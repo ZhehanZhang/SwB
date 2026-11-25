@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+secrets/
+data/
+config/capy-bridge.yaml
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/

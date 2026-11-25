@@ -1,0 +1,20 @@
+FROM python:3.13-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+ARG APP_UID=10001
+RUN useradd --uid ${APP_UID} --create-home --shell /usr/sbin/nologin capybridge
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir .
+
+FROM base AS test
+COPY tests ./tests
+COPY config ./config
+RUN pip install --no-cache-dir ".[test]" && python -m pytest -q
+
+FROM base AS runtime
+USER capybridge
+ENV CAPY_BRIDGE_CONFIG=/config/capy-bridge.yaml CAPY_BRIDGE_DATA=/data
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"
+CMD ["capy-bridge"]
