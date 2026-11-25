@@ -133,7 +133,7 @@ class Switchboard:
         def record(outcome: str, detail: str | None = None) -> None:
             if action.is_audited or outcome != "ok":
                 self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                                  action=action.name, outcome=outcome, detail=detail, target=call.notes.get("target"), ref=call.notes.get("ref"),
+                                  action=action.name, outcome=call.notes.get("outcome", outcome) if outcome == "ok" else outcome, detail=detail, target=call.notes.get("target"), ref=call.notes.get("ref"),
                                   title=call.notes.get("title"), excerpt=str(call.notes.get("excerpt", "")))
 
         if action.capped and dest.daily_cap is not None:
@@ -142,6 +142,14 @@ class Switchboard:
                 call.note(excerpt=str(kwargs.get("task") or ""))
                 record("refused", f"daily cap reached ({used}/{dest.daily_cap})")
                 raise DestinationError(f"daily {destination} {action.name} cap reached ({used}/{dest.daily_cap} today, {self.cfg.timezone}); try tomorrow or raise destinations.{destination}.daily_cap")
+        if action.burst and dest.burst_limit:
+            count, window = dest.burst_limit
+            used = self.audit.count_since(destination, action.name, principal.source, self.clock() - window)
+            if used >= count:
+                call.note(excerpt=str(kwargs.get("task") or ""))
+                record("refused", f"burst limit ({used} in {window:.0f} s)")
+                raise DestinationError(f"{used} {action.name} calls from {principal.source} in the last {window / 60:.0f} minutes looks like a loop, so this one "
+                                       f"was stopped. Check capy_inbox for the work already sent; capy_reply and capy_wait are not limited.")
         try:
             out = await action.handler(call, **kwargs)
         except DestinationError as e:
@@ -155,8 +163,6 @@ class Switchboard:
             record("error", f"{type(e).__name__}: {e}"[:300])
             raise DestinationError(f"{destination} {action.name} failed: {e}") from e
         record("ok")
-        if action.capped and dest.daily_cap is not None and isinstance(out, dict):
-            out.setdefault("used_today", f"{self.audit.count_today(destination, action.name)}/{dest.daily_cap}")
         return out
 
     # Projects in calls ----------------------------------------------------------------------
@@ -194,10 +200,45 @@ class Switchboard:
                           action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
         return {"removed": r.as_dict()}
 
+    # Projects: automatic links and routes ------------------------------------------------------
+
+    async def project_sync(self, principal: Principal, slug: str | None = None, force: bool = False) -> dict[str, Any]:
+        """Link projects to their destination counterparts and route them, without overwriting anything unless force."""
+        projects = [self.projects.get(slug)] if slug else self.projects.list()
+        results = []
+        for p in projects:
+            for name, d in self.destinations.items():
+                if type(d).autolink is Destination.autolink:
+                    continue
+                if not d.online:
+                    results.append({"project": p.slug, "destination": name, "skipped": f"{name} is offline", "changed": []})
+                    continue
+                try:
+                    out = await d.autolink(principal, p, force=force)
+                except Exception as e:
+                    log.warning("%s autolink for %s failed: %s", name, p.slug, e)
+                    out = {"project": p.slug, "error": str(e), "changed": []}
+                if out is not None:
+                    results.append({"destination": name, **out})
+        return {"results": results, "changed": sum(len(r.get("changed", [])) for r in results)}
+
+    def audit_auto(self, principal: Principal, destination: str, action: str, target: str, excerpt: str) -> None:
+        self.audit.record(origin=principal.origin, source="auto", client=principal.client_id, destination=destination,
+                          action=action, outcome="ok", target=target, excerpt=excerpt, detail=f"automatic, during a call by {principal.source}")
+
+    def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "") -> None:
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
+                          action=action, outcome="ok", target=target, excerpt=excerpt)
+
     # Context pack -----------------------------------------------------------------------------
 
     async def context_pack(self, principal: Principal, project: str | None) -> str:
         p = self.project(project)
+        if p and not principal.allows(p.scope):
+            raise CoreError(f"{principal.source} may not read {p.scope}")
+        if not p and not principal.allows(GENERAL):
+            raise CoreError(f"{principal.source} may not read general; pass the project you work in")
+        general = principal.allows(GENERAL)
         now = self.clock()
         out = [f"# Shared context (switchboard, {iso(now)}){f' for project {p.slug}' if p else ''}"]
 
@@ -211,9 +252,10 @@ class Switchboard:
             if p.archived:
                 out.append("This project is archived.")
             section(f"{p.slug}: memory", self.memory.recent(scopes=[p.scope], limit=12, body_limit=500))
-        section("General: profile", self.memory.recent(scopes=[GENERAL], namespace="profile", limit=8, body_limit=500))
-        section("General: recent decisions", self.memory.recent(scopes=[GENERAL], namespace="decisions", since=now - 30 * 86400, limit=8, body_limit=300))
-        other = self.memory.recent(scopes=[GENERAL], since=now - 7 * 86400, exclude_namespaces=("profile", "decisions"), limit=10, body_limit=0)
+        if general:
+            section("General: profile", self.memory.recent(scopes=[GENERAL], namespace="profile", limit=8, body_limit=500))
+            section("General: recent decisions", self.memory.recent(scopes=[GENERAL], namespace="decisions", since=now - 30 * 86400, limit=8, body_limit=300))
+        other = self.memory.recent(scopes=[GENERAL], since=now - 7 * 86400, exclude_namespaces=("profile", "decisions"), limit=10, body_limit=0) if general else []
         if other:
             out.append("\n## General: other changes this week")
             out.extend(f"- {e['title']} ({e['namespace']}, {e['source']}, id {e['id']})" for e in other)

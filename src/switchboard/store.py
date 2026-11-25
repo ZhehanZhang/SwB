@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   links TEXT NOT NULL DEFAULT '{}',
+  private INTEGER NOT NULL DEFAULT 0,
   created_at REAL NOT NULL,
   updated_at REAL NOT NULL,
   archived_at REAL
@@ -156,6 +157,8 @@ CREATE TABLE IF NOT EXISTS inbox_cursors (
 
 def _migrate(db: sqlite3.Connection) -> None:
     """Bring databases written by capy-bridge 0.1 up to the scoped schema."""
+    if "private" not in {r[1] for r in db.execute("PRAGMA table_info(projects)")}:
+        db.execute("ALTER TABLE projects ADD COLUMN private INTEGER NOT NULL DEFAULT 0")
     cols = {r[1] for r in db.execute("PRAGMA table_info(memories)")}
     if "scope" not in cols:
         db.execute("ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'")

@@ -49,10 +49,32 @@ Every memory lives in exactly one scope: `general` (the owner's profile, prefere
 archiving). Each can be linked to a Capy project, repos, a Claude Project name and a ChatGPT project name, and
 `project_list(hint=...)` finds the project for any of those.
 
+A Claude or ChatGPT connector is account-wide, so switchboard can't tell which Claude Project or ChatGPT project a call
+comes from: the scope comes from the instruction snippet, and the model can get it wrong. So the defaults lean towards
+the project, and every step out of it is explicit:
+
 - Writes must name their scope and are never implicitly general. An archived project refuses writes.
-- `memory_search`, `memory_list` and `context_pack` take `project`: they read that project first, then general
-  (`include_general=false` for the project alone). Without a project they read general only.
+- **Writing to `general` needs `confirm_general=true`.** Without it the write fails and tells the model to write to
+  the project scope, or to confirm with the owner that this applies everywhere.
+- **A write that names `project` can't land in another project.** If `project` and `scope` disagree, it's rejected.
+  Every write result echoes the scope it landed in.
+- **Fixing a wrong scope is explicit.** `memory_move(id, to_scope)` moves an entry to another project, and
+  `memory_promote(id)` moves it to general. Both keep the id and revision history and are audited.
+- **Reads cover the named project plus general.** `memory_search`, `memory_list` and `context_pack` take `project`
+  (`include_general=false` for the project alone); without one they read general only. Reading another project needs
+  an explicit `scopes=[...]`, which is written to the audit log.
+- **Private projects** (`private: true` on `project_create` / `project_update`) can't be pulled into another project's
+  read at all, even with `scopes`; only a read that names them as `project` sees them.
+- **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{acme-agent: [project:acme]}`. A limited key
+  can't read or write outside its list, can't create projects or change routes, and must delegate with a project.
 - Rows written by capy-bridge 0.1 were migrated into `general`.
+
+New projects link themselves. `project_create` (and `project_update` while `links.capy_project` is empty) looks the
+project up in Capy: an exact repo match beats a name or slug match. It then routes the project to that Capy project's
+Captain in `captain_thread` mode with the project's repos, when there is exactly one. Ambiguous or missing matches
+change nothing and come back as candidates in `result.auto`, so the assistant can ask the owner. Existing links and
+routes are never replaced unless the call passes `force`. `project_sync(slug?)` reruns this for one or every project,
+and every automatic change is audited with source `auto` (routes get `updated_by: auto`).
 
 ## Routes
 
@@ -116,10 +138,12 @@ to `.mcp.json` and start with `--dangerously-load-development-channels server:sw
 | Tool | What it does |
 | - | - |
 | `context_pack` | Session briefing for a project: its memory and links, general profile and decisions, the routed Captain's digest, its relevant crew work and open asks, delegations in progress |
-| `memory_write` | Create or update an entry: `scope` (required), `namespace`, `title`, `body`, optional `key`, `tags`, `mode=append` |
-| `memory_search` / `memory_list` | FTS5 search and listing, project first then general |
+| `memory_write` | Create or update an entry: `scope` (required), `namespace`, `title`, `body`, optional `key`, `tags`, `mode=append`, `project` (the project you work in), `confirm_general` |
+| `memory_search` / `memory_list` | FTS5 search and listing, project first then general; `scopes` for an explicit, logged cross-project read |
 | `memory_read` / `memory_delete` | One entry with its edit history; soft delete |
-| `project_list` / `project_create` / `project_update` | Projects and their links; rename, archive |
+| `memory_move` / `memory_promote` | Move an entry to another project, or to general; audited, history kept |
+| `project_list` / `project_create` / `project_update` | Projects and their links; rename, archive, private; automatic Capy link and route |
+| `project_sync` | Rerun the automatic link and route for one or every project, reporting changes and candidates |
 | `routes_list` / `routes_set` / `routes_remove` / `routes_resolve` | Routes, audited |
 | `switchboard_status` | Your agent name, your `capy_wait` limits, what's configured or degraded |
 | `capy_delegate` | Send a task along your route (or an allowed explicit target), with repos, files, `new_thread`, `wait_s`; returns a handle, or an MCP task |
@@ -163,8 +187,13 @@ Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where
 - Repos a task names must be linked to its project (`links.repos`), or to any project when it has none.
 - `capy_status`, `capy_result` and `capy_reply` only touch threads delegated through switchboard, routed Captains and
   their crews, routed threads, and threads in routed or linked Capy projects.
-- `destinations.capy.daily_cap` successful delegations per day in `timezone`; identical retries the same day are
-  deduplicated through the API's `requestId` / `clientKey`.
+- Delegating is meant to be routine, so nothing rations it. Two guards catch runaways only:
+  - Burst: more than `destinations.capy.burst.count` delegations (default 10) from one caller within `burst.window_s`
+    (default 600 s) looks like a loop, and the next one is refused with that explanation.
+  - Duplicates: the same caller sending the same task to the same target within `duplicate_window_s` (default 600 s)
+    gets the existing handle back instead of a second thread.
+  - `capy_reply` and `capy_wait` are never limited. `daily_cap` is an optional hard daily limit, off by default.
+  - Retries the API sees again are also deduplicated through its `requestId` / `clientKey`.
 - Every action that changes something, and every refusal, is in the audit log (`docker compose exec switchboard switchboard log`).
 - The Capy API key is only ever sent as a header to api.capy.ai; it is never logged, and access logs drop query strings.
 
@@ -211,25 +240,31 @@ same type, hairline cards, the Arc backdrop, the signature and the shared theme 
 
 > You have the switchboard connector, a memory shared with my other assistants and Capy. This Project is switchboard
 > project `<slug>`. At the start of a conversation call context_pack(project="<slug>"). When I state a durable fact,
-> preference or decision, save it with memory_write: scope "project:<slug>" for this project, "general" only for things
-> about me that hold everywhere; use a key for things that get updated, and tell me in one line. Search memory before
-> asking me something I may have said. For work that needs a machine, a repo, a PR or a long run, offer capy_delegate
-> with project="<slug>", then capy_wait on the handle and give me Capy's answer.
+> preference or decision, save it with memory_write(scope="project:<slug>", project="<slug>"). Use scope "general"
+> only for things about me that hold in every project, after asking me, with confirm_general=true. Use a key for
+> things that get updated, and tell me in one line. Search memory before asking me something I may have said. Don't
+> read other projects' memory unless I ask. For work that needs a machine, a repo, a PR, research or a long run, or
+> that my Captain should know about, use capy_delegate(project="<slug>"), then capy_wait on the handle and give me
+> Capy's answer; follow up with capy_reply.
 
 **ChatGPT project instructions** (one per ChatGPT project, same `<slug>` rule):
 
 > When the switchboard app is enabled, this project is switchboard project `<slug>`: call context_pack(project="<slug>")
-> first. Save durable facts and decisions with memory_write, scope "project:<slug>" (or "general" for things about me
-> everywhere), and say so briefly; search memory before asking me something I may have said. Hand coding, repo, PR and
-> long-running work to Capy with capy_delegate(project="<slug>"), then capy_wait on the handle and report the answer.
+> first. Save durable facts and decisions with memory_write(scope="project:<slug>", project="<slug>"), and say so
+> briefly. Write to "general" only for things about me everywhere, after asking me, with confirm_general=true. Search
+> memory before asking me something I may have said, and stay out of other projects' memory unless I ask. Hand coding,
+> repo, PR, research and long-running work to my Capy Captain with capy_delegate(project="<slug>"), then capy_wait on
+> the handle and report the answer.
 > Your own ChatGPT memory is separate; the shared one is switchboard.
 
-**Personal preferences / custom instructions** (outside projects): the same, with `general` and no project.
+**Personal preferences / custom instructions** (outside projects): ask which project the conversation is about and
+use it; with none, read general, and write to general only after asking, with `confirm_general=true`.
 
 **Capy (AGENTS.md or scope instructions)**:
 
 > Shared memory with the owner's other assistants lives in the switchboard MCP server. Read context_pack with the
-> project you work on, and record decisions and durable facts with memory_write in that project's scope.
+> project you work on, and record decisions and durable facts with memory_write in that project's scope (pass
+> project too). General needs confirm_general=true and is for things that hold in every project.
 
 ## Layout
 

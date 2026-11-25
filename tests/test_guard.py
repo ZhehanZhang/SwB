@@ -31,7 +31,7 @@ def test_register_is_rate_limited(make):
 def test_request_size_limits(make):
     _, c = make()
     assert c.post("/register", content=b"x" * (1024 * 1024 + 1), headers={"content-type": "application/json"}).status_code == 413
-    big = rpc(c, STATIC_KEY, "tools/call", {"name": "memory_write", "arguments": {"scope": "general", "namespace": "notes", "title": "t", "body": "y" * (2 * 1024 * 1024)}})
+    big = rpc(c, STATIC_KEY, "tools/call", {"name": "memory_write", "arguments": {"scope": "general", "confirm_general": True, "namespace": "notes", "title": "t", "body": "y" * (2 * 1024 * 1024)}})
     assert big.status_code == 200
 
 

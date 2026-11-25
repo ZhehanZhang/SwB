@@ -50,6 +50,7 @@ class Config:
     refresh_token_ttl: int = 30 * 86400
     static_keys: tuple[StaticKey, ...] = ()
     source_names: dict[str, str] = field(default_factory=dict)
+    key_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     timezone: str = "America/New_York"
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
@@ -131,6 +132,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         refresh_token_ttl=int(auth.get("refresh_token_ttl", 30 * 86400)),
         static_keys=tuple(keys),
         source_names={str(k): str(v) for k, v in (auth.get("source_names") or {}).items()},
+        key_scopes={str(k).lower(): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_scopes") or {}).items()},
         timezone=str(raw.get("timezone", "America/New_York")),
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),

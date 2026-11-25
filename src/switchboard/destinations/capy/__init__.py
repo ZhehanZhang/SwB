@@ -95,10 +95,6 @@ class CapyDestination(Destination):
                    note="seeded from destinations.capy.default_route", by="config")
 
     @property
-    def daily_cap(self) -> int | None:
-        return int(self.config.get("daily_cap", 20))
-
-    @property
     def online(self) -> bool:
         return self.api is not None
 
@@ -136,7 +132,7 @@ class CapyDestination(Destination):
 
     def actions(self) -> list[Action]:
         return [
-            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True),
+            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True, burst=True),
             Action("status", "Capy thread status", "Status and latest messages of a Capy thread.", self.thread_status, read_only=True),
             Action("list", "List Capy work", "Delegations, a Captain's crew, or a project's threads.", self.list_work, read_only=True),
             Action("reply", "Reply to a Capy thread", "Send a follow-up into a thread.", self.reply),
@@ -221,6 +217,15 @@ class CapyDestination(Destination):
             body += ["", "Repos: " + ", ".join(repos)]
         if p and p.links.get("capy_project"):
             body += [f"Capy project: {p.links['capy_project']}"]
+        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{task}".encode()).hexdigest()
+        window = float(self.config.get("duplicate_window_s", 600))
+        for h in call.core.inbox.handles(owner=call.principal.source, destination=self.name, limit=20):
+            if h["meta"].get("same") == same and h["created_at"] >= call.core.clock() - window:
+                call.note(ref=h["ref"], outcome="duplicate")
+                return {"handle": h["handle"], "thread_id": h["ref"], "target": describe(tgt), "route": level, "mode": h["meta"].get("mode"),
+                        "status": h["status"], "duplicate": True,
+                        "next": f"You sent this exact task to {describe(tgt)} a moment ago, so this is that delegation's handle. "
+                                f"Call capy_wait(handle='{h['handle']}'); use capy_reply to add to it."}
         uploaded = await self._files(api, files) if files else []
         digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}".encode()).hexdigest()
         try:
@@ -247,7 +252,7 @@ class CapyDestination(Destination):
                 status = t.get("status") or "working"
         except CapyError as e:
             raise DestinationError(f"Capy API refused the delegation: {e}") from e
-        meta |= {"target": tgt, "route": level, "task": task[:300]}
+        meta |= {"target": tgt, "route": level, "task": task[:300], "same": same}
         call.core.inbox.open_handle(handle=handle, owner=call.principal.source, destination=self.name, ref=thread_id,
                                     project=p.slug if p else None, title=title, meta=meta, status=status, stream_cursor=cursor)
         call.note(ref=thread_id)
@@ -495,6 +500,52 @@ class CapyDestination(Destination):
             page = await api.list_threads(pid, limit=limit)
             return {"scope": scope, "project": p.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
         raise DestinationError("scope must be delegated, captain or project")
+
+    async def autolink(self, principal: Principal, project: Project, *, force: bool = False) -> dict[str, Any]:
+        """Link a switchboard project to its Capy project (an exact repo match beats a name match) and route it to that
+        project's only Captain. Ambiguous or missing matches come back as candidates; existing links and routes stay unless force."""
+        api = self.need_api()
+        core = self.core
+        out: dict[str, Any] = {"project": project.slug, "changed": [], "notes": [], "candidates": {}}
+        capy_id = project.links.get("capy_project")
+        if not capy_id or force:
+            items = await api.list_projects()
+            repos = set(project.links.get("repos") or [])
+            by_repo = [c for c in items if repos & {str(r.get("repoFullName", "")).lower() for r in c.get("repos") or []}]
+            names = {project.slug, project.name.strip().lower()}
+            by_name = [c for c in items if {str(c.get("name", "")).strip().lower(), str(c.get("code", "")).strip().lower()} & names]
+            pick, how = (by_repo, "repo") if by_repo else (by_name, "name")
+            if len(pick) == 1:
+                if pick[0]["id"] != capy_id:
+                    core.projects.update(project.slug, links={"capy_project": pick[0]["id"]})
+                    core.audit_auto(principal, self.name, "auto_link", project.slug, f"capy_project {pick[0]['id']} ({pick[0].get('name')}, by {how})")
+                    out["changed"].append({"link": "capy_project", "value": pick[0]["id"], "name": pick[0].get("name"), "matched_by": how})
+                    capy_id = pick[0]["id"]
+            else:
+                out["candidates"]["capy_project"] = [{"id": c["id"], "name": c.get("name"), "code": c.get("code"),
+                                                      "repos": [r.get("repoFullName") for r in c.get("repos") or []]} for c in pick]
+                out["notes"].append(f"{len(pick)} Capy projects match by {how}; ask the owner which one and set links.capy_project"
+                                    if pick else "no Capy project matches its repos or name; ask the owner, or set links.capy_project")
+        if not capy_id:
+            out["notes"].append("not linked, so no route was added; the global route still applies")
+            return out
+        existing = self.core.store.one("SELECT 1 FROM routes WHERE destination = ? AND agent = '' AND project = ?", (self.name, project.slug))
+        if existing and not force:
+            out["notes"].append("a project route already exists; left as is (force=true replaces it)")
+            return out
+        captains = [c for c in await api.list_captains() if c.get("projectId") == capy_id and not c.get("archived")]
+        if len(captains) != 1:
+            out["candidates"]["captain"] = [{"id": c["id"], "code": c.get("code"), "name": c.get("name")} for c in captains]
+            out["notes"].append(f"{len(captains)} Captains in that Capy project; set the route with routes_set" if captains
+                                else "that Capy project has no Captain; the global route still applies")
+            return out
+        defaults = {"mode": "captain_thread", **({"repos": project.links["repos"]} if project.links.get("repos") else {})}
+        target, defaults = await self.validate_route_target({"captain": captains[0]["id"]}, defaults)
+        r = core.routes.set(destination=self.name, agent=None, project=project.slug, target=target, defaults=defaults,
+                            allow_override=False, note="set automatically from the linked Capy project", by="auto")
+        core.audit_auto(principal, self.name, "auto_route", f"*/{project.slug}", str(r.target))
+        out["changed"].append({"route": r.as_dict()})
+        return out
 
     async def resolve_captain(self, hint: str) -> dict[str, Any]:
         hint = hint.strip()

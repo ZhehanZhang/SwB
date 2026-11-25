@@ -74,6 +74,15 @@ class FakeCapy:
         self.queues: dict[str, asyncio.Queue] = {}
         self.connects: list[tuple[str, str | None]] = []
         self.stream_status: dict[str, int] = {}
+        self.captains: list[dict[str, Any]] = [
+            {"id": CAPTAIN, "code": "ZINF-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
+            {"id": CAPTAIN2, "code": "ACME-3", "name": "Acme Captain", "title": "Acme Captain", "projectId": OTHER_PROJECT},
+        ]
+        self.projects: list[dict[str, Any]] = [
+            {"id": PROJECT, "name": "Infra", "code": "ZINF", "repos": [{"repoFullName": "example-org/links", "baseBranch": "main", "mode": "primary"},
+                                                                   {"repoFullName": "example-org/status-service", "baseBranch": "main", "mode": "lazy"}]},
+            {"id": OTHER_PROJECT, "name": "Acme", "code": "ACME", "repos": [{"repoFullName": "example-org/team-repo", "baseBranch": "main", "mode": "primary"}]},
+        ]
 
     @staticmethod
     def thread(tid: str, project: str, title: str = "t", status: str = "idle", **extra: Any) -> dict[str, Any]:
@@ -158,12 +167,11 @@ class FakeCapy:
                 self.thread("jam_CREW3", OTHER_PROJECT, title="other project work", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
             ]})
         if p == "captains":
-            return httpx.Response(200, json={"items": [{"id": CAPTAIN, "code": "ZINF-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
-                                                       {"id": CAPTAIN2, "code": "ACME-3", "name": "Acme Captain", "title": "Acme Captain", "projectId": OTHER_PROJECT}], "cursor": None})
+            return httpx.Response(200, json={"items": self.captains, "cursor": None})
         if (mm := re.fullmatch(r"projects/([^/]+)", p)):
             return httpx.Response(200, json={"id": mm.group(1), "name": "Infra", "code": "ZINF"}) if mm.group(1) in (PROJECT, OTHER_PROJECT) else httpx.Response(404, json={"_tag": "capy/ProjectNotFound"})
         if p == "projects":
-            return httpx.Response(200, json={"items": [{"id": PROJECT, "name": "Infra", "code": "ZINF"}, {"id": OTHER_PROJECT, "name": "Acme", "code": "ACME"}]})
+            return httpx.Response(200, json={"items": self.projects})
         return httpx.Response(404, json={"_tag": "test/Unhandled", "message": f"{m} {p}"})
 
 

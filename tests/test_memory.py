@@ -22,11 +22,11 @@ def mem(store):
 
 
 def test_crud_and_key_upsert(mem):
-    a = mem.write(source="claude", scope="general", namespace="profile", key="editor", title="Editor", body="Uses VS Code", tags=["tools"])
+    a = mem.write(source="claude", scope="general", confirm_general=True, namespace="profile", key="editor", title="Editor", body="Uses VS Code", tags=["tools"])
     assert a["action"] == "create" and a["scope"] == "general"
-    b = mem.write(source="chatgpt", scope="general", namespace="profile", key="editor", title="Editor", body="Uses Zed now")
+    b = mem.write(source="chatgpt", scope="general", confirm_general=True, namespace="profile", key="editor", title="Editor", body="Uses Zed now")
     assert b["id"] == a["id"] and b["action"] == "replace" and b["source"] == "chatgpt"
-    mem.write(source="capy", scope="general", id=a["id"], namespace="ignored", title="", body="Also vim", mode="append")
+    mem.write(source="capy", scope="general", confirm_general=True, id=a["id"], namespace="ignored", title="", body="Also vim", mode="append")
     e = mem.read(scope="general", namespace="profile", key="editor")
     assert e["body"] == "Uses Zed now\n\nAlso vim" and e["tags"] == ["tools"] and e["title"] == "Editor"
     assert [h["source"] for h in e["history"]] == ["capy", "chatgpt", "claude"]
@@ -57,7 +57,7 @@ def test_scope_isolation(mem):
 
 
 def test_project_and_general_merge_ranks_project_first(mem):
-    mem.write(source="claude", scope="general", namespace="decisions", title="Deploy style", body="Docker compose behind a tunnel")
+    mem.write(source="claude", scope="general", confirm_general=True, namespace="decisions", title="Deploy style", body="Docker compose behind a tunnel")
     mem.write(source="claude", scope="project:switchboard", namespace="decisions", title="Deploy target", body="your-host behind a cloudflared tunnel")
     mem.write(source="claude", scope="project:slackgate", namespace="decisions", title="Deploy slackgate", body="tunnel not needed")
     hits = mem.search(query="tunnel", scopes=mem.read_scopes("switchboard"))["items"]
@@ -102,7 +102,7 @@ def test_markdown_export_is_one_folder_per_scope(tmp_path, store):
     projects.create(slug="switchboard", name="Switchboard")
     mem = Memory(store, projects, mirror_dir=str(out))
     a = mem.write(source="claude", scope="project:switchboard", namespace="notes", key="auth", title="Auth", body="PKCE", tags=["oauth"])
-    mem.write(source="claude", scope="general", namespace="profile", key="tz", title="TZ", body="NY")
+    mem.write(source="claude", scope="general", confirm_general=True, namespace="profile", key="tz", title="TZ", body="NY")
     md = (out / "projects" / "switchboard" / "notes" / "auth.md").read_text()
     assert md.startswith("---\nid: ") and "scope: project:switchboard" in md and "# Auth\n\nPKCE" in md
     assert (out / "general" / "profile" / "tz.md").exists()

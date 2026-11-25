@@ -20,6 +20,8 @@ auth:
   #   "http://localhost/*", "http://127.0.0.1/*"]
   # Optional: map a redirect host / client name fragment to an agent name.
   # source_names: {cursor: cursor}
+  # Optional: limit bearer keys (by name, the part after SWITCHBOARD_KEY_) to memory scopes. Unlisted keys see every scope.
+  # key_scopes: {acme-agent: [project:acme]}
 
 origins:
   mcp:
@@ -35,7 +37,12 @@ origins:
 destinations:
   capy:
     api_base: https://api.capy.ai/api/v1
-    daily_cap: 20
+    # Runaway guards only: more than burst.count delegations from one caller in burst.window_s looks like a loop and is
+    # stopped, and the same task to the same target within duplicate_window_s returns the existing handle.
+    # capy_reply and capy_wait are never limited. daily_cap is an optional hard limit, off (null) by default.
+    burst: {count: 10, window_s: 600}
+    duplicate_window_s: 600
+    daily_cap: null
     max_file_bytes: 10485760
     # How a task reaches a busy Captain or thread: queue, steer or interrupt.
     captain_delivery: queue

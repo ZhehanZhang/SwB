@@ -25,6 +25,13 @@ class Audit:
     def today(self) -> str:
         return datetime.fromtimestamp(self.store.clock(), self.tz).date().isoformat()
 
+    def count_since(self, destination: str, action: str, source: str, since: float) -> int:
+        row = self.store.one(
+            "SELECT COUNT(*) AS n FROM audit WHERE at >= ? AND destination = ? AND action = ? AND source = ? AND outcome = 'ok'",
+            (since, destination, action, source),
+        )
+        return row["n"]
+
     def count_today(self, destination: str, action: str) -> int:
         row = self.store.one(
             "SELECT COUNT(*) AS n FROM audit WHERE day = ? AND destination = ? AND action = ? AND outcome = 'ok'",

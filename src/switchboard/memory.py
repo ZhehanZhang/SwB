@@ -20,6 +20,11 @@ MAX_TITLE = 200
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,79}$")
 GENERAL = "general"
 log = logging.getLogger("switchboard.memory")
+CONFIRM_GENERAL = (
+    "general is the owner's cross-project memory: every project and assistant reads it. Anything about one project belongs in "
+    "project:<slug> (project_list shows them). If this really applies everywhere (his profile, a preference, a decision for all "
+    "projects), confirm with the owner and retry with confirm_general=true."
+)
 
 
 class MemoryError_(ValueError):
@@ -76,6 +81,33 @@ class Memory:
         except ProjectError as e:
             raise MemoryError_(str(e)) from e
 
+    def explicit_scopes(self, scopes: list[str], project: str | None) -> list[str]:
+        """Scopes a caller named on purpose, the named project first. A private project is readable only as the named project."""
+        named = f"project:{project.strip().lower().removeprefix('project:')}" if project else None
+        out: list[str] = []
+        for raw in scopes:
+            s = (raw or "").strip().lower()
+            if s != GENERAL:
+                if not s.startswith("project:"):
+                    raise MemoryError_("scopes are 'general' or 'project:<slug>'")
+                try:
+                    p = self.projects.get(s[8:])
+                except ProjectError as e:
+                    raise MemoryError_(str(e)) from e
+                if p.private and s != named:
+                    raise MemoryError_(f"project {p.slug!r} is private: read it only with project={p.slug!r}")
+            if s not in out:
+                out.append(s)
+        if not out:
+            raise MemoryError_("scopes is empty")
+        return sorted(out, key=lambda s: (s != named, s == GENERAL))
+
+    def scope_of(self, id: str) -> str:
+        r = self.store.one("SELECT scope FROM memories WHERE id = ? AND deleted_at IS NULL", (id,))
+        if r is None:
+            raise MemoryError_("memory not found")
+        return r["scope"]
+
     def read_scopes(self, project: str | None, include_general: bool = True) -> list[str]:
         """Scopes a read covers, project first: the project plus general, or general alone."""
         if not project:
@@ -120,8 +152,15 @@ class Memory:
             raise MemoryError_(f"body is limited to {MAX_BODY} chars; split it into several entries")
 
     def write(self, *, source: str, scope: str | None, namespace: str, title: str, body: str, key: str | None = None,
-              tags: list[str] | None = None, id: str | None = None, mode: str = "replace") -> dict[str, Any]:
+              tags: list[str] | None = None, id: str | None = None, mode: str = "replace", confirm_general: bool = False,
+              project: str | None = None) -> dict[str, Any]:
         scope = self.write_scope(scope)
+        if project:
+            named = project.strip().lower().removeprefix("project:")
+            if scope != GENERAL and scope != f"project:{named}":
+                raise MemoryError_(f"scope {scope} is not the project you named ({named!r}): write to project:{named}, or drop project if {scope} is right")
+        if scope == GENERAL and not confirm_general:
+            raise MemoryError_(CONFIRM_GENERAL)
         namespace = (namespace or "").strip().strip("/").lower()
         key = key.strip().lower() if key else None
         if mode not in ("replace", "append"):
@@ -204,6 +243,31 @@ class Memory:
         self.store.tx(run)
         self._sync_mirror()
         return {"deleted": id}
+
+    def move(self, *, source: str, id: str, to_scope: str) -> dict[str, Any]:
+        """Move one entry to another scope, keeping its id and revision history."""
+        to = self.write_scope(to_scope)
+        now = self.store.clock()
+
+        def run(db: sqlite3.Connection) -> str:
+            r = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
+            if r is None:
+                raise MemoryError_("memory not found")
+            if r["scope"] == to:
+                raise MemoryError_(f"memory {id} is already in {to}")
+            if r["key"] and db.execute("SELECT 1 FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL",
+                                       (to, r["namespace"], r["key"])).fetchone():
+                raise MemoryError_(f"{to} already has {r['namespace']}/{r['key']}; merge or delete one of them first")
+            db.execute("UPDATE memories SET scope = ?, source = ?, updated_at = ? WHERE id = ?", (to, source, now, id))
+            db.execute(
+                "INSERT INTO memory_revisions(memory_id, at, source, action, title, body) VALUES (?,?,?,?,?,?)",
+                (id, now, source, f"move {r['scope']} -> {to}", r["title"], r["body"]),
+            )
+            return r["scope"]
+
+        frm = self.store.tx(run)
+        self._sync_mirror()
+        return {"moved": id, "from": frm, "to": to}
 
     def list(self, *, scopes: list[str] | None, namespace: str | None = None, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         where, args = self._filter(scopes, namespace)

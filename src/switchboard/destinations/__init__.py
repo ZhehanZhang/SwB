@@ -36,6 +36,7 @@ class Action:
     destructive: bool = False
     idempotent: bool = False
     capped: bool = False
+    burst: bool = False
     audited: bool | None = None
 
     @property
@@ -77,8 +78,15 @@ class Destination:
 
     @property
     def daily_cap(self) -> int | None:
+        """Optional and off by default: a hard daily limit on capped actions."""
         cap = self.config.get("daily_cap")
         return int(cap) if cap is not None else None
+
+    @property
+    def burst_limit(self) -> tuple[int, float] | None:
+        """Runaway guard on burst actions: at most count calls per caller in window_s. null switches it off."""
+        raw = self.config.get("burst", {"count": 10, "window_s": 600})
+        return (int(raw.get("count", 10)), float(raw.get("window_s", 600))) if raw else None
 
     def problems(self) -> list[str]:
         return []
@@ -95,6 +103,10 @@ class Destination:
         raise DestinationError(f"{self.name} does not support routes")
 
     async def context_section(self, principal: "Principal", project: "Project | None") -> str | None:
+        return None
+
+    async def autolink(self, principal: "Principal", project: "Project", *, force: bool = False) -> dict[str, Any] | None:
+        """Link a project to its counterpart here and route it, reporting changes and candidates. None: not supported."""
         return None
 
     async def start(self) -> None:

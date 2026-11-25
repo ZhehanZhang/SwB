@@ -62,6 +62,11 @@ class Principal:
     client_id: str
     kind: str
     origin: str = "mcp"
+    scopes: tuple[str, ...] | None = None
+
+    def allows(self, scope: str) -> bool:
+        """Whether this caller may use a memory scope ('general' or 'project:<slug>'); None means every scope."""
+        return self.scopes is None or "*" in self.scopes or scope in self.scopes
 
 
 @dataclass
@@ -164,7 +169,7 @@ class Auth:
             return None
         for key in self.cfg.static_keys:
             if hmac.compare_digest(sha(token), sha(key.secret)):
-                return Principal(source=key.name, client_id=f"key:{key.name}", kind="key")
+                return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", scopes=self.cfg.key_scopes.get(key.name))
         if not self.cfg.resource:
             return None
         row = self.store.one(

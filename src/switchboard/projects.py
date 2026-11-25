@@ -23,6 +23,7 @@ class Project:
     description: str = ""
     links: dict[str, Any] = field(default_factory=dict)
     archived: bool = False
+    private: bool = False
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -32,12 +33,12 @@ class Project:
 
     def as_dict(self) -> dict[str, Any]:
         return {"slug": self.slug, "scope": self.scope, "name": self.name, "description": self.description, "links": self.links,
-                "archived": self.archived, "created_at": self.created_at, "updated_at": self.updated_at}
+                "archived": self.archived, "private": self.private, "created_at": self.created_at, "updated_at": self.updated_at}
 
 
 def _project(r: sqlite3.Row) -> Project:
     return Project(slug=r["slug"], name=r["name"], description=r["description"], links=json.loads(r["links"]),
-                   archived=r["archived_at"] is not None, created_at=iso(r["created_at"]), updated_at=iso(r["updated_at"]))
+                   archived=r["archived_at"] is not None, private=bool(r["private"]), created_at=iso(r["created_at"]), updated_at=iso(r["updated_at"]))
 
 
 def clean_links(links: dict[str, Any] | None) -> dict[str, Any]:
@@ -75,7 +76,7 @@ class Projects:
         sql = "SELECT * FROM projects" + ("" if include_archived else " WHERE archived_at IS NULL") + " ORDER BY slug"
         return [_project(r) for r in self.store.q(sql)]
 
-    def create(self, *, slug: str, name: str, description: str = "", links: dict[str, Any] | None = None) -> Project:
+    def create(self, *, slug: str, name: str, description: str = "", links: dict[str, Any] | None = None, private: bool = False) -> Project:
         slug = (slug or "").strip().lower()
         if not SLUG_RE.match(slug) or slug == "general":
             raise ProjectError("slug must be lowercase letters, digits and dashes (max 48), and not 'general'")
@@ -85,13 +86,13 @@ class Projects:
             raise ProjectError(f"project {slug!r} already exists")
         now = self.store.clock()
         self.store.x(
-            "INSERT INTO projects(slug, name, description, links, created_at, updated_at) VALUES (?,?,?,?,?,?)",
-            (slug, name.strip(), description or "", json.dumps(clean_links(links)), now, now),
+            "INSERT INTO projects(slug, name, description, links, private, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+            (slug, name.strip(), description or "", json.dumps(clean_links(links)), int(private), now, now),
         )
         return self.get(slug)
 
     def update(self, slug: str, *, name: str | None = None, description: str | None = None, links: dict[str, Any] | None = None,
-               new_slug: str | None = None, archived: bool | None = None) -> Project:
+               new_slug: str | None = None, archived: bool | None = None, private: bool | None = None) -> Project:
         p = self.get(slug)
         merged = dict(p.links)
         if links is not None:
@@ -113,8 +114,9 @@ class Projects:
                 db.execute("UPDATE routes SET project = ? WHERE project = ?", (target, p.slug))
                 db.execute("UPDATE handles SET project = ? WHERE project = ?", (target, p.slug))
             db.execute(
-                "UPDATE projects SET slug = ?, name = ?, description = ?, links = ?, updated_at = ?, archived_at = ? WHERE slug = ?",
-                (target, (name or p.name).strip(), p.description if description is None else description, json.dumps(merged), now, archived_at, p.slug),
+                "UPDATE projects SET slug = ?, name = ?, description = ?, links = ?, private = ?, updated_at = ?, archived_at = ? WHERE slug = ?",
+                (target, (name or p.name).strip(), p.description if description is None else description, json.dumps(merged),
+                 int(p.private if private is None else private), now, archived_at, p.slug),
             )
 
         self.store.tx(run)

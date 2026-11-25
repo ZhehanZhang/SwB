@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from starlette.routing import BaseRoute, Mount
 
 from ...auth import Principal
-from ...memory import MemoryError_
+from ...memory import GENERAL, MemoryError_
 from ...projects import ProjectError
 from ...routes import RouteError
 from .. import Origin
@@ -28,8 +28,12 @@ TASK_MODE: contextvars.ContextVar[bool] = contextvars.ContextVar("switchboard_ta
 
 INSTRUCTIONS = """Switchboard is the owner's shared workspace across Claude, ChatGPT and Capy.
 Memory lives in scopes: 'general' (the owner's profile, preferences, cross-project decisions) or 'project:<slug>'.
-At the start of a session call context_pack with the project you are working in (project_list shows them).
-Search before asking the owner something he may already have said. Every memory_write names its scope.
+Switchboard can't see which Claude or ChatGPT project you are in, so you decide the project: find it with project_list
+(hint: the Claude Project name or a repo), then call context_pack with it at the start of a session.
+Write project facts to project:<slug> and pass project=<slug> too, so a slip lands nowhere. Write to general only for
+things that apply everywhere, after the owner agrees, with confirm_general=true. Reads cover the named project plus
+general; another project's memory needs scopes=[...] and is logged. memory_move and memory_promote fix a wrong scope.
+Search before asking the owner something he may already have said.
 Capy is a coding agent with cloud machines, git and PRs. Use capy_delegate for work that needs a real machine,
 a repo, a PR, or more than a few minutes. It goes where the owner's route for you and the project points
 (usually his Captain), and returns a handle. Then call capy_wait(handle) to wait for Capy's reply and answer
@@ -45,6 +49,7 @@ DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHin
 Scope = Annotated[str, Field(description="Required: 'general' for the owner's cross-project memory, or 'project:<slug>'")]
 ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
 Namespace = Annotated[str, Field(description="Inside the scope: profile, decisions, notes, or e.g. notes/meetings; lowercase, up to 3 levels")]
+ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:acme', 'general']. Logged")]
 
 
 class FileIn(BaseModel):
@@ -128,6 +133,32 @@ class MCPOrigin(Origin):
             except (MemoryError_, ProjectError, RouteError) as e:
                 raise ToolError(str(e)) from e
 
+        def need(p: Principal, scope: str) -> None:
+            if not p.allows(scope):
+                raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes or ())}; {scope} is outside it")
+
+        def unrestricted(p: Principal, what: str) -> None:
+            if p.scopes is not None and "*" not in p.scopes:
+                raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes)}, so it can't {what}")
+
+        def pscope(slug: str) -> str:
+            return "project:" + slug.strip().lower().removeprefix("project:")
+
+        def reading(p: Principal, project: str | None, include_general: bool, scopes: list[str] | None, what: str) -> list[str]:
+            ss = sync(core.memory.explicit_scopes, scopes, project) if scopes else sync(core.memory.read_scopes, project, include_general)
+            if project:
+                need(p, pscope(project))
+            for s in ss:
+                if s != GENERAL:
+                    need(p, s)
+            ss = [s for s in ss if s != GENERAL or p.allows(GENERAL)]
+            if not ss:
+                raise ToolError(f"the {p.source} key can't read general; pass the project you work in")
+            cross = [s for s in ss if s != GENERAL and (not project or s != pscope(project))]
+            if cross:
+                core.audit_memory(p, "cross_read", ",".join(cross), f"{what} while working in {project or 'general'}")
+            return ss
+
         async def run(coro: Any) -> Any:
             from ...core import CoreError
             from ...destinations import DestinationError
@@ -150,7 +181,7 @@ class MCPOrigin(Origin):
 
         @mcp.tool(
             title="Save to shared memory",
-            description="Save or update a durable memory shared with every assistant and Capy. scope is required: 'general' for the owner's profile, preferences and cross-project decisions, 'project:<slug>' for one project. A key makes an entry you will update (e.g. profile/editor). mode=append adds to the existing body.",
+            description="Save or update a durable memory shared with every assistant and Capy. scope is required: 'project:<slug>' for anything about one project (pass project=<slug> as well), or 'general' for the owner's profile, preferences and decisions that apply to every project, which also needs confirm_general=true after the owner agrees. The result echoes the scope it landed in. A key makes an entry you will update (e.g. profile/editor). mode=append adds to the existing body.",
             annotations=WRITE,
         )
         async def memory_write(
@@ -163,10 +194,17 @@ class MCPOrigin(Origin):
             tags: Annotated[list[str] | None, Field(description="Optional tags")] = None,
             id: Annotated[str | None, Field(description="Update the entry with this id instead")] = None,
             mode: Literal["replace", "append"] = "replace",
+            project: Annotated[str | None, Field(description="The project you are working in. A project scope that differs from it is rejected")] = None,
+            confirm_general: Annotated[bool, Field(description="Required for scope 'general': the owner agreed this applies to every project")] = False,
         ) -> dict[str, Any]:
-            return sync(core.memory.write, source=who(ctx).source, scope=scope, namespace=namespace, title=title, body=body, key=key, tags=tags, id=id, mode=mode)
+            p = who(ctx)
+            need(p, (scope or "").strip().lower())
+            if id:
+                need(p, sync(core.memory.scope_of, id))
+            return sync(core.memory.write, source=p.source, scope=scope, namespace=namespace, title=title, body=body, key=key, tags=tags, id=id,
+                        mode=mode, confirm_general=confirm_general, project=project)
 
-        @mcp.tool(title="Search shared memory", description="Full-text search. With project: that project's memory ranked first, then general (include_general=false for the project alone). Without: general only.", annotations=READ)
+        @mcp.tool(title="Search shared memory", description="Full-text search. With project: that project's memory ranked first, then general (include_general=false for the project alone). Without: general only. Another project's memory only with an explicit scopes list, which is logged; private projects never show up there.", annotations=READ)
         async def memory_search(
             ctx: Context,
             query: str,
@@ -174,14 +212,19 @@ class MCPOrigin(Origin):
             include_general: bool = True,
             namespace: Annotated[str | None, Field(description="Namespace prefix filter")] = None,
             limit: Annotated[int, Field(ge=1, le=50)] = 10,
+            scopes: ScopesArg = None,
         ) -> dict[str, Any]:
-            who(ctx)
-            return sync(lambda: core.memory.search(query=query, scopes=core.memory.read_scopes(project, include_general), namespace=namespace, limit=limit))
+            ss = reading(who(ctx), project, include_general, scopes, f"search {query!r}")
+            return sync(lambda: core.memory.search(query=query, scopes=ss, namespace=namespace, limit=limit))
 
         @mcp.tool(title="Read a memory", description="Read one memory in full by id, or by scope, namespace and key, with its recent edit history.", annotations=READ)
         async def memory_read(ctx: Context, id: str | None = None, scope: str | None = None, namespace: str | None = None, key: str | None = None) -> dict[str, Any]:
-            who(ctx)
-            return sync(core.memory.read, id=id, scope=scope, namespace=namespace, key=key)
+            p = who(ctx)
+            if scope:
+                need(p, scope.strip().lower())
+            out = sync(core.memory.read, id=id, scope=scope, namespace=namespace, key=key)
+            need(p, out["scope"])
+            return out
 
         @mcp.tool(title="List memories", description="List memories newest first with per-namespace counts. project works as in memory_search.", annotations=READ)
         async def memory_list(
@@ -191,13 +234,37 @@ class MCPOrigin(Origin):
             namespace: str | None = None,
             limit: Annotated[int, Field(ge=1, le=200)] = 50,
             offset: Annotated[int, Field(ge=0)] = 0,
+            scopes: ScopesArg = None,
         ) -> dict[str, Any]:
-            who(ctx)
-            return sync(lambda: core.memory.list(scopes=core.memory.read_scopes(project, include_general), namespace=namespace, limit=limit, offset=offset))
+            ss = reading(who(ctx), project, include_general, scopes, "list")
+            return sync(lambda: core.memory.list(scopes=ss, namespace=namespace, limit=limit, offset=offset))
 
         @mcp.tool(title="Delete a memory", description="Delete a memory by id when it is wrong or obsolete. History is kept server-side.", annotations=DELETE)
         async def memory_delete(ctx: Context, id: str) -> dict[str, Any]:
-            return sync(core.memory.delete, source=who(ctx).source, id=id)
+            p = who(ctx)
+            need(p, sync(core.memory.scope_of, id))
+            return sync(core.memory.delete, source=p.source, id=id)
+
+        @mcp.tool(title="Move a memory to another project", description="Move an entry that landed in the wrong project to project:<slug>. Keeps its id and history. Audited. Use memory_promote to move it to general.", annotations=WRITE_IDEMPOTENT)
+        async def memory_move(ctx: Context, id: str, to_scope: Annotated[str, Field(description="'project:<slug>'")]) -> dict[str, Any]:
+            p = who(ctx)
+            if (to_scope or "").strip().lower() == GENERAL:
+                raise ToolError("moving to general is memory_promote, after the owner agrees it applies to every project")
+            frm = sync(core.memory.scope_of, id)
+            need(p, frm)
+            need(p, (to_scope or "").strip().lower())
+            out = sync(core.memory.move, source=p.source, id=id, to_scope=to_scope)
+            core.audit_memory(p, "memory_move", f"{out['from']} -> {out['to']}", id)
+            return out
+
+        @mcp.tool(title="Promote a memory to general", description="Move a project entry to general once the owner agrees it applies to every project. Keeps its id and history. Audited.", annotations=WRITE_IDEMPOTENT)
+        async def memory_promote(ctx: Context, id: str, to: Literal["general"] = "general") -> dict[str, Any]:
+            p = who(ctx)
+            need(p, sync(core.memory.scope_of, id))
+            need(p, GENERAL)
+            out = sync(core.memory.move, source=p.source, id=id, to_scope=to)
+            core.audit_memory(p, "memory_promote", f"{out['from']} -> {out['to']}", id)
+            return out
 
         @mcp.tool(
             title="Session briefing",
@@ -214,21 +281,42 @@ class MCPOrigin(Origin):
                 return {"matches": sync(core.projects.resolve, hint)}
             return {"projects": [p.as_dict() for p in core.projects.list(include_archived)]}
 
-        @mcp.tool(title="Create a project", description="Create a project, a memory scope 'project:<slug>'. Do this only when the owner starts a genuinely new project.", annotations=WRITE)
+        @mcp.tool(title="Create a project", description="Create a project, a memory scope 'project:<slug>'. Do this only when the owner starts a genuinely new project. Pass its repos: switchboard then links its Capy project and routes it to that project's Captain (result.auto); ambiguous matches come back as candidates to ask the owner about.", annotations=WRITE)
         async def project_create(ctx: Context, slug: Annotated[str, Field(description="lowercase-dashed, e.g. switchboard")], name: str,
-                                 description: str = "", links: Links | None = None) -> dict[str, Any]:
-            who(ctx)
-            return sync(core.projects.create, slug=slug, name=name, description=description, links=links.model_dump(exclude_none=True) if links else None).as_dict()
+                                 description: str = "", links: Links | None = None,
+                                 private: Annotated[bool, Field(description="Keep its memory out of other projects' reads, even explicit ones")] = False) -> dict[str, Any]:
+            p = who(ctx)
+            unrestricted(p, "create projects")
+            out = sync(core.projects.create, slug=slug, name=name, description=description, links=links.model_dump(exclude_none=True) if links else None,
+                       private=private).as_dict()
+            out["auto"] = await run(core.project_sync(p, out["slug"]))
+            return out
 
-        @mcp.tool(title="Update a project", description="Rename (new_slug moves its memories and routes), describe, relink, archive or restore a project. links merge: a field set to empty clears it.", annotations=WRITE_IDEMPOTENT)
+        @mcp.tool(title="Update a project", description="Rename (new_slug moves its memories and routes), describe, relink, archive or restore a project, or mark it private. links merge: a field set to empty clears it. While links.capy_project is empty, it tries to link and route the project (result.auto).", annotations=WRITE_IDEMPOTENT)
         async def project_update(ctx: Context, slug: str, name: str | None = None, description: str | None = None, links: Links | None = None,
-                                 new_slug: str | None = None, archived: bool | None = None) -> dict[str, Any]:
-            who(ctx)
+                                 new_slug: str | None = None, archived: bool | None = None, private: bool | None = None,
+                                 force: Annotated[bool, Field(description="Let the automatic link and route replace existing ones")] = False) -> dict[str, Any]:
+            p = who(ctx)
+            need(p, pscope(slug))
+            if new_slug:
+                need(p, pscope(new_slug))
             out = sync(core.projects.update, slug, name=name, description=description, links=links.model_dump(exclude_unset=True) if links else None,
-                       new_slug=new_slug, archived=archived).as_dict()
+                       new_slug=new_slug, archived=archived, private=private).as_dict()
             if new_slug:
                 core.memory.schedule_mirror()
+            linked_now = bool(links and links.capy_project)
+            if not out["archived"] and (force or linked_now or not out["links"].get("capy_project")):
+                out["auto"] = await run(core.project_sync(p, out["slug"], force=force))
             return out
+
+        @mcp.tool(title="Sync projects with Capy", description="Link projects to their Capy projects (an exact repo match beats a name match) and route each to its Capy project's only Captain. One project or all. Never replaces an existing link or route unless force. Reports what changed and the candidates when a match is ambiguous.", annotations=WRITE_IDEMPOTENT)
+        async def project_sync(ctx: Context, slug: str | None = None, force: bool = False) -> dict[str, Any]:
+            p = who(ctx)
+            if slug:
+                need(p, pscope(slug))
+            else:
+                unrestricted(p, "sync every project")
+            return await run(core.project_sync(p, slug, force=force))
 
         # Routes (core) ---------------------------------------------------------------------
 
@@ -247,12 +335,15 @@ class MCPOrigin(Origin):
             from ...destinations.capy import parse_target
 
             p = who(ctx)
+            unrestricted(p, "change routes")
             return await run(core.set_route(p, destination="capy", agent=agent, project=project, target=parse_target(target),
                                             defaults=defaults.model_dump(exclude_none=True) if defaults else {}, allow_override=allow_override, note=note))
 
         @mcp.tool(title="Remove a route", description="Remove the route for exactly this agent/project pair (both empty: the global route). Audited.", annotations=DELETE)
         async def routes_remove(ctx: Context, project: str | None = None, agent: str | None = None) -> dict[str, Any]:
-            return sync(core.remove_route, who(ctx), destination="capy", agent=agent, project=project)
+            p = who(ctx)
+            unrestricted(p, "change routes")
+            return sync(core.remove_route, p, destination="capy", agent=agent, project=project)
 
         @mcp.tool(title="Explain a route", description="Which route capy_delegate would use for an agent (default: you) and project, and the levels checked.", annotations=READ)
         async def routes_resolve(ctx: Context, project: str | None = None, agent: str | None = None) -> dict[str, Any]:
@@ -264,7 +355,7 @@ class MCPOrigin(Origin):
         async def switchboard_status(ctx: Context) -> dict[str, Any]:
             p = who(ctx)
             default, mx = self.wait_caps.for_agent(p.source)
-            return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health()}
+            return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health()}
 
         if not has_capy:
             return mcp
@@ -274,10 +365,11 @@ class MCPOrigin(Origin):
         @mcp.tool(
             title="Delegate to Capy",
             description=(
-                "Hand a task to Capy, a coding agent with cloud machines, git and PRs, when it needs a real machine, a repo, a PR, or long-running work. "
-                "It goes to the target your route names for you and project (see routes_resolve), usually the owner's Captain. "
-                "Write the task self-contained: goal, context, repos, what done means. Returns a handle. Then call capy_wait(handle) "
-                "and answer with Capy's reply; if it times out, say Capy is still working and check later. wait_s>0 waits right here. Limited per day."
+                "Hand work to the project's Capy Captain: anything that needs a repo, a machine, a PR, research or a long run, or that the "
+                "Captain should know about. This is the normal way to work with the owner's projects, and it is cheap: delegate freely, and "
+                "follow up with capy_reply. It goes where your route for you and the project points (routes_resolve). Write the task "
+                "self-contained: goal, context, repos, what done means. Returns a handle; then call capy_wait(handle) and answer with Capy's "
+                "reply. If it times out, say Capy is still working and check later. wait_s>0 waits right here."
             ),
             annotations=SEND,
         )
@@ -293,6 +385,10 @@ class MCPOrigin(Origin):
             wait_s: Annotated[float, Field(ge=0, description="Seconds to wait for a first reply before returning (capped per client)")] = 0,
         ) -> dict[str, Any]:
             p = who(ctx)
+            if project:
+                need(p, pscope(project))
+            elif p.scopes is not None and "*" not in p.scopes:
+                raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes)}; pass project")
             out = await capy(ctx, "delegate", task=task, title=title, project=project, target=target, repos=repos,
                              files=[f.model_dump() for f in files] if files else None, new_thread=new_thread)
             if wait_s and not TASK_MODE.get():

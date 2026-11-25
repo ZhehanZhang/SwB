@@ -13,7 +13,7 @@ def test_delegate_follows_the_global_route_to_the_captain(make, capy):
     infra(core)
     tok = sign_in(c)["access_token"]
     out = payload(call(c, tok, "capy_delegate", {"task": "Add a status check for switchboard", "project": "infra", "repos": ["example-org/status-service"]}))
-    assert out["thread_id"] == CAPTAIN and out["route"] == "global" and out["used_today"] == "1/3" and out["handle"].startswith("h_")
+    assert out["thread_id"] == CAPTAIN and out["route"] == "global" and "used_today" not in out and out["handle"].startswith("h_")
     _, _, body = last(capy, "POST", f"threads/{CAPTAIN}/message")
     assert body["text"].startswith("[Delegated via switchboard from claude, project infra]") and "Repos: example-org/status-service" in body["text"]
     assert f"switchboard: done {out['handle']}" in body["text"] and body["delivery"] == "queue" and len(body["clientKey"]) <= 64
@@ -55,7 +55,7 @@ def test_repo_allowlist_comes_from_project_links(make, capy):
     assert [d["outcome"] for d in core.audit.recent(action="delegate")] == ["refused", "refused"]
 
 
-def test_daily_cap_resets_next_day(make):
+def test_optional_daily_cap_resets_next_day(make):
     clock = Clock()
     _, c = make(clock=clock)
     for i in range(3):
@@ -129,8 +129,8 @@ def test_context_pack_includes_project_memory_and_the_routed_captain(make):
     core, c = make()
     infra(core)
     core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN2, "name": "Acme Captain"}, defaults={}, allow_override=False, note="", by="t")
-    call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "profile", "title": "Timezone", "body": "America/New_York"})
-    call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "decisions", "title": "Python stack", "body": "Match slackgate"})
+    call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "profile", "title": "Timezone", "body": "America/New_York"})
+    call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "decisions", "title": "Python stack", "body": "Match slackgate"})
     call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "namespace": "notes", "title": "Port", "body": "8870"})
     call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "infra", "title": "Doing"})
     text = payload(call(c, STATIC_KEY, "context_pack", {"project": "infra"}))
@@ -147,7 +147,7 @@ def test_degraded_without_api_key(make):
     h = c.get("/healthz").json()
     assert h["status"] == "degraded" and [p for p in h["problems"] if "CAPY_API_KEY" in p] and h["destinations"]["capy"]["online"] is False
     assert "CAPY_API_KEY" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
-    assert not call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "notes", "title": "t", "body": "b"}).get("isError")
+    assert not call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "notes", "title": "t", "body": "b"}).get("isError")
     assert "CAPY_API_KEY missing" in payload(call(c, STATIC_KEY, "context_pack", {}))
     page = c.get("/", headers=OWNER)
     assert page.status_code == 200 and "Switchboard" in page.text and "CAPY_API_KEY" in page.text
