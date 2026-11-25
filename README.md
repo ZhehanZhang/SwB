@@ -194,6 +194,13 @@ Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where
     gets the existing handle back instead of a second thread.
   - `capy_reply` and `capy_wait` are never limited. `daily_cap` is an optional hard daily limit, off by default.
   - Retries the API sees again are also deduplicated through its `requestId` / `clientKey`.
+- Capy attributes a message to the API key that sent it. To keep relayed work from showing as the owner's own messages,
+  set `destinations.capy.send_key_env: CAPY_API_KEY_SERVICE` and put a service user's key in `.env`. That key then
+  sends messages and starts threads, while `CAPY_API_KEY` keeps doing the reads. The audit log records which key sent
+  each delegation and reply (`sent as ...`), and `/healthz` shows `sends_as`.
+- Bearer sign-in failures are in the audit log without the key: `auth_failure` records a wrong token's length and
+  paste mistakes (whitespace, quotes, a doubled "Bearer") or a non-Bearer header, and `auth_missing` records a
+  request with no header, at most once per address per 10 minutes.
 - Every action that changes something, and every refusal, is in the audit log (`docker compose exec switchboard switchboard log`).
 - The Capy API key is only ever sent as a header to api.capy.ai; it is never logged, and access logs drop query strings.
 

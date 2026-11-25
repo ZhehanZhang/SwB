@@ -133,7 +133,8 @@ class Switchboard:
         def record(outcome: str, detail: str | None = None) -> None:
             if action.is_audited or outcome != "ok":
                 self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                                  action=action.name, outcome=call.notes.get("outcome", outcome) if outcome == "ok" else outcome, detail=detail, target=call.notes.get("target"), ref=call.notes.get("ref"),
+                                  action=action.name, outcome=call.notes.get("outcome", outcome) if outcome == "ok" else outcome,
+                                  detail=detail or call.notes.get("detail"), target=call.notes.get("target"), ref=call.notes.get("ref"),
                                   title=call.notes.get("title"), excerpt=str(call.notes.get("excerpt", "")))
 
         if action.capped and dest.daily_cap is not None:

@@ -43,6 +43,9 @@ destinations:
     burst: {count: 10, window_s: 600}
     duplicate_window_s: 600
     daily_cap: null
+    # Optional: send messages and start threads with this env var's key (a Capy service user), so relayed work isn't
+    # attributed to the owner. CAPY_API_KEY still does the reads.
+    # send_key_env: CAPY_API_KEY_SERVICE
     max_file_bytes: 10485760
     # How a task reaches a busy Captain or thread: queue, steer or interrupt.
     captain_delivery: queue

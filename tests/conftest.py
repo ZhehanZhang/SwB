@@ -22,6 +22,7 @@ OWNER = {"cf-access-jwt-assertion": "good"}
 CAPY_KEY = "capy_" + "x" * 43
 STATIC_KEY = "s" * 32
 CHANNEL_KEY = "c" * 32
+SERVICE_KEY = "capy_service_" + "y" * 30
 PUBLIC = "https://switchboard.example.test"
 CAPTAIN = "jam_CAPTAIN0000000000000000000"
 CAPTAIN2 = "jam_CAPTAIN2000000000000000000"
@@ -30,6 +31,10 @@ OTHER_PROJECT = "project_OTHER"
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 CLAUDE_CB = "https://claude.ai/api/mcp/auth_callback"
 TASKS = "io.modelcontextprotocol/tasks"
+
+
+def last_auth(capy: "FakeCapy", method: str, path_end: str) -> str:
+    return [a for m, p, a in capy.auths if m == method and p.endswith(path_end)][-1]
 
 
 def base_config(**over: Any) -> dict[str, Any]:
@@ -74,6 +79,8 @@ class FakeCapy:
         self.queues: dict[str, asyncio.Queue] = {}
         self.connects: list[tuple[str, str | None]] = []
         self.stream_status: dict[str, int] = {}
+        self.keys = {CAPY_KEY, SERVICE_KEY}
+        self.auths: list[tuple[str, str, str]] = []
         self.captains: list[dict[str, Any]] = [
             {"id": CAPTAIN, "code": "ZINF-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
             {"id": CAPTAIN2, "code": "ACME-3", "name": "Acme Captain", "title": "Acme Captain", "projectId": OTHER_PROJECT},
@@ -107,7 +114,8 @@ class FakeCapy:
             return httpx.Response(200)
         body = json.loads(request.content) if request.content else None
         self.requests.append((request.method, path, body))
-        assert request.headers["authorization"] == f"Bearer {CAPY_KEY}"
+        assert request.headers["authorization"] in {f"Bearer {k}" for k in self.keys}
+        self.auths.append((request.method, path, request.headers["authorization"][7:]))
         p = path.removeprefix("/api/v1/")
         m = request.method
         if (mm := re.fullmatch(r"threads/([^/]+)/stream", p)):

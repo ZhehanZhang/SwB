@@ -69,6 +69,9 @@ class CapyDestination(Destination):
         key = core.cfg.env.get("CAPY_API_KEY") or None
         base = str(config.get("api_base", "https://api.capy.ai/api/v1"))
         self.api: CapyAPI | None = CapyAPI(base, key, transport=config.get("transport")) if key else None
+        self.send_key_env = str(config.get("send_key_env") or "") or None
+        send_key = core.cfg.env.get(self.send_key_env) if self.send_key_env else None
+        self.send_api: CapyAPI | None = CapyAPI(base, send_key, transport=config.get("transport")) if send_key and self.api else None
         self.delivery = str(config.get("captain_delivery", "queue"))
         if self.delivery not in DELIVERIES:
             raise ValueError("destinations.capy.captain_delivery must be queue, steer or interrupt")
@@ -101,10 +104,19 @@ class CapyDestination(Destination):
     def problems(self) -> list[str]:
         if self.api is None:
             return ["CAPY_API_KEY is not set: capy_* tools are disabled (memory, projects and routes still work)"]
+        if self.send_key_env and self.send_api is None:
+            return [f"{self.send_key_env} (destinations.capy.send_key_env) is not set: messages are sent with CAPY_API_KEY"]
         return []
 
+    @property
+    def sender(self) -> tuple[CapyAPI, str]:
+        """The client that sends messages and starts threads, and the env name of its key (the principal Capy shows)."""
+        if self.send_api is not None:
+            return self.send_api, str(self.send_key_env)
+        return self.need_api(), "CAPY_API_KEY"
+
     def status(self) -> dict[str, Any]:
-        return {"following": sorted(self.followers), "open_handles": len(self.core.inbox.handles(destination=self.name, open_only=True, limit=500))}
+        return {"sends_as": self.sender[1] if self.api else None, "following": sorted(self.followers), "open_handles": len(self.core.inbox.handles(destination=self.name, open_only=True, limit=500))}
 
     async def start(self) -> None:
         if self.api is None:
@@ -211,8 +223,9 @@ class CapyDestination(Destination):
             mode = "new_thread" if new_thread else "captain_thread"
 
         handle = call.core.inbox.new_handle()
-        header = f"[Delegated via switchboard from {call.principal.source}{f', project {p.slug}' if p else ''}]"
-        body = [header, "", task]
+        sender, sent_as = self.sender
+        call.note(detail=f"sent as {sent_as}")
+        body = [task]
         if repos:
             body += ["", "Repos: " + ", ".join(repos)]
         if p and p.links.get("capy_project"):
@@ -226,7 +239,7 @@ class CapyDestination(Destination):
                         "status": h["status"], "duplicate": True,
                         "next": f"You sent this exact task to {describe(tgt)} a moment ago, so this is that delegation's handle. "
                                 f"Call capy_wait(handle='{h['handle']}'); use capy_reply to add to it."}
-        uploaded = await self._files(api, files) if files else []
+        uploaded = await self._files(sender, files) if files else []
         digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}".encode()).hexdigest()
         try:
             if "thread" in tgt or ("captain" in tgt and mode == "captain_thread"):
@@ -234,7 +247,7 @@ class CapyDestination(Destination):
                 body += ["", f"Switchboard handle {handle}: your replies here go back to {call.principal.source}. "
                              f"When this task is finished, end that reply with the line: switchboard: done {handle}"]
                 cursor = await api.latest_cursor(thread_id)
-                receipt = await api.send_message(thread_id, "\n".join(body), files=uploaded or None, model=model,
+                receipt = await sender.send_message(thread_id, "\n".join(body), files=uploaded or None, model=model,
                                                  delivery=defaults.get("delivery") or self.delivery, client_key=digest[:64])
                 meta: dict[str, Any] = {"mode": "message", "message_id": receipt.get("id"), "deduped": bool(receipt.get("deduped"))}
                 status = "sent"
@@ -242,12 +255,12 @@ class CapyDestination(Destination):
                 project_id = tgt.get("project") or tgt.get("captain_project")
                 if not project_id:
                     raise DestinationError(f"{describe(tgt)} has no Capy project to start a thread in")
-                t = await api.create_thread(request_id=str(uuid.UUID(digest[:32])), project_id=project_id, title=title, model=model,
+                t = await sender.create_thread(request_id=str(uuid.UUID(digest[:32])), project_id=project_id, title=title, model=model,
                                             message="\n".join(body) + ("\n\n(Attachments follow in the next message.)" if uploaded else ""),
                                             captain_id=tgt.get("captain"))
                 thread_id, cursor = t["id"], None
                 if uploaded:
-                    await api.send_message(thread_id, "Attachments for the task above.", files=uploaded, delivery="steer", client_key=("files" + digest)[:64])
+                    await sender.send_message(thread_id, "Attachments for the task above.", files=uploaded, delivery="steer", client_key=("files" + digest)[:64])
                 meta = {"mode": "new_thread", "project_id": project_id}
                 status = t.get("status") or "working"
         except CapyError as e:
@@ -457,8 +470,10 @@ class CapyDestination(Destination):
         thread_id = self._thread_ref(thread_id)
         call.note(target=thread_id, ref=thread_id, excerpt=text)
         await self.check_thread_allowed(thread_id)
+        sender, sent_as = self.sender
+        call.note(detail=f"sent as {sent_as}")
         try:
-            r = await api.send_message(thread_id, f"[Reply via switchboard from {call.principal.source}]\n\n{text.strip()}", delivery=delivery)
+            r = await sender.send_message(thread_id, text.strip(), delivery=delivery)
         except CapyError as e:
             raise DestinationError(f"Capy API refused the reply: {e}") from e
         return {"thread_id": thread_id, "message_id": r.get("id"), "delivery": delivery}

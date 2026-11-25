@@ -35,6 +35,17 @@ class BearerGate:
         self.app = app
         self.core = core
         self.limiter = limiter
+        self._anonymous: dict[str, float] = {}
+
+    def _first_anonymous(self, ip: str) -> bool:
+        """Token-less requests are logged once per address per 10 minutes, since OAuth discovery starts with one."""
+        now = self.core.clock()
+        if now - self._anonymous.get(ip, 0) < 600:
+            return False
+        if len(self._anonymous) > 1000:
+            self._anonymous.clear()
+        self._anonymous[ip] = now
+        return True
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope["type"] == "http" and (scope["path"] == "/mcp" or scope["path"].startswith(PROTECTED)):
@@ -51,7 +62,13 @@ class BearerGate:
             if principal is None and token:
                 self.limiter.hit("bearer_fail", ip)
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
-                                       target=scope["path"], detail="invalid or expired bearer token")
+                                       target=scope["path"], detail=f"unknown or expired bearer token ({token_shape(token)}); agent {headers.get('user-agent', '-')[:80]}")
+            elif auth and not token:
+                self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
+                                       target=scope["path"], detail=f"Authorization header is not 'Bearer <token>' (scheme {auth.split(' ')[0][:20]!r}); agent {headers.get('user-agent', '-')[:80]}")
+            elif not auth and self._first_anonymous(ip):
+                self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_missing", outcome="refused",
+                                       target=scope["path"], detail=f"no Authorization header (OAuth discovery, or a key that wasn't sent); agent {headers.get('user-agent', '-')[:80]}")
             if principal is None:
                 challenge = self.core.auth.challenge_header("invalid_token" if token else None)
                 body = json.dumps({"error": "invalid_token" if token else "unauthorized", "error_description": "sign in through OAuth or send a valid bearer key"}).encode()
@@ -60,6 +77,20 @@ class BearerGate:
                 return
             scope[PRINCIPAL_SCOPE] = principal
         await self.app(scope, receive, send)
+
+
+def token_shape(token: str) -> str:
+    """What a wrong token looked like, without any of it: length and the usual paste mistakes."""
+    notes = [f"{len(token)} chars"]
+    if any(ch.isspace() for ch in token):
+        notes.append("contains whitespace")
+    if token[:1] in "\"'" or token[-1:] in "\"'":
+        notes.append("quoted")
+    if token.lower().startswith("bearer"):
+        notes.append("starts with 'Bearer' twice")
+    if "=" in token[:40]:
+        notes.append("looks like NAME=value")
+    return ", ".join(notes)
 
 
 def _cursor(request: Request) -> int | None:
