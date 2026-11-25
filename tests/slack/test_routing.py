@@ -93,6 +93,7 @@ async def test_capy_posts_in_a_routed_thread_as_the_captain(make_core, world):
     c["agents"]["capy"] = {"workspaces": {"a2a": ["bot"]}}
     core = await make_core(c)
     core.set_targets(targets(), {"teamcaptain": Persona(id="teamcaptain", name="TeamCaptain")})
+    core.target_agents = lambda t: {"capy"} if t.kind == "captain" else set()
     await core.ingest("a2a", mention("1700000400.000001", f"<@{BOT_USER}> teamcaptain hi"))
     await core.gate.submit(core.config.grant("capy"), "a2a", "bot", "post_message", {"channel": "CPUBLIC01", "text": "hello", "thread_ts": "1700000400.000001"})
     await core.gate.submit(core.config.grant("capy"), "a2a", "bot", "post_message", {"channel": "CPUBLIC01", "text": "top level"})

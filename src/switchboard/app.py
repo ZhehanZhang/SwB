@@ -1,4 +1,4 @@
-"""The one Starlette app: core pages and endpoints, OAuth, and whatever routes each origin serves."""
+"""The one Starlette app: core pages and endpoints, OAuth, pairing codes, and whatever routes each block serves."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from starlette.routing import Route
 
 from . import pages
 from .guard import Guard, RateLimiter, client_ip, reject
-from .origins.mcp import PRINCIPAL_SCOPE, principal_of
+from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -130,7 +130,9 @@ def create_app(core: "Switchboard") -> Any:
                        "avatar-refused": "Avatar not saved: send a picture of the persona's file type (see its file name), 2 MB at most."}
             extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf(email),
                                      notices.get(request.query_params.get("notice", "")), core.slack.persona_rows())
-        return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra)
+        rows = [row for b in core.blocks.values() for row in b.page_rows()]
+        return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
+                                block_rows=rows, connected=core.connections.list(), csrf=csrf(email))
 
     def csrf(email: str) -> str:
         return hmac.new(core.auth.secret, f"switchboard-csrf:{email}".encode(), hashlib.sha256).hexdigest()
@@ -194,6 +196,64 @@ def create_app(core: "Switchboard") -> Any:
         core.slack.store.audit(f"admin:{email}", "avatar_uploaded", persona=persona.id, file=persona.avatar, bytes=len(data))
         return RedirectResponse("/?notice=avatar-saved", status_code=303)
 
+    async def owner_form(request: Request) -> tuple[str | None, Any, Response | None]:
+        if not core.cfg.access_team_domain:
+            return None, None, pages.message_page("Not available", "This needs Cloudflare Access in front of switchboard (auth.cloudflare_access).", 403)
+        email = await core.auth.owner(request)
+        if email is None:
+            return None, None, pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        form = await request.form()
+        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
+            return None, None, pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
+        return email, form, None
+
+    async def connect_code(request: Request) -> Response:
+        """The owner mints a pairing code from the root page (Access JWT plus CSRF); the code is shown once."""
+        from .connect import ConnectError
+
+        email, form, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        project = str(form.get("project") or "").strip().lower() or None
+        try:
+            if project:
+                core.projects.get(project)
+            code = core.connections.mint(agent=str(form.get("agent") or ""), project=project, client=None, by=f"admin:{email}")
+        except (ConnectError, ValueError) as e:
+            return pages.message_page("Not minted", str(e), 400)
+        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="core", action="connect_code", outcome="ok", target=code["agent"])
+        return pages.connect_code_page(code, core.cfg.public_url or "")
+
+    async def connect_revoke(request: Request) -> Response:
+        email, _, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        n = core.connections.revoke(key_id=request.path_params["kid"])
+        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="core", action="connect_revoke", outcome="ok" if n else "refused",
+                          target=request.path_params["kid"])
+        return RedirectResponse("/", status_code=303)
+
+    async def connect_redeem(request: Request) -> JSONResponse:
+        """A client redeems a pairing code for its own bearer key (a machine path, outside Access). The key is shown once."""
+        from .connect import ConnectError
+
+        ip = client_ip(request.scope)
+        wait = limiter.blocked("connect_fail", ip)
+        if wait is not None:
+            return JSONResponse({"error": "slow_down", "error_description": "too many wrong codes from this address"}, status_code=429)
+        try:
+            body = await request.json()
+            out = core.connections.redeem(str((body or {}).get("code") or ""))
+        except (ConnectError, ValueError, TypeError) as e:
+            limiter.hit("connect_fail", ip)
+            core.audit.record(origin="http", source="-", client=ip, destination="core", action="connect_redeem", outcome="refused", detail=str(e)[:200])
+            return JSONResponse({"error": "invalid_grant", "error_description": str(e) if isinstance(e, ConnectError) else "send JSON {\"code\": \"...\"}"}, status_code=400)
+        core.audit.record(origin="http", source=out["agent"], client=ip, destination="core", action="connect_redeem", outcome="ok", target=out["key_id"])
+        base = core.cfg.public_url or ""
+        return JSONResponse({**out, "mcp_url": f"{base}/mcp", "inbox_events_url": f"{base}/inbox/events", "header": "Authorization: Bearer <key>",
+                             "note": "Store the key now; switchboard keeps only its hash. Revoke it from the root page."},
+                            headers={"Cache-Control": "no-store"})
+
     async def inbox_poll(request: Request) -> JSONResponse:
         """Long-poll for the Claude Code channel and scripts: the caller's own inbox items after ?after=."""
         p = principal_of(request)
@@ -244,6 +304,7 @@ def create_app(core: "Switchboard") -> Any:
             finally:
                 await core.aclose()
 
+    limiter = RateLimiter()
     origin_routes = [r for o in core.origins.values() for r in o.routes()]
     app: Any = Starlette(
         routes=[
@@ -254,6 +315,9 @@ def create_app(core: "Switchboard") -> Any:
             Route("/healthz", healthz),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),
+            Route("/connect", connect_redeem, methods=["POST"]),
+            Route("/connect/code", connect_code, methods=["POST"]),
+            Route("/connect/keys/{kid}/revoke", connect_revoke, methods=["POST"]),
             *pages.routes(),
             *core.auth.routes(),
             *origin_routes,
@@ -262,7 +326,6 @@ def create_app(core: "Switchboard") -> Any:
     )
     for origin in core.origins.values():
         app = origin.wrap(app)
-    limiter = RateLimiter()
 
     def refused(ip: str, path: str, why: str) -> None:
         core.audit.record(origin="http", source="-", client=ip, destination="core", action="rate_limited", outcome="refused", target=path, detail=why)

@@ -62,6 +62,7 @@ class SlackEngine:
         self.listeners: list[EventListener] = []
         self.targets: dict[str, Target] = {}
         self.dynamic_personas: dict[str, Persona] = {}
+        self.target_agents: Callable[[Target], set[str]] = lambda t: set()
         self.connect = True
         self._tasks: list[asyncio.Task] = []
 
@@ -72,7 +73,7 @@ class SlackEngine:
 
     @property
     def avatar_cache(self) -> Path:
-        """Rendered Captain avatars (see capy_avatars), named by what they were rendered from."""
+        """Pictures blocks rendered for their dynamic personas (Captains, say), named by what they were rendered from."""
         return self.data_dir / "avatar-cache"
 
     def avatar_dirs(self) -> list[Path]:
@@ -87,12 +88,15 @@ class SlackEngine:
         if personas is not None:
             self.dynamic_personas = personas
 
-    def thread_persona(self, workspace: str, channel: str | None, thread_ts: str | None) -> str | None:
+    def thread_persona(self, workspace: str, channel: str | None, thread_ts: str | None, agent: str | None = None) -> str | None:
+        """The persona of the target a thread is routed to; with agent, only if that agent is the one behind the target."""
         if not channel or not thread_ts:
             return None
         slug = self.store.thread_target(workspace, channel, thread_ts)
         target = self.targets.get(slug) if slug else None
-        return target.persona if target else None
+        if target is None or (agent is not None and agent not in self.target_agents(target)):
+            return None
+        return target.persona
 
     def route(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> list[str]:
         """Set push target/target_kind (and strip a leading slug from text). Returns slugs to hint at for a near miss."""
@@ -360,7 +364,7 @@ class SlackEngine:
     def persona_rows(self) -> list[dict[str, Any]]:
         """Each persona with its picture's URL, the folder it comes from, and the agents that post as it by default."""
         cfg = self.config
-        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled monogram", self.avatar_cache: "Capy avatar"}
+        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled monogram", self.avatar_cache: "rendered by a block"}
         rows = []
         for pid, p in self.personas().items():
             path = self.find_avatar(p.avatar) if p.avatar else None

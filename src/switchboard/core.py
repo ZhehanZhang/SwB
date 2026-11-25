@@ -1,4 +1,8 @@
-"""The core: auth, projects and scoped memory, routes, the inbox, audit and caps, and routing from origins to destinations."""
+"""The core: blocks, agents, identities, targets, conversations (the inbox), routes, projects and scoped memory, approvals and audit.
+
+It names no vendor. Blocks bring the ways in and out; the core routes a caller's verb (send, reply, status, result,
+cancel, targets) to the block that owns the target, through audit and caps.
+"""
 
 from __future__ import annotations
 
@@ -12,23 +16,25 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 from .audit import Audit, iso
-from .auth import AGENT_LABELS, Auth, Principal
+from . import targets as tgt
+from .agents import Agents
+from .auth import Auth, Principal
+from .blocks import Action, Address, Block, BlockError, Call
+from .blocks import load as load_block
 from .config import Config, load_config
-from .destinations import Action, Call, Destination, DestinationError
-from .destinations import load as load_destination
+from .connect import Connections
 from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
-from .origins import Origin
-from .origins import load as load_origin
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
-from .slack.config import parse_config as parse_slack_config
-from .slack.engine import SlackEngine
 from .store import Store
+
+DestinationError = BlockError
 
 log = logging.getLogger("switchboard")
 
 PACK_LIMIT = 14_000
+TARGETS_TTL_S = 60.0
 
 
 class CoreError(Exception):
@@ -47,6 +53,7 @@ class Switchboard:
         access_verifier: Any = None,
         destination_options: dict[str, dict[str, Any]] | None = None,
         slack_options: dict[str, Any] | None = None,
+        block_options: dict[str, dict[str, Any]] | None = None,
     ):
         self.cfg: Config = load_config(config_path, env)
         self.data_dir = Path(data_dir)
@@ -65,23 +72,59 @@ class Switchboard:
         self.memory = Memory(self.store, self.projects, self.cfg.mirror_dir, self.cfg.mirror_debounce_s)
         self.routes = Routes(self.store)
         self.inbox = Inbox(self.store)
-        self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret())
+        types = {name: load_block(str(sec.get("use") or name)) for name, sec in self.cfg.blocks.items()}
+        self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
+        self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
+        self.connections = Connections(self.store)
+        self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,
+                         connections=self.connections)
         self.auth.audit = self.audit
         self._tasks: set[asyncio.Task[Any]] = set()
         self.change_listeners: list[Any] = []
-        slack_opts = dict(slack_options or {})
-        self.slack_connect = bool(slack_opts.pop("connect", True))
-        self.slack: SlackEngine | None = None
-        destinations, origins = dict(self.cfg.destinations), dict(self.cfg.origins)
-        if self.cfg.slack is not None:
-            self.slack = SlackEngine(parse_slack_config(self.cfg.slack, self.cfg.env), self.data_dir, env=self.cfg.env, **slack_opts)
-            destinations.setdefault("slack", {})
-            origins.setdefault("slack", {})
-        opts = destination_options or {}
-        self.destinations: dict[str, Destination] = {
-            name: load_destination(name)(self, {**section, **opts.get(name, {})}) for name, section in destinations.items()
-        }
-        self.origins: dict[str, Origin] = {name: load_origin(name)(self, section) for name, section in origins.items()}
+        self.slack_options = dict(slack_options or {})
+        self.slack_connect = bool(self.slack_options.pop("connect", True))
+        self._targets: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self.target_errors: dict[str, str] = {}
+        opts = {**(destination_options or {}), **(block_options or {})}
+        self.blocks: dict[str, Block] = {}
+        for name, sec in self.cfg.blocks.items():
+            self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
+        for b in self.blocks.values():
+            b.bind()
+        self._seed_routes(self.cfg.routes)
+
+    @property
+    def origins(self) -> dict[str, Block]:
+        """Blocks that take callers in (they serve routes and authenticate)."""
+        return {n: b for n, b in self.blocks.items() if b.has_in}
+
+    @property
+    def destinations(self) -> dict[str, Block]:
+        """Blocks that reach a system out (they declare actions)."""
+        return {n: b for n, b in self.blocks.items() if b.has_out}
+
+    @property
+    def slack(self) -> Any:
+        """The Slack engine of the slack block, if one is configured (admin page, avatars, approvals)."""
+        for b in self.blocks.values():
+            engine = getattr(b, "engine", None)
+            if engine is not None:
+                return engine
+        return None
+
+    def _seed_routes(self, seeds: list[dict[str, Any]]) -> None:
+        """The config's routes: seed each agent/project slot once (routes_set and the page manage them after). Empty by default."""
+        for seed in seeds:
+            match, to = dict(seed.get("match") or {}), str(seed.get("to") or "")
+            addr = tgt.parse(to, self.blocks)
+            block = self.blocks.get(addr.block) if addr else None
+            if block is None or not block.supports_routes or not addr.kind:
+                raise CoreError(f"routes: {to!r} is not <block>:<kind>:<id> for a block that takes routes")
+            agent, project = match.get("agent") or None, match.get("project") or None
+            if self.store.one("SELECT 1 FROM routes WHERE destination = ? AND agent = ? AND project = ?", (block.name, agent or "", project or "")):
+                continue
+            self.routes.set(destination=block.name, agent=agent, project=project, target={addr.kind: addr.id}, defaults=dict(seed.get("defaults") or {}),
+                            allow_override=bool(seed.get("allow_override", True)), note="seeded from routes: in the config", by="config")
 
     def _secret(self) -> bytes:
         path = self.data_dir / "form-secret"
@@ -99,20 +142,16 @@ class Switchboard:
         return task
 
     async def start(self) -> None:
-        if self.slack is not None:
-            await self.slack.start(connect=self.slack_connect)
-        for d in self.destinations.values():
-            await d.start()
+        for b in self.blocks.values():
+            await b.start()
 
     async def aclose(self) -> None:
         for t in list(self._tasks):
             t.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
-        for d in self.destinations.values():
-            await d.aclose()
-        if self.slack is not None:
-            await self.slack.stop()
+        for b in reversed(list(self.blocks.values())):
+            await b.aclose()
         await self.auth.http.aclose()
         if self.memory.mirror_pending:
             self.memory.flush_mirror()
@@ -120,14 +159,14 @@ class Switchboard:
 
     def health(self) -> dict[str, Any]:
         problems = list(self.cfg.problems())
-        for o in self.origins.values():
-            problems += o.problems()
-        for d in self.destinations.values():
-            problems += d.problems()
+        for b in self.blocks.values():
+            problems += b.problems()
         return {
             "status": "degraded" if problems else "ok",
             "problems": problems,
             "oauth": bool(self.cfg.issuer),
+            "blocks": {n: {"use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
+                           "online": b.online} for n, b in self.blocks.items()},
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
@@ -138,9 +177,10 @@ class Switchboard:
 
     def known_agents(self) -> list[str]:
         """Agent names a message can be addressed to: OAuth agents, bearer-key names, and agents named in routes."""
-        names = set(AGENT_LABELS) | {k.name for k in self.cfg.static_keys if k.name not in self.cfg.inbox_keys} | set(self.cfg.source_names.values())
+        names = set(self.agents.ids()) | {k.name for k in self.cfg.static_keys if k.name not in self.cfg.inbox_keys} | set(self.cfg.source_names.values())
         names |= set(self.cfg.inbox_keys.values())
         names |= {r["agent"] for r in self.store.q("SELECT DISTINCT agent FROM routes WHERE agent IS NOT NULL AND agent != ''")}
+        names |= set(self.connections.agents())
         return sorted(names)
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None) -> dict[str, Any]:
@@ -154,21 +194,197 @@ class Switchboard:
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
-        sender = {"kind": "agent", "agent": principal.source, "label": AGENT_LABELS.get(principal.source, principal.source),
+        sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin}
         handle = self.inbox.open_handle(owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
-                                        meta={"from": sender}, status="delivered")
+                                        meta={"from": sender}, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
         await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
-        return {"to": to, "handle": handle, "delivered": True, "project": p.slug if p else None}
+        return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "project": p.slug if p else None}
 
-    def destination(self, name: str) -> Destination:
-        d = self.destinations.get(name)
+    def destination(self, name: str) -> Block:
+        d = self.blocks.get(name)
         if d is None:
-            raise CoreError(f"destination {name!r} is not configured; configured: {', '.join(self.destinations) or 'none'}")
+            raise CoreError(f"block {name!r} is not configured; configured: {', '.join(self.blocks) or 'none'}")
         return d
+
+    block = destination
+
+    def bind_listener(self, fn: Any) -> None:
+        self.change_listeners.append(fn)
+
+    async def deliver(self, conversation: str, kind: str, data: dict[str, Any]) -> int:
+        """A block reports what it heard back on a conversation: the item lands in its owner's inbox."""
+        return await self.inbox.add(conversation, kind, data)
+
+    def alias_used(self, alias: str, agent: str) -> None:
+        """A deprecated tool name was called: counted per agent, so the aliases can go once nobody uses them."""
+        log.info("deprecated alias %s called by %s", alias, agent)
+        self.store.x("INSERT INTO alias_use(alias, agent, count, last_at) VALUES (?,?,1,?) ON CONFLICT(alias, agent) DO UPDATE SET count = count + 1, last_at = excluded.last_at",
+                     (alias, agent, self.clock()))
+
+    def alias_counts(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in self.store.q("SELECT alias, agent, count, last_at FROM alias_use ORDER BY count DESC")]
+
+    # Targets ------------------------------------------------------------------------------------
+
+    async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> list[dict[str, Any]]:
+        """Every block's targets, plus an agent:<name> mailbox per known agent and a project:<slug> route per project.
+        A block that fails keeps its last good list, and the error shows in target_errors."""
+        out: list[dict[str, Any]] = []
+        now = self.clock()
+        for name, b in self.blocks.items():
+            if type(b).targets is Block.targets or (block and block != name):
+                continue
+            at, got = self._targets.get(name, (0.0, []))
+            if refresh or now - at > TARGETS_TTL_S or not got:
+                try:
+                    got = await b.targets()
+                    self._targets[name] = (now, got)
+                    self.target_errors.pop(name, None)
+                except Exception as exc:
+                    self.target_errors[name] = f"{type(exc).__name__}: {exc}"[:300]
+            for t in got:
+                out.append({**t, "address": str(Address(name, t["kind"], t["id"])), "block": name, "level": b.manifest.level_out,
+                            "slugs": [s for s in t.get("slugs") or [] if s]})
+        if not block or block == "agent":
+            for a in self.known_agents():
+                if a not in tgt.NOT_TARGETS:
+                    out.append({"address": f"agent:{a}", "block": "agent", "kind": "agent", "id": a, "name": self.agents.label(a), "slugs": [a],
+                                "level": "L0", "persona": {"id": a}})
+        if not block or block == "project":
+            for p in self.projects.list():
+                out.append({"address": f"project:{p.slug}", "block": "project", "kind": "project", "id": p.slug, "name": p.name, "slugs": [p.slug],
+                            "level": None, "routed_to": (str(a) if (a := self.route_address(None, p.slug)) else None)})
+        if kind:
+            out = [t for t in out if t["kind"] == kind]
+        if query:
+            q = query.strip().lower()
+            out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
+        prio = tuple(self.cfg.targets.get("priority") or ())
+        return sorted(out, key=lambda t: (tgt.rank(t, prio), t["address"]))
+
+    def slug_map(self, targets: list[dict[str, Any]], aliases: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
+        return dict(tgt.by_slug(targets, self.cfg.targets.get("priority") or (), {**(self.cfg.targets.get("aliases") or {}), **(aliases or {})}))
+
+    def route_address(self, agent: str | None, project: str | None) -> Address | None:
+        """Where a route sends this agent's work for this project, as an address (None: no route)."""
+        for name, b in self.blocks.items():
+            if not b.supports_routes:
+                continue
+            r, _ = self.routes.resolve(destination=name, agent=agent or "", project=project)
+            if r is not None:
+                return b.route_address(r.target)
+        return None
+
+    async def resolve_to(self, to: str) -> Address:
+        """A send's to: an address, a legacy captain:/project:/thread: target, an agent name, a block name or a slug."""
+        text = (to or "").strip()
+        addr = tgt.parse(text, self.blocks)
+        if addr is not None:
+            if addr.block == "project" and not self._is_project(addr.id):
+                owner = self._kind_owner("project")
+                if owner:
+                    return Address(owner, "project", addr.id)
+                raise CoreError(f"no project {addr.id!r}")
+            return addr
+        head, sep, rest = text.partition(":")
+        if sep and head.lower() in tgt.LEGACY_KINDS:
+            owner = self._kind_owner(head.lower())
+            if owner:
+                return Address(owner, head.lower(), rest.strip())
+        word = text.lower()
+        if word in self.blocks:
+            return Address(word, "", "")
+        if word in self.known_agents():
+            return Address("agent", "agent", word)
+        if word.startswith("jam_") or word.startswith("project_"):
+            owner = next((n for n, b in self.blocks.items() if b.owns_ref(text)), None)
+            if owner:
+                return Address(owner, "", text)
+        hits = self.slug_map(await self.targets())
+        t = hits.get(tgt.slugify(word))
+        if t is None:
+            raise CoreError(f"no target {to!r}; list them with targets(), or pass an address like agent:claude or <block>:<kind>:<id>")
+        return Address(t["block"], t["kind"], t["id"])
+
+    def _is_project(self, slug: str) -> bool:
+        try:
+            self.projects.get(slug.strip().lower())
+            return True
+        except ProjectError:
+            return False
+
+    def _kind_owner(self, kind: str) -> str | None:
+        owners = [n for n, b in self.blocks.items() if any(k.kind == kind for k in b.manifest.targets)]
+        return owners[0] if len(owners) == 1 else None
+
+    # Generic verbs ------------------------------------------------------------------------------
+
+    async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
+                   files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None) -> dict[str, Any]:
+        """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
+        addr = await self.resolve_to(to) if to else None
+        if addr is not None and addr.block == "agent":
+            return {**await self.agent_send(principal, to=addr.id, text=task, project=project), "to": str(addr)}
+        if addr is not None and addr.block == "project":
+            project, addr = addr.id, None
+        if addr is not None:
+            block = self.destination(addr.block)
+        else:
+            block = self._routing_block(principal, project)
+        action = block.verb("send")
+        if action is None:
+            raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
+        message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
+        kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
+        out = await self.invoke(principal, block.name, action, kw)
+        if isinstance(out, dict):
+            out.setdefault("conversation", out.get("handle"))
+            out.setdefault("block", block.name)
+        return out
+
+    def _routing_block(self, principal: Principal, project: str | None) -> Block:
+        routable = [b for b in self.blocks.values() if b.supports_routes and b.verb("send") is not None]
+        p = project.strip().lower().removeprefix("project:") if project else None
+        for b in routable:
+            if self.routes.resolve(destination=b.name, agent=principal.source, project=p)[0] is not None:
+                return b
+        if routable:
+            return routable[0]
+        raise CoreError("nothing to send to: no block that takes routes is configured; pass to (an agent:<name> mailbox or a block target)")
+
+    def _conversation(self, principal: Principal, ref: str) -> tuple[Block | None, dict[str, Any] | None]:
+        """The block and handle behind a conversation reference (h_ handle, or a block's own id such as a thread id)."""
+        ref = (ref or "").strip()
+        if ref.startswith("h_"):
+            h = self.inbox.handle(ref)
+            if h is None or h["owner"] != principal.source:
+                raise CoreError(f"no conversation {ref!r}")
+            return self.blocks.get(h["destination"]), h
+        owner = next((b for b in self.blocks.values() if b.owns_ref(ref)), None)
+        if owner is None:
+            raise CoreError(f"no block owns {ref!r}; pass the conversation handle (h_...)")
+        return owner, None
+
+    async def verb(self, principal: Principal, verb: str, ref: str, **kw: Any) -> Any:
+        """reply, status, result or cancel on a conversation, run by the block that owns it."""
+        block, h = self._conversation(principal, ref)
+        if h is not None and h["destination"] == "mailbox":
+            if verb == "reply":
+                return await self.send(principal, to=f"agent:{h['ref']}", task=kw.get("text") or "", project=h["project"])
+            if verb == "cancel":
+                return {"conversation": h["handle"], "status": h["status"]}
+            return {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"],
+                    "note": "a mailbox message; answer it with reply"}
+        if block is None:
+            raise CoreError(f"the block behind {ref!r} is not configured")
+        action = block.verb(verb)
+        if action is None:
+            raise CoreError(f"{block.name} conversations take no {verb}")
+        return await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any]) -> Any:
         """Run one destination action for an origin's caller, enforcing the daily cap and writing the audit record."""
@@ -195,7 +411,7 @@ class Switchboard:
                 call.note(excerpt=str(kwargs.get("task") or ""))
                 record("refused", f"burst limit ({used} in {window:.0f} s)")
                 raise DestinationError(f"{used} {action.name} calls from {principal.source} in the last {window / 60:.0f} minutes looks like a loop, so this one "
-                                       f"was stopped. Check capy_inbox for the work already sent; capy_reply and capy_wait are not limited.")
+                                       f"was stopped. Check inbox for the work already sent; reply and wait are not limited.")
         try:
             out = await action.handler(call, **kwargs)
         except DestinationError as e:
@@ -242,7 +458,8 @@ class Switchboard:
         return r.as_dict()
 
     def changed(self) -> None:
-        """Routes or projects changed: let listeners (the Slack origin's targets) refresh in the background."""
+        """Routes or projects changed: let listeners (the Slack block's targets) refresh in the background."""
+        self._targets.clear()
         for listener in self.change_listeners:
             task = asyncio.ensure_future(listener())
             self._tasks.add(task)
@@ -263,7 +480,7 @@ class Switchboard:
         results = []
         for p in projects:
             for name, d in self.destinations.items():
-                if type(d).autolink is Destination.autolink:
+                if type(d).autolink is Block.autolink:
                     continue
                 if not d.online:
                     results.append({"project": p.slug, "destination": name, "skipped": f"{name} is offline", "changed": []})

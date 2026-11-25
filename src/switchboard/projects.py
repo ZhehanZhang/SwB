@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
@@ -9,7 +10,8 @@ from .audit import iso
 from .config import SLUG_RE
 from .store import Store
 
-LINK_KEYS = ("capy_project", "repos", "claude_project", "chatgpt_project")
+LINK_KEY_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*_project$")
+LINK_KEYS = ("repos",)
 
 
 class ProjectError(ValueError):
@@ -41,11 +43,12 @@ def _project(r: sqlite3.Row) -> Project:
                    archived=r["archived_at"] is not None, private=bool(r["private"]), created_at=iso(r["created_at"]), updated_at=iso(r["updated_at"]))
 
 
-def clean_links(links: dict[str, Any] | None) -> dict[str, Any]:
+def clean_links(links: dict[str, Any] | None, known: tuple[str, ...] = LINK_KEYS) -> dict[str, Any]:
+    """Links are repos plus <block or agent>_project keys (capy_project, claude_project, ...) naming its counterpart there."""
     out: dict[str, Any] = {}
     for k, v in (links or {}).items():
-        if k not in LINK_KEYS:
-            raise ProjectError(f"unknown link {k!r}; use {', '.join(LINK_KEYS)}")
+        if k != "repos" and not LINK_KEY_RE.match(str(k)):
+            raise ProjectError(f"unknown link {k!r}; use {', '.join(dict.fromkeys(('repos', *known)))}")
         if v in (None, "", []):
             continue
         if k == "repos":
@@ -62,6 +65,7 @@ class Projects:
 
     def __init__(self, store: Store):
         self.store = store
+        self.link_keys: tuple[str, ...] = LINK_KEYS
 
     def get(self, slug: str, *, allow_archived: bool = True) -> Project:
         r = self.store.one("SELECT * FROM projects WHERE slug = ?", ((slug or "").strip().lower(),))
@@ -87,7 +91,7 @@ class Projects:
         now = self.store.clock()
         self.store.x(
             "INSERT INTO projects(slug, name, description, links, private, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
-            (slug, name.strip(), description or "", json.dumps(clean_links(links)), int(private), now, now),
+            (slug, name.strip(), description or "", json.dumps(clean_links(links, self.link_keys)), int(private), now, now),
         )
         return self.get(slug)
 
@@ -98,7 +102,7 @@ class Projects:
         if links is not None:
             for k, v in links.items():
                 merged.pop(k, None)
-            merged.update(clean_links(links))
+            merged.update(clean_links(links, self.link_keys))
         target = (new_slug or p.slug).strip().lower()
         if target != p.slug and (not SLUG_RE.match(target) or target == "general"):
             raise ProjectError("new_slug must be lowercase letters, digits and dashes (max 48), and not 'general'")
@@ -127,10 +131,10 @@ class Projects:
         return r["archived_at"] if r else None
 
     def resolve(self, hint: str) -> list[dict[str, Any]]:
-        """Find projects matching a slug, name, Claude/ChatGPT project name, Capy project, or owner/repo."""
+        """Find projects matching a slug, name, any linked project name or id (links.<x>_project), or owner/repo."""
         h = (hint or "").strip().lower()
         if not h:
-            raise ProjectError("pass a project hint: a name, a Claude or ChatGPT project name, a Capy project, or a repo")
+            raise ProjectError("pass a project hint: a name, a linked project's name or id, or a repo")
         hits = []
         for p in self.list(include_archived=True):
             fields = {"slug": p.slug, "name": p.name.lower(), **{k: str(v).lower() for k, v in p.links.items() if k != "repos"}}

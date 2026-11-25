@@ -1,22 +1,21 @@
-"""MCP Tasks (io.modelcontextprotocol/tasks, protocol 2026-07-28) for capy_delegate.
+"""MCP Tasks (io.modelcontextprotocol/tasks, protocol 2026-07-28) for send (and its deprecated alias capy_delegate).
 
-When a tools/call request advertises the extension in its _meta client capabilities, capy_delegate answers with a task
+When a tools/call request advertises the extension in its _meta client capabilities, send answers with a task
 instead of a plain result. The task id is the delegation's switchboard handle, which lives in SQLite, so tasks/get keeps
-working across restarts. The task completes when the Capy thread reports its final result. Clients without the
-extension get the ordinary result (handle plus capy_wait).
+working across restarts. The task completes when the conversation reports its final result. Clients without the
+extension get the ordinary result (conversation plus wait).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from mcp.server.extension import Extension, MethodBinding
 from mcp_types import RequestParams
 
 from ...audit import iso
 
-if TYPE_CHECKING:
-    from . import MCPOrigin
+
 
 EXTENSION = "io.modelcontextprotocol/tasks"
 CAPS_KEY = "io.modelcontextprotocol/clientCapabilities"
@@ -49,21 +48,21 @@ def _structured(result: Any) -> tuple[bool, dict[str, Any] | None]:
 class TasksExtension(Extension):
     identifier = EXTENSION
 
-    def __init__(self, origin: "MCPOrigin"):
+    def __init__(self, origin: Any):
         self.origin = origin
 
     @property
     def core(self) -> Any:
         return self.origin.core
 
-    def ttl_ms(self) -> int:
-        dest = self.core.destinations.get("capy")
-        return int(getattr(dest, "handle_ttl", 7 * 86400) * 1000)
+    def ttl_ms(self, block: str | None = None) -> int:
+        b = self.core.blocks.get(block or "")
+        return int(getattr(b, "handle_ttl", 7 * 86400) * 1000)
 
     async def intercept_tool_call(self, params: Any, ctx: Any, call_next: Any) -> Any:
         from . import TASK_MODE
 
-        if params.name != "capy_delegate" or not wants_tasks(ctx.meta):
+        if params.name not in ("send", "capy_delegate") or not wants_tasks(ctx.meta):
             return await call_next(ctx)
         token = TASK_MODE.set(True)
         try:
@@ -74,6 +73,8 @@ class TasksExtension(Extension):
         if is_error or not data or not data.get("handle"):
             return result
         h = self.core.inbox.handle(data["handle"])
+        if h is None or h["destination"] not in self.core.blocks:
+            return result
         return {"resultType": "task", **self._task(h, detailed=False)}
 
     def _principal(self, ctx: Any) -> Any:
@@ -91,7 +92,7 @@ class TasksExtension(Extension):
 
         p = self._principal(ctx)
         h = self.core.inbox.handle(task_id)
-        if h is None or h["owner"] != p.source or h["destination"] != "capy":
+        if h is None or h["owner"] != p.source or h["destination"] not in self.core.blocks:
             raise MCPError(code=INVALID_PARAMS, message=f"unknown task {task_id!r}")
         return h
 
@@ -101,13 +102,14 @@ class TasksExtension(Extension):
             "taskId": h["handle"],
             "createdAt": iso(h["created_at"]),
             "lastUpdatedAt": iso(h.get("updated_at") or h["created_at"]),
-            "ttlMs": self.ttl_ms(),
+            "ttlMs": self.ttl_ms(h["destination"]),
             "pollIntervalMs": POLL_MS,
         }
         target = h["meta"].get("target") or {}
+        title = self.core.blocks[h["destination"]].title or h["destination"]
         where = f"thread {h['ref']}" + (f" ({target.get('name')})" if target.get("name") else "")
         if h["open"] or not detailed:
-            msg = f"Capy is working on it in {where}"
+            msg = f"{title} is working on it in {where}"
             if state.get("ask"):
                 msg += f"; it needs the owner: {state['ask']}"
             elif state.get("last_reply"):
@@ -120,13 +122,13 @@ class TasksExtension(Extension):
         if status in ("failed", "expired"):
             return {**base, "status": "failed", "statusMessage": text, "error": {"code": TASK_FAILED, "message": text or status}}
         prs = state.get("pull_requests") or []
-        body = text + ("\n\nPull requests:\n" + "\n".join(f"- {u}" for u in prs) if prs else "") + f"\n\n(Capy {where}, handle {h['handle']})"
+        body = text + ("\n\nPull requests:\n" + "\n".join(f"- {u}" for u in prs) if prs else "") + f"\n\n({title} {where}, handle {h['handle']})"
         result = {
             "content": [{"type": "text", "text": body}],
             "structuredContent": {"handle": h["handle"], "thread_id": h["ref"], "status": status, "reply": text, "pull_requests": prs},
             "isError": False,
         }
-        return {**base, "status": "completed", "statusMessage": "Capy reported its result", "result": result}
+        return {**base, "status": "completed", "statusMessage": f"{title} reported its result", "result": result}
 
     def methods(self) -> list[MethodBinding]:
         async def get(ctx: Any, params: TaskParams) -> dict[str, Any]:
@@ -138,8 +140,7 @@ class TasksExtension(Extension):
 
         async def cancel(ctx: Any, params: TaskParams) -> dict[str, Any]:
             h = self._handle(ctx, params.taskId)
-            dest = self.core.destination("capy")
-            await self.core.invoke(self._principal(ctx), "capy", dest.action("cancel"), {"handle": h["handle"]})
+            await self.core.verb(self._principal(ctx), "cancel", h["handle"])
             return {"resultType": "complete"}
 
         return [

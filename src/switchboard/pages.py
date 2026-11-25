@@ -64,7 +64,7 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <a href="https://status.example.com" class="foot-btn" aria-label="Status" title="Status">{icon("foot_vitalSigns")}</a>
 <a href="https://example.com" class="foot-btn" aria-label="Home" title="Home">{icon("foot_home")}</a>
 </div></div>
-<div class="foot-line"><span>Shared memory and routing to Capy for the owner's assistants.</span></div>
+<div class="foot-line"><span>Shared memory and routing between the owner's assistants and agents.</span></div>
 </footer></div></body></html>"""
     return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer"})
 
@@ -135,56 +135,78 @@ def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, 
 
 
 def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]],
-               extra: str = "") -> HTMLResponse:
+               extra: str = "", block_rows: list[tuple[str, str, str, bool | None]] | None = None, connected: list[dict[str, Any]] | None = None,
+               csrf: str = "") -> HTMLResponse:
     ok = health["status"] == "ok"
-    capy = health["destinations"].get("capy")
-    rows = [
-        ("Origin: MCP", "Claude and ChatGPT sign in with OAuth 2.1 (PKCE, DCR, CIMD) or a bearer key", health["oauth"]),
-        ("Destination: Capy", "Delegating to Capy Captains and threads, with replies back", bool(capy and capy["online"])),
-        ("Memory mirror", "Markdown copy for Capy Drive, one folder per scope", health["mirror"]),
-    ]
-    if "slack" in health["destinations"]:
-        rows.insert(2, ("Origin and destination: Slack", "Events from watched channels, mentions and DMs; reads, posts and reactions", bool(health["destinations"]["slack"]["online"])))
-    items = "".join(_row(a, b, "On" if on else "Off", on) for a, b, on in rows)
+    items = ""
+    for name, b in health.get("blocks", {}).items():
+        level = " · ".join(x for x in (f"out {b['level']['out']}" if b["level"]["out"] else "", f"in {b['level']['in']}" if b["level"]["in"] else "") if x)
+        items += _row(f"Block: {name}", f"{b['use']} block, {b['kind']}" + (f", {level}" if level else ""), "On" if b["online"] else "Off", b["online"])
+    items += _row("Memory mirror", "Markdown copy of every memory, one folder per scope", "On" if health["mirror"] else "Off", health["mirror"])
     items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
-    if capy and capy.get("sends_as"):
-        checks = capy.get("send_keys") or {}
-
-        def sender_row(label: str, env: str) -> str:
-            c = checks.get(env) or {"status": "unchecked", "detail": "not checked yet"}
-            if not env:
-                return _row(f"Sends as: {label}", "no key may send for this agent", "none", False)
-            return _row(f"Sends as: {label}", f"{c['status']}: {c.get('detail', '')}", env, c["status"] == "ok")
-
-        items += sender_row("default", capy["sends_as"])
-        items += "".join(sender_row(a, env) for a, env in (capy.get("sends_as_agents") or {}).items())
+    items += "".join(_row(a, b, c, d) for a, b, c, d in block_rows or [])
     problems = "".join(notice(p, "warn") for p in health["problems"])
     status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in with SSO as {html.escape(email)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')
-    return page("Switchboard", status + extra + _routes_body(routes, projects, changes), 200)
+    return page("Switchboard", status + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes), 200)
+
+
+def _connect_body(keys: list[dict[str, Any]], csrf: str) -> str:
+    """Agents connected with a pairing code, each revocable, and a form that mints a new code."""
+    hidden = f'<input type="hidden" name="csrf" value="{csrf}">'
+
+    def row(k: dict[str, Any]) -> str:
+        used = _ago(k.get("last_used_at"))
+        hint = " · ".join(x for x in (k["id"], f"project {k['project']}" if k.get("project") else "", k.get("client") or "", f"last call {used}" if used else "never called") if x)
+        return (f'<div class="setting"><div class="setting-label"><span>{html.escape(k["agent"])}</span><span class="setting-hint">{html.escape(hint)}</span></div>'
+                f'<div class="setting-value"><form method="post" action="/connect/keys/{html.escape(k["id"])}/revoke">{hidden}<button class="text-button">Revoke</button></form></div></div>')
+
+    rows = "".join(row(k) for k in keys) or _row("Nobody connected yet", "Mint a pairing code below, then redeem it on the machine the agent runs on", "")
+    mint = (f'<div class="setting"><div class="setting-label"><span>Connect a new agent</span><span class="setting-hint">A one-time code, valid 10 minutes. '
+            f'The client redeems it for its own key.</span></div><div class="setting-value"><form method="post" action="/connect/code">{hidden}'
+            '<input name="agent" placeholder="agent, e.g. codex" required pattern="[a-z0-9][a-z0-9-]{0,39}" aria-label="Agent name">'
+            '<input name="project" placeholder="project (optional)" aria-label="Project">'
+            '<button class="pill-button primary">Mint code</button></form></div></div>')
+    return (f'<section class="hero section-gap fade-in"><p>Connected agents: one key each, from a pairing code. Revoking stops the next call.</p></section>'
+            f'<div class="card fade-in">{rows}{mint}</div>')
+
+
+def _ago(at: float | None) -> str:
+    if not at:
+        return ""
+    return datetime.fromtimestamp(at, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
+    cmd = f"curl -s -X POST {public_url}/connect -H 'content-type: application/json' -d '{{\"code\": \"{code['code']}\"}}'"
+    body = (hero("Pairing code", f"For <strong>{html.escape(code['agent'])}</strong>" + (f" in project {html.escape(code['project'])}" if code.get("project") else "")
+                 + ". It works once, for 10 minutes.")
+            + f'<div class="card fade-in">{_row("Code", "Give it to the client that redeems it", code["code"])}'
+            + _row("Redeem", "Run this on the machine the agent runs on; it prints the agent's key once, with the MCP URL", cmd) + "</div>"
+            + '<p class="section-gap"><a href="/" class="text-button">Back</a></p>')
+    return page("Pairing code", body, 200)
 
 
 def _routes_body(routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> str:
-    def target(t: dict[str, Any]) -> str:
-        for kind in ("captain", "project", "thread"):
-            if t.get(kind):
-                return f"{kind} {t.get('name') or t[kind]}"
-        return "?"
+    def target(r: dict[str, Any]) -> str:
+        t = r["target"]
+        kind = next((k for k, v in t.items() if v and k not in ("name", "captain_project", "project_id")), None)
+        return f"{r['destination']} {kind} {t.get('name') or t[kind]}" if kind else "?"
 
     def who(r: dict[str, Any]) -> str:
         return f"{r['agent'] or 'any agent'} / {r['project'] or 'any project'}"
 
     route_rows = "".join(
         _row(who(r), f"{r['level']} route" + (", override allowed" if r["allow_override"] else "") + (f", {r['note']}" if r["note"] else "")
-             + f", set by {r['updated_by']} {(r['updated_at'] or '')[:16]}", target(r["target"]) + (f" ({', '.join(f'{k}={v}' for k, v in r['defaults'].items())})" if r["defaults"] else ""))
+             + f", set by {r['updated_by']} {(r['updated_at'] or '')[:16]}", target(r) + (f" ({', '.join(f'{k}={v}' for k, v in r['defaults'].items())})" if r["defaults"] else ""))
         for r in routes
-    ) or _row("No routes", "Set one with the routes_set tool, or default_route in config", "")
+    ) or _row("No routes", "Set one with the routes_set tool, or routes: in the config", "")
     project_rows = "".join(
         _row(p["name"], f"{p['scope']}" + (", archived" if p["archived"] else ""), ", ".join(f"{k}: {v if isinstance(v, str) else ', '.join(v)}" for k, v in p["links"].items()) or "no links")
         for p in projects
     ) or _row("No projects", "Create one with the project_create tool", "")
     change_rows = "".join(_row(f"{c['action'].replace('_', ' ')} {c['target'] or ''}", f"{c['at']} by {c['source']} via {c['origin']}", c["outcome"] + (f": {c['detail']}" if c["detail"] else ""), c["outcome"] == "ok") for c in changes)
-    return (f'<section class="hero section-gap fade-in"><p>Routes: where each assistant\'s Capy work goes. Resolution: agent and project, then project, then agent, then global.</p></section>'
+    return ('<section class="hero section-gap fade-in"><p>Routes: where send goes for each assistant when it names no target. Resolution: agent and project, then project, then agent, then global.</p></section>'
             + f'<div class="card fade-in">{route_rows}</div>'
             + f'<section class="hero section-gap fade-in"><p>Projects</p></section><div class="card fade-in">{project_rows}</div>'
             + (f'<section class="hero section-gap fade-in"><p>Recent route changes and refusals</p></section><div class="card fade-in">{change_rows}</div>' if changes else ""))
