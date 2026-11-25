@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 PROTECTED = ("/mcp", "/inbox/")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
+AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
 
 class BearerGate:
@@ -119,9 +120,11 @@ def create_app(core: "Switchboard") -> Any:
         extra = ""
         if core.slack is not None:
             notices = {"approved": "Approved and sent.", "rejected": "Rejected.", "send-failed": "Approved, but Slack refused the send; see the audit log.",
-                       "decide-refused": "That request was already decided or has expired."}
+                       "decide-refused": "That request was already decided or has expired.",
+                       "avatar-saved": "Avatar saved. New posts use it; Slack may take a minute to show it.",
+                       "avatar-refused": "Avatar not saved: send a picture of the persona's file type (see its file name), 2 MB at most."}
             extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf(email),
-                                     notices.get(request.query_params.get("notice", "")))
+                                     notices.get(request.query_params.get("notice", "")), core.slack.persona_rows())
         return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra)
 
     def csrf(email: str) -> str:
@@ -154,13 +157,37 @@ def create_app(core: "Switchboard") -> Any:
         if core.slack is None:
             return Response(status_code=404)
         name = request.path_params["name"]
-        from .slack.config import AVATAR_RE
-
-        path = core.slack.avatar_dir / name
-        if not AVATAR_RE.match(name) or not path.is_file():
+        path = core.slack.find_avatar(name)
+        if path is None:
             return Response(status_code=404)
         return Response(path.read_bytes(), media_type="image/png" if name.endswith(".png") else ("image/gif" if name.endswith(".gif") else "image/jpeg"),
                         headers={"Cache-Control": "public, max-age=3600"})
+
+    async def avatar_upload(request: Request) -> Response:
+        """The owner replaces a persona's picture from the root page: Access JWT for an owner plus a CSRF token."""
+        if core.slack is None or not core.cfg.access_team_domain:
+            return pages.message_page("Not available", "Avatar uploads need Slack and Cloudflare Access configured.", 403)
+        email = await core.auth.owner(request)
+        if email is None:
+            return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        form = await request.form()
+        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
+            return pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
+        persona = core.slack.config.personas.get(request.path_params["pid"])
+        if persona is None or not persona.avatar:
+            return pages.message_page("Not available", "That persona has no avatar file; it uses an icon_url or emoji from the config.", 404)
+        upload = form.get("file")
+        data = await upload.read(AVATAR_MAX_BYTES + 1) if hasattr(upload, "read") else b""
+        kind = "png" if data.startswith(b"\x89PNG\r\n\x1a\n") else "jpg" if data.startswith(b"\xff\xd8\xff") else "gif" if data[:6] in (b"GIF87a", b"GIF89a") else None
+        want = persona.avatar.rsplit(".", 1)[1].lower().replace("jpeg", "jpg")
+        if not data or len(data) > AVATAR_MAX_BYTES or kind != want:
+            return RedirectResponse("/?notice=avatar-refused", status_code=303)
+        core.slack.avatar_dir.mkdir(parents=True, exist_ok=True)
+        tmp = core.slack.avatar_dir / f".{persona.avatar}.tmp"
+        tmp.write_bytes(data)
+        tmp.replace(core.slack.avatar_dir / persona.avatar)
+        core.slack.store.audit(f"admin:{email}", "avatar_uploaded", persona=persona.id, file=persona.avatar, bytes=len(data))
+        return RedirectResponse("/?notice=avatar-saved", status_code=303)
 
     async def inbox_poll(request: Request) -> JSONResponse:
         """Long-poll for the Claude Code channel and scripts: items for ?agent= (default every agent) after ?after=."""
@@ -214,6 +241,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/", admin, methods=["GET"]),
             Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
             Route("/avatars/{name}", avatar, methods=["GET"]),
+            Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
             Route("/healthz", healthz),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),

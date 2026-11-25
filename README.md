@@ -165,12 +165,38 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   owner's own account. Each identity has a write policy: `free`, `approval` or `never`. A user-only workspace has
   no bot and never joins or invites (the client refuses those methods, and a test scans the source). The loop guard
   queues bot replies past `bot_thread_posts_per_hour` in one thread for approval.
-- **Approvals.** Approval happens only out of band. The owner uses the Approve / Reject DM the bot sends
-  (`approvals.notify_workspace` and `approver_user_id`, delivered over Socket Mode), or the **Slack writes waiting for
-  you** list on the root page (Access plus a CSRF token). No MCP tool decides a request, and a decision from anyone but
-  the configured approver or the page is refused and audited.
-- **Avatars.** `/avatars/<file>` serves persona avatars from `<data>/avatars` without Access, because Slack fetches
-  them. Personas with `icon_url` need nothing.
+- **Approvals.** Approval happens only out of band. The owner uses the Approve / Reject DM the bot sends, or the
+  **Slack writes waiting for you** list on the root page (Access plus a CSRF token). The DM goes from the request's own
+  workspace when that workspace sets `approver_user_id`, else from `approvals.notify_workspace` to
+  `approvals.approver_user_id`. No MCP tool decides a request, and a decision from anyone but a configured approver
+  (clicking in the workspace they are configured for) or the page is refused and audited.
+- **Watching.** `watched` lists channels by `#name` or id; `"*"` watches every channel the bot is a member of, so
+  inviting the bot is enough. The list stays editable next to `"*"`.
+- **Targets.** "@bot <slug> text" routes a message to a target, and the slug is removed from the text passed on.
+  Targets are found automatically: Captains from the Capy destination (by name, and code when there is one), agents
+  switchboard knows (`claude`, `chatgpt`, `gemini`, keys and OAuth agents), and switchboard projects (through that
+  project's Capy route). On a clash a Captain wins over an agent and an agent over a project; `slack.target_aliases`
+  adds or overrides slugs. They refresh at startup, every `origins.slack.refresh_minutes` (30) and after a route
+  change; `slack_targets` lists them (and `refresh: true` re-reads now). Without a slug a message goes to its thread's
+  earlier target, else the workspace's `default_target`. A slug one or two letters off a real one gets an ephemeral
+  hint listing the targets. Events and inbox items carry `target` and `target_kind`; a sink with `targets: [...]` only
+  receives events for those targets. An addressed event for an agent target lands in that agent's inbox. One for a
+  Captain or project that no sink of the workspace takes is delegated as agent `slack` (send key
+  `CAPY_API_KEY_AS_SLACK`), and the Captain's final reply is posted back in the Slack thread under its persona.
+- **Personas.** Bot posts carry a per-message name and picture (`chat:write.customize`), chosen like the send keys:
+  the call's `persona` (only with `allow_persona_override`, and within `allowed_personas`) > for Capy, the persona of
+  the Captain the thread is routed to > `agents.<agent>.persona_by_workspace` > `agents.<agent>.persona` > the persona
+  named like the agent > the workspace's `default_persona`. Every Captain target gets a persona with its name; its
+  picture is a monogram on its Capy background colour, or, with `slack.captain_avatars: true`, the Captain's own Capy
+  avatar (this reads an undocumented capy.ai asset path; see `slack/capy_avatars.py`). User-identity posts never carry
+  a persona: they always show as the account owner, behind the identity's write policy.
+- **Avatars.** A persona's picture is the file named in `avatar:`, or `<persona id>.png` when the persona sets no
+  `icon_url`. Files are looked up in `<data>/avatars` (uploads from the root page's Personas list), then each
+  `slack.avatar_dirs` folder, then rendered Captain avatars, then the neutral monograms bundled for `switchboard`,
+  `claude`, `chatgpt`, `gemini`, `codex`, `claude-code` and `capy`. Dropping a new file in replaces the picture with no
+  restart; the URL carries the file's mtime so Slack fetches the new one. `scripts/monogram.py` draws more.
+  `/avatars/<file>` is served without Access, because Slack fetches it. The limit: the picture shows on each message,
+  but clicking the name opens the app's bot profile, with the app's own name, icon and @handle.
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
@@ -336,3 +362,8 @@ src/switchboard/
   app.py pages.py static/   HTTP app, inbox endpoints, status, consent and routes pages
 channel/             Claude Code channel (Bun) and its plugin manifest
 ```
+
+## Before publishing
+
+- Remove `deploy/branding/`: it holds one deployment's avatar overlay (vendor logos are their owners' trademarks).
+- Check `config/`, `manifests/` and the docs for deployment-specific ids, hosts and names.

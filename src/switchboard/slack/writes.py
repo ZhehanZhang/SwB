@@ -26,6 +26,7 @@ class Actor:
 
     kind: str
     id: str
+    workspace: str | None = None
 
     def __str__(self) -> str:
         return f"{self.kind}:{self.id}"
@@ -54,7 +55,8 @@ class WriteGate:
         if policy == "never":
             store.audit(f"agent:{key.id}", "write_refused", workspace, identity, action=action, params=params, reason="policy never")
             raise WriteError(f"writes as {identity} in {workspace} are disabled (policy: never)")
-        persona = resolve_persona(cfg, ws, identity, key, persona_id) if action == "post_message" else None
+        thread_persona = self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts")) if action == "post_message" else None
+        persona = resolve_persona(cfg, ws, identity, key, persona_id, self.core.personas(), thread_persona) if action == "post_message" else None
         persona_d = asdict(persona) if persona else None
         loop_guard = False
         if identity == "bot" and action == "post_message" and params.get("thread_ts") and policy == "free" and not force_approval:
@@ -81,7 +83,7 @@ class WriteGate:
                 "status": "pending_approval",
                 "request_id": req["id"],
                 "expires_at": req["expires_at"],
-                "note": "Queued for the owner's approval out of band (Slack DM or the switchboard page). Agents cannot approve; poll slack_get_write_request or slack_wait.",
+                "note": "Queued for the owner's approval out of band (Slack DM or the switchboard page). Agents cannot approve; check slack_write_requests later.",
             }
             if loop_guard:
                 result["reason"] = f"loop guard: {ws.bot_thread_posts_per_hour} bot posts in this thread in the last hour"
@@ -104,7 +106,8 @@ class WriteGate:
         if actor.kind not in DECIDER_KINDS:
             store.audit(str(actor), "decision_refused", request_id=request_id, reason="not an owner channel")
             raise WriteError("write requests are decided only by the owner, out of band")
-        if actor.kind == "slack" and (not cfg.approvals.approver_user_id or actor.id != cfg.approvals.approver_user_id):
+        approvers = cfg.approvers()
+        if actor.kind == "slack" and not ((actor.workspace, actor.id) in approvers if actor.workspace else actor.id in {u for _, u in approvers}):
             store.audit(str(actor), "decision_refused", request_id=request_id, reason="not the approver")
             raise WriteError("only the configured approver can decide write requests")
         req = store.get_request(request_id)

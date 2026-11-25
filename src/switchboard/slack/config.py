@@ -21,10 +21,13 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class Persona:
+    """A display name and picture for bot posts. avatar is a file name looked up in the avatar folders at post time."""
+
     id: str
     name: str
     icon_url: str | None = None
     emoji: str | None = None
+    avatar: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,7 @@ class SinkConfig:
     channels: tuple[str, ...]
     coalesce_seconds: float
     max_batch: int
+    targets: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,9 @@ class WorkspaceConfig:
     skip_user_ids: frozenset[str]
     app_id: str | None = None
     bot_thread_posts_per_hour: int = 20
+    watch_all: bool = False
+    approver_user_id: str | None = None
+    default_target: str | None = None
 
     @property
     def has_bot(self) -> bool:
@@ -76,6 +83,7 @@ class Grant:
     allow_persona_override: bool
     allowed_personas: tuple[str, ...] | None
     scopes: Mapping[str, tuple[str, ...]]
+    persona_by_workspace: Mapping[str, str] = field(default_factory=dict)
 
     def identities_for(self, workspace: str) -> tuple[str, ...]:
         return self.scopes.get(workspace, ())
@@ -95,11 +103,21 @@ class Config:
     grants: Mapping[str, Grant] = field(default_factory=dict)
     approvals: ApprovalConfig = ApprovalConfig()
     public_base_url: str | None = None
+    avatar_dirs: tuple[str, ...] = ()
+    target_aliases: Mapping[str, str] = field(default_factory=dict)
+    captain_avatars: bool = False
     max_text_chars: int = 4000
     event_retention_days: int = 14
 
     def grant(self, agent: str) -> Grant | None:
         return self.grants.get(agent)
+
+    def approvers(self) -> set[tuple[str, str]]:
+        """(workspace, Slack user id) pairs whose Approve/Reject clicks count."""
+        out = {(label, ws.approver_user_id) for label, ws in self.workspaces.items() if ws.approver_user_id}
+        if self.approvals.notify_workspace and self.approvals.approver_user_id:
+            out.add((self.approvals.notify_workspace, self.approvals.approver_user_id))
+        return out
 
 
 def _need(cond: bool, msg: str) -> None:
@@ -128,10 +146,11 @@ def _parse_persona(pid: str, raw: Any, public_base_url: str | None) -> Persona:
     if avatar is not None:
         _need(isinstance(avatar, str) and bool(AVATAR_RE.match(avatar)), f"personas.{pid}.avatar must be a file name like {pid}.png")
         _need(bool(public_base_url), f"personas.{pid}.avatar needs public_base_url so Slack can fetch it")
-        icon_url = f"{public_base_url}/avatars/{avatar}"
     if emoji is not None:
         _need(isinstance(emoji, str) and re.fullmatch(r":[a-z0-9_+-]+:", emoji) is not None, f"personas.{pid}.emoji must look like :robot_face:")
-    return Persona(id=pid, name=name, icon_url=icon_url, emoji=emoji)
+    if avatar is None and icon_url is None and public_base_url:
+        avatar = f"{pid}.png"
+    return Persona(id=pid, name=name, icon_url=icon_url, emoji=emoji, avatar=avatar)
 
 
 def _parse_sink(label: str, idx: int, raw: Any, env: Mapping[str, str]) -> SinkConfig:
@@ -161,6 +180,7 @@ def _parse_sink(label: str, idx: int, raw: Any, env: Mapping[str, str]) -> SinkC
         channels=_str_list(raw.get("channels"), f"{where}.channels"),
         coalesce_seconds=coalesce,
         max_batch=max_batch,
+        targets=tuple(t.lower() for t in _str_list(raw.get("targets"), f"{where}.targets")),
     )
 
 
@@ -189,6 +209,12 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
     if default_persona is not None:
         _need("bot" in identities, f"{where}.default_persona needs a bot identity")
         _need(default_persona in personas, f"{where}.default_persona {default_persona!r} is not a defined persona")
+    watched = _str_list(raw.get("watched"), f"{where}.watched")
+    watch_all = "*" in watched
+    _need(not watch_all or "bot" in identities, f"{where}.watched: '*' (every channel the bot is in) needs a bot identity")
+    approver = raw.get("approver_user_id")
+    _need(approver is None or (isinstance(approver, str) and re.fullmatch(r"[UW][A-Z0-9]{2,}", approver) is not None), f"{where}.approver_user_id must be a Slack user id")
+    _need(approver is None or "bot" in identities, f"{where}.approver_user_id needs a bot identity to send the approval DM")
     app_token_env = raw.get("app_token_env")
     intake = raw.get("intake", "socket" if app_token_env else "poll")
     _need(intake in INTAKES, f"{where}.intake must be one of {list(INTAKES)}")
@@ -209,7 +235,7 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
         user_only=user_only,
         app_token_env=app_token_env,
         identities=identities,
-        watched=_str_list(raw.get("watched"), f"{where}.watched"),
+        watched=tuple(w for w in watched if w != "*"),
         sinks=sinks,
         intake=intake,
         poll_seconds=poll_seconds,
@@ -218,6 +244,9 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
         skip_user_ids=frozenset(_str_list(raw.get("skip_user_ids"), f"{where}.skip_user_ids")),
         app_id=app_id,
         bot_thread_posts_per_hour=thread_cap,
+        watch_all=watch_all,
+        approver_user_id=approver,
+        default_target=(str(raw["default_target"]).lower() if raw.get("default_target") else None),
     )
 
 
@@ -231,6 +260,11 @@ def _parse_grant(key_id: str, raw: Any, workspaces: Mapping[str, WorkspaceConfig
     allowed_t = _str_list(allowed, f"{where}.allowed_personas") if allowed is not None else None
     for p in allowed_t or ():
         _need(p in personas, f"{where}.allowed_personas: {p!r} is not a defined persona")
+    by_ws = raw.get("persona_by_workspace") or {}
+    _need(isinstance(by_ws, dict), f"{where}.persona_by_workspace must map workspace label -> persona")
+    for label, pid in by_ws.items():
+        _need(label in workspaces, f"{where}.persona_by_workspace: unknown workspace {label!r}")
+        _need(pid in personas, f"{where}.persona_by_workspace.{label}: {pid!r} is not a defined persona")
     scopes_raw = raw.get("workspaces") or {}
     _need(isinstance(scopes_raw, dict), f"{where}.workspaces must map workspace label -> [identities]")
     scopes: dict[str, tuple[str, ...]] = {}
@@ -246,6 +280,7 @@ def _parse_grant(key_id: str, raw: Any, workspaces: Mapping[str, WorkspaceConfig
         allow_persona_override=bool(raw.get("allow_persona_override", False)),
         allowed_personas=allowed_t,
         scopes=scopes,
+        persona_by_workspace={str(k): str(v) for k, v in by_ws.items()},
     )
 
 
@@ -279,6 +314,9 @@ def parse_config(data: Any, env: Mapping[str, str]) -> Config:
         grants=grants,
         approvals=approvals,
         public_base_url=public_base_url,
+        avatar_dirs=_str_list(data.get("avatar_dirs"), "avatar_dirs"),
+        target_aliases={str(k).lower(): str(v).lower() for k, v in (data.get("target_aliases") or {}).items()},
+        captain_avatars=bool(data.get("captain_avatars", False)),
         max_text_chars=int(data.get("max_text_chars", 4000)),
         event_retention_days=int(data.get("event_retention_days", 14)),
     )

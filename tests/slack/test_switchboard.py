@@ -108,3 +108,23 @@ def test_owner_approves_on_the_root_page_and_agents_cannot(sb):
     assert req["status"] == "sent" and req["decided_by"] == "admin:owner@example.test"
     assert [kw["text"] for t, n, kw in world.calls if t == "xoxp-b" and n == "chat_postMessage"] == ["see you <b>soon</b>"]
     assert "Approved and sent." in client.get("/?notice=approved", headers=OWNER).text
+
+
+def test_captain_final_reply_is_posted_back_as_the_captain(sb):
+    from switchboard.slack.config import Persona
+    from switchboard.slack.routing import build_targets
+
+    core, client, world = sb
+    names = {t["name"] for t in rpc(client, KEY_FULL, "tools/list").json()["result"]["tools"]}
+    assert "slack_targets" in names
+    core.slack.set_targets(build_targets([{"id": "jam_P", "name": "TeamCaptain"}], [], []), {"teamcaptain": Persona(id="teamcaptain", name="TeamCaptain")})
+    core.slack.store.add_relay("h_test", "a2a", "CPUBLIC01", "1700000000.000001", "teamcaptain")
+    origin = core.origins["slack"]
+    client.portal.call(origin.relay, {"kind": "reply", "handle": "h_test", "text": "interim"})
+    client.portal.call(origin.relay, {"kind": "final", "handle": "h_test", "text": "all done"})
+    client.portal.call(origin.relay, {"kind": "final", "handle": "h_other", "text": "not ours"})
+    posts = [kw for t, n, kw in world.calls if n == "chat_postMessage"]
+    assert [(p["text"], p["username"], p["thread_ts"]) for p in posts] == [("all done", "TeamCaptain", "1700000000.000001")]
+    _, got = tool(client, KEY_FULL, "slack_targets")
+    assert any(t["slug"] == "teamcaptain" and t["kind"] == "captain" for t in got["targets"])
+

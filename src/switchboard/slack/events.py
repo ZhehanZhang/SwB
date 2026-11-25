@@ -13,6 +13,7 @@ class ClassifyContext:
     bot_id: str | None = None
     app_id: str | None = None
     watched: frozenset[str] = field(default_factory=frozenset)
+    watch_all: bool = False
     skip_user_ids: frozenset[str] = field(default_factory=frozenset)
 
 
@@ -39,7 +40,7 @@ def classify(event: dict[str, Any], ctx: ClassifyContext) -> str | None:
         return "dm"
     if ctx.bot_user_id and f"<@{ctx.bot_user_id}>" in (event.get("text") or ""):
         return "mention"
-    if event.get("channel") in ctx.watched:
+    if event.get("channel") in ctx.watched or (ctx.watch_all and event.get("channel_type") in ("channel", "group")):
         return "watched"
     return None
 

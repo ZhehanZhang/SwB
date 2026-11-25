@@ -88,7 +88,21 @@ def _row(label: str, hint: str, value: str, on: bool | None = None) -> str:
             f'<div class="setting-value">{mark}<span>{html.escape(value)}</span></div></div>')
 
 
-def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, notice_text: str | None) -> str:
+def _persona_row(p: dict[str, Any], csrf: str) -> str:
+    pic = (f'<img src="{html.escape(p["url"])}" alt="" width="36" height="36" style="border-radius:8px;object-fit:cover">' if p.get("url")
+           else html.escape(p.get("emoji") or ""))
+    hint = " · ".join([p["id"], f"picture: {p['source']}" + (f" ({p['avatar']})" if p.get("avatar") else ""), "used by " + (", ".join(p["used_by"]) or "nobody by default")])
+    form = ""
+    if p.get("avatar"):
+        accept = "image/png" if p["avatar"].endswith(".png") else ("image/gif" if p["avatar"].endswith(".gif") else "image/jpeg")
+        form = (f'<form method="post" action="/slack/personas/{html.escape(p["id"])}/avatar" enctype="multipart/form-data">'
+                f'<input type="hidden" name="csrf" value="{csrf}"><input type="file" name="file" accept="{accept}" required>'
+                '<button class="text-button">Upload</button></form>')
+    return (f'<div class="setting"><div class="setting-label"><span>{html.escape(p["name"])}</span><span class="setting-hint">{html.escape(hint)}</span></div>'
+            f'<div class="setting-value">{pic}{form}</div></div>')
+
+
+def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, notice_text: str | None, personas: list[dict[str, Any]] | None = None) -> str:
     """Slack workspaces and the write requests waiting for the owner, each with Approve and send / Reject."""
     ws_rows = "".join(
         _row(label, f"{w['intake']}" + (", user only" if w["user_only"] else "") + f", {w['watched']} watched" + (f", last event {w['last_event_at']}" if w.get("last_event_at") else "")
@@ -115,7 +129,9 @@ def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, 
     pending_rows = "".join(item(r) for r in pending) or _row("Nothing waiting", "Writes that need your approval appear here and as a Slack DM", "")
     return (f'<section class="hero section-gap fade-in"><p>Slack workspaces</p></section><div class="card fade-in">{ws_rows}</div>'
             + (notice(notice_text, "good") if notice_text else "")
-            + f'<section class="hero section-gap fade-in"><p>Slack writes waiting for you. Agents can never approve their own.</p></section><div class="card fade-in">{pending_rows}</div>')
+            + f'<section class="hero section-gap fade-in"><p>Slack writes waiting for you. Agents can never approve their own.</p></section><div class="card fade-in">{pending_rows}</div>'
+            + (f'<section class="hero section-gap fade-in"><p>Personas: the name and picture on bot posts. An upload replaces the picture for new posts; '
+               f'the Slack profile behind the name stays the app’s.</p></section><div class="card fade-in">{"".join(_persona_row(p, csrf) for p in personas)}</div>' if personas else ""))
 
 
 def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]],

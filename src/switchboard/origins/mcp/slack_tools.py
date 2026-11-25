@@ -72,6 +72,11 @@ def register(mcp: MCPServer, core: "Switchboard", who: Callable[[Context], "Prin
     async def slack_personas(ctx: Context) -> dict[str, Any]:
         return await slack(ctx, "personas")
 
+    @mcp.tool(title="Slack targets", description=("Slugs that route a Slack mention: '@bot <slug> text' goes to that Captain, agent or project, and its "
+                                                  "thread stays with it. Found automatically (Captain > agent > project on a clash). refresh re-reads them now."), annotations=READ)
+    async def slack_targets(ctx: Context, refresh: bool = False) -> dict[str, Any]:
+        return await slack(ctx, "targets", refresh=refresh)
+
     @mcp.tool(title="Post to Slack", description=("Post a message, or a thread reply with thread_ts, to a channel id or #name. identity bot posts as the app with a persona "
                                                   "(persona only if you may choose one); identity user posts as the owner himself. If the identity's policy is approval, "
                                                   "the post is queued (status pending_approval) until the owner approves. Reply to a mention in its thread."), annotations=SEND)

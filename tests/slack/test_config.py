@@ -15,7 +15,7 @@ def test_example_config_parses():
     assert cfg.workspaces["private"].user_only
     assert cfg.workspaces["private"].ack_reaction is None
     assert cfg.workspaces["a2a"].identities["user"].write == "approval"
-    assert cfg.personas["helper"].icon_url == "https://switchboard.example.com/avatars/helper.png"
+    assert cfg.personas["helper"].avatar == "helper.png" and cfg.personas["helper"].icon_url is None
     assert cfg.grant("capy").identities_for("a2a") == ("bot",) and cfg.grant("other-agent") is None
 
 

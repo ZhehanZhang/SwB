@@ -68,6 +68,7 @@ class Switchboard:
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret())
         self.auth.audit = self.audit
         self._tasks: set[asyncio.Task[Any]] = set()
+        self.change_listeners: list[Any] = []
         slack_opts = dict(slack_options or {})
         self.slack_connect = bool(slack_opts.pop("connect", True))
         self.slack: SlackEngine | None = None
@@ -234,12 +235,21 @@ class Switchboard:
             raise
         r = self.routes.set(destination=destination, agent=agent, project=project, target=target, defaults=defaults,
                             allow_override=allow_override, note=note, by=principal.source)
+        self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
                           action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
         return r.as_dict()
 
+    def changed(self) -> None:
+        """Routes or projects changed: let listeners (the Slack origin's targets) refresh in the background."""
+        for listener in self.change_listeners:
+            task = asyncio.ensure_future(listener())
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+
     def remove_route(self, principal: Principal, *, destination: str, agent: str | None, project: str | None) -> dict[str, Any]:
         r = self.routes.remove(destination=destination, agent=agent, project=project)
+        self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
                           action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
         return {"removed": r.as_dict()}

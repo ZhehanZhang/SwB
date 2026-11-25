@@ -120,6 +120,7 @@ class SlackDestination(Destination):
             Action("watched", "Watched Slack channels", "Channels whose new messages reach your inbox.", self.watched, read_only=True),
             Action("events", "Recent Slack events", "Recent watched, mention and DM events.", self.events, read_only=True),
             Action("personas", "Slack personas", "Personas for bot posts.", self.personas, read_only=True),
+            Action("targets", "Slack targets", "Slugs that route a Slack mention to a Captain, agent or project.", self.targets, read_only=True),
             Action("post", "Post to Slack", "Post a message or thread reply.", self.post),
             Action("react", "React in Slack", "Add an emoji reaction.", self.react),
             Action("request_write", "Ask to post to Slack", "Queue a post for the owner's approval.", self.request_write),
@@ -203,8 +204,15 @@ class SlackDestination(Destination):
             raise DestinationError(f"unknown workspace {workspace!r} for {g.id}")
         return self.need().store.recent_events(labels, kind or None, since or None, limit)
 
+    async def targets(self, call: Call, refresh: bool = False) -> dict[str, Any]:
+        self.grant(call)
+        origin = self.core.origins.get("slack")
+        if origin is None:
+            raise DestinationError("the Slack origin is not running")
+        return await origin.refresh() if refresh else origin.describe()  # type: ignore[attr-defined]
+
     async def personas(self, call: Call) -> dict[str, Any]:
-        g, personas = self.grant(call), self.need().config.personas
+        g, personas = self.grant(call), self.need().personas()
         if not g.allow_persona_override:
             visible = [g.persona] if g.persona else []
         elif g.allowed_personas is not None:

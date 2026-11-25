@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS write_requests (
   notice TEXT
 );
 CREATE INDEX IF NOT EXISTS write_requests_status ON write_requests(status, expires_at);
+CREATE TABLE IF NOT EXISTS thread_targets (
+  workspace TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL, at REAL NOT NULL,
+  PRIMARY KEY (workspace, channel, thread_ts)
+);
+CREATE TABLE IF NOT EXISTS relays (
+  handle TEXT PRIMARY KEY, workspace TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, target TEXT NOT NULL, at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at REAL NOT NULL,
@@ -105,6 +112,22 @@ class Store:
 
     def mark_sent(self, team: str, channel: str, ts: str) -> None:
         self._exec("INSERT OR IGNORE INTO sent (team, channel, ts, created_at) VALUES (?,?,?,?)", (team, channel, ts, self.clock()))
+
+    def set_thread_target(self, workspace: str, channel: str, thread_ts: str, target: str, kind: str) -> None:
+        self._exec("INSERT OR REPLACE INTO thread_targets (workspace, channel, thread_ts, target, kind, at) VALUES (?,?,?,?,?,?)",
+                   (workspace, channel, thread_ts, target, kind, self.clock()))
+
+    def thread_target(self, workspace: str, channel: str, thread_ts: str) -> str | None:
+        row = self._exec("SELECT target FROM thread_targets WHERE workspace=? AND channel=? AND thread_ts=?", (workspace, channel, thread_ts)).fetchone()
+        return row[0] if row else None
+
+    def add_relay(self, handle: str, workspace: str, channel: str, thread_ts: str, target: str) -> None:
+        self._exec("INSERT OR REPLACE INTO relays (handle, workspace, channel, thread_ts, target, at) VALUES (?,?,?,?,?,?)",
+                   (handle, workspace, channel, thread_ts, target, self.clock()))
+
+    def relay(self, handle: str) -> dict[str, Any] | None:
+        row = self._exec("SELECT handle, workspace, channel, thread_ts, target FROM relays WHERE handle=?", (handle,)).fetchone()
+        return dict(zip(("handle", "workspace", "channel", "thread_ts", "target"), row)) if row else None
 
     def is_sent(self, team: str, channel: str, ts: str) -> bool:
         return self._exec("SELECT 1 FROM sent WHERE team=? AND channel=? AND ts=?", (team, channel, ts)).fetchone() is not None

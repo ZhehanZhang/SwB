@@ -117,6 +117,7 @@ class WorkspaceRuntime:
             bot_id=self.bot_id,
             app_id=self.cfg.app_id,
             watched=self.watched_ids,
+            watch_all=self.cfg.watch_all,
             skip_user_ids=self.cfg.skip_user_ids,
         )
 
@@ -190,6 +191,19 @@ class WorkspaceRuntime:
                 await self._list_channels()
             except Exception as exc:
                 self.errors.append(f"conversations.list failed ({slack_error(exc)})")
+        if self.cfg.watch_all and "bot" in self.clients:
+            try:
+                cursor = None
+                while True:
+                    resp = await self.clients["bot"].users_conversations(types="public_channel,private_channel", exclude_archived=True, limit=500, cursor=cursor)
+                    for ch in resp.get("channels", []):
+                        ids.add(ch["id"])
+                        self.channel_names[ch["id"]] = ch.get("name") or ch["id"]
+                    cursor = (resp.get("response_metadata") or {}).get("next_cursor")
+                    if not cursor:
+                        break
+            except Exception as exc:
+                self.errors.append(f"users.conversations failed ({slack_error(exc)})")
         for w in self.cfg.watched:
             if CHANNEL_ID_RE.match(w):
                 ids.add(w)
@@ -304,7 +318,7 @@ class WorkspaceRuntime:
                 if params.get("reply_broadcast"):
                     args["reply_broadcast"] = True
             if identity == "bot":
-                args.update(persona_post_args(persona))
+                args.update(persona_post_args(persona, self.core.avatar_url))
             resp = await client.chat_postMessage(**args)
             channel, ts = resp["channel"], resp["ts"]
             self.core.store.mark_sent(self.team_id, channel, ts)

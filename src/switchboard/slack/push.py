@@ -26,6 +26,8 @@ class WebhookSink:
     def accepts(self, event: dict[str, Any]) -> bool:
         if event["kind"] not in self.cfg.kinds:
             return False
+        if self.cfg.targets and event.get("target") not in self.cfg.targets:
+            return False
         if self.cfg.channels:
             names = {event["channel"], event.get("channel_name") or "", "#" + (event.get("channel_name") or "")}
             return bool(names & set(self.cfg.channels))
