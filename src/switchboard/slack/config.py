@@ -71,8 +71,7 @@ class WorkspaceConfig:
     default_target: str | None = None
     owner_user_ids: frozenset[str] = frozenset()
     known: Mapping[str, str] = field(default_factory=dict)
-    allow_from: Mapping[str, str] = field(default_factory=dict)
-    gate_rate: tuple[int, float] = (5, 600.0)
+    sender_rate: tuple[int, float] = (5, 600.0)
 
     @property
     def has_bot(self) -> bool:
@@ -85,13 +84,6 @@ class WorkspaceConfig:
         if user and user in self.known:
             return "known"
         return "external"
-
-    def allow_for(self, slug: str | None, kind: str | None) -> str:
-        """Who a target accepts in this workspace: by slug, then kind, then '*'. Untargeted and mailbox-agent messages take anyone, Captains, threads and projects the owner."""
-        for key in (slug, kind, "*"):
-            if key and key in self.allow_from:
-                return self.allow_from[key]
-        return "anyone" if kind in (None, "agent") else "owner"
 
 
 @dataclass(frozen=True)
@@ -128,6 +120,7 @@ class Config:
     captain_avatars: bool = False
     max_text_chars: int = 4000
     event_retention_days: int = 14
+    visibility: Mapping[str, Any] = field(default_factory=dict)
 
     def grant(self, agent: str) -> Grant | None:
         return self.grants.get(agent)
@@ -255,14 +248,12 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
     owners = frozenset(_str_list(raw.get("owner_user_ids"), f"{where}.owner_user_ids")) or frozenset(x for x in (approver,) if x)
     known_raw = raw.get("known") or {}
     _need(isinstance(known_raw, dict), f"{where}.known must map Slack user or bot ids to names")
-    allow_raw = {str(k).lower(): str(v) for k, v in (raw.get("allow_from") or {}).items()}
-    _need(all(v in ("owner", "known", "anyone") for v in allow_raw.values()), f"{where}.allow_from values must be owner, known or anyone")
-    rate = raw.get("gate_rate") or {}
+    _need("allow_from" not in raw, f"{where}.allow_from became visibility: mark targets and channels shared under visibility.resources")
+    rate = raw.get("sender_rate") or {}
     return WorkspaceConfig(
         owner_user_ids=owners,
         known={str(k): str(v) for k, v in known_raw.items()},
-        allow_from=allow_raw,
-        gate_rate=(int(rate.get("count", 5)), float(rate.get("window_s", 600))),
+        sender_rate=(int(rate.get("count", 5)), float(rate.get("window_s", 600))),
         label=label,
         team_id=team_id,
         user_only=user_only,
@@ -358,4 +349,5 @@ def parse_config(data: Any, env: Mapping[str, str]) -> Config:
         captain_avatars=bool(data.get("captain_avatars", False)),
         max_text_chars=int(data.get("max_text_chars", 4000)),
         event_retention_days=int(data.get("event_retention_days", 14)),
+        visibility=dict(data.get("visibility") or {}),
     )

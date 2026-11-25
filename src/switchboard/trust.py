@@ -1,27 +1,19 @@
 """Sender trust: who a message is really from, computed by switchboard from the sign-in or the platform's own data.
 
-Tiers: owner (the owner's verified accounts and his own sign-ins), known (people and agents the config lists),
-external (everyone else). A target accepts senders from a tier up (allow_from: owner, known or anyone). Text from
-anyone but the owner reaches a Captain or thread inside a header switchboard writes and clear delimiters; copies of
-either inside the text are neutralised, so a sender can't fake them.
+Tiers: owner (the owner's verified accounts and his own sign-ins), known (people and agents the config names),
+external (everyone else). Who may reach what is visibility's job (visibility.py); trust labels the sender. Text from
+anyone but the owner is passed on inside a header switchboard writes and clear delimiters; copies of either inside the
+text are neutralised, so a sender can't fake them.
 """
 
 from __future__ import annotations
 
 import re
 
-TIERS = ("external", "known", "owner")
-ALLOW = {"anyone": "external", "known": "known", "owner": "owner"}
 OPEN = "<<<swb-untrusted"
 CLOSE = "swb-untrusted>>>"
 _HEADER_RE = re.compile(r"\[\s*swb\b", re.IGNORECASE)
 _MARK_RE = re.compile(r"swb-untrusted", re.IGNORECASE)
-
-
-def allows(trust: str | None, allow_from: str) -> bool:
-    """Whether a sender of this tier may reach a target that accepts allow_from (owner, known or anyone)."""
-    need = ALLOW.get(allow_from, "owner")
-    return TIERS.index(trust if trust in TIERS else "external") >= TIERS.index(need)
 
 
 def neutralize(text: str) -> str:

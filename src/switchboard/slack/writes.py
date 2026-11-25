@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 log = logging.getLogger("switchboard.slack.writes")
 
 DECIDER_KINDS = ("slack", "admin")
-INBOUND = "deliver_inbound"
 
 
 class WriteError(RuntimeError):
@@ -124,17 +123,12 @@ class WriteGate:
             if not store.transition_request(request_id, "pending", "rejected", decided_at=now, decided_by=str(actor)):
                 raise WriteError(f"request {request_id} changed state; reload")
             store.audit(str(actor), "write_rejected", req["workspace"], req["identity"], request_id=request_id)
-            if req["action"] == INBOUND:
-                await self.core.decline(req["params"]["push"], str(actor))
         else:
             if not store.transition_request(request_id, "pending", "approved", decided_at=now, decided_by=str(actor)):
                 raise WriteError(f"request {request_id} changed state; reload")
             store.audit(str(actor), "write_approved", req["workspace"], req["identity"], request_id=request_id)
             try:
-                if req["action"] == INBOUND:
-                    result = await self.core.release(req["params"]["push"], str(actor))
-                else:
-                    result = await self._execute(req["workspace"], req["identity"], req["action"], req["params"], req["persona"], actor=str(actor), request_id=request_id)
+                result = await self._execute(req["workspace"], req["identity"], req["action"], req["params"], req["persona"], actor=str(actor), request_id=request_id)
                 store.transition_request(request_id, "approved", "sent", result=result)
             except WriteError as exc:
                 store.transition_request(request_id, "approved", "failed", result={"error": str(exc)})
@@ -146,8 +140,6 @@ class WriteGate:
         expired = self.core.store.expire_requests()
         for req in expired:
             self.core.store.audit("system", "write_expired", req["workspace"], req["identity"], request_id=req["id"])
-            if req["action"] == INBOUND:
-                await self.core.decline(req["params"]["push"], "system")
             await self._close_notice(req)
         return expired
 

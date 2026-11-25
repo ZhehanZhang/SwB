@@ -65,6 +65,7 @@ def base_config() -> dict[str, Any]:
             },
         },
         "approvals": {"ttl_minutes": 10, "notify_workspace": "a2a", "approver_user_id": OWNER_A},
+        "visibility": {"defaults": {"target": "shared", "channel": "shared"}},
         "agents": {
             "full": {"persona": "capy", "allow_persona_override": True, "allowed_personas": ["capy", "gate"], "workspaces": {"a2a": ["bot", "user"], "private": ["user"]}},
             "fixed": {"persona": "capy", "allow_persona_override": False, "workspaces": {"a2a": ["bot"]}},

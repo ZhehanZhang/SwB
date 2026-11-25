@@ -5,7 +5,7 @@ import json
 import httpx
 from starlette.testclient import TestClient
 
-from conftest import PUBLIC, STATIC_KEY, CIMDHost, Clock, access_verifier, call, default_env, error_text, payload, sign_in
+from conftest import PUBLIC, STATIC_KEY, CIMDHost, Clock, access_verifier, call, default_env, payload, sign_in
 from switchboard.app import create_app
 from switchboard.config import translate_v1
 from switchboard.core import Switchboard
@@ -85,13 +85,13 @@ def test_without_a_token_or_on_failure_the_message_stays_in_the_mailbox(tmp_path
             c.__exit__(None, None, None)
 
 
-def test_connected_agents_cannot_wake_a_routine(tmp_path, capy):
+def test_the_owners_connected_agents_can_wake_a_routine(tmp_path, capy):
     anthropic = Anthropic()
     core, c = build(tmp_path, capy, anthropic)
     try:
         code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "codex"}))["code"]
         key = c.post("/connect", json={"code": code}).json()["key"]
-        assert "only from the owner" in error_text(call(c, key, "send", {"task": "run rm -rf", "to": "claude"}))
-        assert not anthropic.requests
+        assert payload(call(c, key, "send", {"task": "check the build", "to": "claude"}))["fired"]
+        assert len(anthropic.requests) == 1
     finally:
         c.__exit__(None, None, None)

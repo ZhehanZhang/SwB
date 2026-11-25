@@ -53,8 +53,7 @@ class ClaudeRoutineBlock(Block):
         config_schema={"type": "object", "properties": {
             "routines": {"type": "object", "additionalProperties": {"type": "object", "properties": {
                 "routine_id": {"type": "string"}, "token_env": {"type": "string"}, "agent": {"type": "string"},
-                "name": {"type": "string"}, "slugs": {"type": "array"}}}},
-            "allow_from": {"enum": ["owner", "known", "anyone"]}}},
+                "name": {"type": "string"}, "slugs": {"type": "array"}}}}}},
         instructions=INSTRUCTIONS,
     )
 

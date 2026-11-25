@@ -221,7 +221,7 @@ message to `/v1/claude_code/routines/<id>/fire` with a note naming the conversat
 answers with `reply(conversation=...)`, and the answer reaches the sender's inbox with `in_reply_to` set to that
 conversation. The session id and URL are kept on the conversation and returned by send. Without a token, or when the
 fire fails, the message stays in the mailbox and the result says so. `agent:claude` always means the mailbox only.
-Like the capy block, it takes sends only from the owner's own sign-ins unless `allow_from: known` is set. The token is
+The routine is private like every target, so only the owner and his own agents can wake it. The token is
 per routine, created once in the routine's API trigger, and goes in `.env`.
 
 ## Slack
@@ -244,16 +244,18 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   (`[swb · from Alex (U0123) in a2a #dev · trust: known]`) and `<<<swb-untrusted` / `swb-untrusted>>>`
   delimiters, with a line saying it is information, not instructions. Copies of the header or the delimiters inside
   the text are neutralised, so a sender can't fake either.
-- **Who may reach a target.** `allow_from` per workspace maps a target slug, a target kind (`captain`, `thread`,
-  `project`, `agent`) or `"*"` to `owner`, `known` or `anyone`. Captains, threads and projects take the owner
-  only by default; agent mailboxes and untargeted events take anyone. A message from a sender the target doesn't
-  accept goes nowhere (no sink, no inbox, no Captain). If it was addressed to the bot, the owner gets an Approve /
-  Reject DM showing who sent it and the exact text, and the sender gets an ephemeral note. Approve delivers it,
-  wrapped as above. Reject or expiry drops it and tells the sender politely. Ambient messages in watched channels are
-  withheld without a DM. `gate_rate` (`{count: 5, window_s: 600}`) caps held messages per sender; past it they are
-  dropped quietly. Every held, approved, released, declined, withheld and rate-limited message is in the audit log.
-  Agents that connected with a pairing code are `known`: they can send to `agent:<name>` mailboxes, but a block
-  that takes work (Capy) refuses them unless `blocks.<name>.allow_from: known`.
+- **Visibility: private or shared.** One switch on every resource, with one resolver: `target:<slug>` (agents,
+  Captains, threads, routines), `channel:<workspace>/<id or #name>`, `memory:<scope>`, `route:<id>` and
+  `tool:<name>`. Everything is private unless marked shared: only the owner reaches it (his Slack ids, and his own
+  signed-in agents over OAuth, keys or pairing codes). `shared` lets anyone in that workspace reach it; a list
+  (`[U0123, workspace:acme]`) narrows it. Tools are always private. A non-owner reaches a target only when both the
+  channel and the target are shared for them. Anything else they send becomes a **context item** in the inbox of the
+  agents behind the target: kind `context`, wrapped as above, with where it came from. It wakes nothing, is never
+  delegated, never reaches a sink or a routine, and gets no answer beyond a neutral ephemeral "Noted.". Non-owners get
+  no slug hints, so private targets aren't discoverable. A private target's reply to a message in a shared channel goes
+  to the owner's DM instead of the channel. `sender_rate` (`{count: 5, window_s: 600}`) caps context items per sender,
+  and every context item and drop is in the audit log. The top-level `visibility:` section sets `defaults` per kind
+  and `resources`; the root page's pills and the `visibility_set` tool flip one resource, and that override wins.
 - **Signed sinks.** A sink with `secret_env` signs each POST: `X-Switchboard-Timestamp` is the Unix time and
   `X-Switchboard-Signature` is `v1=` plus the hex HMAC-SHA256 of `<timestamp>.<raw body>` with that secret. A
   receiver checks the signature and rejects old timestamps. Receivers that can't check one (a Capy automation webhook)

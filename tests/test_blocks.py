@@ -184,14 +184,42 @@ def test_pairing_code_connects_an_agent_once_and_revokes(make):
     assert sqlite3.connect(core.store.path).execute("SELECT count(*) FROM agent_keys WHERE key_hash = ?", (key,)).fetchone()[0] == 0
 
 
-def test_connected_agent_reaches_mailboxes_but_not_captains(make, capy):
+def test_connected_agents_count_as_the_owner_but_cannot_change_access(make, capy):
     core, c = make()
     code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "codex"}))["code"]
     key = c.post("/connect", json={"code": code}).json()["key"]
-    assert "only from the owner" in error_text(call(c, key, "send", {"task": "run this on the server"}))
-    assert "only from the owner" in error_text(call(c, key, "send", {"task": "x", "to": "zinf-1"}))
-    assert payload(call(c, key, "send", {"task": "fyi", "to": "agent:claude"}))["delivered"]
-    assert payload(call(c, STATIC_KEY, "send", {"task": "owner still routes"}))["block"] == "capy"
+    assert payload(call(c, key, "send", {"task": "route me"}))["block"] == "capy"
+    item = payload(call(c, key, "send", {"task": "fyi", "to": "agent:claude"}))
+    assert item["delivered"]
+    tok = sign_in(c)["access_token"]
+    (got,) = payload(call(c, tok, "wait", {"timeout_s": 0}))["items"]
+    assert got["from"]["agent"] == "codex" and got["from"]["trust"] == "owner"
+    assert "connected agent" in error_text(call(c, key, "visibility_set", {"resource": "target:captain", "visibility": "shared"}))
+
+
+def test_visibility_tools_flip_resources_and_keep_tools_private(make):
+    core, c = make()
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:TeamCaptain", "visibility": "shared"}))["visibility"] == "shared"
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "channel:acme/#dev", "visibility": ["U0FRIEND0", "workspace:acme"]}))["visibility"] == ["U0FRIEND0", "workspace:acme"]
+    assert "always private" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "tool:slack_post", "visibility": "shared"}))
+    assert "not a resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "teamcaptain", "visibility": "shared"}))
+    rows = {r["resource"]: r for r in payload(call(c, STATIC_KEY, "visibility_list"))["resources"]}
+    assert rows["target:teamcaptain"]["visibility"] == "shared" and rows["target:teamcaptain"]["source"] == "override"
+    assert core.visibility.rule("target:other") == "private"
+    assert any(a["action"] == "visibility_set" for a in core.audit.recent(limit=10))
+
+
+
+def test_root_page_shows_and_flips_visibility(make):
+    core, c = make()
+    page = c.get("/", headers=OWNER)
+    assert page.status_code == 200 and "Who can reach what" in page.text
+    csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
+    assert c.post("/visibility", data={"resource": "target:captain", "visibility": "shared", "csrf": "nope"}, headers=OWNER).status_code == 403
+    assert c.post("/visibility", data={"resource": "target:captain", "visibility": "shared", "csrf": csrf}, headers=OWNER).status_code == 303
+    assert core.visibility.rule("target:captain") == "shared"
+    assert "target:captain" in c.get("/", headers=OWNER).text
+    assert c.post("/visibility", data={"resource": "tool:deploy", "visibility": "shared", "csrf": csrf}, headers=OWNER).status_code == 400
 
 
 def test_root_page_mints_and_revokes_codes_with_csrf(make):

@@ -108,8 +108,7 @@ blocks:
         approver_user_id: U0OWNER00               # optional: approval DMs for this workspace's requests come from its bot
         owner_user_ids: [U0OWNER00]               # trust owner: passed on unchanged (defaults to the approver)
         known: {U0FRIEND0: Alex, B0OTHERBOT: main-agent}   # trust known: Slack user or bot ids you trust, with names
-        allow_from: {captain: owner, teamcaptain: known, agent: anyone}   # by slug, kind or "*"; Captains default to owner
-        gate_rate: {count: 5, window_s: 600}      # held messages per non-owner sender before the rest are dropped
+        sender_rate: {count: 5, window_s: 600}    # context items per non-owner sender before the rest are dropped
         ack_reaction: eyes                        # added to @mentions and DMs on receipt
         watched: ["#agents"]                      # the bot must be a member (invite it yourself); "*" = every channel it is in
         bot_thread_posts_per_hour: 20             # loop guard: more bot posts in one thread per hour need approval
@@ -143,6 +142,18 @@ blocks:
 # Seeds, written once when that agent/project slot has no route yet. The global default is empty unless set here.
 # routes:
 #   - {match: {}, to: "capy:captain:<Captain id>"}
+
+# Who can reach what. Every resource is private (the owner and his own signed-in agents only) unless marked shared.
+# Resources: target:<slug>, channel:<workspace>/<id or #name>, memory:<general | project:slug>, route:<id>, tool:<name>.
+# shared means anyone in that workspace; a list narrows it to Slack user ids and workspace:<label>. Tools stay private.
+# Anyone else's message to something private becomes a context item in its inbox, with a neutral "Noted." reply.
+# The root page and visibility_set flip a resource; those overrides win over this file.
+visibility:
+  defaults: {target: private, channel: private, memory: private, route: private}
+  resources:
+    target:teamcaptain: shared
+    channel:a2a/#agents: shared
+    # target:helper: [U0FRIEND0, workspace:a2a]
 
 memory:
   # Optional one-way markdown mirror: general/, projects/<slug>/ and INDEX.md, rewritten atomically after changes.

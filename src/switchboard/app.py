@@ -132,7 +132,8 @@ def create_app(core: "Switchboard") -> Any:
                                      notices.get(request.query_params.get("notice", "")), core.slack.persona_rows())
         rows = [row for b in core.blocks.values() for row in b.page_rows()]
         return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
-                                block_rows=rows, connected=core.connections.list(), csrf=csrf(email))
+                                block_rows=rows, connected=core.connections.list(), csrf=csrf(email),
+                                visibility=core.visibility.rows([f"target:{t['slugs'][0]}" for t in await core.targets() if t.get("slugs") and t.get("block") != "agent"][:200]))
 
     def csrf(email: str) -> str:
         return hmac.new(core.auth.secret, f"switchboard-csrf:{email}".encode(), hashlib.sha256).hexdigest()
@@ -223,6 +224,21 @@ def create_app(core: "Switchboard") -> Any:
             return pages.message_page("Not minted", str(e), 400)
         core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="core", action="connect_code", outcome="ok", target=code["agent"])
         return pages.connect_code_page(code, core.cfg.public_url or "")
+
+    async def visibility_set(request: Request) -> Response:
+        from .visibility import VisibilityError
+
+        email, form, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        resource = str(form.get("resource") or "")
+        try:
+            rule = core.visibility.set(resource, str(form.get("visibility") or ""), f"admin:{email}", core.clock())
+        except VisibilityError as e:
+            return pages.message_page("Not changed", str(e), 400)
+        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="core", action="visibility_set", outcome="ok",
+                          target=resource, detail=str(rule))
+        return RedirectResponse("/", status_code=303)
 
     async def connect_revoke(request: Request) -> Response:
         email, _, refused = await owner_form(request)
@@ -318,6 +334,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/connect", connect_redeem, methods=["POST"]),
             Route("/connect/code", connect_code, methods=["POST"]),
             Route("/connect/keys/{kid}/revoke", connect_revoke, methods=["POST"]),
+            Route("/visibility", visibility_set, methods=["POST"]),
             *pages.routes(),
             *core.auth.routes(),
             *origin_routes,

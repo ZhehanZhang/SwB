@@ -28,7 +28,7 @@ from .memory import GENERAL, Memory, MemoryError_
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
 from .store import Store
-from .trust import allows
+from .visibility import Visibility
 
 DestinationError = BlockError
 
@@ -77,6 +77,7 @@ class Switchboard:
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
         self.connections = Connections(self.store)
+        self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,
                          connections=self.connections)
         self.auth.audit = self.audit
@@ -197,7 +198,7 @@ class Switchboard:
         p = self.project(project)
         sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
-                  "trust": "known" if principal.kind == "connect" else "owner"}
+                  "trust": "owner"}
         meta: dict[str, Any] = {"from": sender, **({"in_reply_to": in_reply_to} if in_reply_to else {})}
         handle = self.inbox.open_handle(owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
                                         meta=meta, status="delivered", target=f"agent:{to}")
@@ -347,10 +348,6 @@ class Switchboard:
         action = block.verb("send")
         if action is None:
             raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
-        if principal.kind == "connect" and not allows("known", str(block.config.get("allow_from") or "owner")):
-            self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=block.name, action="send", outcome="refused", target=to)
-            raise CoreError(f"{block.name} takes work only from the owner's own sign-ins; a connected agent can send to agent:<name> mailboxes, "
-                            f"or the owner can set blocks.{block.name}.allow_from: known")
         message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
         kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
         out = await self.invoke(principal, block.name, action, kw)

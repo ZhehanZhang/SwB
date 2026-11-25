@@ -136,7 +136,7 @@ def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, 
 
 def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]],
                extra: str = "", block_rows: list[tuple[str, str, str, bool | None]] | None = None, connected: list[dict[str, Any]] | None = None,
-               csrf: str = "") -> HTMLResponse:
+               csrf: str = "", visibility: list[dict[str, Any]] | None = None) -> HTMLResponse:
     ok = health["status"] == "ok"
     items = ""
     for name, b in health.get("blocks", {}).items():
@@ -148,7 +148,31 @@ def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]],
     problems = "".join(notice(p, "warn") for p in health["problems"])
     status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in with SSO as {html.escape(email)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')
-    return page("Switchboard", status + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes), 200)
+    return page("Switchboard", status + _visibility_body(visibility or [], csrf) + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes), 200)
+
+
+def _visibility_body(rows: list[dict[str, Any]], csrf: str) -> str:
+    """Each resource's private/shared pill; one click flips it. Tools are always private and show no button."""
+    if not rows:
+        return ""
+    hidden = f'<input type="hidden" name="csrf" value="{csrf}">'
+
+    def row(r: dict[str, Any]) -> str:
+        vis = r["visibility"]
+        label = "Shared" if vis == "shared" else "Private" if vis == "private" else "Shared with " + ", ".join(vis)
+        hint = {"override": "set here", "config": "from the config", "default": "the default"}[r["source"]]
+        if r["fixed"]:
+            control = '<span class="setting-hint">Private, always</span>'
+        else:
+            flip = "private" if vis != "private" else "shared"
+            control = (f'<form method="post" action="/visibility">{hidden}<input type="hidden" name="resource" value="{html.escape(r["resource"])}">'
+                       f'<input type="hidden" name="visibility" value="{flip}"><button class="pill-button{" primary" if vis != "private" else ""}" '
+                       f'title="Make it {flip}">{html.escape(label)}</button></form>')
+        return (f'<div class="setting"><div class="setting-label"><span>{html.escape(r["resource"])}</span><span class="setting-hint">{hint}</span></div>'
+                f'<div class="setting-value">{control}</div></div>')
+
+    return (f'<section class="hero section-gap fade-in"><p>Who can reach what. Private: only you and your own agents. Shared: anyone in that workspace. '
+            f'Anyone else’s message to something private lands in its inbox as context.</p></section><div class="card fade-in">{"".join(row(r) for r in rows)}</div>')
 
 
 def _connect_body(keys: list[dict[str, Any]], csrf: str) -> str:

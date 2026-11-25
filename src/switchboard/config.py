@@ -56,6 +56,7 @@ class Config:
     agents: dict[str, Any] | None = None
     targets: dict[str, Any] = field(default_factory=dict)
     routes: list[dict[str, Any]] = field(default_factory=list)
+    visibility: dict[str, Any] = field(default_factory=dict)
     version: int = 2
     env: Mapping[str, str] = field(default_factory=dict)
 
@@ -129,6 +130,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
     for name, sec in blocks.items():
         sec.setdefault("use", name)
     cfg = Config(
+        visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
         owner_emails=tuple(e.lower() for e in as_tuple(auth.get("owner_emails"))),
         access_team_domain=access.get("team_domain") or None,
