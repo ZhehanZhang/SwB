@@ -131,8 +131,10 @@ def create_app(core: "Switchboard") -> Any:
             extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf(email),
                                      notices.get(request.query_params.get("notice", "")), core.slack.persona_rows())
         rows = [row for b in core.blocks.values() for row in b.page_rows()]
+        routine_block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
         return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
                                 block_rows=rows, connected=core.connections.list(), csrf=csrf(email),
+                                routines=routine_block.rows() if routine_block else None, systems=core.project_systems(await core.targets()),
                                 visibility=core.visibility.rows([f"target:{t['slugs'][0]}" for t in await core.targets() if t.get("slugs") and t.get("block") != "agent"][:200]))
 
     def csrf(email: str) -> str:
@@ -240,6 +242,41 @@ def create_app(core: "Switchboard") -> Any:
                           target=resource, detail=str(rule))
         return RedirectResponse("/", status_code=303)
 
+    async def routine_add(request: Request) -> Response:
+        from .blocks import BlockError
+        from .core import CoreError
+
+        email, form, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
+        if block is None:
+            return pages.message_page("Not available", "The claude-routine block isn't configured (blocks.claude-routine).", 400)
+        try:
+            out = block.add(fire=str(form.get("fire_url") or ""), token=str(form.get("token") or ""), project=str(form.get("project") or "") or None,
+                            name=str(form.get("name") or "") or None, agent="claude", actor=f"admin:{email}")
+        except (BlockError, CoreError) as e:
+            return pages.message_page("Not added", str(e), 400)
+        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination=block.name, action="routine_add", outcome="ok",
+                          target=out["name"], excerpt=f"{out['routine_id']} for {out['project'] or 'general'}")
+        return RedirectResponse("/", status_code=303)
+
+    async def routine_remove(request: Request) -> Response:
+        from .blocks import BlockError
+
+        email, _, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
+        name = request.path_params["name"]
+        try:
+            ok = block.remove(name) if block else False
+        except BlockError as e:
+            return pages.message_page("Not removed", str(e), 400)
+        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="claude-routine", action="routine_remove",
+                          outcome="ok" if ok else "refused", target=name)
+        return RedirectResponse("/", status_code=303)
+
     async def connect_revoke(request: Request) -> Response:
         email, _, refused = await owner_form(request)
         if refused is not None:
@@ -335,6 +372,8 @@ def create_app(core: "Switchboard") -> Any:
             Route("/pairing/code", connect_code, methods=["POST"]),
             Route("/pairing/keys/{kid}/revoke", connect_revoke, methods=["POST"]),
             Route("/visibility", visibility_set, methods=["POST"]),
+            Route("/routines", routine_add, methods=["POST"]),
+            Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
             *pages.routes(),
             *core.auth.routes(),
             *origin_routes,

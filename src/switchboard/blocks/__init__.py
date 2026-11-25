@@ -229,6 +229,10 @@ class Block:
             raise BlockError(f"a {self.name} route target looks like <kind>:<id>")
         return {kind.strip().lower(): ident.strip()}
 
+    def wake_target(self, agent: str, project: str) -> Address | None:
+        """For a block that wakes agents: the target that wakes this agent for this project (a project routine), if any."""
+        return None
+
     def owns_ref(self, ref: str) -> bool:
         """Whether a conversation reference (a thread id, say) belongs to this block."""
         return any(t.ref_prefix and ref.startswith(t.ref_prefix) for t in self.manifest.targets)

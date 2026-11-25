@@ -141,8 +141,9 @@ class Kit:
                                   files=[f.model_dump() for f in files] if files else None, new_conversation=new_conversation)
 
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
-        async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None) -> dict[str, Any]:
-            return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery)
+        async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
+                        final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True) -> dict[str, Any]:
+            return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final)
 
         @mcp.tool(
             title="Wait for replies",

@@ -136,7 +136,8 @@ def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, 
 
 def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]],
                extra: str = "", block_rows: list[tuple[str, str, str, bool | None]] | None = None, connected: list[dict[str, Any]] | None = None,
-               csrf: str = "", visibility: list[dict[str, Any]] | None = None) -> HTMLResponse:
+               csrf: str = "", visibility: list[dict[str, Any]] | None = None, routines: list[dict[str, Any]] | None = None,
+               systems: list[dict[str, Any]] | None = None) -> HTMLResponse:
     ok = health["status"] == "ok"
     items = ""
     for name, b in health.get("blocks", {}).items():
@@ -148,7 +149,45 @@ def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]],
     problems = "".join(notice(p, "warn") for p in health["problems"])
     status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in with SSO as {html.escape(email)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')
-    return page("Switchboard", status + _visibility_body(visibility or [], csrf) + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes), 200)
+    body = (status + _systems_body(systems or []) + (_routines_body(routines, projects, csrf) if routines is not None else "") + _visibility_body(visibility or [], csrf)
+            + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes))
+    return page("Switchboard", body, 200)
+
+
+def _systems_body(systems: list[dict[str, Any]]) -> str:
+    """Each switchboard project and what it maps to in every system: the Captain its route reaches, Claude routines, links."""
+    if not systems:
+        return ""
+    rows = "".join(_row(s["name"], f"project {s['slug']}", " · ".join(f"{k}: {v}" for k, v in s["systems"].items()) or "nothing mapped yet")
+                   for s in systems)
+    return (f'<section class="hero section-gap fade-in"><p>Projects across systems: one switchboard project and its counterpart in Capy, '
+            f'Claude and the rest. A send to the project picks one by its routes.</p></section><div class="card fade-in">{rows}</div>')
+
+
+def _routines_body(routines: list[dict[str, Any]], projects: list[dict[str, Any]], csrf: str) -> str:
+    """Claude routines with their status, and a form to add one from its fire URL and token (shown once, never echoed)."""
+    hidden = f'<input type="hidden" name="csrf" value="{csrf}">'
+
+    def row(r: dict[str, Any]) -> str:
+        hint = " · ".join(x for x in (r["kind"], f"project {r['project']}" if r["project"] else "", r["routine_id"], f"slugs {', '.join(r['slugs'])}",
+                                      "from the config" if r["source"] == "config" else "") if x)
+        control = (f'<form method="post" action="/routines/{html.escape(r["name"])}/remove">{hidden}<button class="text-button">Remove</button></form>'
+                   if r["source"] == "stored" else "")
+        return (f'<div class="setting"><div class="setting-label"><span>{html.escape(r["name"])}</span><span class="setting-hint">{html.escape(hint)}</span></div>'
+                f'<div class="setting-value"><span class="setting-hint">{html.escape(r["status"])}</span>{control}</div></div>')
+
+    options = '<option value="">general (no project)</option>' + "".join(
+        f'<option value="{html.escape(p["slug"])}">{html.escape(p["name"])}</option>' for p in projects if not p.get("archived"))
+    add = (f'<div class="setting"><div class="setting-label"><span>Add a routine</span><span class="setting-hint">In the Claude Project, create a task with '
+           f'an API trigger, then paste its fire URL and token here. The token is stored encrypted and never shown again.</span></div>'
+           f'<div class="setting-value"><form method="post" action="/routines" autocomplete="off">{hidden}'
+           '<input name="fire_url" placeholder="https://api.anthropic.com/v1/claude_code/routines/trig_…/fire" required aria-label="Fire URL">'
+           '<input name="token" type="password" placeholder="sk-ant-oat01-…" required aria-label="Token" autocomplete="new-password">'
+           f'<select name="project" aria-label="Project">{options}</select>'
+           '<button class="pill-button primary">Add</button></form></div></div>')
+    rows = "".join(row(r) for r in routines) or _row("No routines yet", "Add one below", "")
+    return (f'<section class="hero section-gap fade-in"><p>Claude routines: a send to claude (or claude:&lt;project&gt;) starts one. Untested until its first fire.</p></section>'
+            f'<div class="card fade-in">{rows}{add}</div>')
 
 
 def _visibility_body(rows: list[dict[str, Any]], csrf: str) -> str:
