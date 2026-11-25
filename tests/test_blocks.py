@@ -227,14 +227,14 @@ def test_root_page_mints_and_revokes_codes_with_csrf(make):
     page = c.get("/", headers=OWNER)
     assert "Connected agents" in page.text and "Mint code" in page.text and "Block: capy" in page.text
     csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
-    assert c.post("/connect/code", data={"agent": "codex", "csrf": "nope"}, headers=OWNER).status_code == 403
-    shown = c.post("/connect/code", data={"agent": "codex", "csrf": csrf}, headers=OWNER)
+    assert c.post("/pairing/code", data={"agent": "codex", "csrf": "nope"}, headers=OWNER).status_code == 403
+    shown = c.post("/pairing/code", data={"agent": "codex", "csrf": csrf}, headers=OWNER)
     assert shown.status_code == 200 and "https://switchboard.example.test/connect" in shown.text
     code = shown.text.split("&quot;code&quot;: &quot;")[1][:11]
     got = c.post("/connect", json={"code": code})
     assert got.status_code == 200, (code, got.text)
     kid = got.json()["key_id"]
-    assert c.post(f"/connect/keys/{kid}/revoke", data={"csrf": csrf}, headers=OWNER).status_code == 303
+    assert c.post(f"/pairing/keys/{kid}/revoke", data={"csrf": csrf}, headers=OWNER).status_code == 303
     assert core.connections.list() == []
 
 

@@ -183,11 +183,11 @@ def _connect_body(keys: list[dict[str, Any]], csrf: str) -> str:
         used = _ago(k.get("last_used_at"))
         hint = " · ".join(x for x in (k["id"], f"project {k['project']}" if k.get("project") else "", k.get("client") or "", f"last call {used}" if used else "never called") if x)
         return (f'<div class="setting"><div class="setting-label"><span>{html.escape(k["agent"])}</span><span class="setting-hint">{html.escape(hint)}</span></div>'
-                f'<div class="setting-value"><form method="post" action="/connect/keys/{html.escape(k["id"])}/revoke">{hidden}<button class="text-button">Revoke</button></form></div></div>')
+                f'<div class="setting-value"><form method="post" action="/pairing/keys/{html.escape(k["id"])}/revoke">{hidden}<button class="text-button">Revoke</button></form></div></div>')
 
     rows = "".join(row(k) for k in keys) or _row("Nobody connected yet", "Mint a pairing code below, then redeem it on the machine the agent runs on", "")
     mint = (f'<div class="setting"><div class="setting-label"><span>Connect a new agent</span><span class="setting-hint">A one-time code, valid 10 minutes. '
-            f'The client redeems it for its own key.</span></div><div class="setting-value"><form method="post" action="/connect/code">{hidden}'
+            f'The client redeems it for its own key.</span></div><div class="setting-value"><form method="post" action="/pairing/code">{hidden}'
             '<input name="agent" placeholder="agent, e.g. codex" required pattern="[a-z0-9][a-z0-9-]{0,39}" aria-label="Agent name">'
             '<input name="project" placeholder="project (optional)" aria-label="Project">'
             '<button class="pill-button primary">Mint code</button></form></div></div>')
