@@ -6,12 +6,12 @@ public_url: https://bridge.example.com
 auth:
   # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
   owner_emails: [owner@example.com]
-  # Optional: verify the Cf-Access-Jwt-Assertion header on /authorize.
-  # cloudflare_access:
-  #   team_domain: your-team.cloudflareaccess.com
-  #   aud: <Access application AUD tag>
-  # true: the owner password is always required, even behind Access.
-  require_password: true
+  # Verify the Cf-Access-Jwt-Assertion header on /authorize (Access app "Capy Bridge Consent").
+  cloudflare_access:
+    team_domain: your-team.cloudflareaccess.com
+    aud: <AUD tag of the Access application on <host>/authorize>
+  # false: a verified owner Access identity is enough. true: CAPY_BRIDGE_OWNER_PASSWORD is required as well.
+  require_password: false
   # Allowed OAuth redirect URIs (exact, or prefix with /*; loopback matches any port).
   # redirect_uris: [https://claude.ai/api/mcp/auth_callback, https://claude.com/api/mcp/auth_callback,
   #   https://chatgpt.com/connector_platform_oauth_redirect, "https://chatgpt.com/connector/oauth/*",

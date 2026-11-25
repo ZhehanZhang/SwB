@@ -55,9 +55,11 @@ requirements (checked November 2026):
 - Access tokens last 1 hour; refresh tokens 30 days, rotated on use, and a replayed refresh token (after a 60 s race
   grace) revokes its whole family. Tokens are stored only as SHA-256 hashes.
 
-**Only Owner can approve a sign-in.** The consent page asks for `CAPY_BRIDGE_OWNER_PASSWORD`; five wrong tries from
-one IP (or 20 overall) lock it for 15 minutes. Optionally (`auth.cloudflare_access`), `/authorize` also verifies the
-Cloudflare Access JWT and requires an owner email, so a stranger never even sees the form. Cloudflare Access sits only
+**Only Owner can approve a sign-in.** In production `/authorize` sits behind the Cloudflare Access app "Capy Bridge
+Consent" (policy "Owner Only"), and the server verifies the Access JWT itself (`auth.cloudflare_access`: signature,
+audience, issuer, owner email), so a request that bypasses the tunnel is refused too. `CAPY_BRIDGE_OWNER_PASSWORD` is a
+second factor when `require_password: true`, or the only factor where Access isn't configured; five wrong tries from
+one IP (or 20 overall) lock it for 15 minutes. Cloudflare Access sits only
 on `/authorize`; `/mcp`, `/token`, `/register` and the metadata must stay reachable by Anthropic's and OpenAI's
 servers.
 
@@ -104,8 +106,8 @@ stone grounds and type, hairline cards, pill buttons, the Arc backdrop, the sign
 - **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → URL
   `https://bridge.example.com/mcp`, sign in with OAuth (published identity or automatic registration both work), approve
   with the owner password. Enable it per chat or in a Project.
-- **ChatGPT**: Settings → Apps & Connectors → Advanced → Developer mode on, then Create → URL
-  `https://bridge.example.com/mcp`, authentication OAuth.
+- **ChatGPT**: Settings → Apps → Advanced settings → turn on Developer mode, then Create app → URL
+  `https://bridge.example.com/mcp`, authentication OAuth. Enable it per chat from the + menu (Developer mode).
 - **Claude Code**: `claude mcp add --transport http capy-bridge https://bridge.example.com/mcp`.
 - **Capy**: add an MCP server with URL `https://bridge.example.com/mcp` and header
   `Authorization: Bearer <CAPY_BRIDGE_KEY_CAPY>`.
