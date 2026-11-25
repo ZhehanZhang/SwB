@@ -200,3 +200,12 @@ def test_key_scopes_apply_to_an_oauth_agent_too(make):
     core, c = make(config=cfg)
     tok = sign_in(c, redirect="https://capy.ai/web/callbacks/mcp")
     assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:acme"]
+
+
+def test_capy_metadata_document_client_is_allowed_by_default(make, cimd):
+    url = "https://capy.ai/.well-known/oauth-client/mcp"
+    cb = "https://capy.ai/web/callbacks/mcp"
+    cimd.docs[url] = {"client_id": url, "client_name": "Capy", "redirect_uris": [cb], "token_endpoint_auth_method": "none"}
+    _, c = make()
+    tok = sign_in(c, redirect=cb, client_id=url)
+    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["agent"] == "capy"
