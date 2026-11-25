@@ -52,6 +52,7 @@ class Config:
     source_names: dict[str, str] = field(default_factory=dict)
     timezone: str = "America/New_York"
     mirror_dir: str | None = None
+    mirror_debounce_s: float = 2.0
     origins: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {}})
     destinations: dict[str, dict[str, Any]] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
@@ -131,7 +132,8 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         static_keys=tuple(keys),
         source_names={str(k): str(v) for k, v in (auth.get("source_names") or {}).items()},
         timezone=str(raw.get("timezone", "America/New_York")),
-        mirror_dir=memory.get("mirror_dir") or None,
+        mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
+        mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
         origins=origins,
         destinations=_sections(raw.get("destinations"), "destinations"),
         env=env,

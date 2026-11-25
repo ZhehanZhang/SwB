@@ -184,8 +184,13 @@ missing, and `/healthz` and the status page at `/` say what's off. Tests run in 
 data directory is renamed to `switchboard.db` on first start.
 
 Markdown export: `docker compose exec switchboard switchboard export /data/export` writes one folder per scope
-(`general/`, `projects/<slug>/`) plus `INDEX.md`. Setting `memory.mirror_dir` rewrites it on every change. It's one-way.
-A Capy Drive mirror is proposed, not wired: one Drive folder per scope, mounted read-only into Capy.
+(`general/`, `projects/<slug>/`) plus `INDEX.md`. Setting `memory.mirror_dir` keeps that tree in sync: after a change, and once at startup,
+it's rewritten with atomic renames, and files and folders for deleted or moved entries are removed. A burst of
+writes collapses into one export after `mirror_debounce_s` (default 2 s) of quiet, at most ten times that after the
+first change. It's one-way: edits in the mirror are never read back. `mirror: false` switches it off.
+
+The deployment mirrors into Capy Drive (`user-owner/switchboard-memory/`): a git-ignored `compose.override.yaml`
+binds that folder at `/mirror`, and `SWITCHBOARD_UID` in `.env` builds the image to run as the uid that owns it.
 
 The pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
 same type, hairline cards, the Arc backdrop, the signature and the shared theme cookie, ported from example-org/id-site.

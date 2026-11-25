@@ -84,3 +84,11 @@ def test_project_rename_moves_routes(make):
     core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN}, defaults={}, allow_override=False, note="", by="t")
     core.projects.update("infra", new_slug="infra")
     assert core.routes.resolve(destination="capy", agent="x", project="infra")[0].level == "project"
+
+
+def test_routes_set_matches_a_captain_by_code(make):
+    core, c = make()
+    infra(core)
+    tok = sign_in(c)["access_token"]
+    assert payload(call(c, tok, "routes_set", {"target": "captain:acme-3", "project": "infra"}))["target"]["captain"] == CAPTAIN2
+    assert payload(call(c, tok, "routes_set", {"target": "captain:ZINF-1"}))["target"]["captain"] == CAPTAIN

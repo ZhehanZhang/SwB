@@ -158,8 +158,8 @@ class FakeCapy:
                 self.thread("jam_CREW3", OTHER_PROJECT, title="other project work", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
             ]})
         if p == "captains":
-            return httpx.Response(200, json={"items": [{"id": CAPTAIN, "name": "Captain", "title": "Captain", "projectId": PROJECT},
-                                                       {"id": CAPTAIN2, "name": "Acme Captain", "title": "Acme Captain", "projectId": OTHER_PROJECT}], "cursor": None})
+            return httpx.Response(200, json={"items": [{"id": CAPTAIN, "code": "ZINF-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
+                                                       {"id": CAPTAIN2, "code": "ACME-3", "name": "Acme Captain", "title": "Acme Captain", "projectId": OTHER_PROJECT}], "cursor": None})
         if (mm := re.fullmatch(r"projects/([^/]+)", p)):
             return httpx.Response(200, json={"id": mm.group(1), "name": "Infra", "code": "ZINF"}) if mm.group(1) in (PROJECT, OTHER_PROJECT) else httpx.Response(404, json={"_tag": "capy/ProjectNotFound"})
         if p == "projects":

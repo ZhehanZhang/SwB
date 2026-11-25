@@ -59,7 +59,7 @@ class Switchboard:
         self.store = Store(db, clock=clock)
         self.audit = Audit(self.store, self.cfg.timezone)
         self.projects = Projects(self.store)
-        self.memory = Memory(self.store, self.projects, self.cfg.mirror_dir)
+        self.memory = Memory(self.store, self.projects, self.cfg.mirror_dir, self.cfg.mirror_debounce_s)
         self.routes = Routes(self.store)
         self.inbox = Inbox(self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret())
@@ -97,6 +97,8 @@ class Switchboard:
         for d in self.destinations.values():
             await d.aclose()
         await self.auth.http.aclose()
+        if self.memory.mirror_pending:
+            self.memory.flush_mirror()
         self.store.close()
 
     def health(self) -> dict[str, Any]:

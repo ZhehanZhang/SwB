@@ -500,7 +500,7 @@ class CapyDestination(Destination):
         hint = hint.strip()
         captains = await self.need_api().list_captains()
         for c in captains:
-            names = {(c.get(k) or "").lower() for k in ("id", "name", "title")}
+            names = {(c.get(k) or "").lower() for k in ("id", "code", "name", "title")}
             if hint.lower() in names:
                 return c
         raise DestinationError(f"no Captain matches {hint!r}; capy_captains lists them")

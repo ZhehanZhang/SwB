@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from switchboard.memory import Memory, MemoryError_
@@ -120,3 +122,35 @@ def test_memory_and_project_tools_over_mcp(make):
     assert payload(call(c, STATIC_KEY, "memory_search", {"query": "fts5", "project": "switchboard"}))["items"][0]["id"] == w["id"]
     assert payload(call(c, STATIC_KEY, "project_list", {"hint": "Switchboard"}))["matches"][0]["slug"] == "switchboard"
     assert payload(call(c, STATIC_KEY, "project_update", {"slug": "switchboard", "archived": True}))["archived"] is True
+
+
+def test_mirror_debounces_bursts_and_follows_renames(tmp_path, store):
+    out = tmp_path / "mirror"
+    projects = Projects(store)
+    projects.create(slug="old", name="Old")
+    mem = Memory(store, projects, mirror_dir=str(out), mirror_debounce_s=0.2)
+    assert (out / "INDEX.md").exists()
+    exports = []
+    real = mem.export
+    mem.export = lambda root: exports.append(root) or real(root)
+    for i in range(5):
+        mem.write(source="t", scope="project:old", namespace="notes", key=f"n{i}", title=f"N{i}", body="x")
+    assert exports == [] and mem.mirror_pending
+    time.sleep(0.6)
+    assert len(exports) == 1 and not mem.mirror_pending
+    assert len(list((out / "projects" / "old" / "notes").glob("*.md"))) == 5
+    projects.update("old", new_slug="new")
+    mem.schedule_mirror()
+    mem.flush_mirror()
+    assert (out / "projects" / "new" / "notes" / "n0.md").exists()
+    assert not (out / "projects" / "old").exists()
+    assert not list(out.rglob(".tmp-*"))
+
+
+def test_mirror_can_be_switched_off(tmp_path):
+    from switchboard.config import load_config
+    path = tmp_path / "c.yaml"
+    path.write_text("public_url: https://sb.example.test\nmemory:\n  mirror_dir: /mirror\n  mirror: false\n")
+    assert load_config(path, env={}).mirror_dir is None
+    path.write_text("public_url: https://sb.example.test\nmemory:\n  mirror_dir: /mirror\n")
+    assert load_config(path, env={}).mirror_dir == "/mirror"

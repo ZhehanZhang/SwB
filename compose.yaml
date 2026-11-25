@@ -2,12 +2,16 @@
 # Secrets: .env (mode 600, git-ignored), see .env.example. Config: config/switchboard.yaml.
 # MCP: http://127.0.0.1:8870/mcp by default. Public exposure: --profile tunnel with
 # TUNNEL_TOKEN in .env; the tunnel's public hostname points at http://switchboard:8000.
+# Memory mirror: bind a host folder at /mirror in compose.override.yaml (git-ignored) and set memory.mirror_dir;
+# SWITCHBOARD_UID in .env builds the image to run as the uid that owns that folder (and ./data).
 name: switchboard
 services:
   switchboard:
     build:
       context: .
       target: runtime
+      args:
+        APP_UID: ${SWITCHBOARD_UID:-10001}
     image: switchboard:local
     env_file:
       - path: .env

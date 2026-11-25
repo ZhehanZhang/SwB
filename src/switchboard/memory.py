@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 import sqlite3
 import tempfile
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +19,7 @@ MAX_BODY = 20_000
 MAX_TITLE = 200
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,79}$")
 GENERAL = "general"
+log = logging.getLogger("switchboard.memory")
 
 
 class MemoryError_(ValueError):
@@ -45,10 +49,16 @@ def _row(r: sqlite3.Row, body: bool = True, limit: int | None = None) -> dict[st
 class Memory:
     """Scoped memory: every entry lives in 'general' or in 'project:<slug>', with namespaces inside the scope."""
 
-    def __init__(self, store: Store, projects: Projects, mirror_dir: str | None = None):
+    def __init__(self, store: Store, projects: Projects, mirror_dir: str | None = None, mirror_debounce_s: float = 0):
         self.store = store
         self.projects = projects
         self.mirror_dir = Path(mirror_dir) if mirror_dir else None
+        self.mirror_debounce_s = mirror_debounce_s
+        self._mirror_lock = threading.Lock()
+        self._mirror_timer: threading.Timer | None = None
+        self._mirror_pending_since = 0.0
+        if self.mirror_dir:
+            self.flush_mirror()
 
     # Scopes -------------------------------------------------------------------------
 
@@ -280,6 +290,9 @@ class Memory:
             rel = p.relative_to(root)
             if rel != Path("INDEX.md") and rel not in wanted:
                 p.unlink()
+        for d in sorted((d for d in root.rglob("*") if d.is_dir()), key=lambda d: len(d.parts), reverse=True) if root.exists() else []:
+            if not any(d.iterdir()):
+                d.rmdir()
         _atomic_write(root / "INDEX.md", self.index_markdown(rows))
         return len(rows)
 
@@ -297,8 +310,41 @@ class Memory:
         return "\n".join(lines) + "\n"
 
     def _sync_mirror(self) -> None:
-        if self.mirror_dir:
+        """Rewrite the mirror after a change. A burst collapses into one export, at most debounce x 10 after its first change."""
+        if not self.mirror_dir:
+            return
+        if self.mirror_debounce_s <= 0:
+            self.flush_mirror()
+            return
+        with self._mirror_lock:
+            now = time.monotonic()
+            if self._mirror_timer:
+                if now - self._mirror_pending_since >= self.mirror_debounce_s * 10:
+                    return
+                self._mirror_timer.cancel()
+            else:
+                self._mirror_pending_since = now
+            self._mirror_timer = threading.Timer(self.mirror_debounce_s, self.flush_mirror)
+            self._mirror_timer.daemon = True
+            self._mirror_timer.start()
+
+    schedule_mirror = _sync_mirror
+
+    def flush_mirror(self) -> None:
+        with self._mirror_lock:
+            if self._mirror_timer:
+                self._mirror_timer.cancel()
+            self._mirror_timer = None
+        if not self.mirror_dir:
+            return
+        try:
             self.export(self.mirror_dir)
+        except OSError:
+            log.exception("memory mirror export to %s failed", self.mirror_dir)
+
+    @property
+    def mirror_pending(self) -> bool:
+        return self._mirror_timer is not None
 
 
 def _atomic_write(path: Path, text: str) -> None:

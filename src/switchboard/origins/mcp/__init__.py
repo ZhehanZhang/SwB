@@ -224,8 +224,11 @@ class MCPOrigin(Origin):
         async def project_update(ctx: Context, slug: str, name: str | None = None, description: str | None = None, links: Links | None = None,
                                  new_slug: str | None = None, archived: bool | None = None) -> dict[str, Any]:
             who(ctx)
-            return sync(core.projects.update, slug, name=name, description=description, links=links.model_dump(exclude_unset=True) if links else None,
-                        new_slug=new_slug, archived=archived).as_dict()
+            out = sync(core.projects.update, slug, name=name, description=description, links=links.model_dump(exclude_unset=True) if links else None,
+                       new_slug=new_slug, archived=archived).as_dict()
+            if new_slug:
+                core.memory.schedule_mirror()
+            return out
 
         # Routes (core) ---------------------------------------------------------------------
 
