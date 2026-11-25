@@ -23,6 +23,9 @@ DEFAULT_REDIRECTS = [
     "http://localhost/*",
     "http://127.0.0.1/*",
 ]
+# Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
+# channel uses SWITCHBOARD_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
+DEFAULT_INBOX_KEYS = {"channel": "claude-code"}
 DEFAULT_CIMD_HOSTS = ["claude.ai", "claude.com", "anthropic.com", "chatgpt.com", "openai.com", "capy.ai"]
 
 NAMESPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}(/[a-z0-9][a-z0-9_.-]{0,59}){0,2}$")
@@ -54,6 +57,7 @@ class Config:
     static_keys: tuple[StaticKey, ...] = ()
     source_names: dict[str, str] = field(default_factory=dict)
     key_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    inbox_keys: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_INBOX_KEYS))
     timezone: str = "America/New_York"
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
@@ -137,6 +141,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         static_keys=tuple(keys),
         source_names={str(k): str(v) for k, v in (auth.get("source_names") or {}).items()},
         key_scopes={str(k).lower(): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_scopes") or {}).items()},
+        inbox_keys={**DEFAULT_INBOX_KEYS, **{str(k).lower(): str(v).lower() for k, v in (auth.get("inbox_keys") or {}).items()}},
         timezone=str(raw.get("timezone", "America/New_York")),
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),

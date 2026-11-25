@@ -138,7 +138,8 @@ class Switchboard:
 
     def known_agents(self) -> list[str]:
         """Agent names a message can be addressed to: OAuth agents, bearer-key names, and agents named in routes."""
-        names = set(AGENT_LABELS) | {k.name for k in self.cfg.static_keys} | set(self.cfg.source_names.values())
+        names = set(AGENT_LABELS) | {k.name for k in self.cfg.static_keys if k.name not in self.cfg.inbox_keys} | set(self.cfg.source_names.values())
+        names |= set(self.cfg.inbox_keys.values())
         names |= {r["agent"] for r in self.store.q("SELECT DISTINCT agent FROM routes WHERE agent IS NOT NULL AND agent != ''")}
         return sorted(names)
 

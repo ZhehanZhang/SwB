@@ -22,6 +22,7 @@ auth:
   # source_names: {cursor: cursor}
   # Optional: limit bearer keys (by name, the part after SWITCHBOARD_KEY_) to memory scopes. Unlisted keys see every scope.
   # key_scopes: {acme-agent: [project:acme]}
+  # inbox_keys: {channel: claude-code}         # inbox-only keys (/inbox/poll, /inbox/events) bound to one agent; this is the default
 
 origins:
   mcp:

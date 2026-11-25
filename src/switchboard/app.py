@@ -79,6 +79,11 @@ class BearerGate:
                 await send({"type": "http.response.start", "status": 401, "headers": [(b"content-type", b"application/json"), (b"www-authenticate", challenge.encode())]})
                 await send({"type": "http.response.body", "body": body})
                 return
+            if principal.kind == "inbox_key" and not scope["path"].startswith("/inbox/"):
+                body = json.dumps({"error": "insufficient_scope", "error_description": f"{principal.client_id} only reads {principal.source}'s inbox (/inbox/poll, /inbox/events)"}).encode()
+                await send({"type": "http.response.start", "status": 403, "headers": [(b"content-type", b"application/json")]})
+                await send({"type": "http.response.body", "body": body})
+                return
             scope[PRINCIPAL_SCOPE] = principal
         await self.app(scope, receive, send)
 
@@ -190,21 +195,25 @@ def create_app(core: "Switchboard") -> Any:
         return RedirectResponse("/?notice=avatar-saved", status_code=303)
 
     async def inbox_poll(request: Request) -> JSONResponse:
-        """Long-poll for the Claude Code channel and scripts: items for ?agent= (default every agent) after ?after=."""
+        """Long-poll for the Claude Code channel and scripts: the caller's own inbox items after ?after=."""
         p = principal_of(request)
+        if request.query_params.get("agent") not in (None, "", p.source):
+            return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         try:
             timeout = min(POLL_MAX_S, max(0.0, float(request.query_params.get("timeout", "25"))))
         except ValueError:
             timeout = 25.0
         since = _cursor(request)
-        out = await core.inbox.wait(owner=request.query_params.get("agent") or None, since=since if since is not None else core.inbox.head(),
+        out = await core.inbox.wait(owner=p.source, since=since if since is not None else core.inbox.head(),
                                     timeout=timeout, reader=f"channel:{p.source}", advance=False)
         return JSONResponse(out)
 
     async def inbox_events(request: Request) -> Response:
         """Server-Sent Events: one 'item' frame per inbox item, id = its cursor, so Last-Event-ID resumes after a drop."""
         p = principal_of(request)
-        agent = request.query_params.get("agent") or None
+        if request.query_params.get("agent") not in (None, "", p.source):
+            return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
+        agent = p.source
         start = _cursor(request)
 
         async def frames() -> AsyncIterator[bytes]:

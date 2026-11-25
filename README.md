@@ -134,10 +134,20 @@ the switchboard MCP server's `capy_reply`.
 Install, during the research preview (custom channels aren't on Anthropic's allowlist, so they need the development
 flag, and Team or Enterprise organizations must enable channels):
 
-1. On your-host, read the channel key: `sudo grep '^SWITCHBOARD_KEY_CHANNEL=' /srv/swb/.env`.
-   Paste it only into Claude Code's config prompt, never into a chat.
-2. Install [Bun](https://bun.sh), then in Claude Code run `/plugin marketplace add ZhehanZhang/switchboard` and
-   `/plugin install switchboard@switchboard`. Enter the URL and the key when it asks.
+1. The channel needs a key named `SWITCHBOARD_KEY_CHANNEL` (generate it with `openssl rand -hex 32` into `.env`). It is
+   an inbox-only key: `auth.inbox_keys` (default `{channel: claude-code}`) binds it to agent `claude-code`, the agent
+   Claude Code signs in as over OAuth, so it pushes exactly what Claude Code's `capy_wait` would see. It may only call
+   `GET /inbox/poll` and `GET /inbox/events`, gets 403 on `/mcp` and on any other agent's inbox, and never moves Claude
+   Code's own `capy_wait` cursor. On your-host, read it with
+   `sudo grep '^SWITCHBOARD_KEY_CHANNEL=' /srv/swb/.env` and paste it only into
+   Claude Code's config prompt, never into a chat.
+2. Install [Bun](https://bun.sh), then add the plugin in Claude Code. From GitHub:
+   `/plugin marketplace add ZhehanZhang/switchboard` and `/plugin install switchboard@switchboard`. While the repo is
+   private, Claude Code clones it with that machine's git, so git there must be able to read it: `gh auth login`
+   (and `gh auth setup-git`), an SSH key on your GitHub account with the `git@github.com:ZhehanZhang/switchboard.git`
+   form, or a credential helper holding a token with read access to the repo. Or skip GitHub: clone it any way you
+   like and run `/plugin marketplace add /path/to/switchboard` (a local folder with `.claude-plugin/marketplace.json`),
+   then the same `/plugin install`. Enter the URL and the key when it asks.
 3. Start sessions with `claude --dangerously-load-development-channels plugin:switchboard@switchboard`.
 
 Without the plugin wrapper, a bare server works too: add
