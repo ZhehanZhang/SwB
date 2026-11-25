@@ -63,6 +63,7 @@ class Switchboard:
         self.routes = Routes(self.store)
         self.inbox = Inbox(self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret())
+        self.auth.audit = self.audit
         self._tasks: set[asyncio.Task[Any]] = set()
         opts = destination_options or {}
         self.destinations: dict[str, Destination] = {

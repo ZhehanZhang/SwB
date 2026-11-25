@@ -166,6 +166,16 @@ class Auth:
         self._access_verifier = access_verifier
         self._jwks: Any = None
         self._cimd_cache: dict[str, tuple[float, Client]] = {}
+        self.audit: Any = None
+
+    def failed(self, request: Request, endpoint: str, e: "OAuthError", client: str | None = None) -> None:
+        """Record a refused OAuth step with its reason. Reasons name redirect URIs and hosts, never secrets."""
+        log.info("oauth %s refused: %s", endpoint, e.description)
+        if self.audit is not None:
+            from .guard import client_ip
+
+            self.audit.record(origin="http", source="-", client=client_ip(request.scope), destination="core", action="oauth_refused",
+                              outcome="refused", target=endpoint, detail=f"{e.error}: {e.description}"[:500], ref=(client or "")[:200] or None)
 
     # Bearer verification --------------------------------------------------------
 
@@ -289,7 +299,7 @@ class Auth:
             return cached[1]
         u = urlparse(url)
         if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not host_allowed(u.hostname, self.cfg.cimd_hosts):
-            raise OAuthError("invalid_client", "client metadata document host is not allowed", 401)
+            raise OAuthError("invalid_client", f"client metadata document host {urlparse(url).hostname} is not allowed (auth.cimd_hosts)", 401)
         try:
             async with self.http.stream("GET", url, headers={"Accept": "application/json"}) as r:
                 if r.status_code != 200:
@@ -386,9 +396,9 @@ class Auth:
         c = await self.client(p.get("client_id"))
         redirect_uri = p.get("redirect_uri") or (c.redirect_uris[0] if len(c.redirect_uris) == 1 else "")
         if not redirect_uri or not redirect_matches(redirect_uri, c.redirect_uris):
-            raise OAuthError("invalid_request", "redirect_uri is not registered for this client")
+            raise OAuthError("invalid_request", f"redirect_uri {redirect_uri or '(none)'} is not registered for this client")
         if not redirect_allowed(redirect_uri, self.cfg.redirect_allow):
-            raise OAuthError("invalid_request", "redirect_uri is not allowed by this server")
+            raise OAuthError("invalid_request", f"redirect_uri {redirect_uri} is not allowed by this server (auth.redirect_uris)")
         return c, {**p, "redirect_uri": redirect_uri}
 
     def check_request(self, p: dict[str, str]) -> None:
@@ -510,6 +520,7 @@ class Auth:
         try:
             out = await self.register(body)
         except OAuthError as e:
+            self.failed(request, "/register", e)
             return e.response()
         log.info("registered oauth client %s (%s)", out["client_id"], out.get("client_name") or "unnamed")
         return JSONResponse(out, status_code=201, headers={"Cache-Control": "no-store"})
@@ -524,10 +535,12 @@ class Auth:
             try:
                 params = self.unsign(str(form.get("req") or ""))
             except OAuthError as e:
+                self.failed(request, "/authorize", e)
                 return pages.message_page("Sign-in failed", e.description, 400)
         try:
             c, params = await self.validate_authorize(params)
         except OAuthError as e:
+            self.failed(request, "/authorize", e, params.get("client_id"))
             return pages.message_page("Sign-in failed", e.description, e.status if e.status != 401 else 400)
         state = params.get("state")
         try:
@@ -581,6 +594,7 @@ class Auth:
         try:
             out = await self.token(form, _basic(request))
         except OAuthError as e:
+            self.failed(request, "/token", e)
             resp = e.response()
             if e.status == 401:
                 resp.headers["WWW-Authenticate"] = "Basic"

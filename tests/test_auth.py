@@ -209,3 +209,15 @@ def test_capy_metadata_document_client_is_allowed_by_default(make, cimd):
     _, c = make()
     tok = sign_in(c, redirect=cb, client_id=url)
     assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["agent"] == "capy"
+
+
+def test_a_refused_redirect_is_named_on_the_page_and_in_the_audit_log(make):
+    core, c = make()
+    cid = register(c)["client_id"]
+    bad = "https://evil.example/cb"
+    page, _ = consent(c, cid, redirect=bad)
+    assert page.status_code == 400 and bad in page.text
+    row = core.audit.recent(action="oauth_refused")[0]
+    assert bad in row["detail"] and row["target"] == "/authorize" and row["ref"] == cid
+    r = c.post("/register", json={"redirect_uris": ["https://other.example/cb"], "client_name": "x"})
+    assert r.status_code == 400 and "https://other.example/cb" in core.audit.recent(action="oauth_refused")[0]["detail"]
