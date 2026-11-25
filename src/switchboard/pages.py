@@ -88,7 +88,38 @@ def _row(label: str, hint: str, value: str, on: bool | None = None) -> str:
             f'<div class="setting-value">{mark}<span>{html.escape(value)}</span></div></div>')
 
 
-def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> HTMLResponse:
+def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, notice_text: str | None) -> str:
+    """Slack workspaces and the write requests waiting for the owner, each with Approve and send / Reject."""
+    ws_rows = "".join(
+        _row(label, f"{w['intake']}" + (", user only" if w["user_only"] else "") + f", {w['watched']} watched" + (f", last event {w['last_event_at']}" if w.get("last_event_at") else "")
+             + (f", missing {', '.join(w['missing_env'])}" if w["missing_env"] else "") + (f", error: {w['errors'][-1]}" if w["errors"] else ""),
+             ", ".join(w["identities"]) or "no tokens", bool(w["identities"]) and not w["missing_env"] and (w["connected"] or w["intake"] != "socket"))
+        for label, w in sorted(slack.get("workspaces", {}).items())
+    ) or _row("No workspaces", "Add them under slack.workspaces in the config", "")
+
+    def item(r: dict[str, Any]) -> str:
+        p = r["params"]
+        what = "Post" if r["action"] == "post_message" else f"React :{p.get('name')}:"
+        facts = [r["id"], f"from {r['key_id']}", f"as {r['identity']} in {r['workspace']}", f"to {p.get('channel')}"]
+        if r.get("persona"):
+            facts.append(f"persona {r['persona']['name']}")
+        if p.get("thread_ts"):
+            facts.append(f"thread {p['thread_ts']}")
+        hidden = f'<input type="hidden" name="csrf" value="{csrf}">'
+        rid = html.escape(r["id"])
+        return (f'<div class="setting"><div class="setting-label"><span>{html.escape(what)}</span><span class="setting-hint">{html.escape(" · ".join(facts))}</span>'
+                + (f'<span class="setting-hint">{html.escape(p["text"])}</span>' if p.get("text") else "")
+                + f'</div><div class="setting-value"><form method="post" action="/slack/requests/{rid}/approve">{hidden}<button class="pill-button primary">Approve and send</button></form>'
+                f'<form method="post" action="/slack/requests/{rid}/reject">{hidden}<button class="text-button">Reject</button></form></div></div>')
+
+    pending_rows = "".join(item(r) for r in pending) or _row("Nothing waiting", "Writes that need your approval appear here and as a Slack DM", "")
+    return (f'<section class="hero section-gap fade-in"><p>Slack workspaces</p></section><div class="card fade-in">{ws_rows}</div>'
+            + (notice(notice_text, "good") if notice_text else "")
+            + f'<section class="hero section-gap fade-in"><p>Slack writes waiting for you. Agents can never approve their own.</p></section><div class="card fade-in">{pending_rows}</div>')
+
+
+def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]],
+               extra: str = "") -> HTMLResponse:
     ok = health["status"] == "ok"
     capy = health["destinations"].get("capy")
     rows = [
@@ -96,6 +127,8 @@ def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]],
         ("Destination: Capy", "Delegating to Capy Captains and threads, with replies back", bool(capy and capy["online"])),
         ("Memory mirror", "Markdown copy for Capy Drive, one folder per scope", health["mirror"]),
     ]
+    if "slack" in health["destinations"]:
+        rows.insert(2, ("Origin and destination: Slack", "Events from watched channels, mentions and DMs; reads, posts and reactions", bool(health["destinations"]["slack"]["online"])))
     items = "".join(_row(a, b, "On" if on else "Off", on) for a, b, on in rows)
     items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
     if capy and capy.get("sends_as"):
@@ -112,7 +145,7 @@ def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]],
     problems = "".join(notice(p, "warn") for p in health["problems"])
     status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in with SSO as {html.escape(email)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')
-    return page("Switchboard", status + _routes_body(routes, projects, changes), 200)
+    return page("Switchboard", status + extra + _routes_body(routes, projects, changes), 200)
 
 
 def _routes_body(routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> str:

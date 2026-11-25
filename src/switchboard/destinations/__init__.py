@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 DESTINATIONS = {
     "capy": "switchboard.destinations.capy:CapyDestination",
+    "slack": "switchboard.destinations.slack:SlackDestination",
 }
 
 

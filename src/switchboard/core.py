@@ -22,6 +22,8 @@ from .origins import Origin
 from .origins import load as load_origin
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
+from .slack.config import parse_config as parse_slack_config
+from .slack.engine import SlackEngine
 from .store import Store
 
 log = logging.getLogger("switchboard")
@@ -44,6 +46,7 @@ class Switchboard:
         oauth_http: httpx.AsyncClient | None = None,
         access_verifier: Any = None,
         destination_options: dict[str, dict[str, Any]] | None = None,
+        slack_options: dict[str, Any] | None = None,
     ):
         self.cfg: Config = load_config(config_path, env)
         self.data_dir = Path(data_dir)
@@ -65,11 +68,19 @@ class Switchboard:
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret())
         self.auth.audit = self.audit
         self._tasks: set[asyncio.Task[Any]] = set()
+        slack_opts = dict(slack_options or {})
+        self.slack_connect = bool(slack_opts.pop("connect", True))
+        self.slack: SlackEngine | None = None
+        destinations, origins = dict(self.cfg.destinations), dict(self.cfg.origins)
+        if self.cfg.slack is not None:
+            self.slack = SlackEngine(parse_slack_config(self.cfg.slack, self.cfg.env), self.data_dir, env=self.cfg.env, **slack_opts)
+            destinations.setdefault("slack", {})
+            origins.setdefault("slack", {})
         opts = destination_options or {}
         self.destinations: dict[str, Destination] = {
-            name: load_destination(name)(self, {**section, **opts.get(name, {})}) for name, section in self.cfg.destinations.items()
+            name: load_destination(name)(self, {**section, **opts.get(name, {})}) for name, section in destinations.items()
         }
-        self.origins: dict[str, Origin] = {name: load_origin(name)(self, section) for name, section in self.cfg.origins.items()}
+        self.origins: dict[str, Origin] = {name: load_origin(name)(self, section) for name, section in origins.items()}
 
     def _secret(self) -> bytes:
         path = self.data_dir / "form-secret"
@@ -87,6 +98,8 @@ class Switchboard:
         return task
 
     async def start(self) -> None:
+        if self.slack is not None:
+            await self.slack.start(connect=self.slack_connect)
         for d in self.destinations.values():
             await d.start()
 
@@ -97,6 +110,8 @@ class Switchboard:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         for d in self.destinations.values():
             await d.aclose()
+        if self.slack is not None:
+            await self.slack.stop()
         await self.auth.http.aclose()
         if self.memory.mirror_pending:
             self.memory.flush_mirror()

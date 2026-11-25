@@ -59,6 +59,7 @@ class Config:
     mirror_debounce_s: float = 2.0
     origins: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {}})
     destinations: dict[str, dict[str, Any]] = field(default_factory=dict)
+    slack: dict[str, Any] | None = None
     env: Mapping[str, str] = field(default_factory=dict)
 
     @property
@@ -141,6 +142,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
         origins=origins,
         destinations=_sections(raw.get("destinations"), "destinations"),
+        slack=dict(raw.get("slack") or {}) if "slack" in raw else None,
         env=env,
     )
     if bool(cfg.access_team_domain) != bool(cfg.access_aud):

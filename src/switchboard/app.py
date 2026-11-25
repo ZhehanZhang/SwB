@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from . import pages
@@ -114,7 +116,51 @@ def create_app(core: "Switchboard") -> Any:
         if email is None:
             return pages.message_page("Not allowed", "This page needs the owner's SSO through Cloudflare Access.", 403)
         changes = [c for c in core.audit.recent(limit=100) if c["action"] in ("route_set", "route_remove", "auth_failure", "rate_limited")][:15]
-        return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes)
+        extra = ""
+        if core.slack is not None:
+            notices = {"approved": "Approved and sent.", "rejected": "Rejected.", "send-failed": "Approved, but Slack refused the send; see the audit log.",
+                       "decide-refused": "That request was already decided or has expired."}
+            extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf(email),
+                                     notices.get(request.query_params.get("notice", "")))
+        return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra)
+
+    def csrf(email: str) -> str:
+        return hmac.new(core.auth.secret, f"switchboard-csrf:{email}".encode(), hashlib.sha256).hexdigest()
+
+    async def slack_decide(request: Request) -> Response:
+        """The owner approves or rejects a Slack write from the root page: Access JWT for an owner plus a CSRF token."""
+        from .slack.writes import Actor, WriteError
+
+        if core.slack is None or not core.cfg.access_team_domain:
+            return pages.message_page("Not available", "Slack approvals here need Slack and Cloudflare Access configured.", 403)
+        email = await core.auth.owner(request)
+        if email is None:
+            return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        form = await request.form()
+        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
+            return pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
+        verb = request.path_params["verb"]
+        if verb not in ("approve", "reject"):
+            return Response(status_code=404)
+        try:
+            req = await core.slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", email))
+        except WriteError:
+            return RedirectResponse("/?notice=decide-refused", status_code=303)
+        outcome = "rejected" if verb == "reject" else ("approved" if req["status"] == "sent" else "send-failed")
+        return RedirectResponse(f"/?notice={outcome}", status_code=303)
+
+    async def avatar(request: Request) -> Response:
+        """Persona avatars for Slack bot posts; Slack fetches them, so this path is public (no Access)."""
+        if core.slack is None:
+            return Response(status_code=404)
+        name = request.path_params["name"]
+        from .slack.config import AVATAR_RE
+
+        path = core.slack.avatar_dir / name
+        if not AVATAR_RE.match(name) or not path.is_file():
+            return Response(status_code=404)
+        return Response(path.read_bytes(), media_type="image/png" if name.endswith(".png") else ("image/gif" if name.endswith(".gif") else "image/jpeg"),
+                        headers={"Cache-Control": "public, max-age=3600"})
 
     async def inbox_poll(request: Request) -> JSONResponse:
         """Long-poll for the Claude Code channel and scripts: items for ?agent= (default every agent) after ?after=."""
@@ -166,6 +212,8 @@ def create_app(core: "Switchboard") -> Any:
     app: Any = Starlette(
         routes=[
             Route("/", admin, methods=["GET"]),
+            Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
+            Route("/avatars/{name}", avatar, methods=["GET"]),
             Route("/healthz", healthz),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),

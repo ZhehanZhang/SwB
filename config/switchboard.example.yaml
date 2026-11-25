@@ -63,3 +63,51 @@ memory:
   # mirror_dir: /mirror
   # mirror: true
   # mirror_debounce_s: 2
+
+# Slack (optional). With this section, switchboard runs the Slack origin (events in) and destination (slack_* tools).
+# Tokens never go here: every *_env names a variable in .env. Config changes apply on restart.
+slack:
+  # Needed only for persona avatars stored under <data>/avatars, which Slack fetches from <public_base_url>/avatars/<file>
+  # (keep /avatars outside Access).
+  public_base_url: https://switchboard.example.com
+  max_text_chars: 4000
+  event_retention_days: 14
+  # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts.
+  personas:
+    switchboard: {name: Switchboard, emoji: ":robot_face:"}
+    capy: {name: Capy, icon_url: "https://example.com/capy.png"}
+    helper: {name: Helper, avatar: helper.png}
+  workspaces:
+    # Workspace A: an agent room. The bot is @mentionable and can also act as the owner (with approval).
+    a2a:
+      team_id: T0AAAAAAA
+      app_id: A0AAAAAAA                         # this Slack app; its own posts are never delivered back
+      app_token_env: SLACK_A2A_APP_TOKEN        # xapp-..., connections:write (Socket Mode)
+      intake: socket                            # or poll (conversations.history every poll_seconds)
+      identities:
+        bot: {token_env: SLACK_A2A_BOT_TOKEN, write: free}        # xoxb-...
+        user: {token_env: SLACK_A2A_USER_TOKEN, write: approval}  # xoxp-..., the owner's own account
+      default_persona: switchboard
+      ack_reaction: eyes                        # added to @mentions and DMs on receipt
+      watched: ["#agents"]                      # the bot must be a member (invite it yourself)
+      bot_thread_posts_per_hour: 20             # loop guard: more bot posts in one thread per hour need approval
+      sinks:                                    # optional: also POST each event to a webhook
+        - {name: a2a-hook, url_env: SLACK_SINK_A2A_URL, kinds: [watched, mention, dm], coalesce_seconds: 0}
+    # Workspace B: private. User token only: no bot, no personas, never joins or invites.
+    private:
+      team_id: T0CCCCCCC
+      user_only: true
+      app_token_env: SLACK_PRIVATE_APP_TOKEN
+      identities:
+        user: {token_env: SLACK_PRIVATE_USER_TOKEN, write: approval}  # user_only allows only approval or never
+      watched: ["#family"]
+  # Owner approvals: a DM with Approve / Reject buttons from a workspace's bot, plus the root page. Agents never approve.
+  approvals:
+    ttl_minutes: 60
+    notify_workspace: a2a
+    approver_user_id: U0OWNER00
+  # What each switchboard agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
+  agents:
+    capy: {persona: capy, workspaces: {a2a: [bot]}}
+    claude: {persona: capy, allow_persona_override: true, allowed_personas: [capy, helper], workspaces: {a2a: [bot, user], private: [user]}}
+

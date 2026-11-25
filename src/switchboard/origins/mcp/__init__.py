@@ -371,6 +371,11 @@ class MCPOrigin(Origin):
                 need(p, pscope(project))
             return await run(core.agent_send(p, to=to, text=text, project=project))
 
+        if "slack" in core.destinations:
+            from .slack_tools import register
+
+            register(mcp, core, who, self.wait_caps)
+
         if not has_capy:
             return mcp
 

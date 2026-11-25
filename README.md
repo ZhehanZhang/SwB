@@ -144,6 +144,36 @@ Without the plugin wrapper, a bare server works too: add
 `{"mcpServers": {"switchboard-channel": {"command": "bun", "args": ["/path/to/channel/switchboard-channel.ts"], "env": {"SWITCHBOARD_KEY": "..."}}}}`
 to `.mcp.json` and start with `--dangerously-load-development-channels server:switchboard-channel`.
 
+## Slack
+
+With a `slack:` section in the config, switchboard also runs Slack as an origin and a destination. This is slackgate,
+ported in: the same intake, write gate, personas and guarantees, but on switchboard's auth, audit and inbox.
+
+- **Origin.** Each workspace connects over Socket Mode (one `xapp-` token per workspace), or polls
+  `conversations.history` with `intake: poll`. Events from watched channels, @mentions of the bot and DMs are deduped.
+  Our own posts are dropped, and mentions, DMs and replies in threads we posted in are marked `addressed_to_us`. Each
+  event lands in the inbox of every agent with a grant on that workspace, where `slack_wait`, `capy_wait` and
+  `capy_inbox` return it. An item's `from` comes from Slack's data (workspace, channel, user id and name, ts,
+  permalink), never from the message text. Webhook `sinks` per workspace still POST each event, with the same payload
+  (`slackgate.event` / `slackgate.batch`) and `Idempotency-Key` as before, so existing receivers keep working.
+- **Destination.** The tools are `slack_workspaces`, `slack_channels`, `slack_search`, `slack_history`,
+  `slack_thread`, `slack_watched`, `slack_events`, `slack_personas`, `slack_post`, `slack_react`,
+  `slack_request_write`, `slack_write_requests` and `slack_wait`. The caller is the switchboard agent (OAuth or
+  `SWITCHBOARD_KEY_<NAME>`), and `slack.agents.<agent>` grants it workspaces, identities and a persona. Unlisted
+  agents get nothing. Every write is in the audit log.
+- **Identities and policy.** `bot` is the app, and its posts can carry a persona name and avatar. `user` is the
+  owner's own account. Each identity has a write policy: `free`, `approval` or `never`. A user-only workspace has
+  no bot and never joins or invites (the client refuses those methods, and a test scans the source). The loop guard
+  queues bot replies past `bot_thread_posts_per_hour` in one thread for approval.
+- **Approvals.** Approval happens only out of band. The owner uses the Approve / Reject DM the bot sends
+  (`approvals.notify_workspace` and `approver_user_id`, delivered over Socket Mode), or the **Slack writes waiting for
+  you** list on the root page (Access plus a CSRF token). No MCP tool decides a request, and a decision from anyone but
+  the configured approver or the page is refused and audited.
+- **Avatars.** `/avatars/<file>` serves persona avatars from `<data>/avatars` without Access, because Slack fetches
+  them. Personas with `icon_url` need nothing.
+- Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
+  bot, and workspace B, user-only.
+
 ## Tools
 
 | Tool | What it does |

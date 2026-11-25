@@ -1,0 +1,15 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TBBBB2222",
+    "event_id": "EvB2",
+    "event": {
+      "type": "message",
+      "channel_type": "channel",
+      "user": "UFAMILY01",
+      "text": "not watched",
+      "ts": "1700001100.001100",
+      "channel": "COTHER001"
+    }
+  }
+}

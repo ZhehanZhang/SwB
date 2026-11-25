@@ -1,0 +1,15 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TAAAA1111",
+    "event_id": "Ev4",
+    "event": {
+      "type": "message",
+      "channel_type": "im",
+      "user": "UPEER0003",
+      "text": "hi bot",
+      "ts": "1700000300.000300",
+      "channel": "DDM000001"
+    }
+  }
+}
