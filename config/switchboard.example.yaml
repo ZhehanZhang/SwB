@@ -106,11 +106,15 @@ blocks:
         default_persona: switchboard
         default_target: captain                   # "@bot text" with no slug goes here (a Captain, agent or project slug)
         approver_user_id: U0OWNER00               # optional: approval DMs for this workspace's requests come from its bot
+        owner_user_ids: [U0OWNER00]               # trust owner: passed on unchanged (defaults to the approver)
+        known: {U0FRIEND0: Alex, B0OTHERBOT: main-agent}   # trust known: Slack user or bot ids you trust, with names
+        allow_from: {captain: owner, teamcaptain: known, agent: anyone}   # by slug, kind or "*"; Captains default to owner
+        gate_rate: {count: 5, window_s: 600}      # held messages per non-owner sender before the rest are dropped
         ack_reaction: eyes                        # added to @mentions and DMs on receipt
         watched: ["#agents"]                      # the bot must be a member (invite it yourself); "*" = every channel it is in
         bot_thread_posts_per_hour: 20             # loop guard: more bot posts in one thread per hour need approval
         sinks:                                    # optional: also POST each event to a webhook
-          - {name: a2a-hook, url_env: SLACK_SINK_A2A_URL, kinds: [watched, mention, dm], coalesce_seconds: 0, targets: [captain]}
+          - {name: a2a-hook, url_env: SLACK_SINK_A2A_URL, secret_env: SLACK_SINK_A2A_SECRET, kinds: [watched, mention, dm], coalesce_seconds: 0, targets: [captain]}
       # Workspace B: private. User token only: no bot, no personas, never joins or invites.
       private:
         team_id: T0CCCCCCC

@@ -40,6 +40,7 @@ class SinkConfig:
     coalesce_seconds: float
     max_batch: int
     targets: tuple[str, ...] = ()
+    secret: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,10 +69,29 @@ class WorkspaceConfig:
     watch_all: bool = False
     approver_user_id: str | None = None
     default_target: str | None = None
+    owner_user_ids: frozenset[str] = frozenset()
+    known: Mapping[str, str] = field(default_factory=dict)
+    allow_from: Mapping[str, str] = field(default_factory=dict)
+    gate_rate: tuple[int, float] = (5, 600.0)
 
     @property
     def has_bot(self) -> bool:
         return "bot" in self.identities
+
+    def trust_of(self, user: str | None) -> str:
+        """owner, known or external, from the Slack user (or bot) id Slack gave us, never from the text."""
+        if user and user in self.owner_user_ids:
+            return "owner"
+        if user and user in self.known:
+            return "known"
+        return "external"
+
+    def allow_for(self, slug: str | None, kind: str | None) -> str:
+        """Who a target accepts in this workspace: by slug, then kind, then '*'. Untargeted and mailbox-agent messages take anyone, Captains, threads and projects the owner."""
+        for key in (slug, kind, "*"):
+            if key and key in self.allow_from:
+                return self.allow_from[key]
+        return "anyone" if kind in (None, "agent") else "owner"
 
 
 @dataclass(frozen=True)
@@ -172,7 +192,10 @@ def _parse_sink(label: str, idx: int, raw: Any, env: Mapping[str, str]) -> SinkC
     _need(0 <= coalesce <= 600, f"{where}.coalesce_seconds must be 0..600")
     max_batch = int(raw.get("max_batch", 20))
     _need(1 <= max_batch <= 200, f"{where}.max_batch must be 1..200")
+    secret = env.get(raw["secret_env"]) if raw.get("secret_env") else None
+    _need(not raw.get("secret_env") or bool(secret) or not env, f"{where}.secret_env names a variable that is not set")
     return SinkConfig(
+        secret=secret or None,
         name=str(raw.get("name") or f"{label}-sink{idx}"),
         url=url,
         headers=headers,
@@ -229,7 +252,17 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
     _need(app_id is None or (isinstance(app_id, str) and bool(re.fullmatch(r"A[0-9A-Z]{6,}", app_id))), f"{where}.app_id must be a Slack app id like A0123ABCD")
     thread_cap = raw.get("bot_thread_posts_per_hour", 20)
     _need(isinstance(thread_cap, int) and not isinstance(thread_cap, bool) and thread_cap >= 1, f"{where}.bot_thread_posts_per_hour must be an integer >= 1")
+    owners = frozenset(_str_list(raw.get("owner_user_ids"), f"{where}.owner_user_ids")) or frozenset(x for x in (approver,) if x)
+    known_raw = raw.get("known") or {}
+    _need(isinstance(known_raw, dict), f"{where}.known must map Slack user or bot ids to names")
+    allow_raw = {str(k).lower(): str(v) for k, v in (raw.get("allow_from") or {}).items()}
+    _need(all(v in ("owner", "known", "anyone") for v in allow_raw.values()), f"{where}.allow_from values must be owner, known or anyone")
+    rate = raw.get("gate_rate") or {}
     return WorkspaceConfig(
+        owner_user_ids=owners,
+        known={str(k): str(v) for k, v in known_raw.items()},
+        allow_from=allow_raw,
+        gate_rate=(int(rate.get("count", 5)), float(rate.get("window_s", 600))),
         label=label,
         team_id=team_id,
         user_only=user_only,
@@ -308,6 +341,12 @@ def parse_config(data: Any, env: Mapping[str, str]) -> Config:
         _need(ws is not None and ws.has_bot, "approvals.notify_workspace must be a workspace with a bot identity")
         _need(bool(approvals.approver_user_id), "approvals.approver_user_id is required with notify_workspace")
     _need("access" not in data, "access is switchboard's auth.cloudflare_access now; drop it from the slack section")
+    if approvals.notify_workspace in workspaces and approvals.approver_user_id:
+        from dataclasses import replace
+
+        ws = workspaces[approvals.notify_workspace]
+        if not ws.owner_user_ids:
+            workspaces[ws.label] = replace(ws, owner_user_ids=frozenset({approvals.approver_user_id}))
     return Config(
         workspaces=workspaces,
         personas=personas,

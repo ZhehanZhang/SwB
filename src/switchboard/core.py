@@ -28,6 +28,7 @@ from .memory import GENERAL, Memory, MemoryError_
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
 from .store import Store
+from .trust import allows
 
 DestinationError = BlockError
 
@@ -338,6 +339,10 @@ class Switchboard:
         action = block.verb("send")
         if action is None:
             raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
+        if principal.kind == "connect" and not allows("known", str(block.config.get("allow_from") or "owner")):
+            self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=block.name, action="send", outcome="refused", target=to)
+            raise CoreError(f"{block.name} takes work only from the owner's own sign-ins; a connected agent can send to agent:<name> mailboxes, "
+                            f"or the owner can set blocks.{block.name}.allow_from: known")
         message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
         kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
         out = await self.invoke(principal, block.name, action, kw)

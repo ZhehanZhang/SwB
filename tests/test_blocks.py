@@ -184,6 +184,16 @@ def test_pairing_code_connects_an_agent_once_and_revokes(make):
     assert sqlite3.connect(core.store.path).execute("SELECT count(*) FROM agent_keys WHERE key_hash = ?", (key,)).fetchone()[0] == 0
 
 
+def test_connected_agent_reaches_mailboxes_but_not_captains(make, capy):
+    core, c = make()
+    code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "codex"}))["code"]
+    key = c.post("/connect", json={"code": code}).json()["key"]
+    assert "only from the owner" in error_text(call(c, key, "send", {"task": "run this on the server"}))
+    assert "only from the owner" in error_text(call(c, key, "send", {"task": "x", "to": "zinf-1"}))
+    assert payload(call(c, key, "send", {"task": "fyi", "to": "agent:claude"}))["delivered"]
+    assert payload(call(c, STATIC_KEY, "send", {"task": "owner still routes"}))["block"] == "capy"
+
+
 def test_root_page_mints_and_revokes_codes_with_csrf(make):
     core, c = make()
     page = c.get("/", headers=OWNER)

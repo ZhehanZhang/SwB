@@ -137,10 +137,10 @@ class SlackIntake(Block):
         engine = self.engine
         assert engine is not None
         sender = {"kind": "slack", "workspace": push["workspace"], "team": push["team"], "channel": push["channel"], "channel_name": push["channel_name"],
-                  "user": push["user"], "user_name": push["user_name"], "is_bot": push["is_bot"], "ts": push["ts"], "thread_ts": push["thread_ts"],
+                  "user": push["user"], "user_name": push["user_name"], "is_bot": push["is_bot"], "trust": push.get("trust", "external"), "ts": push["ts"], "thread_ts": push["thread_ts"],
                   "permalink": push["permalink"]}
         item = {"event_id": push["id"], "slack_kind": push["kind"], "addressed_to_us": push["addressed_to_us"], "text": push["text"],
-                "truncated": push["truncated"], "files": push["files"], "target": push.get("target"), "target_kind": push.get("target_kind"), "from": sender}
+                "truncated": push["truncated"], "files": push["files"], "target": push.get("target"), "target_kind": push.get("target_kind"), "trust": push.get("trust", "external"), "from": sender}
         agents = {agent for agent, grant in engine.config.grants.items() if grant.identities_for(push["workspace"])}
         target = engine.targets.get(push.get("target") or "")
         if target is not None and target.kind == "agent" and push["addressed_to_us"]:

@@ -7,7 +7,7 @@ import io
 import httpx
 import pytest
 
-from slackfix import BOT_USER, ENV, base_config
+from slackfix import BOT_USER, ENV, OWNER_A, base_config
 from slackfix import clock, hooks, make_core, world  # noqa: F401  (fixtures)
 from switchboard.slack.capy_avatars import render_captain
 from switchboard.slack.config import Persona, parse_config
@@ -47,7 +47,7 @@ def cfg(**ws):
 
 
 def mention(ts, text, thread_ts=None):
-    e = {"type": "app_mention", "user": "UHUMAN001", "channel": "CPUBLIC01", "channel_type": "channel", "ts": ts, "text": text}
+    e = {"type": "app_mention", "user": OWNER_A, "channel": "CPUBLIC01", "channel_type": "channel", "ts": ts, "text": text}
     if thread_ts:
         e["thread_ts"] = thread_ts
     return e
@@ -76,7 +76,7 @@ async def test_unknown_slug_gets_a_hint_and_goes_to_the_default(make_core, world
     p = await core.ingest("a2a", mention("1700000200.000001", f"<@{BOT_USER}> teamcaptan are you there"))
     assert p["target"] == "captain" and p["text"].endswith("teamcaptan are you there")
     hints = [kw for t, n, kw in world.calls if n == "chat_postEphemeral"]
-    assert len(hints) == 1 and "teamcaptain" in hints[0]["text"] and hints[0]["user"] == "UHUMAN001"
+    assert len(hints) == 1 and "teamcaptain" in hints[0]["text"] and hints[0]["user"] == OWNER_A
 
 
 async def test_sinks_take_only_their_targets(make_core, hooks):

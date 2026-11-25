@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("switchboard.slack.writes")
 
 DECIDER_KINDS = ("slack", "admin")
+INBOUND = "deliver_inbound"
 
 
 class WriteError(RuntimeError):
@@ -55,7 +56,7 @@ class WriteGate:
         if policy == "never":
             store.audit(f"agent:{key.id}", "write_refused", workspace, identity, action=action, params=params, reason="policy never")
             raise WriteError(f"writes as {identity} in {workspace} are disabled (policy: never)")
-        thread_persona = self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts")) if action == "post_message" else None
+        thread_persona = self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts"), agent=key.id) if action == "post_message" else None
         persona = resolve_persona(cfg, ws, identity, key, persona_id, self.core.personas(), thread_persona) if action == "post_message" else None
         persona_d = asdict(persona) if persona else None
         loop_guard = False
@@ -123,12 +124,17 @@ class WriteGate:
             if not store.transition_request(request_id, "pending", "rejected", decided_at=now, decided_by=str(actor)):
                 raise WriteError(f"request {request_id} changed state; reload")
             store.audit(str(actor), "write_rejected", req["workspace"], req["identity"], request_id=request_id)
+            if req["action"] == INBOUND:
+                await self.core.decline(req["params"]["push"], str(actor))
         else:
             if not store.transition_request(request_id, "pending", "approved", decided_at=now, decided_by=str(actor)):
                 raise WriteError(f"request {request_id} changed state; reload")
             store.audit(str(actor), "write_approved", req["workspace"], req["identity"], request_id=request_id)
             try:
-                result = await self._execute(req["workspace"], req["identity"], req["action"], req["params"], req["persona"], actor=str(actor), request_id=request_id)
+                if req["action"] == INBOUND:
+                    result = await self.core.release(req["params"]["push"], str(actor))
+                else:
+                    result = await self._execute(req["workspace"], req["identity"], req["action"], req["params"], req["persona"], actor=str(actor), request_id=request_id)
                 store.transition_request(request_id, "approved", "sent", result=result)
             except WriteError as exc:
                 store.transition_request(request_id, "approved", "failed", result={"error": str(exc)})
@@ -140,6 +146,8 @@ class WriteGate:
         expired = self.core.store.expire_requests()
         for req in expired:
             self.core.store.audit("system", "write_expired", req["workspace"], req["identity"], request_id=req["id"])
+            if req["action"] == INBOUND:
+                await self.core.decline(req["params"]["push"], "system")
             await self._close_notice(req)
         return expired
 

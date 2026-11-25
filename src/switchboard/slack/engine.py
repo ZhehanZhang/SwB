@@ -10,13 +10,15 @@ from typing import Any, Awaitable, Callable, Mapping
 
 import httpx
 
+from ..guard import RateLimiter
+from ..trust import allows, wrap
 from .config import AVATAR_RE, Config, Persona
 from .events import build_event, classify, event_id
 from .push import WebhookSink
 from .routing import Target, near, split_slug
 from .slack import WorkspaceRuntime, make_client, slack_error
 from .store import Store
-from .writes import Actor, WriteError, WriteGate
+from .writes import INBOUND, Actor, WriteError, WriteGate
 
 BUNDLED_AVATARS = Path(__file__).parent / "avatars"
 
@@ -59,6 +61,8 @@ class SlackEngine:
         self.runtimes: dict[str, WorkspaceRuntime] = {}
         self.sinks: dict[str, list[WebhookSink]] = {}
         self.gate = WriteGate(self)
+        self.senders = RateLimiter(clock=clock)
+        self.senders.limits = {}
         self.listeners: list[EventListener] = []
         self.targets: dict[str, Target] = {}
         self.dynamic_personas: dict[str, Persona] = {}
@@ -231,6 +235,7 @@ class SlackEngine:
             addressed_to_us=kind in ("mention", "dm") or in_our_thread,
         )
         hint = self.route(rt, push)
+        raw_text = self.stamp(rt, push)
         if not self.store.add_event(push):
             return None
         if kind in ("mention", "dm") and rt.cfg.ack_reaction and "bot" in rt.clients:
@@ -245,6 +250,75 @@ class SlackEngine:
                                                               f"Targets: {', '.join(sorted(self.targets)) or 'none yet'}.")
             except Exception as exc:
                 log.info("slug hint on %s failed: %s", event_id(rt.team_id, channel, ts), slack_error(exc))
+        if not await self.screen(rt, push, raw_text):
+            await self.fan_out(label, push)
+        return push
+
+    def stamp(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> str:
+        """Set sender and trust from the Slack ids, and wrap a non-owner's text. Returns the text as the sender wrote it."""
+        raw = push["text"]
+        trust = rt.cfg.trust_of(push["user"])
+        name = rt.cfg.known.get(push["user"] or "") or push["user_name"]
+        push["trust"] = trust
+        push["sender"] = {"id": push["user"], "name": name, "trust": trust, "is_bot": push["is_bot"]}
+        if trust != "owner":
+            where = f"in {push['workspace']} " + (f"#{push['channel_name']}" if push.get("channel_name") else push["channel"])
+            push["text"] = wrap(raw, name, push["user"], trust, where)
+        return raw
+
+    async def screen(self, rt: WorkspaceRuntime, push: dict[str, Any], raw_text: str) -> bool:
+        """Hold a message from a sender its target doesn't accept. Addressed ones wait for the owner's Approve or Reject
+        in his DM; ambient ones (a watched channel) are withheld. Returns True when the message was held or dropped."""
+        target = self.targets.get(push.get("target") or "")
+        allow = rt.cfg.allow_for(push.get("target"), target.kind if target else None)
+        if allows(push["trust"], allow):
+            return False
+        label, actor = rt.label, f"slack:{push['user'] or 'unknown'}"
+        detail = {"message": push["id"], "target": push.get("target"), "trust": push["trust"], "allow_from": allow}
+        if not push["addressed_to_us"]:
+            self.store.audit(actor, "inbound_withheld", label, **detail)
+            return True
+        bucket = f"inbound:{label}"
+        self.senders.limits[bucket] = rt.cfg.gate_rate
+        if self.senders.blocked(bucket, push["user"] or "") is not None:
+            self.store.audit(actor, "inbound_rate_limited", label, **detail)
+            return True
+        self.senders.hit(bucket, push["user"] or "")
+        if await self._approval_target(label) is None:
+            self.store.audit(actor, "inbound_dropped", label, reason="no approver", **detail)
+            await self.tell_sender(push, "This target only takes messages from its owner, so I didn't pass yours on.")
+            return True
+        params = {"push": push, "channel": push["channel"], "thread_ts": push["thread_ts"] or push["ts"], "text": raw_text}
+        req = self.store.create_request(workspace=label, identity="inbound", action=INBOUND, params=params, persona=None,
+                                        key_id=actor, ttl_seconds=self.config.approvals.ttl_minutes * 60)
+        self.store.audit(actor, "inbound_held", label, request_id=req["id"], **detail)
+        try:
+            await self.notify_request(req)
+        except Exception as exc:
+            log.warning("approval notice for %s failed: %s", req["id"], slack_error(exc))
+        await self.tell_sender(push, "Thanks, I've passed this to the owner to approve. It goes through once he does.")
+        return True
+
+    async def release(self, push: dict[str, Any], actor: str) -> dict[str, Any]:
+        """Deliver a held message after the owner approved it."""
+        self.store.audit(actor, "inbound_released", push["workspace"], message=push["id"], target=push.get("target"))
+        await self.fan_out(push["workspace"], push)
+        return {"delivered": push["id"], "target": push.get("target")}
+
+    async def decline(self, push: dict[str, Any], actor: str) -> None:
+        self.store.audit(actor, "inbound_declined", push["workspace"], message=push["id"], target=push.get("target"))
+        await self.tell_sender(push, "Sorry, the owner didn't approve this message, so it wasn't passed on.")
+
+    async def tell_sender(self, push: dict[str, Any], text: str) -> None:
+        rt = self.runtimes.get(push["workspace"])
+        if rt is None or "bot" not in rt.clients or not push.get("user") or push.get("is_bot"):
+            return
+        try:
+            await rt.clients["bot"].chat_postEphemeral(channel=push["channel"], user=push["user"], thread_ts=push["thread_ts"] or push["ts"], text=text)
+        except Exception as exc:
+            log.info("note to sender on %s failed: %s", push["id"], slack_error(exc))
+
+    async def fan_out(self, label: str, push: dict[str, Any]) -> None:
         for sink in self.sinks.get(label, []):
             if sink.accepts(push):
                 sink.put(push)
@@ -253,7 +327,6 @@ class SlackEngine:
                 await listener(push)
             except Exception:
                 log.exception("workspace %s: event listener failed", label)
-        return push
 
     async def handle_block_actions(self, label: str, payload: dict[str, Any]) -> None:
         approvals = self.config.approvals
@@ -302,6 +375,14 @@ class SlackEngine:
         channel = p.get("channel", "")
         name = ws.channel_names.get(channel) if ws else None
         where = f"#{name} ({channel})" if name else channel
+        if req["action"] == INBOUND:
+            push = p["push"]
+            lines = [f"*Message held* {req['id']}: {push['sender']['name'] or push['user']} ({push['user']}), trust {push['trust']}",
+                     f"Workspace: {req['workspace']}   Where: {where}   To: {push.get('target') or 'nobody'}"]
+            if push.get("permalink"):
+                lines.append(f"<{push['permalink']}|Open in Slack>")
+            lines.append("Approve delivers the text below; Reject drops it and tells the sender.")
+            return "\n".join(lines)
         lines = [
             f"*Write request* {req['id']} from agent {req['key_id']}",
             f"Workspace: {req['workspace']}   Identity: {req['identity']}   Action: {req['action']}",
@@ -335,7 +416,8 @@ class SlackEngine:
             }
         )
         blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"Expires <!date^{int(req['expires_at'])}^{{date_short_pretty}} {{time}}|soon>"}]})
-        resp = await bot.chat_postMessage(channel=dm_channel, text=f"Write request {req['id']} needs your approval", blocks=blocks)
+        what = "Message" if req["action"] == INBOUND else "Write request"
+        resp = await bot.chat_postMessage(channel=dm_channel, text=f"{what} {req['id']} needs your approval", blocks=blocks)
         self.store.set_request_notice(req["id"], {"workspace": rt.label, "channel": resp["channel"], "ts": resp["ts"]})
 
     async def close_notice(self, req: dict[str, Any]) -> None:

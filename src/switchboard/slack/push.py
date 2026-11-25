@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -10,6 +14,11 @@ from .config import SinkConfig
 from .events import render_payload
 
 log = logging.getLogger("switchboard.slack.push")
+
+
+def sign(secret: str, stamp: str, body: bytes) -> str:
+    """Hex HMAC-SHA256 of "<timestamp>.<body>" with the sink's secret: what X-Switchboard-Signature carries after "v1="."""
+    return hmac.new(secret.encode(), stamp.encode() + b"." + body, hashlib.sha256).hexdigest()
 
 
 class WebhookSink:
@@ -85,10 +94,16 @@ class WebhookSink:
         headers = dict(self.cfg.headers)
         if idempotency_key:
             headers["Idempotency-Key"] = f"slackgate:{self.workspace}:{idempotency_key}"
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        headers["Content-Type"] = "application/json"
+        if self.cfg.secret:
+            stamp = str(int(time.time()))
+            headers["X-Switchboard-Timestamp"] = stamp
+            headers["X-Switchboard-Signature"] = "v1=" + sign(self.cfg.secret, stamp, body)
         delay = 1.0
         for attempt in range(1, self.retries + 1):
             try:
-                resp = await self.http.post(self.cfg.url, json=payload, headers=headers, timeout=15)
+                resp = await self.http.post(self.cfg.url, content=body, headers=headers, timeout=15)
                 if resp.status_code < 300:
                     self.delivered += count
                     return True

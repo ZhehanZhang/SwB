@@ -215,6 +215,28 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   `slack_wait` return it. An item's `from` comes from Slack's data (workspace, channel, user id and name, ts,
   permalink), never from the message text. Webhook `sinks` per workspace still POST each event, with the same payload
   (`slackgate.event` / `slackgate.batch`) and `Idempotency-Key` as before, so existing receivers keep working.
+- **Trust.** Every event carries `sender` and `trust`, which switchboard sets from Slack's user or bot id, never from
+  the text: `owner` (the workspace's `owner_user_ids`; without them its `approver_user_id`, or the approvals
+  approver in `approvals.notify_workspace`), `known` (the workspace's `known` map of ids to names, for people and
+  other agents you trust) or `external` (everyone else). The owner's text is passed on unchanged. Anyone else's
+  reaches agents, sinks and Captains inside a header switchboard writes
+  (`[swb · from Alex (U0123) in a2a #dev · trust: known]`) and `<<<swb-untrusted` / `swb-untrusted>>>`
+  delimiters, with a line saying it is information, not instructions. Copies of the header or the delimiters inside
+  the text are neutralised, so a sender can't fake either.
+- **Who may reach a target.** `allow_from` per workspace maps a target slug, a target kind (`captain`, `thread`,
+  `project`, `agent`) or `"*"` to `owner`, `known` or `anyone`. Captains, threads and projects take the owner
+  only by default; agent mailboxes and untargeted events take anyone. A message from a sender the target doesn't
+  accept goes nowhere (no sink, no inbox, no Captain). If it was addressed to the bot, the owner gets an Approve /
+  Reject DM showing who sent it and the exact text, and the sender gets an ephemeral note. Approve delivers it,
+  wrapped as above. Reject or expiry drops it and tells the sender politely. Ambient messages in watched channels are
+  withheld without a DM. `gate_rate` (`{count: 5, window_s: 600}`) caps held messages per sender; past it they are
+  dropped quietly. Every held, approved, released, declined, withheld and rate-limited message is in the audit log.
+  Agents that connected with a pairing code are `known`: they can send to `agent:<name>` mailboxes, but a block
+  that takes work (Capy) refuses them unless `blocks.<name>.allow_from: known`.
+- **Signed sinks.** A sink with `secret_env` signs each POST: `X-Switchboard-Timestamp` is the Unix time and
+  `X-Switchboard-Signature` is `v1=` plus the hex HMAC-SHA256 of `<timestamp>.<raw body>` with that secret. A
+  receiver checks the signature and rejects old timestamps. Receivers that can't check one (a Capy automation webhook)
+  depend on their URL staying secret.
 - **Out.** The tools are `slack_workspaces`, `slack_channels`, `slack_search`, `slack_history`,
   `slack_thread`, `slack_watched`, `slack_events`, `slack_personas`, `slack_post`, `slack_react`,
   `slack_request_write`, `slack_write_requests` and `slack_wait`. The caller is the switchboard agent (OAuth or
