@@ -51,10 +51,20 @@ def test_auth_failures_say_what_was_wrong_without_the_key(make):
     assert rpc(c, bad, "tools/list").status_code == 401
     row = core.audit.recent(action="auth_failure")[0]
     assert "34 chars" in row["detail"] and "whitespace" in row["detail"] and "quoted" in row["detail"] and STATIC_KEY not in row["detail"]
-    r = c.post("/mcp", headers={"Authorization": "Token abc", "Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+    r = c.post("/mcp", headers={"Authorization": "Token abc def", "Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert r.status_code == 401 and "not 'Bearer <token>'" in core.audit.recent(action="auth_failure")[0]["detail"]
     for _ in range(3):
         rpc(c, None, "tools/list")
     missing = core.audit.recent(action="auth_missing")
     assert len(missing) == 1 and "no Authorization header" in missing[0]["detail"]
+
+
+def test_a_bare_key_without_the_bearer_scheme_works(make):
+    core, c = make()
+    hdr = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+    body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+    assert c.post("/mcp", headers={**hdr, "Authorization": STATIC_KEY}, json=body).status_code == 200
+    assert c.post("/mcp", headers={**hdr, "Authorization": "  " + STATIC_KEY + " "}, json=body).status_code == 200
+    assert c.post("/mcp", headers={**hdr, "Authorization": "s" * 31}, json=body).status_code == 401
+    assert core.audit.recent(action="auth_failure")[0]["detail"].startswith("unknown or expired bearer token (31 chars")

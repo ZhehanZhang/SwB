@@ -52,7 +52,8 @@ class BearerGate:
             scope.pop(PRINCIPAL_SCOPE, None)
             headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
             auth = headers.get("authorization", "")
-            token = auth[7:].strip() if auth.lower().startswith("bearer ") else None
+            bare = auth.strip()
+            token = auth[7:].strip() if auth.lower().startswith("bearer ") else (bare if bare and " " not in bare else None)
             ip = client_ip(scope)
             wait = self.limiter.blocked("bearer_fail", ip)
             if wait is not None:
