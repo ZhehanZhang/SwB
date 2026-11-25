@@ -47,9 +47,15 @@ def test_avatar_defaults_to_persona_file_and_bad_mapping_refused():
     assert cfg.personas["claude"].avatar == "claude.png" and cfg.personas["claude"].icon_url is None
     assert cfg.personas["gate"].avatar == "gate.png" and cfg.personas["gate"].emoji == ":robot_face:"
     assert cfg.personas["capy"].avatar is None
+    later = agent_config()
+    later["agents"]["capy"]["persona_by_workspace"] = {"a2a": "ghost"}
+    cfg2 = parse_config(later, ENV)
+    assert resolve_persona(cfg2, cfg2.workspaces["a2a"], "bot", cfg2.grant("capy"), None).name == "Capy"
+    from switchboard.slack.config import Persona
+    assert resolve_persona(cfg2, cfg2.workspaces["a2a"], "bot", cfg2.grant("capy"), None, {**cfg2.personas, "ghost": Persona("ghost", "Ghost")}).name == "Ghost"
     bad = agent_config()
-    bad["agents"]["capy"]["persona_by_workspace"] = {"a2a": "ghost"}
-    with pytest.raises(ConfigError, match="not a defined persona"):
+    bad["agents"]["capy"]["persona_by_workspace"] = {"nowhere": "capy"}
+    with pytest.raises(ConfigError, match="unknown workspace"):
         parse_config(bad, ENV)
 
 

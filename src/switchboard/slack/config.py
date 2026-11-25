@@ -264,7 +264,7 @@ def _parse_grant(key_id: str, raw: Any, workspaces: Mapping[str, WorkspaceConfig
     _need(isinstance(by_ws, dict), f"{where}.persona_by_workspace must map workspace label -> persona")
     for label, pid in by_ws.items():
         _need(label in workspaces, f"{where}.persona_by_workspace: unknown workspace {label!r}")
-        _need(pid in personas, f"{where}.persona_by_workspace.{label}: {pid!r} is not a defined persona")
+        _need(isinstance(pid, str) and bool(LABEL_RE.match(pid)), f"{where}.persona_by_workspace.{label}: {pid!r} is not a persona id")
     scopes_raw = raw.get("workspaces") or {}
     _need(isinstance(scopes_raw, dict), f"{where}.workspaces must map workspace label -> [identities]")
     scopes: dict[str, tuple[str, ...]] = {}

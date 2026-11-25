@@ -185,7 +185,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   `CAPY_API_KEY_AS_SLACK`), and the Captain's final reply is posted back in the Slack thread under its persona.
 - **Personas.** Bot posts carry a per-message name and picture (`chat:write.customize`), chosen like the send keys:
   the call's `persona` (only with `allow_persona_override`, and within `allowed_personas`) > for Capy, the persona of
-  the Captain the thread is routed to > `agents.<agent>.persona_by_workspace` > `agents.<agent>.persona` > the persona
+  the Captain the thread is routed to > `agents.<agent>.persona_by_workspace` (which may name a Captain's persona) > `agents.<agent>.persona` > the persona
   named like the agent > the workspace's `default_persona`. Every Captain target gets a persona with its name; its
   picture is a monogram on its Capy background colour, or, with `slack.captain_avatars: true`, the Captain's own Capy
   avatar (this reads an undocumented capy.ai asset path; see `slack/capy_avatars.py`). User-identity posts never carry
