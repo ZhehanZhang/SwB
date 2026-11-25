@@ -184,7 +184,7 @@ class Switchboard:
         names |= set(self.connections.agents())
         return sorted(names)
 
-    async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None) -> dict[str, Any]:
+    async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text."""
         to = (to or "").strip().lower()
         if to not in self.known_agents():
@@ -196,14 +196,17 @@ class Switchboard:
             raise CoreError("text is empty")
         p = self.project(project)
         sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
-                  "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin}
+                  "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
+                  "trust": "known" if principal.kind == "connect" else "owner"}
+        meta: dict[str, Any] = {"from": sender, **({"in_reply_to": in_reply_to} if in_reply_to else {})}
         handle = self.inbox.open_handle(owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
-                                        meta={"from": sender}, status="delivered", target=f"agent:{to}")
+                                        meta=meta, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
-        await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender})
+        await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender,
+                                                 **({"in_reply_to": in_reply_to} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
-        return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "project": p.slug if p else None}
+        return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
 
     def destination(self, name: str) -> Block:
         d = self.blocks.get(name)
@@ -300,6 +303,11 @@ class Switchboard:
         if word in self.blocks:
             return Address(word, "", "")
         if word in self.known_agents():
+            for name, b in self.blocks.items():
+                if b.wakes_agents:
+                    t = self.slug_map(await self.targets(block=name)).get(word)
+                    if t is not None:
+                        return Address(t["block"], t["kind"], t["id"])
             return Address("agent", "agent", word)
         if word.startswith("jam_") or word.startswith("project_"):
             owner = next((n for n, b in self.blocks.items() if b.owns_ref(text)), None)
@@ -379,7 +387,8 @@ class Switchboard:
         block, h = self._conversation(principal, ref)
         if h is not None and h["destination"] == "mailbox":
             if verb == "reply":
-                return await self.send(principal, to=f"agent:{h['ref']}", task=kw.get("text") or "", project=h["project"])
+                return {**await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"]),
+                        "to": f"agent:{h['ref']}", "in_reply_to": h["handle"]}
             if verb == "cancel":
                 return {"conversation": h["handle"], "status": h["status"]}
             return {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"],

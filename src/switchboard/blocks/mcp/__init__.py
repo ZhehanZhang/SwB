@@ -42,7 +42,11 @@ things that apply everywhere, after the owner agrees, with confirm_general=true.
 general; another project's memory needs scopes=[...] and is logged. memory_move and memory_promote fix a wrong scope.
 Search before asking the owner something he may already have said.
 To hand off work or message someone, use send: without to, the owner's route for you and the project decides; to can
-be a slug from targets(), an agent's mailbox (agent:claude) or an address <block>:<kind>:<id>. Then call wait() for
+be a slug from targets(), an agent's mailbox (agent:claude) or an address <block>:<kind>:<id>. Every agent (claude,
+claude-code, chatgpt, gemini, capy, and each persona's agent) has a switchboard mailbox, so you can always message it,
+even when it isn't running: it reads the mailbox on its own schedule, in a live chat, or when switchboard wakes it. Its
+reply comes back to your inbox with in_reply_to set to the conversation send returned. Never say you can't reach an
+agent; send to it. Then call wait() for
 the reply and answer with it. If wait times out, tell the owner it is still working and check again with wait or
 inbox. Answer a message with reply(text, conversation). Older names (capy_delegate, capy_wait, capy_inbox,
 agent_send, ...) still work this release; prefer the new ones."""

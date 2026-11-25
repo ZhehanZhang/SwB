@@ -81,7 +81,7 @@ class Kit:
         from . import TASK_MODE
 
         out = await self.run(self.core.send(p, **kw))
-        if wait_s and not TASK_MODE.get() and out.get("block") and out.get("handle"):
+        if wait_s and not TASK_MODE.get() and out.get("block") and out.get("handle") and not out.get("mailbox"):
             got = await self.core.inbox.wait(owner=p.source, handle=out["handle"], timeout=self.wait_caps.clamp(p.source, wait_s))
             out["replies"], out["cursor"], out["timed_out"] = got["items"], got["cursor"], got["timed_out"]
         return out
@@ -115,10 +115,11 @@ class Kit:
 
         @mcp.tool(
             title="Send work or a message",
-            description=("Hand work to someone, or leave a message: the normal way to work with the owner's projects, and cheap, so send freely. "
-                         "Without to, the owner's route for you and the project decides (routes_resolve shows it). to may be a slug from targets, "
-                         "an agent's mailbox (agent:claude, agent:chatgpt, ...), or an address <block>:<kind>:<id>. Write the task self-contained: "
-                         "goal, context, repos, what done means. Then call wait() and answer with the reply; follow up with reply. wait_s>0 waits here."),
+            description=("Hand work to someone or leave a message; cheap, so send freely. Every agent (claude, claude-code, chatgpt, gemini, "
+                         "capy, ...) has a switchboard mailbox, so a message always goes through even when it isn't running: it reads on its own "
+                         "schedule, in a live chat, or when switchboard wakes it. Its reply reaches your inbox with in_reply_to set to the "
+                         "conversation this returns. Without to, the owner's route decides. to: a slug from targets, agent:<name>, or "
+                         "<block>:<kind>:<id>. Make the task self-contained (goal, context, repos, done). Then wait() and answer with the reply."),
             annotations=SEND,
         )
         async def send(
@@ -152,7 +153,7 @@ class Kit:
                        block: str | None = None) -> dict[str, Any]:
             return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block)
 
-        @mcp.tool(title="Your inbox", description="Replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. No arguments needed; conversation, project and block only narrow it. Never blocks.", annotations=READ)
+        @mcp.tool(title="Your inbox", description="Your switchboard mailbox: replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. A reply to a message you sent carries in_reply_to with that conversation. Each item's from and trust say who sent it, from switchboard's own data. Answer a message with reply(conversation=<its handle>, text). No arguments needed; conversation, project and block only narrow it. Never blocks.", annotations=READ)
         async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
                         project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
             return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)

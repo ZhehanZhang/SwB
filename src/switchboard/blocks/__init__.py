@@ -31,6 +31,7 @@ BLOCKS = {
     "mcp": "switchboard.blocks.mcp:MCPBlock",
     "slack": "switchboard.blocks.slack:SlackBlock",
     "capy": "switchboard.blocks.capy:CapyBlock",
+    "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")
@@ -162,6 +163,8 @@ class Address:
 
 class Block:
     manifest = Manifest(id="", title="")
+    wakes_agents = False
+    """True for a block whose targets wake an agent (a Claude routine): a bare agent name goes to its target first."""
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         self.core = core
