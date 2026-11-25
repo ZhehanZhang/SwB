@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "capy-bridge"
-version = "0.1.0"
-description = "Self-hosted remote MCP server: shared memory for every assistant, and offloading work to Capy"
+name = "switchboard"
+version = "0.2.0"
+description = "Self-hosted switchboard: MCP origins, a core with scoped shared memory and routes, and Capy as a destination"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -23,13 +23,13 @@ dependencies = [
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
 
 [project.scripts]
-capy-bridge = "capy_bridge.__main__:main"
+switchboard = "switchboard.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-capy_bridge = ["static/*"]
+switchboard = ["static/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

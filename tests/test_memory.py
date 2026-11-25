@@ -1,76 +1,122 @@
 import pytest
 
-from capy_bridge.memory import Memory, MemoryError_
-from capy_bridge.store import Store
-from conftest import STATIC_KEY, call, payload, sign_in, Clock
+from switchboard.memory import Memory, MemoryError_
+from switchboard.projects import ProjectError, Projects
+from switchboard.store import Store
+from conftest import STATIC_KEY, Clock, call, error_text, payload, sign_in
 
 
 @pytest.fixture
-def mem(tmp_path):
-    return Memory(Store(tmp_path / "m.db", clock=Clock()))
+def store(tmp_path):
+    return Store(tmp_path / "m.db", clock=Clock())
+
+
+@pytest.fixture
+def mem(store):
+    projects = Projects(store)
+    projects.create(slug="switchboard", name="Switchboard")
+    projects.create(slug="slackgate", name="slackgate")
+    return Memory(store, projects)
 
 
 def test_crud_and_key_upsert(mem):
-    a = mem.write(source="claude", namespace="profile", key="editor", title="Editor", body="Uses VS Code", tags=["tools"])
-    assert a["action"] == "create"
-    b = mem.write(source="chatgpt", namespace="profile", key="editor", title="Editor", body="Uses Zed now")
+    a = mem.write(source="claude", scope="general", namespace="profile", key="editor", title="Editor", body="Uses VS Code", tags=["tools"])
+    assert a["action"] == "create" and a["scope"] == "general"
+    b = mem.write(source="chatgpt", scope="general", namespace="profile", key="editor", title="Editor", body="Uses Zed now")
     assert b["id"] == a["id"] and b["action"] == "replace" and b["source"] == "chatgpt"
-    mem.write(source="capy", id=a["id"], namespace="ignored", title="", body="Also vim", mode="append")
-    e = mem.read(namespace="profile", key="editor")
+    mem.write(source="capy", scope="general", id=a["id"], namespace="ignored", title="", body="Also vim", mode="append")
+    e = mem.read(scope="general", namespace="profile", key="editor")
     assert e["body"] == "Uses Zed now\n\nAlso vim" and e["tags"] == ["tools"] and e["title"] == "Editor"
     assert [h["source"] for h in e["history"]] == ["capy", "chatgpt", "claude"]
     mem.delete(source="claude", id=a["id"])
     with pytest.raises(MemoryError_):
         mem.read(id=a["id"])
-    again = mem.write(source="claude", namespace="profile", key="editor", title="Editor", body="fresh")
-    assert again["action"] == "create" and again["id"] != a["id"]
 
 
-def test_validation(mem):
-    assert mem.write(source="t", namespace="/Profile/", title="x", body="y")["namespace"] == "profile"
-    for ns in ("a/b/c/d", "", "../x", "with space", "projects//x"):
-        with pytest.raises(MemoryError_):
-            mem.write(source="t", namespace=ns, title="x", body="y")
+def test_write_without_scope_is_rejected(mem):
+    for scope in (None, "", "  "):
+        with pytest.raises(MemoryError_, match="scope is required"):
+            mem.write(source="t", scope=scope, namespace="notes", title="x", body="y")
     with pytest.raises(MemoryError_):
-        mem.write(source="t", namespace="notes", key="Bad Key", title="x", body="y")
+        mem.write(source="t", scope="project:nope", namespace="notes", title="x", body="y")
     with pytest.raises(MemoryError_):
-        mem.write(source="t", namespace="notes", title="x", body="y" * 20001)
-    with pytest.raises(MemoryError_):
-        mem.write(source="t", namespace="notes", id="mem_nope", title="x", body="y")
+        mem.write(source="t", scope="team", namespace="notes", title="x", body="y")
 
 
-def test_search_and_list(mem):
-    mem.write(source="claude", namespace="decisions", title="Deploy target", body="capy-bridge runs on your-host behind a cloudflared tunnel")
-    mem.write(source="chatgpt", namespace="projects/capy-bridge", title="Auth", body="OAuth 2.1 with PKCE and DCR")
-    mem.write(source="capy", namespace="projects/slackgate", title="Socket mode", body="slackgate uses Socket Mode")
-    hits = mem.search(query="tunnel your-host")["items"]
-    assert [h["title"] for h in hits] == ["Deploy target"] and "[" in hits[0]["snippet"]
-    assert mem.search(query="deploy", namespace="projects")["items"] == []
-    assert [h["title"] for h in mem.search(query="mode", namespace="projects/slackgate")["items"]] == ["Socket mode"]
-    assert mem.search(query='"unbalanced AND (')["items"] == []
-    listed = mem.list(namespace="projects")
-    assert listed["namespaces"] == {"projects/capy-bridge": 1, "projects/slackgate": 1}
-    assert mem.list()["namespaces"]["decisions"] == 1
+def test_scope_isolation(mem):
+    mem.write(source="claude", scope="project:switchboard", namespace="notes", key="port", title="Port", body="8870 on your-host")
+    mem.write(source="claude", scope="project:slackgate", namespace="notes", key="port", title="Port", body="socket mode, no port")
+    a = mem.read(scope="project:switchboard", namespace="notes", key="port")
+    b = mem.read(scope="project:slackgate", namespace="notes", key="port")
+    assert a["id"] != b["id"] and "8870" in a["body"]
+    only = mem.search(query="port", scopes=mem.read_scopes("slackgate", include_general=False))["items"]
+    assert [h["scope"] for h in only] == ["project:slackgate"]
+    assert mem.search(query="8870", scopes=mem.read_scopes(None))["items"] == []
 
 
-def test_markdown_export_and_mirror(tmp_path):
+def test_project_and_general_merge_ranks_project_first(mem):
+    mem.write(source="claude", scope="general", namespace="decisions", title="Deploy style", body="Docker compose behind a tunnel")
+    mem.write(source="claude", scope="project:switchboard", namespace="decisions", title="Deploy target", body="your-host behind a cloudflared tunnel")
+    mem.write(source="claude", scope="project:slackgate", namespace="decisions", title="Deploy slackgate", body="tunnel not needed")
+    hits = mem.search(query="tunnel", scopes=mem.read_scopes("switchboard"))["items"]
+    assert [h["scope"] for h in hits] == ["project:switchboard", "general"]
+    listed = mem.list(scopes=mem.read_scopes("switchboard"))
+    assert {e["scope"] for e in listed["items"]} == {"project:switchboard", "general"}
+
+
+def test_existing_rows_migrate_to_general(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.executescript("""CREATE TABLE memories (id TEXT PRIMARY KEY, namespace TEXT NOT NULL, key TEXT, title TEXT NOT NULL, body TEXT NOT NULL,
+        tags TEXT NOT NULL DEFAULT '', source TEXT NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL, deleted_at REAL);
+        CREATE UNIQUE INDEX memories_ns_key ON memories(namespace, key) WHERE key IS NOT NULL AND deleted_at IS NULL;
+        INSERT INTO memories VALUES ('mem_1', 'profile', 'tz', 'Timezone', 'New York', '', 'claude', 1, 1, NULL);""")
+    db.commit()
+    db.close()
+    store = Store(path, clock=Clock())
+    store.x("INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')")
+    mem = Memory(store, Projects(store))
+    assert mem.read(id="mem_1")["scope"] == "general"
+    assert mem.search(query="new york", scopes=["general"])["items"][0]["id"] == "mem_1"
+
+
+def test_projects_rename_moves_memories_and_archive_blocks_writes(mem, store):
+    mem.write(source="claude", scope="project:switchboard", namespace="notes", title="t", body="b")
+    p = Projects(store).update("switchboard", new_slug="sb", links={"repos": ["zhehanzhang/switchboard"]})
+    assert p.slug == "sb" and p.links["repos"] == ["zhehanzhang/switchboard"]
+    assert mem.list(scopes=["project:sb"])["items"]
+    Projects(store).update("sb", archived=True)
+    with pytest.raises(MemoryError_, match="archived"):
+        mem.write(source="t", scope="project:sb", namespace="notes", title="x", body="y")
+    with pytest.raises(ProjectError):
+        Projects(store).create(slug="general", name="nope")
+
+
+def test_markdown_export_is_one_folder_per_scope(tmp_path, store):
     out = tmp_path / "mirror"
-    mem = Memory(Store(tmp_path / "m.db", clock=Clock()), mirror_dir=str(out))
-    a = mem.write(source="claude", namespace="projects/capy-bridge", key="auth", title="Auth", body="PKCE", tags=["oauth"])
-    md = (out / "projects" / "capy-bridge" / "auth.md").read_text()
-    assert md.startswith("---\nid: ") and "source: claude" in md and "# Auth\n\nPKCE" in md
-    assert "projects/capy-bridge" in (out / "INDEX.md").read_text()
+    projects = Projects(store)
+    projects.create(slug="switchboard", name="Switchboard")
+    mem = Memory(store, projects, mirror_dir=str(out))
+    a = mem.write(source="claude", scope="project:switchboard", namespace="notes", key="auth", title="Auth", body="PKCE", tags=["oauth"])
+    mem.write(source="claude", scope="general", namespace="profile", key="tz", title="TZ", body="NY")
+    md = (out / "projects" / "switchboard" / "notes" / "auth.md").read_text()
+    assert md.startswith("---\nid: ") and "scope: project:switchboard" in md and "# Auth\n\nPKCE" in md
+    assert (out / "general" / "profile" / "tz.md").exists()
     mem.delete(source="claude", id=a["id"])
-    assert not (out / "projects" / "capy-bridge" / "auth.md").exists()
+    assert not (out / "projects" / "switchboard" / "notes" / "auth.md").exists()
 
 
-def test_memory_tools_over_mcp_record_source(make):
+def test_memory_and_project_tools_over_mcp(make):
     _, c = make()
     tok = sign_in(c)["access_token"]
-    w = payload(call(c, tok, "memory_write", {"namespace": "decisions", "title": "Use SQLite", "body": "FTS5 for search"}))
+    assert "scope is required" in error_text(call(c, tok, "memory_write", {"scope": "", "namespace": "decisions", "title": "x", "body": "y"}))
+    payload(call(c, tok, "project_create", {"slug": "switchboard", "name": "Switchboard", "links": {"repos": ["zhehanzhang/switchboard"], "claude_project": "Switchboard"}}))
+    w = payload(call(c, tok, "memory_write", {"scope": "project:switchboard", "namespace": "decisions", "title": "Use SQLite", "body": "FTS5 for search"}))
     r = payload(call(c, STATIC_KEY, "memory_read", {"id": w["id"]}))
-    assert r["source"] == "claude" and r["body"] == "FTS5 for search"
-    s = payload(call(c, STATIC_KEY, "memory_search", {"query": "fts5"}))
-    assert s["items"][0]["id"] == w["id"]
-    err = call(c, tok, "memory_write", {"namespace": "BAD NS", "title": "x", "body": "y"})
-    assert err["isError"] is True and "namespace" in err["content"][0]["text"]
+    assert r["source"] == "claude" and r["scope"] == "project:switchboard"
+    assert payload(call(c, STATIC_KEY, "memory_search", {"query": "fts5"}))["items"] == []
+    assert payload(call(c, STATIC_KEY, "memory_search", {"query": "fts5", "project": "switchboard"}))["items"][0]["id"] == w["id"]
+    assert payload(call(c, STATIC_KEY, "project_list", {"hint": "Switchboard"}))["matches"][0]["slug"] == "switchboard"
+    assert payload(call(c, STATIC_KEY, "project_update", {"slug": "switchboard", "archived": True}))["archived"] is True

@@ -10,8 +10,18 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS projects (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  links TEXT NOT NULL DEFAULT '{}',
+  created_at REAL NOT NULL,
+  updated_at REAL NOT NULL,
+  archived_at REAL
+);
 CREATE TABLE IF NOT EXISTS memories (
   id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL DEFAULT 'general',
   namespace TEXT NOT NULL,
   key TEXT,
   title TEXT NOT NULL,
@@ -22,7 +32,6 @@ CREATE TABLE IF NOT EXISTS memories (
   updated_at REAL NOT NULL,
   deleted_at REAL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS memories_ns_key ON memories(namespace, key) WHERE key IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS memories_updated ON memories(updated_at);
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(title, body, tags, namespace, content='memories', content_rowid='rowid', tokenize='porter unicode61');
 CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
@@ -77,28 +86,92 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   revoked_at REAL
 );
 CREATE INDEX IF NOT EXISTS oauth_tokens_family ON oauth_tokens(family);
-CREATE TABLE IF NOT EXISTS login_failures (
-  at REAL NOT NULL,
-  ip TEXT NOT NULL
-);
 
-CREATE TABLE IF NOT EXISTS delegations (
+CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at REAL NOT NULL,
   day TEXT NOT NULL,
-  kind TEXT NOT NULL,
+  origin TEXT NOT NULL,
   source TEXT NOT NULL,
   client TEXT NOT NULL,
-  target TEXT NOT NULL,
-  project_id TEXT,
-  thread_id TEXT,
+  destination TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target TEXT,
+  ref TEXT,
   title TEXT,
-  excerpt TEXT NOT NULL,
+  excerpt TEXT NOT NULL DEFAULT '',
   outcome TEXT NOT NULL,
   detail TEXT
 );
-CREATE INDEX IF NOT EXISTS delegations_day ON delegations(day, kind, outcome);
+CREATE INDEX IF NOT EXISTS audit_day ON audit(day, destination, action, outcome);
+
+CREATE TABLE IF NOT EXISTS routes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  destination TEXT NOT NULL,
+  agent TEXT NOT NULL DEFAULT '',
+  project TEXT NOT NULL DEFAULT '',
+  target TEXT NOT NULL,
+  defaults TEXT NOT NULL DEFAULT '{}',
+  allow_override INTEGER NOT NULL DEFAULT 0,
+  note TEXT NOT NULL DEFAULT '',
+  updated_at REAL NOT NULL,
+  updated_by TEXT NOT NULL,
+  UNIQUE(destination, agent, project)
+);
+
+CREATE TABLE IF NOT EXISTS handles (
+  handle TEXT PRIMARY KEY,
+  owner TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  ref TEXT NOT NULL,
+  project TEXT,
+  title TEXT,
+  meta TEXT NOT NULL DEFAULT '{}',
+  created_at REAL NOT NULL,
+  updated_at REAL,
+  open INTEGER NOT NULL DEFAULT 1,
+  status TEXT,
+  stream_cursor TEXT,
+  state TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS handles_open ON handles(destination, open);
+CREATE TABLE IF NOT EXISTS inbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner TEXT NOT NULL,
+  handle TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  data TEXT NOT NULL,
+  at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS inbox_owner ON inbox(owner, id);
+CREATE TABLE IF NOT EXISTS inbox_cursors (
+  owner TEXT NOT NULL,
+  handle TEXT NOT NULL,
+  cursor INTEGER NOT NULL,
+  PRIMARY KEY(owner, handle)
+);
 """
+
+
+def _migrate(db: sqlite3.Connection) -> None:
+    """Bring databases written by capy-bridge 0.1 up to the scoped schema."""
+    cols = {r[1] for r in db.execute("PRAGMA table_info(memories)")}
+    if "scope" not in cols:
+        db.execute("ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'")
+    db.execute("DROP INDEX IF EXISTS memories_ns_key")
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_key ON memories(scope, namespace, key) WHERE key IS NOT NULL AND deleted_at IS NULL"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS memories_scope ON memories(scope, updated_at)")
+    db.execute("DROP TABLE IF EXISTS login_failures")
+    tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    if "delegations" in tables:
+        db.execute(
+            """INSERT INTO audit(at, day, origin, source, client, destination, action, target, ref, title, excerpt, outcome, detail)
+               SELECT at, day, 'mcp', source, client, 'capy', kind, target, thread_id, title, excerpt, outcome, detail FROM delegations"""
+        )
+        db.execute("DROP TABLE delegations")
 
 
 def new_id(prefix: str) -> str:
@@ -106,7 +179,7 @@ def new_id(prefix: str) -> str:
 
 
 class Store:
-    """One SQLite file for memories, OAuth state, and the delegation log. Calls are short and serialized."""
+    """One SQLite file for projects, memories, OAuth state, and the audit log. Calls are short and serialized."""
 
     def __init__(self, path: str | Path, clock: Callable[[], float] = time.time):
         self.path = str(path)
@@ -117,8 +190,8 @@ class Store:
         self.db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA foreign_keys=ON")
         self.db.executescript(SCHEMA)
+        self.tx(_migrate)
 
     def close(self) -> None:
         self.db.close()

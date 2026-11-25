@@ -1,0 +1,50 @@
+# Copy to config/switchboard.yaml (git-ignored). No secrets here: those live in .env.
+# Layout: origins (where requests come from) -> core (auth, projects, scoped memory, routes, inbox, audit) -> destinations.
+
+# Public origin of this server. The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url.
+public_url: https://swb.example.com
+timezone: America/New_York
+
+auth:
+  # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
+  owner_emails: [owner@example.com]
+  # Verify the Cf-Access-Jwt-Assertion header on / (admin) and /authorize. Access app "Switchboard" covers the whole host
+  # with SSO; "Switchboard machine paths (bypass)" lets /mcp, /token, /register, /revoke, /.well-known, /healthz
+  # and /inbox through. There is no password sign-in: without this block, OAuth sign-in and the admin page are off.
+  cloudflare_access:
+    team_domain: your-team.cloudflareaccess.com
+    aud: <AUD tag of the "Switchboard" Access application>
+  # Allowed OAuth redirect URIs (exact, or prefix with /*; loopback matches any port).
+  # redirect_uris: [https://claude.ai/api/mcp/auth_callback, https://claude.com/api/mcp/auth_callback,
+  #   https://chatgpt.com/connector_platform_oauth_redirect, "https://chatgpt.com/connector/oauth/*",
+  #   "http://localhost/*", "http://127.0.0.1/*"]
+  # Optional: map a redirect host / client name fragment to an agent name.
+  # source_names: {cursor: cursor}
+
+origins:
+  mcp:
+    # capy_wait limits in seconds. claude.ai and Claude Desktop cut a tool call at 240 s.
+    # Claude Code fails an HTTP request with no response byte after max(60 s, MCP_TOOL_TIMEOUT, MCP_TIMEOUT),
+    # so keep claude-code under 60 s unless you raised MCP_TOOL_TIMEOUT there.
+    wait:
+      default_s: 60
+      max_s: 200
+      agents:
+        claude-code: {default_s: 45, max_s: 55}
+
+destinations:
+  capy:
+    api_base: https://api.capy.ai/api/v1
+    daily_cap: 20
+    max_file_bytes: 10485760
+    # How a task reaches a busy Captain or thread: queue, steer or interrupt.
+    captain_delivery: queue
+    # Stop following a delegation after this many days (MCP task TTL too).
+    handle_ttl_days: 7
+    # Seeds the global route once, when no global route exists yet. Change routes later with routes_set or the Routes page.
+    default_route:
+      captain: jam_EXAMPLECAPTAIN
+
+memory:
+  # Optional markdown mirror, one folder per scope (general/, projects/<slug>/). Not wired until the owner approves a mount.
+  # mirror_dir: /mirror

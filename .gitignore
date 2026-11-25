@@ -3,7 +3,7 @@
 !.env.example
 secrets/
 data/
-config/capy-bridge.yaml
+config/switchboard.yaml
 __pycache__/
 *.pyc
 .pytest_cache/

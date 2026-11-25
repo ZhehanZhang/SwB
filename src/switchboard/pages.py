@@ -1,4 +1,4 @@
-"""HTML for the pages capy-bridge serves, in the look of the owner's sites (example.com, status, id)."""
+"""HTML for the pages switchboard serves, in the look of the owner's sites (example.com, status, id)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
 
-_STATIC = resources.files("capy_bridge") / "static"
+_STATIC = resources.files("switchboard") / "static"
 _BRAND = json.loads((_STATIC / "brand.json").read_text())
 _ASSETS = {
     "bridge.css": ("text/css; charset=utf-8", (_STATIC / "bridge.css").read_bytes()),
@@ -48,13 +48,13 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>{html.escape(title)} • Capy Bridge</title>
+<title>{html.escape(title)} • Switchboard</title>
 <script src="/assets/prefs.js"></script>
 <link rel="stylesheet" href="/assets/bridge.css">
 </head><body><div class="shell">
 <div class="site-veil" aria-hidden="true"></div>{ARC}
 <header class="site-header"><div class="site-head col">
-<a href="https://example.com" class="brand-link"><span class="brand-sig">{SIGNATURE}</span><span class="brand-name">Capy Bridge{WORDMARK_DOT}</span></a>
+<a href="https://example.com" class="brand-link"><span class="brand-sig">{SIGNATURE}</span><span class="brand-name">Switchboard{WORDMARK_DOT}</span></a>
 </div></header>
 <main class="service-main col">{body}</main>
 <footer class="col fade-in"><div class="foot-row">
@@ -64,7 +64,7 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <a href="https://status.example.com" class="foot-btn" aria-label="Status" title="Status">{icon("foot_vitalSigns")}</a>
 <a href="https://example.com" class="foot-btn" aria-label="Home" title="Home">{icon("foot_home")}</a>
 </div></div>
-<div class="foot-line"><span>Shared memory and Capy offload for the owner's assistants.</span></div>
+<div class="foot-line"><span>Shared memory and routing to Capy for the owner's assistants.</span></div>
 </footer></div></body></html>"""
     return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer"})
 
@@ -82,21 +82,52 @@ def message_page(title: str, text: str, status: int) -> HTMLResponse:
     return page(title, hero(title, html.escape(text)), status)
 
 
-def status_page(health: dict[str, Any]) -> HTMLResponse:
+def _row(label: str, hint: str, value: str, on: bool | None = None) -> str:
+    mark = "" if on is None else (icon("checkCircle", "tone-good") if on else icon("warningFill", "tone-warn"))
+    return (f'<div class="setting"><div class="setting-label"><span>{html.escape(label)}</span><span class="setting-hint">{html.escape(hint)}</span></div>'
+            f'<div class="setting-value">{mark}<span>{html.escape(value)}</span></div></div>')
+
+
+def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> HTMLResponse:
     ok = health["status"] == "ok"
+    capy = health["destinations"].get("capy")
     rows = [
-        ("Sign-in for Claude and ChatGPT", "OAuth 2.1, PKCE, DCR and CIMD", health["oauth"]),
-        ("Capy offload", "Delegating to Capy through its API", health["offload"]),
-        ("Memory mirror", "Markdown copy for Capy Drive", health["mirror"]),
+        ("Origin: MCP", "Claude and ChatGPT sign in with OAuth 2.1 (PKCE, DCR, CIMD) or a bearer key", health["oauth"]),
+        ("Destination: Capy", "Delegating to Capy Captains and threads, with replies back", bool(capy and capy["online"])),
+        ("Memory mirror", "Markdown copy for Capy Drive, one folder per scope", health["mirror"]),
     ]
-    items = "".join(
-        f'<div class="setting"><div class="setting-label"><span>{html.escape(a)}</span><span class="setting-hint">{html.escape(b)}</span></div>'
-        f'<div class="setting-value">{icon("checkCircle", "tone-good") if on else icon("warningFill", "tone-warn")}<span>{"On" if on else "Off"}</span></div></div>'
-        for a, b, on in rows
-    )
+    items = "".join(_row(a, b, "On" if on else "Off", on) for a, b, on in rows)
+    items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
     problems = "".join(notice(p, "warn") for p in health["problems"])
-    body = hero("Capy Bridge", "Running" if ok else "Running, with parts switched off") + f'<div class="card fade-in">{items}</div>{problems}'
-    return page("Status", body, 200)
+    status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in with SSO as {html.escape(email)}.")
+              + f'<div class="card fade-in">{items}</div>{problems}')
+    return page("Switchboard", status + _routes_body(routes, projects, changes), 200)
+
+
+def _routes_body(routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> str:
+    def target(t: dict[str, Any]) -> str:
+        for kind in ("captain", "project", "thread"):
+            if t.get(kind):
+                return f"{kind} {t.get('name') or t[kind]}"
+        return "?"
+
+    def who(r: dict[str, Any]) -> str:
+        return f"{r['agent'] or 'any agent'} / {r['project'] or 'any project'}"
+
+    route_rows = "".join(
+        _row(who(r), f"{r['level']} route" + (", override allowed" if r["allow_override"] else "") + (f", {r['note']}" if r["note"] else "")
+             + f", set by {r['updated_by']} {(r['updated_at'] or '')[:16]}", target(r["target"]) + (f" ({', '.join(f'{k}={v}' for k, v in r['defaults'].items())})" if r["defaults"] else ""))
+        for r in routes
+    ) or _row("No routes", "Set one with the routes_set tool, or default_route in config", "")
+    project_rows = "".join(
+        _row(p["name"], f"{p['scope']}" + (", archived" if p["archived"] else ""), ", ".join(f"{k}: {v if isinstance(v, str) else ', '.join(v)}" for k, v in p["links"].items()) or "no links")
+        for p in projects
+    ) or _row("No projects", "Create one with the project_create tool", "")
+    change_rows = "".join(_row(f"{c['action'].replace('_', ' ')} {c['target'] or ''}", f"{c['at']} by {c['source']} via {c['origin']}", c["outcome"] + (f": {c['detail']}" if c["detail"] else ""), c["outcome"] == "ok") for c in changes)
+    return (f'<section class="hero section-gap fade-in"><p>Routes: where each assistant\'s Capy work goes. Resolution: agent and project, then project, then agent, then global.</p></section>'
+            + f'<div class="card fade-in">{route_rows}</div>'
+            + f'<section class="hero section-gap fade-in"><p>Projects</p></section><div class="card fade-in">{project_rows}</div>'
+            + (f'<section class="hero section-gap fade-in"><p>Recent route changes and refusals</p></section><div class="card fade-in">{change_rows}</div>' if changes else ""))
 
 
 async def asset(request: Request) -> Response:

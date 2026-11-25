@@ -1,141 +1,159 @@
 import base64
 import json
 
-from conftest import CAPTAIN, PROJECT, STATIC_KEY, Clock, base_config, call, payload, sign_in
+from conftest import CAPTAIN, CAPY_KEY, OWNER, PROJECT, STATIC_KEY, Clock, base_config, call, error_text, payload, sign_in, infra
 
 
 def last(capy, method, path_end):
     return [r for r in capy.requests if r[0] == method and r[1].endswith(path_end)][-1]
 
 
-def test_delegate_to_captain_by_default(make, capy):
-    bridge, c = make()
+def test_delegate_follows_the_global_route_to_the_captain(make, capy):
+    core, c = make()
+    infra(core)
     tok = sign_in(c)["access_token"]
-    out = payload(call(c, tok, "capy_delegate", {"task": "Add a status check for capy-bridge", "repos": ["example-org/status-service"]}))
-    assert out["thread_id"] == CAPTAIN and out["delegations_today"] == "1/3"
+    out = payload(call(c, tok, "capy_delegate", {"task": "Add a status check for switchboard", "project": "infra", "repos": ["example-org/status-service"]}))
+    assert out["thread_id"] == CAPTAIN and out["route"] == "global" and out["used_today"] == "1/3" and out["handle"].startswith("h_")
     _, _, body = last(capy, "POST", f"threads/{CAPTAIN}/message")
-    assert body["text"].startswith("[Delegated via capy-bridge from claude]") and "Repos: example-org/status-service" in body["text"]
-    assert body["delivery"] == "queue" and len(body["clientKey"]) <= 64
-    row = bridge.recent_delegations()[0]
-    assert row["source"] == "claude" and row["outcome"] == "ok" and row["client"].startswith("cb_") and row["at"]
+    assert body["text"].startswith("[Delegated via switchboard from claude, project infra]") and "Repos: example-org/status-service" in body["text"]
+    assert f"switchboard: done {out['handle']}" in body["text"] and body["delivery"] == "queue" and len(body["clientKey"]) <= 64
+    row = core.audit.recent(action="delegate")[0]
+    assert row["source"] == "claude" and row["outcome"] == "ok" and row["ref"] == CAPTAIN and row["origin"] == "mcp"
+    h = core.inbox.handle(out["handle"])
+    assert h["open"] and h["owner"] == "claude" and h["project"] == "infra" and h["stream_cursor"] == "01A"
 
 
-def test_delegate_to_project_with_files_and_crew(make, capy):
-    bridge, c = make()
+def test_project_route_starts_a_thread_with_files_and_model(make, capy):
+    core, c = make()
+    infra(core)
+    core.routes.set(destination="capy", agent=None, project="infra", target={"project": PROJECT, "name": "Infra"},
+                    defaults={"model": "anthropic/claude-opus-5-5"}, allow_override=False, note="", by="test")
     files = [{"name": "spec.md", "text": "# spec"}, {"name": "a.png", "base64": base64.b64encode(b"PNG").decode(), "media_type": "image/png"}]
-    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Build it", "target": "infra", "title": "Build", "files": files, "crew": True}))
-    tid = out["thread_id"]
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Build it", "project": "infra", "title": "Build", "files": files}))
+    assert out["route"] == "project" and out["mode"] == "new_thread"
     _, _, create = last(capy, "POST", "/threads")
-    assert create["projectId"] == PROJECT and create["captainId"] == CAPTAIN and create["title"] == "Build"
+    assert create["projectId"] == PROJECT and "captainId" not in create and create["title"] == "Build" and create["model"] == {"modelId": "anthropic/claude-opus-5-5"}
     assert [u[1] for u in capy.uploads] == [b"# spec", b"PNG"]
-    _, _, follow = last(capy, "POST", f"threads/{tid}/message")
+    _, _, follow = last(capy, "POST", f"threads/{out['thread_id']}/message")
     assert [f["fileId"] for f in follow["files"]] == ["file_spec.md", "file_a.png"]
 
 
-def test_allowlist_refuses_unknown_targets_and_repos(make, capy):
-    bridge, c = make()
-    r = call(c, STATIC_KEY, "capy_delegate", {"task": "x", "target": "acme"})
-    assert r["isError"] and "not allowed" in r["content"][0]["text"]
-    r = call(c, STATIC_KEY, "capy_delegate", {"task": "x", "target": "infra", "repos": ["example-org/site"]})
-    assert r["isError"] and "allowlist" in r["content"][0]["text"]
+def test_captain_route_can_start_crew_threads(make, capy):
+    core, c = make()
+    payload(call(c, STATIC_KEY, "routes_set", {"target": "captain:Captain", "defaults": {"mode": "new_thread"}}))
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Do it"}))
+    _, _, create = last(capy, "POST", "/threads")
+    assert out["mode"] == "new_thread" and create["captainId"] == CAPTAIN and create["projectId"] == PROJECT
+
+
+def test_repo_allowlist_comes_from_project_links(make, capy):
+    core, c = make()
+    infra(core)
+    assert "not linked" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "repos": ["example-org/site"]}))
+    assert "no project" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "acme"}))
     assert not [x for x in capy.requests if x[0] == "POST"]
-    assert [d["outcome"] for d in bridge.recent_delegations()] == ["refused", "refused"]
+    assert [d["outcome"] for d in core.audit.recent(action="delegate")] == ["refused", "refused"]
 
 
 def test_daily_cap_resets_next_day(make):
     clock = Clock()
-    bridge, c = make(clock=clock)
+    _, c = make(clock=clock)
     for i in range(3):
         assert not call(c, STATIC_KEY, "capy_delegate", {"task": f"task {i}"}).get("isError")
-    r = call(c, STATIC_KEY, "capy_delegate", {"task": "one more"})
-    assert r["isError"] and "daily delegation cap reached (3/3" in r["content"][0]["text"]
+    assert "daily capy delegate cap reached (3/3" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "one more"}))
     clock.t += 86400
     assert not call(c, STATIC_KEY, "capy_delegate", {"task": "next day"}).get("isError")
 
 
-def test_status_result_and_prs(make, capy):
-    _, c = make()
-    tid = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "target": "infra"}))["thread_id"]
+def test_status_result_and_prs_by_handle(make, capy):
+    core, c = make()
+    infra(core)
+    core.routes.set(destination="capy", agent=None, project="infra", target={"project": PROJECT}, defaults={}, allow_override=False, note="", by="t")
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "infra"}))
+    tid = out["thread_id"]
     capy.threads[tid]["status"] = "idle"
     capy.messages[tid] += [
         {"id": "t1", "source": "tool", "text": "Running tests", "createdAt": "x"},
         {"id": "a1", "source": "assistant", "text": "PR is up: https://github.com/example-org/status-service/pull/12", "createdAt": "x",
          "attachments": [{"file": {"fileId": "f1", "name": "shot.png", "mediaType": "image/png", "sizeBytes": 10}, "title": "Screenshot"}]},
     ]
-    st = payload(call(c, STATIC_KEY, "capy_status", {"thread_id": tid}))
+    st = payload(call(c, STATIC_KEY, "capy_status", {"thread_id": out["handle"]}))
     assert st["status"] == "idle" and st["pull_requests"] == ["https://github.com/example-org/status-service/pull/12"]
     assert all(m["source"] != "tool" for m in st["latest"])
     res = payload(call(c, STATIC_KEY, "capy_result", {"thread_id": tid, "tail": 5}))
     assert res["final_reply"]["text"].startswith("PR is up")
     assert res["attachments"][0]["url"].startswith("https://files.example/f1") and res["attachments"][0]["title"] == "Screenshot"
-    assert len(res["transcript_tail"]) == 2
 
 
 def test_tail_falls_back_to_forward_paging(make, capy):
     capy.backward_supported = False
     _, c = make()
     capy.messages[CAPTAIN] = [{"id": str(i), "source": "assistant", "text": f"m{i}", "createdAt": "x"} for i in range(7)]
-    res = payload(call(c, STATIC_KEY, "capy_result", {"thread_id": CAPTAIN}))
-    assert res["final_reply"]["text"] == "m6"
+    assert payload(call(c, STATIC_KEY, "capy_result", {"thread_id": CAPTAIN}))["final_reply"]["text"] == "m6"
 
 
 def test_reply_and_thread_scope(make, capy):
-    bridge, c = make()
+    core, c = make()
     r = payload(call(c, STATIC_KEY, "capy_reply", {"thread_id": CAPTAIN, "text": "Go with option A"}))
     assert r["delivery"] == "steer"
     _, _, body = last(capy, "POST", f"threads/{CAPTAIN}/message")
-    assert body["text"].startswith("[Reply via capy-bridge from capy]") and body["delivery"] == "steer"
-    denied = call(c, STATIC_KEY, "capy_reply", {"thread_id": "jam_OTHER", "text": "hi"})
-    assert denied["isError"] and "outside" in denied["content"][0]["text"]
+    assert body["text"].startswith("[Reply via switchboard from capy]") and body["delivery"] == "steer"
+    assert "outside" in error_text(call(c, STATIC_KEY, "capy_reply", {"thread_id": "jam_OTHER", "text": "hi"}))
     assert call(c, STATIC_KEY, "capy_status", {"thread_id": "jam_OTHER"})["isError"]
-    assert bridge.recent_delegations()[0]["kind"] == "reply"
+    assert [a["outcome"] for a in core.audit.recent(action="reply")] == ["refused", "ok"]
 
 
-def test_list_scopes(make):
-    _, c = make()
-    call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "target": "infra", "title": "Doing"})
+def test_list_scopes_and_captains(make):
+    core, c = make()
+    infra(core)
+    call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "title": "Doing"})
     d = payload(call(c, STATIC_KEY, "capy_list", {}))
-    assert d["items"][0]["title"] == "Doing" and d["items"][0]["status"] == "working"
+    assert d["items"][0]["task"] == "Doing" and d["items"][0]["following"] is True
     crew = payload(call(c, STATIC_KEY, "capy_list", {"scope": "captain"}))
-    assert {t["title"] for t in crew["items"]} == {"slackgate", "needs owner"}
-    proj = payload(call(c, STATIC_KEY, "capy_list", {"scope": "project", "project": "infra"}))
-    assert proj["project"] == "infra"
+    assert {t["title"] for t in crew["items"]} == {"slackgate", "needs owner", "other project work"}
+    assert payload(call(c, STATIC_KEY, "capy_list", {"scope": "project", "project": "infra"}))["project"] == "infra"
+    caps = payload(call(c, STATIC_KEY, "capy_captains"))["captains"]
+    assert [(x["name"], x["routed"]) for x in caps] == [("Captain", True), ("Acme Captain", False)]
 
 
 def test_captain_digest(make):
     _, c = make()
     d = payload(call(c, STATIC_KEY, "capy_captain_digest", {}))
-    assert d["file"] == "NOTES.md" and "Captain notes" in d["markdown"]
+    assert d["file"] == "NOTES.md" and CAPTAIN in d["markdown"]
     assert [t["ask"] for t in d["crew_needs_you"]] == ["Merge zhehanzhang/x#1"]
-    assert payload(call(c, STATIC_KEY, "capy_captain_digest", {"captain": "captain"}))["captain_id"] == CAPTAIN
 
 
-def test_context_pack(make):
-    _, c = make()
-    call(c, STATIC_KEY, "memory_write", {"namespace": "profile", "title": "Timezone", "body": "America/New_York"})
-    call(c, STATIC_KEY, "memory_write", {"namespace": "decisions", "title": "Python stack", "body": "Match slackgate"})
-    call(c, STATIC_KEY, "memory_write", {"namespace": "projects/capy-bridge", "title": "Port", "body": "8870"})
-    call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "target": "infra", "title": "Doing"})
-    text = payload(call(c, STATIC_KEY, "context_pack", {"project": "capy-bridge"}))
-    for needle in ("## Profile", "Timezone", "## Recent decisions", "Python stack", "## Project capy-bridge", "8870", "## Active Capy work", "Doing", "## Open asks", "Merge zhehanzhang/x#1"):
+def test_context_pack_includes_project_memory_and_the_routed_captain(make):
+    from conftest import CAPTAIN2
+
+    core, c = make()
+    infra(core)
+    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN2, "name": "Acme Captain"}, defaults={}, allow_override=False, note="", by="t")
+    call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "profile", "title": "Timezone", "body": "America/New_York"})
+    call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "decisions", "title": "Python stack", "body": "Match slackgate"})
+    call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "namespace": "notes", "title": "Port", "body": "8870"})
+    call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "infra", "title": "Doing"})
+    text = payload(call(c, STATIC_KEY, "context_pack", {"project": "infra"}))
+    for needle in ("Project Infra", "8870", "General: profile", "Timezone", "Python stack", "## Capy", "captain Acme Captain", "project route",
+                   "Delegations in progress", "Doing", f"Captain notes for {CAPTAIN2}", "needs you: Merge zhehanzhang/x#1", "working: slackgate"):
         assert needle in text, needle
+    assert "other project work" not in text
+    general = payload(call(c, STATIC_KEY, "context_pack", {}))
+    assert "8870" not in general and f"Captain notes for {CAPTAIN}" in general
 
 
 def test_degraded_without_api_key(make):
-    _, c = make(env={"CAPY_BRIDGE_KEY_CAPY": STATIC_KEY})
+    _, c = make(env={"SWITCHBOARD_KEY_CAPY": STATIC_KEY})
     h = c.get("/healthz").json()
-    assert h["status"] == "degraded" and any("CAPY_API_KEY" in p for p in h["problems"])
-    r = call(c, STATIC_KEY, "capy_delegate", {"task": "x"})
-    assert r["isError"] and "CAPY_API_KEY" in r["content"][0]["text"]
-    assert not call(c, STATIC_KEY, "memory_write", {"namespace": "notes", "title": "t", "body": "b"}).get("isError")
-    assert "Offload is not configured" in payload(call(c, STATIC_KEY, "context_pack", {}))
-    page = c.get("/")
-    assert page.status_code == 200 and "Capy Bridge" in page.text and "CAPY_API_KEY" in page.text
+    assert h["status"] == "degraded" and [p for p in h["problems"] if "CAPY_API_KEY" in p] and h["destinations"]["capy"]["online"] is False
+    assert "CAPY_API_KEY" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
+    assert not call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "notes", "title": "t", "body": "b"}).get("isError")
+    assert "CAPY_API_KEY missing" in payload(call(c, STATIC_KEY, "context_pack", {}))
+    page = c.get("/", headers=OWNER)
+    assert page.status_code == 200 and "Switchboard" in page.text and "CAPY_API_KEY" in page.text
 
 
 def test_api_key_never_appears_in_logs_or_health(make, caplog):
-    from conftest import CAPY_KEY
-
     _, c = make()
     caplog.set_level("DEBUG")
     call(c, STATIC_KEY, "capy_delegate", {"task": "x"})

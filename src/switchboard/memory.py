@@ -1,0 +1,312 @@
+from __future__ import annotations
+
+import os
+import re
+import sqlite3
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from .audit import iso
+from .config import NAMESPACE_RE
+from .projects import ProjectError, Projects
+from .store import Store, fts_query, new_id
+
+MAX_BODY = 20_000
+MAX_TITLE = 200
+KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,79}$")
+GENERAL = "general"
+
+
+class MemoryError_(ValueError):
+    pass
+
+
+def _row(r: sqlite3.Row, body: bool = True, limit: int | None = None) -> dict[str, Any]:
+    out = {
+        "id": r["id"],
+        "scope": r["scope"],
+        "namespace": r["namespace"],
+        "key": r["key"],
+        "title": r["title"],
+        "tags": [t for t in r["tags"].split(",") if t],
+        "source": r["source"],
+        "created_at": iso(r["created_at"]),
+        "updated_at": iso(r["updated_at"]),
+    }
+    if body:
+        text = r["body"]
+        if limit is not None and len(text) > limit:
+            text = text[:limit] + " …"
+        out["body"] = text
+    return out
+
+
+class Memory:
+    """Scoped memory: every entry lives in 'general' or in 'project:<slug>', with namespaces inside the scope."""
+
+    def __init__(self, store: Store, projects: Projects, mirror_dir: str | None = None):
+        self.store = store
+        self.projects = projects
+        self.mirror_dir = Path(mirror_dir) if mirror_dir else None
+
+    # Scopes -------------------------------------------------------------------------
+
+    def write_scope(self, scope: str | None) -> str:
+        """A scope for writing: required, explicit, and a live project when it isn't general."""
+        s = (scope or "").strip().lower()
+        if not s:
+            raise MemoryError_("scope is required: 'general' or 'project:<slug>' (writes are never implicitly general)")
+        if s == GENERAL:
+            return s
+        if not s.startswith("project:"):
+            raise MemoryError_("scope must be 'general' or 'project:<slug>'")
+        try:
+            return self.projects.get(s[8:], allow_archived=False).scope
+        except ProjectError as e:
+            raise MemoryError_(str(e)) from e
+
+    def read_scopes(self, project: str | None, include_general: bool = True) -> list[str]:
+        """Scopes a read covers, project first: the project plus general, or general alone."""
+        if not project:
+            return [GENERAL]
+        slug = project.strip().lower().removeprefix("project:")
+        if slug == GENERAL:
+            return [GENERAL]
+        try:
+            p = self.projects.get(slug)
+        except ProjectError as e:
+            raise MemoryError_(str(e)) from e
+        return [p.scope, GENERAL] if include_general else [p.scope]
+
+    @staticmethod
+    def _filter(scopes: list[str] | None, namespace: str | None) -> tuple[str, list[Any]]:
+        sql, args = "", []
+        if scopes is not None:
+            sql += f" AND m.scope IN ({','.join('?' * len(scopes))})"
+            args += scopes
+        if namespace:
+            ns = namespace.strip().strip("/").lower()
+            sql += " AND (m.namespace = ? OR m.namespace LIKE ?)"
+            args += [ns, ns + "/%"]
+        return sql, args
+
+    @staticmethod
+    def _scope_rank(scopes: list[str] | None) -> tuple[str, list[Any]]:
+        if not scopes or len(scopes) == 1:
+            return "NULL", []
+        return "CASE m.scope " + " ".join("WHEN ? THEN %d" % i for i in range(len(scopes))) + " END", list(scopes)
+
+    # CRUD ---------------------------------------------------------------------------
+
+    def validate(self, namespace: str, key: str | None, title: str, body: str) -> None:
+        if not NAMESPACE_RE.match(namespace or ""):
+            raise MemoryError_("namespace must be lowercase segments like 'profile', 'decisions' or 'notes/meetings' (max 3 levels)")
+        if key is not None and not KEY_RE.match(key):
+            raise MemoryError_("key must be a lowercase slug (a-z, 0-9, . _ -), max 80 chars")
+        if not title.strip() or len(title) > MAX_TITLE:
+            raise MemoryError_(f"title is required, max {MAX_TITLE} chars")
+        if len(body) > MAX_BODY:
+            raise MemoryError_(f"body is limited to {MAX_BODY} chars; split it into several entries")
+
+    def write(self, *, source: str, scope: str | None, namespace: str, title: str, body: str, key: str | None = None,
+              tags: list[str] | None = None, id: str | None = None, mode: str = "replace") -> dict[str, Any]:
+        scope = self.write_scope(scope)
+        namespace = (namespace or "").strip().strip("/").lower()
+        key = key.strip().lower() if key else None
+        if mode not in ("replace", "append"):
+            raise MemoryError_("mode must be replace or append")
+        tag_s = ",".join(sorted({t.strip().lower().replace(",", " ") for t in (tags or []) if t.strip()}))
+        now = self.store.clock()
+
+        def run(db: sqlite3.Connection) -> tuple[str, str]:
+            existing = None
+            if id:
+                existing = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
+                if existing is None:
+                    raise MemoryError_(f"no memory with id {id}")
+                if existing["scope"] != scope:
+                    raise MemoryError_(f"memory {id} is in scope {existing['scope']}, not {scope}")
+            elif key:
+                existing = db.execute(
+                    "SELECT * FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL", (scope, namespace, key)
+                ).fetchone()
+            if existing is None:
+                self.validate(namespace, key, title, body)
+                mid = new_id("mem")
+                db.execute(
+                    "INSERT INTO memories(id, scope, namespace, key, title, body, tags, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (mid, scope, namespace, key, title.strip(), body, tag_s, source, now, now),
+                )
+                action = "create"
+            else:
+                mid = existing["id"]
+                new_body = (existing["body"].rstrip() + "\n\n" + body) if mode == "append" else body
+                new_title = title.strip() or existing["title"]
+                self.validate(existing["namespace"], existing["key"], new_title, new_body)
+                db.execute(
+                    "UPDATE memories SET title = ?, body = ?, tags = ?, source = ?, updated_at = ? WHERE id = ?",
+                    (new_title, new_body, tag_s or existing["tags"], source, now, mid),
+                )
+                action = mode
+            r = db.execute("SELECT * FROM memories WHERE id = ?", (mid,)).fetchone()
+            db.execute(
+                "INSERT INTO memory_revisions(memory_id, at, source, action, title, body) VALUES (?,?,?,?,?,?)",
+                (mid, now, source, action, r["title"], r["body"]),
+            )
+            return mid, action
+
+        mid, action = self.store.tx(run)
+        entry = self.read(id=mid)
+        self._sync_mirror()
+        return {"action": action, **{k: entry[k] for k in ("id", "scope", "namespace", "key", "title", "updated_at", "source")}}
+
+    def read(self, *, id: str | None = None, scope: str | None = None, namespace: str | None = None, key: str | None = None) -> dict[str, Any]:
+        if id:
+            r = self.store.one("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,))
+        elif scope and namespace and key:
+            r = self.store.one(
+                "SELECT * FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL",
+                (scope.strip().lower(), namespace.strip("/").lower(), key.lower()),
+            )
+        else:
+            raise MemoryError_("pass id, or scope, namespace and key")
+        if r is None:
+            raise MemoryError_("memory not found")
+        out = _row(r)
+        revs = self.store.q("SELECT at, source, action FROM memory_revisions WHERE memory_id = ? ORDER BY at DESC LIMIT 5", (r["id"],))
+        out["history"] = [{"at": iso(v["at"]), "source": v["source"], "action": v["action"]} for v in revs]
+        return out
+
+    def delete(self, *, source: str, id: str) -> dict[str, Any]:
+        now = self.store.clock()
+
+        def run(db: sqlite3.Connection) -> None:
+            r = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
+            if r is None:
+                raise MemoryError_("memory not found")
+            db.execute("UPDATE memories SET deleted_at = ?, updated_at = ?, source = ? WHERE id = ?", (now, now, source, id))
+            db.execute(
+                "INSERT INTO memory_revisions(memory_id, at, source, action, title, body) VALUES (?,?,?,?,?,?)",
+                (id, now, source, "delete", r["title"], r["body"]),
+            )
+
+        self.store.tx(run)
+        self._sync_mirror()
+        return {"deleted": id}
+
+    def list(self, *, scopes: list[str] | None, namespace: str | None = None, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+        where, args = self._filter(scopes, namespace)
+        rank, rargs = self._scope_rank(scopes)
+        limit = max(1, min(limit, 200))
+        rows = self.store.q(
+            f"SELECT * FROM memories m WHERE m.deleted_at IS NULL{where} ORDER BY {rank}, m.updated_at DESC LIMIT ? OFFSET ?",
+            [*args, *rargs, limit, offset],
+        )
+        counts = self.store.q(
+            f"SELECT m.scope AS s, m.namespace AS ns, COUNT(*) AS n FROM memories m WHERE m.deleted_at IS NULL{where} GROUP BY m.scope, m.namespace ORDER BY m.scope, m.namespace",
+            args,
+        )
+        summary: dict[str, dict[str, int]] = {}
+        for c in counts:
+            summary.setdefault(c["s"], {})[c["ns"]] = c["n"]
+        return {"scopes": summary, "items": [_row(r, body=False) for r in rows], "next_offset": offset + limit if len(rows) == limit else None}
+
+    def search(self, *, query: str, scopes: list[str] | None, namespace: str | None = None, limit: int = 10) -> dict[str, Any]:
+        """Full-text search; with several scopes, matches in the first (the project) rank ahead of general."""
+        limit = max(1, min(limit, 50))
+        where, args = self._filter(scopes, namespace)
+        rank, rargs = self._scope_rank(scopes)
+        match = fts_query(query)
+        if not match:
+            raise MemoryError_("query has no searchable words")
+        rows = self.store.q(
+            f"""SELECT m.*, snippet(memories_fts, 1, '[', ']', ' … ', 24) AS snip
+                FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid
+                WHERE memories_fts MATCH ? AND m.deleted_at IS NULL{where}
+                ORDER BY {rank}, bm25(memories_fts, 4.0, 1.0, 2.0, 1.0) LIMIT ?""",
+            [match, *args, *rargs, limit],
+        )
+        if not rows:
+            words = re.findall(r"\w+", query.lower())[:6]
+            if words:
+                cond = " AND ".join(["lower(m.title || ' ' || m.body || ' ' || m.tags) LIKE ?"] * len(words))
+                rows = self.store.q(
+                    f"SELECT m.*, substr(m.body, 1, 200) AS snip FROM memories m WHERE m.deleted_at IS NULL{where} AND ({cond}) ORDER BY {rank}, m.updated_at DESC LIMIT ?",
+                    [*args, *[f"%{w}%" for w in words], *rargs, limit],
+                )
+        return {"scopes": scopes, "items": [{**_row(r, body=False), "snippet": r["snip"]} for r in rows]}
+
+    def recent(self, *, scopes: list[str] | None, namespace: str | None = None, since: float | None = None, exclude_namespaces: tuple[str, ...] = (),
+               limit: int = 10, body_limit: int = 600) -> list[dict[str, Any]]:
+        where, args = self._filter(scopes, namespace)
+        if since:
+            where += " AND m.updated_at >= ?"
+            args.append(since)
+        for ns in exclude_namespaces:
+            where += " AND m.namespace != ? AND m.namespace NOT LIKE ?"
+            args += [ns, ns + "/%"]
+        rows = self.store.q(f"SELECT * FROM memories m WHERE m.deleted_at IS NULL{where} ORDER BY m.updated_at DESC LIMIT ?", [*args, limit])
+        return [_row(r, limit=body_limit) for r in rows]
+
+    # Markdown export / mirror: one folder per scope, general/ and projects/<slug>/ ------------------------
+
+    @staticmethod
+    def rel_path(scope: str, namespace: str, key: str | None, id: str) -> Path:
+        base = Path("general") if scope == GENERAL else Path("projects", scope.removeprefix("project:"))
+        return base.joinpath(*namespace.split("/")) / f"{key or id}.md"
+
+    @staticmethod
+    def to_markdown(e: dict[str, Any]) -> str:
+        front = ["---", f"id: {e['id']}", f"scope: {e['scope']}", f"namespace: {e['namespace']}"]
+        if e.get("key"):
+            front.append(f"key: {e['key']}")
+        front += [f"source: {e['source']}", f"updated: {e['updated_at']}"]
+        if e.get("tags"):
+            front.append(f"tags: [{', '.join(e['tags'])}]")
+        front += ["---", "", f"# {e['title']}", ""]
+        return "\n".join(front) + "\n" + e["body"].rstrip() + "\n"
+
+    def export(self, root: str | Path) -> int:
+        root = Path(root)
+        rows = self.store.q("SELECT * FROM memories WHERE deleted_at IS NULL ORDER BY scope, namespace, updated_at DESC")
+        wanted = set()
+        for r in rows:
+            e = _row(r)
+            rel = self.rel_path(e["scope"], e["namespace"], e["key"], e["id"])
+            wanted.add(rel)
+            _atomic_write(root / rel, self.to_markdown(e))
+        for p in list(root.rglob("*.md")) if root.exists() else []:
+            rel = p.relative_to(root)
+            if rel != Path("INDEX.md") and rel not in wanted:
+                p.unlink()
+        _atomic_write(root / "INDEX.md", self.index_markdown(rows))
+        return len(rows)
+
+    @staticmethod
+    def index_markdown(rows: list[sqlite3.Row]) -> str:
+        lines = ["# Shared memory (switchboard export)", "", "Generated file: edits here are not read back. Write through the memory_* tools.", ""]
+        current = None
+        for r in rows:
+            head = f"{r['scope']} / {r['namespace']}"
+            if head != current:
+                current = head
+                lines += ["", f"## {head}", ""]
+            rel = Memory.rel_path(r["scope"], r["namespace"], r["key"], r["id"]).as_posix()
+            lines.append(f"- [{r['title']}]({rel}) · {r['source']} · {iso(r['updated_at'])}")
+        return "\n".join(lines) + "\n"
+
+    def _sync_mirror(self) -> None:
+        if self.mirror_dir:
+            self.export(self.mirror_dir)
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and path.read_text() == text:
+        return
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=".md")
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)

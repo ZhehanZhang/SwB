@@ -21,9 +21,9 @@ class CapyAPI:
     """Thin async client for the Capy public API. The key is sent only as a header and never logged."""
 
     def __init__(self, base: str, key: str, transport: httpx.AsyncBaseTransport | None = None, timeout: float = 30.0):
-        self._client = httpx.AsyncClient(
+        self.http = self._client = httpx.AsyncClient(
             base_url=base.rstrip("/") + "/",
-            headers={"Authorization": f"Bearer {key}", "User-Agent": "capy-bridge/0.1"},
+            headers={"Authorization": f"Bearer {key}", "User-Agent": "switchboard/0.2"},
             timeout=timeout,
             transport=transport,
         )
@@ -55,16 +55,22 @@ class CapyAPI:
 
     # Threads and messages
 
-    async def create_thread(self, *, request_id: str, project_id: str, message: str, title: str | None = None, captain_id: str | None = None) -> dict[str, Any]:
+    async def create_thread(self, *, request_id: str, project_id: str, message: str, title: str | None = None, captain_id: str | None = None,
+                            model: str | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {"requestId": request_id, "projectId": project_id, "message": message}
         if title:
             body["title"] = title
         if captain_id:
             body["captainId"] = captain_id
+        if model:
+            body["model"] = {"modelId": model}
         return await self.request("POST", "threads", json=body)
 
-    async def send_message(self, thread_id: str, text: str, *, files: list[dict[str, str]] | None = None, delivery: str | None = None, client_key: str | None = None) -> dict[str, Any]:
+    async def send_message(self, thread_id: str, text: str, *, files: list[dict[str, str]] | None = None, delivery: str | None = None,
+                           client_key: str | None = None, model: str | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {"text": text}
+        if model:
+            body["model"] = {"modelId": model}
         if files:
             body["files"] = files
         if delivery:
@@ -97,6 +103,11 @@ class CapyAPI:
                 break
             after = nxt
         return items
+
+    async def latest_cursor(self, thread_id: str) -> str | None:
+        """The event id of the newest transcript entry, so a stream opened after it carries only what comes next."""
+        page = await self.request("GET", f"threads/{thread_id}/messages", params={"before": MAX_ULID, "limit": 1})
+        return page.get("beforeCursor") if page.get("items") else None
 
     async def download_url(self, thread_id: str, file_id: str) -> dict[str, Any]:
         return await self.request("GET", f"threads/{thread_id}/attachments/{file_id}/download")
@@ -134,6 +145,9 @@ class CapyAPI:
 
     async def get_project(self, project_id: str) -> dict[str, Any]:
         return await self.request("GET", f"projects/{project_id}")
+
+    async def list_projects(self) -> list[dict[str, Any]]:
+        return (await self.request("GET", "projects", params={"limit": 100})).get("items", [])
 
 
 def pr_links(messages: list[dict[str, Any]]) -> list[str]:

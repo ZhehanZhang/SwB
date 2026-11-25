@@ -1,6 +1,6 @@
 from urllib.parse import parse_qs, urlparse
 
-from conftest import CLAUDE_CB, PASSWORD, PUBLIC, STATIC_KEY, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
+from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
 
 
 def test_metadata_advertises_what_claude_and_chatgpt_need(make):
@@ -29,29 +29,36 @@ def test_full_flow_issues_token_tagged_with_the_assistant(make):
     _, c = make()
     tok = sign_in(c)
     assert tok["token_type"] == "Bearer" and tok["expires_in"] == 3600
-    me = payload(call(c, tok["access_token"], "bridge_status"))
-    assert me["you"] == {"source": "claude", "auth": "oauth"}
+    me = payload(call(c, tok["access_token"], "switchboard_status"))
+    assert me["you"] == {"agent": "claude", "auth": "oauth", "origin": "mcp"}
     gpt = sign_in(c, redirect="https://chatgpt.com/connector_platform_oauth_redirect")
-    assert payload(call(c, gpt["access_token"], "bridge_status"))["you"]["source"] == "chatgpt"
+    assert payload(call(c, gpt["access_token"], "switchboard_status"))["you"]["agent"] == "chatgpt"
 
 
-def test_wrong_password_is_rejected_and_locks_out(make):
-    bridge, c = make()
+def test_approving_needs_the_owners_access_jwt_on_the_post_too(make):
+    _, c = make()
     cid = register(c)["client_id"]
-    from conftest import authorize
+    _, req = consent(c, cid)
+    assert c.post("/authorize", data={"req": req, "decision": "approve"}).status_code == 403
+    assert c.post("/authorize", data={"req": req, "decision": "approve"}, headers={"cf-access-jwt-assertion": "other"}).status_code == 403
+    assert c.post("/authorize", data={"req": req, "decision": "approve"}, headers=OWNER).status_code == 302
 
-    for _ in range(5):
-        r = authorize(c, cid, password="guess")
-        assert r.status_code == 401 and "Wrong password" in r.text
-    r = authorize(c, cid, password=PASSWORD)
-    assert r.status_code == 401 and "Too many failed attempts" in r.text
+
+def test_without_access_sign_in_is_off_and_there_is_no_password_form(make):
+    cfg = base_config()
+    cfg["auth"] = {"owner_emails": ["owner@example.test"]}
+    _, c = make(config=cfg)
+    cid = register(c)["client_id"]
+    page, req = consent(c, cid)
+    assert page.status_code == 503 and req is None and 'type="password"' not in page.text
+    assert any("cloudflare_access" in p for p in c.get("/healthz").json()["problems"])
 
 
 def test_deny_redirects_with_access_denied_and_iss(make):
     _, c = make()
     cid = register(c)["client_id"]
     page, req = consent(c, cid)
-    r = c.post("/authorize", data={"req": req, "decision": "deny"})
+    r = c.post("/authorize", data={"req": req, "decision": "deny"}, headers=OWNER)
     q = parse_qs(urlparse(r.headers["location"]).query)
     assert q["error"] == ["access_denied"] and q["iss"] == [PUBLIC]
 
@@ -60,7 +67,7 @@ def test_tampered_form_token_is_rejected(make):
     _, c = make()
     cid = register(c)["client_id"]
     _, req = consent(c, cid)
-    r = c.post("/authorize", data={"req": req[:-3] + "AAA", "password": PASSWORD, "decision": "approve"})
+    r = c.post("/authorize", data={"req": req[:-3] + "AAA", "decision": "approve"}, headers=OWNER)
     assert r.status_code == 400
 
 
@@ -136,7 +143,7 @@ def test_cimd_client(make, cimd):
     cimd.docs[url] = {"client_id": url, "client_name": "Claude", "redirect_uris": [CLAUDE_CB], "token_endpoint_auth_method": "none"}
     _, c = make()
     tok = sign_in(c, client_id=url)
-    assert payload(call(c, tok["access_token"], "bridge_status"))["you"]["source"] == "claude"
+    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["agent"] == "claude"
 
 
 def test_cimd_rejects_untrusted_host_and_mismatched_doc(make, cimd):
@@ -151,22 +158,17 @@ def test_cimd_rejects_untrusted_host_and_mismatched_doc(make, cimd):
 
 def test_static_key_for_capy(make):
     _, c = make()
-    assert payload(call(c, STATIC_KEY, "bridge_status"))["you"] == {"source": "capy", "auth": "key"}
+    assert payload(call(c, STATIC_KEY, "switchboard_status"))["you"] == {"agent": "capy", "auth": "key", "origin": "mcp"}
     assert rpc(c, STATIC_KEY[:-1] + "t", "tools/list").status_code == 401
 
 
 def test_cloudflare_access_gate(make):
-    async def verify(assertion: str):
-        return {"good": "owner@example.test", "other": "someone@example.test"}.get(assertion)
-
-    cfg = base_config()
-    cfg["auth"] = {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "z.cloudflareaccess.com", "aud": "aud1"}, "require_password": False}
-    _, c = make(config=cfg, access=verify)
+    _, c = make()
     cid = register(c)["client_id"]
-    assert consent(c, cid)[0].status_code == 403
+    assert consent(c, cid, headers={})[0].status_code == 403
     assert consent(c, cid, headers={"cf-access-jwt-assertion": "other"})[0].status_code == 403
     page, req = consent(c, cid, headers={"cf-access-jwt-assertion": "good"})
-    assert page.status_code == 200 and 'type="password"' not in page.text
+    assert page.status_code == 200 and 'type="password"' not in page.text and "SSO as owner@example.test" in page.text
     r = c.post("/authorize", data={"req": req, "decision": "approve"}, headers={"cf-access-jwt-assertion": "good"})
     assert r.status_code == 302 and "code=" in r.headers["location"]
 

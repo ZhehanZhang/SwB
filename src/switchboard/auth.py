@@ -1,8 +1,9 @@
 """Single-owner OAuth 2.1 authorization server plus bearer verification for /mcp.
 
 Clients identify themselves by Dynamic Client Registration (RFC 7591) or by a Client ID Metadata
-Document (an https client_id). Every flow needs PKCE S256. Only the owner can approve a sign-in:
-by the password in CAPY_BRIDGE_OWNER_PASSWORD, by a verified Cloudflare Access identity, or both.
+Document (an https client_id). Every flow needs PKCE S256. Only the owner can approve a sign-in: /authorize sits
+behind Cloudflare Access with the SSO identity provider, and the server verifies the Access JWT itself
+(signature, audience, issuer, owner email). There is no password form.
 """
 
 from __future__ import annotations
@@ -30,9 +31,9 @@ from . import pages
 from .config import Config
 from .store import Store, dumps
 
-log = logging.getLogger("capy_bridge.oauth")
+log = logging.getLogger("switchboard.auth")
 
-SCOPE = "capy-bridge"
+SCOPE = "switchboard"
 CODE_TTL = 300
 FORM_TTL = 900
 REFRESH_REUSE_GRACE = 60
@@ -55,9 +56,12 @@ def b64url_dec(s: str) -> bytes:
 
 @dataclass(frozen=True)
 class Principal:
+    """An authenticated caller: source is the agent tag (claude, chatgpt, or a key name), origin where it came in."""
+
     source: str
     client_id: str
     kind: str
+    origin: str = "mcp"
 
 
 @dataclass
@@ -187,7 +191,7 @@ class Auth:
             "authorization_servers": [self.cfg.issuer],
             "scopes_supported": [SCOPE],
             "bearer_methods_supported": ["header"],
-            "resource_name": "capy-bridge",
+            "resource_name": "Switchboard",
         }
 
     def server_metadata(self) -> dict[str, Any]:
@@ -360,16 +364,10 @@ class Auth:
             return None
         return claims.get("email")
 
-    def locked_out(self, ip: str) -> bool:
-        now = self.store.clock()
-        self.store.x("DELETE FROM login_failures WHERE at < ?", (now - 3600,))
-        per_ip = self.store.one("SELECT COUNT(*) AS n FROM login_failures WHERE ip = ? AND at > ?", (ip, now - 900))["n"]
-        total = self.store.one("SELECT COUNT(*) AS n FROM login_failures")["n"]
-        return per_ip >= 5 or total >= 20
-
-    def password_ok(self, given: str | None) -> bool:
-        want = self.cfg.owner_password
-        return bool(want and given and hmac.compare_digest(sha(given), sha(want)))
+    async def owner(self, request: Request) -> str | None:
+        """The owner's email when the request carries a valid Access JWT for an owner, else None."""
+        email = await self.access_email(request)
+        return email if email and email in self.cfg.owner_emails else None
 
     async def validate_authorize(self, p: dict[str, str]) -> tuple[Client, dict[str, str]]:
         """Checks that must pass before anything may be redirected to the client."""
@@ -527,27 +525,17 @@ class Auth:
         except OAuthError as e:
             return self.error_redirect(params["redirect_uri"], state, e)
 
-        email = await self.access_email(request)
-        access_ok = bool(email and email in self.cfg.owner_emails)
-        if self.cfg.access_team_domain and not access_ok:
-            return pages.message_page("Not allowed", "This sign-in needs the owner's Cloudflare Access identity.", 403)
-        need_password = self.cfg.require_password or not access_ok
-        if need_password and not self.cfg.owner_password:
-            return pages.message_page("Sign-in disabled", "No owner password is configured on this server.", 503)
+        if not self.cfg.access_team_domain:
+            return pages.message_page("Sign-in disabled", "Sign-in needs Cloudflare Access in front of /authorize (auth.cloudflare_access).", 503)
+        email = await self.owner(request)
+        if email is None:
+            return pages.message_page("Not allowed", "This sign-in needs the owner's SSO through Cloudflare Access.", 403)
 
-        ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "?")
-        error = ""
         if request.method == "POST":
             form = await request.form()
             if form.get("decision") == "deny":
                 return self.error_redirect(params["redirect_uri"], state, OAuthError("access_denied", "the owner denied the request"))
-            if self.locked_out(ip):
-                error = "Too many failed attempts. Wait 15 minutes."
-            elif need_password and not self.password_ok(str(form.get("password") or "")):
-                self.store.x("INSERT INTO login_failures(at, ip) VALUES (?, ?)", (self.store.clock(), ip))
-                log.warning("owner sign-in failed for client %s", c.client_id[:40])
-                error = "Wrong password."
-            else:
+            if form.get("decision") == "approve":
                 code = self.issue_code(c, params)
                 log.info("owner approved oauth client %s", c.client_id[:60])
                 q = {"code": code, "iss": self.cfg.issuer or ""}
@@ -558,23 +546,16 @@ class Auth:
         source = source_for(params["redirect_uri"], c, self.cfg.source_names)
         who = html.escape(c.name or c.client_id)
         dest = html.escape(urlparse(params["redirect_uri"]).netloc)
-        line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and hand work to Capy."
-        password = (
-            '<label class="label" for="password">Owner password</label>'
-            '<input class="field" type="password" id="password" name="password" autocomplete="current-password" autofocus required>'
-            if need_password else ""
-        )
-        signed = f'<p class="item-line">Cloudflare Access: {html.escape(email or "")}</p>' if access_ok else ""
-        body = pages.hero("Connect to Capy Bridge", line) + f"""
+        line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and route work to the destinations this switchboard connects, such as Capy."
+        signed = f'<p class="item-line">Signed in with SSO as {html.escape(email)}</p>'
+        body = pages.hero("Connect to Switchboard", line) + f"""
 <form method="post" class="fade-in">
 <input type="hidden" name="req" value="{html.escape(self.sign(params))}">
 <div class="card"><div class="item"><div class="item-main"><span class="card-title">{who}</span><span class="item-line">Returns to <code>{dest}</code></span>{signed}</div></div></div>
-<div class="mt-6">{password}</div>
-{pages.notice(error) if error else ""}
 <div class="actions"><button class="pill-button primary" name="decision" value="approve">Approve</button>
 <button class="text-button" name="decision" value="deny" formnovalidate>Deny</button></div>
 </form>"""
-        return pages.page("Connect", body, 200 if not error else 401)
+        return pages.page("Connect", body, 200)
 
     async def h_token(self, request: Request) -> Response:
         if (d := self._disabled()) is not None:

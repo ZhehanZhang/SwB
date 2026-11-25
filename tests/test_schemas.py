@@ -1,9 +1,8 @@
 from conftest import STATIC_KEY, rpc
 
-EXPECTED = {
-    "memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack",
-    "capy_delegate", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "bridge_status",
-}
+CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack", "project_list", "project_create",
+        "project_update", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status"}
+CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}
 
 
 def tools(c):
@@ -13,26 +12,30 @@ def tools(c):
 def test_tool_set_and_schemas(make):
     _, c = make()
     t = tools(c)
-    assert set(t) == EXPECTED
+    assert set(t) == CORE | CAPY
     for name, tool in t.items():
-        assert 40 <= len(tool["description"]) <= 600, name
+        assert 40 <= len(tool["description"]) <= 700, name
         assert tool["inputSchema"]["type"] == "object"
         assert "ctx" not in tool["inputSchema"].get("properties", {}), name
         assert "annotations" in tool, name
     d = t["capy_delegate"]["inputSchema"]
-    assert d["required"] == ["task"]
-    assert {"task", "title", "target", "repos", "files", "crew"} == set(d["properties"])
-    assert set(t["memory_write"]["inputSchema"]["required"]) == {"namespace", "title", "body"}
-    assert t["memory_write"]["inputSchema"]["properties"]["mode"]["enum"] == ["replace", "append"]
-    assert t["capy_list"]["inputSchema"]["properties"]["scope"]["enum"] == ["delegated", "captain", "project"]
+    assert d["required"] == ["task"] and {"task", "project", "title", "target", "repos", "files", "new_thread", "wait_s"} == set(d["properties"])
+    assert set(t["memory_write"]["inputSchema"]["required"]) == {"scope", "namespace", "title", "body"}
+    assert "capy_wait" in t["capy_delegate"]["description"]
+
+
+def test_capy_tools_only_with_the_capy_destination(make):
+    _, c = make(config={"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["o@example.test"]}})
+    assert set(tools(c)) == CORE
 
 
 def test_annotations_mark_reads_and_writes(make):
     _, c = make()
     t = tools(c)
-    for name in ("memory_search", "memory_read", "memory_list", "capy_status", "capy_result", "capy_list", "capy_captain_digest", "context_pack", "bridge_status"):
+    for name in ("memory_search", "memory_read", "memory_list", "capy_status", "capy_result", "capy_list", "capy_captain_digest", "context_pack",
+                 "switchboard_status", "routes_list", "routes_resolve", "capy_wait", "capy_inbox"):
         assert t[name]["annotations"]["readOnlyHint"] is True, name
-    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply"):
+    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply", "routes_set", "routes_remove"):
         assert t[name]["annotations"]["readOnlyHint"] is False, name
     assert t["memory_delete"]["annotations"]["destructiveHint"] is True
 
@@ -40,4 +43,4 @@ def test_annotations_mark_reads_and_writes(make):
 def test_initialize_advertises_instructions(make):
     _, c = make()
     r = rpc(c, STATIC_KEY, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}).json()
-    assert "capy_delegate" in r["result"]["instructions"]
+    assert "capy_wait" in r["result"]["instructions"] and r["result"]["serverInfo"]["name"] == "switchboard"

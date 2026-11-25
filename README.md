@@ -1,150 +1,241 @@
-# capy-bridge
+# switchboard
 
-A self-hosted remote MCP server that gives every assistant Owner uses (the Claude app, ChatGPT, Capy itself, and
-anything else that speaks MCP) one shared environment:
+the owner's self-hosted switchboard. Assistants come in through **origins**, the **core** gives them one scoped shared
+memory, a project list, routes, an inbox and an audit log, and the core sends work out to **destinations**. The first
+origin is MCP (the Claude app, Claude Code, ChatGPT and Capy over OAuth or bearer keys). The first destination is Capy
+(Captains and threads, with their replies coming back).
 
-1. **Shared memory and context**: a SQLite store with full-text search that every assistant reads and writes through
-   tools, each entry tagged with the assistant that wrote it.
-2. **Offloading to Capy**: from a chat, hand a task to Capy (cloud dev machines, repos, PRs, the Captain and its crew),
-   then follow it to the result.
+It runs as a docker compose app on your-host, behind a Cloudflare tunnel at `https://swb.example.com`.
 
-It runs as a docker compose app on your-host, behind a Cloudflare tunnel at `https://bridge.example.com`.
+```mermaid
+flowchart LR
+  subgraph origins
+    MCP["origins.mcp<br/>Claude · Claude Code · ChatGPT · Capy"]
+    CH["Claude Code channel<br/>(local plugin, reads the inbox)"]
+  end
+  subgraph core
+    A[auth + rate limits] --> M[projects + scoped memory]
+    A --> R[routes]
+    A --> I[inbox + handles]
+    A --> L[audit + daily caps]
+  end
+  subgraph destinations
+    C["destinations.capy<br/>Captains, threads, SSE follow"]
+  end
+  MCP --> A
+  R --> C
+  C -- replies --> I
+  I --> MCP
+  I --> CH
+```
+
+Origins and destinations sit behind two small interfaces (`origins/__init__.py`, `destinations/__init__.py`). An
+origin authenticates callers into a `Principal` and calls the core. A destination declares actions, and the core runs
+every action through caps and the audit log. Neither imports the other. To add one, subclass the interface, list it in
+`ORIGINS` or `DESTINATIONS`, and configure it under `origins.<name>` or `destinations.<name>`. A Slack origin and
+destination built on slackgate would slot in there; neither exists yet.
 
 ## What "shared memory" means, honestly
 
-Claude's and ChatGPT's built-in memories are private to each product. **No MCP server can read or write them**, and
-this one doesn't try. "Sync" here means a third store that every assistant uses through the `memory_*` and
-`context_pack` tools, plus a short instruction snippet in each product (below) telling the model to load the briefing
-at the start and save durable facts as it goes. If an assistant isn't told to use the tools, it won't.
+Claude's and ChatGPT's built-in memories are private to each product. **No MCP server can read or write them**, and this
+one doesn't try. "Shared" means a third store every assistant uses through the `memory_*` and `context_pack` tools,
+plus an instruction snippet in each product (below) telling the model to load the briefing and save durable facts. An
+assistant that isn't told to use the tools won't.
+
+## Scopes and projects
+
+Every memory lives in exactly one scope: `general` (the owner's profile, preferences, cross-project decisions) or
+`project:<slug>`. Projects are first-class (`project_list`, `project_create`, `project_update` for renames, links and
+archiving). Each can be linked to a Capy project, repos, a Claude Project name and a ChatGPT project name, and
+`project_list(hint=...)` finds the project for any of those.
+
+- Writes must name their scope and are never implicitly general. An archived project refuses writes.
+- `memory_search`, `memory_list` and `context_pack` take `project`: they read that project first, then general
+  (`include_general=false` for the project alone). Without a project they read general only.
+- Rows written by capy-bridge 0.1 were migrated into `general`.
+
+## Routes
+
+A route maps an agent (the OAuth client's agent name such as `claude`, `chatgpt`, `claude-code`, or a bearer key name),
+a project, both, or neither to a Capy target: a Captain (by name or id), a Capy project (new thread there), or a
+thread. Defaults can carry a model, repos, `mode` (`captain_thread` messages the Captain, `new_thread` starts a crew
+thread) and a delivery mode. Resolution order is **agent+project, then project, then agent, then global**.
+
+`capy_delegate` without a target uses the route. An explicit target is refused unless the matching route has
+`allow_override` (with no route at all, an explicit target is the only way). Route targets are checked against the
+Capy API when set. Every route write, refusals included, is in the audit log. `routes_list`, `routes_set`,
+`routes_remove` and `routes_resolve` manage them, and the admin page at `/` shows them with the projects and recent
+changes. `destinations.capy.default_route` seeds the global route once on a fresh install.
+
+## Getting Capy's answer back
+
+`capy_delegate` returns a **handle** at once. Switchboard then follows the Capy thread over its SSE stream
+(`GET /threads/{id}/stream`, resuming with `Last-Event-ID` after any drop, with exponential backoff plus jitter) and files
+each reply, question for the owner, status change and final result in the caller's **inbox**. Handles and stream
+cursors live in SQLite, so following resumes after a restart. A new thread is finished when it comes to rest after
+replying. A message to a Captain or an existing thread asks the agent to end its final reply with
+`switchboard: done <handle>`, since a Captain thread keeps running after it answers.
+
+Three ways to read the inbox, depending on the client:
+
+| Client | How the answer comes back |
+| - | - |
+| claude.ai, Claude Desktop, ChatGPT | The tool descriptions teach **delegate, then `capy_wait(handle)`, then answer**. `capy_wait` long-polls and returns as soon as something arrives. claude.ai cuts tool calls at 240 s, so it defaults to 60 s and is capped at 200 s; if it times out, the model says Capy is still working and checks again. `capy_inbox` never blocks. |
+| Clients with MCP Tasks | When a `tools/call` advertises `io.modelcontextprotocol/tasks` in its per-request capabilities (protocol 2026-07-28), `capy_delegate` answers with a task whose id is the handle, and `tasks/get` completes it with Capy's final reply. Per Anthropic's docs this covers the Claude Code CLI (v2.1.304+), VS Code and local Desktop app sessions (v2.1.331+), Claude Code cloud sessions, and new chats in the unified Claude app on Pro, Max, Ultra and Team when switchboard is added as a claude.ai connector. Project threads, incognito chats, and servers loaded from `.mcp.json` in cloud sessions get no tasks and fall back to the handle plus `capy_wait`. `tasks/cancel` stops following (the Capy thread keeps running). |
+| Claude Code, open session | The **channel** below pushes replies straight into the session. |
+
+Claude Code's own timeout matters for `capy_wait`: an HTTP request with no response byte within
+max(60 s, `MCP_TOOL_TIMEOUT`, `MCP_TIMEOUT`) fails, so the `claude-code` agent defaults to 45 s and is capped at 55 s.
+Raise `origins.mcp.wait.agents.claude-code` only together with `MCP_TOOL_TIMEOUT`. `switchboard_status` shows each
+caller its limits. No feature depends on MCP resource subscriptions or server notifications, which claude.ai doesn't
+support.
+
+### Claude Code channel (research preview)
+
+`channel/` is a small Bun channel server and plugin. It reads `GET /inbox/events` (SSE; `GET /inbox/poll` is the
+long-poll alternative) with a bearer key and turns every inbox item into a `notifications/claude/channel` event, so
+Capy's replies show up in the Claude Code session that's open. **It only works while that session is open.** Items that
+arrive in between are delivered at the next start, from the cursor it saves. It's one-way: to answer Capy, Claude uses
+the switchboard MCP server's `capy_reply`.
+
+Install, during the research preview (custom channels aren't on Anthropic's allowlist, so they need the development
+flag, and Team or Enterprise organizations must enable channels):
+
+1. On your-host, read the channel key: `sudo grep '^SWITCHBOARD_KEY_CHANNEL=' /srv/swb/.env`.
+   Paste it only into Claude Code's config prompt, never into a chat.
+2. Install [Bun](https://bun.sh), then in Claude Code run `/plugin marketplace add ZhehanZhang/switchboard` and
+   `/plugin install switchboard@switchboard`. Enter the URL and the key when it asks.
+3. Start sessions with `claude --dangerously-load-development-channels plugin:switchboard@switchboard`.
+
+Without the plugin wrapper, a bare server works too: add
+`{"mcpServers": {"switchboard-channel": {"command": "bun", "args": ["/path/to/channel/switchboard-channel.ts"], "env": {"SWITCHBOARD_KEY": "..."}}}}`
+to `.mcp.json` and start with `--dangerously-load-development-channels server:switchboard-channel`.
 
 ## Tools
 
 | Tool | What it does |
 | - | - |
-| `context_pack` | Session briefing: profile, recent decisions, project notes, active Capy work, open asks |
-| `memory_write` | Create or update an entry (`namespace`, `title`, `body`, optional `key` for upserts, `tags`, `mode=append`) |
-| `memory_search` | FTS5 search, optional namespace prefix |
-| `memory_read` / `memory_list` / `memory_delete` | Read one entry with its edit history, list newest first with namespace counts, soft-delete |
-| `capy_delegate` | Send a task to the Captain (default) or start a thread in an allowlisted project, optionally in the Captain's crew, with files |
-| `capy_status` | Thread status, needs-you and ask, PR links, latest messages |
-| `capy_list` | Tasks delegated through the bridge (live status), the Captain's crew, or a project's threads |
-| `capy_reply` | Follow-up into a thread (steer, queue or interrupt) |
-| `capy_result` | Final reply in full, PR links, download links for delivered files, optional transcript tail |
-| `capy_captain_digest` | The Captain's DIGEST.md / ONGOING.md / NOTES.md plus crew threads that need the owner |
-| `bridge_status` | Who you are signed in as, allowed targets and repos, today's delegation count, misconfiguration |
+| `context_pack` | Session briefing for a project: its memory and links, general profile and decisions, the routed Captain's digest, its relevant crew work and open asks, delegations in progress |
+| `memory_write` | Create or update an entry: `scope` (required), `namespace`, `title`, `body`, optional `key`, `tags`, `mode=append` |
+| `memory_search` / `memory_list` | FTS5 search and listing, project first then general |
+| `memory_read` / `memory_delete` | One entry with its edit history; soft delete |
+| `project_list` / `project_create` / `project_update` | Projects and their links; rename, archive |
+| `routes_list` / `routes_set` / `routes_remove` / `routes_resolve` | Routes, audited |
+| `switchboard_status` | Your agent name, your `capy_wait` limits, what's configured or degraded |
+| `capy_delegate` | Send a task along your route (or an allowed explicit target), with repos, files, `new_thread`, `wait_s`; returns a handle, or an MCP task |
+| `capy_wait` / `capy_inbox` | Long-poll or read what Capy reported |
+| `capy_status` / `capy_result` | Thread status, PRs and latest messages; the final reply in full with file links |
+| `capy_list` / `capy_reply` / `capy_cancel` | Delegations, a Captain's crew, or a project's threads; a follow-up; stop following |
+| `capy_captain_digest` / `capy_captains` | A Captain's digest and crew asks; the Captains the key can see |
 
-Namespaces are lowercase paths up to three levels: `profile`, `decisions`, `notes`, `projects/<name>`. The writing
-assistant (`claude`, `chatgpt`, `capy`, ...) comes from the credential, never from a tool argument, so an assistant
-can't write as another one. Every write keeps a revision.
+The writing agent comes from the credential, never from a tool argument. Capy tools only appear when
+`destinations.capy` is configured, and answer that the key is missing until `CAPY_API_KEY` is set.
 
-The Capy API has no pull-request field on threads, so PR links are read from the agent's messages.
-
-## Authentication
+## Authentication and protection
 
 The server is its own single-owner OAuth 2.1 authorization server, built to the stricter of Claude's and ChatGPT's
-requirements (checked November 2026):
+requirements: protected resource metadata (RFC 9728) and a `401` with `resource_metadata` on `/mcp`; authorization
+server metadata (RFC 8414) with PKCE `S256` only, CIMD from allowlisted hosts, DCR (RFC 7591) and RFC 9207 `iss`;
+redirect URIs limited to Claude's, ChatGPT's and loopback; tokens bound to `<public_url>/mcp`; 1 h access tokens and
+rotating 30-day refresh tokens with replay detection, stored only as SHA-256 hashes.
 
-- Protected resource metadata (RFC 9728) at `/.well-known/oauth-protected-resource`, and a `401` with
-  `WWW-Authenticate: Bearer resource_metadata=...` on `/mcp`, which Claude needs to start sign-in.
-- Authorization server metadata (RFC 8414) with PKCE `S256` only, `client_id_metadata_document_supported`, `none`
-  among token auth methods (Claude only picks CIMD then), a `registration_endpoint` for DCR (RFC 7591), and RFC 9207
-  `iss` in every authorization response, which lets ChatGPT use its stable redirect URI.
-- Clients: Client ID Metadata Documents (Claude's "published identity", ChatGPT's preference) from allowlisted hosts
-  only, or Dynamic Client Registration. Redirect URIs are limited to Claude's, ChatGPT's and loopback (Claude Code).
-- The `resource` parameter is checked throughout and tokens are bound to `<public_url>/mcp`.
-- Access tokens last 1 hour; refresh tokens 30 days, rotated on use, and a replayed refresh token (after a 60 s race
-  grace) revokes its whole family. Tokens are stored only as SHA-256 hashes.
+**Only Owner can approve a sign-in or open the admin page, and there is no password form anywhere.** The whole
+hostname sits behind the Cloudflare Access app "Switchboard" (policy "Owner Only", identity provider SSO,
+the same setup as his other apps), and the server verifies the Access JWT itself (signature, audience, issuer, owner
+email), so a request that bypasses the tunnel is refused too. The admin page (status, routes, projects, recent
+refusals) is at `/`. A second Access app, "Switchboard machine paths (bypass)", lets through only what machines call:
+`/mcp`, `/token`, `/register`, `/revoke`, `/.well-known`, `/healthz` and `/inbox` (the Claude Code channel). Those carry
+their own OAuth or bearer checks. Without `auth.cloudflare_access` in config, OAuth sign-in and the admin page are off
+and only bearer keys work.
 
-**Only Owner can approve a sign-in.** In production `/authorize` sits behind the Cloudflare Access app "Capy Bridge
-Consent" (policy "Owner Only"), and the server verifies the Access JWT itself (`auth.cloudflare_access`: signature,
-audience, issuer, owner email), so a request that bypasses the tunnel is refused too. `CAPY_BRIDGE_OWNER_PASSWORD` is a
-second factor when `require_password: true`, or the only factor where Access isn't configured; five wrong tries from
-one IP (or 20 overall) lock it for 15 minutes. Cloudflare Access sits only
-on `/authorize`; `/mcp`, `/token`, `/register` and the metadata must stay reachable by Anthropic's and OpenAI's
-servers.
+In front of everything:
 
-Non-OAuth clients (Capy, scripts) use static bearer keys: `CAPY_BRIDGE_KEY_<NAME>` in `.env`, where `<NAME>` becomes
-the source tag.
+- A wrong bearer token on `/mcp` or `/inbox/` is audited (`auth_failure`) and counts against the caller's IP: after 20
+  in 10 minutes that IP gets `429` for the rest of the window. Requests without a token (OAuth discovery) aren't counted.
+- `/register` allows 20 per IP per hour, `/token` 120 and `/authorize` 60 per 10 minutes; refusals are audited
+  (`rate_limited`).
+- Request bodies are limited to 1 MiB, or 16 MiB on `/mcp` for file attachments.
+
+Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where `<NAME>` becomes the agent name.
 
 ## Delegation guardrails
 
-- **Allowlist**: `capy_delegate` targets are `captain` or a `delegate.projects` alias; anything else is refused. A
-  task may name repos, and each must be on that project's `repos` list (for the Captain, any listed repo). The Capy
-  API can't pin a thread to repos, so the hard boundary is the API key's principal: use a service user whose project
-  access is the same allowlist.
-- **Thread scope**: `capy_status`, `capy_result` and `capy_reply` only touch the Captain, its crew, and threads in
-  allowlisted projects.
-- **Daily cap**: `delegate.daily_cap` successful delegations per calendar day in `delegate.timezone`.
-- **Log**: every delegation and reply, including refusals, is recorded with time, assistant, OAuth client, target and
-  thread (`docker compose exec capy-bridge capy-bridge log`). Identical retries the same day are deduplicated through
-  the API's `requestId` / `clientKey`.
-- The Capy API key is only ever sent as a header to api.capy.ai; it is not logged, and access logs drop query strings.
+- Repos a task names must be linked to its project (`links.repos`), or to any project when it has none.
+- `capy_status`, `capy_result` and `capy_reply` only touch threads delegated through switchboard, routed Captains and
+  their crews, routed threads, and threads in routed or linked Capy projects.
+- `destinations.capy.daily_cap` successful delegations per day in `timezone`; identical retries the same day are
+  deduplicated through the API's `requestId` / `clientKey`.
+- Every action that changes something, and every refusal, is in the audit log (`docker compose exec switchboard switchboard log`).
+- The Capy API key is only ever sent as a header to api.capy.ai; it is never logged, and access logs drop query strings.
 
 ## Running it
 
 ```bash
-cp .env.example .env && chmod 600 .env        # the owner types the values
-cp config/capy-bridge.example.yaml config/capy-bridge.yaml
-docker compose up -d --build                  # MCP on http://127.0.0.1:8870/mcp
-docker compose --profile tunnel up -d         # adds cloudflared (TUNNEL_TOKEN in .env)
+cp .env.example .env && chmod 600 .env          # the owner types CAPY_API_KEY; generate keys with openssl rand -hex 32
+cp config/switchboard.example.yaml config/switchboard.yaml
+docker compose up -d --build                    # MCP on http://127.0.0.1:8870/mcp
+docker compose --profile tunnel up -d           # adds cloudflared (TUNNEL_TOKEN in .env)
 curl -s http://127.0.0.1:8870/healthz
 ```
 
-Without `CAPY_API_KEY` the server runs **degraded**: memory works, the offload tools answer that the key is missing,
-and `/healthz` and the status page at `/` say what's off. Tests run in the image build: `docker build --target test .`.
+Without `CAPY_API_KEY` the server runs **degraded**: memory, projects and routes work, Capy tools say the key is
+missing, and `/healthz` and the status page at `/` say what's off. Tests run in the image build
+(`docker build --target test .`); the channel has its own (`cd channel && bun test`). A legacy `capy-bridge.db` in the
+data directory is renamed to `switchboard.db` on first start.
 
-Markdown export: `docker compose exec capy-bridge capy-bridge export /data/export`. Setting `memory.mirror_dir`
-rewrites the export on every change (atomic writes, plus `INDEX.md`); it's one-way, so edits to the files are not read
-back.
+Markdown export: `docker compose exec switchboard switchboard export /data/export` writes one folder per scope
+(`general/`, `projects/<slug>/`) plus `INDEX.md`. Setting `memory.mirror_dir` rewrites it on every change. It's one-way.
+A Capy Drive mirror is proposed, not wired: one Drive folder per scope, mounted read-only into Capy.
 
-The consent and status pages follow the owner's sites (example.com, status.example.com, id.example.com): the same
-stone grounds and type, hairline cards, pill buttons, the Arc backdrop, the signature, and the shared
-`siteAppearance` theme cookie. The CSS is a hand port of example-org/id-site's Tailwind components, served from `/assets`.
+The pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
+same type, hairline cards, the Arc backdrop, the signature and the shared theme cookie, ported from example-org/id-site.
 
 ## Connecting the assistants
 
-- **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → URL
-  `https://bridge.example.com/mcp`, sign in with OAuth (published identity or automatic registration both work), approve
-  with the owner password. Enable it per chat or in a Project.
-- **ChatGPT**: Settings → Apps → Advanced settings → turn on Developer mode, then Create app → URL
-  `https://bridge.example.com/mcp`, authentication OAuth. Enable it per chat from the + menu (Developer mode).
-- **Claude Code**: `claude mcp add --transport http capy-bridge https://bridge.example.com/mcp`.
-- **Capy**: add an MCP server with URL `https://bridge.example.com/mcp` and header
-  `Authorization: Bearer <CAPY_BRIDGE_KEY_CAPY>`.
+- **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → `https://swb.example.com/mcp`,
+  sign in with SSO, approve.
+- **ChatGPT**: Settings → Apps → Advanced settings → Developer mode, then Create app → `https://swb.example.com/mcp`, OAuth.
+- **Claude Code**: `claude mcp add --transport http switchboard https://swb.example.com/mcp`, plus the channel above if wanted.
+- **Capy**: an MCP server with URL `https://swb.example.com/mcp` and header `Authorization: Bearer <SWITCHBOARD_KEY_CAPY>`.
+  Read the key on your-host with `sudo grep '^SWITCHBOARD_KEY_CAPY=' /srv/swb/.env`
+  and paste it straight into Capy's settings, never into a chat.
 
 ## Instruction snippets
 
-**Claude Project instructions** (or Settings → Profile → personal preferences):
+**Claude Project instructions** (one per Claude Project; replace `<slug>` with its switchboard project):
 
-> You have the capy-bridge connector, a memory shared with my other assistants and Capy. At the start of a
-> conversation, call context_pack (pass project=<name> when the chat is about one). When I state a durable preference,
-> fact or decision, save it with memory_write (profile, decisions or projects/<name>; use a key for things that get
-> updated) and tell me in one line. Search memory before asking me something I may have said before. For work that
-> needs a real machine, a repo, a PR or a long run, offer to hand it to Capy with capy_delegate, then follow it with
-> capy_status and capy_result.
+> You have the switchboard connector, a memory shared with my other assistants and Capy. This Project is switchboard
+> project `<slug>`. At the start of a conversation call context_pack(project="<slug>"). When I state a durable fact,
+> preference or decision, save it with memory_write: scope "project:<slug>" for this project, "general" only for things
+> about me that hold everywhere; use a key for things that get updated, and tell me in one line. Search memory before
+> asking me something I may have said. For work that needs a machine, a repo, a PR or a long run, offer capy_delegate
+> with project="<slug>", then capy_wait on the handle and give me Capy's answer.
 
-**ChatGPT custom instructions** ("What would you like ChatGPT to know / how should it respond"):
+**ChatGPT project instructions** (one per ChatGPT project, same `<slug>` rule):
 
-> When the capy-bridge connector is enabled: call context_pack first. Save durable preferences, facts and decisions
-> with memory_write (namespaces profile, decisions, projects/<name>) and say so briefly; search memory before asking me
-> something I may have said. Offload coding, repo, PR and long-running work to Capy with capy_delegate and report its
-> status with capy_status / capy_result. Your own ChatGPT memory is separate; the shared one is capy-bridge.
+> When the switchboard app is enabled, this project is switchboard project `<slug>`: call context_pack(project="<slug>")
+> first. Save durable facts and decisions with memory_write, scope "project:<slug>" (or "general" for things about me
+> everywhere), and say so briefly; search memory before asking me something I may have said. Hand coding, repo, PR and
+> long-running work to Capy with capy_delegate(project="<slug>"), then capy_wait on the handle and report the answer.
+> Your own ChatGPT memory is separate; the shared one is switchboard.
+
+**Personal preferences / custom instructions** (outside projects): the same, with `general` and no project.
 
 **Capy (AGENTS.md or scope instructions)**:
 
-> Shared memory with the owner's other assistants lives in the capy-bridge MCP server: read context_pack at the start of
-> work, and record decisions and durable facts with memory_write (source is tagged automatically).
+> Shared memory with the owner's other assistants lives in the switchboard MCP server. Read context_pack with the
+> project you work on, and record decisions and durable facts with memory_write in that project's scope.
 
 ## Layout
 
 ```
-src/capy_bridge/
-  app.py         Starlette app, bearer gate on /mcp, health and status page
-  oauth.py       OAuth 2.1 authorization server (DCR, CIMD, PKCE, refresh rotation, Access check)
-  mcp_server.py  MCP tools (MCP Python SDK, streamable HTTP, stateless)
-  core.py        delegation guardrails, Capy reads, context pack
-  capy_api.py    Capy public API client
-  memory.py      memory store logic and markdown export
-  store.py       SQLite schema (memories + FTS5, OAuth state, delegation log)
-  pages.py, static/  sign-in, status pages and their assets
+src/switchboard/
+  core.py            the Switchboard core: wiring, invoke (caps + audit), routes, context pack
+  auth.py            OAuth 2.1 authorization server (DCR, CIMD, PKCE, refresh rotation, Access check)
+  guard.py           body size limits, rate limits, bearer lockout
+  projects.py memory.py routes.py inbox.py audit.py store.py
+  origins/mcp/       MCP tools (MCP Python SDK, streamable HTTP, stateless) and the Tasks extension
+  destinations/capy/ Capy API client, SSE thread follower, actions
+  app.py pages.py static/   HTTP app, inbox endpoints, status, consent and routes pages
+channel/             Claude Code channel (Bun) and its plugin manifest
 ```

@@ -1,4 +1,4 @@
-/* capy-bridge pages, ported by hand from example-org/id-site (src/styles.css, src/arc.css at c5aaab0),
+/* switchboard pages, ported by hand from example-org/id-site (src/styles.css, src/arc.css at c5aaab0),
  * which follows example.com and status.example.com: stone 100 / stone 900 grounds, black or white at
  * fixed opacities, the hairline card, pill button and field, the Arc backdrop, the same theme cookie. */
 *,*::before,*::after{box-sizing:border-box}
@@ -29,6 +29,7 @@ button,input{font:inherit;color:inherit}
 .wordmark-dot{display:inline-block;width:.18em;height:.147em;margin-left:.08em;vertical-align:baseline;overflow:visible}
 .service-main{flex:1;padding-bottom:6rem;padding-top:max(calc(5.5rem + env(safe-area-inset-top,0px)),16svh)}
 .hero{margin-bottom:1.5rem}
+.section-gap{margin-top:2rem;margin-bottom:.75rem}
 .hero h1{font-size:1.5rem;line-height:1.3;letter-spacing:-.01em;font-weight:600;color:#000}
 .dark .hero h1{color:#fff}
 .hero p{margin-top:.25rem;line-height:1.4}
