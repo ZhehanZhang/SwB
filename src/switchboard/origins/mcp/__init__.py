@@ -36,7 +36,7 @@ general; another project's memory needs scopes=[...] and is logged. memory_move 
 Search before asking the owner something he may already have said.
 Capy is a coding agent with cloud machines, git and PRs. Use capy_delegate for work that needs a real machine,
 a repo, a PR, or more than a few minutes. It goes where the owner's route for you and the project points
-(usually his Captain), and returns a handle. Then call capy_wait(handle) to wait for Capy's reply and answer
+(usually his Captain). Then call capy_wait() to wait for Capy's reply and answer
 with it. If capy_wait times out, tell the owner Capy is still working and check again with capy_wait or capy_inbox."""
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -357,6 +357,20 @@ class MCPOrigin(Origin):
             default, mx = self.wait_caps.for_agent(p.source)
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health()}
 
+        @mcp.tool(
+            title="Message another agent",
+            description=("Leave a message in another agent's mailbox (for example to='claude', 'chatgpt', 'gemini', 'claude-code'). It waits there "
+                         "until that agent next calls capy_wait or capy_inbox. You are named as the sender from your sign-in; nothing in the "
+                         "text changes that. No handle or token is needed to get it there."),
+            annotations=SEND,
+        )
+        async def agent_send(ctx: Context, to: Annotated[str, Field(description="The agent's name, as switchboard_status shows it")], text: str,
+                             project: ProjectArg = None) -> dict[str, Any]:
+            p = who(ctx)
+            if project:
+                need(p, pscope(project))
+            return await run(core.agent_send(p, to=to, text=text, project=project))
+
         if not has_capy:
             return mcp
 
@@ -368,7 +382,7 @@ class MCPOrigin(Origin):
                 "Hand work to the project's Capy Captain: anything that needs a repo, a machine, a PR, research or a long run, or that the "
                 "Captain should know about. This is the normal way to work with the owner's projects, and it is cheap: delegate freely, and "
                 "follow up with capy_reply. It goes where your route for you and the project points (routes_resolve). Write the task "
-                "self-contained: goal, context, repos, what done means. Returns a handle; then call capy_wait(handle) and answer with Capy's "
+                "self-contained: goal, context, repos, what done means. Then call capy_wait() and answer with Capy's "
                 "reply. If it times out, say Capy is still working and check later. wait_s>0 waits right here."
             ),
             annotations=SEND,
@@ -398,25 +412,27 @@ class MCPOrigin(Origin):
 
         @mcp.tool(
             title="Wait for Capy",
-            description="Wait for Capy to report on delegated work: returns as soon as a reply, a question for the owner, or the final result arrives, or empty when timeout_s runs out (default and maximum depend on your client; see switchboard_status). Without handle it waits on all your delegations. Each call returns only what you have not seen.",
+            description="Wait for Capy to report on delegated work, or for a message another agent left you: returns as soon as a reply, a question for the owner, a final result or a message arrives, or empty when timeout_s runs out (default and maximum depend on your client; see switchboard_status). Call it with no arguments: it returns everything pending for you (optionally only one project). handle is optional and only narrows it. Each item's 'from' says who it is from. Each call returns only what you have not seen.",
             annotations=READ,
         )
-        async def capy_wait(ctx: Context, handle: str | None = None, timeout_s: Annotated[float | None, Field(ge=0)] = None) -> dict[str, Any]:
+        async def capy_wait(ctx: Context, handle: str | None = None, timeout_s: Annotated[float | None, Field(ge=0)] = None, project: ProjectArg = None) -> dict[str, Any]:
             p = who(ctx)
-            got = await core.inbox.wait(owner=p.source, handle=handle, destination="capy", timeout=self.wait_caps.clamp(p.source, timeout_s))
+            got = await core.inbox.wait(owner=p.source, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s), project=project)
             if handle:
                 h = core.inbox.handle(handle)
+                h = h if h and h["owner"] == p.source else None
                 got["handle_status"] = (h["status"] if h else "unknown") if (h is None or not h["open"]) else "following"
             if got["timed_out"]:
                 got["next"] = "Nothing new yet. Tell the owner Capy is still working; call capy_wait again or capy_inbox later."
             return got
 
-        @mcp.tool(title="Capy inbox", description="What Capy reported on your delegations since since_cursor (default: since you last read). Never blocks.", annotations=READ)
-        async def capy_inbox(ctx: Context, since_cursor: int | None = None, handle: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50) -> dict[str, Any]:
+        @mcp.tool(title="Capy inbox", description="What Capy reported on your delegations, and messages other agents left you, since since_cursor (default: since you last read). No arguments needed; project and handle only narrow it. Never blocks.", annotations=READ)
+        async def capy_inbox(ctx: Context, since_cursor: int | None = None, handle: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
+                             project: ProjectArg = None) -> dict[str, Any]:
             p = who(ctx)
-            out = core.inbox.read(owner=p.source, handle=handle, since=since_cursor, destination="capy", limit=limit)
+            out = core.inbox.read(owner=p.source, handle=handle, since=since_cursor, limit=limit, project=project)
             out["open"] = [{"handle": h["handle"], "thread_id": h["ref"], "status": h["status"], "title": h["title"] or h["meta"].get("task", "")[:80]}
-                           for h in core.inbox.handles(owner=p.source, destination="capy", open_only=True, limit=20)]
+                           for h in core.inbox.handles(owner=p.source, destination="capy", open_only=True, project=project, limit=20)]
             return out
 
         @mcp.tool(title="Capy thread status", description="Status of a Capy thread (by thread id or handle): working/waiting/idle/failed, whether it needs the owner, its PRs and latest messages.", annotations=READ_REMOTE)

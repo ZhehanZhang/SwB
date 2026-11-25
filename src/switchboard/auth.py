@@ -131,7 +131,7 @@ def host_allowed(host: str | None, hosts: tuple[str, ...]) -> bool:
     return any(host == h or host.endswith("." + h) for h in hosts)
 
 
-AGENT_LABELS = {"claude": "Claude", "chatgpt": "ChatGPT", "capy": "Capy"}
+AGENT_LABELS = {"claude": "Claude", "chatgpt": "ChatGPT", "gemini": "Gemini", "capy": "Capy"}
 
 
 def source_for(redirect_uri: str, client: Client, names: dict[str, str]) -> str:
@@ -146,6 +146,8 @@ def source_for(redirect_uri: str, client: Client, names: dict[str, str]) -> str:
         return "chatgpt"
     if host_allowed(host, ("capy.ai",)) or host_allowed(cimd_host, ("capy.ai",)):
         return "capy"
+    if host == "oauth-redirect.googleusercontent.com":
+        return "gemini"
     slug = re.sub(r"[^a-z0-9]+", "-", (client.name or "").lower()).strip("-")[:40]
     return slug or "local"
 

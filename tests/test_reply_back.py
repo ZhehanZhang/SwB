@@ -18,6 +18,7 @@ async def test_capy_wait_returns_early_on_a_stream_event(amake, capy):
     t0 = loop.time()
     wait = asyncio.create_task(acall(c, STATIC_KEY, "capy_wait", {"handle": out["handle"], "timeout_s": 20}))
     await asyncio.sleep(0.1)
+    capy.ack(CAPTAIN)
     capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Working on it."}, id="01B")
     got = payload(await wait)
     assert [i["text"] for i in got["items"]] == ["Working on it."] and got["timed_out"] is False and got["handle_status"] == "following"
@@ -39,6 +40,7 @@ async def test_delegate_wait_s_and_inbox(amake, capy):
     core, c = await amake()
     call = asyncio.create_task(acall(c, STATIC_KEY, "capy_delegate", {"task": "Quick one", "wait_s": 10}))
     await eventually(lambda: capy.streams(CAPTAIN))
+    capy.ack(CAPTAIN)
     capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Answer"}, id="01B")
     out = payload(await call)
     assert [i["text"] for i in out["replies"]] == ["Answer"]
@@ -59,7 +61,9 @@ async def test_tasks_extension_end_to_end_and_across_restart(amake, capy):
     assert got["resultType"] == "complete" and got["status"] == "working" and CAPTAIN in got["statusMessage"]
     assert (await arpc(c, CHANNEL_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["error"]["code"] == -32602
     await eventually(lambda: capy.streams(CAPTAIN))
-    capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": f"Report attached.\nswitchboard: done {tid}"}, id="01B")
+    capy.ack(CAPTAIN)
+    capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Report attached."}, id="01B")
+    capy.emit(CAPTAIN, "status", {"threadId": CAPTAIN, "status": "idle"})
     await eventually(lambda: not core.inbox.handle(tid)["open"])
     await core._test_close()
     core2, c2 = await amake()
@@ -91,6 +95,7 @@ async def test_channel_long_poll_sees_every_agent_without_moving_their_cursor(am
     head = core.inbox.head()
     poll = asyncio.create_task(c.get("/inbox/poll", params={"after": head, "timeout": 10}, headers={"Authorization": f"Bearer {CHANNEL_KEY}"}))
     await asyncio.sleep(0.1)
+    capy.ack(CAPTAIN)
     capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Hello from Capy"}, id="01B")
     r = await poll
     assert r.status_code == 200 and [(i["owner"], i["text"]) for i in r.json()["items"]] == [("capy", "Hello from Capy")]
@@ -118,6 +123,7 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
                 async for line in lines:
                     if line.startswith("event: ready"):
                         break
+                capy.ack(CAPTAIN)
                 capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "pushed"}, id="01B")
                 event_id = None
                 async for line in lines:

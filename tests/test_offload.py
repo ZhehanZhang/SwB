@@ -16,7 +16,7 @@ def test_delegate_follows_the_global_route_to_the_captain(make, capy):
     assert out["thread_id"] == CAPTAIN and out["route"] == "global" and "used_today" not in out and out["handle"].startswith("h_")
     _, _, body = last(capy, "POST", f"threads/{CAPTAIN}/message")
     assert body["text"].startswith("Add a status check for switchboard\n") and "switchboard" not in body["text"].split("\n")[0][:12] and "Repos: example-org/status-service" in body["text"]
-    assert f"switchboard: done {out['handle']}" in body["text"] and body["delivery"] == "queue" and len(body["clientKey"]) <= 64
+    assert "switchboard: done" not in body["text"] and out["handle"] not in body["text"] and body["delivery"] == "queue" and len(body["clientKey"]) <= 64
     row = core.audit.recent(action="delegate")[0]
     assert row["source"] == "claude" and row["outcome"] == "ok" and row["ref"] == CAPTAIN and row["origin"] == "mcp"
     h = core.inbox.handle(out["handle"])
@@ -51,7 +51,7 @@ def test_repo_allowlist_comes_from_project_links(make, capy):
     infra(core)
     assert "not linked" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "repos": ["example-org/site"]}))
     assert "no project" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "acme"}))
-    assert not [x for x in capy.requests if x[0] == "POST"]
+    assert not [x for x in capy.requests if x[0] == "POST" and not x[1].endswith("/send-now")]
     assert [d["outcome"] for d in core.audit.recent(action="delegate")] == ["refused", "refused"]
 
 
@@ -160,24 +160,76 @@ def test_api_key_never_appears_in_logs_or_health(make, caplog):
     assert CAPY_KEY not in caplog.text and CAPY_KEY not in json.dumps(c.get("/healthz").json())
 
 
-def test_optional_send_key_sends_and_the_audit_names_it(make, capy):
-    from conftest import SERVICE_KEY, default_env, last_auth
-    cfg = base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01, "send_key_env": "CAPY_API_KEY_SERVICE"}})
-    _, c = make(config=cfg)
-    assert "CAPY_API_KEY_SERVICE" in " ".join(c.get("/healthz").json()["problems"])
-    core2, c2 = make(config=cfg, env={**default_env(), "CAPY_API_KEY_SERVICE": SERVICE_KEY})
-    out = payload(call(c2, STATIC_KEY, "capy_delegate", {"task": "Ship it"}))
-    assert c2.get("/healthz").json()["destinations"]["capy"]["sends_as"] == "CAPY_API_KEY_SERVICE"
+def test_sends_go_as_the_service_user_and_reads_as_the_main_key(make, capy):
+    from conftest import SERVICE_KEY, last_auth
+    core, c = make()
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Ship it"}))
+    health = c.get("/healthz").json()["destinations"]["capy"]
+    assert health["sends_as"] == "CAPY_API_KEY_SERVICE" and health["identity"] == "service" and health["sends_as_agents"]["claude"] == "CAPY_API_KEY_SERVICE"
     assert last_auth(capy, "POST", f"threads/{CAPTAIN}/message") == SERVICE_KEY
     assert last_auth(capy, "GET", f"threads/{CAPTAIN}/messages") == CAPY_KEY
-    call(c2, STATIC_KEY, "capy_reply", {"thread_id": out["handle"], "text": "and docs"})
-    rows = core2.audit.recent(destination="capy", limit=5)
+    call(c, STATIC_KEY, "capy_reply", {"thread_id": out["handle"], "text": "and docs"})
+    rows = core.audit.recent(destination="capy", limit=5)
     assert {(r["action"], r["detail"]) for r in rows if r["action"] in ("delegate", "reply")} == {("delegate", "sent as CAPY_API_KEY_SERVICE"), ("reply", "sent as CAPY_API_KEY_SERVICE")}
 
 
-def test_without_a_send_key_messages_go_as_the_main_key(make, capy):
-    from conftest import last_auth
-    core, c = make()
+def test_without_a_service_key_sends_are_refused_never_sent_as_the_owner(make, capy):
+    from conftest import default_env
+    env = {k: v for k, v in default_env().items() if k != "CAPY_API_KEY_SERVICE"}
+    core, c = make(env=env)
+    assert "CAPY_API_KEY_SERVICE" in " ".join(c.get("/healthz").json()["problems"])
+    assert "never sends as CAPY_API_KEY" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "Ship it"}))
+    assert not [r for r in capy.requests if r[0] == "POST" and r[1].endswith("/message")]
+    assert core.audit.recent(action="delegate")[0]["outcome"] != "ok"
+
+
+def test_identity_personal_opts_in_to_sending_as_the_main_key(make, capy):
+    from conftest import default_env, last_auth
+    env = {k: v for k, v in default_env().items() if k != "CAPY_API_KEY_SERVICE"}
+    cfg = base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01, "identity": "personal"}})
+    core, c = make(config=cfg, env=env)
     call(c, STATIC_KEY, "capy_delegate", {"task": "Ship it"})
     assert last_auth(capy, "POST", f"threads/{CAPTAIN}/message") == CAPY_KEY
-    assert core.audit.recent(action="delegate")[0]["detail"] == "sent as CAPY_API_KEY"
+    assert core.audit.recent(action="delegate")[0]["detail"] == "sent as CAPY_API_KEY" and not c.get("/healthz").json()["problems"]
+
+
+def test_an_agent_key_sends_for_that_agent_and_falls_back_to_the_service_user_only(make, capy):
+    from conftest import SERVICE_KEY, default_env, last_auth
+    claude_key, cc_key = "capy_as_claude_" + "z" * 30, "capy_as_cc_" + "q" * 30
+    capy.keys |= {claude_key, cc_key}
+    core, c = make(env={**default_env(), "CAPY_API_KEY_AS_CLAUDE": claude_key, "CAPY_API_KEY_AS_CLAUDE_CODE": cc_key})
+    tok = sign_in(c)["access_token"]
+    health = c.get("/healthz").json()["destinations"]["capy"]
+    assert health["sends_as_agents"]["claude"] == "CAPY_API_KEY_AS_CLAUDE" and health["sends_as_agents"]["capy"] == "CAPY_API_KEY_SERVICE"
+    assert health["sends_as_agents"]["claude-code"] == "CAPY_API_KEY_AS_CLAUDE_CODE"
+    out = payload(call(c, tok, "capy_delegate", {"task": "Ship it"}))
+    assert last_auth(capy, "POST", f"threads/{CAPTAIN}/message") == claude_key
+    capy.refused_keys.add(claude_key)
+    call(c, tok, "capy_reply", {"thread_id": out["handle"], "text": "and docs"})
+    assert last_auth(capy, "POST", f"threads/{CAPTAIN}/message") == SERVICE_KEY
+    assert core.audit.recent(action="reply")[0]["detail"] == "sent as CAPY_API_KEY_SERVICE: CAPY_API_KEY_AS_CLAUDE was refused (403)"
+    fb = core.audit.recent(action="send_key_fallback")
+    assert len(fb) == 1 and fb[0]["source"] == "claude" and fb[0]["target"] == "CAPY_API_KEY_AS_CLAUDE"
+    capy.refused_keys.add(SERVICE_KEY)
+    n = len([r for r in capy.auths if r[2] == CAPY_KEY and r[0] == "POST"])
+    assert "every send key was refused" in error_text(call(c, tok, "capy_reply", {"thread_id": out["handle"], "text": "third"}))
+    assert len([r for r in capy.auths if r[2] == CAPY_KEY and r[0] == "POST"]) == n
+    assert core.audit.recent(action="reply")[0]["outcome"] != "ok"
+    assert core.audit.recent(action="send_refused")[0]["detail"] == "not sent: CAPY_API_KEY_AS_CLAUDE was refused (403), CAPY_API_KEY_SERVICE was refused (403)"
+
+
+async def test_key_checks_report_project_and_device_access(amake, capy):
+    from conftest import SERVICE_KEY, default_env, eventually
+    a, b = "capy_as_gemini_" + "g" * 30, "capy_as_slack_" + "s" * 30
+    capy.keys |= {a, b}
+    capy.hidden_from[a] = {CAPTAIN}
+    capy.device_denied.add(b)
+    core, c = await amake(env={**default_env(), "CAPY_API_KEY_AS_GEMINI": a, "CAPY_API_KEY_AS_SLACK": b})
+    dest = core.destination("capy")
+    await eventually(lambda: len(dest.key_checks) == 4)
+    checks = {env: v["status"] for env, v in dest.key_checks.items()}
+    assert checks == {"CAPY_API_KEY": "ok", "CAPY_API_KEY_SERVICE": "ok", "CAPY_API_KEY_AS_GEMINI": "no project access", "CAPY_API_KEY_AS_SLACK": "no device access"}
+    assert CAPTAIN in dest.key_checks["CAPY_API_KEY_AS_GEMINI"]["detail"] and "DeviceAccessDenied" in dest.key_checks["CAPY_API_KEY_AS_SLACK"]["detail"]
+    health = (await c.get("/healthz")).json()
+    assert health["status"] == "degraded" and health["destinations"]["capy"]["send_keys"]["CAPY_API_KEY_AS_SLACK"]["status"] == "no device access"
+    assert SERVICE_KEY not in json.dumps(health) and a not in json.dumps(health)

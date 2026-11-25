@@ -131,6 +131,11 @@ class CapyAPI:
 
     # Captains and projects
 
+    async def probe_send(self, thread_id: str) -> None:
+        """A no-op on the send path: send-now for an event that never existed answers 200 tooLate when the key may
+        send to the thread, and 403 (capy/DeviceAccessDenied or capy/Forbidden) when it may not."""
+        await self.request("POST", f"threads/{thread_id}/messages/01M89000000000000000000000/send-now")
+
     async def list_captains(self) -> list[dict[str, Any]]:
         return (await self.request("GET", "captains", params={"limit": 50})).get("items", [])
 

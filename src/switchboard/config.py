@@ -18,6 +18,8 @@ DEFAULT_REDIRECTS = [
     "https://chatgpt.com/connector_platform_oauth_redirect",
     "https://chatgpt.com/connector/oauth/*",
     "https://capy.ai/web/callbacks/mcp",
+    "https://oauth-redirect.googleusercontent.com/r/*",
+    "https://oauth-redirect.googleusercontent.com/a/*",
     "http://localhost/*",
     "http://127.0.0.1/*",
 ]

@@ -103,7 +103,7 @@ class Inbox:
         )
 
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
-             limit: int = 100, reader: str | None = None, advance: bool = True) -> dict[str, Any]:
+             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
 
         owner None reads every caller's items (the Claude Code channel does this). Each reader keeps its own cursor,
@@ -124,6 +124,9 @@ class Inbox:
         if destination:
             where.append("destination = ?")
             args.append(destination)
+        if project:
+            where.append("handle IN (SELECT h.handle FROM handles h WHERE h.project = ?)")
+            args.append(project)
         rows = self.store.q(f"SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
         cursor = rows[-1]["id"] if rows else start
         if rows and advance:
@@ -135,14 +138,14 @@ class Inbox:
         }
 
     async def wait(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
-                   timeout: float = 20.0, reader: str | None = None, advance: bool = True) -> dict[str, Any]:
+                   timeout: float = 20.0, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
         """Long-poll: return as soon as something new arrives, or an empty result when the timeout runs out."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + max(0.0, timeout)
         cond = self._condition()
         async with cond:
             while True:
-                out = self.read(owner=owner, handle=handle, since=since, destination=destination, reader=reader, advance=advance)
+                out = self.read(owner=owner, handle=handle, since=since, destination=destination, reader=reader, advance=advance, project=project)
                 remaining = deadline - loop.time()
                 if out["items"] or remaining <= 0:
                     out["timed_out"] = not out["items"]

@@ -98,6 +98,17 @@ def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]],
     ]
     items = "".join(_row(a, b, "On" if on else "Off", on) for a, b, on in rows)
     items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
+    if capy and capy.get("sends_as"):
+        checks = capy.get("send_keys") or {}
+
+        def sender_row(label: str, env: str) -> str:
+            c = checks.get(env) or {"status": "unchecked", "detail": "not checked yet"}
+            if not env:
+                return _row(f"Sends as: {label}", "no key may send for this agent", "none", False)
+            return _row(f"Sends as: {label}", f"{c['status']}: {c.get('detail', '')}", env, c["status"] == "ok")
+
+        items += sender_row("default", capy["sends_as"])
+        items += "".join(sender_row(a, env) for a, env in (capy.get("sends_as_agents") or {}).items())
     problems = "".join(notice(p, "warn") for p in health["problems"])
     status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in with SSO as {html.escape(email)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')

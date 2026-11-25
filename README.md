@@ -95,14 +95,25 @@ changes. `destinations.capy.default_route` seeds the global route once on a fres
 (`GET /threads/{id}/stream`, resuming with `Last-Event-ID` after any drop, with exponential backoff plus jitter) and files
 each reply, question for the owner, status change and final result in the caller's **inbox**. Handles and stream
 cursors live in SQLite, so following resumes after a restart. A new thread is finished when it comes to rest after
-replying. A message to a Captain or an existing thread asks the agent to end its final reply with
-`switchboard: done <handle>`, since a Captain thread keeps running after it answers.
+replying.
+
+Correlation is server-side only. Nothing in the message asks the model to keep, echo or paste a token, handle or
+marker. Each delegation is bound when it is created to the authenticated caller (OAuth client or key, giving the agent
+name), the project, and the ids Capy returns for it: the new thread's id, or for a message into a Captain or an
+existing thread, the message's `clientKey` and id. In a shared thread, assistant output belongs to the delegation
+whose message is the latest user entry in Capy's stream. A later message from anyone else ends that, so a Captain's
+answer to the owner never lands in an agent's inbox. That delegation finishes when the thread comes to rest (idle or
+waiting) after replying. Handles are optional: `capy_wait` and `capy_inbox` with no arguments return everything
+pending for the caller (`project` narrows it), and a caller can only ever read its own items. Using another caller's
+handle gets "no handle". Each item has a `from` taken from Capy's data: the thread id and title, the entry's author and
+message id, and Capy's `sender` when another agent sent it. Text in a message never changes it. `agent_send` leaves
+a message in another agent's mailbox, attributed to the calling connection. That is the start of the A2A mailbox.
 
 Three ways to read the inbox, depending on the client:
 
 | Client | How the answer comes back |
 | - | - |
-| claude.ai, Claude Desktop, ChatGPT | The tool descriptions teach **delegate, then `capy_wait(handle)`, then answer**. `capy_wait` long-polls and returns as soon as something arrives. claude.ai cuts tool calls at 240 s, so it defaults to 60 s and is capped at 200 s; if it times out, the model says Capy is still working and checks again. `capy_inbox` never blocks. |
+| claude.ai, Claude Desktop, ChatGPT | The tool descriptions teach **delegate, then `capy_wait()`, then answer**. `capy_wait` long-polls and returns as soon as something arrives. claude.ai cuts tool calls at 240 s, so it defaults to 60 s and is capped at 200 s; if it times out, the model says Capy is still working and checks again. `capy_inbox` never blocks. |
 | Clients with MCP Tasks | When a `tools/call` advertises `io.modelcontextprotocol/tasks` in its per-request capabilities (protocol 2026-07-28), `capy_delegate` answers with a task whose id is the handle, and `tasks/get` completes it with Capy's final reply. Per Anthropic's docs this covers the Claude Code CLI (v2.1.304+), VS Code and local Desktop app sessions (v2.1.331+), Claude Code cloud sessions, and new chats in the unified Claude app on Pro, Max, Ultra and Team when switchboard is added as a claude.ai connector. Project threads, incognito chats, and servers loaded from `.mcp.json` in cloud sessions get no tasks and fall back to the handle plus `capy_wait`. `tasks/cancel` stops following (the Capy thread keeps running). |
 | Claude Code, open session | The **channel** below pushes replies straight into the session. |
 
@@ -194,13 +205,16 @@ Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where
     gets the existing handle back instead of a second thread.
   - `capy_reply` and `capy_wait` are never limited. `daily_cap` is an optional hard daily limit, off by default.
   - Retries the API sees again are also deduplicated through its `requestId` / `clientKey`.
-- Capy attributes a message to the API key that sent it. To keep relayed work from showing as the owner's own messages,
-  set `destinations.capy.send_key_env: CAPY_API_KEY_SERVICE` and put a service user's key in `.env`. That key then
-  sends messages and starts threads, while `CAPY_API_KEY` keeps doing the reads. The audit log records which key sent
-  each delegation and reply (`sent as ...`), and `/healthz` shows `sends_as`. It is off in this deployment: a service
-  user only sees what is shared with it, so a test key found no Captains (`GET /captains` was empty) and got 404 on
-  the owner's private Captain threads. Sends stay on the owner's key unless those Captains are shared with the
-  service user.
+- Capy attributes a message to the API key that sent it. `CAPY_API_KEY` does the reads and stream following. Sends
+  (delegations, replies, new threads) try, in order, the agent's own `CAPY_API_KEY_AS_<AGENT>` (for example
+  `CAPY_API_KEY_AS_CLAUDE` or `CAPY_API_KEY_AS_CLAUDE_CODE`), then the service user's key (`send_key_env`, default
+  `CAPY_API_KEY_SERVICE`). A 401 or 403 moves to the next key and writes a `send_key_fallback` row. When every key
+  is refused, the send fails with a `send_refused` row. Relays never send as `CAPY_API_KEY` unless
+  `destinations.capy.identity: personal` is set (one key, sends show as you). A service user only sees what is shared
+  with it, so share the Captains with it and give it access to the device they run on. On startup and every 30 minutes,
+  each key is checked against `GET /captains` and a send-path no-op on each routed Captain or thread. `/healthz`
+  (`send_keys`) and the root page then show it as ok, no project access, no device access, or rejected, and they show
+  which key sends for each agent.
 - Bearer sign-in failures are in the audit log without the key: `auth_failure` records a wrong token's length and
   paste mistakes (whitespace, quotes, a doubled "Bearer") or a non-Bearer header, and `auth_missing` records a
   request with no header, at most once per address per 10 minutes.

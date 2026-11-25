@@ -48,7 +48,7 @@ def base_config(**over: Any) -> dict[str, Any]:
 
 
 def default_env() -> dict[str, str]:
-    return {"CAPY_API_KEY": CAPY_KEY, "SWITCHBOARD_KEY_CAPY": STATIC_KEY, "SWITCHBOARD_KEY_CHANNEL": CHANNEL_KEY}
+    return {"CAPY_API_KEY": CAPY_KEY, "CAPY_API_KEY_SERVICE": SERVICE_KEY, "SWITCHBOARD_KEY_CAPY": STATIC_KEY, "SWITCHBOARD_KEY_CHANNEL": CHANNEL_KEY}
 
 
 class Clock:
@@ -80,6 +80,10 @@ class FakeCapy:
         self.connects: list[tuple[str, str | None]] = []
         self.stream_status: dict[str, int] = {}
         self.keys = {CAPY_KEY, SERVICE_KEY}
+        self.refused_keys: set[str] = set()
+        self.device_denied: set[str] = set()
+        self.client_keys: dict[str, str] = {}
+        self.hidden_from: dict[str, set[str]] = {}
         self.auths: list[tuple[str, str, str]] = []
         self.captains: list[dict[str, Any]] = [
             {"id": CAPTAIN, "code": "ZINF-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
@@ -101,6 +105,10 @@ class FakeCapy:
     def emit(self, tid: str, event: str, data: dict[str, Any], id: str | None = None) -> None:
         self.q(tid).put_nowait(sse(event, data, id))
 
+    def ack(self, tid: str, id: str = "01A5") -> None:
+        """Emit the user entry for the last message switchboard sent to tid, as Capy's stream shows it: with its clientKey."""
+        self.emit(tid, "transcript", {"id": "u" + id, "source": "user", "text": "(task)", "clientKey": self.client_keys[tid]}, id=id)
+
     def drop(self, tid: str) -> None:
         self.q(tid).put_nowait(None)
 
@@ -116,6 +124,9 @@ class FakeCapy:
         self.requests.append((request.method, path, body))
         assert request.headers["authorization"] in {f"Bearer {k}" for k in self.keys}
         self.auths.append((request.method, path, request.headers["authorization"][7:]))
+        if request.headers["authorization"][7:] in self.refused_keys:
+            return httpx.Response(403, json={"_tag": "capy/Forbidden", "message": "no access to this thread"})
+        key = request.headers["authorization"][7:]
         p = path.removeprefix("/api/v1/")
         m = request.method
         if (mm := re.fullmatch(r"threads/([^/]+)/stream", p)):
@@ -134,6 +145,10 @@ class FakeCapy:
                     yield item
 
             return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=frames())
+        if re.fullmatch(r"threads/([^/]+)/messages/([^/]+)/send-now", p) and m == "POST":
+            if key in self.device_denied:
+                return httpx.Response(403, json={"_tag": "capy/DeviceAccessDenied", "deviceId": "dev_1", "deviceName": "your-host", "status": "none", "held": False})
+            return httpx.Response(200, json={"outcome": "tooLate"})
         if m == "POST" and p == "threads":
             tid = "jam_NEW" + hashlib.sha256(body["requestId"].encode()).hexdigest()[:8].upper()
             self.threads[tid] = self.thread(tid, body["projectId"], title=body.get("title") or "new", status="working")
@@ -146,6 +161,8 @@ class FakeCapy:
             if mm.group(1) not in self.threads:
                 return httpx.Response(404, json={"_tag": "capy/ThreadNotFound"})
             self.messages.setdefault(mm.group(1), []).append({"id": "01AU", "source": "user", "text": body["text"], "createdAt": "x"})
+            if body.get("clientKey"):
+                self.client_keys[mm.group(1)] = body["clientKey"]
             return httpx.Response(200, json={"id": "01MSG" + "0" * 21, "deduped": False})
         if (mm := re.fullmatch(r"threads/([^/]+)/messages", p)) and m == "GET":
             items = self.messages.get(mm.group(1), [])
@@ -175,7 +192,7 @@ class FakeCapy:
                 self.thread("jam_CREW3", OTHER_PROJECT, title="other project work", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
             ]})
         if p == "captains":
-            return httpx.Response(200, json={"items": self.captains, "cursor": None})
+            return httpx.Response(200, json={"items": [c for c in self.captains if c["id"] not in self.hidden_from.get(key, set())], "cursor": None})
         if (mm := re.fullmatch(r"projects/([^/]+)", p)):
             return httpx.Response(200, json={"id": mm.group(1), "name": "Infra", "code": "ZINF"}) if mm.group(1) in (PROJECT, OTHER_PROJECT) else httpx.Response(404, json={"_tag": "capy/ProjectNotFound"})
         if p == "projects":

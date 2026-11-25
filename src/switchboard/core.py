@@ -12,7 +12,7 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 from .audit import Audit, iso
-from .auth import Auth, Principal
+from .auth import AGENT_LABELS, Auth, Principal
 from .config import Config, load_config
 from .destinations import Action, Call, Destination, DestinationError
 from .destinations import load as load_destination
@@ -119,6 +119,33 @@ class Switchboard:
         }
 
     # Routing an action to a destination -----------------------------------------------------
+
+    def known_agents(self) -> list[str]:
+        """Agent names a message can be addressed to: OAuth agents, bearer-key names, and agents named in routes."""
+        names = set(AGENT_LABELS) | {k.name for k in self.cfg.static_keys} | set(self.cfg.source_names.values())
+        names |= {r["agent"] for r in self.store.q("SELECT DISTINCT agent FROM routes WHERE agent IS NOT NULL AND agent != ''")}
+        return sorted(names)
+
+    async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None) -> dict[str, Any]:
+        """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text."""
+        to = (to or "").strip().lower()
+        if to not in self.known_agents():
+            raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
+        if to == principal.source:
+            raise CoreError("that is you; agent_send goes to another agent")
+        text = (text or "").strip()
+        if not text:
+            raise CoreError("text is empty")
+        p = self.project(project)
+        sender = {"kind": "agent", "agent": principal.source, "label": AGENT_LABELS.get(principal.source, principal.source),
+                  "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin}
+        handle = self.inbox.open_handle(owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
+                                        meta={"from": sender}, status="delivered")
+        self.inbox.update_handle(handle, open=False)
+        await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender})
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
+                          outcome="ok", target=to, ref=handle, excerpt=text)
+        return {"to": to, "handle": handle, "delivered": True, "project": p.slug if p else None}
 
     def destination(self, name: str) -> Destination:
         d = self.destinations.get(name)
