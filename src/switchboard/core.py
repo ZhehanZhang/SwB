@@ -186,9 +186,11 @@ class Switchboard:
         return sorted(names)
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None) -> dict[str, Any]:
-        """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text."""
+        """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
+        A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack."""
         to = (to or "").strip().lower()
-        if to not in self.known_agents():
+        original = self.inbox.handle(in_reply_to) if in_reply_to else None
+        if to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         if to == principal.source:
             raise CoreError("that is you; agent_send goes to another agent")

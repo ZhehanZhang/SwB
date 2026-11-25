@@ -9,6 +9,7 @@ No caller of this destination can approve a write.
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
@@ -122,6 +123,7 @@ class SlackActions(Block):
             Action("request_write", "Ask to post to Slack", "Queue a post for the owner's approval.", self.request_write),
             Action("write_request", "Slack write request", "One of your write requests.", self.write_request, read_only=True),
             Action("write_requests", "Slack write requests", "Your write requests.", self.write_requests, read_only=True),
+            Action("reply", "Reply in Slack", "Answer the latest message addressed to you on a Slack conversation, in its thread.", self.reply),
         ]
 
     async def me(self, call: Call) -> dict[str, Any]:
@@ -231,6 +233,29 @@ class SlackActions(Block):
         if not text.strip():
             raise DestinationError("text is empty")
         return await self._write(call, workspace, identity, "post_message", {"channel": channel, "text": text, "thread_ts": thread_ts or None, "reply_broadcast": reply_broadcast}, persona)
+
+    async def reply(self, call: Call, *, ref: str, text: str, **_: Any) -> dict[str, Any]:
+        """reply on a Slack conversation (the inbox handle a workspace's events arrive on): posted in the thread of the
+        latest message there that was addressed to you, as your persona; a private target's answer in a shared channel
+        goes to the owner's DM instead."""
+        h = self.core.inbox.handle(ref)
+        if h is None or h["owner"] != call.principal.source:
+            raise DestinationError(f"no conversation {ref!r}")
+        src: dict[str, Any] | None = None
+        target = None
+        for row in self.core.store.q("SELECT data FROM inbox WHERE handle = ? AND kind = 'slack_event' ORDER BY id DESC LIMIT 50", (ref,)):
+            d = json.loads(row["data"])
+            if d.get("addressed_to_us"):
+                src, target = d["from"], d.get("target")
+                break
+        if src is None:
+            raise DestinationError("nothing on this conversation was addressed to you; use slack_post with a channel and thread_ts")
+        place = await self.need().reply_place(src["workspace"], src["channel"], src.get("thread_ts") or src["ts"], target)
+        if place is None:
+            raise DestinationError("this is a private target in a shared channel and the owner's DM can't be opened")
+        channel, thread_ts, _dm = place
+        out = await self.post(call, workspace=src["workspace"], channel=channel, text=text, thread_ts=thread_ts or "")
+        return {**out, "conversation": ref, "posted_in": channel, "thread_ts": thread_ts}
 
     async def react(self, call: Call, *, workspace: str, channel: str, ts: str, name: str, identity: str = "") -> dict[str, Any]:
         return await self._write(call, workspace, identity, "add_reaction", {"channel": channel, "ts": ts, "name": name.strip(":")})

@@ -26,7 +26,7 @@ class SlackBlock(SlackIntake, SlackActions):
         kind="both",
         level_out="L3",
         level_in="events",
-        verbs={},
+        verbs={"reply": "reply"},
         tools=("workspaces", "channels", "search", "history", "thread", "watched", "events", "personas", "targets", "post", "react",
                "request_write", "write_request", "write_requests", "wait"),
         targets=(TargetKind("channel"),),

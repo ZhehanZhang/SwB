@@ -294,6 +294,18 @@ class SlackEngine:
         name = rt.channel_names.get(channel) if rt else None
         return self.visibility.rule(*self.channel_resources(workspace, channel, name)) != "private"
 
+    async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None) -> tuple[str, str | None, bool] | None:
+        """Where a reply from target goes: its Slack thread, or the owner's DM when a private target answers in a shared
+        channel. None when that DM can't be opened."""
+        if not target or self.visibility.rule(f"target:{target}") != "private" or not self.channel_shared(workspace, channel):
+            return channel, thread_ts, False
+        owner = next(iter(sorted(self.config.workspaces[workspace].owner_user_ids)), None)
+        rt = self.runtimes.get(workspace)
+        if owner is None or rt is None or "bot" not in rt.clients:
+            return None
+        dm = await rt.clients["bot"].conversations_open(users=owner)
+        return dm["channel"]["id"], None, True
+
     async def note_context(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> None:
         """A non-owner's message to something private: filed as a context item in the target's inbox, never a task,
         a wake, a sink event or a reply. The sender gets a neutral ack."""

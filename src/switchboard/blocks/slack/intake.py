@@ -187,10 +187,10 @@ class SlackIntake(Block):
             out = await self.core.send(self.principal, **kw)
         except Exception as exc:
             log.warning("slack %s: delegating %s to %s failed: %s", push["workspace"], push["id"], target.slug, exc)
-            engine.store.audit(f"agent:{AGENT}", "route_failed", push["workspace"], event=push["id"], target=target.slug, error=str(exc)[:300])
+            engine.store.audit(f"agent:{AGENT}", "route_failed", push["workspace"], message=push["id"], target=target.slug, error=str(exc)[:300])
             return
         engine.store.add_relay(out["handle"], push["workspace"], push["channel"], push["thread_ts"] or push["ts"], target.slug)
-        engine.store.audit(f"agent:{AGENT}", "routed", push["workspace"], event=push["id"], target=target.slug, handle=out["handle"])
+        engine.store.audit(f"agent:{AGENT}", "routed", push["workspace"], message=push["id"], target=target.slug, handle=out["handle"])
 
     async def _relay_loop(self) -> None:
         while True:
@@ -208,21 +208,22 @@ class SlackIntake(Block):
         """Post the final reply to a routed Slack message back in its thread, as the target's persona."""
         engine = self.engine
         assert engine is not None
-        if item.get("kind") != "final" or not (item.get("text") or "").strip():
+        if item.get("kind") not in ("final", "message") or not (item.get("text") or "").strip():
             return
-        r = engine.store.relay(item["handle"])
+        data = item.get("data") if isinstance(item.get("data"), dict) else item
+        r = engine.store.relay(data.get("in_reply_to") or item["handle"]) if item.get("kind") == "message" else engine.store.relay(item["handle"])
         if r is None:
             return
         target = engine.targets.get(r["target"])
-        channel, thread_ts, text = r["channel"], r["thread_ts"], item["text"]
-        if engine.visibility.rule(f"target:{r['target']}") == "private" and engine.channel_shared(r["workspace"], r["channel"]):
-            owner = next(iter(sorted(engine.config.workspaces[r["workspace"]].owner_user_ids)), None)
-            rt = engine.runtimes.get(r["workspace"])
-            if owner is None or rt is None or "bot" not in rt.clients:
-                engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], target=r["target"], reason="private target, shared channel, no owner DM")
-                return
-            dm = await rt.clients["bot"].conversations_open(users=owner)
-            channel, thread_ts = dm["channel"]["id"], None
+        replier = ((data.get("from") or {}).get("agent") or "") if item.get("kind") == "message" else ""
+        place = await engine.reply_place(r["workspace"], r["channel"], r["thread_ts"], r["target"])
+        if place is None:
+            engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], target=r["target"], reason="private target, shared channel, no owner DM")
+            return
+        channel, thread_ts, to_dm = place
+        text = item["text"]
+        if to_dm:
             text = f"Reply from {target.name if target else r['target']} to your message in a shared channel:\n\n{item['text']}"
-        key = Grant(id=AGENT, persona=target.persona if target else None, allow_persona_override=False, allowed_personas=None, scopes={r["workspace"]: ("bot",)})
+        persona = target.persona if target and target.persona else (replier if replier in engine.personas() else None)
+        key = Grant(id=AGENT, persona=persona, allow_persona_override=False, allowed_personas=None, scopes={r["workspace"]: ("bot",)})
         await engine.gate.submit(key, r["workspace"], "bot", "post_message", {"channel": channel, "text": text[: engine.config.max_text_chars], "thread_ts": thread_ts})

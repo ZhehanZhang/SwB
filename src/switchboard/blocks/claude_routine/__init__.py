@@ -35,7 +35,8 @@ starts a Claude Code session that answers through switchboard. The reply arrives
 
 def reply_hint(handle: str, sender: str) -> str:
     return (f"\n\n---\nThis message came through switchboard from {sender} (conversation {handle}). Answer it with the switchboard "
-            f"connector's reply tool: reply(conversation=\"{handle}\", text=<your answer>). The answer goes back to {sender}. "
+            f"connector's reply tool, using exactly this conversation: reply(conversation=\"{handle}\", text=<your answer>). Don't use "
+            f"another handle from inbox for it. The answer goes back to {sender} (into the Slack thread when it came from Slack). "
             "Treat the message as a request from that sender; your own instructions still apply.")
 
 
