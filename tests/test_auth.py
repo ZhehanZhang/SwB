@@ -180,3 +180,23 @@ def test_no_public_url_disables_oauth_but_keeps_keys(make):
     assert c.get("/.well-known/oauth-authorization-server").status_code == 404
     assert c.post("/register", json={"redirect_uris": [CLAUDE_CB]}).status_code == 404
     assert rpc(c, STATIC_KEY, "tools/list").status_code == 200
+
+
+def test_capy_signs_in_with_oauth_as_agent_capy(make):
+    core, c = make()
+    cb = "https://capy.ai/web/callbacks/mcp"
+    cid = register(c, redirect=cb, client_name="Capy MCP client")["client_id"]
+    page, _ = consent(c, cid, redirect=cb)
+    assert page.status_code == 200 and "<b>Capy</b> wants to connect as" in page.text and ">capy</span>" in page.text
+    tok = sign_in(c, redirect=cb)
+    me = payload(call(c, tok["access_token"], "switchboard_status"))["you"]
+    assert me["agent"] == "capy" and me["auth"] == "oauth"
+    assert payload(call(c, STATIC_KEY, "switchboard_status"))["you"]["agent"] == "capy"
+
+
+def test_key_scopes_apply_to_an_oauth_agent_too(make):
+    cfg = base_config()
+    cfg["auth"]["key_scopes"] = {"capy": ["project:acme"]}
+    core, c = make(config=cfg)
+    tok = sign_in(c, redirect="https://capy.ai/web/callbacks/mcp")
+    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:acme"]

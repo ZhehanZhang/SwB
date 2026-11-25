@@ -17,10 +17,11 @@ DEFAULT_REDIRECTS = [
     "https://claude.com/api/mcp/auth_callback",
     "https://chatgpt.com/connector_platform_oauth_redirect",
     "https://chatgpt.com/connector/oauth/*",
+    "https://capy.ai/web/callbacks/mcp",
     "http://localhost/*",
     "http://127.0.0.1/*",
 ]
-DEFAULT_CIMD_HOSTS = ["claude.ai", "claude.com", "anthropic.com", "chatgpt.com", "openai.com"]
+DEFAULT_CIMD_HOSTS = ["claude.ai", "claude.com", "anthropic.com", "chatgpt.com", "openai.com", "capy.ai"]
 
 NAMESPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}(/[a-z0-9][a-z0-9_.-]{0,59}){0,2}$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")

@@ -131,6 +131,9 @@ def host_allowed(host: str | None, hosts: tuple[str, ...]) -> bool:
     return any(host == h or host.endswith("." + h) for h in hosts)
 
 
+AGENT_LABELS = {"claude": "Claude", "chatgpt": "ChatGPT", "capy": "Capy"}
+
+
 def source_for(redirect_uri: str, client: Client, names: dict[str, str]) -> str:
     host = (urlparse(redirect_uri).hostname or "").lower()
     cimd_host = (urlparse(client.client_id).hostname or "").lower() if client.kind == "cimd" else ""
@@ -141,6 +144,8 @@ def source_for(redirect_uri: str, client: Client, names: dict[str, str]) -> str:
         return "claude"
     if host_allowed(host, ("chatgpt.com", "openai.com")) or host_allowed(cimd_host, ("chatgpt.com", "openai.com")):
         return "chatgpt"
+    if host_allowed(host, ("capy.ai",)) or host_allowed(cimd_host, ("capy.ai",)):
+        return "capy"
     slug = re.sub(r"[^a-z0-9]+", "-", (client.name or "").lower()).strip("-")[:40]
     return slug or "local"
 
@@ -177,7 +182,7 @@ class Auth:
         )
         if row is None or row["expires_at"] < self.store.clock() or row["resource"] != self.cfg.resource:
             return None
-        return Principal(source=row["source"], client_id=row["client_id"], kind="oauth")
+        return Principal(source=row["source"], client_id=row["client_id"], kind="oauth", scopes=self.cfg.key_scopes.get(row["source"]))
 
     def challenge_header(self, error: str | None = None) -> str:
         parts = []
@@ -549,7 +554,7 @@ class Auth:
                 return RedirectResponse(_append(params["redirect_uri"], q), status_code=302)
 
         source = source_for(params["redirect_uri"], c, self.cfg.source_names)
-        who = html.escape(c.name or c.client_id)
+        who = html.escape(AGENT_LABELS.get(source) or c.name or c.client_id)
         dest = html.escape(urlparse(params["redirect_uri"]).netloc)
         line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and route work to the destinations this switchboard connects, such as Capy."
         signed = f'<p class="item-line">Signed in with SSO as {html.escape(email)}</p>'

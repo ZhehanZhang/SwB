@@ -240,7 +240,10 @@ same type, hairline cards, the Arc backdrop, the signature and the shared theme 
   sign in with SSO, approve.
 - **ChatGPT**: Settings → Apps → Advanced settings → Developer mode, then Create app → `https://swb.example.com/mcp`, OAuth.
 - **Claude Code**: `claude mcp add --transport http switchboard https://swb.example.com/mcp`, plus the channel above if wanted.
-- **Capy**: an MCP server with URL `https://swb.example.com/mcp` and header `Authorization: Bearer <SWITCHBOARD_KEY_CAPY>`.
+- **Capy**: an MCP server with URL `https://swb.example.com/mcp` and OAuth with the Automatic client. Capy registers
+  itself (DCR, redirect `https://capy.ai/web/callbacks/mcp`), the consent page shows "Capy", and any client that
+  returns to capy.ai signs in as agent `capy`, so routes, `key_scopes` and the audit log treat it the same as the old
+  key. The fallback is a header `Authorization: Bearer <SWITCHBOARD_KEY_CAPY>`; a bare key without `Bearer ` works too.
   Read the key on your-host with `sudo grep '^SWITCHBOARD_KEY_CAPY=' /srv/swb/.env`
   and paste it straight into Capy's settings, never into a chat.
 
