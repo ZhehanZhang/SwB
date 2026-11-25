@@ -197,7 +197,10 @@ Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where
 - Capy attributes a message to the API key that sent it. To keep relayed work from showing as the owner's own messages,
   set `destinations.capy.send_key_env: CAPY_API_KEY_SERVICE` and put a service user's key in `.env`. That key then
   sends messages and starts threads, while `CAPY_API_KEY` keeps doing the reads. The audit log records which key sent
-  each delegation and reply (`sent as ...`), and `/healthz` shows `sends_as`.
+  each delegation and reply (`sent as ...`), and `/healthz` shows `sends_as`. It is off in this deployment: a service
+  user only sees what is shared with it, so a test key found no Captains (`GET /captains` was empty) and got 404 on
+  the owner's private Captain threads. Sends stay on the owner's key unless those Captains are shared with the
+  service user.
 - Bearer sign-in failures are in the audit log without the key: `auth_failure` records a wrong token's length and
   paste mistakes (whitespace, quotes, a doubled "Bearer") or a non-Bearer header, and `auth_missing` records a
   request with no header, at most once per address per 10 minutes.
