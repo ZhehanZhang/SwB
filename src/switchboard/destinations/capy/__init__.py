@@ -444,6 +444,10 @@ class CapyDestination(Destination):
                                                          "pull_requests": state.get("pull_requests", []), "from": self._from(h["ref"])})
 
     @staticmethod
+    def _rests(h: dict[str, Any]) -> tuple[str, ...]:
+        return ("idle", "archived") if h["meta"].get("mode") == "new_thread" else ("idle", "waiting", "archived")
+
+    @staticmethod
     def _owns(h: dict[str, Any]) -> bool:
         """Whether assistant output now belongs to this delegation. A new thread is entirely the delegation's. In a shared
         thread (a Captain), output belongs to the delegation whose message is the latest user entry, matched by the
@@ -459,10 +463,8 @@ class CapyDestination(Destination):
                     self.core.inbox.update_handle(h["handle"], status=status)
                     if status in ("waiting", "failed") and self._owns(h):
                         await self.core.inbox.add(h["handle"], "status", {"thread_id": thread_id, "status": status, "from": self._from(thread_id)})
-                if h["state"].get("last_reply") and self._owns(h):
-                    rests = ("idle", "archived") if h["meta"].get("mode") == "new_thread" else ("idle", "waiting", "archived")
-                    if status in rests:
-                        await self._finish(h, "completed", h["state"]["last_reply"])
+                if h["state"].get("last_reply") and self._owns(h) and status in self._rests(h):
+                    await self._finish(h, "completed", h["state"]["last_reply"])
             if status in ("idle", "waiting") and handles and self.api:
                 await self._check_ask(thread_id)
         elif frame.event == "transcript":
@@ -484,6 +486,8 @@ class CapyDestination(Destination):
                     await self.core.inbox.add(h["handle"], "reply", {"thread_id": thread_id, "text": text[:RESULT_LIMIT], "pull_requests": prs,
                                                                      "attachments": [a["file"]["name"] for a in entry.get("attachments") or [] if a.get("file")],
                                                                      "from": self._from(thread_id, entry)})
+                    if h["meta"].get("mode") == "message" and h["status"] in self._rests(h):
+                        await self._finish({**h, "state": state}, "completed", text)
                 elif frame.id:
                     self.core.inbox.update_handle(h["handle"], stream_cursor=frame.id)
         return not self._open(thread_id)

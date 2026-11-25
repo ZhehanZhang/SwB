@@ -106,7 +106,8 @@ class FakeCapy:
         self.q(tid).put_nowait(sse(event, data, id))
 
     def ack(self, tid: str, id: str = "01A5") -> None:
-        """Emit the user entry for the last message switchboard sent to tid, as Capy's stream shows it: with its clientKey."""
+        """The thread picks up the last message switchboard sent to tid: it starts working, and the user entry carries its clientKey."""
+        self.emit(tid, "status", {"threadId": tid, "status": "working"})
         self.emit(tid, "transcript", {"id": "u" + id, "source": "user", "text": "(task)", "clientKey": self.client_keys[tid]}, id=id)
 
     def drop(self, tid: str) -> None:

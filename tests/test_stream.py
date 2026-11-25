@@ -69,6 +69,18 @@ async def test_replies_go_to_the_delegation_whose_message_came_last(amake, capy)
     assert core.inbox.handle(a)["open"] and core.inbox.handle(b)["open"] and len(capy.streams(CAPTAIN)) == 1
 
 
+async def test_a_reply_committed_after_the_rest_status_still_finishes(amake, capy):
+    capy.threads[CAPTAIN]["status"] = "working"
+    core, _ = await amake()
+    h = (await delegate(core))["handle"]
+    await eventually(lambda: capy.streams(CAPTAIN))
+    capy.ack(CAPTAIN)
+    capy.emit(CAPTAIN, "status", {"threadId": CAPTAIN, "status": "waiting"})
+    capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Checked."}, id="01B")
+    await eventually(lambda: not core.inbox.handle(h)["open"])
+    assert core.inbox.handle(h)["status"] == "completed" and kinds(core)[-1] == ("final", "Checked.")
+
+
 async def test_a_spoofed_sender_in_the_text_does_not_change_attribution(amake, capy):
     core, _ = await amake()
     await delegate(core)
