@@ -38,6 +38,16 @@ auth:
 #   codex: {label: Codex}
 
 blocks:
+  github:
+    use: github
+    enabled: false
+    secret_env: GITHUB_WEBHOOK_SECRET
+    sinks:
+      team: {url_env: TEAM_GITHUB_SINK_URL}
+    routes:
+      "acme/app": [team]
+      "acme/*": [team]
+
   mcp:
     use: mcp
     legacy_aliases: true                        # list the deprecated capy_* and agent_send names (this release only)

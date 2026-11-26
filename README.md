@@ -466,6 +466,62 @@ Nothing about a bot's look is hard-coded; every install reads it from Slack at r
 - To brand an install, upload an app icon under Basic Information, then Display Information, in the Slack app's
   settings. The API can't set it.
 
+## GitHub App
+
+Create a GitHub App you own. Set its webhook URL to `https://<your-host>/github/webhook` and generate a webhook
+secret with `openssl rand -hex 32`. Set the same secret on the app and in the server's `GITHUB_WEBHOOK_SECRET`
+environment variable (or the variable named by `secret_env`). If an auth proxy such as Cloudflare Access is in front
+of Switchboard, bypass it for `/github/webhook`: the GitHub signature authenticates that endpoint.
+
+Give the app only the **read-only** repository permissions for the events you want to subscribe to:
+
+| Permission | Webhook events |
+|---|---|
+| Issues | `issues`, `issue_comment` |
+| Pull requests | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| Contents | `push` |
+| Checks | `check_run`, `check_suite` |
+| Actions | `workflow_run` |
+| Metadata | Always enabled; no extra subscription needed |
+
+Each permission except Metadata is optional: leave it off and its events won't arrive. Subscribe to the events you
+need and install the app on the repositories you want to cover. One app can cover many repos; the routes choose sinks.
+See [GitHub's event and permission reference](https://docs.github.com/en/webhooks/webhook-events-and-payloads).
+
+```yaml
+blocks:
+  github:
+    use: github
+    secret_env: GITHUB_WEBHOOK_SECRET
+    sinks:
+      team: {url_env: TEAM_GITHUB_SINK_URL}
+      build: {url: https://hooks.example.com/github}
+    routes:
+      "acme/app": [team, build]
+      "acme/*": [team]
+```
+
+The example config has this block disabled; remove `enabled: false` to turn it on.
+The repo name is matched case-insensitively against both the exact route and the owner wildcard. Each matching sink
+gets one copy. Sinks are the integration point; these events don't enter the core inbox. Use `url_env` for secret
+URLs, and reserve literal `url` for URLs that aren't credentials.
+
+Each sink receives a compact JSON object under 8,000 bytes with null fields omitted:
+
+- `delivery`, `event`, `action`, `repo`, `actor` (sender login), and `is_bot` (sender type is `Bot`).
+- `number`, `title`, `url` (the relevant GitHub HTML link, or the compare link for a push), `state`, `merged`,
+  `draft`, `head_sha`, `base_ref`, and `head_ref` when available.
+- `check` (name), `conclusion`, and `review_state` when available; only completed checks and workflow runs go through.
+- `ref` and `commits` (count) for a push; `body` is at most 500 characters from the relevant comment, review, issue
+  or pull request.
+
+Requests over 1 MiB are rejected. Authenticated deliveries are acknowledged before forwarding, and delivery IDs are
+remembered in memory for up to 24 hours (at most 100,000 IDs). Sinks receive the delivery ID as `Idempotency-Key`;
+network errors and 5xx responses are retried with backoff, but 4xx responses aren't. Unsupported events are counted
+and dropped; unrouted repos are also recorded in the audit log. `/healthz` and `switchboard_status` show the configured
+block, whether its secret is present, the route and drop counts, and each sink's delivered and failed counts, never its
+URL. The block is absent from status if it isn't configured.
+
 ## Tools
 
 Generic tools come first; they go to whichever block owns the target or conversation.
