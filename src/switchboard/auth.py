@@ -204,9 +204,6 @@ class Auth:
 
     def grant_active(self, *, source: str, kind: str, client_id: str, credential: str | None) -> bool:
         """Recheck a long-lived grant without retaining a bearer token."""
-        scopes = self.cfg.key_scopes.get(source)
-        if scopes is not None and "*" not in scopes:
-            return False
         if kind == "key":
             return (client_id == f"key:{source}" and source not in self.cfg.inbox_keys and credential is not None
                     and any(k.name == source and hmac.compare_digest(self._key_grant(k.secret), credential) for k in self.cfg.static_keys))

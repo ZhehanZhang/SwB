@@ -119,7 +119,7 @@ def _iso(at: float) -> str:
 
 
 def _eligible(p: Principal | None) -> bool:
-    return p is not None and p.kind in OWNER_KINDS and (p.scopes is None or "*" in p.scopes)
+    return p is not None and p.kind in OWNER_KINDS
 
 
 def _principal(ctx: Any) -> Principal | None:
@@ -252,10 +252,20 @@ class EventsExtension(Extension):
     def _visible(self, source: str, trust: str, mailbox: Any) -> bool:
         if not isinstance(mailbox, str) or mailbox not in self.core.known_agents():
             return False
+        if mailbox == source:
+            return True
+        if self._restricted(source):
+            return False
         try:
-            return mailbox == source or self.core.visibility.allows(Who(owner=trust == "owner", id=f"agent:{source}"), f"target:{mailbox}")
+            return self.core.visibility.allows(Who(owner=trust == "owner", id=f"agent:{source}"), f"target:{mailbox}")
         except VisibilityError:
             return False
+
+    def _restricted(self, source: str) -> bool:
+        """A key limited to some memory scopes, tools or targets reaches only its own mailbox."""
+        cfg = self.core.auth.cfg
+        limits = [getattr(cfg, name, {}).get(source) for name in ("key_scopes", "key_tools", "key_targets")]
+        return any(limit is not None and "*" not in limit for limit in limits)
 
     def _can_access(self, p: Principal | None, mailbox: Any) -> bool:
         return _eligible(p) and self._grant(p) and self._visible(p.source, p.trust, mailbox)
