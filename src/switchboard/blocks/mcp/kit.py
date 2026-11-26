@@ -50,12 +50,26 @@ class Kit:
         return DEPRECATED.format(new=new) + text
 
     def owner(self, ctx: Context, what: str) -> "Principal":
-        """Pairing codes are the owner's: an unrestricted OAuth or bearer-key caller, never an agent connected by a code."""
         p = self.who(ctx)
         if p.kind == "connect":
-            raise ToolError(f"a connected agent can't {what}; the owner does that from the root page or his own sign-in")
-        self.unrestricted(p, what)
+            raise ToolError(f"a connected agent can't {what}; use the owner's sign-in")
+        if not p.is_unrestricted_owner:
+            raise ToolError(f"only an unrestricted owner can {what}; this caller is limited")
         return p
+
+    def mint_pairing(self, p: "Principal", agent: str, project: str | None, client: str | None) -> dict[str, Any]:
+        from ...connect import ConnectError
+
+        if not p.is_unrestricted_owner:
+            raise ToolError("only an unrestricted owner can mint pairing codes")
+        if project:
+            self.core.project(project)
+        try:
+            out = self.core.connections.mint(agent=agent, project=project, client=client, by=p.source)
+        except ConnectError as e:
+            raise ToolError(str(e)) from e
+        self.core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_code", outcome="ok", target=out["agent"])
+        return out
 
     def alias(self, ctx: Context, name: str) -> "Principal":
         p = self.who(ctx)
@@ -186,16 +200,8 @@ class Kit:
         @mcp.tool(title="Connect a new agent", description="Mint a one-time pairing code (10 minutes) for an agent you are setting up, such as claude-code, codex or a laptop script. The client redeems it at POST /connect for its own bearer key; the owner can revoke it from the root page or connect_revoke. Only an unrestricted caller may mint codes.", annotations=WRITE)
         async def connect_code(ctx: Context, agent: Annotated[str, Field(description="Agent name it signs in as, lowercase-dashed, e.g. codex")], project: ProjectArg = None,
                                client: Annotated[str | None, Field(description="What it is, e.g. codex-cli on the laptop")] = None) -> dict[str, Any]:
-            from ...connect import ConnectError
-
             p = kit.owner(ctx, "mint pairing codes")
-            if project:
-                core.project(project)
-            try:
-                out = core.connections.mint(agent=agent, project=project, client=client, by=p.source)
-            except ConnectError as e:
-                raise ToolError(str(e)) from e
-            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_code", outcome="ok", target=out["agent"])
+            out = kit.mint_pairing(p, agent, project, client)
             base = core.cfg.public_url or ""
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
                     "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
