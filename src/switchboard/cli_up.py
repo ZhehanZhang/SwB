@@ -79,7 +79,10 @@ def _tunnel(provider: str, origin: str) -> Iterator[str]:
             raise CliError(f"{binary} did not start a tunnel.{hint}")
         yield public_url
     finally:
-        process.terminate()
+        if provider == "tailscale" and os.name == "posix":
+            process.send_signal(signal.SIGINT)
+        else:
+            process.terminate()
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:

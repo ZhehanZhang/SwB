@@ -32,7 +32,7 @@ class _NoQuery(logging.Filter):
         if isinstance(record.args, tuple) and len(record.args) >= 3 and isinstance(record.args[2], str):
             args = list(record.args)
             path = args[2].split("?", 1)[0]
-            for prefix in ("/claim/", "/routines/claim/"):
+            for prefix in ("/claim/", "/routines/claim/", "/claims/"):
                 if path.startswith(prefix):
                     path = f"{prefix}[redacted]"
                     break
