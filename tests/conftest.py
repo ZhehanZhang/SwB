@@ -22,6 +22,7 @@ OWNER = {"cf-access-jwt-assertion": "good"}
 CAPY_KEY = "capy_" + "x" * 43
 STATIC_KEY = "s" * 32
 CHANNEL_KEY = "c" * 32
+SECOND_KEY = "d" * 32
 SERVICE_KEY = "capy_service_" + "y" * 30
 PUBLIC = "https://switchboard.example.test"
 CAPTAIN = "jam_CAPTAIN0000000000000000000"
@@ -48,7 +49,7 @@ def base_config(**over: Any) -> dict[str, Any]:
 
 
 def default_env() -> dict[str, str]:
-    return {"CAPY_API_KEY": CAPY_KEY, "CAPY_API_KEY_SERVICE": SERVICE_KEY, "SWITCHBOARD_KEY_CAPY": STATIC_KEY, "SWITCHBOARD_KEY_CHANNEL": CHANNEL_KEY}
+    return {"CAPY_API_KEY": CAPY_KEY, "CAPY_API_KEY_SERVICE": SERVICE_KEY, "SWITCHBOARD_KEY_CAPY": STATIC_KEY, "SWITCHBOARD_KEY_CHANNEL": CHANNEL_KEY, "SWITCHBOARD_KEY_SECOND": SECOND_KEY}
 
 
 class Clock:

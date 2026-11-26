@@ -1,0 +1,17 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TAAAA1111",
+    "event_id": "Ev5",
+    "event": {
+      "type": "message",
+      "subtype": "bot_message",
+      "channel_type": "channel",
+      "bot_id": "BOTHER001",
+      "username": "OtherAgent",
+      "text": "agent update",
+      "ts": "1700000400.000400",
+      "channel": "CWATCH001"
+    }
+  }
+}

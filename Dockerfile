@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir .
 FROM base AS test
 COPY tests ./tests
 COPY config ./config
+COPY manifests ./manifests
 RUN pip install --no-cache-dir ".[test]" && python -m pytest -q
 
 FROM base AS runtime

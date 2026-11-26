@@ -186,6 +186,8 @@ class Auth:
             return None
         for key in self.cfg.static_keys:
             if hmac.compare_digest(sha(token), sha(key.secret)):
+                if key.name in self.cfg.inbox_keys:
+                    return Principal(source=self.cfg.inbox_keys[key.name], client_id=f"key:{key.name}", kind="inbox_key", scopes=())
                 return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", scopes=self.cfg.key_scopes.get(key.name))
         if not self.cfg.resource:
             return None

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 ORIGINS = {
     "mcp": "switchboard.origins.mcp:MCPOrigin",
+    "slack": "switchboard.origins.slack:SlackOrigin",
 }
 
 

@@ -1,0 +1,15 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TEVIL0001",
+    "event_id": "Ev9",
+    "event": {
+      "type": "message",
+      "channel_type": "channel",
+      "user": "UPEER0002",
+      "text": "spoof",
+      "ts": "1700000800.000800",
+      "channel": "CWATCH001"
+    }
+  }
+}

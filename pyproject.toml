@@ -10,8 +10,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "mcp>=2.3,<3",
+  "slack_sdk>=3.48,<4",
+  "aiohttp>=3.10,<4",
   "httpx>=0.28,<1",
   "PyYAML>=6,<7",
+  "pillow>=10.1",
   "uvicorn>=0.30",
   "starlette>=1.0",
   "python-multipart>=0.0.20",
@@ -29,7 +32,7 @@ switchboard = "switchboard.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-switchboard = ["static/*"]
+switchboard = ["static/*", "slack/avatars/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

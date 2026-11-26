@@ -1,0 +1,15 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TBBBB2222",
+    "event_id": "EvB3",
+    "event": {
+      "type": "message",
+      "channel_type": "im",
+      "user": "UFAMILY01",
+      "text": "private dm",
+      "ts": "1700001200.001200",
+      "channel": "DOWNER001"
+    }
+  }
+}

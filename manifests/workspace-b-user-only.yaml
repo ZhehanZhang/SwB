@@ -1,0 +1,34 @@
+# Slack app for workspace B (private): user token ONLY. No bot user, no bot scopes, no bot
+# events, no interactivity. It never joins or invites; every post appears as the owner.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> pick workspace B.
+display_information:
+  name: Switchboard (personal)
+  description: Lets the owner's agents read on their behalf; writes need approval
+  background_color: "#333333"
+oauth_config:
+  scopes:
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # only ever used after the owner approves a request
+      - reactions:write        # same
+      - search:read
+      - users:read
+settings:
+  event_subscriptions:
+    user_events:
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

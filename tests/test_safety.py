@@ -1,6 +1,6 @@
 import pytest
 
-from conftest import CAPTAIN, CAPTAIN2, OTHER_PROJECT, PROJECT, STATIC_KEY, CHANNEL_KEY, Clock, base_config, call, error_text, payload, sign_in, infra
+from conftest import CAPTAIN, CAPTAIN2, OTHER_PROJECT, PROJECT, STATIC_KEY, SECOND_KEY, Clock, base_config, call, error_text, payload, sign_in, infra
 
 
 def mcp_project(c, tok, **args):
@@ -124,12 +124,12 @@ def test_cross_project_reads_are_explicit_logged_and_respect_private(make):
 
 def test_key_scope_allowlist(make):
     cfg = base_config()
-    cfg["auth"]["key_scopes"] = {"channel": ["project:acme"]}
+    cfg["auth"]["key_scopes"] = {"second": ["project:acme"]}
     core, c = make(config=cfg)
     infra(core)
     core.projects.create(slug="acme", name="Acme")
     w = payload(call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "namespace": "notes", "title": "Z", "body": "infra only"}))
-    assert payload(call(c, CHANNEL_KEY, "memory_write", {"scope": "project:acme", "namespace": "notes", "title": "P", "body": "acme"}))["scope"] == "project:acme"
+    assert payload(call(c, SECOND_KEY, "memory_write", {"scope": "project:acme", "namespace": "notes", "title": "P", "body": "acme"}))["scope"] == "project:acme"
     for tool, args in (("memory_write", {"scope": "project:infra", "namespace": "notes", "title": "x", "body": "y"}),
                        ("memory_read", {"id": w["id"]}),
                        ("memory_delete", {"id": w["id"]}),
@@ -138,10 +138,10 @@ def test_key_scope_allowlist(make):
                        ("routes_set", {"target": "captain:Captain"}),
                        ("project_create", {"slug": "new", "name": "New"}),
                        ("capy_delegate", {"task": "x", "project": "infra"})):
-        assert "limited to project:acme" in error_text(call(c, CHANNEL_KEY, tool, args)) or "may not read" in error_text(call(c, CHANNEL_KEY, tool, args)), tool
-    items = payload(call(c, CHANNEL_KEY, "memory_search", {"query": "acme", "project": "acme"}))["items"]
+        assert "limited to project:acme" in error_text(call(c, SECOND_KEY, tool, args)) or "may not read" in error_text(call(c, SECOND_KEY, tool, args)), tool
+    items = payload(call(c, SECOND_KEY, "memory_search", {"query": "acme", "project": "acme"}))["items"]
     assert {i["scope"] for i in items} == {"project:acme"}
-    assert payload(call(c, CHANNEL_KEY, "switchboard_status", {}))["you"]["scopes"] == ["project:acme"]
+    assert payload(call(c, SECOND_KEY, "switchboard_status", {}))["you"]["scopes"] == ["project:acme"]
 
 
 # Runaway guards -----------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ def test_burst_limit_stops_loops_but_never_replies_or_waits(make):
     for _ in range(5):
         assert not call(c, STATIC_KEY, "capy_reply", {"thread_id": CAPTAIN, "text": "more context"}).get("isError")
         assert not call(c, STATIC_KEY, "capy_wait", {"timeout_s": 0}).get("isError")
-    assert not call(c, CHANNEL_KEY, "capy_delegate", {"task": "another caller"}).get("isError")
+    assert not call(c, SECOND_KEY, "capy_delegate", {"task": "another caller"}).get("isError")
     clock.t += 601
     assert not call(c, STATIC_KEY, "capy_delegate", {"task": "task 5"}).get("isError")
 

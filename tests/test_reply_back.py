@@ -7,7 +7,7 @@ import uvicorn
 from switchboard.app import create_app
 
 from switchboard.origins.mcp import WaitCaps
-from conftest import CAPTAIN, CHANNEL_KEY, STATIC_KEY, acall, arpc, eventually, payload
+from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, eventually, payload
 
 
 async def test_capy_wait_returns_early_on_a_stream_event(amake, capy):
@@ -59,7 +59,7 @@ async def test_tasks_extension_end_to_end_and_across_restart(amake, capy):
     tid = created["taskId"]
     got = (await arpc(c, STATIC_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["result"]
     assert got["resultType"] == "complete" and got["status"] == "working" and CAPTAIN in got["statusMessage"]
-    assert (await arpc(c, CHANNEL_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["error"]["code"] == -32602
+    assert (await arpc(c, SECOND_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["error"]["code"] == -32602
     await eventually(lambda: capy.streams(CAPTAIN))
     capy.ack(CAPTAIN)
     capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Report attached."}, id="01B")
@@ -88,18 +88,24 @@ async def test_tasks_cancel(amake):
     assert got["status"] == "cancelled"
 
 
-async def test_channel_long_poll_sees_every_agent_without_moving_their_cursor(amake, capy):
+async def test_channel_key_reads_claude_codes_inbox_only(amake, capy):
     core, c = await amake()
-    out = payload(await acall(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
-    await eventually(lambda: capy.streams(CAPTAIN))
+    channel = {"Authorization": f"Bearer {CHANNEL_KEY}"}
     head = core.inbox.head()
-    poll = asyncio.create_task(c.get("/inbox/poll", params={"after": head, "timeout": 10}, headers={"Authorization": f"Bearer {CHANNEL_KEY}"}))
+    poll = asyncio.create_task(c.get("/inbox/poll", params={"after": head, "timeout": 10}, headers=channel))
     await asyncio.sleep(0.1)
+    payload(await acall(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
+    await eventually(lambda: capy.streams(CAPTAIN))
     capy.ack(CAPTAIN)
     capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Hello from Capy"}, id="01B")
+    await eventually(lambda: core.inbox.head() > head)
+    sent = payload(await acall(c, STATIC_KEY, "agent_send", {"to": "claude-code", "text": "for claude code"}))
     r = await poll
-    assert r.status_code == 200 and [(i["owner"], i["text"]) for i in r.json()["items"]] == [("capy", "Hello from Capy")]
-    assert [i["text"] for i in payload(await acall(c, STATIC_KEY, "capy_inbox"))["items"]] == ["Hello from Capy"]
+    assert r.status_code == 200 and [(i["owner"], i["text"]) for i in r.json()["items"]] == [("claude-code", "for claude code")]
+    assert sent["delivered"] and [i["text"] for i in payload(await acall(c, STATIC_KEY, "capy_inbox"))["items"]] == ["Hello from Capy"]
+    assert (await c.get("/inbox/poll", params={"agent": "capy", "timeout": 0}, headers=channel)).status_code == 403
+    assert (await c.post("/mcp", headers={**channel, "Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+                         content=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))).status_code == 403
     assert (await c.get("/inbox/poll")).status_code == 401
 
 
@@ -114,8 +120,6 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
     base = f"http://127.0.0.1:{port}"
     try:
         async with httpx.AsyncClient(base_url=base, timeout=20) as c:
-            out = payload(await acall(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
-            await eventually(lambda: capy.streams(CAPTAIN))
             frames = []
             async with c.stream("GET", "/inbox/events", headers={"Authorization": f"Bearer {CHANNEL_KEY}"}) as r:
                 assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
@@ -123,8 +127,7 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
                 async for line in lines:
                     if line.startswith("event: ready"):
                         break
-                capy.ack(CAPTAIN)
-                capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "pushed"}, id="01B")
+                out = payload(await acall(c, STATIC_KEY, "agent_send", {"to": "claude-code", "text": "pushed"}))
                 event_id = None
                 async for line in lines:
                     if line.startswith("id: "):
