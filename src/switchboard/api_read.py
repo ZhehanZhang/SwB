@@ -14,7 +14,8 @@ from starlette.routing import Route
 
 from .audit import iso
 from .blocks import BLOCKS, load
-from .memory import GENERAL, NAMESPACE_RE, MemoryError_
+from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
+from .routes import route_audit_name
 from .targets import SLUG_RE
 from .visibility import show
 
@@ -25,6 +26,8 @@ _REPO = re.compile(r"[\w.-]+/[\w.-]+")
 _AUTH_PATHS = ("/mcp", "/inbox/poll", "/inbox/events", "/register", "/authorize", "/token", "/connect/redeem")
 _MEMORY_FIELDS = ("id", "scope", "namespace", "key", "title", "tags", "source", "created_at", "updated_at")
 _PROMPTS = {"coordinator": "v4", "routine": "v1", "dispatcher": "v1"}
+_PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
+_SCOPE = rf"(?:general|project:{_PROJECT})"
 
 
 def _fields(row: Any, *names: str) -> dict[str, Any]:
@@ -114,55 +117,123 @@ async def audit(request: Request) -> JSONResponse:
                                             limit=limit, cursor=cursor or None)
     except ValueError:
         return _error("invalid cursor")
-    items = []
-    for row in rows:
-        fields = _fields(row, "id", "origin", "source", "client", "destination", "action", "outcome", "target", "ref")
-        if fields["action"] in ("auth_failure", "auth_missing", "oauth_refused", "rate_limited"):
-            if fields["target"] not in _AUTH_PATHS:
-                fields["target"] = None
-            fields["ref"] = None
-            try:
-                fields["client"] = str(ip_address(fields["client"])) if "%" not in fields["client"] else None
-            except ValueError:
-                fields["client"] = None
-        items.append({**fields, "at": iso(row["at"])})
-    return JSONResponse({"items": items, "next_cursor": next_cursor})
+    return JSONResponse({"items": [_audit_item(core, row) for row in rows], "next_cursor": next_cursor})
 
 
-async def agents(request: Request) -> JSONResponse:
-    core = request.app.state.core
+def _audit_item(core: Any, row: Any) -> dict[str, Any]:
+    fields = _fields(row, "id", "origin", "source", "client", "destination", "action", "outcome", "target", "ref")
+    action, target, ref = fields["action"], fields["target"] or "", fields["ref"]
+    project: str | None = None
+    metadata: dict[str, Any] = {}
+    if action in ("auth_failure", "auth_missing", "oauth_refused", "rate_limited"):
+        if fields["target"] not in _AUTH_PATHS:
+            fields["target"] = None
+        fields["ref"] = None
+        try:
+            fields["client"] = str(ip_address(fields["client"])) if "%" not in fields["client"] else None
+        except ValueError:
+            fields["client"] = None
+    else:
+        if ref and _reference(ref):
+            project = core.inbox.project_for_ref(fields["destination"], ref)
+        if match := re.fullmatch(rf"project:({_PROJECT})", target):
+            project = project or match[1]
+        if action in ("route_set", "route_remove", "auto_route"):
+            if match := re.fullmatch(rf"(\*|{_PROJECT})/(\*|{_PROJECT})", target):
+                if match[1] != "*":
+                    metadata["agent"] = match[1]
+                if match[2] != "*":
+                    project = project or match[2]
+            if fields["outcome"] == "ok":
+                try:
+                    route = json.loads(row["excerpt"])
+                except ValueError:
+                    route = None
+                if isinstance(route, dict):
+                    if name := route_audit_name(route.get("target_name")):
+                        metadata["target_name"] = name
+                    if type(count := route.get("repo_count")) is int and count >= 0:
+                        metadata["repo_count"] = count
+        elif action in ("auto_link", "project_create", "project_update") and re.fullmatch(_PROJECT, target):
+            project = project or target
+        elif action in ("routine_add", "routine_claim"):
+            if match := re.fullmatch(rf"(?:routine )?(trig_[A-Za-z0-9]{{1,80}}) for ({_PROJECT})( \(new project\))?", row["excerpt"]):
+                metadata["routine_id"] = match[1]
+                if match[3]:
+                    metadata["created_project"] = True
+                if match[2] != GENERAL:
+                    project = project or match[2]
+        elif action == "routine_register":
+            if match := re.fullmatch(rf"routine register for ({_PROJECT}): (pending|candidates)", row["excerpt"]):
+                metadata["state"] = match[2]
+                if match[1] != GENERAL:
+                    project = project or match[1]
+        elif action in ("memory_move", "memory_promote") and fields["destination"] == "memory":
+            if match := re.fullmatch(rf"({_SCOPE}) -> ({_SCOPE})", target):
+                metadata.update(from_scope=match[1], to_scope=match[2])
+                scope = match[1] if match[2] == GENERAL else match[2]
+                if scope != GENERAL:
+                    project = project or scope.removeprefix("project:")
+            if re.fullmatch(r"mem_[0-9]{13}[a-f0-9]{8}", row["excerpt"]):
+                metadata["memory_id"] = row["excerpt"]
+        elif action == "turn_cap":
+            if match := re.fullmatch(r"paused at ([0-9]{1,10}) turns", row["detail"] or ""):
+                metadata["turn_cap"] = int(match[1])
+        elif action == "visibility_set" and row["detail"] in ("shared", "private"):
+            metadata["visibility"] = row["detail"]
+    return {**fields, "at": iso(row["at"]), "project": project, "metadata": metadata}
+
+
+async def _agents(core: Any) -> dict[str, Any]:
     targets = await core.targets()
     routines = []
     for block in core.blocks.values():
         if block.manifest.id == "claude-routine":
             routines.extend({"block": block.name, **_fields(r, "name", "kind", "agent", "project", "routine_id", "claude_project",
-                                                           "slugs", "source", "status", "primary", "visibility")} for r in block.rows())
+                                                           "slugs", "source", "status", "primary", "visibility", "created_by",
+                                                           "created_at", "last_seen_at")} for r in block.rows(details=True))
         elif block.manifest.id == "grok-routine":
             slugs = {t["id"]: t["slugs"] for t in targets if t["block"] == block.name}
             routines.extend({"block": block.name, "kind": "project" if r["project"] else "general", "agent": "grok",
                              "routine_id": None, "slugs": slugs.get(r["name"], []),
                              "visibility": show(core.visibility.rule(f"target:{r['name']}")),
-                             **_fields(r, "name", "project", "source", "status", "primary")} for r in block.status()["routines"])
+                             **_fields(r, "name", "project", "source", "status", "primary", "created_by", "created_at",
+                                       "last_seen_at")} for r in block.status(details=True)["routines"])
     claims = []
     claude = next((block for block in core.blocks.values() if block.manifest.id == "claude-routine"), None)
     for row in reversed(claude.pending(details=True)) if claude else ():
         new_project = row["new_project"]
         claims.append({**_fields(row, "name", "routine_id", "project", "claude_project", "primary"), "created_by": row["requested_by"],
+                       "claim_url": f"/routines/claim/owner/{row['registration']}",
                        "created_at": iso(row["created_at"]), "expires_at": iso(row["expires_at"]),
                        "new_project": _scalars(new_project, "name", "description") if isinstance(new_project, dict) else None})
-    keys = [{**_fields(k, "id", "agent", "project", "client"), "created_at": iso(k["created_at"]), "last_used_at": iso(k["last_used_at"])}
+    keys = [{**_fields(k, "id", "agent", "project", "client", "created_by"), "created_at": iso(k["created_at"]), "last_used_at": iso(k["last_used_at"])}
             for k in core.connections.list()]
     discovered: dict[str, list[dict[str, Any]]] = {"captain": [], "dot": []}
+    configured_routes = core.routes.list()
     for target in targets:
-        if target["kind"] in discovered:
+        kind = target["kind"]
+        if kind in discovered:
             slugs = [s for s in target["slugs"] if SLUG_RE.fullmatch(s)]
-            discovered[target["kind"]].append({
+            names = {n.casefold() for n in [target["id"], target["address"], *slugs]}
+            projects = {r.project for r in configured_routes if r.project and r.destination == target["block"]
+                        and isinstance(value := r.target.get(kind), str) and value.casefold() in names}
+            if target.get("project"):
+                projects.add(target["project"])
+            discovered[kind].append({
                 **_fields(target, "id", "name", "kind", "block", "address", "slugs", "level", "project"),
+                "projects": sorted(projects),
+                "source": target.get("source", "discovered"),
+                "last_seen_at": target.get("last_seen_at"),
                 "online": core.blocks[target["block"]].online,
                 "visibility": show(core.visibility.rule(*(f"target:{s}" for s in slugs))) if slugs else show(core.visibility.defaults["target"]),
             })
-    return JSONResponse({"routines": routines, "keys": keys, "pending_claims": claims, "captains": discovered["captain"], "dots": discovered["dot"],
-                         "static_keys": [k.name for k in core.cfg.static_keys]})
+    return {"routines": routines, "keys": keys, "pending_claims": claims, "captains": discovered["captain"], "dots": discovered["dot"],
+            "static_keys": [k.name for k in core.cfg.static_keys]}
+
+
+async def agents(request: Request) -> JSONResponse:
+    return JSONResponse(await _agents(request.app.state.core))
 
 
 async def projects(request: Request) -> JSONResponse:
@@ -199,14 +270,34 @@ async def projects(request: Request) -> JSONResponse:
     return JSONResponse({"projects": projects, "systems": systems})
 
 
-def _conversation(row: dict[str, Any]) -> dict[str, Any]:
+def _sender(sender: Any) -> dict[str, Any] | None:
+    if not isinstance(sender, dict):
+        return None
+    return _scalars(sender, "kind", "name", "label", "agent", "auth", "origin", "trust", "workspace", "channel", "channel_name", "user", "user_name",
+                    "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot") or None
+
+
+def _conversation(row: dict[str, Any], endpoints: tuple[Any, str | None]) -> dict[str, Any]:
+    sender, target = endpoints
+    meta = row["meta"]
+    first_sender = _sender(meta.get("from"))
+    if first_sender is None:
+        first_sender = _sender(sender) if row["destination"] in ("slack", "mailbox") else {"kind": "agent", "agent": row["owner"]}
+    first_target = row.get("target") or target
+    if row.get("target"):
+        parts = row["target"].split(":", 2)
+        if len(parts) == 3 and isinstance(info := meta.get("target"), dict) and info.get(parts[1]) == parts[2]:
+            first_target = _reference(info.get("name")) or first_target
+        if len(parts) == 3 and parts[1] == "dot" and isinstance(dot := meta.get("dot"), str) and SLUG_RE.fullmatch(dot):
+            first_target = dot
     return {**_fields(row, "handle", "owner", "destination", "ref", "project", "title", "target", "status", "open"),
-            "created_at": iso(row["created_at"]), "updated_at": iso(row["updated_at"])}
+            "created_at": iso(row["created_at"]), "updated_at": iso(row["updated_at"]),
+            "first_sender": first_sender, "first_target": first_target}
 
 
 def _pending_write(row: dict[str, Any]) -> dict[str, Any]:
     persona = (row.get("persona") or {}).get("name")
-    return {**_fields(row, "id", "workspace", "identity", "action", "key_id"),
+    return {"platform": "slack", **_fields(row, "id", "workspace", "identity", "action", "key_id"),
             **_scalars(row["params"], "channel", "thread_ts", "ts", "timestamp", "text", "name"),
             "persona": persona if isinstance(persona, str) else None,
             "created_at": iso(row["created_at"]), "expires_at": iso(row["expires_at"])}
@@ -218,9 +309,11 @@ async def inbox(request: Request) -> JSONResponse:
     pending = [_pending_write(row) for row in slack.store.list_requests(status="pending", limit=50)
                if row["expires_at"] > slack.store.clock()] if slack is not None else []
     pauses = core.store.q("SELECT root, turns, paused_at FROM conversation_turns WHERE paused_at IS NOT NULL ORDER BY paused_at DESC")
+    roots = core.inbox.handles(limit=100, roots_only=True)
+    endpoints = core.inbox.first_endpoints([row["handle"] for row in roots])
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
                          "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"])} for row in pauses],
-                         "conversations": [_conversation(row) for row in core.inbox.handles(limit=100)]})
+                         "conversations": [_conversation(row, endpoints.get(row["handle"], (None, None))) for row in roots]})
 
 
 async def conversation(request: Request) -> JSONResponse:
@@ -234,17 +327,18 @@ async def conversation(request: Request) -> JSONResponse:
     row = core.inbox.handle(handle)
     if row is None:
         return _error("conversation not found", 404)
-    out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False)
+    row = core.inbox.thread_root(row)
+    handle = row["handle"]
+    out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False, include_replies=True)
     items = []
     for item in out["items"]:
-        projected = _scalars(item, "cursor", "kind", "at", "text", "status", "final", "in_reply_to", "trust", "project",
+        projected = _scalars(item, "cursor", "handle", "kind", "at", "text", "status", "final", "in_reply_to", "trust", "project",
                              "target", "target_kind", "event_id", "slack_kind")
-        sender = item.get("from")
-        if isinstance(sender, dict):
-            projected["from"] = _scalars(sender, "kind", "name", "agent", "trust", "workspace", "channel", "channel_name", "user",
-                                         "user_name", "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot")
+        if sender := _sender(item.get("from")):
+            projected["from"] = sender
         items.append(projected)
-    return JSONResponse({"conversation": _conversation(row), "items": items, "cursor": out["cursor"]})
+    endpoints = core.inbox.first_endpoints([handle])
+    return JSONResponse({"conversation": _conversation(row, endpoints.get(handle, (None, None))), "items": items, "cursor": out["cursor"]})
 
 
 async def memory(request: Request) -> JSONResponse:
@@ -267,14 +361,14 @@ async def memory(request: Request) -> JSONResponse:
             return _error("memory not found", 404)
         if scope and entry["scope"] != scope:
             return _error("memory not found", 404)
-        return JSONResponse({"entry": {**_fields(entry, *_MEMORY_FIELDS, "body"),
+        return JSONResponse({"entry": {**_fields(entry, *_MEMORY_FIELDS, "body"), "writer": entry["source"], "summary": memory_summary(entry["body"]),
                                        "history": [_scalars(r, "at", "source", "action") for r in entry["history"]]}})
     try:
         limit = _number(request, "limit", 50, 1, 200)
         offset = _number(request, "offset", 0, 0)
     except ValueError as exc:
         return _error(str(exc))
-    result = core.memory.list(scopes=scopes, namespace=namespace, limit=limit, offset=offset)
+    result = core.memory.list(scopes=scopes, namespace=namespace, limit=limit, offset=offset, summaries=True)
     summary = result["scopes"]
     for name in scopes or known_scopes:
         summary.setdefault(name, {})
@@ -282,10 +376,10 @@ async def memory(request: Request) -> JSONResponse:
         if len(query) > 500:
             return _error("invalid search query")
         try:
-            result = core.memory.search(query=query, scopes=scopes, namespace=namespace, limit=limit)
+            result = core.memory.search(query=query, scopes=scopes, namespace=namespace, limit=limit, summaries=True)
         except MemoryError_:
             return _error("query has no searchable words")
-    return JSONResponse({"scopes": summary, "items": [_fields(row, *_MEMORY_FIELDS, "snippet") for row in result["items"]],
+    return JSONResponse({"scopes": summary, "items": [{**_fields(row, *_MEMORY_FIELDS, "snippet", "summary"), "writer": row["source"]} for row in result["items"]],
                          "next_offset": result.get("next_offset"), "mirror": bool(core.memory.mirror_dir)})
 
 

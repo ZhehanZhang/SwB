@@ -115,8 +115,8 @@ class GrokRoutineBlock(Block):
         out = {name: dict(r) for name, r in self.configured.items()}
         for row in self.core.store.q("SELECT * FROM grok_routines WHERE block = ? ORDER BY created_at, rowid", (self.name,)):
             if row["name"] not in out:
-                out[row["name"]] = self._metadata(row["name"], row["project"], row["auth"], row["header"],
-                                                  bool(row["is_primary"]), "stored")
+                out[row["name"]] = {**self._metadata(row["name"], row["project"], row["auth"], row["header"], bool(row["is_primary"]), "stored"),
+                                    "created_at": row["created_at"]}
         return out
 
     def save_routine(self, name: str, project: str | None, auth: str, header: str | None,
@@ -173,15 +173,16 @@ class GrokRoutineBlock(Block):
         status = fire["last_status"] if fire["credential_tag"] == self._credential_tag(url, secret) else "untested"
         return status, fire["last_success"]
 
-    def _status(self, name: str, url: str, secret: str, problem: str | None) -> str:
-        status, last_success = self._last_fire(name, url, secret)
+    @staticmethod
+    def _status(status: str, last_success: float | None, problem: str | None) -> str:
         status = problem or status
         if last_success is not None:
             status += f" (last success: {iso(last_success)})"
         return status
 
     def status_of(self, r: dict[str, Any]) -> str:
-        return self._status(r["name"], *self._credentials(r))
+        url, secret, problem = self._credentials(r)
+        return self._status(*self._last_fire(r["name"], url, secret), problem)
 
     def is_tested(self, r: dict[str, Any]) -> bool:
         url, secret, problem = self._credentials(r)
@@ -202,12 +203,15 @@ class GrokRoutineBlock(Block):
             (self.name, name, status or "tested", self.core.clock() if status is None else None, self._credential_tag(url, secret)),
         )
 
-    def status(self) -> dict[str, Any]:
+    def status(self, *, details: bool = False) -> dict[str, Any]:
         rows = []
         for r in self.routines().values():
             url, secret, problem = self._credentials(r)
-            rows.append({**r, "status": self._status(r["name"], url, secret, problem), "url_present": bool(url),
-                         "secret_present": bool(secret)})
+            status, last_success = self._last_fire(r["name"], url, secret)
+            rows.append({**r, "status": self._status(status, last_success, problem), "url_present": bool(url),
+                         "secret_present": bool(secret),
+                         **({"created_at": iso(r.get("created_at")), "created_by": None,
+                             "last_seen_at": iso(last_success)} if details else {})})
         return {"routines": rows}
 
     def problems(self) -> list[str]:

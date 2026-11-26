@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
@@ -328,8 +329,20 @@ def create_app(core: "Switchboard") -> Any:
         from .core import CoreError
         from .projects import ProjectError
 
-        code = request.path_params["code"]
-        if request.method == "POST":
+        registration = request.path_params.get("registration")
+        if registration is not None and not re.fullmatch(r"[a-f0-9]{32}", registration):
+            return Response(status_code=404)
+        code = request.path_params.get("code", "")
+        if registration is not None and request.method == "POST":
+            email, form, refused = await owner_form(request)
+            if refused is None:
+                value = form.get("token")
+                actor, token = f"admin:{email}", value if isinstance(value, str) else ""
+        elif registration is not None:
+            email, refused = await owner_page(request)
+            if refused is None:
+                form_csrf = csrf(email)
+        elif request.method == "POST":
             actor, token, refused = await claim_form(request)
         else:
             form_csrf, refused = await claim_page_access(request)
@@ -340,11 +353,12 @@ def create_app(core: "Switchboard") -> Any:
             return pages.message_page("Not available", "The claude-routine block isn't configured (blocks.claude-routine).", 400)
         if request.method != "POST":
             try:
-                return pages.routine_claim_page(block.claim(code), form_csrf, host=request.url.hostname or "", now=core.clock())
+                return pages.routine_claim_page(block.claim(code, registration=registration), form_csrf,
+                                                host=request.url.hostname or "", now=core.clock())
             except BlockError as e:
                 return pages.claim_message_page("Link not usable", str(e), 410)
         try:
-            out = block.complete(code, token, actor=actor)
+            out = block.complete(code, token, actor=actor, registration=registration)
         except (BlockError, CoreError, ProjectError) as e:
             return pages.claim_message_page("Not saved", str(e), 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination=block.name, action="routine_claim", outcome="ok",
@@ -472,6 +486,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/routines", routine_add, methods=["POST"]),
             Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
             Route("/routines/claim/{code}", routine_claim, methods=["GET", "POST"]),
+            Route("/routines/claim/owner/{registration}", routine_claim, methods=["GET", "POST"]),
             Route(CLAIM_PATH + "/{code}", token_claim, methods=["GET", "POST"]),
             *pages.routes(),
             *login.routes(),

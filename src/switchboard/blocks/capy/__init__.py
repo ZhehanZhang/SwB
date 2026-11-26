@@ -825,7 +825,7 @@ class CapyBlock(Block):
         target, defaults = await self.validate_route_target({"captain": captains[0]["id"]}, defaults)
         r = core.routes.set(destination=self.name, agent=None, project=project.slug, target=target, defaults=defaults,
                             allow_override=False, note="set automatically from the linked Capy project", by="auto")
-        core.audit_auto(principal, self.name, "auto_route", f"*/{project.slug}", str(r.target))
+        core.audit_auto(principal, self.name, "auto_route", f"*/{project.slug}", r.audit_excerpt())
         out["changed"].append({"route": r.as_dict()})
         return out
 
