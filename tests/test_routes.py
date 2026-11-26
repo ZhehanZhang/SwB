@@ -1,0 +1,94 @@
+import pytest
+
+from switchboard.routes import RouteError, Routes
+from switchboard.store import Store
+from conftest import CAPTAIN, CAPTAIN2, PROJECT, STATIC_KEY, Clock, call, error_text, payload, sign_in, infra
+
+
+@pytest.fixture
+def routes(tmp_path):
+    return Routes(Store(tmp_path / "r.db", clock=Clock()))
+
+
+def put(routes, agent, project, name):
+    routes.set(destination="capy", agent=agent, project=project, target={"captain": name}, defaults={}, allow_override=False, note="", by="t")
+
+
+def test_resolution_order(routes):
+    assert routes.resolve(destination="capy", agent="claude", project="infra") == (None, ["agent+project", "project", "agent", "global"])
+    put(routes, None, None, "global")
+    put(routes, "claude", None, "agent")
+    put(routes, None, "infra", "project")
+    put(routes, "claude", "infra", "agent+project")
+
+    def target(agent, project):
+        r, _ = routes.resolve(destination="capy", agent=agent, project=project)
+        return r.target["captain"], r.level
+
+    assert target("claude", "infra") == ("agent+project", "agent+project")
+    assert target("chatgpt", "infra") == ("project", "project")
+    assert target("claude", "acme") == ("agent", "agent")
+    assert target("claude", None) == ("agent", "agent")
+    assert target("chatgpt", None) == ("global", "global")
+    routes.remove(destination="capy", agent="claude", project="infra")
+    assert target("claude", "infra") == ("project", "project")
+    with pytest.raises(RouteError):
+        routes.remove(destination="capy", agent="claude", project="infra")
+
+
+def test_override_needs_permission(make, capy):
+    core, c = make()
+    infra(core)
+    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN}, defaults={}, allow_override=False, note="", by="t")
+    err = error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "target": "captain:Acme Captain"}))
+    assert "does not allow overriding" in err
+    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN}, defaults={}, allow_override=True, note="", by="t")
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "target": "captain:Acme Captain"}))
+    assert out["thread_id"] == CAPTAIN2 and out["route"] == "explicit"
+    assert "not linked" not in err
+
+
+def test_no_route_needs_a_target(make):
+    cfg = {"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["owner@example.test"]}, "destinations": {"capy": {}}}
+    _, c = make(config=cfg)
+    assert "no Capy route" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
+    assert payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "target": CAPTAIN}))["route"] == "explicit"
+
+
+def test_route_tools_validate_and_audit(make):
+    core, c = make()
+    infra(core)
+    tok = sign_in(c)["access_token"]
+    r = payload(call(c, tok, "routes_set", {"target": "captain:Acme Captain", "project": "infra", "agent": "claude", "defaults": {"repos": ["example-org/links"]}}))
+    assert r["target"] == {"captain": CAPTAIN2, "name": "Acme Captain", "captain_project": "project_OTHER"} and r["level"] == "agent+project"
+    assert "no Captain matches" in error_text(call(c, tok, "routes_set", {"target": "captain:Nobody"}))
+    assert "no project" in error_text(call(c, tok, "routes_set", {"target": "captain:Captain", "project": "nope"}))
+    assert payload(call(c, tok, "routes_set", {"target": f"project:ZINF"}))["target"]["project"] == PROJECT
+    explained = payload(call(c, tok, "routes_resolve", {"project": "infra"}))
+    assert explained["agent"] == "claude" and explained["route"]["level"] == "agent+project" and explained["checked"] == ["agent+project"]
+    assert len(payload(call(c, tok, "routes_list"))["routes"]) == 2
+    payload(call(c, tok, "routes_remove", {"project": "infra", "agent": "claude"}))
+    log = [(a["action"], a["outcome"], a["source"]) for a in core.audit.recent(destination="capy") if a["action"].startswith("route")]
+    assert log == [("route_remove", "ok", "claude"), ("route_set", "ok", "claude"), ("route_set", "refused", "claude"), ("route_set", "ok", "claude")]
+
+
+def test_seeded_default_route_is_global_and_written_once(make):
+    core, _ = make()
+    (r,) = core.routes.list()
+    assert r.level == "global" and r.target == {"captain": CAPTAIN} and r.updated_by == "config"
+
+
+def test_project_rename_moves_routes(make):
+    core, _ = make()
+    infra(core)
+    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN}, defaults={}, allow_override=False, note="", by="t")
+    core.projects.update("infra", new_slug="infra")
+    assert core.routes.resolve(destination="capy", agent="x", project="infra")[0].level == "project"
+
+
+def test_routes_set_matches_a_captain_by_code(make):
+    core, c = make()
+    infra(core)
+    tok = sign_in(c)["access_token"]
+    assert payload(call(c, tok, "routes_set", {"target": "captain:acme-3", "project": "infra"}))["target"]["captain"] == CAPTAIN2
+    assert payload(call(c, tok, "routes_set", {"target": "captain:ZINF-1"}))["target"]["captain"] == CAPTAIN

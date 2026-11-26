@@ -1,0 +1,13 @@
+{
+  "name": "switchboard",
+  "owner": {
+    "name": "Owner"
+  },
+  "plugins": [
+    {
+      "name": "switchboard",
+      "source": "./channel",
+      "description": "Claude Code channel for switchboard: Capy replies arrive in the open session"
+    }
+  ]
+}

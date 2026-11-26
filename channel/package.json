@@ -1,0 +1,13 @@
+{
+  "name": "switchboard-channel",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code channel that pushes Capy replies from switchboard into an open session",
+  "bin": {
+    "switchboard-channel": "./switchboard-channel.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}
