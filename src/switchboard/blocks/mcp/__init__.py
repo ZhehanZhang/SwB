@@ -26,6 +26,7 @@ from ...projects import ProjectError
 from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
+from .events import EventsExtension, advertise_events
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -137,6 +138,7 @@ class MCPBlock(Block):
         self.legacy_aliases = bool(config.get("legacy_aliases", True))
         self.mcp: MCPServer | None = None
         self.app: Any = None
+        self.events = EventsExtension(self, **(config.get("_events") or {}))
 
     def bind(self) -> None:
         self.mcp = self.build()
@@ -159,6 +161,12 @@ class MCPBlock(Block):
     def lifespan(self) -> AbstractAsyncContextManager[None]:
         return self.app.router.lifespan_context(self.app)
 
+    async def start(self) -> None:
+        self.events.start()
+
+    async def aclose(self) -> None:
+        await self.events.close()
+
     def instructions(self) -> str:
         parts = [CORE_INSTRUCTIONS] + [b.manifest.instructions.strip() for b in self.core.blocks.values() if b.manifest.instructions]
         return "\n".join(parts)
@@ -166,7 +174,9 @@ class MCPBlock(Block):
     def build(self) -> MCPServer:
         core = self.core
         senders = [b for b in core.blocks.values() if b.verb("send") is not None]
-        mcp = LimitedServer(name="switchboard", instructions=self.instructions(), extensions=[TasksExtension(self)] if senders else [])
+        extensions = [self.events, TasksExtension(self)] if senders else [self.events]
+        mcp = LimitedServer(name="switchboard", instructions=self.instructions(), extensions=extensions)
+        mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
         Links = create_model("Links", repos=(list[str] | None, Field(default=None, description="owner/repo names that belong to the project")),
