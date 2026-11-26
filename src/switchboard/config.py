@@ -34,7 +34,7 @@ class StaticKey:
 
 @dataclass(frozen=True)
 class Branding:
-    display_name: str = "switchboard"
+    display_name: str = "SwB"
     public_identity: str = "swb"
     icon: str | None = None
     accent_color: str = "#64748b"

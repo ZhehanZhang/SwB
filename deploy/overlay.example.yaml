@@ -13,7 +13,7 @@ version: 2
 #     aud: <ACCESS_APP_AUDIENCE>
 
 branding:
-  display_name: switchboard
+  display_name: SwB
   # icon: https://switchboard.example.com/icon.svg
   # accent_color: "#64748b"
   # logo_assets_dir: /config/branding

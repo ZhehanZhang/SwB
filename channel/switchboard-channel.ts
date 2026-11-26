@@ -120,7 +120,7 @@ async function follow(): Promise<never> {
 
 if (import.meta.main) {
   if (!URL_BASE) {
-    log("SWITCHBOARD_URL is not set; set it to the base URL of your Switchboard server")
+    log("SWITCHBOARD_URL is not set; set it to the base URL of your SwB server")
     process.exit(1)
   }
   if (!KEY) {

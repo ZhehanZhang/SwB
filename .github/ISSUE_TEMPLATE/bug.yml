@@ -1,5 +1,5 @@
 name: Bug report
-description: Report something that isn't working in switchboard.
+description: Report something that isn't working in SwB.
 body:
   - type: markdown
     attributes:
@@ -10,7 +10,7 @@ body:
     id: environment
     attributes:
       label: Version and environment
-      description: Include the switchboard version or commit, how you installed it, and the affected block or client.
+      description: Include the SwB version or commit, how you installed it, and the affected block or client.
     validations:
       required: true
   - type: textarea

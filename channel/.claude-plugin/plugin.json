@@ -1,7 +1,8 @@
 {
   "name": "switchboard",
+  "displayName": "SwB",
   "version": "0.2.0",
-  "description": "Push Capy's replies to switchboard delegations into the open Claude Code session (channels research preview)",
+  "description": "Push Capy's replies to SwB delegations into the open Claude Code session (channels research preview)",
   "mcpServers": {
     "switchboard": {
       "command": "bun",
@@ -18,12 +19,12 @@
   "channels": [
     {
       "server": "switchboard",
-      "displayName": "Switchboard",
+      "displayName": "SwB",
       "userConfig": {
         "url": {
           "type": "string",
-          "title": "Switchboard URL",
-          "description": "Base URL of your switchboard server",
+          "title": "SwB URL",
+          "description": "Base URL of your SwB server",
           "required": true
         },
         "key": {

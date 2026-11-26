@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: switchboard
+    name: swb
     runtime: docker
     plan: starter
     autoDeployTrigger: "off"

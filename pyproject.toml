@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "swb-one"
 version = "0.2.0"
-description = "Self-hosted MCP server for routing work and sharing scoped memory across AI assistants"
+description = "SwB is a self-hosted MCP server for routing work and sharing scoped memory across AI assistants"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -44,6 +44,8 @@ test = ["pytest>=8", "pytest-asyncio>=0.24"]
 [project.urls]
 Homepage = "https://swb.one"
 Documentation = "https://swb.one"
+Source = "https://github.com/ZhehanZhang/SwB"
+Issues = "https://github.com/ZhehanZhang/SwB/issues"
 
 [project.scripts]
 swb = "switchboard.__main__:cli_main"

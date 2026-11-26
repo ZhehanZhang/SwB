@@ -20,7 +20,8 @@ jobs:
       - uses: docker/metadata-action@v6
         id: meta
         with:
-          images: ghcr.io/${{ github.repository_owner }}/switchboard
+          images: ghcr.io/${{ github.repository_owner }}/swb
+          labels: org.opencontainers.image.title=SwB
           flavor: latest=false
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}

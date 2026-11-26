@@ -35,7 +35,7 @@ def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch
     assert health["block_setup"]["discord"] == {"enabled": False, "missing_env": ["DISCORD_BOT_TOKEN"]}
     assert health["block_setup"]["telegram"] == {"enabled": False, "missing_env": ["TELEGRAM_BOT_TOKEN"]}
     assert health["block_setup"]["dots"] == {"enabled": False, "missing_env": []}
-    assert core.cfg.branding == Branding("switchboard", "swb", None, "#64748b", None)
+    assert core.cfg.branding == Branding("SwB", "swb", None, "#64748b", None)
     assert core.cfg.timezone == "UTC"
     assert (tmp_path / "data" / "switchboard.db").is_file()
     assert "capy: off (missing env: CAPY_API_KEY, CAPY_API_KEY_SERVICE)" in _display("switchboard_status", health)
