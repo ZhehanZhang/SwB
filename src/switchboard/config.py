@@ -48,6 +48,8 @@ class Config:
     static_keys: tuple[StaticKey, ...] = ()
     source_names: dict[str, str] = field(default_factory=dict)
     key_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    key_tools: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    key_targets: dict[str, tuple[str, ...]] = field(default_factory=dict)
     inbox_keys: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_INBOX_KEYS))
     timezone: str = "America/New_York"
     turn_cap: int | None = 200
@@ -101,6 +103,11 @@ def _sections(raw: Any, what: str) -> dict[str, dict[str, Any]]:
     return out
 
 
+def agent_name(key: Any) -> str:
+    """A bearer key's agent name, as its env suffix and the auth maps both spell it: lowercase, with _ as -."""
+    return str(key).strip().lower().replace("_", "-")
+
+
 def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -> Config:
     env = dict(os.environ if env is None else env)
     raw: dict[str, Any] = {}
@@ -121,7 +128,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         if name.startswith(KEY_ENV_PREFIX) and value:
             if len(value) < MIN_KEY_LEN:
                 raise ConfigError(f"{name} must be at least {MIN_KEY_LEN} characters")
-            keys.append(StaticKey(name=name[len(KEY_ENV_PREFIX):].lower(), secret=value))
+            keys.append(StaticKey(name=agent_name(name[len(KEY_ENV_PREFIX):]), secret=value))
 
     version = int(raw.get("version", 1) or 1)
     if version not in (1, 2):
@@ -142,8 +149,10 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         refresh_token_ttl=int(auth.get("refresh_token_ttl", 30 * 86400)),
         static_keys=tuple(keys),
         source_names={str(k): str(v) for k, v in (auth.get("source_names") or {}).items()},
-        key_scopes={str(k).lower(): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_scopes") or {}).items()},
-        inbox_keys={**DEFAULT_INBOX_KEYS, **{str(k).lower(): str(v).lower() for k, v in (auth.get("inbox_keys") or {}).items()}},
+        key_scopes={agent_name(k): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_scopes") or {}).items()},
+        key_tools={agent_name(k): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_tools") or {}).items()},
+        key_targets={agent_name(k): tuple(str(s).strip() for s in as_tuple(v)) for k, v in (auth.get("key_targets") or {}).items()},
+        inbox_keys={**DEFAULT_INBOX_KEYS, **{agent_name(k): str(v).lower() for k, v in (auth.get("inbox_keys") or {}).items()}},
         timezone=str(raw.get("timezone", "America/New_York")),
         turn_cap=int(raw.get("turn_cap", 200)) if raw.get("turn_cap", 200) else None,
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,

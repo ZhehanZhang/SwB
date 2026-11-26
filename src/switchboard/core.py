@@ -7,6 +7,7 @@ cancel, targets) to the block that owns the target, through audit and caps.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import secrets
@@ -400,6 +401,8 @@ class Switchboard:
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
                    forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
+        if principal.targets is not None:
+            await self.check_target(principal, to, project, forward)
         handle = None
         if forward is not None:
             original = self.inbox.handle(forward)
@@ -430,6 +433,30 @@ class Switchboard:
                              "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ? "
                              "AND NOT EXISTS (SELECT 1 FROM inbox WHERE handle = ?)", (forward, handle, handle))
             raise
+
+    async def check_target(self, principal: Principal, to: str | None, project: str | None, forward: str | None = None) -> None:
+        """A key limited by auth.key_targets sends only to those targets, never forwards, and names no project outside its scopes.
+        The target is checked as it will be delivered, after a project picks a different routine or wake target."""
+        if forward is not None:
+            raise CoreError(f"the {principal.source} key can't forward")
+        if not to:
+            raise CoreError(f"the {principal.source} key must send to one of: {', '.join(principal.targets or ()) or 'nothing'}")
+        allowed = set()
+        for t in principal.targets or ():
+            with contextlib.suppress(CoreError):
+                allowed.add(str(await self.resolve_to(t)))
+        addr = await self.resolve_to(to)
+        if not addr.id:
+            raise CoreError(f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
+        if addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
+            addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
+        block = self.blocks.get(addr.block)
+        if block is not None:
+            addr = block.effective_target(addr, project)
+        if str(addr) not in allowed:
+            raise CoreError(f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
+        if project and not principal.allows("project:" + project.strip().lower().removeprefix("project:")):
+            raise CoreError(f"the {principal.source} key can't send in project {project}")
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
