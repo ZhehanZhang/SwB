@@ -228,7 +228,9 @@ def test_memory_preview_and_owner_mutations_reuse_scoped_storage_and_emit_safe_a
     moved = client.post(f"{path}/move", headers=headers, json={"to_scope": "project:second"}).json()
     assert moved == {"moved": item, "from": "project:first", "to": "project:second"}
     assert client.post(f"{path}/promote", headers=headers).json() == {"moved": item, "from": "project:second", "to": "general"}
-    assert read(client, "/memory", id=item)["entry"]["source"] == "admin:owner@example.test"
+    detail = read(client, "/memory", id=item)["entry"]
+    assert detail["source"] == "admin:owner@example.test" and detail["writer"] == "codex"
+    assert read(client, "/memory", scope="general")["items"][0]["writer"] == "codex"
     assert client.delete(path, headers=headers).json() == {"deleted": item}
     assert client.delete(path, headers=headers).status_code == 404
     assert client.get("/api/memory", headers=OWNER, params={"id": item}).status_code == 404
