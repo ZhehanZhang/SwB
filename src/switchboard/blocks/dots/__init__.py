@@ -6,12 +6,11 @@ Switchboard finds the dots itself: in the configured workspace it scans the memb
 rescan_minutes, and registers each as a target named after its handle (example-dots -> @swb example-dots). Config can
 add, rename or disable any of them under dots:. Like every target, a dot is private unless shared.
 
-All traffic goes through one private relay channel (channel, default #switchboard), which switchboard creates as the owner
-when create is true (default #switchboard). Switchboard never invites anyone: the root page and status name the one /invite the owner runs to
-add @swb and the dots. The relay channel is never watched for routing. A send opens one Slack thread per conversation
-and mentions the dot: the owner's own sends (his Slack messages routed here) post as him, through his user token and
-with no approval prompt; his agents' sends post as @swb with the agent's name. The dot's replies in that thread come
-back on the conversation, tied to the sender's inbox.
+All traffic goes through one private channel (channel, default #switchboard), which switchboard creates as the owner
+when create is true. Switchboard never invites anyone: status names the one /invite the owner runs to add @swb and the
+dots. The channel is never watched for routing. Each send is a new post by @swb that @mentions the dot: his agents
+post under their own persona, his own Slack messages under "via <his name>". The dot's replies in that post's thread
+come back on the conversation, tied to the sender's inbox.
 """
 
 from __future__ import annotations
