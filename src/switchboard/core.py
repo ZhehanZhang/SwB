@@ -169,7 +169,7 @@ class Switchboard:
             "status": "degraded" if problems else "ok",
             "problems": problems,
             "oauth": bool(self.cfg.issuer),
-            "blocks": {n: {"use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
+            "blocks": {n: {**(b.status() if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online} for n, b in self.blocks.items()},
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
