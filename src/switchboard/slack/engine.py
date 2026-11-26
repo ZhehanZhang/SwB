@@ -314,10 +314,11 @@ class SlackEngine:
         name = rt.channel_names.get(channel) if rt else None
         return self.visibility.rule(*self.channel_resources(workspace, channel, name)) != "private"
 
-    async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None) -> tuple[str, str | None, bool] | None:
-        """Where a reply from target goes: its Slack thread, or the owner's DM when a private target answers in a shared
-        channel. None when that DM can't be opened."""
-        if not target or self.visibility.rule(*self.target_resources(target)) != "private" or not self.channel_shared(workspace, channel):
+    async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None, *,
+                          trust: str | None = None) -> tuple[str, str | None, bool] | None:
+        """Reply in the Slack thread. Without an owner message to reply to, a private target in a shared channel
+        uses the owner's DM or withholds the reply."""
+        if (trust == "owner" and thread_ts) or not target or self.visibility.rule(*self.target_resources(target)) != "private" or not self.channel_shared(workspace, channel):
             return channel, thread_ts, False
         owner = next(iter(sorted(self.config.workspaces[workspace].owner_user_ids)), None)
         rt = self.runtimes.get(workspace)

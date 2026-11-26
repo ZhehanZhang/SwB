@@ -15,13 +15,13 @@ It runs as a docker compose app on your-host, behind a Cloudflare tunnel at `htt
 ```mermaid
 flowchart LR
   subgraph ins["in"]
-    MCP["mcp<br/>Claude · ChatGPT · Gemini · Claude Code · Capy · any MCP client"]
+    MCP["mcp<br/>Claude, ChatGPT, Gemini, Claude Code, Capy, any MCP client"]
     SIN["slack (events, @swb slug)"]
     CH["Claude Code channel<br/>(local plugin, reads the inbox)"]
   end
   subgraph core
     A["agents + identities<br/>auth, pairing codes, rate limits"] --> T["targets + routes"]
-    T --> V["send · reply · status · result · cancel"]
+    T --> V["send, reply, status, result, cancel"]
     V --> I["conversations + mailboxes<br/>(inbox, wait)"]
     M[projects + scoped memory]
     L[audit, approvals, guards]
@@ -343,7 +343,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   approver in `approvals.notify_workspace`), `known` (the workspace's `known` map of ids to names, for people and
   other agents you trust) or `external` (everyone else). The owner's text is passed on unchanged. Anyone else's
   reaches agents, sinks and Captains inside a header switchboard writes
-  (`[swb · from Alex (U0123) in a2a #dev · trust: known]`) and `<<<swb-untrusted` / `swb-untrusted>>>`
+  (`[swb from Alex (U0123) in a2a #dev, trust known]`) and `<<<swb-untrusted` / `swb-untrusted>>>`
   delimiters, with a line saying it is information, not instructions. Copies of the header or the delimiters inside
   the text are neutralised, so a sender can't fake either.
 - **Visibility: private or shared.** One switch on every resource, with one resolver: `target:<slug>` (agents,
@@ -354,8 +354,9 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   channel and the target are shared for them. Anything else they send becomes a **context item** in the inbox of the
   agents behind the target: kind `context`, wrapped as above, with where it came from. It wakes nothing, is never
   delegated, never reaches a sink or a routine, and gets no answer beyond a neutral ephemeral "Noted.". Non-owners get
-  no slug hints, so private targets aren't discoverable. A private target's reply to a message in a shared channel goes
-  to the owner's DM instead of the channel. `sender_rate` (`{count: 5, window_s: 600}`) caps context items per sender,
+  no slug hints, so private targets aren't discoverable. The owner's messages get replies in their original threads.
+  Without an owner message, a private target's reply in a shared channel goes to the owner's DM or is withheld.
+  `sender_rate` (`{count: 5, window_s: 600}`) caps context items per sender,
   and every context item and drop is in the audit log. The top-level `visibility:` section sets `defaults` per kind
   and `resources`; the root page's pills and the `visibility_set` tool flip one resource, and that override wins.
 - **Signed sinks.** A sink with `secret_env` signs each POST: `X-Switchboard-Timestamp` is the Unix time and

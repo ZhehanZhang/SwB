@@ -45,7 +45,7 @@ OWNER_KINDS = frozenset({"oauth", "key", "connect"})
 
 
 def unlabel(text: str) -> str:
-    """No text can carry switchboard's own [via swb · from X] label: copies become (via swb."""
+    """Neutralise copies of the current and legacy [via swb from X] label."""
     return LABEL_RE.sub("(via swb", text or "")
 
 
@@ -277,7 +277,7 @@ class DotsBlock(Block):
         return list(self.problems_)
 
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
-        rows = [(f"dot {d['slug']}", f"{d['label']} · {d['user_id']} in {self.workspace}", "found", True) for d in self.dots()]
+        rows = [(f"dot {d['slug']}", f"{d['label']} ({d['user_id']}) in {self.workspace}", "found", True) for d in self.dots()]
         ch = self.relay_channel()
         invite = getattr(self, "relay_invite", None)
         rows.append(("Dots relay channel (fallback)", f"#{self.channel_name.lstrip('#')} in {self.workspace or '-'}",
@@ -402,7 +402,7 @@ class DotsBlock(Block):
             body = re.sub(rf"^\s*(<@[A-Z0-9]+>\s*)*{re.escape(dot['slug'])}\b[\s:,]*", "", sender.get("text") or "", flags=re.I).strip() or task
             text = f"{mention}{unlabel(body)}"
         elif as_him:
-            text = f"{mention}[via swb · from {' '.join(unlabel(label).replace(']', ')').split())}] {unlabel(task)}"
+            text = f"{mention}[via swb from {' '.join(unlabel(label).replace(']', ')').split())}] {unlabel(task)}"
         elif owner_agent:
             text = f"{mention}{unlabel(task)}"
         else:

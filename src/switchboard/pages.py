@@ -91,7 +91,7 @@ def _row(label: str, hint: str, value: str, on: bool | None = None) -> str:
 def _persona_row(p: dict[str, Any], csrf: str) -> str:
     pic = (f'<img src="{html.escape(p["url"])}" alt="" width="36" height="36" style="border-radius:8px;object-fit:cover">' if p.get("url")
            else html.escape(p.get("emoji") or ""))
-    hint = " · ".join([p["id"], f"picture: {p['source']}" + (f" ({p['avatar']})" if p.get("avatar") else ""), "used by " + (", ".join(p["used_by"]) or "nobody by default")])
+    hint = ", ".join([p["id"], f"picture: {p['source']}" + (f" ({p['avatar']})" if p.get("avatar") else ""), "used by " + (", ".join(p["used_by"]) or "nobody by default")])
     form = ""
     if p.get("avatar"):
         accept = "image/png" if p["avatar"].endswith(".png") else ("image/gif" if p["avatar"].endswith(".gif") else "image/jpeg")
@@ -121,7 +121,7 @@ def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, 
             facts.append(f"thread {p['thread_ts']}")
         hidden = f'<input type="hidden" name="csrf" value="{csrf}">'
         rid = html.escape(r["id"])
-        return (f'<div class="setting"><div class="setting-label"><span>{html.escape(what)}</span><span class="setting-hint">{html.escape(" · ".join(facts))}</span>'
+        return (f'<div class="setting"><div class="setting-label"><span>{html.escape(what)}</span><span class="setting-hint">{html.escape(", ".join(facts))}</span>'
                 + (f'<span class="setting-hint">{html.escape(p["text"])}</span>' if p.get("text") else "")
                 + f'</div><div class="setting-value"><form method="post" action="/slack/requests/{rid}/approve">{hidden}<button class="pill-button primary">Approve and send</button></form>'
                 f'<form method="post" action="/slack/requests/{rid}/reject">{hidden}<button class="text-button">Reject</button></form></div></div>')
@@ -141,7 +141,7 @@ def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]],
     ok = health["status"] == "ok"
     items = ""
     for name, b in health.get("blocks", {}).items():
-        level = " · ".join(x for x in (f"out {b['level']['out']}" if b["level"]["out"] else "", f"in {b['level']['in']}" if b["level"]["in"] else "") if x)
+        level = ", ".join(x for x in (f"out {b['level']['out']}" if b["level"]["out"] else "", f"in {b['level']['in']}" if b["level"]["in"] else "") if x)
         items += _row(f"Block: {name}", f"{b['use']} block, {b['kind']}" + (f", {level}" if level else ""), "On" if b["online"] else "Off", b["online"])
     items += _row("Memory mirror", "Markdown copy of every memory, one folder per scope", "On" if health["mirror"] else "Off", health["mirror"])
     items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
@@ -158,7 +158,7 @@ def _systems_body(systems: list[dict[str, Any]]) -> str:
     """Each switchboard project and what it maps to in every system: the Captain its route reaches, Claude routines, links."""
     if not systems:
         return ""
-    rows = "".join(_row(s["name"], f"project {s['slug']}", " · ".join(f"{k}: {v}" for k, v in s["systems"].items()) or "nothing mapped yet")
+    rows = "".join(_row(s["name"], f"project {s['slug']}", ", ".join(f"{k}: {v}" for k, v in s["systems"].items()) or "nothing mapped yet")
                    for s in systems)
     return (f'<section class="hero section-gap fade-in"><p>Projects across systems: one switchboard project and its counterpart in Capy, '
             f'Claude and the rest. A send to the project picks one by its routes.</p></section><div class="card fade-in">{rows}</div>')
@@ -169,7 +169,7 @@ def _routines_body(routines: list[dict[str, Any]], projects: list[dict[str, Any]
     hidden = f'<input type="hidden" name="csrf" value="{csrf}">'
 
     def row(r: dict[str, Any]) -> str:
-        hint = " · ".join(x for x in (r["kind"], f"project {r['project']}" if r["project"] else "", r["routine_id"], f"slugs {', '.join(r['slugs'])}",
+        hint = ", ".join(x for x in (r["kind"], f"project {r['project']}" if r["project"] else "", r["routine_id"], f"slugs {', '.join(r['slugs'])}",
                                       "from the config" if r["source"] == "config" else "") if x)
         control = (f'<form method="post" action="/routines/{html.escape(r["name"])}/remove">{hidden}<button class="text-button">Remove</button></form>'
                    if r["source"] == "stored" else "")
@@ -220,7 +220,7 @@ def _connect_body(keys: list[dict[str, Any]], csrf: str) -> str:
 
     def row(k: dict[str, Any]) -> str:
         used = _ago(k.get("last_used_at"))
-        hint = " · ".join(x for x in (k["id"], f"project {k['project']}" if k.get("project") else "", k.get("client") or "", f"last call {used}" if used else "never called") if x)
+        hint = ", ".join(x for x in (k["id"], f"project {k['project']}" if k.get("project") else "", k.get("client") or "", f"last call {used}" if used else "never called") if x)
         return (f'<div class="setting"><div class="setting-label"><span>{html.escape(k["agent"])}</span><span class="setting-hint">{html.escape(hint)}</span></div>'
                 f'<div class="setting-value"><form method="post" action="/pairing/keys/{html.escape(k["id"])}/revoke">{hidden}<button class="text-button">Revoke</button></form></div></div>')
 
@@ -253,7 +253,7 @@ def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
 def claim_page(c: dict[str, Any], code: str, csrf: str) -> HTMLResponse:
     """A pending self-registration: what a Claude session asked to register, and one field for the routine's token."""
     np = c.get("new_project")
-    rows = (_row("Routine", f"{c['routine_id']}" + (" · primary for the project" if c["primary"] else ""), c["name"])
+    rows = (_row("Routine", f"{c['routine_id']}" + (" (primary for the project)" if c["primary"] else ""), c["name"])
             + _row("Claude Project", "Where the routine lives", c["title"] or "-")
             + _row("Switchboard project", "Created when you save" if np else "Already exists", c["project"] + (f" ({np['name']})" if np else ""))
             + _row("Asked by", "The signed-in session that called routine_register", c["created_by"]))

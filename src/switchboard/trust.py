@@ -23,7 +23,7 @@ def neutralize(text: str) -> str:
 def header(name: str | None, sender_id: str | None, trust: str, where: str = "") -> str:
     who, ident, where = (" ".join(neutralize(x).replace("]", ")").split()) for x in (name or sender_id or "unknown", sender_id or "", where))
     ident = f" ({ident})" if ident and ident != who else ""
-    return f"[swb · from {who}{ident}{(' ' + where) if where else ''} · trust: {trust}]"
+    return f"[swb from {who}{ident}{(' ' + where) if where else ''}, trust {trust}]"
 
 
 def wrap(text: str, name: str | None, sender_id: str | None, trust: str, where: str = "") -> str:
