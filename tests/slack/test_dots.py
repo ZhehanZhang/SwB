@@ -266,6 +266,9 @@ def test_owner_mentions_route_in_dots_channels_but_dot_replies_are_consumed(tmp_
 
         text = f"<@{BOT_USER}> claude dot answer"
         assert client.portal.call(core.slack.ingest, "a2a", dot_event(channel, "1700000600.1", text, "1699999999.9")) is None
+        file_share = {**dot_event(channel, "1700000600.15", text, dot["ts"]), "subtype": "file_share"}
+        del file_share["user"]
+        assert client.portal.call(core.slack.ingest, "a2a", file_share) is None
         assert client.portal.call(core.slack.ingest, "a2a", dot_event(channel, "1700000600.2", text, dot["ts"])) is None
         result = tool(client, "result", {"conversation": dot["handle"]})
         assert result["status"] == "answered" and len(result["replies"]) == 1 and text in result["final"]["text"]
