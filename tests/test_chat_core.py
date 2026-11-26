@@ -9,6 +9,7 @@ from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, CIMDHost, FakeCapy, acces
 from starlette.testclient import TestClient
 from switchboard import blocks as blocks_mod
 from switchboard.app import create_app
+from switchboard.auth import Principal
 from switchboard.blocks import BlockError, Manifest
 from switchboard.chat import ChatBlock, Incoming
 from switchboard.config import translate_v1
@@ -20,7 +21,7 @@ OWNER_ID, FRIEND, STRANGER = "1001", "2002", "3003"
 
 class FakeChat(ChatBlock):
     platform = "chatx"
-    manifest = Manifest(id="chatx", title="ChatX", kind="both")
+    manifest = Manifest(id="chatx", title="ChatX", kind="both", verbs={"reply": "reply"})
 
     def __init__(self, core, config):
         super().__init__(core, config)
@@ -29,6 +30,9 @@ class FakeChat(ChatBlock):
     async def post(self, space, channel, text, *, root=None, reply_to=None, persona=None):
         self.n += 1
         self.posts.append({"space": space, "channel": channel, "text": text, "root": root, "reply_to": reply_to, "persona": persona.name if persona else None})
+        if text.startswith("split:"):
+            self.n += 1
+            return [str(9000 + self.n - 1), str(9000 + self.n)]
         return str(9000 + self.n)
 
     async def open_dm(self, space, user):
@@ -123,7 +127,7 @@ def test_listen_mode_only_in_opted_in_channels_and_never_delegates(env):
     core, c, block, anthropic = env
     assert c.portal.call(block.ingest, msg(channel="40", mention=False, text="chatter")) is None
     heard = c.portal.call(block.ingest, msg(channel="50", mention=False, text="claude-infra chatter"))
-    assert heard["kind"] == "listen" and not heard["addressed_to_us"] and anthropic.fired == []
+    assert heard["chat_kind"] == "listen" and not heard["addressed_to_us"] and anthropic.fired == []
     assert block.acks == []
     assert core.store.one("SELECT COUNT(*) AS n FROM inbox WHERE kind = 'chatx_event'")["n"] == 1
 
@@ -170,3 +174,41 @@ def test_claim_route_is_not_shadowed_by_mcp_regardless_of_block_order(env):
     assert list(core.blocks).index("mcp") < list(core.blocks).index("chatx")
     path = block.claim_link("claude")["link"].removeprefix(PUBLIC)
     assert c.get(path, headers=OWNER).status_code == 200
+
+
+def test_every_chunk_of_a_split_post_belongs_to_the_thread(env):
+    core, c, block, anthropic = env
+    c.portal.call(block.ingest, msg(text="claude-infra long answer please"))
+    handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
+    c.portal.call(block.relay, {"kind": "final", "handle": handle, "text": "split: long"})
+    follow = c.portal.call(block.ingest, msg(message="103", mention=False, reply_to="9002", text="about the second part"))
+    assert follow is not None and follow["addressed_to_us"] and follow["from"]["root"] == "100" and follow["target"] == "claude-infra"
+
+
+def test_reply_by_inbox_conversation_answers_the_newest_addressed_event(env):
+    core, c, block, anthropic = env
+    c.portal.call(block.ingest, msg(text="claude hi there", message="104"))
+    handle = core.store.one("SELECT handle FROM handles WHERE owner = 'claude' AND destination = 'chatx'")["handle"]
+    claude = Principal(source="claude", client_id="t", kind="oauth")
+    c.portal.call(lambda: core.verb(claude, "reply", handle, text="hello back"))
+    assert block.posts[-1]["channel"] == "40" and block.posts[-1]["root"] == "104" and block.posts[-1]["text"] == "hello back"
+    with pytest.raises(Exception, match="no conversation"):
+        c.portal.call(lambda: core.verb(Principal(source="other", client_id="t", kind="oauth"), "reply", handle, text="x"))
+
+
+def test_display_names_with_spaces_never_become_visibility_resources(env):
+    core, c, block, anthropic = env
+    event = c.portal.call(block.ingest, msg(user=STRANGER, channel_name="Example group", text="claude-infra hi"))
+    assert event["trust"] == "external" and anthropic.fired == []
+    assert block.channel_resources("home", "40", "Example group") == ["channel:home/40"]
+
+
+def test_agent_targets_count_toward_the_turn_cap(env):
+    core, c, block, anthropic = env
+    core.cfg.turn_cap = 2
+    for i in range(3):
+        c.portal.call(block.ingest, msg(text="claude ping", message=str(200 + i), reply_to="9100" if i else None))
+        core.store.x("INSERT OR IGNORE INTO chat_sent(block, space, channel, message, root, at) VALUES ('chatx', 'home', '40', '9100', '200', 0)")
+    events = core.store.one("SELECT COUNT(*) AS n FROM inbox WHERE owner = 'claude' AND kind = 'chatx_event'")["n"]
+    paused = core.store.one("SELECT paused_at FROM conversation_turns WHERE root = 'chatx:home:40:200'")["paused_at"]
+    assert paused is not None and events == 3
