@@ -68,6 +68,8 @@ class Call:
     destination: str
     action: str
     notes: dict[str, Any] = field(default_factory=dict)
+    handle: str | None = None
+    handle_meta: dict[str, Any] = field(default_factory=dict)
 
     @property
     def block(self) -> str:

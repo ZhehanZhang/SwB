@@ -64,6 +64,7 @@ class Principal:
     kind: str
     origin: str = "mcp"
     scopes: tuple[str, ...] | None = None
+    trust: str = "owner"
 
     def allows(self, scope: str) -> bool:
         """Whether this caller may use a memory scope ('general' or 'project:<slug>'); None means every scope."""
@@ -632,4 +633,3 @@ def _basic(request: Request) -> tuple[str, str] | None:
 
 def _append(uri: str, q: dict[str, str]) -> str:
     return uri + ("&" if urlparse(uri).query else "?") + urlencode(q)
-

@@ -484,12 +484,12 @@ class ClaudeRoutineBlock(Block):
 
     async def targets(self) -> list[dict[str, Any]]:
         routines = self.routines()
-        return [{"kind": "routine", "id": n, "name": (f"Claude · {r['title']}" if r["source"] == "stored" and r["title"] else r["title"])
-                 or (f"Claude · {r['project']}" if r["project"] else f"{n} (Claude routine)"),
+        return [{"kind": "routine", "id": n, "name": (f"Claude: {r['title']}" if r["source"] == "stored" and r["title"] else r["title"])
+                 or (f"Claude: {r['project']}" if r["project"] else f"{n} (Claude routine)"),
                  "slugs": self.slugs(r, routines), **({"project": r["project"]} if r["project"] else {})} for n, r in routines.items()]
 
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
-        return [(f"routine {r['name']}", f"{r['kind']}{' · ' + r['project'] if r['project'] else ''} · {r['routine_id'] or 'no id'}", r["status"],
+        return [(f"routine {r['name']}", f"{r['kind']}{': ' + r['project'] if r['project'] else ''} ({r['routine_id'] or 'no id'})", r["status"],
                  r["status"] not in ("no token", "no routine id") and not r["status"].startswith("failed")) for r in self.rows()]
 
     async def validate_route_target(self, target: dict[str, Any], defaults: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -531,7 +531,8 @@ class ClaudeRoutineBlock(Block):
             raise BlockError(f"no routine for that; routines: {', '.join(self.routines()) or 'none'}")
         name = routine["name"]
         project = project or routine["project"]
-        out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True)
+        out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True,
+                                         handle=call.handle, handle_meta=call.handle_meta)
         handle = out["handle"]
         call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
         token = self.token(routine)

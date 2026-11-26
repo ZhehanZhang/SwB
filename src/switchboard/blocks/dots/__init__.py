@@ -45,7 +45,7 @@ OWNER_KINDS = frozenset({"oauth", "key", "connect"})
 
 
 def unlabel(text: str) -> str:
-    """No text can carry switchboard's own [via swb · from X] label: copies become (via swb."""
+    """Neutralise copies of the current and legacy [via swb from X] label."""
     return LABEL_RE.sub("(via swb", text or "")
 
 
@@ -277,7 +277,7 @@ class DotsBlock(Block):
         return list(self.problems_)
 
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
-        rows = [(f"dot {d['slug']}", f"{d['label']} · {d['user_id']} in {self.workspace}", "found", True) for d in self.dots()]
+        rows = [(f"dot {d['slug']}", f"{d['label']} ({d['user_id']}) in {self.workspace}", "found", True) for d in self.dots()]
         ch = self.relay_channel()
         invite = getattr(self, "relay_invite", None)
         rows.append(("Dots relay channel (fallback)", f"#{self.channel_name.lstrip('#')} in {self.workspace or '-'}",
@@ -392,8 +392,9 @@ class DotsBlock(Block):
             channel, mode = self.relay_channel(), "relay"
         if channel is None:
             raise BlockError(f"Slack won't open a DM with {dot['slug']} and the dots relay channel isn't set up; see switchboard_status")
-        handle = self.core.inbox.open_handle(owner=p.source, destination="dots", ref=dot["user_id"], project=project, title=title or f"dot {dot['slug']}",
-                                             meta={"dot": dot["slug"], "workspace": self.workspace, "channel": channel, "mode": mode},
+        handle = self.core.inbox.open_handle(handle=call.handle, owner=p.source, destination="dots", ref=dot["user_id"],
+                                             project=project, title=title or f"dot {dot['slug']}",
+                                             meta={"dot": dot["slug"], "workspace": self.workspace, "channel": channel, "mode": mode, **call.handle_meta},
                                              status="sent", target=f"{self.name}:dot:{dot['user_id']}")
         label = (sender.get("user_name") or sender.get("user")) if sender else self.core.agents.label(p.source)
         mention = "" if mode == "dm" else f"<@{dot['user_id']}> "
@@ -401,7 +402,7 @@ class DotsBlock(Block):
             body = re.sub(rf"^\s*(<@[A-Z0-9]+>\s*)*{re.escape(dot['slug'])}\b[\s:,]*", "", sender.get("text") or "", flags=re.I).strip() or task
             text = f"{mention}{unlabel(body)}"
         elif as_him:
-            text = f"{mention}[via swb · from {' '.join(unlabel(label).replace(']', ')').split())}] {unlabel(task)}"
+            text = f"{mention}[via swb from {' '.join(unlabel(label).replace(']', ')').split())}] {unlabel(task)}"
         elif owner_agent:
             text = f"{mention}{unlabel(task)}"
         else:
@@ -436,8 +437,6 @@ class DotsBlock(Block):
                 "channel": channel, "ts": out["ts"], "permalink": out.get("permalink"), "note": "the dot's reply comes back on this conversation"}
 
     def from_dot(self, m: dict[str, Any]) -> dict[str, Any] | None:
-        if m.get("subtype") not in (None, "bot_message", "thread_broadcast"):
-            return None
         who = {m.get("user"), m.get("bot_id")} - {None}
         return next((d for d in self.dots() if who & {d["user_id"], d.get("bot_id")}), None)
 
@@ -449,7 +448,7 @@ class DotsBlock(Block):
                                    (self.workspace, channel, dot["user_id"], m.get("ts") or ""))
 
     async def deliver(self, row: Any, dot: dict[str, Any], m: dict[str, Any]) -> bool:
-        if float(m["ts"]) <= float(row["last_ts"] or 0):
+        if m.get("subtype") not in (None, "bot_message", "thread_broadcast") or float(m["ts"]) <= float(row["last_ts"] or 0):
             return False
         self.core.store.x("UPDATE dot_threads SET last_ts = ? WHERE workspace = ? AND channel = ? AND thread_ts = ?",
                           (m["ts"], row["workspace"], row["channel"], row["thread_ts"]))
@@ -463,15 +462,16 @@ class DotsBlock(Block):
         self.core.inbox.update_handle(row["handle"], status="answered")
         return True
 
-    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> None:
-        """A message in the relay channel or a dot DM that @swb sees: a dot's answer goes back on its conversation.
-        Everything else (our own posts, the owner typing, edits) is left alone, and nothing here is routed."""
+    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> bool:
+        """Consume events from known dots, delivering only eligible replies that match a conversation."""
         dot = self.from_dot(event)
-        if dot is None or not event.get("ts"):
-            return
-        row = self._row_for(event["channel"], event, dot)
-        if row is not None and row["dot"] == dot["user_id"]:
-            await self.deliver(row, dot, event)
+        if dot is None:
+            return False
+        if event.get("ts"):
+            row = self._row_for(event["channel"], event, dot)
+            if row is not None and row["dot"] == dot["user_id"]:
+                await self.deliver(row, dot, event)
+        return True
 
     async def poll_dms(self) -> int:
         """Read the dots' answers in DMs for an hour after each send: the owner's own DM with his user token (@swb can't
