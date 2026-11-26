@@ -370,7 +370,7 @@ class Memory:
                 current = head
                 lines += ["", f"## {head}", ""]
             rel = Memory.rel_path(r["scope"], r["namespace"], r["key"], r["id"]).as_posix()
-            lines.append(f"- [{r['title']}]({rel}) · {r['source']} · {iso(r['updated_at'])}")
+            lines.append(f"- [{r['title']}]({rel}) ({r['source']}, {iso(r['updated_at'])})")
         return "\n".join(lines) + "\n"
 
     def _sync_mirror(self) -> None:

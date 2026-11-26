@@ -66,7 +66,7 @@ class SlackEngine:
         self.senders.limits = {}
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
-        self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[None]]] = {}
+        self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]]] = {}
         self.owner_channels: set[tuple[str, str]] = set()
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
         self.visibility = Visibility(dict(config.visibility))
@@ -221,14 +221,13 @@ class SlackEngine:
             log.exception("workspace %s: failed to handle %s", label, req_type)
 
     async def ingest(self, label: str, event: dict[str, Any]) -> dict[str, Any] | None:
-        """Turn one Slack message event into a push event: classify, dedupe, ack, fan out to sinks."""
+        """Let a relay consume the event; otherwise classify, dedupe, ack and fan it out."""
         rt = self.runtime(label)
         channel, ts = event.get("channel"), event.get("ts")
         if not channel or not ts:
             return None
         relay = self.relays.get((label, channel))
-        if relay is not None:
-            await relay(rt, event)
+        if relay is not None and await relay(rt, event):
             return None
         kind = classify(event, rt.classify_context())
         if kind is None:
@@ -314,10 +313,11 @@ class SlackEngine:
         name = rt.channel_names.get(channel) if rt else None
         return self.visibility.rule(*self.channel_resources(workspace, channel, name)) != "private"
 
-    async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None) -> tuple[str, str | None, bool] | None:
-        """Where a reply from target goes: its Slack thread, or the owner's DM when a private target answers in a shared
-        channel. None when that DM can't be opened."""
-        if not target or self.visibility.rule(*self.target_resources(target)) != "private" or not self.channel_shared(workspace, channel):
+    async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None, *,
+                          trust: str | None = None) -> tuple[str, str | None, bool] | None:
+        """Reply in the Slack thread. Without an owner message to reply to, a private target in a shared channel
+        uses the owner's DM or withholds the reply."""
+        if (trust == "owner" and thread_ts) or not target or self.visibility.rule(*self.target_resources(target)) != "private" or not self.channel_shared(workspace, channel):
             return channel, thread_ts, False
         owner = next(iter(sorted(self.config.workspaces[workspace].owner_user_ids)), None)
         rt = self.runtimes.get(workspace)
