@@ -18,6 +18,13 @@ def register(block: "ClaudeRoutineBlock", mcp: MCPServer, kit: Any) -> None:
     async def routine_list(ctx: Context) -> dict[str, Any]:
         return {"routines": await kit.invoke(ctx, bname, "list"), "pending": block.pending()}
 
+    @mcp.tool(title="Collect the message a routine was woken for", description=(
+        "For a Claude routine session whose run has no text: switchboard sometimes has to wake a Project routine without it. Returns "
+        "the message (with its conversation handle and the switchboard note on how to answer), once; call again until conversation "
+        "is null. Pass routine (this routine's name or trig_ id) when you know it."), annotations=kit.WRITE_IDEMPOTENT)
+    async def routine_pickup(ctx: Context, routine: Annotated[str | None, Field(description="this routine's name or trig_ id")] = None) -> dict[str, Any]:
+        return await kit.invoke(ctx, bname, "pickup", routine=routine)
+
     @mcp.tool(title="Register this Claude routine", description=(
         "For a Claude session setting up its own routine (a Claude Code routine with an API trigger, inside a Claude Project). Call "
         "project_list first and attach to the switchboard project that matches (project=<slug>). Pass the routine's fire URL or trig_ id "

@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS routines (name TEXT PRIMARY KEY, routine_id TEXT NOT 
   token TEXT NOT NULL, created_at REAL NOT NULL, created_by TEXT NOT NULL)
 """
 FIRES = "CREATE TABLE IF NOT EXISTS routine_fires (name TEXT PRIMARY KEY, fired_at REAL NOT NULL, last_status TEXT NOT NULL)"
+PICKUPS = """
+CREATE TABLE IF NOT EXISTS routine_pickups (handle TEXT PRIMARY KEY, routine TEXT NOT NULL, routine_id TEXT NOT NULL, project TEXT, text TEXT NOT NULL,
+  created_at REAL NOT NULL, picked_at REAL)
+"""
+PICKUP_TTL_S = 86_400
 CLAIMS = """
 CREATE TABLE IF NOT EXISTS routine_claims (code_hash TEXT PRIMARY KEY, routine_id TEXT NOT NULL, name TEXT NOT NULL, project TEXT NOT NULL,
   new_project TEXT, title TEXT, is_primary INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at REAL NOT NULL,
@@ -126,6 +131,7 @@ class ClaudeRoutineBlock(Block):
         core.store.x(SCHEMA)
         core.store.x(FIRES)
         core.store.x(CLAIMS)
+        core.store.x(PICKUPS)
         cols = {r["name"] for r in core.store.q("PRAGMA table_info(routines)")}
         if "title" not in cols:
             core.store.x("ALTER TABLE routines ADD COLUMN title TEXT")
@@ -211,15 +217,25 @@ class ClaudeRoutineBlock(Block):
         same = next((n for n, r in routines.items() if r["routine_id"] == routine_id and r["source"] == "stored"), None)
         if same:
             return same
+        taken = set(routines) | set(self._claimed(routine_id))
         base = f"{agent}-{slug}" if slug else agent
         words = re.sub(r"[^a-z0-9]+", "-", (title or "").lower()).strip("-")
-        for n in [base] + ([f"{base}-{words}"] if words else []) + [f"{base}-{i}" for i in range(2, 100)]:
-            n = n[:40].rstrip("-")
-            if NAME_RE.fullmatch(n) and n not in routines:
+
+        def fit(suffix: str) -> str:
+            return (base[:40 - len(suffix)].rstrip("-") + suffix) if suffix else base[:40].rstrip("-")
+
+        for n in [fit("")] + ([fit("-" + words[:20].rstrip("-"))] if words else []) + [fit(f"-{i}") for i in range(2, 100)]:
+            if NAME_RE.fullmatch(n) and n not in taken:
                 return n
         raise BlockError(f"no free routine name under {base}; pass name")
 
-    def _check_name(self, name: str, routine_id: str, replace: bool) -> None:
+    def _claimed(self, routine_id: str, skip: str | None = None) -> dict[str, str]:
+        """Names held by registrations still waiting for the owner, other than this routine's own (or the claim skip)."""
+        return {r["name"]: r["routine_id"] for r in self.core.store.q(
+            "SELECT name, routine_id, code_hash FROM routine_claims WHERE used_at IS NULL AND expires_at > ?", (self.core.clock(),))
+            if r["routine_id"] != routine_id and r["code_hash"] != skip}
+
+    def _check_name(self, name: str, routine_id: str, replace: bool, skip: str | None = None) -> None:
         if not NAME_RE.fullmatch(name):
             raise BlockError("a routine name is lowercase letters, digits and dashes")
         if name in self.configured:
@@ -227,6 +243,8 @@ class ClaudeRoutineBlock(Block):
         held = self.routines().get(name)
         if held is not None and held["routine_id"] != routine_id and not replace:
             raise BlockError(f"routine {name} already exists for {held['routine_id']}; pick another name, or pass replace=true to point it at this routine")
+        if name in self._claimed(routine_id, skip):
+            raise BlockError(f"routine name {name} is held by a registration waiting for the owner; pick another name")
 
     def add(self, *, fire: str, token: str, project: str | None, name: str | None, agent: str, actor: str, title: str | None = None,
             primary: bool | None = None, replace: bool = False) -> dict[str, Any]:
@@ -349,7 +367,7 @@ class ClaudeRoutineBlock(Block):
         c = self.claim(code)
         if not TOKEN_RE.fullmatch((token or "").strip()):
             raise BlockError("that doesn't look like a routine token (sk-ant-oat01-…)")
-        self._check_name(c["name"], c["routine_id"], False)
+        self._check_name(c["name"], c["routine_id"], False, skip=_sha(code))
         if not self.core.store.n("UPDATE routine_claims SET used_at = ? WHERE code_hash = ? AND used_at IS NULL", (self.core.clock(), _sha(code))):
             raise BlockError("this link was already used")
         if c["new_project"]:
@@ -389,6 +407,8 @@ class ClaudeRoutineBlock(Block):
             Action("register", "Register this Claude routine", "A Claude session registers its own routine for a switchboard project: "
                    "returns a one-time link where the owner enters the token. Read project_list first; a new project close to an existing one "
                    "is refused unless create_new is set.", self.register_action),
+            Action("pickup", "Collect a routine's message", "For a routine session woken without text: the message it was woken for, "
+                   "with the conversation handle and the switchboard note.", self.pickup_action),
             Action("add", "Add a Claude routine", "Owner only. Register a routine from its fire URL (or trig_ id) and token, for a switchboard project or "
                    "general. The token is encrypted at rest and never shown again. Prefer the root page's form, so the token stays out of chats.",
                    self.add_action),
@@ -472,7 +492,7 @@ class ClaudeRoutineBlock(Block):
             raise BlockError(f"no routine for that; routines: {', '.join(self.routines()) or 'none'}")
         name = routine["name"]
         project = project or routine["project"]
-        out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project)
+        out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True)
         handle = out["handle"]
         call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
         token = self.token(routine)
@@ -497,13 +517,35 @@ class ClaudeRoutineBlock(Block):
             self._record_fire(name, f"failed: HTTP {resp.status_code}")
             return {**base, "fired": False, "note": f"routine {name} didn't start (HTTP {resp.status_code}); the message is in the mailbox"}
         self._record_fire(name, "ok")
+        if bare:
+            self.core.store.x("INSERT OR REPLACE INTO routine_pickups(handle, routine, routine_id, project, text, created_at) VALUES (?,?,?,?,?,?)",
+                              (handle, name, routine["routine_id"], project, text, self.core.clock()))
         body = resp.json()
         session = {"session_id": body.get("claude_code_session_id"), "session_url": body.get("claude_code_session_url"), "routine": name}
         self.core.inbox.update_handle(handle, state={"routine": {**session, "bare": bare}})
         return {**base, "fired": True, **session, **({"woken_without_text": True} if bare else {}),
                 "note": "the session answers with reply; it arrives in your inbox with in_reply_to set to this conversation (final=true for the answer)"
                         + ("; Anthropic refused the text for this Project routine (403 'this project is paused', anthropics/claude-code#102874), "
-                           "so it was woken without it and reads the message from its inbox" if bare else "")}
+                           "so it was woken without it and collects the message with routine_pickup" if bare else "")}
+
+    def pickup(self, routine: str | None) -> dict[str, Any]:
+        """The message a routine was woken for without text: the oldest one waiting for that routine (by name or trig_ id),
+        or for any routine when it doesn't know its own, with the switchboard note. Each message is handed out once."""
+        want = (routine or "").strip().lower()
+        args: list[Any] = [self.core.clock() - PICKUP_TTL_S]
+        sql = "SELECT * FROM routine_pickups WHERE picked_at IS NULL AND created_at > ?"
+        if want:
+            sql += " AND (routine = ? OR lower(routine_id) = ?)"
+            args += [want, want]
+        for row in self.core.store.q(sql + " ORDER BY created_at", args):
+            if self.core.store.n("UPDATE routine_pickups SET picked_at = ? WHERE handle = ? AND picked_at IS NULL", (self.core.clock(), row["handle"])):
+                return {"conversation": row["handle"], "routine": row["routine"], "project": row["project"], "text": row["text"]}
+        return {"conversation": None, "note": "nothing waiting" + (f" for {want}" if want else "")}
+
+    async def pickup_action(self, call: Call, *, routine: str | None = None) -> dict[str, Any]:
+        out = self.pickup(routine)
+        call.note(target=out.get("routine") or routine or "-", ref=out.get("conversation"))
+        return out
 
     def mcp_tools(self, mcp: Any, kit: Any) -> None:
         from .mcp_tools import register

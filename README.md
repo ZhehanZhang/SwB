@@ -259,9 +259,12 @@ Re-registering the same routine id updates its token instead of adding a second 
 different routine is refused unless `replace=true`. One routine per project is the **primary**: the first registered,
 or the one registered with `primary=true`, which clears the mark on the others.
 
-- `send(to="claude", project="<slug>")`, `send(to="claude-<slug>")` and `send(to="claude:<slug>")` wake the
-  primary, which is the project's doorman.
-- `send(to="<routine name>")` wakes one particular routine.
+- `send(to="claude", project="<slug>")` and `send(to="claude:<slug>")` wake the primary, which is the project's
+  doorman.
+- `send(to="<routine name>")` wakes one particular routine. `claude-<slug>` is the name of the project's first routine,
+  so it stays on that routine after the primary moves.
+- A Claude Project can send to its own routine (the setup test does): switchboard opens that conversation even though
+  both sides are agent claude.
 - A project route (`routes_set(target="claude-routine:routine:<name>", project="<slug>")`) picks one explicitly.
 
 Fan-out isn't offered, because the doorman flow wants a single answer on one conversation.
@@ -275,8 +278,9 @@ switchboard project maps to: the Captain its route reaches, its Claude routines,
 
 **Fires without text.** Anthropic's fire endpoint refuses `text` for some Project routines, with 403 "this project
 is paused" even though nothing is paused (anthropics/claude-code#102874). An empty body works. On exactly that
-refusal, switchboard fires again with `{}`. The message is already in claude's mailbox, so the session reads it with
-`inbox()` (the routine prompt says so). send returns `woken_without_text: true` when this happens.
+refusal, switchboard fires again with `{}` and keeps the full message (with its switchboard note) for that routine. The
+session collects it with `routine_pickup(routine=<its name or trig_ id>)`, once per message, rather than from the shared
+claude inbox. send returns `woken_without_text: true` when this happens.
 
 **Coordinator snippet** (Claude Project instructions, when you set it up by hand):
 
@@ -652,7 +656,7 @@ connector):
 > done, or blocked, answer with reply(conversation=<handle from the note>, text=<result>). Then call inbox(), handle
 > anything else waiting the same way, and stop. When the note names a switchboard project, follow its doorman steps:
 > context_pack first, quick items yourself, real work handed to the project coordinator with the handle.
-> If the run has no text, call inbox() and treat each waiting item as the message, with its handle as the conversation.
+> If the run has no text, call routine_pickup() and treat its text as the message (call it again until conversation is null).
 
 **Universal coordinator prompt** (paste into any Claude Project's coordinator; it sets up the project's routine and
 registers it itself):
@@ -670,7 +674,7 @@ registers it itself):
 >    you chose in one line.
 > 3. **Routine.** This project needs a scheduled task (a Claude Code routine) with an **API trigger**. Give it the
 >    switchboard connector and claude-code-remote (so it can message you), and save the routine prompt below as its
->    prompt. If you can create or list routines yourself, do that and read the fire URL
+>    prompt, filling in <this routine's trig_ id> once you know it. If you can create or list routines yourself, do that and read the fire URL
 >    (https://api.anthropic.com/v1/claude_code/routines/trig_…/fire) from it. Otherwise ask me to create it in this
 >    project with that prompt and to paste you only the fire URL. The URL isn't a secret, but the token is: I generate
 >    it in the trigger and paste it only into the link from step 4.
@@ -695,7 +699,8 @@ registers it itself):
 >
 > You are this Claude Project's switchboard doorman. You're woken by switchboard. If the run's text ends with a
 > switchboard note, it names the conversation handle and the sender. If there's no text (switchboard sometimes has to
-> wake you without it), call inbox() and treat each waiting item as the message, with its handle as the conversation.
+> wake you without it), call routine_pickup(routine="<this routine's trig_ id>") and treat its text as the message;
+> call it again until conversation is null.
 > For each message: call context_pack(project=<its project>), then do quick items (answers, lookups) yourself and
 > reply(conversation=<handle>, text=<answer>, final=true). For real work, message this project's coordinator session
 > (claude-code-remote send_message) with the task and the handle, then reply(final=false, text="handed to the
