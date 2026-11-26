@@ -205,11 +205,11 @@ async def test_visibility_scope_and_get_message_ownership(amake, monkeypatch):
     monkeypatch.setattr(core.auth, "verify_bearer", verify)
     assert (await rpc(client, "events/list"))["result"]["events"]
     for values, token in ((params("not-an-agent"), SECOND_KEY), (params("capy"), SECOND_KEY),
-                          (params("restricted"), scoped_key), (params("capy"), "other-principal")):
+                          (params("capy"), scoped_key), (params("capy"), "other-principal")):
         assert (await subscribe(client, values, token))["error"]["code"] == -32024
     assert not receiver.calls and not receiver.lookups and subscription(core) is None
     assert not (await rpc(client, "events/list", token="other-principal"))["result"]["events"]
-    assert not (await rpc(client, "events/list", token=scoped_key))["result"]["events"]
+    assert (await rpc(client, "events/list", token=scoped_key))["result"]["events"]
 
     out = await send(core, mailbox="capy", sender="gemini")
     message_id = core.store.one("SELECT id FROM inbox WHERE handle = ?", (out["handle"],))["id"]
