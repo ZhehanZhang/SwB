@@ -13,6 +13,7 @@ from typing import Any, Iterable, Mapping
 from urllib.parse import urlparse
 
 from .blocks import AgentSpec
+from .config import ConfigError
 
 LOOPBACK_REDIRECTS = ("http://localhost/*", "http://127.0.0.1/*", "http://[::1]/*")
 
@@ -48,9 +49,14 @@ def _tuple(v: Any) -> tuple[str, ...]:
 
 class Agents:
     def __init__(self, specs: Iterable[AgentSpec]):
-        self.specs: dict[str, AgentSpec] = {}
-        for s in specs:
-            self.specs[s.id] = s
+        self.specs = {s.id: s for s in specs}
+        self._cimd_patterns: list[tuple[str, re.Pattern[str]]] = []
+        for agent, spec in self.specs.items():
+            for pattern in spec.cimd_patterns:
+                try:
+                    self._cimd_patterns.append((agent, re.compile(pattern)))
+                except re.error as e:
+                    raise ConfigError(f"agents.{agent}.match.cimd_patterns: invalid pattern {pattern!r}: {e}") from e
 
     @classmethod
     def build(cls, config: Mapping[str, Any] | None, provided: Iterable[AgentSpec]) -> "Agents":
@@ -91,7 +97,7 @@ class Agents:
         return s.label if s else (default if default is not None else agent)
 
     def match_cimd(self, url: str) -> str | None:
-        return next((s.id for s in self.specs.values() if any(re.fullmatch(p, url) for p in s.cimd_patterns)), None)
+        return next((agent for agent, pattern in self._cimd_patterns if pattern.fullmatch(url)), None)
 
     def match(self, redirect_host: str, cimd_url: str) -> str | None:
         if cimd_url and (agent := self.match_cimd(cimd_url)):
