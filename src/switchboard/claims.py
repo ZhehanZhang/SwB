@@ -104,11 +104,14 @@ class Claims:
         return f"{public_url.rstrip('/')}{CLAIM_PATH}/{code}"
 
     def inspect(self, code: str) -> str:
-        row = self.store.one("SELECT name FROM secrets WHERE code_hash = ? AND expires_at > ?",
+        return self.inspect_details(code)["name"]
+
+    def inspect_details(self, code: str) -> dict[str, Any]:
+        row = self.store.one("SELECT name, expires_at, require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
                              (_digest(code), self.store.clock()))
         if row is None:
             raise ClaimUnavailable(UNUSABLE)
-        return row["name"]
+        return dict(row)
 
     def consume(self, code: str, value: str) -> str:
         code_hash = _digest(code)

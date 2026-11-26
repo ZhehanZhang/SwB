@@ -6,6 +6,7 @@ import base64
 import hashlib
 import html
 import json
+import math
 from datetime import datetime, timezone
 from importlib import resources
 from typing import Any
@@ -20,6 +21,8 @@ _BRAND = json.loads((_STATIC / "brand.json").read_text())
 _ASSETS = {
     "bridge.css": ("text/css; charset=utf-8", (_STATIC / "bridge.css").read_bytes()),
     "prefs.js": ("text/javascript; charset=utf-8", (_STATIC / "prefs.js").read_bytes()),
+    "claim.css": ("text/css; charset=utf-8", (_STATIC / "claim.css").read_bytes()),
+    "claim-brand.svg": ("image/svg+xml", (_STATIC / "claim-brand.svg").read_bytes()),
 }
 
 ARC = '<div class="site-arc" aria-hidden="true"><svg viewBox="0 300 940 580" focusable="false"><path fill="currentColor" d="M922.2,588.9A1041.1,270.9 0 1 1 -1159.9,588.9A1041.1,270.9 0 1 1 922.2,588.9ZM734.2,478.4A620,151.5 -14.18 1 0 -468.0,782.2A620,151.5 -14.18 1 0 734.2,478.4Z"/></svg></div>'
@@ -346,30 +349,80 @@ def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     return page("Pairing code", body, 200)
 
 
-def claim_page(title: str, rows: str, csrf: str, *, intro: str = "", hint: str = "", placeholder: str = "", owner_key: bool = False) -> HTMLResponse:
-    key_field = ('<input name="owner_key" type="password" placeholder="Switchboard owner key" required '
-                 'aria-label="Switchboard owner key" autocomplete="new-password">' if owner_key else "")
-    form = (f'<div class="setting"><div class="setting-label"><span>Token</span><span class="setting-hint">{html.escape(hint)}</span></div>'
-            f'<div class="setting-value"><form method="post" autocomplete="off"><input type="hidden" name="csrf" value="{csrf}">{key_field}'
-            f'<input name="token" type="password" placeholder="{html.escape(placeholder)}" required aria-label="Token" autocomplete="new-password">'
-            '<button class="pill-button primary">Save</button></form></div></div>')
-    return page(title, hero(title, html.escape(intro)) + f'<div class="card fade-in">{rows}{form}</div>')
+def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
+    doc = f"""<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<title>{html.escape(title)} | SwB</title>
+<link rel="stylesheet" href="/assets/claim.css">
+</head><body><main>
+<img class="brand" src="/assets/claim-brand.svg" alt="SwB" width="56" height="56">
+{body}
+</main></body></html>"""
+    return HTMLResponse(doc, status_code=status, headers={
+        "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    })
 
 
-def token_claim_page(name: str, csrf: str) -> HTMLResponse:
-    return claim_page("Save a token", _row("Credential", "For Switchboard", name), csrf,
-                      hint="Stored encrypted and never shown again.")
+def claim_message_page(title: str, text: str, status: int) -> HTMLResponse:
+    return _claim_document(title, f'<h1>{html.escape(title)}</h1><p class="scope">{html.escape(text)}</p>', status)
 
 
-def routine_claim_page(c: dict[str, Any], csrf: str) -> HTMLResponse:
-    np = c.get("new_project")
-    rows = (_row("Routine", f"{c['routine_id']}" + (" (primary for the project)" if c["primary"] else ""), c["name"])
-            + _row("Claude Project", "Where the routine lives", c["title"] or "-")
-            + _row("Switchboard project", "Created when you save" if np else "Already exists", c["project"] + (f" ({np['name']})" if np else ""))
-            + _row("Asked by", "The signed-in session that called routine_register", c["created_by"]))
-    return claim_page("Register a Claude routine", rows, csrf, intro="Paste the routine's token and save.",
-                      hint="From the routine's API trigger (Generate token). Stored encrypted, never shown again. This link works once.",
-                      placeholder="sk-ant-oat01-…")
+def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, requester: str = "",
+               credential: str = "Token", guide: bool = False, host: str = "", expires_at: float | None = None,
+               now: float | None = None) -> HTMLResponse:
+    key_field = ('<label for="owner-key">SwB owner key</label>'
+                 '<input id="owner-key" name="owner_key" type="password" required autocomplete="new-password" '
+                 'autocapitalize="none" spellcheck="false">') if owner_key else ""
+    asks = (f'<p class="requester"><svg viewBox="0 0 24 24" aria-hidden="true">'
+            '<path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5M8 3l8 18M3 8l18 8M3 16l18-8M8 21l8-18"/>'
+            f'</svg>{html.escape(requester)} asks for</p>') if requester else ""
+    context = f'<p class="scope">{html.escape(scope)}</p>' if scope else ""
+    help_link = ('<a class="guide" href="https://claude.ai/code" rel="noreferrer">Claude Code, API trigger, Generate token'
+                 '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6m0-6-9 9m6-1v6H5V8h6"/></svg></a>') if guide else ""
+    expiry = (f"Link expires in {max(1, math.ceil((expires_at - now) / 60))} min"
+              if expires_at is not None and now is not None else "")
+    footer = (f'<footer><span>{html.escape(host)}</span><span>{expiry}</span></footer>'
+              if host or expiry else "")
+    return _claim_document(title, f"""{asks}<h1>{html.escape(title)}</h1>{context}
+<form method="post" autocomplete="off">
+<input type="hidden" name="csrf" value="{html.escape(csrf)}">
+{key_field}
+<label for="token">{html.escape(credential)}</label>
+<input id="token" name="token" type="password" required autocomplete="new-password" autocapitalize="none" spellcheck="false">
+{help_link}
+<div class="actions">
+<button type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Save {html.escape(credential.lower())}</button>
+</div>
+</form>{footer}""")
+
+
+def token_claim_page(name: str, csrf: str, *, require_https: bool = False, host: str = "",
+                     expires_at: float | None = None, now: float | None = None) -> HTMLResponse:
+    credential = "Webhook URL" if require_https else "Token"
+    label = {"DISCORD": "Discord bot token", "SLACK": "Slack token", "TELEGRAM": "Telegram bot token",
+             "GITHUB": "GitHub credential", "GROK": "Grok credential"}.get(name.partition("_")[0], f"Save a {credential.lower()}")
+    return claim_page(label, f"For {name}.", csrf, credential=credential,
+                      host=host, expires_at=expires_at, now=now)
+
+
+def routine_claim_page(c: dict[str, Any], csrf: str, *, host: str = "", now: float | None = None) -> HTMLResponse:
+    project = c["project"]
+    scope = f"For {project}"
+    if c["title"]:
+        scope += f" in {c['title']}"
+    scope += f" ({c['routine_id']})."
+    if c.get("new_project"):
+        scope += " Created when you save."
+    if c["primary"]:
+        scope += " Primary routine for this project."
+    requester = c["created_by"].partition(":")[2] or c["created_by"]
+    return claim_page("Claude routine token", scope, csrf, requester=requester, guide=True,
+                      host=host, expires_at=c["expires_at"], now=now)
 
 
 def _routes_body(routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> str:
