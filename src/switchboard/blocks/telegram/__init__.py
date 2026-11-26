@@ -284,7 +284,7 @@ class TelegramBlock(ChatBlock):
                           (self.name, channel, message, topic, self.core.clock()))
 
     async def post(self, space: str, channel: str, text: str, *, root: str | None = None, reply_to: str | None = None,
-                   persona: Persona | None = None) -> str:
+                   persona: Persona | None = None) -> str | list[str]:
         token = self.token()
         if not token or not self.token_re.fullmatch(token):
             raise BlockError("Telegram needs a valid bot token")
@@ -308,7 +308,7 @@ class TelegramBlock(ChatBlock):
             if len(prefix) >= MAX_TEXT:
                 raise BlockError("Telegram persona name is too long")
             params["parse_mode"] = "HTML"
-        first = None
+        ids = []
         for chunk in _chunks(text, prefix):
             if not chunk.strip():
                 continue
@@ -318,10 +318,10 @@ class TelegramBlock(ChatBlock):
             mid = str(result["message_id"])
             if topic:
                 self._save_topic(channel, mid, topic)
-            first = first or mid
-        if first is None:
+            ids.append(mid)
+        if not ids:
             raise BlockError("Telegram message text is empty")
-        return first
+        return ids[0] if len(ids) == 1 else ids
 
     async def open_dm(self, space: str, user: str) -> str | None:
         return user if re.fullmatch(r"[1-9][0-9]{0,23}", user) else None
