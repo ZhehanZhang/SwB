@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import secrets
 from typing import Any, Callable
 
 from .audit import iso
 from .store import Store
+
+log = logging.getLogger("switchboard.inbox")
 
 
 class Inbox:
