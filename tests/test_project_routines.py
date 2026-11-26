@@ -163,6 +163,7 @@ def test_a_target_limited_key_is_checked_after_the_project_picks_a_routine(tmp_p
         core.cfg.key_targets["capy"] = ("claude-infra",)
         assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-infra", "project": "infra"}))["routine"] == "claude-infra"
         assert "may send only to" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "other"}))
+        assert "not a whole block" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-routine", "project": "infra"}))
         assert [rid for rid, _ in anthropic.fired] == ["trig_01GENERAL", "trig_01INFRA"]
     finally:
         c.__exit__(None, None, None)

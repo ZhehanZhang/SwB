@@ -435,6 +435,8 @@ class Switchboard:
             with contextlib.suppress(CoreError):
                 allowed.add(str(await self.resolve_to(t)))
         addr = await self.resolve_to(to)
+        if not addr.id:
+            raise CoreError(f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
         if addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         block = self.blocks.get(addr.block)
