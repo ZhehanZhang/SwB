@@ -163,6 +163,26 @@ async def test_incomplete_check_dropped(github, event):
         assert core.audit.recent() == []
 
 
+async def test_drops_log_only_event_action_repo_and_reason(github, caplog):
+    caplog.set_level("INFO", logger="switchboard.github")
+    async with github() as (_, client):
+        for event, action, details in [
+            ("star", "created", {}),
+            ("check_run", "created", {"check_run": {"status": "in_progress"}}),
+            ("issues", "opened", {}),
+            ("fork", None, {"repository": None}),
+        ]:
+            response = await send(client, event, delivery=event, action=action, marker="never log this payload", **details)
+            assert response.status_code == 200
+    assert [m for name, _, m in caplog.record_tuples if name == "switchboard.github"] == [
+        "github: dropped star/created for acme/app: unhandled event",
+        "github: dropped check_run/created for acme/app: not completed",
+        "github: dropped issues/opened for acme/app: unrouted repository",
+        "github: dropped fork for -: unhandled event",
+    ]
+    assert "never log this payload" not in caplog.text and ISSUE["body"] not in caplog.text
+
+
 async def test_routes_dedupe_and_audit(github):
     seen = []
     now = 10_000.0

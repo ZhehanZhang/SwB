@@ -7,6 +7,7 @@ cancel, targets) to the block that owns the target, through audit and caps.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import secrets
@@ -204,13 +205,17 @@ class Switchboard:
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
-                         handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
+                         handle_meta: dict[str, Any] | None = None, _reply: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
         to = (to or "").strip().lower()
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
         root = (original["meta"].get("root") or original["handle"]) if original is not None else None
+        if original is not None and self._listen_conversation(original) and not (
+            _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
+        ):
+            raise CoreError("listen conversations can only be answered with reply")
         if to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
@@ -400,15 +405,24 @@ class Switchboard:
 
     # Generic verbs ------------------------------------------------------------------------------
 
+    def _listen_conversation(self, handle: dict[str, Any]) -> bool:
+        meta = handle["meta"]
+        root = self.inbox.handle(meta["root"]) if meta.get("root") and meta["root"] != handle["handle"] else None
+        return bool(meta.get("listen") or (root and root["meta"].get("listen")))
+
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
                    forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
+        if principal.targets is not None:
+            await self.check_target(principal, to, project, forward)
         handle = None
         if forward is not None:
             original = self.inbox.handle(forward)
             if original is None or original["destination"] != "mailbox" or original["owner"] != principal.source:
                 raise CoreError("you can only forward a conversation you received")
+            if self._listen_conversation(original):
+                raise CoreError("listen conversations cannot be forwarded; use reply")
             meta = original["meta"]
             sender = meta.get("from") or {}
             trust = meta.get("slack_trust") if sender.get("origin") == "slack" else sender.get("trust")
@@ -432,6 +446,30 @@ class Switchboard:
                              "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ? "
                              "AND NOT EXISTS (SELECT 1 FROM inbox WHERE handle = ?)", (forward, handle, handle))
             raise
+
+    async def check_target(self, principal: Principal, to: str | None, project: str | None, forward: str | None = None) -> None:
+        """A key limited by auth.key_targets sends only to those targets, never forwards, and names no project outside its scopes.
+        The target is checked as it will be delivered, after a project picks a different routine or wake target."""
+        if forward is not None:
+            raise CoreError(f"the {principal.source} key can't forward")
+        if not to:
+            raise CoreError(f"the {principal.source} key must send to one of: {', '.join(principal.targets or ()) or 'nothing'}")
+        allowed = set()
+        for t in principal.targets or ():
+            with contextlib.suppress(CoreError):
+                allowed.add(str(await self.resolve_to(t)))
+        addr = await self.resolve_to(to)
+        if not addr.id:
+            raise CoreError(f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
+        if addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
+            addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
+        block = self.blocks.get(addr.block)
+        if block is not None:
+            addr = block.effective_target(addr, project)
+        if str(addr) not in allowed:
+            raise CoreError(f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
+        if project and not principal.allows("project:" + project.strip().lower().removeprefix("project:")):
+            raise CoreError(f"the {principal.source} key can't send in project {project}")
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
@@ -513,16 +551,38 @@ class Switchboard:
             raise CoreError(f"no block owns {ref!r}; pass the conversation handle (h_...)")
         return owner, None
 
-    async def verb(self, principal: Principal, verb: str, ref: str, **kw: Any) -> Any:
+    async def verb(self, principal: Principal, verb: str, ref: str, *, to_owner: bool = False, **kw: Any) -> Any:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref)
         final = kw.pop("final", None)
+        if to_owner and (verb != "reply" or h is None or h["destination"] != "mailbox" or not h["meta"].get("listen")):
+            raise CoreError("to_owner is only allowed when replying to a listen conversation")
         if h is not None and h["destination"] == "mailbox":
             if verb == "reply":
                 if h["owner"] != principal.source:
                     raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
+                if to_owner:
+                    text = (kw.get("text") or "").strip()
+                    if not text:
+                        raise CoreError("text is empty")
+                    engine, meta = self.slack, h["meta"]
+                    if engine is None:
+                        raise CoreError("Slack is not configured")
+                    self.turn(meta.get("root") or h["handle"], principal)
+                    thread = meta["slack_thread"]
+                    channel = thread["channel_name"] or thread["channel"]
+                    note = f"Note from {meta['boundary']} about {meta['slack_sender']} in #{channel}: {text[:500]}"
+                    if meta.get("permalink"):
+                        note += f"\n{meta['permalink']}"
+                    if not await engine.dm_owner(note):
+                        raise CoreError("could not DM the owner")
+                    if final is not False:
+                        self.inbox.update_handle(h["handle"], status="answered")
+                    self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="slack",
+                                      action="listen_note", outcome="ok", ref=h["handle"], target="owner")
+                    return {"conversation": h["handle"], "in_reply_to": h["handle"], "to_owner": True, "delivered": True, "final": final is not False}
                 return {**await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
-                                                final=final is not False),
+                                                final=final is not False, _reply=True),
                         "to": f"agent:{h['ref']}", "in_reply_to": h["handle"], "final": final is not False}
             if verb == "result":
                 replies = self.mailbox_replies(h["handle"], h["ref"])

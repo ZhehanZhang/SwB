@@ -18,7 +18,7 @@ from typing import Any
 KINDS = ("target", "channel", "memory", "route", "tool")
 ALWAYS_PRIVATE = ("tool",)
 RESOURCE_RE = re.compile(r"(target|channel|memory|route|tool):\S+")
-ENTRY_RE = re.compile(r"[UWB][A-Z0-9]{2,}|workspace:[a-z0-9][a-z0-9_-]*")
+ENTRY_RE = re.compile(r"[UWB][A-Z0-9]{2,}|workspace:[a-z0-9][a-z0-9_-]*|[a-z][a-z0-9-]*:-?[0-9]{1,24}")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS visibility (resource TEXT PRIMARY KEY, value TEXT NOT NULL, set_at REAL NOT NULL, set_by TEXT NOT NULL);
@@ -47,7 +47,7 @@ def parse(value: Any, where: str = "visibility") -> str | tuple[str, ...]:
         return "private"
     if isinstance(value, (list, tuple)) and value and all(isinstance(v, str) and ENTRY_RE.fullmatch(v) for v in value):
         return tuple(value)
-    raise VisibilityError(f"{where} must be private, shared, or a list of Slack user ids and workspace:<label>")
+    raise VisibilityError(f"{where} must be private, shared, or a list of Slack user ids, <platform>:<user id> and workspace:<label>")
 
 
 def show(rule: str | tuple[str, ...]) -> str | list[str]:
