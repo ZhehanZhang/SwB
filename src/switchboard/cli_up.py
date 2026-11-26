@@ -13,7 +13,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from threading import Thread
 
-from .cli import CONFIG, DEFAULT_PORT, CliError, _url
+from .cli import CONFIG, DEFAULT_PORT, CliError
 
 _TUNNELS = {
     "cloudflare": ("cloudflared", ("tunnel", "--no-autoupdate", "--url"), "trycloudflare.com"),
@@ -102,23 +102,24 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, instance: boo
     if not raw_port.isascii() or not raw_port.isdecimal() or len(raw_port) > 5 or not 1 <= (port := int(raw_port)) <= 65535:
         raise CliError("PORT must be a number from 1 to 65535.")
     origin = f"http://127.0.0.1:{port}"
-    data = base / "data" if instance else Path(env.get("SWITCHBOARD_DATA") or Path.home() / ".local/share/switchboard")
-    data = data.expanduser()
     values = {
         **{k: value for k, value in dotenv.items() if k not in os.environ},
-        "SWITCHBOARD_CONFIG": str(base / CONFIG) if instance else env.get("SWITCHBOARD_CONFIG", str(base / CONFIG)),
-        "SWITCHBOARD_DATA": str(data),
         "SWITCHBOARD_HOST": "127.0.0.1",
         "PORT": str(port),
         "FORWARDED_ALLOW_IPS": "127.0.0.1",
     }
-    public = env.get("SWITCHBOARD_PUBLIC_URL") if tunnel is None else None
-    endpoint = _url(public, public=True) if public else origin
-    previous = {k: os.environ.get(k) for k in (*values, "SWITCHBOARD_PUBLIC_URL")}
+    data = None
+    if instance:
+        values["SWITCHBOARD_CONFIG"] = str(base / CONFIG)
+        data = base / "data"
+    elif not (env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA")):
+        values["SWITCHBOARD_DATA_DIR"] = str(Path.home() / ".local/share/switchboard")
+    previous = {k: os.environ.get(k) for k in values}
     previous_sigterm = signal.signal(signal.SIGTERM, _interrupt)
     try:
         with ExitStack() as stack:
             listener = None
+            tunnel_url = None
             if tunnel:
                 listener = stack.enter_context(socket.socket())
                 if os.name == "posix":
@@ -127,14 +128,10 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, instance: boo
                     listener.bind(("127.0.0.1", port))
                 except OSError:
                     raise CliError(f"Could not bind {origin}. Choose another PORT.") from None
-                endpoint = values["SWITCHBOARD_PUBLIC_URL"] = stack.enter_context(_tunnel(tunnel, origin))
-            data.mkdir(mode=0o700, parents=True, exist_ok=True)
+                tunnel_url = stack.enter_context(_tunnel(tunnel, origin))
             os.environ.update(values)
-            print(f"MCP URL: {endpoint}/mcp", flush=True)
-            if listener is None:
-                serve(["serve"])
-            else:
-                serve(["serve"], listener=listener)
+            print(f"MCP URL: {tunnel_url or origin}/mcp", flush=True)
+            serve(["serve"], listener=listener, tunnel_url=tunnel_url, data_dir=data)
     except KeyboardInterrupt:
         pass
     finally:

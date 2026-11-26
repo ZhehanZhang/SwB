@@ -1,25 +1,30 @@
-# Copy to config/switchboard.yaml (git-ignored). No secrets here: those live in .env.
+# Reference for an explicit block list. For an env-only setup, no YAML file is needed.
+# Copy only the settings you want to config/switchboard.yaml (git-ignored). Keep secrets in the environment.
 # Version 2: everything in or out is a block under blocks:, the core (auth, projects, scoped memory, routes, inbox,
-# audit) knows only blocks. Files without version: 2 are read as version 1 (origins:, destinations:, slack:);
+# audit) knows only blocks. Legacy origins:, destinations: and slack: sections are translated at load time;
 # switchboard config migrate prints them as version 2.
 version: 2
 
-# Public origin of this server. The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url.
-public_url: https://swb.example.com
-timezone: America/New_York
+# The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url. Usually set PUBLIC_URL instead.
+# public_url: https://switchboard.example.com
+# data_dir: ./data                              # usually set SWITCHBOARD_DATA_DIR instead
+# timezone: UTC
 # One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
 # A new send starts at zero. null switches it off.
 turn_cap: 200
 
-auth:
-  # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
-  owner_emails: [owner@example.com]
-  # Verify the Cf-Access-Jwt-Assertion header on / (admin) and /authorize. Access app "Switchboard" covers the whole host
-  # with SSO; "Switchboard machine paths (bypass)" lets /mcp, /token, /register, /revoke, /.well-known, /healthz,
-  # /inbox, /avatars and /connect through. There is no password sign-in: without this block, OAuth sign-in and the admin page are off.
-  cloudflare_access:
-    team_domain: your-team.cloudflareaccess.com
-    aud: <AUD tag of the "Switchboard" Access application>
+branding:
+  display_name: switchboard
+  # icon, accent_color and logo_assets_dir are optional; see deploy/overlay.example.yaml.
+
+auth: {}
+  # Usually set SWITCHBOARD_OWNER_EMAILS, CLOUDFLARE_ACCESS_TEAM_DOMAIN and CLOUDFLARE_ACCESS_AUD instead.
+  # owner_emails: [owner@example.com]
+  # cloudflare_access:
+  #   team_domain: <TEAM_NAME>.cloudflareaccess.com
+  #   aud: <ACCESS_APP_AUDIENCE>
+  # The owner signs into / and /authorize through Access. Let MCP and other machine endpoints bypass Access;
+  # see "Authentication and protection" in the README. Without Access, OAuth sign-in and the admin page are off.
   # Allowed OAuth redirect URIs (exact, or prefix with /*; loopback matches any port). Default: every agent's from the
   # agents registry (presets plus block agents, e.g. Capy's from the capy block) and loopback. Setting it replaces that.
   # redirect_uris: [https://claude.ai/api/mcp/auth_callback, https://claude.com/api/mcp/auth_callback,
@@ -28,8 +33,8 @@ auth:
   # Optional: map a redirect host / client name fragment to an agent name.
   # source_names: {cursor: cursor}
   # Optional: limit bearer keys (by name, the part after SWITCHBOARD_KEY_) to memory scopes. Unlisted keys see every scope.
-  # key_scopes: {acme-agent: [project:acme]}
-  # inbox_keys: {channel: claude-code}         # inbox-only keys (/inbox/poll, /inbox/events) bound to one agent; this is the default
+  # key_scopes: {support-agent: [project:support]}
+  # inbox_keys: {channel: claude-code}         # inbox-only keys (/inbox/poll, /inbox/events); this is the default
 
 # Optional. Who calls in. Without this section every preset (claude, chatgpt, gemini, claude-code) is known, plus the
 # agents blocks bring (capy). Agents connected with a pairing code register themselves.
@@ -45,8 +50,8 @@ blocks:
     sinks:
       team: {url_env: TEAM_GITHUB_SINK_URL}
     routes:
-      "acme/app": [team]
-      "acme/*": [team]
+      "example-org/app": [team]
+      "example-org/*": [team]
 
   mcp:
     use: mcp
@@ -62,6 +67,7 @@ blocks:
 
   capy:
     use: capy
+    enabled: false
     api_base: https://api.capy.ai/api/v1
     # Runaway guard: the same task to the same target within duplicate_window_s returns the existing handle (loops are
     # caught by turn_cap at the top level). daily_cap is an optional hard limit, off (null) by default.
@@ -80,12 +86,30 @@ blocks:
     # true: Captain personas use their Capy avatar in Slack (an undocumented capy.ai asset path); off by default.
     avatars: false
 
+  claude-routine:
+    use: claude-routine
+    enabled: false
+
+  grok-routine:
+    use: grok-routine
+    enabled: false
+    # routines:
+    #   example-routine: {project: example, url_env: GROK_ROUTINE_URL, secret_env: GROK_ROUTINE_SECRET, auth: signature}
+
+  dots:
+    use: dots
+    enabled: false
+    delivery: mailbox
+    dots:
+      example-dot: {name: Example Dot, mailbox: chatgpt}
+
   # Slack (optional): events in (watched channels, mentions, DMs, @swb <slug> routing) and slack_* tools out.
   # Tokens never go here: every *_env names a variable in .env. Config changes apply on restart.
   slack:
     use: slack
+    enabled: false
     refresh_minutes: 30                         # how often targets ("@swb <slug>") are re-read
-    workspace_projects: {}                      # e.g. {a2a: acme}: the switchboard project a workspace's events belong to
+    workspace_projects: {}                      # e.g. {a2a: support}: the project a workspace's events belong to
     channel_projects: {}
     listen_channels: {}
     # Needed only for persona avatars stored under <data>/avatars, which Slack fetches from <public_base_url>/avatars/<file>
@@ -96,7 +120,7 @@ blocks:
     # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts. A persona with no
     # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled monograms; emoji is the fallback.
     personas:
-      switchboard: {name: Switchboard, emoji: ":robot_face:"}
+      switchboard: {name: switchboard, emoji: ":robot_face:"}
       claude: {name: Claude}
       chatgpt: {name: ChatGPT}
       gemini: {name: Gemini}
@@ -105,12 +129,13 @@ blocks:
       capy: {name: Capy}
       helper: {name: Helper, avatar: helper.png}
     avatar_dirs: []                               # extra folders searched for avatar files (e.g. a branding overlay)
-    target_aliases: {}                            # extra "@bot <slug>" names, e.g. {pp: teamcaptain}
+    target_aliases: {}                            # extra "@bot <slug>" names, e.g. {dev: development}
     workspaces:
+      # Replace all example IDs before enabling Slack.
       # Workspace A: an agent room. The bot is @mentionable and can also act as the owner (with approval).
       a2a:
-        team_id: T0AAAAAAA
-        app_id: A0AAAAAAA                         # this Slack app; its own posts are never delivered back
+        team_id: T0EXAMPLEA
+        app_id: A0EXAMPLEA                        # this Slack app; its own posts are never delivered back
         app_token_env: SLACK_A2A_APP_TOKEN        # xapp-..., connections:write (Socket Mode)
         intake: socket                            # or poll (conversations.history every poll_seconds)
         identities:
@@ -120,7 +145,7 @@ blocks:
         default_target: captain                   # "@bot text" with no slug goes here (a Captain, agent or project slug)
         approver_user_id: U0OWNER00               # optional: approval DMs for this workspace's requests come from its bot
         owner_user_ids: [U0OWNER00]               # trust owner: passed on unchanged (defaults to the approver)
-        known: {U0FRIEND0: Alex, B0OTHERBOT: main-agent}   # trust known: Slack user or bot ids you trust, with names
+        known: {U0EXAMPLE: Example User, B0OTHERBOT: example-agent}   # Slack user or bot IDs you trust
         sender_rate: {count: 5, window_s: 600}    # context items per non-owner sender before the rest are dropped
         ack_reaction: eyes                        # added to @mentions and DMs on receipt
         watched: ["#agents"]                      # the bot must be a member (invite it yourself); "*" = every channel it is in
@@ -129,12 +154,12 @@ blocks:
           - {name: a2a-hook, url_env: SLACK_SINK_A2A_URL, secret_env: SLACK_SINK_A2A_SECRET, kinds: [watched, mention, dm], coalesce_seconds: 0, targets: [captain]}
       # Workspace B: private. User token only: no bot, no personas, never joins or invites.
       private:
-        team_id: T0CCCCCCC
+        team_id: T0EXAMPLEB
         user_only: true
         app_token_env: SLACK_PRIVATE_APP_TOKEN
         identities:
           user: {token_env: SLACK_PRIVATE_USER_TOKEN, write: approval}  # user_only allows only approval or never
-        watched: ["#family"]
+        watched: ["#private"]
     # Owner approvals: a DM with Approve / Reject buttons from a workspace's bot, plus the root page. Agents never approve.
     approvals:
       ttl_minutes: 60
@@ -150,23 +175,23 @@ blocks:
 # Optional. Slug priority on a clash ("capy:captain", "agent", "project"); default: block targets, agents, projects.
 # targets:
 #   priority: [capy:captain, agent, project]
-#   aliases: {pp: capy:captain:<Captain id>}
+#   aliases: {dev: "capy:captain:<CAPTAIN_ID>"}
 
 # Seeds, written once when that agent/project slot has no route yet. The global default is empty unless set here.
 # routes:
-#   - {match: {}, to: "capy:captain:<Captain id>"}
+#   - {match: {}, to: "capy:captain:<CAPTAIN_ID>"}
 
-# Who can reach what. Every resource is private (the owner and his own signed-in agents only) unless marked shared.
+# Who can reach what. Every resource is private (only the owner and their signed-in agents) unless marked shared.
 # Resources: target:<slug>, channel:<workspace>/<id or #name>, memory:<general | project:slug>, route:<id>, tool:<name>.
 # shared means anyone in that workspace; a list narrows it to Slack user ids and workspace:<label>. Tools stay private.
 # Anyone else's message to something private becomes a context item in its inbox, with a neutral "Noted." reply.
 # The root page and visibility_set flip a resource; those overrides win over this file.
 visibility:
   defaults: {target: private, channel: private, memory: private, route: private}
-  resources:
-    target:teamcaptain: shared
-    channel:a2a/#agents: shared
-    # target:helper: [U0FRIEND0, workspace:a2a]
+  # resources:
+  #   target:development: shared
+  #   channel:a2a/#agents: shared
+  #   target:helper: [U0EXAMPLE, workspace:a2a]
 
 memory:
   # Optional one-way markdown mirror: general/, projects/<slug>/ and INDEX.md, rewritten atomically after changes.

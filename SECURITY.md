@@ -17,8 +17,8 @@ Only test on instances you own or have explicit permission to test.
 
 ## Report privately
 
-Go to the repository's [GitHub Security Advisories](https://github.com/ZhehanZhang/switchboard/security/advisories)
-and choose **Report a vulnerability**. Don't open a public issue or pull request for a suspected vulnerability.
+In the GitHub repository, open **Security**, select **Advisories**, then choose **Report a vulnerability**.
+Don't open a public issue or pull request for a suspected vulnerability.
 
 Include the affected version or commit, the relevant block or configuration, the observed impact,
 and enough detail for maintainers to verify the report. Don't send credentials, private messages,

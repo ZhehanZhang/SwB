@@ -15,9 +15,10 @@ RUN pip install --no-cache-dir ".[test]" && python -m pytest -q
 FROM base AS runtime
 LABEL org.opencontainers.image.title="Switchboard" \
       org.opencontainers.image.description="Self-hosted MCP server for routing work and sharing scoped memory" \
-      org.opencontainers.image.source="https://github.com/zhehanzhang/switchboard" \
+      org.opencontainers.image.url="https://swb.one" \
       org.opencontainers.image.licenses="Apache-2.0"
 RUN install -d -m 0700 -o switchboard -g switchboard /data
+WORKDIR /
 USER switchboard
 ENV SWITCHBOARD_DATA=/data
 VOLUME ["/data"]

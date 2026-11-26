@@ -1,5 +1,1 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Report a security vulnerability
-    url: https://github.com/ZhehanZhang/switchboard/security/advisories
-    about: Use GitHub's private reporting instead of opening a public issue.

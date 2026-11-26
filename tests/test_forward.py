@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from conftest import CAPTAIN, SECOND_KEY, STATIC_KEY, acall, base_config, error_text, eventually, payload, principal, infra
+from conftest import CAPTAIN, SECOND_KEY, STATIC_KEY, acall, base_config, error_text, eventually, payload, principal, beacon
 from switchboard.core import CoreError
 
 
@@ -43,11 +43,11 @@ async def test_final_bubbles_through_multiple_forwards(amake):
 async def test_forward_to_project_captain_copies_its_final_only(amake, capy):
     capy.threads[CAPTAIN]["status"] = "working"
     core, _ = await amake()
-    infra(core)
-    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN}, defaults={},
+    beacon(core)
+    core.routes.set(destination="capy", agent=None, project="beacon", target={"captain": CAPTAIN}, defaults={},
                     allow_override=False, note="", by="test")
     original = (await core.send(principal("capy"), to="agent:second", task="Check build"))["handle"]
-    args = {"project": "infra", "task": "Check build", "forward": original}
+    args = {"project": "beacon", "task": "Check build", "forward": original}
     outs = await asyncio.gather(core.send(principal("second"), **args), core.send(principal("second"), **args), return_exceptions=True)
     (out,) = [o for o in outs if isinstance(o, dict)]
     (error,) = [o for o in outs if isinstance(o, CoreError)]

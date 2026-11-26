@@ -22,7 +22,7 @@ def event(ts="1700000000.000100", kind="watched", channel="C1", name="general"):
         kind=kind,
         channel_name=name,
         user_name="alice",
-        team_url="https://a.slack.com/",
+        team_url="https://workspace-a.example.test/",
         max_text_chars=10,
     )
 
@@ -45,7 +45,7 @@ def test_event_format():
         "text": "x" * 10,
         "truncated": True,
         "files": 0,
-        "permalink": "https://a.slack.com/archives/C1/p1700000000000100?thread_ts=1699999999.000001&cid=C1",
+        "permalink": "https://workspace-a.example.test/archives/C1/p1700000000000100?thread_ts=1699999999.000001&cid=C1",
     }
 
 

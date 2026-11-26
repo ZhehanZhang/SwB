@@ -48,8 +48,8 @@ class CoreError(Exception):
 class Switchboard:
     def __init__(
         self,
-        config_path: str | Path | None,
-        data_dir: str | Path,
+        config_path: str | Path | None = None,
+        data_dir: str | Path | None = None,
         env: dict[str, str] | None = None,
         clock: Callable[[], float] = time.time,
         http_transport: httpx.AsyncBaseTransport | None = None,
@@ -58,10 +58,11 @@ class Switchboard:
         destination_options: dict[str, dict[str, Any]] | None = None,
         slack_options: dict[str, Any] | None = None,
         block_options: dict[str, dict[str, Any]] | None = None,
+        tunnel_url: str | None = None,
     ):
-        self.cfg: Config = load_config(config_path, env)
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url)
+        self.data_dir = Path(data_dir) if data_dir is not None else self.cfg.data_dir
+        self.data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.clock = clock
         self.http_transport = http_transport
         legacy = self.data_dir / "capy-bridge.db"
@@ -183,6 +184,8 @@ class Switchboard:
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
             "blocks": {n: {**(b.status() if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
+            "block_setup": {n: {"enabled": n in self.blocks, "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
+                            for n, keys in self.cfg.block_env.items()},
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
