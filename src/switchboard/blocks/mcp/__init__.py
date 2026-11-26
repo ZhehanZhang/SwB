@@ -24,6 +24,7 @@ from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
 from ...projects import ProjectError
 from ...routes import RouteError
+from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .tasks import TasksExtension
 
@@ -371,6 +372,10 @@ class MCPBlock(Block):
             b = core.blocks.get(head) if head in core.blocks else None
             if b is not None:
                 return b.name, b.parse_route_target(text.strip()[len(head) + 1:])
+            owner = core._kind_owner(head) if head in LEGACY_KINDS else None
+            if owner is not None:
+                b = core.blocks[owner]
+                return b.name, b.parse_route_target(text.strip())
             b = routing_block(None)
             return b.name, b.parse_route_target(text)
 

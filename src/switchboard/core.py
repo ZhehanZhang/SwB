@@ -78,6 +78,7 @@ class Switchboard:
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
         self.connections = Connections(self.store)
+        self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,
                          connections=self.connections)
@@ -174,6 +175,8 @@ class Switchboard:
             "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
             "mirror": bool(self.cfg.mirror_dir),
+            "turn_cap": {"per_conversation": self.cfg.turn_cap,
+                         "paused": self.store.one("SELECT COUNT(*) AS n FROM conversation_turns WHERE paused_at IS NOT NULL")["n"]},
         }
 
     # Routing an action to a destination -----------------------------------------------------
@@ -193,6 +196,7 @@ class Switchboard:
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
         to = (to or "").strip().lower()
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
+        root = (original["meta"].get("root") or original["handle"]) if original is not None else None
         if to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
@@ -202,10 +206,12 @@ class Switchboard:
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
+        if root is not None:
+            self.turn(root, principal)
         sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
                   "trust": "owner"}
-        meta: dict[str, Any] = {"from": sender, **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})}
+        meta: dict[str, Any] = {"from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
         handle = self.inbox.open_handle(owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
                                         meta=meta, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
@@ -216,6 +222,35 @@ class Switchboard:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
         return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
+
+    def turn(self, root: str, principal: Principal) -> None:
+        """Count one more turn on a conversation: a send's handle plus every reply hanging off it (a new send starts at
+        zero). At turn_cap that one conversation pauses, as a likely loop, and the owner gets a Slack DM."""
+        cap = self.cfg.turn_cap
+        if not cap:
+            return
+        row = self.store.one("SELECT turns, paused_at FROM conversation_turns WHERE root = ?", (root,))
+        turns = (row["turns"] if row else 1) + 1
+        if row is not None and row["paused_at"] is None and turns <= cap:
+            self.store.x("UPDATE conversation_turns SET turns = ? WHERE root = ?", (turns, root))
+            return
+        if row is None:
+            self.store.x("INSERT INTO conversation_turns(root, turns) VALUES (?, ?)", (root, turns))
+            if turns <= cap:
+                return
+        stop = f"conversation {root} is paused: it reached {cap} turns, which looks like a loop. Start a new send if the work goes on."
+        if row is not None and row["paused_at"] is not None:
+            raise CoreError(stop)
+        self.store.x("UPDATE conversation_turns SET paused_at = ? WHERE root = ?", (self.clock(), root))
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="core", action="turn_cap",
+                          outcome="refused", ref=root, detail=f"paused at {cap} turns")
+        engine = self.slack
+        if engine is not None:
+            task = asyncio.ensure_future(engine.dm_owner(f"switchboard paused conversation {root} after {cap} turns (last from "
+                                                         f"{principal.source}); it looks like a loop. Other conversations are unaffected."))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+        raise CoreError(stop)
 
     def destination(self, name: str) -> Block:
         d = self.blocks.get(name)
@@ -452,6 +487,8 @@ class Switchboard:
                     "note": "a mailbox message; answer it with reply"}
         if block is None:
             raise CoreError(f"the block behind {ref!r} is not configured")
+        if verb == "reply":
+            self.turn(h["handle"] if h is not None else ref, principal)
         action = block.verb(verb)
         if action is None:
             raise CoreError(f"{block.name} conversations take no {verb}")
@@ -475,14 +512,6 @@ class Switchboard:
                 call.note(excerpt=str(kwargs.get("task") or ""))
                 record("refused", f"daily cap reached ({used}/{dest.daily_cap})")
                 raise DestinationError(f"daily {destination} {action.name} cap reached ({used}/{dest.daily_cap} today, {self.cfg.timezone}); try tomorrow or raise destinations.{destination}.daily_cap")
-        if action.burst and dest.burst_limit:
-            count, window = dest.burst_limit
-            used = self.audit.count_since(destination, action.name, principal.source, self.clock() - window)
-            if used >= count:
-                call.note(excerpt=str(kwargs.get("task") or ""))
-                record("refused", f"burst limit ({used} in {window:.0f} s)")
-                raise DestinationError(f"{used} {action.name} calls from {principal.source} in the last {window / 60:.0f} minutes looks like a loop, so this one "
-                                       f"was stopped. Check inbox for the work already sent; reply and wait are not limited.")
         try:
             out = await action.handler(call, **kwargs)
         except DestinationError as e:
