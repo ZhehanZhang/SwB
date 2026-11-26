@@ -1,51 +1,53 @@
-import { Ellipsis } from "lucide-react"
-import { NavLink, Outlet, useLocation } from "react-router-dom"
-import { AccountMenu, CommandMenu, HealthControl } from "@/app/header-controls"
-import { sections } from "@/app/navigation"
-import { Footer } from "@/components/footer"
-import { Button } from "@/components/ui/button"
+import { useEffect, useState } from "react"
+import { ChevronLeft, Menu } from "lucide-react"
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
+import { CommandMenu } from "@/app/header-controls"
+import { PageTitle } from "@/app/page-title"
+import { isSection, sections } from "@/app/navigation"
+import { SwbIcon } from "@/components/swb-icon"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-const bottomTabs = sections.slice(0, 4)
-const moreTabs = sections.slice(4)
+const tabClass = "flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground hover:text-foreground"
 
-function MobileNavigation() {
-  const { pathname } = useLocation()
-  const moreActive = moreTabs.some(({ to }) => pathname === to || pathname.startsWith(`${to}/`))
-
+function HomeNav({ active, mobile = false }: { active: boolean; mobile?: boolean }) {
   return (
-    <nav aria-label="Navigation" className="fixed inset-x-0 bottom-0 z-30 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden">
-      <div className="grid h-14 grid-cols-5">
-        {bottomTabs.map(({ name, to, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to === "/canvas" && pathname === "/" ? "/" : to}
-            className={({ isActive }) => cn(
-              "flex min-w-0 flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-[11px] font-medium text-muted-foreground focus-visible:outline-offset-[-4px]",
-              isActive && "border-lamp text-foreground",
-            )}
-          >
-            <Icon aria-hidden className="size-[18px]" /> {name}
-          </NavLink>
-        ))}
+    <Link to="/" aria-label="SwitchBoard overview" aria-current={active ? "page" : undefined}
+      className={cn(tabClass, mobile ? "h-14" : "h-[72px] w-16")}
+    >
+      <SwbIcon muted={!active} className={active ? (mobile ? "size-11" : "size-12") : (mobile ? "size-[26px]" : "size-7")} />
+      {!active && <span>Overview</span>}
+    </Link>
+  )
+}
+
+function SectionNav({ section, mobile = false }: { section: typeof sections[number]; mobile?: boolean }) {
+  const { name, to, icon: Icon } = section
+  return (
+    <NavLink to={to} className={({ isActive }) => cn(tabClass, mobile ? "h-14" : "h-14 w-16 hover:bg-muted",
+      isActive && (mobile ? "font-semibold text-foreground" : "bg-muted text-foreground"))}>
+      <Icon aria-hidden className="size-5" /> {name}
+    </NavLink>
+  )
+}
+
+function MobileNavigation({ pathname, home }: { pathname: string; home: boolean }) {
+  const more = sections.slice(3)
+  const active = more.some(({ to }) => isSection(pathname, to))
+  return (
+    <nav aria-label="Navigation" className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-30 h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 pt-[30px] md:hidden">
+      <div className="pointer-events-auto grid grid-cols-5">
+        <HomeNav active={home} mobile />
+        {sections.slice(0, 3).map(section => <SectionNav key={section.to} section={section} mobile />)}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className={cn(
-                "h-full min-w-0 flex-col gap-0.5 rounded-none border-t-2 border-transparent px-0 text-[11px] text-muted-foreground focus-visible:outline-offset-[-4px] [&_svg]:size-[18px]",
-                moreActive && "border-lamp text-foreground",
-              )}
-            >
-              <Ellipsis aria-hidden /> More
-            </Button>
+            <button type="button" className={cn(tabClass, "h-14", active && "font-semibold text-foreground")}>
+              <Menu aria-hidden className="size-5" /> More
+            </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" collisionPadding={8}>
-            {moreTabs.map(({ name, to, icon: Icon }) => (
-              <DropdownMenuItem key={to} asChild>
-                <NavLink to={to}><Icon aria-hidden /> {name}</NavLink>
-              </DropdownMenuItem>
+          <DropdownMenuContent side="top" align="end" collisionPadding={12}>
+            {more.map(({ name, to, icon: Icon }) => (
+              <DropdownMenuItem key={to} asChild><NavLink to={to}><Icon aria-hidden /> {name}</NavLink></DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -56,54 +58,34 @@ function MobileNavigation() {
 
 export function AppShell() {
   const { pathname } = useLocation()
+  const project = isSection(pathname, "/projects")
+  const home = pathname === "/" || project || isSection(pathname, "/canvas")
+  const [title, setTitle] = useState<string>()
+  const heading = title ?? (home ? "SwitchBoard" : sections.find(({ to }) => isSection(pathname, to))?.name ?? "SwitchBoard")
+  useEffect(() => { document.title = heading === "SwitchBoard" ? heading : `${heading} | SwitchBoard` }, [heading])
 
   return (
-    <div className="flex min-h-dvh flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
-      <a
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:bg-card focus:px-3 focus:py-2"
-        href="#main-content"
-      >
-        Skip to content
-      </a>
-      <header className="sticky top-0 z-30 border-b border-console-line bg-console pt-[env(safe-area-inset-top)] text-console-foreground">
-        <div className="flex min-h-14 items-center gap-2 px-3 lg:gap-3 lg:px-4 xl:px-6">
-          <NavLink
-            to="/"
-            end
-            aria-label="Switchboard home"
-            className="inline-flex shrink-0 items-center gap-2 rounded-sm font-display text-xl leading-none font-extrabold tracking-tight focus-visible:outline-lamp"
-          >
-            <span aria-hidden className="grid size-[18px] place-items-center rounded-full bg-lamp">
-              <span className="size-1.5 rounded-full bg-console" />
-            </span>
-            Switchboard
-          </NavLink>
-          <nav aria-label="Navigation" className="hidden min-w-0 flex-1 self-stretch md:flex">
-            {sections.map(({ name, to }) => (
-              <NavLink
-                key={to}
-                to={to === "/canvas" && pathname === "/" ? "/" : to}
-                className={({ isActive }) => cn(
-                  "inline-flex items-center border-b-2 border-transparent px-2 pt-0.5 text-sm font-medium whitespace-nowrap text-console-muted hover:text-console-foreground focus-visible:outline-offset-[-4px] focus-visible:outline-lamp xl:px-3",
-                  isActive && "border-lamp text-console-foreground",
-                )}
-              >
-                {name}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="ml-auto flex shrink-0 items-center sm:gap-1">
-            <HealthControl />
-            <CommandMenu />
-            <AccountMenu />
+    <PageTitle.Provider value={setTitle}>
+      <a className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2" href="#main-content">Skip to content</a>
+      <nav aria-label="Navigation" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--rail-width)] flex-col gap-1 px-2 pt-4 pb-4 pl-4 md:flex">
+        <HomeNav active={home} />
+        {sections.slice(0, -1).map(section => <SectionNav key={section.to} section={section} />)}
+        <div className="flex-1" />
+        <SectionNav section={sections[5]} />
+      </nav>
+      <div className="min-h-dvh px-5 pt-[env(safe-area-inset-top)] pb-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
+        <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-2">
+            {project && <Link to="/" aria-label="Back to SwitchBoard" className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
+            <h1 className="truncate text-page-title">{heading}</h1>
           </div>
-        </div>
-      </header>
-      <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 scroll-mt-20 px-4 py-6 sm:px-6">
-        <Outlet />
-      </main>
-      <Footer />
-      <MobileNavigation />
-    </div>
+          <CommandMenu />
+        </header>
+        <main id="main-content" tabIndex={-1} className="min-w-0">
+          <Outlet />
+        </main>
+      </div>
+      <MobileNavigation pathname={pathname} home={home} />
+    </PageTitle.Provider>
   )
 }
