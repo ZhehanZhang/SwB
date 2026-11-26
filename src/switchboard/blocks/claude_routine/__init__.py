@@ -549,7 +549,10 @@ class ClaudeRoutineBlock(Block):
             if slug and r["project"] != slug:
                 continue
             if self.core.store.n("UPDATE routine_pickups SET picked_at = ? WHERE handle = ? AND picked_at IS NULL", (self.core.clock(), row["handle"])):
-                return {"conversation": row["handle"], "routine": row["routine"], "project": row["project"], "text": row["text"]}
+                handle = self.core.inbox.handle(row["handle"])
+                sender = handle["meta"].get("from") if handle else None
+                return {"conversation": row["handle"], "routine": row["routine"], "project": row["project"], "text": row["text"],
+                        "from": sender, "trust": (sender or {}).get("trust", "unknown")}
         return {"conversation": None, "note": "nothing waiting" + (f" for {want}" if want else "")}
 
     async def pickup_action(self, call: Call, *, routine: str | None = None, claude_project: str | None = None,
