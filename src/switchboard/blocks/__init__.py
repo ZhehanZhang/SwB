@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 BLOCKS = {
     "mcp": "switchboard.blocks.mcp:MCPBlock",
     "slack": "switchboard.blocks.slack:SlackBlock",
+    "github": "switchboard.blocks.github:GitHubBlock",
     "capy": "switchboard.blocks.capy:CapyBlock",
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",

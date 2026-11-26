@@ -10,6 +10,8 @@ import time
 from collections import deque
 from typing import Any, Callable
 
+from starlette.exceptions import HTTPException
+
 BODY_LIMIT = 1 * 1024 * 1024
 MCP_BODY_LIMIT = 16 * 1024 * 1024
 LIMITS = {
@@ -112,7 +114,7 @@ class Guard:
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
                 if seen > limit:
-                    raise ValueError("request body too large")
+                    raise HTTPException(413, "request body too large")
             return message
 
         await self.app(scope, counted, send)
