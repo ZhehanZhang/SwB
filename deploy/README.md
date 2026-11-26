@@ -14,7 +14,7 @@ The published image is `ghcr.io/your-org/swb:latest` (replace `your-org` with th
 | `PORT` | The HTTP port on `0.0.0.0`. Use the platform-provided port on Railway and Render. Fly's `fly.toml` sets both the listening port and the proxy's internal port to `8000`. |
 | `SWITCHBOARD_CONFIG` | Leave unset on an env-only deployment. Use it only to point an existing YAML-based installation at its mounted config file. |
 
-No YAML config or Cloudflare credentials are needed for bearer access. For clients that support a custom HTTP header, set a separate secret `SWITCHBOARD_KEY_<NAME>` and connect to `https://YOUR-HOST/mcp` with `Authorization: Bearer <client-key>`. Keep the owner key for administration. For OAuth sign-in, follow the [owner sign-in configuration](../README.md#config-version-2); setting the public URL alone doesn't configure OAuth.
+No YAML config or Cloudflare credentials are needed for bearer access. For clients that support a custom HTTP header, set a separate secret `SWITCHBOARD_KEY_<NAME>` and connect to `https://YOUR-HOST/mcp` with `Authorization: Bearer <client-key>`. Keep the owner key for administration. For OAuth sign-in, follow the [owner sign-in configuration](../docs/guide.md#config-version-2); setting the public URL alone doesn't configure OAuth.
 
 ## Railway
 
