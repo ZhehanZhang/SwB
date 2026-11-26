@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
 import re
 import time
@@ -48,7 +47,7 @@ CREATE TABLE IF NOT EXISTS chat_events (block TEXT NOT NULL, space TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS chat_threads (block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, root TEXT NOT NULL, target TEXT NOT NULL,
   at REAL NOT NULL, PRIMARY KEY (block, space, channel, root));
 CREATE TABLE IF NOT EXISTS chat_sent (block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL, root TEXT NOT NULL,
-  at REAL NOT NULL, PRIMARY KEY (block, space, channel, message));
+  part INTEGER NOT NULL DEFAULT 0, at REAL NOT NULL, PRIMARY KEY (block, space, channel, message));
 CREATE TABLE IF NOT EXISTS chat_relays (handle TEXT PRIMARY KEY, block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, root TEXT NOT NULL,
   reply_to TEXT, target TEXT NOT NULL, trust TEXT NOT NULL, at REAL NOT NULL);
 """
@@ -331,17 +330,22 @@ class ChatBlock(Block):
         if target is not None and target["kind"] == "agent" and addressed and self._count_turn(self._thread_key(msg.space, msg.channel, root)):
             agents.add(target["id"])
         for agent in sorted(agents):
-            await self.core.inbox.add(self._handle(agent, msg.space), f"{self.platform}_event", event)
+            thread = (msg.channel, root) if addressed else None
+            await self.core.inbox.add(self._handle(agent, msg.space, thread), f"{self.platform}_event", event)
         if addressed and target is not None and target["kind"] != "agent":
             await self.delegate(space, msg, event, target, root)
         return event
 
-    def _handle(self, agent: str, space: str) -> str:
-        for h in self.core.inbox.handles(owner=agent, destination=self.name, limit=200):
-            if h["ref"] == space:
-                return h["handle"]
-        return self.core.inbox.open_handle(owner=agent, destination=self.name, ref=space, project=self.spaces[space].project,
-                                           title=f"{self.manifest.title} {space}", meta={"space": space}, status="following")
+    def _handle(self, agent: str, space: str, thread: tuple[str, str] | None = None) -> str:
+        """An agent's conversation for one thread it was addressed in (so reply answers exactly that thread), or for
+        the space as a whole (listen events and context, which are never answered by handle)."""
+        ref = f"{space}:{thread[0]}:{thread[1]}" if thread else space
+        row = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? LIMIT 1", (agent, self.name, ref))
+        if row is not None:
+            return row["handle"]
+        meta = {"space": space, **({"channel": thread[0], "root": thread[1]} if thread else {})}
+        return self.core.inbox.open_handle(owner=agent, destination=self.name, ref=ref, project=self.spaces[space].project,
+                                           title=f"{self.manifest.title} {space}", meta=meta, status="following")
 
     async def note_context(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any] | None) -> None:
         """A non-owner's message to something private: a context item for the agents behind its target. It wakes
@@ -456,7 +460,7 @@ class ChatBlock(Block):
         """The per-thread bot post cap: False when this thread already had bot_posts_per_hour posts in the last hour."""
         if root is None:
             return True
-        n = self.core.store.one("SELECT COUNT(*) AS n FROM chat_sent WHERE block = ? AND space = ? AND channel = ? AND root = ? AND at > ?",
+        n = self.core.store.one("SELECT COUNT(*) AS n FROM chat_sent WHERE block = ? AND space = ? AND channel = ? AND root = ? AND part = 0 AND at > ?",
                                 (self.name, space, channel, root, self.core.clock() - 3600))["n"]
         return n < self.spaces[space].bot_posts_per_hour
 
@@ -471,8 +475,9 @@ class ChatBlock(Block):
         sent = await self.post(space, channel, text, root=root, reply_to=reply_to, persona=persona)
         ids = [sent] if isinstance(sent, str) else list(sent)
         mid = ids[0]
-        self.core.store.db.executemany("INSERT OR REPLACE INTO chat_sent(block, space, channel, message, root, at) VALUES (?,?,?,?,?,?)",
-                                       [(self.name, space, channel, i, root or mid, self.core.clock()) for i in ids])
+        for part, i in enumerate(ids):
+            self.core.store.x("INSERT OR REPLACE INTO chat_sent(block, space, channel, message, root, part, at) VALUES (?,?,?,?,?,?,?)",
+                              (self.name, space, channel, i, root or mid, part, self.core.clock()))
         if root:
             self.core.store.x("INSERT OR IGNORE INTO chat_threads(block, space, channel, root, target, at) VALUES (?,?,?,?,?,?)",
                               (self.name, space, channel, root, "", self.core.clock()))
@@ -533,12 +538,10 @@ class ChatBlock(Block):
         if handle is not None and handle["destination"] == self.name:
             if handle["owner"] != call.principal.source:
                 raise BlockError("you can only reply in a conversation from your own inbox")
-            row = self.core.store.one("SELECT data FROM inbox WHERE handle = ? AND kind = ? AND json_extract(data, '$.addressed_to_us') "
-                                      "ORDER BY id DESC LIMIT 1", (ref, f"{self.platform}_event"))
-            if row is None:
-                raise BlockError(f"conversation {ref} has no message addressed to switchboard to reply to")
-            sender = json.loads(row["data"])["from"]
-            return await self._post(call, sender["space"], sender["channel"], text, sender["root"])
+            meta = handle["meta"]
+            if not meta.get("channel"):
+                raise BlockError(f"conversation {ref} is a whole {self.manifest.title} space; reply with ref <space>:<channel>:<root> from the event")
+            return await self._post(call, meta["space"], meta["channel"], text, meta["root"])
         space, _, rest = (ref or "").partition(":")
         channel, _, root = rest.partition(":")
         if not (space and channel):
