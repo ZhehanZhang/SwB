@@ -57,6 +57,7 @@ class Action:
     idempotent: bool = False
     capped: bool = False
     audited: bool | None = None
+    previewable: bool = False
 
     @property
     def is_audited(self) -> bool:
@@ -74,6 +75,7 @@ class Call:
     notes: dict[str, Any] = field(default_factory=dict)
     handle: str | None = None
     handle_meta: dict[str, Any] = field(default_factory=dict)
+    dry_run: bool = False
 
     @property
     def block(self) -> str:
