@@ -88,6 +88,41 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
 );
 CREATE INDEX IF NOT EXISTS oauth_tokens_family ON oauth_tokens(family);
 
+CREATE TABLE IF NOT EXISTS owner_sessions (
+  id TEXT PRIMARY KEY,
+  via TEXT NOT NULL,
+  client_id TEXT,
+  source TEXT,
+  created_at REAL NOT NULL,
+  last_seen REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_login_links (
+  token_hash TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  expires_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_webauthn_challenges (
+  id TEXT PRIMARY KEY,
+  challenge BLOB NOT NULL,
+  kind TEXT NOT NULL,
+  owner_key TEXT,
+  expires_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS owner_webauthn_challenges_expiry ON owner_webauthn_challenges(expires_at);
+CREATE TABLE IF NOT EXISTS owner_webauthn_user (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  handle BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_passkeys (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  public_key BLOB NOT NULL,
+  sign_count INTEGER NOT NULL,
+  created_at REAL NOT NULL,
+  last_used_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at REAL NOT NULL,
