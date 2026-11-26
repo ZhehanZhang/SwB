@@ -284,7 +284,7 @@ def test_passkey_registration_discoverable_login_and_counter(make, caplog):
         assert denied.status_code == 401 and denied.json() == {"error": "passkey_failed"}
         assert authenticate(client, key, 7).status_code == 401
         assert authenticate(client, key, 8, flags=0x01).status_code == 401
-        assert authenticate(client, key, 0).status_code == 204
+        assert authenticate(client, key, 0).status_code == 401
         assert core.store.one("SELECT sign_count FROM owner_passkeys")["sign_count"] == 7
         assert authenticate(client, key, 8).status_code == 204
     assert all(secret not in caplog.text for secret in (ref, public_key["challenge"], request["publicKey"]["challenge"]))
@@ -318,6 +318,15 @@ def test_passkey_challenge_bound_to_session_and_single_use_on_failure_or_expiry(
     assert client.post(SIGN_IN + "/verify", json={"credential": credential.assertion(opts, 1)}).status_code == 401
     assert client.get("/auth/session").json()["signed_in"] is False
     assert core.store.one("SELECT 1 FROM owner_webauthn_challenges") is None
+
+
+def test_counterless_passkey_signs_in_repeatedly(make):
+    _, client = make(base_config(auth={}))
+    assert sign_in(client).status_code == 204
+    key = Passkey()
+    assert add_key(client, key).status_code == 201
+    assert authenticate(client, key, 0).status_code == 204
+    assert authenticate(client, key, 0).status_code == 204
 
 
 def test_passkey_delete_signs_out_its_sessions(make):
