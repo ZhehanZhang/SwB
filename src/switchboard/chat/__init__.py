@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import re
 import time
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("switchboard.chat")
 
 LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+NAME_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,79}")
 SLUG_RE = re.compile(r"\s*([A-Za-z0-9][A-Za-z0-9-]{0,39})(?:[:,]|\s+|$)")
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chat_events (block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL, at REAL NOT NULL,
@@ -149,8 +151,9 @@ class ChatBlock(Block):
     # Transport, implemented per platform -------------------------------------------------------
 
     async def post(self, space: str, channel: str, text: str, *, root: str | None = None, reply_to: str | None = None,
-                   persona: Persona | None = None) -> str:
-        """Post text and return the new message id. root is the thread to post in (the platform decides how)."""
+                   persona: Persona | None = None) -> str | list[str]:
+        """Post text and return the new message id, or every id in order when the platform split it. root is the thread
+        to post in (the platform decides how)."""
         raise NotImplementedError
 
     async def open_dm(self, space: str, user: str) -> str | None:
@@ -261,7 +264,8 @@ class ChatBlock(Block):
         return Who(owner=trust == "owner", id=f"{self.platform}:{user}", workspace=space.label)
 
     def channel_resources(self, space: str, channel: str, name: str | None) -> list[str]:
-        return [f"channel:{space}/{channel}", *([f"channel:{space}/#{name.lower()}"] if name else [])]
+        alias = (name or "").lower()
+        return [f"channel:{space}/{channel}", *([f"channel:{space}/#{alias}"] if NAME_RE.fullmatch(alias) else [])]
 
     def target_resources(self, slug: str) -> list[str]:
         t = self.targets_by_slug.get(slug)
@@ -308,7 +312,7 @@ class ChatBlock(Block):
         where = f"in {self.platform} {msg.space} " + (f"#{msg.channel_name}" if msg.channel_name else msg.channel)
         sender = {"kind": self.platform, "space": msg.space, "channel": msg.channel, "channel_name": msg.channel_name, "user": msg.user, "user_name": name,
                   "is_bot": msg.is_bot, "trust": trust, "message": msg.message, "root": root, "link": msg.link}
-        event = {"event_id": f"{msg.space}:{msg.channel}:{msg.message}", "kind": "dm" if msg.dm else "mention" if msg.mention else "reply" if ours else "listen",
+        event = {"event_id": f"{msg.space}:{msg.channel}:{msg.message}", "chat_kind": "dm" if msg.dm else "mention" if msg.mention else "reply" if ours else "listen",
                  "addressed_to_us": addressed, "text": text if trust == "owner" else wrap(text, name, f"{self.platform}:{msg.user}", trust, where),
                  "raw_text": text, "target": slug if target else None, "target_kind": target["kind"] if target else None, "trust": trust, "from": sender}
         who = self.who(space, msg.user, trust)
@@ -324,7 +328,7 @@ class ChatBlock(Block):
             with contextlib.suppress(Exception):
                 await self.ack(msg)
         agents = {a for a, labels in self.grants.items() if "*" in labels or msg.space in labels}
-        if target is not None and target["kind"] == "agent" and addressed:
+        if target is not None and target["kind"] == "agent" and addressed and self._count_turn(self._thread_key(msg.space, msg.channel, root)):
             agents.add(target["id"])
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, msg.space), f"{self.platform}_event", event)
@@ -387,9 +391,11 @@ class ChatBlock(Block):
                         await self.post(space.label, channel, text)
                         return
 
+    def _thread_key(self, space: str, channel: str, root: str) -> str:
+        return f"{self.name}:{space}:{channel}:{root}"
+
     async def delegate(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any], root: str) -> None:
-        key = f"{self.name}:{msg.space}:{msg.channel}:{root}"
-        if not self._count_turn(key):
+        if not self._count_turn(self._thread_key(msg.space, msg.channel, root)):
             return
         where = f"#{msg.channel_name}" if msg.channel_name else msg.channel
         who = event["from"]["user_name"] or msg.user
@@ -462,9 +468,11 @@ class ChatBlock(Block):
             self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name, action="loop_guard",
                                    outcome="refused", ref=f"{space}:{channel}:{root}", detail=f"{self.spaces[space].bot_posts_per_hour} bot posts in the last hour")
             raise BlockError(f"loop guard: {self.spaces[space].bot_posts_per_hour} bot posts in this thread in the last hour")
-        mid = await self.post(space, channel, text, root=root, reply_to=reply_to, persona=persona)
-        self.core.store.x("INSERT OR REPLACE INTO chat_sent(block, space, channel, message, root, at) VALUES (?,?,?,?,?,?)",
-                          (self.name, space, channel, mid, root or mid, self.core.clock()))
+        sent = await self.post(space, channel, text, root=root, reply_to=reply_to, persona=persona)
+        ids = [sent] if isinstance(sent, str) else list(sent)
+        mid = ids[0]
+        self.core.store.db.executemany("INSERT OR REPLACE INTO chat_sent(block, space, channel, message, root, at) VALUES (?,?,?,?,?,?)",
+                                       [(self.name, space, channel, i, root or mid, self.core.clock()) for i in ids])
         if root:
             self.core.store.x("INSERT OR IGNORE INTO chat_threads(block, space, channel, root, target, at) VALUES (?,?,?,?,?,?)",
                               (self.name, space, channel, root, "", self.core.clock()))
@@ -479,7 +487,7 @@ class ChatBlock(Block):
         r = self.core.store.one("SELECT * FROM chat_relays WHERE handle = ? AND block = ?", (handle, self.name))
         if r is None or r["space"] not in self.spaces:
             return
-        if not self._count_turn(f"{self.name}:{r['space']}:{r['channel']}:{r['root']}"):
+        if not self._count_turn(self._thread_key(r["space"], r["channel"], r["root"])):
             return
         place = await self.reply_place(r["space"], r["channel"], r["root"], r["target"], r["trust"])
         if place is None:
@@ -514,9 +522,23 @@ class ChatBlock(Block):
         found = self.targets_by_slug.get(persona.lower()) if persona else None
         p = self.persona_for(found) if found else Persona(call.principal.source, call.principal.source)
         call.note(target=f"{space}/{channel}", excerpt=text)
+        if thread and not self._count_turn(self._thread_key(space, channel, thread)):
+            raise BlockError(f"this {self.manifest.title} thread is paused: it reached the turn cap")
         return await self.send_text(space, channel, text, root=thread or None, persona=p)
 
     async def _reply(self, call: Call, ref: str, text: str) -> dict[str, Any]:
+        """ref is an inbox conversation handle (its newest addressed event is answered in its thread) or
+        <space>:<channel>[:<root>]."""
+        handle = self.core.inbox.handle(ref or "")
+        if handle is not None and handle["destination"] == self.name:
+            if handle["owner"] != call.principal.source:
+                raise BlockError("you can only reply in a conversation from your own inbox")
+            row = self.core.store.one("SELECT data FROM inbox WHERE handle = ? AND kind = ? AND json_extract(data, '$.addressed_to_us') "
+                                      "ORDER BY id DESC LIMIT 1", (ref, f"{self.platform}_event"))
+            if row is None:
+                raise BlockError(f"conversation {ref} has no message addressed to switchboard to reply to")
+            sender = json.loads(row["data"])["from"]
+            return await self._post(call, sender["space"], sender["channel"], text, sender["root"])
         space, _, rest = (ref or "").partition(":")
         channel, _, root = rest.partition(":")
         if not (space and channel):
