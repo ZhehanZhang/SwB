@@ -529,7 +529,8 @@ class ChatBlock(Block):
     async def _provision(self, call: Call) -> dict[str, Any]:
         if call.principal.trust != "owner":
             raise BlockError("provisioning is the owner's")
-        return {"missing": self.missing(), "setup": self.setup(), **self.claim_link(call.principal.source)}
+        claim = self.claim_link(call.principal.source)
+        return {"missing": self.missing(), "setup": self.setup(), **claim}
 
     token_re = re.compile(r"\S{20,200}")
     token_hint = "The bot token."
