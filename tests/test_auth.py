@@ -67,6 +67,26 @@ def test_grok_metadata_document_oauth(make, cimd):
     assert cimd.fetches == 1
 
 
+@pytest.mark.parametrize(("agent", "url", "registered", "actual"), [
+    ("claude-code", "https://claude.ai/oauth/claude-code-client-metadata", "http://localhost/callback", "http://localhost:3456/callback"),
+    ("codex", "https://chatgpt.com/oauth/codex/client.json", "http://127.0.0.1/callback", "http://127.0.0.1:3456/callback"),
+    ("codex", "https://chatgpt.com/oauth/codex/example-id/client.json", "http://127.0.0.1/callback", "http://127.0.0.1:3456/callback"),
+    ("goose", "https://goose-docs.ai/oauth/client-metadata.json", "http://[::1]/oauth_callback", "http://[::1]:3456/oauth_callback"),
+    ("opencode", "https://opencode.ai/oauth/opencode/client.json", "http://127.0.0.1/callback", "http://127.0.0.1:3456/callback"),
+])
+def test_coding_agent_cimd_signs_in_as_the_right_mailbox(make, cimd, agent, url, registered, actual):
+    _, client = make()
+    cimd.docs[url] = {"client_id": url, "redirect_uris": [registered]}
+    token = sign_in(client, redirect=actual, client_id=url)
+    assert payload(call(client, token["access_token"], "switchboard_status"))["you"]["agent"] == agent
+
+
+def test_new_cimd_allows_only_the_native_document_by_default(make, cimd):
+    _, client = make()
+    page, _ = consent(client, "https://opencode.ai/other", redirect="http://127.0.0.1:3456/callback")
+    assert page.status_code == 400 and cimd.fetches == 0
+
+
 def test_approving_needs_the_owners_access_jwt_on_the_post_too(make):
     _, c = make()
     cid = register(c)["client_id"]

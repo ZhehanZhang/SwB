@@ -12,7 +12,13 @@ from typing import Any, Iterable, Mapping
 
 from .blocks import AgentSpec
 
-LOOPBACK_REDIRECTS = ("http://localhost/*", "http://127.0.0.1/*")
+LOOPBACK_REDIRECTS = ("http://localhost/*", "http://127.0.0.1/*", "http://[::1]/*")
+NATIVE_CIMD = {
+    "https://claude.ai/oauth/claude-code-client-metadata": "claude-code",
+    "https://chatgpt.com/oauth/codex/client.json": "codex",
+    "https://goose-docs.ai/oauth/client-metadata.json": "goose",
+    "https://opencode.ai/oauth/opencode/client.json": "opencode",
+}
 
 PRESETS: dict[str, AgentSpec] = {
     s.id: s
@@ -26,6 +32,9 @@ PRESETS: dict[str, AgentSpec] = {
         AgentSpec("gemini", "Gemini", redirect_uris=("https://oauth-redirect.googleusercontent.com/r/*", "https://oauth-redirect.googleusercontent.com/a/*"),
                   redirect_hosts=("oauth-redirect.googleusercontent.com",)),
         AgentSpec("claude-code", "Claude Code"),
+        AgentSpec("codex", "Codex"),
+        AgentSpec("goose", "Goose"),
+        AgentSpec("opencode", "OpenCode"),
     )
 }
 
