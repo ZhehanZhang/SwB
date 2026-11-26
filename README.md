@@ -208,7 +208,7 @@ Captain (by name or id), a Capy project (new thread there), or a thread. Default
 `send` without `to` uses the route. An explicit `to` for a routed block is refused unless the matching route has
 `allow_override` (with no route at all, an explicit target is the only way). Route targets are checked with the
 block when set. Every route write, refusals included, is in the audit log. `routes_list`, `routes_set`,
-`routes_remove` and `routes_resolve` manage them, and the admin page at `/` shows them with the projects and recent
+`routes_remove` and `routes_resolve` manage them, and the classic admin page at `/classic` shows them with the projects and recent
 changes. The global default is an empty slot in the code; `routes:` in the config (or the older
 `destinations.capy.default_route`) seeds it once on a fresh install.
 
@@ -332,7 +332,7 @@ Re-registering for the same switchboard project and Claude Project replaces any 
 saved and frees its routine name. Give the owner the latest link; the result lists any replaced names in
 `superseded`, and links for other Claude Projects still work.
 
-**By hand.** On the root page, under Claude routines, paste the task's fire URL and token and pick the switchboard
+**By hand.** On `/classic`, under Claude routines, paste the task's fire URL and token and pick the switchboard
 project, or call `routine_add(fire_url, token, project)`. The token is encrypted in switchboard's store and never
 shown again. The routine shows as **untested** until its first fire works.
 
@@ -356,7 +356,7 @@ A send to claude with no project, or for a project without its own routine, goes
 mailbox when there is none. The project task does quick items itself. For real work it messages the coordinator with
 the task and the switchboard conversation handle, then replies with `final=false` ("handed to the … coordinator"). The
 coordinator answers on the same handle with `reply(final=true)`. `wait` and `inbox` show both replies, and
-`result(conversation)` returns the final one. The root page's **Projects across systems** card shows what each
+`result(conversation)` returns the final one. The classic admin page's **Projects across systems** card shows what each
 switchboard project maps to: the Captain its route reaches, its Claude routines, and its links.
 
 **Fires without text.** Anthropic's fire endpoint refuses `text` for some Project routines, with 403 "this project
@@ -459,7 +459,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   Without an owner message, a private target's reply in a shared channel goes to the owner's DM or is withheld.
   `sender_rate` (`{count: 5, window_s: 600}`) caps context items per sender,
   and every context item and drop is in the audit log. The top-level `visibility:` section sets `defaults` per kind
-  and `resources`; the root page's pills and the `visibility_set` tool flip one resource, and that override wins.
+  and `resources`; the classic admin page and the `visibility_set` tool flip one resource, and that override wins.
 - **Signed sinks.** A sink with `secret_env` signs each POST: `X-Switchboard-Timestamp` is the Unix time and
   `X-Switchboard-Signature` is `v1=` plus the hex HMAC-SHA256 of `<timestamp>.<raw body>` with that secret. A
   receiver checks the signature and rejects old timestamps. Receivers that can't check one (a Capy automation webhook)
@@ -474,7 +474,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   no bot and never joins or invites (the client refuses those methods, and a test scans the source). The loop guard
   queues bot replies past `bot_thread_posts_per_hour` in one thread for approval.
 - **Approvals.** Approval happens only out of band. The owner uses the Approve / Reject DM the bot sends, or the
-  **Slack writes waiting for you** list on the root page (owner sign-in plus a CSRF token). The DM goes from the request's own
+  **Slack writes waiting for you** list on `/classic` (owner sign-in plus a CSRF token). The DM goes from the request's own
   workspace when that workspace sets `approver_user_id`, else from `approvals.notify_workspace` to
   `approvals.approver_user_id`. No MCP tool decides a request, and a decision from anyone but a configured approver
   (clicking in the workspace they are configured for) or the page is refused and audited.
@@ -503,7 +503,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   path; see `blocks/capy/avatars.py`). User-identity posts never carry
   a persona: they always show as the account owner, behind the identity's write policy.
 - **Avatars.** A persona's picture is the file named in `avatar:`, or `<persona id>.png` when the persona sets no
-  `icon_url`. Files are looked up in `<data>/avatars` (uploads from the root page's Personas list), then each
+  `icon_url`. Files are looked up in `<data>/avatars` (uploads from the classic admin page's Personas list), then each
   `slack.avatar_dirs` folder, then pictures blocks rendered, then the neutral monograms bundled for `switchboard`,
   `claude`, `chatgpt`, `gemini`, `codex`, `claude-code` and `capy`. Dropping a new file in replaces the picture with no
   restart; the URL carries the file's mtime so Slack fetches the new one. `scripts/monogram.py` draws more.
@@ -801,7 +801,7 @@ server metadata (RFC 8414) with PKCE `S256` only, CIMD from allowlisted hosts, D
 redirect URIs limited to the agents registry's (each preset's and block's) and loopback; tokens bound to `<public_url>/mcp`; 1 h access tokens and
 rotating 30-day refresh tokens with replay detection, stored only as SHA-256 hashes.
 
-Only the owner can open the admin page at `/` or approve an MCP OAuth connection. With `public_url` set,
+Only the owner can open the web UI at `/`, the classic admin page at `/classic`, or approve an MCP OAuth connection. With `public_url` set,
 the default sign-in is a passkey. For the first sign-in or as a fallback, run `swb login-link` or ask any
 unrestricted owner agent to call `login_link`. The link works once and expires after five minutes. There are no passwords.
 
@@ -812,7 +812,7 @@ through `auth.cloudflare_access` and `auth.owner_emails`; Switchboard verifies t
 
 In front of everything:
 
-- A wrong bearer token on `/mcp` or `/inbox/` is audited (`auth_failure`) and counts against the caller's IP: after 20
+- A wrong bearer token on `/mcp` or the inbox feeds is audited (`auth_failure`) and counts against the caller's IP: after 20
   in 10 minutes that IP gets `429` for the rest of the window. Requests without a token (OAuth discovery) aren't counted.
 - `/register` allows 20 per IP per hour, `/token` 120 and `/authorize` 60 per 10 minutes; refusals are audited
   (`rate_limited`).
@@ -825,7 +825,7 @@ a key from a pairing code (below).
 ### Connecting a new agent with a pairing code
 
 For CLI and session agents started on a laptop when needed (Codex, Gemini CLI, Claude Code, a script), the owner
-mints a one-time code on the root page (**Connected agents → Mint code**) or with `connect_code(agent, project?)`
+mints a one-time code on `/classic` (**Connected agents → Mint code**) or with `connect_code(agent, project?)`
 from his own sign-in. It names the agent and lasts ten minutes. On the machine, redeem it:
 
 ```bash
@@ -834,7 +834,7 @@ curl -s -X POST https://swb.example.com/connect -H 'content-type: application/js
 
 The answer holds the agent's own key (`swb_...`, shown once; only its hash is stored), the MCP URL and the inbox
 URL. The agent signs in with `Authorization: Bearer <key>` as that agent, so routes, personas and the audit log
-resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key on the root page or with
+resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key on `/classic` or with
 `connect_revoke`. A `swb connect` CLI that also writes the client's MCP config comes in a later step.
 
 ## Delegation guardrails
@@ -861,7 +861,7 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
   `destinations.capy.identity: personal` is set (one key, sends show as you). A service user only sees what is shared
   with it, so share the Captains with it and give it access to the device they run on. On startup and every 30 minutes,
   each key is checked against `GET /captains` and a send-path no-op on each routed Captain or thread. `/healthz`
-  (`send_keys`) and the root page then show it as ok, no project access, no device access, or rejected, and they show
+  (`send_keys`) and the classic admin page then show it as ok, no project access, no device access, or rejected, and they show
   which key sends for each agent.
 - Bearer sign-in failures are in the audit log without the key: `auth_failure` records a wrong token's length and
   paste mistakes (whitespace, quotes, a doubled "Bearer") or a non-Bearer header, and `auth_missing` records a
@@ -880,7 +880,7 @@ curl -s http://127.0.0.1:8870/healthz
 ```
 
 Without `CAPY_API_KEY` the server runs **degraded**: memory, projects and routes work, the capy block is offline and its tools say the key is
-missing, and `/healthz` and the status page at `/` say what's off. Tests run in the image build
+missing, and `/healthz` and the status page at `/classic` say what's off. Tests run in the image build
 (`docker build --target test .`); the channel has its own (`cd channel && bun test`). A legacy `capy-bridge.db` in the
 data directory is renamed to `switchboard.db` on first start.
 
@@ -893,8 +893,14 @@ first change. It's one-way: edits in the mirror are never read back. `mirror: fa
 The deployment mirrors into Capy Drive (`user-owner/switchboard-memory/`): a git-ignored `compose.override.yaml`
 binds that folder at `/mirror`, and `SWITCHBOARD_UID` in `.env` builds the image to run as the uid that owns it.
 
-The pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
+The classic pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
 same type, hairline cards, the Arc backdrop, the signature and the shared theme cookie, ported from example-org/id-site.
+Set `SWITCHBOARD_REVISION` to the deployed Git SHA to show it in the web UI's health control.
+
+## Web UI development
+
+`cd web && npm ci && npm run dev` starts Vite with a proxy to swb on port 8000; owner authentication still applies.
+`cd web && npm run build` writes the SPA to `src/switchboard/static/app/` for swb to serve without Node.
 
 ## MCP Events
 
