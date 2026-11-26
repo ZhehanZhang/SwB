@@ -8,17 +8,13 @@ code names a vendor.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable, Mapping
+from urllib.parse import urlparse
 
 from .blocks import AgentSpec
 
 LOOPBACK_REDIRECTS = ("http://localhost/*", "http://127.0.0.1/*", "http://[::1]/*")
-NATIVE_CIMD = {
-    "https://claude.ai/oauth/claude-code-client-metadata": "claude-code",
-    "https://chatgpt.com/oauth/codex/client.json": "codex",
-    "https://goose-docs.ai/oauth/client-metadata.json": "goose",
-    "https://opencode.ai/oauth/opencode/client.json": "opencode",
-}
 
 PRESETS: dict[str, AgentSpec] = {
     s.id: s
@@ -31,10 +27,10 @@ PRESETS: dict[str, AgentSpec] = {
                   redirect_hosts=("grok.com", "x.ai"), cimd_hosts=("grok.com", "x.ai")),
         AgentSpec("gemini", "Gemini", redirect_uris=("https://oauth-redirect.googleusercontent.com/r/*", "https://oauth-redirect.googleusercontent.com/a/*"),
                   redirect_hosts=("oauth-redirect.googleusercontent.com",)),
-        AgentSpec("claude-code", "Claude Code"),
-        AgentSpec("codex", "Codex"),
-        AgentSpec("goose", "Goose"),
-        AgentSpec("opencode", "OpenCode"),
+        AgentSpec("claude-code", "Claude Code", cimd_patterns=(r"https://claude\.ai/oauth/claude-code-client-metadata",)),
+        AgentSpec("codex", "Codex", cimd_patterns=(r"https://chatgpt\.com/oauth/codex/(?:[A-Za-z0-9_-]+/)?client\.json",)),
+        AgentSpec("goose", "Goose", cimd_patterns=(r"https://goose-docs\.ai/oauth/client-metadata\.json",)),
+        AgentSpec("opencode", "OpenCode", cimd_patterns=(r"https://opencode\.ai/oauth/opencode/client\.json",)),
     )
 }
 
@@ -79,6 +75,7 @@ class Agents:
                 redirect_hosts=_tuple(match.get("redirect_hosts")) or (base.redirect_hosts if base else ()),
                 cimd_hosts=_tuple(match.get("cimd_hosts")) or (base.cimd_hosts if base else ()),
                 link_key=raw.get("link_key") or (base.link_key if base else None),
+                cimd_patterns=_tuple(match["cimd_patterns"]) if "cimd_patterns" in match else (base.cimd_patterns if base else ()),
             ))
         specs += [s for s in provided if s.id not in {x.id for x in specs}]
         return cls(specs)
@@ -93,7 +90,13 @@ class Agents:
         s = self.specs.get(agent)
         return s.label if s else (default if default is not None else agent)
 
-    def match(self, redirect_host: str, cimd_host: str) -> str | None:
+    def match_cimd(self, url: str) -> str | None:
+        return next((s.id for s in self.specs.values() if any(re.fullmatch(p, url) for p in s.cimd_patterns)), None)
+
+    def match(self, redirect_host: str, cimd_url: str) -> str | None:
+        if cimd_url and (agent := self.match_cimd(cimd_url)):
+            return agent
+        cimd_host = urlparse(cimd_url).hostname
         for s in self.specs.values():
             if host_allowed(redirect_host, s.redirect_hosts) or host_allowed(cimd_host, s.cimd_hosts):
                 return s.id

@@ -28,7 +28,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from . import pages
-from .agents import NATIVE_CIMD, PRESETS, Agents, host_allowed
+from .agents import PRESETS, Agents, host_allowed
 from .config import Config
 from .store import Store, dumps
 
@@ -138,16 +138,12 @@ def redirect_matches(requested: str, registered: list[str]) -> bool:
 def source_for(redirect_uri: str, client: Client, names: dict[str, str], agents: Agents | None = None) -> str:
     """The agent an OAuth client signs in as: auth.source_names first, then the agents registry, then its client name."""
     host = (urlparse(redirect_uri).hostname or "").lower()
-    cimd_host = (urlparse(client.client_id).hostname or "").lower() if client.kind == "cimd" else ""
+    cimd_url = client.client_id if client.kind == "cimd" else ""
+    cimd_host = (urlparse(cimd_url).hostname or "").lower()
     for needle, name in names.items():
         if needle and (needle in host or needle in cimd_host or needle.lower() in (client.name or "").lower()):
             return name
-    if client.kind == "cimd":
-        if agent := NATIVE_CIMD.get(client.client_id):
-            return agent
-        if re.fullmatch(r"https://chatgpt\.com/oauth/codex/[A-Za-z0-9_-]+/client\.json", client.client_id):
-            return "codex"
-    matched = (agents or Agents(PRESETS.values())).match(host, cimd_host)
+    matched = (agents or Agents(PRESETS.values())).match(host, cimd_url)
     if matched:
         return matched
     slug = re.sub(r"[^a-z0-9]+", "-", (client.name or "").lower()).strip("-")[:40]
@@ -313,7 +309,7 @@ class Auth:
         if cached and cached[0] > self.store.clock():
             return cached[1]
         u = urlparse(url)
-        known_native = not self.cfg.cimd_hosts and NATIVE_CIMD.get(url) in self.agents
+        known_native = not self.cfg.cimd_hosts and self.agents.match_cimd(url)
         if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not (known_native or host_allowed(u.hostname, self.cimd_hosts)):
             raise OAuthError("invalid_client", f"client metadata document host {urlparse(url).hostname} is not allowed (auth.cimd_hosts)", 401)
         try:

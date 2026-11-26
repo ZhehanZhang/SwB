@@ -71,11 +71,11 @@ def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: di
         else:
             if project:
                 project = core.project(project).slug
-            if any(key["agent"] == agent and key["project"] == project for key in core.connections.list()):
-                done.append("The client already has a pairing key.")
-            else:
-                code = kit.mint_pairing(principal, agent, project, None)["code"]
-                steps.append({"by": "person", "do": f'POST {core.base_url}/connect with {{"code":"{code}"}} from the client to obtain its bearer key.'})
+            if key := next((k for k in core.connections.list() if k["agent"] == agent and k["project"] == project), None):
+                return {"done": [*done, "This agent already has a pairing key"], "next": [{"by": "person",
+                        "do": f'To set up another machine or replace it, revoke it with connect_revoke(key_id="{key["id"]}"), then call connect again.'}]}
+            code = kit.mint_pairing(principal, agent, project, None)["code"]
+            steps.append({"by": "person", "do": f'POST {core.base_url}/connect with {{"code":"{code}"}} from the client to obtain its bearer key.'})
     if use_oauth and guide.command:
         do = "Run this command to add Switchboard."
         snippet = guide.command.replace("@url", shlex.quote(url))
