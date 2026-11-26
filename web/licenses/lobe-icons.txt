@@ -1,4 +1,4 @@
-Grok and xAI mark paths are from Lobe Icons (https://github.com/lobehub/lobe-icons).
+Claude, Gemini, OpenAI, and xAI mark paths are from Lobe Icons (https://github.com/lobehub/lobe-icons).
 
 MIT License
 

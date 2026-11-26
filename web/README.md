@@ -17,4 +17,4 @@ The production build writes `../src/switchboard/static/app/index.html` and hashe
 
 - The desktop rail and mobile tabs share one navigation list. Search or jump opens with Cmd/Ctrl-K and searches sections and project names.
 - The console reads `GET /auth/session` for `signed_in`, `via`, `csrf`, and `methods`. The request helper sends `X-CSRF-Token` on protected writes. A signed-out session leads to the standalone `/login` screen.
-- Shared primitives live in `src/components`. Logo tiles use the deployment's raster marks and local SVG paths from Simple Icons (CC0) and Lobe Icons (MIT).
+- Shared primitives live in `src/components`. Logo tiles use local SVG paths from Simple Icons (CC0) and Lobe Icons (MIT).
