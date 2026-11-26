@@ -344,6 +344,8 @@ def create_app(core: "Switchboard") -> Any:
     async def inbox_poll(request: Request) -> JSONResponse:
         """Long-poll for the Claude Code channel and scripts: the caller's own inbox items after ?after=."""
         p = principal_of(request)
+        if p.tools is not None and "inbox" not in p.tools:
+            return JSONResponse({"error": "forbidden", "error_description": f"the {p.source} key can't read an inbox"}, status_code=403)
         if request.query_params.get("agent") not in (None, "", p.source):
             return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         try:
@@ -358,6 +360,8 @@ def create_app(core: "Switchboard") -> Any:
     async def inbox_events(request: Request) -> Response:
         """Server-Sent Events: one 'item' frame per inbox item, id = its cursor, so Last-Event-ID resumes after a drop."""
         p = principal_of(request)
+        if p.tools is not None and "inbox" not in p.tools:
+            return JSONResponse({"error": "forbidden", "error_description": f"the {p.source} key can't read an inbox"}, status_code=403)
         if request.query_params.get("agent") not in (None, "", p.source):
             return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         agent = p.source

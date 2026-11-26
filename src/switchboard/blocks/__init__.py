@@ -236,6 +236,10 @@ class Block:
         """For a block that wakes agents: the target that wakes this agent for this project (a project routine), if any."""
         return None
 
+    def effective_target(self, addr: Address, project: str | None) -> Address:
+        """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""
+        return addr
+
     def owns_ref(self, ref: str) -> bool:
         """Whether a conversation reference (a thread id, say) belongs to this block."""
         return any(t.ref_prefix and ref.startswith(t.ref_prefix) for t in self.manifest.targets)
