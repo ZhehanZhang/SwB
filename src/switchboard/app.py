@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from . import pages
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
 PROTECTED = ("/mcp", "/inbox/")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
+AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
 
 class BearerGate:
@@ -76,6 +79,11 @@ class BearerGate:
                 await send({"type": "http.response.start", "status": 401, "headers": [(b"content-type", b"application/json"), (b"www-authenticate", challenge.encode())]})
                 await send({"type": "http.response.body", "body": body})
                 return
+            if principal.kind == "inbox_key" and not scope["path"].startswith("/inbox/"):
+                body = json.dumps({"error": "insufficient_scope", "error_description": f"{principal.client_id} only reads {principal.source}'s inbox (/inbox/poll, /inbox/events)"}).encode()
+                await send({"type": "http.response.start", "status": 403, "headers": [(b"content-type", b"application/json")]})
+                await send({"type": "http.response.body", "body": body})
+                return
             scope[PRINCIPAL_SCOPE] = principal
         await self.app(scope, receive, send)
 
@@ -114,24 +122,98 @@ def create_app(core: "Switchboard") -> Any:
         if email is None:
             return pages.message_page("Not allowed", "This page needs the owner's SSO through Cloudflare Access.", 403)
         changes = [c for c in core.audit.recent(limit=100) if c["action"] in ("route_set", "route_remove", "auth_failure", "rate_limited")][:15]
-        return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes)
+        extra = ""
+        if core.slack is not None:
+            notices = {"approved": "Approved and sent.", "rejected": "Rejected.", "send-failed": "Approved, but Slack refused the send; see the audit log.",
+                       "decide-refused": "That request was already decided or has expired.",
+                       "avatar-saved": "Avatar saved. New posts use it; Slack may take a minute to show it.",
+                       "avatar-refused": "Avatar not saved: send a picture of the persona's file type (see its file name), 2 MB at most."}
+            extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf(email),
+                                     notices.get(request.query_params.get("notice", "")), core.slack.persona_rows())
+        return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra)
+
+    def csrf(email: str) -> str:
+        return hmac.new(core.auth.secret, f"switchboard-csrf:{email}".encode(), hashlib.sha256).hexdigest()
+
+    async def slack_decide(request: Request) -> Response:
+        """The owner approves or rejects a Slack write from the root page: Access JWT for an owner plus a CSRF token."""
+        from .slack.writes import Actor, WriteError
+
+        if core.slack is None or not core.cfg.access_team_domain:
+            return pages.message_page("Not available", "Slack approvals here need Slack and Cloudflare Access configured.", 403)
+        email = await core.auth.owner(request)
+        if email is None:
+            return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        form = await request.form()
+        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
+            return pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
+        verb = request.path_params["verb"]
+        if verb not in ("approve", "reject"):
+            return Response(status_code=404)
+        try:
+            req = await core.slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", email))
+        except WriteError:
+            return RedirectResponse("/?notice=decide-refused", status_code=303)
+        outcome = "rejected" if verb == "reject" else ("approved" if req["status"] == "sent" else "send-failed")
+        return RedirectResponse(f"/?notice={outcome}", status_code=303)
+
+    async def avatar(request: Request) -> Response:
+        """Persona avatars for Slack bot posts; Slack fetches them, so this path is public (no Access)."""
+        if core.slack is None:
+            return Response(status_code=404)
+        name = request.path_params["name"]
+        path = core.slack.find_avatar(name)
+        if path is None:
+            return Response(status_code=404)
+        return Response(path.read_bytes(), media_type="image/png" if name.endswith(".png") else ("image/gif" if name.endswith(".gif") else "image/jpeg"),
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+    async def avatar_upload(request: Request) -> Response:
+        """The owner replaces a persona's picture from the root page: Access JWT for an owner plus a CSRF token."""
+        if core.slack is None or not core.cfg.access_team_domain:
+            return pages.message_page("Not available", "Avatar uploads need Slack and Cloudflare Access configured.", 403)
+        email = await core.auth.owner(request)
+        if email is None:
+            return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        form = await request.form()
+        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
+            return pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
+        persona = core.slack.config.personas.get(request.path_params["pid"])
+        if persona is None or not persona.avatar:
+            return pages.message_page("Not available", "That persona has no avatar file; it uses an icon_url or emoji from the config.", 404)
+        upload = form.get("file")
+        data = await upload.read(AVATAR_MAX_BYTES + 1) if hasattr(upload, "read") else b""
+        kind = "png" if data.startswith(b"\x89PNG\r\n\x1a\n") else "jpg" if data.startswith(b"\xff\xd8\xff") else "gif" if data[:6] in (b"GIF87a", b"GIF89a") else None
+        want = persona.avatar.rsplit(".", 1)[1].lower().replace("jpeg", "jpg")
+        if not data or len(data) > AVATAR_MAX_BYTES or kind != want:
+            return RedirectResponse("/?notice=avatar-refused", status_code=303)
+        core.slack.avatar_dir.mkdir(parents=True, exist_ok=True)
+        tmp = core.slack.avatar_dir / f".{persona.avatar}.tmp"
+        tmp.write_bytes(data)
+        tmp.replace(core.slack.avatar_dir / persona.avatar)
+        core.slack.store.audit(f"admin:{email}", "avatar_uploaded", persona=persona.id, file=persona.avatar, bytes=len(data))
+        return RedirectResponse("/?notice=avatar-saved", status_code=303)
 
     async def inbox_poll(request: Request) -> JSONResponse:
-        """Long-poll for the Claude Code channel and scripts: items for ?agent= (default every agent) after ?after=."""
+        """Long-poll for the Claude Code channel and scripts: the caller's own inbox items after ?after=."""
         p = principal_of(request)
+        if request.query_params.get("agent") not in (None, "", p.source):
+            return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         try:
             timeout = min(POLL_MAX_S, max(0.0, float(request.query_params.get("timeout", "25"))))
         except ValueError:
             timeout = 25.0
         since = _cursor(request)
-        out = await core.inbox.wait(owner=request.query_params.get("agent") or None, since=since if since is not None else core.inbox.head(),
+        out = await core.inbox.wait(owner=p.source, since=since if since is not None else core.inbox.head(),
                                     timeout=timeout, reader=f"channel:{p.source}", advance=False)
         return JSONResponse(out)
 
     async def inbox_events(request: Request) -> Response:
         """Server-Sent Events: one 'item' frame per inbox item, id = its cursor, so Last-Event-ID resumes after a drop."""
         p = principal_of(request)
-        agent = request.query_params.get("agent") or None
+        if request.query_params.get("agent") not in (None, "", p.source):
+            return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
+        agent = p.source
         start = _cursor(request)
 
         async def frames() -> AsyncIterator[bytes]:
@@ -166,6 +248,9 @@ def create_app(core: "Switchboard") -> Any:
     app: Any = Starlette(
         routes=[
             Route("/", admin, methods=["GET"]),
+            Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
+            Route("/avatars/{name}", avatar, methods=["GET"]),
+            Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
             Route("/healthz", healthz),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),

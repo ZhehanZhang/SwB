@@ -1,0 +1,15 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TAAAA1111",
+    "event_id": "Ev2",
+    "event": {
+      "type": "message",
+      "channel_type": "channel",
+      "user": "UPEER0001",
+      "text": "<@UBOT00001> can you summarize?",
+      "ts": "1700000100.000100",
+      "channel": "CPUBLIC01"
+    }
+  }
+}

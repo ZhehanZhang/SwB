@@ -1,0 +1,56 @@
+# Slack app for workspace A (agent-to-agent space): bot user + the owner's user token.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> pick workspace A.
+# The bot's @handle and member-list profile come from features.bot_user.display_name and the
+# app icon; they do not change per message. Per-message name/avatar = personas (chat:write.customize).
+display_information:
+  name: Switchboard
+  description: Agent switchboard for the owner's assistants
+  background_color: "#1d2733"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: switchboard
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read      # @mentions -> push kind "mention"
+      - channels:history       # watched public channels the bot is in
+      - channels:read
+      - groups:history         # watched private channels the bot is in
+      - groups:read
+      - im:history             # DMs to the bot -> push kind "dm"
+      - im:read
+      - im:write               # approval DMs to the owner
+      - chat:write
+      - chat:write.customize   # personas: per-message username + icon
+      - reactions:write        # ack reaction on mentions/DMs
+      - users:read             # names in pushed events
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # posts as the owner (policy-gated)
+      - reactions:write
+      - search:read            # search_messages
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  interactivity:
+    is_enabled: true           # Approve/Reject buttons, delivered over Socket Mode
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

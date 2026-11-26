@@ -1,0 +1,22 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TBBBB2222",
+    "event_id": "EvB1",
+    "authorizations": [
+      {
+        "team_id": "TBBBB2222",
+        "user_id": "UOWNERB01",
+        "is_bot": false
+      }
+    ],
+    "event": {
+      "type": "message",
+      "channel_type": "group",
+      "user": "UFAMILY01",
+      "text": "dinner at 7?",
+      "ts": "1700001000.001000",
+      "channel": "CPRIV0001"
+    }
+  }
+}

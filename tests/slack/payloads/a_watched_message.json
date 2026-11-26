@@ -1,0 +1,16 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TAAAA1111",
+    "event_id": "Ev3",
+    "event": {
+      "type": "message",
+      "channel_type": "channel",
+      "user": "UPEER0002",
+      "text": "new context for everyone",
+      "ts": "1700000200.000200",
+      "thread_ts": "1700000150.000150",
+      "channel": "CWATCH001"
+    }
+  }
+}

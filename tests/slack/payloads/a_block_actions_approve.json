@@ -1,0 +1,21 @@
+{
+  "type": "interactive",
+  "payload": {
+    "type": "block_actions",
+    "user": {
+      "id": "UOWNERA01",
+      "team_id": "TAAAA1111"
+    },
+    "team": {
+      "id": "TAAAA1111"
+    },
+    "response_url": "https://hooks.slack.com/actions/T/1/x",
+    "actions": [
+      {
+        "action_id": "switchboard_approve",
+        "value": "__RID__",
+        "type": "button"
+      }
+    ]
+  }
+}

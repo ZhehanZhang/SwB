@@ -1,0 +1,15 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TAAAA1111",
+    "event_id": "Ev8",
+    "event": {
+      "type": "message",
+      "channel_type": "channel",
+      "user": "UPEER0002",
+      "text": "chatter",
+      "ts": "1700000700.000700",
+      "channel": "CNOTWATCH"
+    }
+  }
+}

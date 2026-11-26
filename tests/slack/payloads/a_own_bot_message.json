@@ -1,0 +1,16 @@
+{
+  "type": "events_api",
+  "payload": {
+    "team_id": "TAAAA1111",
+    "event_id": "Ev6",
+    "event": {
+      "type": "message",
+      "channel_type": "channel",
+      "user": "UBOT00001",
+      "bot_id": "BBOT00001",
+      "text": "my own reply",
+      "ts": "1700000500.000500",
+      "channel": "CWATCH001"
+    }
+  }
+}
