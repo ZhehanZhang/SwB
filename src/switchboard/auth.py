@@ -18,7 +18,7 @@ import logging
 import re
 import secrets
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlencode, urlparse
 
@@ -65,6 +65,7 @@ class Principal:
     origin: str = "mcp"
     scopes: tuple[str, ...] | None = None
     trust: str = "owner"
+    credential: str | None = field(default=None, repr=False, compare=False)
 
     def allows(self, scope: str) -> bool:
         """Whether this caller may use a memory scope ('general' or 'project:<slug>'); None means every scope."""
@@ -177,6 +178,9 @@ class Auth:
 
     # Bearer verification --------------------------------------------------------
 
+    def _key_grant(self, key: str) -> str:
+        return hmac.digest(self.secret, key.encode(), "sha256").hex()
+
     def verify_bearer(self, token: str | None) -> Principal | None:
         if not token:
             return None
@@ -184,7 +188,8 @@ class Auth:
             if hmac.compare_digest(sha(token), sha(key.secret)):
                 if key.name in self.cfg.inbox_keys:
                     return Principal(source=self.cfg.inbox_keys[key.name], client_id=f"key:{key.name}", kind="inbox_key", scopes=())
-                return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", scopes=self.cfg.key_scopes.get(key.name))
+                return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", scopes=self.cfg.key_scopes.get(key.name),
+                                 credential=self._key_grant(key.secret))
         row = self.connections.verify(token) if self.connections is not None else None
         if row is not None:
             return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect", scopes=self.cfg.key_scopes.get(row["agent"]))
@@ -195,7 +200,32 @@ class Auth:
         )
         if row is None or row["expires_at"] < self.store.clock() or row["resource"] != self.cfg.resource:
             return None
-        return Principal(source=row["source"], client_id=row["client_id"], kind="oauth", scopes=self.cfg.key_scopes.get(row["source"]))
+        return Principal(source=row["source"], client_id=row["client_id"], kind="oauth", scopes=self.cfg.key_scopes.get(row["source"]), credential=row["family"])
+
+    def grant_active(self, *, source: str, kind: str, client_id: str, credential: str | None) -> bool:
+        """Recheck a long-lived grant without retaining a bearer token."""
+        scopes = self.cfg.key_scopes.get(source)
+        if scopes is not None and "*" not in scopes:
+            return False
+        if kind == "key":
+            return (client_id == f"key:{source}" and source not in self.cfg.inbox_keys and credential is not None
+                    and any(k.name == source and hmac.compare_digest(self._key_grant(k.secret), credential) for k in self.cfg.static_keys))
+        if kind == "connect":
+            return client_id.startswith("connect:") and self.store.one(
+                "SELECT 1 FROM agent_keys WHERE id = ? AND agent = ? AND revoked_at IS NULL",
+                (client_id.removeprefix("connect:"), source),
+            ) is not None
+        if kind != "oauth" or not self.cfg.resource or credential is None:
+            return False
+        if client_id.startswith("https://"):
+            if not host_allowed(urlparse(client_id).hostname, self.cimd_hosts):
+                return False
+        elif self.store.one("SELECT 1 FROM oauth_clients WHERE client_id = ?", (client_id,)) is None:
+            return False
+        return self.store.one(
+            "SELECT 1 FROM oauth_tokens WHERE family = ? AND client_id = ? AND source = ? AND resource = ? AND expires_at >= ? AND revoked_at IS NULL",
+            (credential, client_id, source, self.cfg.resource, self.store.clock()),
+        ) is not None
 
     def challenge_header(self, error: str | None = None) -> str:
         parts = []
