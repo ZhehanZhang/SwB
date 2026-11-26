@@ -15,7 +15,7 @@ export function Sheet({ open, onOpenChange, title, description, trigger, childre
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-overlay/50" />
         <Dialog.Content
           {...(!description && { "aria-describedby": undefined })}
           className="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-lg border-t bg-card text-card-foreground md:inset-y-0 md:right-0 md:left-auto md:max-h-none md:w-[340px] md:rounded-none md:border-t-0 md:border-l"

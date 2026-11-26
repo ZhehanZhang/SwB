@@ -14,11 +14,12 @@ def web_dist(tmp_path, monkeypatch):
     assets.mkdir(parents=True)
     (dist / "index.html").write_text('<!doctype html><script src="/app-assets/assets/app-hash.js"></script>')
     (assets / "app-hash.js").write_text("export {};")
+    (assets / "theme.js").write_text("document.documentElement.dataset.theme = 'light';")
     monkeypatch.setattr(web, "APP_DIST", dist)
     return dist
 
 
-@pytest.mark.parametrize("path", ["/", "/canvas", "/agents", "/inbox", "/provision", "/projects", "/memory", "/audit", "/tokens", "/settings",
+@pytest.mark.parametrize("path", ["/", "/canvas", "/agents", "/inbox", "/provision", "/projects", "/memory", "/audit", "/tokens", "/settings", "/about",
                                   "/agents/client/setup", "/inbox/thread/one", "/canvas/"])
 def test_spa_paths_require_owner_and_serve_uncached_shell(make, web_dist, path):
     _, client = make()
@@ -49,6 +50,15 @@ def test_spa_assets_are_cacheable_but_shell_is_not_public(make, web_dist):
     assert client.get("/app-assets/index.html").status_code == 404
     assert client.get("/app-assets/assets/..%2Findex.html").status_code == 404
     assert client.get("/other", headers=OWNER).status_code == 404
+
+
+def test_stable_theme_asset_revalidates_instead_of_caching_immutably(make, web_dist):
+    _, client = make()
+    path = "/app-assets/assets/theme.js"
+    asset = client.get(path)
+    assert asset.status_code == 200 and asset.headers["cache-control"] == "no-cache"
+    unchanged = client.get(path, headers={"if-none-match": asset.headers["etag"]})
+    assert unchanged.status_code == 304 and unchanged.headers["cache-control"] == "no-cache"
 
 
 def test_missing_build_does_not_prevent_classic_or_mcp_starting(make, monkeypatch, tmp_path):

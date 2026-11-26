@@ -901,6 +901,8 @@ Set `SWITCHBOARD_REVISION` to the deployed Git SHA to show it in the web UI's he
 
 `cd web && npm ci && npm run dev` starts Vite with a proxy to swb on port 8000; owner authentication still applies.
 `cd web && npm run build` writes the SPA to `src/switchboard/static/app/` for swb to serve without Node.
+For the About page to identify a Docker build, pass `--build-arg GIT_COMMIT="$(git rev-parse HEAD)"`
+and `--build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"` to `docker build`.
 
 ## MCP Events
 

@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
 import { PRODUCT_NAME } from "@/app/brand"
 import { CommandMenu } from "@/app/header-controls"
 import { PageTitle } from "@/app/page-title"
-import { isSection, sections } from "@/app/navigation"
+import { isSection, primarySections, sections, utilitySections } from "@/app/navigation"
 import { SwbIcon } from "@/components/swb-icon"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
@@ -70,9 +70,9 @@ export function AppShell() {
       <a className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2" href="#main-content">Skip to content</a>
       <nav aria-label="Navigation" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--rail-width)] flex-col gap-1 px-2 pt-4 pb-4 pl-4 md:flex">
         <HomeNav active={home} />
-        {sections.slice(0, -1).map(section => <SectionNav key={section.to} section={section} />)}
+        {primarySections.map(section => <SectionNav key={section.to} section={section} />)}
         <div className="flex-1" />
-        <SectionNav section={sections[5]} />
+        {utilitySections.map(section => <SectionNav key={section.to} section={section} />)}
       </nav>
       <div className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
         <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
