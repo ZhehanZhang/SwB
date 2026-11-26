@@ -475,7 +475,7 @@ def create_app(core: "Switchboard") -> Any:
             *pages.routes(),
             *login.routes(),
             *core.auth.routes(),
-            *web_routes(owner_page),
+            *web_routes(owner_page, csrf),
             *origin_routes,
         ],
         lifespan=lifespan,

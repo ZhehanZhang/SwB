@@ -7,8 +7,13 @@ import "@fontsource-variable/inter-tight"
 import "@fontsource-variable/jetbrains-mono"
 import "./styles.css"
 import { App } from "@/app/app"
+import { authEvents, markSignedOut, SignedOutError } from "@/lib/api"
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 } } })
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: (count, error) => count < 1 && !(error instanceof SignedOutError) } },
+})
+
+authEvents.addEventListener("signed_out", () => markSignedOut(queryClient))
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

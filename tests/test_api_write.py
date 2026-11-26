@@ -8,6 +8,7 @@ from switchboard.slack.writes import WriteError
 
 
 EMAIL = "owner@example.test"
+SECOND_OWNER = "second@example.test"
 ROUTE = {"destination": "capy", "target": {"captain": "ZINF-1"}, "agent": "claude",
          "defaults": {"delivery": "queue"}, "allow_override": True, "note": "Owner route"}
 VISIBILITY = {"resource": "target:claude", "visibility": ["UOWNER01", "workspace:example"]}
@@ -19,9 +20,11 @@ SLACK_SECRET = "upstream-secret-for-test"
 @pytest.fixture
 def board(make):
     async def access(assertion):
-        return EMAIL if assertion == "other-owner-session" else await access_verifier(assertion)
+        return SECOND_OWNER if assertion == "second-owner" else await access_verifier(assertion)
 
-    return make(config=base_config(version=2, blocks={
+    auth = base_config()["auth"]
+    auth["owner_emails"].append(SECOND_OWNER)
+    return make(config=base_config(version=2, auth=auth, blocks={
         "mcp": {},
         "capy": {"daily_cap": 1},
         "claude-routine": {"routines": {"fixed": {"routine_id": "trig_CONFIGURED", "token_env": "FIXED_ROUTINE_TOKEN"}}},
@@ -34,11 +37,11 @@ def board(make):
 
 
 def owner_headers(client):
-    response = client.get("/api/session", headers=OWNER)
+    response = client.get("/auth/session", headers=OWNER)
     assert response.status_code == 200
     session = response.json()
-    assert session["email"] == EMAIL and session["csrf"]
-    return {**OWNER, "Origin": PUBLIC, "X-Swb-CSRF": session["csrf"]}
+    assert session["signed_in"] and session["via"] == "access" and session["csrf"]
+    return {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": session["csrf"]}
 
 
 @pytest.mark.parametrize(("method", "path", "body"), [
@@ -56,31 +59,31 @@ def test_each_write_requires_owner_origin_and_session_csrf(board, method, path, 
     _, client = board
     headers = owner_headers(client)
     attempts = [
-        {"Origin": PUBLIC, "X-Swb-CSRF": headers["X-Swb-CSRF"]},
+        {"Origin": PUBLIC, "X-CSRF-Token": headers["X-CSRF-Token"]},
         {**headers, "cf-access-jwt-assertion": "other"},
-        {"Authorization": f"Bearer {STATIC_KEY}", "Origin": PUBLIC, "X-Swb-CSRF": headers["X-Swb-CSRF"]},
+        {"Authorization": f"Bearer {STATIC_KEY}", "Origin": PUBLIC, "X-CSRF-Token": headers["X-CSRF-Token"]},
         OWNER,
         {**OWNER, "Origin": PUBLIC},
         {**headers, "Origin": "http://switchboard.example.test"},
         {**headers, "Origin": "https://other.example.test"},
-        {**headers, "X-Swb-CSRF": "not-the-session-token"},
+        {**headers, "X-CSRF-Token": "not-the-session-token"},
     ]
     for i, attempted in enumerate(attempts):
         response = client.request(method, path, headers=attempted, json=body)
-        assert response.status_code == 403
-        assert response.json() == {"error": "owner_required" if i < 3 else "csrf_failed"}
-        assert headers["X-Swb-CSRF"] not in response.text and STATIC_KEY not in response.text
+        assert response.status_code == (401 if i < 3 else 403)
+        assert response.json() == {"error": "signed_out" if i < 3 else "csrf"}
+        assert headers["X-CSRF-Token"] not in response.text and STATIC_KEY not in response.text
 
 
-def test_csrf_is_bound_to_the_access_session_even_for_the_same_owner(board):
+def test_csrf_is_bound_to_the_authenticated_access_identity(board):
     core, client = board
     headers = owner_headers(client)
-    other = {**headers, "cf-access-jwt-assertion": "other-owner-session"}
+    other = {**headers, "cf-access-jwt-assertion": "second-owner"}
     response = client.post("/api/visibility", headers=other, json=VISIBILITY)
     assert response.status_code == 403 and core.visibility.explicit(VISIBILITY["resource"]) is None
-    session = client.get("/api/session", headers=other).json()
-    assert session["email"] == EMAIL and session["csrf"] != headers["X-Swb-CSRF"]
-    response = client.post("/api/visibility", headers={**other, "X-Swb-CSRF": session["csrf"]}, json=VISIBILITY)
+    session = client.get("/auth/session", headers=other).json()
+    assert session["signed_in"] and session["csrf"] != headers["X-CSRF-Token"]
+    response = client.post("/api/visibility", headers={**other, "X-CSRF-Token": session["csrf"]}, json=VISIBILITY)
     assert response.status_code == 200
 
 

@@ -23,7 +23,7 @@ def test_all_reads_require_the_access_owner(make, headers):
     _, client = make()
     for path in READ_PATHS:
         response = client.get(f"/api{path}", headers=headers)
-        assert response.status_code == 403, path
+        assert response.status_code == 401 and response.json() == {"error": "signed_out"}, path
         assert response.headers["cache-control"] == "no-store"
     assert client.get("/healthz").status_code == 200
 
