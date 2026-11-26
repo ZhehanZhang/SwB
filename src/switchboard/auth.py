@@ -65,6 +65,13 @@ class Principal:
     origin: str = "mcp"
     scopes: tuple[str, ...] | None = None
     trust: str = "owner"
+    tools: tuple[str, ...] | None = None
+    targets: tuple[str, ...] | None = None
+
+    @property
+    def is_unrestricted_owner(self) -> bool:
+        return (self.kind in ("key", "oauth") and self.trust == "owner"
+                and self.scopes is None and self.tools is None and self.targets is None)
 
     def allows(self, scope: str) -> bool:
         """Whether this caller may use a memory scope ('general' or 'project:<slug>'); None means every scope."""

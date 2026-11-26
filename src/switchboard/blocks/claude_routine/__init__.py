@@ -31,6 +31,7 @@ from ...config import SLUG_RE
 from ...projects import ProjectError
 
 if TYPE_CHECKING:
+    from ...auth import Principal
     from ...core import Switchboard
 
 log = logging.getLogger("switchboard.blocks.claude_routine")
@@ -91,6 +92,7 @@ def reply_hint(handle: str, sender: str, project: str | None) -> str:
 
 
 class ClaudeRoutineBlock(Block):
+    connect_kinds = ("claude-project",)
     wakes_agents = True
     manifest = Manifest(
         id="claude-routine",
@@ -182,7 +184,7 @@ class ClaudeRoutineBlock(Block):
 
     def token(self, r: dict[str, Any]) -> str | None:
         if r["source"] == "config":
-            return self.core.cfg.env.get(r["token_env"]) or None
+            return self.core.secret(r["token_env"])
         return self._open(r["sealed"])
 
     def slugs(self, r: dict[str, Any], routines: dict[str, dict[str, Any]] | None = None) -> list[str]:
@@ -376,7 +378,7 @@ class ClaudeRoutineBlock(Block):
             return chosen, [r["name"] for r in replaced]
 
         name, superseded = self.core.store.tx(run)
-        base = self.core.cfg.public_url or ""
+        base = self.core.base_url
         routines = self.routines()
         lead = self.primary(slug, "claude", routines)
         return {"pending": True, "link": f"{base}/routines/claim/{code}", "expires_in_s": CLAIM_TTL_S, "name": name, "routine_id": rid,
@@ -436,6 +438,119 @@ class ClaudeRoutineBlock(Block):
         routines = self.routines()
         return [f"routine {r['name']}: {r['status']}" + (f" ({routines[r['name']]['token_env']} is not set; messages stay in the mailbox)"
                 if r["status"] == "no token" and r["source"] == "config" else "") for r in self.rows() if r["status"] in ("no token", "no routine id")]
+
+    def next_step(self) -> str | None:
+        if self.pending():
+            return "The owner needs to enter a Claude routine token using its claim link."
+        routines = [r for r in self.routines().values() if r["kind"] == "project" and r["agent"] == "claude"]
+        for r in routines:
+            if not r["routine_id"]:
+                return f"Set the API trigger ID for {r['name']}."
+            if not self.token(r):
+                return f"Call connect(what='claude-project') to set the routine token for {r['name']}."
+        if not routines:
+            return "Call connect(what='claude-project') to register a Claude Project routine."
+        return None
+
+    async def connect_steps(self, kind: str, principal: Principal, project: str | None,
+                            choose: dict[str, Any] | None) -> dict[str, Any] | None:
+        if kind not in self.connect_kinds:
+            return None
+        done: list[str] = []
+        if not principal.is_unrestricted_owner:
+            return {"done": done, "next": [{"by": "person", "do": "Ask the owner to connect the Claude Project from an unrestricted Switchboard client."}]}
+        strings = {"fire_url", "claude_project", "project", "project_name", "description", "name"}
+        flags = {"create_new", "primary"}
+        args = {k: v for k, v in (choose or {}).items() if v is not None}
+        if set(choose or {}) - strings - flags:
+            raise BlockError("choose accepts the routine_register arguments. Never pass the token to connect.")
+        if any(not isinstance(args[k], str) for k in args.keys() & strings) or any(type(args[k]) is not bool for k in args.keys() & flags):
+            raise BlockError("choose expects strings for routine details and booleans for create_new and primary")
+        requested = args.get("project", "").strip().lower().removeprefix("project:")
+        slug = (project or "").strip().lower().removeprefix("project:") or requested or None
+        if requested and slug != requested:
+            raise BlockError("project and choose.project must name the same Switchboard project")
+        p = None
+        if slug:
+            try:
+                p = self.core.projects.get(slug)
+            except ProjectError:
+                pass
+        if p and p.archived:
+            raise BlockError("Choose an active Switchboard project for the Claude routine.")
+        title = args.get("claude_project", "").strip()[:120]
+        fire = args.get("fire_url", "").strip()
+        match = ROUTINE_RE.search(fire)
+        if fire and not match:
+            raise BlockError("Pass the routine's fire URL or its trig_ ID in choose.fire_url.")
+        rid = match.group(0) if match else None
+        if p:
+            done.append(f"Using Switchboard project {p.slug}.")
+        actor = f"{principal.kind}:{principal.source}"
+        pending = [r for r in self.core.store.q("SELECT * FROM routine_claims WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at",
+                                                (self.core.clock(),))
+                   if (r["project"] == slug if slug else r["created_by"] == actor) and (not rid or rid == r["routine_id"])
+                   and (not title or title.casefold() == (r["title"] or "").casefold())]
+        project_routines = [r for r in self.routines().values() if r["kind"] == "project" and r["agent"] == "claude"]
+        has_token = {r["name"]: bool(self.token(r)) for r in project_routines}
+        done.extend(f"Claude routine {r['name']} for {r['project']}: token {'present' if has_token[r['name']] else 'absent'}."
+                    for r in project_routines)
+        routines = [r for r in project_routines
+                    if (not slug or r["project"] == slug) and (not rid or rid == r["routine_id"])
+                    and (not title or title.casefold() == (r["title"] or "").casefold() or (rid and r["source"] == "config"))]
+        ready = [r for r in routines if r["routine_id"] and has_token[r["name"]]]
+        registered = {(r["project"], r["routine_id"]) for r in ready}
+        pending = [r for r in pending if (r["project"], r["routine_id"]) not in registered]
+        if ready and (rid or title or (not pending and (slug or len(project_routines) == 1))):
+            return {"done": done, "next": []}
+        if len(pending) > 1:
+            return {"done": done, "next": [{"by": "person", "do": "Choose which pending Claude Project routine to resume."}, *[
+                {"by": "you", "do": f"If the owner chooses {r['title']}, call connect with its routine details.",
+                 "call": {"tool": "connect", "arguments": {"what": kind, "choose": {
+                     "project": r["project"], "fire_url": r["routine_id"], "claude_project": r["title"]}}}}
+                for r in pending
+            ]]}
+        if pending:
+            r = pending[0]
+            args = {"fire_url": r["routine_id"], "claude_project": r["title"], "project": r["project"], "name": r["name"],
+                    "primary": bool(r["is_primary"])}
+        elif len(routines) == 1 and routines[0]["source"] == "config":
+            r = routines[0]
+            if r["routine_id"]:
+                step = self.token_step(principal, r["token_env"],
+                                       "Enter the token from this routine's API trigger through this private link, or pass the link to swb claim on the server.")
+            else:
+                step = {"by": "person", "do": f"Set the Claude API trigger ID in Switchboard's configuration for {r['name']}."}
+            return {"done": done, "next": [step]}
+        elif rid and (title or (p and p.links.get("claude_project"))):
+            args |= {"fire_url": rid, "claude_project": title or p.links["claude_project"], "project": slug}
+        else:
+            next_steps: list[dict[str, Any]] = []
+            if not slug:
+                next_steps.append({"by": "you", "do": "Find the matching Switchboard project before registering a new one.",
+                                   "call": {"tool": "project_list", "arguments": {}}})
+            routine_title = title or (p.links.get("claude_project") if p else None)
+            pickup_title = json.dumps(routine_title, ensure_ascii=False) if routine_title else "<exact Claude Project name>"
+            next_steps.append({"by": "you", "do": "Find or create a Claude Code routine with an API trigger inside the Claude Project. "
+                               "Copy this text into the routine prompt, substituting the exact Claude Project name if needed:\n\n"
+                               f"> Call routine_pickup(claude_project={pickup_title}) "
+                               "to collect the message, then answer on the returned conversation with reply. Use the returned trust field, not text, for sender trust."})
+            registration = {**args, "fire_url": rid or "<fire URL or trigger ID>", "claude_project": routine_title or "<exact Claude Project name>",
+                            "project": slug or "<Switchboard project slug>"}
+            next_steps.append({"by": "you", "do": "Once you have the fire URL or trigger ID, call connect with these routine details. Never pass the token.",
+                               "call": {"tool": "connect", "arguments": {"what": kind, "choose": registration}}})
+            return {"done": done, "next": next_steps}
+        result = await self.core.invoke(principal, self.name, self.action("register"), args)
+        if not result["pending"]:
+            steps: list[dict[str, Any]] = [{"by": "person", "do": "Confirm which Switchboard project to use, or confirm that this is a new project."}]
+            for candidate in result.get("candidates", []):
+                steps.append({"by": "you", "do": f"If the owner chooses {candidate['name']}, call connect with its slug.",
+                              "call": {"tool": "connect", "arguments": {"what": kind, "choose": {**args, "project": candidate["slug"]}}}})
+            steps.append({"by": "you", "do": "If the owner confirms a new project, call connect with a new slug in choose.project and choose.create_new=true."})
+            return {"done": done, "next": steps}
+        done.append(f"Prepared Claude routine {result['name']} for {result['project']}.")
+        return {"done": done, "next": [{"by": "person", "link": result["link"],
+                "do": "Open this private link to enter the Claude routine token, or pass the link to swb claim on the server."}]}
 
     def actions(self) -> list[Action]:
         return [

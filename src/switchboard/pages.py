@@ -47,7 +47,7 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <meta name="theme-color" content="#f5f5f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="referrer" content="no-referrer">
 <title>{html.escape(title)} • Switchboard</title>
 <script src="/assets/prefs.js"></script>
 <link rel="stylesheet" href="/assets/bridge.css">
@@ -250,19 +250,30 @@ def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     return page("Pairing code", body, 200)
 
 
-def claim_page(c: dict[str, Any], code: str, csrf: str) -> HTMLResponse:
-    """A pending self-registration: what a Claude session asked to register, and one field for the routine's token."""
+def claim_page(title: str, rows: str, csrf: str, *, intro: str = "", hint: str = "", placeholder: str = "", owner_key: bool = False) -> HTMLResponse:
+    key_field = ('<input name="owner_key" type="password" placeholder="Switchboard owner key" required '
+                 'aria-label="Switchboard owner key" autocomplete="new-password">' if owner_key else "")
+    form = (f'<div class="setting"><div class="setting-label"><span>Token</span><span class="setting-hint">{html.escape(hint)}</span></div>'
+            f'<div class="setting-value"><form method="post" autocomplete="off"><input type="hidden" name="csrf" value="{csrf}">{key_field}'
+            f'<input name="token" type="password" placeholder="{html.escape(placeholder)}" required aria-label="Token" autocomplete="new-password">'
+            '<button class="pill-button primary">Save</button></form></div></div>')
+    return page(title, hero(title, html.escape(intro)) + f'<div class="card fade-in">{rows}{form}</div>')
+
+
+def token_claim_page(name: str, csrf: str) -> HTMLResponse:
+    return claim_page("Save a token", _row("Credential", "For Switchboard", name), csrf,
+                      hint="Stored encrypted and never shown again.")
+
+
+def routine_claim_page(c: dict[str, Any], csrf: str) -> HTMLResponse:
     np = c.get("new_project")
     rows = (_row("Routine", f"{c['routine_id']}" + (" (primary for the project)" if c["primary"] else ""), c["name"])
             + _row("Claude Project", "Where the routine lives", c["title"] or "-")
             + _row("Switchboard project", "Created when you save" if np else "Already exists", c["project"] + (f" ({np['name']})" if np else ""))
             + _row("Asked by", "The signed-in session that called routine_register", c["created_by"]))
-    form = (f'<div class="setting"><div class="setting-label"><span>Token</span><span class="setting-hint">From the routine\'s API trigger (Generate token). '
-            f'Stored encrypted, never shown again. This link works once.</span></div><div class="setting-value">'
-            f'<form method="post" action="/routines/claim/{html.escape(code)}" autocomplete="off"><input type="hidden" name="csrf" value="{csrf}">'
-            '<input name="token" type="password" placeholder="sk-ant-oat01-…" required aria-label="Token" autocomplete="new-password">'
-            '<button class="pill-button primary">Save</button></form></div></div>')
-    return page("Register a Claude routine", hero("Register a Claude routine", "Paste the routine's token and save.") + f'<div class="card fade-in">{rows}{form}</div>', 200)
+    return claim_page("Register a Claude routine", rows, csrf, intro="Paste the routine's token and save.",
+                      hint="From the routine's API trigger (Generate token). Stored encrypted, never shown again. This link works once.",
+                      placeholder="sk-ant-oat01-…")
 
 
 def _routes_body(routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> str:

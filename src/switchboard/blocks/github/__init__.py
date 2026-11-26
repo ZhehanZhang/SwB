@@ -18,6 +18,7 @@ from ...guard import client_ip
 from .. import Block, Manifest
 
 if TYPE_CHECKING:
+    from ...auth import Principal
     from ...core import Switchboard
 
 SECRET_ENV = "GITHUB_WEBHOOK_SECRET"
@@ -135,6 +136,7 @@ class _Sink:
 
 
 class GitHubBlock(Block):
+    connect_kinds = ("github",)
     manifest = Manifest(id="github", title="GitHub", kind="source", level_in="webhook",
                         speaks=("event",), secrets=(SECRET_ENV,))
 
@@ -144,7 +146,8 @@ class GitHubBlock(Block):
         secret_env = config.get("secret_env", SECRET_ENV)
         if not isinstance(secret_env, str):
             raise ConfigError(f"{self.name}.secret_env must name an environment variable")
-        self.secret = (env.get(secret_env) or "").encode()
+        self.secret_env = secret_env
+        self.secret = (core.secret(secret_env) or "").encode()
         sinks, routes = config.get("sinks") or {}, config.get("routes") or {}
         if not isinstance(sinks, dict) or any(not isinstance(s, dict) for s in sinks.values()):
             raise ConfigError(f"{self.name}.sinks must map names to settings")
@@ -195,6 +198,24 @@ class GitHubBlock(Block):
     def status(self) -> dict[str, Any]:
         return {"configured": True, "secret_present": self.online, "routes": len(self.repo_routes), "dropped": self.dropped,
                 "sinks": {name: {"delivered": sink.delivered, "failed": sink.failed} for name, sink in self.sinks.items()}}
+
+    def next_step(self) -> str | None:
+        if not self.online:
+            if self.core.secret(self.secret_env):
+                return "Restart Switchboard to apply the saved GitHub webhook secret."
+            return "Save the GitHub webhook secret."
+        if not any(self.repo_routes.values()):
+            return "Add a GitHub repository route in config/switchboard.yaml and restart Switchboard."
+        return None
+
+    async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
+        present = bool(self.core.secret(self.secret_env))
+        done = [f"GitHub webhook secret: {'present' if present else 'missing'}.",
+                f"GitHub repository routes: {sum(bool(sinks) for sinks in self.repo_routes.values())}."]
+        step = self.next_step()
+        if not present:
+            return {"done": done, "next": [self.token_step(principal, self.secret_env, step)]}
+        return {"done": done, "next": [{"by": "person", "do": step}] if step else []}
 
     async def webhook(self, request: Request) -> Response:
         if not self.secret:

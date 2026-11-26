@@ -74,6 +74,8 @@ def _slug(name: str) -> str:
 
 
 class CapyBlock(Block):
+    connect_kinds = ("capy-captain",)
+
     manifest = Manifest(
         id="capy",
         title="Capy",
@@ -100,7 +102,7 @@ class CapyBlock(Block):
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
-        key = core.cfg.env.get("CAPY_API_KEY") or None
+        key = core.secret("CAPY_API_KEY")
         base = str(config.get("api_base", "https://api.capy.ai/api/v1"))
         transport = config.get("transport")
         self.api: CapyAPI | None = CapyAPI(base, key, transport=transport) if key else None
@@ -111,8 +113,10 @@ class CapyBlock(Block):
         self.keys: dict[str, CapyAPI] = {}
         if self.api is not None:
             self.keys["CAPY_API_KEY"] = self.api
+            if self.send_key_env != "CAPY_API_KEY" and (send_key := core.secret(self.send_key_env)):
+                self.keys[self.send_key_env] = CapyAPI(base, send_key, transport=transport)
             for env, value in sorted(core.cfg.env.items()):
-                if value and (env == self.send_key_env or (env.startswith(AS_PREFIX) and len(env) > len(AS_PREFIX))):
+                if value and env not in self.keys and env.startswith(AS_PREFIX) and len(env) > len(AS_PREFIX):
                     self.keys[env] = CapyAPI(base, value, transport=transport)
         self.key_checks: dict[str, dict[str, Any]] = {}
         self.check_interval_s = float(config.get("key_check_interval_s", 1800))
@@ -258,6 +262,97 @@ class CapyBlock(Block):
             return {"sends_as": None, "following": [], "open_handles": 0}
         return {"identity": self.identity, "sends_as": (self.chain(None) or [None])[0], "sends_as_agents": {a: (self.chain(a) or [None])[0] for a in self.agents()},
                 "send_keys": {env: self.key_checks.get(env, {"status": "unchecked"}) for env in self.keys}, "following": sorted(self.followers), "open_handles": len(self.core.inbox.handles(destination=self.name, open_only=True, limit=500))}
+
+    def next_step(self) -> str | None:
+        if self.api is None:
+            if self.core.secret("CAPY_API_KEY"):
+                return "Restart Switchboard to load the saved Capy API key."
+            return "Create a key in Capy Settings → API and enter it through the private link from connect(what='capy-captain')."
+        status = self.key_checks.get("CAPY_API_KEY", {}).get("status")
+        if status == "rejected":
+            return "Replace the rejected Capy API key and restart Switchboard."
+        if not self._routed()[0]:
+            return "Call connect(what='capy-captain') to route a Capy Captain."
+        if self.identity == "service" and self.send_key_env not in self.keys and not any(env.startswith(AS_PREFIX) for env in self.keys):
+            if self.core.secret(self.send_key_env):
+                return "Restart Switchboard to load the saved Capy service key."
+            return "Call connect(what='capy-captain') to save a Capy service user's key."
+        return None
+
+    async def connect_steps(self, kind: str, principal: Principal, project: str | None,
+                            choose: dict[str, Any] | None) -> dict[str, Any] | None:
+        if kind not in self.connect_kinds:
+            return None
+        if not principal.is_unrestricted_owner:
+            return {"done": [], "next": [{"by": "person", "do": "Ask the owner to connect a Capy Captain from an unrestricted Switchboard client."}]}
+        has_key = bool(self.core.secret("CAPY_API_KEY"))
+        done = [f"Capy API key: {'present' if has_key else 'absent'}."]
+        if self.api is None:
+            if has_key:
+                return {"done": done, "next": [{"by": "person", "do": self.next_step()}]}
+            step = self.token_step(principal, "CAPY_API_KEY", self.next_step())
+            return {"done": done, "next": [step]}
+        choose = choose or {}
+        if set(choose) - {"captain", "project"}:
+            raise BlockError("choose accepts captain (a Capy Captain's ID, code, or name) and project (a Switchboard project slug)")
+        if any(not isinstance(value, str) or not value.strip() for value in choose.values()):
+            raise BlockError("choose.captain and choose.project must be nonempty strings")
+        p = self.core.project(project or choose.get("project"))
+        if project and "project" in choose and self.core.project(choose["project"]).slug != p.slug:
+            raise BlockError("project and choose.project must name the same Switchboard project")
+        if p and p.archived:
+            raise BlockError("Choose an active Switchboard project for the Capy route.")
+        slug = p.slug if p else None
+        scope = f"Route for {slug}" if slug else "Global route"
+        routes = self.core.routes.list(self.name)
+        route = next((r for r in routes if r.agent is None and r.project == slug), None)
+        for r in routes:
+            if r.target.get("captain"):
+                place = r.project or "global"
+                who = f" for {r.agent}" if r.agent else ""
+                done.append(f"Capy route {place}{who}: {describe(r.target)}.")
+        hint = choose.get("captain", "").strip().casefold()
+        try:
+            captains = [c for c in await self.api.list_captains() if c.get("id") and not c.get("archived")]
+        except CapyError as e:
+            if e.status in (401, 403):
+                instruction = "Create a Capy API key that can see your Captains."
+                if self.core.cfg.env.get("CAPY_API_KEY"):
+                    step = {"by": "person", "do": f"{instruction} Replace CAPY_API_KEY on the server and restart Switchboard."}
+                else:
+                    step = self.token_step(principal, "CAPY_API_KEY", f"{instruction} Enter it through this private link.")
+                return {"done": done, "next": [step]}
+            raise BlockError("Capy could not list Captains. Try again.") from e
+        done.extend(f"Available Captain: {c.get('name') or c.get('title') or c['id']} ({c['id']})." for c in captains)
+        if hint:
+            matches = [c for c in captains if hint == c["id"].casefold()] or [
+                c for c in captains if hint in {str(c.get(k) or "").casefold() for k in ("code", "name", "title")}]
+            if len(matches) != 1:
+                raise BlockError("Choose the ID of exactly one available Captain for this route.")
+            captain_id = matches[0]["id"]
+        elif route and any(c["id"] == route.target.get("captain") for c in captains):
+            captain_id = route.target["captain"]
+        elif captains:
+            args = {"what": kind, "choose": {"captain": captains[0]["id"] if len(captains) == 1 else "<Captain ID>"}}
+            if slug:
+                args["choose"]["project"] = slug
+            return {"done": done, "next": [{"by": "you", "do": f"Confirm which available Captain should receive work on the {scope.lower()}, then call connect with its ID.",
+                                            "call": {"tool": "connect", "arguments": args}}]}
+        else:
+            return {"done": done, "next": [{"by": "person", "do": "Make sure the Capy API key can see an active Captain for this route."}]}
+        if not route or route.target.get("captain") != captain_id:
+            routed = await self.core.set_route(principal, destination=self.name, agent=None, project=slug, target={"captain": captain_id},
+                                               defaults=route.defaults if route and route.target.get("captain") else {"mode": "captain_thread"},
+                                               allow_override=route.allow_override if route else False, note="Set by connect.")
+            done.append(f"{scope} points to {describe(routed['target'])}.")
+        if not self.chain(principal.source):
+            if self.core.secret(self.send_key_env):
+                step = {"by": "person", "do": "Restart Switchboard to load the saved Capy service key."}
+            else:
+                step = self.token_step(principal, self.send_key_env,
+                                       "Create a read-write service user key in Capy Settings → API, then enter it through this private link.")
+            return {"done": done, "next": [step]}
+        return {"done": done, "next": []}
 
     async def start(self) -> None:
         if self.api is None:
@@ -732,8 +827,11 @@ class CapyBlock(Block):
     async def resolve_captain(self, hint: str) -> dict[str, Any]:
         hint = hint.strip()
         captains = await self.need_api().list_captains()
+        exact = next((c for c in captains if (c.get("id") or "").lower() == hint.lower()), None)
+        if exact is not None:
+            return exact
         for c in captains:
-            names = {(c.get(k) or "").lower() for k in ("id", "code", "name", "title")}
+            names = {(c.get(k) or "").lower() for k in ("code", "name", "title")}
             if hint.lower() in names:
                 return c
         raise DestinationError(f"no Captain matches {hint!r}; targets(block='capy') or capy_captains lists them")
