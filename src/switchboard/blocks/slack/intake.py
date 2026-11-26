@@ -12,7 +12,8 @@ marks what is addressed to us and routes each event to a target ("@swb <slug> ..
   through core.send, and posts the final reply back in the Slack thread under the target's persona.
 
 workspace_projects.<label> (or workspaces.<label>.project) names the switchboard project a workspace's events belong
-to (a project filter on the inbox then finds them).
+to (a project filter on the inbox then finds them). channel_projects.<label> overrides it for delegations from a
+channel, by id or name; an empty value opts the channel out of the workspace default.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import asyncio
 import contextlib
 import contextvars
 import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from .. import Block
@@ -46,6 +48,8 @@ class SlackIntake(Block):
         super().__init__(core, config)
         self.projects = {str(k): str((v or {}).get("project") or "") or None for k, v in (config.get("workspaces") or {}).items() if isinstance(v, dict)}
         self.projects.update({str(k): str(v) for k, v in (config.get("workspace_projects") or {}).items() if v})
+        self.channel_projects = {str(ws): {str(ch).removeprefix("#"): str(p or "").strip() or None for ch, p in channels.items()}
+                                 for ws, channels in (config.get("channel_projects") or {}).items() if isinstance(channels, dict)}
         self.refresh_s = float(config.get("refresh_minutes", 30)) * 60
         self.principal = Principal(source=AGENT, client_id="slack-origin", kind="slack", origin="slack")
         self.refreshed_at: float | None = None
@@ -119,7 +123,7 @@ class SlackIntake(Block):
                 if t["kind"] == "project":
                     routed = self.core.route_address(AGENT, t["id"])
                     persona = ((by_address.get(str(routed)) or {}).get("persona") or {}).get("id") if routed else None
-                targets[slug] = Target(slug, t["kind"], t["id"], t.get("name") or t["id"], persona=persona, address=t["address"])
+                targets[slug] = Target(slug, t["kind"], t["id"], t.get("name") or t["id"], persona=persona, address=t["address"], project=t.get("project"))
             engine.set_targets(targets, personas)
             self.refreshed_at = self.core.clock()
             return self.describe()
@@ -178,21 +182,27 @@ class SlackIntake(Block):
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, push["workspace"]), "context", item)
 
-    async def delegate(self, push: dict[str, Any], target: Any) -> None:
+    async def delegate(self, push: dict[str, Any], target: Target) -> None:
         engine = self.engine
         assert engine is not None
         where = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
         task = (f"Slack message from {push['user_name'] or push['user']} in {push['workspace']} {where} ({push['permalink'] or push['ts']}):\n\n"
                 f"{push['text']}\n\nYour final reply is posted back in that Slack thread as {target.name}.")
-        kw: dict[str, Any] = {"task": task, "title": f"Slack {push['workspace']} {where}"}
+        channels = self.channel_projects.get(push["workspace"], {})
+        project = channels.get(push["channel"], channels.get(push.get("channel_name"), self.projects.get(push["workspace"])))
+        trust = push.get("trust", "external")
+        handle_meta = {"slack_trust": trust, **({"boundary": project} if project else {})}
+        kw: dict[str, Any] = {"task": task, "title": f"Slack {push['workspace']} {where}", "handle_meta": handle_meta}
         if target.kind == "project":
             kw["project"] = target.id
         else:
             kw["to"] = target.address or f"{target.kind}:{target.id}"
-        token = SLACK_SENDER.set({"workspace": push["workspace"], "user": push["user"], "user_name": push["user_name"], "trust": push.get("trust", "external"),
+            if target.kind == "routine" and not target.project and project and trust == "owner":
+                kw["project"] = project
+        token = SLACK_SENDER.set({"workspace": push["workspace"], "user": push["user"], "user_name": push["user_name"], "trust": trust,
                                   "text": push["text"]})
         try:
-            out = await self.core.send(self.principal, **kw)
+            out = await self.core.send(replace(self.principal, trust=trust), **kw)
         except Exception as exc:
             log.warning("slack %s: delegating %s to %s failed: %s", push["workspace"], push["id"], target.slug, exc)
             engine.store.audit(f"agent:{AGENT}", "route_failed", push["workspace"], message=push["id"], target=target.slug, error=str(exc)[:300])

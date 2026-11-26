@@ -389,6 +389,9 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   receives events for those targets. An addressed event for an agent target lands in that agent's inbox. One for any
   other target that no sink of the workspace takes is sent there through `send` as agent `slack` (for Capy, send key
   `CAPY_API_KEY_AS_SLACK`), and the final reply is posted back in the Slack thread under the target's persona.
+  For the owner's `@swb claude`, `workspace_projects` selects the project's primary routine when one exists.
+  `channel_projects: {workspace: {channel-id-or-name: project-slug}}` overrides the workspace; use `null` or an
+  empty value to opt out. An explicit project target still wins, and conversations from mapped places can't be forwarded.
 - **Personas.** Bot posts carry a per-message name and picture (`chat:write.customize`), chosen like the send keys:
   the call's `persona` (only with `allow_persona_override`, and within `allowed_personas`) > the persona of the
   target the thread is routed to, for an agent its block provides (Capy in a Captain's thread) > `agents.<agent>.persona_by_workspace` (which may name a Captain's persona) > `agents.<agent>.persona` > the persona
@@ -545,7 +548,7 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
 - For the capy block, `status`, `result` and `reply` only touch threads delegated through switchboard, routed Captains and
   their crews, routed threads, and threads in routed or linked Capy projects.
 - Delegating is meant to be routine, so nothing rations it. Two guards catch runaways only:
-  - Turn cap: one agent-to-agent conversation (a mailbox send's handle plus every reply and in_reply_to message
+  - Turn cap: one agent-to-agent conversation (a mailbox send's handle plus every forward and reply
     hanging off it) gets `turn_cap` turns (default 200; null switches it off). The next one pauses that conversation,
     refuses with that explanation, and DMs the owner on Slack. Other conversations and new sends are unaffected, since
     a new send starts at zero. Status shows the cap and how many conversations are paused. Replies into Capy and Slack

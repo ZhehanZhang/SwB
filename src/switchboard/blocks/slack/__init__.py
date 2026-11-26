@@ -1,6 +1,6 @@
 """The Slack block: the owner's Slack workspaces as a way in (events, @swb <slug> routing) and out (reads, posts,
 reactions, approvals), on one shared Slack engine. Its settings are the old slack: section, plus refresh_minutes and
-workspace_projects for the intake."""
+workspace_projects and channel_projects for the intake."""
 
 from __future__ import annotations
 

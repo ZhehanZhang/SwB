@@ -29,6 +29,7 @@ class Target:
     name: str
     persona: str | None = None
     address: str | None = None
+    project: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

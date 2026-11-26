@@ -119,7 +119,8 @@ class Kit:
                          "capy, ...) has a switchboard mailbox, so a message always goes through even when it isn't running: it reads on its own "
                          "schedule, in a live chat, or when switchboard wakes it. Its reply reaches your inbox with in_reply_to set to the "
                          "conversation this returns. Without to, the owner's route decides. to: a slug from targets, agent:<name>, or "
-                         "<block>:<kind>:<id>. Make the task self-contained (goal, context, repos, done). Then wait() and answer with the reply."),
+                         "<block>:<kind>:<id>. Make the task self-contained (goal, context, repos, done). Then wait() and answer with the reply. "
+                         "Use forward to hand off a conversation you received and route the final answer back to its sender."),
             annotations=SEND,
         )
         async def send(
@@ -132,13 +133,14 @@ class Kit:
             files: Annotated[list[FileIn] | None, Field(description="Optional files to attach")] = None,
             new_conversation: Annotated[bool | None, Field(description="For a target that is a long-lived thread (a Captain): true starts a new one instead")] = None,
             wait_s: Annotated[float, Field(ge=0, description="Seconds to wait for a first reply before returning (capped per client)")] = 0,
+            forward: Annotated[str | None, Field(description="Conversation handle you received and are handing off")] = None,
         ) -> dict[str, Any]:
             p = kit.who(ctx)
             mailbox = bool(to) and (to.strip().lower().startswith("agent:") or to.strip().lower() in core.known_agents())
             if project or not mailbox:
                 kit.scoped(p, project)
             return await kit.send(p, wait_s=wait_s, task=task, to=to, project=project, title=title, repos=repos,
-                                  files=[f.model_dump() for f in files] if files else None, new_conversation=new_conversation)
+                                  files=[f.model_dump() for f in files] if files else None, new_conversation=new_conversation, forward=forward)
 
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
