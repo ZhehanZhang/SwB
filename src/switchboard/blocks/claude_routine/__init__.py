@@ -531,7 +531,8 @@ class ClaudeRoutineBlock(Block):
             raise BlockError(f"no routine for that; routines: {', '.join(self.routines()) or 'none'}")
         name = routine["name"]
         project = project or routine["project"]
-        out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True)
+        out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True,
+                                         handle=call.handle, handle_meta=call.handle_meta)
         handle = out["handle"]
         call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
         token = self.token(routine)

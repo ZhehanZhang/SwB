@@ -74,15 +74,36 @@ class Inbox:
 
     # Items ----------------------------------------------------------------------------
 
+    def _add(self, h: dict[str, Any], kind: str, data: dict[str, Any]) -> int:
+        self.store.x("UPDATE handles SET updated_at = ? WHERE handle = ?", (self.store.clock(), h["handle"]))
+        return self.store.x(
+            "INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?,?,?,?,?,?)",
+            (h["owner"], h["handle"], h["destination"], kind, json.dumps(data), self.store.clock()),
+        )
+
     async def add(self, handle: str, kind: str, data: dict[str, Any]) -> int:
         h = self.handle(handle)
         if h is None:
             raise KeyError(handle)
-        self.store.x("UPDATE handles SET updated_at = ? WHERE handle = ?", (self.store.clock(), handle))
-        item = self.store.x(
-            "INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?,?,?,?,?,?)",
-            (h["owner"], handle, h["destination"], kind, json.dumps(data), self.store.clock()),
-        )
+        item = self._add(h, kind, data)
+        replied = None
+        if kind == "message" and data.get("final") and data.get("in_reply_to"):
+            replied = self.handle(data["in_reply_to"])
+            if replied is not None:
+                self.update_handle(replied["handle"], status="answered")
+        elif kind == "final" and data.get("final") is not False:
+            replied = h
+        while replied is not None and (original := replied["meta"].get("forward_of")):
+            replied = self.handle(original)
+            if replied is None:
+                break
+            meta = {"in_reply_to": original, "final": True, "from": data.get("from")}
+            copy = self.open_handle(owner=replied["ref"], destination="mailbox", ref=replied["owner"], project=replied["project"],
+                                    title=None, meta={**meta, "root": replied["meta"].get("root") or original}, status="delivered",
+                                    target=f"agent:{replied['ref']}")
+            self.update_handle(copy, open=False)
+            self._add(self.handle(copy), "message", {**data, **meta, "project": replied["project"]})
+            self.update_handle(original, status="answered")
         cond = self._condition()
         async with cond:
             cond.notify_all()

@@ -392,8 +392,9 @@ class DotsBlock(Block):
             channel, mode = self.relay_channel(), "relay"
         if channel is None:
             raise BlockError(f"Slack won't open a DM with {dot['slug']} and the dots relay channel isn't set up; see switchboard_status")
-        handle = self.core.inbox.open_handle(owner=p.source, destination="dots", ref=dot["user_id"], project=project, title=title or f"dot {dot['slug']}",
-                                             meta={"dot": dot["slug"], "workspace": self.workspace, "channel": channel, "mode": mode},
+        handle = self.core.inbox.open_handle(handle=call.handle, owner=p.source, destination="dots", ref=dot["user_id"],
+                                             project=project, title=title or f"dot {dot['slug']}",
+                                             meta={"dot": dot["slug"], "workspace": self.workspace, "channel": channel, "mode": mode, **call.handle_meta},
                                              status="sent", target=f"{self.name}:dot:{dot['user_id']}")
         label = (sender.get("user_name") or sender.get("user")) if sender else self.core.agents.label(p.source)
         mention = "" if mode == "dm" else f"<@{dot['user_id']}> "

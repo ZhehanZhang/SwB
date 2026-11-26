@@ -364,14 +364,15 @@ class CapyBlock(Block):
         if new_thread is not None and "captain" in tgt:
             mode = "new_thread" if new_thread else "captain_thread"
 
-        handle = call.core.inbox.new_handle()
+        handle = call.handle or call.core.inbox.new_handle()
         send = self.sending(call)
         body = [task]
         if repos:
             body += ["", "Repos: " + ", ".join(repos)]
         if p and p.links.get("capy_project"):
             body += [f"Capy project: {p.links['capy_project']}"]
-        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{task}".encode()).hexdigest()
+        forward = f"|forward:{call.handle_meta['forward_of']}" if "forward_of" in call.handle_meta else ""
+        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{task}{forward}".encode()).hexdigest()
         window = float(self.config.get("duplicate_window_s", 600))
         for h in call.core.inbox.handles(owner=call.principal.source, destination=self.name, limit=20):
             if h["meta"].get("same") == same and h["created_at"] >= call.core.clock() - window:
@@ -381,7 +382,7 @@ class CapyBlock(Block):
                         "next": f"You sent this exact task to {describe(tgt)} a moment ago, so this is that delegation's handle. "
                                 f"Call wait(conversation='{h['handle']}'); use reply to add to it."}
         uploaded = await send(lambda a: self._files(a, files)) if files else []
-        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}".encode()).hexdigest()
+        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}{forward}".encode()).hexdigest()
         try:
             if "thread" in tgt or ("captain" in tgt and mode == "captain_thread"):
                 thread_id = tgt.get("thread") or tgt["captain"]
@@ -404,7 +405,7 @@ class CapyBlock(Block):
                 status = t.get("status") or "working"
         except CapyError as e:
             raise DestinationError(f"Capy API refused the delegation: {e}") from e
-        meta |= {"target": tgt, "route": level, "task": task[:300], "same": same}
+        meta |= {"target": tgt, "route": level, "task": task[:300], "same": same, **call.handle_meta}
         kind = next((k for k in TARGET_KINDS if tgt.get(k)), "thread")
         call.core.inbox.open_handle(handle=handle, owner=call.principal.source, destination=self.name, ref=thread_id,
                                     project=p.slug if p else None, title=title, meta=meta, status=status, stream_cursor=cursor,

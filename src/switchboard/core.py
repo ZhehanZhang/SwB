@@ -190,7 +190,8 @@ class Switchboard:
         return sorted(names)
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
-                         final: bool = True, allow_self: bool = False) -> dict[str, Any]:
+                         final: bool = True, allow_self: bool = False, handle: str | None = None,
+                         handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
@@ -210,21 +211,19 @@ class Switchboard:
             self.turn(root, principal)
         sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
-                  "trust": "owner"}
-        meta: dict[str, Any] = {"from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
-        handle = self.inbox.open_handle(owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
+                  "trust": principal.trust}
+        meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
+        handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
                                         meta=meta, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
         await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
-        if original is not None and final:
-            self.inbox.update_handle(in_reply_to, status="answered")
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
         return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
 
     def turn(self, root: str, principal: Principal) -> None:
-        """Count one more turn on a mailbox conversation: a send's handle plus every reply hanging off it (a new send starts
+        """Count one more turn on a mailbox conversation: a send's handle plus every forward and reply (a new send starts
         at zero). At turn_cap that one conversation pauses, as a likely loop, and the owner gets a Slack DM. Slack and
         Capy threads aren't counted here: their handles are shared per workspace or Captain, and Slack has its own
         per-thread bot post guard."""
@@ -389,13 +388,44 @@ class Switchboard:
     # Generic verbs ------------------------------------------------------------------------------
 
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
-                   files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None) -> dict[str, Any]:
+                   files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
+                   forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
+        handle = None
+        if forward is not None:
+            original = self.inbox.handle(forward)
+            if original is None or original["destination"] != "mailbox" or original["owner"] != principal.source:
+                raise CoreError("you can only forward a conversation you received")
+            meta = original["meta"]
+            sender = meta.get("from") or {}
+            trust = meta.get("slack_trust") if sender.get("origin") == "slack" else sender.get("trust")
+            if trust != "owner":
+                raise CoreError("you can only forward an owner-trust conversation")
+            if meta.get("boundary"):
+                raise CoreError(f"conversation {forward} is bounded to {meta['boundary']} and cannot be forwarded")
+            handle = self.inbox.new_handle()
+            if not self.store.n("UPDATE handles SET meta = json_set(meta, '$.forwarded_to', ?) "
+                                "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') IS NULL", (handle, forward)):
+                raise CoreError(f"conversation {forward} has already been forwarded")
+            handle_meta = {**(handle_meta or {}), "forward_of": forward, "root": meta.get("root") or forward}
+        try:
+            if handle is not None:
+                self.turn(handle_meta["root"], principal)
+            return await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
+                                    new_conversation=new_conversation, handle=handle, handle_meta=handle_meta)
+        finally:
+            if handle is not None and self.inbox.handle(handle) is None:
+                self.store.x("UPDATE handles SET meta = json_remove(meta, '$.forwarded_to') "
+                             "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ?", (forward, handle))
+
+    async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
+                    files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
+                    handle: str | None, handle_meta: dict[str, Any] | None) -> dict[str, Any]:
         addr = await self.resolve_to(to) if to else None
         if addr is not None and addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         if addr is not None and addr.block == "agent":
-            return {**await self.agent_send(principal, to=addr.id, text=task, project=project), "to": str(addr)}
+            return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta), "to": str(addr)}
         if addr is not None and addr.block == "project":
             project, addr = addr.id, None
         if addr is not None:
@@ -407,7 +437,7 @@ class Switchboard:
             raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
         message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
         kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
-        out = await self.invoke(principal, block.name, action, kw)
+        out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta)
         if isinstance(out, dict):
             out.setdefault("conversation", out.get("handle"))
             out.setdefault("block", block.name)
@@ -494,10 +524,11 @@ class Switchboard:
             raise CoreError(f"{block.name} conversations take no {verb}")
         return await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
 
-    async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any]) -> Any:
+    async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
+                     handle: str | None = None, handle_meta: dict[str, Any] | None = None) -> Any:
         """Run one destination action for an origin's caller, enforcing the daily cap and writing the audit record."""
         dest = self.destination(destination)
-        call = Call(principal=principal, core=self, destination=destination, action=action.name)
+        call = Call(principal=principal, core=self, destination=destination, action=action.name, handle=handle, handle_meta=handle_meta or {})
 
         def record(outcome: str, detail: str | None = None) -> None:
             if action.is_audited or outcome != "ok":
