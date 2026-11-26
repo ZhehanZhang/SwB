@@ -64,6 +64,7 @@ def slugify(name: str) -> str:
 
 
 class DotsBlock(Block):
+    connect_kinds = ("dots",)
     manifest = Manifest(
         id="dots",
         title="ChatGPT dots",
@@ -295,6 +296,16 @@ class DotsBlock(Block):
 
     def problems(self) -> list[str]:
         return list(self.problems_)
+
+    def next_step(self) -> str | None:
+        engine = self.slack_engine
+        if engine is None or self.workspace not in engine.config.workspaces:
+            return "Connect a Slack workspace for ChatGPT dots."
+        if not self.dots():
+            return "Add a dot to the Slack workspace so Switchboard can discover it."
+        if not self.relay_channel():
+            return "Configure a Slack relay channel for ChatGPT dots."
+        return None
 
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
         if self.delivery == "mailbox":

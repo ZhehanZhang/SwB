@@ -13,7 +13,7 @@ from typing import Any, Iterable, Mapping
 from .blocks import Address
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
-NOT_TARGETS = frozenset({"slack", "local"})
+NOT_TARGETS = frozenset({"slack", "local", "discord", "telegram"})
 LEGACY_KINDS = ("captain", "project", "thread")
 
 

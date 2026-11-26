@@ -39,6 +39,73 @@ flowchart LR
   I --> CH
 ```
 
+## Quick start
+
+Start in an empty instance directory. Replace `OWNER` with the repository owner, or use your local checkout
+path instead of the Git URL. pipx needs Python 3.12 or newer.
+
+**uvx**
+
+```bash
+uvx --from git+https://github.com/OWNER/switchboard swb init && uvx --from git+https://github.com/OWNER/switchboard swb up
+```
+
+**pipx**
+
+```bash
+pipx install git+https://github.com/OWNER/switchboard && swb init && swb up
+```
+
+**Docker**
+
+```bash
+docker build -t switchboard:local /path/to/switchboard && \
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/instance" -w /instance switchboard:local swb init && \
+docker run --rm --name switchboard-local --user "$(id -u):$(id -g)" -p 127.0.0.1:8000:8000 \
+  -v "$PWD:/instance" -w /instance switchboard:local swb up
+```
+
+Replace `/path/to/switchboard` with your checkout in the Docker command.
+
+`swb init` creates `config/switchboard.yaml` with only the MCP block and saves a generated owner key in
+`.env` (mode 600). Keep that file private. `--dir PATH` selects a different instance directory;
+`--public-url https://switchboard.example.com` sets the externally reachable base URL, but doesn't publish the
+server or enable OAuth by itself. Use `--force` only to replace an existing config and rotate its owner key.
+
+From a second terminal in the instance directory:
+
+```bash
+swb status
+swb connect mcp-client
+swb connect mcp-client --choose agent=my-client
+```
+
+If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/switchboard`. If you used Docker, prefix them
+with `docker exec switchboard-local`.
+Both commands authenticate to `http://127.0.0.1:8000/mcp` with the owner key from `.env`; use `--url` for
+a different endpoint. Use `--choose` for choices such as agent or project names, never for tokens.
+
+Enable the matching block in `config/switchboard.yaml` to set up Capy, Claude Project routines, Grok, Slack, or GitHub.
+Then ask your MCP client how to connect it, or run a command such as `swb connect capy-captain`.
+
+When a connection returns a token claim link, run `swb claim 'CLAIM_LINK'` and enter the token at the hidden
+prompt. A standalone code works for generic token claims; for routine claims, use the full link. The command
+sends the token and owner key only to the local server or the server you explicitly select with `--url`; it
+doesn't connect to the host from the claim link. In Docker, use `docker exec -it switchboard-local swb claim 'CLAIM_LINK'`.
+
+### Coding agents
+
+Run `swb connect coding-agent --choose agent=codex`, or ask your MCP client to call `connect(what="coding-agent")`.
+Leave out the choice to list the clients. Each snippet adds a remote MCP server and uses OAuth when available:
+
+- [Claude Code](https://code.claude.com/docs/en/mcp) uses `claude mcp add`; [Codex](https://developers.openai.com/codex/mcp) uses `config.toml`.
+- [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/) and [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/) use `settings.json`; [Goose](https://goose-docs.ai/docs/guides/config-files/) uses `config.yaml`.
+- [OpenCode V2](https://opencode.ai/docs/mcp-servers/) uses `opencode.json`; [Cline](https://docs.cline.bot/mcp/mcp-overview) and [Kiro](https://kiro.dev/docs/mcp/configuration/) use their MCP settings.
+- Choose `other` for generic Streamable HTTP settings with a pairing code. Use the same pairing flow when OAuth is off.
+
+Use `wait` or `inbox` to pick up messages. The [Claude Code channel](#claude-code-channel-research-preview) also
+pushes messages to an open session.
+
 ## Blocks
 
 A block (`src/switchboard/blocks/`) subclasses `Block` and declares a `Manifest`: its kind (source, sink or both),
@@ -114,6 +181,11 @@ the project, and every step out of it is explicit:
   read at all, even with `scopes`; only a read that names them as `project` sees them.
 - **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{acme-agent: [project:acme]}`. A limited key
   can't read or write outside its list, can't create projects or change routes, and must send with a project.
+- **Bearer keys can be limited to tools and send targets** with `auth.key_tools` and `auth.key_targets`, e.g.
+  `key_tools: {monitor: [send]}` and `key_targets: {monitor: [claude-ops]}`. Such a key sees and calls only those
+  tools, sends only to those targets (compared after resolving, so a slug and its address match), never forwards,
+  and can't read its inbox over HTTP unless `inbox` is listed. A key's name is its `SWITCHBOARD_KEY_<NAME>` suffix,
+  lowercased with `_` as `-`.
 - Rows written by capy-bridge 0.1 were migrated into `general`.
 
 New projects link themselves. `project_create` (and `project_update` while a block's link is empty) asks each block
@@ -326,6 +398,33 @@ A switchboard project is the unit of memory (`project:<slug>`), visibility and r
   scope. Context that spans two projects belongs in general memory, or the two should be merged with
   `project_update(new_slug)`.
 
+### Grok routines
+
+Enable `grok-routine` in the Switchboard config, then ask your MCP client how to connect Grok or run `swb connect grok`.
+Add Switchboard under grok.com → Connectors → New Connector → Custom and sign in with OAuth. Grok needs a public
+HTTPS MCP endpoint. If you override `auth.redirect_uris`, include the HTTPS callback Grok registers.
+
+Use the prompt returned by `connect` in a Grok Bot routine with a custom webhook trigger. Register the routine
+with `swb connect grok --choose name=project-doorman project=example auth=key`, then use the two private claim links
+for the webhook URL and key. Neither value belongs in the saved prompt, chat, or MCP arguments. Run the test
+`send` call that `connect` returns, then check the sender's inbox for `pong`. Webhook acceptance alone means Grok
+started the run, not that the run replied.
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-doorman: {project: example, url_env: GROK_WEBHOOK_URL, auth: signature, secret_env: GROK_WEBHOOK_SECRET}
+```
+
+Send to a routine by name or to `grok:example` for the project's primary; `agent:grok` is mailbox-only.
+The webhook receives `text`, `conversation`, `project`, `from` and `trust`. The run replies on that conversation
+using its Switchboard connector; it doesn't need a reply webhook. The default signature header is
+`Webhook-Signature: t=<unix>,v1=<hex HMAC-SHA256>`, signed over the timestamp, a period, and the raw JSON bytes.
+Use `auth: key` for `Authorization: Bearer <key>`; `header` overrides the header name.
+Slack and GitHub webhook sinks can also use Stripe-style signing with `signature: stripe` and `secret_env`;
+their default header is `Stripe-Signature`, configurable with `header`.
+
 ## Slack
 
 With a slack block in the config (or a `slack:` section in a version 1 file), Slack is both a way in and a way out. This is slackgate,
@@ -411,6 +510,17 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
+### Listen mode
+
+Set `listen_channels: {team: ["#support"]}` under the Slack block to opt in by workspace and channel name or ID.
+The channel must be shared with the sender and mapped to a project through `channel_projects` or
+`workspace_projects`. Non-owner messages, including mentions, wake the project's primary routine without an
+acknowledgment; only bots listed in the workspace's `known` map can wake it, and `sender_rate` limits each sender.
+Owner messages still route normally. The doorman can stay silent or use `reply` to post up to 1,500 characters
+in the original thread. If something needs action, `reply(to_owner=true)` sends the owner a private note of up to
+500 characters plus a link to the message instead, using the configured approvals DM. These conversations can't
+be forwarded.
+
 ### ChatGPT dots and #agents
 
 The `dots` block defaults to `delivery: slack`. It finds ChatGPT dots in one workspace and makes each a target named
@@ -484,6 +594,59 @@ Nothing about a bot's look is hard-coded; every install reads it from Slack at r
   the dot's own name and profile picture, re-read on every rescan.
 - To brand an install, upload an app icon under Basic Information, then Display Information, in the Slack app's
   settings. The API can't set it.
+
+## Discord
+
+The Discord block reads bot mentions, DMs, replies in conversations it has handled, and messages in channels you
+explicitly listen to. Mention the bot with a target slug (for example, `@swb helper check the build`) or set a space's
+`default_target`. The target stays attached to the thread for follow-ups. Final replies go back through the bot.
+`discord_post` lets your own agents post to spaces you've granted them.
+
+1. In the [Discord Developer Portal](https://discord.com/developers/applications), create a New Application. Under
+   **Bot**, turn on **Message Content Intent** if you want unmentioned server follow-ups and listen mode to have text.
+   Reset the bot token there. You can copy the Application ID from **General Information** into the config now, or
+   let the bot learn it when Discord connects.
+2. Enable the block, add the servers and your Discord user IDs, and restart switchboard. In Discord's
+   **User Settings → Advanced**, enable **Developer Mode** to copy server and user IDs from their context menus.
+3. As the owner, call `discord_provision` and open its one-time token link behind Cloudflare Access. Paste the token
+   there and save. Without Access, set `DISCORD_BOT_TOKEN` in the server environment instead. Never enter a token in
+   YAML, Discord or an MCP tool argument.
+4. Open `setup.invite_url` from `discord_status` and add the bot to each configured server. The link requests only the
+   bot scope and the permissions for the enabled features; it does not request Administrator or slash commands.
+5. Channels and targets are private by default. To let other people reach a target, share both
+   `channel:<space>/<channel-id>` (or `channel:<space>/#<name>`) and `target:<slug>`. A visibility list can name
+   individual users as `discord:<user-id>`. Only `owner_ids` grant owner trust; non-owner messages remain untrusted.
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: helper
+    agents: {claude: [home]}
+```
+
+- Connection: `token_env` defaults to `DISCORD_BOT_TOKEN`, and an environment token takes precedence over a
+  saved token. `application_id` is optional. `dm_space` selects the space whose trust and routing settings apply
+  to DMs (the first configured space by default). With `message_content: false`, Discord can withhold the text
+  of unmentioned server messages, including follow-ups and listened-to messages. `connect: false` skips Gateway
+  intake, which is useful for testing the REST side alone.
+- Posting: `threads` defaults to `true` and creates a public thread from the original message when Discord
+  supports it. Set it to `false` to reply in place. `personas: true` uses a webhook per channel for persona posts,
+  except in DMs and when a native reply reference is needed. `ack_reaction` defaults to 👀; set it to `null` to
+  disable reactions. Posts don't ping users or roles. `daily_cap` optionally limits outbound tool calls per day.
+- Routing: each space needs a distinct `guild_id`. `known` maps Discord user IDs to names; `listen` lists channel
+  or thread IDs whose unaddressed messages go only to granted inboxes. `project` sets the default project and
+  `channel_projects` overrides it by ID or `#name`. `bot_posts_per_hour` defaults to 20 per thread.
+  The block's `agents` maps agent names to space lists or `"*"`, `target_aliases` adds local slugs, and
+  `refresh_minutes` controls target refresh (30 by default).
+
+`discord_status` reports the Gateway connection state, ordered setup steps still missing, bot identity, configured
+spaces and your grants, the requested intents and invite link, and whether the token came from the environment or
+the claim page. It never returns the token.
 
 ## GitHub App
 

@@ -30,9 +30,11 @@ if TYPE_CHECKING:
 BLOCKS = {
     "mcp": "switchboard.blocks.mcp:MCPBlock",
     "slack": "switchboard.blocks.slack:SlackBlock",
+    "discord": "switchboard.blocks.discord:DiscordBlock",
     "github": "switchboard.blocks.github:GitHubBlock",
     "capy": "switchboard.blocks.capy:CapyBlock",
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
+    "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
@@ -91,6 +93,7 @@ class AgentSpec:
     redirect_hosts: tuple[str, ...] = ()
     cimd_hosts: tuple[str, ...] = ()
     link_key: str | None = None
+    cimd_patterns: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {k: list(v) if isinstance(v, tuple) else v for k, v in asdict(self).items() if v}
@@ -166,6 +169,7 @@ class Address:
 
 class Block:
     manifest = Manifest(id="", title="")
+    connect_kinds: tuple[str, ...] = ()
     wakes_agents = False
     """True for a block whose targets wake an agent (a Claude routine): a bare agent name goes to its target first."""
 
@@ -236,6 +240,10 @@ class Block:
         """For a block that wakes agents: the target that wakes this agent for this project (a project routine), if any."""
         return None
 
+    def effective_target(self, addr: Address, project: str | None) -> Address:
+        """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""
+        return addr
+
     def owns_ref(self, ref: str) -> bool:
         """Whether a conversation reference (a thread id, say) belongs to this block."""
         return any(t.ref_prefix and ref.startswith(t.ref_prefix) for t in self.manifest.targets)
@@ -283,6 +291,17 @@ class Block:
 
     def status(self) -> dict[str, Any]:
         return {}
+
+    def next_step(self) -> str | None:
+        return None
+
+    async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any] | None:
+        return None
+
+    def token_step(self, principal: "Principal", name: str, instruction: str, *, url: bool = False) -> dict[str, str]:
+        if not principal.is_unrestricted_owner:
+            return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url)}
 
     @property
     def online(self) -> bool:
