@@ -44,6 +44,8 @@ class FakeChat(ChatBlock):
     def missing(self):
         return [] if self.token() else ["no bot token: open the link from chatx_provision and paste it"]
 
+    def setup(self):
+        return {"claim_pending": self.claims.pending("bot_token")}
 
 
 
@@ -57,7 +59,7 @@ def env(tmp_path, monkeypatch):
                               "spaces": {"home": {"owner_ids": [OWNER_ID], "known": {FRIEND: "Friend"}, "listen": ["50"], "bot_posts_per_hour": 3}}}
     cfg["visibility"] = {"resources": {"channel:home/60": "shared", "target:claude-infra": [f"chatx:{FRIEND}"]}}
     path = tmp_path / "c.yaml"
-    path.write_text(yaml.safe_dump(cfg))
+    path.write_text(yaml.safe_dump(cfg, sort_keys=False))
     core = Switchboard(path, tmp_path / "data", env={**default_env(), "INFRA_TOKEN": TOKEN}, clock=Clock(),
                        oauth_http=httpx.AsyncClient(transport=httpx.MockTransport(CIMDHost().handler)), access_verifier=access_verifier,
                        destination_options={"claude-routine": {"transport": httpx.MockTransport(anthropic.handler)},
@@ -153,3 +155,18 @@ def test_token_claim_link_is_one_time_behind_access_and_sealed(env):
     assert block.token() == token and token not in core.store.one("SELECT sealed FROM block_secrets")["sealed"]
     assert c.post(path, headers=OWNER, data={"csrf": csrf, "token": token}).status_code == 410
     assert block.missing() == []
+
+
+def test_provision_status_sees_the_newly_opened_claim(env):
+    _, c, block, _ = env
+    assert block.setup()["claim_pending"] is False
+    provision = payload(call(c, STATIC_KEY, "chatx_provision", {}))
+    assert provision["link"].startswith(f"{PUBLIC}/claims/chatx/")
+    assert provision["setup"]["claim_pending"] is True
+
+
+def test_claim_route_is_not_shadowed_by_mcp_regardless_of_block_order(env):
+    core, c, block, _ = env
+    assert list(core.blocks).index("mcp") < list(core.blocks).index("chatx")
+    path = block.claim_link("claude")["link"].removeprefix(PUBLIC)
+    assert c.get(path, headers=OWNER).status_code == 200
