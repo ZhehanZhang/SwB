@@ -380,10 +380,14 @@ def consent(client: TestClient, client_id: str, redirect: str = CLAUDE_CB, chall
     return page, (m.group(1).replace("&quot;", '"') if m else None)
 
 
+def consent_csrf(page: httpx.Response) -> str:
+    return re.search(r'name="csrf" value="([a-f0-9]+)"', page.text).group(1)
+
+
 def authorize(client: TestClient, client_id: str, redirect: str = CLAUDE_CB, challenge: str | None = None, state: str = "st4te") -> httpx.Response:
     page, req = consent(client, client_id, redirect, challenge, state)
     assert page.status_code == 200, page.text
-    return client.post("/authorize", data={"req": req, "decision": "approve"}, headers=OWNER)
+    return client.post("/authorize", data={"req": req, "decision": "approve", "csrf": consent_csrf(page)}, headers=OWNER)
 
 
 def sign_in(client: TestClient, redirect: str = CLAUDE_CB, client_id: str | None = None) -> dict[str, Any]:

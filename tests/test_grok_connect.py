@@ -31,7 +31,8 @@ def enter_claim(client, step, value):
     assert step["by"] == "person" and step["link"].startswith(f"{PUBLIC}/claim/")
     path = urlsplit(step["link"]).path
     assert path.rsplit("/", 1)[-1] not in step["do"]
-    assert client.get(path).status_code == 403
+    refused = client.get(path)
+    assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Fclaim%2F")
     page = client.get(path, headers=OWNER)
     assert page.status_code == 200 and 'type="password"' in page.text
     csrf = page.text.split('name="csrf" value="', 1)[1].split('"', 1)[0]

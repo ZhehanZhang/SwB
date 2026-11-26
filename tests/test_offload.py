@@ -150,7 +150,7 @@ def test_degraded_without_api_key(make):
     assert not call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "notes", "title": "t", "body": "b"}).get("isError")
     assert "CAPY_API_KEY missing" in payload(call(c, STATIC_KEY, "context_pack", {}))
     page = c.get("/", headers=OWNER)
-    assert page.status_code == 200 and "Switchboard" in page.text and "CAPY_API_KEY" in page.text
+    assert page.status_code == 200 and 'class="brand-name">Switchboard' in page.text and "CAPY_API_KEY" in page.text
 
 
 def test_api_key_never_appears_in_logs_or_health(make, caplog):
