@@ -16,7 +16,7 @@ log = logging.getLogger("switchboard.slack.writes")
 DECIDER_KINDS = ("slack", "admin")
 OWNER_RELAY = "relay:owner"
 """The one key that posts as the owner without approval: only the dots block holds it, only for owner-trust senders (his
-own Slack messages and his own agents), and only into a dot DM of his or the dots relay channel. Every other user-identity post keeps its write policy."""
+own Slack messages and his own agents), and only into a dot DM or group DM of his, or the dots relay channel. Every other user-identity post keeps its write policy."""
 
 
 class WriteError(RuntimeError):
