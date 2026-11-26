@@ -134,7 +134,10 @@ class Kit:
             new_conversation: Annotated[bool | None, Field(description="For a target that is a long-lived thread (a Captain): true starts a new one instead")] = None,
             wait_s: Annotated[float, Field(ge=0, description="Seconds to wait for a first reply before returning (capped per client)")] = 0,
             forward: Annotated[str | None, Field(description="Conversation handle you received and are handing off")] = None,
+            in_reply_to: Annotated[str | None, Field(description="Not supported by send; use reply to answer a conversation")] = None,
         ) -> dict[str, Any]:
+            if in_reply_to is not None:
+                raise ToolError("use reply to answer a conversation")
             p = kit.who(ctx)
             mailbox = bool(to) and (to.strip().lower().startswith("agent:") or to.strip().lower() in core.known_agents())
             if project or not mailbox:
@@ -144,8 +147,9 @@ class Kit:
 
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
-                        final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True) -> dict[str, Any]:
-            return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final)
+                        final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
+                        to_owner: Annotated[bool, Field(description="Listen conversations only: DM the owner instead of posting in the Slack thread")] = False) -> dict[str, Any]:
+            return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
             title="Wait for replies",
@@ -241,8 +245,12 @@ class Kit:
             annotations=SEND,
         )
         async def agent_send(ctx: Context, to: Annotated[str, Field(description="The agent's name, as switchboard_status shows it")], text: str,
-                             project: ProjectArg = None) -> dict[str, Any]:
+                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None) -> dict[str, Any]:
+            if in_reply_to is not None or forward is not None:
+                raise ToolError("use reply to answer a conversation or send to forward one")
             p = kit.alias(ctx, "agent_send")
             if project:
                 kit.need(p, kit.pscope(project))
+            if p.targets is not None:
+                await kit.run(core.check_target(p, f"agent:{to}", project))
             return await kit.run(core.agent_send(p, to=to, text=text, project=project))

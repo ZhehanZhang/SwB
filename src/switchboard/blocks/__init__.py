@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 BLOCKS = {
     "mcp": "switchboard.blocks.mcp:MCPBlock",
     "slack": "switchboard.blocks.slack:SlackBlock",
+    "discord": "switchboard.blocks.discord:DiscordBlock",
     "telegram": "switchboard.blocks.telegram:TelegramBlock",
     "github": "switchboard.blocks.github:GitHubBlock",
     "capy": "switchboard.blocks.capy:CapyBlock",
@@ -236,6 +237,10 @@ class Block:
     def wake_target(self, agent: str, project: str) -> Address | None:
         """For a block that wakes agents: the target that wakes this agent for this project (a project routine), if any."""
         return None
+
+    def effective_target(self, addr: Address, project: str | None) -> Address:
+        """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""
+        return addr
 
     def owns_ref(self, ref: str) -> bool:
         """Whether a conversation reference (a thread id, say) belongs to this block."""
