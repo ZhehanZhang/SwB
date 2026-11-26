@@ -6,9 +6,10 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ...auth import Principal
+from .coding import coding_steps
 from .kit import Kit
 
-CLIENTS = ("mcp-client", "chatgpt", "claude")
+CLIENTS = ("mcp-client", "chatgpt", "claude", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine"}
 MENUS = {"chatgpt": "Plugins > + > Add custom MCP server", "claude": "Customize > Connectors > Add > Custom > Web"}
 
@@ -83,10 +84,12 @@ def register(mcp: MCPServer, kit: Kit) -> None:
         if what not in CLIENTS and not p.is_unrestricted_owner:
             return {"what": what, "done": [], "next": [
                 {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}]}
-        choose = (choose or {}) if p.is_unrestricted_owner else {}
+        choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
         outcome = "ok"
         try:
-            if what in CLIENTS:
+            if what == "coding-agent":
+                out = coding_steps(kit, p, project, choose)
+            elif what in CLIENTS:
                 out = client_steps(kit, what, p, project, choose)
             else:
                 out = await kit.run(block.connect_steps(what, p, project, choose))

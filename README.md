@@ -93,6 +93,19 @@ prompt. A standalone code works for generic token claims; for routine claims, us
 sends the token and owner key only to the local server or the server you explicitly select with `--url`; it
 doesn't connect to the host from the claim link. In Docker, use `docker exec -it switchboard-local swb claim 'CLAIM_LINK'`.
 
+### Coding agents
+
+Run `swb connect coding-agent --choose agent=codex`, or ask your MCP client to call `connect(what="coding-agent")`.
+Leave out the choice to list the clients. Each snippet adds a remote MCP server and uses OAuth when available:
+
+- [Claude Code](https://code.claude.com/docs/en/mcp) uses `claude mcp add`; [Codex](https://developers.openai.com/codex/mcp) uses `config.toml`.
+- [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/) and [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/) use `settings.json`; [Goose](https://goose-docs.ai/docs/guides/config-files/) uses `config.yaml`.
+- [OpenCode V2](https://opencode.ai/docs/mcp-servers/) uses `opencode.json`; [Cline](https://docs.cline.bot/mcp/mcp-overview) and [Kiro](https://kiro.dev/docs/mcp/configuration/) use their MCP settings.
+- Choose `other` for generic Streamable HTTP settings with a pairing code. Use the same pairing flow when OAuth is off.
+
+Use `wait` or `inbox` to pick up messages. The [Claude Code channel](#claude-code-channel-research-preview) also
+pushes messages to an open session.
+
 ## Blocks
 
 A block (`src/switchboard/blocks/`) subclasses `Block` and declares a `Manifest`: its kind (source, sink or both),

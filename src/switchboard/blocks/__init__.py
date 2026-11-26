@@ -92,6 +92,7 @@ class AgentSpec:
     redirect_hosts: tuple[str, ...] = ()
     cimd_hosts: tuple[str, ...] = ()
     link_key: str | None = None
+    cimd_patterns: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {k: list(v) if isinstance(v, tuple) else v for k, v in asdict(self).items() if v}
