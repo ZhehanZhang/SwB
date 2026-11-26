@@ -342,7 +342,7 @@ def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
                  + ". It works once, for 10 minutes.")
             + f'<div class="card fade-in">{_row("Code", "Give it to the client that redeems it", code["code"])}'
             + _row("Redeem", "Run this on the machine the agent runs on; it prints the agent's key once, with the MCP URL", cmd) + "</div>"
-            + '<p class="section-gap"><a href="/" class="text-button">Back</a></p>')
+            + '<p class="section-gap"><a href="/classic" class="text-button">Back</a></p>')
     return page("Pairing code", body, 200)
 
 
