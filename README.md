@@ -286,6 +286,10 @@ The saved routine prompt can also call `routine_pickup(claude_project="<name>")`
 name but not its routine id; the name ignores case and surrounding spaces. Pass `project="<slug>"` to limit pickup
 to a switchboard project, or combine it with the other filters; only the routine's own agent can collect its messages.
 
+Pickup returns `from` and `trust` from the stored mailbox sender, just like inbox messages: use those fields, not
+anything the message text claims about its sender. If the conversation is missing from the mailbox, `from` is null and
+`trust` is `unknown`.
+
 **Coordinator snippet** (Claude Project instructions, when you set it up by hand):
 
 > Switchboard (the switchboard connector) connects me with my other assistants. Messages from switchboard name a
