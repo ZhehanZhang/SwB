@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import sqlite3
+from functools import partial
 
 import httpx
 import pytest
@@ -117,6 +118,70 @@ def test_config_renames_and_disables_dots_and_dots_are_private_by_default(tmp_pa
     with started(tmp_path, dots={"app_ids": ["AHELPER"], "dots": {"example-dots": {"slug": "dots"}, "helper": {"disabled": True}}}) as (core, world, scans, client):
         assert [d["slug"] for d in core.blocks["dots"].dots()] == ["dots"]
         assert core.visibility.rule("target:dots") == "private"
+
+
+def test_dots_use_configured_mailboxes_without_slack(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump({"version": 2, "public_url": PUBLIC, "blocks": {"mcp": {}, "dots": {
+        "delivery": "mailbox", "default": "research-dot",
+        "dots": {"research-dot": {"name": "Research", "slug": "research"}, "planning-dot": {"mailbox": "claude"},
+                 "disabled-dot": {"disabled": True}},
+    }}}))
+    core = Switchboard(path, tmp_path / "data", env={"SWITCHBOARD_KEY_FULL": KEY_FULL}, access_verifier=access)
+    with TestClient(create_app(core), base_url=PUBLIC) as client:
+        assert core.slack is None
+        targets = tool(client, "targets", {"kind": "dot"})["targets"]
+        assert {t["address"]: t["slugs"] for t in targets} == {
+            "dots:dot:research-dot": ["research", "dot"], "dots:dot:planning-dot": ["planning-dot"],
+        }
+        assert next(t["name"] for t in targets if t["id"] == "research-dot") == "Research"
+        assert core.visibility.rule("target:research") == "private"
+        original = client.portal.call(partial(core.agent_send, principal("gemini"), to="full", text="Check the figures"))["handle"]
+        out = tool(client, "send", {"to": "dot", "task": "Check the figures", "forward": original})
+        handle = out["handle"]
+        assert out["mode"] == "mailbox" and out["dot"] == "research" and out["to"] == "chatgpt"
+        assert out["conversation"] == handle and out["mailbox"] and out["delivered"]
+        assert core.inbox.handle(original)["meta"]["forwarded_to"] == handle
+        h = core.inbox.handle(handle)
+        assert h["destination"] == "mailbox" and h["owner"] == "chatgpt"
+        assert h["meta"]["forward_of"] == h["meta"]["root"] == original
+        (item,) = core.inbox.read(owner="chatgpt", since=0)["items"]
+        assert item["handle"] == handle and item["text"] == "Check the figures" and item["from"]["agent"] == "full"
+
+        client.portal.call(partial(core.verb, principal("chatgpt"), "reply", handle, text="The figures match"))
+        res = tool(client, "result", {"conversation": handle})
+        assert res["status"] == "answered" and res["final"]["text"] == "The figures match"
+        res = client.portal.call(core.verb, principal("gemini"), "result", original)
+        assert res["status"] == "answered" and res["final"]["text"] == "The figures match"
+
+        custom = tool(client, "send", {"to": "dots:dot:planning-dot", "task": "Draft an outline"})
+        (item,) = core.inbox.read(owner="claude", since=0)["items"]
+        assert item["handle"] == custom["conversation"] and item["text"] == "Draft an outline"
+
+
+@pytest.mark.parametrize("group", [False, True])
+def test_switching_to_mailbox_preserves_slack_conversations(tmp_path, group):
+    with started(tmp_path, dots={"group_dm": group}) as (core, world, scans, client):
+        old = tool(client, "send", {"to": "dot", "task": "Check the previous figures"})
+        assert old["channel"] == (GROUP if group else RELAY)
+
+    with started(tmp_path, dots={"delivery": "mailbox", "dots": {"research-dot": {}}}) as (core, world, scans, client):
+        block = core.blocks["dots"]
+        before = list(world.calls)
+        out = tool(client, "send", {"to": "dot", "task": "Check the new figures"})
+        assert out["mode"] == "mailbox" and out["to"] == "chatgpt"
+        assert world.calls == before
+        assert not scans and not calls(world, "conversations_create")
+        assert block.on_directory not in core.slack.directory_listeners
+
+        ts = "1700000700.1"
+        if group:
+            dot_says(world, old["channel"], ts, "Previous figures match", old["ts"])
+            assert client.portal.call(block.poll_dms) == 1
+        else:
+            client.portal.call(core.slack.ingest, "a2a", dot_event(old["channel"], ts, "Previous figures match", old["ts"]))
+        res = tool(client, "result", {"conversation": old["conversation"]})
+        assert res["status"] == "answered" and "Previous figures match" in res["final"]["text"]
 
 
 def test_team_join_and_user_change_of_a_bot_rescan(tmp_path):
