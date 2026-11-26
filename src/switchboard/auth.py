@@ -28,7 +28,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from . import pages
-from .agents import PRESETS, Agents, host_allowed
+from .agents import NATIVE_CIMD, PRESETS, Agents, host_allowed
 from .config import Config
 from .store import Store, dumps
 
@@ -142,6 +142,11 @@ def source_for(redirect_uri: str, client: Client, names: dict[str, str], agents:
     for needle, name in names.items():
         if needle and (needle in host or needle in cimd_host or needle.lower() in (client.name or "").lower()):
             return name
+    if client.kind == "cimd":
+        if agent := NATIVE_CIMD.get(client.client_id):
+            return agent
+        if re.fullmatch(r"https://chatgpt\.com/oauth/codex/[A-Za-z0-9_-]+/client\.json", client.client_id):
+            return "codex"
     matched = (agents or Agents(PRESETS.values())).match(host, cimd_host)
     if matched:
         return matched
@@ -308,7 +313,8 @@ class Auth:
         if cached and cached[0] > self.store.clock():
             return cached[1]
         u = urlparse(url)
-        if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not host_allowed(u.hostname, self.cimd_hosts):
+        known_native = not self.cfg.cimd_hosts and NATIVE_CIMD.get(url) in self.agents
+        if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not (known_native or host_allowed(u.hostname, self.cimd_hosts)):
             raise OAuthError("invalid_client", f"client metadata document host {urlparse(url).hostname} is not allowed (auth.cimd_hosts)", 401)
         try:
             async with self.http.stream("GET", url, headers={"Accept": "application/json"}) as r:

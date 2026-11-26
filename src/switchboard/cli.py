@@ -223,6 +223,8 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
                 lines.append(f"    Call: {json.dumps(step['call'], ensure_ascii=False)}")
             if step.get("link"):
                 lines.append(f"    {step['link']}")
+            if step.get("snippet"):
+                lines.extend(f"    {line}" for line in step["snippet"].splitlines())
     return "\n".join(lines)
 
 
