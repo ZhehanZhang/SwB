@@ -341,3 +341,27 @@ def test_a_persona_without_a_picture_uses_the_bots_own_picture_never_slacks_init
         assert post["username"] == "Capy" and post["icon_url"] == "https://img.example/capy.png"
         out = client.portal.call(core.slack.runtimes["a2a"].execute, "bot", "post_message", {"channel": RELAY, "text": "x"}, {"id": "bare", "name": "Bare"})
         assert out["ts"] and calls(world, "chat_postMessage")[-1][1]["icon_url"] == "https://img.example/app.png"
+
+def test_posts_without_a_persona_take_the_apps_own_name_and_picture_or_a_neutral_icon(tmp_path):
+    with started(tmp_path, relay_exists=True) as (core, world, scans, client):
+        rt = core.slack.runtimes["a2a"]
+        world.canned["users_info"] = lambda token, kw: {"ok": True, "user": {"id": kw["user"], "name": "swb", "profile": {
+            "real_name": "SwitchBoard", "is_custom_image": True, "image_192": "https://img.example/app.png"}}}
+        client.portal.call(rt.refresh_identity)
+        client.portal.call(rt.execute, "bot", "post_message", {"channel": RELAY, "text": "x"}, None)
+        post = calls(world, "chat_postMessage")[-1][1]
+        assert post["username"] == "SwitchBoard" and post["icon_url"] == "https://img.example/app.png"
+        world.canned["users_info"] = lambda token, kw: {"ok": True, "user": {"id": kw["user"], "name": "swb", "profile": {
+            "real_name": "swb", "is_custom_image": False, "image_192": "https://img.example/initials.png"}}}
+        client.portal.call(rt.refresh_identity)
+        client.portal.call(rt.execute, "bot", "post_message", {"channel": RELAY, "text": "x"}, None)
+        post = calls(world, "chat_postMessage")[-1][1]
+        assert post["username"] == "swb" and post["icon_emoji"] == ":electric_plug:" and "icon_url" not in post
+
+
+def test_config_default_identity_overrides_the_apps_own(tmp_path):
+    from switchboard.slack.config import parse_config
+    cfg = base_config()
+    cfg["workspaces"]["a2a"]["default_identity"] = {"name": "SwitchBoard", "icon_url": "https://img.example/mine.png"}
+    ws = parse_config(cfg, ENV).workspaces["a2a"]
+    assert dict(ws.default_identity) == {"name": "SwitchBoard", "icon_url": "https://img.example/mine.png"}

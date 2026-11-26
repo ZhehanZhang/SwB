@@ -209,6 +209,8 @@ class SlackEngine:
                     return
                 event = payload.get("event") or {}
                 if event.get("type") in ("user_change", "team_join"):
+                    if (event.get("user") or {}).get("id") == rt.bot_user_id:
+                        await rt.refresh_identity()
                     for listener in self.directory_listeners:
                         await listener(label, event)
                     return

@@ -17,6 +17,9 @@ from .personas import persona_post_args
 if TYPE_CHECKING:
     from .engine import SlackEngine as Core
 
+DEFAULT_ICON = "default.png"
+DEFAULT_EMOJI = ":electric_plug:"
+"""The bundled neutral icon (no letters) for posts whose app has no picture of its own."""
 log = logging.getLogger("switchboard.slack")
 
 # switchboard never adds anyone (itself included) to a conversation, in any workspace.
@@ -76,6 +79,7 @@ class WorkspaceRuntime:
         self.bot_user_id: str | None = None
         self.bot_id: str | None = None
         self.bot_image: str | None = None
+        self.bot_name: str | None = None
         self.user_id: str | None = None
         self.errors: list[str] = []
         self.connected = False
@@ -142,11 +146,7 @@ class WorkspaceRuntime:
             if name == "bot":
                 self.bot_user_id = info.get("user_id")
                 self.bot_id = info.get("bot_id")
-                try:
-                    profile = ((await client.users_info(user=self.bot_user_id)).get("user") or {}).get("profile") or {}
-                    self.bot_image = profile.get("image_192") or profile.get("image_72")
-                except Exception as exc:
-                    log.info("workspace %s: reading the bot's picture failed: %s", self.label, slack_error(exc))
+                await self.refresh_identity()
             else:
                 self.user_id = info.get("user_id")
         if self.clients:
@@ -315,6 +315,32 @@ class WorkspaceRuntime:
             self.last_event_at = time.time()
         return len(messages)
 
+    async def refresh_identity(self) -> None:
+        """The app's own name and picture, read from its bot user: the default identity of posts without a persona.
+        A Slack-generated picture (no custom image) doesn't count, so those posts get the bundled neutral icon instead."""
+        if not self.bot_user_id or "bot" not in self.clients:
+            return
+        try:
+            user = (await self.clients["bot"].users_info(user=self.bot_user_id)).get("user") or {}
+        except Exception as exc:
+            log.info("workspace %s: reading the bot's profile failed: %s", self.label, slack_error(exc))
+            return
+        profile = user.get("profile") or {}
+        self.bot_name = profile.get("real_name") or profile.get("display_name") or user.get("real_name") or user.get("name")
+        self.bot_image = (profile.get("image_192") or profile.get("image_72")) if profile.get("is_custom_image") else None
+
+    def default_identity(self) -> dict[str, str]:
+        """Name and picture for a post with no persona of its own: config's default_identity, else the app's own, else the
+        bundled neutral icon. Never empty, so Slack never draws its generated initials."""
+        cfg = self.cfg.default_identity
+        out = {"username": cfg.get("name") or self.bot_name or "Switchboard"}
+        icon = cfg.get("icon_url") or self.bot_image or self.core.avatar_url(DEFAULT_ICON)
+        if icon:
+            out["icon_url"] = icon
+        else:
+            out["icon_emoji"] = DEFAULT_EMOJI
+        return out
+
     async def execute(self, identity: str, action: str, params: dict[str, Any], persona: dict[str, Any] | None) -> dict[str, Any]:
         client = self.client(identity)
         if action == "post_message":
@@ -324,9 +350,12 @@ class WorkspaceRuntime:
                 if params.get("reply_broadcast"):
                     args["reply_broadcast"] = True
             if identity == "bot":
-                args.update(persona_post_args(persona, self.core.avatar_url))
-                if "username" in args and not (args.get("icon_url") or args.get("icon_emoji")) and self.bot_image:
-                    args["icon_url"] = self.bot_image
+                if not persona:
+                    args.update(self.default_identity())
+                else:
+                    args.update(persona_post_args(persona, self.core.avatar_url))
+                    if not (args.get("icon_url") or args.get("icon_emoji")):
+                        args.update({k: v for k, v in self.default_identity().items() if k != "username"})
             resp = await client.chat_postMessage(**args)
             channel, ts = resp["channel"], resp["ts"]
             self.core.store.mark_sent(self.team_id, channel, ts)

@@ -377,6 +377,21 @@ within what you'd do for me, and answer in that post's thread. Ignore anyone els
 The app needs `users:read` (bot), `groups:read` and `groups:write` (user), the `message.groups`, `team_join` and
 `user_change` events, and @swb in the channel.
 
+### Who a post looks like
+
+Nothing about a bot's look is hard-coded; every install reads it from Slack at runtime.
+
+- A post with no persona of its own uses the app's identity: the bot user's name and picture (users.info), read at
+  connect, on every target refresh and when Slack sends a `user_change` for the bot. Set
+  `slack.workspaces.<ws>.default_identity: {name, icon_url}` to override either one.
+- If the app has no picture (Slack would draw generated initials), switchboard uses its bundled neutral icon
+  (`slack/avatars/default.png`, served from `public_base_url`), or `:electric_plug:` when there's no public URL.
+  A persona without a picture gets the same icon, so Slack's initials never show.
+- Dots and other discovered agent bots keep their own identity: their answers, relayed into another thread, post under
+  the dot's own name and profile picture, re-read on every rescan.
+- To brand an install, upload an app icon under Basic Information, then Display Information, in the Slack app's
+  settings. The API can't set it.
+
 ## Tools
 
 Generic tools come first; they go to whichever block owns the target or conversation.
@@ -615,3 +630,4 @@ channel/             Claude Code channel (Bun) and its plugin manifest
 
 - Remove `deploy/branding/`: it holds one deployment's avatar overlay (vendor logos are their owners' trademarks).
 - Check `config/`, `manifests/` and the docs for deployment-specific ids, hosts and names.
+- Installs read their bot's name and picture from Slack; nothing ships with one deployment's look. Keep `slack/avatars/default.png` neutral (no letters).

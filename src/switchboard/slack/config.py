@@ -72,6 +72,7 @@ class WorkspaceConfig:
     owner_user_ids: frozenset[str] = frozenset()
     known: Mapping[str, str] = field(default_factory=dict)
     sender_rate: tuple[int, float] = (5, 600.0)
+    default_identity: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def has_bot(self) -> bool:
@@ -243,6 +244,10 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
         ack = None
     app_id = raw.get("app_id")
     _need(app_id is None or (isinstance(app_id, str) and bool(re.fullmatch(r"A[0-9A-Z]{6,}", app_id))), f"{where}.app_id must be a Slack app id like A0123ABCD")
+    ident_raw = raw.get("default_identity") or {}
+    _need(isinstance(ident_raw, dict) and set(ident_raw) <= {"name", "icon_url"}, f"{where}.default_identity takes name and icon_url")
+    _need(all(isinstance(v, str) and v for v in ident_raw.values()), f"{where}.default_identity values must be non-empty strings")
+    _need(not ident_raw.get("icon_url") or ident_raw["icon_url"].startswith("https://"), f"{where}.default_identity.icon_url must be an https URL")
     thread_cap = raw.get("bot_thread_posts_per_hour", 20)
     _need(isinstance(thread_cap, int) and not isinstance(thread_cap, bool) and thread_cap >= 1, f"{where}.bot_thread_posts_per_hour must be an integer >= 1")
     owners = frozenset(_str_list(raw.get("owner_user_ids"), f"{where}.owner_user_ids")) or frozenset(x for x in (approver,) if x)
@@ -271,6 +276,7 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
         watch_all=watch_all,
         approver_user_id=approver,
         default_target=(str(raw["default_target"]).lower() if raw.get("default_target") else None),
+        default_identity={str(k): str(v) for k, v in ident_raw.items()},
     )
 
 

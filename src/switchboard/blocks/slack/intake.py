@@ -100,6 +100,8 @@ class SlackIntake(Block):
         engine = self.engine
         assert engine is not None
         async with self._refresh_lock:
+            for rt in list(engine.runtimes.values()):
+                await rt.refresh_identity()
             found = await self.core.targets(refresh=True)
             self.refresh_error = "; ".join(f"{b}: {e}" for b, e in sorted(self.core.target_errors.items())) or None
             by_address = {t["address"]: t for t in found}
