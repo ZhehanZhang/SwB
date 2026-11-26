@@ -528,11 +528,15 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
 - For the capy block, `status`, `result` and `reply` only touch threads delegated through switchboard, routed Captains and
   their crews, routed threads, and threads in routed or linked Capy projects.
 - Delegating is meant to be routine, so nothing rations it. Two guards catch runaways only:
-  - Burst: more than `blocks.capy.burst.count` sends (default 10) from one caller within `burst.window_s`
-    (default 600 s) looks like a loop, and the next one is refused with that explanation.
+  - Turn cap: one agent-to-agent conversation (a mailbox send's handle plus every reply and in_reply_to message
+    hanging off it) gets `turn_cap` turns (default 200; null switches it off). The next one pauses that conversation,
+    refuses with that explanation, and DMs the owner on Slack. Other conversations and new sends are unaffected, since
+    a new send starts at zero. Status shows the cap and how many conversations are paused. Replies into Capy and Slack
+    threads aren't counted: those handles are shared per Captain or workspace, and Slack threads have their own bot
+    post guard (`bot_thread_posts_per_hour`).
   - Duplicates: the same caller sending the same task to the same target within `duplicate_window_s` (default 600 s)
     gets the existing conversation back instead of a second thread.
-  - `reply` and `wait` are never limited. `daily_cap` is an optional hard daily limit, off by default.
+  - `wait` is never limited. `daily_cap` is an optional hard daily limit, off by default.
   - Retries the API sees again are also deduplicated through its `requestId` / `clientKey`.
 - Capy attributes a message to the API key that sent it. `CAPY_API_KEY` does the reads and stream following. Sends
   (delegations, replies, new threads) try, in order, the agent's own `CAPY_API_KEY_AS_<AGENT>` (for example

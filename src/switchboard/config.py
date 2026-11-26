@@ -50,6 +50,7 @@ class Config:
     key_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     inbox_keys: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_INBOX_KEYS))
     timezone: str = "America/New_York"
+    turn_cap: int | None = 200
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
     blocks: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {"use": "mcp"}})
@@ -144,6 +145,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         key_scopes={str(k).lower(): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_scopes") or {}).items()},
         inbox_keys={**DEFAULT_INBOX_KEYS, **{str(k).lower(): str(v).lower() for k, v in (auth.get("inbox_keys") or {}).items()}},
         timezone=str(raw.get("timezone", "America/New_York")),
+        turn_cap=int(raw.get("turn_cap", 200)) if raw.get("turn_cap", 200) else None,
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
         blocks=blocks,

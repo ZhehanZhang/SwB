@@ -158,21 +158,37 @@ def test_same_task_to_same_target_returns_the_existing_handle(make, capy):
     assert payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Fix the build"}))["handle"] != first["handle"]
 
 
-def test_burst_limit_stops_loops_but_never_replies_or_waits(make):
-    clock = Clock()
-    cfg = base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01, "burst": {"count": 3, "window_s": 600}}})
-    core, c = make(clock=clock, config=cfg)
-    for i in range(3):
+def ping_pong(c, turns):
+    """capy and second answer each other on one conversation; returns how many replies went through and the last error."""
+    h = payload(call(c, STATIC_KEY, "send", {"task": "ping", "to": "agent:second"}))["conversation"]
+    keys = [SECOND_KEY, STATIC_KEY]
+    for i in range(turns):
+        out = call(c, keys[i % 2], "reply", {"conversation": h, "text": "ack" if i % 2 else "ok"})
+        if out.get("isError"):
+            return i, error_text(out)
+        h = payload(out)["conversation"]
+    return turns, None
+
+
+def test_turn_cap_pauses_a_looping_conversation_only(make):
+    core, c = make(config={**base_config(), "turn_cap": 10})
+    done, err = ping_pong(c, 30)
+    assert done == 9 and "is paused" in err and "10 turns" in err
+    assert core.audit.recent(action="turn_cap")[0]["outcome"] == "refused"
+    assert core.health()["turn_cap"] == {"per_conversation": 10, "paused": 1}
+    done, err = ping_pong(c, 5)
+    assert done == 5 and err is None
+    for _ in range(12):
+        assert not call(c, STATIC_KEY, "send", {"task": "fresh work", "to": "agent:second"}).get("isError")
+
+
+def test_a_busy_burst_of_sends_and_replies_passes(make):
+    core, c = make(config=base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01}}))
+    done, err = ping_pong(c, 60)
+    assert (done, err) == (60, None)
+    for i in range(25):
         assert not call(c, STATIC_KEY, "capy_delegate", {"task": f"task {i}"}).get("isError")
-    err = error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "task 4"}))
-    assert "looks like a loop" in err
-    assert core.audit.recent(action="delegate")[0]["outcome"] == "refused"
-    for _ in range(5):
-        assert not call(c, STATIC_KEY, "capy_reply", {"thread_id": CAPTAIN, "text": "more context"}).get("isError")
-        assert not call(c, STATIC_KEY, "capy_wait", {"timeout_s": 0}).get("isError")
-    assert not call(c, SECOND_KEY, "capy_delegate", {"task": "another caller"}).get("isError")
-    clock.t += 601
-    assert not call(c, STATIC_KEY, "capy_delegate", {"task": "task 5"}).get("isError")
+    assert core.health()["turn_cap"] == {"per_conversation": 200, "paused": 0}
 
 
 def test_delegation_is_not_described_as_scarce(make):

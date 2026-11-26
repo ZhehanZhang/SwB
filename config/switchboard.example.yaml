@@ -7,6 +7,9 @@ version: 2
 # Public origin of this server. The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url.
 public_url: https://swb.example.com
 timezone: America/New_York
+# One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
+# A new send starts at zero. null switches it off.
+turn_cap: 200
 
 auth:
   # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
@@ -50,10 +53,8 @@ blocks:
   capy:
     use: capy
     api_base: https://api.capy.ai/api/v1
-    # Runaway guards only: more than burst.count delegations from one caller in burst.window_s looks like a loop and is
-    # stopped, and the same task to the same target within duplicate_window_s returns the existing handle.
-    # reply and wait are never limited. daily_cap is an optional hard limit, off (null) by default.
-    burst: {count: 10, window_s: 600}
+    # Runaway guard: the same task to the same target within duplicate_window_s returns the existing handle (loops are
+    # caught by turn_cap at the top level). daily_cap is an optional hard limit, off (null) by default.
     duplicate_window_s: 600
     daily_cap: null
     # Who sends. service (default): an agent's own CAPY_API_KEY_AS_<AGENT> if present, else the service user's key

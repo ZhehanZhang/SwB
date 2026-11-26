@@ -401,7 +401,7 @@ class ClaudeRoutineBlock(Block):
     def actions(self) -> list[Action]:
         return [
             Action("fire", "Message a Claude routine", "Leave the message in the routine's mailbox and start a session that replies.",
-                   self.fire, capped=True, burst=True),
+                   self.fire, capped=True),
             Action("list", "Claude routines", "Registered routines: project, kind, status (untested until the first fire), visibility. Tokens are never shown.",
                    self.list_action, read_only=True),
             Action("register", "Register this Claude routine", "A Claude session registers its own routine for a switchboard project: "
