@@ -87,7 +87,8 @@ def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, c
     call = AsyncMock(return_value={
         "what": "mcp-client", "done": ["The MCP server is running."], "next": [
             {"by": "you", "do": "Choose another client.", "call": {"tool": "connect", "arguments": {"what": "mcp-client"}}},
-            {"by": "person", "do": "Open the link.", "link": "https://switchboard.example.test/claim/example"},
+            {"by": "person", "do": "Open the link.", "link": "https://switchboard.example.test/claim/example",
+             "snippet": "[mcp_servers.switchboard]\nurl = 'https://switchboard.example.test/mcp'"},
         ],
     })
     monkeypatch.setattr(cli, "_call", call)
@@ -100,7 +101,8 @@ def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, c
     out, err = capsys.readouterr()
     assert key not in out + err
     for text in ("Done:", "The MCP server is running.", "Next steps:", "you: Choose another client.",
-                 'Call: {"tool": "connect"', "person: Open the link.", "https://switchboard.example.test/claim/example"):
+                 'Call: {"tool": "connect"', "person: Open the link.", "https://switchboard.example.test/claim/example",
+                 "    [mcp_servers.switchboard]\n    url = 'https://switchboard.example.test/mcp'"):
         assert text in out
 
 
