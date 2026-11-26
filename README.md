@@ -411,6 +411,17 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
+### Listen mode
+
+Set `listen_channels: {team: ["#support"]}` under the Slack block to opt in by workspace and channel name or ID.
+The channel must be shared with the sender and mapped to a project through `channel_projects` or
+`workspace_projects`. Non-owner messages, including mentions, wake the project's primary routine without an
+acknowledgment; only bots listed in the workspace's `known` map can wake it, and `sender_rate` limits each sender.
+Owner messages still route normally. The doorman can stay silent or use `reply` to post up to 1,500 characters
+in the original thread. If something needs action, `reply(to_owner=true)` sends the owner a private note of up to
+500 characters plus a link to the message instead, using the configured approvals DM. These conversations can't
+be forwarded.
+
 ### ChatGPT dots and #agents
 
 The `dots` block finds ChatGPT dots in one workspace and makes each a target named after its handle

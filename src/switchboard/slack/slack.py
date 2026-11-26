@@ -90,6 +90,7 @@ class WorkspaceRuntime:
         self.channel_ids: dict[str, str] = {}
         self.user_names: dict[str, str] = {}
         self.watched_ids: frozenset[str] = frozenset()
+        self.listen_ids: frozenset[str] = frozenset()
         self.unresolved_watched: list[str] = []
         self.last_event_at: float | None = None
 
@@ -191,7 +192,7 @@ class WorkspaceRuntime:
 
     async def resolve_watched(self) -> None:
         ids, unresolved = set(), []
-        names = [w.lstrip("#") for w in self.cfg.watched if not CHANNEL_ID_RE.match(w)]
+        names = [w for w in (*self.cfg.watched, *self.cfg.listen_channels) if not CHANNEL_ID_RE.match(w)]
         if names:
             try:
                 await self._list_channels()
@@ -210,14 +211,17 @@ class WorkspaceRuntime:
                         break
             except Exception as exc:
                 self.errors.append(f"users.conversations failed ({slack_error(exc)})")
-        for w in self.cfg.watched:
-            if CHANNEL_ID_RE.match(w):
-                ids.add(w)
-            elif w.lstrip("#") in self.channel_ids:
-                ids.add(self.channel_ids[w.lstrip("#")])
-            else:
-                unresolved.append(w)
+        listen_ids: set[str] = set()
+        for refs, selected in ((self.cfg.watched, ids), (self.cfg.listen_channels, listen_ids)):
+            for w in refs:
+                if CHANNEL_ID_RE.match(w):
+                    selected.add(w)
+                elif w.lstrip("#") in self.channel_ids:
+                    selected.add(self.channel_ids[w.lstrip("#")])
+                else:
+                    unresolved.append(w)
         self.watched_ids = frozenset(ids)
+        self.listen_ids = frozenset(listen_ids)
         self.unresolved_watched = unresolved
 
     async def resolve_channel(self, ref: str) -> str:
@@ -288,7 +292,7 @@ class WorkspaceRuntime:
     async def _poll_loop(self) -> None:
         self.connected = True
         while True:
-            for channel in sorted(self.watched_ids):
+            for channel in sorted(self.watched_ids | self.listen_ids):
                 try:
                     await self.poll_channel(channel)
                 except asyncio.CancelledError:

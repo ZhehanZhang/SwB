@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping
 
 import yaml
@@ -73,6 +73,7 @@ class WorkspaceConfig:
     known: Mapping[str, str] = field(default_factory=dict)
     sender_rate: tuple[int, float] = (5, 600.0)
     default_identity: Mapping[str, str] = field(default_factory=dict)
+    listen_channels: tuple[str, ...] = ()
 
     @property
     def has_bot(self) -> bool:
@@ -324,6 +325,13 @@ def parse_config(data: Any, env: Mapping[str, str]) -> Config:
         public_base_url = public_base_url.rstrip("/")
     personas = {pid: _parse_persona(pid, raw, public_base_url) for pid, raw in (data.get("personas") or {}).items()}
     workspaces = {label: _parse_workspace(label, raw, env, personas) for label, raw in (data.get("workspaces") or {}).items()}
+    listen = data.get("listen_channels", {})
+    _need(isinstance(listen, dict), "listen_channels must map workspaces to channel lists")
+    for label, channels in listen.items():
+        _need(label in workspaces, f"listen_channels: unknown workspace {label!r}")
+        channels = tuple(ch.removeprefix("#") for ch in _str_list(channels, f"listen_channels.{label}"))
+        _need(all(ch and ch != "*" for ch in channels), f"listen_channels.{label} needs channel names or ids")
+        workspaces[label] = replace(workspaces[label], listen_channels=channels)
     _need("api_keys" not in data, "api_keys became agents: {<agent name>: {persona, workspaces, ...}}; switchboard's own keys authenticate")
     grants = {str(k).lower(): _parse_grant(str(k).lower(), raw, workspaces, personas) for k, raw in (data.get("agents") or {}).items()}
     appr = data.get("approvals") or {}
@@ -339,8 +347,6 @@ def parse_config(data: Any, env: Mapping[str, str]) -> Config:
         _need(bool(approvals.approver_user_id), "approvals.approver_user_id is required with notify_workspace")
     _need("access" not in data, "access is switchboard's auth.cloudflare_access now; drop it from the slack section")
     if approvals.notify_workspace in workspaces and approvals.approver_user_id:
-        from dataclasses import replace
-
         ws = workspaces[approvals.notify_workspace]
         if not ws.owner_user_ids:
             workspaces[ws.label] = replace(ws, owner_user_ids=frozenset({approvals.approver_user_id}))
