@@ -287,7 +287,7 @@ class DotsBlock(Block):
 
     def actions(self) -> list[Action]:
         return [Action("send", "Message a dot", "Post in the dots relay channel, mentioning the dot; its reply comes back on the conversation.",
-                       self.send, capped=True, burst=True),
+                       self.send, capped=True),
                 Action("result", "A dot conversation's replies", "The dot's replies so far on one conversation.", self.result, read_only=True)]
 
     async def result(self, call: Call, *, ref: str, tail: int | None = None, **_: Any) -> dict[str, Any]:

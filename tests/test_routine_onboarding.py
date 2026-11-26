@@ -159,3 +159,16 @@ def test_a_claude_project_can_test_its_own_routine(tmp_path):
         assert payload(call(c, tok, "result", {"conversation": h["conversation"]}))["final"]["text"] == "pong"
     finally:
         c.__exit__(None, None, None)
+
+
+def test_routes_set_short_captain_form_goes_to_capy_whatever_the_block_order(tmp_path):
+    from conftest import CAPTAIN
+
+    core, c, anthropic = build(tmp_path, BOTH)
+    core.blocks = {"claude-routine": core.blocks["claude-routine"], **{k: v for k, v in core.blocks.items() if k != "claude-routine"}}
+    try:
+        out = payload(call(c, STATIC_KEY, "routes_set", {"target": f"captain:{CAPTAIN}", "project": "other"}))
+        assert out["destination"] == "capy" and out["target"]["captain"] == CAPTAIN
+        assert payload(call(c, STATIC_KEY, "routes_set", {"target": "claude-routine:routine:claude-infra", "project": "infra"}))["destination"] == "claude-routine"
+    finally:
+        c.__exit__(None, None, None)

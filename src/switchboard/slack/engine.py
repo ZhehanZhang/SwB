@@ -424,6 +424,20 @@ class SlackEngine:
             lines.append(f"Reaction :{p['name']}: on message {p['ts']}")
         return "\n".join(lines)
 
+    async def dm_owner(self, text: str) -> bool:
+        """A plain DM to the owner (the approver), for switchboard notices such as a paused conversation."""
+        target = await self._approval_target()
+        if target is None:
+            return False
+        rt, approver = target
+        try:
+            dm = await rt.clients["bot"].conversations_open(users=approver)
+            await rt.clients["bot"].chat_postMessage(channel=dm["channel"]["id"], text=text)
+        except Exception as e:
+            log.warning("owner DM failed: %s", type(e).__name__)
+            return False
+        return True
+
     async def notify_request(self, req: dict[str, Any]) -> None:
         target = await self._approval_target(req["workspace"])
         if target is None:
