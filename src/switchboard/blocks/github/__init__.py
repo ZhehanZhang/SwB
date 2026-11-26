@@ -14,6 +14,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from ...block_env import GITHUB_SECRET as SECRET_ENV
 from ...config import ConfigError
 from ...guard import client_ip
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
@@ -23,7 +24,6 @@ if TYPE_CHECKING:
     from ...auth import Principal
     from ...core import Switchboard
 
-SECRET_ENV = "GITHUB_WEBHOOK_SECRET"
 CHECKS = {"check_run", "check_suite", "workflow_run"}
 EVENTS = CHECKS | {"issues", "issue_comment", "pull_request", "pull_request_review",
                    "pull_request_review_comment", "pull_request_review_thread", "push"}

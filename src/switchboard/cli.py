@@ -108,13 +108,15 @@ def _read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def _up(base: Path, env: dict[str, str]) -> None:
+def _up(base: Path, env: dict[str, str], *, explicit_dir: bool) -> None:
     from .__main__ import main as server
 
     for name, value in env.items():
         os.environ.setdefault(name, value)
-    os.environ["SWITCHBOARD_CONFIG"] = str(base / CONFIG)
-    os.environ["SWITCHBOARD_DATA"] = str(base / "data")
+    if explicit_dir:
+        os.environ["SWITCHBOARD_CONFIG"] = str(base / CONFIG)
+        os.environ["SWITCHBOARD_DATA"] = str(base / "data")
+        os.environ.pop("SWITCHBOARD_DATA_DIR", None)
     server(["serve"])
 
 
@@ -204,8 +206,14 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
 def _display(tool: str, payload: dict[str, Any]) -> str:
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
-        return "\n".join([f"Status: {payload.get('status', 'unknown')}", "Next steps:",
-                          *([f"  - {step}" for step in steps] or ["  None."])])
+        lines = [f"Status: {payload.get('status', 'unknown')}"]
+        if blocks := payload.get("block_setup"):
+            lines.append("Blocks:")
+            for name, block in blocks.items():
+                state = "on" if block["enabled"] else "off"
+                missing = ", ".join(block["missing_env"])
+                lines.append(f"  - {name}: {state}" + (f" (missing env: {missing})" if missing else ""))
+        return "\n".join([*lines, "Next steps:", *([f"  - {step}" for step in steps] or ["  None."])])
     lines = [str(payload.get("what", "Connect"))]
     if payload.get("state"):
         lines[0] += f": {payload['state']}"
@@ -242,18 +250,18 @@ def main(argv: list[str] | None = None) -> None:
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
     for command in (init, up, connect, status, claim):
-        command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
+        command.add_argument("--dir", type=Path, help="instance directory (default: current directory)")
     for command in (connect, status, claim):
         command.add_argument("--url", help="server base URL or MCP endpoint (default: http://127.0.0.1:8000/mcp)")
     args = parser.parse_args(argv)
     try:
-        base = args.dir.resolve()
+        base = (args.dir or Path(".")).resolve()
         if args.command == "init":
             _init(base, args.public_url, args.force)
             return
         env = _read_env(base / ".env")
         if args.command == "up":
-            _up(base, env)
+            _up(base, env, explicit_dir=args.dir is not None)
             return
         arguments = {}
         if args.command == "connect":

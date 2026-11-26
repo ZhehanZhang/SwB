@@ -239,7 +239,7 @@ def test_cloudflare_access_gate(make):
     assert consent(c, cid, headers={})[0].status_code == 403
     assert consent(c, cid, headers={"cf-access-jwt-assertion": "other"})[0].status_code == 403
     page, req = consent(c, cid, headers={"cf-access-jwt-assertion": "good"})
-    assert page.status_code == 200 and 'type="password"' not in page.text and "SSO as owner@example.test" in page.text
+    assert page.status_code == 200 and 'type="password"' not in page.text and "as owner@example.test" in page.text
     r = c.post("/authorize", data={"req": req, "decision": "approve"}, headers={"cf-access-jwt-assertion": "good"})
     assert r.status_code == 302 and "code=" in r.headers["location"]
 
@@ -267,10 +267,10 @@ def test_capy_signs_in_with_oauth_as_agent_capy(make):
 
 def test_key_scopes_apply_to_an_oauth_agent_too(make):
     cfg = base_config()
-    cfg["auth"]["key_scopes"] = {"capy": ["project:acme"]}
+    cfg["auth"]["key_scopes"] = {"capy": ["project:orbit"]}
     core, c = make(config=cfg)
     tok = sign_in(c, redirect="https://capy.ai/web/callbacks/mcp")
-    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:acme"]
+    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:orbit"]
 
 
 def test_capy_metadata_document_client_is_allowed_by_default(make, cimd):

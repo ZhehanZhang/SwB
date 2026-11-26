@@ -14,8 +14,9 @@ COPY manifests ./manifests
 RUN pip install --no-cache-dir ".[test]" && python -m pytest -q
 
 FROM base AS runtime
+RUN install -d -o switchboard -g switchboard /data
+WORKDIR /
 USER switchboard
-ENV SWITCHBOARD_CONFIG=/config/switchboard.yaml SWITCHBOARD_DATA=/data
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"
 CMD ["switchboard"]

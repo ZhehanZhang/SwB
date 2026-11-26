@@ -35,14 +35,14 @@ if TYPE_CHECKING:
 PRINCIPAL_SCOPE = "switchboard.principal"
 TASK_MODE: contextvars.ContextVar[bool] = contextvars.ContextVar("switchboard_task_mode", default=False)
 
-CORE_INSTRUCTIONS = """Switchboard is the owner's shared workspace across his assistants and agents.
+CORE_INSTRUCTIONS = """Switchboard is a shared workspace for your assistants and agents.
 Memory lives in scopes: 'general' (the owner's profile, preferences, cross-project decisions) or 'project:<slug>'.
 Switchboard can't see which project you are in, so you decide the project: find it with project_list
 (hint: your project's name or a repo), then call context_pack with it at the start of a session.
 Write project facts to project:<slug> and pass project=<slug> too, so a slip lands nowhere. Write to general only for
 things that apply everywhere, after the owner agrees, with confirm_general=true. Reads cover the named project plus
 general; another project's memory needs scopes=[...] and is logged. memory_move and memory_promote fix a wrong scope.
-Search before asking the owner something he may already have said.
+Search before asking the owner something they may already have said.
 When someone asks how to connect, set up or link something to Switchboard, call connect and follow its next steps.
 To hand off work or message someone, use send: without to, the owner's route for you and the project decides; to can
 be a slug from targets(), an agent's mailbox (agent:claude) or an address <block>:<kind>:<id>. Every agent (claude,
@@ -65,7 +65,7 @@ DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHin
 Scope = Annotated[str, Field(description="Required: 'general' for the owner's cross-project memory, or 'project:<slug>'")]
 ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
 Namespace = Annotated[str, Field(description="Inside the scope: profile, decisions, notes, or e.g. notes/meetings; lowercase, up to 3 levels")]
-ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:acme', 'general']. Logged")]
+ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:example', 'general']. Logged")]
 
 
 class FileIn(BaseModel):
