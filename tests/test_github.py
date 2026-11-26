@@ -238,7 +238,7 @@ async def test_sink_delivery_retry_and_secretless_status(github, caplog):
             health = await client.get("/healthz")
             assert health.json()["blocks"]["github"] == {
                 "use": "github", "kind": "source", "level": {"in": "webhook", "out": None}, "online": True,
-                "configured": True, "secret_present": True, "routes": 1, "dropped": 0,
+                "configured": True, "secret_present": True, "routes": 1, "dropped": 0, "next_step": None,
                 "sinks": {"team": {"delivered": 2, "failed": 1}},
             }
             assert url not in health.text and SECRET not in health.text

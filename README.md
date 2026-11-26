@@ -39,6 +39,60 @@ flowchart LR
   I --> CH
 ```
 
+## Quick start
+
+Start in an empty instance directory. Replace `OWNER` with the repository owner, or use your local checkout
+path instead of the Git URL. pipx needs Python 3.12 or newer.
+
+**uvx**
+
+```bash
+uvx --from git+https://github.com/OWNER/switchboard swb init && uvx --from git+https://github.com/OWNER/switchboard swb up
+```
+
+**pipx**
+
+```bash
+pipx install git+https://github.com/OWNER/switchboard && swb init && swb up
+```
+
+**Docker**
+
+```bash
+docker build -t switchboard:local /path/to/switchboard && \
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/instance" -w /instance switchboard:local swb init && \
+docker run --rm --name switchboard-local --user "$(id -u):$(id -g)" -p 127.0.0.1:8000:8000 \
+  -v "$PWD:/instance" -w /instance switchboard:local swb up
+```
+
+Replace `/path/to/switchboard` with your checkout in the Docker command.
+
+`swb init` creates `config/switchboard.yaml` with only the MCP block and saves a generated owner key in
+`.env` (mode 600). Keep that file private. `--dir PATH` selects a different instance directory;
+`--public-url https://switchboard.example.com` sets the externally reachable base URL, but doesn't publish the
+server or enable OAuth by itself. Use `--force` only to replace an existing config and rotate its owner key.
+
+From a second terminal in the instance directory:
+
+```bash
+swb status
+swb connect mcp-client
+swb connect mcp-client --choose agent=my-client
+```
+
+If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/switchboard`. If you used Docker, prefix them
+with `docker exec switchboard-local`.
+Both commands authenticate to `http://127.0.0.1:8000/mcp` with the owner key from `.env`; use `--url` for
+a different endpoint. Use `--choose` for choices such as agent or project names, never for tokens.
+
+Enable the matching block in `config/switchboard.yaml` to set up Capy, Claude Project routines, Grok, Slack, or GitHub.
+Then ask your MCP client how to connect it, or run a command such as `swb connect capy-captain`.
+
+When a connection returns a token claim link, run `swb claim 'CLAIM_LINK'` and enter the token at the hidden
+prompt. A standalone code works for generic token claims; for routine claims, use the full link. The command
+sends the token and owner key only to the local server or the server you explicitly select with `--url`; it
+doesn't connect to the host from the claim link. In Docker, use `docker exec -it switchboard-local swb claim 'CLAIM_LINK'`.
+
 ## Blocks
 
 A block (`src/switchboard/blocks/`) subclasses `Block` and declares a `Manifest`: its kind (source, sink or both),
@@ -330,6 +384,33 @@ A switchboard project is the unit of memory (`project:<slug>`), visibility and r
 - **One external project → several switchboard projects: no.** An external project should belong to one memory
   scope. Context that spans two projects belongs in general memory, or the two should be merged with
   `project_update(new_slug)`.
+
+### Grok routines
+
+Enable `grok-routine` in the Switchboard config, then ask your MCP client how to connect Grok or run `swb connect grok`.
+Add Switchboard under grok.com → Connectors → New Connector → Custom and sign in with OAuth. Grok needs a public
+HTTPS MCP endpoint. If you override `auth.redirect_uris`, include the HTTPS callback Grok registers.
+
+Use the prompt returned by `connect` in a Grok Bot routine with a custom webhook trigger. Register the routine
+with `swb connect grok --choose name=project-doorman project=example auth=key`, then use the two private claim links
+for the webhook URL and key. Neither value belongs in the saved prompt, chat, or MCP arguments. Run the test
+`send` call that `connect` returns, then check the sender's inbox for `pong`. Webhook acceptance alone means Grok
+started the run, not that the run replied.
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-doorman: {project: example, url_env: GROK_WEBHOOK_URL, auth: signature, secret_env: GROK_WEBHOOK_SECRET}
+```
+
+Send to a routine by name or to `grok:example` for the project's primary; `agent:grok` is mailbox-only.
+The webhook receives `text`, `conversation`, `project`, `from` and `trust`. The run replies on that conversation
+using its Switchboard connector; it doesn't need a reply webhook. The default signature header is
+`Webhook-Signature: t=<unix>,v1=<hex HMAC-SHA256>`, signed over the timestamp, a period, and the raw JSON bytes.
+Use `auth: key` for `Authorization: Bearer <key>`; `header` overrides the header name.
+Slack and GitHub webhook sinks can also use Stripe-style signing with `signature: stripe` and `secret_env`;
+their default header is `Stripe-Signature`, configurable with `header`.
 
 ## Slack
 

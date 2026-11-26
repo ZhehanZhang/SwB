@@ -6,14 +6,25 @@ import hmac
 import json
 import logging
 import time
+from contextvars import ContextVar
 from typing import Any
 
 import httpx
 
+from ..signing import STRIPE_SIGNATURE_HEADER, stripe_signature
 from .config import SinkConfig
 from .events import render_payload
 
 log = logging.getLogger("switchboard.slack.push")
+_private_webhook_request = ContextVar("slack_private_webhook_request", default=False)
+
+
+def _public_http_log(record: logging.LogRecord) -> bool:
+    return not _private_webhook_request.get()
+
+
+for _logger in ("httpx", "httpcore.connection", "httpcore.http11", "httpcore.http2", "httpcore.proxy", "httpcore.socks", "hpack.hpack"):
+    logging.getLogger(_logger).addFilter(_public_http_log)
 
 
 def sign(secret: str, stamp: str, body: bytes) -> str:
@@ -91,19 +102,33 @@ class WebhookSink:
             self.failed += count
             log.warning("sink %s has no URL; dropped %d event(s)", self.cfg.name, count)
             return False
+        secret = self.cfg.secret
+        stripe_header = None
+        if self.cfg.signature == "stripe":
+            if not secret:
+                self.failed += count
+                log.warning("sink %s has no signing secret; dropped %d event(s)", self.cfg.name, count)
+                return False
+            stripe_header = self.cfg.header or STRIPE_SIGNATURE_HEADER
         headers = dict(self.cfg.headers)
         if idempotency_key:
             headers["Idempotency-Key"] = f"slackgate:{self.workspace}:{idempotency_key}"
         body = json.dumps(payload, separators=(",", ":")).encode()
         headers["Content-Type"] = "application/json"
-        if self.cfg.secret:
+        if stripe_header:
+            headers = {name: value for name, value in headers.items() if name.lower() != stripe_header.lower()}
+        elif secret:
             stamp = str(int(time.time()))
             headers["X-Switchboard-Timestamp"] = stamp
-            headers["X-Switchboard-Signature"] = "v1=" + sign(self.cfg.secret, stamp, body)
+            headers["X-Switchboard-Signature"] = "v1=" + sign(secret, stamp, body)
         delay = 1.0
+        request_options = {"follow_redirects": False} if stripe_header else {}
         for attempt in range(1, self.retries + 1):
+            if stripe_header and secret:
+                headers[stripe_header] = stripe_signature(secret, body, int(time.time()))
+            private = _private_webhook_request.set(True)
             try:
-                resp = await self.http.post(self.cfg.url, content=body, headers=headers, timeout=15)
+                resp = await self.http.post(self.cfg.url, content=body, headers=headers, timeout=15, **request_options)
                 if resp.status_code < 300:
                     self.delivered += count
                     return True
@@ -113,8 +138,10 @@ class WebhookSink:
                     log.error("sink %s rejected payload: HTTP %d", self.cfg.name, resp.status_code)
                     break
                 log.warning("sink %s HTTP %d (attempt %d)", self.cfg.name, resp.status_code, attempt)
-            except httpx.HTTPError as exc:
+            except (httpx.HTTPError, httpx.InvalidURL, ValueError) as exc:
                 log.warning("sink %s error %s (attempt %d)", self.cfg.name, type(exc).__name__, attempt)
+            finally:
+                _private_webhook_request.reset(private)
             if attempt < self.retries:
                 await asyncio.sleep(min(delay, 60))
                 delay *= 2
