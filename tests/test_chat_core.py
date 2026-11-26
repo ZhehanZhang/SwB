@@ -192,7 +192,7 @@ def test_reply_by_inbox_conversation_answers_the_newest_addressed_event(env):
     claude = Principal(source="claude", client_id="t", kind="oauth")
     c.portal.call(lambda: core.verb(claude, "reply", handle, text="hello back"))
     assert block.posts[-1]["channel"] == "40" and block.posts[-1]["root"] == "104" and block.posts[-1]["text"] == "hello back"
-    with pytest.raises(Exception, match="your own inbox"):
+    with pytest.raises(Exception, match="no conversation"):
         c.portal.call(lambda: core.verb(Principal(source="other", client_id="t", kind="oauth"), "reply", handle, text="x"))
 
 
