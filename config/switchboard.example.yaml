@@ -87,6 +87,7 @@ blocks:
     refresh_minutes: 30                         # how often targets ("@swb <slug>") are re-read
     workspace_projects: {}                      # e.g. {a2a: acme}: the switchboard project a workspace's events belong to
     channel_projects: {}
+    listen_channels: {}
     # Needed only for persona avatars stored under <data>/avatars, which Slack fetches from <public_base_url>/avatars/<file>
     # (keep /avatars outside Access).
     public_base_url: https://switchboard.example.com

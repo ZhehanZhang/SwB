@@ -5,6 +5,7 @@ import logging
 import os
 import secrets
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping
 
@@ -17,7 +18,7 @@ from .config import AVATAR_RE, Config, Persona
 from .events import build_event, classify, event_id
 from .push import WebhookSink
 from .routing import Target, near, split_slug
-from .slack import WorkspaceRuntime, make_client, slack_error
+from .slack import CHANNEL_ID_RE, WorkspaceRuntime, make_client, slack_error
 from .store import Store
 from .writes import Actor, WriteError, WriteGate
 
@@ -66,6 +67,7 @@ class SlackEngine:
         self.senders.limits = {}
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
+        self.listen: Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]] | None = None
         self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]]] = {}
         self.owner_channels: set[tuple[str, str]] = set()
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
@@ -229,14 +231,24 @@ class SlackEngine:
         relay = self.relays.get((label, channel))
         if relay is not None and await relay(rt, event):
             return None
-        kind = classify(event, rt.classify_context())
+        ctx = rt.classify_context()
+        kind = classify(event, ctx)
+        listen_only = kind is None
+        listen_channels = rt.cfg.listen_channels if self.listen is not None else ()
+        if listen_only and listen_channels and rt.cfg.trust_of(event.get("user") or event.get("bot_id")) != "owner":
+            kind = classify(event, replace(ctx, watched=ctx.watched | {channel}))
         if kind is None:
             return None
         if rt.user_id and event.get("user") == rt.user_id and self.own_post_grace > 0:
             await asyncio.sleep(self.own_post_grace)
         if self.store.is_sent(rt.team_id, channel, ts):
             return None
+        if listen_only and channel not in listen_channels and (
+            all(CHANNEL_ID_RE.fullmatch(ref) for ref in listen_channels) or await rt.channel_name(channel) not in listen_channels
+        ):
+            return None
         channel_name, user_name = await asyncio.gather(rt.channel_name(channel), rt.user_name(event.get("user")))
+        listening = channel in listen_channels or channel_name in listen_channels
         thread_ts = event.get("thread_ts")
         in_our_thread = bool(thread_ts and thread_ts != ts and ((rt.bot_user_id and event.get("parent_user_id") == rt.bot_user_id) or self.store.is_sent(rt.team_id, channel, thread_ts)))
         push = build_event(
@@ -250,6 +262,15 @@ class SlackEngine:
             max_text_chars=self.config.max_text_chars,
             addressed_to_us=kind in ("mention", "dm") or in_our_thread,
         )
+        if listening and rt.cfg.trust_of(push["user"]) != "owner" and self.listen is not None:
+            candidate = {**push, "is_bot": bool(push["is_bot"] or event.get("is_bot") or event.get("subtype") == "bot_message")}
+            if candidate["is_bot"] and event.get("bot_id") in rt.cfg.known and rt.cfg.trust_of(candidate["user"]) != "known":
+                candidate["user"] = event["bot_id"]
+            self.stamp(rt, candidate)
+            if await self.listen(rt, candidate):
+                return candidate
+        if listen_only:
+            return None
         hint = self.route(rt, push)
         self.stamp(rt, push)
         if not self.store.add_event(push):
@@ -313,6 +334,16 @@ class SlackEngine:
         name = rt.channel_names.get(channel) if rt else None
         return self.visibility.rule(*self.channel_resources(workspace, channel, name)) != "private"
 
+    def sender_allowed(self, rt: WorkspaceRuntime, push: dict[str, Any], kind: str) -> bool:
+        bucket, user = f"{kind}:{rt.label}", push["user"] or ""
+        self.senders.limits[bucket] = rt.cfg.sender_rate
+        if self.senders.blocked(bucket, user) is not None:
+            self.store.audit(f"slack:{user or 'unknown'}", f"{kind}_rate_limited", rt.label,
+                             message=push["id"], target=push.get("target"), trust=push["trust"])
+            return False
+        self.senders.hit(bucket, user)
+        return True
+
     async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None, *,
                           trust: str | None = None) -> tuple[str, str | None, bool] | None:
         """Reply in the Slack thread. Without an owner message to reply to, a private target in a shared channel
@@ -331,12 +362,8 @@ class SlackEngine:
         a wake, a sink event or a reply. The sender gets a neutral ack."""
         label, actor = rt.label, f"slack:{push['user'] or 'unknown'}"
         detail = {"message": push["id"], "target": push.get("target"), "trust": push["trust"]}
-        bucket = f"context:{label}"
-        self.senders.limits[bucket] = rt.cfg.sender_rate
-        if self.senders.blocked(bucket, push["user"] or "") is not None:
-            self.store.audit(actor, "context_rate_limited", label, **detail)
+        if not self.sender_allowed(rt, push, "context"):
             return
-        self.senders.hit(bucket, push["user"] or "")
         push["context"] = True
         self.store.audit(actor, "context_noted", label, **detail)
         for listener in self.context_listeners:

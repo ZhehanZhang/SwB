@@ -48,6 +48,8 @@ class WriteGate:
         params: dict[str, Any],
         persona_id: str | None = None,
         force_approval: bool = False,
+        *,
+        thread_only: bool = False,
     ) -> dict[str, Any]:
         cfg = self.core.config
         store = self.core.store
@@ -62,7 +64,8 @@ class WriteGate:
         if policy == "never":
             store.audit(f"agent:{key.id}", "write_refused", workspace, identity, action=action, params=params, reason="policy never")
             raise WriteError(f"writes as {identity} in {workspace} are disabled (policy: never)")
-        thread_persona = self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts"), agent=key.id) if action == "post_message" else None
+        thread_persona = (self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts"), agent=key.id)
+                          if action == "post_message" and not thread_only else None)
         persona = resolve_persona(cfg, ws, identity, key, persona_id, self.core.personas(), thread_persona) if action == "post_message" else None
         persona_d = asdict(persona) if persona else None
         loop_guard = False
@@ -72,6 +75,8 @@ class WriteGate:
                 loop_guard = True
                 store.audit(f"agent:{key.id}", "loop_guard", workspace, identity, channel=params["channel"], thread_ts=params["thread_ts"], posts_last_hour=count, limit=ws.bot_thread_posts_per_hour)
         if policy == "approval" or force_approval or loop_guard:
+            if thread_only:
+                raise WriteError("thread-only reply would need approval")
             req = store.create_request(
                 workspace=workspace,
                 identity=identity,
