@@ -1,6 +1,6 @@
 from urllib.parse import parse_qs, urlparse
 
-from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
+from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
 
 
 def test_metadata_advertises_what_claude_and_chatgpt_need(make):
@@ -144,6 +144,25 @@ def test_cimd_client(make, cimd):
     _, c = make()
     tok = sign_in(c, client_id=url)
     assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["agent"] == "claude"
+
+
+def test_chatgpt_cimd_negotiates_public_client(make, cimd):
+    url = "https://chatgpt.com/oauth/client.json"
+    cb = "https://chatgpt.com/connector_platform_oauth_redirect"
+    cimd.docs[url] = {"client_id": url, "client_name": "ChatGPT", "redirect_uris": [cb], "token_endpoint_auth_method": "private_key_jwt", "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"]}
+    _, c = make()
+    tok = sign_in(c, redirect=cb, client_id=url)
+    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["agent"] == "chatgpt"
+    verifier, challenge = pkce()
+    code = parse_qs(urlparse(authorize(c, url, cb, challenge=challenge).headers["location"]).query)["code"][0]
+    assert c.post("/token", data={"grant_type": "authorization_code", "code": code, "client_id": url, "code_verifier": "wrong" + verifier}).status_code == 400
+
+
+def test_cimd_rejects_confidential_only_client(make, cimd):
+    url = "https://chatgpt.com/oauth/client.json"
+    cimd.docs[url] = {"client_id": url, "redirect_uris": ["https://chatgpt.com/connector_platform_oauth_redirect"], "token_endpoint_auth_method": "private_key_jwt"}
+    _, c = make()
+    assert consent(c, url, "https://chatgpt.com/connector_platform_oauth_redirect")[0].status_code == 400
 
 
 def test_cimd_rejects_untrusted_host_and_mismatched_doc(make, cimd):

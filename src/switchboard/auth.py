@@ -328,8 +328,9 @@ class Auth:
         if not isinstance(uris, list) or not uris:
             raise OAuthError("invalid_client", "client metadata document has no redirect_uris", 401)
         method = doc.get("token_endpoint_auth_method") or "none"
-        if method != "none":
-            raise OAuthError("invalid_client", "only public (none) CIMD clients are supported", 401)
+        supported = doc.get("token_endpoint_auth_methods_supported")
+        if method != "none" and not (isinstance(supported, list) and "none" in supported):
+            raise OAuthError("invalid_client", "this CIMD client must also support token_endpoint_auth_method none", 401)
         c = Client(client_id=url, redirect_uris=[str(x) for x in uris], auth_method="none", name=str(doc.get("client_name") or "")[:100] or None, kind="cimd")
         self._cimd_cache[url] = (self.store.clock() + 3600, c)
         return c
