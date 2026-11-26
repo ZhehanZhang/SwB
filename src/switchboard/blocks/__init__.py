@@ -33,6 +33,7 @@ BLOCKS = {
     "github": "switchboard.blocks.github:GitHubBlock",
     "capy": "switchboard.blocks.capy:CapyBlock",
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
+    "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
@@ -291,10 +292,10 @@ class Block:
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
 
-    def token_step(self, principal: "Principal", name: str, instruction: str) -> dict[str, str]:
+    def token_step(self, principal: "Principal", name: str, instruction: str, *, url: bool = False) -> dict[str, str]:
         if not principal.is_unrestricted_owner:
             return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
-        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url)}
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url)}
 
     @property
     def online(self) -> bool:

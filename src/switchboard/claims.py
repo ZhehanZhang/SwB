@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import os
 import re
 import secrets
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from urllib.parse import urlsplit
 
 from cryptography.fernet import Fernet
 
@@ -23,7 +25,8 @@ CREATE TABLE IF NOT EXISTS secrets (
   name TEXT PRIMARY KEY,
   code_hash TEXT UNIQUE,
   expires_at REAL,
-  sealed BLOB
+  sealed BLOB,
+  require_https INTEGER NOT NULL DEFAULT 0
 )
 """
 
@@ -59,22 +62,44 @@ def _digest(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 
+def valid_webhook_url(value: str) -> bool:
+    if any(c.isspace() or ord(c) < 32 or c in "\\#" for c in value):
+        return False
+    try:
+        url = urlsplit(value)
+        port = url.port
+    except ValueError:
+        return False
+    host = (url.hostname or "").rstrip(".")
+    if url.scheme != "https" or url.username is not None or port == 0 or not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_global and not ip.is_multicast
+    except ValueError:
+        return (bool(re.fullmatch(r"[a-z0-9.-]+", host)) and "." in host and not host.rsplit(".", 1)[-1].isdigit()
+                and not host.endswith((".localhost", ".local", ".internal", ".home.arpa")))
+
+
 class Claims:
     def __init__(self, store: Store):
         self.store = store
         self._cipher = Fernet(_key(store))
         store.x(SCHEMA)
+        if "require_https" not in {r["name"] for r in store.q("PRAGMA table_info(secrets)")}:
+            store.x("ALTER TABLE secrets ADD COLUMN require_https INTEGER NOT NULL DEFAULT 0")
 
-    def mint(self, name: str, public_url: str | None) -> str:
+    def mint(self, name: str, public_url: str | None, *, url: bool = False) -> str:
         if not NAME_RE.fullmatch(name):
             raise ClaimError("A claim needs an environment variable name.")
         if not public_url:
             raise ClaimError("A claim link needs public_url configured.")
         code = secrets.token_urlsafe(32)
         self.store.x(
-            """INSERT INTO secrets(name, code_hash, expires_at) VALUES (?, ?, ?)
-               ON CONFLICT(name) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at""",
-            (name, _digest(code), self.store.clock() + CLAIM_TTL_S),
+            """INSERT INTO secrets(name, code_hash, expires_at, require_https) VALUES (?, ?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at,
+                                               require_https = excluded.require_https""",
+            (name, _digest(code), self.store.clock() + CLAIM_TTL_S, url),
         )
         return f"{public_url.rstrip('/')}{CLAIM_PATH}/{code}"
 
@@ -90,6 +115,12 @@ class Claims:
         value = value.strip()
         if not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
             raise ClaimError("Enter a token on a single line, at most 8 KiB.")
+        claim = self.store.one("SELECT require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
+                               (code_hash, self.store.clock()))
+        if claim is None:
+            raise ClaimUnavailable(UNUSABLE)
+        if claim["require_https"] and not valid_webhook_url(value):
+            raise ClaimError("Enter a public HTTPS webhook URL without credentials or a fragment.")
         row = self.store.one(
             """UPDATE secrets SET code_hash = NULL, expires_at = NULL, sealed = ?
                WHERE code_hash = ? AND expires_at > ? RETURNING name""",

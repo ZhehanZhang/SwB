@@ -26,6 +26,24 @@ def private_page(page):
     assert '<meta name="referrer" content="no-referrer">' in page.text
 
 
+def test_webhook_url_claim_rejects_invalid_urls_without_spending_link(make):
+    core, client = make()
+    path = urlsplit(core.claims.mint("EXAMPLE_WEBHOOK_URL", PUBLIC, url=True)).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    invalid = ("http://webhook.example.test/private", "https://user@webhook.example.test/private",
+               "https://webhook.example.test/private#fragment", "https://webhook.example.test/private\nsecond line",
+               "https://127.0.0.1/private", "https://2130706433/private", "https://[::1]/private",
+               "https://[::ffff:127.0.0.1]/private", "https://worker.localhost/path")
+    for value in invalid:
+        response = client.post(path, data={"token": value, "csrf": csrf}, headers=OWNER)
+        assert response.status_code == 400 and value not in response.text
+        assert core.secret("EXAMPLE_WEBHOOK_URL") is None
+    valid = "https://webhook.example.test/private?key=example"
+    response = client.post(path, data={"token": valid, "csrf": csrf}, headers=OWNER)
+    assert response.status_code == 200 and valid not in response.text
+    assert core.secret("EXAMPLE_WEBHOOK_URL") == valid
+
+
 def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     core, client = make()
     link = core.claims.mint(NAME, PUBLIC)
