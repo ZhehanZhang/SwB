@@ -152,6 +152,27 @@ def test_slack_forwarded_final_reaches_original_thread(tmp_path):
         assert core.inbox.handle(original)["status"] == "answered"
 
 
+def test_forward_cannot_retry_after_routine_message_reaches_mailbox(tmp_path, monkeypatch):
+    core, _, _ = build(tmp_path)
+    with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
+        client.portal.call(core.origins["slack"].refresh)
+        client.portal.call(core.slack.ingest, "a2a", mention("claude what is the uptime?"))
+        (item,) = [i for i in tool(client, "inbox", {"since_cursor": 0})["items"] if i["kind"] == "message"]
+        original = item["handle"]
+        args = {"task": "Check uptime", "to": "claude:explicit", "forward": original}
+
+        async def fail(*args, **kwargs):
+            raise RuntimeError("wake failed")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(core.blocks["claude-routine"].http, "post", fail)
+            assert "wake failed" in error_text(call(client, KEY_FULL, "send", args))
+        (delivered,) = [i for i in core.inbox.read(owner="full", since=0)["items"] if i.get("text") == "Check uptime"]
+        retry = call(client, KEY_FULL, "send", args)
+        assert retry.get("isError") and "has already been forwarded" in error_text(retry)
+        assert core.inbox.handle(original)["meta"]["forwarded_to"] == delivered["handle"]
+
+
 def test_mapped_private_routine_replies_in_owner_dm(tmp_path):
     core, world, _ = build(tmp_path, {"target:claude": "shared", "target:claude-workspace": "private"},
                            workspace_project="workspace")
