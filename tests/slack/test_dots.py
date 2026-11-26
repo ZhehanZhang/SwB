@@ -50,7 +50,7 @@ def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=()
     scans = []
     world.canned["users_list"] = lambda token, kw: (scans.append(token), {"ok": True, "members": members()})[1]
     world.canned["conversations_list"] = lambda token, kw: {"ok": True, "channels": ([{"id": OWNER_DM, "user": DOT}] if dm else []) if kw.get("types") == "im"
-                                                            else [{"id": RELAY, "name": "swb"}] if relay_exists else []}
+                                                            else [{"id": RELAY, "name": "agents"}] if relay_exists else []}
     world.canned["conversations_open"] = lambda token, kw: opened(token, kw, group)
     world.history = {}
     world.canned["conversations_history"] = lambda token, kw: {"ok": True, "messages": [m for m in world.history.get(kw["channel"], []) if float(m["ts"]) > float(kw.get("oldest") or 0)]}
@@ -127,7 +127,7 @@ def test_team_join_and_user_change_of_a_bot_rescan(tmp_path):
 def test_the_relay_channel_is_created_as_the_owner_and_nobody_is_invited(tmp_path):
     with started(tmp_path) as (core, world, scans, client):
         (create,) = calls(world, "conversations_create")
-        assert create == ("xoxp-a", {"name": "swb", "is_private": True})
+        assert create == ("xoxp-a", {"name": "agents", "is_private": True})
         assert not [n for _, n, _ in world.calls if "invite" in n or "join" in n]
         assert core.blocks["dots"].problems() == []
         assert any(f"/invite <@{BOT_USER}> <@{DOT}>" in r[2] for r in core.blocks["dots"].page_rows())
