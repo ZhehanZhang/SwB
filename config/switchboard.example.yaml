@@ -60,6 +60,33 @@ blocks:
       agents:
         claude-code: {default_s: 45, max_s: 55}
 
+  # Discord (optional): bot mentions, thread replies, DMs and the discord_* tools.
+  discord:
+    use: discord
+    enabled: false
+    # token_env: DISCORD_BOT_TOKEN             # environment override; otherwise save at the discord_provision link
+    # application_id: "100000000000000000"   # optional; learned from the Gateway if omitted
+    # threads: true                           # start a public thread when replying in a server text channel
+    # personas: false                         # use one webhook per parent channel for persona posts
+    # message_content: true                   # enable Message Content Intent under Bot in the Discord Developer Portal
+    # ack_reaction: "👀"                        # null disables acknowledgements
+    # dm_space: home                          # use this space's trust and routing in DMs; defaults to the first space
+    # connect: true                           # false skips the Gateway connection, for REST-only tests
+    # daily_cap: null                         # optional limit on outbound tool calls per day
+    # agents: {claude: [home]}                 # agent to space labels or "*"; controls posts and event inboxes
+    # target_aliases: {}                      # block-local target slugs
+    # refresh_minutes: 30                     # how often to refresh targets
+    # spaces:
+    #   home:
+    #     guild_id: "100000000000000001"      # required Discord server ID
+    #     owner_ids: ["100000000000000002"]   # the owner's Discord user IDs
+    #     known: {"100000000000000003": Friend}
+    #     listen: ["100000000000000004"]      # channel or thread IDs
+    #     default_target: helper
+    #     project: example
+    #     channel_projects: {"#builds": example}
+    #     bot_posts_per_hour: 20
+
   capy:
     use: capy
     api_base: https://api.capy.ai/api/v1
