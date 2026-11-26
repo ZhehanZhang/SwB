@@ -25,6 +25,7 @@ class _NoQuery(logging.Filter):
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .config import config_path, migrate_text
     from .core import Switchboard
 
     parser = argparse.ArgumentParser(prog="switchboard")
@@ -44,16 +45,13 @@ def main(argv: list[str] | None = None) -> None:
 
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    config = os.environ.get("SWITCHBOARD_CONFIG", "/config/switchboard.yaml")
-    data = os.environ.get("SWITCHBOARD_DATA", "/data")
     if args.cmd == "config":
-        from pathlib import Path
-
-        from .config import migrate_text
-
-        print(migrate_text(Path(args.file or config).read_text()), end="")
+        path = config_path(args.file, os.environ)
+        if path is None:
+            parser.error("no config file found")
+        print(migrate_text(path.read_text()), end="")
         return
-    core = Switchboard(config, data)
+    core = Switchboard()
     if args.cmd == "blocks":
         import yaml
 

@@ -1,6 +1,6 @@
 """The Slack block's out side: reads and writes in the owner's Slack workspaces, through the shared Slack engine.
 
-Ported from slackgate's MCP tools. A caller is a switchboard agent (OAuth agent or bearer key name), and
+A caller is a switchboard agent (OAuth agent or bearer key name), and
 slack.agents.<agent> says which workspaces and identities it may use. Writes follow each identity's policy: free,
 approval (queued until the owner approves out of band: the Slack DM buttons or the switchboard page), or never.
 No caller of this destination can approve a write.
