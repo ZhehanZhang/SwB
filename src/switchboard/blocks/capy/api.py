@@ -137,7 +137,16 @@ class CapyAPI:
         await self.request("POST", f"threads/{thread_id}/messages/01M89000000000000000000000/send-now")
 
     async def list_captains(self) -> list[dict[str, Any]]:
-        return (await self.request("GET", "captains", params={"limit": 50})).get("items", [])
+        items: list[dict[str, Any]] = []
+        cursor = None
+        seen = set()
+        while True:
+            page = await self.request("GET", "captains", params={"limit": 50, "cursor": cursor})
+            items.extend(page.get("items", []))
+            cursor = page.get("cursor")
+            if not cursor or cursor in seen:
+                return items
+            seen.add(cursor)
 
     async def get_captain(self, captain_id: str) -> dict[str, Any]:
         return await self.request("GET", f"captains/{captain_id}")

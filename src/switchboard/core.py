@@ -23,6 +23,7 @@ from .agents import Agents
 from .auth import Auth, Principal
 from .blocks import Action, Address, Block, BlockError, Call
 from .blocks import load as load_block
+from .claims import Claims
 from .config import Config, load_config
 from .connect import Connections
 from .inbox import Inbox
@@ -79,6 +80,7 @@ class Switchboard:
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
         self.connections = Connections(self.store)
+        self.claims = Claims(self.store)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,
@@ -138,6 +140,13 @@ class Switchboard:
             path.chmod(0o600)
         return path.read_bytes()
 
+    def secret(self, name: str) -> str | None:
+        return self.cfg.env.get(name) or self.claims.secret(name)
+
+    @property
+    def base_url(self) -> str:
+        return self.cfg.public_url or f"http://localhost:{self.cfg.env.get('PORT', '8000')}"
+
     # Lifecycle ------------------------------------------------------------------------
 
     def spawn(self, coro: Awaitable[Any], name: str = "") -> asyncio.Task[Any]:
@@ -162,16 +171,18 @@ class Switchboard:
             self.memory.flush_mirror()
         self.store.close()
 
-    def health(self) -> dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         problems = list(self.cfg.problems())
+        next_steps = {n: b.next_step() for n, b in self.blocks.items()}
         for b in self.blocks.values():
             problems += b.problems()
         return {
             "status": "degraded" if problems else "ok",
             "problems": problems,
-            "oauth": bool(self.cfg.issuer),
+            "next_steps": [step for step in next_steps.values() if step],
+            "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
             "blocks": {n: {**(b.status() if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
-                           "online": b.online} for n, b in self.blocks.items()},
+                           "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
@@ -179,6 +190,8 @@ class Switchboard:
             "turn_cap": {"per_conversation": self.cfg.turn_cap,
                          "paused": self.store.one("SELECT COUNT(*) AS n FROM conversation_turns WHERE paused_at IS NOT NULL")["n"]},
         }
+
+    health = status
 
     # Routing an action to a destination -----------------------------------------------------
 

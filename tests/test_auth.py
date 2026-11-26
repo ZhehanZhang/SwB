@@ -1,6 +1,10 @@
 from urllib.parse import parse_qs, urlparse
 
+import pytest
+
 from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
+from switchboard.agents import Agents
+from switchboard.config import ConfigError
 
 
 def test_metadata_advertises_what_claude_and_chatgpt_need(make):
@@ -33,6 +37,73 @@ def test_full_flow_issues_token_tagged_with_the_assistant(make):
     assert me["you"] == {"agent": "claude", "auth": "oauth", "origin": "mcp"}
     gpt = sign_in(c, redirect="https://chatgpt.com/connector_platform_oauth_redirect")
     assert payload(call(c, gpt["access_token"], "switchboard_status"))["you"]["agent"] == "chatgpt"
+
+
+@pytest.mark.parametrize("host", ["grok.com", "x.ai"])
+def test_grok_dynamic_registration_and_oauth_source(make, host):
+    _, client = make()
+    redirect = f"https://{host}/connectors/oauth/callback"
+    reg = register(client, redirect=redirect, client_name="Custom connector")
+    page, _ = consent(client, reg["client_id"], redirect=redirect + "/other")
+    assert page.status_code == 400
+    token = sign_in(client, redirect=redirect, client_id=reg["client_id"])
+    who = payload(call(client, token["access_token"], "switchboard_status"))["you"]
+    assert who == {"agent": "grok", "auth": "oauth", "origin": "mcp"}
+
+
+@pytest.mark.parametrize("redirect", ["https://grok.com.example.test/callback", "https://grok.com@other.example.test/callback",
+                                      "https://other.example.test@grok.com/callback", "http://grok.com/callback"])
+def test_grok_redirect_allowlist_rejects_other_origins(make, redirect):
+    _, client = make()
+    response = client.post("/register", json={"redirect_uris": [redirect]})
+    assert response.status_code == 400 and response.json()["error"] == "invalid_redirect_uri"
+
+
+def test_grok_metadata_document_oauth(make, cimd):
+    _, client = make()
+    url = "https://x.ai/mcp/metadata.json"
+    redirect = "https://grok.com/connectors/oauth/callback"
+    cimd.docs[url] = {"client_id": url, "redirect_uris": [redirect]}
+    token = sign_in(client, redirect=redirect, client_id=url)
+    assert payload(call(client, token["access_token"], "switchboard_status"))["you"]["agent"] == "grok"
+    assert cimd.fetches == 1
+
+
+@pytest.mark.parametrize(("agent", "url", "registered", "actual"), [
+    ("claude-code", "https://claude.ai/oauth/claude-code-client-metadata", "http://localhost/callback", "http://localhost:3456/callback"),
+    ("codex", "https://chatgpt.com/oauth/codex/client.json", "http://127.0.0.1/callback", "http://127.0.0.1:3456/callback"),
+    ("codex", "https://chatgpt.com/oauth/codex/example-id/client.json", "http://127.0.0.1/callback", "http://127.0.0.1:3456/callback"),
+    ("goose", "https://goose-docs.ai/oauth/client-metadata.json", "http://[::1]/oauth_callback", "http://[::1]:3456/oauth_callback"),
+    ("opencode", "https://opencode.ai/oauth/opencode/client.json", "http://127.0.0.1/callback", "http://127.0.0.1:3456/callback"),
+])
+def test_coding_agent_cimd_signs_in_as_the_right_mailbox(make, cimd, agent, url, registered, actual):
+    _, client = make()
+    cimd.docs[url] = {"client_id": url, "redirect_uris": [registered]}
+    token = sign_in(client, redirect=actual, client_id=url)
+    assert payload(call(client, token["access_token"], "switchboard_status"))["you"]["agent"] == agent
+
+
+def test_new_cimd_allows_only_the_native_document_by_default(make, cimd):
+    _, client = make()
+    page, _ = consent(client, "https://opencode.ai/other", redirect="http://127.0.0.1:3456/callback")
+    assert page.status_code == 400 and cimd.fetches == 0
+
+
+def test_codex_cimd_pattern_follows_operator_agent_configuration(make, cimd):
+    _, client = make(base_config(agents={"chatgpt": {}, "review-agent": {"preset": "codex"}}))
+    url = "https://chatgpt.com/oauth/codex/test-client/client.json"
+    redirect = "http://127.0.0.1/callback"
+    cimd.docs[url] = {"client_id": url, "client_name": "Codex", "redirect_uris": [redirect]}
+    token = sign_in(client, redirect="http://127.0.0.1:3456/callback", client_id=url)
+    assert payload(call(client, token["access_token"], "switchboard_status"))["you"]["agent"] == "review-agent"
+
+
+def test_invalid_cimd_pattern_fails_at_config_load():
+    pattern = "https://example.test/["
+    with pytest.raises(ConfigError) as error:
+        Agents.build({"example": {"match": {"cimd_patterns": [pattern]}}}, [])
+    assert "agents.example.match.cimd_patterns" in str(error.value)
+    assert repr(pattern) in str(error.value)
 
 
 def test_approving_needs_the_owners_access_jwt_on_the_post_too(make):

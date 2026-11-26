@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response, Stream
 from starlette.routing import Mount, Route
 
 from . import pages
+from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
 from .guard import Guard, RateLimiter, client_ip, reject
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
 
@@ -111,16 +112,27 @@ def _cursor(request: Request) -> int | None:
 
 
 def create_app(core: "Switchboard") -> Any:
+    claim_owner_key = core.cfg.env.get("SWITCHBOARD_KEY_OWNER")
+    claim_principal = core.auth.verify_bearer(claim_owner_key)
+    claim_key_actor = (claim_principal.client_id if claim_principal is not None and claim_principal.kind == "key"
+                       and claim_principal.source == "owner" and claim_principal.is_unrestricted_owner else None)
+
     async def healthz(request: Request) -> JSONResponse:
         return JSONResponse(core.health())
 
-    async def admin(request: Request) -> Response:
-        """The owner's page at the root: status, routes, projects and recent refusals. Cloudflare Access plus SSO in front, the JWT checked here."""
+    async def owner_page(request: Request) -> tuple[str | None, Response | None]:
         if not core.cfg.access_team_domain:
-            return pages.message_page("Not available", "The admin page needs Cloudflare Access in front of it (auth.cloudflare_access).", 403)
+            return None, pages.message_page("Not available", "This needs Cloudflare Access in front of switchboard (auth.cloudflare_access).", 403)
         email = await core.auth.owner(request)
         if email is None:
-            return pages.message_page("Not allowed", "This page needs the owner's SSO through Cloudflare Access.", 403)
+            return None, pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        return email, None
+
+    async def admin(request: Request) -> Response:
+        """The owner's page: status, routes, projects and recent refusals."""
+        email, refused = await owner_page(request)
+        if refused is not None:
+            return refused
         changes = [c for c in core.audit.recent(limit=100) if c["action"] in ("route_set", "route_remove", "auth_failure", "rate_limited")][:15]
         extra = ""
         if core.slack is not None:
@@ -139,6 +151,10 @@ def create_app(core: "Switchboard") -> Any:
 
     def csrf(email: str) -> str:
         return hmac.new(core.auth.secret, f"switchboard-csrf:{email}".encode(), hashlib.sha256).hexdigest()
+
+    def valid_csrf(form: Any, expected: str) -> bool:
+        token = form.get("csrf")
+        return isinstance(token, str) and hmac.compare_digest(token.encode(), expected.encode())
 
     async def slack_decide(request: Request) -> Response:
         """The owner approves or rejects a Slack write from the root page: Access JWT for an owner plus a CSRF token."""
@@ -200,15 +216,69 @@ def create_app(core: "Switchboard") -> Any:
         return RedirectResponse("/?notice=avatar-saved", status_code=303)
 
     async def owner_form(request: Request) -> tuple[str | None, Any, Response | None]:
-        if not core.cfg.access_team_domain:
-            return None, None, pages.message_page("Not available", "This needs Cloudflare Access in front of switchboard (auth.cloudflare_access).", 403)
-        email = await core.auth.owner(request)
-        if email is None:
-            return None, None, pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        email, refused = await owner_page(request)
+        if refused is not None:
+            return None, None, refused
         form = await request.form()
-        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
+        if not valid_csrf(form, csrf(email)):
             return None, None, pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
         return email, form, None
+
+    def claim_key_owner(token: str) -> str | None:
+        return claim_key_actor if claim_owner_key and hmac.compare_digest(token.encode(), claim_owner_key.encode()) else None
+
+    async def claim_page_access(request: Request) -> tuple[str | None, Response | None]:
+        if not core.cfg.access_team_domain and claim_key_actor:
+            return None, pages.claim_page("Save a token", "", csrf(f"claim:{request.path_params['code']}"), owner_key=True)
+        email, refused = await owner_page(request)
+        return (None, refused) if refused is not None else (csrf(email), None)
+
+    async def claim_form(request: Request) -> tuple[str | None, str, Response | None]:
+        auth = request.headers.get("authorization")
+        if auth is not None:
+            scheme, _, key = auth.partition(" ")
+            actor = claim_key_owner(key.strip()) if scheme.lower() == "bearer" else None
+            if actor is None:
+                return None, "", pages.message_page("Not allowed", "This needs the Switchboard owner key.", 403)
+            form = await request.form()
+        elif not core.cfg.access_team_domain and claim_key_actor:
+            form = await request.form()
+            key = form.get("owner_key")
+            actor = claim_key_owner(key) if isinstance(key, str) else None
+            if actor is None or not valid_csrf(form, csrf(f"claim:{request.path_params['code']}")):
+                return None, "", pages.message_page("Not allowed", "Use the Switchboard owner key and reload the form if needed.", 403)
+        else:
+            email, form, refused = await owner_form(request)
+            if refused is not None:
+                return None, "", refused
+            actor = f"admin:{email}"
+        token = form.get("token")
+        return actor, token if isinstance(token, str) else "", None
+
+    async def token_claim(request: Request) -> Response:
+        code = request.path_params["code"]
+        if request.method != "POST":
+            form_csrf, refused = await claim_page_access(request)
+            if refused is not None:
+                return refused
+            try:
+                name = core.claims.inspect(code)
+            except ClaimUnavailable as e:
+                return pages.message_page("Link not usable", str(e), 410)
+            return pages.token_claim_page(name, form_csrf)
+
+        actor, token, refused = await claim_form(request)
+        if refused is not None:
+            return refused
+        try:
+            name = core.claims.consume(code, token)
+        except ClaimUnavailable as e:
+            return pages.message_page("Link not usable", str(e), 410)
+        except ClaimError as e:
+            return pages.message_page("Not saved", str(e), 400)
+        core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
+                          outcome="ok", target=name)
+        return pages.message_page("Token saved", "Run connect again to see whether Switchboard needs a restart.", 200)
 
     async def connect_code(request: Request) -> Response:
         """The owner mints a pairing code from the root page (Access JWT plus CSRF); the code is shown once."""
@@ -262,34 +332,31 @@ def create_app(core: "Switchboard") -> Any:
         return RedirectResponse("/", status_code=303)
 
     async def routine_claim(request: Request) -> Response:
-        """The owner's half of a self-registration: the one-time link a Claude session got from routine_register, behind
-        Access. GET shows what will be registered; POST takes the token (never shown again) and saves the routine."""
+        """Use a one-time routine registration link to save a token."""
         from .blocks import BlockError
         from .core import CoreError
         from .projects import ProjectError
 
+        code = request.path_params["code"]
+        if request.method == "POST":
+            actor, token, refused = await claim_form(request)
+        else:
+            form_csrf, refused = await claim_page_access(request)
+        if refused is not None:
+            return refused
         block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
         if block is None:
             return pages.message_page("Not available", "The claude-routine block isn't configured (blocks.claude-routine).", 400)
-        code = request.path_params["code"]
-        if request.method == "GET":
-            if not core.cfg.access_team_domain:
-                return pages.message_page("Not available", "This needs Cloudflare Access in front of switchboard (auth.cloudflare_access).", 403)
-            email = await core.auth.owner(request)
-            if email is None:
-                return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+        if request.method != "POST":
             try:
-                return pages.claim_page(block.claim(code), code, csrf(email))
+                return pages.routine_claim_page(block.claim(code), form_csrf)
             except BlockError as e:
                 return pages.message_page("Link not usable", str(e), 410)
-        email, form, refused = await owner_form(request)
-        if refused is not None:
-            return refused
         try:
-            out = block.complete(code, str(form.get("token") or ""), actor=f"admin:{email}")
+            out = block.complete(code, token, actor=actor)
         except (BlockError, CoreError, ProjectError) as e:
             return pages.message_page("Not saved", str(e), 400)
-        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination=block.name, action="routine_claim", outcome="ok",
+        core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination=block.name, action="routine_claim", outcome="ok",
                           target=out["name"], excerpt=f"{out['routine_id']} for {out['project']}" + (" (new project)" if out["created_project"] else ""))
         return pages.message_page("Routine saved", f"{out['name']} ({out['routine_id']}) now answers for switchboard project {out['project']}"
                                   + (", which was just created" if out["created_project"] else "") + ". You can close this tab; the Claude session "
@@ -413,6 +480,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/routines", routine_add, methods=["POST"]),
             Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
             Route("/routines/claim/{code}", routine_claim, methods=["GET", "POST"]),
+            Route(CLAIM_PATH + "/{code}", token_claim, methods=["GET", "POST"]),
             *pages.routes(),
             *core.auth.routes(),
             *origin_routes,

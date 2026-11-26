@@ -2,7 +2,7 @@ from conftest import STATIC_KEY, rpc
 
 CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack", "project_list", "project_create",
         "project_update", "project_sync", "memory_move", "memory_promote", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status", "agent_send"}
-GENERIC = {"send", "reply", "wait", "inbox", "status", "result", "cancel", "targets", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set"}
+GENERIC = {"send", "reply", "wait", "inbox", "status", "result", "cancel", "targets", "connect", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set"}
 CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}
 
 
@@ -36,7 +36,7 @@ def test_annotations_mark_reads_and_writes(make):
     for name in ("memory_search", "memory_read", "memory_list", "capy_status", "capy_result", "capy_list", "capy_captain_digest", "context_pack",
                  "switchboard_status", "routes_list", "routes_resolve", "capy_wait", "capy_inbox"):
         assert t[name]["annotations"]["readOnlyHint"] is True, name
-    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply", "routes_set", "routes_remove"):
+    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply", "routes_set", "routes_remove", "connect"):
         assert t[name]["annotations"]["readOnlyHint"] is False, name
     assert t["memory_delete"]["annotations"]["destructiveHint"] is True
 
