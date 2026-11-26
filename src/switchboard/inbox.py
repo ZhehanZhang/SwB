@@ -94,9 +94,10 @@ class Inbox:
         elif kind == "final" and data.get("final") is not False:
             replied = h
         while replied is not None and (original := replied["meta"].get("forward_of")):
-            replied = self.handle(original)
-            if replied is None:
+            parent = self.handle(original)
+            if parent is None or parent["meta"].get("forwarded_to") != replied["handle"]:
                 break
+            replied = parent
             meta = {"in_reply_to": original, "final": True, "from": data.get("from")}
             copy = self.open_handle(owner=replied["ref"], destination="mailbox", ref=replied["owner"], project=replied["project"],
                                     title=None, meta={**meta, "root": replied["meta"].get("root") or original}, status="delivered",

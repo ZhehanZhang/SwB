@@ -10,6 +10,7 @@ import pytest
 import yaml
 from starlette.testclient import TestClient
 
+from conftest import call, error_text, principal
 from slackfix import BOT_ID, BOT_USER, ENV, KEY_FULL, OWNER_A, FakeWorld, Hooks, base_config
 from switchboard.app import create_app
 from switchboard.core import Switchboard
@@ -166,6 +167,30 @@ def test_an_agent_mentions_the_dot_in_the_group_dm_as_its_own_persona_and_gets_t
         res = tool(client, "result", {"conversation": out["conversation"]})
         assert res["status"] == "answered" and res["final"]["from"]["dot"] == "example-dots" and "busy week" in res["final"]["text"]
         assert "not from the owner" in res["final"]["text"]
+
+
+def test_forward_can_retry_after_dot_send_fails_after_creating_handle(tmp_path):
+    with started(tmp_path, dots={"group_dm": True}) as (core, world, _, client):
+        async def received():
+            return (await core.send(principal("claude"), to="agent:full", task="Check this"))["handle"]
+
+        def fail(*_):
+            raise RuntimeError("write refused")
+
+        original = client.portal.call(received)
+        args = {"to": "example-dots", "task": "Check this", "forward": original}
+        world.canned["chat_postMessage"] = fail
+        assert "post_message failed: RuntimeError" in error_text(call(client, KEY_FULL, "send", args))
+        (failed,) = core.inbox.handles(owner="full", destination="dots")
+        assert failed["meta"]["forward_of"] == original
+        del world.canned["chat_postMessage"]
+        retry = tool(client, "send", args)
+        assert retry["posted"] and retry["handle"] != failed["handle"]
+        assert core.inbox.handle(original)["meta"]["forwarded_to"] == retry["handle"]
+
+        client.portal.call(core.deliver, failed["handle"], "final", {"text": "Stale answer"})
+        assert core.inbox.handle(original)["status"] == "delivered"
+        assert core.inbox.read(owner="claude", since=0)["items"] == []
 
 
 def test_threaded_group_dm_answers_are_read_even_without_the_event_and_only_once(tmp_path):

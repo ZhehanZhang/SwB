@@ -152,6 +152,20 @@ def test_slack_forwarded_final_reaches_original_thread(tmp_path):
         assert core.inbox.handle(original)["status"] == "answered"
 
 
+def test_mapped_private_routine_replies_in_owner_dm(tmp_path):
+    core, world, _ = build(tmp_path, {"target:claude": "shared", "target:claude-workspace": "private"},
+                           workspace_project="workspace")
+    with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
+        client.portal.call(core.origins["slack"].refresh)
+        client.portal.call(core.slack.ingest, "a2a", mention("claude what is the uptime?"))
+        (item,) = [i for i in tool(client, "inbox", {"since_cursor": 0})["items"] if i["kind"] == "message"]
+        tool(client, "reply", {"conversation": item["handle"], "text": "Up 3 days"})
+        (post,) = posts(world, client)
+        assert post["channel"] == "DAPPROVER" and post.get("thread_ts") is None and post["text"].endswith("Up 3 days")
+        (audit,) = [r for r in core.slack.store.recent_audit() if r["action"] == "routed"]
+        assert audit["detail"]["target"] == "claude-workspace"
+
+
 def test_shared_non_owner_slack_message_does_not_upgrade_or_forward(tmp_path):
     core, _, routine = build(tmp_path, workspace_project="workspace")
     with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:

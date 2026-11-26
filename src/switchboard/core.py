@@ -413,10 +413,11 @@ class Switchboard:
                 self.turn(handle_meta["root"], principal)
             return await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
                                     new_conversation=new_conversation, handle=handle, handle_meta=handle_meta)
-        finally:
-            if handle is not None and self.inbox.handle(handle) is None:
+        except BaseException:
+            if handle is not None:
                 self.store.x("UPDATE handles SET meta = json_remove(meta, '$.forwarded_to') "
                              "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ?", (forward, handle))
+            raise
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
