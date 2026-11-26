@@ -12,21 +12,9 @@ ENV_PREFIX = "SWITCHBOARD_"
 KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
 MIN_KEY_LEN = 24
 
-DEFAULT_REDIRECTS = [
-    "https://claude.ai/api/mcp/auth_callback",
-    "https://claude.com/api/mcp/auth_callback",
-    "https://chatgpt.com/connector_platform_oauth_redirect",
-    "https://chatgpt.com/connector/oauth/*",
-    "https://capy.ai/web/callbacks/mcp",
-    "https://oauth-redirect.googleusercontent.com/r/*",
-    "https://oauth-redirect.googleusercontent.com/a/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*",
-]
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
 # channel uses SWITCHBOARD_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
 DEFAULT_INBOX_KEYS = {"channel": "claude-code"}
-DEFAULT_CIMD_HOSTS = ["claude.ai", "claude.com", "anthropic.com", "chatgpt.com", "openai.com", "capy.ai"]
 
 NAMESPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}(/[a-z0-9][a-z0-9_.-]{0,59}){0,2}$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
@@ -44,14 +32,17 @@ class StaticKey:
 
 @dataclass
 class Config:
-    """Core settings plus the raw sections each origin and destination reads for itself."""
+    """Core settings plus the raw section each block reads for itself (blocks.<name>, with use: <block type>).
+
+    redirect_allow and cimd_hosts are empty unless the config overrides them: then the agents registry decides.
+    """
 
     public_url: str | None = None
     owner_emails: tuple[str, ...] = ()
     access_team_domain: str | None = None
     access_aud: str | None = None
-    redirect_allow: tuple[str, ...] = tuple(DEFAULT_REDIRECTS)
-    cimd_hosts: tuple[str, ...] = tuple(DEFAULT_CIMD_HOSTS)
+    redirect_allow: tuple[str, ...] = ()
+    cimd_hosts: tuple[str, ...] = ()
     access_token_ttl: int = 3600
     refresh_token_ttl: int = 30 * 86400
     static_keys: tuple[StaticKey, ...] = ()
@@ -61,9 +52,12 @@ class Config:
     timezone: str = "America/New_York"
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
-    origins: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {}})
-    destinations: dict[str, dict[str, Any]] = field(default_factory=dict)
-    slack: dict[str, Any] | None = None
+    blocks: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {"use": "mcp"}})
+    agents: dict[str, Any] | None = None
+    targets: dict[str, Any] = field(default_factory=dict)
+    routes: list[dict[str, Any]] = field(default_factory=list)
+    visibility: dict[str, Any] = field(default_factory=dict)
+    version: int = 2
     env: Mapping[str, str] = field(default_factory=dict)
 
     @property
@@ -128,14 +122,21 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
                 raise ConfigError(f"{name} must be at least {MIN_KEY_LEN} characters")
             keys.append(StaticKey(name=name[len(KEY_ENV_PREFIX):].lower(), secret=value))
 
-    origins = _sections(raw.get("origins"), "origins") if "origins" in raw else {"mcp": {}}
+    version = int(raw.get("version", 1) or 1)
+    if version not in (1, 2):
+        raise ConfigError("version must be 1 or 2")
+    v2 = raw if version == 2 else translate_v1(raw)
+    blocks = _sections(v2.get("blocks"), "blocks") if "blocks" in v2 else {"mcp": {"use": "mcp"}}
+    for name, sec in blocks.items():
+        sec.setdefault("use", name)
     cfg = Config(
+        visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
         owner_emails=tuple(e.lower() for e in as_tuple(auth.get("owner_emails"))),
         access_team_domain=access.get("team_domain") or None,
         access_aud=access.get("aud") or None,
-        redirect_allow=as_tuple(auth.get("redirect_uris")) or tuple(DEFAULT_REDIRECTS),
-        cimd_hosts=as_tuple(auth.get("cimd_hosts")) or tuple(DEFAULT_CIMD_HOSTS),
+        redirect_allow=as_tuple(auth.get("redirect_uris")),
+        cimd_hosts=as_tuple(auth.get("cimd_hosts")),
         access_token_ttl=int(auth.get("access_token_ttl", 3600)),
         refresh_token_ttl=int(auth.get("refresh_token_ttl", 30 * 86400)),
         static_keys=tuple(keys),
@@ -145,9 +146,11 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         timezone=str(raw.get("timezone", "America/New_York")),
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
-        origins=origins,
-        destinations=_sections(raw.get("destinations"), "destinations"),
-        slack=dict(raw.get("slack") or {}) if "slack" in raw else None,
+        blocks=blocks,
+        agents=dict(v2["agents"]) if isinstance(v2.get("agents"), dict) else None,
+        targets=dict(v2.get("targets") or {}),
+        routes=[dict(r) for r in v2.get("routes") or [] if isinstance(r, dict)],
+        version=version,
         env=env,
     )
     if bool(cfg.access_team_domain) != bool(cfg.access_aud):
@@ -155,3 +158,46 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
     if cfg.access_team_domain and not cfg.owner_emails:
         raise ConfigError("cloudflare_access needs auth.owner_emails")
     return cfg
+
+
+def translate_v1(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """A version 1 config (origins:, destinations:, slack:) as version 2 (blocks:). Core keys carry over unchanged.
+
+    origins.<x> and destinations.<x> of the same name merge into blocks.<x>; the slack: section becomes the slack
+    block's settings, and origins.slack.workspaces.<label>.project becomes its workspace_projects.<label>.
+    """
+    out: dict[str, Any] = {k: v for k, v in raw.items() if k not in ("origins", "destinations", "slack", "version")}
+    out["version"] = 2
+    blocks: dict[str, dict[str, Any]] = {}
+    origins = raw.get("origins") if "origins" in raw else {"mcp": {}}
+    for what, section in (("origins", origins), ("destinations", raw.get("destinations"))):
+        for name, sec in (section or {}).items():
+            if not isinstance(sec, dict) and sec is not None:
+                raise ConfigError(f"{what}.{name} must be a mapping")
+            sec = dict(sec or {})
+            if name == "slack" and what == "origins" and isinstance(sec.get("workspaces"), dict):
+                sec["workspace_projects"] = {k: (v or {}).get("project") for k, v in sec.pop("workspaces").items() if (v or {}).get("project")}
+            merged = blocks.setdefault(str(name), {"use": str(name)})
+            if sec.get("enabled", True) is False:
+                merged["enabled"] = False
+            merged.update({k: v for k, v in sec.items() if k != "enabled"})
+    if "slack" in blocks and "slack" not in raw:
+        blocks["slack"]["engine"] = False
+    if "slack" in raw:
+        slack = blocks.setdefault("slack", {"use": "slack"})
+        clash = sorted(set(slack) & set(raw.get("slack") or {}) - {"use"})
+        if clash:
+            raise ConfigError(f"slack settings {clash} appear in both the slack section and origins/destinations.slack")
+        slack.update(dict(raw.get("slack") or {}))
+    out["blocks"] = blocks
+    return out
+
+
+def migrate_text(text: str) -> str:
+    """switchboard config migrate: a v1 YAML file rewritten as v2 (comments are not kept)."""
+    raw = yaml.safe_load(text) or {}
+    if not isinstance(raw, dict):
+        raise ConfigError("config root must be a mapping")
+    if int(raw.get("version", 1) or 1) == 2:
+        return text
+    return yaml.safe_dump(translate_v1(raw), sort_keys=False, allow_unicode=True)

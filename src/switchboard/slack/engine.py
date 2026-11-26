@@ -10,6 +10,9 @@ from typing import Any, Awaitable, Callable, Mapping
 
 import httpx
 
+from ..guard import RateLimiter
+from ..trust import wrap
+from ..visibility import Visibility, Who
 from .config import AVATAR_RE, Config, Persona
 from .events import build_event, classify, event_id
 from .push import WebhookSink
@@ -59,9 +62,17 @@ class SlackEngine:
         self.runtimes: dict[str, WorkspaceRuntime] = {}
         self.sinks: dict[str, list[WebhookSink]] = {}
         self.gate = WriteGate(self)
+        self.senders = RateLimiter(clock=clock)
+        self.senders.limits = {}
         self.listeners: list[EventListener] = []
+        self.context_listeners: list[EventListener] = []
+        self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[None]]] = {}
+        self.owner_channels: set[tuple[str, str]] = set()
+        self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
+        self.visibility = Visibility(dict(config.visibility))
         self.targets: dict[str, Target] = {}
         self.dynamic_personas: dict[str, Persona] = {}
+        self.target_agents: Callable[[Target], set[str]] = lambda t: set()
         self.connect = True
         self._tasks: list[asyncio.Task] = []
 
@@ -72,7 +83,7 @@ class SlackEngine:
 
     @property
     def avatar_cache(self) -> Path:
-        """Rendered Captain avatars (see capy_avatars), named by what they were rendered from."""
+        """Pictures blocks rendered for their dynamic personas (Captains, say), named by what they were rendered from."""
         return self.data_dir / "avatar-cache"
 
     def avatar_dirs(self) -> list[Path]:
@@ -87,12 +98,15 @@ class SlackEngine:
         if personas is not None:
             self.dynamic_personas = personas
 
-    def thread_persona(self, workspace: str, channel: str | None, thread_ts: str | None) -> str | None:
+    def thread_persona(self, workspace: str, channel: str | None, thread_ts: str | None, agent: str | None = None) -> str | None:
+        """The persona of the target a thread is routed to; with agent, only if that agent is the one behind the target."""
         if not channel or not thread_ts:
             return None
         slug = self.store.thread_target(workspace, channel, thread_ts)
         target = self.targets.get(slug) if slug else None
-        return target.persona if target else None
+        if target is None or (agent is not None and agent not in self.target_agents(target)):
+            return None
+        return target.persona
 
     def route(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> list[str]:
         """Set push target/target_kind (and strip a leading slug from text). Returns slugs to hint at for a near miss."""
@@ -193,7 +207,14 @@ class SlackEngine:
                 if payload.get("team_id") and payload["team_id"] != rt.team_id:
                     log.warning("workspace %s: dropping event for team %s", label, payload["team_id"])
                     return
-                await self.ingest(label, payload.get("event") or {})
+                event = payload.get("event") or {}
+                if event.get("type") in ("user_change", "team_join"):
+                    if (event.get("user") or {}).get("id") == rt.bot_user_id:
+                        await rt.refresh_identity()
+                    for listener in self.directory_listeners:
+                        await listener(label, event)
+                    return
+                await self.ingest(label, event)
             elif req_type == "interactive" and payload.get("type") == "block_actions":
                 await self.handle_block_actions(label, payload)
         except Exception:
@@ -204,6 +225,10 @@ class SlackEngine:
         rt = self.runtime(label)
         channel, ts = event.get("channel"), event.get("ts")
         if not channel or not ts:
+            return None
+        relay = self.relays.get((label, channel))
+        if relay is not None:
+            await relay(rt, event)
             return None
         kind = classify(event, rt.classify_context())
         if kind is None:
@@ -227,6 +252,7 @@ class SlackEngine:
             addressed_to_us=kind in ("mention", "dm") or in_our_thread,
         )
         hint = self.route(rt, push)
+        self.stamp(rt, push)
         if not self.store.add_event(push):
             return None
         if kind in ("mention", "dm") and rt.cfg.ack_reaction and "bot" in rt.clients:
@@ -234,13 +260,103 @@ class SlackEngine:
                 await rt.clients["bot"].reactions_add(channel=channel, timestamp=ts, name=rt.cfg.ack_reaction)
             except Exception as exc:
                 log.info("ack reaction on %s failed: %s", event_id(rt.team_id, channel, ts), slack_error(exc))
-        if hint and "bot" in rt.clients and push.get("user"):
+        if hint and "bot" in rt.clients and push.get("user") and push["trust"] == "owner":
             try:
                 await rt.clients["bot"].chat_postEphemeral(channel=channel, user=push["user"], thread_ts=push["thread_ts"] or ts,
                                                          text=f"No target by that name. Did you mean {', '.join(hint)}? Sent to {push['target'] or 'the default'} instead. "
                                                               f"Targets: {', '.join(sorted(self.targets)) or 'none yet'}.")
             except Exception as exc:
                 log.info("slug hint on %s failed: %s", event_id(rt.team_id, channel, ts), slack_error(exc))
+        if self.reaches(rt, push):
+            await self.fan_out(label, push)
+        else:
+            await self.note_context(rt, push)
+        return push
+
+    def stamp(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> None:
+        """Set sender and trust from the Slack ids, and wrap a non-owner's text."""
+        raw = push["text"]
+        trust = rt.cfg.trust_of(push["user"])
+        name = rt.cfg.known.get(push["user"] or "") or push["user_name"]
+        push["trust"] = trust
+        push["sender"] = {"id": push["user"], "name": name, "trust": trust, "is_bot": push["is_bot"]}
+        if trust != "owner":
+            where = f"in {push['workspace']} " + (f"#{push['channel_name']}" if push.get("channel_name") else push["channel"])
+            push["text"] = wrap(raw, name, push["user"], trust, where)
+
+    def who(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> Who:
+        return Who(owner=push.get("trust") == "owner", id=push.get("user"), workspace=rt.label)
+
+    def channel_resources(self, workspace: str, channel: str, name: str | None) -> list[str]:
+        out = [f"channel:{workspace}/{channel}"]
+        if name:
+            out.append(f"channel:{workspace}/#{name}")
+        return out
+
+    def reaches(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> bool:
+        """Whether this sender may reach the message's channel and target. The owner always does; anyone else only
+        where both are shared (or narrowed to include them)."""
+        who = self.who(rt, push)
+        if who.owner:
+            return True
+        if not self.visibility.allows(who, *self.channel_resources(rt.label, push["channel"], push.get("channel_name"))):
+            return False
+        return not push.get("target") or self.visibility.allows(who, *self.target_resources(push["target"]))
+
+    def target_resources(self, slug: str) -> list[str]:
+        """A target's visibility resources: the slug used, then its other slugs (an alias such as dot shares its rule)."""
+        t = self.targets.get(slug)
+        others = [s for s, x in self.targets.items() if t is not None and s != slug and x.kind == t.kind and x.id == t.id]
+        return [f"target:{s}" for s in (slug, *sorted(others))]
+
+    def channel_shared(self, workspace: str, channel: str) -> bool:
+        rt = self.runtimes.get(workspace)
+        name = rt.channel_names.get(channel) if rt else None
+        return self.visibility.rule(*self.channel_resources(workspace, channel, name)) != "private"
+
+    async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None) -> tuple[str, str | None, bool] | None:
+        """Where a reply from target goes: its Slack thread, or the owner's DM when a private target answers in a shared
+        channel. None when that DM can't be opened."""
+        if not target or self.visibility.rule(*self.target_resources(target)) != "private" or not self.channel_shared(workspace, channel):
+            return channel, thread_ts, False
+        owner = next(iter(sorted(self.config.workspaces[workspace].owner_user_ids)), None)
+        rt = self.runtimes.get(workspace)
+        if owner is None or rt is None or "bot" not in rt.clients:
+            return None
+        dm = await rt.clients["bot"].conversations_open(users=owner)
+        return dm["channel"]["id"], None, True
+
+    async def note_context(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> None:
+        """A non-owner's message to something private: filed as a context item in the target's inbox, never a task,
+        a wake, a sink event or a reply. The sender gets a neutral ack."""
+        label, actor = rt.label, f"slack:{push['user'] or 'unknown'}"
+        detail = {"message": push["id"], "target": push.get("target"), "trust": push["trust"]}
+        bucket = f"context:{label}"
+        self.senders.limits[bucket] = rt.cfg.sender_rate
+        if self.senders.blocked(bucket, push["user"] or "") is not None:
+            self.store.audit(actor, "context_rate_limited", label, **detail)
+            return
+        self.senders.hit(bucket, push["user"] or "")
+        push["context"] = True
+        self.store.audit(actor, "context_noted", label, **detail)
+        for listener in self.context_listeners:
+            try:
+                await listener(push)
+            except Exception:
+                log.exception("workspace %s: context listener failed", label)
+        if push["addressed_to_us"]:
+            await self.tell_sender(push, "Noted.")
+
+    async def tell_sender(self, push: dict[str, Any], text: str) -> None:
+        rt = self.runtimes.get(push["workspace"])
+        if rt is None or "bot" not in rt.clients or not push.get("user") or push.get("is_bot"):
+            return
+        try:
+            await rt.clients["bot"].chat_postEphemeral(channel=push["channel"], user=push["user"], thread_ts=push["thread_ts"] or push["ts"], text=text)
+        except Exception as exc:
+            log.info("note to sender on %s failed: %s", push["id"], slack_error(exc))
+
+    async def fan_out(self, label: str, push: dict[str, Any]) -> None:
         for sink in self.sinks.get(label, []):
             if sink.accepts(push):
                 sink.put(push)
@@ -249,7 +365,6 @@ class SlackEngine:
                 await listener(push)
             except Exception:
                 log.exception("workspace %s: event listener failed", label)
-        return push
 
     async def handle_block_actions(self, label: str, payload: dict[str, Any]) -> None:
         approvals = self.config.approvals
@@ -360,7 +475,7 @@ class SlackEngine:
     def persona_rows(self) -> list[dict[str, Any]]:
         """Each persona with its picture's URL, the folder it comes from, and the agents that post as it by default."""
         cfg = self.config
-        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled monogram", self.avatar_cache: "Capy avatar"}
+        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled monogram", self.avatar_cache: "rendered by a block"}
         rows = []
         for pid, p in self.personas().items():
             path = self.find_avatar(p.avatar) if p.avatar else None

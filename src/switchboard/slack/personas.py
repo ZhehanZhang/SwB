@@ -11,14 +11,12 @@ class PersonaError(ValueError):
     pass
 
 
-CAPY_AGENT = "capy"
-
-
 def resolve_persona(cfg: Config, ws: WorkspaceConfig, identity: str, key: Grant, requested: str | None,
                     personas: Mapping[str, Persona] | None = None, thread_persona: str | None = None) -> Persona | None:
     """Call argument (if the agent may override) > the agent's persona for this workspace > its bound persona >
     the persona named like the agent (claude, chatgpt, ...) > the workspace default. Mirrors the send-key chain.
-    Capy posting in a thread routed to a Captain posts as that Captain (thread_persona) unless it asks otherwise."""
+    thread_persona comes first: the caller passes it only when the agent is the one behind the thread's target (a block
+    agent posting in a thread routed to one of that block's targets, like Capy in a Captain's thread)."""
     personas = cfg.personas if personas is None else personas
     if identity != "bot":
         if requested:
@@ -33,7 +31,7 @@ def resolve_persona(cfg: Config, ws: WorkspaceConfig, identity: str, key: Grant,
         if persona is None:
             raise PersonaError(f"unknown persona {requested!r}")
         return persona
-    chain = (thread_persona if key.id == CAPY_AGENT else None, key.persona_by_workspace.get(ws.label), key.persona, key.id, ws.default_persona)
+    chain = (thread_persona, key.persona_by_workspace.get(ws.label), key.persona, key.id, ws.default_persona)
     for pid in chain:
         if pid and pid in personas:
             return personas[pid]

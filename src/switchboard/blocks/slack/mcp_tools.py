@@ -1,4 +1,4 @@
-"""slack_* tools on the MCP origin: the Slack destination's actions, plus slack_wait on the caller's inbox."""
+"""The slack block's MCP tools: slack_* for its actions, plus slack_wait (the same as wait(block='slack'))."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ SLACK_NOTE = ("Each workspace has identities: bot (the app; posts can use a pers
 
 def register(mcp: MCPServer, core: "Switchboard", who: Callable[[Context], "Principal"], wait_caps: Any) -> None:
     async def slack(ctx: Context, action: str, **kw: Any) -> Any:
-        from ...destinations import DestinationError
+        from .. import BlockError as DestinationError
 
         dest = core.destination("slack")
         try:

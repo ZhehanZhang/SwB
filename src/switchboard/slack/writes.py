@@ -14,6 +14,9 @@ if TYPE_CHECKING:
 log = logging.getLogger("switchboard.slack.writes")
 
 DECIDER_KINDS = ("slack", "admin")
+OWNER_RELAY = "relay:owner"
+"""The one key that posts as the owner without approval: only the dots block holds it, only for owner-trust senders (his
+own Slack messages and his own agents), and only into a dot DM or group DM of his, or the dots relay channel. Every other user-identity post keeps its write policy."""
 
 
 class WriteError(RuntimeError):
@@ -52,10 +55,14 @@ class WriteGate:
         if ws is None or identity not in key.identities_for(workspace):
             raise WriteError(f"agent {key.id!r} may not use {identity} in {workspace!r}")
         policy = ws.identities[identity].write
+        if key.id == OWNER_RELAY:
+            if not (identity == "user" and action == "post_message" and (workspace, params.get("channel")) in self.core.owner_channels):
+                raise WriteError("the owner relay key posts only as the owner, into a relay channel")
+            policy = "free"
         if policy == "never":
             store.audit(f"agent:{key.id}", "write_refused", workspace, identity, action=action, params=params, reason="policy never")
             raise WriteError(f"writes as {identity} in {workspace} are disabled (policy: never)")
-        thread_persona = self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts")) if action == "post_message" else None
+        thread_persona = self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts"), agent=key.id) if action == "post_message" else None
         persona = resolve_persona(cfg, ws, identity, key, persona_id, self.core.personas(), thread_persona) if action == "post_message" else None
         persona_d = asdict(persona) if persona else None
         loop_guard = False

@@ -1,4 +1,4 @@
-"""Per-caller inbox: what destinations report back about delegated work, read by cursor or long-poll."""
+"""Per-caller inbox: what blocks report back on conversations, and mailbox messages from other agents, read by cursor or long-poll."""
 
 from __future__ import annotations
 
@@ -28,12 +28,13 @@ class Inbox:
         return "h_" + secrets.token_hex(8)
 
     def open_handle(self, *, owner: str, destination: str, ref: str, project: str | None, title: str | None, meta: dict[str, Any],
-                    handle: str | None = None, status: str | None = None, stream_cursor: str | None = None) -> str:
-        """Persist a handle for delegated work before anything is reported on it, so it survives restarts."""
+                    handle: str | None = None, status: str | None = None, stream_cursor: str | None = None, target: str | None = None) -> str:
+        """Persist a conversation (a handle) before anything is reported on it, so it survives restarts. destination is the
+        block that owns it, target the address it went to."""
         handle = handle or self.new_handle()
         self.store.x(
-            "INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, status, stream_cursor) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (handle, owner, destination, ref, project, title, json.dumps(meta), self.store.clock(), status, stream_cursor),
+            "INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, status, stream_cursor, target) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (handle, owner, destination, ref, project, title, json.dumps(meta), self.store.clock(), status, stream_cursor, target),
         )
         return handle
 
@@ -107,7 +108,7 @@ class Inbox:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
 
         owner None reads every caller's items (the Claude Code channel does this). Each reader keeps its own cursor,
-        so the channel never moves the position capy_wait and capy_inbox read from.
+        so the channel never moves the position wait and inbox read from.
         """
         reader = reader or owner or "*"
         start = self._cursor(reader, handle) if since is None else since
