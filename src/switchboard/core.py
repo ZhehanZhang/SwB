@@ -224,8 +224,10 @@ class Switchboard:
         return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
 
     def turn(self, root: str, principal: Principal) -> None:
-        """Count one more turn on a conversation: a send's handle plus every reply hanging off it (a new send starts at
-        zero). At turn_cap that one conversation pauses, as a likely loop, and the owner gets a Slack DM."""
+        """Count one more turn on a mailbox conversation: a send's handle plus every reply hanging off it (a new send starts
+        at zero). At turn_cap that one conversation pauses, as a likely loop, and the owner gets a Slack DM. Slack and
+        Capy threads aren't counted here: their handles are shared per workspace or Captain, and Slack has its own
+        per-thread bot post guard."""
         cap = self.cfg.turn_cap
         if not cap:
             return
@@ -487,8 +489,6 @@ class Switchboard:
                     "note": "a mailbox message; answer it with reply"}
         if block is None:
             raise CoreError(f"the block behind {ref!r} is not configured")
-        if verb == "reply":
-            self.turn(h["handle"] if h is not None else ref, principal)
         action = block.verb(verb)
         if action is None:
             raise CoreError(f"{block.name} conversations take no {verb}")
