@@ -119,7 +119,12 @@ def test_console_claim_requires_owner_and_keeps_original_link_one_time(make):
 def test_setup_returns_canonical_snippets_without_minting_or_exposing_credentials(make, monkeypatch):
     core, client = make()
     setup = read(client, "/agents/setup")
-    assert setup["chatgpt"] == {"connector_url": f"{PUBLIC}/mcp"}
+    chatgpt = setup["chatgpt"]
+    assert chatgpt["connector_url"] == f"{PUBLIC}/mcp"
+    assert chatgpt["plugins_url"] == "https://chatgpt.com/plugins"
+    assert all(text in chatgpt["instruction"] for text in (
+        chatgpt["plugins_url"], "web browser", "Add custom MCP server", chatgpt["connector_url"], "OAuth",
+    ))
     assert f"{PUBLIC}/mcp" in setup["any"]["prompt"] and 'connect(what="mcp-client")' in setup["any"]["prompt"]
     assert "Claude" not in setup["any"]["prompt"]
     agents = {guide["id"]: guide for guide in setup["coding_agents"]}
@@ -132,7 +137,9 @@ def test_setup_returns_canonical_snippets_without_minting_or_exposing_credential
 
     monkeypatch.setattr(core.cfg, "public_url", f"https://user:{PRIVATE}@switchboard.example.test")
     fallback = read(client, "/agents/setup")
-    assert fallback["chatgpt"] == {"connector_url": None}
+    assert fallback["chatgpt"]["connector_url"] is None
+    assert fallback["chatgpt"]["plugins_url"] == chatgpt["plugins_url"]
+    assert "<public_url>/mcp" in fallback["chatgpt"]["instruction"]
     assert all(guide["auth"] == "bearer" and "Bearer <key>" in guide["snippet"] for guide in fallback["coding_agents"])
     assert PRIVATE not in json.dumps(fallback)
     assert not core.store.q("SELECT 1 FROM connect_codes")

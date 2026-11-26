@@ -13,6 +13,7 @@ from starlette.routing import Route
 from .api_read import _agents, _audit_item
 from .api_write import _Body, _body, _error, _owner
 from .blocks.mcp.coding import GUIDES, coding_snippet
+from .blocks.mcp.setup import CHATGPT_PLUGINS_URL, hosted_client_instruction
 from .memory import GENERAL, MemoryError_, MemoryNotFound
 
 _INVENTORY = {"routine": "routines", "captain": "captains", "dot": "dots", "key": "keys"}
@@ -83,8 +84,12 @@ async def agent_setup(request: Request) -> JSONResponse:
         'Once connected, call connect(what="mcp-client") for the next setup step. If you know your platform, use its matching connect kind instead. '
         'Follow the steps the tool returns. Keep credentials out of chat and tool arguments; if a token is needed, use the owner link the tool provides.'
     )
-    return JSONResponse({"chatgpt": {"connector_url": connector}, "any": {"prompt": prompt},
-                         "coding_agents": [coding_snippet(agent, url, oauth) for agent in GUIDES]})
+    return JSONResponse({
+        "chatgpt": {"connector_url": connector, "plugins_url": CHATGPT_PLUGINS_URL,
+                    "instruction": hosted_client_instruction("chatgpt", connector)},
+        "any": {"prompt": prompt},
+        "coding_agents": [coding_snippet(agent, url, oauth) for agent in GUIDES],
+    })
 
 
 async def resume_conversation(request: Request) -> JSONResponse:

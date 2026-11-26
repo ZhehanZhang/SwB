@@ -46,7 +46,7 @@ export type Agent = {
 }
 
 export type AgentSetup = {
-  chatgpt: { connector_url: string | null }
+  chatgpt: { connector_url: string | null; plugins_url: string; instruction: string }
   any: { prompt: string }
   coding_agents: { id: string; snippet: string; where: string }[]
 }
@@ -84,6 +84,7 @@ function isInventory(value: unknown): value is Inventory {
 
 export function isAgentSetup(value: unknown): value is AgentSetup {
   return isRecord(value) && isRecord(value.chatgpt) && (value.chatgpt.connector_url === null || typeof value.chatgpt.connector_url === "string")
+    && value.chatgpt.plugins_url === "https://chatgpt.com/plugins" && typeof value.chatgpt.instruction === "string"
     && isRecord(value.any) && typeof value.any.prompt === "string" && Array.isArray(value.coding_agents)
     && value.coding_agents.every((row: unknown) => isRecord(row) && typeof row.id === "string" && typeof row.snippet === "string" && typeof row.where === "string")
 }

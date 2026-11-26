@@ -73,9 +73,12 @@ function ConnectionRow() {
                   <Button aria-label={`Copy ${label} setup`} title="Copy" variant="ghost" size="icon" className="size-6" disabled={!snippet} onClick={() => snippet && void copy(snippet)}>
                     <Copy aria-hidden strokeWidth={1.5} />
                   </Button>
-                  {id === "chatgpt" && <a href="https://chatgpt.com/plugins" target="_blank" rel="noreferrer" aria-label="Add a custom MCP server in ChatGPT Plugins" title="Add custom MCP server" className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:underline">
-                    Plugins <ExternalLink aria-hidden className="size-3" strokeWidth={1.5} />
-                  </a>}
+                  {id === "chatgpt" && <>
+                    <a href={query.data.chatgpt.plugins_url} target="_blank" rel="noreferrer" aria-label="Add a custom MCP server in ChatGPT Plugins" aria-describedby="chatgpt-setup" title={query.data.chatgpt.instruction} className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:underline">
+                      Plugins <ExternalLink aria-hidden className="size-3" strokeWidth={1.5} />
+                    </a>
+                    <span id="chatgpt-setup" className="sr-only">{query.data.chatgpt.instruction}</span>
+                  </>}
                 </div>
               </div>
             )
