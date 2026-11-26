@@ -33,7 +33,7 @@ def test_connect_schema_unknown_and_disabled_blocks(make):
         assert step["by"] == "person" and "Enable" in step["do"] and "link" not in step
 
 
-@pytest.mark.parametrize(("kind", "menu"), [("chatgpt", "Plugins >"), ("claude", "Customize > Connectors")])
+@pytest.mark.parametrize(("kind", "menu"), [("chatgpt", "https://chatgpt.com/plugins"), ("claude", "Customize > Connectors")])
 def test_connect_hosted_clients(make, kind, menu):
     _, client = make()
     out = connect(client, kind)
