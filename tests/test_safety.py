@@ -1,0 +1,185 @@
+import pytest
+
+from conftest import CAPTAIN, CAPTAIN2, OTHER_PROJECT, PROJECT, STATIC_KEY, CHANNEL_KEY, Clock, base_config, call, error_text, payload, sign_in, infra
+
+
+def mcp_project(c, tok, **args):
+    return payload(call(c, tok, "project_create", args))
+
+
+# Auto-link and auto-route -------------------------------------------------------------------
+
+def test_exact_repo_match_links_and_routes_to_the_only_captain(make):
+    core, c = make()
+    tok = sign_in(c)["access_token"]
+    out = mcp_project(c, tok, slug="teamcaptain", name="TeamCaptain", links={"repos": ["example-org/team-repo"]})
+    auto = out["auto"]["results"][0]
+    assert [ch.get("link") for ch in auto["changed"] if "link" in ch] == ["capy_project"]
+    assert core.projects.get("teamcaptain").links["capy_project"] == OTHER_PROJECT
+    route = core.routes.resolve(destination="capy", agent="claude", project="teamcaptain")[0]
+    assert route.target["captain"] == CAPTAIN2 and route.defaults == {"mode": "captain_thread", "repos": ["example-org/team-repo"]} and route.updated_by == "auto"
+    actions = {(r["action"], r["source"]) for r in core.audit.recent(destination="capy", limit=10)}
+    assert {("auto_link", "auto"), ("auto_route", "auto")} <= actions
+
+
+def test_repo_match_beats_name_match(make, capy):
+    core, c = make()
+    capy.projects.append({"id": "project_NAMED", "name": "Infra", "code": "ZN", "repos": []})
+    capy.projects[1]["name"] = "Something else"
+    core.projects.create(slug="infra", name="Infra", links={"repos": ["example-org/team-repo"]})
+    core_out = payload(call(c, STATIC_KEY, "project_sync", {"slug": "infra"}))
+    assert core_out["changed"] >= 1 and core.projects.get("infra").links["capy_project"] == OTHER_PROJECT
+
+
+def test_ambiguous_match_returns_candidates_and_changes_nothing(make, capy):
+    core, c = make()
+    capy.projects.append({"id": "project_TWIN", "name": "Twin", "code": "TW", "repos": [{"repoFullName": "example-org/team-repo", "baseBranch": "main", "mode": "primary"}]})
+    tok = sign_in(c)["access_token"]
+    out = mcp_project(c, tok, slug="acme", name="Acme", links={"repos": ["example-org/team-repo"]})
+    auto = out["auto"]["results"][0]
+    assert auto["changed"] == [] and {x["id"] for x in auto["candidates"]["capy_project"]} == {OTHER_PROJECT, "project_TWIN"}
+    assert "capy_project" not in core.projects.get("acme").links
+    assert core.routes.resolve(destination="capy", agent="claude", project="acme")[0].level == "global"
+
+
+def test_no_captain_leaves_the_global_route(make, capy):
+    core, c = make()
+    capy.captains = [x for x in capy.captains if x["projectId"] != OTHER_PROJECT]
+    out = payload(call(c, STATIC_KEY, "project_create", {"slug": "acme", "name": "Acme", "links": {"repos": ["example-org/team-repo"]}}))
+    auto = out["auto"]["results"][0]
+    assert core.projects.get("acme").links["capy_project"] == OTHER_PROJECT
+    assert auto["candidates"]["captain"] == [] and any("no Captain" in n for n in auto["notes"])
+    assert core.routes.resolve(destination="capy", agent="capy", project="acme")[0].level == "global"
+
+
+def test_existing_route_and_link_are_left_alone_unless_forced(make):
+    core, c = make()
+    core.projects.create(slug="acme", name="Acme", links={"repos": ["example-org/team-repo"], "capy_project": PROJECT})
+    core.routes.set(destination="capy", agent=None, project="acme", target={"captain": CAPTAIN, "name": "Captain"}, defaults={}, allow_override=False, note="", by="owner")
+    out = payload(call(c, STATIC_KEY, "project_sync", {}))
+    acme = [r for r in out["results"] if r["project"] == "acme"][0]
+    assert acme["changed"] == [] and any("already exists" in n for n in acme["notes"])
+    assert core.projects.get("acme").links["capy_project"] == PROJECT
+    assert core.routes.resolve(destination="capy", agent="x", project="acme")[0].target["captain"] == CAPTAIN
+    forced = payload(call(c, STATIC_KEY, "project_sync", {"slug": "acme", "force": True}))
+    assert forced["changed"] == 2 and core.routes.resolve(destination="capy", agent="x", project="acme")[0].target["captain"] == CAPTAIN2
+
+
+# Memory safety ----------------------------------------------------------------------------------
+
+def test_general_writes_need_confirmation(make):
+    core, c = make()
+    infra(core)
+    err = error_text(call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "notes", "title": "t", "body": "b"}))
+    assert "confirm_general=true" in err and "project:<slug>" in err
+    ok = payload(call(c, STATIC_KEY, "memory_write", {"scope": "general", "namespace": "notes", "title": "t", "body": "b", "confirm_general": True}))
+    assert ok["scope"] == "general"
+
+
+def test_write_rejected_when_scope_and_project_disagree(make):
+    core, c = make()
+    infra(core)
+    core.projects.create(slug="acme", name="Acme")
+    err = error_text(call(c, STATIC_KEY, "memory_write", {"scope": "project:acme", "project": "infra", "namespace": "notes", "title": "t", "body": "b"}))
+    assert "not the project you named" in err
+    ok = payload(call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "project": "infra", "namespace": "notes", "title": "t", "body": "b"}))
+    assert ok["scope"] == "project:infra"
+
+
+def test_move_and_promote_keep_history_and_are_audited(make):
+    core, c = make()
+    infra(core)
+    core.projects.create(slug="acme", name="Acme")
+    w = payload(call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "namespace": "notes", "key": "port", "title": "Port", "body": "8870"}))
+    assert "memory_promote" in error_text(call(c, STATIC_KEY, "memory_move", {"id": w["id"], "to_scope": "general"}))
+    moved = payload(call(c, STATIC_KEY, "memory_move", {"id": w["id"], "to_scope": "project:acme"}))
+    assert moved == {"moved": w["id"], "from": "project:infra", "to": "project:acme"}
+    promoted = payload(call(c, STATIC_KEY, "memory_promote", {"id": w["id"]}))
+    assert promoted["to"] == "general"
+    e = core.memory.read(id=w["id"])
+    assert e["scope"] == "general" and [h["action"] for h in e["history"]][:3] == ["move project:acme -> general", "move project:infra -> project:acme", "create"]
+    assert [r["action"] for r in core.audit.recent(destination="memory")] == ["memory_promote", "memory_move"]
+
+
+def test_cross_project_reads_are_explicit_logged_and_respect_private(make):
+    core, c = make()
+    infra(core)
+    core.projects.create(slug="acme", name="Acme")
+    core.projects.create(slug="diary", name="Diary", private=True)
+    for slug in ("infra", "acme", "diary"):
+        call(c, STATIC_KEY, "memory_write", {"scope": f"project:{slug}", "namespace": "notes", "title": f"{slug} deploy", "body": "deploy notes"})
+    plain = payload(call(c, STATIC_KEY, "memory_search", {"query": "deploy", "project": "infra"}))
+    assert {i["scope"] for i in plain["items"]} == {"project:infra"}
+    assert core.audit.recent(destination="memory") == []
+    wide = payload(call(c, STATIC_KEY, "memory_search", {"query": "deploy", "project": "infra", "scopes": ["project:infra", "project:acme"]}))
+    assert [i["scope"] for i in wide["items"]] == ["project:infra", "project:acme"]
+    row = core.audit.recent(destination="memory")[0]
+    assert row["action"] == "cross_read" and row["target"] == "project:acme"
+    assert "private" in error_text(call(c, STATIC_KEY, "memory_search", {"query": "deploy", "project": "infra", "scopes": ["project:diary"]}))
+    own = payload(call(c, STATIC_KEY, "memory_list", {"project": "diary"}))
+    assert {i["scope"] for i in own["items"]} == {"project:diary"}
+    general = payload(call(c, STATIC_KEY, "memory_search", {"query": "deploy"}))
+    assert general["items"] == []
+
+
+def test_key_scope_allowlist(make):
+    cfg = base_config()
+    cfg["auth"]["key_scopes"] = {"channel": ["project:acme"]}
+    core, c = make(config=cfg)
+    infra(core)
+    core.projects.create(slug="acme", name="Acme")
+    w = payload(call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "namespace": "notes", "title": "Z", "body": "infra only"}))
+    assert payload(call(c, CHANNEL_KEY, "memory_write", {"scope": "project:acme", "namespace": "notes", "title": "P", "body": "acme"}))["scope"] == "project:acme"
+    for tool, args in (("memory_write", {"scope": "project:infra", "namespace": "notes", "title": "x", "body": "y"}),
+                       ("memory_read", {"id": w["id"]}),
+                       ("memory_delete", {"id": w["id"]}),
+                       ("memory_search", {"query": "infra", "project": "infra"}),
+                       ("context_pack", {"project": "infra"}),
+                       ("routes_set", {"target": "captain:Captain"}),
+                       ("project_create", {"slug": "new", "name": "New"}),
+                       ("capy_delegate", {"task": "x", "project": "infra"})):
+        assert "limited to project:acme" in error_text(call(c, CHANNEL_KEY, tool, args)) or "may not read" in error_text(call(c, CHANNEL_KEY, tool, args)), tool
+    items = payload(call(c, CHANNEL_KEY, "memory_search", {"query": "acme", "project": "acme"}))["items"]
+    assert {i["scope"] for i in items} == {"project:acme"}
+    assert payload(call(c, CHANNEL_KEY, "switchboard_status", {}))["you"]["scopes"] == ["project:acme"]
+
+
+# Runaway guards -----------------------------------------------------------------------------------
+
+def test_same_task_to_same_target_returns_the_existing_handle(make, capy):
+    clock = Clock()
+    core, c = make(clock=clock, config=base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01}}))
+    first = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Fix the build"}))
+    again = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Fix the build"}))
+    assert again["handle"] == first["handle"] and again["duplicate"] is True
+    assert len([r for r in capy.requests if r[0] == "POST" and r[1].endswith("/message")]) == 1
+    assert [r["outcome"] for r in core.audit.recent(action="delegate")] == ["duplicate", "ok"]
+    clock.t += 601
+    assert payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Fix the build"}))["handle"] != first["handle"]
+
+
+def test_burst_limit_stops_loops_but_never_replies_or_waits(make):
+    clock = Clock()
+    cfg = base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01, "burst": {"count": 3, "window_s": 600}}})
+    core, c = make(clock=clock, config=cfg)
+    for i in range(3):
+        assert not call(c, STATIC_KEY, "capy_delegate", {"task": f"task {i}"}).get("isError")
+    err = error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "task 4"}))
+    assert "looks like a loop" in err
+    assert core.audit.recent(action="delegate")[0]["outcome"] == "refused"
+    for _ in range(5):
+        assert not call(c, STATIC_KEY, "capy_reply", {"thread_id": CAPTAIN, "text": "more context"}).get("isError")
+        assert not call(c, STATIC_KEY, "capy_wait", {"timeout_s": 0}).get("isError")
+    assert not call(c, CHANNEL_KEY, "capy_delegate", {"task": "another caller"}).get("isError")
+    clock.t += 601
+    assert not call(c, STATIC_KEY, "capy_delegate", {"task": "task 5"}).get("isError")
+
+
+def test_delegation_is_not_described_as_scarce(make):
+    from conftest import rpc
+    _, c = make(config=base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}}}))
+    tools = {t["name"]: t for t in rpc(c, STATIC_KEY, "tools/list").json()["result"]["tools"]}
+    d = tools["capy_delegate"]["description"]
+    assert "per day" not in d.lower() and "cheap" in d and "capy_reply" in d
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
+    assert "used_today" not in out

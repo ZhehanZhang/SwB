@@ -3,7 +3,8 @@
 !.env.example
 secrets/
 data/
-config/capy-bridge.yaml
+config/switchboard.yaml
+compose.override.yaml
 __pycache__/
 *.pyc
 .pytest_cache/

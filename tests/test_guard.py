@@ -1,0 +1,70 @@
+from switchboard.guard import RateLimiter
+from conftest import CLAUDE_CB, STATIC_KEY, rpc
+
+
+def test_failed_bearer_keys_are_audited_and_locked_out(make):
+    core, c = make()
+    for _ in range(20):
+        assert rpc(c, "wrong-key-" + "x" * 30, "tools/list").status_code == 401
+    assert rpc(c, "wrong-key-" + "x" * 30, "tools/list").status_code == 429
+    locked = rpc(c, STATIC_KEY, "tools/list")
+    assert locked.status_code == 429 and int(locked.headers["retry-after"]) > 0
+    fails = core.audit.recent(action="auth_failure", limit=50)
+    assert len(fails) == 20 and fails[0]["target"] == "/mcp" and fails[0]["outcome"] == "refused"
+
+
+def test_missing_token_is_not_counted(make):
+    core, c = make()
+    for _ in range(30):
+        assert rpc(c, None, "tools/list").status_code == 401
+    assert rpc(c, STATIC_KEY, "tools/list").status_code == 200
+    assert core.audit.recent(action="auth_failure") == []
+
+
+def test_register_is_rate_limited(make):
+    core, c = make()
+    codes = [c.post("/register", json={"redirect_uris": [CLAUDE_CB], "client_name": "Claude"}).status_code for _ in range(21)]
+    assert codes[:20] == [201] * 20 and codes[20] == 429
+    assert core.audit.recent(action="rate_limited")[0]["target"] == "/register"
+
+
+def test_request_size_limits(make):
+    _, c = make()
+    assert c.post("/register", content=b"x" * (1024 * 1024 + 1), headers={"content-type": "application/json"}).status_code == 413
+    big = rpc(c, STATIC_KEY, "tools/call", {"name": "memory_write", "arguments": {"scope": "general", "confirm_general": True, "namespace": "notes", "title": "t", "body": "y" * (2 * 1024 * 1024)}})
+    assert big.status_code == 200
+
+
+def test_limiter_window_slides():
+    now = [0.0]
+    lim = RateLimiter(clock=lambda: now[0], limits={"x": (2, 10.0)})
+    lim.hit("x", "ip")
+    lim.hit("x", "ip")
+    assert lim.blocked("x", "ip") == 10.0 and lim.blocked("x", "other") is None
+    now[0] = 10.5
+    assert lim.blocked("x", "ip") is None
+
+
+def test_auth_failures_say_what_was_wrong_without_the_key(make):
+    core, c = make()
+    bad = '"' + STATIC_KEY[:10] + ' ' + STATIC_KEY[10:]
+    assert rpc(c, bad, "tools/list").status_code == 401
+    row = core.audit.recent(action="auth_failure")[0]
+    assert "34 chars" in row["detail"] and "whitespace" in row["detail"] and "quoted" in row["detail"] and STATIC_KEY not in row["detail"]
+    r = c.post("/mcp", headers={"Authorization": "Token abc def", "Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+               json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    assert r.status_code == 401 and "not 'Bearer <token>'" in core.audit.recent(action="auth_failure")[0]["detail"]
+    for _ in range(3):
+        rpc(c, None, "tools/list")
+    missing = core.audit.recent(action="auth_missing")
+    assert len(missing) == 1 and "no Authorization header" in missing[0]["detail"]
+
+
+def test_a_bare_key_without_the_bearer_scheme_works(make):
+    core, c = make()
+    hdr = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+    body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+    assert c.post("/mcp", headers={**hdr, "Authorization": STATIC_KEY}, json=body).status_code == 200
+    assert c.post("/mcp", headers={**hdr, "Authorization": "  " + STATIC_KEY + " "}, json=body).status_code == 200
+    assert c.post("/mcp", headers={**hdr, "Authorization": "s" * 31}, json=body).status_code == 401
+    assert core.audit.recent(action="auth_failure")[0]["detail"].startswith("unknown or expired bearer token (31 chars")
