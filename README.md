@@ -646,6 +646,113 @@ Nothing about a bot's look is hard-coded; every install reads it from Slack at r
   settings. The API can't set it. Third-party logos belong to their respective owners; showing one identifies an
   integration and doesn't imply affiliation or endorsement.
 
+## Discord
+
+The Discord block reads bot mentions, DMs, replies in conversations it has handled, and messages in channels you
+explicitly listen to. Mention the bot with a target slug (for example, `@swb helper check the build`) or set a space's
+`default_target`. The target stays attached to the thread for follow-ups. Final replies go back through the bot.
+`discord_post` lets your own agents post to spaces you've granted them.
+
+1. In the [Discord Developer Portal](https://discord.com/developers/applications), create a New Application. Under
+   **Bot**, turn on **Message Content Intent** if you want unmentioned server follow-ups and listen mode to have text.
+   Reset the bot token there. You can copy the Application ID from **General Information** into the config now, or
+   let the bot learn it when Discord connects.
+2. Enable the block, add the servers and your Discord user IDs, and restart switchboard. In Discord's
+   **User Settings → Advanced**, enable **Developer Mode** to copy server and user IDs from their context menus.
+3. As the owner, call `discord_provision` and open its one-time token link behind Cloudflare Access. Paste the token
+   there and save. Without Access, set `DISCORD_BOT_TOKEN` in the server environment instead. Never enter a token in
+   YAML, Discord or an MCP tool argument.
+4. Open `setup.invite_url` from `discord_status` and add the bot to each configured server. The link requests only the
+   bot scope and the permissions for the enabled features; it does not request Administrator or slash commands.
+5. Channels and targets are private by default. To let other people reach a target, share both
+   `channel:<space>/<channel-id>` (or `channel:<space>/#<name>`) and `target:<slug>`. A visibility list can name
+   individual users as `discord:<user-id>`. Only `owner_ids` grant owner trust; non-owner messages remain untrusted.
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: helper
+    agents: {claude: [home]}
+```
+
+- Connection: `token_env` defaults to `DISCORD_BOT_TOKEN`, and an environment token takes precedence over a
+  saved token. `application_id` is optional. `dm_space` selects the space whose trust and routing settings apply
+  to DMs (the first configured space by default). With `message_content: false`, Discord can withhold the text
+  of unmentioned server messages, including follow-ups and listened-to messages. `connect: false` skips Gateway
+  intake, which is useful for testing the REST side alone.
+- Posting: `threads` defaults to `true` and creates a public thread from the original message when Discord
+  supports it. Set it to `false` to reply in place. `personas: true` uses a webhook per channel for persona posts,
+  except in DMs and when a native reply reference is needed. `ack_reaction` defaults to 👀; set it to `null` to
+  disable reactions. Posts don't ping users or roles. `daily_cap` optionally limits outbound tool calls per day.
+- Routing: each space needs a distinct `guild_id`. `known` maps Discord user IDs to names; `listen` lists channel
+  or thread IDs whose unaddressed messages go only to granted inboxes. `project` sets the default project and
+  `channel_projects` overrides it by ID or `#name`. `bot_posts_per_hour` defaults to 20 per thread.
+  The block's `agents` maps agent names to space lists or `"*"`, `target_aliases` adds local slugs, and
+  `refresh_minutes` controls target refresh (30 by default).
+
+`discord_status` reports the Gateway connection state, ordered setup steps still missing, bot identity, configured
+spaces and your grants, the requested intents and invite link, and whether the token came from the environment or
+the claim page. It never returns the token.
+
+## Telegram
+
+Telegram is both a way in and a way out. The bot uses the Bot API's long polling, so it needs no public
+Telegram endpoint, tunnel or Cloudflare Access change. One process can poll a given bot token at a time.
+Telegram DMs, bot mentions, `/swb <target> <message>` and replies to the bot can reach a switchboard target
+such as an agent, routine or project. A reply to the bot keeps the earlier target unless you name another.
+Telegram uses the bot's own name; relayed replies can show the target's persona on a bold first line.
+
+1. Enable the block in `config/switchboard.yaml` and configure at least one space.
+2. Create the bot in [@BotFather](https://t.me/BotFather) with `/newbot`. Call `telegram_provision` and
+   enter its HTTP API token only at the one-time link (requires owner sign-in through Access). Without Access,
+   set the server's `TELEGRAM_BOT_TOKEN` environment variable instead. If set, the environment takes precedence;
+   remove or update it before switching to a token saved through the link.
+3. Add the bot to each group and send `/swb@<bot username>` there. Copy the negative chat id from
+   `telegram_status` → `setup.seen_chats` into the space's `chats`. If using `listen`, turn off privacy
+   mode with `/setprivacy` in @BotFather, then remove and re-add the bot to the group.
+4. Open the bot's private chat and press Start. Copy your private chat id from `setup.seen_chats` into
+   `owner_ids` for each space where you're the owner. Friends can be listed by Telegram user id in `known`;
+   their text is still wrapped as untrusted.
+5. Leave channels and targets private unless others should reach them. To share, set both
+   `channel:<space>/<chat id>` and `target:<slug>` under `visibility.resources` to `shared` or grant access
+   to specific `telegram:<user id>` entries. Messages to private resources from a non-owner file context
+   without waking a routine or sending a reply.
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    token_env: TELEGRAM_BOT_TOKEN
+    dm_space: home
+    ack_reaction: "👀"
+    persona_prefix: true
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        known: {333333: Friend}
+        default_target: claude
+        # listen: [-100111222]
+```
+
+Each group belongs to one space. Private chats go to `dm_space` (the first space by default). Use
+`spaces.<label>.listen` to file unaddressed messages from specific chats in the inboxes of granted agents.
+The shared chat settings `project`, `channel_projects`, and `bot_posts_per_hour` assign project context and cap
+bot posts per thread. `agents` grants agents access to a list of spaces or `"*"`, `target_aliases` adds slug
+aliases, and `refresh_minutes` controls target refresh (30 by default). Set `ack_reaction: null` to turn
+reactions off, or `persona_prefix: false` to send plain text. Config edits take effect on restart.
+
+`telegram_status` reports the connection, configured spaces, and ordered steps for missing setup. Its
+`setup` includes the bot and invite links, privacy mode, whether the token is from the environment or sealed
+storage, whether a claim is still open, and the most recent unconfigured groups and private chats seen this
+run. It never shows the token. Only the owner's agents with a grant can use `telegram_post`.
+
 ## GitHub App
 
 Create a GitHub App you own. Set its webhook URL to `https://<your-host>/github/webhook` and generate a webhook

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
-from starlette.routing import Route
+from starlette.routing import Mount, Route
 
 from . import pages
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
@@ -463,7 +463,7 @@ def create_app(core: "Switchboard") -> Any:
                 await core.aclose()
 
     limiter = RateLimiter()
-    origin_routes = [r for o in core.origins.values() for r in o.routes()]
+    origin_routes = sorted((r for o in core.origins.values() for r in o.routes()), key=lambda r: isinstance(r, Mount) and not r.path)
     app: Any = Starlette(
         routes=[
             Route("/", admin, methods=["GET"]),

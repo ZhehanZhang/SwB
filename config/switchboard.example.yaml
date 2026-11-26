@@ -65,6 +65,33 @@ blocks:
       agents:
         claude-code: {default_s: 45, max_s: 55}
 
+  # Discord (optional): bot mentions, thread replies, DMs and the discord_* tools.
+  discord:
+    use: discord
+    enabled: false
+    # token_env: DISCORD_BOT_TOKEN             # environment override; otherwise save at the discord_provision link
+    # application_id: "100000000000000000"   # optional; learned from the Gateway if omitted
+    # threads: true                           # start a public thread when replying in a server text channel
+    # personas: false                         # use one webhook per parent channel for persona posts
+    # message_content: true                   # enable Message Content Intent under Bot in the Discord Developer Portal
+    # ack_reaction: "👀"                        # null disables acknowledgements
+    # dm_space: home                          # use this space's trust and routing in DMs; defaults to the first space
+    # connect: true                           # false skips the Gateway connection, for REST-only tests
+    # daily_cap: null                         # optional limit on outbound tool calls per day
+    # agents: {claude: [home]}                 # agent to space labels or "*"; controls posts and event inboxes
+    # target_aliases: {}                      # block-local target slugs
+    # refresh_minutes: 30                     # how often to refresh targets
+    # spaces:
+    #   home:
+    #     guild_id: "100000000000000001"      # required Discord server ID
+    #     owner_ids: ["100000000000000002"]   # the owner's Discord user IDs
+    #     known: {"100000000000000003": Friend}
+    #     listen: ["100000000000000004"]      # channel or thread IDs
+    #     default_target: helper
+    #     project: example
+    #     channel_projects: {"#builds": example}
+    #     bot_posts_per_hour: 20
+
   capy:
     use: capy
     enabled: false
@@ -102,6 +129,28 @@ blocks:
     delivery: mailbox
     dots:
       example-dot: {name: Example Dot, mailbox: chatgpt}
+
+  # Telegram (optional): long polling in, Bot API posts out. Set enabled: true to start setup.
+  telegram:
+    use: telegram                               # which block to load
+    enabled: false                              # disabled until you opt in
+    # token_env: TELEGRAM_BOT_TOKEN              # or enter the token at a telegram_provision claim link
+    # dm_space: home                            # where private chats go; default is the first space
+    # ack_reaction: "👀"                         # reaction on addressed messages; null disables it
+    # persona_prefix: true                      # include the persona on a bold first line
+    # refresh_minutes: 30                       # how often to look up targets
+    # target_aliases: {}                         # extra routing slugs, e.g. {helper: claude}
+    # agents: {claude: [home]}                   # space list per agent, or "*" for all spaces
+    # spaces:                                   # maps labels to one or more sets of groups
+    #   home:                                   # label used in telegram_post and visibility
+    #     chats: [-100111222]                   # negative integer group ids, each in at most one space
+    #     owner_ids: [222222]                   # Telegram user ids trusted as owner
+    #     known: {333333: Friend}               # known Telegram user ids and display names
+    #     default_target: claude                # target when no slug or earlier thread target exists
+    #     listen: [-100111222]                  # file unaddressed messages from these chats; needs privacy mode off
+    #     project: example                      # default switchboard project
+    #     channel_projects: {-100111222: null}  # override or opt out of the project by chat id
+    #     bot_posts_per_hour: 20                # limit in each conversation thread
 
   # Slack (optional): events in (watched channels, mentions, DMs, @swb <slug> routing) and slack_* tools out.
   # Tokens never go here: every *_env names a variable in .env. Config changes apply on restart.
