@@ -283,20 +283,38 @@ class ClaudeRoutineBlock(Block):
 
     # Self-registration: a Claude session names its routine, the owner enters the token behind Access -------------
 
+    def pending_projects(self) -> list[dict[str, Any]]:
+        """New projects reserved by active claims, one per slug, until the first link is saved."""
+        now = self.core.clock()
+        out = {}
+        for r in self.core.store.q(
+            "SELECT project, new_project, expires_at FROM routine_claims WHERE new_project IS NOT NULL AND used_at IS NULL AND expires_at > ? "
+            "AND NOT EXISTS (SELECT 1 FROM projects WHERE slug = routine_claims.project) ORDER BY created_at, rowid", (now,)
+        ):
+            slug = r["project"]
+            if slug not in out:
+                p = json.loads(r["new_project"])
+                out[slug] = {"slug": slug, "name": p["name"], "description": p["description"], "claude_project": p["links"]["claude_project"],
+                             "expires_in_s": int(r["expires_at"] - now)}
+        return list(out.values())
+
     def similar(self, *hints: str | None) -> list[dict[str, Any]]:
-        """Projects whose slug, name or linked project name (claude_project, ...) is close to any hint."""
+        """Existing or pending projects whose slug, name or linked project name is close to any hint."""
         def norm(s: str) -> str:
             return re.sub(r"[^a-z0-9]", "", s.lower())
 
         hs = [norm(h) for h in hints if h and norm(h)]
+        projects = [{"slug": p.slug, "name": p.name, "links": {k: v for k, v in p.links.items() if k != "repos"}} for p in self.core.projects.list()]
+        projects.extend({"slug": p["slug"], "name": p["name"], "links": {"claude_project": p["claude_project"]}, "pending": True}
+                        for p in self.pending_projects())
         out = []
-        for p in self.core.projects.list():
-            fields = [p.slug, p.name] + [str(v) for k, v in p.links.items() if k.endswith("_project") and isinstance(v, str)]
+        for p in projects:
+            fields = [p["slug"], p["name"]] + [v for k, v in p["links"].items() if k.endswith("_project") and isinstance(v, str)]
             fs = [norm(f) for f in fields if norm(f)]
             score = max((1.0 if h == f else 0.9 if min(len(h), len(f)) >= 3 and (h in f or f in h) else difflib.SequenceMatcher(None, h, f).ratio())
                         for h in hs for f in fs) if hs and fs else 0.0
             if score >= SIMILAR:
-                out.append({"slug": p.slug, "name": p.name, "links": {k: v for k, v in p.links.items() if k != "repos"}, "score": round(score, 2)})
+                out.append({**p, "score": round(score, 2)})
         return sorted(out, key=lambda x: -x["score"])
 
     def register(self, *, fire: str, claude_project: str, project: str | None, project_name: str | None, description: str | None,
@@ -325,12 +343,16 @@ class ClaudeRoutineBlock(Block):
         if existing is None:
             if not SLUG_RE.match(slug) or slug == "general":
                 raise BlockError("project must be lowercase letters, digits and dashes (max 48), and not 'general'")
-            near = self.similar(slug, project_name, title)
-            if near and not create_new:
-                return {"pending": False, "reason": f"no project {slug!r}, but these are close: attach to one (project=<its slug>), or pass "
-                        "create_new=true if this really is a new project", "candidates": near}
-            new_project = {"name": (project_name or title).strip()[:120], "description": (description or "").strip()[:2000],
-                           "links": {"claude_project": title}}
+            pending = next((p for p in self.pending_projects() if p["slug"] == slug), None)
+            if pending:
+                new_project = {"name": pending["name"], "description": pending["description"], "links": {"claude_project": pending["claude_project"]}}
+            else:
+                near = self.similar(slug, project_name, title)
+                if near and not create_new:
+                    return {"pending": False, "reason": f"no project {slug!r}, but these are close: attach to one (project=<its slug>), or pass "
+                            "create_new=true if this really is a new project", "candidates": near}
+                new_project = {"name": (project_name or title).strip()[:120], "description": (description or "").strip()[:2000],
+                               "links": {"claude_project": title}}
         slug = existing.slug if existing else slug
         if any(r["routine_id"] == rid for r in self.configured.values()):
             raise BlockError(f"{rid} is set in the config file; change it there")
@@ -385,13 +407,15 @@ class ClaudeRoutineBlock(Block):
         self._check_name(c["name"], c["routine_id"], False, skip=_sha(code))
         if not self.core.store.n("UPDATE routine_claims SET used_at = ? WHERE code_hash = ? AND used_at IS NULL", (self.core.clock(), _sha(code))):
             raise BlockError("this link was already used")
+        created_project = False
         if c["new_project"]:
             try:
                 self.core.projects.get(c["project"])
             except ProjectError:
                 self.core.projects.create(slug=c["project"], **c["new_project"])
+                created_project = True
         return {**self.add(fire=c["routine_id"], token=token, project=c["project"], name=c["name"], agent="claude", actor=actor, title=c["title"],
-                           primary=True if c["primary"] else None), "created_project": bool(c["new_project"])}
+                           primary=True if c["primary"] else None), "created_project": created_project}
 
     def pending(self) -> list[dict[str, Any]]:
         return [{"name": r["name"], "routine_id": r["routine_id"], "project": r["project"], "claude_project": r["title"], "requested_by": r["created_by"],

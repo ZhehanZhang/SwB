@@ -290,12 +290,14 @@ class MCPBlock(Block):
         async def context_pack(ctx: Context, project: ProjectArg = None) -> str:
             return await run(core.context_pack(who(ctx), project))
 
-        @mcp.tool(title="List projects", description="Projects that scope memory and routes, with their links (repos, and the matching project in each block or assistant). hint finds the project for a repo or a project name.", annotations=READ)
+        @mcp.tool(title="List projects", description="Projects that scope memory and routes, with their links (repos, and the matching project in each block or assistant). hint finds the project for a repo or a project name. pending_projects lists new slugs waiting for an owner to save a routine registration.", annotations=READ)
         async def project_list(ctx: Context, include_archived: bool = False, hint: str | None = None) -> dict[str, Any]:
             who(ctx)
+            block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
+            pending = block.pending_projects() if block is not None else []
             if hint:
-                return {"matches": sync(core.projects.resolve, hint)}
-            return {"projects": [p.as_dict() for p in core.projects.list(include_archived)]}
+                return {"matches": sync(core.projects.resolve, hint), "pending_projects": pending}
+            return {"projects": [p.as_dict() for p in core.projects.list(include_archived)], "pending_projects": pending}
 
         @mcp.tool(title="Create a project", description="Create a project, a memory scope 'project:<slug>'. Do this only when the owner starts a genuinely new project. Pass its repos: switchboard then links it to its counterpart in each block (a Capy project, say) and routes it (result.auto); ambiguous matches come back as candidates to ask the owner about.", annotations=WRITE)
         async def project_create(ctx: Context, slug: Annotated[str, Field(description="lowercase-dashed, e.g. switchboard")], name: str,

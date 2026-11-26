@@ -249,6 +249,11 @@ result has `pending: false` and the `candidates`, unless the call passes `create
 existing project whose `links.claude_project` equals the Claude Project's name is used. A new project is created only
 when the owner saves the link, with `links.claude_project` set.
 
+`project_list` shows new slugs still waiting on a registration link under `pending_projects`, and the
+near-duplicate check includes them as candidates marked `pending: true`. To attach another routine before the
+project exists, pass that exact slug to `routine_register`. Whichever link the owner saves first creates the
+project with the original name and description; saving another link then attaches its routine.
+
 Re-registering for the same switchboard project and Claude Project replaces any unexpired link still waiting to be
 saved and frees its routine name. Give the owner the latest link; the result lists any replaced names in
 `superseded`, and links for other Claude Projects still work.
