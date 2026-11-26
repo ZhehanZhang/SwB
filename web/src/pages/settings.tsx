@@ -3,6 +3,7 @@ import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/r
 import { Check, Copy, KeyRound, LogOut } from "lucide-react"
 import { toast } from "sonner"
 import { DataState } from "@/components/data-state"
+import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
 import { ApiError, isObject, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
 import { addPasskey, listPasskeys, removePasskey, supportsPasskeys } from "@/lib/owner-auth"
@@ -129,6 +130,14 @@ export function SettingsPage() {
 
   return (
     <div className="w-full max-w-[720px] space-y-8 pt-2 text-sm">
+      <section aria-labelledby="settings-appearance">
+        <h2 id="settings-appearance" className={headingClass}>Appearance</h2>
+        <div className="mt-2 flex min-h-[41px] flex-wrap items-center justify-between gap-2 border-b pb-2">
+          <span className="text-body-sm text-muted-foreground">Theme</span>
+          <ThemePicker />
+        </div>
+      </section>
+
       <section aria-labelledby="settings-run">
         <h2 id="settings-run" className={headingClass}>Run it</h2>
         <ul className="mt-5 rounded-lg bg-surface-sunken px-4 py-3">

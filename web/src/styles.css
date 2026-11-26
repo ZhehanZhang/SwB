@@ -15,6 +15,7 @@
   --primary-foreground: #fafafa;
   --ring: var(--accent);
   --destructive: #c8372d;
+  --destructive-foreground: #ffffff;
   --lamp-on: var(--accent);
   --lamp-off: #d4d4d8;
   --cord-intake: #2f5bd3;
@@ -22,9 +23,49 @@
   --cord-sink: #c8372d;
   --socket: #18181b;
   --socket-inner: #09090b;
+  --overlay: #000000;
+  --logo-capy: #73563e;
+  --logo-capy-foreground: #ffffff;
+  --logo-slack: #4a154b;
+  --logo-dark-tile: #18181b;
+  --surface-shadow: 0 1px 2px rgb(28 26 23 / 8%);
+  --toast-shadow: 0 4px 16px rgb(0 0 0 / 8%);
   --rail-width: 88px;
   --topbar-height: 64px;
   --mobile-tabbar-height: 108px;
+}
+
+.dark {
+  /* Replace this light-palette copy with the Figma dark tokens. */
+  color-scheme: light;
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-sunken: #f4f4f5;
+  --foreground: #18181b;
+  --muted-foreground: #52525b;
+  --subtle-foreground: #a1a1aa;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --accent: #333338;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --ring: var(--accent);
+  --destructive: #c8372d;
+  --destructive-foreground: #ffffff;
+  --lamp-on: var(--accent);
+  --lamp-off: #d4d4d8;
+  --cord-intake: #2f5bd3;
+  --cord-route: #2e7d4f;
+  --cord-sink: #c8372d;
+  --socket: #18181b;
+  --socket-inner: #09090b;
+  --overlay: #000000;
+  --logo-capy: #73563e;
+  --logo-capy-foreground: #ffffff;
+  --logo-slack: #4a154b;
+  --logo-dark-tile: #18181b;
+  --surface-shadow: 0 1px 2px rgb(28 26 23 / 8%);
+  --toast-shadow: 0 4px 16px rgb(0 0 0 / 8%);
 }
 
 @theme inline {
@@ -48,6 +89,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-input: var(--border-strong);
@@ -58,11 +100,14 @@
   --color-cord-sink: var(--cord-sink);
   --color-socket: var(--socket);
   --color-socket-inner: var(--socket-inner);
+  --color-overlay: var(--overlay);
+  --color-logo-capy: var(--logo-capy);
+  --color-logo-capy-foreground: var(--logo-capy-foreground);
+  --color-logo-dark-tile: var(--logo-dark-tile);
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-  --shadow-xs: 0 1px 2px rgb(28 26 23 / 8%);
-  --shadow-toast: 0 4px 16px rgb(0 0 0 / 8%);
+  --shadow-xs: var(--surface-shadow);
   --text-display-xl: 2rem;
   --text-display-xl--line-height: 2.25rem;
   --text-display-xl--font-weight: 800;
@@ -125,5 +170,8 @@
 }
 
 [data-sonner-toaster] [data-sonner-toast] {
-  box-shadow: var(--shadow-toast);
+  --normal-bg: var(--surface);
+  --normal-border: var(--border);
+  --normal-text: var(--foreground);
+  box-shadow: var(--toast-shadow);
 }
