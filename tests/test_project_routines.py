@@ -152,3 +152,17 @@ def test_root_page_adds_a_routine_and_shows_projects_across_systems(tmp_path):
 
 def client_targets(c):
     return payload(call(c, STATIC_KEY, "targets", {"refresh": True}))["targets"]
+
+
+def test_a_target_limited_key_is_checked_after_the_project_picks_a_routine(tmp_path):
+    core, c, anthropic = build(tmp_path, BOTH)
+    try:
+        core.cfg.key_targets["capy"] = ("claude",)
+        assert "may send only to" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "infra"}))
+        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "other"}))["routine"] == "claude"
+        core.cfg.key_targets["capy"] = ("claude-infra",)
+        assert payload(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude-infra", "project": "infra"}))["routine"] == "claude-infra"
+        assert "may send only to" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "claude", "project": "other"}))
+        assert [rid for rid, _ in anthropic.fired] == ["trig_01GENERAL", "trig_01INFRA"]
+    finally:
+        c.__exit__(None, None, None)
