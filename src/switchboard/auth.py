@@ -1,9 +1,8 @@
 """Single-owner OAuth 2.1 authorization server plus bearer verification for /mcp.
 
 Clients identify themselves by Dynamic Client Registration (RFC 7591) or by a Client ID Metadata
-Document (an https client_id). Every flow needs PKCE S256. Only the owner can approve a sign-in: /authorize sits
-behind Cloudflare Access with the SSO identity provider, and the server verifies the Access JWT itself
-(signature, audience, issuer, owner email). There is no password form.
+Document (an https client_id). Every flow needs PKCE S256. Only the owner can approve a sign-in,
+using an owner session or a verified Cloudflare Access assertion. There is no password form.
 """
 
 from __future__ import annotations
@@ -30,6 +29,7 @@ from starlette.routing import Route
 from . import pages
 from .agents import PRESETS, Agents, host_allowed
 from .config import Config
+from .sessions import Owner, Sessions, SESSION_COOKIE, login_redirect
 from .store import Store, dumps
 
 log = logging.getLogger("switchboard.auth")
@@ -170,6 +170,7 @@ class Auth:
         self.cimd_hosts = cfg.cimd_hosts or self.agents.cimd_hosts()
         self.http = http or httpx.AsyncClient(timeout=5.0, follow_redirects=False)
         self.secret = secret or secrets.token_bytes(32)
+        self.sessions = Sessions(store)
         self._access_verifier = access_verifier
         self._jwks: Any = None
         self._cimd_cache: dict[str, tuple[float, Client]] = {}
@@ -404,7 +405,7 @@ class Auth:
 
     async def access_email(self, request: Request) -> str | None:
         assertion = request.headers.get("cf-access-jwt-assertion")
-        if not assertion or not self.cfg.access_team_domain:
+        if not assertion or not self.cfg.access_configured:
             return None
         if self._access_verifier:
             email = await self._access_verifier(assertion)
@@ -426,10 +427,46 @@ class Auth:
             return None
         return claims.get("email")
 
-    async def owner(self, request: Request) -> str | None:
-        """The owner's email when the request carries a valid Access JWT for an owner, else None."""
+    async def owner(self, request: Request) -> Owner | None:
         email = await self.access_email(request)
-        return email if email and email in self.cfg.owner_emails else None
+        if email and any(hmac.compare_digest(email.encode(), e.encode()) for e in self.cfg.owner_emails):
+            return Owner(email, "access")
+        return self.sessions.owner(request.cookies.get(SESSION_COOKIE))
+
+    def origin_ok(self, request: Request) -> bool:
+        origins = request.headers.getlist("origin")
+        if not origins:
+            return True
+        origin = self.cfg.public_origin
+        return origin is not None and all(hmac.compare_digest(value.encode(), origin.encode()) for value in origins)
+
+    def csrf(self, key: str) -> str:
+        return hmac.digest(self.secret, f"switchboard-csrf:{key}".encode(), "sha256").hex()
+
+    async def valid_csrf(self, request: Request, key: str) -> bool:
+        if not self.origin_ok(request):
+            return False
+        expected = self.csrf(key).encode()
+        header = request.headers.get("x-csrf-token")
+        if header is not None and hmac.compare_digest(header.encode(), expected):
+            return True
+        if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() in (
+            "application/x-www-form-urlencoded", "multipart/form-data",
+        ):
+            token = (await request.form()).get("csrf")
+            return isinstance(token, str) and hmac.compare_digest(token.encode(), expected)
+        return False
+
+    async def protect_owner(self, request: Request) -> tuple[Owner | None, JSONResponse | None]:
+        write = request.method not in ("GET", "HEAD")
+        if write and not self.origin_ok(request):
+            return None, JSONResponse({"error": "csrf"}, status_code=403)
+        owner = await self.owner(request)
+        if owner is None:
+            return None, JSONResponse({"error": "signed_out"}, status_code=401)
+        if write and not await self.valid_csrf(request, owner.csrf_key):
+            return None, JSONResponse({"error": "csrf"}, status_code=403)
+        return owner, None
 
     async def validate_authorize(self, p: dict[str, str]) -> tuple[Client, dict[str, str]]:
         """Checks that must pass before anything may be redirected to the client."""
@@ -570,15 +607,19 @@ class Auth:
     async def h_authorize(self, request: Request) -> Response:
         if (d := self._disabled()) is not None:
             return d
-        if request.method == "GET":
-            params = dict(request.query_params)
-        else:
+        owner = None
+        if request.method == "POST":
+            owner, refused = await self.protect_owner(request)
+            if refused is not None:
+                return refused
             form = await request.form()
             try:
                 params = self.unsign(str(form.get("req") or ""))
             except OAuthError as e:
                 self.failed(request, "/authorize", e)
                 return pages.message_page("Sign-in failed", e.description, 400)
+        else:
+            params = dict(request.query_params)
         try:
             c, params = await self.validate_authorize(params)
         except OAuthError as e:
@@ -590,14 +631,10 @@ class Auth:
         except OAuthError as e:
             return self.error_redirect(params["redirect_uri"], state, e)
 
-        if not self.cfg.access_team_domain:
-            return pages.message_page("Sign-in disabled", "Sign-in needs Cloudflare Access in front of /authorize (auth.cloudflare_access).", 503)
-        email = await self.owner(request)
-        if email is None:
-            return pages.message_page("Not allowed", "This sign-in needs the owner's SSO through Cloudflare Access.", 403)
+        if owner is None and (owner := await self.owner(request)) is None:
+            return login_redirect(request)
 
         if request.method == "POST":
-            form = await request.form()
             if form.get("decision") == "deny":
                 return self.error_redirect(params["redirect_uri"], state, OAuthError("access_denied", "the owner denied the request"))
             if form.get("decision") == "approve":
@@ -612,10 +649,11 @@ class Auth:
         who = html.escape((self.agents.label(source, "") if source in self.agents else "") or c.name or c.client_id)
         dest = html.escape(urlparse(params["redirect_uri"]).netloc)
         line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and route work to the destinations this switchboard connects, such as Capy."
-        signed = f'<p class="item-line">Signed in with SSO as {html.escape(email)}</p>'
+        signed = f'<p class="item-line">Signed in as {html.escape(owner.label)}</p>'
         body = pages.hero("Connect to Switchboard", line) + f"""
 <form method="post" class="fade-in">
 <input type="hidden" name="req" value="{html.escape(self.sign(params))}">
+<input type="hidden" name="csrf" value="{self.csrf(owner.csrf_key)}">
 <div class="card"><div class="item"><div class="item-main"><span class="card-title">{who}</span><span class="item-line">Returns to <code>{dest}</code></span>{signed}</div></div></div>
 <div class="actions"><button class="pill-button primary" name="decision" value="approve">Approve</button>
 <button class="text-button" name="decision" value="deny" formnovalidate>Deny</button></div>

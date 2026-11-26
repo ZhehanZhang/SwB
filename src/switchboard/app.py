@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -16,7 +15,9 @@ from starlette.routing import Mount, Route
 from . import pages
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
 from .guard import Guard, RateLimiter, client_ip, reject
+from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
+from .sessions import Owner, login_redirect
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -120,19 +121,18 @@ def create_app(core: "Switchboard") -> Any:
     async def healthz(request: Request) -> JSONResponse:
         return JSONResponse(core.health())
 
-    async def owner_page(request: Request) -> tuple[str | None, Response | None]:
-        if not core.cfg.access_team_domain:
-            return None, pages.message_page("Not available", "This needs Cloudflare Access in front of switchboard (auth.cloudflare_access).", 403)
-        email = await core.auth.owner(request)
-        if email is None:
-            return None, pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
-        return email, None
+    async def owner_page(request: Request) -> tuple[Owner | None, Response | None]:
+        owner = await core.auth.owner(request)
+        if owner is None:
+            return None, login_redirect(request)
+        return owner, None
 
     async def admin(request: Request) -> Response:
         """The owner's page: status, routes, projects and recent refusals."""
-        email, refused = await owner_page(request)
+        owner, refused = await owner_page(request)
         if refused is not None:
             return refused
+        csrf = core.auth.csrf(owner.csrf_key)
         changes = [c for c in core.audit.recent(limit=100) if c["action"] in ("route_set", "route_remove", "auth_failure", "rate_limited")][:15]
         extra = ""
         if core.slack is not None:
@@ -140,39 +140,30 @@ def create_app(core: "Switchboard") -> Any:
                        "decide-refused": "That request was already decided or has expired.",
                        "avatar-saved": "Avatar saved. New posts use it; Slack may take a minute to show it.",
                        "avatar-refused": "Avatar not saved: send a picture of the persona's file type (see its file name), 2 MB at most."}
-            extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf(email),
+            extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf,
                                      notices.get(request.query_params.get("notice", "")), core.slack.persona_rows())
         rows = [row for b in core.blocks.values() for row in b.page_rows()]
         routine_block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
-        return pages.admin_page(core.health(), email, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
-                                block_rows=rows, connected=core.connections.list(), csrf=csrf(email),
+        return pages.admin_page(core.health(), owner.label, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
+                                block_rows=rows, connected=core.connections.list(), csrf=csrf,
+                                add_passkey=bool(core.cfg.public_url and not core.store.one("SELECT 1 FROM owner_passkeys LIMIT 1")),
                                 routines=routine_block.rows() if routine_block else None, systems=core.project_systems(await core.targets()),
                                 visibility=core.visibility.rows([f"target:{t['slugs'][0]}" for t in await core.targets() if t.get("slugs") and t.get("block") != "agent"][:200]))
 
-    def csrf(email: str) -> str:
-        return hmac.new(core.auth.secret, f"switchboard-csrf:{email}".encode(), hashlib.sha256).hexdigest()
-
-    def valid_csrf(form: Any, expected: str) -> bool:
-        token = form.get("csrf")
-        return isinstance(token, str) and hmac.compare_digest(token.encode(), expected.encode())
-
     async def slack_decide(request: Request) -> Response:
-        """The owner approves or rejects a Slack write from the root page: Access JWT for an owner plus a CSRF token."""
+        """The owner approves or rejects a Slack write from the root page."""
         from .slack.writes import Actor, WriteError
 
-        if core.slack is None or not core.cfg.access_team_domain:
-            return pages.message_page("Not available", "Slack approvals here need Slack and Cloudflare Access configured.", 403)
-        email = await core.auth.owner(request)
-        if email is None:
-            return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
-        form = await request.form()
-        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
-            return pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
+        owner, _, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        if core.slack is None:
+            return pages.message_page("Not available", "Slack approvals need Slack configured.", 403)
         verb = request.path_params["verb"]
         if verb not in ("approve", "reject"):
             return Response(status_code=404)
         try:
-            req = await core.slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", email))
+            req = await core.slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", owner.label))
         except WriteError:
             return RedirectResponse("/?notice=decide-refused", status_code=303)
         outcome = "rejected" if verb == "reject" else ("approved" if req["status"] == "sent" else "send-failed")
@@ -190,15 +181,12 @@ def create_app(core: "Switchboard") -> Any:
                         headers={"Cache-Control": "public, max-age=3600"})
 
     async def avatar_upload(request: Request) -> Response:
-        """The owner replaces a persona's picture from the root page: Access JWT for an owner plus a CSRF token."""
-        if core.slack is None or not core.cfg.access_team_domain:
-            return pages.message_page("Not available", "Avatar uploads need Slack and Cloudflare Access configured.", 403)
-        email = await core.auth.owner(request)
-        if email is None:
-            return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
-        form = await request.form()
-        if not hmac.compare_digest(str(form.get("csrf") or ""), csrf(email)):
-            return pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
+        """The owner replaces a persona's picture from the root page."""
+        owner, form, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        if core.slack is None:
+            return pages.message_page("Not available", "Avatar uploads need Slack configured.", 403)
         persona = core.slack.config.personas.get(request.path_params["pid"])
         if persona is None or not persona.avatar:
             return pages.message_page("Not available", "That persona has no avatar file; it uses an icon_url or emoji from the config.", 404)
@@ -212,28 +200,25 @@ def create_app(core: "Switchboard") -> Any:
         tmp = core.slack.avatar_dir / f".{persona.avatar}.tmp"
         tmp.write_bytes(data)
         tmp.replace(core.slack.avatar_dir / persona.avatar)
-        core.slack.store.audit(f"admin:{email}", "avatar_uploaded", persona=persona.id, file=persona.avatar, bytes=len(data))
+        core.slack.store.audit(f"admin:{owner.label}", "avatar_uploaded", persona=persona.id, file=persona.avatar, bytes=len(data))
         return RedirectResponse("/?notice=avatar-saved", status_code=303)
 
-    async def owner_form(request: Request) -> tuple[str | None, Any, Response | None]:
-        email, refused = await owner_page(request)
-        if refused is not None:
-            return None, None, refused
-        form = await request.form()
-        if not valid_csrf(form, csrf(email)):
-            return None, None, pages.message_page("Not allowed", "The form expired; reload the page and try again.", 403)
-        return email, form, None
+    async def owner_form(request: Request) -> tuple[Owner | None, Any, Response | None]:
+        owner, refused = await core.auth.protect_owner(request)
+        return (None, None, refused) if refused is not None else (owner, await request.form(), None)
 
     def claim_key_owner(token: str) -> str | None:
         return claim_key_actor if claim_owner_key and hmac.compare_digest(token.encode(), claim_owner_key.encode()) else None
 
     async def claim_page_access(request: Request) -> tuple[str | None, Response | None]:
-        if not core.cfg.access_team_domain and claim_key_actor:
-            return None, pages.claim_page("Save a token", "", csrf(f"claim:{request.path_params['code']}"), owner_key=True)
-        email, refused = await owner_page(request)
-        return (None, refused) if refused is not None else (csrf(email), None)
+        if not core.cfg.owner_sign_in and claim_key_actor:
+            return None, pages.claim_page("Save a token", "", core.auth.csrf(f"claim:{request.path_params['code']}"), owner_key=True)
+        owner, refused = await owner_page(request)
+        return (None, refused) if refused is not None else (core.auth.csrf(owner.csrf_key), None)
 
     async def claim_form(request: Request) -> tuple[str | None, str, Response | None]:
+        if not core.auth.origin_ok(request):
+            return None, "", JSONResponse({"error": "csrf"}, status_code=403)
         auth = request.headers.get("authorization")
         if auth is not None:
             scheme, _, key = auth.partition(" ")
@@ -241,17 +226,19 @@ def create_app(core: "Switchboard") -> Any:
             if actor is None:
                 return None, "", pages.message_page("Not allowed", "This needs the Switchboard owner key.", 403)
             form = await request.form()
-        elif not core.cfg.access_team_domain and claim_key_actor:
+        elif not core.cfg.owner_sign_in and claim_key_actor:
             form = await request.form()
             key = form.get("owner_key")
             actor = claim_key_owner(key) if isinstance(key, str) else None
-            if actor is None or not valid_csrf(form, csrf(f"claim:{request.path_params['code']}")):
+            if actor is None:
                 return None, "", pages.message_page("Not allowed", "Use the Switchboard owner key and reload the form if needed.", 403)
+            if not await core.auth.valid_csrf(request, f"claim:{request.path_params['code']}"):
+                return None, "", JSONResponse({"error": "csrf"}, status_code=403)
         else:
-            email, form, refused = await owner_form(request)
+            owner, form, refused = await owner_form(request)
             if refused is not None:
                 return None, "", refused
-            actor = f"admin:{email}"
+            actor = f"admin:{owner.label}"
         token = form.get("token")
         return actor, token if isinstance(token, str) else "", None
 
@@ -281,34 +268,34 @@ def create_app(core: "Switchboard") -> Any:
         return pages.message_page("Token saved", "Run connect again to see whether Switchboard needs a restart.", 200)
 
     async def connect_code(request: Request) -> Response:
-        """The owner mints a pairing code from the root page (Access JWT plus CSRF); the code is shown once."""
+        """The owner mints a pairing code from the root page; the code is shown once."""
         from .connect import ConnectError
 
-        email, form, refused = await owner_form(request)
+        owner, form, refused = await owner_form(request)
         if refused is not None:
             return refused
         project = str(form.get("project") or "").strip().lower() or None
         try:
             if project:
                 core.projects.get(project)
-            code = core.connections.mint(agent=str(form.get("agent") or ""), project=project, client=None, by=f"admin:{email}")
+            code = core.connections.mint(agent=str(form.get("agent") or ""), project=project, client=None, by=f"admin:{owner.label}")
         except (ConnectError, ValueError) as e:
             return pages.message_page("Not minted", str(e), 400)
-        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="core", action="connect_code", outcome="ok", target=code["agent"])
+        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="core", action="connect_code", outcome="ok", target=code["agent"])
         return pages.connect_code_page(code, core.cfg.public_url or "")
 
     async def visibility_set(request: Request) -> Response:
         from .visibility import VisibilityError
 
-        email, form, refused = await owner_form(request)
+        owner, form, refused = await owner_form(request)
         if refused is not None:
             return refused
         resource = str(form.get("resource") or "")
         try:
-            rule = core.visibility.set(resource, str(form.get("visibility") or ""), f"admin:{email}", core.clock())
+            rule = core.visibility.set(resource, str(form.get("visibility") or ""), f"admin:{owner.label}", core.clock())
         except VisibilityError as e:
             return pages.message_page("Not changed", str(e), 400)
-        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="core", action="visibility_set", outcome="ok",
+        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="core", action="visibility_set", outcome="ok",
                           target=resource, detail=str(rule))
         return RedirectResponse("/", status_code=303)
 
@@ -316,7 +303,7 @@ def create_app(core: "Switchboard") -> Any:
         from .blocks import BlockError
         from .core import CoreError
 
-        email, form, refused = await owner_form(request)
+        owner, form, refused = await owner_form(request)
         if refused is not None:
             return refused
         block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
@@ -324,10 +311,10 @@ def create_app(core: "Switchboard") -> Any:
             return pages.message_page("Not available", "The claude-routine block isn't configured (blocks.claude-routine).", 400)
         try:
             out = block.add(fire=str(form.get("fire_url") or ""), token=str(form.get("token") or ""), project=str(form.get("project") or "") or None,
-                            name=str(form.get("name") or "") or None, agent="claude", actor=f"admin:{email}")
+                            name=str(form.get("name") or "") or None, agent="claude", actor=f"admin:{owner.label}")
         except (BlockError, CoreError) as e:
             return pages.message_page("Not added", str(e), 400)
-        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination=block.name, action="routine_add", outcome="ok",
+        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination=block.name, action="routine_add", outcome="ok",
                           target=out["name"], excerpt=f"{out['routine_id']} for {out['project'] or 'general'}")
         return RedirectResponse("/", status_code=303)
 
@@ -365,7 +352,7 @@ def create_app(core: "Switchboard") -> Any:
     async def routine_remove(request: Request) -> Response:
         from .blocks import BlockError
 
-        email, _, refused = await owner_form(request)
+        owner, _, refused = await owner_form(request)
         if refused is not None:
             return refused
         block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
@@ -374,16 +361,16 @@ def create_app(core: "Switchboard") -> Any:
             ok = block.remove(name) if block else False
         except BlockError as e:
             return pages.message_page("Not removed", str(e), 400)
-        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="claude-routine", action="routine_remove",
+        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="claude-routine", action="routine_remove",
                           outcome="ok" if ok else "refused", target=name)
         return RedirectResponse("/", status_code=303)
 
     async def connect_revoke(request: Request) -> Response:
-        email, _, refused = await owner_form(request)
+        owner, _, refused = await owner_form(request)
         if refused is not None:
             return refused
         n = core.connections.revoke(key_id=request.path_params["kid"])
-        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination="core", action="connect_revoke", outcome="ok" if n else "refused",
+        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="core", action="connect_revoke", outcome="ok" if n else "refused",
                           target=request.path_params["kid"])
         return RedirectResponse("/", status_code=303)
 
@@ -463,6 +450,7 @@ def create_app(core: "Switchboard") -> Any:
                 await core.aclose()
 
     limiter = RateLimiter()
+    login = OwnerLogin(core.auth, limiter)
     origin_routes = sorted((r for o in core.origins.values() for r in o.routes()), key=lambda r: isinstance(r, Mount) and not r.path)
     app: Any = Starlette(
         routes=[
@@ -482,6 +470,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/routines/claim/{code}", routine_claim, methods=["GET", "POST"]),
             Route(CLAIM_PATH + "/{code}", token_claim, methods=["GET", "POST"]),
             *pages.routes(),
+            *login.routes(),
             *core.auth.routes(),
             *origin_routes,
         ],
