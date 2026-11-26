@@ -60,7 +60,7 @@ PICKUP_TTL_S = 86_400
 CLAIMS = """
 CREATE TABLE IF NOT EXISTS routine_claims (code_hash TEXT PRIMARY KEY, routine_id TEXT NOT NULL, name TEXT NOT NULL, project TEXT NOT NULL,
   new_project TEXT, title TEXT, is_primary INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at REAL NOT NULL,
-  expires_at REAL NOT NULL, used_at REAL)
+  expires_at REAL NOT NULL, used_at REAL, superseded_at REAL)
 """
 
 INSTRUCTIONS = """claude-routine targets are Claude Code routines: send to claude (with project=<slug> to reach that project's
@@ -137,6 +137,8 @@ class ClaudeRoutineBlock(Block):
             core.store.x("ALTER TABLE routines ADD COLUMN title TEXT")
         if "is_primary" not in cols:
             core.store.x("ALTER TABLE routines ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0")
+        if "superseded_at" not in {r["name"] for r in core.store.q("PRAGMA table_info(routine_claims)")}:
+            core.store.x("ALTER TABLE routine_claims ADD COLUMN superseded_at REAL")
 
     # Registry --------------------------------------------------------------------------------
 
@@ -332,22 +334,33 @@ class ClaudeRoutineBlock(Block):
         slug = existing.slug if existing else slug
         if any(r["routine_id"] == rid for r in self.configured.values()):
             raise BlockError(f"{rid} is set in the config file; change it there")
-        name = (name or "").strip().lower() or self._free_name("claude", slug, title, rid)
-        self._check_name(name, rid, False)
         now = self.core.clock()
-        if (self.core.store.one("SELECT COUNT(*) AS n FROM routine_claims WHERE created_by = ? AND used_at IS NULL AND expires_at > ?", (actor, now))["n"]
-                >= CLAIMS_PER_CALLER):
-            raise BlockError(f"{CLAIMS_PER_CALLER} registrations are already waiting for the owner; let those expire or finish first")
         code = secrets.token_urlsafe(24)
-        self.core.store.x("INSERT INTO routine_claims(code_hash, routine_id, name, project, new_project, title, is_primary, created_by, created_at, expires_at) "
-                          "VALUES (?,?,?,?,?,?,?,?,?,?)", (_sha(code), rid, name, slug, json.dumps(new_project) if new_project else None, title,
-                                                           int(bool(primary)), actor, now, now + CLAIM_TTL_S))
+
+        def run(db: Any) -> tuple[str, list[str]]:
+            replaced = [r for r in db.execute("SELECT code_hash, name, title FROM routine_claims WHERE project = ? AND used_at IS NULL "
+                                               "AND expires_at > ? ORDER BY created_at", (slug, now))
+                        if (r["title"] or "").casefold() == title.casefold()]
+            db.executemany("UPDATE routine_claims SET used_at = ?, superseded_at = ? WHERE code_hash = ?",
+                           [(now, now, r["code_hash"]) for r in replaced])
+            chosen = (name or "").strip().lower() or self._free_name("claude", slug, title, rid)
+            self._check_name(chosen, rid, False)
+            if (db.execute("SELECT COUNT(*) FROM routine_claims WHERE created_by = ? AND used_at IS NULL AND expires_at > ?", (actor, now)).fetchone()[0]
+                    >= CLAIMS_PER_CALLER):
+                raise BlockError(f"{CLAIMS_PER_CALLER} registrations are already waiting for the owner; let those expire or finish first")
+            db.execute("INSERT INTO routine_claims(code_hash, routine_id, name, project, new_project, title, is_primary, created_by, created_at, expires_at) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?)", (_sha(code), rid, chosen, slug, json.dumps(new_project) if new_project else None, title,
+                                                        int(bool(primary)), actor, now, now + CLAIM_TTL_S))
+            return chosen, [r["name"] for r in replaced]
+
+        name, superseded = self.core.store.tx(run)
         base = self.core.cfg.public_url or ""
         routines = self.routines()
         lead = self.primary(slug, "claude", routines)
         return {"pending": True, "link": f"{base}/routines/claim/{code}", "expires_in_s": CLAIM_TTL_S, "name": name, "routine_id": rid,
                 "project": slug, "creates_project": new_project is not None, "claude_project": title,
                 "primary": bool(primary) or lead is None or lead["name"] == name,
+                **({"superseded": superseded} if superseded else {}),
                 "next": "Give the owner this link. He opens it (SSO), pastes the routine's token and clicks Save; the token never goes "
                         "through chat or MCP. routine_list shows the routine once saved (untested until its first fire)."}
 
@@ -355,6 +368,8 @@ class ClaudeRoutineBlock(Block):
         row = self.core.store.one("SELECT * FROM routine_claims WHERE code_hash = ?", (_sha(code or ""),))
         if row is None:
             raise BlockError("this link isn't valid; ask the Claude session for a new one")
+        if row["superseded_at"] is not None:
+            raise BlockError("this link was replaced by a newer registration; use the latest link")
         if row["used_at"] is not None:
             raise BlockError("this link was already used")
         if row["expires_at"] <= self.core.clock():

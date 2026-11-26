@@ -249,6 +249,10 @@ result has `pending: false` and the `candidates`, unless the call passes `create
 existing project whose `links.claude_project` equals the Claude Project's name is used. A new project is created only
 when the owner saves the link, with `links.claude_project` set.
 
+Re-registering for the same switchboard project and Claude Project replaces any unexpired link still waiting to be
+saved and frees its routine name. Give the owner the latest link; the result lists any replaced names in
+`superseded`, and links for other Claude Projects still work.
+
 **By hand.** On the root page, under Claude routines, paste the task's fire URL and token and pick the switchboard
 project, or call `routine_add(fire_url, token, project)`. The token is encrypted in switchboard's store and never
 shown again. The routine shows as **untested** until its first fire works.
