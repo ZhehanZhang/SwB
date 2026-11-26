@@ -139,7 +139,7 @@ class SlackIntake(Block):
         return {"targets": [t.as_dict() for t in sorted(engine.targets.values(), key=lambda t: (t.kind, t.slug))],
                 "defaults": {label: ws.default_target for label, ws in engine.config.workspaces.items()},
                 "aliases": dict(engine.config.target_aliases), "refreshed_at": self.refreshed_at, "error": self.refresh_error,
-                "usage": "Mention the bot, then a target: '@bot teamcaptain deploy status?'. Without one, the thread's target or the workspace default."}
+                "usage": "Mention the bot, then a target: '@bot build-bot deploy status?'. Without one, the thread's target or the workspace default."}
 
     # Events ----------------------------------------------------------------------------------
 

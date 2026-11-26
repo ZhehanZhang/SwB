@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 import httpx
 
 from ...audit import iso
+from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
+from ...block_env import CAPY_KEY, CAPY_SEND_KEY
 from .. import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
 from .api import CapyAPI, CapyError, pr_links, thread_summary
 from .stream import Backoff, Frame, StreamClosed, ThreadStream
@@ -38,7 +40,6 @@ DELIVERIES = ("queue", "steer", "interrupt")
 MODES = ("captain_thread", "new_thread")
 TARGET_KINDS = ("captain", "project", "thread")
 DEFAULT_KEYS = {"model", "repos", "mode", "delivery"}
-AS_PREFIX = "CAPY_API_KEY_AS_"
 
 INSTRUCTIONS = """Capy is a coding agent with cloud machines, git and PRs, organised under Captains. Send it work that needs a
 real machine, a repo, a PR, or more than a few minutes: send(task) goes where the owner's route for you and the project
@@ -90,7 +91,7 @@ class CapyBlock(Block):
                           link_key="capy_project"),),
         personas="dynamic",
         link_keys=("capy_project",),
-        secrets=("CAPY_API_KEY", "CAPY_API_KEY_SERVICE", "CAPY_API_KEY_AS_*"),
+        secrets=(CAPY_KEY, CAPY_SEND_KEY, f"{AS_PREFIX}*"),
         network=("api.capy.ai",),
         identities=({"id": "service", "policy": "free"}, {"id": "personal", "policy": "free", "optional": True}),
         config_schema={"type": "object", "properties": {
@@ -102,18 +103,18 @@ class CapyBlock(Block):
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
-        key = core.secret("CAPY_API_KEY")
+        key = core.secret(CAPY_KEY)
         base = str(config.get("api_base", "https://api.capy.ai/api/v1"))
         transport = config.get("transport")
         self.api: CapyAPI | None = CapyAPI(base, key, transport=transport) if key else None
-        self.send_key_env = str(config.get("send_key_env") or "CAPY_API_KEY_SERVICE")
+        self.send_key_env = str(config.get("send_key_env") or CAPY_SEND_KEY)
         self.identity = str(config.get("identity", "service"))
         if self.identity not in ("service", "personal"):
             raise ValueError("destinations.capy.identity must be service or personal")
         self.keys: dict[str, CapyAPI] = {}
         if self.api is not None:
-            self.keys["CAPY_API_KEY"] = self.api
-            if self.send_key_env != "CAPY_API_KEY" and (send_key := core.secret(self.send_key_env)):
+            self.keys[CAPY_KEY] = self.api
+            if self.send_key_env != CAPY_KEY and (send_key := core.secret(self.send_key_env)):
                 self.keys[self.send_key_env] = CapyAPI(base, send_key, transport=transport)
             for env, value in sorted(core.cfg.env.items()):
                 if value and env not in self.keys and env.startswith(AS_PREFIX) and len(env) > len(AS_PREFIX):
@@ -168,7 +169,7 @@ class CapyBlock(Block):
         """Keys a send tries, in order: the agent's own CAPY_API_KEY_AS_<AGENT>, then the service user's send_key_env.
         CAPY_API_KEY (often the owner's own key) sends only with identity: personal, so relayed messages never appear as
         the owner unless that was chosen."""
-        envs = [self.as_env(agent) if agent else "", self.send_key_env, "CAPY_API_KEY" if self.identity == "personal" else ""]
+        envs = [self.as_env(agent) if agent else "", self.send_key_env, CAPY_KEY if self.identity == "personal" else ""]
         return list(dict.fromkeys(e for e in envs if e in self.keys))
 
     def agents(self) -> list[str]:
@@ -265,10 +266,10 @@ class CapyBlock(Block):
 
     def next_step(self) -> str | None:
         if self.api is None:
-            if self.core.secret("CAPY_API_KEY"):
+            if self.core.secret(CAPY_KEY):
                 return "Restart Switchboard to load the saved Capy API key."
             return "Create a key in Capy Settings → API and enter it through the private link from connect(what='capy-captain')."
-        status = self.key_checks.get("CAPY_API_KEY", {}).get("status")
+        status = self.key_checks.get(CAPY_KEY, {}).get("status")
         if status == "rejected":
             return "Replace the rejected Capy API key and restart Switchboard."
         if not self._routed()[0]:
@@ -285,12 +286,12 @@ class CapyBlock(Block):
             return None
         if not principal.is_unrestricted_owner:
             return {"done": [], "next": [{"by": "person", "do": "Ask the owner to connect a Capy Captain from an unrestricted Switchboard client."}]}
-        has_key = bool(self.core.secret("CAPY_API_KEY"))
+        has_key = bool(self.core.secret(CAPY_KEY))
         done = [f"Capy API key: {'present' if has_key else 'absent'}."]
         if self.api is None:
             if has_key:
                 return {"done": done, "next": [{"by": "person", "do": self.next_step()}]}
-            step = self.token_step(principal, "CAPY_API_KEY", self.next_step())
+            step = self.token_step(principal, CAPY_KEY, self.next_step())
             return {"done": done, "next": [step]}
         choose = choose or {}
         if set(choose) - {"captain", "project"}:
@@ -317,10 +318,10 @@ class CapyBlock(Block):
         except CapyError as e:
             if e.status in (401, 403):
                 instruction = "Create a Capy API key that can see your Captains."
-                if self.core.cfg.env.get("CAPY_API_KEY"):
+                if self.core.cfg.env.get(CAPY_KEY):
                     step = {"by": "person", "do": f"{instruction} Replace CAPY_API_KEY on the server and restart Switchboard."}
                 else:
-                    step = self.token_step(principal, "CAPY_API_KEY", f"{instruction} Enter it through this private link.")
+                    step = self.token_step(principal, CAPY_KEY, f"{instruction} Enter it through this private link.")
                 return {"done": done, "next": [step]}
             raise BlockError("Capy could not list Captains. Try again.") from e
         done.extend(f"Available Captain: {c.get('name') or c.get('title') or c['id']} ({c['id']})." for c in captains)

@@ -33,7 +33,7 @@ EventListener = Callable[[dict[str, Any]], Awaitable[None]]
 
 class SlackEngine:
     """Slack workspaces for switchboard: Socket Mode or polling intake, Web API reads and writes, personas, the write
-    policy and approval gate, the bot-to-bot loop guard, and optional webhook sinks. Ported from slackgate.
+    policy and approval gate, the bot-to-bot loop guard, and optional webhook sinks.
 
     Origins and destinations share one engine: the Slack origin listens to its events, the Slack destination calls its
     reads and writes. Auth is switchboard's: a caller is a switchboard agent, and config.grants says what it may do."""

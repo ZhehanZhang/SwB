@@ -39,7 +39,7 @@ async def test_workspace_a_intake(make_core, hooks, world):
     assert watched["type"] == "slackgate.event"
     assert watched["thread_ts"] == "1700000150.000150"
     assert watched["user_name"] == "name-upeer0002"
-    assert watched["permalink"].startswith("https://a.slack.com/archives/CWATCH001/p1700000200000200")
+    assert watched["permalink"].startswith("https://workspace-a.example.test/archives/CWATCH001/p1700000200000200")
     assert hooks.requests[0].headers["authorization"] == "Bearer sink-secret"
     assert hooks.requests[0].headers["idempotency-key"] == "slackgate:a2a:TAAAA1111:CPUBLIC01:1700000100.000100"
     reactions = [kw for t, n, kw in world.calls if n == "reactions_add"]

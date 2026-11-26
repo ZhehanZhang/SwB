@@ -195,8 +195,14 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
 def _display(tool: str, payload: dict[str, Any]) -> str:
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
-        return "\n".join([f"Status: {payload.get('status', 'unknown')}", "Next steps:",
-                          *([f"  - {step}" for step in steps] or ["  None."])])
+        lines = [f"Status: {payload.get('status', 'unknown')}"]
+        if blocks := payload.get("block_setup"):
+            lines.append("Blocks:")
+            for name, block in blocks.items():
+                state = "on" if block["enabled"] else "off"
+                missing = ", ".join(block["missing_env"])
+                lines.append(f"  - {name}: {state}" + (f" (missing env: {missing})" if missing else ""))
+        return "\n".join([*lines, "Next steps:", *([f"  - {step}" for step in steps] or ["  None."])])
     lines = [str(payload.get("what", "Connect"))]
     if payload.get("state"):
         lines[0] += f": {payload['state']}"

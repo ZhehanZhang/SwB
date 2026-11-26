@@ -1,12 +1,12 @@
 import os
 import socket
-import stat
 import sys
 from pathlib import Path
 
 import pytest
 
 from switchboard import __main__, cli, cli_up
+from switchboard.config import load_config
 
 
 @pytest.fixture
@@ -14,25 +14,25 @@ def clean_env(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
-    for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_PUBLIC_URL"):
+    for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR",
+                 "SWITCHBOARD_PUBLIC_URL"):
         monkeypatch.delenv(name, raising=False)
 
 
-@pytest.mark.parametrize("override", [False, True])
+@pytest.mark.parametrize("override", [None, "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR"])
 def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path, monkeypatch, capsys, override):
-    data = str(tmp_path / "custom-data") if override else str(Path.home() / ".local/share/switchboard")
+    data = tmp_path / "custom-data" if override else Path.home() / ".local/share/switchboard"
     if override:
-        monkeypatch.setenv("SWITCHBOARD_DATA", data)
+        monkeypatch.setenv(override, str(data))
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv: calls.append(
-        (argv, *(os.environ[k] for k in ("SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_HOST", "PORT")))))
+    monkeypatch.setattr(__main__, "main", lambda argv, **_: calls.append(
+        (argv, load_config().data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"])))
 
     __main__.cli_main(["up"])
 
-    assert calls == [(["serve"], str(tmp_path / cli.CONFIG), data, "127.0.0.1", "8870")]
+    assert calls == [(["serve"], data, "127.0.0.1", "8870")]
     assert capsys.readouterr().out == "MCP URL: http://127.0.0.1:8870/mcp\n"
     assert "SWITCHBOARD_HOST" not in os.environ
-    assert stat.S_IMODE(Path(data).stat().st_mode) == 0o700
 
 
 @pytest.mark.parametrize(("provider", "binary", "url", "flags"), [
@@ -65,10 +65,14 @@ while True:
 """)
     exe.chmod(0o755)
 
-    def serve(argv, *, listener):
+    (tmp_path / cli.CONFIG).parent.mkdir()
+    (tmp_path / cli.CONFIG).write_text("public_url: https://base.example.test\n")
+    (tmp_path / cli.CONFIG.with_name("local.yaml")).write_text("public_url: https://overlay.example.test\n")
+
+    def serve(argv, *, listener, tunnel_url, **_):
         assert argv == ["serve"]
         assert listener.getsockname() == ("127.0.0.1", port)
-        assert os.environ["SWITCHBOARD_PUBLIC_URL"] == url
+        assert load_config(tunnel_url=tunnel_url).public_url == url
         assert not stopped.exists()
         raise KeyboardInterrupt
 

@@ -24,7 +24,6 @@
           "type": "string",
           "title": "Switchboard URL",
           "description": "Base URL of your switchboard server",
-          "default": "https://swb.example.com",
           "required": true
         },
         "key": {

@@ -4,7 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        For suspected vulnerabilities, use [private reporting](https://github.com/ZhehanZhang/switchboard/security/advisories).
+        For suspected vulnerabilities, go to the repository's Security tab, select Advisories, and choose Report a vulnerability.
         Don't include credentials, claim links, private messages, or unredacted config or logs.
   - type: input
     id: environment

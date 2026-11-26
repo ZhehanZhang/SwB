@@ -1,6 +1,6 @@
 # Contributing
 
-Use the [issue tracker](https://github.com/ZhehanZhang/switchboard/issues) for bugs and feature requests.
+Use the repository's **Issues** tab for bugs and feature requests.
 Report security issues privately as described in [SECURITY.md](SECURITY.md). Please follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 

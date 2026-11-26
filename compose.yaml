@@ -1,9 +1,9 @@
 # switchboard: docker compose up -d --build
-# Secrets: .env (mode 600, git-ignored), see .env.example. Config: config/switchboard.yaml.
+# Secrets: .env (mode 600, git-ignored), see .env.example. YAML under ./config is optional.
 # MCP: http://127.0.0.1:8870/mcp by default. Public exposure: --profile tunnel with
 # TUNNEL_TOKEN in .env; the tunnel's public hostname points at http://switchboard:8000.
 # Memory mirror: bind a host folder at /mirror in compose.override.yaml (git-ignored) and set memory.mirror_dir;
-# SWITCHBOARD_UID in .env builds the image to run as the uid that owns that folder (and ./data).
+# Set SWITCHBOARD_UID to the non-root UID that owns those directories, or grant UID 10001 write access.
 name: switchboard
 services:
   switchboard:

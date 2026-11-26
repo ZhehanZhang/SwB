@@ -1,16 +1,16 @@
 # switchboard
 
-the owner's self-hosted switchboard: one place where his assistants and agents share memory, hand work to each other
+Self-hosted switchboard: one place where your assistants and agents share memory, hand work to each other
 and hear back. Everything that comes in or goes out is a **block** behind one interface. The **core** knows only
 blocks, agents, identities, personas, targets, messages, conversations, routes, projects, memory, approvals and the
 audit log, and names no vendor.
 
 Blocks today: **mcp** (Claude, ChatGPT, Gemini, Claude Code, Capy and any MCP client, over OAuth, a bearer key or a
 pairing-code key), **slack** (workspaces as a way in, with `@swb <slug>` routing, and out, with personas and
-approvals) and **capy** (Capy Captains and threads, with their replies coming back). More blocks are planned in
-the order the block design lays out (TASK-5).
+approvals) and **capy** (Capy Captains and threads, with their replies coming back). Optional blocks connect
+Claude and Grok routines, ChatGPT dots and GitHub webhooks.
 
-It runs as a docker compose app on your-host, behind a Cloudflare tunnel at `https://swb.example.com`.
+Run it locally with `swb` or host it with [Docker Compose](#running-it).
 
 ```mermaid
 flowchart LR
@@ -59,12 +59,13 @@ private `.env` for authenticated access. Data is stored in `~/.local/share/switc
 For a persistent CLI install, run `uv tool install swb-one` or `pipx install swb-one`.
 See [swb.one](https://swb.one) for the documentation.
 
-**Docker** (local only). In an empty directory, create a private env file and use a named volume:
+**Docker** (local only). In an empty directory, create a private env file and use a named volume. Replace
+`your-org` with the GitHub organization or account that publishes the image, using lowercase.
 
 ```bash
 (umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
 docker run --rm --env-file .env -p 127.0.0.1:8870:8000 -v switchboard-data:/data \
-  ghcr.io/zhehanzhang/switchboard:latest
+  ghcr.io/your-org/switchboard:latest
 ```
 
 **Compose with automatic HTTPS.** Point your domain's DNS at the host and allow inbound TCP ports 80 and
@@ -73,7 +74,7 @@ docker run --rm --env-file .env -p 127.0.0.1:8870:8000 -v switchboard-data:/data
 ```bash
 cd deploy/compose
 (umask 077; cp -n .env.example .env)
-# Set DOMAIN and a fresh random SWITCHBOARD_KEY_OWNER in .env.
+# Set DOMAIN, SWITCHBOARD_IMAGE, and a fresh random SWITCHBOARD_KEY_OWNER in .env.
 docker compose up -d
 ```
 
@@ -113,6 +114,74 @@ Leave out the choice to list the clients. Each snippet adds a remote MCP server 
 Use `wait` or `inbox` to pick up messages. The [Claude Code channel](#claude-code-channel-research-preview) also
 pushes messages to an open session.
 
+## Config (version 2)
+
+Start with environment variables. No YAML file is required: the MCP block runs by default, and these variables
+make the corresponding integration available:
+
+| Integration | Environment variables |
+| - | - |
+| Capy | `CAPY_API_KEY`. A `CAPY_API_KEY_SERVICE` or `CAPY_API_KEY_AS_<AGENT>` also enables discovery, but `CAPY_API_KEY` is needed for reads. |
+| Slack | `SLACK_BOT_TOKEN` or `SLACK_USER_TOKEN`, with `SLACK_TEAM_ID`; add `SLACK_APP_TOKEN` for Socket Mode. For named workspaces, insert the workspace name after `SLACK_`, for example `SLACK_SUPPORT_BOT_TOKEN` and `SLACK_SUPPORT_TEAM_ID`. |
+| GitHub | `GITHUB_WEBHOOK_SECRET`. Configure the destinations and routes in YAML. |
+| Claude routines | `CLAUDE_ROUTINE_TOKEN` and `CLAUDE_ROUTINE_ID`, or `CLAUDE_ROUTINE_TOKEN_<NAME>` and `CLAUDE_ROUTINE_ID_<NAME>` for named routines. |
+| Grok routines | `GROK_ROUTINE_SECRET` and `GROK_ROUTINE_URL`, or `GROK_ROUTINE_<NAME>_SECRET` and `GROK_ROUTINE_<NAME>_URL` for named routines. |
+| ChatGPT dots | Configure `blocks.dots` in YAML. Dots has no discovery token of its own. |
+
+If an integration is discovered but needs more settings, `block_setup` in `/healthz` and `switchboard_status` lists
+missing environment variable names, never values. An explicit `blocks` mapping in the final YAML controls which
+blocks are loaded. Omit it to keep env discovery, or include `mcp: {use: mcp}` if you want MCP in an explicit list.
+Env-configured Slack grants access only to the `owner` MCP identity and requires approval for user-token writes.
+Use YAML to grant other agents Slack access.
+
+| Instance setting | Environment variables |
+| - | - |
+| Public base URL | `SWITCHBOARD_PUBLIC_URL` or `PUBLIC_URL`. Needed for hosted OAuth. |
+| Persistent data | `SWITCHBOARD_DATA_DIR` (`SWITCHBOARD_DATA` also works). Defaults to `~/.local/share/switchboard` with `swb up`, `./data` with bare `swb serve`, and `/data` in the image. |
+| Owner sign-in | `SWITCHBOARD_OWNER_EMAILS` (comma-separated), `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD`. See [authentication](#authentication-and-protection). |
+| Static bearer keys | `SWITCHBOARD_KEY_OWNER` for the local CLI, or `SWITCHBOARD_KEY_<AGENT>` for other agents. |
+| YAML paths | `SWITCHBOARD_CONFIG` for the base file, `SWITCHBOARD_OVERLAY` for the private overlay. Both are optional. |
+
+Keep credentials in the process environment or a private `.env` file loaded by `swb up` or Compose. To try an
+env-only instance from an empty directory, run these commands instead of `swb init`:
+
+```bash
+export SWITCHBOARD_KEY_OWNER="$(openssl rand -hex 32)"
+swb up
+```
+
+**YAML and overlays.** Set `SWITCHBOARD_CONFIG` to choose a base file. An explicit `swb up --dir PATH` instead uses
+that instance's `config/switchboard.yaml` and data directory. By default, Switchboard uses an existing
+`config/switchboard.yaml` or `/config/switchboard.yaml` if found. Select an
+optional private overlay with `SWITCHBOARD_OVERLAY`, or use `local.yaml` next to the base file. With no base file,
+Switchboard looks for `config/local.yaml` or `/config/local.yaml` (the latter is the path inside Compose).
+Settings in the base YAML override environment defaults; overlay settings take highest precedence. Mappings are
+merged recursively, and lists are replaced, not appended. If an overlay declares `blocks`, that mapping becomes
+explicit even if the base omitted it.
+With `swb up --tunnel`, the active tunnel URL overrides the configured public URL while the tunnel is running.
+
+Use [the full config example](config/switchboard.example.yaml) as a reference for block policies and routes. Copy
+[the overlay template](deploy/overlay.example.yaml) to `config/local.yaml` for host-specific names, IDs and paths.
+Replace any placeholders you use, and leave unused sections out of your private files.
+
+```yaml
+version: 2
+branding:
+  display_name: switchboard
+blocks:
+  mcp: {use: mcp}
+  capy: {use: capy, identity: personal}
+```
+
+The default display name is `switchboard`, with a neutral accent (`#64748b`) and no deployment-specific logo. Change
+`branding.display_name`, `branding.icon`, `branding.accent_color` or `branding.logo_assets_dir` in a private
+overlay if desired. Use `#RRGGBB` for the accent. The public CLI identity stays `swb`. Third-party logos belong to their respective owners;
+their use identifies integrations and does not imply affiliation or endorsement.
+
+Legacy files using `origins`, `destinations` or top-level `slack` are translated at load time.
+`switchboard config migrate [file]` prints the version 2 form. The database migration is
+additive only (a `target` column on conversations, and new tables for pairing codes, agent keys and alias use).
+
 ## Blocks
 
 A block (`src/switchboard/blocks/`) subclasses `Block` and declares a `Manifest`: its kind (source, sink or both),
@@ -132,28 +201,6 @@ modules for this release.
 `project:<slug>` for a project's route. The short forms `captain:`, `project:` and `thread:` still mean the capy
 block's. Every target has slugs; on a clash block targets beat agents and agents beat projects, unless
 `targets.priority` in the config lists patterns (`[capy:captain, agent, project]`). `targets.aliases` adds slugs.
-
-## Config (version 2)
-
-```yaml
-version: 2
-public_url: https://switchboard.example.com
-auth: {owner_emails: [...], cloudflare_access: {team_domain: ..., aud: ...}}
-agents:                      # optional: without it every preset (claude, chatgpt, gemini, claude-code) plus block agents
-  claude: {}
-  codex: {label: Codex}
-blocks:
-  mcp:   {use: mcp, legacy_aliases: true, wait: {default_s: 60, max_s: 200}}
-  capy:  {use: capy, identity: service, avatars: false}
-  slack: {use: slack, workspaces: {...}, agents: {...}, personas: {...}, workspace_projects: {acme: acme}}
-targets: {priority: [], aliases: {}}
-routes:                      # seeds, written once; routes_set and the page manage them after. Empty by default
-  - {match: {}, to: capy:captain:<Captain id>}
-```
-
-Files without `version: 2` are read as version 1 (`origins:`, `destinations:`, `slack:`) through a translator, so
-nothing changes on deploy. `switchboard config migrate [file]` prints the version 2 form. The database migration is
-additive only (a `target` column on conversations, and new tables for pairing codes, agent keys and alias use).
 
 ## What "shared memory" means, honestly
 
@@ -186,7 +233,7 @@ the project, and every step out of it is explicit:
   an explicit `scopes=[...]`, which is written to the audit log.
 - **Private projects** (`private: true` on `project_create` / `project_update`) can't be pulled into another project's
   read at all, even with `scopes`; only a read that names them as `project` sees them.
-- **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{acme-agent: [project:acme]}`. A limited key
+- **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{support-agent: [project:support]}`. A limited key
   can't read or write outside its list, can't create projects or change routes, and must send with a project.
 - **Bearer keys can be limited to tools and send targets** with `auth.key_tools` and `auth.key_targets`, e.g.
   `key_tools: {monitor: [send]}` and `key_targets: {monitor: [claude-ops]}`. Such a key sees and calls only those
@@ -266,21 +313,18 @@ flag, and Team or Enterprise organizations must enable channels):
    an inbox-only key: `auth.inbox_keys` (default `{channel: claude-code}`) binds it to agent `claude-code`, the agent
    Claude Code signs in as over OAuth, so it pushes exactly what Claude Code's `wait` would see. It may only call
    `GET /inbox/poll` and `GET /inbox/events`, gets 403 on `/mcp` and on any other agent's inbox, and never moves Claude
-   Code's own `wait` cursor. On your-host, read it with
-   `sudo grep '^SWITCHBOARD_KEY_CHANNEL=' /srv/swb/.env` and paste it only into
-   Claude Code's config prompt, never into a chat.
+   Code's own `wait` cursor. Enter the key only in the channel's private configuration, never in chat.
 2. Install [Bun](https://bun.sh), then add the plugin in Claude Code. From GitHub:
-   `/plugin marketplace add ZhehanZhang/switchboard` and `/plugin install switchboard@switchboard`. While the repo is
-   private, Claude Code clones it with that machine's git, so git there must be able to read it: `gh auth login`
-   (and `gh auth setup-git`), an SSH key on your GitHub account with the `git@github.com:ZhehanZhang/switchboard.git`
-   form, or a credential helper holding a token with read access to the repo. Or skip GitHub: clone it any way you
-   like and run `/plugin marketplace add /path/to/switchboard` (a local folder with `.claude-plugin/marketplace.json`),
+   `/plugin marketplace add OWNER/switchboard` and `/plugin install switchboard@switchboard`. Replace `OWNER` with
+   the repository owner. Or run `/plugin marketplace add /path/to/switchboard` from a local checkout containing
+   `.claude-plugin/marketplace.json`,
    then the same `/plugin install`. Enter the URL and the key when it asks.
 3. Start sessions with `claude --dangerously-load-development-channels plugin:switchboard@switchboard`.
 
-Without the plugin wrapper, a bare server works too: add
-`{"mcpServers": {"switchboard-channel": {"command": "bun", "args": ["/path/to/channel/switchboard-channel.ts"], "env": {"SWITCHBOARD_KEY": "..."}}}}`
-to `.mcp.json` and start with `--dangerously-load-development-channels server:switchboard-channel`.
+Without the plugin wrapper, a bare server works too. Set `SWITCHBOARD_URL` to your server's base URL (without
+`/mcp`), set `SWITCHBOARD_KEY` privately, and add
+`{"mcpServers": {"switchboard-channel": {"command": "bun", "args": ["/path/to/channel/switchboard-channel.ts"]}}}`
+to `.mcp.json`. Start with `--dangerously-load-development-channels server:switchboard-channel`.
 
 ### Claude routines
 
@@ -398,8 +442,8 @@ A switchboard project is the unit of memory (`project:<slug>`), visibility and r
   answers `send(project=X)` and owns the project's work in Capy. Other Captains can still be reached with
   `send(to=<Captain slug>, project=X)` and read and write the same project memory. Several routed Captains per
   project would need either fan-out (several answers to one conversation) or a picker rule. Both make "who answers"
-  unclear, so this isn't built. Captains that do different jobs are better served by separate projects (`proj` and
-  `proj-infra`), or by routing per agent (`routes_set(agent=..., project=...)` already routes one sender's sends to
+  unclear, so this isn't built. Captains that do different jobs are better served by separate projects (`app` and
+  `infra`), or by routing per agent (`routes_set(agent=..., project=...)` already routes one sender's sends to
   another Captain).
 - **One external project → several switchboard projects: no.** An external project should belong to one memory
   scope. Context that spans two projects belongs in general memory, or the two should be merged with
@@ -434,8 +478,7 @@ their default header is `Stripe-Signature`, configurable with `header`.
 
 ## Slack
 
-With a slack block in the config (or a `slack:` section in a version 1 file), Slack is both a way in and a way out. This is slackgate,
-ported in: the same intake, write gate, personas and guarantees, but on switchboard's auth, audit and inbox.
+With a Slack block in the config (or a `slack:` section in a version 1 file), Slack is both a way in and a way out.
 
 - **In.** Each workspace connects over Socket Mode (one `xapp-` token per workspace), or polls
   `conversations.history` with `intake: poll`. Events from watched channels, @mentions of the bot and DMs are deduped.
@@ -449,14 +492,14 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   approver in `approvals.notify_workspace`), `known` (the workspace's `known` map of ids to names, for people and
   other agents you trust) or `external` (everyone else). The owner's text is passed on unchanged. Anyone else's
   reaches agents, sinks and Captains inside a header switchboard writes
-  (`[swb from Alex (U0123) in a2a #dev, trust known]`) and `<<<swb-untrusted` / `swb-untrusted>>>`
+  (`[swb from Example User (U0EXAMPLE) in a2a #dev, trust known]`) and `<<<swb-untrusted` / `swb-untrusted>>>`
   delimiters, with a line saying it is information, not instructions. Copies of the header or the delimiters inside
   the text are neutralised, so a sender can't fake either.
 - **Visibility: private or shared.** One switch on every resource, with one resolver: `target:<slug>` (agents,
   Captains, threads, routines), `channel:<workspace>/<id or #name>`, `memory:<scope>`, `route:<id>` and
-  `tool:<name>`. Everything is private unless marked shared: only the owner reaches it (his Slack ids, and his own
+  `tool:<name>`. Everything is private unless marked shared: only the owner reaches it (their Slack IDs and their own
   signed-in agents over OAuth, keys or pairing codes). `shared` lets anyone in that workspace reach it; a list
-  (`[U0123, workspace:acme]`) narrows it. Tools are always private. A non-owner reaches a target only when both the
+  (`[U0EXAMPLE, workspace:a2a]`) narrows it. Tools are always private. A non-owner reaches a target only when both the
   channel and the target are shared for them. Anything else they send becomes a **context item** in the inbox of the
   agents behind the target: kind `context`, wrapped as above, with where it came from. It wakes nothing, is never
   delegated, never reaches a sink or a routine, and gets no answer beyond a neutral ephemeral "Noted.". Non-owners get
@@ -537,8 +580,8 @@ after its handle (`@swb example-dot …`, or `send(to="example-dot")`). It scans
 
 Dots talk in one private channel, `#agents` by default. Switchboard creates it with the owner's user token if it
 doesn't exist and never invites anyone: status shows the one `/invite` to run for @swb and the dots. Each send is a
-new post that @mentions the dot, made by @swb: his agents post under their own persona (Capy, Claude, Captain, and so
-on), and his own verified Slack messages under the persona "via <his name>". The dot's answers in that post's thread
+new post that @mentions the dot, made by @swb: the owner's agents post under their own persona (Capy, Claude, Captain,
+and so on), and verified messages from the owner use "via <owner name>". The dot's answers in that post's thread
 come back on the conversation (`result`, the inbox, or the original Slack thread), wrapped as non-owner text.
 Dot messages are never routed; other messages in the channel route normally. Non-owners reach a dot only when it's
 shared (otherwise their messages are context items); their sends name them, and a dot may ignore them.
@@ -561,7 +604,7 @@ blocks:
 Dot instructions (paste into the dot's instructions; put in your own bot and app ids):
 
 ```text
-In #agents, posts that @mention you from my Switchboard app (bot B0XXXXXXXXX, app A0XXXXXXXXX), shown under
+In #agents, posts that @mention you from my Switchboard app (bot <BOT_ID>, app <APP_ID>), shown under
 persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
 within what you'd do for me, and answer in that post's thread. Ignore anyone else.
 ```
@@ -600,7 +643,8 @@ Nothing about a bot's look is hard-coded; every install reads it from Slack at r
 - Dots and other discovered agent bots keep their own identity: their answers, relayed into another thread, post under
   the dot's own name and profile picture, re-read on every rescan.
 - To brand an install, upload an app icon under Basic Information, then Display Information, in the Slack app's
-  settings. The API can't set it.
+  settings. The API can't set it. Third-party logos belong to their respective owners; showing one identifies an
+  integration and doesn't imply affiliation or endorsement.
 
 ## GitHub App
 
@@ -699,15 +743,15 @@ server metadata (RFC 8414) with PKCE `S256` only, CIMD from allowlisted hosts, D
 redirect URIs limited to the agents registry's (each preset's and block's) and loopback; tokens bound to `<public_url>/mcp`; 1 h access tokens and
 rotating 30-day refresh tokens with replay detection, stored only as SHA-256 hashes.
 
-**Only Owner can approve a sign-in or open the admin page, and there is no password form anywhere.** The whole
-hostname sits behind the Cloudflare Access app "Switchboard" (policy "Owner Only", identity provider SSO,
-the same setup as his other apps), and the server verifies the Access JWT itself (signature, audience, issuer, owner
-email), so a request that bypasses the tunnel is refused too. The admin page (status, routes, projects, recent
-refusals) is at `/`. A second Access app, "Switchboard machine paths (bypass)", lets through only what machines call:
-`/mcp`, `/token`, `/register`, `/revoke`, `/.well-known`, `/healthz`, `/inbox` (the Claude Code channel),
-`/avatars` (Slack fetches persona pictures) and `/connect` (redeeming a pairing code). Those carry
-their own OAuth or bearer checks. Without `auth.cloudflare_access` in config, OAuth sign-in and the admin page are off
-and only bearer keys work.
+**Only configured owner emails can approve sign-ins or open the admin page.** There is no password form. For OAuth
+and admin access, protect the hostname with Cloudflare Access, allow only your owner identities and configure the
+Access team domain and audience. Switchboard verifies the Access JWT signature, audience, issuer and owner email
+itself. The admin page is at `/` and the OAuth consent page is at `/authorize`.
+
+Let machine clients reach `/mcp`, `/token`, `/register`, `/revoke`, `/.well-known`, `/healthz`, `/inbox`, `/avatars`
+and `/connect` without an Access sign-in. Bypass `/github/webhook` too if you use the GitHub block; GitHub signs those
+requests. Switchboard still applies each endpoint's own authentication where required. Without Cloudflare Access
+configured, OAuth sign-in and the admin page are off; bearer keys still work.
 
 In front of everything:
 
@@ -723,15 +767,17 @@ a key from a pairing code (below).
 ### Connecting a new agent with a pairing code
 
 For CLI and session agents started on a laptop when needed (Codex, Gemini CLI, Claude Code, a script), the owner
-mints a one-time code on the root page (**Connected agents → Mint code**) or with `connect_code(agent, project?)`
-from his own sign-in. It names the agent and lasts ten minutes. On the machine, redeem it:
+mints a one-time code on the root page (**Connected agents → Mint code**) or with `connect_code(agent, project?)`.
+It names the agent and lasts ten minutes. Redeem it and save the response to a new private file:
 
 ```bash
-curl -s -X POST https://swb.example.com/connect -H 'content-type: application/json' -d '{"code": "ABCDE-FGH23"}'
+(umask 077; mkdir -p secrets && curl -fsS https://switchboard.example.com/connect \
+  -H 'content-type: application/json' -d '{"code": "<PAIRING_CODE>"}' -o secrets/pairing-response.json)
 ```
 
-The answer holds the agent's own key (`swb_...`, shown once; only its hash is stored), the MCP URL and the inbox
-URL. The agent signs in with `Authorization: Bearer <key>` as that agent, so routes, personas and the audit log
+The answer holds the agent's own key (`swb_...`, returned once; only its hash is stored), the MCP URL and the inbox
+URL. Save the key in the client's secure configuration, then remove the response file. The client signs in with
+`Authorization: Bearer <key>` as that agent, so routes, personas and the audit log
 resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key on the root page or with
 `connect_revoke`. A `swb connect` CLI that also writes the client's MCP config comes in a later step.
 
@@ -756,7 +802,7 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
   `CAPY_API_KEY_AS_CLAUDE` or `CAPY_API_KEY_AS_CLAUDE_CODE`), then the service user's key (`send_key_env`, default
   `CAPY_API_KEY_SERVICE`). A 401 or 403 moves to the next key and writes a `send_key_fallback` row. When every key
   is refused, the send fails with a `send_refused` row. Relays never send as `CAPY_API_KEY` unless
-  `destinations.capy.identity: personal` is set (one key, sends show as you). A service user only sees what is shared
+  `blocks.capy.identity: personal` is set (one key, sends show as you). A service user only sees what is shared
   with it, so share the Captains with it and give it access to the device they run on. On startup and every 30 minutes,
   each key is checked against `GET /captains` and a send-path no-op on each routed Captain or thread. `/healthz`
   (`send_keys`) and the root page then show it as ok, no project access, no device access, or rejected, and they show
@@ -769,18 +815,33 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
 
 ## Running it
 
+For a new Compose deployment, run this as the non-root user who will own the data directory. It creates a private
+`.env` and generates an owner key without displaying it:
+
 ```bash
-cp .env.example .env && chmod 600 .env          # the owner types CAPY_API_KEY; generate keys with openssl rand -hex 32
-cp config/switchboard.example.yaml config/switchboard.yaml
-docker compose up -d --build                    # MCP on http://127.0.0.1:8870/mcp
-docker compose --profile tunnel up -d           # adds cloudflared (TUNNEL_TOKEN in .env)
-curl -s http://127.0.0.1:8870/healthz
+(umask 077; cp .env.example .env)
+{
+  printf 'SWITCHBOARD_UID=%s\n' "$(id -u)"
+  printf 'SWITCHBOARD_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+mkdir -p data
+docker compose up -d --build
+curl -fsS http://127.0.0.1:8870/healthz
 ```
 
-Without `CAPY_API_KEY` the server runs **degraded**: memory, projects and routes work, the capy block is offline and its tools say the key is
-missing, and `/healthz` and the status page at `/` say what's off. Tests run in the image build
-(`docker build --target test .`); the channel has its own (`cd channel && bun test`). A legacy `capy-bridge.db` in the
-data directory is renamed to `switchboard.db` on first start.
+Compose binds MCP to `http://127.0.0.1:8870/mcp` by default and keeps persistent state in `./data`. Set
+`SWITCHBOARD_UID` to the non-root host UID that owns the data directory, or give the image's default UID (10001)
+write access there. Paths in `SWITCHBOARD_CONFIG` and `SWITCHBOARD_OVERLAY` must be visible inside the container;
+for example, `SWITCHBOARD_OVERLAY=/config/local.yaml` points at `./config/local.yaml` on the host.
+
+For a remote deployment, set the public URL and put an HTTPS reverse proxy in front of the server. If you already
+have a Cloudflare Tunnel, set `TUNNEL_TOKEN` in `.env`, configure the tunnel's hostname to forward to
+`http://switchboard:8000`, then run `docker compose --profile tunnel up -d`. After editing `.env`, run
+`docker compose up -d` again to apply it; a restart alone doesn't load new environment values.
+
+Tests run in the image build (`docker build --target test .`); the channel has its own (`cd channel && bun test`).
+A legacy `capy-bridge.db` in the data directory is renamed to `switchboard.db` on first start.
 
 Markdown export: `docker compose exec switchboard switchboard export /data/export` writes one folder per scope
 (`general/`, `projects/<slug>/`) plus `INDEX.md`. Setting `memory.mirror_dir` keeps that tree in sync: after a change, and once at startup,
@@ -788,11 +849,8 @@ it's rewritten with atomic renames, and files and folders for deleted or moved e
 writes collapses into one export after `mirror_debounce_s` (default 2 s) of quiet, at most ten times that after the
 first change. It's one-way: edits in the mirror are never read back. `mirror: false` switches it off.
 
-The deployment mirrors into Capy Drive (`user-owner/switchboard-memory/`): a git-ignored `compose.override.yaml`
-binds that folder at `/mirror`, and `SWITCHBOARD_UID` in `.env` builds the image to run as the uid that owns it.
-
-The pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
-same type, hairline cards, the Arc backdrop, the signature and the shared theme cookie, ported from example-org/id-site.
+To mirror onto the host, bind the chosen folder at `/mirror` in a git-ignored `compose.override.yaml`, set
+`memory.mirror_dir: /mirror`, and give the container user write access there.
 
 ## MCP Events
 
@@ -826,17 +884,18 @@ that support MCP Events can subscribe to their own mailbox in the same way.
 
 ## Connecting the assistants
 
-- **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → `https://swb.example.com/mcp`,
-  sign in with SSO, approve.
-- **ChatGPT**: Settings → Apps → Advanced settings → Developer mode, then Create app → `https://swb.example.com/mcp`, OAuth.
-- **Claude Code**: `claude mcp add --transport http switchboard https://swb.example.com/mcp`, plus the channel above if wanted.
+Replace `switchboard.example.com` with your public hostname in these examples.
+
+- **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → `https://switchboard.example.com/mcp`,
+  sign in through Cloudflare Access and approve.
+- **ChatGPT**: Settings → Apps → Advanced settings → Developer mode, then Create app → `https://switchboard.example.com/mcp`, OAuth.
+- **Claude Code**: `claude mcp add --transport http switchboard https://switchboard.example.com/mcp`, plus the channel above if wanted.
 - **Any other agent** (Codex, Gemini CLI, a script): a pairing code, as above.
-- **Capy**: an MCP server with URL `https://swb.example.com/mcp` and OAuth with the Automatic client. Capy registers
+- **Capy**: an MCP server with URL `https://switchboard.example.com/mcp` and OAuth with the Automatic client. Capy registers
   itself (DCR, redirect `https://capy.ai/web/callbacks/mcp`), the consent page shows "Capy", and any client that
   returns to capy.ai signs in as agent `capy`, so routes, `key_scopes` and the audit log treat it the same as the old
   key. The fallback is a header `Authorization: Bearer <SWITCHBOARD_KEY_CAPY>`; a bare key without `Bearer ` works too.
-  Read the key on your-host with `sudo grep '^SWITCHBOARD_KEY_CAPY=' /srv/swb/.env`
-  and paste it straight into Capy's settings, never into a chat.
+  Enter the key directly in Capy's private settings, never in chat.
 
 ## Instruction snippets
 
@@ -914,7 +973,8 @@ registers it itself):
 >
 > 1. **Connector.** Check that you have the switchboard connector (tools such as project_list, routine_register and
 >    reply). If it's missing, stop and tell me to add it: claude.ai → Settings → Connectors → Add custom connector, URL
->    https://swb.example.com/mcp, then enable it for this project. Continue once it's there.
+>    https://switchboard.example.com/mcp (replace the hostname with your instance's), then enable it for this project.
+>    Continue once it's there.
 > 2. **Project.** Call project_list. Find the switchboard project this Claude Project belongs to, matching on name,
 >    description, repos and links.claude_project. Several Claude Projects can share one switchboard project, so prefer
 >    attaching to a match. Only when nothing fits, pick a short new slug (lowercase-dashed) and a name. Tell me which one
@@ -976,9 +1036,3 @@ src/switchboard/
   app.py pages.py static/   HTTP app, inbox and connect endpoints, status, consent and routes pages
 channel/             Claude Code channel (Bun) and its plugin manifest
 ```
-
-## Before publishing
-
-- Remove `deploy/branding/`: it holds one deployment's avatar overlay (vendor logos are their owners' trademarks).
-- Check `config/`, `manifests/` and the docs for deployment-specific ids, hosts and names.
-- Installs read their bot's name and picture from Slack; nothing ships with one deployment's look. Keep `slack/avatars/default.png` neutral (no letters).
