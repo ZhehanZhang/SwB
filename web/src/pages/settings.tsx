@@ -1,7 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Check, Copy, KeyRound, LogOut } from "lucide-react"
+import { ChevronRight, KeyRound, LogOut } from "lucide-react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
+import { PRODUCT_NAME } from "@/app/brand"
+import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
 import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
@@ -58,33 +61,6 @@ function date(value: string) {
   return Number.isNaN(timestamp) ? "Unknown" : dateFormat.format(timestamp)
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const timeout = window.setTimeout(() => setCopied(false), 1500)
-    return () => window.clearTimeout(timeout)
-  }, [copied])
-  const Icon = copied ? Check : Copy
-  return (
-    <Button
-      variant="ghost" size="icon" className="size-6 text-muted-foreground hover:text-foreground"
-      aria-label={copied ? "Copied" : label} title={copied ? "Copied" : label}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text)
-          setCopied(true)
-          toast.success("Copied")
-        } catch {
-          toast.error("Couldn’t copy.")
-        }
-      }}
-    >
-      <Icon aria-hidden />
-    </Button>
-  )
-}
-
 export function SettingsPage() {
   const client = useQueryClient()
   const { data: session } = useQuery(sessionQuery)
@@ -132,7 +108,7 @@ export function SettingsPage() {
     <div className="w-full max-w-[720px] space-y-8 pt-2 text-sm">
       <section aria-labelledby="settings-appearance">
         <h2 id="settings-appearance" className={headingClass}>Appearance</h2>
-        <div className="mt-2 flex min-h-[41px] flex-wrap items-center justify-between gap-2 border-b pb-2">
+        <div className="mt-2 flex min-h-[50px] flex-wrap items-center justify-between gap-2 border-b py-2 sm:grid sm:grid-cols-[minmax(88px,24%)_1fr] sm:justify-items-start sm:gap-x-0">
           <span className="text-body-sm text-muted-foreground">Theme</span>
           <ThemePicker />
         </div>
@@ -218,12 +194,11 @@ export function SettingsPage() {
             </Button>
           )}
         </div>
-        {session?.via === "access" && <p className="mt-2 text-[13px] text-muted-foreground">Signed in through Access.</p>}
         {session?.methods.oidc && <p className="mt-2 text-[13px] text-muted-foreground">{session.methods.oidc.name} is configured.</p>}
         {passkeys.isPending ? <DataState kind="loading" message="Loading passkeys…" />
           : passkeys.isError ? <DataState kind="error" message="Couldn’t load passkeys." onRetry={() => void passkeys.refetch()} />
             : passkeys.data === null ? <DataState kind="empty" message="Passkey management is not available on this server." />
-              : passkeys.data.length === 0 ? <DataState kind="empty" message="No passkeys yet." className="py-2" />
+              : passkeys.data.length === 0 ? null
                 : (
                   <ul className="mt-2">
                     {passkeys.data.map((passkey) => (
@@ -268,14 +243,25 @@ export function SettingsPage() {
           </form>
         )}
         {session?.via === "access" ? (
-          <Button asChild variant="ghost" size="sm" className="mt-2 -ml-3">
-            <a href="/cdn-cgi/access/logout"><LogOut aria-hidden /> Sign out</a>
-          </Button>
+          <div className="mt-1 flex min-h-[26px] flex-wrap items-center justify-between gap-2">
+            <p className="text-body-sm text-muted-foreground">Signed in through Access.</p>
+            <Button asChild variant="ghost" size="sm">
+              <a href="/cdn-cgi/access/logout"><LogOut aria-hidden /> Sign out</a>
+            </Button>
+          </div>
         ) : session?.signed_in && (
           <Button variant="ghost" size="sm" className="mt-2 -ml-3" disabled={!csrf || logout.isPending} onClick={() => logout.mutate()}>
             <LogOut aria-hidden /> Sign out
           </Button>
         )}
+      </section>
+
+      <section aria-labelledby="settings-about">
+        <h2 id="settings-about" className={headingClass}>About</h2>
+        <Link className="mt-2 flex min-h-[41px] items-center justify-between gap-3 border-b py-2 text-body-sm hover:underline" to="/about">
+          About {PRODUCT_NAME}
+          <ChevronRight aria-hidden className="size-3.5 shrink-0" />
+        </Link>
       </section>
     </div>
   )

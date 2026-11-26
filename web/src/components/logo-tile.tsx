@@ -26,12 +26,14 @@ export function LogoTile({ kind, className }: { kind: string; className?: string
   const id = kind.toLowerCase().replaceAll("_", "-")
   const mark = aliases.find(([prefix]) => id === prefix || id.startsWith(`${prefix}-`) || id.startsWith(`${prefix}:`))?.[1]
   const image = mark && images[mark]
+  const mono = mark === "chatgpt" || mark === "github"
   return (
     <span aria-hidden className={cn("inline-grid size-6 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-surface text-foreground",
-      mark && darkTiles.has(mark) && "border-logo-dark-tile bg-logo-dark-tile",
+      mark && darkTiles.has(mark) && "border-socket bg-socket",
       mark === "capy" && "border-logo-capy bg-logo-capy text-logo-capy-foreground",
       mark === "grok-routine" && "border-0", className)}>
-      {image ? <img alt="" src={image} className={cn(mark === "grok-routine" ? "size-full" : "size-4", "object-contain", mark === "codex" && "invert")} />
+      {image && mono ? <span className="size-4 bg-foreground mask-contain mask-center mask-no-repeat" style={{ maskImage: `url("${image}")` }} />
+        : image ? <img alt="" src={image} className={cn(mark === "grok-routine" ? "size-full" : "size-4", "object-contain", mark === "codex" && "invert")} />
         : mark === "capy" ? <span className="text-[16px] leading-none font-bold">C</span>
         : mark === "slack" ? (
           <svg className="size-[17px]" viewBox="0 0 24 24" fill="var(--logo-slack)">
