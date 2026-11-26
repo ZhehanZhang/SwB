@@ -33,6 +33,7 @@
   --rail-width: 88px;
   --topbar-height: 64px;
   --mobile-tabbar-height: 108px;
+  --mobile-tabbar-fade-height: 30px;
 }
 
 .dark {
@@ -166,7 +167,12 @@
 }
 
 .console-mobile-nav {
-  background: linear-gradient(to bottom, transparent, var(--background) 46%);
+  background: linear-gradient(to bottom, transparent, var(--background) calc(var(--mobile-tabbar-fade-height) * .4));
+}
+
+.console-mobile-tab:is(:active, [aria-current="page"], [data-selected]) {
+  background: var(--surface-sunken);
+  color: var(--foreground);
 }
 
 [data-sonner-toaster] [data-sonner-toast] {

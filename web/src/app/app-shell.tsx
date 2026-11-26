@@ -10,23 +10,25 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils"
 
 const tabClass = "flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground hover:text-foreground"
+const mobileTabClass = "console-mobile-tab flex h-14 min-w-0 touch-manipulation flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground"
+const mobileIconClass = "size-6 shrink-0"
 
-function HomeNav({ active, mobile = false }: { active: boolean; mobile?: boolean }) {
+function HomeNav({ active }: { active: boolean }) {
   return (
     <Link to="/" aria-label={`${PRODUCT_NAME} overview`} aria-current={active ? "page" : undefined}
-      className={cn(tabClass, mobile ? "h-14" : "h-[72px] w-16")}
+      className={cn(tabClass, "h-[72px] w-16")}
     >
-      <SwbIcon muted={!active} className={active ? (mobile ? "size-11" : "size-12") : (mobile ? "size-[26px]" : "size-7")} />
+      <SwbIcon muted={!active} className={active ? "size-12" : "size-7"} />
       {!active && <span>Overview</span>}
     </Link>
   )
 }
 
-function SectionNav({ section, mobile = false }: { section: typeof sections[number]; mobile?: boolean }) {
+function SectionNav({ section }: { section: typeof sections[number] }) {
   const { name, to, icon: Icon } = section
   return (
-    <NavLink to={to} className={({ isActive }) => cn(tabClass, mobile ? "h-14" : "h-14 w-16 hover:bg-muted",
-      isActive && (mobile ? "font-semibold text-foreground" : "bg-muted text-foreground"))}>
+    <NavLink to={to} className={({ isActive }) => cn(tabClass, "h-14 w-16 hover:bg-muted",
+      isActive && "bg-muted text-foreground")}>
       <Icon aria-hidden className="size-5" /> {name}
     </NavLink>
   )
@@ -36,14 +38,20 @@ function MobileNavigation({ pathname, home }: { pathname: string; home: boolean 
   const more = sections.slice(3)
   const active = more.some(({ to }) => isSection(pathname, to))
   return (
-    <nav aria-label="Navigation" className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-30 h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 pt-[30px] md:hidden">
+    <nav aria-label="Navigation" className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-30 h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 pt-[var(--mobile-tabbar-fade-height)] md:hidden">
       <div className="pointer-events-auto grid grid-cols-5">
-        <HomeNav active={home} mobile />
-        {sections.slice(0, 3).map(section => <SectionNav key={section.to} section={section} mobile />)}
+        <Link to="/" aria-current={home ? "page" : undefined} className={mobileTabClass}>
+          <SwbIcon tab className={mobileIconClass} /><span>Overview</span>
+        </Link>
+        {sections.slice(0, 3).map(({ name, to, icon: Icon }) => (
+          <NavLink key={to} to={to} className={mobileTabClass}>
+            <Icon aria-hidden className={mobileIconClass} /><span>{name}</span>
+          </NavLink>
+        ))}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className={cn(tabClass, "h-14", active && "font-semibold text-foreground")}>
-              <Menu aria-hidden className="size-5" /> More
+            <button type="button" className={mobileTabClass} data-selected={active || undefined}>
+              <Menu aria-hidden className={mobileIconClass} /><span>More</span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="end" collisionPadding={12}>
