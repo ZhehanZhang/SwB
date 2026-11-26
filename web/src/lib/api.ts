@@ -1,11 +1,10 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query"
 
-type Session = {
+export type Session = {
   signed_in: boolean
   via: "passkey" | "link" | "oidc" | "access" | null
   csrf: string | null
-  methods: { passkey: boolean; oidc: { name: string } | null; access: boolean }
-  first_run: boolean
+  methods: { passkeys: number; oidc: { name: string } | null; access: boolean }
 }
 type Health = { status: "ok" | "degraded"; problems: string[]; commit?: string | null }
 
@@ -16,22 +15,28 @@ export class SignedOutError extends Error {
   }
 }
 
-export const authEvents = new EventTarget()
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
+export class ApiError extends Error {
+  constructor(public readonly status: number, public readonly code?: string) {
+    super(`Request failed (${status})`)
+    this.name = "ApiError"
+  }
 }
 
-function isSession(value: unknown): value is Session {
-  return isObject(value)
-    && typeof value.signed_in === "boolean"
-    && (value.via === null || value.via === "passkey" || value.via === "link" || value.via === "oidc" || value.via === "access")
-    && (value.csrf === null || typeof value.csrf === "string")
-    && typeof value.first_run === "boolean"
-    && isObject(value.methods)
-    && typeof value.methods.passkey === "boolean"
-    && typeof value.methods.access === "boolean"
-    && (value.methods.oidc === null || (isObject(value.methods.oidc) && typeof value.methods.oidc.name === "string"))
+export const authEvents = new EventTarget()
+
+export function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function sessionShape(value: unknown): value is Omit<Session, "methods"> & { methods: Record<string, unknown> & Omit<Session["methods"], "passkeys"> } {
+  if (!isObject(value)) return false
+  const { signed_in, via, csrf, methods } = value
+  return typeof signed_in === "boolean"
+    && (via === null || via === "passkey" || via === "link" || via === "oidc" || via === "access")
+    && (csrf === null || typeof csrf === "string")
+    && isObject(methods)
+    && typeof methods.access === "boolean"
+    && (methods.oidc === null || (isObject(methods.oidc) && typeof methods.oidc.name === "string"))
 }
 
 function isHealth(value: unknown): value is Health {
@@ -43,6 +48,7 @@ function isHealth(value: unknown): value is Health {
 }
 
 type RequestOptions = Omit<RequestInit, "credentials" | "redirect" | "cache"> & { csrf?: string | null }
+const originOnlyPosts = new Set(["/auth/link", "/auth/passkey/login/options", "/auth/passkey/login/verify"])
 
 export async function requestJson<T>(
   path: string,
@@ -56,7 +62,7 @@ export async function requestJson<T>(
   headers.set("Accept", "application/json")
   headers.delete("X-CSRF-Token")
   method = method.toUpperCase()
-  if (method !== "GET") {
+  if (method !== "GET" && !(method === "POST" && originOnlyPosts.has(url.pathname))) {
     if (!csrf) throw new Error("A CSRF token is required")
     headers.set("X-CSRF-Token", csrf)
   }
@@ -69,14 +75,15 @@ export async function requestJson<T>(
     redirect: "error",
     cache: "no-store",
   })
-  if (response.status === 401) {
+  if (!response.ok) {
     const body: unknown = await response.json().catch(() => null)
-    if (isObject(body) && body.error === "signed_out") {
+    const code = isObject(body) && typeof body.error === "string" ? body.error : undefined
+    if (response.status === 401 && code === "signed_out") {
       authEvents.dispatchEvent(new Event("signed_out"))
       throw new SignedOutError()
     }
+    throw new ApiError(response.status, code)
   }
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
   const value: unknown = response.status === 204 ? undefined : await response.json()
   if (!validate(value)) throw new Error("Unexpected server response")
   return value
@@ -84,7 +91,15 @@ export async function requestJson<T>(
 
 export const sessionQuery = queryOptions({
   queryKey: ["session"],
-  queryFn: ({ signal }) => requestJson("/auth/session", isSession, { signal }),
+  queryFn: async ({ signal }): Promise<Session> => {
+    const { signed_in, via, csrf, methods } = await requestJson("/auth/session", sessionShape, { signal })
+    let passkeys = methods.passkeys
+    if (passkeys === undefined && typeof methods.passkey === "boolean") passkeys = Number(methods.passkey)
+    if (typeof passkeys !== "number" || !Number.isSafeInteger(passkeys) || passkeys < 0) {
+      throw new Error("Unexpected session response")
+    }
+    return { signed_in, via, csrf, methods: { passkeys, oidc: methods.oidc, access: methods.access } }
+  },
   retry: false,
   staleTime: 60_000,
 })
