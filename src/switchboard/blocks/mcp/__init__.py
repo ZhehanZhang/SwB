@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field, create_model
 from starlette.routing import BaseRoute, Mount
 
@@ -88,6 +88,25 @@ def principal_of(request: Any) -> Principal | None:
     return p if isinstance(p, Principal) else None
 
 
+class LimitedServer(MCPServer):
+    """An MCP server that holds a key to its tool allowlist (auth.key_tools): tools/list shows only those tools and
+    tools/call refuses any other."""
+
+    async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
+        out = await super()._handle_list_tools(ctx, params)
+        p = principal_of(getattr(ctx, "request", None))
+        if p is not None and p.tools is not None:
+            out.tools = [t for t in out.tools if t.name in p.tools]
+        return out
+
+    async def _handle_call_tool(self, ctx: Any, params: Any) -> Any:
+        p = principal_of(getattr(ctx, "request", None))
+        if p is not None and p.tools is not None and params.name not in p.tools:
+            return CallToolResult(content=[TextContent(type="text", text=f"the {p.source} key may call only {', '.join(p.tools) or 'no tools'}")],
+                                  is_error=True)
+        return await super()._handle_call_tool(ctx, params)
+
+
 class WaitCaps:
     """wait limits per agent. Hosted Claude allows 240 s per call; Claude Code by default fails a request with no response byte in 60 s."""
 
@@ -139,7 +158,7 @@ class MCPBlock(Block):
     def build(self) -> MCPServer:
         core = self.core
         senders = [b for b in core.blocks.values() if b.verb("send") is not None]
-        mcp = MCPServer(name="switchboard", instructions=self.instructions(), extensions=[TasksExtension(self)] if senders else [])
+        mcp = LimitedServer(name="switchboard", instructions=self.instructions(), extensions=[TasksExtension(self)] if senders else [])
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
         Links = create_model("Links", repos=(list[str] | None, Field(default=None, description="owner/repo names that belong to the project")),
