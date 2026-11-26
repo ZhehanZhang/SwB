@@ -89,6 +89,7 @@ class DotsBlock(Block):
         self.default_slug = str(config.get("default") or "").lower() or None
         self.overrides = {str(k).lower(): (v or {}) for k, v in (config.get("dots") or {}).items()}
         self.problems_: list[str] = []
+        self.images: dict[str, str] = {}
         self.poll_s = float(config.get("poll_seconds", 5))
         self.use_group_dm = bool(config.get("group_dm", False))
         self.owner_dm_mode = bool(config.get("owner_dm", False))
@@ -180,6 +181,8 @@ class DotsBlock(Block):
         now = self.core.clock()
         for m in found:
             profile = m.get("profile") or {}
+            if profile.get("image_192") or profile.get("image_72"):
+                self.images[m["id"]] = profile.get("image_192") or profile.get("image_72")
             self.core.store.x("INSERT INTO dots(workspace, user_id, bot_id, name, real_name, app_id, slug, seen_at) VALUES (?,?,?,?,?,?,?,?) "
                               "ON CONFLICT(workspace, user_id) DO UPDATE SET bot_id = excluded.bot_id, name = excluded.name, real_name = excluded.real_name, "
                               "app_id = excluded.app_id, slug = excluded.slug, seen_at = excluded.seen_at",
@@ -267,6 +270,7 @@ class DotsBlock(Block):
         dots = self.dots()
         default = self.default_dot(dots)
         return [{"kind": "dot", "id": d["user_id"], "name": d["label"],
+                 "persona": {"id": f"dot-{d['slug']}", "name": d["label"], "icon_url": self.images.get(d["user_id"])},
                  "slugs": [d["slug"], *([DEFAULT_ALIAS] if default is d and d["slug"] != DEFAULT_ALIAS else [])]} for d in dots]
 
     def problems(self) -> list[str]:

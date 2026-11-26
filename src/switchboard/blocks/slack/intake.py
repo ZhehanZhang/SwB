@@ -110,7 +110,7 @@ class SlackIntake(Block):
                 if not p.get("id") or block is None or p["id"] in personas:
                     continue
                 avatar = await block.render_avatar(p, engine.http, engine.avatar_cache, engine.config.captain_avatars)
-                personas[p["id"]] = Persona(id=p["id"], name=p.get("name") or p["id"], avatar=avatar)
+                personas[p["id"]] = Persona(id=p["id"], name=p.get("name") or p["id"], avatar=avatar, icon_url=None if avatar else p.get("icon_url"))
             targets: dict[str, Target] = {}
             for slug, t in self.core.slug_map(found, dict(engine.config.target_aliases)).items():
                 persona = (t.get("persona") or {}).get("id")

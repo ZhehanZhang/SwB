@@ -29,7 +29,7 @@ async def access(assertion):
 def members():
     return [
         {"id": BOT_USER, "name": "swb", "is_bot": True, "profile": {"bot_id": BOT_ID}},
-        {"id": DOT, "name": "example-dots", "real_name": "Owner Dots", "is_bot": True, "profile": {"bot_id": DOT_BOT, "api_app_id": "ADOTS"}},
+        {"id": DOT, "name": "example-dots", "real_name": "Owner Dots", "is_bot": True, "profile": {"bot_id": DOT_BOT, "api_app_id": "ADOTS", "image_192": "https://img.example/dot.png"}},
         {"id": HELPER, "name": "helper", "is_bot": True, "profile": {"bot_id": "BHELP0001", "api_app_id": "AHELPER"}},
         {"id": "UGONE0001", "name": "old-dots", "is_bot": True, "deleted": True, "profile": {}},
         {"id": "UHUMAN001", "name": "dotty", "is_bot": False, "profile": {}},
@@ -322,3 +322,22 @@ def test_dot_names_the_only_dot_and_config_picks_it_among_several(tmp_path):
         assert core.blocks["dots"].dot("dot") is None and "dot" not in core.slack.targets
     with started(tmp_path / "c", relay_exists=True, dots={"app_ids": ["AHELPER"], "default": "helper"}) as (core, world, scans, client):
         assert core.blocks["dots"].dot("dot")["user_id"] == HELPER and core.blocks["dots"].dot("example-dots")["user_id"] == DOT
+
+
+def test_a_dot_answer_relayed_into_another_thread_posts_as_the_dot_with_its_picture(tmp_path):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), resources={"target:example-dots": "shared"}) as (core, world, scans, client):
+        client.portal.call(core.slack.ingest, "a2a", mention("dot ping"))
+        settle(client, world, "chat_postMessage", 1)
+        client.portal.call(core.slack.ingest, "a2a", dot_event(RELAY, "1700000600.3", "pong", "1700000000.000001"))
+        got = bot_posts(settle(client, world, "chat_postMessage", 2) and world)[1:]
+        assert got[0]["channel"] == "CPUBLIC01" and got[0]["username"] == "Owner Dots" and got[0]["icon_url"] == "https://img.example/dot.png"
+
+
+def test_a_persona_without_a_picture_uses_the_bots_own_picture_never_slacks_initials(tmp_path):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT)) as (core, world, scans, client):
+        core.slack.runtimes["a2a"].bot_image = "https://img.example/app.png"
+        tool(client, "send", {"to": "dot", "task": "hi"})
+        ((_, post),) = calls(world, "chat_postMessage")
+        assert post["username"] == "Capy" and post["icon_url"] == "https://img.example/capy.png"
+        out = client.portal.call(core.slack.runtimes["a2a"].execute, "bot", "post_message", {"channel": RELAY, "text": "x"}, {"id": "bare", "name": "Bare"})
+        assert out["ts"] and calls(world, "chat_postMessage")[-1][1]["icon_url"] == "https://img.example/app.png"

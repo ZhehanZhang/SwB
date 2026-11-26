@@ -299,7 +299,13 @@ class SlackEngine:
             return True
         if not self.visibility.allows(who, *self.channel_resources(rt.label, push["channel"], push.get("channel_name"))):
             return False
-        return not push.get("target") or self.visibility.allows(who, f"target:{push['target']}")
+        return not push.get("target") or self.visibility.allows(who, *self.target_resources(push["target"]))
+
+    def target_resources(self, slug: str) -> list[str]:
+        """A target's visibility resources: the slug used, then its other slugs (an alias such as dot shares its rule)."""
+        t = self.targets.get(slug)
+        others = [s for s, x in self.targets.items() if t is not None and s != slug and x.kind == t.kind and x.id == t.id]
+        return [f"target:{s}" for s in (slug, *sorted(others))]
 
     def channel_shared(self, workspace: str, channel: str) -> bool:
         rt = self.runtimes.get(workspace)
@@ -309,7 +315,7 @@ class SlackEngine:
     async def reply_place(self, workspace: str, channel: str, thread_ts: str | None, target: str | None) -> tuple[str, str | None, bool] | None:
         """Where a reply from target goes: its Slack thread, or the owner's DM when a private target answers in a shared
         channel. None when that DM can't be opened."""
-        if not target or self.visibility.rule(f"target:{target}") != "private" or not self.channel_shared(workspace, channel):
+        if not target or self.visibility.rule(*self.target_resources(target)) != "private" or not self.channel_shared(workspace, channel):
             return channel, thread_ts, False
         owner = next(iter(sorted(self.config.workspaces[workspace].owner_user_ids)), None)
         rt = self.runtimes.get(workspace)

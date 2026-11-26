@@ -75,6 +75,7 @@ class WorkspaceRuntime:
         self.team_url: str | None = None
         self.bot_user_id: str | None = None
         self.bot_id: str | None = None
+        self.bot_image: str | None = None
         self.user_id: str | None = None
         self.errors: list[str] = []
         self.connected = False
@@ -141,6 +142,11 @@ class WorkspaceRuntime:
             if name == "bot":
                 self.bot_user_id = info.get("user_id")
                 self.bot_id = info.get("bot_id")
+                try:
+                    profile = ((await client.users_info(user=self.bot_user_id)).get("user") or {}).get("profile") or {}
+                    self.bot_image = profile.get("image_192") or profile.get("image_72")
+                except Exception as exc:
+                    log.info("workspace %s: reading the bot's picture failed: %s", self.label, slack_error(exc))
             else:
                 self.user_id = info.get("user_id")
         if self.clients:
@@ -319,6 +325,8 @@ class WorkspaceRuntime:
                     args["reply_broadcast"] = True
             if identity == "bot":
                 args.update(persona_post_args(persona, self.core.avatar_url))
+                if "username" in args and not (args.get("icon_url") or args.get("icon_emoji")) and self.bot_image:
+                    args["icon_url"] = self.bot_image
             resp = await client.chat_postMessage(**args)
             channel, ts = resp["channel"], resp["ts"]
             self.core.store.mark_sent(self.team_id, channel, ts)
