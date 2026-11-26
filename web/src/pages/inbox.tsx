@@ -187,7 +187,7 @@ function Conversations({ items }: { items: Conversation[] }) {
                 <RelativeTime value={row.updated_at ?? row.created_at} />
               </td>
               <td role="cell" className="text-right max-md:col-start-3 max-md:row-start-2">
-                <Lamp state={row.open ? "on" : "off"} label={row.open ? "Open" : "Closed"} className="size-2" />
+                <Lamp state={row.open ? "on" : "off"} label={row.open ? "Open" : "Closed"} />
               </td>
             </tr>
           )

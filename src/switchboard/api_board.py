@@ -131,7 +131,8 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
             meta = dict(stored.get(name, {})) if row["source"] == "stored" else {}
             primary = wake_targets.get((row.get("agent", "grok"), row["project"]))
             role = "primary routine" if primary and str(primary) == ident else "routine"
-            item = {**_item(ident, name, row.get("agent", "grok")), "role": role, "state": _routine_state(row["status"]),
+            item = {**_item(ident, name, use if use == "grok-routine" else row.get("agent", "claude")),
+                    "role": role, "state": _routine_state(row["status"]),
                     "by": _actor(core, meta.get("created_by") or ("config" if row["source"] == "config" else None)),
                     "at": iso(meta.get("created_at"))}
             agents[row["project"]][ident] = item
