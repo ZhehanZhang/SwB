@@ -14,7 +14,7 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     proxy: {
-      "^/(?:api|auth/(?:session|logout)|classic|claim|routines|pairing|visibility|connect|avatars|assets|healthz|slack/(?:requests|personas)|inbox/(?:poll|events))(?:/|\\?|$)":
+      "^/(?:api|auth|classic|claim|routines|pairing|visibility|connect|avatars|assets|healthz|slack/(?:requests|personas)|inbox/(?:poll|events))(?:/|\\?|$)":
         "http://127.0.0.1:8000",
     },
   },
