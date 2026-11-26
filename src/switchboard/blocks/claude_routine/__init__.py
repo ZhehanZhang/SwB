@@ -60,7 +60,7 @@ PICKUP_TTL_S = 86_400
 CLAIMS = """
 CREATE TABLE IF NOT EXISTS routine_claims (code_hash TEXT PRIMARY KEY, routine_id TEXT NOT NULL, name TEXT NOT NULL, project TEXT NOT NULL,
   new_project TEXT, title TEXT, is_primary INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at REAL NOT NULL,
-  expires_at REAL NOT NULL, used_at REAL)
+  expires_at REAL NOT NULL, used_at REAL, superseded_at REAL)
 """
 
 INSTRUCTIONS = """claude-routine targets are Claude Code routines: send to claude (with project=<slug> to reach that project's
@@ -137,6 +137,8 @@ class ClaudeRoutineBlock(Block):
             core.store.x("ALTER TABLE routines ADD COLUMN title TEXT")
         if "is_primary" not in cols:
             core.store.x("ALTER TABLE routines ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0")
+        if "superseded_at" not in {r["name"] for r in core.store.q("PRAGMA table_info(routine_claims)")}:
+            core.store.x("ALTER TABLE routine_claims ADD COLUMN superseded_at REAL")
 
     # Registry --------------------------------------------------------------------------------
 
@@ -281,20 +283,38 @@ class ClaudeRoutineBlock(Block):
 
     # Self-registration: a Claude session names its routine, the owner enters the token behind Access -------------
 
+    def pending_projects(self) -> list[dict[str, Any]]:
+        """New projects reserved by active claims, one per slug, until the first link is saved."""
+        now = self.core.clock()
+        out = {}
+        for r in self.core.store.q(
+            "SELECT project, new_project, expires_at FROM routine_claims WHERE new_project IS NOT NULL AND used_at IS NULL AND expires_at > ? "
+            "AND NOT EXISTS (SELECT 1 FROM projects WHERE slug = routine_claims.project) ORDER BY created_at, rowid", (now,)
+        ):
+            slug = r["project"]
+            if slug not in out:
+                p = json.loads(r["new_project"])
+                out[slug] = {"slug": slug, "name": p["name"], "description": p["description"], "claude_project": p["links"]["claude_project"],
+                             "expires_in_s": int(r["expires_at"] - now)}
+        return list(out.values())
+
     def similar(self, *hints: str | None) -> list[dict[str, Any]]:
-        """Projects whose slug, name or linked project name (claude_project, ...) is close to any hint."""
+        """Existing or pending projects whose slug, name or linked project name is close to any hint."""
         def norm(s: str) -> str:
             return re.sub(r"[^a-z0-9]", "", s.lower())
 
         hs = [norm(h) for h in hints if h and norm(h)]
+        projects = [{"slug": p.slug, "name": p.name, "links": {k: v for k, v in p.links.items() if k != "repos"}} for p in self.core.projects.list()]
+        projects.extend({"slug": p["slug"], "name": p["name"], "links": {"claude_project": p["claude_project"]}, "pending": True}
+                        for p in self.pending_projects())
         out = []
-        for p in self.core.projects.list():
-            fields = [p.slug, p.name] + [str(v) for k, v in p.links.items() if k.endswith("_project") and isinstance(v, str)]
+        for p in projects:
+            fields = [p["slug"], p["name"]] + [v for k, v in p["links"].items() if k.endswith("_project") and isinstance(v, str)]
             fs = [norm(f) for f in fields if norm(f)]
             score = max((1.0 if h == f else 0.9 if min(len(h), len(f)) >= 3 and (h in f or f in h) else difflib.SequenceMatcher(None, h, f).ratio())
                         for h in hs for f in fs) if hs and fs else 0.0
             if score >= SIMILAR:
-                out.append({"slug": p.slug, "name": p.name, "links": {k: v for k, v in p.links.items() if k != "repos"}, "score": round(score, 2)})
+                out.append({**p, "score": round(score, 2)})
         return sorted(out, key=lambda x: -x["score"])
 
     def register(self, *, fire: str, claude_project: str, project: str | None, project_name: str | None, description: str | None,
@@ -323,31 +343,46 @@ class ClaudeRoutineBlock(Block):
         if existing is None:
             if not SLUG_RE.match(slug) or slug == "general":
                 raise BlockError("project must be lowercase letters, digits and dashes (max 48), and not 'general'")
-            near = self.similar(slug, project_name, title)
-            if near and not create_new:
-                return {"pending": False, "reason": f"no project {slug!r}, but these are close: attach to one (project=<its slug>), or pass "
-                        "create_new=true if this really is a new project", "candidates": near}
-            new_project = {"name": (project_name or title).strip()[:120], "description": (description or "").strip()[:2000],
-                           "links": {"claude_project": title}}
+            pending = next((p for p in self.pending_projects() if p["slug"] == slug), None)
+            if pending:
+                new_project = {"name": pending["name"], "description": pending["description"], "links": {"claude_project": pending["claude_project"]}}
+            else:
+                near = self.similar(slug, project_name, title)
+                if near and not create_new:
+                    return {"pending": False, "reason": f"no project {slug!r}, but these are close: attach to one (project=<its slug>), or pass "
+                            "create_new=true if this really is a new project", "candidates": near}
+                new_project = {"name": (project_name or title).strip()[:120], "description": (description or "").strip()[:2000],
+                               "links": {"claude_project": title}}
         slug = existing.slug if existing else slug
         if any(r["routine_id"] == rid for r in self.configured.values()):
             raise BlockError(f"{rid} is set in the config file; change it there")
-        name = (name or "").strip().lower() or self._free_name("claude", slug, title, rid)
-        self._check_name(name, rid, False)
         now = self.core.clock()
-        if (self.core.store.one("SELECT COUNT(*) AS n FROM routine_claims WHERE created_by = ? AND used_at IS NULL AND expires_at > ?", (actor, now))["n"]
-                >= CLAIMS_PER_CALLER):
-            raise BlockError(f"{CLAIMS_PER_CALLER} registrations are already waiting for the owner; let those expire or finish first")
         code = secrets.token_urlsafe(24)
-        self.core.store.x("INSERT INTO routine_claims(code_hash, routine_id, name, project, new_project, title, is_primary, created_by, created_at, expires_at) "
-                          "VALUES (?,?,?,?,?,?,?,?,?,?)", (_sha(code), rid, name, slug, json.dumps(new_project) if new_project else None, title,
-                                                           int(bool(primary)), actor, now, now + CLAIM_TTL_S))
+
+        def run(db: Any) -> tuple[str, list[str]]:
+            replaced = [r for r in db.execute("SELECT code_hash, name, title FROM routine_claims WHERE project = ? AND used_at IS NULL "
+                                               "AND expires_at > ? ORDER BY created_at", (slug, now))
+                        if (r["title"] or "").casefold() == title.casefold()]
+            db.executemany("UPDATE routine_claims SET used_at = ?, superseded_at = ? WHERE code_hash = ?",
+                           [(now, now, r["code_hash"]) for r in replaced])
+            chosen = (name or "").strip().lower() or self._free_name("claude", slug, title, rid)
+            self._check_name(chosen, rid, False)
+            if (db.execute("SELECT COUNT(*) FROM routine_claims WHERE created_by = ? AND used_at IS NULL AND expires_at > ?", (actor, now)).fetchone()[0]
+                    >= CLAIMS_PER_CALLER):
+                raise BlockError(f"{CLAIMS_PER_CALLER} registrations are already waiting for the owner; let those expire or finish first")
+            db.execute("INSERT INTO routine_claims(code_hash, routine_id, name, project, new_project, title, is_primary, created_by, created_at, expires_at) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?)", (_sha(code), rid, chosen, slug, json.dumps(new_project) if new_project else None, title,
+                                                        int(bool(primary)), actor, now, now + CLAIM_TTL_S))
+            return chosen, [r["name"] for r in replaced]
+
+        name, superseded = self.core.store.tx(run)
         base = self.core.cfg.public_url or ""
         routines = self.routines()
         lead = self.primary(slug, "claude", routines)
         return {"pending": True, "link": f"{base}/routines/claim/{code}", "expires_in_s": CLAIM_TTL_S, "name": name, "routine_id": rid,
                 "project": slug, "creates_project": new_project is not None, "claude_project": title,
                 "primary": bool(primary) or lead is None or lead["name"] == name,
+                **({"superseded": superseded} if superseded else {}),
                 "next": "Give the owner this link. He opens it (SSO), pastes the routine's token and clicks Save; the token never goes "
                         "through chat or MCP. routine_list shows the routine once saved (untested until its first fire)."}
 
@@ -355,6 +390,8 @@ class ClaudeRoutineBlock(Block):
         row = self.core.store.one("SELECT * FROM routine_claims WHERE code_hash = ?", (_sha(code or ""),))
         if row is None:
             raise BlockError("this link isn't valid; ask the Claude session for a new one")
+        if row["superseded_at"] is not None:
+            raise BlockError("this link was replaced by a newer registration; use the latest link")
         if row["used_at"] is not None:
             raise BlockError("this link was already used")
         if row["expires_at"] <= self.core.clock():
@@ -370,13 +407,15 @@ class ClaudeRoutineBlock(Block):
         self._check_name(c["name"], c["routine_id"], False, skip=_sha(code))
         if not self.core.store.n("UPDATE routine_claims SET used_at = ? WHERE code_hash = ? AND used_at IS NULL", (self.core.clock(), _sha(code))):
             raise BlockError("this link was already used")
+        created_project = False
         if c["new_project"]:
             try:
                 self.core.projects.get(c["project"])
             except ProjectError:
                 self.core.projects.create(slug=c["project"], **c["new_project"])
+                created_project = True
         return {**self.add(fire=c["routine_id"], token=token, project=c["project"], name=c["name"], agent="claude", actor=actor, title=c["title"],
-                           primary=True if c["primary"] else None), "created_project": bool(c["new_project"])}
+                           primary=True if c["primary"] else None), "created_project": created_project}
 
     def pending(self) -> list[dict[str, Any]]:
         return [{"name": r["name"], "routine_id": r["routine_id"], "project": r["project"], "claude_project": r["title"], "requested_by": r["created_by"],
@@ -528,26 +567,36 @@ class ClaudeRoutineBlock(Block):
                         + ("; Anthropic refused the text for this Project routine (403 'this project is paused', anthropics/claude-code#102874), "
                            "so it was woken without it and collects the message with routine_pickup" if bare else "")}
 
-    def pickup(self, routine: str | None, source: str) -> dict[str, Any]:
-        """The message a routine was woken for without text: the oldest one waiting for that routine (by name or trig_ id),
-        or for any of the caller's routines when it doesn't know its own, with the switchboard note. Only the routine's own
-        agent (claude) sees them, as with its mailbox. Each message is handed out once."""
+    def pickup(self, routine: str | None, source: str, *, claude_project: str | None = None, project: str | None = None) -> dict[str, Any]:
+        """The oldest message waiting for one of the caller's routines, with the switchboard note. Filter by routine
+        name or trig_ id, Claude Project name or switchboard project slug. Each message is handed out once."""
         routines = self.routines()
         want = (routine or "").strip().lower()
+        title = (claude_project or "").strip().casefold()
+        slug = (project or "").strip().lower()
         args: list[Any] = [self.core.clock() - PICKUP_TTL_S]
         sql = "SELECT * FROM routine_pickups WHERE picked_at IS NULL AND created_at > ?"
         if want:
             sql += " AND (routine = ? OR lower(routine_id) = ?)"
             args += [want, want]
         for row in self.core.store.q(sql + " ORDER BY created_at", args):
-            if (routines.get(row["routine"]) or {}).get("agent") != source:
+            r = routines.get(row["routine"])
+            if r is None or r["agent"] != source:
+                continue
+            if title and (r["title"] or "").strip().casefold() != title:
+                continue
+            if slug and r["project"] != slug:
                 continue
             if self.core.store.n("UPDATE routine_pickups SET picked_at = ? WHERE handle = ? AND picked_at IS NULL", (self.core.clock(), row["handle"])):
-                return {"conversation": row["handle"], "routine": row["routine"], "project": row["project"], "text": row["text"]}
+                handle = self.core.inbox.handle(row["handle"])
+                sender = handle["meta"].get("from") if handle else None
+                return {"conversation": row["handle"], "routine": row["routine"], "project": row["project"], "text": row["text"],
+                        "from": sender, "trust": (sender or {}).get("trust", "unknown")}
         return {"conversation": None, "note": "nothing waiting" + (f" for {want}" if want else "")}
 
-    async def pickup_action(self, call: Call, *, routine: str | None = None) -> dict[str, Any]:
-        out = self.pickup(routine, call.principal.source)
+    async def pickup_action(self, call: Call, *, routine: str | None = None, claude_project: str | None = None,
+                            project: str | None = None) -> dict[str, Any]:
+        out = self.pickup(routine, call.principal.source, claude_project=claude_project, project=project)
         call.note(target=out.get("routine") or routine or "-", ref=out.get("conversation"))
         return out
 
