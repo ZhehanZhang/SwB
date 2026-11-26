@@ -114,6 +114,11 @@ the project, and every step out of it is explicit:
   read at all, even with `scopes`; only a read that names them as `project` sees them.
 - **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{acme-agent: [project:acme]}`. A limited key
   can't read or write outside its list, can't create projects or change routes, and must send with a project.
+- **Bearer keys can be limited to tools and send targets** with `auth.key_tools` and `auth.key_targets`, e.g.
+  `key_tools: {monitor: [send]}` and `key_targets: {monitor: [claude-ops]}`. Such a key sees and calls only those
+  tools, sends only to those targets (compared after resolving, so a slug and its address match), never forwards,
+  and can't read its inbox over HTTP unless `inbox` is listed. A key's name is its `SWITCHBOARD_KEY_<NAME>` suffix,
+  lowercased with `_` as `-`.
 - Rows written by capy-bridge 0.1 were migrated into `general`.
 
 New projects link themselves. `project_create` (and `project_update` while a block's link is empty) asks each block

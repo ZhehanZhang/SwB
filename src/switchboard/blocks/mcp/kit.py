@@ -251,4 +251,6 @@ class Kit:
             p = kit.alias(ctx, "agent_send")
             if project:
                 kit.need(p, kit.pscope(project))
+            if p.targets is not None:
+                await kit.run(core.check_target(p, f"agent:{to}", project))
             return await kit.run(core.agent_send(p, to=to, text=text, project=project))
