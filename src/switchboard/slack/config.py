@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Any, Mapping
+from dataclasses import dataclass, field, replace
+from typing import Any, Callable, Mapping
 
 import yaml
+
+from ..signing import HEADER_NAME_RE
 
 IDENTITIES = ("bot", "user")
 POLICIES = ("free", "approval", "never")
@@ -40,7 +42,9 @@ class SinkConfig:
     coalesce_seconds: float
     max_batch: int
     targets: tuple[str, ...] = ()
-    secret: str | None = None
+    secret: str | None = field(default=None, repr=False)
+    signature: str | None = None
+    header: str | None = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,7 @@ class WorkspaceConfig:
     known: Mapping[str, str] = field(default_factory=dict)
     sender_rate: tuple[int, float] = (5, 600.0)
     default_identity: Mapping[str, str] = field(default_factory=dict)
+    listen_channels: tuple[str, ...] = ()
 
     @property
     def has_bot(self) -> bool:
@@ -167,17 +172,19 @@ def _parse_persona(pid: str, raw: Any, public_base_url: str | None) -> Persona:
     return Persona(id=pid, name=name, icon_url=icon_url, emoji=emoji, avatar=avatar)
 
 
-def _parse_sink(label: str, idx: int, raw: Any, env: Mapping[str, str]) -> SinkConfig:
+def _parse_sink(
+    label: str, idx: int, raw: Any, env: Mapping[str, str], secret_lookup: Callable[[str], str | None],
+) -> SinkConfig:
     where = f"workspaces.{label}.sinks[{idx}]"
     _need(isinstance(raw, dict), f"{where} must be a mapping")
     _need(raw.get("type", "webhook") == "webhook", f"{where}.type: only 'webhook' is supported")
     _need(not (raw.get("url") and raw.get("url_env")), f"{where}: set url or url_env, not both")
-    url = raw.get("url") or (env.get(raw["url_env"]) if raw.get("url_env") else None) or None
+    url = raw.get("url") or (secret_lookup(raw["url_env"]) if raw.get("url_env") else None) or None
     if raw.get("url"):
         _need(str(url).startswith(("https://", "http://")), f"{where}.url must be http(s)")
     headers: dict[str, str] = {}
     for header, env_name in (raw.get("headers_env") or {}).items():
-        value = env.get(env_name)
+        value = secret_lookup(env_name)
         if value:
             headers[str(header)] = value
     kinds = _str_list(raw.get("kinds"), f"{where}.kinds") or KINDS
@@ -186,10 +193,21 @@ def _parse_sink(label: str, idx: int, raw: Any, env: Mapping[str, str]) -> SinkC
     _need(0 <= coalesce <= 600, f"{where}.coalesce_seconds must be 0..600")
     max_batch = int(raw.get("max_batch", 20))
     _need(1 <= max_batch <= 200, f"{where}.max_batch must be 1..200")
-    secret = env.get(raw["secret_env"]) if raw.get("secret_env") else None
-    _need(not raw.get("secret_env") or bool(secret) or not env, f"{where}.secret_env names a variable that is not set")
+    signature = raw.get("signature")
+    _need(signature in (None, "stripe"), f"{where}.signature must be 'stripe' when set")
+    secret_env = raw.get("secret_env")
+    header = raw.get("header") if signature == "stripe" else None
+    if signature == "stripe":
+        _need(isinstance(secret_env, str) and bool(secret_env.strip()), f"{where}.secret_env is required for Stripe signing")
+        _need(header is None or (isinstance(header, str) and HEADER_NAME_RE.fullmatch(header) is not None
+                                 and header.lower() not in {"content-type", "idempotency-key"}),
+              f"{where}.header must be a valid, non-reserved HTTP header name")
+    secret = secret_lookup(secret_env) if secret_env else None
+    _need(signature == "stripe" or not secret_env or bool(secret) or not env, f"{where}.secret_env names a variable that is not set")
     return SinkConfig(
         secret=secret or None,
+        signature=signature,
+        header=header,
         name=str(raw.get("name") or f"{label}-sink{idx}"),
         url=url,
         headers=headers,
@@ -201,7 +219,9 @@ def _parse_sink(label: str, idx: int, raw: Any, env: Mapping[str, str]) -> SinkC
     )
 
 
-def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Mapping[str, Persona]) -> WorkspaceConfig:
+def _parse_workspace(
+    label: str, raw: Any, env: Mapping[str, str], personas: Mapping[str, Persona], secret_lookup: Callable[[str], str | None],
+) -> WorkspaceConfig:
     where = f"workspaces.{label}"
     _need(bool(LABEL_RE.match(label)), f"workspace label {label!r} must match {LABEL_RE.pattern}")
     _need(isinstance(raw, dict), f"{where} must be a mapping")
@@ -238,7 +258,7 @@ def _parse_workspace(label: str, raw: Any, env: Mapping[str, str], personas: Map
     _need(intake != "socket" or bool(app_token_env), f"{where}: intake socket needs app_token_env")
     poll_seconds = float(raw.get("poll_seconds", 60))
     _need(poll_seconds >= 10, f"{where}.poll_seconds must be >= 10")
-    sinks = tuple(_parse_sink(label, i, s, env) for i, s in enumerate(raw.get("sinks") or []))
+    sinks = tuple(_parse_sink(label, i, s, env, secret_lookup) for i, s in enumerate(raw.get("sinks") or []))
     ack = raw.get("ack_reaction", "eyes" if "bot" in identities else None)
     if user_only:
         ack = None
@@ -314,7 +334,7 @@ def _parse_grant(key_id: str, raw: Any, workspaces: Mapping[str, WorkspaceConfig
     )
 
 
-def parse_config(data: Any, env: Mapping[str, str]) -> Config:
+def parse_config(data: Any, env: Mapping[str, str], *, secret_lookup: Callable[[str], str | None] | None = None) -> Config:
     if data is None:
         return Config()
     _need(isinstance(data, dict), "config root must be a mapping")
@@ -323,7 +343,15 @@ def parse_config(data: Any, env: Mapping[str, str]) -> Config:
         _need(isinstance(public_base_url, str) and public_base_url.startswith("https://"), "public_base_url must be an https URL")
         public_base_url = public_base_url.rstrip("/")
     personas = {pid: _parse_persona(pid, raw, public_base_url) for pid, raw in (data.get("personas") or {}).items()}
-    workspaces = {label: _parse_workspace(label, raw, env, personas) for label, raw in (data.get("workspaces") or {}).items()}
+    workspaces = {label: _parse_workspace(label, raw, env, personas, secret_lookup or env.get)
+                  for label, raw in (data.get("workspaces") or {}).items()}
+    listen = data.get("listen_channels", {})
+    _need(isinstance(listen, dict), "listen_channels must map workspaces to channel lists")
+    for label, channels in listen.items():
+        _need(label in workspaces, f"listen_channels: unknown workspace {label!r}")
+        channels = tuple(ch.removeprefix("#") for ch in _str_list(channels, f"listen_channels.{label}"))
+        _need(all(ch and ch != "*" for ch in channels), f"listen_channels.{label} needs channel names or ids")
+        workspaces[label] = replace(workspaces[label], listen_channels=channels)
     _need("api_keys" not in data, "api_keys became agents: {<agent name>: {persona, workspaces, ...}}; switchboard's own keys authenticate")
     grants = {str(k).lower(): _parse_grant(str(k).lower(), raw, workspaces, personas) for k, raw in (data.get("agents") or {}).items()}
     appr = data.get("approvals") or {}
@@ -339,8 +367,6 @@ def parse_config(data: Any, env: Mapping[str, str]) -> Config:
         _need(bool(approvals.approver_user_id), "approvals.approver_user_id is required with notify_workspace")
     _need("access" not in data, "access is switchboard's auth.cloudflare_access now; drop it from the slack section")
     if approvals.notify_workspace in workspaces and approvals.approver_user_id:
-        from dataclasses import replace
-
         ws = workspaces[approvals.notify_workspace]
         if not ws.owner_user_ids:
             workspaces[ws.label] = replace(ws, owner_user_ids=frozenset({approvals.approver_user_id}))

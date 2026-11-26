@@ -50,12 +50,26 @@ class Kit:
         return DEPRECATED.format(new=new) + text
 
     def owner(self, ctx: Context, what: str) -> "Principal":
-        """Pairing codes are the owner's: an unrestricted OAuth or bearer-key caller, never an agent connected by a code."""
         p = self.who(ctx)
         if p.kind == "connect":
-            raise ToolError(f"a connected agent can't {what}; the owner does that from the root page or his own sign-in")
-        self.unrestricted(p, what)
+            raise ToolError(f"a connected agent can't {what}; use the owner's sign-in")
+        if not p.is_unrestricted_owner:
+            raise ToolError(f"only an unrestricted owner can {what}; this caller is limited")
         return p
+
+    def mint_pairing(self, p: "Principal", agent: str, project: str | None, client: str | None) -> dict[str, Any]:
+        from ...connect import ConnectError
+
+        if not p.is_unrestricted_owner:
+            raise ToolError("only an unrestricted owner can mint pairing codes")
+        if project:
+            self.core.project(project)
+        try:
+            out = self.core.connections.mint(agent=agent, project=project, client=client, by=p.source)
+        except ConnectError as e:
+            raise ToolError(str(e)) from e
+        self.core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_code", outcome="ok", target=out["agent"])
+        return out
 
     def alias(self, ctx: Context, name: str) -> "Principal":
         p = self.who(ctx)
@@ -134,7 +148,10 @@ class Kit:
             new_conversation: Annotated[bool | None, Field(description="For a target that is a long-lived thread (a Captain): true starts a new one instead")] = None,
             wait_s: Annotated[float, Field(ge=0, description="Seconds to wait for a first reply before returning (capped per client)")] = 0,
             forward: Annotated[str | None, Field(description="Conversation handle you received and are handing off")] = None,
+            in_reply_to: Annotated[str | None, Field(description="Not supported by send; use reply to answer a conversation")] = None,
         ) -> dict[str, Any]:
+            if in_reply_to is not None:
+                raise ToolError("use reply to answer a conversation")
             p = kit.who(ctx)
             mailbox = bool(to) and (to.strip().lower().startswith("agent:") or to.strip().lower() in core.known_agents())
             if project or not mailbox:
@@ -144,8 +161,9 @@ class Kit:
 
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
-                        final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True) -> dict[str, Any]:
-            return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final)
+                        final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
+                        to_owner: Annotated[bool, Field(description="Listen conversations only: DM the owner instead of posting in the Slack thread")] = False) -> dict[str, Any]:
+            return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
             title="Wait for replies",
@@ -182,16 +200,8 @@ class Kit:
         @mcp.tool(title="Connect a new agent", description="Mint a one-time pairing code (10 minutes) for an agent you are setting up, such as claude-code, codex or a laptop script. The client redeems it at POST /connect for its own bearer key; the owner can revoke it from the root page or connect_revoke. Only an unrestricted caller may mint codes.", annotations=WRITE)
         async def connect_code(ctx: Context, agent: Annotated[str, Field(description="Agent name it signs in as, lowercase-dashed, e.g. codex")], project: ProjectArg = None,
                                client: Annotated[str | None, Field(description="What it is, e.g. codex-cli on the laptop")] = None) -> dict[str, Any]:
-            from ...connect import ConnectError
-
             p = kit.owner(ctx, "mint pairing codes")
-            if project:
-                core.project(project)
-            try:
-                out = core.connections.mint(agent=agent, project=project, client=client, by=p.source)
-            except ConnectError as e:
-                raise ToolError(str(e)) from e
-            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_code", outcome="ok", target=out["agent"])
+            out = kit.mint_pairing(p, agent, project, client)
             base = core.cfg.public_url or ""
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
                     "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
@@ -241,8 +251,12 @@ class Kit:
             annotations=SEND,
         )
         async def agent_send(ctx: Context, to: Annotated[str, Field(description="The agent's name, as switchboard_status shows it")], text: str,
-                             project: ProjectArg = None) -> dict[str, Any]:
+                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None) -> dict[str, Any]:
+            if in_reply_to is not None or forward is not None:
+                raise ToolError("use reply to answer a conversation or send to forward one")
             p = kit.alias(ctx, "agent_send")
             if project:
                 kit.need(p, kit.pscope(project))
+            if p.targets is not None:
+                await kit.run(core.check_target(p, f"agent:{to}", project))
             return await kit.run(core.agent_send(p, to=to, text=text, project=project))

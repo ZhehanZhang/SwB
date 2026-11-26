@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field, create_model
 from starlette.routing import BaseRoute, Mount
 
@@ -43,6 +43,7 @@ Write project facts to project:<slug> and pass project=<slug> too, so a slip lan
 things that apply everywhere, after the owner agrees, with confirm_general=true. Reads cover the named project plus
 general; another project's memory needs scopes=[...] and is logged. memory_move and memory_promote fix a wrong scope.
 Search before asking the owner something he may already have said.
+When someone asks how to connect, set up or link something to Switchboard, call connect and follow its next steps.
 To hand off work or message someone, use send: without to, the owner's route for you and the project decides; to can
 be a slug from targets(), an agent's mailbox (agent:claude) or an address <block>:<kind>:<id>. Every agent (claude,
 claude-code, chatgpt, gemini, capy, and each persona's agent) has a switchboard mailbox, so you can always message it,
@@ -89,6 +90,25 @@ def principal_of(request: Any) -> Principal | None:
     return p if isinstance(p, Principal) else None
 
 
+class LimitedServer(MCPServer):
+    """An MCP server that holds a key to its tool allowlist (auth.key_tools): tools/list shows only those tools and
+    tools/call refuses any other."""
+
+    async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
+        out = await super()._handle_list_tools(ctx, params)
+        p = principal_of(getattr(ctx, "request", None))
+        if p is not None and p.tools is not None:
+            out.tools = [t for t in out.tools if t.name in p.tools]
+        return out
+
+    async def _handle_call_tool(self, ctx: Any, params: Any) -> Any:
+        p = principal_of(getattr(ctx, "request", None))
+        if p is not None and p.tools is not None and params.name not in p.tools:
+            return CallToolResult(content=[TextContent(type="text", text=f"the {p.source} key may call only {', '.join(p.tools) or 'no tools'}")],
+                                  is_error=True)
+        return await super()._handle_call_tool(ctx, params)
+
+
 class WaitCaps:
     """wait limits per agent. Hosted Claude allows 240 s per call; Claude Code by default fails a request with no response byte in 60 s."""
 
@@ -131,6 +151,13 @@ class MCPBlock(Block):
     def routes(self) -> list[BaseRoute]:
         return [Mount("/", app=self.app)]
 
+    def next_step(self) -> str | None:
+        if not self.core.cfg.public_url:
+            return "Set public_url to let hosted MCP clients reach Switchboard."
+        if not self.core.cfg.owner_sign_in:
+            return "Configure owner sign-in to enable OAuth for MCP clients."
+        return None
+
     def lifespan(self) -> AbstractAsyncContextManager[None]:
         return self.app.router.lifespan_context(self.app)
 
@@ -148,7 +175,7 @@ class MCPBlock(Block):
         core = self.core
         senders = [b for b in core.blocks.values() if b.verb("send") is not None]
         extensions = [self.events, TasksExtension(self)] if senders else [self.events]
-        mcp = MCPServer(name="switchboard", instructions=self.instructions(), extensions=extensions)
+        mcp = LimitedServer(name="switchboard", instructions=self.instructions(), extensions=extensions)
         mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
@@ -415,6 +442,9 @@ class MCPBlock(Block):
 
         kit = Kit(self, who, run, need, pscope, unrestricted)
         kit.register_generic(mcp)
+        from .setup import register
+
+        register(mcp, kit)
         for b in core.blocks.values():
             b.mcp_tools(mcp, kit)
         return mcp
