@@ -5,7 +5,7 @@ import hmac
 import json
 import re
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import aiohttp
 from starlette.background import BackgroundTask
@@ -15,6 +15,7 @@ from starlette.routing import Route
 
 from ...config import ConfigError
 from ...guard import client_ip
+from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
 from .. import Block, Manifest
 
 if TYPE_CHECKING:
@@ -94,13 +95,15 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | No
 
 
 class _Sink:
-    def __init__(self, url: str | None):
+    def __init__(self, url: str | None, signature_header: str | None = None, secret: str | None = None):
         self.url = url
+        self.signature_header = signature_header
+        self.secret = secret
         self.queue: asyncio.Queue[tuple[str, bytes]] = asyncio.Queue(maxsize=1000)
         self.delivered = self.failed = 0
 
     def put(self, delivery: str, body: bytes) -> None:
-        if not self.url:
+        if not self.url or (self.signature_header and not self.secret):
             self.failed += 1
             return
         try:
@@ -108,7 +111,7 @@ class _Sink:
         except asyncio.QueueFull:
             self.failed += 1
 
-    async def run(self, http: aiohttp.ClientSession) -> None:
+    async def run(self, http: aiohttp.ClientSession, clock: Callable[[], float]) -> None:
         while True:
             delivery, body = await self.queue.get()
             try:
@@ -117,6 +120,8 @@ class _Sink:
                 for delay in RETRY_DELAYS:
                     if delay:
                         await asyncio.sleep(delay)
+                    if self.signature_header and self.secret:
+                        headers[self.signature_header] = stripe_signature(self.secret, body, int(clock()))
                     try:
                         async with http.post(self.url, data=body, headers=headers, allow_redirects=False) as response:
                             status = response.status
@@ -142,7 +147,6 @@ class GitHubBlock(Block):
 
     def __init__(self, core: Switchboard, config: dict[str, Any]):
         super().__init__(core, config)
-        env = core.cfg.env
         secret_env = config.get("secret_env", SECRET_ENV)
         if not isinstance(secret_env, str):
             raise ConfigError(f"{self.name}.secret_env must name an environment variable")
@@ -158,10 +162,25 @@ class GitHubBlock(Block):
             url_env = sink.get("url_env")
             if not isinstance(name, str) or url_env is not None and not isinstance(url_env, str):
                 raise ConfigError(f"{self.name}.sinks needs string names and URL settings")
-            url = env.get(url_env) if url_env else sink.get("url")
+            url = core.secret(url_env) if url_env else sink.get("url")
             if url is not None and not isinstance(url, str):
                 raise ConfigError(f"{self.name}.sinks needs string names and URL settings")
-            self.sinks[name] = _Sink(url)
+            signature = sink.get("signature")
+            if signature not in (None, "stripe"):
+                raise ConfigError(f"{self.name}.sinks.{name}.signature must be 'stripe' when set")
+            header = secret = None
+            if signature == "stripe":
+                where = f"{self.name}.sinks.{name}"
+                sink_secret_env = sink.get("secret_env")
+                if not isinstance(sink_secret_env, str) or not sink_secret_env.strip():
+                    raise ConfigError(f"{where}.secret_env is required for Stripe signing")
+                header = sink.get("header")
+                if header is not None and (not isinstance(header, str) or HEADER_NAME_RE.fullmatch(header) is None
+                                           or header.lower() in {"content-type", "idempotency-key", "user-agent"}):
+                    raise ConfigError(f"{where}.header must be a valid, non-reserved HTTP header name")
+                header = header if header is not None else STRIPE_SIGNATURE_HEADER
+                secret = core.secret(sink_secret_env)
+            self.sinks[name] = _Sink(url, header, secret)
         self.repo_routes: dict[str, set[str]] = {}
         for repo, names in routes.items():
             if not isinstance(repo, str) or not isinstance(names, list) or any(not isinstance(n, str) or n not in self.sinks for n in names):
@@ -182,7 +201,7 @@ class GitHubBlock(Block):
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
         for sink in self.sinks.values():
             if sink.url:
-                self.core.spawn(sink.run(self.http))
+                self.core.spawn(sink.run(self.http, self.core.clock))
 
     async def aclose(self) -> None:
         if self.http is not None:

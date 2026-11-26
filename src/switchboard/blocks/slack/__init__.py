@@ -42,7 +42,7 @@ class SlackBlock(SlackIntake, SlackActions):
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         self.token_names: dict[str, list[str]] = {}
         if config.get("engine", True):
-            parsed = parse_config(config, core.cfg.env)
+            parsed = parse_config(config, core.cfg.env, secret_lookup=core.secret)
             env = dict(core.cfg.env)
             for label, ws in parsed.workspaces.items():
                 names = [ident.token_env for ident in ws.identities.values()]
