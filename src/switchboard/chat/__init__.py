@@ -54,6 +54,12 @@ CREATE TABLE IF NOT EXISTS chat_relays (handle TEXT PRIMARY KEY, block TEXT NOT 
 RETENTION_S = 14 * 86400
 
 
+def migrate(store: Any) -> None:
+    store.db.executescript(SCHEMA)
+    if "part" not in {r["name"] for r in store.q("PRAGMA table_info(chat_sent)")}:
+        store.x("ALTER TABLE chat_sent ADD COLUMN part INTEGER NOT NULL DEFAULT 0")
+
+
 @dataclass(frozen=True)
 class Space:
     """One connected server, group set or bot account on a platform, under a label of the owner's choosing."""
@@ -103,7 +109,7 @@ class ChatBlock(Block):
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
-        core.store.db.executescript(SCHEMA)
+        migrate(core.store)
         self.spaces = {label: self._space(label, raw) for label, raw in (config.get("spaces") or {}).items()}
         grants = config.get("agents") or {}
         if not isinstance(grants, dict):
