@@ -337,61 +337,45 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
-### ChatGPT dots and the relay channel
+### ChatGPT dots and #switchboard
 
 The `dots` block finds ChatGPT dots in one workspace and makes each a target named after its handle
-(`@swb example-dots …`, or `send(to="example-dots")`). It scans the members for bot users whose app id is in
+(`@swb example-dot …`, or `send(to="exampledot")`). It scans the members for bot users whose app id is in
 `app_ids` or whose name matches `match` (`dot` by default), again when Slack sends `team_join` or a bot's
 `user_change`, and every `rescan_minutes`. Like every target a dot is private unless `visibility` shares it.
 
-```yaml
-blocks:
-  dots:
-    workspace: home            # a configured Slack workspace label
-    channel: "#swb-dots"       # the relay channel (a name, or a channel id)
-    create: true               # create it as the owner if it doesn't exist
-    app_ids: []                # extra app ids that are dots
-    match: [dot]
-    rescan_minutes: 30
-    dots:
-      example-dots: {slug: dots}       # rename
-      some-other-dot: {disabled: true}
-```
-
-Sends go to a group DM of the owner, @swb and the dot (opened by @swb once per dot), and @mention the dot, so agents
-collaborate with it in front of him. His agents post as @swb in their own persona (Capy, Claude, Captain, and so on).
-His own verified Slack messages post as @swb with the persona "via <his name>", or as him with `owner_posts_as: owner`
-(his user token, no approval prompt; that key reaches only his dot DMs and the relay channel, and each such post is
-audited). Text can't carry switchboard's `[via swb` label (copies become `(via swb`). The dot's answers in the group
-DM, top-level or in the thread, come back on the conversation (result, the inbox, or the original Slack thread),
-wrapped as non-owner text; switchboard also reads them from history for an hour in case an event is missed. When Slack
-won't open the group DM, the send goes to the private relay channel (created as the owner; switchboard never invites
-anyone, so status shows the one /invite @swb @<dot> to run), one thread per conversation. Nothing in a group DM or the
-relay channel is routed.
-
-`group_dm: false` instead posts owner-trust sends as him in his own DM with the dot (agents only with
-`agents_as_owner: true`, behind a `[via swb · from <agent>]` label). Non-owners reach a dot only when it's shared
-(otherwise their messages are context items); their sends post as @swb naming them, and a dot may ignore them.
+Dots talk in one private channel, `#switchboard` by default. Switchboard creates it with the owner's user token if it
+doesn't exist and never invites anyone: status shows the one `/invite` to run for @swb and the dots. Each send is a
+new post that @mentions the dot, made by @swb: his agents post under their own persona (Capy, Claude, Captain, and so
+on), and his own verified Slack messages under the persona "via <his name>". The dot's answers in that post's thread
+come back on the conversation (`result`, the inbox, or the original Slack thread), wrapped as non-owner text.
+Nothing in the channel is routed. Non-owners reach a dot only when it's shared (otherwise their messages are context
+items); their sends name them, and a dot may ignore them.
 
 ```yaml
 blocks:
   dots:
     workspace: home
-    group_dm: true            # default
-    owner_posts_as: swb       # or owner
-    agents_as_owner: false    # only used with group_dm: false
+    channel: "#switchboard"    # a name, or a channel id
+    create: true               # create it as the owner if it doesn't exist
+    app_ids: []                # extra app ids that are dots
+    match: [dot]
+    rescan_minutes: 30
+    dots:
+      example-dot: {slug: dot}         # rename
+      some-other-dot: {disabled: true}
 ```
 
-Dot instructions (paste into the dot's instructions):
+Dot instructions (paste into the dot's instructions; put in your own bot and app ids):
 
 ```text
-In our group DM with @swb, @swb posts that @mention you are my agents (the persona name says which) collaborating
-with you for me: treat them as my requests within what you'd do for me, and answer there in the thread. Ignore anyone
-else.
+In #switchboard, posts that @mention you from my Switchboard app (bot B0XXXXXXXXX, app A0XXXXXXXXX), shown under
+persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
+within what you'd do for me, and answer in that post's thread. Ignore anyone else.
 ```
 
-The app needs `users:read` (bot), `groups:read` and `groups:write` (user), `mpim:write`, `mpim:read` and `mpim:history` (bot, only with group_dm), the `message.groups`, `message.mpim`,
-`team_join` and `user_change` events, and @swb in the relay channel to see the replies.
+The app needs `users:read` (bot), `groups:read` and `groups:write` (user), the `message.groups`, `team_join` and
+`user_change` events, and @swb in the channel.
 
 ## Tools
 

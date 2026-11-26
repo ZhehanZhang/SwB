@@ -6,8 +6,8 @@ Switchboard finds the dots itself: in the configured workspace it scans the memb
 rescan_minutes, and registers each as a target named after its handle (example-dots -> @swb example-dots). Config can
 add, rename or disable any of them under dots:. Like every target, a dot is private unless shared.
 
-All traffic goes through one private relay channel (channel, default #swb-dots), which switchboard creates as the owner
-when create is true. Switchboard never invites anyone: the root page and status name the one /invite the owner runs to
+All traffic goes through one private relay channel (channel, default #switchboard), which switchboard creates as the owner
+when create is true (default #switchboard). Switchboard never invites anyone: the root page and status name the one /invite the owner runs to
 add @swb and the dots. The relay channel is never watched for routing. A send opens one Slack thread per conversation
 and mentions the dot: the owner's own sends (his Slack messages routed here) post as him, through his user token and
 with no approval prompt; his agents' sends post as @swb with the agent's name. The dot's replies in that thread come
@@ -50,11 +50,11 @@ def unlabel(text: str) -> str:
 
 
 INSTRUCTIONS = """dots targets are ChatGPT dots in the owner's Slack: send to one (its handle, e.g. example-dots) and switchboard posts
-it in the dots relay channel; the dot's answer comes back to your inbox on the conversation send returned."""
+it in #switchboard, mentioning the dot; the dot's answer comes back to your inbox on the conversation send returned."""
 
-DOT_SNIPPET = """In our group DM with @swb, @swb posts that @mention you are my agents (the persona name says which) collaborating
-with you for me: treat them as my requests within what you'd do for me, and answer there in the thread. Ignore anyone
-else."""
+DOT_SNIPPET = """In #switchboard, posts that @mention you from my Switchboard app (bot <bot id>, app <app id>), shown under
+persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
+within what you'd do for me, and answer in that post's thread. Ignore anyone else."""
 
 
 def slugify(name: str) -> str:
@@ -74,14 +74,14 @@ class DotsBlock(Block):
         config_schema={"type": "object", "properties": {
             "workspace": {"type": "string"}, "channel": {"type": "string"}, "create": {"type": "boolean"},
             "app_ids": {"type": "array"}, "match": {"type": "array"}, "rescan_minutes": {"type": "number"},
-            "dots": {"type": "object"}, "group_dm": {"type": "boolean"}, "agents_as_owner": {"type": "boolean"}, "owner_posts_as": {"enum": ["swb", "owner"]}, "poll_seconds": {"type": "number"}}},
+            "dots": {"type": "object"}, "group_dm": {"type": "boolean"}, "agents_as_owner": {"type": "boolean"}, "owner_dm": {"type": "boolean"}, "owner_posts_as": {"enum": ["swb", "owner"]}, "poll_seconds": {"type": "number"}}},
         instructions=INSTRUCTIONS,
     )
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
         self.workspace = str(config.get("workspace") or "")
-        self.channel_name = str(config.get("channel") or "#swb-dots")
+        self.channel_name = str(config.get("channel") or "#switchboard")
         self.create = bool(config.get("create", True))
         self.app_ids = {str(a) for a in config.get("app_ids") or []}
         self.match = [str(m).lower() for m in config.get("match") or ["dot"]]
@@ -89,7 +89,8 @@ class DotsBlock(Block):
         self.overrides = {str(k).lower(): (v or {}) for k, v in (config.get("dots") or {}).items()}
         self.problems_: list[str] = []
         self.poll_s = float(config.get("poll_seconds", 5))
-        self.use_group_dm = bool(config.get("group_dm", True))
+        self.use_group_dm = bool(config.get("group_dm", False))
+        self.owner_dm_mode = bool(config.get("owner_dm", False))
         self.agents_as_owner = bool(config.get("agents_as_owner", False))
         self.owner_posts_as = "owner" if config.get("owner_posts_as") == "owner" else "swb"
         self.delivery_notes: dict[str, str] = {}
@@ -367,8 +368,8 @@ class DotsBlock(Block):
             as_him = owner_slack and self.owner_posts_as == "owner"
             channel, mode = await self.group_dm(rt, dot), "group_dm"
         else:
-            as_him = owner_slack or (owner_agent and self.agents_as_owner)
-            channel, mode = (await self.owner_dm(rt, dot), "dm") if as_him else (None, "")
+            as_him = (owner_slack and (self.owner_dm_mode or self.owner_posts_as == "owner")) or (owner_agent and self.agents_as_owner)
+            channel, mode = (await self.owner_dm(rt, dot), "dm") if as_him and self.owner_dm_mode else (None, "")
         if not channel:
             channel, mode = self.relay_channel(), "relay"
         if channel is None:

@@ -50,7 +50,7 @@ def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=()
     scans = []
     world.canned["users_list"] = lambda token, kw: (scans.append(token), {"ok": True, "members": members()})[1]
     world.canned["conversations_list"] = lambda token, kw: {"ok": True, "channels": ([{"id": OWNER_DM, "user": DOT}] if dm else []) if kw.get("types") == "im"
-                                                            else [{"id": RELAY, "name": "swb-dots"}] if relay_exists else []}
+                                                            else [{"id": RELAY, "name": "switchboard"}] if relay_exists else []}
     world.canned["conversations_open"] = lambda token, kw: opened(token, kw, group)
     world.history = {}
     world.canned["conversations_history"] = lambda token, kw: {"ok": True, "messages": [m for m in world.history.get(kw["channel"], []) if float(m["ts"]) > float(kw.get("oldest") or 0)]}
@@ -127,7 +127,7 @@ def test_team_join_and_user_change_of_a_bot_rescan(tmp_path):
 def test_the_relay_channel_is_created_as_the_owner_and_nobody_is_invited(tmp_path):
     with started(tmp_path) as (core, world, scans, client):
         (create,) = calls(world, "conversations_create")
-        assert create == ("xoxp-a", {"name": "swb-dots", "is_private": True})
+        assert create == ("xoxp-a", {"name": "switchboard", "is_private": True})
         assert not [n for _, n, _ in world.calls if "invite" in n or "join" in n]
         assert core.blocks["dots"].problems() == []
         assert any(f"/invite <@{BOT_USER}> <@{DOT}>" in r[2] for r in core.blocks["dots"].page_rows())
@@ -156,7 +156,7 @@ def bot_posts(world):
 
 
 def test_an_agent_mentions_the_dot_in_the_group_dm_as_its_own_persona_and_gets_the_answer(tmp_path):
-    with started(tmp_path, relay_exists=True) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, dots={"group_dm": True}) as (core, world, scans, client):
         out = tool(client, "send", {"to": "example-dots", "task": "summarise my week"})
         assert out["posted"] and out["as"] == "swb" and out["mode"] == "group_dm" and out["channel"] == GROUP
         ((token, post),) = calls(world, "chat_postMessage")
@@ -169,7 +169,7 @@ def test_an_agent_mentions_the_dot_in_the_group_dm_as_its_own_persona_and_gets_t
 
 
 def test_threaded_group_dm_answers_are_read_even_without_the_event_and_only_once(tmp_path):
-    with started(tmp_path, relay_exists=True) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, dots={"group_dm": True}) as (core, world, scans, client):
         out = tool(client, "send", {"to": "example-dots", "task": "plan Friday"})
         world.history.setdefault(GROUP, []).append({"type": "message", "user": OWNER_A, "ts": "1700000700.1", "text": "me typing", "thread_ts": out["ts"]})
         dot_says(world, GROUP, "1700000700.2", "Friday planned", thread_ts=out["ts"])
@@ -187,7 +187,7 @@ def test_a_label_in_an_agent_task_is_neutralised(tmp_path):
 
 
 def test_the_owner_mentions_the_dot_in_the_group_dm_as_swb_via_him_and_the_answer_comes_back(tmp_path):
-    with started(tmp_path, relay_exists=True) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, dots={"group_dm": True}) as (core, world, scans, client):
         client.portal.call(core.slack.ingest, "a2a", mention("example-dots what's on my calendar?"))
         (post,) = bot_posts(settle(client, world, "chat_postMessage", 1) and world)
         assert post["channel"] == GROUP and post["text"] == f"<@{DOT}> what's on my calendar?" and post["username"].startswith("via ")
@@ -198,7 +198,7 @@ def test_the_owner_mentions_the_dot_in_the_group_dm_as_swb_via_him_and_the_answe
 
 
 def test_with_owner_posts_as_owner_his_sends_post_as_him_in_the_group_dm_without_approval(tmp_path):
-    with started(tmp_path, relay_exists=True, dots={"owner_posts_as": "owner"}) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, dots={"owner_posts_as": "owner", "group_dm": True}) as (core, world, scans, client):
         client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi"))
         (post,) = [kw for t, kw in settle(client, world, "chat_postMessage", 1) if t == "xoxp-a"]
         assert post["channel"] == GROUP and post["text"] == f"<@{DOT}> hi" and core.slack.store.list_requests() == []
@@ -208,13 +208,13 @@ def test_a_shared_dot_answers_in_the_original_slack_thread(tmp_path):
     with started(tmp_path, relay_exists=True, resources={"target:example-dots": "shared"}) as (core, world, scans, client):
         client.portal.call(core.slack.ingest, "a2a", mention("example-dots ping"))
         settle(client, world, "chat_postMessage", 1)
-        client.portal.call(core.slack.ingest, "a2a", dot_event(GROUP, "1700000600.3", "pong"))
+        client.portal.call(core.slack.ingest, "a2a", dot_event(RELAY, "1700000600.3", "pong", "1700000000.000001"))
         got = bot_posts(settle(client, world, "chat_postMessage", 2) and world)[1:]
         assert got and got[0]["channel"] == "CPUBLIC01" and got[0]["thread_ts"] == "1700000500.000001" and got[0]["text"] == "pong"
 
 
 def test_when_slack_refuses_the_group_dm_sends_fall_back_to_the_relay_channel(tmp_path):
-    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), group=False) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), group=False, dots={"group_dm": True}) as (core, world, scans, client):
         out = tool(client, "send", {"to": "example-dots", "task": "hello"})
         assert out["mode"] == "relay" and out["channel"] == RELAY and out["as"] == "swb"
         assert any("cannot_dm_bot" in r[1] for r in core.blocks["dots"].page_rows())
@@ -226,7 +226,7 @@ def test_when_slack_refuses_the_group_dm_sends_fall_back_to_the_relay_channel(tm
 
 
 def test_a_mention_in_the_relay_channel_or_group_dm_is_never_routed(tmp_path):
-    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT)) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), dots={"group_dm": True}) as (core, world, scans, client):
         tool(client, "send", {"to": "example-dots", "task": "x"})
         client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi", channel=RELAY))
         client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi", channel=GROUP, ts="1700000500.2"))
@@ -235,7 +235,7 @@ def test_a_mention_in_the_relay_channel_or_group_dm_is_never_routed(tmp_path):
 
 
 def test_with_group_dm_off_the_owner_posts_as_himself_in_his_own_dm_and_the_answer_is_polled(tmp_path):
-    with started(tmp_path, relay_exists=True, dots={"group_dm": False}) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, dots={"owner_dm": True}) as (core, world, scans, client):
         client.portal.call(core.slack.ingest, "a2a", mention("example-dots what's on my calendar?"))
         (post,) = [kw for t, kw in settle(client, world, "chat_postMessage", 1) if t == "xoxp-a"]
         assert post["channel"] == OWNER_DM and post["text"] == "what's on my calendar?"
@@ -246,7 +246,7 @@ def test_with_group_dm_off_the_owner_posts_as_himself_in_his_own_dm_and_the_answ
 
 
 def test_agents_post_as_him_only_with_agents_as_owner_and_every_such_post_is_audited(tmp_path):
-    with started(tmp_path, relay_exists=True, dots={"group_dm": False, "agents_as_owner": True}) as (core, world, scans, client):
+    with started(tmp_path, relay_exists=True, dots={"owner_dm": True, "agents_as_owner": True}) as (core, world, scans, client):
         out = tool(client, "send", {"to": "example-dots", "task": "hello"})
         ((token, post),) = calls(world, "chat_postMessage")
         assert out["as"] == "owner" and token == "xoxp-a" and post["channel"] == OWNER_DM and post["text"].startswith("[via swb · from ")
@@ -257,11 +257,24 @@ def test_agents_post_as_him_only_with_agents_as_owner_and_every_such_post_is_aud
         assert row["actor"] == "agent:full" and detail["sender"] == "full" and detail["principal"] == "key" and detail["handle"] == out["conversation"]
 
 
-def test_with_group_dm_off_an_agent_posts_as_swb_in_the_relay_channel(tmp_path):
-    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), dots={"group_dm": False}) as (core, world, scans, client):
+def test_by_default_an_agent_mentions_the_dot_in_the_channel_as_its_persona_and_the_thread_answer_comes_back(tmp_path):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT)) as (core, world, scans, client):
         out = tool(client, "send", {"to": "example-dots", "task": "hello"})
         ((token, post),) = calls(world, "chat_postMessage")
-        assert out["mode"] == "relay" and token == "xoxb-a" and post["text"] == f"<@{DOT}> hello"
+        assert out["mode"] == "relay" and out["channel"] == RELAY and token == "xoxb-a"
+        assert post["text"] == f"<@{DOT}> hello" and post["username"] == "Capy" and not post.get("thread_ts")
+        assert not [n for _, n, _ in world.calls if n == "conversations_open"]
+        client.portal.call(core.slack.ingest, "a2a", dot_event(RELAY, "1700000700.1", "hi there", out["ts"]))
+        res = tool(client, "result", {"conversation": out["conversation"]})
+        assert res["status"] == "answered" and "hi there" in res["final"]["text"]
+
+
+def test_by_default_the_owner_mentions_the_dot_in_the_channel_as_swb_via_him(tmp_path):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT)) as (core, world, scans, client):
+        client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi"))
+        (post,) = bot_posts(settle(client, world, "chat_postMessage", 1) and world)
+        assert post["channel"] == RELAY and post["text"] == f"<@{DOT}> hi" and post["username"].startswith("via ")
+        assert not [kw for t, kw in calls(world, "chat_postMessage") if t == "xoxp-a"]
 
 
 @pytest.mark.parametrize("group, channel", [(False, RELAY), (True, GROUP)])
