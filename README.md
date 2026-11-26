@@ -337,14 +337,14 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
-### ChatGPT dots and #switchboard
+### ChatGPT dots and #swb
 
 The `dots` block finds ChatGPT dots in one workspace and makes each a target named after its handle
 (`@swb example-dot …`, or `send(to="exampledot")`). It scans the members for bot users whose app id is in
 `app_ids` or whose name matches `match` (`dot` by default), again when Slack sends `team_join` or a bot's
 `user_change`, and every `rescan_minutes`. Like every target a dot is private unless `visibility` shares it.
 
-Dots talk in one private channel, `#switchboard` by default. Switchboard creates it with the owner's user token if it
+Dots talk in one private channel, `#swb` by default. Switchboard creates it with the owner's user token if it
 doesn't exist and never invites anyone: status shows the one `/invite` to run for @swb and the dots. Each send is a
 new post that @mentions the dot, made by @swb: his agents post under their own persona (Capy, Claude, Captain, and so
 on), and his own verified Slack messages under the persona "via <his name>". The dot's answers in that post's thread
@@ -356,7 +356,7 @@ items); their sends name them, and a dot may ignore them.
 blocks:
   dots:
     workspace: home
-    channel: "#switchboard"    # a name, or a channel id
+    channel: "#swb"    # a name, or a channel id
     create: true               # create it as the owner if it doesn't exist
     app_ids: []                # extra app ids that are dots
     match: [dot]
@@ -369,7 +369,7 @@ blocks:
 Dot instructions (paste into the dot's instructions; put in your own bot and app ids):
 
 ```text
-In #switchboard, posts that @mention you from my Switchboard app (bot B0XXXXXXXXX, app A0XXXXXXXXX), shown under
+In #swb, posts that @mention you from my Switchboard app (bot B0XXXXXXXXX, app A0XXXXXXXXX), shown under
 persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
 within what you'd do for me, and answer in that post's thread. Ignore anyone else.
 ```

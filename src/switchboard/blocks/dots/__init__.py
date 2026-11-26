@@ -6,7 +6,7 @@ Switchboard finds the dots itself: in the configured workspace it scans the memb
 rescan_minutes, and registers each as a target named after its handle (example-dots -> @swb example-dots). Config can
 add, rename or disable any of them under dots:. Like every target, a dot is private unless shared.
 
-All traffic goes through one private channel (channel, default #switchboard), which switchboard creates as the owner
+All traffic goes through one private channel (channel, default #swb), which switchboard creates as the owner
 when create is true. Switchboard never invites anyone: status names the one /invite the owner runs to add @swb and the
 dots. The channel is never watched for routing. Each send is a new post by @swb that @mentions the dot: his agents
 post under their own persona, his own Slack messages under "via <his name>". The dot's replies in that post's thread
@@ -49,9 +49,9 @@ def unlabel(text: str) -> str:
 
 
 INSTRUCTIONS = """dots targets are ChatGPT dots in the owner's Slack: send to one (its handle, e.g. example-dots) and switchboard posts
-it in #switchboard, mentioning the dot; the dot's answer comes back to your inbox on the conversation send returned."""
+it in #swb, mentioning the dot; the dot's answer comes back to your inbox on the conversation send returned."""
 
-DOT_SNIPPET = """In #switchboard, posts that @mention you from my Switchboard app (bot <bot id>, app <app id>), shown under
+DOT_SNIPPET = """In #swb, posts that @mention you from my Switchboard app (bot <bot id>, app <app id>), shown under
 persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
 within what you'd do for me, and answer in that post's thread. Ignore anyone else."""
 
@@ -80,7 +80,7 @@ class DotsBlock(Block):
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
         self.workspace = str(config.get("workspace") or "")
-        self.channel_name = str(config.get("channel") or "#switchboard")
+        self.channel_name = str(config.get("channel") or "#swb")
         self.create = bool(config.get("create", True))
         self.app_ids = {str(a) for a in config.get("app_ids") or []}
         self.match = [str(m).lower() for m in config.get("match") or ["dot"]]
