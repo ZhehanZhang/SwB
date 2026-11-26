@@ -321,7 +321,7 @@ class DotsBlock(Block):
 
     def actions(self) -> list[Action]:
         return [Action("send", "Message a dot", "Deliver to the dot in Slack or its mailbox; its reply comes back on the conversation.",
-                       self.send, capped=True),
+                       self.send, capped=True, previewable=True),
                 Action("result", "A dot conversation's replies", "The dot's replies so far on one conversation.", self.result, read_only=True)]
 
     async def result(self, call: Call, *, ref: str, tail: int | None = None, **_: Any) -> dict[str, Any]:
@@ -407,7 +407,9 @@ class DotsBlock(Block):
             raise BlockError(f"no dot {target!r}; dots: {', '.join(d['slug'] for d in self.dots()) or 'none found yet'}")
         if self.delivery == "mailbox":
             out = await self.core.agent_send(call.principal, to=dot["mailbox"], text=task, project=project,
-                                            handle=call.handle, handle_meta=call.handle_meta)
+                                            handle=call.handle, handle_meta=call.handle_meta, dry_run=call.dry_run)
+            if call.dry_run:
+                return {**out, "to": f"{self.name}:dot:{dot['id']}", "mode": "mailbox"}
             call.note(target=f"dot:{dot['slug']}", ref=out["handle"], title=title, excerpt=task)
             return {**out, "dot": dot["slug"], "mode": "mailbox"}
         from ...slack.config import Grant
@@ -422,10 +424,17 @@ class DotsBlock(Block):
         owner_agent = p.kind in OWNER_KINDS
         if self.use_group_dm:
             as_him = owner_slack and self.owner_posts_as == "owner"
-            channel, mode = await self.group_dm(rt, dot), "group_dm"
         else:
             as_him = (owner_slack and (self.owner_dm_mode or self.owner_posts_as == "owner")) or (owner_agent and self.agents_as_owner)
-            channel, mode = (await self.owner_dm(rt, dot), "dm") if as_him and self.owner_dm_mode else (None, "")
+        mode = "group_dm" if self.use_group_dm else "dm" if as_him and self.owner_dm_mode else "relay"
+        if call.dry_run:
+            if mode == "relay" and self.relay_channel() is None:
+                raise BlockError("the dots relay channel isn't set up; see switchboard_status")
+            return {"to": f"{self.name}:dot:{dot['id']}", "mode": mode}
+        if self.use_group_dm:
+            channel = await self.group_dm(rt, dot)
+        else:
+            channel = await self.owner_dm(rt, dot) if mode == "dm" else None
         if not channel:
             channel, mode = self.relay_channel(), "relay"
         if channel is None:

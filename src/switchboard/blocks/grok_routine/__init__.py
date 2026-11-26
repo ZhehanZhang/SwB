@@ -230,7 +230,7 @@ class GrokRoutineBlock(Block):
 
     def actions(self) -> list[Action]:
         return [Action("fire", "Message a Grok Bot routine", "Leave the message in Grok's mailbox and wake a routine.",
-                       self.fire, capped=True)]
+                       self.fire, capped=True, previewable=True)]
 
     async def targets(self) -> list[dict[str, Any]]:
         routines = self.routines()
@@ -283,7 +283,9 @@ class GrokRoutineBlock(Block):
         if not call.principal.allows(scope):
             raise BlockError("This caller cannot send to that Grok routine's Switchboard scope")
         out = await self.core.agent_send(call.principal, to="grok", text=task, project=effective_project,
-                                         allow_self=True, handle=call.handle, handle_meta=call.handle_meta)
+                                         allow_self=True, handle=call.handle, handle_meta=call.handle_meta, dry_run=call.dry_run)
+        if call.dry_run:
+            return {**out, "to": f"{self.name}:routine:{name}"}
         handle = out["handle"]
         call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
         base = {**out, "routine": name, "routine_project": r["project"]}

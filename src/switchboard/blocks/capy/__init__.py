@@ -381,7 +381,7 @@ class CapyBlock(Block):
 
     def actions(self) -> list[Action]:
         return [
-            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True),
+            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True, previewable=True),
             Action("status", "Capy thread status", "Status and latest messages of a Capy thread.", self.thread_status, read_only=True),
             Action("list", "List Capy work", "Delegations, a Captain's crew, or a project's threads.", self.list_work, read_only=True),
             Action("reply", "Reply to a Capy thread", "Send a follow-up into a thread.", self.reply),
@@ -459,8 +459,16 @@ class CapyBlock(Block):
         if new_thread is not None and "captain" in tgt:
             mode = "new_thread" if new_thread else "captain_thread"
 
-        handle = call.handle or call.core.inbox.new_handle()
+        project_id = tgt.get("project") or tgt.get("captain_project")
+        in_thread = "thread" in tgt or ("captain" in tgt and mode == "captain_thread")
+        if not in_thread and not project_id:
+            raise DestinationError(f"{describe(tgt)} has no Capy project to start a thread in")
         send = self.sending(call)
+        if call.dry_run:
+            address = self.route_address(tgt)
+            return {"to": str(address) if address else None, "project": p.slug if p else None, "route": level, "mode": mode}
+
+        handle = call.handle or call.core.inbox.new_handle()
         body = [task]
         if repos:
             body += ["", "Repos: " + ", ".join(repos)]
@@ -479,7 +487,7 @@ class CapyBlock(Block):
         uploaded = await send(lambda a: self._files(a, files)) if files else []
         digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}{forward}".encode()).hexdigest()
         try:
-            if "thread" in tgt or ("captain" in tgt and mode == "captain_thread"):
+            if in_thread:
                 thread_id = tgt.get("thread") or tgt["captain"]
                 cursor = await api.latest_cursor(thread_id)
                 receipt = await send(lambda a: a.send_message(thread_id, "\n".join(body), files=uploaded or None, model=model,
@@ -487,9 +495,6 @@ class CapyBlock(Block):
                 meta: dict[str, Any] = {"mode": "message", "message_id": receipt.get("id"), "client_key": digest[:64], "deduped": bool(receipt.get("deduped"))}
                 status = "sent"
             else:
-                project_id = tgt.get("project") or tgt.get("captain_project")
-                if not project_id:
-                    raise DestinationError(f"{describe(tgt)} has no Capy project to start a thread in")
                 t = await send(lambda a: a.create_thread(request_id=str(uuid.UUID(digest[:32])), project_id=project_id, title=title, model=model,
                                                          message="\n".join(body) + ("\n\n(Attachments follow in the next message.)" if uploaded else ""),
                                                          captain_id=tgt.get("captain")))

@@ -424,17 +424,25 @@ class ClaudeRoutineBlock(Block):
         return {**self.add(fire=c["routine_id"], token=token, project=c["project"], name=c["name"], agent="claude", actor=actor, title=c["title"],
                            primary=True if c["primary"] else None), "created_project": created_project}
 
-    def pending(self) -> list[dict[str, Any]]:
-        return [{"name": r["name"], "routine_id": r["routine_id"], "project": r["project"], "claude_project": r["title"], "requested_by": r["created_by"],
-                 "expires_in_s": int(r["expires_at"] - self.core.clock())}
-                for r in self.core.store.q("SELECT * FROM routine_claims WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at", (self.core.clock(),))]
+    def pending(self, *, details: bool = False) -> list[dict[str, Any]]:
+        now = self.core.clock()
+        rows = self.core.store.q(
+            "SELECT name, routine_id, project, title, created_by, created_at, expires_at, is_primary, new_project "
+            "FROM routine_claims WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at", (now,),
+        )
+        return [{"name": r["name"], "routine_id": r["routine_id"], "project": r["project"], "claude_project": r["title"],
+                 "requested_by": r["created_by"], "expires_in_s": int(r["expires_at"] - now),
+                 **({"created_at": r["created_at"], "expires_at": r["expires_at"], "primary": bool(r["is_primary"]),
+                     "new_project": json.loads(r["new_project"]) if r["new_project"] else None} if details else {})}
+                for r in rows]
 
     def remove(self, name: str) -> bool:
         name = (name or "").strip().lower()
         if name in self.configured:
             raise BlockError(f"{name} is set in the config file; remove it there")
-        n = self.core.store.x("DELETE FROM routines WHERE name = ?", (name,))
-        self.core.changed()
+        n = self.core.store.n("DELETE FROM routines WHERE name = ?", (name,))
+        if n:
+            self.core.changed()
         return bool(n)
 
     # Block -----------------------------------------------------------------------------------
@@ -560,7 +568,7 @@ class ClaudeRoutineBlock(Block):
     def actions(self) -> list[Action]:
         return [
             Action("fire", "Message a Claude routine", "Leave the message in the routine's mailbox and start a session that replies.",
-                   self.fire, capped=True),
+                   self.fire, capped=True, previewable=True),
             Action("list", "Claude routines", "Registered routines: project, kind, status (untested until the first fire), visibility. Tokens are never shown.",
                    self.list_action, read_only=True),
             Action("register", "Register this Claude routine", "A Claude session registers its own routine for a switchboard project: "
@@ -658,7 +666,9 @@ class ClaudeRoutineBlock(Block):
         name = routine["name"]
         project = project or routine["project"]
         out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True,
-                                         handle=call.handle, handle_meta=call.handle_meta)
+                                         handle=call.handle, handle_meta=call.handle_meta, dry_run=call.dry_run)
+        if call.dry_run:
+            return {**out, "to": f"{self.name}:routine:{name}"}
         handle = out["handle"]
         call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
         token = self.token(routine)
