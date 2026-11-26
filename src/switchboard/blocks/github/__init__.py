@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import logging
 import re
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Callable
@@ -29,6 +30,7 @@ EVENTS = CHECKS | {"issues", "issue_comment", "pull_request", "pull_request_revi
 DELIVERY_TTL_S = 86400
 MAX_DELIVERIES = 100_000
 RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
+log = logging.getLogger("switchboard.github")
 
 
 def _object(value: Any) -> dict[str, Any]:
@@ -218,6 +220,17 @@ class GitHubBlock(Block):
         return {"configured": True, "secret_present": self.online, "routes": len(self.repo_routes), "dropped": self.dropped,
                 "sinks": {name: {"delivered": sink.delivered, "failed": sink.failed} for name, sink in self.sinks.items()}}
 
+    def drop(self, event: str, data: dict[str, Any], reason: str) -> None:
+        self.dropped += 1
+        name = re.sub(r"[^\w.-]", "?", event[:64], flags=re.ASCII) or "-"
+        action = data.get("action")
+        if isinstance(action, str) and re.fullmatch(r"[\w.-]{1,64}", action, re.ASCII):
+            name += f"/{action}"
+        repo = _object(data.get("repository")).get("full_name")
+        if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]{1,64}/[\w.-]{1,128}", repo, re.ASCII):
+            repo = "-"
+        log.info("github: dropped %s for %s: %s", name, repo, reason)
+
     def next_step(self) -> str | None:
         if not self.online:
             if self.core.secret(self.secret_env):
@@ -247,13 +260,16 @@ class GitHubBlock(Block):
         if not hmac.compare_digest(signature.encode("latin-1"), expected):
             return JSONResponse({"error": "invalid signature"}, 401)
         event = request.headers.get("x-github-event", "")
-        if event not in EVENTS and event != "ping":
-            self.dropped += 1
-            return JSONResponse({"ok": True})
+        unsupported = event not in EVENTS and event != "ping"
         try:
             data = json.loads(body)
         except (ValueError, RecursionError):
-            return JSONResponse({"error": "invalid JSON"}, 400)
+            if not unsupported:
+                return JSONResponse({"error": "invalid JSON"}, 400)
+            data = {}
+        if unsupported:
+            self.drop(event, _object(data), "unhandled event")
+            return JSONResponse({"ok": True})
         if not isinstance(data, dict):
             return JSONResponse({"error": "expected a JSON object"}, 400)
         if event == "ping":
@@ -275,7 +291,7 @@ class GitHubBlock(Block):
         self.seen[delivery] = now
         payload = trim(event, delivery, data)
         if payload is None:
-            self.dropped += 1
+            self.drop(event, data, "not completed")
             return
         repo = _object(data.get("repository")).get("full_name")
         sinks = set()
@@ -286,7 +302,7 @@ class GitHubBlock(Block):
         else:
             repo = None
         if not sinks:
-            self.dropped += 1
+            self.drop(event, data, "unrouted repository")
             self.core.audit.record(origin=self.name, source="github", client=ip, destination=self.name, action="webhook",
                                    outcome="dropped", target=repo[:240] if repo else None, ref=delivery, detail="unrouted repository")
             return

@@ -185,6 +185,9 @@ class Auth:
 
     # Bearer verification --------------------------------------------------------
 
+    def _limits(self, agent: str) -> dict[str, Any]:
+        return {"scopes": self.cfg.key_scopes.get(agent), "tools": self.cfg.key_tools.get(agent), "targets": self.cfg.key_targets.get(agent)}
+
     def verify_bearer(self, token: str | None) -> Principal | None:
         if not token:
             return None
@@ -192,10 +195,10 @@ class Auth:
             if hmac.compare_digest(sha(token), sha(key.secret)):
                 if key.name in self.cfg.inbox_keys:
                     return Principal(source=self.cfg.inbox_keys[key.name], client_id=f"key:{key.name}", kind="inbox_key", scopes=())
-                return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", scopes=self.cfg.key_scopes.get(key.name))
+                return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", **self._limits(key.name))
         row = self.connections.verify(token) if self.connections is not None else None
         if row is not None:
-            return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect", scopes=self.cfg.key_scopes.get(row["agent"]))
+            return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect", **self._limits(row["agent"]))
         if not self.cfg.resource:
             return None
         row = self.store.one(
@@ -203,7 +206,7 @@ class Auth:
         )
         if row is None or row["expires_at"] < self.store.clock() or row["resource"] != self.cfg.resource:
             return None
-        return Principal(source=row["source"], client_id=row["client_id"], kind="oauth", scopes=self.cfg.key_scopes.get(row["source"]))
+        return Principal(source=row["source"], client_id=row["client_id"], kind="oauth", **self._limits(row["source"]))
 
     def challenge_header(self, error: str | None = None) -> str:
         parts = []

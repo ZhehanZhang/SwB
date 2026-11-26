@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
-from starlette.routing import Route
+from starlette.routing import Mount, Route
 
 from . import pages
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
@@ -411,6 +411,8 @@ def create_app(core: "Switchboard") -> Any:
     async def inbox_poll(request: Request) -> JSONResponse:
         """Long-poll for the Claude Code channel and scripts: the caller's own inbox items after ?after=."""
         p = principal_of(request)
+        if p.tools is not None and "inbox" not in p.tools:
+            return JSONResponse({"error": "forbidden", "error_description": f"the {p.source} key can't read an inbox"}, status_code=403)
         if request.query_params.get("agent") not in (None, "", p.source):
             return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         try:
@@ -425,6 +427,8 @@ def create_app(core: "Switchboard") -> Any:
     async def inbox_events(request: Request) -> Response:
         """Server-Sent Events: one 'item' frame per inbox item, id = its cursor, so Last-Event-ID resumes after a drop."""
         p = principal_of(request)
+        if p.tools is not None and "inbox" not in p.tools:
+            return JSONResponse({"error": "forbidden", "error_description": f"the {p.source} key can't read an inbox"}, status_code=403)
         if request.query_params.get("agent") not in (None, "", p.source):
             return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         agent = p.source
@@ -459,7 +463,7 @@ def create_app(core: "Switchboard") -> Any:
                 await core.aclose()
 
     limiter = RateLimiter()
-    origin_routes = [r for o in core.origins.values() for r in o.routes()]
+    origin_routes = sorted((r for o in core.origins.values() for r in o.routes()), key=lambda r: isinstance(r, Mount) and not r.path)
     app: Any = Starlette(
         routes=[
             Route("/", admin, methods=["GET"]),
