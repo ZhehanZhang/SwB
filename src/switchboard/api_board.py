@@ -109,6 +109,7 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
     agents: dict[str | None, dict[str, dict[str, Any]]] = defaultdict(dict)
     routes: dict[str, list[dict[str, Any]]] = defaultdict(list)
     routines = {}
+    connected = set()
     for block in core.blocks.values():
         use = block.manifest.id
         if use not in ("claude-routine", "grok-routine"):
@@ -135,10 +136,12 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
             agents[row["project"]][ident] = item
             routines[ident] = (item, row)
     for route in core.routes.list():
-        if not route.project:
-            continue
         block = core.blocks.get(route.destination)
         addr = block.route_address(route.target) if block else None
+        if addr:
+            connected.add(str(addr))
+        if not route.project:
+            continue
         ident = str(addr) if addr else route.destination
         target = targets.get(ident, {})
         use = block.manifest.id if block else route.destination
@@ -161,6 +164,12 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
         agents[key["project"]].setdefault(item["id"], {
             **item, "role": "MCP client", "state": None, "by": _actor(core, key["created_by"]), "at": iso(key["created_at"]),
         })
+    for address, target in targets.items():
+        kind = target.get("kind")
+        if address in connected or kind not in ("captain", "dot"):
+            continue
+        if label := _reference(target.get("name")) or _reference(target.get("id")):
+            agents[None][address] = _item(address, label, "capy" if kind == "captain" else "chatgpt")
     return agents, routes, routines
 
 
