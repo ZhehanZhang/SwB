@@ -9,7 +9,7 @@ from ...auth import Principal
 from .kit import Kit
 
 CLIENTS = ("mcp-client", "chatgpt", "claude")
-BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github"}
+BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine"}
 MENUS = {"chatgpt": "Plugins > + > Add custom MCP server", "claude": "Customize > Connectors > Add > Custom > Web"}
 
 
