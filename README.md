@@ -528,10 +528,12 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
 - For the capy block, `status`, `result` and `reply` only touch threads delegated through switchboard, routed Captains and
   their crews, routed threads, and threads in routed or linked Capy projects.
 - Delegating is meant to be routine, so nothing rations it. Two guards catch runaways only:
-  - Turn cap: one conversation (a send's handle plus every reply and in_reply_to message hanging off it) gets
-    `turn_cap` turns (default 200; null switches it off). The next one pauses that conversation, refuses with that
-    explanation, and DMs the owner on Slack. Other conversations and new sends are unaffected, since a new send starts
-    at zero. Status shows the cap and how many conversations are paused.
+  - Turn cap: one agent-to-agent conversation (a mailbox send's handle plus every reply and in_reply_to message
+    hanging off it) gets `turn_cap` turns (default 200; null switches it off). The next one pauses that conversation,
+    refuses with that explanation, and DMs the owner on Slack. Other conversations and new sends are unaffected, since
+    a new send starts at zero. Status shows the cap and how many conversations are paused. Replies into Capy and Slack
+    threads aren't counted: those handles are shared per Captain or workspace, and Slack threads have their own bot
+    post guard (`bot_thread_posts_per_hour`).
   - Duplicates: the same caller sending the same task to the same target within `duplicate_window_s` (default 600 s)
     gets the existing conversation back instead of a second thread.
   - `wait` is never limited. `daily_cap` is an optional hard daily limit, off by default.
