@@ -191,13 +191,14 @@ class SlackIntake(Block):
         channels = self.channel_projects.get(push["workspace"], {})
         project = channels.get(push["channel"], channels.get(push.get("channel_name"), self.projects.get(push["workspace"])))
         trust = push.get("trust", "external")
+        mapped = target.kind == "routine" and not target.project and project and trust == "owner"
         handle_meta = {"slack_trust": trust, **({"boundary": project} if project else {})}
         kw: dict[str, Any] = {"task": task, "title": f"Slack {push['workspace']} {where}", "handle_meta": handle_meta}
         if target.kind == "project":
             kw["project"] = target.id
         else:
             kw["to"] = target.address or f"{target.kind}:{target.id}"
-            if target.kind == "routine" and not target.project and project and trust == "owner":
+            if mapped:
                 kw["project"] = project
         token = SLACK_SENDER.set({"workspace": push["workspace"], "user": push["user"], "user_name": push["user_name"], "trust": trust,
                                   "text": push["text"]})
@@ -209,8 +210,11 @@ class SlackIntake(Block):
             return
         finally:
             SLACK_SENDER.reset(token)
-        engine.store.add_relay(out["handle"], push["workspace"], push["channel"], push["thread_ts"] or push["ts"], target.slug)
-        engine.store.audit(f"agent:{AGENT}", "routed", push["workspace"], message=push["id"], target=target.slug, handle=out["handle"])
+        slug = target.slug
+        if mapped and (routine := out.get("routine")) and routine != target.id:
+            slug = next((t.slug for t in engine.targets.values() if t.kind == "routine" and t.id == routine), slug)
+        engine.store.add_relay(out["handle"], push["workspace"], push["channel"], push["thread_ts"] or push["ts"], slug)
+        engine.store.audit(f"agent:{AGENT}", "routed", push["workspace"], message=push["id"], target=slug, handle=out["handle"])
 
     async def _relay_loop(self) -> None:
         while True:
