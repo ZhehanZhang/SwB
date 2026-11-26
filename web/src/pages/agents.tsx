@@ -26,8 +26,9 @@ const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric"
 const shortDate = (value: string | null) => value ? date.format(new Date(value)) : "—"
 
 function elapsed(value: string | null) {
-  if (!value) return "—"
-  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 60_000))
+  const timestamp = value ? Date.parse(value) : NaN
+  if (!Number.isFinite(timestamp)) return null
+  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000))
   if (minutes < 1) return "Now"
   if (minutes < 60) return `${minutes} min`
   if (minutes < 1440) return `${Math.floor(minutes / 60)} h`
@@ -86,16 +87,17 @@ function ConnectionRow() {
 }
 
 function Registration({ agent }: { agent: Agent }) {
-  if (!agent.registered_by) return <span className="text-muted-foreground">—</span>
+  const at = agent.registered_at && Number.isFinite(Date.parse(agent.registered_at)) ? agent.registered_at : null
+  if (!agent.registered_by) return at ? <time dateTime={at}>{shortDate(at)}</time> : null
   return <span className="flex min-w-0 items-center gap-2">
     {agent.registered_by !== "you" && <Logo kind={agent.registered_by} className="size-5" />}
-    <span className="truncate">{agent.registered_by}{agent.registered_at ? `, ${shortDate(agent.registered_at)}` : ""}</span>
+    <span className="truncate">{agent.registered_by}{at ? `, ${shortDate(at)}` : ""}</span>
   </span>
 }
 
 function Claim({ agent }: { agent: Agent }) {
   const href = agent.claim_url && /^\/routines\/claim\/owner\/[a-f0-9]{32}$/.test(agent.claim_url) ? agent.claim_url : null
-  return href ? <Button size="sm" variant="outline" asChild><a href={href}>Claim</a></Button>
+  return href ? <Button className="font-sans" size="sm" variant="outline" asChild><a href={href}>Claim</a></Button>
     : <span className="text-body-sm text-muted-foreground">Awaiting handoff</span>
 }
 
@@ -130,7 +132,8 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
                   <td className="pr-2 text-muted-foreground">{agent.kind}</td>
                   <td className="truncate pr-2 font-mono text-xs" title={agent.projects.join(", ") || undefined}>{agent.projects.join(", ") || <span className="text-muted-foreground">none</span>}</td>
                   <td className="truncate pr-2"><Registration agent={agent} /></td>
-                  <td className="relative font-mono text-xs text-muted-foreground">{agent.type === "pending" ? <Claim agent={agent} /> : elapsed(agent.last_seen)}</td>
+                  <td className="relative">{agent.type === "pending" ? <Claim agent={agent} />
+                    : <span className="font-mono text-xs text-muted-foreground">{elapsed(agent.last_seen)}</span>}</td>
                   <td className="text-right"><AgentLamp state={agent.state} /></td>
                 </tr>
               ))}
@@ -148,7 +151,7 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
                     : <Link to={detailPath(agent.id)} className="flex min-w-0 items-center gap-3 rounded-sm before:absolute before:inset-0">{heading}</Link>}
                   <span className="flex shrink-0 items-center gap-2 text-xs">
                     {agent.type === "pending" ? <span className="relative"><Claim agent={agent} /></span> : <>
-                      <span className="font-mono text-muted-foreground">{elapsed(agent.last_seen)}</span>
+                      {agent.last_seen && <span className="font-mono text-muted-foreground">{elapsed(agent.last_seen)}</span>}
                       <AgentLamp state={agent.state} />
                     </>}
                   </span>

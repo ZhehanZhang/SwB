@@ -10,6 +10,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from .api_display import capy_label
 from .api_read import _REPO, _error, _reference
 from .api_runtime import runtime_info
 from .audit import iso
@@ -152,6 +153,7 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
             state = item["state"]
         else:
             label = _reference(target.get("name")) or _reference(route.target.get("name")) or (_reference(addr.id) if addr else None)
+            label = capy_label(ident, route.destination, targets, name=label) or label
             item = {**_item(ident, label or (block.manifest.title if block else route.destination),
                             "chatgpt" if use == "dots" else use),
                     "role": addr.kind if addr else "destination", "state": state, "by": by, "at": route.updated_at}
@@ -168,7 +170,7 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
         kind = target.get("kind")
         if address in connected or kind not in ("captain", "dot"):
             continue
-        if label := _reference(target.get("name")) or _reference(target.get("id")):
+        if label := capy_label(address, target["block"], targets) or _reference(target.get("name")) or _reference(target.get("id")):
             agents[None][address] = _item(address, label, "capy" if kind == "captain" else "chatgpt")
     return agents, routes, routines
 
@@ -230,15 +232,16 @@ async def board(request: Request) -> JSONResponse:
 
 def _conversations(core: Switchboard, slug: str, targets: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     rows = core.store.q(
-        "SELECT handle, owner, destination, title, target, COALESCE(updated_at, created_at) AS at "
+        "SELECT handle, owner, destination, ref, title, target, COALESCE(updated_at, created_at) AS at "
         "FROM handles WHERE project = ? AND open = 1 ORDER BY at DESC, handle LIMIT 5", (slug,),
     )
     out = []
     for row in rows:
         block = core.blocks.get(row["destination"])
-        target = targets.get(row["target"], {})
-        if label := _reference(target.get("name")):
-            endpoint = _item(row["target"], label, block.manifest.id if block else target["id"])
+        ref = row["target"] or (row["ref"] if block and block.manifest.id == "capy" else None)
+        target = targets.get(ref, {})
+        if ref and (label := capy_label(ref, row["destination"], targets) or _reference(target.get("name"))):
+            endpoint = _item(ref, label, block.manifest.id if block else target.get("block", row["destination"]))
         else:
             endpoint = _agent(core, row["owner"])
         out.append({"handle": row["handle"], "endpoint": endpoint, "title": row["title"], "at": iso(row["at"])})

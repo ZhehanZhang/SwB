@@ -9,6 +9,7 @@ import { ListRow } from "@/components/list-row"
 import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { requestJson, sessionQuery } from "@/lib/api"
+import { displayReference } from "@/lib/display-reference"
 import { cn } from "@/lib/utils"
 import {
   approvalTitle, channelLabel, isConversationPage, isInbox, isResumed, isWriteDecision, participants, principalLabel, senderLabel,
@@ -137,7 +138,7 @@ function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conve
   })
   return (
     <NeedsRow
-      name={conversation?.title || pause.root}
+      name={displayReference(conversation?.title || pause.root)}
       kind={conversation?.destination}
       title={<Link className="hover:underline" to={conversationLink(pause.root)}>Paused at the turn cap</Link>}
       at={pause.paused_at}
@@ -179,7 +180,7 @@ function Conversations({ items }: { items: Conversation[] }) {
               <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} /></td>
               <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-1 max-md:font-semibold md:py-2 md:pr-3">
                 <Link to={conversationLink(row.handle)} className="after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring">
-                  {row.title || row.handle}
+                  {displayReference(row.title || row.handle)}
                 </Link>
               </td>
               <td role="cell" className="font-mono text-mono-sm text-muted-foreground max-md:col-start-3 max-md:row-start-1 md:py-2 md:pr-2">
@@ -239,7 +240,7 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
     from?.workspace,
     channel ? channelLabel(channel) : null,
     item.trust || from?.trust ? `Trust: ${item.trust || from?.trust}` : null,
-    from?.thread_id || from?.thread_ts ? `Thread: ${from.thread_id || from.thread_ts}` : null,
+    from?.thread_id || from?.thread_ts ? `Thread: ${displayReference(from.title || from.thread_id || from.thread_ts || "")}` : null,
     from?.message_id || item.event_id || from?.ts ? `Message: ${from?.message_id || item.event_id || from?.ts}` : null,
   ].filter(Boolean)
   const kind = item.kind === "slack_event" ? item.slack_kind || "Slack event" : item.kind.replace(/_/g, " ")
@@ -295,7 +296,7 @@ function InboxConversation({ handle }: { handle: string }) {
       )}
       {conversation && people && (
         <section aria-labelledby="conversation-title" className="mt-4">
-          <h2 id="conversation-title" className="text-page-title wrap-anywhere">{conversation.title || conversation.handle}</h2>
+          <h2 id="conversation-title" className="text-page-title wrap-anywhere">{displayReference(conversation.title || conversation.handle)}</h2>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <Person label={people.from} kind={people.fromKind} />
             <ArrowRight aria-label="to" className="size-4 text-muted-foreground" strokeWidth={1.5} />

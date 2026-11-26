@@ -48,7 +48,11 @@ class Route:
 
     def audit_excerpt(self) -> str:
         repos = self.defaults.get("repos")
-        return json.dumps({"target_name": route_audit_name(self.target.get("name")), "repo_count": len(repos) if isinstance(repos, list) else 0},
+        name = route_audit_name(self.target.get("name"))
+        captain = self.target.get("captain")
+        if isinstance(captain, str) and captain.startswith("jam_") and (not name or name == captain):
+            name = route_audit_name(f"{self.destination}:captain:{captain}")
+        return json.dumps({"target_name": name, "repo_count": len(repos) if isinstance(repos, list) else 0},
                           ensure_ascii=False)
 
 

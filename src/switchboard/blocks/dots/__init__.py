@@ -291,8 +291,12 @@ class DotsBlock(Block):
     async def targets(self) -> list[dict[str, Any]]:
         dots = self.dots()
         default = self.default_dot(dots)
+        activity = {r["dot"]: iso(r["at"]) for r in self.core.store.q(
+            "SELECT dot, MAX(CAST(last_ts AS REAL)) AS at FROM dot_threads WHERE workspace = ? "
+            "AND CAST(last_ts AS REAL) > CAST(thread_ts AS REAL) GROUP BY dot", (self.workspace,),
+        )} if self.delivery == "slack" else {}
         return [{"kind": "dot", "id": d["id"], "name": d["label"],
-                 "source": "config" if self.delivery != "slack" else "discovered", "last_seen_at": iso(d.get("seen_at")),
+                 "source": "config" if self.delivery != "slack" else "discovered", "last_seen_at": activity.get(d["id"]),
                  "persona": {"id": f"dot-{d['slug']}", "name": d["label"], "icon_url": self.images.get(d["id"])},
                  "slugs": [d["slug"], *([DEFAULT_ALIAS] if default is d and d["slug"] != DEFAULT_ALIAS else [])]} for d in dots]
 
