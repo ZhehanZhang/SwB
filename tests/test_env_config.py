@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import os
 from unittest.mock import patch
 
+import httpx
 import pytest
 import yaml
 from starlette.testclient import TestClient
 
 from switchboard import __main__, cli
 from switchboard.app import create_app
+from switchboard.blocks import BlockError
+from switchboard.blocks.mcp.events import EVENT
+from switchboard.chat import Incoming
 from switchboard.cli import _display
 from switchboard.config import Branding, ConfigError, load_config
 from switchboard.core import Switchboard
+
+from conftest import SECOND_KEY, STATIC_KEY, acall, arpc, eventually, principal
 
 
 def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch):
@@ -24,6 +32,8 @@ def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch
     assert health["block_setup"]["mcp"] == {"enabled": True, "missing_env": []}
     assert health["block_setup"]["capy"] == {"enabled": False, "missing_env": ["CAPY_API_KEY", "CAPY_API_KEY_SERVICE"]}
     assert health["block_setup"]["slack"]["missing_env"] == ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"]
+    assert health["block_setup"]["discord"] == {"enabled": False, "missing_env": ["DISCORD_BOT_TOKEN"]}
+    assert health["block_setup"]["telegram"] == {"enabled": False, "missing_env": ["TELEGRAM_BOT_TOKEN"]}
     assert health["block_setup"]["dots"] == {"enabled": False, "missing_env": []}
     assert core.cfg.branding == Branding("switchboard", "swb", None, "#64748b", None)
     assert core.cfg.timezone == "UTC"
@@ -36,6 +46,8 @@ def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch
     ("capy", "CAPY_API_KEY_SERVICE", ["CAPY_API_KEY"]),
     ("capy", "CAPY_API_KEY_AS_EXAMPLE", ["CAPY_API_KEY", "CAPY_API_KEY_SERVICE"]),
     ("github", "GITHUB_WEBHOOK_SECRET", []),
+    ("discord", "DISCORD_BOT_TOKEN", []),
+    ("telegram", "TELEGRAM_BOT_TOKEN", []),
     ("slack", "SLACK_BOT_TOKEN", ["SLACK_TEAM_ID"]),
     ("slack", "SLACK_APP_TOKEN", ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"]),
     ("slack", "SLACK_ACME_USER_TOKEN", ["SLACK_ACME_TEAM_ID"]),
@@ -56,6 +68,70 @@ def test_token_env_loads_its_block_and_status_never_includes_credential_values(t
         assert marker not in repr(core.cfg)
     finally:
         asyncio.run(core.aclose())
+
+
+async def test_env_chat_blocks_do_not_allow_unconfigured_intake_or_posts(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = {"DISCORD_BOT_TOKEN": "fixture-discord", "TELEGRAM_BOT_TOKEN": "fixture-telegram"}
+    core = Switchboard(env=env)
+    try:
+        assert set(core.blocks) == {"mcp", "discord", "telegram"}
+        for name, token in (("discord", "DISCORD_BOT_TOKEN"), ("telegram", "TELEGRAM_BOT_TOKEN")):
+            block = core.blocks[name]
+            assert block.token() == env[token]
+            assert block.dm_space is None
+            assert await block.ingest(Incoming("default", "123", "456", "789", "hello", dm=True)) is None
+            with pytest.raises(BlockError, match="has no grant"):
+                await core.invoke(principal("owner"), name, block.action("post"), {"space": "default", "channel": "123", "text": "hello"})
+    finally:
+        await core.aclose()
+
+
+def test_yaml_chat_token_overrides_and_explicit_blocks_take_precedence(tmp_path):
+    base = tmp_path / "base.yaml"
+    base.write_text("version: 2\nblocks:\n  community: {use: discord, token_env: CUSTOM_DISCORD_TOKEN}\n  telegram: {enabled: false}\n")
+    cfg = load_config(base, {"DISCORD_BOT_TOKEN": "fixture-discord", "TELEGRAM_BOT_TOKEN": "fixture-telegram"})
+    assert cfg.blocks == {"community": {"use": "discord", "token_env": "CUSTOM_DISCORD_TOKEN"}}
+    assert cfg.block_env["community"] == ("CUSTOM_DISCORD_TOKEN",)
+
+
+async def test_mcp_events_deliver_mailbox_messages_without_yaml(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    core = Switchboard(env={"SWITCHBOARD_KEY_OWNER": STATIC_KEY, "SWITCHBOARD_KEY_SECOND": SECOND_KEY})
+    assert set(core.blocks) == {"mcp"}
+    delivered = []
+
+    async def resolve(host, port):
+        return ["8.8.8.8"]
+
+    def receive(request):
+        body = json.loads(request.content)
+        if body.get("type") == "verification":
+            return httpx.Response(200, json={"challenge": body["challenge"]})
+        delivered.append(body)
+        return httpx.Response(204)
+
+    core.blocks["mcp"].events.resolver = resolve
+    core.blocks["mcp"].events.transport = httpx.MockTransport(receive)
+    app = create_app(core)
+    async with app.starlette.router.lifespan_context(app.starlette):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as client:
+            response = await arpc(client, SECOND_KEY, "server/discover", modern=True)
+            assert response.json()["result"]["capabilities"]["events"] == {}
+            response = await arpc(client, SECOND_KEY, "events/list", modern=True)
+            assert [event["name"] for event in response.json()["result"]["events"]] == [EVENT]
+            subscription = {"name": EVENT, "arguments": {"mailbox_id": "second"}, "delivery": {
+                "mode": "webhook", "url": "https://receiver.example.test/hook",
+                "secret": "whsec_" + base64.b64encode(b"a" * 32).decode(),
+            }}
+            response = await arpc(client, SECOND_KEY, "events/subscribe", subscription, modern=True)
+            assert response.json()["result"]["id"].startswith("sub_")
+            await acall(client, STATIC_KEY, "send", {"to": "agent:second", "task": "env-only mailbox message"}, modern=True)
+            await eventually(lambda: len(delivered) == 1)
+            [event] = delivered
+            assert event["name"] == EVENT and event["data"]["mailbox_id"] == "second"
+            message = await acall(client, SECOND_KEY, "get_message", {"message_id": event["data"]["message_id"]}, modern=True)
+            assert message["structuredContent"]["text"] == "env-only mailbox message"
 
 
 def test_complete_env_builds_workspaces_and_routines_and_sets_server_settings(tmp_path, monkeypatch):
@@ -154,9 +230,10 @@ def test_swb_up_without_dir_preserves_process_and_dotenv_paths(tmp_path, monkeyp
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text("SWITCHBOARD_CONFIG=from-env.yaml\nSWITCHBOARD_DATA_DIR=dotenv-data\n")
     called = []
-    monkeypatch.setattr(__main__, "main", lambda args: called.append((args, load_config())))
+    monkeypatch.setattr(__main__, "main", lambda args, **_: called.append((args, load_config(), os.environ["SWITCHBOARD_CONFIG"])))
     with patch.dict(os.environ, {"SWITCHBOARD_DATA_DIR": "process-data"}, clear=True):
         cli.main(["up"])
-        assert os.environ["SWITCHBOARD_CONFIG"] == "from-env.yaml"
-    args, cfg = called[0]
+        assert "SWITCHBOARD_CONFIG" not in os.environ
+    args, cfg, config_path = called[0]
+    assert config_path == "from-env.yaml"
     assert args == ["serve"] and cfg.data_dir.as_posix() == "process-data" and set(cfg.blocks) == {"mcp"}

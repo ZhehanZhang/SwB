@@ -8,7 +8,7 @@ audit log, and names no vendor.
 Blocks today: **mcp** (Claude, ChatGPT, Gemini, Claude Code, Capy and any MCP client, over OAuth, a bearer key or a
 pairing-code key), **slack** (workspaces as a way in, with `@swb <slug>` routing, and out, with personas and
 approvals) and **capy** (Capy Captains and threads, with their replies coming back). Optional blocks connect
-Claude and Grok routines, ChatGPT dots and GitHub webhooks.
+Discord, Telegram, Claude and Grok routines, ChatGPT dots, and GitHub webhooks.
 
 Run it locally with `swb` or host it with [Docker Compose](#running-it).
 
@@ -41,22 +41,23 @@ flowchart LR
 
 ## Quick start
 
-**Run locally with uvx** (Python 3.12 or newer). In an empty directory, create an owner key and start the server:
+**Run locally with uvx** (Python 3.12 or newer). In an empty directory, create a private env file with an owner key and start the server:
 
 ```bash
-uvx swb-one init
-uvx --from swb-one swb up --tunnel cloudflare
+(umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
+uvx swb-one up --tunnel cloudflare
 ```
 
 The [Cloudflare Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) prints a
 temporary HTTPS MCP URL. Install `cloudflared` first, or use `--tunnel tailscale` on a signed-in
 [Tailscale node with Funnel enabled](https://tailscale.com/docs/features/tailscale-funnel).
 Both tunnels are public and stop when `swb up` exits. Omit `--tunnel` for
-`http://127.0.0.1:8870/mcp`. The server needs no config file; `init` saves the owner key to a
-private `.env` for authenticated access. Data is stored in `~/.local/share/switchboard` unless you set
-`SWITCHBOARD_DATA` or run `swb up --dir PATH` to use a separate instance directory.
+`http://127.0.0.1:8870/mcp`. The server needs no YAML config. It loads the owner key from `.env`; keep
+that file private. Data is stored in `~/.local/share/switchboard` unless you set `SWITCHBOARD_DATA_DIR`
+or run `swb up --dir PATH` to use a separate instance directory.
 
-For a persistent CLI install, run `uv tool install swb-one` or `pipx install swb-one`.
+Use `uvx --from swb-one swb` to invoke the short command without installing it. For a persistent CLI install,
+run `uv tool install swb-one` or `pipx install swb-one`.
 See [swb.one](https://swb.one) for the documentation.
 
 **Docker** (local only). In an empty directory, create a private env file and use a named volume. Replace
@@ -123,6 +124,8 @@ make the corresponding integration available:
 | - | - |
 | Capy | `CAPY_API_KEY`. A `CAPY_API_KEY_SERVICE` or `CAPY_API_KEY_AS_<AGENT>` also enables discovery, but `CAPY_API_KEY` is needed for reads. |
 | Slack | `SLACK_BOT_TOKEN` or `SLACK_USER_TOKEN`, with `SLACK_TEAM_ID`; add `SLACK_APP_TOKEN` for Socket Mode. For named workspaces, insert the workspace name after `SLACK_`, for example `SLACK_SUPPORT_BOT_TOKEN` and `SLACK_SUPPORT_TEAM_ID`. |
+| Discord | `DISCORD_BOT_TOKEN`. Configure server IDs, routing, and grants under `blocks.discord` in YAML. |
+| Telegram | `TELEGRAM_BOT_TOKEN`. Configure chat IDs, routing, and grants under `blocks.telegram` in YAML. |
 | GitHub | `GITHUB_WEBHOOK_SECRET`. Configure the destinations and routes in YAML. |
 | Claude routines | `CLAUDE_ROUTINE_TOKEN` and `CLAUDE_ROUTINE_ID`, or `CLAUDE_ROUTINE_TOKEN_<NAME>` and `CLAUDE_ROUTINE_ID_<NAME>` for named routines. |
 | Grok routines | `GROK_ROUTINE_SECRET` and `GROK_ROUTINE_URL`, or `GROK_ROUTINE_<NAME>_SECRET` and `GROK_ROUTINE_<NAME>_URL` for named routines. |
@@ -142,13 +145,9 @@ Use YAML to grant other agents Slack access.
 | Static bearer keys | `SWITCHBOARD_KEY_OWNER` for the local CLI, or `SWITCHBOARD_KEY_<AGENT>` for other agents. |
 | YAML paths | `SWITCHBOARD_CONFIG` for the base file, `SWITCHBOARD_OVERLAY` for the private overlay. Both are optional. |
 
-Keep credentials in the process environment or a private `.env` file loaded by `swb up` or Compose. To try an
-env-only instance from an empty directory, run these commands instead of `swb init`:
-
-```bash
-export SWITCHBOARD_KEY_OWNER="$(openssl rand -hex 32)"
-swb up
-```
+Keep credentials in the process environment or a private `.env` file loaded by `swb up` or Compose.
+`swb init` is optional and writes an explicit MCP-only YAML config and an owner key file. Remove its
+`blocks` mapping to use environment discovery, or add blocks to it explicitly.
 
 **YAML and overlays.** Set `SWITCHBOARD_CONFIG` to choose a base file. An explicit `swb up --dir PATH` instead uses
 that instance's `config/switchboard.yaml` and data directory. By default, Switchboard uses an existing
@@ -657,7 +656,8 @@ explicitly listen to. Mention the bot with a target slug (for example, `@swb hel
    **Bot**, turn on **Message Content Intent** if you want unmentioned server follow-ups and listen mode to have text.
    Reset the bot token there. You can copy the Application ID from **General Information** into the config now, or
    let the bot learn it when Discord connects.
-2. Enable the block, add the servers and your Discord user IDs, and restart switchboard. In Discord's
+2. Set `DISCORD_BOT_TOKEN` in the server environment to enable Discord without YAML. To route messages, add the
+   servers and your Discord user IDs to the config and restart switchboard. In Discord's
    **User Settings → Advanced**, enable **Developer Mode** to copy server and user IDs from their context menus.
 3. As the owner, call `discord_provision` and open its one-time token link behind Cloudflare Access. Paste the token
    there and save. Without Access, set `DISCORD_BOT_TOKEN` in the server environment instead. Never enter a token in
@@ -707,7 +707,8 @@ Telegram DMs, bot mentions, `/swb <target> <message>` and replies to the bot can
 such as an agent, routine or project. A reply to the bot keeps the earlier target unless you name another.
 Telegram uses the bot's own name; relayed replies can show the target's persona on a bold first line.
 
-1. Enable the block in `config/switchboard.yaml` and configure at least one space.
+1. Set `TELEGRAM_BOT_TOKEN` in the server environment to enable Telegram without YAML. Configure at least one
+   space in YAML to route messages to Switchboard targets.
 2. Create the bot in [@BotFather](https://t.me/BotFather) with `/newbot`. Call `telegram_provision` and
    enter its HTTP API token only at the one-time link (requires owner sign-in through Access). Without Access,
    set the server's `TELEGRAM_BOT_TOKEN` environment variable instead. If set, the environment takes precedence;

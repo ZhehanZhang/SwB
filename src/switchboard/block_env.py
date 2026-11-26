@@ -9,6 +9,7 @@ CAPY_KEY = "CAPY_API_KEY"
 CAPY_SEND_KEY = "CAPY_API_KEY_SERVICE"
 CAPY_AGENT_KEY_PREFIX = "CAPY_API_KEY_AS_"
 GITHUB_SECRET = "GITHUB_WEBHOOK_SECRET"
+CHAT_BOT_TOKENS = {"discord": "DISCORD_BOT_TOKEN", "telegram": "TELEGRAM_BOT_TOKEN"}
 SLACK_TOKEN = re.compile(r"SLACK(?:_([A-Z0-9][A-Z0-9_]{0,31}))?_(BOT|APP|USER)_TOKEN")
 CLAUDE_TOKEN = re.compile(r"CLAUDE_ROUTINE_TOKEN(?:_([A-Z0-9][A-Z0-9_]{0,39}))?")
 GROK_TOKEN = re.compile(r"GROK_ROUTINE(?:_([A-Z0-9][A-Z0-9_]{0,39}))?_(?:SECRET|URL)")
@@ -29,12 +30,16 @@ def env_blocks(env: Mapping[str, str]) -> tuple[dict[str, dict[str, Any]], dict[
         "mcp": (), "slack": ("SLACK_BOT_TOKEN", "SLACK_TEAM_ID"), "capy": (CAPY_KEY, CAPY_SEND_KEY),
         "github": (GITHUB_SECRET,), "claude-routine": ("CLAUDE_ROUTINE_TOKEN", "CLAUDE_ROUTINE_ID"),
         "grok-routine": ("GROK_ROUTINE_SECRET", "GROK_ROUTINE_URL"), "dots": (),
+        **{block: (token,) for block, token in CHAT_BOT_TOKENS.items()},
     }
     present = sorted(name for name, value in env.items() if value)
     if any(name in required["capy"] or name.startswith(CAPY_AGENT_KEY_PREFIX) and len(name) > len(CAPY_AGENT_KEY_PREFIX) for name in present):
         blocks["capy"] = {"use": "capy"}
     if env.get(GITHUB_SECRET):
         blocks["github"] = {"use": "github"}
+    for block, token in CHAT_BOT_TOKENS.items():
+        if env.get(token):
+            blocks[block] = {"use": block}
 
     slack: dict[str, set[str]] = {}
     claude, grok = set(), set()
@@ -104,6 +109,8 @@ def configured_env(name: str, config: dict[str, Any]) -> tuple[str, ...]:
     if kind == "github":
         return (config.get("secret_env", GITHUB_SECRET), *(sink[key] for _, sink in items(config.get("sinks"))
                 for key in ("url_env", "secret_env") if sink.get(key) and (key == "url_env" or sink.get("signature") == "stripe")))
+    if kind in CHAT_BOT_TOKENS:
+        return (config.get("token_env", CHAT_BOT_TOKENS[kind]),)
     if kind == "slack" and config.get("engine", True):
         return tuple(token for _, ws in items(config.get("workspaces"))
                      for token in [*(i.get("token_env") for _, i in items(ws.get("identities"))),

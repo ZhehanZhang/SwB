@@ -6,13 +6,13 @@ Switchboard runs on Railway, Render, or Fly.io from the root Dockerfile. Use one
 
 | Variable | Value |
 | --- | --- |
-| `SWITCHBOARD_DATA` | `/data`. Keep it set to the persistent mount. |
+| `SWITCHBOARD_DATA_DIR` | `/data`. The included templates use the equivalent `SWITCHBOARD_DATA` variable. Keep the path set to the persistent mount. |
 | `SWITCHBOARD_PUBLIC_URL` | The service's external HTTPS origin, such as `https://switchboard.example.com`, without a path or trailing slash. |
 | `SWITCHBOARD_KEY_OWNER` | A private, randomly generated owner bearer key. Use at least 32 characters and store it in the platform's secret settings and your password manager, not in source control. |
 | `PORT` | The HTTP port on `0.0.0.0`. Use the platform-provided port on Railway and Render. Fly's `fly.toml` sets both the listening port and the proxy's internal port to `8000`. |
 | `SWITCHBOARD_CONFIG` | Leave unset on an env-only deployment. Use it only to point an existing YAML-based installation at its mounted config file. |
 
-No YAML config or Cloudflare credentials are needed for bearer access. For clients that support a custom HTTP header, set a separate secret `SWITCHBOARD_KEY_<NAME>` and connect to `https://YOUR-HOST/mcp` with `Authorization: Bearer <client-key>`. Keep the owner key for administration. For OAuth sign-in, follow the Cloudflare Access settings in [the example project config](../config/switchboard.example.yaml); setting the public URL alone doesn't configure OAuth.
+No YAML config or Cloudflare credentials are needed for bearer access. For clients that support a custom HTTP header, set a separate secret `SWITCHBOARD_KEY_<NAME>` and connect to `https://YOUR-HOST/mcp` with `Authorization: Bearer <client-key>`. Keep the owner key for administration. For OAuth sign-in, follow the [owner sign-in configuration](../README.md#config-version-2); setting the public URL alone doesn't configure OAuth.
 
 ## Railway
 

@@ -1,3 +1,4 @@
+import logging
 import os
 import socket
 import sys
@@ -57,7 +58,8 @@ import os, signal, sys, time
 from pathlib import Path
 assert tuple(sys.argv[1:]) == {(*flags, origin)!r}
 assert "SWITCHBOARD_KEY_OWNER" not in os.environ
-signal.signal(signal.SIGTERM, lambda *_: (Path({str(stopped)!r}).touch(), sys.exit()))
+stop_signal = signal.SIGINT if os.name == "posix" and {provider!r} == "tailscale" else signal.SIGTERM
+signal.signal(stop_signal, lambda *_: (Path({str(stopped)!r}).touch(), sys.exit()))
 print("ignored diagnostic", file=sys.stderr, flush=True)
 print(" | {url} |" if {provider!r} == "cloudflare" else "{url}", file=sys.stderr, flush=True)
 while True:
@@ -121,3 +123,10 @@ def test_tunnel_failure_does_not_log_diagnostics(clean_env, tmp_path, monkeypatc
     out, err = capsys.readouterr()
     assert not out
     assert "did not start a tunnel" in err and "fixture-diagnostic" not in err
+
+
+@pytest.mark.parametrize("path", ["/claim/code", "/routines/claim/code", "/claims/discord/code", "/oauth?code=code"])
+def test_access_log_redacts_claim_paths_and_query_strings(path):
+    record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "%s %s %s", ("local", "GET", path), None)
+    assert __main__._NoQuery().filter(record)
+    assert "code" not in record.getMessage()
