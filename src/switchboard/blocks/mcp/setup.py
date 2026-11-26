@@ -11,7 +11,7 @@ from .kit import Kit
 
 CLIENTS = ("mcp-client", "chatgpt", "claude", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine"}
-MENUS = {"chatgpt": "Plugins > + > Add custom MCP server", "claude": "Customize > Connectors > Add > Custom > Web"}
+MENUS = {"chatgpt": "https://chatgpt.com/plugins in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web"}
 
 
 def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
