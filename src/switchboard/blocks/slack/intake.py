@@ -27,8 +27,12 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from .. import Block
 from ...auth import Principal
+from ...projects import ProjectError
 from ...slack.config import Grant, Persona
 from ...slack.routing import Target
+from ...slack.slack import WorkspaceRuntime
+from ...slack.writes import WriteError
+from ...trust import neutralize
 
 SLACK_SENDER: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("slack_sender", default=None)
 """The verified Slack sender (from Slack ids, never text) of the message being delegated, for blocks that act on it."""
@@ -57,6 +61,7 @@ class SlackIntake(Block):
         self._refresh_lock = asyncio.Lock()
         if self.engine is not None:
             self.engine.listeners.append(self.deliver)
+            self.engine.listen = self.listen
             self.engine.target_agents = self.target_agents
             self.engine.context_listeners.append(self.deliver_context)
             self.engine.visibility = core.visibility
@@ -182,23 +187,61 @@ class SlackIntake(Block):
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, push["workspace"]), "context", item)
 
-    async def delegate(self, push: dict[str, Any], target: Target) -> None:
+    def mapped_project(self, push: dict[str, Any]) -> str | None:
+        channels = self.channel_projects.get(push["workspace"], {})
+        return channels.get(push["channel"], channels.get(push.get("channel_name"), self.projects.get(push["workspace"])))
+
+    async def listen(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> bool:
+        engine = self.engine
+        assert engine is not None
+        actor = f"slack:{push['user'] or 'unknown'}"
+        details = {"channel": push["channel"], "message": push["id"], "trust": push["trust"]}
+        try:
+            project = self.core.projects.get((self.mapped_project(push) or "").strip().lower().removeprefix("project:"), allow_archived=False).slug
+        except ProjectError:
+            engine.store.audit(actor, "listen_ignored", rt.label, reason="no mapped project", **details)
+            return False
+        channel_resources = engine.channel_resources(rt.label, push["channel"], push.get("channel_name"))
+        if not engine.channel_shared(rt.label, push["channel"]) or not engine.visibility.allows(engine.who(rt, push), *channel_resources):
+            engine.store.audit(actor, "listen_ignored", rt.label, reason="channel is not shared with sender", **details)
+            return False
+        if push["is_bot"] and push["trust"] != "known":
+            return True
+        address = next((addr for b in self.core.blocks.values() if b.wakes_agents and (addr := b.wake_target("claude", project))), None)
+        if address is None:
+            engine.store.audit(actor, "listen_ignored", rt.label, reason="no primary routine", project=project, **details)
+            return True
+        target = next((t for t in engine.targets.values() if t.address == str(address)), None)
+        target = target or Target(address.id, address.kind, address.id, address.id, address=str(address), project=project)
+        push.update(target=target.slug, target_kind=target.kind)
+        if engine.store.add_event(push) and engine.sender_allowed(rt, push, "listen"):
+            await self.delegate(push, target, listen_project=project)
+        return True
+
+    async def delegate(self, push: dict[str, Any], target: Target, *, listen_project: str | None = None) -> None:
         engine = self.engine
         assert engine is not None
         where = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
         task = (f"Slack message from {push['user_name'] or push['user']} in {push['workspace']} {where} ({push['permalink'] or push['ts']}):\n\n"
                 f"{push['text']}\n\nYour final reply is posted back in that Slack thread as {target.name}.")
-        channels = self.channel_projects.get(push["workspace"], {})
-        project = channels.get(push["channel"], channels.get(push.get("channel_name"), self.projects.get(push["workspace"])))
+        project = listen_project or self.mapped_project(push)
         trust = push.get("trust", "external")
         mapped = target.kind == "routine" and not target.project and project and trust == "owner"
         handle_meta = {"slack_trust": trust, **({"boundary": project} if project else {})}
+        if listen_project:
+            sender = " ".join(neutralize(push["sender"]["name"] or push["user"] or "unknown").split())[:120]
+            task = (f"Slack listen-mode message from {sender}, trust {trust}, in {push['workspace']} {where}:\n\n"
+                    f"{push['text']}\n\nA reply is optional. If anything needs action, send only a short note to the owner.")
+            handle_meta.update(listen=True, permalink=push["permalink"], slack_sender=sender,
+                               slack_thread={"workspace": push["workspace"], "channel": push["channel"], "target": target.slug,
+                                             "channel_name": push["channel_name"], "thread_ts": push["thread_ts"] or push["ts"],
+                                             "persona": target.persona or ("claude" if "claude" in engine.personas() else None)})
         kw: dict[str, Any] = {"task": task, "title": f"Slack {push['workspace']} {where}", "handle_meta": handle_meta}
         if target.kind == "project":
             kw["project"] = target.id
         else:
             kw["to"] = target.address or f"{target.kind}:{target.id}"
-            if mapped:
+            if mapped or listen_project:
                 kw["project"] = project
         token = SLACK_SENDER.set({"workspace": push["workspace"], "user": push["user"], "user_name": push["user_name"], "trust": trust,
                                   "text": push["text"]})
@@ -213,7 +256,8 @@ class SlackIntake(Block):
         slug = target.slug
         if mapped and (routine := out.get("routine")) and routine != target.id:
             slug = next((t.slug for t in engine.targets.values() if t.kind == "routine" and t.id == routine), slug)
-        engine.store.add_relay(out["handle"], push["workspace"], push["channel"], push["thread_ts"] or push["ts"], slug)
+        if not listen_project:
+            engine.store.add_relay(out["handle"], push["workspace"], push["channel"], push["thread_ts"] or push["ts"], slug)
         engine.store.audit(f"agent:{AGENT}", "routed", push["workspace"], message=push["id"], target=slug, handle=out["handle"])
 
     async def _relay_loop(self) -> None:
@@ -236,14 +280,22 @@ class SlackIntake(Block):
             return
         data = item.get("data") if isinstance(item.get("data"), dict) else item
         handle = (data.get("in_reply_to") or item["handle"]) if item.get("kind") == "message" else item["handle"]
-        r = engine.store.relay(handle)
+        original = self.core.inbox.handle(handle)
+        meta = original["meta"] if original else {}
+        listen = bool(meta.get("listen"))
+        if listen and item["kind"] != "message":
+            return
+        r = meta.get("slack_thread") if listen else engine.store.relay(handle)
         if r is None:
             return
         target = engine.targets.get(r["target"])
         replier = ((data.get("from") or {}).get("agent") or "") if item.get("kind") == "message" else ""
-        original = self.core.inbox.handle(handle)
-        trust = original["meta"].get("slack_trust") if original else None
-        place = await engine.reply_place(r["workspace"], r["channel"], r["thread_ts"], r["target"], trust=trust)
+        if listen:
+            place = r["channel"], r["thread_ts"], False
+            persona = r["persona"]
+        else:
+            place = await engine.reply_place(r["workspace"], r["channel"], r["thread_ts"], r["target"], trust=meta.get("slack_trust"))
+            persona = target.persona if target and target.persona else (replier if replier in engine.personas() else None)
         if place is None:
             engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], target=r["target"], reason="private target, shared channel, no owner DM")
             return
@@ -251,6 +303,16 @@ class SlackIntake(Block):
         text = data.get("raw_text") or item["text"]
         if to_dm:
             text = f"Reply from {target.name if target else r['target']} to a message in a shared channel:\n\n{text}"
-        persona = target.persona if target and target.persona else (replier if replier in engine.personas() else None)
+        limit = engine.config.max_text_chars
+        if listen:
+            limit = min(limit, 1500)
+            if len(text) > limit and limit > 0:
+                text = text[:limit - 1] + "…"
         key = Grant(id=AGENT, persona=persona, allow_persona_override=False, allowed_personas=None, scopes={r["workspace"]: ("bot",)})
-        await engine.gate.submit(key, r["workspace"], "bot", "post_message", {"channel": channel, "text": text[: engine.config.max_text_chars], "thread_ts": thread_ts})
+        try:
+            await engine.gate.submit(key, r["workspace"], "bot", "post_message",
+                                     {"channel": channel, "text": text[:limit], "thread_ts": thread_ts}, thread_only=listen)
+        except WriteError as exc:
+            if not listen:
+                raise
+            engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], handle=handle, target=r["target"], reason=str(exc))
