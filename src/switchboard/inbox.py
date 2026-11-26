@@ -84,7 +84,10 @@ class Inbox:
                 (h["owner"], h["handle"], h["destination"], kind, json.dumps(data), at),
             ).lastrowid
             for listener in self.listeners:
-                listener(h["owner"], item, h["handle"], kind, data, at)
+                try:
+                    listener(h["owner"], item, h["handle"], kind, data, at)
+                except Exception:
+                    log.exception("inbox listener failed for item %s", item)
             return item
 
         return self.store.tx(write)
