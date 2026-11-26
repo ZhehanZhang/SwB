@@ -140,6 +140,15 @@ def test_loop_guard_caps_bot_posts_per_thread(env):
         c.portal.call(lambda: block.send_text("home", "40", "x", root="500"))
 
 
+def test_a_split_post_counts_once_toward_the_loop_guard(env):
+    core, c, block, anthropic = env
+    for _ in range(3):
+        c.portal.call(lambda: block.send_text("home", "40", "split: x", root="600"))
+    with pytest.raises(BlockError, match="loop guard"):
+        c.portal.call(lambda: block.send_text("home", "40", "x", root="600"))
+    assert core.store.one("SELECT COUNT(*) AS n FROM chat_sent WHERE root = '600'")["n"] == 6
+
+
 def test_posting_needs_a_grant_and_the_owner(env):
     core, c, block, anthropic = env
     assert "no grant" in str(call(c, STATIC_KEY, "chatx_post", {"space": "home", "channel": "40", "text": "hi"}).get("content"))
@@ -188,7 +197,8 @@ def test_every_chunk_of_a_split_post_belongs_to_the_thread(env):
 def test_reply_by_inbox_conversation_answers_the_newest_addressed_event(env):
     core, c, block, anthropic = env
     c.portal.call(block.ingest, msg(text="claude hi there", message="104"))
-    handle = core.store.one("SELECT handle FROM handles WHERE owner = 'claude' AND destination = 'chatx'")["handle"]
+    c.portal.call(block.ingest, msg(text="claude elsewhere", message="105", channel="41"))
+    handle = core.store.one("SELECT handle FROM handles WHERE owner = 'claude' AND ref = 'home:40:104'")["handle"]
     claude = Principal(source="claude", client_id="t", kind="oauth")
     c.portal.call(lambda: core.verb(claude, "reply", handle, text="hello back"))
     assert block.posts[-1]["channel"] == "40" and block.posts[-1]["root"] == "104" and block.posts[-1]["text"] == "hello back"
