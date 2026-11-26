@@ -1,0 +1,149 @@
+:root {
+  color-scheme: light;
+  color: #18181b;
+  background: #fff;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 40px 20px;
+  place-items: center;
+}
+
+main {
+  width: 100%;
+  max-width: 440px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.brand {
+  display: block;
+  margin-bottom: 24px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 28px;
+  letter-spacing: -.03em;
+}
+
+.requester, .scope { color: #52525b; }
+.requester {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.scope { margin: 8px 0 0; }
+
+form { margin-top: 24px; }
+label { display: block; margin-bottom: 4px; font-weight: 500; }
+
+input[type="password"] {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  color: inherit;
+  background: #fff;
+  font: 13px ui-monospace, monospace;
+}
+
+#owner-key { margin-bottom: 16px; }
+
+.guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 24px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.guide:hover { text-decoration: underline; }
+
+svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.requester svg {
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  color: #bd6547;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 6px;
+  color: #fafafa;
+  background: #18181b;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button:hover { background: #333338; }
+:focus-visible { outline: 2px solid #333338; outline-offset: 2px; }
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e4e4e7;
+  color: #52525b;
+  font-size: 12px;
+}
+
+footer span:first-child { font-family: ui-monospace, monospace; }
+
+@media (max-width: 560px) {
+  body {
+    align-items: start;
+    padding-top: max(54px, env(safe-area-inset-top));
+  }
+
+  .brand { margin-bottom: 20px; }
+  form { margin-top: 26px; }
+  input[type="password"] { font-size: 16px; }
+  .guide { margin-top: 12px; }
+  button { width: calc((100% - 8px) / 2); }
+}
