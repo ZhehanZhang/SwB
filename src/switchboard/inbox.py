@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
-from typing import Any
+from typing import Any, Callable
 
 from .audit import iso
 from .store import Store
@@ -15,6 +15,7 @@ class Inbox:
     def __init__(self, store: Store):
         self.store = store
         self._cond: asyncio.Condition | None = None
+        self.listeners: list[Callable[[str, int, str, str, dict[str, Any], float], None]] = []
 
     def _condition(self) -> asyncio.Condition:
         if self._cond is None:
@@ -75,11 +76,18 @@ class Inbox:
     # Items ----------------------------------------------------------------------------
 
     def _add(self, h: dict[str, Any], kind: str, data: dict[str, Any]) -> int:
-        self.store.x("UPDATE handles SET updated_at = ? WHERE handle = ?", (self.store.clock(), h["handle"]))
-        return self.store.x(
-            "INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?,?,?,?,?,?)",
-            (h["owner"], h["handle"], h["destination"], kind, json.dumps(data), self.store.clock()),
-        )
+        def write(db: Any) -> int:
+            at = self.store.clock()
+            db.execute("UPDATE handles SET updated_at = ? WHERE handle = ?", (at, h["handle"]))
+            item = db.execute(
+                "INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?,?,?,?,?,?)",
+                (h["owner"], h["handle"], h["destination"], kind, json.dumps(data), at),
+            ).lastrowid
+            for listener in self.listeners:
+                listener(h["owner"], item, h["handle"], kind, data, at)
+            return item
+
+        return self.store.tx(write)
 
     async def add(self, handle: str, kind: str, data: dict[str, Any]) -> int:
         h = self.handle(handle)
@@ -125,6 +133,15 @@ class Inbox:
             (reader, handle or "*", cursor),
         )
 
+    @staticmethod
+    def _item(r: Any) -> dict[str, Any]:
+        return {"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
+                "at": iso(r["at"]), **json.loads(r["data"])}
+
+    def item(self, item_id: int) -> dict[str, Any] | None:
+        row = self.store.one("SELECT * FROM inbox WHERE id = ?", (item_id,))
+        return {**self._item(row), "owner": row["owner"]} if row is not None else None
+
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
              limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
@@ -155,8 +172,7 @@ class Inbox:
         if rows and advance:
             self._advance(reader, handle, cursor)
         return {
-            "items": [{"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
-                       "at": iso(r["at"]), **json.loads(r["data"])} for r in rows],
+            "items": [self._item(r) for r in rows],
             "cursor": cursor,
         }
 
