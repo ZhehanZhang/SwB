@@ -66,7 +66,7 @@ class SlackEngine:
         self.senders.limits = {}
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
-        self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[None]]] = {}
+        self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]]] = {}
         self.owner_channels: set[tuple[str, str]] = set()
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
         self.visibility = Visibility(dict(config.visibility))
@@ -221,14 +221,13 @@ class SlackEngine:
             log.exception("workspace %s: failed to handle %s", label, req_type)
 
     async def ingest(self, label: str, event: dict[str, Any]) -> dict[str, Any] | None:
-        """Turn one Slack message event into a push event: classify, dedupe, ack, fan out to sinks."""
+        """Let a relay consume the event; otherwise classify, dedupe, ack and fan it out."""
         rt = self.runtime(label)
         channel, ts = event.get("channel"), event.get("ts")
         if not channel or not ts:
             return None
         relay = self.relays.get((label, channel))
-        if relay is not None:
-            await relay(rt, event)
+        if relay is not None and await relay(rt, event):
             return None
         kind = classify(event, rt.classify_context())
         if kind is None:

@@ -423,8 +423,8 @@ doesn't exist and never invites anyone: status shows the one `/invite` to run fo
 new post that @mentions the dot, made by @swb: his agents post under their own persona (Capy, Claude, Captain, and so
 on), and his own verified Slack messages under the persona "via <his name>". The dot's answers in that post's thread
 come back on the conversation (`result`, the inbox, or the original Slack thread), wrapped as non-owner text.
-Nothing in the channel is routed. Non-owners reach a dot only when it's shared (otherwise their messages are context
-items); their sends name them, and a dot may ignore them.
+Dot messages are never routed; other messages in the channel route normally. Non-owners reach a dot only when it's
+shared (otherwise their messages are context items); their sends name them, and a dot may ignore them.
 
 ```yaml
 blocks:
