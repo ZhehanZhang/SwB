@@ -39,6 +39,7 @@ SCHEMA = (
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 LABEL_RE = re.compile(r"\[\s*via\s+swb\b", re.IGNORECASE)
 OWNER_PERSONA = "dots-owner"
+DEFAULT_ALIAS = "dot"
 OWNER_KINDS = frozenset({"oauth", "key", "connect"})
 """Principals that are the owner's own agents: his OAuth sign-ins, his configured keys, his paired connections."""
 
@@ -73,7 +74,7 @@ class DotsBlock(Block):
         config_schema={"type": "object", "properties": {
             "workspace": {"type": "string"}, "channel": {"type": "string"}, "create": {"type": "boolean"},
             "app_ids": {"type": "array"}, "match": {"type": "array"}, "rescan_minutes": {"type": "number"},
-            "dots": {"type": "object"}, "group_dm": {"type": "boolean"}, "agents_as_owner": {"type": "boolean"}, "owner_dm": {"type": "boolean"}, "owner_posts_as": {"enum": ["swb", "owner"]}, "poll_seconds": {"type": "number"}}},
+            "dots": {"type": "object"}, "group_dm": {"type": "boolean"}, "agents_as_owner": {"type": "boolean"}, "owner_dm": {"type": "boolean"}, "default": {"type": "string"}, "owner_posts_as": {"enum": ["swb", "owner"]}, "poll_seconds": {"type": "number"}}},
         instructions=INSTRUCTIONS,
     )
 
@@ -85,6 +86,7 @@ class DotsBlock(Block):
         self.app_ids = {str(a) for a in config.get("app_ids") or []}
         self.match = [str(m).lower() for m in config.get("match") or ["dot"]]
         self.rescan_s = float(config.get("rescan_minutes", 30)) * 60
+        self.default_slug = str(config.get("default") or "").lower() or None
         self.overrides = {str(k).lower(): (v or {}) for k, v in (config.get("dots") or {}).items()}
         self.problems_: list[str] = []
         self.poll_s = float(config.get("poll_seconds", 5))
@@ -207,9 +209,19 @@ class DotsBlock(Block):
             out.append(d)
         return out
 
+    def default_dot(self, dots: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+        """The owner's dot, the one "dot" names: config's default, else the only dot found."""
+        dots = self.dots() if dots is None else dots
+        if self.default_slug:
+            return next((d for d in dots if self.default_slug in (d["slug"], d["user_id"].lower())), None)
+        return dots[0] if len(dots) == 1 else None
+
     def dot(self, ref: str) -> dict[str, Any] | None:
         ref = (ref or "").partition(":")[2] or ref
-        return next((d for d in self.dots() if ref in (d["user_id"], d["slug"])), None)
+        dots = self.dots()
+        if ref.lower() == DEFAULT_ALIAS:
+            return self.default_dot(dots)
+        return next((d for d in dots if ref in (d["user_id"], d["slug"])), None)
 
     # The relay channel -------------------------------------------------------------------------
 
@@ -252,7 +264,10 @@ class DotsBlock(Block):
     # Sending -----------------------------------------------------------------------------------
 
     async def targets(self) -> list[dict[str, Any]]:
-        return [{"kind": "dot", "id": d["user_id"], "name": d["label"], "slugs": [d["slug"]]} for d in self.dots()]
+        dots = self.dots()
+        default = self.default_dot(dots)
+        return [{"kind": "dot", "id": d["user_id"], "name": d["label"],
+                 "slugs": [d["slug"], *([DEFAULT_ALIAS] if default is d and d["slug"] != DEFAULT_ALIAS else [])]} for d in dots]
 
     def problems(self) -> list[str]:
         return list(self.problems_)

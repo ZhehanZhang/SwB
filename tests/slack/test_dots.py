@@ -306,3 +306,19 @@ def test_the_owner_relay_key_posts_only_into_a_relay_channel_and_other_user_post
         other = Grant(id="full", persona=None, allow_persona_override=False, allowed_personas=None, scopes={"a2a": ("user",)})
         out = client.portal.call(core.slack.gate.submit, other, "a2a", "user", "post_message", {"channel": RELAY, "text": "hi"})
         assert out["status"] != "sent"
+
+
+def test_dot_names_the_only_dot_and_config_picks_it_among_several(tmp_path):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT)) as (core, world, scans, client):
+        (t,) = [t for t in tool(client, "targets", {})["targets"] if t.get("kind") == "dot"]
+        assert t["slugs"] == ["example-dots", "dot"] and core.slack.targets["dot"].id == DOT
+        out = tool(client, "send", {"to": "dot", "task": "hi"})
+        assert out["dot"] == "example-dots" and calls(world, "chat_postMessage")[0][1]["text"] == f"<@{DOT}> hi"
+        client.portal.call(core.slack.ingest, "a2a", mention("dot what's up?", ts="1700000500.9"))
+        assert [kw for t, kw in settle(client, world, "chat_postMessage", 2) if t == "xoxb-a"][1]["text"] == f"<@{DOT}> what's up?"
+    (tmp_path / "b").mkdir()
+    (tmp_path / "c").mkdir()
+    with started(tmp_path / "b", relay_exists=True, dots={"app_ids": ["AHELPER"]}) as (core, world, scans, client):
+        assert core.blocks["dots"].dot("dot") is None and "dot" not in core.slack.targets
+    with started(tmp_path / "c", relay_exists=True, dots={"app_ids": ["AHELPER"], "default": "helper"}) as (core, world, scans, client):
+        assert core.blocks["dots"].dot("dot")["user_id"] == HELPER and core.blocks["dots"].dot("example-dots")["user_id"] == DOT
