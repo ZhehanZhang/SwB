@@ -1,4 +1,5 @@
 import re
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -21,13 +22,17 @@ def web_dist(tmp_path, monkeypatch):
                                   "/agents/client/setup", "/inbox/thread/one", "/canvas/"])
 def test_spa_paths_require_owner_and_serve_uncached_shell(make, web_dist, path):
     _, client = make()
-    assert client.get(path).status_code == 403
-    assert client.get(path, headers={"authorization": f"Bearer {STATIC_KEY}"}).status_code == 403
+    for headers in ({}, {"authorization": f"Bearer {STATIC_KEY}"}):
+        signed_out = client.get(path, headers=headers)
+        location = urlsplit(signed_out.headers["location"])
+        assert signed_out.status_code == 303 and location.path == "/login"
+        assert parse_qs(location.query) == {"next": [path]}
     response = client.get(path, headers=OWNER)
     assert response.status_code == 200
     assert response.text == (web_dist / "index.html").read_text()
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["referrer-policy"] == "same-origin"
     directives = dict(d.strip().split(" ", 1) for d in response.headers["content-security-policy"].split(";"))
     assert directives["script-src"] == directives["connect-src"] == directives["font-src"] == "'self'"
     assert directives["frame-ancestors"] == "'none'"
@@ -63,6 +68,9 @@ def test_login_shell_is_available_when_signed_out(make, web_dist):
     assert response.status_code == 200
     assert response.text == (web_dist / "index.html").read_text()
     assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "same-origin"
+    signed_in = client.get("/login", params={"next": "/agents?tab=known"}, headers=OWNER)
+    assert signed_in.status_code == 303 and signed_in.headers["location"] == "/agents?tab=known"
 
 
 def test_auth_session_matches_access_and_reuses_classic_csrf(make):
@@ -98,6 +106,6 @@ def test_api_owner_and_csrf_are_checked_before_dispatch(make):
     assert client.get(target, headers=OWNER).json() == {"error": "not_found"}
     assert client.post(target, headers={**OWNER, "origin": PUBLIC, "x-swb-csrf": token}).json() == {"error": "csrf"}
     assert client.post(target, headers={**OWNER, "origin": PUBLIC + ".invalid", "x-csrf-token": token}).json() == {"error": "csrf"}
-    headers = [*OWNER.items(), ("origin", PUBLIC), ("origin", PUBLIC), ("x-csrf-token", token)]
+    headers = [*OWNER.items(), ("origin", PUBLIC), ("origin", "null"), ("x-csrf-token", token)]
     assert client.post(target, headers=headers).json() == {"error": "csrf"}
     assert client.post(target, headers={**OWNER, "origin": PUBLIC, "x-csrf-token": token}).status_code == 404

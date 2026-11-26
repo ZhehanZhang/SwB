@@ -134,7 +134,8 @@ def test_pairing_code_uses_the_protected_classic_handoff(board):
     assert response.json() == {"status": "classic_required", "url": "/classic"}
     assert response.headers["Cache-Control"] == "no-store"
     assert core.store.q("SELECT 1 FROM connect_codes") == []
-    assert client.get(response.json()["url"]).status_code == 403
+    denied = client.get(response.json()["url"])
+    assert denied.status_code == 303 and denied.headers["location"] == "/login?next=%2Fclassic"
     classic = client.get(response.json()["url"], headers=OWNER)
     assert classic.status_code == 200 and 'action="/pairing/code"' in classic.text
     csrf = re.search(r'name="csrf" value="([^"]+)"', classic.text)[1]

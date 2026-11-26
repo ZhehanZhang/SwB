@@ -274,7 +274,7 @@ class Switchboard:
         raise CoreError(stop)
 
     def resume_conversation(self, principal: Principal, root: str) -> bool:
-        if not principal.is_unrestricted_owner and not (principal.kind == "access" and principal.trust == "owner"):
+        if not principal.is_unrestricted_owner and not (principal.kind == "owner_session" and principal.trust == "owner"):
             raise CoreError("only the owner can resume paused conversations")
         if not self.store.n("UPDATE conversation_turns SET turns = 0, paused_at = NULL WHERE root = ? AND paused_at IS NOT NULL", (root,)):
             return False

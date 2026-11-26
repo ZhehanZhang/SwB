@@ -19,6 +19,7 @@ from conftest import (
     OWNER, PUBLIC, STATIC_KEY, Clock, base_config, call, consent, consent_csrf,
     default_env, error_text, payload, register, rpc,
 )
+from switchboard import web
 from switchboard.auth import b64url
 from switchboard.config import ConfigError
 from switchboard.oidc import COOKIE as OIDC_COOKIE
@@ -31,6 +32,11 @@ OWNER_EMAIL = "owner@example.test"
 OIDC_CONFIG = {"issuer": ISSUER, "client_id": "switchboard-client", "client_secret_env": "OIDC_SECRET",
                "name": "Example Identity", "owner_subjects": ["owner-subject"]}
 OIDC_ENV = {**default_env(), "OIDC_SECRET": "fixture-client-secret"}
+
+
+@pytest.fixture
+def no_spa_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(web, "APP_DIST", tmp_path / "no-spa")
 
 
 def token(client):
@@ -80,7 +86,7 @@ def test_owner_session_shape_cookie_rotation_and_logout(make):
     security_headers(first_session)
     assert first_session.json() == {"signed_in": True, "via": "link", "csrf": core.auth.csrf(digest),
                                    "methods": {"passkeys": 0, "oidc": None, "access": False}}
-    assert "Add a passkey" in client.get("/").text
+    assert "Add a passkey" in client.get("/classic").text
     assert sign_in(client).status_code == 204
     assert core.store.one("SELECT 1 FROM owner_sessions WHERE id = ?", (digest,)) is None
     new = client.cookies[SESSION_COOKIE]
@@ -247,7 +253,7 @@ def authenticate(client, key, count, **opts):
     return client.post(SIGN_IN + "/verify", json={"credential": key.assertion(options, count, **opts)})
 
 
-def test_passkey_registration_discoverable_login_and_counter(make, caplog):
+def test_passkey_registration_discoverable_login_and_counter(make, caplog, no_spa_build):
     clock = Clock()
     core, client = make(base_config(auth={}), clock=clock)
     assert sign_in(client).status_code == 204
@@ -266,7 +272,7 @@ def test_passkey_registration_discoverable_login_and_counter(make, caplog):
         added = add_key(client, key, opts)
         assert added.status_code == 201 and added.json() == {"id": b64url(key.id)}
         cookie_attributes(added, CHALLENGE_COOKIE, 0)
-        assert "Add a passkey" not in client.get("/").text
+        assert "Add a passkey" not in client.get("/classic").text
         client.cookies.set(CHALLENGE_COOKIE, ref)
         replay = add_key(client, key, opts)
         assert replay.status_code == 401 and replay.json() == {"error": "passkey_failed"}
@@ -291,6 +297,42 @@ def test_passkey_registration_discoverable_login_and_counter(make, caplog):
     options = add_options(client).json()["publicKey"]
     assert options["user"]["id"] == key.handle
     assert options["excludeCredentials"] == [{"id": b64url(key.id), "type": "public-key"}]
+
+
+def test_passkey_session_owns_api_reads_and_writes(make):
+    core, client = make(base_config(auth={}))
+    assert sign_in(client).status_code == 204
+    key = Passkey()
+    assert add_key(client, key).status_code == 201
+    link_csrf = csrf(client)["X-CSRF-Token"]
+    client.cookies.clear()
+    assert authenticate(client, key, 1).status_code == 204
+    session = client.get("/auth/session").json()
+    assert session["signed_in"] and session["via"] == "passkey" and session["csrf"] != link_csrf
+    read = client.get("/api/health")
+    assert read.status_code == 200 and read.headers["cache-control"] == "no-store"
+
+    path = "/api/visibility"
+    rule = {"resource": "target:claude", "visibility": "shared"}
+    origin = {"Origin": PUBLIC}
+    for headers in (origin, {**origin, "X-CSRF-Token": "invalid"}, {**origin, "X-CSRF-Token": link_csrf},
+                    {"Origin": "null", "X-CSRF-Token": session["csrf"]}):
+        denied = client.post(path, json=rule, headers=headers)
+        assert denied.status_code == 403 and denied.json() == {"error": "csrf"}
+    assert core.visibility.explicit(rule["resource"]) is None
+    assert client.post("/api/pairing/code", headers=origin, data={"csrf": session["csrf"]}).status_code == 200
+    bad_body = client.post(path, headers=origin, data={**rule, "csrf": session["csrf"]})
+    assert bad_body.status_code == 400 and bad_body.json() == {"error": "invalid_request"}
+    saved = client.post(path, json=rule, headers={**origin, "X-CSRF-Token": session["csrf"]})
+    assert saved.status_code == 200 and saved.json() == rule
+    assert core.visibility.explicit(rule["resource"]) == "shared"
+    core.store.x("INSERT INTO conversation_turns(root, turns, paused_at) VALUES (?, ?, ?)", ("h_test", 200, core.clock()))
+    resumed = client.post("/api/inbox/pauses/h_test/resume", headers={**origin, "X-CSRF-Token": session["csrf"]})
+    assert resumed.status_code == 200 and resumed.json() == {"root": "h_test", "resumed": True}
+
+    client.cookies.clear()
+    for denied in (client.get("/api/health"), client.post(path, headers=origin, json=rule)):
+        assert denied.status_code == 401 and denied.json() == {"error": "signed_out"}
 
 
 def test_passkey_challenge_bound_to_session_and_single_use_on_failure_or_expiry(make):
@@ -371,7 +413,7 @@ def test_passkey_delete_keeps_last_method_without_upstream(make, upstream):
     ("client_secret_post", "ES256", {"nonce": "wrong"}, False),
     ("client_secret_post", "ES256", {"aud": "wrong"}, False),
 ])
-def test_oidc_start_and_callback_with_signed_provider_token(make, method, alg, claim, accepted):
+def test_oidc_start_and_callback_with_signed_provider_token(make, method, alg, claim, accepted, no_spa_build):
     cfg = base_config(auth={"owner_emails": [OWNER_EMAIL], "oidc": OIDC_CONFIG})
     core, client = make(cfg, env=OIDC_ENV)
     identity_key = ec.generate_private_key(ec.SECP256R1()) if alg == "ES256" else rsa.generate_private_key(65537, 2048)
@@ -441,7 +483,7 @@ def test_oidc_configuration_errors_are_caught_when_loading(make, changes):
 
 @pytest.mark.parametrize("bad", ["//evil.example", "/\\evil.example", "https://evil.example", "relative",
                                  "/\n/evil.example", "\t//evil.example", None, ""])
-def test_next_is_same_origin_only(make, bad):
+def test_next_is_same_origin_only(make, bad, no_spa_build):
     assert safe_next(bad) == "/"
     _, client = make()
     response = client.get("/login", params={"next": bad or ""})
@@ -449,7 +491,7 @@ def test_next_is_same_origin_only(make, bad):
     security_headers(response)
 
 
-def test_authorize_returns_to_full_request_and_accepts_session(make):
+def test_authorize_returns_to_full_request_and_accepts_session(make, no_spa_build):
     _, client = make(base_config(auth={}))
     cid = register(client)["client_id"]
     state = "keep the full query /+&"

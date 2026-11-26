@@ -28,13 +28,14 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-function sessionShape(value: unknown): value is Omit<Session, "methods"> & { methods: Record<string, unknown> & Omit<Session["methods"], "passkeys"> } {
+function sessionShape(value: unknown): value is Session {
   if (!isObject(value)) return false
   const { signed_in, via, csrf, methods } = value
   return typeof signed_in === "boolean"
     && (via === null || via === "passkey" || via === "link" || via === "oidc" || via === "access")
     && (csrf === null || typeof csrf === "string")
     && isObject(methods)
+    && typeof methods.passkeys === "number" && Number.isSafeInteger(methods.passkeys) && methods.passkeys >= 0
     && typeof methods.access === "boolean"
     && (methods.oidc === null || (isObject(methods.oidc) && typeof methods.oidc.name === "string"))
 }
@@ -91,15 +92,7 @@ export async function requestJson<T>(
 
 export const sessionQuery = queryOptions({
   queryKey: ["session"],
-  queryFn: async ({ signal }): Promise<Session> => {
-    const { signed_in, via, csrf, methods } = await requestJson("/auth/session", sessionShape, { signal })
-    let passkeys = methods.passkeys
-    if (passkeys === undefined && typeof methods.passkey === "boolean") passkeys = Number(methods.passkey)
-    if (typeof passkeys !== "number" || !Number.isSafeInteger(passkeys) || passkeys < 0) {
-      throw new Error("Unexpected session response")
-    }
-    return { signed_in, via, csrf, methods: { passkeys, oidc: methods.oidc, access: methods.access } }
-  },
+  queryFn: ({ signal }) => requestJson("/auth/session", sessionShape, { signal }),
   retry: false,
   staleTime: 60_000,
 })
