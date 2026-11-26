@@ -14,7 +14,10 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import Message, Receive, Scope, Send
 
 from . import pages
+from .api_board import BOARD_ROUTES
 from .api_read import READ_ROUTES
+from .api_settings import SETTINGS_ROUTES
+from .api_tokens import TOKEN_ROUTES
 from .api_write import WRITE_ROUTES
 
 APP_DIST = Path(__file__).with_name("static") / "app"
@@ -74,7 +77,7 @@ def web_routes(owner_page: Callable[[Request], Awaitable[tuple[str | None, Respo
             "methods": {"passkeys": 0, "oidc": None, "access": bool(request.app.state.core.cfg.access_team_domain)},
         }, headers=API_HEADERS)
 
-    api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES], redirect_slashes=False)
+    api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES, *BOARD_ROUTES, *SETTINGS_ROUTES, *TOKEN_ROUTES], redirect_slashes=False)
 
     async def owner_api(scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
