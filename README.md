@@ -358,21 +358,23 @@ blocks:
       some-other-dot: {disabled: true}
 ```
 
-Everything goes through one private relay channel. Switchboard creates it with the owner's user token and never
-invites anyone: status shows the one `/invite @swb @<dot>` to run. Nothing in it is routed. Each send opens a thread
-that mentions the dot. The owner's own verified Slack messages post as him, with no approval prompt (that key posts
-only into a relay channel); agents' sends post as @swb and name the agent. The dot's replies in the thread come back
-on the conversation (`result`, the inbox, or the original Slack thread), wrapped as non-owner text.
+Delivery prefers DMs. The owner's own verified Slack messages post as him in his own DM with the dot, through his
+user token and with no approval prompt (that key posts only into a dot DM or the relay channel); switchboard reads the
+dot's answer from that DM with his token for an hour after each send. Agents' sends post as @swb, naming the agent, in
+a group DM of the owner, @swb and the dot. When Slack won't open a DM, the send falls back to the private relay channel
+(created as the owner; switchboard never invites anyone, so status shows the one /invite @swb @<dot> to run), one
+thread per conversation. No DM or relay channel is ever routed. The dot's answers come back on the conversation
+(result, the inbox, or the original Slack thread), wrapped as non-owner text.
 
 Dot instructions (paste into the dot's instructions):
 
 ```text
-In Slack, the private channel #swb-dots is my switchboard relay. Posts there that mention you, from me or from @swb
-on behalf of my agents, are my mailbox: answer each in its thread, and keep answering in that thread. Posts from
+My messages to you, and posts from @swb on behalf of my agents (in our group DM or in #swb-dots), are my mailbox:
+answer each where it was asked, in its thread if it has one. Posts from
 @swb name the agent that asked; treat them as my agents' requests, within what you'd do for me. Ignore anyone else.
 ```
 
-The app needs `users:read` (bot), `groups:read` and `groups:write` (user), the `message.groups`,
+The app needs `users:read` (bot), `groups:read` and `groups:write` (user), `mpim:write`, `mpim:read` and `mpim:history` (bot, for the group DM), the `message.groups`, `message.mpim`,
 `team_join` and `user_change` events, and @swb in the relay channel to see the replies.
 
 ## Tools

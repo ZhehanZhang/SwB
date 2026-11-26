@@ -34,6 +34,7 @@ SCHEMA = (
     "slug TEXT NOT NULL, seen_at REAL NOT NULL, PRIMARY KEY (workspace, user_id))",
     "CREATE TABLE IF NOT EXISTS dot_threads (workspace TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, handle TEXT NOT NULL, "
     "dot TEXT NOT NULL, PRIMARY KEY (workspace, channel, thread_ts))",
+    "CREATE TABLE IF NOT EXISTS dot_dms (workspace TEXT NOT NULL, dot TEXT NOT NULL, kind TEXT NOT NULL, channel TEXT NOT NULL, PRIMARY KEY (workspace, dot, kind))",
     "CREATE TABLE IF NOT EXISTS dot_relays (workspace TEXT PRIMARY KEY, channel TEXT NOT NULL, created INTEGER NOT NULL)",
 )
 SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -77,8 +78,14 @@ class DotsBlock(Block):
         self.rescan_s = float(config.get("rescan_minutes", 30)) * 60
         self.overrides = {str(k).lower(): (v or {}) for k, v in (config.get("dots") or {}).items()}
         self.problems_: list[str] = []
+        self.poll_s = float(config.get("poll_seconds", 5))
+        self.delivery_notes: dict[str, str] = {}
         for sql in SCHEMA:
             core.store.x(sql)
+        cols = {r["name"] for r in core.store.q("PRAGMA table_info(dot_threads)")}
+        for col, decl in (("mode", "TEXT NOT NULL DEFAULT 'relay'"), ("last_ts", "TEXT"), ("created_at", "REAL NOT NULL DEFAULT 0")):
+            if col not in cols:
+                core.store.x(f"ALTER TABLE dot_threads ADD COLUMN {col} {decl}")
 
     # Wiring ------------------------------------------------------------------------------------
 
@@ -96,17 +103,20 @@ class DotsBlock(Block):
         row = self.core.store.one("SELECT channel FROM dot_relays WHERE workspace = ?", (self.workspace,))
         if row is not None:
             engine.relays[(self.workspace, row["channel"])] = self.on_relay_event
+        for r in self.core.store.q("SELECT channel FROM dot_dms WHERE workspace = ?", (self.workspace,)):
+            engine.relays[(self.workspace, r["channel"])] = self.on_relay_event
 
     async def start(self) -> None:
         engine = self.slack_engine
         if engine is not None and engine.connect:
             self._task = asyncio.create_task(self._loop(), name="dots")
+            self._poll = asyncio.create_task(self._poll_loop(), name="dots-poll")
 
     async def aclose(self) -> None:
-        task = getattr(self, "_task", None)
-        if task is not None:
+        tasks = [t for t in (getattr(self, "_task", None), getattr(self, "_poll", None)) if t is not None]
+        for task in tasks:
             task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _loop(self) -> None:
         await asyncio.sleep(5)
@@ -220,8 +230,7 @@ class DotsBlock(Block):
             members = set()
             self.problems_.append(f"can't read the relay channel's members: {type(exc).__name__}")
         missing = [f"<@{u}>" for u in [rt.bot_user_id, *(d["user_id"] for d in self.dots())] if u and members and u not in members]
-        if missing:
-            self.problems_.append(f"in #{name}, run: /invite {' '.join(missing)}  (switchboard never invites anyone itself)")
+        self.relay_invite = f"/invite {' '.join(missing)}" if missing else None
         return channel
 
     # Sending -----------------------------------------------------------------------------------
@@ -235,7 +244,10 @@ class DotsBlock(Block):
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
         rows = [(f"dot {d['slug']}", f"{d['label']} · {d['user_id']} in {self.workspace}", "found", True) for d in self.dots()]
         ch = self.relay_channel()
-        rows.append(("Dots relay channel", f"#{self.channel_name.lstrip('#')} in {self.workspace or '-'}", ch or "not set up", bool(ch) and not self.problems_))
+        invite = getattr(self, "relay_invite", None)
+        rows.append(("Dots relay channel (fallback)", f"#{self.channel_name.lstrip('#')} in {self.workspace or '-'}",
+                     (f"to use it, run in it: {invite} (switchboard never invites anyone itself)" if invite else ch) if ch else "not set up", bool(ch) and not invite))
+        rows += [("Dots delivery", note, "falls back to the relay channel", None) for note in self.delivery_notes.values()]
         return rows
 
     def actions(self) -> list[Action]:
@@ -252,32 +264,86 @@ class DotsBlock(Block):
         return {"conversation": ref, "status": h["status"], "dot": h["meta"].get("dot"), "permalink": h["state"].get("permalink"),
                 "final": replies[-1] if replies else None, "replies": replies[-(tail or 10):]}
 
+    def owner_id(self) -> str | None:
+        ws = self.slack_engine.config.workspaces.get(self.workspace)
+        return next(iter(sorted(ws.owner_user_ids)), None) if ws is not None else None
+
+    def _cached_dm(self, dot: dict[str, Any], kind: str) -> str | None:
+        row = self.core.store.one("SELECT channel FROM dot_dms WHERE workspace = ? AND dot = ? AND kind = ?", (self.workspace, dot["user_id"], kind))
+        return row["channel"] if row else None
+
+    def _remember_dm(self, dot: dict[str, Any], kind: str, channel: str) -> str:
+        self.core.store.x("INSERT OR REPLACE INTO dot_dms(workspace, dot, kind, channel) VALUES (?,?,?,?)", (self.workspace, dot["user_id"], kind, channel))
+        self.slack_engine.relays[(self.workspace, channel)] = self.on_relay_event
+        return channel
+
+    async def owner_dm(self, rt: Any, dot: dict[str, Any]) -> str | None:
+        """The owner's own DM with the dot (found, else opened with his user token), or None when Slack won't give one."""
+        channel = self._cached_dm(dot, "im")
+        if channel or "user" not in rt.clients:
+            return channel
+        try:
+            resp = await rt.client("user").conversations_list(types="im", limit=1000)
+            channel = next((c["id"] for c in resp.get("channels") or [] if c.get("user") == dot["user_id"]), None)
+            if channel is None:
+                made = await rt.client("user").conversations_open(users=dot["user_id"])
+                if not made.get("ok", True):
+                    raise BlockError(made.get("error") or "refused")
+                channel = made["channel"]["id"]
+        except Exception as exc:
+            self.delivery_notes[f"im:{dot['user_id']}"] = f"no DM with {dot['slug']}: {str(exc)[:160]}"
+            return None
+        self.delivery_notes.pop(f"im:{dot['user_id']}", None)
+        return self._remember_dm(dot, "im", channel)
+
+    async def group_dm(self, rt: Any, dot: dict[str, Any]) -> str | None:
+        """A group DM of the owner, @swb and the dot, opened with the bot token, or None when Slack refuses."""
+        channel = self._cached_dm(dot, "mpim")
+        owner = self.owner_id()
+        if channel or owner is None or "bot" not in rt.clients:
+            return channel
+        try:
+            made = await rt.client("bot").conversations_open(users=f"{owner},{dot['user_id']}")
+            if not made.get("ok", True):
+                raise BlockError(made.get("error") or "refused")
+            channel = made["channel"]["id"]
+        except Exception as exc:
+            self.delivery_notes[f"mpim:{dot['user_id']}"] = f"no group DM with {dot['slug']}: {str(exc)[:160]}"
+            return None
+        self.delivery_notes.pop(f"mpim:{dot['user_id']}", None)
+        return self._remember_dm(dot, "mpim", channel)
+
     async def send(self, call: Call, *, task: str, target: str | None = None, title: str | None = None, project: str | None = None, **_: Any) -> dict[str, Any]:
+        """The owner's own sends go to his DM with the dot, as him. Agents' sends go to a group DM of him, @swb and the
+        dot, as @swb. Either falls back to the relay channel when Slack won't open the DM."""
         dot = self.dot(target or "")
         if dot is None:
             raise BlockError(f"no dot {target!r}; dots: {', '.join(d['slug'] for d in self.dots()) or 'none found yet'}")
-        channel = self.relay_channel()
-        if channel is None:
-            raise BlockError("the dots relay channel isn't set up yet; see switchboard_status")
         from ...slack.config import Grant
         from ...slack.writes import OWNER_RELAY, WriteError
         from ..slack.intake import SLACK_SENDER
 
+        rt = self.runtime()
         p = call.principal
         sender = SLACK_SENDER.get() if p.kind == "slack" else None
         as_owner = bool(sender) and sender.get("trust") == "owner"
+        channel = await (self.owner_dm(rt, dot) if as_owner else self.group_dm(rt, dot))
+        mode = ("dm" if as_owner else "group_dm") if channel else "relay"
+        channel = channel or self.relay_channel()
+        if channel is None:
+            raise BlockError(f"Slack won't open a DM with {dot['slug']} and the dots relay channel isn't set up; see switchboard_status")
         handle = self.core.inbox.open_handle(owner=p.source, destination="dots", ref=dot["user_id"], project=project, title=title or f"dot {dot['slug']}",
-                                             meta={"dot": dot["slug"], "workspace": self.workspace, "channel": channel}, status="sent", target=f"{self.name}:dot:{dot['user_id']}")
+                                             meta={"dot": dot["slug"], "workspace": self.workspace, "channel": channel, "mode": mode},
+                                             status="sent", target=f"{self.name}:dot:{dot['user_id']}")
         label = (sender.get("user_name") or sender.get("user")) if sender else self.core.agents.label(p.source)
+        mention = "" if mode == "dm" else f"<@{dot['user_id']}> "
         if as_owner:
             body = re.sub(rf"^\s*(<@[A-Z0-9]+>\s*)*{re.escape(dot['slug'])}\b[\s:,]*", "", sender.get("text") or "", flags=re.I).strip() or task
-            text = f"<@{dot['user_id']}> {body}"
-        else:
-            text = f"<@{dot['user_id']}> {task}\n\n_from {label} via switchboard_"
-        if as_owner:
+            text = f"{mention}{body}"
             key = Grant(id=OWNER_RELAY, persona=None, allow_persona_override=False, allowed_personas=None, scopes={self.workspace: ("user",)})
             identity = "user"
         else:
+            text = f"{mention}{task}\n\n_from {label} via switchboard_"
             persona = p.source if p.source in self.slack_engine.personas() else None
             key = Grant(id=f"dots:{p.source}", persona=persona, allow_persona_override=False, allowed_personas=None, scopes={self.workspace: ("bot",)})
             identity = "bot"
@@ -286,35 +352,86 @@ class DotsBlock(Block):
         except WriteError as exc:
             raise BlockError(str(exc)) from exc
         if out.get("status") != "sent":
-            return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": False, **out}
-        self.core.store.x("INSERT OR REPLACE INTO dot_threads(workspace, channel, thread_ts, handle, dot) VALUES (?,?,?,?,?)",
-                          (self.workspace, channel, out["ts"], handle, dot["user_id"]))
-        self.core.inbox.update_handle(handle, state={"thread_ts": out["ts"], "permalink": out.get("permalink")})
+            return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": False, "mode": mode, **out}
+        self.core.store.x("INSERT OR REPLACE INTO dot_threads(workspace, channel, thread_ts, handle, dot, mode, last_ts, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                          (self.workspace, channel, out["ts"], handle, dot["user_id"], mode, out["ts"], self.core.clock()))
+        self.core.inbox.update_handle(handle, state={"thread_ts": out["ts"], "permalink": out.get("permalink"), "mode": mode})
         call.note(target=f"dot:{dot['slug']}", ref=handle, excerpt=task)
-        return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": True, "as": "owner" if as_owner else "swb", "ts": out["ts"],
-                "permalink": out.get("permalink"), "note": "the dot's reply in that thread comes back on this conversation"}
+        return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": True, "as": "owner" if as_owner else "swb", "mode": mode,
+                "channel": channel, "ts": out["ts"], "permalink": out.get("permalink"), "note": "the dot's reply comes back on this conversation"}
 
-    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> None:
-        """A message in the relay channel: a dot's reply in one of our threads goes back on its conversation. Everything
-        else (our own posts, the owner typing there, other edits) is left alone, and nothing here is routed."""
-        if event.get("subtype") not in (None, "bot_message", "thread_broadcast") or not event.get("thread_ts"):
-            return
-        who = {event.get("user"), event.get("bot_id")} - {None}
-        dot = next((d for d in self.dots() if who & {d["user_id"], d.get("bot_id")}), None)
-        if dot is None:
-            return
-        row = self.core.store.one("SELECT handle FROM dot_threads WHERE workspace = ? AND channel = ? AND thread_ts = ?",
-                                  (self.workspace, event["channel"], event["thread_ts"]))
-        if row is None:
-            return
+    def from_dot(self, m: dict[str, Any]) -> dict[str, Any] | None:
+        if m.get("subtype") not in (None, "bot_message", "thread_broadcast"):
+            return None
+        who = {m.get("user"), m.get("bot_id")} - {None}
+        return next((d for d in self.dots() if who & {d["user_id"], d.get("bot_id")}), None)
+
+    def _row_for(self, channel: str, m: dict[str, Any], dot: dict[str, Any]) -> Any:
+        """The conversation a dot message answers: its thread's, else (a top-level answer) the newest one sent to that dot there."""
+        if m.get("thread_ts") and m["thread_ts"] != m.get("ts"):
+            return self.core.store.one("SELECT * FROM dot_threads WHERE workspace = ? AND channel = ? AND thread_ts = ?", (self.workspace, channel, m["thread_ts"]))
+        return self.core.store.one("SELECT * FROM dot_threads WHERE workspace = ? AND channel = ? AND dot = ? AND thread_ts < ? ORDER BY thread_ts DESC LIMIT 1",
+                                   (self.workspace, channel, dot["user_id"], m.get("ts") or ""))
+
+    async def deliver(self, row: Any, dot: dict[str, Any], m: dict[str, Any]) -> bool:
+        if float(m["ts"]) <= float(row["last_ts"] or 0):
+            return False
+        self.core.store.x("UPDATE dot_threads SET last_ts = ? WHERE workspace = ? AND channel = ? AND thread_ts = ?",
+                          (m["ts"], row["workspace"], row["channel"], row["thread_ts"]))
         from ...trust import wrap
 
-        text = event.get("text") or ""
+        text = m.get("text") or ""
         sender = {"kind": "dot", "dot": dot["slug"], "user": dot["user_id"], "name": dot["label"], "workspace": self.workspace, "trust": "known",
-                  "ts": event["ts"], "thread_ts": event["thread_ts"]}
-        await self.core.inbox.add(row["handle"], "final", {"text": wrap(text, dot["label"], dot["user_id"], "known", f"in {self.workspace} relay"),
+                  "ts": m["ts"], "thread_ts": m.get("thread_ts"), "mode": row["mode"]}
+        await self.core.inbox.add(row["handle"], "final", {"text": wrap(text, dot["label"], dot["user_id"], "known", f"in {self.workspace} Slack"),
                                                            "raw_text": text, "final": True, "from": sender})
         self.core.inbox.update_handle(row["handle"], status="answered")
+        return True
+
+    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> None:
+        """A message in the relay channel or a dot DM that @swb sees: a dot's answer goes back on its conversation.
+        Everything else (our own posts, the owner typing, edits) is left alone, and nothing here is routed."""
+        dot = self.from_dot(event)
+        if dot is None or not event.get("ts"):
+            return
+        row = self._row_for(event["channel"], event, dot)
+        if row is not None and row["dot"] == dot["user_id"]:
+            await self.deliver(row, dot, event)
+
+    async def poll_dms(self) -> int:
+        """The owner's DMs with dots aren't visible to @swb, so read the answers with his user token for an hour after each send."""
+        rt = self.runtime()
+        if "user" not in rt.clients:
+            return 0
+        got = 0
+        rows = self.core.store.q("SELECT * FROM dot_threads WHERE workspace = ? AND mode = 'dm' AND created_at > ? ORDER BY thread_ts",
+                                 (self.workspace, self.core.clock() - 3600))
+        dots = {d["user_id"]: d for d in self.dots()}
+        for channel in {r["channel"] for r in rows}:
+            mine = [r for r in rows if r["channel"] == channel]
+            oldest = min(float(r["last_ts"] or r["thread_ts"]) for r in mine)
+            msgs = list((await rt.client("user").conversations_history(channel=channel, oldest=f"{oldest:.6f}", limit=100)).get("messages") or [])
+            for r in mine:
+                msgs += [m for m in (await rt.client("user").conversations_replies(channel=channel, ts=r["thread_ts"], limit=100)).get("messages") or []
+                         if m.get("ts") != r["thread_ts"]]
+            for m in sorted({m["ts"]: m for m in msgs if m.get("ts")}.values(), key=lambda m: float(m["ts"])):
+                dot = self.from_dot(m)
+                if dot is None or dot["user_id"] not in dots:
+                    continue
+                row = self._row_for(channel, m, dot)
+                if row is not None and row["mode"] == "dm" and await self.deliver(row, dot, m):
+                    got += 1
+        return got
+
+    async def _poll_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.poll_s)
+            try:
+                await self.poll_dms()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("dots DM poll failed")
 
 
 DotsDestination = DotsBlock
