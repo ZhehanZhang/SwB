@@ -9,12 +9,17 @@ import uvicorn
 
 
 class _NoQuery(logging.Filter):
-    """Access logs never carry query strings (OAuth codes and state live there)."""
+    """Access logs never carry OAuth query strings or claim codes."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.args, tuple) and len(record.args) >= 3 and isinstance(record.args[2], str):
             args = list(record.args)
-            args[2] = args[2].split("?", 1)[0]
+            path = args[2].split("?", 1)[0]
+            for prefix in ("/claim/", "/routines/claim/"):
+                if path.startswith(prefix):
+                    path = f"{prefix}[redacted]"
+                    break
+            args[2] = path
             record.args = tuple(args)
         return True
 
