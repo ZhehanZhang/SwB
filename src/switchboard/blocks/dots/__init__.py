@@ -298,6 +298,8 @@ class DotsBlock(Block):
         return list(self.problems_)
 
     def next_step(self) -> str | None:
+        if self.delivery == "mailbox":
+            return None if self.dots() else "Declare a dot under dots in the dots block config."
         engine = self.slack_engine
         if engine is None or self.workspace not in engine.config.workspaces:
             return "Connect a Slack workspace for ChatGPT dots."
