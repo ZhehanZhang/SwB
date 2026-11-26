@@ -18,7 +18,7 @@ from .api_read import READ_ROUTES
 from .api_write import WRITE_ROUTES
 
 APP_DIST = Path(__file__).with_name("static") / "app"
-APP_SECTIONS = ("canvas", "agents", "inbox", "provision", "projects", "memory", "audit")
+APP_SECTIONS = ("canvas", "agents", "tokens", "inbox", "provision", "projects", "memory", "audit", "settings")
 SPA_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
@@ -71,8 +71,7 @@ def web_routes(owner_page: Callable[[Request], Awaitable[tuple[str | None, Respo
             "signed_in": email is not None,
             "via": "access" if email else None,
             "csrf": csrf(email) if email else None,
-            "methods": {"passkey": False, "oidc": None, "access": bool(request.app.state.core.cfg.access_team_domain)},
-            "first_run": True,
+            "methods": {"passkeys": 0, "oidc": None, "access": bool(request.app.state.core.cfg.access_team_domain)},
         }, headers=API_HEADERS)
 
     api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES], redirect_slashes=False)

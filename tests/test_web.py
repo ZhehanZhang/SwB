@@ -17,7 +17,7 @@ def web_dist(tmp_path, monkeypatch):
     return dist
 
 
-@pytest.mark.parametrize("path", ["/", "/canvas", "/agents", "/inbox", "/provision", "/projects", "/memory", "/audit",
+@pytest.mark.parametrize("path", ["/", "/canvas", "/agents", "/inbox", "/provision", "/projects", "/memory", "/audit", "/tokens", "/settings",
                                   "/agents/client/setup", "/inbox/thread/one", "/canvas/"])
 def test_spa_paths_require_owner_and_serve_uncached_shell(make, web_dist, path):
     _, client = make()
@@ -67,7 +67,7 @@ def test_login_shell_is_available_when_signed_out(make, web_dist):
 
 def test_auth_session_matches_access_and_reuses_classic_csrf(make):
     _, client = make()
-    fields = {"methods": {"passkey": False, "oidc": None, "access": True}, "first_run": True}
+    fields = {"methods": {"passkeys": 0, "oidc": None, "access": True}}
     anonymous = client.get("/auth/session")
     assert anonymous.status_code == 200
     assert anonymous.json() == {**fields, "signed_in": False, "via": None, "csrf": None}
@@ -86,7 +86,7 @@ def test_auth_session_reports_when_access_is_not_configured(make):
     response = client.get("/auth/session", headers=OWNER)
     assert response.status_code == 200
     assert response.json() == {"signed_in": False, "via": None, "csrf": None,
-                               "methods": {"passkey": False, "oidc": None, "access": False}, "first_run": True}
+                               "methods": {"passkeys": 0, "oidc": None, "access": False}}
 
 
 def test_api_owner_and_csrf_are_checked_before_dispatch(make):
