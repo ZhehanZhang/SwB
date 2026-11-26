@@ -149,6 +149,33 @@ def test_project_routine_refused_with_text_is_woken_without_it(tmp_path):
         c.__exit__(None, None, None)
 
 
+def test_pickup_filters_by_claude_project_and_switchboard_project(tmp_path):
+    core, c, anthropic = build(tmp_path, {
+        "claude-infra": {**BOTH["claude-infra"], "name": "  Personal Web Infra  "},
+        "claude-infra-ops": {**BOTH["claude-infra"], "name": "Infra Ops", "routine_id": "trig_01OPS"},
+    })
+    core.blocks["claude-routine"].http = httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda req: httpx.Response(403, json={"error": {"message": "this project is paused"}})
+        if "text" in json.loads(req.content) else httpx.Response(200, json={})))
+    try:
+        tok = sign_in(c)["access_token"]
+        a = payload(call(c, STATIC_KEY, "send", {"task": "web", "to": "claude-infra"}))
+        b = payload(call(c, STATIC_KEY, "send", {"task": "ops", "to": "claude-infra-ops"}))
+        for filters in ({"claude_project": "unknown"}, {"project": "other", "claude_project": "Infra Ops"},
+                        {"routine": "claude-infra", "claude_project": "Infra Ops"}):
+            assert payload(call(c, tok, "routine_pickup", filters))["conversation"] is None
+        assert payload(call(c, STATIC_KEY, "routine_pickup", {"claude_project": "Infra Ops"}))["conversation"] is None
+        got = payload(call(c, tok, "routine_pickup", {"claude_project": " inFra Ops ", "project": "infra", "routine": "trig_01OPS"}))
+        assert got["conversation"] == b["conversation"] and got["text"].startswith("ops")
+        got = payload(call(c, tok, "routine_pickup", {"claude_project": "personal web infra"}))
+        assert got["conversation"] == a["conversation"] and got["text"].startswith("web")
+        for routine in ("claude-infra", "claude-infra-ops"):
+            out = payload(call(c, STATIC_KEY, "send", {"task": "again", "to": routine}))
+            assert payload(call(c, tok, "routine_pickup", {"project": "infra"}))["conversation"] == out["conversation"]
+    finally:
+        c.__exit__(None, None, None)
+
+
 def test_a_claude_project_can_test_its_own_routine(tmp_path):
     core, c, anthropic = build(tmp_path, BOTH)
     try:

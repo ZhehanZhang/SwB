@@ -282,6 +282,10 @@ refusal, switchboard fires again with `{}` and keeps the full message (with its 
 session collects it with `routine_pickup(routine=<its name or trig_ id>)`, once per message, rather than from the shared
 claude inbox. send returns `woken_without_text: true` when this happens.
 
+The saved routine prompt can also call `routine_pickup(claude_project="<name>")` when it knows the Claude Project's
+name but not its routine id; the name ignores case and surrounding spaces. Pass `project="<slug>"` to limit pickup
+to a switchboard project, or combine it with the other filters; only the routine's own agent can collect its messages.
+
 **Coordinator snippet** (Claude Project instructions, when you set it up by hand):
 
 > Switchboard (the switchboard connector) connects me with my other assistants. Messages from switchboard name a

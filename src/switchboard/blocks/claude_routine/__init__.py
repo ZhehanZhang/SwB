@@ -528,26 +528,33 @@ class ClaudeRoutineBlock(Block):
                         + ("; Anthropic refused the text for this Project routine (403 'this project is paused', anthropics/claude-code#102874), "
                            "so it was woken without it and collects the message with routine_pickup" if bare else "")}
 
-    def pickup(self, routine: str | None, source: str) -> dict[str, Any]:
-        """The message a routine was woken for without text: the oldest one waiting for that routine (by name or trig_ id),
-        or for any of the caller's routines when it doesn't know its own, with the switchboard note. Only the routine's own
-        agent (claude) sees them, as with its mailbox. Each message is handed out once."""
+    def pickup(self, routine: str | None, source: str, *, claude_project: str | None = None, project: str | None = None) -> dict[str, Any]:
+        """The oldest message waiting for one of the caller's routines, with the switchboard note. Filter by routine
+        name or trig_ id, Claude Project name or switchboard project slug. Each message is handed out once."""
         routines = self.routines()
         want = (routine or "").strip().lower()
+        title = (claude_project or "").strip().casefold()
+        slug = (project or "").strip().lower()
         args: list[Any] = [self.core.clock() - PICKUP_TTL_S]
         sql = "SELECT * FROM routine_pickups WHERE picked_at IS NULL AND created_at > ?"
         if want:
             sql += " AND (routine = ? OR lower(routine_id) = ?)"
             args += [want, want]
         for row in self.core.store.q(sql + " ORDER BY created_at", args):
-            if (routines.get(row["routine"]) or {}).get("agent") != source:
+            r = routines.get(row["routine"])
+            if r is None or r["agent"] != source:
+                continue
+            if title and (r["title"] or "").strip().casefold() != title:
+                continue
+            if slug and r["project"] != slug:
                 continue
             if self.core.store.n("UPDATE routine_pickups SET picked_at = ? WHERE handle = ? AND picked_at IS NULL", (self.core.clock(), row["handle"])):
                 return {"conversation": row["handle"], "routine": row["routine"], "project": row["project"], "text": row["text"]}
         return {"conversation": None, "note": "nothing waiting" + (f" for {want}" if want else "")}
 
-    async def pickup_action(self, call: Call, *, routine: str | None = None) -> dict[str, Any]:
-        out = self.pickup(routine, call.principal.source)
+    async def pickup_action(self, call: Call, *, routine: str | None = None, claude_project: str | None = None,
+                            project: str | None = None) -> dict[str, Any]:
+        out = self.pickup(routine, call.principal.source, claude_project=claude_project, project=project)
         call.note(target=out.get("routine") or routine or "-", ref=out.get("conversation"))
         return out
 
