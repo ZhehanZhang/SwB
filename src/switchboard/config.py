@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -30,6 +31,15 @@ class StaticKey:
     secret: str
 
 
+@dataclass(frozen=True)
+class OIDCConfig:
+    issuer: str
+    client_id: str
+    client_secret_env: str
+    name: str
+    owner_subjects: tuple[str, ...]
+
+
 @dataclass
 class Config:
     """Core settings plus the raw section each block reads for itself (blocks.<name>, with use: <block type>).
@@ -41,6 +51,7 @@ class Config:
     owner_emails: tuple[str, ...] = ()
     access_team_domain: str | None = None
     access_aud: str | None = None
+    oidc: OIDCConfig | None = None
     redirect_allow: tuple[str, ...] = ()
     cimd_hosts: tuple[str, ...] = ()
     access_token_ttl: int = 3600
@@ -72,15 +83,29 @@ class Config:
         return f"{self.public_url}/mcp" if self.public_url else None
 
     @property
-    def owner_sign_in(self) -> bool:
+    def access_configured(self) -> bool:
         return bool(self.access_team_domain and self.access_aud and self.owner_emails)
+
+    @property
+    def owner_sign_in(self) -> bool:
+        return bool(self.public_url or self.access_configured or self.oidc)
+
+    @property
+    def public_origin(self) -> str | None:
+        if not self.public_url:
+            return None
+        url = urlsplit(self.public_url)
+        host = url.hostname or ""
+        host = f"[{host}]" if ":" in host else host.encode("idna").decode()
+        port = url.port
+        return f"{url.scheme}://{host}" + (f":{port}" if port and port != {"https": 443, "http": 80}[url.scheme] else "")
 
     def problems(self) -> list[str]:
         out = []
         if not self.public_url:
             out.append("public_url is not set in config: OAuth sign-in is disabled (static keys still work)")
         if not self.owner_sign_in:
-            out.append("auth.cloudflare_access is not set: OAuth sign-in and the admin page are off (bearer keys still work)")
+            out.append("Owner sign-in is not configured: set public_url or configure an upstream sign-in method (bearer keys still work)")
         return out
 
 
@@ -112,6 +137,40 @@ def agent_name(key: Any) -> str:
     return str(key).strip().lower().replace("_", "-")
 
 
+def _web_url(value: str, *, local: bool = False) -> bool:
+    try:
+        url = urlsplit(value)
+        return bool(url.hostname and url.port != 0 and url.username is None and not re.search(r"[\s?#\\]", value)
+                    and (url.scheme == "https" or (local and url.scheme == "http" and url.hostname == "localhost")))
+    except ValueError:
+        return False
+
+
+def _oidc(raw: Any, public_url: str | None, emails: tuple[str, ...], env: Mapping[str, str]) -> OIDCConfig | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ConfigError("auth.oidc must be a mapping")
+    if not public_url:
+        raise ConfigError("auth.oidc needs public_url")
+    fields = ("issuer", "client_id", "client_secret_env", "name")
+    values = [raw.get(field) for field in fields]
+    for field, value in zip(fields, values):
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(f"auth.oidc.{field} must be a non-empty string")
+    issuer, client_id, secret_env, name = values
+    if not _web_url(issuer):
+        raise ConfigError("auth.oidc.issuer must be an HTTPS URL without a query or fragment")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", secret_env) or not env.get(secret_env):
+        raise ConfigError("auth.oidc.client_secret_env must name a set environment variable")
+    subjects = raw.get("owner_subjects", [])
+    if not isinstance(subjects, list) or not all(isinstance(s, str) and s.strip() for s in subjects):
+        raise ConfigError("auth.oidc.owner_subjects must be a list of non-empty strings")
+    if not subjects and not emails:
+        raise ConfigError("auth.oidc needs owner_subjects or auth.owner_emails")
+    return OIDCConfig(issuer, client_id, secret_env, name, tuple(subjects))
+
+
 def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -> Config:
     env = dict(os.environ if env is None else env)
     raw: dict[str, Any] = {}
@@ -120,12 +179,15 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         if not isinstance(raw, dict):
             raise ConfigError("config root must be a mapping")
     auth = raw.get("auth") or {}
+    if not isinstance(auth, dict):
+        raise ConfigError("auth must be a mapping")
     access = auth.get("cloudflare_access") or {}
     memory = raw.get("memory") or {}
 
     public_url = (env.get(ENV_PREFIX + "PUBLIC_URL") or raw.get("public_url") or "").strip().rstrip("/") or None
-    if public_url and not public_url.startswith("https://") and not public_url.startswith("http://localhost"):
-        raise ConfigError("public_url must be https")
+    if public_url and not _web_url(public_url, local=True):
+        raise ConfigError("public_url must be an HTTPS URL or use http://localhost")
+    owner_emails = tuple(e.lower() for e in as_tuple(auth.get("owner_emails")))
 
     keys = []
     for name, value in sorted(env.items()):
@@ -144,9 +206,10 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
     cfg = Config(
         visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
-        owner_emails=tuple(e.lower() for e in as_tuple(auth.get("owner_emails"))),
+        owner_emails=owner_emails,
         access_team_domain=access.get("team_domain") or None,
         access_aud=access.get("aud") or None,
+        oidc=_oidc(auth.get("oidc"), public_url, owner_emails, env),
         redirect_allow=as_tuple(auth.get("redirect_uris")),
         cimd_hosts=as_tuple(auth.get("cimd_hosts")),
         access_token_ttl=int(auth.get("access_token_ttl", 3600)),
