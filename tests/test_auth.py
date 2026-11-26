@@ -1,5 +1,7 @@
 from urllib.parse import parse_qs, urlparse
 
+import pytest
+
 from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
 
 
@@ -33,6 +35,36 @@ def test_full_flow_issues_token_tagged_with_the_assistant(make):
     assert me["you"] == {"agent": "claude", "auth": "oauth", "origin": "mcp"}
     gpt = sign_in(c, redirect="https://chatgpt.com/connector_platform_oauth_redirect")
     assert payload(call(c, gpt["access_token"], "switchboard_status"))["you"]["agent"] == "chatgpt"
+
+
+@pytest.mark.parametrize("host", ["grok.com", "x.ai"])
+def test_grok_dynamic_registration_and_oauth_source(make, host):
+    _, client = make()
+    redirect = f"https://{host}/connectors/oauth/callback"
+    reg = register(client, redirect=redirect, client_name="Custom connector")
+    page, _ = consent(client, reg["client_id"], redirect=redirect + "/other")
+    assert page.status_code == 400
+    token = sign_in(client, redirect=redirect, client_id=reg["client_id"])
+    who = payload(call(client, token["access_token"], "switchboard_status"))["you"]
+    assert who == {"agent": "grok", "auth": "oauth", "origin": "mcp"}
+
+
+@pytest.mark.parametrize("redirect", ["https://grok.com.example.test/callback", "https://grok.com@other.example.test/callback",
+                                      "https://other.example.test@grok.com/callback", "http://grok.com/callback"])
+def test_grok_redirect_allowlist_rejects_other_origins(make, redirect):
+    _, client = make()
+    response = client.post("/register", json={"redirect_uris": [redirect]})
+    assert response.status_code == 400 and response.json()["error"] == "invalid_redirect_uri"
+
+
+def test_grok_metadata_document_oauth(make, cimd):
+    _, client = make()
+    url = "https://x.ai/mcp/metadata.json"
+    redirect = "https://grok.com/connectors/oauth/callback"
+    cimd.docs[url] = {"client_id": url, "redirect_uris": [redirect]}
+    token = sign_in(client, redirect=redirect, client_id=url)
+    assert payload(call(client, token["access_token"], "switchboard_status"))["you"]["agent"] == "grok"
+    assert cimd.fetches == 1
 
 
 def test_approving_needs_the_owners_access_jwt_on_the_post_too(make):

@@ -1420,6 +1420,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "httpx" },
+    { name = "httpx2" },
     { name = "mcp" },
     { name = "pillow" },
     { name = "pyjwt", extra = ["crypto"] },
@@ -1441,6 +1442,7 @@ test = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.10,<4" },
     { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "httpx2", specifier = ">=2.10.0" },
     { name = "mcp", specifier = ">=2.3,<3" },
     { name = "pillow", specifier = ">=10.1" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9,<3" },

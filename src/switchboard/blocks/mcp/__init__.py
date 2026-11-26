@@ -42,6 +42,7 @@ Write project facts to project:<slug> and pass project=<slug> too, so a slip lan
 things that apply everywhere, after the owner agrees, with confirm_general=true. Reads cover the named project plus
 general; another project's memory needs scopes=[...] and is logged. memory_move and memory_promote fix a wrong scope.
 Search before asking the owner something he may already have said.
+When someone asks how to connect, set up or link something to Switchboard, call connect and follow its next steps.
 To hand off work or message someone, use send: without to, the owner's route for you and the project decides; to can
 be a slug from targets(), an agent's mailbox (agent:claude) or an address <block>:<kind>:<id>. Every agent (claude,
 claude-code, chatgpt, gemini, capy, and each persona's agent) has a switchboard mailbox, so you can always message it,
@@ -147,6 +148,13 @@ class MCPBlock(Block):
 
     def routes(self) -> list[BaseRoute]:
         return [Mount("/", app=self.app)]
+
+    def next_step(self) -> str | None:
+        if not self.core.cfg.public_url:
+            return "Set public_url to let hosted MCP clients reach Switchboard."
+        if not self.core.cfg.owner_sign_in:
+            return "Configure owner sign-in to enable OAuth for MCP clients."
+        return None
 
     def lifespan(self) -> AbstractAsyncContextManager[None]:
         return self.app.router.lifespan_context(self.app)
@@ -424,6 +432,9 @@ class MCPBlock(Block):
 
         kit = Kit(self, who, run, need, pscope, unrestricted)
         kit.register_generic(mcp)
+        from .setup import register
+
+        register(mcp, kit)
         for b in core.blocks.values():
             b.mcp_tools(mcp, kit)
         return mcp
