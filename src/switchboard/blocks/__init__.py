@@ -31,6 +31,7 @@ BLOCKS = {
     "mcp": "switchboard.blocks.mcp:MCPBlock",
     "slack": "switchboard.blocks.slack:SlackBlock",
     "discord": "switchboard.blocks.discord:DiscordBlock",
+    "telegram": "switchboard.blocks.telegram:TelegramBlock",
     "github": "switchboard.blocks.github:GitHubBlock",
     "capy": "switchboard.blocks.capy:CapyBlock",
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
