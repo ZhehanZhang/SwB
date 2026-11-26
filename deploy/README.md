@@ -1,6 +1,8 @@
-# Deploy Switchboard
+# Deploy SwB
 
-Switchboard runs on Railway, Render, or Fly.io from the root Dockerfile. Use one replica with a persistent volume at `/data` so connections, memory, and grants survive restarts and redeploys. A second replica with a separate disk won't share this state. The source-built image initializes fresh mounts and then runs the server as UID `10001`; no custom start command is needed. Back up the volume before upgrades.
+SwB runs on Railway, Render, or Fly.io from the root Dockerfile in [the SwB repository](https://github.com/ZhehanZhang/SwB). Use one replica with a persistent volume at `/data` so connections, memory, and grants survive restarts and redeploys. A second replica with a separate disk won't share this state. The source-built image initializes fresh mounts and then runs the server as UID `10001`; no custom start command is needed. Back up the volume before upgrades.
+
+The published image is `ghcr.io/your-org/swb:latest` (replace `your-org` with the lowercase publisher name). The hosted templates build from source so they can initialize fresh mounts; the published image expects a writable `/data` on startup.
 
 ## Environment variables
 
@@ -16,13 +18,13 @@ No YAML config or Cloudflare credentials are needed for bearer access. For clien
 
 ## Railway
 
-For [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code), set the GitHub repository in [`.railway/railway.ts`](../.railway/railway.ts). With Node.js and the current Railway CLI installed, run `npm install --no-save --package-lock=false railway` in the repo, link a Railway project and environment with `railway link`, then review `railway config plan` and run `railway config apply`. This sets up the Docker service, one replica, a required volume at `/data`, and `/healthz`. In the dashboard, set the owner key, enable public networking, and set the public URL as in step 2 below. The IaC file preserves those two variables when you reapply it.
+For [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code), use [`.railway/railway.ts`](../.railway/railway.ts). If you use a fork, set its GitHub repository in the template. With Node.js and the current Railway CLI installed, run `npm install --no-save --package-lock=false railway` in the repo, link a Railway project and environment with `railway link`, then review `railway config plan` and run `railway config apply`. This sets up the Docker service, one replica, a required volume at `/data`, and `/healthz`. In the dashboard, set the owner key, enable public networking, and set the public URL as in step 2 below. The IaC file preserves those two variables when you reapply it.
 
 If you prefer the dashboard:
 
 1. Create a service from the GitHub repository. Railway builds the root Dockerfile. Before deploying, [attach a volume](https://docs.railway.com/volumes) to the service at `/data`.
 2. In the service's settings, enable public networking, generate a domain or add your own, and set the health check path to `/healthz`. Set `SWITCHBOARD_DATA=/data`, `SWITCHBOARD_PUBLIC_URL` to the resulting HTTPS origin, and `SWITCHBOARD_KEY_OWNER` to your secret. Leave `PORT` to Railway.
-3. Deploy the staged changes. Keep the Dockerfile's default start command so it can prepare the Railway volume before starting Switchboard.
+3. Deploy the staged changes. Keep the Dockerfile's default start command so it can prepare the Railway volume before starting SwB.
 
 [`railway.json`](../railway.json) is a fallback only for services already using legacy [Config as Code](https://docs.railway.com/config-as-code). It sets the build, mount requirement, and health check; it can't create a volume. Attach the volume in the dashboard and set the variables above. Railway doesn't accept legacy Config as Code on new services and stops reading it on December 1, 2026. Don't use both config files for the same service.
 

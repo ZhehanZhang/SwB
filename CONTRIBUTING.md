@@ -1,14 +1,16 @@
-# Contributing
+# Contributing to SwB
 
-Use the repository's **Issues** tab for bugs and feature requests.
+Use [SwB's issue tracker](https://github.com/ZhehanZhang/SwB/issues) for bugs and feature requests.
 Report security issues privately as described in [SECURITY.md](SECURITY.md). Please follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Develop locally
 
-Install Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). From the checkout, run:
+Install Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). Clone SwB and set up the environment:
 
 ```bash
+git clone https://github.com/ZhehanZhang/SwB.git
+cd SwB
 uv sync --extra test --group dev --locked
 uv run pytest -q
 uv run ruff check
@@ -41,6 +43,6 @@ providers, and blocks don't import each other.
    packaged block, register its class in the `switchboard.blocks` entry-point group.
 4. Document the block's settings and add it to a local version 2 config under
    `blocks.<name>` with `use: <type>`. Set `SWITCHBOARD_CONFIG` to that file and
-   `SWITCHBOARD_DATA` to a writable local directory, then run `uv run switchboard blocks show <name>`
-   and `uv run switchboard blocks check <name>`. Add tests under [`tests/`](tests/) for what the
+   `SWITCHBOARD_DATA` to a writable local directory, then run `uv run swb blocks show <name>`
+   and `uv run swb blocks check <name>`. Add tests under [`tests/`](tests/) for what the
    block does and how it handles failures.

@@ -13,7 +13,7 @@ COPY config/switchboard.example.yaml ./config/switchboard.example.yaml
 RUN pip install --no-cache-dir ".[test]" && python -m pytest -q
 
 FROM base AS runtime
-LABEL org.opencontainers.image.title="Switchboard" \
+LABEL org.opencontainers.image.title="SwB" \
       org.opencontainers.image.description="Self-hosted MCP server for routing work and sharing scoped memory" \
       org.opencontainers.image.url="https://swb.one" \
       org.opencontainers.image.licenses="Apache-2.0"

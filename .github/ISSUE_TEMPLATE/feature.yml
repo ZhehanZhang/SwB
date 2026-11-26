@@ -1,11 +1,11 @@
 name: Feature request
-description: Suggest an improvement to switchboard.
+description: Suggest an improvement to SwB.
 body:
   - type: textarea
     id: goal
     attributes:
       label: What are you trying to do?
-      description: Describe your workflow and where switchboard gets in the way today.
+      description: Describe your workflow and where SwB gets in the way today.
     validations:
       required: true
   - type: textarea

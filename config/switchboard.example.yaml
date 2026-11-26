@@ -14,7 +14,7 @@ version: 2
 turn_cap: 200
 
 branding:
-  display_name: switchboard
+  display_name: SwB
   # icon, accent_color and logo_assets_dir are optional; see deploy/overlay.example.yaml.
 
 auth: {}
@@ -148,7 +148,7 @@ blocks:
     #     known: {333333: Friend}               # known Telegram user ids and display names
     #     default_target: claude                # target when no slug or earlier thread target exists
     #     listen: [-100111222]                  # file unaddressed messages from these chats; needs privacy mode off
-    #     project: example                      # default switchboard project
+    #     project: example                      # default SwB project
     #     channel_projects: {-100111222: null}  # override or opt out of the project by chat id
     #     bot_posts_per_hour: 20                # limit in each conversation thread
 
@@ -169,7 +169,7 @@ blocks:
     # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts. A persona with no
     # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled monograms; emoji is the fallback.
     personas:
-      switchboard: {name: switchboard, emoji: ":robot_face:"}
+      switchboard: {name: SwB, emoji: ":robot_face:"}
       claude: {name: Claude}
       chatgpt: {name: ChatGPT}
       gemini: {name: Gemini}
@@ -214,7 +214,7 @@ blocks:
       ttl_minutes: 60
       notify_workspace: a2a
       approver_user_id: U0OWNER00
-    # What each switchboard agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
+    # What each SwB agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
     # Each agent posts as the persona named like it (claude -> claude) unless persona / persona_by_workspace says otherwise.
     agents:
       capy: {allow_persona_override: true, workspaces: {a2a: [bot]}}

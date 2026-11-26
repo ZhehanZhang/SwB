@@ -1,6 +1,6 @@
 ## What changed and why?
 
-<!-- Link a related issue if there is one. -->
+<!-- Describe the change to SwB and link a related issue if there is one. -->
 
 ## How did you check it?
 

@@ -232,7 +232,7 @@ def main(argv: list[str] | None = None) -> None:
     init = commands.add_parser("init", help="create a minimal config and a local owner key")
     init.add_argument("--public-url", help="optional public base URL")
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
-    up = commands.add_parser("up", help="run the Switchboard server")
+    up = commands.add_parser("up", help="run the SwB server")
     up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
     connect.add_argument("what", help="connection kind, for example mcp-client")
