@@ -1,3 +1,5 @@
+import { displayReference } from "../../lib/display-reference.js"
+
 export type PendingWrite = {
   id: string
   workspace: string
@@ -145,7 +147,7 @@ export function isResumed(value: unknown): value is { root: string; resumed: tru
 
 export function principalLabel(value: string) {
   if (value.startsWith("admin:")) return "you"
-  return value.replace(/^agent:/, "")
+  return displayReference(value.replace(/^agent:/, ""))
 }
 
 export function participants(row: Conversation): { from: string; to: string; fromKind?: string; toKind?: string } {
@@ -161,7 +163,7 @@ export function participants(row: Conversation): { from: string; to: string; fro
     }
   }
   if (row.destination === "slack") {
-    return { from: channel ? channelLabel(channel) : senderLabel(sender) || row.ref, to: principalLabel(target || row.owner), fromKind: "slack" }
+    return { from: channel ? channelLabel(channel) : principalLabel(senderLabel(sender) || row.ref), to: principalLabel(target || row.owner), fromKind: "slack" }
   }
   return { from: principalLabel(row.owner), to: principalLabel(target || row.ref || row.destination), toKind: row.destination }
 }

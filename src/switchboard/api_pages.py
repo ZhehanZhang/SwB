@@ -56,8 +56,9 @@ async def agent_detail(request: Request) -> JSONResponse:
         identities[row["block"]].update(names | {f"routine:{name}" for name in names})
     entries = core.audit.related(targets={name: sorted(values) for name, values in identities.items()},
                                  keys=[key["id"] for key in keys])
+    captains = {row["address"]: row for row in inventory["captains"]}
     return JSONResponse({"kind": kind, "agent": agent, "routines": routines, "keys": keys,
-                         "audit": [_audit_item(core, row) for row in entries]})
+                         "audit": [_audit_item(core, row, captains) for row in entries]})
 
 
 def _mcp_url(value: str | None) -> str | None:

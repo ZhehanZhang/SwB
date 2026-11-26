@@ -1,9 +1,13 @@
+import { displayReference } from "../../lib/display-reference.js"
+
 type AuditMetadata = {
   agent?: string
   state?: string
   to_scope?: string
   memory_id?: string
   target_name?: string
+  target_label?: string
+  ref_label?: string
   repo_count?: number
   turn_cap?: number
   visibility?: string
@@ -59,7 +63,7 @@ export function isAuditPage(value: unknown): value is AuditPageData {
 function isAuditMetadata(value: unknown): value is AuditMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
   const metadata = value as Record<string, unknown>
-  return ["agent", "state", "to_scope", "memory_id", "target_name", "visibility"].every((key) => !(key in metadata) || typeof metadata[key] === "string")
+  return ["agent", "state", "to_scope", "memory_id", "target_name", "target_label", "ref_label", "visibility"].every((key) => !(key in metadata) || typeof metadata[key] === "string")
     && ["repo_count", "turn_cap"].every((key) => !(key in metadata) || Number.isSafeInteger(metadata[key]))
 }
 
@@ -76,7 +80,7 @@ export function auditProject({ action, target, project }: AuditEvent): string | 
 export function auditActor({ source }: AuditEvent) {
   if (source === "owner" || source.startsWith("admin:")) return "you"
   if (source === "auto") return "SwB"
-  return source === "-" ? "—" : source
+  return source === "-" ? "—" : displayReference(source)
 }
 
 const titles: Record<string, readonly [past: string, present: string]> = {
@@ -123,11 +127,20 @@ const titles: Record<string, readonly [past: string, present: string]> = {
   rate_limited: ["Rate limited", "rate limited"],
 }
 
-export function auditText({ action, target, ref, destination, outcome, metadata, project }: AuditEvent): string {
+export function auditText(item: AuditEvent): string {
+  return displayReference(auditSentence(item))
+}
+
+function auditSentence({ action, target, ref, destination, outcome, metadata, project }: AuditEvent): string {
+  const memoryPath = action.startsWith("memory_")
+    ? target?.match(/^(?:general|project:[a-z0-9-]+)\/(?:[a-z0-9_.-]+\/)+([a-z0-9_.-]+)$/)
+    : null
+  target = metadata?.target_label || memoryPath?.[1] || (target && displayReference(target))
+  ref = metadata?.ref_label || (ref && displayReference(ref))
   if (action === "route_set" && outcome === "ok" && metadata?.target_name) {
     const via = metadata.agent === "github" ? "GitHub" : metadata.agent === "slack" ? "Slack" : metadata.agent || project || "default"
     const count = metadata.repo_count
-    return `Routed ${via}${count ? ` (${count} ${count === 1 ? "repo" : "repos"})` : ""} to ${metadata.target_name}`
+    return `Routed ${via}${count ? ` (${count} ${count === 1 ? "repo" : "repos"})` : ""} to ${displayReference(metadata.target_name, "Captain")}`
   }
   if (action === "turn_cap") return ["Paused conversation", ref, metadata?.turn_cap ? `at ${metadata.turn_cap} turns` : null].filter(Boolean).join(" ")
   if (action === "webhook") return [outcome === "dropped" ? "Dropped webhook for" : "Received webhook for", target || destination].join(" ")

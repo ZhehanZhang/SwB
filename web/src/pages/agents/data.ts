@@ -1,4 +1,5 @@
 import { requestJson } from "@/lib/api"
+import { displayReference } from "@/lib/display-reference"
 import type { AuditEvent } from "../audit/events"
 
 export type Key = {
@@ -23,7 +24,7 @@ type Routine = {
   last_seen_at: string | null
 }
 
-type Target = { id: string; name: string; block: string; project?: string | null; projects?: string[]; online: boolean; last_seen_at?: string | null }
+type Target = { id: string; name: string; block: string; project?: string | null; projects?: string[]; online: boolean; created_at?: string | null; last_seen_at?: string | null }
 type Pending = { name: string; project: string; created_by: string; created_at: string; claim_url?: string | null }
 type Inventory = { keys: Key[]; routines: Routine[]; captains: Target[]; dots: Target[]; pending_claims: Pending[] }
 type AgentKind = "routine" | "captain" | "dot" | "key" | "pending"
@@ -70,7 +71,7 @@ function isRoutine(row: unknown): row is Routine {
 }
 
 function isTarget(row: unknown): row is Target {
-  return isRecord(row) && typeof row.online === "boolean" && fields(row, ["id", "name", "block"], ["project", "last_seen_at"])
+  return isRecord(row) && typeof row.online === "boolean" && fields(row, ["id", "name", "block"], ["project", "created_at", "last_seen_at"])
     && (row.projects === undefined || Array.isArray(row.projects) && row.projects.every((value: unknown) => typeof value === "string"))
 }
 
@@ -98,7 +99,7 @@ function principal(value: string | null): string | null {
 }
 
 const clientNames: Record<string, string> = {
-  "claude-code": "Claude Code", codex: "Codex", chatgpt: "ChatGPT", "gemini-cli": "Gemini CLI",
+  "claude-code": "Claude Code", codex: "Codex", chatgpt: "ChatGPT", gemini: "Gemini", "gemini-cli": "Gemini CLI",
 }
 
 export const agentListKey = ["registered-agents"]
@@ -112,9 +113,10 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
       last_seen: row.last_seen_at ?? null, state: row.status.startsWith("tested") ? "on" : row.status === "untested" ? "off" : "fault",
     })),
     ...(["captain", "dot"] as const).flatMap((kind) => (kind === "captain" ? captains : dots).map((row): Agent => ({
-      id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind, name: row.name, kind,
+      id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
+      name: kind === "captain" ? displayReference(row.name, "Captain") : row.name, kind,
       logo: kind === "captain" ? "capy" : "chatgpt", projects: row.projects ?? (row.project ? [row.project] : []),
-      registered_by: null, registered_at: null, last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",
+      registered_by: null, registered_at: row.created_at ?? null, last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",
     }))),
     ...keys.map((row): Agent => ({
       id: `key:${row.id}`, reference: row.id, type: "key", name: clientNames[row.agent] ?? row.agent, kind: "MCP client",

@@ -13,6 +13,7 @@ import hashlib
 import logging
 import re
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 import httpx
@@ -44,6 +45,16 @@ INSTRUCTIONS = """Capy is a coding agent with cloud machines, git and PRs, organ
 real machine, a repo, a PR, or more than a few minutes: send(task) goes where the owner's route for you and the project
 points (usually his Captain), or send(task, to='capy:captain:<name>') when your route allows choosing. Then wait() for
 the reply. capy_captain_digest, capy_captains and capy_list read Captains and their crews."""
+
+
+def _api_timestamp(value: Any) -> str | None:
+    if isinstance(value, str):
+        try:
+            if datetime.fromisoformat(value).tzinfo is not None:
+                return value
+        except ValueError:
+            pass
+    return None
 
 
 def parse_target(text: str) -> dict[str, str]:
@@ -942,6 +953,8 @@ class CapyBlock(Block):
             name = c.get("name") or c.get("title") or c["id"]
             pid = _slug(name)
             out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [pid, str(c.get("code") or "").lower()],
+                        "created_at": _api_timestamp(c.get("createdAt")),
+                        "last_seen_at": _api_timestamp(c.get("lastActivityAt")) or _api_timestamp(c.get("updatedAt")),
                         "persona": {"id": pid, "name": name, "avatar": c.get("avatar")}})
         return out
 

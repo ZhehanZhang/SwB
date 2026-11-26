@@ -8,6 +8,7 @@ import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
+import { displayReference } from "@/lib/display-reference"
 import {
   coordinatorQuery, formatAge, formatDay, formatTime, projectBoardQuery, quantity,
   type Endpoint, type ProjectBoard, type ProjectRoute,
@@ -165,7 +166,7 @@ function ProjectHistory({ data }: { data: ProjectBoard }) {
     })[row.action]
       ?? row.action.replaceAll("_", " ")
     const message = `${action.charAt(0).toUpperCase()}${action.slice(1)}`
-    return `${message}${row.destination === "core" ? "" : ` on ${row.destination}`}${row.outcome === "ok" ? "" : ` (${row.outcome})`}`
+    return displayReference(`${message}${row.destination === "core" ? "" : ` on ${row.destination}`}${row.outcome === "ok" ? "" : ` (${row.outcome})`}`)
   }
   return (
     <section aria-labelledby="project-history-heading">
@@ -228,7 +229,7 @@ function ProjectActivity({ data }: { data: ProjectBoard }) {
                     <span className="truncate text-label-sm">{endpoint.label}</span>
                     {at && <time title={formatTime(at)} dateTime={at} className="ml-auto shrink-0 font-mono text-mono-sm text-subtle-foreground">{formatAge(at)}</time>}
                   </div>
-                  <div className="mt-0.5 truncate text-body-sm text-muted-foreground">{title || handle}</div>
+                  <div className="mt-0.5 truncate text-body-sm text-muted-foreground">{displayReference(title || handle)}</div>
                 </Link>
               </li>
             ))}

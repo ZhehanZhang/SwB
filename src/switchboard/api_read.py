@@ -12,6 +12,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from .api_display import capy_label, captain_targets
 from .audit import iso
 from .blocks import BLOCKS, load
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
@@ -72,12 +73,16 @@ async def health(request: Request) -> JSONResponse:
 
 async def routes(request: Request) -> JSONResponse:
     core = request.app.state.core
+    configured = core.routes.list()
+    captains = await captain_targets(core, (route.destination for route in configured if route.target.get("captain")))
     items = []
-    for route in core.routes.list():
+    for route in configured:
         block = core.blocks.get(route.destination)
         kinds = tuple(t.kind for t in block.manifest.targets) if block else _ROUTE_KINDS
         kind, ident = next(((k, ident) for k in kinds if (ident := _reference(route.target.get(k)))), (None, None))
         name = _reference(route.target.get("name")) or ident if ident else None
+        if kind in ("captain", "thread"):
+            name = capy_label(f"{route.destination}:{kind}:{ident}", route.destination, captains, name=name) or name
         defaults: dict[str, Any] = {k: val for k in _ROUTE_DEFAULTS if (val := _reference(route.defaults.get(k)))}
         if isinstance(repos := route.defaults.get("repos"), list):
             defaults["repos"] = [repo for repo in repos if isinstance(repo, str) and _REPO.fullmatch(repo)]
@@ -117,10 +122,15 @@ async def audit(request: Request) -> JSONResponse:
                                             limit=limit, cursor=cursor or None)
     except ValueError:
         return _error("invalid cursor")
-    return JSONResponse({"items": [_audit_item(core, row) for row in rows], "next_cursor": next_cursor})
+    captains = await captain_targets(core, (
+        name for row in rows for name in (row["destination"], (row["target"] or "").partition(":")[0])
+        if row["action"] in ("route_set", "route_remove", "auto_route")
+        or "jam_" in ((row["target"] or "") + (row["ref"] or "")).lower()
+    ))
+    return JSONResponse({"items": [_audit_item(core, row, captains) for row in rows], "next_cursor": next_cursor})
 
 
-def _audit_item(core: Any, row: Any) -> dict[str, Any]:
+def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dict[str, Any]:
     fields = _fields(row, "id", "origin", "source", "client", "destination", "action", "outcome", "target", "ref")
     action, target, ref = fields["action"], fields["target"] or "", fields["ref"]
     project: str | None = None
@@ -134,6 +144,9 @@ def _audit_item(core: Any, row: Any) -> dict[str, Any]:
         except ValueError:
             fields["client"] = None
     else:
+        for value, field in ((target, "target_label"), (ref, "ref_label")):
+            if label := capy_label(value, fields["destination"], captains):
+                metadata[field] = label
         if ref and _reference(ref):
             project = core.inbox.project_for_ref(fields["destination"], ref)
         if match := re.fullmatch(rf"project:({_PROJECT})", target):
@@ -151,7 +164,7 @@ def _audit_item(core: Any, row: Any) -> dict[str, Any]:
                     route = None
                 if isinstance(route, dict):
                     if name := route_audit_name(route.get("target_name")):
-                        metadata["target_name"] = name
+                        metadata["target_name"] = capy_label(name, fields["destination"], captains) or name
                     if type(count := route.get("repo_count")) is int and count >= 0:
                         metadata["repo_count"] = count
         elif action in ("auto_link", "project_create", "project_update") and re.fullmatch(_PROJECT, target):
@@ -221,7 +234,7 @@ async def _agents(core: Any) -> dict[str, Any]:
             if target.get("project"):
                 projects.add(target["project"])
             discovered[kind].append({
-                **_fields(target, "id", "name", "kind", "block", "address", "slugs", "level", "project"),
+                **_fields(target, "id", "name", "kind", "block", "address", "slugs", "level", "project", "created_at"),
                 "projects": sorted(projects),
                 "source": target.get("source", "discovered"),
                 "last_seen_at": target.get("last_seen_at"),
@@ -277,7 +290,7 @@ def _sender(sender: Any) -> dict[str, Any] | None:
                     "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot") or None
 
 
-def _conversation(row: dict[str, Any], endpoints: tuple[Any, str | None]) -> dict[str, Any]:
+def _conversation(row: dict[str, Any], endpoints: tuple[Any, str | None], captains: dict[str, dict[str, Any]]) -> dict[str, Any]:
     sender, target = endpoints
     meta = row["meta"]
     first_sender = _sender(meta.get("from"))
@@ -290,6 +303,8 @@ def _conversation(row: dict[str, Any], endpoints: tuple[Any, str | None]) -> dic
             first_target = _reference(info.get("name")) or first_target
         if len(parts) == 3 and parts[1] == "dot" and isinstance(dot := meta.get("dot"), str) and SLUG_RE.fullmatch(dot):
             first_target = dot
+    first_target = capy_label(row.get("target") or first_target or row["ref"], row["destination"], captains,
+                              name=first_target) or first_target
     return {**_fields(row, "handle", "owner", "destination", "ref", "project", "title", "target", "status", "open"),
             "created_at": iso(row["created_at"]), "updated_at": iso(row["updated_at"]),
             "first_sender": first_sender, "first_target": first_target}
@@ -311,9 +326,10 @@ async def inbox(request: Request) -> JSONResponse:
     pauses = core.store.q("SELECT root, turns, paused_at FROM conversation_turns WHERE paused_at IS NOT NULL ORDER BY paused_at DESC")
     roots = core.inbox.handles(limit=100, roots_only=True)
     endpoints = core.inbox.first_endpoints([row["handle"] for row in roots])
+    captains = await captain_targets(core, (row["destination"] for row in roots))
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
                          "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"])} for row in pauses],
-                         "conversations": [_conversation(row, endpoints.get(row["handle"], (None, None))) for row in roots]})
+                         "conversations": [_conversation(row, endpoints.get(row["handle"], (None, None)), captains) for row in roots]})
 
 
 async def conversation(request: Request) -> JSONResponse:
@@ -338,7 +354,9 @@ async def conversation(request: Request) -> JSONResponse:
             projected["from"] = sender
         items.append(projected)
     endpoints = core.inbox.first_endpoints([handle])
-    return JSONResponse({"conversation": _conversation(row, endpoints.get(handle, (None, None))), "items": items, "cursor": out["cursor"]})
+    captains = await captain_targets(core, (row["destination"],))
+    return JSONResponse({"conversation": _conversation(row, endpoints.get(handle, (None, None)), captains),
+                         "items": items, "cursor": out["cursor"]})
 
 
 async def memory(request: Request) -> JSONResponse:
