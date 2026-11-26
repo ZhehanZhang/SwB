@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="t2 d2">
+  <title id="t2">How SwB connects</title>
+  <desc id="d2">Agents on the left and chat platforms and webhooks on the right plug into the SwB core, which keeps projects, routes, conversations and the audit log.</desc>
+  <rect x="0.5" y="0.5" width="1199" height="559" rx="16" fill="#fafafa" stroke="#e4e4e7"/>
+  <g font-family="Inter, Helvetica Neue, Arial, sans-serif">
+    <text x="60" y="64" font-size="13" font-weight="600" letter-spacing="1.2" fill="#71717a">WHERE YOUR AGENTS ALREADY RUN</text>
+    <text x="1140" y="64" font-size="13" font-weight="600" letter-spacing="1.2" fill="#71717a" text-anchor="end">WHERE PEOPLE AND EVENTS ARE</text>
+    <g><rect x="60" y="86" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="80" y="116" font-size="17" font-weight="500" fill="#18181b">Claude Projects</text><circle cx="310" cy="110" r="9" fill="#3f3f46"/><circle cx="310" cy="110" r="4" fill="#09090b"/></g>
+    <g><rect x="60" y="162" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="80" y="192" font-size="17" font-weight="500" fill="#18181b">ChatGPT and dots</text><circle cx="310" cy="186" r="9" fill="#3f3f46"/><circle cx="310" cy="186" r="4" fill="#09090b"/></g>
+    <g><rect x="60" y="238" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="80" y="268" font-size="17" font-weight="500" fill="#18181b">Grok</text><circle cx="310" cy="262" r="9" fill="#3f3f46"/><circle cx="310" cy="262" r="4" fill="#09090b"/></g>
+    <g><rect x="60" y="314" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="80" y="344" font-size="17" font-weight="500" fill="#18181b">Capy Captains</text><circle cx="310" cy="338" r="9" fill="#3f3f46"/><circle cx="310" cy="338" r="4" fill="#09090b"/></g>
+    <g><rect x="60" y="390" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="80" y="420" font-size="17" font-weight="500" fill="#18181b">Coding agents</text><circle cx="310" cy="414" r="9" fill="#3f3f46"/><circle cx="310" cy="414" r="4" fill="#09090b"/></g>
+    <g><rect x="890" y="86" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="1120" y="116" font-size="17" font-weight="500" fill="#18181b" text-anchor="end">Slack</text><circle cx="890" cy="110" r="9" fill="#3f3f46"/><circle cx="890" cy="110" r="4" fill="#09090b"/></g>
+    <g><rect x="890" y="162" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="1120" y="192" font-size="17" font-weight="500" fill="#18181b" text-anchor="end">Discord</text><circle cx="890" cy="186" r="9" fill="#3f3f46"/><circle cx="890" cy="186" r="4" fill="#09090b"/></g>
+    <g><rect x="890" y="238" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="1120" y="268" font-size="17" font-weight="500" fill="#18181b" text-anchor="end">Telegram</text><circle cx="890" cy="262" r="9" fill="#3f3f46"/><circle cx="890" cy="262" r="4" fill="#09090b"/></g>
+    <g><rect x="890" y="314" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="1120" y="344" font-size="17" font-weight="500" fill="#18181b" text-anchor="end">GitHub webhooks</text><circle cx="890" cy="338" r="9" fill="#3f3f46"/><circle cx="890" cy="338" r="4" fill="#09090b"/></g>
+    <g><rect x="890" y="390" width="250" height="48" rx="8" fill="#ffffff" stroke="#e4e4e7"/><text x="1120" y="420" font-size="17" font-weight="500" fill="#18181b" text-anchor="end">Claude and Grok routines</text><circle cx="890" cy="414" r="9" fill="#3f3f46"/><circle cx="890" cy="414" r="4" fill="#09090b"/></g>
+    <rect x="450" y="96" width="300" height="320" rx="14" fill="#18181b"/>
+    <text x="600" y="148" font-family="Inter Tight, Inter, Helvetica Neue, Arial, sans-serif" font-size="40" font-weight="800" letter-spacing="-1.5" fill="#fafafa" text-anchor="middle">SwB</text>
+    <g><rect x="476" y="178" width="248" height="42" rx="6" fill="#27272a"/><text x="600" y="204" font-size="14" fill="#d4d4d8" text-anchor="middle">projects and scoped memory</text></g>
+    <g><rect x="476" y="234" width="248" height="42" rx="6" fill="#27272a"/><text x="600" y="260" font-size="14" fill="#d4d4d8" text-anchor="middle">targets and routes</text></g>
+    <g><rect x="476" y="290" width="248" height="42" rx="6" fill="#27272a"/><text x="600" y="316" font-size="14" fill="#d4d4d8" text-anchor="middle">conversations and mailboxes</text></g>
+    <g><rect x="476" y="346" width="248" height="42" rx="6" fill="#27272a"/><text x="600" y="372" font-size="14" fill="#d4d4d8" text-anchor="middle">trust, approvals and audit</text></g>
+  </g>
+  <g fill="none" stroke-width="5" stroke-linecap="round">
+    <path d="M310 110 C 380 110, 390 200, 450 200" stroke="#2f5bd3"/>
+    <path d="M310 186 C 380 186, 390 240, 450 240" stroke="#2f5bd3"/>
+    <path d="M310 262 C 380 262, 390 280, 450 280" stroke="#2f5bd3"/>
+    <path d="M310 338 C 380 338, 390 320, 450 320" stroke="#2f5bd3"/>
+    <path d="M310 414 C 380 414, 390 360, 450 360" stroke="#2f5bd3"/>
+    <path d="M750 200 C 810 200, 820 110, 890 110" stroke="#c8372d"/>
+    <path d="M750 240 C 810 240, 820 186, 890 186" stroke="#c8372d"/>
+    <path d="M750 280 C 810 280, 820 262, 890 262" stroke="#c8372d"/>
+    <path d="M750 320 C 810 320, 820 338, 890 338" stroke="#2e7d4f"/>
+    <path d="M750 360 C 810 360, 820 414, 890 414" stroke="#2e7d4f"/>
+  </g>
+  <g font-family="Inter, Helvetica Neue, Arial, sans-serif" font-size="14" fill="#52525b">
+    <circle cx="300" cy="496" r="6" fill="#2f5bd3"/><text x="314" y="501">MCP, OAuth or a pairing key</text>
+    <circle cx="560" cy="496" r="6" fill="#c8372d"/><text x="574" y="501">posts and replies in threads</text>
+    <circle cx="812" cy="496" r="6" fill="#2e7d4f"/><text x="826" y="501">signed webhooks and fires</text>
+  </g>
+</svg>
