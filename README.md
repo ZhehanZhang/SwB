@@ -413,8 +413,8 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 
 ### ChatGPT dots and #agents
 
-The `dots` block finds ChatGPT dots in one workspace and makes each a target named after its handle
-(`@swb example-dot …`, or `send(to="exampledot")`). It scans the members for bot users whose app id is in
+The `dots` block defaults to `delivery: slack`. It finds ChatGPT dots in one workspace and makes each a target named
+after its handle (`@swb example-dot …`, or `send(to="example-dot")`). It scans the members for bot users whose app id is in
 `app_ids` or whose name matches `match` (`dot` by default), again when Slack sends `team_join` or a bot's
 `user_change`, and every `rescan_minutes`. Like every target a dot is private unless `visibility` shares it.
 
@@ -429,6 +429,7 @@ shared (otherwise their messages are context items); their sends name them, and 
 ```yaml
 blocks:
   dots:
+    delivery: slack            # default
     workspace: home
     channel: "#agents" # a name, or a channel id
     create: true               # create it as the owner if it doesn't exist
@@ -436,7 +437,7 @@ blocks:
     match: [dot]
     rescan_minutes: 30
     dots:
-      example-dot: {slug: dot}         # rename
+      example-dot: {slug: dot}        # rename
       some-other-dot: {disabled: true}
 ```
 
@@ -450,6 +451,24 @@ within what you'd do for me, and answer in that post's thread. Ignore anyone els
 
 The app needs `users:read` (bot), `groups:read` and `groups:write` (user), the `message.groups`, `team_join` and
 `user_change` events, and @swb in the channel.
+
+Set `delivery: mailbox` to skip Slack for new sends to dots. In this mode, list the dots in config; no Slack workspace
+or relay is needed. A dot's `mailbox` must name a known agent and defaults to `chatgpt`. Dots sharing a mailbox receive
+the same event stream, so use separate signed-in agent mailboxes if they must receive different messages.
+
+```yaml
+blocks:
+  mcp: {use: mcp}
+  dots:
+    use: dots
+    delivery: mailbox
+    default: example-dot
+    dots:
+      example-dot: {name: Example Dot, mailbox: chatgpt}
+```
+
+A send to `example-dot` goes straight to its mailbox. A client subscribed to that mailbox can fetch and reply to
+the message on the original conversation using [MCP Events](#mcp-events).
 
 ### Who a post looks like
 
@@ -657,6 +676,36 @@ binds that folder at `/mirror`, and `SWITCHBOARD_UID` in `.env` builds the image
 
 The pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
 same type, hairline cards, the Arc backdrop, the signature and the shared theme cookie, ported from example-org/id-site.
+
+## MCP Events
+
+The MCP endpoint advertises `capabilities.events` in both `initialize` and `server/discover`. An MCP client that
+supports webhook events can call `events/list`, `events/subscribe` and `events/unsubscribe`. The
+`switchboard.message.created` event takes one filter, `{"mailbox_id":"example-agent"}`. Its payload is
+`{"mailbox_id":"example-agent","message_id":"msg_123","conversation":"h_example","kind":"message"}`.
+It fires when an item arrives in that mailbox, excluding items the mailbox's own agent sent to itself.
+
+Sign in with OAuth, an unrestricted bearer key, or a pairing key. The mailbox must be a known agent. You can
+subscribe to and read your own mailbox, or another mailbox you can see under its target visibility policy.
+The webhook never carries message text. Call `get_message(message_id)` for the stored item and treat its text as data
+using the stored sender and trust. Only the mailbox owner can answer with `reply(conversation=..., text=...)`.
+
+The client supplies an HTTPS webhook URL and a Standard Webhooks `whsec_` signing key. Switchboard confirms the
+endpoint with a signed challenge that it must echo. It resolves and validates the destination on every connection,
+rejects private addresses and redirects, and signs each POST over the exact body bytes. The `webhook-id` equals the
+event ID and stays the same on retries. Switchboard persists pending deliveries and retries transient failures up to
+five total attempts over roughly 15 minutes. A `410` stops delivery; a `413` or other permanent error drops the event.
+
+Subscriptions expire after 24 hours by default and never last more than seven days without a refresh. Refreshing
+extends the existing subscription; when it replaces the signing key, both keys are used for one hour. Access is
+rechecked before delivery. Unsubscribing removes pending deliveries, and there is no historical replay. Keep
+`mcp-events.key` with the data directory when backing it up; it protects the stored signing keys.
+
+For example, connect the public MCP endpoint (`https://switchboard.example.test/mcp`) to a ChatGPT plugin with OAuth,
+then rescan the plugin for events. In a Work chat or a dot with the plugin enabled, ask it to monitor
+`switchboard.message.created` for `mailbox_id: chatgpt`, read each new item via `get_message`, and reply on its
+conversation when appropriate. Send a test message to `agent:chatgpt` (or a dot using mailbox delivery). Other clients
+that support MCP Events can subscribe to their own mailbox in the same way.
 
 ## Connecting the assistants
 
