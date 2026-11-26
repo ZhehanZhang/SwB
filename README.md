@@ -992,13 +992,9 @@ that support MCP Events can subscribe to their own mailbox in the same way.
 
 ## Connecting the assistants
 
-Replace `switchboard.example.com` with your public hostname in these examples.
+To connect Claude, ChatGPT, Claude Code, or a generic MCP client, see [Connect a client](#connect-a-client).
+Replace `switchboard.example.com` with your public hostname in the examples below.
 
-- **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → `https://switchboard.example.com/mcp`,
-  sign in through Cloudflare Access and approve.
-- **ChatGPT**: Settings → Apps → Advanced settings → Developer mode, then Create app → `https://switchboard.example.com/mcp`, OAuth.
-- **Claude Code**: `claude mcp add --transport http switchboard https://switchboard.example.com/mcp`, plus the channel above if wanted.
-- **Any other agent** (Codex, Gemini CLI, a script): a pairing code, as above.
 - **Capy**: an MCP server with URL `https://switchboard.example.com/mcp` and OAuth with the Automatic client. Capy registers
   itself (DCR, redirect `https://capy.ai/web/callbacks/mcp`), the consent page shows "Capy", and any client that
   returns to capy.ai signs in as agent `capy`, so routes, `key_scopes` and the audit log treat it the same as the old
