@@ -361,7 +361,8 @@ async def memory(request: Request) -> JSONResponse:
             return _error("memory not found", 404)
         if scope and entry["scope"] != scope:
             return _error("memory not found", 404)
-        return JSONResponse({"entry": {**_fields(entry, *_MEMORY_FIELDS, "body"), "writer": entry["source"], "summary": memory_summary(entry["body"]),
+        writer = core.memory.latest_writers([entry["id"]]).get(entry["id"], entry["source"])
+        return JSONResponse({"entry": {**_fields(entry, *_MEMORY_FIELDS, "body"), "writer": writer, "summary": memory_summary(entry["body"]),
                                        "history": [_scalars(r, "at", "source", "action") for r in entry["history"]]}})
     try:
         limit = _number(request, "limit", 50, 1, 200)
@@ -379,7 +380,9 @@ async def memory(request: Request) -> JSONResponse:
             result = core.memory.search(query=query, scopes=scopes, namespace=namespace, limit=limit, summaries=True)
         except MemoryError_:
             return _error("query has no searchable words")
-    return JSONResponse({"scopes": summary, "items": [{**_fields(row, *_MEMORY_FIELDS, "snippet", "summary"), "writer": row["source"]} for row in result["items"]],
+    writers = core.memory.latest_writers([row["id"] for row in result["items"]])
+    return JSONResponse({"scopes": summary, "items": [{**_fields(row, *_MEMORY_FIELDS, "snippet", "summary"),
+                                                       "writer": writers.get(row["id"], row["source"])} for row in result["items"]],
                          "next_offset": result.get("next_offset"), "mirror": bool(core.memory.mirror_dir)})
 
 

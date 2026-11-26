@@ -236,6 +236,16 @@ class Memory:
         out["history"] = [{"at": iso(v["at"]), "source": v["source"], "action": v["action"]} for v in revs]
         return out
 
+    def latest_writers(self, ids: list[str]) -> dict[str, str]:
+        if not ids:
+            return {}
+        rows = self.store.q(
+            "SELECT m.id, COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = m.id "
+            "AND r.action IN ('create', 'replace', 'append') ORDER BY r.at DESC, r.rowid DESC LIMIT 1), m.source) AS writer "
+            "FROM memories m WHERE m.id IN (" + ",".join("?" for _ in ids) + ")", ids,
+        )
+        return {r["id"]: r["writer"] for r in rows}
+
     def delete(self, *, source: str, id: str, check_scope: Callable[[str], None] | None = None) -> dict[str, Any]:
         now = self.store.clock()
 
