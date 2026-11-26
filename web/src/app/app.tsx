@@ -5,11 +5,16 @@ import { Toaster } from "sonner"
 import { AppShell } from "@/app/app-shell"
 import { DataState } from "@/components/data-state"
 import { sessionQuery, SignedOutError } from "@/lib/api"
+import { LoginPage } from "@/pages/login"
 
 const AgentsPage = lazy(() => import("@/pages/agents").then(({ AgentsPage }) => ({ default: AgentsPage })))
 const InboxPage = lazy(() => import("@/pages/inbox").then(({ InboxPage }) => ({ default: InboxPage })))
 const MemoryPage = lazy(() => import("@/pages/memory").then(({ MemoryPage }) => ({ default: MemoryPage })))
 const AuditPage = lazy(() => import("@/pages/audit").then(({ AuditPage }) => ({ default: AuditPage })))
+const OverviewPage = lazy(() => import("@/pages/overview").then(({ OverviewPage }) => ({ default: OverviewPage })))
+const ProjectPage = lazy(() => import("@/pages/project").then(({ ProjectPage }) => ({ default: ProjectPage })))
+const TokensPage = lazy(() => import("@/pages/tokens").then(({ TokensPage }) => ({ default: TokensPage })))
+const SettingsPage = lazy(() => import("@/pages/settings").then(({ SettingsPage }) => ({ default: SettingsPage })))
 
 function RequireSession() {
   const session = useQuery(sessionQuery)
@@ -32,18 +37,18 @@ export function App() {
     <>
       <Suspense fallback={<main className="mx-auto max-w-lg p-8"><DataState kind="loading" /></main>}>
         <Routes>
-          <Route path="/login" element={<main className="mx-auto max-w-lg p-8"><h1 className="text-display-xl">Sign in</h1></main>} />
+          <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireSession />}>
-            <Route index element={null} />
+            <Route index element={<OverviewPage />} />
             <Route path="/agents/*" element={<AgentsPage />} />
-            <Route path="/tokens" element={null} />
+            <Route path="/tokens" element={<TokensPage />} />
             <Route path="/inbox" element={<InboxPage />} />
             <Route path="/inbox/:handle" element={<InboxPage />} />
             <Route path="/projects" element={<Navigate to="/" replace />} />
-            <Route path="/projects/:slug" element={null} />
+            <Route path="/projects/:slug" element={<ProjectPage />} />
             <Route path="/memory/*" element={<MemoryPage />} />
             <Route path="/audit" element={<AuditPage />} />
-            <Route path="/settings" element={null} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/canvas/*" element={<Navigate to="/" replace />} />
             <Route path="/provision/*" element={<Navigate to="/" replace />} />
             <Route path="*" element={<DataState kind="empty" message="Page not found." />} />
