@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { ChevronLeft, Menu } from "lucide-react"
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
+import { PRODUCT_NAME } from "@/app/brand"
 import { CommandMenu } from "@/app/header-controls"
 import { PageTitle } from "@/app/page-title"
 import { isSection, sections } from "@/app/navigation"
@@ -12,7 +13,7 @@ const tabClass = "flex min-w-0 flex-col items-center justify-center gap-1 rounde
 
 function HomeNav({ active, mobile = false }: { active: boolean; mobile?: boolean }) {
   return (
-    <Link to="/" aria-label="SwitchBoard overview" aria-current={active ? "page" : undefined}
+    <Link to="/" aria-label={`${PRODUCT_NAME} overview`} aria-current={active ? "page" : undefined}
       className={cn(tabClass, mobile ? "h-14" : "h-[72px] w-16")}
     >
       <SwbIcon muted={!active} className={active ? (mobile ? "size-11" : "size-12") : (mobile ? "size-[26px]" : "size-7")} />
@@ -61,8 +62,8 @@ export function AppShell() {
   const project = isSection(pathname, "/projects")
   const home = pathname === "/" || project || isSection(pathname, "/canvas")
   const [title, setTitle] = useState<string>()
-  const heading = title ?? (home ? "SwitchBoard" : sections.find(({ to }) => isSection(pathname, to))?.name ?? "SwitchBoard")
-  useEffect(() => { document.title = heading === "SwitchBoard" ? heading : `${heading} | SwitchBoard` }, [heading])
+  const heading = title ?? (home ? PRODUCT_NAME : sections.find(({ to }) => isSection(pathname, to))?.name ?? PRODUCT_NAME)
+  useEffect(() => { document.title = heading === PRODUCT_NAME ? heading : `${heading} | ${PRODUCT_NAME}` }, [heading])
 
   return (
     <PageTitle.Provider value={setTitle}>
@@ -73,10 +74,10 @@ export function AppShell() {
         <div className="flex-1" />
         <SectionNav section={sections[5]} />
       </nav>
-      <div className="min-h-dvh px-5 pt-[env(safe-area-inset-top)] pb-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
+      <div className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
         <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2">
-            {project && <Link to="/" aria-label="Back to SwitchBoard" className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
+            {project && <Link to="/" aria-label={`Back to ${PRODUCT_NAME}`} className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
             <h1 className="truncate text-page-title">{heading}</h1>
           </div>
           <CommandMenu />

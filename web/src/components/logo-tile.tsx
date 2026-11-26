@@ -29,7 +29,7 @@ export function LogoTile({ kind, className }: { kind: string; className?: string
   const image = mark && images[mark]
   return (
     <span aria-hidden className={cn("inline-grid size-6 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-surface text-foreground", mark === "capy" && "border-[#73563e] bg-[#73563e] text-white", className)}>
-      {mark && image ? <img alt="" src={image} className={fullBleed.has(mark) ? "size-full object-cover" : "size-4 object-contain"} />
+      {mark && image ? <img alt="" src={image} className={cn(fullBleed.has(mark) ? "size-full object-cover" : "size-4 object-contain", mark === "chatgpt" && "invert")} />
         : mark === "capy" ? <span className="text-[16px] leading-none font-bold">C</span>
         : mark === "slack" ? (
           <svg className="size-[17px]" viewBox="0 0 24 24" fill="#4a154b">
