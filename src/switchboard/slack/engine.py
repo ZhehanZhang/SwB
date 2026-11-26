@@ -67,7 +67,7 @@ class SlackEngine:
         self.senders.limits = {}
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
-        self.listen: Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]] | None = None
+        self.listen: Callable[[WorkspaceRuntime, dict[str, Any], dict[str, Any]], Awaitable[bool]] | None = None
         self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]]] = {}
         self.owner_channels: set[tuple[str, str]] = set()
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
@@ -267,7 +267,7 @@ class SlackEngine:
             if candidate["is_bot"] and event.get("bot_id") in rt.cfg.known and rt.cfg.trust_of(candidate["user"]) != "known":
                 candidate["user"] = event["bot_id"]
             self.stamp(rt, candidate)
-            if await self.listen(rt, candidate):
+            if await self.listen(rt, candidate, push):
                 return candidate
         if listen_only:
             return None
@@ -383,13 +383,14 @@ class SlackEngine:
         except Exception as exc:
             log.info("note to sender on %s failed: %s", push["id"], slack_error(exc))
 
-    async def fan_out(self, label: str, push: dict[str, Any]) -> None:
+    async def fan_out(self, label: str, push: dict[str, Any], *, skip_delegate: bool = False) -> None:
         for sink in self.sinks.get(label, []):
             if sink.accepts(push):
                 sink.put(push)
+        event = {**push, "_skip_delegate": True} if skip_delegate else push
         for listener in self.listeners:
             try:
-                await listener(push)
+                await listener(event)
             except Exception:
                 log.exception("workspace %s: event listener failed", label)
 
