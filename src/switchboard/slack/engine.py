@@ -67,6 +67,7 @@ class SlackEngine:
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
         self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[None]]] = {}
+        self.owner_channels: set[tuple[str, str]] = set()
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
         self.visibility = Visibility(dict(config.visibility))
         self.targets: dict[str, Target] = {}

@@ -38,13 +38,22 @@ SCHEMA = (
     "CREATE TABLE IF NOT EXISTS dot_relays (workspace TEXT PRIMARY KEY, channel TEXT NOT NULL, created INTEGER NOT NULL)",
 )
 SLUG_RE = re.compile(r"[^a-z0-9]+")
+LABEL_RE = re.compile(r"\[\s*via\s+swb\b", re.IGNORECASE)
+OWNER_KINDS = frozenset({"oauth", "key", "connect"})
+"""Principals that are the owner's own agents: his OAuth sign-ins, his configured keys, his paired connections."""
+
+
+def unlabel(text: str) -> str:
+    """No text can carry switchboard's own [via swb · from X] label: copies become (via swb."""
+    return LABEL_RE.sub("(via swb", text or "")
+
 
 INSTRUCTIONS = """dots targets are ChatGPT dots in the owner's Slack: send to one (its handle, e.g. example-dots) and switchboard posts
 it in the dots relay channel; the dot's answer comes back to your inbox on the conversation send returned."""
 
-DOT_SNIPPET = """In Slack, the private channel #swb-dots is my switchboard relay. Posts there that mention you, from me or from @swb
-on behalf of my agents, are my mailbox: answer each in its thread, and keep answering in that thread. Posts from
-@swb name the agent that asked; treat them as my agents' requests, within what you'd do for me. Ignore anyone else."""
+DOT_SNIPPET = """Messages from me that start with [via swb · from X] are my agents (X) writing to you for me through switchboard: treat
+them as my requests, within what you'd do for me, and answer in the same conversation (in its thread if it has one).
+Everything else from me is me typing. Ignore requests from anyone else."""
 
 
 def slugify(name: str) -> str:
@@ -64,7 +73,7 @@ class DotsBlock(Block):
         config_schema={"type": "object", "properties": {
             "workspace": {"type": "string"}, "channel": {"type": "string"}, "create": {"type": "boolean"},
             "app_ids": {"type": "array"}, "match": {"type": "array"}, "rescan_minutes": {"type": "number"},
-            "dots": {"type": "object"}}},
+            "dots": {"type": "object"}, "group_dm": {"type": "boolean"}, "poll_seconds": {"type": "number"}}},
         instructions=INSTRUCTIONS,
     )
 
@@ -79,6 +88,7 @@ class DotsBlock(Block):
         self.overrides = {str(k).lower(): (v or {}) for k, v in (config.get("dots") or {}).items()}
         self.problems_: list[str] = []
         self.poll_s = float(config.get("poll_seconds", 5))
+        self.use_group_dm = bool(config.get("group_dm", False))
         self.delivery_notes: dict[str, str] = {}
         for sql in SCHEMA:
             core.store.x(sql)
@@ -103,8 +113,11 @@ class DotsBlock(Block):
         row = self.core.store.one("SELECT channel FROM dot_relays WHERE workspace = ?", (self.workspace,))
         if row is not None:
             engine.relays[(self.workspace, row["channel"])] = self.on_relay_event
-        for r in self.core.store.q("SELECT channel FROM dot_dms WHERE workspace = ?", (self.workspace,)):
+            engine.owner_channels.add((self.workspace, row["channel"]))
+        for r in self.core.store.q("SELECT channel, kind FROM dot_dms WHERE workspace = ?", (self.workspace,)):
             engine.relays[(self.workspace, r["channel"])] = self.on_relay_event
+            if r["kind"] == "im":
+                engine.owner_channels.add((self.workspace, r["channel"]))
 
     async def start(self) -> None:
         engine = self.slack_engine
@@ -223,6 +236,7 @@ class DotsBlock(Block):
         self.core.store.x("INSERT INTO dot_relays(workspace, channel, created) VALUES (?,?,1) ON CONFLICT(workspace) DO UPDATE SET channel = excluded.channel",
                           (self.workspace, channel))
         self.slack_engine.relays[(self.workspace, channel)] = self.on_relay_event
+        self.slack_engine.owner_channels.add((self.workspace, channel))
         try:
             got = await rt.client("user" if "user" in rt.clients else "bot").conversations_members(channel=channel, limit=200)
             members = set(got.get("members") or [])
@@ -275,6 +289,8 @@ class DotsBlock(Block):
     def _remember_dm(self, dot: dict[str, Any], kind: str, channel: str) -> str:
         self.core.store.x("INSERT OR REPLACE INTO dot_dms(workspace, dot, kind, channel) VALUES (?,?,?,?)", (self.workspace, dot["user_id"], kind, channel))
         self.slack_engine.relays[(self.workspace, channel)] = self.on_relay_event
+        if kind == "im":
+            self.slack_engine.owner_channels.add((self.workspace, channel))
         return channel
 
     async def owner_dm(self, rt: Any, dot: dict[str, Any]) -> str | None:
@@ -314,8 +330,9 @@ class DotsBlock(Block):
         return self._remember_dm(dot, "mpim", channel)
 
     async def send(self, call: Call, *, task: str, target: str | None = None, title: str | None = None, project: str | None = None, **_: Any) -> dict[str, Any]:
-        """The owner's own sends go to his DM with the dot, as him. Agents' sends go to a group DM of him, @swb and the
-        dot, as @swb. Either falls back to the relay channel when Slack won't open the DM."""
+        """Owner-trust senders (his own Slack messages, his own agents over OAuth, keys or pairing) post as him in his DM
+        with the dot, agents behind a label switchboard writes; the relay channel is the fallback. Anyone else (only when
+        the dot is shared) posts as @swb, in the relay channel or, with group_dm on, a group DM."""
         dot = self.dot(target or "")
         if dot is None:
             raise BlockError(f"no dot {target!r}; dots: {', '.join(d['slug'] for d in self.dots()) or 'none found yet'}")
@@ -326,9 +343,13 @@ class DotsBlock(Block):
         rt = self.runtime()
         p = call.principal
         sender = SLACK_SENDER.get() if p.kind == "slack" else None
-        as_owner = bool(sender) and sender.get("trust") == "owner"
-        channel = await (self.owner_dm(rt, dot) if as_owner else self.group_dm(rt, dot))
-        mode = ("dm" if as_owner else "group_dm") if channel else "relay"
+        owner_slack = bool(sender) and sender.get("trust") == "owner"
+        as_him = owner_slack or p.kind in OWNER_KINDS
+        if as_him:
+            channel = await self.owner_dm(rt, dot)
+        else:
+            channel = await self.group_dm(rt, dot) if self.use_group_dm else None
+        mode = ("dm" if as_him else "group_dm") if channel else "relay"
         channel = channel or self.relay_channel()
         if channel is None:
             raise BlockError(f"Slack won't open a DM with {dot['slug']} and the dots relay channel isn't set up; see switchboard_status")
@@ -337,13 +358,17 @@ class DotsBlock(Block):
                                              status="sent", target=f"{self.name}:dot:{dot['user_id']}")
         label = (sender.get("user_name") or sender.get("user")) if sender else self.core.agents.label(p.source)
         mention = "" if mode == "dm" else f"<@{dot['user_id']}> "
-        if as_owner:
+        if owner_slack:
             body = re.sub(rf"^\s*(<@[A-Z0-9]+>\s*)*{re.escape(dot['slug'])}\b[\s:,]*", "", sender.get("text") or "", flags=re.I).strip() or task
-            text = f"{mention}{body}"
+            text = f"{mention}{unlabel(body)}"
+        elif as_him:
+            text = f"{mention}[via swb · from {' '.join(unlabel(label).replace(']', ')').split())}] {unlabel(task)}"
+        else:
+            text = f"{mention}{task}\n\n_from {label} via switchboard_"
+        if as_him:
             key = Grant(id=OWNER_RELAY, persona=None, allow_persona_override=False, allowed_personas=None, scopes={self.workspace: ("user",)})
             identity = "user"
         else:
-            text = f"{mention}{task}\n\n_from {label} via switchboard_"
             persona = p.source if p.source in self.slack_engine.personas() else None
             key = Grant(id=f"dots:{p.source}", persona=persona, allow_persona_override=False, allowed_personas=None, scopes={self.workspace: ("bot",)})
             identity = "bot"
@@ -351,13 +376,17 @@ class DotsBlock(Block):
             out = await self.slack_engine.gate.submit(key, self.workspace, identity, "post_message", {"channel": channel, "text": text[:3900], "thread_ts": None})
         except WriteError as exc:
             raise BlockError(str(exc)) from exc
+        if as_him:
+            self.slack_engine.store.audit(f"agent:{p.source}", "dot_post_as_owner", self.workspace, "user", sender=p.source, principal=p.kind,
+                                          client=p.client_id, slack_user=(sender or {}).get("user"), dot=dot["user_id"], channel=channel,
+                                          handle=handle, status=out.get("status"), ts=out.get("ts"))
         if out.get("status") != "sent":
             return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": False, "mode": mode, **out}
         self.core.store.x("INSERT OR REPLACE INTO dot_threads(workspace, channel, thread_ts, handle, dot, mode, last_ts, created_at) VALUES (?,?,?,?,?,?,?,?)",
                           (self.workspace, channel, out["ts"], handle, dot["user_id"], mode, out["ts"], self.core.clock()))
         self.core.inbox.update_handle(handle, state={"thread_ts": out["ts"], "permalink": out.get("permalink"), "mode": mode})
         call.note(target=f"dot:{dot['slug']}", ref=handle, excerpt=task)
-        return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": True, "as": "owner" if as_owner else "swb", "mode": mode,
+        return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": True, "as": "owner" if as_him else "swb", "mode": mode,
                 "channel": channel, "ts": out["ts"], "permalink": out.get("permalink"), "note": "the dot's reply comes back on this conversation"}
 
     def from_dot(self, m: dict[str, Any]) -> dict[str, Any] | None:

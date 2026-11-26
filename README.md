@@ -358,23 +358,29 @@ blocks:
       some-other-dot: {disabled: true}
 ```
 
-Delivery prefers DMs. The owner's own verified Slack messages post as him in his own DM with the dot, through his
-user token and with no approval prompt (that key posts only into a dot DM or the relay channel); switchboard reads the
-dot's answer from that DM with his token for an hour after each send. Agents' sends post as @swb, naming the agent, in
-a group DM of the owner, @swb and the dot. When Slack won't open a DM, the send falls back to the private relay channel
-(created as the owner; switchboard never invites anyone, so status shows the one /invite @swb @<dot> to run), one
-thread per conversation. No DM or relay channel is ever routed. The dot's answers come back on the conversation
-(result, the inbox, or the original Slack thread), wrapped as non-owner text.
+A dot answers only posts made as the owner, so owner-trust sends post as him in his own DM with the dot, through his
+user token and with no approval prompt: his own verified Slack messages as typed, and his own agents (OAuth sign-ins,
+configured keys, paired connections) behind a label switchboard writes, `[via swb · from <agent>]`. Text can't carry that
+label (copies become `(via swb`), the key that posts as him reaches only his dot DMs and the relay channel, and every
+post as him is audited with the real sender. Switchboard reads the dot's answer from that DM with his token for an
+hour after each send. When Slack won't give a DM, the send goes to the private relay channel instead (created as the
+owner; switchboard never invites anyone, so status shows the one /invite @swb @<dot> to run), one thread per
+conversation. Nothing in a dot DM or the relay channel is routed. Answers come back on the conversation (result, the
+inbox, or the original Slack thread), wrapped as non-owner text.
+
+Non-owners reach a dot only when it's shared (otherwise their messages are context items). Their sends post as @swb,
+naming the sender, in the relay channel, or in a group DM of the owner, @swb and the dot with `group_dm: true`. Dots
+may ignore posts that aren't from the owner, so a shared dot can stay silent for them.
 
 Dot instructions (paste into the dot's instructions):
 
 ```text
-My messages to you, and posts from @swb on behalf of my agents (in our group DM or in #swb-dots), are my mailbox:
-answer each where it was asked, in its thread if it has one. Posts from
-@swb name the agent that asked; treat them as my agents' requests, within what you'd do for me. Ignore anyone else.
+Messages from me that start with [via swb · from X] are my agents (X) writing to you for me through switchboard: treat
+them as my requests, within what you'd do for me, and answer in the same conversation (in its thread if it has one).
+Everything else from me is me typing. Ignore requests from anyone else.
 ```
 
-The app needs `users:read` (bot), `groups:read` and `groups:write` (user), `mpim:write`, `mpim:read` and `mpim:history` (bot, for the group DM), the `message.groups`, `message.mpim`,
+The app needs `users:read` (bot), `groups:read` and `groups:write` (user), `mpim:write`, `mpim:read` and `mpim:history` (bot, only with group_dm), the `message.groups`, `message.mpim`,
 `team_join` and `user_change` events, and @swb in the relay channel to see the replies.
 
 ## Tools

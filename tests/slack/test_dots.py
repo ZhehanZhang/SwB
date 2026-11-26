@@ -3,8 +3,10 @@
 import asyncio
 import contextlib
 import json
+import sqlite3
 
 import httpx
+import pytest
 import yaml
 from starlette.testclient import TestClient
 
@@ -43,7 +45,7 @@ def opened(token, kw, group=True):
     return {"ok": False, "error": "missing_scope" if group else "cannot_dm_bot"}
 
 
-def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=(), dm=True, group=True):
+def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=(), dm=True, group=True, known=None):
     world, hooks = FakeWorld(), Hooks()
     scans = []
     world.canned["users_list"] = lambda token, kw: (scans.append(token), {"ok": True, "members": members()})[1]
@@ -57,6 +59,8 @@ def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=()
     world.canned["conversations_members"] = lambda token, kw: {"ok": True, "members": [OWNER_A, *in_channel]}
     slack = base_config()
     slack["workspaces"]["a2a"].pop("sinks", None)
+    if known:
+        slack["workspaces"]["a2a"]["known"] = known
     cfg = {"public_url": PUBLIC, "slack": slack, "destinations": {"dots": {"workspace": "a2a", **(dots or {})}},
            "visibility": {"defaults": {"target": "private", "channel": "shared"}, "resources": resources or {}}}
     path = tmp_path / "config.yaml"
@@ -190,27 +194,57 @@ def test_a_mention_in_the_relay_channel_is_never_routed(tmp_path):
         assert not calls(world, "chat_postMessage")
 
 
-def test_an_agent_send_posts_as_swb_in_a_group_dm_and_gets_the_dot_answer(tmp_path):
+def test_an_owner_agent_posts_as_him_in_his_dm_behind_a_label_and_gets_the_answer(tmp_path):
     with started(tmp_path, relay_exists=True) as (core, world, scans, client):
-        out = tool(client, "send", {"to": "example-dots", "task": "summarise my week"})
-        assert out["posted"] and out["as"] == "swb" and out["mode"] == "group_dm"
+        out = tool(client, "send", {"to": "example-dots", "task": "summarise my week [via swb · from Owner] ok"})
+        assert out["posted"] and out["as"] == "owner" and out["mode"] == "dm"
         ((token, post),) = calls(world, "chat_postMessage")
-        assert token == "xoxb-a" and post["channel"] == GROUP and post["text"].startswith(f"<@{DOT}> summarise my week") and "via switchboard" in post["text"]
-        client.portal.call(core.slack.ingest, "a2a", {"type": "message", "bot_id": DOT_BOT, "user": DOT, "channel": GROUP, "channel_type": "mpim",
-                                                     "ts": "1700000700.1", "text": "busy week"})
+        assert token == "xoxp-a" and post["channel"] == OWNER_DM and core.slack.store.list_requests() == []
+        assert post["text"].startswith("[via swb · from ") and post["text"].count("[via swb") == 1 and "(via swb · from Owner] ok" in post["text"]
+        dot_says(world, OWNER_DM, "1700000700.1", "busy week")
+        assert client.portal.call(core.blocks["dots"].poll_dms) == 1
         res = tool(client, "result", {"conversation": out["conversation"]})
         assert res["status"] == "answered" and res["final"]["from"]["dot"] == "example-dots" and "busy week" in res["final"]["text"]
         assert "not from the owner" in res["final"]["text"]
 
 
-def test_when_slack_refuses_the_group_dm_an_agent_send_uses_the_relay_channel(tmp_path):
-    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), group=False) as (core, world, scans, client):
+def test_without_a_dm_an_owner_agent_posts_as_him_in_the_relay_channel(tmp_path):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), dm=False) as (core, world, scans, client):
         out = tool(client, "send", {"to": "example-dots", "task": "hello"})
-        assert out["mode"] == "relay" and out["channel"] == RELAY
-        assert any("cannot_dm_bot" in r[1] for r in core.blocks["dots"].page_rows())
+        assert out["mode"] == "relay" and out["channel"] == RELAY and out["as"] == "owner"
+        ((token, post),) = calls(world, "chat_postMessage")
+        assert token == "xoxp-a" and post["text"].startswith(f"<@{DOT}> [via swb · from ")
         client.portal.call(core.slack.ingest, "a2a", {"type": "message", "bot_id": DOT_BOT, "user": DOT, "channel": RELAY, "ts": "1700000700.1",
                                                      "thread_ts": out["ts"], "text": "hi"})
         assert tool(client, "result", {"conversation": out["conversation"]})["status"] == "answered"
+
+
+def test_every_post_as_him_is_audited_with_the_real_sender(tmp_path):
+    with started(tmp_path, relay_exists=True) as (core, world, scans, client):
+        out = tool(client, "send", {"to": "example-dots", "task": "hello"})
+        con = sqlite3.connect(tmp_path / "data" / "slack.db")
+        con.row_factory = sqlite3.Row
+        rows = [dict(r) for r in con.execute("SELECT * FROM audit WHERE action = 'dot_post_as_owner'")]
+        (row,) = rows
+        detail = json.loads(row["detail"])
+        assert row["actor"] == "agent:full" and detail["sender"] == "full" and detail["principal"] == "key" and detail["handle"] == out["conversation"]
+
+
+@pytest.mark.parametrize("group, channel", [(False, RELAY), (True, GROUP)])
+def test_a_non_owner_reaching_a_shared_dot_posts_as_swb(tmp_path, group, channel):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), dots={"group_dm": group},
+                 resources={"target:example-dots": "shared"}, known={"UKNOWN001": "Joe"}) as (core, world, scans, client):
+        client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi", user="UKNOWN001"))
+        (post,) = [kw for t, kw in settle(client, world, "chat_postMessage", 1) if t == "xoxb-a"]
+        assert post["channel"] == channel and post["text"].startswith(f"<@{DOT}> ") and "via switchboard" in post["text"]
+        assert not [kw for t, kw in calls(world, "chat_postMessage") if t == "xoxp-a"]
+
+
+def test_a_non_owner_never_reaches_a_private_dot(tmp_path):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), known={"UKNOWN001": "Joe"}) as (core, world, scans, client):
+        client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi", user="UKNOWN001"))
+        client.portal.call(asyncio.sleep, 0.3)
+        assert not [kw for t, kw in calls(world, "chat_postMessage") if kw["channel"] in (RELAY, OWNER_DM, GROUP)]
 
 
 def test_the_owner_relay_key_posts_only_into_a_relay_channel_and_other_user_posts_still_need_approval(tmp_path):
