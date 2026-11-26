@@ -1,12 +1,17 @@
 (() => {
   const key = "swb-theme"
+  const root = document.documentElement
   const system = window.matchMedia("(prefers-color-scheme: dark)")
   const read = () => {
     try { return localStorage.getItem(key) } catch { return null }
   }
   const mode = value => value === "light" || value === "dark" ? value : "system"
   let preference = mode(read())
-  const apply = () => document.documentElement.classList.toggle("dark", preference === "dark" || (preference === "system" && system.matches))
+  const apply = () => {
+    const dark = preference === "dark" || (preference === "system" && system.matches)
+    root.classList.toggle("dark", dark)
+    root.style.colorScheme = dark ? "dark" : "light"
+  }
   const update = value => {
     preference = mode(value)
     apply()

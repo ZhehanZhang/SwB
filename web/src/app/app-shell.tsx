@@ -24,11 +24,11 @@ function HomeNav({ active }: { active: boolean }) {
   )
 }
 
-function SectionNav({ section }: { section: typeof sections[number] }) {
+function SectionNav({ section, selected = false }: { section: typeof sections[number]; selected?: boolean }) {
   const { name, to, icon: Icon } = section
   return (
     <NavLink to={to} className={({ isActive }) => cn(tabClass, "h-14 w-16 hover:bg-muted",
-      isActive && "bg-muted text-foreground")}>
+      (isActive || selected) && "bg-muted text-foreground")}>
       <Icon aria-hidden className="size-5" /> {name}
     </NavLink>
   )
@@ -80,7 +80,7 @@ export function AppShell() {
         <HomeNav active={home} />
         {primarySections.map(section => <SectionNav key={section.to} section={section} />)}
         <div className="flex-1" />
-        {utilitySections.map(section => <SectionNav key={section.to} section={section} />)}
+        {utilitySections.map(section => <SectionNav key={section.to} section={section} selected={isSection(pathname, "/about")} />)}
       </nav>
       <div className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
         <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">

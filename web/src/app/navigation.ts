@@ -9,11 +9,10 @@ export const primarySections = [
 ] as const
 
 export const utilitySections = [
-  { name: "About", to: "/about", icon: Info },
   { name: "Settings", to: "/settings", icon: Settings },
 ] as const
 
-export const sections = [...primarySections, ...utilitySections] as const
+export const sections = [...primarySections, ...utilitySections, { name: "About", to: "/about", icon: Info }] as const
 
 export function isSection(pathname: string, to: string) {
   return pathname === to || pathname.startsWith(`${to}/`)

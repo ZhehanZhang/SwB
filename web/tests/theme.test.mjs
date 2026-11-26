@@ -14,7 +14,7 @@ function boot({ prefersDark = false, values = new Map(), blocked = false } = {})
       return media
     },
   })
-  const document = { documentElement: { classList: {
+  const document = { documentElement: { style: {}, classList: {
     toggle(name, enabled) { if (enabled) rootClasses.add(name); else rootClasses.delete(name) },
   } } }
   const localStorage = {
@@ -25,6 +25,7 @@ function boot({ prefersDark = false, values = new Map(), blocked = false } = {})
   return {
     theme: window.swbTheme,
     dark: () => rootClasses.has("dark"),
+    scheme: () => document.documentElement.style.colorScheme,
     systemDark(matches) {
       media.matches = matches
       media.dispatchEvent(new Event("change"))
@@ -39,8 +40,10 @@ test("applies system preference on boot and follows OS changes", () => {
   const app = boot({ prefersDark: true })
   assert.equal(app.theme.get(), "system")
   assert.equal(app.dark(), true)
+  assert.equal(app.scheme(), "dark")
   app.systemDark(false)
   assert.equal(app.dark(), false)
+  assert.equal(app.scheme(), "light")
   app.systemDark(true)
   assert.equal(app.dark(), true)
 })
