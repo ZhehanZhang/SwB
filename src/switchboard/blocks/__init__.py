@@ -52,7 +52,6 @@ class Action:
     destructive: bool = False
     idempotent: bool = False
     capped: bool = False
-    burst: bool = False
     audited: bool | None = None
 
     @property
@@ -258,12 +257,6 @@ class Block:
         """Optional and off by default: a hard daily limit on capped actions."""
         cap = self.config.get("daily_cap")
         return int(cap) if cap is not None else None
-
-    @property
-    def burst_limit(self) -> tuple[int, float] | None:
-        """Runaway guard on burst actions: at most count calls per caller in window_s. null switches it off."""
-        raw = self.config.get("burst", {"count": 10, "window_s": 600})
-        return (int(raw.get("count", 10)), float(raw.get("window_s", 600))) if raw else None
 
     async def validate_route_target(self, target: dict[str, Any], defaults: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """Normalize a route's target and defaults (resolve names to ids), or raise BlockError."""

@@ -286,7 +286,7 @@ class CapyBlock(Block):
 
     def actions(self) -> list[Action]:
         return [
-            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True, burst=True),
+            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True),
             Action("status", "Capy thread status", "Status and latest messages of a Capy thread.", self.thread_status, read_only=True),
             Action("list", "List Capy work", "Delegations, a Captain's crew, or a project's threads.", self.list_work, read_only=True),
             Action("reply", "Reply to a Capy thread", "Send a follow-up into a thread.", self.reply),

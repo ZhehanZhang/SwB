@@ -46,10 +46,6 @@ class SlackActions(Block):
         return {"workspaces": st["workspaces"], "agents": st["agents"], "pending_approvals": st["pending_approvals"],
                 "sinks": {label: [s.get("name") for s in sinks] for label, sinks in st["sinks"].items()}}
 
-    @property
-    def burst_limit(self) -> tuple[int, float] | None:
-        return None
-
     def need(self) -> "SlackEngine":
         if self.engine is None:
             raise DestinationError("Slack is not configured on this server (no slack section)")
