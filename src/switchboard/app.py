@@ -261,6 +261,40 @@ def create_app(core: "Switchboard") -> Any:
                           target=out["name"], excerpt=f"{out['routine_id']} for {out['project'] or 'general'}")
         return RedirectResponse("/", status_code=303)
 
+    async def routine_claim(request: Request) -> Response:
+        """The owner's half of a self-registration: the one-time link a Claude session got from routine_register, behind
+        Access. GET shows what will be registered; POST takes the token (never shown again) and saves the routine."""
+        from .blocks import BlockError
+        from .core import CoreError
+        from .projects import ProjectError
+
+        block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
+        if block is None:
+            return pages.message_page("Not available", "The claude-routine block isn't configured (blocks.claude-routine).", 400)
+        code = request.path_params["code"]
+        if request.method == "GET":
+            if not core.cfg.access_team_domain:
+                return pages.message_page("Not available", "This needs Cloudflare Access in front of switchboard (auth.cloudflare_access).", 403)
+            email = await core.auth.owner(request)
+            if email is None:
+                return pages.message_page("Not allowed", "This page needs the owner's sign-in through Cloudflare Access.", 403)
+            try:
+                return pages.claim_page(block.claim(code), code, csrf(email))
+            except BlockError as e:
+                return pages.message_page("Link not usable", str(e), 410)
+        email, form, refused = await owner_form(request)
+        if refused is not None:
+            return refused
+        try:
+            out = block.complete(code, str(form.get("token") or ""), actor=f"admin:{email}")
+        except (BlockError, CoreError, ProjectError) as e:
+            return pages.message_page("Not saved", str(e), 400)
+        core.audit.record(origin="http", source=f"admin:{email}", client=client_ip(request.scope), destination=block.name, action="routine_claim", outcome="ok",
+                          target=out["name"], excerpt=f"{out['routine_id']} for {out['project']}" + (" (new project)" if out["created_project"] else ""))
+        return pages.message_page("Routine saved", f"{out['name']} ({out['routine_id']}) now answers for switchboard project {out['project']}"
+                                  + (", which was just created" if out["created_project"] else "") + ". You can close this tab; the Claude session "
+                                  "sees it in routine_list.", 200)
+
     async def routine_remove(request: Request) -> Response:
         from .blocks import BlockError
 
@@ -374,6 +408,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/visibility", visibility_set, methods=["POST"]),
             Route("/routines", routine_add, methods=["POST"]),
             Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
+            Route("/routines/claim/{code}", routine_claim, methods=["GET", "POST"]),
             *pages.routes(),
             *core.auth.routes(),
             *origin_routes,
