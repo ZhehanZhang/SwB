@@ -928,7 +928,7 @@ that support MCP Events can subscribe to their own mailbox in the same way.
 
 - **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → `https://swb.example.com/mcp`,
   sign in with SSO, approve.
-- **ChatGPT**: Settings → Apps → Advanced settings → Developer mode, then Create app → `https://swb.example.com/mcp`, OAuth.
+- **ChatGPT**: open https://chatgpt.com/plugins in a web browser, then + → Add custom MCP server → `https://swb.example.com/mcp`, OAuth. The desktop apps and the interactive plugin editor can't add a custom MCP server.
 - **Claude Code**: `claude mcp add --transport http switchboard https://swb.example.com/mcp`, plus the channel above if wanted.
 - **Any other agent** (Codex, Gemini CLI, a script): a pairing code, as above.
 - **Capy**: an MCP server with URL `https://swb.example.com/mcp` and OAuth with the Automatic client. Capy registers
