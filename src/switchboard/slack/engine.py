@@ -66,6 +66,8 @@ class SlackEngine:
         self.senders.limits = {}
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
+        self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[None]]] = {}
+        self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
         self.visibility = Visibility(dict(config.visibility))
         self.targets: dict[str, Target] = {}
         self.dynamic_personas: dict[str, Persona] = {}
@@ -204,7 +206,12 @@ class SlackEngine:
                 if payload.get("team_id") and payload["team_id"] != rt.team_id:
                     log.warning("workspace %s: dropping event for team %s", label, payload["team_id"])
                     return
-                await self.ingest(label, payload.get("event") or {})
+                event = payload.get("event") or {}
+                if event.get("type") in ("user_change", "team_join"):
+                    for listener in self.directory_listeners:
+                        await listener(label, event)
+                    return
+                await self.ingest(label, event)
             elif req_type == "interactive" and payload.get("type") == "block_actions":
                 await self.handle_block_actions(label, payload)
         except Exception:
@@ -215,6 +222,10 @@ class SlackEngine:
         rt = self.runtime(label)
         channel, ts = event.get("channel"), event.get("ts")
         if not channel or not ts:
+            return None
+        relay = self.relays.get((label, channel))
+        if relay is not None:
+            await relay(rt, event)
             return None
         kind = classify(event, rt.classify_context())
         if kind is None:

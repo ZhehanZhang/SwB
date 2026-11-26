@@ -14,6 +14,9 @@ if TYPE_CHECKING:
 log = logging.getLogger("switchboard.slack.writes")
 
 DECIDER_KINDS = ("slack", "admin")
+OWNER_RELAY = "relay:owner"
+"""The one key that posts as the owner without approval: only the dots relay holds it, only for the owner's own verified
+sends, and only into a registered relay channel. Every other user-identity post keeps its write policy."""
 
 
 class WriteError(RuntimeError):
@@ -52,6 +55,10 @@ class WriteGate:
         if ws is None or identity not in key.identities_for(workspace):
             raise WriteError(f"agent {key.id!r} may not use {identity} in {workspace!r}")
         policy = ws.identities[identity].write
+        if key.id == OWNER_RELAY:
+            if not (identity == "user" and action == "post_message" and (workspace, params.get("channel")) in self.core.relays):
+                raise WriteError("the owner relay key posts only as the owner, into a relay channel")
+            policy = "free"
         if policy == "never":
             store.audit(f"agent:{key.id}", "write_refused", workspace, identity, action=action, params=params, reason="policy never")
             raise WriteError(f"writes as {identity} in {workspace} are disabled (policy: never)")

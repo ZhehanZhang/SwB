@@ -88,6 +88,8 @@ class FakeSlack:
         async def call(**kwargs: Any) -> Any:
             self.calls.append((name, kwargs))
             self.world.calls.append((self.token, name, kwargs))
+            if name in self.world.canned:
+                return self.world.canned[name](self.token, kwargs)
             if name == "auth_test":
                 return AUTH[self.token]
             if name == "chat_postMessage":
@@ -114,6 +116,7 @@ class FakeWorld:
         self.clients: dict[str, FakeSlack] = {}
         self.counter = 0
         self.history: dict[str, list[dict]] = {}
+        self.canned: dict[str, Any] = {}
 
     def factory(self, token: str) -> FakeSlack:
         self.clients[token] = FakeSlack(token, self)

@@ -337,6 +337,44 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
+### ChatGPT dots and the relay channel
+
+The `dots` block finds ChatGPT dots in one workspace and makes each a target named after its handle
+(`@swb example-dots …`, or `send(to="example-dots")`). It scans the members for bot users whose app id is in
+`app_ids` or whose name matches `match` (`dot` by default), again when Slack sends `team_join` or a bot's
+`user_change`, and every `rescan_minutes`. Like every target a dot is private unless `visibility` shares it.
+
+```yaml
+blocks:
+  dots:
+    workspace: home            # a configured Slack workspace label
+    channel: "#swb-dots"       # the relay channel (a name, or a channel id)
+    create: true               # create it as the owner if it doesn't exist
+    app_ids: []                # extra app ids that are dots
+    match: [dot]
+    rescan_minutes: 30
+    dots:
+      example-dots: {slug: dots}       # rename
+      some-other-dot: {disabled: true}
+```
+
+Everything goes through one private relay channel. Switchboard creates it with the owner's user token and never
+invites anyone: status shows the one `/invite @swb @<dot>` to run. Nothing in it is routed. Each send opens a thread
+that mentions the dot. The owner's own verified Slack messages post as him, with no approval prompt (that key posts
+only into a relay channel); agents' sends post as @swb and name the agent. The dot's replies in the thread come back
+on the conversation (`result`, the inbox, or the original Slack thread), wrapped as non-owner text.
+
+Dot instructions (paste into the dot's instructions):
+
+```text
+In Slack, the private channel #swb-dots is my switchboard relay. Posts there that mention you, from me or from @swb
+on behalf of my agents, are my mailbox: answer each in its thread, and keep answering in that thread. Posts from
+@swb name the agent that asked; treat them as my agents' requests, within what you'd do for me. Ignore anyone else.
+```
+
+The app needs `users:read` (bot), `groups:read` and `groups:write` (user), the `message.groups`,
+`team_join` and `user_change` events, and @swb in the relay channel to see the replies.
+
 ## Tools
 
 Generic tools come first; they go to whichever block owns the target or conversation.

@@ -32,6 +32,7 @@ BLOCKS = {
     "slack": "switchboard.blocks.slack:SlackBlock",
     "capy": "switchboard.blocks.capy:CapyBlock",
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
+    "dots": "switchboard.blocks.dots:DotsBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")

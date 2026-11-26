@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import logging
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
@@ -26,6 +27,9 @@ from .. import Block
 from ...auth import Principal
 from ...slack.config import Grant, Persona
 from ...slack.routing import Target
+
+SLACK_SENDER: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("slack_sender", default=None)
+"""The verified Slack sender (from Slack ids, never text) of the message being delegated, for blocks that act on it."""
 
 if TYPE_CHECKING:
     from ...core import Switchboard
@@ -183,12 +187,16 @@ class SlackIntake(Block):
             kw["project"] = target.id
         else:
             kw["to"] = target.address or f"{target.kind}:{target.id}"
+        token = SLACK_SENDER.set({"workspace": push["workspace"], "user": push["user"], "user_name": push["user_name"], "trust": push.get("trust", "external"),
+                                  "text": push["text"]})
         try:
             out = await self.core.send(self.principal, **kw)
         except Exception as exc:
             log.warning("slack %s: delegating %s to %s failed: %s", push["workspace"], push["id"], target.slug, exc)
             engine.store.audit(f"agent:{AGENT}", "route_failed", push["workspace"], message=push["id"], target=target.slug, error=str(exc)[:300])
             return
+        finally:
+            SLACK_SENDER.reset(token)
         engine.store.add_relay(out["handle"], push["workspace"], push["channel"], push["thread_ts"] or push["ts"], target.slug)
         engine.store.audit(f"agent:{AGENT}", "routed", push["workspace"], message=push["id"], target=target.slug, handle=out["handle"])
 
@@ -221,9 +229,9 @@ class SlackIntake(Block):
             engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], target=r["target"], reason="private target, shared channel, no owner DM")
             return
         channel, thread_ts, to_dm = place
-        text = item["text"]
+        text = data.get("raw_text") or item["text"]
         if to_dm:
-            text = f"Reply from {target.name if target else r['target']} to your message in a shared channel:\n\n{item['text']}"
+            text = f"Reply from {target.name if target else r['target']} to your message in a shared channel:\n\n{text}"
         persona = target.persona if target and target.persona else (replier if replier in engine.personas() else None)
         key = Grant(id=AGENT, persona=persona, allow_persona_override=False, allowed_personas=None, scopes={r["workspace"]: ("bot",)})
         await engine.gate.submit(key, r["workspace"], "bot", "post_message", {"channel": channel, "text": text[: engine.config.max_text_chars], "thread_ts": thread_ts})
