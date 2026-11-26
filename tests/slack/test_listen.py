@@ -10,7 +10,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from conftest import call, error_text, payload
-from slackfix import BOT_ID, BOT_USER, ENV, KEY_FULL, OWNER_A, TEAM_A, FakeWorld
+from slackfix import BOT_ID, BOT_USER, ENV, KEY_FULL, OWNER_A, TEAM_A, FakeWorld, Hooks
 from switchboard.app import create_app
 from switchboard.core import CoreError, Switchboard
 from switchboard.slack.config import ConfigError, parse_config
@@ -25,7 +25,7 @@ EXTERNAL = "USTRANGER"
 @pytest.fixture
 def opened(tmp_path):
     @contextmanager
-    def build(*, channels=None, mapped="docs", shared="shared", turn_cap=200, rate=5, write="free", intake="socket"):
+    def build(*, channels=None, mapped="docs", shared="shared", turn_cap=200, rate=5, write="free", intake="socket", hooks=None):
         world, fires = FakeWorld(), []
         ws = {"team_id": TEAM_A, "app_token_env": "A_APP", "identities": {"bot": {"token_env": "A_BOT", "write": write}},
               "sender_rate": {"count": rate}, "known": {"BKNOWN001": "Build bot"}, "ack_reaction": "eyes", "intake": intake}
@@ -34,6 +34,13 @@ def opened(tmp_path):
                  "listen_channels": {"team": [f"#{NAME}"] if channels is None else channels},
                  "approvals": {"notify_workspace": "team", "approver_user_id": OWNER_A},
                  "personas": {"claude": {"name": "Routine"}, "doorman": {"name": "Doc doorman"}}}
+        slack_options = {"client_factory": world.factory, "own_post_grace": 0, "connect": False}
+        if hooks is not None:
+            ws.update(watched=[CHANNEL], default_target="claude",
+                      sinks=[{"name": "feed", "url_env": "SINK_A", "channels": [f"#{NAME}"],
+                              "kinds": ["watched", "mention"], "targets": ["claude"]}])
+            slack["agents"] = {"claude": {"workspaces": {"team": ["bot"]}}}
+            slack_options["http"] = httpx.AsyncClient(transport=httpx.MockTransport(hooks.handler))
         routines = {name: {"routine_id": f"trig_{name.replace('-', '')}", "project": project, "token_env": "ROUTINE_TOKEN", "primary": primary}
                     for name, project, primary in [("claude", None, False), ("docs-backup", "docs", False),
                                                    ("docs-main", "docs", True), ("workspace", "workspace", True)]}
@@ -47,7 +54,7 @@ def opened(tmp_path):
             return httpx.Response(200, json={"claude_code_session_id": "session_example"})
 
         core = Switchboard(path, tmp_path / "data", env={**ENV, "SWITCHBOARD_KEY_CLAUDE": KEY_FULL, "ROUTINE_TOKEN": "example-token"},
-                           slack_options={"client_factory": world.factory, "own_post_grace": 0, "connect": False},
+                           slack_options=slack_options,
                            block_options={"claude-routine": {"transport": httpx.MockTransport(fire)}})
         for project in ("docs", "workspace", "no-routine"):
             core.projects.create(slug=project, name=project.title())
@@ -148,6 +155,39 @@ def test_listen_rate_limits_addressed_messages_without_ack_or_context(opened):
         assert any(row["action"] == "listen_rate_limited" for row in core.slack.store.recent_audit())
         assert len(payload(call(client, KEY_FULL, "inbox", {"since_cursor": 0}))["items"]) == 2
         assert not {"chat_postEphemeral", "reactions_add", "chat_postMessage"}.intersection(world.names())
+
+
+@pytest.mark.parametrize(("event", "kind"), [("message", "watched"), ("app_mention", "mention")])
+def test_listen_preserves_sink_and_granted_inbox_without_double_waking(opened, event, kind):
+    hooks = Hooks()
+    text = "Can we fix this?"
+    original = f"<@{BOT_USER}> claude {text}" if event == "app_mention" else text
+    with opened(hooks=hooks) as (core, client, world, fires):
+        ingest(core, client, type=event, text=original)
+        ingest(core, client, type=event, text=original)
+        for _ in range(100):
+            if hooks.requests:
+                break
+            client.portal.call(asyncio.sleep, 0.01)
+        (delivered,) = hooks.bodies("/a")
+        assert delivered["kind"] == kind and delivered["target"] == "claude"
+        assert f"<<<swb-untrusted\n{text}\nswb-untrusted>>>" in delivered["text"]
+        assert "_skip_delegate" not in delivered
+        (fire,) = fires
+        assert fire[0].endswith("/trig_docsmain/fire")
+        assert len(core.slack.store.recent_events(["team"])) == 1
+        items = payload(call(client, KEY_FULL, "inbox", {"since_cursor": 0}))["items"]
+        assert sorted(i["kind"] for i in items) == ["message", "slack_event"]
+        (item,) = [i for i in items if i["kind"] == "slack_event"]
+        assert item["target"] == "claude" and item["text"] == delivered["text"]
+        assert "chat_postEphemeral" not in world.names()
+
+
+def test_listen_still_skips_the_ordinary_delegate_without_a_sink(opened):
+    with opened() as (core, client, _, fires):
+        ingest(core, client, type="app_mention", text=f"<@{BOT_USER}> claude hello")
+        (fire,) = fires
+        assert fire[0].endswith("/trig_docsmain/fire")
 
 
 def test_owner_in_listening_channel_unchanged(opened):

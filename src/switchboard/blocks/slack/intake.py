@@ -164,7 +164,8 @@ class SlackIntake(Block):
             agents.add(target.id)
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, push["workspace"]), "slack_event", item)
-        if target is not None and target.kind != "agent" and push["addressed_to_us"] and not engine.sink_accepts(push["workspace"], push):
+        if (not push.get("_skip_delegate") and target is not None and target.kind != "agent" and push["addressed_to_us"]
+                and not engine.sink_accepts(push["workspace"], push)):
             await self.delegate(push, target)
 
     async def deliver_context(self, push: dict[str, Any]) -> None:
@@ -191,7 +192,7 @@ class SlackIntake(Block):
         channels = self.channel_projects.get(push["workspace"], {})
         return channels.get(push["channel"], channels.get(push.get("channel_name"), self.projects.get(push["workspace"])))
 
-    async def listen(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> bool:
+    async def listen(self, rt: WorkspaceRuntime, push: dict[str, Any], original: dict[str, Any]) -> bool:
         engine = self.engine
         assert engine is not None
         actor = f"slack:{push['user'] or 'unknown'}"
@@ -205,6 +206,12 @@ class SlackIntake(Block):
         if not engine.channel_shared(rt.label, push["channel"]) or not engine.visibility.allows(engine.who(rt, push), *channel_resources):
             engine.store.audit(actor, "listen_ignored", rt.label, reason="channel is not shared with sender", **details)
             return False
+        engine.route(rt, original)
+        engine.stamp(rt, original)
+        if not engine.store.add_event(original):
+            return True
+        if engine.reaches(rt, original):
+            await engine.fan_out(rt.label, original, skip_delegate=True)
         if push["is_bot"] and push["trust"] != "known":
             return True
         address = next((addr for b in self.core.blocks.values() if b.wakes_agents and (addr := b.wake_target("claude", project))), None)
@@ -214,7 +221,7 @@ class SlackIntake(Block):
         target = next((t for t in engine.targets.values() if t.address == str(address)), None)
         target = target or Target(address.id, address.kind, address.id, address.id, address=str(address), project=project)
         push.update(target=target.slug, target_kind=target.kind)
-        if engine.store.add_event(push) and engine.sender_allowed(rt, push, "listen"):
+        if engine.sender_allowed(rt, push, "listen"):
             await self.delegate(push, target, listen_project=project)
         return True
 
