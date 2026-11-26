@@ -416,7 +416,8 @@ class Switchboard:
         except BaseException:
             if handle is not None:
                 self.store.x("UPDATE handles SET meta = json_remove(meta, '$.forwarded_to') "
-                             "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ?", (forward, handle))
+                             "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ? "
+                             "AND NOT EXISTS (SELECT 1 FROM inbox WHERE handle = ?)", (forward, handle, handle))
             raise
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
