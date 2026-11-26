@@ -87,6 +87,15 @@ def test_new_cimd_allows_only_the_native_document_by_default(make, cimd):
     assert page.status_code == 400 and cimd.fetches == 0
 
 
+def test_codex_cimd_pattern_follows_operator_agent_configuration(make, cimd):
+    _, client = make(base_config(agents={"chatgpt": {}, "review-agent": {"preset": "codex"}}))
+    url = "https://chatgpt.com/oauth/codex/test-client/client.json"
+    redirect = "http://127.0.0.1/callback"
+    cimd.docs[url] = {"client_id": url, "client_name": "Codex", "redirect_uris": [redirect]}
+    token = sign_in(client, redirect="http://127.0.0.1:3456/callback", client_id=url)
+    assert payload(call(client, token["access_token"], "switchboard_status"))["you"]["agent"] == "review-agent"
+
+
 def test_approving_needs_the_owners_access_jwt_on_the_post_too(make):
     _, c = make()
     cid = register(c)["client_id"]

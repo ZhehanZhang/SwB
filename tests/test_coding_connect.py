@@ -78,6 +78,25 @@ def test_coding_agent_bearer_configuration_without_oauth(make, agent):
     assert paired["key"] not in json.dumps(again)
 
 
+def test_coding_agent_with_existing_key_explains_replacement_without_a_snippet(make):
+    core, client = make(base_config(auth={}))
+    core.projects.create(slug="sample", name="Sample")
+    other = core.connections.mint(agent="other", project="sample", client=None, by="owner")
+    core.connections.redeem(other["code"])
+    first = connect(client, "other")
+    code = re.search(r'"code":"([A-Z0-9-]+)"', first["next"][0]["do"])[1]
+    paired = client.post("/connect", json={"code": code}).json()
+    out = connect(client, "other")
+    assert "This agent already has a pairing key" in out["done"]
+    assert out["next"] == [{"by": "person", "do": (
+        f'To set up another machine or replace it, revoke it with connect_revoke(key_id="{paired["key_id"]}"), then call connect again.'
+    )}]
+    assert paired["key"] not in json.dumps(out)
+    assert len(core.store.q("SELECT 1 FROM connect_codes")) == 2
+    assert payload(call(client, STATIC_KEY, "connect_revoke", {"key_id": paired["key_id"]})) == {"revoked": 1}
+    assert any("snippet" in step for step in connect(client, "other")["next"])
+
+
 @pytest.mark.parametrize("agent", ["other", "claude-code"])
 def test_limited_coding_agent_has_person_steps_only(make, monkeypatch, agent):
     core, client = make(base_config(auth={}))
