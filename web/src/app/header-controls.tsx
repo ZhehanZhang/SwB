@@ -4,6 +4,7 @@ import { Command } from "cmdk"
 import { FolderKanban, Search } from "lucide-react"
 import { Dialog } from "radix-ui"
 import { useNavigate } from "react-router-dom"
+import { PRODUCT_NAME } from "@/app/brand"
 import { sections } from "@/app/navigation"
 import { DataState } from "@/components/data-state"
 import { SwbIcon } from "@/components/swb-icon"
@@ -69,8 +70,8 @@ export function CommandMenu() {
             </div>
             <Command.List className="max-h-[min(24rem,55dvh)] overflow-y-auto p-2">
               <Command.Empty className="px-2"><DataState kind="empty" message="No matches." /></Command.Empty>
-              <Command.Item value="SwitchBoard Overview Home" onSelect={() => jump("/")} className={itemClass}>
-                <SwbIcon className="size-5" /> SwitchBoard
+              <Command.Item value={`${PRODUCT_NAME} Overview Home`} onSelect={() => jump("/")} className={itemClass}>
+                <SwbIcon className="size-5" /> {PRODUCT_NAME}
               </Command.Item>
               {sections.map(({ name, to, icon: Icon }) => (
                 <Command.Item key={to} value={name} onSelect={() => jump(to)} className={itemClass}>
