@@ -110,7 +110,8 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
   return [
     ...routines.map((row): Agent => ({
       id: `routine:${row.block}:${row.name}`, reference: row.name, block: row.block, type: "routine", name: row.name, kind: "routine",
-      logo: row.agent, projects: row.project ? [row.project] : [], registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
+      logo: row.agent === "grok" ? "grok-routine" : row.agent, projects: row.project ? [row.project] : [],
+      registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
       last_seen: row.last_seen_at ?? null, state: row.status.startsWith("tested") ? "on" : row.status === "untested" ? "off" : "fault",
     })),
     ...(["captain", "dot"] as const).flatMap((kind) => (kind === "captain" ? captains : dots).map((row): Agent => ({

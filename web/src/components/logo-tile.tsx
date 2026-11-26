@@ -4,17 +4,19 @@ import claude from "@/assets/claude.svg"
 import discord from "@/assets/discord.svg"
 import gemini from "@/assets/gemini.svg"
 import github from "@/assets/github.svg"
+import grokRoutine from "@/assets/grok-routine.svg"
 import openai from "@/assets/openai.svg"
 import telegram from "@/assets/telegram.svg"
 import xai from "@/assets/xai.svg"
 import { cn } from "@/lib/utils"
 
 const images: Record<string, string> = {
-  anthropic, chatgpt: openai, "claude-code": claude, claude, codex: openai, discord, gemini, github, grok: xai, telegram, xai,
+  anthropic, chatgpt: openai, "claude-code": claude, claude, codex: openai, discord, gemini, github, "grok-routine": grokRoutine,
+  grok: xai, telegram, xai,
 }
 const darkTiles = new Set(["claude-code", "codex"])
 const aliases = [
-  ["claude-code", "claude-code"], ["claude", "claude"], ["grok", "grok"], ["xai", "xai"],
+  ["claude-code", "claude-code"], ["claude", "claude"], ["grok-routine", "grok-routine"], ["grok", "grok"], ["xai", "xai"],
   ["openai", "chatgpt"], ["chatgpt", "chatgpt"], ["dot", "chatgpt"], ["capy", "capy"], ["captain", "capy"],
   ["github", "github"], ["slack", "slack"], ["discord", "discord"], ["telegram", "telegram"],
   ["gemini", "gemini"], ["codex", "codex"], ["anthropic", "anthropic"], ["mcp", "mcp"],
@@ -27,8 +29,9 @@ export function LogoTile({ kind, className }: { kind: string; className?: string
   return (
     <span aria-hidden className={cn("inline-grid size-6 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-surface text-foreground",
       mark && darkTiles.has(mark) && "border-foreground bg-foreground",
-      mark === "capy" && "border-[#73563e] bg-[#73563e] text-white", className)}>
-      {image ? <img alt="" src={image} className={cn("size-4 object-contain", mark === "codex" && "invert")} />
+      mark === "capy" && "border-[#73563e] bg-[#73563e] text-white",
+      mark === "grok-routine" && "border-0", className)}>
+      {image ? <img alt="" src={image} className={cn(mark === "grok-routine" ? "size-full" : "size-4", "object-contain", mark === "codex" && "invert")} />
         : mark === "capy" ? <span className="text-[16px] leading-none font-bold">C</span>
         : mark === "slack" ? (
           <svg className="size-[17px]" viewBox="0 0 24 24" fill="#4a154b">

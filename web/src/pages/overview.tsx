@@ -41,7 +41,7 @@ function Fan({ count, side, compact = false }: { count: number; side: "left" | "
               d={`M ${start},${y} h ${side === "left" ? 0.01 : -0.01}`}
               fill="none"
               strokeLinecap="round"
-              strokeWidth={compact ? "6" : "8"}
+              strokeWidth="8"
               vectorEffect="non-scaling-stroke"
             />
           </g>
@@ -55,7 +55,7 @@ function ProjectSummary({ project }: { project: Project }) {
   return (
     <Link
       to={`/projects/${encodeURIComponent(project.slug)}`}
-      className="group flex min-h-[170px] min-w-0 flex-col self-center rounded-lg bg-muted px-4 py-3.5 hover:bg-border"
+      className="group flex min-h-[170px] min-w-0 flex-col self-center rounded-[10px] bg-surface-sunken px-4 py-3.5 hover:bg-border"
     >
       <div className="mb-3.5 flex items-center justify-between gap-2">
         <div className="min-w-0">
