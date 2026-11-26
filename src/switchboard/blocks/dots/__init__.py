@@ -23,6 +23,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from .. import Action, Block, BlockError, Call, Manifest, TargetKind
+from ...audit import iso
 
 if TYPE_CHECKING:
     from ...core import Switchboard
@@ -291,6 +292,7 @@ class DotsBlock(Block):
         dots = self.dots()
         default = self.default_dot(dots)
         return [{"kind": "dot", "id": d["id"], "name": d["label"],
+                 "source": "config" if self.delivery != "slack" else "discovered", "last_seen_at": iso(d.get("seen_at")),
                  "persona": {"id": f"dot-{d['slug']}", "name": d["label"], "icon_url": self.images.get(d["id"])},
                  "slugs": [d["slug"], *([DEFAULT_ALIAS] if default is d and d["slug"] != DEFAULT_ALIAS else [])]} for d in dots]
 

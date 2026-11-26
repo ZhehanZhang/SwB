@@ -48,7 +48,8 @@ class Inbox:
             return None
         return {**dict(r), "meta": json.loads(r["meta"]), "state": json.loads(r["state"]), "open": bool(r["open"])}
 
-    def handles(self, *, owner: str | None = None, destination: str | None = None, open_only: bool = False, project: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    def handles(self, *, owner: str | None = None, destination: str | None = None, open_only: bool = False, project: str | None = None,
+                limit: int = 50, roots_only: bool = False) -> list[dict[str, Any]]:
         where, args = [], []
         for col, val in (("owner", owner), ("destination", destination), ("project", project)):
             if val:
@@ -56,8 +57,53 @@ class Inbox:
                 args.append(val)
         if open_only:
             where.append("open = 1")
-        sql = "SELECT handle FROM handles" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created_at DESC LIMIT ?"
+        if roots_only:
+            where.append("""NOT EXISTS (
+                SELECT 1 FROM handles p WHERE p.handle != h.handle
+                AND p.handle IN (json_extract(h.meta, '$.root'), json_extract(h.meta, '$.in_reply_to'), json_extract(h.meta, '$.forward_of'))
+            ) AND NOT EXISTS (
+                SELECT 1 FROM inbox i JOIN handles p ON p.handle = json_extract(i.data, '$.in_reply_to')
+                WHERE i.handle = h.handle AND p.handle != h.handle
+            )""")
+        sql = "SELECT handle FROM handles h" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created_at DESC LIMIT ?"
         return [self.handle(r["handle"]) for r in self.store.q(sql, [*args, limit])]
+
+    def thread_root(self, row: dict[str, Any]) -> dict[str, Any]:
+        seen = {row["handle"]}
+        while True:
+            meta = row["meta"]
+            parent = next((v for k in ("root", "in_reply_to", "forward_of") if isinstance(v := meta.get(k), str) and v not in seen), None)
+            if parent is None:
+                reply = self.store.one(
+                    "SELECT json_extract(data, '$.in_reply_to') AS parent FROM inbox WHERE handle = ? "
+                    "AND json_type(data, '$.in_reply_to') = 'text' ORDER BY id LIMIT 1", (row["handle"],),
+                )
+                parent = reply["parent"] if reply else None
+            if not parent or parent in seen or (previous := self.handle(parent)) is None:
+                return row
+            seen.add(parent)
+            row = previous
+
+    def first_endpoints(self, handles: list[str]) -> dict[str, tuple[Any, str | None]]:
+        if not handles:
+            return {}
+        rows = self.store.q(
+            """SELECT h.handle,
+                 (SELECT json_extract(i.data, '$."from"') FROM inbox i WHERE i.handle = h.handle
+                  AND json_type(i.data, '$."from"') = 'object' ORDER BY i.id LIMIT 1) AS sender,
+                 (SELECT json_extract(i.data, '$.target') FROM inbox i WHERE i.handle = h.handle
+                  AND json_type(i.data, '$.target') = 'text' ORDER BY i.id LIMIT 1) AS target
+               FROM handles h WHERE h.handle IN (""" + ",".join("?" for _ in handles) + ")",
+            handles,
+        )
+        return {r["handle"]: (json.loads(r["sender"]) if r["sender"] else None, r["target"]) for r in rows}
+
+    def project_for_ref(self, destination: str, ref: str) -> str | None:
+        direct = self.store.one("SELECT project FROM handles WHERE handle = ?", (ref,))
+        if direct is not None:
+            return direct["project"]
+        rows = self.store.q("SELECT DISTINCT project FROM handles WHERE destination = ? AND ref = ? LIMIT 2", (destination, ref))
+        return rows[0]["project"] if len(rows) == 1 else None
 
     def update_handle(self, handle: str, *, status: str | None = None, stream_cursor: str | None = None, state: dict[str, Any] | None = None, open: bool | None = None) -> None:
         sets, args = [], []
@@ -149,7 +195,8 @@ class Inbox:
         return {**self._item(row), "owner": row["owner"]} if row is not None else None
 
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
-             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
+             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None,
+             include_replies: bool = False) -> dict[str, Any]:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
 
         owner None reads every caller's items (the Claude Code channel does this). Each reader keeps its own cursor,
@@ -157,6 +204,7 @@ class Inbox:
         """
         reader = reader or owner or "*"
         start = self._cursor(reader, handle) if since is None else since
+        with_clause = ""
         where, args = ["id > ?"], [start]
         if owner:
             where.append("owner = ?")
@@ -165,15 +213,26 @@ class Inbox:
             where.append("id > COALESCE((SELECT c.cursor FROM inbox_cursors c WHERE c.owner = ? AND c.handle = inbox.handle), 0)")
             args.append(reader)
         if handle:
-            where.append("handle = ?")
-            args.append(handle)
+            if include_replies:
+                with_clause = """WITH RECURSIVE linked(handle) AS (
+                    VALUES (?)
+                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.root') = l.handle
+                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.in_reply_to') = l.handle
+                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.forward_of') = l.handle
+                    UNION SELECT i.handle FROM linked l JOIN inbox i ON json_extract(i.data, '$.in_reply_to') = l.handle
+                ) """
+                args.insert(0, handle)
+                where.append("handle IN (SELECT handle FROM linked)")
+            else:
+                where.append("handle = ?")
+                args.append(handle)
         if destination:
             where.append("destination = ?")
             args.append(destination)
         if project:
             where.append("handle IN (SELECT h.handle FROM handles h WHERE h.project = ?)")
             args.append(project)
-        rows = self.store.q(f"SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
+        rows = self.store.q(f"{with_clause}SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
         cursor = rows[-1]["id"] if rows else start
         if rows and advance:
             self._advance(reader, handle, cursor)

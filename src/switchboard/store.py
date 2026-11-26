@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS handles (
   state TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS handles_open ON handles(destination, open);
+CREATE INDEX IF NOT EXISTS handles_ref ON handles(destination, ref);
 CREATE TABLE IF NOT EXISTS inbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   owner TEXT NOT NULL,
@@ -181,6 +182,11 @@ CREATE TABLE IF NOT EXISTS inbox (
   at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS inbox_owner ON inbox(owner, id);
+CREATE INDEX IF NOT EXISTS inbox_handle ON inbox(handle, id);
+CREATE INDEX IF NOT EXISTS inbox_reply_to ON inbox(json_extract(data, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS handles_root ON handles(json_extract(meta, '$.root'));
+CREATE INDEX IF NOT EXISTS handles_reply_to ON handles(json_extract(meta, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS handles_forward_of ON handles(json_extract(meta, '$.forward_of'));
 CREATE TABLE IF NOT EXISTS inbox_cursors (
   owner TEXT NOT NULL,
   handle TEXT NOT NULL,

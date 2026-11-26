@@ -273,6 +273,15 @@ class Switchboard:
             task.add_done_callback(self._tasks.discard)
         raise CoreError(stop)
 
+    def resume_conversation(self, principal: Principal, root: str) -> bool:
+        if not principal.is_unrestricted_owner and not (principal.kind == "access" and principal.trust == "owner"):
+            raise CoreError("only the owner can resume paused conversations")
+        if not self.store.n("UPDATE conversation_turns SET turns = 0, paused_at = NULL WHERE root = ? AND paused_at IS NOT NULL", (root,)):
+            return False
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="core",
+                          action="conversation_resume", outcome="ok", ref=root)
+        return True
+
     def destination(self, name: str) -> Block:
         d = self.blocks.get(name)
         if d is None:
@@ -672,7 +681,7 @@ class Switchboard:
                             allow_override=allow_override, note=note, by=principal.source)
         self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return r.as_dict()
 
     def changed(self) -> None:
@@ -687,7 +696,7 @@ class Switchboard:
         r = self.routes.remove(destination=destination, agent=agent, project=project)
         self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return {"removed": r.as_dict()}
 
     # Projects: automatic links and routes ------------------------------------------------------
@@ -719,6 +728,26 @@ class Switchboard:
     def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "") -> None:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
                           action=action, outcome="ok", target=target, excerpt=excerpt)
+
+    @staticmethod
+    def check_memory_scope(principal: Principal, scope: str) -> None:
+        if not principal.allows(scope):
+            raise MemoryError_(f"the {principal.source} key is limited to {', '.join(principal.scopes or ())}; {scope} is outside it")
+
+    def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
+        out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        self.audit_memory(principal, "memory_delete", id)
+        return out
+
+    def move_memory(self, principal: Principal, id: str, to_scope: str, *, promote: bool = False) -> dict[str, Any]:
+        to_scope = to_scope.strip().lower()
+        if to_scope == GENERAL and not promote:
+            raise MemoryError_("moving to general is memory_promote, after the owner agrees it applies to every project")
+        self.check_memory_scope(principal, to_scope)
+        out = self.memory.move(source=principal.source, id=id, to_scope=to_scope,
+                               check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        self.audit_memory(principal, "memory_promote" if promote else "memory_move", f"{out['from']} -> {out['to']}", id)
+        return out
 
     # Context pack -----------------------------------------------------------------------------
 
