@@ -68,6 +68,11 @@ class Principal:
     tools: tuple[str, ...] | None = None
     targets: tuple[str, ...] | None = None
 
+    @property
+    def is_unrestricted_owner(self) -> bool:
+        return (self.kind in ("key", "oauth") and self.trust == "owner"
+                and self.scopes is None and self.tools is None and self.targets is None)
+
     def allows(self, scope: str) -> bool:
         """Whether this caller may use a memory scope ('general' or 'project:<slug>'); None means every scope."""
         return self.scopes is None or "*" in self.scopes or scope in self.scopes
@@ -133,11 +138,12 @@ def redirect_matches(requested: str, registered: list[str]) -> bool:
 def source_for(redirect_uri: str, client: Client, names: dict[str, str], agents: Agents | None = None) -> str:
     """The agent an OAuth client signs in as: auth.source_names first, then the agents registry, then its client name."""
     host = (urlparse(redirect_uri).hostname or "").lower()
-    cimd_host = (urlparse(client.client_id).hostname or "").lower() if client.kind == "cimd" else ""
+    cimd_url = client.client_id if client.kind == "cimd" else ""
+    cimd_host = (urlparse(cimd_url).hostname or "").lower()
     for needle, name in names.items():
         if needle and (needle in host or needle in cimd_host or needle.lower() in (client.name or "").lower()):
             return name
-    matched = (agents or Agents(PRESETS.values())).match(host, cimd_host)
+    matched = (agents or Agents(PRESETS.values())).match(host, cimd_url)
     if matched:
         return matched
     slug = re.sub(r"[^a-z0-9]+", "-", (client.name or "").lower()).strip("-")[:40]
@@ -306,7 +312,8 @@ class Auth:
         if cached and cached[0] > self.store.clock():
             return cached[1]
         u = urlparse(url)
-        if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not host_allowed(u.hostname, self.cimd_hosts):
+        known_native = not self.cfg.cimd_hosts and self.agents.match_cimd(url)
+        if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not (known_native or host_allowed(u.hostname, self.cimd_hosts)):
             raise OAuthError("invalid_client", f"client metadata document host {urlparse(url).hostname} is not allowed (auth.cimd_hosts)", 401)
         try:
             async with self.http.stream("GET", url, headers={"Accept": "application/json"}) as r:
