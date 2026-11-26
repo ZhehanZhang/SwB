@@ -42,7 +42,7 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <meta name="theme-color" content="#f5f5f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="same-origin">
 <title>{html.escape(title)} | SwB</title>
 <script src="/assets/prefs.js"></script>
 <link rel="stylesheet" href="/assets/bridge.css">
@@ -59,7 +59,7 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 </div></div>
 <div class="foot-line"><span>Shared memory and routing between assistants and agents.</span></div>
 </footer></div></body></html>"""
-    return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer"})
+    return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "same-origin"})
 
 
 def hero(title: str, line: str = "") -> str:

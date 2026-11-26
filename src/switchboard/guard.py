@@ -99,7 +99,7 @@ class Guard:
                     headers = MutableHeaders(scope=message)
                     headers["Cache-Control"] = "no-store"
                     headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
-                    headers.setdefault("Referrer-Policy", "no-referrer")
+                    headers.setdefault("Referrer-Policy", "same-origin")
                 await original_send(message)
 
         limit = MCP_BODY_LIMIT if path == "/mcp" or path.startswith("/mcp/") else BODY_LIMIT

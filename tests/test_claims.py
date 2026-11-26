@@ -22,8 +22,8 @@ def form_csrf(page):
 
 def private_page(page):
     assert page.headers["cache-control"] == "no-store"
-    assert page.headers["referrer-policy"] == "no-referrer"
-    assert '<meta name="referrer" content="no-referrer">' in page.text
+    assert page.headers["referrer-policy"] == "same-origin"
+    assert '<meta name="referrer" content="same-origin">' in page.text
 
 
 def test_webhook_url_claim_rejects_invalid_urls_without_spending_link(make):

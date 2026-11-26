@@ -176,7 +176,7 @@ class OwnerLogin:
             row_id = bytes_to_base64url(verified.credential_id) if verified else None
             if verified and self.store.n(
                 "UPDATE owner_passkeys SET last_used_at = ?, sign_count = max(sign_count, ?) "
-                "WHERE id = ? AND public_key = ? AND (sign_count = 0 OR ? = 0 OR sign_count < ?)",
+                "WHERE id = ? AND public_key = ? AND ((sign_count = 0 AND ? = 0) OR sign_count < ?)",
                 (self.store.clock(), verified.new_sign_count, bytes_to_base64url(verified.credential_id),
                  row["public_key"], verified.new_sign_count, verified.new_sign_count),
             ):
