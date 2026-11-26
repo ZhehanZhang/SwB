@@ -48,6 +48,8 @@ class Config:
     static_keys: tuple[StaticKey, ...] = ()
     source_names: dict[str, str] = field(default_factory=dict)
     key_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    key_tools: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    key_targets: dict[str, tuple[str, ...]] = field(default_factory=dict)
     inbox_keys: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_INBOX_KEYS))
     timezone: str = "America/New_York"
     turn_cap: int | None = 200
@@ -121,7 +123,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         if name.startswith(KEY_ENV_PREFIX) and value:
             if len(value) < MIN_KEY_LEN:
                 raise ConfigError(f"{name} must be at least {MIN_KEY_LEN} characters")
-            keys.append(StaticKey(name=name[len(KEY_ENV_PREFIX):].lower(), secret=value))
+            keys.append(StaticKey(name=name[len(KEY_ENV_PREFIX):].lower().replace("_", "-"), secret=value))
 
     version = int(raw.get("version", 1) or 1)
     if version not in (1, 2):
@@ -143,6 +145,8 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         static_keys=tuple(keys),
         source_names={str(k): str(v) for k, v in (auth.get("source_names") or {}).items()},
         key_scopes={str(k).lower(): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_scopes") or {}).items()},
+        key_tools={str(k).lower(): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_tools") or {}).items()},
+        key_targets={str(k).lower(): tuple(str(s).strip() for s in as_tuple(v)) for k, v in (auth.get("key_targets") or {}).items()},
         inbox_keys={**DEFAULT_INBOX_KEYS, **{str(k).lower(): str(v).lower() for k, v in (auth.get("inbox_keys") or {}).items()}},
         timezone=str(raw.get("timezone", "America/New_York")),
         turn_cap=int(raw.get("turn_cap", 200)) if raw.get("turn_cap", 200) else None,
