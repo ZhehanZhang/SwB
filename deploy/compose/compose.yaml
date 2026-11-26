@@ -1,0 +1,30 @@
+name: switchboard-caddy
+services:
+  switchboard:
+    image: ghcr.io/zhehanzhang/switchboard:latest
+    environment:
+      SWITCHBOARD_DATA: /data
+      SWITCHBOARD_PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      SWITCHBOARD_KEY_OWNER: ${SWITCHBOARD_KEY_OWNER:?Set SWITCHBOARD_KEY_OWNER in .env}
+    volumes:
+      - switchboard_data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  switchboard_data:
+  caddy_data:
+  caddy_config:

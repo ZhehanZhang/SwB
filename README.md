@@ -41,57 +41,64 @@ flowchart LR
 
 ## Quick start
 
-Start in an empty instance directory. Replace `OWNER` with the repository owner, or use your local checkout
-path instead of the Git URL. pipx needs Python 3.12 or newer.
-
-**uvx**
+**Run locally with uvx** (Python 3.12 or newer). In an empty directory, create an owner key and start the server:
 
 ```bash
-uvx --from git+https://github.com/OWNER/switchboard swb init && uvx --from git+https://github.com/OWNER/switchboard swb up
+uvx swb-one init
+uvx --from swb-one swb up --tunnel cloudflare
 ```
 
-**pipx**
+The [Cloudflare Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) prints a
+temporary HTTPS MCP URL. Install `cloudflared` first, or use `--tunnel tailscale` on a signed-in
+[Tailscale node with Funnel enabled](https://tailscale.com/docs/features/tailscale-funnel).
+Both tunnels are public and stop when `swb up` exits. Omit `--tunnel` for
+`http://127.0.0.1:8870/mcp`. The server needs no config file; `init` saves the owner key to a
+private `.env` for authenticated access. Data is stored in `~/.local/share/switchboard` unless you set
+`SWITCHBOARD_DATA` or run `swb up --dir PATH` to use a separate instance directory.
+
+For a persistent CLI install, run `uv tool install swb-one` or `pipx install swb-one`.
+See [swb.one](https://swb.one) for the documentation.
+
+**Docker** (local only). In an empty directory, create a private env file and use a named volume:
 
 ```bash
-pipx install git+https://github.com/OWNER/switchboard && swb init && swb up
+(umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
+docker run --rm --env-file .env -p 127.0.0.1:8870:8000 -v switchboard-data:/data \
+  ghcr.io/zhehanzhang/switchboard:latest
 ```
 
-**Docker**
+**Compose with automatic HTTPS.** Point your domain's DNS at the host and allow inbound TCP ports 80 and
+443. From a checkout:
 
 ```bash
-docker build -t switchboard:local /path/to/switchboard && \
-docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/instance" -w /instance switchboard:local swb init && \
-docker run --rm --name switchboard-local --user "$(id -u):$(id -g)" -p 127.0.0.1:8000:8000 \
-  -v "$PWD:/instance" -w /instance switchboard:local swb up
+cd deploy/compose
+(umask 077; cp -n .env.example .env)
+# Set DOMAIN and a fresh random SWITCHBOARD_KEY_OWNER in .env.
+docker compose up -d
 ```
 
-Replace `/path/to/switchboard` with your checkout in the Docker command.
+Caddy serves `https://YOUR_DOMAIN/mcp` and automatically obtains and renews certificates.
 
-`swb init` creates `config/switchboard.yaml` with only the MCP block and saves a generated owner key in
-`.env` (mode 600). Keep that file private. `--dir PATH` selects a different instance directory;
-`--public-url https://switchboard.example.com` sets the externally reachable base URL, but doesn't publish the
-server or enable OAuth by itself. Use `--force` only to replace an existing config and rotate its owner key.
+**Hosted deployments.** These use a persistent volume at `/data`:
 
-From a second terminal in the instance directory:
+- [Railway](deploy/README.md#railway): Apply the Railway IaC template or create a service with a volume in the dashboard, then generate a domain and set the environment variables.
+- [Render](deploy/README.md#render): Deploy `render.yaml` as a Blueprint and set the public URL.
+- [Fly.io](deploy/README.md#flyio): Set your app name in `fly.toml`, add the owner key as a secret, and run `fly deploy --ha=false`.
 
-```bash
-swb status
-swb connect mcp-client
-swb connect mcp-client --choose agent=my-client
-```
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FOWNER%2Fswitchboard)
 
-If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/switchboard`. If you used Docker, prefix them
-with `docker exec switchboard-local`.
-Both commands authenticate to `http://127.0.0.1:8000/mcp` with the owner key from `.env`; use `--url` for
-a different endpoint. Use `--choose` for choices such as agent or project names, never for tokens.
+Replace `OWNER` in the deploy button's repository URL before publishing.
 
-Enable the matching block in `config/switchboard.yaml` to set up Capy, Claude Project routines, Grok, Slack, or GitHub.
-Then ask your MCP client how to connect it, or run a command such as `swb connect capy-captain`.
+### Connect a client
 
-When a connection returns a token claim link, run `swb claim 'CLAIM_LINK'` and enter the token at the hidden
-prompt. A standalone code works for generic token claims; for routine claims, use the full link. The command
-sends the token and owner key only to the local server or the server you explicitly select with `--url`; it
-doesn't connect to the host from the claim link. In Docker, use `docker exec -it switchboard-local swb claim 'CLAIM_LINK'`.
+Give the client the printed MCP URL, or use `https://YOUR_DOMAIN/mcp` for a hosted instance. Cloud clients
+need a public HTTPS URL. OAuth requires owner sign-in to be configured; for clients that accept an
+Authorization header, you can use a separate client bearer key instead. Keep the owner key private.
+
+- **Claude Project or Claude Desktop:** In Claude, open Settings, then Connectors, and add a custom connector with the MCP URL. Enable it in your Project or conversation.
+- **ChatGPT:** Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a browser and add a custom MCP server there. Enable developer mode if required. The interactive plugin editor and desktop apps don't add custom servers reliably.
+- **Claude Code:** Run `claude mcp add --transport http switchboard https://YOUR_DOMAIN/mcp`.
+- **Other clients:** Add a Streamable HTTP MCP server. Run `swb connect mcp-client --choose agent=CLIENT` from your local instance to get client-specific settings.
 
 ### Coding agents
 

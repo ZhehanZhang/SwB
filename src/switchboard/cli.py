@@ -23,6 +23,7 @@ from mcp.client.streamable_http import streamable_http_client
 OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
 CONFIG = Path("config/switchboard.yaml")
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
+DEFAULT_PORT = "8870"
 
 
 class CliError(ValueError):
@@ -106,16 +107,6 @@ def _read_env(path: Path) -> dict[str, str]:
             value = re.split(r"\s+#", value, maxsplit=1)[0]
         values[key] = value
     return values
-
-
-def _up(base: Path, env: dict[str, str]) -> None:
-    from .__main__ import main as server
-
-    for name, value in env.items():
-        os.environ.setdefault(name, value)
-    os.environ["SWITCHBOARD_CONFIG"] = str(base / CONFIG)
-    os.environ["SWITCHBOARD_DATA"] = str(base / "data")
-    server(["serve"])
 
 
 def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
@@ -229,31 +220,36 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="swb")
+    parser = argparse.ArgumentParser(
+        prog="swb", epilog="Server tools: serve, export, log, config, blocks, targets (each accepts --help).")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="create a minimal config and a local owner key")
     init.add_argument("--public-url", help="optional public base URL")
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
     up = commands.add_parser("up", help="run the Switchboard server")
+    up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
     connect.add_argument("what", help="connection kind, for example mcp-client")
     connect.add_argument("--choose", action="append", nargs="+", default=[], metavar="KEY=VALUE")
     status = commands.add_parser("status", help="show server status and next steps")
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
-    for command in (init, up, connect, status, claim):
+    up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
+    for command in (init, connect, status, claim):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
     for command in (connect, status, claim):
-        command.add_argument("--url", help="server base URL or MCP endpoint (default: http://127.0.0.1:8000/mcp)")
+        command.add_argument("--url", help=f"server base URL or MCP endpoint (default: http://127.0.0.1:{DEFAULT_PORT}/mcp)")
     args = parser.parse_args(argv)
     try:
-        base = args.dir.resolve()
+        base = (args.dir or Path.cwd()).resolve()
         if args.command == "init":
             _init(base, args.public_url, args.force)
             return
         env = _read_env(base / ".env")
         if args.command == "up":
-            _up(base, env)
+            from .cli_up import run
+
+            run(base, env, args.tunnel, instance=args.dir is not None)
             return
         arguments = {}
         if args.command == "connect":
@@ -263,7 +259,7 @@ def main(argv: list[str] | None = None) -> None:
         key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
-        port = os.environ.get("PORT", env.get("PORT", "8000"))
+        port = os.environ.get("PORT", env.get("PORT", DEFAULT_PORT))
         url = _url(args.url or f"http://127.0.0.1:{port}/mcp")
         request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")
         level = request_log.level

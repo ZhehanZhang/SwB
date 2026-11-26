@@ -3,5 +3,10 @@
 .env.*
 secrets
 data
+config/switchboard.yaml
+.venv
+build
+dist
+**/*.egg-info
 **/__pycache__
 .pytest_cache

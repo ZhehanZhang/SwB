@@ -4,8 +4,6 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping
 
-import yaml
-
 from ..signing import HEADER_NAME_RE
 
 IDENTITIES = ("bot", "user")
