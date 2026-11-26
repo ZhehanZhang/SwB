@@ -17,6 +17,7 @@ LIMITS = {
     "token": (120, 600.0),
     "authorize": (60, 600.0),
     "bearer_fail": (20, 600.0),
+    "connect_fail": (10, 600.0),
 }
 
 

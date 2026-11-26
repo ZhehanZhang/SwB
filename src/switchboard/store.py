@@ -168,6 +168,9 @@ def _migrate(db: sqlite3.Connection) -> None:
     )
     db.execute("CREATE INDEX IF NOT EXISTS memories_scope ON memories(scope, updated_at)")
     db.execute("DROP TABLE IF EXISTS login_failures")
+    if "target" not in {r[1] for r in db.execute("PRAGMA table_info(handles)")}:
+        db.execute("ALTER TABLE handles ADD COLUMN target TEXT")
+    db.execute("CREATE TABLE IF NOT EXISTS alias_use (alias TEXT NOT NULL, agent TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, last_at REAL NOT NULL, PRIMARY KEY(alias, agent))")
     tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     if "delegations" in tables:
         db.execute(
@@ -211,6 +214,11 @@ class Store:
         with self._lock:
             cur = self.db.execute(sql, tuple(args))
             return cur.lastrowid or cur.rowcount
+
+    def n(self, sql: str, args: Iterable[Any] = ()) -> int:
+        """Run an UPDATE or DELETE and return how many rows it changed."""
+        with self._lock:
+            return self.db.execute(sql, tuple(args)).rowcount
 
     def tx(self, fn: Callable[[sqlite3.Connection], Any]) -> Any:
         with self._lock:

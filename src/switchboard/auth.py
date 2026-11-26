@@ -28,6 +28,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from . import pages
+from .agents import PRESETS, Agents, host_allowed
 from .config import Config
 from .store import Store, dumps
 
@@ -126,28 +127,16 @@ def redirect_matches(requested: str, registered: list[str]) -> bool:
     return False
 
 
-def host_allowed(host: str | None, hosts: tuple[str, ...]) -> bool:
-    host = (host or "").lower()
-    return any(host == h or host.endswith("." + h) for h in hosts)
-
-
-AGENT_LABELS = {"claude": "Claude", "chatgpt": "ChatGPT", "gemini": "Gemini", "capy": "Capy"}
-
-
-def source_for(redirect_uri: str, client: Client, names: dict[str, str]) -> str:
+def source_for(redirect_uri: str, client: Client, names: dict[str, str], agents: Agents | None = None) -> str:
+    """The agent an OAuth client signs in as: auth.source_names first, then the agents registry, then its client name."""
     host = (urlparse(redirect_uri).hostname or "").lower()
     cimd_host = (urlparse(client.client_id).hostname or "").lower() if client.kind == "cimd" else ""
     for needle, name in names.items():
         if needle and (needle in host or needle in cimd_host or needle.lower() in (client.name or "").lower()):
             return name
-    if host_allowed(host, ("claude.ai", "claude.com")) or host_allowed(cimd_host, ("claude.ai", "claude.com", "anthropic.com")):
-        return "claude"
-    if host_allowed(host, ("chatgpt.com", "openai.com")) or host_allowed(cimd_host, ("chatgpt.com", "openai.com")):
-        return "chatgpt"
-    if host_allowed(host, ("capy.ai",)) or host_allowed(cimd_host, ("capy.ai",)):
-        return "capy"
-    if host == "oauth-redirect.googleusercontent.com":
-        return "gemini"
+    matched = (agents or Agents(PRESETS.values())).match(host, cimd_host)
+    if matched:
+        return matched
     slug = re.sub(r"[^a-z0-9]+", "-", (client.name or "").lower()).strip("-")[:40]
     return slug or "local"
 
@@ -160,9 +149,15 @@ class Auth:
         http: httpx.AsyncClient | None = None,
         access_verifier: Callable[[str], Awaitable[str | None]] | None = None,
         secret: bytes | None = None,
+        agents: Agents | None = None,
+        connections: Any = None,
     ):
         self.cfg = cfg
         self.store = store
+        self.agents = agents or Agents(PRESETS.values())
+        self.connections = connections
+        self.redirect_allow = cfg.redirect_allow or self.agents.redirect_uris()
+        self.cimd_hosts = cfg.cimd_hosts or self.agents.cimd_hosts()
         self.http = http or httpx.AsyncClient(timeout=5.0, follow_redirects=False)
         self.secret = secret or secrets.token_bytes(32)
         self._access_verifier = access_verifier
@@ -189,6 +184,9 @@ class Auth:
                 if key.name in self.cfg.inbox_keys:
                     return Principal(source=self.cfg.inbox_keys[key.name], client_id=f"key:{key.name}", kind="inbox_key", scopes=())
                 return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", scopes=self.cfg.key_scopes.get(key.name))
+        row = self.connections.verify(token) if self.connections is not None else None
+        if row is not None:
+            return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect", scopes=self.cfg.key_scopes.get(row["agent"]))
         if not self.cfg.resource:
             return None
         row = self.store.one(
@@ -243,7 +241,7 @@ class Auth:
         uris = body.get("redirect_uris")
         if not isinstance(uris, list) or not uris or not all(isinstance(u, str) for u in uris):
             raise OAuthError("invalid_redirect_uri", "redirect_uris is required")
-        bad = [u for u in uris if not redirect_allowed(u, self.cfg.redirect_allow)]
+        bad = [u for u in uris if not redirect_allowed(u, self.redirect_allow)]
         if bad:
             raise OAuthError("invalid_redirect_uri", f"redirect URI not allowed by this server: {bad[0]}")
         method = body.get("token_endpoint_auth_method") or "none"
@@ -302,7 +300,7 @@ class Auth:
         if cached and cached[0] > self.store.clock():
             return cached[1]
         u = urlparse(url)
-        if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not host_allowed(u.hostname, self.cfg.cimd_hosts):
+        if u.scheme != "https" or not u.path or u.path == "/" or u.fragment or not host_allowed(u.hostname, self.cimd_hosts):
             raise OAuthError("invalid_client", f"client metadata document host {urlparse(url).hostname} is not allowed (auth.cimd_hosts)", 401)
         try:
             async with self.http.stream("GET", url, headers={"Accept": "application/json"}) as r:
@@ -401,7 +399,7 @@ class Auth:
         redirect_uri = p.get("redirect_uri") or (c.redirect_uris[0] if len(c.redirect_uris) == 1 else "")
         if not redirect_uri or not redirect_matches(redirect_uri, c.redirect_uris):
             raise OAuthError("invalid_request", f"redirect_uri {redirect_uri or '(none)'} is not registered for this client")
-        if not redirect_allowed(redirect_uri, self.cfg.redirect_allow):
+        if not redirect_allowed(redirect_uri, self.redirect_allow):
             raise OAuthError("invalid_request", f"redirect_uri {redirect_uri} is not allowed by this server (auth.redirect_uris)")
         return c, {**p, "redirect_uri": redirect_uri}
 
@@ -421,7 +419,7 @@ class Auth:
 
     def issue_code(self, c: Client, p: dict[str, str]) -> str:
         code = secrets.token_urlsafe(32)
-        source = source_for(p["redirect_uri"], c, self.cfg.source_names)
+        source = source_for(p["redirect_uri"], c, self.cfg.source_names, self.agents)
         self.store.x(
             "INSERT INTO oauth_codes(code_hash, client_id, redirect_uri, challenge, resource, scope, source, expires_at) VALUES (?,?,?,?,?,?,?,?)",
             (sha(code), c.client_id, p["redirect_uri"], p["code_challenge"], self.normalize_resource(p.get("resource")), SCOPE, source, self.store.clock() + CODE_TTL),
@@ -570,8 +568,8 @@ class Auth:
                     q["state"] = state
                 return RedirectResponse(_append(params["redirect_uri"], q), status_code=302)
 
-        source = source_for(params["redirect_uri"], c, self.cfg.source_names)
-        who = html.escape(AGENT_LABELS.get(source) or c.name or c.client_id)
+        source = source_for(params["redirect_uri"], c, self.cfg.source_names, self.agents)
+        who = html.escape((self.agents.label(source, "") if source in self.agents else "") or c.name or c.client_id)
         dest = html.escape(urlparse(params["redirect_uri"]).netloc)
         line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and route work to the destinations this switchboard connects, such as Capy."
         signed = f'<p class="item-line">Signed in with SSO as {html.escape(email)}</p>'

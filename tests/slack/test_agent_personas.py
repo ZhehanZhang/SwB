@@ -71,7 +71,7 @@ async def test_bot_posts_use_the_agent_persona_and_avatar_file(make_core, world,
     await core.gate.submit(core.config.grant("stranger"), "a2a", "bot", "post_message", {"channel": "CWATCH001", "text": "hi"})
     posts = [kw for t, n, kw in world.calls if t == "xoxb-a" and n == "chat_postMessage"]
     assert posts[0]["username"] == "Claude" and re.fullmatch(PUBLIC + r"/avatars/claude\.png\?v=\d+", posts[0]["icon_url"])
-    assert posts[1]["username"] == "TeamCaptain" and "icon_url" not in posts[1]
+    assert posts[1]["username"] == "TeamCaptain" and re.fullmatch(PUBLIC + r"/avatars/default\.png\?v=\d+", posts[1]["icon_url"])
     assert posts[2]["username"] == "Switchboard"
     (core.avatar_dir).mkdir(parents=True, exist_ok=True)
     (core.avatar_dir / "claude.png").write_bytes(PNG + b"new")

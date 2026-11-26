@@ -1,8 +1,9 @@
 """Slug routing for "@swb <slug> <text>": which Captain, agent or project a Slack message is for.
 
-Targets are found automatically: Captains from Capy (by name and code), agents switchboard knows, and switchboard
-projects. On a slug collision a Captain wins over an agent, and an agent over a project; slack.target_aliases
-overrides both. A message with no matching slug goes to the thread's earlier target, else the workspace's
+Targets come from the core (switchboard.targets): every block's targets (Captains, say), the agents switchboard
+knows and its projects. On a slug collision block targets win over agents and agents over projects, unless the
+config's targets.priority says otherwise; slack.target_aliases overrides both. build_targets is the same rule for
+plain lists, kept for tests and scripts. A message with no matching slug goes to the thread's earlier target, else the workspace's
 default_target.
 """
 
@@ -11,6 +12,8 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable, Mapping
+
+from ..targets import slugify
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 KIND_ORDER = ("captain", "agent", "project")
@@ -25,13 +28,13 @@ class Target:
     id: str
     name: str
     persona: str | None = None
+    address: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def slugify(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")[:40]
+__all__ = ["Target", "build_targets", "near", "slugify", "split_slug"]
 
 
 def split_slug(text: str, bot_user_id: str | None) -> tuple[str, str]:

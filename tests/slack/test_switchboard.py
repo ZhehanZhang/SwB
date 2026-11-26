@@ -26,7 +26,7 @@ async def access(assertion):
 def sb(tmp_path):
     world, hooks = FakeWorld(), Hooks()
     cfg = {"public_url": PUBLIC, "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "z.cloudflareaccess.com", "aud": "a"}},
-           "slack": base_config()}
+           "slack": base_config(), "visibility": {"defaults": {"target": "shared", "channel": "shared"}}}
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(cfg))
     env = {**ENV, "SWITCHBOARD_KEY_FULL": KEY_FULL, "SWITCHBOARD_KEY_FIXED": KEY_FIXED, "SWITCHBOARD_KEY_NOBODY": "n" * 32}

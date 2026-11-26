@@ -1,5 +1,8 @@
 # Copy to config/switchboard.yaml (git-ignored). No secrets here: those live in .env.
-# Layout: origins (where requests come from) -> core (auth, projects, scoped memory, routes, inbox, audit) -> destinations.
+# Version 2: everything in or out is a block under blocks:, the core (auth, projects, scoped memory, routes, inbox,
+# audit) knows only blocks. Files without version: 2 are read as version 1 (origins:, destinations:, slack:);
+# switchboard config migrate prints them as version 2.
+version: 2
 
 # Public origin of this server. The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url.
 public_url: https://swb.example.com
@@ -9,12 +12,13 @@ auth:
   # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
   owner_emails: [owner@example.com]
   # Verify the Cf-Access-Jwt-Assertion header on / (admin) and /authorize. Access app "Switchboard" covers the whole host
-  # with SSO; "Switchboard machine paths (bypass)" lets /mcp, /token, /register, /revoke, /.well-known, /healthz
-  # and /inbox through. There is no password sign-in: without this block, OAuth sign-in and the admin page are off.
+  # with SSO; "Switchboard machine paths (bypass)" lets /mcp, /token, /register, /revoke, /.well-known, /healthz,
+  # /inbox, /avatars and /connect through. There is no password sign-in: without this block, OAuth sign-in and the admin page are off.
   cloudflare_access:
     team_domain: your-team.cloudflareaccess.com
     aud: <AUD tag of the "Switchboard" Access application>
-  # Allowed OAuth redirect URIs (exact, or prefix with /*; loopback matches any port).
+  # Allowed OAuth redirect URIs (exact, or prefix with /*; loopback matches any port). Default: every agent's from the
+  # agents registry (presets plus block agents, e.g. Capy's from the capy block) and loopback. Setting it replaces that.
   # redirect_uris: [https://claude.ai/api/mcp/auth_callback, https://claude.com/api/mcp/auth_callback,
   #   https://chatgpt.com/connector_platform_oauth_redirect, "https://chatgpt.com/connector/oauth/*",
   #   "http://localhost/*", "http://127.0.0.1/*"]
@@ -24,9 +28,17 @@ auth:
   # key_scopes: {acme-agent: [project:acme]}
   # inbox_keys: {channel: claude-code}         # inbox-only keys (/inbox/poll, /inbox/events) bound to one agent; this is the default
 
-origins:
+# Optional. Who calls in. Without this section every preset (claude, chatgpt, gemini, claude-code) is known, plus the
+# agents blocks bring (capy). Agents connected with a pairing code register themselves.
+# agents:
+#   claude: {}
+#   codex: {label: Codex}
+
+blocks:
   mcp:
-    # capy_wait limits in seconds. claude.ai and Claude Desktop cut a tool call at 240 s.
+    use: mcp
+    legacy_aliases: true                        # list the deprecated capy_* and agent_send names (this release only)
+    # wait limits in seconds. claude.ai and Claude Desktop cut a tool call at 240 s.
     # Claude Code fails an HTTP request with no response byte after max(60 s, MCP_TOOL_TIMEOUT, MCP_TIMEOUT),
     # so keep claude-code under 60 s unless you raised MCP_TOOL_TIMEOUT there.
     wait:
@@ -35,12 +47,12 @@ origins:
       agents:
         claude-code: {default_s: 45, max_s: 55}
 
-destinations:
   capy:
+    use: capy
     api_base: https://api.capy.ai/api/v1
     # Runaway guards only: more than burst.count delegations from one caller in burst.window_s looks like a loop and is
     # stopped, and the same task to the same target within duplicate_window_s returns the existing handle.
-    # capy_reply and capy_wait are never limited. daily_cap is an optional hard limit, off (null) by default.
+    # reply and wait are never limited. daily_cap is an optional hard limit, off (null) by default.
     burst: {count: 10, window_s: 600}
     duplicate_window_s: 600
     daily_cap: null
@@ -54,9 +66,94 @@ destinations:
     captain_delivery: queue
     # Stop following a delegation after this many days (MCP task TTL too).
     handle_ttl_days: 7
-    # Seeds the global route once, when no global route exists yet. Change routes later with routes_set or the Routes page.
-    default_route:
-      captain: jam_EXAMPLECAPTAIN
+    # true: Captain personas use their Capy avatar in Slack (an undocumented capy.ai asset path); off by default.
+    avatars: false
+
+  # Slack (optional): events in (watched channels, mentions, DMs, @swb <slug> routing) and slack_* tools out.
+  # Tokens never go here: every *_env names a variable in .env. Config changes apply on restart.
+  slack:
+    use: slack
+    refresh_minutes: 30                         # how often targets ("@swb <slug>") are re-read
+    workspace_projects: {}                      # e.g. {a2a: acme}: the switchboard project a workspace's events belong to
+    # Needed only for persona avatars stored under <data>/avatars, which Slack fetches from <public_base_url>/avatars/<file>
+    # (keep /avatars outside Access).
+    public_base_url: https://switchboard.example.com
+    max_text_chars: 4000
+    event_retention_days: 14
+    # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts. A persona with no
+    # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled monograms; emoji is the fallback.
+    personas:
+      switchboard: {name: Switchboard, emoji: ":robot_face:"}
+      claude: {name: Claude}
+      chatgpt: {name: ChatGPT}
+      gemini: {name: Gemini}
+      codex: {name: Codex}
+      claude-code: {name: Claude Code}
+      capy: {name: Capy}
+      helper: {name: Helper, avatar: helper.png}
+    avatar_dirs: []                               # extra folders searched for avatar files (e.g. a branding overlay)
+    target_aliases: {}                            # extra "@bot <slug>" names, e.g. {pp: teamcaptain}
+    workspaces:
+      # Workspace A: an agent room. The bot is @mentionable and can also act as the owner (with approval).
+      a2a:
+        team_id: T0AAAAAAA
+        app_id: A0AAAAAAA                         # this Slack app; its own posts are never delivered back
+        app_token_env: SLACK_A2A_APP_TOKEN        # xapp-..., connections:write (Socket Mode)
+        intake: socket                            # or poll (conversations.history every poll_seconds)
+        identities:
+          bot: {token_env: SLACK_A2A_BOT_TOKEN, write: free}        # xoxb-...
+          user: {token_env: SLACK_A2A_USER_TOKEN, write: approval}  # xoxp-..., the owner's own account
+        default_persona: switchboard
+        default_target: captain                   # "@bot text" with no slug goes here (a Captain, agent or project slug)
+        approver_user_id: U0OWNER00               # optional: approval DMs for this workspace's requests come from its bot
+        owner_user_ids: [U0OWNER00]               # trust owner: passed on unchanged (defaults to the approver)
+        known: {U0FRIEND0: Alex, B0OTHERBOT: main-agent}   # trust known: Slack user or bot ids you trust, with names
+        sender_rate: {count: 5, window_s: 600}    # context items per non-owner sender before the rest are dropped
+        ack_reaction: eyes                        # added to @mentions and DMs on receipt
+        watched: ["#agents"]                      # the bot must be a member (invite it yourself); "*" = every channel it is in
+        bot_thread_posts_per_hour: 20             # loop guard: more bot posts in one thread per hour need approval
+        sinks:                                    # optional: also POST each event to a webhook
+          - {name: a2a-hook, url_env: SLACK_SINK_A2A_URL, secret_env: SLACK_SINK_A2A_SECRET, kinds: [watched, mention, dm], coalesce_seconds: 0, targets: [captain]}
+      # Workspace B: private. User token only: no bot, no personas, never joins or invites.
+      private:
+        team_id: T0CCCCCCC
+        user_only: true
+        app_token_env: SLACK_PRIVATE_APP_TOKEN
+        identities:
+          user: {token_env: SLACK_PRIVATE_USER_TOKEN, write: approval}  # user_only allows only approval or never
+        watched: ["#family"]
+    # Owner approvals: a DM with Approve / Reject buttons from a workspace's bot, plus the root page. Agents never approve.
+    approvals:
+      ttl_minutes: 60
+      notify_workspace: a2a
+      approver_user_id: U0OWNER00
+    # What each switchboard agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
+    # Each agent posts as the persona named like it (claude -> claude) unless persona / persona_by_workspace says otherwise.
+    agents:
+      capy: {allow_persona_override: true, workspaces: {a2a: [bot]}}
+      claude: {allow_persona_override: true, allowed_personas: [claude, helper], workspaces: {a2a: [bot, user], private: [user]}}
+      chatgpt: {workspaces: {a2a: [bot]}}
+
+# Optional. Slug priority on a clash ("capy:captain", "agent", "project"); default: block targets, agents, projects.
+# targets:
+#   priority: [capy:captain, agent, project]
+#   aliases: {pp: capy:captain:<Captain id>}
+
+# Seeds, written once when that agent/project slot has no route yet. The global default is empty unless set here.
+# routes:
+#   - {match: {}, to: "capy:captain:<Captain id>"}
+
+# Who can reach what. Every resource is private (the owner and his own signed-in agents only) unless marked shared.
+# Resources: target:<slug>, channel:<workspace>/<id or #name>, memory:<general | project:slug>, route:<id>, tool:<name>.
+# shared means anyone in that workspace; a list narrows it to Slack user ids and workspace:<label>. Tools stay private.
+# Anyone else's message to something private becomes a context item in its inbox, with a neutral "Noted." reply.
+# The root page and visibility_set flip a resource; those overrides win over this file.
+visibility:
+  defaults: {target: private, channel: private, memory: private, route: private}
+  resources:
+    target:teamcaptain: shared
+    channel:a2a/#agents: shared
+    # target:helper: [U0FRIEND0, workspace:a2a]
 
 memory:
   # Optional one-way markdown mirror: general/, projects/<slug>/ and INDEX.md, rewritten atomically after changes.
@@ -64,64 +161,3 @@ memory:
   # mirror_dir: /mirror
   # mirror: true
   # mirror_debounce_s: 2
-
-# Slack (optional). With this section, switchboard runs the Slack origin (events in) and destination (slack_* tools).
-# Tokens never go here: every *_env names a variable in .env. Config changes apply on restart.
-slack:
-  # Needed only for persona avatars stored under <data>/avatars, which Slack fetches from <public_base_url>/avatars/<file>
-  # (keep /avatars outside Access).
-  public_base_url: https://switchboard.example.com
-  max_text_chars: 4000
-  event_retention_days: 14
-  # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts. A persona with no
-  # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled monograms; emoji is the fallback.
-  personas:
-    switchboard: {name: Switchboard, emoji: ":robot_face:"}
-    claude: {name: Claude}
-    chatgpt: {name: ChatGPT}
-    gemini: {name: Gemini}
-    codex: {name: Codex}
-    claude-code: {name: Claude Code}
-    capy: {name: Capy}
-    helper: {name: Helper, avatar: helper.png}
-  avatar_dirs: []                               # extra folders searched for avatar files (e.g. a branding overlay)
-  captain_avatars: false                        # true: Captain personas use their Capy avatar (undocumented asset path)
-  target_aliases: {}                            # extra "@bot <slug>" names, e.g. {pp: teamcaptain}
-  workspaces:
-    # Workspace A: an agent room. The bot is @mentionable and can also act as the owner (with approval).
-    a2a:
-      team_id: T0AAAAAAA
-      app_id: A0AAAAAAA                         # this Slack app; its own posts are never delivered back
-      app_token_env: SLACK_A2A_APP_TOKEN        # xapp-..., connections:write (Socket Mode)
-      intake: socket                            # or poll (conversations.history every poll_seconds)
-      identities:
-        bot: {token_env: SLACK_A2A_BOT_TOKEN, write: free}        # xoxb-...
-        user: {token_env: SLACK_A2A_USER_TOKEN, write: approval}  # xoxp-..., the owner's own account
-      default_persona: switchboard
-      default_target: captain                   # "@bot text" with no slug goes here (a Captain, agent or project slug)
-      approver_user_id: U0OWNER00               # optional: approval DMs for this workspace's requests come from its bot
-      ack_reaction: eyes                        # added to @mentions and DMs on receipt
-      watched: ["#agents"]                      # the bot must be a member (invite it yourself); "*" = every channel it is in
-      bot_thread_posts_per_hour: 20             # loop guard: more bot posts in one thread per hour need approval
-      sinks:                                    # optional: also POST each event to a webhook
-        - {name: a2a-hook, url_env: SLACK_SINK_A2A_URL, kinds: [watched, mention, dm], coalesce_seconds: 0, targets: [captain]}
-    # Workspace B: private. User token only: no bot, no personas, never joins or invites.
-    private:
-      team_id: T0CCCCCCC
-      user_only: true
-      app_token_env: SLACK_PRIVATE_APP_TOKEN
-      identities:
-        user: {token_env: SLACK_PRIVATE_USER_TOKEN, write: approval}  # user_only allows only approval or never
-      watched: ["#family"]
-  # Owner approvals: a DM with Approve / Reject buttons from a workspace's bot, plus the root page. Agents never approve.
-  approvals:
-    ttl_minutes: 60
-    notify_workspace: a2a
-    approver_user_id: U0OWNER00
-  # What each switchboard agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
-  # Each agent posts as the persona named like it (claude -> claude) unless persona / persona_by_workspace says otherwise.
-  agents:
-    capy: {allow_persona_override: true, workspaces: {a2a: [bot]}}
-    claude: {allow_persona_override: true, allowed_personas: [claude, helper], workspaces: {a2a: [bot, user], private: [user]}}
-    chatgpt: {workspaces: {a2a: [bot]}}
-

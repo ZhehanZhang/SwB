@@ -2,6 +2,11 @@
 
 from slackfix import OWNER_B, drain, payload
 from slackfix import clock, hooks, make_core, world  # noqa: F401  (fixtures)
+from switchboard.trust import CLOSE, OPEN
+
+
+def inner(text):
+    return text.split(OPEN + "\n", 1)[1].split("\n" + CLOSE, 1)[0]
 
 
 async def feed(core, label, name):
@@ -53,7 +58,7 @@ async def test_workspace_b_user_events(make_core, hooks, world):
     await feed(core, "private", "b_dm_to_owner.json")
     await drain(core)
     bodies = hooks.bodies("/b")
-    assert [(b["kind"], b["channel"], b["text"]) for b in bodies] == [("watched", "CPRIV0001", "dinner at 7?")]
+    assert [(b["kind"], b["channel"], inner(b["text"]), b["trust"]) for b in bodies] == [("watched", "CPRIV0001", "dinner at 7?", "external")]
     assert not [n for t, n, _ in world.calls if t == "xoxp-b" and n == "reactions_add"]
 
 
@@ -78,7 +83,7 @@ async def test_poll_fallback_uses_cursor(make_core, hooks, world):
     ]
     assert await rt.poll_channel("CPRIV0001") == 2
     await drain(core)
-    assert [b["text"] for b in hooks.bodies("/b")] == ["first", "second"]
+    assert [inner(b["text"]) for b in hooks.bodies("/b")] == ["first", "second"]
     assert core.store.get_cursor("private", "CPRIV0001") == "1700000002.000002"
     hist = [kw for t, n, kw in world.calls if n == "conversations_history"]
     assert hist[0]["oldest"] == cursor and all(t == "xoxp-b" for t, n, _ in world.calls if n == "conversations_history")

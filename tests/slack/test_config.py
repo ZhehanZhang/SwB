@@ -9,7 +9,7 @@ from slackfix import clock, hooks, make_core, world  # noqa: F401  (fixtures)
 
 
 def test_example_config_parses():
-    data = yaml.safe_load((ROOT / "config" / "switchboard.example.yaml").read_text())["slack"]
+    data = yaml.safe_load((ROOT / "config" / "switchboard.example.yaml").read_text())["blocks"]["slack"]
     cfg = parse_config(data, {})
     assert set(cfg.workspaces) == {"a2a", "private"}
     assert cfg.workspaces["private"].user_only
