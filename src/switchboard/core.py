@@ -187,14 +187,16 @@ class Switchboard:
         return sorted(names)
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
-                         final: bool = True) -> dict[str, Any]:
+                         final: bool = True, allow_self: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
-        A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack."""
+        A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
+        allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
         to = (to or "").strip().lower()
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
         if to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
-        if to == principal.source:
+        own = original is not None and original["ref"] == to and original["owner"] == to
+        if to == principal.source and not (allow_self or own):
             raise CoreError("that is you; agent_send goes to another agent")
         text = (text or "").strip()
         if not text:
@@ -303,6 +305,10 @@ class Switchboard:
             return addr
         head, sep, rest = text.partition(":")
         if sep and head.lower() in self.known_agents():
+            if self._is_project(rest.strip().lower()):
+                addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(head.lower(), rest.strip().lower()))), None)
+                if addr is not None:
+                    return addr
             for name, b in self.blocks.items():
                 if b.wakes_agents:
                     t = self.slug_map(await self.targets(block=name)).get(tgt.slugify(f"{head}-{rest}"))

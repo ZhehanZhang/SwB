@@ -250,6 +250,21 @@ def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     return page("Pairing code", body, 200)
 
 
+def claim_page(c: dict[str, Any], code: str, csrf: str) -> HTMLResponse:
+    """A pending self-registration: what a Claude session asked to register, and one field for the routine's token."""
+    np = c.get("new_project")
+    rows = (_row("Routine", f"{c['routine_id']}" + (" · primary for the project" if c["primary"] else ""), c["name"])
+            + _row("Claude Project", "Where the routine lives", c["title"] or "-")
+            + _row("Switchboard project", "Created when you save" if np else "Already exists", c["project"] + (f" ({np['name']})" if np else ""))
+            + _row("Asked by", "The signed-in session that called routine_register", c["created_by"]))
+    form = (f'<div class="setting"><div class="setting-label"><span>Token</span><span class="setting-hint">From the routine\'s API trigger (Generate token). '
+            f'Stored encrypted, never shown again. This link works once.</span></div><div class="setting-value">'
+            f'<form method="post" action="/routines/claim/{html.escape(code)}" autocomplete="off"><input type="hidden" name="csrf" value="{csrf}">'
+            '<input name="token" type="password" placeholder="sk-ant-oat01-…" required aria-label="Token" autocomplete="new-password">'
+            '<button class="pill-button primary">Save</button></form></div></div>')
+    return page("Register a Claude routine", hero("Register a Claude routine", "Paste the routine's token and save.") + f'<div class="card fade-in">{rows}{form}</div>', 200)
+
+
 def _routes_body(routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]]) -> str:
     def target(r: dict[str, Any]) -> str:
         t = r["target"]
