@@ -46,7 +46,7 @@ def opened(token, kw, group=True):
     return {"ok": False, "error": "missing_scope" if group else "cannot_dm_bot"}
 
 
-def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=(), dm=True, group=True, known=None):
+def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=(), dm=True, group=True, known=None, routines=None):
     world, hooks = FakeWorld(), Hooks()
     scans = []
     world.canned["users_list"] = lambda token, kw: (scans.append(token), {"ok": True, "members": members()})[1]
@@ -64,6 +64,8 @@ def build(tmp_path, dots=None, resources=None, relay_exists=False, in_channel=()
         slack["workspaces"]["a2a"]["known"] = known
     cfg = {"public_url": PUBLIC, "slack": slack, "destinations": {"dots": {"workspace": "a2a", **(dots or {})}},
            "visibility": {"defaults": {"target": "private", "channel": "shared"}, "resources": resources or {}}}
+    if routines:
+        cfg["destinations"]["claude-routine"] = {"routines": routines}
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(cfg))
     core = Switchboard(path, tmp_path / "data", env={**ENV, "SWITCHBOARD_KEY_FULL": KEY_FULL}, access_verifier=access,
@@ -251,13 +253,25 @@ def test_when_slack_refuses_the_group_dm_sends_fall_back_to_the_relay_channel(tm
         assert res["status"] == "answered" and len(res["replies"]) == 1 and "hi" in res["final"]["text"]
 
 
-def test_a_mention_in_the_relay_channel_or_group_dm_is_never_routed(tmp_path):
-    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), dots={"group_dm": True}) as (core, world, scans, client):
-        tool(client, "send", {"to": "example-dots", "task": "x"})
-        client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi", channel=RELAY))
-        client.portal.call(core.slack.ingest, "a2a", mention("example-dots hi", channel=GROUP, ts="1700000500.2"))
-        client.portal.call(asyncio.sleep, 0.2)
-        assert len(calls(world, "chat_postMessage")) == 1
+@pytest.mark.parametrize("channel", [RELAY, GROUP])
+def test_owner_mentions_route_in_dots_channels_but_dot_replies_are_consumed(tmp_path, channel):
+    with started(tmp_path, relay_exists=True, in_channel=(BOT_USER, DOT), dots={"group_dm": channel == GROUP},
+                 routines={"claude": {"agent": "full"}}) as (core, _, _, client):
+        dot = tool(client, "send", {"to": "example-dots", "task": "Check this"})
+        assert dot["channel"] == channel
+        push = client.portal.call(core.slack.ingest, "a2a", mention("claude check uptime", channel=channel))
+        assert push is not None and (push["kind"], push["target"], push["trust"]) == ("mention", "claude", "owner")
+        (item,) = [i for i in core.inbox.read(owner="full", since=0)["items"] if i["kind"] == "message"]
+        assert "check uptime" in item["text"] and core.slack.store.relay(item["handle"])["channel"] == channel
+
+        text = f"<@{BOT_USER}> claude dot answer"
+        assert client.portal.call(core.slack.ingest, "a2a", dot_event(channel, "1700000600.1", text, "1699999999.9")) is None
+        file_share = {**dot_event(channel, "1700000600.15", text, dot["ts"]), "subtype": "file_share"}
+        del file_share["user"]
+        assert client.portal.call(core.slack.ingest, "a2a", file_share) is None
+        assert client.portal.call(core.slack.ingest, "a2a", dot_event(channel, "1700000600.2", text, dot["ts"])) is None
+        result = tool(client, "result", {"conversation": dot["handle"]})
+        assert result["status"] == "answered" and len(result["replies"]) == 1 and text in result["final"]["text"]
 
 
 def test_with_group_dm_off_the_owner_posts_as_himself_in_his_own_dm_and_the_answer_is_polled(tmp_path):

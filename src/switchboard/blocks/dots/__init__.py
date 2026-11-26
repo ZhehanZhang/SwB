@@ -437,8 +437,6 @@ class DotsBlock(Block):
                 "channel": channel, "ts": out["ts"], "permalink": out.get("permalink"), "note": "the dot's reply comes back on this conversation"}
 
     def from_dot(self, m: dict[str, Any]) -> dict[str, Any] | None:
-        if m.get("subtype") not in (None, "bot_message", "thread_broadcast"):
-            return None
         who = {m.get("user"), m.get("bot_id")} - {None}
         return next((d for d in self.dots() if who & {d["user_id"], d.get("bot_id")}), None)
 
@@ -450,7 +448,7 @@ class DotsBlock(Block):
                                    (self.workspace, channel, dot["user_id"], m.get("ts") or ""))
 
     async def deliver(self, row: Any, dot: dict[str, Any], m: dict[str, Any]) -> bool:
-        if float(m["ts"]) <= float(row["last_ts"] or 0):
+        if m.get("subtype") not in (None, "bot_message", "thread_broadcast") or float(m["ts"]) <= float(row["last_ts"] or 0):
             return False
         self.core.store.x("UPDATE dot_threads SET last_ts = ? WHERE workspace = ? AND channel = ? AND thread_ts = ?",
                           (m["ts"], row["workspace"], row["channel"], row["thread_ts"]))
@@ -464,15 +462,16 @@ class DotsBlock(Block):
         self.core.inbox.update_handle(row["handle"], status="answered")
         return True
 
-    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> None:
-        """A message in the relay channel or a dot DM that @swb sees: a dot's answer goes back on its conversation.
-        Everything else (our own posts, the owner typing, edits) is left alone, and nothing here is routed."""
+    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> bool:
+        """Consume events from known dots, delivering only eligible replies that match a conversation."""
         dot = self.from_dot(event)
-        if dot is None or not event.get("ts"):
-            return
-        row = self._row_for(event["channel"], event, dot)
-        if row is not None and row["dot"] == dot["user_id"]:
-            await self.deliver(row, dot, event)
+        if dot is None:
+            return False
+        if event.get("ts"):
+            row = self._row_for(event["channel"], event, dot)
+            if row is not None and row["dot"] == dot["user_id"]:
+                await self.deliver(row, dot, event)
+        return True
 
     async def poll_dms(self) -> int:
         """Read the dots' answers in DMs for an hour after each send: the owner's own DM with his user token (@swb can't
