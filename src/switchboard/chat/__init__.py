@@ -317,7 +317,7 @@ class ChatBlock(Block):
         if not reaches:
             await self.note_context(space, msg, event, target)
             return event
-        if addressed and target is not None and (explicit or sticky is None):
+        if addressed and target is not None and (explicit or not (sticky and sticky["target"])):
             self.core.store.x("INSERT INTO chat_threads(block, space, channel, root, target, at) VALUES (?,?,?,?,?,?) ON CONFLICT(block, space, channel, root) "
                               "DO UPDATE SET target = excluded.target, at = excluded.at", (self.name, msg.space, msg.channel, root, slug, self.core.clock()))
         if addressed:
