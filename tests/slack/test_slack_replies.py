@@ -1,5 +1,4 @@
-"""Replies to conversations that started in Slack: a routine, an inbox watcher or any agent answers with reply, and the
-answer lands in the Slack thread (or the owner's DM for a private target in a shared channel)."""
+"""Replies to conversations that started in Slack, including private-target replies with no owner message."""
 
 import asyncio
 import json
@@ -76,8 +75,8 @@ def posts(world, client, n=1):
     return [kw for t, n_, kw in world.calls if n_ == "chat_postMessage"]
 
 
-@pytest.mark.parametrize("resources, channel, thread", [({}, "CPUBLIC01", "1700000500.000001"), ({"target:claude": "private"}, "DAPPROVER", None)])
-def test_a_routine_answers_a_slack_message_with_reply(tmp_path, resources, channel, thread):
+@pytest.mark.parametrize("resources", [{}, {"target:claude": "private"}])
+def test_a_routine_answers_a_slack_message_with_reply(tmp_path, resources):
     core, world, routine = build(tmp_path, resources)
     with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
         origin = core.origins["slack"]
@@ -93,13 +92,14 @@ def test_a_routine_answers_a_slack_message_with_reply(tmp_path, resources, chann
         out = tool(client, "reply", {"conversation": handle, "text": "up 3 days"})
         assert out["in_reply_to"] == handle and out["to"] == "agent:slack"
         (post,) = posts(world, client)
-        assert post["channel"] == channel and post.get("thread_ts") == thread and post["text"].endswith("up 3 days")
+        assert post["channel"] == "CPUBLIC01" and post["thread_ts"] == "1700000500.000001" and post["text"] == "up 3 days"
 
 
 def test_reply_on_a_slack_event_conversation_posts_in_its_thread(tmp_path):
-    core, world, routine = build(tmp_path)
+    core, world, _ = build(tmp_path, {"target:full": "private"})
     with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
-        client.portal.call(core.slack.ingest, "a2a", mention("anyone around?", ts="1700000600.000001"))
+        client.portal.call(core.origins["slack"].refresh)
+        client.portal.call(core.slack.ingest, "a2a", mention("full anyone around?", ts="1700000600.000001"))
         items = [i for i in tool(client, "wait", {"timeout_s": 0})["items"] if i["kind"] == "slack_event"]
         out = tool(client, "reply", {"conversation": items[0]["handle"], "text": "here"})
         assert out["status"] == "sent" and out["posted_in"] == "CPUBLIC01" and out["thread_ts"] == "1700000600.000001"
@@ -173,7 +173,7 @@ def test_forward_cannot_retry_after_routine_message_reaches_mailbox(tmp_path, mo
         assert core.inbox.handle(original)["meta"]["forwarded_to"] == delivered["handle"]
 
 
-def test_mapped_private_routine_replies_in_owner_dm(tmp_path):
+def test_owner_message_to_mapped_private_routine_stays_in_thread(tmp_path):
     core, world, _ = build(tmp_path, {"target:claude": "shared", "target:claude-workspace": "private"},
                            workspace_project="workspace")
     with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
@@ -182,9 +182,23 @@ def test_mapped_private_routine_replies_in_owner_dm(tmp_path):
         (item,) = [i for i in tool(client, "inbox", {"since_cursor": 0})["items"] if i["kind"] == "message"]
         tool(client, "reply", {"conversation": item["handle"], "text": "Up 3 days"})
         (post,) = posts(world, client)
-        assert post["channel"] == "DAPPROVER" and post.get("thread_ts") is None and post["text"].endswith("Up 3 days")
+        assert post["channel"] == "CPUBLIC01" and post["thread_ts"] == "1700000500.000001" and post["text"] == "Up 3 days"
         (audit,) = [r for r in core.slack.store.recent_audit() if r["action"] == "routed"]
         assert audit["detail"]["target"] == "claude-workspace"
+
+
+def test_private_routine_without_owner_message_replies_in_owner_dm(tmp_path):
+    core, world, _ = build(tmp_path)
+    with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
+        client.portal.call(core.origins["slack"].refresh)
+        client.portal.call(core.slack.ingest, "a2a", {**mention("claude what is the uptime?"), "user": "USTRANGER"})
+        (item,) = [i for i in tool(client, "inbox", {"since_cursor": 0})["items"] if i["kind"] == "message"]
+        assert item["from"]["trust"] == "external"
+        core.visibility.set("target:claude", "private", core.clock(), "test")
+        tool(client, "reply", {"conversation": item["handle"], "text": "Up 3 days"})
+        (post,) = posts(world, client)
+        assert post["channel"] == "DAPPROVER" and post.get("thread_ts") is None
+        assert post["text"] == "Reply from claude (Claude routine) to a message in a shared channel:\n\nUp 3 days"
 
 
 def test_shared_non_owner_slack_message_does_not_upgrade_or_forward(tmp_path):

@@ -235,19 +235,22 @@ class SlackIntake(Block):
         if item.get("kind") not in ("final", "message") or not (item.get("text") or "").strip():
             return
         data = item.get("data") if isinstance(item.get("data"), dict) else item
-        r = engine.store.relay(data.get("in_reply_to") or item["handle"]) if item.get("kind") == "message" else engine.store.relay(item["handle"])
+        handle = (data.get("in_reply_to") or item["handle"]) if item.get("kind") == "message" else item["handle"]
+        r = engine.store.relay(handle)
         if r is None:
             return
         target = engine.targets.get(r["target"])
         replier = ((data.get("from") or {}).get("agent") or "") if item.get("kind") == "message" else ""
-        place = await engine.reply_place(r["workspace"], r["channel"], r["thread_ts"], r["target"])
+        original = self.core.inbox.handle(handle)
+        trust = original["meta"].get("slack_trust") if original else None
+        place = await engine.reply_place(r["workspace"], r["channel"], r["thread_ts"], r["target"], trust=trust)
         if place is None:
             engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], target=r["target"], reason="private target, shared channel, no owner DM")
             return
         channel, thread_ts, to_dm = place
         text = data.get("raw_text") or item["text"]
         if to_dm:
-            text = f"Reply from {target.name if target else r['target']} to your message in a shared channel:\n\n{text}"
+            text = f"Reply from {target.name if target else r['target']} to a message in a shared channel:\n\n{text}"
         persona = target.persona if target and target.persona else (replier if replier in engine.personas() else None)
         key = Grant(id=AGENT, persona=persona, allow_persona_override=False, allowed_personas=None, scopes={r["workspace"]: ("bot",)})
         await engine.gate.submit(key, r["workspace"], "bot", "post_message", {"channel": channel, "text": text[: engine.config.max_text_chars], "thread_ts": thread_ts})

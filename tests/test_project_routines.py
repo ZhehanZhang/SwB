@@ -143,7 +143,7 @@ def test_root_page_adds_a_routine_and_shows_projects_across_systems(tmp_path):
         page = c.get("/", headers=OWNER).text
         assert "claude-infra" in page and "trig_01PAGE" in page and TOKEN not in page and "untested" in page
         systems = {s["slug"]: s["systems"] for s in core.project_systems(client_targets(c))}
-        assert systems["infra"]["claude-routine routine"] == "Claude · infra" and "capy" in systems["infra"]
+        assert systems["infra"]["claude-routine routine"] == "Claude: infra" and "capy" in systems["infra"]
         assert c.post("/routines/claude-infra/remove", data={"csrf": csrf}, headers=OWNER).status_code == 303
         assert "claude-infra" not in {r["name"] for r in core.blocks["claude-routine"].rows()}
     finally:

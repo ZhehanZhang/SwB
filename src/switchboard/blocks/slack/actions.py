@@ -232,8 +232,8 @@ class SlackActions(Block):
 
     async def reply(self, call: Call, *, ref: str, text: str, **_: Any) -> dict[str, Any]:
         """reply on a Slack conversation (the inbox handle a workspace's events arrive on): posted in the thread of the
-        latest message there that was addressed to you, as your persona; a private target's answer in a shared channel
-        goes to the owner's DM instead."""
+        latest message there that was addressed to you, as your persona. Without an owner message, a private target's
+        answer in a shared channel goes to the owner's DM."""
         h = self.core.inbox.handle(ref)
         if h is None or h["owner"] != call.principal.source:
             raise DestinationError(f"no conversation {ref!r}")
@@ -246,7 +246,7 @@ class SlackActions(Block):
                 break
         if src is None:
             raise DestinationError("nothing on this conversation was addressed to you; use slack_post with a channel and thread_ts")
-        place = await self.need().reply_place(src["workspace"], src["channel"], src.get("thread_ts") or src["ts"], target)
+        place = await self.need().reply_place(src["workspace"], src["channel"], src.get("thread_ts") or src["ts"], target, trust=src.get("trust"))
         if place is None:
             raise DestinationError("this is a private target in a shared channel and the owner's DM can't be opened")
         channel, thread_ts, _dm = place
