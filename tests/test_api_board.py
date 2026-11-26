@@ -2,7 +2,7 @@ import json
 import re
 from functools import partial
 
-from conftest import CAPTAIN, CAPY_KEY, OWNER, PUBLIC, STATIC_KEY, base_config, default_env
+from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, STATIC_KEY, base_config, default_env
 from test_api_read import get
 
 
@@ -16,8 +16,9 @@ def test_board_routes_require_the_owner(make):
             assert response.headers["cache-control"] == "no-store"
 
 
-def test_board_uses_project_scoped_placements_and_real_counts(make):
+def test_board_uses_project_scoped_placements_and_real_counts(make, capy):
     private = "private-fixture-data"
+    capy.captains.append({"id": "jam_UNPATCHED", "name": "Another Captain"})
     config = base_config(version=2, turn_cap=8, blocks={
         "mcp": {}, "capy": {},
         "slack": {
@@ -39,7 +40,7 @@ def test_board_uses_project_scoped_placements_and_real_counts(make):
     core.projects.update("old", archived=True)
     route = core.routes.set(destination="capy", agent="codex", project="context", target={"captain": CAPTAIN, "token": private},
                             defaults={"secret": private}, allow_override=True, note=private, by="admin:owner@example.test")
-    core.routes.set(destination="capy", agent=None, project=None, target={"captain": "jam_OTHER"},
+    core.routes.set(destination="capy", agent=None, project=None, target={"captain": CAPTAIN2},
                     defaults=None, allow_override=True, note="", by="config")
 
     core.memory.write(source="codex", scope=project.scope, namespace="notes", title="Build", key="build", body=private)
@@ -76,7 +77,9 @@ def test_board_uses_project_scoped_placements_and_real_counts(make):
     assert (other["memory_count"], other["open_count"]) == (1, 7)
     assert [(row["label"], row["kind"]) for row in context["sources"]] == [("#dev", "slack"), ("2 repos", "github")]
     assert other["sources"] == [] and other["agents"] == []
-    assert {row["label"] for row in board["unassigned"]} >= {"#general", "owner/three", "Gemini"}
+    unassigned = {row["label"] for row in board["unassigned"]}
+    assert unassigned >= {"#general", "owner/three", "Gemini", "Another Captain"}
+    assert "Acme Captain" not in unassigned
     assert [(row["label"], row["role"], row["by"]["label"]) for row in context["agents"]] == [
         ("Captain", "captain", "Owner"), ("Claude Code", "MCP client", "Owner"),
     ]
