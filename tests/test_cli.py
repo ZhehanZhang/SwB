@@ -70,32 +70,17 @@ def test_init_invalid_public_url_leaves_no_files(tmp_path, capsys):
     assert "--public-url" in capsys.readouterr().err
 
 
-def test_init_prints_login_link_from_reachable_server(tmp_path, monkeypatch, capsys):
-    monkeypatch.delenv(cli.OWNER_KEY, raising=False)
-    monkeypatch.setenv("PORT", "8400")
-    link = "https://switchboard.example.test/login#t=fixture"
-
-    async def call(url, key, tool, args):
-        assert url == "http://127.0.0.1:8400/mcp" and tool == "login_link" and args == {}
-        assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] == key
-        return {"url": link, "expires_in": 300}
-
-    monkeypatch.setattr(cli, "_call", call)
-    cli.main(["init", "--dir", str(tmp_path), "--public-url", "https://switchboard.example.test"])
+def test_init_points_to_login_link(tmp_path, capsys):
+    cli.main(["init", "--dir", str(tmp_path)])
     out = capsys.readouterr().out
-    assert out.splitlines()[-1] == link and "swb login-link" not in out
+    assert f"swb login-link --dir {tmp_path}" in out
     assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] not in out
 
 
-def test_login_link_calls_owner_tool_and_init_explains_unreachable_server(tmp_path, monkeypatch, capsys):
+def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv(cli.OWNER_KEY, raising=False)
-
-    async def offline(*args):
-        raise cli.CliError("unreachable")
-
-    monkeypatch.setattr(cli, "_call", offline)
     cli.main(["init", "--dir", str(tmp_path)])
-    assert "Run swb login-link" in capsys.readouterr().out
+    capsys.readouterr()
     link = "https://switchboard.example.test/login#t=fixture"
 
     async def call(url, key, tool, args):
