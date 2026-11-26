@@ -54,6 +54,8 @@ _Model = TypeVar("_Model", bound=_Body)
 
 
 async def _body(request: Request, model: type[_Model]) -> _Model | None:
+    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+        return None
     try:
         return model.model_validate_json(await request.body())
     except ValidationError:
@@ -65,7 +67,8 @@ def _error(code: str, status: int = 400) -> JSONResponse:
 
 
 def _owner(request: Request) -> Principal:
-    return Principal(source=f"admin:{request.state.owner_email}", client_id=client_ip(request.scope), kind="access", origin="http")
+    owner = request.state.owner
+    return Principal(source=f"admin:{owner.label}", client_id=client_ip(request.scope), kind="owner_session", origin="http")
 
 
 async def route_set(request: Request) -> JSONResponse:
@@ -150,7 +153,7 @@ async def slack_decide(request: Request) -> JSONResponse:
     if slack is None or verb not in ("approve", "reject"):
         return _error("not_found", 404)
     try:
-        out = await slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", request.state.owner_email))
+        out = await slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", request.state.owner.label))
     except WriteError:
         return _error("decision_refused", 409)
     return JSONResponse({"id": out["id"], "status": out["status"]})

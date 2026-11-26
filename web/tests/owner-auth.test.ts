@@ -93,7 +93,7 @@ test("keeps expired-link errors distinct from expired sessions", async (t) => {
   assert.equal(signOuts, 1)
 })
 
-test("accepts v2 counts and normalizes the interim session format", async (t) => {
+test("requires a non-negative passkey count in the session contract", async (t) => {
   mockBrowser(t)
   const access = { signed_in: true, via: "access", csrf: "csrf-test" }
   mockRequests(t, [
@@ -102,8 +102,8 @@ test("accepts v2 counts and normalizes the interim session format", async (t) =>
     () => Response.json({ ...access, methods: { passkeys: -1, passkey: true, oidc: null, access: true } }),
   ])
   assert.deepEqual(await new QueryClient().fetchQuery(sessionQuery), { ...access, methods: { passkeys: 2, oidc: { name: "My ID" }, access: true } })
-  assert.deepEqual(await new QueryClient().fetchQuery(sessionQuery), { ...access, methods: { passkeys: 0, oidc: null, access: true } })
-  await assert.rejects(new QueryClient().fetchQuery(sessionQuery), /Unexpected session response/)
+  await assert.rejects(new QueryClient().fetchQuery(sessionQuery), /Unexpected server response/)
+  await assert.rejects(new QueryClient().fetchQuery(sessionQuery), /Unexpected server response/)
 })
 
 test("uses native WebAuthn JSON conversion for get and create, with the right CSRF", async (t) => {

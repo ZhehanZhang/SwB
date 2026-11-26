@@ -108,7 +108,7 @@ def test_standalone_handoff_uses_only_local_accent_assets_and_a_password_field(m
     path = urlsplit(core.claims.mint("EXAMPLE_TOKEN", PUBLIC)).path
     response = client.get(path, headers=OWNER)
     assert response.status_code == 200
-    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["referrer-policy"] == "same-origin"
     assert response.headers["cache-control"] == "no-store"
     assert "form-action 'self'" in response.headers["content-security-policy"]
     assert "/assets/claim-brand.svg" in response.text and "/assets/claim.css" in response.text

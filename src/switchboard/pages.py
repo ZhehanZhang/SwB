@@ -354,7 +354,7 @@ def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="same-origin">
 <title>{html.escape(title)} | SwB</title>
 <link rel="stylesheet" href="/assets/claim.css">
 </head><body><main>
@@ -362,7 +362,7 @@ def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
 {body}
 </main></body></html>"""
     return HTMLResponse(doc, status_code=status, headers={
-        "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
+        "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin",
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     })

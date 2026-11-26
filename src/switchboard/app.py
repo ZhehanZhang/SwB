@@ -334,14 +334,14 @@ def create_app(core: "Switchboard") -> Any:
             return Response(status_code=404)
         code = request.path_params.get("code", "")
         if registration is not None and request.method == "POST":
-            email, form, refused = await owner_form(request)
+            owner, form, refused = await owner_form(request)
             if refused is None:
                 value = form.get("token")
-                actor, token = f"admin:{email}", value if isinstance(value, str) else ""
+                actor, token = f"admin:{owner.label}", value if isinstance(value, str) else ""
         elif registration is not None:
-            email, refused = await owner_page(request)
+            owner, refused = await owner_page(request)
             if refused is None:
-                form_csrf = csrf(email)
+                form_csrf = core.auth.csrf(owner.csrf_key)
         elif request.method == "POST":
             actor, token, refused = await claim_form(request)
         else:
@@ -491,7 +491,7 @@ def create_app(core: "Switchboard") -> Any:
             *pages.routes(),
             *login.routes(),
             *core.auth.routes(),
-            *web_routes(owner_page, csrf),
+            *web_routes(),
             *origin_routes,
         ],
         lifespan=lifespan,

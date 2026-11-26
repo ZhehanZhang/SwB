@@ -5,6 +5,7 @@ import pytest
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, default_env
 from switchboard import api_runtime
+from switchboard.config import ConfigError
 
 
 def test_settings_is_owner_only_and_reports_runtime_facts_without_secrets(make, monkeypatch):
@@ -40,8 +41,12 @@ def test_settings_is_owner_only_and_reports_runtime_facts_without_secrets(make, 
     ("https://example.test?token=fixture-password", "/mcp"),
     ("https://example.test:invalid", "/mcp"),
 ])
-def test_settings_omits_unavailable_or_unsafe_values(make, base, endpoint):
-    _, client = make(base_config(public_url=base))
+def test_settings_omits_unavailable_or_unsafe_values(make, monkeypatch, base, endpoint):
+    if base is not None:
+        with pytest.raises(ConfigError, match="public_url"):
+            make(base_config(public_url=base))
+    core, client = make(base_config(public_url=None))
+    monkeypatch.setattr(core.cfg, "public_url", base)
     response = client.get("/api/settings", headers=OWNER)
     assert response.status_code == 200
     assert response.json()["owner_key_masked"] is None

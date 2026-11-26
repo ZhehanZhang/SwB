@@ -104,7 +104,8 @@ def test_console_claim_requires_owner_and_keeps_original_link_one_time(make):
     [row] = read(client, "/agents")["pending_claims"]
     path = row["claim_url"]
     token = "sk-ant-oat01-" + "x" * 35
-    assert client.get(path).status_code == 403
+    denied = client.get(path)
+    assert denied.status_code == 303 and denied.headers["location"].startswith("/login?next=%2Froutines%2Fclaim%2Fowner%2F")
     assert client.get(path, headers=OWNER).status_code == client.get(original, headers=OWNER).status_code == 200
     assert client.post(path, data={"token": token}, headers=OWNER).status_code == 403
     assert client.get("/routines/claim/owner/9999999999999999999", headers=OWNER).status_code == 404

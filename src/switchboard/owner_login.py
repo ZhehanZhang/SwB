@@ -27,6 +27,7 @@ from . import pages
 from .guard import RateLimiter, client_ip
 from .oidc import OIDC
 from .sessions import CHALLENGE_COOKIE, CHALLENGE_TTL, clear_cookie, safe_next, set_cookie
+from .web import spa_index
 
 if TYPE_CHECKING:
     from .auth import Auth
@@ -80,6 +81,8 @@ class OwnerLogin:
         owner = await self.auth.owner(request)
         if owner is not None and owner.via == "access":
             return RedirectResponse(next_path, status_code=303)
+        if (index := spa_index()) is not None:
+            return index
         return pages.login_page(self.methods(), next_path, request.query_params.get("error"), signed_in=owner is not None)
 
     async def session(self, request: Request) -> Response:
