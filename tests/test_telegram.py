@@ -161,13 +161,29 @@ def test_stranger_cannot_wake_or_receive_a_reply_from_a_private_target(run):
         assert not anthropic.fired and not bot.calls["sendMessage"] and not bot.calls["setMessageReaction"]
 
 
+def test_native_reply_to_second_chunk_keeps_the_original_target(run):
+    with run(persona_prefix=False) as (core, c, _, bot, anthropic):
+        c.portal.call(bot.deliver, update(11, mention=True, text="example-runner start"))
+        handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
+        result = payload(call(c, STATIC_KEY, "reply", {"conversation": handle, "text": "x" * 4097}))
+        assert result["delivered"]
+        c.portal.call(until, lambda: core.store.one("SELECT 1 FROM chat_sent WHERE message = '9002'"))
+        assert [len(post["text"]) for post in bot.calls["sendMessage"]] == [4096, 1]
+        assert [(row["message"], row["root"]) for row in core.store.q("SELECT message, root FROM chat_sent ORDER BY message")] == [
+            ("9001", "11"), ("9002", "11")]
+        c.portal.call(bot.deliver, update(12, text="follow up", reply=9002))
+        assert len(anthropic.fired) == 2 and "follow up" in anthropic.fired[-1][1]
+        event = json.loads(core.store.one("SELECT data FROM inbox WHERE kind = 'telegram_event' ORDER BY id DESC")["data"])
+        assert (event["chat_kind"], event["target"], event["from"]["root"]) == ("reply", "example-runner", "11")
+
+
 def test_dm_space_seen_chats_and_bot_self_filter(run):
     with run() as (core, c, block, bot, _):
         c.portal.call(bot.deliver, update(10, chat=UNKNOWN, mention=True), update(11, chat=775555, user=BOT, kind="private"),
                       update(12, chat=OWNER_ID, kind="private", text=f"/ask@{BOT_NAME} testing"))
         events = core.store.q("SELECT data FROM inbox WHERE kind = 'telegram_event'")
         event, = (json.loads(row["data"]) for row in events)
-        assert (event["kind"], event["from"]["space"], event["text"], event["from"]["user_name"]) == ("dm", "dm", "testing", "Example User")
+        assert (event["chat_kind"], event["from"]["space"], event["text"], event["from"]["user_name"]) == ("dm", "dm", "testing", "Example User")
         assert c.portal.call(block.open_dm, "dm", str(OWNER_ID)) == str(OWNER_ID)
         assert c.portal.call(block.open_dm, "dm", str(GROUP)) is None
         assert block.setup()["seen_chats"] == [{"id": OWNER_ID, "title": "Example group", "type": "private"},
@@ -213,14 +229,15 @@ def test_offset_survives_restart_and_is_scoped_to_bot_identity(run):
         assert c.portal.call(until, lambda: bot.calls["getUpdates"])[0]["offset"] == 0
 
 
-def test_post_splits_html_on_character_boundaries_and_returns_first_id(run):
+def test_post_splits_html_on_character_boundaries_and_returns_each_id(run):
     with run(connect=False) as (_, c, block, bot, _):
         body = ("&<>\"'b" * 1000) + "end"
         name = '<agent & "team">'
         result = c.portal.call(lambda: block.post("group", str(GROUP), body, root="5", persona=Persona("agent", name)))
         texts = [p["text"] for p in bot.calls["sendMessage"]]
         prefix = f"<b>{html.escape(name)}</b>\n"
-        assert result == "9001" and len(texts) > 1 and texts[0].startswith(prefix)
+        assert result == [str(9001 + i) for i in range(len(texts))]
+        assert len(texts) > 1 and texts[0].startswith(prefix)
         assert all(0 < len(t) <= 4096 for t in texts)
         assert html.unescape(texts[0].removeprefix(prefix)) + "".join(html.unescape(t) for t in texts[1:]) == body
         assert all(p["parse_mode"] == "HTML" and p["reply_parameters"]["message_id"] == 5 for p in bot.calls["sendMessage"])
