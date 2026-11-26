@@ -137,7 +137,7 @@ class OwnerLogin:
             return error("passkey_failed", 401)
         cookie, challenge = self.sessions.challenge("register", owner)
         options = generate_registration_options(
-            rp_id=self.rp_id, rp_name="Switchboard", user_id=self.sessions.user_handle(), user_name="owner",
+            rp_id=self.rp_id, rp_name="SwB", user_id=self.sessions.user_handle(), user_name="owner",
             user_display_name="Owner", challenge=challenge, timeout=CHALLENGE_TTL * 1000,
             authenticator_selection=AuthenticatorSelectionCriteria(resident_key=ResidentKeyRequirement.REQUIRED,
                                                                     user_verification=UserVerificationRequirement.REQUIRED),

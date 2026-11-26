@@ -258,7 +258,7 @@ def test_passkey_registration_discoverable_login_and_counter(make, caplog):
         cookie_attributes(response, CHALLENGE_COOKIE, 120)
         opts = response.json()
         public_key = opts["publicKey"]
-        assert public_key["rp"] == {"id": urlsplit(PUBLIC).hostname, "name": "Switchboard"}
+        assert public_key["rp"] == {"id": urlsplit(PUBLIC).hostname, "name": "SwB"}
         assert public_key["authenticatorSelection"] == {"residentKey": "required", "requireResidentKey": True,
                                                        "userVerification": "required"}
         assert public_key["excludeCredentials"] == []

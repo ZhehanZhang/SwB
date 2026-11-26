@@ -252,7 +252,7 @@ class Auth:
             "authorization_servers": [self.cfg.issuer],
             "scopes_supported": [SCOPE],
             "bearer_methods_supported": ["header"],
-            "resource_name": "Switchboard",
+            "resource_name": "SwB",
         }
 
     def server_metadata(self) -> dict[str, Any]:
@@ -650,7 +650,7 @@ class Auth:
         dest = html.escape(urlparse(params["redirect_uri"]).netloc)
         line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and route work to the destinations this switchboard connects, such as Capy."
         signed = f'<p class="item-line">Signed in as {html.escape(owner.label)}</p>'
-        body = pages.hero("Connect to Switchboard", line) + f"""
+        body = pages.hero("Connect to SwB", line) + f"""
 <form method="post" class="fade-in">
 <input type="hidden" name="req" value="{html.escape(self.sign(params))}">
 <input type="hidden" name="csrf" value="{self.csrf(owner.csrf_key)}">
