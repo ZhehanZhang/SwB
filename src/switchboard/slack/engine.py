@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import secrets
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -395,7 +394,6 @@ class SlackEngine:
                 log.exception("workspace %s: event listener failed", label)
 
     async def handle_block_actions(self, label: str, payload: dict[str, Any]) -> None:
-        approvals = self.config.approvals
         rt = self.runtime(label)
         user = (payload.get("user") or {}).get("id", "")
         team = (payload.get("team") or {}).get("id") or (payload.get("user") or {}).get("team_id")

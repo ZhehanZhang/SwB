@@ -1,0 +1,34 @@
+name: Bug report
+description: Report something that isn't working in switchboard.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For suspected vulnerabilities, use [private reporting](https://github.com/ZhehanZhang/switchboard/security/advisories).
+        Don't include credentials, claim links, private messages, or unredacted config or logs.
+  - type: input
+    id: environment
+    attributes:
+      label: Version and environment
+      description: Include the switchboard version or commit, how you installed it, and the affected block or client.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the smallest set of steps that shows the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or configuration
+      description: Include only the relevant lines, with private data removed.

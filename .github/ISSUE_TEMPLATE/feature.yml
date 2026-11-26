@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an improvement to switchboard.
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: Describe your workflow and where switchboard gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help?
+      description: Describe the behavior you want. If it involves a block or client, say which one.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've tried
+      description: Describe any workarounds or other approaches you considered.

@@ -140,7 +140,7 @@ def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize(("claim", "endpoint", "expected", "success"), [
-    ("fixture-code", None, "http://127.0.0.1:8000/claim/fixture-code", "Token saved."),
+    ("fixture-code", None, "http://127.0.0.1:8870/claim/fixture-code", "Token saved."),
     ("https://other.example.test/claim/fixture-code", "https://switchboard.example.test",
      "https://switchboard.example.test/claim/fixture-code", "Token saved."),
     ("https://other.example.test/prefix/routines/claim/fixture-code", "https://switchboard.example.test/prefix/mcp",
