@@ -74,24 +74,9 @@ def _init(base: Path, public_url: str | None, force: bool) -> None:
             raise CliError(f"{path} already exists; use --force to replace it.")
     config_path.parent.mkdir(parents=True, exist_ok=True)
     _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
-    key = secrets.token_hex(32)
-    _write_file(env_path, f"{OWNER_KEY}={key}\n", force=force, mode=0o600)
+    _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
     start = "swb up" if base == Path.cwd() else f"swb up --dir {shlex.quote(str(base))}"
-    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}")
-    command = start.replace("swb up", "swb login-link", 1)
-    port = os.environ.get("PORT", "8000")
-    key = os.environ.get(OWNER_KEY) or key
-    request_log = logging.getLogger("mcp")
-    level = request_log.level
-    try:
-        request_log.setLevel(logging.CRITICAL + 1)
-        url = _url(f"http://127.0.0.1:{port}/mcp")
-        payload = asyncio.run(asyncio.wait_for(_call(url, key, "login_link", {}), timeout=2))
-        print(_display("login_link", payload).replace(key, "[redacted]"))
-    except (CliError, TimeoutError):
-        print(f"Run {command} after {start} to get a sign-in link.")
-    finally:
-        request_log.setLevel(level)
+    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}, then {start.replace('swb up', 'swb login-link', 1)} to sign in.")
 
 
 def _read_env(path: Path) -> dict[str, str]:

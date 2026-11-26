@@ -320,6 +320,19 @@ def test_passkey_challenge_bound_to_session_and_single_use_on_failure_or_expiry(
     assert core.store.one("SELECT 1 FROM owner_webauthn_challenges") is None
 
 
+def test_passkey_delete_signs_out_its_sessions(make):
+    _, client = make(base_config(auth={}))
+    assert sign_in(client).status_code == 204
+    first, second = Passkey(), Passkey()
+    for key in (first, second):
+        assert add_key(client, key).status_code == 201
+    assert authenticate(client, first, 1).status_code == 204
+    assert client.delete("/auth/passkeys/" + b64url(first.id), headers=csrf(client)).status_code == 204
+    assert client.get("/auth/session").json()["signed_in"] is False
+    assert authenticate(client, second, 1).status_code == 204
+    assert client.get("/auth/session").json()["via"] == "passkey"
+
+
 @pytest.mark.parametrize("upstream", [None, "access", "oidc"])
 def test_passkey_delete_keeps_last_method_without_upstream(make, upstream):
     config = base_config()

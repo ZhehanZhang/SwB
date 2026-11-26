@@ -173,13 +173,14 @@ class OwnerLogin:
                         )
                     except Exception:
                         pass
+            row_id = bytes_to_base64url(verified.credential_id) if verified else None
             if verified and self.store.n(
                 "UPDATE owner_passkeys SET last_used_at = ?, sign_count = max(sign_count, ?) "
                 "WHERE id = ? AND public_key = ? AND (sign_count = 0 OR ? = 0 OR sign_count < ?)",
                 (self.store.clock(), verified.new_sign_count, bytes_to_base64url(verified.credential_id),
                  row["public_key"], verified.new_sign_count, verified.new_sign_count),
             ):
-                response = self.sessions.start(request, Response(status_code=204), "passkey")
+                response = self.sessions.start(request, Response(status_code=204), "passkey", source=row_id)
             else:
                 self.limiter.hit("passkey_fail", ip)
                 response = error("passkey_failed", 401)
@@ -242,6 +243,7 @@ class OwnerLogin:
             ).fetchone()[0] == 1:
                 return 409
             db.execute("DELETE FROM owner_passkeys WHERE id = ?", (cred_id,))
+            db.execute("DELETE FROM owner_sessions WHERE via = 'passkey' AND source = ?", (cred_id,))
             return 204
 
         status = self.store.tx(delete)
