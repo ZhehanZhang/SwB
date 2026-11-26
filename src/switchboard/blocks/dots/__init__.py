@@ -1,12 +1,13 @@
-"""Dots: ChatGPT dots (always-on ChatGPT agents, each with its own Slack identity) reached through a dedicated Slack
-relay channel.
+"""Dots: ChatGPT dots reached through a Slack relay or a Switchboard mailbox.
 
-Switchboard finds the dots itself: in the configured workspace it scans the members for bot users that look like dots
+With delivery: mailbox, dots are declared in config and messages go to each dot's mailbox (chatgpt by default).
+
+With delivery: slack (the default), Switchboard scans the configured Slack workspace for bot users that look like dots
 (an app id in app_ids, or a name matching match, "dot" by default), again on user_change and team_join and every
-rescan_minutes, and registers each as a target named after its handle (example-dots -> @swb example-dots). Config can
+rescan_minutes, and registers each as a target named after its handle. Config can
 add, rename or disable any of them under dots:. Like every target, a dot is private unless shared.
 
-All traffic goes through one private channel (channel, default #agents), which switchboard creates as the owner
+The default Slack route is one private channel (channel, default #agents), which switchboard creates as the owner
 when create is true. Switchboard never invites anyone: status names the one /invite the owner runs to add @swb and the
 dots. The channel is never watched for routing. Each send is a new post by @swb that @mentions the dot: his agents
 post under their own persona, his own Slack messages under "via <his name>". The dot's replies in that post's thread
@@ -40,6 +41,7 @@ SLUG_RE = re.compile(r"[^a-z0-9]+")
 LABEL_RE = re.compile(r"\[\s*via\s+swb\b", re.IGNORECASE)
 OWNER_PERSONA = "dots-owner"
 DEFAULT_ALIAS = "dot"
+DEFAULT_MAILBOX = "chatgpt"
 OWNER_KINDS = frozenset({"oauth", "key", "connect"})
 """Principals that are the owner's own agents: his OAuth sign-ins, his configured keys, his paired connections."""
 
@@ -49,8 +51,8 @@ def unlabel(text: str) -> str:
     return LABEL_RE.sub("(via swb", text or "")
 
 
-INSTRUCTIONS = """dots targets are ChatGPT dots in the owner's Slack: send to one (its handle, e.g. example-dots) and switchboard posts
-it in #agents, mentioning the dot; the dot's answer comes back to your inbox on the conversation send returned."""
+INSTRUCTIONS = """Send to a dot by its target handle. Depending on the configured delivery mode, Switchboard posts in
+Slack or delivers to the dot's mailbox. The dot's answer comes back to your inbox on the conversation send returned."""
 
 DOT_SNIPPET = """In #agents, posts that @mention you from my Switchboard app (bot <bot id>, app <app id>), shown under
 persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
@@ -72,14 +74,20 @@ class DotsBlock(Block):
         targets=(TargetKind("dot", slug_from="name"),),
         network=("slack.com",),
         config_schema={"type": "object", "properties": {
+            "delivery": {"enum": ["slack", "mailbox"], "default": "slack"},
             "workspace": {"type": "string"}, "channel": {"type": "string"}, "create": {"type": "boolean"},
             "app_ids": {"type": "array"}, "match": {"type": "array"}, "rescan_minutes": {"type": "number"},
-            "dots": {"type": "object"}, "group_dm": {"type": "boolean"}, "agents_as_owner": {"type": "boolean"}, "owner_dm": {"type": "boolean"}, "default": {"type": "string"}, "owner_posts_as": {"enum": ["swb", "owner"]}, "poll_seconds": {"type": "number"}}},
+            "dots": {"type": "object", "additionalProperties": {"type": "object", "properties": {
+                "mailbox": {"type": "string", "default": DEFAULT_MAILBOX}}}},
+            "group_dm": {"type": "boolean"}, "agents_as_owner": {"type": "boolean"}, "owner_dm": {"type": "boolean"}, "default": {"type": "string"}, "owner_posts_as": {"enum": ["swb", "owner"]}, "poll_seconds": {"type": "number"}}},
         instructions=INSTRUCTIONS,
     )
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
+        self.delivery = config.get("delivery", "slack")
+        if self.delivery not in ("slack", "mailbox"):
+            raise BlockError("dots.delivery must be slack or mailbox")
         self.workspace = str(config.get("workspace") or "")
         self.channel_name = str(config.get("channel") or "#agents")
         self.create = bool(config.get("create", True))
@@ -115,7 +123,8 @@ class DotsBlock(Block):
             return
         if not self.workspace:
             self.workspace = next(iter(engine.config.workspaces), "")
-        engine.directory_listeners.append(self.on_directory)
+        if self.delivery == "slack":
+            engine.directory_listeners.append(self.on_directory)
         row = self.core.store.one("SELECT channel FROM dot_relays WHERE workspace = ?", (self.workspace,))
         if row is not None:
             engine.relays[(self.workspace, row["channel"])] = self.on_relay_event
@@ -127,7 +136,8 @@ class DotsBlock(Block):
     async def start(self) -> None:
         engine = self.slack_engine
         if engine is not None and engine.connect:
-            self._task = asyncio.create_task(self._loop(), name="dots")
+            if self.delivery == "slack":
+                self._task = asyncio.create_task(self._loop(), name="dots")
             self._poll = asyncio.create_task(self._poll_loop(), name="dots-poll")
 
     async def aclose(self) -> None:
@@ -166,6 +176,8 @@ class DotsBlock(Block):
 
     async def rescan(self) -> list[dict[str, Any]]:
         """Find the workspace's dots, register them as targets, and make sure the relay channel exists."""
+        if self.delivery == "mailbox":
+            return self.dots()
         rt = self.runtime()
         members, cursor = [], None
         for _ in range(20):
@@ -201,12 +213,20 @@ class DotsBlock(Block):
             await self.rescan()
 
     def dots(self) -> list[dict[str, Any]]:
+        if self.delivery == "slack":
+            return self.slack_dots()
+        return [{"id": str(o.get("user_id") or name), "slug": str(o.get("slug") or slugify(name)).lower(),
+                 "label": o.get("name") or name, "mailbox": str(o.get("mailbox") or DEFAULT_MAILBOX).strip().lower()}
+                for name, o in self.overrides.items() if not o.get("disabled")]
+
+    def slack_dots(self) -> list[dict[str, Any]]:
         out = []
         for r in self.core.store.q("SELECT * FROM dots WHERE workspace = ? ORDER BY name", (self.workspace,)):
             d = dict(r)
             o = self.overrides.get(d["slug"]) or next((v for v in self.overrides.values() if v.get("user_id") == d["user_id"]), {})
-            if o.get("disabled"):
+            if o.get("disabled") and self.delivery == "slack":
                 continue
+            d["id"] = d["user_id"]
             d["slug"] = str(o.get("slug") or d["slug"]).lower()
             d["label"] = o.get("name") or d.get("real_name") or d["name"]
             out.append(d)
@@ -216,7 +236,7 @@ class DotsBlock(Block):
         """The owner's dot, the one "dot" names: config's default, else the only dot found."""
         dots = self.dots() if dots is None else dots
         if self.default_slug:
-            return next((d for d in dots if self.default_slug in (d["slug"], d["user_id"].lower())), None)
+            return next((d for d in dots if self.default_slug in (d["slug"], d["id"].lower())), None)
         return dots[0] if len(dots) == 1 else None
 
     def dot(self, ref: str) -> dict[str, Any] | None:
@@ -224,7 +244,7 @@ class DotsBlock(Block):
         dots = self.dots()
         if ref.lower() == DEFAULT_ALIAS:
             return self.default_dot(dots)
-        return next((d for d in dots if ref in (d["user_id"], d["slug"])), None)
+        return next((d for d in dots if ref in (d["id"], d["slug"])), None)
 
     # The relay channel -------------------------------------------------------------------------
 
@@ -269,14 +289,17 @@ class DotsBlock(Block):
     async def targets(self) -> list[dict[str, Any]]:
         dots = self.dots()
         default = self.default_dot(dots)
-        return [{"kind": "dot", "id": d["user_id"], "name": d["label"],
-                 "persona": {"id": f"dot-{d['slug']}", "name": d["label"], "icon_url": self.images.get(d["user_id"])},
+        return [{"kind": "dot", "id": d["id"], "name": d["label"],
+                 "persona": {"id": f"dot-{d['slug']}", "name": d["label"], "icon_url": self.images.get(d["id"])},
                  "slugs": [d["slug"], *([DEFAULT_ALIAS] if default is d and d["slug"] != DEFAULT_ALIAS else [])]} for d in dots]
 
     def problems(self) -> list[str]:
         return list(self.problems_)
 
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
+        if self.delivery == "mailbox":
+            known = set(self.core.known_agents())
+            return [(f"dot {d['slug']}", d["label"], f"mailbox: {d['mailbox']}", d["mailbox"] in known) for d in self.dots()]
         rows = [(f"dot {d['slug']}", f"{d['label']} ({d['user_id']}) in {self.workspace}", "found", True) for d in self.dots()]
         ch = self.relay_channel()
         invite = getattr(self, "relay_invite", None)
@@ -286,7 +309,7 @@ class DotsBlock(Block):
         return rows
 
     def actions(self) -> list[Action]:
-        return [Action("send", "Message a dot", "Post in the dots relay channel, mentioning the dot; its reply comes back on the conversation.",
+        return [Action("send", "Message a dot", "Deliver to the dot in Slack or its mailbox; its reply comes back on the conversation.",
                        self.send, capped=True),
                 Action("result", "A dot conversation's replies", "The dot's replies so far on one conversation.", self.result, read_only=True)]
 
@@ -366,12 +389,16 @@ class DotsBlock(Block):
         return OWNER_PERSONA
 
     async def send(self, call: Call, *, task: str, target: str | None = None, title: str | None = None, project: str | None = None, **_: Any) -> dict[str, Any]:
-        """Sends go to the group DM of the owner, @swb and the dot, @mentioning the dot: agents post as @swb in their own
-        persona, the owner's own Slack messages as @swb "via <him>" (or as him, owner_posts_as: owner). The relay channel is
-        the fallback. With group_dm off, owner-trust sends post as him in his own DM with the dot instead."""
+        """In mailbox mode, deliver to the configured mailbox. Slack sends can use the group DM with the owner,
+        @swb and the dot, or the owner's DM with the dot. The private relay channel is the default and the fallback."""
         dot = self.dot(target or "")
         if dot is None:
             raise BlockError(f"no dot {target!r}; dots: {', '.join(d['slug'] for d in self.dots()) or 'none found yet'}")
+        if self.delivery == "mailbox":
+            out = await self.core.agent_send(call.principal, to=dot["mailbox"], text=task, project=project,
+                                            handle=call.handle, handle_meta=call.handle_meta)
+            call.note(target=f"dot:{dot['slug']}", ref=out["handle"], title=title, excerpt=task)
+            return {**out, "dot": dot["slug"], "mode": "mailbox"}
         from ...slack.config import Grant
         from ...slack.writes import OWNER_RELAY, WriteError
         from ..slack.intake import SLACK_SENDER
@@ -438,7 +465,7 @@ class DotsBlock(Block):
 
     def from_dot(self, m: dict[str, Any]) -> dict[str, Any] | None:
         who = {m.get("user"), m.get("bot_id")} - {None}
-        return next((d for d in self.dots() if who & {d["user_id"], d.get("bot_id")}), None)
+        return next((d for d in self.slack_dots() if who & {d["user_id"], d.get("bot_id")}), None)
 
     def _row_for(self, channel: str, m: dict[str, Any], dot: dict[str, Any]) -> Any:
         """The conversation a dot message answers: its thread's, else (a top-level answer) the newest one sent to that dot there."""
@@ -476,11 +503,13 @@ class DotsBlock(Block):
     async def poll_dms(self) -> int:
         """Read the dots' answers in DMs for an hour after each send: the owner's own DM with his user token (@swb can't
         see it), the group DM with the bot token (in case its events are missed). Each answer is delivered once."""
-        rt = self.runtime()
-        got = 0
         rows = self.core.store.q("SELECT * FROM dot_threads WHERE workspace = ? AND mode IN ('dm', 'group_dm') AND created_at > ? ORDER BY thread_ts",
                                  (self.workspace, self.core.clock() - 3600))
-        dots = {d["user_id"]: d for d in self.dots()}
+        if not rows:
+            return 0
+        rt = self.runtime()
+        got = 0
+        dots = {d["user_id"]: d for d in self.slack_dots()}
         for channel, mode in {(r["channel"], r["mode"]) for r in rows}:
             identity = "user" if mode == "dm" else "bot"
             if identity not in rt.clients:
