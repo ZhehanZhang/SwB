@@ -33,9 +33,9 @@ def register(block: "ClaudeRoutineBlock", mcp: MCPServer, kit: Any) -> None:
         "For a Claude session setting up its own routine (a Claude Code routine with an API trigger, inside a Claude Project). Call "
         "project_list first and attach to the switchboard project that matches (project=<slug>). Pass the routine's fire URL or trig_ id "
         "and claude_project (the Claude Project's name). Several routines can share one switchboard project; each gets its own name, and "
-        "the first one (or primary=true) is the one a send to claude for that project wakes. A project slug that doesn't exist is created "
-        "when the owner completes the link, but if it is close to an existing project the call returns candidates instead, unless "
-        "create_new=true. Never ask for or pass the token: the result's link is where the owner enters it (one paste, one click, 30 "
+        "the first one (or primary=true) is the one a send to claude for that project wakes. A new project is created when the owner "
+        "completes the first link; pass its slug to attach while it is still pending. Similar existing or pending projects come back as "
+        "candidates unless create_new=true. Never ask for or pass the token: the result's link is where the owner enters it (one paste, one click, 30 "
         "minutes, once). Re-registering for the same switchboard project and Claude Project replaces any link still waiting for the owner. "
         "Give him the latest link, then check routine_list."), annotations=kit.WRITE_IDEMPOTENT)
     async def routine_register(ctx: Context, fire_url: Annotated[str, Field(description="https://api.anthropic.com/v1/claude_code/routines/trig_…/fire, or the trig_ id")],

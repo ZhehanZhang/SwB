@@ -4,6 +4,7 @@ link for the token, duplicate-project guard, and the empty-body fire for Project
 import json
 
 import httpx
+import pytest
 
 from conftest import OWNER, STATIC_KEY, call, error_text, payload, sign_in
 from test_project_routines import BOTH, TOKEN, build
@@ -143,6 +144,56 @@ def test_registration_reads_projects_first_and_refuses_near_duplicates(tmp_path)
         assert "fire URL" in error_text(call(c, tok, "routine_register", {"fire_url": "nope", "claude_project": "X", "project": "infra"}))
     finally:
         c.__exit__(None, None, None)
+
+
+@pytest.mark.parametrize("second_first", [False, True])
+def test_routines_can_share_a_pending_project_and_save_in_either_order(tmp_path, second_first):
+    core, c, anthropic = build(tmp_path, {})
+    try:
+        tok = sign_in(c)["access_token"]
+        first = payload(call(c, tok, "routine_register", {"fire_url": "trig_01GARDEN", "claude_project": "Garden Planner", "project": "garden",
+                                                          "project_name": "Garden", "description": "A seed calendar"}))
+        assert first["pending"] and first["creates_project"]
+        projects = payload(call(c, tok, "project_list"))
+        pending = {"slug": "garden", "name": "Garden", "description": "A seed calendar", "claude_project": "Garden Planner", "expires_in_s": 1800}
+        assert projects["pending_projects"] == [pending] and "garden" not in {p["slug"] for p in projects["projects"]}
+        near = payload(call(c, tok, "routine_register", {"fire_url": "trig_01NEAR", "claude_project": "Seed Orders", "project": "garden-planner"}))
+        assert not near["pending"] and any(p["slug"] == "garden" and p["pending"] for p in near["candidates"])
+        second = payload(call(c, tok, "routine_register", {"fire_url": "trig_01SEEDS", "claude_project": "Seed Orders", "project": "garden",
+                                                           "project_name": "Ignored Name", "description": "Ignored description"}))
+        assert second["pending"] and second["creates_project"] and second["name"] != first["name"]
+        assert payload(call(c, tok, "project_list"))["pending_projects"] == [pending]
+        for i, reg in enumerate((second, first) if second_first else (first, second)):
+            path, page, csrf = claim(c, reg["link"])
+            assert page.status_code == 200
+            saved = c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER)
+            assert saved.status_code == 200 and ("which was just created" in saved.text) == (i == 0)
+            p = core.projects.get("garden")
+            assert p.name == "Garden" and p.description == "A seed calendar" and p.links == {"claude_project": "Garden Planner"}
+            assert payload(call(c, tok, "project_list"))["pending_projects"] == []
+        rows = payload(call(c, tok, "routine_list"))["routines"]
+        assert {r["routine_id"] for r in rows if r["project"] == "garden"} == {"trig_01GARDEN", "trig_01SEEDS"}
+    finally:
+        c.__exit__(None, None, None)
+
+
+def test_expired_claim_no_longer_reserves_a_pending_project(tmp_path):
+    core, c, anthropic = build(tmp_path, {})
+    try:
+        args = {"fire_url": "trig_01GARDEN", "claude_project": "Garden Planner", "project": "garden"}
+        first = payload(call(c, STATIC_KEY, "routine_register", args))
+        core.clock.t += 1801
+        assert payload(call(c, STATIC_KEY, "project_list"))["pending_projects"] == []
+        fresh = payload(call(c, STATIC_KEY, "routine_register", {**args, "project_name": "New Garden"}))
+        assert fresh["name"] == first["name"] and "superseded" not in fresh
+        assert payload(call(c, STATIC_KEY, "project_list"))["pending_projects"][0]["name"] == "New Garden"
+    finally:
+        c.__exit__(None, None, None)
+
+
+def test_project_list_without_routine_block_has_no_pending_projects(make):
+    _, c = make()
+    assert payload(call(c, STATIC_KEY, "project_list"))["pending_projects"] == []
 
 
 def test_project_routine_refused_with_text_is_woken_without_it(tmp_path):
