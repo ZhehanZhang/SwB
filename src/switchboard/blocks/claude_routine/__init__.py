@@ -498,6 +498,12 @@ class ClaudeRoutineBlock(Block):
             raise BlockError(f"no routine {name!r}; routines: {', '.join(self.routines()) or 'none'}")
         return {"routine": name}, {}
 
+    def effective_target(self, addr: Any, project: str | None) -> Any:
+        from .. import Address
+
+        routine = self.pick(f"routine:{addr.id}" if addr.id else None, project) if addr.kind in ("routine", "") else None
+        return Address(self.name, "routine", routine["name"]) if routine else addr
+
     def wake_target(self, agent: str, project: str) -> Any:
         from .. import Address
 

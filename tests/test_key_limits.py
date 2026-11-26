@@ -67,3 +67,23 @@ async def test_a_task_mode_call_is_held_to_the_allowlist_too(amake):
     core, c = await amake(config=cfg)
     r = await arpc(c, SECOND_KEY, "tools/call", {"name": "memory_search", "arguments": {"query": "x"}}, tasks=True)
     assert "may call only send" in r.text
+
+
+def test_auth_maps_match_a_key_name_spelt_with_underscores(make):
+    from switchboard.config import load_config
+
+    cfg = load_config(None, env={"SWITCHBOARD_KEY_STATUS_MONITOR": "k" * 32})
+    assert cfg.static_keys[0].name == "status-monitor"
+    cfg = base_config()
+    cfg["auth"]["key_scopes"] = {"SECOND": ["project:infra"]}
+    cfg["auth"]["key_tools"] = {"sec_ond": ["send"]}
+    core, _ = make(config=cfg)
+    assert core.cfg.key_scopes == {"second": ("project:infra",)} and core.cfg.key_tools == {"sec-ond": ("send",)}
+
+
+def test_the_legacy_agent_send_alias_is_held_to_the_targets(make):
+    cfg = base_config()
+    cfg["auth"]["key_targets"] = {"second": ["agent:claude"]}
+    core, c = make(config=cfg)
+    assert "may send only to" in error_text(call(c, SECOND_KEY, "agent_send", {"to": "capy", "text": "x"}))
+    assert payload(call(c, SECOND_KEY, "agent_send", {"to": "claude", "text": "x"}))["delivered"]

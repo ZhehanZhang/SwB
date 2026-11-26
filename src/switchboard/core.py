@@ -393,7 +393,7 @@ class Switchboard:
                    forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
         if principal.targets is not None:
-            await self._allowed_target(principal, to, project, forward)
+            await self.check_target(principal, to, project, forward)
         handle = None
         if forward is not None:
             original = self.inbox.handle(forward)
@@ -423,8 +423,9 @@ class Switchboard:
                              "AND NOT EXISTS (SELECT 1 FROM inbox WHERE handle = ?)", (forward, handle, handle))
             raise
 
-    async def _allowed_target(self, principal: Principal, to: str | None, project: str | None, forward: str | None) -> None:
-        """A key limited by auth.key_targets sends only to those targets, never forwards, and names no project outside its scopes."""
+    async def check_target(self, principal: Principal, to: str | None, project: str | None, forward: str | None = None) -> None:
+        """A key limited by auth.key_targets sends only to those targets, never forwards, and names no project outside its scopes.
+        The target is checked as it will be delivered, after a project picks a different routine or wake target."""
         if forward is not None:
             raise CoreError(f"the {principal.source} key can't forward")
         if not to:
@@ -433,7 +434,13 @@ class Switchboard:
         for t in principal.targets or ():
             with contextlib.suppress(CoreError):
                 allowed.add(str(await self.resolve_to(t)))
-        if str(await self.resolve_to(to)) not in allowed:
+        addr = await self.resolve_to(to)
+        if addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
+            addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
+        block = self.blocks.get(addr.block)
+        if block is not None:
+            addr = block.effective_target(addr, project)
+        if str(addr) not in allowed:
             raise CoreError(f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
         if project and not principal.allows("project:" + project.strip().lower().removeprefix("project:")):
             raise CoreError(f"the {principal.source} key can't send in project {project}")
