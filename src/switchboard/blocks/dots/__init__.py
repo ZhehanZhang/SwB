@@ -464,15 +464,16 @@ class DotsBlock(Block):
         self.core.inbox.update_handle(row["handle"], status="answered")
         return True
 
-    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> None:
-        """A message in the relay channel or a dot DM that @swb sees: a dot's answer goes back on its conversation.
-        Everything else (our own posts, the owner typing, edits) is left alone, and nothing here is routed."""
+    async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> bool:
+        """Consume dot messages, delivering any that match a conversation. Other events route normally."""
         dot = self.from_dot(event)
-        if dot is None or not event.get("ts"):
-            return
-        row = self._row_for(event["channel"], event, dot)
-        if row is not None and row["dot"] == dot["user_id"]:
-            await self.deliver(row, dot, event)
+        if dot is None:
+            return False
+        if event.get("ts"):
+            row = self._row_for(event["channel"], event, dot)
+            if row is not None and row["dot"] == dot["user_id"]:
+                await self.deliver(row, dot, event)
+        return True
 
     async def poll_dms(self) -> int:
         """Read the dots' answers in DMs for an hour after each send: the owner's own DM with his user token (@swb can't
