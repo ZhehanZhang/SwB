@@ -107,6 +107,28 @@ blocks:
     # true: Captain personas use their Capy avatar in Slack (an undocumented capy.ai asset path); off by default.
     avatars: false
 
+  # Telegram (optional): long polling in, Bot API posts out. Set enabled: true to start setup.
+  telegram:
+    use: telegram                               # which block to load
+    enabled: false                              # disabled until you opt in
+    # token_env: TELEGRAM_BOT_TOKEN              # or enter the token at a telegram_provision claim link
+    # dm_space: home                            # where private chats go; default is the first space
+    # ack_reaction: "👀"                         # reaction on addressed messages; null disables it
+    # persona_prefix: true                      # include the persona on a bold first line
+    # refresh_minutes: 30                       # how often to look up targets
+    # target_aliases: {}                         # extra routing slugs, e.g. {helper: claude}
+    # agents: {claude: [home]}                   # space list per agent, or "*" for all spaces
+    # spaces:                                   # maps labels to one or more sets of groups
+    #   home:                                   # label used in telegram_post and visibility
+    #     chats: [-100111222]                   # negative integer group ids, each in at most one space
+    #     owner_ids: [222222]                   # Telegram user ids trusted as owner
+    #     known: {333333: Friend}               # known Telegram user ids and display names
+    #     default_target: claude                # target when no slug or earlier thread target exists
+    #     listen: [-100111222]                  # file unaddressed messages from these chats; needs privacy mode off
+    #     project: example                      # default switchboard project
+    #     channel_projects: {-100111222: null}  # override or opt out of the project by chat id
+    #     bot_posts_per_hour: 20                # limit in each conversation thread
+
   # Slack (optional): events in (watched channels, mentions, DMs, @swb <slug> routing) and slack_* tools out.
   # Tokens never go here: every *_env names a variable in .env. Config changes apply on restart.
   slack:
