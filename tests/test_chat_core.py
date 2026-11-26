@@ -222,3 +222,16 @@ def test_agent_targets_count_toward_the_turn_cap(env):
     events = core.store.one("SELECT COUNT(*) AS n FROM inbox WHERE owner = 'claude' AND kind = 'chatx_event'")["n"]
     paused = core.store.one("SELECT paused_at FROM conversation_turns WHERE root = 'chatx:home:40:200'")["paused_at"]
     assert paused is not None and events == 3
+
+
+def test_an_older_chat_sent_table_gains_the_part_column(tmp_path):
+    from switchboard.chat import migrate
+    from switchboard.store import Store
+
+    store = Store(tmp_path / "old.db")
+    store.db.execute("CREATE TABLE chat_sent (block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL, "
+                     "root TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY (block, space, channel, message))")
+    store.x("INSERT INTO chat_sent VALUES ('chatx', 'home', '40', '1', '1', 0)")
+    migrate(store)
+    migrate(store)
+    assert [dict(r) for r in store.q("SELECT message, part FROM chat_sent")] == [{"message": "1", "part": 0}]
