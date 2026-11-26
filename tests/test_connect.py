@@ -70,7 +70,7 @@ def test_connect_pairing_resume(make):
 
 
 @pytest.mark.parametrize("restriction", [
-    {"scopes": ()}, {"scopes": ("*",)}, {"tools": ()}, {"targets": ("*",)}, {"kind": "connect"}, {"trust": "known"},
+    {"scopes": ()}, {"scopes": ("*",)}, {"tools": ("connect",)}, {"targets": ("*",)}, {"kind": "connect"}, {"trust": "known"},
 ])
 def test_connect_read_only_for_every_limited_principal(make, monkeypatch, restriction):
     cfg = base_config(version=2, blocks={"mcp": {}, "capy": {}, "claude-routine": {}, "github": {}})
