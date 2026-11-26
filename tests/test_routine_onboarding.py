@@ -73,11 +73,37 @@ def test_self_registration_link_takes_the_token_once(tmp_path):
         second = payload(call(c, tok, "routine_register", {"fire_url": URL.format("trig_01TWO"), "claude_project": "Infra Ops", "project": "infra"}))
         assert second["name"] == "claude-infra-infra-ops" and not second["primary"]
         held = payload(call(c, tok, "routine_register", {"fire_url": URL.format("trig_01THREE"), "claude_project": "Infra Ops", "project": "infra"}))
-        assert held["name"] != second["name"]
+        assert held["name"] == second["name"]
         bad = core.blocks["claude-routine"]
         assert "isn't valid" in error_text_of(lambda: bad.claim("nope"))
         core.clock.t += 1801
-        assert c.get(claim(c, second["link"])[0], headers=OWNER).status_code == 410
+        _, expired, _ = claim(c, held["link"])
+        assert expired.status_code == 410 and "this link has expired" in expired.text
+    finally:
+        c.__exit__(None, None, None)
+
+
+def test_registration_replaces_only_the_same_claude_projects_active_claim(tmp_path):
+    core, c, anthropic = build(tmp_path, {})
+    try:
+        core.projects.create(slug="context", name="Context")
+        tok = sign_in(c)["access_token"]
+        a = {"fire_url": "trig_01A", "claude_project": "Things Cloud API", "project": "context"}
+        first = payload(call(c, tok, "routine_register", a))
+        other = payload(call(c, tok, "routine_register", {**a, "fire_url": "trig_01OTHER", "claude_project": "Canvas Connector"}))
+        assert other["name"] != first["name"] and "superseded" not in other
+        again = {**a, "fire_url": "trig_01B", "claude_project": "things cloud api"}
+        assert "is held" in error_text(call(c, tok, "routine_register", {**again, "name": other["name"]}))
+        assert claim(c, first["link"])[1].status_code == 200
+        second = payload(call(c, tok, "routine_register", again))
+        assert second["name"] == first["name"] and second["superseded"] == [first["name"]]
+        _, replaced, _ = claim(c, first["link"])
+        assert replaced.status_code == 410 and "this link was replaced by a newer registration; use the latest link" in replaced.text
+        pending = payload(call(c, tok, "routine_list"))["pending"]
+        assert {p["routine_id"] for p in pending} == {"trig_01B", "trig_01OTHER"}
+        path, page, csrf = claim(c, second["link"])
+        assert page.status_code == 200 and c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER).status_code == 200
+        assert claim(c, other["link"])[1].status_code == 200
     finally:
         c.__exit__(None, None, None)
 
