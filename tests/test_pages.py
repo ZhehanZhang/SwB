@@ -5,7 +5,7 @@ def test_pages_use_site_assets_and_strict_csp(make):
     _, c = make()
     cid = register(c)["client_id"]
     page, _ = consent(c, cid)
-    assert "/assets/bridge.css" in page.text and "site-arc" in page.text and "<title>Connect | Switchboard</title>" in page.text
+    assert "/assets/bridge.css" in page.text and "site-arc" in page.text and "<title>Connect | SwB</title>" in page.text
     csp = page.headers["content-security-policy"]
     assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp and "style=" not in page.text
     css = c.get("/assets/bridge.css")

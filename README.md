@@ -1,4 +1,4 @@
-# switchboard
+# SwB
 
 the owner's self-hosted switchboard: one place where his assistants and agents share memory, hand work to each other
 and hear back. Everything that comes in or goes out is a **block** behind one interface. The **core** knows only
@@ -47,13 +47,13 @@ path instead of the Git URL. pipx needs Python 3.12 or newer.
 **uvx**
 
 ```bash
-uvx --from git+https://github.com/OWNER/switchboard swb init && uvx --from git+https://github.com/OWNER/switchboard swb up
+uvx --from git+https://github.com/OWNER/swb swb init && uvx --from git+https://github.com/OWNER/swb swb up
 ```
 
 **pipx**
 
 ```bash
-pipx install git+https://github.com/OWNER/switchboard && swb init && swb up
+pipx install git+https://github.com/OWNER/swb && swb init && swb up
 ```
 
 **Docker**
@@ -82,7 +82,7 @@ swb connect mcp-client
 swb connect mcp-client --choose agent=my-client
 ```
 
-If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/switchboard`. If you used Docker, prefix them
+If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/swb`. If you used Docker, prefix them
 with `docker exec switchboard-local`.
 These commands authenticate to `http://127.0.0.1:8000/mcp` with the owner key from `.env`; use `--url` for
 a different endpoint. Use `--choose` for choices such as agent or project names, never for tokens.

@@ -43,17 +43,17 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="referrer" content="no-referrer">
-<title>{html.escape(title)} | Switchboard</title>
+<title>{html.escape(title)} | SwB</title>
 <script src="/assets/prefs.js"></script>
 <link rel="stylesheet" href="/assets/bridge.css">
 </head><body><div class="shell">
 <div class="site-veil" aria-hidden="true"></div>{ARC}
 <header class="site-header"><div class="site-head col">
-<a href="/" class="brand-link"><span class="brand-name">Switchboard{WORDMARK_DOT}</span></a>
+<a href="/" class="brand-link"><span class="brand-name">SwB{WORDMARK_DOT}</span></a>
 </div></header>
 <main class="service-main col">{body}</main>
 <footer class="col fade-in"><div class="foot-row">
-<div class="foot-copy">&copy; {year} Switchboard</div>
+<div class="foot-copy">&copy; {year} SwB</div>
 <div class="footer-icons">
 <button type="button" class="foot-btn" aria-label="Theme" title="Theme" data-theme-cycle><span class="theme-cycle">{icon("foot_lightMode", mode="light")}{icon("foot_darkMode", mode="dark")}{icon("foot_desktopWindows", mode="system")}</span></button>
 </div></div>
@@ -166,8 +166,8 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
         button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
     return HTMLResponse(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark"><title>Sign in to Switchboard</title></head>
-<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}><h1>Sign in to Switchboard</h1>
+<meta name="color-scheme" content="light dark"><title>Sign in to SwB</title></head>
+<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}><h1>Sign in to SwB</h1>
 <p id="login-error" role="status">{messages.get(error, "")}</p>{button or "<p>Ask your agent for a sign-in link.</p>"}
 </main><script>{LOGIN_JS}</script></body></html>""", headers={"Content-Security-Policy": script_policy(LOGIN_JS)})
 
@@ -237,14 +237,14 @@ def admin_page(health: dict[str, Any], actor: str, routes: list[dict[str, Any]],
     items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
     items += "".join(_row(a, b, c, d) for a, b, c, d in block_rows or [])
     problems = "".join(notice(p, "warn") for p in health["problems"])
-    status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in as {html.escape(actor)}.")
+    status = (hero("SwB", ("Running" if ok else "Running, with parts switched off") + f". Signed in as {html.escape(actor)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')
     body = (status + _systems_body(systems or []) + (_routines_body(routines, projects, csrf) if routines is not None else "") + _visibility_body(visibility or [], csrf)
             + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes))
     if add_passkey:
         body = (f'<button type="button" id="add-passkey" data-csrf="{csrf}">Add a passkey</button>'
                 f'<p id="passkey-error" role="status"></p>' + body + f"<script>{REGISTER_JS}</script>")
-    response = page("Switchboard", body, 200)
+    response = page("SwB", body, 200)
     if add_passkey:
         response.headers["Content-Security-Policy"] = script_policy(REGISTER_JS)
     return response
