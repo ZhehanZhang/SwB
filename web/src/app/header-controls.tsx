@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Command } from "cmdk"
 import { ExternalLink, LayoutList, LogOut, Monitor, Moon, Search, Sun, UserRound } from "lucide-react"
 import { Dialog, Popover } from "radix-ui"
 import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
 import { sections } from "@/app/navigation"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
@@ -19,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { setTheme, useThemeMode } from "@/lib/appearance"
-import { healthQuery, sessionQuery } from "@/lib/api"
+import { healthQuery, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
 
 const actionClass = "size-11 text-console-foreground hover:bg-console-line focus-visible:outline-lamp md:size-9"
 
@@ -156,23 +157,31 @@ const themes = [
 ] as const
 
 export function AccountMenu() {
-  const session = useQuery(sessionQuery)
+  const { data: session } = useQuery(sessionQuery)
   const theme = useThemeMode()
-  const email = session.isSuccess ? session.data.email : undefined
+  const queryClient = useQueryClient()
+  const logout = useMutation({
+    mutationFn: () => requestJson("/auth/logout", (value): value is undefined => value === undefined, {
+      method: "POST",
+      csrf: session?.csrf,
+    }),
+    onSuccess: () => markSignedOut(queryClient),
+    onError: (error) => {
+      if (!(error instanceof SignedOutError)) toast.error("Couldn’t sign out.")
+    },
+  })
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className={actionClass} aria-label="Account" title="Account">
           <span className="grid size-7 place-items-center rounded-full border border-console-line" aria-hidden>
-            {email ? Array.from(email.trim())[0]?.toUpperCase() : <UserRound />}
+            <UserRound />
           </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" collisionPadding={8} className="w-60">
-        <DropdownMenuLabel className="truncate px-2.5 py-2 font-medium" title={email}>
-          {email ?? (session.isPending ? "Checking session…" : "Session unavailable")}
-        </DropdownMenuLabel>
+        <DropdownMenuLabel className="px-2.5 py-2 font-medium">Account</DropdownMenuLabel>
         <DropdownMenuSeparator className="my-1 border-t" />
         <DropdownMenuRadioGroup aria-label="Theme" value={theme} onValueChange={setTheme}>
           {themes.map(({ mode, name, icon: Icon }) => (
@@ -182,18 +191,17 @@ export function AccountMenu() {
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator className="my-1 border-t" />
-        {session.isError && (
-          <DropdownMenuItem onSelect={() => void session.refetch()}>Retry session</DropdownMenuItem>
-        )}
-        {email && (
-          <>
-            <DropdownMenuItem asChild>
-              <a href="/classic"><LayoutList aria-hidden /> Classic console</a>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href="/cdn-cgi/access/logout"><LogOut aria-hidden /> Sign out</a>
-            </DropdownMenuItem>
-          </>
+        <DropdownMenuItem asChild>
+          <a href="/classic"><LayoutList aria-hidden /> Classic console</a>
+        </DropdownMenuItem>
+        {session?.via === "access" ? (
+          <DropdownMenuItem asChild>
+            <a href="/cdn-cgi/access/logout"><LogOut aria-hidden /> Sign out</a>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled={!session?.csrf || logout.isPending} onSelect={() => logout.mutate()}>
+            <LogOut aria-hidden /> Sign out
+          </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

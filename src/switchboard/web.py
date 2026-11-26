@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import hmac
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -32,6 +31,7 @@ SPA_HEADERS = {
     "X-Frame-Options": "DENY",
     "X-Robots-Tag": "noindex, nofollow",
 }
+API_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
 
 
 class AppAssets(StaticFiles):
@@ -53,26 +53,29 @@ def _origin(url: str) -> str:
     return f"{parts.scheme}://{authority}"
 
 
-def web_routes(owner_page: Callable[[Request], Awaitable[tuple[str | None, Response | None]]]) -> list[Route | Mount]:
-    def session_csrf(request: Request, email: str) -> str:
-        assertion = request.headers["cf-access-jwt-assertion"]
-        secret = request.app.state.core.auth.secret
-        return hmac.new(secret, f"switchboard-api-csrf:{email}:{assertion}".encode(), hashlib.sha256).hexdigest()
-
-    async def shell(request: Request) -> Response:
-        _, refused = await owner_page(request)
-        if refused is not None:
-            return refused
+def web_routes(owner_page: Callable[[Request], Awaitable[tuple[str | None, Response | None]]],
+               csrf: Callable[[str], str]) -> list[Route | Mount]:
+    async def login(request: Request) -> Response:
         index = APP_DIST / "index.html"
         if not index.is_file():
             return pages.message_page("Web UI not built", "Use /classic or build the web UI first.", 503)
         return FileResponse(index, media_type="text/html", headers=SPA_HEADERS)
 
-    async def session(request: Request) -> Response:
-        email = request.state.owner_email
-        return JSONResponse({"email": email, "csrf": session_csrf(request, email)})
+    async def shell(request: Request) -> Response:
+        _, refused = await owner_page(request)
+        return refused if refused is not None else await login(request)
 
-    api = Router(routes=[Route("/session", session), *READ_ROUTES, *WRITE_ROUTES], redirect_slashes=False)
+    async def session(request: Request) -> Response:
+        email, _ = await owner_page(request)
+        return JSONResponse({
+            "signed_in": email is not None,
+            "via": "access" if email else None,
+            "csrf": csrf(email) if email else None,
+            "methods": {"passkey": False, "oidc": None, "access": bool(request.app.state.core.cfg.access_team_domain)},
+            "first_run": True,
+        }, headers=API_HEADERS)
+
+    api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES], redirect_slashes=False)
 
     async def owner_api(scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -82,13 +85,12 @@ def web_routes(owner_page: Callable[[Request], Awaitable[tuple[str | None, Respo
         async def no_store(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
-                headers["Cache-Control"] = "no-store"
-                headers["X-Content-Type-Options"] = "nosniff"
+                headers.update(API_HEADERS)
             await send(message)
 
         email, _ = await owner_page(request)
         if email is None:
-            response = JSONResponse({"error": "owner_required"}, status_code=403)
+            response = JSONResponse({"error": "signed_out"}, status_code=401)
             return await response(scope, receive, no_store)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             core = request.app.state.core
@@ -97,10 +99,10 @@ def web_routes(owner_page: Callable[[Request], Awaitable[tuple[str | None, Respo
             except ValueError:
                 expected_origin = ""
             valid_origin = bool(expected_origin) and request.headers.getlist("origin") == [expected_origin]
-            provided = request.headers.getlist("x-swb-csrf")
+            provided = request.headers.getlist("x-csrf-token")
             if (not valid_origin or len(provided) != 1
-                    or not hmac.compare_digest(provided[0].encode(), session_csrf(request, email).encode())):
-                response = JSONResponse({"error": "csrf_failed"}, status_code=403)
+                    or not hmac.compare_digest(provided[0].encode(), csrf(email).encode())):
+                response = JSONResponse({"error": "csrf"}, status_code=403)
                 return await response(scope, receive, no_store)
         request.state.owner_email = email
         try:
@@ -113,6 +115,8 @@ def web_routes(owner_page: Callable[[Request], Awaitable[tuple[str | None, Respo
     return [
         *([Mount("/app-assets/assets", app=AppAssets(directory=APP_DIST / "assets"))] if (APP_DIST / "assets").is_dir() else []),
         Mount("/api", app=owner_api),
+        Route("/auth/session", session),
+        Route("/login", login),
         Route("/", shell),
         *(Route(f"/{section}", shell) for section in APP_SECTIONS),
         *(Route(f"/{section}/{{rest:path}}", shell) for section in APP_SECTIONS),
