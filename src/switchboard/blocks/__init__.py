@@ -166,6 +166,7 @@ class Address:
 
 class Block:
     manifest = Manifest(id="", title="")
+    connect_kinds: tuple[str, ...] = ()
     wakes_agents = False
     """True for a block whose targets wake an agent (a Claude routine): a bare agent name goes to its target first."""
 
@@ -283,6 +284,17 @@ class Block:
 
     def status(self) -> dict[str, Any]:
         return {}
+
+    def next_step(self) -> str | None:
+        return None
+
+    async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any] | None:
+        return None
+
+    def token_step(self, principal: "Principal", name: str, instruction: str) -> dict[str, str]:
+        if not principal.is_unrestricted_owner:
+            return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url)}
 
     @property
     def online(self) -> bool:
