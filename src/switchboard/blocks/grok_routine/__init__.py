@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS grok_routines (
 """
 FIRES = """
 CREATE TABLE IF NOT EXISTS grok_routine_fires (
-  block TEXT NOT NULL, name TEXT NOT NULL, last_status TEXT NOT NULL, last_success REAL,
+  block TEXT NOT NULL, name TEXT NOT NULL, last_status TEXT NOT NULL, last_success REAL, credential_tag BLOB,
   PRIMARY KEY (block, name)
 )
 """
@@ -90,6 +91,8 @@ class GrokRoutineBlock(Block):
         self.http: aiohttp.ClientSession | None = None
         core.store.x(SCHEMA)
         core.store.x(FIRES)
+        if "credential_tag" not in {r["name"] for r in core.store.q("PRAGMA table_info(grok_routine_fires)")}:
+            core.store.x("ALTER TABLE grok_routine_fires ADD COLUMN credential_tag BLOB")
 
     def _metadata(self, name: str, project: str | None, auth: str, header: str | None,
                   primary: bool, source: str) -> dict[str, Any]:
@@ -159,37 +162,51 @@ class GrokRoutineBlock(Block):
             return url, secret, "invalid webhook secret"
         return url, secret, None
 
-    def _last_fire(self, name: str) -> Any:
-        return self.core.store.one("SELECT last_status, last_success FROM grok_routine_fires WHERE block = ? AND name = ?",
-                                   (self.name, name))
+    def _credential_tag(self, url: str, secret: str) -> bytes:
+        return hmac.digest(self.core.auth.secret, json.dumps([url, secret]).encode(), "sha256")
 
-    def _status(self, name: str, problem: str | None) -> str:
-        fire = self._last_fire(name)
-        status = problem or (fire["last_status"] if fire else "untested")
-        if fire and fire["last_success"] is not None:
-            status += f" (last success: {iso(fire['last_success'])})"
+    def _last_fire(self, name: str, url: str, secret: str) -> tuple[str, float | None]:
+        fire = self.core.store.one("SELECT last_status, last_success, credential_tag FROM grok_routine_fires WHERE block = ? AND name = ?",
+                                   (self.name, name))
+        if not fire:
+            return "untested", None
+        status = fire["last_status"] if fire["credential_tag"] == self._credential_tag(url, secret) else "untested"
+        return status, fire["last_success"]
+
+    def _status(self, name: str, url: str, secret: str, problem: str | None) -> str:
+        status, last_success = self._last_fire(name, url, secret)
+        status = problem or status
+        if last_success is not None:
+            status += f" (last success: {iso(last_success)})"
         return status
 
     def status_of(self, r: dict[str, Any]) -> str:
-        return self._status(r["name"], self._credentials(r)[2])
+        return self._status(r["name"], *self._credentials(r))
 
     def is_tested(self, r: dict[str, Any]) -> bool:
-        fire = self._last_fire(r["name"])
-        return bool(fire and fire["last_status"] == "tested" and self._credentials(r)[2] is None)
+        url, secret, problem = self._credentials(r)
+        return not problem and self._last_fire(r["name"], url, secret)[0] == "tested"
 
-    def _record_fire(self, name: str, status: str | None) -> None:
+    def rejected_credential(self, r: dict[str, Any]) -> str | None:
+        url, secret, problem = self._credentials(r)
+        if problem:
+            return None
+        status, _ = self._last_fire(r["name"], url, secret)
+        return {"failed: HTTP 401": "secret", "failed: HTTP 403": "secret", "failed: HTTP 404": "url"}.get(status)
+
+    def _record_fire(self, name: str, status: str | None, url: str, secret: str) -> None:
         self.core.store.x(
-            "INSERT INTO grok_routine_fires(block, name, last_status, last_success) VALUES (?,?,?,?) "
-            "ON CONFLICT(block, name) DO UPDATE SET last_status = excluded.last_status, "
+            "INSERT INTO grok_routine_fires(block, name, last_status, last_success, credential_tag) VALUES (?,?,?,?,?) "
+            "ON CONFLICT(block, name) DO UPDATE SET last_status = excluded.last_status, credential_tag = excluded.credential_tag, "
             "last_success = coalesce(excluded.last_success, grok_routine_fires.last_success)",
-            (self.name, name, status or "tested", self.core.clock() if status is None else None),
+            (self.name, name, status or "tested", self.core.clock() if status is None else None, self._credential_tag(url, secret)),
         )
 
     def status(self) -> dict[str, Any]:
         rows = []
         for r in self.routines().values():
             url, secret, problem = self._credentials(r)
-            rows.append({**r, "status": self._status(r["name"], problem), "url_present": bool(url),
+            rows.append({**r, "status": self._status(r["name"], url, secret, problem), "url_present": bool(url),
                          "secret_present": bool(secret)})
         return {"routines": rows}
 
@@ -300,7 +317,7 @@ class GrokRoutineBlock(Block):
             failure = None if 200 <= status < 300 else f"HTTP {status}"
         except (aiohttp.ClientError, TimeoutError, OSError, ValueError):
             failure = "request failed"
-        self._record_fire(name, f"failed: {failure}" if failure else None)
+        self._record_fire(name, f"failed: {failure}" if failure else None, url, secret)
         if failure:
             call.note(detail=failure)
             return {**base, "fired": False, "note": f"Grok routine didn't start ({failure}); the message is in the Grok mailbox"}

@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, error_text, payload, sign_in
+from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, default_env, error_text, payload, sign_in
 from switchboard.auth import Principal
 
 WEBHOOK_URL = "https://grok.example.test/private-trigger"
@@ -105,18 +105,98 @@ def test_grok_connect_claims_resumes_and_waits_for_successful_test(grok, monkeyp
     assert step["by"] == "you" and action == {"tool": "send", "arguments": {
         "to": "grok-routine:routine:grok-demo", "task": "switchboard setup test: reply pong",
     }}
-    for status in (401, 200, 401):
-        sent = payload(call(client, STATIC_KEY, action["tool"], action["arguments"]))
-        assert sent["fired"] is (status == 200)
-        after = connect(client, choose=CHOICE)
-        assert (after.get("state") == "connected") is (status == 200)
-        assert bool(after["next"]) is (status != 200)
-        assert all(value not in json.dumps(after) for value in (WEBHOOK_URL, WEBHOOK_KEY))
-    assert len(posted) == 3
-    assert all(url == WEBHOOK_URL and body["project"] == "demo" and headers["X-Routine-Key"] == WEBHOOK_KEY
-               for url, body, headers in posted)
+    assert not payload(call(client, STATIC_KEY, action["tool"], action["arguments"]))["fired"]
+    rejected = connect(client, choose=CHOICE)
+    retry, = rejected["next"]
+    fresh, = connect(client, choose=CHOICE)["next"]
+    assert fresh["link"] != retry["link"] and "webhook key" in fresh["do"]
+    assert client.get(urlsplit(retry["link"]).path, headers=OWNER).status_code == 410
+    secret_env = block.routines()["grok-demo"]["secret_env"]
+    old = core.store.one("SELECT sealed FROM secrets WHERE name = ?", (secret_env,))["sealed"]
+    replacement = "mock-grok-webhook-replacement"
+    assert enter_claim(client, fresh, replacement).status_code == 200
+    assert core.secret(secret_env) == replacement
+    assert core.store.one("SELECT sealed FROM secrets WHERE name = ?", (secret_env,))["sealed"] != old
+    [step] = connect(client, choose=CHOICE)["next"]
+    assert step["call"] == action
+    assert payload(call(client, STATIC_KEY, action["tool"], action["arguments"]))["fired"]
+    connected = connect(client, choose=CHOICE)
+    assert connected["state"] == "connected" and not connected["next"]
+    assert not payload(call(client, STATIC_KEY, action["tool"], action["arguments"]))["fired"]
+    assert "webhook key" in connect(client, choose=CHOICE)["next"][0]["do"]
+    assert all(value not in json.dumps([rejected, fresh, connected]) for value in (WEBHOOK_URL, WEBHOOK_KEY, replacement))
+    assert [headers["X-Routine-Key"] for _, _, headers in posted] == [WEBHOOK_KEY, replacement, replacement]
+    assert all(url == WEBHOOK_URL and body["project"] == "demo" for url, body, _ in posted)
     assert all(value.encode() not in row["sealed"] for row in core.store.q("SELECT sealed FROM secrets")
-               for value in (WEBHOOK_URL, WEBHOOK_KEY))
+               for value in (WEBHOOK_URL, WEBHOOK_KEY, replacement))
+
+
+def test_grok_replace_url_and_recover_from_not_found(grok, monkeypatch):
+    core, client = grok
+    block = core.blocks["grok-routine"]
+    url, key = connect(client, choose=CHOICE)["next"]
+    assert enter_claim(client, url, WEBHOOK_URL).status_code == 200
+    assert enter_claim(client, key, WEBHOOK_KEY).status_code == 200
+    urls = []
+    replies = iter((200, 404, 200))
+
+    async def post(url, body, headers):
+        urls.append(url)
+        return next(replies)
+
+    monkeypatch.setattr(block, "_post", post)
+    test = connect(client, choose=CHOICE)["next"][0]["call"]
+    assert payload(call(client, STATIC_KEY, test["tool"], test["arguments"]))["fired"]
+    assert connect(client, choose=CHOICE)["state"] == "connected"
+    [rotation] = connect(client, choose={"name": CHOICE["name"], "replace": "url"})["next"]
+    assert "Webhook POST URL" in rotation["do"]
+    url_env = block.routines()["grok-demo"]["url_env"]
+    assert core.secret(url_env) == WEBHOOK_URL
+    assert not payload(call(client, STATIC_KEY, test["tool"], test["arguments"]))["fired"]
+    [recovery] = connect(client, choose=CHOICE)["next"]
+    assert "Webhook POST URL" in recovery["do"] and recovery["link"] != rotation["link"]
+    assert client.get(urlsplit(rotation["link"]).path, headers=OWNER).status_code == 410
+    replacement = "https://grok.example.test/replacement"
+    assert enter_claim(client, recovery, replacement).status_code == 200
+    assert connect(client, choose=CHOICE)["next"][0]["call"] == test
+    assert payload(call(client, STATIC_KEY, test["tool"], test["arguments"]))["fired"]
+    assert urls == [WEBHOOK_URL, WEBHOOK_URL, replacement]
+    assert connect(client, choose=CHOICE)["state"] == "connected"
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_grok_environment_secret_requires_restart_instead_of_claim(make, monkeypatch, status):
+    cfg = base_config(version=2, blocks={"mcp": {}, "grok-routine": {"routines": {
+        "grok-demo": {"url_env": "GROK_TEST_URL", "secret_env": "GROK_TEST_KEY"},
+    }}})
+    env = {**default_env(), "GROK_TEST_URL": WEBHOOK_URL, "GROK_TEST_KEY": WEBHOOK_KEY}
+    core, client = make(cfg, env=env)
+    block = core.blocks["grok-routine"]
+
+    async def post(url, body, headers):
+        return status
+
+    monkeypatch.setattr(block, "_post", post)
+    test = connect(client)["next"][0]["call"]
+    assert not payload(call(client, STATIC_KEY, test["tool"], test["arguments"]))["fired"]
+    for choose in ({"name": "grok-demo"}, {"name": "grok-demo", "replace": "secret"}):
+        [step] = connect(client, choose=choose)["next"]
+        assert step == {"by": "person", "do": "Change GROK_TEST_KEY in .env and restart Switchboard."}
+    assert not core.store.q("SELECT 1 FROM secrets")
+
+
+def test_grok_limited_caller_cannot_replace_existing_credential(grok, monkeypatch):
+    core, client = grok
+    connect(client, choose=CHOICE)
+    before = [dict(r) for r in core.store.q("SELECT * FROM secrets")]
+    principal = Principal("limited", "key:limited", "key", scopes=("*",))
+    monkeypatch.setattr(core.auth, "verify_bearer", lambda _token: principal)
+    choice = {"name": CHOICE["name"], "replace": "secret"}
+    for result in (connect(client, choose=choice),
+                   client.portal.call(core.blocks["grok-routine"].connect_steps, "grok", principal, None, choice)):
+        [step] = result["next"]
+        assert set(step) == {"by", "do"} and step["by"] == "person"
+    assert [dict(r) for r in core.store.q("SELECT * FROM secrets")] == before
 
 
 def test_grok_discovery_resumes_after_oauth_and_preserves_partial_choices(grok):
