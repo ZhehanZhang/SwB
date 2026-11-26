@@ -29,14 +29,17 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
         return {"done": [], "next": [{"by": "person", "do": "Run connect for Grok from the owner's sign-in."}]}
 
     args = {k: v for k, v in (choose or {}).items() if v is not None}
-    strings = {"name", "project", "auth", "header"}
+    strings = {"name", "project", "auth", "header", "replace"}
     if set(choose or {}) - strings - {"primary"}:
-        raise BlockError("choose accepts name, project, auth, header and primary. Never pass webhook credentials to connect.")
+        raise BlockError("choose accepts name, project, auth, header, primary and replace. Never pass webhook credentials to connect.")
     if any(not isinstance(args[k], str) for k in args.keys() & strings) or ("primary" in args and type(args["primary"]) is not bool):
         raise BlockError("choose expects strings for routine details and a boolean for primary.")
     name = args.get("name", "").strip().lower()
     if name and not SLUG_RE.fullmatch(name):
         raise BlockError("choose.name must be a routine slug.")
+    replace = args.get("replace")
+    if replace is not None and (replace not in {"url", "secret"} or not name or args.keys() - {"name", "project", "replace"}):
+        raise BlockError("To replace a credential, pass the routine name and replace=url or replace=secret.")
     auth = args.get("auth", "").strip().lower()
     if "auth" in args and auth not in {"key", "signature"}:
         raise BlockError("choose.auth must be key or signature.")
@@ -59,6 +62,8 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
                 raise BlockError("That Grok routine uses different authentication settings. Choose another name.")
             if "primary" in args and args["primary"] != routine["primary"]:
                 routine = block.save_routine(name, routine["project"], routine["auth"], routine["header"], primary=args["primary"])
+        elif replace:
+            raise BlockError("Choose an existing Grok routine to replace a credential.")
         elif slug and auth:
             routine = block.save_routine(name, slug, auth, args.get("header"), primary=args.get("primary", False))
     else:
@@ -107,13 +112,16 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
     status = block.status_of(routine)
     done = [f"Grok routine {routine['name']}: {status}."]
     steps = []
-    if not core.secret(routine["url_env"]):
-        steps.append(block.token_step(principal, routine["url_env"],
-                     "Enter the Grok routine's Webhook POST URL through this private link.", url=True))
-    if not core.secret(routine["secret_env"]):
-        credential = "signing secret" if routine["auth"] == "signature" else "webhook key (without the header or Bearer prefix)"
-        steps.append(block.token_step(principal, routine["secret_env"],
-                     f"Enter the Grok routine's {credential} through this private link."))
+    rejected = block.rejected_credential(routine) if not replace else None
+    credential = "signing secret" if routine["auth"] == "signature" else "webhook key (without the header or Bearer prefix)"
+    for field, label in (("url", "Webhook POST URL"), ("secret", credential)):
+        env_name = routine[f"{field}_env"]
+        if (replace and field != replace) or (not replace and field != rejected and core.secret(env_name)):
+            continue
+        if core.cfg.env.get(env_name):
+            steps.append({"by": "person", "do": f"Change {env_name} in .env and restart Switchboard."})
+        else:
+            steps.append(block.token_step(principal, env_name, f"Enter the Grok routine's {label} through this private link.", url=field == "url"))
     if steps or block.is_tested(routine):
         return {"done": done, "next": steps}
     return {"done": done, "next": [{"by": "you", "do": "Test the webhook, then call connect again to check whether Grok accepted it.",
