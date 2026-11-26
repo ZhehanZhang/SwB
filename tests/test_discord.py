@@ -161,7 +161,7 @@ def test_dispatch_routes_owner_and_the_native_thread_keeps_the_target(discord):
         dispatch("READY", ready())
         dispatch("GUILD_CREATE", {"id": GUILD, "channels": [api.channels[CHANNEL]], "threads": []})
         event = dispatch("MESSAGE_CREATE", message())
-        assert event["trust"] == "owner" and event["kind"] == "mention" and event["target"] == "build-check"
+        assert event["trust"] == "owner" and event["chat_kind"] == "mention" and event["target"] == "build-check"
         assert event["text"] == "check the build" and event["from"]["user_name"] == "Tester"
         assert event["from"]["link"] == f"https://discord.com/channels/{GUILD}/{CHANNEL}/{ROOT}"
         assert len(api.routines) == 1 and "check the build" in api.routines[0]
@@ -171,7 +171,7 @@ def test_dispatch_routes_owner_and_the_native_thread_keeps_the_target(discord):
         assert ("POST", f"/channels/{CHANNEL}/messages/{ROOT}/threads", {"name": message()["content"]}) in api.calls
         assert api.posts == [(f"/channels/{ROOT}/messages", {"allowed_mentions": {"parse": []}, "content": "all green @everyone"}, {})]
         follow = dispatch("MESSAGE_CREATE", message(channel_id=ROOT, id="101", content="and staging?"))
-        assert follow["target"] == "build-check" and follow["kind"] == "reply"
+        assert follow["target"] == "build-check" and follow["chat_kind"] == "reply"
         assert follow["from"]["root"] == ROOT and follow["from"]["channel"] == CHANNEL and follow["from"]["channel_name"] == "builds"
         assert follow["from"]["link"] == f"https://discord.com/channels/{GUILD}/{ROOT}/101"
         assert len(api.routines) == 2 and "and staging?" in api.routines[-1]
@@ -188,7 +188,7 @@ def test_dispatch_filters_own_and_unknown_guild_messages_and_sends_dms_to_config
             assert dispatch("MESSAGE_CREATE", dropped) is None
         assert not api.routines
         event = dispatch("MESSAGE_CREATE", message(guild_id=None, channel_id=DM, content="hello"))
-        assert event["from"]["space"] == "direct" and event["kind"] == "dm" and event["trust"] == "owner"
+        assert event["from"]["space"] == "direct" and event["chat_kind"] == "dm" and event["trust"] == "owner"
         assert event["from"]["link"] == f"https://discord.com/channels/@me/{DM}/{ROOT}" and len(api.routines) == 1
         assert "guild_id" not in parse_qs(urlsplit(block.setup()["invite_url"]).query)
 
@@ -230,8 +230,8 @@ def test_persona_webhooks_are_reused_per_parent_and_do_not_leak_secrets(discord,
 def test_in_place_references_dm_open_and_message_split(discord):
     with discord(settings={"threads": False, "personas": True, "ack_reaction": None}) as (_, client, block, api):
         text = "a" * 2000 + "👀" * 1000 + "z"
-        first = client.portal.call(lambda: block.post("home", CHANNEL, text, root=ROOT, reply_to="102", persona=Persona("h", "Helper")))
-        assert first == "700" and [p[1]["content"] for p in api.posts] == ["a" * 2000, "👀" * 1000, "z"]
+        ids = client.portal.call(lambda: block.post("home", CHANNEL, text, root=ROOT, reply_to="102", persona=Persona("h", "Helper")))
+        assert ids == ["700", "701", "702"] and [p[1]["content"] for p in api.posts] == ["a" * 2000, "👀" * 1000, "z"]
         assert all(p[0] == f"/channels/{CHANNEL}/messages" and p[1]["allowed_mentions"] == {"parse": []} for p in api.posts)
         assert api.posts[0][1]["message_reference"] == {"message_id": "102"} and "message_reference" not in api.posts[1][1]
         assert client.portal.call(block.open_dm, "home", USER) == DM
@@ -239,6 +239,20 @@ def test_in_place_references_dm_open_and_message_split(discord):
         client.portal.call(lambda: block.post("home", DM, "private", root=ROOT, reply_to=ROOT, persona=Persona("h", "Helper")))
         assert api.posts[-1] == (f"/channels/{DM}/messages", {"content": "private", "allowed_mentions": {"parse": []},
                                                               "message_reference": {"message_id": ROOT}}, {})
+
+
+def test_native_reply_to_second_chunk_routes_to_the_original_target_without_a_discord_thread(discord):
+    with discord(settings={"threads": False}) as (core, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block.dispatch, "MESSAGE_CREATE", message())
+        handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
+        client.portal.call(block.relay, {"kind": "final", "handle": handle, "text": "a" * 2000 + "second chunk"})
+        assert [p[0] for p in api.posts] == [f"/channels/{CHANNEL}/messages"] * 2
+        assert api.posts[1][1]["content"] == "second chunk"
+        reference = {"type": 0, "channel_id": CHANNEL, "message_id": "701"}
+        follow = client.portal.call(block.dispatch, "MESSAGE_CREATE", message(id="101", content="and staging?", message_reference=reference))
+        assert follow["chat_kind"] == "reply" and follow["target"] == "build-check" and follow["from"]["root"] == ROOT
+        assert len(api.routines) == 2 and "and staging?" in api.routines[-1]
 
 
 def test_discord_channel_must_belong_to_the_requested_space(discord):

@@ -334,7 +334,7 @@ class DiscordBlock(ChatBlock):
             return self.webhooks[channel]
 
     async def post(self, space: str, channel: str, text: str, *, root: str | None = None, reply_to: str | None = None,
-                   persona: Persona | None = None) -> str:
+                   persona: Persona | None = None) -> str | list[str]:
         self._snowflake(channel, "Discord channel")
         if root is not None:
             self._snowflake(root, "Discord thread")
@@ -376,12 +376,12 @@ class DiscordBlock(ChatBlock):
         chunks.append(text[start:])
         if reference:
             data["message_reference"] = {"message_id": reference}
-        first = ""
+        ids = []
         for chunk in chunks:
             sent = await self.request("POST", path, json={**data, "content": chunk}, params=params, webhook=webhook)
-            first = first or sent["id"]
+            ids.append(sent["id"])
             data.pop("message_reference", None)
-        return first
+        return ids[0] if len(ids) == 1 else ids
 
     async def open_dm(self, space: str, user: str) -> str | None:
         self._snowflake(user, "Discord user")
