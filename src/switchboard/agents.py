@@ -8,11 +8,14 @@ code names a vendor.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable, Mapping
+from urllib.parse import urlparse
 
 from .blocks import AgentSpec
+from .config import ConfigError
 
-LOOPBACK_REDIRECTS = ("http://localhost/*", "http://127.0.0.1/*")
+LOOPBACK_REDIRECTS = ("http://localhost/*", "http://127.0.0.1/*", "http://[::1]/*")
 
 PRESETS: dict[str, AgentSpec] = {
     s.id: s
@@ -21,9 +24,14 @@ PRESETS: dict[str, AgentSpec] = {
                   redirect_hosts=("claude.ai", "claude.com"), cimd_hosts=("claude.ai", "claude.com", "anthropic.com"), link_key="claude_project"),
         AgentSpec("chatgpt", "ChatGPT", redirect_uris=("https://chatgpt.com/connector_platform_oauth_redirect", "https://chatgpt.com/connector/oauth/*"),
                   redirect_hosts=("chatgpt.com", "openai.com"), cimd_hosts=("chatgpt.com", "openai.com"), link_key="chatgpt_project"),
+        AgentSpec("grok", "Grok", redirect_uris=("https://grok.com/*", "https://x.ai/*"),
+                  redirect_hosts=("grok.com", "x.ai"), cimd_hosts=("grok.com", "x.ai")),
         AgentSpec("gemini", "Gemini", redirect_uris=("https://oauth-redirect.googleusercontent.com/r/*", "https://oauth-redirect.googleusercontent.com/a/*"),
                   redirect_hosts=("oauth-redirect.googleusercontent.com",)),
-        AgentSpec("claude-code", "Claude Code"),
+        AgentSpec("claude-code", "Claude Code", cimd_patterns=(r"https://claude\.ai/oauth/claude-code-client-metadata",)),
+        AgentSpec("codex", "Codex", cimd_patterns=(r"https://chatgpt\.com/oauth/codex/(?:[A-Za-z0-9_-]+/)?client\.json",)),
+        AgentSpec("goose", "Goose", cimd_patterns=(r"https://goose-docs\.ai/oauth/client-metadata\.json",)),
+        AgentSpec("opencode", "OpenCode", cimd_patterns=(r"https://opencode\.ai/oauth/opencode/client\.json",)),
     )
 }
 
@@ -41,9 +49,14 @@ def _tuple(v: Any) -> tuple[str, ...]:
 
 class Agents:
     def __init__(self, specs: Iterable[AgentSpec]):
-        self.specs: dict[str, AgentSpec] = {}
-        for s in specs:
-            self.specs[s.id] = s
+        self.specs = {s.id: s for s in specs}
+        self._cimd_patterns: list[tuple[str, re.Pattern[str]]] = []
+        for agent, spec in self.specs.items():
+            for pattern in spec.cimd_patterns:
+                try:
+                    self._cimd_patterns.append((agent, re.compile(pattern)))
+                except re.error as e:
+                    raise ConfigError(f"agents.{agent}.match.cimd_patterns: invalid pattern {pattern!r}: {e}") from e
 
     @classmethod
     def build(cls, config: Mapping[str, Any] | None, provided: Iterable[AgentSpec]) -> "Agents":
@@ -68,6 +81,7 @@ class Agents:
                 redirect_hosts=_tuple(match.get("redirect_hosts")) or (base.redirect_hosts if base else ()),
                 cimd_hosts=_tuple(match.get("cimd_hosts")) or (base.cimd_hosts if base else ()),
                 link_key=raw.get("link_key") or (base.link_key if base else None),
+                cimd_patterns=_tuple(match["cimd_patterns"]) if "cimd_patterns" in match else (base.cimd_patterns if base else ()),
             ))
         specs += [s for s in provided if s.id not in {x.id for x in specs}]
         return cls(specs)
@@ -82,7 +96,13 @@ class Agents:
         s = self.specs.get(agent)
         return s.label if s else (default if default is not None else agent)
 
-    def match(self, redirect_host: str, cimd_host: str) -> str | None:
+    def match_cimd(self, url: str) -> str | None:
+        return next((agent for agent, pattern in self._cimd_patterns if pattern.fullmatch(url)), None)
+
+    def match(self, redirect_host: str, cimd_url: str) -> str | None:
+        if cimd_url and (agent := self.match_cimd(cimd_url)):
+            return agent
+        cimd_host = urlparse(cimd_url).hostname
         for s in self.specs.values():
             if host_allowed(redirect_host, s.redirect_hosts) or host_allowed(cimd_host, s.cimd_hosts):
                 return s.id

@@ -71,11 +71,15 @@ class Config:
     def resource(self) -> str | None:
         return f"{self.public_url}/mcp" if self.public_url else None
 
+    @property
+    def owner_sign_in(self) -> bool:
+        return bool(self.access_team_domain and self.access_aud and self.owner_emails)
+
     def problems(self) -> list[str]:
         out = []
         if not self.public_url:
             out.append("public_url is not set in config: OAuth sign-in is disabled (static keys still work)")
-        if not (self.access_team_domain and self.access_aud):
+        if not self.owner_sign_in:
             out.append("auth.cloudflare_access is not set: OAuth sign-in and the admin page are off (bearer keys still work)")
         return out
 
