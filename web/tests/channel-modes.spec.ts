@@ -56,15 +56,22 @@ test("console mode and action edits keep the bound agent visible", async ({ page
   const headers = { Origin: new URL(session.url()).origin, "X-CSRF-Token": csrf }
   const repo = "example-org/example-repo"
   const placement = { block: "repo-events", space: "release", channel: repo }
+  const address = "capy:captain:jam_EXAMPLEATLAS"
   const target = "agent:claude-code"
-  const bound = await request.post("/api/modes", { headers, data: { ...placement, mode: "triage", target } })
+  const bound = await request.post("/api/modes", { headers, data: { ...placement, mode: "triage", target: address } })
   expect(bound.ok()).toBeTruthy()
   try {
     await page.goto("/connections/github")
     const mode = page.getByRole("combobox", { name: "Mode for " + repo })
     const row = page.getByRole("row").filter({ has: mode })
-    const agent = row.getByText("Agent " + target, { exact: true }).filter({ visible: true })
+    await expect(row.getByText(address, { exact: true }).filter({ visible: true })).toHaveClass(/font-mono/)
+    expect((await request.post("/api/modes", { headers, data: { ...placement, mode: "triage", target } })).ok()).toBeTruthy()
+    await page.reload()
+    const agent = row.getByText("Claude Code", { exact: true }).filter({ visible: true })
+    const avatar = row.locator('img[src="/avatars/claude-code.png"]').filter({ visible: true })
     await expect(agent).toBeVisible()
+    await expect(avatar).toBeVisible()
+    await expect(row).not.toContainText(target)
     await mode.selectOption("assist")
     await expect(mode).toHaveValue("assist")
     await expect(agent).toBeVisible()
@@ -77,6 +84,7 @@ test("console mode and action edits keep the bound agent visible", async ({ page
     await page.reload()
     await expect(mode).toHaveValue("triage")
     await expect(agent).toBeVisible()
+    await expect(avatar).toBeVisible()
   } finally {
     const cleared = await request.post("/api/modes", { headers, data: { ...placement, mode: "inherit" } })
     expect(cleared.ok()).toBeTruthy()
