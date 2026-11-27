@@ -132,6 +132,7 @@ class Companions:
         self._jobs: dict[str, Job] = {}
         self._claims: dict[str, tuple[Claim, str | None, str | None]] = {}
         self._events: dict[str, tuple[str, Event]] = {}
+        self.on_disconnect: list[Callable[[str], None]] = []
         with store._lock:
             store.db.executescript(SCHEMA)
 
@@ -192,9 +193,14 @@ class Companions:
         stream.close(event)
         if self._streams.get(companion_id) is stream:
             del self._streams[companion_id]
+            for disconnected in self.on_disconnect:
+                disconnected(companion_id)
         for job in self._jobs.values():
             if job.stream is stream and not job.future.done():
                 job.future.set_exception(CompanionError(DISCONNECTED if event == "revoked" else OFFLINE))
+
+    def connected(self, companion_id: str) -> bool:
+        return companion_id in self._streams
 
     def revoke(self, companion_id: str, *, origin: str, source: str, client: str) -> bool:
         if not self.store.n("UPDATE companions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL", (self.store.clock(), companion_id)):

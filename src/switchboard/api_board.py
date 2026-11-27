@@ -173,11 +173,15 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
         })
     for address, target in targets.items():
         kind = target.get("kind")
-        if address in connected or kind not in ("captain", "dot"):
+        if address in connected or kind not in ("captain", "dot", "session"):
             continue
         if label := capy_label(address, target["block"], targets) or _reference(target.get("name")) or _reference(target.get("id")):
-            agents[None][address] = _item(address, label, "capy" if kind == "captain" else "chatgpt",
-                                         avatar_url=captain_avatar_url(core, target))
+            if kind == "session":
+                agents[None][address] = {**_item(address, label, target["agent"] or "local", detail=target["state"],
+                                                avatar_url=target.get("avatar_url")), "role": "session"}
+            else:
+                agents[None][address] = _item(address, label, "capy" if kind == "captain" else "chatgpt",
+                                             avatar_url=captain_avatar_url(core, target))
     return agents, routes, routines
 
 

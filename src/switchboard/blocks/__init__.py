@@ -39,8 +39,10 @@ BLOCKS = {
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
     "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
+    "local": "switchboard.blocks.local:LocalBlock",
     "muse": "switchboard.blocks.muse:MuseBlock",
 }
+ON_DEMAND_BLOCKS = frozenset({"local"})
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")
 
@@ -180,6 +182,7 @@ class Address:
 class Block:
     manifest = Manifest(id="", title="")
     connect_kinds: tuple[str, ...] = ()
+    cache_targets = True
     wakes_agents = False
     """True for a block whose targets wake an agent (a Claude routine): a bare agent name goes to its target first."""
 
@@ -258,6 +261,10 @@ class Block:
 
     def effective_target(self, addr: Address, project: str | None) -> Address:
         """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""
+        return addr
+
+    def grant_target(self, addr: Address) -> Address | None:
+        """The address a key must have a grant for, or None if a scoped key cannot send here."""
         return addr
 
     def owns_ref(self, ref: str) -> bool:
@@ -342,6 +349,11 @@ class Block:
         return True
 
     @property
+    def hidden(self) -> bool:
+        """Omit this block from status and discovery by block name."""
+        return False
+
+    @property
     def has_in(self) -> bool:
         return self.manifest.kind in ("source", "both")
 
@@ -376,3 +388,8 @@ def load(use: str) -> type[Block]:
         raise ValueError(f"unknown block type {use!r}; known: {', '.join(sorted(known))}")
     module, _, cls = known[use].partition(":")
     return getattr(importlib.import_module(module), cls)
+
+
+def on_demand_blocks() -> dict[str, type[Block]]:
+    """Blocks that register listeners at startup and expose themselves on discovery."""
+    return {use: load(use) for use in BLOCKS if use in ON_DEMAND_BLOCKS}

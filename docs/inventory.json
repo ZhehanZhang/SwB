@@ -50,6 +50,13 @@
       "sha256": "c04454fd6e5fc2211fb83991373fdd35adff8de6f334fee599048ccd7783b64b"
     },
     {
+      "icon": "src/switchboard/slack/avatars/dsh.png",
+      "id": "avatar:dsh.png",
+      "kind": "avatar",
+      "label": "DeepSeek Harness",
+      "sha256": "df94e255c16abe6ded5c3d312aa5e17fa8b01522038266a6d4f4e44a5ae83961"
+    },
+    {
       "icon": "src/switchboard/slack/avatars/gemini.png",
       "id": "avatar:gemini.png",
       "kind": "avatar",
@@ -196,6 +203,16 @@
       "kind": "block",
       "label": "Grok Bot",
       "use": "grok-routine"
+    },
+    {
+      "block_kind": "sink",
+      "connect_target": null,
+      "credentials": [],
+      "icon": null,
+      "id": "block:local",
+      "kind": "block",
+      "label": "Local sessions",
+      "use": "local"
     },
     {
       "block_kind": "source",
@@ -397,6 +414,27 @@
       "id": "command:export",
       "kind": "command",
       "label": "swb export"
+    },
+    {
+      "arguments": [
+        {
+          "choices": [
+            "claude-code",
+            "gemini",
+            "codex"
+          ],
+          "name": "harness"
+        }
+      ],
+      "command": "swb hook",
+      "flags": [
+        "--help",
+        "-h"
+      ],
+      "icon": null,
+      "id": "command:hook",
+      "kind": "command",
+      "label": "swb hook"
     },
     {
       "arguments": [],
@@ -2524,6 +2562,12 @@
       "id": "provider:codex",
       "kind": "provider",
       "label": "Codex"
+    },
+    {
+      "icon": "src/switchboard/slack/avatars/dsh.png",
+      "id": "provider:dsh",
+      "kind": "provider",
+      "label": "DeepSeek Harness"
     },
     {
       "icon": "src/switchboard/slack/avatars/gemini.png",

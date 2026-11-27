@@ -54,7 +54,8 @@ def release_version(env: Mapping[str, str]) -> str | None:
 def about(request: Request) -> JSONResponse:
     core = request.app.state.core
     release = release_version(core.cfg.env)
-    block_types = {name: str(core.cfg.blocks[name].get("use") or name) for name in core.blocks}
+    blocks = core.visible_blocks()
+    block_types = {name: str(core.cfg.blocks.get(name, {}).get("use") or block.manifest.id) for name, block in blocks.items()}
     block_versions = dict.fromkeys(BLOCKS, release)
     plugin_types = set(block_types.values()) - BLOCKS.keys()
     if plugin_types:
@@ -67,7 +68,7 @@ def about(request: Request) -> JSONResponse:
         "build_date": _build_date(core.cfg.env.get("BUILD_DATE", "")),
         "blocks": [
             {"name": name, "id": block.manifest.id, "version": block_versions.get(block_types[name])}
-            for name, block in sorted(core.blocks.items())
+            for name, block in sorted(blocks.items())
         ],
     })
 

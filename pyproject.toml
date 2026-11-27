@@ -55,9 +55,9 @@ Source = "https://github.com/ZhehanZhang/SwB"
 Issues = "https://github.com/ZhehanZhang/SwB/issues"
 
 [project.scripts]
-swb = "switchboard.__main__:cli_main"
-switchboard = "switchboard.__main__:cli_main"
-swb-one = "switchboard.__main__:cli_main"
+swb = "switchboard.entrypoint:cli_main"
+switchboard = "switchboard.entrypoint:cli_main"
+swb-one = "switchboard.entrypoint:cli_main"
 
 [dependency-groups]
 dev = ["ruff>=0.11,<1"]
