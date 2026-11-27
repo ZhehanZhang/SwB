@@ -167,9 +167,11 @@ def test_listed_mailbox_visibility_applies_to_discord_and_github(make):
     for resource in beta_resources:
         set_visibility(resource, "private")
     outside_reports(11)
-    assert core.inbox.read(owner="beta")["items"] == []
+    [item] = core.inbox.read(owner="beta")["items"]
+    assert (item["destination"], item["kind"], item["target"]) == ("github", "context", "agent:beta")
     assert core.audit.recent(action="chat_event")[0]["detail"] == "target access restricted"
-    assert core.audit.recent(action="webhook")[0]["detail"] == "target access restricted"
+    [row] = core.audit.recent(action="context_noted")
+    assert (row["destination"], row["ref"], row["outcome"]) == ("github", "example-11", "ok")
 
 
 def test_owner_http_sets_and_clears_a_channel_target(make):
