@@ -806,7 +806,7 @@ the default sign-in is a passkey. For the first sign-in or as a fallback, run `s
 unrestricted owner agent to call `login_link`. The link works once and expires after five minutes. There are no passwords.
 
 Optionally set `auth.oidc` with `issuer`, `client_id`, `client_secret_env` (the name of an environment variable),
-`name` (the button label), and `owner_subjects`. Register `<public_url>/auth/oidc/callback` at the provider.
+`name` (the button label), and `owner_subjects`. Register `<public_url>/auth/oidc/callback` at the provider, and the same path on each URL in `public_url_aliases`.
 A subject on the allowlist or a verified email in `auth.owner_emails` can sign in. Cloudflare Access still works
 through `auth.cloudflare_access` and `auth.owner_emails`; Switchboard verifies the upstream assertion itself.
 

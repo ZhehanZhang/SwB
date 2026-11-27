@@ -35,7 +35,7 @@ class OIDC:
 
     @property
     def callback_url(self) -> str:
-        return f"{self.auth.cfg.public_url}/auth/oidc/callback"
+        return f"{self.auth.cfg.issuer}/auth/oidc/callback"
 
     def _mac(self, payload: str) -> str:
         return hmac.digest(self.auth.secret, f"switchboard-oidc:{payload}".encode(), "sha256").hex()

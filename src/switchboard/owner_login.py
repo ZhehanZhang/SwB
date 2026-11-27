@@ -60,7 +60,7 @@ class OwnerLogin:
         return self.auth.cfg.passkey_rp
 
     def methods(self) -> dict:
-        return {"passkeys": self.store.one("SELECT count(*) AS n FROM owner_passkeys")["n"],
+        return {"passkeys": self.store.one("SELECT count(*) AS n FROM owner_passkeys WHERE rp_id IS NULL OR rp_id = ?", (self.rp_id,))["n"],
                 "oidc": {"name": self.oidc.cfg.name} if self.oidc.cfg else None,
                 "access": self.auth.cfg.access_configured}
 
@@ -180,9 +180,9 @@ class OwnerLogin:
                         pass
             row_id = bytes_to_base64url(verified.credential_id) if verified else None
             if verified and self.store.n(
-                "UPDATE owner_passkeys SET last_used_at = ?, sign_count = max(sign_count, ?) "
+                "UPDATE owner_passkeys SET last_used_at = ?, sign_count = max(sign_count, ?), rp_id = coalesce(rp_id, ?) "
                 "WHERE id = ? AND public_key = ? AND ((sign_count = 0 AND ? = 0) OR sign_count < ?)",
-                (self.store.clock(), verified.new_sign_count, bytes_to_base64url(verified.credential_id),
+                (self.store.clock(), verified.new_sign_count, self.rp_id, bytes_to_base64url(verified.credential_id),
                  row["public_key"], verified.new_sign_count, verified.new_sign_count),
             ):
                 response = self.sessions.start(request, Response(status_code=204), "passkey", source=row_id)
@@ -215,9 +215,9 @@ class OwnerLogin:
                 except Exception:
                     pass
             if verified and self.store.n(
-                "INSERT OR IGNORE INTO owner_passkeys(id, name, public_key, sign_count, created_at) VALUES (?,?,?,?,?)",
+                "INSERT OR IGNORE INTO owner_passkeys(id, name, public_key, sign_count, created_at, rp_id) VALUES (?,?,?,?,?,?)",
                 (cid := bytes_to_base64url(verified.credential_id), name.strip()[:100], verified.credential_public_key,
-                 verified.sign_count, self.store.clock()),
+                 verified.sign_count, self.store.clock(), self.rp_id),
             ):
                 response = JSONResponse({"id": cid}, status_code=201)
             else:

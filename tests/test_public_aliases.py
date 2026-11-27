@@ -45,6 +45,22 @@ def test_passkey_rp_id_is_shared_across_hosts(make):
         assert client.post("/auth/passkey/login/options").json()["publicKey"]["rpId"] == "example.test"
 
 
+def test_alias_with_default_port_matches_host_header(make):
+    config = base_config(public_url_aliases=[ALIAS + ":443"])
+    _, primary = make(config)
+    alias = TestClient(primary.app, base_url=ALIAS)
+    assert alias.get("/.well-known/oauth-authorization-server").json()["issuer"] == ALIAS + ":443"
+
+
+def test_passkey_count_and_enrollment_follow_the_host(make):
+    core, primary, alias = both(make)
+    core.store.x("INSERT INTO owner_passkeys(id, name, public_key, sign_count, created_at, rp_id) VALUES ('a', 'Old', x'00', 0, 0, 'switchboard.example.test')")
+    assert primary.get("/auth/session").json()["methods"]["passkeys"] == 1
+    assert alias.get("/auth/session").json()["methods"]["passkeys"] == 0
+    assert "Add a passkey" in alias.get("/", headers=OWNER).text
+    assert "Add a passkey" not in primary.get("/", headers=OWNER).text
+
+
 @pytest.mark.parametrize(("aliases", "rp_id"), [(["http://swb.example.test"], None), ([PUBLIC], None), ([ALIAS], "other.test"), ([ALIAS], "test")])
 def test_alias_and_rp_id_validation(tmp_path, aliases, rp_id):
     import yaml
