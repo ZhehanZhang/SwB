@@ -21,7 +21,7 @@ blocks:
           example: [bot, user]
 ```
 
-Replace `claude` with your agent name. Replace `example` with the workspace label. Add the same grant for `owner` if I use the `swb` command for Slack. Use the identities set up for that workspace. For my account only, use `[user]`. If I need to edit the file myself, give me the YAML. Tell me when SwB needs a restart. Check identities with `slack_workspaces`.
+Replace `claude` with your agent name. Replace `example` with the workspace label. Use the identities set up for that workspace. For my account only, use `[user]`. If I need to edit the file myself, give me the YAML. Tell me when SwB needs a restart. Check identities with `slack_workspaces`.
 
 Ask me to enter tokens only through the claim link that connect returns. Keep tokens out of this chat.
 
