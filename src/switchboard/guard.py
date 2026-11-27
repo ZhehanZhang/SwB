@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from typing import Any, Callable
 
 from starlette.exceptions import HTTPException
@@ -39,33 +39,52 @@ def client_ip(scope: dict[str, Any]) -> str:
 
 
 class RateLimiter:
-    """Sliding-window counters per (bucket, key), in memory: a restart forgets them, which is acceptable for these limits."""
+    """In-memory sliding windows. Each bucket expires idle keys and evicts the least recently hit key at capacity."""
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic, limits: dict[str, tuple[int, float]] | None = None):
+    def __init__(self, clock: Callable[[], float] = time.monotonic, limits: dict[str, tuple[int, float]] | None = None,
+                 *, max_keys_per_bucket: int = 5_000):
         self.clock = clock
         self.limits = limits or LIMITS
-        self.hits: dict[tuple[str, str], deque[float]] = {}
+        self.max_keys_per_bucket = max_keys_per_bucket
+        self.hits: dict[str, OrderedDict[str, deque[float]]] = {}
+        self._last_now = float("-inf")
 
-    def _window(self, bucket: str, key: str) -> deque[float]:
-        n, span = self.limits[bucket]
-        q = self.hits.setdefault((bucket, key), deque(maxlen=n))
-        cutoff = self.clock() - span
-        while q and q[0] < cutoff:
-            q.popleft()
-        return q
+    def _now(self) -> float:
+        self._last_now = max(self._last_now, self.clock())
+        return self._last_now
+
+    @staticmethod
+    def _expire(peers: OrderedDict[str, deque[float]], cutoff: float) -> None:
+        while peers and next(iter(peers.values()))[-1] <= cutoff:
+            peers.popitem(last=False)
 
     def blocked(self, bucket: str, key: str) -> float | None:
         """Seconds until the next attempt is allowed, or None when it may go ahead."""
         n, span = self.limits[bucket]
-        q = self._window(bucket, key)
-        if len(q) < n:
+        if not (peers := self.hits.get(bucket)):
             return None
-        return max(1.0, q[0] + span - self.clock())
+        now = self._now()
+        cutoff = now - span
+        self._expire(peers, cutoff)
+        if (q := peers.get(key)) is None:
+            return None
+        while q[0] <= cutoff:
+            q.popleft()
+        return max(1.0, q[0] + span - now) if len(q) >= n else None
 
     def hit(self, bucket: str, key: str) -> None:
-        self._window(bucket, key).append(self.clock())
-        if len(self.hits) > 50_000:
-            self.hits.clear()
+        n, span = self.limits[bucket]
+        if n <= 0:
+            return
+        now = self._now()
+        peers = self.hits.setdefault(bucket, OrderedDict())
+        self._expire(peers, now - span)
+        if (q := peers.get(key)) is None:
+            if len(peers) >= self.max_keys_per_bucket:
+                peers.popitem(last=False)
+            peers[key] = q = deque(maxlen=n)
+        q.append(now)
+        peers.move_to_end(key)
 
 
 async def reject(send: Any, status: int, error: str, description: str, retry_after: float | None = None) -> None:
