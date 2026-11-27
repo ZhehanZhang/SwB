@@ -7,6 +7,7 @@ import hmac
 import json
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
+from urllib.parse import urlsplit
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -238,31 +239,72 @@ def create_app(core: "Switchboard") -> Any:
         return (None, refused) if refused is not None else (csrf(email), None)
 
     async def claim_form(request: Request) -> tuple[str | None, str, Response | None]:
+        actor, form, refused = await claim_submission(request)
+        token = form.get("token") if form is not None else None
+        return actor, token if isinstance(token, str) else "", refused
+
+    async def claim_submission(request: Request) -> tuple[str | None, Any, Response | None]:
+        """The owner check for a claim form post (owner key header, owner key field, or Access session plus CSRF) and its form."""
         auth = request.headers.get("authorization")
         if auth is not None:
             scheme, _, key = auth.partition(" ")
             actor = claim_key_owner(key.strip()) if scheme.lower() == "bearer" else None
             if actor is None:
-                return None, "", pages.message_page("Not allowed", "This needs the Switchboard owner key.", 403)
+                return None, None, pages.message_page("Not allowed", "This needs the Switchboard owner key.", 403)
             form = await request.form()
         elif not core.cfg.access_team_domain and claim_key_actor:
             form = await request.form()
             key = form.get("owner_key")
             actor = claim_key_owner(key) if isinstance(key, str) else None
             if actor is None or not valid_csrf(form, csrf(f"claim:{request.path_params['code']}")):
-                return None, "", pages.message_page("Not allowed", "Use the Switchboard owner key and reload the form if needed.", 403)
+                return None, None, pages.message_page("Not allowed", "Use the Switchboard owner key and reload the form if needed.", 403)
         else:
             email, form, refused = await owner_form(request)
             if refused is not None:
-                return None, "", refused
+                return None, None, refused
             actor = f"admin:{email}"
-        token = form.get("token")
-        return actor, token if isinstance(token, str) else "", None
+        return actor, form, None
+
+    async def group_claim(request: Request, group: dict[str, Any]) -> Response:
+        from . import credentials
+
+        code = request.path_params["code"]
+        if request.method != "POST":
+            form_csrf, refused = await claim_page_access(request)
+            if refused is not None:
+                return refused
+            return credentials.page(group, form_csrf, owner_key=not core.cfg.access_team_domain and bool(claim_key_actor),
+                                    host=urlsplit(core.base_url or "").hostname or "", now=core.store.clock())
+        actor, form, refused = await claim_submission(request)
+        if refused is not None:
+            return refused
+        values = {f.name: v for f in group["fields"] if isinstance(v := form.get(f.name), str)}
+        try:
+            names = core.claims.consume_group(code, values)
+        except ClaimUnavailable as e:
+            return pages.message_page("Link not usable", str(e), 410)
+        except ClaimError as e:
+            return pages.message_page("Not saved", f"{e} Nothing was saved; go back and try again.", 400)
+        core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
+                          outcome="ok", target=",".join(names), excerpt=group["title"])
+        for block in core.blocks.values():
+            if saved := getattr(block, "secret_saved", None):
+                for name in names:
+                    await saved(name)
+        return pages.message_page("Saved", f"{group['title']}: {len(names)} credential{'s' if len(names) != 1 else ''} saved. "
+                                  "Run connect again to see what's next.", 200)
+
+    async def claim_asset(request: Request) -> Response:
+        from . import credentials
+
+        return credentials.asset(request.path_params["name"])
 
     async def token_claim(request: Request) -> Response:
         from .chat import ChatBlock
 
         code = request.path_params["code"]
+        if (group := core.claims.group(code)) is not None:
+            return await group_claim(request, group)
         if request.method != "POST":
             form_csrf, refused = await claim_page_access(request)
             if refused is not None:
@@ -494,6 +536,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
             Route("/routines/claim/{code}", routine_claim, methods=["GET", "POST"]),
             Route(CLAIM_PATH + "/{code}", token_claim, methods=["GET", "POST"]),
+            Route("/claim-assets/{name}", claim_asset, methods=["GET"]),
             *pages.routes(),
             *core.auth.routes(),
             *origin_routes,
