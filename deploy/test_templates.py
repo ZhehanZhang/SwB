@@ -39,6 +39,8 @@ def test_deploy_templates_use_the_wildcard_docker_runtime():
     assert compose["ports"] == [f"{published}:8000"]
     caddy = yaml.safe_load((ROOT / "deploy/compose/compose.yaml").read_text())["services"]["switchboard"]
     assert caddy["build"]["target"] == "paas"
+    assert caddy["environment"]["SWB_KEY_OWNER"] == "${SWB_KEY_OWNER-${SWITCHBOARD_KEY_OWNER-}}"
+    assert "SWITCHBOARD_KEY_OWNER" not in caddy["environment"]
     for service in (compose, caddy):
         assert service["environment"]["SWB_TRUSTED_PROXIES"] is None
 

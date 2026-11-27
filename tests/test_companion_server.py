@@ -314,7 +314,7 @@ async def test_online_progress_claims_results_and_stream_revocation(amake):
         job_id = job["job_id"]
         other_headers = bearer(other["device_key"])
         claim = {"job_id": job_id, "kind": "demo_claim", "payload": {"private": "claim data"}}
-        large_result = {"content_b64": "a" * (2 * 1024 * 1024)}
+        large_result = {"content_b64": "a" * (512 * 1024)}
         result = {"job_id": job_id, "ok": True, "result": large_result}
         assert (await client.post("/companion/results", headers=other_headers, json=result)).status_code == 404
         assert (await client.post("/companion/claims", headers=other_headers, json=claim)).status_code == 404

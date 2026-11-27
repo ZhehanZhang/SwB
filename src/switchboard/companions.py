@@ -27,6 +27,8 @@ OFFLINE = "Companion offline."
 UNKNOWN_JOB = "Companion job expired or unavailable."
 DISCONNECTED = "Companion disconnected."
 FAILED = "Companion action failed."
+DEVICE_OUTPUT_LIMIT = 1024 * 1024
+DEVICE_OUTPUT_ERROR = "Companion output exceeds 1 MiB. Request less data."
 ONLINE_S = 45
 MAX_TIMEOUT_S = 900
 SCHEMA = """
@@ -258,6 +260,9 @@ class Companions:
     def connected(self, companion_id: str) -> bool:
         return companion_id in self._streams
 
+    def has_session_claims(self) -> bool:
+        return self.store.one("SELECT 1 FROM companion_session_owners WHERE expires_at > ? LIMIT 1", (self.store.clock(),)) is not None
+
     def session_owner(self, harness: str, session: str) -> str | None:
         row = self.store.one("SELECT companion FROM companion_session_owners WHERE harness = ? AND session = ? AND expires_at > ?",
                              (harness, session, self.store.clock()))
@@ -384,8 +389,17 @@ class Companions:
                         await done
                 except Exception:
                     raise CompanionError("Companion progress failed.", 500) from None
-        elif body.get("ok") is True and isinstance(body.get("result"), dict):
-            job.future.set_result(body["result"])
+        elif body.get("ok") is True and isinstance(result := body.get("result"), dict):
+            if (job.capability, job.action) != ("drop", "get"):
+                try:
+                    size = len(json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8"))
+                except (ValueError, RecursionError):
+                    raise CompanionError("Invalid companion result.") from None
+                if size > DEVICE_OUTPUT_LIMIT:
+                    exc = CompanionError(DEVICE_OUTPUT_ERROR, 413, audit_ref=f"{job.capability}.{job.action}")
+                    job.future.set_exception(exc)
+                    raise exc
+            job.future.set_result(result)
         elif body.get("ok") is False:
             error = body.get("error")
             safe = isinstance(error, str) and 0 < len(error) <= 200 and error.isprintable()

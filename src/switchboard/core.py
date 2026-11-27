@@ -294,10 +294,12 @@ class Switchboard:
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
                          handle_meta: dict[str, Any] | None = None, title: str | None = None,
-                         _reply: bool = False, dry_run: bool = False, _allow_unregistered: bool = False) -> dict[str, Any]:
+                         _reply: bool = False, dry_run: bool = False, _allow_unregistered: bool = False,
+                         _session_target: str | None = None) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
-        allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
+        allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine).
+        A session target opens a reply handle without publishing a mailbox item."""
         to = (to or "").strip().lower()
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
         if original is not None and original["meta"].get("channel_mode") and not _reply:
@@ -321,7 +323,7 @@ class Switchboard:
             raise CoreError("text is empty")
         p = self.project(project)
         if dry_run:
-            return {"to": f"agent:{to}", "mailbox": True, "project": p.slug if p else None}
+            return {"to": f"agent:{to}", "mailbox": _session_target is None, "project": p.slug if p else None}
         if root is not None:
             self.turn(root, principal)
         label = self.agents.label(principal.source)
@@ -333,8 +335,10 @@ class Switchboard:
             label, "", None, text, verb="replies" if in_reply_to else "asks", trust=trust)
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
         handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=title,
-                                        meta=meta, status="delivered", target=f"agent:{to}")
+                                        meta=meta, status="delivered", target=_session_target or f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
+        if _session_target is not None:
+            return {"to": to, "handle": handle, "conversation": handle, "mailbox": False, "project": p.slug if p else None}
         await self.inbox.add(handle, "message", {"subject": title, "text": display, "project": p.slug if p else None, "from": sender, "trust": trust,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",

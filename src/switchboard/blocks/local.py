@@ -12,7 +12,7 @@ from ..companion.caps.base import CapabilityError
 from ..companion.harness import STATES, WAKE_TTL_S, Session, reply_text
 from ..companions import COMPANION_ID, OFFLINE, CompanionError, DeviceActionError
 from ..refusals import TARGET_REQUIRED
-from ..targets import NOT_TARGETS, SLUG_RE, slugify
+from ..targets import NOT_TARGETS, SLUG_RE
 from ..trust import FramedText, frame_sender, neutralize
 from ..visibility import Who
 from . import Action, Address, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
@@ -27,7 +27,7 @@ AGENTS = {
 }
 SESSION_TTL_S = 86_400
 WAKE_TIMEOUT_S = 10
-SESSION_ID = re.compile(r"[A-Za-z0-9_.:-]{1,160}")
+SESSION_ID = re.compile(r"[A-Za-z0-9_.-]{1,160}")
 SessionKey = tuple[str, str, str]
 REPLY_UNAVAILABLE = "Local wake reply unavailable."
 
@@ -85,6 +85,8 @@ class LocalBlock(Block):
             core.companions.register_event(f"{cap}.session", partial(self._session, cap), capability=cap)
             core.companions.register_event(f"{cap}.reply", partial(self._reply, cap), capability=cap)
         core.companions.on_disconnect.append(self._disconnect)
+        if self.name not in core.blocks and core.companions.has_session_claims():
+            core.blocks[self.name] = self
 
     @property
     def online(self) -> bool:
@@ -178,9 +180,8 @@ class LocalBlock(Block):
             value = row.value
             ident = ":".join(key)
             label = value.name or value.dir
-            name = label or value.session
             agent = self._agent(value.harness, value.agent)
-            slug = f"local-{sha256(ident.encode()).hexdigest()[:16]}-{slugify(name)[:17]}".rstrip("-")
+            slug = f"local-{sha256(ident.encode()).hexdigest()[:16]}"
             fields = {"name": label, "dir": value.dir, "detail": value.detail}
             if framed:
                 fields = {field: frame_sender(text, None, key[0], "local session")[1] if text else text
@@ -212,17 +213,22 @@ class LocalBlock(Block):
         to = f"{self.name}:{kind}:{':'.join(key) if companion else ident}"
         who = principal.visibility_who or Who(owner=principal.trust == "owner")
         if not who.owner:
-            if not agent or not companion or (initial is None and unavailable != OFFLINE) or not self.core.visibility.allows(who, f"target:{to}"):
+            if (not companion or (initial is None and unavailable != OFFLINE) or (initial is not None and not agent)
+                    or not self.core.visibility.allows(who, f"target:{to}")):
                 raise BlockRefused(TARGET_REQUIRED, "Access to this local session is restricted.")
+        call.note(target=to)
+        if unavailable == OFFLINE and key not in self.offline:
+            raise BlockError("Local session is offline.")
         mailbox = agent or "owner"
+        publish = self.core.visibility.allows(who, f"target:{mailbox}")
         out = await self.core.agent_send(principal, to=mailbox, text=task, project=project, allow_self=True,
                                          handle=call.handle, handle_meta=call.handle_meta, title=title, dry_run=call.dry_run,
-                                         _allow_unregistered=agent is None)
+                                         _allow_unregistered=agent is None, _session_target=None if publish else to)
         base = {**out, "to": to, "agent": mailbox}
         if call.dry_run:
             return base
         conversation = out["handle"]
-        call.note(target=to, ref=conversation)
+        call.note(ref=conversation)
         _, row, current_agent, reason = self._find(key)
         if row:
             if row.cap == "hooks":
@@ -236,6 +242,9 @@ class LocalBlock(Block):
             elif row.value.state == "blocked":
                 reason = "Agent is waiting on a prompt."
         if reason:
+            if not publish:
+                self.core.inbox.update_handle(conversation, status="cancelled")
+                raise BlockError(reason)
             call.note(outcome="mailbox")
             return {**base, "woke": False, "note": f"{reason} Message left in the {mailbox} mailbox."}
         sender = self.core.agents.label(principal.source)
@@ -250,8 +259,11 @@ class LocalBlock(Block):
                                                                             "conversation": conversation, "agent": agent},
                                               timeout_s=WAKE_TIMEOUT_S, principal=principal)
         except (CompanionError, CapabilityError) as exc:
-            call.note(outcome="mailbox")
             reason = exc.display if isinstance(exc, DeviceActionError) else str(exc)
+            if not publish:
+                self.core.inbox.update_handle(conversation, status="cancelled")
+                raise BlockError(reason) from exc
+            call.note(outcome="mailbox")
             return {**base, "woke": False, "note": f"{reason}\nMessage left in the {mailbox} mailbox."}
         else:
             pending.confirmed = True
@@ -267,7 +279,7 @@ class LocalBlock(Block):
                                               action="companion_emit", target=companion, detail=str(exc))
             finally:
                 self.wakes.pop(conversation, None)
-        return {**base, "woke": True}
+        return {**base, "delivered": True, "woke": True}
 
     async def _reply(self, cap: str, principal: Principal, payload: dict[str, Any]) -> None:
         conversation, text = payload.get("conversation"), payload.get("text")
