@@ -4,6 +4,8 @@ Use [SwB's issue tracker](https://github.com/ZhehanZhang/SwB/issues) for bugs an
 Report security issues privately as described in [SECURITY.md](SECURITY.md). Please follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
+We welcome contributions to SwB. See the [trademark policy](TRADEMARKS.md).
+
 ## Develop locally
 
 Install Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). Clone SwB and set up the environment:
