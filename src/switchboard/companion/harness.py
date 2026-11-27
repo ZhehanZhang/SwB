@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
@@ -49,20 +50,28 @@ class Harness:
         self.wakes: dict[str, Wake] = {}
 
     def expect(self, keys: Iterable[str], session: str, conversation: str, agent: str) -> None:
-        wake = Wake(session, conversation, agent, time.monotonic() + WAKE_TTL_S)
+        now = time.monotonic()
+        for key in [key for key, wake in self.wakes.items() if wake.expires <= now]:
+            del self.wakes[key]
+        wake = Wake(session, conversation, agent, now + WAKE_TTL_S)
         for key in keys:
             if key:
                 self.wakes[key] = wake
 
-    def take(self, keys: Iterable[str]) -> Wake | None:
+    def pending(self, keys: Iterable[str]) -> Wake | None:
         now = time.monotonic()
-        for key in [k for k in keys if k]:
-            wake = self.wakes.get(key)
-            if wake and wake.expires > now:
-                for k in [k for k, w in self.wakes.items() if w is wake]:
-                    del self.wakes[k]
-                return wake
+        for key in keys:
+            if key and (wake := self.wakes.get(key)):
+                if wake.expires > now:
+                    return wake
+                del self.wakes[key]
         return None
+
+    def take(self, keys: Iterable[str]) -> Wake | None:
+        if wake := self.pending(keys):
+            for key in [key for key, value in self.wakes.items() if value is wake]:
+                del self.wakes[key]
+        return wake
 
     async def report(self, ctx: CompanionContext, cap: str, session: Session) -> bool:
         payload = session.payload()
@@ -73,17 +82,28 @@ class Harness:
             return False
         if last and now - last[0] < COALESCE_S and payload["state"] == last[1]["state"]:
             return False
-        self.reported[key] = (now, payload)
+        await ctx.emit(f"{cap}.session", payload)
         if payload["state"] == "ended":
             self.reported.pop(key, None)
-        await ctx.emit(f"{cap}.session", payload)
+        else:
+            self.reported[key] = (now, payload)
         return True
 
     async def reply(self, ctx: CompanionContext, cap: str, keys: Iterable[str], text: str) -> bool:
         if not text.strip() or not (wake := self.take(keys)):
             return False
+        text = text[:REPLY_MAX].encode("utf-8", errors="replace").decode("utf-8")
+        if len(json.dumps(text, ensure_ascii=False).encode()) > REPLY_MAX + 2:
+            lower, upper = 0, len(text)
+            while lower < upper:
+                middle = (lower + upper + 1) // 2
+                if len(json.dumps(text[:middle], ensure_ascii=False).encode()) <= REPLY_MAX + 2:
+                    lower = middle
+                else:
+                    upper = middle - 1
+            text = text[:lower]
         await ctx.emit(f"{cap}.reply", {"session": wake.session, "conversation": wake.conversation, "agent": wake.agent,
-                                        "text": text[:REPLY_MAX]})
+                                        "text": text})
         return True
 
 
