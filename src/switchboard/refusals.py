@@ -8,7 +8,7 @@ GRANT_REQUIRED = "Use an account granted this action."
 
 SIGN_IN_FAILURES = {
     "/auth/setup": frozenset({"setup_failed", "setup_closed", "csrf"}),
-    "/auth/link": frozenset({"link_used", "link_expired", "csrf"}),
+    "/auth/link": frozenset({"link_used", "link_expired", "link_invalid", "csrf"}),
     "/auth/passkey/login/options": frozenset({"passkey_failed", "csrf"}),
     "/auth/passkey/login/verify": frozenset({"passkey_failed", "csrf"}),
     "/auth/passkey/register/options": frozenset({"passkey_failed"}),

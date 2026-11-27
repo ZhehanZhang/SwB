@@ -233,7 +233,7 @@ def test_restricted_keys_cannot_discover_or_call_login_link(make, restriction):
     assert core.store.one("SELECT 1 FROM owner_login_links") is None
 
 
-@pytest.mark.parametrize("body", [{}, {"token": None}, {"token": 1}, {"token": "nonsense"},
+@pytest.mark.parametrize("body", [{}, {"token": None}, {"token": 1}, {"token": "fixture-malformed-link"},
                                  {"token": "!" * 43}, {"token": "a" * 43}])
 def test_invalid_link_never_starts_a_session(make, body):
     core, client = make()
@@ -242,6 +242,14 @@ def test_invalid_link_never_starts_a_session(make, body):
     assert "set-cookie" not in response.headers
     assert core.store.one("SELECT 1 FROM owner_sessions") is None
     assert not core.audit.recent(action="login_link_used")
+    raw = core.audit.recent(action="auth_failure")
+    public = client.get("/api/audit", headers=OWNER, params={"action": "auth_failure"}).json()["items"]
+    for rows in (raw, public):
+        assert [(r["origin"], r["target"], r["detail"], r["outcome"]) for r in rows] == [
+            ("http", "/auth/link", "link_invalid", "refused")
+        ]
+        if isinstance(value := body.get("token"), str):
+            assert value[:12] not in json.dumps(rows)
 
 
 @pytest.mark.parametrize("path, failure", [("/auth/link", "link_invalid"), (SIGN_IN + "/verify", "passkey_failed")])
