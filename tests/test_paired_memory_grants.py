@@ -186,6 +186,17 @@ def test_owner_session_only_can_remove_a_single_paired_scope(workspace):
     assert audit["target"] == agent["key_id"]
 
 
+@pytest.mark.parametrize("project", ["old", "project:old"])
+def test_pending_pairing_gets_the_renamed_project_grant(workspace, project):
+    core, client, *_ = workspace
+    core.projects.create(slug="old", name="Old")
+    code = payload(call(client, STATIC_KEY, "connect_code", {"agent": "pending", "project": project}))["code"]
+    core.projects.update("old", new_slug="new")
+    paired = client.post("/connect", json={"code": code}).json()
+    assert paired["project"] == "new"
+    assert core.connections.memory_scopes(paired["key_id"]) == ("agent:pending", "project:new")
+
+
 async def test_startup_migrates_active_legacy_keys_once_then_keeps_new_defaults(tmp_path, amake, caplog):
     data = tmp_path / "data"
     store = Store(data / INSTANCE_DB)

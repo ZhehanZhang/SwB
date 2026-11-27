@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS memories (
   deleted_at REAL
 );
 CREATE INDEX IF NOT EXISTS memories_updated ON memories(updated_at);
+CREATE TABLE IF NOT EXISTS connect_codes (
+  code_hash TEXT PRIMARY KEY,
+  agent TEXT NOT NULL,
+  project TEXT,
+  client TEXT,
+  created_by TEXT NOT NULL,
+  created_at REAL NOT NULL,
+  expires_at REAL NOT NULL,
+  used_at REAL
+);
 CREATE TABLE IF NOT EXISTS paired_memory_grants (
   key_id TEXT NOT NULL,
   scope TEXT NOT NULL,

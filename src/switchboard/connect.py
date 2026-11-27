@@ -34,16 +34,6 @@ def public_https_prerequisite(owner_sign_in: bool) -> str:
 
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS connect_codes (
-  code_hash TEXT PRIMARY KEY,
-  agent TEXT NOT NULL,
-  project TEXT,
-  client TEXT,
-  created_by TEXT NOT NULL,
-  created_at REAL NOT NULL,
-  expires_at REAL NOT NULL,
-  used_at REAL
-);
 CREATE TABLE IF NOT EXISTS agent_keys (
   id TEXT PRIMARY KEY,
   agent TEXT NOT NULL,
