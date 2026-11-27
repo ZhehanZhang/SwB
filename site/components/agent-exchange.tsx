@@ -1,5 +1,6 @@
 'use client';
 
+import { UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MarkTile } from './mark-tile';
 import type { Locale } from '@/lib/i18n';
@@ -58,7 +59,7 @@ export function AgentExchange({ lang }: { lang: Locale }) {
     <div className="swb-exchange mt-10">
       <div className="swb-win overflow-hidden rounded-xl border" aria-hidden="true">
         <div className="swb-win-bar flex items-center gap-2 border-b px-4">
-          <MarkTile kind={app} className="swb-win-mark" />
+          <MarkTile kind={app} className="swb-win-avatar" />
           <span className="text-sm font-semibold">{app === 'slack' ? 'Slack #launch' : agentNames[app]}</span>
         </div>
         <div className="swb-win-body relative min-h-0 overflow-hidden">
@@ -67,14 +68,12 @@ export function AgentExchange({ lang }: { lang: Locale }) {
               <div key={`${source}/${index}`}
                 className={`swb-win-entry flex gap-3${source === scene ? ' swb-win-message' : ''}${index === 0 ? ' swb-win-break' : ''}`}>
                 {speaker === 'you'
-                  ? <span className="swb-win-you grid size-8 shrink-0 place-items-center rounded-md text-sm font-semibold" aria-hidden="true">{you.slice(0, 1)}</span>
-                  : speaker === 'capy'
-                    ? <span className="swb-mark-tile swb-mark-avatar swb-win-avatar" aria-hidden="true"><img src="/avatars/capy-96.webp" alt="" /></span>
-                    : <MarkTile kind={speaker} className="swb-win-avatar" />}
+                  ? <span className="swb-mark-tile swb-win-avatar swb-win-you" aria-hidden="true"><UserRound className="swb-mark-glyph" /></span>
+                  : <MarkTile kind={speaker} className="swb-win-avatar" />}
                 <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                  <p className="text-sm font-semibold">
                     {speaker === 'you' ? you : agentNames[speaker]}
-                    {channel === 'slack' && speaker !== 'you' && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
+                    {speaker !== 'you' && speaker !== channel && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
                   </p>
                   <p className="text-[15px] leading-6">{text[lang]}</p>
                 </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { AIChatPanel, AIChatProvider, AIChatSearch, useAIChat, type AIChatClientData } from '@fumadocs/ai-chat';
+import { AIChatPanel, AIChatProvider, AIChatSearch, AIChatTrigger, useAIChat, type AIChatClientData } from '@fumadocs/ai-chat';
 import { DefaultChatTransport, type UIMessage } from 'ai';
 import { DocsLayout, type DocsLayoutProps } from 'fumadocs-ui/layouts/notebook';
 import { useMemo } from 'react';
@@ -14,9 +14,14 @@ type Message = UIMessage<unknown, { client: AIChatClientData }, {
   };
 }>;
 
-function ChatLayout(props: DocsLayoutProps) {
+function ChatLayout({ children, ...props }: DocsLayoutProps) {
   const { open, setOpen } = useAIChat();
-  return <DocsLayout {...props} aiChat={{ open, onOpenChange: setOpen, panel: <AIChatPanel />, trigger: true }} />;
+  return (
+    <DocsLayout {...props} aiChat={{ open, onOpenChange: setOpen, panel: <AIChatPanel /> }}>
+      {children}
+      <AIChatTrigger className="swb-ask-trigger" />
+    </DocsLayout>
+  );
 }
 
 function renderPart(part: Message['parts'][number], live: boolean) {
@@ -53,6 +58,13 @@ function EnabledChat({ lang, ...props }: DocsLayoutProps & { lang: Locale }) {
   );
 }
 
-export function DocsShell({ lang, askAI, ...props }: DocsLayoutProps & { lang: Locale; askAI: boolean }) {
-  return askAI ? <EnabledChat key={lang} lang={lang} {...props} /> : <DocsLayout {...props} />;
+export function DocsShell({ lang, askAI, ...props }: Pick<DocsLayoutProps, 'tree' | 'children'> & { lang: Locale; askAI: boolean }) {
+  const layoutProps: DocsLayoutProps = {
+    ...props,
+    nav: { enabled: false, mode: 'top' },
+    themeSwitch: { enabled: false },
+    i18n: false,
+    containerProps: { className: askAI ? 'swb-docs swb-docs-with-chat' : 'swb-docs' },
+  };
+  return askAI ? <EnabledChat key={lang} lang={lang} {...layoutProps} /> : <DocsLayout {...layoutProps} />;
 }
