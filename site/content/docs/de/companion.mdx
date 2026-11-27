@@ -43,7 +43,7 @@ Fügen Sie für jede Funktion, die Sie aktivieren möchten, eine Option `--cap` 
 
 Unter Linux nutzen Benachrichtigungen `notify-send`. Unter Debian und Ubuntu installieren Sie es mit dem Paket `libnotify-bin`.
 
-Verwenden Sie für die Muse-Funktion Python 3.13. Folgen Sie der [Anleitung zur Muse-Kopplung](/de/docs/setup/muse).
+Verwenden Sie Python 3.13, um das Muse-Gadget zu koppeln. Folgen Sie der [Anleitung zur Muse-Kopplung](/de/docs/setup/muse). Nach der Kopplung hält der SwB-Server die Verbindung zu Muse offen.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse

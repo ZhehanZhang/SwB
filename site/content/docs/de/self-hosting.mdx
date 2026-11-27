@@ -3,6 +3,12 @@ title: Selbst hosten
 description: Betreiben Sie SwB auf einem Server mit Docker Compose und Cloudflare.
 ---
 
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
+## Bereitstellung mit einem Klick
+
+<DeployProviders lang="de" />
+
 ## Docker Compose
 
 Installieren Sie Docker Compose 2.24 oder neuer. Führen Sie diese Befehle als normaler Benutzer aus, dem der Datenordner gehört.
@@ -31,9 +37,27 @@ Bei einem entfernten Server leiten Sie dessen Port `8870` auf den lokalen Port `
 
 Eine Anfrage ohne Anmeldung an `/healthz` gibt `status` und `version` zurück. Für vollständige Statusdetails verwenden Sie eine Inhabersitzung oder den Inhaberschlüssel.
 
-## Cloudflare Tunnel
+## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Folgen Sie der [Anleitung für Cloudflare Tunnel](/de/docs/setup/cloudflare), um einen Tunnel für Ihre Domain zu erstellen. Verwenden Sie für Compose `http://switchboard:8000` als Dienstadresse. Speichern Sie das Tunnel-Token in `.env` unter dem Namen aus der [Compose-Datei des Releases](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37). Ersetzen Sie `SWB_PUBLIC_URL` in `.env` durch die Tunneladresse. Starten Sie Compose mit dem Profil `tunnel`.
+Ein Cloudflare Tunnel gibt SwB eine öffentliche HTTPS-Adresse. Cloudflare bietet Tunnel im kostenlosen Plan an.
+
+### Quick Tunnel
+
+Mit einem Quick Tunnel testen Sie SwB unter einer temporären Adresse. Führen Sie diesen Befehl auf dem Host mit `cloudflared` aus, dem Programm, das SwB mit Cloudflare verbindet.
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+Setzen Sie `SWB_PUBLIC_URL` auf die HTTPS-Adresse aus dem Terminal. Wenn Ihre Konfiguration `public_url` enthält, aktualisieren Sie diese Einstellung ebenfalls. Starten Sie SwB neu. Die Adresse ändert sich bei jedem Start des Tunnels. OAuth-Anmeldungen und Passkeys sind an diese Adresse gebunden. Für eine dauerhafte Adresse verwenden Sie einen benannten Tunnel.
+
+### Benannter Tunnel
+
+Verwenden Sie ein kostenloses Cloudflare-Konto mit Ihrer Domain. Folgen Sie der [Anleitung zur Cloudflare-Einrichtung](/de/docs/setup/cloudflare), um den Tunnel zu erstellen und Access einzurichten. Setzen Sie `SWB_PUBLIC_URL` auf Ihre öffentliche Adresse, zum Beispiel `https://swb.example.com`. Aktualisieren Sie die Adresse in `public_url`, wenn Ihre Konfiguration diese Einstellung enthält.
+
+Für einen Tunnel auf dem SwB-Host richten Sie seine Dienstadresse auf `http://localhost:8870`. Setzen Sie `SWB_TRUSTED_PROXIES` auf die Adresse des Connectors, zum Beispiel `127.0.0.1/32` für eine IPv4-Loopback-Verbindung.
+
+Für den Tunnel in Compose richten Sie seine Dienstadresse auf `http://switchboard:8000`. Tragen Sie das Tunnel-Token in `.env` als `TUNNEL_TOKEN` ein. Tragen Sie die Adresse oder das dedizierte Netzwerk des Connectors in `trusted_proxies` ein. Starten Sie Compose mit dem Profil `tunnel`.
 
 ```bash
 docker compose --profile tunnel up -d
@@ -57,8 +81,11 @@ Verwenden Sie eine einzelne SwB-Instanz mit einem persistenten Datenträger unte
 
 ## Railway [#railway]
 
-Die [Definition der Railway-Vorlage](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts) startet einen SwB-Dienst und hängt ein Volume mit 1 GB unter `/data` ein.
-Stellen Sie SwB aus dem Railway-Marketplace bereit, sobald die Vorlage veröffentlicht ist.
+Stellen Sie SwB über die [SwB-Vorlage auf Railway](https://railway.com/deploy/swb) bereit. Behalten Sie ein einzelnes Replikat bei. Die Vorlage hängt ein Volume unter `/data` ein.
+
+Für ein dauerhaft laufendes SwB verwenden Sie den Hobby-Plan. Er kostet 5 $ im Monat und enthält Nutzung im Wert von 5 $.
+
+Der [Free-Plan](https://docs.railway.com/reference/pricing/free-trial) enthält Nutzung im Wert von 1 $ pro Monat. Das reicht für etwa 100 MB RAM rund um die Uhr. Eine SwB-Testinstanz belegte im Leerlauf etwa 107 MiB. Dienste im Free-Plan stoppen, sobald das Guthaben von 1 $ aufgebraucht ist.
 
 ## Fly.io [#fly]
 

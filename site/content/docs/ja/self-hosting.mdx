@@ -3,6 +3,12 @@ title: セルフホスティング
 description: Docker Compose と Cloudflare を使って、サーバーで SwB を実行します。
 ---
 
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
+## ワンクリックでデプロイする
+
+<DeployProviders lang="ja" />
+
 ## Docker Compose
 
 Docker Compose 2.24 以降をインストールしてください。これらのコマンドは、データフォルダーを所有する一般ユーザーとして実行してください。
@@ -31,9 +37,27 @@ docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 
 `/healthz` へのリクエストは、サインイン前でも `status` と `version` を返します。ヘルスチェックの詳細をすべて見るときは、オーナーのセッションかオーナーキーを使ってください。
 
-## Cloudflare Tunnel
+## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-[Cloudflare Tunnel の手順](/ja/docs/setup/cloudflare)に従って、自分のドメイン用のトンネルを作成してください。Compose では、サービスのアドレスに `http://switchboard:8000` を使います。トンネルのトークンは、[リリースの Compose ファイル](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37)にある名前で `.env` に保存してください。`.env` の `SWB_PUBLIC_URL` を、トンネルのアドレスに置き換えてください。tunnel プロファイルを付けて Compose を起動してください。
+Cloudflare Tunnel を使うと、SwB に公開 HTTPS アドレスを用意できます。トンネルは Cloudflare の無料プランで使えます。
+
+### クイックトンネル
+
+一時的なアドレスで SwB を試すときは、クイックトンネルを使ってください。`cloudflared` があるホストで、このコマンドを実行してください。`cloudflared` は、SwB を Cloudflare につなぐプログラムです。
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+ターミナルに表示される HTTPS アドレスを `SWB_PUBLIC_URL` に設定してください。設定ファイルに `public_url` がある場合は、その設定も更新してください。SwB を再起動してください。アドレスは、トンネルを起動するたびに変わります。OAuth のサインインとパスキーは、そのアドレスに結び付きます。固定のアドレスには、名前付きトンネルを使ってください。
+
+### 名前付きトンネル
+
+自分のドメインを登録した無料の Cloudflare アカウントを使ってください。[Cloudflare のセットアップガイド](/ja/docs/setup/cloudflare)に従って、トンネルを作成し、Access を設定してください。`SWB_PUBLIC_URL` に、`https://swb.example.com` のような公開アドレスを設定してください。設定ファイルに `public_url` がある場合は、そのアドレスも更新してください。
+
+SwB のホスト上のトンネルでは、サービスのアドレスを `http://localhost:8870` にしてください。`SWB_TRUSTED_PROXIES` にコネクターのアドレスを設定してください。IPv4 のループバック接続では `127.0.0.1/32` を使います。
+
+Compose のトンネルでは、サービスのアドレスを `http://switchboard:8000` にしてください。トンネルのトークンを `TUNNEL_TOKEN` として `.env` に入れてください。コネクターのアドレスか専用のネットワークを `trusted_proxies` に追加してください。tunnel プロファイルを付けて Compose を起動してください。
 
 ```bash
 docker compose --profile tunnel up -d
@@ -57,8 +81,11 @@ SwB のホストか Docker ネットワーク上で Cloudflare Tunnel を使う�
 
 ## Railway [#railway]
 
-[Railway のテンプレート定義](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts)は、SwB のサービスを 1 つ実行し、1 GB のボリュームを `/data` にマウントします。
-テンプレートの公開後は、Railway のマーケットプレイスからデプロイしてください。
+[Railway の SwB テンプレート](https://railway.com/deploy/swb)からデプロイしてください。レプリカは 1 つのままにしてください。テンプレートは `/data` にボリュームをマウントします。
+
+SwB を常時稼働させるときは、Hobby プランを使ってください。Hobby プランは月額 $5 で、$5 分の利用枠が含まれます。
+
+[Free プラン](https://docs.railway.com/reference/pricing/free-trial)には、月 $1 分の利用枠が含まれます。この額で、約 100 MB の RAM を 24 時間使えます。テストした SwB のインスタンスは、待機中に約 107 MiB を使いました。$1 を使い切ると、Free プランのサービスは停止します。
 
 ## Fly.io [#fly]
 

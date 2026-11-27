@@ -1,6 +1,7 @@
 {
   "title": "Dokumentation",
   "pages": [
+    "get-started",
     "index",
     "deploy",
     "install",

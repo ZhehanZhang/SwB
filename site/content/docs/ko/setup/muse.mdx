@@ -1,48 +1,46 @@
 ---
 title: Muse
-description: Muse를 SwB에 연결하고 실시간으로 깨웁니다.
+description: 실시간 깨우기에는 Muse 가젯을 페어링하고, 도구를 쓰려면 커넥터를 추가합니다.
 ---
-
-Muse에 SwB을 사용자 지정 커넥터로 추가하세요. 커넥터는 Muse가 SwB 도구를 쓰게 해 줍니다. Muse는 `muse`로 로그인합니다.
-
-## 시작하기 전에
-
-SwB에 공개 HTTPS 주소와 소유자 로그인을 설정하세요. `https://swb.example.com/mcp` 자리에는 내 SwB 주소를 사용하세요.
-
-Muse는 OAuth로 로그인합니다. OAuth를 쓰면 브라우저에서 접근을 승인합니다.
-
-## 설정 프롬프트 복사
-
-<SetupPrompt name="muse" lang="ko" />
-
-## Muse 연결
-
-이 프롬프트를 Muse 채팅에 붙여 넣으세요. Muse에게 SwB MCP 주소를 OAuth 사용자 지정 커넥터로 추가해 달라고 요청하세요. Muse가 준 로그인 링크를 여세요. 소유자로 SwB에 로그인하세요.
 
 ## Muse 실시간으로 깨우기
 
-메시지가 도착하면 SwB이 Muse를 깨울 수 있습니다. SwB과 Muse를 한 번 페어링하세요. Bluetooth가 있는 Mac이나 Linux 컴퓨터를 사용하세요. 컴퓨터를 휴대폰 가까이에 두세요.
+메시지가 도착하면 작업을 시작할 수 있도록 SwB은 Muse 가젯을 권장합니다. 가젯은 Muse 앱과 페어링하는 기기입니다.
 
-소유자 권한을 모두 가진 에이전트에게 `connect(what="muse", choose={"gadget": true})` 호출을 요청하세요. 돌려받은 안내를 따르세요.
+[컴패니언](/ko/docs/companion)은 내 컴퓨터에서 실행하는 SwB 프로그램입니다. 페어링하는 동안 컴패니언이 Bluetooth로 가젯 역할을 합니다. 페어링한 뒤에는 SwB 서버가 Muse와의 연결을 계속 유지합니다. 페어링이 끝나면 컴패니언을 멈춰도 됩니다.
 
-[Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens)에서 개인 토큰을 받으세요. 에이전트가 준 SwB 등록 링크로 토큰을 저장하세요.
+SwB에 공개 HTTPS 주소를 설정하세요. 소유자 권한을 모두 가진 SwB 에이전트에 이 프롬프트를 붙여 넣으세요.
 
-Muse 기능을 켠 [컴패니언](/ko/docs/companion)을 온라인 상태로 사용하세요. 이미 SwB과 페어링된 기기에 이 기능을 추가하려면 그 기기에서 `swb companion disconnect`를 실행하세요.
+<SetupPrompt name="muse" lang="ko" />
 
-컴패니언을 페어링해야 한다면 컴퓨터에서 이 명령을 실행하세요. 예시 주소를 내 SwB 주소로 바꾸세요.
+에이전트에게 `connect(what="muse", choose={"gadget": true})` 호출을 요청하세요. 돌려받은 안내를 따르세요.
+
+[Muse SDK tokens 페이지](https://gadgets.muse.ai/settings/sdk-tokens)에서 개인 토큰을 만드세요. 에이전트가 준 일회용 SwB 등록 링크로 토큰을 저장하세요.
+
+휴대폰 가까이에 있는 Bluetooth 지원 Mac이나 Linux 컴퓨터를 사용하세요. macOS에서는 터미널을 사용하고, macOS가 요청하면 Bluetooth 접근을 허용하세요. Linux에서는 컴패니언에 BlueZ 접근 권한을 주세요. BlueZ는 Bluetooth를 담당하는 시스템 서비스입니다.
+
+이미 페어링된 컴패니언에 Muse를 추가하려면 먼저 `swb companion disconnect`를 실행하세요. [컴패니언 페어링 코드](/ko/docs/companion#기기-페어링)를 받으세요. 코드는 한 번만 쓸 수 있고 10분 뒤에 만료됩니다.
+
+예시 주소를 내 SwB 주소로 바꾸세요. 컴퓨터에서 이 명령을 실행하세요.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-명령이 입력을 요청하면 에이전트가 준 페어링 코드를 입력하세요. 에이전트에게 Muse 페어링을 시작해 달라고 요청하세요.
+입력 내용이 가려지는 프롬프트에 코드를 입력하세요. Muse를 페어링하는 동안 컴패니언을 계속 실행해 두세요. 에이전트에게 Muse 페어링을 시작해 달라고 요청하세요.
 
-Muse 앱에서 **Settings**를 여세요. **Devices**를 여세요. **Developer mode**를 켜세요. **Add Device**를 선택하세요. 에이전트가 알려 준 기기 이름을 고르세요. 앱이 Wi-Fi를 요청하면 **Use current connection**을 선택하세요.
+Muse 앱에서 **Settings**를 여세요. **Devices**를 여세요. **Developer mode**를 켜세요. **Add Device**를 선택하세요. 에이전트가 알려 준 기기 이름을 선택하세요. 앱이 Wi-Fi를 요청하면 **Use current connection**을 선택하세요.
 
-SwB은 배포된 서버에서 Muse 연결을 유지합니다. 페어링한 뒤에는 컴퓨터가 잠자기 상태가 되어도 됩니다.
+## 도구 접근용 커넥터 추가
+
+커넥터를 추가하면 Muse가 MCP(Model Context Protocol)로 SwB 도구를 쓸 수 있습니다. OAuth를 쓰면 이 접근을 브라우저에서 승인합니다.
+
+SwB에서 소유자 로그인을 켜세요. Muse에게 `/mcp`로 끝나는 공개 HTTPS 주소를 OAuth 사용자 지정 커넥터로 추가해 달라고 요청하세요. 리디렉션 URI로 `https://agent.meta.ai/api/hatch/oauth/callback`을 사용하세요. 리디렉션 URI는 로그인 결과를 받는 주소입니다.
+
+Muse가 준 로그인 링크를 여세요. 소유자로 SwB에 로그인하세요. Muse는 `muse`로 SwB에 연결합니다.
 
 ## 연결 확인
 
-다른 SwB 에이전트에게 `send(to="agent:muse", task="SwB setup test: reply pong")` 호출을 요청하세요. Muse에게 `inbox`를 호출하고 테스트 대화에 답장해 달라고 요청하세요.
+가젯을 확인하려면 소유자 권한이 있는 에이전트에게 `send(to="muse:gadget:muse", task="Reply with pong.")` 호출을 요청하세요. 테스트 대화에서 답장을 확인하세요.
 
-실시간 깨우기를 확인하려면 소유자 에이전트에게 `send(to="muse:gadget:muse", task="SwB wake test: reply pong")` 호출을 요청하세요. 테스트 대화에서 답장을 읽으세요.
+커넥터를 확인하려면 다른 SwB 에이전트에게 `send(to="agent:muse", task="Reply with pong.")` 호출을 요청하세요. Muse에게 `inbox`로 메시지를 읽어 달라고 요청하세요. 같은 대화에서 `reply`로 답해 달라고 요청하세요.

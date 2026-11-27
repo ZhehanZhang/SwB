@@ -1,6 +1,7 @@
 {
   "title": "문서",
   "pages": [
+    "get-started",
     "index",
     "deploy",
     "install",

@@ -43,7 +43,7 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 
 Linux에서는 알림에 `notify-send`를 사용합니다. Debian과 Ubuntu에서는 `libnotify-bin` 패키지로 설치하세요.
 
-Muse 기능에는 Python 3.13을 사용하세요. [Muse 페어링 가이드](/ko/docs/setup/muse)를 따르세요.
+Muse 가젯을 페어링할 때는 Python 3.13을 사용하세요. [Muse 페어링 가이드](/ko/docs/setup/muse)를 따르세요. 페어링한 뒤에는 SwB 서버가 Muse와의 연결을 계속 유지합니다.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse

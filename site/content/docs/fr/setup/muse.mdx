@@ -1,48 +1,46 @@
 ---
 title: Muse
-description: Connectez Muse à SwB et réveillez Muse en temps réel.
+description: Appairez le gadget Muse pour les réveils en temps réel ou ajoutez un connecteur pour l'accès aux outils.
 ---
-
-Ajoutez SwB à Muse comme connecteur personnalisé. Un connecteur donne à Muse l'accès aux outils SwB. Muse se connecte sous le nom `muse`.
-
-## Avant de commencer
-
-Configurez une adresse publique HTTPS et la connexion propriétaire pour SwB. Remplacez `https://swb.example.com/mcp` par votre propre adresse SwB.
-
-Muse utilise OAuth pour se connecter. Avec OAuth, vous approuvez l'accès dans votre navigateur.
-
-## Copier le prompt de configuration
-
-<SetupPrompt name="muse" lang="fr" />
-
-## Connecter Muse
-
-Collez le prompt dans une discussion Muse. Demandez à Muse d'ajouter votre adresse MCP SwB comme connecteur personnalisé avec OAuth. Ouvrez le lien de connexion fourni par Muse. Connectez-vous à SwB en tant que propriétaire.
 
 ## Réveiller Muse en temps réel
 
-SwB peut réveiller Muse à l'arrivée d'un message. Appairez SwB avec Muse une seule fois. Utilisez un Mac ou un ordinateur Linux équipé du Bluetooth. Gardez l'ordinateur près de votre téléphone.
+SwB recommande le gadget Muse pour lancer le travail à l'arrivée d'un message. Le gadget est un appareil qui s'appaire avec l'application Muse.
 
-Demandez à un agent doté de l'accès propriétaire complet d'appeler `connect(what="muse", choose={"gadget": true})`. Suivez les instructions qu'il renvoie.
+Un [compagnon](/fr/docs/companion) est un programme SwB installé sur votre ordinateur. Pendant l'appairage, il joue le rôle du gadget en Bluetooth. Après l'appairage, votre serveur SwB garde la connexion à Muse ouverte. Vous pouvez alors arrêter le compagnon.
 
-Obtenez un jeton personnel sur la page [Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens). Enregistrez le jeton par le lien de saisie SwB fourni par votre agent.
+Configurez une adresse publique HTTPS pour SwB. Collez ce prompt dans un agent SwB doté de l'accès propriétaire complet.
 
-Utilisez un [compagnon](/fr/docs/companion) en ligne doté de la fonction Muse. Pour ajouter cette fonction à un appareil déjà appairé avec SwB, exécutez `swb companion disconnect` sur l'appareil.
+<SetupPrompt name="muse" lang="fr" />
 
-Pour appairer un compagnon, exécutez cette commande sur l'ordinateur. Remplacez l'adresse d'exemple par votre adresse SwB.
+Demandez à l'agent d'appeler `connect(what="muse", choose={"gadget": true})`. Suivez les instructions qu'il renvoie.
+
+Créez un jeton personnel sur la page [Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens). Enregistrez-le par le lien de saisie SwB à usage unique fourni par votre agent.
+
+Utilisez un Mac ou un ordinateur Linux équipé du Bluetooth, près de votre téléphone. Sous macOS, utilisez Terminal et autorisez l'accès au Bluetooth quand macOS le demande. Sous Linux, donnez au compagnon l'accès à BlueZ, le service système du Bluetooth.
+
+Pour ajouter Muse à un compagnon déjà appairé, exécutez d'abord `swb companion disconnect`. Obtenez un [code d'appairage du compagnon](/fr/docs/companion#appairer-un-appareil). Le code fonctionne une seule fois et expire après 10 minutes.
+
+Remplacez l'adresse d'exemple par votre adresse SwB. Exécutez cette commande sur l'ordinateur.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-Quand la commande vous le demande, saisissez le code d'appairage fourni par votre agent. Demandez ensuite à votre agent de lancer l'appairage Muse.
+Saisissez le code à l'invite masquée. Gardez le compagnon actif pendant l'appairage de Muse. Demandez à votre agent de lancer l'appairage Muse.
 
-Dans l'application Muse, ouvrez **Settings**. Ouvrez **Devices**. Activez **Developer mode**. Sélectionnez **Add Device**. Choisissez le nom d'appareil que vous donne votre agent. Si l'application demande le Wi-Fi, sélectionnez **Use current connection**.
+Dans l'application Muse, ouvrez **Settings**. Ouvrez **Devices**. Activez **Developer mode**. Sélectionnez **Add Device**. Sélectionnez le nom d'appareil fourni par votre agent. Si l'application demande le Wi-Fi, sélectionnez **Use current connection**.
 
-SwB maintient la connexion Muse sur votre déploiement. Après l'appairage, l'ordinateur peut se mettre en veille.
+## Ajouter un connecteur pour l'accès aux outils
+
+Un connecteur permet à Muse d'utiliser les outils SwB par le Model Context Protocol (MCP). Avec OAuth, vous approuvez cet accès dans votre navigateur.
+
+Activez la connexion propriétaire sur SwB. Demandez à Muse d'ajouter votre adresse publique HTTPS se terminant par `/mcp` comme connecteur personnalisé avec OAuth. Indiquez `https://agent.meta.ai/api/hatch/oauth/callback` comme URI de redirection, l'adresse qui reçoit le résultat de la connexion.
+
+Ouvrez le lien de connexion fourni par Muse. Connectez-vous à SwB en tant que propriétaire. Muse se connecte à SwB sous le nom `muse`.
 
 ## Vérifier la connexion
 
-Demandez à un autre agent SwB d'appeler `send(to="agent:muse", task="SwB setup test: reply pong")`. Demandez à Muse d'appeler `inbox` et de répondre dans la conversation de test.
+Pour le gadget, demandez à un agent doté de l'accès propriétaire d'appeler `send(to="muse:gadget:muse", task="Reply with pong.")`. Vérifiez la réponse dans la conversation de test.
 
-Pour vérifier les réveils en temps réel, demandez à un agent propriétaire d'appeler `send(to="muse:gadget:muse", task="SwB wake test: reply pong")`. Lisez la réponse dans la conversation de test.
+Pour le connecteur, demandez à un autre agent SwB d'appeler `send(to="agent:muse", task="Reply with pong.")`. Demandez à Muse de lire le message avec `inbox`. Demandez à Muse de répondre avec `reply` dans la même conversation.
