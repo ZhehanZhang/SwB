@@ -6,6 +6,7 @@ import { STEP, agentPair, agentPairs, clock, trips } from '@/lib/live';
 
 type Props = {
   stem: string;
+  endingPrefix?: string;
   endings: string[];
   between: [string, string, string];
   names: Partial<Record<MarkKind, string>>;
@@ -39,7 +40,7 @@ function Slot({ options, current, names }: { options: MarkKind[]; current: MarkK
 const starts = [...new Set(agentPairs.map(({ a }) => a))];
 const ends = [...new Set(agentPairs.map(({ b }) => b))];
 
-export function HeroTitle({ stem, endings, between, names }: Props) {
+export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props) {
   const [word, setWord] = useState(0);
   const [step, setStep] = useState(0);
   useEffect(() => {
@@ -69,10 +70,11 @@ export function HeroTitle({ stem, endings, between, names }: Props) {
   return (
     <>
       <h1 id="landing-heading" className="text-display-xl swb-hero-title">
-        <span className="block text-balance">{stem}</span>
+        <span className="block text-balance" data-hero-stem>{stem}</span>
         <span className="swb-rotate" aria-live="off">
           {endings.map((text, index) => (
-            <span key={text} className={`swb-rotate-item ${index === word ? 'swb-rotate-on' : ''}`} aria-hidden={index !== word}>{text}</span>
+            <span key={text} className={`swb-rotate-item${index === word ? ' swb-rotate-on' : ''}${endingPrefix ? ' whitespace-nowrap' : ''}`}
+              aria-hidden={index !== word}>{`${endingPrefix ?? ''}${text}`}</span>
           ))}
         </span>
       </h1>

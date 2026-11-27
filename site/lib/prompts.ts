@@ -1,15 +1,17 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import promptBundle from '../.generated/prompts.json';
 
-const directory = join(process.cwd(), '..', 'docs', 'prompts');
+const prompts: Record<string, string> = promptBundle;
 
 export function promptFiles() {
-  return readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-    .map((entry) => entry.name)
-    .sort();
+  return Object.keys(prompts).sort();
+}
+
+export function readPromptSource(name: string) {
+  const file = `${name}.md`;
+  if (!Object.hasOwn(prompts, file)) throw new Error(`Unknown prompt: ${name}`);
+  return prompts[file];
 }
 
 export function readPrompt(name: string) {
-  return readFileSync(join(directory, `${name}.md`), 'utf8').trim();
+  return readPromptSource(name).trim();
 }

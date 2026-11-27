@@ -111,13 +111,13 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
     expect(result.overflow).toBeLessThanOrEqual(0.5);
   });
 
-  test(`${locale} pills fit their text, icon and padding at 390px, 1200px and 1440px`, async ({ page }) => {
+  test(`${locale} pills fit their text, icon and padding at each target width`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready);
     const slots = page.locator('.swb-slot');
     await expect(slots).toHaveCount(2);
-    for (const width of [390, 1200, 1440]) {
+    for (const width of [390, 1024, 1200, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const extraWidths = await slots.evaluateAll((nodes) => nodes.map((slot) => {
         const chip = slot.querySelector('.swb-chip-on')!;

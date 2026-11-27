@@ -1,7 +1,7 @@
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { replaceSource } from 'fumadocs-core/mdx-plugins/stringifier';
 import remarkCjkFriendly from 'remark-cjk-friendly';
-import { readPrompt } from './lib/prompts';
+import { readPromptFile } from './lib/prompt-source';
 import { promptUrl } from './lib/urls';
 
 type Node = Parameters<typeof replaceSource>[1];
@@ -15,7 +15,7 @@ function remarkDocSource() {
       if (child.type === 'mdxJsxFlowElement' && child.name === 'SetupPrompt') {
         const name = child.attributes.find((attr) => attr.type === 'mdxJsxAttribute' && attr.name === 'name')?.value;
         if (typeof name !== 'string') throw new Error('SetupPrompt requires a prompt name');
-        const text = readPrompt(name);
+        const text = readPromptFile(`${name}.md`).trim();
         const fence = '`'.repeat(Math.max(3, ...Array.from(text.matchAll(/`+/g), ([run]) => run.length + 1)));
         replaceSource(file, child, `${promptUrl(`${name}.md`)}\n\n${fence}\n${text}\n${fence}`, 'markdown');
       }

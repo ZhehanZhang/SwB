@@ -32,7 +32,7 @@ type Copy = {
     flyClaim: string; paidPlan: string; hobbyPlan: string; freePlan: string; tunnelAttribution: string;
   };
   usage: { title: string; examples: [string, string, string, string, string, string] };
-  hero: { stem: string; endings: string[]; between: [string, string, string] };
+  hero: { stem: string; endingPrefix?: string; endings: string[]; between: [string, string, string] };
 };
 
 export const landingCopy: Record<Locale, Copy> = {
@@ -102,7 +102,8 @@ export const landingCopy: Record<Locale, Copy> = {
     boardAlt: 'SwB 连接各个应用',
     boardHint: '选择要设置的应用。',
     hero: {
-      stem: '第一方智能体协同工作，不必',
+      stem: '第一方智能体协同工作，',
+      endingPrefix: '不必',
       endings: ['运行 CLI', '担心封号', '交出会话令牌', '离开自己的应用', '搬迁它们', '模拟网页操作'],
       between: ['', ' 与 ', ' 之间的实时对话'],
     },
@@ -154,7 +155,8 @@ export const landingCopy: Record<Locale, Copy> = {
     boardAlt: 'SwB 連接各個應用程式',
     boardHint: '選取要設定的應用程式。',
     hero: {
-      stem: '第一方代理協同工作，不必',
+      stem: '第一方代理協同工作，',
+      endingPrefix: '不必',
       endings: ['執行 CLI', '擔心封號', '交出工作階段權杖', '離開自己的應用程式', '搬移它們', '模擬網頁操作'],
       between: ['', ' 與 ', ' 之間的即時對話'],
     },

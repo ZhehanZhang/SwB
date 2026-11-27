@@ -92,7 +92,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
         <SiteContainer>
           <section className="swb-hero-grid" aria-labelledby="landing-heading">
             <div className="swb-hero-copy">
-              <HeroTitle stem={copy.hero.stem} endings={copy.hero.endings} between={copy.hero.between}
+              <HeroTitle {...copy.hero}
                 names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy Captain', dots: 'ChatGPT dots' }} />
               <div className="mt-6 grid justify-items-start gap-4 lg:flex lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2">
                 <div className="flex items-center gap-2" data-hero-actions>

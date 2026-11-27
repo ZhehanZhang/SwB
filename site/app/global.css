@@ -53,6 +53,14 @@
     @apply bg-fd-background text-fd-foreground antialiased;
   }
 
+  html:not(:is(:lang(zh), :lang(ja), :lang(ko))) { hyphens: auto; }
+
+  :is(h1, h2, h3, button, nav, .swb-button, .swb-chip, .swb-between):is(:lang(zh), :lang(ja), :lang(ko)) {
+    word-break: keep-all;
+    line-break: strict;
+  }
+  :is(h1, h2, h3):is(:lang(zh), :lang(ja), :lang(ko)) { overflow-wrap: anywhere; }
+
   svg.lucide {
     stroke-width: 1.5;
   }
@@ -363,7 +371,7 @@
 }
 .swb-hero-copy { container-type: inline-size; }
 .swb-hero-title { font-size: clamp(1.75rem, 8.4cqw, 3.625rem); line-height: 1.07; }
-.swb-hero-title:lang(zh) { font-size: clamp(1.625rem, 7.8cqw, 3.625rem); }
+.swb-hero-title:lang(zh) { font-size: clamp(1.5rem, 7.8cqw, 3.625rem); }
 .swb-hero { width: min(100%, 39rem); justify-self: center; }
 
 .swb-node { cursor: pointer; border-radius: 9999px; background: none; padding: 0; animation: swb-drift var(--drift-duration) var(--drift-delay) ease-in-out infinite alternate; }
