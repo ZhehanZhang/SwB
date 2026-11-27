@@ -57,7 +57,7 @@ SwB 先讀取 YAML 設定檔或覆寫檔中的 `data_dir`，再依序檢查 `SWI
 curl -fsS http://127.0.0.1:8870/healthz
 ```
 
-上述請求只會傳回 `status` 和 `version` 兩個欄位。以擁有者身分登入或使用擁有者金鑰，即可查看各模組的狀態。
+這條指令會以登出狀態查詢，顯示 `status` 和 `version`。執行 `swb status`，或用擁有者金鑰存取 `/healthz`，即可查看模組、運作狀態和缺少的變數。
 
 ## 伺服器指令
 

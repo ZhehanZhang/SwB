@@ -67,7 +67,7 @@ SwB 所在的伺服器必須能透過 7844 連接埠連到 Cloudflare。SwB 的 
 <Step>
 ### 設定 SwB 的值
 
-把下方的值寫進 SwB 的 `.env` 檔案。重新啟動 SwB。
+依下方範例將你的值寫入 SwB 的 `.env` 檔案。重新啟動 SwB。
 </Step>
 <Step>
 ### 發布主機名稱
@@ -101,7 +101,7 @@ SwB 所在的伺服器必須能透過 7844 連接埠連到 Cloudflare。SwB 的 
 SWITCHBOARD_PUBLIC_URL=https://swb.example.com
 SWITCHBOARD_OWNER_EMAILS=owner@example.com
 CLOUDFLARE_ACCESS_TEAM_DOMAIN=example.cloudflareaccess.com
-CLOUDFLARE_ACCESS_AUD=<application audience tag>
+CLOUDFLARE_ACCESS_AUD="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
 SwB 會檢查每個擁有者請求的 Access 登入。略過路徑使用 SwB 自己的登入。

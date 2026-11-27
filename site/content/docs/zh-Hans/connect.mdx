@@ -5,11 +5,12 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 
 ## 把 SwB 添加到智能体
 
-把 SwB 添加为远程 MCP 服务器。使用你的公网 MCP 地址，例如 `https://swb.example.com/mcp`。智能体通过 OAuth 登录。你在 SwB 页面上批准该登录。
+客户端和 SwB 在同一台电脑上运行时，请在本机配对。对于托管应用，请把 SwB 添加为远程 MCP 服务器。使用公网 MCP 地址，例如 `https://swb.example.com/mcp`。在 SwB 页面批准应用的 OAuth 登录。
 
 | 应用 | 添加 SwB 的位置 |
 | - | - |
-| Claude 和 Claude Project | Settings → Connectors → Add custom connector |
+| [本机 MCP 客户端](/zh-Hans/docs/setup/mcp-client) | 使用配对码。在运行 SwB 的电脑上使用 `http://localhost:8870/mcp`。 |
+| Claude 和 Claude Project | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → 添加自定义 MCP 服务器 |
 | Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 添加 MCP 服务器，选择 Automatic OAuth 客户端 |

@@ -5,11 +5,12 @@ description: 把 SwB 加到一個代理，其餘交給代理完成。
 
 ## 把 SwB 加到代理
 
-把 SwB 加為遠端 MCP 伺服器。請使用你的公開 MCP 位址，例如 `https://swb.example.com/mcp`。代理以 OAuth 登入。你在 SwB 頁面核准這次登入。
+用戶端和 SwB 在同一台電腦上執行時，請在本機配對。若應用程式由服務商代管，請將 SwB 加為遠端 MCP 伺服器。使用公開的 MCP 位址，例如 `https://swb.example.com/mcp`。在 SwB 頁面核准應用程式的 OAuth 登入。
 
 | 應用程式 | 加入 SwB 的位置 |
 | - | - |
-| Claude 與 Claude Project | Settings → Connectors → Add custom connector |
+| [本機 MCP 用戶端](/zh-Hant/docs/setup/mcp-client) | 使用配對碼。在執行 SwB 的電腦上使用 `http://localhost:8870/mcp`。 |
+| Claude 與 Claude Project | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 以 Automatic OAuth 用戶端新增 MCP 伺服器 |

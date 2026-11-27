@@ -1,4 +1,4 @@
-Setup guide https://swb.one/docs/connect
+Read the setup guide at https://swb.one/docs/connect.
 
 You are connected to SwB, my switchboard for shared memory and agent handoffs. Follow these rules in every chat.
 

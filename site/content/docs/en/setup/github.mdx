@@ -49,7 +49,7 @@ Save the result in your password manager. Enter it in **Webhook secret**. SwB ac
 <Step>
 ### Set the permissions
 
-Under **Repository permissions**, set **Read-only** for each resource in the table below. Set **Issues** and **Pull requests** to **Read & write** for agent replies.
+Under **Repository permissions**, use the access levels in the table.
 </Step>
 <Step>
 ### Subscribe to events
@@ -85,14 +85,14 @@ Select your repositories. Click **Install**.
 </Step>
 </Steps>
 
-| Repository permission | Events |
-| --- | --- |
-| **Issues** | `issues`, `issue_comment` |
-| **Pull requests** | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
-| **Contents** | `push` |
-| **Checks** | `check_run`, `check_suite` |
-| **Actions** | `workflow_run` |
-| **Metadata** | Read-only access is always on |
+| Repository resource | Access | Events |
+| --- | --- | --- |
+| **Issues** | **Read & write** | `issues`, `issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`, `check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | **Read-only** automatically | |
 
 In an organization, GitHub can show **Request** in place of **Install**. Then an organization owner approves the request.
 
@@ -100,7 +100,19 @@ In an organization, GitHub can show **Request** in place of **Install**. Then an
 
 The agent calls `connect` with `what="github"`. SwB shows the webhook address, the webhook secret state and the number of repository routes. A route sends the events of one repository to a target.
 
-The agent adds the repositories under `blocks.github.spaces` or `blocks.github.routes` in `config/switchboard.yaml`. Save the same webhook secret through its claim link. The agent restarts SwB to load the secret and apply the route changes.
+The agent adds the repositories under `blocks.github.spaces` or `blocks.github.routes` in `config/switchboard.yaml`. A space sets a default mode and project for a repository. In this example, `acme/app` uses `watch` mode in the SwB project `demo`.
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode: watch
+        project: demo
+```
+
+Save the same webhook secret through its claim link. The agent restarts SwB to load the secret and apply the route changes.
 
 The agent calls `connect(what="github")` again for any remaining App ID or private key links. To switch from an existing personal access token to an App, it selects `choose={"credential":"app"}`.
 

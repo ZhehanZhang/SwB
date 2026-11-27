@@ -13,6 +13,8 @@ Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth �
 
 ## 复制设置提示词
 
+提示词保留英文，供智能体使用。
+
 <SetupPrompt name="mcp-client" lang="zh-Hans" />
 
 把提示词粘贴到已经接入 SwB 的智能体中，或粘贴到你要连接的应用中。智能体会带你完成其余步骤。
@@ -33,26 +35,34 @@ Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth �
 <Step>
 ### 换取密钥
 
-在运行该应用的电脑上，于 10 分钟内把配对码发给 SwB。
+在运行应用的电脑上，用终端打开一个私密目录。把 `https://swb.example.com` 换成你的 SwB 地址。保留末尾的 `/connect`。如果本机服务器使用 8870 端口，请用 `http://localhost:8870/connect`。请在 10 分钟内通过隐藏输入提示填写配对码。
 
 ```bash
-curl -X POST https://swb.example.com/connect -H 'Content-Type: application/json' -d '{"code":"XXXXX-XXXXX"}'
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
 ```
 </Step>
 <Step>
 ### 妥善保管密钥
 
-从响应中复制密钥。SwB 只显示一次密钥。
+用私密编辑器打开 `.swb-pairing.json`。命令以 `0600` 权限保存响应。将其中的 `key` 填入应用设置。SwB 只返回一次密钥。
 </Step>
 <Step>
 ### 把 SwB 添加到应用
 
-在应用的 MCP 设置中，URL 填写 `https://swb.example.com/mcp`，传输方式选择 Streamable HTTP。 {/* unverified */}
+在应用的 MCP 设置中，填入文件里的 `mcp_url`。如果本机服务器使用 8870 端口，请用 `http://localhost:8870/mcp`。传输方式选择 Streamable HTTP。
 </Step>
 <Step>
 ### 添加密钥
 
-添加请求头 `Authorization: Bearer <key>`，填入你的密钥。把密钥保存在应用的私密设置中。
+在应用的私密设置中添加请求头 `Authorization: Bearer <key>`。保存密钥后删除 `.swb-pairing.json`。
 </Step>
 </Steps>
 
@@ -75,7 +85,7 @@ SwB 为这个名称生成配对码，并返回 `POST /connect` 这一步。配�
 
 ## 检查连接
 
-请应用调用 `inbox`。负责设置的智能体调用 `connect_list`，可以看到新密钥及其最近调用时间。向 `agent:notes-bot` 发送测试消息，确认应用用 `reply` 回复。
+请新智能体调用 `inbox`。请以所有者身份登录的智能体调用 `connect_list`，查看新密钥的最近调用时间。请所有者的智能体向 `agent:notes-bot` 发送测试消息。请新智能体用 `inbox` 读取消息，再用 `reply` 回复。
 
 ## 解决问题
 

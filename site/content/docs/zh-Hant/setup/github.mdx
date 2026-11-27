@@ -13,6 +13,8 @@ GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook
 
 ## 複製設定提示詞
 
+提示詞保留英文，供代理使用。
+
 <SetupPrompt name="github" lang="zh-Hant" />
 
 把提示詞貼給你的代理。代理會帶你完成其餘步驟。
@@ -36,20 +38,20 @@ GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook
 在 **Webhook** 下保持勾選 **Active**。在 **Webhook URL** 中填入 `https://swb.example.com/github/webhook`。
 </Step>
 <Step>
-### 設定 webhook 密鑰
+### 設定 webhook 金鑰
 
-將隨機密鑰產生到私用檔案中。
+將隨機金鑰產生到私用檔案中。
 
 ```bash
 (umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
 ```
 
-將產生的密鑰存到密碼管理工具。把密鑰填入 **Webhook secret**。SwB 接受至少 16 個字元的密鑰。
+將金鑰存到密碼管理工具。把金鑰填入 **Webhook secret**。SwB 接受至少 16 個字元的金鑰。
 </Step>
 <Step>
 ### 設定權限
 
-在 **Repository permissions** 下，替下表的每項資源選擇 **Read-only**。要讓代理回覆，請把 **Issues** 和 **Pull requests** 設為 **Read & write**。
+在 **Repository permissions** 中，依下表設定權限。
 </Step>
 <Step>
 ### 訂閱事件
@@ -71,7 +73,7 @@ GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook
 <Step>
 ### 儲存憑證
 
-開啟代理給你的各個 SwB 領取連結。儲存同一組 webhook 密鑰、**App ID** 和完整的 `.pem` 檔案。儲存密鑰後刪除私用檔案。
+開啟代理給你的各個 SwB 領取連結。儲存同一組 webhook 金鑰、**App ID** 和完整的 `.pem` 檔案。儲存金鑰後刪除私用檔案。
 </Step>
 <Step>
 ### 安裝應用程式
@@ -85,22 +87,34 @@ GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook
 </Step>
 </Steps>
 
-| 儲存庫權限 | 事件 |
-| --- | --- |
-| **Issues** | `issues`、`issue_comment` |
-| **Pull requests** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
-| **Contents** | `push` |
-| **Checks** | `check_run`、`check_suite` |
-| **Actions** | `workflow_run` |
-| **Metadata** | 唯讀權限一律開啟 |
+| 儲存庫資源 | 存取權限 | 事件 |
+| --- | --- | --- |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自動設為 **Read-only** | |
 
 在組織中，GitHub 可能把 **Install** 顯示為 **Request**。這時由組織擁有者核准請求。
 
 ## 代理的工作
 
-代理呼叫 `connect`，參數為 `what="github"`。SwB 顯示 webhook 位址、webhook 密鑰的狀態和儲存庫路由數量。路由會把一個儲存庫的事件傳給一個目標。
+代理呼叫 `connect`，參數為 `what="github"`。SwB 顯示 webhook 位址、webhook 金鑰的狀態和儲存庫路由數量。路由會把一個儲存庫的事件傳給一個目標。
 
-代理將儲存庫加入 `config/switchboard.yaml` 中的 `blocks.github.spaces` 或 `blocks.github.routes`。使用領取連結儲存同一組 webhook 密鑰。代理重新啟動 SwB 以載入密鑰並套用路由。
+代理將儲存庫加入 `config/switchboard.yaml` 中的 `blocks.github.spaces` 或 `blocks.github.routes`。用空間設定儲存庫的預設模式和專案。此範例將 `acme/app` 歸入 SwB 專案 `demo`，並設為 `watch` 模式。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode: watch
+        project: demo
+```
+
+使用領取連結儲存同一組 webhook 金鑰。代理重新啟動 SwB 以載入金鑰並套用路由。
 
 代理再次呼叫 `connect(what="github")`，取得尚待填寫的 App ID 或私密金鑰連結。若要從現有的個人存取權杖改用 GitHub App 憑證，選用 `choose={"credential":"app"}`。
 
@@ -110,7 +124,7 @@ GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook
 
 | 權杖 | GitHub 顯示位置 | 格式 | 填寫位置 |
 | --- | --- | --- | --- |
-| Webhook 密鑰 | 用 `openssl rand -hex 32` 產生 | 至少 16 個字元 | SwB 領取連結 |
+| Webhook 金鑰 | 用 `openssl rand -hex 32` 產生 | 至少 16 個字元 | SwB 領取連結 |
 | App ID | 應用程式設定中的 **App ID** | 一串數字 | SwB 領取連結 |
 | 私密金鑰 | 點選 **Generate a private key** 後下載一次 | `.pem` 檔案 | SwB 領取連結 |
 
@@ -124,6 +138,6 @@ SwB 會用私密金鑰自行產生安裝權杖。每個安裝權杖的效期是�
 
 ## 排解問題
 
-如果傳遞因為簽章錯誤而失敗，代表 GitHub 與 SwB 儲存的密碼有差異。請產生新密碼，填入 GitHub，再透過新的領取連結儲存。
+簽章錯誤表示 GitHub 和 SwB 儲存的 webhook 金鑰有差異。請產生新金鑰。將新金鑰填入 GitHub。使用新的領取連結將金鑰儲存到 SwB。
 
 如果 `connect` 要求 **Issues** 寫入權限，請開啟應用程式設定 → **Permissions & events**。把 **Issues** 設為 **Read & write**，並在安裝上接受這項變更。

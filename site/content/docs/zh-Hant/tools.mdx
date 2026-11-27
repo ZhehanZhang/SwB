@@ -3,7 +3,23 @@ title: 工具
 description: SwB 提供給你的代理的 MCP 工具。
 ---
 
-代理看得到其登入資格所允許的工具。模組開啟時，該模組的工具才會出現。
+模組啟用後，工具清單會顯示該模組的工具。清單也可能顯示需要擁有者身分的工具。
+
+## 配對金鑰
+
+配對金鑰可在擁有者授權的範圍內呼叫下列工具。
+
+| 用途 | 工具與權限 |
+| - | - |
+| 訊息 | 可呼叫 `send`、`agent_send` 與 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 與 `get_message` 處理自己的訊息和對話 |
+| 記憶與專案 | 可呼叫 `context_pack` 與 `project_list`。在授權範圍內使用記憶工具 |
+| 路由 | 可呼叫 `routes_list` 與 `routes_resolve`。呼叫 `routes_set` 或 `routes_remove` 時，將自己的代理名稱填入 `agent` |
+| 設定 | 用 `switchboard_status` 與 `modes_status` 查看狀態。用 `connect` 取得用戶端設定指引。設定模組和發出配對碼需要擁有者身分 |
+| 模組 | 在授權範圍內使用模組工具，並執行頻道模式允許的動作 |
+
+呼叫 `login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 與 `visibility_set` 需要擁有者身分。呼叫 `project_create`、`project_update`、`project_sync` 與 `space_mode` 也需要擁有者身分。擁有者還可呼叫 `routine_register`、`routine_add`、`routine_remove`、`discord_provision` 與 `telegram_provision`。
+
+擁有者可用 `auth.key_tools` 限制工具的顯示和呼叫。可用 `auth.key_scopes` 限制存取範圍，用 `auth.key_targets` 限制傳送目標。
 
 ## 訊息
 
@@ -39,7 +55,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 | 工具 | 用途 |
 | - | - |
 | `context_pack` | 取得專案的簡報 |
-| `memory_write` | 儲存記憶時，填寫 `scope`、`namespace`、`title` 和 `body`。`namespace` 用來為同一範圍內的項目分類，最多三層，使用小寫，例如 `notes/meetings`。儲存專案記憶時，將專案簡稱填入 `project`，並設定 `scope="project:<slug>"`。儲存通用記憶時，在擁有者同意後設定 `confirm_general=true` |
+| `memory_write` | 儲存記憶時，填寫 `scope`、`namespace`、`title` 和 `body`。`namespace` 用來為同一範圍內的項目分類，最多三層，使用小寫，例如 `notes/meetings`。儲存專案記憶時，將專案簡稱填入 `project`，並設定 `scope="project:<slug>"`。寫入通用記憶前，先向擁有者確認。接著設定 `confirm_general=true` |
 | `memory_search` | 用 `query` 搜尋記憶。預設搜尋 `general`。將專案簡稱填入 `project`，即可先搜尋專案記憶，再搜尋 `general`。設為 `include_general=false` 時，只搜尋該專案 |
 | `memory_list` | 列出記憶項目 |
 | `memory_read` | 讀取一筆記憶與它的歷史 |
@@ -50,6 +66,15 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `project_create` | 建立專案 |
 | `project_update` | 重新命名、連結、封存專案，或把專案設為私人 |
 | `project_sync` | 重新把專案連結到它們的對應項目 |
+
+在 `project_update` 的 `links` 中填入下列值。可用的專案連結鍵取決於已設定的代理和模組。
+
+| 鍵 | 值 |
+| - | - |
+| `repos` | 儲存庫名稱清單，格式為 `owner/repo` |
+| `claude_project` | Claude 專案名稱或 ID |
+| `chatgpt_project` | ChatGPT 專案名稱或 ID |
+| `capy_project` | Capy 專案名稱或 ID |
 
 呼叫 `memory_search` 或 `memory_list` 時，將私人專案填入 `project`，即可讀取該專案的記憶。透過 `scopes` 加入其他專案時，請選擇公開專案。代理的金鑰須具備各專案的存取權限。
 

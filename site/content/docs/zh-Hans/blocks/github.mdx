@@ -15,15 +15,16 @@ description: 把 GitHub 事件发送给你的智能体和服务。
 
 ## 权限
 
-给应用授予你所需事件的读取权限。
+在 **Repository permissions** 中，按下表设置权限。
 
-| 权限 | 事件 |
-| - | - |
-| Issues | `issues`、`issue_comment` |
-| Pull requests | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
-| Contents | `push` |
-| Checks | `check_run`、`check_suite` |
-| Actions | `workflow_run` |
+| 仓库资源 | 访问权限 | 事件 |
+| - | - | - |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自动设为 **Read-only** | |
 
 在你选择的仓库上安装该应用。
 
@@ -60,7 +61,8 @@ blocks:
 | `blocks.github.sinks.*.url_env` | 存放接收端地址的变量名 |
 | `blocks.github.routes` | 为仓库名称或 `owner/*` 指定接收端列表 |
 | `blocks.github.spaces` | 共用设置的仓库组。用 `acme/app` 这样的名称可选中该仓库 |
-| `blocks.github.spaces.*.mode` | 这个空间内各仓库的默认[频道模式](/docs/channel-modes) |
+| `blocks.github.spaces.*.repo` | `owner/repo` 格式的仓库名称 |
+| `blocks.github.spaces.*.mode` | 这个空间内各仓库的默认[频道模式](/zh-Hans/docs/channel-modes) |
 | `blocks.github.spaces.*.project` | 此空间的事件默认归入的 SwB 项目 |
 
 使用[频道模式](/zh-Hans/docs/channel-modes)，可通过项目路由唤醒智能体。
