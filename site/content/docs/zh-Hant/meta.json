@@ -2,6 +2,7 @@
   "title": "文件",
   "pages": [
     "index",
+    "deploy",
     "install",
     "first-run",
     "connect",
