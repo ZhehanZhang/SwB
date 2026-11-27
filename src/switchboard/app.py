@@ -171,29 +171,6 @@ def create_app(core: "Switchboard") -> Any:
             return None, login_redirect(request)
         return owner, None
 
-    async def admin(request: Request) -> Response:
-        """The owner's page: status, routes, projects and recent refusals."""
-        owner, refused = await owner_page(request)
-        if refused is not None:
-            return refused
-        csrf = core.auth.csrf(owner.csrf_key)
-        changes = [c for c in core.audit.recent(limit=100) if c["action"] in ("route_set", "route_remove", "auth_failure", "rate_limited")][:15]
-        extra = ""
-        if core.slack is not None:
-            notices = {"approved": "Approved and sent.", "rejected": "Rejected.", "send-failed": "Approved, but Slack refused the send; see the audit log.",
-                       "decide-refused": "That request was already decided or has expired.",
-                       "avatar-saved": "Avatar saved. New posts use it; Slack may take a minute to show it.",
-                       "avatar-refused": "Avatar not saved: send a picture of the persona's file type (see its file name), 2 MB at most."}
-            extra = pages.slack_body(core.slack.status(), core.slack.store.list_requests(status="pending", limit=50), csrf,
-                                     notices.get(request.query_params.get("notice", "")), core.slack.persona_rows())
-        rows = [row for b in core.blocks.values() for row in b.page_rows()]
-        routine_block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
-        return pages.admin_page(core.health(), owner.label, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
-                                block_rows=rows, connected=core.connections.list(), csrf=csrf,
-                                add_passkey=bool(core.cfg.passkey_rp and not login.methods()["passkeys"]),
-                                routines=routine_block.rows() if routine_block else None, systems=core.project_systems(await core.targets()),
-                                visibility=core.visibility.rows([f"target:{t['slugs'][0]}" for t in await core.targets() if t.get("slugs") and t.get("block") != "agent"][:200]))
-
     async def slack_decide(request: Request) -> Response:
         """The owner approves or rejects a Slack write."""
         from .slack.writes import Actor, WriteError
@@ -207,11 +184,10 @@ def create_app(core: "Switchboard") -> Any:
         if verb not in ("approve", "reject"):
             return Response(status_code=404)
         try:
-            req = await core.slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", owner.label))
+            result = await core.slack.gate.decide(request.path_params["rid"], verb == "approve", Actor("admin", owner.label))
         except WriteError:
-            return RedirectResponse("/classic?notice=decide-refused", status_code=303)
-        outcome = "rejected" if verb == "reject" else ("approved" if req["status"] == "sent" else "send-failed")
-        return RedirectResponse(f"/classic?notice={outcome}", status_code=303)
+            return RedirectResponse("/inbox?notice=decide-refused", status_code=303)
+        return RedirectResponse("/inbox?notice=send-failed" if result["status"] == "failed" else "/inbox", status_code=303)
 
     async def avatar(request: Request) -> Response:
         """Public avatar file for clients such as Slack and Discord, including rendered Captain avatars."""
@@ -242,22 +218,27 @@ def create_app(core: "Switchboard") -> Any:
         if refused is not None:
             return refused
         if core.slack is None:
-            return pages.message_page("Not available", "Avatar uploads need Slack configured.", 403)
+            await request.close()
+            return Response(status_code=403)
         persona = core.slack.config.personas.get(request.path_params["pid"])
         if persona is None or not persona.avatar:
-            return pages.message_page("Not available", "That persona has no avatar file; it uses an icon_url or emoji from the config.", 404)
+            await request.close()
+            return Response(status_code=404)
         upload = form.get("file")
-        data = await upload.read(AVATAR_MAX_BYTES + 1) if hasattr(upload, "read") else b""
+        try:
+            data = await upload.read(AVATAR_MAX_BYTES + 1) if hasattr(upload, "read") else b""
+        finally:
+            await request.close()
         kind = "png" if data.startswith(b"\x89PNG\r\n\x1a\n") else "jpg" if data.startswith(b"\xff\xd8\xff") else "gif" if data[:6] in (b"GIF87a", b"GIF89a") else None
         want = persona.avatar.rsplit(".", 1)[1].lower().replace("jpeg", "jpg")
         if not data or len(data) > AVATAR_MAX_BYTES or kind != want:
-            return RedirectResponse("/classic?notice=avatar-refused", status_code=303)
+            return RedirectResponse("/agents?notice=avatar-refused", status_code=303)
         core.slack.avatar_dir.mkdir(parents=True, exist_ok=True)
         tmp = core.slack.avatar_dir / f".{persona.avatar}.tmp"
         tmp.write_bytes(data)
         tmp.replace(core.slack.avatar_dir / persona.avatar)
         core.slack.store.audit(f"admin:{owner.label}", "avatar_uploaded", persona=persona.id, file=persona.avatar, bytes=len(data))
-        return RedirectResponse("/classic?notice=avatar-saved", status_code=303)
+        return RedirectResponse("/agents?notice=avatar-saved", status_code=303)
 
     async def owner_form(request: Request) -> tuple[Owner | None, Any, Response | None]:
         owner, refused = await core.auth.protect_owner(request)
@@ -392,40 +373,6 @@ def create_app(core: "Switchboard") -> Any:
         core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="core", action="connect_code", outcome="ok", target=code["agent"])
         return pages.connect_code_page(code, core.cfg.public_url or "")
 
-    async def visibility_set(request: Request) -> Response:
-        from .visibility import VisibilityError
-
-        owner, form, refused = await owner_form(request)
-        if refused is not None:
-            return refused
-        resource = str(form.get("resource") or "")
-        try:
-            rule = core.visibility.set(resource, str(form.get("visibility") or ""), f"admin:{owner.label}", core.clock())
-        except VisibilityError as e:
-            return pages.message_page("Not changed", str(e), 400)
-        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="core", action="visibility_set", outcome="ok",
-                          target=resource, detail=str(rule))
-        return RedirectResponse("/classic", status_code=303)
-
-    async def routine_add(request: Request) -> Response:
-        from .blocks import BlockError
-        from .core import CoreError
-
-        owner, form, refused = await owner_form(request)
-        if refused is not None:
-            return refused
-        block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
-        if block is None:
-            return pages.claim_message_page("Claude routine setup required", 400)
-        try:
-            out = block.add(fire=str(form.get("fire_url") or ""), token=str(form.get("token") or ""), project=str(form.get("project") or "") or None,
-                            name=str(form.get("name") or "") or None, agent="claude", actor=f"admin:{owner.label}")
-        except (BlockError, CoreError):
-            return pages.claim_message_page("Routine setup failed", 400)
-        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination=block.name, action="routine_add", outcome="ok",
-                          target=out["name"], excerpt=f"{out['routine_id']} for {out['project'] or 'general'}")
-        return RedirectResponse("/classic", status_code=303)
-
     async def routine_claim(request: Request) -> Response:
         """Use a one-time routine registration link to save a token."""
         from .blocks import BlockError
@@ -468,31 +415,6 @@ def create_app(core: "Switchboard") -> Any:
                           target=out["name"], excerpt=f"{out['routine_id']} for {out['project']}" + (" (new project)" if out["created_project"] else ""))
         return pages.claim_message_page("Routine and project saved" if out["created_project"] else "Routine saved", 200)
 
-    async def routine_remove(request: Request) -> Response:
-        from .blocks import BlockError
-
-        owner, _, refused = await owner_form(request)
-        if refused is not None:
-            return refused
-        block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
-        name = request.path_params["name"]
-        try:
-            ok = block.remove(name) if block else False
-        except BlockError as e:
-            return pages.message_page("Not removed", str(e), 400)
-        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="claude-routine", action="routine_remove",
-                          outcome="ok" if ok else "refused", target=name)
-        return RedirectResponse("/classic", status_code=303)
-
-    async def connect_revoke(request: Request) -> Response:
-        owner, _, refused = await owner_form(request)
-        if refused is not None:
-            return refused
-        n = core.connections.revoke(key_id=request.path_params["kid"])
-        core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="core", action="connect_revoke", outcome="ok" if n else "refused",
-                          target=request.path_params["kid"])
-        return RedirectResponse("/classic", status_code=303)
-
     async def connect_redeem(request: Request) -> JSONResponse:
         """A client redeems a pairing code for its own bearer key (a machine path, outside Access). The key is shown once."""
         from .connect import ConnectError
@@ -511,7 +433,7 @@ def create_app(core: "Switchboard") -> Any:
         core.audit.record(origin="http", source=out["agent"], client=ip, destination="core", action="connect_redeem", outcome="ok", target=out["key_id"])
         base = core.cfg.public_url or ""
         return JSONResponse({**out, "mcp_url": f"{base}/mcp", "inbox_events_url": f"{base}/inbox/events", "header": "Authorization: Bearer <key>",
-                             "note": "Store the key now; switchboard keeps only its hash. Revoke it from /classic."},
+                             "note": "Store the key now. Revoke it in Tokens at /tokens."},
                             headers={"Cache-Control": "no-store"})
 
     async def inbox_poll(request: Request) -> JSONResponse:
@@ -575,7 +497,6 @@ def create_app(core: "Switchboard") -> Any:
     origin_routes = sorted((r for o in core.origins.values() for r in o.routes()), key=lambda r: isinstance(r, Mount) and not r.path)
     app: Any = Starlette(
         routes=[
-            pages.PageRoute("/classic", admin, pages.CLASSIC_TITLE, methods=["GET"]),
             Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
             Route("/avatars/{name}", avatar, methods=["GET"]),
             Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
@@ -585,10 +506,6 @@ def create_app(core: "Switchboard") -> Any:
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),
             pages.PageRoute("/pairing/code", connect_code, pages.PAIRING_TITLE, methods=["POST"]),
-            Route("/pairing/keys/{kid}/revoke", connect_revoke, methods=["POST"]),
-            Route("/visibility", visibility_set, methods=["POST"]),
-            Route("/routines", routine_add, methods=["POST"]),
-            Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
             pages.PageRoute("/routines/claim/{code}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
             pages.PageRoute("/routines/claim/owner/{registration}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
             pages.PageRoute(CLAIM_PATH + "/{code}", token_claim, pages.TOKEN_CLAIM_TITLE, methods=["GET", "POST"]),

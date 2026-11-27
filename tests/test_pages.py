@@ -1,4 +1,4 @@
-from conftest import CAPTAIN, OWNER, base_config, consent, register
+from conftest import OWNER, base_config, consent, register
 
 
 def test_pages_use_site_assets_and_strict_csp(make):
@@ -13,24 +13,10 @@ def test_pages_use_site_assets_and_strict_csp(make):
     assert c.get("/assets/nope.js").status_code == 404
 
 
-def test_classic_admin_page_needs_the_owners_access_identity(make):
-    core, c = make(env={"SWITCHBOARD_KEY_CAPY": "s" * 32})
-    core.projects.create(slug="beacon", name="Beacon", links={"repos": ["example-org/web-app"]})
-    for headers in ({}, {"cf-access-jwt-assertion": "other"}):
-        redirect = c.get("/classic", headers=headers, follow_redirects=False)
-        assert redirect.status_code == 303 and redirect.headers["location"] == "/login?next=%2Fclassic"
-    page = c.get("/classic", headers=OWNER)
-    assert page.status_code == 200 and "style=" not in page.text and 'type="password"' not in page.text
-    for needle in ("Signed in as owner@example.test", "global route", CAPTAIN, "Beacon", "CAPY_API_KEY", "Bearer keys"):
-        assert needle in page.text, needle
-    assert c.get("/routes").status_code == 404
-    assert c.get("/healthz").status_code == 200
-
-
 def test_access_assertion_does_not_sign_in_when_access_is_unconfigured(make):
     cfg = base_config()
     cfg["auth"] = {"owner_emails": ["owner@example.test"]}
     _, c = make(config=cfg)
-    for path, next_path in (("/", "%2F"), ("/classic", "%2Fclassic")):
+    for path, next_path in (("/", "%2F"), ("/tokens", "%2Ftokens")):
         refused = c.get(path, headers=OWNER, follow_redirects=False)
         assert refused.status_code == 303 and refused.headers["location"] == f"/login?next={next_path}"
