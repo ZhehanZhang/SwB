@@ -2,24 +2,61 @@
 
 import json
 from importlib.resources import files
+from textwrap import indent
 from typing import Any
 
+import yaml
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ...auth import Principal
+from ...block_env import GITHUB_SECRET, configured_env
 from ...modes import PROVIDERS
+from ...muse_protocol import TOKEN_ENV as MUSE_TOKEN_ENV
 from .coding import coding_steps
 from .kit import Kit
 
 CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
-          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse"}
+          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse", "dots": "dots"}
+BLOCK_EXAMPLES = {
+    "slack": {"workspaces": {"a2a": {
+        "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "SLACK_A2A_APP_TOKEN",
+        "identities": {"bot": {"token_env": "SLACK_A2A_BOT_TOKEN", "write": "free"}},
+    }}},
+    "github": {"secret_env": GITHUB_SECRET, "spaces": {"example-org/app": {"mode": "watch"}}},
+    "dots": {"delivery": "mailbox", "dots": {"example-dot": {"name": "Example Dot", "mailbox": "chatgpt"}}},
+}
+ROUTINE_ENV_ONLY = {
+    "claude-routine": ("CLAUDE_ROUTINE_ID", "CLAUDE_ROUTINE_TOKEN"),
+    "grok-routine": ("GROK_ROUTINE_URL", "GROK_ROUTINE_SECRET"),
+}
 ALIASES = {"grok-routine": "grok-bot"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
 MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web",
          "grok": "grok.com > Connectors > New Connector > Custom"}
 GUIDE_TITLE_WORDS = {"chatgpt": "ChatGPT", "github": "GitHub", "mcp": "MCP"}
+
+
+def enable_steps(name: str) -> list[dict[str, str]]:
+    config = {"use": name, "enabled": True, **BLOCK_EXAMPLES.get(name, {})}
+    instruction = "Merge this YAML under blocks in config/switchboard.yaml."
+    if name == "slack":
+        instruction += " Replace T0DEMO0001 with the Slack workspace ID."
+    elif name == "github":
+        instruction += " Replace example-org/app with the GitHub repository."
+    names = (MUSE_TOKEN_ENV,) if name == "muse" else configured_env(name, config)
+    if names:
+        instruction += f" Use {', '.join(names)} in .env or get private claim links after restart."
+    elif name in ROUTINE_ENV_ONLY:
+        instruction += (
+            " Get private claim links after restart."
+            f" For an environment-only config, omit blocks and set {', '.join(ROUTINE_ENV_ONLY[name])} in .env."
+        )
+    return [
+        {"by": "you", "do": instruction, "snippet": indent(yaml.safe_dump({name: config}, sort_keys=False).rstrip(), "  ")},
+        {"by": "you", "do": "Restart SwB."},
+    ]
 
 
 def register_guides(mcp: MCPServer) -> dict[str, dict[str, str]]:
@@ -97,11 +134,11 @@ def register(mcp: MCPServer, kit: Kit) -> None:
     guide_names = sorted(guide["prompt"] for guide in guides.values())
 
     @mcp.tool(
-        title="Connect to Switchboard",
-        description=('When someone asks "how do I connect/set up/link X to switchboard?", call connect first. '
-                     f'Kinds: {", ".join(kinds)}. Follow each next step in order: run exact calls marked "you", '
-                     'give "person" steps and links to the owner, and call connect again to check progress. '
-                     'Pass choices such as a Captain, project or agent name in choose, never credentials; use the link for token entry. '
+        title="Connect to SwB",
+        description=('When someone asks how to connect, set up or link something to SwB, call connect first. '
+                     f'Supported kinds include {", ".join(kinds)}. Do steps marked "you" in order. '
+                     'Share "person" steps and links with the owner. Call connect again to check progress. '
+                     'Use choose for details such as a Captain, project or agent name. Use private links for credentials. '
                      'Read the prompt or resource in guide for detailed setup instructions.'),
         annotations=kit.SEND,
     )
@@ -116,13 +153,12 @@ def register(mcp: MCPServer, kit: Kit) -> None:
                 return {**result, "done": [], "next": []}
             return {"what": "unknown", "done": [], "next": [], "kinds": kinds, "guides": guide_names}
         block = owners.get(what)
-        if what in BLOCKS and block is None:
-            return {**result, "done": [], "next": [
-                {"by": "person", "do": f"Enable the {BLOCKS[what]} block in config/switchboard.yaml and restart Switchboard."}]}
         if what not in CLIENTS and not p.is_unrestricted_owner:
             return {**result, "done": [], "next": [
                 {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}],
                 **({"modes": core.modes.summary(block.name, p)} if block is not None and block.manifest.id in PROVIDERS else {})}
+        if what in BLOCKS and block is None:
+            return {**result, "done": [], "next": enable_steps(BLOCKS[what])}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
         outcome = "ok"
         try:

@@ -20,18 +20,59 @@ def connect(client, what, **kw):
     return payload(result)
 
 
-def test_connect_schema_unknown_and_disabled_blocks(make):
+def test_connect_schema_and_unknown_kinds(make):
     _, client = make(config=base_config(version=2, blocks={"mcp": {}}))
     tools = rpc(client, STATIC_KEY, "tools/list").json()["result"]["tools"]
     tool = next(t for t in tools if t["name"] == "connect")
-    assert tool["description"].startswith('When someone asks "how do I connect/set up/link X to switchboard?", call connect')
+    assert tool["title"] == "Connect to SwB"
+    assert "call connect first" in tool["description"]
     assert set(tool["inputSchema"]["properties"]) == {"what", "project", "choose"}
-    out = connect(client, "unknown")
-    assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "coding-agent", "discord", "github",
-                            "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
-    for kind in ("capy-captain", "claude-project", "slack", "github", "grok-bot", "muse"):
-        [step] = connect(client, kind)["next"]
-        assert step["by"] == "person" and "Enable" in step["do"] and "link" not in step
+    for kind in ("unknown", "cloudflare"):
+        out = connect(client, kind)
+        assert out["what"] == "unknown"
+        assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "coding-agent", "discord", "dots",
+                                "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
+
+
+@pytest.mark.parametrize(("kind", "block", "env_names"), [
+    ("capy-captain", "capy", ("CAPY_API_KEY", "CAPY_API_KEY_SERVICE")),
+    ("claude-project", "claude-routine", ("CLAUDE_ROUTINE_ID", "CLAUDE_ROUTINE_TOKEN")),
+    ("discord", "discord", ("DISCORD_BOT_TOKEN",)),
+    ("dots", "dots", ()),
+    ("github", "github", ("GITHUB_WEBHOOK_SECRET",)),
+    ("grok-bot", "grok-routine", ("GROK_ROUTINE_URL", "GROK_ROUTINE_SECRET")),
+    ("muse", "muse", ("MUSE_BRIDGE_TOKEN",)),
+    ("slack", "slack", ("SLACK_A2A_APP_TOKEN", "SLACK_A2A_BOT_TOKEN")),
+    ("telegram", "telegram", ("TELEGRAM_BOT_TOKEN",)),
+])
+def test_connect_offers_working_config_for_disabled_block(make, kind, block, env_names):
+    cfg = base_config(version=2, blocks={"mcp": {}, block: {"enabled": False}})
+    env = {"SWITCHBOARD_KEY_CAPY": STATIC_KEY}
+    _, client = make(config=cfg, env=env)
+    out = connect(client, kind)
+    assert out["what"] == kind and out["done"] == []
+    configure, restart = out["next"]
+    assert configure["by"] == "you" and "config/switchboard.yaml" in configure["do"]
+    assert "link" not in configure
+    assert all(name in configure["do"] for name in env_names)
+    assert (".env" in configure["do"]) == bool(env_names)
+    assert restart == {"by": "you", "do": "Restart SwB."}
+    snippet = configure["snippet"]
+    assert snippet.startswith(f"  {block}:\n")
+    parsed = yaml.safe_load(snippet)
+    assert set(parsed) == {block}
+    assert parsed[block]["use"] == block and parsed[block]["enabled"] is True
+    cfg["blocks"].update(parsed)
+    core, enabled = make(config=cfg, env=env)
+    assert block in core.blocks
+    if kind == "dots":
+        assert core.blocks[block].dots()[0]["mailbox"] == "chatgpt"
+        assert connect(enabled, kind)["state"] == "connected"
+    elif kind == "slack":
+        assert set(core.blocks[block].token_names["a2a"]) == set(env_names)
+        assert "link" in connect(enabled, kind)["next"][0]
+    elif kind == "github":
+        assert core.blocks[block].registered_repositories() == {"example-org/app"}
 
 
 @pytest.mark.parametrize(("kind", "menu"), [("chatgpt", "https://chatgpt.com/plugins"), ("claude", "Customize > Connectors")])
@@ -83,6 +124,7 @@ def test_connect_read_only_for_every_limited_principal(make, monkeypatch, restri
         "capy-captain": {"captain": "Example Captain"},
         "claude-project": {"fire_url": "trig_123456789", "claude_project": "Example", "project": "example"},
         "github": {},
+        "telegram": {},
     }
     for kind, choose in requests.items():
         out = connect(client, kind, choose=choose)
