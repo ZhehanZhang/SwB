@@ -62,7 +62,7 @@ def instance_paths(base: Path, env: Mapping[str, str], *, explicit: bool) -> tup
     if config is None:
         return None, home_data, None
     data = base / "data"
-    if data != home_data and (home_data / INSTANCE_DB).is_file() and not (data / INSTANCE_DB).exists():
+    if not explicit and not os.path.lexists(data) and (home_data / INSTANCE_DB).is_file():
         return config, home_data, data
     return config, data, None
 

@@ -23,6 +23,7 @@ from mcp.client.streamable_http import streamable_http_client
 from . import __version__
 from .config import INSTANCE_CONFIG, ConfigError, LOOPBACK_HOSTS, client_endpoint, instance_paths
 from .deployment import OWNER_KEY, volume_owner_key
+from .store import ensure_private_data_dir
 
 CONFIG = INSTANCE_CONFIG
 
@@ -73,6 +74,8 @@ def _init(base: Path, public_url: str | None, force: bool) -> None:
     for path in (config_path, env_path):
         if not force and os.path.lexists(path):
             raise CliError(f"{path} already exists; use --force to replace it.")
+    if not os.path.lexists(config_path):
+        ensure_private_data_dir(base / "data")
     config_path.parent.mkdir(parents=True, exist_ok=True)
     _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
     _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
