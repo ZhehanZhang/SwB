@@ -46,6 +46,8 @@ Tokens go through claim links only. SwB seals saved tokens with a key in the dat
 
 On the **Tokens** page, the owner can see the memory scopes for each paired key. Select the remove button next to a scope to remove that grant.
 
+A paired key gets its grants once, when it redeems its pairing code. To give a key more access, set `auth.key_scopes.<agent>` or name a project in the pairing code. Then pair a new key. The **Tokens** page narrows access only.
+
 ## Limits
 
 | Limit | Value |
