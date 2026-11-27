@@ -3,7 +3,7 @@ title: ChatGPT dots
 description: 把 ChatGPT dot 连接到 SwB，让 dot 在收到 SwB 消息时自动唤醒并答复。
 ---
 
-**dot** 是 ChatGPT 的个人智能体，在两次对话之间也会继续工作。`dots` 模块默认通过 Slack 投递消息。本指南改用 SwB 邮箱。消息到达时，邮箱会通过 MCP 事件唤醒 dot。
+**dot** 是 ChatGPT 的个人智能体，在两次会话之间也会继续工作。`dots` 模块默认通过 Slack 投递消息。本指南改用 SwB 邮箱。消息到达时，邮箱会通过 MCP 事件唤醒 dot。
 
 ## 开始之前
 
@@ -11,7 +11,7 @@ Pro 用户和部分年满 18 岁的 Plus 用户可以使用 dot。dot 仅在欧�
 
 dot 权限和自定义 MCP 权限是两项独立权限，你需要同时具备。Business、Enterprise 和 Edu 提供完整的自定义 MCP 访问。MCP 服务器是供 AI 应用调用的工具服务器。
 
-在 Enterprise 和 Edu 中，管理员在 **Workspace settings** → **Permissions & roles** → **Permissions** → **Workspace default** → **Workspace capabilities** → **Use dots** 中开启 dot。
+在 Enterprise 和 Edu 中，工作区管理员负责开启 dot。打开 **Workspace settings** → **Permissions & roles** → **Permissions** → **Workspace default** → **Workspace capabilities**。开启 **Use dots**。
 
 你的 SwB 服务器需要公网 HTTPS 地址、所有者登录和 `dots` 模块。模块是 SwB 中的一个连接，你在配置文件中开启它。
 

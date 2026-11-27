@@ -90,10 +90,12 @@ Open https://swb.example.com in a new browser window. Sign in with your identity
 
 | Path | Policy |
 | --- | --- |
-| `/mcp`, `/register`, `/token`, `/revoke`, `/healthz`, `/connect` | Bypass |
-| `/.well-known/*`, `/inbox`, `/inbox/*`, `/avatars/*` | Bypass |
-| `/github/webhook` | Bypass, for GitHub only |
-| All other paths, with `/` and `/authorize` | Owner |
+| `/mcp`, `/register`, `/token`, `/revoke`, `/.well-known/*` | Bypass |
+| `/healthz`, `/connect`, `/avatars/*` | Bypass |
+| `/inbox/poll`, `/inbox/events` | Bypass |
+| `/inbox/muse/bridge` | Bypass for Muse |
+| `/github/webhook` | Bypass for GitHub |
+| All other paths, including `/`, `/authorize`, `/inbox` and its conversation pages | Owner |
 
 ```sh
 SWITCHBOARD_PUBLIC_URL=https://swb.example.com
@@ -106,9 +108,9 @@ SwB checks the Access sign-in of each owner request. The bypass paths use the si
 
 ## What the agent does
 
-An agent with the Cloudflare connector can make the tunnel, the Access policies and the applications through the Cloudflare API. It makes its own API token with the least access for your account and zone. You keep your own Cloudflare tokens to yourself.
+Ask an agent with the Cloudflare connector to follow this page. The agent sets up the tunnel, DNS and Access for your SwB hostname. It uses the account and zone permissions needed for that setup. It stores its API token in the connector's secret settings.
 
-After the address works, the agent calls `connect` for your app, for example `what="claude"` or `what="chatgpt"`. SwB returns the MCP address `https://swb.example.com/mcp`. `switchboard_status` shows which SwB identity the app uses.
+Use SwB `connect` for the app after the public address works. For example, the agent uses `what="claude"` or `what="chatgpt"`. SwB returns the MCP address `https://swb.example.com/mcp`. `switchboard_status` shows which SwB identity the app uses.
 
 ## Credentials
 
@@ -130,6 +132,4 @@ Send a request to `https://swb.example.com/mcp` before you sign in. SwB answers 
 
 OAuth needs all the machine paths. OAuth is the sign-in flow that apps use to connect to SwB. If one path is missing, the app stops at sign-in.
 
-The path `/inbox/*` leaves out `/inbox` itself. Add both paths.
-
-Keep `/` and `/authorize` under the owner policy. A bypass on these paths opens the console to everyone.
+Keep `/`, `/authorize`, `/inbox` and its conversation pages under the owner policy. Apply **Bypass** to the inbox paths in the table.

@@ -90,10 +90,12 @@ SwB 所在的伺服器必須能透過 7844 連接埠連到 Cloudflare。SwB 的 
 
 | 路徑 | 政策 |
 | --- | --- |
-| `/mcp`、`/register`、`/token`、`/revoke`、`/healthz`、`/connect` | 略過 |
-| `/.well-known/*`、`/inbox`、`/inbox/*`、`/avatars/*` | 略過 |
-| `/github/webhook` | 略過，只用於 GitHub |
-| 其餘所有路徑，包括 `/` 和 `/authorize` | 擁有者 |
+| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | 略過 |
+| `/healthz`、`/connect`、`/avatars/*` | 略過 |
+| `/inbox/poll`、`/inbox/events` | 略過 |
+| `/inbox/muse/bridge` | 為 Muse 略過 |
+| `/github/webhook` | 為 GitHub 略過 |
+| 其餘路徑，包括 `/`、`/authorize`、`/inbox` 和對話頁面 | 擁有者 |
 
 ```sh
 SWITCHBOARD_PUBLIC_URL=https://swb.example.com
@@ -106,9 +108,9 @@ SwB 會檢查每個擁有者請求的 Access 登入。略過路徑使用 SwB 自
 
 ## 代理的工作
 
-具備 Cloudflare 連接器的代理可以透過 Cloudflare API 建立通道、Access 政策和應用程式。它會替你的帳號和區域產生權限最小的 API 權杖。你自己的 Cloudflare 權杖留在你手上。
+請具備 Cloudflare 連接器的代理依照本頁操作。代理為 SwB 主機名稱設定通道、DNS 和 Access。它使用這次設定所需的帳號和區域權限，並將 API 權杖存到連接器的機密設定。
 
-網址可以使用後，代理替你的應用程式呼叫 `connect`，例如 `what="claude"` 或 `what="chatgpt"`。SwB 回傳 MCP 網址 `https://swb.example.com/mcp`。`switchboard_status` 顯示應用程式使用哪個 SwB 身分。
+公開網址可以使用後，用 SwB 的 `connect` 接上應用程式。代理可以使用 `what="claude"` 或 `what="chatgpt"`。SwB 回傳 MCP 網址 `https://swb.example.com/mcp`。`switchboard_status` 顯示應用程式使用哪個 SwB 身分。
 
 ## 憑證
 
@@ -130,6 +132,4 @@ SwB 會檢查每個擁有者請求的 Access 登入。略過路徑使用 SwB 自
 
 OAuth 需要所有機器路徑。OAuth 是應用程式連到 SwB 時使用的登入流程。缺少任何一個路徑，應用程式都會停在登入這一步。
 
-路徑 `/inbox/*` 只符合下層路徑，`/inbox` 本身要另外加入。請把兩個路徑都加上。
-
-讓 `/` 和 `/authorize` 保持在擁有者政策下。在這兩個路徑上略過，會讓任何人都能開啟主控台。
+用擁有者政策保護 `/`、`/authorize`、`/inbox` 和對話頁面。依上表略過收件匣的指定路徑。

@@ -184,7 +184,7 @@ settings:
 
 代理呼叫 `connect`，參數為 `what="slack"`。SwB 列出每個工作區還缺哪些權杖，並回傳一個領取連結，一次收齊這些權杖。
 
-代理把工作區寫進 `config/switchboard.yaml` 的 `blocks.slack.workspaces`，包括 `team_id` 和權杖名稱。如果代理能存取伺服器，它會直接修改。否則它會把 YAML 交給你加入。
+代理在 `config/switchboard.yaml` 的 `blocks.slack.workspaces` 下填入工作區 ID 和權杖名稱。它在 `blocks.slack.agents` 下授權給擁有者。這項權限讓擁有者可以呼叫 `slack_workspaces`。如果需要你修改設定檔，代理會提供 YAML。
 
 這個範例用機器人和你的帳號連線到一個工作區。把 `T0DEMO0001` 換成你的工作區 ID。
 
@@ -202,9 +202,13 @@ blocks:
             token_env: SLACK_EXAMPLE_BOT_TOKEN
           user:
             token_env: SLACK_EXAMPLE_USER_TOKEN
+    agents:
+      owner:
+        workspaces:
+          example: [bot, user]
 ```
 
-若只用你的帳號，在 `team_id` 同一層加入 `user_only: true`。移除 `identities` 下的 `bot` 項目。
+工作區設定和授權使用相同的工作區名稱。若只用你的帳號，在 `team_id` 同一層加入 `user_only: true`。移除 `identities` 下的 `bot` 項目。將授權中的身分設為 `[user]`。
 
 SwB 要求重新啟動時，代理會告訴你。重新啟動後，代理用 `slack_workspaces` 檢查每個身分。身分是指機器人或你自己的帳號。最後，代理用 `slack_post` 傳送一則測試訊息。
 

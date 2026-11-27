@@ -33,17 +33,18 @@ docker compose --profile tunnel up -d
 
 ## Cloudflare Access
 
-Access 可以保护 SwB 页面和登录页。为你的主机名创建一个 Access 应用。允许你的所有者身份。为机器使用的路径添加绕过规则。
+参照 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare) 配置所有者策略和放行策略。
 
-| 路径 | 使用者 |
-| - | - |
-| `/mcp`、`/token`、`/register`、`/revoke`、`/.well-known` | MCP 客户端和 OAuth |
-| `/healthz` | 健康检查 |
-| `/inbox`、`/connect` | 频道和配对码 |
-| `/avatars` | Slack 和 Discord 头像 |
-| `/github/webhook` | GitHub |
+| 路径 | 策略 |
+| --- | --- |
+| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | 放行 |
+| `/healthz`、`/connect`、`/avatars/*` | 放行 |
+| `/inbox/poll`、`/inbox/events` | 放行 |
+| `/inbox/muse/bridge` | 为 Muse 放行 |
+| `/github/webhook` | 为 GitHub 放行 |
+| 其余路径，包括 `/`、`/authorize`、`/inbox` 和会话页面 | 所有者 |
 
-然后设置 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 和 `CLOUDFLARE_ACCESS_AUD`。每个路径在 SwB 中保留自己的登录检查。
+从所有者应用取得 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 和 `CLOUDFLARE_ACCESS_AUD`。SwB 会对放行路径上的请求执行相应检查。
 
 ## 托管平台
 

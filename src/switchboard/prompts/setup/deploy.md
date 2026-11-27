@@ -1,14 +1,37 @@
-Setup guide: https://swb.one/docs/deploy
+Follow the deploy guide at https://swb.one/docs/deploy.
 
-Help me run SwB, my self-hosted switchboard for agents. Use your terminal for commands. Ask me only for choices and steps that need me.
+Help me run SwB, my switchboard for agents. Use your terminal for commands it can run. Ask me for choices and actions that need me.
 
-Ask where I want to run SwB. Offer this computer, Fly.io, Koyeb, or my own server with Docker.
+Ask where to run SwB. Offer this computer, Fly.io, Koyeb or my server with Docker.
 
 ## This computer
 
-Check that uv is available. Use an empty instance folder. Check that port 8870 is free. Run `uvx swb-one init --public-url http://localhost:8870`. Run `echo "SWITCHBOARD_DATA_DIR=$PWD/data" >> .env` to keep the data in this folder. Start SwB with `uvx swb-one up`. Keep the server running. In a second terminal, run `(umask 077; set -C; uvx swb-one login-link > .swb-login-link)` from the same folder. The command writes a private file with a one-time owner sign-in link. Tell me the file path. Ask me to open the link in my local browser within five minutes. Ask me to delete the file after sign-in.
+Run the local commands on the computer that will run SwB. If I have that terminal, give me the commands to run there.
 
-For a different port, use that port in `--public-url` when you run `init`. Set `PORT` in the instance's `.env` file. Use the same port in `--url` if you need to point `login-link` at that server. Use the MCP address that `up` prints for a client on this computer.
+Check that uv is available. Make an empty instance folder. Check that port 8870 is free. Run the following commands in that folder. Keep the server running.
+
+```bash
+uvx swb-one init --public-url http://localhost:8870
+uvx swb-one up --dir .
+```
+
+`swb init` creates a private `data/` folder with mode `0700`. An initialized instance or `--dir` uses the instance's `data/` folder by default. Outside an instance, `swb up` defaults to `~/.local/share/switchboard`.
+
+SwB checks for `data_dir` in the YAML settings and their overlay first. Then it checks `SWITCHBOARD_DATA_DIR`, then `SWITCHBOARD_DATA`. The default folder applies last.
+
+For an older instance with a missing `data/` folder, plain `swb up` reuses an existing home database. SwB shows a notice once. Database files use mode `0600`.
+
+SwB uses the config file named by `SWITCHBOARD_CONFIG`. With `--dir`, it uses the config file from that instance instead.
+
+In a second terminal, use the same folder to create a one-time owner sign-in link in a private file.
+
+```bash
+(umask 077; set -C; uvx swb-one login-link > .swb-login-link)
+```
+
+Tell me the file path. Ask me to open the link in my local browser within five minutes. Ask me to delete the file after sign-in.
+
+For another port, set `PORT` in the instance's `.env` file. Use that port in the `--public-url` value when you run `init`. Use it in the local MCP address.
 
 ## Fly.io, Koyeb, or a server
 
@@ -26,6 +49,10 @@ Wait for SwB to start. Give me the public service URL. Give me the sign-in page 
 
 Tell me to open the private file. Tell me to copy the value of `SWB_SETUP_CODE`. Tell me to paste it into **Setup code** on the sign-in page. The code works once, for the first owner sign-in. For Fly.io or Koyeb, tell me to delete the private file after sign-in.
 
-## Connect an agent
+## Connect my first agent
 
-After I sign in, help me add SwB to one agent. Use https://swb.one/docs/connect. Then ask me to paste the coordinator prompt from https://swb.one/docs into that agent.
+Ask where the app runs. For an MCP client on the SwB computer, use the local MCP address and https://swb.one/prompts/mcp-client.md. For a coding agent, use https://swb.one/docs/setup/coding-agent.
+
+Cloud clients need a public HTTPS address. If SwB is running only on my computer, offer a [public address](https://swb.one/docs/first-run#get-a-public-address) or a hosted deployment. For Claude, use https://swb.one/prompts/claude.md. For ChatGPT, use https://swb.one/prompts/chatgpt.md. For Grok, use https://swb.one/prompts/grok.md.
+
+Once the first app connects, ask me to paste the prompt from https://swb.one/prompts/coordinator.md into that app.

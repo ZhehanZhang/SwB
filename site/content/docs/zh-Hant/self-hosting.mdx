@@ -33,17 +33,18 @@ docker compose --profile tunnel up -d
 
 ## Cloudflare Access
 
-Access 可以保護 SwB 頁面與登入頁面。請為你的主機名稱建立 Access 應用程式。允許你的擁有者身分。為機器使用的路徑加上略過規則。
+參考 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare) 設定擁有者政策和略過政策。
 
-| 路徑 | 使用者 |
-| - | - |
-| `/mcp`、`/token`、`/register`、`/revoke`、`/.well-known` | MCP 用戶端與 OAuth |
-| `/healthz` | 健康檢查 |
-| `/inbox`、`/connect` | 頻道與配對碼 |
-| `/avatars` | Slack 與 Discord 的圖片 |
-| `/github/webhook` | GitHub |
+| 路徑 | 政策 |
+| --- | --- |
+| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | 略過 |
+| `/healthz`、`/connect`、`/avatars/*` | 略過 |
+| `/inbox/poll`、`/inbox/events` | 略過 |
+| `/inbox/muse/bridge` | 為 Muse 略過 |
+| `/github/webhook` | 為 GitHub 略過 |
+| 其餘路徑，包括 `/`、`/authorize`、`/inbox` 和對話頁面 | 擁有者 |
 
-接著設定 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 與 `CLOUDFLARE_ACCESS_AUD`。每個路徑在 SwB 中保有自己的登入檢查。
+從擁有者應用程式取得 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 和 `CLOUDFLARE_ACCESS_AUD`。SwB 會檢查略過路徑收到的請求。
 
 ## 託管平台
 

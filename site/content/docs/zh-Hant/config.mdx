@@ -11,7 +11,7 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 | - | - |
 | `SWITCHBOARD_KEY_OWNER` | `swb` 指令使用的擁有者金鑰 |
 | `SWITCHBOARD_PUBLIC_URL` | 瀏覽器登入位址。本機執行時用 `http://localhost:8870`。遠端伺服器請用 HTTPS，例如 `https://swb.example.com`。 |
-| `SWITCHBOARD_DATA_DIR` | 資料夾。`swb up` 的預設值是 `~/.local/share/switchboard`。映像檔使用 `/data` |
+| `SWITCHBOARD_DATA_DIR` | 資料夾。映像檔使用 `/data`。 |
 | `SWITCHBOARD_OWNER_EMAILS` | OIDC 與 Cloudflare Access 的擁有者電子郵件，以逗號分隔 |
 | `SWITCHBOARD_KEY_<NAME>` | 代理 `<name>` 的 bearer 金鑰 |
 | `SWITCHBOARD_CONFIG` | 基礎 YAML 檔的路徑 |
@@ -20,7 +20,27 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 在終端機或執行個體的 `.env` 檔案中設定 `PORT`。本機登入時，請把公開位址設為 `http://localhost:<port>`。同一份檔案也可設定 `SWITCHBOARD_PUBLIC_URL` 與 `SWITCHBOARD_DATA_DIR`。YAML 設定檔中的 `public_url` 優先於環境變數。
 
-執行 `swb up --dir ./my-swb` 時，SwB 會讀取該資料夾內的 `.env` 及 `config/switchboard.yaml`，並將資料存到其中的 `data` 子資料夾。執行 `swb init`、`swb status`、`swb login-link`、`swb connect` 和 `swb claim` 時，請指定同一個 `--dir`。後四個指令可用 `--url` 指定其他伺服器位址。
+用 `swb up --dir ./my-swb` 讀取該資料夾內的 `.env` 和 `config/switchboard.yaml`。執行 `swb init` 時，請指定同一個 `--dir`。直接執行 `swb up` 時，可用 `SWITCHBOARD_CONFIG` 指定其他設定檔。
+
+`swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 尋找 `.env`。這四個指令用 `--url` 指定伺服器位址。
+
+`swb muse-bridge` 需要 `--url`。用 `--state-dir` 指定存放橋接檔案的資料夾。
+
+在執行個體的資料夾內執行 `swb export`、`swb log`、`swb blocks` 和 `swb targets`。這些指令會讀取該資料夾內的 `.env`。它們會採用 `SWITCHBOARD_CONFIG` 指定的檔案或本機設定檔。
+
+`swb serve` 讀取終端機中的環境變數與設定檔。
+
+用 `swb config migrate [file]` 印出第 2 版格式的設定。省略 `file` 時，指令會採用終端機中的 `SWITCHBOARD_CONFIG` 或預設設定檔。
+
+## 資料夾
+
+`swb init` 為新的執行個體建立 `data` 資料夾。`swb up` 預設會使用這個資料夾。`swb up --dir` 預設會使用指定位置下的 `data`。直接執行 `swb up` 並只用環境變數設定時，預設會使用 `~/.local/share/switchboard`。
+
+在設定檔或覆寫檔中設定 `data_dir`，即可更改路徑。這項設定優先。SwB 接著依序檢查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`。三項設定都是空值時，SwB 會採用預設路徑。
+
+舊的執行個體已有設定檔且缺少 `data` 資料夾時，直接執行 `swb up` 會沿用家目錄中的現有資料庫。SwB 為每個執行個體記錄一次提示。
+
+在 Linux 與 macOS 上，SwB 將資料夾的權限設為 `0700`。資料庫檔案的權限設為 `0600`。
 
 ## 模組
 
@@ -97,6 +117,8 @@ routes:
 | `auth.redirect_uris` | 允許的 OAuth 回呼位址。這份清單會取代內建清單。用 `/*` 比對路徑及其子路徑 |
 | `auth.source_names` | 將 OAuth 主機名稱或用戶端名稱的片段對應到登入時使用的代理名稱 |
 | `auth.key_scopes` | 依金鑰名稱設定可存取的記憶範圍，例如 `[project:example]` |
+| `auth.key_tools` | 依金鑰名稱設定可呼叫的 MCP 工具，例如 `[send]` |
+| `auth.key_targets` | 依金鑰名稱設定可接收訊息的目標，例如 `[agent:claude]` |
 | `auth.inbox_keys` | 為每把金鑰指定唯一可讀取的代理收件匣。內建項目為 `channel: claude-code` |
 
 ## 存取權限

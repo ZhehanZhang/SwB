@@ -5,13 +5,13 @@ description: 把 GitHub 事件发送给你的智能体和服务。
 
 ## 创建应用
 
-在你的账号下创建 GitHub App。将 SwB 公网地址加上 `/github/webhook` 作为 webhook 地址，例如 `https://swb.example.com/github/webhook`。生成 webhook 密钥。
+在你的账号下创建 GitHub App。将 SwB 公网地址加上 `/github/webhook` 作为 webhook 地址，例如 `https://swb.example.com/github/webhook`。将 webhook 密钥生成到私有文件中。SwB 接受至少 16 个字符的密钥。
 
 ```bash
-openssl rand -hex 32
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
 ```
 
-请智能体连接 GitHub。SwB 为每个缺失的值生成一个领取链接。App ID、私钥和 webhook 密钥各有一个链接。填写私钥时，请粘贴 `.pem` 文件的完整内容。
+将密钥填入 **Webhook secret**。请智能体连接 GitHub。通过领取链接保存同一个 webhook 密钥。保存密钥后删除私有文件。重启 SwB 以载入密钥。请智能体再次调用 `connect`，获取仍需填写的 App ID 或私钥链接。填写私钥时，请粘贴 `.pem` 文件的完整内容。
 
 ## 权限
 
