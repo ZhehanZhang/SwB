@@ -50,7 +50,8 @@ def test_about_reports_the_installed_plugin_distribution_version(make, monkeypat
     assert response.status_code == 200
     assert response.json() == {
         "version": version("swb-one"), "commit": "unknown", "build_date": "unknown",
-        "blocks": [{"name": "custom", "id": "example", "version": "1.2.3"}],
+        "blocks": [{"name": "custom", "id": "example", "version": "1.2.3"},
+                   {"name": "mcp", "id": "mcp", "version": version("swb-one")}],
     }
 
 

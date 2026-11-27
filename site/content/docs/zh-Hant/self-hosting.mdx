@@ -27,6 +27,8 @@ docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 
 擁有者在瀏覽器中透過 `http://localhost:8870` 登入。容器內的指令使用 `8000` 連接埠。Compose 將資料存放在 `./data`。修改 `.env` 後，請再次執行 `docker compose up -d`。
 
+執行 `docker compose exec switchboard swb login-link` 取得 `http://localhost:8870` 的登入連結。
+
 登出後，`/healthz` 只會傳回 `status` 和 `version` 兩個欄位。以擁有者身分登入或使用擁有者金鑰，即可查看完整的運作狀態。
 
 ## Cloudflare Tunnel
@@ -38,6 +40,14 @@ docker compose --profile tunnel up -d
 ```
 
 把 `SWB_PUBLIC_URL` 設為通道主機名稱，例如 `https://swb.example.com`。
+
+## 信任的代理
+
+反向代理會將請求轉送給 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 加入代理的位址或專用網段。請用 CIDR 格式填寫位址範圍。
+
+也可以在 `.env` 設定 `SWB_TRUSTED_PROXIES`。請用逗號分隔各項。SwB 優先採用 YAML 內的設定。
+
+如果 Cloudflare 通道與 SwB 共用主機或 Docker 網路，請加入通道連接器的位址或專用網段。連接器會直接連到 SwB。如果 Cloudflare 邊緣伺服器直接連到 SwB，請加入 `cloudflare`。
 
 ## Cloudflare Access
 

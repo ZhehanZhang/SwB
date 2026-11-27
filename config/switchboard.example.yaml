@@ -8,6 +8,10 @@ version: 2
 
 # The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url. Usually set PUBLIC_URL instead.
 # public_url: https://switchboard.example.com
+# List the IP ranges of proxies that connect directly to SwB.
+# Use cloudflare for connections from Cloudflare edge servers.
+# Use SWB_TRUSTED_PROXIES to set the ranges in the environment.
+# trusted_proxies: []
 # data_dir: ./data                              # usually set SWB_DATA_DIR instead
 # timezone: UTC
 # One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.

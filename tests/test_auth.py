@@ -1,4 +1,4 @@
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlsplit
 
 import pytest
 
@@ -28,6 +28,38 @@ def test_mcp_without_token_is_401_with_discovery_challenge(make):
     assert f'resource_metadata="{PUBLIC}/.well-known/oauth-protected-resource"' in r.headers["www-authenticate"]
     bad = rpc(c, "not-a-token", "tools/list")
     assert bad.status_code == 401 and 'error="invalid_token"' in bad.headers["www-authenticate"]
+
+
+def test_companion_keys_are_refused_outside_the_companion_api(make):
+    core, client = make(env={"SWITCHBOARD_KEY_OWNER": STATIC_KEY})
+    code = payload(call(client, STATIC_KEY, "companion_code"))["code"]
+    hello = {"name": "Test device", "platform": "linux", "capabilities": []}
+    paired = client.post("/companion/pair", json={"code": code, **hello})
+    assert paired.status_code == 200
+    device = paired.json()
+    key = device["device_key"]
+    auth = {"Authorization": f"Bearer {key}"}
+    assert client.post("/companion/hello", headers=auth, json={**hello, "version": "1.0.0"}).status_code == 200
+
+    claim = urlsplit(core.claims.mint("EXAMPLE_TOKEN", PUBLIC)).path
+    form = {"token": "example-credential"}
+    assert client.post(claim, data=form).status_code == 401
+    assert client.get("/healthz").status_code == 200
+    for method, path in (("POST", claim), ("POST", "/mcp"), ("GET", "/inbox/poll"), ("GET", "/healthz")):
+        refused = client.request(method, path, headers=auth, data=form if path == claim else None)
+        assert refused.status_code == 401 and refused.json()["error"] == "invalid_token"
+        assert 'error="invalid_token"' in refused.headers["www-authenticate"]
+        assert key not in refused.text
+    assert client.post(claim, headers={"Authorization": key}, data=form).status_code == 401
+    assert client.post(claim, headers={"Authorization": "Bearer swbd_unknown"}, data=form).status_code == 401
+    assert core.claims.secret("EXAMPLE_TOKEN") is None
+    assert client.post(claim, headers={"Authorization": f"Bearer {STATIC_KEY}"}, data=form).status_code == 200
+
+    rows = core.audit.recent(action="companion_refused", outcome="refused")
+    assert {(row["target"], row["ref"]) for row in rows} == {(device["companion_id"], "/claim"), ("/claim", None)}
+    assert {row["detail"] for row in rows} == {"companion key outside the companion API"}
+    assert {row["target"] for row in core.audit.recent(action="auth_failure")} == {"/mcp", "/inbox"}
+    assert key not in str(rows) and claim not in str(rows)
 
 
 def test_full_flow_issues_token_tagged_with_the_assistant(make):

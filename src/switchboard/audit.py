@@ -52,13 +52,13 @@ class Audit:
         log.info("%s.%s %s by %s via %s (%s) -> %s %s", destination, action, outcome, source, origin, client[:60], target or "", ref or detail or "")
 
     def record_refusal(self, *, origin: str, client: str, destination: str, action: str, detail: str,
-                       target: str | None = None) -> None:
+                       target: str | None = None, ref: str | None = None) -> None:
         key = origin, destination, action, target, detail
         now = self.store.clock()
         previous = self._refusal_audited_at.get(key)
         if previous is None or now - previous >= REFUSAL_AUDIT_INTERVAL_S:
             self.record(origin=origin, source="-", client=client, destination=destination, action=action,
-                        outcome="refused", target=target, detail=detail)
+                        outcome="refused", target=target, detail=detail, ref=ref)
             self._refusal_audited_at[key] = now
 
     def _recent_rows(self, *, destination: str | None = None, actions: Sequence[str] = (), origin: str | None = None,
