@@ -84,6 +84,7 @@ BLOCK_ROLES: dict[str, dict[str, Role]] = {
 AUTH_REQUIRED = "Sign in to call tools."
 ROUTE_REQUIRED = "Use a route for your own agent or sign in as the owner."
 CONVERSATION_NOT_FOUND = "Conversation not found."
+CONVERSATION_CONFLICT = "Pass the same ID for conversation and handle."
 MESSAGE_NOT_FOUND = "message not found"
 MEMORY_NOT_FOUND = "memory not found"
 TOOL_REQUIRED = "Use a key granted this tool."
@@ -92,7 +93,7 @@ POLICY_REQUIRED = "Use a tool with a SwB write policy."
 REFUSAL_DETAILS = frozenset({
     AUTH_REQUIRED, OWNER_REQUIRED, ROUTE_REQUIRED, CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED,
     POLICY_REQUIRED, MODE_REQUIRED, CONFIRMATION_REQUIRED, GRANT_REQUIRED,
-    CONVERSATION_NOT_FOUND, MESSAGE_NOT_FOUND, MEMORY_NOT_FOUND,
+    CONVERSATION_NOT_FOUND, CONVERSATION_CONFLICT, MESSAGE_NOT_FOUND, MEMORY_NOT_FOUND,
 })
 
 

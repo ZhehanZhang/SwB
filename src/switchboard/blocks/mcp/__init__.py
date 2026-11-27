@@ -30,8 +30,9 @@ from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
-from .policy import (CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED, READ_ROLES, ROUTE_REQUIRED, SCOPE_REQUIRED,
-                     TARGET_REQUIRED, TOOL_REQUIRED, Role, catalog_refusal, mutation_roles, read_refusal)
+from .policy import (BLOCK_ROLES, CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
+                     READ_ROLES, ROUTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED, Role, catalog_refusal,
+                     mutation_roles, read_refusal)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -96,6 +97,7 @@ class LimitedServer(MCPServer):
 
     modes: ChannelModes
     roles: dict[str, Role]
+    github_actions: dict[str, str]
 
     def _audit_refusal(self, p: Principal | None, tool: str | None, reason: str) -> None:
         self.modes.core.audit.record(origin=p.origin if p else "mcp", source=p.source if p else "-",
@@ -109,7 +111,15 @@ class LimitedServer(MCPServer):
         role = self.roles.get(name)
         reason = catalog_refusal(p, name, tool, role)
         if reason is None and p is not None:
-            reason = await self._argument_refusal(p, name, role, arguments)
+            if name in self.github_actions and (conversation := arguments.get("conversation")) is not None:
+                handle = arguments.get("handle")
+                if handle is not None and handle != conversation:
+                    reason = CONVERSATION_CONFLICT
+                elif isinstance(conversation, str):
+                    arguments = {**arguments, "handle": conversation}
+                    del arguments["conversation"]
+            if reason is None:
+                reason = await self._argument_refusal(p, name, role, arguments)
         if reason:
             self._audit_refusal(p, tool.name if tool else None, reason)
             if reason == OWNER_REQUIRED and p is not None and p.kind == "connect":
@@ -190,22 +200,20 @@ class LimitedServer(MCPServer):
         return out
 
     def _check_mode(self, p: Principal, name: str, arguments: dict[str, Any]) -> None:
-        ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
-                    if isinstance(arguments.get(k), str)), None)
-        action = name
-        if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
-            action = "notify_owner"
-        elif action == "send" and arguments.get("forward"):
-            action = "forward"
         repo = None
-        for block in self.modes.core.blocks.values():
-            if block.manifest.id == "github" and action.startswith(f"{block.name}_"):
-                candidate = action.removeprefix(f"{block.name}_")
-                if candidate in ("label", "comment", "open_issue", "link_duplicate", "reply", "notify_owner"):
-                    action = candidate
-                    repo = arguments.get("repo") if isinstance(arguments.get("repo"), str) else None
+        if name in self.github_actions:
+            action = self.github_actions[name]
+            ref, repo = arguments.get("handle"), arguments.get("repo")
+        else:
+            ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
+                        if isinstance(arguments.get(k), str)), None)
+            action = name
+            if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
+                action = "notify_owner"
+            elif action == "send" and arguments.get("forward"):
+                action = "forward"
         try:
-            self.modes.check(p, ref, action, repo)
+            self.modes.check(p, ref if isinstance(ref, str) else None, action, repo if isinstance(repo, str) else None)
         except PermissionError as e:
             self._audit_refusal(p, name, MODE_REQUIRED)
             raise ToolError(str(e)) from e
@@ -278,6 +286,8 @@ class MCPBlock(Block):
         mcp = LimitedServer(name="swb", title="SwB", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
         mcp.roles = mutation_roles(core)
+        mcp.github_actions = {f"{b.name}_{action}": action for b in core.blocks.values() if b.manifest.id == "github"
+                              for action in BLOCK_ROLES["github"]}
         mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
