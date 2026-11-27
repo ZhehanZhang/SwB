@@ -23,6 +23,7 @@
   "block:muse": "site/content/docs/en/setup/muse.mdx",
   "block:slack": "site/content/docs/en/blocks/slack.mdx",
   "block:telegram": "site/content/docs/en/blocks/telegram.mdx",
+  "block:webhook": "site/content/docs/en/blocks/webhooks.mdx",
   "command:blocks": "site/content/docs/en/blocks/index.mdx",
   "command:claim": "site/content/docs/en/credentials.mdx",
   "command:config": "site/content/docs/en/install.mdx",
@@ -235,6 +236,7 @@
   "config_key:blocks.telegram.target_aliases": "site/content/docs/en/blocks/telegram.mdx",
   "config_key:blocks.telegram.token_env": "site/content/docs/en/blocks/telegram.mdx",
   "config_key:blocks.telegram.use": "site/content/docs/en/blocks/telegram.mdx",
+  "config_key:blocks.webhook.max_body_kb": "site/content/docs/en/blocks/webhooks.mdx",
   "config_key:branding": "site/content/docs/en/config.mdx",
   "config_key:branding.accent_color": "site/content/docs/en/config.mdx",
   "config_key:branding.display_name": "site/content/docs/en/config.mdx",
@@ -314,6 +316,7 @@
   "prompt:setup-muse": "site/content/docs/en/connect.mdx",
   "prompt:setup-slack": "site/content/docs/en/connect.mdx",
   "prompt:setup-telegram": "site/content/docs/en/connect.mdx",
+  "prompt:setup-webhook": "site/content/docs/en/blocks/webhooks.mdx",
   "provider:capy": "site/content/docs/en/setup/capy-captain.mdx",
   "provider:chatgpt": "site/content/docs/en/setup/chatgpt.mdx",
   "provider:claude": "site/content/docs/en/setup/claude-project.mdx",
@@ -406,5 +409,10 @@
   "tool:telegram_status": "site/content/docs/en/tools.mdx",
   "tool:visibility_list": "site/content/docs/en/tools.mdx",
   "tool:visibility_set": "site/content/docs/en/tools.mdx",
-  "tool:wait": "site/content/docs/en/tools.mdx"
+  "tool:wait": "site/content/docs/en/tools.mdx",
+  "tool:webhook_create": "site/content/docs/en/blocks/webhooks.mdx",
+  "tool:webhook_list": "site/content/docs/en/blocks/webhooks.mdx",
+  "tool:webhook_revoke": "site/content/docs/en/blocks/webhooks.mdx",
+  "tool:webhook_rotate": "site/content/docs/en/blocks/webhooks.mdx",
+  "tool:webhook_test": "site/content/docs/en/blocks/webhooks.mdx"
 }
