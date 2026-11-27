@@ -278,7 +278,8 @@
   }
 }
 .swb-hero-copy { container-type: inline-size; }
-.swb-hero-title { font-size: clamp(2rem, 9.2cqw, 3.625rem); line-height: 1.07; }
+.swb-hero-title { font-size: clamp(1.75rem, 8.4cqw, 3.625rem); line-height: 1.07; }
+.swb-hero-title:lang(zh) { font-size: clamp(1.625rem, 7.8cqw, 3.625rem); }
 .swb-hero { width: min(100%, 39rem); justify-self: center; }
 
 button.swb-node { cursor: pointer; border-radius: 9999px; background: none; padding: 0; animation: swb-drift var(--drift-duration) var(--drift-delay) ease-in-out infinite alternate; }
@@ -345,6 +346,8 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
   box-shadow: var(--toast-shadow);
 }
 .swb-win-bar { background: var(--surface-sunken); }
+.swb-win-body { display: flex; flex-direction: column; justify-content: flex-end; }
+.swb-win-message { flex-shrink: 0; }
 .swb-win-message + .swb-win-message { margin-top: .55rem; }
 @media (prefers-reduced-motion: no-preference) {
   .swb-win-message[data-pending] { display: none; }
@@ -375,12 +378,23 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
 .swb-rotate-item:not(.swb-rotate-on) { pointer-events: none; }
 .swb-between { display: flex; flex-wrap: wrap; align-items: center; gap: .35em .5em; line-height: 1.6; color: var(--muted-foreground, inherit); }
 .swb-pair { display: inline-flex; align-items: center; gap: .5em; white-space: nowrap; }
+@container (width < 34rem) {
+  .swb-between > .swb-between-text:first-child { flex-basis: 100%; }
+}
+@container (width < 25rem) {
+  .swb-between > .swb-between-text:last-child { flex-basis: 100%; }
+}
 .swb-slot {
   display: inline-grid;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
+  box-sizing: content-box;
+  overflow: clip;
   border: 1px solid var(--border);
   border-radius: 9999px;
   background: var(--surface);
+  transition: inline-size 1.2s cubic-bezier(.3, .2, .7, .8);
 }
 .swb-chip {
   grid-area: 1 / 1;
@@ -398,10 +412,10 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
   opacity: 0;
   transition: opacity .6s ease;
 }
-.swb-chip:not(.swb-chip-on) { pointer-events: none; }
+.swb-chip:not(.swb-chip-on) { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; pointer-events: none; }
 .swb-chip-on { opacity: 1; transition-delay: .2s; }
 .swb-chip-mark.swb-mark-tile { width: 1.4em; height: 1.4em; min-width: 0; min-height: 0; }
 .swb-picker-mark.swb-mark-tile { width: 1.5rem; height: 1.5rem; min-width: 0; min-height: 0; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .swb-rotate-item, .swb-chip { transition: none; }
+  .swb-rotate-item, .swb-slot, .swb-chip { transition: none; }
 }

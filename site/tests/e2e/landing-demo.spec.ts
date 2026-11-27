@@ -73,6 +73,29 @@ test('demo windows start at staggered times and show their own conversations', a
   }
 });
 
+test('each demo keeps its last message within 24px of the bottom during playback', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await page.goto('/');
+  await page.evaluate(() => document.fonts.ready);
+  const windows = page.locator('.swb-win-body');
+  await expect(windows).toHaveCount(6);
+  await page.clock.runFor(4400);
+  for (const width of [390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const gaps = await windows.evaluateAll((bodies) => bodies.map((body) => {
+      const messages = body.querySelectorAll('.swb-win-message:not([data-pending])');
+      return { gap: body.getBoundingClientRect().bottom - messages[messages.length - 1].getBoundingClientRect().bottom, count: messages.length };
+    }));
+    for (const { gap, count } of gaps) {
+      expect(count).toBeGreaterThan(1);
+      expect(gap, `${width}px bottom gap`).toBeGreaterThanOrEqual(0);
+      expect(gap, `${width}px bottom gap`).toBeLessThanOrEqual(24);
+    }
+  }
+});
+
 test('each demo window uses canonical avatars and marks only relayed senders', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
