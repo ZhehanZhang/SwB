@@ -8,13 +8,12 @@ const aliases: Partial<Record<SetupChoice, 'chatgpt-dots' | 'capy' | 'gemini'>> 
   dots: 'chatgpt-dots', 'capy-captain': 'capy', 'gemini-cli': 'gemini',
 };
 
-export const getStartedAgents = setupChoices.flatMap((choice) => {
-  if (choice.id === 'companion') return [];
+export const getStartedAgents = setupChoices.map((choice) => {
   const id = aliases[choice.id] ?? choice.id;
   const details = choice.id === 'claude'
     ? { open: ['claude'] as const, docs: '/docs/setup/claude' }
     : setup[choice.mark]!;
-  return [{ id, name: choice.name, mark: choice.mark, prompt: choice.prompt, open: details.open, docs: details.docs }];
+  return { id, name: choice.name, mark: choice.mark, prompt: choice.prompt, open: details.open, docs: details.docs };
 });
 
 export type GetStartedAgent = (typeof getStartedAgents)[number]['id'];
