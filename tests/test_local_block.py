@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import aclosing, asynccontextmanager
+from hashlib import sha256
 
 import pytest
 from starlette.testclient import TestClient
@@ -57,7 +58,7 @@ async def test_session_registry_targets_console_and_expiry(amake):
         assert f"{OPEN}\nexample\n{CLOSE}" in entry["dir"]
         assert entry["persona"]["id"] == "claude-code"
         [slug] = entry["slugs"]
-        assert slug.startswith("local-") and slug.endswith("-code-review")
+        assert slug == f"local-{sha256(entry['id'].encode()).hexdigest()[:16]}"
         assert str(await core.resolve_to(slug)) == str(await core.resolve_to(TARGET)) == scoped
         assert local.page_rows() == [("Code Review", "herdr", "idle", True)]
         assert (await client.get("/api/health", headers=OWNER)).json()["blocks"]["local"]["online"]
@@ -145,7 +146,18 @@ async def test_local_visibility_uses_session_and_key_grants_use_backing_agent(am
         await core.set_visibility(resource, ["U123"], "owner")
         assert {row["resource"] for row in core.visibility.rows(await core.visibility_resources())
                 if row["resource"].startswith("target:local")} == {resource}
-        assert (await core.send(external, task="Hello", to=TARGET))["woke"]
+        out = await core.send(external, task="Hello", to=TARGET)
+        assert out["woke"] and out["delivered"] and not out["mailbox"]
+        assert not core.inbox.read(owner="claude-code")["items"]
+        await emit(core, linked, "herdr.reply", {"session": REPORT["session"], "agent": "claude-code",
+                                                "conversation": out["handle"], "text": "Review complete."})
+        [reply] = core.mailbox_replies(out["handle"], external.source)
+        assert "Review complete." in reply["text"] and reply["final"]
+        await core.set_visibility("target:claude-code", ["U123"], "owner")
+        out = await core.send(external, task="Hello", to=TARGET)
+        assert out["woke"] and out["delivered"] and out["mailbox"]
+        [item] = core.inbox.read(owner="claude-code")["items"]
+        assert item["kind"] == "message" and item["handle"] == out["handle"]
         scoped = Principal("gemini", "key", "key", targets=(TARGET,))
         with pytest.raises(CoreRefused, match="may send only"):
             await core.send(scoped, task="Hello", to=TARGET)
@@ -183,11 +195,11 @@ async def test_shared_session_prefers_a_wake_capability_and_avoids_device_collis
 async def test_session_claim_and_original_address_survive_disconnect_and_restart(amake):
     clock = Clock()
     first, _ = await amake(config=CFG, clock=clock)
-    report = {**REPORT, "harness": "codex", "session": "Session:1"}
+    report = {**REPORT, "harness": "codex", "session": "Session.1"}
     async with device(first, "codex") as owner:
         await emit(first, owner, "codex.session", report)
         [entry] = await first.targets(block="local")
-        legacy = "local:session:codex:Session:1"
+        legacy = "local:session:codex:Session.1"
         resource = f"target:{entry['address']}"
         assert await first.set_visibility(f"target:{legacy}", "shared", "owner") == (resource, "shared")
         assert first.visibility.explicit(resource.lower()) is None
@@ -202,6 +214,46 @@ async def test_session_claim_and_original_address_survive_disconnect_and_restart
         assert current["address"] != entry["address"]
         assert str(await second.resolve_to(entry["address"])) == entry["address"]
         assert second.visibility.explicit(f"target:{current['address']}") is None
+
+
+async def test_known_local_session_is_offline_after_restart(amake):
+    first, _ = await amake(config=CFG)
+    async with device(first, "herdr") as linked:
+        await emit(first, linked, "herdr.session", REPORT)
+        [entry] = await first.targets(block="local")
+    await first._test_close()
+
+    second, _ = await amake(config=CFG)
+    assert not await second.targets(block="local")
+    assert "local" not in second.visible_blocks()
+    for address in (TARGET, entry["address"]):
+        with pytest.raises(BlockError, match=r"Local session is offline\."):
+            await second.send(principal(), task="Review.", to=address)
+    rows = second.audit.recent(destination="local", action="wake", outcome="refused")
+    assert [(row["target"], row["detail"]) for row in rows] == [
+        (entry["address"], "Local session is offline."),
+        (entry["address"], "Local session is offline."),
+    ]
+    assert not second.inbox.read(owner="owner")["items"]
+    assert not second.inbox.read(owner="claude-code")["items"]
+
+
+@pytest.mark.parametrize("field", ["session", "harness"])
+async def test_local_session_report_fields_require_single_segments(amake, field):
+    core, client = await amake(config=CFG)
+    code = core.companions.mint(PUBLIC, origin="test", source="owner", client="local")["code"]
+    paired = core.companions.pair({"code": code, "name": "Device", "platform": "linux",
+                                  "capabilities": [{"id": "herdr", "version": "1", "title": "Herdr", "actions": ["prompt"]}]},
+                                 client="local")
+    async with device(core, "hooks") as other, aclosing(core.companions.events(paired["companion_id"], 3600)) as stream:
+        await anext(stream)
+        malformed = f"{other.client_id.removeprefix('companion:')}:claude-code:s-dev2"
+        response = await client.post("/companion/emit", headers={"Authorization": f"Bearer {paired['device_key']}"},
+                                     json={"capability": "herdr", "kind": "herdr.session", "payload": {**REPORT, field: malformed}})
+    assert response.status_code == 400 and response.json()["error"] == "Invalid local session report."
+    [row] = core.audit.recent(action="companion_emit", outcome="refused")
+    assert row["target"] == paired["companion_id"] and row["detail"] == "Invalid local session report."
+    assert not await core.targets(block="local")
 
 
 @pytest.mark.parametrize("cap,harness", [("hooks", "claude-code"), ("codex", "codex"), ("herdr", "herdr")])

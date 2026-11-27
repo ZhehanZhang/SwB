@@ -17,7 +17,7 @@ from ...audit import iso
 from ...companion.caps.base import CapabilityError
 from ...companion.caps.drop import decode_file_content, valid_name
 from ...companion.mcp_config import NAME as LOCAL_MCP_NAME
-from ...companions import COMPANION_ID, SLUG
+from ...companions import COMPANION_ID, DEVICE_OUTPUT_ERROR, DEVICE_OUTPUT_LIMIT, SLUG
 from ...refusals import OWNER_REQUIRED, SCOPE_REQUIRED, PolicyRefusal
 from ...trust import neutralize, wrap
 
@@ -41,14 +41,19 @@ DEVICE_VALUES = frozenset({"type", "mimeType", "uri", "size"})
 DEVICE_SCHEMAS = frozenset({"inputSchema", "outputSchema"})
 SCHEMA_TEXT = frozenset({"title", "description", "$comment", "examples"})
 DEVICE_TOKEN = re.compile(r"[A-Za-z0-9_.+/:#@=-]{1,256}")
+DEVICE_VERSION = re.compile(r"unknown|[0-9][A-Za-z0-9_.+-]{0,31}")
 DEVICE_BASE64 = re.compile(r"[A-Za-z0-9+/_-]*={0,2}")
-DEVICE_OUTPUT_LIMIT = 1024 * 1024
-DEVICE_OUTPUT_ERROR = "Companion output exceeds 1 MiB. Request less data."
-DEVICE_LIST_IDS = {
+DEVICE_ROW_IDS = {
     ("id",): COMPANION_ID.fullmatch,
     ("last_seen",): DEVICE_TOKEN.fullmatch,
     ("capabilities", None): SLUG.fullmatch,
+}
+DEVICE_LIST_IDS = {
+    **DEVICE_ROW_IDS,
+    ("platform",): SLUG.fullmatch,
+    ("version",): DEVICE_VERSION.fullmatch,
     ("capabilities", None, "id"): SLUG.fullmatch,
+    ("capabilities", None, "version"): DEVICE_VERSION.fullmatch,
     ("capabilities", None, "actions", None, "name"): SLUG.fullmatch,
 }
 DEVICE_LIST_SCHEMA = ("capabilities", None, "actions", None, "schema")
@@ -116,8 +121,9 @@ def device_output(out: dict[str, Any], file_data: str | None = None) -> CallTool
     return CallToolResult(content=[TextContent(type="text", text=text.decode("utf-8"))], structured_content=structured)
 
 
-def frame_companion(row: dict[str, Any], limit: int = DEVICE_OUTPUT_LIMIT) -> dict[str, Any]:
-    return frame_device(row, "", sender=row["id"], exact=DEVICE_LIST_IDS, schema_path=DEVICE_LIST_SCHEMA, limit=limit)
+def frame_companion(row: dict[str, Any], *, details: bool = False, limit: int = DEVICE_OUTPUT_LIMIT) -> dict[str, Any]:
+    return frame_device(row, "", sender=row["id"], exact=DEVICE_LIST_IDS if details else DEVICE_ROW_IDS,
+                        schema_path=DEVICE_LIST_SCHEMA, limit=limit)
 
 
 class FileIn(BaseModel):
@@ -331,7 +337,7 @@ class Kit:
             rows = []
             remaining = DEVICE_OUTPUT_LIMIT - len('{"companions":[],"trust":"external"}')
             for row in core.companions.list(details=True):
-                framed = frame_companion(row, limit=remaining - bool(rows))
+                framed = frame_companion(row, details=True, limit=remaining - bool(rows))
                 remaining -= len(to_json(framed)) + bool(rows)
                 rows.append(framed)
             return device_output({"companions": rows, "trust": "external"})
