@@ -1,6 +1,9 @@
 """auth.key_tools and auth.key_targets: a key held to some tools and some send targets, enforced in the server."""
 
+import json
+
 from conftest import SECOND_KEY, STATIC_KEY, arpc, base_config, call, error_text, payload, rpc, beacon
+from switchboard.refusals import SCOPE_REQUIRED, TARGET_REQUIRED
 
 
 def limited(make):
@@ -43,9 +46,13 @@ def test_a_disallowed_target_is_refused(make):
 
 
 def test_a_disallowed_project_or_a_forward_is_refused(make):
-    _, c = limited(make)
-    assert "limited to project:beacon" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": "x", "project": "other"}))
-    assert "can't forward" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": "x", "project": "beacon", "forward": "h_x"}))
+    core, c = limited(make)
+    task = "fixture-private-task-body"
+    assert "limited to project:beacon" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": task, "project": "other"}))
+    assert "can't forward" in error_text(call(c, SECOND_KEY, "send", {"to": "agent:claude", "task": task, "project": "beacon", "forward": "h_x"}))
+    rows = core.audit.recent(action="tool_refused")
+    assert [(row["target"], row["detail"]) for row in rows] == [("send", TARGET_REQUIRED), ("send", SCOPE_REQUIRED)]
+    assert task[:12] not in json.dumps(rows) and SECOND_KEY[:10] not in json.dumps(rows)
 
 
 def test_a_limited_key_cannot_read_an_inbox_over_http(make):

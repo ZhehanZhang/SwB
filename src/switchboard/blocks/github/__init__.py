@@ -19,13 +19,14 @@ from ...auth import Principal
 from ...claims import NAME_RE as SECRET_NAME_RE
 from ...block_env import GITHUB_SECRET as SECRET_ENV
 from ...config import ConfigError
-from ...guard import client_ip
+from ...guard import audit_client_ip
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
+from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
 from ...subject import subject, wake_text
 from ...trust import wrap
 from ...visibility import Who
-from .. import Action, Block, BlockError, Call, Manifest
+from .. import Action, Block, BlockError, BlockRefused, Call, Manifest
 from .api import (
     API_URL,
     APP_ID_ENV,
@@ -497,10 +498,12 @@ class GitHubBlock(Block):
     def _check(self, call: Call, handle: str | None, action: str, repo: str | None = None) -> dict[str, Any] | None:
         try:
             meta = self.core.modes.check(call.principal, handle, action, repo=repo)
-        except (PermissionError, ValueError) as exc:
+        except PermissionError as exc:
+            raise BlockRefused(MODE_REQUIRED, str(exc)) from exc
+        except ValueError as exc:
             raise BlockError(str(exc)) from exc
         if meta is None and (handle or not call.principal.is_unrestricted_owner or (repo and self.space_for(repo) is None)):
-            raise BlockError("Use your assist or triage conversation handle; only the owner can write to a registered repository without a handle")
+            raise BlockRefused(CONVERSATION_REQUIRED, "Use your assist or triage conversation handle; only the owner can write to a registered repository without a handle")
         call.note(ref=meta.get("permalink") if meta else None, target=repo)
         return meta
 
@@ -592,23 +595,24 @@ class GitHubBlock(Block):
         return await self._write(call, "reply", repo, path, {"body": self._text(text, limit)}, handle, permissions=permissions, meta=meta)
 
     async def webhook(self, request: Request) -> Response:
-        ip = client_ip(request.scope)
+        ip = audit_client_ip(request.scope)
 
-        def refuse(error: str, status: int) -> JSONResponse:
+        def refuse(error: str, status: int, *, detail: str | None = None) -> JSONResponse:
             self.refused += 1
             now = self.core.clock()
-            previous = self._refusal_audited_at.get(error)
+            detail = detail or error
+            previous = self._refusal_audited_at.get(detail)
             if previous is None or now - previous >= REFUSAL_AUDIT_INTERVAL_S:
                 self.core.audit.record(origin=self.name, source="-", client=ip, destination=self.name, action="webhook",
-                                       outcome="refused", detail=error)
-                self._refusal_audited_at[error] = now
+                                       outcome="refused", detail=detail)
+                self._refusal_audited_at[detail] = now
             return JSONResponse({"error": error}, status)
 
         if not self.secret:
             return refuse("webhook secret unavailable", 503)
         signature = request.headers.get("x-hub-signature-256")
         if not signature:
-            return refuse("invalid signature", 401)
+            return refuse("invalid signature", 401, detail="missing signature")
         body = await request.body()
         expected = b"sha256=" + hmac.digest(self.secret, body, "sha256").hex().encode()
         if not hmac.compare_digest(signature.encode("latin-1"), expected):

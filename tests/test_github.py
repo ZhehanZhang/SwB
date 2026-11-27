@@ -93,12 +93,18 @@ async def test_signature_and_ping(github):
 @pytest.mark.parametrize("signature", [None, "sha256=nope", "sha256=" + "0" * 64, "sha1=" + "0" * 40, b"\xff"])
 async def test_invalid_signature(github, signature):
     async with github() as (core, client):
-        headers = {"X-GitHub-Event": "ping"}
+        raw = b"fixture-private-webhook-body"
+        headers = {"X-GitHub-Event": "ping", "CF-Connecting-IP": raw}
         if signature is not None:
             headers["X-Hub-Signature-256"] = signature
-        assert (await client.post(PATH, content=b"{}", headers=headers)).status_code == 401
+        response = await client.post(PATH, content=raw, headers=headers)
+        assert response.status_code == 401 and response.json() == {"error": "invalid signature"}
         (row,) = core.audit.recent(action="webhook")
-        assert (row["outcome"], row["detail"], row["ref"], row["excerpt"]) == ("refused", "invalid signature", None, "")
+        reason = "missing signature" if signature is None else "invalid signature"
+        assert (row["outcome"], row["detail"], row["ref"], row["excerpt"], row["client"]) == ("refused", reason, None, "", "-")
+        assert raw[:15].decode() not in str(row) and SECRET[:12] not in str(row)
+        if isinstance(signature, str):
+            assert signature[:12] not in str(row)
         assert core.blocks["github"].status()["dropped"] == 0
 
 
@@ -125,11 +131,13 @@ async def test_webhook_refusal_audit_is_bounded_by_reason_and_window(github):
         status = payload(await acall(client, token, "github_status"))
         assert (status["refused"], status["dropped"]) == (50, 0)
 
+        assert (await client.post(PATH)).status_code == 401
+        assert (await client.post(PATH)).status_code == 401
         assert (await client.post(PATH, content=b"bad JSON", headers=signed(b"bad JSON"))).status_code == 400
         clock.t += REFUSAL_AUDIT_INTERVAL_S
         assert (await client.post(PATH)).status_code == 401
         assert [row["detail"] for row in core.audit.recent(action="webhook", outcome="refused")] == [
-            "invalid signature", "invalid JSON", "invalid signature",
+            "missing signature", "invalid JSON", "missing signature", "invalid signature",
         ]
 
 

@@ -8,7 +8,7 @@ SwB has one owner. The owner signs in to the SwB page to see the instance, appro
 | Page | Use |
 | - | - |
 | `/login` | Sign in as the owner. |
-| `/authorize` | Review an agent's request to connect through OAuth. |
+| `/authorize` | Review an agent's request to connect. |
 
 ## One-time link
 
@@ -18,14 +18,9 @@ swb login-link
 
 The command prints a link such as `https://swb.example.com/login#t=...`. Open it in your browser within five minutes. The link works once. An agent signed in as the owner can also make a link with the `login_link` tool. The token stays in the part of the link after `#`.
 
-For a local run, set `SWITCHBOARD_PUBLIC_URL` to `http://localhost:8870` before you start SwB. Set the port in the address to match `PORT`. If the YAML config sets `public_url`, change it there. Use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
+On the first local start, `swb up` prints a one-time link. The local address defaults to `http://localhost:8870`. If you set `PORT`, SwB uses that port in the address. For `swb login-link`, use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
 
-If the link shows one of these errors, run `swb login-link` again. Open the new link in your browser.
-
-| Error | Meaning |
-| - | - |
-| `link_used` | Someone used the link to sign in before it expired. |
-| `link_expired` | The link expired or is invalid. |
+If sign-in with the link fails, run `swb login-link` again. Open the new link in your browser.
 
 ## Setup code
 
@@ -64,6 +59,45 @@ Set the redirect address in your provider to `https://swb.example.com/auth/oidc/
 
 If Cloudflare Access protects your host, SwB reads the Access token and signs you in at once. Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN`, `CLOUDFLARE_ACCESS_AUD` and `SWITCHBOARD_OWNER_EMAILS`. SwB checks the token signature, audience, issuer and email itself.
 
+## Agent sign-in
+
+OAuth lets an app connect to SwB with your approval. Approve the connection on `/authorize`. The app uses `/token` to get or renew its tokens.
+
+Check `error_description` for details when the app gets an OAuth error.
+
+| Error | Meaning |
+| - | - |
+| `access_denied` | The owner declined the connection. |
+| `invalid_client` | SwB rejected the app identity or credentials. |
+| `invalid_client_metadata` | SwB rejected the app registration settings. |
+| `invalid_redirect_uri` | SwB requires an allowed callback address at registration. |
+| `invalid_request` | The request format or a required value is invalid. |
+| `invalid_grant` | SwB rejected the authorization code or refresh token. |
+| `invalid_target` | The request names the wrong MCP address. |
+| `unsupported_response_type` | Use `response_type=code`. |
+| `unsupported_grant_type` | Use `grant_type=authorization_code` or `grant_type=refresh_token`. |
+| `temporarily_unavailable` | Set `public_url` or check the client registration limit. |
+
+`/connect` also returns `invalid_grant` when SwB rejects a [pairing code](/docs/connect#connect-with-a-pairing-code).
+
 ## Sessions
 
 A session is a secure cookie on the SwB host. Each change on the page carries a CSRF token. Sign out from Settings.
+
+The browser reads your current sign-in state at `/auth/session`.
+
+## Sign-in errors
+
+| Error | Meaning |
+| - | - |
+| `link_used` | Someone used the link to sign in before it expired. |
+| `link_expired` | The link expired or is invalid. |
+| `setup_failed` | The setup code has the wrong format or differs from `SWB_SETUP_CODE`. |
+| `setup_closed` | Sign-in by setup code is closed. Use another sign-in method. |
+| `passkey_failed` | Passkey setup or verification failed. |
+| `last_method` | SwB keeps the last passkey when OIDC and Cloudflare Access are both inactive. |
+| `not_found` | The passkey ID is wrong or the passkey was removed. |
+| `oidc_failed` | Sign-in through the identity provider failed. |
+| `signed_out` | The request needs an owner session. |
+| `csrf` | SwB rejected the page address or security token. |
+| `slow_down` | Sign-in attempts reached a limit. Wait for the time in `Retry-After`. |

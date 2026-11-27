@@ -27,9 +27,10 @@ from .claims import Claims
 from .config import INSTANCE_DB, Config, Instance, load_config
 from .connect import Connections
 from .inbox import Inbox
-from .memory import GENERAL, Memory, MemoryError_
+from .memory import GENERAL, Memory, MemoryError_, MemoryRefused
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
+from .refusals import CONVERSATION_REQUIRED, MODE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal
 from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
@@ -45,6 +46,10 @@ TARGETS_TTL_S = 60.0
 
 
 class CoreError(Exception):
+    pass
+
+
+class CoreRefused(PolicyRefusal, CoreError):
     pass
 
 
@@ -275,12 +280,12 @@ class Switchboard:
         to = (to or "").strip().lower()
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
         if original is not None and original["meta"].get("channel_mode") and not _reply:
-            raise CoreError("channel-mode conversations can only be answered with reply")
+            raise CoreRefused(MODE_REQUIRED, "channel-mode conversations can only be answered with reply")
         root = (original["meta"].get("root") or original["handle"]) if original is not None else None
         if original is not None and self._listen_conversation(original) and not (
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
-            raise CoreError("listen conversations can only be answered with reply")
+            raise CoreRefused(MODE_REQUIRED, "listen conversations can only be answered with reply")
         if to not in self.known_agents() and not (original is not None and original["ref"] == to) and not (_mode_notify and to == "owner"):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
@@ -569,19 +574,19 @@ class Switchboard:
             try:
                 self.modes.check(principal, forward, "forward")
             except PermissionError as exc:
-                raise CoreError(str(exc)) from exc
+                raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
             original = self.inbox.handle(forward)
             if original is None or original["destination"] != "mailbox" or original["owner"] != principal.source:
-                raise CoreError("you can only forward a conversation you received")
+                raise CoreRefused(CONVERSATION_REQUIRED, "you can only forward a conversation you received")
             if self._listen_conversation(original):
-                raise CoreError("listen conversations cannot be forwarded; use reply")
+                raise CoreRefused(MODE_REQUIRED, "listen conversations cannot be forwarded; use reply")
             meta = original["meta"]
             sender = meta.get("from") or {}
             trust = meta.get("slack_trust") if sender.get("origin") == "slack" else sender.get("trust")
             if trust != "owner":
-                raise CoreError("you can only forward an owner-trust conversation")
+                raise CoreRefused(CONVERSATION_REQUIRED, "you can only forward an owner-trust conversation")
             if meta.get("boundary"):
-                raise CoreError(f"conversation {forward} is bounded to {meta['boundary']} and cannot be forwarded")
+                raise CoreRefused(CONVERSATION_REQUIRED, f"conversation {forward} is bounded to {meta['boundary']} and cannot be forwarded")
             handle = self.inbox.new_handle()
             if not self.store.n("UPDATE handles SET meta = json_set(meta, '$.forwarded_to', ?) "
                                 "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') IS NULL", (handle, forward)):
@@ -604,25 +609,25 @@ class Switchboard:
         """A key limited by auth.key_targets sends only to those targets, never forwards, and names no project outside its scopes.
         The target is checked as it will be delivered, after a project picks a different routine or wake target."""
         if forward is not None:
-            raise CoreError(f"the {principal.source} key can't forward")
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key can't forward")
         if not to:
-            raise CoreError(f"the {principal.source} key must send to one of: {', '.join(principal.targets or ()) or 'nothing'}")
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key must send to one of: {', '.join(principal.targets or ()) or 'nothing'}")
         allowed = set()
         for t in principal.targets or ():
             with contextlib.suppress(CoreError):
                 allowed.add(str(await self.resolve_to(t)))
         addr = await self.resolve_to(to)
         if not addr.id:
-            raise CoreError(f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
         if addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         block = self.blocks.get(addr.block)
         if block is not None:
             addr = block.effective_target(addr, project)
         if str(addr) not in allowed:
-            raise CoreError(f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
+            raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
         if project and not principal.allows("project:" + project.strip().lower().removeprefix("project:")):
-            raise CoreError(f"the {principal.source} key can't send in project {project}")
+            raise CoreRefused(SCOPE_REQUIRED, f"the {principal.source} key can't send in project {project}")
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
@@ -699,7 +704,7 @@ class Switchboard:
         if ref.startswith("h_"):
             h = self.inbox.handle(ref)
             if h is None or not (self.inbox.participant(h, principal.source) or (read and principal.is_unrestricted_owner)):
-                raise CoreError(f"no conversation {ref!r}")
+                raise CoreRefused(CONVERSATION_REQUIRED, f"no conversation {ref!r}")
             return self.blocks.get(h["destination"]), h
         owner = next((b for b in self.blocks.values() if b.owns_ref(ref)), None)
         if owner is None:
@@ -711,10 +716,10 @@ class Switchboard:
         block, h = self._conversation(principal, ref, read=verb in ("status", "result"))
         final = kw.pop("final", None)
         if verb == "cancel" and h is not None and h["destination"] == "mailbox" and h["ref"] != principal.source:
-            raise CoreError("Choose a mailbox conversation you sent.")
+            raise CoreRefused(CONVERSATION_REQUIRED, "Choose a mailbox conversation you sent.")
         if verb == "reply" and h is not None and h["destination"] == "mailbox":
             if h["owner"] != principal.source:
-                raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
+                raise CoreRefused(CONVERSATION_REQUIRED, "that conversation is one you sent; replies to it come from the other side (see result)")
             if h["status"] == "cancelled":
                 return {"conversation": h["handle"], "in_reply_to": h["handle"], "final": final is not False,
                         "delivered": False, "status": "cancelled",
@@ -724,7 +729,7 @@ class Switchboard:
             try:
                 channel_mode = self.modes.check(principal, ref, "notify_owner" if verb == "reply" and to_owner else verb)
             except PermissionError as exc:
-                raise CoreError(str(exc)) from exc
+                raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
         if channel_mode:
             if to_owner:
                 return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
@@ -733,7 +738,7 @@ class Switchboard:
             if channel_mode["mode"] == "assist":
                 kw["text"] = (kw.get("text") or "")[:self.modes.assist_max_chars]
         if to_owner and (verb != "reply" or h is None or h["destination"] != "mailbox" or not h["meta"].get("listen")):
-            raise CoreError("to_owner is only allowed when replying to a listen conversation")
+            raise CoreRefused(MODE_REQUIRED, "to_owner is only allowed when replying to a listen conversation")
         if h is not None and h["destination"] == "mailbox":
             if verb == "reply":
                 if to_owner:
@@ -791,13 +796,13 @@ class Switchboard:
         try:
             meta = self.modes.check(principal, conversation, "notify_owner")
         except PermissionError as exc:
-            raise CoreError(str(exc)) from exc
+            raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
         if meta is None:
-            raise CoreError("notify_owner needs a triage conversation")
+            raise CoreRefused(MODE_REQUIRED, "notify_owner needs a triage conversation")
         target = meta["notify_target"]
         if to is not None and to.removeprefix("agent:").lower() not in ("owner", target):
             self.modes.audit_action(principal, meta, "notify_owner", "refused")
-            raise CoreError("notify_owner can only message the owner or space's default target")
+            raise CoreRefused(TARGET_REQUIRED, "notify_owner can only message the owner or space's default target")
         if to is not None and to.removeprefix("agent:").lower() == "owner":
             target = "owner"
         if principal.targets is not None:
@@ -837,6 +842,12 @@ class Switchboard:
             return await action.handler(call, **kwargs)
         try:
             out = await action.handler(call, **kwargs)
+        except PolicyRefusal as e:
+            self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
+                              destination=destination, action=action.name, outcome="refused", detail=e.reason)
+            if isinstance(e, DestinationError):
+                raise
+            raise DestinationError(str(e)) from e
         except DestinationError as e:
             record("refused", str(e))
             raise
@@ -934,7 +945,7 @@ class Switchboard:
     @staticmethod
     def check_memory_scope(principal: Principal, scope: str) -> None:
         if not principal.allows(scope):
-            raise MemoryError_(f"the {principal.source} key is limited to {', '.join(principal.scopes or ())}; {scope} is outside it")
+            raise MemoryRefused(SCOPE_REQUIRED, f"the {principal.source} key is limited to {', '.join(principal.scopes or ())}; {scope} is outside it")
 
     def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
         out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
@@ -956,9 +967,9 @@ class Switchboard:
     async def context_pack(self, principal: Principal, project: str | None) -> str:
         p = self.project(project)
         if p and not principal.allows(p.scope):
-            raise CoreError(f"{principal.source} may not read {p.scope}")
+            raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read {p.scope}")
         if not p and not principal.allows(GENERAL):
-            raise CoreError(f"{principal.source} may not read general; pass the project you work in")
+            raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read general; pass the project you work in")
         general = principal.allows(GENERAL)
         now = self.clock()
         out = [f"# Shared context (switchboard, {iso(now)}){f' for project {p.slug}' if p else ''}"]

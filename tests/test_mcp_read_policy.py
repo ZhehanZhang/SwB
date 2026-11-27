@@ -300,3 +300,17 @@ def test_missing_limits_keep_default_memory_but_do_not_create_owner_access(works
     entry = core.memory.write(source="owner", scope="general", namespace="notes", title="General",
                               body="Shared workspace facts", confirm_general=True)
     assert access(client, keys["alpha"], "memory_read", {"id": entry["id"]})["body"] == "Shared workspace facts"
+
+
+@pytest.mark.parametrize("name", ["visibility_list", "connect_list"])
+def test_admin_read_denials_use_the_policy_audit(workspace, name):
+    core, client, keys = workspace
+    assert access(client, STATIC_KEY, name, {})
+    for caller in ("alpha", "scoped"):
+        assert "Use the owner's sign-in to call this tool." in error_text(call(client, keys[caller], name))
+    for rows in (core.audit.recent(action="tool_refused"),
+                 client.get("/api/audit", headers=OWNER, params={"action": "tool_refused"}).json()["items"]):
+        assert [(row["source"], row["target"], row["detail"]) for row in rows] == [
+            (caller, name, "Use the owner's sign-in to call this tool.") for caller in ("scoped", "alpha")
+        ]
+        assert all(keys[caller][:12] not in json.dumps(rows) for caller in ("scoped", "alpha"))
