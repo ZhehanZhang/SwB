@@ -28,7 +28,7 @@ Tell the agent a short name for the app, for example `notes-bot`. SwB shows this
 <Step>
 ### Get the pairing code
 
-The agent gives you a pairing code from `connect`. You can also click **Mint code** on the SwB home page.
+Ask an agent signed in as the owner to get a pairing code. The agent can call `connect_code` with the app name.
 </Step>
 <Step>
 ### Get the key
@@ -68,7 +68,7 @@ From the terminal on the SwB server, `swb connect mcp-client --choose agent=note
 
 | Item | Where it is shown | Format | Where it goes |
 | - | - | - | - |
-| Pairing code | The `connect` result or the **Pairing code** page | `XXXXX-XXXXX`, valid 10 minutes, one use | The `POST /connect` request |
+| Pairing code | The `connect` or `connect_code` result | `XXXXX-XXXXX`, valid 10 minutes, one use | The `POST /connect` request |
 | Agent key | The `POST /connect` answer, one time | Starts with `swb_` | The `Authorization` header in the private settings of the app |
 
 Keep the key out of chat and shared files. SwB stores only a hash of the key.
