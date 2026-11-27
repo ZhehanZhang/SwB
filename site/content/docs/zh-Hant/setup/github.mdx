@@ -116,6 +116,10 @@ blocks:
         project: demo
 ```
 
+若要使用工作模式，代理會將 `mode.mode` 設為 `work`。接著把你的 GitHub 數字使用者 ID 填入空間的 `owner_ids`。查詢方式與範例請參閱[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
+
+GitHub 的信任等級為 `owner` 和 `external`。`known` 設定適用於 Slack、Discord 和 Telegram。存取規則使用 `github:4242` 這類寄件者 ID。
+
 使用領取連結儲存同一組 webhook 金鑰。代理重新啟動 SwB 以載入金鑰並套用路由。
 
 代理再次呼叫 `connect(what="github")`，取得尚待填寫的 App ID 或私密金鑰連結。若要從現有的個人存取權杖改用 GitHub App 憑證，選用 `choose={"credential":"app"}`。

@@ -146,6 +146,15 @@ routes:
 
 用 `private` 将访问权限限定为所有者及其智能体。用 `shared` 开放访问。填写用户 ID 或 `workspace:home` 这样的条目，即可指定共享对象。通过 `visibility_set` 所作的更改优先于此文件。
 
+## GitHub 发件人信任等级
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.github.owner_ids` | 默认认定为所有者的 GitHub 数字用户 ID 列表 |
+| `blocks.github.spaces.*.owner_ids` | 覆盖此空间默认列表的 GitHub 数字用户 ID 列表 |
+
+GitHub 的信任等级为 `owner` 和 `external`。`known` 设置适用于 Slack、Discord 和 Telegram。工作模式的配置方法见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
+
 ## MCP
 
 | 配置键 | 用途 |

@@ -46,6 +46,26 @@ blocks:
 
 如果 Cloudflare Access 保护你的主机，请放行 `/github/webhook`。该路径由 GitHub 签名保护。
 
+## 所有者账号
+
+工作模式只接收来自已配置的所有者账号的事件。将 `https://api.github.com/users/USERNAME` 中的 `USERNAME` 换成你的 GitHub 用户名。打开该地址。将数字 `id` 填入空间的 `owner_ids` 列表。重启 SwB 以应用设置。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        owner_ids: [4242]
+        mode:
+          mode: work
+          target: agent:beta
+```
+
+用 `blocks.github.owner_ids` 设置默认的所有者 ID。空间的 `owner_ids` 列表会覆盖默认列表。将空间的列表设为空即可清除默认值。
+
+GitHub 的信任等级为 `owner` 和 `external`。`known` 设置适用于 Slack、Discord 和 Telegram。访问规则使用 `github:4242` 之类的 ID。发件人的信任等级保持原样。
+
 ## 配置
 
 | 配置键 | 用途 |
@@ -60,8 +80,10 @@ blocks:
 | `blocks.github.sinks` | 按接收端名称配置事件接收端 |
 | `blocks.github.sinks.*.url_env` | 存放接收端地址的变量名 |
 | `blocks.github.routes` | 为仓库名称或 `owner/*` 指定接收端列表 |
+| `blocks.github.owner_ids` | 默认认定为所有者的 GitHub 数字用户 ID 列表 |
 | `blocks.github.spaces` | 共用设置的仓库组。用 `acme/app` 这样的名称可选中该仓库 |
 | `blocks.github.spaces.*.repo` | `owner/repo` 格式的仓库名称 |
+| `blocks.github.spaces.*.owner_ids` | 覆盖此空间默认列表的 GitHub 数字用户 ID 列表 |
 | `blocks.github.spaces.*.mode` | 这个空间内各仓库的默认[频道模式](/zh-Hans/docs/channel-modes) |
 | `blocks.github.spaces.*.mode.target` | 模式设置中的目标，填写 `agent:beta` 这样的地址 |
 | `blocks.github.spaces.*.project` | 此空间的事件默认归入的 SwB 项目 |

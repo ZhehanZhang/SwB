@@ -2,7 +2,7 @@ Read the setup guide at https://swb.one/docs/setup/claude-project.
 
 Help me connect this Claude Project to SwB. SwB is my switchboard for shared memory and agent handoffs. You reach it as an MCP server.
 
-If the SwB tools are missing, ask me to use Customize > Connectors > Add > Add custom connector in Claude. Ask me to enter my SwB address, such as https://swb.example.com/mcp. Ask me to approve the sign-in. Wait for me to confirm.
+If the SwB tools are missing, ask me to open the Claude connector settings. Give me the path `Customize > Connectors > Add > Add custom connector`. Ask me to enter my SwB MCP address. Use `https://swb.example.com/mcp` as the example. Ask me to approve the sign-in. Wait for me to confirm.
 
 Call connect(what="claude-project"). Do each step marked "you" yourself. Create a Claude Code routine named `switchboard <project>` in this project. Add an API trigger. Use the routine prompt that connect returns.
 
