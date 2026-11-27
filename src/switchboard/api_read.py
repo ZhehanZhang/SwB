@@ -240,6 +240,7 @@ async def _agents(core: Any) -> dict[str, Any]:
             avatar_url = captain_avatar_url(core, target)
             discovered[kind].append({
                 **_fields(target, "id", "name", "kind", "block", "address", "slugs", "level", "project", "created_at"),
+                "created_by": _reference(target.get("created_by")),
                 **({"avatar_url": avatar_url} if avatar_url else {}),
                 "projects": sorted(projects),
                 "source": target.get("source", "discovered"),

@@ -91,6 +91,7 @@ class WorkspaceRuntime:
         self.user_names: dict[str, str] = {}
         self.watched_ids: frozenset[str] = frozenset()
         self.listen_ids: frozenset[str] = frozenset()
+        self.bot_channels: frozenset[str] = frozenset()
         self.unresolved_watched: list[str] = []
         self.last_event_at: float | None = None
 
@@ -198,19 +199,25 @@ class WorkspaceRuntime:
                 await self._list_channels()
             except Exception as exc:
                 self.errors.append(f"conversations.list failed ({slack_error(exc)})")
-        if self.cfg.watch_all and "bot" in self.clients:
+        if (self.cfg.watch_all or (self.cfg.intake == "poll" and self.core.mode_poll_channels is not None)) and "bot" in self.clients:
+            membership: set[str] = set()
             try:
                 cursor = None
                 while True:
                     resp = await self.clients["bot"].users_conversations(types="public_channel,private_channel", exclude_archived=True, limit=500, cursor=cursor)
                     for ch in resp.get("channels", []):
-                        ids.add(ch["id"])
+                        membership.add(ch["id"])
                         self.channel_names[ch["id"]] = ch.get("name") or ch["id"]
+                        if ch.get("name"):
+                            self.channel_ids[ch["name"]] = ch["id"]
                     cursor = (resp.get("response_metadata") or {}).get("next_cursor")
                     if not cursor:
                         break
             except Exception as exc:
                 self.errors.append(f"users.conversations failed ({slack_error(exc)})")
+            self.bot_channels = frozenset(membership)
+            if self.cfg.watch_all:
+                ids.update(membership)
         listen_ids: set[str] = set()
         for refs, selected in ((self.cfg.watched, ids), (self.cfg.listen_channels, listen_ids)):
             for w in refs:
@@ -292,9 +299,11 @@ class WorkspaceRuntime:
     async def _poll_loop(self) -> None:
         self.connected = True
         while True:
-            for channel in sorted(self.watched_ids | self.listen_ids):
+            legacy = self.watched_ids | self.listen_ids
+            modes = self.core.mode_poll_channels(self) if self.core.mode_poll_channels is not None else set()
+            for channel in sorted(legacy | modes):
                 try:
-                    await self.poll_channel(channel)
+                    await self.poll_channel(channel, bot_only=channel not in legacy and "bot" in self.clients)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -302,13 +311,13 @@ class WorkspaceRuntime:
                 await asyncio.sleep(1)
             await asyncio.sleep(self.cfg.poll_seconds)
 
-    async def poll_channel(self, channel: str) -> int:
+    async def poll_channel(self, channel: str, *, bot_only: bool = False) -> int:
         store = self.core.store
         cursor = store.get_cursor(self.label, channel)
         if cursor is None:
             store.set_cursor(self.label, channel, f"{self.core.clock():.6f}")
             return 0
-        reader = self.reader("user" if "user" in self.clients else None)
+        reader = self.reader("bot" if bot_only else "user" if "user" in self.clients else None)
         resp = await reader.conversations_history(channel=channel, oldest=cursor, inclusive=False, limit=100)
         messages = sorted(resp.get("messages", []), key=lambda m: float(m["ts"]))
         channel_type = {"D": "im", "G": "group"}.get(channel[0], "channel")

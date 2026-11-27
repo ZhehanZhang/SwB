@@ -42,7 +42,18 @@ def captain_target(value: str | None, destination: str, targets: Mapping[str, di
 
 
 def captain_avatar_url(core: Switchboard, target: Mapping[str, Any]) -> str | None:
-    if target.get("kind") != "captain" or not isinstance(url := target.get("avatar_url"), str):
+    if target.get("kind") != "captain":
+        return None
+    url = target.get("avatar_url")
+    if url is None and core.avatars.public_base_url is None:
+        persona = target.get("persona")
+        name = persona.get("avatar_file") if isinstance(persona, Mapping) else None
+        if isinstance(name, str) and (file := core.find_avatar(name)):
+            try:
+                return f"/avatars/{name}?v={file.stat().st_mtime_ns}"
+            except FileNotFoundError:
+                return None
+    if not isinstance(url, str):
         return None
     if base := core.avatars.public_base_url:
         url = url.removeprefix(base)

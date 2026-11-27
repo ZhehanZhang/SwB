@@ -174,7 +174,7 @@ class Kit:
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
                         final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
-                        to_owner: Annotated[bool, Field(description="Listen conversations only: DM the owner instead of posting in the Slack thread")] = False) -> dict[str, Any]:
+                        to_owner: Annotated[bool, Field(description="For a triage conversation with notify_owner, send a note to the owner mailbox instead of replying in-thread")] = False) -> dict[str, Any]:
             return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
@@ -263,10 +263,13 @@ class Kit:
             annotations=SEND,
         )
         async def agent_send(ctx: Context, to: Annotated[str, Field(description="The agent's name, as switchboard_status shows it")], text: str,
-                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None) -> dict[str, Any]:
+                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None,
+                             conversation: str | None = None) -> dict[str, Any]:
             if in_reply_to is not None or forward is not None:
                 raise ToolError("use reply to answer a conversation or send to forward one")
             p = kit.alias(ctx, "agent_send")
+            if conversation is not None:
+                return await kit.run(core.notify_mode_owner(p, conversation, text, to=to))
             if project:
                 kit.need(p, kit.pscope(project))
             if p.targets is not None:

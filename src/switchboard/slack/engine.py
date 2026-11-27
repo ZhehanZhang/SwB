@@ -69,6 +69,8 @@ class SlackEngine:
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
         self.listen: Callable[[WorkspaceRuntime, dict[str, Any], dict[str, Any]], Awaitable[bool]] | None = None
+        self.mode_intake: Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[tuple[bool, dict[str, Any] | None]]] | None = None
+        self.mode_poll_channels: Callable[[WorkspaceRuntime], set[str]] | None = None
         self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]]] = {}
         self.owner_channels: set[tuple[str, str]] = set()
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
@@ -108,7 +110,7 @@ class SlackEngine:
             return None
         return target.persona
 
-    def route(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> list[str]:
+    def route(self, rt: WorkspaceRuntime, push: dict[str, Any], *, default_target: str | None = None) -> list[str]:
         """Set push target/target_kind (and strip a leading slug from text). Returns slugs to hint at for a near miss."""
         root = push["thread_ts"] or push["ts"]
         target: Target | None = None
@@ -122,7 +124,7 @@ class SlackEngine:
             elif word and push["kind"] in ("mention", "dm"):
                 hint = near(word, self.targets)
         sticky = self.store.thread_target(push["workspace"], push["channel"], root) if push["thread_ts"] else None
-        slug = target.slug if target else (sticky or rt.cfg.default_target)
+        slug = target.slug if target else (sticky or default_target or rt.cfg.default_target)
         if target is None and slug:
             target = self.targets.get(slug)
         push["target"] = slug
@@ -224,7 +226,7 @@ class SlackEngine:
         kind = classify(event, ctx)
         listen_only = kind is None
         listen_channels = rt.cfg.listen_channels if self.listen is not None else ()
-        if listen_only and listen_channels and rt.cfg.trust_of(event.get("user") or event.get("bot_id")) != "owner":
+        if listen_only and (self.mode_intake is not None or (listen_channels and rt.cfg.trust_of(event.get("user") or event.get("bot_id")) != "owner")):
             kind = classify(event, replace(ctx, watched=ctx.watched | {channel}))
         if kind is None:
             return None
@@ -232,11 +234,11 @@ class SlackEngine:
             await asyncio.sleep(self.own_post_grace)
         if self.store.is_sent(rt.team_id, channel, ts):
             return None
-        if listen_only and channel not in listen_channels and (
+        if self.mode_intake is None and listen_only and channel not in listen_channels and (
             all(CHANNEL_ID_RE.fullmatch(ref) for ref in listen_channels) or await rt.channel_name(channel) not in listen_channels
         ):
             return None
-        channel_name, user_name = await asyncio.gather(rt.channel_name(channel), rt.user_name(event.get("user")))
+        channel_name = await rt.channel_name(channel)
         listening = channel in listen_channels or channel_name in listen_channels
         thread_ts = event.get("thread_ts")
         in_our_thread = bool(thread_ts and thread_ts != ts and ((rt.bot_user_id and event.get("parent_user_id") == rt.bot_user_id) or self.store.is_sent(rt.team_id, channel, thread_ts)))
@@ -246,15 +248,23 @@ class SlackEngine:
             event=event,
             kind=kind,
             channel_name=channel_name,
-            user_name=user_name,
+            user_name=None,
             team_url=rt.team_url,
             max_text_chars=self.config.max_text_chars,
             addressed_to_us=kind in ("mention", "dm") or in_our_thread,
         )
+        candidate = {**push, "is_bot": bool(push["is_bot"] or event.get("is_bot") or event.get("subtype") == "bot_message")}
+        if candidate["is_bot"] and event.get("bot_id") in rt.cfg.known and rt.cfg.trust_of(candidate["user"]) == "external":
+            candidate["user"] = event["bot_id"]
+        if self.mode_intake is not None:
+            handled, routed = await self.mode_intake(rt, candidate)
+            if handled:
+                return routed
+        if listen_only and not listening:
+            return None
+        if user_name := await rt.user_name(event.get("user")):
+            candidate["user_name"] = push["user_name"] = user_name
         if listening and rt.cfg.trust_of(push["user"]) != "owner" and self.listen is not None:
-            candidate = {**push, "is_bot": bool(push["is_bot"] or event.get("is_bot") or event.get("subtype") == "bot_message")}
-            if candidate["is_bot"] and event.get("bot_id") in rt.cfg.known and rt.cfg.trust_of(candidate["user"]) != "known":
-                candidate["user"] = event["bot_id"]
             self.stamp(rt, candidate)
             if await self.listen(rt, candidate, push):
                 return candidate

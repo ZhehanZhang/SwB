@@ -365,7 +365,9 @@ def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     return page("Pairing code", body, 200)
 
 
-def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
+def _claim_document(title: str, body: str, status: int = 200, *, grouped: bool = False) -> HTMLResponse:
+    group_assets = ('<link rel="stylesheet" href="/claim-assets/claim.css">'
+                    '<script src="/claim-assets/claim.js" defer></script>') if grouped else ""
     doc = f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -375,6 +377,7 @@ def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
 <title>{html.escape(title)} | SwB</title>
 <script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/claim.css">
+{group_assets}
 </head><body><main>
 {CLAIM_BRAND}
 {body}

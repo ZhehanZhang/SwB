@@ -201,7 +201,9 @@ def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
 
 
 def test_stranger_cannot_wake_or_receive_a_reply_from_a_private_target(run):
-    with run() as (core, c, _, bot, anthropic):
+    spaces = {"group": {"owner_ids": [OWNER_ID], "chats": [GROUP], "mode": "assist", "default_target": "example-runner"},
+              "dm": {"owner_ids": [OWNER_ID]}}
+    with run(spaces=spaces) as (core, c, _, bot, anthropic):
         c.portal.call(bot.deliver, update(11, user=STRANGER, text="/swb example-runner please run"))
         context = json.loads(core.store.one("SELECT data FROM inbox WHERE kind = 'context'")["data"])
         assert context["trust"] == "external" and context["target"] == "example-runner" and "<<<swb-untrusted" in context["text"]

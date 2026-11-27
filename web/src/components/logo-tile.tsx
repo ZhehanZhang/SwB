@@ -36,7 +36,7 @@ export function LogoTile({ kind, className, avatarUrl }: { kind: string; classNa
   const id = kind.toLowerCase().replaceAll("_", "-")
   const mark = connectorKind(id) ?? aliases.find(([prefix]) => id === prefix || id.startsWith(`${prefix}-`) || id.startsWith(`${prefix}:`))?.[1]
   const image = mark && images[mark]
-  const mono = mark === "chatgpt" || mark === "github"
+  const mono = mark === "chatgpt" || mark === "github" || mark === "anthropic" || mark === "grok" || mark === "xai"
   const captainImage = mark === "capy" && typeof avatarUrl === "string" && avatarPath.exec(avatarUrl)?.[0] === avatarUrl
     ? avatarUrl : undefined
   return (

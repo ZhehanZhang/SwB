@@ -10,7 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from switchboard import pages
+from switchboard import credentials, pages
+from switchboard.claims import Field
 
 
 class VisibleHTML(HTMLParser):
@@ -54,6 +55,11 @@ def rendered_pages():
             yield pages.token_claim_page, pages.token_claim_page(
                 f"{name.upper()}_KEY", "csrf", require_https=require_https, **test_time)
     yield pages.routine_claim_page, pages.routine_claim_page(routine, "csrf", host="swb.one", now=60)
+    for provider in credentials.PROVIDERS:
+        group = {"title": "Example credentials", "provider": provider, "expires_at": 120,
+                 "fields": [Field("EXAMPLE_ID", "App ID", "id"),
+                            Field("EXAMPLE_PRIVATE_KEY", "Private key", "pem", optional=True)]}
+        yield credentials.page, credentials.page(group, "csrf", owner_key=True, host="swb.one", now=60)
     yield pages.connect_code_page, pages.connect_code_page(
         {"code": "example", "agent": "Example", "project": "example"}, "https://swb.one")
     for error in ("link_expired", "passkey_failed", "oidc_failed"):
@@ -83,7 +89,7 @@ def literal_parts(node):
 
 def scoped_literals():
     routes = {
-        "app.py": {"claim_form", "claim_page_access", "token_claim", "routine_claim", "routine_add", "connect_code"},
+        "app.py": {"claim_form", "claim_submission", "claim_page_access", "group_claim", "token_claim", "routine_claim", "routine_add", "connect_code"},
         "chat/claims.py": {"claim"},
         "web.py": {"shell"},
     }

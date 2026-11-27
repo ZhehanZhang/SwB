@@ -14,7 +14,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response, Stream
 from starlette.routing import Mount, Route
 
 from . import pages
-from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
+from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable, GroupFieldError
 from .guard import Guard, RateLimiter, client_ip, reject
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
@@ -135,7 +135,7 @@ def create_app(core: "Switchboard") -> Any:
                        and claim_principal.source == "owner" and claim_principal.is_unrestricted_owner else None)
 
     async def healthz(request: Request) -> JSONResponse:
-        return JSONResponse(core.health())
+        return JSONResponse(core.health(public=True))
 
     async def owner_page(request: Request) -> tuple[Owner | None, Response | None]:
         owner = await core.auth.owner(request)
@@ -195,10 +195,12 @@ def create_app(core: "Switchboard") -> Any:
                         headers={"Cache-Control": "public, max-age=3600"})
 
     async def targets(request: Request) -> JSONResponse:
-        _, refused = await owner_page(request)
+        _, refused = await core.auth.protect_owner(request)
+        headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
         if refused is not None:
-            return JSONResponse({"error": "forbidden"}, status_code=403)
-        return JSONResponse({"targets": await core.targets()}, headers={"Cache-Control": "no-store"})
+            refused.headers.update(headers)
+            return refused
+        return JSONResponse({"targets": await core.targets()}, headers=headers)
 
     async def avatar_upload(request: Request) -> Response:
         """The owner replaces a persona's picture."""
@@ -237,35 +239,78 @@ def create_app(core: "Switchboard") -> Any:
         return (None, refused) if refused is not None else (core.auth.csrf(owner.csrf_key), None)
 
     async def claim_form(request: Request) -> tuple[str | None, str, Response | None]:
+        actor, form, refused = await claim_submission(request)
+        token = form.get("token") if form is not None else None
+        return actor, token if isinstance(token, str) else "", refused
+
+    async def claim_submission(request: Request) -> tuple[str | None, Any, Response | None]:
         if not core.auth.origin_ok(request):
-            return None, "", JSONResponse({"error": "csrf"}, status_code=403)
+            return None, None, JSONResponse({"error": "csrf"}, status_code=403)
         auth = request.headers.get("authorization")
         if auth is not None:
             scheme, _, key = auth.partition(" ")
             actor = claim_key_owner(key.strip()) if scheme.lower() == "bearer" else None
             if actor is None:
-                return None, "", pages.claim_message_page("Use the SwB owner key", 403)
+                return None, None, pages.claim_message_page("Use the SwB owner key", 403)
             form = await request.form()
         elif not core.cfg.owner_sign_in and claim_key_actor:
             form = await request.form()
             key = form.get("owner_key")
             actor = claim_key_owner(key) if isinstance(key, str) else None
             if actor is None:
-                return None, "", pages.claim_message_page("Use the SwB owner key", 403)
+                return None, None, pages.claim_message_page("Use the SwB owner key", 403)
             if not await core.auth.valid_csrf(request, f"claim:{request.path_params['code']}"):
-                return None, "", JSONResponse({"error": "csrf"}, status_code=403)
+                return None, None, JSONResponse({"error": "csrf"}, status_code=403)
         else:
             owner, form, refused = await owner_form(request)
             if refused is not None:
-                return None, "", refused
+                return None, None, refused
             actor = f"admin:{owner.label}"
-        token = form.get("token")
-        return actor, token if isinstance(token, str) else "", None
+        return actor, form, None
+
+    async def group_claim(request: Request, group: dict[str, Any]) -> Response:
+        from . import credentials
+
+        code = request.path_params["code"]
+        if request.method != "POST":
+            owner_key = not core.cfg.owner_sign_in and bool(claim_key_actor)
+            if owner_key:
+                form_csrf = core.auth.csrf(f"claim:{code}")
+            else:
+                form_csrf, refused = await claim_page_access(request)
+                if refused is not None:
+                    return refused
+            return credentials.page(group, form_csrf, owner_key=owner_key,
+                                    host=request.url.hostname or "", now=core.clock())
+        actor, form, refused = await claim_submission(request)
+        if refused is not None:
+            return refused
+        values = {f.name: v for f in group["fields"] if isinstance(v := form.get(f.name), str)}
+        try:
+            names = core.claims.consume_group(code, values)
+        except ClaimUnavailable:
+            return pages.claim_message_page("Request a new link", 410)
+        except GroupFieldError as e:
+            return pages.claim_message_page(f"Check {e.field.label}", 400)
+        core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
+                          outcome="ok", target=",".join(names), excerpt=group["title"])
+        for block in core.blocks.values():
+            if saved := getattr(block, "secret_saved", None):
+                for name in names:
+                    await saved(name)
+        return pages.claim_message_page(f"{len(names)} credential{'s' if len(names) != 1 else ''} saved", 200)
+
+    async def claim_asset(request: Request) -> Response:
+        from . import credentials
+
+        return credentials.asset(request.path_params["name"])
 
     async def token_claim(request: Request) -> Response:
         from .chat import ChatBlock
 
         code = request.path_params["code"]
+        if (group := core.claims.group(code)) is not None:
+            return await group_claim(request, group)
         if request.method != "POST":
             form_csrf, refused = await claim_page_access(request)
             if refused is not None:
@@ -467,6 +512,8 @@ def create_app(core: "Switchboard") -> Any:
             while True:
                 got = await core.inbox.wait(owner=agent, since=cursor, timeout=HEARTBEAT_S, reader=f"channel:{p.source}", advance=False)
                 for item in got["items"]:
+                    if item["kind"] == "watch_digest":
+                        continue
                     yield f"id: {item['cursor']}\nevent: item\ndata: {json.dumps(item)}\n\n".encode()
                 if got["timed_out"]:
                     yield b"event: heartbeat\ndata: {}\n\n"
@@ -511,6 +558,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/routines/claim/{code}", routine_claim, methods=["GET", "POST"]),
             Route("/routines/claim/owner/{registration}", routine_claim, methods=["GET", "POST"]),
             Route(CLAIM_PATH + "/{code}", token_claim, methods=["GET", "POST"]),
+            Route("/claim-assets/{name}", claim_asset, methods=["GET"]),
             *pages.routes(),
             *login.routes(),
             *core.auth.routes(),
