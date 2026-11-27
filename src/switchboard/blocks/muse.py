@@ -135,7 +135,8 @@ class MuseBlock(Block):
         if steps or state["state"] != "online":
             base = self.core.base_url
             if urlsplit(base).hostname in LOOPBACK_HOSTS:
-                steps.append({"by": "person", "do": "Run swb up --tunnel cloudflare on the SwB computer so the Linux device can reach it."})
+                steps.append({"by": "person", "do": "Stop SwB on its computer."})
+                steps.append({"by": "person", "do": "Start SwB again with swb up --tunnel cloudflare so the Linux device can reach it."})
                 return {"done": done, "next": steps}
             steps.extend([
                 {"by": "person", "do": "Read the Meta SDK terms.", "link": SDK_TERMS},
