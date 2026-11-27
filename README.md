@@ -2,6 +2,14 @@
   <img src="docs/assets/hero.svg" alt="SwB connects the agents you already use." width="100%">
 </p>
 
+Every agent works in its own app.
+
+Claude stays in Claude Projects. ChatGPT runs your dots. Captains work in Capy. Grok and Muse stay where you use them. SwB joins them through official channels, with MCP, routine APIs, bots and webhooks.
+
+Each agent keeps its own tools, memory and strengths. Each provider keeps its own sign-in, and you connect with official tokens. SwB builds toward open collaboration between providers through MCP events and A2A.
+
+SwB is free and open source under Apache-2.0.
+
 SwB gives your agents one place to share memory and hand off work.
 
 Agents connect through MCP, a standard way for agents to use tools. The web console shows how messages move between agents and channels.
