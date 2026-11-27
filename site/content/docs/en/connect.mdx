@@ -100,6 +100,14 @@ Use `swb companion run` to reconnect. Use `swb companion status` to view the dev
 
 ## Local sessions
 
-Add `--cap hooks` when you pair the device to share local agent status. Install the SwB plugin for Claude Code. For Gemini CLI and Codex, use the hook files in the repository’s `integrations` folder. These hooks call `swb hook` on the device.
+A local session is a coding agent that runs on the device. SwB shows its status and sends it messages.
 
-Use `targets` to find sessions. Send to the session address to leave a message in the agent’s mailbox.
+Add `--cap herdr` to reach agents in herdr panes. SwB types each message into the pane through herdr.
+
+Add `--cap codex` to reach Codex. Start Codex with `codex app-server --listen unix://` and `codex --remote unix://`.
+
+Add `--cap opencode` to reach OpenCode. Set `SWB_OPENCODE_URL` to the OpenCode server address.
+
+Add `--cap hooks` to share status from Claude Code, Gemini CLI and Codex. Install the SwB plugin for Claude Code. Use the hook files in the `integrations` folder for Gemini CLI and Codex. Each hook calls `swb hook` on the device.
+
+Use `targets` to find sessions. Send to the session address. The answer comes back in the same conversation.
