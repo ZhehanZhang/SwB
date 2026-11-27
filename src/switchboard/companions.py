@@ -16,11 +16,12 @@ from typing import Any
 from .audit import Audit, iso
 from .auth import COMPANION_KEY_PREFIX, Principal, sha
 from .blocks import BlockError
+from .companion import COMPANION_ID, REPAIR_CAPABILITIES
 from .connect import CODE_TTL_S, new_code, normalize_code
 from .guard import COMPANION_EMIT_LIMIT
 from .store import Store, dumps
+from .trust import wrap
 
-COMPANION_ID = re.compile(r"cmp_[0-9a-f]{24}")
 SLUG = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 OFFLINE = "Companion offline."
 UNKNOWN_JOB = "Companion job expired or unavailable."
@@ -40,10 +41,20 @@ CREATE TABLE IF NOT EXISTS companions (
   platform TEXT NOT NULL,
   version TEXT NOT NULL,
   capabilities TEXT NOT NULL,
+  granted_capabilities TEXT,
+  capabilities_changed INTEGER NOT NULL DEFAULT 0,
   created_at REAL NOT NULL,
   last_seen REAL,
   revoked_at REAL
 );
+CREATE TABLE IF NOT EXISTS companion_session_owners (
+  harness TEXT NOT NULL,
+  session TEXT NOT NULL,
+  companion TEXT NOT NULL REFERENCES companions(id),
+  expires_at REAL NOT NULL,
+  PRIMARY KEY (harness, session)
+);
+CREATE INDEX IF NOT EXISTS companion_session_expires ON companion_session_owners(expires_at);
 """
 
 Progress = Callable[[dict[str, Any]], Awaitable[None] | None]
@@ -52,14 +63,21 @@ Event = Callable[[Principal, dict[str, Any]], Awaitable[dict[str, Any] | None]]
 
 
 class CompanionError(BlockError):
-    def __init__(self, message: str, status: int = 400):
+    def __init__(self, message: str, status: int = 400, *, audit_ref: str | None = None):
         super().__init__(message)
         self.status = status
+        self.audit_ref = audit_ref
 
 
 class InvalidCode(CompanionError):
     def __init__(self):
         super().__init__("Pairing code expired or invalid.", 401)
+
+
+class DeviceActionError(CompanionError):
+    def __init__(self, message: str, companion_id: str):
+        super().__init__(message)
+        self.display = wrap(message, "companion", companion_id, "external")
 
 
 def _label(value: object, max_length: int, *, optional: bool = False) -> str:
@@ -80,16 +98,16 @@ def _declaration(body: dict[str, Any]) -> tuple[str, str, str, str]:
     for cap in caps:
         if not isinstance(cap, dict):
             raise CompanionError("Invalid companion capability.")
-        ident = _label(cap.get("id"), 32)
+        ident = cap.get("id")
         actions = cap.get("actions")
-        if not SLUG.fullmatch(ident) or ident in by_id or not isinstance(actions, list) or len(actions) > 32:
+        if not isinstance(ident, str) or not SLUG.fullmatch(ident) or ident in by_id or not isinstance(actions, list) or len(actions) > 32:
             raise CompanionError("Invalid companion capability.")
         names = set()
         action_specs = []
         for action in actions:
             spec = action if isinstance(action, dict) else {"name": action}
-            action_name = _label(spec.get("name"), 32)
-            if not SLUG.fullmatch(action_name) or action_name in names:
+            action_name = spec.get("name")
+            if not isinstance(action_name, str) or not SLUG.fullmatch(action_name) or action_name in names:
                 raise CompanionError("Invalid companion action.")
             out = {"name": action_name}
             if "description" in spec:
@@ -102,7 +120,10 @@ def _declaration(body: dict[str, Any]) -> tuple[str, str, str, str]:
             action_specs.append(out)
         by_id[ident] = {"id": ident, "version": _label(cap.get("version"), 32), "title": _label(cap.get("title"), 80),
                         "actions": action_specs}
-    return name, platform, version, dumps(list(by_id.values()))
+    try:
+        return name, platform, version, json.dumps(list(by_id.values()), separators=(",", ":"), allow_nan=False)
+    except (ValueError, RecursionError):
+        raise CompanionError("Invalid companion declaration.") from None
 
 
 @dataclass(eq=False)
@@ -135,6 +156,12 @@ class Companions:
         self.on_disconnect: list[Callable[[str], None]] = []
         with store._lock:
             store.db.executescript(SCHEMA)
+            columns = {row[1] for row in store.db.execute("PRAGMA table_info(companions)")}
+            if "granted_capabilities" not in columns:
+                store.db.execute("ALTER TABLE companions ADD COLUMN granted_capabilities TEXT")
+            if "capabilities_changed" not in columns:
+                store.db.execute("ALTER TABLE companions ADD COLUMN capabilities_changed INTEGER NOT NULL DEFAULT 0")
+            store.db.execute("UPDATE companions SET granted_capabilities = capabilities WHERE granted_capabilities IS NULL")
 
     def mint(self, url: str, *, origin: str, source: str, client: str) -> dict[str, Any]:
         code, code_hash = new_code()
@@ -155,8 +182,8 @@ class Companions:
                 raise InvalidCode()
             name, platform, version, caps = _declaration(body)
             companion_id, key = "cmp_" + secrets.token_hex(12), COMPANION_KEY_PREFIX + secrets.token_urlsafe(32)
-            db.execute("INSERT INTO companions(id, key_hash, name, platform, version, capabilities, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       (companion_id, sha(key), name, platform, version, caps, now))
+            db.execute("INSERT INTO companions(id, key_hash, name, platform, version, capabilities, granted_capabilities, created_at) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (companion_id, sha(key), name, platform, version, caps, caps, now))
             return {"companion_id": companion_id, "device_key": key}
 
         out = self.store.tx(redeem)
@@ -172,21 +199,50 @@ class Companions:
         return Principal(row["name"], f"companion:{row['id']}", "companion", origin="companion",
                          trust="device", scopes=(), tools=(), targets=())
 
-    def hello(self, companion_id: str, body: dict[str, Any]) -> None:
-        if not self.store.n("UPDATE companions SET name = ?, platform = ?, version = ?, capabilities = ?, last_seen = ? "
-                            "WHERE id = ? AND revoked_at IS NULL", (*_declaration(body), self.store.clock(), companion_id)):
-            raise CompanionError(DISCONNECTED, 401)
+    def key_id(self, token: str) -> str | None:
+        if not token.startswith(COMPANION_KEY_PREFIX):
+            return None
+        row = self.store.one("SELECT id FROM companions WHERE key_hash = ?", (sha(token),))
+        return row["id"] if row else None
+
+    def hello(self, companion_id: str, body: dict[str, Any], *, client: str) -> None:
+        name, platform, version, declared = _declaration(body)
+        caps = {cap["id"]: cap for cap in json.loads(declared)}
+
+        def update(db: sqlite3.Connection) -> tuple[bool, str | None]:
+            row = db.execute("SELECT capabilities, granted_capabilities FROM companions WHERE id = ? AND revoked_at IS NULL",
+                             (companion_id,)).fetchone()
+            if row is None:
+                raise CompanionError(DISCONNECTED, 401)
+            old = {cap["id"]: cap for cap in json.loads(row["capabilities"])}
+            granted = {cap["id"] for cap in json.loads(row["granted_capabilities"])}
+            changed = old != caps
+            ref = dumps({"old": sorted(old), "new": sorted(caps)}) if changed else None
+            if changed:
+                db.execute("UPDATE companions SET capabilities_changed = 1 WHERE id = ?", (companion_id,))
+            if caps.keys() - granted:
+                return False, ref
+            db.execute("UPDATE companions SET name = ?, platform = ?, version = ?, capabilities = ?, last_seen = ? WHERE id = ?",
+                       (name, platform, version, declared, self.store.clock(), companion_id))
+            return True, ref
+
+        accepted, ref = self.store.tx(update)
+        if not accepted:
+            raise CompanionError(REPAIR_CAPABILITIES, 403, audit_ref=ref)
+        if ref is not None:
+            self.audit.record(origin="companion", source=companion_id, client=client, destination="core",
+                              action="companion_capabilities", outcome="ok", target=companion_id, ref=ref)
 
     def list(self, *, details: bool = False) -> list[dict[str, Any]]:
         now = self.store.clock()
         out = []
-        for row in self.store.q("SELECT id, name, platform, version, capabilities, last_seen FROM companions "
+        for row in self.store.q("SELECT id, name, platform, version, capabilities, last_seen, capabilities_changed FROM companions "
                                 "WHERE revoked_at IS NULL ORDER BY created_at, id"):
             caps, seen = json.loads(row["capabilities"]), row["last_seen"]
             out.append({"id": row["id"], "name": row["name"], "platform": row["platform"],
                         "online": row["id"] in self._streams or (seen is not None and now - seen < ONLINE_S),
                         "last_seen": iso(seen), "capabilities": caps if details else [cap["id"] for cap in caps],
-                        **({"version": row["version"]} if details else {})})
+                        **({"version": row["version"], "capabilities_changed": bool(row["capabilities_changed"])} if details else {})})
         return out
 
     def _close(self, companion_id: str, stream: Stream, event: str) -> None:
@@ -202,9 +258,30 @@ class Companions:
     def connected(self, companion_id: str) -> bool:
         return companion_id in self._streams
 
+    def session_owner(self, harness: str, session: str) -> str | None:
+        row = self.store.one("SELECT companion FROM companion_session_owners WHERE harness = ? AND session = ? AND expires_at > ?",
+                             (harness, session, self.store.clock()))
+        return row["companion"] if row else None
+
+    def claim_session(self, companion: str, harness: str, session: str, ttl: float, *, ending: bool) -> None:
+        now = self.store.clock()
+        self.store.n("DELETE FROM companion_session_owners WHERE expires_at <= ?", (now,))
+        if ending:
+            if (owner := self.session_owner(harness, session)) is None:
+                return
+            claimed = owner == companion
+        else:
+            claimed = self.store.n(
+                "INSERT INTO companion_session_owners(harness, session, companion, expires_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(harness, session) DO UPDATE SET expires_at = excluded.expires_at "
+                "WHERE companion_session_owners.companion = excluded.companion", (harness, session, companion, now + ttl))
+        if not claimed:
+            raise CompanionError("Local session belongs to another companion.", 409)
+
     def revoke(self, companion_id: str, *, origin: str, source: str, client: str) -> bool:
         if not self.store.n("UPDATE companions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL", (self.store.clock(), companion_id)):
             return False
+        self.store.n("DELETE FROM companion_session_owners WHERE companion = ?", (companion_id,))
         if (stream := self._streams.get(companion_id)) is not None:
             self._close(companion_id, stream, "revoked")
         self.audit.record(origin=origin, source=source, client=client, destination="core", action="companion_revoke",
@@ -312,7 +389,7 @@ class Companions:
         elif body.get("ok") is False:
             error = body.get("error")
             safe = isinstance(error, str) and 0 < len(error) <= 200 and error.isprintable()
-            job.future.set_exception(CompanionError(error if safe else FAILED))
+            job.future.set_exception(DeviceActionError(error, companion_id) if safe else CompanionError(FAILED))
         else:
             raise CompanionError("Invalid companion result.")
 
@@ -333,7 +410,6 @@ class Companions:
             raise CompanionError("Unknown companion claim.", 404)
         if not isinstance(payload := body.get("payload"), dict):
             raise CompanionError("Invalid companion claim.")
-        outcome = "refused"
         task = asyncio.create_task(handler(principal, payload))
         try:
             done, _ = await asyncio.wait((task, job.future), return_when=asyncio.FIRST_COMPLETED)
@@ -342,17 +418,15 @@ class Companions:
             try:
                 result = task.result()
             except Exception:
-                outcome = "failed"
                 raise CompanionError("Companion claim failed.") from None
-            outcome = "ok"
+            self.audit.record(origin="companion", source=companion_id, client=principal.client_id, destination="core",
+                              action="companion_claim", outcome="ok", target=companion_id, ref=kind)
             return result
         finally:
             if not task.done():
                 task.cancel()
             with contextlib.suppress(Exception, asyncio.CancelledError):
                 await task
-            self.audit.record(origin="companion", source=companion_id, client=principal.client_id, destination="core",
-                              action="companion_claim", outcome=outcome, target=companion_id, ref=kind)
 
     def register_event(self, kind: str, handler: Event, *, capability: str) -> None:
         if not kind or len(kind) > 96 or not SLUG.fullmatch(capability) or kind in self._events:
@@ -382,5 +456,7 @@ class Companions:
         try:
             out = await registration[1](principal, payload)
             return out if out is not None else {"ok": True}
+        except CompanionError:
+            raise
         except Exception:
             raise CompanionError("Companion event failed.") from None

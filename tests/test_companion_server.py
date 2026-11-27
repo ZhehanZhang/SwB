@@ -14,6 +14,7 @@ import pytest
 import uvicorn
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.testclient import TestClient
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, acall, arpc, base_config, call, error_text, eventually, new_core, payload, rpc
 from switchboard.app import create_app
@@ -88,7 +89,10 @@ def test_owner_console_and_mcp_boundaries(make):
     assert client.post(revoke, headers={**owner, "Origin": "https://elsewhere.example"}).status_code == 403
     expected = [{"id": id_, "name": "Device", "platform": "linux", "online": False, "last_seen": None, "capabilities": ["demo"]}]
     assert client.get("/api/companions", headers=owner).json() == {"companions": expected}
-    assert payload(call(client, STATIC_KEY, "switchboard_status"))["companions"] == expected
+    [status_device] = payload(call(client, STATIC_KEY, "switchboard_status"))["companions"]
+    assert "\nDevice\nswb-untrusted>>>" in status_device.pop("name")
+    assert "\nlinux\nswb-untrusted>>>" in status_device.pop("platform")
+    assert status_device == {field: value for field, value in expected[0].items() if field not in ("name", "platform")}
     [details] = payload(call(client, STATIC_KEY, "companion_list"))["companions"]
     assert details["capabilities"][0]["actions"] == [{"name": "work"}, {"name": "other"}]
     assert "Companion offline." in error_text(call(client, STATIC_KEY, "companion_invoke", {"companion": id_, "capability": "demo", "action": "work"}))
@@ -106,7 +110,7 @@ def test_owner_console_and_mcp_boundaries(make):
             assert rpc(client, token, "tools/call", {"name": tool}).status_code == 401
     assert client.get("/inbox/events", headers=bearer(key)).status_code == 401
     assert client.post("/inbox/poll", headers=bearer(key)).status_code == 401
-    assert client.get("/claim/sample", headers=bearer(key)).status_code == 303
+    assert client.get("/claim/sample", headers=bearer(key)).status_code == 401
     assert client.post(revoke, headers=owner).json() == {"ok": True}
     assert client.get("/api/companions", headers=owner).json() == {"companions": []}
     assert payload(call(client, STATIC_KEY, "companion_revoke", {"companion": id_})) == {"ok": False}
@@ -119,21 +123,22 @@ def test_companion_endpoints_refuse_strangers_owner_and_revoked_keys(make):
     id_, key = (out := client.post("/companion/pair", json={"code": code, **HELLO}).json())["companion_id"], out["device_key"]
     owner = passkey_session(core)
 
-    def assert_refused(headers, ip):
-        for path in COMPANION_ROUTES:
-            response = client.request("GET" if path.endswith("/events") else "POST", path,
-                                      headers={**headers, "CF-Connecting-IP": ip})
-            assert response.status_code == 401
+    async def assert_refused(headers, ip):
+        transport = httpx.ASGITransport(app=client.app, client=(ip, 50000))
+        async with httpx.AsyncClient(transport=transport, base_url=PUBLIC) as peer:
+            for path in COMPANION_ROUTES:
+                response = await peer.request("GET" if path.endswith("/events") else "POST", path, headers=headers)
+                assert response.status_code == 401
 
-    assert_refused({}, "192.0.2.1")
-    assert_refused(bearer("wrong"), "192.0.2.2")
-    assert_refused({**owner, **bearer(STATIC_KEY)}, "192.0.2.3")
+    client.portal.call(assert_refused, {}, "192.0.2.1")
+    client.portal.call(assert_refused, bearer("wrong"), "192.0.2.2")
+    client.portal.call(assert_refused, {**owner, **bearer(STATIC_KEY)}, "192.0.2.3")
     assert client.post("/companion/hello", headers=bearer(key), json={**HELLO, "name": "Renamed", "version": "1.0.0"}).json() == {"ok": True}
     assert core.companions.authenticate(key).source == "Renamed"
     assert client.post("/companion/results", headers=bearer(key), json={"job_id": "missing", "ok": True, "result": {}}).status_code == 404
     assert client.post("/companion/claims", headers=bearer(key), json={"kind": "missing"}).status_code == 404
     assert client.post("/companion/revoke", headers=bearer(key)).json() == {"ok": True}
-    assert_refused(bearer(key), "192.0.2.4")
+    client.portal.call(assert_refused, bearer(key), "192.0.2.4")
     assert rpc(client, key, "tools/list").status_code == 401
     assert client.get("/api/companions", headers=bearer(key)).status_code == 401
     assert core.audit.recent(action="companion_revoke")[0]["origin"] == "companion"
@@ -150,6 +155,111 @@ def test_companion_rate_limits(make, bucket, path, body):
         assert client.post(path, json=body, headers=bearer("wrong")).status_code == 401
     response = client.post(path, json=body, headers=bearer("wrong"))
     assert response.status_code == 429 and int(response.headers["retry-after"]) > 0
+
+
+def test_companion_refusals_have_bounded_audit_reasons(make):
+    core, client = make(config=CFG)
+    code = payload(call(client, STATIC_KEY, "companion_code"))["code"]
+    device = client.post("/companion/pair", json={"code": code, **HELLO}).json()
+    auth = bearer(device["device_key"])
+    cases = [
+        ("pair", "pair", [], 400, "Send a JSON object."),
+        ("hello", "hello", [], 400, "Send a JSON object."),
+        ("emit", "emit", {"capability": "disabled", "kind": "fixture"}, 403, "Companion capability unavailable."),
+        ("emit", "emit", {"capability": "demo", "kind": "fixture"}, 404, "Unknown companion event."),
+        ("results", "result", {"job_id": "missing", "ok": True, "result": {}}, 404, "Companion job expired or unavailable."),
+    ]
+    for path, action, body, status, reason in cases:
+        for _ in range(2):
+            assert client.post(f"/companion/{path}", headers=auth, json=body).status_code == status
+        rows = [row for row in core.audit.recent(action=f"companion_{action}", outcome="refused") if row["detail"] == reason]
+        [row] = rows
+        if path != "pair":
+            assert row["target"] == device["companion_id"]
+
+
+@pytest.mark.parametrize(("trusted_proxies", "resolved"), [("", "192.0.2.1"), ("192.0.2.0/24", "198.51.100.4")])
+def test_companion_refusals_use_the_resolved_client_address(tmp_path, capy, trusted_proxies, resolved):
+    core = new_core(tmp_path, capy, config=CFG,
+                    env={"SWB_KEY_CAPY": STATIC_KEY, "SWB_TRUSTED_PROXIES": trusted_proxies})
+    with TestClient(create_app(core), base_url=PUBLIC, client=("192.0.2.1", 10000)) as client:
+        code = payload(call(client, STATIC_KEY, "companion_code"))["code"]
+        device = client.post("/companion/pair", json={"code": code, **HELLO}).json()
+        headers = {**bearer(device["device_key"]), "CF-Connecting-IP": "198.51.100.9", "X-Forwarded-For": "198.51.100.4"}
+        assert client.post("/claim/sample", headers=headers).status_code == 401
+        assert client.post("/companion/hello", headers=headers, json=[]).status_code == 400
+        assert client.post("/companion/emit", headers=headers, content=b"x" * (COMPANION_EMIT_LIMIT + 257)).status_code == 413
+        for action in ("companion_refused", "companion_hello", "companion_emit"):
+            [row] = core.audit.recent(action=action, outcome="refused")
+            assert (row["client"], row["target"]) == (resolved, device["companion_id"])
+
+
+def test_hello_audits_capability_changes_and_preserves_pairing_grant(make):
+    core, client = make(config=CFG)
+    code = payload(call(client, STATIC_KEY, "companion_code"))["code"]
+    device = client.post("/companion/pair", json={"code": code, **HELLO}).json()
+    auth = bearer(device["device_key"])
+
+    def listed():
+        [row] = payload(call(client, STATIC_KEY, "companion_list"))["companions"]
+        return row
+
+    assert not listed()["capabilities_changed"]
+    assert client.post("/companion/hello", headers=auth, json=HELLO).status_code == 200
+    assert core.audit.recent(action="companion_capabilities") == []
+    assert client.post("/companion/hello", headers=auth, json={**HELLO, "capabilities": []}).status_code == 200
+    assert listed()["capabilities_changed"] and not listed()["capabilities"]
+    [removed] = core.audit.recent(action="companion_capabilities")
+    assert json.loads(removed["ref"]) == {"old": ["demo"], "new": []}
+    assert client.post("/companion/hello", headers=auth, json=HELLO).status_code == 200
+    assert [cap["id"] for cap in listed()["capabilities"]] == ["demo"]
+    for ident in ("new", "other"):
+        extra = {**CAPS[0], "id": ident}
+        response = client.post("/companion/hello", headers=auth, json={**HELLO, "capabilities": [*CAPS, extra]})
+        assert response.status_code == 403 and response.json()["error"] == "Disconnect and pair again to add capabilities."
+    [refusal] = core.audit.recent(action="companion_hello", outcome="refused")
+    assert refusal["target"] == device["companion_id"]
+    assert json.loads(refusal["ref"]) == {"old": ["demo"], "new": ["demo", "new"]}
+    assert [cap["id"] for cap in listed()["capabilities"]] == ["demo"]
+
+
+async def test_companion_routes_refuse_and_audit_conflicting_sessions_and_unbound_replies(amake, monkeypatch):
+    core, client = await amake(config=CFG)
+    declaration = {**HELLO, "capabilities": [{"id": "herdr", "title": "Herdr", "version": "1", "actions": ["prompt"]}]}
+
+    async def pair():
+        code = payload(await acall(client, STATIC_KEY, "companion_code"))["code"]
+        return (await client.post("/companion/pair", json={**declaration, "code": code})).json()
+
+    async def emit(device, kind, data):
+        return await client.post("/companion/emit", headers=bearer(device["device_key"]),
+                                 json={"capability": "herdr", "kind": f"herdr.{kind}", "payload": data})
+
+    async def invoke(*args, **kwargs):
+        return {}
+
+    monkeypatch.setattr(core.companions, "invoke", invoke)
+    first, second = await pair(), await pair()
+    async with (aclosing(core.companions.events(first["companion_id"], 3600)) as first_stream,
+                aclosing(core.companions.events(second["companion_id"], 3600)) as second_stream):
+        await anext(first_stream)
+        await anext(second_stream)
+        report = {"harness": "herdr", "session": "session_1", "agent": "codex", "state": "idle"}
+        assert (await emit(first, "session", report)).status_code == 200
+        assert (await emit(second, "session", report)).status_code == 409
+        [entry] = await core.targets(block="local")
+        assert first["companion_id"] in entry["address"]
+        send = payload(await acall(client, STATIC_KEY, "send", {"to": entry["address"], "task": "Fixture task."}))
+        answer = {"conversation": send["conversation"], "session": "session_1", "agent": "codex", "text": "Fixture answer."}
+        assert (await emit(second, "reply", answer)).status_code == 404
+        assert (await emit(first, "reply", {**answer, "conversation": "h_unused"})).status_code == 404
+        assert (await emit(first, "reply", answer)).status_code == 200
+        assert (await emit(first, "reply", answer)).status_code == 404
+        assert {(row["target"], row["detail"]) for row in core.audit.recent(action="companion_emit", outcome="refused")} == {
+            (second["companion_id"], "Local session belongs to another companion."),
+            (second["companion_id"], "Local wake reply unavailable."),
+            (first["companion_id"], "Local wake reply unavailable."),
+        }
 
 
 async def test_online_progress_claims_results_and_stream_revocation(amake):
@@ -283,7 +393,8 @@ async def test_companion_is_optional_across_startup_and_existing_surfaces(tmp_pa
             assert (await arpc(client, agent, "tools/list")).json()["result"]["tools"] == before_tools
             assert payload(await acall(client, agent, "connect", {"what": "muse"})) == before_setup
             assert (await client.get("/api/connections/slack", headers=OWNER)).json() == before_console
-            assert (await client.get("/api/companions", headers=OWNER)).json() == {"companions": [offline]}
+            [console_device] = (await client.get("/api/companions", headers=OWNER)).json()["companions"]
+            assert console_device == {**offline, "name": "Device", "platform": "linux"}
             async with asyncio.timeout(1):
                 refused = await acall(client, STATIC_KEY, "companion_invoke", {"companion": offline["id"], "capability": "demo", "action": "work"})
             assert "Companion offline." in error_text(refused)
@@ -316,6 +427,12 @@ async def test_unsolicited_event_requires_declared_capability_and_limits_payload
     limit = COMPANION_EMIT_LIMIT - len('{"text":""}')
     assert (await client.post("/companion/emit", headers=auth, json={**event, "payload": {"text": "x" * limit}})).json() == {"size": limit}
     assert (await client.post("/companion/emit", headers=auth, json={**event, "payload": {"text": "x" * (limit + 1)}})).status_code == 413
+    for _ in range(2):
+        assert (await client.post("/companion/emit", headers=auth, json={**event, "payload": {"text": "x" * (limit + 500)}})).status_code == 413
+    oversized = [row for row in core.audit.recent(action="companion_emit", outcome="refused")
+                 if row["detail"] == "Companion request exceeds the body limit."]
+    [row] = oversized
+    assert row["target"] == paired["companion_id"]
     assert seen == [f"companion:{paired['companion_id']}"] * 2
     assert (await client.post("/companion/hello", headers=auth, json={**HELLO, "capabilities": []})).status_code == 200
     assert (await client.post("/companion/emit", headers=auth, json=event)).status_code == 403
@@ -356,10 +473,15 @@ async def test_real_companion_round_trip_and_secret_hygiene(tmp_path, capy, capl
                     **args, "action": "put", "args": {"name": "probe.txt", "content_b64": "c3di"},
                 }))
                 assert out["trust"] == "external" and out["from"] == f"companion {state.companion_id} drop.put"
-                assert "\nprobe.txt\nswb-untrusted>>>" in out["result"]["name"]
+                assert out["result"]["name"] == "probe.txt"
                 assert (drop_dir / "probe.txt").read_bytes() == b"swb"
                 out = payload(await acall(client, STATIC_KEY, "companion_invoke", {**args, "action": "get", "args": {"name": "probe.txt"}}))
                 assert out["result"]["content_b64"] == "c3di"
+                missing = await acall(client, STATIC_KEY, "companion_invoke", {**args, "action": "get", "args": {"name": "missing.txt"}})
+                assert missing["isError"]
+                shown = error_text(missing)
+                assert f"[swb from companion ({state.companion_id}), trust external]" in shown
+                assert "\n<<<swb-untrusted\nCheck the Drop folder and file permissions.\nswb-untrusted>>>" in shown
                 status = await cli("status")
                 status_out = await asyncio.wait_for(status.communicate(), 5)
                 assert status.returncode == 0

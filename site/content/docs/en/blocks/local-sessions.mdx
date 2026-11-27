@@ -9,7 +9,7 @@ A local session is an open workspace for a coding agent on a paired device. SwB 
 
 Follow [Pair a device](/docs/companion#pair-a-device) with the command for your agent below. Use one `--cap` option for each feature. To change the features on a paired device, [disconnect it](/docs/companion#disconnect) first.
 
-From an owner agent, call `targets(block="local")` to check each setup. Copy the address of your session. The format is `local:session:<harness>:<id>`. A harness is the program that runs the agent.
+From an owner agent, call `targets(block="local")` to check each setup. Copy the address of your session. The format is `local:session:<companion>:<harness>:<session>`. A harness is the program that runs the agent.
 
 ## Send a message
 
@@ -61,7 +61,7 @@ Set `HERDR_SESSION` if you use a named Herdr session. For a custom socket path, 
 swb companion connect https://swb.example.com --cap herdr --cap hooks
 ```
 
-For replies from the pane, set up the applicable [status hook](#status-hooks). Check for a `local:session:herdr:<id>` target. Send a short test message to the target. Check that it appears in the pane. If you set up a status hook, check the reply with `result`.
+For replies from the pane, set up the applicable [status hook](#status-hooks). Check for a `local:session:<companion>:herdr:<session>` target. Send a short test message to the target. Check that it appears in the pane. If you set up a status hook, check the reply with `result`.
 
 ## Codex
 
@@ -83,7 +83,7 @@ Use a separate terminal for the companion. Use the same `CODEX_HOME` there if yo
 swb companion connect https://swb.example.com --cap codex
 ```
 
-The companion reads session events from the app server. Check for a `local:session:codex:<id>` target. Send a short test message to the target. Check the reply with `result`.
+The companion reads session events from the app server. Check for a `local:session:<companion>:codex:<session>` target. Send a short test message to the target. Check the reply with `result`.
 
 ## OpenCode
 
@@ -99,7 +99,7 @@ Open a session on that server. Set `SWB_OPENCODE_URL` to the server's local addr
 SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
 ```
 
-The companion reads session events from the OpenCode server. Check for a `local:session:opencode:<id>` target. Send a short test message to the target. Check the reply with `result`.
+The companion reads session events from the OpenCode server. Check for a `local:session:<companion>:opencode:<session>` target. Send a short test message to the target. Check the reply with `result`.
 
 ## DeepSeek Harness
 
@@ -117,4 +117,4 @@ Restart DeepSeek Harness with the `web` profile. Open a session. If you set `SWB
 swb companion connect https://swb.example.com --cap dsh
 ```
 
-Check for a `local:session:dsh:<id>` target. Send a short test message to the target. Check the reply with `result`.
+Check for a `local:session:<companion>:dsh:<session>` target. Send a short test message to the target. Check the reply with `result`.

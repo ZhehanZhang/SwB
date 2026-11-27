@@ -210,7 +210,7 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
         button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
     if methods.get("setup"):
         button += ('<form id="owner-setup" method="post" action="/auth/setup">'
-                   '<label>Setup code <input name="code" type="password" autocomplete="off" '
+                   '<label>Setup code <input name="code" type="password" autocomplete="one-time-code" '
                    'minlength="44" maxlength="64" required></label><button type="submit">Sign in</button></form>')
     title = LOGIN_TITLE if button else "Ask your agent for a sign-in link"
     return HTMLResponse(f"""<!doctype html>

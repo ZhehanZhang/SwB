@@ -259,6 +259,7 @@
   "config_key:targets.aliases": "site/content/docs/en/config.mdx",
   "config_key:targets.priority": "site/content/docs/en/config.mdx",
   "config_key:timezone": "site/content/docs/en/config.mdx",
+  "config_key:trusted_proxies": "site/content/docs/en/self-hosting.mdx",
   "config_key:turn_cap": "site/content/docs/en/config.mdx",
   "config_key:version": "site/content/docs/en/config.mdx",
   "config_key:visibility": "site/content/docs/en/config.mdx",

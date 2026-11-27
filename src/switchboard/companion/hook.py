@@ -107,6 +107,10 @@ def event_payload(
 
 
 def run(args: list[str]) -> None:
+    if args in (["-h"], ["--help"]):
+        print("Usage\n  swb hook {" + ",".join(EVENT_STATES) + "}")
+        print("Forward a local agent event from standard input.")
+        return
     if len(args) != 1 or args[0] not in EVENT_STATES or not supported():
         return
     try:
