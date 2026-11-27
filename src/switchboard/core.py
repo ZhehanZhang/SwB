@@ -28,6 +28,7 @@ from .config import Config, load_config
 from .connect import Connections
 from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
+from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
 from .slack.avatar_files import AvatarFiles
@@ -97,6 +98,7 @@ class Switchboard:
         self._avatar_files: AvatarFiles | None = None
         opts = {**(destination_options or {}), **(block_options or {})}
         self.blocks: dict[str, Block] = {}
+        self.modes = ChannelModes(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
         for b in self.blocks.values():
@@ -186,6 +188,7 @@ class Switchboard:
     async def start(self) -> None:
         for b in self.blocks.values():
             await b.start()
+        self.spawn(self.modes.run(), name="watch-digests")
 
     async def aclose(self) -> None:
         for t in list(self._tasks):
@@ -201,20 +204,33 @@ class Switchboard:
             self.memory.flush_mirror()
         self.store.close()
 
-    def status(self) -> dict[str, Any]:
+    def status(self, principal: Principal | None = None, *, public: bool = False) -> dict[str, Any]:
         problems = list(self.cfg.problems())
         next_steps = {n: b.next_step() for n, b in self.blocks.items()}
         for b in self.blocks.values():
             problems += b.problems()
+
+        def block_status(block: Block) -> dict[str, Any]:
+            out = block.status()
+            restricted = principal is not None and not principal.is_unrestricted_owner
+            if public:
+                out.pop("modes", None)
+            elif "modes" in out and restricted:
+                out["modes"] = self.modes.status(principal, block.name)
+            if block.manifest.id == "github" and (public or restricted):
+                for field in ("installation", "checked_at", "installations", "missing_installations", "installation_problem", "token_scopes"):
+                    out.pop(field, None)
+            return out
+
         return {
             "status": "degraded" if problems else "ok",
             "problems": problems,
             "next_steps": [step for step in next_steps.values() if step],
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
-            "blocks": {n: {**(b.status() if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
+            "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
             "origins": sorted(self.origins),
-            "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
+            "destinations": {n: {"online": d.online, **block_status(d)} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
             "mirror": bool(self.cfg.mirror_dir),
             "turn_cap": {"per_conversation": self.cfg.turn_cap,
@@ -235,18 +251,20 @@ class Switchboard:
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
-                         handle_meta: dict[str, Any] | None = None, _reply: bool = False) -> dict[str, Any]:
+                         handle_meta: dict[str, Any] | None = None, _reply: bool = False, _mode_notify: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
         to = (to or "").strip().lower()
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
+        if original is not None and original["meta"].get("channel_mode") and not _reply:
+            raise CoreError("channel-mode conversations can only be answered with reply")
         root = (original["meta"].get("root") or original["handle"]) if original is not None else None
         if original is not None and self._listen_conversation(original) and not (
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
             raise CoreError("listen conversations can only be answered with reply")
-        if to not in self.known_agents() and not (original is not None and original["ref"] == to):
+        if to not in self.known_agents() and not (original is not None and original["ref"] == to) and not (_mode_notify and to == "owner"):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
         if to == principal.source and not (allow_self or own):
@@ -470,12 +488,15 @@ class Switchboard:
 
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
-                   forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
+                   forward: str | None = None, handle_meta: dict[str, Any] | None = None, handle: str | None = None) -> dict[str, Any]:
         """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
         if principal.targets is not None:
             await self.check_target(principal, to, project, forward)
-        handle = None
         if forward is not None:
+            try:
+                self.modes.check(principal, forward, "forward")
+            except PermissionError as exc:
+                raise CoreError(str(exc)) from exc
             original = self.inbox.handle(forward)
             if original is None or original["destination"] != "mailbox" or original["owner"] != principal.source:
                 raise CoreError("you can only forward a conversation you received")
@@ -494,12 +515,12 @@ class Switchboard:
                 raise CoreError(f"conversation {forward} has already been forwarded")
             handle_meta = {**(handle_meta or {}), "forward_of": forward, "root": meta.get("root") or forward}
         try:
-            if handle is not None:
+            if forward is not None:
                 self.turn(handle_meta["root"], principal)
             return await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
                                     new_conversation=new_conversation, handle=handle, handle_meta=handle_meta)
         except BaseException:
-            if handle is not None:
+            if forward is not None:
                 self.store.x("UPDATE handles SET meta = json_remove(meta, '$.forwarded_to') "
                              "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ? "
                              "AND NOT EXISTS (SELECT 1 FROM inbox WHERE handle = ?)", (forward, handle, handle))
@@ -613,6 +634,19 @@ class Switchboard:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref)
         final = kw.pop("final", None)
+        channel_mode = None
+        if verb in ("reply", "cancel"):
+            try:
+                channel_mode = self.modes.check(principal, ref, "notify_owner" if verb == "reply" and to_owner else verb)
+            except PermissionError as exc:
+                raise CoreError(str(exc)) from exc
+        if channel_mode:
+            if to_owner:
+                return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
+            if self.blocks[channel_mode["block"]].manifest.id == "github":
+                raise CoreError(f"GitHub conversations use {channel_mode['block']}_reply to post a reply")
+            if channel_mode["mode"] == "assist":
+                kw["text"] = (kw.get("text") or "")[:self.modes.assist_max_chars]
         if to_owner and (verb != "reply" or h is None or h["destination"] != "mailbox" or not h["meta"].get("listen")):
             raise CoreError("to_owner is only allowed when replying to a listen conversation")
         if h is not None and h["destination"] == "mailbox":
@@ -639,8 +673,11 @@ class Switchboard:
                     self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="slack",
                                       action="listen_note", outcome="ok", ref=h["handle"], target="owner")
                     return {"conversation": h["handle"], "in_reply_to": h["handle"], "to_owner": True, "delivered": True, "final": final is not False}
-                return {**await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
-                                                final=final is not False, _reply=True),
+                out = await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
+                                            final=final is not False, _reply=True)
+                if channel_mode:
+                    self.modes.audit_action(principal, channel_mode, "reply")
+                return {**out,
                         "to": f"agent:{h['ref']}", "in_reply_to": h["handle"], "final": final is not False}
             if verb == "result":
                 replies = self.mailbox_replies(h["handle"], h["ref"])
@@ -655,7 +692,34 @@ class Switchboard:
         action = block.verb(verb)
         if action is None:
             raise CoreError(f"{block.name} conversations take no {verb}")
-        return await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
+        out = await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
+        if channel_mode:
+            self.modes.audit_action(principal, channel_mode, "reply")
+        return out
+
+    async def notify_mode_owner(self, principal: Principal, conversation: str, text: str, *, to: str | None = None) -> dict[str, Any]:
+        try:
+            meta = self.modes.check(principal, conversation, "notify_owner")
+        except PermissionError as exc:
+            raise CoreError(str(exc)) from exc
+        if meta is None:
+            raise CoreError("notify_owner needs a triage conversation")
+        target = meta["notify_target"]
+        if to is not None and to.removeprefix("agent:").lower() not in ("owner", target):
+            self.modes.audit_action(principal, meta, "notify_owner", "refused")
+            raise CoreError("notify_owner can only message the owner or space's default target")
+        if to is not None and to.removeprefix("agent:").lower() == "owner":
+            target = "owner"
+        if principal.targets is not None:
+            await self.check_target(principal, f"agent:{target}", meta["project"])
+        text = text.strip()
+        if not text:
+            raise CoreError("text is empty")
+        link = f"\n{meta['permalink']}" if meta["permalink"] else ""
+        out = await self.agent_send(principal, to=target, text=f"Triage note for {meta['space']}:{link}\n\n{text}",
+                                    project=meta["project"], allow_self=True, _mode_notify=True)
+        self.modes.audit_action(principal, meta, "notify_owner")
+        return out
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
                      handle: str | None = None, handle_meta: dict[str, Any] | None = None) -> Any:
