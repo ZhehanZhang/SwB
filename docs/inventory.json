@@ -2563,7 +2563,7 @@
       "name": "agent_send"
     },
     {
-      "description": "Stop reporting on a conversation (its handle). The work on the other side keeps running; use reply to stop it.",
+      "description": "Stop following a conversation you sent. The work on the other side continues.",
       "icon": null,
       "id": "tool:cancel",
       "input_properties": [

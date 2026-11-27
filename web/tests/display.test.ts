@@ -43,6 +43,15 @@ test("audit displays the key from project and general memory paths", () => {
     "Deleted memory quick-start.md")
 })
 
+test("audit accepts refusal detail and describes the refusal", () => {
+  const refused = event("webhook", { destination: "example", outcome: "refused", detail: "invalid signature" })
+  assert.ok(isAuditPage({ items: [refused], next_cursor: null }))
+  assert.ok(isAuditPage({ items: [{ ...refused, detail: null }], next_cursor: null }))
+  assert.ok(!isAuditPage({ items: [{ ...refused, detail: { example: "invalid signature" } }], next_cursor: null }))
+  assert.equal(auditText(refused), "Refused webhook for example")
+  assert.equal(auditText(event("tool_refused", { target: "routes_set", outcome: "refused" })), "Refused routes_set")
+})
+
 test("Audit Who uses explicit connector origins without overwriting MCP personas", () => {
   for (const origin of ["slack", "discord", "telegram", "github", "chatgpt", "muse"]) {
     assert.equal(auditActorKind(event("post", { source: "Alex", origin })), origin)

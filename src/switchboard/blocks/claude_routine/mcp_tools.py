@@ -54,10 +54,8 @@ def register(block: "ClaudeRoutineBlock", mcp: MCPServer, kit: Any) -> None:
                           name: Annotated[str | None, Field(description="optional; default claude-<project>, or claude-<project>-<n> when taken")] = None,
                           primary: Annotated[bool | None, Field(description="make this the routine a send to claude for the project wakes")] = None,
                           replace: Annotated[bool, Field(description="point an existing name at a different routine")] = False) -> dict[str, Any]:
-        kit.owner(ctx, "add routines")
         return await kit.invoke(ctx, bname, "add", fire_url=fire_url, token=token, project=project, name=name, primary=primary, replace=replace)
 
     @mcp.tool(title="Remove a Claude routine", description="Owner only. Forget a routine added with routine_add or the root page (config ones are removed in the config file). Audited.", annotations=kit.DELETE)
     async def routine_remove(ctx: Context, name: str) -> dict[str, Any]:
-        kit.owner(ctx, "remove routines")
         return await kit.invoke(ctx, bname, "remove", name=name)

@@ -11,6 +11,9 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.extension import Extension, MethodBinding
+from mcp.server.mcpserver import Context
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.exceptions import MCPError
 from mcp_types import RequestParams
 
 from ...audit import iso
@@ -78,8 +81,6 @@ class TasksExtension(Extension):
         return {"resultType": "task", **self._task(h, detailed=False)}
 
     def _principal(self, ctx: Any) -> Any:
-        from mcp.shared.exceptions import MCPError
-
         from . import principal_of
 
         p = principal_of(ctx.request)
@@ -88,8 +89,6 @@ class TasksExtension(Extension):
         return p
 
     def _handle(self, ctx: Any, task_id: str) -> dict[str, Any]:
-        from mcp.shared.exceptions import MCPError
-
         p = self._principal(ctx)
         h = self.core.inbox.handle(task_id)
         if h is None or h["owner"] != p.source or h["destination"] not in self.core.blocks:
@@ -140,7 +139,11 @@ class TasksExtension(Extension):
 
         async def cancel(ctx: Any, params: TaskParams) -> dict[str, Any]:
             h = self._handle(ctx, params.taskId)
-            await self.core.verb(self._principal(ctx), "cancel", h["handle"])
+            server = self.origin.mcp
+            try:
+                await server.call_tool("cancel", {"conversation": h["handle"]}, Context(request_context=ctx, mcp_server=server))
+            except ToolError as exc:
+                raise MCPError(code=INVALID_PARAMS, message=str(exc)) from exc
             return {"resultType": "complete"}
 
         return [

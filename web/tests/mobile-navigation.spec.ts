@@ -60,6 +60,21 @@ test("About and page metadata use the shared tagline", async ({ page }) => {
   await expect(page.locator('meta[property="og:description"]')).toHaveAttribute("content", TAGLINE.en)
 })
 
+test("Audit shows a webhook refusal reason as plain text", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1200, height: 800 })
+  await page.route("**/api/audit?**", route => route.fulfill({ json: { next_cursor: null, items: [{
+    id: 1, at: "2026-01-01T12:00:00Z", origin: "github", source: "-", destination: "github", action: "webhook",
+    outcome: "refused", target: null, ref: null, detail: "invalid signature",
+  }] } }))
+  await page.goto("/audit")
+  await expect(page.getByRole("columnheader", { name: "Detail" })).toBeVisible()
+  const row = page.getByRole("row").filter({ hasText: "Refused webhook" })
+  await expect(row.getByRole("cell", { name: "invalid signature", exact: true })).toBeVisible()
+  await row.screenshot({ path: testInfo.outputPath("audit-refusal.png") })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(row.getByRole("cell", { name: "invalid signature", exact: true })).toBeVisible()
+})
+
 test("every tab responds to 20 touch taps, including after a route switch or while scrolled", async ({ page }) => {
   await page.goto("/")
   const nav = navigation(page)

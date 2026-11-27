@@ -475,6 +475,8 @@ class ChannelModes:
 
     def check(self, principal: Principal, handle: str | None, action: str, repo: str | None = None) -> dict[str, Any] | None:
         row = self.core.inbox.handle(handle) if handle and handle.startswith("h_") else None
+        if action == "cancel" and row and row["destination"] == "mailbox" and row["ref"] == principal.source:
+            return None
         meta = row["meta"].get("channel_mode") if row else None
         if meta:
             if row["owner"] != principal.source:
