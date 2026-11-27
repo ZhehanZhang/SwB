@@ -144,6 +144,6 @@ On GitHub, open the app settings → **Advanced** → **Recent deliveries**. Ope
 
 ## Fix problems
 
-If deliveries fail with a signature error, the two secrets differ. Make a new secret, enter it at GitHub and save it through a new claim link.
+To fix a signature error, generate a new webhook secret with `openssl rand -hex 32`. Enter it in your GitHub App settings. Ask your agent to call `connect(what="github", choose={"replace":"secret"})`. Save the same secret through the claim link. Restart SwB. Send the event again from **Recent deliveries**.
 
 If `connect` asks for **Issues** write access, open the app settings → **Permissions & events**. Set **Issues** to **Read & write** and accept the change on the installation.

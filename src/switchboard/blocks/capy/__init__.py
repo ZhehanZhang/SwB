@@ -21,6 +21,7 @@ import httpx
 from ...audit import iso
 from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
 from ...block_env import CAPY_KEY, CAPY_SEND_KEY
+from ...claims import ClaimInputError
 from ...refusals import CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED
 from ...subject import lead_with_subject, subject
 from .. import Action, Address, AgentSpec, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("switchboard.capy")
 
+CAPY_KEY_RE = re.compile(r"capy_[A-Za-z0-9_-]{43}")
 MSG_LIMIT = 1500
 RESULT_LIMIT = 20_000
 DIGEST_LIMIT = 2500
@@ -84,6 +86,11 @@ def describe(target: dict[str, Any]) -> str:
 
 def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")[:40]
+
+
+def validate_api_key(value: str) -> None:
+    if not CAPY_KEY_RE.fullmatch(value):
+        raise ClaimInputError("Enter capy_ followed by 43 characters")
 
 
 class CapyBlock(Block):
@@ -144,6 +151,10 @@ class CapyBlock(Block):
         self.followers: dict[str, ThreadStream] = {}
         self._follow_tasks: dict[str, asyncio.Task[Any]] = {}
         self._seed_route(config.get("default_route"))
+
+    def bind(self) -> None:
+        self.core.claims.register_name(CAPY_KEY, validate_api_key)
+        self.core.claims.register_name(self.send_key_env, validate_api_key)
 
     # Lifecycle and health ----------------------------------------------------------------
 

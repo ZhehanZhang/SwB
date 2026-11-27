@@ -22,7 +22,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
 from .__main__ import SERVER_COMMANDS, add_server_commands
-from .config import INSTANCE_CONFIG, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
+from .config import DEFAULT_PORT, INSTANCE_CONFIG, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
 from .store import ensure_private_data_dir
 
@@ -77,9 +77,16 @@ def _instance_config(base: Path, public_url: str | None, *, force: bool) -> None
     _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
 
 
+def _port(value: str) -> int:
+    if not value.isascii() or not value.isdecimal() or len(value) > 5 or not 1 <= (port := int(value)) <= 65535:
+        raise CliError("PORT must be a number from 1 to 65535.")
+    return port
+
+
 def _init(base: Path, public_url: str | None, force: bool) -> None:
     if public_url is not None:
         public_url = _url(public_url, public=True)
+    port = str(_port(os.environ.get("PORT", DEFAULT_PORT)))
     config_path, env_path = base / CONFIG, base / ".env"
     for path in (config_path, env_path):
         if not force and os.path.lexists(path):
@@ -87,7 +94,8 @@ def _init(base: Path, public_url: str | None, force: bool) -> None:
     if not os.path.lexists(config_path):
         ensure_private_data_dir(base / "data")
     _instance_config(base, public_url, force=force)
-    _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
+    port_line = f"PORT={port}\n" if port != DEFAULT_PORT else ""
+    _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n{port_line}", force=force, mode=0o600)
     start = "swb up" if base == Path.cwd() else f"swb up --dir {shlex.quote(str(base))}"
     print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}, then {start.replace('swb up', 'swb login-link', 1)} to sign in.")
 
@@ -160,6 +168,14 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
     return target._replace(path=prefix + path).geturl(), path.startswith("/routines/")
 
 
+def _rate_limit(response: httpx2.Response) -> CliError:
+    delay = response.headers.get("Retry-After", "").strip()
+    if re.fullmatch(r"[0-9]{1,9}", delay):
+        seconds = int(delay)
+        return CliError(f"Slow down. Try again in {seconds} {'second' if seconds == 1 else 'seconds'}.")
+    return CliError("Slow down. Try again shortly.")
+
+
 def _claim(url: str, key: str, *, routine: bool) -> None:
     token = _hidden_input("Token: ")
     if not token.strip():
@@ -170,6 +186,8 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
             response = client.post(url, data={"token": token})
     except (httpx2.HTTPError, ValueError):
         raise CliError("Check that SwB is running and verify --url.") from None
+    if response.status_code == 429:
+        raise _rate_limit(response)
     if not response.is_success:
         status = response.status_code
         if status in CLAIM_ERRORS and response.headers.get("content-type", "").partition(";")[0] == "application/json":
@@ -196,15 +214,27 @@ def _hidden_input(prompt: str) -> str:
 
 
 async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    rate_limit = None
+
+    async def inspect_response(response: httpx2.Response) -> None:
+        nonlocal rate_limit
+        if response.status_code == 429 and response.request.method == "POST":
+            rate_limit = _rate_limit(response)
+
     try:
         async with (
-            httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False) as client,
+            httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False,
+                               event_hooks={"response": [inspect_response]}) as client,
             streamable_http_client(url, http_client=client) as streams,
             ClientSession(*streams, read_timeout_seconds=30) as session,
         ):
             await session.initialize()
             result = await session.call_tool(tool, arguments)
     except Exception:
+        if rate_limit is not None:
+            raise rate_limit from None
+        if tool == "login_link":
+            raise CliError(f"Check that SwB is running at {url.replace(key, '[redacted]')}. Verify the owner key.") from None
         raise CliError("Check that SwB is running. Verify --url and the owner key.") from None
     if result.is_error:
         reason = "\n".join(item.text for item in result.content if item.type == "text" and item.text.strip())
