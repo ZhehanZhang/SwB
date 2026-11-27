@@ -146,6 +146,15 @@ For Slack, `channel:home/#agents` is a channel rule. For GitHub, use `channel:gi
 
 Use `private` for the owner and their agents. Use `shared` to open access. List user IDs or entries such as `workspace:home` to share with selected people. Changes made with `visibility_set` take priority over this file.
 
+## GitHub sender trust
+
+| Key | Use |
+| - | - |
+| `blocks.github.owner_ids` | Default list of numeric GitHub user IDs trusted as owners |
+| `blocks.github.spaces.*.owner_ids` | List of numeric GitHub user IDs that replaces the default for this space |
+
+GitHub uses `owner` and `external` trust. The `known` setting applies to Slack, Discord and Telegram. See [Owner accounts](/docs/blocks/github#owner-accounts) for Work mode setup.
+
 ## MCP
 
 | Key | Use |

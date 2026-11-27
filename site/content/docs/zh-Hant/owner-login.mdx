@@ -36,7 +36,9 @@ swb login-link
 
 ## 通行金鑰
 
-首次登入後，頁面會請你新增通行金鑰。用裝置名稱為金鑰命名。往後用通行金鑰登入。在每台裝置上新增一個通行金鑰。你可以在 **Settings** 查看或移除通行金鑰。
+通行金鑰透過裝置確認你的登入。首次登入後，請用裝置名稱為通行金鑰命名。選取 **Add a passkey**。
+
+若要在另一部裝置上新增通行金鑰，請開啟 **Settings**。在 **Sign-in** 下選取 **Add a passkey**。輸入名稱。選取 **Add passkey** 儲存。日後可用通行金鑰登入。
 
 ## OIDC
 
@@ -82,7 +84,9 @@ SwB 拒絕[配對碼](/zh-Hant/docs/connect#用配對碼連接)時，`/connect` 
 
 ## 工作階段
 
-工作階段是 SwB 主機上的安全 cookie。頁面上的每項變更都帶有 CSRF 權杖。請從 Settings 登出。
+瀏覽器用工作階段 cookie 維持登入狀態。即使在 `http://localhost` 上，SwB 也會將 cookie 標記為 `Secure`。Chrome 和 Firefox 在 `localhost` 上接受這種 cookie。
+
+頁面上的每項變更都帶有 CSRF 權杖。請從 **Settings** 登出。
 
 瀏覽器會透過 `/auth/session` 讀取目前的登入狀態。
 

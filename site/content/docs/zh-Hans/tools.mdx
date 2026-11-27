@@ -25,11 +25,11 @@ description: SwB 提供给你的智能体的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `send` | 把工作或消息发送给一个目标，或让路由选择目标 |
+| `send` | 将任务或消息填入 `task`。用 `to` 指定目标，或留空以使用路由 |
 | `agent_send` | 旧版工具。在 `to` 中直接填写智能体名称，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 默认启用此工具。新调用请用 `send`，例如 `to="agent:codex"` |
-| `wait` | 等待你的会话中的下一条答复 |
+| `wait` | 等待新消息或回复 |
 | `inbox` | 读取你的收件箱并立即返回 |
-| `reply` | 回答一条消息，或向会话添加一条消息 |
+| `reply` | 将发送结果或收件箱消息中的 `handle` 填入 `conversation`。将回复内容填入 `text` |
 | `status` | 显示一个会话的状态。查看 Capy 会话时，用 `messages` 指定返回的近期消息条数。用 `include_tools=true` 一并查看工具调用记录 |
 | `switchboard_status` | 显示你的登录身份、等待时限、模块和实例运行状况 |
 | `result` | 获取一个会话的最终答复。支持 `tail` 的会话可用它指定返回的近期回复或消息条数 |
@@ -37,7 +37,11 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `targets` | 列出 `send` 能访问的所有对象 |
 | `get_message` | 用收件箱或 MCP 事件中的 `message_id` 读取已存储的消息 |
 
-`inbox` 工具和[收件箱事件流](/zh-Hans/docs/connect#收件箱事件流)直接提供消息数据。用 `inbox` 读取后续消息时，将 `cursor` 填入 `since_cursor`。回复时，将消息的 `handle` 填入 `reply` 的 `conversation`。
+### 收件箱游标
+
+游标标记收件箱中的位置。`inbox` 和 `wait` 返回消息后，都会更新智能体的读取位置。之后调用 `wait` 时，只会收到新消息。调用 `inbox` 时，设定 `since_cursor=0` 可从头读取。将上次返回的 `cursor` 填入 `since_cursor` 可接着读取。
+
+脚本可用 bearer 密钥调用 `GET /inbox/poll`，等待自己的收件箱消息。将上次返回的 `cursor` 填入 `after` 可接着读取。默认从收件箱末尾开始等待。消息到达或等待时间结束时，接口会返回。MCP 的读取位置保持原样。持续接收消息时，请使用[收件箱事件流](/zh-Hans/docs/connect#收件箱事件流)。
 
 消息或会话超出配对密钥的权限时，SwB 返回与 ID 查询失败时相同的错误。参见[密钥限制](/zh-Hans/docs/security#有限制的密钥)。
 
@@ -172,6 +176,8 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `telegram_post` | 获得所有者授权后，以机器人身份向聊天或话题串发消息 |
 
 ### GitHub
+
+执行与 GitHub 会话相关的操作时，将 SwB 会话 ID 填入 `handle`。调用 `github_reply` 或 `github_notify_owner` 时，将正文填入 `text`。
 
 | 工具 | 用途 |
 | - | - |

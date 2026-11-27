@@ -23,6 +23,8 @@ Gemini CLI 需要 Gemini Code Assist Standard 或 Enterprise 授權，或付費�
 
 ## 你的步驟
 
+如果 `connect` 提供配對碼，請依 **其他代理** 的配對說明操作。
+
 <Tabs items={['Claude Code', 'Codex', 'Gemini CLI', '其他代理']}>
 <Tab value="Claude Code">
 <Steps>
@@ -103,19 +105,21 @@ gemini mcp add --scope user --transport http switchboard https://swb.example.com
 <Tab value="其他代理">
 <Steps>
 <Step>
-### 取得設定項目
+### 取得設定
 
-告訴代理你使用的程式開發代理名稱。SwB 會提供該代理的檔案名稱與正確的設定項目。
+告訴代理你使用哪個用戶端。選擇 `other` 可取得通用的 Streamable HTTP 設定。
 </Step>
 <Step>
-### 加入設定項目
+### 加入 SwB
 
-把設定項目合併到 SwB 指定的檔案。Goose 的檔案是 `~/.config/goose/config.yaml`。
+如果 SwB 提供配對碼，請用它[換取金鑰](/zh-Hant/docs/setup/mcp-client#換取金鑰)。把金鑰填入傳回的設定。
+
+套用 SwB 提供的設定。Goose 使用 `~/.config/goose/config.yaml`。
 </Step>
 <Step>
 ### 登入
 
-啟動程式開發代理，在它開啟瀏覽器時登入。在 **Connect to SwB** 頁面按一下 **Approve**。
+如果 SwB 提示登入，請啟動程式開發代理。瀏覽器開啟後登入。在 **Connect to SwB** 頁面按一下 **Approve**。
 </Step>
 </Steps>
 </Tab>
@@ -125,16 +129,16 @@ gemini mcp add --scope user --transport http switchboard https://swb.example.com
 
 代理呼叫 `connect(what="coding-agent")`。SwB 會列出支援的程式開發代理。代理會問你使用哪一個，再以 `choose={"agent":"codex"}` 或其他名稱呼叫 `connect`。
 
-SwB 會傳回指令或設定項目，以及登入步驟。如果代理能在你的電腦上執行指令，它會自己執行。瀏覽器中的登入由你完成。
+SwB 會傳回用戶端設定，以及登入或配對步驟。如果代理能在你的電腦上執行設定指令，就會自行執行。瀏覽器中的登入由你完成。
 
-如果 SwB 伺服器關閉了 OAuth 登入，`connect` 會改為提供配對碼。配對碼是一次性的短代碼，用戶端用它換取自己的金鑰。
+OAuth 登入關閉時，`connect` 會使用配對碼。選擇 `other` 時也使用配對碼。需要發出新金鑰時，擁有者會收到配對碼。用戶端用這組一次性代碼換取自己的金鑰。
 
 ## 憑證
 
 | 項目 | 顯示位置 | 格式 | 去處 |
 | - | - | - | - |
 | SwB 存取權杖 | 你按一下 **Approve** 後由程式開發代理保存 | 隨機文字 | 程式開發代理自動保存 |
-| 配對碼 | `connect` 的結果，只在 OAuth 關閉時出現 | `XXXXX-XXXXX`，10 分鐘內有效 | 從你的電腦送出的 `POST /connect` 請求 |
+| 配對碼 | 發出新配對金鑰時，擁有者收到的 `connect` 結果 | `XXXXX-XXXXX`，10 分鐘內有效 | 從你的電腦送出的 `POST /connect` 請求 |
 | 代理金鑰 | `POST /connect` 的回應，只顯示一次 | 以 `swb_` 開頭 | 程式開發代理的私人環境變數 |
 
 ## 檢查連線

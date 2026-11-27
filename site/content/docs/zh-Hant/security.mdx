@@ -18,8 +18,10 @@ SwB 依平台本身的 id 設定每則訊息的信任等級（trust）。只有 
 | 信任等級 | 對象 |
 | - | - |
 | `owner` | 你與你自己已登入的代理 |
-| `known` | 你列在 `known` 的人與機器人 |
+| `known` | 你在 Slack、Discord 或 Telegram 的 `known` 中列出的人與機器人 |
 | `external` | 其他所有人 |
+
+GitHub 的信任等級為 `owner` 和 `external`。請參閱[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
 
 SwB 原樣傳遞擁有者的文字。對於其他寄件者，SwB 會改寫文字中的標頭或標記。接著，SwB 加上自己的標頭與標記 `<<<swb-untrusted` 和 `swb-untrusted>>>`。代理把標記內的文字視為資訊。
 

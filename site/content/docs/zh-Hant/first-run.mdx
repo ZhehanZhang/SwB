@@ -9,13 +9,19 @@ description: 讓 SwB 可從外部連線、登入並檢視你的執行個體。
 
 ## 取得公開位址
 
-Claude、ChatGPT 與 Grok 在雲端執行。它們需要公開的 HTTPS 位址才能連到 SwB。請用通道（tunnel）啟動 SwB 來取得位址。
+Claude、ChatGPT 與 Grok 在雲端執行。它們需要公開的 HTTPS 位址才能連到 SwB。通道會為本機的 SwB 提供公開位址。
+
+安裝 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)。確認終端機可以執行 `cloudflared --version`。如果 SwB 正在執行，請先停止。在 SwB 執行個體的資料夾內執行下列指令。
 
 ```bash
-swb up --tunnel cloudflare
+uvx swb-one up --tunnel cloudflare
 ```
 
-SwB 會開啟 Cloudflare Quick Tunnel，並印出公開的 MCP 位址。若要使用 Tailscale Funnel，請加上 `--tunnel tailscale`。若要在自己的網域上使用固定位址，請閱讀[自行代管](/zh-Hant/docs/self-hosting)。
+SwB 會啟動 Cloudflare Quick Tunnel，並顯示公開的 MCP 位址。使用此選項重新啟動時，每次都會取得新的位址。請更新各應用程式中的位址。
+
+若要使用 Tailscale，請[安裝並登入 Tailscale](https://tailscale.com/download)。啟用 [Funnel](https://tailscale.com/docs/features/tailscale-funnel)。確認終端機可以執行 `tailscale version`。把上方指令的選項改為 `--tunnel tailscale`。
+
+若要在自己的網域上使用固定位址，請閱讀[自行代管](/zh-Hant/docs/self-hosting)。
 
 ## 查看下一步
 
@@ -52,7 +58,7 @@ swb login-link
 | `/inbox/:handle` | 閱讀單一對話中的訊息。 |
 | `/memory/*` | 瀏覽及搜尋已儲存的筆記。 |
 | `/projects/:slug` | 查看單一專案的路由、歷程、對話與記憶。 |
-| `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的連線狀態與[頻道模式](/zh-Hant/docs/channel-modes)。 |
+| `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的連線狀態與 [**Modes**](/zh-Hant/docs/channel-modes)。 |
 | `/settings` | 查看伺服器設定並管理通行金鑰。 |
 | `/tokens` | 查看權杖請求和已儲存的憑證。 |
 | `/about` | 查看 SwB 版本與已啟用的模組。 |

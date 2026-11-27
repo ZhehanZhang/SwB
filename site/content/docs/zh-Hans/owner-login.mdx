@@ -36,7 +36,9 @@ swb login-link
 
 ## 通行密钥
 
-首次登录后，页面会请你添加通行密钥。按设备为通行密钥命名，例如 MacBook。之后的登录使用该通行密钥。在你使用的每台设备上各添加一个通行密钥。Settings 显示你的通行密钥，并允许你删除其中任何一个。
+通行密钥通过设备确认你的登录。首次登录后，请用设备名称给通行密钥命名。选择 **Add a passkey**。
+
+要在另一台设备上添加通行密钥，请打开 **Settings**。在 **Sign-in** 中选择 **Add a passkey**。输入名称。选择 **Add passkey** 保存。之后可以用通行密钥登录。
 
 ## OIDC
 
@@ -82,7 +84,9 @@ SwB 拒绝[配对码](/zh-Hans/docs/connect#用配对码连接)时，`/connect` 
 
 ## 登录状态
 
-登录状态保存在 SwB 主机的安全 cookie 中。页面上的每次变更都带有 CSRF 令牌。在 Settings 中退出登录。
+浏览器用会话 cookie 保持登录状态。即使在 `http://localhost` 上，SwB 也会给 cookie 加上 `Secure` 标记。Chrome 和 Firefox 在 `localhost` 上接受这种 cookie。
+
+页面上的每次变更都带有 CSRF 令牌。在 **Settings** 中退出登录。
 
 浏览器通过 `/auth/session` 读取当前登录状态。
 

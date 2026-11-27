@@ -114,6 +114,10 @@ blocks:
         project: demo
 ```
 
+For Work mode, the agent sets `mode.mode` to `work`. It adds your numeric GitHub user ID to the space's `owner_ids`. See [Owner accounts](/docs/blocks/github#owner-accounts) for the ID lookup and example.
+
+GitHub uses `owner` and `external` trust. The `known` setting applies to Slack, Discord and Telegram. For access rules, use a sender ID such as `github:4242`.
+
 Save the same webhook secret through its claim link. The agent restarts SwB to load the secret and apply the route changes.
 
 The agent calls `connect(what="github")` again for any remaining App ID or private key links. To switch from an existing personal access token to an App, it selects `choose={"credential":"app"}`.
