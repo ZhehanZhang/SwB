@@ -21,6 +21,7 @@ KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
 MIN_KEY_LEN = 24
 CONFIG_PATHS = (Path("config/switchboard.yaml"), Path("/config/switchboard.yaml"))
 DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = "8870"
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
@@ -30,11 +31,23 @@ DEFAULT_INBOX_KEYS = {"channel": "claude-code"}
 REQUEST_BASE: ContextVar[str | None] = ContextVar("switchboard_request_base", default=None)
 
 
+def _http_origin(host: str, port: int | str) -> str:
+    netloc = f"[{host}]" if ":" in host else host
+    return f"http://{netloc}:{port}"
+
+
 def bind_address(env: Mapping[str, str], port: int | str, *, host: str | None = None) -> tuple[str, str]:
     host = host or env.get("SWITCHBOARD_HOST") or DEFAULT_HOST
     origin_host = {"0.0.0.0": DEFAULT_HOST, "::": "::1"}.get(host, host)
-    netloc = f"[{origin_host}]" if ":" in origin_host else origin_host
-    return host, f"http://{netloc}:{port}"
+    return host, _http_origin(origin_host, port)
+
+
+def client_endpoint(env: Mapping[str, str]) -> str:
+    host = env.get("SWITCHBOARD_HOST")
+    if host is None or host not in (DEFAULT_HOST, "::1"):
+        host = "localhost"
+    port = env.get("SWITCHBOARD_PORT") or env.get("PORT") or DEFAULT_PORT
+    return f"{_http_origin(host, port)}/mcp"
 
 
 def _origin(url: str) -> str:

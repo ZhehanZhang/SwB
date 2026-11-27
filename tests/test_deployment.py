@@ -70,12 +70,13 @@ def test_login_cli_reads_the_volume_key(tmp_path, monkeypatch, capsys):
     env = {PLATFORM: "fly", "FLY_APP_NAME": "test-swb", "SWITCHBOARD_DATA": str(tmp_path), "PORT": "8000"}
     key = serve_env(env)[OWNER_KEY]
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv(OWNER_KEY, raising=False)
+    for name in (OWNER_KEY, "SWITCHBOARD_HOST", "SWITCHBOARD_PORT"):
+        monkeypatch.delenv(name, raising=False)
     for name, value in env.items():
         monkeypatch.setenv(name, value)
 
     async def mock_call(url, actual_key, tool, arguments):
-        assert url == "http://127.0.0.1:8000/mcp"
+        assert url == "http://localhost:8000/mcp"
         assert hmac.compare_digest(actual_key, key)
         assert tool == "login_link"
         return {"url": "https://test-swb.fly.dev/login"}
