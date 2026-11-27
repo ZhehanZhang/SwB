@@ -134,7 +134,7 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
     if re.fullmatch(r"[A-Za-z0-9_-]+", link):
         path = f"/claim/{link}"
     else:
-        invalid = CliError("Provide a Switchboard claim link or code.")
+        invalid = CliError("Provide a SwB claim link or code.")
         try:
             parsed = urlsplit(link)
         except ValueError:
@@ -158,9 +158,9 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
                            follow_redirects=False, trust_env=False) as client:
             response = client.post(url, data={"token": token})
     except (httpx2.HTTPError, ValueError):
-        raise CliError("Couldn't submit the claim. Check that Switchboard is running and verify --url.") from None
+        raise CliError("Check that SwB is running and verify --url.") from None
     if not response.is_success:
-        raise CliError(f"Switchboard did not save the token (HTTP {response.status_code}). Check the claim link and owner key.")
+        raise CliError(f"Token claim failed (HTTP {response.status_code}). Check the claim link and owner key.")
     print("Routine saved." if routine else "Token saved. Run swb connect again to check the next step.")
 
 
@@ -183,7 +183,7 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
             await session.initialize()
             result = await session.call_tool(tool, arguments)
     except Exception:
-        raise CliError("Couldn't reach or authenticate to Switchboard. Check that it's running and verify --url and the owner key.") from None
+        raise CliError("Check that SwB is running. Verify --url and the owner key.") from None
     if result.is_error:
         reason = "\n".join(item.text for item in result.content if item.type == "text" and item.text.strip())
         raise CliError(reason.replace(key, "[redacted]") or f"SwB refused the {tool} tool call.")
@@ -194,7 +194,7 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
         except ValueError:
             pass
     if not isinstance(payload, dict):
-        raise CliError("Switchboard returned an unexpected MCP result.")
+        raise CliError("SwB returned an unexpected MCP result.")
     return payload
 
 
@@ -202,7 +202,7 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
     if tool == "login_link":
         url = payload.get("url")
         if not isinstance(url, str) or not url:
-            raise CliError("Switchboard did not return a sign-in link.")
+            raise CliError("Ask SwB for a new sign-in link.")
         return url
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []

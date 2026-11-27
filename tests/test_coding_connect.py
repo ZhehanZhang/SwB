@@ -45,7 +45,7 @@ def test_coding_agent_snippet_uses_remote_url_and_oauth_where_supported(make, ag
     [setup] = [step for step in out["next"] if "snippet" in step]
     snippet = setup["snippet"]
     assert f"{PUBLIC}/mcp" in snippet and setup["by"] in {"you", "person"}
-    assert "wait or inbox" in out["next"][-1]["do"]
+    assert "SwB wait or inbox" in out["next"][-1]["do"]
     assert all(key not in json.dumps(out) for key in (CAPY_KEY, STATIC_KEY))
     if agent == "other":
         assert "unverified" in setup["do"]
@@ -54,6 +54,8 @@ def test_coding_agent_snippet_uses_remote_url_and_oauth_where_supported(make, ag
     else:
         assert "Bearer" not in snippet and not core.store.q("SELECT 1 FROM connect_codes")
         if agent == "claude-code":
+            assert setup["do"] == "Add SwB with this command."
+            assert out["next"][-2]["do"] == "Sign in to SwB from /mcp in Claude Code."
             assert snippet == f"claude mcp add --transport http --scope user switchboard {PUBLIC}/mcp"
             assert "Claude Code channel" in out["next"][-1]["do"]
         else:
