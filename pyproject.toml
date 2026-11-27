@@ -40,6 +40,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+companion = ["bless>=0.2.6,<1"]
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
 
 [project.urls]

@@ -1,12 +1,13 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ChevronRight, KeyRound, LogOut } from "lucide-react"
+import { Apple, ChevronRight, KeyRound, LogOut, Monitor, PanelsTopLeft, Smartphone, Terminal, X } from "lucide-react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { PRODUCT_NAME } from "@/app/brand"
 import { connectionNames } from "@/app/navigation"
 import { preloadOnTouch } from "@/app/route-pages"
 import { ConnectionStatus } from "@/components/console/connection-status"
+import { Lamp } from "@/components/console/lamp"
 import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
@@ -14,7 +15,7 @@ import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
 import { ApiError, isObject, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
 import { channelModesQuery, hasGitHubConnection } from "@/lib/channel-modes"
-import { connectionQuery } from "@/lib/connections"
+import { companionsQuery, connectionQuery, disconnectCompanion, pairCompanion } from "@/lib/connections"
 import { addPasskey, listPasskeys, removePasskey, supportsPasskeys } from "@/lib/owner-auth"
 
 type Settings = {
@@ -51,6 +52,20 @@ const rowClass = "grid min-h-[41px] grid-cols-[minmax(88px,24%)_1fr_auto] items-
 const headingClass = "text-heading-md"
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
 const connectionPlatforms = ["slack", "discord", "telegram"] as const
+const deviceIcons = new Map([
+  ["darwin", Apple], ["macos", Apple], ["linux", Terminal], ["windows", PanelsTopLeft], ["win32", PanelsTopLeft],
+  ["ios", Smartphone], ["android", Smartphone],
+])
+
+function DeviceIcon({ platform }: { platform: string }) {
+  const Icon = deviceIcons.get(platform.toLowerCase()) ?? Monitor
+  return (
+    <span role="img" aria-label={platform}
+      className="inline-grid size-6 shrink-0 place-items-center rounded-md border border-border bg-surface text-foreground dark:border-border-strong dark:bg-surface-sunken">
+      <Icon aria-hidden className="size-3/4" />
+    </span>
+  )
+}
 
 function uptime(seconds: number) {
   if (seconds >= 86_400) return `${Math.floor(seconds / 86_400)} d`
@@ -71,6 +86,7 @@ export function SettingsPage() {
   const passkeys = useQuery(passkeysQuery)
   const connections = useQueries({ queries: connectionPlatforms.map(connectionQuery) })
   const modes = useQuery(channelModesQuery)
+  const companions = useQuery(companionsQuery)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState("")
   const csrf = session?.csrf ?? null
@@ -83,6 +99,26 @@ export function SettingsPage() {
     client.invalidateQueries({ queryKey: passkeysQuery.queryKey }),
     client.invalidateQueries({ queryKey: sessionQuery.queryKey }),
   ])
+  const { data: pairing, isPending: pairingPending, mutate: pair, reset: clearPairing } = useMutation({
+    gcTime: 0,
+    mutationFn: () => pairCompanion(csrf),
+    onError: (error) => {
+      if (!(error instanceof SignedOutError)) toast.error("Pairing code unavailable")
+    },
+  })
+  const disconnect = useMutation({
+    mutationFn: (id: string) => disconnectCompanion(id, csrf),
+    onSuccess: () => client.invalidateQueries({ queryKey: companionsQuery.queryKey }),
+    onError: (error) => {
+      if (!(error instanceof SignedOutError)) toast.error("Disconnect failed")
+    },
+  })
+  useEffect(() => {
+    if (!pairing) return
+    const timeout = window.setTimeout(clearPairing, pairing.expires_in_s * 1_000)
+    return () => window.clearTimeout(timeout)
+  }, [pairing, clearPairing])
+
   const register = useMutation({
     mutationFn: () => addPasskey(csrf, name.trim() || "Passkey"),
     onSuccess: async () => {
@@ -161,7 +197,21 @@ export function SettingsPage() {
       </section>
 
       <section aria-labelledby="settings-connections">
-        <h2 id="settings-connections" className={headingClass}>Connections</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="settings-connections" className={headingClass}>Connections</h2>
+          <Button variant="outline" size="sm" disabled={!csrf || pairingPending || Boolean(pairing)} onClick={() => pair()}>
+            {pairingPending ? "Pairing…" : "Pair a device"}
+          </Button>
+        </div>
+        {pairing && (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-b py-2">
+            <output aria-label="Pairing code" className="wrap-anywhere font-mono text-mono-md">{pairing.code}</output>
+            <CopyButton text={pairing.code} label="Copy pairing code" />
+            <Button variant="ghost" size="icon" className="size-6 text-muted-foreground" aria-label="Close pairing code" onClick={clearPairing}>
+              <X aria-hidden />
+            </Button>
+          </div>
+        )}
         <ul className="mt-2">
           {[...connectionPlatforms, "github" as const].map((platform, index) => {
             const connection = connections[index]
@@ -182,7 +232,27 @@ export function SettingsPage() {
               </li>
             )
           })}
+          {companions.data?.companions.map(companion => (
+            <li key={companion.id}
+              className="grid min-h-[41px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b py-2 text-body-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <DeviceIcon platform={companion.platform} />
+                <span className="min-w-0 wrap-anywhere">{companion.name}</span>
+                <Lamp state={companion.online ? "on" : "off"} label={companion.online ? "Online" : "Offline"} />
+              </span>
+              <span className="order-last col-span-2 wrap-anywhere ps-[34px] text-muted-foreground sm:order-none sm:col-span-1 sm:ps-0">
+                {companion.capabilities.join(", ")}
+              </span>
+              <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!csrf || disconnect.isPending}
+                aria-label={`Disconnect ${companion.name}`} onClick={() => disconnect.mutate(companion.id)}>
+                {disconnect.isPending && disconnect.variables === companion.id ? "Disconnecting…" : "Disconnect"}
+              </Button>
+            </li>
+          ))}
         </ul>
+        {companions.isError && !companions.data && (
+          <DataState kind="error" message="Devices unavailable" onRetry={() => void companions.refetch()} />
+        )}
       </section>
 
       {settings.data && (

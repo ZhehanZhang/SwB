@@ -27,6 +27,7 @@ test.beforeEach(async ({ page }) => {
     const { pathname } = new URL(route.request().url())
     if (pathname === "/api/board") return route.fulfill({ json: board })
     if (pathname === "/api/inbox") return route.fulfill({ json: inbox })
+    if (pathname === "/api/companions") return route.fulfill({ json: { companions: [] } })
     if (pathname === "/api/about") return route.fulfill({ json: { version: "1.0.0", commit: "unknown", build_date: "unknown", blocks: [] } })
     return route.fulfill({ status: 404, json: { error: "not_found" } })
   })
@@ -74,6 +75,71 @@ test("Audit shows a webhook refusal reason as plain text", async ({ page }, test
   await row.screenshot({ path: testInfo.outputPath("audit-refusal.png") })
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(row.getByRole("cell", { name: "invalid signature", exact: true })).toBeVisible()
+})
+
+test("Connections shows companion devices and supports pairing and disconnecting", async ({ page }, testInfo) => {
+  const csrf = "fixture-csrf"
+  const code = "fixture-pairing-code"
+  const url = "https://example.test/fixture-pairing-url"
+  let companions = [
+    { id: "device-1", name: "Studio Mac", platform: "darwin", online: true, last_seen: 1, capabilities: ["notify"] },
+    { id: "device-2", name: "Workshop Laptop", platform: "linux", online: false, last_seen: 0, capabilities: ["notify"] },
+  ]
+  await page.route("**/auth/session", route => route.fulfill({
+    json: { signed_in: true, via: "access", csrf, methods: { passkeys: 0, oidc: null, access: true } },
+  }))
+  await page.route("**/api/connections/*", route => route.fulfill({
+    json: { platform: new URL(route.request().url()).pathname.split("/").at(-1), state: "not_configured", block: null, details: null },
+  }))
+  await page.route("**/api/modes", route => route.fulfill({
+    json: { schema: { modes: ["off"], dm_modes: ["off"], actions: [], default: "off" }, spaces: [], dm: [] },
+  }))
+  await page.route("**/api/companions", route => route.fulfill({ json: { companions } }))
+  await page.route("**/pairing/companion", route => {
+    expect(route.request().method()).toBe("POST")
+    expect(route.request().headers()["x-csrf-token"]).toBe(csrf)
+    return route.fulfill({ json: { code, url, expires_in_s: 30 } })
+  })
+  await page.route("**/api/companions/device-1/revoke", route => {
+    expect(route.request().method()).toBe("POST")
+    expect(route.request().headers()["x-csrf-token"]).toBe(csrf)
+    companions = companions.filter(device => device.id !== "device-1")
+    return route.fulfill({ json: { ok: true } })
+  })
+
+  await page.clock.install()
+  await page.setViewportSize({ width: 1200, height: 850 })
+  await page.goto("/settings")
+  const connections = page.getByRole("region", { name: "Connections" })
+  const mac = connections.getByRole("listitem").filter({ hasText: "Studio Mac" })
+  const laptop = connections.getByRole("listitem").filter({ hasText: "Workshop Laptop" })
+  const pair = connections.getByRole("button", { name: "Pair a device" })
+  const pairingCode = connections.getByRole("status", { name: "Pairing code" })
+  await expect(mac.getByRole("img", { name: "darwin" })).toBeVisible()
+  await expect(mac.getByText("Online", { exact: true })).toBeAttached()
+  await expect(mac.getByText("notify", { exact: true })).toBeVisible()
+  await expect(laptop.getByRole("img", { name: "linux" })).toBeVisible()
+  await expect(laptop.getByText("Offline", { exact: true })).toBeAttached()
+  await expect(pairingCode).toHaveCount(0)
+  await connections.screenshot({ path: testInfo.outputPath("connections-desktop.png") })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(mac.getByText("notify", { exact: true })).toBeVisible()
+  await connections.evaluate(section => section.scrollIntoView({ block: "center", behavior: "instant" }))
+  await connections.screenshot({ path: testInfo.outputPath("connections-mobile.png") })
+  await pair.click()
+  await expect(pairingCode).toHaveText(code)
+  await expect(connections.getByText(url, { exact: true })).toHaveCount(0)
+  await connections.getByRole("button", { name: "Close pairing code" }).click()
+  await expect(pairingCode).toHaveCount(0)
+  await pair.click()
+  await expect(pairingCode).toBeVisible()
+  await page.clock.fastForward(30_001)
+  await expect(pairingCode).toHaveCount(0)
+
+  await mac.getByRole("button", { name: "Disconnect Studio Mac" }).click()
+  await expect(mac).toHaveCount(0)
+  await expect(laptop).toBeVisible()
 })
 
 test("every tab responds to 20 touch taps, including after a route switch or while scrolled", async ({ page }) => {

@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import argparse
+import asyncio
+import logging
+import os
+from collections.abc import Callable
+from pathlib import Path
+
+from . import client
+from .caps import CAPABILITIES, registry
+from .state import CompanionError, CompanionState, base_url, state_path
+
+
+def add_commands(commands: argparse._SubParsersAction) -> None:
+    companion = commands.add_parser("companion", help="connect this device to SwB")
+    actions = companion.add_subparsers(dest="companion_action", required=True)
+    connect = actions.add_parser("connect", help="pair this device and run the companion")
+    connect.add_argument("url", help="SwB server URL")
+    connect.add_argument("--code", help="pairing code (entered privately by default)")
+    connect.add_argument("--no-run", action="store_true", help="pair this device and exit")
+    connect.add_argument("--cap", action="append", choices=CAPABILITIES, help="opt in to a capability (repeat as needed)")
+    connect.add_argument("--drop-dir", type=Path, help="use this Drop folder")
+    actions.add_parser("run", help="run the paired companion")
+    actions.add_parser("status", help="show the local companion status")
+    actions.add_parser("disconnect", help="disconnect this device from SwB")
+
+
+def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
+    action = args.companion_action
+    path = state_path()
+    state = CompanionState.load(path)
+    if state is None and action in ("status", "disconnect"):
+        print("Pair this device with swb companion connect.")
+        return
+    if state is None and action == "run":
+        raise CompanionError("Pair this device with swb companion connect.")
+    if state is not None and action == "connect":
+        raise CompanionError("Disconnect this device before pairing again.")
+    loggers = [logging.getLogger(name) for name in ("httpx", "httpcore")]
+    levels = [logger.level for logger in loggers]
+    try:
+        for logger in loggers:
+            logger.setLevel(logging.CRITICAL + 1)
+        if action == "connect":
+            url = base_url(args.url)
+            enabled = tuple(dict.fromkeys(args.cap or ()))
+            drop_dir = Path(os.path.abspath((args.drop_dir or (Path.home() / "SwB Drop")).expanduser()))
+            caps, unavailable = registry(enabled, drop_dir)
+            if enabled and not caps:
+                raise CompanionError(next(iter(unavailable.values())))
+            for reason in unavailable.values():
+                print(reason, flush=True)
+            code = args.code if args.code is not None else hidden_input("Pairing code: ")
+            if not (code := code.strip()):
+                raise CompanionError("Enter a pairing code.")
+            state = asyncio.run(client.pair(url, code, caps, enabled, drop_dir))
+            state.save(path)
+            print("This device is paired.", flush=True)
+            if args.no_run:
+                return
+        elif action == "disconnect":
+            asyncio.run(client.disconnect(state, path))
+            return
+        else:
+            caps, unavailable = registry(state.enabled_caps, Path(state.drop_dir))
+            if action == "status":
+                print(f"This device is paired as {state.companion_id}.")
+                for cap in caps.values():
+                    print(cap.title)
+                for reason in unavailable.values():
+                    print(reason)
+                return
+        asyncio.run(client.run(state, path, caps))
+    except KeyboardInterrupt:
+        pass
+    except (OSError, UnicodeError):
+        raise CompanionError("Check the companion settings and file permissions.") from None
+    finally:
+        for logger, level in zip(loggers, levels):
+            logger.setLevel(level)
