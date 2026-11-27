@@ -61,6 +61,14 @@ def test_passkey_count_and_enrollment_follow_the_host(make):
     assert "Add a passkey" not in primary.get("/", headers=OWNER).text
 
 
+def test_legacy_passkey_counts_only_on_the_primary_host(make):
+    core, primary, alias = both(make)
+    core.store.x("INSERT INTO owner_passkeys(id, name, public_key, sign_count, created_at) VALUES ('a', 'Old', x'00', 0, 0)")
+    assert primary.get("/auth/session").json()["methods"]["passkeys"] == 1
+    assert alias.get("/auth/session").json()["methods"]["passkeys"] == 0
+    assert "Sign in with a passkey" not in alias.get("/login").text
+
+
 @pytest.mark.parametrize(("aliases", "rp_id"), [(["http://swb.example.test"], None), ([PUBLIC], None), ([ALIAS], "other.test"), ([ALIAS], "test")])
 def test_alias_and_rp_id_validation(tmp_path, aliases, rp_id):
     import yaml
