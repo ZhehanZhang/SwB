@@ -108,7 +108,7 @@ function AgentList({ project, compact = false }: { project: Project; compact?: b
     <ul className="min-w-0 self-center">
       {project.agents.map((agent) => (
         <li key={agent.id} className={`flex min-w-0 items-center ${compact ? "h-8 gap-1.5 pl-3" : "h-10 gap-2.5 pl-5"}`}>
-          <LogoTile kind={agent.kind} avatarUrl={agent.avatar_url} className={compact ? "size-[18px]" : undefined} />
+          <LogoTile kind={agent.kind} avatarUrl={agent.avatar_url ?? null} className={compact ? "size-[18px]" : undefined} />
           <span className="truncate text-label-sm" title={agent.label}>{agent.label}</span>
           {!compact && (
             <>
@@ -281,7 +281,7 @@ export function OverviewPage() {
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {board.data.unassigned.map((item) => (
               <li key={item.id} className="flex items-center gap-2" title={item.detail ?? undefined}>
-                <LogoTile kind={item.kind} avatarUrl={item.avatar_url} className="size-[22px]" />
+                <LogoTile kind={item.kind} avatarUrl={item.avatar_url ?? null} className="size-[22px]" />
                 <span>{item.short_label ?? item.label}</span>
               </li>
             ))}

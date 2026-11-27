@@ -77,7 +77,7 @@ function RoutePoint({ endpoint, mode, short = false }: {
   return (
     <span className="flex min-w-0 items-center gap-2" title={endpoint.detail ?? endpoint.label}>
       <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${color}`} />
-      <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url} className="size-[21px]" />
+      <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url ?? null} className="size-[21px]" />
       <span className={`truncate ${mode !== "route" && "font-mono text-mono-sm"}`}>
         {short ? endpoint.short_label ?? endpoint.label : endpoint.label}
       </span>
@@ -226,7 +226,7 @@ function ProjectActivity({ data }: { data: ProjectBoard }) {
               <li key={handle} className="border-b border-border">
                 <Link to={`/inbox/${encodeURIComponent(handle)}`} className="block py-2.5 hover:bg-muted">
                   <div className="flex min-w-0 items-center gap-2">
-                    <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url} className="size-[18px]" />
+                    <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url ?? null} className="size-[18px]" />
                     <span className="truncate text-label-sm">{endpoint.label}</span>
                     {at && <time title={formatTime(at)} dateTime={at} className="ml-auto shrink-0 font-mono text-mono-sm text-subtle-foreground">{formatAge(at)}</time>}
                   </div>
