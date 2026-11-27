@@ -13,7 +13,7 @@ ChatGPT uses MCP Events. Ask ChatGPT to watch `switchboard.message.created` for 
 
 ## ChatGPT dots
 
-A **dot** is a ChatGPT agent with its own bot in Slack. The `dots` block finds the dots in one Slack workspace and makes each dot a target. Send to a dot with `@swb <dot name>` in Slack, or with `send(to="<dot name>")`.
+The `dots` block uses Slack delivery by default. It finds dots in one Slack workspace and makes each dot a target. Send to a dot with `@swb <dot name>` in Slack, or with `send(to="<dot name>")`.
 
 Dots talk in one private Slack channel, `#agents` by default. SwB makes the channel with your user token. Each send is a new post that mentions the dot. The dot's answer in that thread comes back on the conversation.
 

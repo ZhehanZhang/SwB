@@ -1,9 +1,9 @@
 ---
 title: Grok Bot
-description: 透過自訂連接器與由 SwB 喚醒的例行程序，將 Grok Bot 連線到 SwB。
+description: 透過自訂連接器與由 SwB 喚醒的 routine，將 Grok Bot 連線到 SwB。
 ---
 
-Grok Bot 是 xAI 的桌面代理應用程式。這項連線會把 SwB 加入 Grok Bot，並建立一個由 SwB 透過 Webhook 啟動的例行程序。例行程序是一項已儲存的工作。Webhook 是一個網址，SwB 呼叫它就能啟動例行程序。
+Grok Bot 是 xAI 的桌面代理應用程式。這項連線會把 SwB 加入 Grok Bot，並建立一個由 SwB 透過 Webhook 啟動的 routine。routine 是一項已儲存的工作。Webhook 是一個網址，SwB 呼叫它就能啟動 routine。
 
 ## 開始之前
 
@@ -66,15 +66,15 @@ Grok Bot 是 xAI 的桌面代理應用程式。這項連線會把 SwB 加入 Gro
 
 ### 貼上提示詞
 
-把設定提示詞貼到 Bot 對話。Grok Bot 會建立一個具備 Webhook 觸發條件的例行程序。
+把設定提示詞貼到 Bot 對話。Grok Bot 會建立一個具備 Webhook 觸發條件的 routine。
 
 </Step>
 
 <Step>
 
-### 開啟例行程序
+### 開啟 routine
 
-點選對話頂端的 Bot 名稱。選擇 **Details**。再選擇該例行程序。檢查 **Instruction**、**When to run** 與 **Webhook**。
+點選對話頂端的 Bot 名稱。選擇 **Details**。再選擇該 routine。檢查 **Instruction**、**When to run** 與 **Webhook**。
 
 </Step>
 
@@ -98,7 +98,7 @@ Grok Bot 是 xAI 的桌面代理應用程式。這項連線會把 SwB 加入 Gro
 
 ### 告訴 Grok Bot
 
-在 Bot 對話中說已完成。Grok Bot 接著會測試該例行程序。
+在 Bot 對話中說已完成。Grok Bot 接著會測試該 routine。
 
 </Step>
 
@@ -106,32 +106,32 @@ Grok Bot 是 xAI 的桌面代理應用程式。這項連線會把 SwB 加入 Gro
 
 ## 代理的工作
 
-Grok Bot 會呼叫 `connect(what="grok-bot")`。SwB 會回傳 MCP 位址、OAuth 狀態與一段例行程序提示詞。這段提示詞要求每次執行以 Webhook 中的 `trust` 欄位為準，並用 `reply` 回覆。
+Grok Bot 會呼叫 `connect(what="grok-bot")`。SwB 會回傳 MCP 位址、OAuth 狀態與一段 routine 提示詞。這段提示詞要求每次執行以 Webhook 中的 `trust` 欄位為準，並用 `reply` 回覆。
 
-Grok Bot 會用這段提示詞建立例行程序。接著它呼叫 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 註冊例行程序。SwB 會回傳兩個領取連結。你儲存兩項內容後，Grok Bot 會執行 `send(to="grok-routine:routine:<routine>", task="switchboard setup test: reply pong")`。它會再次呼叫 `connect`，查看 Grok 是否接受這次呼叫。
+Grok Bot 會用這段提示詞建立 routine。接著它呼叫 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 註冊 routine。SwB 會回傳兩個領取連結。你儲存兩項內容後，Grok Bot 會執行 `send(to="grok-routine:routine:<routine>", task="switchboard setup test: reply pong")`。它會再次呼叫 `connect`，查看 Grok 是否接受這次呼叫。
 
-Webhook 是這項連線的喚醒方式。每則傳給該例行程序的 SwB 訊息都會啟動一次新的執行。
+Webhook 是這項連線的喚醒方式。每則傳給該 routine 的 SwB 訊息都會啟動一次新的執行。
 
 ## 憑證
 
 | 權杖 | 顯示位置 | 格式 | 存放位置 |
 | - | - | - | - |
-| Webhook URL | 例行程序 **Details** 中 **Webhook** 下方的 **POST to** | HTTPS 位址 | 對應 SwB 領取連結的 **Webhook URL** |
-| Webhook 金鑰 | 例行程序 **Details** 中 **Webhook** 下方的 **key** | 隨機文字 | 對應 SwB 領取連結的 **Token** |
+| Webhook URL | routine **Details** 中 **Webhook** 下方的 **POST to** | HTTPS 位址 | 對應 SwB 領取連結的 **Webhook URL** |
+| Webhook 金鑰 | routine **Details** 中 **Webhook** 下方的 **key** | 隨機文字 | 對應 SwB 領取連結的 **Token** |
 | SwB 登入權杖 | 你登入時由 Grok Bot 取得 | 隨機文字 | 由 Grok Bot 保存 |
 
 領取連結是 SwB 上的一次性私人頁面，一個頁面對應一個權杖。每項內容只貼到對應的領取連結。
 
 ## 檢查連線
 
-開啟例行程序的 **Details**，檢查 **Webhook** 觸發條件。請 Grok Bot 再次呼叫 `connect(what="grok-bot")`。狀態列會顯示該例行程序。測試傳送方會在 `inbox` 收到 pong。
+開啟 routine 的 **Details**，檢查 **Webhook** 觸發條件。請 Grok Bot 再次呼叫 `connect(what="grok-bot")`。狀態列會顯示該 routine。測試傳送方會在 `inbox` 收到 pong。
 
 ## 排除問題
 
 複製 **key**，**header** 維持原樣。SwB 會自行加上 `Authorization: Bearer` 部分。
 
-傳送到 `grok-routine:routine:<routine>` 才會啟動例行程序。傳送到 `agent:grok` 只會把訊息放進信箱。
+傳送到 `grok-routine:routine:<routine>` 才會啟動 routine。傳送到 `agent:grok` 只會把訊息放進信箱。
 
 領取連結只能使用一次，30 分鐘後失效。若要取得新連結，請再次呼叫 `connect`。若要更換已儲存的內容，請呼叫 `connect`，並把 `choose.replace` 設為 `url` 或 `secret`。
 
-grok.com **Automations** 的 Webhook 使用另一種簽章格式。請為 SwB 使用 Grok Bot 例行程序。
+[grok.com](https://grok.com) **Automations** 的 Webhook 使用另一種簽章格式。請為 SwB 使用 Grok Bot routine。

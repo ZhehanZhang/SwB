@@ -10,24 +10,35 @@ Agents see the tools that their sign-in allows. Block tools appear when the bloc
 | Tool | Use |
 | - | - |
 | `send` | Send work or a message to a target, or let the route choose the target |
-| `agent_send` | Send a message to another agent. Use `send` with `to="agent:<name>"` in new calls |
+| `agent_send` | Deprecated name for `send` with `to="agent:<name>"`. Available in this release only. `blocks.mcp.legacy_aliases` enables it by default. Use `send` for new calls |
 | `wait` | Wait for the next reply on your conversations |
 | `inbox` | Read your inbox and return at once |
 | `reply` | Answer a message, or add a message to a conversation |
-| `status` | Show the state of one conversation |
+| `status` | Show the state of one conversation. For Capy, use `messages` for the number of recent messages. Set `include_tools=true` to include tool activity |
 | `switchboard_status` | Show your sign-in identity, wait limits, blocks and instance health |
-| `result` | Get the final reply of a conversation |
+| `result` | Get the final reply of a conversation. Use `tail` to set the number of recent replies or messages where supported |
 | `cancel` | Stop following a conversation |
 | `targets` | List everything `send` can reach |
 | `get_message` | Read one stored message by id |
+
+### Send options
+
+| Option | Use |
+| - | - |
+| `wait_s` | Wait this many seconds for the first reply from a block that returns a conversation ID. The limit depends on the client. Use `wait` for agent mailboxes |
+| `forward` | Pass the ID of an eligible conversation you received with `owner` trust. SwB sends the final reply to the original sender |
+| `new_conversation` | Set `true` to start a new thread in the Capy Captain's project. Set `false` to send to the Captain's thread |
+| `files` | Attach files to a Capy task. Give each file a `name` and either `text` or `base64` content. Use `media_type` to set the file type |
+| `repos` | Pass the repositories for a Capy task as `owner/repo` names. Use repositories linked to the SwB project |
+| `in_reply_to` | Use `reply` with `conversation` to answer a message. `send` rejects `in_reply_to` |
 
 ## Memory and projects
 
 | Tool | Use |
 | - | - |
 | `context_pack` | Get the briefing for a project |
-| `memory_write` | Make or change a memory entry |
-| `memory_search` | Search memory |
+| `memory_write` | Save an entry with `scope`, `namespace`, `title` and `body`. A namespace groups entries within a scope. Use up to three lowercase levels, such as `notes/meetings`. For project memory, pass its short name in `project` and use `scope="project:<slug>"`. For general memory, set `confirm_general=true` after the owner agrees |
+| `memory_search` | Search memory with `query`. The default scope is `general`. Pass the project slug in `project` to search that project first, then `general`. Set `include_general=false` to search that project alone |
 | `memory_list` | List memory entries |
 | `memory_read` | Read one entry with its history |
 | `memory_delete` | Remove an entry |
@@ -47,18 +58,25 @@ Agents see the tools that their sign-in allows. Block tools appear when the bloc
 | `connect_list` | List agent keys |
 | `connect_revoke` | Remove an agent key |
 | `login_link` | Make a one-time sign-in link for the owner |
-| `routes_list`, `routes_set`, `routes_remove`, `routes_resolve` | Manage routes |
-| `routine_register`, `routine_list`, `routine_pickup` | Manage Claude Code routines |
-| `routine_add` | Add a Claude Code routine with its token as the owner |
-| `routine_remove` | Remove a registered Claude Code routine as the owner |
 | `modes_status` | Show the modes of channels and repositories you can access |
 | `space_mode` | Set a mode for a space or channel as the owner. Use `inherit` to clear this setting |
 | `visibility_list` | Show the default access rules and the rules for individual resources. Use the owner sign-in |
 | `visibility_set` | Set a resource to private or shared as the owner. Tools stay private |
 
-## Block tools
+## Routes
 
-Other block tools include `discord_status` and `telegram_provision`.
+A route picks a target for `send`. Use a block that accepts routes, such as `capy`, `claude-routine`, `grok-routine` or `muse`. Use `send` with `to="agent:<name>"` to reach an agent mailbox directly.
+
+| Tool | Use |
+| - | - |
+| `routes_list` | List routes across all blocks |
+| `routes_set` | Save a route. Give `target` the block address, such as `capy:captain:<name>`. Use `agent` or `project` to limit the route |
+| `routes_resolve` | Show the matching route on one block. Pass its name in `block`, such as `grok-routine` |
+| `routes_remove` | Remove the route for the exact `agent` and `project` on the chosen `block` |
+
+`routes_resolve` and `routes_remove` use the first block that accepts routes by default. Pass `block` to select a different one.
+
+## Block tools
 
 ### Capy
 
@@ -75,16 +93,61 @@ Other block tools include `discord_status` and `telegram_provision`.
 | `capy_result` | Get the latest reply from a Capy thread with available links to files and pull requests. Use `result` in new calls |
 | `capy_cancel` | Stop following work sent to Capy. The Capy thread can continue. Use `cancel` in new calls |
 
+### Claude Code routines
+
+These tools appear when the `claude-routine` block is on. A routine is a Claude Code task that SwB can start.
+
+| Tool | Use |
+| - | - |
+| `routine_register` | Register a routine and get a link for the owner to enter its token |
+| `routine_list` | List the routines SwB can start |
+| `routine_pickup` | Pick up the message when a routine starts with an empty prompt |
+| `routine_add` | Add a routine with its token as the owner |
+| `routine_remove` | Remove a routine saved through SwB as the owner |
+
 ### Slack
 
 | Tool | Use |
 | - | - |
+| `slack_workspaces` | List the Slack workspaces you can use, the accounts available in each and their posting rules |
 | `slack_channels` | List channels visible to the selected Slack account. The list marks the channels SwB watches |
+| `slack_search` | Search messages in a workspace through the owner's Slack account |
 | `slack_history` | Read recent messages in a channel with the newest first |
 | `slack_thread` | Read the first message in a thread and its replies with the oldest first |
 | `slack_watched` | List the channels whose new messages go to your SwB inbox |
+| `slack_events` | Read recent messages in watched channels, bot mentions and direct messages. The newest items come first |
+| `slack_wait` | Wait for the next Slack item in your inbox |
 | `slack_personas` | Show the names and images available for bot posts and the default choice |
 | `slack_targets` | List target names to put after a bot mention in Slack |
+| `slack_post` | Post as the bot or the owner's Slack account. Use `thread_ts` to post a reply in a thread. The posting rules can require owner approval |
 | `slack_react` | Add an emoji reaction to a message. The same rules apply as for `slack_post` |
 | `slack_request_write` | Send a proposed Slack post to the owner for approval |
 | `slack_write_requests` | Check the state of your Slack approval requests. Use `request_id` to read one request |
+
+### Discord
+
+| Tool | Use |
+| - | - |
+| `discord_status` | Show the Discord connection, spaces and remaining setup |
+| `discord_provision` | Get the setup links and a one-time bot token entry link as the owner |
+| `discord_post` | Post as the bot to a channel or thread with a grant from the owner |
+
+### Telegram
+
+| Tool | Use |
+| - | - |
+| `telegram_status` | Show the Telegram connection, spaces and remaining setup |
+| `telegram_provision` | Get the setup links and a one-time bot token entry link as the owner |
+| `telegram_post` | Post as the bot to a chat or thread with a grant from the owner |
+
+### GitHub
+
+| Tool | Use |
+| - | - |
+| `github_status` | Check the webhook, repository modes and GitHub App permissions |
+| `github_label` | Add existing labels to an issue or pull request |
+| `github_comment` | Comment on an issue or pull request |
+| `github_open_issue` | Open an issue in a repository |
+| `github_link_duplicate` | Link an issue to its original in the same repository. SwB adds `duplicate` and closes the duplicate as `not_planned` |
+| `github_notify_owner` | Send the owner an inbox note with a link to the issue or pull request that started the conversation |
+| `github_reply` | Reply in the GitHub thread that started the SwB conversation |
