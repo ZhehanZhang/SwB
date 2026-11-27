@@ -46,7 +46,9 @@ Have the new app call `inbox`. A successful call confirms the connection, even w
 
 For a round trip, use an app with SwB owner access. On the SwB computer, you can use a private MCP session instead. Load `SWB_KEY_OWNER` from the instance `.env` inside the client. Send it only as a bearer token to the local SwB address. Keep the key out of commands, logs and chat.
 
-Send a test message to `agent:notes-bot` with my chosen name. Ask the new agent to read it with `inbox` and answer with `reply`. Call `result` from the same owner app or session. Show me the reply.
+Call `send(to="agent:notes-bot", task="SwB setup test. Reply pong.")`. Replace `notes-bot` with my chosen name. Ask the new agent to read the message with `inbox`. Ask it to answer with `reply`. Call `result` from the same owner app or session. Show me the reply.
+
+For the first shared memory check, use `general` if the paired key has that grant. Otherwise use a project scope that both agents can read. Ask the new agent to call `memory_list` with the chosen scope in `scopes`.
 
 Ask me to paste the coordinator prompt from https://swb.one/prompts/coordinator.md into the new app. The client can subscribe to `switchboard.message.created` if it supports MCP events. It can also use `wait` or `inbox` to read messages.
 

@@ -8,18 +8,24 @@ description: 用 Docker Compose 和 Cloudflare 在服务器上运行 SwB。
 以拥有数据目录的用户身份运行这些命令。
 
 ```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
 (umask 077; cp .env.example .env)
 {
   printf 'SWB_UID=%s\n' "$(id -u)"
   printf 'SWB_KEY_OWNER='
   openssl rand -hex 32
 } >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
 mkdir -p data
-docker compose up -d
+docker compose up -d --build
 curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Compose 在 `http://127.0.0.1:8870` 提供 SwB，并把数据保存在 `./data`。修改 `.env` 后，再次运行 `docker compose up -d`。
+请在五分钟内打开终端显示的一次性登录链接。
+
+所有者在浏览器中通过 `http://localhost:8870` 登录。容器内的命令使用 `8000` 端口。Compose 将数据保存在 `./data`。修改 `.env` 后，再次运行 `docker compose up -d`。
 
 运行 `docker compose exec switchboard swb login-link` 获取 `http://localhost:8870` 的登录链接。
 

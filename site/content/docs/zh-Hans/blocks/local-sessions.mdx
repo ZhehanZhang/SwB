@@ -3,94 +3,118 @@ title: 本地会话
 description: 向已配对设备上的编程智能体发送消息。
 ---
 
-本地会话是指正在已配对设备上运行的编程智能体。SwB 会把它列为目标。目标是可以接收消息的地址。
-
-## 发送消息
-
-用 `targets` 工具查找会话地址。将 `block` 设为 `local`。地址格式为 `local:session:<harness>:<id>`。其中 `harness` 指运行智能体的程序。
-
-向该地址发送消息。SwB 先将消息放入智能体的邮箱，再尝试送到已打开的会话。智能体的答复会回到原来的 SwB 会话。
-
-会话状态包括运行中、等待处理、空闲和已完成。SwB 也可以将会话状态显示为 `unknown`。等待处理表示会话正在等待批准或输入。SwB 会把消息留在邮箱中，并保持会话原样。请在会话中处理请求。
-
-SwB 会把会话状态和基本信息发给你部署的 SwB。基本信息包括会话名称和文件夹名称等。对于经 SwB 送达的消息，设备还可以发回一条答复。其余会话内容留在设备上。
+本地会话是编程智能体在已配对设备上打开的工作环境。SwB 会把会话列为目标。目标是可以接收消息的地址。
 
 ## 配对设备
 
-请使用[伴侣设备的设置提示词](/zh-Hans/docs/companion#复制设置提示词)。伴侣设备是运行 SwB 的自有设备。在这台设备上运行对应智能体的命令。将示例地址换成你的 SwB HTTPS 地址。每启用一项功能，添加一个 `--cap` 选项。要更改已配对设备的功能，请先[断开连接](/zh-Hans/docs/companion#断开连接)。
+按照[配对设备](/zh-Hans/docs/companion#配对设备)中的说明操作。使用下方对应智能体的命令。每启用一项功能，添加一个 `--cap` 选项。要更改已配对设备的功能，请先[断开连接](/zh-Hans/docs/companion#断开连接)。
 
-### Herdr
+请以所有者身份登录的智能体调用 `targets(block="local")`，检查设置结果。复制会话地址。地址格式为 `local:session:<companion>:<harness>:<session>`。其中 `harness` 指运行智能体的程序。
 
-在 Herdr 的终端窗格中打开编程智能体。窗格是终端内的一块区域。SwB 通过 Herdr 的套接字连接它。套接字是设备上的通信接口。
+## 发送消息
+
+调用 `send`，将会话地址填入 `to`。SwB 先将消息放入智能体的邮箱。对于支持直接连接的会话，SwB 也会尝试将消息送入已打开的会话。用 `result` 在原来的 SwB 会话中读取答复。
+
+| 状态 | 含义 |
+| --- | --- |
+| `working` | 智能体正在工作 |
+| `blocked` | 智能体正在等待批准或输入 |
+| `idle` | 智能体可以接收任务 |
+| `done` | 智能体已完成任务 |
+| `unknown` | 状态待确认 |
+
+如果会话正在等待处理，请在会话中回应请求。SwB 会将消息留在邮箱中。
+
+SwB 会将会话状态发给你部署的 SwB。它也可以报告会话名称和文件夹名称。对于经 SwB 送达的消息，设备可以发回一条答复。其余会话内容留在设备上。
+
+## 状态钩子
+
+智能体报告变化时，钩子会运行命令。macOS 和 Linux 支持状态钩子。
+
+```sh
+swb companion connect https://swb.example.com --cap hooks
+```
+
+用 [pipx](/zh-Hans/docs/install) 安装 `swb` 命令。将它加入智能体的命令搜索路径。如果设置了 `SWB_COMPANION_HOME`，请让智能体和伴侣设备使用同一目录。
+
+| 智能体 | 事件命令 | 配置方式 |
+| --- | --- | --- |
+| Claude Code | `swb hook claude-code` | 将 `channel/hooks/hooks.json` 中的 `hooks` 合并到 `~/.claude/settings.json` |
+| Gemini CLI | `swb hook gemini` | 用下方的命令从本地副本安装 SwB 扩展 |
+| Codex | `swb hook codex` | 将 `integrations/codex/hooks.json` 中的 `hooks` 合并到 `~/.codex/hooks.json` |
+
+请使用 [SwB 发布分支的本地副本](/zh-Hans/docs/self-hosting#docker-compose)中的文件。Claude Code 的 SwB 插件也包含这些钩子。如果设置了 `CODEX_HOME`，请使用该目录中的 `hooks.json`。
+
+```sh
+gemini extensions install /path/to/SwB/integrations/gemini
+```
+
+配置钩子后，打开一个新会话。用 `targets(block="local")` 确认会话地址已出现。单独启用状态钩子时，会话通过邮箱收取消息。
+
+## Herdr
+
+在 Herdr 的窗格中打开编程智能体。窗格是终端中的一块区域。伴侣设备通过 Herdr 的套接字接收会话事件。套接字让同一台设备上的程序互相通信。
+
+如果使用命名的 Herdr 会话，请设置 `HERDR_SESSION`。如果使用自定义套接字路径，请在运行伴侣设备的终端中设置 `HERDR_SOCKET_PATH`。
 
 ```sh
 swb companion connect https://swb.example.com --cap herdr --cap hooks
 ```
 
-使用 Claude Code、Gemini CLI 或 Codex 时，可以启用[状态钩子](#状态钩子)，让伴侣设备传回答复。
+要接收窗格中的答复，请配置对应的[状态钩子](#状态钩子)。确认目标中出现 `local:session:<companion>:herdr:<session>` 地址。向该地址发送一条简短的测试消息。确认消息出现在窗格中。如果配置了状态钩子，请用 `result` 查看答复。
 
-### Codex
+## Codex
 
-在一个终端中启动 Codex 应用服务器。
+Codex 应用服务器是一个进程，让其他程序访问已打开的 Codex 会话。在一个终端中启动它。
 
 ```sh
 codex app-server --listen unix://
 ```
 
-再从另一个终端将 Codex 连到该服务器。
+在另一个终端中打开会话。
 
 ```sh
 codex --remote unix://
 ```
 
-另开一个终端来配对设备。如果使用自定义套接字路径，请在运行伴侣设备的终端中设置 `SWB_CODEX_SOCKET`。
+另开一个终端运行伴侣设备。如果为应用服务器设置了 `CODEX_HOME`，请在这里使用同一个值。如果使用自定义套接字路径，请设置 `SWB_CODEX_SOCKET`。
 
 ```sh
 swb companion connect https://swb.example.com --cap codex
 ```
 
-### OpenCode
+伴侣设备从应用服务器读取会话事件。确认目标中出现 `local:session:<companion>:codex:<session>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
 
-在设备上启动 OpenCode 服务器。将 `SWB_OPENCODE_URL` 设为服务器的本机 HTTP 或 HTTPS 地址。如果服务器设有密码，请在运行伴侣设备的终端中设置 `OPENCODE_SERVER_PASSWORD`。
+## OpenCode
+
+在设备上启动 OpenCode 服务器。
+
+```sh
+opencode serve --hostname 127.0.0.1 --port 4096
+```
+
+在服务器上打开会话。将 `SWB_OPENCODE_URL` 设为服务器的本机地址。如果服务器设有密码，请在运行伴侣设备的终端中设置 `OPENCODE_SERVER_PASSWORD`。
 
 ```sh
 SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
 ```
 
-### DeepSeek Harness
+伴侣设备从 OpenCode 服务器读取会话事件。确认目标中出现 `local:session:<companion>:opencode:<session>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
 
-使用 DeepSeek Harness `0.2.2-rc.5`。将 SwB 桥接插件装到 `web` 配置中。该插件将已打开的会话接入伴侣设备。
+## DeepSeek Harness
 
-仓库的默认分支包含该插件时，请运行以下命令。
+使用 DeepSeek Harness `0.2.2-rc.5`。配置方案是一组应用设置。将 SwB 桥接插件安装到 `web` 配置方案中。插件会将会话事件传给伴侣设备。
 
-```sh
-dsh plugin --profile web add github:ZhehanZhang/SwB#path:/integrations/dsh
-```
-
-如果从包含该插件的 SwB 本地副本安装，请使用插件的绝对路径。
+此版本请从本地副本安装。桥接插件位于 `release/1.0` 分支。将 `/path/to/SwB` 换成本地副本的绝对路径。
 
 ```sh
 dsh plugin --profile web add /path/to/SwB/integrations/dsh
 ```
 
-安装后重启 `web` 配置。
+使用 `web` 配置方案重启 DeepSeek Harness。打开一个会话。如果设置了 `SWB_COMPANION_HOME`，请让 DeepSeek Harness 和伴侣设备使用相同的绝对路径。
 
 ```sh
 swb companion connect https://swb.example.com --cap dsh
 ```
 
-## 状态钩子
-
-钩子会在智能体启动、状态变化或结束时运行命令。在 macOS 和 Linux 上，`--cap hooks` 可以接收 Claude Code、Gemini CLI 和 Codex 的状态。仅使用钩子的会话通过邮箱收取消息。
-
-位于 `channel/` 的 SwB Claude Code 插件已包含钩子。[Claude Code 频道](/zh-Hans/docs/blocks/coding-agents)是另一项处于研究预览阶段的功能。
-
-在 Gemini CLI 中，请从 SwB 的本地副本安装扩展。
-
-```sh
-gemini extensions install <path-to-SwB>/integrations/gemini
-```
-
-在 Codex 中，请使用该副本中的 `integrations/codex/hooks.json`。
-
-伴侣设备的钩子套接字存在时，钩子才会调用 `swb hook <harness>`。请将 `swb` 加入智能体的命令搜索路径。
+确认目标中出现 `local:session:<companion>:dsh:<session>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。

@@ -22,7 +22,7 @@ description: SwB 连接的每个平台。
 
 ## 所有模块的共同点
 
-SwB 根据平台的发送者 ID 标记消息的信任等级。在 Slack、Discord 和 Telegram 中，`known` 是接收设置。SwB 用它判断接收哪些发送者的消息。所有者之外的发送者即使通过 `known` 获准，消息的信任等级仍为 `external`。详见[信任](/zh-Hans/docs/security#信任)。
+SwB 根据平台的发送者 ID 标记消息的信任等级。在 Slack、Discord 和 Telegram 中，`known` 是接收设置。SwB 用它判断接收哪些发送者的消息。所有者之外的发送者即使通过 `known` 获准，消息的信任等级仍为 `external`。详见[信任](/zh-Hans/docs/security#信任等级)。
 
 每个目标、频道和记忆范围起初都是私有的。只有所有者能访问私有资源。共享资源后，其他人才能访问它。
 
