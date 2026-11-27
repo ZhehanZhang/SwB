@@ -39,7 +39,7 @@ __all__ = ["Target", "build_targets", "near", "slugify", "split_slug"]
 
 
 def split_slug(text: str, bot_user_id: str | None) -> tuple[str, str]:
-    """('teamcaptain', 'rest of the message') for '<@BOT> TeamCaptain: rest of the message'; ('', text) without a candidate."""
+    """('helper', 'rest of the message') for '<@BOT> Helper: rest of the message'; ('', text) without a candidate."""
     body = text or ""
     lead = LEAD_MENTION.match(body)
     if lead and (bot_user_id is None or f"<@{bot_user_id}" in lead.group(0)):

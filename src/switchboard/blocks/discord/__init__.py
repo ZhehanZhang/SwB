@@ -78,7 +78,7 @@ class DiscordBlock(ChatBlock):
         if "dm_space" in config and (not isinstance(self.dm_space, str) or self.dm_space not in raw_spaces):
             raise BlockError(f"{where}.dm_space must name a configured space")
         self.threads = config.get("threads", True)
-        self.personas = config.get("personas", False)
+        self.personas = config.get("personas", True)
         self.message_content = config.get("message_content", True)
         self.connect = config.get("connect", True)
         for key in ("threads", "personas", "message_content", "connect"):
@@ -103,6 +103,7 @@ class DiscordBlock(ChatBlock):
         self.channels: dict[str, Channel] = {}
         self.webhooks: dict[str, tuple[str, str]] = {}
         self.webhook_ids: set[str] = set()
+        self._webhook_denied: set[str] = set()
         self._post_lock = asyncio.Lock()
         self._connect_lock = asyncio.Lock()
         self._transport = config.get("transport") or httpx.AsyncHTTPTransport()
@@ -158,7 +159,8 @@ class DiscordBlock(ChatBlock):
                 "dm_users": [{"id": u, "name": n} for u, n in self.dm_users.items()]}
 
     def status(self) -> dict[str, Any]:
-        return {**super().status(), "discovered": self.discovered()}
+        return {**super().status(), "discovered": self.discovered(),
+                **({"personas": "missing Manage Webhooks"} if self._webhook_denied else {})}
 
     async def _load_owner(self) -> None:
         token = self.token()
@@ -204,6 +206,8 @@ class DiscordBlock(ChatBlock):
             out.extend(f"Invite the bot to {label}: {invite}" for guild, label in self.guild_spaces.items() if guild not in self.guilds)
             if self.auto_space and self.connected() and not any(self.space_for(g) == self.auto_space for g in self.guild_info):
                 out.append(f"Invite the bot to a server you own for space {self.auto_space}: {invite}")
+            if self._webhook_denied:
+                out.append(f"Re-open the invite URL to grant Manage Webhooks: {invite}")
         out.extend(f"Set blocks.{self.name}.spaces.{s.label}.owner_ids to the owner's Discord user ID." for s in self.spaces.values() if not self.owners(s))
         return out
 
@@ -211,7 +215,7 @@ class DiscordBlock(ChatBlock):
         source = "env" if self.core.cfg.env.get(self.token_env) else "stored" if self.token() else None
         return {"developer_portal_url": PORTAL, "invite_url": self._invite(), "application_id": self.application_id,
                 "bot_user_id": self.user_id, "bot_name": self.bot_name, "token_source": source,
-                "claim_pending": self.claims.pending("bot_token"), "intents": [name for name, bit in INTENTS.items() if self.intents & bit],
+                "claim_pending": self.claim_pending(), "intents": [name for name, bit in INTENTS.items() if self.intents & bit],
                 "steps": ["1. Create a New Application in the Discord Developer Portal.",
                           "2. Under Bot, reset or generate the bot token."
                           + (" Turn on Message Content Intent under Bot." if self.message_content else ""),
@@ -269,6 +273,7 @@ class DiscordBlock(ChatBlock):
             self.channels.clear()
             self.webhooks.clear()
             self.webhook_ids.clear()
+            self._webhook_denied.clear()
             if self._running:
                 self._start_gateway()
 
@@ -451,20 +456,25 @@ class DiscordBlock(ChatBlock):
             thread = await self._thread(channel, root, self.threads and place.type in THREAD_PARENT_TYPES)
         reference = (reply_to or (root if thread is None else None)) if dm or not self.threads or thread is None else None
         data: dict[str, Any] = {"allowed_mentions": {"parse": []}}
-        webhook = self.personas and persona is not None and not dm and reference is None
-        params = None
-        if webhook and persona is not None:
-            webhook_id, secret = await self._webhook(parent)
-            path = f"/webhooks/{webhook_id}/{secret}"
-            params = {"wait": "true", **({"thread_id": thread} if thread else {})}
-            data["username"] = PERSONA_NAME_RE.sub("swb", persona.name).strip()[:80].rstrip() or "swb"
-            if persona.icon_url:
+        bot_path = f"/channels/{thread or channel}/messages"
+        webhook_path = None
+        persona_data: dict[str, str] = {}
+        if self.personas and persona is not None and not dm and reference is None:
+            try:
+                webhook_id, secret = await self._webhook(parent)
+                webhook_path = f"/webhooks/{webhook_id}/{secret}"
+            except rest.DiscordHTTPError as exc:
+                if exc.status != 403:
+                    raise
+                self._webhook_denied.add(parent)
+            persona_data["username"] = PERSONA_NAME_RE.sub("swb", persona.name).strip()[:80].rstrip() or "swb"
+            avatar = persona.avatar or (f"{persona.id}.png" if not persona.icon_url else None)
+            avatar_url = (self.core.avatar_url(avatar) if avatar else None) or persona.icon_url
+            if avatar_url:
                 with contextlib.suppress(ValueError):
-                    url = urlsplit(persona.icon_url)
+                    url = urlsplit(avatar_url)
                     if url.scheme == "https" and url.hostname:
-                        data["avatar_url"] = persona.icon_url
-        else:
-            path = f"/channels/{thread or channel}/messages"
+                        persona_data["avatar_url"] = avatar_url
         chunks = []
         start, length = 0, 0
         for end, char in enumerate(text):
@@ -477,8 +487,22 @@ class DiscordBlock(ChatBlock):
         if reference:
             data["message_reference"] = {"message_id": reference}
         ids = []
+        params = {"wait": "true", **({"thread_id": thread} if thread else {})}
         for chunk in chunks:
-            sent = await self.request("POST", path, json={**data, "content": chunk}, params=params, webhook=webhook)
+            body = {**data, "content": chunk}
+            if webhook_path:
+                try:
+                    sent = await self.request("POST", webhook_path, json={**body, **persona_data}, params=params, webhook=True)
+                except rest.DiscordHTTPError as exc:
+                    if exc.status != 403:
+                        raise
+                    self._webhook_denied.add(parent)
+                    self.webhooks.pop(parent, None)
+                    webhook_path = None
+                else:
+                    self._webhook_denied.discard(parent)
+            if not webhook_path:
+                sent = await self.request("POST", bot_path, json=body)
             ids.append(sent["id"])
             data.pop("message_reference", None)
         return ids[0] if len(ids) == 1 else ids

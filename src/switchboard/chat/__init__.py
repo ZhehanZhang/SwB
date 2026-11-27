@@ -31,8 +31,8 @@ from typing import TYPE_CHECKING, Any
 
 from ..auth import Principal
 from ..blocks import Action, Block, BlockError, Call
+from ..claims import CLAIM_TTL_S
 from ..slack.config import AVATAR_RE
-from ..slack.engine import find_avatar
 from ..trust import wrap
 from ..visibility import Who
 from .claims import Claims
@@ -105,6 +105,7 @@ class Persona:
     id: str
     name: str
     icon_url: str | None = None
+    avatar: str | None = None
 
 
 class ChatBlock(Block):
@@ -204,8 +205,7 @@ class ChatBlock(Block):
         error = "could not apply avatar"
         with contextlib.suppress(Exception):
             try:
-                engine = self.core.slack
-                path = engine.find_avatar(file) if engine is not None else find_avatar(file)
+                path = self.core.find_avatar(file)
                 if path is None:
                     raise BlockError("avatar file not found")
                 data = path.read_bytes()
@@ -294,7 +294,7 @@ class ChatBlock(Block):
                 return None
         p = target.get("persona") or {}
         name = p.get("name") or target.get("name") or p.get("id")
-        return Persona(id=p.get("id") or target["id"], name=str(name), icon_url=p.get("icon_url")) if name else None
+        return Persona(id=p.get("id") or target["id"], name=str(name), icon_url=p.get("icon_url"), avatar=p.get("avatar_file")) if name else None
 
     # Intake ----------------------------------------------------------------------------------
 
@@ -610,7 +610,14 @@ class ChatBlock(Block):
         return str(self.config.get("token_env") or f"{self.name.upper().replace('-', '_')}_BOT_TOKEN")
 
     def token(self) -> str | None:
+        if not self.core.cfg.access_team_domain:
+            return self.core.secret(self.token_env) or self.claims.get("bot_token")
         return self.secret("bot_token", self.token_env)
+
+    def claim_pending(self) -> bool:
+        if not self.core.cfg.access_team_domain:
+            return self.core.claims.pending(self.token_env)
+        return self.claims.pending("bot_token")
 
     async def connect_steps(self, kind: str, principal: Principal, project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
         token = bool(self.token())
@@ -627,15 +634,21 @@ class ChatBlock(Block):
             steps.append(f"Add a space under blocks.{self.name}.spaces with the project it belongs to.")
         steps += [f"Space {s.label} has no owner ids. {self.owner_hint()}" for s in self.spaces.values()
                   if not self.owners(s) and f"spaces.{s.label}.owner_ids" not in " ".join(steps)]
-        return {"done": done, "next": [{"by": "person", "do": step} for step in steps]}
+        next_steps = [{"by": "person", "do": step} for step in steps]
+        if self.connected() and self._avatar_status["file"] is None:
+            next_steps.append({"by": "person", "do": f"Set blocks.{self.name}.avatar to an image file to give the bot an icon.", "optional": True})
+        return {"done": done, "next": next_steps}
 
     def owner_hint(self) -> str:
         return f"DM the bot once, then copy your id from {self.name}_status into owner_ids."
 
     def claim_link(self, actor: str) -> dict[str, Any]:
-        """A one-time link where the owner enters (or rotates) the bot token behind Access."""
+        """A one-time link where the signed-in owner enters or rotates the bot token."""
         from .claims import ClaimError
 
+        if not self.core.cfg.access_team_domain and self.core.cfg.env.get("SWITCHBOARD_KEY_OWNER"):
+            return {"link": self.core.claims.mint(self.token_env, self.core.base_url), "expires_in_s": CLAIM_TTL_S, "secret": "bot_token",
+                    "next": "Use swb claim with this link to save the token from your terminal."}
         try:
             return self.claims.open("bot_token", actor)
         except ClaimError as e:

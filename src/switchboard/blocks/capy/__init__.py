@@ -931,19 +931,26 @@ class CapyBlock(Block):
         if self.api is None:
             return []
         out = []
+        persona_ids = set(self.core.known_agents())
         for c in await self.api.list_captains():
             if c.get("archived"):
                 continue
             name = c.get("name") or c.get("title") or c["id"]
-            pid = _slug(name)
-            out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [pid, str(c.get("code") or "").lower()],
+            slug = _slug(name)
+            code = str(c.get("code") or "").lower()
+            pid = slug or code or c["id"]
+            if pid in persona_ids:
+                pid = f"{pid[:29]}-{hashlib.sha256(c['id'].encode()).hexdigest()[:10]}"
+            persona_ids.add(pid)
+            out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [slug, code],
                         "persona": {"id": pid, "name": name, "avatar": c.get("avatar")}})
         return out
 
-    async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = False) -> str | None:
+    async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = True) -> str | None:
         from .avatars import render_captain
 
-        return await render_captain(http, out_dir, persona.get("name") or persona["id"], persona.get("avatar"), remote or bool(self.config.get("avatars")))
+        return await render_captain(http, out_dir, persona.get("name") or persona["id"], persona.get("avatar"),
+                                    remote and bool(self.config.get("avatars", True)), captain_id=persona.get("target_id"))
 
     def parse_route_target(self, text: str) -> dict[str, Any]:
         return parse_target(text)

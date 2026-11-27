@@ -103,4 +103,4 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             if p.is_unrestricted_owner:
                 core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination=block.name if block else "core",
                                   action=f"connect_{what}", outcome=outcome)
-        return {"what": what, **out, **({"state": "connected"} if not out["next"] else {})}
+        return {"what": what, **out, **({"state": "connected"} if all(step.get("optional") for step in out["next"]) else {})}

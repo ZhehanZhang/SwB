@@ -5,7 +5,7 @@
 version: 2
 
 # Public origin of this server. The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url.
-public_url: https://swb.example.com
+public_url: https://switchboard.example.com
 timezone: America/New_York
 # One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
 # A new send starts at zero. null switches it off.
@@ -15,10 +15,10 @@ auth:
   # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
   owner_emails: [owner@example.com]
   # Verify the Cf-Access-Jwt-Assertion header on / (admin) and /authorize. Access app "Switchboard" covers the whole host
-  # with SSO; "Switchboard machine paths (bypass)" lets /mcp, /token, /register, /revoke, /.well-known, /healthz,
+  # with your identity provider; a bypass policy for machine paths lets /mcp, /token, /register, /revoke, /.well-known, /healthz,
   # /inbox, /avatars and /connect through. There is no password sign-in: without this block, OAuth sign-in and the admin page are off.
   cloudflare_access:
-    team_domain: your-team.cloudflareaccess.com
+    team_domain: example.cloudflareaccess.com
     aud: <AUD tag of the "Switchboard" Access application>
   # Allowed OAuth redirect URIs (exact, or prefix with /*; loopback matches any port). Default: every agent's from the
   # agents registry (presets plus block agents, e.g. Capy's from the capy block) and loopback. Setting it replaces that.
@@ -28,7 +28,7 @@ auth:
   # Optional: map a redirect host / client name fragment to an agent name.
   # source_names: {cursor: cursor}
   # Optional: limit bearer keys (by name, the part after SWITCHBOARD_KEY_) to memory scopes. Unlisted keys see every scope.
-  # key_scopes: {acme-agent: [project:acme]}
+  # key_scopes: {example-agent: [project:example]}
   # inbox_keys: {channel: claude-code}         # inbox-only keys (/inbox/poll, /inbox/events) bound to one agent; this is the default
 
 # Optional. Who calls in. Without this section every preset (claude, chatgpt, gemini, claude-code) is known, plus the
@@ -67,7 +67,8 @@ blocks:
     # token_env: DISCORD_BOT_TOKEN             # environment override; otherwise save at the discord_provision link
     # application_id: "100000000000000000"   # optional; learned from the Gateway if omitted
     # threads: true                           # start a public thread when replying in a server text channel
-    # personas: false                         # use one webhook per parent channel for persona posts
+    # personas: true                          # use webhooks for persona posts; false posts as the bot only
+    # avatar: switchboard.png                 # bot profile picture, not a persona avatar
     # message_content: true                   # enable Message Content Intent under Bot in the Discord Developer Portal
     # ack_reaction: "👀"                        # null disables acknowledgements
     # dm_space: home                          # use this space's trust and routing in DMs; defaults to the first space
@@ -78,8 +79,8 @@ blocks:
     # refresh_minutes: 30                     # how often to refresh targets
     # spaces:
     #   home:
-    #     guild_id: "100000000000000001"      # required Discord server ID
-    #     owner_ids: ["100000000000000002"]   # the owner's Discord user IDs
+    #     guild_id: "100000000000000001"      # may be omitted for one space to discover its server
+    #     owner_ids: ["100000000000000002"]   # optional override for the discovered application owner
     #     known: {"100000000000000003": Friend}
     #     listen: ["100000000000000004"]      # channel or thread IDs
     #     default_target: helper
@@ -104,8 +105,7 @@ blocks:
     captain_delivery: queue
     # Stop following a delegation after this many days (MCP task TTL too).
     handle_ttl_days: 7
-    # true: Captain personas use their Capy avatar in Slack (an undocumented capy.ai asset path); off by default.
-    avatars: false
+    # avatars: true                           # false uses monograms instead of fetching Captain assets
 
   # Telegram (optional): long polling in, Bot API posts out. Set enabled: true to start setup.
   telegram:
@@ -134,7 +134,7 @@ blocks:
   slack:
     use: slack
     refresh_minutes: 30                         # how often targets ("@swb <slug>") are re-read
-    workspace_projects: {}                      # e.g. {a2a: acme}: the switchboard project a workspace's events belong to
+    workspace_projects: {}                      # e.g. {a2a: example}: the switchboard project a workspace's events belong to
     channel_projects: {}
     listen_channels: {}
     # Needed only for persona avatars stored under <data>/avatars, which Slack fetches from <public_base_url>/avatars/<file>
@@ -143,7 +143,7 @@ blocks:
     max_text_chars: 4000
     event_retention_days: 14
     # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts. A persona with no
-    # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled monograms; emoji is the fallback.
+    # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled marks; emoji is the fallback.
     personas:
       switchboard: {name: Switchboard, emoji: ":robot_face:"}
       claude: {name: Claude}
@@ -153,8 +153,8 @@ blocks:
       claude-code: {name: Claude Code}
       capy: {name: Capy}
       helper: {name: Helper, avatar: helper.png}
-    avatar_dirs: []                               # extra folders searched for avatar files (e.g. a branding overlay)
-    target_aliases: {}                            # extra "@bot <slug>" names, e.g. {pp: teamcaptain}
+    avatar_dirs: []                               # optional folders with files that override bundled marks
+    target_aliases: {}                            # extra "@bot <slug>" names, e.g. {help: helper}
     workspaces:
       # Workspace A: an agent room. The bot is @mentionable and can also act as the owner (with approval).
       a2a:
@@ -213,7 +213,7 @@ blocks:
 visibility:
   defaults: {target: private, channel: private, memory: private, route: private}
   resources:
-    target:teamcaptain: shared
+    # target:helper: shared
     channel:a2a/#agents: shared
     # target:helper: [U0FRIEND0, workspace:a2a]
 

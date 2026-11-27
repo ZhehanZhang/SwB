@@ -30,6 +30,7 @@ from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
+from .slack.avatar_files import AvatarFiles
 from .store import Store
 from .visibility import Visibility
 
@@ -92,6 +93,8 @@ class Switchboard:
         self.slack_connect = bool(self.slack_options.pop("connect", True))
         self._targets: dict[str, tuple[float, list[dict[str, Any]]]] = {}
         self.target_errors: dict[str, str] = {}
+        self._avatar_http: httpx.AsyncClient | None = None
+        self._avatar_files: AvatarFiles | None = None
         opts = {**(destination_options or {}), **(block_options or {})}
         self.blocks: dict[str, Block] = {}
         for name, sec in self.cfg.blocks.items():
@@ -118,6 +121,31 @@ class Switchboard:
             if engine is not None:
                 return engine
         return None
+
+    @property
+    def avatars(self) -> AvatarFiles:
+        slack = self.slack
+        if slack is not None and slack.config.public_base_url:
+            return slack.avatars
+        if self._avatar_files is None:
+            self._avatar_files = AvatarFiles(self.data_dir, self.cfg.public_url, slack.config.avatar_dirs if slack is not None else ())
+        return self._avatar_files
+
+    @property
+    def avatar_http(self) -> httpx.AsyncClient:
+        if self._avatar_http is None:
+            self._avatar_http = httpx.AsyncClient(transport=self.http_transport)
+        return self._avatar_http
+
+    @property
+    def avatar_cache(self) -> Path:
+        return self.avatars.rendered
+
+    def find_avatar(self, name: str) -> Path | None:
+        return self.avatars.find_avatar(name)
+
+    def avatar_url(self, name: str) -> str | None:
+        return self.avatars.avatar_url(name)
 
     def _seed_routes(self, seeds: list[dict[str, Any]]) -> None:
         """The config's routes: seed each agent/project slot once (routes_set and the page manage them after). Empty by default."""
@@ -164,6 +192,8 @@ class Switchboard:
             t.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+        if self._avatar_http is not None:
+            await self._avatar_http.aclose()
         for b in reversed(list(self.blocks.values())):
             await b.aclose()
         await self.auth.http.aclose()
@@ -297,6 +327,19 @@ class Switchboard:
 
     # Targets ------------------------------------------------------------------------------------
 
+    async def _render_target(self, block: Block, target: dict[str, Any]) -> dict[str, Any]:
+        persona = target.get("persona")
+        if not persona:
+            return target
+        slack = self.slack
+        try:
+            avatar = await block.render_avatar({**persona, "target_id": target["id"]}, self.avatar_http, self.avatar_cache,
+                                               slack is None or slack.config.captain_avatars)
+        except OSError as exc:
+            log.warning("Avatar cache for %s:%s is unavailable: %s", block.name, target["id"], type(exc).__name__)
+            return target
+        return {**target, "persona": {**persona, "avatar_file": avatar}} if avatar else target
+
     async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> list[dict[str, Any]]:
         """Every block's targets, plus an agent:<name> mailbox per known agent and a project:<slug> route per project.
         A block that fails keeps its last good list, and the error shows in target_errors."""
@@ -308,7 +351,8 @@ class Switchboard:
             at, got = self._targets.get(name, (0.0, []))
             if refresh or now - at > TARGETS_TTL_S or not got:
                 try:
-                    got = await b.targets()
+                    found = await b.targets()
+                    got = list(await asyncio.gather(*(self._render_target(b, t) for t in found))) if type(b).render_avatar is not Block.render_avatar else found
                     self._targets[name] = (now, got)
                     self.target_errors.pop(name, None)
                 except Exception as exc:
@@ -330,6 +374,20 @@ class Switchboard:
         if query:
             q = query.strip().lower()
             out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
+        slack = self.slack
+        personas = slack.config.personas if slack is not None else {}
+        for t in out:
+            if p := t.get("persona"):
+                configured = personas.get(p.get("id"))
+                avatar = p.get("avatar_file") or p.get("avatar")
+                icon_url = p.get("icon_url")
+                if configured is not None:
+                    avatar, icon_url = configured.avatar, configured.icon_url
+                elif not avatar and not icon_url and p.get("id"):
+                    avatar = f"{p['id']}.png"
+                file = avatar if isinstance(avatar, str) and self.find_avatar(avatar) else None
+                t["persona"] = {**p, "avatar_file": file, "icon_url": icon_url}
+                t["avatar_url"] = (self.avatar_url(file) if file else None) or icon_url
         prio = tuple(self.cfg.targets.get("priority") or ())
         return sorted(out, key=lambda t: (tgt.rank(t, prio), t["address"]))
 
