@@ -122,6 +122,12 @@ class Inbox:
             args.append(self.store.clock())
             self.store.x(f"UPDATE handles SET {', '.join(sets)} WHERE handle = ?", [*args, handle])
 
+    async def cancel_mailbox(self, handle: str) -> None:
+        self.update_handle(handle, status="cancelled", open=False)
+        cond = self._condition()
+        async with cond:
+            cond.notify_all()
+
     # Items ----------------------------------------------------------------------------
 
     def _add(self, h: dict[str, Any], kind: str, data: dict[str, Any]) -> int:
@@ -149,13 +155,15 @@ class Inbox:
         replied = None
         if kind == "message" and data.get("final") and data.get("in_reply_to"):
             replied = self.handle(data["in_reply_to"])
+            if replied is not None and replied["status"] == "cancelled":
+                replied = None
             if replied is not None:
                 self.update_handle(replied["handle"], status="answered")
         elif kind == "final" and data.get("final") is not False:
             replied = h
         while replied is not None and (original := replied["meta"].get("forward_of")):
             parent = self.handle(original)
-            if parent is None or parent["meta"].get("forwarded_to") != replied["handle"]:
+            if parent is None or parent["status"] == "cancelled" or parent["meta"].get("forwarded_to") != replied["handle"]:
                 break
             replied = parent
             meta = {"in_reply_to": original, "final": True, "from": data.get("from")}
@@ -208,6 +216,11 @@ class Inbox:
             start = self._cursor(reader, position)
             if handle and not start:
                 start = self._cursor(reader, handle)
+        if handle and owner is not None and self.store.one(
+            "SELECT 1 FROM handles WHERE handle = ? AND destination = 'mailbox' AND status = 'cancelled' "
+            "AND (owner = ? OR ref = ?)", (handle, owner, owner),
+        ):
+            return {"items": [], "cursor": start, "handle_status": "cancelled"}
         with_clause = ""
         where, args = ["id > ?"], [start]
         if owner:
@@ -252,8 +265,9 @@ class Inbox:
             while True:
                 out = self.read(owner=owner, handle=handle, since=since, destination=destination, reader=reader, advance=advance, project=project)
                 remaining = deadline - loop.time()
-                if out["items"] or remaining <= 0:
-                    out["timed_out"] = not out["items"]
+                cancelled = out.get("handle_status") == "cancelled"
+                if out["items"] or cancelled or remaining <= 0:
+                    out["timed_out"] = not (out["items"] or cancelled)
                     return out
                 try:
                     await asyncio.wait_for(cond.wait(), timeout=remaining)
