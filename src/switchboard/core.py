@@ -40,7 +40,7 @@ from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
 from .subject import subject
 from .trust import FramedText, frame_sender
-from .visibility import RESOURCE_RE, Visibility, VisibilityError
+from .visibility import LOCAL_SESSION_RESOURCE, RESOURCE_RE, Visibility, VisibilityError
 
 DestinationError = BlockError
 
@@ -480,6 +480,8 @@ class Switchboard:
         if address.block == "agent":
             return {address.id}
         block = self.blocks.get(address.block)
+        if block is not None and block.manifest.id == "local" and (agent := block.grant_target(address)) is not None:
+            return {agent.id}
         return {agent.id for agent in block.manifest.agents} if block is not None else set()
 
     def target_visibility_resources(self, selector: str, address: Address | None = None, *,
@@ -490,6 +492,9 @@ class Switchboard:
             address = Address(row["block"], row["kind"], row["id"])
         if address is not None and address.block == "agent":
             return [f"target:{address.id}"] if tgt.SLUG_RE.fullmatch(address.id) else []
+        if address is not None and address.kind == "session" and (block := self.blocks.get(address.block)) is not None and block.manifest.id == "local":
+            canonical = block.canonical_target(address)
+            return [resource] if RESOURCE_RE.fullmatch(resource := f"target:{canonical}") else []
         ident = tgt.slugify(address.id) if address is not None else tgt.slugify(name)
         key = f"project:{address.id}" if address and address.block == "project" else str(address) if address else ""
         aliases = sorted(slug for slug, row in slugs.items() if row["address"] == key)
@@ -510,6 +515,10 @@ class Switchboard:
 
     async def set_visibility(self, resource: str, value: Any, actor: str) -> tuple[str, str | list[str]]:
         resource = self.visibility.key(resource)
+        if resource.startswith(LOCAL_SESSION_RESOURCE):
+            address = tgt.parse(resource.removeprefix("target:"), self.blocks)
+            if address is not None:
+                resource = self.visibility.key(f"target:{self.blocks[address.block].canonical_target(address)}")
         if resource.startswith("tool:"):
             raise VisibilityError("Tools are always private.")
         if self.visibility.explicit(resource) is None and resource not in await self.visibility_resources():
@@ -525,7 +534,7 @@ class Switchboard:
         if route.destination == "agent":
             return Address("agent", "agent", route.target["agent"])
         block = self.blocks.get(route.destination)
-        return block.route_address(route.target) if block else None
+        return block.canonical_target(addr) if block and (addr := block.route_address(route.target)) else None
 
     async def resolve_to(self, to: str) -> Address:
         """A send's to: an address, a legacy captain:/project:/thread: target, an agent name, a block name or a slug."""
@@ -537,7 +546,8 @@ class Switchboard:
                 if owner:
                     return Address(owner, "project", addr.id)
                 raise CoreError(f"no project {addr.id!r}")
-            return addr
+            block = self.blocks.get(addr.block)
+            return block.canonical_target(addr) if block else addr
         head, sep, rest = text.partition(":")
         if sep and head.lower() in self.known_agents():
             if self._is_project(rest.strip().lower()):
