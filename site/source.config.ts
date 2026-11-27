@@ -1,19 +1,35 @@
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
+import { replaceSource } from 'fumadocs-core/mdx-plugins/stringifier';
 import remarkCjkFriendly from 'remark-cjk-friendly';
 import { DEPLOY_BUTTONS_LIVE } from './lib/flags';
+import { readPrompt } from './lib/prompts';
+import { promptUrl } from './lib/urls';
 
-type Node = { type: string; name?: string; children?: Node[] };
+type Node = Parameters<typeof replaceSource>[1];
+type File = Parameters<typeof replaceSource>[0];
 
-function remarkDeployFlag() {
-  const walk = (node: Node) => {
-    if (!node.children) return;
-    node.children = node.children.flatMap((child) => {
+function remarkDocSource() {
+  const walk = (node: Node, file: File) => {
+    if (!('children' in node)) return;
+    const children: Node[] = node.children;
+    node.children = children.flatMap((child) => {
       if (child.type === 'mdxJsxFlowElement' && (child.name === 'DeployLive' || child.name === 'DeployHeld')) {
-        return (child.name === 'DeployLive') === DEPLOY_BUTTONS_LIVE ? child.children ?? [] : [];
+        const active = (child.name === 'DeployLive') === DEPLOY_BUTTONS_LIVE;
+        replaceSource(file, child, active ? (s) => s.inner(child) : '', 'markdown');
+        if (!active) return [];
+        walk(child, file);
+        return child.children;
       }
-      walk(child);
+      if (child.type === 'mdxJsxFlowElement' && child.name === 'SetupPrompt') {
+        const name = child.attributes.find((attr) => attr.type === 'mdxJsxAttribute' && attr.name === 'name')?.value;
+        if (typeof name !== 'string') throw new Error('SetupPrompt requires a prompt name');
+        const text = readPrompt(name);
+        const fence = '`'.repeat(Math.max(3, ...Array.from(text.matchAll(/`+/g), ([run]) => run.length + 1)));
+        replaceSource(file, child, `${promptUrl(`${name}.md`)}\n\n${fence}\n${text}\n${fence}`, 'markdown');
+      }
+      walk(child, file);
       return [child];
-    });
+    }) as typeof node.children;
   };
   return walk;
 }
@@ -22,13 +38,17 @@ export const docs = defineDocs({
   dir: 'content/docs',
   docs: {
     postprocess: {
-      includeProcessedMarkdown: true,
+      includeProcessedMarkdown: {
+        output: 'string',
+        filterElement: (node) => !((node.type === 'mdxFlowExpression' || node.type === 'mdxTextExpression')
+          && /^\s*\/\*/.test(node.value) && node.data?.estree?.body.length === 0),
+      },
     },
   },
 });
 
 export default defineConfig({
   mdxOptions: {
-    remarkPlugins: (plugins) => [remarkDeployFlag, remarkCjkFriendly, ...plugins],
+    remarkPlugins: (plugins) => [remarkDocSource, remarkCjkFriendly, ...plugins],
   },
 });
