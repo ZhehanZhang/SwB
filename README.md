@@ -810,6 +810,10 @@ Optionally set `auth.oidc` with `issuer`, `client_id`, `client_secret_env` (the 
 A subject on the allowlist or a verified email in `auth.owner_emails` can sign in. Cloudflare Access still works
 through `auth.cloudflare_access` and `auth.owner_emails`; Switchboard verifies the upstream assertion itself.
 
+To move to a new address without breaking clients, set `public_url` to the new URL and list the old one in
+`public_url_aliases`. Each host answers as its own OAuth issuer, existing tokens keep working on both, and new links
+use `public_url`. Passkeys belong to one host unless `auth.passkey_rp_id` names a parent domain all hosts share.
+
 In front of everything:
 
 - A wrong bearer token on `/mcp` or `/inbox/` is audited (`auth_failure`) and counts against the caller's IP: after 20
