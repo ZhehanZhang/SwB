@@ -52,8 +52,8 @@ def unlabel(text: str) -> str:
     return LABEL_RE.sub("(via swb", text or "")
 
 
-INSTRUCTIONS = """Send to a dot by its target handle. Depending on the configured delivery mode, Switchboard posts in
-Slack or delivers to the dot's mailbox. The dot's answer comes back to your inbox on the conversation send returned."""
+INSTRUCTIONS = """Send to a dot by its target handle. SwB uses the configured delivery mode.
+The dot's reply reaches your inbox on the conversation from send."""
 
 DOT_SNIPPET = """In #agents, posts that @mention you from my Switchboard app (bot <bot id>, app <app id>), shown under
 persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests

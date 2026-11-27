@@ -67,12 +67,12 @@ CREATE TABLE IF NOT EXISTS routine_claims (code_hash TEXT PRIMARY KEY, owner_ref
   expires_at REAL NOT NULL, used_at REAL, superseded_at REAL)
 """
 
-INSTRUCTIONS = """claude-routine targets are Claude Code routines: send to claude (with project=<slug> to reach that project's
-Claude Project routine, or to claude:<project>) starts a Claude session that answers through switchboard. Replies arrive in
-your inbox (wait or inbox) with in_reply_to set to the conversation send returned; a hand-off note comes first with
-final=false, the answer with final=true. A project can have several routines (one per Claude Project): send(to=claude,
-project=X) wakes X's primary routine, and send(to=<routine name>) any one of them. A Claude session registers its own
-routine with routine_register (after project_list); it returns a one-time link where the owner enters the token."""
+INSTRUCTIONS = """Send to claude with project=<slug> to wake the project's primary Claude Code routine.
+Use claude:<project> for the same route or the routine name for a specific routine.
+Replies arrive in your SwB inbox with in_reply_to set to the conversation from send.
+The routine sends its handoff with final=false and its answer with final=true.
+Use project_list to find the project and routine_register to register the session's routine.
+Give the owner the one-time link to enter the routine token."""
 
 
 def _sha(text: str) -> str:
