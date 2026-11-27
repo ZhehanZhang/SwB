@@ -283,8 +283,7 @@ class Inbox:
                 author, excerpt, link = entry["author"], entry["excerpt"], entry["link"]
                 safe_link = neutralize(link) if link else link
                 if (parts := entry.pop("parts", None)) is not None:
-                    _, rendered = frame_parts(parts, where)
-                    framed = "\n\n".join(filter(None, (neutralize(excerpt), join_parts(rendered))))
+                    framed = "\n\n".join(filter(None, (neutralize(excerpt), join_parts(frame_parts(parts, where)))))
                     entries.append("\n".join(filter(None, (framed, safe_link))))
                 else:
                     _, framed = frame_sender(excerpt, author, None, where)

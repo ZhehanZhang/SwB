@@ -42,7 +42,7 @@ blocks:
       "acme/*": [team]
 ```
 
-**接收端**（sink）是收到每个事件副本的地址。每个匹配的接收端收到一个精简的 JSON 事件。事件包含仓库、操作者、编号、标题、状态和简短正文。每次投递都带有 `Idempotency-Key`。SwB 在网络错误和服务器错误时重试。
+**接收端**（sink）是收到每个事件副本的地址。每个匹配的接收端收到一个精简的 JSON 事件。SwB 将事件详情作为引文写入 `metadata`。每次投递都带有 `Idempotency-Key`。SwB 在网络错误和服务器错误时重试。
 
 如果 Cloudflare Access 保护你的主机，请放行 `/github/webhook`。该路径由 GitHub 签名保护。
 
