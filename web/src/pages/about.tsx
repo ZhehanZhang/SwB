@@ -8,15 +8,17 @@ import { SwbIcon } from "@/components/swb-icon"
 import { isObject, requestJson } from "@/lib/api"
 
 const repository = "https://github.com/ZhehanZhang/SwB"
+const mainFiles = `${repository}/blob/main`
 const openSourceLinks = [
-  ["License", "Apache-2.0", repository],
+  ["License", "Apache-2.0", `${mainFiles}/LICENSE`],
   ["Repository", "github.com/ZhehanZhang/SwB", repository],
-  ["Contributing", "", repository],
+  ["Contributing", "", `${mainFiles}/CONTRIBUTING.md`],
+  ["Code of Conduct", "", `${mainFiles}/CODE_OF_CONDUCT.md`],
   ["Website", "swb.one", "https://swb.one"],
 ] as const
 const projectLinks = [
-  ["Docs", "README.md", `${repository}/blob/main/README.md`],
-  ["Security policy", "", repository],
+  ["Docs", "README.md", `${mainFiles}/README.md`],
+  ["Security policy", "", `${mainFiles}/SECURITY.md`],
 ] as const
 
 type About = {

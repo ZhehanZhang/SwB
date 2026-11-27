@@ -38,7 +38,7 @@ CLAIM_CONNECTORS = {
     "telegram": ("Telegram", "Telegram bot token"),
     "github": ("GitHub", "GitHub credential"),
     "chatgpt": ("ChatGPT", ""),
-    "muse": ("Muse", ""),
+    "muse": ("Muse", "Muse bridge token"),
     "claude": ("Claude", ""),
     "grok": ("Grok", "Grok credential"),
 }
@@ -402,7 +402,7 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
     connector = requester.lower().replace("_", "-").partition(":")[0].partition("-")[0]
     if connector in {"openai", "dot"}:
         connector = "chatgpt"
-    mark_kind = connector if connector in CLAIM_CONNECTORS and connector != "muse" else "agent"
+    mark_kind = connector if connector in CLAIM_CONNECTORS else "agent"
     name = html.escape(requester)
     tile = (f'<div class="requester"><span class="requester-tile" data-connector="{mark_kind}" role="img" '
             f'aria-label="{name}" title="{name}"><svg viewBox="0 0 24 24" aria-hidden="true">'
