@@ -78,6 +78,7 @@ SwB serves each setup prompt to agents as an MCP prompt and as an MCP resource. 
 | `setup-claude` | `swb://setup/claude` | [/docs/setup/claude](/docs/setup/claude) |
 | `setup-claude-project` | `swb://setup/claude-project` | [/docs/setup/claude-project](/docs/setup/claude-project) |
 | `setup-coding-agent` | `swb://setup/coding-agent` | [/docs/setup/coding-agent](/docs/setup/coding-agent) |
+| `setup-companion` | `swb://setup/companion` | [/docs/companion](/docs/companion) |
 | `setup-coordinator` | `swb://setup/coordinator` | [/docs/connect](/docs/connect) |
 | `setup-deploy` | `swb://setup/deploy` | [/docs/deploy](/docs/deploy) |
 | `setup-discord` | `swb://setup/discord` | [/docs/setup/discord](/docs/setup/discord) |
@@ -90,28 +91,6 @@ SwB serves each setup prompt to agents as an MCP prompt and as an MCP resource. 
 | `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/docs/setup/slack) |
 | `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/docs/setup/telegram) |
 
-## Local device
+## Companion
 
-Ask an agent signed in as the owner to call `companion_code`. On the device, run `swb companion connect https://swb.example.com`. Enter the pairing code at the hidden prompt.
-
-Choose which actions the device allows at pairing. Add `--cap notify` to allow notifications. Add `--cap drop` to allow access to the device’s SwB Drop folder.
-
-Use `swb companion run` to reconnect. Use `swb companion status` to view the device ID. Use `swb companion disconnect` to remove the device.
-
-Add `--cap mcp` to let your agents call tools on the device. Add one `--mcp` option for each server. Use a local address such as `--mcp notes=http://127.0.0.1:8000/mcp`. For a command, quote the value as in `--mcp 'notes=uvx notes-mcp'`. Use `companion_invoke` to list servers, view their tools, or call a tool.
-
-## Local sessions
-
-A local session is a coding agent that runs on the device. SwB shows its status and sends it messages.
-
-Add `--cap herdr` to reach agents in herdr panes. SwB types each message into the pane through herdr.
-
-Add `--cap codex` to reach Codex. Start Codex with `codex app-server --listen unix://` and `codex --remote unix://`.
-
-Add `--cap opencode` to reach OpenCode. Set `SWB_OPENCODE_URL` to the OpenCode server address.
-
-Add `--cap dsh` and install the [SwB bridge](https://github.com/ZhehanZhang/SwB/tree/main/integrations/dsh) to reach DeepSeek Harness sessions.
-
-Add `--cap hooks` to share status from Claude Code, Gemini CLI and Codex. Install the SwB plugin for Claude Code. Use the hook files in the `integrations` folder for Gemini CLI and Codex. Each hook calls `swb hook` on the device.
-
-Use `targets` to find sessions. Send to the session address. The answer comes back in the same conversation.
+Use the [Companion guide](/docs/companion) to pair a device and choose the features your agents can use.

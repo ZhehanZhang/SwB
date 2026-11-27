@@ -1,0 +1,55 @@
+---
+title: 伴侣设备
+description: 在自己的设备上运行 SwB，让已部署的 SwB 使用本地功能。
+---
+
+伴侣设备是运行 SwB 的自有设备。它会连接你部署的 SwB，让智能体使用这台设备上的功能。
+
+## 复制设置提示词
+
+<SetupPrompt name="companion" lang="zh-Hans" />
+
+## 配对设备
+
+请以所有者身份登录的智能体调用 `companion_code`。
+
+若要在控制台获取配对码，请[用通行密钥登录](/zh-Hans/docs/owner-login)。打开 **Settings**。在 **Connections** 中选择 **Pair a device**。
+
+在设备上运行以下命令。将示例地址换成你的 SwB HTTPS 地址。
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+按提示输入配对码。输入内容会隐藏。配对码限用一次，有效期为 10 分钟。审计日志会记录配对码的创建者。
+
+设备会把自己的密钥保存在私有文件中。
+
+## 选择功能
+
+每启用一项功能，添加一个 `--cap` 选项。
+
+| 选项 | 功能 |
+| --- | --- |
+| `--cap notify` | 在设备桌面上显示通知 |
+| `--cap drop` | 通过 `~/SwB Drop` 文件夹共享文件，每个文件上限为 10 MiB |
+| `--cap mcp --mcp NAME=COMMAND` | 让智能体使用设备上 MCP 服务器提供的工具 |
+| `--cap muse` | 在 Mac 或 Linux 电脑上通过蓝牙与 Muse 配对。请使用 [Muse 指南](/zh-Hans/docs/setup/muse)中的命令 |
+
+在 Linux 上，通知功能使用 `notify-send`。
+
+每个 MCP 服务器使用一个 `--mcp` 选项。填写启动命令或本机 HTTP 地址，例如 `--mcp 'notes=uvx notes-mcp'` 或 `--mcp notes=http://127.0.0.1:8000/mcp`。
+
+智能体用 `companion_list` 查看已配对的设备及其操作。它用 `companion_invoke` 执行操作。
+
+## 保持运行
+
+配对后，伴侣设备会开始运行。运行 `swb companion run` 可重新启动。运行 `swb companion status` 可查看本机设备编号和功能。
+
+通过 `uvx` 运行时，把命令中的 `swb` 换成 `uvx swb-one`。配对 Muse 时，请保留 [Muse 指南](/zh-Hans/docs/setup/muse)中的软件包和 Python 选项。
+
+每次连接都由设备发起。
+
+## 断开连接
+
+在设备上运行 `swb companion disconnect`，以移除设备密钥。也可以在控制台的 **Settings** 中打开 **Connections**。在该设备旁选择 **Disconnect**，以撤销密钥。
