@@ -194,6 +194,24 @@ def test_dispatch_routes_owner_and_the_native_thread_keeps_the_target(discord):
         assert len(api.routines) == 2 and "and staging?" in api.routines[-1]
 
 
+def test_discord_event_and_delegate_share_the_ask_as_subject(discord):
+    with discord() as (core, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "channels": [api.channels[CHANNEL]], "threads": []})
+        event = client.portal.call(block.dispatch, "MESSAGE_CREATE", message(
+            content=f"<@!{BOT}> build-check **check** the canary", member={"nick": "Dana"}))
+        title = "Dana in Discord #builds asks: check the canary"
+        entries = core.inbox.read(owner="claude", since=0)["items"]
+        chat = next(item for item in entries if item["kind"] == "discord_event")
+        task = next(item for item in entries if item["kind"] == "message")
+        assert event["subject"] == chat["subject"] == task["subject"] == title
+        assert task["text"].split("\n\n") == [
+            title, "**check** the canary", event["from"]["link"],
+            "Your final reply is posted back in that Discord thread as build-check (Claude routine).",
+        ]
+        assert api.routines[0].splitlines()[0] == title
+
+
 def test_dispatch_filters_own_and_unknown_guild_messages_and_sends_dms_to_configured_space(discord):
     spaces = {"home": {"guild_id": GUILD, "owner_ids": [USER]},
               "direct": {"guild_id": GUILD_2, "owner_ids": [USER], "default_target": "build-check"}}

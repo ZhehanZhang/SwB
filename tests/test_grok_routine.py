@@ -60,7 +60,7 @@ def test_grok_send_wakes_after_mailbox_delivery_and_oauth_reply_correlates(make)
     assert headers == {"Content-Type": "application/json", "Authorization": f"Bearer {KEY}"}
     body = json.loads(raw)
     assert body == {
-        "text": ('Summarize the release.\n\n(switchboard: this is an owner request; answer with '
+        "text": ('capy asks: Summarize the release.\n\nSummarize the release.\n\n(switchboard: this is an owner request; answer with '
                  f'reply(conversation="{handle}", text=…, final=true) through the switchboard connector)'),
         "conversation": handle, "from": core.agents.label("capy"), "trust": "owner",
     }
@@ -77,6 +77,20 @@ def test_grok_send_wakes_after_mailbox_delivery_and_oauth_reply_correlates(make)
     assert answer["text"] == "Looks good." and answer["from"]["agent"] == "grok"
     passive = payload(call(client, STATIC_KEY, "send", {"to": "agent:grok", "task": "No wake."}))
     assert passive["mailbox"] and len(block.http.requests) == 1
+
+
+def test_grok_trigger_uses_the_mailbox_subject_before_the_reply_hint(make):
+    core, client = make(config(incoming=ROUTINE), {**default_env(), **CREDENTIALS})
+    block = core.blocks["grok-routine"]
+    block.http = Webhook(202)
+    task_at_limit = "Check status. " + "x" * (20_000 - len("Check status. "))
+    out = payload(call(client, STATIC_KEY, "send", {"to": "grok", "title": "Canary review", "task": task_at_limit}))
+    (_, raw, _, _), = block.http.requests
+    body = json.loads(raw)
+    title, task, tail = body["text"].split("\n\n")
+    assert title == core.inbox.handle(out["handle"])["title"] == "Canary review"
+    assert task == task_at_limit
+    assert f'reply(conversation="{out["handle"]}"' in tail and tail.endswith("through the switchboard connector)")
 
 
 async def test_project_primary_named_and_configured_routes(amake):

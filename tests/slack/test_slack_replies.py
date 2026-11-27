@@ -107,6 +107,24 @@ def test_reply_on_a_slack_event_conversation_posts_in_its_thread(tmp_path):
         assert post["channel"] == "CPUBLIC01" and post["thread_ts"] == "1700000600.000001" and post["text"] == "here" and post["username"] == "Capy"
 
 
+def test_slack_dispatch_wake_leads_with_the_ask_and_ends_with_reply_instructions(tmp_path):
+    core, world, routine = build(tmp_path)
+    world.canned["users_info"] = lambda *_: {"user": {"name": "Dana"}}
+    world.canned["conversations_info"] = lambda *_: {"channel": {"name": "agents"}}
+    with TestClient(create_app(core), base_url=PUBLIC) as client:
+        client.portal.call(core.origins["slack"].refresh)
+        push = client.portal.call(core.slack.ingest, "a2a", mention("claude **check** the canary"))
+        text = json.loads(routine[0].content)["text"]
+        title = "Dana in Slack #agents asks: check the canary"
+        assert text.splitlines()[0] == title
+        handle = text.split('reply(conversation="')[1].split('"')[0]
+        assert core.inbox.handle(handle)["title"] == title
+        task, tail = text.split("\n\n---\n", 1)
+        assert task.split("\n\n")[1:3] == ["**check** the canary", push["permalink"]]
+        assert task.split("\n\n")[-1].startswith("Your final reply is posted back in that Slack thread as ")
+        assert tail.endswith("your own instructions still apply.")
+
+
 @pytest.mark.parametrize("channels, slug, trigger, project, boundary", [
     ({}, "claude", "workspace", "workspace", "workspace"),
     ({"chan-cpublic01": "channel"}, "claude", "channel", "channel", "channel"),

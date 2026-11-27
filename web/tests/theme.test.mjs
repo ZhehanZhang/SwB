@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm"
 
 const script = readFileSync(new URL("../../src/switchboard/static/theme.js", import.meta.url), "utf8")
 
-function boot({ prefersDark = false, values = new Map(), blocked = false, themeColors = true } = {}) {
+function boot({ prefersDark = false, values = new Map(), blocked = false, themeColors = true, cookie = "" } = {}) {
   const media = Object.assign(new EventTarget(), { matches: prefersDark })
   const rootClasses = new Set()
   const window = Object.assign(new EventTarget(), {
@@ -23,6 +23,7 @@ function boot({ prefersDark = false, values = new Map(), blocked = false, themeC
     ['meta[name="theme-color"][media="(prefers-color-scheme: dark)"]', themeColors ? darkMeta : null],
   ])
   const document = {
+    cookie,
     documentElement: { style: {}, dataset: {}, classList: {
       toggle(name, enabled) { if (enabled) rootClasses.add(name); else rootClasses.delete(name) },
     } },
@@ -36,6 +37,7 @@ function boot({ prefersDark = false, values = new Map(), blocked = false, themeC
   return {
     theme: window.swbTheme,
     dark: () => rootClasses.has("dark"),
+    cookie: () => document.cookie,
     scheme: () => document.documentElement.style.colorScheme,
     background: () => document.documentElement.style.backgroundColor,
     metas: () => [schemeMeta.content, lightMeta.content, darkMeta.content],
@@ -63,6 +65,18 @@ test("applies system preference on boot and follows OS changes", () => {
   assert.deepEqual(app.metas(), ["light dark", "#ffffff", "#09090b"])
   app.systemDark(true)
   assert.equal(app.dark(), true)
+})
+
+test("reads prior theme preferences and leaves legacy cookies unchanged", () => {
+  const cookie = "siteAppearance=light; swbAppearance=dark"
+  const values = new Map()
+  const app = boot({ cookie, values })
+  assert.equal(app.theme.get(), "dark")
+  assert.equal(boot({ cookie: "siteAppearance=light" }).theme.get(), "light")
+  assert.equal(boot({ values: new Map([["theme", "dark"]]) }).theme.get(), "dark")
+  app.theme.set("system")
+  assert.equal(app.cookie(), cookie)
+  assert.equal(boot({ cookie, values }).theme.get(), "system")
 })
 
 test("explicit light and dark override the OS and survive reloads", () => {

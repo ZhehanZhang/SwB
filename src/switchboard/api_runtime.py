@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import urlsplit
 
-from . import installed_version
+from .api_about import release_version
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -23,7 +23,7 @@ class RuntimeInfo(TypedDict):
 
 
 def runtime_info(core: Switchboard) -> RuntimeInfo:
-    release = installed_version()
+    release = release_version(core.cfg.env)
     mcp = next((block for block in core.blocks.values() if block.manifest.id == "mcp"), None)
     url = "/mcp" if mcp else None
     if mcp and (public_url := core.cfg.public_url):

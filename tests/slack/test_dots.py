@@ -155,9 +155,10 @@ def test_dots_use_configured_mailboxes_without_slack(tmp_path):
         res = client.portal.call(core.verb, principal("gemini"), "result", original)
         assert res["status"] == "answered" and res["final"]["text"] == "The figures match"
 
-        custom = tool(client, "send", {"to": "dots:dot:planning-dot", "task": "Draft an outline"})
+        custom = tool(client, "send", {"to": "dots:dot:planning-dot", "title": "Plan the review", "task": "Draft an outline"})
         (item,) = core.inbox.read(owner="claude", since=0)["items"]
         assert item["handle"] == custom["conversation"] and item["text"] == "Draft an outline"
+        assert item["subject"] == core.inbox.handle(custom["handle"])["title"] == "Plan the review"
 
 
 @pytest.mark.parametrize("group", [False, True])

@@ -86,7 +86,12 @@ def test_claim_assets_are_served(make, name):
 
 def test_every_provider_mark_is_bundled():
     for p in credentials.PROVIDERS.values():
-        assert (credentials.MARKS / f"{p.mark}.svg").exists() and f'data-connector="{p.key}"' in credentials.mark(p.key)
+        mark = credentials.mark(p.key)
+        assert f'data-connector="{p.key}"' in mark
+        if avatar := credentials.agent_avatar(p.key):
+            assert (credentials.BUNDLED_AVATARS / avatar).is_file() and f'src="/avatars/{avatar}"' in mark
+        else:
+            assert (credentials.MARKS / f"{p.mark}.svg").is_file() and f"class=\"mark mark-{p.key}\"" in mark
 
 
 def test_owner_key_installs_get_the_grouped_form(make):

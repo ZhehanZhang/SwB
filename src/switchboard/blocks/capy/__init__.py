@@ -21,6 +21,7 @@ import httpx
 from ...audit import iso
 from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
 from ...block_env import CAPY_KEY, CAPY_SEND_KEY
+from ...subject import lead_with_subject, subject
 from .. import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
 from .api import CapyAPI, CapyError, pr_links, thread_summary
 from .stream import Backoff, Frame, StreamClosed, ThreadStream
@@ -455,6 +456,8 @@ class CapyBlock(Block):
         task = (task or "").strip()
         if not task:
             raise DestinationError("task is empty")
+        if title:
+            title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
         tgt, defaults, level = self.plan(call.principal, p, target)
         if level == "explicit":
@@ -481,13 +484,13 @@ class CapyBlock(Block):
             return {"to": str(address) if address else None, "project": p.slug if p else None, "route": level, "mode": mode}
 
         handle = call.handle or call.core.inbox.new_handle()
-        body = [task]
+        body = [lead_with_subject(title, task) if title and in_thread else task]
         if repos:
             body += ["", "Repos: " + ", ".join(repos)]
         if p and p.links.get("capy_project"):
             body += [f"Capy project: {p.links['capy_project']}"]
         forward = f"|forward:{call.handle_meta['forward_of']}" if "forward_of" in call.handle_meta else ""
-        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{task}{forward}".encode()).hexdigest()
+        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{title or ''}|{task}{forward}".encode()).hexdigest()
         window = float(self.config.get("duplicate_window_s", 600))
         for h in call.core.inbox.handles(owner=call.principal.source, destination=self.name, limit=20):
             if h["meta"].get("same") == same and h["created_at"] >= call.core.clock() - window:
@@ -497,7 +500,7 @@ class CapyBlock(Block):
                         "next": f"You sent this exact task to {describe(tgt)} a moment ago, so this is that delegation's handle. "
                                 f"Call wait(conversation='{h['handle']}'); use reply to add to it."}
         uploaded = await send(lambda a: self._files(a, files)) if files else []
-        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}{forward}".encode()).hexdigest()
+        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{title or ''}|{task}{forward}".encode()).hexdigest()
         try:
             if in_thread:
                 thread_id = tgt.get("thread") or tgt["captain"]
