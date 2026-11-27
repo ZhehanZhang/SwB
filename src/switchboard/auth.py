@@ -89,7 +89,7 @@ class Principal:
     def memory_writer(self) -> str | None:
         if self.is_memory_owner:
             return None
-        if self.kind == "connect" or (self.kind in ("key", "oauth") and self.credential is not None):
+        if self.kind == "connect" or (self.kind in ("key", "oauth", "companion") and self.credential is not None):
             return sha(dumps([self.kind, self.client_id, self.credential]))
         return None
 

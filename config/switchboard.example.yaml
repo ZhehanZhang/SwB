@@ -266,6 +266,7 @@ visibility:
   #   target:helper: [U0DEMO0002, workspace:a2a]
 
 memory:
+  # sync: true
   # Optional one-way markdown mirror: general/, projects/<slug>/ and INDEX.md, rewritten atomically after changes.
   # Bursts of writes collapse into one export after mirror_debounce_s of quiet. mirror: false switches it off.
   # mirror_dir: /mirror

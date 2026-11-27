@@ -2008,6 +2008,13 @@
     },
     {
       "icon": null,
+      "id": "config_key:memory.sync",
+      "key": "memory.sync",
+      "kind": "config_key",
+      "label": "memory.sync"
+    },
+    {
+      "icon": null,
       "id": "config_key:modes",
       "key": "modes",
       "kind": "config_key",
@@ -3033,15 +3040,57 @@
       "name": "login_link"
     },
     {
+      "description": "Create a file in a topic folder under /memories.",
+      "icon": null,
+      "id": "tool:memory_create",
+      "input_properties": [
+        "confirm_general",
+        "file_text",
+        "overwrite",
+        "path",
+        "tags"
+      ],
+      "kind": "tool",
+      "label": "Create a memory file",
+      "name": "memory_create"
+    },
+    {
       "description": "Delete an entry you wrote within your grants. The owner can delete any entry. SwB keeps the history.",
       "icon": null,
       "id": "tool:memory_delete",
       "input_properties": [
-        "id"
+        "id",
+        "path"
       ],
       "kind": "tool",
       "label": "Delete a memory",
       "name": "memory_delete"
+    },
+    {
+      "description": "List revisions for a memory by path or ID.",
+      "icon": null,
+      "id": "tool:memory_history",
+      "input_properties": [
+        "id",
+        "limit",
+        "path"
+      ],
+      "kind": "tool",
+      "label": "Read memory history",
+      "name": "memory_history"
+    },
+    {
+      "description": "Insert text after a line. Use 0 for the start of the file.",
+      "icon": null,
+      "id": "tool:memory_insert",
+      "input_properties": [
+        "insert_line",
+        "insert_text",
+        "path"
+      ],
+      "kind": "tool",
+      "label": "Insert text in a memory file",
+      "name": "memory_insert"
     },
     {
       "description": "List memories newest first with per-namespace counts. project works as in memory_search.",
@@ -3053,7 +3102,8 @@
         "namespace",
         "offset",
         "project",
-        "scopes"
+        "scopes",
+        "since"
       ],
       "kind": "tool",
       "label": "List memories",
@@ -3084,18 +3134,44 @@
       "name": "memory_promote"
     },
     {
-      "description": "Read one memory in full by id, or by scope, namespace and key, with its recent edit history.",
+      "description": "Read a memory by path, ID, or scope, namespace and key.",
       "icon": null,
       "id": "tool:memory_read",
       "input_properties": [
         "id",
         "key",
         "namespace",
+        "path",
         "scope"
       ],
       "kind": "tool",
       "label": "Read a memory",
       "name": "memory_read"
+    },
+    {
+      "description": "Rename or move a file or topic folder between granted scopes.",
+      "icon": null,
+      "id": "tool:memory_rename",
+      "input_properties": [
+        "new_path",
+        "old_path"
+      ],
+      "kind": "tool",
+      "label": "Rename memory files",
+      "name": "memory_rename"
+    },
+    {
+      "description": "Restore a revision by path or ID and keep the current scope.",
+      "icon": null,
+      "id": "tool:memory_restore",
+      "input_properties": [
+        "id",
+        "path",
+        "rev"
+      ],
+      "kind": "tool",
+      "label": "Restore a memory revision",
+      "name": "memory_restore"
     },
     {
       "description": "Search granted scopes. Pass project for that project, or scopes for exact scopes such as agent:<name>. General is included only when granted. For a private project, use its project name.",
@@ -3112,6 +3188,69 @@
       "kind": "tool",
       "label": "Search shared memory",
       "name": "memory_search"
+    },
+    {
+      "description": "Read or set the owner's memory sync switch.",
+      "icon": null,
+      "id": "tool:memory_settings",
+      "input_properties": [
+        "sync"
+      ],
+      "kind": "tool",
+      "label": "Set memory sync",
+      "name": "memory_settings"
+    },
+    {
+      "description": "Replace one exact match in a memory file.",
+      "icon": null,
+      "id": "tool:memory_str_replace",
+      "input_properties": [
+        "new_str",
+        "old_str",
+        "path"
+      ],
+      "kind": "tool",
+      "label": "Replace text in a memory file",
+      "name": "memory_str_replace"
+    },
+    {
+      "description": "List recent memory paths and titles in granted scopes.",
+      "icon": null,
+      "id": "tool:memory_summary",
+      "input_properties": [
+        "limit_chars",
+        "project",
+        "scopes"
+      ],
+      "kind": "tool",
+      "label": "Summarize memory",
+      "name": "memory_summary"
+    },
+    {
+      "description": "Copy up to 50 native memories. Keep each source key stable.",
+      "icon": null,
+      "id": "tool:memory_sync",
+      "input_properties": [
+        "items",
+        "project",
+        "scope",
+        "source"
+      ],
+      "kind": "tool",
+      "label": "Sync native memory",
+      "name": "memory_sync"
+    },
+    {
+      "description": "List a folder or read a file with line numbers under /memories.",
+      "icon": null,
+      "id": "tool:memory_view",
+      "input_properties": [
+        "path",
+        "view_range"
+      ],
+      "kind": "tool",
+      "label": "View memory files",
+      "name": "memory_view"
     },
     {
       "description": "Save memory in a granted scope. Use 'project:<slug>' for project facts or 'agent:<name>' for agent memory. With a general grant, pass confirm_general=true after the owner agrees. Update an entry you wrote by ID or by scope, namespace and key. The owner can update any entry.",

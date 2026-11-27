@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 from ...chat import ChatBlock
-from ...memory import GENERAL, MemoryError_
+from ...memory import GENERAL, MemoryError_, MemoryPath, missing_path
 from ...refusals import (CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, GRANT_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED,
                          OWNER_REQUIRED, PROJECT_LINK_REQUIRED, ROUTE_TARGET_KIND, SCOPE_REQUIRED, TARGET_REQUIRED)
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from ...projects import Project
 
 Role = Literal["owner", "self", "grant", "owner_or_writer", "route", "setup", "companion"]
-ReadRole = Literal["message", "conversation", "provider_ref", "memory", "memory_scope", "projects", "owner"]
+ReadRole = Literal["message", "conversation", "provider_ref", "memory", "memory_path", "memory_scope", "projects", "owner"]
 
 COMPANION_ROUTES: dict[str, Role] = {
     "/companion/hello": "companion",
@@ -37,6 +37,9 @@ READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
     "capy_wait": ("conversation", "handle"),
     "capy_inbox": ("conversation", "handle"),
     "memory_read": ("memory", "id"),
+    "memory_view": ("memory_path", "path"),
+    "memory_history": ("memory_path", "id"),
+    "memory_summary": ("memory_scope", None),
     "memory_search": ("memory_scope", None),
     "memory_list": ("memory_scope", None),
     "context_pack": ("memory_scope", None),
@@ -56,9 +59,16 @@ MUTATION_ROLES: dict[str, Role] = {
     "routes_set": "route",
     "routes_remove": "route",
     "memory_write": "grant",
+    "memory_create": "grant",
+    "memory_str_replace": "grant",
+    "memory_insert": "grant",
+    "memory_sync": "grant",
     "memory_delete": "owner_or_writer",
     "memory_move": "owner_or_writer",
+    "memory_rename": "owner_or_writer",
+    "memory_restore": "owner_or_writer",
     "memory_promote": "owner",
+    "memory_settings": "owner",
     "login_link": "owner",
     "visibility_set": "owner",
     "connect_code": "owner",
@@ -141,7 +151,7 @@ def granted_memory_scopes(core: Switchboard, p: Principal, scopes: list[str]) ->
 
 
 def default_memory_scopes(core: Switchboard, p: Principal) -> list[str]:
-    return list(p.memory_grants) if p.kind == "connect" else granted_memory_scopes(core, p, [GENERAL])
+    return [s for s in p.memory_grants if not s.startswith("agent:") or s == f"agent:{p.source}"] if p.kind == "connect" else granted_memory_scopes(core, p, [GENERAL])
 
 
 def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any]) -> str | None:
@@ -171,6 +181,22 @@ def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str
         return None if can_read_conversation(core, p, handle) else CONVERSATION_NOT_FOUND
 
     scope = arguments.get("scope")
+    path = arguments.get("path")
+    if role in ("memory", "memory_path") and isinstance(path, str):
+        try:
+            parsed = MemoryPath.parse(path)
+        except MemoryError_:
+            return None
+        if parsed.scope and not core.allows_memory(p, parsed.scope):
+            return missing_path(parsed.path)
+        return None
+    if role == "memory_path" and parameter == "id" and isinstance(reference, str):
+        try:
+            row = core.memory.locate(core.store, reference, deleted=True)
+        except MemoryError_:
+            return MEMORY_NOT_FOUND
+        if not core.allows_memory(p, row["scope"]):
+            return MEMORY_NOT_FOUND
     if role == "memory":
         if isinstance(scope, str) and scope and not core.allows_memory(p, scope.strip().lower()):
             return MEMORY_NOT_FOUND
@@ -183,7 +209,7 @@ def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str
                 return MEMORY_NOT_FOUND
             if not core.allows_memory(p, scope):
                 return MEMORY_NOT_FOUND
-    if role == "memory_scope":
+    if role == "memory_scope" and name != "memory_summary":
         project = arguments.get("project")
         scopes = arguments.get("scopes")
         effective_project = project.strip().lower().removeprefix("project:") if isinstance(project, str) and project else ""

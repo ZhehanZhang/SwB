@@ -122,6 +122,34 @@ class _MoveBody(_Body):
     to_scope: str
 
 
+class _EditMemoryBody(_Body):
+    title: str
+    body: str
+    tags: list[str] | None = None
+
+
+class _RestoreMemoryBody(_Body):
+    rev: int
+
+
+class _RenameMemoryBody(_Body):
+    path: str
+
+
+class _MemorySettingsBody(_Body):
+    sync: bool
+
+
+async def memory_settings(request: Request) -> JSONResponse:
+    core = request.app.state.core
+    if request.method == "GET":
+        return JSONResponse(core.memory_settings())
+    body = await _body(request, _MemorySettingsBody)
+    if body is None:
+        return _error("invalid_request")
+    return JSONResponse(core.set_memory_setting(_owner(request), body.sync))
+
+
 async def mutate_memory(request: Request) -> JSONResponse:
     ident = request.path_params["id"]
     core, owner = request.app.state.core, _owner(request)
@@ -137,6 +165,21 @@ async def mutate_memory(request: Request) -> JSONResponse:
             result = core.move_memory(owner, ident, body.to_scope)
         elif verb == "promote":
             result = core.move_memory(owner, ident, GENERAL, promote=True)
+        elif verb == "edit":
+            body = await _body(request, _EditMemoryBody)
+            if body is None:
+                return _error("invalid_request")
+            result = core.edit_memory(owner, ident, body.title, body.body, body.tags)
+        elif verb == "restore":
+            body = await _body(request, _RestoreMemoryBody)
+            if body is None:
+                return _error("invalid_request")
+            result = core.restore_memory(owner, body.rev, id=ident)
+        elif verb == "rename":
+            body = await _body(request, _RenameMemoryBody)
+            if body is None:
+                return _error("invalid_request")
+            result = {"renamed": ident, "message": core.rename_memory(owner, body.path, id=ident)}
         else:
             return _error("not_found", 404)
     except MemoryNotFound:
@@ -152,6 +195,7 @@ PAGE_ROUTES = [
     Route("/agents/setup", agent_setup, methods=["GET"]),
     Route("/agents/{agent}", agent_detail, methods=["GET"]),
     Route("/inbox/pauses/{root}/resume", resume_conversation, methods=["POST"]),
+    Route("/memory/settings", memory_settings, methods=["GET", "POST"]),
     Route("/memory/{id}/{verb}", mutate_memory, methods=["POST"]),
     Route("/memory/{id}", mutate_memory, methods=["DELETE"]),
 ]

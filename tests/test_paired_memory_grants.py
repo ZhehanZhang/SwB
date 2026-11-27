@@ -12,6 +12,7 @@ from switchboard.memory import Memory
 from switchboard.projects import Projects
 from switchboard.refusals import MEMORY_WRITER_REQUIRED, OWNER_REQUIRED, SCOPE_REQUIRED
 from switchboard.store import Store
+from switchboard.trust import wrap_memory
 
 
 def pair(client, agent, project=None):
@@ -93,9 +94,9 @@ def test_oauth_and_configured_keys_keep_their_memory_roles(workspace):
     scoped_oauth = core.auth._issue("fixture-scoped-client", core.cfg.resource, "second")["access_token"]
     private = payload(write(client, STATIC_KEY, "project:secretproj"))["id"]
     assert payload(call(client, oauth, "memory_read", {"id": private}))["id"] == private
-    for credential in (SECOND_KEY, scoped_oauth):
+    for credential, body in ((SECOND_KEY, "Configured key fixture"), (scoped_oauth, "Scoped OAuth fixture")):
         assert error_text(call(client, credential, "memory_read", {"id": private})) == MEMORY_NOT_FOUND
-        assert payload(write(client, credential, "project:demo"))["scope"] == "project:demo"
+        assert payload(write(client, credential, "project:demo", body=body))["scope"] == "project:demo"
     assert payload(call(client, oauth, "memory_delete", {"id": private}))["deleted"] == private
 
 
@@ -163,8 +164,8 @@ def test_only_the_owner_discovers_memory_promote(workspace):
 def test_mutations_require_exact_writer_and_both_grants(workspace, name):
     core, client, agent, sibling, scoped, default = workspace
     owner_entry = payload(write(client, STATIC_KEY, "project:demo", key="owner-note"))["id"]
-    agent_entry = payload(write(client, agent["key"], "project:demo"))["id"]
-    scoped_entry = payload(write(client, SECOND_KEY, "project:demo"))["id"]
+    agent_entry = payload(write(client, agent["key"], "project:demo", body="Paired writer fixture"))["id"]
+    scoped_entry = payload(write(client, SECOND_KEY, "project:demo", body="Configured writer fixture"))["id"]
     assert error_text(write(client, agent["key"], "project:demo", key="owner-note", mode="append")) == MEMORY_WRITER_REQUIRED
     assert error_text(write(client, sibling["key"], "project:demo", id=agent_entry)) == MEMORY_WRITER_REQUIRED
     assert payload(write(client, agent["key"], "project:demo", id=agent_entry, mode="append"))["action"] == "append"
@@ -264,7 +265,9 @@ async def test_startup_migrates_active_legacy_keys_once_then_keeps_new_defaults(
             assert first.connections.memory_scopes("ak_revoked") == ()
             for scope, ident in entries.items():
                 result = payload(await acall(client, keys["legacy"], "memory_read", {"id": ident}))
-                assert (result["scope"], result["body"]) == (scope, f"Saved in {scope}")
+                assert (result["scope"], result["body"]) == (
+                    scope, wrap_memory(f"Saved in {scope}", result["path"], "owner", result["updated_at"], "agent"),
+                )
             result = await acall(client, keys["limited"], "memory_read", {"id": entries["general"]})
             assert error_text(result) == MEMORY_NOT_FOUND
             code = first.connections.mint(agent="new", project="demo", client=None, by="owner")["code"]
