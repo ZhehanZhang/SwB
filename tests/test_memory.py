@@ -124,6 +124,13 @@ def test_memory_and_project_tools_over_mcp(make):
     assert payload(call(c, STATIC_KEY, "project_update", {"slug": "switchboard", "archived": True}))["archived"] is True
 
 
+def test_memory_write_reports_field_names_without_echoing_arguments(make):
+    _, client = make()
+    args = {"scope": "general", "title": "A note", "body": "private sample text"}
+    assert error_text(call(client, STATIC_KEY, "memory_write", args)) == "Provide namespace."
+    assert error_text(call(client, STATIC_KEY, "memory_write", {**args, "namespace": ["private sample text"]})) == "Check namespace."
+
+
 def test_mirror_debounces_bursts_and_follows_renames(tmp_path, store):
     out = tmp_path / "mirror"
     projects = Projects(store)
