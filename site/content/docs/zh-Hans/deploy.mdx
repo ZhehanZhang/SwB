@@ -1,9 +1,11 @@
 ---
-title: 一键部署
+title: 部署
 description: 在云平台上运行 SwB，再让智能体完成设置。
 ---
 
 本页适合通过智能体工作的人。你在云平台上部署 SwB，登录一次，再把设置提示词交给智能体。
+
+<DeployLive>
 
 ## 部署 SwB
 
@@ -47,14 +49,34 @@ Render 会在几分钟内构建 SwB。SwB 就绪后，服务页面显示 **Live*
 </Step>
 </Steps>
 
+</DeployLive>
+
+<DeployHeld>
+
+## 部署 SwB
+
+把这段提示词粘贴给编程智能体，例如 Claude Code 或 Codex。它会在 Fly.io、Koyeb 或装有 Docker 的服务器上部署 SwB，并告诉你设置码保存在哪个私密文件中。
+
+<SetupPrompt name="deploy" lang="zh-Hans" />
+
+## 登录
+
+打开服务日志中显示的登录页面地址。把私密文件中的设置码粘贴到 **Setup code**。添加通行密钥，以后用它登录。设置码只能使用一次。
+
+</DeployHeld>
+
 ## 连接你的智能体
 
 把这段提示词粘贴给你正在用的智能体。它会添加 SwB，接通你的其他应用，并开始与它们对话。
 
 <SetupPrompt name="coordinator" lang="zh-Hans" />
 
+<DeployLive>
+
 ## 使用其他平台
 
 Fly.io、Koyeb 和装有 Docker 的服务器需要编程智能体，例如 Claude Code 或 Codex。把这段提示词粘贴给编程智能体。它会完成部署，并告诉你设置码保存在哪个文件中。
 
 <SetupPrompt name="deploy" lang="zh-Hans" />
+
+</DeployLive>

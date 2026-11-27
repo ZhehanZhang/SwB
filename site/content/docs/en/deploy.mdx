@@ -1,9 +1,11 @@
 ---
-title: Deploy in one click
+title: Deploy
 description: Run SwB on a cloud platform and let your agent do the setup.
 ---
 
 This page is for people who work through agents. You deploy SwB on a cloud platform, sign in one time, and give your agent the setup prompt.
+
+<DeployLive>
 
 ## Deploy SwB
 
@@ -47,14 +49,34 @@ Paste the code in **Setup code**. Add a passkey to sign in again. The setup code
 </Step>
 </Steps>
 
+</DeployLive>
+
+<DeployHeld>
+
+## Deploy SwB
+
+Paste this prompt into a coding agent, for example Claude Code or Codex. The agent deploys SwB on Fly.io, Koyeb or your server with Docker. It tells you the private file that holds your setup code.
+
+<SetupPrompt name="deploy" lang="en" />
+
+## Sign in
+
+Open the sign-in page address from the service log. Paste the code from the private file in **Setup code**. Add a passkey to sign in again. The setup code works one time.
+
+</DeployHeld>
+
 ## Connect your agent
 
 Paste this prompt into the agent that you use. The agent adds SwB, connects your other apps and starts to talk to them.
 
 <SetupPrompt name="coordinator" lang="en" />
 
+<DeployLive>
+
 ## Use another platform
 
 Fly.io, Koyeb and a server with Docker use a coding agent, for example Claude Code or Codex. Paste this prompt into the coding agent. The agent runs the deploy and tells you where to find your setup code.
 
 <SetupPrompt name="deploy" lang="en" />
+
+</DeployLive>
