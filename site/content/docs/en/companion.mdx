@@ -61,7 +61,7 @@ A **local session** is a coding agent's open conversation on the device. SwB lis
 
 Use the link for your coding agent in the feature table. Set up the agent before pairing. After pairing, keep the companion running. Ask an agent signed in as the owner to call `targets(block="local")`. Check that your session address appears.
 
-SwB puts a message for the session in the agent's mailbox first. It then tries to deliver the message into the open session. The answer comes back in the same conversation.
+SwB tries to deliver each message to the open session. It puts the message in the agent's mailbox when the sender can use that mailbox. The answer comes back in the same conversation.
 
 Use the session address from `targets`. Find the resource for that address in `visibility_list`. Share the resource with `visibility_set`.
 

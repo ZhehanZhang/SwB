@@ -15,21 +15,29 @@ Add SwB to the same Claude account. See [Claude](/docs/setup/claude). Enable the
 
 <SetupPrompt name="claude-project" lang="en" />
 
-Paste the prompt into the coordinator chat of your Claude Project.
+Open your project in [Claude Code](https://claude.ai/code). Paste the prompt into the coordinator chat on the left. The coordinator creates a routine named `swb <project>` in your project.
 
-## Create the routine
+## Open the routine
 
-Open your project in [Claude Code](https://claude.ai/code). Open a routine in the project or create one. Add the routine prompt from the coordinator.
+Open the routine link from the coordinator or use one of these paths.
 
-## Add an API trigger
+### From the Routines page
 
-Open the routine. You can also find it on the [scheduled tasks page](https://claude.ai/code/routines).
+Open the [Routines page](https://claude.ai/code/routines). Click the banner at the top to show hidden project routines. Open `swb <project>`.
 
-Open the menu next to the routine name. Select **Edit**. In the **Trigger** row, select **+**. Select **API**.
+### From the project
 
-Copy the **Fire URL**. Give this URL to the coordinator. Select **Generate token**. Copy the token while the **Token generated** dialog is open.
+Click **+** in the top tab row of the right panel. Select **Routines**. Open `swb <project>`. Click **View full page**.
 
-## Save the token
+## Open the API trigger
+
+Open the menu next to the routine name. Select **Edit**. In the edit form, select **Trigger**, then **+**, then **API**.
+
+Copy the **Fire URL**. Give this URL to the coordinator.
+
+## Generate and save the token
+
+The owner generates the token in Claude. Select **Generate token**. Copy the token while the **Token generated** dialog is open.
 
 Open the claim link from the coordinator. Check the project and routine ID on the **Claude routine token** page. Paste the token into **Token**. Select **Save token**.
 
@@ -37,9 +45,9 @@ SwB shows **Routine saved** or **Routine and project saved**. Tell the coordinat
 
 ## What the agent does
 
-The coordinator calls `connect(what="claude-project")`. SwB checks the `claude-routine` block and lists its routines. The coordinator can call `project_list` to find your SwB project.
+The coordinator calls `connect(what="claude-project")` from a SwB client with unrestricted owner access. SwB checks the `claude-routine` block and lists its routines. The coordinator can call `project_list` to find your SwB project.
 
-The coordinator returns a prompt for the routine. It includes this instruction with the exact project name.
+The coordinator adds an API trigger. It includes this instruction in the routine prompt with the exact Claude Project name.
 
 ```text
 Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.

@@ -15,21 +15,29 @@ routine 是一項已儲存的 Claude Code 工作，可以自行執行。其他�
 
 <SetupPrompt name="claude-project" lang="zh-Hant" />
 
-把提示詞貼到 Claude Project 的協調對話。
+在 [Claude Code](https://claude.ai/code) 開啟專案。把提示詞貼到左側的協調對話。協調代理會在專案中建立名為 `swb <project>` 的 routine。
 
-## 建立 routine
+## 開啟 routine
 
-在 [Claude Code](https://claude.ai/code) 開啟專案。開啟專案中的 routine，或建立一項。加入協調代理提供的 routine 提示詞。
+開啟協調代理提供的 routine 連結。你也可以用以下任一種方式開啟。
 
-## 新增 API 觸發條件
+### 從 Routines 頁面開啟
 
-開啟 routine。你也可以在[排程工作頁面](https://claude.ai/code/routines)找到它。
+開啟 [Routines 頁面](https://claude.ai/code/routines)。按一下頁面頂端的橫幅，顯示隱藏的專案 routine。開啟 `swb <project>`。
 
-開啟 routine 名稱旁的選單。選取 **Edit**。在 **Trigger** 這一列按一下 **+**。選取 **API**。
+### 從專案開啟
 
-複製 **Fire URL**。把網址交給協調代理。按一下 **Generate token**。趁 **Token generated** 對話方塊開著時複製權杖。
+按一下右側面板頂端分頁列中的 **+**。選取 **Routines**。開啟 `swb <project>`。按一下 **View full page**。
 
-## 儲存權杖
+## 開啟 API 觸發條件
+
+開啟 routine 名稱旁的選單。選取 **Edit**。在編輯表單中依序選取 **Trigger**、**+** 和 **API**。
+
+複製 **Fire URL**。把網址交給協調代理。
+
+## 產生並儲存權杖
+
+由擁有者在 Claude 產生權杖。按一下 **Generate token**。趁 **Token generated** 對話方塊開著時複製權杖。
 
 開啟協調代理提供的領取連結。在 **Claude routine token** 頁面核對專案和 routine ID。把權杖貼到 **Token**。按一下 **Save token**。
 
@@ -37,9 +45,9 @@ SwB 會顯示 **Routine saved** 或 **Routine and project saved**。儲存後通
 
 ## 代理的工作
 
-協調代理呼叫 `connect(what="claude-project")`。SwB 會檢查 `claude-routine` 模組並列出已登記的 routine。協調代理可以用 `project_list` 找到你的 SwB 專案。
+協調代理從具備完整擁有者權限的 SwB 用戶端呼叫 `connect(what="claude-project")`。SwB 會檢查 `claude-routine` 模組並列出已登記的 routine。協調代理可以用 `project_list` 找到你的 SwB 專案。
 
-協調代理會傳回 routine 的提示詞。其中包含下列指示和正確的專案名稱。
+協調代理會新增 API 觸發條件。它會把下列指示加到 routine 的提示詞中，並填入正確的 Claude Project 名稱。
 
 ```text
 Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.

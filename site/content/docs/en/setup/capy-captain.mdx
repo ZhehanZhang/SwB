@@ -49,7 +49,7 @@ In **Settings** → **API**, create a service user with the role `read_write`. G
 
 ### Share the Capy Captain
 
-Open the Capy Captain menu. Select **Share**. Grant access to the service user. For a Captain on a paired device, grant the service user access to the device too.
+Open the Capy Captain menu. Select **Share**. Grant access to the service user. For a Captain on a paired device, grant the service user access to the device too. {/* unverified */}
 
 ### Save the send key
 
@@ -66,6 +66,8 @@ From a client with full owner access, call `connect(what="capy-captain")`. If Sw
 After the restart, `connect` lists the available Captains. Confirm which Captain should receive the work. Call `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`. For a project route, add `"project":"<project>"` to `choose`. A route tells SwB where to send work.
 
 SwB asks for a service key if the agent needs one to send. Use `capy_captains`, `routes_list` and `routes_resolve` to check the route.
+
+If your app supports MCP events, subscribe to `switchboard.message.created`. For on-demand reads, call `wait` or `inbox`.
 
 ## Credentials
 

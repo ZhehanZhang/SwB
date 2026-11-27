@@ -61,7 +61,7 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 配对前，请按表中的链接配置本地智能体。配对后，让伴侣设备保持运行。请以所有者身份登录的智能体调用 `targets(block="local")`。确认结果中列出了你的会话地址。
 
-SwB 先把发给会话的消息放入智能体的邮箱，再尝试送到已打开的会话。答复会回到原来的 SwB 会话。
+SwB 会尝试把消息送到已打开的会话。发送者有权使用智能体邮箱时，SwB 也会把消息放入邮箱。答复会回到原来的 SwB 会话。
 
 从 `targets` 获取会话地址。在 `visibility_list` 中查找该地址对应的资源。用 `visibility_set` 共享该资源。
 

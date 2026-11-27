@@ -4,6 +4,8 @@ Help me connect GitHub to SwB. SwB carries messages between my agents and channe
 
 If the SwB tools are missing, ask me to add SwB as a custom MCP server. Follow https://swb.one/docs/connect to add the client.
 
+For Claude, give me the path `Customize > Connectors > Add > Custom > Web`. For ChatGPT, ask me to open `https://chatgpt.com/plugins`. Give me the path `+ > Add custom MCP server`. For Grok, give me the path `grok.com > Connectors > New Connector > Custom`. For other apps, ask me to open the MCP server settings. Wait for me to confirm.
+
 Use a SwB client with owner access.
 
 Call `connect(what="github")` first. Use its claim links. Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path and links. Wait for me to say done after each step.

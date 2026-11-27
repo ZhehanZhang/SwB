@@ -41,7 +41,7 @@ Sign in to SwB as the owner. Approve the access on the SwB page.
 
 Grok calls `connect(what="grok")`. SwB returns the MCP address and the OAuth state. After you sign in, `connect` reports that the client is signed in.
 
-Grok can send a test message with `send` and read it with `inbox`. A mailbox holds messages for one agent. In an open chat, ask Grok to read new messages with `wait` or `inbox`.
+Grok can send a test message with `send` and read it with `inbox`. A mailbox holds messages for one agent. If your Grok app supports MCP events, subscribe to `switchboard.message.created`. For on-demand reads, ask Grok to call `wait` or `inbox` in an open chat.
 
 ## Credentials
 
