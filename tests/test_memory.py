@@ -17,7 +17,7 @@ def store(tmp_path):
 def mem(store):
     projects = Projects(store)
     projects.create(slug="switchboard", name="Switchboard")
-    projects.create(slug="slackgate", name="slackgate")
+    projects.create(slug="notifier", name="notifier")
     return Memory(store, projects)
 
 
@@ -46,20 +46,20 @@ def test_write_without_scope_is_rejected(mem):
 
 
 def test_scope_isolation(mem):
-    mem.write(source="claude", scope="project:switchboard", namespace="notes", key="port", title="Port", body="8870 on your-host")
-    mem.write(source="claude", scope="project:slackgate", namespace="notes", key="port", title="Port", body="socket mode, no port")
+    mem.write(source="claude", scope="project:switchboard", namespace="notes", key="port", title="Port", body="8870 on example-host")
+    mem.write(source="claude", scope="project:notifier", namespace="notes", key="port", title="Port", body="socket mode, no port")
     a = mem.read(scope="project:switchboard", namespace="notes", key="port")
-    b = mem.read(scope="project:slackgate", namespace="notes", key="port")
+    b = mem.read(scope="project:notifier", namespace="notes", key="port")
     assert a["id"] != b["id"] and "8870" in a["body"]
-    only = mem.search(query="port", scopes=mem.read_scopes("slackgate", include_general=False))["items"]
-    assert [h["scope"] for h in only] == ["project:slackgate"]
+    only = mem.search(query="port", scopes=mem.read_scopes("notifier", include_general=False))["items"]
+    assert [h["scope"] for h in only] == ["project:notifier"]
     assert mem.search(query="8870", scopes=mem.read_scopes(None))["items"] == []
 
 
 def test_project_and_general_merge_ranks_project_first(mem):
     mem.write(source="claude", scope="general", confirm_general=True, namespace="decisions", title="Deploy style", body="Docker compose behind a tunnel")
-    mem.write(source="claude", scope="project:switchboard", namespace="decisions", title="Deploy target", body="your-host behind a cloudflared tunnel")
-    mem.write(source="claude", scope="project:slackgate", namespace="decisions", title="Deploy slackgate", body="tunnel not needed")
+    mem.write(source="claude", scope="project:switchboard", namespace="decisions", title="Deploy target", body="example-host behind a cloudflared tunnel")
+    mem.write(source="claude", scope="project:notifier", namespace="decisions", title="Deploy notifier", body="tunnel not needed")
     hits = mem.search(query="tunnel", scopes=mem.read_scopes("switchboard"))["items"]
     assert [h["scope"] for h in hits] == ["project:switchboard", "general"]
     listed = mem.list(scopes=mem.read_scopes("switchboard"))
@@ -86,8 +86,8 @@ def test_existing_rows_migrate_to_general(tmp_path):
 
 def test_projects_rename_moves_memories_and_archive_blocks_writes(mem, store):
     mem.write(source="claude", scope="project:switchboard", namespace="notes", title="t", body="b")
-    p = Projects(store).update("switchboard", new_slug="sb", links={"repos": ["demo-org/sample-docs"]})
-    assert p.slug == "sb" and p.links["repos"] == ["demo-org/sample-docs"]
+    p = Projects(store).update("switchboard", new_slug="sb", links={"repos": ["example-org/switchboard"]})
+    assert p.slug == "sb" and p.links["repos"] == ["example-org/switchboard"]
     assert mem.list(scopes=["project:sb"])["items"]
     Projects(store).update("sb", archived=True)
     with pytest.raises(MemoryError_, match="archived"):
@@ -114,7 +114,7 @@ def test_memory_and_project_tools_over_mcp(make):
     _, c = make()
     tok = sign_in(c)["access_token"]
     assert "scope is required" in error_text(call(c, tok, "memory_write", {"scope": "", "namespace": "decisions", "title": "x", "body": "y"}))
-    payload(call(c, tok, "project_create", {"slug": "switchboard", "name": "Switchboard", "links": {"repos": ["demo-org/sample-docs"], "claude_project": "Switchboard"}}))
+    payload(call(c, tok, "project_create", {"slug": "switchboard", "name": "Switchboard", "links": {"repos": ["example-org/switchboard"], "claude_project": "Switchboard"}}))
     w = payload(call(c, tok, "memory_write", {"scope": "project:switchboard", "namespace": "decisions", "title": "Use SQLite", "body": "FTS5 for search"}))
     r = payload(call(c, STATIC_KEY, "memory_read", {"id": w["id"]}))
     assert r["source"] == "claude" and r["scope"] == "project:switchboard"

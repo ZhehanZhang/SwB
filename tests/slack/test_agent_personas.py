@@ -21,11 +21,11 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 32
 def agent_config():
     c = copy.deepcopy(base_config())
     c["public_base_url"] = PUBLIC
-    c["personas"].update({"claude": {"name": "Claude"}, "demoagent": {"name": "DemoAgent"}, "switchboard": {"name": "Switchboard"}})
+    c["personas"].update({"claude": {"name": "Claude"}, "helperbot": {"name": "HelperBot"}, "switchboard": {"name": "Switchboard"}})
     c["workspaces"]["a2a"]["default_persona"] = "switchboard"
     c["agents"].update({
         "claude": {"workspaces": {"a2a": ["bot"]}},
-        "capy": {"persona_by_workspace": {"a2a": "demoagent"}, "allow_persona_override": True, "allowed_personas": ["demoagent", "capy"],
+        "capy": {"persona_by_workspace": {"a2a": "helperbot"}, "allow_persona_override": True, "allowed_personas": ["helperbot", "capy"],
                  "workspaces": {"a2a": ["bot", "user"]}},
         "stranger": {"workspaces": {"a2a": ["bot"]}},
     })
@@ -36,7 +36,7 @@ def test_persona_follows_the_agent_like_send_keys():
     cfg = parse_config(agent_config(), ENV)
     ws = cfg.workspaces["a2a"]
     assert resolve_persona(cfg, ws, "bot", cfg.grant("claude"), None).name == "Claude"
-    assert resolve_persona(cfg, ws, "bot", cfg.grant("capy"), None).name == "DemoAgent"
+    assert resolve_persona(cfg, ws, "bot", cfg.grant("capy"), None).name == "HelperBot"
     assert resolve_persona(cfg, ws, "bot", cfg.grant("capy"), "capy").name == "Capy"
     assert resolve_persona(cfg, ws, "bot", cfg.grant("stranger"), None).name == "Switchboard"
     assert resolve_persona(cfg, ws, "user", cfg.grant("capy"), None) is None
@@ -71,7 +71,7 @@ async def test_bot_posts_use_the_agent_persona_and_avatar_file(make_core, world,
     await core.gate.submit(core.config.grant("stranger"), "a2a", "bot", "post_message", {"channel": "CWATCH001", "text": "hi"})
     posts = [kw for t, n, kw in world.calls if t == "xoxb-a" and n == "chat_postMessage"]
     assert posts[0]["username"] == "Claude" and re.fullmatch(PUBLIC + r"/avatars/claude\.png\?v=\d+", posts[0]["icon_url"])
-    assert posts[1]["username"] == "DemoAgent" and re.fullmatch(PUBLIC + r"/avatars/default\.png\?v=\d+", posts[1]["icon_url"])
+    assert posts[1]["username"] == "HelperBot" and re.fullmatch(PUBLIC + r"/avatars/default\.png\?v=\d+", posts[1]["icon_url"])
     assert posts[2]["username"] == "Switchboard"
     (core.avatar_dir).mkdir(parents=True, exist_ok=True)
     (core.avatar_dir / "claude.png").write_bytes(PNG + b"new")

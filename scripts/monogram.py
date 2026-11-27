@@ -1,4 +1,6 @@
-"""Make a square monogram PNG for a Slack persona: python scripts/monogram.py "DemoAgent" demoagent.png [--bg "#5b6b7a"].
+"""Make a square monogram PNG for a Slack persona.
+
+    python scripts/monogram.py "Build Bot" build-bot.png [--bg "#5b6b7a"].
 
 Drop the file into <data>/avatars or an avatar_dirs folder, named after the persona (or its avatar: entry), and new
 bot posts use it.

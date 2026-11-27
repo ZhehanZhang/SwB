@@ -1,13 +1,15 @@
-# Copy this file to config/switchboard.yaml. Set secrets in .env.
+# Use this file as a reference for optional settings.
+# Copy the settings you need to config/switchboard.yaml. Set secrets in .env.
 # The examples use fictional accounts and IDs. Use your own values for your installation.
 # Version 2: everything in or out is a block under blocks:, the core (auth, projects, scoped memory, routes, inbox,
-# audit) knows only blocks. Files without version: 2 are read as version 1 (origins:, destinations:, slack:);
+# audit) knows only blocks. Legacy origins:, destinations: and slack: sections are translated at load time;
 # switchboard config migrate prints them as version 2.
 version: 2
 
-# Public origin of this server. The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url.
-public_url: https://switchboard.example.com
-timezone: America/New_York
+# The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url. Usually set PUBLIC_URL instead.
+# public_url: https://switchboard.example.com
+# data_dir: ./data                              # usually set SWITCHBOARD_DATA_DIR instead
+# timezone: UTC
 # One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
 # A new send starts at zero. null switches it off.
 turn_cap: 200
@@ -18,15 +20,16 @@ modes:
   assist_max_chars: 1500                      # maximum length of one assist reply
   # projects: {example: assist}              # defaults for spaces assigned to these projects
 
-auth:
-  # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
-  owner_emails: [owner@example.com]
-  # Verify the Cf-Access-Jwt-Assertion header on / (admin) and /authorize. Access app "Switchboard" covers the whole host
-  # with your identity provider; a bypass policy for machine paths lets /mcp, /token, /register, /revoke, /.well-known, /healthz,
-  # /inbox, /avatars and /connect through. There is no password sign-in: without this block, OAuth sign-in and the admin page are off.
-  cloudflare_access:
-    team_domain: example.cloudflareaccess.com
-    aud: <AUD tag of the "Switchboard" Access application>
+branding:
+  display_name: SwB
+  # icon, accent_color and logo_assets_dir are optional; see deploy/overlay.example.yaml.
+
+auth: {}
+  # Usually set SWITCHBOARD_OWNER_EMAILS, CLOUDFLARE_ACCESS_TEAM_DOMAIN and CLOUDFLARE_ACCESS_AUD instead.
+  # owner_emails: [owner@example.com]
+  # cloudflare_access:
+  #   team_domain: <TEAM_NAME>.cloudflareaccess.com
+  #   aud: <ACCESS_APP_AUDIENCE>
   # Allowed OAuth redirect URIs (exact, or prefix with /*; loopback matches any port). Default: every agent's from the
   # agents registry (presets plus block agents, e.g. Capy's from the capy block) and loopback. Setting it replaces that.
   # redirect_uris: [https://claude.ai/api/mcp/auth_callback, https://claude.com/api/mcp/auth_callback,
@@ -55,10 +58,10 @@ blocks:
     sinks:
       team: {url_env: TEAM_GITHUB_SINK_URL}
     routes:
-      "acme/app": [team]
-      "acme/*": [team]
+      "example-org/app": [team]
+      "example-org/*": [team]
     # spaces:
-    #   "acme/app": {mode: watch, project: example}
+    #   "example-org/app": {mode: watch, project: example}
 
   mcp:
     use: mcp
@@ -107,6 +110,7 @@ blocks:
 
   capy:
     use: capy
+    enabled: false
     api_base: https://api.capy.ai/api/v1
     # Runaway guard: the same task to the same target within duplicate_window_s returns the existing handle (loops are
     # caught by turn_cap at the top level). daily_cap is an optional hard limit, off (null) by default.
@@ -123,6 +127,23 @@ blocks:
     # Stop following a delegation after this many days (MCP task TTL too).
     handle_ttl_days: 7
     # avatars: true                           # false uses monograms instead of fetching Captain assets
+
+  claude-routine:
+    use: claude-routine
+    enabled: false
+
+  grok-routine:
+    use: grok-routine
+    enabled: false
+    # routines:
+    #   example-routine: {project: example, url_env: GROK_ROUTINE_URL, secret_env: GROK_ROUTINE_SECRET, auth: signature}
+
+  dots:
+    use: dots
+    enabled: false
+    delivery: mailbox
+    dots:
+      example-dot: {name: Example Dot, mailbox: chatgpt}
 
   # Telegram (optional): long polling in, Bot API posts out. Set enabled: true to start setup.
   telegram:
@@ -146,7 +167,7 @@ blocks:
     #     channels:
     #       "-1001111111111": {mode: assist, project: example}
     #     listen: [-1001111111111]                  # legacy alias for assist
-    #     project: example                      # default switchboard project
+    #     project: example                      # default SwB project
     #     channel_projects: {-1001111111111: null}  # override or opt out of the project by chat id
     #     bot_posts_per_hour: 20                # limit in each conversation thread
 
@@ -154,6 +175,7 @@ blocks:
   # Tokens never go here: every *_env names a variable in .env. Config changes apply on restart.
   slack:
     use: slack
+    enabled: false
     refresh_minutes: 30                         # how often targets ("@swb <slug>") are re-read
     workspace_projects: {}                      # e.g. {a2a: example}: the switchboard project a workspace's events belong to
     channel_projects: {}
@@ -166,7 +188,7 @@ blocks:
     # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts. A persona with no
     # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled marks; emoji is the fallback.
     personas:
-      switchboard: {name: Switchboard, emoji: ":robot_face:"}
+      switchboard: {name: SwB, emoji: ":robot_face:"}
       claude: {name: Claude}
       chatgpt: {name: ChatGPT}
       gemini: {name: Gemini}
@@ -177,6 +199,7 @@ blocks:
     avatar_dirs: []                               # optional folders with files that override bundled marks
     target_aliases: {}                            # extra "@bot <slug>" names, e.g. {help: helper}
     workspaces:
+      # Use IDs from Slack in your installation.
       # Workspace A: an agent room. The bot is @demo_swb and can also act as the owner (with approval).
       a2a:
         team_id: T0DEMO0001
@@ -204,13 +227,13 @@ blocks:
         app_token_env: SLACK_PRIVATE_APP_TOKEN
         identities:
           user: {token_env: SLACK_PRIVATE_USER_TOKEN, write: approval}  # user_only allows only approval or never
-        watched: ["#family"]
+        watched: ["#private"]
     # Owner approvals: a DM with Approve / Reject buttons from a workspace's bot, plus the root page. Agents never approve.
     approvals:
       ttl_minutes: 60
       notify_workspace: a2a
       approver_user_id: U0DEMO0001
-    # What each switchboard agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
+    # What each SwB agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
     # Each agent posts as the persona named like it (claude -> claude) unless persona / persona_by_workspace says otherwise.
     agents:
       capy: {allow_persona_override: true, workspaces: {a2a: [bot]}}
@@ -220,23 +243,23 @@ blocks:
 # Optional. Slug priority on a clash ("capy:captain", "agent", "project"); default: block targets, agents, projects.
 # targets:
 #   priority: [capy:captain, agent, project]
-#   aliases: {pp: capy:captain:<Captain id>}
+#   aliases: {dev: "capy:captain:<CAPTAIN_ID>"}
 
 # Seeds, written once when that agent/project slot has no route yet. The global default is empty unless set here.
 # routes:
-#   - {match: {}, to: "capy:captain:<Captain id>"}
+#   - {match: {}, to: "capy:captain:<CAPTAIN_ID>"}
 
-# Who can reach what. Every resource is private (the owner and his own signed-in agents only) unless marked shared.
+# Who can reach what. Every resource is private (only the owner and their signed-in agents) unless marked shared.
 # Resources: target:<slug>, channel:<workspace>/<id or #name>, memory:<general | project:slug>, route:<id>, tool:<name>.
 # shared means anyone in that workspace; a list narrows it to Slack user ids and workspace:<label>. Tools stay private.
 # Anyone else's message to something private becomes a context item in its inbox, with a neutral "Noted." reply.
 # The root page and visibility_set flip a resource; those overrides win over this file.
 visibility:
   defaults: {target: private, channel: private, memory: private, route: private}
-  resources:
-    # target:helper: shared
-    channel:a2a/#agents: shared
-    # target:helper: [U0DEMO0002, workspace:a2a]
+  # resources:
+  #   target:development: shared
+  #   channel:a2a/#agents: shared
+  #   target:helper: [U0DEMO0002, workspace:a2a]
 
 memory:
   # Optional one-way markdown mirror: general/, projects/<slug>/ and INDEX.md, rewritten atomically after changes.

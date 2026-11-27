@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
-const URL_BASE = (process.env.SWITCHBOARD_URL ?? "https://swb.example.com").replace(/\/+$/, "")
+const URL_BASE = (process.env.SWITCHBOARD_URL ?? "").trim().replace(/\/+$/, "")
 const KEY = process.env.SWITCHBOARD_KEY ?? ""
 const AGENT = process.env.SWITCHBOARD_AGENT ?? ""
 const STATE_DIR = process.env.SWITCHBOARD_CHANNEL_STATE ?? join(homedir(), ".claude", "channels", "switchboard")
@@ -119,6 +119,10 @@ async function follow(): Promise<never> {
 }
 
 if (import.meta.main) {
+  if (!URL_BASE) {
+    log("SWITCHBOARD_URL is not set; set it to the base URL of your SwB server")
+    process.exit(1)
+  }
   if (!KEY) {
     log("SWITCHBOARD_KEY is not set; set it to the value of SWITCHBOARD_KEY_CHANNEL from the server's .env")
     process.exit(1)

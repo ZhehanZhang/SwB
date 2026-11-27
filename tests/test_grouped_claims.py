@@ -44,7 +44,8 @@ def test_group_saves_every_field_together_or_nothing(make, caplog):
     assert core.secret("GITHUB_APP_ID") is None and core.secret("GITHUB_APP_PRIVATE_KEY") is None
     missing = client.post(path, data={"csrf": csrf, "GITHUB_APP_ID": "12345"}, headers=OWNER)
     assert missing.status_code == 400 and core.secret("GITHUB_APP_ID") is None
-    ok = client.post(path, data={"csrf": csrf, "GITHUB_APP_ID": " 12345 ", "GITHUB_APP_PRIVATE_KEY": PKCS1.replace("\n", "")}, headers=OWNER)
+    ok = client.post(path, data={"csrf": csrf, "GITHUB_APP_ID": " 12345 ", "GITHUB_APP_PRIVATE_KEY": PKCS1.replace("\n", "")},
+                     headers={**OWNER, "Origin": PUBLIC})
     assert ok.status_code == 200 and "2 credentials saved" in ok.text
     assert core.secret("GITHUB_APP_ID") == "12345" and core.secret("GITHUB_APP_PRIVATE_KEY") == normalize_pem(PKCS1)
     assert core.secret("GITHUB_WEBHOOK_SECRET") is None
@@ -56,10 +57,12 @@ def test_group_saves_every_field_together_or_nothing(make, caplog):
 def test_group_claims_need_the_owner(make):
     core, client = make()
     path = urlsplit(core.claims.mint_group("Example", [Field("EXAMPLE_ID", "ID", "id")], PUBLIC)).path
-    response = client.get(path, follow_redirects=False)
-    assert response.status_code == 303 and response.headers["location"].startswith("/login?")
-    response = client.post(path, data={"EXAMPLE_ID": "1"})
-    assert response.status_code == 401 and response.json() == {"error": "signed_out"}
+    page = client.get(path)
+    assert page.status_code == 303 and page.headers["location"].startswith("/login?next=%2Fclaim%2F")
+    assert page.headers["cache-control"] == "no-store" and page.headers["referrer-policy"] == "no-referrer"
+    assert "EXAMPLE_ID" not in page.text
+    denied = client.post(path, data={"EXAMPLE_ID": "1"})
+    assert denied.status_code == 401 and denied.json() == {"error": "signed_out"}
     assert core.secret("EXAMPLE_ID") is None
 
 
@@ -95,5 +98,11 @@ def test_owner_key_installs_get_the_grouped_form(make):
     page = client.get(path)
     assert page.status_code == 200 and 'name="owner_key"' in page.text
     assert 'name="GITHUB_APP_ID"' in page.text and 'name="GITHUB_APP_PRIVATE_KEY"' in page.text and 'name="token"' not in page.text
-    saved = client.post(path, data={"owner_key": OWNER_KEY, "csrf": form_csrf(page), "GITHUB_APP_ID": "12345", "GITHUB_APP_PRIVATE_KEY": PKCS8})
+    values = {"owner_key": OWNER_KEY, "GITHUB_APP_ID": "12345", "GITHUB_APP_PRIVATE_KEY": PKCS8}
+    private_page(page)
+    assert client.post(path, data=values).status_code == 403
+    values["csrf"] = form_csrf(page)
+    assert client.post(path, headers={"Origin": "https://other.example.test"}, data=values).status_code == 403
+    assert core.secret("GITHUB_APP_ID") is None
+    saved = client.post(path, data=values)
     assert saved.status_code == 200 and core.secret("GITHUB_APP_ID") == "12345"
