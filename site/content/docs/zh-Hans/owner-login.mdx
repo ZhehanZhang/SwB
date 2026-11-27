@@ -20,6 +20,13 @@ swb login-link
 
 在本机运行时，启动前将 `SWITCHBOARD_PUBLIC_URL` 设为 `http://localhost:8870`。地址中的端口须与 `PORT` 一致。如果 YAML 配置已设置 `public_url`，请在那里修改。用 `--url` 指定其他服务器。用 `--dir` 从其他实例目录读取所有者密钥。
 
+若链接显示以下错误，请重新运行 `swb login-link`。在浏览器中打开新链接。
+
+| 错误 | 含义 |
+| - | - |
+| `link_used` | 已有人通过该链接登录。 |
+| `link_expired` | 链接已过期或已失效。 |
+
 ## 设置码
 
 设置码仅用于所有者首次登录，用过即失效。由 SwB 直接处理登录时，可使用设置码。[云平台和 Docker 部署脚本](/zh-Hans/docs/deploy)会生成设置码。
