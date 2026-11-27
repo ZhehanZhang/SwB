@@ -45,7 +45,7 @@ def enable_steps(cfg: Config, name: str) -> list[dict[str, str]]:
     restart = {"by": "you", "do": "Restart SwB."}
     routine_env = ROUTINE_ENV_ONLY.get(name)
     if routine_env and not cfg.blocks_from_file:
-        return [{"by": "you", "do": f"Set {' and '.join(routine_env)} in .env."}, restart]
+        return [{"by": "person", "do": f"Set {' and '.join(routine_env)} in .env."}, restart]
 
     config = {"use": name, "enabled": True, **BLOCK_EXAMPLES.get(name, {})}
     if cfg.blocks_from_file:

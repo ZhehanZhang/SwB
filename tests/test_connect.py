@@ -115,7 +115,7 @@ def test_connect_enables_routine_through_environment_discovery(make, kind, block
     core, client = make(config=cfg, env=env)
     assert set(core.blocks) == {"mcp"}
     configure, restart = connect(client, kind)["next"]
-    assert configure == {"by": "you", "do": f"Set {' and '.join(routine_env)} in .env."}
+    assert configure == {"by": "person", "do": f"Set {' and '.join(routine_env)} in .env."}
     assert restart == {"by": "you", "do": "Restart SwB."}
     reloaded, client = make(config=cfg, env={**env, **routine_env})
     assert set(reloaded.blocks) == {"mcp", block}
