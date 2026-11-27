@@ -1,4 +1,4 @@
-# switchboard
+# SwB
 
 the owner's self-hosted switchboard: one place where his assistants and agents share memory, hand work to each other
 and hear back. Everything that comes in or goes out is a **block** behind one interface. The **core** knows only
@@ -47,13 +47,13 @@ path instead of the Git URL. pipx needs Python 3.12 or newer.
 **uvx**
 
 ```bash
-uvx --from git+https://github.com/OWNER/switchboard swb init && uvx --from git+https://github.com/OWNER/switchboard swb up
+uvx --from git+https://github.com/OWNER/swb swb init && uvx --from git+https://github.com/OWNER/swb swb up
 ```
 
 **pipx**
 
 ```bash
-pipx install git+https://github.com/OWNER/switchboard && swb init && swb up
+pipx install git+https://github.com/OWNER/swb && swb init && swb up
 ```
 
 **Docker**
@@ -69,8 +69,10 @@ Replace `/path/to/switchboard` with your checkout in the Docker command.
 
 `swb init` creates `config/switchboard.yaml` with only the MCP block and saves a generated owner key in
 `.env` (mode 600). Keep that file private. `--dir PATH` selects a different instance directory;
-`--public-url https://switchboard.example.com` sets the externally reachable base URL, but doesn't publish the
-server or enable OAuth by itself. Use `--force` only to replace an existing config and rotate its owner key.
+`--public-url https://switchboard.example.com` sets the externally reachable base URL for owner sign-in and OAuth.
+It doesn't publish the server. Use `--force` only to replace an existing config and rotate its owner key.
+`swb init` prints a sign-in link if it can reach the server; otherwise run `swb login-link` after `swb up`.
+Open the link, then choose **Add a passkey**.
 
 From a second terminal in the instance directory:
 
@@ -80,9 +82,9 @@ swb connect mcp-client
 swb connect mcp-client --choose agent=my-client
 ```
 
-If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/switchboard`. If you used Docker, prefix them
+If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/swb`. If you used Docker, prefix them
 with `docker exec switchboard-local`.
-Both commands authenticate to `http://127.0.0.1:8000/mcp` with the owner key from `.env`; use `--url` for
+These commands authenticate to `http://127.0.0.1:8000/mcp` with the owner key from `.env`; use `--url` for
 a different endpoint. Use `--choose` for choices such as agent or project names, never for tokens.
 
 Enable the matching block in `config/switchboard.yaml` to set up Capy, Claude Project routines, Grok, Slack, or GitHub.
@@ -310,7 +312,7 @@ coordinator. It does the rest:
 2. It gets the routine's fire URL (it creates the routine itself when it can, or asks the owner to paste the URL; the
    URL isn't a secret).
 3. It calls `routine_register(fire_url, claude_project, project)`. Switchboard returns a one-time link
-   (`/routines/claim/<code>`, behind Access like `/pairing`). The link works once, for 30 minutes, and is bound to
+   (`/routines/claim/<code>`, protected by owner sign-in). The link works once, for 30 minutes, and is bound to
    that pending registration. The owner opens it, pastes the token and clicks Save. The token never goes through chat
    or MCP.
 4. It confirms with `routine_list` (the `pending` list shows registrations still waiting for the owner) and runs a
@@ -472,7 +474,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   no bot and never joins or invites (the client refuses those methods, and a test scans the source). The loop guard
   queues bot replies past `bot_thread_posts_per_hour` in one thread for approval.
 - **Approvals.** Approval happens only out of band. The owner uses the Approve / Reject DM the bot sends, or the
-  **Slack writes waiting for you** list on the root page (Access plus a CSRF token). The DM goes from the request's own
+  **Slack writes waiting for you** list on the root page (owner sign-in plus a CSRF token). The DM goes from the request's own
   workspace when that workspace sets `approver_user_id`, else from `approvals.notify_workspace` to
   `approvals.approver_user_id`. No MCP tool decides a request, and a decision from anyone but a configured approver
   (clicking in the workspace they are configured for) or the page is refused and audited.
@@ -608,8 +610,8 @@ explicitly listen to. Mention the bot with a target slug (for example, `@swb hel
    let the bot learn it when Discord connects.
 2. Enable the block, add the servers and your Discord user IDs, and restart switchboard. In Discord's
    **User Settings → Advanced**, enable **Developer Mode** to copy server and user IDs from their context menus.
-3. As the owner, call `discord_provision` and open its one-time token link behind Cloudflare Access. Paste the token
-   there and save. Without Access, set `DISCORD_BOT_TOKEN` in the server environment instead. Never enter a token in
+3. As the owner, call `discord_provision` and open its one-time token link. Sign in, paste the token there, and save.
+   You can also set `DISCORD_BOT_TOKEN` in the server environment. Never enter a token in
    YAML, Discord or an MCP tool argument.
 4. Open `setup.invite_url` from `discord_status` and add the bot to each configured server. The link requests only the
    bot scope and the permissions for the enabled features; it does not request Administrator or slash commands.
@@ -658,7 +660,7 @@ Telegram uses the bot's own name; relayed replies can show the target's persona 
 
 1. Enable the block in `config/switchboard.yaml` and configure at least one space.
 2. Create the bot in [@BotFather](https://t.me/BotFather) with `/newbot`. Call `telegram_provision` and
-   enter its HTTP API token only at the one-time link (requires owner sign-in through Access). Without Access,
+   enter its HTTP API token only at the one-time link (requires owner sign-in). Alternatively,
    set the server's `TELEGRAM_BOT_TOKEN` environment variable instead. If set, the environment takes precedence;
    remove or update it before switching to a token saved through the link.
 3. Add the bot to each group and send `/swb@<bot username>` there. Copy the negative chat id from
@@ -799,15 +801,14 @@ server metadata (RFC 8414) with PKCE `S256` only, CIMD from allowlisted hosts, D
 redirect URIs limited to the agents registry's (each preset's and block's) and loopback; tokens bound to `<public_url>/mcp`; 1 h access tokens and
 rotating 30-day refresh tokens with replay detection, stored only as SHA-256 hashes.
 
-**Only Owner can approve a sign-in or open the admin page, and there is no password form anywhere.** The whole
-hostname sits behind the Cloudflare Access app "Switchboard" (policy "Owner Only", identity provider SSO,
-the same setup as his other apps), and the server verifies the Access JWT itself (signature, audience, issuer, owner
-email), so a request that bypasses the tunnel is refused too. The admin page (status, routes, projects, recent
-refusals) is at `/`. A second Access app, "Switchboard machine paths (bypass)", lets through only what machines call:
-`/mcp`, `/token`, `/register`, `/revoke`, `/.well-known`, `/healthz`, `/inbox` (the Claude Code channel),
-`/avatars` (Slack fetches persona pictures) and `/connect` (redeeming a pairing code). Those carry
-their own OAuth or bearer checks. Without `auth.cloudflare_access` in config, OAuth sign-in and the admin page are off
-and only bearer keys work.
+Only the owner can open the admin page at `/` or approve an MCP OAuth connection. With `public_url` set,
+the default sign-in is a passkey. For the first sign-in or as a fallback, run `swb login-link` or ask any
+unrestricted owner agent to call `login_link`. The link works once and expires after five minutes. There are no passwords.
+
+Optionally set `auth.oidc` with `issuer`, `client_id`, `client_secret_env` (the name of an environment variable),
+`name` (the button label), and `owner_subjects`. Register `<public_url>/auth/oidc/callback` at the provider.
+A subject on the allowlist or a verified email in `auth.owner_emails` can sign in. Cloudflare Access still works
+through `auth.cloudflare_access` and `auth.owner_emails`; Switchboard verifies the upstream assertion itself.
 
 In front of everything:
 
@@ -815,6 +816,7 @@ In front of everything:
   in 10 minutes that IP gets `429` for the rest of the window. Requests without a token (OAuth discovery) aren't counted.
 - `/register` allows 20 per IP per hour, `/token` 120 and `/authorize` 60 per 10 minutes; refusals are audited
   (`rate_limited`).
+- Sign-in link redemption and passkey verification each allow 10 failures per IP per 10 minutes.
 - Request bodies are limited to 1 MiB, or 16 MiB on `/mcp` for file attachments.
 
 Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where `<NAME>` becomes the agent name, or
@@ -926,17 +928,16 @@ that support MCP Events can subscribe to their own mailbox in the same way.
 
 ## Connecting the assistants
 
-- **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → `https://swb.example.com/mcp`,
-  sign in with SSO, approve.
-- **ChatGPT**: open https://chatgpt.com/plugins in a web browser, then + → Add custom MCP server → `https://swb.example.com/mcp`, OAuth. The desktop apps and the interactive plugin editor can't add a custom MCP server.
-- **Claude Code**: `claude mcp add --transport http switchboard https://swb.example.com/mcp`, plus the channel above if wanted.
+- **Claude** (claude.ai, Desktop, mobile): Settings → Connectors → Add custom connector → `<public_url>/mcp`,
+  sign in as the owner and approve.
+- **ChatGPT**: open https://chatgpt.com/plugins in a web browser, then + → Add custom MCP server → `<public_url>/mcp`, OAuth. The desktop apps and the interactive plugin editor can't add a custom MCP server.
+- **Claude Code**: `claude mcp add --transport http switchboard https://switchboard.example.com/mcp`, plus the channel above if wanted.
 - **Any other agent** (Codex, Gemini CLI, a script): a pairing code, as above.
-- **Capy**: an MCP server with URL `https://swb.example.com/mcp` and OAuth with the Automatic client. Capy registers
+- **Capy**: an MCP server with URL `<public_url>/mcp` and OAuth with the Automatic client. Capy registers
   itself (DCR, redirect `https://capy.ai/web/callbacks/mcp`), the consent page shows "Capy", and any client that
   returns to capy.ai signs in as agent `capy`, so routes, `key_scopes` and the audit log treat it the same as the old
   key. The fallback is a header `Authorization: Bearer <SWITCHBOARD_KEY_CAPY>`; a bare key without `Bearer ` works too.
-  Read the key on your-host with `sudo grep '^SWITCHBOARD_KEY_CAPY=' /srv/swb/.env`
-  and paste it straight into Capy's settings, never into a chat.
+  Use the key from the server environment in Capy's settings, never in a chat.
 
 ## Instruction snippets
 

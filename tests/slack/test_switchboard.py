@@ -94,13 +94,16 @@ def test_owner_approves_on_the_root_page_and_agents_cannot(sb):
     core, client, world = sb
     _, pending = tool(client, KEY_FULL, "slack_post", {"workspace": "private", "channel": "CPRIV0001", "text": "see you <b>soon</b>", "identity": "user"})
     rid = pending["request_id"]
-    assert client.get("/").status_code == 403 and client.get("/", headers={"cf-access-jwt-assertion": "other"}).status_code == 403
+    for headers in ({}, {"cf-access-jwt-assertion": "other"}):
+        refused = client.get("/", headers=headers)
+        assert refused.status_code == 303 and refused.headers["location"] == "/login?next=%2F"
     page = client.get("/", headers=OWNER).text
     assert rid in page and "Approve and send" in page and "see you &lt;b&gt;soon&lt;/b&gt;" in page
     token = re.search(r'name="csrf" value="([0-9a-f]+)"', page).group(1)
     assert client.post(f"/slack/requests/{rid}/approve", headers=OWNER, data={"csrf": "0" * 64}).status_code == 403
-    assert client.post(f"/slack/requests/{rid}/approve", headers={"cf-access-jwt-assertion": "other"}, data={"csrf": token}).status_code == 403
-    assert client.post(f"/slack/requests/{rid}/approve", headers={"Authorization": f"Bearer {KEY_FULL}"}, data={"csrf": token}).status_code == 403
+    for headers in ({"cf-access-jwt-assertion": "other"}, {"Authorization": f"Bearer {KEY_FULL}"}):
+        refused = client.post(f"/slack/requests/{rid}/approve", headers=headers, data={"csrf": token})
+        assert refused.status_code == 401 and refused.json() == {"error": "signed_out"}
     assert core.slack.store.get_request(rid)["status"] == "pending"
     r = client.post(f"/slack/requests/{rid}/approve", headers=OWNER, data={"csrf": token})
     assert r.status_code == 303 and r.headers["location"] == "/?notice=approved"
@@ -127,4 +130,3 @@ def test_captain_final_reply_is_posted_back_as_the_captain(sb):
     assert [(p["text"], p["username"], p["thread_ts"]) for p in posts] == [("all done", "TeamCaptain", "1700000000.000001")]
     _, got = tool(client, KEY_FULL, "slack_targets")
     assert any(t["slug"] == "teamcaptain" and t["kind"] == "captain" for t in got["targets"])
-

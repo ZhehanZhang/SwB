@@ -76,7 +76,7 @@ def _init(base: Path, public_url: str | None, force: bool) -> None:
     _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
     _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
     start = "swb up" if base == Path.cwd() else f"swb up --dir {shlex.quote(str(base))}"
-    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}")
+    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}, then {start.replace('swb up', 'swb login-link', 1)} to sign in.")
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -202,6 +202,11 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
 
 
 def _display(tool: str, payload: dict[str, Any]) -> str:
+    if tool == "login_link":
+        url = payload.get("url")
+        if not isinstance(url, str) or not url:
+            raise CliError("Switchboard did not return a sign-in link.")
+        return url
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
         return "\n".join([f"Status: {payload.get('status', 'unknown')}", "Next steps:",
@@ -239,11 +244,12 @@ def main(argv: list[str] | None = None) -> None:
     connect.add_argument("what", help="connection kind, for example mcp-client")
     connect.add_argument("--choose", action="append", nargs="+", default=[], metavar="KEY=VALUE")
     status = commands.add_parser("status", help="show server status and next steps")
+    login_link = commands.add_parser("login-link", help="mint a one-time owner sign-in link")
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
-    for command in (init, up, connect, status, claim):
+    for command in (init, up, connect, status, claim, login_link):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
-    for command in (connect, status, claim):
+    for command in (connect, status, claim, login_link):
         command.add_argument("--url", help="server base URL or MCP endpoint (default: http://127.0.0.1:8000/mcp)")
     args = parser.parse_args(argv)
     try:
@@ -273,7 +279,7 @@ def main(argv: list[str] | None = None) -> None:
                 claim_url, routine = _claim_url(url, args.link)
                 _claim(claim_url, key, routine=routine)
                 return
-            tool = "connect" if args.command == "connect" else "switchboard_status"
+            tool = {"connect": "connect", "login-link": "login_link", "status": "switchboard_status"}[args.command]
             payload = asyncio.run(_call(url, key, tool, arguments))
         finally:
             request_log.setLevel(level)

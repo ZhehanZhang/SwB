@@ -61,7 +61,8 @@ def test_self_registration_link_takes_the_token_once(tmp_path):
         assert [p["name"] for p in pend["pending"]] == ["claude-infra"] and "claude-infra" not in {r["name"] for r in pend["routines"]}
         path, page, csrf = claim(c, out["link"])
         assert page.status_code == 200 and "trig_01SELF" in page.text and "Personal Web Infra" in page.text and 'type="password"' in page.text
-        assert c.get(path).status_code == 403
+        refused = c.get(path)
+        assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Froutines%2Fclaim%2F")
         assert c.post(path, data={"token": TOKEN, "csrf": "bad"}, headers=OWNER).status_code == 403
         assert c.post(path, data={"token": "nope", "csrf": csrf}, headers=OWNER).status_code == 400
         assert c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER).status_code == 200

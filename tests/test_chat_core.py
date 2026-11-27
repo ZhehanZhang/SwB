@@ -158,8 +158,9 @@ def test_token_claim_link_is_one_time_behind_access_and_sealed(env):
     core, c, block, anthropic = env
     link = block.claim_link("claude")["link"]
     path = link.removeprefix(PUBLIC)
-    assert c.get(path).status_code == 403
-    assert c.get(path, headers={"cf-access-jwt-assertion": "other"}).status_code == 403
+    for headers in ({}, {"cf-access-jwt-assertion": "other"}):
+        refused = c.get(path, headers=headers)
+        assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Fclaims%2F")
     page = c.get(path, headers=OWNER)
     csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
     assert c.post(path, headers=OWNER, data={"csrf": csrf, "token": "short"}).status_code == 400

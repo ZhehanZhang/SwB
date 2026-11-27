@@ -124,6 +124,18 @@ class Kit:
     # The generic tools ---------------------------------------------------------------------
 
     def register_generic(self, mcp: MCPServer) -> None:
+        @mcp.tool(title="Owner sign-in link", description="Mint a one-time web sign-in link that expires in five minutes. Show it directly to the owner and never paste it anywhere else.", annotations=WRITE)
+        async def login_link(ctx: Context) -> dict[str, Any]:
+            from ...sessions import LINK_TTL
+
+            p = self.owner(ctx, "mint a sign-in link")
+            if not (base := self.core.cfg.public_url):
+                raise ToolError("set public_url to enable owner sign-in links")
+            token = self.core.auth.sessions.mint_link(p.client_id, p.source)
+            self.core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core",
+                                   action="login_link_minted", outcome="ok")
+            return {"url": f"{base}/login#t={token}", "expires_in": LINK_TTL}
+
         core = self.core
         kit = self
 

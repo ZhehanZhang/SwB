@@ -2,7 +2,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, payload, pkce, register, rpc, sign_in, Clock
+from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, consent_csrf, payload, pkce, register, rpc, sign_in, Clock
 from switchboard.agents import Agents
 from switchboard.config import ConfigError
 
@@ -106,30 +106,36 @@ def test_invalid_cimd_pattern_fails_at_config_load():
     assert repr(pattern) in str(error.value)
 
 
-def test_approving_needs_the_owners_access_jwt_on_the_post_too(make):
+def test_approving_needs_the_owners_access_jwt_and_csrf_on_the_post_too(make):
     _, c = make()
     cid = register(c)["client_id"]
-    _, req = consent(c, cid)
-    assert c.post("/authorize", data={"req": req, "decision": "approve"}).status_code == 403
-    assert c.post("/authorize", data={"req": req, "decision": "approve"}, headers={"cf-access-jwt-assertion": "other"}).status_code == 403
-    assert c.post("/authorize", data={"req": req, "decision": "approve"}, headers=OWNER).status_code == 302
+    page, req = consent(c, cid)
+    form = {"req": req, "decision": "approve", "csrf": consent_csrf(page)}
+    for headers in ({}, {"cf-access-jwt-assertion": "other"}):
+        r = c.post("/authorize", data=form, headers=headers)
+        assert r.status_code == 401 and r.json() == {"error": "signed_out"}
+    r = c.post("/authorize", data={"req": req, "decision": "approve"}, headers=OWNER)
+    assert r.status_code == 403 and r.json() == {"error": "csrf"}
+    assert c.post("/authorize", data=form, headers=OWNER).status_code == 302
 
 
-def test_without_access_sign_in_is_off_and_there_is_no_password_form(make):
+def test_without_access_sign_in_uses_the_login_page_and_there_is_no_password_form(make):
     cfg = base_config()
     cfg["auth"] = {"owner_emails": ["owner@example.test"]}
     _, c = make(config=cfg)
     cid = register(c)["client_id"]
     page, req = consent(c, cid)
-    assert page.status_code == 503 and req is None and 'type="password"' not in page.text
-    assert any("cloudflare_access" in p for p in c.get("/healthz").json()["problems"])
+    assert page.status_code == 303 and req is None
+    login = c.get(page.headers["location"])
+    assert login.status_code == 200 and 'type="password"' not in login.text
+    assert c.get("/healthz").json()["oauth"] is True
 
 
 def test_deny_redirects_with_access_denied_and_iss(make):
     _, c = make()
     cid = register(c)["client_id"]
     page, req = consent(c, cid)
-    r = c.post("/authorize", data={"req": req, "decision": "deny"}, headers=OWNER)
+    r = c.post("/authorize", data={"req": req, "decision": "deny", "csrf": consent_csrf(page)}, headers=OWNER)
     q = parse_qs(urlparse(r.headers["location"]).query)
     assert q["error"] == ["access_denied"] and q["iss"] == [PUBLIC]
 
@@ -137,8 +143,8 @@ def test_deny_redirects_with_access_denied_and_iss(make):
 def test_tampered_form_token_is_rejected(make):
     _, c = make()
     cid = register(c)["client_id"]
-    _, req = consent(c, cid)
-    r = c.post("/authorize", data={"req": req[:-3] + "AAA", "decision": "approve"}, headers=OWNER)
+    page, req = consent(c, cid)
+    r = c.post("/authorize", data={"req": req[:-3] + "AAA", "decision": "approve", "csrf": consent_csrf(page)}, headers=OWNER)
     assert r.status_code == 400
 
 
@@ -255,11 +261,13 @@ def test_static_key_for_capy(make):
 def test_cloudflare_access_gate(make):
     _, c = make()
     cid = register(c)["client_id"]
-    assert consent(c, cid, headers={})[0].status_code == 403
-    assert consent(c, cid, headers={"cf-access-jwt-assertion": "other"})[0].status_code == 403
+    for headers in ({}, {"cf-access-jwt-assertion": "other"}):
+        refused, _ = consent(c, cid, headers=headers)
+        assert refused.status_code == 303
+        assert parse_qs(urlparse(refused.headers["location"]).query)["next"][0].startswith("/authorize?")
     page, req = consent(c, cid, headers={"cf-access-jwt-assertion": "good"})
-    assert page.status_code == 200 and 'type="password"' not in page.text and "SSO as owner@example.test" in page.text
-    r = c.post("/authorize", data={"req": req, "decision": "approve"}, headers={"cf-access-jwt-assertion": "good"})
+    assert page.status_code == 200 and 'type="password"' not in page.text and "Signed in as owner@example.test" in page.text
+    r = c.post("/authorize", data={"req": req, "decision": "approve", "csrf": consent_csrf(page)}, headers=OWNER)
     assert r.status_code == 302 and "code=" in r.headers["location"]
 
 

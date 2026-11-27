@@ -1,12 +1,15 @@
-"""HTML for the pages switchboard serves, in the look of the owner's sites (example.com, status, id)."""
+"""Server-rendered Switchboard pages."""
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import html
 import json
 from datetime import datetime, timezone
 from importlib import resources
 from typing import Any
+from urllib.parse import urlencode
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
@@ -30,14 +33,6 @@ def icon(name: str, cls: str = "", mode: str | None = None) -> str:
     return f'<svg viewBox="0 -960 960 960" class="icon {cls}" data-icon="{name}"{extra} aria-hidden="true"><path d="{_BRAND["icons"][name]}"/></svg>'
 
 
-def _signature() -> str:
-    s = _BRAND["signature"]
-    return f'<svg viewBox="{s["viewBox"]}" aria-hidden="true" fill="currentColor">' + "".join(f'<path d="{d}"/>' for d in s["paths"]) + "</svg>"
-
-
-SIGNATURE = _signature()
-
-
 def page(title: str, body: str, status: int = 200) -> HTMLResponse:
     year = datetime.now(timezone.utc).year
     doc = f"""<!doctype html>
@@ -47,26 +42,24 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <meta name="theme-color" content="#f5f5f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-<meta name="referrer" content="no-referrer">
-<title>{html.escape(title)} • Switchboard</title>
+<meta name="referrer" content="same-origin">
+<title>{html.escape(title)} | SwB</title>
 <script src="/assets/prefs.js"></script>
 <link rel="stylesheet" href="/assets/bridge.css">
 </head><body><div class="shell">
 <div class="site-veil" aria-hidden="true"></div>{ARC}
 <header class="site-header"><div class="site-head col">
-<a href="https://example.com" class="brand-link"><span class="brand-sig">{SIGNATURE}</span><span class="brand-name">Switchboard{WORDMARK_DOT}</span></a>
+<a href="/" class="brand-link"><span class="brand-name">SwB{WORDMARK_DOT}</span></a>
 </div></header>
 <main class="service-main col">{body}</main>
 <footer class="col fade-in"><div class="foot-row">
-<div class="foot-copy">&copy; {year} &bull; Owner</div>
+<div class="foot-copy">&copy; {year} SwB</div>
 <div class="footer-icons">
 <button type="button" class="foot-btn" aria-label="Theme" title="Theme" data-theme-cycle><span class="theme-cycle">{icon("foot_lightMode", mode="light")}{icon("foot_darkMode", mode="dark")}{icon("foot_desktopWindows", mode="system")}</span></button>
-<a href="https://status.example.com" class="foot-btn" aria-label="Status" title="Status">{icon("foot_vitalSigns")}</a>
-<a href="https://example.com" class="foot-btn" aria-label="Home" title="Home">{icon("foot_home")}</a>
 </div></div>
-<div class="foot-line"><span>Shared memory and routing between the owner's assistants and agents.</span></div>
+<div class="foot-line"><span>Shared memory and routing between assistants and agents.</span></div>
 </footer></div></body></html>"""
-    return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "no-referrer"})
+    return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "same-origin"})
 
 
 def hero(title: str, line: str = "") -> str:
@@ -80,6 +73,103 @@ def notice(text: str, tone: str = "bad") -> str:
 
 def message_page(title: str, text: str, status: int) -> HTMLResponse:
     return page(title, hero(title, html.escape(text)), status)
+
+
+PASSKEY_JS = """
+async function post(path, body, csrf) {
+  const headers = {"Content-Type": "application/json"};
+  if (csrf) headers["X-CSRF-Token"] = csrf;
+  const response = await fetch(path, {method: "POST", headers, body: JSON.stringify(body)});
+  if (!response.ok) throw new Error("Request refused");
+  return response.status === 204 ? null : response.json();
+}
+function decode(value) {
+  return Uint8Array.from(atob(value.replaceAll("-", "+").replaceAll("_", "/")), c => c.charCodeAt(0));
+}
+function encode(value) {
+  return btoa(String.fromCharCode(...new Uint8Array(value))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+async function passkey(action, csrf) {
+  const path = "/auth/passkey/" + action;
+  const {publicKey} = await post(path + "/options", {}, csrf);
+  const register = action === "register";
+  const parser = register ? "parseCreationOptionsFromJSON" : "parseRequestOptionsFromJSON";
+  let options = publicKey;
+  if (PublicKeyCredential[parser]) {
+    options = PublicKeyCredential[parser](publicKey);
+  } else {
+    options.challenge = decode(options.challenge);
+    if (register) options.user.id = decode(options.user.id);
+    for (const item of (register ? options.excludeCredentials : options.allowCredentials) || []) item.id = decode(item.id);
+  }
+  const credential = await navigator.credentials[register ? "create" : "get"]({publicKey: options});
+  if (!credential) throw new Error("No credential");
+  const response = credential.response;
+  const fields = register ? ["attestationObject"] : ["authenticatorData", "signature", "userHandle"];
+  const result = credential.toJSON ? credential.toJSON() : {
+    id: credential.id, rawId: encode(credential.rawId), type: credential.type,
+    response: Object.fromEntries(["clientDataJSON", ...fields].map(field => [field, response[field] ? encode(response[field]) : null]))
+  };
+  await post(path + "/verify", {credential: result, ...(register ? {name: "Passkey"} : {})}, csrf);
+}
+"""
+
+LOGIN_JS = PASSKEY_JS + """
+const screen = document.querySelector("main");
+const message = document.querySelector("#login-error");
+const button = document.querySelector("#passkey-login");
+const fragment = new URLSearchParams(location.hash.slice(1));
+const next = () => location.replace(screen.dataset.next);
+if (button) button.addEventListener("click", async () => {
+  button.disabled = true;
+  message.textContent = "";
+  try { await passkey("login"); next(); }
+  catch { message.textContent = "Passkey sign-in failed."; }
+  finally { button.disabled = false; }
+});
+if (fragment.has("t")) {
+  history.replaceState(null, "", location.pathname + location.search);
+  if (button) button.disabled = true;
+  post("/auth/link", {token: fragment.get("t")}).then(next).catch(() => {
+    message.textContent = "This sign-in link is invalid or expired.";
+    screen.hidden = false;
+    if (button) button.disabled = false;
+  });
+} else if (screen.hidden) {
+  next();
+}
+"""
+
+REGISTER_JS = PASSKEY_JS + """
+const add = document.querySelector("#add-passkey");
+add.addEventListener("click", async () => {
+  add.disabled = true;
+  try { await passkey("register", add.dataset.csrf); location.reload(); }
+  catch { document.querySelector("#passkey-error").textContent = "Couldn't add the passkey."; }
+  finally { add.disabled = false; }
+});
+"""
+
+
+def script_policy(script: str) -> str:
+    digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+    return CSP.replace("script-src 'self'", f"script-src 'self' 'sha256-{digest}'; connect-src 'self'")
+
+
+def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, signed_in: bool = False) -> HTMLResponse:
+    messages = {"link_expired": "This sign-in link is invalid or expired.", "passkey_failed": "Passkey sign-in failed.",
+                "oidc_failed": "Sign-in with the identity provider failed."}
+    button = '<button type="button" id="passkey-login">Sign in with a passkey</button>' if methods["passkeys"] else ""
+    oidc = methods["oidc"]
+    if oidc:
+        href = "/auth/oidc/start?" + urlencode({"next": next_path})
+        button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
+    return HTMLResponse(f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>Sign in to SwB</title></head>
+<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}><h1>Sign in to SwB</h1>
+<p id="login-error" role="status">{messages.get(error, "")}</p>{button or "<p>Ask your agent for a sign-in link.</p>"}
+</main><script>{LOGIN_JS}</script></body></html>""", headers={"Content-Security-Policy": script_policy(LOGIN_JS)})
 
 
 def _row(label: str, hint: str, value: str, on: bool | None = None) -> str:
@@ -134,10 +224,10 @@ def slack_body(slack: dict[str, Any], pending: list[dict[str, Any]], csrf: str, 
                f'the Slack profile behind the name stays the app’s.</p></section><div class="card fade-in">{"".join(_persona_row(p, csrf) for p in personas)}</div>' if personas else ""))
 
 
-def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]],
+def admin_page(health: dict[str, Any], actor: str, routes: list[dict[str, Any]], projects: list[dict[str, Any]], changes: list[dict[str, Any]],
                extra: str = "", block_rows: list[tuple[str, str, str, bool | None]] | None = None, connected: list[dict[str, Any]] | None = None,
                csrf: str = "", visibility: list[dict[str, Any]] | None = None, routines: list[dict[str, Any]] | None = None,
-               systems: list[dict[str, Any]] | None = None) -> HTMLResponse:
+               systems: list[dict[str, Any]] | None = None, add_passkey: bool = False) -> HTMLResponse:
     ok = health["status"] == "ok"
     items = ""
     for name, b in health.get("blocks", {}).items():
@@ -147,11 +237,17 @@ def admin_page(health: dict[str, Any], email: str, routes: list[dict[str, Any]],
     items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
     items += "".join(_row(a, b, c, d) for a, b, c, d in block_rows or [])
     problems = "".join(notice(p, "warn") for p in health["problems"])
-    status = (hero("Switchboard", ("Running" if ok else "Running, with parts switched off") + f". Signed in with SSO as {html.escape(email)}.")
+    status = (hero("SwB", ("Running" if ok else "Running, with parts switched off") + f". Signed in as {html.escape(actor)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')
     body = (status + _systems_body(systems or []) + (_routines_body(routines, projects, csrf) if routines is not None else "") + _visibility_body(visibility or [], csrf)
             + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes))
-    return page("Switchboard", body, 200)
+    if add_passkey:
+        body = (f'<button type="button" id="add-passkey" data-csrf="{csrf}">Add a passkey</button>'
+                f'<p id="passkey-error" role="status"></p>' + body + f"<script>{REGISTER_JS}</script>")
+    response = page("SwB", body, 200)
+    if add_passkey:
+        response.headers["Content-Security-Policy"] = script_policy(REGISTER_JS)
+    return response
 
 
 def _systems_body(systems: list[dict[str, Any]]) -> str:

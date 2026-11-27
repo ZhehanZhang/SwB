@@ -20,6 +20,7 @@ dependencies = [
   "starlette>=1.0",
   "python-multipart>=0.0.20",
   "PyJWT[crypto]>=2.9,<3",
+  "webauthn>=2.2,<3",
   "tzdata",
 ]
 
