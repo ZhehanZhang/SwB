@@ -2451,6 +2451,13 @@
     },
     {
       "icon": null,
+      "id": "prompt:setup-companion",
+      "kind": "prompt",
+      "label": "Set up Companion",
+      "name": "setup-companion"
+    },
+    {
+      "icon": null,
       "id": "prompt:setup-coordinator",
       "kind": "prompt",
       "label": "Set up Coordinator",

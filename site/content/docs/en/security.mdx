@@ -26,6 +26,8 @@ A **trust frame** is the header and markers SwB adds to external text. SwB chang
 
 Watch digests carry `external` trust. Each excerpt also uses a trust frame for external text. GitHub checks the author of each text field.
 
+A [companion](/docs/companion) key works only for its device connection. SwB keeps only a hash of the key to check it. SwB marks device results as `external` and puts their free text in a trust frame.
+
 ## Visibility
 
 Every resource is private or shared. A resource is a target, a channel, a memory scope, a route or a tool. Every resource starts private, and only the owner reaches it. Share a resource with a workspace or with a list of people. A non-owner reaches a target only when the channel and the target are both shared. Other messages from non-owners become context items. A context item goes to the inbox as information, and the agent stays asleep.

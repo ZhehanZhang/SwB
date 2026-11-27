@@ -1,0 +1,55 @@
+---
+title: 夥伴裝置
+description: 在自己的裝置上執行 SwB，讓部署的 SwB 使用本機功能。
+---
+
+夥伴裝置是執行 SwB 的自有裝置。它會連線到你部署的 SwB，讓代理使用這台裝置的功能。
+
+## 複製設定提示詞
+
+<SetupPrompt name="companion" lang="zh-Hant" />
+
+## 配對裝置
+
+請以擁有者身分登入的代理呼叫 `companion_code`。
+
+若要在主控台取得配對碼，請[使用通行金鑰登入](/zh-Hant/docs/owner-login)。開啟 **Settings**。在 **Connections** 中選取 **Pair a device**。
+
+在裝置上執行下方指令。將範例位址換成你的 SwB HTTPS 位址。
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+依提示輸入配對碼。輸入內容會隱藏。配對碼限用一次，有效時間為 10 分鐘。稽核記錄會記下配對碼的建立者。
+
+裝置會將自己的金鑰儲存在私密檔案中。
+
+## 選擇功能
+
+每啟用一項功能，加入一個 `--cap` 選項。
+
+| 選項 | 功能 |
+| --- | --- |
+| `--cap notify` | 在裝置桌面顯示通知 |
+| `--cap drop` | 透過 `~/SwB Drop` 資料夾分享檔案，每個檔案上限為 10 MiB |
+| `--cap mcp --mcp NAME=COMMAND` | 讓代理使用裝置上 MCP 伺服器提供的工具 |
+| `--cap muse` | 在 Mac 或 Linux 電腦上透過藍牙與 Muse 配對。請使用 [Muse 指南](/zh-Hant/docs/setup/muse)中的指令 |
+
+在 Linux 上，通知功能使用 `notify-send`。
+
+每台 MCP 伺服器使用一個 `--mcp` 選項。填入啟動指令或本機 HTTP 位址，例如 `--mcp 'notes=uvx notes-mcp'` 或 `--mcp notes=http://127.0.0.1:8000/mcp`。
+
+代理用 `companion_list` 查看已配對的裝置及其操作。它用 `companion_invoke` 執行操作。
+
+## 保持執行
+
+配對後，夥伴裝置就會開始執行。執行 `swb companion run` 可重新啟動。執行 `swb companion status` 可查看本機裝置編號和功能。
+
+透過 `uvx` 執行時，將指令中的 `swb` 換成 `uvx swb-one`。配對 Muse 時，請保留 [Muse 指南](/zh-Hant/docs/setup/muse)中的套件和 Python 選項。
+
+每次連線都由裝置發起。
+
+## 中斷連線
+
+在裝置上執行 `swb companion disconnect`，以移除裝置金鑰。也可以在主控台的 **Settings** 中開啟 **Connections**。在該裝置旁選取 **Disconnect**，以撤銷金鑰。

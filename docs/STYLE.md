@@ -27,6 +27,7 @@ The Simplified Chinese and Traditional Chinese docs follow the same rules. Write
 | en | zh-Hans | zh-Hant |
 | - | - | - |
 | agent | 智能体 | 代理 |
+| companion | 伴侣设备 | 夥伴裝置 |
 | coding agent | 编程智能体 | 程式開發代理 |
 | key | 密钥 | 金鑰 |
 | private key | 私钥 | 私密金鑰 |
@@ -34,6 +35,7 @@ The Simplified Chinese and Traditional Chinese docs follow the same rules. Write
 | token | 令牌 | 權杖 |
 | claim link | 领取链接 | 領取連結 |
 | setup code | 设置码 | 設定碼 |
+| pairing code | 配对码 | 配對碼 |
 | conversation | 会话 | 對話 |
 | routine | routine | routine |
 | block | 模块 | 模組 |
