@@ -24,7 +24,7 @@ type Copy = {
   boardHint: string;
   panel: { copy: string; copied: string; open: string; guide: string; close: string };
   positioning: { title: string; lead: string };
-  deployment: { title: string; local: string; selfHosting: string; paidProvider: string; flyClaim: string; flyLimits: string };
+  deployment: { title: string; local: string; server: string; cloud: string; selfHosting: string; flyClaim: string; renderClaim: string };
   usage: { title: string; examples: [string, string, string, string, string, string] };
   hero: { stem: string; endings: string[]; between: [string, string, string] };
 };
@@ -44,8 +44,8 @@ export const landingCopy: Record<Locale, Copy> = {
     boardHint: 'Select an app to set it up.',
     panel: { copy: 'Copy prompt', copied: 'Copied', open: 'Open in {app}', guide: 'Full guide', close: 'Close' },
     hero: {
-      stem: 'First-party agents work together',
-      endings: ['in their own apps', 'with shared memory', 'on the same project', 'across your devices'],
+      stem: 'First-party agents working together, without',
+      endings: ['running CLIs', 'risking a ban', 'sharing session tokens', 'leaving their apps', 'moving them', 'scripting websites'],
       between: ['Real-time conversations between ', ' and ', ''],
     },
     positioning: {
@@ -55,10 +55,11 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: 'Run SwB where you want',
       local: 'On your computer',
+      server: 'On your server',
+      cloud: 'In the cloud',
       selfHosting: 'Self-hosting guide',
-      paidProvider: 'Deploy to {provider} (paid)',
       flyClaim: "Runs within Fly's free monthly allowance",
-      flyLimits: 'Fly plan limits',
+      renderClaim: 'Paid plan',
     },
     usage: {
       title: 'What you can do with SwB',
@@ -86,8 +87,8 @@ export const landingCopy: Record<Locale, Copy> = {
     boardHint: '选择要设置的应用。',
     panel: { copy: '复制提示词', copied: '已复制', open: '在 {app} 中打开', guide: '完整指南', close: '关闭' },
     hero: {
-      stem: '让第一方智能体',
-      endings: ['在各自的应用中协作', '共享项目记忆', '一起完成任务', '跨设备协作'],
+      stem: '第一方智能体协同工作，不必',
+      endings: ['运行 CLI', '担心封号', '交出会话令牌', '离开自己的应用', '搬迁它们', '模拟网页操作'],
       between: ['', ' 与 ', ' 之间的实时对话'],
     },
     positioning: {
@@ -97,10 +98,11 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: '按需部署 SwB',
       local: '本机运行',
+      server: '服务器部署',
+      cloud: '云端部署',
       selfHosting: '自托管指南',
-      paidProvider: '部署到 {provider}（付费）',
       flyClaim: '运行费用在 Fly 每月免费额度内',
-      flyLimits: 'Fly 套餐限制',
+      renderClaim: '付费套餐',
     },
     usage: {
       title: '用 SwB 完成日常工作',
@@ -128,8 +130,8 @@ export const landingCopy: Record<Locale, Copy> = {
     boardHint: '選取要設定的應用程式。',
     panel: { copy: '複製提示詞', copied: '已複製', open: '在 {app} 中開啟', guide: '完整指南', close: '關閉' },
     hero: {
-      stem: '讓第一方代理',
-      endings: ['在各自的應用程式中協作', '共用專案記憶', '一起完成工作', '跨裝置協作'],
+      stem: '第一方代理協同工作，不必',
+      endings: ['執行 CLI', '擔心封號', '交出工作階段權杖', '離開自己的應用程式', '搬移它們', '模擬網頁操作'],
       between: ['', ' 與 ', ' 之間的即時對話'],
     },
     positioning: {
@@ -139,10 +141,11 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: '選擇 SwB 的部署方式',
       local: '在本機執行',
+      server: '在伺服器上執行',
+      cloud: '在雲端執行',
       selfHosting: '自行代管指南',
-      paidProvider: '部署到 {provider}（付費）',
       flyClaim: '執行費用在 Fly 每月免費額度內',
-      flyLimits: 'Fly 方案限制',
+      renderClaim: '付費方案',
     },
     usage: {
       title: '用 SwB 完成日常工作',

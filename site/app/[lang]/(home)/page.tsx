@@ -1,5 +1,5 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AgentExchange } from '@/components/agent-exchange';
@@ -19,6 +19,8 @@ import { tagline } from '@/lib/tagline';
 import { releaseBranch, repository } from '@/lib/urls';
 
 const sectionTitle = 'font-display text-3xl font-extrabold tracking-tight sm:text-4xl';
+const deployBlock = 'grid min-w-0 grid-rows-[auto_1fr] gap-2';
+const deployLink = 'swb-button grid flex-1 grid-cols-[3.25rem_minmax(0,1fr)_auto] border px-3 py-2 text-left hover:bg-fd-muted';
 const compose = `git clone -b ${releaseBranch} ${repository}.git
 cd SwB
 mkdir -p data
@@ -42,6 +44,8 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   if (!isLocale(lang)) notFound();
   const copy = landingCopy[lang];
   const license = `${repository}/blob/${releaseBranch}/LICENSE`;
+  const selfHosting = localize(lang, '/docs/self-hosting');
+  const { render } = deployProviders;
 
   return (
     <>
@@ -73,30 +77,32 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </section>
           <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-deploy">
             <h2 id="landing-deploy" className={sectionTitle}>{copy.deployment.title}</h2>
-            <div className="mt-7 grid gap-6 min-[900px]:grid-cols-2">
-              {[[copy.deployment.local, copy.install], ['Docker Compose', compose]].map(([title, command]) => (
-                <div className="min-w-0" key={title}>
+            <div className="mt-7 grid auto-rows-fr gap-6 min-[900px]:grid-cols-3" data-deploy-grid>
+              {[[copy.deployment.local, copy.install], [copy.deployment.server, compose]].map(([title, command]) => (
+                <div className={deployBlock} key={title}>
                   <h3 className="text-base font-semibold">{title}</h3>
-                  <pre className="mt-2 wrap-break-word whitespace-pre-wrap rounded-lg border bg-fd-muted p-4 text-sm leading-6"><code>{command}</code></pre>
+                  <pre className="wrap-anywhere whitespace-pre-wrap rounded-lg border bg-fd-muted p-3 text-sm leading-6"><code>{command}</code></pre>
                 </div>
               ))}
+              <div className={deployBlock}>
+                <h3 className="text-base font-semibold">{copy.deployment.cloud}</h3>
+                <div className="flex flex-col gap-2">
+                  <Link className={deployLink} href={`${selfHosting}#fly`}>
+                    <strong>Fly.io</strong>{' '}
+                    <span className="text-fd-muted-foreground">{copy.deployment.flyClaim}</span>
+                    <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
+                  </Link>
+                  {render.enabled && render.href && (
+                    <a className={deployLink} href={render.href}>
+                      <strong>{render.name}</strong>{' '}
+                      <span className="text-fd-muted-foreground">{copy.deployment.renderClaim}</span>
+                      <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
-              <Link className="swb-text-link text-sm" href={localize(lang, '/docs/self-hosting#flyio')}>Fly.io</Link>
-              <p className="text-sm text-fd-muted-foreground">
-                {copy.deployment.flyClaim}{' '}
-                <a className="swb-text-link underline underline-offset-4" href="https://docs.fly.io/about/free-plan">{copy.deployment.flyLimits}</a>
-              </p>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
-              {Object.values(deployProviders).map(({ enabled, name, href }) => enabled && href && (
-                <a className="swb-button border hover:bg-fd-muted" href={href} key={name}>
-                  {copy.deployment.paidProvider.replace('{provider}', name)}
-                  <ArrowUpRight aria-hidden="true" className="size-4" />
-                </a>
-              ))}
-              <Link className="swb-text-link text-sm text-fd-muted-foreground" href={localize(lang, '/docs/self-hosting')}>{copy.deployment.selfHosting}</Link>
-            </div>
+            <Link className="swb-text-link mt-5 inline-flex text-sm" href={selfHosting}>{copy.deployment.selfHosting}</Link>
           </section>
           <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-usage">
             <h2 id="landing-usage" className={sectionTitle}>{copy.usage.title}</h2>
