@@ -6,20 +6,12 @@ import { CopyInstall, LandingLanguage, LandingTheme } from '@/components/landing
 import { isLocale, localize } from '@/lib/i18n';
 import { landingCopy } from '@/lib/landing-copy';
 import { pageMetadata } from '@/lib/metadata';
+import { MarkTile, type MarkKind } from '@/components/mark-tile';
+import { SwitchboardHero } from '@/components/switchboard-hero';
 import { repository } from '@/lib/source';
 
-const connectorIcons = [
-  '/icons/claude.svg',
-  '/avatars/chatgpt-96.webp',
-  '/icons/gemini.svg',
-  '/avatars/claude-code-96.webp',
-  '/avatars/codex-96.webp',
-  '/avatars/capy-96.webp',
-  '/icons/grok-routine.svg',
-  '/icons/slack.svg',
-  '/icons/discord.svg',
-  '/icons/telegram.svg',
-  '/icons/github.svg',
+const connectorKinds: MarkKind[] = [
+  'claude', 'chatgpt', 'gemini', 'claude-code', 'codex', 'capy', 'grok', 'slack', 'discord', 'telegram', 'github',
 ];
 
 export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
@@ -52,8 +44,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
       <main className="mx-auto max-w-6xl px-5 sm:px-8">
         <section className="flex flex-col items-center py-14 text-center sm:py-20 lg:py-24">
           <h1 className="text-display-xl swb-hero-title">{copy.headline}</h1>
-          <p className="mt-3 text-fd-muted-foreground sm:text-lg">{copy.intro}</p>
-          <div className="mt-7"><CopyInstall lang={lang} /></div>
+          <div className="mt-8"><CopyInstall lang={lang} /></div>
           <div className="mt-5 flex flex-wrap justify-center gap-2.5">
             <Link className="swb-button bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/85" href={docs}>
               {copy.docs}<ArrowRight aria-hidden="true" className="size-4" />
@@ -61,7 +52,8 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <a className="swb-button border hover:bg-fd-muted" href={repository}>{copy.github}</a>
           </div>
         </section>
-        <figure className="overflow-hidden rounded-lg">
+        <SwitchboardHero label={copy.boardAlt} />
+        <figure className="mt-16 overflow-hidden rounded-lg sm:mt-24">
           <img className="block h-auto w-full dark:hidden" width={2400} height={1350}
             src="/shots/hero-light.webp" srcSet="/shots/hero-light-1200.webp 1200w, /shots/hero-light.webp 2400w"
             sizes="(min-width: 1152px) 1088px, 100vw" alt={copy.shotAlt} fetchPriority="high" />
@@ -69,11 +61,10 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             src="/shots/hero-dark.webp" srcSet="/shots/hero-dark-1200.webp 1200w, /shots/hero-dark.webp 2400w"
             sizes="(min-width: 1152px) 1088px, 100vw" alt={copy.shotAlt} loading="lazy" />
         </figure>
-        <div className="grid grid-cols-3 gap-y-6 py-10 min-[500px]:grid-cols-6 lg:grid-cols-11 lg:py-14">
+        <div className="swb-connectors grid grid-cols-3 gap-y-6 py-12 min-[500px]:grid-cols-6 lg:grid-cols-11 lg:py-16">
           {copy.connectors.map((name, index) => (
             <figure key={name} className="flex flex-col items-center gap-2 text-center">
-              <img className="swb-connector block size-8 rounded-sm object-contain" width={32} height={32}
-                src={connectorIcons[index]} alt="" />
+              <MarkTile kind={connectorKinds[index]} />
               <figcaption className="text-xs text-fd-muted-foreground">{name}</figcaption>
             </figure>
           ))}

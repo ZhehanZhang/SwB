@@ -13,6 +13,7 @@ const en = {
   copied: 'Copied',
   copyError: 'Select the command to copy it',
   shotAlt: 'The SwitchBoard overview with channels in, projects and agents out',
+  boardAlt: 'Slack, Discord, Telegram and GitHub patched through SwB to Claude, ChatGPT, Capy, Grok, Codex and Claude Code',
   language: 'Language',
   languages: { en: 'English', 'zh-Hans': '简体中文', 'zh-Hant': '繁體中文' },
   theme: { light: 'Light theme', dark: 'Dark theme' },
@@ -39,6 +40,7 @@ export const landingCopy: Record<Locale, typeof en> = {
     copied: '已复制',
     copyError: '请选中命令后复制',
     shotAlt: 'SwitchBoard 总览，左侧是接入的频道，中间是项目，右侧是智能体',
+    boardAlt: 'Slack、Discord、Telegram 和 GitHub 经由 SwB 接通 Claude、ChatGPT、Capy、Grok、Codex 和 Claude Code',
     language: '语言',
     theme: { light: '浅色主题', dark: '深色主题' },
     steps: [
@@ -57,6 +59,7 @@ export const landingCopy: Record<Locale, typeof en> = {
     copied: '已複製',
     copyError: '請選取指令後複製',
     shotAlt: 'SwitchBoard 總覽，左側是接入的頻道，中間是專案，右側是 AI 代理',
+    boardAlt: 'Slack、Discord、Telegram 與 GitHub 經由 SwB 接通 Claude、ChatGPT、Capy、Grok、Codex 與 Claude Code',
     language: '語言',
     theme: { light: '淺色主題', dark: '深色主題' },
     steps: [
