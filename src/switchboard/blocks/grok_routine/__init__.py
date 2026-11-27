@@ -45,11 +45,11 @@ CREATE TABLE IF NOT EXISTS grok_routine_fires (
 
 
 class GrokRoutineBlock(Block):
-    connect_kinds = ("grok",)
+    connect_kinds = ("grok-bot",)
     wakes_agents = True
     manifest = Manifest(
         id="grok-routine",
-        title="Grok Bot routines",
+        title="Grok Bot",
         kind="sink",
         level_out="L1",
         verbs={"send": "fire"},
@@ -223,9 +223,9 @@ class GrokRoutineBlock(Block):
     def next_step(self) -> str | None:
         routines = self.routines()
         if not routines or any(self._credentials(r)[2] for r in routines.values()):
-            return "Call connect(what='grok') to set up a Grok Bot routine."
+            return "Call connect(what='grok-bot') to set up a Grok Bot routine."
         if any(not self.is_tested(r) for r in routines.values()):
-            return "Call connect(what='grok') to test the Grok Bot webhook."
+            return "Call connect(what='grok-bot') to test the Grok Bot webhook."
         return None
 
     async def connect_steps(self, kind: str, principal: Principal, project: str | None,

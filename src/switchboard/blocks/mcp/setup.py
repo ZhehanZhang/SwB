@@ -11,11 +11,13 @@ from ...modes import PROVIDERS
 from .coding import coding_steps
 from .kit import Kit
 
-CLIENTS = ("mcp-client", "chatgpt", "claude", "coding-agent")
+CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
-          "grok": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse"}
+          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse"}
+ALIASES = {"grok-routine": "grok-bot"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
-MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web"}
+MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web",
+         "grok": "grok.com > Connectors > New Connector > Custom"}
 
 
 def hosted_client_instruction(kind: str, connector: str | None) -> str:
@@ -81,7 +83,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
     )
     async def connect(ctx: Context, what: str, project: str | None = None, choose: dict[str, Any] | None = None) -> dict[str, Any]:
         p = kit.who(ctx)
-        what = what.strip().lower()
+        what = ALIASES.get(what := what.strip().lower(), what)
         if what not in kinds:
             return {"what": "unknown", "done": [], "next": [], "kinds": kinds}
         block = owners.get(what)
