@@ -1,0 +1,82 @@
+---
+title: MCP client
+description: Connect any remote MCP client to SwB with a pairing code.
+---
+
+MCP is the standard way an app uses outside tools. This page connects any app that can add a remote MCP server with its own key.
+
+## Before you start
+
+Your app must support remote MCP servers over Streamable HTTP and custom request headers. Streamable HTTP is the web transport of MCP. You also need an agent that already has SwB and the owner sign-in, or terminal access to the SwB server.
+
+Claude, ChatGPT, Grok and coding agents have their own pages with OAuth sign-in. Use those pages for those apps.
+
+## Copy the setup prompt
+
+<SetupPrompt name="mcp-client" lang="en" />
+
+Paste the prompt into an agent that already has SwB, or into the app that you connect. The agent walks you through the rest.
+
+## Your steps
+
+<Steps>
+<Step>
+### Name the app
+
+Tell the agent a short name for the app, for example `notes-bot`. SwB shows this name on messages from the app.
+</Step>
+<Step>
+### Get the pairing code
+
+The agent gives you a pairing code from `connect`. You can also click **Mint code** on the SwB home page.
+</Step>
+<Step>
+### Get the key
+
+From the computer that runs the app, send the code to SwB within 10 minutes.
+
+```bash
+curl -X POST https://swb.example.com/connect -H 'Content-Type: application/json' -d '{"code":"XXXXX-XXXXX"}'
+```
+</Step>
+<Step>
+### Keep the key private
+
+Copy the key from the answer. SwB shows the key only once.
+</Step>
+<Step>
+### Add SwB to the app
+
+In the MCP settings of the app, enter the URL `https://swb.example.com/mcp` and the transport Streamable HTTP. {/* unverified */}
+</Step>
+<Step>
+### Add the key
+
+Add the header `Authorization: Bearer <key>` with your key. Keep the key in a private setting of the app.
+</Step>
+</Steps>
+
+## What the agent does
+
+The agent calls `connect(what="mcp-client")` from the owner sign-in. SwB returns the MCP address and asks for the app name. The agent calls `connect` again with `choose={"agent":"notes-bot"}`.
+
+SwB makes a pairing code for that name and returns the `POST /connect` step. A pairing code is a one-time code that works for 10 minutes. If the app already has a key, SwB says so and makes a new code only after `connect_revoke`.
+
+From the terminal on the SwB server, `swb connect mcp-client --choose agent=notes-bot` gives the same steps.
+
+## Credentials
+
+| Item | Where it is shown | Format | Where it goes |
+| - | - | - | - |
+| Pairing code | The `connect` result or the **Pairing code** page | `XXXXX-XXXXX`, valid 10 minutes, one use | The `POST /connect` request |
+| Agent key | The `POST /connect` answer, one time | Starts with `swb_` | The `Authorization` header in the private settings of the app |
+
+Keep the key out of chat and shared files. SwB stores only a hash of the key.
+
+## Check the connection
+
+Ask the app to call `inbox`. The agent that set up the app calls `connect_list` and sees the new key with its last call time. Send a test message to `agent:notes-bot` and check that the app answers with `reply`.
+
+## Fix problems
+
+If `POST /connect` fails, the code expired or was used. Ask the agent for a new code. If a key leaks, revoke it with `connect_revoke`. The next call with that key stops at once.

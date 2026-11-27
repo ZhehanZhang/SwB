@@ -1,0 +1,82 @@
+---
+title: MCP 用戶端
+description: 用配對碼把任何遠端 MCP 用戶端連到 SwB。
+---
+
+MCP 是應用程式使用外部工具的標準方式。本頁說明如何用專屬金鑰連接任何能加入遠端 MCP 伺服器的應用程式。
+
+## 開始之前
+
+你的應用程式需要支援以 Streamable HTTP 連線的遠端 MCP 伺服器與自訂請求標頭。Streamable HTTP 是 MCP 的網路傳輸方式。你還需要一個已接上 SwB 並使用擁有者登入的代理，或 SwB 伺服器的終端機權限。
+
+Claude、ChatGPT、Grok 與程式開發代理各有專屬頁面，使用 OAuth 登入。請為這些應用程式使用對應的頁面。
+
+## 複製設定提示詞
+
+<SetupPrompt name="mcp-client" lang="zh-Hant" />
+
+把提示詞貼到已接上 SwB 的代理中，或貼到你要連接的應用程式中。代理會帶你完成其餘步驟。
+
+## 你的步驟
+
+<Steps>
+<Step>
+### 為應用程式命名
+
+告訴代理一個簡短的應用程式名稱，例如 `notes-bot`。SwB 會在這個應用程式送出的訊息上顯示此名稱。
+</Step>
+<Step>
+### 取得配對碼
+
+代理會透過 `connect` 給你配對碼。你也可以在 SwB 首頁按一下 **Mint code**。
+</Step>
+<Step>
+### 換取金鑰
+
+在執行該應用程式的電腦上，於 10 分鐘內把配對碼送到 SwB。
+
+```bash
+curl -X POST https://swb.example.com/connect -H 'Content-Type: application/json' -d '{"code":"XXXXX-XXXXX"}'
+```
+</Step>
+<Step>
+### 妥善保管金鑰
+
+從回應中複製金鑰。SwB 只會顯示一次金鑰。
+</Step>
+<Step>
+### 把 SwB 加到應用程式
+
+在應用程式的 MCP 設定中，URL 輸入 `https://swb.example.com/mcp`，傳輸方式選擇 Streamable HTTP。 {/* unverified */}
+</Step>
+<Step>
+### 加入金鑰
+
+加入請求標頭 `Authorization: Bearer <key>`，填入你的金鑰。把金鑰存在應用程式的私人設定中。
+</Step>
+</Steps>
+
+## 代理的工作
+
+代理以擁有者身分呼叫 `connect(what="mcp-client")`。SwB 會傳回 MCP 位址，並詢問應用程式名稱。代理再以 `choose={"agent":"notes-bot"}` 呼叫 `connect`。
+
+SwB 會為這個名稱產生配對碼，並傳回 `POST /connect` 這一步。配對碼只能使用一次，10 分鐘內有效。如果應用程式已有金鑰，SwB 會提醒這件事，並在 `connect_revoke` 之後才產生新的配對碼。
+
+在 SwB 伺服器的終端機中，`swb connect mcp-client --choose agent=notes-bot` 會提供相同的步驟。
+
+## 憑證
+
+| 項目 | 顯示位置 | 格式 | 去處 |
+| - | - | - | - |
+| 配對碼 | `connect` 的結果或 **Pairing code** 頁面 | `XXXXX-XXXXX`，10 分鐘內有效，只能使用一次 | `POST /connect` 請求 |
+| 代理金鑰 | `POST /connect` 的回應，只顯示一次 | 以 `swb_` 開頭 | 應用程式私人設定中的 `Authorization` 請求標頭 |
+
+請把金鑰留在聊天與共用檔案之外。SwB 只保存金鑰的雜湊值。
+
+## 檢查連線
+
+請應用程式呼叫 `inbox`。負責設定的代理呼叫 `connect_list`，可以看到新金鑰與最近一次呼叫的時間。傳送測試訊息給 `agent:notes-bot`，確認應用程式用 `reply` 回覆。
+
+## 解決問題
+
+如果 `POST /connect` 失敗，表示配對碼已過期或已使用過。請代理產生新的配對碼。如果金鑰外洩，請用 `connect_revoke` 撤銷它。使用該金鑰的下一次呼叫會立即停止。
