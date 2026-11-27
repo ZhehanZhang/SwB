@@ -41,21 +41,27 @@ class _NoQuery(logging.Filter):
         return True
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="swb")
-    sub = parser.add_subparsers(dest="cmd")
+def add_server_commands(sub: argparse._SubParsersAction) -> None:
     serve = sub.add_parser("serve", help="run the server (default)")
     serve.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
     exp = sub.add_parser("export", help="write every memory as markdown, one folder per scope")
-    exp.add_argument("dir")
-    sub.add_parser("log", help="print the recent audit log")
+    exp.add_argument("destination", metavar="DIR")
+    log = sub.add_parser("log", help="print the recent audit log")
+    log.add_argument("--limit", type=int, default=50, help="maximum rows to print (default 50)")
     cfg = sub.add_parser("config", help="config tools")
     cfg.add_argument("action", choices=["migrate"], help="migrate: print a version 1 config rewritten as version 2")
     cfg.add_argument("file", nargs="?", help="config file (default: SWITCHBOARD_CONFIG)")
     blk = sub.add_parser("blocks", help="the configured blocks")
     blk.add_argument("action", choices=["list", "show", "check"])
     blk.add_argument("block", nargs="?")
-    sub.add_parser("targets", help="every target send can reach, with slugs and levels")
+    targets = sub.add_parser("targets", help="every target send can reach, with slugs and levels")
+    for command in (serve, exp, log, cfg, blk, targets):
+        command.add_argument("--dir", type=Path, help="instance directory for config, data and .env")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="swb")
+    add_server_commands(parser.add_subparsers(dest="cmd"))
     return parser
 
 
@@ -63,34 +69,48 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
          data_dir: Path | None = None, announce: bool = False) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.cmd == "log" and not 1 <= args.limit < 2 ** 63:
+        parser.error("Set --limit between 1 and 9223372036854775807.")
 
+    from .config import ConfigError, LOOPBACK_HOSTS, bind_address, config_path, migrate_text
     from .core import Switchboard
-
-    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    if args.cmd == "config":
-        from .config import config_path, migrate_text
-
-        path = config_path(args.file, os.environ)
-        if path is None:
-            parser.error("no config file found")
-        print(migrate_text(path.read_text()), end="")
-        return
-    from .config import ConfigError, LOOPBACK_HOSTS, bind_address
     from .deployment import serve_env
 
+    env = dict(os.environ)
+    instance_config = None
+    if (directory := getattr(args, "dir", None)) is not None:
+        from .cli import CONFIG, CliError, _read_env
+
+        base = directory.resolve()
+        instance_config = base / CONFIG
+        data_dir = base / "data"
+        try:
+            env = {**_read_env(base / ".env"), **env}
+        except (CliError, OSError, UnicodeError):
+            parser.exit(2, "swb: Check the instance .env file.\n")
+
+    logging.basicConfig(level=env.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    if args.cmd == "config":
+        path = config_path(args.file or instance_config, env)
+        if path is None or not path.is_file():
+            parser.error("Choose an existing config file.")
+        print(migrate_text(path.read_text()), end="")
+        return
+
     serving = args.cmd in (None, "serve")
-    port = int(os.environ.get("PORT", "8000")) if serving else 0
-    host, origin = bind_address(os.environ, port, host=getattr(args, "host", None))
+    port = int(env.get("PORT", "8000")) if serving else 0
+    host, origin = bind_address(env, port, host=getattr(args, "host", None))
     loopback_origin = origin if host in LOOPBACK_HOSTS and port else None
     try:
-        env = serve_env(os.environ) if serving else None
+        deployment_env = serve_env(env) if serving else None
     except ConfigError as error:
         parser.exit(2, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(2, f"swb: Check the owner key on the volume ({type(error).__name__}).\n")
     try:
-        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, loopback_origin=loopback_origin)
+        core = Switchboard(config_path=instance_config, data_dir=data_dir, tunnel_url=tunnel_url,
+                           env=deployment_env if deployment_env is not None else env, loopback_origin=loopback_origin)
     except ConfigError as error:
         parser.exit(2, f"swb: {error}\n")
     if args.cmd == "blocks":
@@ -124,13 +144,13 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         return
 
     if args.cmd == "export":
-        n = core.memory.export(args.dir)
-        print(f"exported {n} memories to {args.dir}")
+        n = core.memory.export(args.destination)
+        print(f"exported {n} memories to {args.destination}")
         return
     if args.cmd == "log":
         import json
 
-        for entry in core.audit.recent(limit=50):
+        for entry in core.audit.recent(limit=args.limit):
             print(json.dumps(entry, ensure_ascii=False))
         return
 
@@ -138,7 +158,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
 
     for problem in core.health()["problems"]:
         logging.getLogger("switchboard").warning("degraded: %s", problem)
-    if env is not None and core.cfg.public_url:
+    if deployment_env is not None and core.cfg.public_url:
         logging.getLogger("switchboard").info("Sign-in page %s/login", core.cfg.public_url)
     logging.getLogger("uvicorn.access").addFilter(_NoQuery())
     app = create_app(core)
@@ -146,7 +166,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         "host": host,
         "port": port,
         "proxy_headers": True,
-        "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
+        "forwarded_allow_ips": env.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,
     }
     if announce:

@@ -30,23 +30,33 @@ async def agent_avatars(request: Request) -> JSONResponse:
 
 async def agent_detail(request: Request) -> JSONResponse:
     core = request.app.state.core
+    path_ident = request.path_params.get("agent")
     kind = request.query_params.get("kind")
-    ident = request.query_params.get("id")
+    ident = path_ident or request.query_params.get("id")
     block = request.query_params.get("block")
-    if kind not in _INVENTORY or not ident or len(ident) > 200:
+    if (kind not in _INVENTORY and kind != "mailbox" and (kind is not None or path_ident is None)) or not ident or len(ident) > 200:
         return _error("invalid_agent")
     inventory = await _agents(core)
-    matches = [row for row in inventory[_INVENTORY[kind]]
-               if row["name" if kind == "routine" else "id"] == ident and (not block or row.get("block") == block)]
+    matches = [(group, row) for group, collection in _INVENTORY.items() if kind is None or group == kind
+               for row in inventory[collection] if not block or row.get("block") == block
+               if ident == row["name" if group == "routine" else "id"]
+               or path_ident is not None and ident in (row.get("name"), row.get("routine_id"), *row.get("slugs", []))]
+    if not matches and kind in (None, "mailbox") and not block and (
+        ident in inventory["static_keys"] or any(row["agent"] == ident for row in inventory["keys"])
+    ):
+        matches = [("mailbox", {"id": ident, "name": ident, "agent": ident})]
     if not matches:
         return _error("agent_not_found", 404)
     if len(matches) > 1:
         return _error("ambiguous_agent", 409)
-    agent = matches[0]
+    kind, agent = matches[0]
     project = agent.get("project")
     identities = defaultdict(set)
 
-    if kind in ("routine", "key"):
+    if kind == "mailbox":
+        routines = [row for row in inventory["routines"] if row["agent"] == ident]
+        keys = [row for row in inventory["keys"] if row["agent"] == ident]
+    elif kind in ("routine", "key"):
         routines = [row for row in inventory["routines"] if row["agent"] == agent["agent"]
                     and (row["project"] == project or kind == "key" and project is None)]
         keys = [row for row in inventory["keys"] if row["agent"] == agent["agent"] and row["project"] in (None, project)]
@@ -57,7 +67,7 @@ async def agent_detail(request: Request) -> JSONResponse:
         keys = [row for row in inventory["keys"] if row["project"] in projects]
         identities[agent["block"]].update(names | {agent["address"], *(f"{kind}:{name}" for name in names)})
         if kind == "captain":
-            identities[agent["block"]].update((f"captain {ident}", f"captain {agent['name']} ({ident})"))
+            identities[agent["block"]].update((f"captain {agent['id']}", f"captain {agent['name']} ({agent['id']})"))
 
     for row in routines:
         names = {row["name"], *row["slugs"]}
@@ -140,6 +150,7 @@ PAGE_ROUTES = [
     Route("/agents/avatars", agent_avatars, methods=["GET"]),
     Route("/agents/detail", agent_detail, methods=["GET"]),
     Route("/agents/setup", agent_setup, methods=["GET"]),
+    Route("/agents/{agent}", agent_detail, methods=["GET"]),
     Route("/inbox/pauses/{root}/resume", resume_conversation, methods=["POST"]),
     Route("/memory/{id}/{verb}", mutate_memory, methods=["POST"]),
     Route("/memory/{id}", mutate_memory, methods=["DELETE"]),

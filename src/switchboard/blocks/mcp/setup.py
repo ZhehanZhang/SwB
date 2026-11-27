@@ -23,7 +23,7 @@ CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
           "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse", "dots": "dots"}
 BLOCK_EXAMPLES = {
-    "slack": {"workspaces": {"a2a": {
+    "slack": {"agents": {"owner": {"workspaces": {"a2a": ["bot"]}}}, "workspaces": {"a2a": {
         "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "SLACK_A2A_APP_TOKEN",
         "identities": {"bot": {"token_env": "SLACK_A2A_BOT_TOKEN", "write": "free"}},
     }}},

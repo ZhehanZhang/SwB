@@ -38,9 +38,10 @@ export function LoginPage() {
       await refreshSession()
     }).catch((error: unknown) => {
       if (!active) return
-      setLinkError(error instanceof ApiError && error.code === "link_expired"
-        ? "Ask your agent for a fresh sign-in link."
-        : "Sign-in failed. Ask your agent for a new link.")
+      const code = error instanceof ApiError ? error.code : ""
+      const reason = code === "link_used" ? "Sign-in link already used." :
+        code === "link_expired" ? "Sign-in link expired." : "Sign-in failed."
+      setLinkError(`${reason} Ask your agent for a new link.`)
     }).finally(() => {
       if (active) setLinkPending(false)
     })

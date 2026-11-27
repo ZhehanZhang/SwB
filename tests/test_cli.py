@@ -15,6 +15,7 @@ from mcp.types import CallToolResult, TextContent
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, payload
 from switchboard import __main__, cli
+from switchboard.core import Switchboard
 
 
 def test_log_prints_one_json_object_per_line(make, tmp_path, monkeypatch, capsys):
@@ -31,6 +32,106 @@ def test_log_prints_one_json_object_per_line(make, tmp_path, monkeypatch, capsys
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 2
     assert [json.loads(line) for line in lines] == core.audit.recent()
+
+
+@pytest.fixture
+def cli_instance(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    for name in ("SWITCHBOARD_CONFIG", "SWITCHBOARD_OVERLAY", "SWITCHBOARD_DATA_DIR", "SWITCHBOARD_DATA",
+                 "SWITCHBOARD_HOST", "PORT", "SWITCHBOARD_DEPLOY_PLATFORM"):
+        monkeypatch.delenv(name, raising=False)
+    base = tmp_path / "instance"
+    config = base / cli.CONFIG
+    config.parent.mkdir(parents=True)
+    config.write_text("version: 2\nblocks:\n  custom-mcp:\n    use: mcp\n")
+    (base / ".env").write_text(f"{cli.OWNER_KEY}={STATIC_KEY}\nSWITCHBOARD_HOST=localhost\nPORT=18871\n")
+    core = Switchboard(config_path=config, data_dir=base / "data", env={})
+    return base, core
+
+
+def test_server_tools_appear_in_top_level_help(capsys):
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["--help"])
+    assert exited.value.code == 0
+    usage = capsys.readouterr().out.split("positional arguments:", 1)[0]
+    assert all(command in usage for command in __main__.SERVER_COMMANDS)
+
+
+def test_serve_reads_instance_config_data_and_dotenv(cli_instance, monkeypatch):
+    base, core = cli_instance
+    calls = []
+    monkeypatch.setattr(__main__.uvicorn, "run", lambda app, **options: calls.append((app.starlette.state.core, options)))
+
+    __main__.cli_main(["serve", "--dir", base.name])
+
+    [(served, options)] = calls
+    assert list(served.blocks) == ["custom-mcp"] and served.data_dir == core.data_dir
+    assert served.cfg.env[cli.OWNER_KEY] == STATIC_KEY
+    assert (options["host"], options["port"]) == ("localhost", 18871)
+    assert cli.OWNER_KEY not in os.environ
+
+
+def test_log_reads_instance_data_and_honors_limit(cli_instance, capsys):
+    base, core = cli_instance
+    for index in range(52):
+        core.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
+                          action="read", outcome="ok", title=f"Entry {index}")
+    for options, count in (([], 50), (["--limit", "2"], 2), (["--limit", "60"], 52)):
+        __main__.cli_main(["log", "--dir", base.name, *options])
+        assert [json.loads(line) for line in capsys.readouterr().out.splitlines()] == core.audit.recent(limit=count)
+
+
+@pytest.mark.parametrize("setting", ["yaml", "env", "both"])
+def test_explicit_dir_keeps_data_in_instance(cli_instance, monkeypatch, capsys, setting):
+    base, core = cli_instance
+    if setting in ("yaml", "both"):
+        config = base / cli.CONFIG
+        config.write_text(config.read_text() + f"data_dir: {base / 'yaml-data'}\n")
+    if setting in ("env", "both"):
+        monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(base / "env-data"))
+    core.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
+                      action="read", outcome="ok", title="Instance data")
+
+    __main__.cli_main(["log", "--dir", base.name])
+
+    assert [json.loads(line) for line in capsys.readouterr().out.splitlines()] == core.audit.recent()
+
+
+@pytest.mark.parametrize("bad_limit", ["0", "-1", "9223372036854775808"])
+def test_log_rejects_out_of_range_limits(bad_limit, capsys):
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["log", "--limit", bad_limit])
+    assert exited.value.code == 2
+    assert "--limit" in capsys.readouterr().err
+
+
+def test_export_uses_instance_data_and_separate_destination(cli_instance, tmp_path, capsys):
+    base, core = cli_instance
+    core.memory.write(source="owner", scope="general", namespace="notes", key="fixture", title="Fixture title", body="Fixture body",
+                      confirm_general=True)
+
+    __main__.cli_main(["export", "snapshot", "--dir", base.name])
+
+    assert "exported 1 memories" in capsys.readouterr().out
+    assert "Fixture title" in (tmp_path / "snapshot" / "INDEX.md").read_text()
+    assert not (base / "snapshot").exists()
+
+
+def test_config_and_blocks_use_instance_config(cli_instance, capsys):
+    base, _ = cli_instance
+    __main__.cli_main(["config", "migrate", "--dir", base.name])
+    assert yaml.safe_load(capsys.readouterr().out)["blocks"] == {"custom-mcp": {"use": "mcp"}}
+    __main__.cli_main(["blocks", "list", "--dir", base.name])
+    assert capsys.readouterr().out.split()[0:2] == ["custom-mcp", "mcp"]
+
+
+def test_targets_use_instance_config(cli_instance, capsys):
+    base, _ = cli_instance
+    (base / cli.CONFIG).write_text("version: 2\nblocks:\n  dots:\n    delivery: mailbox\n    dots:\n      alpha:\n        name: Alpha\n")
+
+    __main__.cli_main(["targets", "--dir", base.name])
+
+    assert "dots:dot:alpha" in capsys.readouterr().out
 
 
 def test_cli_version_matches_installed_distribution(capsys):
@@ -361,6 +462,33 @@ def test_claim_does_not_follow_redirects_or_print_response(tmp_path, monkeypatch
     out, err = capsys.readouterr()
     assert "HTTP 307" in err
     assert all(value not in out + err for value in (key, token, code))
+
+
+@pytest.mark.parametrize(("error", "message", "visible"), [
+    ("claim_input", "Enter a numeric ID", True),
+    ("claim_input", "Check fixture-token-not-a-secret", False),
+    ("claim_input", "Check fixture-owner-key-not-a-secret", False),
+    ("claim_input", "Check fixture-code", False),
+    ("claim_input", "Check the value\x1b[32m", False),
+    ("other_error", "Check another value", False),
+])
+def test_claim_prints_only_safe_json_errors(tmp_path, monkeypatch, capsys, error, message, visible):
+    key, token, code = "fixture-owner-key-not-a-secret", "fixture-token-not-a-secret", "fixture-code"
+    monkeypatch.setenv(cli.OWNER_KEY, key)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: f" {token} ")
+
+    def post(request):
+        assert request.headers["accept"] == "application/json"
+        return httpx2.Response(400, json={"error": error, "message": message, "detail": f"{key} {token} {code}"})
+
+    client = httpx2.Client
+    monkeypatch.setattr(cli.httpx2, "Client", lambda **kw: client(transport=httpx2.MockTransport(post), **kw))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["claim", code, "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    out, err = capsys.readouterr()
+    assert not out and (message in err if visible else "HTTP 400" in err and message not in err)
+    assert all(secret not in err for secret in (key, token, code))
 
 
 def test_claim_requires_hidden_input(tmp_path, monkeypatch, capsys):

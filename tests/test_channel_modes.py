@@ -83,6 +83,30 @@ def test_unconfigured_defaults_to_off_and_triage_uses_full_actions(make):
     assert (mode, source, set(actions)) == ("triage", "channel", ACTIONS)
 
 
+def test_github_repo_space_has_one_row_after_override(make):
+    repo = "example-org/app"
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {repo: {"mode": "watch"}}}})
+    _, client = make(cfg)
+    payload(call(client, STATIC_KEY, "space_mode", {"block": "github", "space": repo, "mode": "off"}))
+    [row] = payload(call(client, STATIC_KEY, "modes_status"))["spaces"]
+    assert (row["space"], row["channel"], row["mode"], row["source"]) == (repo, repo, "off", "override")
+
+
+def test_slack_mode_requires_connected_workspace(make, monkeypatch):
+    workspace = "example"
+    cfg = base_config(version=2, blocks={"mcp": {}, "slack": {"workspaces": {workspace: {
+        "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "FIXTURE_APP_TOKEN",
+        "identities": {"bot": {"token_env": "FIXTURE_BOT_TOKEN"}},
+    }}}})
+    core, client = make(cfg)
+    args = {"block": "slack", "space": workspace, "channel": "C123", "mode": "watch"}
+    runtime = core.blocks["slack"].engine.runtimes[workspace]
+    assert "Connect Slack workspace example first." in error_text(call(client, STATIC_KEY, "space_mode", args))
+    assert not core.store.q("SELECT 1 FROM space_modes")
+    monkeypatch.setattr(runtime, "clients", {"bot": object()})
+    assert payload(call(client, STATIC_KEY, "space_mode", args))["mode"] == "watch"
+
+
 def test_triage_prefers_registered_routine_and_reports_fallback(make):
     cfg = config({
         "home": {"guild_id": GUILD, "project": "example", "default_target": "doorman", "channels": {DISCORD_CHANNEL: "triage"}},

@@ -302,6 +302,9 @@ class Block:
     def next_step(self) -> str | None:
         return None
 
+    def validate_mode_space(self, space: str) -> None:
+        pass
+
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
 

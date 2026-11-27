@@ -47,7 +47,7 @@ def test_connect_schema_and_unknown_kinds(make):
 ])
 def test_connect_offers_working_config_for_disabled_block(make, kind, block, env_names):
     cfg = base_config(version=2, blocks={"mcp": {}, block: {"enabled": False}})
-    env = {"SWITCHBOARD_KEY_CAPY": STATIC_KEY}
+    env = {"SWITCHBOARD_KEY_OWNER": STATIC_KEY}
     _, client = make(config=cfg, env=env)
     out = connect(client, kind)
     assert out["what"] == kind and out["done"] == []
@@ -73,6 +73,8 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
     elif kind == "slack":
         assert set(core.blocks[block].token_names["a2a"]) == set(env_names)
         assert "link" in connect(enabled, kind)["next"][0]
+        workspaces = payload(call(enabled, STATIC_KEY, "slack_workspaces"))["workspaces"]
+        assert [(w["workspace"], list(w["identities"])) for w in workspaces] == [("a2a", ["bot"])]
     elif kind == "github":
         assert core.blocks[block].registered_repositories() == {"example-org/app"}
 

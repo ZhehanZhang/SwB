@@ -277,6 +277,7 @@
       ],
       "command": "swb blocks",
       "flags": [
+        "--dir",
         "--help",
         "-h"
       ],
@@ -319,6 +320,7 @@
       ],
       "command": "swb config",
       "flags": [
+        "--dir",
         "--help",
         "-h"
       ],
@@ -351,11 +353,12 @@
       "arguments": [
         {
           "choices": [],
-          "name": "dir"
+          "name": "destination"
         }
       ],
       "command": "swb export",
       "flags": [
+        "--dir",
         "--help",
         "-h"
       ],
@@ -383,7 +386,9 @@
       "arguments": [],
       "command": "swb log",
       "flags": [
+        "--dir",
         "--help",
+        "--limit",
         "-h"
       ],
       "icon": null,
@@ -425,6 +430,7 @@
       "arguments": [],
       "command": "swb serve",
       "flags": [
+        "--dir",
         "--help",
         "--host",
         "-h"
@@ -465,6 +471,7 @@
       "arguments": [],
       "command": "swb targets",
       "flags": [
+        "--dir",
         "--help",
         "-h"
       ],
