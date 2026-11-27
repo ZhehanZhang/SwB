@@ -5,7 +5,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from starlette.testclient import TestClient
 
+from conftest import STATIC_KEY, call, error_text, payload
 from switchboard import __main__, cli, cli_up
 from switchboard.config import load_config
 
@@ -16,7 +18,8 @@ def clean_env(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR",
-                 "SWITCHBOARD_PUBLIC_URL"):
+                 "SWITCHBOARD_PUBLIC_URL", "PUBLIC_URL", "SWITCHBOARD_DEPLOY_PLATFORM", "CLOUDFLARE_ACCESS_TEAM_DOMAIN",
+                 "CLOUDFLARE_ACCESS_AUD", "SWITCHBOARD_OWNER_EMAILS"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -34,6 +37,37 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
     assert calls == [(["serve"], data, "127.0.0.1", "8870")]
     assert capsys.readouterr().out == "MCP URL: http://127.0.0.1:8870/mcp\n"
     assert "SWITCHBOARD_HOST" not in os.environ
+
+
+def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, monkeypatch):
+    (tmp_path / ".env").write_text(f"SWITCHBOARD_KEY_OWNER={STATIC_KEY}\n")
+    monkeypatch.delenv("SWITCHBOARD_KEY_OWNER", raising=False)
+    monkeypatch.setenv("PORT", "18871")
+    base = "http://localhost:18871"
+
+    def serve(app, *, host, port, **options):
+        assert (host, port) == ("127.0.0.1", 18871)
+        with TestClient(app, base_url="http://127.0.0.1:18871") as client:
+            assert client.get("/healthz").json()["status"] == "ok"
+            link = payload(call(client, STATIC_KEY, "login_link"))["url"]
+            assert link.startswith(f"{base}/login#t=")
+            token = link.partition("#t=")[2]
+            assert client.post(f"{base}/auth/link", json={"token": token}, headers={"Origin": base}).status_code == 204
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+
+
+def test_wildcard_bind_requires_public_url_for_owner_link(clean_env, monkeypatch):
+    monkeypatch.setenv("SWITCHBOARD_HOST", "0.0.0.0")
+    monkeypatch.setenv("SWITCHBOARD_KEY_OWNER", STATIC_KEY)
+
+    def serve(app, **options):
+        with TestClient(app) as client:
+            assert "Set SWITCHBOARD_PUBLIC_URL" in error_text(call(client, STATIC_KEY, "login_link"))
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["serve"])
 
 
 @pytest.mark.parametrize(("provider", "binary", "url", "flags"), [

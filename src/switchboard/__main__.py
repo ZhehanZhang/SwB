@@ -75,17 +75,21 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.error("no config file found")
         print(migrate_text(path.read_text()), end="")
         return
-    from .config import ConfigError
+    from .config import ConfigError, LOOPBACK_HOSTS
     from .deployment import serve_env
 
+    serving = args.cmd in (None, "serve")
+    host = os.environ.get("SWITCHBOARD_HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000")) if serving else 0
+    default_public_url = f"http://localhost:{port}" if host in LOOPBACK_HOSTS and port else None
     try:
-        env = serve_env(os.environ) if args.cmd in (None, "serve") else None
+        env = serve_env(os.environ) if serving else None
     except ConfigError as error:
         parser.error(str(error))
     except (OSError, UnicodeError) as error:
         parser.error(f"couldn't load the owner key on the volume ({type(error).__name__})")
     try:
-        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env)
+        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, default_public_url=default_public_url)
     except ConfigError as error:
         parser.error(str(error))
     if args.cmd == "blocks":
@@ -127,8 +131,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     logging.getLogger("uvicorn.access").addFilter(_NoQuery())
     app = create_app(core)
     options = {
-        "host": os.environ.get("SWITCHBOARD_HOST", "0.0.0.0"),
-        "port": int(os.environ.get("PORT", "8000")),
+        "host": host,
+        "port": port,
         "proxy_headers": True,
         "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,

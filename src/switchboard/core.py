@@ -62,8 +62,9 @@ class Switchboard:
         slack_options: dict[str, Any] | None = None,
         block_options: dict[str, dict[str, Any]] | None = None,
         tunnel_url: str | None = None,
+        default_public_url: str | None = None,
     ):
-        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url)
+        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url, default_public_url=default_public_url)
         self.data_dir = Path(data_dir) if data_dir is not None else self.cfg.data_dir
         self.data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.clock = clock

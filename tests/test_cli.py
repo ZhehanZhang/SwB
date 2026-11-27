@@ -78,6 +78,13 @@ def test_init_invalid_public_url_leaves_no_files(tmp_path, capsys):
     assert "--public-url" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "[::1]"])
+def test_init_accepts_http_loopback_public_urls(tmp_path, host):
+    origin = f"http://{host}:8870"
+    cli.main(["init", "--dir", str(tmp_path), "--public-url", origin])
+    assert yaml.safe_load((tmp_path / cli.CONFIG).read_text())["public_url"] == origin
+
+
 def test_init_points_to_login_link(tmp_path, capsys):
     cli.main(["init", "--dir", str(tmp_path)])
     out = capsys.readouterr().out
@@ -262,8 +269,8 @@ def test_claim_requires_hidden_input(tmp_path, monkeypatch, capsys):
     assert "hidden input" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("structured", [True, False])
-async def test_mcp_transport_initializes_and_sends_bearer(monkeypatch, structured):
+@pytest.mark.parametrize("result_kind", ["structured", "text", "error", "empty error"])
+async def test_mcp_transport_initializes_and_sends_bearer(monkeypatch, result_kind):
     calls = []
     url, key = "https://switchboard.example.test/mcp", "fixture-owner-key-not-a-secret"
 
@@ -288,12 +295,23 @@ async def test_mcp_transport_initializes_and_sends_bearer(monkeypatch, structure
 
         async def call_tool(self, tool, arguments):
             calls.append((tool, arguments))
+            if result_kind in ("error", "empty error"):
+                content = [TextContent(type="text", text=f"Set SWITCHBOARD_PUBLIC_URL. Key {key}.")]
+                return CallToolResult(content=content if result_kind == "error" else [], is_error=True)
             return CallToolResult(content=[TextContent(type="text", text='{"what":"mcp-client"}')],
-                                  structured_content={"what": "mcp-client"} if structured else None)
+                                  structured_content={"what": "mcp-client"} if result_kind == "structured" else None)
 
     monkeypatch.setattr(cli, "streamable_http_client", transport)
     monkeypatch.setattr(cli, "ClientSession", Session)
-    assert await cli._call(url, key, "connect", {"what": "mcp-client"}) == {"what": "mcp-client"}
+    if result_kind == "error":
+        with pytest.raises(cli.CliError) as refused:
+            await cli._call(url, key, "connect", {"what": "mcp-client"})
+        assert str(refused.value) == "Set SWITCHBOARD_PUBLIC_URL. Key [redacted]."
+    elif result_kind == "empty error":
+        with pytest.raises(cli.CliError, match="SwB refused the connect tool call"):
+            await cli._call(url, key, "connect", {"what": "mcp-client"})
+    else:
+        assert await cli._call(url, key, "connect", {"what": "mcp-client"}) == {"what": "mcp-client"}
     assert calls == [(url, f"Bearer {key}"), "initialize", ("connect", {"what": "mcp-client"})]
 
 

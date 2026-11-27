@@ -52,7 +52,7 @@ def serve_env(env: Mapping[str, str]) -> dict[str, str] | None:
         elif platform == "railway" and (host := values.get("RAILWAY_PUBLIC_DOMAIN")):
             url = f"https://{host}"
         if not url:
-            raise ConfigError("The deployment requires a public URL.")
+            raise ConfigError("The deployment requires a public URL. Set SWITCHBOARD_PUBLIC_URL.")
         values["SWITCHBOARD_PUBLIC_URL"] = url
     if not values.get(OWNER_KEY):
         key = volume_owner_key(values, create=True)

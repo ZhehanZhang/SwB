@@ -130,7 +130,7 @@ class Kit:
 
             p = self.owner(ctx, "mint a sign-in link")
             if not (base := self.core.cfg.public_url):
-                raise ToolError("set public_url to enable owner sign-in links")
+                raise ToolError("Set SWITCHBOARD_PUBLIC_URL to enable owner sign-in links.")
             token = self.core.auth.sessions.mint_link(p.client_id, p.source)
             self.core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core",
                                    action="login_link_minted", outcome="ok")

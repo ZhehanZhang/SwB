@@ -23,6 +23,17 @@ from switchboard.core import Switchboard
 from conftest import SECOND_KEY, STATIC_KEY, acall, arpc, eventually, principal
 
 
+def test_loopback_public_url_and_aliases(tmp_path):
+    config = tmp_path / "switchboard.yaml"
+    config.write_text(
+        "public_url: http://127.0.0.1:8870\n"
+        "public_url_aliases: ['http://[::1]:8870', 'http://localhost:8870']\n"
+    )
+    cfg = load_config(config, env={}, default_public_url="http://localhost:8000")
+    assert cfg.public_urls == ("http://127.0.0.1:8870", "http://[::1]:8870", "http://localhost:8870")
+    assert cfg.base_for_host("[::1]:8870") == "http://[::1]:8870"
+
+
 def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     core = Switchboard(env={})
