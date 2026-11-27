@@ -89,13 +89,32 @@ def test_unconfigured_defaults_to_off_and_triage_can_reply(make):
     assert (mode, source, actions) == ("triage", "channel", ("reply",))
 
 
-def test_github_repo_space_has_one_row_after_override(make):
+@pytest.mark.parametrize("space", ["example-org/app", "release"])
+def test_github_repo_space_has_one_row_after_override(make, space):
     repo = "example-org/app"
-    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {repo: {"mode": "watch"}}}})
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {space: {"repo": repo, "mode": "watch"}}}})
     _, client = make(cfg)
-    payload(call(client, STATIC_KEY, "space_mode", {"block": "github", "space": repo, "mode": "off"}))
+    args = {"block": "github", "space": space, "mode": "off"}
+    saved = payload(call(client, STATIC_KEY, "space_mode", args))
     [row] = payload(call(client, STATIC_KEY, "modes_status"))["spaces"]
-    assert (row["space"], row["channel"], row["mode"], row["source"]) == (repo, repo, "off", "override")
+    assert saved == row
+    assert (row["space"], row["channel"], row["mode"], row["source"]) == (space, repo, "off", "override")
+    visible = payload(call(client, STATIC_KEY, "visibility_list"))["resources"]
+    assert {item["resource"] for item in visible if item["resource"].startswith("channel:")} == {f"channel:github/{repo}"}
+
+
+def test_github_single_repo_reports_channel_when_clearing_legacy_space_override(make):
+    repo = "example-org/app"
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {"release": {"repo": repo, "mode": "watch"}}}})
+    core, client = make(cfg)
+    core.store.x("INSERT INTO space_modes(block, space, channel, mode, actions, target, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,?)",
+                 ("github", "release", "", "assist", "null", "agent:claude", core.clock(), "owner"))
+    [row] = payload(call(client, STATIC_KEY, "modes_status"))["spaces"]
+    assert (row["channel"], row["mode"], row["target"]) == (repo, "assist", "agent:claude")
+    args = {"block": "github", "space": "release", "mode": "inherit"}
+    row = payload(call(client, STATIC_KEY, "space_mode", args))
+    assert (row["channel"], row["mode"], row["target"]) == (repo, "watch", None)
+    assert not core.store.q("SELECT 1 FROM space_modes")
 
 
 def test_mode_target_must_appear_in_discovery(make):
