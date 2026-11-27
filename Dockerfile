@@ -4,6 +4,7 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
 COPY src/switchboard/static/theme.js /app/src/switchboard/static/theme.js
+COPY src/switchboard/slack/avatars/ /app/src/switchboard/slack/avatars/
 RUN npm run build
 
 FROM python:3.13-slim AS base
