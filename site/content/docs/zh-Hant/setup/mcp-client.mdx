@@ -7,7 +7,9 @@ MCP 是應用程式使用外部工具的標準方式。本頁說明如何用專�
 
 ## 開始之前
 
-你的應用程式需要支援以 Streamable HTTP 連線的遠端 MCP 伺服器與自訂請求標頭。Streamable HTTP 是 MCP 的網路傳輸方式。你還需要一個已接上 SwB 並使用擁有者登入的代理，或 SwB 伺服器的終端機權限。
+你的應用程式需要支援以 Streamable HTTP 連線的遠端 MCP 伺服器與自訂請求標頭。Streamable HTTP 是 MCP 的網路傳輸方式。你還需要一個以擁有者身分登入 SwB 的代理，或能在執行 SwB 的電腦上使用終端機。
+
+若要在應用程式所在的電腦上啟動 SwB，請在空資料夾內執行 `uvx swb-one up`。開啟終端機顯示的一次性登入連結。其他方式請參閱[安裝指南](/zh-Hant/docs/install)。
 
 Claude、ChatGPT、Grok 與程式開發代理各有專屬頁面，使用 OAuth 登入。請為這些應用程式使用對應的頁面。
 
@@ -30,12 +32,12 @@ Claude、ChatGPT、Grok 與程式開發代理各有專屬頁面，使用 OAuth �
 <Step>
 ### 取得配對碼
 
-請以擁有者身分登入的代理取得配對碼。代理可以用應用程式名稱呼叫 `connect_code`。
+請以擁有者身分登入的代理取得配對碼。代理可以用應用程式名稱呼叫 `connect_code`。你也可以在 SwB 執行個體的資料夾內執行 `uvx swb-one connect mcp-client --choose agent=notes-bot`。請將指令中的範例名稱換成你的應用程式名稱。
 </Step>
 <Step>
 ### 換取金鑰
 
-在執行應用程式的電腦上，用終端機開啟私人資料夾。將 `https://swb.example.com` 換成你的 SwB 位址。保留結尾的 `/connect`。如果本機伺服器使用 8870 連接埠，請用 `http://localhost:8870/connect`。請在 10 分鐘內透過隱藏輸入提示填入配對碼。
+在執行應用程式的電腦上，用終端機開啟私人資料夾。將 `https://swb.example.com` 換成你的 SwB 位址。保留結尾的 `/connect`。若 SwB 在本機執行，請用 `http://localhost:8870/connect`，並依啟動時顯示的位址填入連接埠。請在 10 分鐘內透過隱藏輸入提示填入配對碼。
 
 ```bash
 bash -c '
@@ -57,7 +59,7 @@ bash -c '
 <Step>
 ### 把 SwB 加到應用程式
 
-在應用程式的 MCP 設定中，填入檔案中的 `mcp_url`。如果本機伺服器使用 8870 連接埠，請用 `http://localhost:8870/mcp`。傳輸方式選擇 Streamable HTTP。
+在應用程式的 MCP 設定中，填入檔案中的 `mcp_url`。若 SwB 在本機執行，請用啟動時顯示的 MCP 位址。傳輸方式選擇 Streamable HTTP。
 </Step>
 <Step>
 ### 加入金鑰

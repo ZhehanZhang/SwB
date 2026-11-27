@@ -61,4 +61,6 @@ GitHub changes require a GitHub credential with write access. SwB records triage
 
 Use `modes_status` to see the mode, target, actions and setup problems. Both `space_mode` and `modes_status` show the message “Choose a triage agent.” when triage needs a target.
 
-SwB records a reason for each GitHub webhook it drops. Open **Audit** or run `swb log` to see the reason.
+SwB records drop reasons for Slack, Discord and Telegram in the audit log. It records at most one entry every 10 minutes for the same block, space, channel and reason.
+
+SwB also records reasons for dropped GitHub webhooks. Open **Audit** or run `swb log` to see the reason.

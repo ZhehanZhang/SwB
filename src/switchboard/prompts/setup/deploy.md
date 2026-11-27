@@ -6,32 +6,17 @@ Ask me to choose where to run SwB. Offer this computer, Fly.io, Koyeb or my serv
 
 ## This computer
 
-Run the local commands on the computer that will run SwB. If I have that terminal, ask me to run the commands there.
-
-Check that uv is available. Make an empty instance folder. Check that port 8870 is free. Run the following commands in that folder. Keep the server running.
+Help me check that uv is available. Help me choose an empty folder for SwB. Check that port 8870 is free. Ask me to run this command in that folder in my terminal.
 
 ```bash
-uvx swb-one init --public-url http://localhost:8870
-uvx swb-one up --dir .
+uvx swb-one up
 ```
 
-`swb init` creates a private `data/` folder with mode `0700`. An initialized instance or `--dir` uses the instance's `data/` folder by default. Outside an instance, `swb up` defaults to `~/.local/share/switchboard`.
+SwB creates `.env`, `config/switchboard.yaml` and `data/` in that folder. Ask me to keep the server running. Ask me to open the one-time sign-in link from my terminal within five minutes. Keep the link private.
 
-SwB checks for `data_dir` in the YAML settings and their overlay first. Then it checks `SWITCHBOARD_DATA_DIR`, then `SWITCHBOARD_DATA`. The default folder applies last.
+To get a new link, ask me to run `uvx swb-one login-link` in a second terminal from the same folder.
 
-For an older instance with a missing `data/` folder, plain `swb up` reuses an existing home database. SwB shows a notice once. Database files use mode `0600`.
-
-SwB uses the config file named by `SWITCHBOARD_CONFIG`. With `--dir`, it uses the config file from that instance instead.
-
-In a second terminal, use the same folder to create a one-time owner sign-in link in a private file.
-
-```bash
-(umask 077; set -C; uvx swb-one login-link > .swb-login-link)
-```
-
-Tell me the file path. Ask me to open the link in my local browser within five minutes. Ask me to delete the file after sign-in.
-
-For another port, set `PORT` in the instance's `.env` file. Use that port in the `--public-url` value when you run `init`. Use it in the local MCP address.
+For another port, set `PORT` before you start SwB. The default local MCP address is `http://localhost:8870/mcp`. Use the MCP address shown at startup.
 
 ## Fly.io, Koyeb, or a server
 

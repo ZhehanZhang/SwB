@@ -18,7 +18,7 @@ swb login-link
 
 The command prints a link such as `https://swb.example.com/login#t=...`. Open it in your browser within five minutes. The link works once. An agent signed in as the owner can also make a link with the `login_link` tool. The token stays in the part of the link after `#`.
 
-For a local run, set `SWITCHBOARD_PUBLIC_URL` to `http://localhost:8870` before you start SwB. Set the port in the address to match `PORT`. If the YAML config sets `public_url`, change it there. Use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
+On the first local start, `swb up` prints a one-time link. The local address defaults to `http://localhost:8870`. If you set `PORT`, SwB uses that port in the address. For `swb login-link`, use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
 
 If sign-in with the link fails, run `swb login-link` again. Open the new link in your browser.
 

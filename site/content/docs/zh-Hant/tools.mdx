@@ -11,7 +11,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 用途 | 工具與權限 |
 | - | - |
-| 訊息 | 可呼叫 `send`、`agent_send` 與 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 與 `get_message` 處理自己的訊息和對話 |
+| 訊息 | 可呼叫 `send`、`agent_send` 與 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 與 `get_message` 處理金鑰授權範圍內自己的訊息和對話 |
 | 記憶與專案 | 可呼叫 `context_pack` 與 `project_list`。在授權範圍內使用記憶工具 |
 | 路由 | 可呼叫 `routes_list` 與 `routes_resolve`。呼叫 `routes_set` 或 `routes_remove` 時，將自己的代理名稱填入 `agent` |
 | 設定 | 用 `switchboard_status` 與 `modes_status` 查看狀態。用 `connect` 取得用戶端設定指引。設定模組和發出配對碼需要擁有者身分 |
@@ -35,9 +35,11 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `result` | 取得對話的最終回覆。支援 `tail` 的對話可用它指定回傳的近期回覆或訊息則數 |
 | `cancel` | 停止追蹤對話 |
 | `targets` | 列出 `send` 能連到的所有對象 |
-| `get_message` | 使用 MCP 事件回呼中的 `message_id` 讀取已儲存的訊息，例如 `msg_42` |
+| `get_message` | 用收件匣或 MCP 事件中的 `message_id` 讀取已儲存的訊息 |
 
 `inbox` 工具和[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)會直接提供訊息資料。用 `inbox` 讀取後續訊息時，將 `cursor` 填入 `since_cursor`。回覆時，將訊息的 `handle` 填入 `reply` 的 `conversation`。
+
+訊息或對話超出配對金鑰的權限時，SwB 會回傳與 ID 查詢失敗時相同的錯誤。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
 
 ### 傳送選項
 
@@ -54,7 +56,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `context_pack` | 取得專案的簡報 |
+| `context_pack` | 取得專案簡報。使用配對金鑰時，Capy 部分只列出該代理在授權範圍內進行中的工作 |
 | `memory_write` | 儲存記憶時，填寫 `scope`、`namespace`、`title` 和 `body`。`namespace` 用來為同一範圍內的項目分類，最多三層，使用小寫，例如 `notes/meetings`。儲存專案記憶時，將專案簡稱填入 `project`，並設定 `scope="project:<slug>"`。寫入通用記憶前，先向擁有者確認。接著設定 `confirm_general=true` |
 | `memory_search` | 用 `query` 搜尋記憶。預設搜尋 `general`。將專案簡稱填入 `project`，即可先搜尋專案記憶，再搜尋 `general`。設為 `include_general=false` 時，只搜尋該專案 |
 | `memory_list` | 列出記憶項目 |
@@ -112,8 +114,8 @@ description: SwB 提供給你的代理的 MCP 工具。
 | 工具 | 用途 |
 | - | - |
 | `capy_captains` | 列出目前的 Capy 連線可以存取的 Captain |
-| `capy_captain_digest` | 讀取 Captain 的摘要並查看處理中或需要擁有者介入的討論串 |
-| `capy_list` | 列出透過 SwB 交付的工作。也能查看 Captain 團隊或已連結 Capy 專案的討論串 |
+| `capy_captain_digest` | 讀取 Captain 的摘要並查看處理中或需要擁有者介入的討論串。此工具需要擁有者身分 |
+| `capy_list` | 列出透過 SwB 交付的工作。也能查看 Captain 團隊或已連結 Capy 專案的討論串。使用配對金鑰時，清單只顯示該代理在授權範圍內的工作 |
 | `capy_delegate` | 把工作交給 Capy。新呼叫請用 `send` 並指定 `to="capy"` |
 | `capy_inbox` | 立即讀取 Capy 收件匣。新呼叫請用 `inbox` 並指定 `block="capy"` |
 | `capy_wait` | 等待收件匣收到下一則訊息。新呼叫請用 `wait` |
