@@ -107,7 +107,7 @@ class CapyBlock(Block):
         identities=({"id": "service", "policy": "free"}, {"id": "personal", "policy": "free", "optional": True}),
         config_schema={"type": "object", "properties": {
             "api_base": {"type": "string"}, "identity": {"enum": ["service", "personal"]}, "send_key_env": {"type": "string"},
-            "default_route": {}, "daily_cap": {"type": ["integer", "null"]}, "burst": {}, "captain_delivery": {"enum": list(DELIVERIES)},
+            "default_route": {}, "daily_cap": {"type": ["integer", "null"]}, "captain_delivery": {"enum": list(DELIVERIES)},
             "avatars": {"type": "boolean"}, "handle_ttl_days": {"type": "number"}, "duplicate_window_s": {"type": "number"}}},
         instructions=INSTRUCTIONS,
     )

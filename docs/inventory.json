@@ -593,13 +593,6 @@
     },
     {
       "icon": null,
-      "id": "config_key:blocks.capy.burst",
-      "key": "blocks.capy.burst",
-      "kind": "config_key",
-      "label": "blocks.capy.burst"
-    },
-    {
-      "icon": null,
       "id": "config_key:blocks.capy.captain_delivery",
       "key": "blocks.capy.captain_delivery",
       "kind": "config_key",
@@ -2253,17 +2246,6 @@
     },
     {
       "icon": null,
-      "id": "page:/canvas/*",
-      "kind": "page",
-      "label": "SwB",
-      "path": "/canvas/*",
-      "redirect_to": "/",
-      "surfaces": [
-        "console"
-      ]
-    },
-    {
-      "icon": null,
       "id": "page:/claim/{code}",
       "kind": "page",
       "label": "Save a token",
@@ -2342,32 +2324,10 @@
     },
     {
       "icon": null,
-      "id": "page:/projects",
-      "kind": "page",
-      "label": "SwB",
-      "path": "/projects",
-      "redirect_to": "/",
-      "surfaces": [
-        "console"
-      ]
-    },
-    {
-      "icon": null,
       "id": "page:/projects/:slug",
       "kind": "page",
       "label": "Project",
       "path": "/projects/:slug",
-      "surfaces": [
-        "console"
-      ]
-    },
-    {
-      "icon": null,
-      "id": "page:/provision/*",
-      "kind": "page",
-      "label": "SwB",
-      "path": "/provision/*",
-      "redirect_to": "/",
       "surfaces": [
         "console"
       ]

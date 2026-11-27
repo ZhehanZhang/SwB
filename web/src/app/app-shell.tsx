@@ -110,7 +110,7 @@ export function AppShell() {
   const project = isSection(pathname, "/projects")
   const platform = isSection(pathname, "/connections") ? pathname.split("/")[2] : undefined
   const connection = isConnectionPlatform(platform)
-  const home = pathname === "/" || project || isSection(pathname, "/canvas")
+  const home = pathname === "/" || project
   const [title, setTitle] = useState<string>()
   const [moreOpen, setMoreOpen] = useState(false)
   const heading = connection ? connectionNames[platform] : title ?? (home ? PRODUCT_NAME : sections.find(({ to }) => isSection(pathname, to))?.name ?? PRODUCT_NAME)
