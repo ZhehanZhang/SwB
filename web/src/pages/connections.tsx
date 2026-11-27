@@ -17,7 +17,7 @@ const chatStates = { direct: "Direct messages", listening: "Listening", unlisted
 const slackIntake = { socket: "Socket Mode", poll: "Polling", none: "None" }
 
 function StatusTable({ label, headings, children }: { label: string; headings: string[]; children: ReactNode }) {
-  const widths = headings.length === 4 ? ["w-[32%]", "w-[23%]", "w-[20%]"] : ["w-2/5"]
+  const widths = headings.length === 4 ? ["w-[30%]", "w-[25%]", "w-[20%]"] : ["w-2/5"]
   return (
     <table aria-label={label} className="mt-1 w-full table-fixed border-collapse text-left">
       <thead>
