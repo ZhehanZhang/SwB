@@ -1,25 +1,7 @@
 {
-  "avatar:switchboard.png": "Legacy avatar alias pending inventory removal.",
   "config_key:blocks.capy.burst": "Schema-only key in release 1.0.",
   "page:/canvas/*": "Compatibility redirect to the main console.",
-  "page:/classic": "retired, flows moving to the SPA",
   "page:/pairing/code": "Legacy form action from the classic console.",
   "page:/projects": "Compatibility redirect to the main console.",
-  "page:/provision/*": "Compatibility redirect to the main console.",
-  "prompt:setup-capy-captain": "Served to agents; docs page pending",
-  "prompt:setup-chatgpt": "Served to agents; docs page pending",
-  "prompt:setup-claude": "Served to agents; docs page pending",
-  "prompt:setup-claude-project": "Served to agents; docs page pending",
-  "prompt:setup-coding-agent": "Served to agents; docs page pending",
-  "prompt:setup-coordinator": "Served to agents; docs page pending",
-  "prompt:setup-deploy": "Served to agents; docs page pending",
-  "prompt:setup-discord": "Served to agents; docs page pending",
-  "prompt:setup-dots": "Served to agents; docs page pending",
-  "prompt:setup-github": "Served to agents; docs page pending",
-  "prompt:setup-grok": "Served to agents; docs page pending",
-  "prompt:setup-grok-bot": "Served to agents; docs page pending",
-  "prompt:setup-mcp-client": "Served to agents; docs page pending",
-  "prompt:setup-muse": "Served to agents; docs page pending",
-  "prompt:setup-slack": "Served to agents; docs page pending",
-  "prompt:setup-telegram": "Served to agents; docs page pending"
+  "page:/provision/*": "Compatibility redirect to the main console."
 }

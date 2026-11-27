@@ -45,3 +45,26 @@ swb connect grok
 ## 用配对码连接
 
 请以所有者身份登录的智能体调用 `connect_code`。把新智能体的名称告诉它。配对码在 10 分钟内有效，只能使用一次。新智能体通过 `POST /connect` 用配对码换取自己的密钥。完整的配对方法见 [MCP 客户端](/zh-Hans/docs/setup/mcp-client)。
+
+## 设置提示词
+
+SwB 把每段设置提示词作为 MCP prompt 和 MCP resource 提供给智能体。`connect` 工具在 `guide` 字段中返回每个平台对应的两项。
+
+| Prompt | Resource | 指南 |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/docs/setup/capy-captain](/zh-Hans/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/docs/setup/chatgpt](/zh-Hans/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/docs/setup/claude](/zh-Hans/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/docs/setup/claude-project](/zh-Hans/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/docs/setup/coding-agent](/zh-Hans/docs/setup/coding-agent) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/docs/connect](/zh-Hans/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/docs/deploy](/zh-Hans/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/docs/setup/discord](/zh-Hans/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/docs/setup/dots](/zh-Hans/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/docs/setup/github](/zh-Hans/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/docs/setup/grok](/zh-Hans/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/docs/setup/grok-bot](/zh-Hans/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/docs/setup/mcp-client](/zh-Hans/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/zh-Hans/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/zh-Hans/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/zh-Hans/docs/setup/telegram) |

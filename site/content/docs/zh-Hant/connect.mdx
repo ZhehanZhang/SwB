@@ -45,3 +45,26 @@ swb connect grok
 ## 用配對碼連接
 
 請以擁有者身分登入的代理呼叫 `connect_code`。告訴它新代理的名稱。配對碼的有效期限是 10 分鐘，只能使用一次。新代理透過 `POST /connect`，用配對碼換取自己的金鑰。完整的配對方式請見 [MCP 用戶端](/zh-Hant/docs/setup/mcp-client)。
+
+## 設定提示詞
+
+SwB 把每段設定提示詞作為 MCP prompt 與 MCP resource 提供給代理。`connect` 工具在 `guide` 欄位中傳回每個平台對應的兩項。
+
+| Prompt | Resource | 指南 |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/docs/setup/capy-captain](/zh-Hant/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/docs/setup/chatgpt](/zh-Hant/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/docs/setup/claude](/zh-Hant/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/docs/setup/claude-project](/zh-Hant/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/docs/setup/coding-agent](/zh-Hant/docs/setup/coding-agent) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/docs/connect](/zh-Hant/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/docs/deploy](/zh-Hant/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/docs/setup/discord](/zh-Hant/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/docs/setup/dots](/zh-Hant/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/docs/setup/github](/zh-Hant/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/docs/setup/grok](/zh-Hant/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/docs/setup/grok-bot](/zh-Hant/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/docs/setup/mcp-client](/zh-Hant/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/zh-Hant/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/zh-Hant/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/zh-Hant/docs/setup/telegram) |
