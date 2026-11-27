@@ -45,3 +45,5 @@ swb connect grok
 ## Connect with a pairing code
 
 To pair a new agent, ask an agent signed in as the owner to call `connect_code`. Give it the name of the new agent. The code works one time for ten minutes. The new agent uses `POST /connect` to exchange the code for its own key. See [MCP client](/docs/setup/mcp-client) for the full pairing procedure.
+
+You can also create a pairing code in Tokens. SwB sends the form to `POST /pairing/code`.

@@ -1,10 +1,6 @@
 {
   "avatar:switchboard.png": "Legacy avatar alias pending inventory removal.",
-  "page:/canvas/*": "Compatibility redirect to the main console.",
   "page:/classic": "retired, flows moving to the SPA",
-  "page:/pairing/code": "Legacy form action from the classic console.",
-  "page:/projects": "Compatibility redirect to the main console.",
-  "page:/provision/*": "Compatibility redirect to the main console.",
   "prompt:setup-capy-captain": "Served to agents; docs page pending",
   "prompt:setup-chatgpt": "Served to agents; docs page pending",
   "prompt:setup-claude": "Served to agents; docs page pending",

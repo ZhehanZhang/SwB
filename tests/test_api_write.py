@@ -48,7 +48,6 @@ def owner_headers(client):
     ("POST", "/api/routes", ROUTE),
     ("DELETE", "/api/routes/1", None),
     ("POST", "/api/visibility", VISIBILITY),
-    ("POST", "/api/pairing/code", {"agent": "codex"}),
     ("POST", "/api/pairing/keys/ak_unknown/revoke", None),
     ("POST", "/api/routines/unknown/remove", None),
     ("POST", "/api/slack/requests/wr_unknown/approve", None),
@@ -130,12 +129,9 @@ def test_pairing_code_uses_the_protected_tokens_form(board):
     core, client = board
     headers = owner_headers(client)
     response = client.post("/api/pairing/code", headers=headers, json={"agent": "codex"})
-    assert response.status_code == 200
-    assert response.json() == {"status": "owner_form_required", "url": "/tokens"}
-    assert response.headers["Cache-Control"] == "no-store"
+    assert response.status_code == 404
+    assert response.json() == {"error": "not_found"}
     assert core.store.q("SELECT 1 FROM connect_codes") == []
-    denied = client.get(response.json()["url"])
-    assert denied.status_code == 303 and denied.headers["location"] == "/login?next=%2Ftokens"
     csrf = headers["X-CSRF-Token"]
     assert client.post("/pairing/code", headers=OWNER, data={"agent": "codex"}).status_code == 403
     minted = client.post("/pairing/code", headers=OWNER, data={"agent": "codex", "csrf": csrf})
