@@ -5,7 +5,7 @@ import hmac
 import json
 import re
 import sqlite3
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from unittest.mock import AsyncMock
 
 import httpx
@@ -405,8 +405,67 @@ async def test_assist_without_target_records_drop_and_reports_it_in_status(githu
         assert (row["outcome"], row["target"], row["ref"], row["detail"], row["excerpt"]) == (
             "dropped", "acme/app", "example-1", "assist target is missing", "",
         )
-        assert core.inbox.head() == 0
+        [context] = core.inbox.read(owner="owner")["items"]
+        assert context["kind"] == "context" and context["trust"] == "external"
         assert payload(await acall(client, token, "github_status"))["dropped"] == 1
+
+
+async def test_shared_github_assist_wakes_local_session_and_keeps_context_on_refusal(github, monkeypatch):
+    repo = "acme/app"
+    legacy = "local:session:codex:s-gh"
+    config = {"spaces": {repo: {"mode": "assist", "target": legacy}}}
+    settings = {"public_url": "https://example.test", "blocks": {"mcp": {}, "github": config},
+                "visibility": {"resources": {f"channel:github/{repo}": "shared"}}}
+    async with github(config, settings=settings) as (core, client):
+        code = payload(await acall(client, OWNER_KEY, "companion_code"))["code"]
+        paired = (await client.post("/companion/pair", json={
+            "code": code, "name": "Fixture", "platform": "linux",
+            "capabilities": [{"id": "codex", "title": "Codex", "version": "1", "actions": ["prompt"]}],
+        })).json()
+        auth = {"Authorization": f"Bearer {paired['device_key']}"}
+        report = {"capability": "codex", "kind": "codex.session",
+                  "payload": {"harness": "codex", "session": "s-gh", "state": "idle"}}
+        invoke = AsyncMock(return_value={})
+        monkeypatch.setattr(core.companions, "invoke", invoke)
+        async with aclosing(core.companions.events(paired["companion_id"], 3600)) as stream:
+            await anext(stream)
+            assert (await client.post("/companion/emit", headers=auth, json=report)).status_code == 200
+            [target] = await core.targets(block="local")
+            resource = f"target:{target['address']}"
+            listed = payload(await acall(client, OWNER_KEY, "visibility_list"))["resources"]
+            assert {r["resource"] for r in listed if r["resource"].startswith("target:local:session:")} == {resource}
+            assert payload(await acall(client, OWNER_KEY, "visibility_set", {"resource": resource, "visibility": "shared"}))["resource"] == resource
+            assert core.visibility.explicit("target:codex") is None
+            sender = {"id": 9999, "type": "User"}
+            issue = {**ISSUE, "user": sender, "body": "External report."}
+            assert (await send(client, sender=sender, issue=issue)).status_code == 200
+            invoke.assert_awaited_once()
+            args = invoke.await_args
+            assert args.args[:3] == (paired["companion_id"], "codex", "prompt")
+            outside, frames = split_frames(args.args[3]["text"])
+            assert "External report." in frames and "External report." not in outside
+            assert args.kwargs["principal"].trust == "external"
+            [wake] = core.inbox.read(owner="codex")["items"]
+            assert wake["trust"] == "external"
+
+            check = core.visibility.allows
+            calls = 0
+
+            def restrict_at_wake(who, *resources):
+                nonlocal calls
+                if resources == (resource,):
+                    calls += 1
+                    if calls == 2:
+                        return False
+                return check(who, *resources)
+
+            monkeypatch.setattr(core.visibility, "allows", restrict_at_wake)
+            assert (await send(client, sender=sender, issue=issue, delivery="refused-wake")).status_code == 200
+            [context] = core.inbox.read(owner="codex")["items"]
+            assert (context["kind"], context["trust"], context["target"]) == ("context", "external", legacy)
+            assert core.audit.recent(action="context_noted")[0]["ref"] == "refused-wake"
+            assert core.audit.recent(destination="local", action="wake")[0]["outcome"] == "refused"
+            invoke.assert_awaited_once()
 
 
 @pytest.mark.parametrize("mode", ["assist", "triage", "work"])

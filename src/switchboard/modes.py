@@ -490,6 +490,9 @@ class ChannelModes:
             target = target.strip()
             if mode != "inherit":
                 addr = tgt.parse(target, self.core.blocks)
+                if addr is not None and (block_target := self.core.blocks.get(addr.block)) is not None:
+                    addr = block_target.canonical_target(addr)
+                    target = str(addr)
                 if addr is not None and addr.block == "agent" and addr.id in self.core.known_agents():
                     target = str(addr)
                 else:

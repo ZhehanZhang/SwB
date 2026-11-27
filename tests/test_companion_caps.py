@@ -81,6 +81,17 @@ async def test_drop_concurrent_put_allocates_distinct_names(context, tmp_path):
     assert {result["name"] for result in results} == {"note.txt", *(f"note ({n}).txt" for n in range(2, 5))}
 
 
+async def test_drop_list_names_can_be_passed_to_get_verbatim(context, tmp_path):
+    capability = DropCapability(tmp_path)
+    (tmp_path / "Résumé draft.txt").write_bytes(b"draft")
+    (tmp_path / "swb-untrusted.txt").write_bytes(b"reserved")
+    [file] = (await capability.invoke("list", {}, context))["files"]
+    assert file == {"name": "Résumé draft.txt", "size": 5}
+    assert await capability.invoke("get", {"name": file["name"]}, context) == {
+        "name": "Résumé draft.txt", "content_b64": "ZHJhZnQ=",
+    }
+
+
 @pytest.mark.parametrize("name", ["", ".", "..", "a..b", "../outside", "nested/a", "nested\\a",
                                   "/absolute", "C:\\file", "note:stream", "NUL", "nul.txt", "a\0b"])
 async def test_drop_rejects_non_basenames(context, tmp_path, name):
