@@ -53,6 +53,9 @@ test('landing CTA combines and copies selected setup prompts without shifting th
   await picker.getByRole('checkbox', { name: 'Telegram', exact: true }).check();
   expect(await dimensions(preview)).toEqual(opened.preview);
   await picker.getByRole('checkbox', { name: 'Slack', exact: true }).check();
+  const companion = picker.getByRole('checkbox', { name: 'Companion', exact: true });
+  await expect(companion.locator('..').locator('img')).toHaveAttribute('src', '/avatars/swb.png');
+  await companion.check();
   const prompt = await preview.inputValue();
   for (const phrase of [
     'Create New App > From a manifest',
@@ -62,6 +65,8 @@ test('landing CTA combines and copies selected setup prompts without shifting th
   ]) expect(prompt.split(phrase)).toHaveLength(2);
   expect(prompt.indexOf('Help me run SwB.')).toBeLessThan(prompt.indexOf('### Slack'));
   expect(prompt.indexOf('### Slack')).toBeLessThan(prompt.indexOf('### Telegram'));
+  expect(prompt).toContain('### Companion');
+  expect(prompt).toContain('uvx swb-one companion connect https://swb.example.com');
   expect(await dimensions(picker)).toEqual(opened.picker);
   expect(await dimensions(preview)).toEqual(opened.preview);
   expect(await pageGeometry(page)).toEqual(baseline);
@@ -76,7 +81,7 @@ test('landing CTA combines and copies selected setup prompts without shifting th
   for (const name of ['Claude', 'Grok Bot', 'GitHub', 'Telegram']) {
     await picker.getByRole('checkbox', { name, exact: true }).check();
   }
-  await expect(picker.getByRole('checkbox', { checked: true })).toHaveCount(5);
+  await expect(picker.getByRole('checkbox', { checked: true })).toHaveCount(6);
   expect(await dimensions(picker)).toEqual(opened.picker);
   expect(await dimensions(preview)).toEqual(opened.preview);
   expect(await preview.evaluate((node) => {
@@ -108,7 +113,13 @@ for (const [locale, path, heading, label] of [
     await expect(preview).toHaveValue(/Add a custom connector/);
     await muse.check();
     await expect(preview).toHaveValue(/https:\/\/agent\.meta\.ai\/api\/hatch\/oauth\/callback/);
+    await picker.getByRole('checkbox', { name: 'Companion', exact: true }).check();
+    await expect(preview).toHaveValue(/https:\/\/swb\.one\/docs\/companion/);
     expect(await dimensions(picker)).toEqual(start);
+
+    await page.goto(path.replace(/\/setup$/, '/companion'));
+    const companionPrompt = page.locator('.swb-prompt');
+    await expect(companionPrompt.locator('pre')).toContainText('Call `companion_code`');
   });
 }
 
