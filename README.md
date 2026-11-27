@@ -28,14 +28,6 @@ Project finds the result later in the project's memory.
   <img src="docs/assets/flow-message.svg" alt="Eight steps from a Slack message through SwB to a ChatGPT dot and back, then a Claude Project reading the result" width="100%">
 </p>
 
-<p align="center">
-  <img src="docs/assets/shot-switchboard.png" alt="The SwB overview shows how projects connect channels to agents" width="100%">
-</p>
-<p align="center">
-  <img src="docs/assets/shot-agents.png" alt="The Agents screen" width="75%">
-  <img src="docs/assets/shot-mobile.png" alt="The SwB overview on mobile" width="21%">
-</p>
-
 ## Quick start
 
 ~~~bash
