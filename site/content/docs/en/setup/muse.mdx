@@ -1,0 +1,107 @@
+---
+title: Muse
+description: Pair Meta Muse with SwB through a Linux device.
+---
+
+SwB pairs with Muse as a text gadget named **SwB**. A gadget is a device that the Muse app talks to over Bluetooth. A Linux device runs the SwB bridge, which carries messages between Muse and SwB.
+
+## Before you start
+
+You need a Muse account and the Muse app on iOS or Android. You need a Linux device with Bluetooth Low Energy that can reach your SwB server, for example https://swb.example.com. SwB uses Ubuntu 24.04 with the packages `bluez`, `python3-dbus`, `python3-gi` and `python3-venv`.
+
+The Muse block must be on in `config/switchboard.yaml` with `muse: {use: muse}` under `blocks`. You also need the owner sign-in to SwB.
+
+## Copy the setup prompt
+
+<SetupPrompt name="muse" lang="en" />
+
+Paste the prompt into your agent. The agent walks you through the rest.
+
+## Your steps
+
+<Steps>
+<Step>
+### Make the bridge token
+
+Generate 64 random letters and digits in your password manager. This is the bridge token.
+</Step>
+<Step>
+### Save the bridge token
+
+Paste the bridge token into **Token** on the SwB claim link from your agent. Click **Save token**.
+</Step>
+<Step>
+### Open the Meta token page
+
+Open https://gadgets.muse.ai/settings/sdk-tokens. Click **Log in** with the account of your Muse app.
+</Step>
+<Step>
+### Make the Meta token
+
+Click **I agree to the Gadget SDK Terms** → **Generate token** → **Copy**. Keep the token in your password manager.
+</Step>
+{/* unverified */}
+<Step>
+### Install the bridge
+
+Open the SwB folder for your server version on the Linux device. Run the commands below.
+</Step>
+<Step>
+### Type both tokens
+
+Type the bridge token at **SwB bridge token from the claim**. Type the Meta token at **Personal Meta Gadget SDK token**.
+</Step>
+<Step>
+### Turn on Developer mode
+
+In the Muse app, click **Settings** → **Devices** → **Developer mode**. Turn it on.
+</Step>
+<Step>
+### Add the device
+
+Tap **Add Device** in **Devices**. Select the Bluetooth name that SwB shows on the Linux device.
+</Step>
+<Step>
+### Confirm the pairing
+
+Confirm the warning about community devices. If the app asks for Wi-Fi, select the network that SwB shows.
+</Step>
+{/* unverified */}
+</Steps>
+
+```sh
+/usr/bin/python3 -m venv --system-site-packages .venv-muse
+.venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
+.venv-muse/bin/swb muse-bridge --url https://swb.example.com --setup
+```
+
+Keep the bridge running. The terminal shows **SwB is ready for Muse messages.** when the bridge is ready.
+
+## What the agent does
+
+The agent calls `connect` with `what="muse"`. SwB returns the claim link for the bridge token and your steps. It tracks the token, the bridge state and the first reply from Muse.
+
+When the bridge is online, the agent calls `connect` again. It sends the test with `send` to `muse:gadget:muse` and reads the answer with `result`. Later messages go to Muse with `send` and `to="muse"`, or through a route to `muse:gadget:muse`.
+
+To change the bridge token, the agent calls `connect` with `what="muse"` and `choose={"replace":true}`.
+
+## Credentials
+
+| Token | Where it is shown | Format | Where it goes |
+| --- | --- | --- | --- |
+| Bridge token | You make it in your password manager | 64 letters and digits | SwB claim link, then the hidden prompt on the Linux device |
+| Meta Gadget SDK token | https://gadgets.muse.ai/settings/sdk-tokens, shown once | Starts with `mgst_` | Hidden prompt on the Linux device only |
+
+The Meta token stays on the Linux device. SwB keeps only the bridge token.
+
+## Check the connection
+
+Check that **SwB** is under **Devices** in the Muse app. Ask the agent to call `connect` again and send the test. A real reply in `result` shows that the connection works.
+
+## Fix problems
+
+After a restart of the Linux device, run `swb muse-bridge --url https://swb.example.com` with the saved state. Add `--setup --pair-again` to pair again.
+
+Meta keeps the pairing window open for ten minutes. Pair on a network that you trust.
+
+SwB keeps messages while the device is offline and sends them when it comes back. Check Muse before you send a message again.

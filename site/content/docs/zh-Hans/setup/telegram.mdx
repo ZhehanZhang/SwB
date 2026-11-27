@@ -1,0 +1,99 @@
+---
+title: Telegram
+description: 用机器人把 Telegram 私聊和群组连接到 SwB。
+---
+
+SwB 通过你在 BotFather 中创建的机器人与 Telegram 通信。SwB 主动向 Telegram 拉取新消息，所以 SwB 服务器可以留在私有地址上。
+
+## 开始之前
+
+你需要一个 Telegram 账号。接入群组时，你需要有添加成员的权限。你还需要以所有者身份登录 SwB 服务器，例如 https://swb.example.com。
+
+## 复制设置提示词
+
+<SetupPrompt name="telegram" lang="zh-Hans" />
+
+把提示词粘贴给你的智能体。智能体会带你完成其余步骤。
+
+## 你的步骤
+
+<Steps>
+<Step>
+### 打开 BotFather
+
+在 Telegram 中打开 https://t.me/BotFather。如果这是你第一次和 BotFather 聊天，点击 **Start**。
+</Step>
+<Step>
+### 创建机器人
+
+发送 `/newbot`。回复一个显示名称。
+</Step>
+{/* unverified */}
+<Step>
+### 选择用户名
+
+回复一个以 `bot` 结尾的用户名。BotFather 会回复令牌。
+</Step>
+<Step>
+### 保存令牌
+
+打开智能体给你的 SwB 领取链接。把令牌粘贴到字段中。
+</Step>
+<Step>
+### 开始私聊
+
+在与机器人的私聊中点击 **Start**。发送一条消息，让 SwB 找到你的用户 ID。
+</Step>
+<Step>
+### 把机器人加入群组
+
+打开智能体给你的群组链接。选择群组。
+</Step>
+{/* unverified */}
+<Step>
+### 发送设置命令
+
+在群组中发送 `/swb@<bot username>`。SwB 随即得到群组 ID。
+</Step>
+<Step>
+### 关闭隐私模式
+
+向 BotFather 发送 `/setprivacy`。选择你的机器人 → **Disable**。
+</Step>
+{/* unverified */}
+<Step>
+### 重新加入机器人
+
+把机器人移出每个群组。再把机器人加回群组。
+</Step>
+</Steps>
+
+最后两步只适用于机器人要读取每条消息的群组。只处理私聊和命令的机器人可以跳过这两步。
+
+## 智能体的工作
+
+智能体调用 `connect`，参数为 `what="telegram"`。SwB 返回机器人令牌的领取链接。`telegram_provision` 也会返回领取链接。
+
+你保存令牌后，智能体调用 `telegram_status`。它显示机器人名称、连接状态、隐私模式，以及 `setup.add_to_group_url` 中的群组链接。SwB 见过的聊天 ID 在 `setup.seen_chats` 中。
+
+智能体在 `config/switchboard.yaml` 的 `blocks.telegram.spaces` 下添加一个空间。空间是 SwB 对应到一个项目的一组 Telegram 聊天。智能体把群组 ID 写入 `chats`，把你的用户 ID 写入 `owner_ids`。最后，它用 `telegram_post` 发送一条测试消息。
+
+## 凭据
+
+| 令牌 | Telegram 显示位置 | 格式 | 填写位置 |
+| --- | --- | --- | --- |
+| 机器人令牌 | BotFather 在 `/newbot` 或 `/token` 之后的回复 | 数字、冒号，再接字母和数字 | SwB 领取链接 |
+
+群组 ID 和用户 ID 只是聊天的名称，可以放心写进配置文件。
+
+## 检查连接
+
+请智能体再次调用 `connect`。设置完成后，它会报告 `connected`。
+
+在私聊中向机器人发送 `/swb <target> hello`。确认机器人发回了回复。
+
+## 解决问题
+
+如果机器人在群组中只读取命令，请在 BotFather 中关闭隐私模式。然后把机器人移出群组，再重新加入。
+
+Webhook 是 Telegram 推送消息的网址。如果机器人还留着以前设置的 webhook，它会挡住 SwB 拉取消息。请用 Telegram 的 `deleteWebhook` 方法删除它。

@@ -1,0 +1,121 @@
+---
+title: GitHub
+description: Send GitHub events to SwB and let agents act on issues and pull requests.
+---
+
+SwB gets repository events from a GitHub App that you register. With the private key of the app, agents can also label, comment on and open issues.
+
+## Before you start
+
+You need a GitHub account and the repositories to connect. For an organization, you need the owner role or the GitHub App manager role. You also need the owner sign-in to your SwB server, for example https://swb.example.com.
+
+GitHub must reach `https://swb.example.com/github/webhook` on your server.
+
+## Copy the setup prompt
+
+<SetupPrompt name="github" lang="en" />
+
+Paste the prompt into your agent. The agent walks you through the rest.
+
+## Your steps
+
+<Steps>
+<Step>
+### Open the GitHub App settings
+
+Click your profile picture → **Settings** → **Developer settings** → **GitHub Apps**. Click **New GitHub App**.
+</Step>
+<Step>
+### Name the app
+
+Type a **GitHub App name** and a **Homepage URL**. Your repository address is a good homepage.
+</Step>
+<Step>
+### Set the webhook
+
+Under **Webhook**, keep **Active** selected. Type `https://swb.example.com/github/webhook` in **Webhook URL**.
+</Step>
+<Step>
+### Set the webhook secret
+
+Make a random secret of 64 characters in your password manager. Type it in **Webhook secret**.
+</Step>
+<Step>
+### Set the permissions
+
+Under **Repository permissions**, set **Read-only** for each resource in the table below. Set **Issues** and **Pull requests** to **Read & write** for agent replies.
+</Step>
+<Step>
+### Subscribe to events
+
+Under **Subscribe to events**, select the events in the table below.
+</Step>
+{/* unverified */}
+<Step>
+### Create the app
+
+Under **Where can this GitHub App be installed?**, select **Only on this account**. Click **Create GitHub App**.
+</Step>
+<Step>
+### Make the private key
+
+Click **Generate a private key** under **Private keys**. Your browser downloads a `.pem` file once.
+</Step>
+{/* unverified */}
+<Step>
+### Save the credentials
+
+Open each SwB claim link from your agent. Save the webhook secret, the **App ID** and the whole `.pem` file there.
+</Step>
+<Step>
+### Install the app
+
+Click **Install App** → **Install** next to your account. Select **Only select repositories**.
+</Step>
+<Step>
+### Select the repositories
+
+Select your repositories. Click **Install**.
+</Step>
+</Steps>
+
+| Repository permission | Events |
+| --- | --- |
+| **Issues** | `issues`, `issue_comment` |
+| **Pull requests** | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| **Contents** | `push` |
+| **Checks** | `check_run`, `check_suite` |
+| **Actions** | `workflow_run` |
+| **Metadata** | Read-only access is always on |
+
+In an organization, GitHub can show **Request** in place of **Install**. Then an organization owner approves the request.
+
+## What the agent does
+
+The agent calls `connect` with `what="github"`. SwB shows the webhook address, the webhook secret state and the number of repository routes. A route sends the events of one repository to a target.
+
+For an app that writes, the agent calls `connect` with `what="github"` and `choose={"credential":"app"}`. SwB returns one claim link for each missing value. The agent adds the repositories under `blocks.github.spaces` or `blocks.github.routes` in `config/switchboard.yaml`.
+
+After a restart, the agent calls `github_status`. This checks the installation and its permissions. Agents then use `github_label`, `github_comment`, `github_open_issue`, `github_link_duplicate`, `github_reply` and `github_notify_owner` as the channel mode allows.
+
+## Credentials
+
+| Token | Where GitHub shows it | Format | Where it goes |
+| --- | --- | --- | --- |
+| Webhook secret | You make it in your password manager | Random text, 64 characters | SwB claim link |
+| App ID | App settings, **App ID** | A number | SwB claim link |
+| Private key | Downloaded once after **Generate a private key** | A `.pem` file | SwB claim link |
+
+SwB makes installation tokens from the private key by itself. Each installation token works for one hour.
+
+## Check the connection
+
+Ask the agent to call `connect` again. It reports `connected` when the setup is complete. `github_status` shows `secret_present` and the permissions of the installation.
+
+On GitHub, open the app settings → **Advanced** → **Recent deliveries**. Open the newest delivery and check that SwB answered with a success code.
+
+## Fix problems
+
+If deliveries fail with a signature error, the two secrets differ. Make a new secret, enter it at GitHub and save it through a new claim link.
+
+If `connect` asks for **Issues** write access, open the app settings → **Permissions & events**. Set **Issues** to **Read & write** and accept the change on the installation.

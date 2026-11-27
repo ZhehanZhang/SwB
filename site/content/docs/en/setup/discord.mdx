@@ -1,0 +1,88 @@
+---
+title: Discord
+description: Connect a Discord server to SwB with a bot.
+---
+
+SwB signs in to Discord as a bot. It gets new messages through the Discord Gateway, a connection that SwB opens to Discord.
+
+## Before you start
+
+You need a Discord account and a server where you have the **Manage Server** permission. You also need the owner sign-in to your SwB server, for example https://swb.example.com. A private bot is free.
+
+## Copy the setup prompt
+
+<SetupPrompt name="discord" lang="en" />
+
+Paste the prompt into your agent. The agent walks you through the rest.
+
+## Your steps
+
+<Steps>
+<Step>
+### Create the application
+
+Open https://discord.com/developers/applications. Click **New Application**.
+</Step>
+<Step>
+### Name the application
+
+Type a name. Click **Create**.
+</Step>
+<Step>
+### Reset the bot token
+
+Click **Bot** → **Reset Token**. Confirm the reset.
+</Step>
+{/* unverified */}
+<Step>
+### Copy the bot token
+
+Click **Copy** while Discord shows the token. Discord shows it only once.
+</Step>
+<Step>
+### Turn on Message Content Intent
+
+On the **Bot** page, turn on **Message Content Intent** under **Privileged Gateway Intents**. Click **Save Changes**.
+</Step>
+{/* unverified */}
+<Step>
+### Save the token
+
+Open the SwB claim link from your agent. Paste the token into the field.
+</Step>
+<Step>
+### Invite the bot
+
+Select your server in the invite link from your agent. Click **Authorize**.
+</Step>
+{/* unverified */}
+</Steps>
+
+## What the agent does
+
+The agent calls `connect` with `what="discord"`. SwB returns a claim link for the bot token. `discord_provision` also returns a claim link and the setup details.
+
+After you save the token, the agent calls `discord_status`. This shows the bot name, the Gateway state, the servers, the missing steps and the invite link in `setup.invite_url`.
+
+The agent adds a space under `blocks.discord.spaces` in `config/switchboard.yaml`. A space is a Discord server that SwB routes to one project. The agent also grants agents access in `blocks.discord.agents`. Last, it sends a test message with `discord_post`.
+
+## Credentials
+
+| Token | Where Discord shows it | Format | Where it goes |
+| --- | --- | --- | --- |
+| Bot token | **Bot** → **Reset Token**, shown once | Three parts with dots between them | SwB claim link |
+| Application ID | **General Information** → **Application ID** | A number | `blocks.discord.application_id`, or SwB finds it |
+
+## Check the connection
+
+Ask the agent to call `connect` again. It reports `connected` when the setup is complete. `discord_status` shows that the Gateway is ready and the bot is on your server.
+
+Mention the bot in a channel and add a target name. Check that the reply comes back in the same channel.
+
+## Fix problems
+
+Gateway code 4014 means that Message Content Intent is off. Turn it on, or set `message_content: false` in the config.
+
+Gateway code 4004 means that Discord refused the token. Reset the token and save it through a new claim link.
+
+If the bot is on the server but stays quiet in a channel, check the permissions of that channel.

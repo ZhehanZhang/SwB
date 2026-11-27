@@ -1,0 +1,113 @@
+---
+title: Slack
+description: Connect a Slack workspace to SwB with a bot and your own Slack account.
+---
+
+SwB reads and posts in Slack through a Slack app that you make from a manifest. A manifest is a file that holds all the settings of the app.
+
+The app uses Socket Mode. Socket Mode is a connection that SwB opens to Slack, so your SwB server can stay on a private address.
+
+## Before you start
+
+You need a Slack account in the workspace and the right to create and install apps there. In an Enterprise Grid organization, an Org Owner or Org Admin must approve the app. You also need the owner sign-in to your SwB server, for example https://swb.example.com.
+
+SwB has two manifests. Use `manifests/workspace-a-agent.yaml` for a bot and your own account. Use `manifests/workspace-b-user-only.yaml` for your own account only.
+
+## Copy the setup prompt
+
+<SetupPrompt name="slack" lang="en" />
+
+Paste the prompt into your agent. The agent walks you through the rest.
+
+## Your steps
+
+<Steps>
+<Step>
+### Open the Slack app settings
+
+Open https://api.slack.com/apps. Click **Create New App** → **From a manifest**.
+</Step>
+<Step>
+### Select the workspace
+
+Select your workspace. Click **Next**.
+</Step>
+<Step>
+### Paste the manifest
+
+Select **YAML**. Paste the full SwB manifest.
+</Step>
+<Step>
+### Create the app
+
+Click **Next** → **Create**.
+</Step>
+<Step>
+### Make the app-level token
+
+Click **Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**. Type a name for the token.
+</Step>
+<Step>
+### Add the scope
+
+Click **Add Scope** → `connections:write`. Click **Generate**.
+</Step>
+<Step>
+### Install the app
+
+Click **Install App** → **Install to Workspace**. Click **Allow** as the Slack user that SwB acts for.
+</Step>
+<Step>
+### Get approval in Enterprise Grid
+
+If Slack asks for approval, send the app to an Org Owner. The Org Owner approves it in **Organization settings** → **Integrations** → **Manage Apps** → **Approve an app**.
+</Step>
+{/* unverified */}
+<Step>
+### Save the tokens
+
+Open the SwB claim link from your agent. Paste each Slack token into its field.
+</Step>
+<Step>
+### Invite the bot
+
+Open each Slack channel for SwB. Send `/invite @<bot name>` in that channel.
+</Step>
+<Step>
+### Find the workspace ID
+
+Open Slack in a desktop browser. Give your agent the part of the address that starts with `T`.
+</Step>
+</Steps>
+
+## What the agent does
+
+The agent calls `connect` with `what="slack"`. SwB shows which tokens each workspace still needs and returns one claim link for them.
+
+The agent adds the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml` with its `team_id` and token names. If it has access to the server, it makes the change. If the server is out of its reach, it gives you the YAML to add.
+
+When SwB asks for a restart, the agent tells you. After the restart, it uses `slack_workspaces` to check each identity. An identity is the bot or your own account. Last, it sends a test message with `slack_post`.
+
+## Credentials
+
+| Token | Where Slack shows it | Format | Where it goes |
+| --- | --- | --- | --- |
+| App-level token | **Basic Information** → **App-Level Tokens** | Starts with `xapp-` | SwB claim link |
+| Bot token | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | Starts with `xoxb-` | SwB claim link |
+| User token | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | Starts with `xoxp-` | SwB claim link |
+
+The workspace ID and channel IDs are names for places in Slack. They are safe to put in the config file.
+
+## Check the connection
+
+Ask the agent to call `connect` again. It reports `connected` when the setup is complete. `slack_workspaces` shows `ready` for each identity and `connected` for Socket Mode.
+
+Mention the bot in a channel and add a target name. The agent sees the message with `slack_events` or `slack_wait`.
+
+## Fix problems
+
+If SwB reports a Socket Mode problem, open **Socket Mode** in the app settings. Turn on **Enable Socket Mode**.
+
+If you change the scopes of the app, install the app again. Then save the new tokens through a new claim link.
+
+Search with `slack_search` uses your own account. It needs the user token with the scope `search:read`.

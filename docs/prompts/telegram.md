@@ -1,11 +1,15 @@
-Setup guide: https://swb.one/docs/blocks/telegram
+Setup guide: https://swb.one/docs/setup/telegram
 
-Help me connect Telegram to SwB. SwB is my switchboard for shared memory and agent handoffs, and you reach it as an MCP server.
+Help me connect Telegram to SwB, my self-hosted switchboard for agents and channels. You reach SwB as an MCP server.
 
-If the SwB tools are missing in this app, first walk me through adding SwB as a custom MCP server here. Use my SwB address, for example https://swb.example.com/mcp, and wait until I confirm.
+If the SwB tools are missing in this app, first help me add SwB as a custom MCP server here, at my SwB address such as https://swb.example.com/mcp. In Claude, open Customize > Connectors > Add > Custom > Web. In ChatGPT, open https://chatgpt.com/plugins in a web browser, then + > Add custom MCP server. In Grok, open grok.com > Connectors > New Connector > Custom. In other apps, use the MCP server settings. Wait until I confirm.
 
-I create a bot with BotFather in Telegram and paste its token on the SwB claim link. Give me the exact BotFather commands.
+Call connect(what="telegram"). Do each step marked "you" yourself. Give me each step marked "person" one at a time, with the exact click path, and wait for me to say done. Then call connect(what="telegram") again to check it.
 
-Call connect(what="telegram") and read the steps it returns. Do each step marked "you" yourself. Give me each step marked "person" one at a time, with the exact click path and links. After each step, wait for me to say done. Then call connect(what="telegram") again to check it. Ask me for tokens only through the claim link that connect returns, and keep them out of chat.
+My Telegram steps, in order: open https://t.me/BotFather > Start, send /newbot, then a display name, then a username that ends in bot. BotFather replies with the token. Then I open the bot chat, tap Start and send one message. For a group, I open setup.add_to_group_url from telegram_status, pick the group, and send /swb@<bot username> there. To let the bot read all group messages, I send /setprivacy to BotFather, pick the bot, choose Disable, then remove and re-add the bot.
 
-When connect reports done, send a test message and show me the reply. Last, make sure new work reaches you. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise call wait to collect new messages.
+Read the chat IDs from telegram_status setup.seen_chats. Add a space under blocks.telegram.spaces in config/switchboard.yaml with chats and owner_ids, or give me the YAML.
+
+Ask me for tokens only through the claim link that connect returns, and keep them out of chat.
+
+When connect reports connected, send a test message with telegram_post and show me the reply. Last, subscribe to SwB events: use switchboard.message.created if this app supports MCP events, else call wait or inbox to collect new messages.

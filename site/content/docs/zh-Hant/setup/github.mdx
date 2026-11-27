@@ -1,0 +1,121 @@
+---
+title: GitHub
+description: 把 GitHub 事件傳送到 SwB，並讓代理處理 issue 和 pull request。
+---
+
+SwB 從你註冊的 GitHub App 接收儲存庫事件。有了應用程式的私密金鑰，代理還能替 issue 加上標籤、留言和開立新 issue。
+
+## 開始之前
+
+你需要一個 GitHub 帳號和要接上的儲存庫。在組織中操作時，你需要組織擁有者角色或 GitHub App 管理者角色。你也需要以擁有者身分登入 SwB 伺服器，例如 https://swb.example.com。
+
+GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook`。
+
+## 複製設定提示詞
+
+<SetupPrompt name="github" lang="zh-Hant" />
+
+把提示詞貼給你的代理。代理會帶你完成其餘步驟。
+
+## 你的步驟
+
+<Steps>
+<Step>
+### 開啟 GitHub App 設定
+
+點選大頭貼 → **Settings** → **Developer settings** → **GitHub Apps**。點選 **New GitHub App**。
+</Step>
+<Step>
+### 替應用程式命名
+
+填寫 **GitHub App name** 和 **Homepage URL**。首頁可以填儲存庫網址。
+</Step>
+<Step>
+### 設定 webhook
+
+在 **Webhook** 下保持勾選 **Active**。在 **Webhook URL** 中填入 `https://swb.example.com/github/webhook`。
+</Step>
+<Step>
+### 設定 webhook 密碼
+
+在密碼管理工具中產生一組 64 個字元的隨機密碼。把它填入 **Webhook secret**。
+</Step>
+<Step>
+### 設定權限
+
+在 **Repository permissions** 下，替下表的每項資源選擇 **Read-only**。要讓代理回覆，請把 **Issues** 和 **Pull requests** 設為 **Read & write**。
+</Step>
+<Step>
+### 訂閱事件
+
+在 **Subscribe to events** 下，勾選下表中的事件。
+</Step>
+{/* unverified */}
+<Step>
+### 建立應用程式
+
+在 **Where can this GitHub App be installed?** 下選擇 **Only on this account**。點選 **Create GitHub App**。
+</Step>
+<Step>
+### 產生私密金鑰
+
+在 **Private keys** 下點選 **Generate a private key**。瀏覽器會下載一個 `.pem` 檔案，只會下載一次。
+</Step>
+{/* unverified */}
+<Step>
+### 儲存憑證
+
+開啟代理給你的每個 SwB 領取連結。在那裡儲存 webhook 密碼、**App ID** 和完整的 `.pem` 檔案。
+</Step>
+<Step>
+### 安裝應用程式
+
+點選 **Install App** → 你的帳號旁的 **Install**。選擇 **Only select repositories**。
+</Step>
+<Step>
+### 選擇儲存庫
+
+勾選你的儲存庫。點選 **Install**。
+</Step>
+</Steps>
+
+| 儲存庫權限 | 事件 |
+| --- | --- |
+| **Issues** | `issues`、`issue_comment` |
+| **Pull requests** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | `push` |
+| **Checks** | `check_run`、`check_suite` |
+| **Actions** | `workflow_run` |
+| **Metadata** | 唯讀權限一律開啟 |
+
+在組織中，GitHub 可能把 **Install** 顯示為 **Request**。這時由組織擁有者核准請求。
+
+## 代理的工作
+
+代理呼叫 `connect`，參數為 `what="github"`。SwB 顯示 webhook 位址、webhook 密碼的狀態和儲存庫路由數量。路由會把一個儲存庫的事件傳給一個目標。
+
+如果應用程式需要寫入，代理呼叫 `connect`，參數為 `what="github"` 和 `choose={"credential":"app"}`。SwB 替每個缺少的值回傳一個領取連結。代理把儲存庫寫進 `config/switchboard.yaml` 的 `blocks.github.spaces` 或 `blocks.github.routes`。
+
+重新啟動後，代理呼叫 `github_status`，檢查安裝和它的權限。之後，代理依照頻道模式使用 `github_label`、`github_comment`、`github_open_issue`、`github_link_duplicate`、`github_reply` 和 `github_notify_owner`。
+
+## 憑證
+
+| 權杖 | GitHub 顯示位置 | 格式 | 填寫位置 |
+| --- | --- | --- | --- |
+| Webhook 密碼 | 你在密碼管理工具中產生 | 64 個字元的隨機文字 | SwB 領取連結 |
+| App ID | 應用程式設定中的 **App ID** | 一串數字 | SwB 領取連結 |
+| 私密金鑰 | 點選 **Generate a private key** 後下載一次 | `.pem` 檔案 | SwB 領取連結 |
+
+SwB 會用私密金鑰自行產生安裝權杖。每個安裝權杖的效期是一小時。
+
+## 檢查連線
+
+請代理再次呼叫 `connect`。設定完成後，它會回報 `connected`。`github_status` 顯示 `secret_present` 和安裝的權限。
+
+在 GitHub 上開啟應用程式設定 → **Advanced** → **Recent deliveries**。開啟最新一次傳遞，確認 SwB 回傳了成功代碼。
+
+## 排解問題
+
+如果傳遞因為簽章錯誤而失敗，代表 GitHub 與 SwB 儲存的密碼有差異。請產生新密碼，填入 GitHub，再透過新的領取連結儲存。
+
+如果 `connect` 要求 **Issues** 寫入權限，請開啟應用程式設定 → **Permissions & events**。把 **Issues** 設為 **Read & write**，並在安裝上接受這項變更。
