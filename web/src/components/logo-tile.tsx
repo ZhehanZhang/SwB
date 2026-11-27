@@ -46,6 +46,7 @@ export function LogoTile({ kind, className, avatarUrl }: { kind: string; classNa
       mark === "grok-routine" && "border-0", className)}>
       {image && mono ? <span className="size-4 bg-foreground mask-contain mask-center mask-no-repeat" style={{ maskImage: `url("${image}")` }} />
         : image ? <img alt="" src={image} className={cn(mark === "grok-routine" ? "size-full" : "size-4", "object-contain", mark === "codex" && "invert")} />
+        : mark === "muse" ? <svg className="size-4" viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/claim-connectors.svg#muse" /></svg>
         : mark === "capy" ? <CaptainTile key={captainImage} src={captainImage} />
         : mark === "slack" ? (
           <svg className="size-[17px]" viewBox="0 0 24 24" fill="var(--logo-slack)">
