@@ -1,94 +1,128 @@
 import { MarkTile, type MarkKind } from './mark-tile';
 
-const W = 1100;
-const H = 460;
-const HUB = { x: 550, y: 230 };
+type Node = { kind: MarkKind; label: string; channel?: boolean };
 
-const channels: { kind: MarkKind; label: string; y: number }[] = [
-  { kind: 'slack', label: '#launch', y: 80 },
-  { kind: 'discord', label: '#support', y: 180 },
-  { kind: 'telegram', label: 'Release crew', y: 280 },
-  { kind: 'github', label: 'acme/app', y: 380 },
-];
-const agents: { kind: MarkKind; label: string; y: number }[] = [
-  { kind: 'claude', label: 'Claude', y: 40 },
-  { kind: 'chatgpt', label: 'ChatGPT', y: 94 },
-  { kind: 'gemini', label: 'Gemini', y: 148 },
-  { kind: 'claude-code', label: 'Claude Code', y: 202 },
-  { kind: 'codex', label: 'Codex', y: 256 },
-  { kind: 'capy', label: 'Captain', y: 310 },
-  { kind: 'grok', label: 'Grok', y: 364 },
-  { kind: 'muse', label: 'Muse', y: 418 },
+const nodes: Node[] = [
+  { kind: 'slack', label: 'Slack', channel: true },
+  { kind: 'claude', label: 'Claude' },
+  { kind: 'capy', label: 'Captain' },
+  { kind: 'discord', label: 'Discord', channel: true },
+  { kind: 'chatgpt', label: 'ChatGPT' },
+  { kind: 'codex', label: 'Codex' },
+  { kind: 'github', label: 'GitHub', channel: true },
+  { kind: 'gemini', label: 'Gemini' },
+  { kind: 'claude-code', label: 'Claude Code' },
+  { kind: 'telegram', label: 'Telegram', channel: true },
+  { kind: 'grok', label: 'Grok' },
+  { kind: 'muse', label: 'Muse' },
 ];
 
-const inPath = (y: number) => `M284 ${y} C410 ${y} 420 ${HUB.y} ${HUB.x - 34} ${HUB.y}`;
-const outPath = (y: number) => `M${HUB.x + 34} ${HUB.y} C680 ${HUB.y} 690 ${y} 816 ${y}`;
+const index = (kind: MarkKind) => nodes.findIndex((node) => node.kind === kind);
+const trips: [MarkKind, MarkKind][] = [
+  ['slack', 'claude'],
+  ['claude', 'capy'],
+  ['chatgpt', 'codex'],
+  ['github', 'claude-code'],
+  ['capy', 'telegram'],
+  ['gemini', 'muse'],
+  ['discord', 'grok'],
+];
+const LEG = 0.8;
+const STEP = 2.1;
+const CYCLE = trips.length * STEP;
+
+const layouts = {
+  wide: { W: 1000, H: 560, rx: 340, ry: 215 },
+  tall: { W: 1000, H: 1000, rx: 380, ry: 380 },
+};
+type Layout = keyof typeof layouts;
+
+function place(layout: Layout, i: number) {
+  const { W, H, rx, ry } = layouts[layout];
+  const angle = ((i + 0.5) / nodes.length) * Math.PI * 2 - Math.PI / 2;
+  return { x: W / 2 + rx * Math.cos(angle), y: H / 2 + ry * Math.sin(angle) };
+}
+
+function cord(layout: Layout, i: number) {
+  const { W, H } = layouts[layout];
+  const { x, y } = place(layout, i);
+  const cx = W / 2;
+  const cy = H / 2;
+  const mx = (x + cx) / 2 - (y - cy) * 0.12;
+  const my = (y + cy) / 2 + (x - cx) * 0.12;
+  return `M${x.toFixed(1)} ${y.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${cx} ${cy}`;
+}
+
 const pct = (value: number, total: number) => `${(value / total) * 100}%`;
+const times = (start: number) => `${start}s;${(start + CYCLE).toFixed(1)}s`;
 
-const trips = [
-  { from: 0, to: 0, begin: 0 },
-  { from: 1, to: 1, begin: 1.6 },
-  { from: 3, to: 4, begin: 3.2 },
-  { from: 2, to: 5, begin: 4.8 },
-];
+function Pulse({ path, start, tone, back }: { path: string; start: number; tone: string; back?: boolean }) {
+  return (
+    <circle r={6} className={`swb-pulse ${tone}`} visibility="hidden">
+      <set attributeName="visibility" to="visible" begin={times(start)} dur={`${LEG}s`} />
+      <animateMotion dur={`${LEG}s`} begin={times(start)} keyTimes="0;1" keyPoints={back ? '1;0' : '0;1'} calcMode="linear">
+        <mpath href={`#${path}`} />
+      </animateMotion>
+    </circle>
+  );
+}
+
+function Board({ layout, className }: { layout: Layout; className: string }) {
+  const { W, H } = layouts[layout];
+  const id = (i: number) => `swb-${layout}-${i}`;
+  const tone = (i: number) => (nodes[i].channel ? 'swb-pulse-in' : 'swb-pulse-out');
+  return (
+    <div className={`swb-board swb-board-${layout} ${className}`} style={{ aspectRatio: `${W} / ${H}` }}>
+      <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+        {nodes.map((node, i) => (
+          <path key={i} id={id(i)} d={cord(layout, i)} pathLength={1}
+            className={`swb-cord ${node.channel ? 'swb-cord-in' : 'swb-cord-out'}`} style={{ animationDelay: `${i * 0.06}s` }} />
+        ))}
+        <g className="swb-pulses">
+          {trips.map(([from, to], n) => [[from, n * STEP], [to, n * STEP + LEG * 2]] as const).flat().map(([kind, at], k) => {
+            const { x, y } = place(layout, index(kind));
+            return (
+              <circle key={`h${k}`} cx={x} cy={y} r={layout === 'wide' ? 34 : 64} className="swb-halo" opacity={0}>
+                <animate attributeName="opacity" values="0;0.5;0" dur="1.2s" begin={times(at)} />
+              </circle>
+            );
+          })}
+          {trips.map(([from, to], n) => {
+            const a = index(from);
+            const b = index(to);
+            const start = n * STEP;
+            return (
+              <g key={n}>
+                <Pulse path={id(a)} start={start} tone={tone(a)} />
+                <Pulse path={id(b)} start={start + LEG} tone={tone(b)} back />
+                <Pulse path={id(b)} start={start + LEG * 2 + 0.1} tone="swb-pulse-back" />
+                <Pulse path={id(a)} start={start + LEG * 3 + 0.1} tone="swb-pulse-back" back />
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+      <span className="swb-hub-ring" style={{ left: '50%', top: '50%' }} aria-hidden="true" />
+      <img className="swb-hub" src="/avatars/swb.png" alt="" style={{ left: '50%', top: '50%' }} />
+      {nodes.map((node, i) => {
+        const { x, y } = place(layout, i);
+        const side = x < W / 2 ? 'swb-node-left' : 'swb-node-right';
+        return (
+          <div key={node.kind} className={`swb-node ${side}`} style={{ left: pct(x, W), top: pct(y, H) }}>
+            <MarkTile kind={node.kind} />
+            <span className="swb-node-label">{node.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function SwitchboardHero({ label }: { label: string }) {
   return (
-    <figure className="swb-board" role="img" aria-label={label}>
-      <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-        {channels.map(({ y }, index) => (
-          <path key={`in${index}`} id={`swb-in-${index}`} d={inPath(y)} className="swb-cord swb-cord-in" pathLength={1} />
-        ))}
-        {agents.map(({ y }, index) => (
-          <path key={`out${index}`} id={`swb-out-${index}`} d={outPath(y)} className="swb-cord swb-cord-out" pathLength={1} />
-        ))}
-        {channels.map(({ y }, index) => <circle key={`ji${index}`} cx={284} cy={y} r={4} className="swb-jack swb-jack-in" />)}
-        {agents.map(({ y }, index) => <circle key={`jo${index}`} cx={816} cy={y} r={4} className="swb-jack swb-jack-out" />)}
-        <g className="swb-pulses">
-          {trips.map(({ from, to, begin }) => (
-            <g key={`${from}-${to}`}>
-              <circle r={5} className="swb-pulse swb-pulse-in" visibility="hidden">
-                <set attributeName="visibility" to="visible" begin={`${begin}s;${begin + 6.4}s`} dur="1.2s" />
-                <animateMotion dur="1.2s" begin={`${begin}s;${begin + 6.4}s`} fill="remove" keyTimes="0;1" keyPoints="0;1" calcMode="linear">
-                  <mpath href={`#swb-in-${from}`} />
-                </animateMotion>
-              </circle>
-              <circle r={5} className="swb-pulse swb-pulse-out" visibility="hidden">
-                <set attributeName="visibility" to="visible" begin={`${begin + 1.2}s;${begin + 7.6}s`} dur="1.2s" />
-                <animateMotion dur="1.2s" begin={`${begin + 1.2}s;${begin + 7.6}s`} fill="remove" keyTimes="0;1" keyPoints="0;1" calcMode="linear">
-                  <mpath href={`#swb-out-${to}`} />
-                </animateMotion>
-              </circle>
-              <circle r={5} className="swb-pulse swb-pulse-back" visibility="hidden">
-                <set attributeName="visibility" to="visible" begin={`${begin + 2.6}s;${begin + 9}s`} dur="1.2s" />
-                <animateMotion dur="1.2s" begin={`${begin + 2.6}s;${begin + 9}s`} fill="remove" keyTimes="0;1" keyPoints="1;0" calcMode="linear">
-                  <mpath href={`#swb-out-${to}`} />
-                </animateMotion>
-              </circle>
-              <circle r={5} className="swb-pulse swb-pulse-back" visibility="hidden">
-                <set attributeName="visibility" to="visible" begin={`${begin + 3.8}s;${begin + 10.2}s`} dur="1.2s" />
-                <animateMotion dur="1.2s" begin={`${begin + 3.8}s;${begin + 10.2}s`} fill="remove" keyTimes="0;1" keyPoints="1;0" calcMode="linear">
-                  <mpath href={`#swb-in-${from}`} />
-                </animateMotion>
-              </circle>
-            </g>
-          ))}
-        </g>
-      </svg>
-      {channels.map(({ kind, label: name, y }) => (
-        <div key={name} className="swb-node swb-node-in" style={{ top: pct(y, H), right: pct(W - 276, W) }}>
-          <span className="swb-node-label">{name}</span>
-          <MarkTile kind={kind} />
-        </div>
-      ))}
-      <span className="swb-hub-ring" style={{ left: pct(HUB.x, W), top: pct(HUB.y, H) }} aria-hidden="true" />
-      <img className="swb-hub" src="/avatars/swb.png" alt="" style={{ left: pct(HUB.x, W), top: pct(HUB.y, H) }} />
-      {agents.map(({ kind, label: name, y }) => (
-        <div key={name} className="swb-node swb-node-out" style={{ top: pct(y, H), left: pct(824, W) }}>
-          <MarkTile kind={kind} />
-          <span className="swb-node-label">{name}</span>
-        </div>
-      ))}
+    <figure className="swb-hero" role="img" aria-label={label}>
+      <Board layout="wide" className="hidden sm:block" />
+      <Board layout="tall" className="sm:hidden" />
     </figure>
   );
 }
