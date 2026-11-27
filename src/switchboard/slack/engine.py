@@ -52,7 +52,6 @@ class SlackEngine:
     ):
         self.env = dict(os.environ) if env is None else dict(env)
         self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.clock = clock
         self.store = Store(self.data_dir / "slack.db", clock=clock)
         self.http = http or httpx.AsyncClient()
