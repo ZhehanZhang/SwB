@@ -23,7 +23,8 @@ const slackIntake = { socket: "Socket Mode", poll: "Polling", none: "" }
 function StatusTable({ label, headings, children, compact = false }: {
   label: string; headings: string[]; children: ReactNode; compact?: boolean
 }) {
-  const widths = headings.length === 4 ? ["w-[30%]", "w-[25%]", "w-[20%]"] : ["w-2/5"]
+  const widths = headings.length === 4 ? ["w-[30%]", "w-[25%]", "w-[20%]"]
+    : [cn("w-[36%] md:w-2/5"), cn("w-[26%] md:w-auto")]
   return (
     <table aria-label={label} className="mt-1 w-full table-fixed border-collapse text-left">
       <thead className={compact ? "hidden md:table-header-group" : undefined}>
@@ -207,7 +208,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
                       <tr key={workspace.name} className="border-b">
                         <td className={cell}>{workspace.name}</td>
                         <td className={`${cell} text-muted-foreground`}>{slackIntake[workspace.intake]}</td>
-                        <td className={cell}><ConnectionStatus state={workspace.connected ? "connected" : "disconnected"} /></td>
+                        <td className="whitespace-nowrap py-3 align-top"><ConnectionStatus state={workspace.connected ? "connected" : "disconnected"} /></td>
                       </tr>
                     ))}
                   </StatusTable>
