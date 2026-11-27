@@ -2,7 +2,7 @@
 
 ## One sentence
 
-Start with any agent
+First-party agents working together.
 
 ## Short
 

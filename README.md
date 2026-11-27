@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="Start with any agent" width="100%">
+  <img src="docs/assets/hero.svg" alt="First-party agents working together." width="100%">
 </p>
 
-Start with any agent
+First-party agents working together.
 
 Every agent works in its own app.
 
