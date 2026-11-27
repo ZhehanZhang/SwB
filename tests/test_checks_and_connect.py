@@ -49,6 +49,23 @@ def test_connect_reports_missing_provider_credentials_only_in_next(make):
         assert not any(word in step.lower() for word in ("missing", "not connected", "none") for step in result["done"])
 
 
+def test_github_setup_reports_mode_and_project_targets_separately_from_sinks(make):
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {
+        "acme/configured": {"mode": "watch"},
+        "acme/routed": {"mode": "assist", "project": "demo"},
+    }}})
+    core, client = make(cfg, env={cli.OWNER_KEY: STATIC_KEY})
+    core.projects.create(slug="demo", name="Demo")
+    assert payload(call(client, STATIC_KEY, "routes_set", {"project": "demo", "target": "agent:claude"}))["project"] == "demo"
+    args = {"block": "github", "space": "acme/configured", "mode": "assist", "target": "agent:claude"}
+    assert payload(call(client, STATIC_KEY, "space_mode", args))["target"] == "agent:claude"
+    connect = payload(call(client, STATIC_KEY, "connect", {"what": "github"}))
+    status = payload(call(client, STATIC_KEY, "github_status"))
+    for report in (connect, status):
+        assert (report["repository_spaces"], report["bound_repositories"], report["sink_routes"]) == (2, 2, 0)
+    assert "GitHub repositories with a target 2." in connect["done"]
+
+
 def test_blocks_check_uses_status_missing_credentials(make, tmp_path, monkeypatch, capsys):
     cfg = base_config(version=2, blocks={
         "mcp": {}, "github": {}, "slack": {"workspaces": {"sample": {

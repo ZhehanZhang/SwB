@@ -324,16 +324,24 @@ class GitHubBlock(Block):
     def has_write_credential(self) -> bool:
         return self.api.auth_type() is not None
 
+    def _repository_counts(self, modes: dict[str, Any]) -> dict[str, int]:
+        registered = self.registered_repositories()
+        bound = {row["channel"] for row in modes["spaces"] if row["target"] and row["channel"] in registered}
+        return {"repository_spaces": len(self.repo_spaces), "bound_repositories": len(bound),
+                "sink_routes": sum(bool(sinks) for sinks in self.repo_routes.values())}
+
     def status(self) -> dict[str, Any]:
         credential = self.api.auth_type()
+        modes = self.core.modes.status(block=self.name)
         return {"configured": True, "secret_present": self.online, "routes": len(self.repo_routes),
+                **self._repository_counts(modes),
                 "dropped": self.dropped, "refused": self.refused,
                 "sinks": {name: {"delivered": sink.delivered, "failed": sink.failed} for name, sink in self.sinks.items()},
                 "credential": credential, "credential_problem": GITHUB_CREDENTIAL_PROBLEM if credential is None else None,
                 "installation": dict(self.installation), "checked_at": self.checked_at,
                 "installations": self.installations, "missing_installations": self.missing_installations,
                 "installation_problem": self.installation_problem, "token_scopes": self.pat_capabilities["scopes"] if self.pat_capabilities else None,
-                "modes": self.core.modes.status(block=self.name)}
+                "modes": modes}
 
     async def refresh_installation(self) -> None:
         async with self._refresh_lock:
@@ -422,8 +430,6 @@ class GitHubBlock(Block):
         present = bool(self.core.secret(self.secret_env))
         done = ["GitHub webhook secret present."] if present else []
         done.append(f"GitHub webhook endpoint {self.core.base_url}/github/webhook.")
-        if routes := sum(bool(sinks) for sinks in self.repo_routes.values()):
-            done.append(f"GitHub repository routes {routes}.")
         step = self.next_step()
         steps = []
         if not present:
@@ -471,11 +477,18 @@ class GitHubBlock(Block):
             steps.append({"by": "you", "do": "For a fine-grained personal access token instead, call connect again with credential=pat.",
                           "call": {"tool": "connect", "arguments": {"what": kind, "choose": {"credential": "pat"}}}})
         slugs = await self.core.modes.status_slugs(principal)
+        modes = self.core.modes.status(principal, self.name, slugs=slugs)
+        counts = self._repository_counts(modes)
+        for key, label in (("repository_spaces", "GitHub repository spaces"),
+                           ("bound_repositories", "GitHub repositories with a target"),
+                           ("sink_routes", "GitHub sink routes")):
+            if counts[key]:
+                done.append(f"{label} {counts[key]}.")
         return {"done": done, "next": steps,
+                **counts,
                 "installations": self.installations, "missing_installations": self.missing_installations,
                 "pat_capabilities": self.pat_capabilities,
-                "modes": {**self.core.modes.status(principal, self.name, slugs=slugs),
-                          **self.core.modes.summary(self.name, principal, slugs=slugs)}}
+                "modes": {**modes, **self.core.modes.summary(self.name, principal, slugs=slugs)}}
 
     def actions(self) -> list[Action]:
         return [Action("status", "GitHub status", "Check the GitHub webhook, repository modes and installation permissions.", self.status_action, read_only=True),
