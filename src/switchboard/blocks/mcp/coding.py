@@ -22,7 +22,7 @@ JSON_BEARER = ', "headers": {"Authorization": "Bearer <key>"}'
 MCP_JSON = '{"mcpServers": {"switchboard": {%s@auth}}}'
 GUIDES = {
     "claude-code": Guide("~/.claude.json", MCP_JSON % '"type": "http", "url": @url',
-                         "Sign in to switchboard from /mcp in Claude Code.", JSON_BEARER,
+                         "Sign in to SwB from /mcp in Claude Code.", JSON_BEARER,
                          "claude mcp add --transport http --scope user switchboard @url"),
     "codex": Guide("~/.codex/config.toml", "[mcp_servers.switchboard]\nurl = @url@auth",
                    "Run codex mcp login switchboard to sign in.", '\nhttp_headers = { Authorization = "Bearer <key>" }'),
@@ -35,7 +35,7 @@ GUIDES = {
     "opencode": Guide("opencode.json (OpenCode V2)", '{"mcp": {"servers": {"switchboard": {"type": "remote", "url": @url, "enabled": true@auth}}}}',
                       "Run opencode mcp auth switchboard to sign in.", ', "oauth": false' + JSON_BEARER),
     "cline": Guide("~/.cline/data/settings/cline_mcp_settings.json", MCP_JSON % '"type": "streamableHttp", "url": @url',
-                   "Open cline mcp and select Authorize OAuth for switchboard.", JSON_BEARER),
+                   "Open cline mcp and select Authorize OAuth for the switchboard entry.", JSON_BEARER),
     "kiro": Guide("~/.kiro/settings/mcp.json", MCP_JSON % '"url": @url',
                   "Sign in when Kiro opens the browser on first connect.", JSON_BEARER),
     "qwen-code": Guide("~/.qwen/settings.json", MCP_JSON % '"httpUrl": @url',
@@ -48,7 +48,7 @@ def coding_snippet(agent: str, url: str, oauth: bool) -> dict[str, str]:
     guide = GUIDES[agent]
     use_oauth = oauth and guide.oauth is not None
     if use_oauth and guide.command:
-        instruction = "Run this command to add Switchboard."
+        instruction = "Add SwB with this command."
         snippet = guide.command.replace("@url", shlex.quote(url))
     else:
         instruction = f"Merge this entry into {guide.where}." if guide.where else "Enter these settings in your remote MCP client (client-specific syntax unverified)."
@@ -98,8 +98,8 @@ def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: di
     steps.append({"by": "person", "do": config["instruction"], "snippet": config["snippet"]})
     if use_oauth:
         steps.append({"by": "person", "do": guide.oauth})
-    wake = "Use the Switchboard wait or inbox tool to pick up messages"
+    wake = "Use the SwB wait or inbox tool to pick up messages."
     if agent == "claude-code":
-        wake += "; the Claude Code channel described in the README can also push messages to an open session"
-    steps.append({"by": "person", "do": wake + "."})
+        wake += " The Claude Code channel can also deliver messages to an open session."
+    steps.append({"by": "person", "do": wake})
     return {"done": done, "next": steps}

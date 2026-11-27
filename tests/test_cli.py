@@ -204,6 +204,15 @@ def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch
     assert "--url must be HTTPS" in capsys.readouterr().err
 
 
+def test_status_uses_swb_branding_if_connection_fails(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.OWNER_KEY, "fixture-owner-key-not-a-secret")
+    monkeypatch.setattr(cli, "streamable_http_client", Mock(side_effect=OSError))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["status", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", "swb: Check that SwB is running. Verify --url and the owner key.\n")
+
+
 @pytest.mark.parametrize(("claim", "endpoint", "expected", "success"), [
     ("fixture-code", None, "http://127.0.0.1:8870/claim/fixture-code", "Token saved."),
     ("https://other.example.test/claim/fixture-code", "https://switchboard.example.test",
