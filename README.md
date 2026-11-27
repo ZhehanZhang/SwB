@@ -63,7 +63,7 @@ Ask any connected agent to call `connect`, or run `swb connect <kind>`.
 | Discord | Bot token | Replies in the thread |
 | Telegram | Bot token | Replies in the thread |
 | GitHub | Webhook secret | Signed webhooks |
-| [Muse](docs/muse.md) | Device pairing | Bridge replies |
+| [Muse](docs/muse.md) | Custom connector | Scheduled check-in |
 
 SwB is an independent project. Logos identify the available connections.
 

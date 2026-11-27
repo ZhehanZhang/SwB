@@ -39,7 +39,6 @@ BLOCKS = {
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
     "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
-    "muse": "switchboard.blocks.muse:MuseBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")

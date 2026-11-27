@@ -129,7 +129,7 @@ def _read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def _choices(groups: list[list[str]], *, kind: str = "") -> dict[str, str | bool]:
+def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
     choices: dict[str, str | bool] = {}
     for group in groups:
         for pair in group:
@@ -138,7 +138,7 @@ def _choices(groups: list[list[str]], *, kind: str = "") -> dict[str, str | bool
                 raise CliError("--choose expects key=value pairs.")
             if key in choices:
                 raise CliError("--choose cannot repeat a key.")
-            if key in ("create_new", "primary") or (key == "replace" and kind.strip().lower() == "muse"):
+            if key in ("create_new", "primary"):
                 if value.lower() not in ("true", "false"):
                     raise CliError(f"--choose {key} expects true or false.")
                 choices[key] = value.lower() == "true"
@@ -307,11 +307,6 @@ def build_parser() -> argparse.ArgumentParser:
     login_link = commands.add_parser("login-link", help="mint a one-time owner sign-in link")
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
-    muse = commands.add_parser("muse-bridge", help="pair and run SwB as a Muse gadget on Linux")
-    muse.add_argument("--url", required=True, help="SwB base URL or MCP endpoint")
-    muse.add_argument("--setup", action="store_true", help="enter the bridge token and pair in the Muse app")
-    muse.add_argument("--pair-again", action="store_true", help="replace this gadget's Meta pairing (requires --setup)")
-    muse.add_argument("--state-dir", type=Path, default=Path.home() / ".config" / "swb" / "muse")
     up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
     for command in (init, connect, status, claim, login_link):
         command.add_argument("--dir", type=Path, help="instance directory (default: current directory)")
@@ -330,12 +325,6 @@ def main(argv: list[str] | None = None) -> None:
         server(argv)
         return
     try:
-        if args.command == "muse-bridge":
-            from .muse_gadget import run_gadget
-
-            url = _url(args.url).removesuffix("/mcp")
-            run_gadget(url, args.state_dir, setup=args.setup, pair_again=args.pair_again)
-            return
         base = (args.dir or Path.cwd()).resolve()
         if args.command == "init":
             _init(base, args.public_url, args.force)
@@ -349,7 +338,7 @@ def main(argv: list[str] | None = None) -> None:
         arguments = {}
         if args.command == "connect":
             arguments["what"] = args.what
-            if choose := _choices(args.choose, kind=args.what):
+            if choose := _choices(args.choose):
                 arguments["choose"] = choose
         env = {**env, **os.environ}
         local_url = client_endpoint(env)

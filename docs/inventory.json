@@ -209,21 +209,6 @@
     },
     {
       "block_kind": "both",
-      "connect_target": "muse",
-      "credentials": [
-        {
-          "claim_label": "Token",
-          "env": "MUSE_BRIDGE_TOKEN"
-        }
-      ],
-      "icon": "src/switchboard/slack/avatars/muse.png",
-      "id": "block:muse",
-      "kind": "block",
-      "label": "Muse",
-      "use": "muse"
-    },
-    {
-      "block_kind": "both",
       "connect_target": "slack",
       "credentials": [
         {
@@ -409,22 +394,6 @@
       "id": "command:login-link",
       "kind": "command",
       "label": "swb login-link"
-    },
-    {
-      "arguments": [],
-      "command": "swb muse-bridge",
-      "flags": [
-        "--help",
-        "--pair-again",
-        "--setup",
-        "--state-dir",
-        "--url",
-        "-h"
-      ],
-      "icon": null,
-      "id": "command:muse-bridge",
-      "kind": "command",
-      "label": "swb muse-bridge"
     },
     {
       "arguments": [],
@@ -1321,27 +1290,6 @@
       "key": "blocks.mcp.wait.max_s",
       "kind": "config_key",
       "label": "blocks.mcp.wait.max_s"
-    },
-    {
-      "icon": null,
-      "id": "config_key:blocks.muse",
-      "key": "blocks.muse",
-      "kind": "config_key",
-      "label": "blocks.muse"
-    },
-    {
-      "icon": null,
-      "id": "config_key:blocks.muse.enabled",
-      "key": "blocks.muse.enabled",
-      "kind": "config_key",
-      "label": "blocks.muse.enabled"
-    },
-    {
-      "icon": null,
-      "id": "config_key:blocks.muse.use",
-      "key": "blocks.muse.use",
-      "kind": "config_key",
-      "label": "blocks.muse.use"
     },
     {
       "icon": null,
