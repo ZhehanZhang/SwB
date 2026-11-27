@@ -28,7 +28,7 @@ from starlette.routing import Route
 
 from . import pages
 from .agents import PRESETS, Agents, host_allowed
-from .config import Config
+from .config import Config, LOOPBACK_HOSTS
 from .sessions import Owner, Sessions, SESSION_COOKIE, login_redirect
 from .store import Store, dumps
 
@@ -40,7 +40,6 @@ FORM_TTL = 900
 REFRESH_REUSE_GRACE = 60
 MAX_CLIENTS = 500
 CIMD_MAX_BYTES = 64 * 1024
-LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "[::1]")
 
 
 def sha(s: str) -> str:
@@ -107,7 +106,7 @@ def redirect_allowed(uri: str, patterns: tuple[str, ...]) -> bool:
         return False
     if u.fragment or not u.scheme or not u.netloc:
         return False
-    loopback = u.scheme == "http" and u.hostname in ("localhost", "127.0.0.1", "::1")
+    loopback = u.scheme == "http" and u.hostname in LOOPBACK_HOSTS
     if u.scheme != "https" and not loopback:
         return False
     for p in patterns:
@@ -127,7 +126,7 @@ def redirect_matches(requested: str, registered: list[str]) -> bool:
     if requested in registered:
         return True
     rq = urlparse(requested)
-    if rq.scheme != "http" or rq.hostname not in ("localhost", "127.0.0.1", "::1"):
+    if rq.scheme != "http" or rq.hostname not in LOOPBACK_HOSTS:
         return False
     for r in registered:
         ru = urlparse(r)

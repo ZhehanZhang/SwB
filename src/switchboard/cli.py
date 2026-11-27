@@ -21,11 +21,10 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
-from .config import ConfigError
+from .config import ConfigError, LOOPBACK_HOSTS
 from .deployment import OWNER_KEY, volume_owner_key
 
 CONFIG = Path("config/switchboard.yaml")
-LOOPBACK = ("localhost", "127.0.0.1", "::1")
 DEFAULT_PORT = "8870"
 
 
@@ -34,7 +33,7 @@ class CliError(ValueError):
 
 
 def _url(value: str, *, public: bool = False) -> str:
-    message = ("--public-url must be an HTTPS base URL or use http://localhost"
+    message = ("--public-url must be an HTTPS base URL or use a loopback address for HTTP"
                if public else "--url must be HTTPS or use a loopback address for HTTP")
     try:
         url = urlsplit(value)
@@ -44,8 +43,7 @@ def _url(value: str, *, public: bool = False) -> str:
         raise CliError(message) from None
     if not host or port == 0 or url.username is not None or re.search(r"[\s?#]", value):
         raise CliError(message)
-    local = ("localhost",) if public else LOOPBACK
-    if url.scheme != "https" and not (url.scheme == "http" and host in local):
+    if url.scheme != "https" and not (url.scheme == "http" and host in LOOPBACK_HOSTS):
         raise CliError(message)
     path = url.path.rstrip("/")
     if not public and not path:
@@ -187,7 +185,8 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
     except Exception:
         raise CliError("Couldn't reach or authenticate to Switchboard. Check that it's running and verify --url and the owner key.") from None
     if result.is_error:
-        raise CliError(f"Switchboard refused the {tool} tool call.")
+        reason = "\n".join(item.text for item in result.content if item.type == "text" and item.text.strip())
+        raise CliError(reason.replace(key, "[redacted]") or f"SwB refused the {tool} tool call.")
     payload = result.structured_content
     if payload is None and len(result.content) == 1 and result.content[0].type == "text":
         try:
