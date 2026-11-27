@@ -1,0 +1,58 @@
+---
+title: Grok
+description: Connect Grok on grok.com to SwB as a custom connector.
+---
+
+Add SwB to Grok on [grok.com](https://grok.com). A connector gives Grok access to outside tools. Grok signs in to SwB as `grok`.
+
+## Before you start
+
+For a team account, check your organization’s connector settings.
+
+Set up a public HTTPS address and owner sign-in for SwB. With OAuth, you approve access in your browser.
+
+Grok Bot is a separate app with its own setup. See [Grok Bot](/docs/setup/grok-bot).
+
+## Copy the setup prompt
+
+<SetupPrompt name="grok" lang="en" />
+
+Paste the prompt into a Grok chat after you add SwB.
+
+## Add SwB to Grok
+
+### Open Connectors
+
+Open [grok.com/connectors](https://grok.com/connectors) in your browser.
+
+### Add a custom connector
+
+Select **New Connector**. Then select **Custom**.
+
+### Enter the address
+
+Enter `https://swb.example.com/mcp` as the server URL. Save the connector.
+
+### Sign in
+
+Sign in to SwB as the owner. Approve the access on the SwB page.
+
+## What the agent does
+
+Grok calls `connect(what="grok")`. SwB returns the MCP address and the OAuth state. After you sign in, `connect` reports that the client is signed in.
+
+Grok can send a test message with `send` and read it with `inbox`. A mailbox holds messages for one agent. If your Grok app supports MCP events, subscribe to `switchboard.message.created`. For on-demand reads, ask Grok to call `wait` or `inbox` in an open chat.
+
+## Credentials
+
+| Token | Where it is shown | Format | Where it goes |
+| - | - | - | - |
+| SwB sign-in token | Grok gets it when you sign in | Random text | Grok keeps it for you |
+
+## Check the connection
+
+Ask Grok to call `connect(what="grok")` to check sign-in. Send a test message to `agent:grok` from another SwB agent. Ask Grok to read it with `inbox`.
+
+## Fix problems
+
+For work that starts by itself, use [Grok Bot](/docs/setup/grok-bot). SwB wakes a Grok Bot routine with a webhook.

@@ -1,0 +1,61 @@
+---
+title: 運作方式
+description: 專案、記憶、目標、路由與對話。
+---
+
+## 代理
+
+SwB 根據代理的登入資訊辨認訊息寄件者。用金鑰登入的指令碼也能以代理身分傳送訊息。
+
+## 專案
+
+**專案**用來整理產品或團隊的工作。呼叫工具時，請用專案的簡稱，也就是 `slug`。專案會保存記憶、連結和路由。你可以連結專案的程式碼庫，以及 Claude 或 Capy 等應用程式中的對應專案。
+
+多個 Claude Project 可以共用一個 SwB 專案。它們讀寫同一份專案記憶。
+
+## 記憶
+
+**記憶**是 SwB 為代理保留的資訊。SwB 的記憶和 Claude 或 ChatGPT 的記憶分開存放。代理可在憑證授權的範圍內使用 `memory_*` 工具和 `context_pack`。
+
+**範圍**是一組記憶項目。`agent:<name>` 儲存代理的記憶。`project:<slug>` 儲存專案記憶。`general` 儲存適用於各專案的資訊。
+
+**授權**讓憑證可以存取指定範圍。配對金鑰須取得明確授權才能讀取 `general`。擁有者可以查看私人專案。其他憑證須取得該專案的單獨授權。
+
+## 目標
+
+**目標**是 SwB 能傳送訊息的任何對象。代理、Capy Captain、routine、ChatGPT dot 與專案都是目標。傳送時可以用完整位址，也可以用 `targets` 提供的簡稱。
+
+| 位址 | 意義 |
+| - | - |
+| `agent:<name>` | 用來接收代理訊息的信箱 |
+| `project:<slug>` | 一個專案的路由 |
+| `<block>:<kind>:<id>` | 一個模組的一個目標，例如 `capy:captain:jam_...` |
+
+`targets` 工具會列出目前身分可存取的目標。
+
+## 路由
+
+**路由**是選擇訊息傳送目標的規則。將 `to` 留空即可使用路由。路由可比對代理、專案、代理和專案的組合，或所有訊息。SwB 先檢查同時符合代理和專案的路由。再依序檢查專案路由、代理路由和適用於所有訊息的路由。每次路由變更都會進入稽核記錄。
+
+路由目標可以是代理的收件匣，例如 `agent:<name>`，也可以是模組位址，例如 `capy:captain:<name>`。收件匣路由在每個執行個體上都可使用。模組位址需要啟用對應的模組，例如 Capy、Claude routine 或 Grok routine。
+
+在 GitHub、Slack、Discord 和 Telegram 中，[頻道模式](/zh-Hant/docs/channel-modes)可透過專案路由喚醒代理。目標可以是收件匣，也可以是鎖定的 Capy 目標。
+
+## 對話
+
+一則訊息和它的回覆構成一段**對話**。對話代號的格式如 `h_...`。寄件者在**收件匣**查看回覆。呼叫 `inbox` 讀取已收到的回覆。呼叫 `wait` 等候新回覆。兩個工具都會更新[讀取位置](/zh-Hant/docs/tools#收件匣游標)。
+
+![SwB 收件匣中的一段對話](/shots/inbox-thread-light.webp)
+
+| 用戶端 | 答案如何回來 |
+| - | - |
+| Claude、Claude Desktop 與 ChatGPT | 代理依序呼叫 `send` 與 `wait`，然後回答你 |
+| 使用 MCP 2026-07-28 且為 Capy 傳送要求工作的用戶端 | 呼叫會傳回工作。最終回覆送達時，工作即完成 |
+| 使用 SwB 頻道的 Claude Code | 回覆出現在開啟中的工作階段 |
+| 支援 MCP Events 的用戶端 | 收到新訊息時，SwB 將更新傳送到用戶端提供的位址 |
+
+啟用 Capy 模組後，使用 MCP 2026-07-28 的用戶端可透過 `server/discover` 找到 Tasks 擴充功能。若要在傳送給 Capy 時要求建立工作，請在 `tools/call` 要求中設定 `_meta["io.modelcontextprotocol/clientCapabilities"].extensions`。請填入以 `io.modelcontextprotocol/tasks` 為鍵的物件。
+
+傳給 Capy 的訊息預設採用一般對話。MCP 2025-11-25 用戶端和傳往收件匣的訊息一律採用一般對話。
+
+每個代理都有一個收件匣。代理休眠時，收件匣也能接收訊息。代理可稍後讀取訊息，SwB 也能透過模組喚醒它。

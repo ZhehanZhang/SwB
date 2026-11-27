@@ -1,0 +1,91 @@
+---
+title: Capy Captain
+description: 將 SwB 的工作交給 Capy Captain，並把回覆帶回來。
+---
+
+Capy Captain 是負責協調一組執行緒的 Capy 代理。SwB 把工作交給 Captain，再將回覆交給傳送者。
+
+## 開始之前
+
+請在同一個 Capy 組織準備帳號、專案和 Captain。服務使用者是供軟體使用的 Capy 帳號。
+
+啟用 `capy` 模組。在 Capy 的 **Settings** → **MCP & plugins** 加入 SwB。請使用具備完整擁有者權限的 SwB 用戶端。
+
+## 複製設定提示詞
+
+<SetupPrompt name="capy-captain" lang="zh-Hant" />
+
+把提示詞貼到 SwB 擁有者用戶端。
+
+## 設定 Captain 路由
+
+### 開啟 API 設定
+
+在 Capy 開啟 **Settings** → **API**。確認目前是正確的組織。
+
+### 建立讀取金鑰
+
+建立一把可存取 Captain 的個人 API 金鑰。趁 Capy 顯示金鑰時複製。
+
+### 儲存讀取金鑰
+
+開啟代理給你的領取連結。把金鑰貼到 **Token**。再選擇 **Save token**。
+
+### 重新啟動 SwB
+
+代理提示時，重新啟動 SwB。SwB 接著會載入金鑰。
+
+### 建立 Capy Captain
+
+視需要建立 Capy Captain。選擇專案和 Captain 執行時使用的裝置。
+
+### 選擇 Capy Captain
+
+告訴代理由哪個 Capy Captain 接收工作。
+
+### 建立傳送金鑰
+
+在 **Settings** → **API** 建立角色為 `read_write` 的服務使用者。授予它專案存取權。為它建立金鑰。
+
+### 分享 Capy Captain
+
+開啟 Capy Captain 選單。選取 **Share**。授予服務使用者存取權。如果 Captain 使用已配對的裝置，也授予服務使用者該裝置的存取權。 {/* unverified */}
+
+### 儲存傳送金鑰
+
+開啟第二個領取連結。把金鑰貼到 **Token**。再選擇 **Save token**。
+
+### 再次重新啟動 SwB
+
+重新啟動 SwB。接著告訴代理已完成。
+
+## 代理的工作
+
+在具備完整擁有者權限的用戶端呼叫 `connect(what="capy-captain")`。如果需要讀取金鑰，SwB 會傳回領取連結。領取連結是提交憑證的私人頁面。
+
+重新啟動後，`connect` 會列出可用的 Captain。確認哪個 Captain 要接收工作。呼叫 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。若要設定專案路由，在 `choose` 加入 `"project":"<project>"`。路由會指定工作送往何處。
+
+代理若需要服務金鑰才能傳送，SwB 會要求提供金鑰。用 `capy_captains`、`routes_list` 和 `routes_resolve` 檢查路由。
+
+若應用程式支援 MCP 事件，請訂閱 `switchboard.message.created`。若要主動讀取訊息，請呼叫 `wait` 或 `inbox`。
+
+## 憑證
+
+| 權杖 | 顯示位置 | 格式 | 存放位置 |
+| - | - | - | - |
+| 讀取金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
+| 傳送金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
+
+## 檢查連線
+
+請代理再次呼叫 `connect(what="capy-captain")`。確認結果為 `connected`。向路由傳送一項簡短的測試工作。在 Captain 執行緒查看工作。用 `result` 或 `inbox` 讀取回覆。以擁有者身分開啟 `/healthz`，查看傳送金鑰的名稱和狀態。
+
+## 排除問題
+
+Capy 金鑰使用對應帳號的權限。如果 `connect` 要求新的讀取金鑰，請建立一把可存取 Captain 的金鑰。
+
+傳送時若出現存取錯誤，請檢查服務使用者是否可存取專案、Captain 和已配對的裝置。
+
+伺服器環境中的值優先於領取連結儲存的值。請在伺服器環境中修改該值，再重新啟動 SwB。
+
+若要更換遺失的金鑰，請在 **Settings** → **API** 撤銷舊金鑰。接著建立一把新金鑰。每個領取連結可用一次，30 分鐘後失效。

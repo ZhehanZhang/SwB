@@ -1,0 +1,73 @@
+---
+title: Cloudflare
+description: Use Cloudflare Tunnel for a public SwB address and Cloudflare Access for owner sign-in.
+---
+
+Cloudflare Tunnel gives SwB a fixed public HTTPS address. A **tunnel** connects your server to Cloudflare. Cloudflare Access restricts the SwB console to your account.
+
+## Before you start
+
+Follow [Docker Compose](/docs/self-hosting#docker-compose) to start SwB. Use a Cloudflare account that can manage tunnels and Access applications for your domain. Allow your server to connect to Cloudflare on port 7844.
+
+## Create the tunnel
+
+Follow [Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/). Copy the tunnel token from the install command. Put it in the SwB `.env` entry named in [the Compose file](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39). Keep the token private.
+
+Start the tunnel connector on the SwB server.
+
+```sh
+docker compose --profile tunnel up -d
+```
+
+Select **Continue** when the connector appears in Cloudflare.
+
+## Protect the console
+
+[Create an Access application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) for your SwB hostname. Set the policy action to **Allow**. Under **Include** → **Emails**, enter your email address.
+
+Create another Access application on the same hostname for the paths marked **Bypass**. Set its policy action to **Bypass**. Under **Include**, select **Everyone**.
+
+| Path | Access policy |
+| --- | --- |
+| `/mcp`, `/register`, `/token`, `/revoke`, `/.well-known/*` | Bypass |
+| `/healthz`, `/connect`, `/avatars/*` | Bypass |
+| `/inbox/poll`, `/inbox/events` | Bypass |
+| `/companion/*` | Bypass |
+| `/github/webhook` | Bypass for GitHub |
+| All other paths, including `/pairing/companion`, `/authorize` and `/inbox` | Owner |
+
+SwB checks pairing codes at `/companion/pair`. It checks the device key on other companion requests. If you use Access, ask an agent with owner access to call `companion_code`.
+
+## Set the SwB address
+
+Set `SWB_PUBLIC_URL` in `.env` to your public address. For example, use `https://swb.example.com`. Add your team's domain and the owner application's audience tag to `config/switchboard.yaml`. The tag tells SwB which application issued the token.
+
+| Value | Where to find it | Configuration key |
+| --- | --- | --- |
+| Team domain | **Zero Trust** → **Settings** | `auth.cloudflare_access.team_domain` |
+| Application Audience (AUD) Tag | Owner application → **Additional settings** | `auth.cloudflare_access.aud` |
+| Your email address | Owner policy → **Emails** | `auth.owner_emails` |
+
+```yaml
+auth:
+  owner_emails: [owner@swb.example.com]
+  cloudflare_access:
+    team_domain: example.cloudflareaccess.com
+    aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+Run `docker compose --profile tunnel up -d` again to apply the settings.
+
+## Publish the hostname
+
+Open the tunnel's **Routes** tab. Select **Add route**. Choose **Published application**. Enter your public hostname. Set **Service URL** to `http://switchboard:8000`. Select **Add route** to save it.
+
+## Check the connection
+
+Open `https://swb.example.com` in a browser. Sign in to Cloudflare Access. Open `https://swb.example.com/healthz` to check that SwB answers.
+
+Open `https://swb.example.com/mcp` in a private browser window. SwB returns `401` with a `WWW-Authenticate` header. If Cloudflare shows its sign-in page, check the bypass policy.
+
+## Set up an app
+
+After the hostname works, use [Connect](/docs/connect) to set up an app. Use the public MCP address, for example `https://swb.example.com/mcp`. Ask your agent to call `switchboard_status` to check its SwB identity.

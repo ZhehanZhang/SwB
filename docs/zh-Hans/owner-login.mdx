@@ -1,0 +1,110 @@
+---
+title: 所有者登录
+description: 用通行密钥、一次性链接、设置码或身份提供方登录 SwB。
+---
+
+所有者登录后可以管理 SwB。所有者可以批准智能体登录，也可以保存令牌。
+
+| 页面 | 用途 |
+| - | - |
+| `/login` | 以所有者身份登录。 |
+| `/authorize` | 审核智能体发起的连接请求。 |
+
+## 一次性链接
+
+```bash
+swb login-link
+```
+
+命令会打印形如 `https://swb.example.com/login#t=...` 的链接。请在五分钟内用浏览器打开。链接用过一次就会失效。以所有者身份登录的智能体也能用 `login_link` 工具生成链接。令牌在链接的 `#` 后面。
+
+首次在本机运行 `swb up` 时，终端会显示一次性登录链接。本机地址默认为 `http://localhost:8870`。如果设置了 `SWB_PORT`，SwB 会在地址中使用该端口。运行 `swb login-link` 时，用 `--url` 指定其他服务器。用 `--dir` 从其他实例目录读取所有者密钥。
+
+用链接登录失败时，请重新运行 `swb login-link`。在浏览器中打开新链接。
+
+## 设置码
+
+设置码仅用于所有者首次登录，用过即失效。由 SwB 直接处理登录时，可使用设置码。请参阅[部署指南](/zh-Hans/docs/deploy)获取托管服务器的设置码。
+
+要自行设置，请生成 32 个随机字节。将它们编码为 64 个小写十六进制字符，或使用标准 Base64 编码。下面的命令把十六进制设置码追加到私有文件 `.env`。先运行 `swb init`，再在实例目录中运行此命令。
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+设置好 `SWB_SETUP_CODE` 后启动 SwB。在浏览器中打开 `/login`。把设置码粘贴到 **Setup code**。选择 **Sign in**。
+
+## 通行密钥
+
+**通行密钥**通过设备确认你的登录。首次登录后，请在 **Passkey name** 中输入设备名称。选择 **Add a passkey**。
+
+要在另一台设备上添加通行密钥，请打开 **Settings**。在 **Sign-in** 中选择 **Add a passkey**。输入名称。选择 **Add passkey** 保存。之后可以用通行密钥登录。
+
+## OIDC
+
+OpenID Connect（OIDC）让 Google 等登录服务确认你的身份。请将你的登录服务加入配置文件。用 `SWB_OIDC_CLIENT_SECRET` 保存该服务提供的密钥。
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
+```
+
+在你的提供方中，把重定向地址设为 `https://swb.example.com/auth/oidc/callback`。登录页会显示该服务的登录按钮。SwB 接受 `auth.owner_emails` 中已验证的邮箱地址。你也可以在 `auth.oidc.owner_subjects` 中填写登录服务的账号标识。
+
+## Cloudflare Access
+
+按 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare)保护控制台。SwB 检查 Access 令牌，并用 `auth.owner_emails` 或 `SWB_OWNER_EMAILS` 核对邮箱地址。
+
+## 智能体登录
+
+OAuth 让应用在你批准后连接 SwB。请在 `/authorize` 批准连接。应用使用 `switchboard` 作为 OAuth 权限的名称。应用通过 `/token` 获取或更新令牌。
+
+应用收到 OAuth 错误时，请在 `error_description` 中查看详情。
+
+| 错误 | 含义 |
+| - | - |
+| `access_denied` | 所有者拒绝了连接。 |
+| `invalid_client` | SwB 拒绝了应用身份或凭据。 |
+| `invalid_client_metadata` | SwB 拒绝了应用的注册设置。 |
+| `invalid_redirect_uri` | 注册时需要填写 SwB 允许的回调地址。 |
+| `invalid_request` | 请求格式或必填值有误。 |
+| `invalid_grant` | SwB 拒绝了授权码或刷新令牌。 |
+| `invalid_target` | 请求中的 MCP 地址有误。 |
+| `unsupported_response_type` | 请使用 `response_type=code`。 |
+| `unsupported_grant_type` | 请使用 `grant_type=authorization_code` 或 `grant_type=refresh_token`。 |
+| `temporarily_unavailable` | 请设置 `public_url`，或检查客户端注册数量是否已达上限。 |
+
+SwB 拒绝[配对码](/zh-Hans/docs/connect#用配对码连接)时，`/connect` 也会返回 `invalid_grant`。
+
+## 登录状态
+
+浏览器保存 **Cookie** 来维持登录状态。SwB 会为 Cookie 设置 `Secure` 标记。公网地址请使用 HTTPS。
+
+更改设置时，浏览器会发送令牌，供 SwB 检查请求。在 **Settings** 中退出登录。
+
+浏览器通过 `/auth/session` 读取当前登录状态。
+
+## 登录错误
+
+浏览器登录失败时，SwB 会在 **Audit** 中记录原因。设置码和令牌保持私密。部分错误会限制重复记录的次数。
+
+| 错误 | 含义 |
+| - | - |
+| `link_used` | 已有人通过该链接登录。 |
+| `link_expired` | 链接已过期。 |
+| `link_invalid` | SwB 拒绝了该链接。 |
+| `setup_failed` | 设置码的格式有误，或与 `SWB_SETUP_CODE` 的值有差异。 |
+| `setup_closed` | 设置码登录已关闭。请改用其他登录方式。 |
+| `passkey_failed` | 通行密钥设置或验证失败。 |
+| `last_method` | OIDC 和 Cloudflare Access 均停用时，SwB 会保留最后一个通行密钥。 |
+| `not_found` | 通行密钥的编号有误，或密钥已移除。 |
+| `oidc_failed` | 通过身份提供方登录失败。 |
+| `signed_out` | 此请求需要以所有者身份登录。 |
+| `csrf` | SwB 拒绝了页面地址或安全令牌。 |
+| `slow_down` | 登录尝试次数已达上限。请按 `Retry-After` 指定的时长等待。 |

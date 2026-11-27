@@ -1,0 +1,73 @@
+---
+title: Cloudflare
+description: 用 Cloudflare Tunnel 设置 SwB 公网地址。用 Cloudflare Access 管理所有者登录。
+---
+
+Cloudflare Tunnel 为 SwB 提供固定的公网 HTTPS 地址。**隧道**是服务器与 Cloudflare 之间的连接。Cloudflare Access 只允许你的账号访问 SwB 控制台。
+
+## 开始之前
+
+按 [Docker Compose](/zh-Hans/docs/self-hosting#docker-compose) 指南启动 SwB。请使用有权管理域名隧道和 Access 应用的 Cloudflare 账号。请允许服务器通过 7844 端口连接 Cloudflare。
+
+## 创建隧道
+
+按 Cloudflare 的[隧道创建指南](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)操作。从安装命令中复制隧道令牌。[Compose 文件](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39)列出了 SwB `.env` 中对应的变量。将令牌填入该变量。请妥善保管令牌。
+
+在 SwB 服务器上启动隧道连接器。
+
+```sh
+docker compose --profile tunnel up -d
+```
+
+连接器出现在 Cloudflare 控制台后，选择 **Continue**。
+
+## 保护控制台
+
+为 SwB 主机名[创建 Access 应用](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)。把策略的 **Action** 设为 **Allow**。在 **Include** → **Emails** 中填入你的邮箱地址。
+
+为同一主机名上标有 **Bypass** 的路径创建另一个 Access 应用。把策略的 **Action** 设为 **Bypass**。在 **Include** 中选择 **Everyone**。
+
+| 路径 | Access 策略 |
+| --- | --- |
+| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | Bypass |
+| `/healthz`、`/connect`、`/avatars/*` | Bypass |
+| `/inbox/poll`、`/inbox/events` | Bypass |
+| `/companion/*` | Bypass |
+| `/github/webhook` | 为 GitHub 设为 Bypass |
+| 其余路径，包括 `/pairing/companion`、`/authorize` 和 `/inbox` | 仅限所有者 |
+
+SwB 在 `/companion/pair` 检查配对码。SwB 在其他伴侣设备请求中检查设备密钥。使用 Access 时，请让拥有所有者权限的智能体调用 `companion_code`。
+
+## 设置 SwB 地址
+
+在 `.env` 中将 `SWB_PUBLIC_URL` 设为公网地址，例如 `https://swb.example.com`。将团队域名和所有者应用的受众标签写入 `config/switchboard.yaml`。SwB 根据受众标签确认令牌由哪个应用签发。
+
+| 值 | 查找位置 | 配置项 |
+| --- | --- | --- |
+| 团队域名 | **Zero Trust** → **Settings** | `auth.cloudflare_access.team_domain` |
+| 应用受众标签 | 所有者应用 → **Additional settings** | `auth.cloudflare_access.aud` |
+| 你的邮箱地址 | 所有者策略 → **Emails** | `auth.owner_emails` |
+
+```yaml
+auth:
+  owner_emails: [owner@swb.example.com]
+  cloudflare_access:
+    team_domain: example.cloudflareaccess.com
+    aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+```
+
+再次运行 `docker compose --profile tunnel up -d` 以应用设置。
+
+## 发布主机名
+
+打开隧道的 **Routes** 标签页。选择 **Add route**。选择 **Published application**。输入公网主机名。将 **Service URL** 设为 `http://switchboard:8000`。选择 **Add route** 保存。
+
+## 检查连接
+
+在浏览器中打开 `https://swb.example.com`。登录 Cloudflare Access。打开 `https://swb.example.com/healthz` 检查 SwB 是否响应。
+
+在浏览器的隐私窗口中打开 `https://swb.example.com/mcp`。SwB 会返回 `401` 和 `WWW-Authenticate` 响应头。如果出现 Cloudflare 登录页，请检查放行策略。
+
+## 连接应用
+
+公网主机名可用后，请按[连接指南](/zh-Hans/docs/connect)设置应用。请使用公网 MCP 地址，例如 `https://swb.example.com/mcp`。请让智能体调用 `switchboard_status` 检查自己的 SwB 身份。

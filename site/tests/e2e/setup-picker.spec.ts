@@ -48,9 +48,8 @@ test('the docs picker combines and copies setup prompts without shifting', async
   await picker.getByRole('checkbox', { name: 'Telegram', exact: true }).check();
   expect(await dimensions(preview)).toEqual(opened.preview);
   await picker.getByRole('checkbox', { name: 'Slack', exact: true }).check();
-  const companion = picker.getByRole('checkbox', { name: 'Companion', exact: true });
-  await expect(companion.locator('..').locator('img')).toHaveAttribute('src', '/avatars/swb.png');
-  await companion.check();
+  await expect(picker.getByRole('checkbox', { name: 'Companion', exact: true })).toHaveCount(0);
+  await picker.getByRole('checkbox', { name: 'Discord', exact: true }).check();
   const prompt = await preview.inputValue();
   for (const phrase of [
     'Create New App > From a manifest',
@@ -60,8 +59,8 @@ test('the docs picker combines and copies setup prompts without shifting', async
   ]) expect(prompt.split(phrase)).toHaveLength(2);
   expect(prompt.indexOf('Help me run SwB.')).toBeLessThan(prompt.indexOf('### Slack'));
   expect(prompt.indexOf('### Slack')).toBeLessThan(prompt.indexOf('### Telegram'));
-  expect(prompt).toContain('### Companion');
-  expect(prompt).toContain('uvx swb-one companion connect https://swb.example.com');
+  expect(prompt).toContain('### Discord');
+  expect(prompt).not.toContain('### Companion');
   expect(await dimensions(picker)).toEqual(opened.picker);
   expect(await dimensions(preview)).toEqual(opened.preview);
 
@@ -126,6 +125,7 @@ for (const [locale, path, heading, label] of [
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
     const picker = page.locator('[data-setup-picker]');
+    await expect(picker.getByRole('checkbox', { name: 'Companion', exact: true })).toHaveCount(0);
     const muse = picker.getByRole('checkbox', { name: 'Muse', exact: true });
     await expect(muse).toBeVisible();
     await expect(muse).not.toBeChecked();
@@ -136,8 +136,7 @@ for (const [locale, path, heading, label] of [
     await expect(preview).toHaveValue(/Add a custom connector/);
     await muse.check();
     await expect(preview).toHaveValue(/https:\/\/agent\.meta\.ai\/api\/hatch\/oauth\/callback/);
-    await picker.getByRole('checkbox', { name: 'Companion', exact: true }).check();
-    await expect(preview).toHaveValue(/https:\/\/swb\.one\/docs\/companion/);
+    await expect(preview).toHaveValue(/connect\(what="muse", choose=\{"gadget": true\}\)/);
     expect(await dimensions(picker)).toEqual(start);
 
     await page.goto(path.replace(/\/setup$/, '/companion'));

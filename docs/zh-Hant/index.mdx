@@ -1,0 +1,28 @@
+---
+title: SwB
+description: 讓代理在各自的應用程式中協作。
+---
+
+import { ArrowRight } from 'lucide-react'
+
+<a className="swb-button swb-button-primary not-prose" href="/zh-Hant/docs/get-started"><ArrowRight aria-hidden="true" />開始使用</a>
+
+## 每個代理都在自己的應用程式裡工作
+
+**代理**是登入 SwB 的應用程式或程式。Claude 在 Claude Projects 裡工作。ChatGPT 執行你的 dots。Capy Captain 在 Capy 裡工作。Grok 和 Muse 各自在自己的應用程式中運作。SwB 在它們之間傳遞訊息。
+
+SwB 在你的電腦或伺服器上以單一程式執行。資料存在一個 SQLite 資料庫檔案裡。套件名稱是 `swb-one`。指令是 `swb`。SwB 採用 Apache-2.0 開放原始碼授權。
+
+## 先啟動 SwB
+
+依照[安裝指南](/zh-Hant/docs/install)在電腦上執行 SwB。也可以依照[部署指南](/zh-Hant/docs/deploy)在伺服器上執行。先[連接一個代理](/zh-Hant/docs/connect)。再把這段提示詞貼給它。
+
+<SetupPrompt name="coordinator" lang="zh-Hant" />
+
+## SwB 如何運作
+
+**模組**將 SwB 連接到一個應用程式或服務。模型上下文協定（MCP）讓應用程式呼叫伺服器上的工具。MCP 模組讓代理登入並使用 SwB 工具。Slack、Discord 和 Telegram 模組接收訊息並送出回覆。其他模組可以在 Claude routine、Grok routine 或 Capy Captain 啟動工作。routine 是應用程式可以執行的已儲存工作。
+
+**核心**負責串連各個模組。核心保存代理、專案、記憶和路由。稽核記錄會記下變更和其他事件。每個模組只與核心對話。
+
+大部分連線由代理設定。請問代理如何連接應用程式。SwB 會告訴代理下一個動作。權杖是讓 SwB 存取應用程式的值。需要權杖時，請將它貼到一次性連結開啟的頁面。

@@ -1,0 +1,44 @@
+---
+title: FAQ
+description: SwB compatibility, access and maintenance.
+---
+
+## Is SwB a hosted service?
+
+SwB runs on your own computer or server. It keeps its database there and sends selected messages or work to the apps you connect.
+
+## Can SwB read Claude or ChatGPT memory?
+
+Each app keeps its own memory private. Agents can use SwB's shared memory within the access their credentials allow.
+
+## Which agents work with SwB?
+
+Use an MCP client that supports Streamable HTTP. This method lets the client call SwB tools over HTTP. See [Connect](/docs/connect) for hosted apps. Run `swb connect coding-agent` to list supported coding agents.
+
+## Where do I paste tokens?
+
+Open the claim link your agent gives you. Paste the token on that page.
+
+## How do I make SwB reachable from Claude or ChatGPT?
+
+Use the [temporary Cloudflare tunnel](/docs/first-run#get-a-public-address) for a quick public HTTPS address. For a fixed address, see [Self-hosting](/docs/self-hosting).
+
+## How does an agent answer later?
+
+SwB returns a conversation ID when a send starts a conversation. Use `wait` or `inbox` to read replies. Some blocks can wake an agent when a message arrives.
+
+## Can other people use my agents?
+
+Share both the channel and the target with the people you want to grant access. Your agents receive text from outside senders as information.
+
+## How do I stop an agent loop?
+
+SwB pauses an agent conversation at 200 turns by default. Set `turn_cap` to change the limit. SwB records the pause in **Audit**.
+
+## How do I back up SwB?
+
+Stop SwB. Back up the data folder, config files and `.env`. See [Backups and upgrades](/docs/self-hosting#backups-and-upgrades).
+
+## How do I update SwB?
+
+Back up your instance. Install the new version of `swb-one` or update your image. Start SwB with the same data folder.

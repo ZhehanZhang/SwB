@@ -1,0 +1,74 @@
+---
+title: 首次執行
+description: 讓其他應用程式連線到 SwB。登入後檢視你的執行個體。
+---
+
+## 在本機執行
+
+{/* prepublication */}
+
+套件發布後，請在空資料夾內執行 `uvx swb-one up`。請在五分鐘內開啟終端機顯示的一次性登入連結。SwB 預設使用 `http://localhost:8870`。若有設定 `SWB_PORT`，SwB 會在位址中使用該連接埠。[安裝指南](/zh-Hant/docs/install)介紹其他啟動方式，包括從原始碼建置。
+
+## 取得公開位址
+
+Claude、ChatGPT 與 Grok 在雲端執行。它們需要公開的 HTTPS 位址才能連到 SwB。通道會為本機的 SwB 提供公開位址。
+
+安裝 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)。確認終端機可以執行 `cloudflared --version`。如果 SwB 正在執行，請先停止。在 SwB 執行個體的資料夾內執行下列指令。
+
+```bash
+uvx swb-one up --tunnel cloudflare
+```
+
+SwB 會啟動 Cloudflare Quick Tunnel，並顯示公開的 MCP 位址。使用此選項重新啟動時，每次都會取得新的位址。請更新各應用程式中的位址。
+
+若要使用 Tailscale，請先[安裝 Tailscale](https://tailscale.com/download)。接著登入 Tailscale。啟用 [Funnel](https://tailscale.com/docs/features/tailscale-funnel)。確認終端機可以執行 `tailscale version`。把上方指令的選項改為 `--tunnel tailscale`。
+
+若要在自己的網域上使用固定位址，請閱讀[自行代管](/zh-Hant/docs/self-hosting)。
+
+## 查看下一步
+
+```bash
+swb status
+```
+
+指令會顯示伺服器狀態和已啟用的模組。請在 **Next steps** 查看後續設定。`switchboard_status` 工具也會顯示後續操作。
+
+若要查詢其他位址的伺服器，請加上 `--url`。例如，執行 `swb status --url http://127.0.0.1:8871`。指令會用終端機或執行個體的 `.env` 中的 `SWB_PORT` 組成預設本機位址。若啟動時用了 `--dir`，查詢時也請指定同一資料夾。
+
+## 登入網頁
+
+網頁會顯示你的專案、代理、收件匣、記憶與稽核記錄。它也是貼上權杖的安全位置。
+
+![SwB 登入頁面](/shots/login-light.webp)
+
+若要取得新連結，請另開終端機，在同一個執行個體的資料夾內執行下列指令。
+
+```bash
+swb login-link
+```
+
+指令會印出一次性登入連結。請在五分鐘內用瀏覽器開啟。這個指令也接受 `swb status` 使用的 `--url` 與 `--dir`。首次登入後，請新增[通行金鑰](/zh-Hant/docs/owner-login#通行金鑰)。往後用通行金鑰登入。設定碼與其他方式請見[擁有者登入](/zh-Hant/docs/owner-login)。
+
+## 網頁控制台
+
+| 頁面 | 用途 |
+| - | - |
+| `/` | 查看伺服器狀態與專案清單。 |
+| `/agents/*` | 查看已註冊的代理和各自的詳細資料。 |
+| `/audit` | 依類型篩選變更紀錄與其他事件。 |
+| `/inbox` | 查看對話與待處理的請求。 |
+| `/inbox/:handle` | 閱讀單一對話中的訊息。 |
+| `/memory/*` | 瀏覽及搜尋已儲存的筆記。 |
+| `/projects/:slug` | 查看單一專案的路由、歷程、對話與記憶。 |
+| `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的連線狀態與 [**Channel modes**](/zh-Hant/docs/channel-modes)。 |
+| `/settings` | 查看伺服器設定並管理通行金鑰。 |
+| `/tokens` | 查看權杖請求和已儲存的憑證。 |
+| `/about` | 查看 SwB 版本與已啟用的模組。 |
+
+## 連接第一個代理
+
+若要讓第一個代理設定其他應用程式，請授予它擁有者權限。請在瀏覽器中核准伺服器上應用程式的 [OAuth 登入](/zh-Hant/docs/owner-login#代理登入)。請使用可呼叫所有 SwB 工具的連線。
+
+你也可以在執行 SwB 的電腦上設定[本機擁有者用戶端](/zh-Hant/docs/setup/mcp-client#本機擁有者用戶端)。用執行個體資料夾中 `.env` 裡的 `SWB_KEY_OWNER` 登入用戶端。請只把這組金鑰傳到本機的 `/mcp` 位址。
+
+若第一個代理使用配對金鑰，請它為每個限擁有者執行的步驟提供對應的終端機指令。在 SwB 執行個體的資料夾內執行該指令。例如，執行 `swb connect slack`。其他應用程式的做法請參閱[連接你的代理](/zh-Hant/docs/connect)。

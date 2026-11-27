@@ -1,0 +1,133 @@
+---
+title: GitHub
+description: 把 GitHub 事件傳送到 SwB，並讓代理處理 issue 和 pull request。
+---
+
+SwB 從 GitHub App 接收儲存庫事件。事件是 GitHub 發出的操作通知。代理可以用應用程式的私密金鑰替議題加標籤、留言或開立議題。
+
+## 開始之前
+
+請使用可在目標儲存庫建立並安裝應用程式的 GitHub 帳號。請以擁有者身分登入 SwB。
+
+GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook`。
+
+## 複製設定提示詞
+
+<SetupPrompt name="github" lang="zh-Hant" />
+
+把提示詞貼到 SwB 擁有者用戶端。
+
+## 設定 GitHub App
+
+### 開啟 GitHub App 設定
+
+點選大頭貼 → **Settings** → **Developer settings** → **GitHub Apps**。點選 **New GitHub App**。
+### 替應用程式命名
+
+填寫 **GitHub App name** 和 **Homepage URL**。首頁可以填儲存庫網址。
+### 設定 webhook
+
+在 **Webhook** 下維持勾選 **Active**。Webhook 是 GitHub 用來傳送事件的網址。在 **Webhook URL** 填入含 `/github/webhook` 的 SwB 位址。
+### 設定 webhook 金鑰
+
+將隨機金鑰產生到私用檔案中。
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
+```
+
+將金鑰存到密碼管理工具。把金鑰填入 **Webhook secret**。SwB 接受至少 16 個字元的金鑰。
+### 設定權限
+
+在 **Repository permissions** 中，依下表設定權限。
+### 訂閱事件
+
+在 **Subscribe to events** 下，勾選下表中的事件。
+
+### 建立應用程式
+
+在 **Where can this GitHub App be installed?** 下選擇 **Only on this account**。點選 **Create GitHub App**。
+### 產生私密金鑰
+
+在 **Private keys** 下選取 **Generate a private key**。請妥善保管下載的 `.pem` 檔案。
+
+### 儲存憑證
+
+用 SwB 領取連結儲存 Webhook 金鑰。儲存後刪除暫存金鑰檔。SwB 提示時，用對應的連結儲存 **App ID** 和 `.pem` 檔案。
+### 安裝應用程式
+
+點選 **Install App** → 你的帳號旁的 **Install**。選擇 **Only select repositories**。
+### 選擇儲存庫
+
+勾選你的儲存庫。點選 **Install**。
+
+| 儲存庫資源 | 存取權限 | 事件 |
+| --- | --- | --- |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自動設為 **Read-only** | |
+
+在組織中，GitHub 可能把 **Install** 顯示為 **Request**。這時由組織擁有者核准請求。
+
+## 代理的工作
+
+代理呼叫 `connect(what="github")`。SwB 會顯示 Webhook 位址、金鑰狀態和儲存庫路由數量。路由會把事件傳給指定目標。
+
+代理將儲存庫加入 `config/switchboard.yaml` 中的 `blocks.github.spaces`。空間會指定儲存庫的模式、專案和目標。此範例將專案 `demo` 中儲存庫 `acme/app` 的觀察摘要送到 `agent:beta`。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode:
+          mode: watch
+          target: agent:beta
+        project: demo
+```
+
+若要使用工作模式，代理會將 `mode.mode` 設為 `work`。接著把你的 GitHub 數字使用者 ID 填入空間的 `owner_ids`。查詢方式與範例請參閱[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
+
+SwB 會檢查事件文字的作者。`owner_ids` 中的人所寫的文字可標為 `owner`。SwB 將分支名稱、參照、工作流程標題和檢查名稱視為 `external`。
+
+即使由擁有者觸發檢查，檢查名稱仍標為 `external`。來自衍生儲存庫的提取要求可以變更檢查名稱。
+
+儲存 Webhook 金鑰並更新路由後，重新啟動 SwB。
+
+代理再次呼叫 `connect(what="github")`，取得尚待填寫的 App ID 或私密金鑰連結。若要從現有的個人存取權杖改用 GitHub App 憑證，選用 `choose={"credential":"app"}`。
+
+重新啟動後，代理呼叫 `github_status` 檢查安裝及其權限。
+
+使用分流模式時，請呼叫 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`。從 `targets` 選取位址。協助模式使用 `mode="assist"`。分流模式預設允許的 GitHub 寫入操作是 `github_reply`。
+
+若要接收外部使用者的事件，請開放 `channel:github/acme/app` 和 `target:beta`。詳情請參閱[頻道可見度](/zh-Hant/docs/channel-modes#允許外部-github-使用者存取)。
+
+觀察模式會依 `modes.digest_minutes` 的間隔把摘要送到目標信箱。累積到 50 個事件時會提早傳送。擁有者可在主控台的 **Inbox** 查看摘要，也可呼叫 `inbox` 或 `wait`。
+
+## 憑證
+
+| 權杖 | GitHub 顯示位置 | 格式 | 填寫位置 |
+| --- | --- | --- | --- |
+| Webhook 金鑰 | 用 `openssl rand -hex 32` 產生 | 至少 16 個字元 | SwB 領取連結 |
+| App ID | 應用程式設定中的 **App ID** | 一串數字 | SwB 領取連結 |
+| 私密金鑰 | 點選 **Generate a private key** 後下載一次 | `.pem` 檔案 | SwB 領取連結 |
+
+SwB 使用私密金鑰產生安裝權杖。每個安裝權杖的效期是一小時。
+
+請代理呼叫 `connect(what="github", choose={"replace":"secret"})` 更換 webhook 金鑰。`webhook_secret` 的效果相同。用 `all` 一併更換應用程式憑證或個人存取權杖。請依傳回的指示更新各項憑證。詳情請參閱[更換憑證](/zh-Hant/docs/credentials#更換憑證)。
+
+## 檢查連線
+
+請代理再次呼叫 `connect`。設定完成後，它會回報 `connected`。`github_status` 顯示 `secret_present` 和安裝的權限。
+
+在 GitHub 上開啟應用程式設定 → **Advanced** → **Recent deliveries**。開啟最新一次傳遞，確認 SwB 回傳了成功代碼。
+
+## 排解問題
+
+發生簽章錯誤時，請依[設定 webhook 金鑰](#設定-webhook-金鑰)中的方式產生新金鑰。在 GitHub 應用程式設定中填入新金鑰。請代理呼叫 `connect(what="github", choose={"replace":"secret"})`。用領取連結儲存同一組金鑰。重新啟動 SwB。在 **Recent deliveries** 中重新傳送該事件。
+
+如果 `connect` 要求 **Issues** 寫入權限，請開啟應用程式設定 → **Permissions & events**。把 **Issues** 設為 **Read & write**，並在安裝上接受這項變更。

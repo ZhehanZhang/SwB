@@ -1,0 +1,75 @@
+---
+title: Telegram
+description: Connect Telegram chats and groups to SwB with a bot.
+---
+
+SwB talks to Telegram through a bot that you make in BotFather. SwB asks Telegram for new messages, so your SwB server can stay on a private address.
+
+## Before you start
+
+Use a Telegram account. To connect a group, use an account that can add members. Sign in to SwB as the owner.
+
+## Copy the setup prompt
+
+<SetupPrompt name="telegram" lang="en" />
+
+Paste the prompt into your SwB owner client.
+
+## Set up the Telegram bot
+
+### Open BotFather
+
+Open https://t.me/BotFather in Telegram. Tap **Start** if this is your first chat with BotFather.
+### Create the bot
+
+Send `/newbot`. Reply with a display name.
+
+### Choose the username
+
+Reply with a username that ends in `bot`. BotFather replies with the token.
+### Save the token
+
+Open the SwB claim link from your agent. Paste the token into the field.
+### Start a private chat
+
+Tap **Start** in the private chat with your bot. Send one message so SwB can find your user ID.
+### Add the bot to a group
+
+Open the group link from your agent. Select the group.
+
+### Send the setup command
+
+Send `/swb@<bot username>` in the group. SwB then knows the group ID.
+### Read all group messages
+
+For groups where the bot needs every message, send `/setprivacy` to BotFather. Choose your bot. Select **Disable**.
+
+### Add the bot again
+
+Remove the bot from each group. Add the bot to the group again.
+
+## What the agent does
+
+The agent calls `connect(what="telegram")`. If needed, it enables the `telegram` block. When the block is enabled, `connect` or `telegram_provision` returns a claim link for the bot token.
+
+After you save the token, the agent calls `telegram_status`. It checks the bot and privacy mode. The group invite is in `setup.add_to_group_url`. Recent chat IDs are in `setup.seen_chats`.
+
+The agent configures a space under `blocks.telegram.spaces` in `config/switchboard.yaml`. A space points a set of chats to a SwB project. Set the group IDs in `chats`. Set your user ID in `owner_ids`. Restart SwB after editing the file.
+
+## Credentials
+
+| Token | Where Telegram shows it | Format | Where it goes |
+| --- | --- | --- | --- |
+| Bot token | Reply from BotFather after `/newbot`, or after `/token` | Digits, a colon, then letters and digits | SwB claim link |
+
+## Check the connection
+
+Ask the agent to call `connect` again. It reports `connected` when the setup is complete.
+
+Use the Telegram account listed in `owner_ids`. Send `/swb <target> hello` to the bot in a private chat. Replace `<target>` with a target name from `targets`. Check for a reply.
+
+## Fix problems
+
+If the bot reads only commands in a group, turn off privacy mode in BotFather. Then remove the bot and add it again.
+
+A webhook is a web address where Telegram sends messages. Ask the bot owner to remove any old webhook with Telegram’s `deleteWebhook` method.

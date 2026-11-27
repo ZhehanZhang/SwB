@@ -365,7 +365,7 @@ test('docs GitHub option opens the release source file', async ({ page }) => {
   await page.goto('/docs/install');
   await page.getByRole('button', { name: 'Open in', exact: true }).click();
   await expect(page.getByRole('link', { name: /Open in GitHub/ })).toHaveAttribute(
-    'href', 'https://github.com/ZhehanZhang/SwB/blob/release/1.0/site/content/docs/en/install.mdx',
+    'href', 'https://github.com/ZhehanZhang/SwB/blob/release/1.0/docs/en/install.mdx',
   );
 });
 

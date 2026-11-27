@@ -1,86 +1,78 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="First-party agents working together." width="100%">
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/docs/assets/hero.svg" alt="SwB. First-party agents working together." width="100%">
 </p>
 
-First-party agents working together.
+Every agent works in its own app. SwB passes messages between Claude Projects, ChatGPT dots, Capy Captains, Grok and Muse.
 
-Every agent works in its own app.
-
-Claude stays in Claude Projects. ChatGPT runs your dots. Captains work in Capy. Grok and Muse stay where you use them. SwB joins them through official channels, with MCP, routine APIs, bots and webhooks.
-
-Each agent keeps its own tools, memory and strengths. Each provider keeps its own sign-in, and you connect with official tokens. SwB builds toward open collaboration between providers through MCP events and A2A.
-
-SwB is free and open source under Apache-2.0.
+Each app keeps its own sign-in and tools. Apps can use Model Context Protocol (MCP) to call SwB tools.
 
 <p align="center">
-  <img src="docs/assets/connected.svg" alt="Slack, Discord, Telegram and GitHub patched into one project, out to Claude Projects, a ChatGPT dot, Grok, a Capy Captain, Claude Code and Codex" width="100%">
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/docs/assets/connected.svg" alt="A SwB project connects Slack, Discord, Telegram and GitHub to agents" width="100%">
 </p>
 
 ## Use SwB
 
 Give your agents access to the projects they work on. A project keeps related messages and memory together.
 
-Ask an agent to run `connect` to set up a connection. Enter a token on the page the agent opens for you.
+Ask an agent with owner access to call `connect` for the app you want to add. A claim link opens a private page where you can enter a token.
 
-Use the web console to see where a message came from and where it went.
-Use [channel modes](docs/guide.md#channel-modes) to choose how SwB handles channel messages.
+Use the web console to see where a message came from and where it went. Set a [channel mode](https://github.com/ZhehanZhang/SwB/blob/release/1.0/docs/guide.md#channel-modes) to choose how SwB handles messages from that channel.
 
 ## See it work
 
-Ask your ChatGPT dot something in Slack. It wakes on an MCP event, answers in the same thread, and your Claude
-Project finds the result later in the project's memory.
+Set a Slack route to send messages to ChatGPT. If ChatGPT subscribes to MCP events, a new message can start work. SwB can deliver the answer in the Slack thread. A Claude Project can read it later if an agent saves it to shared project memory.
 
 <p align="center">
-  <img src="docs/assets/flow-message.svg" alt="Eight steps from a Slack message through SwB to a ChatGPT dot and back, then a Claude Project reading the result" width="100%">
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/docs/assets/flow-message.svg" alt="SwB carries a Slack message to a ChatGPT dot and returns the answer to Slack" width="100%">
 </p>
 
 ## Quick start
+
+Build SwB from source with [Docker Compose](https://github.com/ZhehanZhang/SwB/blob/release/1.0/deploy/README.md#docker-compose) before the PyPI release. After the release, [install uv](https://docs.astral.sh/uv/getting-started/installation/). Run this command in an empty folder.
 
 ~~~bash
 uvx swb-one up
 ~~~
 
-Run the command in an empty folder. Open the one-time sign-in link from your terminal within five minutes.
+Open the one-time sign-in link from your terminal within five minutes.
 
-The local MCP address is `http://localhost:8870/mcp`. Add `--tunnel cloudflare` for a public HTTPS address. Add `--tunnel tailscale` for an address on your private network.
+The local MCP address is `http://localhost:8870/mcp`. Add `--tunnel cloudflare` or `--tunnel tailscale` for a public HTTPS address.
 
-See [deployment options](deploy/README.md) and [owner sign-in](docs/guide.md#authentication-and-protection).
+See [deployment options](https://github.com/ZhehanZhang/SwB/blob/release/1.0/deploy/README.md) and [owner sign-in](https://github.com/ZhehanZhang/SwB/blob/release/1.0/docs/guide.md#authentication-and-protection).
 
-See [server addresses](docs/guide.md#server-addresses) to move an instance to a new URL.
+See [server addresses](https://github.com/ZhehanZhang/SwB/blob/release/1.0/docs/guide.md#server-addresses) to move an instance to a new URL.
 
 ## Connections
 
-Ask any connected agent to call `connect`, or run `swb connect <kind>`.
+You can also run `swb connect <kind>` in your SwB folder. OAuth lets you grant access in your browser.
 
-| | Connects with | Hears new messages by |
+| App | Connection | Message delivery |
 | - | - | - |
-| Claude Projects | Custom connector, OAuth | `wait` and `inbox`, Claude routines |
-| ChatGPT and dots | Custom MCP server, OAuth | MCP events |
-| Grok | MCP connector, Grok routines | Signed routine webhook |
-| Capy | API key | Thread stream |
-| Claude Code | `claude mcp add`, [`swb@swb` channel plugin](channel/README.md) | Push into the open session |
-| Codex, Gemini CLI and other coding agents | OAuth or a pairing code | `wait` and `inbox`, MCP events |
+| Claude Projects | Custom MCP connector with OAuth | `wait`, `inbox` or Claude Code routines |
+| ChatGPT and dots | Custom MCP server with OAuth | `wait`, `inbox` or MCP events with a compatible client |
+| Grok | Custom MCP connector with OAuth | `wait`, `inbox` or MCP events with a compatible client |
+| Grok Bot | Routine webhook with a key or signature | Webhook starts a routine |
+| Capy Captain | Capy API keys | Messages in a Capy thread |
+| Claude Code | Remote MCP server or [`swb@swb` channel plugin](https://github.com/ZhehanZhang/SwB/blob/release/1.0/channel/README.md) | `wait`, `inbox` or push through the plugin |
+| Codex, Gemini CLI and other coding agents | OAuth or a pairing code | `wait`, `inbox` or MCP events with a compatible client |
 | Slack | Slack app, Socket Mode | Replies in the thread |
 | Discord | Bot token | Replies in the thread |
 | Telegram | Bot token | Replies in the thread |
 | GitHub | Webhook secret | Signed webhooks |
-| [Muse](docs/muse.md) | Custom connector | Connector replies |
-
-SwB is an independent project. Logos identify the available connections.
+| Muse | Custom MCP connector with OAuth or a paired gadget | `inbox` or push through the gadget |
 
 ## How it works
 
 <p align="center">
-  <img src="docs/assets/flow-architecture.svg" alt="Agents and people pass through identity and trust, targets and routes, and conversations and mailboxes, out to wakes and deliveries" width="100%">
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/docs/assets/flow-architecture.svg" alt="Agents and people pass through identity and trust, targets and routes, and conversations and mailboxes, out to wakes and deliveries" width="100%">
 </p>
 
-Blocks connect apps to SwB. See the [guide](docs/guide.md) for configuration, routing, memory and tools. See [authentication](docs/guide.md#authentication-and-protection) for access settings.
+Blocks connect apps to SwB. See the [guide](https://swb.one/docs) for configuration, routing, memory and tools. See [authentication](https://github.com/ZhehanZhang/SwB/blob/release/1.0/docs/guide.md#authentication-and-protection) for access settings.
 
 ## License and contributing
 
-SwB is licensed under the [Apache License 2.0](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) and
-[SECURITY.md](SECURITY.md). Documentation also lives at [swb.one](https://swb.one).
+SwB is free and open source under the [Apache License 2.0](https://github.com/ZhehanZhang/SwB/blob/release/1.0/LICENSE). See [how to contribute](https://github.com/ZhehanZhang/SwB/blob/release/1.0/CONTRIBUTING.md) and [how to report a security issue](https://github.com/ZhehanZhang/SwB/blob/release/1.0/SECURITY.md). See the [trademark policy](https://github.com/ZhehanZhang/SwB/blob/release/1.0/TRADEMARKS.md).
 
-We welcome contributions to SwB. See the [trademark policy](TRADEMARKS.md).
+Read the docs at [swb.one](https://swb.one/docs).
 
 Tell us how you use SwB at [hello@swb.one](mailto:hello@swb.one).

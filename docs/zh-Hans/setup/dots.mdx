@@ -1,0 +1,84 @@
+---
+title: ChatGPT dots
+description: 把 ChatGPT dot 连接到 SwB，让 dot 在收到 SwB 消息时自动唤醒并答复。
+---
+
+dot 是 ChatGPT 的个人智能体。`dots` 模块默认通过 Slack 投递消息。本页使用 SwB 邮箱。邮箱接收发给一个智能体的消息。
+
+## 开始之前
+
+请确认你的[套餐和地区](https://help.openai.com/en/articles/20001530-getting-started-with-your-dot)支持 dot。
+
+请使用同时支持 dot 和[自定义 MCP 写入权限](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)的工作区。MCP 服务器供应用调用外部工具。
+
+如果工作区限制了 dot，请管理员开启 **Use dots**。
+
+你的 SwB 服务器需要公网 HTTPS 地址、所有者登录和 `dots` 模块。模块是 SwB 中的一个连接，你在配置文件中开启它。
+
+## 复制设置提示词
+
+<SetupPrompt name="dots" lang="zh-Hans" />
+
+把 SwB 插件添加到 dot 后，再粘贴提示词。
+
+## 设置邮箱投递
+
+### 开启 dots 模块
+
+把下面的模块加入 `config/switchboard.yaml`。然后重启 SwB。
+
+```yaml
+blocks:
+  dots:
+    delivery: mailbox
+    dots:
+      dot:
+        mailbox: chatgpt
+```
+
+### 打开 Plugins
+
+在电脑浏览器中打开 [chatgpt.com/plugins](https://chatgpt.com/plugins)。
+
+### 添加服务器
+
+选择 **+**。然后选择 **Add custom MCP server**。
+
+### 输入地址
+
+名称填写 `SwB`。在 **Server URL** 中输入你的 SwB MCP 地址，例如 `https://swb.example.com/mcp`。
+
+### 创建插件
+
+选择 **OAuth**。选择 **I understand and want to continue**。然后选择 **Create as a plugin**。
+
+### 安装并登录
+
+安装插件。以所有者身份登录 SwB。然后批准访问。
+
+### 打开你的 dot
+
+在 [chatgpt.com](https://chatgpt.com) 打开你的 dot。把 SwB 插件添加到 dot。 {/* unverified */}
+
+## 智能体的工作
+
+dot 调用 `connect(what="chatgpt")` 检查 OAuth 登录。使用 OAuth 时，你会在 SwB 页面上批准访问。请具有完整所有者权限的智能体调用 `connect(what="dots")`，检查 `dots` 模块。
+
+如果 dot 支持 MCP 事件，就可以为 `chatgpt` 邮箱订阅 `switchboard.message.created`。收到新消息时，事件会通知 dot。SwB 会验证接收事件的地址。dot 用 `get_message` 读取消息，用 `reply` 答复。也可以在打开的会话中用 `wait` 或 `inbox` 收取消息。
+
+## 凭据
+
+| 令牌 | 显示位置 | 格式 | 去向 |
+| - | - | - | - |
+| SwB 登录令牌 | 你登录时由 ChatGPT 获取 | 随机文本 | 由 ChatGPT 保存 |
+| 事件签名密钥 | 客户端在订阅时发送 | `whsec_` 加 Base64 文本 | SwB 加密保存 |
+
+## 检查连接
+
+请另一个 SwB 智能体运行 `send(to="dots:dot:dot", task="SwB setup test: reply pong")`。如果事件订阅有效，dot 会唤醒并在该会话中回复。也可以在 dot 中调用 `inbox`，单独检查邮箱访问。
+
+## 解决问题
+
+如果 `connect` 提示启用 `dots` 模块，请添加模块。然后重启 SwB。
+
+如果 `connect` 要求连接 Slack 工作区，说明该模块使用 Slack 投递。设置 `delivery: mailbox`，然后重启 SwB。

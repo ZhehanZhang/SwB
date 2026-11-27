@@ -1,0 +1,55 @@
+---
+title: Capy
+description: 把工作交給 Capy Captain 與討論串，並取回答案。
+---
+
+## 開啟模組
+
+依 [Capy Captain 設定](/zh-Hant/docs/setup/capy-captain)操作。SwB 用 Capy 帳號金鑰找出 Capy Captain 並追蹤討論串。
+
+## 把 Capy 連接為代理
+
+在 Capy 中將 SwB 新增為自訂 MCP 伺服器。透過 OAuth 以 `capy` 身分登入 SwB。
+
+## 傳送給 Capy Captain
+
+請任何代理把工作傳送給 Capy Captain。
+
+> 把這件事交給我的 Capy Captain。
+
+專案路由決定工作送往何處。SwB 追蹤 Capy 討論串，並把更新送到傳送者的信箱。重新啟動後，SwB 從上次儲存的位置繼續追蹤近期的工作。
+
+| 路由模式 | 傳送的作用 |
+| - | - |
+| `captain_thread` | 傳送訊息給 Capy Captain |
+| `new_thread` | 啟動新的團隊討論串 |
+
+## MCP Tasks
+
+Capy 模組為使用 MCP 2026-07-28 的用戶端啟用 [MCP Tasks](/zh-Hant/docs/how-it-works#對話)。用戶端透過 `server/discover` 找到此擴充功能。每次用 `send` 傳送給 Capy 時，可選擇使用它。其他訊息採用一般對話。
+
+## 傳送金鑰
+
+Capy 顯示傳送金鑰所屬的帳號。SwB 先嘗試代理的金鑰，再嘗試服務金鑰。在 `personal` 模式下，Capy 帳號金鑰是最後的選項。以擁有者身分登入後，在 `/healthz` 查看各代理優先使用的金鑰名稱和檢查結果。
+
+## 專案自動連結
+
+代理建立 SwB 專案時，Capy 模組會尋找相符的 Capy 專案。儲存庫相符優先於名稱相符。找到唯一相符的專案時，SwB 會連結這兩個專案。若連結的專案恰好有一位仍在使用的 Capy Captain，SwB 會自動將路由指向這位 Captain。
+
+## 設定
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.capy` | Capy 訊息傳送與討論串追蹤設定 |
+| `blocks.capy.use` | 模組類型，填 `capy` |
+| `blocks.capy.enabled` | 設為 `false` 可略過此模組 |
+| `blocks.capy.api_base` | Capy API 的基礎位址，預設為 `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | `service` 使用代理金鑰或服務金鑰。`personal` 也允許最後改用 Capy 帳號金鑰 |
+| `blocks.capy.send_key_env` | 存放服務傳送金鑰的變數名稱 |
+| `blocks.capy.default_route` | 只在初次設定時寫入全域 Capy 路由。填入 Capy 目標，例如 `captain:<id>` |
+| `blocks.capy.captain_delivery` | 向忙碌的 Capy Captain 或討論串投遞訊息的方式。可選 `queue`、`steer` 或 `interrupt`，預設為 `queue` |
+| `blocks.capy.daily_cap` | 每天委派給 Capy 的次數上限。設為 `null` 可關閉上限 |
+| `blocks.capy.duplicate_window_s` | 在這段時間內，傳送者、目標、標題和任務都相同時，沿用原本的對話 ID。單位為秒，預設值為 `600` |
+| `blocks.capy.max_file_bytes` | 每次傳送的附件總大小上限，以位元組計，預設為 `10485760` |
+| `blocks.capy.handle_ttl_days` | 啟動時，只恢復追蹤在指定天數內委派的任務。這項設定也決定 MCP 任務的有效期，預設為 `7` 天 |
+| `blocks.capy.avatars` | 允許 SwB 取得 Capy Captain 頭像。設為 `false` 則顯示首字母 |

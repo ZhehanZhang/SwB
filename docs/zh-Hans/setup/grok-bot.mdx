@@ -1,0 +1,84 @@
+---
+title: Grok Bot
+description: 通过自定义连接器和由 SwB 唤醒的 routine，把 Grok Bot 连接到 SwB。
+---
+
+Grok Bot 是 xAI 的桌面智能体应用。routine 是保存好的任务。这个连接使用 Webhook。Webhook 是 SwB 用来启动 routine 的网址。
+
+## 开始之前
+
+在受支持的电脑上安装 [Grok Bot](https://x.ai/bot)。使用包含 Grok Bot 的套餐登录。
+
+为 SwB 设置公网 HTTPS 地址和所有者登录。开启 `grok-routine` 模块。选择一个 SwB 项目。使用 OAuth 时，你会在浏览器中批准访问。
+
+## 复制设置提示词
+
+<SetupPrompt name="grok-bot" lang="zh-Hans" />
+
+添加 SwB 后，把提示词粘贴到 Bot 会话。
+
+## 连接 Grok Bot
+
+### 创建 Bot
+
+使用引导流程创建的 Bot，或在侧边栏用 **+** 选择 **New Bot**。输入名称。选择 **Create**。
+
+### 打开 Connect apps
+
+在侧边栏打开 **Connect apps**。选择 **Add a custom connector**。
+
+### 输入地址
+
+在 **Name** 中填写 `SwB`。在 **Type** 下选择 **Remote HTTPS**。在 **Server URL** 中输入 `https://swb.example.com/mcp`。选择 **Add plugin**。
+
+### 登录
+
+请将 OAuth 客户端选填项留空。如果 Grok Bot 打开 SwB 登录页面，请以所有者身份登录。然后批准访问。 {/* unverified */}
+
+### 打开 routine
+
+在 Bot 会话的 **Details** 中打开 routine。检查 **Webhook** 触发器。
+
+### 保存 Webhook URL
+
+打开 Webhook 地址的领取链接。从 routine 复制 **POST to**。把地址粘贴到 **Webhook URL**。选择 **Save webhook url**。
+
+### 保存密钥
+
+打开 Webhook 密钥的领取链接。从 routine 复制 **key**。把密钥粘贴到 **Token**。选择 **Save token**。
+
+### 告诉 Grok Bot
+
+在 Bot 聊天中说已完成。Grok Bot 随后测试该 routine。
+
+## 智能体的工作
+
+请让拥有所有者权限的智能体调用 `connect(what="grok-bot")`。SwB 返回 MCP 地址、OAuth 状态和 routine 提示词。提示词用 Webhook 的 `trust` 字段判断哪些请求可执行。routine 用 `reply` 回复。
+
+请让 Grok Bot 使用提示词创建 routine。在所有者客户端中调用 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 登记。SwB 为地址和密钥各生成一个领取链接。保存两项后，请执行 `connect` 返回的 `send` 调用。
+
+发送消息时，SwB 会调用 webhook 来启动 routine。
+
+## 凭据
+
+| 令牌 | 显示位置 | 格式 | 去向 |
+| - | - | - | - |
+| Webhook URL | routine **Details** 中 **Webhook** 下的 **POST to** | HTTPS 地址 | 对应 SwB 领取链接中的 **Webhook URL** |
+| Webhook 密钥 | routine **Details** 中 **Webhook** 下的 **key** | 随机文本 | 对应 SwB 领取链接中的 **Token** |
+| SwB 登录令牌 | 你登录时由 Grok Bot 获取 | 随机文本 | 由 Grok Bot 保存 |
+
+领取链接是 SwB 上的一次性私密页面，每个页面对应一个令牌。每项内容只粘贴到对应的领取链接中。
+
+## 检查连接
+
+打开 routine 的 **Details**。检查 **Webhook** 触发器。在所有者客户端中再次调用 `connect(what="grok-bot")`。状态行会显示该 routine。在发送测试的客户端中调用 `inbox` 查找回复。
+
+## 解决问题
+
+如果 OAuth 登录失败，请用另一个拥有所有者权限的 SwB 客户端登记 routine。如果连接器接受 bearer 密钥，请使用[配对密钥](/zh-Hans/docs/setup/mcp-client#配对客户端)。
+
+复制 **key** 的值。使用默认请求头时，SwB 会添加 `Authorization: Bearer`。
+
+要启动 routine，请发送到 `grok-routine:routine:<routine>`。要发到 Grok 邮箱，请使用 `agent:grok`。
+
+领取链接只能使用一次，30 分钟后过期。要获取新链接，请再次调用 `connect`。要更换已保存的内容，请调用 `connect` 并把 `choose.replace` 设为 `url` 或 `secret`。

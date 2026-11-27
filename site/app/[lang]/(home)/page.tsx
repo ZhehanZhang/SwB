@@ -146,7 +146,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                     <ProviderMark name="render" />
                     <ProviderLabel name={render.name} plan={deploy.paidPlan} />
                   </a>
-                  <a className={providerButton} href={railway.href}>
+                  <a className={providerButton} href={railway.oneClickHref ?? railway.href}>
                     <ProviderMark name="railway" />
                     <ProviderLabel name={railway.name} plan={deploy.hobbyPlan} />
                   </a>

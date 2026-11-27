@@ -15,6 +15,9 @@ const markdown = (prefix: string, targetPrefix = prefix) => [
 ];
 
 const config: NextConfig = {
+  turbopack: {
+    resolveAlias: { 'lucide-react': './node_modules/lucide-react' },
+  },
   env: {
     NEXT_PUBLIC_ASK_AI: process.env.NEXT_PUBLIC_ASK_AI ?? vars.NEXT_PUBLIC_ASK_AI,
   },

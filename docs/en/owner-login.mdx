@@ -1,0 +1,110 @@
+---
+title: Owner sign-in
+description: Sign in with a passkey, a one-time link, a setup code or your identity provider.
+---
+
+The owner signs in to manage SwB. This access lets the owner approve agent sign-ins and save tokens.
+
+| Page | Use |
+| - | - |
+| `/login` | Sign in as the owner. |
+| `/authorize` | Review an agent's request to connect. |
+
+## One-time link
+
+```bash
+swb login-link
+```
+
+The command prints a link such as `https://swb.example.com/login#t=...`. Open it in your browser within five minutes. The link works once. An agent signed in as the owner can also make a link with the `login_link` tool. The token stays in the part of the link after `#`.
+
+On the first local start, `swb up` prints a one-time link. The local address defaults to `http://localhost:8870`. If you set `SWB_PORT`, SwB uses that port in the address. For `swb login-link`, use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
+
+If sign-in with the link fails, run `swb login-link` again. Open the new link in your browser.
+
+## Setup code
+
+A setup code works once, for the first owner sign-in. Use it when SwB handles sign-in directly. The [deploy guide](/docs/deploy) shows where to get the code for a hosted server.
+
+To set your own code, generate 32 random bytes. Encode them as 64 lowercase hexadecimal characters or standard Base64. This command adds a hexadecimal code to the private `.env` file. Run it in the instance folder after `swb init`.
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+Start SwB with `SWB_SETUP_CODE` set. Open `/login` in your browser. Paste the code in **Setup code**. Select **Sign in**.
+
+## Passkey
+
+A **passkey** uses your device to confirm your sign-in. After your first sign-in, enter your device name in **Passkey name**. Select **Add a passkey**.
+
+For another device, open **Settings**. Under **Sign-in**, select **Add a passkey**. Enter a name. Select **Add passkey** to save it. Use your passkey for later sign-ins.
+
+## OIDC
+
+OpenID Connect (OIDC) lets a sign-in service such as Google confirm your identity. Add your service to the configuration file. Set `SWB_OIDC_CLIENT_SECRET` to the secret from that service.
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
+```
+
+Set the redirect address in your provider to `https://swb.example.com/auth/oidc/callback`. The sign-in page shows a button for your service. SwB accepts a verified email in `auth.owner_emails`. You can also list account IDs from your service in `auth.oidc.owner_subjects`.
+
+## Cloudflare Access
+
+Follow [Cloudflare setup](/docs/setup/cloudflare) to protect the console with Cloudflare Access. SwB checks the Access token and matches the email to `auth.owner_emails` or `SWB_OWNER_EMAILS`.
+
+## Agent sign-in
+
+OAuth lets an app connect to SwB with your approval. Approve the connection on `/authorize`. The app receives the OAuth scope `switchboard`, the name of the access it requests. The app uses `/token` to get or renew its tokens.
+
+Check `error_description` for details when the app gets an OAuth error.
+
+| Error | Meaning |
+| - | - |
+| `access_denied` | The owner declined the connection. |
+| `invalid_client` | SwB rejected the app identity or credentials. |
+| `invalid_client_metadata` | SwB rejected the app registration settings. |
+| `invalid_redirect_uri` | SwB requires an allowed callback address at registration. |
+| `invalid_request` | The request format or a required value is invalid. |
+| `invalid_grant` | SwB rejected the authorization code or refresh token. |
+| `invalid_target` | The request names the wrong MCP address. |
+| `unsupported_response_type` | Use `response_type=code`. |
+| `unsupported_grant_type` | Use `grant_type=authorization_code` or `grant_type=refresh_token`. |
+| `temporarily_unavailable` | Set `public_url` or check the client registration limit. |
+
+`/connect` also returns `invalid_grant` when SwB rejects a [pairing code](/docs/connect#connect-with-a-pairing-code).
+
+## Sessions
+
+A **cookie** is a value your browser saves to keep you signed in. SwB sets the `Secure` flag on this cookie. Use HTTPS for a public address.
+
+When you change a setting, the browser sends a token that SwB uses to check the request. Sign out from **Settings**.
+
+The browser reads your current sign-in state at `/auth/session`.
+
+## Sign-in errors
+
+SwB records browser sign-in failures under **Audit**. Each row shows the reason and keeps codes and tokens private. SwB limits repeated rows for some failures.
+
+| Error | Meaning |
+| - | - |
+| `link_used` | Someone used the link to sign in before it expired. |
+| `link_expired` | The link expired. |
+| `link_invalid` | SwB rejected the link. |
+| `setup_failed` | The setup code has the wrong format or differs from `SWB_SETUP_CODE`. |
+| `setup_closed` | Sign-in by setup code is closed. Use another sign-in method. |
+| `passkey_failed` | Passkey setup or verification failed. |
+| `last_method` | SwB keeps the last passkey when OIDC and Cloudflare Access are both inactive. |
+| `not_found` | The passkey ID is wrong or the passkey was removed. |
+| `oidc_failed` | Sign-in through the identity provider failed. |
+| `signed_out` | The request needs an owner session. |
+| `csrf` | SwB rejected the page address or security token. |
+| `slow_down` | Sign-in attempts reached a limit. Wait for the time in `Retry-After`. |
