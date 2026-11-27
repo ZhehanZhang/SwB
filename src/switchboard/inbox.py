@@ -195,8 +195,7 @@ class Inbox:
         return {**self._item(row), "owner": row["owner"]} if row is not None else None
 
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
-             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None,
-             include_replies: bool = False) -> dict[str, Any]:
+             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
 
         owner None reads every caller's items (the Claude Code channel does this). Each reader keeps its own cursor,
@@ -213,19 +212,15 @@ class Inbox:
             where.append("id > COALESCE((SELECT c.cursor FROM inbox_cursors c WHERE c.owner = ? AND c.handle = inbox.handle), 0)")
             args.append(reader)
         if handle:
-            if include_replies:
-                with_clause = """WITH RECURSIVE linked(handle) AS (
-                    VALUES (?)
-                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.root') = l.handle
-                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.in_reply_to') = l.handle
-                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.forward_of') = l.handle
-                    UNION SELECT i.handle FROM linked l JOIN inbox i ON json_extract(i.data, '$.in_reply_to') = l.handle
-                ) """
-                args.insert(0, handle)
-                where.append("handle IN (SELECT handle FROM linked)")
-            else:
-                where.append("handle = ?")
-                args.append(handle)
+            with_clause = """WITH RECURSIVE linked(handle) AS (
+                VALUES (?)
+                UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.root') = l.handle
+                UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.in_reply_to') = l.handle
+                UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.forward_of') = l.handle
+                UNION SELECT i.handle FROM linked l JOIN inbox i ON json_extract(i.data, '$.in_reply_to') = l.handle
+            ) """
+            args.insert(0, handle)
+            where.append("handle IN (SELECT handle FROM linked)")
         if destination:
             where.append("destination = ?")
             args.append(destination)
