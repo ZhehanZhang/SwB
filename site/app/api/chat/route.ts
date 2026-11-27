@@ -57,11 +57,11 @@ export async function POST(request: Request) {
     const { env } = getCloudflareContext();
     if (!env.AI) return new Response(unavailable[lang], { status: 503 });
     if (env.NEXT_PUBLIC_ASK_AI !== '1') return new Response(null, { status: 404 });
-    if (!env.ASK_LIMIT || !env.ASK_GLOBAL) return new Response(unavailable[lang], { status: 503 });
-    const perClient = await env.ASK_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'unknown' });
-    if (!perClient.success) return new Response(unavailable[lang], { status: 429, headers: { 'Retry-After': '60' } });
-    const overall = await env.ASK_GLOBAL.limit({ key: 'all' });
-    if (!overall.success) return new Response(unavailable[lang], { status: 429, headers: { 'Retry-After': '60' } });
+    if (!env.ASK_DO) return new Response(unavailable[lang], { status: 503 });
+    for (const [name, limit] of [[`ip:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`, 10], ['all', 120]] as const) {
+      const check = await env.ASK_DO.get(env.ASK_DO.idFromName(name)).fetch(`https://limit/?limit=${limit}&period=60`);
+      if (check.status === 429) return new Response(unavailable[lang], { status: 429, headers: { 'Retry-After': '60' } });
+    }
 
     const location = messages.at(-1)?.location?.location;
     const docs = await askContext(lang, messages.at(-1)!.text, location, 40_000);
