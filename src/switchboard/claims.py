@@ -65,6 +65,12 @@ class Field:
     link: str = ""
 
 
+class GroupFieldError(ClaimError):
+    def __init__(self, field: Field, message: str):
+        self.field = field
+        super().__init__(message)
+
+
 def normalize_pem(value: str) -> str:
     """Rebuild a PEM private key that lost its line breaks (a paste into a one-line field) and check that it loads."""
     found = PEM_RE.search(value)
@@ -244,11 +250,11 @@ class Claims:
             if not raw.strip():
                 if f.optional:
                     continue
-                raise ClaimError(f"{f.label} is missing.")
+                raise GroupFieldError(f, f"{f.label} is missing.")
             try:
                 sealed[f.name] = self._cipher.encrypt(normalize(f.kind, raw).encode())
             except ClaimError as e:
-                raise ClaimError(f"{f.label}: {e}") from None
+                raise GroupFieldError(f, f"{f.label}: {e}") from None
 
         def save(db: Any) -> None:
             if db.execute("DELETE FROM claim_groups WHERE code_hash = ? AND expires_at > ? RETURNING code_hash",

@@ -384,6 +384,45 @@ Use `auth: key` for `Authorization: Bearer <key>`; `header` overrides the header
 Slack and GitHub webhook sinks can also use Stripe-style signing with `signature: stripe` and `secret_env`;
 their default header is `Stripe-Signature`, configurable with `header`.
 
+## Channel modes
+
+Use `modes_status` to see each channel's mode, its source, and any setup problems. The owner can call
+`space_mode` to change a mode. Pass a channel ID for one channel. Pass the space to change its default.
+Select `inherit` to restore the configured mode. SwB records each change and applies it immediately.
+
+`off` keeps the channel for owner requests. `watch` collects message excerpts in an inbox report for the owner.
+`assist` lets the assigned agent reply in the original thread. Use `modes.assist_max_chars` to change the
+1,500-character reply limit. `triage` lets the assigned agent use the approved actions. `work` routes owner requests.
+
+The owner's direct messages and mentions use `work` in every mode. Direct messages from other people use
+`watch` by default. Use `blocks.<block>.dm_mode: off` to keep direct messages for the owner. SwB checks
+sender IDs and applies the same access rules in every mode.
+
+SwB checks overrides first. Then it checks the channel, space, legacy settings, project, and default in that
+order. The default is `off`. The sample config sets it to `watch`. Watch reports arrive after 50 messages
+or the interval in `modes.digest_minutes`, whichever comes first. The default interval is 60 minutes.
+
+```yaml
+modes:
+  default: watch
+blocks:
+  discord:
+    spaces:
+      home:
+        mode: watch
+        project: example
+        channels:
+          "100000000000000004": assist
+          "100000000000000005": {mode: triage, actions: [reply, notify_owner]}
+```
+
+Triage starts with all supported actions. Set `actions` to choose the actions for a channel. For GitHub
+actions, use `connect(github)` to link a GitHub App or token. Grant the credential permission to change issues
+in the relevant repositories. Mode status shows when triage uses the project's default agent.
+
+Use separate agent credentials for public channels and owner work. A public channel can temporarily limit
+other writes for the same credential.
+
 ## Slack
 
 With a Slack block in the config (or a `slack:` section in a version 1 file), Slack is both a way in and a way out.
@@ -644,11 +683,11 @@ blocks:
     agents: {claude: [home]}
     spaces:
       home:
-        chats: [-100111222]
+        chats: [-1001111111111]
         owner_ids: [222222]
         known: {333333: Friend}
         default_target: claude
-        # listen: [-100111222]
+        # listen: [-1001111111111]
 ```
 
 Each group belongs to one space. Private chats go to `dm_space` (the first space by default). Use
@@ -780,6 +819,16 @@ In front of everything:
 
 Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where `<NAME>` becomes the agent name, or
 a key from a pairing code (below).
+
+### Server addresses
+
+Set `public_url` to the new URL. Add the old URL to `public_url_aliases`.
+
+Each URL has its own OAuth issuer. Existing tokens work at both URLs. New links use the new URL.
+
+Register `/auth/oidc/callback` for every server URL in the sign-in provider.
+
+By default, each passkey belongs to its original host. Set `auth.passkey_rp_id` to a domain that all hosts share to enroll passkeys for that domain.
 
 ### Connecting a new agent with a pairing code
 

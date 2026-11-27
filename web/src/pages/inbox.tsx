@@ -38,22 +38,23 @@ function relativeTime(value: string | null) {
 
 function RelativeTime({ value }: { value: string | null }) {
   const time = relativeTime(value)
-  if (!time) return "—"
+  if (!time) return null
   return <time dateTime={time.at.toISOString()} title={time.at.toLocaleString()}>{time.short}</time>
 }
 
-function Person({ label, kind, className }: { label: string; kind?: string | null; className?: string }) {
+function Person({ label, kind, className, avatarUrl }: { label: string; kind?: string | null; className?: string; avatarUrl?: string | null }) {
   return (
     <span className={cn("flex min-w-0 items-center gap-2", className)}>
-      <Logo kind={kind || label} className="size-5" />
+      <Logo kind={kind || label} avatarUrl={avatarUrl} className="size-5" />
       <span className="min-w-0 wrap-anywhere">{label}</span>
     </span>
   )
 }
 
-function NeedsRow({ name, kind, title, at, preview, actions }: {
+function NeedsRow({ name, kind, title, at, preview, actions, avatarUrl }: {
   name: string
   kind?: string
+  avatarUrl?: string | null
   title: ReactNode
   at: string | null
   preview?: ReactNode
@@ -62,7 +63,7 @@ function NeedsRow({ name, kind, title, at, preview, actions }: {
   return (
     <li className="grid grid-cols-1 gap-3 border-b py-3.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:py-[15px]">
       <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 text-sm leading-[18px] md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-y-0.5 md:text-[13px]">
-        <Logo kind={kind || name} className="col-start-1 row-start-1 size-[22px] md:row-span-2 md:size-7" />
+        <Logo kind={kind || name} avatarUrl={avatarUrl} className="col-start-1 row-start-1 size-[22px] md:row-span-2 md:size-7" />
         <span className="col-start-2 row-start-1 max-w-[14rem] min-w-0 font-semibold wrap-anywhere">{name}</span>
         <span className="col-start-3 row-start-1 font-mono text-xs leading-[18px] text-muted-foreground md:hidden"><RelativeTime value={at} /></span>
         <div className="col-span-3 row-start-2 min-w-0 wrap-anywhere md:col-span-1 md:col-start-3 md:row-start-1">
@@ -85,11 +86,11 @@ function SlackApproval({ item }: { item: PendingWrite }) {
       { method: "POST", csrf: session?.csrf },
     ),
     onSuccess: ({ status }) => {
-      if (status === "failed") toast.error("Slack didn’t send the approved write.")
-      else if (status === "rejected") toast.success("Denied Slack write.")
-      else toast.success("Approved Slack write.")
+      if (status === "failed") toast.error("Slack delivery failed.")
+      else if (status === "rejected") toast.success("Denied Slack request.")
+      else toast.success("Approved Slack request.")
     },
-    onError: () => toast.error("Couldn’t decide the Slack request."),
+    onError: () => toast.error("Slack request update failed."),
     onSettled: () => Promise.all([
       client.invalidateQueries({ queryKey: inboxKey }),
       client.invalidateQueries({ queryKey: ["audit"] }),
@@ -130,7 +131,7 @@ function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conve
       method: "POST", csrf: session?.csrf,
     }),
     onSuccess: () => toast.success("Resumed conversation."),
-    onError: () => toast.error("Couldn’t resume the conversation."),
+    onError: () => toast.error("Conversation failed to resume."),
     onSettled: () => Promise.all([
       client.invalidateQueries({ queryKey: inboxKey }),
       client.invalidateQueries({ queryKey: ["conversation", pause.root] }),
@@ -141,9 +142,10 @@ function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conve
     <NeedsRow
       name={displayReference(conversation?.title || pause.root)}
       kind={conversation?.destination_kind || conversation?.destination}
-      title={<Link className="hover:underline" to={conversationLink(pause.root)}>Paused at the turn cap</Link>}
+      avatarUrl={conversation?.target_avatar_url}
+      title={<Link className="hover:underline" to={conversationLink(pause.root)}>Paused at turn cap</Link>}
       at={pause.paused_at}
-      preview={`${pause.turns} turns`}
+      preview={`${pause.turns} ${pause.turns === 1 ? "turn" : "turns"}`}
       actions={(
         <Button
           size="sm" className="min-h-9 md:min-h-[26px]" disabled={!session?.csrf || resume.isPending || resume.isSuccess}
@@ -176,9 +178,9 @@ function Conversations({ items }: { items: Conversation[] }) {
           const { from, to, fromKind, toKind } = participants(row)
           return (
             <tr key={row.handle} role="row" className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
-              <td role="cell" className="font-mono text-xs wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project ?? "—"}</td>
+              <td role="cell" className="font-mono text-xs wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project}</td>
               <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} /></td>
-              <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} /></td>
+              <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url} /></td>
               <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-1 max-md:font-semibold md:py-2 md:pr-3">
                 <Link to={conversationLink(row.handle)} className="after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring">
                   {displayReference(row.title || row.handle)}
@@ -210,7 +212,7 @@ function InboxList() {
       <section aria-labelledby="needs-you">
         <h2 id="needs-you" className="text-heading-md font-semibold tracking-[-0.01em]">Needs you</h2>
         {inbox.isPending && <div className="flex h-[60px] items-center"><Skeleton className="h-3 w-28" /></div>}
-        {inbox.isError && <DataState kind="error" message="Couldn’t load the inbox." onRetry={() => void inbox.refetch()} />}
+        {inbox.isError && <DataState kind="error" message="Inbox unavailable." onRetry={() => void inbox.refetch()} />}
         {data && (data.pending_writes.length || data.pauses.length ? (
           <ul className="mt-2">
             {data.pending_writes.map((item) => <SlackApproval key={item.id} item={item} />)}
@@ -218,14 +220,14 @@ function InboxList() {
               <TurnPause key={pause.root} pause={pause} conversation={data.conversations.find((row) => row.handle === pause.root)} />
             ))}
           </ul>
-        ) : <DataState kind="empty" message="Nothing needs you." />)}
+        ) : <DataState kind="empty" message="All clear" />)}
       </section>
       {(inbox.isPending || data) && (
         <section aria-labelledby="conversations">
           <h2 id="conversations" className="text-heading-md font-semibold tracking-[-0.01em]">Conversations</h2>
           {inbox.isPending ? <ConversationsSkeleton /> : data?.conversations.length
             ? <Conversations items={data.conversations} />
-            : <DataState kind="empty" message="No conversations yet." />}
+            : <DataState kind="empty" message="0 conversations" />}
         </section>
       )}
     </div>
@@ -264,9 +266,9 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
     from?.kind ? from.kind.replace(/_/g, " ") : null,
     from?.workspace,
     channel ? channelLabel(channel) : null,
-    item.trust || from?.trust ? `Trust: ${item.trust || from?.trust}` : null,
-    from?.thread_id || from?.thread_ts ? `Thread: ${displayReference(from.title || from.thread_id || from.thread_ts || "")}` : null,
-    from?.message_id || item.event_id || from?.ts ? `Message: ${from?.message_id || item.event_id || from?.ts}` : null,
+    item.trust || from?.trust ? `Trust ${item.trust || from?.trust}` : null,
+    from?.thread_id || from?.thread_ts ? `Thread ${displayReference(from.title || from.thread_id || from.thread_ts || "")}` : null,
+    from?.message_id || item.event_id || from?.ts ? `Message ${from?.message_id || item.event_id || from?.ts}` : null,
   ].filter(Boolean)
   const kind = item.kind === "slack_event" ? item.slack_kind || "Slack event" : item.kind.replace(/_/g, " ")
   return (
@@ -279,7 +281,7 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
         {(provenance.length > 0 || item.in_reply_to || (author && kind !== "message") || item.status) && (
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs wrap-anywhere text-muted-foreground">
             {author && kind !== "message" && <span className="capitalize">{kind}</span>}
-            {item.status && <span>Status: {item.status.replace(/_/g, " ")}</span>}
+            {item.status && <span>Status {item.status.replace(/_/g, " ")}</span>}
             {provenance.map((part, index) => <span key={index}>{part}</span>)}
             {item.in_reply_to && (replyCursor
               ? <a className="underline underline-offset-2" href={`#message-${replyCursor}`}>In reply to {item.in_reply_to}</a>
@@ -306,6 +308,7 @@ function InboxConversation({ handle }: { handle: string }) {
   const conversation = thread.data?.pages[0]?.conversation
   const messages = thread.data?.pages.flatMap((page) => page.items) ?? []
   const people = conversation && participants(conversation)
+  const updatedAt = conversation?.updated_at ?? conversation?.created_at
   const firstMessage = new Map<string, number>()
   for (const item of messages) {
     if (item.handle && !firstMessage.has(item.handle)) firstMessage.set(item.handle, item.cursor)
@@ -342,7 +345,7 @@ function InboxConversation({ handle }: { handle: string }) {
         </LoadingSkeleton>
       )}
       {thread.isError && !conversation && (
-        <DataState kind="error" message="Couldn’t load this conversation." onRetry={() => void thread.refetch()} />
+        <DataState kind="error" message="Conversation unavailable." onRetry={() => void thread.refetch()} />
       )}
       {conversation && people && (
         <section aria-labelledby="conversation-title" className="mt-4">
@@ -350,14 +353,14 @@ function InboxConversation({ handle }: { handle: string }) {
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <Person label={people.from} kind={people.fromKind} />
             <ArrowRight aria-label="to" className="size-4 text-muted-foreground" strokeWidth={1.5} />
-            <Person label={people.to} kind={people.toKind} />
+            <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url} />
           </div>
           <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-xs text-muted-foreground">
             {conversation.project && <div className="flex flex-wrap gap-1"><dt>Project</dt><dd className="font-mono wrap-anywhere">{conversation.project}</dd></div>}
-            <div className="flex flex-wrap gap-1"><dt>Via</dt><dd className="font-mono wrap-anywhere">{conversation.destination}</dd></div>
+            <div className="flex flex-wrap gap-1"><dt>Channel</dt><dd className="font-mono wrap-anywhere">{conversation.destination}</dd></div>
             <div className="flex flex-wrap gap-1"><dt>Status</dt><dd>{conversation.status?.replace(/_/g, " ") || (conversation.open ? "Open" : "Closed")}</dd></div>
-            <div className="flex flex-wrap gap-1"><dt>Handle</dt><dd className="font-mono wrap-anywhere">{conversation.handle}</dd></div>
-            <div className="flex flex-wrap gap-1"><dt>Updated</dt><dd><RelativeTime value={conversation.updated_at ?? conversation.created_at} /></dd></div>
+            <div className="flex flex-wrap gap-1"><dt>Conversation ID</dt><dd className="font-mono wrap-anywhere">{conversation.handle}</dd></div>
+            {updatedAt && <div className="flex flex-wrap gap-1"><dt>Updated</dt><dd><RelativeTime value={updatedAt} /></dd></div>}
           </dl>
           {messages.length ? (
             <ol aria-label="Messages">
@@ -365,9 +368,9 @@ function InboxConversation({ handle }: { handle: string }) {
                 <ThreadMessage key={item.cursor} item={item} replyCursor={firstMessage.get(item.in_reply_to ?? "")} />
               ))}
             </ol>
-          ) : <DataState kind="empty" message="No messages yet." />}
+          ) : <DataState kind="empty" message="0 messages" />}
           {thread.isFetchNextPageError && (
-            <DataState kind="error" message="Couldn’t load more messages." onRetry={() => void thread.fetchNextPage()} />
+            <DataState kind="error" message="Loading more messages failed." onRetry={() => void thread.fetchNextPage()} />
           )}
           {thread.hasNextPage && !thread.isFetchNextPageError && (
             <Button className="mt-4" variant="outline" size="sm" disabled={thread.isFetching} onClick={() => void thread.fetchNextPage()}>

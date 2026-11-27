@@ -28,7 +28,7 @@ from test_project_routines import Anthropic, TOKEN as ROUTINE_TOKEN
 BOT, OWNER_ID, STRANGER = 111111, 222222, 333333
 TOKEN = f"{BOT}:" + "fake_" * 8
 REJECTED = f"{BOT}:" + "invalid_" * 5
-GROUP, UNKNOWN = -100111222, -100333444
+GROUP, UNKNOWN = -1001111111111, -1002222222222
 BOT_NAME, ROUTINE_NAME = "ExampleSwbBot", 'Ops & <Build> "Desk"'
 
 
@@ -184,7 +184,7 @@ def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
     with run() as (core, c, block, bot, anthropic):
         c.portal.call(bot.deliver, update(11, mention=True, text="example-runner can you check?", topic=42))
         assert "can you check?" in anthropic.fired[0][1] and f"@{BOT_NAME.lower()}" not in anthropic.fired[0][1]
-        assert "https://t.me/c/111222/11" in anthropic.fired[0][1]
+        assert f"https://t.me/c/{str(GROUP)[4:]}/11" in anthropic.fired[0][1]
         assert bot.calls["setMessageReaction"] == [{"chat_id": GROUP, "message_id": 11, "reaction": [{"type": "emoji", "emoji": "👀"}]}]
         handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
         answer = 'Result: <ok> & "ready"'

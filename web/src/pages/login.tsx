@@ -37,8 +37,8 @@ export function LoginPage() {
     }).catch((error: unknown) => {
       if (!active) return
       setLinkError(error instanceof ApiError && error.code === "link_expired"
-        ? "This sign-in link expired or was already used. Ask your agent for a new one."
-        : "Couldn’t use this sign-in link. Ask your agent for a new one.")
+        ? "Ask your agent for a fresh sign-in link."
+        : "Sign-in failed. Ask your agent for a new link.")
     }).finally(() => {
       if (active) setLinkPending(false)
     })
@@ -69,8 +69,8 @@ export function LoginPage() {
 
   const hasPasskey = !!session.data?.methods.passkeys
   const oidc = session.data?.methods.oidc
-  const error = linkError || (signIn.isError ? "Couldn’t sign in with a passkey." : "")
-    || (params.get("error") === "oidc_failed" ? "Couldn’t sign in with your identity provider." : "")
+  const error = linkError || (signIn.isError ? "Passkey sign-in failed." : "")
+    || (params.get("error") === "oidc_failed" ? "Sign-in with your provider failed." : "")
   const loading = linkPending || session.isPending
 
   function enrollPasskey(event: FormEvent<HTMLFormElement>) {
@@ -100,10 +100,10 @@ export function LoginPage() {
                     />
                   </label>
                 )}
-                {!passkeysSupported && <p className="text-sm text-muted-foreground">Passkeys aren’t available in this browser.</p>}
-                {register.isError && <p role="alert" className="text-sm text-destructive">Couldn’t add a passkey.</p>}
+                {!passkeysSupported && <p className="text-sm text-muted-foreground">Passkeys require a compatible browser.</p>}
+                {register.isError && <p role="alert" className="text-sm text-destructive">Try adding the passkey again.</p>}
                 <div className="flex flex-wrap justify-end gap-3">
-                  <Button variant="ghost" disabled={register.isPending} onClick={() => setEnrollmentDone(true)}>Continue without passkey</Button>
+                  <Button variant="ghost" disabled={register.isPending} onClick={() => setEnrollmentDone(true)}>Skip for now</Button>
                   <Button type="submit" disabled={register.isPending || !passkeysSupported || !session.data?.csrf}>
                     <KeyRound aria-hidden />
                     {register.isPending ? "Adding…" : "Add a passkey"}
@@ -117,7 +117,7 @@ export function LoginPage() {
                   <DataState kind="error" message="Session unavailable." onRetry={() => void session.refetch()} className="py-0" />
                 ) : (
                   <>
-                    {hasPasskey && !passkeysSupported && <p className="text-sm text-muted-foreground">Passkeys aren’t available in this browser.</p>}
+                    {hasPasskey && !passkeysSupported && <p className="text-sm text-muted-foreground">Passkeys require a compatible browser.</p>}
                     {(hasPasskey && passkeysSupported || oidc) && (
                       <div className="flex flex-wrap items-center gap-2">
                         {hasPasskey && passkeysSupported && (

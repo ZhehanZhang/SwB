@@ -4,7 +4,7 @@ import type { ConnectionState } from "@/lib/connections"
 const labels = {
   connected: "Connected",
   disconnected: "Disconnected",
-  not_configured: "Not configured",
+  not_configured: "Setup pending",
   loading: "Loading…",
   unavailable: "Unavailable",
 }

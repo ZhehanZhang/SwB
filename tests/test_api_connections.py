@@ -52,7 +52,7 @@ def test_discord_connection_uses_discovery_and_safe_status_fields(providers):
     assert response.headers["cache-control"] == "no-store"
     assert DISCORD_TOKEN not in response.text and "token_source" not in response.text
     assert response.json() == {
-        "platform": "discord", "state": "connected",
+        "platform": "discord", "block": "discord-bot", "state": "connected",
         "details": {
             "bot_name": status["setup"]["bot_name"], "invite_url": status["setup"]["invite_url"],
             "owner_ids": ["301", "303"],
@@ -85,7 +85,7 @@ def test_telegram_connection_uses_seen_chats_and_actual_spaces(providers):
     assert response.status_code == 200
     assert TELEGRAM_TOKEN not in response.text and "token_source" not in response.text
     assert response.json() == {
-        "platform": "telegram", "state": "disconnected",
+        "platform": "telegram", "block": "telegram", "state": "disconnected",
         "details": {
             "bot_name": "@ReleaseSwbBot", "owner_ids": ["811"],
             "avatar": {"file": "switchboard.png", "state": "pending", "url": None},
@@ -108,7 +108,7 @@ def test_connection_routes_require_owner_and_list_unconfigured(make, platform):
             denied = client.get(url, headers=headers)
             assert denied.status_code == 401 and denied.json() == {"error": "signed_out"}
             assert denied.headers["cache-control"] == "no-store"
-    assert client.get(route, headers=OWNER).json() == {"platform": platform, "state": "not_configured", "details": None}
+    assert client.get(route, headers=OWNER).json() == {"platform": platform, "block": None, "state": "not_configured", "details": None}
     assert client.get(f"{route}/avatar", headers=OWNER).status_code == 404
     csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
     assert client.post(route, headers={**OWNER, "origin": PUBLIC, "x-csrf-token": csrf}).status_code == 405
@@ -124,7 +124,7 @@ def test_slack_connection_summary_uses_runtime_status(make):
     response = client.get("/api/connections/slack", headers=OWNER)
     assert response.status_code == 200
     assert response.json() == {
-        "platform": "slack", "state": "connected",
+        "platform": "slack", "block": "slack", "state": "connected",
         "details": {"workspaces": [{"name": "ops", "intake": "poll", "connected": True}]},
     }
 

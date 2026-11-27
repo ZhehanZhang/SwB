@@ -6,6 +6,22 @@ from pathlib import Path
 from .config import AVATAR_RE
 
 BUNDLED_AVATARS = Path(__file__).parent / "avatars"
+AGENT_AVATARS = {
+    "grok-bot": "grok-bot.png", "grok-routine": "grok-bot.png", "dots": "dots.png", "dot": "dots.png",
+    "claude-code": "claude-code.png", "claude": "claude.png", "anthropic": "claude.png",
+    "chatgpt": "chatgpt.png", "openai": "chatgpt.png",
+    "codex": "codex.png", "gemini": "gemini.png", "grok": "grok.png", "xai": "grok.png",
+    "muse": "muse.png", "swb": "swb.png", "switchboard": "swb.png",
+}
+
+
+def agent_avatar(name: str) -> str | None:
+    name = name.lower().replace("_", "-").replace(" ", "-").partition(":")[0]
+    return next((filename for prefix, filename in AGENT_AVATARS.items() if name == prefix or name.startswith(prefix + "-")), None)
+
+
+def agent_avatar_url(name: str) -> str | None:
+    return f"/avatars/{avatar}" if (avatar := agent_avatar(name)) else None
 
 
 def find_avatar(name: str, dirs: Iterable[Path] = (BUNDLED_AVATARS,)) -> Path | None:

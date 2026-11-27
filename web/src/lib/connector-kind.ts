@@ -5,9 +5,9 @@ export function connectorKind(kind?: string | null) {
     case "telegram": return "telegram"
     case "github": return "github"
     case "chatgpt":
-    case "openai":
+    case "openai": return "chatgpt"
     case "dot":
-    case "dots": return "chatgpt"
+    case "dots": return "dots"
     case "muse":
     case "muse-code": return "muse"
     default: return undefined

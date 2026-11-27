@@ -27,6 +27,8 @@ SERVICE_KEY = "capy_service_" + "y" * 30
 PUBLIC = "https://switchboard.example.test"
 CAPTAIN = "jam_CAPTAIN0000000000000000000"
 CAPTAIN2 = "jam_CAPTAIN2000000000000000000"
+CAPTAIN_CODE = "BCN-1"
+CAPTAIN2_NAME = "Orbit Captain"
 PROJECT = "project_BCN"
 OTHER_PROJECT = "project_OTHER"
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
@@ -71,7 +73,7 @@ class FakeCapy:
         self.requests: list[tuple[str, str, Any]] = []
         self.threads: dict[str, dict[str, Any]] = {
             CAPTAIN: self.thread(CAPTAIN, PROJECT, title="Captain"),
-            CAPTAIN2: self.thread(CAPTAIN2, OTHER_PROJECT, title="Orbit Captain"),
+            CAPTAIN2: self.thread(CAPTAIN2, OTHER_PROJECT, title=CAPTAIN2_NAME),
             "jam_OTHER": self.thread("jam_OTHER", OTHER_PROJECT, title="Someone else's"),
         }
         self.messages: dict[str, list[dict[str, Any]]] = {CAPTAIN: [{"id": "01A", "source": "assistant", "text": "earlier", "createdAt": "x"}]}
@@ -87,8 +89,8 @@ class FakeCapy:
         self.hidden_from: dict[str, set[str]] = {}
         self.auths: list[tuple[str, str, str]] = []
         self.captains: list[dict[str, Any]] = [
-            {"id": CAPTAIN, "code": "BCN-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
-            {"id": CAPTAIN2, "code": "ORBIT-3", "name": "Orbit Captain", "title": "Orbit Captain", "projectId": OTHER_PROJECT},
+            {"id": CAPTAIN, "code": CAPTAIN_CODE, "name": "Captain", "title": "Captain", "projectId": PROJECT},
+            {"id": CAPTAIN2, "code": "ORBIT-3", "name": CAPTAIN2_NAME, "title": CAPTAIN2_NAME, "projectId": OTHER_PROJECT},
         ]
         self.projects: list[dict[str, Any]] = [
             {"id": PROJECT, "name": "Beacon", "code": "BCN", "repos": [{"repoFullName": "Example-Org/Web-App", "baseBranch": "main", "mode": "primary"},

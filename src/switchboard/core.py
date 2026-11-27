@@ -31,8 +31,9 @@ from .memory import GENERAL, Memory, MemoryError_
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
-from .slack.avatar_files import AvatarFiles
+from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store
+from .subject import subject
 from .visibility import Visibility
 
 DestinationError = BlockError
@@ -254,8 +255,8 @@ class Switchboard:
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
-                         handle_meta: dict[str, Any] | None = None, _reply: bool = False, _mode_notify: bool = False,
-                         dry_run: bool = False) -> dict[str, Any]:
+                         handle_meta: dict[str, Any] | None = None, title: str | None = None,
+                         _reply: bool = False, _mode_notify: bool = False, dry_run: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
@@ -284,11 +285,13 @@ class Switchboard:
         sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
                   "trust": principal.trust}
+        title = subject("", "", None, title or "", verb="") or subject(
+            sender["label"], "", None, text, verb="replies" if in_reply_to else "asks", trust=principal.trust)
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
-        handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
+        handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=title,
                                         meta=meta, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
-        await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender,
+        await self.inbox.add(handle, "message", {"subject": title, "text": text[:20_000], "project": p.slug if p else None, "from": sender,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
@@ -418,6 +421,8 @@ class Switchboard:
                     avatar, icon_url = configured.avatar, configured.icon_url
                 elif not avatar and not icon_url and p.get("id"):
                     avatar = f"{p['id']}.png"
+                    if not self.find_avatar(avatar):
+                        avatar = agent_avatar(p["id"])
                 file = avatar if isinstance(avatar, str) and self.find_avatar(avatar) else None
                 t["persona"] = {**p, "avatar_file": file, "icon_url": icon_url}
                 t["avatar_url"] = (self.avatar_url(file) if file else None) or icon_url
@@ -503,8 +508,8 @@ class Switchboard:
 
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
-                   forward: str | None = None, handle_meta: dict[str, Any] | None = None, handle: str | None = None,
-                   dry_run: bool = False) -> dict[str, Any]:
+                   forward: str | None = None, handle_meta: dict[str, Any] | None = None,
+                   handle: str | None = None, dry_run: bool = False) -> dict[str, Any]:
         """Send work or a message, or preview its resolved destination without delivering it."""
         if principal.targets is not None:
             await self.check_target(principal, to, project, forward)
@@ -577,7 +582,7 @@ class Switchboard:
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         if addr is not None and addr.block == "agent":
             return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta,
-                                            dry_run=dry_run), "to": str(addr)}
+                                            title=title, dry_run=dry_run), "to": str(addr)}
         if addr is not None and addr.block == "project":
             project, addr = addr.id, None
         if addr is not None:
