@@ -47,6 +47,11 @@ class RateLimiter:
         self.limits = limits or LIMITS
         self.max_keys_per_bucket = max_keys_per_bucket
         self.hits: dict[str, OrderedDict[str, deque[float]]] = {}
+        self._last_now = float("-inf")
+
+    def _now(self) -> float:
+        self._last_now = max(self._last_now, self.clock())
+        return self._last_now
 
     @staticmethod
     def _expire(peers: OrderedDict[str, deque[float]], cutoff: float) -> None:
@@ -58,7 +63,7 @@ class RateLimiter:
         n, span = self.limits[bucket]
         if not (peers := self.hits.get(bucket)):
             return None
-        now = self.clock()
+        now = self._now()
         cutoff = now - span
         self._expire(peers, cutoff)
         if (q := peers.get(key)) is None:
@@ -71,7 +76,7 @@ class RateLimiter:
         n, span = self.limits[bucket]
         if n <= 0:
             return
-        now = self.clock()
+        now = self._now()
         peers = self.hits.setdefault(bucket, OrderedDict())
         self._expire(peers, now - span)
         if (q := peers.get(key)) is None:

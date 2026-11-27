@@ -74,6 +74,20 @@ def test_limiter_expires_idle_peers_without_looking_them_up():
     assert lim.blocked("total", "*") == 10.0
 
 
+def test_limiter_preserves_expiry_order_when_the_clock_moves_backward():
+    now = [1000.0]
+    lim = RateLimiter(clock=lambda: now[0], limits={"peer": (1, 600.0)})
+    lim.hit("peer", "first")
+    now[0] = 999.0
+    lim.hit("peer", "second")
+    assert lim.blocked("peer", "second") == 600.0
+    now[0] = 1599.5
+    assert lim.blocked("peer", "first") == lim.blocked("peer", "second") == 1.0
+    now[0] = 1600.0
+    assert lim.blocked("peer", "second") is None
+    assert not lim.hits["peer"]
+
+
 def test_auth_failures_say_what_was_wrong_without_the_key(make):
     core, c = make()
     bad = '"' + STATIC_KEY[:10] + ' ' + STATIC_KEY[10:]
