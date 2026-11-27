@@ -1,36 +1,40 @@
 import type { CSSProperties } from 'react';
 
 export type MarkKind =
-  | 'claude' | 'claude-code' | 'chatgpt' | 'codex' | 'gemini' | 'grok' | 'capy'
+  | 'claude' | 'claude-code' | 'chatgpt' | 'codex' | 'gemini' | 'grok' | 'muse' | 'swb' | 'capy'
   | 'slack' | 'discord' | 'telegram' | 'github';
 
-const color: Partial<Record<MarkKind, string>> = {
-  claude: '/marks/claude.svg',
-  'claude-code': '/marks/claude.svg',
-  gemini: '/marks/gemini-star.webp',
+const avatar: Partial<Record<MarkKind, string>> = {
+  claude: '/avatars/claude.png',
+  'claude-code': '/avatars/claude-code.png',
+  chatgpt: '/avatars/chatgpt.png',
+  codex: '/avatars/codex.png',
+  gemini: '/avatars/gemini.png',
+  grok: '/avatars/grok.png',
+  muse: '/avatars/muse.png',
+  swb: '/avatars/swb.png',
+  capy: '/marks/captain.webp',
+};
+const platform: Partial<Record<MarkKind, [string, string]>> = {
+  slack: ['/marks/slack.svg', 'var(--logo-slack)'],
+  github: ['/marks/github.svg', 'var(--foreground)'],
+};
+const platformColor: Partial<Record<MarkKind, string>> = {
   discord: '/marks/discord.svg',
   telegram: '/marks/telegram.svg',
 };
-const mono: Partial<Record<MarkKind, [string, string]>> = {
-  chatgpt: ['/marks/openai.svg', 'var(--foreground)'],
-  codex: ['/marks/openai.svg', '#fafafa'],
-  github: ['/marks/github.svg', 'var(--foreground)'],
-  grok: ['/marks/xai.svg', 'var(--foreground)'],
-  slack: ['/marks/slack.svg', 'var(--logo-slack)'],
-};
 
 export function MarkTile({ kind, className = '', style }: { kind: MarkKind; className?: string; style?: CSSProperties }) {
-  const dark = kind === 'claude-code' || kind === 'codex';
-  const base = `swb-mark-tile ${dark ? 'swb-mark-tile-dark' : ''} ${className}`;
-  if (kind === 'capy') {
-    return <span className={`${base} swb-mark-tile-capy`} style={style} aria-hidden="true"><img src="/marks/captain.webp" alt="" /></span>;
+  const face = avatar[kind];
+  if (face) {
+    return <span className={`swb-mark-tile swb-mark-avatar ${className}`} style={style} aria-hidden="true"><img src={face} alt="" /></span>;
   }
-  const masked = mono[kind];
+  const masked = platform[kind];
   return (
-    <span className={base} style={style} aria-hidden="true">
+    <span className={`swb-mark-tile ${className}`} style={style} aria-hidden="true">
       {masked
         ? <span className="swb-mark-glyph" style={{ backgroundColor: masked[1], maskImage: `url("${masked[0]}")`, WebkitMaskImage: `url("${masked[0]}")` }} />
-        : <img className="swb-mark-glyph" src={color[kind]} alt="" />}
+        : <img className="swb-mark-glyph" src={platformColor[kind]} alt="" />}
     </span>
   );
 }

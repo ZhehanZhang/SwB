@@ -41,7 +41,7 @@ export function Conversation({ title, channel, you, lines }: { title: string; ch
               </circle>
             ))}
           <foreignObject x="36" y="16" width="48" height="48"><MarkTile kind="slack" className="swb-route-node" /></foreignObject>
-          <image href="/marks/swb.svg" x="122" y="152" width="56" height="56" />
+          <foreignObject x="122" y="152" width="56" height="56"><MarkTile kind="swb" className="swb-route-hub" /></foreignObject>
           <foreignObject x="36" y="296" width="48" height="48"><MarkTile kind="claude" className="swb-route-node" /></foreignObject>
           <foreignObject x="216" y="296" width="48" height="48"><MarkTile kind="capy" className="swb-route-node" /></foreignObject>
         </svg>

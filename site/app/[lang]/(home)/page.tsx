@@ -13,7 +13,7 @@ import { SwitchboardHero } from '@/components/switchboard-hero';
 import { repository } from '@/lib/source';
 
 const connectorKinds: MarkKind[] = [
-  'claude', 'chatgpt', 'gemini', 'claude-code', 'codex', 'capy', 'grok', 'slack', 'discord', 'telegram', 'github',
+  'claude', 'chatgpt', 'gemini', 'claude-code', 'codex', 'capy', 'grok', 'muse', 'slack', 'discord', 'telegram', 'github',
 ];
 
 export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
@@ -63,7 +63,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             src="/shots/hero-dark.webp" srcSet="/shots/hero-dark-1200.webp 1200w, /shots/hero-dark.webp 2400w"
             sizes="(min-width: 1152px) 1088px, 100vw" alt={copy.shotAlt} loading="lazy" />
         </figure>
-        <div className="swb-connectors grid grid-cols-3 gap-y-6 py-12 min-[500px]:grid-cols-6 lg:grid-cols-11 lg:py-16">
+        <div className="swb-connectors grid grid-cols-3 gap-y-6 py-12 min-[500px]:grid-cols-6 lg:grid-cols-12 lg:py-16">
           {copy.connectors.map((name, index) => (
             <figure key={name} className="flex flex-col items-center gap-2 text-center">
               <MarkTile kind={connectorKinds[index]} />
