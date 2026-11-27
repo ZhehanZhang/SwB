@@ -3,7 +3,7 @@ title: 伴侣设备
 description: 在自己的设备上运行 SwB，让已部署的 SwB 使用本地功能。
 ---
 
-伴侣设备是运行 SwB 的自有设备。它会连接你部署的 SwB，让智能体使用这台设备上的功能。
+在自己的设备上运行 SwB，就能把它用作伴侣设备。智能体可以通过你部署的 SwB 使用这台设备上的功能。
 
 ## 复制设置提示词
 
@@ -11,11 +11,11 @@ description: 在自己的设备上运行 SwB，让已部署的 SwB 使用本地�
 
 ## 配对设备
 
-请以所有者身份登录的智能体调用 `companion_code`。
+请以所有者身份登录的智能体调用 `companion_code`。请智能体将配对码存入权限为 `0600` 的私有文件。
 
 若要在控制台获取配对码，请[用通行密钥登录](/zh-Hans/docs/owner-login)。打开 **Settings**。在 **Connections** 中选择 **Pair a device**。
 
-在设备上运行以下命令。将示例地址换成你的 SwB HTTPS 地址。
+在设备上运行以下命令。将示例地址换成你的 SwB HTTPS 地址。如果 SwB 也在这台设备上运行，可以使用 `http://127.0.0.1:8870`。
 
 ```sh
 uvx swb-one companion connect https://swb.example.com --cap notify
@@ -34,26 +34,28 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | `--cap notify` | 在设备桌面上显示通知 |
 | `--cap drop` | 通过 `~/SwB Drop` 文件夹共享文件，每个文件上限为 10 MiB |
 | `--cap mcp --mcp NAME=COMMAND` | 让智能体使用设备上 MCP 服务器提供的工具 |
-| `--cap herdr` | 向 Herdr 窗格中的编程智能体发送消息 |
-| `--cap codex` | 通过 Codex 应用服务器向 Codex 发送消息 |
-| `--cap opencode` | 通过 OpenCode 服务器向 OpenCode 发送消息 |
-| `--cap dsh` | 通过 SwB 桥接插件向 DeepSeek Harness 发送消息 |
-| `--cap hooks` | 接收 Claude Code、Gemini CLI 和 Codex 的状态 |
-| `--cap muse` | 在 Mac 或 Linux 电脑上通过蓝牙与 Muse 配对。请使用 [Muse 指南](/zh-Hans/docs/setup/muse)中的命令 |
+| `--cap herdr` | [Herdr](/zh-Hans/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex 应用服务器](/zh-Hans/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode 服务器](/zh-Hans/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/zh-Hans/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [状态钩子](/zh-Hans/docs/blocks/local-sessions#状态钩子) |
+| `--cap muse` | 在 Mac 或 Linux 电脑上通过蓝牙与 Muse 配对 |
 
-在 Linux 上，通知功能使用 `notify-send`。
+Linux 上的通知功能使用 `notify-send`。在 Debian 和 Ubuntu 上，请安装 `libnotify-bin` 软件包。
 
-每个 MCP 服务器使用一个 `--mcp` 选项。填写启动命令或本机 HTTP 地址，例如 `--mcp 'notes=uvx notes-mcp'` 或 `--mcp notes=http://127.0.0.1:8000/mcp`。
+Muse 功能请使用 Python 3.13。请参阅 [Muse 配对指南](/zh-Hans/docs/setup/muse)。
+
+```sh
+uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
+```
+
+为每个 MCP 服务器添加一个 `--mcp` 选项。可以填写启动命令，例如 `--mcp 'notes=uvx notes-mcp'`。对于设备上的 HTTP 服务器，请填写本机地址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
 智能体用 `companion_list` 查看已配对的设备及其操作。它用 `companion_invoke` 执行操作。
 
 ## 本地会话
 
-本地会话是指正在这台设备上运行的编程智能体。SwB 会把会话及其状态列在目标中。
-
-SwB 先把发给会话的消息放入智能体的邮箱，再尝试送到已打开的会话。答复会回到原来的 SwB 会话。
-
-有关命令和适用的智能体，请参阅[本地会话](/zh-Hans/docs/blocks/local-sessions)。
+配对前，请按表中的链接配置本地智能体。配对后，让伴侣设备保持运行。请以所有者身份登录的智能体调用 `targets(block="local")`。确认结果中列出了你的会话地址。
 
 ## 保持运行
 
@@ -66,3 +68,5 @@ SwB 先把发给会话的消息放入智能体的邮箱，再尝试送到已打�
 ## 断开连接
 
 在设备上运行 `swb companion disconnect`，以移除设备密钥。也可以在控制台的 **Settings** 中打开 **Connections**。在该设备旁选择 **Disconnect**，以撤销密钥。
+
+运行中的伴侣设备发现密钥已撤销时，会删除本机密钥。如果设备上还留有密钥，请先运行 `swb companion disconnect`，再重新配对。

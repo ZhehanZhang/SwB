@@ -3,7 +3,7 @@ title: Companion
 description: Run SwB on your own device and give your SwB deployment local features.
 ---
 
-A companion is SwB running on a device you own. It connects to your SwB deployment. Your agents can then use features on that device.
+Run SwB on your own device to use it as a companion. The companion connects to your SwB deployment. Your agents can then use features on that device.
 
 ## Copy the setup prompt
 
@@ -11,11 +11,11 @@ A companion is SwB running on a device you own. It connects to your SwB deployme
 
 ## Pair a device
 
-Ask an agent signed in as the owner to call `companion_code`.
+Ask an agent signed in as the owner to call `companion_code`. Ask the agent to save the code in a private file with mode `0600`.
 
 To get a code in the console, [sign in with a passkey](/docs/owner-login). Open Settings. In **Connections**, select **Pair a device**.
 
-Run this command on the device. Replace the example address with your SwB HTTPS address.
+Run this command on the device. Replace the example address with your SwB HTTPS address. For SwB on this device, you can use `http://127.0.0.1:8870`.
 
 ```sh
 uvx swb-one companion connect https://swb.example.com --cap notify
@@ -34,26 +34,28 @@ Add one `--cap` option for each feature you want to enable.
 | `--cap notify` | Shows desktop notifications on the device |
 | `--cap drop` | Shares files up to 10 MiB each through the `~/SwB Drop` folder |
 | `--cap mcp --mcp NAME=COMMAND` | Gives your agents access to tools on an MCP server on the device |
-| `--cap herdr` | Reaches coding agents in Herdr panes |
-| `--cap codex` | Reaches Codex through its app server |
-| `--cap opencode` | Reaches OpenCode through its server |
-| `--cap dsh` | Reaches DeepSeek Harness through the SwB bridge |
-| `--cap hooks` | Shares status from Claude Code, Gemini CLI and Codex |
-| `--cap muse` | Pairs Muse over Bluetooth on a Mac or a Linux computer. Use the command in the [Muse guide](/docs/setup/muse) |
+| `--cap herdr` | [Herdr](/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex app server](/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode server](/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [Status hooks](/docs/blocks/local-sessions#status-hooks) |
+| `--cap muse` | Pairs Muse over Bluetooth on a Mac or a Linux computer |
 
-On Linux, notifications use `notify-send`.
+On Linux, notifications use `notify-send`. On Debian and Ubuntu, install it with the `libnotify-bin` package.
 
-For MCP, add one `--mcp` option for each server. Give a command or an HTTP address on the device. For example, use `--mcp 'notes=uvx notes-mcp'` or `--mcp notes=http://127.0.0.1:8000/mcp`.
+Use Python 3.13 for the Muse feature. Follow the [Muse pairing guide](/docs/setup/muse).
+
+```sh
+uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
+```
+
+Add one `--mcp` option per MCP server. Use a command such as `--mcp 'notes=uvx notes-mcp'`. For an HTTP server on the device, use its local address, such as `--mcp notes=http://127.0.0.1:8000/mcp`.
 
 Your agents use `companion_list` to see each paired device and its actions. They use `companion_invoke` to run an action.
 
 ## Local sessions
 
-A local session is a coding agent that runs on the device. SwB lists each session as a target with its status.
-
-SwB puts a message for the session in the agent's mailbox first. It then tries to deliver the message into the open session. The answer comes back in the same conversation.
-
-For commands and supported agents, see [Local sessions](/docs/blocks/local-sessions).
+Use the linked instructions to set up the local agent before pairing. After pairing, keep the companion running. Ask an owner agent to call `targets(block="local")`. Check that your session address appears.
 
 ## Keep it running
 
@@ -65,4 +67,6 @@ The device starts each connection to SwB.
 
 ## Disconnect
 
-Run `swb companion disconnect` on the device to remove its key. To revoke the key in the console, open **Connections** in Settings. Select **Disconnect** for the device.
+Run `swb companion disconnect` on the device to remove its key. To revoke the key in the console, open **Connections** in **Settings**. Select **Disconnect** for the device.
+
+A running companion removes its local key when it detects the revocation. If a key remains on the device, run `swb companion disconnect` before pairing it again.
