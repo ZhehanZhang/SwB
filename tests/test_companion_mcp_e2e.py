@@ -177,6 +177,7 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
         unused_listener.bind(("127.0.0.1", 0))
         http_url = f"http://localhost:{http_listener.getsockname()[1]}/fixtures/mcp"
         unused_url = f"http://127.0.0.1:{unused_listener.getsockname()[1]}/mcp"
+        unused_listener.close()
         async with serve(http_listener, observed_http), companion(
             "--cap", "mcp", "--mcp", f"stdio={stdio_flag(events)}", "--mcp", f"http={http_url}",
             "--mcp", f"unavailable={unused_url}",
@@ -236,7 +237,9 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
             http_tools = device_payload(await invoke(client, state, "tools", {"server": "http"}))
             for tools in (stdio_tools, http_tools):
                 [echo] = [tool for tool in tools["tools"] if device_text(tool["name"]) == "echo"]
-                assert echo["inputSchema"] == ECHO_SCHEMA
+                schema = echo["inputSchema"]
+                prop = schema["properties"]["text"]
+                assert {**schema, "properties": {"text": {**prop, "description": device_text(prop["description"])}}} == ECHO_SCHEMA
                 assert device_text(echo["description"]) == "Echo text on this fixture."
             image = device_payload(await local_call(client, state, "stdio", "image"))
             assert image == {"content": [{"type": "image", "data": "YWJj", "mimeType": "image/png"}], "isError": False}

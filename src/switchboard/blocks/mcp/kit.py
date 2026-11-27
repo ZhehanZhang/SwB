@@ -3,6 +3,7 @@ tools use. A block registers its own tools through Block.mcp_tools(mcp, kit) and
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
@@ -12,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from ...audit import iso
 from ...refusals import OWNER_REQUIRED, SCOPE_REQUIRED, PolicyRefusal
-from ...trust import wrap
+from ...trust import neutralize, wrap
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -30,21 +31,27 @@ Conversation = Annotated[str, Field(description="The conversation: its handle (h
 DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. "
 
 
-DEVICE_VALUES = frozenset({"type", "mimeType", "uri", "isError", "size", "data"})
-DEVICE_SCHEMAS = frozenset({"inputSchema", "outputSchema", "schema"})
+DEVICE_VALUES = frozenset({"type", "mimeType", "uri", "size"})
+DEVICE_SCHEMAS = frozenset({"inputSchema", "outputSchema"})
+DEVICE_TOKEN = re.compile(r"[A-Za-z0-9_.+/:#@=-]{1,256}")
+DEVICE_BASE64 = re.compile(r"[A-Za-z0-9+/_-]*={0,2}")
 
 
-def frame_device(value: Any, where: str, key: str = "") -> Any:
-    """Frame device strings as external by default, preserving schemas and machine values."""
-    if key in DEVICE_SCHEMAS:
-        return value
+def frame_device(value: Any, where: str, key: str = "", schema: bool = False) -> Any:
+    """Frame device strings as external by default. Exact strings are short tokens in machine fields or schemas, and base64."""
     if isinstance(value, dict):
-        return {k: frame_device(v, where, k) for k, v in value.items()}
+        binary = value.get("type") in ("image", "audio")
+        return {neutralize(str(k))[:128]: frame_device(v, where, "text" if k == "data" and not binary else k,
+                                                       schema or k in DEVICE_SCHEMAS) for k, v in value.items()}
     if isinstance(value, list):
-        return [frame_device(v, where, key) for v in value]
-    if isinstance(value, str) and key not in DEVICE_VALUES and not key.lower().endswith(("base64", "b64")):
-        return wrap(value, None, None, "external", where)
-    return value
+        return [frame_device(v, where, key, schema) for v in value]
+    if not isinstance(value, str):
+        return value
+    if (key in DEVICE_VALUES or schema) and DEVICE_TOKEN.fullmatch(value):
+        return value
+    if (key == "data" or key.lower().endswith(("base64", "b64"))) and DEVICE_BASE64.fullmatch(value):
+        return value
+    return wrap(value, None, None, "external", where)
 
 
 class FileIn(BaseModel):
