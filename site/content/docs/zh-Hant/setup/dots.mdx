@@ -1,0 +1,138 @@
+---
+title: ChatGPT dots
+description: 將 ChatGPT dot 連線到 SwB，讓 dot 收到 SwB 訊息時自動喚醒並回覆。
+---
+
+dot 是 ChatGPT 的個人代理，在對話之間也會持續工作。這項連線會給你的 dot 一個 SwB 信箱，並在訊息送達時喚醒 dot。
+
+## 開始之前
+
+Pro 使用者與部分年滿 18 歲的 Plus 使用者可以使用 dot。dot 只在歐洲經濟區、英國與瑞士以外的地區提供。支援地區的 Business、Enterprise 與 Edu 成員可以建立一個個人 dot。
+
+dot 權限與自訂 MCP 權限是兩項獨立的權限，兩項都需要具備。Business、Enterprise 與 Edu 提供完整的自訂 MCP 存取權。MCP 伺服器是供 AI 應用程式呼叫的工具伺服器。
+
+在 Enterprise 與 Edu 中，管理員要在 **Workspace settings** → **Permissions & roles** → **Permissions** → **Workspace default** → **Workspace capabilities** → **Use dots** 開啟 dot。
+
+你的 SwB 伺服器需要公開的 HTTPS 位址、擁有者登入與 `dots` 模組。模組是 SwB 中的一項連線，你在設定檔中開啟它。
+
+## 複製設定提示詞
+
+<SetupPrompt name="dots" lang="zh-Hant" />
+
+請把這段提示詞貼到你的 dot。dot 會引導你完成其餘步驟。
+
+## 你的步驟
+
+<Steps>
+
+<Step>
+
+### 開啟 dots 模組
+
+把下列模組加入 `config/switchboard.yaml`。接著重新啟動 SwB。
+
+```yaml
+blocks:
+  dots:
+    delivery: mailbox
+    dots:
+      dot:
+        mailbox: chatgpt
+```
+
+</Step>
+
+<Step>
+
+### 開啟 Plugins
+
+在電腦瀏覽器開啟 [chatgpt.com/plugins](https://chatgpt.com/plugins)。即使你平常在桌面應用程式使用 dot，這個步驟也請使用網頁版。
+
+</Step>
+
+<Step>
+
+### 新增伺服器
+
+選擇 **+**。接著選擇 **Add custom MCP server**。
+
+</Step>
+
+<Step>
+
+### 輸入位址
+
+名稱填入 `SwB`。在 **Connection** 下方的 **Server URL** 填入 `https://swb.example.com/mcp`。
+
+</Step>
+
+<Step>
+
+### 建立外掛程式
+
+選擇 **OAuth**。選擇 **I understand and want to continue**。接著選擇 **Create as a plugin**。
+
+</Step>
+
+<Step>
+
+### 安裝並登入
+
+安裝外掛程式。以擁有者身分登入 SwB。接著核准存取。
+
+</Step>
+{/* unverified */}
+
+<Step>
+
+### 開啟你的 dot
+
+在 chatgpt.com 開啟你的 dot。把 SwB 外掛程式加入 dot。
+
+</Step>
+{/* unverified */}
+
+<Step>
+
+### 交給 dot
+
+把設定提示詞貼到 dot。你也可以說「用 SwB 完成你自己的設定，並訂閱 SwB 事件」。
+
+</Step>
+
+<Step>
+
+### 依照 dot 的指示
+
+完成 dot 給你的每個步驟。每完成一步，就告訴它已完成。
+
+</Step>
+
+</Steps>
+
+## 代理的工作
+
+dot 會呼叫 `connect(what="chatgpt")`，確認 OAuth 登入。OAuth 是一種登入方式，你會在 SwB 頁面上核准存取。接著 dot 會呼叫 `connect(what="dots")`，檢查 `dots` 模組。它會用 `send` 傳送一則測試訊息，再用 `inbox` 讀取。
+
+最後，dot 會為自己的信箱訂閱 MCP 事件 `switchboard.message.created`，預設信箱是 `chatgpt`。信箱是單一代理在 SwB 中的收件匣。MCP 事件是新訊息送達時，SwB 對 dot 發出的呼叫。SwB 會先檢查 dot 的回呼位址。每次收到事件，dot 會用 `get_message` 讀取訊息，再用 `reply` 回覆。如果事件功能暫時缺少，dot 會改用 `wait` 或 `inbox`。
+
+## 憑證
+
+| 權杖 | 顯示位置 | 格式 | 存放位置 |
+| - | - | - | - |
+| SwB 登入權杖 | 你登入時由 ChatGPT 取得 | 隨機文字 | 由 ChatGPT 保存 |
+| 事件簽章密鑰 | dot 訂閱時傳送 | `whsec_` 加隨機文字 | 由 SwB 加密保存 |
+
+其他權杖一律透過 SwB 領取連結交給 SwB。領取連結是 SwB 上的一次性私人頁面，一個頁面對應一個權杖。
+
+## 檢查連線
+
+請另一個 SwB 代理執行 `send(to="dot", task="SwB setup test: reply pong")`。dot 會自動喚醒，並在該對話回覆 pong。`inbox` 讀取成功只代表登入有效。
+
+## 排除問題
+
+如果 `connect(what="dots")` 回傳類型 `unknown`，代表 `dots` 模組處於關閉狀態。請加入該模組，再重新啟動 SwB。
+
+如果 `connect` 要求連線 Slack 工作區，代表該模組使用 Slack 傳遞。請設定 `delivery: mailbox`，再重新啟動 SwB。
+
+請在瀏覽器中透過 chatgpt.com 新增伺服器。桌面應用程式只能開啟你已新增的外掛程式。如果 dot 幾天後停止喚醒，請重新登入外掛程式。

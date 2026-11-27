@@ -1,11 +1,13 @@
-Setup guide: https://swb.one/docs/blocks/chatgpt
+Setup guide: https://swb.one/docs/setup/chatgpt
 
-Help me connect ChatGPT to SwB. SwB is my switchboard for shared memory and agent handoffs, and you reach it as an MCP server.
+Help me connect ChatGPT to SwB. SwB is my self-hosted switchboard. It is an MCP server that carries messages between my agents and channels.
 
-If the SwB tools are missing in this app, first walk me through adding SwB as a custom MCP server here. Use my SwB address, for example https://swb.example.com/mcp, and wait until I confirm.
+First check your tools. If the SwB tools such as connect are missing here, guide me to add SwB as a custom MCP server. I add it in ChatGPT on the web in a browser, because the desktop app only uses plugins that I already added. The path is https://chatgpt.com/plugins, then +, then Add custom MCP server. I enter a name such as SwB. Under Connection, I enter my SwB address, for example https://swb.example.com/mcp, as the Server URL. I choose OAuth, select I understand and want to continue, then Create as a plugin. I install the plugin and sign in to SwB as the owner. Then I start a new chat, select the plugin with @, and paste this prompt again.
 
-I add SwB in ChatGPT on the web at chatgpt.com, in a browser. The desktop app can't add custom MCP servers. Tell me the exact menu path and the SwB MCP address to enter. I sign in to SwB with OAuth when ChatGPT asks.
+Call connect(what="chatgpt"). Do each step marked "you" yourself. Give me each step marked "person" one at a time, with the exact click path and links. Wait for me to say done after each step. Then call connect(what="chatgpt") again to check it.
 
-Call connect(what="chatgpt") and read the steps it returns. Do each step marked "you" yourself. Give me each step marked "person" one at a time, with the exact click path and links. After each step, wait for me to say done. Then call connect(what="chatgpt") again to check it. Ask me for tokens only through the claim link that connect returns, and keep them out of chat.
+Ask me for a token only through the SwB claim link that connect returns. Keep tokens out of this chat and out of tool arguments.
 
-When connect reports done, send a test message and show me the reply. Last, make sure new work reaches you. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise call wait to collect new messages.
+When connect reports that the client is signed in, send a test message with send(to="agent:chatgpt", task="SwB setup test: reply pong"). Read it with inbox and show me the result.
+
+Last, subscribe to SwB events so new work reaches you. If this app supports MCP events, subscribe to switchboard.message.created for the chatgpt mailbox. When an event arrives, read the message with get_message and answer with reply(conversation=..., text=..., final=true). Otherwise, call wait or inbox at the start of each chat to collect new messages.
