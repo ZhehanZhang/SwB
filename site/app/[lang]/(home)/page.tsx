@@ -1,6 +1,6 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import { Plane } from 'lucide-react';
+import { BookOpen, Plane } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AgentExchange } from '@/components/agent-exchange';
@@ -23,7 +23,8 @@ const sectionTitle = 'font-display text-3xl font-extrabold tracking-tight sm:tex
 const deployBlock = 'grid min-w-0 content-start gap-2';
 const deployLink = 'swb-button swb-button-outline justify-start px-3 py-2 text-left';
 const providerLabel = 'flex min-w-0 flex-wrap items-baseline gap-x-2';
-const compose = `git clone -b ${releaseBranch} ${repository}.git
+const compose = `git clone -b ${releaseBranch} \\
+  ${repository}.git
 cd SwB
 mkdir -p data
 SWB_UID="$(id -u)" docker compose up`;
@@ -93,7 +94,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
               {[[copy.deployment.local, copy.install], [copy.deployment.server, compose]].map(([title, command]) => (
                 <div className={deployBlock} key={title}>
                   <h3 className="text-base font-semibold">{title}</h3>
-                  <pre className="wrap-anywhere whitespace-pre-wrap rounded-lg border bg-fd-muted p-3 font-mono text-sm leading-6"><code>{command}</code></pre>
+                  <pre className="overflow-x-auto whitespace-pre rounded-lg border bg-fd-muted p-3 font-mono text-sm leading-6"><code>{command}</code></pre>
                 </div>
               ))}
               <div className={deployBlock}>
@@ -110,13 +111,13 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                   {railway.enabled && (
                     <Link className={deployLink} href={`${selfHosting}#railway`}>
                       <ProviderMark name="railway" />
-                      <strong>{railway.name}</strong>
+                      <span className={providerLabel}><strong>{railway.name}</strong>{' '}<span className="font-normal text-fd-muted-foreground">{copy.deployment.renderClaim}</span></span>
                     </Link>
                   )}
                 </div>
               </div>
             </div>
-            <Link className="swb-text-link mt-5 inline-flex text-sm" href={selfHosting}>{copy.deployment.selfHosting}</Link>
+            <Link className="swb-text-link mt-5 inline-flex items-center gap-2 text-sm" href={selfHosting}><BookOpen aria-hidden="true" className="size-4" />{copy.deployment.selfHosting}</Link>
           </section>
           <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-usage">
             <h2 id="landing-usage" className={sectionTitle}>{copy.usage.title}</h2>
