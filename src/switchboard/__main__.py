@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import sys
 from collections.abc import Callable
 from contextlib import ExitStack
 from logging.config import dictConfig
@@ -14,20 +13,9 @@ import uvicorn
 from uvicorn.main import STARTUP_FAILURE
 
 from .config import Instance
+from .entrypoint import cli_main
 
 SERVER_COMMANDS = ("serve", "export", "log", "config", "blocks", "targets")
-
-
-def cli_main(argv: list[str] | None = None) -> None:
-    from .cli import main as client
-
-    args = sys.argv[1:] if argv is None else argv
-    if args and args[0] in SERVER_COMMANDS:
-        main(args)
-    elif not args and Path(sys.argv[0]).stem in ("switchboard", "__main__"):
-        main(["serve"])
-    else:
-        client(args or ["--help"])
 
 
 class _NoQuery(logging.Filter):

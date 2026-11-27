@@ -198,6 +198,16 @@
       "use": "grok-routine"
     },
     {
+      "block_kind": "sink",
+      "connect_target": null,
+      "credentials": [],
+      "icon": null,
+      "id": "block:local",
+      "kind": "block",
+      "label": "Local sessions",
+      "use": "local"
+    },
+    {
       "block_kind": "source",
       "connect_target": "mcp-client",
       "credentials": [],
@@ -381,6 +391,27 @@
       "id": "command:export",
       "kind": "command",
       "label": "swb export"
+    },
+    {
+      "arguments": [
+        {
+          "choices": [
+            "claude-code",
+            "gemini",
+            "codex"
+          ],
+          "name": "harness"
+        }
+      ],
+      "command": "swb hook",
+      "flags": [
+        "--help",
+        "-h"
+      ],
+      "icon": null,
+      "id": "command:hook",
+      "kind": "command",
+      "label": "swb hook"
     },
     {
       "arguments": [],
