@@ -1,6 +1,7 @@
 """Live setup directions for MCP clients and enabled blocks."""
 
 import json
+from importlib.resources import files
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
@@ -18,6 +19,26 @@ ALIASES = {"grok-routine": "grok-bot"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
 MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web",
          "grok": "grok.com > Connectors > New Connector > Custom"}
+GUIDE_TITLE_WORDS = {"chatgpt": "ChatGPT", "github": "GitHub", "mcp": "MCP"}
+
+
+def register_guides(mcp: MCPServer) -> dict[str, dict[str, str]]:
+    def register_guide(name: str, uri: str, title: str, text: str) -> None:
+        @mcp.prompt(name=name, title=title)
+        @mcp.resource(uri, name=name, title=title, mime_type="text/markdown")
+        def read_guide() -> str:
+            return text
+
+    guides = {}
+    for path in sorted(files("switchboard.prompts.setup").iterdir(), key=lambda path: path.name):
+        if not path.is_file() or not path.name.endswith(".md"):
+            continue
+        kind = path.name.removesuffix(".md")
+        name, uri = f"setup-{kind}", f"swb://setup/{kind}"
+        label = " ".join(GUIDE_TITLE_WORDS.get(word, word.capitalize()) for word in kind.split("-"))
+        register_guide(name, uri, f"Set up {label}", path.read_bytes().decode("utf-8"))
+        guides[kind] = {"prompt": name, "resource": uri}
+    return guides
 
 
 def hosted_client_instruction(kind: str, connector: str | None) -> str:
@@ -72,26 +93,34 @@ def register(mcp: MCPServer, kit: Kit) -> None:
     core = kit.core
     owners = {kind: block for block in core.blocks.values() for kind in block.connect_kinds}
     kinds = sorted(set(CLIENTS) | BLOCKS.keys() | owners.keys())
+    guides = register_guides(mcp)
+    guide_names = sorted(guide["prompt"] for guide in guides.values())
 
     @mcp.tool(
         title="Connect to Switchboard",
         description=('When someone asks "how do I connect/set up/link X to switchboard?", call connect first. '
                      f'Kinds: {", ".join(kinds)}. Follow each next step in order: run exact calls marked "you", '
                      'give "person" steps and links to the owner, and call connect again to check progress. '
-                     'Pass choices such as a Captain, project or agent name in choose, never credentials; use the link for token entry.'),
+                     'Pass choices such as a Captain, project or agent name in choose, never credentials; use the link for token entry. '
+                     'Read the prompt or resource in guide for detailed setup instructions.'),
         annotations=kit.SEND,
     )
     async def connect(ctx: Context, what: str, project: str | None = None, choose: dict[str, Any] | None = None) -> dict[str, Any]:
         p = kit.who(ctx)
         what = ALIASES.get(what := what.strip().lower(), what)
+        result: dict[str, Any] = {"what": what}
+        if what in guides:
+            result["guide"] = guides[what]
         if what not in kinds:
-            return {"what": "unknown", "done": [], "next": [], "kinds": kinds}
+            if what in guides:
+                return {**result, "done": [], "next": []}
+            return {"what": "unknown", "done": [], "next": [], "kinds": kinds, "guides": guide_names}
         block = owners.get(what)
         if what in BLOCKS and block is None:
-            return {"what": what, "done": [], "next": [
+            return {**result, "done": [], "next": [
                 {"by": "person", "do": f"Enable the {BLOCKS[what]} block in config/switchboard.yaml and restart Switchboard."}]}
         if what not in CLIENTS and not p.is_unrestricted_owner:
-            return {"what": what, "done": [], "next": [
+            return {**result, "done": [], "next": [
                 {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}],
                 **({"modes": core.modes.summary(block.name, p)} if block is not None and block.manifest.id in PROVIDERS else {})}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
@@ -115,4 +144,4 @@ def register(mcp: MCPServer, kit: Kit) -> None:
                                   action=f"connect_{what}", outcome=outcome)
         if block is not None and block.manifest.id in PROVIDERS:
             out.setdefault("modes", core.modes.summary(block.name, p))
-        return {"what": what, **out, **({"state": "connected"} if all(step.get("optional") for step in out["next"]) else {})}
+        return {**result, **out, **({"state": "connected"} if all(step.get("optional") for step in out["next"]) else {})}
