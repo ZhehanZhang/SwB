@@ -135,7 +135,7 @@ async def eventually(condition):
 
 
 @asynccontextmanager
-async def connected(fake, tmp_path, monkeypatch):
+async def connected(fake, tmp_path, monkeypatch, before_emit=None):
     path = tmp_path / "c.sock"
     monkeypatch.setenv("SWB_CODEX_SOCKET", str(path))
     capability = codex.CodexCapability()
@@ -143,6 +143,8 @@ async def connected(fake, tmp_path, monkeypatch):
     events = []
 
     async def emit(kind, payload):
+        if before_emit:
+            await before_emit(kind, payload)
         events.append((kind, payload))
         return {}
 
@@ -327,6 +329,34 @@ async def test_fixed_errors_validate_and_never_retry_turn_on_steer_rejection(tmp
         fake.deliver.assert_awaited_once()
         assert fake.deliver.call_args.args[0] == "turn/steer"
         assert not wake_book.wakes
+
+
+async def test_codex_keeps_correlation_until_the_retry_is_acknowledged(tmp_path, monkeypatch, wake_book):
+    fake = FakeCodex()
+    fake.thread("thread-1")
+    fake.deliver.return_value = {"turn": {"id": "woken"}}
+    first_attempt = asyncio.Event()
+
+    async def before_emit(kind, payload):
+        if kind == "codex.reply" and not first_attempt.is_set():
+            first_attempt.set()
+            raise CapabilityError("Temporarily unavailable.")
+
+    async with connected(fake, tmp_path, monkeypatch, before_emit) as (capability, events, ctx):
+        assert await capability.invoke("prompt", INPUT, ctx) == {"delivered": True}
+        await fake.event("turn/completed", threadId="thread-1", turn={
+            "id": "woken", "status": "completed", "items": [
+                {"type": "agentMessage", "phase": "final_answer", "text": "the answer"},
+            ],
+        })
+        await first_attempt.wait()
+        with pytest.raises(CapabilityError, match="pending wake"):
+            await capability.invoke("prompt", INPUT, ctx)
+        assert capability._turns["thread-1"].turn == "woken"
+        await eventually(lambda: any(kind == "codex.reply" for kind, _ in events))
+        await eventually(lambda: "thread-1" not in capability._turns)
+        assert not wake_book.wakes
+        assert [payload["text"] for kind, payload in events if kind == "codex.reply"] == ["the answer"]
 
 
 async def test_rejects_private_paths_as_thread_ids(tmp_path, monkeypatch, wake_book):

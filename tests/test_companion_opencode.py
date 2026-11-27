@@ -78,6 +78,7 @@ class Server:
         self.streams = []
         self.requests = []
         self.history = []
+        self.history_pages = {}
         self.posts = []
         self.post_status = 204 if self.legacy else 200
         self.before_ack = None
@@ -107,6 +108,15 @@ class Server:
         if path in self.pending:
             return httpx.Response(200, json=self.wrap(self.pending[path]))
         if path == self.messages:
+            if self.history_pages:
+                parameter = "before" if self.legacy else "cursor"
+                cursor = request.url.params.get(parameter)
+                assert request.url.params.get("order") == (None if self.legacy or cursor else "desc")
+                page, next_cursor = self.history_pages[cursor]
+                if self.legacy:
+                    headers = {"X-Next-Cursor": next_cursor} if next_cursor else {}
+                    return httpx.Response(200, json=page, headers=headers)
+                return httpx.Response(200, json={"data": page, "cursor": {"next": next_cursor}})
             return httpx.Response(200, json=self.wrap(self.history))
         if path == self.wait and request.method == "POST":
             self.wait_started.set()
@@ -171,10 +181,12 @@ def fixture(monkeypatch):
 
 
 @asynccontextmanager
-async def running(cap):
+async def running(cap, before_emit=None):
     events = asyncio.Queue()
 
     async def emit(name, payload):
+        if before_emit:
+            await before_emit(name, payload)
         events.put_nowait((name, payload))
         return {}
 
@@ -296,6 +308,60 @@ async def test_idle_arriving_before_prompt_ack_still_uses_new_wake(fixture, cont
         assert (await events.get())[0] == "opencode.reply"
 
 
+@pytest.mark.parametrize("dialect", ["legacy", "text"])
+async def test_reply_correlates_across_history_pages(fixture, context, dialect):
+    cap, server, monitor = fixture(dialect)
+    async with running(cap) as events:
+        await events.get()
+        assert await cap.invoke("prompt", PROMPT, context) == {"queued": True}
+        message_id = server.posts[0].get("id", server.posts[0].get("messageID"))
+        if server.legacy:
+            unrelated = server.messages_for("msg_other", include_user=False)
+            answer = server.messages_for(message_id, include_user=False)
+            server.history_pages = {None: (unrelated * 50, "older"), "older": (answer, None)}
+        else:
+            unrelated = server.messages_for("msg_other")
+            answer, matching_user = server.messages_for(message_id)
+            server.history_pages = {
+                None: (unrelated + [answer] + [{"type": "system"}] * 47, "older"),
+                "older": ([matching_user], None),
+            }
+        server.streams[0].send("session.idle", {}, legacy=server.legacy)
+        assert (await events.get())[1]["state"] == "idle"
+        assert await events.get() == ("opencode.reply", {
+            "session": SESSION, "conversation": "thread", "agent": "agent", "text": "only the reply",
+        })
+        assert monitor.pending([f"opencode:{SESSION}"]) is None
+        assert sum(request.url.path == server.messages for request in server.requests) == 2
+
+
+async def test_opencode_keeps_correlation_until_the_retry_is_acknowledged(fixture, context):
+    cap, server, monitor = fixture()
+    first_attempt = asyncio.Event()
+
+    async def before_emit(kind, payload):
+        if kind == "opencode.reply" and not first_attempt.is_set():
+            first_attempt.set()
+            raise CapabilityError("Temporarily unavailable.")
+
+    async with running(cap, before_emit) as events:
+        await events.get()
+        assert await cap.invoke("prompt", PROMPT, context) == {"queued": True}
+        message_id = server.posts[0]["id"]
+        server.history = server.messages_for(message_id)
+        server.streams[0].send("session.idle", {})
+        assert (await events.get())[1]["state"] == "idle"
+        await first_attempt.wait()
+        with pytest.raises(CapabilityError, match="pending OpenCode reply"):
+            await cap.invoke("prompt", PROMPT, context)
+        assert cap._expected[SESSION][0] == message_id
+        assert await events.get() == ("opencode.reply", {
+            "session": SESSION, "conversation": "thread", "agent": "agent", "text": "only the reply",
+        })
+        assert not monitor.pending([f"opencode:{SESSION}"])
+        assert await cap.invoke("prompt", PROMPT, context) == {"queued": True}
+
+
 async def test_active_snapshot_reconciles_sessions_without_idle_events(fixture, monkeypatch):
     cap, server, _ = fixture("prompt")
     monkeypatch.setattr(opencode, "_ACTIVE_REFRESH_S", 0.03)
@@ -388,6 +454,9 @@ async def test_reconnect_rediscovers_and_caps_retry(fixture, monkeypatch):
     sleep = asyncio.sleep
 
     async def pause(delay):
+        if delay == opencode.REFRESH_S:
+            await sleep(delay)
+            return
         delays.append(delay)
         if len(delays) == 9:
             raise asyncio.CancelledError()
@@ -407,7 +476,12 @@ async def test_reconnect_rediscovers_and_caps_retry(fixture, monkeypatch):
 
 async def test_reconnect_reports_sessions_removed_while_offline(fixture, context, monkeypatch):
     cap, server, monitor = fixture()
-    monkeypatch.setattr(_harness.asyncio, "sleep", AsyncMock())
+    sleep = asyncio.sleep
+
+    async def pause(delay):
+        await sleep(delay if delay == opencode.REFRESH_S else 0)
+
+    monkeypatch.setattr(_harness.asyncio, "sleep", pause)
     async with running(cap) as events:
         assert (await events.get())[1]["state"] == "working"
         assert await cap.invoke("prompt", PROMPT, context) == {"queued": True}
