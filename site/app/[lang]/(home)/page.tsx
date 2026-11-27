@@ -1,28 +1,27 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import { BookOpen, Plane } from 'lucide-react';
+import { BookOpen, Globe, Plane, Plug } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { AgentExchange } from '@/components/agent-exchange';
 import { GitHubMark } from '@/components/github-mark';
 import { HeroTitle } from '@/components/hero-title';
 import { CopyInstall } from '@/components/landing-controls';
 import { MarkTile } from '@/components/mark-tile';
-import { SetupPicker } from '@/components/setup-picker';
 import { SiteContainer } from '@/components/site-container';
 import { SwitchboardHero } from '@/components/switchboard-hero';
 import { deployProviders } from '@/lib/flags';
 import { isLocale, localize } from '@/lib/i18n';
 import { landingCopy, usageMarks } from '@/lib/landing-copy';
 import { pageMetadata } from '@/lib/metadata';
-import { promptFiles, readPrompt } from '@/lib/prompts';
+import { getStartedHref } from '@/lib/setup';
 import { tagline } from '@/lib/tagline';
 import { releaseBranch, repository } from '@/lib/urls';
 
 const sectionTitle = 'font-display text-3xl font-extrabold tracking-tight sm:text-4xl';
-const deployBlock = 'grid min-w-0 content-start gap-2';
-const deployLink = 'swb-button swb-button-outline justify-start px-3 py-2 text-left';
-const providerLabel = 'flex min-w-0 flex-wrap items-baseline gap-x-2';
+const deployIntro = 'text-sm leading-5 text-fd-muted-foreground';
+const deployLink = 'swb-button swb-button-outline justify-start gap-2 whitespace-nowrap px-2.5';
 const compose = `git clone -b ${releaseBranch} \\
   ${repository}.git
 cd SwB
@@ -35,11 +34,33 @@ export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
   return pageMetadata(lang, '/', 'SwB', tagline[lang]);
 }
 
-function prompts() {
-  return Object.fromEntries(promptFiles().map((file) => {
-    const name = file.slice(0, -3);
-    return [name, readPrompt(name)];
-  }));
+function DeployOption({ heading, intro, children, footer }: {
+  heading: string; intro: string; children: ReactNode; footer: ReactNode;
+}) {
+  return (
+    <div className="grid min-w-0 gap-2" data-deploy-option>
+      <h3 className="text-base font-semibold">{heading}</h3>
+      <p className={deployIntro}>{intro}</p>
+      {children}
+      {footer}
+    </div>
+  );
+}
+
+function DeployCommand({ children }: { children: string }) {
+  return <pre className="overflow-x-auto whitespace-pre rounded-lg border bg-fd-muted px-3 py-2 font-mono text-[13px] leading-[18px]"><code>{children}</code></pre>;
+}
+
+function DeployGuide({ href, children }: { href: string; children: string }) {
+  return (
+    <Link className="swb-text-link inline-flex w-fit items-center gap-1.5 whitespace-nowrap text-xs leading-5 text-fd-muted-foreground" href={href}>
+      <BookOpen aria-hidden="true" className="size-4 shrink-0" />{children}
+    </Link>
+  );
+}
+
+function ProviderLabel({ name, plan }: { name: ReactNode; plan: string }) {
+  return <span className="inline-flex items-baseline gap-1.5"><strong>{name}</strong>{' '}<span className="text-xs font-normal text-fd-muted-foreground">{plan}</span></span>;
 }
 
 function ProviderMark({ name }: { name: 'render' | 'railway' }) {
@@ -57,9 +78,11 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
   const copy = landingCopy[lang];
+  const deploy = copy.deployment;
   const license = `${repository}/blob/${releaseBranch}/LICENSE`;
   const selfHosting = localize(lang, '/docs/self-hosting');
   const { render, railway } = deployProviders;
+  const providerButton = `${deployLink} ${railway.enabled ? 'py-2.5' : 'py-4'}`;
 
   return (
     <>
@@ -69,55 +92,67 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <div className="swb-hero-copy">
               <HeroTitle stem={copy.hero.stem} endings={copy.hero.endings} between={copy.hero.between}
                 names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy Captain', dots: 'ChatGPT dots' }} />
-              <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="mt-6 grid justify-items-start gap-4 lg:flex lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2">
                 <div className="flex items-center gap-2" data-hero-actions>
-                  <SetupPicker lang={lang} modal />
+                  <Link className="swb-button swb-button-primary whitespace-nowrap" href={getStartedHref(lang)} prefetch={false}>
+                    <Plug aria-hidden="true" />{copy.setupWithAgent}
+                  </Link>
                   <a className="swb-button swb-button-outline" href={repository}>
                     <GitHubMark />GitHub
                   </a>
                 </div>
+                <p className="text-xs text-fd-muted-foreground lg:order-last lg:basis-full lg:pt-1">
+                  <a className="hover:text-fd-foreground hover:underline hover:underline-offset-4" href={license}>{copy.openSource}</a>
+                </p>
                 <CopyInstall lang={lang} />
               </div>
-              <p className="mt-3 text-xs text-fd-muted-foreground">
-                <a className="hover:text-fd-foreground hover:underline hover:underline-offset-4" href={license}>{copy.openSource}</a>
-              </p>
             </div>
-            <SwitchboardHero label={copy.boardAlt} hint={copy.boardHint} lang={lang} prompts={prompts()} labels={copy.panel} />
+            <SwitchboardHero label={copy.boardAlt} hint={copy.boardHint} lang={lang} />
           </section>
           <section className="py-12 sm:py-16" data-landing-section aria-labelledby="landing-demos">
             <h2 id="landing-demos" className={sectionTitle}>{copy.positioning.title}</h2>
             <AgentExchange lang={lang} />
           </section>
           <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-deploy">
-            <h2 id="landing-deploy" className={sectionTitle}>{copy.deployment.title}</h2>
-            <div className="mt-6 grid items-start gap-6 min-[900px]:grid-cols-3" data-deploy-grid>
-              {[[copy.deployment.local, copy.install], [copy.deployment.server, compose]].map(([title, command]) => (
-                <div className={deployBlock} key={title}>
-                  <h3 className="text-base font-semibold">{title}</h3>
-                  <pre className="overflow-x-auto whitespace-pre rounded-lg border bg-fd-muted p-3 font-mono text-sm leading-6"><code>{command}</code></pre>
-                </div>
-              ))}
-              <div className={deployBlock}>
-                <h3 className="text-base font-semibold">{copy.deployment.cloud}</h3>
-                <div className="flex flex-col gap-2">
-                  <Link className={deployLink} href={`${selfHosting}#fly`}>
-                    <Plane aria-hidden="true" />
-                    <span className={providerLabel}><strong>Fly.io</strong>{' '}<span className="font-normal text-fd-muted-foreground">{copy.deployment.flyClaim}</span></span>
+            <h2 id="landing-deploy" className={sectionTitle}>{deploy.title}</h2>
+            <div className="mt-6 grid items-start gap-6 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)_minmax(0,1fr)] min-[900px]:gap-x-4 lg:gap-x-6" data-deploy-grid>
+              <DeployOption heading={deploy.local} intro={deploy.localIntro}
+                footer={<DeployGuide href={localize(lang, '/docs/install')}>{deploy.localGuide}</DeployGuide>}>
+                <DeployCommand>{copy.install}</DeployCommand>
+                <p className={deployIntro}>{deploy.localAlternative}</p>
+                <DeployCommand>{'pipx install swb-one\nswb up'}</DeployCommand>
+              </DeployOption>
+              <DeployOption heading={deploy.server} intro={deploy.serverIntro} footer={
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                  <Link className={providerButton} href={`${selfHosting}#cloudflare-tunnel`} prefetch={false} data-deploy-tunnel>
+                    <Globe aria-hidden="true" />
+                    <ProviderLabel name={<>Cloudflare Tunnel<sup>™</sup></>} plan={deploy.freePlan} />
                   </Link>
-                  <a className={deployLink} href={render.href}>
+                  <DeployGuide href={`${selfHosting}#docker-compose`}>{deploy.serverGuide}</DeployGuide>
+                </div>
+              }>
+                <DeployCommand>{compose}</DeployCommand>
+              </DeployOption>
+              <DeployOption heading={deploy.cloud} intro={deploy.cloudIntro}
+                footer={<DeployGuide href={selfHosting}>{deploy.cloudGuide}</DeployGuide>}>
+                <div className="grid gap-3" data-deploy-providers>
+                  <Link className={providerButton} href={`${selfHosting}#fly`}>
+                    <Plane aria-hidden="true" />
+                    <ProviderLabel name="Fly.io" plan={deploy.flyClaim} />
+                  </Link>
+                  <a className={providerButton} href={render.href}>
                     <ProviderMark name="render" />
-                    <span className={providerLabel}><strong>{render.name}</strong>{' '}<span className="font-normal text-fd-muted-foreground">{copy.deployment.renderClaim}</span></span>
+                    <ProviderLabel name={render.name} plan={deploy.paidPlan} />
                   </a>
                   {railway.enabled && (
-                    <Link className={deployLink} href={`${selfHosting}#railway`}>
+                    <Link className={providerButton} href={`${selfHosting}#railway`}>
                       <ProviderMark name="railway" />
-                      <span className={providerLabel}><strong>{railway.name}</strong>{' '}<span className="font-normal text-fd-muted-foreground">{copy.deployment.renderClaim}</span></span>
+                      <ProviderLabel name={railway.name} plan={deploy.paidPlan} />
                     </Link>
                   )}
                 </div>
-              </div>
+              </DeployOption>
             </div>
-            <Link className="swb-text-link mt-5 inline-flex items-center gap-2 text-sm" href={selfHosting}><BookOpen aria-hidden="true" className="size-4" />{copy.deployment.selfHosting}</Link>
           </section>
           <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-usage">
             <h2 id="landing-usage" className={sectionTitle}>{copy.usage.title}</h2>
@@ -143,6 +178,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <a className="swb-text-link" href={license}>{copy.license}</a>
             <Link className="swb-text-link" href={localize(lang, '/docs/trademarks')}>{copy.trademarks}</Link>
             <a className="swb-text-link" href="mailto:hello@swb.one">hello@swb.one</a>
+            <p className="basis-full text-xs">{deploy.tunnelAttribution}</p>
           </div>
           <ThemeSwitch className="swb-theme-toggle" />
         </SiteContainer>

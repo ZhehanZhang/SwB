@@ -108,7 +108,7 @@ test('landing header, hero, sections and footer share both grid edges', async ({
   }
 });
 
-test('hero actions share a baseline, height and left edge with the command', async ({ page }) => {
+test('hero actions share a baseline and keep mobile actions, license and command in order', async ({ page }) => {
   for (const [path, label] of [
     ['/', 'Set up with agent'], ['/zh-Hans', '用智能体设置'], ['/zh-Hant', '用代理設定'],
   ]) {
@@ -117,21 +117,24 @@ test('hero actions share a baseline, height and left edge with the command', asy
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const actions = page.locator('[data-hero-actions]');
-      await expect(actions.getByRole('button', { name: label, exact: true })).toBeVisible();
-      const { setup, github, chip, license, copy, hub, sameWeight, fits } = await page.evaluate(() => {
+      await expect(actions.getByRole('link', { name: label, exact: true })).toBeVisible();
+      const { setup, github, chip, license, copy, hub, sameWeight, fits, inDomOrder } = await page.evaluate(() => {
         const select = (selector: string) => document.querySelector<HTMLElement>(selector)!;
         const box = (selector: string) => select(selector).getBoundingClientRect().toJSON();
-        const setupButton = select('[data-hero-actions] > button');
-        const gitHubLink = select('[data-hero-actions] > a');
+        const setupButton = select('[data-hero-actions] > a:first-child');
+        const gitHubLink = select('[data-hero-actions] > a:last-child');
+        const license = select('.swb-hero-copy a[href$="/LICENSE"]').parentElement!;
+        const follows = (first: Element, second: Element) => Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
         return {
-          setup: box('[data-hero-actions] > button'),
-          github: box('[data-hero-actions] > a'),
+          setup: setupButton.getBoundingClientRect().toJSON(),
+          github: gitHubLink.getBoundingClientRect().toJSON(),
           chip: box('[data-install-chip]'),
-          license: box('.swb-hero-copy a[href$="/LICENSE"]'),
+          license: license.getBoundingClientRect().toJSON(),
           copy: box('.swb-hero-copy'),
           hub: box('.swb-hero'),
           sameWeight: getComputedStyle(setupButton).fontWeight === getComputedStyle(gitHubLink).fontWeight,
           fits: [setupButton, gitHubLink].every((button) => button.scrollWidth <= button.clientWidth),
+          inDomOrder: follows(gitHubLink, license) && follows(license, select('[data-install-chip]')),
         };
       });
       expect(setup.height).toBe(40);
@@ -141,17 +144,22 @@ test('hero actions share a baseline, height and left edge with the command', asy
       expect(fits).toBe(true);
       expect(github.right).toBeLessThanOrEqual(copy.right + 1);
       expect(chip.height).toBeLessThanOrEqual(28);
-      if (chip.top >= github.bottom) {
+      if (width === 390) {
+        expect(inDomOrder).toBe(true);
+        expect(license.top).toBeGreaterThan(github.bottom);
+        expect(chip.top).toBeGreaterThan(license.bottom);
+        expect(Math.abs(setup.left - chip.left)).toBeLessThanOrEqual(1);
+        expect(license.top - github.bottom).toBeCloseTo(chip.top - license.bottom, 0);
+      } else if (chip.top >= github.bottom) {
         expect(width).not.toBe(1440);
         expect(Math.abs(setup.left - chip.left)).toBeLessThanOrEqual(1);
         expect(chip.top - github.bottom).toBeLessThanOrEqual(8);
       } else {
-        expect(width).not.toBe(390);
         expect(chip.left).toBeGreaterThan(github.right);
         expect(Math.abs((chip.top + chip.bottom) / 2 - (github.top + github.bottom) / 2)).toBeLessThanOrEqual(1);
       }
       expect(Math.abs(setup.left - license.left)).toBeLessThanOrEqual(1);
-      expect(license.top).toBeGreaterThan(Math.max(chip.bottom, github.bottom));
+      if (width >= 1024) expect(license.top).toBeGreaterThan(Math.max(chip.bottom, github.bottom));
       if (width >= 1024) expect(Math.abs((copy.top + copy.bottom) / 2 - (hub.top + hub.bottom) / 2)).toBeLessThanOrEqual(1);
     }
   }
@@ -197,13 +205,6 @@ test('every shared action has a leading 16px icon', async ({ page }) => {
       }
     };
     await assertIcons();
-    if (path === '/') {
-      await page.locator('[data-hero-actions]').getByRole('button').click();
-      await assertIcons();
-      await page.keyboard.press('Escape');
-      await page.locator('.swb-board:visible').getByRole('button', { name: 'Claude', exact: true }).click();
-      await assertIcons();
-    }
   }
 });
 
@@ -251,25 +252,33 @@ test('docs GitHub option opens the release source file', async ({ page }) => {
 
 test('landing shows supported deployment links and six usage examples in each locale', async ({ page }) => {
   for (const [prefix, selfHosting, allowance, paid] of [
-    ['', 'Self-hosting guide', "Runs within Fly's free monthly allowance", 'Paid plan'],
-    ['/zh-Hans', '自托管指南', '运行费用在 Fly 每月免费额度内', '付费套餐'],
-    ['/zh-Hant', '自行代管指南', '執行費用在 Fly 每月免費額度內', '付費方案'],
+    ['', 'Self-hosting guide', 'Free with monthly allowance', 'Paid plan'],
+    ['/zh-Hans', '自托管指南', '月度额度内免费', '付费套餐'],
+    ['/zh-Hant', '自行代管指南', '每月免費額度內免費', '付費方案'],
   ]) {
     await page.goto(prefix || '/');
     const deploy = page.locator('#landing-deploy').locator('..');
     const commands = deploy.locator('code');
     await expect(commands.first()).toHaveText('uvx swb-one up');
+    await expect(commands.nth(1)).toHaveText('pipx install swb-one\nswb up');
     await expect(commands.last()).toContainText('git clone -b release/1.0');
+    expect(await commands.last().textContent()).toContain('\\\n');
     await expect(commands.last()).toContainText('docker compose up');
-    const providers = deploy.locator('a.swb-button');
+    const providers = deploy.locator('[data-deploy-providers] a');
     await expect(providers).toHaveCount(2);
     await expect(providers.last()).toHaveText(`Render ${paid}`);
     await expect(providers.last()).toHaveAttribute('href', 'https://github.com/ZhehanZhang/SwB/blob/release/1.0/deploy/README.md#render');
-    await expect(deploy.getByRole('link', { name: 'Railway', exact: true })).toHaveCount(0);
+    await expect(deploy.getByRole('link', { name: new RegExp(`^Railway ${paid}$`) })).toHaveCount(0);
     const fly = providers.first();
     await expect(fly).toHaveText(`Fly.io ${allowance}`);
     await expect(fly).toHaveAttribute('href', `${prefix}/docs/self-hosting#fly`);
     await expect(fly).toHaveClass((await providers.last().getAttribute('class'))!);
+    const tunnel = deploy.locator('[data-deploy-tunnel]');
+    await expect(tunnel).toHaveAttribute('href', `${prefix}/docs/self-hosting#cloudflare-tunnel`);
+    await expect(tunnel).toHaveClass((await providers.last().getAttribute('class'))!);
+    await expect(tunnel.locator('svg.lucide-globe')).toHaveCount(1);
+    await expect(deploy.locator(`a[href="${prefix}/docs/install"] > .lucide-book-open`)).toHaveCount(1);
+    await expect(deploy.locator(`a[href="${prefix}/docs/self-hosting#docker-compose"] > .lucide-book-open`)).toHaveCount(1);
     const usage = page.locator('#landing-usage').locator('..');
     await expect(usage.locator('p')).toHaveCount(6);
     await expect(deploy.getByRole('link', { name: selfHosting })).toHaveAttribute('href', `${prefix}/docs/self-hosting`);
@@ -283,7 +292,7 @@ test('landing shows supported deployment links and six usage examples in each lo
   }
 });
 
-test('deploy blocks stack below 900px, align at the top and hug their content', async ({ page }) => {
+test('deploy columns stack below 900px, align at the top and hug their content', async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready);
   const grid = page.locator('[data-deploy-grid]');
@@ -295,9 +304,14 @@ test('deploy blocks stack below 900px, align at the top and hug their content', 
       return {
         columns: getComputedStyle(node).gridTemplateColumns.split(' '),
         tops: boxes.map(({ top }) => top),
-        bodyTops: blocks.map((block) => block.lastElementChild!.getBoundingClientRect().top),
-        bodyHeights: blocks.map((block) => block.lastElementChild!.getBoundingClientRect().height),
-        bodyOverflow: blocks.map((block, index) => block.lastElementChild!.getBoundingClientRect().right - boxes[index].right),
+        heights: boxes.map(({ height }) => height),
+        bodyTops: blocks.map((block) => block.children[2].getBoundingClientRect().top),
+        codeBlocks: [...node.querySelectorAll('pre')].map((code) => {
+          const style = getComputedStyle(code);
+          const chrome = [style.paddingBlockStart, style.paddingBlockEnd, style.borderBlockStartWidth, style.borderBlockEndWidth]
+            .reduce((sum, value) => sum + parseFloat(value), 0);
+          return { measured: code.getBoundingClientRect().height, natural: chrome + parseFloat(style.lineHeight) * code.textContent!.split('\n').length };
+        }),
       };
     });
     expect(layout.columns).toHaveLength(columns);
@@ -305,9 +319,40 @@ test('deploy blocks stack below 900px, align at the top and hug their content', 
     if (columns === 3) {
       expect(Math.max(...layout.tops) - Math.min(...layout.tops), `${width}px column tops`).toBeLessThanOrEqual(1);
       expect(Math.max(...layout.bodyTops) - Math.min(...layout.bodyTops), `${width}px body tops`).toBeLessThanOrEqual(1);
+      if (width >= 1024) expect(Math.max(...layout.heights) - Math.min(...layout.heights), `${width}px column heights`).toBeLessThanOrEqual(24);
     }
-    expect(layout.bodyHeights[0]).toBeLessThan(64);
-    expect(layout.bodyHeights[0]).toBeLessThan(layout.bodyHeights[1]);
-    for (const overflow of layout.bodyOverflow) expect(overflow, `${width}px block overflow`).toBeLessThanOrEqual(1);
+    expect(layout.codeBlocks).toHaveLength(3);
+    for (const { measured, natural } of layout.codeBlocks) expect(measured).toBeCloseTo(natural, 0);
+  }
+});
+
+test('provider and tunnel rows fit a single line in all three locales', async ({ page }) => {
+  for (const path of ['/', '/zh-Hans', '/zh-Hant']) {
+    await page.goto(path);
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of [390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const rows = await page.locator('[data-deploy-providers] a, [data-deploy-tunnel]').evaluateAll((links) => links.map((link) => {
+        const { width, height, right } = link.getBoundingClientRect();
+        const style = getComputedStyle(link);
+        const singleLine = [style.lineHeight, style.paddingBlockStart, style.paddingBlockEnd, style.borderBlockStartWidth, style.borderBlockEndWidth]
+          .reduce((sum, value) => sum + parseFloat(value), 0);
+        return {
+          width, height, singleLine,
+          contained: link.lastElementChild!.getBoundingClientRect().right <= right - parseFloat(style.paddingInlineEnd) + 1,
+          whiteSpace: style.whiteSpace,
+          isTunnel: link.hasAttribute('data-deploy-tunnel'),
+        };
+      }));
+      expect(rows).toHaveLength(3);
+      const cloud = rows.filter((row) => !row.isTunnel);
+      expect(cloud[0].width).toBe(cloud[1].width);
+      expect(new Set(rows.map(({ height }) => height)).size).toBe(1);
+      for (const row of rows) {
+        expect(row.whiteSpace).toBe('nowrap');
+        expect(row.contained).toBe(true);
+        expect(Math.abs(row.height - row.singleLine), `${path} provider height at ${width}px`).toBeLessThanOrEqual(2);
+      }
+    }
   }
 });

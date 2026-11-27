@@ -16,15 +16,21 @@ type Copy = {
   license: string;
   trademarks: string;
   install: string;
+  setupWithAgent: string;
   copy: string;
   copied: string;
   copyError: string;
   openSource: string;
   boardAlt: string;
   boardHint: string;
-  panel: { copy: string; copied: string; open: string; guide: string; close: string };
   positioning: { title: string; lead: string };
-  deployment: { title: string; local: string; server: string; cloud: string; selfHosting: string; flyClaim: string; renderClaim: string };
+  deployment: {
+    title: string;
+    local: string; localIntro: string; localAlternative: string; localGuide: string;
+    server: string; serverIntro: string; serverGuide: string;
+    cloud: string; cloudIntro: string; cloudGuide: string;
+    flyClaim: string; paidPlan: string; freePlan: string; tunnelAttribution: string;
+  };
   usage: { title: string; examples: [string, string, string, string, string, string] };
   hero: { stem: string; endings: string[]; between: [string, string, string] };
 };
@@ -36,13 +42,13 @@ export const landingCopy: Record<Locale, Copy> = {
     license: 'Apache-2.0',
     trademarks: 'Trademarks',
     install: 'uvx swb-one up',
+    setupWithAgent: 'Set up with agent',
     copy: 'Copy',
     copied: 'Copied',
     copyError: 'Select the command to copy it',
     openSource: 'Free and open source under Apache-2.0',
     boardAlt: 'SwB connects your apps',
     boardHint: 'Select an app to set it up.',
-    panel: { copy: 'Copy prompt', copied: 'Copied', open: 'Open in {app}', guide: 'Full guide', close: 'Close' },
     hero: {
       stem: 'First-party agents working together, without',
       endings: ['running CLIs', 'risking a ban', 'sharing session tokens', 'leaving their apps', 'moving them', 'scripting websites'],
@@ -55,11 +61,19 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: 'Run SwB where you want',
       local: 'On your computer',
+      localIntro: 'Start SwB and open its sign-in link.',
+      localAlternative: 'Use pipx to keep SwB installed.',
+      localGuide: 'Install guide',
       server: 'On your server',
+      serverIntro: 'Run SwB with Docker Compose.',
+      serverGuide: 'Compose',
       cloud: 'In the cloud',
-      selfHosting: 'Self-hosting guide',
-      flyClaim: "Runs within Fly's free monthly allowance",
-      renderClaim: 'Paid plan',
+      cloudIntro: 'Choose a cloud provider.',
+      cloudGuide: 'Self-hosting guide',
+      flyClaim: 'Free with monthly allowance',
+      paidPlan: 'Paid plan',
+      freePlan: 'Free',
+      tunnelAttribution: 'Cloudflare Tunnel is a trademark of Cloudflare, Inc.',
     },
     usage: {
       title: 'What you can do with SwB',
@@ -79,13 +93,13 @@ export const landingCopy: Record<Locale, Copy> = {
     license: 'Apache-2.0',
     trademarks: '商标',
     install: 'uvx swb-one up',
+    setupWithAgent: '用智能体设置',
     copy: '复制',
     copied: '已复制',
     copyError: '请选中命令后复制',
     openSource: '免费开源，采用 Apache-2.0 许可',
     boardAlt: 'SwB 连接各个应用',
     boardHint: '选择要设置的应用。',
-    panel: { copy: '复制提示词', copied: '已复制', open: '在 {app} 中打开', guide: '完整指南', close: '关闭' },
     hero: {
       stem: '第一方智能体协同工作，不必',
       endings: ['运行 CLI', '担心封号', '交出会话令牌', '离开自己的应用', '搬迁它们', '模拟网页操作'],
@@ -98,11 +112,19 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: '按需部署 SwB',
       local: '本机运行',
+      localIntro: '启动 SwB，打开它显示的登录链接。',
+      localAlternative: '也可以用 pipx 安装 SwB。',
+      localGuide: '安装指南',
       server: '服务器部署',
+      serverIntro: '用 Docker Compose 启动 SwB。',
+      serverGuide: '部署指南',
       cloud: '云端部署',
-      selfHosting: '自托管指南',
-      flyClaim: '运行费用在 Fly 每月免费额度内',
-      renderClaim: '付费套餐',
+      cloudIntro: '选择云服务商。',
+      cloudGuide: '自托管指南',
+      flyClaim: '月度额度内免费',
+      paidPlan: '付费套餐',
+      freePlan: '免费',
+      tunnelAttribution: 'Cloudflare Tunnel 是 Cloudflare, Inc. 的商标。',
     },
     usage: {
       title: '用 SwB 完成日常工作',
@@ -122,13 +144,13 @@ export const landingCopy: Record<Locale, Copy> = {
     license: 'Apache-2.0',
     trademarks: '商標',
     install: 'uvx swb-one up',
+    setupWithAgent: '用代理設定',
     copy: '複製',
     copied: '已複製',
     copyError: '請選取指令後複製',
     openSource: '免費開源，採用 Apache-2.0 授權',
     boardAlt: 'SwB 連接各個應用程式',
     boardHint: '選取要設定的應用程式。',
-    panel: { copy: '複製提示詞', copied: '已複製', open: '在 {app} 中開啟', guide: '完整指南', close: '關閉' },
     hero: {
       stem: '第一方代理協同工作，不必',
       endings: ['執行 CLI', '擔心封號', '交出工作階段權杖', '離開自己的應用程式', '搬移它們', '模擬網頁操作'],
@@ -141,11 +163,19 @@ export const landingCopy: Record<Locale, Copy> = {
     deployment: {
       title: '選擇 SwB 的部署方式',
       local: '在本機執行',
+      localIntro: '啟動 SwB，開啟它顯示的登入連結。',
+      localAlternative: '也可以用 pipx 安裝 SwB。',
+      localGuide: '安裝指南',
       server: '在伺服器上執行',
+      serverIntro: '用 Docker Compose 啟動 SwB。',
+      serverGuide: '部署指南',
       cloud: '在雲端執行',
-      selfHosting: '自行代管指南',
-      flyClaim: '執行費用在 Fly 每月免費額度內',
-      renderClaim: '付費方案',
+      cloudIntro: '選擇雲端服務商。',
+      cloudGuide: '自行代管指南',
+      flyClaim: '每月免費額度內免費',
+      paidPlan: '付費方案',
+      freePlan: '免費',
+      tunnelAttribution: 'Cloudflare Tunnel 是 Cloudflare, Inc. 的商標。',
     },
     usage: {
       title: '用 SwB 完成日常工作',

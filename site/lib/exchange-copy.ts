@@ -1,10 +1,10 @@
 import type { Locale } from './i18n';
 
 export const exchangeCopy = {
-  en: { you: 'You' },
-  'zh-Hans': { you: '你' },
-  'zh-Hant': { you: '你' },
-} satisfies Record<Locale, { you: string }>;
+  en: { you: 'You', setup: 'Set this up' },
+  'zh-Hans': { you: '你', setup: '配置此场景' },
+  'zh-Hant': { you: '你', setup: '設定此情境' },
+} satisfies Record<Locale, { you: string; setup: string }>;
 
 export const agentNames = {
   claude: 'Claude',

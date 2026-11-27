@@ -1,17 +1,10 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 async function dimensions(locator: Locator) {
   return locator.evaluate((node) => {
     const { x, y, width, height } = node.getBoundingClientRect();
     return [x + window.scrollX, y + window.scrollY, width, height];
   });
-}
-
-async function pageGeometry(page: Page) {
-  return {
-    hero: await dimensions(page.locator('.swb-hero-copy')),
-    height: await page.evaluate(() => document.documentElement.scrollHeight),
-  };
 }
 
 test('landing and docs share links, with a menu on narrow screens', async ({ page }) => {
@@ -39,15 +32,11 @@ test('landing and docs share links, with a menu on narrow screens', async ({ pag
   }
 });
 
-test('landing CTA combines and copies selected setup prompts without shifting the page or picker', async ({ page, context }) => {
+test('the docs picker combines and copies setup prompts without shifting', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/docs/setup');
   await page.evaluate(() => document.fonts.ready.then(() => null));
-  const cta = page.getByRole('button', { name: 'Set up with agent', exact: true });
-  const baseline = await pageGeometry(page);
-  await cta.click();
-  const picker = page.getByRole('dialog', { name: 'Set up' });
+  const picker = page.locator('[data-setup-picker]');
   const copy = picker.getByRole('button', { name: 'Copy prompt', exact: true });
   const preview = picker.getByRole('textbox', { name: 'Setup prompt' });
   await expect(picker).toBeVisible();
@@ -75,7 +64,6 @@ test('landing CTA combines and copies selected setup prompts without shifting th
   expect(prompt).toContain('uvx swb-one companion connect https://swb.example.com');
   expect(await dimensions(picker)).toEqual(opened.picker);
   expect(await dimensions(preview)).toEqual(opened.preview);
-  expect(await pageGeometry(page)).toEqual(baseline);
 
   await copy.click();
   await expect(picker.getByRole('status')).toHaveText('Copied');
@@ -94,10 +82,30 @@ test('landing CTA combines and copies selected setup prompts without shifting th
     node.scrollTop = node.scrollHeight;
     return node.scrollTop;
   })).toBeGreaterThan(0);
-  await page.keyboard.press('Escape');
-  await expect(picker).toBeHidden();
-  await expect(cta).toBeFocused();
-  expect(await pageGeometry(page)).toEqual(baseline);
+});
+
+test('the hero CTA and all hub apps link to localized Get started routes', async ({ page }) => {
+  const apps = {
+    Slack: 'slack', Claude: 'claude', 'Capy Captain': 'capy', Dots: 'chatgpt-dots',
+    Discord: 'discord', ChatGPT: 'chatgpt-dots', Codex: 'codex', GitHub: 'github',
+    Gemini: 'gemini', 'Claude Code': 'claude-code', Grok: 'grok',
+    Telegram: 'telegram', 'Grok Bot': 'grok-bot', Muse: 'muse',
+  };
+  for (const [prefix, title] of [
+    ['', 'Set up with agent'], ['/zh-Hans', '用智能体设置'], ['/zh-Hant', '用代理設定'],
+  ]) {
+    await page.goto(`${prefix}/`);
+    const path = `${prefix}/docs/get-started`;
+    const cta = page.getByRole('link', { name: title, exact: true });
+    await expect(cta).toHaveAttribute('href', path);
+    await expect(cta.locator('svg.lucide-plug')).toHaveCount(1);
+    const board = page.locator('.swb-board:visible');
+    await expect(board.getByRole('link')).toHaveCount(Object.keys(apps).length);
+    for (const [name, id] of Object.entries(apps)) {
+      await expect(board.getByRole('link', { name, exact: true })).toHaveAttribute('href', `${path}?agents=${id}`);
+    }
+    await expect(page.locator('dialog')).toHaveCount(0);
+  }
 });
 
 for (const [locale, path, heading, label] of [
@@ -138,19 +146,10 @@ for (const [locale, path, heading, label] of [
   });
 }
 
-test('the Muse hub and guide offer the release connector prompt', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-  await page.locator('.swb-board:visible').getByRole('button', { name: 'Muse', exact: true }).click();
-  const panel = page.getByRole('dialog', { name: 'Muse' });
-  await expect(panel).toBeVisible();
-  const prompt = await panel.locator('pre').textContent();
-  expect(prompt).toContain('https://agent.meta.ai/api/hatch/oauth/callback');
-  await expect(panel.getByRole('link', { name: /Open in/ })).toHaveCount(0);
-  await panel.getByRole('link', { name: 'Full guide' }).click();
-  await expect(page).toHaveURL(/\/docs\/setup\/muse$/);
+test('the Muse guide offers the release connector prompt', async ({ page }) => {
+  await page.goto('/docs/setup/muse');
   const guide = page.locator('.swb-prompt');
-  expect(await guide.locator('pre').textContent()).toBe(prompt);
+  await expect(guide.locator('pre')).toContainText('https://agent.meta.ai/api/hatch/oauth/callback');
   await expect(guide.getByRole('button', { name: 'Copy prompt' })).toBeVisible();
   await expect(guide.getByRole('link', { name: /Open in/ })).toHaveCount(0);
 });
