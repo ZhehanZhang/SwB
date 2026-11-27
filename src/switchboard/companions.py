@@ -304,7 +304,9 @@ class Companions:
         elif body.get("ok") is True and isinstance(body.get("result"), dict):
             job.future.set_result(body["result"])
         elif body.get("ok") is False:
-            job.future.set_exception(CompanionError(FAILED))
+            error = body.get("error")
+            safe = isinstance(error, str) and 0 < len(error) <= 200 and error.isprintable()
+            job.future.set_exception(CompanionError(error if safe else FAILED))
         else:
             raise CompanionError("Invalid companion result.")
 
