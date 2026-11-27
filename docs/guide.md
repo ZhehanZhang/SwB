@@ -130,7 +130,7 @@ A new paired key gets `agent:<name>` and any memory scopes set for its name in `
 
 On upgrade, SwB grants each active paired key with open access `general` and all projects that exist at that time. SwB copies any specific `auth.key_scopes` list instead. Projects outside those grants need their own grants.
 
-The `auth.key_scopes` setting limits messages, conversations and routing. It also limits memory for configured keys. Owner-approved OAuth clients and unrestricted configured keys keep full memory access. Use `auth.key_tools` to limit tool calls and `auth.key_targets` to limit send targets.
+The `auth.key_scopes` setting limits messages, conversations and routing. It also limits memory for configured keys and owner-approved OAuth clients. Without an entry, both keep full memory access. Use `auth.key_tools` to limit tool calls and `auth.key_targets` to limit send targets.
 
 `project_list` shows projects within the credential's access. Use `project_list(hint=...)` to find a project by its name, repository or linked project. Use `project_create` or `project_update` as the owner to manage projects and their links.
 
