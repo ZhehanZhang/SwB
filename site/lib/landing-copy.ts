@@ -60,7 +60,7 @@ export const landingCopy: Record<Locale, Copy> = {
     positioning: {
       title: '每个智能体都在自己的应用里工作',
       body: [
-        'Claude 留在 Claude Projects。ChatGPT 运行你的 dots。Captain 在 Capy 中工作。Grok 和 Muse 留在你常用的地方。SwB 通过官方渠道把它们连在一起，包括 MCP、routine API、机器人和 webhook。',
+        'Claude 留在 Claude Projects。ChatGPT 运行你的 dots。Capy Captain 沿用自己的工作区。Grok 和 Muse 留在你常用的地方。SwB 通过官方渠道把它们连在一起，包括 MCP、routine API、机器人和 webhook。',
         'SwB 使用各家服务商的官方渠道，每个智能体都在自己的应用里工作。你省去额外的 CLI 和网页自动化。',
         '每个智能体保留自己的工具、记忆和长处。登录始终由各家服务商负责，你用官方令牌完成连接。SwB 推动服务商之间通过 MCP events 和 A2A 开放协作。',
       ],
@@ -85,7 +85,7 @@ export const landingCopy: Record<Locale, Copy> = {
     positioning: {
       title: '每個代理都在自己的應用程式裡工作',
       body: [
-        'Claude 留在 Claude Projects。ChatGPT 執行你的 dots。Captain 在 Capy 中工作。Grok 與 Muse 留在你慣用的地方。SwB 透過官方管道把它們串連起來，包括 MCP、routine API、機器人與 webhook。',
+        'Claude 留在 Claude Projects。ChatGPT 執行你的 dots。Capy Captain 沿用自己的工作區。Grok 與 Muse 留在你慣用的地方。SwB 透過官方管道把它們串連起來，包括 MCP、routine API、機器人與 webhook。',
         'SwB 使用各家服務商的官方管道，每個代理都在自己的應用程式裡工作。你省去額外的 CLI 與網頁自動化。',
         '每個代理保留自己的工具、記憶與長處。登入一律由各家服務商負責，你用官方權杖完成連線。SwB 推動服務商之間透過 MCP events 與 A2A 開放協作。',
       ],

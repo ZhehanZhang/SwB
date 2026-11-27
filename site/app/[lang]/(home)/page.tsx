@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { AgentExchange } from '@/components/agent-exchange';
 import { GitHubMark } from '@/components/github-mark';
 import { HeroTitle } from '@/components/hero-title';
@@ -10,7 +9,6 @@ import { SwitchboardHero } from '@/components/switchboard-hero';
 import { exchangeCopy } from '@/lib/exchange-copy';
 import { isLocale, localize } from '@/lib/i18n';
 import { landingCopy } from '@/lib/landing-copy';
-import { baseOptions } from '@/lib/layout.shared';
 import { pageMetadata } from '@/lib/metadata';
 import { promptFiles, readPrompt } from '@/lib/prompts';
 import { repository } from '@/lib/source';
@@ -35,16 +33,19 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const copy = landingCopy[lang];
 
   return (
-    <HomeLayout {...baseOptions(lang)}>
+    <>
       <main className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <section className="swb-hero-grid">
           <div className="swb-hero-copy">
             <HeroTitle stem={copy.hero.stem} endings={copy.hero.endings} between={copy.hero.between}
-              names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Captain', dots: 'ChatGPT dots' }} />
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+              names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy Captain', dots: 'ChatGPT dots' }} />
+            <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2">
               <SetupPicker lang={lang} modal />
               <a className="swb-button border hover:bg-fd-muted" href={repository}>
                 <GitHubMark />GitHub
+              </a>
+              <a className="basis-full text-sm text-fd-muted-foreground underline underline-offset-4 hover:text-fd-foreground sm:basis-auto" href={`${repository}/blob/main/LICENSE`}>
+                {copy.openSource}
               </a>
             </div>
             <div className="mt-3"><CopyInstall lang={lang} /></div>
@@ -68,6 +69,6 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <a className="swb-text-link" href="https://www.apache.org/licenses/LICENSE-2.0">{copy.license}</a>
         </div>
       </footer>
-    </HomeLayout>
+    </>
   );
 }
