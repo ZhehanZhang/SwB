@@ -424,10 +424,10 @@ class ChannelModes:
             return False
         if not self.core.visibility.allows(Who(False), *self._channel_resources(block, space, row["channel"], row["name"])):
             return False
-        target = row["target"]
-        if not target:
-            return True
-        resources = provider.target_resources(target) if provider.manifest.id == "github" else [f"target:{target}", f"target:{target.removeprefix('agent:')}"]
+        return not row["target"] or self._target_visible(row["target"], getattr(provider, "targets_by_slug", None))
+
+    def _target_visible(self, target: str, slugs: dict[str, dict[str, Any]] | None) -> bool:
+        resources = self.core.target_visibility_resources(target, slugs=slugs)
         return bool(resources and self.core.visibility.allows(Who(False), *resources))
 
     def summary(self, block: str, principal: Principal | None = None) -> dict[str, Any]:

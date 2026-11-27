@@ -28,12 +28,11 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from ..auth import Principal
-from ..blocks import Action, Block, BlockError, Call
+from ..blocks import Action, Address, Block, BlockError, Call
 from ..claims import CLAIM_TTL_S
 from ..modes import PROVIDERS, ChatDrop, chat_target_drop
 from ..slack.config import AVATAR_RE
 from ..subject import subject, wake_text
-from ..targets import slugify
 from ..trust import wrap
 from ..visibility import Who
 from .claims import Claims
@@ -320,12 +319,6 @@ class ChatBlock(Block):
         alias = (name or "").lower()
         return [f"channel:{space}/{channel}", *([f"channel:{space}/#{alias}"] if NAME_RE.fullmatch(alias) else [])]
 
-    def target_resources(self, slug: str) -> list[str]:
-        t = self.targets_by_slug.get(slug) or next((t for t in self.targets_by_slug.values() if t["address"] == slug), None)
-        others = sorted(s for s, x in self.targets_by_slug.items() if t is not None and s != slug and x["address"] == t["address"])
-        slugs = dict.fromkeys((slug, *others, slug.removeprefix("agent:")))
-        return [f"target:{s}" for s in slugs]
-
     def _root(self, msg: Incoming) -> tuple[str, bool]:
         """The thread a message belongs to, and whether switchboard started or answered it."""
         q = self.core.store.one
@@ -416,9 +409,10 @@ class ChatBlock(Block):
                  "subject": subject(name or msg.user, self.manifest.title, place, text, trust=trust),
                  "raw_text": text, "target": slug if target else None, "target_kind": target["kind"] if target else None, "trust": trust, "from": sender}
         who = self.who(space, msg.user, trust)
-        target_resources = self.target_resources(slug or "") + ([f"target:{slugify(route.id)}"] if routed else [])
+        address = Address(target["block"], target["kind"], target["id"]) if target else None
+        target_resources = self.core.target_visibility_resources(slug or "", address, slugs=self.targets_by_slug)
         channel_reaches = self.core.visibility.allows(who, *self.channel_resources(msg.space, msg.channel, msg.channel_name))
-        target_reaches = not channel_reaches or target is None or self.core.visibility.allows(who, *target_resources)
+        target_reaches = not channel_reaches or target is None or bool(target_resources and self.core.visibility.allows(who, *target_resources))
         if channel_mode:
             event.update({"mode": channel_mode["mode"], "actions": channel_mode["actions"], "note": policy.wake_note(channel_mode)})
             event.pop("raw_text", None)
@@ -430,7 +424,8 @@ class ChatBlock(Block):
                 else:
                     reason = chat_target_drop(channel_mode["mode"], bool(slug))
                 self._drop(msg, reason)
-                await self.note_context(space, msg, event, target)
+                if address is None or address.block != "agent":
+                    await self.note_context(space, msg, event, target)
             elif self._admit_sender(msg, event, audit=False):
                 await self.delegate(space, msg, event, target, root, channel_mode, route_project=project if routed else None)
             else:
@@ -595,7 +590,8 @@ class ChatBlock(Block):
     async def reply_place(self, space: str, channel: str, root: str, target: str | None, trust: str) -> tuple[str, str | None, bool] | None:
         """(channel, root, to_dm). The thread itself, unless a private target would answer a non-owner in a shared
         channel: then the owner's DM, or None to withhold it."""
-        private = not target or self.core.visibility.rule(*self.target_resources(target)) == "private"
+        resources = self.core.target_visibility_resources(target or "", slugs=self.targets_by_slug)
+        private = not resources or self.core.visibility.rule(*resources) == "private"
         if trust == "owner" or not private or not self.channel_shared(space, channel):
             return channel, root, False
         owner = next(iter(sorted(self.owners(self.spaces[space]))), None)

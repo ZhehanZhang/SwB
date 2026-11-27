@@ -23,7 +23,6 @@ from ...guard import client_ip
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
 from ...subject import subject, wake_text
-from ...targets import slugify
 from ...trust import wrap
 from ...visibility import Who
 from .. import Action, Block, BlockError, Call, Manifest
@@ -276,10 +275,6 @@ class GitHubBlock(Block):
 
     def channel_resources(self, space: str, repo: str) -> list[str]:
         return list(dict.fromkeys((f"channel:{space}/{repo}", f"channel:{self.name}/{repo}")))
-
-    def target_resources(self, target: str, ident: str | None = None) -> list[str]:
-        ident = target.rpartition(":")[2] if ident is None else ident
-        return [f"target:{slug}" for slug in dict.fromkeys((slugify(target), slugify(ident))) if slug]
 
     def legacy_watch(self, repo: str) -> bool:
         return bool(self.sink_names(repo.casefold()))
@@ -713,7 +708,9 @@ class GitHubBlock(Block):
             self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
             return
         try:
-            resources = self.target_resources(target, addr.id)
+            if not owner and addr.block != "agent":
+                await self.core.targets()
+            resources = self.core.target_visibility_resources(target, addr)
             if not resources or not self.core.visibility.allows(who, *resources):
                 self.drop(event, data, "target access restricted", ip, delivery)
                 return

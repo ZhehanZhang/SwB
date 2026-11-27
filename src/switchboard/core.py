@@ -97,6 +97,7 @@ class Switchboard:
         self.slack_options = dict(slack_options or {})
         self.slack_connect = bool(self.slack_options.pop("connect", True))
         self._targets: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._target_slugs: dict[str, dict[str, Any]] = {}
         self.target_errors: dict[str, str] = {}
         self._avatar_http: httpx.AsyncClient | None = None
         self._avatar_files: AvatarFiles | None = None
@@ -423,6 +424,8 @@ class Switchboard:
         if query:
             q = query.strip().lower()
             out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
+        if block is None and kind is None and query is None:
+            self._target_slugs = self.slug_map(out)
         slack = self.slack
         personas = slack.config.personas if slack is not None else {}
         for t in out:
@@ -445,13 +448,26 @@ class Switchboard:
     def slug_map(self, targets: list[dict[str, Any]], aliases: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
         return dict(tgt.by_slug(targets, self.cfg.targets.get("priority") or (), {**(self.cfg.targets.get("aliases") or {}), **(aliases or {})}))
 
+    def target_visibility_resources(self, selector: str, address: Address | None = None, *,
+                                    slugs: dict[str, dict[str, Any]] | None = None) -> list[str]:
+        slugs = self._target_slugs if slugs is None else slugs
+        name = selector.casefold()
+        address = address or tgt.parse(selector, self.blocks)
+        if address is None and (row := slugs.get(name) or slugs.get(tgt.slugify(name))):
+            address = Address(row["block"], row["kind"], row["id"])
+        if address is not None and address.block == "agent":
+            return [f"target:{address.id}"] if tgt.SLUG_RE.fullmatch(address.id) else []
+        ident = tgt.slugify(address.id) if address is not None else tgt.slugify(name)
+        key = f"project:{address.id}" if address and address.block == "project" else str(address) if address else ""
+        aliases = sorted(slug for slug, row in slugs.items() if row["address"] == key)
+        names = (*([name] if tgt.SLUG_RE.fullmatch(name) or name == key.casefold() else []), ident, *aliases, key.casefold())
+        return [resource for slug in dict.fromkeys(names) if RESOURCE_RE.fullmatch(resource := f"target:{slug}")]
+
     async def visibility_resources(self) -> set[str]:
-        targets = await self.targets()
-        slugs = set(self.slug_map(targets))
-        for target in targets:
-            slugs.update((tgt.slugify(target["id"]), tgt.slugify(target["address"])))
-        slugs.update(self.known_agents())
-        resources = {f"target:{slug}" for slug in slugs if tgt.SLUG_RE.fullmatch(slug)}
+        resources = {resource for target in await self.targets()
+                     for resource in self.target_visibility_resources(target["address"], Address(target["block"], target["kind"], target["id"]))}
+        resources.update(resource for agent in self.known_agents()
+                         for resource in self.target_visibility_resources(f"agent:{agent}"))
         resources.update(f"route:{route.id}" for route in self.routes.list())
         resources.update((f"memory:{GENERAL}", *(f"memory:{p.scope}" for p in self.projects.list(include_archived=True))))
         resources.update(resource.lower() for resource in self.modes.channel_resources() if RESOURCE_RE.fullmatch(resource))
@@ -872,6 +888,7 @@ class Switchboard:
     def changed(self) -> None:
         """Routes or projects changed: let listeners (the Slack block's targets) refresh in the background."""
         self._targets.clear()
+        self._target_slugs.clear()
         for listener in self.change_listeners:
             task = asyncio.ensure_future(listener())
             self._tasks.add(task)
