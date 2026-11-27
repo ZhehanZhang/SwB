@@ -388,7 +388,11 @@ class ChannelModes:
                 "kind": kind or {"telegram": "group", "github": "repo"}.get(use, "channel"), "mode": mode, "source": source,
                 "project": project, "target": target, "actions": list(actions), "digest": digest, "problems": problems}
 
-    def status(self, principal: Principal | None = None, block: str | None = None) -> dict[str, Any]:
+    async def status_slugs(self, principal: Principal) -> dict[str, dict[str, Any]]:
+        return {} if principal.is_unrestricted_owner else self.core.slug_map(await self.core.targets())
+
+    def status(self, principal: Principal | None = None, block: str | None = None, *,
+               slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         spaces, dm = [], []
         owner = principal is None or principal.is_unrestricted_owner
         github = {"installation": {}, "checked_at": None}
@@ -396,9 +400,10 @@ class ChannelModes:
             use = provider.manifest.id
             if use not in PROVIDERS or (block is not None and block != name):
                 continue
+            provider_slugs = getattr(provider, "targets_by_slug", slugs or {})
             for (space, channel), (label, kind, parent) in sorted(self._inventory(name).items()):
                 row = self.row(name, space, channel, label, kind, parent)
-                if owner or self._visible(principal, row):
+                if owner or self._visible(principal, row, provider_slugs):
                     spaces.append(row)
             if use != "github" and (owner or any(r["block"] == name for r in spaces)):
                 mode, source = self.dm(name)
@@ -408,7 +413,7 @@ class ChannelModes:
         return {"schema": {"modes": list(MODES), "dm_modes": list(DM_MODES), "actions": list(ACTIONS), "default": self.cfg.default.mode},
                 "spaces": spaces, "dm": dm, "github": github}
 
-    def _visible(self, principal: Principal, row: dict[str, Any]) -> bool:
+    def _visible(self, principal: Principal, row: dict[str, Any], slugs: dict[str, dict[str, Any]]) -> bool:
         project = row["project"]
         if project and not principal.allows(f"project:{project}"):
             return False
@@ -425,14 +430,15 @@ class ChannelModes:
             return False
         if not self.core.visibility.allows(Who(False), *self._channel_resources(block, space, row["channel"], row["name"])):
             return False
-        return not row["target"] or self._target_visible(row["target"], getattr(provider, "targets_by_slug", None))
+        return not row["target"] or self._target_visible(row["target"], slugs)
 
-    def _target_visible(self, target: str, slugs: dict[str, dict[str, Any]] | None) -> bool:
+    def _target_visible(self, target: str, slugs: dict[str, dict[str, Any]]) -> bool:
         resources = self.core.target_visibility_resources(target, slugs=slugs)
         return bool(resources and self.core.visibility.allows(Who(False), *resources))
 
-    def summary(self, block: str, principal: Principal | None = None) -> dict[str, Any]:
-        payload = self.status(principal, block)
+    def summary(self, block: str, principal: Principal | None = None, *,
+                slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+        payload = self.status(principal, block, slugs=slugs)
         problems = {p for row in payload["spaces"] for p in row["problems"]}
         provider = self.core.blocks[block]
         if provider.manifest.id == "github" and (principal is None or principal.is_unrestricted_owner) and not provider.has_write_credential():

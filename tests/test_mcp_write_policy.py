@@ -179,7 +179,7 @@ def test_general_memory_confirmation_refusal_does_not_audit_arguments(server, pa
     assert "confirm_general" in error_text(call(client, paired, "memory_write", {
         "scope": "general", "namespace": "notes", "title": "Fixture", "body": SECRET,
     }))
-    for rows in (core.audit.recent(action="tool_refused"),
+    for rows in (core.audit.recent(outcome="refused"),
                  client.get("/api/audit", headers=OWNER, params={"action": "tool_refused"}).json()["items"]):
         assert [(row["target"], row["detail"], row["outcome"]) for row in rows] == [
             ("memory_write", CONFIRMATION_REQUIRED, "refused")
@@ -200,6 +200,6 @@ def test_provider_conversation_refusal_audits_without_the_body(server, paired):
     core, client, _ = server
     result = call(client, paired, "github_comment", {"repo": "example/repo", "number": 1, "body": SECRET})
     assert "Use your assist or triage conversation handle" in error_text(result)
-    [row] = core.audit.recent(action="tool_refused")
-    assert (row["target"], row["detail"]) == ("github_comment", CONVERSATION_REQUIRED)
+    [row] = core.audit.recent(outcome="refused")
+    assert (row["destination"], row["action"], row["detail"]) == ("github", "comment", CONVERSATION_REQUIRED)
     assert SECRET[:18] not in json.dumps(row) and paired[:12] not in json.dumps(row)

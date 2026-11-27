@@ -125,7 +125,9 @@ class LimitedServer(MCPServer):
             cause: BaseException | None = exc
             while cause is not None:
                 if isinstance(cause, PolicyRefusal):
-                    self._audit_refusal(p, name, cause.reason)
+                    if not cause.audited:
+                        self._audit_refusal(p, name, cause.reason)
+                        cause.audited = True
                     raise ToolError(str(cause)) from cause
                 cause = cause.__cause__
             if isinstance(exc, UnexpectedToolError) or not isinstance(error := exc.__cause__, ValidationError):
@@ -329,7 +331,7 @@ class MCPBlock(Block):
         async def modes_status(ctx: Context) -> dict[str, Any]:
             p = who(ctx)
             await core.modes.refresh(p)
-            return core.modes.status(p)
+            return core.modes.status(p, slugs=await core.modes.status_slugs(p))
 
         @mcp.tool(title="Set a channel mode", description="Owner only. Set a space or channel override. Choose a target listed by targets, such as agent:beta. Omit target to keep the binding. Pass an empty target to clear it. Use inherit to clear the override. The triage agent can reply by default.", annotations=WRITE)
         async def space_mode(ctx: Context, block: str, space: str, mode: str, channel: str = "",
@@ -539,7 +541,8 @@ class MCPBlock(Block):
             p = who(ctx)
             default, mx = self.wait_caps.for_agent(p.source)
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})},
-                    "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health(p),
+                    "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx},
+                    **core.health(p, mode_slugs=await core.modes.status_slugs(p)),
                     "agents": core.known_agents(),
                     "connected": (sorted(set(core.connections.agents())) if p.is_unrestricted_owner else [p.source] if p.kind == "connect" else [])}
 
