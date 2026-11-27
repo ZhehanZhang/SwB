@@ -16,3 +16,5 @@ services:
         value: render
       - key: SWITCHBOARD_KEY_OWNER
         generateValue: true
+      - key: SWB_SETUP_CODE
+        generateValue: true

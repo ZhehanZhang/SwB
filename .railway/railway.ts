@@ -13,6 +13,7 @@ export default defineRailway(() => {
       SWITCHBOARD_DEPLOY_PLATFORM: "railway",
       SWITCHBOARD_PUBLIC_URL: preserve(),
       SWITCHBOARD_KEY_OWNER: preserve(),
+      SWB_SETUP_CODE: preserve(),
     },
     volumeMounts: { "/data": data },
   });

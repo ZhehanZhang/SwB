@@ -7,7 +7,7 @@ import { DataState } from "@/components/data-state"
 import { SwbIcon } from "@/components/swb-icon"
 import { Button } from "@/components/ui/button"
 import { ApiError, sessionQuery } from "@/lib/api"
-import { addPasskey, exchangeLinkFromLocation, oidcStart, safeNext, signInWithPasskey, supportsPasskeys } from "@/lib/owner-auth"
+import { addPasskey, exchangeLinkFromLocation, oidcStart, safeNext, signInWithPasskey, signInWithSetupCode, supportsPasskeys } from "@/lib/owner-auth"
 
 export function LoginPage() {
   const { search } = useLocation()
@@ -25,6 +25,8 @@ export function LoginPage() {
   const [linkError, setLinkError] = useState("")
   const [name, setName] = useState("")
   const [enrollmentDone, setEnrollmentDone] = useState(false)
+  const [setupPending, setSetupPending] = useState(false)
+  const [setupError, setSetupError] = useState("")
   const passkeysSupported = supportsPasskeys()
 
   useLayoutEffect(() => {
@@ -69,6 +71,7 @@ export function LoginPage() {
 
   const hasPasskey = !!session.data?.methods.passkeys
   const oidc = session.data?.methods.oidc
+  const canSetUp = session.data?.methods.setup === true
   const error = linkError || (signIn.isError ? "Passkey sign-in failed." : "")
     || (params.get("error") === "oidc_failed" ? "Sign-in with your provider failed." : "")
   const loading = linkPending || session.isPending
@@ -76,6 +79,27 @@ export function LoginPage() {
   function enrollPasskey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     register.mutate()
+  }
+
+  async function enterSetupCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const code = new FormData(form).get("code")
+    if (typeof code !== "string") return
+    setSetupPending(true)
+    setSetupError("")
+    form.reset()
+    try {
+      await signInWithSetupCode(code.trim())
+      await refreshSession()
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+        void client.invalidateQueries({ queryKey: sessionQuery.queryKey })
+      }
+      setSetupError(error instanceof ApiError && error.status === 429 ? "Try again later." : "Check your setup code.")
+    } finally {
+      setSetupPending(false)
+    }
   }
 
   return (
@@ -117,6 +141,17 @@ export function LoginPage() {
                   <DataState kind="error" message="Session unavailable." onRetry={() => void session.refetch()} className="py-0" />
                 ) : (
                   <>
+                    {canSetUp && (
+                      <form method="post" action="/auth/setup" onSubmit={enterSetupCode} className="space-y-4">
+                        <label className="block text-label-sm">
+                          Setup code
+                          <input name="code" type="password" autoComplete="off" minLength={32} maxLength={128} required
+                            className="mt-1 block h-9 w-full rounded-md border border-input px-3 text-sm" />
+                        </label>
+                        {setupError && <p role="alert" className="text-sm text-destructive">{setupError}</p>}
+                        <Button type="submit" disabled={setupPending}>{setupPending ? "Signing in…" : "Sign in"}</Button>
+                      </form>
+                    )}
                     {hasPasskey && !passkeysSupported && <p className="text-sm text-muted-foreground">Passkeys require a compatible browser.</p>}
                     {(hasPasskey && passkeysSupported || oidc) && (
                       <div className="flex flex-wrap items-center gap-2">
@@ -133,7 +168,7 @@ export function LoginPage() {
                         )}
                       </div>
                     )}
-                    {!linkError && (error || (!oidc && (!hasPasskey || !passkeysSupported))) && (
+                    {!canSetUp && !linkError && (error || (!oidc && (!hasPasskey || !passkeysSupported))) && (
                       <p className="text-sm text-muted-foreground">Ask your agent for a sign-in link.</p>
                     )}
                   </>

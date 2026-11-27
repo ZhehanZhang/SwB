@@ -47,6 +47,10 @@ export function supportsPasskeys() {
     && Boolean(navigator.credentials)
 }
 
+export function signInWithSetupCode(code: string) {
+  return requestJson("/auth/setup", noContent, { method: "POST", ...json({ code }) })
+}
+
 function isRequestOptions(value: unknown): value is { publicKey: PublicKeyCredentialRequestOptionsJSON } {
   return isObject(value) && isObject(value.publicKey) && typeof value.publicKey.challenge === "string"
 }

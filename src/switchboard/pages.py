@@ -155,8 +155,20 @@ LOGIN_JS = PASSKEY_JS + """
 const screen = document.querySelector("main");
 const message = document.querySelector("#login-error");
 const button = document.querySelector("#passkey-login");
+const setup = document.querySelector("#owner-setup");
 const fragment = new URLSearchParams(location.hash.slice(1));
 const next = () => location.replace(screen.dataset.next);
+if (setup) setup.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const code = new FormData(setup).get("code");
+  setup.reset();
+  const submit = setup.querySelector("button");
+  submit.disabled = true;
+  message.textContent = "";
+  try { await post("/auth/setup", {code: code.trim()}); next(); }
+  catch { message.textContent = "Check your setup code or try again later."; }
+  finally { submit.disabled = false; }
+});
 if (button) button.addEventListener("click", async () => {
   button.disabled = true;
   message.textContent = "";
@@ -201,6 +213,10 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
     if oidc:
         href = "/auth/oidc/start?" + urlencode({"next": next_path})
         button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
+    if methods.get("setup"):
+        button += ('<form id="owner-setup" method="post" action="/auth/setup">'
+                   '<label>Setup code <input name="code" type="password" autocomplete="off" '
+                   'minlength="32" maxlength="128" required></label><button type="submit">Sign in</button></form>')
     title = LOGIN_TITLE if button else "Ask your agent for a sign-in link"
     return HTMLResponse(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

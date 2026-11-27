@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 from typing import TYPE_CHECKING
@@ -51,6 +52,8 @@ class OwnerLogin:
         self.sessions = auth.sessions
         self.limiter = limiter
         self.oidc = OIDC(auth)
+        code = auth.cfg.env.get("SWB_SETUP_CODE", "")
+        self.setup_digest = hashlib.sha256(code.encode()).digest() if code.isascii() and 32 <= len(code) <= 128 else None
 
     @property
     def origin(self) -> str | None:
@@ -61,10 +64,17 @@ class OwnerLogin:
         return self.auth.cfg.passkey_rp
 
     def methods(self) -> dict:
-        return {"passkeys": self.store.one("SELECT count(*) AS n FROM owner_passkeys WHERE rp_id = ? OR (rp_id IS NULL AND ?)",
-                                           (self.rp_id, self.rp_id == self.auth.cfg.legacy_passkey_rp))["n"],
-                "oidc": {"name": self.oidc.cfg.name} if self.oidc.cfg else None,
-                "access": self.auth.cfg.access_configured}
+        methods = {"passkeys": self.store.one("SELECT count(*) AS n FROM owner_passkeys WHERE rp_id = ? OR (rp_id IS NULL AND ?)",
+                                             (self.rp_id, self.rp_id == self.auth.cfg.legacy_passkey_rp))["n"],
+                   "oidc": {"name": self.oidc.cfg.name} if self.oidc.cfg else None,
+                   "access": self.auth.cfg.access_configured}
+        if self.setup_open():
+            methods["setup"] = True
+        return methods
+
+    def setup_open(self) -> bool:
+        return (self.setup_digest is not None and self.origin is not None and self.oidc.cfg is None
+                and not self.auth.cfg.access_configured and self.store.one("SELECT 1 FROM owner_initialized") is None)
 
     def routes(self) -> list[Route]:
         return [
@@ -72,6 +82,7 @@ class OwnerLogin:
             Route("/auth/session", self.session, methods=["GET"]),
             Route("/auth/logout", self.logout, methods=["POST"]),
             Route("/auth/link", self.link, methods=["POST"]),
+            Route("/auth/setup", self.setup, methods=["POST"]),
             Route("/auth/passkey/login/options", self.login_options, methods=["POST"]),
             Route("/auth/passkey/login/verify", self.login_verify, methods=["POST"]),
             Route("/auth/passkey/register/options", self.register_options, methods=["POST"]),
@@ -120,6 +131,28 @@ class OwnerLogin:
         response = self.sessions.start(request, Response(status_code=204), "link", row["client_id"], row["source"])
         self.auth.audit.record(origin="http", source=row["source"], client=row["client_id"], destination="core",
                                action="login_link_used", outcome="ok")
+        return response
+
+    async def setup(self, request: Request) -> Response:
+        if not self.setup_open():
+            return error("setup_closed", 404)
+        if not request.headers.get("origin") or not self.auth.origin_ok(request):
+            return error("csrf", 403)
+        peer = request.client.host if request.client else "?"
+        buckets = (("owner_setup", peer), ("owner_setup_total", "*"))
+        for bucket, key in buckets:
+            if (limited := self.limited(bucket, key)) is not None:
+                return limited
+        for bucket, key in buckets:
+            self.limiter.hit(bucket, key)
+        code = (await json_body(request)).get("code")
+        if not (isinstance(code, str) and code.isascii() and 32 <= len(code) <= 128
+                and hmac.compare_digest(hashlib.sha256(code.encode()).digest(), self.setup_digest)):
+            return error("setup_failed", 401)
+        response = self.sessions.start(request, Response(status_code=204), "setup")
+        if response.status_code == 409:
+            return error("setup_closed", 409)
+        self.auth.audit.record(origin="http", source="owner", client="setup", destination="core", action="owner_setup", outcome="ok")
         return response
 
     async def login_options(self, request: Request) -> Response:
