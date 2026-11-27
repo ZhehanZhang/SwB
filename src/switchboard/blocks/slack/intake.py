@@ -120,7 +120,7 @@ class SlackIntake(Block):
                 block = self.core.blocks.get(t["block"])
                 if not p.get("id") or block is None or p["id"] in personas:
                     continue
-                avatar = await block.render_avatar(p, engine.http, engine.avatar_cache, engine.config.captain_avatars)
+                avatar = p.get("avatar_file")
                 personas[p["id"]] = Persona(id=p["id"], name=p.get("name") or p["id"], avatar=avatar, icon_url=None if avatar else p.get("icon_url"))
             targets: dict[str, Target] = {}
             for slug, t in self.core.slug_map(found, dict(engine.config.target_aliases)).items():
@@ -139,7 +139,7 @@ class SlackIntake(Block):
         return {"targets": [t.as_dict() for t in sorted(engine.targets.values(), key=lambda t: (t.kind, t.slug))],
                 "defaults": {label: ws.default_target for label, ws in engine.config.workspaces.items()},
                 "aliases": dict(engine.config.target_aliases), "refreshed_at": self.refreshed_at, "error": self.refresh_error,
-                "usage": "Mention the bot, then a target: '@bot teamcaptain deploy status?'. Without one, the thread's target or the workspace default."}
+                "usage": "Mention the bot, then a target: '@bot example deploy status?'. Without one, the thread's target or the workspace default."}
 
     # Events ----------------------------------------------------------------------------------
 

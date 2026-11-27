@@ -137,7 +137,7 @@ agents:                      # optional: without it every preset (claude, chatgp
   codex: {label: Codex}
 blocks:
   mcp:   {use: mcp, legacy_aliases: true, wait: {default_s: 60, max_s: 200}}
-  capy:  {use: capy, identity: service, avatars: false}
+  capy:  {use: capy, identity: service}
   slack: {use: slack, workspaces: {...}, agents: {...}, personas: {...}, workspace_projects: {acme: acme}}
 targets: {priority: [], aliases: {}}
 routes:                      # seeds, written once; routes_set and the page manage them after. Empty by default
@@ -495,18 +495,21 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - **Personas.** Bot posts carry a per-message name and picture (`chat:write.customize`), chosen like the send keys:
   the call's `persona` (only with `allow_persona_override`, and within `allowed_personas`) > the persona of the
   target the thread is routed to, for an agent its block provides (Capy in a Captain's thread) > `agents.<agent>.persona_by_workspace` (which may name a Captain's persona) > `agents.<agent>.persona` > the persona
-  named like the agent > the workspace's `default_persona`. Blocks can bring personas for their targets: every Captain
-  gets one with its name, and its picture is a monogram on its Capy background colour, or, with `blocks.capy.avatars:
-  true` (or `slack.captain_avatars: true`), the Captain's own Capy avatar (this reads an undocumented capy.ai asset
-  path; see `blocks/capy/avatars.py`). User-identity posts never carry
-  a persona: they always show as the account owner, behind the identity's write policy.
+  named like the agent > the workspace's `default_persona`. User-identity posts never carry a persona: they always
+  show as the account owner, behind the identity's write policy.
+- **Captain avatars.** Each Captain gets a persona with their own Capy avatar by default. SwB reads Capy's public,
+  undocumented avatar assets and caches one file per Captain and avatar spec, so a changed spec gets a new URL.
+  If the asset can't be rendered, SwB draws a monogram on the Captain's background colour. A Captain without an
+  avatar spec uses the bundled Capy mark. Set `blocks.capy.avatars: false` or `blocks.slack.captain_avatars: false`
+  (legacy `slack.captain_avatars`) to use monograms instead of fetching Capy assets.
 - **Avatars.** A persona's picture is the file named in `avatar:`, or `<persona id>.png` when the persona sets no
-  `icon_url`. Files are looked up in `<data>/avatars` (uploads from the root page's Personas list), then each
-  `slack.avatar_dirs` folder, then pictures blocks rendered, then the neutral monograms bundled for `switchboard`,
-  `claude`, `chatgpt`, `gemini`, `codex`, `claude-code` and `capy`. Dropping a new file in replaces the picture with no
-  restart; the URL carries the file's mtime so Slack fetches the new one. `scripts/monogram.py` draws more.
-  `/avatars/<file>` is served without Access, because Slack fetches it. The limit: the picture shows on each message,
-  but clicking the name opens the app's bot profile, with the app's own name, icon and @handle.
+  `icon_url`. SwB looks in `<data>/avatars` (uploads from the Personas list), then each `blocks.slack.avatar_dirs`
+  folder (legacy `slack.avatar_dirs`), then the rendered avatar cache, then the bundled marks. No extra folder is
+  required for `switchboard`, `claude`, `claude-code`, `chatgpt`, `gemini`, `codex` or `capy`. Put your own file in
+  `avatar_dirs` to override a bundled mark. The URL carries the file's mtime, so replacing a file doesn't require a
+  restart. Set `blocks.slack.public_base_url` to give Slack a reachable `/avatars/<file>` URL. Discord uses the same
+  URL when configured, or falls back to `public_url`. This route is public so they can fetch pictures. In Slack, clicking a persona still opens the
+  app's bot profile with the app's own name, icon and @handle.
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
@@ -604,18 +607,18 @@ explicitly listen to. Mention the bot with a target slug (for example, `@swb hel
 
 1. In the [Discord Developer Portal](https://discord.com/developers/applications), create a New Application. Under
    **Bot**, turn on **Message Content Intent** if you want unmentioned server follow-ups and listen mode to have text.
-   Reset the bot token there. You can copy the Application ID from **General Information** into the config now, or
-   let the bot learn it when Discord connects.
-2. Enable the block, add the servers and your Discord user IDs, and restart switchboard. In Discord's
-   **User Settings → Advanced**, enable **Developer Mode** to copy server and user IDs from their context menus.
-3. As the owner, call `discord_provision` and open its one-time token link behind Cloudflare Access. Paste the token
-   there and save. Without Access, set `DISCORD_BOT_TOKEN` in the server environment instead. Never enter a token in
-   YAML, Discord or an MCP tool argument.
-4. Open `setup.invite_url` from `discord_status` and add the bot to each configured server. The link requests only the
-   bot scope and the permissions for the enabled features; it does not request Administrator or slash commands.
+   Reset the bot token there. SwB learns the Application ID and owner when Discord connects.
+2. Enable the block with one space and restart switchboard. Leave out `guild_id` and `owner_ids` for automatic setup.
+3. As the owner, call `connect` with `what: discord` for a one-time token link. With Cloudflare Access, open the link
+   and paste the token there. With a local owner key from `swb init`, use `swb claim <link>`. Or set
+   `DISCORD_BOT_TOKEN` in the server environment. Never enter a token in YAML, Discord or an MCP tool argument.
+4. Use the invite from `connect` or `discord_status` to add the bot to a server you own. A guild-less space binds when
+   the bot sees exactly one server owned by its application owner. The link requests only the bot scope and the
+   permissions for the enabled features, not Administrator or slash commands.
 5. Channels and targets are private by default. To let other people reach a target, share both
    `channel:<space>/<channel-id>` (or `channel:<space>/#<name>`) and `target:<slug>`. A visibility list can name
-   individual users as `discord:<user-id>`. Only `owner_ids` grant owner trust; non-owner messages remain untrusted.
+   individual users as `discord:<user-id>`. Configured `owner_ids` override the discovered application owner;
+   non-owner messages remain untrusted.
 
 ```yaml
 blocks:
@@ -623,8 +626,6 @@ blocks:
     use: discord
     spaces:
       home:
-        guild_id: "100000000000000001"
-        owner_ids: ["100000000000000002"]
         default_target: helper
     agents: {claude: [home]}
 ```
@@ -635,10 +636,12 @@ blocks:
   of unmentioned server messages, including follow-ups and listened-to messages. `connect: false` skips Gateway
   intake, which is useful for testing the REST side alone.
 - Posting: `threads` defaults to `true` and creates a public thread from the original message when Discord
-  supports it. Set it to `false` to reply in place. `personas: true` uses a webhook per channel for persona posts,
-  except in DMs and when a native reply reference is needed. `ack_reaction` defaults to 👀; set it to `null` to
+  supports it. Set it to `false` to reply in place. `personas` defaults to `true`: a webhook per channel lets
+  posts show the same persona name and avatar as Slack, except in DMs or when a native reply reference is needed.
+  If Discord denies webhook access, SwB posts as the bot in the same place. Re-open the invite from `connect`
+  to grant Manage Webhooks, or set `personas: false` to use the bot for all posts. `ack_reaction` defaults to 👀; set it to `null` to
   disable reactions. Posts don't ping users or roles. `daily_cap` optionally limits outbound tool calls per day.
-- Routing: each space needs a distinct `guild_id`. `known` maps Discord user IDs to names; `listen` lists channel
+- Routing: at most one space can omit `guild_id`. Any others need distinct `guild_id` values. `known` maps Discord user IDs to names; `listen` lists channel
   or thread IDs whose unaddressed messages go only to granted inboxes. `project` sets the default project and
   `channel_projects` overrides it by ID or `#name`. `bot_posts_per_hour` defaults to 20 per thread.
   The block's `agents` maps agent names to space lists or `"*"`, `target_aliases` adds local slugs, and
@@ -654,13 +657,13 @@ Telegram is both a way in and a way out. The bot uses the Bot API's long polling
 Telegram endpoint, tunnel or Cloudflare Access change. One process can poll a given bot token at a time.
 Telegram DMs, bot mentions, `/swb <target> <message>` and replies to the bot can reach a switchboard target
 such as an agent, routine or project. A reply to the bot keeps the earlier target unless you name another.
-Telegram uses the bot's own name; relayed replies can show the target's persona on a bold first line.
+Telegram can't set per-message avatars. It uses the bot's own name and picture; relayed replies can show the
+target's persona on a bold first line.
 
 1. Enable the block in `config/switchboard.yaml` and configure at least one space.
-2. Create the bot in [@BotFather](https://t.me/BotFather) with `/newbot`. Call `telegram_provision` and
-   enter its HTTP API token only at the one-time link (requires owner sign-in through Access). Without Access,
-   set the server's `TELEGRAM_BOT_TOKEN` environment variable instead. If set, the environment takes precedence;
-   remove or update it before switching to a token saved through the link.
+2. Create the bot in [@BotFather](https://t.me/BotFather) with `/newbot`. Call `connect` with `what: telegram`
+   for a one-time token link. Open it through Cloudflare Access, or use `swb claim <link>` with a local owner key
+   from `swb init`. `TELEGRAM_BOT_TOKEN` in the server environment takes precedence over a token saved with the link.
 3. Add the bot to each group and send `/swb@<bot username>` there. Copy the negative chat id from
    `telegram_status` → `setup.seen_chats` into the space's `chats`. If using `listen`, turn off privacy
    mode with `/setprivacy` in @BotFather, then remove and re-add the bot to the group.
@@ -709,9 +712,9 @@ run. It never shows the token. Only the owner's agents with a grant can use `tel
 - `blocks.slack.app_icon`: SwB lists a manual step in status. Upload the file at [api.slack.com/apps](https://api.slack.com/apps)
   under **Basic Information → Display Information**; Slack has no API for setting the app icon.
 
-For Discord and Telegram, set a file name such as `switchboard.png`. SwB looks in the Slack engine's upload directory
-(`<data>/avatars`), then its configured `avatar_dirs`, then the bundled avatars. Without the Slack engine, it looks
-only in the bundled avatars. Leave the key unset to keep the existing photo. SwB skips unchanged files, and
+For Discord and Telegram, set a file name such as `switchboard.png`. SwB uses the same avatar lookup order as for
+personas. The upload directory (`<data>/avatars`) and bundled marks work without the Slack block. Leave the key
+unset to keep the existing photo. SwB skips unchanged files, and
 `discord_status` and `telegram_status` report whether the configured file was applied or an upload failed.
 
 ## GitHub App
@@ -817,7 +820,7 @@ the same setup as his other apps), and the server verifies the Access JWT itself
 email), so a request that bypasses the tunnel is refused too. The admin page (status, routes, projects, recent
 refusals) is at `/`. A second Access app, "Switchboard machine paths (bypass)", lets through only what machines call:
 `/mcp`, `/token`, `/register`, `/revoke`, `/.well-known`, `/healthz`, `/inbox` (the Claude Code channel),
-`/avatars` (Slack fetches persona pictures) and `/connect` (redeeming a pairing code). Those carry
+`/avatars` (Slack and Discord fetch persona pictures) and `/connect` (redeeming a pairing code). Those carry
 their own OAuth or bearer checks. Without `auth.cloudflare_access` in config, OAuth sign-in and the admin page are off
 and only bearer keys work.
 
