@@ -57,6 +57,9 @@ export async function POST(request: Request) {
     const { env } = getCloudflareContext();
     if (!env.AI) return new Response(unavailable[lang], { status: 503 });
     if (env.NEXT_PUBLIC_ASK_AI !== '1') return new Response(null, { status: 404 });
+    if (!env.ASK_LIMIT) return new Response(unavailable[lang], { status: 503 });
+    const { success } = await env.ASK_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'unknown' });
+    if (!success) return new Response(unavailable[lang], { status: 429 });
 
     const location = messages.at(-1)?.location?.location;
     const docs = await fullMarkdown(lang);
