@@ -21,8 +21,9 @@ import httpx
 from ...audit import iso
 from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
 from ...block_env import CAPY_KEY, CAPY_SEND_KEY
+from ...refusals import CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED
 from ...subject import lead_with_subject, subject
-from .. import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
+from .. import Action, Address, AgentSpec, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
 from .api import CapyAPI, CapyError, pr_links, thread_summary
 from .stream import Backoff, Frame, StreamClosed, ThreadStream
 
@@ -448,8 +449,8 @@ class CapyBlock(Block):
         route, _ = self.core.routes.resolve(destination=self.name, agent=principal.source, project=project.slug if project else None)
         if target:
             if route is not None and not route.allow_override:
-                raise DestinationError(f"the {route.level} route sends this to {describe(route.target)} and does not allow overriding; "
-                                       "leave target out, or have the owner set allow_override on that route")
+                raise BlockRefused(TARGET_REQUIRED, f"the {route.level} route sends this to {describe(route.target)} and does not allow overriding; "
+                                   "leave target out, or have the owner set allow_override on that route")
             return parse_target(target), dict(route.defaults) if route else {}, "explicit"
         if route is None:
             raise DestinationError("No route is set for Capy. Set a route or pass a target.")
@@ -698,13 +699,13 @@ class CapyBlock(Block):
         delegated = self.core.store.one("SELECT 1 FROM handles WHERE destination = ? AND ref = ?", (self.name, thread_id)) is not None
         if delegated or thread_id in captains | threads or (t.get("captain") or {}).get("jamId") in captains or t.get("projectId") in projects:
             return t
-        raise DestinationError("that thread is outside the Captains, projects and threads routed here")
+        raise BlockRefused(CONVERSATION_REQUIRED, "that thread is outside the Captains, projects and threads routed here")
 
     def _thread_ref(self, ref: str, call: Call, *, read: bool = False) -> str:
         if ref.startswith("h_"):
             h = self.core.inbox.handle(ref)
             if h is None or not (h["owner"] == call.principal.source or (read and call.principal.is_unrestricted_owner)):
-                raise DestinationError(f"no handle {ref!r}")
+                raise BlockRefused(CONVERSATION_REQUIRED, f"no handle {ref!r}")
             return h["ref"]
         return ref
 
@@ -807,7 +808,7 @@ class CapyBlock(Block):
                 page = await api.list_threads(pid, limit=limit)
                 return {"scope": scope, "project": entry.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
             if not p.allows(entry.scope):
-                raise DestinationError("Choose a project granted to this key.")
+                raise BlockRefused(SCOPE_REQUIRED)
             refs = dict.fromkeys(h["ref"] for h in self.core.inbox.handles(owner=owner, destination=self.name, project=entry.slug,
                                                                            scopes=p.scopes, limit=limit))
             threads = await asyncio.gather(*(api.get_thread(ref) for ref in refs), return_exceptions=True)

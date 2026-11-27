@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from starlette.routing import BaseRoute
 
+from ..refusals import PolicyRefusal
+
 if TYPE_CHECKING:
     from ..auth import Principal
     from ..core import Switchboard
@@ -45,6 +47,10 @@ VERBS = ("send", "reply", "status", "result", "cancel", "targets")
 
 class BlockError(Exception):
     """A refusal or failure the caller should see; the core records it in the audit log."""
+
+
+class BlockRefused(PolicyRefusal, BlockError):
+    pass
 
 
 @dataclass

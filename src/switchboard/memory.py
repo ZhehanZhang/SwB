@@ -14,6 +14,7 @@ from typing import Any
 from .audit import iso
 from .config import NAMESPACE_RE
 from .projects import ProjectError, Projects
+from .refusals import CONFIRMATION_REQUIRED, PolicyRefusal
 from .store import Store, fts_query, new_id
 
 MAX_BODY = 20_000
@@ -21,11 +22,8 @@ MAX_TITLE = 200
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,79}$")
 GENERAL = "general"
 log = logging.getLogger("switchboard.memory")
-CONFIRM_GENERAL = (
-    "general is the owner's cross-project memory: every project and assistant reads it. Anything about one project belongs in "
-    "project:<slug> (project_list shows them). If this really applies everywhere (his profile, a preference, a decision for all "
-    "projects), confirm with the owner and retry with confirm_general=true."
-)
+CONFIRM_GENERAL = ("Save project facts in project:<slug>. For facts that apply to every project, "
+                   "confirm the write with the owner and pass confirm_general=true.")
 
 
 class MemoryError_(ValueError):
@@ -33,6 +31,10 @@ class MemoryError_(ValueError):
 
 
 class MemoryNotFound(MemoryError_):
+    pass
+
+
+class MemoryRefused(PolicyRefusal, MemoryError_):
     pass
 
 
@@ -166,7 +168,7 @@ class Memory:
             if scope != GENERAL and scope != f"project:{named}":
                 raise MemoryError_(f"scope {scope} is not the project you named ({named!r}): write to project:{named}, or drop project if {scope} is right")
         if scope == GENERAL and not confirm_general:
-            raise MemoryError_(CONFIRM_GENERAL)
+            raise MemoryRefused(CONFIRMATION_REQUIRED, CONFIRM_GENERAL)
         namespace = (namespace or "").strip().strip("/").lower()
         key = key.strip().lower() if key else None
         if mode not in ("replace", "append"):

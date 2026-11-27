@@ -106,7 +106,7 @@ def test_audit_shows_webhook_refusal_and_drop_reasons_from_the_log(make):
     assert response.status_code == 200
     items = get(client, "/audit", action="webhook")["items"]
     cli_rows = core.audit.recent(action="webhook")
-    assert [r["detail"] for r in items] == [r["detail"] for r in cli_rows] == ["unhandled event", "invalid signature"]
+    assert [r["detail"] for r in items] == [r["detail"] for r in cli_rows] == ["unhandled event", "missing signature"]
     assert [r["excerpt"] for r in items] == [r["excerpt"] for r in cli_rows] == ["", ""]
     assert all(secret_value not in json.dumps(items) for secret_value in (PRIVATE, secret, signature))
 

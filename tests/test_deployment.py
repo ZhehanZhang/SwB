@@ -155,14 +155,20 @@ def test_setup_code_is_removed_from_application_environment():
 
 def test_setup_code_rate_limits_failures_without_blocking_the_owner(tmp_path):
     env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE, "SWITCHBOARD_DATA": str(tmp_path)}
-    with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
+    core = Switchboard(env=env)
+    wrong = "fixture-wrong-setup".ljust(44, "x")
+    with TestClient(create_app(core), base_url=SETUP_URL) as client:
         for i in range(8):
             headers = {"Origin": SETUP_URL, "CF-Connecting-IP": f"192.0.2.{i}"}
-            assert client.post("/auth/setup", json={"code": "x" * 32}, headers=headers).status_code == 401
-        response = client.post("/auth/setup", json={"code": "x" * 32},
+            failed = client.post("/auth/setup", json={"code": wrong}, headers=headers)
+            assert failed.status_code == 401 and failed.json() == {"error": "setup_failed"}
+        response = client.post("/auth/setup", json={"code": wrong},
                                headers={"Origin": SETUP_URL, "CF-Connecting-IP": "192.0.2.99"})
         assert response.status_code == 429 and "Retry-After" in response.headers
         assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers={"Origin": SETUP_URL}).status_code == 204
+        for rows in (core.audit.recent(action="auth_failure"), client.get("/api/audit", params={"action": "auth_failure"}).json()["items"]):
+            assert [(row["origin"], row["target"], row["detail"]) for row in rows] == [("http", "/auth/setup", "setup_failed")] * 8
+            assert wrong[:12] not in str(rows) and SETUP_CODE[:12] not in str(rows)
 
 
 def test_setup_code_counts_and_logs_throttled_failures_without_exposing_codes(tmp_path, caplog):

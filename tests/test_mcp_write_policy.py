@@ -6,11 +6,12 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult
 
-from conftest import STATIC_KEY, base_config, call, error_text, payload, rpc
+from conftest import OWNER, STATIC_KEY, base_config, call, error_text, payload, rpc
 from switchboard.blocks import BLOCKS
 from switchboard.blocks.mcp import PRINCIPAL_SCOPE, WRITE
 from switchboard.blocks.mcp.policy import (
-    BLOCK_ROLES, CHAT_ROLES, CONVERSATION_REQUIRED, MUTATION_ROLES, OWNER_REQUIRED, POLICY_REQUIRED, ROUTE_REQUIRED, TARGET_REQUIRED,
+    BLOCK_ROLES, CHAT_ROLES, CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, MUTATION_ROLES, OWNER_REQUIRED, POLICY_REQUIRED, ROUTE_REQUIRED,
+    TARGET_REQUIRED,
 )
 
 PROVIDER_ROLES = {f"{block}_{tool}": role for block, tools in {**BLOCK_ROLES, "discord": CHAT_ROLES, "telegram": CHAT_ROLES}.items()
@@ -137,10 +138,32 @@ def test_paired_mailbox_reply_and_cancel_respect_sender_and_recipient(server):
     assert SECRET not in json.dumps(refusals)
 
 
-def test_ordinary_tool_errors_do_not_emit_policy_refusals(server, paired):
+def test_general_memory_confirmation_refusal_does_not_audit_arguments(server, paired):
     core, client, _ = server
     assert "confirm_general" in error_text(call(client, paired, "memory_write", {
-        "scope": "general", "namespace": "notes", "title": "Fixture", "body": "General note",
+        "scope": "general", "namespace": "notes", "title": "Fixture", "body": SECRET,
     }))
+    for rows in (core.audit.recent(action="tool_refused"),
+                 client.get("/api/audit", headers=OWNER, params={"action": "tool_refused"}).json()["items"]):
+        assert [(row["target"], row["detail"], row["outcome"]) for row in rows] == [
+            ("memory_write", CONFIRMATION_REQUIRED, "refused")
+        ]
+        assert SECRET[:18] not in json.dumps(rows) and paired[:12] not in json.dumps(rows)
+
+
+def test_ordinary_tool_errors_do_not_emit_policy_refusals(server, paired):
+    core, client, _ = server
     assert "Provide" in error_text(call(client, paired, "memory_write"))
+    assert "title is required" in error_text(call(client, paired, "memory_write", {
+        "scope": "general", "namespace": "notes", "title": "", "body": SECRET, "confirm_general": True,
+    }))
     assert core.audit.recent(action="tool_refused") == []
+
+
+def test_provider_conversation_refusal_audits_without_the_body(server, paired):
+    core, client, _ = server
+    result = call(client, paired, "github_comment", {"repo": "example/repo", "number": 1, "body": SECRET})
+    assert "Use your assist or triage conversation handle" in error_text(result)
+    [row] = core.audit.recent(action="tool_refused")
+    assert (row["target"], row["detail"]) == ("github_comment", CONVERSATION_REQUIRED)
+    assert SECRET[:18] not in json.dumps(row) and paired[:12] not in json.dumps(row)

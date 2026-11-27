@@ -179,6 +179,16 @@ def test_link_origin_single_use_expiry_and_audit(make, caplog):
         expired = client.post("/auth/link", json={"token": other})
         assert expired.status_code == 401 and expired.json() == {"error": "link_expired"}
         assert "set-cookie" not in expired.headers
+        raw = core.audit.recent(action="auth_failure")
+        public = client.get("/api/audit", headers=OWNER, params={"action": "auth_failure"}).json()["items"]
+        for rows in (raw, public):
+            assert [(r["origin"], r["target"], r["detail"], r["outcome"]) for r in rows] == [
+                ("http", "/auth/link", reason, "refused") for reason in ("link_expired", "link_used")
+            ] + [
+                ("http", path, "csrf", "refused") for path in (SIGN_IN + "/verify", SIGN_IN + "/options", "/auth/link")
+            ]
+            for value in (first, other):
+                assert value[:8] not in json.dumps(rows)
         assert client.post("/auth/link", json={"token": first}).json() == {"error": "link_expired"}
         token(client)
         assert core.store.one("SELECT 1 FROM owner_login_links_used") is None
@@ -217,13 +227,39 @@ def test_restricted_keys_cannot_discover_or_call_login_link(make, restriction):
 
 @pytest.mark.parametrize("path, failure", [("/auth/link", "link_expired"), (SIGN_IN + "/verify", "passkey_failed")])
 def test_failed_login_attempts_are_rate_limited(make, path, failure):
-    _, client = make()
+    core, client = make()
     for _ in range(10):
         response = client.post(path, json={})
         assert response.status_code == 401 and response.json() == {"error": failure}
     response = client.post(path, json={})
     assert response.status_code == 429 and "retry-after" in response.headers
     security_headers(response)
+    rows = core.audit.recent(action="auth_failure")
+    assert [(row["target"], row["detail"]) for row in rows] == [(path, failure)] * 10
+
+
+@pytest.mark.parametrize("path", [SIGN_IN + "/verify", ADD + "/verify"])
+def test_passkey_verification_audits_without_the_credential(make, path):
+    core, client = make()
+    credential = "fixture-passkey-credential"
+    response = client.post(path, json={"credential": credential}, headers={**OWNER, **csrf(client, OWNER)})
+    assert response.status_code == 401 and response.json() == {"error": "passkey_failed"}
+    for rows in (core.audit.recent(action="auth_failure"),
+                 client.get("/api/audit", headers=OWNER, params={"action": "auth_failure"}).json()["items"]):
+        assert [(r["origin"], r["target"], r["detail"]) for r in rows] == [("http", path, "passkey_failed")]
+        assert credential[:12] not in json.dumps(rows)
+
+
+def test_oidc_callback_refusal_audits_without_the_code_or_cookie(make):
+    core, client = make(base_config(auth={"oidc": OIDC_CONFIG}), env=OIDC_ENV)
+    private = "fixture-oidc-credential"
+    for _ in range(2):
+        response = client.get("/auth/oidc/callback", params={"code": private}, headers={"Cookie": f"{OIDC_COOKIE}={private}"},
+                              follow_redirects=False)
+        assert response.status_code == 303 and response.headers["location"] == "/login?error=oidc_failed"
+    [row] = core.audit.recent(action="auth_failure")
+    assert (row["origin"], row["target"], row["detail"]) == ("http", "/auth/oidc/callback", "oidc_failed")
+    assert private[:12] not in json.dumps(row)
 
 
 class Passkey:

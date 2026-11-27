@@ -65,8 +65,14 @@ def test_slack_tools_use_switchboard_keys_and_grants(sb):
     assert me["you"]["agent"] == "fixed" and [w["workspace"] for w in me["workspaces"]] == ["a2a"]
     res, _ = tool(client, "n" * 32, "slack_workspaces")
     assert res["isError"] and "no Slack access" in res["content"][0]["text"]
-    res, _ = tool(client, KEY_FIXED, "slack_post", {"workspace": "private", "channel": "CPRIV0001", "text": "x"})
+    task = "fixture-private-slack-message"
+    res, _ = tool(client, KEY_FIXED, "slack_post", {"workspace": "private", "channel": "CPRIV0001", "text": task})
     assert res["isError"]
+    refusals = core.audit.recent(action="tool_refused")
+    assert [(row["target"], row["detail"]) for row in refusals] == [
+        (name, "Use an account granted this action.") for name in ("slack_post", "slack_workspaces")
+    ]
+    assert task not in json.dumps(refusals) and KEY_FIXED[:12] not in json.dumps(refusals)
     _, pending = tool(client, KEY_FULL, "slack_post", {"workspace": "private", "channel": "#family", "text": "hi", "identity": "user"})
     assert pending["status"] == "pending_approval"
     _, sent = tool(client, KEY_FIXED, "slack_post", {"workspace": "a2a", "channel": "CWATCH001", "text": "yo", "thread_ts": "1700000000.000001"})

@@ -10,6 +10,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
+from ...refusals import OWNER_REQUIRED, SCOPE_REQUIRED, PolicyRefusal
+
 if TYPE_CHECKING:
     from ...auth import Principal
     from . import MCPBlock
@@ -49,19 +51,11 @@ class Kit:
     def deprecated(self, new: str, text: str) -> str:
         return DEPRECATED.format(new=new) + text
 
-    def owner(self, ctx: Context, what: str) -> "Principal":
-        p = self.who(ctx)
-        if p.kind == "connect":
-            raise ToolError(f"a connected agent can't {what}; use the owner's sign-in")
-        if not p.is_unrestricted_owner:
-            raise ToolError(f"only an unrestricted owner can {what}; this caller is limited")
-        return p
-
     def mint_pairing(self, p: "Principal", agent: str, project: str | None, client: str | None) -> dict[str, Any]:
         from ...connect import ConnectError
 
         if not p.is_unrestricted_owner:
-            raise ToolError("only an unrestricted owner can mint pairing codes")
+            raise PolicyRefusal(OWNER_REQUIRED)
         if project:
             self.core.project(project)
         try:
@@ -89,7 +83,7 @@ class Kit:
         if project:
             self.need(p, self.pscope(project))
         elif p.scopes is not None and "*" not in p.scopes:
-            raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes)}; pass project")
+            raise PolicyRefusal(SCOPE_REQUIRED, f"the {p.source} key is limited to {', '.join(p.scopes)}; pass project")
 
     async def send(self, p: "Principal", *, wait_s: float = 0, **kw: Any) -> dict[str, Any]:
         from . import TASK_MODE
@@ -232,8 +226,7 @@ class Kit:
                     "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
 
         @mcp.tool(title="Who can reach what", description="Every resource's visibility: private (only the owner and his own agents) or shared (anyone in that workspace, or a narrowed list). Resources are target:<slug>, channel:<workspace>/<id or #name>, memory:<scope>, route:<id> and tool:<name>; defaults are per kind.", annotations=READ)
-        async def visibility_list(ctx: Context) -> dict[str, Any]:
-            kit.owner(ctx, "read visibility")
+        async def visibility_list() -> dict[str, Any]:
             slugs = [f"target:{s}" for t in await core.targets() for s in t.get("slugs") or [] if t.get("block") != "agent"][:500]
             return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()}, "resources": core.visibility.rows(slugs)}
 
@@ -251,8 +244,7 @@ class Kit:
             return {"resource": resource.lower(), "visibility": rule}
 
         @mcp.tool(title="Connected agents", description="Agents connected with a pairing code: their key ids, project, client, when they last called, and who minted the code. Keys themselves are never shown again.", annotations=READ)
-        async def connect_list(ctx: Context, include_revoked: bool = False) -> dict[str, Any]:
-            kit.owner(ctx, "list connected agents")
+        async def connect_list(include_revoked: bool = False) -> dict[str, Any]:
             return {"keys": core.connections.list(include_revoked)}
 
         @mcp.tool(title="Revoke a connected agent", description="Revoke one connected key (key_id) or every key of an agent. The agent's next call is refused; its memory and conversations stay. Audited.", annotations=DELETE)
