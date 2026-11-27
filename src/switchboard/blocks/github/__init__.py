@@ -275,7 +275,10 @@ class GitHubBlock(Block):
         return self.repo_routes.get(repo, set()) | self.repo_routes.get(f"{repo.split('/', 1)[0]}/*", set())
 
     def channel_resources(self, space: str, repo: str) -> list[str]:
-        return list(dict.fromkeys((f"channel:{space}/{repo}", f"channel:{self.name}/{repo}")))
+        return list(dict.fromkeys((f"channel:{space}/{repo}", self.channel_resource(repo))))
+
+    def channel_resource(self, repo: str) -> str:
+        return f"channel:{self.name}/{repo}"
 
     def legacy_watch(self, repo: str) -> bool:
         return bool(self.sink_names(repo.casefold()))
