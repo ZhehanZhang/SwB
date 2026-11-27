@@ -47,11 +47,15 @@ For MCP, add one `--mcp` option for each server. Give a command or an HTTP addre
 
 Your agents use `companion_list` to see each paired device and its actions. They use `companion_invoke` to run an action.
 
+Companion text results have a 1 MiB limit. Read Drop file data from `structuredContent.result.content_b64`.
+
 ## Local sessions
 
 A local session is a coding agent that runs on the device. SwB lists each session as a target with its status.
 
 SwB puts a message for the session in the agent's mailbox first. It then tries to deliver the message into the open session. The answer comes back in the same conversation.
+
+Use the session address from `targets`. Find the resource for that address in `visibility_list`. Share the resource with `visibility_set`.
 
 For commands and supported agents, see [Local sessions](/docs/blocks/local-sessions).
 

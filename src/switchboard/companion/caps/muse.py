@@ -19,6 +19,7 @@ from ...vendor.musegadget.ble_framing import (
 from ...vendor.musegadget.ble_setup import Credentials, ProvisionFailed, SetupController
 from ...vendor.musegadget.identity import Identity
 from ...vendor.musegadget.pairing import PairingSession
+from .. import MUSE_PAIRING_CLAIM
 from .base import ActionSpec, Capability, CapabilityError, JobContext
 
 SERVICE_UUID = "7fdd3d1c-38ea-46cf-8b46-314ecf5f240c"
@@ -275,7 +276,7 @@ class MuseCapability(Capability):
 
         async def provision(credentials: Credentials, commit) -> None:
             try:
-                result = await ctx.claim("muse_pairing", {
+                result = await ctx.claim(MUSE_PAIRING_CLAIM, {
                     "credentials": asdict(credentials),
                     "node_id": identity.setup_node_id,
                 })

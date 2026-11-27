@@ -14,6 +14,7 @@ from uuid import uuid4
 from ..agents import PRESETS
 from ..auth import Principal
 from ..claims import ClaimInputError
+from ..companion import MUSE_PAIRING_CLAIM
 from ..companions import COMPANION_ID, DISCONNECTED, OFFLINE, CompanionError
 from ..connect import public_https_prerequisite
 from ..refusals import OWNER_REQUIRED, SCOPE_REQUIRED
@@ -69,7 +70,7 @@ class MuseBlock(Block):
         self._claim_lock = asyncio.Lock()
 
     def bind(self) -> None:
-        self.core.companions.register_claim("muse_pairing", self._claim_pairing, capability="muse", action="pair")
+        self.core.companions.register_claim(MUSE_PAIRING_CLAIM, self._claim_pairing, capability="muse", action="pair")
 
     @property
     def online(self) -> bool:
