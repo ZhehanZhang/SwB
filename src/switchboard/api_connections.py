@@ -92,6 +92,7 @@ async def connection(request: Request) -> JSONResponse:
     platform, block = _block(request)
     details = None
     connected = False
+    state = None
     if block is not None:
         status = block.status()
         if isinstance(block, DiscordBlock):
@@ -101,7 +102,7 @@ async def connection(request: Request) -> JSONResponse:
             connected = status["connected"]
             details = _telegram(block, status)
         elif isinstance(block, GitHubBlock):
-            connected = block.online
+            state = status["state"]
             details = {"repositories": sorted(block.registered_repositories()), "credential": status["credential"],
                        "dropped": status["dropped"], "refused": status["refused"]}
         else:
@@ -111,7 +112,7 @@ async def connection(request: Request) -> JSONResponse:
             ]
             connected = any(ws["connected"] for ws in workspaces)
             details = {"workspaces": workspaces}
-    state = "not_configured" if block is None else "connected" if connected else "disconnected"
+    state = state or ("not_configured" if block is None else "connected" if connected else "disconnected")
     return JSONResponse({"platform": platform, "block": block.name if block is not None else None, "state": state, "details": details})
 
 

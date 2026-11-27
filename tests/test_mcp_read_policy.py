@@ -119,6 +119,14 @@ def test_provider_read_requires_local_conversation_or_owner(workspace, name, fie
     assert_refused(core, client, keys, name, args, {field: "jam_missing" if external else "h_missing"}, CONVERSATION_NOT_FOUND)
 
 
+def test_mcp_inbox_limit_reports_the_range(make):
+    _, client = make()
+    assert error_text(call(client, STATIC_KEY, "inbox", {"limit": 51})) == "Use a limit from 1 to 50."
+    assert error_text(call(client, STATIC_KEY, "inbox", {"limit": 0})) == "Use a limit from 1 to 50."
+    for limit in (1, 50):
+        assert access(client, STATIC_KEY, "inbox", {"limit": limit})["items"] == []
+
+
 def test_scope_limits_own_conversation_and_inbox_feeds(workspace):
     core, client, keys = workspace
     outside = mailbox(client, keys, to="scoped", project="private")

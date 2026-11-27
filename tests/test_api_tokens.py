@@ -2,7 +2,7 @@ import hashlib
 from urllib.parse import urlsplit
 
 from conftest import CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, Clock, base_config, default_env
-from switchboard.claims import CLAIM_TTL_S
+from switchboard.claims import CLAIM_TTL_S, Field
 
 
 def _csrf(page):
@@ -77,6 +77,40 @@ def test_stored_inventory_never_reads_or_renders_plaintext(make, monkeypatch):
     sealed = core.store.one("SELECT sealed FROM secrets WHERE name = 'EXAMPLE_TOKEN'")["sealed"].decode()
     for value in (secret, sealed, configured_url, rotation, CAPY_KEY, SERVICE_KEY, STATIC_KEY):
         assert value not in response.text
+
+
+def test_saving_a_credential_resolves_earlier_waiting_requests(make):
+    core, client = make()
+    name = "EXAMPLE_TOKEN"
+    first = urlsplit(core.claims.mint(name, PUBLIC)).path
+    second = urlsplit(core.claims.mint(name, PUBLIC)).path
+    third = urlsplit(core.claims.mint(name, PUBLIC)).path
+
+    def save(path):
+        response = client.post(path, headers=OWNER, data={"token": "fixture-value", "csrf": _csrf(client.get(path, headers=OWNER))})
+        assert response.status_code == 200
+
+    def waiting():
+        return [row["label"] for row in client.get("/api/tokens", headers=OWNER).json()["waiting"]]
+
+    assert waiting() == [name]
+    save(second)
+    assert waiting() == [name]
+    save(third)
+    assert waiting() == [] and not core.claims.pending(name)
+    assert client.get(first, headers=OWNER).status_code == 200
+
+
+def test_saving_grouped_credentials_resolves_matching_waiting_requests(make):
+    core, client = make()
+    core.claims.mint("FIRST_TOKEN", PUBLIC)
+    core.claims.mint("OTHER_TOKEN", PUBLIC)
+    link = core.claims.mint_group("Pair", [Field("FIRST_TOKEN", "First token")], PUBLIC)
+    path = urlsplit(link).path
+    response = client.post(path, headers=OWNER, data={"FIRST_TOKEN": "fixture-value", "csrf": _csrf(client.get(path, headers=OWNER))})
+    assert response.status_code == 200
+    waiting = client.get("/api/tokens", headers=OWNER).json()["waiting"]
+    assert [row["label"] for row in waiting] == ["OTHER_TOKEN"]
 
 
 def test_only_owner_can_revoke_a_paired_key(make):

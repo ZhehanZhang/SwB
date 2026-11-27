@@ -13,7 +13,7 @@ import { Sheet } from "@/components/ui/sheet"
 import { principalLabel } from "@/lib/agent-identity"
 import { isObject, requestJson, sessionQuery } from "@/lib/api"
 import { auditText } from "./audit/events"
-import { agentListKey, isAgentDetail, isAgentSetup, listAgents, type Agent, type AgentDetail } from "./agents/data"
+import { agentDetailKey, agentListKey, getAgentDetail, isAgentSetup, listAgents, type Agent, type AgentDetail } from "./agents/data"
 
 const connections = [
   { id: "claude-code", label: "Claude Code", preview: "claude mcp add …" },
@@ -241,7 +241,7 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
       toast.success("Token revoked")
       if (agent.type === "key" && agent.reference === id) void navigate("/agents", { replace: true })
       void client.invalidateQueries({ queryKey: agentListKey })
-      void client.invalidateQueries({ queryKey: ["agent-detail"] })
+      void client.invalidateQueries({ queryKey: agentDetailKey })
     },
     onError: () => toast.error("Token revocation failed"),
   })
@@ -312,19 +312,10 @@ function AgentDetailSkeleton({ loadingName = false }: { loadingName?: boolean })
   )
 }
 
-function AgentInspector({ agent }: { agent: Agent }) {
+function AgentInspector({ detail }: { detail: AgentDetail }) {
+  const { agent } = detail
   const navigate = useNavigate()
-  const query = useQuery({
-    queryKey: ["agent-detail", agent.id],
-    queryFn: ({ signal }) => {
-      const params = new URLSearchParams({ kind: agent.type, id: agent.reference })
-      if (agent.block) params.set("block", agent.block)
-      return requestJson(`/api/agents/detail?${params}`, isAgentDetail, { signal })
-    },
-  })
-  const panel = query.isPending ? <AgentDetailSkeleton /> : query.isError ? (
-    <DataState kind="error" message="Agent unavailable." onRetry={() => void query.refetch()} />
-  ) : <AgentPanel key={agent.id} agent={agent} detail={query.data} />
+  const panel = <AgentPanel key={agent.id} agent={agent} detail={detail} />
 
   const [desktop, setDesktop] = useState(() => matchMedia("(min-width: 768px)").matches)
   useEffect(() => {
@@ -377,27 +368,34 @@ function PersonaAvatars() {
 }
 
 export function AgentsPage() {
-  const id = useParams()["*"]
+  const id = useParams()["*"] ?? ""
   const query = useQuery({ queryKey: agentListKey, queryFn: ({ signal }) => listAgents(signal) })
-  const agent = id ? query.data?.find((row) => row.id === id && row.type !== "pending") : undefined
+  const registeredPath = id.includes(":")
+  const registered = registeredPath ? query.data?.find((row) => row.id === id && row.type !== "pending") : undefined
+  const detail = useQuery({
+    queryKey: [...agentDetailKey, id],
+    queryFn: ({ signal }) => getAgentDetail(registered ?? id, signal),
+    enabled: Boolean(id) && (!registeredPath || !query.isPending),
+  })
   const state: DataStateProps | undefined = query.isPending ? { kind: "loading" } : query.isError ? {
     kind: "error", message: "Agents unavailable.", onRetry: () => void query.refetch(),
   } : undefined
   return (
     <>
-      <div className={agent || (id && query.isPending) ? "hidden pt-2 md:block" : "pt-2"}>
+      <div className={detail.data || (id && detail.isPending) ? "hidden pt-2 md:block" : "pt-2"}>
         <ConnectionRow />
         <AgentList agents={query.data ?? []} state={state} />
         <PersonaAvatars />
       </div>
-      {id && query.isPending && (
-        <section aria-label="Agent details" className="md:hidden">
+      {id && detail.isPending && (
+        <section aria-label="Agent details">
           <AgentBackLink />
           <AgentDetailSkeleton loadingName />
         </section>
       )}
-      {agent && <AgentInspector agent={agent} />}
-      {id && query.data && !agent && <DataState kind="empty" message="Unknown agent." />}
+      {detail.data && <AgentInspector detail={detail.data} />}
+      {id && detail.isError && <DataState kind="error" message="Agent unavailable." onRetry={() => void detail.refetch()} />}
+      {id && detail.data === null && <DataState kind="empty" message="Unknown agent." />}
     </>
   )
 }

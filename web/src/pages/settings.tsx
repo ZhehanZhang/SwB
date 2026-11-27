@@ -13,7 +13,6 @@ import { LogoTile } from "@/components/logo-tile"
 import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
 import { ApiError, isObject, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
-import { channelModesQuery, hasGitHubConnection } from "@/lib/channel-modes"
 import { connectionQuery } from "@/lib/connections"
 import { addPasskey, listPasskeys, removePasskey, supportsPasskeys } from "@/lib/owner-auth"
 
@@ -50,7 +49,7 @@ const commands = ["swb up", "swb status", "swb log"] as const
 const rowClass = "grid min-h-[41px] grid-cols-[minmax(88px,24%)_1fr_auto] items-center gap-x-3 border-b text-body-sm"
 const headingClass = "text-heading-md"
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
-const connectionPlatforms = ["slack", "discord", "telegram"] as const
+const connectionPlatforms = ["slack", "discord", "telegram", "github"] as const
 
 function uptime(seconds: number) {
   if (seconds >= 86_400) return `${Math.floor(seconds / 86_400)} d`
@@ -70,7 +69,6 @@ export function SettingsPage() {
   const settings = useQuery(settingsQuery)
   const passkeys = useQuery(passkeysQuery)
   const connections = useQueries({ queries: connectionPlatforms.map(connectionQuery) })
-  const modes = useQuery(channelModesQuery)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState("")
   const csrf = session?.csrf ?? null
@@ -163,11 +161,9 @@ export function SettingsPage() {
       <section aria-labelledby="settings-connections">
         <h2 id="settings-connections" className={headingClass}>Connections</h2>
         <ul className="mt-2">
-          {[...connectionPlatforms, "github" as const].map((platform, index) => {
+          {connectionPlatforms.map((platform, index) => {
             const connection = connections[index]
-            const state = platform === "github"
-              ? modes.isPending ? "loading" : modes.isError ? "unavailable" : hasGitHubConnection(modes.data) ? "connected" : "not_configured"
-              : connection.data?.state ?? (connection.isPending ? "loading" : "unavailable")
+            const state = connection.data?.state ?? (connection.isPending ? "loading" : "unavailable")
             return (
               <li key={platform}>
                 <Link to={`/connections/${platform}`} {...preloadOnTouch(`/connections/${platform}`)}

@@ -35,7 +35,7 @@ def test_cloudflare_connect_returns_manual_setup(make, monkeypatch, paired):
 
     result = payload(call(client, key, "connect", {"what": " Cloudflare "}))
 
-    assert result == {"what": "cloudflare", "done": [], "next": [{
+    assert result == {"what": "cloudflare", "complete": False, "done": [], "next": [{
         "by": "person", "do": "Follow the Cloudflare setup guide.", "link": "https://swb.one/docs/setup/cloudflare",
     }]}
     assert not core.routes.list()
@@ -59,6 +59,7 @@ def test_capy_claim_resume_and_restart(make, tmp_path, capy):
     assert "Capy Settings" in core.health()["blocks"]["capy"]["next_step"]
     response = connect(client, "capy-captain")
     step = response["next"][0]
+    assert response["complete"] is False
     assert response["done"] == ["Capy API key: absent."]
     assert step["by"] == "person"
     assert step["link"].rsplit("/", 1)[-1] not in step["do"]
@@ -107,13 +108,15 @@ def test_capy_lists_choices_and_routes_once(make, capy):
     core, client = make(config())
     result = connect(client, "capy-captain")
     assert result["done"][0] == "Capy API key: present."
+    assert result["complete"] is False
     assert all(any(captain in item for item in result["done"]) for captain in (CAPTAIN, CAPTAIN2))
     step, = result["next"]
     assert step["by"] == "you" and step["call"] == {
         "tool": "connect", "arguments": {"what": "capy-captain", "choose": {"captain": "<Captain ID>"}},
     }
     assert not core.routes.list("capy")
-    assert connect(client, "capy-captain", choose={"captain": CAPTAIN})["state"] == "connected"
+    completed = connect(client, "capy-captain", choose={"captain": CAPTAIN})
+    assert completed["complete"] is True and completed["state"] == "connected" and completed["next"] == []
     route, = core.routes.list("capy")
     assert not route.agent and not route.project and route.target["captain"] == CAPTAIN
     assert core.health()["blocks"]["capy"]["next_step"] is None
