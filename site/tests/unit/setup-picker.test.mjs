@@ -60,5 +60,16 @@ test('uses the Muse OAuth connector and reads its mailbox in chat', () => {
   assert.ok(prompt.includes('https://agent.meta.ai/api/hatch/oauth/callback'));
   assert.ok(prompt.includes('send(to="agent:muse"'));
   assert.ok(prompt.includes('At the start of each chat, call inbox'));
+  assert.ok(prompt.includes('connect(what="muse", choose={"gadget": true})'));
   assert.ok(!prompt.includes('switchboard.message.created'));
+});
+
+test('includes the Companion guide and pairing commands when selected', () => {
+  const prompt = combineSetupPrompts(sources, ['companion']);
+  assert.match(prompt, /^### Companion$/m);
+  assert.ok(prompt.includes('https://swb.one/docs/companion'));
+  assert.ok(prompt.includes('uvx swb-one companion connect https://swb.example.com'));
+  assert.ok(prompt.includes("uvx --python 3.13 --from 'swb-one[companion]' swb companion connect"));
+  assert.ok(prompt.includes('Call `companion_list`'));
+  assert.equal(count(prompt, '### Muse'), 0);
 });

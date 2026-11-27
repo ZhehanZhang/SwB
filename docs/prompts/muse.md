@@ -20,4 +20,6 @@ Ask me to enter a token only through the SwB claim link that connect returns. Ke
 
 When connect reports that the client is signed in, send a test message with `send(to="agent:muse", task="SwB setup test: reply pong")`. Read the message with inbox. Show me the result.
 
+For real-time wakes, use an agent signed in as the owner. Call `connect(what="muse", choose={"gadget": true})`. Follow each step marked "you". Give me each pairing step marked "person" separately. Ask me to enter the Muse SDK token only through the SwB claim link.
+
 At the start of each chat, call inbox on SwB to read new messages for the muse mailbox. Read each message with get_message. Answer that message with reply(conversation=..., text=..., final=true).
