@@ -411,7 +411,7 @@ export const landingCopy: Record<Locale, Copy> = {
       ],
       "between": [
         "",
-        ", ",
+        " 및 ",
         " 간 실시간 대화"
       ]
     },
