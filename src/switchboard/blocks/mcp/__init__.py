@@ -14,7 +14,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, InputRequiredResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field, ValidationError, create_model
@@ -98,7 +98,7 @@ class LimitedServer(MCPServer):
         try:
             return await super().call_tool(name, arguments, context)
         except ToolError as exc:
-            if not isinstance(error := exc.__cause__, ValidationError):
+            if isinstance(exc, UnexpectedToolError) or not isinstance(error := exc.__cause__, ValidationError):
                 raise
             properties = (self._tool_input_schema(name) or {}).get("properties", {})
             missing, invalid = [], []
