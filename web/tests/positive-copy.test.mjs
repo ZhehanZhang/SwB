@@ -17,7 +17,7 @@ const visibleAttributes = new Set(["alt", "aria-description", "aria-label", "ari
   "mode", "placeholder", "subtitle", "summary", "text", "title"])
 const implementationProps = new Set(["cache", "className", "class", "id", "maskImage", "refetchType"])
 const technicalCalls = new Set(["addEventListener", "getAttribute", "matchMedia", "matches", "querySelector",
-  "querySelectorAll", "removeEventListener", "startsWith", "endsWith", "cn", "cva"])
+  "querySelectorAll", "removeEventListener", "includes", "startsWith", "endsWith", "cn", "cva"])
 const classBindings = new Map([
   ["app/header-controls.tsx", "itemClass"],
   ["pages/about.tsx", "row"],
