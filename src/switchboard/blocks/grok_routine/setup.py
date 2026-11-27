@@ -6,9 +6,9 @@ import json
 
 from typing import TYPE_CHECKING, Any
 
+from ...connect import PUBLIC_HTTPS_PREREQUISITE
 from ...targets import SLUG_RE
 from .. import BlockError
-from ..mcp.setup import PUBLIC_HTTPS_PREREQUISITE
 
 if TYPE_CHECKING:
     from ...auth import Principal

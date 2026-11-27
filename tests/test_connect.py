@@ -75,6 +75,30 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
         assert core.blocks[block].registered_repositories() == {"example-org/app"}
 
 
+def test_connect_snippet_keeps_environment_discovered_blocks_after_reload(make):
+    cfg = {"version": 2, "public_url": PUBLIC}
+    env = {
+        "SWITCHBOARD_KEY_OWNER": STATIC_KEY,
+        "GITHUB_WEBHOOK_SECRET": "fixture-github-webhook-secret",
+        "GROK_ROUTINE_DEMO_URL": "https://example.test/demo-webhook",
+        "GROK_ROUTINE_DEMO_SECRET": "fixture-grok-webhook-secret",
+    }
+    core, client = make(config=cfg, env=env)
+    assert set(core.blocks) == {"mcp", "github", "grok-routine"}
+    configure, restart = connect(client, "dots")["next"]
+    assert configure["by"] == "you" and "Add this blocks section" in configure["do"]
+    assert restart["do"] == "Restart SwB."
+    snippet = configure["snippet"]
+    assert all(value not in snippet for value in env.values())
+    parsed = yaml.safe_load(snippet)
+    assert set(parsed) == {"blocks"}
+    for name, config in core.cfg.blocks.items():
+        assert parsed["blocks"][name] == config
+    reloaded, client = make(config={**cfg, **parsed}, env=env)
+    assert set(reloaded.blocks) == {"mcp", "github", "grok-routine", "dots"}
+    assert connect(client, "dots")["state"] == "connected"
+
+
 @pytest.mark.parametrize(("kind", "menu"), [
     ("chatgpt", "https://chatgpt.com/plugins"), ("claude", "Customize > Connectors"), ("grok", "grok.com > Connectors"),
 ])
