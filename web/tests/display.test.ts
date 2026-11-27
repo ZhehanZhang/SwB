@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { connectorKind } from "../src/lib/connector-kind.js"
+import { getAgentDetail, listAgents } from "../src/pages/agents/data.js"
 import { auditActorKind, auditText, isAuditPage, type AuditEvent } from "../src/pages/audit/events.js"
 import { participants, senderLogoKind, type Conversation } from "../src/pages/inbox/data.js"
 
@@ -85,4 +86,44 @@ test("inbox preserves participant labels and uses provider and agent identities 
   { from: "Ops helper", to: "Code reviewer", fromKind: "chatgpt", toKind: "codex" })
   assert.equal(senderLogoKind({ kind: "telegram", user_name: "Ops helper" }), "telegram")
   assert.equal(senderLogoKind({ kind: "capy_thread", title: "ChatGPT" }), "capy_thread")
+})
+
+test("agent deep links resolve server names and keep registered links disambiguated", async (t) => {
+  const origin = "https://switchboard.example.test"
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "location")
+  Object.defineProperty(globalThis, "location", { configurable: true, value: new URL("/agents/alpha", origin) })
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, "location", previous)
+    else Reflect.deleteProperty(globalThis, "location")
+  })
+  const paths: string[] = []
+  const dot = { id: "dot-one", name: "Alpha", block: "team-dots", online: true, projects: ["context"] }
+  const detail = { keys: [], routines: [], audit: [] }
+  const expected = {
+    "/api/agents/alpha": { kind: "mailbox", agent: { id: "alpha", name: "alpha", agent: "alpha" }, ...detail },
+    "/api/agents/Alpha": { kind: "dot", agent: dot, ...detail },
+    "/api/agents": { keys: [], routines: [], captains: [], dots: [dot], pending_claims: [] },
+    "/api/agents/detail?kind=dot&id=dot-one&block=team-dots": { kind: "dot", agent: dot, ...detail },
+  }
+  t.mock.method(globalThis, "fetch", async (url: URL) => {
+    const path = url.pathname + url.search
+    paths.push(path)
+    assert.equal(url.origin, origin)
+    return Object.hasOwn(expected, path)
+      ? Response.json(expected[path as keyof typeof expected])
+      : Response.json({ error: "agent_not_found" }, { status: 404 })
+  })
+
+  const signal = new AbortController().signal
+  const mailbox = await getAgentDetail("alpha", signal)
+  assert.equal(mailbox?.agent.name, "alpha")
+  assert.equal(mailbox?.agent.type, "mailbox")
+  const named = await getAgentDetail("Alpha", signal)
+  assert.equal(named?.agent.name, "Alpha")
+  assert.deepEqual(named?.agent.projects, ["context"])
+  const [registered] = await listAgents(signal)
+  assert.equal(registered.id, "dot:team-dots:dot-one")
+  assert.deepEqual(await getAgentDetail(registered, signal), named)
+  assert.equal(await getAgentDetail("missing", signal), null)
+  assert.deepEqual(paths, [...Object.keys(expected), "/api/agents/missing"])
 })

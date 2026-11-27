@@ -268,13 +268,13 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
                 missing = ", ".join(block["missing_env"])
                 lines.append(f"  - {name}: {state}" + (f" (missing env: {missing})" if missing else ""))
         return "\n".join([*lines, "Next steps:", *([f"  - {step}" for step in steps] or ["  None."])])
+    if payload.get("what") == "unknown" and (kinds := payload.get("kinds")):
+        return "Supported kinds: " + ", ".join(kinds)
     lines = [str(payload.get("what", "Connect"))]
     if payload.get("state"):
         lines[0] += f": {payload['state']}"
     if payload.get("error"):
         lines.append(str(payload["error"]))
-    if payload.get("kinds"):
-        lines.append("Supported kinds: " + ", ".join(payload["kinds"]))
     steps = payload.get("next") or []
     if payload.get("done"):
         lines.extend(["Progress" if steps else "Done", *payload["done"]])

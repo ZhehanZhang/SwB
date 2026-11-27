@@ -7,7 +7,7 @@ description: 设置 SwB 在各空间中如何处理消息。
 
 | 模式 | SwB 的行为 |
 | - | - |
-| `off` | 丢弃其他人发来的消息 |
+| `off` | 丢弃所有 GitHub 事件，包括所有者的事件。在 Slack、Discord 和 Telegram 中丢弃其他人发来的消息 |
 | `watch` | 收集消息并汇总成摘要 |
 | `assist` | 唤醒智能体，让它参考上下文并在原话题串回复 |
 | `triage` | 唤醒分流智能体。默认操作是在原话题串回复 |
@@ -20,6 +20,17 @@ description: 设置 SwB 在各空间中如何处理消息。
 ## 设置模式
 
 在连接或项目页面的 **Channel modes** 中设置模式。也可以在 YAML 中设置。所有者可以用 `space_mode` 指定模式、目标、项目和允许的操作。
+
+在 YAML 中给 `"off"` 加引号，SwB 就会将它读作文本。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      example-org/app:
+        mode: "off"
+```
 
 SwB 先查找已保存的设置，再查找频道和空间设置。接着查找模块的旧版设置、项目模式和 `modes.default`。默认模式为 `off`。
 

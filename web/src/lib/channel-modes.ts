@@ -77,10 +77,6 @@ export function modeKey(row: Pick<ModeRow, "block" | "space" | "channel">) {
   return JSON.stringify([row.block, row.space, row.channel])
 }
 
-export function hasGitHubConnection(status: ModesStatus | null | undefined) {
-  return Object.keys(status?.github?.installation ?? {}).length > 0
-}
-
 export async function saveChannelMode(row: ModeRow, mode: Mode | "inherit", changes: TriageAction[] | undefined, csrf: string | null) {
   const { block, space, channel } = row
   const changeset = changes === undefined ? {} : { actions: changes }

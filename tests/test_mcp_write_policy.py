@@ -185,6 +185,15 @@ def test_paired_mailbox_reply_and_cancel_respect_sender_and_recipient(server):
     assert SECRET not in json.dumps(refusals)
 
 
+def test_to_owner_explains_refusal_on_an_agent_message(make):
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    sender, recipient = (pair(client, who) for who in ("alpha", "beta"))
+    sent = payload(call(client, sender, "send", {"to": "agent:beta", "task": "Check the example"}))
+    response = call(client, recipient, "reply", {"conversation": sent["conversation"], "text": "A note", "to_owner": True})
+    assert error_text(response) == "Use a forwarded Slack message or a triage conversation with owner notes enabled."
+    assert core.inbox.read(owner="owner")["items"] == []
+
+
 def test_general_memory_confirmation_refusal_does_not_audit_arguments(server):
     core, client, _ = server
     core.cfg.key_scopes["general-agent"] = ("general",)

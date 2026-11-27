@@ -5,7 +5,7 @@ description: 把 Slack 消息路由给智能体，并在话题串中发布答复
 
 ## 创建 Slack 应用
 
-到 SwB 仓库的 `manifests/` 目录获取应用清单。工作区使用机器人时，选用 `workspace-a-agent.yaml`。只使用个人账号时，选用 `workspace-b-user-only.yaml`。
+从 [Slack 设置](/zh-Hans/docs/setup/slack#应用清单)中复制 YAML 应用清单。按工作区需要选择机器人版或仅个人账号版。
 
 在工作区安装应用。请智能体连接 Slack，或运行 `swb connect slack`。工作区缺少令牌时，SwB 会提供该工作区的领取链接。表单字段与工作区设置一致。
 

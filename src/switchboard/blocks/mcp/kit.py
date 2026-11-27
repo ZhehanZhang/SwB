@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ...audit import iso
 from ...refusals import OWNER_REQUIRED, SCOPE_REQUIRED, PolicyRefusal
+from ...trust import wrap
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -27,6 +28,20 @@ DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHin
 ProjectArg = Annotated[str | None, Field(description="Project slug (project_list)")]
 Conversation = Annotated[str, Field(description="The conversation: its handle (h_...) from send or an inbox item, or the block's own id (a jam_ thread id)")]
 DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. "
+
+
+DEVICE_TEXT = frozenset({"text", "body", "title", "description", "message", "error", "content"})
+
+
+def frame_device(value: Any, where: str, key: str = "") -> Any:
+    """Free text from a device reaches agents framed as external; names, schemas and base64 stay exact."""
+    if isinstance(value, dict):
+        return {k: frame_device(v, where, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [frame_device(v, where, key) for v in value]
+    if isinstance(value, str) and key in DEVICE_TEXT:
+        return wrap(value, None, None, "external", where)
+    return value
 
 
 class FileIn(BaseModel):
@@ -183,7 +198,7 @@ class Kit:
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
                         final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
-                        to_owner: Annotated[bool, Field(description="For a triage conversation with notify_owner, send a note to the owner mailbox instead of replying in-thread")] = False) -> dict[str, Any]:
+                        to_owner: Annotated[bool, Field(description="Send an owner note from a forwarded Slack message or a triage conversation with notify_owner enabled.")] = False) -> dict[str, Any]:
             return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
@@ -197,7 +212,7 @@ class Kit:
             return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block, owner_facing=owner_facing)
 
         @mcp.tool(title="Your inbox", description="Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
-        async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
+        async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=50)] = 50,
                         project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
             return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)
 
@@ -242,7 +257,9 @@ class Kit:
         @mcp.tool(title="Run a companion action", description="Run an advertised capability action on a connected device. Use the device ID and action schema from companion_list.", annotations=SEND)
         async def companion_invoke(ctx: Context, companion: str, capability: str, action: str, args: dict[str, Any] | None = None,
                                    timeout_s: Annotated[float, Field(gt=0, le=120)] = 30) -> dict[str, Any]:
-            return await kit.run(core.companions.invoke(companion, capability, action, args or {}, timeout_s, principal=kit.who(ctx)))
+            result = await kit.run(core.companions.invoke(companion, capability, action, args or {}, timeout_s, principal=kit.who(ctx)))
+            return {"trust": "external", "from": f"companion {companion} {capability}.{action}",
+                    "result": frame_device(result, f"companion {companion} {capability}.{action}")}
 
         @mcp.tool(title="Disconnect a companion", description="Revoke a paired device key and close its connection.", annotations=DELETE)
         async def companion_revoke(ctx: Context, companion: str) -> dict[str, Any]:

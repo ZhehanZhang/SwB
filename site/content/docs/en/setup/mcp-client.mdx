@@ -1,6 +1,6 @@
 ---
 title: MCP client
-description: Connect any remote MCP client to SwB with a pairing code.
+description: Connect an MCP client with a local owner key or a pairing code.
 ---
 
 MCP is the standard way an app uses outside tools. This page connects any app that can add a remote MCP server with its own key.
@@ -19,7 +19,13 @@ Claude, ChatGPT, Grok and coding agents have their own pages with OAuth sign-in.
 
 Paste the prompt into an agent that already has SwB, or into the app that you connect. The agent walks you through the rest.
 
-## Your steps
+## Local owner client
+
+Use a private client on the SwB computer if it will set up other apps. Set its MCP address to the local `/mcp` address shown at startup. Use `SWITCHBOARD_KEY_OWNER` from the instance `.env` in `Authorization: Bearer <key>`. Keep that key only in the client's private local config with file mode `0600`. The key gives full owner access. Use it only with local SwB.
+
+## Pair a client
+
+If your agent can edit the client settings on the same computer, let it add the paired key. It saves the key in the client config with file mode `0600`. Use the steps below when you set up the client yourself.
 
 <Steps>
 <Step>
