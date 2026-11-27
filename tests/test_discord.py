@@ -33,6 +33,7 @@ class DiscordAPI:
         self.webhooks = []
         self.channels = {CHANNEL: {"id": CHANNEL, "name": "builds", "type": 0, "guild_id": GUILD}, DM: {"id": DM, "type": 1}}
         self.responses = deque()
+        self.application = {"id": APP, "owner": {"id": USER}}
 
     def handler(self, request):
         method, path = request.method, request.url.path.removeprefix("/api/v10")
@@ -42,6 +43,8 @@ class DiscordAPI:
         assert request.headers["User-Agent"].startswith("DiscordBot (")
         if path == "/gateway/bot":
             return httpx.Response(200, json={"url": "wss://gateway.discord.gg"})
+        if path == "/oauth2/applications/@me":
+            return httpx.Response(200, json=self.application)
         if path == "/users/@me/channels":
             return httpx.Response(200, json=self.channels[DM])
         if "/reactions/" in path:
@@ -370,3 +373,73 @@ def test_invalid_discord_config_names_the_path(discord, settings, key):
     with pytest.raises(BlockError, match=rf"blocks\.discord\.{key}"):
         with discord(settings=settings):
             pytest.fail("invalid Discord configuration was accepted")
+
+
+def test_a_space_without_guild_id_binds_the_owners_server_and_trusts_the_application_owner(discord):
+    spaces = {"spaces": {"home": {"project": None}}, "agents": {"claude": ["home"]}}
+    with discord(settings=spaces) as (core, client, block, api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}, {"id": GUILD_2}]))
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == {USER}
+        dispatch("GUILD_CREATE", {"id": GUILD, "name": "Home", "owner_id": USER, "channels": [api.channels[CHANNEL]], "threads": []})
+        dispatch("GUILD_CREATE", {"id": GUILD_2, "name": "Elsewhere", "owner_id": "999", "channels": [], "threads": []})
+        event = dispatch("MESSAGE_CREATE", message())
+        assert event["trust"] == "owner" and event["from"]["space"] == "home"
+        assert dispatch("MESSAGE_CREATE", message(guild_id=GUILD_2, channel_id="41", id="102")) is None
+        status = payload(call(client, STATIC_KEY, "discord_status"))
+        assert status["spaces"]["home"]["owners"] == 1
+        assert status["discovered"]["application_owner_ids"] == [USER]
+        assert [(g["id"], g["name"], g["space"]) for g in status["discovered"]["guilds"]] == [(GUILD, "Home", "home"), (GUILD_2, "Elsewhere", None)]
+        assert status["discovered"]["guilds"][0]["channels"] == [{"id": CHANNEL, "name": "builds", "type": 0}]
+        assert not any("owner_ids" in m for m in status["missing"])
+
+
+def test_the_auto_space_binds_nothing_when_two_owned_servers_are_joined(discord):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}, {"id": GUILD_2}]))
+        client.portal.call(block._load_owner)
+        for guild in (GUILD, GUILD_2):
+            dispatch("GUILD_CREATE", {"id": guild, "name": guild, "owner_id": USER, "channels": [], "threads": []})
+        assert block.space_for(GUILD) is None and block.space_for(GUILD_2) is None
+        assert dispatch("MESSAGE_CREATE", message()) is None
+
+
+def test_configured_owner_ids_win_and_a_team_owner_is_read(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": ["555"]}}, "agents": {}}) as (_, client, block, api):
+        api.application = {"id": APP, "owner": {"id": "1"}, "team": {"owner_user_id": USER}}
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == {USER}
+        assert block.owners(block.spaces["home"]) == {"555"}
+        assert block.trust_of(block.spaces["home"], USER) == "external"
+
+
+def test_dms_are_listed_as_candidates_but_never_trusted(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}}}) as (_, client, block, api):
+        api.application = {"id": APP, "owner": {}}
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block._load_owner)
+        client.portal.call(block.dispatch, "MESSAGE_CREATE", message(guild_id=None, channel_id=DM, id="103", author={"id": "777", "username": "someone"}))
+        discovered = payload(call(client, STATIC_KEY, "discord_status"))["discovered"]
+        assert discovered["dm_users"] == [{"id": "777", "name": "someone"}] and discovered["application_owner_ids"] == []
+        assert block.trust_of(block.spaces["home"], "777") == "external"
+
+
+def test_only_one_space_may_leave_out_guild_id(discord):
+    with pytest.raises(BlockError, match="only one space"):
+        with discord(settings={"spaces": {"a": {}, "b": {}}, "agents": {}}):
+            pass
+
+
+def test_connect_discord_hands_out_the_token_link_then_the_invite(discord):
+    with discord(token=False, settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        out = payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))
+        assert out["what"] == "discord" and "/claims/discord/" in out["next"][0]["link"]
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        client.portal.call(block.dispatch, "READY", ready(guilds=[]))
+        client.portal.call(block._load_owner)
+        block._gateway.ready = True
+        steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
+        assert any(s.startswith("Invite the bot to a server you own for space home: https://discord.com/oauth2/authorize?") for s in steps)
