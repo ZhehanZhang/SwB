@@ -23,7 +23,8 @@ async def test_generated_inventory(monkeypatch):
         "avatar:claude.png", "avatar:muse.png", "provider:muse", "prompt:setup-muse", "page:/projects/:slug", "page:/pairing/code",
     } <= items.keys()
     assert {"page:/classic", "page:/canvas/*", "page:/provision/*", "page:/projects", "config_key:blocks.capy.burst"}.isdisjoint(items)
-    assert {"block:muse", "command:" + "-".join(("muse", "bridge"))}.isdisjoint(items)
+    assert items["block:muse"]["connect_target"] == "muse"
+    assert "command:" + "-".join(("muse", "bridge")) not in items
     assert not any(key.startswith("config_key:blocks.muse") for key in items)
     assert {"task", "to"} <= set(items["tool:send"]["input_properties"])
     assert "ctx" not in items["tool:send"]["input_properties"]

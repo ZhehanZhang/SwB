@@ -18,6 +18,7 @@
   "block:github": "site/content/docs/en/blocks/github.mdx",
   "block:grok-routine": "site/content/docs/en/blocks/grok.mdx",
   "block:mcp": "site/content/docs/en/connect.mdx",
+  "block:muse": "site/content/docs/en/setup/muse.mdx",
   "block:slack": "site/content/docs/en/blocks/slack.mdx",
   "block:telegram": "site/content/docs/en/blocks/telegram.mdx",
   "command:blocks": "site/content/docs/en/blocks/index.mdx",
