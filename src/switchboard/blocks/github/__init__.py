@@ -24,7 +24,7 @@ from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
 from ...subject import subject, wake_text
-from ...trust import frame_sender, neutralize
+from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
 from ...visibility import Who
 from .. import Action, Block, BlockError, BlockRefused, Call, Manifest
 from .api import (
@@ -70,8 +70,8 @@ def _excerpt(value: str, budget: int) -> str:
     return value
 
 
-def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | None:
-    """Project the webhook to scalar fields, with a 500-character body and bounded escaped UTF-8 elsewhere."""
+def trim(event: str, delivery: str, data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]] | None:
+    """Bound the payload and retain the author object for each authored field."""
     if event not in EVENTS:
         return None
     check = _object(data.get(event)) if event in CHECKS else {}
@@ -86,6 +86,7 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | No
         if isinstance(comments, list) and comments:
             comment = _object(comments[0])
     detail = comment or review
+    primary = detail if isinstance(detail.get("body"), str) else item
     head = _object(item.get("head"))
     push = event == "push"
     commits = data.get("commits") if push else None
@@ -102,8 +103,14 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | No
         "check": check.get("name"), "conclusion": check.get("conclusion"), "review_state": review.get("state"),
         "ref": data.get("ref") if push else None,
         "commits": data.get("size", len(commits) if isinstance(commits, list) else None) if push else None,
-        "body": detail.get("body") if detail.get("body") is not None else item.get("body"),
+        "body": primary.get("body"),
     }
+    authors = {"title": _object(item.get("user")) if item.get("title") else {},
+               "body": _object(primary.get("user")), "check": {}}
+    if primary is detail:
+        context_field = "issue_body" if event == "issue_comment" else "pull_request_body"
+        fields[context_field] = item.get("body")
+        authors[context_field] = _object(item.get("user"))
     out = {}
     for key, value in fields.items():
         if key in {"number", "commits"}:
@@ -114,8 +121,8 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> dict[str, Any] | No
                 out[key] = value
         elif isinstance(value, str):
             limit = {"url": 1024, "delivery": 256}.get(key, 240)
-            out[key] = value[:500] if key == "body" else _excerpt(value, limit)
-    return out
+            out[key] = value[:500] if key.endswith("body") else _excerpt(value, limit)
+    return out, {key: author for key, author in authors.items() if key in out}
 
 
 class _Sink:
@@ -710,10 +717,11 @@ class GitHubBlock(Block):
         if len(self.seen) >= MAX_DELIVERIES:
             self.seen.popitem(last=False)
         self.seen[delivery] = now
-        payload = trim(event, delivery, data)
-        if payload is None:
+        trimmed = trim(event, delivery, data)
+        if trimmed is None:
             self.drop(event, data, "not completed", ip, delivery)
             return
+        payload, authors = trimmed
         repo = repo_name(payload.get("repo"))
         location = self.space_for(repo) if repo else None
         if location is None:
@@ -726,12 +734,24 @@ class GitHubBlock(Block):
         target = to or (str(route) if route else None)
         sender = _object(data.get("sender"))
         user_id = provider_id(sender.get("id"))
-        author = payload.get("actor")
-        owner = (user_id is not None and user_id in self.space_owners.get(space, self.owner_ids)
-                 and not payload.get("is_bot"))
+        actor = payload.get("actor")
+        owners = self.space_owners.get(space, self.owner_ids)
+        actor_is_owner = user_id in owners and not payload.get("is_bot")
         sender_id = f"github:{user_id}" if user_id else None
         where = f"in GitHub {repo}"
-        link = payload.get("url")
+        parts: dict[str, AuthoredText] = {}
+        for key, author in authors.items():
+            text = payload.pop(key)
+            if not text:
+                continue
+            author_id = provider_id(author.get("id"))
+            login = author.get("login")
+            parts[key] = {"text": text,
+                          "author": _excerpt(login, 240) if isinstance(login, str) else None,
+                          "author_id": f"github:{author_id}" if author_id else None,
+                          "owner": author_id in owners and author.get("type") != "Bot"}
+        trust, rendered = frame_parts(parts, where)
+        link = neutralize(payload["url"]) if "url" in payload else None
         event_name = "Issue" if event == "issues" else event.replace("_", " ").capitalize()
         summary = " ".join(part for part in (event_name, payload.get("action"), payload.get("conclusion")) if part)
         number = provider_id(payload.get("number"))
@@ -739,27 +759,28 @@ class GitHubBlock(Block):
         delivery_note = f"GitHub delivery {neutralize(delivery)}."
         if mode == "watch":
             if sinks := self.sink_names(repo):
-                trust, excerpt = frame_sender(payload.get("body", ""), author, sender_id, where, owner=owner)
-                title = subject(author or user_id or "Unknown sender", "GitHub", repo, event_title, verb="", trust=trust)
-                details = "\n\n".join(part for part in (neutralize(summary) + ".", excerpt if payload.get("body") else "") if part)
-                text = wake_text(title, details, link if owner or not link else neutralize(link), delivery_note)
-                body = _json({**payload, "subject": title, "text": text, "trust": trust,
-                              **({"body": excerpt} if "body" in payload else {})})
+                title = subject(actor or user_id or "Unknown sender", "GitHub", repo, event_title, verb="", trust=trust)
+                details = "\n\n".join(filter(None, (neutralize(summary) + ".", join_parts(rendered))))
+                text = wake_text(title, details, link, delivery_note)
+                body = _json({**{key: neutralize(value) if isinstance(value, str) else value for key, value in payload.items()},
+                              **rendered, "subject": title, "text": text, "trust": trust})
                 for sink in sinks:
                     self.sinks[sink].put(delivery, body)
-            self.core.modes.watch(self.name, space, repo, delivery, user_id or "", author,
-                                  payload.get("body") or payload.get("title") or event, link, target, project=project)
+            primary = parts.get("body") or parts.get("title")
+            self.core.modes.watch(self.name, space, repo, delivery, (primary["author_id"] if primary else sender_id) or "",
+                                  primary["author"] if primary else actor, neutralize(event_title), link, target, project=project,
+                                  parts=parts)
             return
         if mode == "off":
             self.drop(event, data, "channel mode off", ip, delivery)
             return
-        if mode == "work" and not owner:
+        if mode == "work" and not actor_is_owner:
             self.drop(event, data, "work mode requires an owner event", ip, delivery)
             return
         if not user_id or payload.get("is_bot") or (mode != "work" and user_id == self.api.pat_actor):
             self.drop(event, data, "sender ignored", ip, delivery)
             return
-        who = Who(owner=owner, id=sender_id, workspace=space)
+        who = Who(owner=actor_is_owner, id=sender_id, workspace=space)
         if not self.core.visibility.allows(who, *self.channel_resources(space, repo)):
             self.drop(event, data, "channel access restricted", ip, delivery)
             return
@@ -775,12 +796,12 @@ class GitHubBlock(Block):
             self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
             return
         try:
-            slugs = self.core.slug_map(await self.core.targets()) if not owner and addr.block != "agent" else {}
+            slugs = self.core.slug_map(await self.core.targets()) if not actor_is_owner and addr.block != "agent" else {}
             resources = self.core.target_visibility_resources(target, addr, slugs=slugs)
             if not resources or not self.core.visibility.allows(who, *resources):
                 self.drop(event, data, "target access restricted", ip, delivery)
                 return
-            if not owner:
+            if not actor_is_owner:
                 recent = [seen for seen in self._senders.pop(user_id, []) if now - seen < 600]
                 self._senders[user_id] = recent
                 if len(recent) >= 5:
@@ -789,7 +810,10 @@ class GitHubBlock(Block):
                 recent.append(now)
                 if len(self._senders) > MAX_DELIVERIES:
                     self._senders.popitem(last=False)
-            trust, text = frame_sender(json.dumps(payload, ensure_ascii=False), author, sender_id, where, owner=owner)
+            metadata = neutralize(json.dumps(payload, ensure_ascii=False))
+            text = "\n\n".join(filter(None, (metadata, join_parts(rendered))))
+            if trust == "external":
+                text = FramedText(text)
             principal = Principal(self.name, ip, "github", origin=self.name, trust=trust)
             self.core.turn(f"{self.name}:{repo}:{number or delivery}", principal)
             meta = self.core.modes.meta(self.name, space, repo, mode, actions, project, link, target)
@@ -803,11 +827,11 @@ class GitHubBlock(Block):
                 reply_to = provider_id(comment.get("in_reply_to_id") or comment.get("id"))
                 if reply_to:
                     meta["review_comment"] = int(reply_to)
-            title = subject(author or user_id, "GitHub", repo, event_title, verb="", trust=trust)
+            title = subject(actor or user_id, "GitHub", repo, event_title, verb="", trust=trust)
             tail = delivery_note
             if mode in {"assist", "triage"}:
-                tail += f"\n\n{self.core.modes.wake_note(meta, owner=owner)} Use github_reply for the originating GitHub thread."
-            await self.core.send(principal, to=to, task=wake_text(title, text, link if owner or not link else neutralize(link), tail),
+                tail += f"\n\n{self.core.modes.wake_note(meta, owner=trust == 'owner')} Use github_reply for the originating GitHub thread."
+            await self.core.send(principal, to=to, task=wake_text(title, text, link, tail),
                                  project=project, title=title,
                                  handle_meta={**({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
                                               **({"boundary": project} if project and mode != "work" else {})})

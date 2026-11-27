@@ -9,6 +9,7 @@ text are neutralised, so a sender can't fake them.
 from __future__ import annotations
 
 import re
+from typing import TypedDict
 
 OPEN = "<<<swb-untrusted"
 CLOSE = "swb-untrusted>>>"
@@ -18,6 +19,13 @@ _MARK_RE = re.compile(r"swb-untrusted", re.IGNORECASE)
 
 class FramedText(str):
     """External text framed in-process by SwB."""
+
+
+class AuthoredText(TypedDict):
+    text: str
+    author: str | None
+    author_id: str | None
+    owner: bool
 
 
 def neutralize(text: str) -> str:
@@ -43,3 +51,14 @@ def frame_sender(text: str, name: str | None, sender_id: str | None, where: str 
     if owner:
         return "owner", text
     return "external", FramedText(wrap(text, name, sender_id, "external", where))
+
+
+def frame_parts(parts: dict[str, AuthoredText], where: str) -> tuple[str, dict[str, str]]:
+    rendered = {key: frame_sender(neutralize(part["text"]), part["author"], part["author_id"], where, owner=part["owner"])
+                for key, part in parts.items()}
+    trust = "owner" if rendered and all(trust == "owner" for trust, _ in rendered.values()) else "external"
+    return trust, {key: text for key, (_, text) in rendered.items()}
+
+
+def join_parts(parts: dict[str, str]) -> str:
+    return "\n\n".join(f"{key.replace('_', ' ').capitalize()}\n{text}" for key, text in parts.items())

@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS space_modes (
 CREATE TABLE IF NOT EXISTS watch_events (
   block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL,
   author_id TEXT NOT NULL, author TEXT NOT NULL, excerpt TEXT NOT NULL, link TEXT, at REAL NOT NULL,
-  target TEXT NOT NULL, project TEXT, dm INTEGER NOT NULL DEFAULT 0, delivered_at REAL,
+  target TEXT NOT NULL, project TEXT, dm INTEGER NOT NULL DEFAULT 0, delivered_at REAL, parts TEXT,
   PRIMARY KEY(block, space, channel, message)
 );
 CREATE INDEX IF NOT EXISTS watch_events_pending ON watch_events(block, space, dm, target, at) WHERE delivered_at IS NULL;
@@ -263,6 +263,8 @@ def _migrate(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE owner_passkeys ADD COLUMN rp_id TEXT")
     if "target" not in {r[1] for r in db.execute("PRAGMA table_info(space_modes)")}:
         db.execute("ALTER TABLE space_modes ADD COLUMN target TEXT")
+    if "parts" not in {r[1] for r in db.execute("PRAGMA table_info(watch_events)")}:
+        db.execute("ALTER TABLE watch_events ADD COLUMN parts TEXT")
     db.execute("""
         INSERT OR IGNORE INTO owner_initialized(id)
         SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM owner_initialized) AND (
