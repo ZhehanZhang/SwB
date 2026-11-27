@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm"
 
 const script = readFileSync(new URL("../../src/switchboard/static/theme.js", import.meta.url), "utf8")
 
-function boot({ prefersDark = false, values = new Map(), blocked = false } = {}) {
+function boot({ prefersDark = false, values = new Map(), blocked = false, cookie = "" } = {}) {
   const media = Object.assign(new EventTarget(), { matches: prefersDark })
   const rootClasses = new Set()
   const window = Object.assign(new EventTarget(), {
@@ -14,7 +14,7 @@ function boot({ prefersDark = false, values = new Map(), blocked = false } = {})
       return media
     },
   })
-  const document = { documentElement: { style: {}, dataset: {}, classList: {
+  const document = { cookie, documentElement: { style: {}, dataset: {}, classList: {
     toggle(name, enabled) { if (enabled) rootClasses.add(name); else rootClasses.delete(name) },
   } } }
   const localStorage = {
@@ -25,6 +25,7 @@ function boot({ prefersDark = false, values = new Map(), blocked = false } = {})
   return {
     theme: window.swbTheme,
     dark: () => rootClasses.has("dark"),
+    cookie: () => document.cookie,
     scheme: () => document.documentElement.style.colorScheme,
     systemDark(matches) {
       media.matches = matches
@@ -46,6 +47,18 @@ test("applies system preference on boot and follows OS changes", () => {
   assert.equal(app.scheme(), "light")
   app.systemDark(true)
   assert.equal(app.dark(), true)
+})
+
+test("reads prior theme preferences and leaves legacy cookies unchanged", () => {
+  const cookie = "siteAppearance=light; swbAppearance=dark"
+  const values = new Map()
+  const app = boot({ cookie, values })
+  assert.equal(app.theme.get(), "dark")
+  assert.equal(boot({ cookie: "siteAppearance=light" }).theme.get(), "light")
+  assert.equal(boot({ values: new Map([["theme", "dark"]]) }).theme.get(), "dark")
+  app.theme.set("system")
+  assert.equal(app.cookie(), cookie)
+  assert.equal(boot({ cookie, values }).theme.get(), "system")
 })
 
 test("explicit light and dark override the OS and survive reloads", () => {
