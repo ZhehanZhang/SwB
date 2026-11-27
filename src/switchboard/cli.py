@@ -24,7 +24,7 @@ from . import __version__
 from .__main__ import SERVER_COMMANDS, add_server_commands
 from .companion import commands as companion_commands
 from .companion.state import CompanionError
-from .config import DEFAULT_PORT, INSTANCE_CONFIG, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
+from .config import DEFAULT_PORT, INSTANCE_CONFIG, MCP_OFF, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
 from .store import ensure_private_data_dir
 
@@ -217,21 +217,33 @@ def _hidden_input(prompt: str) -> str:
 
 async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
     rate_limit = None
+    mcp_missing = False
 
     async def inspect_response(response: httpx2.Response) -> None:
-        nonlocal rate_limit
-        if response.status_code == 429 and response.request.method == "POST":
-            rate_limit = _rate_limit(response)
+        nonlocal rate_limit, mcp_missing
+        if response.request.method == "POST":
+            if response.status_code == 429:
+                rate_limit = _rate_limit(response)
+            elif response.status_code == 404:
+                mcp_missing = True
 
     try:
-        async with (
-            httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False,
-                               event_hooks={"response": [inspect_response]}) as client,
-            streamable_http_client(url, http_client=client) as streams,
-            ClientSession(*streams, read_timeout_seconds=30) as session,
-        ):
-            await session.initialize()
-            result = await session.call_tool(tool, arguments)
+        async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False,
+                                      event_hooks={"response": [inspect_response]}) as client:
+            try:
+                async with (
+                    streamable_http_client(url, http_client=client) as streams,
+                    ClientSession(*streams, read_timeout_seconds=30) as session,
+                ):
+                    await session.initialize()
+                    result = await session.call_tool(tool, arguments)
+            except Exception:
+                parts = urlsplit(url)
+                if tool == "switchboard_status" and mcp_missing and parts.path.endswith("/mcp"):
+                    response = await client.get(parts._replace(path=f"{parts.path[:-4]}/healthz").geturl())
+                    if response.is_success and isinstance(health := response.json(), dict) and health.get("mcp_enabled") is False:
+                        return health
+                raise
     except Exception:
         if rate_limit is not None:
             raise rate_limit from None
@@ -261,6 +273,8 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
         lines = [f"Status: {payload.get('status', 'unknown')}"]
+        if payload.get("mcp_enabled") is False:
+            lines.append(MCP_OFF)
         if blocks := payload.get("block_setup"):
             lines.append("Blocks:")
             for name, block in blocks.items():

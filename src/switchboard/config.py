@@ -6,13 +6,14 @@ import os
 import re
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from ipaddress import IPv4Network, IPv6Network, ip_network
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 from urllib.parse import urlsplit
 
 import yaml
 
-from .block_env import configured_env, env_blocks
+from .block_env import configured_env, default_blocks, env_blocks
 
 if TYPE_CHECKING:
     from .modes import ModeConfig
@@ -25,6 +26,16 @@ CONFIG_PATHS = (INSTANCE_CONFIG, Path("/config/switchboard.yaml"))
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = "8870"
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+MCP_OFF = "MCP is off."
+
+# https://www.cloudflare.com/ips-v4 and https://www.cloudflare.com/ips-v6 (2026-11-27)
+CLOUDFLARE_NETWORKS = (
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22", "141.101.64.0/18",
+    "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22", "198.41.128.0/17",
+    "162.158.0.0/15", "104.16.0.0/13", "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32", "2405:8100::/32",
+    "2a06:98c0::/29", "2c0f:f248::/32",
+)
 
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
 # channel uses SWITCHBOARD_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
@@ -50,6 +61,17 @@ def client_endpoint(env: Mapping[str, str]) -> str:
         host = "localhost"
     port = env.get("SWITCHBOARD_PORT") or env.get("PORT") or DEFAULT_PORT
     return f"{_http_origin(host, port)}/mcp"
+
+
+def local_origin(host: str, origin: str, env: Mapping[str, str]) -> str | None:
+    if host in LOOPBACK_HOSTS:
+        return origin
+    compose_origin = env.get("SWB_COMPOSE_ORIGIN")
+    if compose_origin and _web_url(compose_origin, local=True):
+        parts = urlsplit(compose_origin)
+        if parts.scheme == "http" and parts.hostname in LOOPBACK_HOSTS and parts.port and not parts.path:
+            return compose_origin
+    return None
 
 
 def _origin(url: str) -> str:
@@ -123,6 +145,7 @@ class Config:
     owner_emails: tuple[str, ...] = ()
     access_team_domain: str | None = None
     access_aud: str | None = None
+    trusted_proxies: tuple[IPv4Network | IPv6Network, ...] = ()
     oidc: OIDCConfig | None = None
     owner_setup_digest: bytes | None = field(default=None, repr=False)
     redirect_allow: tuple[str, ...] = ()
@@ -139,7 +162,7 @@ class Config:
     turn_cap: int | None = 200
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
-    blocks: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {"use": "mcp"}})
+    blocks: dict[str, dict[str, Any]] = field(default_factory=default_blocks)
     blocks_from_file: bool = False
     block_env: dict[str, tuple[str, ...]] = field(default_factory=dict)
     agents: dict[str, Any] | None = None
@@ -198,12 +221,18 @@ class Config:
     def public_origin(self) -> str | None:
         return _origin(self.issuer) if self.issuer else None
 
+    @property
+    def mcp_enabled(self) -> bool:
+        return any((settings.get("use") or name) == "mcp" for name, settings in self.blocks.items())
+
     def problems(self) -> list[str]:
         out = []
         if not self.public_url:
             out.append("Set SWITCHBOARD_PUBLIC_URL to enable OAuth sign-in")
         if not self.owner_sign_in:
             out.append("Set SWITCHBOARD_PUBLIC_URL or configure an upstream method for owner sign-in")
+        if not self.mcp_enabled:
+            out.append(MCP_OFF)
         return out
 
 
@@ -356,6 +385,19 @@ def _branding(raw: Any) -> Branding:
                     icon=raw.get("icon"), logo_assets_dir=raw.get("logo_assets_dir"))
 
 
+def _trusted_proxies(raw: Any) -> tuple[IPv4Network | IPv6Network, ...]:
+    if not isinstance(raw, list) or not all(isinstance(entry, str) for entry in raw):
+        raise ConfigError("Set trusted_proxies to a list of IP ranges.")
+    networks = []
+    for entry in raw:
+        entry = entry.strip()
+        try:
+            networks.extend(ip_network(value) for value in (CLOUDFLARE_NETWORKS if entry == "cloudflare" else (entry,)))
+        except ValueError:
+            raise ConfigError("Use IP ranges or cloudflare in trusted_proxies.") from None
+    return tuple(dict.fromkeys(networks))
+
+
 def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = None, *,
                 tunnel_url: str | None = None, loopback_origin: str | None = None,
                 instance: Instance | None = None) -> Config:
@@ -375,6 +417,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     if not isinstance(access, dict):
         raise ConfigError("auth.cloudflare_access must be a mapping")
     memory = raw.get("memory") or {}
+    proxy_env = [entry for entry in env.get("SWITCHBOARD_TRUSTED_PROXIES", "").split(",") if entry.strip()]
 
     configured_url = tunnel_url or raw.get("public_url", env.get("SWITCHBOARD_PUBLIC_URL") or env.get("PUBLIC_URL"))
     if isinstance(configured_url, str):
@@ -421,7 +464,13 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     blocks_from_file = "blocks" in v2
     if blocks_from_file:
         sections = _sections(v2["blocks"], "blocks")
-        blocks = {name: {"use": name, **sec} for name, sec in sections.items() if sec.get("enabled", True)}
+        defaults = default_blocks()
+        for name, sec in sections.items():
+            use = sec.get("use") or name
+            if isinstance(use, str) and name != use:
+                defaults.pop(use, None)
+        sections = _merge(defaults, sections)
+        blocks = {name: {"use": name, **sec} for name, sec in sections.items() if sec.get("enabled") is not False}
         for name in sections:
             block_env[name] = configured_env(name, blocks[name]) if name in blocks else block_env.get(name, ())
     else:
@@ -437,6 +486,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         owner_emails=owner_emails,
         access_team_domain=access.get("team_domain", access_env.get("CLOUDFLARE_ACCESS_TEAM_DOMAIN")) or None,
         access_aud=access.get("aud", access_env.get("CLOUDFLARE_ACCESS_AUD")) or None,
+        trusted_proxies=_trusted_proxies(raw.get("trusted_proxies", proxy_env)),
         oidc=_oidc(auth.get("oidc"), public_url, owner_emails, env),
         owner_setup_digest=owner_setup_digest,
         redirect_allow=as_tuple(auth.get("redirect_uris")),
@@ -499,6 +549,8 @@ def translate_v1(raw: Mapping[str, Any]) -> dict[str, Any]:
         if clash:
             raise ConfigError(f"slack settings {clash} appear in both the slack section and origins/destinations.slack")
         slack.update(dict(raw.get("slack") or {}))
+    if not any((sec.get("use") or name) == "mcp" for name, sec in blocks.items()):
+        blocks.setdefault("mcp", {"use": "mcp", "enabled": False})
     out["blocks"] = blocks
     return out
 

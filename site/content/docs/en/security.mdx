@@ -68,6 +68,12 @@ A conversation pauses at the turn cap. SwB tells the owner.
 
 Capy can return the earlier conversation for a repeat send. Its `duplicate_window_s` sets the time window. Its default is 600 seconds.
 
+## Client addresses
+
+SwB uses the address of the connection for limits and audit records by default. Add your proxy to `trusted_proxies` to use the client address it sends. Configure the proxy to replace incoming client address headers with values it verifies.
+
+Use the [self-hosting guide](/docs/self-hosting#trusted-proxies) to add a Cloudflare Tunnel connector or a reverse proxy on your Docker network.
+
 ## Audit log
 
 SwB records tool calls that its access rules reject. It records failed browser sign-ins for setup codes, used, expired or invalid links, passkeys, CSRF checks and OIDC.

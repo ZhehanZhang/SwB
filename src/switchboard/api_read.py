@@ -79,7 +79,7 @@ async def health(request: Request) -> JSONResponse:
     problems += [f"{name}: check block status" for name, block in core.blocks.items() if block.problems()]
     revision = core.cfg.env.get("SWITCHBOARD_REVISION", "")
     return JSONResponse({
-        **_fields(report, "status", "mirror", "static_keys", "turn_cap"),
+        **_fields(report, "status", "mirror", "static_keys", "turn_cap", "mcp_enabled"),
         **({"commit": revision.lower()} if re.fullmatch(r"[0-9a-fA-F]{40}", revision) else {}),
         "blocks": {name: _fields(row, "use", "kind", "level", "online") for name, row in report["blocks"].items()},
         "problems": problems,

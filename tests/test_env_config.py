@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import os
+from ipaddress import ip_network
 from unittest.mock import patch
 
 import httpx
@@ -42,6 +43,28 @@ def test_default_local_public_url_adds_bound_alias_once(tmp_path, aliases):
     assert cfg.public_urls == ("http://localhost:8870", "http://127.0.0.1:8870")
     cfg = load_config(config, env={}, tunnel_url="https://swb.example.test", loopback_origin="http://127.0.0.1:8870")
     assert cfg.public_urls == ("https://swb.example.test", *aliases)
+
+
+def test_trusted_proxies_accept_yaml_and_environment(tmp_path):
+    path = tmp_path / "switchboard.yaml"
+    path.write_text("trusted_proxies: [192.0.2.0/24, '2001:db8::/32']\n")
+    env = {"SWITCHBOARD_TRUSTED_PROXIES": " 198.51.100.12, cloudflare, "}
+    assert load_config(path, env).trusted_proxies == (ip_network("192.0.2.0/24"), ip_network("2001:db8::/32"))
+    path.write_text("trusted_proxies: []\n")
+    assert not load_config(path, env).trusted_proxies
+    path.write_text("version: 2\n")
+    networks = load_config(path, env).trusted_proxies
+    assert networks[0] == ip_network("198.51.100.12/32")
+    assert ip_network("173.245.48.0/20") in networks and ip_network("2400:cb00::/32") in networks
+    assert not load_config(path, {}).trusted_proxies
+
+
+@pytest.mark.parametrize("setting", ["'*'", "[example.test]", "[192.0.2.1/24]", "[42]"])
+def test_invalid_trusted_proxies_stop_config_loading(tmp_path, setting):
+    path = tmp_path / "switchboard.yaml"
+    path.write_text(f"trusted_proxies: {setting}\n")
+    with pytest.raises(ConfigError, match="trusted_proxies"):
+        load_config(path, {})
 
 
 def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch):
@@ -113,7 +136,7 @@ def test_yaml_chat_token_overrides_and_explicit_blocks_take_precedence(tmp_path)
     base = tmp_path / "base.yaml"
     base.write_text("version: 2\nblocks:\n  community: {use: discord, token_env: CUSTOM_DISCORD_TOKEN}\n  telegram: {enabled: false}\n")
     cfg = load_config(base, {"DISCORD_BOT_TOKEN": "fixture-discord", "TELEGRAM_BOT_TOKEN": "fixture-telegram"})
-    assert cfg.blocks == {"community": {"use": "discord", "token_env": "CUSTOM_DISCORD_TOKEN"}}
+    assert cfg.blocks == {"mcp": {"use": "mcp"}, "community": {"use": "discord", "token_env": "CUSTOM_DISCORD_TOKEN"}}
     assert cfg.block_env["community"] == ("CUSTOM_DISCORD_TOKEN",)
 
 
@@ -255,7 +278,8 @@ def test_env_aliases_and_yaml_null_overrides(tmp_path, monkeypatch):
     base = tmp_path / "base.yaml"
     base.write_text("version: 2\npublic_url: null\nauth: {cloudflare_access: null, owner_emails: []}\nblocks: {}\n")
     explicit = load_config(base, env)
-    assert explicit.public_url is None and not explicit.owner_emails and not explicit.owner_sign_in and not explicit.blocks
+    assert explicit.public_url is None and not explicit.owner_emails and not explicit.owner_sign_in
+    assert explicit.blocks == {"mcp": {"use": "mcp"}}
 
 
 def test_swb_up_without_dir_preserves_process_and_dotenv_paths(tmp_path, monkeypatch):

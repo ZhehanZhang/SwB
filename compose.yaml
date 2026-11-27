@@ -17,8 +17,11 @@ services:
       - path: .env
         required: false
     environment:
+      PORT: "8000"
       SWITCHBOARD_HOST: 0.0.0.0
       SWITCHBOARD_PORT: ""
+      SWB_COMPOSE_ORIGIN: "http://${SWITCHBOARD_BIND:-127.0.0.1}:${SWITCHBOARD_PORT:-8870}"
+      SWITCHBOARD_TRUSTED_PROXIES: ${SWITCHBOARD_TRUSTED_PROXIES:-}
     ports:
       - "${SWITCHBOARD_BIND:-127.0.0.1}:${SWITCHBOARD_PORT:-8870}:8000"
     volumes:
