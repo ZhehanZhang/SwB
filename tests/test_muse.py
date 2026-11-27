@@ -160,8 +160,8 @@ def test_default_paired_key_does_not_wake_the_owners_muse(make):
     key = client.post("/connect", json={"code": code}).json()["key"]
     args = {"to": ADDR, "task": "Check the example"}
     assert error_text(call(client, key, "send", args)) == "Use the owner's sign-in to call this tool."
-    [row] = core.audit.recent(action="tool_refused")
-    assert (row["target"], row["detail"]) == ("send", "Use the owner's sign-in to call this tool.")
+    [row] = core.audit.recent(outcome="refused")
+    assert (row["destination"], row["action"], row["detail"]) == ("muse", "send", "Use the owner's sign-in to call this tool.")
     assert args["task"] not in str(row) and key[:12] not in str(row)
     assert core.inbox.head() == 0
     assert payload(call(client, STATIC_KEY, "send", args))["mailbox"]

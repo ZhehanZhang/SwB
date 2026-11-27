@@ -125,7 +125,9 @@ class LimitedServer(MCPServer):
             cause: BaseException | None = exc
             while cause is not None:
                 if isinstance(cause, PolicyRefusal):
-                    self._audit_refusal(p, name, cause.reason)
+                    if not cause.audited:
+                        self._audit_refusal(p, name, cause.reason)
+                        cause.audited = True
                     raise ToolError(str(cause)) from cause
                 cause = cause.__cause__
             if isinstance(exc, UnexpectedToolError) or not isinstance(error := exc.__cause__, ValidationError):
