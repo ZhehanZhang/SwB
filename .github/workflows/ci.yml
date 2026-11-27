@@ -21,6 +21,18 @@ jobs:
       - run: uv run --no-sync ruff check
       - run: uv run --no-sync python scripts/inventory.py --check
       - run: uv run --no-sync python scripts/inventory_coverage.py
+      - uses: actions/setup-node@v6
+        if: matrix.python-version == '3.13'
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the web UI and smoke-test the installed wheel
+        if: matrix.python-version == '3.13'
+        run: |
+          npm ci --prefix web
+          npm run build --prefix web
+          bash scripts/smoke-fresh-install.sh
 
   web:
     runs-on: ubuntu-latest

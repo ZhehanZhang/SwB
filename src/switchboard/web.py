@@ -75,7 +75,7 @@ def web_routes() -> list[Route | Mount]:
         _, refused = await request.app.state.core.auth.protect_owner(request)
         if refused is not None:
             return login_redirect(request)
-        return spa_index() or pages.message_page("Web UI build required", "", 503)
+        return spa_index() or pages.message_page("Web UI build required", "Run npm run build --prefix web", 503)
 
     api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES, *BOARD_ROUTES, *SETTINGS_ROUTES, *TOKEN_ROUTES, *PAGE_ROUTES, *ABOUT_ROUTES, *CONNECTION_ROUTES],
                  redirect_slashes=False)

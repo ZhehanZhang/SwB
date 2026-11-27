@@ -26,6 +26,7 @@ clean() {
 clean "$venv/bin/python" -I -B -c 'from pathlib import Path; import sys, switchboard; assert Path(switchboard.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())'
 clean "$venv/bin/swb" --help >/dev/null
 echo "Installed swb CLI: ok"
+clean "$venv/bin/python" -I -B "$root/scripts/smoke-wheel-web.py" "${wheels[0]}"
 : > empty.yaml
 status="$(clean SWITCHBOARD_CONFIG="$PWD/empty.yaml" SWITCHBOARD_DATA="$PWD/data" "$venv/bin/switchboard" blocks check)"
 printf '%s\n' "$status"
