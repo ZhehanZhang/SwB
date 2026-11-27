@@ -40,7 +40,6 @@ def test_connect_schema_and_unknown_kinds(make):
     ("dots", "dots", ()),
     ("github", "github", ("GITHUB_WEBHOOK_SECRET",)),
     ("grok-bot", "grok-routine", ("GROK_ROUTINE_URL", "GROK_ROUTINE_SECRET")),
-    ("muse", "muse", ("MUSE_BRIDGE_TOKEN",)),
     ("slack", "slack", ("SLACK_A2A_APP_TOKEN", "SLACK_A2A_BOT_TOKEN")),
     ("telegram", "telegram", ("TELEGRAM_BOT_TOKEN",)),
 ])
@@ -174,7 +173,7 @@ def test_connect_hosted_clients(make, kind, menu):
     assert f"{PUBLIC}/mcp" in step["do"] and "OAuth" in step["do"]
 
 
-@pytest.mark.parametrize("kind", ["claude", "chatgpt", "grok"])
+@pytest.mark.parametrize("kind", ["claude", "chatgpt", "grok", "muse"])
 def test_connect_hosted_clients_require_https_even_with_local_oauth(make, kind):
     core, client = make(config=base_config(public_url="http://localhost:8000", version=2, blocks={"mcp": {}, "grok-routine": {}}))
     assert core.cfg.owner_sign_in

@@ -26,6 +26,7 @@ PRESETS: dict[str, AgentSpec] = {
                   redirect_hosts=("chatgpt.com", "openai.com"), cimd_hosts=("chatgpt.com", "openai.com"), link_key="chatgpt_project"),
         AgentSpec("grok", "Grok", redirect_uris=("https://grok.com/*", "https://x.ai/*"),
                   redirect_hosts=("grok.com", "x.ai"), cimd_hosts=("grok.com", "x.ai")),
+        AgentSpec("muse", "Muse", redirect_uris=("https://agent.meta.ai/api/hatch/oauth/callback",), redirect_hosts=("agent.meta.ai",)),
         AgentSpec("gemini", "Gemini", redirect_uris=("https://oauth-redirect.googleusercontent.com/r/*", "https://oauth-redirect.googleusercontent.com/a/*"),
                   redirect_hosts=("oauth-redirect.googleusercontent.com",)),
         AgentSpec("claude-code", "Claude Code", cimd_patterns=(r"https://claude\.ai/oauth/claude-code-client-metadata",)),

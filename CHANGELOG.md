@@ -10,7 +10,7 @@ Sign in as the owner with a passkey or a sign-in link. Open the owner board to s
 
 Connect a Discord bot and find its servers and channels. Set how SwB handles messages in Slack, Discord, Telegram, and GitHub.
 
-Pair a Linux device to send text between SwB and Muse.
+Add SwB to Muse as a custom connector with OAuth.
 
 ### Changed
 
