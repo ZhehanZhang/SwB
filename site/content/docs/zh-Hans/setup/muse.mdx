@@ -1,0 +1,107 @@
+---
+title: Muse
+description: 通过一台 Linux 设备把 Meta Muse 与 SwB 配对。
+---
+
+SwB 以名为 **SwB** 的文字小装置与 Muse 配对。小装置是 Muse 应用通过蓝牙连接的设备。一台 Linux 设备运行 SwB 桥接程序，在 Muse 和 SwB 之间传递消息。
+
+## 开始之前
+
+你需要一个 Muse 账号，以及 iOS 或 Android 上的 Muse 应用。你需要一台支持低功耗蓝牙的 Linux 设备，它能访问你的 SwB 服务器，例如 https://swb.example.com。SwB 使用 Ubuntu 24.04，并安装 `bluez`、`python3-dbus`、`python3-gi` 和 `python3-venv`。
+
+`config/switchboard.yaml` 的 `blocks` 下必须有 `muse: {use: muse}`。你还需要以所有者身份登录 SwB。
+
+## 复制设置提示词
+
+<SetupPrompt name="muse" lang="zh-Hans" />
+
+把提示词粘贴给你的智能体。智能体会带你完成其余步骤。
+
+## 你的步骤
+
+<Steps>
+<Step>
+### 生成桥接令牌
+
+在密码管理器中生成 64 个随机字母和数字。这就是桥接令牌。
+</Step>
+<Step>
+### 保存桥接令牌
+
+在智能体给你的 SwB 领取链接中，把桥接令牌粘贴到 **Token**。点击 **Save token**。
+</Step>
+<Step>
+### 打开 Meta 令牌页面
+
+打开 https://gadgets.muse.ai/settings/sdk-tokens。点击 **Log in**，使用 Muse 应用的账号。
+</Step>
+<Step>
+### 生成 Meta 令牌
+
+点击 **I agree to the Gadget SDK Terms** → **Generate token** → **Copy**。把令牌存进密码管理器。
+</Step>
+{/* unverified */}
+<Step>
+### 安装桥接程序
+
+在 Linux 设备上打开与服务器版本一致的 SwB 文件夹。运行下面的命令。
+</Step>
+<Step>
+### 输入两个令牌
+
+在 **SwB bridge token from the claim** 处输入桥接令牌。在 **Personal Meta Gadget SDK token** 处输入 Meta 令牌。
+</Step>
+<Step>
+### 打开开发者模式
+
+在 Muse 应用中点击 **Settings** → **Devices** → **Developer mode**。将其开启。
+</Step>
+<Step>
+### 添加设备
+
+在 **Devices** 中点击 **Add Device**。选择 SwB 在 Linux 设备上显示的蓝牙名称。
+</Step>
+<Step>
+### 确认配对
+
+确认关于社区设备的提示。如果应用询问 Wi-Fi，选择 SwB 显示的网络。
+</Step>
+{/* unverified */}
+</Steps>
+
+```sh
+/usr/bin/python3 -m venv --system-site-packages .venv-muse
+.venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
+.venv-muse/bin/swb muse-bridge --url https://swb.example.com --setup
+```
+
+让桥接程序保持运行。桥接就绪后，终端显示 **SwB is ready for Muse messages.**。
+
+## 智能体的工作
+
+智能体调用 `connect`，参数为 `what="muse"`。SwB 返回桥接令牌的领取链接和你的步骤。它会跟踪令牌、桥接状态和 Muse 的第一条回复。
+
+桥接上线后，智能体再次调用 `connect`。它用 `send` 向 `muse:gadget:muse` 发送测试，并用 `result` 读取答复。之后的消息用 `send` 加 `to="muse"` 发给 Muse，或通过指向 `muse:gadget:muse` 的路由发送。
+
+要更换桥接令牌，智能体调用 `connect`，参数为 `what="muse"` 和 `choose={"replace":true}`。
+
+## 凭据
+
+| 令牌 | 显示位置 | 格式 | 填写位置 |
+| --- | --- | --- | --- |
+| 桥接令牌 | 你在密码管理器中生成 | 64 个字母和数字 | SwB 领取链接，然后是 Linux 设备上的隐藏提示 |
+| Meta Gadget SDK 令牌 | https://gadgets.muse.ai/settings/sdk-tokens，只显示一次 | 以 `mgst_` 开头 | 只填在 Linux 设备上的隐藏提示中 |
+
+Meta 令牌只保存在 Linux 设备上。SwB 只保存桥接令牌。
+
+## 检查连接
+
+确认 Muse 应用的 **Devices** 中有 **SwB**。请智能体再次调用 `connect` 并发送测试。`result` 中出现真实回复，说明连接正常。
+
+## 解决问题
+
+Linux 设备重启后，运行 `swb muse-bridge --url https://swb.example.com`，使用已保存的状态。要重新配对，加上 `--setup --pair-again`。
+
+Meta 的配对窗口保持十分钟。请在你信任的网络中配对。
+
+设备离线时，SwB 会保留消息，等设备回来后再发送。重发消息前，请先在 Muse 中查看。
