@@ -113,10 +113,12 @@ class Guard:
 
     PATHS = {"/register": "register", "/token": "token", "/authorize": "authorize"}
 
-    def __init__(self, app: Any, limiter: RateLimiter, on_refusal: Callable[[str, str, str], None] | None = None):
+    def __init__(self, app: Any, limiter: RateLimiter, on_refusal: Callable[[str, str, str], None] | None = None,
+                 on_large_body: Callable[[dict], None] | None = None):
         self.app = app
         self.limiter = limiter
         self.on_refusal = on_refusal or (lambda ip, path, why: None)
+        self.on_large_body = on_large_body or (lambda scope: None)
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope["type"] != "http":
@@ -146,6 +148,7 @@ class Guard:
                 except ValueError:
                     too_big = True
                 if too_big:
+                    self.on_large_body(scope)
                     await reject(send, 413, "request_too_large", f"request bodies are limited to {limit} bytes")
                     return
         bucket = self.PATHS.get(path)
@@ -165,6 +168,7 @@ class Guard:
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
                 if seen > limit:
+                    self.on_large_body(scope)
                     raise HTTPException(413, "request body too large")
             return message
 

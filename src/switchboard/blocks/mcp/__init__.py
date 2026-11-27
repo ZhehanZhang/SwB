@@ -22,6 +22,7 @@ from starlette.routing import BaseRoute, Mount
 
 from ... import __version__
 from ...auth import Principal
+from ...guard import MCP_BODY_LIMIT
 from ...memory import GENERAL, MemoryError_
 from ...modes import ChannelModes
 from ...projects import Project, ProjectError
@@ -275,6 +276,7 @@ class MCPBlock(Block):
         self.app = self.mcp.streamable_http_app(
             stateless_http=True,
             json_response=True,
+            max_request_body_size=MCP_BODY_LIMIT,
             transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
         )
 
@@ -357,10 +359,13 @@ class MCPBlock(Block):
 
         async def run(coro: Any) -> Any:
             from ...blocks import BlockError as DestinationError
+            from ...companions import DeviceActionError
             from ...core import CoreError
 
             try:
                 return await coro
+            except DeviceActionError as e:
+                raise ToolError(e.display) from None
             except (CoreError, DestinationError, MemoryError_, ProjectError, RouteError, PermissionError) as e:
                 raise ToolError(str(e)) from e
 
@@ -585,9 +590,12 @@ class MCPBlock(Block):
             p = who(ctx)
             await core.modes.refresh(p)
             default, mx = self.wait_caps.for_agent(p.source)
+            health = core.health(p, mode_slugs=await core.modes.status_slugs(p))
+            if "companions" in health:
+                health["companions"] = [frame_companion(row) for row in health["companions"]]
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})},
                     "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx},
-                    **core.health(p, mode_slugs=await core.modes.status_slugs(p)),
+                    **health,
                     "agents": core.known_agents(),
                     "connected": (sorted(set(core.connections.agents())) if p.is_unrestricted_owner else [p.source] if p.kind == "connect" else [])}
 
@@ -602,4 +610,4 @@ class MCPBlock(Block):
 
 
 
-from .kit import Kit  # noqa: E402
+from .kit import Kit, frame_companion  # noqa: E402

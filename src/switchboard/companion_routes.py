@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .core import Switchboard
 
 NO_STORE = {"Cache-Control": "no-store"}
+COMPANION_ACTIONS = {"hello": "hello", "results": "result", "claims": "claim", "emit": "emit", "revoke": "revoke"}
 
 
 def _error(exc: CompanionError) -> JSONResponse:
@@ -48,15 +49,17 @@ def companion_routes(core: Switchboard, limiter: RateLimiter, heartbeat_s: float
 
     async def pair(request: Request) -> JSONResponse:
         ip = client_ip(request.scope)
+        client = audit_client_ip(request.scope)
         if (wait := limiter.blocked("companion_pair_fail", ip)) is not None:
+            core.audit.record_refusal(origin="http", client=client, destination="core", action="companion_pair",
+                                      detail="Pairing attempt limit reached.")
             return JSONResponse({"error": "Too many failed pairing attempts."}, status_code=429,
                                 headers={**NO_STORE, "Retry-After": str(int(wait + 0.999))})
-        client = audit_client_ip(request.scope)
         try:
             out = companions.pair(await _body(request), client=client)
         except CompanionError as exc:
             limiter.hit("companion_pair_fail", ip)
-            core.audit.record(origin="http", source="-", client=client, destination="core", action="companion_pair", outcome="refused")
+            core.audit.record_refusal(origin="http", client=client, destination="core", action="companion_pair", detail=str(exc))
             return _error(exc)
         return JSONResponse(out, headers=NO_STORE)
 
@@ -89,6 +92,8 @@ def companion_routes(core: Switchboard, limiter: RateLimiter, heartbeat_s: float
                 else:
                     return JSONResponse(await companions.emit(principal, body), headers=NO_STORE)
         except CompanionError as exc:
+            core.audit.record_refusal(origin="companion", client=principal.client_id, destination="core",
+                                      action=f"companion_{COMPANION_ACTIONS[verb]}", detail=str(exc), target=companion_id, ref=exc.audit_ref)
             return _error(exc)
         return JSONResponse({"ok": True}, headers=NO_STORE)
 
@@ -96,5 +101,5 @@ def companion_routes(core: Switchboard, limiter: RateLimiter, heartbeat_s: float
         Route("/pairing/companion", mint, methods=["POST"]),
         Route("/companion/pair", pair, methods=["POST"]),
         Route("/companion/events", events),
-        *(Route(f"/companion/{verb}", up, methods=["POST"]) for verb in ("hello", "results", "claims", "emit", "revoke")),
+        *(Route(f"/companion/{verb}", up, methods=["POST"]) for verb in COMPANION_ACTIONS),
     ]

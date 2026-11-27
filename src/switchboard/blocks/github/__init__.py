@@ -797,46 +797,50 @@ class GitHubBlock(Block):
         if not self.core.visibility.allows(who, *self.channel_resources(space, repo)):
             self.drop(event, data, "channel access restricted", ip, delivery)
             return
+        if not actor_is_owner:
+            recent = [seen for seen in self._senders.pop(user_id, []) if now - seen < 600]
+            self._senders[user_id] = recent
+            if len(recent) >= 5:
+                self.drop(event, data, "sender rate limit", ip, delivery)
+                return
+            recent.append(now)
+            if len(self._senders) > MAX_DELIVERIES:
+                self._senders.popitem(last=False)
+        text = FramedText(details) if trust == "external" else details
+
+        async def note_context(address=None):
+            item = {**generated, "subject": title, "text": wake_text(title, text, None, delivery_note),
+                    "from": {"block": self.name, "space": space, "trust": trust}, "trust": trust,
+                    "target": target, "note": CONTEXT_NOTE}
+            agents = self.core.target_agents(address) if address else set()
+            for agent in sorted(agents or {"owner"}):
+                row = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? AND project IS ?",
+                                          (agent, self.name, repo, project))
+                handle = row["handle"] if row else self.core.inbox.open_handle(
+                    owner=agent, destination=self.name, ref=repo, project=project, title=f"GitHub {repo}", meta={}, status="following")
+                await self.core.inbox.add(handle, "context", item)
+            self.core.audit.record(origin=self.name, source=sender_id, client=ip, destination=self.name,
+                                   action="context_noted", outcome="ok", ref=delivery, target=target)
+
         if not target:
             self.drop(event, data, f"{mode} target is missing", ip, delivery)
+            await note_context()
             return
         try:
             addr = await self.core.resolve_to(to) if to else route
         except (BlockError, CoreError, ValueError):
             self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            await note_context()
             return
         if addr is None or (addr.block == "agent" and addr.id not in self.core.known_agents()):
             self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            await note_context()
             return
         try:
             slugs = self.core.slug_map(await self.core.targets()) if not actor_is_owner and addr.block != "agent" else {}
             resources = self.core.target_visibility_resources(target, addr, slugs=slugs)
-            restricted = not resources or not self.core.visibility.allows(who, *resources)
-            if restricted and actor_is_owner:
-                self.drop(event, data, "target access restricted", ip, delivery)
-                return
-            if not actor_is_owner:
-                recent = [seen for seen in self._senders.pop(user_id, []) if now - seen < 600]
-                self._senders[user_id] = recent
-                if len(recent) >= 5:
-                    self.drop(event, data, "sender rate limit", ip, delivery)
-                    return
-                recent.append(now)
-                if len(self._senders) > MAX_DELIVERIES:
-                    self._senders.popitem(last=False)
-            text = FramedText(details) if trust == "external" else details
-            if restricted:
-                item = {**generated, "subject": title, "text": wake_text(title, text, None, delivery_note),
-                        "from": {"block": self.name, "space": space, "trust": trust}, "trust": trust,
-                        "target": target, "note": CONTEXT_NOTE}
-                for agent in sorted(self.core.target_agents(addr)):
-                    row = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? AND project IS ?",
-                                              (agent, self.name, repo, project))
-                    handle = row["handle"] if row else self.core.inbox.open_handle(
-                        owner=agent, destination=self.name, ref=repo, project=project, title=f"GitHub {repo}", meta={}, status="following")
-                    await self.core.inbox.add(handle, "context", item)
-                self.core.audit.record(origin=self.name, source=sender_id, client=ip, destination=self.name,
-                                       action="context_noted", outcome="ok", ref=delivery, target=target)
+            if not resources or not self.core.visibility.allows(who, *resources):
+                await note_context(addr)
                 return
             principal = Principal(self.name, ip, "github", origin=self.name, trust=trust, visibility_who=who)
             self.core.turn(f"{self.name}:{repo}:{number or delivery}", principal)
@@ -860,6 +864,7 @@ class GitHubBlock(Block):
                                  handle_meta={**({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
                                               **({"boundary": project} if project and mode != "work" else {})})
         except (BlockError, CoreError, ValueError) as exc:
+            await note_context(addr)
             log.warning("GitHub wake for %s failed: %s", repo, type(exc).__name__)
             self.core.audit.record(origin=self.name, source="github", client=ip, destination=self.name, action="webhook",
                                    outcome="error", target=repo, ref=delivery, detail=type(exc).__name__)

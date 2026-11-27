@@ -42,6 +42,10 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 
 代理用 `companion_list` 查看已配對的裝置及其操作。它用 `companion_invoke` 執行操作。
 
+夥伴裝置回傳的文字上限為 1 MiB。請從 `structuredContent.result.content_b64` 讀取 Drop 檔案資料。
+
+從 `targets` 取得工作階段的位址。在 `visibility_list` 中查找該位址對應的資源。用 `visibility_set` 分享該資源。
+
 ## 保持執行
 
 配對後，夥伴裝置就會開始執行。執行 `swb companion run` 可重新啟動。執行 `swb companion status` 可查看本機裝置編號和功能。
