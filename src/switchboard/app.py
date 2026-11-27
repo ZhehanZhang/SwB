@@ -16,7 +16,7 @@ from starlette.routing import Mount, Route
 from . import pages
 from .api_about import release_version
 from .api_display import SLACK_PROFILE_PREFIX
-from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable, GroupFieldError
+from .claims import CLAIM_PATH, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
 from .config import REQUEST_BASE
 from .guard import Guard, RateLimiter, client_ip, reject
 from .owner_login import OwnerLogin
@@ -32,11 +32,6 @@ INBOX_FEEDS = ("/inbox/poll", "/inbox/events")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
-TOKEN_CLAIM_MESSAGES = {
-    "Enter a token on a single line, at most 8 KiB.": "Enter a single-line token",
-    "Enter a public HTTPS webhook URL without credentials or a fragment.": "Enter a public HTTPS webhook URL",
-    "That doesn't look like the right kind of token.": "Use a bot token",
-}
 ROUTINE_CLAIM_MESSAGES = {
     "this link isn't valid; ask the Claude session for a new one": "Request a new link",
     "this link was replaced by a newer registration; use the latest link": "Use the latest link",
@@ -302,7 +297,7 @@ def create_app(core: "Switchboard") -> Any:
             return refused
         values = {f.name: v for f in group["fields"] if isinstance(v := form.get(f.name), str)}
         try:
-            names = core.claims.consume_group(code, values)
+            names = await core.claims.consume_group(code, values)
         except ClaimUnavailable:
             return pages.claim_message_page("Request a new link", 410)
         except GroupFieldError as e:
@@ -327,34 +322,44 @@ def create_app(core: "Switchboard") -> Any:
         if (group := core.claims.group(code)) is not None:
             return await group_claim(request, group)
         if request.method != "POST":
+            owner_key = not core.cfg.owner_sign_in and bool(claim_key_actor)
             form_csrf, refused = await claim_page_access(request)
-            if refused is not None:
+            if refused is not None and not owner_key:
                 return refused
             try:
                 claim = core.claims.inspect_details(code)
             except ClaimUnavailable:
-                return pages.claim_message_page("Request a new link", 410)
-            return pages.token_claim_page(claim["name"], form_csrf, require_https=claim["require_https"],
+                return refused if owner_key else pages.claim_message_page("Request a new link", 410)
+            if owner_key:
+                if not claim["label"]:
+                    return refused
+                form_csrf = core.auth.csrf(f"claim:{code}")
+            return pages.token_claim_page(claim["name"], form_csrf, require_https=claim["require_https"], kind=claim["kind"],
+                                          label=claim["label"], owner_key=owner_key,
                                           host=request.url.hostname or "", expires_at=claim["expires_at"], now=core.clock())
 
         actor, token, refused = await claim_form(request)
         if refused is not None:
             return refused
         try:
-            name = core.claims.inspect(code)
+            claim = core.claims.inspect_details(code)
+            name = claim["name"]
             chats = [block for block in core.blocks.values() if isinstance(block, ChatBlock) and block.token_env == name]
             if any(not block.token_re.fullmatch(token.strip()) for block in chats):
-                raise ClaimError("That doesn't look like the right kind of token.")
-            name = core.claims.consume(code, token)
+                raise ClaimInputError("Use a bot token")
+            name = await core.claims.submit(code, token)
         except ClaimUnavailable:
             return pages.claim_message_page("Request a new link", 410)
-        except ClaimError as e:
-            return pages.claim_message_page(TOKEN_CLAIM_MESSAGES.get(str(e), "Check the token"), 400)
+        except ClaimInputError as e:
+            return pages.claim_message_page(str(e), 400)
+        except ClaimError:
+            return pages.claim_message_page("Check the value", 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=name)
         for block in chats:
             await block.secret_saved("bot_token")
-        return pages.claim_message_page("Token saved", 200)
+        label = claim["label"] or "Token"
+        return pages.claim_message_page(f"{label} saved", 200)
 
     async def connect_code(request: Request) -> Response:
         """The owner mints a pairing code; the code is shown once."""

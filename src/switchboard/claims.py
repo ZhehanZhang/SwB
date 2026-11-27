@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import ipaddress
 import json
 import os
 import re
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 from urllib.parse import urlsplit
 
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 from .store import Store
 
@@ -29,7 +33,9 @@ CREATE TABLE IF NOT EXISTS secrets (
   code_hash TEXT UNIQUE,
   expires_at REAL,
   sealed BLOB,
-  require_https INTEGER NOT NULL DEFAULT 0
+  require_https INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'token',
+  label TEXT NOT NULL DEFAULT ''
 )
 """
 
@@ -43,14 +49,20 @@ CREATE TABLE IF NOT EXISTS claim_groups (
   expires_at REAL NOT NULL
 )
 """
-KINDS = ("token", "id", "url", "pem", "json")
+KINDS = ("token", "id", "url", "pem", "json", "webhook_secret")
 FILE_KINDS = ("pem", "json")
 MAX_FILE_BYTES = 64 * 1024
 PEM_RE = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
+ClaimCheck = Callable[[str], object]
+ClaimOnlineCheck = Callable[[str], Awaitable[str | None]]
 
 
 class ClaimError(ValueError):
     pass
+
+
+class ClaimInputError(ClaimError):
+    """A validation title safe to show to the claim owner."""
 
 
 @dataclass(frozen=True)
@@ -71,43 +83,47 @@ class GroupFieldError(ClaimError):
         super().__init__(message)
 
 
-def normalize_pem(value: str) -> str:
+def normalize_pem(value: str, *, check: ClaimCheck | None = None) -> str:
     """Rebuild a PEM private key that lost its line breaks (a paste into a one-line field) and check that it loads."""
     found = PEM_RE.search(value)
     body = re.sub(r"\s+", "", found.group(2)) if found else ""
     if not body or not re.fullmatch(r"[A-Za-z0-9+/]+=*", body):
-        raise ClaimError("Paste the whole private key, from -----BEGIN to -----END, or upload the .pem file.")
+        raise ClaimInputError("Paste the full private key or upload the .pem file")
     label = found.group(1)
     pem = f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
-    from cryptography.hazmat.primitives.serialization import load_pem_private_key
-
-    try:
-        load_pem_private_key(pem.encode(), password=None)
-    except (ValueError, TypeError) as e:
-        raise ClaimError("That private key doesn't load. Use the unencrypted .pem file GitHub gave you.") from e
+    if check is None:
+        try:
+            load_pem_private_key(pem.encode(), password=None)
+        except (ValueError, TypeError, UnsupportedAlgorithm):
+            raise ClaimInputError("Use a valid .pem file") from None
+    else:
+        check(pem)
     return pem
 
 
-def normalize(kind: str, value: str) -> str:
+def normalize(kind: str, value: str, *, check: ClaimCheck | None = None) -> str:
     value = value.strip()
     if kind in FILE_KINDS:
         if len(value.encode()) > MAX_FILE_BYTES or "\x00" in value:
-            raise ClaimError("That file is too large; the limit is 64 KiB.")
+            raise ClaimInputError("Use a text file up to 64 KiB")
         if kind == "pem":
-            return normalize_pem(value)
+            return normalize_pem(value, check=check)
         try:
             parsed = json.loads(value)
-        except ValueError as e:
-            raise ClaimError("That isn't valid JSON.") from e
+        except ValueError:
+            raise ClaimInputError("Use a JSON object") from None
         if not isinstance(parsed, dict):
-            raise ClaimError("Expected a JSON object.")
-        return value
-    if not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
-        raise ClaimError("Enter it on a single line, at most 8 KiB.")
-    if kind == "id" and not re.fullmatch(r"\d{1,20}", value):
-        raise ClaimError("Enter the number only.")
+            raise ClaimInputError("Use a JSON object")
+    elif not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
+        raise ClaimInputError("Enter a single-line value up to 8 KiB")
+    if kind == "id" and not re.fullmatch(r"[0-9]+", value):
+        raise ClaimInputError("Enter a numeric ID")
+    if kind == "webhook_secret" and len(value) < 16:
+        raise ClaimInputError("Use a webhook secret with at least 16 characters")
     if kind == "url" and not valid_webhook_url(value):
-        raise ClaimError("Enter a public HTTPS URL without credentials or a fragment.")
+        raise ClaimInputError("Enter a public HTTPS webhook URL")
+    if check is not None:
+        check(value)
     return value
 
 
@@ -161,23 +177,52 @@ class Claims:
     def __init__(self, store: Store):
         self.store = store
         self._cipher = Fernet(_key(store))
-        self.validators: dict[str, tuple[re.Pattern[str], str]] = {}
+        self._name_checks: dict[str, ClaimCheck] = {}
+        self._kind_checks: dict[str, ClaimCheck] = {}
+        self._online_checks: dict[str, ClaimOnlineCheck] = {}
         store.x(SCHEMA)
         store.x(GROUP_SCHEMA)
-        if "require_https" not in {r["name"] for r in store.q("PRAGMA table_info(secrets)")}:
-            store.x("ALTER TABLE secrets ADD COLUMN require_https INTEGER NOT NULL DEFAULT 0")
+        columns = {r["name"] for r in store.q("PRAGMA table_info(secrets)")}
+        for name, definition in (("require_https", "INTEGER NOT NULL DEFAULT 0"),
+                                 ("kind", "TEXT NOT NULL DEFAULT 'token'"), ("label", "TEXT NOT NULL DEFAULT ''")):
+            if name not in columns:
+                store.x(f"ALTER TABLE secrets ADD COLUMN {name} {definition}")
 
-    def mint(self, name: str, public_url: str | None, *, url: bool = False) -> str:
+    def register_name(self, name: str, check: ClaimCheck) -> None:
+        self._name_checks[name] = check
+
+    def register_kind(self, kind: str, check: ClaimCheck, *, check_online: ClaimOnlineCheck | None = None) -> None:
+        """Register local validation and an optional check that returns a safe error title."""
+        self._kind_checks[kind] = check
+        if check_online is not None:
+            self._online_checks[kind] = check_online
+        else:
+            self._online_checks.pop(kind, None)
+
+    def _known_kind(self, kind: str) -> bool:
+        return kind in KINDS or kind in self._kind_checks
+
+    def _normalize(self, name: str, kind: str, value: str) -> str:
+        if not self._known_kind(kind):
+            raise ClaimUnavailable(UNUSABLE)
+        value = normalize(kind, value, check=self._name_checks.get(name))
+        if check := self._kind_checks.get(kind):
+            check(value)
+        return value
+
+    def mint(self, name: str, public_url: str | None, *, url: bool = False, kind: str = "token", label: str = "") -> str:
         if not NAME_RE.fullmatch(name):
             raise ClaimError("A claim needs an environment variable name.")
         if not public_url:
             raise ClaimError("A claim link needs public_url configured.")
+        if not self._known_kind(kind):
+            raise ClaimError("Choose a credential kind.")
         code = secrets.token_urlsafe(32)
         self.store.x(
-            """INSERT INTO secrets(name, code_hash, expires_at, require_https) VALUES (?, ?, ?, ?)
+            """INSERT INTO secrets(name, code_hash, expires_at, require_https, kind, label) VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(name) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at,
-                                               require_https = excluded.require_https""",
-            (name, _digest(code), self.store.clock() + CLAIM_TTL_S, url),
+                                               require_https = excluded.require_https, kind = excluded.kind, label = excluded.label""",
+            (name, _digest(code), self.store.clock() + CLAIM_TTL_S, url, "url" if url else kind, label),
         )
         return f"{public_url.rstrip('/')}{CLAIM_PATH}/{code}"
 
@@ -185,7 +230,7 @@ class Claims:
         return self.inspect_details(code)["name"]
 
     def inspect_details(self, code: str) -> dict[str, Any]:
-        row = self.store.one("SELECT name, expires_at, require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
+        row = self.store.one("SELECT name, expires_at, require_https, kind, label FROM secrets WHERE code_hash = ? AND expires_at > ?",
                              (_digest(code), self.store.clock()))
         if row is None:
             raise ClaimUnavailable(UNUSABLE)
@@ -195,25 +240,27 @@ class Claims:
         return self.store.one("SELECT 1 FROM secrets WHERE name = ? AND code_hash IS NOT NULL AND expires_at > ?",
                               (name, self.store.clock())) is not None
 
+    async def submit(self, code: str, value: str) -> str:
+        claim = self.inspect_details(code)
+        value = self._single_value(claim, value)
+        if (check := self._online_checks.get(claim["kind"])) and (error := await check(value)):
+            raise ClaimInputError(error)
+        return self._save(code, value)
+
     def consume(self, code: str, value: str) -> str:
-        code_hash = _digest(code)
-        value = value.strip()
-        if PEM_RE.search(value):
-            value = normalize("pem", value)
-        elif not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
-            raise ClaimError("Enter a token on a single line, at most 8 KiB.")
-        claim = self.store.one("SELECT name, require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
-                               (code_hash, self.store.clock()))
-        if claim is None:
-            raise ClaimUnavailable(UNUSABLE)
-        if claim["require_https"] and not valid_webhook_url(value):
-            raise ClaimError("Enter a public HTTPS webhook URL without credentials or a fragment.")
-        if (validation := self.validators.get(claim["name"])) and not validation[0].fullmatch(value):
-            raise ClaimError(validation[1])
+        return self._save(code, self._single_value(self.inspect_details(code), value))
+
+    def _single_value(self, claim: dict[str, Any], value: str) -> str:
+        kind = "url" if claim["require_https"] else claim["kind"]
+        if kind == "token" and PEM_RE.search(value):
+            kind = "pem"
+        return self._normalize(claim["name"], kind, value)
+
+    def _save(self, code: str, value: str) -> str:
         row = self.store.one(
             """UPDATE secrets SET code_hash = NULL, expires_at = NULL, sealed = ?
                WHERE code_hash = ? AND expires_at > ? RETURNING name""",
-            (self._cipher.encrypt(value.encode()), code_hash, self.store.clock()),
+            (self._cipher.encrypt(value.encode()), _digest(code), self.store.clock()),
         )
         if row is None:
             raise ClaimUnavailable(UNUSABLE)
@@ -222,7 +269,7 @@ class Claims:
     def mint_group(self, title: str, fields: list[Field], public_url: str | None, provider: str = "") -> str:
         """One link whose form saves every field together, after each one is checked."""
         names = [f.name for f in fields]
-        if not fields or len(set(names)) != len(names) or not all(NAME_RE.fullmatch(n) and f.kind in KINDS for n, f in zip(names, fields)):
+        if not fields or len(set(names)) != len(names) or not all(NAME_RE.fullmatch(f.name) and self._known_kind(f.kind) for f in fields):
             raise ClaimError("A grouped claim needs distinct environment variable names.")
         if not public_url:
             raise ClaimError("A claim link needs public_url configured.")
@@ -242,11 +289,11 @@ class Claims:
         return {"title": row["title"], "provider": row["provider"], "expires_at": row["expires_at"],
                 "fields": [Field(**f) for f in json.loads(row["fields"])]}
 
-    def consume_group(self, code: str, values: dict[str, str]) -> list[str]:
+    async def consume_group(self, code: str, values: dict[str, str]) -> list[str]:
         found = self.group(code)
         if found is None:
             raise ClaimUnavailable(UNUSABLE)
-        sealed = {}
+        normalized = []
         for f in found["fields"]:
             raw = values.get(f.name) or ""
             if not raw.strip():
@@ -254,9 +301,15 @@ class Claims:
                     continue
                 raise GroupFieldError(f, f"{f.label} is missing.")
             try:
-                sealed[f.name] = self._cipher.encrypt(normalize(f.kind, raw).encode())
+                normalized.append((f, self._normalize(f.name, f.kind, raw)))
             except ClaimError as e:
-                raise GroupFieldError(f, f"{f.label}: {e}") from None
+                raise GroupFieldError(f, str(e)) from None
+        online = [(f, value, check) for f, value in normalized if (check := self._online_checks.get(f.kind))]
+        errors = await asyncio.gather(*(check(value) for _, value, check in online))
+        for (f, _, _), error in zip(online, errors):
+            if error:
+                raise GroupFieldError(f, error)
+        sealed = {f.name: self._cipher.encrypt(value.encode()) for f, value in normalized}
 
         def save(db: Any) -> None:
             if db.execute("DELETE FROM claim_groups WHERE code_hash = ? AND expires_at > ? RETURNING code_hash",

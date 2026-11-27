@@ -555,6 +555,26 @@ async def test_github_mcp_write_tools_use_the_guarded_conversation(github):
         assert writes == ["/repos/acme/app/issues/7/comments"]
 
 
+async def test_unloadable_app_key_allows_pat_auth_for_connect_and_writes(github):
+    requests = []
+    pat = "example-repository-token"
+
+    def api(request):
+        assert request.headers["Authorization"] == f"Bearer {pat}"
+        requests.append((request.method, request.url.path))
+        return httpx.Response(200 if request.method == "GET" else 201, json={"id": 123})
+
+    env = {"GITHUB_APP_ID": "123", "GITHUB_APP_PRIVATE_KEY": "not a pem", "GITHUB_TOKEN": pat, "GITHUB_WEBHOOK_SECRET": SECRET}
+    async with github(github_config("triage"), env, http_transport=httpx.MockTransport(api)) as (core, _):
+        github_block = core.blocks["github"]
+        owner = Principal("owner", "local", "key")
+        info = await github_block.connect_steps("github", owner, None, {"credential": "pat"})
+        assert info["pat_capabilities"]["verified"] and not info["next"]
+        assert github_block.status()["credential"] == "pat" and github_block.installation_problem is None
+        await core.invoke(owner, "github", github_block.action("comment"), {"repo": "acme/app", "number": 7, "body": "Status update"})
+        assert requests == [("GET", "/user"), ("POST", "/repos/acme/app/issues/7/comments")]
+
+
 @pytest.mark.parametrize(("header", "scopes"), [(None, None), ("", []), ("repo, read:org, repo", ["read:org", "repo"])])
 async def test_pat_capability_refresh_is_cached_and_does_not_gate_writes(github, header, scopes):
     calls = []
