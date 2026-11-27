@@ -2659,7 +2659,7 @@
       "name": "capy_wait"
     },
     {
-      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Call connect again to check progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
+      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [

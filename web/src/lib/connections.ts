@@ -30,10 +30,12 @@ type TelegramChat = {
 }
 export type TelegramDetails = Bot & { chats: TelegramChat[] }
 type SlackDetails = { workspaces: { name: string; intake: "socket" | "poll" | "none"; connected: boolean }[] }
+type GitHubDetails = { repositories: string[]; credential: "app" | "pat" | null; dropped: number; refused: number }
 type Connection = { state: ConnectionState; block: string | null } & (
   | { platform: "discord"; details: DiscordDetails | null }
   | { platform: "telegram"; details: TelegramDetails | null }
   | { platform: "slack"; details: SlackDetails | null }
+  | { platform: "github"; details: GitHubDetails | null }
 )
 
 const nullableString = (value: unknown) => value === null || typeof value === "string"
@@ -50,9 +52,14 @@ function isBot(value: Record<string, unknown>, platform: "discord" | "telegram")
 function isConnection(value: unknown): value is Connection {
   if (!isObject(value)) return false
   const { platform, state, details, block } = value
-  if (platform !== "discord" && platform !== "telegram" && platform !== "slack") return false
+  if (platform !== "discord" && platform !== "telegram" && platform !== "slack" && platform !== "github") return false
   if (state === "not_configured") return details === null && block === null
   if (typeof block !== "string" || !isObject(details) || (state !== "connected" && state !== "disconnected")) return false
+  if (platform === "github") {
+    return Array.isArray(details.repositories) && details.repositories.every((repo: unknown) => typeof repo === "string")
+      && (details.credential === null || details.credential === "app" || details.credential === "pat")
+      && typeof details.dropped === "number" && typeof details.refused === "number"
+  }
   if (platform === "slack") {
     return Array.isArray(details.workspaces) && details.workspaces.every((workspace: unknown) => isObject(workspace)
       && typeof workspace.name === "string" && typeof workspace.connected === "boolean"
@@ -71,7 +78,7 @@ function isConnection(value: unknown): value is Connection {
     && (chat.listen === "direct" || chat.listen === "listening" || chat.listen === "unlisted"))
 }
 
-export function connectionQuery(platform: StatusPlatform) {
+export function connectionQuery(platform: ConnectionPlatform) {
   return queryOptions({
     queryKey: ["connection", platform],
     queryFn: ({ signal }) => requestJson(`/api/connections/${platform}`,

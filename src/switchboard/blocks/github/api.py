@@ -23,7 +23,8 @@ INSTALLATION_ID_ENV = "GITHUB_INSTALLATION_ID"
 PRIVATE_KEY_ENV = "GITHUB_APP_PRIVATE_KEY"
 TOKEN_ENV = "GITHUB_TOKEN"
 API_URL = "https://api.github.com"
-ID_RE = re.compile(r"[1-9][0-9]{0,23}")
+ID_RE = re.compile(r"[1-9][0-9]{0,18}")
+MAX_ID = (1 << 63) - 1
 REPO_RE = re.compile(r"[A-Za-z0-9-]{1,100}/[A-Za-z0-9_.-]{1,100}")
 PEM_RE = re.compile(r"-----BEGIN ((?:RSA )?PRIVATE KEY)-----\s*(.*?)\s*-----END \1-----", re.DOTALL)
 
@@ -48,7 +49,7 @@ def repo_name(value: Any) -> str | None:
 def provider_id(value: Any) -> str | None:
     if type(value) is int or isinstance(value, str):
         value = str(value)
-        if ID_RE.fullmatch(value):
+        if ID_RE.fullmatch(value) and int(value) <= MAX_ID:
             return value
     return None
 
