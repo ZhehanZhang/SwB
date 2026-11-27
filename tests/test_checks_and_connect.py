@@ -40,6 +40,15 @@ def test_dots_connect_accepts_a_static_mailbox_key(make):
     assert result["state"] == "connected" and result["next"] == []
 
 
+def test_connect_reports_missing_provider_credentials_only_in_next(make):
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {}, "discord": {"connect": False}, "telegram": {"connect": False}})
+    _, client = make(cfg, env={cli.OWNER_KEY: STATIC_KEY})
+    for provider in ("github", "discord", "telegram"):
+        result = payload(call(client, STATIC_KEY, "connect", {"what": provider}))
+        assert result["next"][0]["by"] == "person" and result["next"][0]["link"]
+        assert not any(word in step.lower() for word in ("missing", "not connected", "none") for step in result["done"])
+
+
 def test_blocks_check_uses_status_missing_credentials(make, tmp_path, monkeypatch, capsys):
     cfg = base_config(version=2, blocks={
         "mcp": {}, "github": {}, "slack": {"workspaces": {"sample": {

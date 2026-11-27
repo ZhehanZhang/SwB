@@ -746,9 +746,12 @@ class ChatBlock(Block):
 
     async def connect_steps(self, kind: str, principal: Principal, project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
         token = bool(self.token())
-        done = [f"{self.manifest.title} bot token: {'saved' if token else 'missing'}.",
-                f"{self.manifest.title} connection: {'connected' if self.connected() else 'not connected'}.",
-                *(f"Space {s.label}: {len(self.owners(s))} owner id(s), project {s.project or 'none'}." for s in self.spaces.values())]
+        title = self.manifest.title
+        done = [f"Configured space {s.label}." for s in self.spaces.values()]
+        if token:
+            done.append(f"{title} bot token saved.")
+        if self.connected():
+            done.append(f"{title} bot connected.")
         if not token:
             if not principal.is_unrestricted_owner:
                 return {"done": done, "next": [{"by": "person", "do": f"Ask the owner to connect {self.manifest.title} from their own sign-in."}]}
@@ -759,6 +762,8 @@ class ChatBlock(Block):
             steps.append(f"Add a space under blocks.{self.name}.spaces with the project it belongs to.")
         steps += [f"Space {s.label} has no owner ids. {self.owner_hint()}" for s in self.spaces.values()
                   if not self.owners(s) and f"spaces.{s.label}.owner_ids" not in " ".join(steps)]
+        if not self.connected() and not steps:
+            steps.append(f"Wait for the {title} bot to connect. Run connect again.")
         next_steps = [{"by": "person", "do": step} for step in steps]
         if self.connected() and self._avatar_status["file"] is None:
             next_steps.append({"by": "person", "do": f"Set blocks.{self.name}.avatar to an image file to give the bot an icon.", "optional": True})
