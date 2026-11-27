@@ -292,3 +292,12 @@ async def test_startup_migrates_active_legacy_keys_once_then_keeps_new_defaults(
     assert [record.message for record in caplog.records if record.message.startswith("Paired memory grants")] == [
         "Paired memory grants migration: 2 keys, 4 grants",
     ]
+
+
+def test_fresh_start_records_empty_grants_migration_without_logging(make, caplog):
+    with caplog.at_level(logging.INFO, logger="switchboard"):
+        core, _ = make(config=base_config(version=2, blocks={"mcp": {}}))
+
+    counts = core.store.one("SELECT keys_migrated, grants_migrated FROM paired_memory_grants_migration WHERE version = 1")
+    assert tuple(counts) == (0, 0)
+    assert not any(record.message.startswith("Paired memory grants migration:") for record in caplog.records)

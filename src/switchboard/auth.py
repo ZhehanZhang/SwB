@@ -19,7 +19,7 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
-from urllib.parse import urlencode, urlparse
+from urllib.parse import unquote_plus, urlencode, urlparse
 
 import httpx
 from starlette.requests import Request
@@ -29,6 +29,8 @@ from starlette.routing import Route
 from . import pages
 from .agents import PRESETS, Agents, host_allowed
 from .config import Config, LOOPBACK_HOSTS
+from .guard import audit_client_ip
+from .refusals import CSRF_AUDIT_PATHS
 from .sessions import Owner, Sessions, SESSION_COOKIE, login_redirect
 from .store import Store, dumps
 
@@ -482,15 +484,23 @@ class Auth:
             return isinstance(token, str) and hmac.compare_digest(token.encode(), expected)
         return False
 
+    def csrf_refused(self, request: Request, *, target: str | None = None) -> JSONResponse:
+        if target is None and request.url.path in CSRF_AUDIT_PATHS:
+            target = request.url.path
+        if self.audit is not None:
+            self.audit.record_refusal(origin="http", client=audit_client_ip(request.scope), destination="core",
+                                      action="auth_failure", target=target, detail="csrf")
+        return JSONResponse({"error": "csrf"}, status_code=403)
+
     async def protect_owner(self, request: Request) -> tuple[Owner | None, JSONResponse | None]:
         write = request.method not in ("GET", "HEAD")
         if write and not self.origin_ok(request):
-            return None, JSONResponse({"error": "csrf"}, status_code=403)
+            return None, self.csrf_refused(request)
         owner = await self.owner(request)
         if owner is None:
             return None, JSONResponse({"error": "signed_out"}, status_code=401)
         if write and not await self.valid_csrf(request, owner.csrf_key):
-            return None, JSONResponse({"error": "csrf"}, status_code=403)
+            return None, self.csrf_refused(request)
         return owner, None
 
     async def validate_authorize(self, p: dict[str, str]) -> tuple[Client, dict[str, str]]:
@@ -515,7 +525,7 @@ class Auth:
 
     def error_redirect(self, redirect_uri: str, state: str | None, e: OAuthError) -> RedirectResponse:
         q = {"error": e.error, "error_description": e.description, "iss": self.cfg.issuer or ""}
-        if state:
+        if state is not None:
             q["state"] = state
         return RedirectResponse(_append(redirect_uri, q), status_code=302)
 
@@ -737,4 +747,6 @@ def _basic(request: Request) -> tuple[str, str] | None:
 
 
 def _append(uri: str, q: dict[str, str]) -> str:
-    return uri + ("&" if urlparse(uri).query else "?") + urlencode(q)
+    parts = urlparse(uri)
+    query = [part for part in parts.query.split("&") if part and unquote_plus(part.partition("=")[0]) not in q]
+    return parts._replace(query="&".join([*query, urlencode(q)])).geturl()

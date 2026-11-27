@@ -9,7 +9,7 @@ from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, ST
 
 PRIVATE = "fixture-secret-not-owner-console-data"
 READ_PATHS = ("/health", "/routes", "/visibility", "/audit", "/agents", "/projects", "/inbox",
-              "/conversations/not-found", "/memory", "/prompts/coordinator", "/platforms")
+              "/conversations/not-found", "/memory", "/prompts", "/prompts/coordinator", "/platforms")
 
 
 def get(client, path, *, status=200, **params):
@@ -392,15 +392,16 @@ def test_memory_folders_search_and_read_use_owner_scope_and_safe_errors(make):
 
 def test_console_prompts_match_every_packaged_setup_prompt(make):
     _, client = make()
-    sources = sorted((path for path in files("switchboard.prompts.setup").iterdir()
-                      if path.is_file() and path.name.endswith(".md")), key=lambda path: path.name)
+    sources = {path.name.removesuffix(".md"): path for path in files("switchboard.prompts.setup").iterdir()
+               if path.is_file() and path.name.endswith(".md")}
     assert sources
-    for path in sources:
-        name = path.name.removesuffix(".md")
+    index = get(client, "/prompts")
+    assert index == {"prompts": sorted(sources)}
+    for name in index["prompts"]:
         response = client.get(f"/api/prompts/{name}", headers=OWNER)
         assert response.status_code == 200, name
         assert response.headers["content-type"] == "text/markdown; charset=utf-8"
-        assert response.content == path.read_bytes(), name
+        assert response.content == sources[name].read_bytes(), name
 
 
 @pytest.mark.parametrize("name", [PRIVATE, "universal-coordinator", "routine", "dispatcher"])

@@ -10,7 +10,7 @@ If you use a paired key, give me the equivalent terminal command for each owner-
 
 When I ask to connect a platform, call `connect(what=...)` for that platform. Use `grok` for the web connector. Use `grok-bot` for routines. Call `connect(what="anything")` for the current list. Follow the steps in `next`. Do each step marked "you" yourself. Give me each step marked "person" in one short message. Include button names and public links. Wait for me to confirm the step.
 
-Call `connect` again with the same `what` and choices. Repeat while there are required steps in `next`. Use `state: connected` as the completion signal. SwB sets it when a connection check returns an empty `next` or only optional steps. The `done` field shows progress. For a coding agent, check the connection with `inbox` in the new client. Each platform has a setup guide at https://swb.one/docs. Link the matching guide when a step is hard.
+Call `connect` again with the same `what` and choices. Repeat until `complete` is `true`. The `done` field shows progress. If `next` is empty and the result only offers a guide, follow that guide. For a coding agent, check the connection with `inbox` in the new client. Each platform has a setup guide at https://swb.one/docs. Link the matching guide when a step is hard.
 
 Tokens
 
