@@ -10,6 +10,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from starlette.applications import Starlette
+from starlette.datastructures import Headers
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
@@ -93,7 +94,7 @@ class BearerGate:
         companion = path.startswith("/companion/") and path.rstrip("/") != "/companion/pair"
         if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed or companion):
             scope.pop(PRINCIPAL_SCOPE, None)
-            headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+            headers = Headers(scope=scope)
             auth = headers.get("authorization", "")
             bare = auth.strip()
             token = auth[7:].strip() if auth.lower().startswith("bearer ") else (bare if bare and " " not in bare else None)
@@ -580,6 +581,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
     def refused(ip: str, path: str, why: str) -> None:
         core.audit.record(origin="http", source="-", client=ip, destination="core", action="rate_limited", outcome="refused", target=path, detail=why)
 
-    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused)
+    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused,
+                 trusted_proxies=core.cfg.trusted_proxies)
     gate.starlette = app
     return gate

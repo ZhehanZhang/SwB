@@ -4,6 +4,8 @@
 version: 2
 
 # public_url: https://switchboard.example.com
+# Use SWB_TRUSTED_PROXIES to set the ranges in the environment.
+# trusted_proxies: []
 # data_dir: /data
 # timezone: Etc/UTC
 # auth:

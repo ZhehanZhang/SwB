@@ -2099,6 +2099,13 @@
     },
     {
       "icon": null,
+      "id": "config_key:trusted_proxies",
+      "key": "trusted_proxies",
+      "kind": "config_key",
+      "label": "trusted_proxies"
+    },
+    {
+      "icon": null,
       "id": "config_key:turn_cap",
       "key": "turn_cap",
       "kind": "config_key",

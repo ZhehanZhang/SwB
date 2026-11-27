@@ -137,7 +137,7 @@ def test_project_listen_and_reply_paths_require_real_wiring(make):
 
 
 def test_no_mcp_runtime_advertises_no_url(make):
-    _, client = make(base_config(version=2, blocks={}))
+    _, client = make(base_config(version=2, blocks={"mcp": {"enabled": False}}))
     runtime = get(client, "/board")["runtime"]
     assert runtime["mcp_url"] is None and not runtime["online"]
     assert re.fullmatch(r"\d+\.\d+\.\d+.*", runtime["version"])
