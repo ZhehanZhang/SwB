@@ -159,8 +159,8 @@ def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     invalid = client.post(path, data={"csrf": csrf, "token": VALUE + "\nsecond line"}, headers=OWNER)
     assert invalid.status_code == 400 and VALUE not in invalid.text
     private_page(invalid)
-    row = core.store.one("SELECT code_hash, sealed FROM secrets WHERE name = ?", (NAME,))
-    assert row["code_hash"] == hashlib.sha256(code.encode()).hexdigest() and row["sealed"] is None
+    row = core.store.one("SELECT code_hash FROM claim_links WHERE name = ?", (NAME,))
+    assert row["code_hash"] == hashlib.sha256(code.encode()).hexdigest() and core.claims.secret(NAME) is None
 
     with caplog.at_level(logging.INFO, logger="switchboard.audit"):
         saved = client.post(path, data={"csrf": csrf, "token": VALUE}, headers=OWNER)
@@ -168,8 +168,8 @@ def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     private_page(saved)
     assert VALUE not in saved.text and VALUE not in caplog.text
     assert code not in saved.text and code not in caplog.text
-    row = core.store.one("SELECT code_hash, sealed FROM secrets WHERE name = ?", (NAME,))
-    assert row["code_hash"] is None and VALUE.encode() not in row["sealed"]
+    row = core.store.one("SELECT sealed FROM secrets WHERE name = ?", (NAME,))
+    assert not core.claims.pending(NAME) and VALUE.encode() not in row["sealed"]
     assert core.secret(NAME) == VALUE
     spent = client.get(path, headers=OWNER)
     assert spent.status_code == 410
@@ -262,7 +262,7 @@ def test_designated_key_must_be_unrestricted_for_claim(make, restriction):
     assert core.secret(NAME) is None
 
 
-def test_claim_expiry_and_newest_link_wins_per_name(make):
+def test_each_claim_link_has_its_own_expiry(make):
     clock = Clock()
     core, client = make(clock=clock)
     first = urlsplit(core.claims.mint(NAME, PUBLIC)).path
@@ -271,9 +271,10 @@ def test_claim_expiry_and_newest_link_wins_per_name(make):
     clock.t += CLAIM_TTL_S - 1
     newest = urlsplit(core.claims.mint(NAME, PUBLIC)).path
     assert newest != first
-    assert client.get(first, headers=OWNER).status_code == 410
+    assert client.get(first, headers=OWNER).status_code == 200
     assert client.get(other, headers=OWNER).status_code == 200
     clock.t += 1
+    assert client.get(first, headers=OWNER).status_code == 410
     assert client.get(other, headers=OWNER).status_code == 410
     page = client.get(newest, headers=OWNER)
     assert page.status_code == 200

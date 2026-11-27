@@ -79,9 +79,14 @@ async def tokens(request: Request) -> JSONResponse:
     now = core.clock()
     refs = _credential_refs(core)
     claims = {r["name"]: r for r in core.store.q(
-        """SELECT name, require_https, sealed IS NOT NULL AS stored,
-                  CASE WHEN code_hash IS NOT NULL AND expires_at > ? THEN expires_at END AS pending_until
-           FROM secrets""",
+        """WITH pending AS (
+             SELECT name, MAX(expires_at) AS pending_until, MAX(require_https) AS require_https
+             FROM claim_links WHERE expires_at > ? GROUP BY name
+           )
+           SELECT s.name, COALESCE(p.require_https, s.require_https) AS require_https, s.sealed IS NOT NULL AS stored, p.pending_until
+             FROM secrets s LEFT JOIN pending p ON p.name = s.name
+           UNION ALL
+           SELECT name, require_https, 0, pending_until FROM pending WHERE name NOT IN (SELECT name FROM secrets)""",
         (now,),
     ) if NAME_RE.fullmatch(r["name"])}
     saved = {r["target"]: r for r in core.store.q(

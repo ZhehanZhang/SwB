@@ -194,9 +194,13 @@ class Inbox:
         ))
 
     @staticmethod
+    def message_id(cursor: int) -> str:
+        return f"msg_{cursor}"
+
+    @staticmethod
     def _item(r: Any) -> dict[str, Any]:
         return {"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
-                "at": iso(r["at"]), **json.loads(r["data"])}
+                "at": iso(r["at"]), **json.loads(r["data"]), "message_id": Inbox.message_id(r["id"])}
 
     def item(self, item_id: int) -> dict[str, Any] | None:
         row = self.store.one("SELECT * FROM inbox WHERE id = ?", (item_id,))
@@ -210,23 +214,20 @@ class Inbox:
         so the channel never moves the position wait and inbox read from.
         """
         reader = reader or owner or "*"
-        position = f"conversation:{handle}" if handle else "*"
-        start = since
-        if start is None:
-            start = self._cursor(reader, position)
-            if handle and not start:
-                start = self._cursor(reader, handle)
+        start = self._cursor(reader, None) if since is None else since
+        position = f"conversation:{handle}" if handle else None
+        idle_cursor = max(start, self._cursor(reader, position)) if position and since is None else start
         if handle and owner is not None and self.store.one(
             "SELECT 1 FROM handles WHERE handle = ? AND destination = 'mailbox' AND status = 'cancelled' "
             "AND (owner = ? OR ref = ?)", (handle, owner, owner),
         ):
-            return {"items": [], "cursor": start, "handle_status": "cancelled"}
+            return {"items": [], "cursor": idle_cursor, "handle_status": "cancelled"}
         with_clause = ""
         where, args = ["id > ?"], [start]
         if owner:
             where.append("owner = ?")
             args.append(owner)
-        if since is None and not handle:
+        if since is None:
             where.append("id > COALESCE((SELECT c.cursor FROM inbox_cursors c WHERE c.owner = ? AND c.handle = inbox.handle), 0)")
             args.append(reader)
         if handle:
@@ -246,10 +247,15 @@ class Inbox:
             where.append("handle IN (SELECT h.handle FROM handles h WHERE h.project = ?)")
             args.append(project)
         rows = self.store.q(f"{with_clause}SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
-        cursor = rows[-1]["id"] if rows else start
+        cursor = rows[-1]["id"] if rows else idle_cursor
         if rows and advance:
-            cursors = {r["handle"]: r["id"] for r in rows} if handle else {}
-            self._advance(reader, {**cursors, position: cursor})
+            if handle or destination or project:
+                cursors = {r["handle"]: r["id"] for r in rows}
+                if position:
+                    cursors[position] = cursor
+            else:
+                cursors = {"*": cursor}
+            self._advance(reader, cursors)
         return {
             "items": [self._item(r) for r in rows],
             "cursor": cursor,

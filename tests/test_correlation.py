@@ -87,3 +87,17 @@ def test_mailbox_cancel_stops_delivery_and_following(make):
     history = client.get(f"/api/conversations/{handle}", headers=OWNER).json()
     assert [item["text"] for item in history["items"]] == ["Check the build", "Checking"]
     assert len(core.audit.recent(action="cancel", outcome="ok")) == 1
+
+
+def test_mailbox_wait_and_inbox_share_consumption_in_both_directions(make):
+    _, client = make()
+    handle = payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Check the build"}))["conversation"]
+    first = {"conversation": handle, "text": "Checking", "final": False}
+    payload(call(client, SECOND_KEY, "reply", first))
+    unfiltered = payload(call(client, STATIC_KEY, "wait", {"timeout_s": 0}))["items"]
+    assert [item["text"] for item in unfiltered] == ["Checking"]
+    payload(call(client, SECOND_KEY, "reply", {"conversation": handle, "text": "Passed"}))
+    filtered = payload(call(client, STATIC_KEY, "wait", {"conversation": handle, "timeout_s": 0}))["items"]
+    assert [item["text"] for item in filtered] == ["Passed"]
+    assert payload(call(client, STATIC_KEY, "inbox"))["items"] == []
+    assert payload(call(client, STATIC_KEY, "inbox", {"conversation": handle, "since_cursor": 0}))["items"] == unfiltered + filtered
