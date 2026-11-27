@@ -68,12 +68,10 @@ def _write_file(path: Path, text: str, *, force: bool, mode: int) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def _instance_config(base: Path, public_url: str | None, *, force: bool, alias: str | None = None) -> None:
-    config = {"version": 2, "blocks": {"mcp": {"use": "mcp"}}}
+def _instance_config(base: Path, public_url: str | None, *, force: bool) -> None:
+    config = {"version": 2}
     if public_url is not None:
         config["public_url"] = public_url
-    if alias is not None:
-        config["public_url_aliases"] = [alias]
     config_path = base / CONFIG
     config_path.parent.mkdir(parents=True, exist_ok=True)
     _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
