@@ -30,9 +30,9 @@ from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
-from .policy import (BLOCK_ROLES, CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, OWNER_REQUIRED, READ_ROLES,
+from .policy import (BLOCK_ROLES, CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MEMORY_NOT_FOUND, OWNER_REQUIRED, READ_ROLES,
                      ROUTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED, Role, can_read_project, catalog_refusal,
-                     mutation_roles, read_refusal)
+                     default_memory_scopes, granted_memory_scopes, mutation_roles, read_refusal)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -158,12 +158,14 @@ class LimitedServer(MCPServer):
             if isinstance(exc, UnexpectedToolError) or not isinstance(error := exc.__cause__, ValidationError):
                 raise
             properties = (self._tool_input_schema(name) or {}).get("properties", {})
-            missing, invalid = [], []
+            parts, missing, invalid = [], [], []
             for issue in error.errors(include_input=False, include_context=False, include_url=False):
                 loc = issue["loc"]
-                if loc and loc[0] in properties:
+                if name == "inbox" and loc == ("limit",) and issue["type"] in ("greater_than_equal", "less_than_equal"):
+                    limits = properties["limit"]
+                    parts.append(f"Use a limit from {limits['minimum']} to {limits['maximum']}.")
+                elif loc and loc[0] in properties:
                     (missing if issue["type"] == "missing" else invalid).append(loc[0])
-            parts = []
             if missing:
                 parts.append(f"Provide {', '.join(dict.fromkeys(missing))}.")
             if invalid:
@@ -333,15 +335,25 @@ class MCPBlock(Block):
         def pscope(slug: str) -> str:
             return "project:" + slug.strip().lower().removeprefix("project:")
 
-        def reading(p: Principal, project: str | None, include_general: bool, scopes: list[str] | None, what: str) -> list[str]:
-            ss = sync(core.memory.explicit_scopes, scopes, project) if scopes else sync(core.memory.read_scopes, project, include_general)
-            ss = [s for s in ss if core.allows_memory(p, s)]
+        def reading(p: Principal, project: str | None, include_general: bool, scopes: list[str] | None, what: str) -> tuple[list[str], str | None]:
+            note = None
+            if scopes:
+                granted = granted_memory_scopes(core, p, scopes)
+                if not granted:
+                    raise PolicyRefusal(MEMORY_NOT_FOUND)
+                ss = sync(core.memory.explicit_scopes, granted, project)
+                if len(granted) < len(scopes):
+                    note = "Skipped scopes outside this key's grants."
+            elif not project:
+                ss = default_memory_scopes(core, p)
+            else:
+                ss = granted_memory_scopes(core, p, sync(core.memory.read_scopes, project, include_general))
             if not ss:
-                raise PolicyRefusal(SCOPE_REQUIRED, "Pass the project you work in.")
+                raise PolicyRefusal(MEMORY_NOT_FOUND)
             cross = [s for s in ss if s != GENERAL and (not project or s != pscope(project))]
             if cross:
                 core.audit_memory(p, "cross_read", ",".join(cross), f"{what} while working in {project or 'general'}")
-            return ss
+            return ss, note
 
         async def run(coro: Any) -> Any:
             from ...blocks import BlockError as DestinationError
@@ -399,8 +411,9 @@ class MCPBlock(Block):
             limit: Annotated[int, Field(ge=1, le=50)] = 10,
             scopes: ScopesArg = None,
         ) -> dict[str, Any]:
-            ss = reading(who(ctx), project, include_general, scopes, f"search {query!r}")
-            return sync(lambda: core.memory.search(query=query, scopes=ss, namespace=namespace, limit=limit))
+            ss, note = reading(who(ctx), project, include_general, scopes, f"search {query!r}")
+            out = sync(core.memory.search, query=query, scopes=ss, namespace=namespace, limit=limit)
+            return {**out, "note": note} if note else out
 
         @mcp.tool(title="Read a memory", description="Read one memory in full by id, or by scope, namespace and key, with its recent edit history.", annotations=READ)
         async def memory_read(ctx: Context, id: str | None = None, scope: str | None = None, namespace: str | None = None, key: str | None = None) -> dict[str, Any]:
@@ -419,8 +432,9 @@ class MCPBlock(Block):
             offset: Annotated[int, Field(ge=0)] = 0,
             scopes: ScopesArg = None,
         ) -> dict[str, Any]:
-            ss = reading(who(ctx), project, include_general, scopes, "list")
-            return sync(lambda: core.memory.list(scopes=ss, namespace=namespace, limit=limit, offset=offset))
+            ss, note = reading(who(ctx), project, include_general, scopes, "list")
+            out = sync(core.memory.list, scopes=ss, namespace=namespace, limit=limit, offset=offset)
+            return {**out, "note": note} if note else out
 
         @mcp.tool(title="Delete a memory", description="Delete an entry you wrote within your grants. The owner can delete any entry. SwB keeps the history.", annotations=DELETE)
         async def memory_delete(ctx: Context, id: str) -> dict[str, Any]:
@@ -436,11 +450,14 @@ class MCPBlock(Block):
 
         @mcp.tool(
             title="Session briefing",
-            description="Read the granted project's memory and links and your conversations in progress. General memory is included only when granted. The owner's sign-in includes the routed Captain's digest and crew activity.",
+            description="Read granted memory and your conversations in progress. Pass a project for its links or scopes to select memory. Paired keys default to their grants. The owner's sign-in includes the routed Captain's digest and crew activity.",
             annotations=READ_REMOTE,
         )
-        async def context_pack(ctx: Context, project: ProjectArg = None) -> str:
-            return await run(core.context_pack(who(ctx), project))
+        async def context_pack(ctx: Context, project: ProjectArg = None, scopes: ScopesArg = None) -> str:
+            p = who(ctx)
+            ss, note = reading(p, project, True, scopes, "briefing")
+            out = await run(core.context_pack(p, project, ss))
+            return f"{out}\n\n{note}" if note else out
 
         @mcp.tool(title="List projects", description="List public projects and private projects you have a named grant to see. The owner sees every project. Pass hint to find a project by repository or name. pending_projects lists new slugs waiting for a routine registration.", annotations=READ)
         async def project_list(ctx: Context, include_archived: bool = False, hint: str | None = None) -> dict[str, Any]:

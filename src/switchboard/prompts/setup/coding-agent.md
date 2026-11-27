@@ -4,15 +4,17 @@ Help me connect my coding agent to SwB. SwB is my switchboard for shared memory 
 
 If the SwB tools are missing, help me add a remote MCP server named switchboard. Use my SwB address, such as https://swb.example.com/mcp.
 
+Use the following commands to add an OAuth connection before you can call `connect`.
+
 For Claude Code, run `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp`. Ask me to open `/mcp`. Ask me to select switchboard. Ask me to choose Authenticate.
 
-For Codex, run `codex mcp add switchboard --url https://swb.example.com/mcp`. Then run `codex mcp login switchboard`.
+For Codex, run `codex mcp add switchboard --url https://swb.example.com/mcp` to add SwB for OAuth. If `connect` gives you settings, merge them into `~/.codex/config.toml` instead. For OAuth, run `codex mcp login switchboard`.
 
-For Gemini CLI, run `gemini mcp add --scope user --transport http switchboard https://swb.example.com/mcp`. Ask me to enter `/mcp auth switchboard`.
+For Gemini CLI, run `gemini mcp add --scope user --transport http switchboard https://swb.example.com/mcp` to add SwB for OAuth. If `connect` gives you settings, merge them into `~/.gemini/settings.json` instead. Use the `httpUrl` field for the SwB address. For OAuth, ask me to enter `/mcp auth switchboard`.
 
 Ask me to sign in to SwB in the browser. Ask me to click Approve on the Connect to SwB page. Wait for me to confirm. Ask me to start a new session.
 
-Call connect(what="coding-agent"). Ask me to name the agent I use. Examples are claude-code, codex, gemini-cli, goose, opencode, cline, kiro, qwen-code and other. Call connect again with `choose={"agent": "<name>"}`. Do each step marked "you" yourself. Run the command that connect returns if you have access to my terminal. Give me each step marked "person" one at a time with the exact click path. Wait for me to say done after each step. Call connect again to check the connection.
+Call connect(what="coding-agent"). Ask me to name the agent I use. Examples are claude-code, codex, gemini-cli, goose, opencode, cline, kiro, qwen-code and other. Call `connect` again with `choose={"agent": "<name>"}`. Apply the settings or run the command that `connect` returns if you have access to my terminal. Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path. Wait for me to say done after each step.
 
 Ask me to enter tokens only through the claim link that `connect` returns. Keep tokens out of this chat. If `connect` gives a pairing code, ask me to redeem it on my computer. Ask me to keep the key in a private environment variable.
 

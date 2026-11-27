@@ -34,7 +34,9 @@ def test_spa_paths_require_owner_and_serve_uncached_shell(make, web_dist, path):
     assert response.headers["content-type"].startswith("text/html")
     assert response.headers["referrer-policy"] == "same-origin"
     directives = dict(d.strip().split(" ", 1) for d in response.headers["content-security-policy"].split(";"))
-    assert directives["script-src"] == directives["connect-src"] == directives["font-src"] == "'self'"
+    assert directives["script-src"] == directives["connect-src"] == "'self'"
+    assert {name for name, sources in directives.items() if "data:" in sources.split()} == {"font-src", "img-src"}
+    assert directives["font-src"] == "'self' data:"
     assert directives["frame-ancestors"] == "'none'"
 
 

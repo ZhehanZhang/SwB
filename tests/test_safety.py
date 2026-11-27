@@ -131,9 +131,9 @@ def test_key_scope_allowlist(make):
     core.projects.create(slug="orbit", name="Orbit")
     w = payload(call(c, STATIC_KEY, "memory_write", {"scope": "project:beacon", "namespace": "notes", "title": "Z", "body": "beacon only"}))
     assert payload(call(c, SECOND_KEY, "memory_write", {"scope": "project:orbit", "namespace": "notes", "title": "P", "body": "orbit"}))["scope"] == "project:orbit"
-    for tool, args in (("memory_write", {"scope": "project:beacon", "namespace": "notes", "title": "x", "body": "y"}),
-                       ("memory_delete", {"id": w["id"]})):
-        assert error_text(call(c, SECOND_KEY, tool, args)) == SCOPE_REQUIRED, tool
+    attempted = {"scope": "project:beacon", "namespace": "notes", "title": "x", "body": "y"}
+    assert error_text(call(c, SECOND_KEY, "memory_write", attempted)) == "project:beacon is outside this key's grants."
+    assert error_text(call(c, SECOND_KEY, "memory_delete", {"id": w["id"]})) == SCOPE_REQUIRED
     assert "limited to project:orbit" in error_text(call(c, SECOND_KEY, "capy_delegate", {"task": "x", "project": "beacon"}))
     for tool, args in (("memory_read", {"id": w["id"]}), ("memory_search", {"query": "beacon", "project": "beacon"}),
                        ("context_pack", {"project": "beacon"})):
