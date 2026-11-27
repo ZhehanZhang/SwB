@@ -59,7 +59,12 @@ A paired key gets its grants once, when it redeems its pairing code. To give a k
 | `/register` | 20 per address per hour |
 | `/token` | 120 per address in 10 minutes |
 | `/authorize` | 60 per address in 10 minutes |
-| Request body | 1 MiB, or 16 MiB on `/mcp` |
+| Wrong codes at `/companion/pair` | 10 per address in 10 minutes, then HTTP `429` |
+| Wrong codes at `/connect` | 10 per address in 10 minutes, then HTTP `429` |
+| Default request body limit | 1 MiB |
+| Request body at `/mcp` and `/companion/results` | 16 MiB |
+| Request body at `/companion/emit` | 16,640 bytes |
+| Request body at `/auth/setup` | 1,024 bytes |
 | Turns per agent conversation | 200 |
 
 The bearer token limit applies to every key from the same address, including valid keys. SwB returns `429` on bearer-protected endpoints until the limit clears.
