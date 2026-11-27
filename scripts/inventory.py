@@ -72,12 +72,17 @@ def block_items(core):
         )
 
 
+def product_name():
+    return re.search(r'PRODUCT_NAME\s*=\s*"([^"]+)"', (WEB / "app/brand.ts").read_text(encoding="utf-8"))[1]
+
+
 def provider_and_avatar_items(block_types):
     providers = Agents.build(None, (spec for block in block_types.values() for spec in block.manifest.agents)).specs
     labels = {
         path.name: block.manifest.title for use, block in block_types.items() if (path := avatar_path(use))
     }
-    labels.update({"swb.png": pages.CLASSIC_TITLE, "switchboard.png": pages.CLASSIC_TITLE})
+    brand = product_name()
+    labels.update({"swb.png": brand, "switchboard.png": brand})
     for provider in providers.values():
         path = avatar_path(provider.id)
         if path is not None:
@@ -97,8 +102,7 @@ def page_items(routes):
     navigation = (WEB / "app/navigation.ts").read_text(encoding="utf-8")
     names = {path: name for name, path in re.findall(r'name:\s*"([^"]+)",\s*to:\s*"([^"]+)"', navigation)}
     platforms = dict(re.findall(r'(\w+):\s*"([^"]+)"', re.search(r"connectionNames\s*=\s*\{([^}]+)\}", navigation)[1]))
-    brand = re.search(r'PRODUCT_NAME\s*=\s*"([^"]+)"', (WEB / "app/brand.ts").read_text(encoding="utf-8"))[1]
-    names["/"] = brand
+    names["/"] = product_name()
 
     route_source = (WEB / "app/app.tsx").read_text(encoding="utf-8")
     console_routes = re.findall(

@@ -2,6 +2,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from conftest import OWNER, PUBLIC, base_config, call, payload, sign_in
+from switchboard import web
 from switchboard.config import ConfigError, load_config
 
 ALIAS = "https://swb.example.test"
@@ -54,21 +55,23 @@ def test_alias_with_default_port_matches_host_header(make):
 
 def test_passkey_count_and_enrollment_follow_the_host(make):
     core, primary, alias = both(make)
-    core.store.x("INSERT INTO owner_passkeys(id, name, public_key, sign_count, created_at, rp_id) VALUES ('a', 'Old', x'00', 0, 0, 'switchboard.example.test')")
+    core.store.x("INSERT INTO owner_passkeys(id, name, public_key, sign_count, created_at, rp_id) VALUES ('YQ', 'Old', x'00', 0, 0, 'switchboard.example.test')")
     assert primary.get("/auth/session").json()["methods"]["passkeys"] == 1
     assert alias.get("/auth/session").json()["methods"]["passkeys"] == 0
-    assert "Add a passkey" in alias.get("/classic", headers=OWNER).text
-    assert "Add a passkey" not in primary.get("/classic", headers=OWNER).text
+    for client, host in ((primary, "switchboard.example.test"), (alias, "swb.example.test")):
+        csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
+        result = client.post("/auth/passkey/register/options", headers={**OWNER, "X-CSRF-Token": csrf})
+        assert result.status_code == 200 and result.json()["publicKey"]["rp"]["id"] == host
 
 
-def test_legacy_passkey_counts_only_on_the_primary_host(make):
+def test_legacy_passkey_counts_only_on_the_primary_host(make, monkeypatch, tmp_path):
+    monkeypatch.setattr(web, "APP_DIST", tmp_path / "no-spa")
     core, primary, alias = both(make)
     core.store.x("INSERT INTO owner_passkeys(id, name, public_key, sign_count, created_at) VALUES ('a', 'Old', x'00', 0, 0)")
     assert primary.get("/auth/session").json()["methods"]["passkeys"] == 1
     assert alias.get("/auth/session").json()["methods"]["passkeys"] == 0
+    assert "Sign in with a passkey" in primary.get("/login").text
     assert "Sign in with a passkey" not in alias.get("/login").text
-    assert "Add a passkey" in alias.get("/classic", headers=OWNER).text
-    assert "Add a passkey" not in primary.get("/classic", headers=OWNER).text
 
 
 @pytest.mark.parametrize(("aliases", "rp_id"), [(["http://swb.example.test"], None), ([PUBLIC], None), ([ALIAS], "other.test"), ([ALIAS], "test")])

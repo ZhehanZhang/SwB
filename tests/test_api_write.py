@@ -126,22 +126,21 @@ def test_visibility_writes_the_resolver_rule(board):
     assert core.visibility.rule("tool:send") == "private"
 
 
-def test_pairing_code_uses_the_protected_classic_handoff(board):
+def test_pairing_code_uses_the_protected_tokens_form(board):
     core, client = board
     headers = owner_headers(client)
     response = client.post("/api/pairing/code", headers=headers, json={"agent": "codex"})
     assert response.status_code == 200
-    assert response.json() == {"status": "classic_required", "url": "/classic"}
+    assert response.json() == {"status": "owner_form_required", "url": "/tokens"}
     assert response.headers["Cache-Control"] == "no-store"
     assert core.store.q("SELECT 1 FROM connect_codes") == []
     denied = client.get(response.json()["url"])
-    assert denied.status_code == 303 and denied.headers["location"] == "/login?next=%2Fclassic"
-    classic = client.get(response.json()["url"], headers=OWNER)
-    assert classic.status_code == 200 and 'action="/pairing/code"' in classic.text
-    csrf = re.search(r'name="csrf" value="([^"]+)"', classic.text)[1]
+    assert denied.status_code == 303 and denied.headers["location"] == "/login?next=%2Ftokens"
+    csrf = headers["X-CSRF-Token"]
     assert client.post("/pairing/code", headers=OWNER, data={"agent": "codex"}).status_code == 403
     minted = client.post("/pairing/code", headers=OWNER, data={"agent": "codex", "csrf": csrf})
-    assert minted.status_code == 200
+    assert minted.status_code == 200 and minted.headers["cache-control"] == "no-store"
+    assert 'href="/tokens"' in minted.text
     codes = core.store.q("SELECT agent FROM connect_codes")
     assert [row["agent"] for row in codes] == ["codex"]
     assert len(re.findall(r"[A-Z2-9]{5}-[A-Z2-9]{5}", minted.text)) >= 1

@@ -1,4 +1,5 @@
 import asyncio
+import os
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -16,7 +17,7 @@ from switchboard.claims import Field
 from switchboard.core import Switchboard
 
 HOST = "127.0.0.1"
-PORT = 4178
+PORT = int(os.environ.get("SWB_PLAYWRIGHT_PORT", "4178"))
 CAPTAIN = "jam_EXAMPLEATLAS"
 
 
@@ -82,7 +83,8 @@ def run(path: Path) -> None:
                     "2001": "assist", "2002": {"mode": "off", "project": "community"},
                 },
             }}},
-            "slack": {"use": "slack",
+            "slack": {"use": "slack", "public_base_url": "https://swb.example.com",
+                      "personas": {"example": {"name": "Review bot", "avatar": "review-bot.png"}},
                       "workspaces": {"studio": {
                           "team_id": "T000EXAMPLE", "identities": {"bot": {"token_env": "EXAMPLE_SLACK_TOKEN"}},
                       }},

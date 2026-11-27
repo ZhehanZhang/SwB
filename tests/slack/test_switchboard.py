@@ -1,5 +1,5 @@
 """The Slack port inside switchboard: slack_* tools over switchboard auth, events into each granted agent's inbox,
-and owner approvals on the root page. Agents never approve their own writes."""
+and owner approvals in Inbox. Agents never approve their own writes."""
 
 import json
 import re
@@ -27,6 +27,8 @@ def sb(tmp_path):
     world, hooks = FakeWorld(), Hooks()
     cfg = {"public_url": PUBLIC, "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access-team.example.test", "aud": "a"}},
            "slack": base_config(), "visibility": {"defaults": {"target": "shared", "channel": "shared"}}}
+    cfg["slack"]["public_base_url"] = PUBLIC
+    cfg["slack"]["personas"]["avatar-test"] = {"name": "Example", "avatar": "example.png"}
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(cfg))
     env = {**ENV, "SWITCHBOARD_KEY_FULL": KEY_FULL, "SWITCHBOARD_KEY_FIXED": KEY_FIXED, "SWITCHBOARD_KEY_NOBODY": "n" * 32}
@@ -90,27 +92,56 @@ def test_events_reach_only_granted_agents_with_slack_attribution(sb):
     assert again["items"] == [] and again["timed_out"]
 
 
-def test_owner_approves_on_the_classic_page_and_agents_cannot(sb):
+def test_owner_approval_form_redirects_to_inbox_and_agents_cannot_approve(sb):
     core, client, world = sb
     _, pending = tool(client, KEY_FULL, "slack_post", {"workspace": "private", "channel": "CPRIV0001", "text": "see you <b>soon</b>", "identity": "user"})
     rid = pending["request_id"]
     for headers in ({}, {"cf-access-jwt-assertion": "other"}):
-        refused = client.get("/classic", headers=headers, follow_redirects=False)
-        assert refused.status_code == 303 and refused.headers["location"] == "/login?next=%2Fclassic"
-    page = client.get("/classic", headers=OWNER).text
-    assert rid in page and "Approve and send" in page and "see you &lt;b&gt;soon&lt;/b&gt;" in page
-    token = re.search(r'name="csrf" value="([0-9a-f]+)"', page).group(1)
+        assert client.get("/api/inbox", headers=headers).status_code == 401
+    (entry,) = client.get("/api/inbox", headers=OWNER).json()["pending_writes"]
+    assert entry["id"] == rid and "see you <b>soon</b>" in str(entry)
+    token = client.get("/auth/session", headers=OWNER).json()["csrf"]
     assert client.post(f"/slack/requests/{rid}/approve", headers=OWNER, data={"csrf": "0" * 64}).status_code == 403
     for headers in ({"cf-access-jwt-assertion": "other"}, {"Authorization": f"Bearer {KEY_FULL}"}):
         refused = client.post(f"/slack/requests/{rid}/approve", headers=headers, data={"csrf": token})
         assert refused.status_code == 401 and refused.json() == {"error": "signed_out"}
     assert core.slack.store.get_request(rid)["status"] == "pending"
     r = client.post(f"/slack/requests/{rid}/approve", headers=OWNER, data={"csrf": token})
-    assert r.status_code == 303 and r.headers["location"] == "/classic?notice=approved"
+    assert r.status_code == 303 and r.headers["location"] == "/inbox"
     req = core.slack.store.get_request(rid)
     assert req["status"] == "sent" and req["decided_by"] == "admin:owner@example.test"
     assert [kw["text"] for t, n, kw in world.calls if t == "xoxp-b" and n == "chat_postMessage"] == ["see you <b>soon</b>"]
-    assert "Approved and sent." in client.get("/classic?notice=approved", headers=OWNER).text
+    assert client.get("/api/inbox", headers=OWNER).json()["pending_writes"] == []
+    replay = client.post(f"/slack/requests/{rid}/approve", headers=OWNER, data={"csrf": token})
+    assert replay.status_code == 303 and replay.headers["location"] == "/inbox?notice=decide-refused"
+
+
+def test_owner_saves_a_slack_avatar_and_returns_to_agents(sb):
+    from io import BytesIO
+
+    from PIL import Image
+
+    core, client, _ = sb
+    assert client.get("/api/agents/avatars").status_code == 401
+    assert client.get("/api/agents/avatars", headers=OWNER).json() == {"personas": [
+        {"id": "avatar-test", "name": "Example", "accept": "image/png"},
+        {"id": "gate", "name": "Gate", "accept": "image/png"},
+        {"id": "other", "name": "Other", "accept": "image/png"},
+    ]}
+    csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
+    image = BytesIO()
+    Image.new("RGB", (2, 2)).save(image, format="PNG")
+    data = image.getvalue()
+    path = "/slack/personas/avatar-test/avatar"
+    files = {"file": ("example.png", data, "image/png")}
+    assert client.post(path, headers=OWNER, files=files).status_code == 403
+    assert client.post(path, data={"csrf": csrf}, files=files).status_code == 401
+    invalid = client.post(path, headers=OWNER, data={"csrf": csrf}, files={"file": ("example.png", b"invalid", "image/png")})
+    assert invalid.status_code == 303 and invalid.headers["location"] == "/agents?notice=avatar-refused"
+    assert not (core.slack.avatar_dir / "example.png").exists()
+    saved = client.post(path, headers={**OWNER, "origin": PUBLIC}, data={"csrf": csrf}, files=files)
+    assert saved.status_code == 303 and saved.headers["location"] == "/agents?notice=avatar-saved"
+    assert client.get("/avatars/example.png").content == data
 
 
 def test_captain_final_reply_is_posted_back_as_the_captain(sb):
