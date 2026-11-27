@@ -68,10 +68,11 @@ def test_slack_tools_use_switchboard_keys_and_grants(sb):
     task = "fixture-private-slack-message"
     res, _ = tool(client, KEY_FIXED, "slack_post", {"workspace": "private", "channel": "CPRIV0001", "text": task})
     assert res["isError"]
-    refusals = core.audit.recent(action="tool_refused")
-    assert [(row["target"], row["detail"]) for row in refusals] == [
-        (name, "Use an account granted this action.") for name in ("slack_post", "slack_workspaces")
+    refusals = core.audit.recent(destination="slack", outcome="refused")
+    assert [(row["action"], row["detail"]) for row in refusals] == [
+        (name, "Use an account granted this action.") for name in ("post", "me")
     ]
+    assert core.audit.recent(action="tool_refused") == []
     assert task not in json.dumps(refusals) and KEY_FIXED[:12] not in json.dumps(refusals)
     _, pending = tool(client, KEY_FULL, "slack_post", {"workspace": "private", "channel": "#family", "text": "hi", "identity": "user"})
     assert pending["status"] == "pending_approval"

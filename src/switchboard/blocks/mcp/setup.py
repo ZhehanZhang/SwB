@@ -177,9 +177,10 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             return {"what": "unknown", "done": [], "next": [], "kinds": kinds, "guides": guide_names}
         block = owners.get(what)
         if what not in CLIENTS and not p.is_unrestricted_owner:
+            modes = ({"modes": core.modes.summary(block.name, p, slugs=await core.modes.status_slugs(p))}
+                     if block is not None and block.manifest.id in PROVIDERS else {})
             return {**result, "done": [], "next": [
-                {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}],
-                **({"modes": core.modes.summary(block.name, p)} if block is not None and block.manifest.id in PROVIDERS else {})}
+                {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}], **modes}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
         if what in BLOCKS and block is None:
             return {**result, "done": [], "next": enable_steps(core.cfg, BLOCKS[what], choose)}

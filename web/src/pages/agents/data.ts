@@ -1,5 +1,5 @@
 import { requestJson } from "@/lib/api"
-import { connectorKind } from "@/lib/connector-kind"
+import { agentLogo, principalLabel } from "@/lib/agent-identity"
 import { displayReference } from "@/lib/display-reference"
 import type { AuditEvent } from "../audit/events"
 
@@ -114,13 +114,6 @@ function principal(value?: string | null): string | null {
   return actor?.replace(/^(oauth|key|agent):/, "") || null
 }
 
-const clientNames: Record<string, string> = {
-  claude: "Claude", "claude-code": "Claude Code", codex: "Codex", chatgpt: "ChatGPT", gemini: "Gemini", "gemini-cli": "Gemini CLI",
-  grok: "Grok", xai: "xAI",
-}
-
-export const principalLabel = (value: string) => Object.hasOwn(clientNames, value) ? clientNames[value] : value
-
 export const agentListKey = ["registered-agents"]
 
 export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
@@ -142,7 +135,7 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
     }))),
     ...keys.map((row): Agent => ({
       id: `key:${row.id}`, reference: row.id, type: "key", name: principalLabel(row.agent), kind: "MCP client",
-      logo: connectorKind(row.agent) ?? (Object.hasOwn(clientNames, row.agent) ? row.agent : "mcp"),
+      logo: agentLogo(row.agent),
       projects: row.project ? [row.project] : [],
       registered_by: principal(row.created_by), registered_at: row.created_at ?? null, last_seen: row.last_used_at ?? null,
       state: row.last_used_at ? "on" : "off",

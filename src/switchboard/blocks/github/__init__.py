@@ -468,10 +468,12 @@ class GitHubBlock(Block):
                 steps.append(self.token_step(principal, name, instruction, kind="pem", label="Private key"))
             steps.append({"by": "you", "do": "For a fine-grained personal access token instead, call connect again with credential=pat.",
                           "call": {"tool": "connect", "arguments": {"what": kind, "choose": {"credential": "pat"}}}})
+        slugs = await self.core.modes.status_slugs(principal)
         return {"done": done, "next": steps,
                 "installations": self.installations, "missing_installations": self.missing_installations,
                 "pat_capabilities": self.pat_capabilities,
-                "modes": {**self.core.modes.status(principal, self.name), **self.core.modes.summary(self.name, principal)}}
+                "modes": {**self.core.modes.status(principal, self.name, slugs=slugs),
+                          **self.core.modes.summary(self.name, principal, slugs=slugs)}}
 
     def actions(self) -> list[Action]:
         return [Action("status", "GitHub status", "Check the GitHub webhook, repository modes and installation permissions.", self.status_action, read_only=True),
@@ -493,7 +495,8 @@ class GitHubBlock(Block):
         if principal.is_unrestricted_owner:
             await self.refresh_installation()
             return {**self.status(), "pat_capabilities": self.pat_capabilities}
-        return {"configured": True, "modes": self.core.modes.status(principal, self.name)}
+        slugs = await self.core.modes.status_slugs(principal)
+        return {"configured": True, "modes": self.core.modes.status(principal, self.name, slugs=slugs)}
 
     def _check(self, call: Call, handle: str | None, action: str, repo: str | None = None) -> dict[str, Any] | None:
         try:
@@ -712,9 +715,8 @@ class GitHubBlock(Block):
             self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
             return
         try:
-            if not owner and addr.block != "agent":
-                await self.core.targets()
-            resources = self.core.target_visibility_resources(target, addr)
+            slugs = self.core.slug_map(await self.core.targets()) if not owner and addr.block != "agent" else {}
+            resources = self.core.target_visibility_resources(target, addr, slugs=slugs)
             if not resources or not self.core.visibility.allows(who, *resources):
                 self.drop(event, data, "target access restricted", ip, delivery)
                 return
