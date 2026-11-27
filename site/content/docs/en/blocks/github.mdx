@@ -5,7 +5,7 @@ description: Send GitHub events to your agents and services.
 
 ## Make the app
 
-Make a GitHub App on your account. Set the webhook address to `https://<your host>/github/webhook`. Make a webhook secret.
+Create a GitHub App on your account. Set the webhook address to your public SwB address plus `/github/webhook`. For example, use `https://swb.example.com/github/webhook`. Make a webhook secret.
 
 ```bash
 openssl rand -hex 32
@@ -44,3 +44,21 @@ blocks:
 A **sink** is an address that gets a copy of each event. Each matching sink gets one compact JSON event. The event has the repository, the actor, the number, the title, the state and a short body. Each delivery has an `Idempotency-Key`. SwB retries network errors and server errors.
 
 If Cloudflare Access protects your host, let `/github/webhook` through. The GitHub signature protects that path.
+
+## Config
+
+| Key | Use |
+| - | - |
+| `blocks.github` | Settings for GitHub events and actions |
+| `blocks.github.use` | Block type. Use `github` |
+| `blocks.github.enabled` | Set `false` to skip this block |
+| `blocks.github.app_id_env` | Name of the variable that holds the App ID. Default `GITHUB_APP_ID` |
+| `blocks.github.private_key_env` | Name of the variable that holds the App private key. Default `GITHUB_APP_PRIVATE_KEY` |
+| `blocks.github.token_env` | Name of the variable that holds a fine-grained token as an alternative to App credentials. Default `GITHUB_TOKEN` |
+| `blocks.github.secret_env` | Name of the variable that holds the webhook secret. Default `GITHUB_WEBHOOK_SECRET` |
+| `blocks.github.sinks` | Settings by event receiver name |
+| `blocks.github.sinks.*.url_env` | Name of the variable that holds the receiver address |
+| `blocks.github.routes` | Map from repo names or `owner/*` to lists of event receivers |
+| `blocks.github.spaces` | Named sets of repositories that share settings. A name such as `acme/app` selects that repository |
+| `blocks.github.spaces.*.mode` | Default [channel mode](/docs/channel-modes) for the repositories in this space |
+| `blocks.github.spaces.*.project` | Default SwB project for events from this space |

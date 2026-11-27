@@ -5,7 +5,7 @@ description: 把 GitHub 事件发送给你的智能体和服务。
 
 ## 创建应用
 
-在你的账户上创建一个 GitHub App。把 webhook 地址设为 `https://<your host>/github/webhook`。生成一个 webhook 密钥。
+在你的账号下创建 GitHub App。将 SwB 公网地址加上 `/github/webhook` 作为 webhook 地址，例如 `https://swb.example.com/github/webhook`。生成 webhook 密钥。
 
 ```bash
 openssl rand -hex 32
@@ -44,3 +44,21 @@ blocks:
 **接收端**（sink）是收到每个事件副本的地址。每个匹配的接收端收到一个精简的 JSON 事件。事件包含仓库、操作者、编号、标题、状态和简短正文。每次投递都带有 `Idempotency-Key`。SwB 在网络错误和服务器错误时重试。
 
 如果 Cloudflare Access 保护你的主机，请放行 `/github/webhook`。该路径由 GitHub 签名保护。
+
+## 配置
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.github` | GitHub 事件和操作设置 |
+| `blocks.github.use` | 模块类型，填 `github` |
+| `blocks.github.enabled` | 设为 `false` 可跳过此模块 |
+| `blocks.github.app_id_env` | 存放应用 ID 的变量名，默认为 `GITHUB_APP_ID` |
+| `blocks.github.private_key_env` | 存放应用私钥的变量名，默认为 `GITHUB_APP_PRIVATE_KEY` |
+| `blocks.github.token_env` | 存放细粒度令牌的变量名。此令牌可替代应用凭据。默认为 `GITHUB_TOKEN` |
+| `blocks.github.secret_env` | 存放 webhook 密钥的变量名，默认为 `GITHUB_WEBHOOK_SECRET` |
+| `blocks.github.sinks` | 按接收端名称配置事件接收端 |
+| `blocks.github.sinks.*.url_env` | 存放接收端地址的变量名 |
+| `blocks.github.routes` | 为仓库名称或 `owner/*` 指定接收端列表 |
+| `blocks.github.spaces` | 共用设置的仓库组。用 `acme/app` 这样的名称可选中该仓库 |
+| `blocks.github.spaces.*.mode` | 这个空间内各仓库的默认[频道模式](/docs/channel-modes) |
+| `blocks.github.spaces.*.project` | 此空间的事件默认归入的 SwB 项目 |

@@ -19,13 +19,28 @@ SwB 回傳一段 routine 提示與兩個領取連結。請建立一個帶有自�
 
 ## 喚醒如何運作
 
-傳送給 routine 的內容，會以已簽章的 webhook 貼到 Grok。webhook 帶有文字、對話、專案、傳送者與信任等級。routine 透過它的 SwB 連接器在對話中回答。
+傳送訊息時，SwB 向 Grok 發出 webhook 請求。請求帶有本文、對話、專案、傳送者與信任等級。例程透過 SwB 連接器回覆。
 
 ```yaml
 blocks:
   grok-routine:
     routines:
-      project-doorman: {project: example, url_env: GROK_WEBHOOK_URL, auth: signature, secret_env: GROK_WEBHOOK_SECRET}
+      project-doorman: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
 ```
 
 用 routine 名稱傳送給它，或用 `grok:<slug>` 傳送給專案的主 routine。
+
+## 設定
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.grok-routine` | 用於喚醒 Grok Bot 例程的模組設定 |
+| `blocks.grok-routine.use` | 模組類型，填 `grok-routine` |
+| `blocks.grok-routine.enabled` | 設為 `false` 可略過此模組 |
+| `blocks.grok-routine.routines` | 依名稱設定例程 |
+| `blocks.grok-routine.routines.*.project` | SwB 專案的簡稱。通用例程填 `null` |
+| `blocks.grok-routine.routines.*.primary` | 設為 `true` 後，優先選用此例程處理所屬專案的訊息 |
+| `blocks.grok-routine.routines.*.auth` | 用 `key` 傳送金鑰，或用 `signature` 為請求加上簽章。預設為 `key` |
+| `blocks.grok-routine.routines.*.header` | 攜帶金鑰或簽章的 HTTP 標頭。`key` 預設用 `Authorization`，`signature` 預設用 `Webhook-Signature` |
+| `blocks.grok-routine.routines.*.url_env` | 存放公開 HTTPS webhook 位址的變數名稱 |
+| `blocks.grok-routine.routines.*.secret_env` | 存放金鑰或簽章金鑰的變數名稱 |

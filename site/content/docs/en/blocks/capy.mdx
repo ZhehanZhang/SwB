@@ -26,8 +26,27 @@ The send goes to the Captain that the project's route names. SwB follows the Cap
 
 ## Send keys
 
-Capy shows each message as written by the key that sent it. For sends, SwB first uses the agent's own key, `CAPY_API_KEY_AS_<AGENT>`. Then it uses the service key, `CAPY_API_KEY_SERVICE`. Set `identity: personal` to send every message with `CAPY_API_KEY` as yourself. `/healthz` shows which key sends for each agent.
+Capy shows the account that owns the send key. SwB tries the agent key `CAPY_API_KEY_AS_<AGENT>` first, then the service key. In `personal` mode, SwB can use `CAPY_API_KEY` as the last choice. `/healthz` shows which key each agent uses.
 
 ## Projects link themselves
 
 When an agent makes a SwB project, the Capy block looks for the matching Capy project. A repository match wins over a name match. With one clear match, SwB links the projects and routes the SwB project to that Captain.
+
+## Config
+
+| Key | Use |
+| - | - |
+| `blocks.capy` | Settings for Capy sends and thread tracking |
+| `blocks.capy.use` | Block type. Use `capy` |
+| `blocks.capy.enabled` | Set `false` to skip this block |
+| `blocks.capy.api_base` | Capy API base address. Default `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | Use `service` for agent and service keys. Use `personal` to also allow `CAPY_API_KEY` as the last choice |
+| `blocks.capy.send_key_env` | Name of the variable that holds the service send key. Default `CAPY_API_KEY_SERVICE` |
+| `blocks.capy.default_route` | Sets the initial global Capy route once. Use a Capy target such as `captain:<id>` |
+| `blocks.capy.captain_delivery` | How Capy delivers a message to a busy Captain or thread. Values are `queue`, `steer` and `interrupt`. Default `queue` |
+| `blocks.capy.daily_cap` | Daily limit on Capy delegations. Use `null` for unlimited sends |
+| `blocks.capy.duplicate_window_s` | Seconds in which the same task to the same target returns the first conversation ID. Default `600` |
+| `blocks.capy.burst` | Schema entry only in this release |
+| `blocks.capy.max_file_bytes` | Total attachment size limit in bytes per send. Default `10485760` |
+| `blocks.capy.handle_ttl_days` | Age limit in days for resuming thread tracking at startup. Also sets MCP task lifetime. Default `7` |
+| `blocks.capy.avatars` | Allows SwB to fetch Captain avatars. Set `false` to use initials instead |

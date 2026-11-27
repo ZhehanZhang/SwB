@@ -35,8 +35,23 @@ description: 连接 Claude 和 Claude Project，并用 routine 唤醒它们。
 ```yaml
 blocks:
   claude-routine:
- routines:
+    routines:
       claude: {routine_id: trig_..., token_env: CLAUDE_ROUTINE_TOKEN, agent: claude}
 ```
 
 环境变量 `CLAUDE_ROUTINE_TOKEN` 和 `CLAUDE_ROUTINE_ID` 可启用带一个 routine 的模块。
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.claude-routine` | 用于唤醒 Claude Code 任务的模块设置 |
+| `blocks.claude-routine.use` | 模块类型，填 `claude-routine` |
+| `blocks.claude-routine.enabled` | 设为 `false` 可跳过此模块 |
+| `blocks.claude-routine.routines` | 按任务名称设置例程 |
+| `blocks.claude-routine.routines.*.agent` | 接收消息的智能体，默认为 `claude` |
+| `blocks.claude-routine.routines.*.kind` | 项目例程填 `project`，通用例程填 `general` |
+| `blocks.claude-routine.routines.*.project` | 项目例程所属 SwB 项目的简称 |
+| `blocks.claude-routine.routines.*.name` | 例程的显示名称 |
+| `blocks.claude-routine.routines.*.primary` | 设为 `true` 后，优先选用此智能体在该项目中的这条例程 |
+| `blocks.claude-routine.routines.*.routine_id` | Claude API 触发器 ID，例如 `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | 发送时可以使用的其他简称 |
+| `blocks.claude-routine.routines.*.token_env` | 存放例程令牌的变量名 |

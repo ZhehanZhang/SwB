@@ -33,3 +33,37 @@ blocks:
 私訊機器人、提及機器人，或使用 `/swb <target> <message>`。回覆機器人會送給同一個目標。答案的第一行以粗體顯示目標名稱。
 
 若要讓機器人讀取群組中的每則訊息，請在 @BotFather 用 `/setprivacy` 關閉隱私模式。然後把機器人移出群組，再重新加入。
+
+## 模組設定
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.telegram` | 設定 Telegram 機器人及其空間 |
+| `blocks.telegram.use` | 載入 `telegram` 模組 |
+| `blocks.telegram.enabled` | 設為 `true` 啟用模組，設為 `false` 關閉模組 |
+| `blocks.telegram.token_env` | 存放機器人權杖的環境變數名稱。預設值為 `TELEGRAM_BOT_TOKEN` |
+| `blocks.telegram.dm_space` | 指定私聊所用的路由與擁有者設定來自哪個空間。預設使用設定中的第一個空間 |
+| `blocks.telegram.dm_mode` | 其他人傳來私訊時的處理模式。設為 `watch` 收集訊息以製作摘要，設為 `off` 略過訊息 |
+| `blocks.telegram.ack_reaction` | 收到傳給機器人的訊息時用來確認的表情符號。設為 `null` 可關閉這項反應 |
+| `blocks.telegram.persona_prefix` | 設為 `true` 後，在第一行以粗體顯示代理使用的名稱 |
+| `blocks.telegram.refresh_minutes` | 目標清單的更新間隔，單位為分鐘。預設值為 `30` |
+| `blocks.telegram.target_aliases` | 替現有目標加上其他可用的名稱 |
+| `blocks.telegram.agents` | 各代理可貼文與接收事件的空間。用 `*` 選取所有空間 |
+
+## 空間與群組
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.telegram.spaces` | 替 SwB 中的各個空間設定一組 Telegram 群組 |
+| `blocks.telegram.spaces.*.chats` | 這個空間中的群組聊天 ID。請使用負整數。每個群組歸入一個空間 |
+| `blocks.telegram.spaces.*.owner_ids` | 視為擁有者的 Telegram 使用者 ID |
+| `blocks.telegram.spaces.*.known` | 替已登記的 Telegram 使用者 ID 設定顯示名稱 |
+| `blocks.telegram.spaces.*.default_target` | 傳給 SwB 的新訊息省略目標名稱時使用的目標 |
+| `blocks.telegram.spaces.*.project` | 這個空間的預設 SwB 專案 |
+| `blocks.telegram.spaces.*.channel_projects` | 依群組聊天 ID 設定 SwB 專案 |
+| `blocks.telegram.spaces.*.mode` | 空間的處理模式。群組的模式可以覆寫這項設定 |
+| `blocks.telegram.spaces.*.channels` | 依群組聊天 ID 設定處理模式，也可以填寫詳細設定 |
+| `blocks.telegram.spaces.*.channels.*.mode` | 單一群組的處理模式 |
+| `blocks.telegram.spaces.*.channels.*.project` | 單一群組使用的 SwB 專案。這項設定優先於空間的專案 |
+| `blocks.telegram.spaces.*.listen` | 舊版設定。讓指定 ID 的群組聊天使用 `assist` 模式 |
+| `blocks.telegram.spaces.*.bot_posts_per_hour` | 機器人每小時可在同一對話串貼文的次數上限。預設值為 `20` |

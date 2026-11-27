@@ -52,6 +52,14 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 回應會列出每個模組與它的狀態。需要設定的模組會顯示缺少的變數名稱。
 
+## 伺服器指令
+
+| 指令 | 用途 |
+| - | - |
+| `swb serve` | 依設定的主機位址與連接埠執行 SwB 伺服器。 |
+| `swb config migrate` | 將第 1 版設定轉為第 2 版格式並輸出。 |
+| `swb targets` | 列出 `send` 可用目的地的位址、簡稱與層級。 |
+
 ## 版本
 
 每個版本都發佈在 PyPI（套件 `swb-one`）與 GitHub Container Registry（映像檔 `ghcr.io/zhehanzhang/swb`）。想固定使用某個版本，請使用版本標籤，例如 `1.0.0`。標籤 `latest` 會跟隨最新版本。

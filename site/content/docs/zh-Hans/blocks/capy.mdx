@@ -26,8 +26,27 @@ description: 把工作发送给 Capy Captain 和话题串，并取回答复。
 
 ## 发送密钥
 
-Capy 把每条消息显示为发送它的密钥的作者所写。发送时，SwB 先使用智能体自己的密钥 `CAPY_API_KEY_AS_<AGENT>`，再使用服务密钥 `CAPY_API_KEY_SERVICE`。设置 `identity: personal`，可让每条消息都用 `CAPY_API_KEY`，以你本人的身份发送。`/healthz` 显示每个智能体由哪个密钥发送。
+Capy 显示发送密钥所属的账号。SwB 先尝试智能体密钥 `CAPY_API_KEY_AS_<AGENT>`，再尝试服务密钥。在 `personal` 模式下，还可以最后使用 `CAPY_API_KEY`。访问 `/healthz` 可查看各智能体所用的密钥。
 
 ## 项目自动链接
 
 智能体创建 SwB 项目时，Capy 模块会查找对应的 Capy 项目。仓库匹配优先于名称匹配。出现唯一明确的匹配时，SwB 链接这两个项目，并把 SwB 项目路由到那个 Captain。
+
+## 配置
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.capy` | Capy 消息发送和话题串跟踪设置 |
+| `blocks.capy.use` | 模块类型，填 `capy` |
+| `blocks.capy.enabled` | 设为 `false` 可跳过此模块 |
+| `blocks.capy.api_base` | Capy API 的基础地址，默认为 `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | `service` 使用智能体密钥或服务密钥。`personal` 还允许最后改用 `CAPY_API_KEY` |
+| `blocks.capy.send_key_env` | 存放服务传送密钥的变量名，默认为 `CAPY_API_KEY_SERVICE` |
+| `blocks.capy.default_route` | 仅在首次设置时写入全局 Capy 路由。填写 Capy 目标，例如 `captain:<id>` |
+| `blocks.capy.captain_delivery` | 向忙碌的 Captain 或话题串投递消息的方式。可选 `queue`、`steer` 或 `interrupt`，默认为 `queue` |
+| `blocks.capy.daily_cap` | 每天委派给 Capy 的次数上限。设为 `null` 可关闭上限 |
+| `blocks.capy.duplicate_window_s` | 在这段秒数内向同一目标重复发送同一任务时，返回原会话 ID。默认为 `600` |
+| `blocks.capy.burst` | 本版本仅在配置规范中列出此字段 |
+| `blocks.capy.max_file_bytes` | 每次发送的附件总大小上限，以字节计，默认为 `10485760` |
+| `blocks.capy.handle_ttl_days` | 启动时，只恢复跟踪在指定天数内委派的任务。此设置也决定 MCP 任务的有效期，默认为 `7` 天 |
+| `blocks.capy.avatars` | 允许 SwB 获取 Captain 头像。设为 `false` 则显示首字母 |

@@ -52,6 +52,14 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 返回内容列出每个模块及其状态。需要某项设置的模块会显示所缺环境变量的名称。
 
+## 服务器命令
+
+| 命令 | 用途 |
+| - | - |
+| `swb serve` | 按配置的主机地址和端口运行 SwB 服务器。 |
+| `swb config migrate` | 将第 1 版配置转换为第 2 版格式并输出。 |
+| `swb targets` | 列出 `send` 可用目标的地址、简称和等级。 |
+
 ## 版本
 
 每个版本都发布在 PyPI（名为 `swb-one`）和 GitHub Container Registry（名为 `ghcr.io/zhehanzhang/swb`）。使用 `1.0.0` 这样的版本标签，可固定在某一个版本。标签 `latest` 跟随最新版本。

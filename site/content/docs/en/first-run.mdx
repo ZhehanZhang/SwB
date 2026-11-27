@@ -33,6 +33,22 @@ swb login-link
 
 The command prints a sign-in link. The link works one time, for five minutes. Open it in your browser. On the first sign-in, add a passkey. Use the passkey for the next sign-ins. [Owner sign-in](/docs/owner-login) has the other methods.
 
+## Web console
+
+| Page | Use |
+| - | - |
+| `/` | See the server status and project list. |
+| `/agents/*` | See registered agents and open the details of each agent. |
+| `/audit` | Filter the log of changes and other events. |
+| `/inbox` | See conversations and requests that need your attention. |
+| `/inbox/:handle` | Read the messages in one conversation. |
+| `/memory/*` | Browse and search saved notes. |
+| `/projects/:slug` | See one project's routes, history, conversations and memory. |
+| `/connections/:platform` | See the connection status and channel modes for Slack, Discord, Telegram or GitHub. |
+| `/settings` | View server settings and manage passkeys. |
+| `/tokens` | See token requests and stored credentials. |
+| `/about` | See the SwB version and the list of enabled blocks. |
+
 ## Connect the first agent
 
 Add SwB to one agent. [Connect your agents](/docs/connect) shows how for each app. Then ask that agent to connect the rest.

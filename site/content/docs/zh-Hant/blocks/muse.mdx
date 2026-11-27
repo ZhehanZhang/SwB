@@ -41,3 +41,11 @@ SwB 回傳一個領取連結。領取連結是一次性頁面，用來貼上密�
 裝置離線時，SwB 會保留訊息。每次喚醒都會在 Muse 中開啟一個新對話。
 
 要更換橋接權杖，執行 `swb connect muse --choose replace=true`，然後用 `--setup` 啟動橋接程式。
+
+## 設定
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.muse` | Muse 裝置連線設定 |
+| `blocks.muse.use` | 模組類型，填 `muse` |
+| `blocks.muse.enabled` | 設為 `true` 或省略此欄位即可載入模組。設為 `false` 可略過 |

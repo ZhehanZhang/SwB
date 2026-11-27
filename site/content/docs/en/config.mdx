@@ -3,7 +3,7 @@ title: Config
 description: Environment variables, the config file and overlays.
 ---
 
-SwB runs with environment variables alone. The MCP block is on by default. Each other block turns on when its variables are present. Use a YAML config file for routing, grants and policies.
+SwB can run with environment variables alone. The MCP block starts by default. Some blocks start when you set their variables. Use a YAML file for more settings.
 
 ## Instance
 
@@ -54,11 +54,88 @@ routes:
   - {match: {}, to: capy:captain:<Captain id>}
 ```
 
-A `blocks` list in the file chooses the blocks exactly. Leave `blocks` out to keep the blocks from the environment. The `routes` list sets the first routes on a new install. After that, agents and the SwB page manage the routes.
+The `blocks` section takes priority over block selection from the environment. SwB uses the environment to select blocks when you omit `blocks`.
 
 ## Overlays
 
 An overlay is a private YAML file for your own names, ids and paths. Put it in `config/local.yaml`, or name it with `SWITCHBOARD_OVERLAY`. The overlay wins over the base file, and the base file wins over the environment. Mappings merge. Lists replace.
+
+In a key, `*` stands for an entry name or a list item.
+
+## Core
+
+| Key | Use |
+| - | - |
+| `version` | YAML format version. Use `2` for `blocks` |
+| `public_url` | Public HTTPS address SwB uses for MCP and OAuth |
+| `data_dir` | Path to the data folder. Set it here or with `SWITCHBOARD_DATA_DIR` |
+| `timezone` | Time zone for daily counts and limits. Default `UTC` |
+| `turn_cap` | Turns before SwB pauses a conversation. Default `200`. Set `null` to turn off the limit |
+| `blocks` | Blocks to load, named by type or by your own label |
+| `agents` | Agent definitions by name |
+| `agents.*.label` | Display name for an agent |
+| `targets` | Target names and their priority |
+| `targets.aliases` | Map from a short name to a target name or address |
+| `targets.priority` | Order to use when targets share a name. For example, `[capy:captain, agent, project]` |
+| `routes` | Initial routes. SwB keeps routes that are already set |
+| `routes.*.match` | Agent or project to match. Use `{}` for the global route |
+| `routes.*.to` | Address to send to when the route matches |
+
+## Sign-in and keys
+
+| Key | Use |
+| - | - |
+| `auth` | Sign-in and key settings |
+| `auth.owner_emails` | Email addresses that can sign in as the owner through OIDC or Cloudflare Access |
+| `auth.cloudflare_access` | Cloudflare Access sign-in settings. Supply both fields and set `auth.owner_emails` |
+| `auth.cloudflare_access.team_domain` | Your Cloudflare Access team domain. You can use `CLOUDFLARE_ACCESS_TEAM_DOMAIN` |
+| `auth.cloudflare_access.aud` | Audience tag from the Access application. You can use `CLOUDFLARE_ACCESS_AUD` |
+| `auth.redirect_uris` | Allowed OAuth return addresses. This list replaces the built-in set. Use `/*` to match a path and its subpaths |
+| `auth.source_names` | Map from part of an OAuth host or client name to the agent name used for sign-in |
+| `auth.key_scopes` | Map from key name to allowed memory scopes, for example `[project:example]` |
+| `auth.inbox_keys` | Map from key name to the one agent whose inbox it can read. The built-in entry is `channel: claude-code` |
+
+## Visibility
+
+| Key | Use |
+| - | - |
+| `visibility` | Rules for who can access a resource. Tools stay private |
+| `visibility.defaults` | Default rules by resource type. All types start as `private` |
+| `visibility.defaults.channel` | Default rule for channels |
+| `visibility.defaults.memory` | Default rule for memory scopes |
+| `visibility.defaults.route` | Default rule for routes |
+| `visibility.defaults.target` | Default rule for send targets |
+| `visibility.resources` | Rules for specific resources such as `channel:home/#agents`. Each rule takes priority over its type default |
+
+Use `private` for the owner and their agents. Use `shared` to open access. List user IDs or entries such as `workspace:home` to share with selected people. Changes made with `visibility_set` take priority over this file.
+
+## MCP
+
+| Key | Use |
+| - | - |
+| `blocks.mcp` | Settings for the block that serves MCP clients |
+| `blocks.mcp.use` | Block type. Use `mcp` |
+| `blocks.mcp.legacy_aliases` | Keeps older MCP tool names such as `agent_send`, `capy_delegate`, `capy_wait` and `capy_reply` available. Default `true` |
+| `blocks.mcp.wait` | Limits for tool calls that wait for a reply |
+| `blocks.mcp.wait.default_s` | Wait time in seconds when the caller leaves it blank. Default `60` |
+| `blocks.mcp.wait.max_s` | Maximum wait in seconds. Default `200` |
+| `blocks.mcp.wait.agents` | Map of wait limits by agent. Claude Code uses `45` seconds by default and at most `55` seconds |
+| `blocks.mcp.wait.agents.*.default_s` | Default wait in seconds for this agent |
+| `blocks.mcp.wait.agents.*.max_s` | Maximum wait in seconds for this agent |
+
+## Memory and channel modes
+
+| Key | Use |
+| - | - |
+| `memory` | Settings for the Markdown copy of memory |
+| `memory.mirror` | Controls the Markdown copy. Set `false` to stop updates |
+| `memory.mirror_dir` | Folder for the Markdown copy |
+| `memory.mirror_debounce_s` | Seconds to wait after a memory change before writing the copy. Default `2` |
+| `modes` | Settings for how SwB acts on incoming events |
+| `modes.default` | Default mode. The default is `off` |
+| `modes.projects` | Default mode for spaces assigned to each project |
+| `modes.assist_max_chars` | Character limit SwB gives agents for an `assist` reply. Default `1500` |
+| `modes.digest_minutes` | Minutes to collect `watch` events before a summary. Default `60`. SwB also sends a summary at `50` events |
 
 ## Branding
 
@@ -68,8 +145,15 @@ branding:
   accent_color: "#64748b"
 ```
 
-`branding.icon` and `branding.logo_assets_dir` set your own icon and logos.
+| Key | Use |
+| - | - |
+| `branding` | Settings for the name, icon and colors that SwB shows |
+| `branding.display_name` | Display name. Default `SwB` |
+| `branding.accent_color` | Accent color in `#RRGGBB` format |
+| `branding.icon` | Custom icon |
+| `branding.logo_assets_dir` | Folder for custom logo files |
+| `branding.public_identity` | Internal field fixed at `swb` in this release |
 
 ## Full reference
 
-[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) has every key with a comment.
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) has a YAML example with notes.

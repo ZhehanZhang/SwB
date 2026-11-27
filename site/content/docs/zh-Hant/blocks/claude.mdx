@@ -40,3 +40,18 @@ blocks:
 ```
 
 環境變數 `CLAUDE_ROUTINE_TOKEN` 與 `CLAUDE_ROUTINE_ID` 可用一個 routine 啟用這個模組。
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.claude-routine` | 用於喚醒 Claude Code 任務的模組設定 |
+| `blocks.claude-routine.use` | 模組類型，填 `claude-routine` |
+| `blocks.claude-routine.enabled` | 設為 `false` 可略過此模組 |
+| `blocks.claude-routine.routines` | 依任務名稱設定例程 |
+| `blocks.claude-routine.routines.*.agent` | 接收訊息的代理，預設為 `claude` |
+| `blocks.claude-routine.routines.*.kind` | 專案例程填 `project`，通用例程填 `general` |
+| `blocks.claude-routine.routines.*.project` | 專案例程所屬 SwB 專案的簡稱 |
+| `blocks.claude-routine.routines.*.name` | 例程的顯示名稱 |
+| `blocks.claude-routine.routines.*.primary` | 設為 `true` 後，優先選用此代理在該專案中的這個例程 |
+| `blocks.claude-routine.routines.*.routine_id` | Claude API 觸發器 ID，例如 `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | 傳送時可使用的其他簡稱 |
+| `blocks.claude-routine.routines.*.token_env` | 存放例程權杖的變數名稱 |

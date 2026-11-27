@@ -33,3 +33,27 @@ In #agents, posts that @mention you from my SwB app (bot <BOT_ID>, app <APP_ID>)
 ```
 
 设置 `delivery: mailbox`，可通过 MCP Events 向 dot 发送。
+
+## 配置
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.dots` | 向 ChatGPT dot 发送消息的设置 |
+| `blocks.dots.use` | 模块类型，填 `dots` |
+| `blocks.dots.enabled` | 设为 `false` 可跳过此模块 |
+| `blocks.dots.delivery` | 通过 Slack 发送时填 `slack`，通过 MCP Events 发送时填 `mailbox`。默认为 `slack` |
+| `blocks.dots.workspace` | 要扫描的 Slack 工作区，默认使用首个工作区 |
+| `blocks.dots.channel` | 向 dot 转发消息的私有 Slack 频道，默认为 `#agents` |
+| `blocks.dots.create` | 设为 `true` 后，SwB 会按需以所有者身份创建频道。默认为 `true` |
+| `blocks.dots.app_ids` | 用于查找 dot 的 Slack 应用 ID |
+| `blocks.dots.match` | 在 Slack 机器人名称中查找的文字，默认为 `[dot]` |
+| `blocks.dots.rescan_minutes` | 扫描 Slack dot 的间隔分钟数，默认为 `30` |
+| `blocks.dots.poll_seconds` | 检查 Slack 私信答复的间隔秒数，默认为 `5` |
+| `blocks.dots.default` | 目标名 `dot` 指向的 dot。填写它的简称或 ID |
+| `blocks.dots.dots` | 为 `mailbox` 投递定义 dot，或覆盖 Slack 中发现的 dot 设置 |
+| `blocks.dots.dots.*.name` | dot 的显示名称 |
+| `blocks.dots.dots.*.mailbox` | 在 `mailbox` 模式下接收消息的收件箱，默认为 `chatgpt` |
+| `blocks.dots.group_dm` | 设为 `true` 后使用所有者、SwB 和 dot 的 Slack 群组私信 |
+| `blocks.dots.owner_dm` | 设为 `true` 后，以所有者身份发送的消息会进入所有者与 dot 的 Slack 私信 |
+| `blocks.dots.agents_as_owner` | 设为 `true` 后，所有者的智能体在频道或一对一私信中使用所有者的 Slack 账号发送 |
+| `blocks.dots.owner_posts_as` | 转发所有者的 Slack 消息给 dot 时使用的账号。默认为 `swb`，设为 `owner` 则使用所有者账号 |

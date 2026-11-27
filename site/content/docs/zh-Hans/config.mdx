@@ -3,7 +3,7 @@ title: 配置
 description: 环境变量、配置文件和覆盖文件。
 ---
 
-SwB 只靠环境变量即可运行。MCP 模块默认启用。其他每个模块在相应变量存在时启用。路由、授权和策略使用 YAML 配置文件。
+SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在设置相应变量后启用。其他设置可写入 YAML 文件。
 
 ## 实例
 
@@ -54,11 +54,88 @@ routes:
   - {match: {}, to: capy:captain:<Captain id>}
 ```
 
-文件中的 `blocks` 列表精确指定启用的模块。省略 `blocks`，则保留来自环境变量的模块。`routes` 列表设置新安装的首批路由。之后由智能体和 SwB 页面管理路由。
+`blocks` 一节优先决定加载哪些模块。省略 `blocks` 时，SwB 根据环境变量选择模块。
 
 ## 覆盖文件
 
 覆盖文件是存放你自己的名称、id 和路径的私有 YAML 文件。把它放在 `config/local.yaml`，或用 `SWITCHBOARD_OVERLAY` 指定它。覆盖文件优先于基础文件，基础文件优先于环境变量。映射会合并。列表会被替换。
+
+键中的 `*` 代表一个名称或列表项。
+
+## 核心设置
+
+| 配置键 | 用途 |
+| - | - |
+| `version` | YAML 配置格式版本。使用 `blocks` 时设为 `2` |
+| `public_url` | SwB 用于 MCP 和 OAuth 的公网 HTTPS 地址 |
+| `data_dir` | 数据目录的路径。可在此设置，也可用 `SWITCHBOARD_DATA_DIR` |
+| `timezone` | 每日计数和限额所用的时区，默认为 `UTC` |
+| `turn_cap` | 会话暂停前的轮数，默认为 `200`。设为 `null` 可关闭上限 |
+| `blocks` | 要加载的模块，可用模块类型或自定义名称命名 |
+| `agents` | 按名称设置智能体 |
+| `agents.*.label` | 智能体的显示名称 |
+| `targets` | 发送目标的名称和优先顺序 |
+| `targets.aliases` | 将简称指向目标名称或地址 |
+| `targets.priority` | 目标重名时的选择顺序，例如 `[capy:captain, agent, project]` |
+| `routes` | 初始路由。SwB 保留已设置的路由 |
+| `routes.*.match` | 要匹配的智能体或项目。全局路由使用 `{}` |
+| `routes.*.to` | 路由匹配时的发送地址 |
+
+## 登录和密钥
+
+| 配置键 | 用途 |
+| - | - |
+| `auth` | 登录和密钥设置 |
+| `auth.owner_emails` | 可通过 OIDC 或 Cloudflare Access 以所有者身份登录的邮箱地址 |
+| `auth.cloudflare_access` | Cloudflare Access 登录设置。填写下方两项并设置 `auth.owner_emails` |
+| `auth.cloudflare_access.team_domain` | Cloudflare Access 团队域名，也可用 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 设置 |
+| `auth.cloudflare_access.aud` | Access 应用的受众标记，也可用 `CLOUDFLARE_ACCESS_AUD` 设置 |
+| `auth.redirect_uris` | 允许的 OAuth 回调地址。此列表替换内置列表。用 `/*` 匹配路径及其子路径 |
+| `auth.source_names` | 将 OAuth 主机名或客户端名称的片段映射到登录时所用的智能体名称 |
+| `auth.key_scopes` | 按密钥名称设置可访问的记忆范围，例如 `[project:example]` |
+| `auth.inbox_keys` | 为每把密钥指定唯一可读取的智能体收件箱。内置项为 `channel: claude-code` |
+
+## 访问权限
+
+| 配置键 | 用途 |
+| - | - |
+| `visibility` | 决定谁能访问各项资源。工具始终为私有 |
+| `visibility.defaults` | 按资源类型设定默认规则。各类型初始值均为 `private` |
+| `visibility.defaults.channel` | 频道的默认规则 |
+| `visibility.defaults.memory` | 记忆范围的默认规则 |
+| `visibility.defaults.route` | 路由的默认规则 |
+| `visibility.defaults.target` | 发送目标的默认规则 |
+| `visibility.resources` | 设置单项资源的规则，例如 `channel:home/#agents`。单项规则优先于该类型的默认规则 |
+
+用 `private` 将访问权限限定为所有者及其智能体。用 `shared` 开放访问。填写用户 ID 或 `workspace:home` 这样的条目，即可指定共享对象。通过 `visibility_set` 所作的更改优先于此文件。
+
+## MCP
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.mcp` | 为 MCP 客户端提供服务的模块设置 |
+| `blocks.mcp.use` | 模块类型，填 `mcp` |
+| `blocks.mcp.legacy_aliases` | 保留 `agent_send`、`capy_delegate`、`capy_wait` 和 `capy_reply` 等旧版 MCP 工具名称。默认为 `true` |
+| `blocks.mcp.wait` | 等待答复的工具调用时限 |
+| `blocks.mcp.wait.default_s` | 调用方省略等待时间时使用的秒数，默认为 `60` |
+| `blocks.mcp.wait.max_s` | 最长等待秒数，默认为 `200` |
+| `blocks.mcp.wait.agents` | 按智能体设置等待时限。Claude Code 默认等待 `45` 秒，最多 `55` 秒 |
+| `blocks.mcp.wait.agents.*.default_s` | 该智能体默认等待的秒数 |
+| `blocks.mcp.wait.agents.*.max_s` | 该智能体最长等待的秒数 |
+
+## 记忆和频道模式
+
+| 配置键 | 用途 |
+| - | - |
+| `memory` | 记忆的 Markdown 副本设置 |
+| `memory.mirror` | 控制 Markdown 副本。设为 `false` 可停止更新 |
+| `memory.mirror_dir` | 存放 Markdown 副本的目录 |
+| `memory.mirror_debounce_s` | 记忆更新后，写入副本前等待的秒数，默认为 `2` |
+| `modes` | 设置 SwB 如何处理传入事件 |
+| `modes.default` | 默认模式，初始值为 `off` |
+| `modes.projects` | 各项目下空间的默认模式 |
+| `modes.assist_max_chars` | SwB 为智能体指定的 `assist` 答复字符上限，默认为 `1500` |
+| `modes.digest_minutes` | `watch` 模式汇总事件前的等待分钟数，默认为 `60`。累计 `50` 条事件时也会发送摘要 |
 
 ## 品牌
 
@@ -68,8 +145,15 @@ branding:
   accent_color: "#64748b"
 ```
 
-`branding.icon` 和 `branding.logo_assets_dir` 设置你自己的图标和标志。
+| 配置键 | 用途 |
+| - | - |
+| `branding` | 设置 SwB 显示的名称、图标和颜色 |
+| `branding.display_name` | 显示名称，默认为 `SwB` |
+| `branding.accent_color` | 主题强调色，格式为 `#RRGGBB` |
+| `branding.icon` | 自定义图标 |
+| `branding.logo_assets_dir` | 存放自定义标志的目录 |
+| `branding.public_identity` | 内部字段。本版本固定为 `swb` |
 
 ## 完整参考
 
-[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) 列出每个键，并附有注释。
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) 提供带注释的 YAML 示例。
