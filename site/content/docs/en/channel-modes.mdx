@@ -17,7 +17,7 @@ On Slack, Discord and Telegram, your mentions and direct messages use `work` in 
 
 ## Set a mode
 
-Set the mode on the SwB page, in YAML, or with `space_mode` as the owner. With `space_mode`, set the mode, project and allowed actions.
+Set the mode on the SwB page, in YAML, or with `space_mode` as the owner. With `space_mode`, set the mode, target, project and allowed actions.
 
 SwB first checks the saved setting, then the channel and space settings. It then checks older block settings, the project mode, and `modes.default`. The default is `off`.
 
@@ -27,19 +27,40 @@ On GitHub, Slack, Discord and Telegram, the project route can wake an agent in `
 
 | Order | Target |
 | - | - |
-| First | YAML `target` in the channel, space or project mode setting, in that order |
+| First | Target on the saved `space_mode` setting. A channel setting replaces the whole space setting |
+| Next | YAML `target` in the channel, space or project mode setting, in that order |
 | Next | In `triage`, an available target named `claude-<project>-triage`, such as a Claude routine |
 | Next | The space's `default_target` or its `target` alias |
 | Last | The route for the project |
 
-Call `routes_set` with the project slug and target address. Set the same `project` in the mode. This example uses an existing GitHub space, project and paired agent.
+Choose a target from `targets`. This example binds an agent mailbox to an existing GitHub space.
 
 ```python
-routes_set(project="app", target="agent:alpha")
-space_mode(block="github", space="example-org/app", mode="triage", project="app")
+space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
 ```
 
-Use `mode="assist"` to set assist mode instead. For a locked Capy route, use a target such as `capy:captain:<name>` and keep `allow_override=false`. Share the space and target to let other people reach the agent.
+Use `mode="assist"` for assist mode. Omit `target` to keep the binding. Set `target=""` to clear it.
+
+To set the fallback, call `routes_set` with the linked project and target address. For a locked Capy route, use a target such as `capy:captain:<name>` and keep `allow_override=false`.
+
+## Allow outside GitHub senders
+
+Call `visibility_list` for the exact resource names. SwB refuses unknown names in `visibility_set`. The address `agent:beta` points to the mailbox. The rule `target:beta` controls who can reach it.
+
+```python
+visibility_set(resource="channel:github/acme/app", visibility="shared")
+visibility_set(resource="target:beta", visibility="shared")
+```
+
+To limit access to one sender, use the same verified sender ID on both resources. For example, set `visibility=["github:1234"]` on both.
+
+## Read a Watch digest
+
+Set the interval with `modes.digest_minutes`. The default is 60 minutes. SwB puts the digest in the target mailbox when the interval ends or the batch reaches 50 events. The owner mailbox is the fallback.
+
+Read every digest as the owner in the console **Inbox** or through MCP `inbox` and `wait`. The digest lists the event count. It lists each event's author, excerpt and available link. Its trust is `external`.
+
+Watch keeps agents asleep. SwB delivers digests through inbox reads instead of push events. Configured GitHub sinks still get individual event copies.
 
 ## Triage actions
 
@@ -59,7 +80,7 @@ GitHub changes require a GitHub credential with write access. SwB records triage
 
 ## Check a delivery
 
-Use `modes_status` to see the mode, target, actions and setup problems. Both `space_mode` and `modes_status` show the message “Choose a triage agent.” when triage needs a target.
+Use `modes_status` to see the mode, bound target, actions and setup problems. The console mode row shows the bound agent. In triage, the default-agent hint appears only when SwB uses the fallback. Both `space_mode` and `modes_status` prompt you to choose a triage agent when triage needs a target.
 
 SwB records drop reasons for Slack, Discord and Telegram in the audit log. It records at most one entry every 10 minutes for the same block, space, channel and reason.
 

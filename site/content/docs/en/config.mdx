@@ -142,6 +142,8 @@ In a key, `*` stands for an entry name or a list item.
 | `visibility.defaults.target` | Default rule for send targets |
 | `visibility.resources` | Rules for specific resources such as `channel:home/#agents`. Each rule takes priority over its type default |
 
+For Slack, `channel:home/#agents` is a channel rule. For GitHub, use `channel:github/acme/app` and `target:beta` to let outside senders reach `agent:beta`. See [channel visibility](/docs/channel-modes#allow-outside-github-senders).
+
 Use `private` for the owner and their agents. Use `shared` to open access. List user IDs or entries such as `workspace:home` to share with selected people. Changes made with `visibility_set` take priority over this file.
 
 ## MCP

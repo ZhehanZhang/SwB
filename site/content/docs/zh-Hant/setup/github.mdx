@@ -102,7 +102,7 @@ GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook
 
 代理呼叫 `connect`，參數為 `what="github"`。SwB 顯示 webhook 位址、webhook 金鑰的狀態和儲存庫路由數量。路由會把一個儲存庫的事件傳給一個目標。
 
-代理將儲存庫加入 `config/switchboard.yaml` 中的 `blocks.github.spaces` 或 `blocks.github.routes`。用空間設定儲存庫的預設模式和專案。此範例將 `acme/app` 歸入 SwB 專案 `demo`，並設為 `watch` 模式。
+代理將儲存庫加入 `config/switchboard.yaml` 中的 `blocks.github.spaces`。空間會指定儲存庫的模式、專案和目標。此範例將專案 `demo` 中儲存庫 `acme/app` 的觀察摘要送到 `agent:beta`。
 
 ```yaml
 blocks:
@@ -110,7 +110,9 @@ blocks:
     use: github
     spaces:
       acme/app:
-        mode: watch
+        mode:
+          mode: watch
+          target: agent:beta
         project: demo
 ```
 
@@ -118,7 +120,13 @@ blocks:
 
 代理再次呼叫 `connect(what="github")`，取得尚待填寫的 App ID 或私密金鑰連結。若要從現有的個人存取權杖改用 GitHub App 憑證，選用 `choose={"credential":"app"}`。
 
-重新啟動後，代理呼叫 `github_status` 檢查安裝及其權限。請參閱[頻道模式](/zh-Hant/docs/channel-modes)，了解如何繫結專案路由並啟用分流動作。分流模式預設允許 `github_reply`。
+重新啟動後，代理呼叫 `github_status` 檢查安裝及其權限。
+
+代理呼叫 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`，繫結分流目標。使用 `mode="assist"` 可切換至協助模式。請從 `targets` 回傳的清單中選擇目標。連結的專案路由是備用選項。分流模式預設允許 `github_reply`。
+
+若要接收外部使用者的事件，請開放 `channel:github/acme/app` 和 `target:beta`。詳情請參閱[頻道可見度](/zh-Hant/docs/channel-modes#允許外部-github-使用者存取)。
+
+觀察模式會依 `modes.digest_minutes` 的間隔將摘要送至目標信箱。累積到 50 個事件時，SwB 提前傳送摘要。擁有者可在主控台的 **Inbox** 查看所有摘要，也可呼叫 MCP 工具 `inbox` 或 `wait`。
 
 ## 憑證
 
