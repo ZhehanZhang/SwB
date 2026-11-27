@@ -102,7 +102,8 @@ async def connection(request: Request) -> JSONResponse:
             details = _telegram(block, status)
         elif isinstance(block, GitHubBlock):
             connected = block.online
-            details = {"repositories": sorted(block.registered_repositories()), "credential": status["credential"], "dropped": status["dropped"]}
+            details = {"repositories": sorted(block.registered_repositories()), "credential": status["credential"],
+                       "dropped": status["dropped"], "refused": status["refused"]}
         else:
             workspaces = [
                 {"name": name, "intake": ws["intake"], "connected": ws["connected"]}

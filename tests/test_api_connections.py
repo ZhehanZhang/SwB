@@ -128,7 +128,7 @@ def test_github_connection_exposes_safe_webhook_status(make, configured):
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
     assert response.json() == {
         "platform": "github", "block": "repos", "state": "connected" if configured else "disconnected",
-        "details": {"repositories": ["acme/app", "acme/other"], "credential": "pat", "dropped": 0},
+        "details": {"repositories": ["acme/app", "acme/other"], "credential": "pat", "dropped": 0, "refused": 0},
     }
     assert secret not in response.text and token not in response.text
     assert client.get("/api/connections/github/avatar", headers=OWNER).status_code == 404

@@ -45,6 +45,7 @@ CHECKS = {"check_run", "check_suite", "workflow_run"}
 EVENTS = CHECKS | {"issues", "issue_comment", "pull_request", "pull_request_review",
                    "pull_request_review_comment", "pull_request_review_thread", "push"}
 DELIVERY_TTL_S = 86400
+REFUSAL_AUDIT_INTERVAL_S = 600
 MAX_DELIVERIES = 100_000
 RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
 WRITES = ("label", "comment", "open_issue", "link_duplicate", "notify_owner", "reply")
@@ -254,6 +255,8 @@ class GitHubBlock(Block):
         self._senders: OrderedDict[str, list[float]] = OrderedDict()
         self.seen: OrderedDict[str, float] = OrderedDict()
         self.dropped = 0
+        self.refused = 0
+        self._refusal_audited_at: dict[str, float] = {}
         self.http: aiohttp.ClientSession | None = None
 
     def _owners(self, config: dict[str, Any]) -> frozenset[str]:
@@ -316,7 +319,8 @@ class GitHubBlock(Block):
 
     def status(self) -> dict[str, Any]:
         credential = self.api.auth_type()
-        return {"configured": True, "secret_present": self.online, "routes": len(self.repo_routes), "dropped": self.dropped,
+        return {"configured": True, "secret_present": self.online, "routes": len(self.repo_routes),
+                "dropped": self.dropped, "refused": self.refused,
                 "sinks": {name: {"delivered": sink.delivered, "failed": sink.failed} for name, sink in self.sinks.items()},
                 "credential": credential, "credential_problem": GITHUB_CREDENTIAL_PROBLEM if credential is None else None,
                 "installation": dict(self.installation), "checked_at": self.checked_at,
@@ -576,8 +580,13 @@ class GitHubBlock(Block):
         ip = client_ip(request.scope)
 
         def refuse(error: str, status: int) -> JSONResponse:
-            self.core.audit.record(origin=self.name, source="-", client=ip, destination=self.name, action="webhook",
-                                   outcome="refused", detail=error)
+            self.refused += 1
+            now = self.core.clock()
+            previous = self._refusal_audited_at.get(error)
+            if previous is None or now - previous >= REFUSAL_AUDIT_INTERVAL_S:
+                self.core.audit.record(origin=self.name, source="-", client=ip, destination=self.name, action="webhook",
+                                       outcome="refused", detail=error)
+                self._refusal_audited_at[error] = now
             return JSONResponse({"error": error}, status)
 
         if not self.secret:
