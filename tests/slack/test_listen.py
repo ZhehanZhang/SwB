@@ -9,7 +9,7 @@ import pytest
 import yaml
 from starlette.testclient import TestClient
 
-from conftest import call, error_text, payload
+from conftest import call, error_text, payload, use_capy
 from slackfix import BOT_ID, BOT_USER, ENV, KEY_FULL, OWNER_A, TEAM_A, FakeWorld, Hooks
 from switchboard.app import create_app
 from switchboard.core import CoreError, Switchboard
@@ -25,7 +25,8 @@ EXTERNAL = "USTRANGER"
 @pytest.fixture
 def opened(tmp_path):
     @contextmanager
-    def build(*, channels=None, mapped="docs", workspace_project="workspace", shared="shared", turn_cap=200, rate=5, write="free", intake="socket", hooks=None):
+    def build(*, channels=None, mapped="docs", workspace_project="workspace", shared="shared", turn_cap=200, rate=5, write="free", intake="socket",
+              hooks=None, capy=None):
         world, fires = FakeWorld(), []
         ws = {"team_id": TEAM_A, "app_token_env": "A_APP", "identities": {"bot": {"token_env": "A_BOT", "write": write}},
               "sender_rate": {"count": rate}, "known": {"BKNOWN001": "Build bot"}, "ack_reaction": "eyes", "intake": intake}
@@ -47,15 +48,16 @@ def opened(tmp_path):
         cfg = {"version": 2, "turn_cap": turn_cap, "blocks": {"mcp": {}, "slack": slack, "claude-routine": {"routines": routines}},
                "visibility": {"defaults": {"channel": shared, "target": "shared"}}}
         path = tmp_path / "config.yaml"
-        path.write_text(yaml.safe_dump(cfg))
 
         def fire(request):
             fires.append((request.url.path, json.loads(request.content)["text"]))
             return httpx.Response(200, json={"claude_code_session_id": "session_example"})
 
-        core = Switchboard(path, tmp_path / "data", env={**ENV, "SWITCHBOARD_KEY_CLAUDE": KEY_FULL, "ROUTINE_TOKEN": "example-token"},
-                           slack_options=slack_options,
-                           block_options={"claude-routine": {"transport": httpx.MockTransport(fire)}})
+        env = {**ENV, "SWITCHBOARD_KEY_CLAUDE": KEY_FULL, "ROUTINE_TOKEN": "example-token"}
+        options = {"claude-routine": {"transport": httpx.MockTransport(fire)}}
+        use_capy(capy, cfg, env, options)
+        path.write_text(yaml.safe_dump(cfg))
+        core = Switchboard(path, tmp_path / "data", env=env, slack_options=slack_options, block_options=options)
         for project in ("docs", "workspace", "no-routine"):
             core.projects.create(slug=project, name=project.title())
         with TestClient(create_app(core)) as client:

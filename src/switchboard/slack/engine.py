@@ -109,8 +109,8 @@ class SlackEngine:
             return None
         return target.persona
 
-    def route(self, rt: WorkspaceRuntime, push: dict[str, Any], *, default_target: str | None = None) -> list[str]:
-        """Set push target/target_kind (and strip a leading slug from text). Returns slugs to hint at for a near miss."""
+    def route(self, rt: WorkspaceRuntime, push: dict[str, Any], *, default_target: str | None = None) -> tuple[list[str], bool]:
+        """Set the target and strip a leading slug. Return near matches and whether the sender named a target."""
         root = push["thread_ts"] or push["ts"]
         target: Target | None = None
         hint: list[str] = []
@@ -130,7 +130,7 @@ class SlackEngine:
         push["target_kind"] = target.kind if target else None
         if slug and push["addressed_to_us"] and (explicit or not sticky):
             self.store.set_thread_target(push["workspace"], push["channel"], root, slug, push["target_kind"] or "")
-        return hint
+        return hint, explicit
 
     def sink_accepts(self, label: str, push: dict[str, Any]) -> list[str]:
         return [s.cfg.name for s in self.sinks.get(label, []) if s.accepts(push)]
@@ -269,7 +269,7 @@ class SlackEngine:
                 return candidate
         if listen_only:
             return None
-        hint = self.route(rt, push)
+        hint, _ = self.route(rt, push)
         self.stamp(rt, push)
         if not self.store.add_event(push):
             return None
@@ -383,11 +383,11 @@ class SlackEngine:
         except Exception as exc:
             log.info("note to sender on %s failed: %s", push["id"], slack_error(exc))
 
-    async def fan_out(self, label: str, push: dict[str, Any], *, skip_delegate: bool = False) -> None:
+    async def fan_out(self, label: str, push: dict[str, Any], *, skip_delegate: bool = False, skip_agent: str | None = None) -> None:
         for sink in self.sinks.get(label, []):
             if sink.accepts(push):
                 sink.put(push)
-        event = {**push, "_skip_delegate": True} if skip_delegate else push
+        event = {**push, "_skip_delegate": skip_delegate, "_skip_agent": skip_agent} if skip_delegate or skip_agent else push
         for listener in self.listeners:
             try:
                 await listener(event)
