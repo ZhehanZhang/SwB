@@ -1,8 +1,11 @@
 import os
 import stat
+from pathlib import Path
 
 import pytest
+from starlette.testclient import TestClient
 
+from switchboard.app import create_app
 from switchboard.core import Switchboard
 
 
@@ -33,3 +36,27 @@ async def test_data_and_sqlite_files_are_private(tmp_path, existing):
     finally:
         if original is not None:
             await original.aclose()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file modes")
+@pytest.mark.parametrize("error", [PermissionError, OSError])
+def test_server_starts_when_it_cannot_chmod_existing_data(tmp_path, monkeypatch, caplog, error):
+    data = tmp_path / "data"
+    with TestClient(create_app(Switchboard(data_dir=data, env={}))) as client:
+        assert client.get("/healthz").is_success
+    db = data / "switchboard.db"
+    data.chmod(0o755)
+    db.chmod(0o644)
+    chmod = Path.chmod
+
+    def fail_on_existing_paths(path, mode):
+        if path in (data, db):
+            raise error("fixture cannot change existing mode")
+        return chmod(path, mode)
+
+    monkeypatch.setattr(Path, "chmod", fail_on_existing_paths)
+    with TestClient(create_app(Switchboard(data_dir=data, env={}))) as client:
+        assert client.get("/healthz").is_success
+
+    for path, mode in [(data, "0700"), (db, "0600")]:
+        assert caplog.text.count(f"Could not set mode {mode} on {path}.") == 1

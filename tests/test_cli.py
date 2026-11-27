@@ -56,6 +56,10 @@ def test_init_writes_minimal_config_and_private_owner_key(tmp_path, capsys):
     assert name == cli.OWNER_KEY
     assert len(bytes.fromhex(key)) == 32
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
+    data = instance / "data"
+    assert data.is_dir() and not list(data.iterdir())
+    if os.name == "posix":
+        assert stat.S_IMODE(data.stat().st_mode) == 0o700
     out, err = capsys.readouterr()
     assert key not in out + err
     assert f"Owner key saved in {env}." in out and f"swb up --dir '{instance}'" in out
@@ -72,6 +76,7 @@ def test_init_does_not_overwrite_or_create_other_file_when_one_exists(tmp_path, 
     assert path.read_text() == "existing"
     other = cli.CONFIG if existing == ".env" else ".env"
     assert not (tmp_path / other).exists()
+    assert not (tmp_path / "data").exists()
     assert "--force" in capsys.readouterr().err
 
 

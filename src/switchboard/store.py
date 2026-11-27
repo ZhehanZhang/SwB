@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -10,6 +11,8 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -254,9 +257,27 @@ def new_id(prefix: str) -> str:
 
 
 def ensure_private_data_dir(path: Path) -> None:
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if os.name == "posix" and stat.S_IMODE(path.stat().st_mode) != 0o700:
-        path.chmod(0o700)
+    if not path.is_dir():
+        try:
+            path.mkdir(mode=0o700, parents=True)
+        except FileExistsError:
+            if not path.is_dir():
+                raise
+        else:
+            _private_mode(path, 0o700, existing=False)
+            return
+    _private_mode(path, 0o700, existing=True)
+
+
+def _private_mode(path: Path, mode: int, *, existing: bool) -> None:
+    if os.name != "posix" or stat.S_IMODE(path.stat().st_mode) == mode:
+        return
+    try:
+        path.chmod(mode)
+    except OSError:
+        if not existing:
+            raise
+        log.warning("Could not set mode %04o on %s. Check its permissions.", mode, path)
 
 
 def open_database(path: str | Path) -> sqlite3.Connection:
@@ -267,15 +288,14 @@ def open_database(path: str | Path) -> sqlite3.Connection:
             try:
                 path.touch(mode=0o600, exist_ok=False)
             except FileExistsError:
-                pass
-            for suffix in ("", "-wal", "-shm", "-journal"):
-                file = path.with_name(path.name + suffix)
+                _private_mode(path, 0o600, existing=True)
+            else:
+                _private_mode(path, 0o600, existing=False)
+            for suffix in ("-wal", "-shm", "-journal"):
                 try:
-                    if stat.S_IMODE(file.stat().st_mode) != 0o600:
-                        file.chmod(0o600)
+                    _private_mode(path.with_name(path.name + suffix), 0o600, existing=True)
                 except FileNotFoundError:
-                    if not suffix:
-                        raise
+                    pass
     db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")

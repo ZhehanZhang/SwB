@@ -41,7 +41,12 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
     assert "SWITCHBOARD_HOST" not in os.environ
 
 
-def test_init_and_up_use_separate_data_directories(clean_env, tmp_path, monkeypatch):
+@pytest.mark.parametrize("existing_home_db", [False, True])
+def test_init_and_up_use_separate_data_directories(clean_env, tmp_path, monkeypatch, caplog, existing_home_db):
+    home_db = Path.home() / ".local/share/switchboard/switchboard.db"
+    if existing_home_db:
+        home_db.parent.mkdir(parents=True)
+        home_db.touch()
     opened = []
 
     def serve(app, **options):
@@ -54,33 +59,41 @@ def test_init_and_up_use_separate_data_directories(clean_env, tmp_path, monkeypa
         folder.mkdir()
         monkeypatch.chdir(folder)
         __main__.cli_main(["init"])
+        assert (folder / "data").is_dir()
         __main__.cli_main(["up"])
 
     assert opened == [tmp_path / name / "data" for name in ("first", "second")]
     assert all((data / "switchboard.db").is_file() for data in opened)
-    assert not (Path.home() / ".local/share/switchboard/switchboard.db").exists()
+    assert home_db.exists() is existing_home_db
+    assert "Using existing data" not in caplog.text
 
 
-@pytest.mark.parametrize("override", [None, "SWITCHBOARD_DATA_DIR", "SWITCHBOARD_DATA"])
-def test_up_preserves_existing_instance_data_and_respects_overrides(clean_env, tmp_path, monkeypatch, caplog, override):
+@pytest.mark.parametrize("mode", ["empty data", "existing db", "explicit", "SWITCHBOARD_DATA_DIR", "SWITCHBOARD_DATA"])
+def test_up_uses_instance_data_when_selected(clean_env, tmp_path, monkeypatch, caplog, mode):
     home_data = Path.home() / ".local/share/switchboard"
     home_data.mkdir(parents=True)
     (home_data / "switchboard.db").touch()
-    __main__.cli_main(["init"])
+    config = tmp_path / cli.CONFIG
+    config.parent.mkdir()
+    config.write_text("version: 2\n")
     data = tmp_path / "data"
-    if override:
+    args = ["up"]
+    if mode.startswith("SWITCHBOARD_"):
         data = tmp_path / "custom-data"
-        monkeypatch.setenv(override, str(data))
-    else:
+        monkeypatch.setenv(mode, str(data))
+    elif mode == "explicit":
+        args += ["--dir", str(tmp_path)]
+    elif mode in ("empty data", "existing db"):
         data.mkdir()
-        (data / "switchboard.db").touch()
+        if mode == "existing db":
+            (data / "switchboard.db").touch()
 
     def serve(app, **options):
         with TestClient(app):
             assert app.starlette.state.core.data_dir == data
 
     monkeypatch.setattr(__main__.uvicorn, "run", serve)
-    __main__.cli_main(["up"])
+    __main__.cli_main(args)
 
     assert (data / "switchboard.db").is_file()
     assert "Using existing data" not in caplog.text
@@ -106,8 +119,13 @@ def test_up_keeps_the_old_home_database_and_warns_once_per_instance(clean_env, t
         folder = tmp_path / name
         folder.mkdir()
         monkeypatch.chdir(folder)
-        __main__.cli_main(["init"])
-        capsys.readouterr()
+        config = folder / cli.CONFIG
+        config.parent.mkdir()
+        config.write_text("version: 2\n")
+        if name == "second":
+            __main__.cli_main(["init", "--force"])
+            assert not (folder / "data").exists()
+            capsys.readouterr()
         __main__.cli_main(["log"])
         assert '"action": "saved-event"' in capsys.readouterr().out
         __main__.cli_main(["up"])

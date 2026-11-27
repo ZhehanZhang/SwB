@@ -21,7 +21,8 @@ def volume_owner_key(env: Mapping[str, str], *, create: bool = False) -> str | N
         raise ConfigError("Set SWITCHBOARD_DATA to the persistent volume mount.")
     path = Path(data) / "owner-key"
     if create and not path.exists():
-        ensure_private_data_dir(path.parent)
+        if not path.parent.is_dir():
+            ensure_private_data_dir(path.parent)
         with NamedTemporaryFile(mode="w", encoding="ascii", dir=path.parent) as key:
             key.write(secrets.token_hex(32) + "\n")
             key.flush()
