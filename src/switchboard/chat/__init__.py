@@ -32,6 +32,7 @@ from ..blocks import Action, Block, BlockError, Call
 from ..claims import CLAIM_TTL_S
 from ..modes import PROVIDERS
 from ..slack.config import AVATAR_RE
+from ..subject import subject, wake_text
 from ..trust import wrap
 from ..visibility import Who
 from .claims import Claims
@@ -375,11 +376,13 @@ class ChatBlock(Block):
                                      (self.name, msg.space, msg.channel, root))
         slug = channel_mode["target"] if channel_mode else slug or (sticky["target"] if sticky else None) or space.default_target
         target = self.targets_by_slug.get(slug or "") or next((t for t in self.targets_by_slug.values() if t["address"] == slug), None)
-        where = f"in {self.platform} {msg.space} " + (f"#{msg.channel_name}" if msg.channel_name else msg.channel)
+        place = f"#{msg.channel_name}" if msg.channel_name else msg.channel
+        where = f"in {self.platform} {msg.space} {place}"
         sender = {"kind": self.platform, "space": msg.space, "channel": msg.channel, "channel_name": msg.channel_name, "user": msg.user, "user_name": name,
                   "is_bot": msg.is_bot, "trust": trust, "message": msg.message, "root": root, "link": msg.link}
         event = {"event_id": f"{msg.space}:{msg.channel}:{msg.message}", "chat_kind": "dm" if msg.dm else "mention" if msg.mention else "reply" if ours else "listen",
                  "addressed_to_us": addressed, "text": text if trust == "owner" else wrap(text, name, f"{self.platform}:{msg.user}", trust, where),
+                 "subject": subject(name or msg.user, self.manifest.title, place, text, trust=trust),
                  "raw_text": text, "target": slug if target else None, "target_kind": target["kind"] if target else None, "trust": trust, "from": sender}
         who = self.who(space, msg.user, trust)
         reaches = who.owner or (self.core.visibility.allows(who, *self.channel_resources(msg.space, msg.channel, msg.channel_name))
@@ -481,18 +484,16 @@ class ChatBlock(Block):
                        mode: dict[str, Any] | None = None) -> None:
         if not self._count_turn(self._thread_key(msg.space, msg.channel, root)):
             return
-        where = f"#{msg.channel_name}" if msg.channel_name else msg.channel
-        who = event["from"]["user_name"] or msg.user
         name = (self.persona_for(target) or Persona(target["id"], target.get("name") or target["id"])).name
-        task = (f"{self.manifest.title} message from {who} in {msg.space} {where}{f' ({msg.link})' if msg.link else ''}:\n\n{event['text']}\n\n"
-                f"Your final reply is posted back in that {self.manifest.title} thread as {name}.")
+        title = event["subject"]
+        tail = event["note"] if mode else f"Your final reply is posted back in that {self.manifest.title} thread as {name}."
+        task = wake_text(title, event["text"], msg.link, tail)
         project = space.channel_projects.get(msg.channel, space.channel_projects.get(f"#{msg.channel_name}", space.project)) if msg.channel_name else \
             space.channel_projects.get(msg.channel, space.project)
         trust = event["trust"]
-        kw: dict[str, Any] = {"task": task, "title": f"{self.manifest.title} {msg.space} {where}",
+        kw: dict[str, Any] = {"task": task, "title": title,
                               "handle_meta": {"chat_trust": trust, **({"boundary": project} if project else {})}}
         if mode:
-            kw["task"] = f"{event['note']}\n\n{task}"
             kw["handle_meta"].update(channel_mode=mode)
             if mode["project"]:
                 kw["handle_meta"]["boundary"] = mode["project"]

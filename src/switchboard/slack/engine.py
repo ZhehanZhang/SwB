@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from ..guard import RateLimiter
+from ..subject import subject
 from ..trust import wrap
 from ..visibility import Visibility, Who
 from .avatar_files import BUNDLED_AVATARS, AvatarFiles, find_avatar
@@ -298,8 +299,10 @@ class SlackEngine:
         name = rt.cfg.known.get(push["user"] or "") or push["user_name"]
         push["trust"] = trust
         push["sender"] = {"id": push["user"], "name": name, "trust": trust, "is_bot": push["is_bot"]}
+        channel = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
+        push["subject"] = subject(name or push["user"] or "unknown", "Slack", channel, raw, trust=trust)
         if trust != "owner":
-            where = f"in {push['workspace']} " + (f"#{push['channel_name']}" if push.get("channel_name") else push["channel"])
+            where = f"in {push['workspace']} {channel}"
             push["text"] = wrap(raw, name, push["user"], trust, where)
 
     def who(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> Who:
