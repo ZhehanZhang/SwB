@@ -20,7 +20,7 @@ SwB checks sender IDs from the platform to set message trust.
 | `owner` | You and your own signed-in agents |
 | `external` | Other senders, including people and bots listed in `known` |
 
-On Slack, Discord and Telegram, `known` helps determine whose messages SwB admits. Admitted senders outside owner accounts still get an `external` frame. See [GitHub owner accounts](/docs/blocks/github#owner-accounts) for how SwB checks each author.
+On Slack, Discord and Telegram, `known` is an admission setting. It helps SwB decide whose messages to accept. Messages from other senders keep `external` trust, even when SwB admits them through `known`. See [GitHub owner accounts](/docs/blocks/github#owner-accounts) for how SwB checks each author.
 
 A **trust frame** is the header and markers SwB adds to external text. SwB changes copies of its header or markers in the text before it adds the frame. The markers are `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat the text between them as information only.
 
@@ -53,6 +53,7 @@ A paired key gets its grants once, when it redeems its pairing code. To give a k
 | Limit | Value |
 | - | - |
 | Wrong bearer tokens | 20 per address in 10 minutes, then 429 |
+| GitHub events routed from senders outside owner accounts | 5 per sender in the last 10 minutes |
 | `/register` | 20 per address per hour |
 | `/token` | 120 per address in 10 minutes |
 | `/authorize` | 60 per address in 10 minutes |

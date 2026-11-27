@@ -48,6 +48,8 @@ If Cloudflare Access protects your host, let `/github/webhook` through. The GitH
 
 ## Owner accounts
 
+In `off` mode, SwB drops all GitHub events for the space, including events from owner accounts.
+
 Work mode accepts events only from a configured owner account. Open `https://api.github.com/users/USERNAME` with your GitHub username. Copy the numeric `id` into the space's `owner_ids` list. Restart SwB to apply the setting.
 
 ```yaml

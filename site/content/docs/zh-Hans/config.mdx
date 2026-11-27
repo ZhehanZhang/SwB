@@ -151,7 +151,7 @@ routes:
 | `blocks.github.owner_ids` | 默认认定为所有者的 GitHub 数字用户 ID 列表 |
 | `blocks.github.spaces.*.owner_ids` | 覆盖此空间默认列表的 GitHub 数字用户 ID 列表 |
 
-GitHub 的信任等级为 `owner` 和 `external`。`known` 设置适用于 Slack、Discord 和 Telegram。工作模式的配置方法见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
+GitHub 的信任等级为 `owner` 和 `external`。在 Slack、Discord 和 Telegram 中，`known` 是接收设置。SwB 用它判断接收哪些发送者的消息。所有者之外的发送者即使通过 `known` 获准，消息的信任等级仍为 `external`。工作模式的配置方法见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
 
 ## MCP
 
