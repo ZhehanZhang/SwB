@@ -35,6 +35,13 @@ The screenshots show demo data from a local SwB server. Every name, channel and 
 
 The mark is a solid circle with the letters SwB. Use the light mark on light backgrounds. Use the dark mark on dark backgrounds. Keep a clear space of one quarter of the mark width on all sides. Use the mark at 24 pixels or larger. Use the files as they are, with their own colours and proportions.
 
+The dark mark is the reversed mark. It has a light circle with dark letters. Use it on dark backgrounds and on dark icon tiles. Both marks are online at stable addresses.
+
+| Mark | SVG | PNG |
+| --- | --- | --- |
+| Standard | https://swb.one/brand/swb.svg | https://swb.one/brand/swb-512.png and https://swb.one/brand/swb-1024.png |
+| Reversed | https://swb.one/brand/swb-reversed.svg | https://swb.one/brand/swb-reversed-512.png and https://swb.one/brand/swb-reversed-1024.png |
+
 ![SwB brand sheet](brand/swb-brand-sheet-light.png)
 
 ## Colour
