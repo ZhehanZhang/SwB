@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 Role = Literal["owner", "self", "grant", "owner_or_writer", "route", "setup", "companion"]
 ReadRole = Literal["message", "conversation", "provider_ref", "memory", "memory_scope", "projects", "owner"]
+ReadPolicy = tuple[ReadRole, str | None]
 
 COMPANION_ROUTES: dict[str, Role] = {
     "/companion/hello": "companion",
@@ -26,7 +27,7 @@ COMPANION_ROUTES: dict[str, Role] = {
     "/companion/revoke": "companion",
 }
 
-READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
+READ_ROLES: dict[str, ReadPolicy] = {
     "get_message": ("message", "message_id"),
     "result": ("provider_ref", "conversation"),
     "status": ("provider_ref", "conversation"),
@@ -94,7 +95,9 @@ BLOCK_ROLES: dict[str, dict[str, Role]] = {
         "label": "grant", "comment": "grant", "open_issue": "grant",
         "link_duplicate": "grant", "notify_owner": "grant", "reply": "grant",
     },
+    "webhook": {"create": "owner", "rotate": "owner", "revoke": "owner", "test": "owner"},
 }
+BLOCK_READ_ROLES: dict[str, dict[str, ReadPolicy]] = {"webhook": {"list": ("owner", None)}}
 
 AUTH_REQUIRED = "Sign in to call tools."
 ROUTE_REQUIRED = "Use a route for your own agent or sign in as the owner."
@@ -112,18 +115,17 @@ REFUSAL_DETAILS = frozenset({
 })
 
 
-def catalog_refusal(p: Principal | None, name: str, tool: Tool | None, role: Role | None) -> str | None:
+def catalog_refusal(p: Principal | None, name: str, tool: Tool | None, role: Role | None, read_role: ReadPolicy | None) -> str | None:
     if p is None or p.kind in ("inbox_key", "companion"):
         return AUTH_REQUIRED
     if p.tools is not None and name not in p.tools:
         return TOOL_REQUIRED
     if tool is not None:
         if tool.annotations and tool.annotations.read_only_hint:
-            if name not in READ_ROLES and REFERENCE_ARGS.intersection(tool.input_schema.get("properties", {})):
+            if read_role is None and REFERENCE_ARGS.intersection(tool.input_schema.get("properties", {})):
                 return CONVERSATION_NOT_FOUND
         elif role is None:
             return POLICY_REQUIRED
-    read_role = READ_ROLES.get(name)
     if not p.is_unrestricted_owner and (role == "owner" or (read_role and read_role[0] == "owner")):
         return OWNER_REQUIRED
     return None
@@ -144,8 +146,8 @@ def default_memory_scopes(core: Switchboard, p: Principal) -> list[str]:
     return list(p.memory_grants) if p.kind == "connect" else granted_memory_scopes(core, p, [GENERAL])
 
 
-def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any]) -> str | None:
-    role, parameter = READ_ROLES[name]
+def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any], policy: ReadPolicy) -> str | None:
+    role, parameter = policy
     reference = arguments.get(parameter) if parameter else None
     if role == "message" and isinstance(reference, str):
         handle = core.inbox.message_handle(reference)
@@ -205,4 +207,12 @@ def mutation_roles(core: Switchboard) -> dict[str, Role]:
         **MUTATION_ROLES,
         **{f"{block.name}_{suffix}": role for block in core.blocks.values()
            for suffix, role in (CHAT_ROLES if isinstance(block, ChatBlock) else BLOCK_ROLES.get(block.manifest.id, {})).items()},
+    }
+
+
+def read_roles(core: Switchboard) -> dict[str, ReadPolicy]:
+    return {
+        **READ_ROLES,
+        **{f"{block.name}_{suffix}": role for block in core.blocks.values()
+           for suffix, role in BLOCK_READ_ROLES.get(block.manifest.id, {}).items()},
     }

@@ -24,7 +24,7 @@ On Slack, Discord and Telegram, `known` helps SwB choose whose messages to accep
 
 A **trust frame** is the header and markers SwB adds to external text. SwB changes copies of its header or markers in the text before it adds the frame. The markers are `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat the text between them as information only.
 
-A summary from Watch mode carries `external` trust. Each excerpt includes a trust frame for external text. GitHub checks the author of each text field.
+A summary from Watch mode carries `external` trust. Each excerpt includes a trust frame for external text. SwB checks the author of each GitHub text field.
 
 A [companion](/docs/companion) key works only for its device connection. SwB keeps only a hash of the key to check it. SwB marks device results as `external` and puts their free text in a trust frame.
 

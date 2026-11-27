@@ -4,6 +4,7 @@ export function connectorKind(kind?: string | null) {
     case "discord": return "discord"
     case "telegram": return "telegram"
     case "github": return "github"
+    case "webhook": return "webhook"
     case "chatgpt":
     case "openai": return "chatgpt"
     case "dot":

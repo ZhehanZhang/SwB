@@ -33,7 +33,8 @@ def test_about_is_owner_only_and_lists_enabled_blocks(make, monkeypatch):
         "version": version("swb-one"),
         "commit": sha,
         "build_date": date,
-        "blocks": [{"name": "client", "id": "mcp", "version": version("swb-one")}],
+        "blocks": [{"name": "client", "id": "mcp", "version": version("swb-one")},
+                   {"name": "webhook", "id": "webhook", "version": version("swb-one")}],
     }
 
 
@@ -51,7 +52,8 @@ def test_about_reports_the_installed_plugin_distribution_version(make, monkeypat
     assert response.json() == {
         "version": version("swb-one"), "commit": "unknown", "build_date": "unknown",
         "blocks": [{"name": "custom", "id": "example", "version": "1.2.3"},
-                   {"name": "mcp", "id": "mcp", "version": version("swb-one")}],
+                   {"name": "mcp", "id": "mcp", "version": version("swb-one")},
+                   {"name": "webhook", "id": "webhook", "version": version("swb-one")}],
     }
 
 
@@ -120,7 +122,8 @@ def test_about_omits_invalid_environment_values_and_handles_missing_package(make
     assert response.status_code == 200
     assert response.json() == {
         "version": "unknown", "commit": "unknown", "build_date": "unknown",
-        "blocks": [{"name": "mcp", "id": "mcp", "version": None}],
+        "blocks": [{"name": "mcp", "id": "mcp", "version": None},
+                   {"name": "webhook", "id": "webhook", "version": None}],
     }
 
 

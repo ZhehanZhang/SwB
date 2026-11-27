@@ -611,6 +611,10 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         core.audit.record(origin="http", source="-", client=ip, destination="core", action="rate_limited", outcome="refused", target=path, detail=why)
 
     def large_body(scope: dict) -> None:
+        if scope["path"].startswith("/hooks/"):
+            core.audit.record_refusal(origin="webhook", client=audit_client_ip(scope), destination="webhook",
+                                      action="webhook", target="unknown", detail="body too large")
+            return
         head, _, verb = scope["path"].rstrip("/").rpartition("/")
         if head != "/companion":
             return

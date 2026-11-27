@@ -31,11 +31,24 @@ type TelegramChat = {
 export type TelegramDetails = Bot & { chats: TelegramChat[] }
 type SlackDetails = { workspaces: { name: string; intake: "socket" | "poll" | "none"; connected: boolean }[] }
 type GitHubDetails = { repositories: string[]; credential: "app" | "pat" | null; dropped: number; refused: number }
+export type Webhook = {
+  id: string
+  name: string
+  verify: string
+  events: number
+  refused: number
+  last_event_at: string | null
+  secret: "set" | "waiting"
+} & (
+  | { direction: "in"; to: string; url: string }
+  | { direction: "out"; address: string }
+)
 type Connection = { state: ConnectionState; block: string | null } & (
   | { platform: "discord"; details: DiscordDetails | null }
   | { platform: "telegram"; details: TelegramDetails | null }
   | { platform: "slack"; details: SlackDetails | null }
   | { platform: "github"; details: GitHubDetails | null }
+  | { platform: "webhook"; details: { webhooks: Webhook[] } | null }
 )
 
 const nullableString = (value: unknown) => value === null || typeof value === "string"
@@ -49,12 +62,26 @@ function isBot(value: Record<string, unknown>, platform: "discord" | "telegram")
     && (avatar.url === null || avatar.url === `/api/connections/${platform}/avatar`)
 }
 
+function isWebhook(value: unknown): value is Webhook {
+  if (!isObject(value)) return false
+  const { id, name, verify, direction, events, refused, last_event_at, secret } = value
+  return typeof id === "string" && typeof name === "string" && typeof verify === "string"
+    && typeof events === "number" && typeof refused === "number"
+    && (last_event_at === null || (typeof last_event_at === "string" && Number.isFinite(Date.parse(last_event_at))))
+    && (secret === "set" || secret === "waiting")
+    && (direction === "in" ? typeof value.to === "string" && typeof value.url === "string"
+      : direction === "out" && typeof value.address === "string" && !Object.hasOwn(value, "url"))
+}
+
 function isConnection(value: unknown): value is Connection {
   if (!isObject(value)) return false
   const { platform, state, details, block } = value
-  if (platform !== "discord" && platform !== "telegram" && platform !== "slack" && platform !== "github") return false
+  if (platform !== "discord" && platform !== "telegram" && platform !== "slack" && platform !== "github" && platform !== "webhook") return false
   if (state === "not_configured") return details === null && block === null
   if (typeof block !== "string" || !isObject(details) || (state !== "connected" && state !== "disconnected")) return false
+  if (platform === "webhook") {
+    return Array.isArray(details.webhooks) && details.webhooks.every(isWebhook)
+  }
   if (platform === "github") {
     return Array.isArray(details.repositories) && details.repositories.every((repo: unknown) => typeof repo === "string")
       && (details.credential === null || details.credential === "app" || details.credential === "pat")

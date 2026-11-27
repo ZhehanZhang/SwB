@@ -1,4 +1,4 @@
-import { Bot, Terminal } from "lucide-react"
+import { Bot, Terminal, Webhook } from "lucide-react"
 import { useState } from "react"
 import capy from "../../../src/switchboard/slack/avatars/capy.png?no-inline"
 import chatgpt from "../../../src/switchboard/slack/avatars/chatgpt.png?no-inline"
@@ -57,7 +57,8 @@ export function LogoTile({ kind, className, avatarUrl }: { kind: string; classNa
           <svg className="size-3/4" viewBox="0 0 24 24" fill="var(--logo-slack)">
             <path d="M5 15a2.5 2.5 0 1 1-2.5-2.5H5V15Zm1.25 0a2.5 2.5 0 0 1 5 0v6.25a2.5 2.5 0 1 1-5 0V15ZM9 5a2.5 2.5 0 1 1 2.5-2.5V5H9Zm0 1.25a2.5 2.5 0 0 1 0 5H2.75a2.5 2.5 0 1 1 0-5H9ZM19 9a2.5 2.5 0 1 1 2.5 2.5H19V9Zm-1.25 0a2.5 2.5 0 1 1-5 0V2.75a2.5 2.5 0 1 1 5 0V9ZM15 19a2.5 2.5 0 1 1-2.5 2.5V19H15Zm0-1.25a2.5 2.5 0 1 1 0-5h6.25a2.5 2.5 0 1 1 0 5H15Z" />
           </svg>
-        ) : mark === "mcp" ? <Terminal className="size-3/4 stroke-[2.5]" /> : <Bot className="size-3/4 stroke-[2.5]" />}
+        ) : mark === "mcp" ? <Terminal className="size-3/4 stroke-[2.5]" />
+          : mark === "webhook" ? <Webhook className="size-3/4" /> : <Bot className="size-3/4 stroke-[2.5]" />}
     </span>
   )
 }

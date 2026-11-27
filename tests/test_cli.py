@@ -83,7 +83,7 @@ def test_serve_reads_instance_config_data_and_dotenv(cli_instance, monkeypatch):
     __main__.cli_main(["serve", "--dir", base.name])
 
     [(served, options)] = calls
-    assert list(served.blocks) == ["custom-mcp"] and served.data_dir == core.data_dir
+    assert list(served.blocks) == ["webhook", "custom-mcp"] and served.data_dir == core.data_dir
     assert served.cfg.env[cli.OWNER_KEY] == STATIC_KEY
     assert (options["host"], options["port"]) == ("localhost", 18871)
     assert cli.OWNER_KEY not in os.environ
@@ -149,7 +149,7 @@ def test_config_and_blocks_use_instance_config(cli_instance, tmp_path, monkeypat
     __main__.cli_main(["config", *(instance + ["migrate"] if dir_before_action else ["migrate"] + instance)])
     assert yaml.safe_load(capsys.readouterr().out)["blocks"] == {"custom-mcp": {"use": "mcp"}}
     __main__.cli_main(["blocks", *(instance + ["list"] if dir_before_action else ["list"] + instance)])
-    assert capsys.readouterr().out.split()[0:2] == ["custom-mcp", "mcp"]
+    assert [line.split()[:2] for line in capsys.readouterr().out.splitlines()] == [["webhook", "webhook"], ["custom-mcp", "mcp"]]
 
 
 def test_targets_use_instance_config(cli_instance, capsys):

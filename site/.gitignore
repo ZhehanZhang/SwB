@@ -1,6 +1,7 @@
 /node_modules/
 /.next/
 /.open-next/
+/.generated/
 /.source/
 /.wrangler/
 /.dev.vars*

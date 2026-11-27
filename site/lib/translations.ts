@@ -2,7 +2,7 @@ import { aiChatTranslations } from '@fumadocs/ai-chat/i18n';
 import { zhCN } from '@fumadocs/language/zh-cn';
 import { zhTW } from '@fumadocs/language/zh-tw';
 import { uiTranslations } from 'fumadocs-ui/i18n';
-import { i18n } from './i18n';
+import { i18n, localeNames } from './i18n';
 import es from './ui/es.json';
 import fr from './ui/fr.json';
 import de from './ui/de.json';
@@ -16,14 +16,14 @@ export const translations = i18n.translations()
   .preset('zh-Hant', zhTW())
   .add({
     en: {
-      displayName: 'EN',
+      displayName: localeNames.en,
       'Open(page actions)': 'Open in',
       'Ask a question(AI chat)': 'Question',
       'Ask a follow-up(AI chat)': 'Follow-up',
       'What do you want to know?(AI chat)': '',
     },
     'zh-Hans': {
-      displayName: '简体',
+      displayName: localeNames['zh-Hans'],
       'Search(search trigger)': '搜索文档',
       'Search(search dialog)': '搜索文档',
       'On this page(table of contents)': '本页内容',
@@ -33,7 +33,7 @@ export const translations = i18n.translations()
       'What do you want to know?(AI chat)': '',
     },
     'zh-Hant': {
-      displayName: '繁體',
+      displayName: localeNames['zh-Hant'],
       'Search(search trigger)': '搜尋文件',
       'Search(search dialog)': '搜尋文件',
       'On this page(table of contents)': '本頁內容',
@@ -42,9 +42,9 @@ export const translations = i18n.translations()
       'Ask a follow-up(AI chat)': '追問',
       'What do you want to know?(AI chat)': '',
     },
-    es,
-    fr,
-    de,
-    ko,
-    ja,
+    es: { ...es, displayName: localeNames.es },
+    fr: { ...fr, displayName: localeNames.fr },
+    de: { ...de, displayName: localeNames.de },
+    ko: { ...ko, displayName: localeNames.ko },
+    ja: { ...ja, displayName: localeNames.ja },
   });

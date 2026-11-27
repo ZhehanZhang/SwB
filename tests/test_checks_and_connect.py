@@ -149,6 +149,7 @@ def test_blocks_check_separates_required_config_from_live_setup(tmp_path, monkey
 
     assert set(capsys.readouterr().out.splitlines()) == {
         "mcp is ready.",
+        "webhook is ready.",
         "slack is ready.",
         "slack-dots is ready.",
         "dots needs setup. Declare a dot under dots in the dots block config.",

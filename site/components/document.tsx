@@ -14,7 +14,7 @@ export function Document({ page }: { page: DocumentPage }) {
   const startNext = page.slugs.join('/') === 'get-started' ? source.getPage([], page.locale) : undefined;
 
   return (
-    <DocsPage toc={toc} full={full} tableOfContent={{ enabled: Boolean(toc?.length) }}
+    <DocsPage toc={toc} full={full} breadcrumb={{ className: 'swb-docs-breadcrumb' }} tableOfContent={{ enabled: Boolean(toc?.length) }}
       tableOfContentPopover={{ enabled: Boolean(toc?.length) }}
       footer={{ component: (
         <footer data-docs-footer>
@@ -28,7 +28,7 @@ export function Document({ page }: { page: DocumentPage }) {
       <div className="mt-2 flex flex-wrap items-center gap-2 border-b pb-5">
         <MarkdownCopyButton className="swb-button swb-button-compact swb-doc-copy" markdownUrl={markdown} />
         <ViewOptionsPopover className="swb-button swb-button-compact flex-row-reverse" markdownUrl={markdown} githubUrl={githubUrl} pageUrl={new URL(markdown, siteUrl).href} />
-        <DocsNavigation />
+        <DocsNavigation askAI={process.env.NEXT_PUBLIC_ASK_AI === '1'} />
       </div>
       <TranslationNote lang={page.locale ?? 'en'} />
       <DocsBody className="swb-mdx">

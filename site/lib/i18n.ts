@@ -3,6 +3,19 @@ import { defineI18n } from 'fumadocs-core/i18n';
 export const locales = ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const;
 export type Locale = (typeof locales)[number];
 
+export const localeNames = {
+  en: 'English',
+  'zh-Hans': '简体中文',
+  'zh-Hant': '繁體中文',
+  es: 'Español',
+  fr: 'Français',
+  de: 'Deutsch',
+  ko: '한국어',
+  ja: '日本語',
+} satisfies Record<Locale, string>;
+
+export const localeCookie = 'swb-locale';
+
 export const i18n = defineI18n({
   defaultLanguage: 'en',
   languages: [...locales],
