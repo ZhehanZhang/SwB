@@ -12,6 +12,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ...auth import Principal
 from ...block_env import GITHUB_SECRET, configured_env
+from ...config import Config
+from ...connect import PUBLIC_HTTPS_PREREQUISITE
 from ...modes import PROVIDERS
 from ...muse_protocol import TOKEN_ENV as MUSE_TOKEN_ENV
 from .coding import coding_steps
@@ -37,12 +39,16 @@ CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
 MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web",
          "grok": "grok.com > Connectors > New Connector > Custom"}
 GUIDE_TITLE_WORDS = {"chatgpt": "ChatGPT", "github": "GitHub", "mcp": "MCP"}
-PUBLIC_HTTPS_PREREQUISITE = "Configure a public HTTPS URL and owner sign-in to use OAuth."
 
 
-def enable_steps(name: str) -> list[dict[str, str]]:
+def enable_steps(cfg: Config, name: str) -> list[dict[str, str]]:
     config = {"use": name, "enabled": True, **BLOCK_EXAMPLES.get(name, {})}
-    instruction = "Merge this YAML under blocks in config/switchboard.yaml."
+    if cfg.blocks_from_file:
+        instruction = "Merge this YAML under blocks in config/switchboard.yaml."
+        snippet = indent(yaml.safe_dump({name: config}, sort_keys=False).rstrip(), "  ")
+    else:
+        instruction = "Add this blocks section to config/switchboard.yaml."
+        snippet = yaml.safe_dump({"blocks": {**cfg.blocks, name: config}}, sort_keys=False).rstrip()
     if name == "slack":
         instruction += " Replace T0DEMO0001 with the Slack workspace ID."
     elif name == "github":
@@ -56,7 +62,7 @@ def enable_steps(name: str) -> list[dict[str, str]]:
             f" For an environment-only config, omit blocks and set {', '.join(ROUTINE_ENV_ONLY[name])} in .env."
         )
     return [
-        {"by": "you", "do": instruction, "snippet": indent(yaml.safe_dump({name: config}, sort_keys=False).rstrip(), "  ")},
+        {"by": "you", "do": instruction, "snippet": snippet},
         {"by": "you", "do": "Restart SwB."},
     ]
 
@@ -161,7 +167,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
                 {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}],
                 **({"modes": core.modes.summary(block.name, p)} if block is not None and block.manifest.id in PROVIDERS else {})}
         if what in BLOCKS and block is None:
-            return {**result, "done": [], "next": enable_steps(BLOCKS[what])}
+            return {**result, "done": [], "next": enable_steps(core.cfg, BLOCKS[what])}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
         outcome = "ok"
         try:
