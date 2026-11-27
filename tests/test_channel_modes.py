@@ -497,17 +497,18 @@ def test_restricted_wake_cannot_write_with_or_without_its_handle(intake, mode):
             assert audit["ref"] == meta["permalink"]
 
 
-def test_notify_owner_only_reaches_the_owner_or_default_mailbox(intake):
+def test_notify_owner_only_reaches_the_owner_mailbox(intake):
     with intake("triage") as chat:
         chat.client.portal.call(chat.core.modes.set, principal(), chat.block.name, "home", "triage", chat.channel, ["notify_owner"])
         chat.send(100, "Feedback to summarize")
         handle = chat.core.store.one("SELECT handle FROM chat_relays")["handle"]
         bad = call(chat.client, STATIC_KEY, "agent_send", {"conversation": handle, "to": "someone-else", "text": "A note"})
-        assert "can only message the owner" in error_text(bad)
+        assert "Choose the owner as the target." in error_text(bad)
         out = payload(call(chat.client, STATIC_KEY, "reply", {"conversation": handle, "text": "A note", "to_owner": True}))
-        assert out["delivered"]
-        note = chat.core.inbox.read(owner=out["to"], since=0, advance=False)["items"][-1]
-        assert "A note" in note["text"] and "/100" in note["text"]
+        assert out["delivered"] and out["to"] == "owner"
+        [note] = chat.core.inbox.read(owner="owner", since=0, advance=False)["items"]
+        assert note["text"] == "A note" and note["permalink"].endswith("/100")
+        assert note["kind"] == "triage_note" and note["handle"] == out["handle"]
         [audit] = chat.core.audit.recent(action="triage.notify_owner", outcome="ok")
         assert audit["ref"].endswith("/100")
         assert not chat.posts

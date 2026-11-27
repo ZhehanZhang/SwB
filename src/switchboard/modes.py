@@ -561,7 +561,7 @@ class ChannelModes:
     def meta(self, block: str, space: str, channel: str, mode: str, actions: tuple[str, ...] | list[str], project: str | None,
              link: str | None, target: str | None) -> dict[str, Any]:
         return {"block": block, "space": space, "channel": channel, "mode": mode, "actions": list(actions), "project": project,
-                "permalink": link, "target": target, "notify_target": self._mailbox(self._default_target(block, space, project), project)}
+                "permalink": link, "target": target}
 
     def wake_note(self, meta: dict[str, Any]) -> str:
         if meta["mode"] == "assist":
@@ -570,10 +570,11 @@ class ChannelModes:
                 f"details, or notify the owner only as allowed. Allowed actions: {', '.join(meta['actions']) or 'none'}. "
                 "Use this conversation for every action. Do not forward, delegate, change settings, or write memory.")
 
-    def audit_action(self, principal: Principal, meta: dict[str, Any], action: str, outcome: str = "ok") -> None:
+    def audit_action(self, principal: Principal, meta: dict[str, Any], action: str, outcome: str = "ok", *, detail: str | None = None) -> None:
         if meta["mode"] == "triage":
             self.core.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=meta["block"],
-                                   action=f"triage.{action}", outcome=outcome, ref=meta["permalink"], target=f'{meta["space"]}/{meta["channel"]}')
+                                   action=f"triage.{action}", outcome=outcome, ref=meta["permalink"], target=f'{meta["space"]}/{meta["channel"]}',
+                                   detail=detail)
 
     def check(self, principal: Principal, handle: str | None, action: str, repo: str | None = None) -> dict[str, Any] | None:
         row = self.core.inbox.handle(handle) if handle and handle.startswith("h_") else None
@@ -584,13 +585,15 @@ class ChannelModes:
             if row["owner"] != principal.source:
                 raise PermissionError("that channel-mode conversation is not yours")
             if meta["project"] and not principal.allows(f'project:{meta["project"]}'):
-                self.audit_action(principal, meta, action, "refused")
+                if action != "notify_owner":
+                    self.audit_action(principal, meta, action, "refused")
                 raise PermissionError("that channel-mode conversation is outside this key's project scope")
             if meta["mode"] == "work" and action == "reply":
                 return None
             allowed = ("reply",) if meta["mode"] == "assist" else meta["actions"]
             if action not in allowed:
-                self.audit_action(principal, meta, action, "refused")
+                if action != "notify_owner":
+                    self.audit_action(principal, meta, action, "refused")
                 raise PermissionError(f"{meta['mode']} conversations cannot {action}; allowed actions: {', '.join(allowed) or 'none'}")
             if repo is not None:
                 project = self.core.project(meta["project"]) if meta["project"] else None

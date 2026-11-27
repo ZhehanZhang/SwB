@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import sqlite3
 from contextlib import asynccontextmanager
 
 import httpx
@@ -21,6 +22,7 @@ from switchboard.blocks import BlockError
 from switchboard.blocks.github import DELIVERY_TTL_S, REFUSAL_AUDIT_INTERVAL_S, _json, trim
 from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
+from switchboard.refusals import OWNER_NOTE_REQUIRED
 
 SECRET = "example-test-only-secret"
 OWNER_KEY = "fixture-long-owner-key-only"
@@ -771,6 +773,41 @@ async def test_github_mcp_write_tools_use_the_guarded_conversation(github):
         result = await acall(client, token, "github_notify_owner", {"handle": item["handle"], "text": "Asked for the version."})
         assert not result.get("isError"), result
         assert writes == ["/repos/acme/app/issues/7/comments"]
+
+
+@pytest.mark.parametrize("name", ["reply", "github_notify_owner"])
+async def test_github_triage_owner_note_matches_delivery_and_audit(github, monkeypatch, name):
+    config = github_config("triage", ["notify_owner"])
+    async with github(config, settings={**shared(), "blocks": {"mcp": {}, "github": config}}) as (core, client):
+        await send(client, sender={"id": 21})
+        [item] = core.inbox.read(owner="claude")["items"]
+        code = core.connections.mint(agent="claude", project=None, client=None, by="fixture")["code"]
+        key = core.connections.redeem(code)["key"]
+        text = "Fixture triage note for the owner"
+        args = {"text": text, **({"conversation": item["handle"], "to_owner": True} if name == "reply" else {"handle": item["handle"]})}
+
+        def fail(*args, **kwargs):
+            raise sqlite3.OperationalError(text)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(core.inbox, "_add", fail)
+            assert error_text(await acall(client, key, name, args)) == OWNER_NOTE_REQUIRED
+        assert core.inbox.read(owner="owner", since=0)["items"] == []
+        assert core.inbox.handles(owner="owner", destination="mailbox") == []
+        [denied] = core.audit.recent(outcome="refused")
+        assert (denied["action"], denied["detail"], denied["excerpt"]) == ("triage.notify_owner", OWNER_NOTE_REQUIRED, "")
+        assert text not in json.dumps(denied)
+
+        out = payload(await acall(client, key, name, args))
+        assert out["ok"]
+        [note] = core.inbox.read(owner="owner", since=0)["items"]
+        assert (note["handle"], note["kind"], note["conversation"], note["text"], note["permalink"]) == (
+            out["handle"], "triage_note", item["handle"], text, ISSUE["html_url"],
+        )
+        assert not core.inbox.read(owner="claude")["items"]
+        assert [(row["outcome"], row["ref"]) for row in core.audit.recent(action="triage.notify_owner")] == [
+            ("ok", ISSUE["html_url"]), ("refused", ISSUE["html_url"]),
+        ]
 
 
 async def test_unloadable_app_key_allows_pat_auth_for_connect_and_writes(github):

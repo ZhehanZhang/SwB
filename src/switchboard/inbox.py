@@ -170,7 +170,7 @@ class Inbox:
 
     # Items ----------------------------------------------------------------------------
 
-    def _add(self, h: dict[str, Any], kind: str, data: dict[str, Any]) -> int:
+    def _add(self, h: dict[str, Any], kind: str, data: dict[str, Any], *, connection: Any = None) -> int:
         def write(db: Any) -> int:
             at = self.store.clock()
             db.execute("UPDATE handles SET updated_at = ? WHERE handle = ?", (at, h["handle"]))
@@ -185,7 +185,20 @@ class Inbox:
                     log.exception("inbox listener failed for item %s", item)
             return item
 
-        return self.store.tx(write)
+        return self.store.tx(write) if connection is None else write(connection)
+
+    def deliver_triage_note(self, *, source: str, project: str | None, data: dict[str, Any]) -> str:
+        handle = self.new_handle()
+
+        def write(db: Any) -> None:
+            db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status, target) "
+                       "VALUES (?, 'owner', 'mailbox', ?, ?, 'Triage note', '{}', ?, 0, 'delivered', 'agent:owner')",
+                       (handle, source, project, self.store.clock()))
+            self._add({"handle": handle, "owner": "owner", "destination": "mailbox"}, "triage_note", data, connection=db)
+
+        self.store.tx(write)
+        self.signal_waiters()
+        return handle
 
     async def add(self, handle: str, kind: str, data: dict[str, Any]) -> int:
         h = self.handle(handle)
