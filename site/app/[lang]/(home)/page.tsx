@@ -51,7 +51,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </div>
           <SwitchboardHero label={copy.boardAlt} lang={lang} prompts={prompts()} labels={copy.panel} />
         </section>
-        <section className="py-16 sm:py-24">
+        <section className="pb-16 pt-6 sm:pb-24 sm:pt-10">
           <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{copy.positioning.title}</h2>
           <div className="mt-5 grid max-w-5xl gap-4 text-[17px] leading-relaxed text-fd-muted-foreground md:grid-cols-3 md:gap-10">
             {copy.positioning.body.map((text) => <p key={text}>{text}</p>)}

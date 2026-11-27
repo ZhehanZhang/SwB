@@ -139,10 +139,10 @@
 }
 
 .swb-node .swb-node-label { position: absolute; }
-.swb-node-right .swb-node-label { left: calc(100% + 1.4cqw); top: 50%; transform: translateY(-50%); }
-.swb-node-left .swb-node-label { right: calc(100% + 1.4cqw); top: 50%; transform: translateY(-50%); }
-.swb-node-top .swb-node-label { bottom: calc(100% + 1.4cqw); left: 50%; transform: translateX(-50%); }
-.swb-node-bottom .swb-node-label { top: calc(100% + 1.4cqw); left: 50%; transform: translateX(-50%); }
+.swb-node-right .swb-node-label { left: calc(100% + 2.2cqw); top: 50%; transform: translateY(-50%); }
+.swb-node-left .swb-node-label { right: calc(100% + 2.2cqw); top: 50%; transform: translateY(-50%); }
+.swb-node-top .swb-node-label { bottom: calc(100% + 2.2cqw); left: 50%; transform: translateX(-50%); }
+.swb-node-bottom .swb-node-label { top: calc(100% + 2.2cqw); left: 50%; transform: translateX(-50%); }
 .swb-board-tall .swb-node-label { display: none; }
 .swb-board-tall .swb-mark-tile { width: 10cqw; height: 10cqw; }
 .swb-board-tall .swb-hub, .swb-board-tall .swb-hub-ring { width: 17cqw; height: 17cqw; }
@@ -260,8 +260,8 @@
   display: grid;
   align-items: center;
   gap: 2rem;
-  min-height: calc(100dvh - 3.5rem);
-  padding-block: 2.5rem;
+  min-height: calc(86dvh - 3.5rem);
+  padding-block: 2.5rem 1rem;
 }
 @media (min-width: 1024px) {
   .swb-hero-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 2rem; }
@@ -343,6 +343,8 @@ button.swb-node:focus-visible { outline: none; }
   transform: translateY(6px);
   transition: opacity .35s ease, transform .35s ease;
 }
+.swb-from { display: flex; align-items: center; gap: .4rem; margin-bottom: .2rem; font-size: 13px; font-weight: 600; }
+.swb-from-mark.swb-mark-tile { width: 18px; height: 18px; }
 .swb-bubble-mine { margin-left: auto; background: color-mix(in oklab, var(--accent) 14%, var(--surface)); }
 .swb-bubble-in { opacity: 1; transform: none; }
 .swb-slack-line { transition: opacity .35s ease, transform .35s ease; }

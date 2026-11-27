@@ -34,7 +34,7 @@ const trips = livePairs.map(([from, to]) => [index(from), index(to)] as const);
 const BEND = 0.14;
 
 const layouts = {
-  wide: { W: 1000, H: 820, r: 320, hub: 44, cord: [7, 2.4], pulse: 6, halo: 30 },
+  wide: { W: 1000, H: 820, r: 320, hub: 44, cord: [7, 2.4], pulse: 6, halo: 26 },
   tall: { W: 1000, H: 1000, r: 385, hub: 85, cord: [5, 1.8], pulse: 4.5, halo: 58 },
 };
 type Layout = keyof typeof layouts;
