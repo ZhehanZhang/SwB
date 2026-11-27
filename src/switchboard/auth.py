@@ -147,7 +147,7 @@ def source_for(redirect_uri: str, client: Client, names: dict[str, str], agents:
     if matched:
         return matched
     slug = re.sub(r"[^a-z0-9]+", "-", (client.name or "").lower()).strip("-")[:40]
-    return slug or "local"
+    return slug or f"oauth-{sha(client.client_id)[:12]}"
 
 
 class Auth:
@@ -647,15 +647,18 @@ class Auth:
                 return RedirectResponse(_append(params["redirect_uri"], q), status_code=302)
 
         source = source_for(params["redirect_uri"], c, self.cfg.source_names, self.agents)
-        who = html.escape((self.agents.label(source, "") if source in self.agents else "") or c.name or c.client_id)
+        who = html.escape((c.name or "").strip() or self.agents.label(source, "") or "OAuth client")
+        address = f'<span class="item-line">Mailbox address <code>agent:{html.escape(source)}</code></span>' if source not in self.agents else ""
         dest = html.escape(urlparse(params["redirect_uri"]).netloc)
-        line = f"<b>{who}</b> wants to connect as <span class=\"tag\">{html.escape(source)}</span>. It can read and write shared memory and route work to the destinations this switchboard connects, such as Capy."
-        signed = f'<p class="item-line">Signed in as {html.escape(owner.label)}</p>'
-        body = pages.hero("Connect to SwB", line) + f"""
+        owner_name = owner.label if owner.via == "access" else (
+            self.cfg.owner_emails[0] if len(self.cfg.owner_emails) == 1 else "owner"
+        )
+        signed = f'<p class="item-line">Signed in as {html.escape(owner_name)}</p>'
+        body = pages.hero("Connect to SwB", "This connection can read and write shared memory and route work.") + f"""
 <form method="post" class="fade-in">
 <input type="hidden" name="req" value="{html.escape(self.sign(params))}">
 <input type="hidden" name="csrf" value="{self.csrf(owner.csrf_key)}">
-<div class="card"><div class="item"><div class="item-main"><span class="card-title">{who}</span><span class="item-line">Returns to <code>{dest}</code></span>{signed}</div></div></div>
+<div class="card"><div class="item"><div class="item-main"><span class="card-title">{who}</span>{address}<span class="item-line">Returns to <code>{dest}</code></span>{signed}</div></div></div>
 <div class="actions"><button class="pill-button primary" name="decision" value="approve">Approve</button>
 <button class="text-button" name="decision" value="deny" formnovalidate>Deny</button></div>
 </form>"""

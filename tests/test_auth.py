@@ -2,8 +2,9 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, consent_csrf, payload, pkce, register, rpc, sign_in, Clock
+from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, consent_csrf, error_text, payload, pkce, register, rpc, sign_in, Clock
 from switchboard.agents import Agents
+from switchboard.brand import TAGLINE
 from switchboard.config import ConfigError
 
 
@@ -285,11 +286,52 @@ def test_capy_signs_in_with_oauth_as_agent_capy(make):
     cb = "https://capy.ai/web/callbacks/mcp"
     cid = register(c, redirect=cb, client_name="Capy MCP client")["client_id"]
     page, _ = consent(c, cid, redirect=cb)
-    assert page.status_code == 200 and "<b>Capy</b> wants to connect as" in page.text and ">capy</span>" in page.text
+    assert page.status_code == 200 and page.text.count("Capy MCP client") == 1
+    assert TAGLINE["en"] in page.text and "Returns to <code>capy.ai</code>" in page.text
     tok = sign_in(c, redirect=cb)
     me = payload(call(c, tok["access_token"], "switchboard_status"))["you"]
     assert me["agent"] == "capy" and me["auth"] == "oauth"
     assert payload(call(c, STATIC_KEY, "switchboard_status"))["you"]["agent"] == "capy"
+
+
+def test_unmapped_oauth_agent_is_addressable_after_token_exchange(make):
+    core, c = make()
+    redirect = "http://localhost:8765/callback"
+    cid = register(c, redirect=redirect, client_name="R3C OAuth <test>")["client_id"]
+    page, _ = consent(c, cid, redirect=redirect)
+    assert page.status_code == 200 and page.text.count("R3C OAuth &lt;test&gt;") == 1
+    assert "R3C OAuth <test>" not in page.text
+    slug = "r3c-oauth-test"
+    assert f"Mailbox address <code>agent:{slug}</code>" in page.text
+    task = {"task": "review this", "to": f"agent:{slug}"}
+    assert "no agent" in error_text(call(c, STATIC_KEY, "send", task))
+
+    tokens = sign_in(c, redirect=redirect, client_id=cid)
+    access = tokens["access_token"]
+    assert payload(call(c, access, "switchboard_status"))["you"]["agent"] == slug
+    delivery = payload(call(c, STATIC_KEY, "send", task))
+    assert delivery["delivered"] and delivery["to"] == task["to"]
+    items = payload(call(c, access, "inbox"))["items"]
+    assert [item["text"] for item in items] == ["review this"]
+
+    other_grant = sign_in(c, redirect=redirect, client_id=cid)
+    assert payload(call(c, other_grant["access_token"], "switchboard_status"))["you"]["agent"] == slug
+    for grant in (tokens, other_grant):
+        assert c.post("/revoke", data={"client_id": cid, "token": grant["access_token"]}).status_code == 200
+    assert slug not in core.known_agents()
+
+
+def test_unnamed_oauth_clients_get_distinct_stable_slugs(make):
+    _, c = make()
+    redirect = "http://localhost:8765/callback"
+    first, other = (register(c, redirect=redirect, client_name="")["client_id"] for _ in range(2))
+
+    def slug(client_id):
+        access = sign_in(c, redirect=redirect, client_id=client_id)["access_token"]
+        return payload(call(c, access, "switchboard_status"))["you"]["agent"]
+
+    first_slug = slug(first)
+    assert first_slug.startswith("oauth-") and first_slug == slug(first) and first_slug != slug(other)
 
 
 def test_key_scopes_apply_to_an_oauth_agent_too(make):

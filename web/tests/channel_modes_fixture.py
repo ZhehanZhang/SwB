@@ -59,6 +59,14 @@ async def capy_fixture(request: httpx.Request) -> httpx.Response:
 
 
 async def seed_inbox(core: Switchboard) -> None:
+    for i in range(1, 27):
+        handle = core.inbox.open_handle(
+            handle=f"h_history_{i}", owner="claude-code", destination="mailbox", ref=f"history-{i}",
+            project="operations" if i <= 22 else "community", title=f"Conversation {i}", meta={},
+        )
+        if i == 1:
+            await core.inbox.add(handle, "message", {"text": "The first conversation."})
+            core.store.x("INSERT INTO conversation_turns(root, turns, paused_at) VALUES (?, ?, ?)", (handle, 200, core.clock()))
     pairing = core.connections.mint(agent="claude-code", project="operations", client=None, by="owner")
     key = core.connections.redeem(pairing["code"])
     core.slack.store.create_request(
@@ -117,6 +125,10 @@ def run(path: Path) -> None:
                        slack_options={"connect": False, "client_factory": lambda _token: SlackFixture()})
     core.projects.create(slug="operations", name="Operations")
     core.projects.create(slug="community", name="Community")
+    core.memory.write(source="claude-code", scope="general", namespace="notes", key="release-plan",
+                      title="Release plan", body="Prepare the release.", confirm_general=True)
+    core.memory.write(source="claude-code", scope="general", namespace="notes",
+                      title="Meeting notes", body="Review the schedule.", confirm_general=True)
     discord = core.blocks["team-chat"]
     discord.guilds.add("1000")
     discord.guild_info["1000"] = {"name": "Engineering", "owner_id": "1001"}

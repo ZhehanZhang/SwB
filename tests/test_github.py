@@ -474,6 +474,41 @@ def app_key():
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
+async def test_signed_deliveries_do_not_wait_for_an_installation_check(github, app_key):
+    entered, release = asyncio.Event(), asyncio.Event()
+    requests = []
+
+    async def api(request):
+        requests.append(request.url.path)
+        entered.set()
+        await release.wait()
+        return httpx.Response(401)
+
+    pem = app_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "GITHUB_APP_ID": "123", "GITHUB_APP_PRIVATE_KEY": pem}
+    async with github(github_config("triage"), env, settings=shared(), http_transport=httpx.MockTransport(api)) as (core, client):
+        block = core.blocks["github"]
+        async with asyncio.TaskGroup() as tasks:
+            refresh = tasks.create_task(block.refresh_installation())
+            try:
+                await asyncio.wait_for(entered.wait(), timeout=2)
+                concurrent = tasks.create_task(block.refresh_installation())
+                sender = {"id": 11, "type": "User"}
+                responses = await asyncio.wait_for(asyncio.gather(
+                    send(client, sender=sender),
+                    send(client, sender=sender),
+                    send(client, delivery="example-2", sender=sender),
+                ), timeout=2)
+                assert all(response.status_code == 200 and response.json() == {"ok": True} for response in responses)
+                assert not refresh.done() and not concurrent.done()
+                assert requests == ["/repos/acme/app/installation"]
+                assert len(core.inbox.read(owner="claude")["items"]) == 2
+            finally:
+                release.set()
+        assert requests == ["/repos/acme/app/installation"]
+        assert block.missing_installations == {"acme/app": "GitHub did not accept the configured credentials (HTTP 401)"}
+
+
 @pytest.mark.parametrize("format", [serialization.PrivateFormat.TraditionalOpenSSL, serialization.PrivateFormat.PKCS8])
 @pytest.mark.parametrize("separator", ["", " ", "\n"])
 async def test_app_claim_accepts_pasted_pem_and_checks_each_installation(github, app_key, format, separator):

@@ -98,6 +98,15 @@ def test_events_reach_only_granted_agents_with_slack_attribution(sb):
     assert again["items"] == [] and again["timed_out"]
 
 
+def test_send_to_slack_names_the_registered_slack_tools(sb):
+    _, client, _ = sb
+    res, _ = tool(client, KEY_FULL, "send", {"to": "slack:a2a", "task": "Test message"})
+    assert res["isError"]
+    assert res["content"][0]["text"].endswith(
+        "Post with slack_post. Request approval with slack_request_write. Check requests with slack_write_requests."
+    )
+
+
 def test_owner_approval_form_redirects_to_inbox_and_agents_cannot_approve(sb):
     core, client, world = sb
     _, pending = tool(client, KEY_FULL, "slack_post", {"workspace": "private", "channel": "CPRIV0001", "text": "see you <b>soon</b>", "identity": "user"})
