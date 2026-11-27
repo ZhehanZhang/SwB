@@ -120,6 +120,10 @@ test.describe("mobile connections", () => {
         await expect(page.getByRole("heading", { name: "Bot", exact: true })).toHaveCount(0)
         await expect(page.getByText("Disconnected", { exact: true })).toBeVisible()
       }
+      if (platform === "slack") {
+        const workspaceStatus = page.getByRole("table", { name: "Slack workspaces" }).getByText("Disconnected", { exact: true })
+        expect((await workspaceStatus.boundingBox())?.height).toBeLessThan(24)
+      }
     }
   })
 })
