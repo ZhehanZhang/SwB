@@ -107,7 +107,7 @@ async def connection(request: Request) -> JSONResponse:
             connected = any(ws["connected"] for ws in workspaces)
             details = {"workspaces": workspaces}
     state = "not_configured" if block is None else "connected" if connected else "disconnected"
-    return JSONResponse({"platform": platform, "state": state, "details": details})
+    return JSONResponse({"platform": platform, "block": block.name if block is not None else None, "state": state, "details": details})
 
 
 def avatar(request: Request) -> Response:

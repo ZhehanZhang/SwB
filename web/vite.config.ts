@@ -1,11 +1,25 @@
+import { readFileSync } from "node:fs"
 import { fileURLToPath, URL } from "node:url"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
+const theme = readFileSync(new URL("../src/switchboard/static/theme.js", import.meta.url), "utf8")
+
 export default defineConfig(({ command }) => ({
   base: command === "build" ? "/app-assets/" : "/",
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), {
+    name: "swb-theme",
+    configureServer(server) {
+      server.middlewares.use("/assets/theme.js", (_request, response) => {
+        response.setHeader("Content-Type", "text/javascript; charset=utf-8")
+        response.end(theme)
+      })
+    },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "assets/theme.js", source: theme })
+    },
+  }],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {
     outDir: fileURLToPath(new URL("../src/switchboard/static/app", import.meta.url)),

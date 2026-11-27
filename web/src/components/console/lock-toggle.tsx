@@ -17,7 +17,7 @@ export function LockToggle({ shared, resource, onSharedChange, className }: Lock
     return (
       <span className={cn("inline-grid size-10 shrink-0 place-items-center", className)} title={status}>
         <Icon aria-hidden className="size-4" />
-        <span className="sr-only">{resource}: {status}</span>
+        <span className="sr-only">{status} {resource}</span>
       </span>
     )
   }

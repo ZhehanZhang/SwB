@@ -80,7 +80,7 @@ def test_self_registration_link_takes_the_token_once(tmp_path):
         assert "isn't valid" in error_text_of(lambda: bad.claim("nope"))
         core.clock.t += 1801
         _, expired, _ = claim(c, held["link"])
-        assert expired.status_code == 410 and "this link has expired" in expired.text
+        assert expired.status_code == 410 and "<h1>Link expired</h1>" in expired.text
     finally:
         c.__exit__(None, None, None)
 
@@ -100,7 +100,7 @@ def test_registration_replaces_only_the_same_claude_projects_active_claim(tmp_pa
         second = payload(call(c, tok, "routine_register", again))
         assert second["name"] == first["name"] and second["superseded"] == [first["name"]]
         _, replaced, _ = claim(c, first["link"])
-        assert replaced.status_code == 410 and "this link was replaced by a newer registration; use the latest link" in replaced.text
+        assert replaced.status_code == 410 and "<h1>Use the latest link</h1>" in replaced.text
         pending = payload(call(c, tok, "routine_list"))["pending"]
         assert {p["routine_id"] for p in pending} == {"trig_01B", "trig_01OTHER"}
         path, page, csrf = claim(c, second["link"])
@@ -136,7 +136,7 @@ def test_registration_reads_projects_first_and_refuses_near_duplicates(tmp_path)
         assert fresh["pending"] and fresh["creates_project"]
         assert "infra-web" not in {p.slug for p in core.projects.list()}
         path, page, csrf = claim(c, made["link"])
-        assert "Created when you save" in page.text
+        assert '<p class="scope">For infra-web in Infra Web (trig_01NEW).</p>' in page.text
         assert c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER).status_code == 200
         p = core.projects.get("infra-web")
         assert p.name == "Infra web" and p.links["claude_project"] == "Infra Web"
@@ -168,7 +168,8 @@ def test_routines_can_share_a_pending_project_and_save_in_either_order(tmp_path,
             path, page, csrf = claim(c, reg["link"])
             assert page.status_code == 200
             saved = c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER)
-            assert saved.status_code == 200 and ("which was just created" in saved.text) == (i == 0)
+            title = "Routine and project saved" if i == 0 else "Routine saved"
+            assert saved.status_code == 200 and f"<h1>{title}</h1>" in saved.text
             p = core.projects.get("garden")
             assert p.name == "Garden" and p.description == "A seed calendar" and p.links == {"claude_project": "Garden Planner"}
             assert payload(call(c, tok, "project_list"))["pending_projects"] == []

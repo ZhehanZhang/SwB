@@ -17,8 +17,8 @@ function RequireSession() {
   return (
     <main className="mx-auto max-w-lg p-8">
       {session.isError
-        ? <DataState kind="error" message="Session unavailable." onRetry={() => void session.refetch()} />
-        : <DataState kind="loading" message="Checking session…" />}
+        ? <DataState kind="error" message="Session unavailable" onRetry={() => void session.refetch()} />
+        : <DataState kind="loading" />}
     </main>
   )
 }
@@ -43,7 +43,7 @@ export function App() {
           <Route path="/connections/:platform" element={<ConnectionsPage />} />
           <Route path="/canvas/*" element={<Navigate to="/" replace />} />
           <Route path="/provision/*" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<DataState kind="empty" message="Page not found." />} />
+          <Route path="*" element={<DataState kind="empty" message="Unknown page" />} />
         </Route>
       </Routes>
       <Toaster position="bottom-right" />

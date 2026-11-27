@@ -12,10 +12,10 @@ def test_delegate_follows_the_global_route_to_the_captain(make, capy):
     core, c = make()
     infra(core)
     tok = sign_in(c)["access_token"]
-    out = payload(call(c, tok, "capy_delegate", {"task": "Add a status check for switchboard", "project": "infra", "repos": ["example-org/status-service"]}))
+    out = payload(call(c, tok, "capy_delegate", {"task": "Add a status check for switchboard", "project": "infra", "repos": ["demo-org/sample-tools"]}))
     assert out["thread_id"] == CAPTAIN and out["route"] == "global" and "used_today" not in out and out["handle"].startswith("h_")
     _, _, body = last(capy, "POST", f"threads/{CAPTAIN}/message")
-    assert body["text"].startswith("Add a status check for switchboard\n") and "switchboard" not in body["text"].split("\n")[0][:12] and "Repos: example-org/status-service" in body["text"]
+    assert body["text"].startswith("Add a status check for switchboard\n") and "switchboard" not in body["text"].split("\n")[0][:12] and "Repos: demo-org/sample-tools" in body["text"]
     assert "switchboard: done" not in body["text"] and out["handle"] not in body["text"] and body["delivery"] == "queue" and len(body["clientKey"]) <= 64
     row = core.audit.recent(action="delegate")[0]
     assert row["source"] == "claude" and row["outcome"] == "ok" and row["ref"] == CAPTAIN and row["origin"] == "mcp"
@@ -49,8 +49,8 @@ def test_captain_route_can_start_crew_threads(make, capy):
 def test_repo_allowlist_comes_from_project_links(make, capy):
     core, c = make()
     infra(core)
-    assert "not linked" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "repos": ["example-org/site"]}))
-    assert "no project" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "acme"}))
+    assert "not linked" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "repos": ["demo-org/sample-jobs"]}))
+    assert "no project" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "demolab"}))
     assert not [x for x in capy.requests if x[0] == "POST" and not x[1].endswith("/send-now")]
     assert [d["outcome"] for d in core.audit.recent(action="delegate")] == ["refused", "refused"]
 
@@ -74,11 +74,11 @@ def test_status_result_and_prs_by_handle(make, capy):
     capy.threads[tid]["status"] = "idle"
     capy.messages[tid] += [
         {"id": "t1", "source": "tool", "text": "Running tests", "createdAt": "x"},
-        {"id": "a1", "source": "assistant", "text": "PR is up: https://github.com/example-org/status-service/pull/12", "createdAt": "x",
+        {"id": "a1", "source": "assistant", "text": "PR is up: https://github.com/demo-org/sample-tools/pull/12", "createdAt": "x",
          "attachments": [{"file": {"fileId": "f1", "name": "shot.png", "mediaType": "image/png", "sizeBytes": 10}, "title": "Screenshot"}]},
     ]
     st = payload(call(c, STATIC_KEY, "capy_status", {"thread_id": out["handle"]}))
-    assert st["status"] == "idle" and st["pull_requests"] == ["https://github.com/example-org/status-service/pull/12"]
+    assert st["status"] == "idle" and st["pull_requests"] == ["https://github.com/demo-org/sample-tools/pull/12"]
     assert all(m["source"] != "tool" for m in st["latest"])
     res = payload(call(c, STATIC_KEY, "capy_result", {"thread_id": tid, "tail": 5}))
     assert res["final_reply"]["text"].startswith("PR is up")
@@ -113,14 +113,14 @@ def test_list_scopes_and_captains(make):
     assert {t["title"] for t in crew["items"]} == {"slackgate", "needs owner", "other project work"}
     assert payload(call(c, STATIC_KEY, "capy_list", {"scope": "project", "project": "infra"}))["project"] == "infra"
     caps = payload(call(c, STATIC_KEY, "capy_captains"))["captains"]
-    assert [(x["name"], x["routed"]) for x in caps] == [("Captain", True), ("Acme Captain", False)]
+    assert [(x["name"], x["routed"]) for x in caps] == [("Captain", True), ("DemoLab Captain", False)]
 
 
 def test_captain_digest(make):
     _, c = make()
     d = payload(call(c, STATIC_KEY, "capy_captain_digest", {}))
     assert d["file"] == "NOTES.md" and CAPTAIN in d["markdown"]
-    assert [t["ask"] for t in d["crew_needs_you"]] == ["Merge zhehanzhang/x#1"]
+    assert [t["ask"] for t in d["crew_needs_you"]] == ["Merge demo-org/sample-service#1"]
 
 
 def test_context_pack_includes_project_memory_and_the_routed_captain(make):
@@ -128,14 +128,14 @@ def test_context_pack_includes_project_memory_and_the_routed_captain(make):
 
     core, c = make()
     infra(core)
-    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN2, "name": "Acme Captain"}, defaults={}, allow_override=False, note="", by="t")
+    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN2, "name": "DemoLab Captain"}, defaults={}, allow_override=False, note="", by="t")
     call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "profile", "title": "Timezone", "body": "America/New_York"})
     call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "decisions", "title": "Python stack", "body": "Match slackgate"})
     call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "namespace": "notes", "title": "Port", "body": "8870"})
     call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "infra", "title": "Doing"})
     text = payload(call(c, STATIC_KEY, "context_pack", {"project": "infra"}))
-    for needle in ("Project Infra", "8870", "General: profile", "Timezone", "Python stack", "## Capy", "captain Acme Captain", "project route",
-                   "Delegations in progress", "Doing", f"Captain notes for {CAPTAIN2}", "needs you: Merge zhehanzhang/x#1", "working: slackgate"):
+    for needle in ("Project Infra", "8870", "General: profile", "Timezone", "Python stack", "## Capy", "captain DemoLab Captain", "project route",
+                   "Delegations in progress", "Doing", f"Captain notes for {CAPTAIN2}", "needs you: Merge demo-org/sample-service#1", "working: slackgate"):
         assert needle in text, needle
     assert "other project work" not in text
     general = payload(call(c, STATIC_KEY, "context_pack", {}))

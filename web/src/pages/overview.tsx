@@ -75,7 +75,7 @@ function ProjectSummary({ project }: { project: Project }) {
           ["Open", quantity(project.open_count, "conversation")],
         ].map(([label, value]) => (
           <div key={label} className="flex justify-between gap-2">
-            <dt className="text-muted-foreground" title={label === "Turn cap" ? "Global limit per conversation" : undefined}>{label}</dt>
+            <dt className="text-muted-foreground">{label}</dt>
             <dd className="text-right font-mono text-mono-sm">{value}</dd>
           </div>
         ))}
@@ -85,7 +85,7 @@ function ProjectSummary({ project }: { project: Project }) {
 }
 
 function SourceList({ project, compact = false }: { project: Project; compact?: boolean }) {
-  if (!project.sources.length) return <p className="self-center pr-3 text-right text-body-sm text-muted-foreground">No channels</p>
+  if (!project.sources.length) return <div aria-hidden />
   return (
     <ul className="min-w-0 self-center">
       {project.sources.map((item) => (
@@ -103,12 +103,12 @@ function SourceList({ project, compact = false }: { project: Project; compact?: 
 }
 
 function AgentList({ project, compact = false }: { project: Project; compact?: boolean }) {
-  if (!project.agents.length) return <p className="self-center pl-3 text-body-sm text-muted-foreground">No agents</p>
+  if (!project.agents.length) return <div aria-hidden />
   return (
     <ul className="min-w-0 self-center">
       {project.agents.map((agent) => (
         <li key={agent.id} className={`flex min-w-0 items-center ${compact ? "h-8 gap-1.5 pl-3" : "h-10 gap-2.5 pl-5"}`}>
-          <LogoTile kind={agent.kind} className={compact ? "size-[18px]" : undefined} />
+          <LogoTile kind={agent.kind} avatarUrl={agent.avatar_url} className={compact ? "size-[18px]" : undefined} />
           <span className="truncate text-label-sm" title={agent.label}>{agent.label}</span>
           {!compact && (
             <>
@@ -161,7 +161,7 @@ function ProjectRow({ project }: { project: Project }) {
             <span aria-hidden className="absolute top-1/2 left-1/2 size-2.5 -translate-1/2 rounded-full bg-foreground" />
           </div>
         )}
-        {!project.sources.length && !project.agents.length && <p className="text-body-sm text-muted-foreground">No line yet</p>}
+        {!project.sources.length && !project.agents.length && <p className="text-body-sm text-muted-foreground">Unrouted</p>}
       </div>
     </li>
   )
@@ -180,7 +180,7 @@ function Runtime({ runtime }: { runtime: Board["runtime"] }) {
       await navigator.clipboard.writeText(url.href)
       toast.success("MCP URL copied")
     } catch {
-      toast.error("Couldn’t copy the MCP URL")
+      toast.error("MCP URL copy failed")
     }
   }
   return (
@@ -190,7 +190,7 @@ function Runtime({ runtime }: { runtime: Board["runtime"] }) {
         {url ? (
           <span className="truncate font-mono text-mono-md" title={url.href}>{url.host}{url.pathname}</span>
         ) : (
-          <span className="text-body-sm text-muted-foreground">{runtime.online ? "MCP URL unavailable" : "MCP not configured"}</span>
+          <span className="text-body-sm text-muted-foreground">{runtime.online ? "MCP URL unavailable" : "MCP setup required"}</span>
         )}
         {url && (
           <Button variant="ghost" onClick={() => void copyUrl()} className="ml-auto sm:ml-0" aria-label="Copy MCP URL">
@@ -263,7 +263,7 @@ export function OverviewPage() {
   }, [hash, key, hasProjects])
 
   if (board.isPending) return <OverviewSkeleton />
-  if (board.isError) return <DataState kind="error" message={`Couldn’t load ${PRODUCT_NAME}.`} onRetry={() => void board.refetch()} />
+  if (board.isError) return <DataState kind="error" message="Overview unavailable." onRetry={() => void board.refetch()} />
 
   return (
     <div>
@@ -273,15 +273,15 @@ export function OverviewPage() {
           {board.data.projects.map((project) => <ProjectRow key={project.slug} project={project} />)}
         </ul>
       ) : (
-        <DataState kind="empty" message="No projects yet." />
+        <DataState kind="empty" message="0 projects" />
       )}
       {board.data.unassigned.length > 0 && (
         <section className="flex flex-wrap items-center gap-4 py-5 text-body-sm text-muted-foreground" aria-labelledby="unassigned-heading">
-          <h2 id="unassigned-heading">No line yet</h2>
+          <h2 id="unassigned-heading">Unrouted</h2>
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {board.data.unassigned.map((item) => (
               <li key={item.id} className="flex items-center gap-2" title={item.detail ?? undefined}>
-                <LogoTile kind={item.kind} className="size-[22px]" />
+                <LogoTile kind={item.kind} avatarUrl={item.avatar_url} className="size-[22px]" />
                 <span>{item.short_label ?? item.label}</span>
               </li>
             ))}

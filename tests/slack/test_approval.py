@@ -100,7 +100,7 @@ async def test_sweep_expires(make_core, clock):
 async def test_free_bot_post_sends_now_and_request_write_queues(make_core, world):
     core = await make_core()
     res = await core.gate.submit(key(core), "a2a", "bot", "post_message", {"channel": "CWATCH001", "text": "hi", "thread_ts": "1.2"})
-    assert res["status"] == "sent" and res["permalink"].startswith("https://a.slack.com/archives/CWATCH001/")
+    assert res["status"] == "sent" and res["permalink"].startswith("https://workspace-a.example.test/archives/CWATCH001/")
     queued = await core.gate.submit(key(core), "a2a", "bot", "post_message", {"channel": "CWATCH001", "text": "check me"}, force_approval=True)
     assert queued["status"] == "pending_approval"
     assert core.store.is_sent("TAAAA1111", "CWATCH001", res["ts"])

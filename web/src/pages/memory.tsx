@@ -32,16 +32,17 @@ function noteName(note: MemoryNote) {
 }
 
 function NoteTime({ date, short = false }: { date: string | null; short?: boolean }) {
-  if (!date) return "—"
+  if (!date) return null
   return <time dateTime={date} title={fullDate.format(new Date(date))}>{(short ? shortDate : fullDate).format(new Date(date))}</time>
 }
 
 function Author({ source }: { source: string }) {
+  if (!source) return null
   const name = source.startsWith("admin:") ? "Owner" : source
   return (
     <span className="flex min-w-0 items-center gap-2">
       <Logo kind={source} className="size-5" />
-      <span className="truncate" title={name}>{name || "Unknown"}</span>
+      <span className="truncate" title={name}>{name}</span>
     </span>
   )
 }
@@ -86,7 +87,7 @@ function NotesTable({ scope, notes, state, onOpen }: {
               </button>
             </td>
             <td role="cell" className="col-span-2 min-w-0 text-body-md text-muted-foreground lg:pr-4">
-              <span className="block wrap-anywhere lg:truncate" title={note.summary}>{note.summary || "—"}</span>
+              <span className="block wrap-anywhere lg:truncate" title={note.summary}>{note.summary}</span>
             </td>
             <td role="cell" className="min-w-0 text-body-sm lg:pr-4 lg:text-body-md"><Author source={note.writer} /></td>
             <td role="cell" className="self-center whitespace-nowrap font-mono text-mono-sm text-muted-foreground"><NoteTime date={note.updated_at} short /></td>
@@ -167,17 +168,20 @@ function NoteInspector({ note, onClose, onRelocate }: {
     <Sheet
       open
       title={entry?.title ?? note.title}
-      description={`${scopeName(scope)} / ${entry?.namespace ?? note.namespace}`}
       onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }}
     >
       {detail.isPending ? <DataState kind="loading" message="Loading note…" />
         : detail.isError ? (
-          <DataState kind="error" message="Couldn’t load this note." onRetry={() => void detail.refetch()} />
+          <DataState kind="error" message="Note unavailable." onRetry={() => void detail.refetch()} />
         ) : entry && (
           <>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2 border-b pb-4 text-xs">
               <dt className="text-muted-foreground">Key</dt>
               <dd className="font-mono break-all">{noteName(entry)}</dd>
+              <dt className="text-muted-foreground">Scope</dt>
+              <dd className="font-mono break-all">{scopeName(scope)}</dd>
+              <dt className="text-muted-foreground">Namespace</dt>
+              <dd className="font-mono break-all">{entry.namespace}</dd>
               <dt className="text-muted-foreground">Written by</dt>
               <dd><Author source={entry.writer} /></dd>
               <dt className="text-muted-foreground">Updated</dt>
@@ -187,9 +191,9 @@ function NoteInspector({ note, onClose, onRelocate }: {
                 <dd className="break-words">{entry.tags.join(", ")}</dd>
               </>}
             </dl>
-            <div className="py-4 text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">
-              {entry.body || <span className="text-muted-foreground">No note body.</span>}
-            </div>
+            {entry.body && <div className="py-4 text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {entry.body}
+            </div>}
             {!!entry.history.length && (
               <details className="border-t py-3">
                 <summary className="cursor-pointer rounded-sm text-sm font-medium">History</summary>
@@ -223,7 +227,7 @@ function NoteInspector({ note, onClose, onRelocate }: {
                     {action === "move" ? (
                       projects.isPending ? <DataState kind="loading" message="Loading projects…" className="py-0" />
                         : projects.isError ? (
-                          <DataState kind="error" message="Couldn’t load projects." onRetry={() => void projects.refetch()} className="py-0" />
+                          <DataState kind="error" message="Projects unavailable." onRetry={() => void projects.refetch()} className="py-0" />
                         ) : destinations.length ? (
                           <Field label="Move to project">
                             <select
@@ -236,16 +240,13 @@ function NoteInspector({ note, onClose, onRelocate }: {
                               {destinations.map((destination) => <option value={destination} key={destination}>{scopeName(destination)}</option>)}
                             </select>
                           </Field>
-                        ) : <DataState kind="empty" message="No other projects." className="py-0" />
-                    ) : (
-                      <p className="text-sm">
-                        {action === "promote" ? "Promote this note to general? All projects can read it there."
-                          : "Delete this note? It will no longer appear in Memory."}
-                      </p>
+                        ) : <DataState kind="empty" message="0 other projects" className="py-0" />
+                    ) : action === "promote" && (
+                      <p className="text-sm">All projects can read promoted notes.</p>
                     )}
                     {mutation.isError && (
                       <p role="alert" className="text-sm text-destructive">
-                        {action === "delete" ? "Couldn’t delete this note." : action === "promote" ? "Couldn’t promote this note." : "Couldn’t move this note."}
+                        {action === "delete" ? "Try deleting the note again." : action === "promote" ? "Try promoting the note again." : "Try moving the note again."}
                       </p>
                     )}
                     <div className="flex flex-wrap gap-2">
@@ -308,10 +309,10 @@ export function MemoryPage() {
   const noteTotal = query ? rows.length : scopeCount
   const resultText = query ? `${noteTotal} shown` : `${noteTotal} ${noteTotal === 1 ? "note" : "notes"}`
   const state: DataStateProps | undefined = !scopeCounts && scopes.isError
-    ? { kind: "error", message: "Couldn’t load notes." }
+    ? { kind: "error", message: "Notes unavailable." }
     : notes.isPending ? { kind: "loading", message: "Loading notes…" }
-    : notes.isError && !notes.data ? { kind: "error", message: "Couldn’t load notes.", onRetry: () => void notes.refetch() }
-    : !rows.length ? { kind: "empty", message: query ? "No matching notes." : "No notes in this scope." }
+    : notes.isError && !notes.data ? { kind: "error", message: "Notes unavailable.", onRetry: () => void notes.refetch() }
+    : !rows.length ? { kind: "empty", message: query ? "0 results" : "0 notes" }
     : undefined
 
   useEffect(() => { if (searchOpen) searchInput.current?.focus() }, [searchOpen])
@@ -365,7 +366,7 @@ export function MemoryPage() {
           </ul>
         ) : scopes.isPending ? (
           <DataState kind="loading" message="Loading scopes…" className="px-2.5 py-2" />
-        ) : <DataState kind="error" message="Couldn’t load scopes." onRetry={() => void scopes.refetch()} className="py-2" />}
+        ) : <DataState kind="error" message="Scopes unavailable." onRetry={() => void scopes.refetch()} className="py-2" />}
       </aside>
       <section aria-labelledby="memory-notes-heading" className="min-w-0 lg:pt-2">
         <div className="mb-1 flex min-h-7 items-center justify-between gap-4">
@@ -386,7 +387,7 @@ export function MemoryPage() {
             >
               <Search aria-hidden strokeWidth={1.5} />
             </Button>
-            {scopeCounts && <p aria-live="polite" className="text-body-sm text-muted-foreground">{!query || !notes.isPending ? resultText : ""}</p>}
+            {scopeCounts && state?.kind !== "empty" && <p aria-live="polite" className="text-body-sm text-muted-foreground">{!query || !notes.isPending ? resultText : ""}</p>}
           </div>
         </div>
         {searchOpen && (
@@ -426,7 +427,7 @@ export function MemoryPage() {
             <Button variant="outline" size="sm" disabled={notes.isFetchingNextPage} onClick={() => void notes.fetchNextPage()}>
               {notes.isFetchingNextPage ? "Loading…" : notes.isFetchNextPageError ? "Retry" : "Load more"}
             </Button>
-            {notes.isFetchNextPageError && <span role="alert" className="text-sm text-muted-foreground">Couldn’t load more notes.</span>}
+            {notes.isFetchNextPageError && <span role="alert" className="text-sm text-muted-foreground">Loading more notes failed.</span>}
           </div>
         )}
       </section>

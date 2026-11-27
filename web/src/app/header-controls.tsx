@@ -50,26 +50,26 @@ export function CommandMenu() {
       <Dialog.Trigger asChild>
         <button
           type="button"
-          aria-label="Search or jump"
+          aria-label="Search"
           aria-keyshortcuts="Meta+K Control+K"
           className="flex size-9 shrink-0 items-center justify-center gap-2 rounded-md text-body-sm text-muted-foreground hover:bg-muted md:w-[280px] md:justify-start md:border md:border-border-strong md:px-3"
         >
           <Search aria-hidden className="size-5 md:size-4" />
-          <span className="hidden md:inline">Search or jump</span>
+          <span className="hidden md:inline">Search</span>
           <kbd aria-hidden className="ml-auto hidden font-mono text-mono-sm text-subtle-foreground md:inline">⌘K</kbd>
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/25" />
         <Dialog.Content aria-describedby={undefined} className="fixed inset-x-5 top-[min(16dvh,8rem)] z-50 mx-auto max-w-lg overflow-hidden rounded-lg border bg-surface">
-          <Dialog.Title className="sr-only">Search or jump</Dialog.Title>
-          <Command label="Search or jump">
+          <Dialog.Title className="sr-only">Search</Dialog.Title>
+          <Command label="Search">
             <div className="flex items-center gap-2 border-b px-4">
               <Search aria-hidden className="size-4 text-muted-foreground" />
-              <Command.Input placeholder="Search or jump" autoFocus className="min-h-12 w-full bg-transparent text-body-md outline-none focus-visible:outline-none" />
+              <Command.Input placeholder="Search" autoFocus className="min-h-12 w-full bg-transparent text-body-md outline-none focus-visible:outline-none" />
             </div>
             <Command.List className="max-h-[min(24rem,55dvh)] overflow-y-auto p-2">
-              <Command.Empty className="px-2"><DataState kind="empty" message="No matches." /></Command.Empty>
+              <Command.Empty className="px-2"><DataState kind="empty" /></Command.Empty>
               <Command.Item value={`${PRODUCT_NAME} Overview Home`} onSelect={() => jump("/")} className={itemClass}>
                 <SwbIcon className="size-5" /> {PRODUCT_NAME}
               </Command.Item>

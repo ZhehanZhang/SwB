@@ -7,7 +7,7 @@
   --button-foreground: #fafafa;
   --accent: #333338;
   --logo-slack: #4a154b;
-  color-scheme: light;
+  color-scheme: light dark;
   color: var(--foreground);
   background: var(--background);
   font-family: Inter, system-ui, sans-serif;
@@ -151,7 +151,7 @@ footer {
 footer span:first-child { font-family: ui-monospace, monospace; }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --background: #09090b;
     --foreground: #fafafa;
     --muted: #a1a1aa;
@@ -163,8 +163,22 @@ footer span:first-child { font-family: ui-monospace, monospace; }
     color-scheme: dark;
   }
 
-  .brand { filter: invert(1); }
+  :root:not([data-theme]) .brand { filter: invert(1); }
 }
+
+html.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --muted: #a1a1aa;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --button-foreground: #18181b;
+  --accent: #e4e4e7;
+  --logo-slack: #e9d8ea;
+  color-scheme: dark;
+}
+
+.dark .brand { filter: invert(1); }
 
 @media (max-width: 560px) {
   body {

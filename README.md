@@ -1,16 +1,10 @@
 # SwB
 
-the owner's self-hosted switchboard: one place where his assistants and agents share memory, hand work to each other
-and hear back. Everything that comes in or goes out is a **block** behind one interface. The **core** knows only
-blocks, agents, identities, personas, targets, messages, conversations, routes, projects, memory, approvals and the
-audit log, and names no vendor.
+SwB gives your agents one place to share memory and hand off work.
 
-Blocks today: **mcp** (Claude, ChatGPT, Gemini, Claude Code, Capy and any MCP client, over OAuth, a bearer key or a
-pairing-code key), **slack** (workspaces as a way in, with `@swb <slug>` routing, and out, with personas and
-approvals) and **capy** (Capy Captains and threads, with their replies coming back). More blocks are planned in
-the order the block design lays out (TASK-5).
+Agents connect through MCP. The web console shows how messages move between agents and channels.
 
-It runs as a docker compose app on your-host, behind a Cloudflare tunnel at `https://swb.example.com`.
+Run SwB with Docker Compose. Use `https://swb.example.com` as a sample public URL.
 
 ```mermaid
 flowchart LR
@@ -47,13 +41,13 @@ path instead of the Git URL. pipx needs Python 3.12 or newer.
 **uvx**
 
 ```bash
-uvx --from git+https://github.com/OWNER/swb swb init && uvx --from git+https://github.com/OWNER/swb swb up
+uvx --from git+https://github.com/zhehanzhang/swb swb init && uvx --from git+https://github.com/zhehanzhang/swb swb up
 ```
 
 **pipx**
 
 ```bash
-pipx install git+https://github.com/OWNER/swb && swb init && swb up
+pipx install git+https://github.com/zhehanzhang/swb && swb init && swb up
 ```
 
 **Docker**
@@ -82,7 +76,7 @@ swb connect mcp-client
 swb connect mcp-client --choose agent=my-client
 ```
 
-If you used uvx, prefix these commands with `uvx --from git+https://github.com/OWNER/swb`. If you used Docker, prefix them
+If you used uvx, prefix these commands with `uvx --from git+https://github.com/zhehanzhang/swb`. If you used Docker, prefix them
 with `docker exec switchboard-local`.
 These commands authenticate to `http://127.0.0.1:8000/mcp` with the owner key from `.env`; use `--url` for
 a different endpoint. Use `--choose` for choices such as agent or project names, never for tokens.
@@ -140,7 +134,7 @@ agents:                      # optional: without it every preset (claude, chatgp
 blocks:
   mcp:   {use: mcp, legacy_aliases: true, wait: {default_s: 60, max_s: 200}}
   capy:  {use: capy, identity: service}
-  slack: {use: slack, workspaces: {...}, agents: {...}, personas: {...}, workspace_projects: {acme: acme}}
+  slack: {use: slack, workspaces: {...}, agents: {...}, personas: {...}, workspace_projects: {demolab: demolab}}
 targets: {priority: [], aliases: {}}
 routes:                      # seeds, written once; routes_set and the page manage them after. Empty by default
   - {match: {}, to: capy:captain:<Captain id>}
@@ -181,7 +175,7 @@ the project, and every step out of it is explicit:
   an explicit `scopes=[...]`, which is written to the audit log.
 - **Private projects** (`private: true` on `project_create` / `project_update`) can't be pulled into another project's
   read at all, even with `scopes`; only a read that names them as `project` sees them.
-- **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{acme-agent: [project:acme]}`. A limited key
+- **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{demolab-agent: [project:demolab]}`. A limited key
   can't read or write outside its list, can't create projects or change routes, and must send with a project.
 - **Bearer keys can be limited to tools and send targets** with `auth.key_tools` and `auth.key_targets`, e.g.
   `key_tools: {monitor: [send]}` and `key_targets: {monitor: [claude-ops]}`. Such a key sees and calls only those
@@ -246,36 +240,36 @@ Raise `origins.mcp.wait.agents.claude-code` only together with `MCP_TOOL_TIMEOUT
 caller its limits. No feature depends on MCP resource subscriptions or server notifications, which claude.ai doesn't
 support.
 
-### Claude Code channel (research preview)
+### Claude Code channel
 
-`channel/` is a small Bun channel server and plugin. It reads `GET /inbox/events` (SSE; `GET /inbox/poll` is the
-long-poll alternative) with a bearer key and turns every inbox item into a `notifications/claude/channel` event, so
-replies show up in the Claude Code session that's open. **It only works while that session is open.** Items that
-arrive in between are delivered at the next start, from the cursor it saves. It's one-way: to answer, Claude uses
-the switchboard MCP server's `reply`.
+The Claude Code channel shows SwB inbox messages in the current session. The plugin saves its position and resumes when you start it again. Use the SwB MCP tool `reply` to answer.
 
-Install, during the research preview (custom channels aren't on Anthropic's allowlist, so they need the development
-flag, and Team or Enterprise organizations must enable channels):
+Enable Claude Code channels if your organization manages their use. Set `SWITCHBOARD_KEY_CHANNEL` to a random value in `.env`. SwB maps this key to the `claude-code` inbox by default.
 
-1. The channel needs a key named `SWITCHBOARD_KEY_CHANNEL` (generate it with `openssl rand -hex 32` into `.env`). It is
-   an inbox-only key: `auth.inbox_keys` (default `{channel: claude-code}`) binds it to agent `claude-code`, the agent
-   Claude Code signs in as over OAuth, so it pushes exactly what Claude Code's `wait` would see. It may only call
-   `GET /inbox/poll` and `GET /inbox/events`, gets 403 on `/mcp` and on any other agent's inbox, and never moves Claude
-   Code's own `wait` cursor. On your-host, read it with
-   `sudo grep '^SWITCHBOARD_KEY_CHANNEL=' /srv/swb/.env` and paste it only into
-   Claude Code's config prompt, never into a chat.
-2. Install [Bun](https://bun.sh), then add the plugin in Claude Code. From GitHub:
-   `/plugin marketplace add ZhehanZhang/switchboard` and `/plugin install switchboard@switchboard`. While the repo is
-   private, Claude Code clones it with that machine's git, so git there must be able to read it: `gh auth login`
-   (and `gh auth setup-git`), an SSH key on your GitHub account with the `git@github.com:ZhehanZhang/switchboard.git`
-   form, or a credential helper holding a token with read access to the repo. Or skip GitHub: clone it any way you
-   like and run `/plugin marketplace add /path/to/switchboard` (a local folder with `.claude-plugin/marketplace.json`),
-   then the same `/plugin install`. Enter the URL and the key when it asks.
-3. Start sessions with `claude --dangerously-load-development-channels plugin:switchboard@switchboard`.
+Install [Bun](https://bun.sh). Run these commands in Claude Code.
 
-Without the plugin wrapper, a bare server works too: add
-`{"mcpServers": {"switchboard-channel": {"command": "bun", "args": ["/path/to/channel/switchboard-channel.ts"], "env": {"SWITCHBOARD_KEY": "..."}}}}`
-to `.mcp.json` and start with `--dangerously-load-development-channels server:switchboard-channel`.
+```text
+/plugin marketplace add zhehanzhang/swb
+/plugin install switchboard@switchboard
+```
+
+Enter your SwB URL and inbox key when prompted. Start Claude Code with the channel enabled.
+
+```sh
+claude --dangerously-load-development-channels plugin:switchboard@switchboard
+```
+
+To run the channel server directly, add this entry to `.mcp.json`.
+
+```json
+{"mcpServers": {"switchboard-channel": {"command": "bun", "args": ["./channel/switchboard-channel.ts"], "env": {"SWITCHBOARD_KEY": "..."}}}}
+```
+
+Start Claude Code with the server enabled.
+
+```sh
+claude --dangerously-load-development-channels server:switchboard-channel
+```
 
 ### Claude routines
 
@@ -451,7 +445,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   Captains, threads, routines), `channel:<workspace>/<id or #name>`, `memory:<scope>`, `route:<id>` and
   `tool:<name>`. Everything is private unless marked shared: only the owner reaches it (his Slack ids, and his own
   signed-in agents over OAuth, keys or pairing codes). `shared` lets anyone in that workspace reach it; a list
-  (`[U0123, workspace:acme]`) narrows it. Tools are always private. A non-owner reaches a target only when both the
+  (`[U0123, workspace:demolab]`) narrows it. Tools are always private. A non-owner reaches a target only when both the
   channel and the target are shared for them. Anything else they send becomes a **context item** in the inbox of the
   agents behind the target: kind `context`, wrapped as above, with where it came from. It wakes nothing, is never
   delegated, never reaches a sink or a routine, and gets no answer beyond a neutral ephemeral "Noted.". Non-owners get
@@ -559,7 +553,7 @@ blocks:
 Dot instructions (paste into the dot's instructions; put in your own bot and app ids):
 
 ```text
-In #agents, posts that @mention you from my Switchboard app (bot B0XXXXXXXXX, app A0XXXXXXXXX), shown under
+In #agents, posts that @mention you from my Switchboard app (bot B0DEMO0001, app A0DEMO0001), shown under
 persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
 within what you'd do for me, and answer in that post's thread. Ignore anyone else.
 ```
@@ -688,11 +682,11 @@ blocks:
     agents: {claude: [home]}
     spaces:
       home:
-        chats: [-100111222]
+        chats: [-1001111111111]
         owner_ids: [222222]
         known: {333333: Friend}
         default_target: claude
-        # listen: [-100111222]
+        # listen: [-1001111111111]
 ```
 
 Each group belongs to one space. Private chats go to `dm_space` (the first space by default). Use
@@ -905,12 +899,9 @@ it's rewritten with atomic renames, and files and folders for deleted or moved e
 writes collapses into one export after `mirror_debounce_s` (default 2 s) of quiet, at most ten times that after the
 first change. It's one-way: edits in the mirror are never read back. `mirror: false` switches it off.
 
-The deployment mirrors into Capy Drive (`user-owner/switchboard-memory/`): a git-ignored `compose.override.yaml`
-binds that folder at `/mirror`, and `SWITCHBOARD_UID` in `.env` builds the image to run as the uid that owns it.
+Set `SWITCHBOARD_UID` to the user ID that owns the mounted directories.
 
-The classic pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
-same type, hairline cards, the Arc backdrop, the signature and the shared theme cookie, ported from example-org/id-site.
-Set `SWITCHBOARD_REVISION` to the deployed Git SHA to show it in the web UI's health control.
+Set `SWITCHBOARD_REVISION` to show the build version on the About page.
 
 ## Web UI development
 

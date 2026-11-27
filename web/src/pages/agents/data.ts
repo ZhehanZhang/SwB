@@ -25,7 +25,7 @@ type Routine = {
   last_seen_at: string | null
 }
 
-type Target = { id: string; name: string; block: string; project?: string | null; projects?: string[]; online: boolean; created_at?: string | null; last_seen_at?: string | null }
+type Target = { id: string; name: string; block: string; project?: string | null; projects?: string[]; online: boolean; created_at?: string | null; last_seen_at?: string | null; avatar_url?: string | null }
 type Pending = { name: string; project: string; created_by: string; created_at: string; claim_url?: string | null }
 type Inventory = { keys: Key[]; routines: Routine[]; captains: Target[]; dots: Target[]; pending_claims: Pending[] }
 type AgentKind = "routine" | "captain" | "dot" | "key" | "pending"
@@ -38,6 +38,7 @@ export type Agent = {
   name: string
   kind: string
   logo: string
+  avatar_url?: string | null
   projects: string[]
   registered_by: string | null
   registered_at: string | null
@@ -72,7 +73,7 @@ function isRoutine(row: unknown): row is Routine {
 }
 
 function isTarget(row: unknown): row is Target {
-  return isRecord(row) && typeof row.online === "boolean" && fields(row, ["id", "name", "block"], ["project", "created_at", "last_seen_at"])
+  return isRecord(row) && typeof row.online === "boolean" && fields(row, ["id", "name", "block"], ["project", "created_at", "last_seen_at", "avatar_url"])
     && (row.projects === undefined || Array.isArray(row.projects) && row.projects.every((value: unknown) => typeof value === "string"))
 }
 
@@ -119,6 +120,7 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
       id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
       name: kind === "captain" ? displayReference(row.name, "Captain") : row.name, kind,
       logo: kind === "captain" ? "capy" : "chatgpt", projects: row.projects ?? (row.project ? [row.project] : []),
+      avatar_url: row.avatar_url,
       registered_by: null, registered_at: row.created_at ?? null, last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",
     }))),
     ...keys.map((row): Agent => ({

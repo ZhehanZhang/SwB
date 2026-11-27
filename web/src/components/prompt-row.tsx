@@ -15,7 +15,7 @@ export function PromptRow({ title, version, prompt }: PromptRowProps) {
       await navigator.clipboard.writeText(prompt)
       toast.success("Copied")
     } catch {
-      toast.error("Couldn’t copy the prompt")
+      toast.error("Copy failed")
     }
   }
 

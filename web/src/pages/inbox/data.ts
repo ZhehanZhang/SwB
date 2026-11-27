@@ -33,6 +33,7 @@ export type Conversation = {
   updated_at: string | null
   first_sender?: Sender | null
   first_target?: string | null
+  target_avatar_url?: string | null
 }
 
 export type Sender = {
@@ -106,7 +107,7 @@ function isPause(value: unknown): value is Pause {
 function isConversation(value: unknown): value is Conversation {
   return isRecord(value) && strings(value, ["handle", "owner", "destination", "ref"])
     && nullableStrings(value, ["project", "title", "target", "status", "created_at", "updated_at"]) && typeof value.open === "boolean"
-    && optionalStrings(value, ["first_target", "destination_kind"])
+    && optionalStrings(value, ["first_target", "destination_kind", "target_avatar_url"])
     && (value.first_sender == null || isSender(value.first_sender))
 }
 
@@ -189,5 +190,5 @@ export function approvalTitle({ action, identity, channel, channel_name, thread_
   const as = identity === "user" ? " as you" : ""
   if (action === "post_message") return `${thread_ts ? "Reply" : "Post"}${as}${at}`
   if (action === "add_reaction") return `React${as}${at}`
-  return `Approve Slack write${address ? at : ""}`
+  return `Slack request${address ? at : ""}`
 }

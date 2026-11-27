@@ -27,7 +27,7 @@ def test_resolution_order(routes):
 
     assert target("claude", "infra") == ("agent+project", "agent+project")
     assert target("chatgpt", "infra") == ("project", "project")
-    assert target("claude", "acme") == ("agent", "agent")
+    assert target("claude", "demolab") == ("agent", "agent")
     assert target("claude", None) == ("agent", "agent")
     assert target("chatgpt", None) == ("global", "global")
     routes.remove(destination="capy", agent="claude", project="infra")
@@ -40,10 +40,10 @@ def test_override_needs_permission(make, capy):
     core, c = make()
     infra(core)
     core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN}, defaults={}, allow_override=False, note="", by="t")
-    err = error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "target": "captain:Acme Captain"}))
+    err = error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "target": "captain:DemoLab Captain"}))
     assert "does not allow overriding" in err
     core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN}, defaults={}, allow_override=True, note="", by="t")
-    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "target": "captain:Acme Captain"}))
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "target": "captain:DemoLab Captain"}))
     assert out["thread_id"] == CAPTAIN2 and out["route"] == "explicit"
     assert "not linked" not in err
 
@@ -59,8 +59,8 @@ def test_route_tools_validate_and_audit(make):
     core, c = make()
     infra(core)
     tok = sign_in(c)["access_token"]
-    r = payload(call(c, tok, "routes_set", {"target": "captain:Acme Captain", "project": "infra", "agent": "claude", "defaults": {"repos": ["example-org/links"]}}))
-    assert r["target"] == {"captain": CAPTAIN2, "name": "Acme Captain", "captain_project": "project_OTHER"} and r["level"] == "agent+project"
+    r = payload(call(c, tok, "routes_set", {"target": "captain:DemoLab Captain", "project": "infra", "agent": "claude", "defaults": {"repos": ["demo-org/sample-app"]}}))
+    assert r["target"] == {"captain": CAPTAIN2, "name": "DemoLab Captain", "captain_project": "project_OTHER"} and r["level"] == "agent+project"
     assert "no Captain matches" in error_text(call(c, tok, "routes_set", {"target": "captain:Nobody"}))
     assert "no project" in error_text(call(c, tok, "routes_set", {"target": "captain:Captain", "project": "nope"}))
     assert payload(call(c, tok, "routes_set", {"target": f"project:ZINF"}))["target"]["project"] == PROJECT
@@ -90,5 +90,5 @@ def test_routes_set_matches_a_captain_by_code(make):
     core, c = make()
     infra(core)
     tok = sign_in(c)["access_token"]
-    assert payload(call(c, tok, "routes_set", {"target": "captain:acme-3", "project": "infra"}))["target"]["captain"] == CAPTAIN2
+    assert payload(call(c, tok, "routes_set", {"target": "captain:demolab-3", "project": "infra"}))["target"]["captain"] == CAPTAIN2
     assert payload(call(c, tok, "routes_set", {"target": "captain:ZINF-1"}))["target"]["captain"] == CAPTAIN
