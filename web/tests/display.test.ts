@@ -50,7 +50,7 @@ test("Audit Who uses explicit connector origins without overwriting MCP personas
   assert.equal(auditActorKind(event("post", { source: "codex", origin: "mcp" })), "codex")
   assert.equal(auditActorKind(event("post", { source: "unrelated", origin: "discord-tools" })), "unrelated")
   assert.equal(connectorKind("OpenAI"), "chatgpt")
-  assert.equal(connectorKind("dots"), "chatgpt")
+  assert.equal(connectorKind("dots"), "dots")
   assert.equal(connectorKind("muse_code"), "muse")
 })
 
