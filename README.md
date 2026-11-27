@@ -425,6 +425,25 @@ Use `auth: key` for `Authorization: Bearer <key>`; `header` overrides the header
 Slack and GitHub webhook sinks can also use Stripe-style signing with `signature: stripe` and `secret_env`;
 their default header is `Stripe-Signature`, configurable with `header`.
 
+## Muse
+
+SwB can wake [Meta Muse](https://muse.ai/) through a device paired to your personal account. SwB registers as **SwB** in the app; it does not expose shell or file commands. This uses Meta's [Linux Device SDK](https://github.com/facebookincubator/muse-gadget-sdk/tree/main/linux), not the Model API or Muse Code. Review [Meta's Gadget SDK Token Terms](https://gadgets.muse.ai/sdk-terms): this is a personal, non-commercial integration, and the upstream SDK is provided as-is.
+
+1. Enable `muse: {use: muse}` under `blocks:` in `config/switchboard.yaml` and restart SwB. Run `swb connect muse` or call `connect(what="muse")` from the owner's MCP sign-in. Generate a random URL-safe bridge token (for example, 32 random bytes encoded as unpadded base64url) and save it through the returned SwB claim link. Never send either token in chat.
+2. On a Linux device with Bluetooth LE and BlueZ, use a dedicated account. Install the SDK alongside the same SwB release as the server. For example, on Ubuntu 24.04 install the system packages `bluez python3-dbus python3-gi python3-venv`, then run the following as that account from the SwB checkout:
+
+   ```sh
+   /usr/bin/python3 -m venv --system-site-packages .venv-muse
+   .venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
+   ```
+
+3. Get a [personal Meta Gadget SDK token](https://gadgets.muse.ai/settings/sdk-tokens). On the gadget run `.venv-muse/bin/swb muse-bridge --url https://your-swb-host.example --setup`. Enter the SwB bridge token and then the Meta token in the hidden prompts. In the Muse app, turn on **Settings → Devices → Developer mode**, then **Add Device** and select the Bluetooth name printed by SwB. The Meta token and device pairing stay on that device.
+4. Leave the bridge running; start it again with the same URL and omit `--setup` after a restart. Run `swb connect muse` again to get the test message. Use `send(to="muse", task="…")` for subsequent messages, or set a route to `muse:gadget:muse`. Muse's text reply arrives in the sender's inbox and through `result` on the original conversation. The SwB server doesn't need Bluetooth if the gadget runs on another host; that host only needs outbound access to SwB's `/inbox/muse/bridge` endpoint and to Muse.
+
+Only owner-trusted routed messages are sent to Muse, and only their text leaves SwB. `agent:muse` is the plain SwB mailbox and does not wake the device. If the bridge is offline, routed messages stay queued. Repeating the same message to Muse from the same sender and project within ten minutes returns the same conversation. Each wake uses its own Muse side chat to avoid picking up a reply from the main chat. If delivery can't be confirmed or a reply doesn't arrive in time, check the Muse app before resending; SwB won't automatically repeat an uncertain wake. You can rotate the SwB bridge token using `connect(what="muse", choose={"replace": true})` followed by `--setup` on the gadget.
+
+The packaged avatar is a neutral monogram. For deployment branding, the repository overlay uses the [official Muse mark](https://muse.ai/images/favicon/app-squiggle.svg). Keep the overlay out of distributed packages.
+
 ## Slack
 
 With a slack block in the config (or a `slack:` section in a version 1 file), Slack is both a way in and a way out. This is slackgate,
