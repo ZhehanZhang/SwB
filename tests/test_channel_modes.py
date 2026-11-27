@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import (
     OWNER,
+    PUBLIC,
     SECOND_KEY,
     STATIC_KEY,
     base_config,
@@ -368,8 +369,10 @@ def test_modes_api_requires_owner_session_and_csrf(make):
     args = {"block": "discord", "space": "home", "channel": DISCORD_CHANNEL, "mode": "off"}
     bearer = {"Authorization": f"Bearer {STATIC_KEY}"}
     for headers in ({}, bearer, {"cf-access-jwt-assertion": "other"}):
-        assert client.get("/api/modes", headers=headers).status_code == 403
-        assert client.post("/api/modes", headers=headers, json=args).status_code == 403
+        for method in ("GET", "POST"):
+            response = client.request(method, "/api/modes", headers={**headers, "Origin": PUBLIC}, json=args)
+            assert response.status_code == 401 and response.json() == {"error": "signed_out"}
+            assert response.headers["cache-control"] == "no-store"
 
     response = client.get("/api/modes", headers=OWNER)
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
@@ -382,26 +385,30 @@ def test_modes_api_requires_owner_session_and_csrf(make):
     assert (row["kind"], row["mode"], row["source"]) == ("channel", "assist", "channel")
     assert {"name", "project", "target", "actions", "digest", "problems"} <= row.keys()
 
-    session = client.get("/auth/session", headers=OWNER)
-    assert session.status_code == 200
-    csrf = session.json()["csrf"]
-    assert client.post("/api/modes", headers=bearer, json={**args, "csrf": csrf}).status_code == 403
-    for json_body in (args, {**args, "csrf": "wrong"}):
-        assert client.post("/api/modes", headers=OWNER, json=json_body).status_code == 403
-    assert client.post("/api/modes", headers={**OWNER, "Origin": "https://other.example.test"},
-                       json={**args, "csrf": csrf}).status_code == 403
-    assert client.post("/api/modes", headers=OWNER, json={**args, "csrf": csrf, "mode": "invalid"}).status_code == 400
-    bad_action = {**args, "csrf": csrf, "mode": "triage", "actions": ["delete_repository"]}
-    assert client.post("/api/modes", headers=OWNER, json=bad_action).status_code == 400
+    csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
+    headers = {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": csrf}
+    for denied in (
+        {**OWNER, "Origin": PUBLIC},
+        {**headers, "X-CSRF-Token": "wrong"},
+        {**headers, "Origin": "https://other.example.test"},
+    ):
+        response = client.post("/api/modes", headers=denied, json={**args, "csrf": csrf})
+        assert response.status_code == 403 and response.json() == {"error": "csrf"}
+        assert response.headers["cache-control"] == "no-store"
+    assert client.post("/api/modes", headers=headers, json={**args, "mode": "invalid"}).status_code == 400
+    bad_action = {**args, "mode": "triage", "actions": ["delete_repository"]}
+    assert client.post("/api/modes", headers=headers, json=bad_action).status_code == 400
 
-    triage = {**args, "csrf": csrf, "mode": "triage", "actions": ["notify_owner"], "project": "example"}
-    changed = client.post("/api/modes", headers=OWNER, json=triage)
+    triage = {**args, "mode": "triage", "actions": ["notify_owner"], "project": "example"}
+    changed = client.post("/api/modes", headers=headers, json=triage)
     assert changed.status_code == 200, changed.text
     row = changed.json()["space"]
     assert (row["mode"], row["source"], row["actions"], row["project"]) == ("triage", "override", ["notify_owner"], "example")
     assert core.modes.resolve("discord", "home", DISCORD_CHANNEL, None)[:2] == ("triage", "override")
     assert client.get("/api/modes", headers=OWNER).json() == payload(call(client, STATIC_KEY, "modes_status"))
-    assert client.post("/api/modes", headers={**OWNER, "X-CSRF-Token": csrf}, json=args).status_code == 200
+    cleared = client.post("/api/modes", headers=headers, json={**args, "mode": "inherit"})
+    assert cleared.status_code == 200
+    assert cleared.json()["space"] == space_row(status, "discord", "home", DISCORD_CHANNEL)
 
 
 def test_delayed_triage_reply_follows_the_current_mode_and_is_audited(intake):

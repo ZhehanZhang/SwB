@@ -42,6 +42,15 @@ class _VisibilityBody(_Body):
     visibility: str | list[str]
 
 
+class _ModeBody(_Body):
+    block: str
+    space: str
+    channel: str = ""
+    mode: str
+    actions: list[str] | None = None
+    project: str | None = None
+
+
 class _SendBody(_Body):
     task: str
     to: str | None = None
@@ -172,6 +181,21 @@ async def send(request: Request) -> JSONResponse:
     return JSONResponse({key: out[key] for key in fields if key in out})
 
 
+async def modes(request: Request) -> JSONResponse:
+    service = request.app.state.core.modes
+    if request.method in ("GET", "HEAD"):
+        await service.refresh()
+        return JSONResponse(service.status())
+    body = await _body(request, _ModeBody)
+    if body is None:
+        return _error("invalid_request")
+    try:
+        row = service.set(_owner(request), **body.model_dump())
+    except ValueError:
+        return _error("mode_not_saved")
+    return JSONResponse({"space": row})
+
+
 WRITE_ROUTES = [
     Route("/routes", route_set, methods=["POST"]),
     Route("/routes/{id}", route_remove, methods=["DELETE"]),
@@ -181,4 +205,5 @@ WRITE_ROUTES = [
     Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
     Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
     Route("/send", send, methods=["POST"]),
+    Route("/modes", modes, methods=["GET", "POST"]),
 ]

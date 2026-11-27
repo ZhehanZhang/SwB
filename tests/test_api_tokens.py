@@ -131,8 +131,10 @@ def test_standalone_handoff_uses_only_local_accent_assets_and_a_password_field(m
     assert response.headers["cache-control"] == "no-store"
     assert "form-action 'self'" in response.headers["content-security-policy"]
     assert "/assets/claim-brand.svg" in response.text and "/assets/claim.css" in response.text
-    assert "<script" not in response.text and "bridge.css" not in response.text
+    assert response.text.count("<script") == 1 and '<script src="/assets/theme.js"></script>' in response.text
+    assert "script-src 'self';" in response.headers["content-security-policy"] and "bridge.css" not in response.text
     assert path not in response.text and 'name="token" type="password" required' in response.text
     assert 'method="post"' in response.text
     assert client.get("/assets/claim-brand.svg").headers["content-type"] == "image/svg+xml"
     assert client.get("/assets/claim.css").headers["content-type"].startswith("text/css")
+    assert client.get("/assets/theme.js").headers["content-type"].startswith("text/javascript")

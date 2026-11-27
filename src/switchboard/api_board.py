@@ -10,7 +10,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from .api_display import capy_label
+from .api_display import captain_avatar_url, captain_target, capy_label
 from .api_read import _REPO, _error, _reference
 from .api_runtime import runtime_info
 from .audit import iso
@@ -21,8 +21,10 @@ if TYPE_CHECKING:
     from .core import Switchboard
 
 
-def _item(id: str, label: str, kind: str, *, short_label: str | None = None, detail: str | None = None) -> dict[str, Any]:
-    return {"id": id, "label": label, "kind": kind, "short_label": short_label, "detail": detail}
+def _item(id: str, label: str, kind: str, *, short_label: str | None = None, detail: str | None = None,
+          avatar_url: str | None = None) -> dict[str, Any]:
+    return {"id": id, "label": label, "kind": kind, "short_label": short_label, "detail": detail,
+            **({"avatar_url": avatar_url} if avatar_url else {})}
 
 
 def _agent(core: Switchboard, name: str) -> dict[str, Any]:
@@ -156,7 +158,7 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
             label = _reference(target.get("name")) or _reference(route.target.get("name")) or (_reference(addr.id) if addr else None)
             label = capy_label(ident, route.destination, targets, name=label) or label
             item = {**_item(ident, label or (block.manifest.title if block else route.destination),
-                            "chatgpt" if use == "dots" else use),
+                            "chatgpt" if use == "dots" else use, avatar_url=captain_avatar_url(core, target)),
                     "role": addr.kind if addr else "destination", "state": state, "by": by, "at": route.updated_at}
         agents[route.project].setdefault(ident, item)
         routes[route.project].append({"id": str(route.id), "from": _agent(core, route.agent) if route.agent else _item("any-agent", "Any agent", "agent"),
@@ -172,7 +174,8 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
         if address in connected or kind not in ("captain", "dot"):
             continue
         if label := capy_label(address, target["block"], targets) or _reference(target.get("name")) or _reference(target.get("id")):
-            agents[None][address] = _item(address, label, "capy" if kind == "captain" else "chatgpt")
+            agents[None][address] = _item(address, label, "capy" if kind == "captain" else "chatgpt",
+                                         avatar_url=captain_avatar_url(core, target))
     return agents, routes, routines
 
 
@@ -242,7 +245,9 @@ def _conversations(core: Switchboard, slug: str, targets: dict[str, dict[str, An
         ref = row["target"] or (row["ref"] if block and block.manifest.id == "capy" else None)
         target = targets.get(ref, {})
         if ref and (label := capy_label(ref, row["destination"], targets) or _reference(target.get("name"))):
-            endpoint = _item(ref, label, block.manifest.id if block else target.get("block", row["destination"]))
+            captain = captain_target(ref, row["destination"], targets)
+            endpoint = _item(ref, label, block.manifest.id if block else target.get("block", row["destination"]),
+                             avatar_url=captain_avatar_url(core, captain) if captain else None)
         else:
             endpoint = _agent(core, row["owner"])
         out.append({"handle": row["handle"], "endpoint": endpoint, "title": row["title"], "at": iso(row["at"])})

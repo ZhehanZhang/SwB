@@ -9,6 +9,7 @@ export type Endpoint = {
   kind: string
   short_label: string | null
   detail: string | null
+  avatar_url?: string | null
 }
 
 type Placement = Endpoint & {
@@ -93,7 +94,7 @@ function state(value: unknown): value is LampState {
 
 function endpoint(value: unknown): value is Endpoint {
   return object(value) && text(value.id) && text(value.label) && text(value.kind)
-    && nullable(value.short_label, text) && nullable(value.detail, text)
+    && nullable(value.short_label, text) && nullable(value.detail, text) && (value.avatar_url == null || text(value.avatar_url))
 }
 
 function placement(value: unknown): value is Placement {

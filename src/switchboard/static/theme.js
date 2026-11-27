@@ -10,6 +10,8 @@
   const apply = () => {
     const dark = preference === "dark" || (preference === "system" && system.matches)
     root.classList.toggle("dark", dark)
+    root.dataset.theme = dark ? "dark" : "light"
+    root.dataset.themeMode = preference
     root.style.colorScheme = dark ? "dark" : "light"
   }
   const update = value => {

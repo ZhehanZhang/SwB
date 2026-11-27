@@ -3,6 +3,7 @@ import type { ConnectionPlatform } from "@/app/navigation"
 import { isObject, requestJson } from "@/lib/api"
 
 export type ConnectionState = "connected" | "disconnected" | "not_configured"
+export type StatusPlatform = Exclude<ConnectionPlatform, "github">
 
 export type BotAvatar = {
   file: string | null
@@ -29,7 +30,7 @@ type TelegramChat = {
 }
 export type TelegramDetails = Bot & { chats: TelegramChat[] }
 type SlackDetails = { workspaces: { name: string; intake: "socket" | "poll" | "none"; connected: boolean }[] }
-type Connection = { state: ConnectionState } & (
+type Connection = { state: ConnectionState; block: string | null } & (
   | { platform: "discord"; details: DiscordDetails | null }
   | { platform: "telegram"; details: TelegramDetails | null }
   | { platform: "slack"; details: SlackDetails | null }
@@ -48,10 +49,10 @@ function isBot(value: Record<string, unknown>, platform: "discord" | "telegram")
 
 function isConnection(value: unknown): value is Connection {
   if (!isObject(value)) return false
-  const { platform, state, details } = value
+  const { platform, state, details, block } = value
   if (platform !== "discord" && platform !== "telegram" && platform !== "slack") return false
-  if (state === "not_configured") return details === null
-  if (!isObject(details) || (state !== "connected" && state !== "disconnected")) return false
+  if (state === "not_configured") return details === null && block === null
+  if (typeof block !== "string" || !isObject(details) || (state !== "connected" && state !== "disconnected")) return false
   if (platform === "slack") {
     return Array.isArray(details.workspaces) && details.workspaces.every((workspace: unknown) => isObject(workspace)
       && typeof workspace.name === "string" && typeof workspace.connected === "boolean"
@@ -70,7 +71,7 @@ function isConnection(value: unknown): value is Connection {
     && (chat.listen === "direct" || chat.listen === "listening" || chat.listen === "unlisted"))
 }
 
-export function connectionQuery(platform: ConnectionPlatform) {
+export function connectionQuery(platform: StatusPlatform) {
   return queryOptions({
     queryKey: ["connection", platform],
     queryFn: ({ signal }) => requestJson(`/api/connections/${platform}`,

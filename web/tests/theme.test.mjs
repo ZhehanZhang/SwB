@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import test from "node:test"
 import { runInNewContext } from "node:vm"
 
-const script = readFileSync(new URL("../public/assets/theme.js", import.meta.url), "utf8")
+const script = readFileSync(new URL("../../src/switchboard/static/theme.js", import.meta.url), "utf8")
 
 function boot({ prefersDark = false, values = new Map(), blocked = false } = {}) {
   const media = Object.assign(new EventTarget(), { matches: prefersDark })
@@ -14,7 +14,7 @@ function boot({ prefersDark = false, values = new Map(), blocked = false } = {})
       return media
     },
   })
-  const document = { documentElement: { style: {}, classList: {
+  const document = { documentElement: { style: {}, dataset: {}, classList: {
     toggle(name, enabled) { if (enabled) rootClasses.add(name); else rootClasses.delete(name) },
   } } }
   const localStorage = {

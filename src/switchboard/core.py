@@ -503,8 +503,8 @@ class Switchboard:
 
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
-                   forward: str | None = None, handle_meta: dict[str, Any] | None = None, handle: str | None = None,
-                   dry_run: bool = False) -> dict[str, Any]:
+                   forward: str | None = None, handle_meta: dict[str, Any] | None = None,
+                   handle: str | None = None, dry_run: bool = False) -> dict[str, Any]:
         """Send work or a message, or preview its resolved destination without delivering it."""
         if principal.targets is not None:
             await self.check_target(principal, to, project, forward)

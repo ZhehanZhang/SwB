@@ -193,7 +193,9 @@ def test_captain_and_bundled_avatars_without_slack_or_avatar_dirs(fresh_config, 
         return row["avatar_url"]
 
     with TestClient(create_app(core), base_url=PUBLIC) as client:
-        assert client.get("/api/targets").status_code == 403
+        denied = client.get("/api/targets")
+        assert denied.status_code == 401 and denied.json() == {"error": "signed_out"}
+        assert denied.headers["cache-control"] == "no-store"
         rows = captains(client)
         assert set(rows) == {CAPTAIN, CAPTAIN2}
         first = check_avatar(client, rows[CAPTAIN], colors["first"])

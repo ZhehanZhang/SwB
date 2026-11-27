@@ -7,6 +7,7 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from .routes import route_audit_name
+from .slack.config import AVATAR_RE
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -26,15 +27,50 @@ async def captain_targets(core: Switchboard, destinations: Iterable[str]) -> dic
     }
 
 
+def _captain(parts: dict[str, str | None], destination: str, targets: Mapping[str, dict[str, Any]]) -> dict[str, Any] | None:
+    if (parts.get("kind") or "").lower() != "thread":
+        block = parts.get("block") or destination
+        ident = parts.get("named_id") or parts["id"]
+        return targets.get(f"{block}:captain:{ident}")
+    return None
+
+
+def captain_target(value: str | None, destination: str, targets: Mapping[str, dict[str, Any]]) -> dict[str, Any] | None:
+    if value and (match := _ADDRESS.fullmatch(value) or _DESCRIPTION.fullmatch(value)):
+        return _captain(match.groupdict(), destination, targets)
+    return None
+
+
+def captain_avatar_url(core: Switchboard, target: Mapping[str, Any]) -> str | None:
+    if target.get("kind") != "captain":
+        return None
+    url = target.get("avatar_url")
+    if url is None and core.avatars.public_base_url is None:
+        persona = target.get("persona")
+        name = persona.get("avatar_file") if isinstance(persona, Mapping) else None
+        if isinstance(name, str) and (file := core.find_avatar(name)):
+            try:
+                return f"/avatars/{name}?v={file.stat().st_mtime_ns}"
+            except FileNotFoundError:
+                return None
+    if not isinstance(url, str):
+        return None
+    if base := core.avatars.public_base_url:
+        url = url.removeprefix(base)
+    path, separator, version = url.partition("?")
+    if (path.startswith("/avatars/") and AVATAR_RE.fullmatch(path.removeprefix("/avatars/"))
+            and (not separator or re.fullmatch(r"v=[0-9]{1,20}", version))):
+        return url
+    return None
+
+
 def capy_label(value: str | None, destination: str, targets: Mapping[str, dict[str, Any]],
                *, name: str | None = None) -> str | None:
     if not value or not (match := _ADDRESS.fullmatch(value) or _DESCRIPTION.fullmatch(value)):
         return None
     parts = match.groupdict()
     kind = (parts.get("kind") or "").lower()
-    block = parts.get("block") or destination
-    ident = parts.get("named_id") or parts["id"]
-    captain = targets.get(f"{block}:captain:{ident}", {}) if kind != "thread" else {}
+    captain = _captain(parts, destination, targets) or {}
     for candidate in (captain.get("name"), name, parts.get("name")):
         if (label := route_audit_name(candidate)) and not _JAM_ID.search(label):
             return label

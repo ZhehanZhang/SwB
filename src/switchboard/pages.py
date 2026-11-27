@@ -22,6 +22,7 @@ _ASSETS = {
     "bridge.css": ("text/css; charset=utf-8", (_STATIC / "bridge.css").read_bytes()),
     "prefs.js": ("text/javascript; charset=utf-8", (_STATIC / "prefs.js").read_bytes()),
     "claim.css": ("text/css; charset=utf-8", (_STATIC / "claim.css").read_bytes()),
+    "theme.js": ("text/javascript; charset=utf-8", (_STATIC / "theme.js").read_bytes()),
     "claim-brand.svg": ("image/svg+xml", (_STATIC / "claim-brand.svg").read_bytes()),
     "claim-connectors.svg": ("image/svg+xml", (_STATIC / "claim-connectors.svg").read_bytes()),
 }
@@ -59,7 +60,7 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="referrer" content="same-origin">
 <title>{html.escape(title)} | SwB</title>
-<script src="/assets/prefs.js"></script>
+<script src="/assets/theme.js"></script><script src="/assets/prefs.js" defer></script>
 <link rel="stylesheet" href="/assets/bridge.css">
 </head><body><div class="shell">
 <div class="site-veil" aria-hidden="true"></div>{ARC}
@@ -139,14 +140,14 @@ if (button) button.addEventListener("click", async () => {
   button.disabled = true;
   message.textContent = "";
   try { await passkey("login"); next(); }
-  catch { message.textContent = "Passkey sign-in failed."; }
+  catch { message.textContent = "Try your passkey again."; }
   finally { button.disabled = false; }
 });
 if (fragment.has("t")) {
   history.replaceState(null, "", location.pathname + location.search);
   if (button) button.disabled = true;
   post("/auth/link", {token: fragment.get("t")}).then(next).catch(() => {
-    message.textContent = "This sign-in link is invalid or expired.";
+    message.textContent = "Request a fresh sign-in link.";
     screen.hidden = false;
     if (button) button.disabled = false;
   });
@@ -172,19 +173,20 @@ def script_policy(script: str) -> str:
 
 
 def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, signed_in: bool = False) -> HTMLResponse:
-    messages = {"link_expired": "This sign-in link is invalid or expired.", "passkey_failed": "Passkey sign-in failed.",
-                "oidc_failed": "Sign-in with the identity provider failed."}
+    messages = {"link_expired": "Request a fresh sign-in link.", "passkey_failed": "Try your passkey again.",
+                "oidc_failed": "Try signing in again."}
     button = '<button type="button" id="passkey-login">Sign in with a passkey</button>' if methods["passkeys"] else ""
     oidc = methods["oidc"]
     if oidc:
         href = "/auth/oidc/start?" + urlencode({"next": next_path})
         button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
+    title = "Sign in to SwB" if button else "Ask your agent for a sign-in link"
     return HTMLResponse(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>Sign in to SwB</title>
-<link rel="stylesheet" href="/assets/claim.css"></head>
-<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}>{CLAIM_BRAND}<h1>Sign in to SwB</h1>
-<p id="login-error" role="status">{messages.get(error, "")}</p>{button or "<p>Ask your agent for a sign-in link.</p>"}
+<script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/claim.css"></head>
+<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}>{CLAIM_BRAND}<h1>{title}</h1>
+<p id="login-error" role="status">{messages.get(error, "")}</p>{button}
 </main><script>{LOGIN_JS}</script></body></html>""", headers={"Content-Security-Policy": script_policy(LOGIN_JS)})
 
 
@@ -354,22 +356,28 @@ def _ago(at: float | None) -> str:
 
 def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     cmd = f"curl -s -X POST {public_url}/connect -H 'content-type: application/json' -d '{{\"code\": \"{code['code']}\"}}'"
-    body = (hero("Pairing code", f"For <strong>{html.escape(code['agent'])}</strong>" + (f" in project {html.escape(code['project'])}" if code.get("project") else "")
-                 + ". It works once, for 10 minutes.")
-            + f'<div class="card fade-in">{_row("Code", "Give it to the client that redeems it", code["code"])}'
-            + _row("Redeem", "Run this on the machine the agent runs on; it prints the agent's key once, with the MCP URL", cmd) + "</div>"
+    body = (hero("Pairing code", "")
+            + f'<div class="card fade-in">{_row("Agent", "", code["agent"])}'
+            + (_row("Project", "", code["project"]) if code.get("project") else "")
+            + _row("Code", "Expires in 10 min", code["code"])
+            + _row("Redeem", "", cmd) + "</div>"
             + '<p class="section-gap"><a href="/classic" class="text-button">Back</a></p>')
     return page("Pairing code", body, 200)
 
 
-def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
+def _claim_document(title: str, body: str, status: int = 200, *, grouped: bool = False) -> HTMLResponse:
+    group_assets = ('<link rel="stylesheet" href="/claim-assets/claim.css">'
+                    '<script src="/claim-assets/claim.js" defer></script>') if grouped else ""
     doc = f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="referrer" content="same-origin">
+<meta name="color-scheme" content="light dark">
 <title>{html.escape(title)} | SwB</title>
+<script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/claim.css">
+{group_assets}
 </head><body><main>
 {CLAIM_BRAND}
 {body}
@@ -377,12 +385,12 @@ def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
     return HTMLResponse(doc, status_code=status, headers={
         "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin",
         "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+        "Content-Security-Policy": "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     })
 
 
-def claim_message_page(title: str, text: str, status: int) -> HTMLResponse:
-    return _claim_document(title, f'<h1>{html.escape(title)}</h1><p class="scope">{html.escape(text)}</p>', status)
+def claim_message_page(title: str, status: int) -> HTMLResponse:
+    return _claim_document(title, f'<h1>{html.escape(title)}</h1>', status)
 
 
 def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, requester: str = "",
@@ -395,17 +403,18 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
     if connector in {"openai", "dot"}:
         connector = "chatgpt"
     mark_kind = connector if connector in CLAIM_CONNECTORS and connector != "muse" else "agent"
-    mark = (f'<span class="requester-tile" data-connector="{mark_kind}" aria-hidden="true"><svg viewBox="0 0 24 24">'
-            f'<use href="/assets/claim-connectors.svg#{mark_kind}"/></svg></span>')
-    asks = f'<p class="requester">{mark}{html.escape(requester)} asks for</p>' if requester else ""
+    name = html.escape(requester)
+    tile = (f'<div class="requester"><span class="requester-tile" data-connector="{mark_kind}" role="img" '
+            f'aria-label="{name}" title="{name}"><svg viewBox="0 0 24 24" aria-hidden="true">'
+            f'<use href="/assets/claim-connectors.svg#{mark_kind}"/></svg></span></div>') if requester else ""
     context = f'<p class="scope">{html.escape(scope)}</p>' if scope else ""
-    help_link = ('<a class="guide" href="https://claude.ai/code" rel="noreferrer">Claude Code, API trigger, Generate token'
+    help_link = ('<a class="guide" href="https://claude.ai/code" rel="noreferrer">Open Claude Code'
                  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6m0-6-9 9m6-1v6H5V8h6"/></svg></a>') if guide else ""
-    expiry = (f"Link expires in {max(1, math.ceil((expires_at - now) / 60))} min"
+    expiry = (f"Expires in {max(1, math.ceil((expires_at - now) / 60))} min"
               if expires_at is not None and now is not None else "")
     footer = (f'<footer><span>{html.escape(host)}</span><span>{expiry}</span></footer>'
               if host or expiry else "")
-    return _claim_document(title, f"""{asks}<h1>{html.escape(title)}</h1>{context}
+    return _claim_document(title, f"""{tile}<h1>{html.escape(title)}</h1>{context}
 <form method="post" autocomplete="off">
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
 {key_field}
@@ -433,10 +442,6 @@ def routine_claim_page(c: dict[str, Any], csrf: str, *, host: str = "", now: flo
     if c["title"]:
         scope += f" in {c['title']}"
     scope += f" ({c['routine_id']})."
-    if c.get("new_project"):
-        scope += " Created when you save."
-    if c["primary"]:
-        scope += " Primary routine for this project."
     requester = c["created_by"].partition(":")[2] or c["created_by"]
     return claim_page("Claude routine token", scope, csrf, requester=requester, guide=True,
                       host=host, expires_at=c["expires_at"], now=now)

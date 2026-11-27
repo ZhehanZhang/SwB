@@ -49,7 +49,7 @@ export function ClaimLink({ url, expiresAt }: ClaimLinkProps) {
             <span className="font-mono text-xs text-muted-foreground" role="timer">Expires in {duration(seconds)}</span>
             <Button asChild variant="outline">
               <a href={href} target="_blank" rel="noopener noreferrer">
-                <ExternalLink aria-hidden /> Open and paste token<span className="sr-only"> (opens in a new tab)</span>
+                <ExternalLink aria-hidden /> Enter token<span className="sr-only"> (opens in a new tab)</span>
               </a>
             </Button>
           </div>

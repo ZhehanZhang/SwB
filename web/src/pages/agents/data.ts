@@ -25,7 +25,18 @@ type Routine = {
   last_seen_at: string | null
 }
 
-type Target = { id: string; name: string; block: string; project?: string | null; projects?: string[]; online: boolean; created_at?: string | null; last_seen_at?: string | null }
+type Target = {
+  id: string
+  name: string
+  block: string
+  project?: string | null
+  projects?: string[]
+  online: boolean
+  created_by?: string | null
+  created_at?: string | null
+  last_seen_at?: string | null
+  avatar_url?: string | null
+}
 type Pending = { name: string; project: string; created_by: string; created_at: string; claim_url?: string | null }
 type Inventory = { keys: Key[]; routines: Routine[]; captains: Target[]; dots: Target[]; pending_claims: Pending[] }
 type AgentKind = "routine" | "captain" | "dot" | "key" | "pending"
@@ -38,6 +49,7 @@ export type Agent = {
   name: string
   kind: string
   logo: string
+  avatar_url?: string | null
   projects: string[]
   registered_by: string | null
   registered_at: string | null
@@ -72,7 +84,8 @@ function isRoutine(row: unknown): row is Routine {
 }
 
 function isTarget(row: unknown): row is Target {
-  return isRecord(row) && typeof row.online === "boolean" && fields(row, ["id", "name", "block"], ["project", "created_at", "last_seen_at"])
+  return isRecord(row) && typeof row.online === "boolean"
+    && fields(row, ["id", "name", "block"], ["project", "created_by", "created_at", "last_seen_at", "avatar_url"])
     && (row.projects === undefined || Array.isArray(row.projects) && row.projects.every((value: unknown) => typeof value === "string"))
 }
 
@@ -95,14 +108,18 @@ export function isAgentDetail(value: unknown): value is AgentDetail {
     && Array.isArray(value.routines) && value.routines.every(isRoutine) && Array.isArray(value.audit)
 }
 
-function principal(value: string | null): string | null {
-  if (value === "owner" || value?.startsWith("admin:")) return "you"
-  return value?.replace(/^(oauth|key):/, "") || null
+function principal(value?: string | null): string | null {
+  const actor = value?.trim()
+  if (actor === "owner" || actor === "admin" || actor?.startsWith("admin:") || actor?.startsWith("owner:")) return "you"
+  return actor?.replace(/^(oauth|key|agent):/, "") || null
 }
 
 const clientNames: Record<string, string> = {
-  "claude-code": "Claude Code", codex: "Codex", chatgpt: "ChatGPT", gemini: "Gemini", "gemini-cli": "Gemini CLI",
+  claude: "Claude", "claude-code": "Claude Code", codex: "Codex", chatgpt: "ChatGPT", gemini: "Gemini", "gemini-cli": "Gemini CLI",
+  grok: "Grok", xai: "xAI",
 }
+
+export const principalLabel = (value: string) => Object.hasOwn(clientNames, value) ? clientNames[value] : value
 
 export const agentListKey = ["registered-agents"]
 
@@ -119,10 +136,12 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
       id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
       name: kind === "captain" ? displayReference(row.name, "Captain") : row.name, kind,
       logo: kind === "captain" ? "capy" : "chatgpt", projects: row.projects ?? (row.project ? [row.project] : []),
-      registered_by: null, registered_at: row.created_at ?? null, last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",
+      avatar_url: row.avatar_url,
+      registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
+      last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",
     }))),
     ...keys.map((row): Agent => ({
-      id: `key:${row.id}`, reference: row.id, type: "key", name: clientNames[row.agent] ?? row.agent, kind: "MCP client",
+      id: `key:${row.id}`, reference: row.id, type: "key", name: principalLabel(row.agent), kind: "MCP client",
       logo: connectorKind(row.agent) ?? (Object.hasOwn(clientNames, row.agent) ? row.agent : "mcp"),
       projects: row.project ? [row.project] : [],
       registered_by: principal(row.created_by), registered_at: row.created_at ?? null, last_seen: row.last_used_at ?? null,

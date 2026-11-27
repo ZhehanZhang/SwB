@@ -352,7 +352,10 @@ class ChannelModes:
 
     def set(self, principal: Principal, block: str, space: str, mode: str, channel: str = "",
             actions: list[str] | None = None, project: str | None = None) -> dict[str, Any]:
-        if not principal.is_unrestricted_owner:
+        if not principal.is_unrestricted_owner and not (
+            principal.kind == "owner_session" and principal.trust == "owner"
+            and principal.scopes is None and principal.tools is None and principal.targets is None
+        ):
             raise PermissionError("only the owner can set channel modes")
         if not isinstance(block, str) or not isinstance(space, str) or not space or not isinstance(channel, str):
             raise ValueError("block, space and channel must be strings; space cannot be empty")
