@@ -37,7 +37,7 @@ docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 docker compose --profile tunnel up -d
 ```
 
-把 `SWITCHBOARD_PUBLIC_URL` 設為通道主機名稱，例如 `https://swb.example.com`。
+把 `SWB_PUBLIC_URL` 設為通道主機名稱，例如 `https://swb.example.com`。
 
 ## Cloudflare Access
 
@@ -55,7 +55,7 @@ docker compose --profile tunnel up -d
 
 ## 託管平台
 
-程式碼庫提供 Railway（`.railway/railway.ts`）、Render（`render.yaml`）與 Fly.io（`fly.toml`）的範本。請使用一個副本，並在 `/data` 掛載一個儲存卷。在平台的機密設定中設定 `SWITCHBOARD_PUBLIC_URL` 與 `SWITCHBOARD_KEY_OWNER`。
+執行一個 SwB 執行個體。將持久磁碟掛載到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/main/deploy)說明 Railway、Render 和 Fly.io 的範本及 Koyeb 指令稿。
 
 ## 備份與升級
 

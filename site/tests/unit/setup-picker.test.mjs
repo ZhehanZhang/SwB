@@ -49,9 +49,13 @@ test('shows one coding-agent section with commands for each selected app', () =>
   const prompt = combineSetupPrompts(sources, ['codex', 'claude-code']);
   assert.equal(count(prompt, '### Claude Code, Codex'), 1);
   assert.equal(count(prompt, 'Call connect(what="coding-agent").'), 1);
-  assert.equal(count(prompt, 'claude mcp add --transport http'), 1);
-  assert.equal(count(prompt, 'codex mcp add switchboard'), 1);
+  assert.equal(count(prompt, 'claude mcp add --transport http --scope user swb'), 1);
+  assert.equal(count(prompt, 'codex mcp add swb'), 1);
   assert.equal(count(prompt, 'gemini mcp add --scope user'), 0);
+
+  const gemini = combineSetupPrompts(sources, ['gemini-cli']);
+  assert.equal(count(gemini, 'gemini mcp add --scope user --transport http swb'), 1);
+  assert.equal(count(gemini, '/mcp auth swb'), 1);
 });
 
 test('uses the Muse OAuth connector and reads its mailbox in chat', () => {

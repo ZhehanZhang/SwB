@@ -29,7 +29,7 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
   </Tab>
   <Tab value="Docker">
     ```bash
-    (umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\nSWITCHBOARD_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
+    (umask 077; set -C; printf 'SWB_KEY_OWNER=%s\nSWB_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
     docker run -d --name swb --env-file .env \
       -e PORT=8870 -p 127.0.0.1:8870:8870 -v swb-data:/data \
       ghcr.io/zhehanzhang/swb:latest
@@ -43,7 +43,7 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
 
 如需在启动前创建文件，请先运行 `swb init`。再运行 `swb up`。另开一个终端，在同一目录中运行 `swb login-link`。
 
-`swb up` 默认在 `127.0.0.1` 的 `8870` 端口监听。默认的本机 MCP 地址是 `http://localhost:8870/mcp`。如需更改端口，请在终端或 `.env` 中设置 `PORT`。
+`swb up` 默认在 `127.0.0.1` 的 `8870` 端口监听。默认的本机 MCP 地址是 `http://localhost:8870/mcp`。如需更改端口，请在终端或 `.env` 中设置 `SWB_PORT`。
 
 用 `swb up --dir ./my-swb` 指定实例目录。运行其他命令时，请传入相同的 `--dir`。监听地址、配置文件和数据目录见[配置](/zh-Hans/docs/config)。
 

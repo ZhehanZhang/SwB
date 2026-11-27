@@ -90,7 +90,7 @@ SwB 通过一个 Slack 应用读取和发送 Slack 消息。你用清单创建�
 # The bot's @handle and member-list profile come from features.bot_user.display_name and the
 # app icon; they do not change per message. Per-message name/avatar = personas (chat:write.customize).
 display_information:
-  name: Switchboard
+  name: SwB
   description: Agent switchboard for the owner's assistants
   background_color: "#1d2733"
 features:
@@ -99,7 +99,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   bot_user:
-    display_name: switchboard
+    display_name: swb
     always_online: true
 oauth_config:
   scopes:
@@ -150,7 +150,7 @@ settings:
 # It never joins or invites; every post appears as the owner.
 # Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
 display_information:
-  name: Switchboard (personal)
+  name: SwB (personal)
   description: Lets the owner's agents read on their behalf; writes need approval
   background_color: "#333333"
 oauth_config:

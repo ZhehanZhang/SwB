@@ -4,7 +4,7 @@ Help me connect this Claude Project to SwB. SwB is my switchboard for shared mem
 
 If the SwB tools are missing, ask me to open the Claude connector settings. Give me the path `Customize > Connectors > Add > Add custom connector`. Ask me to enter my SwB MCP address. Use `https://swb.example.com/mcp` as the example. Ask me to approve the sign-in. Wait for me to confirm.
 
-Call connect(what="claude-project"). Do each step marked "you" yourself. Create a Claude Code routine named `switchboard <project>` in this project. Add an API trigger. Use the routine prompt that connect returns.
+Call connect(what="claude-project"). Do each step marked "you" yourself. Create a Claude Code routine named `swb <project>` in this project. Add an API trigger. Use the routine prompt that connect returns.
 
 Give me each step marked "person" one at a time. Wait for me to say done after each step. Guide me to the routine by link or through the project.
 

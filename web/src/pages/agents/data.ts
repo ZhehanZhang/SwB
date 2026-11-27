@@ -142,7 +142,7 @@ function routineAgent(row: Routine): Agent {
 function targetAgent(kind: "captain" | "dot", row: Target): Agent {
   return {
     id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
-    name: kind === "captain" ? displayReference(row.name, "Captain") : row.name, kind,
+    name: kind === "captain" ? displayReference(row.name, "Capy Captain") : row.name, kind,
     logo: kind, projects: row.projects ?? (row.project ? [row.project] : []),
     avatar_url: row.avatar_url,
     registered_by: principal(row.created_by), registered_at: row.created_at ?? null,

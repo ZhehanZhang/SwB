@@ -5,6 +5,6 @@ export function displayReference(value: string, fallback = "Capy thread"): strin
     .replace(/\b(?:(?:[\w-]+:)?(captain|thread):|(captain|thread) )?jam_[\w-]+/gi,
       (_match, addressKind?: string, describedKind?: string) => {
         const kind = (addressKind ?? describedKind)?.toLowerCase()
-        return kind === "captain" ? "Captain" : kind === "thread" ? "Capy thread" : fallback
+        return kind === "captain" ? "Capy Captain" : kind === "thread" ? "Capy thread" : fallback
       })
 }

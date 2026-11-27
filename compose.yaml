@@ -3,7 +3,7 @@
 # MCP: http://127.0.0.1:8870/mcp by default. Public exposure: --profile tunnel with
 # TUNNEL_TOKEN in .env; the tunnel's public hostname points at http://switchboard:8000.
 # Memory mirror: bind a host folder at /mirror in compose.override.yaml (git-ignored) and set memory.mirror_dir;
-# Set SWITCHBOARD_UID to the non-root UID that owns those directories, or grant UID 10001 write access.
+# Set SWB_UID to the user ID that owns those directories. You can also grant write access to user ID 10001.
 name: switchboard
 services:
   switchboard:
@@ -11,16 +11,16 @@ services:
       context: .
       target: runtime
       args:
-        APP_UID: ${SWITCHBOARD_UID:-10001}
+        APP_UID: ${SWB_UID:-${SWITCHBOARD_UID:-10001}}
     image: switchboard:local
     env_file:
       - path: .env
         required: false
     environment:
-      SWITCHBOARD_HOST: 0.0.0.0
-      SWITCHBOARD_PORT: ""
+      SWB_HOST: 0.0.0.0
+      SWB_PORT: ""
     ports:
-      - "${SWITCHBOARD_BIND:-127.0.0.1}:${SWITCHBOARD_PORT:-8870}:8000"
+      - "${SWB_BIND:-${SWITCHBOARD_BIND:-127.0.0.1}}:${SWB_PORT:-${SWITCHBOARD_PORT:-8870}}:8000"
     volumes:
       - ./config:/config:ro
       - ./data:/data

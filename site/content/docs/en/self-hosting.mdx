@@ -37,7 +37,7 @@ A tunnel gives SwB a public address on your domain and keeps your ports closed. 
 docker compose --profile tunnel up -d
 ```
 
-Set `SWITCHBOARD_PUBLIC_URL` to the tunnel hostname, for example `https://swb.example.com`.
+Set `SWB_PUBLIC_URL` to the tunnel hostname, for example `https://swb.example.com`.
 
 ## Cloudflare Access
 
@@ -55,7 +55,7 @@ Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD` from the owner a
 
 ## Hosted platforms
 
-The repository has templates for Railway (`.railway/railway.ts`), Render (`render.yaml`) and Fly.io (`fly.toml`). Use one replica with a volume at `/data`. Set `SWITCHBOARD_PUBLIC_URL` and `SWITCHBOARD_KEY_OWNER` in the platform's secret settings.
+Use one SwB instance with a persistent disk mounted at `/data`. See the [deployment guide](https://github.com/ZhehanZhang/SwB/tree/main/deploy) for the Railway, Render and Fly.io templates and the Koyeb script.
 
 ## Backups and upgrades
 

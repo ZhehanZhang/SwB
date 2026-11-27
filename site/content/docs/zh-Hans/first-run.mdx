@@ -5,7 +5,7 @@ description: 让其他应用访问 SwB。登录后查看你的实例。
 
 ## 在本机运行
 
-在空目录中运行 `uvx swb-one up`。请在五分钟内打开终端显示的一次性登录链接。SwB 默认使用 `http://localhost:8870`。如果设置了 `PORT`，SwB 会在地址中使用该端口。其他启动方式见[安装指南](/zh-Hans/docs/install)。
+在空目录中运行 `uvx swb-one up`。请在五分钟内打开终端显示的一次性登录链接。SwB 默认使用 `http://localhost:8870`。如果设置了 `SWB_PORT`，SwB 会在地址中使用该端口。其他启动方式见[安装指南](/zh-Hans/docs/install)。
 
 ## 获取公网地址
 
@@ -31,7 +31,7 @@ swb status
 
 命令会显示服务器状态，以及每个模块是否开启。所有后续操作都列在 **Next steps** 下。`switchboard_status` 工具还会提供各模块的下一步。
 
-要查询其他地址上的服务器，请加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。命令用终端或实例 `.env` 中的 `PORT` 组成默认本机地址。若启动时用了 `--dir`，查询时也请指定同一实例目录。
+要查询其他地址上的服务器，请加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。命令用终端或实例 `.env` 中的 `SWB_PORT` 组成默认本机地址。若启动时用了 `--dir`，查询时也请指定同一实例目录。
 
 ## 登录 SwB 页面
 
@@ -67,6 +67,6 @@ swb login-link
 
 如果要让第一个智能体设置其他应用，请给它所有者权限。对于托管应用，请在 SwB 页面批准 OAuth 登录。OAuth 让你在浏览器中批准应用访问。请选择可访问所有范围、工具和目标的应用。
 
-也可以在运行 SwB 的电脑上设置[本机所有者客户端](/zh-Hans/docs/setup/mcp-client#本机所有者客户端)。将实例目录中 `.env` 里的 `SWITCHBOARD_KEY_OWNER` 用作客户端的 bearer 密钥。请只把密钥发送到本机的 `/mcp` 地址。
+也可以在运行 SwB 的电脑上设置[本机所有者客户端](/zh-Hans/docs/setup/mcp-client#本机所有者客户端)。将实例目录中 `.env` 里的 `SWB_KEY_OWNER` 用作客户端的 bearer 密钥。请只把密钥发送到本机的 `/mcp` 地址。
 
 如果第一个智能体用的是配对密钥，请让它为每个仅限所有者的步骤提供对应的终端命令。在 SwB 实例目录中运行该命令。例如，运行 `swb connect slack`。[连接你的智能体](/zh-Hans/docs/connect)介绍其他应用的连接方法。
