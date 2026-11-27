@@ -118,7 +118,7 @@ def _up(base: Path, env: dict[str, str]) -> None:
     server(["serve"])
 
 
-def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
+def _choices(groups: list[list[str]], *, kind: str = "") -> dict[str, str | bool]:
     choices: dict[str, str | bool] = {}
     for group in groups:
         for pair in group:
@@ -127,7 +127,7 @@ def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
                 raise CliError("--choose expects key=value pairs.")
             if key in choices:
                 raise CliError("--choose cannot repeat a key.")
-            if key in ("create_new", "primary"):
+            if key in ("create_new", "primary") or (key == "replace" and kind.strip().lower() == "muse"):
                 if value.lower() not in ("true", "false"):
                     raise CliError(f"--choose {key} expects true or false.")
                 choices[key] = value.lower() == "true"
@@ -273,7 +273,7 @@ def main(argv: list[str] | None = None) -> None:
         arguments = {}
         if args.command == "connect":
             arguments["what"] = args.what
-            if choose := _choices(args.choose):
+            if choose := _choices(args.choose, kind=args.what):
                 arguments["choose"] = choose
         key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
         if not key:

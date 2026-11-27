@@ -9,7 +9,8 @@ import pytest
 from conftest import OWNER, SECOND_KEY, STATIC_KEY, base_config, call, payload
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
-from switchboard.muse_gadget import relay
+from switchboard.claims import ClaimError
+from switchboard.muse_gadget import BridgeOffline, relay
 from switchboard.muse_protocol import BRIDGE_PATH, DELIVERY_TIMEOUT
 
 SECRET = "a" * 43
@@ -34,7 +35,7 @@ def test_muse_connect_claim_status_and_credential_scope(make):
     status = payload(call(client, STATIC_KEY, "switchboard_status"))
     assert status["blocks"]["muse"]["online"] is False and "claim link" in status["blocks"]["muse"]["next_step"]
     setup = payload(call(client, STATIC_KEY, "connect", {"what": "muse"}))
-    assert setup["done"] == ["Muse bridge: unconfigured."]
+    assert setup["done"] == ["Muse bridge setup is ready."]
     path = urlparse(setup["next"][0]["link"]).path
     assert path.startswith("/claim/")
     assert client.get(path).status_code == 403
@@ -52,7 +53,11 @@ def test_muse_connect_claim_status_and_credential_scope(make):
     assert setup["next"][0]["call"]["arguments"]["to"] == ADDR
     assert "state" not in setup and SECRET not in json.dumps(core.status())
     rotate = payload(call(client, STATIC_KEY, "connect", {"what": "muse", "choose": {"replace": True}}))
-    core.claims.consume(urlparse(rotate["next"][0]["link"]).path.rsplit("/", 1)[1], REPLACEMENT)
+    code = urlparse(rotate["next"][0]["link"]).path.rsplit("/", 1)[1]
+    with pytest.raises(ClaimError, match="bridge token"):
+        core.claims.consume(code, "mistyped")
+    assert bridge(client).is_success
+    core.claims.consume(code, REPLACEMENT)
     assert core.status()["destinations"]["muse"]["state"] == "offline"
     assert bridge(client).status_code == 401 and bridge(client, token=REPLACEMENT).is_success
 
@@ -113,7 +118,7 @@ async def test_muse_routes_require_owner_trust_and_explicit_slot(make):
         await core.send(Principal("guest", "guest", "slack", trust="known"), task="no", to="muse")
     with pytest.raises(BlockError, match="Name Muse explicitly"):
         await core.send(owner, task="unrouted")
-    with pytest.raises(BlockError, match="cannot send to Muse in this scope"):
+    with pytest.raises(BlockError, match="Muse send scope"):
         await core.send(Principal("owner", "scoped", "key", scopes=("project:demo",)), task="no", to="muse")
     core.projects.create(slug="demo", name="Demo")
     await core.set_route(owner, destination="muse", agent="owner", project="demo", target={"gadget": "muse"}, defaults={}, allow_override=False)
@@ -122,7 +127,7 @@ async def test_muse_routes_require_owner_trust_and_explicit_slot(make):
 
 
 @pytest.mark.asyncio
-async def test_gadget_sends_through_sdk_then_posts_correlated_reply():
+async def test_gadget_sends_through_sdk_then_posts_correlated_reply(tmp_path):
     requested = []
     finish = asyncio.Event()
 
@@ -149,7 +154,7 @@ async def test_gadget_sends_through_sdk_then_posts_correlated_reply():
 
     session = Session()
     async with httpx.AsyncClient(transport=httpx.MockTransport(server), base_url="https://swb.test") as client:
-        job = asyncio.create_task(relay(session, client, BRIDGE_PATH, sdk))
+        job = asyncio.create_task(relay(session, client, BRIDGE_PATH, sdk, tmp_path / "pending.json"))
         await asyncio.sleep(0)
         assert not requested
         session.registered.set()
@@ -158,3 +163,57 @@ async def test_gadget_sends_through_sdk_then_posts_correlated_reply():
         with pytest.raises(asyncio.CancelledError):
             await job
     assert requested[1] == {"claim": requested[0]["claim"], "handle": "h_original", "state": "answered", "text": "pong"}
+
+
+@pytest.mark.asyncio
+async def test_gadget_replays_saved_callback_after_outage_and_restart(tmp_path, monkeypatch):
+    calls = []
+    failed = asyncio.Event()
+    accepted = asyncio.Event()
+    running = asyncio.Event()
+    pending = tmp_path / "pending.json"
+    wake_count = 0
+
+    class Session:
+        registered = asyncio.Event()
+
+        async def send_chat(self, text, session_id):
+            nonlocal wake_count
+            wake_count += 1
+            return {"ok": True}
+
+    async def sdk(session, send, _session_id, _timeout):
+        return {**await send(), "reply": "first reply"}
+
+    async def exchange(_client, _url, request):
+        calls.append(request.copy())
+        if "handle" in request:
+            if not running.is_set():
+                failed.set()
+                raise BridgeOffline
+            accepted.set()
+            return {"ok": True}
+        if len(calls) > 1:
+            return {"message": None}
+        return {"message": {"handle": "h_original", "session_id": "session", "text": "wake"}}
+
+    monkeypatch.setattr("switchboard.muse_gadget.exchange", exchange)
+    s = Session()
+    s.registered.set()
+    job = asyncio.create_task(relay(s, None, BRIDGE_PATH, sdk, pending))
+    await asyncio.wait_for(failed.wait(), timeout=2)
+    job.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await job
+    assert pending.stat().st_mode & 0o777 == 0o600
+    assert json.loads(pending.read_text())["result"]["text"] == "first reply"
+
+    running.set()
+    job = asyncio.create_task(relay(s, None, BRIDGE_PATH, sdk, pending))
+    await asyncio.wait_for(accepted.wait(), timeout=2)
+    job.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await job
+    assert calls[1] == calls[2]
+    assert wake_count == 1
+    assert not pending.exists()

@@ -50,6 +50,7 @@ class MuseBlock(Block):
         super().__init__(core, config)
         if self.name != MAILBOX:
             raise BlockError("Configure the Muse gadget under blocks.muse.")
+        core.claims.validators[TOKEN_ENV] = (TOKEN, "Enter a bridge token of 43 to 128 letters, digits, hyphens, or underscores.")
         core.store.x("CREATE TABLE IF NOT EXISTS muse_bridge (id INTEGER PRIMARY KEY CHECK(id = 1), key_hash TEXT, "
                      "last_seen REAL, last_reply REAL)")
         core.store.x("CREATE UNIQUE INDEX IF NOT EXISTS muse_claim ON handles(json_extract(meta, '$.muse_claim')) "
@@ -96,7 +97,7 @@ class MuseBlock(Block):
 
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
         state = self._state()
-        return [("Muse", self.next_step() or TARGET, state["state"], state["state"] == "online" and state["verified"])]
+        return [("Muse", "", state["state"], state["state"] == "online" and state["verified"])]
 
     async def connect_steps(self, kind: str, principal: Principal, project: str | None,
                             choose: dict[str, Any] | None) -> dict[str, Any]:
@@ -104,21 +105,22 @@ class MuseBlock(Block):
         if set(args) - {"replace"} or ("replace" in args and not isinstance(args["replace"], bool)):
             raise BlockError("Muse setup accepts only choose.replace (true to rotate the bridge token).")
         state = self._state()
-        done = [f"Muse bridge: {state['state']}."] + (["Muse has returned a reply."] if state["verified"] else [])
+        done = [{"unconfigured": "Muse bridge setup is ready.", "offline": "Muse bridge token saved.",
+                 "online": "Muse bridge online."}[state["state"]]] + (["Muse has returned a reply."] if state["verified"] else [])
         steps = []
         if not state["configured"] or args.get("replace"):
             if self.core.cfg.env.get(TOKEN_ENV):
-                steps.append({"by": "person", "do": f"Set {TOKEN_ENV} to a random URL-safe token of at least 43 characters in .env and restart SwB."})
+                steps.append({"by": "person", "do": f"Set {TOKEN_ENV} in .env to a random token of 43 to 128 letters, digits, hyphens, or underscores. Restart SwB."})
             else:
                 steps.append(self.token_step(principal, TOKEN_ENV,
-                             "Generate an independent random URL-safe bridge token (43 to 128 characters) and enter it through this private link. This is not your Meta SDK token."))
+                             "Use a password manager to generate a bridge token with 64 random letters and digits. Save it through this link."))
         if steps or state["state"] != "online":
-            steps.append({"by": "person", "do": f"Create a personal Meta Gadget SDK token. Review {SDK_TERMS} first.", "link": SDK_TOKENS})
-            steps.append({"by": "person", "do": f"On a Linux host with Bluetooth LE and the Linux Device SDK installed, run swb muse-bridge --url {quote(self.core.base_url)} --setup. Enter the tokens at the hidden prompts. Pair the advertised device in the Muse app under Settings > Devices > Developer mode > Add Device. SwB registers as SwB in Muse. Leave the bridge running.",
+            steps.append({"by": "person", "do": f"Read {SDK_TERMS}. Create a personal Meta token.", "link": SDK_TOKENS})
+            steps.append({"by": "person", "do": f"Install Meta's Linux Device SDK on a device with Bluetooth Low Energy. Run swb muse-bridge --url {quote(self.core.base_url)} --setup. Enter both tokens at the hidden prompts. In the Muse app, turn on Settings > Devices > Developer mode. Choose Add Device. Select the Bluetooth name SwB prints. Leave SwB running.",
                           "link": SDK_DOCS})
         elif not state["verified"]:
-            steps.append({"by": "you", "do": "Send a harmless test, then check the returned conversation with result.",
-                          "call": {"tool": "send", "arguments": {"to": TARGET, "task": "Switchboard setup test: reply with pong."}}})
+            steps.append({"by": "you", "do": "Send the test message. Check the conversation with result.",
+                          "call": {"tool": "send", "arguments": {"to": TARGET, "task": "Reply with pong to test SwB."}}})
         return {"done": done, "next": steps}
 
     async def targets(self) -> list[dict[str, Any]]:
@@ -130,7 +132,7 @@ class MuseBlock(Block):
 
     async def validate_route_target(self, target: dict[str, Any], defaults: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         if target != {"gadget": MAILBOX} or defaults:
-            raise BlockError(f"Muse routes target {TARGET} and take no defaults.")
+            raise BlockError(f"Set the route target to {TARGET} and leave defaults empty.")
         return target, defaults
 
     def actions(self) -> list[Action]:
@@ -143,14 +145,14 @@ class MuseBlock(Block):
         if call.principal.trust != "owner":
             raise BlockError("Only owner-trusted callers can wake Muse.")
         if not self.credential():
-            raise BlockError('Muse is not configured. Run connect(what="muse").')
+            raise BlockError('Set up Muse with connect(what="muse").')
         task = task.strip()
         if not task or len(task) > MESSAGE_LIMIT or files:
-            raise BlockError(f"Muse delivery needs text of 1 to {MESSAGE_LIMIT} characters, without attachments.")
+            raise BlockError(f"Muse accepts text only, up to {MESSAGE_LIMIT} characters.")
         proj = self.core.project(project)
         slug = proj.slug if proj else None
         if not call.principal.allows(f"project:{slug}" if slug else "general"):
-            raise BlockError("This caller cannot send to Muse in this scope.")
+            raise BlockError("Choose a Muse send scope allowed by this key.")
         if target is None and not self.core.routes.resolve(destination=self.name, agent=call.principal.source, project=slug)[0]:
             raise BlockError("Name Muse explicitly or configure a Muse route before sending.")
         digest = hashlib.sha256(task.encode()).hexdigest()
@@ -251,7 +253,7 @@ class MuseBlock(Block):
         h = self.core.inbox.handle(handle)
         if (h is None or h["owner"] != MAILBOX or h["destination"] != "mailbox" or h["meta"].get("muse_claim") != claim):
             return respond({"error": "no such delivery"}, 404)
-        if h["status"] != "delivering" and not (h["status"] == UNKNOWN and state == "answered"):
+        if h["status"] != "delivering" and not (h["status"] == UNKNOWN and state != UNKNOWN):
             return respond({"ok": True})
         if state == "answered":
             try:

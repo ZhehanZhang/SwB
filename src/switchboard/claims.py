@@ -85,6 +85,7 @@ class Claims:
     def __init__(self, store: Store):
         self.store = store
         self._cipher = Fernet(_key(store))
+        self.validators: dict[str, tuple[re.Pattern[str], str]] = {}
         store.x(SCHEMA)
         if "require_https" not in {r["name"] for r in store.q("PRAGMA table_info(secrets)")}:
             store.x("ALTER TABLE secrets ADD COLUMN require_https INTEGER NOT NULL DEFAULT 0")
@@ -115,12 +116,14 @@ class Claims:
         value = value.strip()
         if not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
             raise ClaimError("Enter a token on a single line, at most 8 KiB.")
-        claim = self.store.one("SELECT require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
+        claim = self.store.one("SELECT name, require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
                                (code_hash, self.store.clock()))
         if claim is None:
             raise ClaimUnavailable(UNUSABLE)
         if claim["require_https"] and not valid_webhook_url(value):
             raise ClaimError("Enter a public HTTPS webhook URL without credentials or a fragment.")
+        if (validation := self.validators.get(claim["name"])) and not validation[0].fullmatch(value):
+            raise ClaimError(validation[1])
         row = self.store.one(
             """UPDATE secrets SET code_hash = NULL, expires_at = NULL, sealed = ?
                WHERE code_hash = ? AND expires_at > ? RETURNING name""",
