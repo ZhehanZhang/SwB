@@ -507,6 +507,33 @@ async def test_assist_delivers_through_locked_capy_route(github, capy, agent):
         assert handle["meta"]["channel_mode"]["target"] == row["target"]
 
 
+async def test_github_private_target_alias_survives_catalog_invalidation(github, capy, monkeypatch):
+    address = f"capy:captain:{CAPTAIN}"
+    config = {"spaces": {"team": {"repo": "acme/app", "mode": "assist", "project": "example"}}}
+    settings = {"blocks": {"capy": {"identity": "personal"}, "github": config},
+                "targets": {"aliases": {"private-review": address}},
+                "visibility": {"defaults": {"target": "shared"},
+                               "resources": {"channel:team/acme/app": "shared", "target:private-review": "private"}}}
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "CAPY_API_KEY": CAPY_KEY}
+    async with github(config, env, settings=settings, block_options={"capy": {"transport": httpx.MockTransport(capy.handler)}}) as (core, client):
+        core.projects.create(slug="example", name="Example")
+        core.routes.set(destination="capy", agent=None, project="example", target={"captain": CAPTAIN},
+                        defaults=None, allow_override=False, note="", by="test")
+        discover = core.targets
+
+        async def discover_then_invalidate(**kwargs):
+            rows = await discover(**kwargs)
+            core.changed()
+            return rows
+
+        monkeypatch.setattr(core, "targets", discover_then_invalidate)
+        assert "target:private-review" in await core.visibility_resources()
+        assert (await send(client, sender={"id": 11, "type": "User"})).status_code == 200
+        [drop] = core.audit.recent(action="webhook", outcome="dropped")
+        assert drop["detail"] == "target access restricted"
+        assert not any(method == "POST" and path == f"/api/v1/threads/{CAPTAIN}/message" for method, path, _ in capy.requests)
+
+
 @pytest.mark.parametrize("mode", ["off", "watch", "assist", "triage", "work"])
 async def test_webhook_modes_route_only_the_right_events(github, mode):
     async with github(github_config(mode, ["label"]), settings=shared()) as (core, client):
