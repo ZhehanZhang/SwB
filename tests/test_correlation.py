@@ -61,5 +61,7 @@ def test_conversation_filter_follows_mailbox_reply_handles(make):
     assert [item["in_reply_to"] for item in got["items"]] == [root, root, followup["conversation"]]
     assert [item["final"] for item in got["items"]] == [False, True, True]
     assert payload(call(c, STATIC_KEY, "wait", args))["timed_out"]
+    unfiltered = payload(call(c, STATIC_KEY, "inbox"))
+    assert [item["text"] for item in unfiltered["items"]] == ["Unrelated"]
     inbox = payload(call(c, STATIC_KEY, "inbox", {"conversation": root, "since_cursor": 0}))
     assert inbox["items"] == got["items"]
