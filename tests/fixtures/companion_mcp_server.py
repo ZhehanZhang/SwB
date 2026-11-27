@@ -39,13 +39,13 @@ def make_server(transport: str, events: Path | None = None, *, large_catalogue: 
         record(params.name)
         args = params.arguments or {}
         if params.name == "fail":
-            raise MCPError(INTERNAL_ERROR, SENTINEL)
+            raise MCPError(INTERNAL_ERROR, args.get("text", SENTINEL))
         if params.name == "crash" and transport == "stdio":
             os._exit(13)
         if params.name == "slow":
             await asyncio.sleep(60)
         if params.name == "report_error":
-            return CallToolResult(content=[TextContent(type="text", text=SENTINEL)], is_error=True)
+            return CallToolResult(content=[TextContent(type="text", text=args.get("text", SENTINEL))], is_error=True)
         if params.name == "blob":
             return CallToolResult(content=[TextContent(type="text", text=args.get("character", "x") * args["size"])])
         if params.name == "image":
