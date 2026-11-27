@@ -7,7 +7,9 @@ MCP 是应用使用外部工具的标准方式。本页介绍如何用专属密�
 
 ## 开始之前
 
-你的应用需要支持基于 Streamable HTTP 的远程 MCP 服务器和自定义请求头。Streamable HTTP 是 MCP 的网络传输方式。你还需要一个已经接入 SwB 并使用所有者登录的智能体，或者 SwB 服务器的终端权限。
+你的应用需要支持基于 Streamable HTTP 的远程 MCP 服务器和自定义请求头。Streamable HTTP 是 MCP 的网络传输方式。你还需要一个以所有者身份登录 SwB 的智能体，或能在运行 SwB 的电脑上使用终端。
+
+如需在应用所在的电脑上启动 SwB，请在空目录中运行 `uvx swb-one up`。打开终端显示的一次性登录链接。其他方式见[安装指南](/zh-Hans/docs/install)。
 
 Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth 登录。请为这些应用使用对应的页面。
 
@@ -30,12 +32,12 @@ Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth �
 <Step>
 ### 获取配对码
 
-请以所有者身份登录的智能体获取配对码。智能体可以用应用名称调用 `connect_code`。
+请以所有者身份登录的智能体获取配对码。智能体可以用应用名称调用 `connect_code`。你也可以在 SwB 实例目录中运行 `uvx swb-one connect mcp-client --choose agent=notes-bot`。将命令中的示例名称换成你的应用名称。
 </Step>
 <Step>
 ### 换取密钥
 
-在运行应用的电脑上，用终端打开一个私密目录。把 `https://swb.example.com` 换成你的 SwB 地址。保留末尾的 `/connect`。如果本机服务器使用 8870 端口，请用 `http://localhost:8870/connect`。请在 10 分钟内通过隐藏输入提示填写配对码。
+在运行应用的电脑上，用终端打开一个私密目录。把 `https://swb.example.com` 换成你的 SwB 地址。保留末尾的 `/connect`。如果 SwB 在本机运行，请用 `http://localhost:8870/connect`，并按启动时显示的地址填写端口。请在 10 分钟内通过隐藏输入提示填写配对码。
 
 ```bash
 bash -c '
@@ -57,7 +59,7 @@ bash -c '
 <Step>
 ### 把 SwB 添加到应用
 
-在应用的 MCP 设置中，填入文件里的 `mcp_url`。如果本机服务器使用 8870 端口，请用 `http://localhost:8870/mcp`。传输方式选择 Streamable HTTP。
+在应用的 MCP 设置中，填入文件里的 `mcp_url`。如果 SwB 在本机运行，请用启动时显示的 MCP 地址。传输方式选择 Streamable HTTP。
 </Step>
 <Step>
 ### 添加密钥

@@ -18,7 +18,7 @@ swb login-link
 
 指令會印出類似 `https://swb.example.com/login#t=...` 的連結。請在五分鐘內用瀏覽器開啟。連結使用一次後就會失效。以擁有者身分登入的代理也可用 `login_link` 工具產生連結。權杖位於連結的 `#` 後方。
 
-在本機執行時，請在啟動前將 `SWITCHBOARD_PUBLIC_URL` 設為 `http://localhost:8870`。位址中的連接埠須與 `PORT` 一致。若 YAML 設定檔已設定 `public_url`，請直接修改該欄位。用 `--url` 指定其他伺服器。用 `--dir` 從其他資料夾讀取擁有者金鑰。
+首次在本機執行 `swb up` 時，終端機會顯示一次性登入連結。本機位址預設為 `http://localhost:8870`。若有設定 `PORT`，SwB 會在位址中使用該連接埠。執行 `swb login-link` 時，用 `--url` 指定其他伺服器。用 `--dir` 從其他資料夾讀取擁有者金鑰。
 
 用連結登入失敗時，請重新執行 `swb login-link`。在瀏覽器中開啟新連結。
 

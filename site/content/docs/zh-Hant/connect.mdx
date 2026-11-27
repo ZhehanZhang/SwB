@@ -49,11 +49,13 @@ swb connect grok
 
 你也可以在權杖頁面建立配對碼。SwB 透過 `POST /pairing/code` 送出表單。
 
-配對碼指定了專案時，`POST /connect` 會在 `project` 傳回該專案。將它設為用戶端的預設專案。呼叫工具需要指定專案時，將該值填入 `project`。金鑰沿用代理原有的存取權限。請在 `auth.key_scopes` 中依代理名稱設定可存取的記憶範圍。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
+配對碼指定了專案時，`POST /connect` 會在 `project` 傳回該專案。將它設為用戶端的預設專案。呼叫工具需要指定專案時，將該值填入 `project`。
+
+配對金鑰只能讀取該代理送出或收到的訊息，且訊息須在擁有者授權的範圍內。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
 
 ## 收件匣事件串流
 
-`POST /connect` 傳回 `inbox_events_url`，也就是 `GET /inbox/events` 的網址。連線時，請在 `Authorization: Bearer <key>` 中帶入配對取得的代理金鑰。SwB 會維持連線，以伺服器傳送事件（SSE）的方式提供該代理的收件匣更新。
+`POST /connect` 傳回 `inbox_events_url`，也就是 `GET /inbox/events` 的網址。連線時，請在 `Authorization: Bearer <key>` 中帶入配對取得的代理金鑰。SwB 只提供該代理在金鑰授權範圍內的收件匣更新。更新以伺服器傳送事件（SSE）的方式透過同一條連線傳送。
 
 連線建立後，SwB 先傳送 `ready` 事件。`item` 事件的 JSON 資料包含游標 `cursor`、對話代碼 `handle` 和訊息資料。事件 ID 採用游標值，代表事件在串流中的位置。
 
