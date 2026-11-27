@@ -8,7 +8,7 @@ For Fly.io, check that flyctl is installed and that I am signed in with fly auth
 
 For Koyeb, check that the koyeb CLI is installed and signed in. Then run sh deploy/koyeb.sh my-swb with my app name.
 
-For my own server, ask me for the domain. Ask me to point its DNS at the server and wait until I confirm. In deploy/compose, write a private .env file with DOMAIN set to my domain and SWB_SETUP_CODE set to the output of openssl rand -hex 32. Use umask 077 so only I can read it. Then run docker compose up -d --build in deploy/compose.
+For my own server, ask me for the domain. Ask me to point its DNS at the server and wait until I confirm. Then run sh deploy/compose/start.sh with my domain, for example sh deploy/compose/start.sh swb.example.com.
 
 The setup code is a secret. Keep it out of this chat, your output and every log. Tell me only the name of the private file that holds it: .env.swb-setup-fly-my-swb for Fly.io, .env.swb-setup-koyeb-my-swb for Koyeb, or deploy/compose/.env for my server.
 

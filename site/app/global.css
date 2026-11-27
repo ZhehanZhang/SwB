@@ -367,8 +367,8 @@ button.swb-node:focus-visible { outline: none; }
 }
 
 .swb-rotate { display: grid; color: var(--accent-strong, var(--foreground)); }
-.swb-rotate-item { grid-area: 1 / 1; opacity: 0; transform: translateY(.12em); transition: opacity .45s ease, transform .45s ease; }
-.swb-rotate-on { opacity: 1; transform: none; }
+.swb-rotate-item { grid-area: 1 / 1; opacity: 0; transform: translateY(.12em); transition: opacity .25s ease, transform .25s ease; }
+.swb-rotate-on { opacity: 1; transform: none; transition: opacity .35s ease .25s, transform .35s ease .25s; }
 .swb-rotate-item:not(.swb-rotate-on) { pointer-events: none; }
 .swb-between { line-height: 2.2; color: var(--muted-foreground, inherit); }
 .swb-slot { display: inline-grid; vertical-align: middle; margin-inline: .15em; }
