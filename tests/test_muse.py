@@ -1,0 +1,277 @@
+import asyncio
+import builtins
+import json
+from urllib.parse import urlsplit
+from uuid import UUID, uuid4
+
+import pytest
+
+from conftest import PUBLIC, SECOND_KEY, STATIC_KEY, acall, base_config, call, eventually, payload, sign_in
+from switchboard import muse_gadget
+from switchboard.auth import Principal
+from switchboard.blocks import muse
+from switchboard.vendor.musegadget import muse_api
+from switchboard.vendor.musegadget.identity import Identity
+
+SDK_TOKEN = "mgst_" + "U" * 43
+COMPANION = "cmp_c0ffee"
+ACCESS = "test-muse-device-access"
+REFRESH = "test-muse-device-refresh"
+
+
+class FakeGadget:
+    def __init__(self, *, identity, pairing, sdk_token, save_pairing):
+        self.identity = identity
+        self.save_pairing = save_pairing
+        self.ready = asyncio.Event()
+        self.wakes = []
+        self.reply = "pong"
+
+    @property
+    def online(self):
+        return self.ready.is_set()
+
+    async def run(self):
+        self.ready.set()
+        await asyncio.Future()
+
+    async def wait_ready(self):
+        await self.ready.wait()
+
+    async def wake(self, session_id, text):
+        self.wakes.append((session_id, text))
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        return self.reply
+
+
+class FakeCompanions:
+    def __init__(self):
+        self.online = True
+        self.invokes = []
+        self.before_claim = None
+
+    def register_claim(self, kind, handler, *, capability, action):
+        assert (kind, capability, action) == ("muse_pairing", "muse", "pair")
+        self.handler = handler
+
+    def list(self):
+        return [{"id": COMPANION, "online": self.online, "capabilities": ["muse"]}]
+
+    async def invoke(self, companion_id, capability, action, args, timeout_s):
+        assert companion_id == COMPANION and (capability, action, timeout_s) == ("muse", "pair", 660)
+        assert args["sdk_token"] == SDK_TOKEN and args["window_s"] == 600
+        assert set(args) == {"sdk_token", "identity", "window_s"}
+        identity = Identity(args["identity"]["mac"])
+        self.invokes.append(identity)
+        p = Principal("test-device", f"companion:{COMPANION}", "companion", trust="external")
+        data = {"node_id": identity.setup_node_id, "credentials": {"access_token": ACCESS, "refresh_token": REFRESH}}
+        if self.before_claim:
+            await self.before_claim(p, data)
+        result = await self.handler(p, data)
+        if not result["ok"]:
+            raise ValueError(ACCESS)
+        return {"paired": True}
+
+
+def config():
+    return base_config(version=2, blocks={"mcp": {"use": "mcp"}, "muse": {"use": "muse"}})
+
+
+@pytest.fixture
+async def muse_app(amake, monkeypatch):
+    monkeypatch.setattr(muse_gadget, "MuseGadget", FakeGadget)
+    core, client = await amake(config())
+    core.companions = companions = FakeCompanions()
+    block = core.blocks["muse"]
+    block.bind()
+
+    def verify(token, url):
+        assert token == ACCESS and url == "https://api.muse.ai"
+        return [{"vm_id": "test-vm"}], 200
+
+    monkeypatch.setattr(muse_api, "fetch_vms_with_status", verify)
+    return core, client, companions, block
+
+
+async def tool(client, name, args=None, key=STATIC_KEY):
+    return payload(await acall(client, key, name, args))
+
+
+async def connect(client, **choice):
+    return await tool(client, "connect", {"what": "muse", "choose": choice})
+
+
+async def pair(core, client):
+    setup = await connect(client)
+    path = urlsplit(setup["next"][1]["link"]).path
+    assert path.startswith("/claim/")
+    assert core.claims.consume(path.rsplit("/", 1)[1], SDK_TOKEN) == muse.TOKEN_ENV
+    result = await connect(client, companion=COMPANION)
+    assert result["pairing"] == "in_progress"
+    await eventually(lambda: core.blocks["muse"]._pairing is None)
+    assert (await connect(client))["pairing"] == "paired"
+
+
+async def test_opt_in_sets_up_the_block_without_replacing_oauth(amake):
+    core, client = await amake()
+    assert "custom connector with OAuth" in (await connect(client))["next"][0]["do"]
+    assert "muse:" in (await connect(client, gadget=True))["next"][0]["snippet"]
+    assert "muse" not in (await tool(client, "switchboard_status"))["blocks"]
+    assert core.claims.secret(muse.IDENTITY_SECRET) is None
+
+
+def test_unpaired_block_starts_without_importing_sdk_or_bluetooth(make, monkeypatch):
+    importer = builtins.__import__
+
+    def guarded(name, *args, **kwargs):
+        assert not name.endswith(("muse_gadget", "musegadget", "musegadget.identity", "bless", "dbus_next"))
+        return importer(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded)
+    core, client = make(config())
+    assert core.blocks["muse"]._tasks == ()
+    assert core.claims.secret(muse.IDENTITY_SECRET) is None
+    status = payload(call(client, STATIC_KEY, "switchboard_status"))
+    assert status["destinations"]["muse"]["state"] == "unconfigured"
+    assert status["blocks"]["muse"]["next_step"] == 'Run connect(what="muse") for the Muse SDK token link.'
+    assert not any("muse" in str(problem).lower() for problem in status["problems"])
+
+
+def test_configured_gadget_preserves_muse_oauth_connector(make):
+    _, client = make(config())
+    token = sign_in(client, redirect="https://agent.meta.ai/api/hatch/oauth/callback")["access_token"]
+    setup = payload(call(client, token, "connect", {"what": "muse"}))
+    assert setup["state"] == "connected" and setup["guide"]["prompt"] == "setup-muse"
+    queued = payload(call(client, STATIC_KEY, "send", {"to": "muse", "task": "Reply with pong"}))
+    assert queued["to"] == "agent:muse" and queued["mailbox"]
+
+
+async def test_pairing_verifies_and_seals_credentials(muse_app, caplog):
+    core, client, companions, block = muse_app
+    caplog.set_level("DEBUG")
+    setup = await connect(client)
+    assert setup["next"][0]["link"] == "https://gadgets.muse.ai/settings/sdk-tokens"
+    code = urlsplit(setup["next"][1]["link"]).path.rsplit("/", 1)[1]
+    assert core.claims.consume(code, SDK_TOKEN) == muse.TOKEN_ENV
+    companions.online = False
+    assert PUBLIC in (await connect(client))["next"][1]["do"]
+    companions.online = True
+    setup = await connect(client)
+    assert setup["companions"] == [COMPANION]
+    opened, finish = asyncio.Event(), asyncio.Event()
+
+    async def reject_unexpected_claims(p, data):
+        assert not (await companions.handler(p, {**data, "node_id": "wrong"}))["ok"]
+        assert not (await companions.handler(Principal("other", "companion:cmp_else", "companion"), data))["ok"]
+        assert not (await companions.handler(p, {**data, "credentials": {**data["credentials"], "api_url_v2": "https://example.test"}}))["ok"]
+        opened.set()
+        await finish.wait()
+
+    companions.before_claim = reject_unexpected_claims
+    in_progress = await asyncio.wait_for(connect(client, companion=COMPANION), 2)
+    await asyncio.wait_for(opened.wait(), 2)
+    assert "MuseGadget" in in_progress["next"][0]["do"] and in_progress["pairing"] == "in_progress"
+    assert (await connect(client, companion=COMPANION)) == in_progress
+    assert (await connect(client)) == in_progress
+    assert len(companions.invokes) == 1
+    mac = core.claims.secret(muse.IDENTITY_SECRET)
+    assert int(mac[:2], 16) & 3 == 2
+    finish.set()
+    await eventually(lambda: block.online and block._pairing is None)
+    paired = await connect(client)
+    assert paired["state"] == "connected" and paired["pairing"] == "paired"
+    assert core.claims.secret(muse.IDENTITY_SECRET) == mac == companions.invokes[0].mac
+    record = json.loads(core.claims.secret(muse.PAIRING_SECRET))
+    assert (record["access_token"], record["refresh_token"], record["node_id"]) == (ACCESS, REFRESH, Identity(mac).setup_node_id)
+    block._gadget.save_pairing({**record, "access_token_saved_at": core.clock() + 1})
+    assert json.loads(core.claims.secret(muse.PAIRING_SECRET))["access_token_saved_at"] == core.clock() + 1
+    protected = tuple(row["sealed"] for row in core.store.q("SELECT sealed FROM secrets"))
+    public = caplog.text + str(core.audit.recent(limit=100)) + json.dumps(await tool(client, "switchboard_status")) + json.dumps(paired)
+    for secret in (SDK_TOKEN, ACCESS, REFRESH):
+        assert secret not in public
+        assert all(secret.encode() not in value for value in protected)
+
+
+async def test_pairing_api_failure_is_sanitized_and_saves_nothing(muse_app, monkeypatch, caplog):
+    core, client, _, _ = muse_app
+    caplog.set_level("DEBUG")
+    core.claims.save_secret(muse.TOKEN_ENV, SDK_TOKEN)
+
+    def bad_verify(*args):
+        raise RuntimeError(ACCESS)
+
+    monkeypatch.setattr(muse_api, "fetch_vms_with_status", bad_verify)
+    assert (await connect(client, companion=COMPANION))["pairing"] == "in_progress"
+    await eventually(lambda: core.blocks["muse"]._pairing is None)
+    result = await connect(client)
+    assert result["pairing"] == "window_closed" and "Retry pairing" in result["next"][0]["do"]
+    assert core.claims.secret(muse.PAIRING_SECRET) is None
+    assert all(secret not in caplog.text + str(core.audit.recent()) + str(result) for secret in (SDK_TOKEN, ACCESS, REFRESH))
+
+
+async def test_gadget_routes_replies_and_dedupes_without_polling_oauth_mailbox(muse_app):
+    core, client, companions, block = muse_app
+    await pair(core, client)
+    companions.online = False
+    args = {"to": "muse", "task": "Reply with pong"}
+    first = await tool(client, "send", args)
+    duplicate = await tool(client, "send", {**args, "to": muse.TARGET})
+    assert first["conversation"] == duplicate["conversation"] and duplicate["duplicate"]
+    second = await tool(client, "send", args, key=SECOND_KEY)
+    plain = await tool(client, "send", {**args, "to": "agent:muse"})
+    assert plain["mailbox"] and plain["to"] == "agent:muse"
+    await eventually(lambda: core.inbox.handle(second["conversation"])["status"] == "answered")
+    assert len(block._gadget.wakes) == 2
+    assert block.online and len(companions.invokes) == 1
+    assert {UUID(session).version for session, _ in block._gadget.wakes} == {4}
+    assert len({session for session, _ in block._gadget.wakes}) == 2
+    assert [item["handle"] for item in core.inbox.read(owner="muse", since=0)["items"]] == [plain["conversation"]]
+    for key, work in ((STATIC_KEY, first), (SECOND_KEY, second)):
+        [received] = (await tool(client, "inbox", {"since_cursor": 0}, key=key))["items"]
+        assert received["handle"] == work["conversation"] and received["from"]["agent"] == "muse"
+        assert received["trust"] == "external" and "\npong\n" in received["text"]
+        result = await tool(client, "result", {"conversation": work["conversation"]}, key=key)
+        assert result["status"] == "answered" and result["final"]["text"] == received["text"]
+    assert (await connect(client, connector=True))["guide"]["prompt"] == "setup-muse"
+    assert (await client.post("/inbox/muse/bridge", json={})).status_code == 404
+
+
+async def test_uncertain_delivery_is_deduped_and_never_replayed(muse_app):
+    core, client, _, block = muse_app
+    await pair(core, client)
+    block._gadget.reply = ConnectionError("uncertain wake")
+    args = {"to": "muse", "task": "Wake once"}
+    handle = (await tool(client, "send", args))["conversation"]
+    await eventually(lambda: core.inbox.handle(handle)["status"] == "delivery_unknown")
+    duplicate = await tool(client, "send", args)
+    assert duplicate["conversation"] == handle and duplicate["duplicate"]
+    assert len(block._gadget.wakes) == 1
+    core.clock.t += muse.DUPLICATE_WINDOW + 1
+    assert (await tool(client, "send", args))["conversation"] != handle
+    await eventually(lambda: len(block._gadget.wakes) == 2)
+
+
+async def test_start_resumes_queued_jobs_but_never_replays_inflight(amake, muse_app):
+    core, client, _, _ = muse_app
+    await pair(core, client)
+    handles = {}
+    for state in ("delivering", "queued"):
+        handles[state] = core.inbox.open_handle(owner="owner", destination="muse", ref=str(uuid4()), project=None, title=None,
+                                                meta={"muse_task": state}, status=state, target=muse.TARGET)
+    await core._test_close()
+    restarted, _ = await amake(config())
+    block = restarted.blocks["muse"]
+    await eventually(lambda: restarted.inbox.handle(handles["queued"])["status"] == "answered")
+    assert restarted.inbox.handle(handles["delivering"])["status"] == "delivery_unknown"
+    assert [message for _, message in block._gadget.wakes] == ["queued"]
+
+
+async def test_muse_device_unpair_keeps_identity_and_clears_saved_credentials(muse_app):
+    core, client, _, block = muse_app
+    await pair(core, client)
+    ident = core.claims.secret(muse.IDENTITY_SECRET)
+    block._gadget.save_pairing(None)
+    assert not block.online and core.claims.secret(muse.PAIRING_SECRET) is None
+    assert core.claims.secret(muse.IDENTITY_SECRET) == ident
+    assert (await connect(client))["companions"] == [COMPANION]
