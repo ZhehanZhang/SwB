@@ -57,6 +57,8 @@ def _credential_refs(core: Switchboard) -> dict[str, tuple[str, str, list[str]]]
             add(MUSE_TOKEN_ENV, kind, "Muse bridge token", uses)
         elif kind == "github":
             add(block.secret_env, "github", "GitHub webhook secret", uses)
+            add(block.api.app_id_env, "github", "GitHub App ID", uses)
+            add(block.api.private_key_env, "github", "GitHub private key", uses)
             for sink in (block.config.get("sinks") or {}).values():
                 add(sink.get("url_env"), "github", "GitHub sink URL", uses)
                 if sink.get("signature") == "stripe":

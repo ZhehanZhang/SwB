@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import jwt
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
+from ...claims import ClaimInputError, Field
 from .. import BlockError
 
 if TYPE_CHECKING:
@@ -22,6 +26,17 @@ API_URL = "https://api.github.com"
 ID_RE = re.compile(r"[1-9][0-9]{0,23}")
 REPO_RE = re.compile(r"[A-Za-z0-9-]{1,100}/[A-Za-z0-9_.-]{1,100}")
 PEM_RE = re.compile(r"-----BEGIN ((?:RSA )?PRIVATE KEY)-----\s*(.*?)\s*-----END \1-----", re.DOTALL)
+
+
+def github_app(webhook_secret_env: str | None = None, *, webhook_secret_saved: bool = False) -> tuple[str, str, list[Field]]:
+    settings = "https://github.com/settings/apps"
+    fields = [Field(APP_ID_ENV, "App ID", "id", "The number at the top of the app's General settings.", link=settings),
+              Field(PRIVATE_KEY_ENV, "Private key", "pem",
+                    "Under Private keys, Generate a private key, then upload the .pem file it downloads.", link=settings)]
+    if webhook_secret_env and not webhook_secret_saved:
+        fields.append(Field(webhook_secret_env, "Webhook secret", "webhook_secret", "The secret set under Webhook, if the app sends events.",
+                            optional=True, link=settings))
+    return "GitHub App", "github", fields
 
 
 def repo_name(value: Any) -> str | None:
@@ -38,7 +53,22 @@ def provider_id(value: Any) -> str | None:
     return None
 
 
-def private_key(value: str) -> str:
+def validate_app_id(value: str) -> None:
+    if provider_id(value) is None:
+        raise ClaimInputError("Enter a numeric App ID")
+
+
+def load_rsa_private_key(pem: str) -> RSAPrivateKey:
+    try:
+        key = load_pem_private_key(pem.encode(), password=None)
+        if isinstance(key, RSAPrivateKey):
+            return key
+    except (ValueError, TypeError, UnsupportedAlgorithm):
+        pass
+    raise ClaimInputError("Use the .pem file that GitHub downloads.")
+
+
+def private_key(value: str) -> RSAPrivateKey:
     found = PEM_RE.fullmatch(value.strip().replace("\\n", "\n"))
     if found is None:
         found = PEM_RE.fullmatch(base64.b64decode(value, validate=True).decode().strip())
@@ -46,8 +76,8 @@ def private_key(value: str) -> str:
         raise ValueError("invalid PEM")
     label, body = found.groups()
     body = "".join(body.split())
-    base64.b64decode(body, validate=True)
-    return f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
+    pem = f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
+    return load_rsa_private_key(pem)
 
 
 class GitHubAPI:
@@ -63,6 +93,8 @@ class GitHubAPI:
         self.tokens: dict[str, tuple[str, float, str, tuple[str, str, str, str]]] = {}
         self.pat_actor: str | None = None
         self._verified_pat = ""
+        self._key_source: str | None = None
+        self._key: RSAPrivateKey | None = None
 
     def credentials(self) -> tuple[str, str, str, str]:
         return (self.app_id or self.core.secret(self.app_id_env) or "",
@@ -71,11 +103,22 @@ class GitHubAPI:
 
     def auth_type(self) -> str | None:
         app_id, _, key, token = self.credentials()
-        if app_id and key:
+        if provider_id(app_id) and self.app_key(key) is not None:
             return "app"
         if token:
             return "pat"
         return None
+
+    def app_key(self, value: str) -> RSAPrivateKey | None:
+        if value != self._key_source:
+            self._key_source = value
+            self._key = None
+            if value:
+                try:
+                    self._key = private_key(value)
+                except ValueError:
+                    pass
+        return self._key
 
     async def _response(self, method: str, path: str, token: str, **kwargs: Any) -> httpx.Response:
         if self.http is None:
@@ -118,9 +161,11 @@ class GitHubAPI:
         app_id, installation_id, key, _ = self.credentials()
         if not provider_id(app_id) or not key or (installation_id and not provider_id(installation_id)):
             raise BlockError("Configure a valid GitHub App ID, private key, and optional installation ID")
+        if (parsed_key := self.app_key(key)) is None:
+            raise BlockError("The GitHub App private key is invalid")
         try:
             now = int(self.core.clock())
-            return jwt.encode({"iat": now - 60, "exp": now + 540, "iss": app_id}, private_key(key), algorithm="RS256")
+            return jwt.encode({"iat": now - 60, "exp": now + 540, "iss": app_id}, parsed_key, algorithm="RS256")
         except (binascii.Error, ValueError, TypeError, UnicodeError, jwt.PyJWTError):
             raise BlockError("The GitHub App private key is invalid") from None
 

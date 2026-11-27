@@ -34,8 +34,10 @@ from .api import (
     PRIVATE_KEY_ENV,
     TOKEN_ENV,
     GitHubAPI,
+    load_rsa_private_key,
     provider_id,
     repo_name,
+    validate_app_id,
 )
 
 if TYPE_CHECKING:
@@ -288,6 +290,8 @@ class GitHubBlock(Block):
     def bind(self) -> None:
         if sum(block.manifest.id == self.manifest.id for block in self.core.blocks.values()) > 1:
             raise ConfigError("only one github block can serve /github/webhook")
+        self.core.claims.register_name(self.api.app_id_env, validate_app_id)
+        self.core.claims.register_name(self.api.private_key_env, load_rsa_private_key)
 
     def routes(self) -> list[Route]:
         return [Route("/github/webhook", self.webhook, methods=["POST"])]
@@ -405,10 +409,10 @@ class GitHubBlock(Block):
     def next_step(self) -> str | None:
         if not self.online:
             if self.core.secret(self.secret_env):
-                return "Restart Switchboard to apply the saved GitHub webhook secret."
+                return "Restart SwB to apply the saved GitHub webhook secret."
             return "Save the GitHub webhook secret."
         if not self.registered_repositories() and not any(self.repo_routes.values()):
-            return "Add a GitHub repository route or space in config/switchboard.yaml and restart Switchboard."
+            return "Add a GitHub repository route or space in config/switchboard.yaml and restart SwB."
         return None
 
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
@@ -419,11 +423,15 @@ class GitHubBlock(Block):
         step = self.next_step()
         steps = []
         if not present:
-            steps.append(self.token_step(principal, self.secret_env, step))
+            steps.append(self.token_step(principal, self.secret_env, step, kind="webhook_secret", label="Webhook secret"))
         elif step:
             steps.append({"by": "person", "do": step})
-        auth = self.api.auth_type()
         credential = (choose or {}).get("credential")
+        auth = self.api.auth_type()
+        app_id, _, key, _ = self.api.credentials()
+        valid_id = provider_id(app_id) is not None
+        valid_key = self.api.app_key(key) is not None
+        repair_app = (app_id and not valid_id) or (key and not valid_key)
         if auth == "app":
             await self.refresh_installation()
             done.append("GitHub App credentials: present.")
@@ -431,7 +439,7 @@ class GitHubBlock(Block):
                 steps.append({"by": "person", "do": self.installation_problem})
             elif self.checked_at is not None and self.installation.get("issues") != "write":
                 steps.append({"by": "person", "do": "Grant Issues: write to the GitHub App installation for the triage repositories."})
-        elif auth == "pat":
+        elif auth == "pat" and (credential == "pat" or (credential != "app" and not repair_app)):
             await self.refresh_installation()
             pat = self.pat_capabilities
             if pat and pat["verified"]:
@@ -442,14 +450,19 @@ class GitHubBlock(Block):
                 steps.append({"by": "person", "do": pat["problem"]})
         elif credential == "pat":
             steps.append(self.token_step(principal, self.api.token_env, "Save a fine-grained GitHub token for the triage repositories with Issues: write."))
-        elif credential == "app" or present or self.registered_repositories():
-            app_id, _, key, _ = self.api.credentials()
-            if not app_id:
-                steps.append(self.token_step(principal, self.api.app_id_env,
-                             "Open GitHub Settings → Developer settings → GitHub Apps. Open your GitHub App and save its numeric App ID."))
-            if not key:
-                steps.append(self.token_step(principal, self.api.private_key_env,
-                             "In the GitHub App settings, choose Generate a private key, then paste the full downloaded .pem into this private form."))
+        elif credential == "app" or repair_app or present or self.registered_repositories():
+            if not valid_id:
+                name = self.api.app_id_env
+                instruction = "Save the numeric App ID from your GitHub App settings."
+                if self.core.cfg.env.get(name):
+                    instruction += f" Clear {name} from the environment and restart SwB to use the saved App ID."
+                steps.append(self.token_step(principal, name, instruction, kind="id", label="App ID"))
+            if not valid_key:
+                name = self.api.private_key_env
+                instruction = "Save the .pem file from your GitHub App settings."
+                if self.core.cfg.env.get(name):
+                    instruction += f" Clear {name} from the environment and restart SwB to use the saved private key."
+                steps.append(self.token_step(principal, name, instruction, kind="pem", label="Private key"))
             steps.append({"by": "you", "do": "For a fine-grained personal access token instead, call connect again with credential=pat.",
                           "call": {"tool": "connect", "arguments": {"what": kind, "choose": {"credential": "pat"}}}})
         return {"done": done, "next": steps,

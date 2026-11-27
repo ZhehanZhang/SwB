@@ -200,7 +200,7 @@ def test_connect_read_only_for_every_limited_principal(make, monkeypatch, restri
     assert not core.store.q("SELECT 1 FROM secrets")
 
 
-def test_block_status_and_token_setup(make):
+def test_block_status_and_token_setup(make, monkeypatch):
     cfg = base_config(version=2, blocks={
         "mcp": {},
         "capy": {},
@@ -211,6 +211,12 @@ def test_block_status_and_token_setup(make):
     })
     env = {"SWITCHBOARD_KEY_CAPY": STATIC_KEY}
     core, client = make(config=cfg, env=env)
+
+    async def offline(kind, token):
+        assert kind == "slack_bot" and token.startswith("xoxb-")
+        return None
+
+    monkeypatch.setattr(core.blocks["slack"], "claim_auth_check", offline)
     status = core.status()
     assert status["blocks"]["mcp"]["next_step"] is None
     for name, hint in {"capy": "key", "claude-routine": "routine", "slack": "SLACK_EXAMPLE_BOT_TOKEN",
@@ -221,16 +227,31 @@ def test_block_status_and_token_setup(make):
         [step] = connect(client, kind)["next"]
         assert step["by"] == "person" and step["link"].startswith(f"{PUBLIC}/claim/")
         assert step["do"] == status["blocks"][kind]["next_step"]
-        token = "test-token-kept-out-of-output"
+        token = ("xoxb-" if kind == "slack" else "") + "test-token-kept-out-of-output"
         page = client.get(step["link"], headers=OWNER)
         csrf = re.search(r'name="csrf" value="([^"]+)"', page.text)[1]
         saved = client.post(step["link"], headers=OWNER, data={"csrf": csrf, "token": token})
         assert saved.status_code == 200 and token not in saved.text
         out = connect(client, kind)
-        assert "Restart Switchboard" in out["next"][0]["do"]
+        assert "Restart SwB" in out["next"][0]["do"]
         assert "present" in out["done"][0] and token not in json.dumps(out)
     assert "Slack workspace" in connect(client, "dots")["next"][0]["do"]
     assert "dots" in connect(client, "unrecognized")["kinds"]
+
+
+def test_slack_connect_names_every_credential_on_the_grouped_form(make):
+    _, client = make(base_config(version=2, blocks={"mcp": {}, "slack": {"workspaces": {
+        "example": {"team_id": "T0123ABCD", "intake": "socket", "app_token_env": "EXAMPLE_APP",
+                    "identities": {"bot": {"token_env": "EXAMPLE_BOT"}, "user": {"token_env": "EXAMPLE_USER"}}},
+    }}}))
+
+    step, = connect(client, "slack")["next"]
+    assert step["by"] == "person" and "Slack workspace example" in step["do"]
+    page = client.get(step["link"], headers=OWNER)
+    assert page.status_code == 200
+    for label, name in (("Bot token", "EXAMPLE_BOT"), ("User token", "EXAMPLE_USER"), ("App-level token", "EXAMPLE_APP")):
+        assert f"{label} ({name})" in step["do"]
+        assert f">{label}</label>" in page.text and f'name="{name}"' in page.text
 
 
 def test_slack_app_icon_is_a_manual_step_in_status(make):
@@ -271,8 +292,8 @@ async def test_saved_slack_and_github_tokens_loaded_on_restart(tmp_path):
         for name, token in tokens.items():
             url = core.claims.mint(name, PUBLIC)
             core.claims.consume(url.rsplit("/", 1)[-1], token)
-        assert "Restart Switchboard" in core.status()["blocks"]["slack"]["next_step"]
-        assert "Restart Switchboard" in core.status()["blocks"]["github"]["next_step"]
+        assert "Restart SwB" in core.status()["blocks"]["slack"]["next_step"]
+        assert "Restart SwB" in core.status()["blocks"]["github"]["next_step"]
     finally:
         await core.aclose()
 

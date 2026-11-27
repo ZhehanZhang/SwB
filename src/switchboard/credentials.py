@@ -42,28 +42,6 @@ PROVIDERS = {p.key: p for p in (
 )}
 
 
-def github_app(webhook_secret_env: str | None = None, *, webhook_secret_saved: bool = False) -> tuple[str, str, list[Field]]:
-    """The GitHub App fields: its numeric ID and private key, plus the webhook secret while none is saved."""
-    settings = "https://github.com/settings/apps"
-    fields = [Field("GITHUB_APP_ID", "App ID", "id", "The number at the top of the app's General settings.", link=settings),
-              Field("GITHUB_APP_PRIVATE_KEY", "Private key", "pem",
-                    "Under Private keys, Generate a private key, then upload the .pem file it downloads.", link=settings)]
-    if webhook_secret_env and not webhook_secret_saved:
-        fields.append(Field(webhook_secret_env, "Webhook secret", "token", "The secret set under Webhook, if the app sends events.",
-                            optional=True, link=settings))
-    return "GitHub App", "github", fields
-
-
-def slack_workspace(label: str, names: dict[str, str]) -> tuple[str, str, list[Field]]:
-    """A Slack workspace's tokens, keyed bot, user and app as in its identities and app_token_env."""
-    apps = "https://api.slack.com/apps"
-    text = {"bot": ("Bot token", "OAuth & Permissions, Bot User OAuth Token (xoxb-)."),
-            "user": ("User token", "OAuth & Permissions, User OAuth Token (xoxp-)."),
-            "app": ("App-level token", "Basic Information, App-Level Tokens, with connections:write (xapp-).")}
-    fields = [Field(env, text[kind][0], "token", text[kind][1], link=apps) for kind, env in names.items() if kind in text]
-    return f"Slack workspace {label}", "slack", fields
-
-
 def mark(provider: str) -> str:
     p = PROVIDERS.get(provider)
     if p is None:
@@ -77,7 +55,7 @@ def mark(provider: str) -> str:
     return f'<span class="requester-tile" data-connector="{p.key}" title="{html.escape(p.title)}">{body}</span>'
 
 
-def _field(f: Field) -> str:
+def claim_field(f: Field) -> str:
     fid = f"f-{f.name}"
     get = (f'<a class="get" href="{html.escape(f.link)}" target="_blank" rel="noreferrer">Provider settings'
            '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6m0-6-9 9m6-1v6H5V8h6"/></svg></a>') if f.link else ""
@@ -107,10 +85,10 @@ def page(group: dict, csrf: str, *, owner_key: bool = False, host: str = "", now
 <p class="scope">For {html.escape(group["title"])}.</p>
 <form method="post" autocomplete="off">
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
-{key}{"".join(_field(f) for f in fields)}
+{key}{"".join(claim_field(f) for f in fields)}
 <div class="actions"><button type="submit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Save</button></div>
 </form>{footer}"""
-    return pages._claim_document("Save credentials", body, grouped=True)
+    return pages._claim_document("Save credentials", body, field_assets=True)
 
 
 def _marks_css() -> str:
