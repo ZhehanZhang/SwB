@@ -105,7 +105,16 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             elif args.action == "show":
                 print(yaml.safe_dump({name: b.manifest.as_dict()}, sort_keys=False, allow_unicode=True), end="")
             else:
-                print(f"{name}: " + ("; ".join(b.problems()) or "ok"))
+                missing = core.block_setup().get(name, {}).get("missing_env", ())
+                if missing:
+                    for key in missing:
+                        print(f"{name} requires {key}.")
+                elif step := b.next_step():
+                    print(f"{name} needs setup. {step}")
+                elif b.problems() or not b.online:
+                    print(f"Check {name} with swb status.")
+                else:
+                    print(f"{name} is ready.")
         return
     if args.cmd == "targets":
         import asyncio

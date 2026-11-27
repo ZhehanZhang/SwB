@@ -67,7 +67,9 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
     assert block in core.blocks
     if kind == "dots":
         assert core.blocks[block].dots()[0]["mailbox"] == "chatgpt"
-        assert connect(enabled, kind)["state"] == "connected"
+        progress = connect(enabled, kind)
+        assert "state" not in progress
+        assert 'connect(what="chatgpt")' in progress["next"][0]["do"]
     elif kind == "slack":
         assert set(core.blocks[block].token_names["a2a"]) == set(env_names)
         assert "link" in connect(enabled, kind)["next"][0]
@@ -96,7 +98,7 @@ def test_connect_snippet_keeps_environment_discovered_blocks_after_reload(make):
         assert parsed["blocks"][name] == config
     reloaded, client = make(config={**cfg, **parsed}, env=env)
     assert set(reloaded.blocks) == {"mcp", "github", "grok-routine", "dots"}
-    assert connect(client, "dots")["state"] == "connected"
+    assert "state" not in connect(client, "dots")
 
 
 @pytest.mark.parametrize(("kind", "block", "routine_env"), [

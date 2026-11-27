@@ -386,7 +386,7 @@ class CapyBlock(Block):
 
     def need_api(self) -> CapyAPI:
         if self.api is None:
-            raise DestinationError("Capy is not configured on this server (CAPY_API_KEY missing). Memory, project and route tools still work.")
+            raise DestinationError("Capy is unreachable. Run swb connect capy-captain to add an API key.")
         return self.api
 
     # Actions ---------------------------------------------------------------------------
@@ -456,8 +456,8 @@ class CapyBlock(Block):
         if title:
             title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
-        tgt, defaults, level = self.plan(call.principal, p, target)
         api = self.need_api()
+        tgt, defaults, level = self.plan(call.principal, p, target)
         if level == "explicit":
             tgt, extra = await self.validate_route_target(tgt, {})
             defaults = {**defaults, **extra}

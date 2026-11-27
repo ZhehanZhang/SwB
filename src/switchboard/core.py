@@ -232,8 +232,7 @@ class Switchboard:
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
             "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
-            "block_setup": {n: {"enabled": n in self.blocks, "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
-                            for n, keys in self.cfg.block_env.items()},
+            "block_setup": self.block_setup(),
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **block_status(d)} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
@@ -243,6 +242,11 @@ class Switchboard:
         }
 
     health = status
+
+    def block_setup(self) -> dict[str, dict[str, Any]]:
+        return {name: {"enabled": name in self.blocks,
+                       "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
+                for name, keys in self.cfg.block_env.items()}
 
     # Routing an action to a destination -----------------------------------------------------
 

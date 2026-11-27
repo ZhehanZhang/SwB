@@ -107,6 +107,7 @@ class DotsBlock(Block):
         self.agents_as_owner = bool(config.get("agents_as_owner", False))
         self.owner_posts_as = "owner" if config.get("owner_posts_as") == "owner" else "swb"
         self.delivery_notes: dict[str, str] = {}
+        self.relay_members: set[str] = set()
         for sql in SCHEMA:
             core.store.x(sql)
         if "created_by" not in {r["name"] for r in core.store.q("PRAGMA table_info(dots)")}:
@@ -268,6 +269,7 @@ class DotsBlock(Block):
         """The relay channel: the configured id, else a private channel of that name the owner is in, else one created as
         him. Members are reported, never added: the owner runs the /invite."""
         self.problems_ = []
+        self.relay_members.clear()
         channel = self.relay_channel()
         name = self.channel_name.lstrip("#")
         if channel is None and re.fullmatch(r"[CG][A-Z0-9]{6,}", name):
@@ -288,11 +290,11 @@ class DotsBlock(Block):
         self.slack_engine.owner_channels.add((self.workspace, channel))
         try:
             got = await rt.client("user" if "user" in rt.clients else "bot").conversations_members(channel=channel, limit=200)
-            members = set(got.get("members") or [])
+            self.relay_members.update(got.get("members") or [])
         except Exception as exc:
-            members = set()
             self.problems_.append(f"can't read the relay channel's members: {type(exc).__name__}")
-        missing = [f"<@{u}>" for u in [rt.bot_user_id, *(d["user_id"] for d in self.dots())] if u and members and u not in members]
+        missing = [f"<@{u}>" for u in [rt.bot_user_id, *(d["user_id"] for d in self.dots())]
+                   if u and self.relay_members and u not in self.relay_members]
         self.relay_invite = f"/invite {' '.join(missing)}" if missing else None
         return channel
 
@@ -315,15 +317,34 @@ class DotsBlock(Block):
         return list(self.problems_)
 
     def next_step(self) -> str | None:
+        dots = self.dots()
         if self.delivery == "mailbox":
-            return None if self.dots() else "Declare a dot under dots in the dots block config."
+            if not dots:
+                return "Declare a dot under dots in the dots block config."
+            mailboxes = {d["mailbox"] for d in dots}
+            if mailboxes.intersection(self.core.connections.agents()) or any(
+                self.core.store.one(
+                    "SELECT 1 FROM oauth_tokens WHERE source = ? AND expires_at > ? AND revoked_at IS NULL "
+                    "AND resource IN (SELECT value FROM json_each(?)) LIMIT 1",
+                    (mailbox, self.core.clock(), json.dumps(self.core.cfg.resources)),
+                ) for mailbox in mailboxes
+            ):
+                return None
+            if DEFAULT_MAILBOX in mailboxes:
+                return 'Run connect(what="chatgpt") to sign in. Add the SwB plugin to your dot.'
+            return "Sign in to SwB with the agent for a dot mailbox."
         engine = self.slack_engine
         if engine is None or self.workspace not in engine.config.workspaces:
             return SLACK_STEP
-        if not self.dots():
-            return "Add a dot to the Slack workspace so Switchboard can discover it."
+        runtime = self.runtime(required=False)
+        if runtime is None or not runtime.connected:
+            return f"Connect Slack workspace {self.workspace}."
+        if not dots:
+            return "Add a dot to the Slack workspace so SwB can find it."
         if not self.relay_channel():
             return "Configure a Slack relay channel for ChatGPT dots."
+        if runtime.bot_user_id not in self.relay_members or not any(d["user_id"] in self.relay_members for d in dots):
+            return "Add the SwB bot and a dot to the Slack relay channel."
         return None
 
     def page_rows(self) -> list[tuple[str, str, str, bool | None]]:
