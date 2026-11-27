@@ -10,7 +10,7 @@ export function CopyInstall({ lang }: { lang: Locale }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'error'>('idle');
 
   return (
-    <div className="inline-flex min-h-11 max-w-full items-center gap-3 rounded-md border bg-fd-muted pl-4 pr-1.5">
+    <div className="inline-flex h-11 w-full items-center justify-between gap-3 rounded-md border bg-fd-muted pl-4 pr-1.5" data-install-chip>
       <code className="min-w-0 text-sm">{copy.install}</code>
       <button type="button" className="grid size-8 shrink-0 place-items-center rounded-sm hover:bg-fd-background"
         title={copy.copy} aria-label={copy.copy} onClick={async () => {

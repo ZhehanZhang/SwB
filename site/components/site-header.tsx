@@ -11,6 +11,7 @@ import { localize, type Locale } from '@/lib/i18n';
 import { headerLinks, navLabels } from '@/lib/layout.shared';
 import { Brand } from './brand';
 import { GitHubMark } from './github-mark';
+import { SiteContainer } from './site-container';
 
 const iconButton = 'grid size-9 shrink-0 place-items-center rounded-md text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground';
 const tab = 'rounded-md px-2.5 py-2 text-sm font-medium whitespace-nowrap text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground aria-[current]:text-fd-foreground';
@@ -22,7 +23,7 @@ export function SiteHeader({ lang, repository }: { lang: Locale; repository: str
 
   return (
     <header id="nd-nav" className="sticky top-0 z-30 h-(--swb-header-height) border-b bg-fd-background/95 backdrop-blur-sm">
-      <nav className="mx-auto flex h-full max-w-7xl items-center gap-1 px-4 sm:gap-4 sm:px-6">
+      <SiteContainer as="nav" className="flex h-full items-center gap-1 sm:gap-4">
         <Link data-header-item="brand" className="inline-flex shrink-0" href={localize(lang, '/')}><Brand name="SwB" /></Link>
         <div className="hidden items-center gap-0.5 sm:flex">
           {links.map(({ id, text, href }) => (
@@ -50,7 +51,7 @@ export function SiteHeader({ lang, repository }: { lang: Locale; repository: str
             </PopoverContent>
           </Popover>
         </div>
-      </nav>
+      </SiteContainer>
     </header>
   );
 }

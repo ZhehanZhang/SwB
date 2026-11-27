@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MarkTile, type MarkKind } from './mark-tile';
 import { STEP, clock, trips } from '@/lib/live';
 
@@ -12,23 +12,9 @@ type Props = {
 };
 
 const agentPairs = trips.map(([a, b], n) => ({ a, b, n })).filter(({ a, b }) => a !== 'slack' && a !== 'github' && b !== 'slack' && b !== 'github');
-const pillLayout: 'inline' | 'row' = 'inline';
-
 function Slot({ options, current, names }: { options: MarkKind[]; current: MarkKind; names: Props['names'] }) {
-  const slot = useRef<HTMLSpanElement>(null);
-  const [widths, setWidths] = useState<Partial<Record<MarkKind, number>>>({});
-
-  useLayoutEffect(() => {
-    const chips = Array.from(slot.current!.children);
-    const measure = () => setWidths(Object.fromEntries(options.map((kind, i) => [kind, chips[i].getBoundingClientRect().width])));
-    measure();
-    const observer = new ResizeObserver(measure);
-    chips.forEach((chip) => observer.observe(chip, { box: 'border-box' }));
-    return () => observer.disconnect();
-  }, [options]);
-
   return (
-    <span ref={slot} className="swb-slot" style={{ inlineSize: widths[current] }}>
+    <span className="swb-slot">
       {options.map((kind) => (
         <span key={kind} className={`swb-chip ${kind === current ? 'swb-chip-on' : ''}`} aria-hidden={kind !== current}>
           <MarkTile kind={kind} className="swb-chip-mark" />
@@ -71,15 +57,15 @@ export function HeroTitle({ stem, endings, between, names }: Props) {
   const pair = agentPairs.findLast(({ n }) => n <= step) ?? agentPairs[0];
   return (
     <>
-      <h1 className="text-display-xl swb-hero-title">
-        <span className="block">{stem}</span>
+      <h1 id="landing-heading" className="text-display-xl swb-hero-title">
+        <span className="block text-balance">{stem}</span>
         <span className="swb-rotate" aria-live="off">
           {endings.map((text, index) => (
             <span key={text} className={`swb-rotate-item ${index === word ? 'swb-rotate-on' : ''}`} aria-hidden={index !== word}>{text}</span>
           ))}
         </span>
       </h1>
-      <p className={`swb-between swb-between-${pillLayout} mt-6 text-base`} data-hero-pair={pair.n}>
+      <p className="swb-between mt-3 text-base" data-hero-pair={pair.n}>
         {between[0] && <span className="swb-between-text">{between[0]}</span>}
         <span className="swb-pair">
           <Slot options={starts} current={pair.a} names={names} />

@@ -1,4 +1,14 @@
 import type { Locale } from './i18n';
+import type { MarkKind } from '@/components/mark-tile';
+
+export const usageMarks = [
+  ['claude', 'capy'],
+  ['claude', 'muse'],
+  ['slack', 'claude-code'],
+  ['github', 'grok-bot'],
+  ['capy', 'claude-code'],
+  ['telegram', 'claude'],
+] as const satisfies readonly (readonly MarkKind[])[];
 
 type Copy = {
   docs: string;
@@ -11,8 +21,11 @@ type Copy = {
   copyError: string;
   openSource: string;
   boardAlt: string;
+  boardHint: string;
   panel: { copy: string; copied: string; open: string; guide: string; close: string };
-  positioning: { title: string; body: [string, string, string] };
+  positioning: { title: string; lead: string };
+  deployment: { title: string; local: string; selfHosting: string; paidProvider: string; flyClaim: string; flyLimits: string };
+  usage: { title: string; examples: [string, string, string, string, string, string] };
   hero: { stem: string; endings: string[]; between: [string, string, string] };
 };
 
@@ -28,18 +41,34 @@ export const landingCopy: Record<Locale, Copy> = {
     copyError: 'Select the command to copy it',
     openSource: 'Free and open source under Apache-2.0',
     boardAlt: 'SwB connects your apps',
+    boardHint: 'Select an app to set it up.',
     panel: { copy: 'Copy prompt', copied: 'Copied', open: 'Open in {app}', guide: 'Full guide', close: 'Close' },
     hero: {
-      stem: 'First-party agents working together, without',
-      endings: ['running CLIs', 'risking a ban', 'sharing session tokens', 'leaving their apps', 'moving them', 'scripting websites'],
+      stem: 'First-party agents work together',
+      endings: ['in their own apps', 'with shared memory', 'on the same project', 'across your devices'],
       between: ['Real-time conversations between ', ' and ', ''],
     },
     positioning: {
       title: 'Every agent works in its own app',
-      body: [
-        'Claude stays in Claude Projects. ChatGPT runs your dots. Captains work in Capy. Grok and Muse stay where you use them. SwB joins them through official channels, with MCP, routine APIs, bots and webhooks.',
-        'You skip extra command-line tools and website automation.',
-        'Each agent keeps its own tools, memory and strengths. Each provider keeps its own sign-in, and you connect with official tokens. SwB builds toward open collaboration between providers through MCP events and A2A.',
+      lead: 'SwB carries messages and replies between the apps you use.',
+    },
+    deployment: {
+      title: 'Run SwB where you want',
+      local: 'On your computer',
+      selfHosting: 'Self-hosting guide',
+      paidProvider: 'Deploy to {provider} (paid)',
+      flyClaim: "Runs within Fly's free monthly allowance",
+      flyLimits: 'Fly plan limits',
+    },
+    usage: {
+      title: 'What you can do with SwB',
+      examples: [
+        'Ask Capy Captain to review Claude’s changes.',
+        'Save a project decision in Claude and read it in Muse.',
+        'Send a Slack thread to a coding agent.',
+        'Send new GitHub issues to a triage agent.',
+        'Send work from Capy Captain to a local Claude Code session.',
+        'Read Claude’s reply in Telegram.',
       ],
     },
   },
@@ -54,18 +83,34 @@ export const landingCopy: Record<Locale, Copy> = {
     copyError: '请选中命令后复制',
     openSource: '免费开源，采用 Apache-2.0 许可',
     boardAlt: 'SwB 连接各个应用',
+    boardHint: '选择要设置的应用。',
     panel: { copy: '复制提示词', copied: '已复制', open: '在 {app} 中打开', guide: '完整指南', close: '关闭' },
     hero: {
-      stem: '第一方智能体协同工作，不必',
-      endings: ['运行 CLI', '担心封号', '交出会话令牌', '离开自己的应用', '搬迁它们', '模拟网页操作'],
+      stem: '让第一方智能体',
+      endings: ['在各自的应用中协作', '共享项目记忆', '一起完成任务', '跨设备协作'],
       between: ['', ' 与 ', ' 之间的实时对话'],
     },
     positioning: {
       title: '每个智能体都在自己的应用里工作',
-      body: [
-        'Claude 留在 Claude Projects。ChatGPT 运行你的 dots。Capy Captain 沿用自己的工作区。Grok 和 Muse 留在你常用的地方。SwB 通过官方渠道把它们连在一起，包括 MCP、routine API、机器人和 webhook。',
-        '你省去额外的命令行工具和网页自动化。',
-        '每个智能体保留自己的工具、记忆和长处。登录始终由各家服务商负责，你用官方令牌完成连接。SwB 推动服务商之间通过 MCP events 和 A2A 开放协作。',
+      lead: 'SwB 在你常用的应用之间传递消息和回复。',
+    },
+    deployment: {
+      title: '按需部署 SwB',
+      local: '本机运行',
+      selfHosting: '自托管指南',
+      paidProvider: '部署到 {provider}（付费）',
+      flyClaim: '运行费用在 Fly 每月免费额度内',
+      flyLimits: 'Fly 套餐限制',
+    },
+    usage: {
+      title: '用 SwB 完成日常工作',
+      examples: [
+        '请 Capy Captain 审查 Claude 的改动。',
+        '用 Claude 保存项目决定，再用 Muse 查看。',
+        '把 Slack 讨论串交给编程智能体。',
+        '把 GitHub 的新议题交给分流智能体。',
+        '用 Capy Captain 给本机的 Claude Code 会话分配任务。',
+        '在 Telegram 查看 Claude 的回复。',
       ],
     },
   },
@@ -80,18 +125,34 @@ export const landingCopy: Record<Locale, Copy> = {
     copyError: '請選取指令後複製',
     openSource: '免費開源，採用 Apache-2.0 授權',
     boardAlt: 'SwB 連接各個應用程式',
+    boardHint: '選取要設定的應用程式。',
     panel: { copy: '複製提示詞', copied: '已複製', open: '在 {app} 中開啟', guide: '完整指南', close: '關閉' },
     hero: {
-      stem: '第一方代理協同工作，不必',
-      endings: ['執行 CLI', '擔心封號', '交出工作階段權杖', '離開自己的應用程式', '搬移它們', '模擬網頁操作'],
+      stem: '讓第一方代理',
+      endings: ['在各自的應用程式中協作', '共用專案記憶', '一起完成工作', '跨裝置協作'],
       between: ['', ' 與 ', ' 之間的即時對話'],
     },
     positioning: {
       title: '每個代理都在自己的應用程式裡工作',
-      body: [
-        'Claude 留在 Claude Projects。ChatGPT 執行你的 dots。Capy Captain 沿用自己的工作區。Grok 與 Muse 留在你慣用的地方。SwB 透過官方管道把它們串連起來，包括 MCP、routine API、機器人與 webhook。',
-        '你省去額外的命令列工具和網頁自動化。',
-        '每個代理保留自己的工具、記憶與長處。登入一律由各家服務商負責，你用官方權杖完成連線。SwB 推動服務商之間透過 MCP events 與 A2A 開放協作。',
+      lead: 'SwB 在你慣用的應用程式之間傳遞訊息和回覆。',
+    },
+    deployment: {
+      title: '選擇 SwB 的部署方式',
+      local: '在本機執行',
+      selfHosting: '自行代管指南',
+      paidProvider: '部署到 {provider}（付費）',
+      flyClaim: '執行費用在 Fly 每月免費額度內',
+      flyLimits: 'Fly 方案限制',
+    },
+    usage: {
+      title: '用 SwB 完成日常工作',
+      examples: [
+        '請 Capy Captain 審查 Claude 的變更。',
+        '用 Claude 儲存專案決策，再用 Muse 查看。',
+        '把 Slack 討論串交給程式開發代理。',
+        '把 GitHub 的新議題交給分流代理。',
+        '用 Capy Captain 把工作交給本機的 Claude Code 工作階段。',
+        '在 Telegram 查看 Claude 的回覆。',
       ],
     },
   },

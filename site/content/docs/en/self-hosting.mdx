@@ -55,7 +55,21 @@ Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD` from the owner a
 
 ## Hosted platforms
 
-Use one SwB instance with a persistent disk mounted at `/data`. See the [deployment guide](https://github.com/ZhehanZhang/SwB/tree/main/deploy) for the Railway, Render and Fly.io templates and the Koyeb script.
+Use one SwB instance with a persistent disk mounted at `/data`. See the [deployment guide](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy) for the Railway, Render and Fly.io templates and the Koyeb script.
+
+## Fly.io
+
+Use the [SwB release checkout](#docker-compose). Install the [Fly.io command line tool](https://docs.fly.io/flyctl/) and sign in.
+
+Run `sh deploy/fly.sh my-swb` from the SwB folder. Replace `my-swb` with a unique app name. The script uses `fly deploy --ha=false` to start one Machine.
+
+Open `.env.swb-setup-fly-my-swb` in your checkout. Use `SWB_SETUP_CODE` to sign in.
+
+Add a card to get $5 of usage each month on the [Fly.io Free plan](https://docs.fly.io/about/free-plan). Your account starts with $1 of credit for 7 days before you add a card.
+
+A `shared-cpu-1x` Machine with 512 MB of memory costs $3.69 per month in Ashburn (`iad`). A 1 GB volume costs $0.15 per month.
+
+When usage passes $5, Fly.io moves your organization to Pay As You Go. Fly.io bills the whole month at [standard rates](https://fly.io/docs/about/pricing/).
 
 ## Backups and upgrades
 

@@ -1,7 +1,6 @@
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { replaceSource } from 'fumadocs-core/mdx-plugins/stringifier';
 import remarkCjkFriendly from 'remark-cjk-friendly';
-import { DEPLOY_BUTTONS_LIVE } from './lib/flags';
 import { readPrompt } from './lib/prompts';
 import { promptUrl } from './lib/urls';
 
@@ -13,13 +12,6 @@ function remarkDocSource() {
     if (!('children' in node)) return;
     const children: Node[] = node.children;
     node.children = children.flatMap((child) => {
-      if (child.type === 'mdxJsxFlowElement' && (child.name === 'DeployLive' || child.name === 'DeployHeld')) {
-        const active = (child.name === 'DeployLive') === DEPLOY_BUTTONS_LIVE;
-        replaceSource(file, child, active ? (s) => s.inner(child) : '', 'markdown');
-        if (!active) return [];
-        walk(child, file);
-        return child.children;
-      }
       if (child.type === 'mdxJsxFlowElement' && child.name === 'SetupPrompt') {
         const name = child.attributes.find((attr) => attr.type === 'mdxJsxAttribute' && attr.name === 'name')?.value;
         if (typeof name !== 'string') throw new Error('SetupPrompt requires a prompt name');
