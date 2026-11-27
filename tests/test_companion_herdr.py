@@ -197,7 +197,7 @@ async def test_prompt_accepts_the_full_character_limit(peer, runtime, job):
     assert peer.prompt.call_args.args[0]["params"]["text"] == text
 
 
-async def test_in_flight_wake_cannot_be_overwritten(peer, runtime, job):
+async def test_in_flight_prompt_is_guarded_but_a_new_wake_replaces_it(peer, runtime, job):
     entered, accept = asyncio.Event(), asyncio.Event()
 
     async def delivery(request):
@@ -210,14 +210,14 @@ async def test_in_flight_wake_cannot_be_overwritten(peer, runtime, job):
     first = asyncio.create_task(cap.invoke("prompt", _PROMPT, job))
     try:
         await asyncio.wait_for(entered.wait(), 1)
-        with pytest.raises(CapabilityError, match="pending wake"):
+        with pytest.raises(CapabilityError, match="A prompt is being sent"):
             await cap.invoke("prompt", {**_PROMPT, "conversation": "other"}, job)
         accept.set()
         assert await first == {"delivered": True}
-        with pytest.raises(CapabilityError, match="pending wake"):
-            await cap.invoke("prompt", {**_PROMPT, "conversation": "other"}, job)
         assert runtime.pending(["herdr:w1:p1"]).conversation == _PROMPT["conversation"]
-        assert [request["method"] for request in peer.calls] == ["agent.prompt"]
+        assert await cap.invoke("prompt", {**_PROMPT, "conversation": "other"}, job) == {"delivered": True}
+        assert runtime.pending(["herdr:w1:p1"]).conversation == "other"
+        assert [request["method"] for request in peer.calls] == ["agent.prompt", "agent.prompt"]
     finally:
         first.cancel()
         await asyncio.gather(first, return_exceptions=True)

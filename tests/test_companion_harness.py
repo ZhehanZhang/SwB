@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -8,7 +9,7 @@ from switchboard.companion.caps import registry
 from switchboard.companion.caps._harness import check_list_args, folder_name, prompt_args, reconnect
 from switchboard.companion.caps.base import CapabilityError, CompanionContext
 from switchboard.companion.client import Disconnected
-from switchboard.companion.harness import REPLY_MAX, Harness, Session
+from switchboard.companion.harness import REFRESH_S, REPLY_MAX, WAKE_TTL_S, Harness, Session
 
 
 @pytest.mark.parametrize(("value", "expected"), [
@@ -88,6 +89,87 @@ async def test_report_recovers_when_the_same_state_failed_to_emit():
     assert emit.await_count == 2
     assert emit.await_args.args == ("codex.session", state.payload())
     assert emit.await_args.args[1]["dir"] == "project"
+
+
+async def test_identical_live_session_refreshes_after_six_hours(monkeypatch):
+    now = 100
+    monkeypatch.setattr("switchboard.companion.harness.time", SimpleNamespace(monotonic=lambda: now))
+    emit = AsyncMock()
+    ctx = CompanionContext("device", emit)
+    relay = Harness()
+    state = Session("codex", "thread", state="idle")
+    assert REFRESH_S == 6 * 60 * 60
+
+    assert await relay.report(ctx, "codex", state)
+    now += REFRESH_S - 1
+    assert not await relay.report(ctx, "codex", state)
+    now += 1
+    assert await relay.report(ctx, "codex", state)
+    assert not await relay.report(ctx, "codex", state)
+    assert emit.await_count == 2
+
+
+async def test_reply_retries_asynchronously_with_cap_and_consumes_only_after_ack(monkeypatch):
+    delays = []
+    retry_ready, retry_allowed = asyncio.Event(), asyncio.Event()
+
+    async def sleep(delay):
+        delays.append(delay)
+        retry_ready.set()
+        await retry_allowed.wait()
+
+    async def emit(kind, payload):
+        assert relay.pending(keys) is wake
+        assert (kind, payload["text"]) == ("codex.reply", "first answer")
+        if len(delays) < 8:
+            raise CapabilityError("Temporarily unavailable.")
+        return {}
+
+    monkeypatch.setattr("switchboard.companion.harness.asyncio.sleep", sleep)
+    ctx = CompanionContext("device", AsyncMock(side_effect=emit))
+    relay = Harness()
+    keys = ["codex:thread", "herdr:pane"]
+    relay.expect(keys, "thread", "conversation", "codex")
+    wake = relay.pending(keys)
+
+    assert not await relay.reply(ctx, "codex", iter(keys), "first answer")
+    await retry_ready.wait()
+    assert relay.pending(keys) is wake and relay.replying(wake)
+    assert not await relay.reply(ctx, "hooks", keys[1:], "duplicate")
+    retry_allowed.set()
+    await asyncio.gather(*relay._retries)
+    assert delays == [1, 2, 4, 8, 16, 32, 60, 60]
+    assert ctx._emit.await_count == 9
+    assert relay.pending(keys) is None
+
+
+@pytest.mark.parametrize("replace", [False, True])
+async def test_reply_retry_stops_at_wake_expiry_or_replacement(monkeypatch, replace):
+    now = 100
+    keys = ["herdr:pane"]
+    relay = Harness()
+
+    async def sleep(delay):
+        nonlocal now
+        if replace:
+            relay.expect(keys, "pane", "replacement", "claude")
+        else:
+            now += WAKE_TTL_S
+
+    monkeypatch.setattr("switchboard.companion.harness.time", SimpleNamespace(monotonic=lambda: now))
+    monkeypatch.setattr("switchboard.companion.harness.asyncio.sleep", sleep)
+    emit = AsyncMock(side_effect=CapabilityError("Temporarily unavailable."))
+    relay.expect(keys, "pane", "initial", "claude")
+    wake = relay.pending(keys)
+    assert not await relay.reply(CompanionContext("device", emit), "hooks", keys, "answer")
+    await asyncio.gather(*relay._retries)
+
+    assert not relay.replying(wake)
+    assert emit.await_count == 1
+    if replace:
+        assert relay.pending(keys).conversation == "replacement"
+    else:
+        assert relay.pending(keys) is None
 
 
 @pytest.mark.parametrize("text", ["🦉" * REPLY_MAX, "\n" * REPLY_MAX + "text", "a" * (REPLY_MAX + 1)])
