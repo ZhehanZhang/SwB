@@ -1,0 +1,135 @@
+---
+title: Cloudflare
+description: 用 Cloudflare Tunnel 给 SwB 一个公共 HTTPS 地址，并用 Cloudflare Access 保护它。
+---
+
+Cloudflare Tunnel 给 SwB 一个固定的公共 HTTPS 地址。隧道是从你的服务器到 Cloudflare 的连接，所以服务器的端口可以保持关闭。Cloudflare Access 只让你本人打开 SwB 控制台。
+
+## 开始之前
+
+你需要一个 Cloudflare 账号、该账号中的一个域名，以及一个 Zero Trust 组织。Zero Trust Free 套餐就够用，Cloudflare 会要求填写付款信息。你需要有权管理 SwB 主机名的隧道、Access 应用和 DNS。
+
+SwB 所在的服务器必须能通过 7844 端口访问 Cloudflare。SwB 的 Compose 配置监听 `http://switchboard:8000`。
+
+## 你的步骤
+
+<Steps>
+<Step>
+### 创建隧道
+
+在 Cloudflare 控制台中点击 **Networking** → **Tunnels** → **Create a tunnel**。
+</Step>
+<Step>
+### 命名隧道
+
+输入隧道名称。点击 **Create Tunnel**。
+</Step>
+<Step>
+### 保存隧道令牌
+
+从安装命令中复制隧道令牌。把它写入 SwB 的 `.env` 文件，名称为 `TUNNEL_TOKEN`。
+</Step>
+<Step>
+### 启动连接器
+
+在 SwB 服务器上运行 `docker compose --profile tunnel up -d`。连接器出现在控制台后，点击 **Continue**。
+</Step>
+<Step>
+### 创建所有者策略
+
+点击 **Zero Trust** → **Access controls** → **Policies** → **Add a policy**。把 **Action** 设为 **Allow**。
+</Step>
+<Step>
+### 添加你的邮箱
+
+在 **Include** → **Emails** 下输入你的邮箱地址。点击 **Save**。
+</Step>
+<Step>
+### 保护控制台
+
+点击 **Access controls** → **Applications** → **Create new application** → **Self-hosted and private**。添加 SwB 主机名，并使用所有者策略。
+</Step>
+<Step>
+### 创建放行策略
+
+再添加一个策略，把 **Action** 设为 **Bypass**，**Include** 设为 **Everyone**。点击 **Save**。
+</Step>
+<Step>
+### 开放机器路径
+
+在同一主机名上再创建一个应用，使用下表中的路径和放行策略。点击 **Create**。
+</Step>
+<Step>
+### 复制 Access 值
+
+从所有者应用 → **Additional settings** 中复制 **Application Audience (AUD) Tag**。从 **Zero Trust** → **Settings** 中复制团队域名。
+</Step>
+<Step>
+### 设置 SwB 的值
+
+把下面的值写入 SwB 的 `.env` 文件。重启 SwB。
+</Step>
+<Step>
+### 发布主机名
+
+点击 **Networking** → **Tunnels** → 你的隧道 → **Routes** → **Add route** → **Published application**。输入主机名，并把 **Service URL** 设为 `http://switchboard:8000`。
+</Step>
+<Step>
+### 添加路由
+
+点击 **Add route**。
+</Step>
+{/* unverified */}
+<Step>
+### 登录
+
+在新的浏览器窗口中打开 https://swb.example.com。用你的身份提供方登录。
+</Step>
+{/* unverified */}
+</Steps>
+
+| 路径 | 策略 |
+| --- | --- |
+| `/mcp`、`/register`、`/token`、`/revoke`、`/healthz`、`/connect` | 放行 |
+| `/.well-known/*`、`/inbox`、`/inbox/*`、`/avatars/*` | 放行 |
+| `/github/webhook` | 放行，仅用于 GitHub |
+| 其余所有路径，包括 `/` 和 `/authorize` | 所有者 |
+
+```sh
+SWITCHBOARD_PUBLIC_URL=https://swb.example.com
+SWITCHBOARD_OWNER_EMAILS=owner@example.com
+CLOUDFLARE_ACCESS_TEAM_DOMAIN=example.cloudflareaccess.com
+CLOUDFLARE_ACCESS_AUD=<application audience tag>
+```
+
+SwB 会检查每个所有者请求的 Access 登录。放行路径使用 SwB 自己的登录。
+
+## 智能体的工作
+
+带有 Cloudflare 连接器的智能体可以通过 Cloudflare API 创建隧道、Access 策略和应用。它会为你的账号和区域生成一个权限最小的 API 令牌。你自己的 Cloudflare 令牌留在你手中。
+
+地址可用后，智能体为你的应用调用 `connect`，例如 `what="claude"` 或 `what="chatgpt"`。SwB 返回 MCP 地址 `https://swb.example.com/mcp`。`switchboard_status` 显示应用使用哪个 SwB 身份。
+
+## 凭据
+
+| 令牌 | Cloudflare 显示位置 | 格式 | 填写位置 |
+| --- | --- | --- | --- |
+| 隧道令牌 | **Networking** → **Tunnels** → 你的隧道，在安装命令中 | 以 `eyJ` 开头的长文本 | SwB `.env` 文件中的 `TUNNEL_TOKEN` |
+| 应用受众标签 | 所有者应用 → **Additional settings** | 很长的十六进制文本 | `.env` 文件中的 `CLOUDFLARE_ACCESS_AUD` |
+| 团队域名 | **Zero Trust** → **Settings** | `<team>.cloudflareaccess.com` | `.env` 文件中的 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` |
+
+隧道令牌可以控制隧道。只把它保存在 `.env` 文件中。
+
+## 检查连接
+
+确认 **Networking** → **Tunnels** 中的隧道显示 **Healthy**。打开 `https://swb.example.com/healthz`，确认 SwB 有响应。
+
+在登录之前向 `https://swb.example.com/mcp` 发送请求。SwB 返回 `401` 和 `WWW-Authenticate` 标头。如果出现 Cloudflare 登录页，说明缺少放行应用。
+
+## 解决问题
+
+OAuth 需要全部机器路径。OAuth 是应用连接 SwB 时使用的登录流程。缺少任何一个路径，应用都会停在登录这一步。
+
+路径 `/inbox/*` 只匹配下级路径，`/inbox` 本身要单独添加。请把两个路径都加上。
+
+让 `/` 和 `/authorize` 保持在所有者策略下。在这两个路径上放行，会让任何人都能打开控制台。
