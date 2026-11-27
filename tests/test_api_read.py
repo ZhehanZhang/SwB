@@ -384,7 +384,7 @@ def test_memory_folders_search_and_read_use_owner_scope_and_safe_errors(make):
     for params in ({"id": note["id"]}, {"scope": "project:context", "namespace": "notes/meetings", "key": "release"}):
         entry = get(client, "/memory", **params)["entry"]
         assert entry["body"] == "Launch Wednesday" and entry["history"][0]["source"] == "codex"
-        assert set(entry["history"][0]) == {"at", "source", "action"}
+        assert set(entry["history"][0]) == {"rev", "at", "source", "action", "title", "scope", "namespace", "key", "tags", "trust", "excerpt"}
     assert get(client, "/memory", id=PRIVATE, status=404) == {"error": "memory not found"}
     assert get(client, "/memory", scope=PRIVATE, status=404) == {"error": "scope not found"}
     assert get(client, "/memory", q="!?", status=400) == {"error": "query has no searchable words"}

@@ -299,7 +299,7 @@ MEMORY_COLUMNS = {
     "sync_key": "TEXT",
     "deleted_by": "TEXT",
 }
-REVISION_COLUMNS = {"scope": "TEXT", "namespace": "TEXT", "key": "TEXT", "tags": "TEXT", "trust": "TEXT"}
+REVISION_COLUMNS = {"rev": "INTEGER", "scope": "TEXT", "namespace": "TEXT", "key": "TEXT", "tags": "TEXT", "trust": "TEXT"}
 
 
 def memory_hash(body: str) -> str:
@@ -324,6 +324,10 @@ END""")
     for name, definition in REVISION_COLUMNS.items():
         if name not in rcols:
             db.execute(f"ALTER TABLE memory_revisions ADD COLUMN {name} {definition}")
+    db.execute("UPDATE memory_revisions SET rev = rowid WHERE rev IS NULL")
+    db.execute("""CREATE TRIGGER IF NOT EXISTS memory_revisions_ai AFTER INSERT ON memory_revisions BEGIN
+  UPDATE memory_revisions SET rev = new.rowid WHERE rowid = new.rowid;
+END""")
     db.execute("""UPDATE memories SET created_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id
                   ORDER BY r.at, r.rowid LIMIT 1), source) WHERE created_by IS NULL""")
     db.execute("""UPDATE memories SET content_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id

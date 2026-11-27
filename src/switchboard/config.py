@@ -163,6 +163,7 @@ class Config:
     turn_cap: int | None = 200
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
+    memory_sync: bool = True
     blocks: dict[str, dict[str, Any]] = field(default_factory=default_blocks)
     blocks_from_file: bool = False
     block_env: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -513,6 +514,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         turn_cap=int(raw.get("turn_cap", 200)) if raw.get("turn_cap", 200) else None,
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
+        memory_sync=bool(memory.get("sync", True)),
         blocks=blocks,
         blocks_from_file=blocks_from_file,
         modes=parse_modes(v2.get("modes"), blocks),
