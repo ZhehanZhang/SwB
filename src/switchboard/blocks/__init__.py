@@ -41,6 +41,7 @@ BLOCKS = {
     "dots": "switchboard.blocks.dots:DotsBlock",
     "local": "switchboard.blocks.local:LocalBlock",
     "muse": "switchboard.blocks.muse:MuseBlock",
+    "webhook": "switchboard.blocks.webhook:WebhookBlock",
 }
 ON_DEMAND_BLOCKS = frozenset({"local"})
 LEVELS = ("L0", "L1", "L2", "L3", "L4")

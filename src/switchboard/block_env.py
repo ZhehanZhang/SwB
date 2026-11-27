@@ -25,7 +25,7 @@ def grok_credential_envs(block: str, name: str) -> tuple[str, str]:
 
 
 def default_blocks() -> dict[str, dict[str, Any]]:
-    return {"mcp": {"use": "mcp"}}
+    return {"mcp": {"use": "mcp"}, "webhook": {"use": "webhook"}}
 
 
 def env_blocks(env: Mapping[str, str]) -> tuple[dict[str, dict[str, Any]], dict[str, tuple[str, ...]]]:
