@@ -167,8 +167,8 @@ class HerdrCapability(Capability):
         if "\r" in text or "\t" in text:
             raise CapabilityError("Prompt text contains unsupported characters.")
         keys = [f"herdr:{target}"]
-        if target in self._prompting or harness().pending(keys):
-            raise CapabilityError("The Herdr pane has a pending wake.")
+        if target in self._prompting:
+            raise CapabilityError("A prompt is being sent to this Herdr pane.")
         self._prompting.add(target)
         try:
             async with _exchange(
@@ -211,7 +211,9 @@ class HerdrCapability(Capability):
                         await harness().report(ctx, self.id, session)
                         self._sessions[pane] = session
                     for pane in self._sessions.keys() - sessions.keys():
-                        harness().take([f"herdr:{pane}"])
+                        keys = [f"herdr:{pane}"]
+                        if (wake := harness().pending(keys)) and not harness().replying(wake):
+                            harness().take(keys)
                         await harness().report(ctx, self.id, replace(self._sessions[pane], state="ended"))
                         del self._sessions[pane]
                     if panes != sessions.keys():
