@@ -94,7 +94,9 @@ def test_no_route_serves_classic_templates(make):
 def test_missing_build_does_not_prevent_login_or_mcp_starting(make, monkeypatch, tmp_path):
     monkeypatch.setattr(web, "APP_DIST", tmp_path / "absent")
     _, client = make()
-    assert client.get("/", headers=OWNER).status_code == 503
+    missing = client.get("/", headers=OWNER)
+    assert missing.status_code == 503
+    assert "Run npm run build --prefix web" in missing.text
     assert client.get("/login").status_code == 200
     assert client.get("/healthz").status_code == 200
     assert client.get("/mcp").status_code == 401

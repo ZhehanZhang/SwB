@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 ARG APP_UID=10001
 RUN useradd --uid ${APP_UID} --create-home --shell /usr/sbin/nologin switchboard
 WORKDIR /app
-COPY pyproject.toml README.md LICENSE NOTICE ./
+COPY pyproject.toml setup.py README.md LICENSE NOTICE ./
 COPY web/licenses/lobe-icons.txt ./web/licenses/lobe-icons.txt
 COPY src ./src
 COPY --from=web /app/src/switchboard/static/app ./src/switchboard/static/app
