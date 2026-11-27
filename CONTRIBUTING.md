@@ -44,7 +44,7 @@ providers, and blocks don't import each other.
    [`src/switchboard/blocks/__init__.py`](src/switchboard/blocks/__init__.py). For a separately
    packaged block, register its class in the `switchboard.blocks` entry-point group.
 4. Document the block's settings and add it to a local version 2 config under
-   `blocks.<name>` with `use: <type>`. Set `SWITCHBOARD_CONFIG` to that file and
-   `SWITCHBOARD_DATA` to a writable local directory, then run `uv run swb blocks show <name>`
+   `blocks.<name>` with `use: <type>`. Set `SWB_CONFIG` to that file and
+   `SWB_DATA_DIR` to a writable local directory, then run `uv run swb blocks show <name>`
    and `uv run swb blocks check <name>`. Add tests under [`tests/`](tests/) for what the
    block does and how it handles failures.

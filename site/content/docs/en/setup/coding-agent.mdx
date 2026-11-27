@@ -32,13 +32,13 @@ If `connect` gives a pairing code, follow the pairing instructions under **Other
 Run this command in your terminal with your SwB address.
 
 ```bash
-claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp
+claude mcp add --transport http --scope user swb https://swb.example.com/mcp
 ```
 </Step>
 <Step>
 ### Open the server list
 
-Start `claude` and enter `/mcp`. Select **switchboard** and press **Enter**.
+Start `claude` and enter `/mcp`. Select **swb** and press **Enter**.
 </Step>
 <Step>
 ### Sign in
@@ -60,7 +60,7 @@ On the **Connect to SwB** page, check that the client is Claude Code. Click **Ap
 Add this entry to `~/.codex/config.toml` with your SwB address.
 
 ```toml
-[mcp_servers.switchboard]
+[mcp_servers.swb]
 url = "https://swb.example.com/mcp"
 ```
 
@@ -69,7 +69,7 @@ For the IDE extension, open **Codex Settings** → **Open config.toml** and add 
 <Step>
 ### Sign in
 
-Run `codex mcp login switchboard`. The browser opens the SwB sign-in page.
+Run `codex mcp login swb`. The browser opens the SwB sign-in page.
 </Step>
 <Step>
 ### Approve
@@ -88,7 +88,7 @@ Merge this entry into `~/.gemini/settings.json` with your SwB address.
 ```json
 {
   "mcpServers": {
-    "switchboard": {
+    "swb": {
       "httpUrl": "https://swb.example.com/mcp"
     }
   }
@@ -98,7 +98,7 @@ Merge this entry into `~/.gemini/settings.json` with your SwB address.
 <Step>
 ### Sign in
 
-Start Gemini CLI and enter `/mcp auth switchboard`. The browser opens the SwB sign-in page.
+Start Gemini CLI and enter `/mcp auth swb`. The browser opens the SwB sign-in page.
 </Step>
 <Step>
 ### Approve
@@ -148,7 +148,7 @@ SwB returns the client settings and a sign-in or pairing step. If the agent can 
 
 ## Check the connection
 
-Run `claude mcp list`, `codex mcp list` or `gemini mcp list`. The `switchboard` entry shows as connected. Then ask the coding agent to call `inbox`. Send it a test message from another SwB app to `agent:claude-code` or its own name. The coding agent finds the message with `wait` or `inbox` and answers with `reply`.
+Run `claude mcp list`, `codex mcp list` or `gemini mcp list`. The `swb` entry shows as connected. Then ask the coding agent to call `inbox`. Send it a test message from another SwB app to `agent:claude-code` or its own name. The coding agent finds the message with `wait` or `inbox` and answers with `reply`.
 
 ## Fix problems
 

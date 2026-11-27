@@ -1,24 +1,24 @@
 {
-  "name": "switchboard",
+  "name": "swb",
   "displayName": "SwB",
   "version": "0.2.0",
   "description": "Push Capy's replies to SwB delegations into the open Claude Code session (channels research preview)",
   "mcpServers": {
-    "switchboard": {
+    "swb": {
       "command": "bun",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/switchboard-channel.ts"
       ],
       "env": {
-        "SWITCHBOARD_URL": "${user_config.url}",
-        "SWITCHBOARD_KEY": "${user_config.key}",
-        "SWITCHBOARD_CHANNEL_STATE": "${CLAUDE_PLUGIN_DATA}"
+        "SWB_URL": "${user_config.url}",
+        "SWB_KEY": "${user_config.key}",
+        "SWB_CHANNEL_STATE": "${CLAUDE_PLUGIN_DATA}"
       }
     }
   },
   "channels": [
     {
-      "server": "switchboard",
+      "server": "swb",
       "displayName": "SwB",
       "userConfig": {
         "url": {
@@ -30,7 +30,7 @@
         "key": {
           "type": "string",
           "title": "Channel key",
-          "description": "The value of SWITCHBOARD_KEY_CHANNEL in the server's .env",
+          "description": "The value of SWB_KEY_CHANNEL in the server's .env",
           "sensitive": true,
           "required": true
         }

@@ -54,8 +54,10 @@ def test_server_tools_appear_in_top_level_help(capsys):
     with pytest.raises(SystemExit) as exited:
         __main__.cli_main(["--help"])
     assert exited.value.code == 0
-    usage = capsys.readouterr().out.split("positional arguments:", 1)[0]
+    out = capsys.readouterr().out
+    usage = out.split("positional arguments:", 1)[0]
     assert all(command in usage for command in __main__.SERVER_COMMANDS)
+    assert "serve" in out and "run the SwB server (default)" in out
 
 
 @pytest.mark.parametrize(("command", "action", "description", "argument"), [
@@ -249,7 +251,8 @@ def test_init_saves_a_custom_port_for_login_link(tmp_path, monkeypatch, capsys):
     cli.main(["init", "--dir", str(tmp_path)])
     capsys.readouterr()
     saved = cli._read_env(tmp_path / ".env")
-    assert saved["PORT"] == "18921"
+    assert saved["SWB_PORT"] == "18921"
+    assert set(saved) == {"SWB_KEY_OWNER", "SWB_PORT"}
 
     monkeypatch.delenv("PORT")
     call_tool = AsyncMock(return_value={"url": "http://localhost:18921/login#t=fixture"})
@@ -333,7 +336,7 @@ def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, c
         "what": "mcp-client", "done": ["The MCP server is running."], "next": [
             {"by": "you", "do": "Choose another client.", "call": {"tool": "connect", "arguments": {"what": "mcp-client"}}},
             {"by": "person", "do": "Open the link.", "link": "https://switchboard.example.test/claim/example",
-             "snippet": "[mcp_servers.switchboard]\nurl = 'https://switchboard.example.test/mcp'"},
+             "snippet": "[mcp_servers.swb]\nurl = 'https://switchboard.example.test/mcp'"},
         ],
     })
     monkeypatch.setattr(cli, "_call", call)
@@ -348,7 +351,7 @@ def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, c
     assert "Done" not in out.splitlines()
     for text in ("Progress", "The MCP server is running.", "Next steps:", "you: Choose another client.",
                  'Call: {"tool": "connect"', "person: Open the link.", "https://switchboard.example.test/claim/example",
-                 "    [mcp_servers.switchboard]\n    url = 'https://switchboard.example.test/mcp'"):
+                 "    [mcp_servers.swb]\n    url = 'https://switchboard.example.test/mcp'"):
         assert text in out
 
 

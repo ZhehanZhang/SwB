@@ -10,8 +10,8 @@ description: 用 Docker Compose 和 Cloudflare 在服务器上运行 SwB。
 ```bash
 (umask 077; cp .env.example .env)
 {
-  printf 'SWITCHBOARD_UID=%s\n' "$(id -u)"
-  printf 'SWITCHBOARD_KEY_OWNER='
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
   openssl rand -hex 32
 } >> .env
 mkdir -p data
@@ -31,7 +31,7 @@ Compose 在 `http://127.0.0.1:8870` 提供 SwB，并把数据保存在 `./data`�
 docker compose --profile tunnel up -d
 ```
 
-把 `SWITCHBOARD_PUBLIC_URL` 设为隧道的主机名，例如 `https://swb.example.com`。
+把 `SWB_PUBLIC_URL` 设为隧道的主机名，例如 `https://swb.example.com`。
 
 ## Cloudflare Access
 
@@ -49,7 +49,7 @@ docker compose --profile tunnel up -d
 
 ## 托管平台
 
-仓库为 Railway（`.railway/railway.ts`）、Render（`render.yaml`）和 Fly.io（`fly.toml`）提供了模板。使用一个副本，并把卷挂载在 `/data`。在平台的密钥设置中设置 `SWITCHBOARD_PUBLIC_URL` 和 `SWITCHBOARD_KEY_OWNER`。
+运行一个 SwB 实例。将持久磁盘挂载到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/main/deploy)介绍 Railway、Render 和 Fly.io 的模板以及 Koyeb 脚本。
 
 ## 备份与升级
 

@@ -8,7 +8,7 @@ version: 2
 
 # The MCP endpoint is <public_url>/mcp and the OAuth issuer is public_url. Usually set PUBLIC_URL instead.
 # public_url: https://switchboard.example.com
-# data_dir: ./data                              # usually set SWITCHBOARD_DATA_DIR instead
+# data_dir: ./data                              # usually set SWB_DATA_DIR instead
 # timezone: UTC
 # One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
 # A new send starts at zero. null switches it off.
@@ -25,7 +25,7 @@ branding:
   # icon, accent_color and logo_assets_dir are optional; see deploy/overlay.example.yaml.
 
 auth: {}
-  # Usually set SWITCHBOARD_OWNER_EMAILS, CLOUDFLARE_ACCESS_TEAM_DOMAIN and CLOUDFLARE_ACCESS_AUD instead.
+  # Usually set SWB_OWNER_EMAILS, CLOUDFLARE_ACCESS_TEAM_DOMAIN and CLOUDFLARE_ACCESS_AUD instead.
   # owner_emails: [owner@example.com]
   # cloudflare_access:
   #   team_domain: <TEAM_NAME>.cloudflareaccess.com
@@ -37,7 +37,7 @@ auth: {}
   #   "http://localhost/*", "http://127.0.0.1/*"]
   # Optional: map a redirect host / client name fragment to an agent name.
   # source_names: {cursor: cursor}
-  # Optional: limit bearer keys (by name, the part after SWITCHBOARD_KEY_) to memory scopes. Unlisted keys see every scope.
+  # Optional: limit bearer keys (by name, the part after SWB_KEY_) to memory scopes. Unlisted keys see every scope.
   # key_scopes: {example-agent: [project:example]}
   # inbox_keys: {channel: claude-code}         # inbox-only keys (/inbox/poll, /inbox/events) bound to one agent; this is the default
 
@@ -233,7 +233,7 @@ blocks:
       ttl_minutes: 60
       notify_workspace: a2a
       approver_user_id: U0DEMO0001
-    # What each SwB agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
+    # What each SwB agent (OAuth agent or SWB_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
     # Each agent posts as the persona named like it (claude -> claude) unless persona / persona_by_workspace says otherwise.
     agents:
       capy: {allow_persona_override: true, workspaces: {a2a: [bot]}}

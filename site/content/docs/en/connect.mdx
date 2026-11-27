@@ -14,7 +14,7 @@ For an MCP client on the SwB computer, choose [owner access or pairing](/docs/se
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | grok.com → Connectors → New Connector → Custom |
 | Capy | Add an MCP server with the Automatic OAuth client |
-| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
+| Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
 | Codex, Gemini CLI and other coding agents | `swb connect coding-agent --choose agent=codex` |
 
 For a coding agent, change `codex` to the name of your client. Run `swb connect coding-agent` alone to see the list. The list has Claude Code, Codex, Gemini CLI, Qwen Code, Goose, OpenCode, Cline and Kiro.
@@ -23,7 +23,7 @@ For a coding agent, change `codex` to the name of your client. Run `swb connect 
 
 An agent with owner access can set up the other connections. With a paired key, the agent gives you a terminal command for each owner-only step.
 
-Owner access needs an owner-approved OAuth sign-in or a key from `SWITCHBOARD_KEY_<NAME>`. Use a credential with full access to scopes, tools and targets. The settings `auth.key_scopes`, `auth.key_tools` and `auth.key_targets` limit this access.
+Owner access needs an owner-approved OAuth sign-in or a key from `SWB_KEY_<NAME>`. Use a credential with full access to scopes, tools and targets. The settings `auth.key_scopes`, `auth.key_tools` and `auth.key_targets` limit this access.
 
 | Ask | The agent does |
 | - | - |
