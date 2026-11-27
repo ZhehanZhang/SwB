@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from mimetypes import guess_type
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -17,6 +18,14 @@ from .blocks.mcp.setup import CHATGPT_PLUGINS_URL, hosted_client_instruction
 from .memory import GENERAL, MemoryError_, MemoryNotFound
 
 _INVENTORY = {"routine": "routines", "captain": "captains", "dot": "dots", "key": "keys"}
+
+
+async def agent_avatars(request: Request) -> JSONResponse:
+    slack = request.app.state.core.slack
+    return JSONResponse({"personas": [
+        {"id": persona.id, "name": persona.name, "accept": guess_type(persona.avatar)[0]}
+        for persona in slack.config.personas.values() if persona.avatar
+    ] if slack else []})
 
 
 async def agent_detail(request: Request) -> JSONResponse:
@@ -128,6 +137,7 @@ async def mutate_memory(request: Request) -> JSONResponse:
 
 
 PAGE_ROUTES = [
+    Route("/agents/avatars", agent_avatars, methods=["GET"]),
     Route("/agents/detail", agent_detail, methods=["GET"]),
     Route("/agents/setup", agent_setup, methods=["GET"]),
     Route("/inbox/pauses/{root}/resume", resume_conversation, methods=["POST"]),

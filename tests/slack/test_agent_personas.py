@@ -80,7 +80,7 @@ async def test_bot_posts_use_the_agent_persona_and_avatar_file(make_core, world,
 
 
 def test_bundled_monograms_cover_the_known_agents():
-    for name in ("switchboard", "claude", "chatgpt", "gemini", "codex", "claude-code", "capy"):
+    for name in ("swb", "claude", "chatgpt", "gemini", "codex", "claude-code", "capy"):
         data = (BUNDLED_AVATARS / f"{name}.png").read_bytes()
         assert data.startswith(b"\x89PNG") and len(data) > 1000
 

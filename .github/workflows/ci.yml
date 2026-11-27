@@ -20,7 +20,34 @@ jobs:
       - run: uv run --no-sync pytest -q tests deploy/test_templates.py
       - run: uv run --no-sync ruff check
       - run: uv run --no-sync python scripts/inventory.py --check
+      - run: uv run --no-sync python scripts/sync_prompts.py --check
       - run: uv run --no-sync python scripts/inventory_coverage.py
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked --extra test
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+      - run: npm run typecheck --prefix web
+      - run: npm run build --prefix web
+      - run: bash web/tests/run-display-tests.sh
+      - run: bash web/tests/run-owner-auth-tests.sh
+      - run: node --test tests/positive-copy.test.mjs tests/theme.test.mjs
+        working-directory: web
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: web
+      - run: npm run test:mobile --prefix web
+      - run: npm run test:theme --prefix web
+      - run: npm run test:modes --prefix web
 
   docker:
     runs-on: ubuntu-latest

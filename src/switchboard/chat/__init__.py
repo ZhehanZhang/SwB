@@ -118,7 +118,7 @@ class ChatBlock(Block):
         super().__init__(core, config)
         avatar = config.get("avatar")
         if avatar is not None and (not isinstance(avatar, str) or not AVATAR_RE.fullmatch(avatar)):
-            raise BlockError(f"blocks.{self.name}.avatar must be a file name like switchboard.png")
+            raise BlockError(f"blocks.{self.name}.avatar must be a file name like swb.png")
         self._avatar_status = {"file": avatar, "applied": False, "error": None}
         migrate(core.store)
         self.spaces = {label: self._space(label, raw) for label, raw in (config.get("spaces") or {}).items()}

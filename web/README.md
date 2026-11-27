@@ -9,7 +9,7 @@ npm run typecheck
 npm run build
 ```
 
-Vite serves the app at `/` in development. It forwards `/api`, `/auth`, `/classic`, claim and form routes, `/healthz`, and classic assets to the switchboard at `http://127.0.0.1:8000` without rewriting the request's Origin. `/login` and `/inbox` are client pages. Only `/inbox/poll` and `/inbox/events` are forwarded under `/inbox`. The proxy does not bypass authentication or write-origin checks.
+Vite serves the app at `/` in development. It forwards API requests, claim forms, shared page assets, and legacy redirects to `http://127.0.0.1:8000`. `/login` and `/inbox` are client pages. Inbox feeds use `/inbox/poll` and `/inbox/events` on the server. The proxy preserves authentication, the request origin, and write checks.
 
 The production build writes `../src/switchboard/static/app/index.html` and hashed assets under `../src/switchboard/static/app/assets/`. The HTML and CSS address these assets under `/app-assets/assets/`; client routes still start at `/`. To build without writing into the Python source tree, run `npm run build -- --outDir dist`.
 

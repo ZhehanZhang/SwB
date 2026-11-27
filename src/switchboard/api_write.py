@@ -125,7 +125,7 @@ async def visibility_set(request: Request) -> JSONResponse:
 
 
 async def pairing_code(request: Request) -> JSONResponse:
-    return JSONResponse({"status": "classic_required", "url": "/classic"}, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"status": "owner_form_required", "url": "/tokens"})
 
 
 async def pairing_revoke(request: Request) -> JSONResponse:

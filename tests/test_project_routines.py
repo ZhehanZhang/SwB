@@ -131,27 +131,24 @@ def test_routine_tools_register_list_and_remove_without_showing_tokens(tmp_path)
         c.__exit__(None, None, None)
 
 
-def test_root_page_adds_a_routine_and_shows_projects_across_systems(tmp_path):
+def test_owner_adds_a_routine_and_console_shows_projects_across_systems(tmp_path):
     core, c, anthropic = build(tmp_path, {"claude": BOTH["claude"]})
     try:
-        page = c.get("/classic", headers=OWNER)
-        assert "Claude routines" in page.text and 'type="password"' in page.text and "Projects across systems" in page.text
-        csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
-        form = {"fire_url": "https://api.anthropic.com/v1/claude_code/routines/trig_01PAGE/fire", "token": TOKEN, "project": "beacon", "csrf": csrf}
-        assert c.post("/routines", data={**form, "csrf": "bad"}, headers=OWNER).status_code == 403
-        assert c.post("/routines", data=form, headers=OWNER).status_code == 303
-        page = c.get("/classic", headers=OWNER).text
-        assert "claude-beacon" in page and "trig_01PAGE" in page and TOKEN not in page and "untested" in page
-        systems = {s["slug"]: s["systems"] for s in core.project_systems(client_targets(c))}
+        csrf = c.get("/auth/session", headers=OWNER).json()["csrf"]
+        routine = {"fire_url": "https://api.anthropic.com/v1/claude_code/routines/trig_01PAGE/fire", "token": TOKEN, "project": "beacon"}
+        assert payload(call(c, STATIC_KEY, "routine_add", routine))["name"] == "claude-beacon"
+        agents = c.get("/api/agents", headers=OWNER)
+        assert agents.status_code == 200 and TOKEN not in agents.text
+        row = next(r for r in agents.json()["routines"] if r["name"] == "claude-beacon")
+        assert row["routine_id"] == "trig_01PAGE" and row["status"] == "untested"
+        systems = {s["slug"]: s["systems"] for s in c.get("/api/projects", headers=OWNER).json()["systems"]}
         assert systems["beacon"]["claude-routine routine"] == "Claude: beacon" and "capy" in systems["beacon"]
-        assert c.post("/routines/claude-beacon/remove", data={"csrf": csrf}, headers=OWNER).status_code == 303
+        path = "/api/routines/claude-beacon/remove"
+        assert c.post(path, headers={**OWNER, "X-CSRF-Token": "bad"}).status_code == 403
+        assert c.post(path, headers={**OWNER, "X-CSRF-Token": csrf}).status_code == 200
         assert "claude-beacon" not in {r["name"] for r in core.blocks["claude-routine"].rows()}
     finally:
         c.__exit__(None, None, None)
-
-
-def client_targets(c):
-    return payload(call(c, STATIC_KEY, "targets", {"refresh": True}))["targets"]
 
 
 def test_a_target_limited_key_is_checked_after_the_project_picks_a_routine(tmp_path):

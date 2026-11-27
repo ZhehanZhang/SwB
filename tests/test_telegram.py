@@ -149,7 +149,7 @@ def run(tmp_path):
 
 
 def test_avatar_upload_uses_jpeg_multipart_and_skips_unchanged_file(run, tmp_path):
-    name = "switchboard.png"
+    name = "swb.png"
     source = tmp_path / name
     for color, uploads in (("blue", 1), ("blue", 0), ("red", 1)):
         Image.new("RGBA", (32, 32), color).save(source)
@@ -171,11 +171,11 @@ def test_avatar_upload_uses_jpeg_multipart_and_skips_unchanged_file(run, tmp_pat
 def test_avatar_error_is_non_fatal_and_does_not_expose_the_token(run, caplog):
     bot = FakeBotAPI()
     bot.avatar_error = 400
-    with run(bot=bot, avatar="switchboard.png") as (_, client, _, _, _):
+    with run(bot=bot, avatar="swb.png") as (_, client, _, _, _):
         client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
         status = payload(call(client, STATIC_KEY, "telegram_status"))
         error = "Telegram setMyProfilePhoto: API error 400"
-        assert status["connected"] and status["avatar"] == {"file": "switchboard.png", "applied": False, "error": error}
+        assert status["connected"] and status["avatar"] == {"file": "swb.png", "applied": False, "error": error}
         assert len(bot.calls["setMyProfilePhoto"]) == 1 and caplog.text.count(error) == 1
         assert TOKEN not in caplog.text and TOKEN not in json.dumps(status)
 

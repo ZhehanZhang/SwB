@@ -1,10 +1,9 @@
-import re
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config
-from switchboard import web
+from switchboard import pages, web
 
 
 @pytest.fixture
@@ -61,11 +60,42 @@ def test_stable_theme_asset_revalidates_instead_of_caching_immutably(make, web_d
     assert unchanged.status_code == 304 and unchanged.headers["cache-control"] == "no-cache"
 
 
-def test_missing_build_does_not_prevent_classic_or_mcp_starting(make, monkeypatch, tmp_path):
+@pytest.mark.parametrize(("path", "target"), [
+    ("/classic", "/"), ("/classic/", "/"), ("/classic/tokens", "/tokens"),
+    ("/classic/inbox", "/inbox"), ("/classic/agents", "/agents"),
+    ("/classic?notice=approved", "/inbox?notice=approved"),
+    ("/classic?notice=avatar-saved", "/agents?notice=avatar-saved"),
+    ("/classic?next=//example.test", "/"),
+])
+def test_classic_bookmarks_redirect_to_the_protected_spa(make, web_dist, path, target):
+    _, client = make()
+    for headers in ({}, OWNER, {"cf-access-jwt-assertion": "other"}):
+        redirect = client.get(path, headers=headers)
+        assert redirect.status_code == 308 and redirect.headers["location"] == target
+        assert not redirect.content
+        response = client.get(target, headers=headers)
+        if headers == OWNER:
+            assert response.status_code == 200 and response.text == (web_dist / "index.html").read_text()
+        else:
+            assert response.status_code == 303
+            assert parse_qs(urlsplit(response.headers["location"]).query) == {"next": [target]}
+
+
+def test_no_route_serves_classic_templates(make):
+    _, client = make()
+    routes = [route for route in client.app.starlette.routes if getattr(route, "path", "").startswith("/classic")]
+    assert {route.path for route in routes} == {"/classic", "/classic/{rest:path}"}
+    assert all(not isinstance(route, pages.PageRoute) and route.endpoint is web.classic_redirect for route in routes)
+    assert not hasattr(pages, "admin_page")
+    for path in ("/visibility", "/routines", "/routines/example/remove", "/pairing/keys/example/revoke"):
+        assert client.post(path, headers=OWNER).status_code == 404
+
+
+def test_missing_build_does_not_prevent_login_or_mcp_starting(make, monkeypatch, tmp_path):
     monkeypatch.setattr(web, "APP_DIST", tmp_path / "absent")
     _, client = make()
     assert client.get("/", headers=OWNER).status_code == 503
-    assert client.get("/classic", headers=OWNER).status_code == 200
+    assert client.get("/login").status_code == 200
     assert client.get("/healthz").status_code == 200
     assert client.get("/mcp").status_code == 401
     assert client.get("/inbox/poll", headers=OWNER).status_code == 401
@@ -83,8 +113,8 @@ def test_login_shell_is_available_when_signed_out(make, web_dist):
     assert signed_in.status_code == 303 and signed_in.headers["location"] == "/agents?tab=known"
 
 
-def test_auth_session_matches_access_and_reuses_classic_csrf(make):
-    _, client = make()
+def test_auth_session_matches_access_and_returns_owner_csrf(make):
+    core, client = make()
     fields = {"methods": {"passkeys": 0, "oidc": None, "access": True}}
     anonymous = client.get("/auth/session")
     assert anonymous.status_code == 200
@@ -94,8 +124,7 @@ def test_auth_session_matches_access_and_reuses_classic_csrf(make):
     token = session.json()["csrf"]
     assert session.json() == {**fields, "signed_in": True, "via": "access", "csrf": token} and len(token) == 64
     assert session.headers["cache-control"] == "no-store"
-    classic = client.get("/classic", headers=OWNER)
-    assert re.search(r'name="csrf" value="([0-9a-f]+)"', classic.text)[1] == token
+    assert token == core.auth.csrf("owner@example.test")
     assert client.get("/api/session", headers=OWNER).status_code == 404
 
 

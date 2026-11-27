@@ -149,8 +149,10 @@ def test_degraded_without_api_key(make):
     assert "CAPY_API_KEY" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
     assert not call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "notes", "title": "t", "body": "b"}).get("isError")
     assert "CAPY_API_KEY missing" in payload(call(c, STATIC_KEY, "context_pack", {}))
-    page = c.get("/classic", headers=OWNER)
-    assert page.status_code == 200 and 'class="brand-name">SwB' in page.text and "CAPY_API_KEY" in page.text
+    health = c.get("/api/health", headers=OWNER)
+    assert health.status_code == 200 and health.json()["status"] == "degraded"
+    assert health.json()["blocks"]["capy"]["online"] is False
+    assert "capy: check block status" in health.json()["problems"]
 
 
 def test_api_key_never_appears_in_logs_or_health(make, caplog):
