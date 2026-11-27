@@ -20,7 +20,7 @@ SwB 根据平台提供的发送者 ID 判定消息的信任等级。
 | `owner` | 你和以你的身份登录的智能体 |
 | `external` | 其他发送者，包括 `known` 中的人员和机器人 |
 
-Slack、Discord 和 Telegram 通过 `known` 判断哪些发送者可以发来消息。获准的其他发送者仍使用 `external` 信任框。GitHub 按每段文字的作者判定，详见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
+在 Slack、Discord 和 Telegram 中，`known` 是接收设置。SwB 用它判断接收哪些发送者的消息。所有者之外的发送者即使通过 `known` 获准，消息的信任等级仍为 `external`。GitHub 按每段文字的作者判断信任等级，详见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
 
 **信任框**由 SwB 为外部文字添加的消息头和一对标记组成。SwB 先替换正文中仿写的消息头和标记，再加上信任框。标记是 `<<<swb-untrusted` 和 `swb-untrusted>>>`。智能体仅把标记内的文字当作参考信息。
 
@@ -53,6 +53,7 @@ SwB 为每把配对密钥单独保存记忆授权。升级时，原先可访问�
 | 限制 | 数值 |
 | - | - |
 | 错误的 bearer 令牌 | 每个地址 10 分钟内 20 次，之后返回 429 |
+| SwB 为所有者之外的发送者转发的 GitHub 事件 | 每个发送者在最近 10 分钟内最多 5 个事件 |
 | `/register` | 每个地址每小时 20 次 |
 | `/token` | 每个地址 10 分钟内 120 次 |
 | `/authorize` | 每个地址 10 分钟内 60 次 |

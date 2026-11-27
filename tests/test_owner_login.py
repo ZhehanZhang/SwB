@@ -341,7 +341,7 @@ def authenticate(client, key, count, **opts):
 
 
 def test_passkey_registration_discoverable_login_and_counter(make, caplog, no_spa_build):
-    clock = Clock()
+    clock = Clock(1_764_000_000.125)
     core, client = make(base_config(auth={}), clock=clock)
     assert sign_in(client).status_code == 204
     key = Passkey()
@@ -359,7 +359,9 @@ def test_passkey_registration_discoverable_login_and_counter(make, caplog, no_sp
         added = add_key(client, key, opts)
         assert added.status_code == 201 and added.json() == {"id": b64url(key.id)}
         cookie_attributes(added, CHALLENGE_COOKIE, 0)
-        assert [entry["id"] for entry in client.get("/auth/passkeys").json()] == [b64url(key.id)]
+        assert client.get("/auth/passkeys").json() == [
+            {"id": b64url(key.id), "name": "Laptop", "created_at": "2025-11-24T16:00:00.125+00:00", "last_used_at": None},
+        ]
         client.cookies.set(CHALLENGE_COOKIE, ref)
         replay = add_key(client, key, opts)
         assert replay.status_code == 401 and replay.json() == {"error": "passkey_failed"}
@@ -371,7 +373,8 @@ def test_passkey_registration_discoverable_login_and_counter(make, caplog, no_sp
         assert authenticate(client, key, 7).status_code == 204
         assert client.get("/auth/session").json()["via"] == "passkey"
         assert client.get("/auth/passkeys").json() == [
-            {"id": b64url(key.id), "name": "Laptop", "created_at": clock.t - 1, "last_used_at": clock.t},
+            {"id": b64url(key.id), "name": "Laptop", "created_at": "2025-11-24T16:00:00.125+00:00",
+             "last_used_at": "2025-11-24T16:00:01.125+00:00"},
         ]
         denied = authenticate(client, key, 6)
         assert denied.status_code == 401 and denied.json() == {"error": "passkey_failed"}
