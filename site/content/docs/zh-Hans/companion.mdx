@@ -34,6 +34,11 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | `--cap notify` | 在设备桌面上显示通知 |
 | `--cap drop` | 通过 `~/SwB Drop` 文件夹共享文件，每个文件上限为 10 MiB |
 | `--cap mcp --mcp NAME=COMMAND` | 让智能体使用设备上 MCP 服务器提供的工具 |
+| `--cap herdr` | 向 Herdr 窗格中的编程智能体发送消息 |
+| `--cap codex` | 通过 Codex 应用服务器向 Codex 发送消息 |
+| `--cap opencode` | 通过 OpenCode 服务器向 OpenCode 发送消息 |
+| `--cap dsh` | 通过 SwB 桥接插件向 DeepSeek Harness 发送消息 |
+| `--cap hooks` | 接收 Claude Code、Gemini CLI 和 Codex 的状态 |
 | `--cap muse` | 在 Mac 或 Linux 电脑上通过蓝牙与 Muse 配对。请使用 [Muse 指南](/zh-Hans/docs/setup/muse)中的命令 |
 
 在 Linux 上，通知功能使用 `notify-send`。
@@ -41,6 +46,14 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 每个 MCP 服务器使用一个 `--mcp` 选项。填写启动命令或本机 HTTP 地址，例如 `--mcp 'notes=uvx notes-mcp'` 或 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
 智能体用 `companion_list` 查看已配对的设备及其操作。它用 `companion_invoke` 执行操作。
+
+## 本地会话
+
+本地会话是指正在这台设备上运行的编程智能体。SwB 会把会话及其状态列在目标中。
+
+SwB 先把发给会话的消息放入智能体的邮箱，再尝试送到已打开的会话。答复会回到原来的 SwB 会话。
+
+有关命令和适用的智能体，请参阅[本地会话](/zh-Hans/docs/blocks/local-sessions)。
 
 ## 保持运行
 
