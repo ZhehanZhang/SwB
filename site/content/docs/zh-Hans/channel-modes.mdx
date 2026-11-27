@@ -8,9 +8,9 @@ description: 设置 SwB 在各空间中如何处理消息。
 | 模式 | SwB 的行为 |
 | - | - |
 | `off` | 丢弃所有 GitHub 事件，包括所有者的事件。在 Slack、Discord 和 Telegram 中丢弃其他人发来的消息 |
-| `watch` | 收集消息并汇总成摘要 |
+| `watch` | 把近期消息汇总成摘要 |
 | `assist` | 唤醒智能体，让它参考上下文并在原话题串回复 |
-| `triage` | 唤醒分流智能体。默认操作是在原话题串回复 |
+| `triage` | 唤醒分流智能体。它会查看事件并选择处理方式。默认操作是在原话题串回复 |
 | `work` | 处理所有者发来的消息 |
 
 在 Slack、Discord 和 Telegram 中，所有者的提及和私信始终按 `work` 处理。频道和目标的访问范围由可见性设置决定。
@@ -21,7 +21,7 @@ description: 设置 SwB 在各空间中如何处理消息。
 
 在连接或项目页面的 **Channel modes** 中设置模式。也可以在 YAML 中设置。所有者可以用 `space_mode` 指定模式、目标、项目和允许的操作。
 
-在 YAML 中给 `"off"` 加引号，SwB 就会将它读作文本。
+YAML 是 SwB 配置文件使用的文本格式。请在 YAML 中用引号括住 `"off"`。
 
 ```yaml
 blocks:
@@ -73,11 +73,11 @@ visibility_set(resource="target:beta", visibility="shared")
 
 所有者可以在控制台的 **Inbox** 中查看所有摘要，也可以调用 MCP 工具 `inbox` 或 `wait`。摘要列出事件总数、各事件的作者和节选，以及可用的链接。摘要的信任等级为 `external`。
 
-观察模式让智能体保持休眠。摘要仅供收件箱查询。已配置的 GitHub 接收端仍会收到各个事件的副本。
+观察模式让智能体保持休眠。摘要仅供收件箱查询。已配置的 [GitHub 事件接收方](/zh-Hans/docs/blocks/github)仍会收到各个事件的副本。
 
 ## 分流操作
 
-分流智能体可以读取上下文。默认操作是在原话题串中执行 `reply`。在 GitHub 话题串中，请使用 `github_reply`。在 `handle` 中填入会话 ID。在 `text` 中填入回复内容。
+分流智能体可以读取事件相关信息。默认操作是在原话题串中执行 `reply`。在 GitHub 话题串中，请使用 `github_reply`。在 `handle` 中填入会话 ID。在 `text` 中填入回复内容。
 
 要开放更多操作，请在 `space_mode` 或 YAML 中设置 `actions`。将 `reply` 加入列表可保留回复功能，例如 `actions=["reply", "notify_owner"]`。
 

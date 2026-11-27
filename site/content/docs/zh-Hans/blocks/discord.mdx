@@ -5,15 +5,15 @@ description: 把 Discord 消息路由给智能体，并在话题串中回复。
 
 ## 创建机器人
 
-在 [Discord Developer Portal](https://discord.com/developers/applications) 中创建 New Application。在 Bot 下开启 Message Content Intent。重置机器人令牌。
+按 [Discord 设置](/zh-Hans/docs/setup/discord)创建机器人。开启 Message Content Intent，以读取消息正文和后续消息。
 
-请智能体连接 Discord。智能体调用 `discord_provision` 并给你一个领取链接。打开链接并粘贴机器人令牌。你也可以在 SwB 服务器的环境变量中设置 `DISCORD_BOT_TOKEN`。
+请智能体连接 Discord。智能体调用 `discord_provision` 并给你一个领取链接。打开链接并粘贴机器人令牌。
 
 ## 把机器人添加到 Discord 服务器
 
-`discord_status` 返回 `setup.invite_url`。打开它，把机器人添加到你的 Discord 服务器。该链接请求 bot 范围，以及你所用功能需要的权限。
+机器人连接后，调用 `discord_status`。打开 `setup.invite_url` 中的链接。将机器人添加到服务器。链接会请求已启用功能所需的权限。
 
-SwB 从 Discord 读取机器人的所有者，并记录机器人加入的服务器。`discord_status` 在 `discovered` 下列出它们。把某个服务器加入配置文件，即可路由它的消息。
+在 `discord_status` 的 `discovered.guilds` 中查找服务器 ID。将 ID 填入配置文件的空间中。每个空间保存一个 Discord 服务器的设置。
 
 ```yaml
 blocks:
@@ -23,19 +23,19 @@ blocks:
       home:
         guild_id: "100000000000000001"
         owner_ids: ["100000000000000002"]
-        default_target: helper
+        default_target: claude
     agents: {claude: [home]}
 ```
 
-要复制 id，请在 User Settings → Advanced 中开启 Developer Mode。然后右键点击服务器或用户。
+要设置所有者，请给机器人发私信。在 `discord_status` 的 `discovered.dm_users` 中查找你的用户 ID。将 ID 填入 `owner_ids`。
 
 ## 从 Discord 发送
 
-提及机器人并带上目标 slug，例如 `@swb helper check the build`。SwB 根据你的消息创建一个话题串，并把你加入其中。答复回到该话题串。话题串中的后续消息发往同一个目标。角色形象（persona）帖子为每个频道使用一个 webhook，因此每个智能体显示自己的名称和头像。
+提及机器人并写上目标简称，例如 `@swb claude check the build`。启用话题串后，SwB 可根据你的消息创建话题串并把你加入其中。SwB 会在话题串中回复。后续消息可沿用该话题串的目标。启用角色形象后，符合条件的回复会显示智能体的名称和头像。
 
 ## 与其他人共享
 
-频道和目标起初都是私有的。要让其他人访问某个目标，请共享该频道和该目标。使用 `channel:<space>/<channel id>` 和 `target:<slug>`。列表可以用 `discord:<user id>` 指定单个用户。
+频道和目标默认为私有资源。要给其他人访问权限，请同时共享频道和目标。用 `channel:<space>/<channel id>` 和 `target:<slug>` 指定这两项资源。要授权给指定用户，请在访问列表中添加 `discord:<user id>`。
 
 ## 模块设置
 
@@ -44,7 +44,7 @@ blocks:
 | `blocks.discord` | 设置 Discord 机器人及其空间 |
 | `blocks.discord.use` | 加载 `discord` 模块 |
 | `blocks.discord.enabled` | 设为 `true` 启用模块，设为 `false` 关闭模块 |
-| `blocks.discord.token_env` | 存放机器人令牌的环境变量名。默认值为 `DISCORD_BOT_TOKEN` |
+| `blocks.discord.token_env` | 存放机器人令牌的环境变量名 |
 | `blocks.discord.application_id` | 用于生成邀请链接的 Discord 应用 ID。SwB 也可从 Discord 读取此 ID |
 | `blocks.discord.connect` | 设为 `true` 后接收 Discord 实时事件。设为 `false` 可单独测试 API 调用 |
 | `blocks.discord.message_content` | 设为 `true` 可读取消息正文，包括话题串里的后续消息。在开发者后台开启 Message Content Intent |

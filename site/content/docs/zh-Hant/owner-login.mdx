@@ -3,7 +3,7 @@ title: 擁有者登入
 description: 使用通行金鑰、一次性連結、設定碼或身分提供者登入 SwB。
 ---
 
-SwB 只有一位擁有者。以擁有者身分登入後，可以檢視 SwB、核准代理登入及儲存權杖。
+擁有者登入後可以管理 SwB。擁有者可以核准代理登入，也可以儲存權杖。
 
 | 頁面 | 用途 |
 | - | - |
@@ -24,7 +24,7 @@ swb login-link
 
 ## 設定碼
 
-設定碼用於擁有者第一次登入，使用一次後即失效。由 SwB 直接處理登入時，可使用設定碼。[雲端與 Docker 部署指令](/zh-Hant/docs/deploy)會產生設定碼。
+設定碼用於擁有者第一次登入，使用一次後即失效。由 SwB 直接處理登入時，可使用設定碼。請依[部署指南](/zh-Hant/docs/deploy)取得託管伺服器的設定碼。
 
 若要自訂設定碼，請產生 32 個隨機位元組。將前述位元組編碼成 64 個小寫十六進位字元，或用標準 Base64 編碼。下列指令會將十六進位設定碼加到私有的 `.env`。先執行 `swb init`，再於執行個體的資料夾內執行此指令。
 
@@ -32,17 +32,17 @@ swb login-link
 (umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
 ```
 
-設定好 `SWB_SETUP_CODE` 後啟動 SwB。在瀏覽器中開啟 `/login`。將設定碼貼到 **Setup code**。
+設定好 `SWB_SETUP_CODE` 後啟動 SwB。在瀏覽器中開啟 `/login`。將設定碼貼到 **Setup code**。選取 **Sign in**。
 
 ## 通行金鑰
 
-通行金鑰透過裝置確認你的登入。首次登入後，請用裝置名稱為通行金鑰命名。選取 **Add a passkey**。
+**通行金鑰**會透過裝置確認你的登入。首次登入後，請在 **Passkey name** 輸入裝置名稱。選取 **Add a passkey**。
 
 若要在另一部裝置上新增通行金鑰，請開啟 **Settings**。在 **Sign-in** 下選取 **Add a passkey**。輸入名稱。選取 **Add passkey** 儲存。日後可用通行金鑰登入。
 
 ## OIDC
 
-你可以使用自己的身分提供者，例如 Google、Okta 或 Authentik。請把它加入設定檔。
+OpenID Connect（OIDC）讓 Google 等登入服務確認你的身分。請將登入服務加入設定檔。用 `SWB_OIDC_CLIENT_SECRET` 儲存該服務提供的金鑰。
 
 ```yaml
 public_url: https://swb.example.com
@@ -52,18 +52,18 @@ auth:
     name: Google
     issuer: https://accounts.google.com
     client_id: 1234.apps.googleusercontent.com
-    client_secret_env: OIDC_CLIENT_SECRET
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
 ```
 
-請在提供者端把重新導向位址設為 `https://swb.example.com/auth/oidc/callback`。登入頁面隨即顯示你的提供者按鈕。SwB 接受已驗證信箱的擁有者電子郵件。你也可以把提供者的 subject id 列在 `owner_subjects`。
+請在提供者端把重新導向位址設為 `https://swb.example.com/auth/oidc/callback`。登入頁會顯示該服務的登入按鈕。SwB 接受 `auth.owner_emails` 中已驗證的電子郵件地址。也可以在 `auth.oidc.owner_subjects` 填入登入服務的帳號識別碼。
 
 ## Cloudflare Access
 
-若 Cloudflare Access 保護你的主機，SwB 會讀取 Access 權杖並立即讓你登入。請設定 `CLOUDFLARE_ACCESS_TEAM_DOMAIN`、`CLOUDFLARE_ACCESS_AUD` 與 `SWB_OWNER_EMAILS`。SwB 自行檢查權杖的簽章、audience、issuer 與電子郵件。
+依 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare)保護主控台。SwB 會檢查 Access 權杖，再用 `auth.owner_emails` 或 `SWB_OWNER_EMAILS` 核對電子郵件地址。
 
 ## 代理登入
 
-OAuth 讓應用程式在你核准後連線到 SwB。請在 `/authorize` 核准連線。應用程式會透過 `/token` 取得或更新權杖。
+OAuth 讓應用程式在你核准後連線到 SwB。請在 `/authorize` 核准連線。應用程式使用 `switchboard` 作為 OAuth 權限的名稱。應用程式會透過 `/token` 取得或更新權杖。
 
 應用程式收到 OAuth 錯誤時，請在 `error_description` 中查看詳細資訊。
 
@@ -84,9 +84,9 @@ SwB 拒絕[配對碼](/zh-Hant/docs/connect#用配對碼連接)時，`/connect` 
 
 ## 工作階段
 
-瀏覽器用工作階段 cookie 維持登入狀態。即使在 `http://localhost` 上，SwB 也會將 cookie 標記為 `Secure`。Chrome 和 Firefox 在 `localhost` 上接受這種 cookie。
+瀏覽器會儲存 **Cookie** 來維持登入狀態。SwB 會在 Cookie 上設定 `Secure` 標記。公開位址請使用 HTTPS。
 
-頁面上的每項變更都帶有 CSRF 權杖。請從 **Settings** 登出。
+變更設定時，瀏覽器會送出權杖供 SwB 檢查要求。請從 **Settings** 登出。
 
 瀏覽器會透過 `/auth/session` 讀取目前的登入狀態。
 

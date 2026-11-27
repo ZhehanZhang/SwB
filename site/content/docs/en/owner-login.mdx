@@ -3,7 +3,7 @@ title: Owner sign-in
 description: Sign in with a passkey, a one-time link, a setup code or your identity provider.
 ---
 
-SwB has one owner. The owner signs in to the SwB page to see the instance, approve agent sign-ins and paste tokens. SwB uses passkeys, one-time links and OIDC in place of passwords.
+The owner signs in to manage SwB. This access lets the owner approve agent sign-ins and save tokens.
 
 | Page | Use |
 | - | - |
@@ -24,7 +24,7 @@ If sign-in with the link fails, run `swb login-link` again. Open the new link in
 
 ## Setup code
 
-A setup code works once, for the first owner sign-in. Use it when SwB handles sign-in directly. The [cloud and Docker deploy scripts](/docs/deploy) create the code for you.
+A setup code works once, for the first owner sign-in. Use it when SwB handles sign-in directly. The [deploy guide](/docs/deploy) shows where to get the code for a hosted server.
 
 To set your own code, generate 32 random bytes. Encode them as 64 lowercase hexadecimal characters or standard Base64. This command adds a hexadecimal code to the private `.env` file. Run it in the instance folder after `swb init`.
 
@@ -32,17 +32,17 @@ To set your own code, generate 32 random bytes. Encode them as 64 lowercase hexa
 (umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
 ```
 
-Start SwB with `SWB_SETUP_CODE` set. Open `/login` in your browser. Paste the code in **Setup code**.
+Start SwB with `SWB_SETUP_CODE` set. Open `/login` in your browser. Paste the code in **Setup code**. Select **Sign in**.
 
 ## Passkey
 
-A passkey uses your device to confirm your sign-in. After your first sign-in, name the passkey after your device. Select **Add a passkey**.
+A **passkey** uses your device to confirm your sign-in. After your first sign-in, enter your device name in **Passkey name**. Select **Add a passkey**.
 
 For another device, open **Settings**. Under **Sign-in**, select **Add a passkey**. Enter a name. Select **Add passkey** to save it. Use your passkey for later sign-ins.
 
 ## OIDC
 
-Use your own identity provider, for example Google, Okta or Authentik. Add it to the config.
+OpenID Connect (OIDC) lets a sign-in service such as Google confirm your identity. Add your service to the configuration file. Set `SWB_OIDC_CLIENT_SECRET` to the secret from that service.
 
 ```yaml
 public_url: https://swb.example.com
@@ -52,18 +52,18 @@ auth:
     name: Google
     issuer: https://accounts.google.com
     client_id: 1234.apps.googleusercontent.com
-    client_secret_env: OIDC_CLIENT_SECRET
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
 ```
 
-Set the redirect address in your provider to `https://swb.example.com/auth/oidc/callback`. The sign-in page then shows a button for your provider. SwB accepts an owner email with a verified address. You can also list provider subject ids in `owner_subjects`.
+Set the redirect address in your provider to `https://swb.example.com/auth/oidc/callback`. The sign-in page shows a button for your service. SwB accepts a verified email in `auth.owner_emails`. You can also list account IDs from your service in `auth.oidc.owner_subjects`.
 
 ## Cloudflare Access
 
-If Cloudflare Access protects your host, SwB reads the Access token and signs you in at once. Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN`, `CLOUDFLARE_ACCESS_AUD` and `SWB_OWNER_EMAILS`. SwB checks the token signature, audience, issuer and email itself.
+Follow [Cloudflare setup](/docs/setup/cloudflare) to protect the console with Cloudflare Access. SwB checks the Access token and matches the email to `auth.owner_emails` or `SWB_OWNER_EMAILS`.
 
 ## Agent sign-in
 
-OAuth lets an app connect to SwB with your approval. Approve the connection on `/authorize`. The app uses `/token` to get or renew its tokens.
+OAuth lets an app connect to SwB with your approval. Approve the connection on `/authorize`. The app receives the OAuth scope `switchboard`, the name of the access it requests. The app uses `/token` to get or renew its tokens.
 
 Check `error_description` for details when the app gets an OAuth error.
 
@@ -84,9 +84,9 @@ Check `error_description` for details when the app gets an OAuth error.
 
 ## Sessions
 
-A session cookie keeps you signed in. SwB sets the `Secure` flag on the cookie, including on `http://localhost`. Chrome and Firefox accept this cookie on `localhost`.
+A **cookie** is a value your browser saves to keep you signed in. SwB sets the `Secure` flag on this cookie. Use HTTPS for a public address.
 
-Each change on the page carries a CSRF token. Sign out from **Settings**.
+When you change a setting, the browser sends a token that SwB uses to check the request. Sign out from **Settings**.
 
 The browser reads your current sign-in state at `/auth/session`.
 

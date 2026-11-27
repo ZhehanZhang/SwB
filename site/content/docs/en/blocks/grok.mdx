@@ -1,33 +1,35 @@
 ---
 title: Grok
-description: Connect Grok and wake it with Grok routines.
+description: Connect Grok in the browser or wake Grok Bot with a routine.
 ---
 
 ## Add the connector
 
-In grok.com, open Connectors → New Connector → Custom. Enter your public MCP address and sign in with OAuth.
+Follow [Grok setup](/docs/setup/grok) to connect Grok in the browser. Use [Grok Bot setup](/docs/setup/grok-bot) for the separate desktop app.
 
 ## Wake Grok Bot with a routine
 
-Ask an agent to connect Grok Bot. From a terminal, run `swb connect grok-bot` for the routine prompt.
+Ask an agent to connect Grok Bot. From a terminal, run `swb connect grok-bot`. Follow its setup instructions to get the routine prompt.
 
-Create a Grok Bot routine with the prompt and a custom webhook trigger. Register the routine with SwB. Use your project name in place of `example`.
+Use the prompt to create a Grok Bot routine with a webhook trigger. A webhook starts the routine when SwB sends a request to its URL. Replace `example` with the short name of an active SwB project. Run the command to register the routine.
 
 ```bash
 swb connect grok-bot --choose name=project-triage project=example auth=key
 ```
 
-SwB gives you separate claim links for the webhook address and key. Paste each value in its claim link. Run the same command again to get the test send. A `pong` in your inbox confirms the routine works.
+SwB gives you separate claim links for the webhook address and key. Use each link to save its value. Run the same command again for the test call. Ask your agent to run the call and check for a `pong` reply.
 
 ## How a wake works
 
-SwB sends a webhook request to start the routine. With `auth=key`, SwB sends the key as a bearer token by default. With `auth=signature`, SwB signs the request. The request gives the text, conversation, project, sender and trust level. The routine answers through its SwB connector.
+With `auth=key`, SwB sends the key in the `Authorization` header by default. With `auth=signature`, SwB signs the request. The request contains the text, conversation ID, sender and trust level. It also includes the project when available. The routine calls `reply` for requests with `owner` trust.
+
+For manual setup, set the variables named in `url_env` and `secret_env` in your server environment.
 
 ```yaml
 blocks:
   grok-routine:
     routines:
-      project-triage: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
+      project-triage: {project: example, url_env: SWB_EXAMPLE_GROK_URL, auth: key, secret_env: SWB_EXAMPLE_GROK_SECRET}
 ```
 
 Send to a routine by its name, or to `grok:<slug>` for the main routine of a project.

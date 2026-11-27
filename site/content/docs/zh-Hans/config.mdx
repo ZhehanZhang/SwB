@@ -3,25 +3,25 @@ title: 配置
 description: 环境变量、配置文件和覆盖文件。
 ---
 
-SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在设置相应变量后启用。其他设置可写入 YAML 文件。
+SwB 可以只用环境变量运行。MCP 模块默认启用。有些模块在设置对应变量后才启用。其他设置可写进 YAML 文件。YAML 是一种用文本记录设置的格式。
 
 ## 实例
 
 | 变量 | 用途 |
 | - | - |
-| `SWB_KEY_OWNER` | `swb` 命令使用的所有者密钥 |
+| `SWB_KEY_OWNER` | SwB 工具和命令使用的所有者密钥 |
 | `SWB_PUBLIC_URL` | 登录和 MCP 使用的公开地址。远程服务器使用 HTTPS，例如 `https://swb.example.com`。 |
 | `SWB_HOST` | 监听地址，默认为 `127.0.0.1`。 |
 | `SWB_DATA_DIR` | 数据目录。镜像使用 `/data`。 |
-| `SWB_OWNER_EMAILS` | 用于 OIDC 和 Cloudflare Access 的所有者邮箱，用逗号分隔 |
-| `SWB_KEY_<NAME>` | 智能体 `<name>` 的 bearer 密钥 |
+| `SWB_OWNER_EMAILS` | OpenID Connect（OIDC）和 Cloudflare Access 使用的所有者邮箱地址。用逗号分隔各地址 |
+| `SWB_KEY_<NAME>` | 智能体 `<name>` 的密钥。智能体把它作为 bearer 密钥放入 `Authorization` 请求头 |
 | `SWB_CONFIG` | 基础 YAML 文件的路径 |
 | `SWB_OVERLAY` | 私有覆盖文件的路径 |
 | `SWB_PORT` | HTTP 端口。`swb up` 默认为 `8870`。 |
 
-在终端或实例的 `.env` 文件中设置 `SWB_PORT`。托管平台也可以设置 `PORT`。本机登录地址使用所选端口。
+在终端或实例的 `.env` 文件中设置 `SWB_PORT`。如果托管平台设置了其他端口，用 `--url` 为客户端命令指定服务器的实际地址。
 
-用 `swb up --public-url https://swb.example.com` 在命令行中设置公开地址。该选项优先于 YAML 中的 `public_url`。YAML 设置优先于 `SWB_PUBLIC_URL`。
+用 `swb up --public-url https://swb.example.com` 在命令行中设置公开地址。本次运行时，该选项优先于 YAML 中的 `public_url`。YAML 设置优先于 `SWB_PUBLIC_URL`。
 
 用 `--host` 覆盖 `SWB_HOST`。监听 `0.0.0.0` 或局域网地址之前，请先设置公开地址。
 
@@ -29,7 +29,7 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 `swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 查找 `.env`。这四条命令用 `--url` 指定服务器地址。
 
-所有服务器命令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 从指定目录读取 `.env` 和配置。需要访问数据库的命令也从该目录查找实例数据。
+服务器命令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 从指定目录读取 `.env` 和配置。需要访问数据库的命令也从该目录查找实例数据。
 
 直接运行 `swb serve` 时，SwB 读取终端环境和配置文件。其他服务器命令默认使用当前目录。
 
@@ -41,27 +41,17 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 在配置文件或覆盖文件中设置 `data_dir` 可更改路径。这项设置优先。SwB 接着按顺序检查 `SWB_DATA_DIR` 和 `SWB_DATA`。三项设置都为空时，SwB 使用默认路径。
 
-直接运行 `swb up` 会保留已有配置文件。原先使用主目录数据库的实例会继续使用该数据库。如果 SwB 因为缺少 `data/` 目录而使用主目录中的数据库，日志会提示一次。
+直接运行 `swb up` 会保留已有配置文件。实例已有配置文件且 `data/` 目录缺失时，SwB 会到 `~/.local/share/switchboard` 查找旧数据库。如果用了旧数据库，SwB 会在日志中提示一次。
 
 在 Linux 和 macOS 上，SwB 将数据目录的权限设为 `0700`。数据库文件的权限设为 `0600`。
 
 ## 模块
 
-| 模块 | 变量 |
-| - | - |
-| Capy | `CAPY_API_KEY`，发送另用 `CAPY_API_KEY_SERVICE` 或 `CAPY_API_KEY_AS_<AGENT>` |
-| Slack | `SLACK_BOT_TOKEN` 或 `SLACK_USER_TOKEN`、`SLACK_TEAM_ID`，以及用于 Socket Mode 的 `SLACK_APP_TOKEN` |
-| Discord | `DISCORD_BOT_TOKEN` |
-| Telegram | `TELEGRAM_BOT_TOKEN` |
-| GitHub | `GITHUB_WEBHOOK_SECRET` |
-| Claude routine | `CLAUDE_ROUTINE_TOKEN` 和 `CLAUDE_ROUTINE_ID` |
-| Grok routine | `GROK_ROUTINE_SECRET` 和 `GROK_ROUTINE_URL` |
-
-对已命名的 Slack 工作区，把名称放在 `SLACK_` 之后，例如 `SLACK_SUPPORT_BOT_TOKEN`。已命名的 routine 做法相同，例如 `CLAUDE_ROUTINE_TOKEN_DOCS`。
+有些模块可以根据环境中的凭据启动。请参阅[模块](/zh-Hans/docs/blocks)了解设置方法。[发布版环境示例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)列出了带名称的工作区和 routine 使用的凭据名称。
 
 ## 配置文件
 
-运行 `swb up` 会在当前目录中初始化新实例。SwB 将所有者密钥写入 `.env`，并将自定义的 `SWB_PORT` 保存在同一文件中。文件权限为 `0600`。
+`swb up` 在实例目录中初始化新实例。SwB 在 `.env` 中保存所有者密钥和自定义的 `SWB_PORT`。文件权限为 `0600`。
 
 如需在启动 SwB 前创建文件，请运行 `swb init`。
 
@@ -69,7 +59,7 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 swb init
 ```
 
-这两条命令生成的 `config/switchboard.yaml` 默认仅含 `version: 2`。用 `--public-url` 可将公开地址保存到此文件。创建新实例时，`swb up` 也会保存 `SWB_PUBLIC_URL` 中的地址。如需通过 YAML 选择模块，请参照下例添加 `blocks`。
+这两条命令默认会把 `version: 2` 写入 `config/switchboard.yaml`。用 `swb init --public-url` 可将地址保存到该文件。首次运行 `swb up` 时，它会保存 `--public-url` 或 `SWB_PUBLIC_URL` 中的地址。添加 `blocks` 可选择加载的模块。把 `CAPTAIN_ID` 换成你的 Capy Captain ID。
 
 ```yaml
 version: 2
@@ -82,14 +72,14 @@ blocks:
 targets:
   aliases: {}
 routes:
-  - {match: {}, to: capy:captain:<Capy Captain id>}
+  - {match: {}, to: capy:captain:CAPTAIN_ID}
 ```
 
-`blocks` 一节优先决定加载哪些模块。省略 `blocks` 时，SwB 根据环境变量选择模块。
+SwB 优先按 `blocks` 选择模块。将 MCP 模块的 `enabled` 设为 `false` 可关闭它。模块仍可从环境变量读取凭据。
 
 ## 覆盖文件
 
-覆盖文件是存放你自己的名称、id 和路径的私有 YAML 文件。把它放在 `config/local.yaml`，或用 `SWB_OVERLAY` 指定它。覆盖文件优先于基础文件，基础文件优先于环境变量。映射会合并。列表会被替换。
+覆盖文件是存放实例专用设置的 YAML 文件。在基础配置文件旁创建 `local.yaml`，或用 `SWB_OVERLAY` 指定路径。覆盖文件优先于基础文件。基础文件优先于环境变量中的默认设置。按名称分组的设置会合并。覆盖文件中的列表会取代原有列表。
 
 键中的 `*` 代表一个名称或列表项。
 
@@ -98,7 +88,7 @@ routes:
 | 配置键 | 用途 |
 | - | - |
 | `version` | YAML 配置格式版本。使用 `blocks` 时设为 `2` |
-| `public_url` | SwB 用于 MCP 和 OAuth 的地址。请参见 `SWB_PUBLIC_URL`。 |
+| `public_url` | MCP 和登录使用的公开地址。OAuth 让应用在你批准后登录 |
 | `data_dir` | 数据目录的路径。可在此设置，也可用 `SWB_DATA_DIR` |
 | `timezone` | 每日计数和限额所用的时区，默认为 `UTC` |
 | `turn_cap` | 会话暂停前的轮数，默认为 `200`。设为 `null` 可关闭上限 |
@@ -109,7 +99,7 @@ routes:
 | `targets.aliases` | 将简称指向目标名称或地址 |
 | `targets.priority` | 目标重名时的选择顺序，例如 `[capy:captain, agent, project]` |
 | `routes` | 初始路由。SwB 保留已设置的路由 |
-| `routes.*.match` | 要匹配的智能体或项目。全局路由使用 `{}` |
+| `routes.*.match` | 匹配智能体、项目，或两者都匹配。全局路由使用 `{}` |
 | `routes.*.to` | 路由匹配时的发送地址 |
 
 ## 登录和密钥
@@ -119,13 +109,13 @@ routes:
 | `auth` | 登录和密钥设置 |
 | `auth.owner_emails` | 可通过 OIDC 或 Cloudflare Access 以所有者身份登录的邮箱地址 |
 | `auth.cloudflare_access` | Cloudflare Access 登录设置。填写下方两项并设置 `auth.owner_emails` |
-| `auth.cloudflare_access.team_domain` | Cloudflare Access 团队域名，也可用 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 设置 |
-| `auth.cloudflare_access.aud` | Access 应用的受众标记，也可用 `CLOUDFLARE_ACCESS_AUD` 设置 |
+| `auth.cloudflare_access.team_domain` | Cloudflare Access 团队域名 |
+| `auth.cloudflare_access.aud` | Access 应用的受众标记 |
 | `auth.redirect_uris` | 允许的 OAuth 回调地址。此列表替换内置列表。用 `/*` 匹配路径及其子路径 |
 | `auth.source_names` | 将 OAuth 主机名或客户端名称的片段映射到登录时所用的智能体名称 |
-| `auth.key_scopes` | 按密钥名称指定范围，例如 `[project:example]`。限制路由、消息和会话。它也限制配置密钥的记忆访问，并在配对时提供额外的记忆授权。SwB 按配对密钥保存这些授权 |
+| `auth.key_scopes` | 按密钥或智能体名称设置访问范围，例如 `[project:example]`。这些范围限制路由、消息和会话。通过配置密钥或 OAuth 客户端访问记忆时也受这些范围限制。在配对时，SwB 会将指定的记忆范围加入授权 |
 | `auth.key_tools` | 按密钥名称设置可调用的 MCP 工具，例如 `[send]` |
-| `auth.key_targets` | 按密钥名称设置可接收消息的目标，例如 `[agent:claude]` |
+| `auth.key_targets` | 按密钥名称设置允许发送的目标，例如 `[agent:claude]`。使用受此限制的密钥时，须指定一个允许的目标 |
 | `auth.inbox_keys` | 为每把密钥指定唯一可读取的智能体收件箱。内置项为 `channel: claude-code` |
 
 ## 访问权限
@@ -140,7 +130,7 @@ routes:
 | `visibility.defaults.target` | 发送目标的默认规则 |
 | `visibility.resources` | 设置单项资源的规则，例如 `channel:home/#agents`。单项规则优先于该类型的默认规则 |
 
-在 Slack 中，`channel:home/#agents` 是一条频道规则。在 GitHub 中，为 `channel:github/acme/app` 和 `target:beta` 授权后，外部用户就能访问 `agent:beta`。详情见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-用户访问)。
+在 Slack 中，`channel:home/#agents` 是一条频道规则。在 GitHub 中，同时共享 `channel:github/acme/app` 和 `target:beta`，外部发送者才可联系 `agent:beta`。详情见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-用户访问)。
 
 用 `private` 将访问权限限定为所有者及其智能体。用 `shared` 开放访问。填写用户 ID 或 `workspace:home` 这样的条目，即可指定共享对象。通过 `visibility_set` 所作的更改优先于此文件。
 
@@ -151,7 +141,7 @@ routes:
 | `blocks.github.owner_ids` | 默认认定为所有者的 GitHub 数字用户 ID 列表 |
 | `blocks.github.spaces.*.owner_ids` | 覆盖此空间默认列表的 GitHub 数字用户 ID 列表 |
 
-GitHub 的信任等级为 `owner` 和 `external`。在 Slack、Discord 和 Telegram 中，`known` 是接收设置。SwB 用它判断接收哪些发送者的消息。所有者之外的发送者即使通过 `known` 获准，消息的信任等级仍为 `external`。工作模式的配置方法见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
+GitHub 的信任等级为 `owner` 和 `external`。Slack、Discord 和 Telegram 用 `known` 帮助 SwB 判断接收哪些发送者的消息。其他发送者的消息仍标为 `external`。工作模式的配置方法见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
 
 ## MCP
 
@@ -202,4 +192,4 @@ branding:
 
 ## 完整参考
 
-[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) 提供带注释的 YAML 示例。
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/release/1.0/config/switchboard.example.yaml) 提供带注释的 YAML 示例。

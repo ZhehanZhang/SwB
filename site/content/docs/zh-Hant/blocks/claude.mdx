@@ -5,30 +5,28 @@ description: 連接 Claude 與 Claude Project，並用 routine 喚醒它們。
 
 ## 新增連接器
 
-在 Claude 中開啟 Settings → Connectors → Add custom connector。輸入你的 MCP 位址。在你的 Project 或聊天中開啟這個連接器。Claude 以 OAuth 登入，代理名稱是 `claude`。
+依 [Claude 設定](/zh-Hant/docs/setup/claude)新增自訂連接器，並填入 SwB 的 MCP 位址。在 Claude Project 或聊天中啟用連接器。Claude 透過 OAuth 以 `claude` 身分登入。
 
 ## 連接 Claude Project
 
-請向這個 Project 的主聊天詢問。
+把 [Claude Project 設定提示詞](/zh-Hant/docs/setup/claude-project)貼到該 Project 的聊天中。
 
-> 我要怎麼連接我的 Claude Project？
-
-代理會找到或建立對應的 SwB 專案。它會建立一個帶有 API 觸發器的 Claude Code routine，或請你建立一個。接著它呼叫 `routine_register`。SwB 回傳一次性連結。請開啟連結，貼上 routine 的權杖並按下 Save。連結只能使用一次，有效時間是 30 分鐘。最後，代理向自己的 routine 傳送測試訊息，並回報往返結果。
+代理會找出對應的 SwB 專案，並設定帶有 API 觸發器的 routine。代理呼叫 `connect` 取得領取連結。連結可使用一次，30 分鐘後失效。開啟連結。把 routine 的權杖貼到表單。儲存權杖。代理會傳送測試訊息並檢查回覆。
 
 ## Routine
 
-**routine**是 SwB 能喚醒的 Claude Code 任務。向 `claude` 傳送並指定專案，會喚醒該專案的主 routine。SwB 也會把訊息留在 Claude 的信箱。routine 用 `reply` 回答，答案回到傳送者。
+**routine**是 SwB 可以啟動的 Claude Code 任務。SwB 也會把訊息留在 Claude 的信箱。routine 用 `reply` 回覆傳送者。
 
-| 傳送給 | 喚醒 |
+| 傳送給 | 去向 |
 | - | - |
 | `claude` 加上 `project=<slug>` | 該專案的主 routine |
 | `claude:<slug>` | 該專案的主 routine |
 | `<routine name>` | 該 routine |
 | `agent:claude` | 只有信箱 |
 
-一個專案可以有多個 routine。第一個 routine 是主 routine。註冊 routine 時加上 `primary=true`，即可讓它成為主 routine。
+一個專案可以有多個 routine。SwB 預設選擇該代理在此專案中的第一個 routine。註冊時設為 `primary=true`，即可優先使用該 routine。
 
-有些 Project routine 只接受空本文的喚醒。這時 SwB 以空本文喚醒 routine，並保留訊息。routine 用 `routine_pickup` 取回訊息。
+若 Claude 回報專案已暫停，SwB 會用空白請求重試。routine 用 `routine_pickup` 讀取訊息。
 
 ## 設定
 
@@ -36,10 +34,10 @@ description: 連接 Claude 與 Claude Project，並用 routine 喚醒它們。
 blocks:
   claude-routine:
     routines:
-      claude: {routine_id: trig_..., token_env: CLAUDE_ROUTINE_TOKEN, agent: claude}
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
 ```
 
-環境變數 `CLAUDE_ROUTINE_TOKEN` 與 `CLAUDE_ROUTINE_ID` 可用一個 routine 啟用這個模組。
+手動設定時，用 `token_env` 指定存放 routine 權杖的變數。範例使用 `SWB_EXAMPLE_CLAUDE_TOKEN`。
 
 | 設定鍵 | 用途 |
 | - | - |

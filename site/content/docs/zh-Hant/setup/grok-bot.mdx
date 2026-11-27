@@ -3,116 +3,61 @@ title: Grok Bot
 description: 透過自訂連接器與由 SwB 喚醒的 routine，將 Grok Bot 連線到 SwB。
 ---
 
-Grok Bot 是 xAI 的桌面代理應用程式。這項連線會把 SwB 加入 Grok Bot，並建立一個由 SwB 透過 Webhook 啟動的 routine。routine 是一項已儲存的工作。Webhook 是一個網址，SwB 呼叫它就能啟動 routine。
+Grok Bot 是 xAI 的桌面代理應用程式。routine 是儲存好的工作。這項連線使用 Webhook。Webhook 是 SwB 用來啟動 routine 的網址。
 
 ## 開始之前
 
-在 macOS、Windows 或 Linux 上安裝 Grok Bot。你需要包含 Grok Bot 的方案，例如 X 訂閱或 Grok Business 席位。
+在支援的電腦上安裝 [Grok Bot](https://x.ai/bot)。使用包含 Grok Bot 的方案登入。
 
-你的 SwB 伺服器需要公開的 HTTPS 位址、擁有者登入、一個 SwB 專案與 `grok-routine` 模組。OAuth 是一種登入方式，你會在瀏覽器的 SwB 頁面上核准存取。請用你自己的擁有者登入完成設定。
+為 SwB 設定公開的 HTTPS 位址和擁有者登入。啟用 `grok-routine` 模組。選擇一個 SwB 專案。使用 OAuth 時，你會在瀏覽器核准存取。
 
 ## 複製設定提示詞
 
-提示詞保留英文，供代理使用。
-
 <SetupPrompt name="grok-bot" lang="zh-Hant" />
 
-請把這段提示詞貼到 Grok Bot 的 Bot 對話。Grok Bot 會引導你完成其餘步驟。
+加入 SwB 後，把提示詞貼到 Bot 對話。
 
-## 你的步驟
-
-<Steps>
-
-<Step>
-
-### 安裝 Grok Bot
-
-從 [x.ai/bot](https://x.ai/bot) 下載 Grok Bot。開啟應用程式。選擇 **Sign in**。在瀏覽器完成登入。
-
-</Step>
-
-<Step>
+## 連線到 Grok Bot
 
 ### 建立 Bot
 
 使用新手引導建立的 Bot，或在側邊欄用 **+** 選擇 **New Bot**。輸入名稱。選擇 **Create**。
 
-</Step>
-
-<Step>
-
 ### 開啟 Connect apps
 
 在側邊欄開啟 **Connect apps**。選擇 **Add a custom connector**。
-
-</Step>
-
-<Step>
 
 ### 輸入位址
 
 在 **Name** 填入 `SwB`。在 **Type** 下方選擇 **Remote HTTPS**。在 **Server URL** 填入 `https://swb.example.com/mcp`。選擇 **Add plugin**。
 
-</Step>
-
-<Step>
-
 ### 登入
 
-以擁有者身分登入 SwB。接著核准存取。**Client ID** 與 **Client secret** 保持空白。
-
-</Step>
-{/* unverified */}
-
-<Step>
-
-### 貼上提示詞
-
-把設定提示詞貼到 Bot 對話。Grok Bot 會建立一個具備 Webhook 觸發條件的 routine。
-
-</Step>
-
-<Step>
+請將 OAuth 用戶端選填欄位留空。若 Grok Bot 開啟 SwB 登入頁面，請以擁有者身分登入。接著核准存取。
 
 ### 開啟 routine
 
-點選對話頂端的 Bot 名稱。選擇 **Details**。再選擇該 routine。檢查 **Instruction**、**When to run** 與 **Webhook**。
-
-</Step>
-
-<Step>
+在 Bot 對話的 **Details** 開啟 routine。檢查 **Webhook** 觸發條件。
 
 ### 儲存 Webhook URL
 
-開啟 Grok Bot 給你的 **Webhook URL** 領取連結。複製 **Webhook** 下方的 **POST to**。把它貼到 **Webhook URL**。選擇 **Save webhook url**。
-
-</Step>
-
-<Step>
+開啟 Webhook 位址的領取連結。從 routine 複製 **POST to**。把位址貼到 **Webhook URL**。選取 **Save webhook url**。
 
 ### 儲存金鑰
 
-開啟 **Token** 領取連結。複製 **Webhook** 下方的 **key**，**header** 維持原樣。把它貼到 **Token**。選擇 **Save token**。
-
-</Step>
-
-<Step>
+開啟 Webhook 金鑰的領取連結。從 routine 複製 **key**。把金鑰貼到 **Token**。選取 **Save token**。
 
 ### 告訴 Grok Bot
 
 在 Bot 對話中說已完成。Grok Bot 接著會測試該 routine。
 
-</Step>
-
-</Steps>
-
 ## 代理的工作
 
-Grok Bot 會呼叫 `connect(what="grok-bot")`。SwB 會回傳 MCP 位址、OAuth 狀態與一段 routine 提示詞。這段提示詞要求每次執行以 Webhook 中的 `trust` 欄位為準，並用 `reply` 回覆。
+請具備擁有者權限的代理呼叫 `connect(what="grok-bot")`。SwB 會傳回 MCP 位址、OAuth 狀態和 routine 提示詞。提示詞會用 Webhook 的 `trust` 欄位判斷哪些請求可以執行。routine 用 `reply` 回覆。
 
-Grok Bot 會用這段提示詞建立 routine。接著它呼叫 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 註冊 routine。SwB 會回傳兩個領取連結。你儲存兩項內容後，Grok Bot 會執行 `send(to="grok-routine:routine:<routine>", task="SwB setup test. Reply pong.")`。它會再次呼叫 `connect`，查看 Grok 是否接受這次呼叫。
+請 Grok Bot 用提示詞建立 routine。在擁有者用戶端呼叫 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 登記。SwB 會為位址和金鑰各建立一個領取連結。儲存兩項後，請執行 `connect` 傳回的 `send` 呼叫。
 
-Webhook 是這項連線的喚醒方式。每則傳給該 routine 的 SwB 訊息都會啟動一次新的執行。
+傳送訊息時，SwB 會呼叫 webhook 來啟動 routine。
 
 ## 憑證
 
@@ -126,14 +71,14 @@ Webhook 是這項連線的喚醒方式。每則傳給該 routine 的 SwB 訊息�
 
 ## 檢查連線
 
-開啟 routine 的 **Details**，檢查 **Webhook** 觸發條件。請 Grok Bot 再次呼叫 `connect(what="grok-bot")`。狀態列會顯示該 routine。測試傳送方會在 `inbox` 收到 pong。
+開啟 routine 的 **Details**。檢查 **Webhook** 觸發條件。在擁有者用戶端再次呼叫 `connect(what="grok-bot")`。狀態列會顯示該 routine。在傳送測試的用戶端呼叫 `inbox` 查看回覆。
 
 ## 排除問題
 
-複製 **key**，**header** 維持原樣。SwB 會自行加上 `Authorization: Bearer` 部分。
+若 OAuth 登入失敗，請用另一個具備擁有者權限的 SwB 用戶端登記 routine。若連接器接受 bearer 金鑰，請使用[配對金鑰](/zh-Hant/docs/setup/mcp-client#配對用戶端)。
 
-傳送到 `grok-routine:routine:<routine>` 才會啟動 routine。傳送到 `agent:grok` 只會把訊息放進信箱。
+複製 **key** 的值。使用預設標頭時，SwB 會加上 `Authorization: Bearer`。
+
+用 `grok-routine:routine:<routine>` 啟動 routine。用 `agent:grok` 傳送到 Grok 信箱。
 
 領取連結只能使用一次，30 分鐘後失效。若要取得新連結，請再次呼叫 `connect`。若要更換已儲存的內容，請呼叫 `connect`，並把 `choose.replace` 設為 `url` 或 `secret`。
-
-[grok.com](https://grok.com) **Automations** 的 Webhook 使用另一種簽章格式。請為 SwB 使用 Grok Bot routine。

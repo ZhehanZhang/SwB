@@ -3,110 +3,67 @@ title: ChatGPT
 description: 將 ChatGPT 連線到 SwB，讓 ChatGPT 讀取並回覆 SwB 訊息。
 ---
 
-這項連線會把 SwB 以自訂 MCP 伺服器的形式加入 ChatGPT。MCP 伺服器是供 AI 應用程式呼叫的工具伺服器。完成後，ChatGPT 會以代理 `chatgpt` 的身分登入 SwB。
+在 ChatGPT 將 SwB 新增為自訂 MCP 伺服器。MCP 伺服器可供應用程式呼叫外部工具。ChatGPT 會以 `chatgpt` 身分登入 SwB。
 
 ## 開始之前
 
-ChatGPT Business、Enterprise 與 Edu 提供完整的自訂 MCP 存取權，包含寫入工具。Pro 只提供讀取權。Plus 的存取權請在你自己的帳號中確認。
+Business、Enterprise 和 Edu 支援 MCP 寫入工具。Pro 支援讀取工具。請確認工作區的[自訂 MCP 權限](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)。
 
 在 Business 中，由管理員或擁有者建立並發布外掛程式。在 Enterprise 與 Edu 中，管理員可以把 **Create plugins with MCPs** 權限授予成員。
 
-你的 SwB 伺服器需要公開的 HTTPS 位址與擁有者登入。OAuth 是一種登入方式，你會在瀏覽器的 SwB 頁面上核准存取。
+為 SwB 設定公開的 HTTPS 位址和擁有者登入。使用 OAuth 時，你會在瀏覽器的 SwB 頁面核准存取。
 
 ## 複製設定提示詞
 
-提示詞保留英文，供代理使用。
-
 <SetupPrompt name="chatgpt" lang="zh-Hant" />
 
-請把這段提示詞貼到新的 ChatGPT 對話。ChatGPT 會引導你完成其餘步驟。
+加入 SwB 後，再把提示詞貼到 ChatGPT 對話。
 
-## 你的步驟
-
-<Steps>
-
-<Step>
+## 在 ChatGPT 新增 SwB
 
 ### 開啟 Plugins
 
-在電腦瀏覽器開啟 [chatgpt.com/plugins](https://chatgpt.com/plugins)。這個步驟請使用網頁版。
-
-</Step>
-
-<Step>
+在電腦瀏覽器開啟 [chatgpt.com/plugins](https://chatgpt.com/plugins)。
 
 ### 新增伺服器
 
 選擇 **+**。接著選擇 **Add custom MCP server**。
 
-</Step>
-
-<Step>
-
 ### 輸入位址
 
-名稱填入 `SwB`。在 **Connection** 下方的 **Server URL** 填入 `https://swb.example.com/mcp`。
-
-</Step>
-
-<Step>
+名稱填入 `SwB`。在 **Server URL** 填入你的 SwB MCP 位址，例如 `https://swb.example.com/mcp`。
 
 ### 建立外掛程式
 
 選擇 **OAuth**。選擇 **I understand and want to continue**。接著選擇 **Create as a plugin**。
 
-</Step>
-
-<Step>
-
 ### 安裝並登入
 
 安裝外掛程式。以擁有者身分登入 SwB。接著核准存取。
 
-</Step>
-{/* unverified */}
+### 在工作區發布
 
-<Step>
-
-### 發布到工作區
-
-只有使用舊版發布方式的工作區才需要這個步驟。管理員依序開啟 **Admin Console** → 工作區 → **Plugins** → **Manage Legacy Apps** → **Drafts** → **Publish**。
-
-</Step>
-
-<Step>
-
-### 貼上提示詞
-
-開啟新對話。用 **@** 選擇 SwB 外掛程式。接著貼上設定提示詞。
-
-</Step>
-
-</Steps>
+若要在工作區共用，請管理員[發布外掛程式](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)。
 
 ## 代理的工作
 
 ChatGPT 會呼叫 `connect(what="chatgpt")`。SwB 會回傳 MCP 位址與 OAuth 狀態。你登入後，`connect` 會回報用戶端已登入。
 
-ChatGPT 會用 `send` 傳送一則測試訊息，再用 `inbox` 讀取。最後，ChatGPT 會為 `chatgpt` 信箱訂閱 MCP 事件 `switchboard.message.created`。信箱是單一代理在 SwB 中的收件匣。MCP 事件是新訊息送達時，SwB 對 ChatGPT 發出的呼叫。ChatGPT 會用 `get_message` 讀取每則訊息，再用 `reply` 回覆。如果 ChatGPT 缺少 MCP 事件功能，它會改用 `wait` 或 `inbox`。
+ChatGPT 用 `send` 傳送測試訊息，再用 `inbox` 讀取。信箱收取傳給單一代理的訊息。如果用戶端支援 MCP 事件，就可以為 `chatgpt` 信箱訂閱 `switchboard.message.created`。新訊息送達時，事件會通知用戶端。ChatGPT 用 `get_message` 讀取訊息，再用 `reply` 回覆。你也可以在開啟的對話中用 `wait` 或 `inbox` 收取訊息。
 
 ## 憑證
 
 | 權杖 | 顯示位置 | 格式 | 存放位置 |
 | - | - | - | - |
 | SwB 登入權杖 | 你登入時由 ChatGPT 取得 | 隨機文字 | 由 ChatGPT 保存 |
-| 事件簽章金鑰 | ChatGPT 訂閱時傳送 | `whsec_` 加隨機文字 | 由 SwB 加密保存 |
-
-其他權杖一律透過 SwB 領取連結交給 SwB。領取連結是 SwB 上的一次性私人頁面，一個頁面對應一個權杖。
+| 事件簽章金鑰 | 用戶端訂閱時傳送 | `whsec_` 加 Base64 文字 | SwB 加密保存 |
 
 ## 檢查連線
 
-開啟新對話。用 **@** 選擇 SwB 外掛程式。請 ChatGPT 呼叫 `connect(what="chatgpt")`。回覆會顯示用戶端已登入。接著請另一個 SwB 代理執行 `send(to="agent:chatgpt", task="SwB setup test: reply pong")`。ChatGPT 會在該對話回覆 pong。
+在啟用了 SwB 的對話中，請 ChatGPT 呼叫 `connect(what="chatgpt")`。再請另一個代理執行 `send(to="agent:chatgpt", task="SwB setup test: reply pong")`。請 ChatGPT 用 `inbox` 讀取並回覆訊息。若要測試喚醒，請在對話關閉時傳送訊息，再查看回覆。
 
 ## 排除問題
 
-請在瀏覽器中透過 [chatgpt.com](https://chatgpt.com) 新增伺服器。桌面應用程式與外掛程式編輯器只能開啟你已新增的外掛程式。
+請在電腦瀏覽器開啟 [Plugins 頁面](https://chatgpt.com/plugins)來新增 SwB。
 
-舊版指南寫的是 **Settings** → **Apps and Connectors** → **Developer mode**。請改用 **Plugins** 頁面。
-
-`inbox` 讀取成功只代表登入有效。若要確認喚醒有效，請另一個代理傳送測試訊息。如果 ChatGPT 幾天後停止回覆，請重新登入外掛程式。
+如果外掛程式要求重新登入，請在 SwB 核准連線。

@@ -5,19 +5,19 @@ description: Add SwB to your agents and set up their connections.
 
 ## Add SwB to an agent
 
-For an MCP client on the SwB computer, choose [owner access or pairing](/docs/setup/mcp-client). For a hosted app, add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. Approve the app's OAuth sign-in on the SwB page.
+For an app on the SwB computer, choose [owner access or pairing](/docs/setup/mcp-client). For an app that runs on a server, add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. Approve the app's [OAuth sign-in](/docs/owner-login#agent-sign-in) on the SwB page.
 
 | App | Where to add SwB |
 | - | - |
 | [Local MCP client](/docs/setup/mcp-client) | Use an owner key or pair with a code. Use `http://localhost:8870/mcp` on the SwB computer. |
 | Claude and Claude Projects | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
-| Grok | grok.com → Connectors → New Connector → Custom |
-| Capy | Add an MCP server with the Automatic OAuth client |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
+| Capy | Settings → MCP & plugins → Add a custom MCP server |
 | Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
 | Codex, Gemini CLI and other coding agents | `swb connect coding-agent --choose agent=codex` |
 
-For a coding agent, change `codex` to the name of your client. Run `swb connect coding-agent` alone to see the list. The list has Claude Code, Codex, Gemini CLI, Qwen Code, Goose, OpenCode, Cline and Kiro.
+For a coding agent, run `swb connect coding-agent` to list the supported names. Replace `codex` with the name from that list.
 
 ## Ask your agent
 
@@ -31,13 +31,13 @@ Owner access needs an owner-approved OAuth sign-in or a key from `SWB_KEY_<NAME>
 | Connect Slack to SwB. | It points you to the YAML manifest in [Slack setup](/docs/setup/slack#app-manifests) and gets a claim link when needed |
 | Connect my Discord bot. | It gives you a token link and the bot invite link |
 | Send this to my Capy Captain. | It sends the task and waits for the answer |
-| What can you send to? | It lists every target SwB can reach |
+| What can you send to? | It lists the targets the agent can reach |
 
 The agent calls the `connect` tool. SwB answers with the next step for that platform. When a step needs a token, SwB gives a one-time claim link. Open the link and paste the token there. [Credentials](/docs/credentials) explains claim links.
 
 ## Connect from the terminal
 
-Run `swb connect` in the SwB instance folder. It uses the owner key from `.env` and connects to the local SwB address by default. Use `--dir` to select an instance folder. Use `--url` to set the SwB address. Run `swb login-link` for a one-time owner sign-in link.
+Run `swb connect PLATFORM` in the SwB instance folder. Replace `PLATFORM` with the platform name, such as `slack`. The command uses the owner key from `.env`. It uses the local SwB address by default. Use `--dir` to select an instance folder. Use `--url` to set the SwB address. Run `swb login-link` for a one-time owner sign-in link.
 
 ```bash
 swb connect mcp-client
@@ -47,9 +47,9 @@ swb connect grok
 
 ## Connect with a pairing code
 
-To pair a new agent, ask an agent signed in as the owner to call `connect_code`. Give it the name of the new agent. The code works one time for ten minutes. The new agent uses `POST /connect` to exchange the code for its own key. See [MCP client](/docs/setup/mcp-client) for the full pairing procedure.
+Pairing gives a new agent its own key. Ask an agent signed in as the owner to call `connect_code`. Give it the name of the new agent. The code works one time for ten minutes. The new agent uses `POST /connect` to exchange the code for its own key. See [MCP client](/docs/setup/mcp-client) for the full pairing procedure.
 
-You can also create a pairing code in Tokens. SwB sends the form to `POST /pairing/code`.
+To make a code in the console, open **Tokens**. Open **Pairing code**. Enter the agent name. Select **Create code**. SwB sends the form to `POST /pairing/code`.
 
 Pairing grants memory access to `agent:<name>` and to any scopes set for the agent in `auth.key_scopes`. A pairing code that names a project also grants that project's memory scope.
 
@@ -61,7 +61,7 @@ With a paired key, `tools/list` shows the tools for the paired agent role. The `
 
 ## Inbox event stream
 
-`POST /connect` returns `inbox_events_url`, the URL for `GET /inbox/events`. Open that URL with `Authorization: Bearer <key>` using the paired agent's key. SwB sends that agent's inbox updates within the scopes of the key. These server-sent events (SSE) arrive over an open connection.
+`POST /connect` returns `inbox_events_url`, the URL for `GET /inbox/events`. Open that URL with `Authorization: Bearer <key>` using the paired agent's key. SwB sends that agent's inbox messages within the key's access. These server-sent events (SSE) arrive while the connection stays open. Read Watch digests and context items with `inbox` instead.
 
 The stream starts with a `ready` event. Each `item` event has JSON data with a `cursor`, a conversation `handle` and the message data. The event ID is the cursor, which marks a position in the stream.
 
@@ -69,7 +69,7 @@ The stream starts at the latest position by default. To resume, send the last ev
 
 ## Setup prompts
 
-SwB serves each setup prompt to agents as an MCP prompt and as an MCP resource. The `connect` tool returns both for each platform in its `guide` field.
+Agents can read setup text as an MCP prompt or resource. A prompt is text to give the agent. A resource is text the agent can read at an address. The `connect` tool gives both names in `guide` when a platform has a setup prompt.
 
 | Prompt | Resource | Guide |
 | - | - | - |

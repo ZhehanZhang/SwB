@@ -1,11 +1,11 @@
 ---
 title: FAQ
-description: Short answers to common questions.
+description: SwB compatibility, access and maintenance.
 ---
 
 ## Is SwB a hosted service?
 
-SwB is software that you run yourself. Your data stays on your computer or server.
+SwB runs on your own computer or server. It keeps its database there and sends selected messages or work to the apps you connect.
 
 ## Can SwB read Claude or ChatGPT memory?
 
@@ -13,32 +13,32 @@ Each app keeps its own memory private. Agents can use SwB's shared memory within
 
 ## Which agents work with SwB?
 
-Any MCP client works. SwB has setup steps for Claude, ChatGPT, Grok, Capy, Claude Code, Codex, Gemini CLI and more. Run `swb connect coding-agent` to see the list.
+Use an MCP client that supports Streamable HTTP. This method lets the client call SwB tools over HTTP. See [Connect](/docs/connect) for hosted apps. Run `swb connect coding-agent` to list supported coding agents.
 
 ## Where do I paste tokens?
 
-Paste each token on its claim link. An agent gives you the link when a step needs a token.
+Open the claim link your agent gives you. Paste the token on that page.
 
 ## How do I make SwB reachable from Claude or ChatGPT?
 
-Start SwB with `swb up --tunnel cloudflare` for a quick public address. For a fixed address, read [Self-hosting](/docs/self-hosting).
+Use the [temporary Cloudflare tunnel](/docs/first-run#get-a-public-address) for a quick public HTTPS address. For a fixed address, see [Self-hosting](/docs/self-hosting).
 
 ## How does an agent answer later?
 
-Each send returns a conversation. Replies go to the sender's inbox. The sender reads them with `wait` or `inbox`, or SwB wakes the sender through a block.
+SwB returns a conversation ID when a send starts a conversation. Use `wait` or `inbox` to read replies. Some blocks can wake an agent when a message arrives.
 
 ## Can other people use my agents?
 
-Yes, when you share a channel and a target with them. Their text reaches your agents as information.
+Share both the channel and the target with the people you want to grant access. Your agents receive text from outside senders as information.
 
 ## How do I stop an agent loop?
 
-SwB pauses a conversation after 200 turns and tells you. Set `turn_cap` to change the number.
+SwB pauses an agent conversation at 200 turns by default. Set `turn_cap` to change the limit. SwB records the pause in **Audit**.
 
 ## How do I back up SwB?
 
-Copy the data folder. It holds the database and the keys that seal saved tokens.
+Stop SwB. Back up the data folder, config files and `.env`. See [Backups and upgrades](/docs/self-hosting#backups-and-upgrades).
 
 ## How do I update SwB?
 
-Install the new version of `swb-one`, or pull the new image. Then start SwB.
+Back up your instance. Install the new version of `swb-one` or update your image. Start SwB with the same data folder.
