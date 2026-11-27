@@ -428,6 +428,56 @@ async def test_runtime_mode_target_and_visibility_for_outside_github_senders(git
         assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["mode"] == mode
 
 
+@pytest.mark.parametrize("target", [None, "agent:beta"])
+async def test_watch_digest_reaches_owner_mcp_and_stays_passive(github, target, monkeypatch):
+    repo = "acme/app"
+    config = {"spaces": {repo: {"mode": "watch", "project": "demo", **({"target": target} if target else {})}}}
+    settings = {"blocks": {"mcp": {}, "github": config}, "modes": {"digest_minutes": 1}}
+    owner_key = "example-coordinator-key-for-tests"
+    clock = Clock()
+    async with github(config, env={"GITHUB_WEBHOOK_SECRET": SECRET, "SWITCHBOARD_KEY_COORDINATOR": owner_key},
+                      settings=settings, clock=clock) as (core, client):
+        core.projects.create(slug="demo", name="Demo")
+        beta_pair = core.connections.mint(agent="beta", project="demo", client=None, by="owner")
+        beta = core.connections.redeem(beta_pair["code"])["key"]
+        other_pair = core.connections.mint(agent="other", project="demo", client=None, by="owner")
+        other = core.connections.redeem(other_pair["code"])["key"]
+        notifications = []
+        core.inbox.listeners.append(lambda _owner, _cursor, _handle, kind, _data, _at: notifications.append(kind))
+        for delivery in ("first", "second"):
+            assert (await send(client, sender={"id": 11, "login": "reporter"}, delivery=delivery)).status_code == 200
+        [row] = payload(await acall(client, owner_key, "modes_status"))["spaces"]
+        assert row["digest"]["pending"] == 2
+        assert payload(await acall(client, owner_key, "inbox", {"since_cursor": 0}))["items"] == []
+
+        reading = asyncio.Event()
+        read = core.inbox.read
+
+        def notice_read(**kwargs):
+            result = read(**kwargs)
+            if kwargs.get("owner") == "coordinator":
+                reading.set()
+            return result
+
+        monkeypatch.setattr(core.inbox, "read", notice_read)
+        waiting = asyncio.create_task(acall(client, owner_key, "wait", {"timeout_s": 5}))
+        await asyncio.wait_for(reading.wait(), timeout=2)
+        clock.t = row["digest"]["next_at"]
+        assert core.modes.flush() == 1 and core.modes.flush() == 0
+        [digest] = payload(await asyncio.wait_for(waiting, timeout=2))["items"]
+        assert (digest["kind"], digest["owner"], digest["space"], digest["count"], digest["trust"]) == (
+            "watch_digest", "beta" if target else "owner", repo, 2, "external",
+        )
+        assert [entry["excerpt"] for entry in digest["items"]] == ["Issue body", "Issue body"]
+        assert payload(await acall(client, owner_key, "inbox", {"since_cursor": 0, "project": "demo"}))["items"] == [digest]
+        assert payload(await acall(client, beta, "inbox", {"since_cursor": 0}))["items"] == ([digest] if target else [])
+        assert payload(await acall(client, other, "inbox", {"since_cursor": 0}))["items"] == []
+        assert "message not found" in error_text(await acall(client, other, "get_message", {"message_id": digest["message_id"]}))
+        [row] = payload(await acall(client, owner_key, "modes_status"))["spaces"]
+        assert row["digest"]["pending"] == 0
+        assert notifications == []
+
+
 @pytest.mark.parametrize("agent", [None, "github"])
 async def test_assist_delivers_through_locked_capy_route(github, capy, agent):
     config = {"spaces": {"team": {"repo": "acme/app", "mode": "assist", "project": "example"}}}

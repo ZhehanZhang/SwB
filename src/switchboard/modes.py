@@ -521,15 +521,19 @@ class ChannelModes:
                 summary = {"block": b, "space": s, "channel": next(iter(channels)) if len(channels) == 1 else "",
                            "count": len(rows), "items": [{k: r[k] for k in ("author", "excerpt", "link", "at")} for r in rows]}
                 handle = Inbox.new_handle()
-                db.execute("INSERT INTO handles(handle, owner, destination, ref, project, meta, created_at, open, status) "
-                           "VALUES (?, ?, 'mailbox', ?, ?, '{}', ?, 0, 'delivered')", (handle, target, b, project, now))
+                db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status) "
+                           "VALUES (?, ?, 'mailbox', '', ?, ?, '{}', ?, 0, 'delivered')",
+                           (handle, target, project, f"Watch digest for {s}", now))
                 db.execute("INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?, ?, 'mailbox', 'watch_digest', ?, ?)",
                            (target, handle, dumps(summary), now))
                 db.execute("UPDATE watch_events SET delivered_at=? WHERE block=? AND space=? AND dm=? AND target=? AND delivered_at IS NULL",
                            (now, b, s, dm, target))
             return len(groups)
 
-        return self.core.store.tx(write)
+        count = self.core.store.tx(write)
+        if count:
+            self.core.inbox.signal_waiters()
+        return count
 
     async def run(self) -> None:
         while True:

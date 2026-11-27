@@ -105,7 +105,7 @@ class Kit:
         h = self.core.inbox.handle(handle) if handle else None
         owner, reader = self.inbox_reader(p, h)
         got = await self.core.inbox.wait(owner=owner, reader=reader, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s),
-                                         project=project, destination=block, scopes=p.scopes)
+                                         project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         if handle:
             h = self.core.inbox.handle(handle)
             h = h if h and (p.is_unrestricted_owner or self.core.inbox.participant(h, p.source)) else None
@@ -118,7 +118,7 @@ class Kit:
         handle = handle.strip() if handle else None
         owner, reader = self.inbox_reader(p, self.core.inbox.handle(handle) if handle else None)
         out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit,
-                                   project=project, destination=block, scopes=p.scopes)
+                                   project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         senders = [block] if block else [n for n, b in self.core.blocks.items() if b.verb("send") is not None]
         open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True,
                                                                       project=project, scopes=p.scopes, limit=20)]
@@ -199,7 +199,7 @@ class Kit:
                        block: str | None = None) -> dict[str, Any]:
             return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block)
 
-        @mcp.tool(title="Your inbox", description="Your switchboard mailbox: replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. A reply to a message you sent carries in_reply_to with that conversation. Each item's from and trust say who sent it, from switchboard's own data. Answer a message with reply(conversation=<its handle>, text). No arguments needed; conversation, project and block only narrow it. Never blocks.", annotations=READ)
+        @mcp.tool(title="Your inbox", description="Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
         async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
                         project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
             return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)

@@ -2905,7 +2905,7 @@
       "name": "github_status"
     },
     {
-      "description": "Your switchboard mailbox: replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. A reply to a message you sent carries in_reply_to with that conversation. Each item's from and trust say who sent it, from switchboard's own data. Answer a message with reply(conversation=<its handle>, text). No arguments needed; conversation, project and block only narrow it. Never blocks.",
+      "description": "Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
       "icon": null,
       "id": "tool:inbox",
       "input_properties": [
