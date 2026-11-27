@@ -1,1 +1,1 @@
-"""Slack workspaces for switchboard (ported from slackgate): intake, reads and writes, personas, the write gate."""
+"""Slack workspaces for switchboard: intake, reads and writes, personas, the write gate."""

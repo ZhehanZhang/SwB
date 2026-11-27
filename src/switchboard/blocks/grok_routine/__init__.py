@@ -11,6 +11,7 @@ from yarl import URL
 from .. import Action, Address, Block, BlockError, Call, Manifest, TargetKind
 from ...agents import PRESETS
 from ...audit import iso
+from ...block_env import grok_credential_envs
 from ...claims import NAME_RE as SECRET_NAME_RE, valid_webhook_url
 from ...config import SLUG_RE as PROJECT_RE
 from ...projects import ProjectError
@@ -107,9 +108,9 @@ class GrokRoutineBlock(Block):
             raise BlockError("Choose a valid, non-reserved Grok routine credential header")
         if type(primary) is not bool:
             raise BlockError("Grok routine primary must be a boolean")
-        prefix = (self.name + "_" + name).upper().replace("-", "_")
+        url_env, secret_env = grok_credential_envs(self.name, name)
         return {"name": name, "project": project, "auth": auth, "header": header, "primary": primary, "source": source,
-                "url_env": f"{prefix}_URL", "secret_env": f"{prefix}_SECRET"}
+                "url_env": url_env, "secret_env": secret_env}
 
     def routines(self) -> dict[str, dict[str, Any]]:
         out = {name: dict(r) for name, r in self.configured.items()}

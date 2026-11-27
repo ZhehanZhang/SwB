@@ -4,6 +4,7 @@ from subprocess import CompletedProcess, TimeoutExpired
 import pytest
 
 from conftest import OWNER, STATIC_KEY, base_config, default_env
+import switchboard
 from switchboard import api_about
 from switchboard.blocks import Block, Manifest
 
@@ -29,10 +30,10 @@ def test_about_is_owner_only_and_lists_enabled_blocks(make, monkeypatch):
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.json() == {
-        "version": version("switchboard"),
+        "version": version("swb-one"),
         "commit": sha,
         "build_date": date,
-        "blocks": [{"name": "client", "id": "mcp", "version": version("switchboard")}],
+        "blocks": [{"name": "client", "id": "mcp", "version": version("swb-one")}],
     }
 
 
@@ -48,7 +49,7 @@ def test_about_reports_the_installed_plugin_distribution_version(make, monkeypat
     response = client.get("/api/about", headers=OWNER)
     assert response.status_code == 200
     assert response.json() == {
-        "version": version("switchboard"), "commit": "unknown", "build_date": "unknown",
+        "version": version("swb-one"), "commit": "unknown", "build_date": "unknown",
         "blocks": [{"name": "custom", "id": "example", "version": "1.2.3"}],
     }
 
@@ -57,7 +58,7 @@ def test_about_omits_invalid_environment_values_and_handles_missing_package(make
     def missing_package(name):
         raise PackageNotFoundError(name)
 
-    monkeypatch.setattr(api_about, "version", missing_package)
+    monkeypatch.setattr(switchboard, "version", missing_package)
     monkeypatch.setattr(api_about, "_REPO_ROOT", tmp_path / "installed")
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()

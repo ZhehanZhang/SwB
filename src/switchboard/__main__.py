@@ -4,8 +4,25 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
+from socket import socket
 
 import uvicorn
+from uvicorn.main import STARTUP_FAILURE
+
+SERVER_COMMANDS = ("serve", "export", "log", "config", "blocks", "targets")
+
+
+def cli_main(argv: list[str] | None = None) -> None:
+    from .cli import main as client
+
+    args = sys.argv[1:] if argv is None else argv
+    if args and args[0] in SERVER_COMMANDS:
+        main(args)
+    elif not args and Path(sys.argv[0]).stem in ("switchboard", "__main__"):
+        main(["serve"])
+    else:
+        client(args or ["--help"])
 
 
 class _NoQuery(logging.Filter):
@@ -15,7 +32,7 @@ class _NoQuery(logging.Filter):
         if isinstance(record.args, tuple) and len(record.args) >= 3 and isinstance(record.args[2], str):
             args = list(record.args)
             path = args[2].split("?", 1)[0]
-            for prefix in ("/claim/", "/routines/claim/"):
+            for prefix in ("/claim/", "/routines/claim/", "/claims/"):
                 if path.startswith(prefix):
                     path = f"{prefix}[redacted]"
                     break
@@ -24,10 +41,9 @@ class _NoQuery(logging.Filter):
         return True
 
 
-def main(argv: list[str] | None = None) -> None:
-    from .core import Switchboard
-
-    parser = argparse.ArgumentParser(prog="switchboard")
+def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
+         data_dir: Path | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="swb")
     sub = parser.add_subparsers(dest="cmd")
     sub.add_parser("serve", help="run the server (default)")
     exp = sub.add_parser("export", help="write every memory as markdown, one folder per scope")
@@ -42,18 +58,19 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("targets", help="every target send can reach, with slugs and levels")
     args = parser.parse_args(argv)
 
+    from .core import Switchboard
+
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    config = os.environ.get("SWITCHBOARD_CONFIG", "/config/switchboard.yaml")
-    data = os.environ.get("SWITCHBOARD_DATA", "/data")
     if args.cmd == "config":
-        from pathlib import Path
+        from .config import config_path, migrate_text
 
-        from .config import migrate_text
-
-        print(migrate_text(Path(args.file or config).read_text()), end="")
+        path = config_path(args.file, os.environ)
+        if path is None:
+            parser.error("no config file found")
+        print(migrate_text(path.read_text()), end="")
         return
-    core = Switchboard(config, data)
+    core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url)
     if args.cmd == "blocks":
         import yaml
 
@@ -89,8 +106,22 @@ def main(argv: list[str] | None = None) -> None:
     for problem in core.health()["problems"]:
         logging.getLogger("switchboard").warning("degraded: %s", problem)
     logging.getLogger("uvicorn.access").addFilter(_NoQuery())
-    uvicorn.run(create_app(core), host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), proxy_headers=True, forwarded_allow_ips="*", timeout_graceful_shutdown=5)
+    app = create_app(core)
+    options = {
+        "host": os.environ.get("SWITCHBOARD_HOST", "0.0.0.0"),
+        "port": int(os.environ.get("PORT", "8000")),
+        "proxy_headers": True,
+        "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
+        "timeout_graceful_shutdown": 5,
+    }
+    if listener is None:
+        uvicorn.run(app, **options)
+    else:
+        server = uvicorn.Server(uvicorn.Config(app, **options))
+        server.run(sockets=[listener])
+        if not server.started:
+            raise SystemExit(STARTUP_FAILURE)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    cli_main()

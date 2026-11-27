@@ -1,0 +1,50 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - name: Verify the release tag matches the package version
+        run: |
+          uv run --no-project python - <<'PY'
+          import os, tomllib
+          with open("pyproject.toml", "rb") as file:
+              version = tomllib.load(file)["project"]["version"]
+          if os.environ["GITHUB_REF_NAME"] != f"v{version}":
+              raise SystemExit(f"Release tag must match the package version: v{version}")
+          PY
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # Once: create the "pypi" GitHub environment, restrict it to release tags,
+    # and register a PyPI (pending if new) Trusted Publisher for swb-one:
+    # this repo's owner/name, workflow release.yml, environment pypi.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/swb-one/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -28,6 +28,7 @@ import httpx
 
 from .. import Action, Block, BlockError, Call, Manifest, TargetKind
 from ...audit import iso
+from ...block_env import claude_token_env
 from ...config import SLUG_RE
 from ...projects import ProjectError
 
@@ -132,7 +133,7 @@ class ClaudeRoutineBlock(Block):
             if kind not in KINDS or (kind == "project") != bool(project):
                 raise BlockError(f"blocks.{self.name}.routines.{name}: a project routine names its project, a general one none")
             self.configured[name] = {"name": name, "routine_id": rid, "agent": str(raw.get("agent") or "claude").lower(), "project": project,
-                                     "kind": kind, "token_env": str(raw.get("token_env") or f"CLAUDE_ROUTINE_TOKEN_{name.upper().replace('-', '_')}"),
+                                     "kind": kind, "token_env": str(raw.get("token_env") or claude_token_env(name)),
                                      "title": raw.get("name"), "slugs": [str(s).lower() for s in raw.get("slugs") or []], "source": "config",
                                      "primary": bool(raw.get("primary"))}
         self.http = httpx.AsyncClient(transport=config.get("transport"), timeout=30)
@@ -399,7 +400,7 @@ class ClaudeRoutineBlock(Block):
                 "project": slug, "creates_project": new_project is not None, "claude_project": title,
                 "primary": bool(primary) or lead is None or lead["name"] == name,
                 **({"superseded": superseded} if superseded else {}),
-                "next": "Give the owner this link. The owner signs in, pastes the routine's token and clicks Save; the token never goes "
+                "next": "Give the owner this link to open, sign in, paste the routine's token, and click Save. The token never goes "
                         "through chat or MCP. routine_list shows the routine once saved (untested until its first fire)."}
 
     def _claim_row(self, code: str, registration: str | None = None) -> Any:

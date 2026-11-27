@@ -2,7 +2,7 @@ import json
 import re
 from functools import partial
 
-from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, STATIC_KEY, base_config, default_env
+from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, PUBLIC, STATIC_KEY, base_config, default_env
 from test_api_read import get
 
 
