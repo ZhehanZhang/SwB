@@ -6,6 +6,7 @@ type AuditMetadata = {
   state?: string
   to_scope?: string
   memory_id?: string
+  scope?: string
   target_name?: string
   target_label?: string
   target_avatar_url?: string | null
@@ -25,6 +26,7 @@ export type AuditEvent = {
   outcome: string
   target: string | null
   ref: string | null
+  detail?: string | null
   project?: string | null
   metadata?: AuditMetadata
 }
@@ -58,6 +60,7 @@ export function isAuditPage(value: unknown): value is AuditPageData {
       && "outcome" in item && typeof item.outcome === "string"
       && "target" in item && (item.target === null || typeof item.target === "string")
       && "ref" in item && (item.ref === null || typeof item.ref === "string")
+      && (!("detail" in item) || item.detail === null || typeof item.detail === "string")
       && (!("project" in item) || item.project === null || typeof item.project === "string")
       && (!("metadata" in item) || isAuditMetadata(item.metadata)))
 }
@@ -65,7 +68,7 @@ export function isAuditPage(value: unknown): value is AuditPageData {
 function isAuditMetadata(value: unknown): value is AuditMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
   const metadata = value as Record<string, unknown>
-  return ["agent", "state", "to_scope", "memory_id", "target_name", "target_label", "ref_label", "visibility"].every((key) => !(key in metadata) || typeof metadata[key] === "string")
+  return ["agent", "state", "to_scope", "memory_id", "scope", "target_name", "target_label", "ref_label", "visibility"].every((key) => !(key in metadata) || typeof metadata[key] === "string")
     && (metadata.target_avatar_url == null || typeof metadata.target_avatar_url === "string")
     && ["repo_count", "turn_cap"].every((key) => !(key in metadata) || Number.isSafeInteger(metadata[key]))
 }
@@ -151,7 +154,12 @@ function auditSentence({ action, target, ref, destination, outcome, metadata, pr
     return `Routed ${routed} to ${displayReference(metadata.target_name, "Captain")}`
   }
   if (action === "turn_cap") return ["Paused conversation", ref, metadata?.turn_cap ? `at ${metadata.turn_cap} turns` : null].filter(Boolean).join(" ")
-  if (action === "webhook") return [outcome === "dropped" ? "Dropped webhook for" : "Received webhook for", target || destination].join(" ")
+  if (action === "webhook") {
+    const event = outcome === "dropped" ? "Dropped" : outcome === "refused" ? "Refused" : outcome === "error" ? "Failed" : "Received"
+    return `${event} webhook for ${target || destination}`
+  }
+  if (action === "tool_refused") return target ? `Refused ${target}` : "Refused tool request"
+  if (action === "memory_write" && metadata?.scope) return "Wrote memory"
   if (action === "auth_failure" || action === "auth_missing" || action === "oauth_refused" || action === "rate_limited") {
     return [titles[action][0], target ? `for ${target}` : null].filter(Boolean).join(" ")
   }

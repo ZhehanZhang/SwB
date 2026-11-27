@@ -58,6 +58,8 @@ class Audit:
                 where.append(f"{col} = ?")
                 args.append(val)
         if actions:
+            if "send" in actions and "agent_send" not in actions:
+                actions = (*actions, "agent_send")
             where.append(f"action IN ({','.join('?' for _ in actions)})")
             args.extend(actions)
         if cursor is not None:

@@ -98,7 +98,7 @@ def test_move_and_promote_keep_history_and_are_audited(make):
     assert promoted["to"] == "general"
     e = core.memory.read(id=w["id"])
     assert e["scope"] == "general" and [h["action"] for h in e["history"]][:3] == ["move project:orbit -> general", "move project:beacon -> project:orbit", "create"]
-    assert [r["action"] for r in core.audit.recent(destination="memory")] == ["memory_promote", "memory_move"]
+    assert [r["action"] for r in core.audit.recent(destination="memory")] == ["memory_promote", "memory_move", "memory_write"]
 
 
 def test_cross_project_reads_are_explicit_logged_and_respect_private(make):
@@ -110,7 +110,7 @@ def test_cross_project_reads_are_explicit_logged_and_respect_private(make):
         call(c, STATIC_KEY, "memory_write", {"scope": f"project:{slug}", "namespace": "notes", "title": f"{slug} deploy", "body": "deploy notes"})
     plain = payload(call(c, STATIC_KEY, "memory_search", {"query": "deploy", "project": "beacon"}))
     assert {i["scope"] for i in plain["items"]} == {"project:beacon"}
-    assert core.audit.recent(destination="memory") == []
+    assert [r["action"] for r in core.audit.recent(destination="memory")] == ["memory_write"] * 3
     wide = payload(call(c, STATIC_KEY, "memory_search", {"query": "deploy", "project": "beacon", "scopes": ["project:beacon", "project:orbit"]}))
     assert [i["scope"] for i in wide["items"]] == ["project:beacon", "project:orbit"]
     row = core.audit.recent(destination="memory")[0]
