@@ -1,18 +1,28 @@
+import { HomeLayout } from 'fumadocs-ui/layouts/home';
+import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AgentExchange } from '@/components/agent-exchange';
 import { GitHubMark } from '@/components/github-mark';
 import { HeroTitle } from '@/components/hero-title';
 import { CopyInstall } from '@/components/landing-controls';
+import { MarkTile } from '@/components/mark-tile';
 import { SetupPicker } from '@/components/setup-picker';
+import { SiteContainer } from '@/components/site-container';
 import { SwitchboardHero } from '@/components/switchboard-hero';
-import { exchangeCopy } from '@/lib/exchange-copy';
+import { deployProviders } from '@/lib/flags';
 import { isLocale, localize } from '@/lib/i18n';
-import { landingCopy } from '@/lib/landing-copy';
+import { landingCopy, usageMarks } from '@/lib/landing-copy';
 import { pageMetadata } from '@/lib/metadata';
 import { promptFiles, readPrompt } from '@/lib/prompts';
-import { repository } from '@/lib/source';
 import { tagline } from '@/lib/tagline';
+import { releaseBranch, repository } from '@/lib/urls';
+
+const sectionTitle = 'font-display text-3xl font-extrabold tracking-tight sm:text-4xl';
+const compose = `git clone -b ${releaseBranch} ${repository}.git
+cd SwB
+mkdir -p data
+SWB_UID="$(id -u)" docker compose up`;
 
 export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
@@ -31,45 +41,87 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
   const copy = landingCopy[lang];
+  const license = `${repository}/blob/${releaseBranch}/LICENSE`;
 
   return (
     <>
-      <main className="mx-auto w-full max-w-7xl px-5 sm:px-8">
-        <section className="swb-hero-grid">
-          <div className="swb-hero-copy">
-            <HeroTitle stem={copy.hero.stem} endings={copy.hero.endings} between={copy.hero.between}
-              names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy Captain', dots: 'ChatGPT dots' }} />
-            <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <SetupPicker lang={lang} modal />
-              <a className="swb-button border hover:bg-fd-muted" href={repository}>
-                <GitHubMark />GitHub
-              </a>
-              <a className="basis-full text-sm text-fd-muted-foreground underline underline-offset-4 hover:text-fd-foreground sm:basis-auto" href={`${repository}/blob/main/LICENSE`}>
-                {copy.openSource}
-              </a>
+      <HomeLayout nav={{ enabled: false }}>
+        <SiteContainer>
+          <section className="swb-hero-grid" aria-labelledby="landing-heading">
+            <div className="swb-hero-copy">
+              <HeroTitle stem={copy.hero.stem} endings={copy.hero.endings} between={copy.hero.between}
+                names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy Captain', dots: 'ChatGPT dots' }} />
+              <div className="mt-6 grid w-fit max-w-full justify-items-start gap-2.5">
+                <div className="flex w-full items-center gap-2.5 [&>.swb-button]:h-11 [&>.swb-button]:flex-1" data-hero-actions>
+                  <SetupPicker lang={lang} modal />
+                  <a className="swb-button border hover:bg-fd-muted" href={repository}>
+                    <GitHubMark />GitHub
+                  </a>
+                </div>
+                <CopyInstall lang={lang} />
+              </div>
+              <p className="mt-3 text-xs text-fd-muted-foreground">
+                <a className="underline underline-offset-4 hover:text-fd-foreground" href={license}>{copy.openSource}</a>
+              </p>
             </div>
-            <div className="mt-3"><CopyInstall lang={lang} /></div>
-          </div>
-          <SwitchboardHero label={copy.boardAlt} lang={lang} prompts={prompts()} labels={copy.panel} />
-        </section>
-        <section className="pb-16 pt-6 sm:pb-24 sm:pt-10">
-          <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{copy.positioning.title}</h2>
-          <div className="mt-5 grid max-w-5xl gap-4 text-[17px] leading-relaxed text-fd-muted-foreground md:grid-cols-3 md:gap-10">
-            {copy.positioning.body.map((text) => <p key={text}>{text}</p>)}
-          </div>
-          <h3 className="sr-only">{exchangeCopy[lang].title}</h3>
-          <AgentExchange lang={lang} />
-        </section>
-      </main>
+            <SwitchboardHero label={copy.boardAlt} hint={copy.boardHint} lang={lang} prompts={prompts()} labels={copy.panel} />
+          </section>
+          <section className="py-12 sm:py-16" data-landing-section aria-labelledby="landing-demos">
+            <h2 id="landing-demos" className={sectionTitle}>{copy.positioning.title}</h2>
+            <p className="mt-3 text-base text-fd-muted-foreground sm:text-lg">{copy.positioning.lead}</p>
+            <AgentExchange lang={lang} />
+          </section>
+          <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-deploy">
+            <h2 id="landing-deploy" className={sectionTitle}>{copy.deployment.title}</h2>
+            <div className="mt-7 grid gap-6 min-[900px]:grid-cols-2">
+              {[[copy.deployment.local, copy.install], ['Docker Compose', compose]].map(([title, command]) => (
+                <div className="min-w-0" key={title}>
+                  <h3 className="text-base font-semibold">{title}</h3>
+                  <pre className="mt-2 wrap-break-word whitespace-pre-wrap rounded-lg border bg-fd-muted p-4 text-sm leading-6"><code>{command}</code></pre>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <Link className="swb-text-link text-sm" href={localize(lang, '/docs/self-hosting#flyio')}>Fly.io</Link>
+              <p className="text-sm text-fd-muted-foreground">
+                {copy.deployment.flyClaim}{' '}
+                <a className="swb-text-link underline underline-offset-4" href="https://docs.fly.io/about/free-plan">{copy.deployment.flyLimits}</a>
+              </p>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+              {Object.values(deployProviders).map(({ enabled, name, href }) => enabled && href && (
+                <a className="swb-button border hover:bg-fd-muted" href={href} key={name}>
+                  {copy.deployment.paidProvider.replace('{provider}', name)}
+                  <ArrowUpRight aria-hidden="true" className="size-4" />
+                </a>
+              ))}
+              <Link className="swb-text-link text-sm text-fd-muted-foreground" href={localize(lang, '/docs/self-hosting')}>{copy.deployment.selfHosting}</Link>
+            </div>
+          </section>
+          <section className="border-t py-12 sm:py-16" data-landing-section aria-labelledby="landing-usage">
+            <h2 id="landing-usage" className={sectionTitle}>{copy.usage.title}</h2>
+            <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {copy.usage.examples.map((text, index) => (
+                <div className="grid content-start gap-3 rounded-lg border bg-fd-card p-4" key={text}>
+                  <div className="flex gap-1.5">
+                    {usageMarks[index].map((mark) => <MarkTile key={mark} kind={mark} className="swb-win-avatar" />)}
+                  </div>
+                  <p className="text-sm leading-6">{text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </SiteContainer>
+      </HomeLayout>
       <footer className="border-t">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-3 px-5 py-5 text-sm text-fd-muted-foreground sm:px-8">
+        <SiteContainer className="flex flex-wrap items-center gap-x-5 gap-y-3 py-5 text-sm text-fd-muted-foreground">
           <Link className="swb-text-link" href={localize(lang, '/docs')}>{copy.docs}</Link>
           <a className="swb-text-link" href={repository}>GitHub</a>
           <Link className="swb-text-link" href={localize(lang, '/about')}>{copy.about}</Link>
-          <a className="swb-text-link" href="https://www.apache.org/licenses/LICENSE-2.0">{copy.license}</a>
+          <a className="swb-text-link" href={license}>{copy.license}</a>
           <Link className="swb-text-link" href={localize(lang, '/docs/trademarks')}>{copy.trademarks}</Link>
           <a className="swb-text-link" href="mailto:hello@swb.one">hello@swb.one</a>
-        </div>
+        </SiteContainer>
       </footer>
     </>
   );

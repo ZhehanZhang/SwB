@@ -1,21 +1,25 @@
 import type { Locale } from './i18n';
 
 export const exchangeCopy = {
-  en: { title: 'Agents work together', you: 'You' },
-  'zh-Hans': { title: '智能体协同工作', you: '你' },
-  'zh-Hant': { title: '代理協同工作', you: '你' },
-} satisfies Record<Locale, { title: string; you: string }>;
+  en: { you: 'You' },
+  'zh-Hans': { you: '你' },
+  'zh-Hant': { you: '你' },
+} satisfies Record<Locale, { you: string }>;
 
 export const agentNames = {
   claude: 'Claude',
+  'claude-code': 'Claude Code',
   'grok-bot': 'Grok Bot',
   capy: 'Capy Captain',
   muse: 'Muse',
+  slack: 'Slack #launch',
+  github: 'GitHub',
 };
 
 type Message = [speaker: keyof typeof agentNames | 'you', text: Record<Locale, string>];
+export type ExchangeScene = { app: keyof typeof agentNames; messages: Message[] };
 
-export const exchangeScenes: { app: keyof typeof agentNames | 'slack'; messages: Message[] }[] = [
+export const exchangeScenes: ExchangeScene[] = [
   {
     app: 'claude',
     messages: [
@@ -41,18 +45,18 @@ export const exchangeScenes: { app: keyof typeof agentNames | 'slack'; messages:
     messages: [
       ['you', {
         en: 'Check my SwB inbox.',
-        'zh-Hans': '看一下我的 SwB 收件箱。',
-        'zh-Hant': '幫我查看 SwB 收件匣。',
+        'zh-Hans': '看一下我的 SwB 邮箱。',
+        'zh-Hant': '幫我查看 SwB 信箱。',
       }],
       ['muse', {
-        en: 'Grok Bot replied. It found a Slack example for your talk.',
-        'zh-Hans': 'Grok Bot 回信了。它找到了一个适合你演讲的 Slack 示例。',
-        'zh-Hant': 'Grok Bot 回覆了。它找到了適合你演講的 Slack 範例。',
+        en: 'Grok Bot found a Slack example for your talk.',
+        'zh-Hans': 'Grok Bot 为你的演讲找到了一个 Slack 示例。',
+        'zh-Hant': 'Grok Bot 幫你找到一個可用在演講中的 Slack 範例。',
       }],
       ['muse', {
-        en: 'I used send to ask Grok Bot for a second example.',
-        'zh-Hans': '我用 send 请 Grok Bot 再找一个示例。',
-        'zh-Hant': '我用 send 請 Grok Bot 再找一個範例。',
+        en: 'I asked Grok Bot for one more example.',
+        'zh-Hans': '我请 Grok Bot 再找一个示例。',
+        'zh-Hant': '我請 Grok Bot 再找一個範例。',
       }],
     ],
   },
@@ -90,9 +94,9 @@ export const exchangeScenes: { app: keyof typeof agentNames | 'slack'; messages:
     app: 'slack',
     messages: [
       ['you', {
-        en: '@SwB, ask the agents for a release update.',
-        'zh-Hans': '@SwB，问问各个智能体，发布进展如何？',
-        'zh-Hant': '@SwB，請各個代理回報發布進度。',
+        en: 'Share the release update here.',
+        'zh-Hans': '请在这里汇报发布进展。',
+        'zh-Hant': '請在這裡回報發布進度。',
       }],
       ['claude', {
         en: 'The release notes are ready.',
@@ -108,6 +112,46 @@ export const exchangeScenes: { app: keyof typeof agentNames | 'slack'; messages:
         en: 'I opened pull request 42.',
         'zh-Hans': '我发起了 PR 42。',
         'zh-Hant': '我開了 PR 42。',
+      }],
+    ],
+  },
+  {
+    app: 'github',
+    messages: [
+      ['you', {
+        en: 'Issue 42 asks for a Docker example.',
+        'zh-Hans': '议题 42 请求提供 Docker 示例。',
+        'zh-Hant': '議題 42 想要一個 Docker 範例。',
+      }],
+      ['grok-bot', {
+        en: 'I added the documentation label.',
+        'zh-Hans': '我加上了文档标签。',
+        'zh-Hant': '我加上了文件標籤。',
+      }],
+      ['grok-bot', {
+        en: 'I linked the Docker guide in a comment.',
+        'zh-Hans': '我在评论中附上了 Docker 指南。',
+        'zh-Hant': '我在留言中附上了 Docker 指南。',
+      }],
+    ],
+  },
+  {
+    app: 'claude-code',
+    messages: [
+      ['capy', {
+        en: 'Run the build on the paired Mac.',
+        'zh-Hans': '请在已配对的 Mac 上运行构建。',
+        'zh-Hant': '請在已配對的 Mac 上執行建置。',
+      }],
+      ['claude-code', {
+        en: 'The local build is running.',
+        'zh-Hans': '本机构建正在运行。',
+        'zh-Hant': '本機正在建置。',
+      }],
+      ['claude-code', {
+        en: 'The build passed. I sent the result to Capy Captain.',
+        'zh-Hans': '构建通过。我已将结果发给 Capy Captain。',
+        'zh-Hant': '建置已通過。我已將結果傳給 Capy Captain。',
       }],
     ],
   },

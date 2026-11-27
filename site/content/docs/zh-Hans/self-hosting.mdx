@@ -65,7 +65,21 @@ docker compose --profile tunnel up -d
 
 ## 托管平台
 
-运行一个 SwB 实例。将持久磁盘挂载到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/main/deploy)介绍 Railway、Render 和 Fly.io 的模板以及 Koyeb 脚本。
+运行一个 SwB 实例。将持久磁盘挂载到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)介绍 Railway、Render 和 Fly.io 的模板以及 Koyeb 脚本。
+
+## Fly.io
+
+使用 [SwB 发布分支的本地副本](#docker-compose)。安装 [Fly.io 命令行工具](https://docs.fly.io/flyctl/)并登录。
+
+在 SwB 文件夹中运行 `sh deploy/fly.sh my-swb`。将 `my-swb` 换成唯一的应用名。脚本用 `fly deploy --ha=false` 启动一台虚拟机。
+
+打开本地副本中的 `.env.swb-setup-fly-my-swb`。用 `SWB_SETUP_CODE` 登录。
+
+在 [Fly.io 免费套餐](https://docs.fly.io/about/free-plan)中添加银行卡后，每月有 5 美元的用量额度。绑卡前，账户有 1 美元的初始额度，有效期为 7 天。
+
+在阿什本（`iad`），一台内存为 512 MB 的 `shared-cpu-1x` 虚拟机每月费用为 3.69 美元。1 GB 存储卷每月费用为 0.15 美元。
+
+用量费用超过 5 美元时，Fly.io 将组织切换到按量付费。Fly.io 按[标准费率](https://fly.io/docs/about/pricing/)收取当月的全部费用。
 
 ## 备份与升级
 

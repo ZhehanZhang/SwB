@@ -7,54 +7,6 @@ description: 在电脑或服务器上运行 SwB。
 
 按[安装指南](/zh-Hans/docs/install)启动 SwB。打开首次在本机启动时显示的一次性登录链接。如需获取新链接，请运行 `swb login-link`。部署提示词也适用于本机。
 
-<DeployLive>
-
-## 部署 SwB
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB)
-
-<Steps>
-<Step>
-### 开始部署
-
-点击 **Deploy to Render**。登录 Render。保留默认设置，点击 **Deploy**。{/* unverified */}
-</Step>
-<Step>
-### 等待服务就绪
-
-Render 会在几分钟内构建 SwB。SwB 就绪后，服务页面显示 **Live**。
-</Step>
-<Step>
-### 复制地址
-
-复制页面顶部的服务 URL。在末尾加上 `/mcp`，就是 MCP 地址。
-</Step>
-</Steps>
-
-## 登录
-
-<Steps>
-<Step>
-### 复制设置码
-
-在 Render 服务中打开 **Environment**。复制 `SWB_SETUP_CODE` 的值。
-</Step>
-<Step>
-### 打开登录页面
-
-在 Render 服务中打开 **Logs**。打开日志中显示的登录页面地址。{/* unverified */}
-</Step>
-<Step>
-### 输入设置码
-
-把设置码粘贴到 **Setup code**。添加通行密钥，以后用它登录。设置码只能使用一次。
-</Step>
-</Steps>
-
-</DeployLive>
-
-<DeployHeld>
-
 ## 部署 SwB
 
 把提示词粘贴到 Claude Code 或 Codex 等编程智能体。请它引导你在本机或托管平台上部署 SwB。
@@ -67,8 +19,6 @@ Render 会在几分钟内构建 SwB。SwB 就绪后，服务页面显示 **Live*
 
 打开服务日志中的登录地址。从服务设置或部署命令指定的私有文件中复制 `SWB_SETUP_CODE`。将它粘贴到 **Setup code**。添加通行密钥供以后登录。
 
-</DeployHeld>
-
 ## 连接你的智能体
 
 先[把 SwB 连接到一个智能体](/zh-Hans/docs/connect)。再把提示词粘贴给它。请它连接其他应用。
@@ -76,15 +26,3 @@ Render 会在几分钟内构建 SwB。SwB 就绪后，服务页面显示 **Live*
 提示词保留英文，供智能体使用。
 
 <SetupPrompt name="coordinator" lang="zh-Hans" />
-
-<DeployLive>
-
-## 使用其他平台
-
-把提示词粘贴到 Claude Code 或 Codex 等编程智能体。请它引导你在其他平台上部署 SwB。
-
-提示词保留英文，供智能体使用。
-
-<SetupPrompt name="deploy" lang="zh-Hans" />
-
-</DeployLive>

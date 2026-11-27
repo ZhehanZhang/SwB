@@ -7,7 +7,6 @@ import type { Locale } from '@/lib/i18n';
 import { localize } from '@/lib/i18n';
 import { openUrl, setup } from '@/lib/setup';
 import { CYCLE, LEG, STEP, clock, trips as livePairs } from '@/lib/live';
-import { DEPLOY_BUTTONS_LIVE } from '@/lib/flags';
 import { MarkTile, type MarkKind } from './mark-tile';
 
 type Node = { kind: MarkKind; label: string };
@@ -258,18 +257,13 @@ function Panel({ kind, lang, prompts, labels, onClose }: {
           ))}
           <Link className="swb-button hover:bg-fd-muted" href={localize(lang, item.docs)}>{labels.guide}</Link>
         </div>
-        {DEPLOY_BUTTONS_LIVE && (
-          <a className="mt-5 inline-block" href="https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB" target="_blank" rel="noreferrer">
-            <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" width={153} height={40} />
-          </a>
-        )}
       </section>
     </div>
   );
 }
 
-export function SwitchboardHero({ label, lang, prompts, labels }: {
-  label: string; lang: Locale; prompts: Record<string, string>; labels: Labels;
+export function SwitchboardHero({ label, hint, lang, prompts, labels }: {
+  label: string; hint: string; lang: Locale; prompts: Record<string, string>; labels: Labels;
 }) {
   const [picked, setPicked] = useState<MarkKind | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -285,6 +279,7 @@ export function SwitchboardHero({ label, lang, prompts, labels }: {
     <figure className="swb-hero" aria-label={label}>
       <Board layout="wide" className="hidden sm:block" onPick={pick} />
       <Board layout="tall" className="sm:hidden" onPick={pick} />
+      <figcaption className="text-center text-sm text-fd-muted-foreground">{hint}</figcaption>
       {picked && <Panel kind={picked} lang={lang} prompts={prompts} labels={labels} onClose={close} />}
     </figure>
   );

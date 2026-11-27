@@ -3,7 +3,7 @@ import { createGetUrl, loader, type InferPageType } from 'fumadocs-core/source';
 import { i18n } from './i18n';
 import { siteUrl } from './urls';
 
-export { siteUrl };
+export { repository, siteUrl } from './urls';
 
 const docsUrl = createGetUrl('/docs', i18n);
 const aboutUrl = createGetUrl('/about', i18n);
@@ -15,8 +15,6 @@ export const source = loader(docs.toFumadocsSource(), {
 });
 
 export type DocsPage = InferPageType<typeof source>;
-
-export const repository = 'https://github.com/ZhehanZhang/SwB';
 
 export function markdownUrl(page: DocsPage) {
   return `${page.url}.mdx`;
