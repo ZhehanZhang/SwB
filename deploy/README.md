@@ -16,11 +16,11 @@ Use `/healthz` to check service health.
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB)
 
-The [Blueprint](../render.yaml) creates a paid web service and a 1 GB disk. Open **Environment** in the service. Copy `SWB_SETUP_CODE`.
+The button uses the repository default branch. The [Blueprint](../render.yaml) creates a paid web service and a 1 GB disk. Open **Environment** in the service. Copy `SWB_SETUP_CODE`.
 
 ## Railway
 
-Use the [Railway template composer](https://docs.railway.com/templates/create) to publish the deploy button. Select `https://github.com/ZhehanZhang/SwB` as the source. Use the root Dockerfile and one replica. Attach a 1 GB volume at `/data`. Set `/healthz` as the health check. Set `/data` as the required mount path. Enable public networking on port `8000`.
+Use the [Railway template composer](https://docs.railway.com/templates/create) to publish the deploy button. Select the SwB release branch in `https://github.com/ZhehanZhang/SwB`. Use the root Dockerfile and one replica. Attach a 1 GB volume at `/data`. Set `/healthz` as the health check. Set `/data` as the required mount path. Enable public networking on port `8000`.
 
 Set these variables in the template.
 
@@ -47,7 +47,7 @@ Fly creates a public address and a 1 GB volume from [fly.toml](../fly.toml). Ope
 
 ## Koyeb
 
-Sign in with the [Koyeb command line tool](https://www.koyeb.com/docs/build-and-deploy/cli/installation). Run this in the SwB repository. Replace `my-swb` with your app name.
+Sign in with the [Koyeb command line tool](https://www.koyeb.com/docs/build-and-deploy/cli/installation). Run this from the published SwB branch you want to deploy. Replace `my-swb` with your app name.
 
 ```sh
 sh deploy/koyeb.sh my-swb

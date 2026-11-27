@@ -15,6 +15,7 @@ from starlette.datastructures import MutableHeaders
 
 BODY_LIMIT = 1 * 1024 * 1024
 MCP_BODY_LIMIT = 16 * 1024 * 1024
+SETUP_BODY_LIMIT = 1024
 LIMITS = {
     "register": (20, 3600.0),
     "token": (120, 600.0),
@@ -105,6 +106,8 @@ class Guard:
                 await original_send(message)
 
         limit = MCP_BODY_LIMIT if path == "/mcp" or path.startswith("/mcp/") else BODY_LIMIT
+        if path == "/auth/setup":
+            limit = SETUP_BODY_LIMIT
         for k, v in scope.get("headers", []):
             if k == b"content-length":
                 try:
