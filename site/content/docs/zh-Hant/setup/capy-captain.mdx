@@ -3,137 +3,89 @@ title: Capy Captain
 description: 將 SwB 的工作交給 Capy Captain，並把回覆帶回來。
 ---
 
-Capy Captain 是長期運作的 Capy 代理，負責協調一組討論串。SwB 透過這項連線交付工作，再將回覆交給傳送者。
+Capy Captain 是負責協調一組執行緒的 Capy 代理。SwB 把工作交給 Captain，再將回覆交給傳送者。
 
 ## 開始之前
 
-你需要在正確組織中的 Capy 帳號、一個專案與一個 Capy Captain。任何成員都可以建立 `read_write` 服務使用者。服務使用者是供軟體使用的 Capy 帳號，擁有自己的金鑰。
+請在同一個 Capy 組織準備帳號、專案和 Captain。服務使用者是供軟體使用的 Capy 帳號。
 
-你的 SwB 伺服器需要 `capy` 模組。請把提示詞貼到已用擁有者身分連上 SwB 的代理。在 Capy 中，你可以在 **Settings** → **MCP & plugins** 加入 SwB。
+啟用 `capy` 模組。在 Capy 的 **Settings** → **MCP & plugins** 加入 SwB。請使用具備完整擁有者權限的 SwB 用戶端。
 
 ## 複製設定提示詞
 
-提示詞保留英文，供代理使用。
-
 <SetupPrompt name="capy-captain" lang="zh-Hant" />
 
-請把這段提示詞貼到你的代理。代理會引導你完成其餘步驟。
+把提示詞貼到 SwB 擁有者用戶端。
 
-## 你的步驟
-
-<Steps>
-
-<Step>
+## 設定 Captain 路由
 
 ### 開啟 API 設定
 
 在 Capy 開啟 **Settings** → **API**。確認目前是正確的組織。
 
-</Step>
-
-<Step>
-
 ### 建立讀取金鑰
 
-為你自己建立一把 API 金鑰。輸入名稱。Capy 只顯示一次金鑰，請立即複製。
-
-</Step>
-{/* unverified */}
-
-<Step>
+建立一把可存取 Captain 的個人 API 金鑰。趁 Capy 顯示金鑰時複製。
 
 ### 儲存讀取金鑰
 
 開啟代理給你的領取連結。把金鑰貼到 **Token**。再選擇 **Save token**。
 
-</Step>
-
-<Step>
-
 ### 重新啟動 SwB
 
 代理提示時，重新啟動 SwB。SwB 接著會載入金鑰。
 
-</Step>
-
-<Step>
-
 ### 建立 Capy Captain
 
-視需要建立 Capy Captain。設定名稱、專案、**Machine** 與模型。
-
-</Step>
-{/* unverified */}
-
-<Step>
+視需要建立 Capy Captain。選擇專案和 Captain 執行時使用的裝置。
 
 ### 選擇 Capy Captain
 
 告訴代理由哪個 Capy Captain 接收工作。
 
-</Step>
-
-<Step>
-
 ### 建立傳送金鑰
 
-在 **Settings** → **API** 建立角色為 `read_write` 的服務使用者。授予它專案權限。再為它建立一把金鑰。
-
-</Step>
-{/* unverified */}
-
-<Step>
+在 **Settings** → **API** 建立角色為 `read_write` 的服務使用者。授予它專案存取權。為它建立金鑰。
 
 ### 分享 Capy Captain
 
-開啟 Capy Captain 選單。選擇 **Share**。加入該服務使用者。如果 Capy Captain 在已配對裝置上執行，也要分享該裝置。
-
-</Step>
-{/* unverified */}
-
-<Step>
+開啟 Capy Captain 選單。選取 **Share**。授予服務使用者存取權。如果 Captain 使用已配對的裝置，也授予服務使用者該裝置的存取權。 {/* unverified */}
 
 ### 儲存傳送金鑰
 
 開啟第二個領取連結。把金鑰貼到 **Token**。再選擇 **Save token**。
 
-</Step>
-
-<Step>
-
 ### 再次重新啟動 SwB
 
 重新啟動 SwB。接著告訴代理已完成。
 
-</Step>
-
-</Steps>
-
 ## 代理的工作
 
-代理會以擁有者身分呼叫 `connect(what="capy-captain")`。SwB 會透過領取連結要求讀取金鑰 `CAPY_API_KEY`。領取連結是 SwB 上的一次性私人頁面，一個頁面對應一個權杖。
+在具備完整擁有者權限的用戶端呼叫 `connect(what="capy-captain")`。如果需要讀取金鑰，SwB 會傳回領取連結。領取連結是提交憑證的私人頁面。
 
-重新啟動後，`connect` 會列出每個可用的 Capy Captain。代理會與你確認 Capy Captain，再呼叫 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。如需專案路由，它會加上 `"project":"<project>"`。路由是 SwB 中指定工作去向的規則。新路由會把每則訊息送到 Capy Captain 執行緒。
+重新啟動後，`connect` 會列出可用的 Captain。確認哪個 Captain 要接收工作。呼叫 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。若要設定專案路由，在 `choose` 加入 `"project":"<project>"`。路由會指定工作送往何處。
 
-接著 SwB 會要求傳送金鑰 `CAPY_API_KEY_SERVICE`。代理會用 `capy_captains`、`routes_list` 與 `routes_resolve` 檢查路由。它會用 `send` 傳送測試工作，再用 `result` 或 `inbox` 讀取回覆。最後，如果它所在的應用程式支援 MCP 事件，它會訂閱 `switchboard.message.created`。否則它會呼叫 `wait`。
+代理若需要服務金鑰才能傳送，SwB 會要求提供金鑰。用 `capy_captains`、`routes_list` 和 `routes_resolve` 檢查路由。
+
+若應用程式支援 MCP 事件，請訂閱 `switchboard.message.created`。若要主動讀取訊息，請呼叫 `wait` 或 `inbox`。
 
 ## 憑證
 
 | 權杖 | 顯示位置 | 格式 | 存放位置 |
 | - | - | - | - |
-| 讀取金鑰 `CAPY_API_KEY` | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
-| 傳送金鑰 `CAPY_API_KEY_SERVICE` | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
+| 讀取金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
+| 傳送金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
 
 ## 檢查連線
 
-請代理再次呼叫 `connect(what="capy-captain")`。回覆會顯示狀態 `connected`。執行 `routes_list` 查看路由。傳送一項簡短的測試工作。工作會出現在 Capy Captain 中，回覆會透過 `result` 或 `inbox` 傳回。以擁有者身分登入後，可在 `/healthz` 查看各代理使用的傳送金鑰。
+請代理再次呼叫 `connect(what="capy-captain")`。確認結果為 `connected`。向路由傳送一項簡短的測試工作。在 Captain 執行緒查看工作。用 `result` 或 `inbox` 讀取回覆。以擁有者身分開啟 `/healthz`，查看傳送金鑰的名稱和狀態。
 
 ## 排除問題
 
-Capy 金鑰具備其擁有者的存取權。如果 `connect` 要求新的讀取金鑰，請授予該擁有者 Capy Captain 的存取權。
+Capy 金鑰使用對應帳號的權限。如果 `connect` 要求新的讀取金鑰，請建立一把可存取 Captain 的金鑰。
 
-如果傳送時出現存取錯誤，請把專案與已配對裝置分享給服務使用者。
+傳送時若出現存取錯誤，請檢查服務使用者是否可存取專案、Captain 和已配對的裝置。
 
 伺服器環境中的值優先於領取連結儲存的值。請在伺服器環境中修改該值，再重新啟動 SwB。
 
-Capy 只顯示一次金鑰。金鑰遺失時，請在 **Settings** → **API** 建立新金鑰，並撤銷舊金鑰。領取連結只能使用一次，30 分鐘後失效。
+若要更換遺失的金鑰，請在 **Settings** → **API** 撤銷舊金鑰。接著建立一把新金鑰。每個領取連結可用一次，30 分鐘後失效。

@@ -3,135 +3,89 @@ title: Capy Captain
 description: Route SwB work to a Capy Captain and bring the replies back.
 ---
 
-A Capy Captain is a long-lived Capy agent that directs a crew of threads. This connection sends SwB work to the agent and brings each reply back to the sender.
+A Capy Captain is a Capy agent that directs a group of threads. SwB sends tasks to the Captain and returns each reply to the sender.
 
 ## Before you start
 
-You need a Capy account in the right organization, a project and a Capy Captain. Any member can create a `read_write` service user. A service user is a Capy account for software, with its own key.
+You need a Capy account, a project and a Captain in the same organization. A service user is a Capy account for software.
 
-Your SwB server needs the `capy` block. Paste the prompt into an agent that has SwB with owner sign-in. In Capy, you add SwB under **Settings** → **MCP & plugins**.
+Enable the `capy` block. In Capy, add SwB under **Settings** → **MCP & plugins**. Use a SwB client with full owner access.
 
 ## Copy the setup prompt
 
 <SetupPrompt name="capy-captain" lang="en" />
 
-Paste this prompt into your agent. The agent then walks you through the rest.
+Paste the prompt into your SwB owner client.
 
-## Your steps
-
-<Steps>
-
-<Step>
+## Set up the Captain route
 
 ### Open API settings
 
 In Capy, open **Settings** → **API**. Check that the right organization is open.
 
-</Step>
-
-<Step>
-
 ### Create the read key
 
-Create an API key for yourself. Enter a name. Copy the key, because Capy shows it one time.
-
-</Step>
-{/* unverified */}
-
-<Step>
+Create a personal API key with access to your Captain. Copy the key while Capy shows it.
 
 ### Save the read key
 
 Open the claim link from your agent. Paste the key in **Token**. Select **Save token**.
 
-</Step>
-
-<Step>
-
 ### Restart SwB
 
 Restart SwB when your agent asks. SwB then loads the key.
 
-</Step>
-
-<Step>
-
 ### Make a Capy Captain
 
-Create a Capy Captain if you need one. Set the name, project, **Machine** and model.
-
-</Step>
-{/* unverified */}
-
-<Step>
+Create a Capy Captain if you need one. Choose the project and the machine on which the Captain runs.
 
 ### Choose the Capy Captain
 
 Tell your agent which Capy Captain gets the work.
 
-</Step>
-
-<Step>
-
 ### Create the send key
 
-In **Settings** → **API**, create a service user with the role `read_write`. Give it the project. Create a key for it.
-
-</Step>
-{/* unverified */}
-
-<Step>
+In **Settings** → **API**, create a service user with the role `read_write`. Grant it access to the project. Create a key for the service user.
 
 ### Share the Capy Captain
 
-Open the Capy Captain menu. Select **Share**. Add the service user. If the Capy Captain runs on a paired device, share the device too.
-
-</Step>
-{/* unverified */}
-
-<Step>
+Open the Capy Captain menu. Select **Share**. Grant access to the service user. For a Captain on a paired device, grant the service user access to the device too. {/* unverified */}
 
 ### Save the send key
 
 Open the second claim link. Paste the key in **Token**. Select **Save token**.
 
-</Step>
-
-<Step>
-
 ### Restart SwB again
 
 Restart SwB. Then tell your agent that you are done.
 
-</Step>
-
-</Steps>
-
 ## What the agent does
 
-The agent calls `connect(what="capy-captain")` from the owner sign-in. SwB asks for the read key, `CAPY_API_KEY`, through a claim link. A claim link is a private one-time SwB page for one token.
+From a client with full owner access, call `connect(what="capy-captain")`. If SwB needs the read key, it returns a claim link. A claim link is a private page for entering a credential.
 
-After the restart, `connect` lists each available Capy Captain. The agent confirms the Capy Captain with you and calls `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`. It adds `"project":"<project>"` for a project route. A route is the SwB rule that names where work goes. A new route sends each message to the Capy Captain thread.
+After the restart, `connect` lists the available Captains. Confirm which Captain should receive the work. Call `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`. For a project route, add `"project":"<project>"` to `choose`. A route tells SwB where to send work.
 
-Then SwB asks for the send key, `CAPY_API_KEY_SERVICE`. The agent checks the route with `capy_captains`, `routes_list` and `routes_resolve`. It sends a test task with `send` and reads the answer with `result` or `inbox`. Last, the agent subscribes to `switchboard.message.created` if its app supports MCP events. Otherwise it calls `wait`.
+SwB asks for a service key if the agent needs one to send. Use `capy_captains`, `routes_list` and `routes_resolve` to check the route.
+
+If your app supports MCP events, subscribe to `switchboard.message.created`. For on-demand reads, call `wait` or `inbox`.
 
 ## Credentials
 
 | Token | Where it is shown | Format | Where it goes |
 | - | - | - | - |
-| Read key `CAPY_API_KEY` | **Settings** → **API**, one time | `capy_` and 43 random characters | **Token** on its SwB claim link |
-| Send key `CAPY_API_KEY_SERVICE` | **Settings** → **API**, one time | `capy_` and 43 random characters | **Token** on its SwB claim link |
+| Read key | **Settings** → **API**, one time | `capy_` and 43 random characters | **Token** on its SwB claim link |
+| Send key | **Settings** → **API**, one time | `capy_` and 43 random characters | **Token** on its SwB claim link |
 
 ## Check the connection
 
-Ask your agent to call `connect(what="capy-captain")` again. The answer shows the state `connected`. Run `routes_list` to see the route. Send a short test task. The task appears in the Capy Captain, and the answer comes back through `result` or `inbox`. Sign in as the owner to see the send key for each agent in `/healthz`.
+Ask your agent to call `connect(what="capy-captain")` again. Check for `connected`. Send a short test task to the route. Check for the task in the Captain thread. Read the reply with `result` or `inbox`. Use `/healthz` as the owner to check the name and status of the configured send key.
 
 ## Fix problems
 
-A Capy key acts with the access of its owner. If `connect` asks for a new read key, give that owner access to the Capy Captain.
+A Capy key uses the permissions of its account. If `connect` asks for a new read key, create one with access to the Captain.
 
-If a send fails with an access error, share the project and the paired device with the service user.
+If a send fails with an access error, check the service user’s access to the project, Captain and paired device.
 
 A value in the server environment wins over a claimed value. Change it in the server environment and restart SwB.
 
-Capy shows a key one time. For a lost key, create a new key and revoke the old key in **Settings** → **API**. Claim links work one time and expire after 30 minutes.
+To replace a lost key, revoke it in **Settings** → **API**. Create a new key. Each claim link works once and expires after 30 minutes.

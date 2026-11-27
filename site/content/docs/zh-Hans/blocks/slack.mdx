@@ -5,9 +5,9 @@ description: 把 Slack 消息路由给智能体，并在话题串中发布答复
 
 ## 创建 Slack 应用
 
-从 [Slack 设置](/zh-Hans/docs/setup/slack#应用清单)中复制 YAML 应用清单。按工作区需要选择机器人版或仅个人账号版。
+打开 [Slack 设置](/zh-Hans/docs/setup/slack#应用清单)。按需选择机器人和个人账号共用的清单，或个人账号专用的清单。清单包含 Slack 应用的设置。
 
-在工作区安装应用。请智能体连接 Slack，或运行 `swb connect slack`。工作区缺少令牌时，SwB 会提供该工作区的领取链接。表单字段与工作区设置一致。
+在工作区安装应用。请智能体连接 Slack，或运行 `swb connect slack`。通过领取链接保存工作区的令牌。重启 SwB 以加载令牌。
 
 | 令牌 | 获取位置 |
 | - | - |
@@ -17,17 +17,17 @@ description: 把 Slack 消息路由给智能体，并在话题串中发布答复
 
 ## 从 Slack 发送
 
-提及机器人并带上目标 slug。
+提及机器人并写上目标简称。用 `targets` 查询简称。
 
 ```text
 @swb claude check the release notes
 ```
 
-SwB 去掉 slug，把其余内容发送给目标。答复回到同一个话题串，显示目标的名称和头像。话题串中的消息发往该话题串之前的目标。其他消息发往工作区的 `default_target`。
+SwB 去掉目标简称后转发其余内容。机器人通常会在原话题串中回复，并显示目标的名称和头像。后续消息可沿用话题串的目标。工作区的 `default_target` 是备用目标。
 
 ## 以智能体身份发帖
 
-智能体用 `slack_*` 工具发帖。`slack.agents.<agent>` 授予智能体其工作区和身份。每个身份有一项写入策略。
+智能体用 `slack_post` 发帖。在 `blocks.slack.agents.<agent>.workspaces` 中设置智能体可使用的工作区和账号。每个账号都有写入策略。
 
 | 策略 | 效果 |
 | - | - |
@@ -83,7 +83,7 @@ SwB 去掉 slug，把其余内容发送给目标。答复回到同一个话题�
 | `blocks.slack.workspaces.*.default_target` | 发给 SwB 的新消息省去目标名称时使用的目标 |
 | `blocks.slack.workspaces.*.ack_reaction` | 机器人收到提及或私信时用来确认的 Slack 表情名称。默认值为 `eyes` |
 | `blocks.slack.workspaces.*.owner_user_ids` | 视为所有者的 Slack 用户 ID。默认使用工作区审批人 |
-| `blocks.slack.workspaces.*.known` | 为已登记的 Slack 用户或机器人 ID 设置显示名称 |
+| `blocks.slack.workspaces.*.known` | 为已登记的 Slack 用户或机器人 ID 设置显示名称。此设置有助于决定接收哪些消息 |
 | `blocks.slack.workspaces.*.sender_rate` | 限制 SwB 从所有者以外的发送者接收消息的频率。适用于 `assist`、`triage` 和作为参考的消息 |
 | `blocks.slack.workspaces.*.sender_rate.count` | 每个发送者在时段内的消息数量上限。默认值为 `5` |
 | `blocks.slack.workspaces.*.sender_rate.window_s` | 限流时段的长度，单位为秒。默认值为 `600` |
@@ -122,7 +122,8 @@ SwB 去掉 slug，把其余内容发送给目标。答复回到同一个话题�
 | `blocks.slack.workspaces.*.sinks` | 设置将 Slack 事件转发给其他服务的 Webhook |
 | `blocks.slack.workspaces.*.sinks.*.name` | 日志和状态中显示的 Webhook 名称 |
 | `blocks.slack.workspaces.*.sinks.*.url_env` | 存放 Webhook 网址的环境变量名 |
-| `blocks.slack.workspaces.*.sinks.*.secret_env` | 存放 Webhook 请求签名密钥的环境变量名 |
+| `blocks.slack.workspaces.*.sinks.*.signature` | 设为 `stripe`，按 Stripe 格式为请求签名 |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | 存放签名密钥的环境变量名 |
 | `blocks.slack.workspaces.*.sinks.*.kinds` | 要转发的事件类型，可选 `watched`、`mention` 和 `dm`。默认转发全部三种 |
 | `blocks.slack.workspaces.*.sinks.*.targets` | 仅转发与这些目标名称对应的事件 |
 | `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | 把事件合并为一次请求的等待秒数。默认值 `0` 表示逐条发送 |

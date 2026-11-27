@@ -7,28 +7,22 @@ description: 把 Claude Code、Codex、Gemini CLI 與其他程式開發代理連
 
 ## 開始之前
 
-請先安裝程式開發代理並登入。SwB 支援 Claude Code、Codex、Gemini CLI、Goose、OpenCode、Cline、Kiro 與 Qwen Code。其他遠端 MCP 用戶端使用通用設定。MCP 是應用程式使用外部工具的標準方式。
+請安裝程式開發代理並登入。SwB 提供 Claude Code、Codex、Gemini CLI、Goose、OpenCode、Cline、Kiro 和 Qwen Code 的設定。MCP 是應用程式呼叫外部工具的標準。
 
-若要在本機啟動新的 SwB 伺服器，請依[安裝指南](/zh-Hant/docs/install)操作。開啟終端機顯示的一次性登入連結。若代理支援本機 HTTP，請在下方指令中使用啟動時顯示的 MCP 位址。代管的代理須使用公開的 HTTPS 位址。
-
-Gemini CLI 需要 Gemini Code Assist Standard 或 Enterprise 授權，或付費的 Gemini API 金鑰。你的組織可能會限制 MCP 伺服器。如果 SwB 位址遭到封鎖，請洽詢管理員。
+若要在本機執行 SwB，請參閱[安裝指南](/zh-Hant/docs/install)。如果本機代理支援 HTTP，請使用啟動時顯示的 MCP 位址。代管的代理須使用公開的 HTTPS 位址。
 
 ## 複製設定提示詞
 
-提示詞保留英文，供代理使用。
-
 <SetupPrompt name="coding-agent" lang="zh-Hant" />
 
-把提示詞貼到你的程式開發代理中。代理會帶你完成其餘步驟。
+把提示詞貼到程式開發代理。
 
-## 你的步驟
+## 為程式開發代理加入 SwB
 
-如果 `connect` 提供配對碼，請依 **其他代理** 的配對說明操作。
+使用 `connect` 傳回的登入方式。如果它提供配對碼，請[換取金鑰](/zh-Hant/docs/setup/mcp-client#換取金鑰)。套用傳回的用戶端設定。
 
 <Tabs items={['Claude Code', 'Codex', 'Gemini CLI', '其他代理']}>
 <Tab value="Claude Code">
-<Steps>
-<Step>
 ### 加入 SwB
 
 在終端機執行下面的指令，並換成你的 SwB 位址。
@@ -36,27 +30,17 @@ Gemini CLI 需要 Gemini Code Assist Standard 或 Enterprise 授權，或付費�
 ```bash
 claude mcp add --transport http --scope user swb https://swb.example.com/mcp
 ```
-</Step>
-<Step>
 ### 開啟伺服器清單
 
 啟動 `claude`，輸入 `/mcp`。選擇 **swb**，按下 **Enter**。
-</Step>
-<Step>
 ### 登入
 
 選擇 **Authenticate**。瀏覽器會開啟 **Sign in to SwB** 頁面。
-</Step>
-<Step>
 ### 核准
 
 在 **Connect to SwB** 頁面確認用戶端是 Claude Code。按一下 **Approve**，再回到終端機。
-</Step>
-</Steps>
 </Tab>
 <Tab value="Codex">
-<Steps>
-<Step>
 ### 加入 SwB
 
 將下列設定項目加入 `~/.codex/config.toml`。請使用你的 SwB 位址。
@@ -66,23 +50,15 @@ claude mcp add --transport http --scope user swb https://swb.example.com/mcp
 url = "https://swb.example.com/mcp"
 ```
 
-使用 IDE 擴充功能時，開啟 **Codex Settings** → **Open config.toml**，加入代理提供的設定項目。
-</Step>
-<Step>
+Codex 編輯器擴充功能使用同一個檔案。
 ### 登入
 
 執行 `codex mcp login swb`。瀏覽器會開啟 SwB 登入頁面。
-</Step>
-<Step>
 ### 核准
 
-在 **Connect to SwB** 頁面按一下 **Approve**。 {/* unverified */}
-</Step>
-</Steps>
+在 **Connect to SwB** 頁面按一下 **Approve**。
 </Tab>
 <Tab value="Gemini CLI">
-<Steps>
-<Step>
 ### 加入 SwB
 
 將下列設定項目合併到 `~/.gemini/settings.json`。請使用你的 SwB 位址。
@@ -96,39 +72,25 @@ url = "https://swb.example.com/mcp"
   }
 }
 ```
-</Step>
-<Step>
 ### 登入
 
 啟動 Gemini CLI，輸入 `/mcp auth swb`。瀏覽器會開啟 SwB 登入頁面。
-</Step>
-<Step>
 ### 核准
 
-在 **Connect to SwB** 頁面按一下 **Approve**。 {/* unverified */}
-</Step>
-</Steps>
+在 **Connect to SwB** 頁面按一下 **Approve**。
 </Tab>
 <Tab value="其他代理">
-<Steps>
-<Step>
 ### 取得設定
 
 告訴代理你使用哪個用戶端。選擇 `other` 可取得通用的 Streamable HTTP 設定。
-</Step>
-<Step>
 ### 加入 SwB
 
 如果 SwB 提供配對碼，請用它[換取金鑰](/zh-Hant/docs/setup/mcp-client#換取金鑰)。把金鑰填入傳回的設定。
 
 套用 SwB 提供的設定。Goose 使用 `~/.config/goose/config.yaml`。
-</Step>
-<Step>
 ### 登入
 
 如果 SwB 提示登入，請啟動程式開發代理。瀏覽器開啟後登入。在 **Connect to SwB** 頁面按一下 **Approve**。
-</Step>
-</Steps>
 </Tab>
 </Tabs>
 
@@ -138,7 +100,7 @@ url = "https://swb.example.com/mcp"
 
 SwB 會傳回用戶端設定，以及登入或配對步驟。如果代理能在你的電腦上執行設定指令，就會自行執行。瀏覽器中的登入由你完成。
 
-OAuth 登入關閉時，`connect` 會使用配對碼。選擇 `other` 時也使用配對碼。需要發出新金鑰時，擁有者會收到配對碼。用戶端用這組一次性代碼換取自己的金鑰。
+OAuth 登入關閉時，`connect` 會使用配對碼。選擇 `other` 時也使用配對碼。擁有者取得配對碼，用戶端用它換取專屬金鑰。
 
 ## 憑證
 
@@ -146,14 +108,14 @@ OAuth 登入關閉時，`connect` 會使用配對碼。選擇 `other` 時也使�
 | - | - | - | - |
 | SwB 存取權杖 | 你按一下 **Approve** 後由程式開發代理保存 | 隨機文字 | 程式開發代理自動保存 |
 | 配對碼 | 發出新配對金鑰時，擁有者收到的 `connect` 結果 | `XXXXX-XXXXX`，10 分鐘內有效 | 從你的電腦送出的 `POST /connect` 請求 |
-| 代理金鑰 | `POST /connect` 的回應，只顯示一次 | 以 `swb_` 開頭 | 程式開發代理的私人環境變數 |
+| 代理金鑰 | `POST /connect` 的回應，只顯示一次 | 以 `swb_` 開頭 | 用戶端的私人設定 |
 
 ## 檢查連線
 
-執行 `claude mcp list`、`codex mcp list` 或 `gemini mcp list`。`swb` 應顯示為已連線。接著請程式開發代理呼叫 `inbox`。從另一個 SwB 應用程式傳送測試訊息給 `agent:claude-code` 或它自己的名稱。程式開發代理用 `wait` 或 `inbox` 取得訊息，再用 `reply` 回覆。
+執行 `claude mcp list`、`codex mcp list` 或 `gemini mcp list`，確認清單中有 `swb`。請程式開發代理呼叫 `switchboard_status` 以取得自己的 SwB 名稱。使用另一個 SwB 應用程式傳送測試訊息給它。請它用 `wait` 或 `inbox` 讀取訊息。請它用 `reply` 回覆。
 
 ## 解決問題
 
-如果 Claude Code 顯示 **Needs authentication**，請開啟 `/mcp`，再次選擇 **Authenticate**。Codex 與 Gemini CLI 在啟動時讀取設定，所以變更後請開啟新的工作階段。在 Gemini CLI 中，請把 SwB 位址寫在 `httpUrl`，因為 `url` 會選用舊的傳輸方式。
+如果 Claude Code 提示登入，請開啟 `/mcp` 並選取 **Authenticate**。更改設定後，請重新啟動 Codex 或 Gemini CLI。Gemini CLI 的 SwB 位址應填在 `httpUrl`。
 
 要用配對金鑰設定第二台電腦，請先用 `connect_revoke` 撤銷第一把金鑰，再呼叫 `connect`。

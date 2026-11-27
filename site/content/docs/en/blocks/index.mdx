@@ -1,34 +1,34 @@
 ---
 title: Blocks
-description: Every platform SwB connects.
+description: Find the connections and features SwB provides.
 ---
 
-A block is the connection to one platform. Each block turns on when its credentials are in the environment, or when it is in the config file. `swb status` shows each block and its next step. Sign in as the owner to see details in `/healthz`.
+A block adds a connection or feature to SwB. Set up blocks in the config file. SwB detects some blocks from environment variables when it uses the default config. Run `swb status` for block status and setup guidance. Sign in as the owner to see details at `/healthz`.
 
-| Block | Connects with | Hears new messages by |
+| Connection | Connects with | How SwB passes messages |
 | - | - | - |
 | [Claude](/docs/blocks/claude) | Custom connector and Claude routines | `wait`, `inbox` and routine wakes |
 | [ChatGPT](/docs/blocks/chatgpt) | Custom MCP server and ChatGPT dots | MCP Events |
 | [Capy](/docs/blocks/capy) | Capy API key | The Capy thread stream |
-| [Grok](/docs/blocks/grok) | MCP connector and Grok routines | A signed routine webhook |
+| [Grok](/docs/blocks/grok) | MCP connector and Grok Bot routines | `wait`, `inbox` and routine wakes |
 | [Coding agents](/docs/blocks/coding-agents) | OAuth or a pairing code | `wait`, `inbox` and the Claude Code channel |
-| [Local sessions](/docs/blocks/local-sessions) | Paired device | Messages to an open session |
+| [Local sessions](/docs/blocks/local-sessions) | Paired device | Mailbox or direct delivery to an open session |
 | [Slack](/docs/blocks/slack) | Slack app over Socket Mode | Replies in the thread |
 | [Discord](/docs/blocks/discord) | Bot token | Replies in the thread |
 | [Telegram](/docs/blocks/telegram) | Bot token | Replies in the thread |
-| [GitHub App](/docs/blocks/github) | Webhook secret | Signed webhooks |
+| [GitHub](/docs/blocks/github) | Webhook secret | Signed webhooks |
+| [Muse](/docs/setup/muse) | MCP connector and paired Muse gadget | Mailbox and gadget wakes |
+| [Other MCP clients](/docs/setup/mcp-client) | OAuth or a pairing code | `wait` and `inbox` |
 
-The Capy block enables [MCP Tasks](/docs/how-it-works#conversations) discovery through `server/discover` for MCP 2026-07-28 clients. Clients opt in on each Capy send. MCP 2025-11-25 clients and mailbox sends use regular conversations.
+## Trust and access
 
-## What every block shares
+SwB checks platform IDs to set message trust. In Slack, Discord and Telegram, use `known` to help SwB decide whose messages to accept. Messages from people other than the owner carry `external` trust. See [Trust](/docs/security#trust).
 
-SwB checks platform IDs to set message trust. On Slack, Discord and Telegram, `known` is an admission setting. It helps SwB decide whose messages to accept. Messages from other senders keep `external` trust, even when SwB admits them through `known`. See [Trust](/docs/security#trust).
-
-Every target, channel and memory scope starts private. Only the owner reaches a private resource. Share a resource to let other people reach it.
+Targets, channels and memory scopes are private by default. Share a resource to give others access.
 
 ## Bundled avatars
 
-Use a file name to select a bundled picture for a persona.
+Use a file name to select a bundled picture for a [Slack persona](/docs/blocks/slack#personas).
 
 | File | Name |
 | - | - |
@@ -43,8 +43,9 @@ Use a file name to select a bundled picture for a persona.
 | `gemini.png` | Gemini |
 | `grok-bot.png` | Grok Bot |
 | `grok.png` | Grok |
+| `muse.png` | Muse |
 | `swb.png` | SwB |
 
 ## Add your own block
 
-A block is a Python class with a manifest. The manifest names the verbs, targets and secrets of the block. Third-party blocks register in the `switchboard.blocks` entry-point group. `swb blocks list` shows the blocks configured on this instance.
+A block is a Python class with a manifest. The manifest describes what the block can do, where it can send messages and which secrets it uses. Register your block in the `switchboard.blocks` entry point group. Run `swb blocks list` to see the blocks configured on your server.

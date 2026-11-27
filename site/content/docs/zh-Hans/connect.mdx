@@ -5,7 +5,7 @@ description: 把 SwB 添加到智能体并设置连接。
 
 ## 把 SwB 添加到智能体
 
-客户端和 SwB 在同一台电脑上运行时，请选择[所有者权限或配对](/zh-Hans/docs/setup/mcp-client)。对于托管应用，请把 SwB 添加为远程 MCP 服务器。使用公网 MCP 地址，例如 `https://swb.example.com/mcp`。在 SwB 页面批准应用的 OAuth 登录。
+客户端和 SwB 在同一台电脑上运行时，请选择[所有者权限或配对](/zh-Hans/docs/setup/mcp-client)。对于运行在服务器上的应用，请把 SwB 添加为远程 MCP 服务器。使用公网 MCP 地址，例如 `https://swb.example.com/mcp`。在 SwB 页面批准应用的 [OAuth 登录](/zh-Hans/docs/owner-login#智能体登录)。
 
 | 应用 | 添加 SwB 的位置 |
 | - | - |
@@ -13,11 +13,11 @@ description: 把 SwB 添加到智能体并设置连接。
 | Claude 和 Claude Project | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → 添加自定义 MCP 服务器 |
 | Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
-| Capy | 添加 MCP 服务器，选择 Automatic OAuth 客户端 |
+| Capy | Settings → MCP & plugins → 添加自定义 MCP 服务器 |
 | Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
 | Codex、Gemini CLI 和其他编程智能体 | `swb connect coding-agent --choose agent=codex` |
 
-对于编程智能体，把 `codex` 改成你的客户端的名称。单独运行 `swb connect coding-agent` 可查看列表。列表包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 和 Kiro。
+对于编程智能体，请运行 `swb connect coding-agent` 查看支持的名称。把 `codex` 换成列表中的名称。
 
 ## 询问你的智能体
 
@@ -31,13 +31,13 @@ description: 把 SwB 添加到智能体并设置连接。
 | 把 Slack 连接到 SwB。 | 它会引导你查看 [Slack 设置](/zh-Hans/docs/setup/slack#应用清单)中的 YAML 清单，并在需要时提供领取链接 |
 | 连接我的 Discord 机器人。 | 它给你一个领取链接和机器人邀请链接 |
 | 把这个发给我的 Capy Captain。 | 它发送任务并等待答复 |
-| 你能发送给哪些目标？ | 它列出 SwB 能访问的所有目标 |
+| 你能发送给哪些目标？ | 它列出该智能体可访问的目标 |
 
 智能体调用 `connect` 工具。SwB 回答该平台的下一步。某一步需要令牌时，SwB 给出一次性领取链接。打开链接，在那里粘贴令牌。[凭据](/zh-Hans/docs/credentials)介绍领取链接。
 
 ## 在终端中连接
 
-在 SwB 实例目录中运行 `swb connect`。该命令使用 `.env` 中的所有者密钥，默认连接本机 SwB 地址。用 `--dir` 指定实例目录。用 `--url` 指定 SwB 地址。运行 `swb login-link` 可获取一次性所有者登录链接。
+在 SwB 实例目录中运行 `swb connect PLATFORM`。把 `PLATFORM` 换成平台名称，例如 `slack`。命令使用 `.env` 中的所有者密钥。命令默认连接本机 SwB 地址。用 `--dir` 指定实例目录。用 `--url` 指定 SwB 地址。运行 `swb login-link` 可获取一次性所有者登录链接。
 
 ```bash
 swb connect mcp-client
@@ -47,9 +47,9 @@ swb connect grok
 
 ## 用配对码连接
 
-请以所有者身份登录的智能体调用 `connect_code`。把新智能体的名称告诉它。配对码在 10 分钟内有效，只能使用一次。新智能体通过 `POST /connect` 用配对码换取自己的密钥。完整的配对方法见 [MCP 客户端](/zh-Hans/docs/setup/mcp-client)。
+配对为新智能体分配自己的密钥。请以所有者身份登录的智能体调用 `connect_code`。把新智能体的名称告诉它。配对码在 10 分钟内有效，只能使用一次。新智能体通过 `POST /connect` 用配对码换取自己的密钥。完整的配对方法见 [MCP 客户端](/zh-Hans/docs/setup/mcp-client)。
 
-你也可以在令牌页面创建配对码。SwB 通过 `POST /pairing/code` 提交表单。
+要在控制台获取配对码，请打开 **Tokens**。展开 **Pairing code**。输入智能体名称。选择 **Create code**。SwB 通过 `POST /pairing/code` 提交表单。
 
 配对密钥可访问 `agent:<name>` 的记忆，以及 `auth.key_scopes` 中为该智能体设置的范围。配对码指定项目时，密钥也会获得该项目的记忆授权。
 
@@ -61,7 +61,7 @@ swb connect grok
 
 ## 收件箱事件流
 
-`POST /connect` 返回 `inbox_events_url`，即 `GET /inbox/events` 的地址。请求该地址时，在 `Authorization: Bearer <key>` 中传入配对所得的智能体密钥。SwB 只推送该智能体在密钥授权范围内的收件箱更新。更新以服务器发送事件（SSE）的形式通过同一连接传送。
+`POST /connect` 返回 `inbox_events_url`，即 `GET /inbox/events` 的地址。请求该地址时，在 `Authorization: Bearer <key>` 中传入配对所得的智能体密钥。SwB 按密钥的授权范围推送该智能体的收件箱消息。连接保持打开时，服务器发送事件（SSE）会持续到达。请用 `inbox` 读取观察摘要和上下文条目。
 
 连接建立后，SwB 先发送 `ready` 事件。`item` 事件的 JSON 数据包含游标 `cursor`、会话标识 `handle` 和消息数据。事件 ID 采用游标值，表示事件在流中的位置。
 
@@ -69,7 +69,7 @@ swb connect grok
 
 ## 设置提示词
 
-SwB 把每段设置提示词作为 MCP prompt 和 MCP resource 提供给智能体。`connect` 工具在 `guide` 字段中返回每个平台对应的两项。
+智能体可通过 MCP 提示词或资源读取设置说明。提示词是给智能体使用的文字。资源是智能体从指定地址读取的文字。平台有设置提示词时，`connect` 工具在 `guide` 中返回两项的名称。
 
 | Prompt | Resource | 指南 |
 | - | - | - |

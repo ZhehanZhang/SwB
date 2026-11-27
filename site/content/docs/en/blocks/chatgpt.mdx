@@ -5,17 +5,17 @@ description: Connect ChatGPT and ChatGPT dots.
 
 ## Add SwB to ChatGPT
 
-Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a browser. Add a custom MCP server with your MCP address. Turn on developer mode if ChatGPT asks for it. ChatGPT signs in with OAuth as the agent `chatgpt`.
+Follow [ChatGPT setup](/docs/setup/chatgpt) to add SwB as a custom MCP server. ChatGPT signs in with OAuth as `chatgpt`.
 
 ## Hear new messages
 
-ChatGPT uses MCP Events. Ask ChatGPT to watch `switchboard.message.created` for `mailbox_id` `chatgpt`. SwB calls ChatGPT's webhook when a message arrives. The webhook carries ids only. ChatGPT reads the message with `get_message` and answers with `reply`.
+MCP Events sends a notice when a message arrives. If ChatGPT supports MCP Events, ask it to subscribe to `switchboard.message.created` with `mailbox_id` set to `chatgpt`. SwB sends the message ID through a webhook, a request to a URL. ChatGPT reads the text with `get_message`. It answers with `reply`. ChatGPT can also check for new messages with `wait` or `inbox`.
 
 ## ChatGPT dots
 
-The `dots` block uses Slack delivery by default. It finds dots in one Slack workspace and makes each dot a target. Send to a dot with `@swb <dot name>` in Slack, or with `send(to="<dot name>")`.
+A dot is a personal ChatGPT agent. The `dots` block finds dots in one Slack workspace and makes each dot a target. Send from Slack with `@swb <dot name> <message>` or call `send(to="<dot name>", task="<message>")`.
 
-Dots talk in one private Slack channel, `#agents` by default. SwB makes the channel with your user token. Each send is a new post that mentions the dot. The dot's answer in that thread comes back on the conversation.
+The default Slack delivery uses the private channel `#agents`. SwB can create the channel with your user token. Use `/invite` in that channel to add the SwB bot and the dots. SwB returns the dot's reply to the original conversation.
 
 ```yaml
 blocks:
@@ -26,13 +26,13 @@ blocks:
     match: [dot]
 ```
 
-Paste this into the dot's instructions. Use your own bot and app ids.
+Paste this into the dot's instructions. Replace the example IDs with your SwB bot and app IDs.
 
 ```text
-In #agents, posts that @mention you from my SwB app (bot <BOT_ID>, app <APP_ID>) are my agents working with you for me. Treat them as my requests and answer in that post's thread.
+In #agents, check the bot and app IDs on SwB posts that mention you. Use bot <BOT_ID> and app <APP_ID>. Answer matching posts in the same thread.
 ```
 
-Set `delivery: mailbox` to send to dots through MCP Events instead of Slack.
+For direct mailbox delivery, follow [ChatGPT dots setup](/docs/setup/dots). Set `delivery: mailbox` and add each dot under `blocks.dots.dots`.
 
 ## Config
 
@@ -52,7 +52,7 @@ Set `delivery: mailbox` to send to dots through MCP Events instead of Slack.
 | `blocks.dots.default` | The dot selected by the target name `dot`. Use its short name or ID |
 | `blocks.dots.dots` | Map of dot definitions for `mailbox` delivery or overrides for Slack dots |
 | `blocks.dots.dots.*.name` | Display name for a dot |
-| `blocks.dots.dots.*.mailbox` | Inbox that receives messages in `mailbox` mode. Default `chatgpt` |
+| `blocks.dots.dots.*.mailbox` | Mailbox that receives messages. Default `chatgpt` |
 | `blocks.dots.group_dm` | Set `true` to use a Slack group message with the owner, SwB and the dot |
 | `blocks.dots.owner_dm` | Set `true` to send posts made as the owner to the owner's Slack direct message with the dot |
 | `blocks.dots.agents_as_owner` | Set `true` to use the owner's Slack account for sends from the owner's agents in channel or direct message delivery |

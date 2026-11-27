@@ -3,7 +3,9 @@ title: 安装
 description: 用 uvx、pipx 或 Docker 安装 SwB。
 ---
 
-SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要 Python 3.12 或更高版本。Docker 方式需要 Docker。
+{/* prepublication */}
+
+SwB 可在 Linux、macOS 和 Windows 上运行。要从源代码构建 SwB，请参阅 [Docker Compose](/zh-Hans/docs/self-hosting#docker-compose)。软件包或镜像发布后，请使用下方的安装方式。
 
 ## 安装并启动
 
@@ -11,6 +13,8 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
 
 <Tabs items={['uvx', 'pipx', 'Docker']}>
   <Tab value="uvx">
+    请[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)。SwB 需要 Python 3.12 或更高版本。
+
     ```bash
     uvx swb-one up
     ```
@@ -18,6 +22,8 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
     uvx 会下载并启动 SwB。请在五分钟内打开终端显示的一次性登录链接。运行其他示例时，把开头的 `swb` 换成 `uvx swb-one`。
   </Tab>
   <Tab value="pipx">
+    请[安装 pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html)。SwB 需要 Python 3.12 或更高版本。
+
     ```bash
     pipx install swb-one
     swb up
@@ -28,14 +34,16 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
     如果 pipx 使用较旧的 Python，请运行 `pipx install --python 3.12 swb-one`。
   </Tab>
   <Tab value="Docker">
+    请[安装 Docker](https://docs.docker.com/get-started/get-docker/)。
+
     ```bash
     (umask 077; set -C; printf 'SWB_KEY_OWNER=%s\nSWB_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
     docker run -d --name swb --env-file .env \
-      -e PORT=8870 -p 127.0.0.1:8870:8870 -v swb-data:/data \
+      -p 127.0.0.1:8870:8000 -v swb-data:/data \
       ghcr.io/zhehanzhang/swb:latest
     ```
 
-    这组命令先创建私有文件 `.env`，再启动容器。镜像把数据保存在 `/data`。运行 `docker exec swb swb login-link` 获取登录链接。运行其他示例时，把开头的 `swb` 换成 `docker exec swb swb`。
+    这组命令先创建私有文件 `.env`，再启动容器。镜像把数据保存在 `/data`。运行 `docker exec swb swb login-link` 获取登录链接。在容器中运行其他 SwB 命令时，请用 `docker exec -it swb swb` 开头。
   </Tab>
 </Tabs>
 
@@ -45,7 +53,7 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
 
 `swb up` 默认在 `127.0.0.1` 的 `8870` 端口监听。默认的本机 MCP 地址是 `http://localhost:8870/mcp`。如需更改端口，请在终端或 `.env` 中设置 `SWB_PORT`。
 
-用 `swb up --dir ./my-swb` 指定实例目录。运行其他命令时，请传入相同的 `--dir`。监听地址、配置文件和数据目录见[配置](/zh-Hans/docs/config)。
+用 `swb up --dir ./my-swb` 指定实例目录。运行 `swb init`、`swb status`、`swb login-link`、`swb connect` 和 `swb claim` 时，请传入相同的 `--dir`。监听地址、配置文件和数据目录见[配置](/zh-Hans/docs/config)。
 
 ## 检查服务器
 
@@ -63,7 +71,7 @@ curl -fsS http://127.0.0.1:8870/healthz
 | - | - |
 | `swb init` | 写入私有的所有者密钥和基本配置。 |
 | `swb up` | 在本机启动 SwB。 |
-| `swb connect` | 获取连接平台的步骤。 |
+| `swb connect PLATFORM` | 获取连接平台的步骤。 |
 | `swb companion` | 配对、运行或断开伴侣设备。 |
 | `swb hook HARNESS` | 将本地智能体事件转发给伴侣设备。 |
 | `swb status` | 查看状态和下一步。 |
@@ -80,4 +88,6 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 ## 版本
 
-版本发布后，可从 PyPI 获取 `swb-one` 软件包，或从 GitHub Container Registry 获取 `ghcr.io/zhehanzhang/swb` 镜像。用 `1.0.0` 这样的版本号指定版本。镜像标签 `latest` 指向最新的稳定版本。
+{/* prepublication */}
+
+版本发布后，PyPI 提供 `swb-one` 软件包。GitHub Container Registry 提供 `ghcr.io/zhehanzhang/swb` 镜像。用 `1.0.0` 这样的版本号指定版本。镜像标签 `latest` 指向最新的稳定版本。

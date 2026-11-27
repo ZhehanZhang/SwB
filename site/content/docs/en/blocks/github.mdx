@@ -8,7 +8,7 @@ description: Send GitHub events to your agents and services.
 Create a GitHub App on your account. Set the webhook address to your public SwB address plus `/github/webhook`. For example, use `https://swb.example.com/github/webhook`. Generate a webhook secret in a private file. SwB accepts secrets of at least 16 characters.
 
 ```bash
-(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
+(umask 077; set -C; openssl rand -hex 32 > ~/.swb-github-secret)
 ```
 
 Enter the secret in **Webhook secret**. Ask an agent to connect GitHub. Save the same secret through its claim link. Delete the private file. Restart SwB to load the secret. Ask the agent to call `connect` again for any remaining App ID or private key links. Paste the full contents of the `.pem` file in the private key field.
@@ -34,15 +34,16 @@ Install the app on the repositories you want.
 blocks:
   github:
     use: github
-    secret_env: GITHUB_WEBHOOK_SECRET
     sinks:
-      team: {url_env: TEAM_GITHUB_SINK_URL}
+      team: {url_env: SWB_EXAMPLE_GITHUB_SINK_URL}
     routes:
       "acme/app": [team]
       "acme/*": [team]
 ```
 
-A **sink** is an address that gets a copy of each event. Each matching sink gets one compact JSON event. SwB quotes event details in `metadata`. Each delivery has an `Idempotency-Key`. SwB retries network errors and server errors.
+Set `SWB_EXAMPLE_GITHUB_SINK_URL` to the receiver's address in your server environment.
+
+A **sink** is a URL that receives a copy of an event. SwB sends each matching sink a compact JSON event in `watch` mode. A repository with a sink route uses `watch` by default. Channel and space modes take priority. SwB quotes additional details in `metadata`. Each request uses the event's delivery ID as its `Idempotency-Key`. SwB retries connection failures, timeouts and HTTP 5xx responses.
 
 If Cloudflare Access protects your host, let `/github/webhook` through. The GitHub signature protects that path.
 
@@ -50,7 +51,7 @@ If Cloudflare Access protects your host, let `/github/webhook` through. The GitH
 
 In `off` mode, SwB drops all GitHub events for the space, including events from owner accounts.
 
-Work mode accepts events only from a configured owner account. Open `https://api.github.com/users/USERNAME` with your GitHub username. Copy the numeric `id` into the space's `owner_ids` list. Restart SwB to apply the setting.
+Use `work` mode to accept events from configured owner accounts only. Replace `USERNAME` in `https://api.github.com/users/USERNAME` with your GitHub username. Open the URL. Copy the numeric `id` into the space's `owner_ids` list. Restart SwB to apply the setting.
 
 ```yaml
 blocks:
@@ -68,7 +69,7 @@ Use `blocks.github.owner_ids` to set the default owner IDs. A space's `owner_ids
 
 SwB checks the author of each title, body or comment. The text counts as `owner` only when its own author is in `owner_ids` and is a person. SwB quotes branch names, refs, workflow titles and check names as `external`.
 
-An owner-triggered `check_run` carries `external` trust when it contains a check name. A fork of the repository can change the name in its pull request. Access rules use IDs such as `github:4242` and leave sender trust unchanged.
+A `check_run` with a check name carries `external` trust, even when the owner triggers it. A pull request from a fork can set the check name. Use IDs such as `github:4242` in access rules. These rules give access separately from trust.
 
 For GitHub conversation actions, pass the SwB conversation ID in `conversation` or `handle`.
 
@@ -79,10 +80,10 @@ For GitHub conversation actions, pass the SwB conversation ID in `conversation` 
 | `blocks.github` | Settings for GitHub events and actions |
 | `blocks.github.use` | Block type. Use `github` |
 | `blocks.github.enabled` | Set `false` to skip this block |
-| `blocks.github.app_id_env` | Name of the variable that holds the App ID. Default `GITHUB_APP_ID` |
-| `blocks.github.private_key_env` | Name of the variable that holds the App private key. Default `GITHUB_APP_PRIVATE_KEY` |
-| `blocks.github.token_env` | Name of the variable that holds a fine-grained token as an alternative to App credentials. Default `GITHUB_TOKEN` |
-| `blocks.github.secret_env` | Name of the variable that holds the webhook secret. Default `GITHUB_WEBHOOK_SECRET` |
+| `blocks.github.app_id_env` | Name of the variable that holds the App ID |
+| `blocks.github.private_key_env` | Name of the variable that holds the App private key |
+| `blocks.github.token_env` | Name of the variable that holds a fine-grained token as an alternative to App credentials |
+| `blocks.github.secret_env` | Name of the variable that holds the webhook secret |
 | `blocks.github.sinks` | Settings by event receiver name |
 | `blocks.github.sinks.*.url_env` | Name of the variable that holds the receiver address |
 | `blocks.github.routes` | Map from repo names or `owner/*` to lists of event receivers |
@@ -98,4 +99,4 @@ Bind an agent to a repository with `space_mode(block="github", space="acme/app",
 
 For outside senders, grant access to both `channel:github/acme/app` and `target:beta`. See [channel visibility](/docs/channel-modes#allow-outside-github-senders) for the access rules.
 
-Watch puts a digest in the target mailbox at the interval set by `modes.digest_minutes` or at 50 events. See [Watch digests](/docs/channel-modes#read-a-watch-digest) for where to read them.
+In `watch` mode, SwB sends a digest to the target mailbox after `modes.digest_minutes` or once it collects 50 events for that mailbox and space. See [Watch digests](/docs/channel-modes#read-a-watch-digest).

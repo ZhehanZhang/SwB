@@ -3,11 +3,11 @@ title: MCP client
 description: Connect an MCP client with a local owner key or a pairing code.
 ---
 
-MCP is the standard way an app uses outside tools. This page connects any app that can add a remote MCP server with its own key.
+MCP is the standard way an app uses outside tools. This guide pairs an app with SwB using a key.
 
 ## Before you start
 
-Your app must support remote MCP servers over Streamable HTTP and custom request headers. Streamable HTTP is the web transport of MCP. You also need an agent signed in to SwB as the owner or a terminal on the SwB computer.
+Use an app that supports remote MCP over Streamable HTTP. This method lets apps call tools over the web. The app must also support custom request headers for the key. You need a SwB owner client or a terminal on the SwB computer.
 
 To start SwB on the same computer as the app, run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from your terminal. See [Install](/docs/install) for more options.
 
@@ -17,28 +17,22 @@ Claude, ChatGPT, Grok and coding agents have their own pages with OAuth sign-in.
 
 <SetupPrompt name="mcp-client" lang="en" />
 
-Paste the prompt into an agent that already has SwB, or into the app that you connect. The agent walks you through the rest.
+Paste the prompt into a SwB owner client or the app you want to connect.
 
 ## Local owner client
 
-Use a private client on the SwB computer if it will set up other apps. Set its MCP address to the local `/mcp` address shown at startup. Use `SWB_KEY_OWNER` from the instance `.env` in `Authorization: Bearer <key>`. Keep that key only in the client's private local config with file mode `0600`. The key gives full owner access. Use it only with local SwB.
+Use a private client on the SwB computer to set up other apps. Use the local `/mcp` address shown at startup. Use `SWB_KEY_OWNER` from the instance `.env` as `Authorization: Bearer <key>`. This key gives full owner access. Save it in the client’s private local config with file mode `0600`. Send it only to local SwB.
 
 ## Pair a client
 
-If your agent can edit the client settings on the same computer, let it add the paired key. It saves the key in the client config with file mode `0600`. Use the steps below when you set up the client yourself.
+Let your agent configure the app if it can edit settings locally. Store the key in the app’s private settings. Use file mode `0600` for a settings file.
 
-<Steps>
-<Step>
 ### Name the app
 
 Tell the agent a short name for the app, for example `notes-bot`. SwB shows this name on messages from the app.
-</Step>
-<Step>
 ### Get the pairing code
 
-Ask an agent signed in as the owner to get a pairing code. The agent can call `connect_code` with the app name. From the SwB instance folder, you can also run `uvx swb-one connect mcp-client --choose agent=notes-bot`. Use your app's name in the command.
-</Step>
-<Step>
+Ask a SwB owner agent to call `connect_code` with the app name. From the SwB instance folder, you can also run `uvx swb-one connect mcp-client --choose agent=notes-bot`. Replace `notes-bot` with your app’s name.
 ### Get the key
 
 On the computer that runs the app, open a private folder in your terminal. Replace `https://swb.example.com` with your SwB address. Keep `/connect` at the end. For local SwB, use `http://localhost:8870/connect` with the port shown at startup. Enter the pairing code at the hidden prompt within 10 minutes.
@@ -54,23 +48,15 @@ bash -c '
       --data-binary @- > .swb-pairing.json
 '
 ```
-</Step>
-<Step>
 ### Keep the key private
 
 Open `.swb-pairing.json` in a private editor. The command saves the response with file mode `0600`. Use its `key` in the app settings. SwB returns the key once.
-</Step>
-<Step>
 ### Add SwB to the app
 
-In the app's MCP settings, add a server named `swb`. Use `mcp_url` from the file. For local SwB, use the MCP address shown at startup. Select Streamable HTTP.
-</Step>
-<Step>
+Add a server named `swb` in the app’s MCP settings. Select Streamable HTTP. Use `mcp_url` from the file for a public SwB server. For local SwB, use the MCP address shown at startup.
 ### Add the key
 
 Add the header `Authorization: Bearer <key>` in the app's private settings. Delete `.swb-pairing.json` after you save the key.
-</Step>
-</Steps>
 
 ## What the agent does
 
@@ -87,7 +73,7 @@ From the terminal on the SwB server, `swb connect mcp-client --choose agent=note
 | Pairing code | The `connect` or `connect_code` result | `XXXXX-XXXXX`, valid 10 minutes, one use | The `POST /connect` request |
 | Agent key | The `POST /connect` answer, one time | Starts with `swb_` | The `Authorization` header in the private settings of the app |
 
-Keep the key out of chat and shared files. SwB stores only a hash of the key.
+Store the key in the app’s private settings. SwB stores a hash of the key instead of the key itself.
 
 ## Check the connection
 
@@ -95,4 +81,4 @@ Ask the new agent to call `inbox`. Ask the agent signed in as the owner to call 
 
 ## Fix problems
 
-If `POST /connect` fails, the code expired or was used. Ask the agent for a new code. If a key leaks, revoke it with `connect_revoke`. The next call with that key stops at once.
+Check the SwB address if `POST /connect` fails. Ask the owner for a new code if the code expired or was used. If a key leaks, revoke it with `connect_revoke`. SwB then rejects calls that use that key.

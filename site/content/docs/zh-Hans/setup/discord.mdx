@@ -7,66 +7,47 @@ SwB 以机器人身份登录 Discord。它通过 Discord Gateway 接收新消息
 
 ## 开始之前
 
-你需要一个 Discord 账号，以及一个你拥有 **Manage Server** 权限的服务器。你还需要以所有者身份登录 SwB 服务器，例如 `https://swb.example.com`。私有机器人免费。
+请使用在目标服务器上具有 **Manage Server** 权限的 Discord 账号。请以所有者身份登录 SwB。
 
 ## 复制设置提示词
 
-提示词保留英文，供智能体使用。
-
 <SetupPrompt name="discord" lang="zh-Hans" />
 
-把提示词粘贴给你的智能体。智能体会带你完成其余步骤。
+把提示词粘贴到 SwB 所有者客户端。
 
-## 你的步骤
+## 设置 Discord 机器人
 
-<Steps>
-<Step>
 ### 创建应用
 
 打开 [https://discord.com/developers/applications](https://discord.com/developers/applications)。点击 **New Application**。
-</Step>
-<Step>
 ### 命名应用
 
 输入名称。点击 **Create**。
-</Step>
-<Step>
 ### 重置机器人令牌
 
 点击 **Bot** → **Reset Token**。确认重置。
-</Step>
-{/* unverified */}
-<Step>
+
 ### 复制机器人令牌
 
 令牌显示时点击 **Copy**。Discord 只显示一次。
-</Step>
-<Step>
 ### 打开 Message Content Intent
 
 在 **Bot** 页面的 **Privileged Gateway Intents** 下打开 **Message Content Intent**。点击 **Save Changes**。
-</Step>
-{/* unverified */}
-<Step>
+
 ### 保存令牌
 
 打开智能体给你的 SwB 领取链接。把令牌粘贴到字段中。
-</Step>
-<Step>
 ### 邀请机器人
 
-在智能体给你的邀请链接中选择你的服务器。点击 **Authorize**。
-</Step>
-{/* unverified */}
-</Steps>
+打开智能体给你的邀请链接。如果 Discord 要求选择服务器，请选择你的服务器。点击 **Authorize**。
 
 ## 智能体的工作
 
-智能体调用 `connect`，参数为 `what="discord"`。SwB 返回机器人令牌的领取链接。`discord_provision` 也会返回领取链接和设置信息。
+智能体调用 `connect(what="discord")`。需要时先启用 `discord` 模块。模块启用后，`connect` 或 `discord_provision` 会返回机器人令牌的领取链接。
 
-你保存令牌后，智能体调用 `discord_status`。它显示机器人名称、Gateway 状态、服务器、缺少的步骤，以及 `setup.invite_url` 中的邀请链接。
+保存令牌后，智能体调用 `discord_status` 检查机器人、Gateway 连接和服务器。它会把 `setup.invite_url` 中的邀请链接发给你。
 
-智能体在 `config/switchboard.yaml` 的 `blocks.discord.spaces` 下添加一个空间。空间是 SwB 对应到一个项目的 Discord 服务器。智能体还在 `blocks.discord.agents` 中给智能体授权。最后，它用 `discord_post` 发送一条测试消息。
+智能体在 `config/switchboard.yaml` 的 `blocks.discord.spaces` 下设置服务器。空间将服务器关联到一个 SwB 项目。智能体设置 `guild_id` 和 `owner_ids`。要让智能体调用 `discord_post`，请在 `blocks.discord.agents` 下授予权限。修改文件后重启 SwB。
 
 ## 凭据
 
@@ -79,12 +60,12 @@ SwB 以机器人身份登录 Discord。它通过 Discord Gateway 接收新消息
 
 请智能体再次调用 `connect`。设置完成后，它会报告 `connected`。`discord_status` 显示 Gateway 已就绪，机器人已在你的服务器中。
 
-在频道中提及机器人，并写上目标名称。确认回复出现在同一频道。
+请使用 `owner_ids` 中的 Discord 账号。在频道中提及机器人。加上 `targets` 返回的目标名称和测试消息。确认回复出现在同一频道。
 
 ## 解决问题
 
-Gateway 代码 4014 表示 Message Content Intent 处于关闭状态。打开它，或在配置中设置 `message_content: false`。
+看到 Gateway 代码 `4014` 时，请开启 **Message Content Intent**。如果要用提及来触发机器人，请设置 `message_content: false`，并在每条消息中提及机器人。
 
-Gateway 代码 4004 表示 Discord 拒绝了令牌。重置令牌，并通过新的领取链接保存。
+看到 Gateway 代码 `4004` 时，请重置 Discord 机器人令牌。如果令牌来自服务器环境，请在那里更换令牌并重启 SwB。也可用新的领取链接更新已领取的令牌。
 
 如果机器人已在服务器中，却在某个频道里保持沉默，请检查该频道的权限。

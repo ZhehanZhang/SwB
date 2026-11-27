@@ -1,9 +1,9 @@
 ---
 title: Companion
-description: Run SwB on your own device and give your SwB deployment local features.
+description: Connect a device so your agents can use its local features.
 ---
 
-Run SwB on your own device to use it as a companion. The companion connects to your SwB deployment. Your agents can then use features on that device.
+A **companion** is a device that connects to your SwB server. Agents can then use features on that device.
 
 ## Copy the setup prompt
 
@@ -11,9 +11,9 @@ Run SwB on your own device to use it as a companion. The companion connects to y
 
 ## Pair a device
 
-Ask an agent signed in as the owner to call `companion_code`. Ask the agent to save the code in a private file with mode `0600`.
+Ask an agent signed in as the owner to call `companion_code`. Ask the agent to save the code in a file with permissions `0600`. These permissions give only the file owner access.
 
-To get a code in the console, [sign in with a passkey](/docs/owner-login). Open Settings. In **Connections**, select **Pair a device**.
+To get a code in the console, [sign in with a passkey](/docs/owner-login#passkey). Open **Settings**. In **Connections**, select **Pair a device**. If you use Cloudflare Access, use the `companion_code` tool.
 
 Run this command on the device. Replace the example address with your SwB HTTPS address. For SwB on this device, you can use `http://127.0.0.1:8870`.
 
@@ -49,7 +49,7 @@ Use Python 3.13 for the Muse feature. Follow the [Muse pairing guide](/docs/setu
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-Add one `--mcp` option per MCP server. Use a command such as `--mcp 'notes=uvx notes-mcp'`. For an HTTP server on the device, use its local address, such as `--mcp notes=http://127.0.0.1:8000/mcp`.
+Add one `--mcp` option per MCP server. For a program, use `--mcp 'NAME=COMMAND'`. Replace `NAME` with a name for your server. Replace `COMMAND` with the program's start command. For an HTTP server on the device, use its local address, such as `--mcp notes=http://127.0.0.1:8000/mcp`.
 
 Your agents use `companion_list` to see each paired device and its actions. They use `companion_invoke` to run an action.
 
@@ -57,11 +57,11 @@ Companion text results have a 1 MiB limit. Read Drop file data from `structuredC
 
 ## Local sessions
 
-A local session is a coding agent that runs on the device. SwB lists each session as a target with its status.
+A **local session** is a coding agent's open conversation on the device. SwB lists its status with its `local:session:<companion>:<harness>:<session>` address.
 
-Use the linked instructions to set up the local agent before pairing. After pairing, keep the companion running. Ask an owner agent to call `targets(block="local")`. Check that your session address appears.
+Use the link for your coding agent in the feature table. Set up the agent before pairing. After pairing, keep the companion running. Ask an agent signed in as the owner to call `targets(block="local")`. Check that your session address appears.
 
-SwB puts a message for the session in the agent's mailbox first. It then tries to deliver the message into the open session. The answer comes back in the same conversation.
+SwB tries to deliver each message to the open session. It puts the message in the agent's mailbox when the sender can use that mailbox. The answer comes back in the same conversation.
 
 Use the session address from `targets`. Find the resource for that address in `visibility_list`. Share the resource with `visibility_set`.
 

@@ -5,9 +5,9 @@ description: 把 Slack 訊息路由給代理，並在討論串中貼出答案。
 
 ## 建立 Slack 應用程式
 
-從 [Slack 設定](/zh-Hant/docs/setup/slack#應用程式資訊清單)複製 YAML 應用程式資訊清單。依工作區需求選擇機器人版或僅個人帳號版。
+開啟 [Slack 設定](/zh-Hant/docs/setup/slack#應用程式資訊清單)。依需求選擇機器人和個人帳號共用的資訊清單，或個人帳號專用的資訊清單。清單包含 Slack 應用程式的設定。
 
-在工作區安裝應用程式。請代理連接 Slack，或執行 `swb connect slack`。工作區缺少權杖時，SwB 會提供該工作區的領取連結。表單會依工作區設定顯示欄位。
+在工作區安裝應用程式。請代理連接 Slack，或執行 `swb connect slack`。透過領取連結儲存工作區的權杖。重新啟動 SwB 以載入權杖。
 
 | 權杖 | 在哪裡找到 |
 | - | - |
@@ -17,17 +17,17 @@ description: 把 Slack 訊息路由給代理，並在討論串中貼出答案。
 
 ## 從 Slack 傳送
 
-提及機器人並加上目標 slug。
+提及機器人並填上目標簡稱。用 `targets` 查詢簡稱。
 
 ```text
 @swb claude check the release notes
 ```
 
-SwB 移除 slug，並把其餘內容傳送給目標。答案回到同一個討論串，並以目標的名稱與圖片顯示。討論串中的訊息會送給該討論串先前的目標。其他訊息送給工作區的 `default_target`。
+SwB 會移除目標簡稱，再傳送其餘內容。機器人通常會在原討論串回覆，並顯示目標的名稱和頭像。後續訊息可以沿用討論串的目標。工作區的 `default_target` 是備用目標。
 
 ## 以代理身分貼文
 
-代理用 `slack_*` 工具貼文。`slack.agents.<agent>` 為代理授予工作區與身分。每個身分有一個寫入政策。
+代理用 `slack_post` 貼文。在 `blocks.slack.agents.<agent>.workspaces` 設定代理可使用的工作區和帳號。每個帳號都有寫入政策。
 
 | 政策 | 效果 |
 | - | - |
@@ -83,7 +83,7 @@ SwB 移除 slug，並把其餘內容傳送給目標。答案回到同一個討�
 | `blocks.slack.workspaces.*.default_target` | 傳給 SwB 的新訊息省略目標名稱時使用的目標 |
 | `blocks.slack.workspaces.*.ack_reaction` | 機器人收到提及或私訊時用來確認的 Slack 表情符號名稱。預設值為 `eyes` |
 | `blocks.slack.workspaces.*.owner_user_ids` | 視為擁有者的 Slack 使用者 ID。預設使用工作區核准人 |
-| `blocks.slack.workspaces.*.known` | 替已登記的 Slack 使用者或機器人 ID 設定顯示名稱 |
+| `blocks.slack.workspaces.*.known` | 為已登記的 Slack 使用者或機器人 ID 設定顯示名稱。此設定可協助判斷要接收哪些訊息 |
 | `blocks.slack.workspaces.*.sender_rate` | 限制 SwB 從擁有者以外的傳送者接收訊息的頻率。適用於 `assist`、`triage` 與作為參考的訊息 |
 | `blocks.slack.workspaces.*.sender_rate.count` | 每位傳送者在時段內的訊息數量上限。預設值為 `5` |
 | `blocks.slack.workspaces.*.sender_rate.window_s` | 計算訊息上限的時段長度，單位為秒。預設值為 `600` |
@@ -122,7 +122,8 @@ SwB 移除 slug，並把其餘內容傳送給目標。答案回到同一個討�
 | `blocks.slack.workspaces.*.sinks` | 設定將 Slack 事件轉送給其他服務的 Webhook |
 | `blocks.slack.workspaces.*.sinks.*.name` | 記錄與狀態中顯示的 Webhook 名稱 |
 | `blocks.slack.workspaces.*.sinks.*.url_env` | 存放 Webhook 網址的環境變數名稱 |
-| `blocks.slack.workspaces.*.sinks.*.secret_env` | 存放 Webhook 請求簽署金鑰的環境變數名稱 |
+| `blocks.slack.workspaces.*.sinks.*.signature` | 設為 `stripe`，依 Stripe 格式為請求加上簽章 |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | 存放簽章金鑰的環境變數名稱 |
 | `blocks.slack.workspaces.*.sinks.*.kinds` | 要轉送的事件類型，可選 `watched`、`mention` 與 `dm`。預設轉送全部三種 |
 | `blocks.slack.workspaces.*.sinks.*.targets` | 只轉送對應這些目標名稱的事件 |
 | `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | 將事件合併成單次請求的等待秒數。預設值 `0` 表示逐則傳送 |

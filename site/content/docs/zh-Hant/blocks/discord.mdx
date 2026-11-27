@@ -5,15 +5,15 @@ description: 把 Discord 訊息路由給代理，並在討論串中回覆。
 
 ## 建立機器人
 
-在 [Discord Developer Portal](https://discord.com/developers/applications) 建立 New Application。在 Bot 之下開啟 Message Content Intent。重設機器人權杖。
+依 [Discord 設定](/zh-Hant/docs/setup/discord)建立機器人。開啟 Message Content Intent，讓機器人讀取訊息內文和後續訊息。
 
-請代理連接 Discord。代理呼叫 `discord_provision` 並給你一個領取連結。開啟連結並貼上機器人權杖。你也可以在伺服器環境中設定 `DISCORD_BOT_TOKEN`。
+請代理連接 Discord。代理呼叫 `discord_provision` 並給你一個領取連結。開啟連結並貼上機器人權杖。
 
 ## 把機器人加到伺服器
 
-`discord_status` 會回傳 `setup.invite_url`。開啟它，把機器人加到你的伺服器。連結會要求 bot 範圍，以及你所用功能需要的權限。
+機器人連線後，呼叫 `discord_status`。開啟 `setup.invite_url` 中的連結。把機器人加入伺服器。連結會要求已啟用功能所需的權限。
 
-SwB 從 Discord 讀取機器人的擁有者，並記錄機器人加入的伺服器。`discord_status` 把它們列在 `discovered` 之下。把伺服器加入設定檔，就能路由它的訊息。
+在 `discord_status` 的 `discovered.guilds` 找出伺服器 ID。將 ID 填入設定檔的空間。每個空間保存一個 Discord 伺服器的設定。
 
 ```yaml
 blocks:
@@ -23,19 +23,19 @@ blocks:
       home:
         guild_id: "100000000000000001"
         owner_ids: ["100000000000000002"]
-        default_target: helper
+        default_target: claude
     agents: {claude: [home]}
 ```
 
-若要複製 id，請在 User Settings → Advanced 開啟 Developer Mode。然後在伺服器或使用者上按右鍵。
+若要設定擁有者，請先私訊機器人。在 `discord_status` 的 `discovered.dm_users` 找出你的使用者 ID。將 ID 填入 `owner_ids`。
 
 ## 從 Discord 傳送
 
-提及機器人並加上目標 slug，例如 `@swb helper check the build`。SwB 從你的訊息開啟討論串，並把你加入其中。答案回到討論串。討論串中的後續訊息送給同一個目標。角色身分的貼文每個頻道使用一個 webhook，所以每個代理顯示自己的名稱與圖片。
+提及機器人並填上目標簡稱，例如 `@swb claude check the build`。啟用討論串後，SwB 可以從你的訊息建立討論串並將你加入。SwB 會在討論串回覆。後續訊息可以沿用討論串的目標。啟用角色身分後，符合條件的回覆會顯示代理的名稱和頭像。
 
 ## 與其他人共用
 
-頻道與目標起初是私人。若要讓其他人連到目標，請共用頻道與目標。使用 `channel:<space>/<channel id>` 與 `target:<slug>`。清單可用 `discord:<user id>` 指定單一使用者。
+頻道和目標預設為私人資源。若要讓其他人存取，請同時共用頻道和目標。用 `channel:<space>/<channel id>` 和 `target:<slug>` 指定這兩項資源。若要授權給特定使用者，請在存取清單加入 `discord:<user id>`。
 
 ## 模組設定
 
@@ -44,7 +44,7 @@ blocks:
 | `blocks.discord` | 設定 Discord 機器人及其空間 |
 | `blocks.discord.use` | 載入 `discord` 模組 |
 | `blocks.discord.enabled` | 設為 `true` 啟用模組，設為 `false` 關閉模組 |
-| `blocks.discord.token_env` | 存放機器人權杖的環境變數名稱。預設值為 `DISCORD_BOT_TOKEN` |
+| `blocks.discord.token_env` | 存放機器人權杖的環境變數名稱 |
 | `blocks.discord.application_id` | 用於產生邀請連結的 Discord 應用程式 ID。SwB 也可以從 Discord 讀取這個 ID |
 | `blocks.discord.connect` | 設為 `true` 後接收 Discord 即時事件。設為 `false` 可單獨測試 API 呼叫 |
 | `blocks.discord.message_content` | 設為 `true` 可讀取訊息內容，包括討論串中的後續訊息。在開發者入口網站開啟 Message Content Intent |

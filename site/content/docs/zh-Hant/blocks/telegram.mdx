@@ -3,23 +3,22 @@ title: Telegram
 description: 把 Telegram 訊息路由給代理，並貼出答案。
 ---
 
-Telegram 使用長輪詢。機器人從你的伺服器連到 Telegram，所以 SwB 可以停留在私人位址。
+SwB 主動向 Telegram 取得新訊息。SwB 伺服器可以使用私人位址。
 
 ## 建立機器人
 
-在 [@BotFather](https://t.me/BotFather) 傳送 `/newbot`。請代理連接 Telegram。代理呼叫 `telegram_provision` 並給你一個領取連結。開啟連結並貼上機器人權杖。你也可以在伺服器環境中設定 `TELEGRAM_BOT_TOKEN`。
+在 [@BotFather](https://t.me/BotFather) 傳送 `/newbot`。請代理連接 Telegram。代理呼叫 `telegram_provision` 並給你一個領取連結。開啟連結並貼上機器人權杖。
 
 ## 把機器人加到群組
 
 把機器人加到群組。在群組中傳送 `/swb@<bot username>`。接著 `telegram_status` 會在 `setup.seen_chats` 中顯示群組的聊天 id。把這個 id 放進空間的 `chats`。
 
-開啟機器人的私人聊天並按下 Start。把你自己的聊天 id 放進 `owner_ids`。
+開啟與機器人的私人對話。傳送一則訊息給它。在 `setup.seen_chats` 找出你的私人對話 ID。將該 ID 填入 `owner_ids`。
 
 ```yaml
 blocks:
   telegram:
     use: telegram
-    token_env: TELEGRAM_BOT_TOKEN
     agents: {claude: [home]}
     spaces:
       home:
@@ -30,7 +29,7 @@ blocks:
 
 ## 從 Telegram 傳送
 
-私訊機器人、提及機器人，或使用 `/swb <target> <message>`。回覆機器人會送給同一個目標。答案的第一行以粗體顯示目標名稱。
+私訊機器人、提及機器人，或使用 `/swb <target> <message>`。若要繼續對話，請直接回覆機器人的回答。啟用 `persona_prefix` 後，代理的回覆可以用粗體顯示其名稱。
 
 若要讓機器人讀取群組中的每則訊息，請在 @BotFather 用 `/setprivacy` 關閉隱私模式。然後把機器人移出群組，再重新加入。
 
@@ -41,7 +40,7 @@ blocks:
 | `blocks.telegram` | 設定 Telegram 機器人及其空間 |
 | `blocks.telegram.use` | 載入 `telegram` 模組 |
 | `blocks.telegram.enabled` | 設為 `true` 啟用模組，設為 `false` 關閉模組 |
-| `blocks.telegram.token_env` | 存放機器人權杖的環境變數名稱。預設值為 `TELEGRAM_BOT_TOKEN` |
+| `blocks.telegram.token_env` | 存放機器人權杖的環境變數名稱 |
 | `blocks.telegram.dm_space` | 指定私聊所用的路由與擁有者設定來自哪個空間。預設使用設定中的第一個空間 |
 | `blocks.telegram.dm_mode` | 其他人傳來私訊時的處理模式。設為 `watch` 收集訊息以製作摘要，設為 `off` 略過訊息 |
 | `blocks.telegram.ack_reaction` | 收到傳給機器人的訊息時用來確認的表情符號。設為 `null` 可關閉這項反應 |

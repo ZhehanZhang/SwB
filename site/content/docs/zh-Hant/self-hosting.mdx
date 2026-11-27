@@ -5,7 +5,7 @@ description: 用 Docker Compose 與 Cloudflare 在伺服器上執行 SwB。
 
 ## Docker Compose
 
-請以擁有資料夾的使用者身分執行下列指令。
+安裝 Docker Compose 2.24 或更新版本。用擁有資料夾的一般使用者帳號執行以下指令。
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -23,27 +23,25 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-請在五分鐘內開啟終端機顯示的一次性登入連結。
+在五分鐘內開啟終端機顯示的一次性登入連結。請妥善保管連結。
 
 擁有者在瀏覽器中透過 `http://localhost:8870` 登入。容器內的指令使用 `8000` 連接埠。Compose 將資料存放在 `./data`。修改 `.env` 後，請再次執行 `docker compose up -d`。
 
-執行 `docker compose exec switchboard swb login-link` 取得 `http://localhost:8870` 的登入連結。
+如果 SwB 在遠端伺服器上執行，先將伺服器的 `8870` 連接埠轉送至本機的 `8870` 連接埠，再開啟連結。
 
-登出後，`/healthz` 只會傳回 `status` 和 `version` 兩個欄位。以擁有者身分登入或使用擁有者金鑰，即可查看完整的運作狀態。
+直接存取 `/healthz` 會傳回 `status` 和 `version`。以擁有者身分登入或使用擁有者金鑰，可查看完整的運作狀態。
 
 ## Cloudflare Tunnel
 
-通道讓 SwB 在你的網域上有公開位址，並讓連接埠保持關閉。請在 Cloudflare Zero Trust 建立通道。把它的公開主機名稱指向 `http://switchboard:8000`。把通道權杖放進 `.env`，名稱是 `TUNNEL_TOKEN`。用 tunnel profile 啟動 Compose。
+依照 [Cloudflare 通道設定指南](/zh-Hant/docs/setup/cloudflare)為你的網域建立通道。將 Compose 服務位址設為 `http://switchboard:8000`。按[發行版 Compose 檔](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37)中的名稱，將通道權杖存入 `.env`。將 `.env` 裡的 `SWB_PUBLIC_URL` 改為通道位址。用 `tunnel` 設定啟動 Compose。
 
 ```bash
 docker compose --profile tunnel up -d
 ```
 
-把 `SWB_PUBLIC_URL` 設為通道主機名稱，例如 `https://swb.example.com`。
-
 ## 信任的代理
 
-反向代理會將請求轉送給 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 加入代理的位址或專用網段。請用 CIDR 格式填寫位址範圍。
+反向代理會將要求轉送給 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 加入代理的位址或專用網段。以 CIDR 格式填寫網段，例如 `192.0.2.0/24`。
 
 也可以在 `.env` 設定 `SWB_TRUSTED_PROXIES`。請用逗號分隔各項。SwB 優先採用 YAML 內的設定。
 
@@ -51,17 +49,7 @@ docker compose --profile tunnel up -d
 
 ## Cloudflare Access
 
-參考 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare) 設定擁有者政策和略過政策。
-
-| 路徑 | 政策 |
-| --- | --- |
-| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | 略過 |
-| `/healthz`、`/connect`、`/avatars/*` | 略過 |
-| `/inbox/poll`、`/inbox/events` | 略過 |
-| `/github/webhook` | 為 GitHub 略過 |
-| 其餘路徑，包括 `/`、`/authorize`、`/inbox` 和對話頁面 | 擁有者 |
-
-從擁有者應用程式取得 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 和 `CLOUDFLARE_ACCESS_AUD`。SwB 會檢查略過路徑收到的請求。
+依照 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare)設定 SwB，並為擁有者和用戶端要求設定存取規則。
 
 ## 託管平台
 
@@ -74,26 +62,24 @@ docker compose --profile tunnel up -d
 
 ## Fly.io [#fly]
 
-使用 [SwB 發行分支的本機副本](#docker-compose)。安裝 [Fly.io 命令列工具](https://docs.fly.io/flyctl/)並登入。
+使用 [Docker Compose 範例](#docker-compose)下載的 SwB 發行分支。安裝 [Fly.io 命令列工具](https://docs.fly.io/flyctl/)。登入 Fly.io。
 
 在 SwB 資料夾中執行 `sh deploy/fly.sh my-swb`。將 `my-swb` 換成唯一的應用程式名稱。指令稿以 `fly deploy --ha=false` 啟動一部虛擬機器。
 
-開啟本機副本中的 `.env.swb-setup-fly-my-swb`。使用 `SWB_SETUP_CODE` 登入。
+開啟應用程式的登入頁。從本機的 `.env.swb-setup-fly-my-swb` 檔案複製 `SWB_SETUP_CODE`。將設定碼填入 **Setup code**。登入後刪除此檔。
 
-在 [Fly.io 免費方案](https://docs.fly.io/about/free-plan)中新增信用卡後，每月有 5 美元的使用額度。加卡前，帳號有 1 美元的初始額度，有效期為 7 天。
-
-在阿什本（`iad`），一部配有 512 MB 記憶體的 `shared-cpu-1x` 虛擬機器每月費用為 3.69 美元。1 GB 儲存磁碟區每月費用為 0.15 美元。
-
-使用費用超過 5 美元時，Fly.io 會將組織切換為按用量付費。Fly.io 按[標準費率](https://fly.io/docs/about/pricing/)收取當月的全部費用。
+計費詳情請參閱 [Fly.io 免費方案](https://docs.fly.io/about/free-plan)和[目前費率](https://fly.io/docs/about/pricing/)。
 
 ## 備份與升級
 
-所有狀態都在資料夾中。升級前請先備份。請讓 `mcp-events.key` 與 `claim-key` 跟資料庫放在一起，因為它們封存已儲存的機密。升級時，安裝新版本並啟動 SwB。資料庫變更只會新增資料表與欄位。
+複製資料夾前，先停止 SwB。完整保留資料夾、資料庫和 `mcp-events.key`、`claim-key` 等金鑰。也要備份設定檔和 `.env`。妥善保管備份。安裝或建置新版本。使用原本的資料夾啟動 SwB。
 
 ## 匯出記憶
 
+在 Compose 容器中執行匯出。
+
 ```bash
-swb export /data/export
+docker compose exec -T switchboard swb export /data/export
 ```
 
-匯出會為每個範圍寫入一個 Markdown 資料夾，並附上 `INDEX.md`。設定 `memory.mirror_dir` 可在資料夾中保留即時副本。
+匯出的 Markdown 檔會依範圍存放在主機的 `./data/export` 裡。目錄內還有一份 `INDEX.md`。設定 `memory.mirror_dir` 即可保留隨記憶更新的 Markdown 副本。

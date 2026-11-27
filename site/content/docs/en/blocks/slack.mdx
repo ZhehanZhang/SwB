@@ -5,9 +5,9 @@ description: Route Slack messages to agents and post the answers in the thread.
 
 ## Make the Slack app
 
-Copy the YAML app manifest from [Slack setup](/docs/setup/slack#app-manifests). Choose the manifest for a bot or for your account only.
+Open [Slack setup](/docs/setup/slack#app-manifests). Choose the manifest for both accounts or for your user account. A manifest is a file with the Slack app settings.
 
-Install the app in your workspace. Ask an agent to connect Slack, or run `swb connect slack`. If a token is missing, SwB gives you a claim link for that workspace. The fields match the workspace settings.
+Install the app in your workspace. Ask an agent to connect Slack, or run `swb connect slack`. Save the workspace tokens through the claim link. Restart SwB to load the saved tokens.
 
 | Token | Where to find it |
 | - | - |
@@ -17,17 +17,17 @@ Install the app in your workspace. Ask an agent to connect Slack, or run `swb co
 
 ## Send from Slack
 
-Mention the bot with a target slug.
+Mention the bot and give the target's short name. Use `targets` to look up names.
 
 ```text
 @swb claude check the release notes
 ```
 
-SwB removes the slug and sends the rest to the target. The answer comes back in the same thread, under the target's name and picture. A message in a thread goes to the thread's earlier target. Other messages go to the workspace's `default_target`.
+SwB removes the target name and sends the rest of the message. For a normal bot reply, SwB posts in the thread under the target's name and picture. In a follow-up, SwB can reuse the thread's target. The workspace's `default_target` is a fallback.
 
 ## Post as an agent
 
-Agents post with the `slack_*` tools. `slack.agents.<agent>` grants an agent its workspaces and identities. Each identity has a write policy.
+Agents post with `slack_post`. Use `blocks.slack.agents.<agent>.workspaces` to choose where and through which accounts an agent can post. Each account has a write policy.
 
 | Policy | Effect |
 | - | - |
@@ -83,7 +83,7 @@ Use [channel modes](/docs/channel-modes) to wake an agent through a project rout
 | `blocks.slack.workspaces.*.default_target` | Target for a new message addressed to SwB with the target name omitted |
 | `blocks.slack.workspaces.*.ack_reaction` | Slack emoji name for acknowledgments on mentions and direct messages. The bot default is `eyes` |
 | `blocks.slack.workspaces.*.owner_user_ids` | Slack user IDs treated as owners. The workspace approver is the default |
-| `blocks.slack.workspaces.*.known` | Maps trusted Slack user or bot IDs to display names |
+| `blocks.slack.workspaces.*.known` | Maps known Slack user or bot IDs to display names. Use it to help choose whose messages to accept |
 | `blocks.slack.workspaces.*.sender_rate` | Limits message intake for each sender other than the owner. Applies to `assist`, `triage` and messages used as context |
 | `blocks.slack.workspaces.*.sender_rate.count` | Maximum messages per sender in the time window. The default is `5` |
 | `blocks.slack.workspaces.*.sender_rate.window_s` | Length of the time window in seconds. The default is `600` |
@@ -122,7 +122,8 @@ Use [channel modes](/docs/channel-modes) to wake an agent through a project rout
 | `blocks.slack.workspaces.*.sinks` | Sets up webhooks that send Slack events to other services |
 | `blocks.slack.workspaces.*.sinks.*.name` | Name that identifies the webhook in logs and status |
 | `blocks.slack.workspaces.*.sinks.*.url_env` | Name of the environment variable for the webhook URL |
-| `blocks.slack.workspaces.*.sinks.*.secret_env` | Name of the environment variable for the key that signs webhook requests |
+| `blocks.slack.workspaces.*.sinks.*.signature` | Set `stripe` to sign requests in the Stripe format |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | Name of the environment variable for the signing key |
 | `blocks.slack.workspaces.*.sinks.*.kinds` | Event types to send. Choose from `watched`, `mention` and `dm`. The default sends all three |
 | `blocks.slack.workspaces.*.sinks.*.targets` | Send only events for these target names |
 | `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | Seconds to collect events for one request. The default of `0` sends each event on its own |

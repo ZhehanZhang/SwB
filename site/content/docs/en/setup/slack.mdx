@@ -5,78 +5,54 @@ description: Connect a Slack workspace to SwB with a bot and your own Slack acco
 
 SwB reads and posts in Slack through a Slack app that you make from a manifest. A manifest is a file that holds all the settings of the app.
 
-The app uses Socket Mode. Socket Mode is a connection that SwB opens to Slack, so your SwB server can stay on a private address.
+The app uses Socket Mode. SwB opens this connection to Slack, so your server can use a private address.
 
 ## Before you start
 
-You need a Slack account in the workspace and the right to create and install apps there. In an Enterprise Grid organization, an Org Owner or Org Admin must approve the app. You also need the owner sign-in to your SwB server, for example `https://swb.example.com`.
+Use a Slack account that can create and install apps in the workspace. Your organization may require app approval. Sign in to SwB as the owner.
 
 ## Copy the setup prompt
 
 <SetupPrompt name="slack" lang="en" />
 
-Paste the prompt into your agent. The agent walks you through the rest.
+Paste the prompt into your SwB owner client.
 
-## Your steps
+## Set up the Slack app
 
-<Steps>
-<Step>
 ### Open the Slack app settings
 
 Open [Slack app settings](https://api.slack.com/apps). Click **Create New App** → **From a manifest**.
-</Step>
-<Step>
 ### Select the workspace
 
 Select your workspace. Click **Next**.
-</Step>
-<Step>
 ### Paste the manifest
 
 Select **YAML**. Copy one of the app manifests below. Paste it in full.
-</Step>
-<Step>
 ### Create the app
 
 Click **Next** → **Create**.
-</Step>
-<Step>
 ### Make the app-level token
 
 Click **Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**. Type a name for the token.
-</Step>
-<Step>
 ### Add the scope
 
 Click **Add Scope** → `connections:write`. Click **Generate**.
-</Step>
-<Step>
 ### Install the app
 
 Click **Install App** → **Install to Workspace**. Click **Allow** as the Slack user that SwB acts for.
-</Step>
-<Step>
 ### Get approval in Enterprise Grid
 
-If Slack asks for approval, send the app to an Org Owner. The Org Owner approves it in **Organization settings** → **Integrations** → **Manage Apps** → **Approve an app**.
-</Step>
-{/* unverified */}
-<Step>
+If Slack asks for approval, send the app to a workspace or organization admin for approval.
+
 ### Save the tokens
 
-Open the SwB claim link from your agent. Paste each Slack token into its field.
-</Step>
-<Step>
+Open the claim link for your workspace. Paste each Slack token into its field.
 ### Invite the bot
 
-Open each Slack channel for SwB. Send `/invite @<bot name>` in that channel.
-</Step>
-<Step>
+If you use a bot, send `/invite @<bot name>` in each Slack channel for SwB.
 ### Find the workspace ID
 
-Open Slack in a desktop browser. Give your agent the part of the address that starts with `T`.
-</Step>
-</Steps>
+Open Slack in a browser. Give your agent the workspace ID from the address. It starts with `T`.
 
 ## App manifests
 
@@ -182,9 +158,9 @@ settings:
 
 ## What the agent does
 
-The agent calls `connect` with `what="slack"`. SwB shows which tokens each workspace still needs and returns one claim link for them.
+The agent calls `connect(what="slack")`. SwB checks which tokens are missing. It returns a claim link for the workspace that needs them.
 
-The agent adds the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml`. It uses the workspace ID and token names. It adds a grant for its own agent name under `blocks.slack.agents`, so it can call `slack_workspaces`. If the agent needs you to edit the file, it gives you the YAML.
+The agent adds the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml`. It sets the workspace ID and token names. It grants access under `blocks.slack.agents`.
 
 This example connects one workspace with a bot and your account. Replace `T0DEMO0001` with your workspace ID.
 
@@ -196,21 +172,21 @@ blocks:
     workspaces:
       example:
         team_id: T0DEMO0001
-        app_token_env: SLACK_EXAMPLE_APP_TOKEN
+        app_token_env: SWB_SLACK_EXAMPLE_APP_TOKEN
         identities:
           bot:
-            token_env: SLACK_EXAMPLE_BOT_TOKEN
+            token_env: SWB_SLACK_EXAMPLE_BOT_TOKEN
           user:
-            token_env: SLACK_EXAMPLE_USER_TOKEN
+            token_env: SWB_SLACK_EXAMPLE_USER_TOKEN
     agents:
       claude:
         workspaces:
           example: [bot, user]
 ```
 
-The grant names the agent that uses Slack. Use the name that `switchboard_status` shows, for example `claude` or `chatgpt`. Add one grant for each agent. Use the same workspace label in the workspace entry and the grant. For the account-only manifest, add `user_only: true` next to `team_id`. Remove the `bot` entry under `identities`. Set the grant to `[user]`.
+Use the agent name that `switchboard_status` shows. Add one grant for each agent. Use the same workspace label in the workspace entry and the grant. For the account-only manifest, add `user_only: true` next to `team_id`. Remove `bot` from `identities`. Set the grant to `[user]`.
 
-When SwB asks for a restart, the agent tells you. After the restart, it uses `slack_workspaces` to check each identity. An identity is the bot or your own account. Last, it sends a test message with `slack_post`.
+Restart SwB when `connect` asks. The agent can check each Slack identity with `slack_workspaces`. An identity is the bot or your account.
 
 ## Credentials
 
@@ -220,13 +196,11 @@ When SwB asks for a restart, the agent tells you. After the restart, it uses `sl
 | Bot token | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | Starts with `xoxb-` | SwB claim link |
 | User token | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | Starts with `xoxp-` | SwB claim link |
 
-The workspace ID and channel IDs are names for places in Slack. They are safe to put in the config file.
-
 ## Check the connection
 
-Ask the agent to call `connect` again. It reports `connected` when the setup is complete. `slack_workspaces` shows `ready` for each identity and `connected` for Socket Mode.
+Run `connect(what="slack")` again and check for `connected`. Call `slack_workspaces`. Check that `ready` is `true` for each identity and `connected` is `true` for the workspace.
 
-Mention the bot in a channel and add a target name. The agent sees the message with `slack_events` or `slack_wait`.
+For bot setup, mention the bot in a channel and add a target name. Ask the agent to check `slack_events` or `slack_wait`. To test a post, use `slack_post` from an identity with write access.
 
 ## Fix problems
 
