@@ -21,6 +21,8 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 Compose 在 `http://127.0.0.1:8870` 提供 SwB，并把数据保存在 `./data`。修改 `.env` 后，再次运行 `docker compose up -d`。
 
+运行 `docker compose exec switchboard swb login-link` 获取 `http://localhost:8870` 的登录链接。
+
 退出登录后，`/healthz` 只返回 `status` 和 `version` 两个字段。以所有者身份登录或使用所有者密钥，即可查看完整的运行状态。
 
 ## Cloudflare Tunnel
@@ -32,6 +34,12 @@ docker compose --profile tunnel up -d
 ```
 
 把 `SWITCHBOARD_PUBLIC_URL` 设为隧道的主机名，例如 `https://swb.example.com`。
+
+## 受信任的代理
+
+反向代理把请求转发给 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 中添加代理的地址或专用网段。用 CIDR 格式填写地址范围。
+
+如果 Cloudflare 隧道和 SwB 共用主机或 Docker 网络，请添加隧道连接器的地址或专用网段。连接器直接连接 SwB。如果 Cloudflare 边缘服务器直接连接 SwB，请添加 `cloudflare`。
 
 ## Cloudflare Access
 

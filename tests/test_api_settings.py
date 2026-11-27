@@ -55,7 +55,7 @@ def test_settings_omits_unavailable_or_unsafe_values(make, monkeypatch, base, en
 
 
 def test_settings_does_not_invent_an_mcp_endpoint_for_disabled_mcp(make):
-    _, client = make(base_config(version=2, blocks={}))
+    _, client = make(base_config(version=2, blocks={"mcp": {"enabled": False}}))
     response = client.get("/api/settings", headers=OWNER)
     assert response.status_code == 200
     assert response.json()["mcp_url"] is None

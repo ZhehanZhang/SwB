@@ -27,7 +27,7 @@ def clean_env(tmp_path, monkeypatch):
     for name in ("PORT", "SWITCHBOARD_PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR",
                  "SWITCHBOARD_PUBLIC_URL", "PUBLIC_URL", "SWITCHBOARD_DEPLOY_PLATFORM", "CLOUDFLARE_ACCESS_TEAM_DOMAIN",
                  "CLOUDFLARE_ACCESS_AUD", "SWITCHBOARD_OWNER_EMAILS", "SWB_SETUP_CODE", "CAPY_API_KEY", "GITHUB_WEBHOOK_SECRET",
-                 cli.OWNER_KEY):
+                 "SWB_COMPOSE_ORIGIN", cli.OWNER_KEY):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -99,6 +99,45 @@ def test_generated_config_keeps_discovering_env_blocks(clean_env, tmp_path, monk
     assert configs == [{"mcp", "capy"}, {"mcp", "capy", "github"}]
     assert yaml.safe_load((tmp_path / cli.CONFIG).read_text()) == {"version": 2}
     capsys.readouterr()
+
+
+def test_documented_github_block_and_generated_muse_block_keep_mcp(clean_env, tmp_path, capsys):
+    __main__.cli_main(["init"])
+    capsys.readouterr()
+    config = tmp_path / cli.CONFIG
+    assert config.read_text() == "version: 2\n"
+    env = cli._read_env(tmp_path / ".env")
+    key = env[cli.OWNER_KEY]
+    with config.open("a") as file:
+        file.write("""blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode:
+          mode: watch
+          target: agent:beta
+        project: demo
+""")
+
+    from switchboard.app import create_app
+    from switchboard.core import Switchboard
+
+    def start():
+        return TestClient(create_app(Switchboard(config, data_dir=tmp_path / "data", env=env,
+                                                 loopback_origin="http://127.0.0.1:8870")))
+
+    with start() as client:
+        status = payload(call(client, key, "switchboard_status"))
+        assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "github"}
+        steps = payload(call(client, key, "connect", {"what": "muse", "choose": {"gadget": True}}))["next"]
+        snippet = next(step["snippet"] for step in steps if "snippet" in step)
+        assert yaml.safe_load(snippet) == {"muse": {"use": "muse", "enabled": True}}
+    with config.open("a") as file:
+        file.write(f"{snippet}\n")
+    with start() as client:
+        status = payload(call(client, key, "switchboard_status"))
+        assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "github", "muse"}
 
 
 def test_generated_config_follows_port_changes(clean_env, tmp_path, monkeypatch, capsys):
@@ -320,7 +359,7 @@ def test_implicit_commands_use_the_config_override_and_dir_forces_local(clean_en
 def test_missing_config_override_does_not_discover_the_local_file(clean_env, tmp_path, monkeypatch):
     local = tmp_path / cli.CONFIG
     local.parent.mkdir()
-    local.write_text("version: 2\nblocks: {}\n")
+    local.write_text("version: 2\nblocks:\n  mcp: {enabled: false}\n")
     (tmp_path / ".env").write_text("SWITCHBOARD_CONFIG=missing.yaml\n")
 
     def serve(app, **options):

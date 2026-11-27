@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     if args.cmd == "log" and not 1 <= args.limit < 2 ** 63:
         parser.error("Set --limit between 1 and 9223372036854775807.")
 
-    from .config import ConfigError, LOOPBACK_HOSTS, bind_address, config_path, migrate_text
+    from .config import ConfigError, bind_address, config_path, local_origin, migrate_text
     from .core import Switchboard
     from .deployment import OWNER_KEY, serve_env
 
@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
 
     port = int(env.get("PORT", "8000")) if serving else 0
     host, origin = bind_address(env, port, host=getattr(args, "host", None))
-    loopback_origin = origin if host in LOOPBACK_HOSTS and port else None
+    loopback_origin = local_origin(host, origin, env) if port else None
     try:
         deployment_env = serve_env(env, instance=instance) if serving else None
     except ConfigError as error:
@@ -147,8 +147,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             options = {
                 "host": host,
                 "port": port,
-                "proxy_headers": True,
-                "forwarded_allow_ips": env.get("FORWARDED_ALLOW_IPS", "*"),
+                "proxy_headers": False,
                 "timeout_graceful_shutdown": 5,
             }
             if announce_login:

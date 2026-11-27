@@ -8,11 +8,11 @@ from __future__ import annotations
 import json
 import time
 from collections import OrderedDict, deque
-from ipaddress import ip_address
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address
 from typing import Any, Callable
 
 from starlette.exceptions import HTTPException
-from starlette.datastructures import MutableHeaders
+from starlette.datastructures import Headers, MutableHeaders
 
 BODY_LIMIT = 1 * 1024 * 1024
 MCP_BODY_LIMIT = 16 * 1024 * 1024
@@ -35,20 +35,46 @@ LIMITS = {
 }
 
 
-def client_ip(scope: dict[str, Any]) -> str:
-    for k, v in scope.get("headers", []):
-        if k == b"cf-connecting-ip":
-            return v.decode()[:64]
-    client = scope.get("client")
-    return str(client[0]) if client else "?"
-
-
-def audit_client_ip(scope: dict[str, Any]) -> str:
-    peer = client_ip(scope)
+def _ip(value: str) -> IPv4Address | IPv6Address | None:
     try:
-        return str(ip_address(peer)) if "%" not in peer else "-"
+        return ip_address(value.strip()) if "%" not in value else None
     except ValueError:
+        return None
+
+
+def _peer_ip(scope: dict[str, Any]) -> IPv4Address | IPv6Address | None:
+    client = scope.get("client")
+    return _ip(str(client[0])) if client else None
+
+
+def _resolved_ip(scope: dict[str, Any], trusted_proxies: tuple[IPv4Network | IPv6Network, ...]) -> str:
+    peer = _peer_ip(scope)
+    if peer is None:
         return "-"
+    if any(peer in network for network in trusted_proxies):
+        headers = Headers(scope=scope)
+        forwarded = headers.getlist("x-forwarded-for")
+        for field in reversed(forwarded):
+            for value in reversed(field.split(",")):
+                address = _ip(value)
+                if address is None:
+                    return str(peer)
+                if not any(address in network for network in trusted_proxies):
+                    return str(address)
+        if not forwarded:
+            cf = headers.getlist("cf-connecting-ip")
+            if len(cf) == 1 and (address := _ip(cf[0])) is not None:
+                return str(address)
+    return str(peer)
+
+
+def client_ip(scope: dict[str, Any]) -> str:
+    if resolved := scope.get("swb.client_ip"):
+        return resolved
+    return str(peer) if (peer := _peer_ip(scope)) is not None else "-"
+
+
+audit_client_ip = client_ip
 
 
 class RateLimiter:
@@ -113,15 +139,18 @@ class Guard:
 
     PATHS = {"/register": "register", "/token": "token", "/authorize": "authorize"}
 
-    def __init__(self, app: Any, limiter: RateLimiter, on_refusal: Callable[[str, str, str], None] | None = None):
+    def __init__(self, app: Any, limiter: RateLimiter, on_refusal: Callable[[str, str, str], None] | None = None,
+                 *, trusted_proxies: tuple[IPv4Network | IPv6Network, ...] = ()):
         self.app = app
         self.limiter = limiter
         self.on_refusal = on_refusal or (lambda ip, path, why: None)
+        self.trusted_proxies = trusted_proxies
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        scope["swb.client_ip"] = _resolved_ip(scope, self.trusted_proxies)
         path = scope["path"]
         if path == "/login" or path.startswith("/auth/"):
             original_send = send

@@ -4,6 +4,7 @@
 version: 2
 
 # public_url: https://switchboard.example.com
+# trusted_proxies: []
 # data_dir: /data
 # timezone: Etc/UTC
 # auth:
