@@ -78,6 +78,7 @@ def test_inventory_coverage(tmp_path, capsys, monkeypatch):
     ("key", "label", "mention", "unrelated"),
     [
         ("tool:send", "Send", "Call `send`.", "Call `send_later`."),
+        ("prompt:setup-grok-bot", "Set up Grok Bot", "Open `setup-grok-bot`.", "Open `setup-grok`."),
         ("command:up", "swb up", "Run `swb up --tunnel`.", "Run `swb upgrade`."),
         ("command:swb", "swb", "Run `swb`.", "Install `swb-one`."),
         ("page:/", "SwB", "Open `/`.", "Open `/settings` or `/.well-known/*`."),
