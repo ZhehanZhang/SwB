@@ -9,7 +9,7 @@ description: 向已配對裝置上的程式開發代理傳送訊息。
 
 依照[配對裝置](/zh-Hant/docs/companion#配對裝置)的說明操作。使用下方對應代理的指令。每啟用一項功能，加入一個 `--cap` 選項。若要變更已配對裝置的功能，請先[中斷連線](/zh-Hant/docs/companion#中斷連線)。
 
-請以擁有者身分登入的代理呼叫 `targets(block="local")`，確認設定結果。複製工作階段的位址。位址格式為 `local:session:<harness>:<id>`。其中 `harness` 是執行代理的程式。
+請以擁有者身分登入的代理呼叫 `targets(block="local")`，確認設定結果。複製工作階段的位址。位址格式為 `local:session:<companion>:<harness>:<session>`。其中 `harness` 是執行代理的程式。
 
 ## 傳送訊息
 
@@ -61,7 +61,7 @@ gemini extensions install /path/to/SwB/integrations/gemini
 swb companion connect https://swb.example.com --cap herdr --cap hooks
 ```
 
-若要接收窗格中的回覆，請設定對應的[狀態掛鉤](#狀態掛鉤)。確認目標中列出 `local:session:herdr:<id>` 位址。傳送一則簡短的測試訊息到該位址。確認訊息出現在窗格中。若有設定狀態掛鉤，請用 `result` 檢視回覆。
+若要接收窗格中的回覆，請設定對應的[狀態掛鉤](#狀態掛鉤)。確認目標中列出 `local:session:<companion>:herdr:<session>` 位址。傳送一則簡短的測試訊息到該位址。確認訊息出現在窗格中。若有設定狀態掛鉤，請用 `result` 檢視回覆。
 
 ## Codex
 
@@ -83,7 +83,7 @@ codex --remote unix://
 swb companion connect https://swb.example.com --cap codex
 ```
 
-夥伴裝置從應用程式伺服器讀取工作階段事件。確認目標中列出 `local:session:codex:<id>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
+夥伴裝置從應用程式伺服器讀取工作階段事件。確認目標中列出 `local:session:<companion>:codex:<session>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
 
 ## OpenCode
 
@@ -99,7 +99,7 @@ opencode serve --hostname 127.0.0.1 --port 4096
 SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
 ```
 
-夥伴裝置從 OpenCode 伺服器讀取工作階段事件。確認目標中列出 `local:session:opencode:<id>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
+夥伴裝置從 OpenCode 伺服器讀取工作階段事件。確認目標中列出 `local:session:<companion>:opencode:<session>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
 
 ## DeepSeek Harness
 
@@ -117,4 +117,4 @@ dsh plugin --profile web add /path/to/SwB/integrations/dsh
 swb companion connect https://swb.example.com --cap dsh
 ```
 
-確認目標中列出 `local:session:dsh:<id>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。
+確認目標中列出 `local:session:<companion>:dsh:<session>` 位址。傳送一則簡短的測試訊息到該位址。用 `result` 檢視回覆。

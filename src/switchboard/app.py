@@ -10,6 +10,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from starlette.applications import Starlette
+from starlette.datastructures import Headers
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
@@ -19,7 +20,7 @@ from .api_about import release_version
 from .api_display import SLACK_PROFILE_PREFIX
 from .auth import COMPANION_KEY_PREFIX
 from .claims import CLAIM_PATH, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
-from .companion_routes import companion_routes
+from .companion_routes import COMPANION_ACTIONS, companion_routes
 from .config import REQUEST_BASE
 from .deployment import OWNER_KEY
 from .env import env_value
@@ -66,9 +67,8 @@ class RequestBase:
 class BearerGate:
     """Authenticates MCP, inbox and companion requests with distinct bearer credentials.
 
-    Wrong tokens are audited and count against the caller's IP: after too many, that IP gets 429 for a while,
-    even with a good token, so guessing keys is slow. Requests without any token are the normal OAuth discovery
-    step and are neither audited nor counted.
+    Wrong tokens on protected endpoints count toward per-address lockout. Anonymous MCP and inbox requests
+    can start OAuth discovery without counting as failed sign-ins.
     """
 
     def __init__(self, app: Any, core: "Switchboard", limiter: RateLimiter):
@@ -87,53 +87,79 @@ class BearerGate:
         self._anonymous[ip] = now
         return True
 
+    def _companion_refused(self, scope: dict, endpoint: str | None, detail: str, token: str | None = None) -> None:
+        companion_id = self.core.companions.key_id(token) if token else None
+        self.core.audit.record_refusal(origin="http", client=audit_client_ip(scope), destination="core",
+                                       action="companion_refused", detail=detail, target=companion_id or endpoint,
+                                       ref=endpoint if companion_id else None)
+
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
         path = scope.get("path", "")
         inbox_feed = path.rstrip("/") in INBOX_FEEDS
-        companion = path.startswith("/companion/") and path.rstrip("/") != "/companion/pair"
-        if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed or companion):
+        mcp = path.startswith("/mcp")
+        companion_api = path.startswith("/companion/")
+        companion = companion_api and path.rstrip("/") != "/companion/pair"
+        headers = Headers(scope=scope)
+        auth = headers.get("authorization", "")
+        bare = auth.strip()
+        bearer = auth[:7].lower() == "bearer "
+        token = auth[7:].strip() if bearer else (bare if bare and " " not in bare else None)
+        wrong_realm = not companion_api and token is not None and token.startswith(COMPANION_KEY_PREFIX)
+        mcp_or_inbox = mcp or inbox_feed
+        if wrong_realm and not mcp_or_inbox:
+            target = CLAIM_PATH if path.startswith(CLAIM_PATH + "/") else None
+            self._companion_refused(scope, target, "companion key outside the companion API", token)
+            response = JSONResponse({"error": "invalid_token", "error_description": "Use a credential for this endpoint."},
+                                    status_code=401, headers={"WWW-Authenticate": 'Bearer error="invalid_token"', "Cache-Control": "no-store"})
+            return await response(scope, receive, send)
+
+        if mcp_or_inbox or companion:
             scope.pop(PRINCIPAL_SCOPE, None)
-            headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-            auth = headers.get("authorization", "")
-            bare = auth.strip()
-            token = auth[7:].strip() if auth.lower().startswith("bearer ") else (bare if bare and " " not in bare else None)
             ip = client_ip(scope)
             if companion:
                 wait = self.limiter.blocked("companion_bearer_fail", ip)
                 if wait is not None:
+                    self._companion_refused(scope, "/companion", "companion sign-in rate limit", token)
                     await reject(send, 429, "slow_down", "Too many failed companion sign-ins.", wait)
                     return
-                principal = self.core.companions.authenticate(token or "") if auth.lower().startswith("bearer ") else None
+                principal = self.core.companions.authenticate(token or "") if bearer else None
                 if principal is None:
                     self.limiter.hit("companion_bearer_fail", ip)
+                    detail = "unknown or revoked companion key" if token else "missing companion key"
+                    self._companion_refused(scope, "/companion", detail, token)
                     self.core.audit.record_refusal(origin="http", client=audit_client_ip(scope), destination="core", action="auth_failure",
-                                                   detail="unknown or revoked companion key" if token else "missing companion key",
-                                                   target="/companion")
+                                                   detail=detail, target="/companion")
                     await reject(send, 401, "invalid_token", "Use a valid companion key.")
                     return
                 scope[PRINCIPAL_SCOPE] = principal
-                await self.app(scope, receive, send)
-                return
+                return await self.app(scope, receive, send)
             wait = self.limiter.blocked("bearer_fail", ip)
             if wait is not None:
+                if wrong_realm:
+                    self._companion_refused(scope, "/inbox" if inbox_feed else "/mcp", "sign-in rate limit", token)
                 await reject(send, 429, "slow_down", "too many failed sign-ins from this address; try again later", wait)
                 return
             principal = self.core.auth.verify_bearer(token)
             if principal is None and token:
                 self.limiter.hit("bearer_fail", ip)
-                if token.startswith(COMPANION_KEY_PREFIX):
-                    self.core.audit.record(origin="http", source="-", client=audit_client_ip(scope), destination="core",
-                                           action="auth_failure", outcome="refused", target="/mcp" if not inbox_feed else "/inbox",
-                                           detail="companion key outside the companion API")
+                if wrong_realm:
+                    endpoint = "/inbox" if inbox_feed else "/mcp"
+                    detail = "companion key outside the companion API"
+                    self._companion_refused(scope, endpoint, detail, token)
+                    self.core.audit.record_refusal(origin="http", client=audit_client_ip(scope), destination="core",
+                                                   action="auth_failure", target=endpoint, detail=detail)
                 else:
                     self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
-                                           target=scope["path"], detail=f"unknown or expired bearer token ({token_shape(token)}); agent {headers.get('user-agent', '-')[:80]}")
+                                           target=path, detail=f"unknown or expired bearer token ({token_shape(token)}); agent {headers.get('user-agent', '-')[:80]}")
             elif auth and not token:
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
-                                       target=scope["path"], detail="Authorization header is not 'Bearer <token>'")
+                                       target=path, detail="Authorization header is not 'Bearer <token>'")
             elif not auth and self._first_anonymous(ip):
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_missing", outcome="refused",
-                                       target=scope["path"], detail=f"no Authorization header (OAuth discovery, or a key that wasn't sent); agent {headers.get('user-agent', '-')[:80]}")
+                                       target=path, detail=f"no Authorization header (OAuth discovery, or a key that wasn't sent); agent {headers.get('user-agent', '-')[:80]}")
             if principal is None:
                 challenge = self.core.auth.challenge_header("invalid_token" if token else None)
                 body = json.dumps({"error": "invalid_token" if token else "unauthorized", "error_description": "sign in through OAuth or send a valid bearer key"}).encode()
@@ -580,6 +606,20 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
     def refused(ip: str, path: str, why: str) -> None:
         core.audit.record(origin="http", source="-", client=ip, destination="core", action="rate_limited", outcome="refused", target=path, detail=why)
 
-    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused)
+    def large_body(scope: dict) -> None:
+        head, _, verb = scope["path"].rstrip("/").rpartition("/")
+        if head != "/companion":
+            return
+        detail = "Companion request exceeds the body limit."
+        if verb == "pair":
+            core.audit.record_refusal(origin="http", client=audit_client_ip(scope), destination="core", action="companion_pair", detail=detail)
+        elif action := COMPANION_ACTIONS.get(verb):
+            scheme, _, token = Headers(scope=scope).get("authorization", "").partition(" ")
+            if scheme.lower() == "bearer" and (companion_id := core.companions.key_id(token.strip())):
+                core.audit.record_refusal(origin="companion", client=audit_client_ip(scope), destination="core",
+                                          action=f"companion_{action}", target=companion_id, detail=detail)
+
+    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused,
+                 on_large_body=large_body, trusted_proxies=core.cfg.trusted_proxies)
     gate.starlette = app
     return gate

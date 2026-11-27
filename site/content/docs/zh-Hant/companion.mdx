@@ -53,9 +53,19 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 代理用 `companion_list` 檢視已配對的裝置及其操作。代理用 `companion_invoke` 執行操作。
 
+夥伴裝置回傳的文字上限為 1 MiB。請從 `structuredContent.result.content_b64` 讀取 Drop 檔案資料。
+
 ## 本機工作階段
 
+本機工作階段是指正在這台裝置上執行的程式開發代理。SwB 會在目標中列出工作階段及其狀態。
+
 配對前，請依表格中的連結設定本機代理。配對後，讓夥伴裝置持續執行。請以擁有者身分登入的代理呼叫 `targets(block="local")`。確認結果中列出你的工作階段位址。
+
+SwB 先把傳給工作階段的訊息放進代理的信箱，再嘗試送到已開啟的工作階段。回覆會回到原本的 SwB 對話。
+
+從 `targets` 取得工作階段的位址。在 `visibility_list` 中查找該位址對應的資源。用 `visibility_set` 分享該資源。
+
+如需指令與適用的代理，請參閱[本機工作階段](/zh-Hant/docs/blocks/local-sessions)。
 
 ## 保持執行
 

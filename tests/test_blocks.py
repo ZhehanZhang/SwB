@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from functools import partial
 
+import pytest
 import yaml
 
 from conftest import CAPTAIN, OWNER, PROJECT, STATIC_KEY, Clock, base_config, beacon, call, error_text, payload, register, rpc, sign_in
@@ -56,6 +57,26 @@ def test_v1_config_translates_to_blocks(tmp_path):
     assert list(load_config(None, {}).blocks) == ["mcp"]
     assert translate_v1({"destinations": {"capy": {"enabled": False}}})["blocks"]["capy"]["enabled"] is False
     assert translate_v1({"origins": {"slack": {}}})["blocks"]["slack"]["engine"] is False
+
+
+@pytest.mark.parametrize(("origins", "enabled"), [(None, True), ({}, False), ({"mcp": {"enabled": False}}, False), ({"mcp": {}}, True)])
+def test_legacy_config_preserves_mcp_state_after_migration(tmp_path, origins, enabled):
+    config = {"version": 1, "destinations": {"capy": {}}}
+    if origins is not None:
+        config["origins"] = origins
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(config))
+    assert load_config(path, {}).mcp_enabled is enabled
+    path.write_text(migrate_text(path.read_text()))
+    assert load_config(path, {}).mcp_enabled is enabled
+
+
+def test_yaml_preserves_an_existing_named_mcp_block(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("version: 2\nblocks:\n  primary: {use: mcp, legacy_aliases: false}\n")
+    cfg = load_config(path, {})
+    assert cfg.blocks == {"primary": {"use": "mcp", "legacy_aliases": False}}
+    assert cfg.mcp_enabled
 
 
 def test_v2_config_runs_the_same_core(make):

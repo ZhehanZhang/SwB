@@ -41,6 +41,7 @@ class CompanionState:
     enabled_caps: tuple[str, ...]
     drop_dir: str
     mcp_servers: tuple[str, ...] = field(default=(), repr=False)
+    name: str | None = None
 
     @classmethod
     def load(cls, path: Path) -> CompanionState | None:
@@ -75,11 +76,14 @@ class CompanionState:
             if not isinstance(servers, list) or not all(isinstance(server, str) for server in servers):
                 raise ValueError
             specs = tuple(servers)
+            name = data.get("name")
+            if name is not None:
+                name = device_name(name)
             from .mcp_config import local_servers
 
             if ("mcp" in caps) != bool(local_servers(specs)):
                 raise ValueError
-            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs)
+            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs, name)
         except (TypeError, ValueError, KeyError):
             raise CompanionError("Check the companion settings file.") from None
 
@@ -106,9 +110,20 @@ class CompanionState:
             finally:
                 temporary.unlink(missing_ok=True)
 
-    def clear(self, path: Path) -> None:
-        if self == self.load(path):
-            path.unlink(missing_ok=True)
+    def clear(self, path: Path) -> bool:
+        current = self.load(path)
+        if current is None:
+            return True
+        if (current.url, current.companion_id, current.device_key) != (self.url, self.companion_id, self.device_key):
+            return False
+        path.unlink(missing_ok=True)
+        return True
+
+
+def device_name(value: object) -> str:
+    if isinstance(value, str) and (name := value.strip()) and len(name) <= 120 and name.isprintable():
+        return name
+    raise CompanionError("Enter a device name of up to 120 printable characters.")
 
 
 def valid_pair(companion_id: object, key: object) -> bool:

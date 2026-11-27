@@ -149,7 +149,7 @@ export function LoginPage() {
                       <form method="post" action="/auth/setup" onSubmit={enterSetupCode} className="space-y-4">
                         <label className="block text-label-sm">
                           Setup code
-                          <input name="code" type="password" autoComplete="off" minLength={44} maxLength={64} required
+                          <input name="code" type="password" autoComplete="one-time-code" minLength={44} maxLength={64} required
                             className="mt-1 block h-9 w-full rounded-md border border-input px-3 text-sm" />
                         </label>
                         {setupError && <p role="alert" className="text-sm text-destructive">{setupError}</p>}
