@@ -79,7 +79,7 @@ def test_owner_claim_stores_and_audits_without_echo(make, caplog):
 
     with caplog.at_level(logging.INFO, logger="switchboard.audit"):
         saved = client.post(path, data={"csrf": csrf, "token": VALUE}, headers=OWNER)
-    assert saved.status_code == 200 and "Run connect again" in saved.text
+    assert saved.status_code == 200 and "<h1>Token saved</h1>" in saved.text
     private_page(saved)
     assert VALUE not in saved.text and VALUE not in caplog.text
     assert code not in saved.text and code not in caplog.text

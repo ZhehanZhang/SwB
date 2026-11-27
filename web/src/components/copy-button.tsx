@@ -21,7 +21,7 @@ export function CopyButton({ text, label }: { text: string; label: string }) {
           setCopied(true)
           toast.success("Copied")
         } catch {
-          toast.error("Couldn’t copy.")
+          toast.error("Copy failed")
         }
       }}
     >

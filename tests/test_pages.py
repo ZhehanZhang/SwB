@@ -15,7 +15,7 @@ def test_pages_use_site_assets_and_strict_csp(make):
 
 def test_classic_admin_page_needs_the_owners_access_identity(make):
     core, c = make(env={"SWITCHBOARD_KEY_CAPY": "s" * 32})
-    core.projects.create(slug="infra", name="Infra", links={"repos": ["example-org/links"]})
+    core.projects.create(slug="infra", name="Infra", links={"repos": ["demo-org/sample-app"]})
     for headers in ({}, {"cf-access-jwt-assertion": "other"}):
         redirect = c.get("/classic", headers=headers, follow_redirects=False)
         assert redirect.status_code == 303 and redirect.headers["location"] == "/login?next=%2Fclassic"

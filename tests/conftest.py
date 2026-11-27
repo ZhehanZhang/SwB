@@ -41,7 +41,7 @@ def last_auth(capy: "FakeCapy", method: str, path_end: str) -> str:
 def base_config(**over: Any) -> dict[str, Any]:
     cfg = {
         "public_url": PUBLIC,
-        "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "z.cloudflareaccess.com", "aud": "aud1"}},
+        "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access.example.test", "aud": "aud1"}},
         "destinations": {"capy": {"daily_cap": 3, "default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01}},
     }
     cfg.update(over)
@@ -71,7 +71,7 @@ class FakeCapy:
         self.requests: list[tuple[str, str, Any]] = []
         self.threads: dict[str, dict[str, Any]] = {
             CAPTAIN: self.thread(CAPTAIN, PROJECT, title="Captain"),
-            CAPTAIN2: self.thread(CAPTAIN2, OTHER_PROJECT, title="Acme Captain"),
+            CAPTAIN2: self.thread(CAPTAIN2, OTHER_PROJECT, title="DemoLab Captain"),
             "jam_OTHER": self.thread("jam_OTHER", OTHER_PROJECT, title="Someone else's"),
         }
         self.messages: dict[str, list[dict[str, Any]]] = {CAPTAIN: [{"id": "01A", "source": "assistant", "text": "earlier", "createdAt": "x"}]}
@@ -88,12 +88,12 @@ class FakeCapy:
         self.auths: list[tuple[str, str, str]] = []
         self.captains: list[dict[str, Any]] = [
             {"id": CAPTAIN, "code": "ZINF-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
-            {"id": CAPTAIN2, "code": "ACME-3", "name": "Acme Captain", "title": "Acme Captain", "projectId": OTHER_PROJECT},
+            {"id": CAPTAIN2, "code": "DEMOLAB-3", "name": "DemoLab Captain", "title": "DemoLab Captain", "projectId": OTHER_PROJECT},
         ]
         self.projects: list[dict[str, Any]] = [
-            {"id": PROJECT, "name": "Infra", "code": "ZINF", "repos": [{"repoFullName": "example-org/links", "baseBranch": "main", "mode": "primary"},
-                                                                   {"repoFullName": "example-org/status-service", "baseBranch": "main", "mode": "lazy"}]},
-            {"id": OTHER_PROJECT, "name": "Acme", "code": "ACME", "repos": [{"repoFullName": "example-org/team-repo", "baseBranch": "main", "mode": "primary"}]},
+            {"id": PROJECT, "name": "Infra", "code": "ZINF", "repos": [{"repoFullName": "demo-org/sample-app", "baseBranch": "main", "mode": "primary"},
+                                                                   {"repoFullName": "demo-org/sample-tools", "baseBranch": "main", "mode": "lazy"}]},
+            {"id": OTHER_PROJECT, "name": "DemoLab", "code": "DEMOLAB", "repos": [{"repoFullName": "example-user/demolab", "baseBranch": "main", "mode": "primary"}]},
         ]
 
     @staticmethod
@@ -190,7 +190,7 @@ class FakeCapy:
         if (mm := re.fullmatch(r"captains/([^/]+)/crew", p)):
             return httpx.Response(200, json={"items": [
                 self.thread("jam_CREW1", PROJECT, title="slackgate", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
-                self.thread("jam_CREW2", PROJECT, title="needs owner", status="idle", needsYou=True, ask={"key": "a", "kind": "conversation", "text": "Merge zhehanzhang/x#1", "causeKey": None}, captain={"jamId": CAPTAIN, "name": "Captain"}),
+                self.thread("jam_CREW2", PROJECT, title="needs owner", status="idle", needsYou=True, ask={"key": "a", "kind": "conversation", "text": "Merge demo-org/sample-service#1", "causeKey": None}, captain={"jamId": CAPTAIN, "name": "Captain"}),
                 self.thread("jam_CREW3", OTHER_PROJECT, title="other project work", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
             ]})
         if p == "captains":
@@ -240,7 +240,7 @@ def new_core(tmp_path, capy, cimd=None, config=None, env=None, clock=None, acces
 
 
 def infra(core: Switchboard) -> None:
-    core.projects.create(slug="infra", name="Infra", links={"capy_project": PROJECT, "repos": ["example-org/links", "example-org/status-service"]})
+    core.projects.create(slug="infra", name="Infra", links={"capy_project": PROJECT, "repos": ["demo-org/sample-app", "demo-org/sample-tools"]})
 
 
 @pytest.fixture

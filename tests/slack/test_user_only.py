@@ -76,7 +76,7 @@ async def test_b_runtime_paths_never_join(make_core, world, hooks):
 async def test_b_refuses_bot_token_for_user_identity(make_core, world):
     from slackfix import AUTH, ENV
 
-    AUTH["xoxb-sneaky"] = {"ok": True, "team_id": "TBBBB2222", "user_id": "UBOTX", "bot_id": "BX", "url": "https://b.slack.com/"}
+    AUTH["xoxb-sneaky"] = {"ok": True, "team_id": "TBBBB2222", "user_id": "UBOTX", "bot_id": "BX", "url": "https://workspace-b.example.test/"}
     try:
         core = await make_core(env={**ENV, "B_USER": "xoxb-sneaky"})
         rt = core.runtimes["private"]

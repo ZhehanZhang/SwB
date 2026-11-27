@@ -35,13 +35,13 @@ def test_old_module_paths_are_the_same_modules():
 
 
 def test_v1_config_translates_to_blocks(tmp_path):
-    v1 = {"public_url": "https://sb.example.test", "origins": {"mcp": {"wait": {"max_s": 100}}, "slack": {"workspaces": {"a2a": {"project": "acme"}}, "refresh_minutes": 5}},
+    v1 = {"public_url": "https://sb.example.test", "origins": {"mcp": {"wait": {"max_s": 100}}, "slack": {"workspaces": {"a2a": {"project": "demolab"}}, "refresh_minutes": 5}},
           "destinations": {"capy": {"daily_cap": 3}}, "slack": {"workspaces": {"a2a": {"bot_token_env": "X"}}, "captain_avatars": True}}
     v2 = translate_v1(v1)
     assert v2["version"] == 2 and v2["public_url"] == "https://sb.example.test"
     assert v2["blocks"]["mcp"] == {"use": "mcp", "wait": {"max_s": 100}}
     assert v2["blocks"]["capy"] == {"use": "capy", "daily_cap": 3}
-    assert v2["blocks"]["slack"]["workspace_projects"] == {"a2a": "acme"} and v2["blocks"]["slack"]["refresh_minutes"] == 5
+    assert v2["blocks"]["slack"]["workspace_projects"] == {"a2a": "demolab"} and v2["blocks"]["slack"]["refresh_minutes"] == 5
     assert v2["blocks"]["slack"]["workspaces"] == {"a2a": {"bot_token_env": "X"}} and v2["blocks"]["slack"]["captain_avatars"] is True
     p1, p2 = tmp_path / "v1.yaml", tmp_path / "v2.yaml"
     p1.write_text(yaml.safe_dump(v1))
@@ -199,12 +199,12 @@ def test_connected_agents_count_as_the_owner_but_cannot_change_access(make, capy
 
 def test_visibility_tools_flip_resources_and_keep_tools_private(make):
     core, c = make()
-    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:TeamCaptain", "visibility": "shared"}))["visibility"] == "shared"
-    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "channel:acme/#dev", "visibility": ["U0FRIEND0", "workspace:acme"]}))["visibility"] == ["U0FRIEND0", "workspace:acme"]
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:DemoAgent", "visibility": "shared"}))["visibility"] == "shared"
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "channel:demolab/#dev", "visibility": ["U0DEMO0002", "workspace:demolab"]}))["visibility"] == ["U0DEMO0002", "workspace:demolab"]
     assert "always private" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "tool:slack_post", "visibility": "shared"}))
-    assert "not a resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "teamcaptain", "visibility": "shared"}))
+    assert "not a resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "demoagent", "visibility": "shared"}))
     rows = {r["resource"]: r for r in payload(call(c, STATIC_KEY, "visibility_list"))["resources"]}
-    assert rows["target:teamcaptain"]["visibility"] == "shared" and rows["target:teamcaptain"]["source"] == "override"
+    assert rows["target:demoagent"]["visibility"] == "shared" and rows["target:demoagent"]["source"] == "override"
     assert core.visibility.rule("target:other") == "private"
     assert any(a["action"] == "visibility_set" for a in core.audit.recent(limit=10))
 

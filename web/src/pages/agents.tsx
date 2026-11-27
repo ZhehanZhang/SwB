@@ -17,15 +17,15 @@ import { agentListKey, isAgentDetail, isAgentSetup, listAgents, type Agent, type
 const connections = [
   { id: "claude-code", label: "Claude Code", preview: "claude mcp add …" },
   { id: "codex", label: "Codex", preview: "MCP config" },
-  { id: "chatgpt", label: "ChatGPT", preview: "Connector URL" },
+  { id: "chatgpt", label: "ChatGPT", preview: "MCP URL" },
   { id: "gemini-cli", label: "Gemini CLI", preview: "MCP config" },
-  { id: "any", label: "Any agent", preview: "Setup prompt" },
+  { id: "any", label: "Any agent", preview: "Connection prompt" },
 ]
 const setupGrid = "mt-4 grid gap-x-7 gap-y-4 md:flex md:flex-wrap"
 
 const detailPath = (id: string) => `/agents/${encodeURIComponent(id)}`
 const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
-const shortDate = (value: string | null) => value ? date.format(new Date(value)) : "—"
+const shortDate = (value: string | null) => value ? date.format(new Date(value)) : null
 
 function elapsed(value: string | null) {
   const timestamp = value ? Date.parse(value) : NaN
@@ -51,7 +51,7 @@ function ConnectionRow() {
       await navigator.clipboard.writeText(snippet)
       toast.success("Copied")
     } catch {
-      toast.error("Couldn’t copy")
+      toast.error("Copy failed")
     }
   }
 
@@ -59,7 +59,7 @@ function ConnectionRow() {
     <section className="border-b pb-3" aria-labelledby="connect-agent">
       <h2 id="connect-agent" className="text-base leading-6 font-semibold tracking-[-0.01em]">Connect an agent</h2>
       {query.isPending ? (
-        <LoadingSkeleton message="Loading setup snippets…">
+        <LoadingSkeleton message="Loading connection details…">
           <div className={setupGrid}>
             {connections.map(({ id }) => (
               <div key={id} className="min-w-0">
@@ -77,7 +77,7 @@ function ConnectionRow() {
           </div>
         </LoadingSkeleton>
       ) : query.isError ? (
-        <DataState kind="error" message="Couldn’t load setup snippets." onRetry={() => void query.refetch()} />
+        <DataState kind="error" message="Connection details unavailable." onRetry={() => void query.refetch()} />
       ) : (
         <div className={setupGrid}>
           {connections.map(({ id, label, preview }) => {
@@ -90,15 +90,14 @@ function ConnectionRow() {
                 <div className="flex items-center gap-2 text-sm font-medium"><Logo kind={id} />{label}</div>
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <code title={monospace} className="max-w-36 truncate font-mono text-xs leading-4 text-muted-foreground">{monospace}</code>
-                  <Button aria-label={`Copy ${label} setup`} title="Copy" variant="ghost" size="icon" className="size-6" disabled={!snippet} onClick={() => snippet && void copy(snippet)}>
+                  <Button aria-label={`Copy ${label} connection details`} title="Copy" variant="ghost" size="icon" className="size-6" disabled={!snippet} onClick={() => snippet && void copy(snippet)}>
                     <Copy aria-hidden strokeWidth={1.5} />
                   </Button>
-                  {id === "chatgpt" && <>
-                    <a href={query.data.chatgpt.plugins_url} target="_blank" rel="noreferrer" aria-label="Add a custom MCP server in ChatGPT Plugins" aria-describedby="chatgpt-setup" title={query.data.chatgpt.instruction} className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:underline">
+                  {id === "chatgpt" && (
+                    <a href={query.data.chatgpt.plugins_url} target="_blank" rel="noreferrer" aria-label="ChatGPT Plugins" className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:underline">
                       Plugins <ExternalLink aria-hidden className="size-3" strokeWidth={1.5} />
                     </a>
-                    <span id="chatgpt-setup" className="sr-only">{query.data.chatgpt.instruction}</span>
-                  </>}
+                  )}
                 </div>
               </div>
             )
@@ -121,7 +120,7 @@ function Registration({ agent }: { agent: Agent }) {
 function Claim({ agent }: { agent: Agent }) {
   const href = agent.claim_url && /^\/routines\/claim\/owner\/[a-f0-9]{32}$/.test(agent.claim_url) ? agent.claim_url : null
   return href ? <Button className="font-sans" size="sm" variant="outline" asChild><a href={href}>Claim</a></Button>
-    : <span className="text-body-sm text-muted-foreground">Awaiting handoff</span>
+    : <span className="text-body-sm text-muted-foreground">Claim pending</span>
 }
 
 function AgentListSkeleton() {
@@ -155,11 +154,11 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
     <section aria-labelledby="registered-agents" className="mt-8">
       <div className="flex items-center justify-between gap-3">
         <h2 id="registered-agents" className="text-base leading-6 font-semibold tracking-[-0.01em]">Registered</h2>
-        {state?.kind === "loading" ? <Skeleton className="h-3 w-12" /> : !state && (
+        {state?.kind === "loading" ? <Skeleton className="h-3 w-12" /> : !state && agents.length > 0 && (
           <span className="text-body-sm text-muted-foreground">{agents.length} {agents.length === 1 ? "agent" : "agents"}</span>
         )}
       </div>
-      {state?.kind === "loading" ? <AgentListSkeleton /> : state ? <DataState {...state} /> : !agents.length ? <DataState kind="empty" message="No registered agents." /> : (
+      {state?.kind === "loading" ? <AgentListSkeleton /> : state ? <DataState {...state} /> : !agents.length ? <DataState kind="empty" message="0 agents" /> : (
         <>
           <table className="hidden w-full table-fixed text-left text-[13px] leading-[18px] md:table">
             <thead className="border-b text-[11px] leading-4 font-medium text-muted-foreground">
@@ -177,11 +176,11 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
                 <tr key={agent.id} className="relative h-[45px] border-b hover:bg-muted/50 focus-within:bg-muted/50">
                   <td className="pr-2">
                     {agent.type === "pending" ? <span className="flex items-center gap-2 font-semibold"><Logo kind={agent.logo} />{agent.name}</span> : <Link to={detailPath(agent.id)} className="flex items-center gap-2 rounded-sm font-semibold before:absolute before:inset-0">
-                      <Logo kind={agent.logo} className="size-[22px]" /><span className="truncate">{agent.name}</span>
+                      <Logo kind={agent.logo} avatarUrl={agent.avatar_url} className="size-[22px]" /><span className="truncate">{agent.name}</span>
                     </Link>}
                   </td>
                   <td className="pr-2 text-muted-foreground">{agent.kind}</td>
-                  <td className="truncate pr-2 font-mono text-xs" title={agent.projects.join(", ") || undefined}>{agent.projects.join(", ") || <span className="text-muted-foreground">none</span>}</td>
+                  <td className="truncate pr-2 font-mono text-xs" title={agent.projects.join(", ") || undefined}>{agent.projects.join(", ")}</td>
                   <td className="truncate pr-2"><Registration agent={agent} /></td>
                   <td className="relative">{agent.type === "pending" ? <Claim agent={agent} />
                     : <span className="font-mono text-xs text-muted-foreground">{elapsed(agent.last_seen)}</span>}</td>
@@ -192,7 +191,7 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
           </table>
           <ul className="md:hidden">
             {agents.map((agent) => {
-              const heading = <><Logo kind={agent.logo} /><span className="min-w-0">
+              const heading = <><Logo kind={agent.logo} avatarUrl={agent.avatar_url} /><span className="min-w-0">
                 <span className="block truncate text-[13px] font-semibold">{agent.name}</span>
                 <span className="block truncate text-xs text-muted-foreground">{agent.kind}{agent.projects.length ? ` / ${agent.projects.join(", ")}` : ""}</span>
               </span></>
@@ -220,7 +219,7 @@ function Overview({ agent }: { agent: Agent }) {
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-3 py-4 text-[13px] leading-[18px]">
       <dt className="text-muted-foreground">Kind</dt><dd>{agent.kind}</dd>
-      <dt className="text-muted-foreground">Projects</dt><dd className="font-mono text-xs">{agent.projects.join(", ") || "none"}</dd>
+      <dt className="text-muted-foreground">Projects</dt><dd className="font-mono text-xs">{agent.projects.join(", ")}</dd>
       <dt className="text-muted-foreground">Registered by</dt><dd><Registration agent={agent} /></dd>
       <dt className="text-muted-foreground">Last seen</dt><dd className="flex items-center gap-2 font-mono text-xs"><AgentLamp state={agent.state} />{elapsed(agent.last_seen)}</dd>
     </dl>
@@ -228,7 +227,7 @@ function Overview({ agent }: { agent: Agent }) {
 }
 
 function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
-  const tabs = ["Overview", "Routines", "Keys", "Activity"] as const
+  const tabs = ["Overview", "Routines", "Tokens", "Activity"] as const
   const [confirmKey, setConfirmKey] = useState<string>()
   const session = useQuery(sessionQuery)
   const client = useQueryClient()
@@ -238,27 +237,27 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
       !!data && typeof data === "object" && "revoked" in data && data.revoked === true, { method: "POST", csrf: session.data?.csrf }),
     onSuccess: (_, id) => {
       setConfirmKey(undefined)
-      toast.success("Key revoked")
+      toast.success("Token revoked")
       if (agent.type === "key" && agent.reference === id) void navigate("/agents", { replace: true })
       void client.invalidateQueries({ queryKey: agentListKey })
       void client.invalidateQueries({ queryKey: ["agent-detail"] })
     },
-    onError: () => toast.error("Couldn’t revoke key"),
+    onError: () => toast.error("Token revocation failed"),
   })
 
   return (
     <Tabs defaultValue="Overview">
-      <TabsList aria-label="Agent detail" className="gap-0.5">
+      <TabsList aria-label="Agent details" className="gap-0.5">
         {tabs.map((name) => <TabsTrigger key={name} value={name}>{name}</TabsTrigger>)}
       </TabsList>
       <TabsContent value="Overview"><Overview agent={agent} /></TabsContent>
       <TabsContent value="Routines">{detail.routines.length ? <ul className="text-[13px]">
         {detail.routines.map((routine) => <li key={`${routine.block}:${routine.name}`} className="flex items-center justify-between gap-2 border-b py-3">
           <span className="font-medium">{routine.name}</span>
-          <span className="text-muted-foreground">{routine.project || "general"}{routine.primary ? " (primary)" : ""}</span>
+          <span className="text-muted-foreground">{routine.project}{routine.primary && (routine.project ? ", primary" : "Primary")}</span>
         </li>)}
-      </ul> : <DataState kind="empty" message="No routines." />}</TabsContent>
-      <TabsContent value="Keys">{detail.keys.length ? <ul className="text-[13px]">
+      </ul> : <DataState kind="empty" message="0 routines" />}</TabsContent>
+      <TabsContent value="Tokens">{detail.keys.length ? <ul className="text-[13px]">
         {detail.keys.map((key) => <li key={key.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-3">
           <div>
             <p className="font-mono text-xs">{key.id}</p>
@@ -266,16 +265,16 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
           </div>
           {confirmKey === key.id ? <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => setConfirmKey(undefined)} disabled={revoke.isPending}>Cancel</Button>
-            <Button size="sm" variant="destructive" disabled={revoke.isPending || !session.data?.csrf} onClick={() => revoke.mutate(key.id)}>Revoke key</Button>
+            <Button size="sm" variant="destructive" disabled={revoke.isPending || !session.data?.csrf} onClick={() => revoke.mutate(key.id)}>Revoke token</Button>
           </div> : <Button size="sm" variant="outline" onClick={() => setConfirmKey(key.id)} disabled={revoke.isPending}>Revoke</Button>}
         </li>)}
-      </ul> : <DataState kind="empty" message="No revocable keys." />}</TabsContent>
+      </ul> : <DataState kind="empty" message="0 tokens to revoke" />}</TabsContent>
       <TabsContent value="Activity">{detail.audit.length ? <ul className="text-[13px]">
         {detail.audit.map((entry) => <li key={entry.id} className="flex items-center justify-between gap-3 border-b py-3">
           <span>{auditText(entry)}</span>
           <span className="shrink-0 font-mono text-xs text-muted-foreground">{shortDate(entry.at)}</span>
         </li>)}
-      </ul> : <DataState kind="empty" message="No audit activity." />}</TabsContent>
+      </ul> : <DataState kind="empty" message="0 events" />}</TabsContent>
     </Tabs>
   )
 }
@@ -323,7 +322,7 @@ function AgentInspector({ agent }: { agent: Agent }) {
     },
   })
   const panel = query.isPending ? <AgentDetailSkeleton /> : query.isError ? (
-    <DataState kind="error" message="Couldn’t load agent." onRetry={() => void query.refetch()} />
+    <DataState kind="error" message="Agent unavailable." onRetry={() => void query.refetch()} />
   ) : <AgentPanel key={agent.id} agent={agent} detail={query.data} />
 
   const [desktop, setDesktop] = useState(() => matchMedia("(min-width: 768px)").matches)
@@ -336,7 +335,7 @@ function AgentInspector({ agent }: { agent: Agent }) {
   return desktop ? <Sheet open title={agent.name} onOpenChange={(open) => { if (!open) void navigate("/agents", { replace: true }) }}>{panel}</Sheet> : (
     <section aria-label="Agent details">
       <AgentBackLink />
-      <h2 className="my-4 flex items-center gap-2 text-base font-semibold"><Logo kind={agent.logo} />{agent.name}</h2>
+      <h2 className="my-4 flex items-center gap-2 text-base font-semibold"><Logo kind={agent.logo} avatarUrl={agent.avatar_url} />{agent.name}</h2>
       {panel}
     </section>
   )
@@ -347,7 +346,7 @@ export function AgentsPage() {
   const query = useQuery({ queryKey: agentListKey, queryFn: ({ signal }) => listAgents(signal) })
   const agent = id ? query.data?.find((row) => row.id === id && row.type !== "pending") : undefined
   const state: DataStateProps | undefined = query.isPending ? { kind: "loading" } : query.isError ? {
-    kind: "error", message: "Couldn’t load agents.", onRetry: () => void query.refetch(),
+    kind: "error", message: "Agents unavailable.", onRetry: () => void query.refetch(),
   } : undefined
   return (
     <>
@@ -362,7 +361,7 @@ export function AgentsPage() {
         </section>
       )}
       {agent && <AgentInspector agent={agent} />}
-      {id && query.data && !agent && <DataState kind="empty" message="Agent not found." />}
+      {id && query.data && !agent && <DataState kind="empty" message="Unknown agent." />}
     </>
   )
 }

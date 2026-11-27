@@ -79,7 +79,7 @@ def test_board_uses_project_scoped_placements_and_real_counts(make, capy):
     assert other["sources"] == [] and other["agents"] == []
     unassigned = {row["label"] for row in board["unassigned"]}
     assert unassigned >= {"#general", "owner/three", "Gemini", "Another Captain"}
-    assert "Acme Captain" not in unassigned
+    assert "DemoLab Captain" not in unassigned
     assert [(row["label"], row["role"], row["by"]["label"]) for row in context["agents"]] == [
         ("Captain", "captain", "Owner"), ("Claude Code", "MCP client", "Owner"),
     ]

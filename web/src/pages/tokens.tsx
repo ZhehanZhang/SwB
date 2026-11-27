@@ -89,18 +89,18 @@ export function TokensPage() {
       { method: "POST", csrf: session?.csrf },
     ),
     onSuccess: () => toast.success("Key revoked."),
-    onError: () => toast.error("Couldn’t revoke the key."),
+    onError: () => toast.error("Try revoking the key again."),
     onSettled: () => client.invalidateQueries({ queryKey }),
   })
 
-  if (!tokens.isPending && !tokens.data) return <DataState kind="error" message="Couldn’t load tokens." onRetry={() => void tokens.refetch()} />
+  if (!tokens.isPending && !tokens.data) return <DataState kind="error" message="Tokens unavailable." onRetry={() => void tokens.refetch()} />
 
   const { waiting = [], stored = [] } = tokens.data ?? {}
 
   return (
     <div className="space-y-8 pt-2">
       <section aria-labelledby="waiting-tokens">
-        <h2 id="waiting-tokens" className="text-heading-md">Waiting for you</h2>
+        <h2 id="waiting-tokens" className="text-heading-md">Token requests</h2>
         {tokens.isPending ? (
           <div aria-hidden="true" className="mt-2 flex h-[67px] items-center gap-3 border-b">
             <Skeleton className="size-7 rounded-md" />
@@ -111,7 +111,7 @@ export function TokensPage() {
             <Skeleton className="ml-auto h-2.5 w-16" />
           </div>
         ) : waiting.length === 0
-          ? <DataState kind="empty" message="No token requests." />
+          ? <DataState kind="empty" message="0 requests" />
           : <ul className="mt-2">
               {waiting.map((row) => {
                 const detail = [
@@ -133,7 +133,7 @@ export function TokensPage() {
                     <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground" title={row.expires_at
                       ? `Expires ${new Date(row.expires_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
                       : undefined}>
-                      <Lamp state="off" /> Use the original link
+                      <Lamp state="off" /> Open the request link
                     </span>
                   </li>
                 )
@@ -162,7 +162,7 @@ export function TokensPage() {
             ))}
           </LoadingSkeleton>
         ) : stored.length === 0
-          ? <DataState kind="empty" message="No stored credentials." />
+          ? <DataState kind="empty" message="0 stored tokens" />
           : <table className="mt-2 w-full text-left text-[13px] leading-[18px]" aria-labelledby="stored-tokens" role="table">
               <thead className="sr-only md:not-sr-only md:table-header-group" role="rowgroup">
                 <tr className="border-b text-[11px] text-muted-foreground" role="row">
@@ -182,17 +182,13 @@ export function TokensPage() {
                       <span aria-hidden>••••</span><span className="sr-only">Hidden</span>
                     </td>
                     <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.used_by.length && "max-md:hidden")} role="cell">
-                      {row.used_by.length > 0
-                        ? <><span className="md:sr-only">Used by </span>{row.used_by.join(", ")}</>
-                        : <span className="hidden md:inline">—</span>}
+                      {row.used_by.length > 0 && <><span className="md:sr-only">Used by </span>{row.used_by.join(", ")}</>}
                     </td>
                     <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.added_by && "max-md:hidden")} role="cell">
-                      {row.added_by
-                        ? <><span className="md:sr-only">Added by </span>{row.added_by}</>
-                        : <span className="hidden md:inline">—</span>}
+                      {row.added_by && <><span className="md:sr-only">Added by </span>{row.added_by}</>}
                     </td>
                     <td className={cn("font-mono text-xs text-muted-foreground md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
-                      {row.added_at ? <time dateTime={row.added_at}>{date.format(new Date(row.added_at))}</time> : <span className="hidden md:inline">—</span>}
+                      {row.added_at && <time dateTime={row.added_at}>{date.format(new Date(row.added_at))}</time>}
                     </td>
                     <td className={cn("col-start-2 justify-self-end text-right", !row.revoke_id && "max-md:hidden")} role="cell">
                       {row.revoke_id && <Button
@@ -202,7 +198,7 @@ export function TokensPage() {
                         disabled={!session?.csrf || revoke.isPending}
                         aria-label={`Revoke access key for ${row.label}`}
                         onClick={() => {
-                          if (row.revoke_id && window.confirm(`Revoke this access key for ${row.label}?`)) {
+                          if (row.revoke_id && window.confirm(`Revoke the access key for ${row.label}?`)) {
                             revoke.mutate(row.revoke_id)
                           }
                         }}
