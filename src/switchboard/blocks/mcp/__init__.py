@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field, create_model
+from mcp.types import CallToolResult, InputRequiredResult, TextContent, ToolAnnotations
+from pydantic import BaseModel, Field, ValidationError, create_model
 from starlette.routing import BaseRoute, Mount
 
 from ... import __version__
@@ -97,6 +97,25 @@ class LimitedServer(MCPServer):
     tools/call refuses any other."""
 
     modes: ChannelModes
+
+    async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None) -> CallToolResult | InputRequiredResult:
+        try:
+            return await super().call_tool(name, arguments, context)
+        except ToolError as exc:
+            if not isinstance(error := exc.__cause__, ValidationError):
+                raise
+            properties = (self._tool_input_schema(name) or {}).get("properties", {})
+            missing, invalid = [], []
+            for issue in error.errors(include_input=False, include_context=False, include_url=False):
+                loc = issue["loc"]
+                if loc and loc[0] in properties:
+                    (missing if issue["type"] == "missing" else invalid).append(loc[0])
+            parts = []
+            if missing:
+                parts.append(f"Provide {', '.join(dict.fromkeys(missing))}.")
+            if invalid:
+                parts.append(f"Check {', '.join(dict.fromkeys(invalid))}.")
+            raise ToolError(" ".join(parts) or "Check the tool arguments.") from error
 
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
