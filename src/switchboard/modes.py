@@ -263,17 +263,23 @@ class ChannelModes:
                 names.setdefault((space, channel), (channel, "topic" if topic else default_kind, parent or None))
             if not any(s == space for s, _ in names):
                 names[space, ""] = (space, default_kind, None)
-        for row in self.core.store.q("SELECT space, channel FROM space_modes WHERE block = ? UNION SELECT DISTINCT space, channel FROM watch_events "
+        space_overrides = set()
+        for row in self.core.store.q("SELECT space, channel, 1 AS is_override FROM space_modes WHERE block = ? "
+                                     "UNION ALL SELECT DISTINCT space, channel, 0 AS is_override FROM watch_events "
                                      "WHERE block = ? AND delivered_at IS NULL AND dm = 0", (block, block)):
             space, channel = row["space"], row["channel"]
             names.setdefault((space, channel), (channel or space, default_kind, None))
+            if row["is_override"] and not channel:
+                space_overrides.add(space)
+        for space in {space for space, channel in names if channel} - space_overrides:
+            names.pop((space, ""), None)
         return names
 
     def row(self, block: str, space: str, channel: str, name: str | None = None, kind: str | None = None,
             parent: str | None = None) -> dict[str, Any]:
         provider = self.core.blocks[block]
         use = provider.manifest.id
-        mode, source, actions, target, project = self.policy(block, space, channel, parent=parent, name=name)
+        mode, source, actions, target, project = self.policy(block, space, channel, parent=parent, name=name if channel else None)
         digest, problems = None, []
         if mode == "watch":
             pending = self.core.store.one("SELECT COUNT(*) AS n, MIN(at) AS first_at FROM watch_events "
@@ -288,7 +294,8 @@ class ChannelModes:
             problems.append(GITHUB_CREDENTIAL_PROBLEM)
         elif use == "github" and channel in provider.missing_installations:
             problems.append(provider.missing_installations[channel])
-        return {"block": block, "space": space, "channel": channel, "name": name or channel or space,
+        label = f"{space} default" if not channel and source == "override" else name or channel or space
+        return {"block": block, "space": space, "channel": channel, "name": label,
                 "kind": kind or {"telegram": "group", "github": "repo"}.get(use, "channel"), "mode": mode, "source": source,
                 "project": project, "target": target, "actions": list(actions), "digest": digest, "problems": problems}
 

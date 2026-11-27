@@ -437,21 +437,19 @@ class CapyBlock(Block):
 
     def plan(self, principal: "Principal", project: "Project | None", target: str | None) -> tuple[dict[str, Any], dict[str, Any], str]:
         """Which target this caller's delegation goes to: (target, defaults, how it was chosen). Explicit targets need a route that allows it."""
-        route, tried = self.core.routes.resolve(destination=self.name, agent=principal.source, project=project.slug if project else None)
+        route, _ = self.core.routes.resolve(destination=self.name, agent=principal.source, project=project.slug if project else None)
         if target:
             if route is not None and not route.allow_override:
                 raise DestinationError(f"the {route.level} route sends this to {describe(route.target)} and does not allow overriding; "
                                        "leave target out, or have the owner set allow_override on that route")
             return parse_target(target), dict(route.defaults) if route else {}, "explicit"
         if route is None:
-            raise DestinationError(f"no Capy route for agent {principal.source!r}{f' and project {project.slug!r}' if project else ''} "
-                                   f"(checked {', '.join(tried)}); set one with routes_set or pass target")
+            raise DestinationError("No route is set for Capy. Set a route or pass a target.")
         return dict(route.target), dict(route.defaults), route.level
 
     async def delegate(self, call: Call, *, task: str, title: str | None = None, project: str | None = None, target: str | None = None,
                        repos: list[str] | None = None, files: list[dict[str, Any]] | None = None, model: str | None = None,
                        new_thread: bool | None = None) -> dict[str, Any]:
-        api = self.need_api()
         task = (task or "").strip()
         if not task:
             raise DestinationError("task is empty")
@@ -459,6 +457,7 @@ class CapyBlock(Block):
             title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
         tgt, defaults, level = self.plan(call.principal, p, target)
+        api = self.need_api()
         if level == "explicit":
             tgt, extra = await self.validate_route_target(tgt, {})
             defaults = {**defaults, **extra}

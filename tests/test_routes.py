@@ -2,7 +2,7 @@ import pytest
 
 from switchboard.routes import RouteError, Routes
 from switchboard.store import Store
-from conftest import CAPTAIN, CAPTAIN2, PROJECT, STATIC_KEY, Clock, call, error_text, payload, sign_in, beacon
+from conftest import CAPTAIN, CAPTAIN2, OWNER, PROJECT, SECOND_KEY, STATIC_KEY, Clock, base_config, call, error_text, payload, sign_in, beacon
 
 
 @pytest.fixture
@@ -51,8 +51,17 @@ def test_override_needs_permission(make, capy):
 def test_no_route_needs_a_target(make):
     cfg = {"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["owner@example.test"]}, "destinations": {"capy": {}}}
     _, c = make(config=cfg)
-    assert "no Capy route" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
+    assert "No route is set for Capy" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
     assert payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "target": CAPTAIN}))["route"] == "explicit"
+
+
+def test_send_checks_for_a_route_before_capy_credentials(make):
+    cfg = {"version": 2, "blocks": {"mcp": {}, "capy": {}}}
+    core, client = make(config=cfg, env={"SWITCHBOARD_KEY_CAPY": STATIC_KEY})
+    args = {"task": "Check the build"}
+    assert "No route is set for Capy" in error_text(call(client, STATIC_KEY, "send", args))
+    put(core.routes, None, None, CAPTAIN)
+    assert "CAPY_API_KEY missing" in error_text(call(client, STATIC_KEY, "send", args))
 
 
 def test_route_tools_validate_and_audit(make):
@@ -92,3 +101,26 @@ def test_routes_set_matches_a_captain_by_code(make):
     tok = sign_in(c)["access_token"]
     assert payload(call(c, tok, "routes_set", {"target": "captain:orbit-3", "project": "beacon"}))["target"]["captain"] == CAPTAIN2
     assert payload(call(c, tok, "routes_set", {"target": "captain:BCN-1"}))["target"]["captain"] == CAPTAIN
+
+
+def test_mailbox_routes_send_and_show_up_with_only_mcp_enabled(make):
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    core.projects.create(slug="demo", name="Demo")
+    args = {"project": "demo"}
+    assert set(core.blocks) == {"mcp"}
+    assert "unknown" in error_text(call(client, STATIC_KEY, "routes_set", {**args, "target": "agent:unknown"}))
+    route = payload(call(client, STATIC_KEY, "routes_set", {**args, "target": "agent:second"}))
+    assert route["destination"] == "agent" and route["level"] == "project"
+    assert payload(call(client, STATIC_KEY, "routes_list"))["routes"] == [route]
+    resolved = payload(call(client, STATIC_KEY, "routes_resolve", args))
+    assert resolved["to"] == "agent:second" and resolved["route"] == route
+    assert payload(call(client, STATIC_KEY, "routes_resolve", {**args, "block": "agent"})) == resolved
+    out = payload(call(client, STATIC_KEY, "send", {**args, "task": "Check the build"}))
+    assert out["to"] == "agent:second" and out["mailbox"]
+    (item,) = payload(call(client, SECOND_KEY, "inbox", args))["items"]
+    assert item["handle"] == out["conversation"] and item["text"] == "Check the build"
+    (placement,) = client.get("/api/board/projects/demo", headers=OWNER).json()["routes"]
+    assert placement["to"]["id"] == "agent:second" and placement["state"] == "on"
+    assert payload(call(client, STATIC_KEY, "routes_remove", args))["removed"] == route
+    assert core.audit.recent(action="route_remove")[0]["destination"] == "agent"
+    assert "No route is set" in error_text(call(client, STATIC_KEY, "send", {**args, "task": "Check again"}))

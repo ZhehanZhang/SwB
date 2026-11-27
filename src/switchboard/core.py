@@ -30,7 +30,7 @@ from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
-from .routes import RouteError, Routes
+from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store
 from .subject import subject
@@ -434,14 +434,15 @@ class Switchboard:
         return dict(tgt.by_slug(targets, self.cfg.targets.get("priority") or (), {**(self.cfg.targets.get("aliases") or {}), **(aliases or {})}))
 
     def route_address(self, agent: str | None, project: str | None) -> Address | None:
-        """Where a route sends this agent's work for this project, as an address (None: no route)."""
-        for name, b in self.blocks.items():
-            if not b.supports_routes:
-                continue
-            r, _ = self.routes.resolve(destination=name, agent=agent or "", project=project)
-            if r is not None:
-                return b.route_address(r.target)
-        return None
+        """Where a route sends this agent's work for this project."""
+        route, _ = self.routes.resolve(destination=self.route_destinations(), agent=agent or "", project=project)
+        return self.address_for_route(route) if route else None
+
+    def address_for_route(self, route: Route) -> Address | None:
+        if route.destination == "agent":
+            return Address("agent", "agent", route.target["agent"])
+        block = self.blocks.get(route.destination)
+        return block.route_address(route.target) if block else None
 
     async def resolve_to(self, to: str) -> Address:
         """A send's to: an address, a legacy captain:/project:/thread: target, an agent name, a block name or a slug."""
@@ -581,15 +582,22 @@ class Switchboard:
         addr = await self.resolve_to(to) if to else None
         if addr is not None and addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
+        if addr is not None and addr.block == "project":
+            project, addr = addr.id, None
+        if addr is None:
+            destinations = self.route_destinations()
+            route, _ = self.routes.resolve(destination=destinations, agent=principal.source, project=project)
+            destination = route.destination if route else destinations[0]
+            if destination == "agent":
+                if route is None:
+                    raise CoreError("No route is set. Set a route or pass a target.")
+                addr = self.address_for_route(route)
+        else:
+            destination = addr.block
         if addr is not None and addr.block == "agent":
             return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta,
                                             title=title, dry_run=dry_run), "to": str(addr)}
-        if addr is not None and addr.block == "project":
-            project, addr = addr.id, None
-        if addr is not None:
-            block = self.destination(addr.block)
-        else:
-            block = self._routing_block(principal, project)
+        block = self.destination(destination)
         action = block.verb("send")
         if action is None:
             raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
@@ -602,16 +610,9 @@ class Switchboard:
             out.setdefault("block", block.name)
         return out
 
-    def _routing_block(self, principal: Principal, project: str | None) -> Block:
-        routable = [b for b in self.blocks.values() if b.supports_routes and b.verb("send") is not None]
-        p = project.strip().lower().removeprefix("project:") if project else None
-        levels = ("agent+project", "project", "agent", "global")
-        found = [(levels.index(r.level), i, b) for i, b in enumerate(routable) if (r := self.routes.resolve(destination=b.name, agent=principal.source, project=p)[0])]
-        if found:
-            return min(found, key=lambda x: (x[0], x[1]))[2]
-        if routable:
-            return routable[0]
-        raise CoreError("nothing to send to: no block that takes routes is configured; pass to (an agent:<name> mailbox or a block target)")
+    def route_destinations(self) -> tuple[str, ...]:
+        providers = tuple(b.name for b in self.blocks.values() if b.supports_routes and b.verb("send") is not None and b.name != "agent")
+        return (*providers, "agent")
 
     def project_systems(self, targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Per switchboard project, its counterpart in each system: the target each route reaches, block targets that
@@ -801,11 +802,16 @@ class Switchboard:
 
     async def set_route(self, principal: Principal, *, destination: str, agent: str | None, project: str | None, target: dict[str, Any],
                         defaults: dict[str, Any] | None, allow_override: bool, note: str = "") -> dict[str, Any]:
-        dest = self.destination(destination)
         if project:
             self.project(project)
         try:
-            target, defaults = await dest.validate_route_target(target, defaults or {})
+            if destination == "agent":
+                name = str(target.get("agent") or "").strip().lower()
+                if name not in self.known_agents():
+                    raise DestinationError(f"Choose a known agent with targets. Agent {name!r} is unknown.")
+                target, defaults = {"agent": name, "name": f"agent:{name}"}, {}
+            else:
+                target, defaults = await self.destination(destination).validate_route_target(target, defaults or {})
         except DestinationError as e:
             self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
                               action="route_set", outcome="refused", detail=str(e), target=f"{agent or '*'}/{project or '*'}")
@@ -825,10 +831,10 @@ class Switchboard:
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
-    def remove_route(self, principal: Principal, *, destination: str, agent: str | None, project: str | None) -> dict[str, Any]:
+    def remove_route(self, principal: Principal, *, destination: str | tuple[str, ...], agent: str | None, project: str | None) -> dict[str, Any]:
         r = self.routes.remove(destination=destination, agent=agent, project=project)
         self.changed()
-        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=r.destination,
                           action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return {"removed": r.as_dict()}
 

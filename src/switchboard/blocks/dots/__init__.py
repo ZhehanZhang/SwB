@@ -43,6 +43,7 @@ LABEL_RE = re.compile(r"\[\s*via\s+swb\b", re.IGNORECASE)
 OWNER_PERSONA = "dots-owner"
 DEFAULT_ALIAS = "dot"
 DEFAULT_MAILBOX = "chatgpt"
+SLACK_STEP = "Connect a Slack workspace for ChatGPT dots or select mailbox delivery."
 OWNER_KINDS = frozenset({"oauth", "key", "connect"})
 """Principals that are the owner's own agents: his OAuth sign-ins, his configured keys, his paired connections."""
 
@@ -139,6 +140,9 @@ class DotsBlock(Block):
 
     async def start(self) -> None:
         engine = self.slack_engine
+        if self.delivery == "slack" and (engine is None or self.workspace not in engine.config.workspaces):
+            log.warning("%s", SLACK_STEP)
+            return
         if engine is not None and engine.connect:
             if self.delivery == "slack":
                 self._task = asyncio.create_task(self._loop(), name="dots")
@@ -161,11 +165,12 @@ class DotsBlock(Block):
                 log.exception("dots rescan failed")
             await asyncio.sleep(self.rescan_s)
 
-    def runtime(self) -> Any:
+    def runtime(self, *, required: bool = True) -> Any:
         engine = self.slack_engine
-        if engine is None or self.workspace not in engine.runtimes:
+        runtime = engine.runtimes.get(self.workspace) if engine is not None else None
+        if runtime is None and required:
             raise BlockError(f"dots need the Slack workspace {self.workspace or '(none)'} connected")
-        return engine.runtimes[self.workspace]
+        return runtime
 
     # Discovery ---------------------------------------------------------------------------------
 
@@ -182,7 +187,9 @@ class DotsBlock(Block):
         """Find the workspace's dots, register them as targets, and make sure the relay channel exists."""
         if self.delivery == "mailbox":
             return self.dots()
-        rt = self.runtime()
+        rt = self.runtime(required=False)
+        if rt is None:
+            return self.dots()
         members, cursor = [], None
         for _ in range(20):
             resp = await rt.client("bot").users_list(limit=200, **({"cursor": cursor} if cursor else {}))
@@ -312,7 +319,7 @@ class DotsBlock(Block):
             return None if self.dots() else "Declare a dot under dots in the dots block config."
         engine = self.slack_engine
         if engine is None or self.workspace not in engine.config.workspaces:
-            return "Connect a Slack workspace for ChatGPT dots."
+            return SLACK_STEP
         if not self.dots():
             return "Add a dot to the Slack workspace so Switchboard can discover it."
         if not self.relay_channel():
@@ -540,7 +547,9 @@ class DotsBlock(Block):
                                  (self.workspace, self.core.clock() - 3600))
         if not rows:
             return 0
-        rt = self.runtime()
+        rt = self.runtime(required=False)
+        if rt is None:
+            return 0
         got = 0
         dots = {d["user_id"]: d for d in self.slack_dots()}
         for channel, mode in {(r["channel"], r["mode"]) for r in rows}:

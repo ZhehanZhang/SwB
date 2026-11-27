@@ -42,3 +42,26 @@ def test_gemini_redirect_is_allowed_and_signs_in_as_gemini(make):
     gem = "https://oauth-redirect.googleusercontent.com/r/some-project"
     tok = sign_in(c, redirect=gem)["access_token"]
     assert payload(call(c, tok, "switchboard_status"))["you"]["agent"] == "gemini"
+
+
+def test_conversation_filter_follows_mailbox_reply_handles(make):
+    _, c = make()
+    tok = sign_in(c)["access_token"]
+    root = payload(call(c, STATIC_KEY, "send", {"to": "agent:claude", "task": "Check the build"}))["conversation"]
+    interim = payload(call(c, tok, "reply", {"conversation": root, "text": "Checking", "final": False}))
+    final = payload(call(c, tok, "reply", {"conversation": root, "text": "Passed"}))
+    followup = payload(call(c, STATIC_KEY, "reply", {"conversation": interim["conversation"], "text": "Also check staging"}))
+    nested = payload(call(c, tok, "reply", {"conversation": followup["conversation"], "text": "Staging passed"}))
+    payload(call(c, tok, "send", {"to": "agent:capy", "task": "Unrelated"}))
+
+    args = {"conversation": root, "timeout_s": 0}
+    got = payload(call(c, STATIC_KEY, "wait", args))
+    assert not got["timed_out"] and got["handle_status"] == "answered"
+    assert [item["handle"] for item in got["items"]] == [interim["conversation"], final["conversation"], nested["conversation"]]
+    assert [item["in_reply_to"] for item in got["items"]] == [root, root, followup["conversation"]]
+    assert [item["final"] for item in got["items"]] == [False, True, True]
+    assert payload(call(c, STATIC_KEY, "wait", args))["timed_out"]
+    unfiltered = payload(call(c, STATIC_KEY, "inbox"))
+    assert [item["text"] for item in unfiltered["items"]] == ["Unrelated"]
+    inbox = payload(call(c, STATIC_KEY, "inbox", {"conversation": root, "since_cursor": 0}))
+    assert inbox["items"] == got["items"]
