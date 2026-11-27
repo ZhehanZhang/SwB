@@ -50,6 +50,7 @@ export function AuditPage() {
               <th role="columnheader" scope="col" className="w-[9%] py-2 pr-3 font-medium">Project</th>
               <th role="columnheader" scope="col" className="w-[16%] py-2 pr-3 font-medium">Who</th>
               <th role="columnheader" scope="col" className="py-2 pr-3 font-medium">What</th>
+              <th role="columnheader" scope="col" className="w-[24%] py-2 pr-3 font-medium">Detail</th>
               <th role="columnheader" scope="col" className="w-[8.5%] py-2 font-medium">Via</th>
             </tr>
           </thead>
@@ -71,6 +72,9 @@ export function AuditPage() {
                       {item.metadata?.target_avatar_url !== undefined && <Logo kind="captain" avatarUrl={item.metadata.target_avatar_url} className="size-5" />}
                       <span>{auditText(item)}</span>
                     </span>
+                  </td>
+                  <td role="cell" className="wrap-anywhere text-muted-foreground empty:max-md:hidden max-md:col-span-2 max-md:row-start-4 md:py-2 md:pr-3">
+                    {item.detail}
                   </td>
                   <td role="cell" className="font-mono text-mono-sm text-muted-foreground max-md:text-right md:py-2">
                     {item.origin === "http" && who === "you" ? "web" : item.origin}

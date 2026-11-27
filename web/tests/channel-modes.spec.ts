@@ -83,7 +83,8 @@ test("claims and login share the console theme and follow the system by default"
 
 test("dropped webhooks show the reason in the audit log", async ({ page }) => {
   await page.goto("/audit")
-  await expect(page.getByText("Dropped webhook for example-org/example-repo. Channel mode off.")).toBeVisible()
+  const row = page.getByRole("row").filter({ hasText: "Dropped webhook for example-org/example-repo" })
+  await expect(row.getByRole("cell", { name: "channel mode off", exact: true })).toBeVisible()
 })
 
 test("agent tiles and claim pages display bundled avatars", async ({ page }) => {

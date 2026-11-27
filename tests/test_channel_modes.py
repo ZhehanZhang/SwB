@@ -29,6 +29,8 @@ from test_telegram import OWNER_ID as TELEGRAM_OWNER
 from test_telegram import STRANGER as TELEGRAM_STRANGER
 from test_telegram import run as _telegram_fixture
 
+from switchboard.blocks.mcp.policy import MODE_REQUIRED
+
 MODES = {"off", "watch", "assist", "triage", "work"}
 ACTIONS = {"reply", "label", "comment", "open_issue", "link_duplicate", "notify_owner"}
 discord = _discord_fixture
@@ -276,6 +278,9 @@ def test_chat_modes_use_project_mailbox_route(intake, mode):
         assert status["target"] == "agent:alpha"
         [wake] = chat.core.inbox.read(owner="alpha")["items"]
         assert "Message for the project" in wake["text"] and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        assert wake["destination"] == "mailbox" and wake["project"] == "example"
+        result = chat.client.portal.call(chat.core.verb, chat.block.principal, "cancel", wake["handle"])
+        assert result["status"] == "cancelled"
         assert not chat.wakes()
 
 
@@ -516,6 +521,8 @@ def test_recent_restricted_wake_blocks_legacy_chat_replies(intake):
                           "VALUES ('h_legacy', ?, ?, 'old', NULL, '{}', ?, 1, 'open')", (owner, chat.block.name, chat.core.clock() - 7200))
         refused = call(chat.client, STATIC_KEY, "reply", {"conversation": "h_legacy", "text": "public write"})
         assert "requires its conversation handle" in error_text(refused)
+        [row] = chat.core.audit.recent(action="tool_refused")
+        assert (row["target"], row["detail"]) == ("reply", MODE_REQUIRED)
 
 
 def test_mode_project_reaches_the_send(intake):

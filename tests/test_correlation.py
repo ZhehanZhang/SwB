@@ -33,7 +33,8 @@ def test_agent_send_lands_in_the_named_agents_mailbox_attributed_to_the_caller(m
     assert payload(call(c, STATIC_KEY, "capy_inbox", {"since_cursor": 0}))["items"] == []
     assert "no agent" in error_text(call(c, STATIC_KEY, "agent_send", {"to": "nobody", "text": "x"}))
     assert "that is you" in error_text(call(c, STATIC_KEY, "agent_send", {"to": "capy", "text": "x"}))
-    row = core.audit.recent(action="agent_send")[0]
+    row = core.audit.recent(action="send")[0]
+    assert row["action"] == "send"
     assert row["source"] == "capy" and row["target"] == "claude"
 
 

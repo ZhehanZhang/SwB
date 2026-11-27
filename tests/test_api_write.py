@@ -211,7 +211,7 @@ def test_send_preview_does_not_dispatch_and_actual_send_uses_core(board, capy):
     assert "handle" not in response.json() and SEND["task"] not in response.text
     assert capy.requests == before
     assert not core.inbox.handles(owner="claude")
-    assert core.audit.recent(action="agent_send") == []
+    assert core.audit.recent(action="send") == []
     response = client.post("/api/send", headers=headers, json=SEND)
     assert response.status_code == 200
     receipt = response.json()
