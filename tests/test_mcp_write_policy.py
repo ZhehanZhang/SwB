@@ -145,6 +145,17 @@ def test_paired_agent_can_change_its_own_routes_and_read_projects(server, paired
     assert not core.projects.get("example").archived and not core.projects.get("example").private
 
 
+@pytest.mark.parametrize("link", ["bogus", "capy_project"])
+def test_project_update_refuses_unknown_link_keys(make, link):
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    core.projects.create(slug="example", name="Example")
+    result = call(client, STATIC_KEY, "project_update", {"slug": "example", "links": {"repos": ["example/repo"], link: SECRET}})
+    assert error_text(result) == "Choose a supported project link key."
+    [row] = core.audit.recent(outcome="refused")
+    assert (row["target"], row["detail"]) == ("project_update", "Choose a supported project link key.")
+    assert SECRET not in str(row) and core.projects.get("example").links == {}
+
+
 def test_paired_agent_route_honors_target_grant(server, paired):
     core, client, _ = server
     core.cfg.key_targets["paired"] = ("agent:second",)

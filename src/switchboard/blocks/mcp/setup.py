@@ -30,7 +30,7 @@ BLOCK_EXAMPLES = {
         "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "SLACK_A2A_APP_TOKEN",
         "identities": {"bot": {"token_env": "SLACK_A2A_BOT_TOKEN", "write": "free"}},
     }}},
-    "github": {"secret_env": GITHUB_SECRET, "spaces": {"example-org/app": {"mode": "watch"}}},
+    "github": {"secret_env": GITHUB_SECRET, "spaces": {"example-org/app": {"mode": {"mode": "watch", "target": "agent:beta"}}}},
     "dots": {"delivery": "mailbox", "dots": {"example-dot": {"name": "Example Dot", "mailbox": "chatgpt"}}},
 }
 ROUTINE_ENV_ONLY = {
@@ -39,6 +39,7 @@ ROUTINE_ENV_ONLY = {
 }
 ALIASES = {"grok-routine": "grok-bot"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
+CLOUDFLARE_SETUP_URL = "https://swb.one/docs/setup/cloudflare"
 MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser. Select + > Add custom MCP server",
          "claude": "Customize > Connectors > Add > Custom > Web",
          "grok": "grok.com > Connectors > New Connector > Custom"}
@@ -65,7 +66,7 @@ def enable_steps(cfg: Config, name: str, choose: dict[str, Any]) -> list[dict[st
     if name == "slack":
         instruction += " Replace T0DEMO0001 with the Slack workspace ID."
     elif name == "github":
-        instruction += " Replace example-org/app with the GitHub repository."
+        instruction += " Replace example-org/app with the GitHub repository. Replace agent:beta with an address from targets."
     elif name == "discord":
         instruction += " Replace guild_id and owner_ids with your Discord server and user IDs."
     elif name == "telegram":
@@ -152,7 +153,7 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
 def register(mcp: MCPServer, kit: Kit) -> None:
     core = kit.core
     owners = {kind: block for block in core.blocks.values() for kind in block.connect_kinds}
-    kinds = sorted(set(CLIENTS) | BLOCKS.keys() | owners.keys())
+    kinds = sorted(set(CLIENTS) | BLOCKS.keys() | owners.keys() | {"cloudflare"})
     guides = register_guides(mcp)
     guide_names = sorted(guide["prompt"] for guide in guides.values())
 
@@ -171,6 +172,9 @@ def register(mcp: MCPServer, kit: Kit) -> None:
         result: dict[str, Any] = {"what": what}
         if what in guides:
             result["guide"] = guides[what]
+        if what == "cloudflare":
+            return {**result, "done": [], "next": [
+                {"by": "person", "do": "Follow the Cloudflare setup guide.", "link": CLOUDFLARE_SETUP_URL}]}
         if what not in kinds:
             if what in guides:
                 return {**result, "done": [], "next": []}

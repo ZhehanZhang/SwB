@@ -27,11 +27,10 @@ def test_connect_schema_and_unknown_kinds(make):
     assert tool["title"] == "Connect to SwB"
     assert "call connect first" in tool["description"]
     assert set(tool["inputSchema"]["properties"]) == {"what", "project", "choose"}
-    for kind in ("unknown", "cloudflare"):
-        out = connect(client, kind)
-        assert out["what"] == "unknown"
-        assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "coding-agent", "discord", "dots",
-                                "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
+    out = connect(client, "unknown")
+    assert out["what"] == "unknown"
+    assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "cloudflare", "coding-agent", "discord",
+                            "dots", "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
 
 
 @pytest.mark.parametrize(("kind", "block", "env_names"), [
@@ -85,6 +84,8 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
         assert [(w["workspace"], list(w["identities"])) for w in workspaces] == [("a2a", ["bot"])]
     elif kind == "github":
         assert core.blocks[block].registered_repositories() == {"example-org/app"}
+        assert parsed[block]["spaces"]["example-org/app"]["mode"] == {"mode": "watch", "target": "agent:beta"}
+        assert "Replace agent:beta with an address from targets." in configure["do"]
 
 
 def test_connect_uses_chosen_dot_in_the_config_snippet(make):

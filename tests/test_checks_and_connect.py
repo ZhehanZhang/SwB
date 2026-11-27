@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
 
+import httpx
 import yaml
 
 from conftest import PUBLIC, STATIC_KEY, base_config, call, payload
@@ -38,6 +39,53 @@ def test_dots_connect_accepts_a_static_mailbox_key(make):
     assert core.auth.verify_bearer("example-dot-key-value-only").source == "dot-helper"
     result = payload(call(client, STATIC_KEY, "connect", {"what": "dots"}))
     assert result["state"] == "connected" and result["next"] == []
+
+
+def test_connect_reports_missing_provider_credentials_only_in_next(make):
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {}, "discord": {"connect": False}, "telegram": {"connect": False}})
+    _, client = make(cfg, env={cli.OWNER_KEY: STATIC_KEY})
+    for provider in ("github", "discord", "telegram"):
+        result = payload(call(client, STATIC_KEY, "connect", {"what": provider}))
+        assert result["next"][0]["by"] == "person" and result["next"][0]["link"]
+        assert not any(word in step.lower() for word in ("missing", "not connected", "none") for step in result["done"])
+
+
+def test_github_setup_reports_mode_and_project_targets_separately_from_sinks(make):
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {
+        "acme/configured": {"mode": "watch"},
+        "acme/routed": {"mode": "assist", "project": "demo"},
+    }}})
+    core, client = make(cfg, env={cli.OWNER_KEY: STATIC_KEY})
+    core.projects.create(slug="demo", name="Demo")
+    assert payload(call(client, STATIC_KEY, "routes_set", {"project": "demo", "target": "agent:claude"}))["project"] == "demo"
+    args = {"block": "github", "space": "acme/configured", "mode": "assist", "target": "agent:claude"}
+    assert payload(call(client, STATIC_KEY, "space_mode", args))["target"] == "agent:claude"
+    connect = payload(call(client, STATIC_KEY, "connect", {"what": "github"}))
+    status = payload(call(client, STATIC_KEY, "github_status"))
+    for report in (connect, status):
+        assert (report["repository_spaces"], report["bound_repositories"], report["sink_routes"]) == (2, 2, 0)
+    assert "GitHub repositories with a target 2." in connect["done"]
+
+
+def test_signed_in_status_explains_github_installation_access_failure(make, monkeypatch):
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {"acme/app": {"mode": "watch"}}}})
+    core, client = make(cfg, env={cli.OWNER_KEY: STATIC_KEY, "GITHUB_WEBHOOK_SECRET": "fixture-webhook-secret"})
+    api = core.blocks["github"].api
+    monkeypatch.setattr(api, "auth_type", lambda: "app")
+    monkeypatch.setattr(api, "app_jwt", lambda: "fixture-app-jwt")
+    denied = AsyncMock(return_value=httpx.Response(401))
+    monkeypatch.setattr(api.http, "request", denied)
+    assert client.get("/healthz").status_code == 200
+    denied.assert_not_called()
+
+    step = "Check the GitHub App credentials and repository access."
+    result = payload(call(client, STATIC_KEY, "switchboard_status"))
+    health = client.get("/healthz", headers={"Authorization": f"Bearer {STATIC_KEY}"}).json()
+    denied.assert_awaited_once()
+    for status in (result, health):
+        assert status["status"] == "degraded" and step in status["next_steps"]
+        assert status["blocks"]["github"]["next_step"] == step
+    assert step in cli._display("switchboard_status", result)
 
 
 def test_blocks_check_uses_status_missing_credentials(make, tmp_path, monkeypatch, capsys):

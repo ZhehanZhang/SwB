@@ -52,6 +52,16 @@ def test_override_needs_permission(make, capy):
     assert "not linked" not in err
 
 
+@pytest.mark.parametrize("target", ["nonsense:foo", "capy:nonsense:foo"])
+def test_unknown_route_kind_names_the_target_and_audits_once(make, target):
+    core, client = make()
+    before = core.routes.list()
+    assert target in error_text(call(client, STATIC_KEY, "routes_set", {"target": target}))
+    [row] = core.audit.recent(outcome="refused")
+    assert (row["target"], row["detail"]) == ("routes_set", "Choose a supported route target kind.")
+    assert target not in str(row) and core.routes.list() == before
+
+
 def test_no_route_needs_a_target(make):
     cfg = {"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["owner@example.test"]}, "destinations": {"capy": {}}}
     _, c = make(config=cfg)
