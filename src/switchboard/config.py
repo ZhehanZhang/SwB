@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 
 KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
 MIN_KEY_LEN = 24
-CONFIG_PATHS = (Path("config/switchboard.yaml"), Path("/config/switchboard.yaml"))
+INSTANCE_CONFIG = Path("config/switchboard.yaml")
+INSTANCE_DB = "switchboard.db"
+CONFIG_PATHS = (INSTANCE_CONFIG, Path("/config/switchboard.yaml"))
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = "8870"
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
@@ -75,6 +77,13 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class Instance:
+    base: Path
+    explicit: bool = False
+    bare_home: bool = True
+
+
+@dataclass(frozen=True)
 class StaticKey:
     name: str
     secret: str = field(repr=False)
@@ -107,6 +116,7 @@ class Config:
 
     public_url: str | None = None
     data_dir: Path = Path("data")
+    legacy_instance_data: Path | None = None
     branding: Branding = Branding()
     public_url_aliases: tuple[str, ...] = ()
     passkey_rp_id: str | None = None
@@ -296,6 +306,41 @@ def _merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
                       for key, value in overlay.items()}}
 
 
+def _config_files(path: str | Path | None, env: Mapping[str, str],
+                  instance: Instance | None) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    if instance is not None:
+        local = instance.base / INSTANCE_CONFIG
+        if instance.explicit or (not path and not env.get("SWITCHBOARD_CONFIG") and local.is_file()):
+            path = local
+    base_path = config_path(path, env)
+    base = _read_yaml(base_path, "config")
+    overlay_path = env.get("SWITCHBOARD_OVERLAY")
+    local_paths = (p.with_name("local.yaml") for p in ((base_path,) if base_path else CONFIG_PATHS))
+    local_path = Path(overlay_path) if overlay_path else next((p for p in local_paths if p.is_file()), None)
+    overlay = _read_yaml(local_path, "overlay", required=bool(overlay_path)) or {}
+    return base, overlay
+
+
+def _data_paths(env: Mapping[str, str], raw: Mapping[str, Any], instance: Instance | None, *,
+                has_config: bool) -> tuple[Path, Path | None]:
+    if configured := raw.get("data_dir") or env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA"):
+        return Path(configured).expanduser(), None
+    if instance is None:
+        return Path("data"), None
+    home_data = Path.home() / ".local/share/switchboard"
+    if not instance.explicit and not has_config:
+        return (home_data if instance.bare_home else Path("data")), None
+    data = instance.base / "data"
+    if not instance.explicit and not os.path.lexists(data) and (home_data / INSTANCE_DB).is_file():
+        return home_data, data
+    return data, None
+
+
+def instance_data_dir(env: Mapping[str, str], instance: Instance) -> Path:
+    base, overlay = _config_files(None, env, instance)
+    return _data_paths(env, _merge(base or {}, overlay), instance, has_config=base is not None)[0]
+
+
 def _branding(raw: Any) -> Branding:
     if raw is None:
         return Branding()
@@ -312,18 +357,15 @@ def _branding(raw: Any) -> Branding:
 
 
 def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = None, *,
-                tunnel_url: str | None = None, loopback_origin: str | None = None) -> Config:
+                tunnel_url: str | None = None, loopback_origin: str | None = None,
+                instance: Instance | None = None) -> Config:
     from .modes import parse_config as parse_modes
 
     env = dict(os.environ if env is None else env)
     owner_setup_digest = _owner_setup_digest(env.pop("SWB_SETUP_CODE", None))
-    base_path = config_path(path, env)
-    base = _read_yaml(base_path, "config")
-    overlay_path = env.get("SWITCHBOARD_OVERLAY")
-    local_paths = (p.with_name("local.yaml") for p in ((base_path,) if base_path else CONFIG_PATHS))
-    local_path = Path(overlay_path) if overlay_path else next((p for p in local_paths if p.is_file()), None)
-    overlay = _read_yaml(local_path, "overlay", required=bool(overlay_path)) or {}
+    base, overlay = _config_files(path, env, instance)
     raw = _merge(base or {}, overlay)
+    data_dir, legacy_instance_data = _data_paths(env, raw, instance, has_config=base is not None)
     auth = raw.get("auth") or {}
     if not isinstance(auth, dict):
         raise ConfigError("auth must be a mapping")
@@ -387,7 +429,8 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     cfg = Config(
         visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
-        data_dir=Path(raw.get("data_dir", env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA")) or "data").expanduser(),
+        data_dir=data_dir,
+        legacy_instance_data=legacy_instance_data,
         branding=_branding(raw.get("branding")),
         public_url_aliases=aliases,
         passkey_rp_id=rp_id,
