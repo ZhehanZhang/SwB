@@ -216,10 +216,12 @@ class SlackEngine:
         """Let a relay consume the event; otherwise classify, dedupe, ack and fan it out."""
         rt = self.runtime(label)
         channel, ts = event.get("channel"), event.get("ts")
-        if not channel or not ts:
+        if not channel:
             return None
         relay = self.relays.get((label, channel))
         if relay is not None and await relay(rt, event):
+            return None
+        if not ts:
             return None
         ctx = rt.classify_context()
         kind = classify(event, ctx)

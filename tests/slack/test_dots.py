@@ -14,6 +14,7 @@ from starlette.testclient import TestClient
 from conftest import call, error_text, principal
 from slackfix import BOT_ID, BOT_USER, ENV, KEY_FULL, OWNER_A, FakeWorld, Hooks, base_config
 from switchboard.app import create_app
+from switchboard.blocks import dots as dots_block
 from switchboard.core import Switchboard
 from switchboard.slack.config import Grant
 from switchboard.slack.writes import OWNER_RELAY, WriteError
@@ -112,6 +113,39 @@ def test_discovery_finds_dots_by_name_or_app_id_and_never_by_humans_or_itself(tm
         assert addrs == {"workspace-dots": f"dots:dot:{DOT}", "helper": f"dots:dot:{HELPER}"}
         assert core.slack.targets["workspace-dots"].kind == "dot"
         assert any(r[0] == "dot workspace-dots" for r in block.page_rows())
+
+
+def test_connect_refreshes_relay_members_after_invite(tmp_path, monkeypatch):
+    members = [BOT_USER]
+    with started(tmp_path, in_channel=members) as (core, world, _, client):
+        block = core.blocks["dots"]
+        core.slack.runtime("a2a").connected = True
+        start = tool(client, "connect", {"what": "dots"})
+        assert "state" not in start and "Add the SwB bot and a dot" in start["next"][0]["do"]
+        members.append(DOT)
+        assert tool(client, "connect", {"what": "dots"})["state"] == "connected"
+        assert block.relay_invite is None
+
+        async def slow_members(**_):
+            await asyncio.Future()
+
+        for slack_client in core.slack.runtime("a2a").clients.values():
+            monkeypatch.setattr(slack_client, "conversations_members", slow_members, raising=False)
+        monkeypatch.setattr(dots_block, "RELAY_MEMBERS_TIMEOUT", 0.01)
+        timed_out = tool(client, "connect", {"what": "dots"})
+        assert "state" not in timed_out and timed_out["next"][0]["do"] == "Check access to the Slack relay channel."
+
+
+def test_relay_membership_events_update_readiness(tmp_path):
+    with started(tmp_path, in_channel=(BOT_USER,)) as (core, _, _, client):
+        block = core.blocks["dots"]
+        core.slack.runtime("a2a").connected = True
+        assert block.next_step()
+        for kind, ready in (("member_joined_channel", True), ("member_left_channel", False)):
+            client.portal.call(core.slack.handle_socket, "a2a", "events_api", {"event": {
+                "type": kind, "channel": RELAY, "user": DOT, "event_ts": "1764000000.01",
+            }})
+            assert (block.next_step() is None) is ready
 
 
 def test_config_renames_and_disables_dots_and_dots_are_private_by_default(tmp_path):

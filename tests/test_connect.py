@@ -274,7 +274,8 @@ def test_status_missing_oauth_and_missing_github_routes(make):
     secret = "local-webhook-test-value"
     core, client = make(config=cfg, env={**default_env(), "GITHUB_WEBHOOK_SECRET": secret})
     status = payload(call(client, STATIC_KEY, "switchboard_status"))
-    assert status["blocks"]["mcp"]["next_step"].startswith("Set public_url")
+    assert status["blocks"]["mcp"]["next_step"] is None
+    assert status["blocks"]["mcp"]["manual_steps"] == ["Set public_url to let hosted MCP clients reach SwB."]
     assert status["blocks"]["github"]["next_step"].startswith("Add a GitHub repository route")
     assert status["next_steps"] == core.status()["next_steps"] and secret not in json.dumps(status)
     out = connect(client, "claude")
