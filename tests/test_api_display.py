@@ -3,6 +3,7 @@ import json
 import httpx
 
 from conftest import CAPTAIN2, CAPTAIN2_NAME, OWNER, base_config, default_env
+from switchboard import api_read
 from switchboard.slack.avatar_files import BUNDLED_AVATARS
 from test_api_read import get
 
@@ -26,8 +27,17 @@ def test_discovered_captain_registrant_comes_from_capy_author(make, capy):
     assert "private@swb.example.com" not in json.dumps(rows)
 
 
-def test_message_sender_uses_its_own_captain_avatar_not_the_conversation_target(make):
+def test_message_sender_uses_its_own_captain_avatar_not_the_conversation_target(make, monkeypatch):
     core, client = make()
+    lookups = []
+    original = api_read.captain_targets
+
+    async def targets(core, destinations):
+        destinations = tuple(destinations)
+        lookups.append(destinations)
+        return await original(core, destinations)
+
+    monkeypatch.setattr(api_read, "captain_targets", targets)
     handle = core.inbox.open_handle(owner="codex", destination="capy", ref="jam_EXAMPLECREW", project=None,
                                     title="Example discussion", meta={}, target=f"capy:captain:{UNKNOWN}")
     for sender in (
@@ -40,6 +50,7 @@ def test_message_sender_uses_its_own_captain_avatar_not_the_conversation_target(
 
     avatar = next(row["avatar_url"] for row in get(client, "/agents")["captains"] if row["id"] == CAPTAIN2)
     detail = get(client, f"/conversations/{handle}")
+    assert lookups == [("capy",)]
     first, second, crew, known = [item["from"] for item in detail["items"]]
     assert detail["conversation"]["first_sender"]["avatar_url"] == "/avatars/codex.png"
     assert first["author"] == second["author"] == CAPTAIN2_NAME

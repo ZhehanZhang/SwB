@@ -191,16 +191,12 @@ class DotsBlock(Block):
             if not cursor:
                 break
         found = [m for m in members if self.looks_like_dot(m, rt.bot_user_id)]
-        member_ids = {m.get("id") for m in members}
         for uid, o in self.overrides.items():
             if o.get("user_id") and not any(m["id"] == o["user_id"] for m in found):
                 found.append(next((m for m in members if m.get("id") == o["user_id"]), {"id": o["user_id"], "name": uid, "profile": {}}))
         now = self.core.clock()
         for m in found:
             profile = m.get("profile") or {}
-            registrant = next((value.strip() for value in (
-                profile.get("display_name"), m.get("real_name"), profile.get("real_name"), m.get("name"), m["id"],
-            ) if isinstance(value, str) and value.strip()), None) if m["id"] in member_ids else None
             if profile.get("image_192") or profile.get("image_72"):
                 self.images[m["id"]] = profile.get("image_192") or profile.get("image_72")
             self.core.store.x("INSERT INTO dots(workspace, user_id, bot_id, name, real_name, app_id, slug, seen_at, created_by) VALUES (?,?,?,?,?,?,?,?,?) "
@@ -208,7 +204,7 @@ class DotsBlock(Block):
                               "app_id = excluded.app_id, slug = excluded.slug, seen_at = excluded.seen_at, "
                               "created_by = COALESCE(dots.created_by, excluded.created_by)",
                               (self.workspace, m["id"], profile.get("bot_id"), m.get("name") or m["id"], m.get("real_name") or profile.get("real_name"),
-                               profile.get("api_app_id"), slugify(m.get("name") or m["id"]), now, registrant))
+                               profile.get("api_app_id"), slugify(m.get("name") or m["id"]), now, None))
         self.core.changed()
         try:
             await self.ensure_channel(rt)
