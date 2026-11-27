@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from .. import Action, Block, BlockError, Call, Manifest, TargetKind
+from ...audit import iso
 from ...config import SLUG_RE
 from ...projects import ProjectError
 
@@ -59,7 +60,7 @@ CREATE TABLE IF NOT EXISTS routine_pickups (handle TEXT PRIMARY KEY, routine TEX
 """
 PICKUP_TTL_S = 86_400
 CLAIMS = """
-CREATE TABLE IF NOT EXISTS routine_claims (code_hash TEXT PRIMARY KEY, routine_id TEXT NOT NULL, name TEXT NOT NULL, project TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS routine_claims (code_hash TEXT PRIMARY KEY, owner_ref TEXT, routine_id TEXT NOT NULL, name TEXT NOT NULL, project TEXT NOT NULL,
   new_project TEXT, title TEXT, is_primary INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at REAL NOT NULL,
   expires_at REAL NOT NULL, used_at REAL, superseded_at REAL)
 """
@@ -144,8 +145,13 @@ class ClaudeRoutineBlock(Block):
             core.store.x("ALTER TABLE routines ADD COLUMN title TEXT")
         if "is_primary" not in cols:
             core.store.x("ALTER TABLE routines ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0")
-        if "superseded_at" not in {r["name"] for r in core.store.q("PRAGMA table_info(routine_claims)")}:
+        claim_cols = {r["name"] for r in core.store.q("PRAGMA table_info(routine_claims)")}
+        if "superseded_at" not in claim_cols:
             core.store.x("ALTER TABLE routine_claims ADD COLUMN superseded_at REAL")
+        if "owner_ref" not in claim_cols:
+            core.store.x("ALTER TABLE routine_claims ADD COLUMN owner_ref TEXT")
+        core.store.x("UPDATE routine_claims SET owner_ref = lower(hex(randomblob(16))) WHERE owner_ref IS NULL AND used_at IS NULL")
+        core.store.x("CREATE UNIQUE INDEX IF NOT EXISTS routine_claims_owner_ref ON routine_claims(owner_ref)")
 
     # Registry --------------------------------------------------------------------------------
 
@@ -177,6 +183,7 @@ class ClaudeRoutineBlock(Block):
             if row["name"] not in out:
                 out[row["name"]] = {**{k: row[k] for k in ("name", "routine_id", "agent", "project", "kind", "title")},
                                     "sealed": row["token"], "slugs": [], "source": "stored", "created_by": row["created_by"],
+                                    "created_at": row["created_at"],
                                     "primary": bool(row["is_primary"])}
         return out
 
@@ -200,24 +207,26 @@ class ClaudeRoutineBlock(Block):
         lead = r["project"] and (self.primary(r["project"], r["agent"], routines) or {}).get("name") == r["name"] and alias not in routines
         return list(dict.fromkeys([r["name"]] + ([alias] if lead else []) + r["slugs"]))
 
-    def status_of(self, r: dict[str, Any]) -> str:
+    def _status_of(self, r: dict[str, Any], fire: Any) -> str:
         if not r["routine_id"] or not self.token(r):
             return "no token" if r["routine_id"] else "no routine id"
-        row = self.core.store.one("SELECT last_status FROM routine_fires WHERE name = ?", (r["name"],))
-        return {"ok": "tested"}.get(row["last_status"], row["last_status"]) if row else "untested"
+        return {"ok": "tested"}.get(fire["last_status"], fire["last_status"]) if fire else "untested"
 
     def _record_fire(self, name: str, status: str) -> None:
         self.core.store.x("INSERT INTO routine_fires(name, fired_at, last_status) VALUES (?,?,?) ON CONFLICT(name) DO UPDATE SET "
                           "fired_at = excluded.fired_at, last_status = excluded.last_status", (name, self.core.clock(), status))
 
-    def rows(self) -> list[dict[str, Any]]:
+    def rows(self, *, details: bool = False) -> list[dict[str, Any]]:
         routines = self.routines()
         out = []
         for n, r in routines.items():
             lead = self.primary(r["project"], r["agent"], routines)
+            fire = self.core.store.one("SELECT last_status, fired_at FROM routine_fires WHERE name = ?", (n,))
             out.append({"name": n, "routine_id": r["routine_id"], "agent": r["agent"], "project": r["project"], "kind": r["kind"], "source": r["source"],
                         "claude_project": r["title"], "primary": lead is not None and lead["name"] == n, "slugs": self.slugs(r, routines),
-                        "status": self.status_of(r), "visibility": self.core.visibility.rule(f"target:{n}")})
+                        "status": self._status_of(r, fire), "visibility": self.core.visibility.rule(f"target:{n}"),
+                        **({"created_by": r.get("created_by"), "created_at": iso(r.get("created_at")),
+                            "last_seen_at": iso(fire["fired_at"]) if fire else None} if details else {})})
         return out
 
     def _free_name(self, agent: str, slug: str | None, title: str | None, routine_id: str) -> str:
@@ -377,9 +386,9 @@ class ClaudeRoutineBlock(Block):
             if (db.execute("SELECT COUNT(*) FROM routine_claims WHERE created_by = ? AND used_at IS NULL AND expires_at > ?", (actor, now)).fetchone()[0]
                     >= CLAIMS_PER_CALLER):
                 raise BlockError(f"{CLAIMS_PER_CALLER} registrations are already waiting for the owner; let those expire or finish first")
-            db.execute("INSERT INTO routine_claims(code_hash, routine_id, name, project, new_project, title, is_primary, created_by, created_at, expires_at) "
-                       "VALUES (?,?,?,?,?,?,?,?,?,?)", (_sha(code), rid, chosen, slug, json.dumps(new_project) if new_project else None, title,
-                                                        int(bool(primary)), actor, now, now + CLAIM_TTL_S))
+            db.execute("INSERT INTO routine_claims(code_hash, owner_ref, routine_id, name, project, new_project, title, is_primary, created_by, created_at, expires_at) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (_sha(code), secrets.token_hex(16), rid, chosen, slug, json.dumps(new_project) if new_project else None,
+                                                           title, int(bool(primary)), actor, now, now + CLAIM_TTL_S))
             return chosen, [r["name"] for r in replaced]
 
         name, superseded = self.core.store.tx(run)
@@ -390,11 +399,15 @@ class ClaudeRoutineBlock(Block):
                 "project": slug, "creates_project": new_project is not None, "claude_project": title,
                 "primary": bool(primary) or lead is None or lead["name"] == name,
                 **({"superseded": superseded} if superseded else {}),
-                "next": "Give the owner this link. He opens it (SSO), pastes the routine's token and clicks Save; the token never goes "
+                "next": "Give the owner this link. The owner signs in, pastes the routine's token and clicks Save; the token never goes "
                         "through chat or MCP. routine_list shows the routine once saved (untested until its first fire)."}
 
-    def claim(self, code: str) -> dict[str, Any]:
-        row = self.core.store.one("SELECT * FROM routine_claims WHERE code_hash = ?", (_sha(code or ""),))
+    def _claim_row(self, code: str, registration: str | None = None) -> Any:
+        if registration is None:
+            return self.core.store.one("SELECT * FROM routine_claims WHERE code_hash = ?", (_sha(code or ""),))
+        return self.core.store.one("SELECT * FROM routine_claims WHERE owner_ref = ?", (registration,))
+
+    def _claim_details(self, row: Any) -> dict[str, Any]:
         if row is None:
             raise BlockError("this link isn't valid; ask the Claude session for a new one")
         if row["superseded_at"] is not None:
@@ -406,13 +419,18 @@ class ClaudeRoutineBlock(Block):
         return {**{k: row[k] for k in ("routine_id", "name", "project", "title", "created_by")}, "primary": bool(row["is_primary"]),
                 "new_project": json.loads(row["new_project"]) if row["new_project"] else None, "expires_at": row["expires_at"]}
 
-    def complete(self, code: str, token: str, actor: str) -> dict[str, Any]:
+    def claim(self, code: str, *, registration: str | None = None) -> dict[str, Any]:
+        return self._claim_details(self._claim_row(code, registration))
+
+    def complete(self, code: str, token: str, actor: str, *, registration: str | None = None) -> dict[str, Any]:
         """The owner's half: the token for a pending registration. Creates the project if the registration asked for one."""
-        c = self.claim(code)
+        row = self._claim_row(code, registration)
+        c = self._claim_details(row)
         if not TOKEN_RE.fullmatch((token or "").strip()):
             raise BlockError("that doesn't look like a routine token (sk-ant-oat01-…)")
-        self._check_name(c["name"], c["routine_id"], False, skip=_sha(code))
-        if not self.core.store.n("UPDATE routine_claims SET used_at = ? WHERE code_hash = ? AND used_at IS NULL", (self.core.clock(), _sha(code))):
+        code_hash = row["code_hash"]
+        self._check_name(c["name"], c["routine_id"], False, skip=code_hash)
+        if not self.core.store.n("UPDATE routine_claims SET used_at = ? WHERE code_hash = ? AND used_at IS NULL", (self.core.clock(), code_hash)):
             raise BlockError("this link was already used")
         created_project = False
         if c["new_project"]:
@@ -424,17 +442,25 @@ class ClaudeRoutineBlock(Block):
         return {**self.add(fire=c["routine_id"], token=token, project=c["project"], name=c["name"], agent="claude", actor=actor, title=c["title"],
                            primary=True if c["primary"] else None), "created_project": created_project}
 
-    def pending(self) -> list[dict[str, Any]]:
-        return [{"name": r["name"], "routine_id": r["routine_id"], "project": r["project"], "claude_project": r["title"], "requested_by": r["created_by"],
-                 "expires_in_s": int(r["expires_at"] - self.core.clock())}
-                for r in self.core.store.q("SELECT * FROM routine_claims WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at", (self.core.clock(),))]
+    def pending(self, *, details: bool = False) -> list[dict[str, Any]]:
+        now = self.core.clock()
+        rows = self.core.store.q(
+            "SELECT owner_ref, name, routine_id, project, title, created_by, created_at, expires_at, is_primary, new_project "
+            "FROM routine_claims WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at", (now,),
+        )
+        return [{"name": r["name"], "routine_id": r["routine_id"], "project": r["project"], "claude_project": r["title"],
+                 "requested_by": r["created_by"], "expires_in_s": int(r["expires_at"] - now),
+                 **({"registration": r["owner_ref"], "created_at": r["created_at"], "expires_at": r["expires_at"], "primary": bool(r["is_primary"]),
+                     "new_project": json.loads(r["new_project"]) if r["new_project"] else None} if details else {})}
+                for r in rows]
 
     def remove(self, name: str) -> bool:
         name = (name or "").strip().lower()
         if name in self.configured:
             raise BlockError(f"{name} is set in the config file; remove it there")
-        n = self.core.store.x("DELETE FROM routines WHERE name = ?", (name,))
-        self.core.changed()
+        n = self.core.store.n("DELETE FROM routines WHERE name = ?", (name,))
+        if n:
+            self.core.changed()
         return bool(n)
 
     # Block -----------------------------------------------------------------------------------
@@ -560,7 +586,7 @@ class ClaudeRoutineBlock(Block):
     def actions(self) -> list[Action]:
         return [
             Action("fire", "Message a Claude routine", "Leave the message in the routine's mailbox and start a session that replies.",
-                   self.fire, capped=True),
+                   self.fire, capped=True, previewable=True),
             Action("list", "Claude routines", "Registered routines: project, kind, status (untested until the first fire), visibility. Tokens are never shown.",
                    self.list_action, read_only=True),
             Action("register", "Register this Claude routine", "A Claude session registers its own routine for a switchboard project: "
@@ -658,7 +684,9 @@ class ClaudeRoutineBlock(Block):
         name = routine["name"]
         project = project or routine["project"]
         out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True,
-                                         handle=call.handle, handle_meta=call.handle_meta)
+                                         handle=call.handle, handle_meta=call.handle_meta, dry_run=call.dry_run)
+        if call.dry_run:
+            return {**out, "to": f"{self.name}:routine:{name}"}
         handle = out["handle"]
         call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
         token = self.token(routine)

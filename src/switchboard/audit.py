@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
+from sqlite3 import Row
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -47,15 +49,51 @@ class Audit:
         )
         log.info("%s.%s %s by %s via %s (%s) -> %s %s", destination, action, outcome, source, origin, client[:60], target or "", ref or detail or "")
 
-    def recent(self, *, destination: str | None = None, action: str | None = None, outcome: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    def _recent_rows(self, *, destination: str | None = None, actions: Sequence[str] = (), origin: str | None = None,
+                     outcome: str | None = None, limit: int = 20, cursor: int | None = None,
+                     targets: Mapping[str, Sequence[str]] | None = None, keys: Sequence[str] = ()) -> list[Row]:
         where, args = [], []
-        for col, val in (("destination", destination), ("action", action), ("outcome", outcome)):
+        for col, val in (("destination", destination), ("origin", origin), ("outcome", outcome)):
             if val:
                 where.append(f"{col} = ?")
                 args.append(val)
+        if actions:
+            where.append(f"action IN ({','.join('?' for _ in actions)})")
+            args.extend(actions)
+        if cursor is not None:
+            boundary = self.store.one("SELECT at FROM audit WHERE id = ?", (cursor,))
+            if boundary is None:
+                raise ValueError("invalid cursor")
+            where.append("(at, id) < (?, ?)")
+            args.extend((boundary["at"], cursor))
+        if targets is not None or keys:
+            subjects = []
+            for block, names in (targets or {}).items():
+                if names:
+                    subjects.append(f"(destination = ? AND target IN ({','.join('?' for _ in names)}))")
+                    args.extend((block, *names))
+            if keys:
+                marks = ",".join("?" for _ in keys)
+                subjects.append(f"(client IN ({marks}) OR (destination = 'core' AND action IN ('connect_redeem', 'connect_revoke') "
+                                f"AND target IN ({marks})))")
+                args.extend([*(f"connect:{key}" for key in keys), *keys])
+            if not subjects:
+                return []
+            where.append("(" + " OR ".join(subjects) + ")")
         sql = "SELECT * FROM audit" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY at DESC, id DESC LIMIT ?"
+        return self.store.q(sql, [*args, limit])
+
+    def recent(self, *, destination: str | None = None, action: str | None = None, outcome: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         return [
             {"at": iso(r["at"]), "origin": r["origin"], "source": r["source"], "client": r["client"], "destination": r["destination"], "action": r["action"],
              "target": r["target"], "ref": r["ref"], "title": r["title"], "outcome": r["outcome"], "detail": r["detail"], "excerpt": r["excerpt"][:120]}
-            for r in self.store.q(sql, [*args, limit])
+            for r in self._recent_rows(destination=destination, actions=(action,) if action else (), outcome=outcome, limit=limit)
         ]
+
+    def page(self, *, actions: Sequence[str], origin: str | None, outcome: str | None,
+             limit: int, cursor: int | None) -> tuple[list[Row], int | None]:
+        rows = self._recent_rows(actions=actions, origin=origin, outcome=outcome, limit=limit + 1, cursor=cursor)
+        return rows[:limit], rows[limit - 1]["id"] if len(rows) > limit else None
+
+    def related(self, *, targets: Mapping[str, Sequence[str]], keys: Sequence[str], limit: int = 20) -> list[Row]:
+        return self._recent_rows(targets=targets, keys=keys, limit=limit)

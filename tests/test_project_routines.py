@@ -134,13 +134,13 @@ def test_routine_tools_register_list_and_remove_without_showing_tokens(tmp_path)
 def test_root_page_adds_a_routine_and_shows_projects_across_systems(tmp_path):
     core, c, anthropic = build(tmp_path, {"claude": BOTH["claude"]})
     try:
-        page = c.get("/", headers=OWNER)
+        page = c.get("/classic", headers=OWNER)
         assert "Claude routines" in page.text and 'type="password"' in page.text and "Projects across systems" in page.text
         csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
         form = {"fire_url": "https://api.anthropic.com/v1/claude_code/routines/trig_01PAGE/fire", "token": TOKEN, "project": "infra", "csrf": csrf}
         assert c.post("/routines", data={**form, "csrf": "bad"}, headers=OWNER).status_code == 403
         assert c.post("/routines", data=form, headers=OWNER).status_code == 303
-        page = c.get("/", headers=OWNER).text
+        page = c.get("/classic", headers=OWNER).text
         assert "claude-infra" in page and "trig_01PAGE" in page and TOKEN not in page and "untested" in page
         systems = {s["slug"]: s["systems"] for s in core.project_systems(client_targets(c))}
         assert systems["infra"]["claude-routine routine"] == "Claude: infra" and "capy" in systems["infra"]

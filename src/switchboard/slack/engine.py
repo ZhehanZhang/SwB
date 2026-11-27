@@ -5,24 +5,24 @@ import logging
 import os
 import secrets
 import time
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any
 
 import httpx
 
 from ..guard import RateLimiter
 from ..trust import wrap
 from ..visibility import Visibility, Who
-from .config import AVATAR_RE, Config, Persona
+from .avatar_files import BUNDLED_AVATARS, AvatarFiles, find_avatar
+from .config import Config, Persona
 from .events import build_event, classify, event_id
 from .push import WebhookSink
 from .routing import Target, near, split_slug
 from .slack import CHANNEL_ID_RE, WorkspaceRuntime, make_client, slack_error
 from .store import Store
 from .writes import Actor, WriteError, WriteGate
-
-BUNDLED_AVATARS = Path(__file__).parent / "avatars"
 
 log = logging.getLogger("switchboard.slack")
 
@@ -56,6 +56,7 @@ class SlackEngine:
         self.clock = clock
         self.store = Store(self.data_dir / "slack.db", clock=clock)
         self.http = http or httpx.AsyncClient()
+        self.avatars = AvatarFiles(self.data_dir, config.public_base_url, config.avatar_dirs)
         self.client_factory = client_factory
         self.own_post_grace = own_post_grace
         self.config = config
@@ -81,15 +82,12 @@ class SlackEngine:
     @property
     def avatar_dir(self) -> Path:
         """Uploads from the root page land here and win over avatar_dirs and the bundled monograms."""
-        return self.data_dir / "avatars"
+        return self.avatars.uploads
 
     @property
     def avatar_cache(self) -> Path:
         """Pictures blocks rendered for their dynamic personas (Captains, say), named by what they were rendered from."""
-        return self.data_dir / "avatar-cache"
-
-    def avatar_dirs(self) -> list[Path]:
-        return [self.avatar_dir, *(Path(d) for d in self.config.avatar_dirs), self.avatar_cache, BUNDLED_AVATARS]
+        return self.avatars.rendered
 
     def personas(self) -> dict[str, Persona]:
         """Configured personas, plus one per Captain target found automatically; the config wins on the same id."""
@@ -137,19 +135,10 @@ class SlackEngine:
         return [s.cfg.name for s in self.sinks.get(label, []) if s.accepts(push)]
 
     def find_avatar(self, name: str) -> Path | None:
-        if not AVATAR_RE.match(name):
-            return None
-        for d in self.avatar_dirs():
-            if (d / name).is_file():
-                return d / name
-        return None
+        return find_avatar(name, self.avatars.dirs)
 
     def avatar_url(self, name: str) -> str | None:
-        """Public URL for an avatar file, versioned by mtime so Slack refetches a replaced picture."""
-        path = self.find_avatar(name)
-        if path is None or not self.config.public_base_url:
-            return None
-        return f"{self.config.public_base_url}/avatars/{name}?v={int(path.stat().st_mtime)}"
+        return self.avatars.avatar_url(name)
 
     async def start(self, connect: bool = True) -> None:
         self.connect = connect
@@ -517,14 +506,15 @@ class SlackEngine:
     def persona_rows(self) -> list[dict[str, Any]]:
         """Each persona with its picture's URL, the folder it comes from, and the agents that post as it by default."""
         cfg = self.config
-        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled monogram", self.avatar_cache: "rendered by a block"}
+        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled mark", self.avatar_cache: "rendered by a block"}
         rows = []
         for pid, p in self.personas().items():
             path = self.find_avatar(p.avatar) if p.avatar else None
+            url = (self.avatar_url(p.avatar) if p.avatar else None) or p.icon_url
             used = sorted({g.id for g in cfg.grants.values() if pid in (g.persona, g.id, *g.persona_by_workspace.values())}
                           | {f"default in {w.label}" for w in cfg.workspaces.values() if w.default_persona == pid}
                           | {f"target {t.slug}" for t in self.targets.values() if t.persona == pid})
-            rows.append({"id": pid, "name": p.name, "avatar": p.avatar, "url": self.avatar_url(p.avatar) if p.avatar else p.icon_url,
+            rows.append({"id": pid, "name": p.name, "avatar": p.avatar, "url": url, "avatar_url": url,
                          "emoji": p.emoji, "source": (sources.get(path.parent, "avatar folder") if path else ("icon_url" if p.icon_url else "none")),
                          "used_by": used})
         return rows

@@ -44,6 +44,24 @@ GUIDES = {
 }
 
 
+def coding_snippet(agent: str, url: str, oauth: bool) -> dict[str, str]:
+    guide = GUIDES[agent]
+    use_oauth = oauth and guide.oauth is not None
+    if use_oauth and guide.command:
+        instruction = "Run this command to add Switchboard."
+        snippet = guide.command.replace("@url", shlex.quote(url))
+    else:
+        instruction = f"Merge this entry into {guide.where}." if guide.where else "Enter these settings in your remote MCP client (client-specific syntax unverified)."
+        if not use_oauth:
+            instruction = instruction.rstrip(".") + ", replacing <key> locally with the pairing key and keeping it out of shared files."
+        auth = "" if use_oauth else guide.bearer
+        snippet_url = json.dumps(url) if guide.where else url
+        snippet = guide.snippet.replace("@auth", auth).replace("@url", snippet_url)
+        if snippet.startswith("{"):
+            snippet = json.dumps(json.loads(snippet), indent=2)
+    return {"id": agent, "where": guide.where, "snippet": snippet, "instruction": instruction, "auth": "oauth" if use_oauth else "bearer"}
+
+
 def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
     core = kit.core
     url = f"{core.base_url}/mcp"
@@ -63,7 +81,8 @@ def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: di
     if agent not in GUIDES:
         raise ToolError(f"Choose one of these coding agents: {names}.")
     guide = GUIDES[agent]
-    use_oauth = oauth and guide.oauth is not None
+    config = coding_snippet(agent, url, oauth)
+    use_oauth = config["auth"] == "oauth"
     steps: list[dict[str, str]] = []
     if not use_oauth:
         if not principal.is_unrestricted_owner:
@@ -76,19 +95,7 @@ def coding_steps(kit: Kit, principal: Principal, project: str | None, choose: di
                         "do": f'To set up another machine or replace it, revoke it with connect_revoke(key_id="{key["id"]}"), then call connect again.'}]}
             code = kit.mint_pairing(principal, agent, project, None)["code"]
             steps.append({"by": "person", "do": f'POST {core.base_url}/connect with {{"code":"{code}"}} from the client to obtain its bearer key.'})
-    if use_oauth and guide.command:
-        do = "Run this command to add Switchboard."
-        snippet = guide.command.replace("@url", shlex.quote(url))
-    else:
-        do = f"Merge this entry into {guide.where}." if guide.where else "Enter these settings in your remote MCP client (client-specific syntax unverified)."
-        if not use_oauth:
-            do = do.rstrip(".") + ", replacing <key> locally with the pairing key and keeping it out of shared files."
-        auth = "" if use_oauth else guide.bearer
-        snippet_url = json.dumps(url) if guide.where else url
-        snippet = guide.snippet.replace("@auth", auth).replace("@url", snippet_url)
-        if snippet.startswith("{"):
-            snippet = json.dumps(json.loads(snippet), indent=2)
-    steps.append({"by": "person", "do": do, "snippet": snippet})
+    steps.append({"by": "person", "do": config["instruction"], "snippet": config["snippet"]})
     if use_oauth:
         steps.append({"by": "person", "do": guide.oauth})
     wake = "Use the Switchboard wait or inbox tool to pick up messages"

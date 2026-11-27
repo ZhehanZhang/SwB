@@ -139,7 +139,7 @@ agents:                      # optional: without it every preset (claude, chatgp
   codex: {label: Codex}
 blocks:
   mcp:   {use: mcp, legacy_aliases: true, wait: {default_s: 60, max_s: 200}}
-  capy:  {use: capy, identity: service, avatars: false}
+  capy:  {use: capy, identity: service}
   slack: {use: slack, workspaces: {...}, agents: {...}, personas: {...}, workspace_projects: {acme: acme}}
 targets: {priority: [], aliases: {}}
 routes:                      # seeds, written once; routes_set and the page manage them after. Empty by default
@@ -208,7 +208,7 @@ Captain (by name or id), a Capy project (new thread there), or a thread. Default
 `send` without `to` uses the route. An explicit `to` for a routed block is refused unless the matching route has
 `allow_override` (with no route at all, an explicit target is the only way). Route targets are checked with the
 block when set. Every route write, refusals included, is in the audit log. `routes_list`, `routes_set`,
-`routes_remove` and `routes_resolve` manage them, and the admin page at `/` shows them with the projects and recent
+`routes_remove` and `routes_resolve` manage them, and the classic admin page at `/classic` shows them with the projects and recent
 changes. The global default is an empty slot in the code; `routes:` in the config (or the older
 `destinations.capy.default_route`) seeds it once on a fresh install.
 
@@ -332,7 +332,7 @@ Re-registering for the same switchboard project and Claude Project replaces any 
 saved and frees its routine name. Give the owner the latest link; the result lists any replaced names in
 `superseded`, and links for other Claude Projects still work.
 
-**By hand.** On the root page, under Claude routines, paste the task's fire URL and token and pick the switchboard
+**By hand.** On `/classic`, under Claude routines, paste the task's fire URL and token and pick the switchboard
 project, or call `routine_add(fire_url, token, project)`. The token is encrypted in switchboard's store and never
 shown again. The routine shows as **untested** until its first fire works.
 
@@ -356,7 +356,7 @@ A send to claude with no project, or for a project without its own routine, goes
 mailbox when there is none. The project task does quick items itself. For real work it messages the coordinator with
 the task and the switchboard conversation handle, then replies with `final=false` ("handed to the … coordinator"). The
 coordinator answers on the same handle with `reply(final=true)`. `wait` and `inbox` show both replies, and
-`result(conversation)` returns the final one. The root page's **Projects across systems** card shows what each
+`result(conversation)` returns the final one. The classic admin page's **Projects across systems** card shows what each
 switchboard project maps to: the Captain its route reaches, its Claude routines, and its links.
 
 **Fires without text.** Anthropic's fire endpoint refuses `text` for some Project routines, with 403 "this project
@@ -459,7 +459,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   Without an owner message, a private target's reply in a shared channel goes to the owner's DM or is withheld.
   `sender_rate` (`{count: 5, window_s: 600}`) caps context items per sender,
   and every context item and drop is in the audit log. The top-level `visibility:` section sets `defaults` per kind
-  and `resources`; the root page's pills and the `visibility_set` tool flip one resource, and that override wins.
+  and `resources`; the classic admin page and the `visibility_set` tool flip one resource, and that override wins.
 - **Signed sinks.** A sink with `secret_env` signs each POST: `X-Switchboard-Timestamp` is the Unix time and
   `X-Switchboard-Signature` is `v1=` plus the hex HMAC-SHA256 of `<timestamp>.<raw body>` with that secret. A
   receiver checks the signature and rejects old timestamps. Receivers that can't check one (a Capy automation webhook)
@@ -474,7 +474,7 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
   no bot and never joins or invites (the client refuses those methods, and a test scans the source). The loop guard
   queues bot replies past `bot_thread_posts_per_hour` in one thread for approval.
 - **Approvals.** Approval happens only out of band. The owner uses the Approve / Reject DM the bot sends, or the
-  **Slack writes waiting for you** list on the root page (owner sign-in plus a CSRF token). The DM goes from the request's own
+  **Slack writes waiting for you** list on `/classic` (owner sign-in plus a CSRF token). The DM goes from the request's own
   workspace when that workspace sets `approver_user_id`, else from `approvals.notify_workspace` to
   `approvals.approver_user_id`. No MCP tool decides a request, and a decision from anyone but a configured approver
   (clicking in the workspace they are configured for) or the page is refused and audited.
@@ -497,18 +497,21 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - **Personas.** Bot posts carry a per-message name and picture (`chat:write.customize`), chosen like the send keys:
   the call's `persona` (only with `allow_persona_override`, and within `allowed_personas`) > the persona of the
   target the thread is routed to, for an agent its block provides (Capy in a Captain's thread) > `agents.<agent>.persona_by_workspace` (which may name a Captain's persona) > `agents.<agent>.persona` > the persona
-  named like the agent > the workspace's `default_persona`. Blocks can bring personas for their targets: every Captain
-  gets one with its name, and its picture is a monogram on its Capy background colour, or, with `blocks.capy.avatars:
-  true` (or `slack.captain_avatars: true`), the Captain's own Capy avatar (this reads an undocumented capy.ai asset
-  path; see `blocks/capy/avatars.py`). User-identity posts never carry
-  a persona: they always show as the account owner, behind the identity's write policy.
+  named like the agent > the workspace's `default_persona`. User-identity posts never carry a persona: they always
+  show as the account owner, behind the identity's write policy.
+- **Captain avatars.** Each Captain gets a persona with their own Capy avatar by default. SwB reads Capy's public,
+  undocumented avatar assets and caches one file per Captain and avatar spec, so a changed spec gets a new URL.
+  If the asset can't be rendered, SwB draws a monogram on the Captain's background colour. A Captain without an
+  avatar spec uses the bundled Capy mark. Set `blocks.capy.avatars: false` or `blocks.slack.captain_avatars: false`
+  (legacy `slack.captain_avatars`) to use monograms instead of fetching Capy assets.
 - **Avatars.** A persona's picture is the file named in `avatar:`, or `<persona id>.png` when the persona sets no
-  `icon_url`. Files are looked up in `<data>/avatars` (uploads from the root page's Personas list), then each
-  `slack.avatar_dirs` folder, then pictures blocks rendered, then the neutral monograms bundled for `switchboard`,
-  `claude`, `chatgpt`, `gemini`, `codex`, `claude-code` and `capy`. Dropping a new file in replaces the picture with no
-  restart; the URL carries the file's mtime so Slack fetches the new one. `scripts/monogram.py` draws more.
-  `/avatars/<file>` is served without Access, because Slack fetches it. The limit: the picture shows on each message,
-  but clicking the name opens the app's bot profile, with the app's own name, icon and @handle.
+  `icon_url`. SwB looks in `<data>/avatars` (uploads from the classic admin page's Personas list), then each `blocks.slack.avatar_dirs`
+  folder (legacy `slack.avatar_dirs`), then the rendered avatar cache, then the bundled marks. No extra folder is
+  required for `switchboard`, `claude`, `claude-code`, `chatgpt`, `gemini`, `codex` or `capy`. Put your own file in
+  `avatar_dirs` to override a bundled mark. The URL carries the file's mtime, so replacing a file doesn't require a
+  restart. Set `blocks.slack.public_base_url` to give Slack a reachable `/avatars/<file>` URL. Discord uses the same
+  URL when configured, or falls back to `public_url`. This route is public so they can fetch pictures. In Slack, clicking a persona still opens the
+  app's bot profile with the app's own name, icon and @handle.
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
@@ -606,18 +609,18 @@ explicitly listen to. Mention the bot with a target slug (for example, `@swb hel
 
 1. In the [Discord Developer Portal](https://discord.com/developers/applications), create a New Application. Under
    **Bot**, turn on **Message Content Intent** if you want unmentioned server follow-ups and listen mode to have text.
-   Reset the bot token there. You can copy the Application ID from **General Information** into the config now, or
-   let the bot learn it when Discord connects.
-2. Enable the block, add the servers and your Discord user IDs, and restart switchboard. In Discord's
-   **User Settings → Advanced**, enable **Developer Mode** to copy server and user IDs from their context menus.
-3. As the owner, call `discord_provision` and open its one-time token link. Sign in, paste the token there, and save.
-   You can also set `DISCORD_BOT_TOKEN` in the server environment. Never enter a token in
-   YAML, Discord or an MCP tool argument.
-4. Open `setup.invite_url` from `discord_status` and add the bot to each configured server. The link requests only the
-   bot scope and the permissions for the enabled features; it does not request Administrator or slash commands.
+   Reset the bot token there. SwB learns the Application ID and owner when Discord connects.
+2. Enable the block with one space and restart switchboard. Leave out `guild_id` and `owner_ids` for automatic setup.
+3. As the owner, call `connect` with `what: discord` for a one-time token link. Sign in, open the link
+   and paste the token there. With a local owner key from `swb init`, use `swb claim <link>`. Or set
+   `DISCORD_BOT_TOKEN` in the server environment. Never enter a token in YAML, Discord or an MCP tool argument.
+4. Use the invite from `connect` or `discord_status` to add the bot to a server you own. A guild-less space binds when
+   the bot sees exactly one server owned by its application owner. The link requests only the bot scope and the
+   permissions for the enabled features, not Administrator or slash commands.
 5. Channels and targets are private by default. To let other people reach a target, share both
    `channel:<space>/<channel-id>` (or `channel:<space>/#<name>`) and `target:<slug>`. A visibility list can name
-   individual users as `discord:<user-id>`. Only `owner_ids` grant owner trust; non-owner messages remain untrusted.
+   individual users as `discord:<user-id>`. Configured `owner_ids` override the discovered application owner;
+   non-owner messages remain untrusted.
 
 ```yaml
 blocks:
@@ -625,8 +628,6 @@ blocks:
     use: discord
     spaces:
       home:
-        guild_id: "100000000000000001"
-        owner_ids: ["100000000000000002"]
         default_target: helper
     agents: {claude: [home]}
 ```
@@ -637,10 +638,12 @@ blocks:
   of unmentioned server messages, including follow-ups and listened-to messages. `connect: false` skips Gateway
   intake, which is useful for testing the REST side alone.
 - Posting: `threads` defaults to `true` and creates a public thread from the original message when Discord
-  supports it. Set it to `false` to reply in place. `personas: true` uses a webhook per channel for persona posts,
-  except in DMs and when a native reply reference is needed. `ack_reaction` defaults to 👀; set it to `null` to
+  supports it. Set it to `false` to reply in place. `personas` defaults to `true`: a webhook per channel lets
+  posts show the same persona name and avatar as Slack, except in DMs or when a native reply reference is needed.
+  If Discord denies webhook access, SwB posts as the bot in the same place. Re-open the invite from `connect`
+  to grant Manage Webhooks, or set `personas: false` to use the bot for all posts. `ack_reaction` defaults to 👀; set it to `null` to
   disable reactions. Posts don't ping users or roles. `daily_cap` optionally limits outbound tool calls per day.
-- Routing: each space needs a distinct `guild_id`. `known` maps Discord user IDs to names; `listen` lists channel
+- Routing: at most one space can omit `guild_id`. Any others need distinct `guild_id` values. `known` maps Discord user IDs to names; `listen` lists channel
   or thread IDs whose unaddressed messages go only to granted inboxes. `project` sets the default project and
   `channel_projects` overrides it by ID or `#name`. `bot_posts_per_hour` defaults to 20 per thread.
   The block's `agents` maps agent names to space lists or `"*"`, `target_aliases` adds local slugs, and
@@ -656,13 +659,13 @@ Telegram is both a way in and a way out. The bot uses the Bot API's long polling
 Telegram endpoint, tunnel or Cloudflare Access change. One process can poll a given bot token at a time.
 Telegram DMs, bot mentions, `/swb <target> <message>` and replies to the bot can reach a switchboard target
 such as an agent, routine or project. A reply to the bot keeps the earlier target unless you name another.
-Telegram uses the bot's own name; relayed replies can show the target's persona on a bold first line.
+Telegram can't set per-message avatars. It uses the bot's own name and picture; relayed replies can show the
+target's persona on a bold first line.
 
 1. Enable the block in `config/switchboard.yaml` and configure at least one space.
-2. Create the bot in [@BotFather](https://t.me/BotFather) with `/newbot`. Call `telegram_provision` and
-   enter its HTTP API token only at the one-time link (requires owner sign-in). Alternatively,
-   set the server's `TELEGRAM_BOT_TOKEN` environment variable instead. If set, the environment takes precedence;
-   remove or update it before switching to a token saved through the link.
+2. Create the bot in [@BotFather](https://t.me/BotFather) with `/newbot`. Call `connect` with `what: telegram`
+   for a one-time token link. Open it with the owner's sign-in, or use `swb claim <link>` with a local owner key
+   from `swb init`. `TELEGRAM_BOT_TOKEN` in the server environment takes precedence over a token saved with the link.
 3. Add the bot to each group and send `/swb@<bot username>` there. Copy the negative chat id from
    `telegram_status` → `setup.seen_chats` into the space's `chats`. If using `listen`, turn off privacy
    mode with `/setprivacy` in @BotFather, then remove and re-add the bot to the group.
@@ -703,6 +706,18 @@ reactions off, or `persona_prefix: false` to send plain text. Config edits take 
 `setup` includes the bot and invite links, privacy mode, whether the token is from the environment or sealed
 storage, whether a claim is still open, and the most recent unconfigured groups and private chats seen this
 run. It never shows the token. Only the owner's agents with a grant can use `telegram_post`.
+
+### Bot and app icons
+
+- `blocks.discord.avatar`: SwB applies the bot avatar through the Discord API after Gateway READY.
+- `blocks.telegram.avatar`: SwB applies the bot profile photo through the Telegram Bot API after connecting.
+- `blocks.slack.app_icon`: SwB lists a manual step in status. Upload the file at [api.slack.com/apps](https://api.slack.com/apps)
+  under **Basic Information → Display Information**; Slack has no API for setting the app icon.
+
+For Discord and Telegram, set a file name such as `switchboard.png`. SwB uses the same avatar lookup order as for
+personas. The upload directory (`<data>/avatars`) and bundled marks work without the Slack block. Leave the key
+unset to keep the existing photo. SwB skips unchanged files, and
+`discord_status` and `telegram_status` report whether the configured file was applied or an upload failed.
 
 ## GitHub App
 
@@ -801,7 +816,7 @@ server metadata (RFC 8414) with PKCE `S256` only, CIMD from allowlisted hosts, D
 redirect URIs limited to the agents registry's (each preset's and block's) and loopback; tokens bound to `<public_url>/mcp`; 1 h access tokens and
 rotating 30-day refresh tokens with replay detection, stored only as SHA-256 hashes.
 
-Only the owner can open the admin page at `/` or approve an MCP OAuth connection. With `public_url` set,
+Only the owner can open the web UI at `/`, the classic admin page at `/classic`, or approve an MCP OAuth connection. With `public_url` set,
 the default sign-in is a passkey. For the first sign-in or as a fallback, run `swb login-link` or ask any
 unrestricted owner agent to call `login_link`. The link works once and expires after five minutes. There are no passwords.
 
@@ -812,7 +827,7 @@ through `auth.cloudflare_access` and `auth.owner_emails`; Switchboard verifies t
 
 In front of everything:
 
-- A wrong bearer token on `/mcp` or `/inbox/` is audited (`auth_failure`) and counts against the caller's IP: after 20
+- A wrong bearer token on `/mcp` or the inbox feeds is audited (`auth_failure`) and counts against the caller's IP: after 20
   in 10 minutes that IP gets `429` for the rest of the window. Requests without a token (OAuth discovery) aren't counted.
 - `/register` allows 20 per IP per hour, `/token` 120 and `/authorize` 60 per 10 minutes; refusals are audited
   (`rate_limited`).
@@ -825,7 +840,7 @@ a key from a pairing code (below).
 ### Connecting a new agent with a pairing code
 
 For CLI and session agents started on a laptop when needed (Codex, Gemini CLI, Claude Code, a script), the owner
-mints a one-time code on the root page (**Connected agents → Mint code**) or with `connect_code(agent, project?)`
+mints a one-time code on `/classic` (**Connected agents → Mint code**) or with `connect_code(agent, project?)`
 from his own sign-in. It names the agent and lasts ten minutes. On the machine, redeem it:
 
 ```bash
@@ -834,7 +849,7 @@ curl -s -X POST https://swb.example.com/connect -H 'content-type: application/js
 
 The answer holds the agent's own key (`swb_...`, shown once; only its hash is stored), the MCP URL and the inbox
 URL. The agent signs in with `Authorization: Bearer <key>` as that agent, so routes, personas and the audit log
-resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key on the root page or with
+resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key on `/classic` or with
 `connect_revoke`. A `swb connect` CLI that also writes the client's MCP config comes in a later step.
 
 ## Delegation guardrails
@@ -861,7 +876,7 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
   `destinations.capy.identity: personal` is set (one key, sends show as you). A service user only sees what is shared
   with it, so share the Captains with it and give it access to the device they run on. On startup and every 30 minutes,
   each key is checked against `GET /captains` and a send-path no-op on each routed Captain or thread. `/healthz`
-  (`send_keys`) and the root page then show it as ok, no project access, no device access, or rejected, and they show
+  (`send_keys`) and the classic admin page then show it as ok, no project access, no device access, or rejected, and they show
   which key sends for each agent.
 - Bearer sign-in failures are in the audit log without the key: `auth_failure` records a wrong token's length and
   paste mistakes (whitespace, quotes, a doubled "Bearer") or a non-Bearer header, and `auth_missing` records a
@@ -880,7 +895,7 @@ curl -s http://127.0.0.1:8870/healthz
 ```
 
 Without `CAPY_API_KEY` the server runs **degraded**: memory, projects and routes work, the capy block is offline and its tools say the key is
-missing, and `/healthz` and the status page at `/` say what's off. Tests run in the image build
+missing, and `/healthz` and the status page at `/classic` say what's off. Tests run in the image build
 (`docker build --target test .`); the channel has its own (`cd channel && bun test`). A legacy `capy-bridge.db` in the
 data directory is renamed to `switchboard.db` on first start.
 
@@ -893,8 +908,16 @@ first change. It's one-way: edits in the mirror are never read back. `mirror: fa
 The deployment mirrors into Capy Drive (`user-owner/switchboard-memory/`): a git-ignored `compose.override.yaml`
 binds that folder at `/mirror`, and `SWITCHBOARD_UID` in `.env` builds the image to run as the uid that owns it.
 
-The pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
+The classic pages (consent, status, routes) follow the owner's sites (example.com, status.example.com, id.example.com): the
 same type, hairline cards, the Arc backdrop, the signature and the shared theme cookie, ported from example-org/id-site.
+Set `SWITCHBOARD_REVISION` to the deployed Git SHA to show it in the web UI's health control.
+
+## Web UI development
+
+`cd web && npm ci && npm run dev` starts Vite with a proxy to swb on port 8000; owner authentication still applies.
+`cd web && npm run build` writes the SPA to `src/switchboard/static/app/` for swb to serve without Node.
+For the About page to identify a Docker build, pass `--build-arg GIT_COMMIT="$(git rev-parse HEAD)"`
+and `--build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"` to `docker build`.
 
 ## MCP Events
 

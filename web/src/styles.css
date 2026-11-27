@@ -1,0 +1,233 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-sunken: #f4f4f5;
+  --foreground: #18181b;
+  --muted-foreground: #52525b;
+  --subtle-foreground: #a1a1aa;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --socket: #18181b;
+  --socket-inner: #09090b;
+  --brass: #a8874a;
+  --brass-light: #cdb27a;
+  --lamp-on: var(--accent);
+  --lamp-off: #d4d4d8;
+  --lamp-glow: #fdf3d7;
+  --cord-intake: #2f5bd3;
+  --cord-route: #2e7d4f;
+  --cord-sink: #c8372d;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --ring: var(--accent);
+  --destructive: #c8372d;
+  --console: #27272a;
+  --console-foreground: #f4f4f5;
+  --accent: #333338;
+  --logo-slack: #4a154b;
+  --fade-0: #ffffff00;
+  --fade-92: #ffffffeb;
+  --destructive-foreground: #ffffff;
+  --overlay: #000000;
+  --logo-capy: #73563e;
+  --logo-capy-foreground: #ffffff;
+  --surface-shadow: 0 1px 2px rgb(28 26 23 / 8%);
+  --toast-shadow: 0 4px 16px rgb(0 0 0 / 8%);
+  --rail-width: 88px;
+  --topbar-height: 64px;
+  --mobile-tabbar-height: 78px;
+  --mobile-tabbar-clearance: 108px;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #09090b;
+  --surface: #09090b;
+  --surface-sunken: #18181b;
+  --foreground: #fafafa;
+  --muted-foreground: #a1a1aa;
+  --subtle-foreground: #71717a;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --socket: #3f3f46;
+  --socket-inner: #18181b;
+  --brass: #c9a96a;
+  --brass-light: #e0c896;
+  --lamp-on: var(--accent);
+  --lamp-off: #3f3f46;
+  --lamp-glow: #2e2a20;
+  --cord-intake: #6b8ff0;
+  --cord-route: #4fae78;
+  --cord-sink: #e5675c;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --ring: var(--accent);
+  --destructive: #e5675c;
+  --console: #18181b;
+  --console-foreground: #f4f4f5;
+  --accent: #e4e4e7;
+  --logo-slack: #e9d8ea;
+  --fade-0: #09090b00;
+  --fade-92: #09090beb;
+  --destructive-foreground: var(--primary-foreground);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-display: "Inter Tight Variable", "Inter Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+  --color-muted: var(--surface-sunken);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--border-strong);
+  --color-lamp-on: var(--lamp-on);
+  --color-lamp-off: var(--lamp-off);
+  --color-cord-intake: var(--cord-intake);
+  --color-cord-route: var(--cord-route);
+  --color-cord-sink: var(--cord-sink);
+  --color-socket: var(--socket);
+  --color-socket-inner: var(--socket-inner);
+  --color-overlay: var(--overlay);
+  --color-logo-capy: var(--logo-capy);
+  --color-logo-capy-foreground: var(--logo-capy-foreground);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-xs: var(--surface-shadow);
+  --text-display-xl: 2rem;
+  --text-display-xl--line-height: 2.25rem;
+  --text-display-xl--font-weight: 800;
+  --text-display-xl--letter-spacing: -.025em;
+  --text-display-lg: 1.375rem;
+  --text-display-lg--line-height: 1.75rem;
+  --text-display-lg--font-weight: 800;
+  --text-display-lg--letter-spacing: -.02em;
+  --text-page-title: 1.25rem;
+  --text-page-title--line-height: 1.75rem;
+  --text-page-title--font-weight: 600;
+  --text-page-title--letter-spacing: -.01em;
+  --text-heading-md: 1rem;
+  --text-heading-md--line-height: 1.5rem;
+  --text-heading-md--font-weight: 600;
+  --text-heading-md--letter-spacing: -.01em;
+  --text-label-sm: .8125rem;
+  --text-label-sm--line-height: 1.125rem;
+  --text-label-sm--font-weight: 500;
+  --text-body-md: .875rem;
+  --text-body-md--line-height: 1.25rem;
+  --text-body-sm: .8125rem;
+  --text-body-sm--line-height: 1.125rem;
+  --text-caption: .6875rem;
+  --text-caption--line-height: .875rem;
+  --text-caption--font-weight: 500;
+  --text-caption--letter-spacing: .02em;
+  --text-mono-sm: .75rem;
+  --text-mono-sm--line-height: 1rem;
+  --text-mono-md: .8125rem;
+  --text-mono-md--line-height: 1.125rem;
+  --text-mono-md--font-weight: 500;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-body-md text-foreground antialiased;
+  }
+
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+.console-pressable {
+  -webkit-tap-highlight-color: transparent;
+
+  @media (prefers-reduced-motion: no-preference) {
+    transition: background-color 170ms ease-out, opacity 170ms ease-out, transform 170ms ease-out;
+  }
+}
+
+@media (hover: hover) {
+  .console-pressable:hover:where(:not(:disabled, [aria-disabled="true"], [data-disabled])) {
+    background-color: var(--console-pressable-bg, var(--surface-sunken));
+  }
+}
+
+.console-pressable:active:where(:not(:disabled, [aria-disabled="true"], [data-disabled])) {
+  background-color: var(--console-pressable-bg, var(--surface-sunken));
+  opacity: .92;
+
+  @media (prefers-reduced-motion: no-preference) {
+    transform: scale(.97);
+    transition-duration: 0s;
+  }
+}
+
+.console-mobile-nav {
+  background: var(--background);
+}
+
+.console-mobile-nav::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 100%;
+  height: 60px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--background) 3%, transparent),
+    color-mix(in srgb, var(--background) 10%, transparent),
+    color-mix(in srgb, var(--background) 22%, transparent),
+    color-mix(in srgb, var(--background) 38%, transparent),
+    color-mix(in srgb, var(--background) 56%, transparent),
+    color-mix(in srgb, var(--background) 74%, transparent),
+    color-mix(in srgb, var(--background) 88%, transparent),
+    color-mix(in srgb, var(--background) 96%, transparent),
+    var(--background)
+  );
+}
+
+.console-mobile-tab:is(:active, [aria-current="page"], [data-selected]) {
+  background-color: var(--surface-sunken);
+  color: var(--foreground);
+}
+
+[data-sonner-toaster] [data-sonner-toast] {
+  --normal-bg: var(--surface);
+  --normal-border: var(--border);
+  --normal-text: var(--foreground);
+  box-shadow: var(--toast-shadow);
+}
