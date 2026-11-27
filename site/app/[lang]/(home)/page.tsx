@@ -67,6 +67,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <Link className="swb-text-link" href={localize(lang, '/about')}>{copy.about}</Link>
           <a className="swb-text-link" href="https://www.apache.org/licenses/LICENSE-2.0">{copy.license}</a>
           <Link className="swb-text-link" href={localize(lang, '/docs/trademarks')}>{copy.trademarks}</Link>
+          <a className="swb-text-link" href="mailto:hello@swb.one">hello@swb.one</a>
         </div>
       </footer>
     </HomeLayout>
