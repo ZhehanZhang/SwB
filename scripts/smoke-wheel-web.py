@@ -1,11 +1,12 @@
 import os
-import secrets
 import socket
 import subprocess
 import sys
 import time
 from http.cookies import SimpleCookie
 from pathlib import Path
+from queue import Queue
+from threading import Thread
 from urllib.parse import urlsplit
 from zipfile import ZipFile
 
@@ -21,13 +22,20 @@ with socket.socket() as probe:
     probe.bind(("127.0.0.1", 0))
     port = probe.getsockname()[1]
 
-Path(".env").write_text(f"SWITCHBOARD_KEY_OWNER={secrets.token_hex(32)}\n", encoding="ascii")
 env = {**os.environ, "PORT": str(port)}
 swb = Path(sys.executable).with_name("swb")
 endpoint = f"http://127.0.0.1:{port}"
 origin = f"http://localhost:{port}"
 
-with subprocess.Popen([swb, "up"], env=env, stdout=subprocess.DEVNULL) as server:
+with subprocess.Popen([swb, "up"], env=env, stdout=subprocess.PIPE, text=True) as server:
+    lines: Queue[str] = Queue()
+
+    def read_stdout() -> None:
+        for line in server.stdout:
+            lines.put(line.strip())
+
+    reader = Thread(target=read_stdout, daemon=True)
+    reader.start()
     try:
         with httpx.Client(trust_env=False, timeout=2) as client:
             deadline = time.monotonic() + 15
@@ -42,8 +50,8 @@ with subprocess.Popen([swb, "up"], env=env, stdout=subprocess.DEVNULL) as server
                 assert health.is_success and health.json()["status"] == "ok"
                 break
 
-            link = subprocess.run([swb, "login-link", "--url", endpoint], env=env, text=True,
-                                  capture_output=True, timeout=15, check=True).stdout.strip()
+            assert lines.get(timeout=3) == f"MCP URL: {origin}/mcp"
+            link = lines.get(timeout=3)
             url = urlsplit(link)
             assert f"{url.scheme}://{url.netloc}{url.path}" == f"{origin}/login"
             name, _, token = url.fragment.partition("=")
@@ -52,6 +60,10 @@ with subprocess.Popen([swb, "up"], env=env, stdout=subprocess.DEVNULL) as server
             assert login_page.status_code == 200 and login_page.content == index
             session = client.post(f"{origin}/auth/link", json={"token": token}, headers={"Origin": origin})
             assert session.status_code == 204
+            followup = subprocess.run([swb, "login-link"], text=True,
+                                      capture_output=True, timeout=15, check=True).stdout.strip()
+            assert followup.startswith(f"{origin}/login#t=") and followup != link
+            assert not (Path.home() / ".local/share/switchboard/switchboard.db").exists()
             cookie = SimpleCookie(session.headers["Set-Cookie"])[SESSION_COOKIE]
             assert cookie["secure"]
             headers = {"Cookie": f"{SESSION_COOKIE}={cookie.value}"}
@@ -66,5 +78,6 @@ with subprocess.Popen([swb, "up"], env=env, stdout=subprocess.DEVNULL) as server
             except subprocess.TimeoutExpired:
                 server.kill()
                 server.wait()
+        reader.join()
 
 print("Installed wheel console sign-in and routes passed.")
