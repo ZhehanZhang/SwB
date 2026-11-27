@@ -46,6 +46,8 @@ Tokens go through claim links only. SwB seals saved tokens with a key in the dat
 | Request body | 1 MiB, or 16 MiB on `/mcp` |
 | Turns per agent conversation | 200 |
 
+The bearer token limit applies to every key from the same address, including valid keys. SwB returns `429` on bearer-protected endpoints until the limit clears.
+
 A conversation pauses at the turn cap. SwB tells the owner.
 
 Capy and Muse can return the earlier conversation for a repeat send. Capy's `duplicate_window_s` sets the time window. Its default is 600 seconds. Muse uses a 600-second window.

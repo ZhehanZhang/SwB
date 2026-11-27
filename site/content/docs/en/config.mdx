@@ -10,13 +10,17 @@ SwB can run with environment variables alone. The MCP block starts by default. S
 | Variable | Use |
 | - | - |
 | `SWITCHBOARD_KEY_OWNER` | The owner key for the `swb` command |
-| `SWITCHBOARD_PUBLIC_URL` | The public HTTPS address, for example `https://swb.example.com` |
+| `SWITCHBOARD_PUBLIC_URL` | The browser sign-in address. Use `http://localhost:8870` for a local run. Use HTTPS for a remote server, for example `https://swb.example.com`. |
 | `SWITCHBOARD_DATA_DIR` | The data folder. The default for `swb up` is `~/.local/share/switchboard`. The image uses `/data` |
 | `SWITCHBOARD_OWNER_EMAILS` | Owner emails for OIDC and Cloudflare Access, separated by commas |
 | `SWITCHBOARD_KEY_<NAME>` | A bearer key for the agent `<name>` |
 | `SWITCHBOARD_CONFIG` | The path of the base YAML file |
 | `SWITCHBOARD_OVERLAY` | The path of a private overlay file |
-| `PORT` | The HTTP port |
+| `PORT` | HTTP port. The default for `swb up` is `8870`. |
+
+Set `PORT` in the shell or in the instance's `.env` file. For local sign-in, use `http://localhost:<port>` as the public URL. The same file can hold `SWITCHBOARD_PUBLIC_URL` and `SWITCHBOARD_DATA_DIR`. A `public_url` in the YAML config takes priority over the environment.
+
+With `swb up --dir ./my-swb`, SwB reads `.env` and `config/switchboard.yaml` in that folder. It stores data in the `data` subfolder. Use the same `--dir` for `swb init`, `swb status`, `swb login-link`, `swb connect` and `swb claim`. Use `--url` on the last four commands to select a different server address.
 
 ## Blocks
 
@@ -38,13 +42,13 @@ For a named Slack workspace, put the name after `SLACK_`, for example `SLACK_SUP
 swb init
 ```
 
-`swb init` writes `config/switchboard.yaml` and an owner key. The file is optional. SwB reads `config/switchboard.yaml` when it exists.
+`swb init` writes the owner key to a private `.env` file. It writes the base config to `config/switchboard.yaml`. SwB can also start from environment variables alone.
 
 ```yaml
 version: 2
 public_url: https://swb.example.com
 auth:
-  owner_emails: [owner@example.com]
+  owner_emails: [owner@swb.example.com]
 blocks:
   mcp: {use: mcp}
   capy: {use: capy, identity: service}
@@ -67,7 +71,7 @@ In a key, `*` stands for an entry name or a list item.
 | Key | Use |
 | - | - |
 | `version` | YAML format version. Use `2` for `blocks` |
-| `public_url` | Public HTTPS address SwB uses for MCP and OAuth |
+| `public_url` | Address SwB uses for MCP and OAuth. See `SWITCHBOARD_PUBLIC_URL`. |
 | `data_dir` | Path to the data folder. Set it here or with `SWITCHBOARD_DATA_DIR` |
 | `timezone` | Time zone for daily counts and limits. Default `UTC` |
 | `turn_cap` | Turns before SwB pauses a conversation. Default `200`. Set `null` to turn off the limit |

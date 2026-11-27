@@ -10,24 +10,35 @@ description: SwB 提供給你的代理的 MCP 工具。
 | 工具 | 用途 |
 | - | - |
 | `send` | 把工作或訊息傳送給目標，或交由路由選擇目標 |
-| `agent_send` | 傳送訊息給另一個代理。新呼叫請用 `send` 並指定 `to="agent:<name>"` |
+| `agent_send` | 已淘汰的工具名稱，僅在本版保留。`blocks.mcp.legacy_aliases` 預設啟用此名稱。新呼叫請用 `send` 並指定 `to="agent:<name>"` |
 | `wait` | 等待你的對話中的下一則回覆 |
 | `inbox` | 讀取你的收件匣並立即回傳 |
 | `reply` | 回答訊息，或在對話中加入訊息 |
-| `status` | 顯示單一對話的狀態 |
+| `status` | 顯示單一對話的狀態。查看 Capy 對話時，用 `messages` 指定回傳的近期訊息則數。用 `include_tools=true` 一併查看工具呼叫記錄 |
 | `switchboard_status` | 顯示你的登入身分、等待時限、模組與執行個體的運作狀況 |
-| `result` | 取得對話的最終回覆 |
+| `result` | 取得對話的最終回覆。支援 `tail` 的對話可用它指定回傳的近期回覆或訊息則數 |
 | `cancel` | 停止追蹤對話 |
 | `targets` | 列出 `send` 能連到的所有對象 |
 | `get_message` | 依 id 讀取一則已儲存的訊息 |
+
+### 傳送選項
+
+| 選項 | 用途 |
+| - | - |
+| `wait_s` | 如果模組回傳對話 ID，依指定的秒數等待第一則回覆。各用戶端的等待上限各異。代理收件匣使用 `wait` |
+| `forward` | 填入收到的對話 ID。對話須允許轉交，且寄件者的信任等級須為 `owner`。SwB 會把最終回覆送給原寄件者 |
+| `new_conversation` | 設為 `true` 時，在 Capy Captain 的專案中開啟新討論串。設為 `false` 時，傳送到 Captain 的討論串 |
+| `files` | 為 Capy 工作附加檔案。每個檔案填寫 `name`，內容使用 `text` 或 `base64`。用 `media_type` 指定檔案類型 |
+| `repos` | 用 `owner/repo` 格式指定 Capy 工作涉及的程式碼庫。請選擇已連結到 SwB 專案的程式碼庫 |
+| `in_reply_to` | 回覆訊息時，呼叫 `reply` 並填寫 `conversation`。`send` 會拒絕 `in_reply_to` |
 
 ## 記憶與專案
 
 | 工具 | 用途 |
 | - | - |
 | `context_pack` | 取得專案的簡報 |
-| `memory_write` | 建立或修改一筆記憶 |
-| `memory_search` | 搜尋記憶 |
+| `memory_write` | 儲存記憶時，填寫 `scope`、`namespace`、`title` 和 `body`。`namespace` 用來為同一範圍內的項目分類，最多三層，使用小寫，例如 `notes/meetings`。儲存專案記憶時，將專案簡稱填入 `project`，並設定 `scope="project:<slug>"`。儲存通用記憶時，在擁有者同意後設定 `confirm_general=true` |
+| `memory_search` | 用 `query` 搜尋記憶。預設搜尋 `general`。將專案簡稱填入 `project`，即可先搜尋專案記憶，再搜尋 `general`。設為 `include_general=false` 時，只搜尋該專案 |
 | `memory_list` | 列出記憶項目 |
 | `memory_read` | 讀取一筆記憶與它的歷史 |
 | `memory_delete` | 移除一筆記憶 |
@@ -47,18 +58,25 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `connect_list` | 列出代理金鑰 |
 | `connect_revoke` | 移除代理金鑰 |
 | `login_link` | 為擁有者產生一次性登入連結 |
-| `routes_list`、`routes_set`、`routes_remove`、`routes_resolve` | 管理路由 |
-| `routine_register`、`routine_list`、`routine_pickup` | 管理 Claude Code 例行程序 |
-| `routine_add` | 以擁有者身分使用權杖新增 Claude Code 例行程序 |
-| `routine_remove` | 以擁有者身分移除已註冊的 Claude Code 例行程序 |
 | `modes_status` | 查看你可以存取的頻道和程式碼庫所用的模式 |
 | `space_mode` | 以擁有者身分設定空間或頻道的模式。用 `inherit` 清除這項設定 |
 | `visibility_list` | 以擁有者身分查看預設存取規則和各項資源的存取規則 |
 | `visibility_set` | 以擁有者身分將資源設為私人或共用。工具一律為私人 |
 
-## 模組工具
+## 路由
 
-其他模組工具包括 `discord_status` 和 `telegram_provision`。
+路由為 `send` 選擇目標。請選用支援路由的模組，例如 `capy`、`claude-routine`、`grok-routine` 或 `muse`。若要直接傳送到代理收件匣，請呼叫 `send` 並指定 `to="agent:<name>"`。
+
+| 工具 | 用途 |
+| - | - |
+| `routes_list` | 列出所有模組的路由 |
+| `routes_set` | 儲存路由。將模組目標的位址填入 `target`，例如 `capy:captain:<name>`。用 `agent` 或 `project` 限定路由的適用範圍 |
+| `routes_resolve` | 查看單一模組中符合條件的路由。將模組名稱填入 `block`，例如 `grok-routine` |
+| `routes_remove` | 依 `agent` 和 `project` 移除指定 `block` 中完全符合條件的路由 |
+
+`routes_resolve` 和 `routes_remove` 預設使用第一個支援路由的模組。用 `block` 選擇其他模組。
+
+## 模組工具
 
 ### Capy
 
@@ -75,16 +93,61 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `capy_result` | 取得 Capy 討論串的最新回覆和可用的檔案與 Pull request 連結。新呼叫請用 `result` |
 | `capy_cancel` | 停止追蹤交給 Capy 的工作。Capy 仍可繼續處理工作。新呼叫請用 `cancel` |
 
+### Claude Code routine
+
+開啟 `claude-routine` 模組後即可使用這些工具。routine 是 SwB 可以啟動的 Claude Code 工作。
+
+| 工具 | 用途 |
+| - | - |
+| `routine_register` | 登記 routine，並取得供擁有者輸入權杖的領取連結 |
+| `routine_list` | 列出 SwB 可以啟動的 routine |
+| `routine_pickup` | 在 routine 的啟動提示為空時，領取待處理的訊息 |
+| `routine_add` | 以擁有者身分使用權杖新增 routine |
+| `routine_remove` | 以擁有者身分移除透過 SwB 儲存的 routine |
+
 ### Slack
 
 | 工具 | 用途 |
 | - | - |
+| `slack_workspaces` | 列出可用的 Slack 工作區、各工作區可用的帳號與發文規則 |
 | `slack_channels` | 列出所選 Slack 帳號可見的頻道。結果會標示 SwB 正在關注的頻道 |
+| `slack_search` | 使用擁有者的 Slack 帳號搜尋工作區中的訊息 |
 | `slack_history` | 讀取頻道的近期訊息。最新訊息排在前面 |
 | `slack_thread` | 依時間順序讀取討論串的首則訊息與回覆 |
 | `slack_watched` | 查看哪些頻道的新訊息會送到你的 SwB 收件匣 |
+| `slack_events` | 查看關注頻道的近期訊息、對機器人的提及和私訊。最新訊息排在前面 |
+| `slack_wait` | 等待收件匣收到下一則 Slack 訊息 |
 | `slack_personas` | 查看機器人發文時可用的名稱與頭像及預設選項 |
 | `slack_targets` | 列出在 Slack 提及機器人後可填入的目標名稱 |
+| `slack_post` | 以機器人或擁有者的 Slack 帳號發文。用 `thread_ts` 在討論串中回覆。發文規則可能要求擁有者核准 |
 | `slack_react` | 用表情符號回應訊息。此操作適用與 `slack_post` 相同的規則 |
 | `slack_request_write` | 把準備發出的 Slack 訊息送交擁有者核准 |
 | `slack_write_requests` | 查看你送出的 Slack 核准申請。用 `request_id` 查看單筆申請 |
+
+### Discord
+
+| 工具 | 用途 |
+| - | - |
+| `discord_status` | 查看 Discord 的連線狀態、空間和待完成的設定 |
+| `discord_provision` | 以擁有者身分取得設定連結和一次性的機器人權杖輸入連結 |
+| `discord_post` | 取得擁有者授權後，以機器人身分傳送訊息到頻道或討論串 |
+
+### Telegram
+
+| 工具 | 用途 |
+| - | - |
+| `telegram_status` | 查看 Telegram 的連線狀態、空間和待完成的設定 |
+| `telegram_provision` | 以擁有者身分取得設定連結和一次性的機器人權杖輸入連結 |
+| `telegram_post` | 取得擁有者授權後，以機器人身分傳送訊息到聊天室或討論串 |
+
+### GitHub
+
+| 工具 | 用途 |
+| - | - |
+| `github_status` | 檢查 Webhook、程式碼庫模式與 GitHub App 權限 |
+| `github_label` | 為議題或 Pull request 加上現有標籤 |
+| `github_comment` | 在議題或 Pull request 新增留言 |
+| `github_open_issue` | 在程式碼庫建立議題 |
+| `github_link_duplicate` | 將重複議題與同一程式碼庫中的原議題連結。SwB 為重複議題加上 `duplicate` 標籤，並以 `not_planned` 狀態關閉它 |
+| `github_notify_owner` | 在擁有者的收件匣留言，附上啟動對話的議題或 Pull request 連結 |
+| `github_reply` | 在啟動 SwB 對話的 GitHub 討論串中回覆 |

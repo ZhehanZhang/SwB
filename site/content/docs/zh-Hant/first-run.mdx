@@ -3,6 +3,10 @@ title: 首次執行
 description: 讓 SwB 可從外部連線、登入並檢視你的執行個體。
 ---
 
+## 在本機執行
+
+若要在本機瀏覽器登入，請在啟動前設定 `SWITCHBOARD_PUBLIC_URL=http://localhost:8870`。位址中的連接埠須與 `PORT` 一致。若 YAML 設定檔已設定 `public_url`，請直接修改該欄位。[安裝指南](/zh-Hant/docs/install)使用連接埠 8870 設定本機登入。
+
 ## 取得公開位址
 
 Claude、ChatGPT 與 Grok 在雲端執行。它們需要公開的 HTTPS 位址才能連到 SwB。請用通道（tunnel）啟動 SwB 來取得位址。
@@ -19,7 +23,9 @@ SwB 會開啟 Cloudflare Quick Tunnel，並印出公開的 MCP 位址。若要�
 swb status
 ```
 
-狀態會列出每個模組，以及各模組的下一步。你的代理透過 `switchboard_status` 工具讀取同樣的狀態。
+指令會顯示伺服器狀態，以及各模組的開關狀態。所有後續操作會集中列在 **Next steps** 下。`switchboard_status` 工具也會回傳各模組的下一步。
+
+若要查詢其他位址的伺服器，請加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。指令會用終端機或執行個體的 `.env` 中的 `PORT` 組成預設本機位址。若啟動時用了 `--dir`，查詢時也請指定同一資料夾。
 
 ## 登入網頁
 
@@ -31,7 +37,7 @@ swb status
 swb login-link
 ```
 
-指令會印出登入連結。連結只能使用一次，有效時間是五分鐘。請在瀏覽器中開啟它。第一次登入時，請新增一個密碼金鑰（passkey）。之後的登入使用這個密碼金鑰。[擁有者登入](/zh-Hant/docs/owner-login)介紹其他方式。
+指令會印出一次性登入連結。請在五分鐘內用瀏覽器開啟。這個指令也接受 `swb status` 使用的 `--url` 與 `--dir`。首次登入後，請新增通行金鑰。往後用通行金鑰登入。設定碼與其他方式請見[擁有者登入](/zh-Hant/docs/owner-login)。
 
 ## 網頁控制台
 
@@ -45,7 +51,7 @@ swb login-link
 | `/memory/*` | 瀏覽及搜尋已儲存的筆記。 |
 | `/projects/:slug` | 查看單一專案的路由、歷程、對話與記憶。 |
 | `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的連線狀態與頻道模式。 |
-| `/settings` | 查看伺服器設定並管理密碼金鑰。 |
+| `/settings` | 查看伺服器設定並管理通行金鑰。 |
 | `/tokens` | 查看權杖請求和已儲存的憑證。 |
 | `/about` | 查看 SwB 版本與已啟用的模組。 |
 

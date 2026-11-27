@@ -5,44 +5,45 @@ description: 用 uvx、pipx 或 Docker 安装 SwB。
 
 SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要 Python 3.12 或更高版本。Docker 方式需要 Docker。
 
-## 创建所有者密钥
-
-所有者密钥是你的 SwB 实例的密码。`swb` 命令用它以你的身份登录。在一个空文件夹中创建它。下面的命令把密钥写入私有的 `.env` 文件，并隐藏输出内容。
-
-```bash
-(umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
-```
-
 ## 安装并启动
+
+用空文件夹存放 SwB 实例。`swb` 命令用所有者密钥以你的身份登录。
 
 <Tabs items={['uvx', 'pipx', 'Docker']}>
   <Tab value="uvx">
     ```bash
+    uvx swb-one init --public-url http://localhost:8870
     uvx swb-one up
     ```
 
-    uvx 会下载并运行 SwB。把示例命令开头的 `swb` 换成 `uvx swb-one`。
+    uvx 会下载并运行 SwB。`init` 把所有者密钥写入私有文件 `.env`。登录地址保存在 `config/switchboard.yaml` 中。运行其他示例时，把开头的 `swb` 换成 `uvx swb-one`。
   </Tab>
   <Tab value="pipx">
     ```bash
     pipx install swb-one
+    swb init --public-url http://localhost:8870
     swb up
     ```
 
-    pipx 为你的用户安装 `swb` 命令。
+    pipx 会为当前用户安装 `swb` 命令。`init` 会写入私有的所有者密钥和配置文件。
   </Tab>
   <Tab value="Docker">
     ```bash
+    (umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\nSWITCHBOARD_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
     docker run -d --name swb --env-file .env \
       -e PORT=8870 -p 127.0.0.1:8870:8870 -v swb-data:/data \
       ghcr.io/zhehanzhang/swb:latest
     ```
 
-    镜像把数据保存在 `/data`。把示例命令开头的 `swb` 换成 `docker exec swb swb`。
+    这组命令先创建私有文件 `.env`，再启动容器。镜像把数据保存在 `/data`。运行其他示例时，把开头的 `swb` 换成 `docker exec swb swb`。
   </Tab>
 </Tabs>
 
-SwB 在 `http://127.0.0.1:8870` 启动。你的 MCP 地址是 `http://127.0.0.1:8870/mcp`。
+`swb up` 默认在 `127.0.0.1` 的 `8870` 端口监听。本机 MCP 地址是 `http://127.0.0.1:8870/mcp`。浏览器登录地址用 `http://localhost:8870`。
+
+要更改 `swb up` 的端口，请在终端或 `.env` 中设置 `PORT`。登录地址也要使用同一个端口。要指定其他服务器，请在客户端命令中加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。
+
+用 `swb up --dir ./my-swb` 将配置、`.env` 和数据放在独立的实例目录中。运行 `swb init` 和客户端命令时，传入同一个 `--dir`。详见[配置](/zh-Hans/docs/config)。
 
 ## 检查服务器
 
@@ -56,9 +57,21 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 | 命令 | 用途 |
 | - | - |
-| `swb serve` | 按配置的主机地址和端口运行 SwB 服务器。 |
+| `swb init` | 写入私有的所有者密钥和基本配置。 |
+| `swb up` | 在本机启动 SwB。 |
+| `swb connect` | 获取连接平台的步骤。 |
+| `swb status` | 查看状态和下一步。 |
+| `swb login-link` | 生成一次性所有者登录链接。 |
+| `swb claim` | 用领取链接或领取码保存凭据。 |
+| `swb muse-bridge` | 在 Linux 上配对并运行 Muse 设备。 |
+| `swb serve` | 按配置的主机地址和端口运行服务器。 |
+| `swb export DIR` | 把已保存的记忆导出到指定目录中的 Markdown 文件。 |
+| `swb log` | 输出近期审计记录。 |
 | `swb config migrate` | 将第 1 版配置转换为第 2 版格式并输出。 |
-| `swb targets` | 列出 `send` 可用目标的地址、简称和等级。 |
+| `swb blocks list` | 列出已配置的模块。 |
+| `swb blocks show BLOCK` | 显示指定模块的设置。 |
+| `swb blocks check` | 检查模块配置。 |
+| `swb targets` | 列出 `send` 可用的目标。 |
 
 ## 版本
 
