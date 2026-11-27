@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ...audit import iso
 from ...refusals import OWNER_REQUIRED, SCOPE_REQUIRED, PolicyRefusal
+from ...trust import wrap
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -27,6 +28,20 @@ DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHin
 ProjectArg = Annotated[str | None, Field(description="Project slug (project_list)")]
 Conversation = Annotated[str, Field(description="The conversation: its handle (h_...) from send or an inbox item, or the block's own id (a jam_ thread id)")]
 DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. "
+
+
+DEVICE_TEXT = frozenset({"text", "body", "title", "description", "message", "error", "content"})
+
+
+def frame_device(value: Any, where: str, key: str = "") -> Any:
+    """Free text from a device reaches agents framed as external; names, schemas and base64 stay exact."""
+    if isinstance(value, dict):
+        return {k: frame_device(v, where, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [frame_device(v, where, key) for v in value]
+    if isinstance(value, str) and key in DEVICE_TEXT:
+        return wrap(value, None, None, "external", where)
+    return value
 
 
 class FileIn(BaseModel):
@@ -227,6 +242,29 @@ class Kit:
             base = core.cfg.public_url or ""
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
                     "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
+
+        @mcp.tool(title="Pair a companion", description="Create a one-time pairing code valid for ten minutes. Enter it at the hidden prompt for swb companion connect <url>.", annotations=WRITE)
+        async def companion_code(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            if not (url := core.cfg.issuer):
+                raise ToolError("Set a public SwB address first.")
+            return core.companions.mint(url, origin=p.origin, source=p.source, client=p.client_id)
+
+        @mcp.tool(title="List companions", description="List paired devices, their connection status, and their available actions.", annotations=READ)
+        async def companion_list() -> dict[str, Any]:
+            return {"companions": core.companions.list(details=True)}
+
+        @mcp.tool(title="Run a companion action", description="Run an advertised capability action on a connected device. Use the device ID and action schema from companion_list.", annotations=SEND)
+        async def companion_invoke(ctx: Context, companion: str, capability: str, action: str, args: dict[str, Any] | None = None,
+                                   timeout_s: Annotated[float, Field(gt=0, le=120)] = 30) -> dict[str, Any]:
+            result = await kit.run(core.companions.invoke(companion, capability, action, args or {}, timeout_s, principal=kit.who(ctx)))
+            return {"trust": "external", "from": f"companion {companion} {capability}.{action}",
+                    "result": frame_device(result, f"companion {companion} {capability}.{action}")}
+
+        @mcp.tool(title="Disconnect a companion", description="Revoke a paired device key and close its connection.", annotations=DELETE)
+        async def companion_revoke(ctx: Context, companion: str) -> dict[str, Any]:
+            p = kit.who(ctx)
+            return {"ok": core.companions.revoke(companion, origin="owner", source=p.source, client=p.client_id)}
 
         @mcp.tool(title="Who can reach what", description="List the resource names and visibility rules for targets, channels, memory and routes. Tools use private visibility. Use a listed resource with visibility_set.", annotations=READ)
         async def visibility_list() -> dict[str, Any]:

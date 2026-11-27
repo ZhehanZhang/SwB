@@ -14,8 +14,17 @@ if TYPE_CHECKING:
     from ...core import Switchboard
     from ...projects import Project
 
-Role = Literal["owner", "self", "grant", "owner_or_writer", "route", "setup"]
+Role = Literal["owner", "self", "grant", "owner_or_writer", "route", "setup", "companion"]
 ReadRole = Literal["message", "conversation", "provider_ref", "memory", "memory_scope", "projects", "owner"]
+
+COMPANION_ROUTES: dict[str, Role] = {
+    "/companion/hello": "companion",
+    "/companion/events": "companion",
+    "/companion/results": "companion",
+    "/companion/claims": "companion",
+    "/companion/emit": "companion",
+    "/companion/revoke": "companion",
+}
 
 READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
     "get_message": ("message", "message_id"),
@@ -35,6 +44,7 @@ READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
     "capy_captain_digest": ("owner", None),
     "visibility_list": ("owner", None),
     "connect_list": ("owner", None),
+    "companion_list": ("owner", None),
 }
 REFERENCE_ARGS = frozenset({"id", "message_id", "conversation", "handle", "thread_id", "ref"})
 
@@ -53,6 +63,9 @@ MUTATION_ROLES: dict[str, Role] = {
     "visibility_set": "owner",
     "connect_code": "owner",
     "connect_revoke": "owner",
+    "companion_code": "owner",
+    "companion_invoke": "owner",
+    "companion_revoke": "owner",
     "connect": "setup",
     "send": "grant",
     "agent_send": "grant",
@@ -100,7 +113,7 @@ REFUSAL_DETAILS = frozenset({
 
 
 def catalog_refusal(p: Principal | None, name: str, tool: Tool | None, role: Role | None) -> str | None:
-    if p is None or p.kind == "inbox_key":
+    if p is None or p.kind in ("inbox_key", "companion"):
         return AUTH_REQUIRED
     if p.tools is not None and name not in p.tools:
         return TOOL_REQUIRED

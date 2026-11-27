@@ -89,3 +89,11 @@ SwB 把每段設定提示詞作為 MCP prompt 與 MCP resource 提供給代理�
 | `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/zh-Hant/docs/setup/muse) |
 | `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/zh-Hant/docs/setup/slack) |
 | `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/zh-Hant/docs/setup/telegram) |
+
+## 本機裝置
+
+請以擁有者身分登入的代理呼叫 `companion_code`。在裝置上執行 `swb companion connect https://swb.example.com`。依提示輸入配對碼，輸入內容會隱藏。
+
+各項裝置功能預設為關閉。加上 `--cap notify` 允許傳送通知。加上 `--cap drop` 允許存取裝置上的 SwB Drop 資料夾。
+
+執行 `swb companion run` 重新連線。執行 `swb companion status` 查看裝置編號。執行 `swb companion disconnect` 移除裝置。

@@ -17,9 +17,11 @@ from starlette.routing import Mount, Route
 from . import pages
 from .api_about import release_version
 from .api_display import SLACK_PROFILE_PREFIX
+from .auth import COMPANION_KEY_PREFIX
 from .claims import CLAIM_PATH, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
+from .companion_routes import companion_routes
 from .config import REQUEST_BASE
-from .guard import Guard, RateLimiter, client_ip, reject
+from .guard import Guard, RateLimiter, audit_client_ip, client_ip, reject
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
 from .sessions import Owner, login_redirect
@@ -60,7 +62,7 @@ class RequestBase:
 
 
 class BearerGate:
-    """Requires a valid OAuth access token or bearer key on /mcp and the inbox feeds; adds the principal to the ASGI scope.
+    """Authenticates MCP, inbox and companion requests with distinct bearer credentials.
 
     Wrong tokens are audited and count against the caller's IP: after too many, that IP gets 429 for a while,
     even with a good token, so guessing keys is slow. Requests without any token are the normal OAuth discovery
@@ -86,13 +88,30 @@ class BearerGate:
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         path = scope.get("path", "")
         inbox_feed = path.rstrip("/") in INBOX_FEEDS
-        if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed):
+        companion = path.startswith("/companion/") and path.rstrip("/") != "/companion/pair"
+        if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed or companion):
             scope.pop(PRINCIPAL_SCOPE, None)
             headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
             auth = headers.get("authorization", "")
             bare = auth.strip()
             token = auth[7:].strip() if auth.lower().startswith("bearer ") else (bare if bare and " " not in bare else None)
             ip = client_ip(scope)
+            if companion:
+                wait = self.limiter.blocked("companion_bearer_fail", ip)
+                if wait is not None:
+                    await reject(send, 429, "slow_down", "Too many failed companion sign-ins.", wait)
+                    return
+                principal = self.core.companions.authenticate(token or "") if auth.lower().startswith("bearer ") else None
+                if principal is None:
+                    self.limiter.hit("companion_bearer_fail", ip)
+                    self.core.audit.record_refusal(origin="http", client=audit_client_ip(scope), destination="core", action="auth_failure",
+                                                   detail="unknown or revoked companion key" if token else "missing companion key",
+                                                   target=path.rstrip("/"))
+                    await reject(send, 401, "invalid_token", "Use a valid companion key.")
+                    return
+                scope[PRINCIPAL_SCOPE] = principal
+                await self.app(scope, receive, send)
+                return
             wait = self.limiter.blocked("bearer_fail", ip)
             if wait is not None:
                 await reject(send, 429, "slow_down", "too many failed sign-ins from this address; try again later", wait)
@@ -100,11 +119,16 @@ class BearerGate:
             principal = self.core.auth.verify_bearer(token)
             if principal is None and token:
                 self.limiter.hit("bearer_fail", ip)
-                self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
-                                       target=scope["path"], detail=f"unknown or expired bearer token ({token_shape(token)}); agent {headers.get('user-agent', '-')[:80]}")
+                if token.startswith(COMPANION_KEY_PREFIX):
+                    self.core.audit.record(origin="http", source="-", client=audit_client_ip(scope), destination="core",
+                                           action="auth_failure", outcome="refused", target="/mcp" if not inbox_feed else "/inbox",
+                                           detail="companion key outside the companion API")
+                else:
+                    self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
+                                           target=scope["path"], detail=f"unknown or expired bearer token ({token_shape(token)}); agent {headers.get('user-agent', '-')[:80]}")
             elif auth and not token:
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
-                                       target=scope["path"], detail=f"Authorization header is not 'Bearer <token>' (scheme {auth.split(' ')[0][:20]!r}); agent {headers.get('user-agent', '-')[:80]}")
+                                       target=scope["path"], detail="Authorization header is not 'Bearer <token>'")
             elif not auth and self._first_anonymous(ip):
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_missing", outcome="refused",
                                        target=scope["path"], detail=f"no Authorization header (OAuth discovery, or a key that wasn't sent); agent {headers.get('user-agent', '-')[:80]}")
@@ -533,6 +557,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),
+            *companion_routes(core, limiter, HEARTBEAT_S),
             pages.PageRoute("/pairing/code", connect_code, pages.PAIRING_TITLE, methods=["POST"]),
             pages.PageRoute("/routines/claim/{code}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
             pages.PageRoute("/routines/claim/owner/{registration}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),

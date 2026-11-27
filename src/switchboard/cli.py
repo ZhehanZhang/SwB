@@ -22,6 +22,8 @@ from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
 from .__main__ import SERVER_COMMANDS, add_server_commands
+from .companion import commands as companion_commands
+from .companion.state import CompanionError
 from .config import DEFAULT_PORT, INSTANCE_CONFIG, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
 from .store import ensure_private_data_dir
@@ -312,6 +314,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--dir", type=Path, help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
         command.add_argument("--url", help="server base URL or MCP endpoint (defaults to loopback and SWITCHBOARD_PORT, PORT, or 8870)")
+    companion_commands.add_commands(commands)
     add_server_commands(commands)
     return parser
 
@@ -325,6 +328,9 @@ def main(argv: list[str] | None = None) -> None:
         server(argv)
         return
     try:
+        if args.command == "companion":
+            companion_commands.run(args, _hidden_input)
+            return
         base = (args.dir or Path.cwd()).resolve()
         if args.command == "init":
             _init(base, args.public_url, args.force)
@@ -361,7 +367,7 @@ def main(argv: list[str] | None = None) -> None:
         finally:
             request_log.setLevel(level)
         print(_display(tool, payload).replace(key, "[redacted]"))
-    except (CliError, ConfigError) as error:
+    except (CliError, CompanionError, ConfigError) as error:
         parser.exit(2 if args.command == "up" and isinstance(error, ConfigError) else 1, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(1, f"swb: couldn't read or write the instance files ({type(error).__name__}).\n")

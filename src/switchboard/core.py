@@ -25,6 +25,7 @@ from .auth import Auth, Principal
 from .blocks import Action, Address, Block, BlockError, Call
 from .blocks import load as load_block
 from .claims import Claims
+from .companions import Companions
 from .config import INSTANCE_DB, Config, Instance, load_config
 from .connect import Connections
 from .inbox import Inbox
@@ -97,6 +98,7 @@ class Switchboard:
         if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None and any(migrated):
             log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
+        self.companions = Companions(self.store, self.audit)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,
@@ -250,6 +252,7 @@ class Switchboard:
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **block_status(d)} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys] if principal is None or principal.is_unrestricted_owner else [],
+            **({"companions": self.companions.list()} if principal is not None and principal.is_unrestricted_owner and not public else {}),
             "mirror": bool(self.cfg.mirror_dir),
             "turn_cap": {"per_conversation": self.cfg.turn_cap,
                          "paused": self.store.one("SELECT COUNT(*) AS n FROM conversation_turns WHERE paused_at IS NOT NULL")["n"]},
