@@ -182,7 +182,7 @@ def test_init_writes_minimal_config_and_private_owner_key(tmp_path, monkeypatch,
     }
     env = instance / ".env"
     name, key = env.read_text().strip().split("=", 1)
-    assert name == cli.OWNER_KEY
+    assert name == "SWB_KEY_OWNER"
     assert len(bytes.fromhex(key)) == 32
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
     data = instance / "data"
@@ -244,17 +244,18 @@ def test_init_points_to_login_link(tmp_path, capsys):
     assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] not in out
 
 
-def test_init_saves_a_custom_port_for_login_link(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PORT", "18921")
-    monkeypatch.delenv("SWITCHBOARD_PORT", raising=False)
-    monkeypatch.delenv("SWITCHBOARD_HOST", raising=False)
+@pytest.mark.parametrize("port_name", ["PORT", "SWB_PORT", "SWITCHBOARD_PORT"])
+def test_init_saves_a_custom_port_for_login_link(tmp_path, monkeypatch, capsys, port_name):
+    for name in ("PORT", "SWB_PORT", "SWITCHBOARD_PORT", "SWB_HOST", "SWITCHBOARD_HOST"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(port_name, "18921")
     cli.main(["init", "--dir", str(tmp_path)])
     capsys.readouterr()
     saved = cli._read_env(tmp_path / ".env")
     assert saved["SWB_PORT"] == "18921"
     assert set(saved) == {"SWB_KEY_OWNER", "SWB_PORT"}
 
-    monkeypatch.delenv("PORT")
+    monkeypatch.delenv(port_name)
     call_tool = AsyncMock(return_value={"url": "http://localhost:18921/login#t=fixture"})
     monkeypatch.setattr(cli, "_call", call_tool)
     cli.main(["login-link", "--dir", str(tmp_path)])
