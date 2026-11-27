@@ -498,3 +498,29 @@ def test_connect_discord_hands_out_the_token_link_then_the_invite(discord):
         block._gateway.ready = True
         steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
         assert any(s.startswith("Invite the bot to a server you own for space home: https://discord.com/oauth2/authorize?") for s in steps)
+
+
+def test_guild_ownership_transfer_unbinds_the_auto_space(discord):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}]))
+        client.portal.call(block._load_owner)
+        dispatch("GUILD_CREATE", {"id": GUILD, "name": "Home", "owner_id": USER, "channels": [], "threads": []})
+        assert block.space_for(GUILD) == "home"
+        dispatch("GUILD_UPDATE", {"id": GUILD, "name": "Home", "owner_id": "999"})
+        assert block.space_for(GUILD) is None
+
+
+def test_an_owner_lookup_for_a_replaced_token_is_discarded(discord, monkeypatch):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        tokens = iter(["old", "old", "new"])
+        monkeypatch.setattr(block, "token", lambda: next(tokens))
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == frozenset()
+
+
+def test_connect_discord_keeps_a_rejected_token_step(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}}, "agents": {}}) as (_, client, block, _api):
+        block._gateway.fatal_code = 4004
+        steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
+        assert any(s.startswith("Discord rejected the bot token.") for s in steps)
