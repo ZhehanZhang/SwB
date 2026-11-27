@@ -6,6 +6,7 @@ MODE_REQUIRED = "Use an action allowed by the conversation mode."
 CONFIRMATION_REQUIRED = "Confirm a general memory write with the owner."
 GRANT_REQUIRED = "Use an account granted this action."
 OWNER_NOTE_REQUIRED = "Try sending the owner note again."
+MEMORY_WRITER_REQUIRED = "Use the owner's sign-in or the credential that wrote this memory."
 
 SIGN_IN_FAILURES = {
     "/auth/setup": frozenset({"setup_failed", "setup_closed", "csrf"}),

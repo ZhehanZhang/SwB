@@ -807,7 +807,7 @@ class CapyBlock(Block):
             if visible is None:
                 page = await api.list_threads(pid, limit=limit)
                 return {"scope": scope, "project": entry.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
-            if not p.allows(entry.scope):
+            if not p.allows_routing_scope(entry.scope):
                 raise BlockRefused(SCOPE_REQUIRED)
             refs = list(dict.fromkeys(h["ref"] for h in self.core.inbox.handles(owner=owner, destination=self.name, project=entry.slug,
                                                                                 scopes=p.scopes, limit=500)))[:limit]

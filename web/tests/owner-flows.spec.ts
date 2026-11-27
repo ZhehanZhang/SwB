@@ -44,6 +44,32 @@ test("Tokens cancels and confirms revoking a paired key", async ({ page, request
   await expect(trigger).toHaveCount(0)
 })
 
+test("Tokens shows and removes a paired key memory scope", async ({ page, request }, testInfo) => {
+  await page.goto("/tokens")
+  await page.getByText("Pairing code", { exact: true }).click()
+  await page.getByLabel("Agent name").fill("memory-reviewer")
+  await page.getByLabel("Project", { exact: true }).fill("operations")
+  await page.getByRole("button", { name: "Create code" }).click()
+  await expect(page).toHaveURL("/pairing/code")
+  const code = await page.getByText(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/).innerText()
+  const paired = await request.post("/connect", { data: { code } })
+  expect(paired.ok()).toBe(true)
+  await page.getByRole("link", { name: "Back" }).click()
+
+  const table = page.getByRole("table", { name: "Stored" })
+  const row = table.getByRole("row").filter({ hasText: "memory-reviewer" })
+  const project = row.getByRole("button", { name: "Remove operations from memory-reviewer" })
+  const agent = row.getByRole("button", { name: "Remove Agent memory-reviewer from memory-reviewer" })
+  await expect(project).toBeVisible()
+  await expect(agent).toBeVisible()
+  const path = testInfo.outputPath("memory-access.png")
+  await table.screenshot({ path, animations: "disabled" })
+  await testInfo.attach("Memory access", { path, contentType: "image/png" })
+  await project.click()
+  await expect(project).toHaveCount(0)
+  await expect(agent).toBeVisible()
+})
+
 test("Agents saves a Slack persona avatar", async ({ page }) => {
   await page.goto("/classic?notice=avatar-refused")
   await expect(page).toHaveURL("/agents?notice=avatar-refused")

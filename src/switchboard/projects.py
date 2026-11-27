@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -115,6 +116,8 @@ class Projects:
                 if db.execute("SELECT 1 FROM projects WHERE slug = ?", (target,)).fetchone():
                     raise ProjectError(f"project {target!r} already exists")
                 db.execute("UPDATE memories SET scope = ? WHERE scope = ?", (f"project:{target}", p.scope))
+                db.execute("UPDATE OR IGNORE paired_memory_grants SET scope = ? WHERE scope = ?", (f"project:{target}", p.scope))
+                db.execute("DELETE FROM paired_memory_grants WHERE scope = ?", (p.scope,))
                 db.execute("UPDATE routes SET project = ? WHERE project = ?", (target, p.slug))
                 db.execute("UPDATE handles SET project = ? WHERE project = ?", (target, p.slug))
             db.execute(
@@ -130,13 +133,15 @@ class Projects:
         r = self.store.one("SELECT archived_at FROM projects WHERE slug = ?", (slug,))
         return r["archived_at"] if r else None
 
-    def resolve(self, hint: str) -> list[dict[str, Any]]:
+    def resolve(self, hint: str, visible: Callable[[Project], bool] | None = None) -> list[dict[str, Any]]:
         """Find projects matching a slug, name, any linked project name or id (links.<x>_project), or owner/repo."""
         h = (hint or "").strip().lower()
         if not h:
             raise ProjectError("pass a project hint: a name, a linked project's name or id, or a repo")
         hits = []
         for p in self.list(include_archived=True):
+            if visible is not None and not visible(p):
+                continue
             fields = {"slug": p.slug, "name": p.name.lower(), **{k: str(v).lower() for k, v in p.links.items() if k != "repos"}}
             exact = [k for k, v in fields.items() if v == h] + (["repos"] if h in p.links.get("repos", []) else [])
             partial = [k for k, v in fields.items() if h in v and k not in exact]

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { X } from "lucide-react"
 import { AlertDialog } from "radix-ui"
 import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
@@ -28,6 +29,7 @@ type Stored = Credential & {
   added_by: string | null
   added_at: string | null
   revoke_id: string | null
+  memory_scopes?: string[]
 }
 
 type Tokens = { waiting: Waiting[]; stored: Stored[] }
@@ -51,11 +53,18 @@ function isTokens(value: unknown): value is Tokens {
     && value.waiting.every((row) => isCredential(row) && nullableText(row.asked_by)
       && timestamp(row.requested_at) && timestamp(row.expires_at))
     && value.stored.every((row) => isCredential(row) && nullableText(row.added_by)
-      && timestamp(row.added_at) && (row.revoke_id === null || typeof row.revoke_id === "string"))
+      && timestamp(row.added_at) && (row.revoke_id === null || typeof row.revoke_id === "string")
+      && (row.memory_scopes === undefined || (Array.isArray(row.memory_scopes) && row.memory_scopes.every((scope) => typeof scope === "string"))))
 }
 
 const queryKey = ["tokens"] as const
 const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
+
+function memoryScopeLabel(scope: string) {
+  if (scope === "general") return "General"
+  if (scope.startsWith("agent:")) return `Agent ${scope.slice(6)}`
+  return scope.replace(/^project:/, "")
+}
 
 function relative(at: string | null) {
   if (!at) return null
@@ -121,6 +130,15 @@ export function TokensPage() {
     onError: () => toast.error("Try revoking the key again."),
     onSettled: () => client.invalidateQueries({ queryKey }),
   })
+  const removeScope = useMutation({
+    mutationFn: ({ id, scope }: { id: string; scope: string }) => requestJson(
+      `/api/pairing/keys/${encodeURIComponent(id)}/memory/remove`,
+      (data): data is { removed: boolean } => isObject(data) && typeof data.removed === "boolean",
+      { method: "POST", csrf: session?.csrf, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope }) },
+    ),
+    onSuccess: () => client.invalidateQueries({ queryKey }),
+    onError: () => toast.error("Try removing the scope again."),
+  })
 
   if (!tokens.isPending && !tokens.data) return <DataState kind="error" message="Tokens unavailable." onRetry={() => void tokens.refetch()} />
 
@@ -174,7 +192,7 @@ export function TokensPage() {
         {tokens.isPending ? (
           <LoadingSkeleton message="Loading tokens…" className="mt-2">
             <div className="hidden h-[27px] items-start gap-5 border-b md:flex">
-              {[0, 1, 2, 3, 4].map((column) => <Skeleton key={column} className="h-2.5 w-[12%]" />)}
+              {[0, 1, 2, 3, 4, 5].map((column) => <Skeleton key={column} className="h-2.5 w-[12%]" />)}
             </div>
             {[0, 1].map((row) => (
               <div key={row} className="flex h-[71px] flex-col justify-center gap-2 border-b md:h-[49px] md:flex-row md:items-center md:justify-start md:gap-4">
@@ -198,6 +216,7 @@ export function TokensPage() {
                   <th scope="col" className="w-[19%] pb-2 font-medium">Name</th>
                   <th scope="col" className="w-[14%] pb-2 font-medium">Value</th>
                   <th scope="col" className="pb-2 font-medium">Used by</th>
+                  <th scope="col" className="w-[18%] pb-2 font-medium">Memory access</th>
                   <th scope="col" className="w-[14%] pb-2 font-medium">Added by</th>
                   <th scope="col" className="w-[11%] pb-2 font-medium">Added</th>
                   <th scope="col" className="w-16"><span className="sr-only">Actions</span></th>
@@ -214,6 +233,27 @@ export function TokensPage() {
                       </td>
                       <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.used_by.length && "max-md:hidden")} role="cell">
                         {row.used_by.length > 0 && <><span className="md:sr-only">Used by </span>{row.used_by.join(", ")}</>}
+                      </td>
+                      <td className={cn("col-span-2 md:pr-4", !row.memory_scopes && "max-md:hidden")} role="cell">
+                        {row.memory_scopes && (
+                          <div className="grid justify-items-start">
+                            <span className="text-muted-foreground md:sr-only">Memory access</span>
+                            {row.memory_scopes.length === 0 && <span className="text-muted-foreground">0 scopes</span>}
+                            {row.memory_scopes.map((scope) => {
+                              const label = memoryScopeLabel(scope)
+                              return (
+                                <div key={scope} className="inline-flex max-w-full items-center gap-1">
+                                  <span className="wrap-anywhere">{label}</span>
+                                  {id && <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0"
+                                    aria-label={`Remove ${label} from ${row.label}`} title="Remove scope"
+                                    disabled={!session?.csrf || removeScope.isPending} onClick={() => removeScope.mutate({ id, scope })}>
+                                    <X aria-hidden strokeWidth={1.5} />
+                                  </Button>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </td>
                       <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.added_by && "max-md:hidden")} role="cell">
                         {row.added_by && <><span className="md:sr-only">Added by </span>{row.added_by}</>}

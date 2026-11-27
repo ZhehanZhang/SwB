@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from ...chat import ChatBlock
 from ...memory import GENERAL, MemoryError_
-from ...refusals import (CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, GRANT_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
+from ...refusals import (CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, GRANT_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
                          SCOPE_REQUIRED, TARGET_REQUIRED)
 
 if TYPE_CHECKING:
@@ -12,9 +12,10 @@ if TYPE_CHECKING:
 
     from ...auth import Principal
     from ...core import Switchboard
+    from ...projects import Project
 
-Role = Literal["owner", "self", "grant", "route", "setup"]
-ReadRole = Literal["message", "conversation", "provider_ref", "memory", "memory_scope", "owner"]
+Role = Literal["owner", "self", "grant", "owner_or_writer", "route", "setup"]
+ReadRole = Literal["message", "conversation", "provider_ref", "memory", "memory_scope", "projects", "owner"]
 
 READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
     "get_message": ("message", "message_id"),
@@ -30,11 +31,12 @@ READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
     "memory_search": ("memory_scope", None),
     "memory_list": ("memory_scope", None),
     "context_pack": ("memory_scope", None),
+    "project_list": ("projects", None),
     "capy_captain_digest": ("owner", None),
     "visibility_list": ("owner", None),
     "connect_list": ("owner", None),
 }
-REFERENCE_ARGS = frozenset({"message_id", "conversation", "handle", "thread_id", "ref"})
+REFERENCE_ARGS = frozenset({"id", "message_id", "conversation", "handle", "thread_id", "ref"})
 
 MUTATION_ROLES: dict[str, Role] = {
     "space_mode": "owner",
@@ -44,9 +46,9 @@ MUTATION_ROLES: dict[str, Role] = {
     "routes_set": "route",
     "routes_remove": "route",
     "memory_write": "grant",
-    "memory_delete": "grant",
-    "memory_move": "grant",
-    "memory_promote": "grant",
+    "memory_delete": "owner_or_writer",
+    "memory_move": "owner_or_writer",
+    "memory_promote": "owner_or_writer",
     "login_link": "owner",
     "visibility_set": "owner",
     "connect_code": "owner",
@@ -91,7 +93,7 @@ POLICY_REQUIRED = "Use a tool with a SwB write policy."
 
 REFUSAL_DETAILS = frozenset({
     AUTH_REQUIRED, OWNER_REQUIRED, ROUTE_REQUIRED, CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED,
-    POLICY_REQUIRED, MODE_REQUIRED, CONFIRMATION_REQUIRED, GRANT_REQUIRED,
+    POLICY_REQUIRED, MODE_REQUIRED, CONFIRMATION_REQUIRED, GRANT_REQUIRED, MEMORY_WRITER_REQUIRED,
     CONVERSATION_NOT_FOUND, MESSAGE_NOT_FOUND, MEMORY_NOT_FOUND,
 })
 
@@ -117,7 +119,7 @@ def can_read_conversation(core: Switchboard, p: Principal, handle: dict[str, Any
     if handle is None:
         return False
     scope = f'project:{handle["project"]}' if handle["project"] else GENERAL
-    return p.is_unrestricted_owner or (p.allows(scope) and core.inbox.participant(handle, p.source))
+    return p.is_unrestricted_owner or (p.allows_routing_scope(scope) and core.inbox.participant(handle, p.source))
 
 
 def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any]) -> str | None:
@@ -148,7 +150,7 @@ def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str
 
     scope = arguments.get("scope")
     if role == "memory":
-        if isinstance(scope, str) and scope and not p.allows(scope.strip().lower()):
+        if isinstance(scope, str) and scope and not core.allows_memory(p, scope.strip().lower()):
             return MEMORY_NOT_FOUND
         namespace, key = arguments.get("namespace"), arguments.get("key")
         ident = reference if isinstance(reference, str) else None
@@ -157,19 +159,23 @@ def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str
                 scope = core.memory.scope_of(ident, scope=scope, namespace=namespace, key=key)
             except MemoryError_:
                 return MEMORY_NOT_FOUND
-            if not p.allows(scope):
+            if not core.allows_memory(p, scope):
                 return MEMORY_NOT_FOUND
     if role == "memory_scope":
         project = arguments.get("project")
         scopes = arguments.get("scopes")
         effective_project = project.strip().lower().removeprefix("project:") if isinstance(project, str) and project else ""
-        if effective_project and not p.allows(GENERAL if effective_project == GENERAL else f"project:{effective_project}"):
+        if effective_project and not core.allows_memory(p, GENERAL if effective_project == GENERAL else f"project:{effective_project}"):
             return MEMORY_NOT_FOUND
-        if isinstance(scopes, list) and any(isinstance(s, str) and not p.allows(s.strip().lower()) for s in scopes):
+        if isinstance(scopes, list) and any(isinstance(s, str) and not core.allows_memory(p, s.strip().lower()) for s in scopes):
             return MEMORY_NOT_FOUND
-        if not effective_project and not scopes and not p.allows(GENERAL):
+        if not effective_project and not scopes and not core.allows_memory(p, GENERAL):
             return MEMORY_NOT_FOUND
     return None
+
+
+def can_read_project(p: Principal, project: Project) -> bool:
+    return not project.private or p.allows_private_memory(project.scope)
 
 
 def mutation_roles(core: Switchboard) -> dict[str, Role]:

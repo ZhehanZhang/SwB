@@ -174,8 +174,10 @@ def test_paired_mailbox_reply_and_cancel_respect_sender_and_recipient(server):
     assert SECRET not in json.dumps(refusals)
 
 
-def test_general_memory_confirmation_refusal_does_not_audit_arguments(server, paired):
+def test_general_memory_confirmation_refusal_does_not_audit_arguments(server):
     core, client, _ = server
+    core.cfg.key_scopes["general-agent"] = ("general",)
+    paired = pair(client, "general-agent")
     assert "confirm_general" in error_text(call(client, paired, "memory_write", {
         "scope": "general", "namespace": "notes", "title": "Fixture", "body": SECRET,
     }))
@@ -191,7 +193,7 @@ def test_ordinary_tool_errors_do_not_emit_policy_refusals(server, paired):
     core, client, _ = server
     assert "Provide" in error_text(call(client, paired, "memory_write"))
     assert "title is required" in error_text(call(client, paired, "memory_write", {
-        "scope": "general", "namespace": "notes", "title": "", "body": SECRET, "confirm_general": True,
+        "scope": "agent:paired", "namespace": "notes", "title": "", "body": SECRET,
     }))
     assert core.audit.recent(action="tool_refused") == []
 

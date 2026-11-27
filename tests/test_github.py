@@ -22,7 +22,7 @@ from switchboard.blocks import BlockError
 from switchboard.blocks.github import DELIVERY_TTL_S, REFUSAL_AUDIT_INTERVAL_S, _json, trim
 from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
-from switchboard.refusals import OWNER_NOTE_REQUIRED
+from switchboard.refusals import MODE_REQUIRED, OWNER_NOTE_REQUIRED
 from switchboard.trust import CLOSE, OPEN
 
 SECRET = "example-test-only-secret"
@@ -789,6 +789,12 @@ async def test_github_mcp_write_tools_use_the_guarded_conversation(github):
         [item] = core.inbox.read(owner="claude")["items"]
         tools = (await arpc(client, token, "tools/list")).json()["result"]["tools"]
         assert {tool["name"] for tool in tools} >= {"github_status", "github_reply", "github_label", "github_comment", "github_notify_owner"}
+        private = "Fixture disallowed comment body"
+        denied = await acall(client, token, "github_comment", {"handle": item["handle"], "repo": "acme/app", "number": 7, "body": private})
+        assert "cannot comment" in error_text(denied)
+        [refusal] = core.audit.recent(outcome="refused")
+        assert (refusal["action"], refusal["target"], refusal["detail"]) == ("tool_refused", "github_comment", MODE_REQUIRED)
+        assert private not in json.dumps(refusal)
         result = await acall(client, token, "github_reply", {"handle": item["handle"], "text": "Which version are you on?"})
         assert not result.get("isError"), result
         result = await acall(client, token, "github_notify_owner", {"handle": item["handle"], "text": "Asked for the version."})

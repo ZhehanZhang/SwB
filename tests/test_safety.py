@@ -1,6 +1,7 @@
 import pytest
 
 from conftest import CAPTAIN, CAPTAIN2, OTHER_PROJECT, PROJECT, STATIC_KEY, SECOND_KEY, Clock, base_config, call, error_text, payload, sign_in, beacon
+from switchboard.refusals import SCOPE_REQUIRED
 
 
 def mcp_project(c, tok, **args):
@@ -131,9 +132,9 @@ def test_key_scope_allowlist(make):
     w = payload(call(c, STATIC_KEY, "memory_write", {"scope": "project:beacon", "namespace": "notes", "title": "Z", "body": "beacon only"}))
     assert payload(call(c, SECOND_KEY, "memory_write", {"scope": "project:orbit", "namespace": "notes", "title": "P", "body": "orbit"}))["scope"] == "project:orbit"
     for tool, args in (("memory_write", {"scope": "project:beacon", "namespace": "notes", "title": "x", "body": "y"}),
-                       ("memory_delete", {"id": w["id"]}),
-                       ("capy_delegate", {"task": "x", "project": "beacon"})):
-        assert "limited to project:orbit" in error_text(call(c, SECOND_KEY, tool, args)) or "may not read" in error_text(call(c, SECOND_KEY, tool, args)), tool
+                       ("memory_delete", {"id": w["id"]})):
+        assert error_text(call(c, SECOND_KEY, tool, args)) == SCOPE_REQUIRED, tool
+    assert "limited to project:orbit" in error_text(call(c, SECOND_KEY, "capy_delegate", {"task": "x", "project": "beacon"}))
     for tool, args in (("memory_read", {"id": w["id"]}), ("memory_search", {"query": "beacon", "project": "beacon"}),
                        ("context_pack", {"project": "beacon"})):
         assert error_text(call(c, SECOND_KEY, tool, args)) == "memory not found", tool
