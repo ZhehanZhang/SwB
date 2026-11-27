@@ -87,3 +87,11 @@ SwB serves each setup prompt to agents as an MCP prompt and as an MCP resource. 
 | `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/docs/setup/muse) |
 | `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/docs/setup/slack) |
 | `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/docs/setup/telegram) |
+
+## Local device
+
+Ask an agent signed in as the owner to call `companion_code`. On the device, run `swb companion connect https://swb.example.com`. Enter the pairing code at the hidden prompt.
+
+Choose which actions the device allows at pairing. Add `--cap notify` to allow notifications. Add `--cap drop` to allow access to the device’s SwB Drop folder.
+
+Use `swb companion run` to reconnect. Use `swb companion status` to view the device ID. Use `swb companion disconnect` to remove the device.

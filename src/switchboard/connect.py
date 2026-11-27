@@ -61,6 +61,11 @@ def normalize_code(code: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", (code or "").upper())
 
 
+def new_code() -> tuple[str, str]:
+    raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(10))
+    return f"{raw[:5]}-{raw[5:]}", _sha(raw)
+
+
 class Connections:
     def __init__(self, store: Store, key_scopes: dict[str, tuple[str, ...]] | None = None):
         self.store = store
@@ -112,11 +117,11 @@ class Connections:
         agent = (agent or "").strip().lower()
         if not AGENT_RE.match(agent) or agent in RESERVED:
             raise ConnectError(f"agent must be lowercase letters, digits and dashes (not {', '.join(sorted(RESERVED - {'-'}))})")
-        raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(10))
+        code, code_hash = new_code()
         now = self.store.clock()
         self.store.x("INSERT INTO connect_codes(code_hash, agent, project, client, created_by, created_at, expires_at) VALUES (?,?,?,?,?,?,?)",
-                           (_sha(raw), agent, project, client, by, now, now + ttl_s))
-        return {"code": f"{raw[:5]}-{raw[5:]}", "agent": agent, "project": project, "client": client, "expires_in_s": int(ttl_s)}
+                     (code_hash, agent, project, client, by, now, now + ttl_s))
+        return {"code": code, "agent": agent, "project": project, "client": client, "expires_in_s": int(ttl_s)}
 
     def redeem(self, code: str) -> dict[str, Any]:
         raw = normalize_code(code)

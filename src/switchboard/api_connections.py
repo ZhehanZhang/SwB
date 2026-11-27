@@ -14,6 +14,7 @@ from .blocks.github import GitHubBlock
 from .blocks.slack import SlackBlock
 from .blocks.telegram import TelegramBlock
 from .chat import ChatBlock
+from .guard import audit_client_ip
 
 BLOCK_TYPES = {"discord": DiscordBlock, "github": GitHubBlock, "slack": SlackBlock, "telegram": TelegramBlock}
 AVATAR_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}
@@ -139,4 +140,17 @@ def avatar(request: Request) -> Response:
     return Response(data, media_type=media)
 
 
-CONNECTION_ROUTES = [Route("/connections/{platform}", connection), Route("/connections/{platform}/avatar", avatar)]
+async def companions(request: Request) -> JSONResponse:
+    return JSONResponse({"companions": request.app.state.core.companions.list()})
+
+
+async def companion_revoke(request: Request) -> JSONResponse:
+    registry = request.app.state.core.companions
+    if not registry.revoke(request.path_params["companion"], origin="owner", source=f"admin:{request.state.owner.label}",
+                           client=audit_client_ip(request.scope)):
+        raise HTTPException(404)
+    return JSONResponse({"ok": True})
+
+
+CONNECTION_ROUTES = [Route("/connections/{platform}", connection), Route("/connections/{platform}/avatar", avatar),
+                     Route("/companions", companions), Route("/companions/{companion}/revoke", companion_revoke, methods=["POST"])]
