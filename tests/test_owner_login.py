@@ -320,7 +320,7 @@ def test_passkey_session_owns_api_reads_and_writes(make):
         denied = client.post(path, json=rule, headers=headers)
         assert denied.status_code == 403 and denied.json() == {"error": "csrf"}
     assert core.visibility.explicit(rule["resource"]) is None
-    assert client.post("/api/pairing/code", headers=origin, data={"csrf": session["csrf"]}).status_code == 200
+    assert client.post("/pairing/code", headers=origin, data={"agent": "codex", "csrf": session["csrf"]}).status_code == 200
     bad_body = client.post(path, headers=origin, data={**rule, "csrf": session["csrf"]})
     assert bad_body.status_code == 400 and bad_body.json() == {"error": "invalid_request"}
     saved = client.post(path, json=rule, headers={**origin, "X-CSRF-Token": session["csrf"]})

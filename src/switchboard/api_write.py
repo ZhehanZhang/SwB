@@ -124,10 +124,6 @@ async def visibility_set(request: Request) -> JSONResponse:
     return JSONResponse({"resource": resource, "visibility": rule})
 
 
-async def pairing_code(request: Request) -> JSONResponse:
-    return JSONResponse({"status": "owner_form_required", "url": "/tokens"})
-
-
 async def pairing_revoke(request: Request) -> JSONResponse:
     core = request.app.state.core
     owner = _owner(request)
@@ -200,7 +196,6 @@ WRITE_ROUTES = [
     Route("/routes", route_set, methods=["POST"]),
     Route("/routes/{id}", route_remove, methods=["DELETE"]),
     Route("/visibility", visibility_set, methods=["POST"]),
-    Route("/pairing/code", pairing_code, methods=["POST"]),
     Route("/pairing/keys/{kid}/revoke", pairing_revoke, methods=["POST"]),
     Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
     Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),

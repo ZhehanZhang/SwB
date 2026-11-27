@@ -43,10 +43,9 @@ MODES = ("captain_thread", "new_thread")
 TARGET_KINDS = ("captain", "project", "thread")
 DEFAULT_KEYS = {"model", "repos", "mode", "delivery"}
 
-INSTRUCTIONS = """Capy is a coding agent with cloud machines, git and PRs, organised under Captains. Send it work that needs a
-real machine, a repo, a PR, or more than a few minutes: send(task) goes where the owner's route for you and the project
-points (usually his Captain), or send(task, to='capy:captain:<name>') when your route allows choosing. Then wait() for
-the reply. capy_captain_digest, capy_captains and capy_list read Captains and their crews."""
+INSTRUCTIONS = """Capy is a coding agent with cloud machines and Captains. Send it work that needs a machine, repository, or pull request.
+Use send(task=...) to follow the owner's route, usually to their Captain. Set to='capy:captain:<name>' if the route lets you choose.
+Call wait for the reply. Use capy_captain_digest, capy_captains and capy_list to read about Captains and their crews."""
 
 
 def _api_timestamp(value: Any) -> str | None:
@@ -108,7 +107,7 @@ class CapyBlock(Block):
         identities=({"id": "service", "policy": "free"}, {"id": "personal", "policy": "free", "optional": True}),
         config_schema={"type": "object", "properties": {
             "api_base": {"type": "string"}, "identity": {"enum": ["service", "personal"]}, "send_key_env": {"type": "string"},
-            "default_route": {}, "daily_cap": {"type": ["integer", "null"]}, "burst": {}, "captain_delivery": {"enum": list(DELIVERIES)},
+            "default_route": {}, "daily_cap": {"type": ["integer", "null"]}, "captain_delivery": {"enum": list(DELIVERIES)},
             "avatars": {"type": "boolean"}, "handle_ttl_days": {"type": "number"}, "duplicate_window_s": {"type": "number"}}},
         instructions=INSTRUCTIONS,
     )
