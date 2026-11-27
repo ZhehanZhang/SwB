@@ -20,6 +20,13 @@ The command prints a link such as `https://swb.example.com/login#t=...`. Open it
 
 For a local run, set `SWITCHBOARD_PUBLIC_URL` to `http://localhost:8870` before you start SwB. Set the port in the address to match `PORT`. If the YAML config sets `public_url`, change it there. Use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
 
+If the link shows one of these errors, run `swb login-link` again. Open the new link in your browser.
+
+| Error | Meaning |
+| - | - |
+| `link_used` | Someone used the link to sign in before it expired. |
+| `link_expired` | The link expired or is invalid. |
+
 ## Setup code
 
 A setup code works once, for the first owner sign-in. Use it when SwB handles sign-in directly. The [cloud and Docker deploy scripts](/docs/deploy) create the code for you.

@@ -104,7 +104,7 @@ GitHub 必須能連到你伺服器上的 `https://swb.example.com/github/webhook
 
 代理再次呼叫 `connect(what="github")`，取得尚待填寫的 App ID 或私密金鑰連結。若要從現有的個人存取權杖改用 GitHub App 憑證，選用 `choose={"credential":"app"}`。
 
-重新啟動後，代理呼叫 `github_status`，檢查安裝和它的權限。之後，代理依照頻道模式使用 `github_label`、`github_comment`、`github_open_issue`、`github_link_duplicate`、`github_reply` 和 `github_notify_owner`。
+重新啟動後，代理呼叫 `github_status` 檢查安裝及其權限。請參閱[頻道模式](/zh-Hant/docs/channel-modes)，了解如何繫結專案路由並啟用分流動作。分流模式預設允許 `github_reply`。
 
 ## 憑證
 
