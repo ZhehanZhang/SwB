@@ -151,6 +151,15 @@ def test_configured_gadget_preserves_muse_oauth_connector(make):
     assert queued["to"] == "agent:muse" and queued["mailbox"]
 
 
+async def test_muse_companion_setup_uses_python_313(muse_app):
+    core, client, companions, _ = muse_app
+    core.claims.save_secret(muse.TOKEN_ENV, SDK_TOKEN)
+    companions.online = False
+    _, person = (await connect(client))["next"]
+    assert person["by"] == "person"
+    assert person["do"].startswith(f"Run uvx --python 3.13 --from 'swb-one[companion]' swb companion connect {PUBLIC} --cap muse.")
+
+
 async def test_pairing_verifies_and_seals_credentials(muse_app, caplog):
     core, client, companions, block = muse_app
     caplog.set_level("DEBUG")
