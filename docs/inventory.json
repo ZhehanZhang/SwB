@@ -309,6 +309,36 @@
       "arguments": [
         {
           "choices": [
+            "connect",
+            "run",
+            "status",
+            "disconnect"
+          ],
+          "name": "companion_action"
+        },
+        {
+          "choices": [],
+          "name": "url"
+        }
+      ],
+      "command": "swb companion",
+      "flags": [
+        "--cap",
+        "--code",
+        "--drop-dir",
+        "--help",
+        "--no-run",
+        "-h"
+      ],
+      "icon": null,
+      "id": "command:companion",
+      "kind": "command",
+      "label": "swb companion"
+    },
+    {
+      "arguments": [
+        {
+          "choices": [
             "migrate"
           ],
           "name": "action"
@@ -2672,6 +2702,50 @@
       "kind": "tool",
       "label": "Wait for Capy",
       "name": "capy_wait"
+    },
+    {
+      "description": "Create a one-time pairing code valid for ten minutes. Enter it at the hidden prompt for swb companion connect <url>.",
+      "icon": null,
+      "id": "tool:companion_code",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Pair a companion",
+      "name": "companion_code"
+    },
+    {
+      "description": "Run an advertised capability action on a connected device. Use the device ID and action schema from companion_list.",
+      "icon": null,
+      "id": "tool:companion_invoke",
+      "input_properties": [
+        "action",
+        "args",
+        "capability",
+        "companion",
+        "timeout_s"
+      ],
+      "kind": "tool",
+      "label": "Run a companion action",
+      "name": "companion_invoke"
+    },
+    {
+      "description": "List paired devices, their connection status, and their available actions.",
+      "icon": null,
+      "id": "tool:companion_list",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "List companions",
+      "name": "companion_list"
+    },
+    {
+      "description": "Revoke a paired device key and close its connection.",
+      "icon": null,
+      "id": "tool:companion_revoke",
+      "input_properties": [
+        "companion"
+      ],
+      "kind": "tool",
+      "label": "Disconnect a companion",
+      "name": "companion_revoke"
     },
     {
       "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Call connect again to check progress. Use choose for details such as a Captain, project, agent name or dot name. For Muse device pairing pass choose.gadget=true. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",

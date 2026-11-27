@@ -9,6 +9,7 @@ CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_d
         "project_update", "project_sync", "memory_move", "memory_promote", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status", "agent_send",
         "modes_status", "space_mode"}
 GENERIC = {"send", "reply", "wait", "inbox", "get_message", "status", "result", "cancel", "targets", "connect", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set", "login_link"}
+COMPANION = {"companion_code", "companion_list", "companion_invoke", "companion_revoke"}
 CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}
 
 
@@ -19,7 +20,7 @@ def tools(c):
 def test_tool_set_and_schemas(make):
     _, c = make()
     t = tools(c)
-    assert set(t) == CORE | GENERIC | CAPY
+    assert set(t) == CORE | GENERIC | COMPANION | CAPY
     for name, tool in t.items():
         assert 40 <= len(tool["description"]) <= 700, name
         assert tool["inputSchema"]["type"] == "object"
@@ -34,7 +35,7 @@ def test_tool_set_and_schemas(make):
 
 def test_capy_tools_only_with_the_capy_destination(make):
     _, c = make(config={"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["o@example.test"]}})
-    assert set(tools(c)) == CORE | GENERIC
+    assert set(tools(c)) == CORE | GENERIC | COMPANION
 
 
 def test_annotations_mark_reads_and_writes(make):

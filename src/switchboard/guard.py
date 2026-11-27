@@ -16,6 +16,7 @@ from starlette.datastructures import MutableHeaders
 
 BODY_LIMIT = 1 * 1024 * 1024
 MCP_BODY_LIMIT = 16 * 1024 * 1024
+COMPANION_EMIT_LIMIT = 16 * 1024
 SETUP_BODY_LIMIT = 1024
 LIMITS = {
     "register": (20, 3600.0),
@@ -23,6 +24,8 @@ LIMITS = {
     "authorize": (60, 600.0),
     "bearer_fail": (20, 600.0),
     "connect_fail": (10, 600.0),
+    "companion_pair_fail": (10, 600.0),
+    "companion_bearer_fail": (20, 600.0),
     "login_link_fail": (10, 600.0),
     "owner_setup": (8, 600.0),
     "owner_setup_total": (120, 600.0),
@@ -131,8 +134,10 @@ class Guard:
                     headers.setdefault("Referrer-Policy", "same-origin")
                 await original_send(message)
 
-        limit = MCP_BODY_LIMIT if path == "/mcp" or path.startswith("/mcp/") else BODY_LIMIT
-        if path == "/auth/setup":
+        limit = MCP_BODY_LIMIT if path == "/mcp" or path.startswith("/mcp/") or path.rstrip("/") == "/companion/results" else BODY_LIMIT
+        if path.rstrip("/") == "/companion/emit":
+            limit = COMPANION_EMIT_LIMIT + 256
+        elif path == "/auth/setup":
             limit = SETUP_BODY_LIMIT
         for k, v in scope.get("headers", []):
             if k == b"content-length":

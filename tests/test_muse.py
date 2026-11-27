@@ -1,6 +1,7 @@
 import asyncio
 import builtins
 import json
+from contextlib import aclosing
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -10,11 +11,13 @@ from conftest import PUBLIC, SECOND_KEY, STATIC_KEY, acall, base_config, call, e
 from switchboard import muse_gadget
 from switchboard.auth import Principal
 from switchboard.blocks import muse
+from switchboard.companion.caps import registry
+from switchboard.companion.caps.muse import MuseCapability
 from switchboard.vendor.musegadget import muse_api
 from switchboard.vendor.musegadget.identity import Identity
 
 SDK_TOKEN = "mgst_" + "U" * 43
-COMPANION = "cmp_c0ffee"
+COMPANION = "cmp_" + "a" * 24
 ACCESS = "test-muse-device-access"
 REFRESH = "test-muse-device-refresh"
 
@@ -58,8 +61,9 @@ class FakeCompanions:
     def list(self):
         return [{"id": COMPANION, "online": self.online, "capabilities": ["muse"]}]
 
-    async def invoke(self, companion_id, capability, action, args, timeout_s):
+    async def invoke(self, companion_id, capability, action, args, timeout_s, *, principal):
         assert companion_id == COMPANION and (capability, action, timeout_s) == ("muse", "pair", 660)
+        assert principal.is_unrestricted_owner
         assert args["sdk_token"] == SDK_TOKEN and args["window_s"] == 600
         assert set(args) == {"sdk_token", "identity", "window_s"}
         identity = Identity(args["identity"]["mac"])
@@ -275,3 +279,63 @@ async def test_muse_device_unpair_keeps_identity_and_clears_saved_credentials(mu
     assert not block.online and core.claims.secret(muse.PAIRING_SECRET) is None
     assert core.claims.secret(muse.IDENTITY_SECRET) == ident
     assert (await connect(client))["companions"] == [COMPANION]
+
+
+async def test_live_companion_hub_pairs_muse_and_filters_job_errors(amake, tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(MuseCapability, "available", lambda self: None)
+    monkeypatch.setattr(muse_gadget, "MuseGadget", FakeGadget)
+    monkeypatch.setattr(muse_api, "fetch_vms_with_status", lambda *_: ([{"vm_id": "test-vm"}], 200))
+    core, client = await amake(config())
+    caplog.set_level("DEBUG")
+    block = core.blocks["muse"]
+    core.claims.save_secret(muse.TOKEN_ENV, SDK_TOKEN)
+    assert registry((), tmp_path) == ({}, {})
+    caps, unavailable = registry(("muse",), tmp_path)
+    assert not unavailable
+    code = (await tool(client, "companion_code"))["code"]
+    paired = (await client.post("/companion/pair", json={"code": code, "name": "Test device", "platform": "linux",
+                                                        "capabilities": [caps["muse"].manifest()]})).json()
+    device_id = paired["companion_id"]
+    auth = {"Authorization": f"Bearer {paired['device_key']}"}
+    async with aclosing(core.companions.events(device_id, 1)) as stream:
+        assert await anext(stream) == ("ping", "{}")
+
+        async def start_job():
+            started = await connect(client, companion=device_id)
+            assert started["pairing"] == "in_progress"
+            event, data = await asyncio.wait_for(anext(stream), 1)
+            assert event == "job"
+            job = json.loads(data)
+            assert (job["capability"], job["action"], job["args"]["window_s"]) == ("muse", "pair", 600)
+            assert job["args"]["sdk_token"] == SDK_TOKEN
+            return job
+
+        for untrusted_error, expected in ((SDK_TOKEN, "Muse pairing did not finish."),
+                                          ("Bluetooth adapter unavailable", "Bluetooth adapter unavailable")):
+            job = await start_job()
+            response = await client.post("/companion/results", headers=auth,
+                                         json={"job_id": job["job_id"], "ok": False, "error": untrusted_error})
+            assert response.json() == {"ok": True}
+            await eventually(lambda: block._pairing is None)
+            state = await connect(client)
+            assert state["pairing"] == "window_closed" and state["pairing_error"] == expected
+
+        job = await start_job()
+        job_id = job["job_id"]
+        ident = Identity(job["args"]["identity"]["mac"])
+        claim = {"job_id": job_id, "kind": "muse_pairing", "payload": {"node_id": ident.setup_node_id,
+                 "credentials": {"access_token": ACCESS, "refresh_token": REFRESH}}}
+        assert (await client.post("/companion/claims", headers=auth, json={**claim, "job_id": "wrong"})).status_code == 404
+        assert (await client.post("/companion/claims", headers=auth, json=claim)).json() == {"ok": True}
+        assert (await client.post("/companion/results", headers=auth,
+                                  json={"job_id": job_id, "ok": True, "result": {"paired": True}})).json() == {"ok": True}
+        await eventually(lambda: block._pairing is None and block.online)
+    assert (await client.post("/companion/revoke", headers=auth)).json() == {"ok": True}
+    assert not core.companions.list() and block.online and (await connect(client))["pairing"] == "paired"
+    handle = (await tool(client, "send", {"to": "muse", "task": "Wake after revocation"}))["conversation"]
+    await eventually(lambda: core.inbox.handle(handle)["status"] == "answered")
+    invocations = core.audit.recent(action="companion_invoke")
+    assert [(row["target"], row["ref"], row["outcome"]) for row in invocations] == [(device_id, "muse.pair", state)
+                                                                                 for state in ("ok", "failed", "failed")]
+    audit = caplog.text + str(core.audit.recent(limit=100))
+    assert all(secret not in audit for secret in (code, paired["device_key"], SDK_TOKEN, ACCESS, REFRESH))

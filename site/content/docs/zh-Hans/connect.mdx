@@ -87,3 +87,11 @@ SwB 把每段设置提示词作为 MCP prompt 和 MCP resource 提供给智能�
 | `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/zh-Hans/docs/setup/muse) |
 | `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/zh-Hans/docs/setup/slack) |
 | `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/zh-Hans/docs/setup/telegram) |
+
+## 本地设备
+
+请以所有者身份登录的智能体调用 `companion_code`。在设备上运行 `swb companion connect https://swb.example.com`。按提示输入配对码，输入内容会隐藏。
+
+各项设备功能默认关闭。加上 `--cap notify` 允许发送通知。加上 `--cap drop` 允许访问设备上的 SwB Drop 文件夹。
+
+运行 `swb companion run` 重新连接。运行 `swb companion status` 查看设备编号。运行 `swb companion disconnect` 移除设备。

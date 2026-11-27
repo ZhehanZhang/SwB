@@ -19,7 +19,7 @@ from ...vendor.musegadget.ble_framing import (
 from ...vendor.musegadget.ble_setup import Credentials, ProvisionFailed, SetupController
 from ...vendor.musegadget.identity import Identity
 from ...vendor.musegadget.pairing import PairingSession
-from .base import ActionSpec, CapabilityError, JobContext
+from .base import ActionSpec, Capability, CapabilityError, JobContext
 
 SERVICE_UUID = "7fdd3d1c-38ea-46cf-8b46-314ecf5f240c"
 RX_UUID = "4d593029-28a2-4a6e-a1f0-3c2d5e8f9b01"
@@ -214,7 +214,7 @@ class _BlessTransport:
                     delegate.peripheral_manager.removeAllServices()
 
 
-class MuseCapability:
+class MuseCapability(Capability):
     id = "muse"
     version = "1"
     title = "Muse"

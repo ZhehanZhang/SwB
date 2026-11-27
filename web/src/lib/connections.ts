@@ -78,3 +78,39 @@ export function connectionQuery(platform: StatusPlatform) {
       (value): value is Connection => isConnection(value) && value.platform === platform, { signal }),
   })
 }
+
+export type Companion = {
+  id: string
+  name: string
+  platform: string
+  online: boolean
+  capabilities: string[]
+}
+
+function isCompanion(value: unknown): value is Companion {
+  return isObject(value) && typeof value.id === "string" && typeof value.name === "string"
+    && typeof value.platform === "string" && typeof value.online === "boolean"
+    && Array.isArray(value.capabilities) && value.capabilities.every(capability => typeof capability === "string")
+}
+
+export const companionsQuery = queryOptions({
+  queryKey: ["companions"],
+  queryFn: ({ signal }) => requestJson("/api/companions",
+    (value): value is { companions: Companion[] } => isObject(value)
+      && Array.isArray(value.companions) && value.companions.every(isCompanion), { signal }),
+  refetchInterval: 15_000,
+})
+
+export async function pairCompanion(csrf: string | null) {
+  const { code, expires_in_s } = await requestJson("/pairing/companion",
+    (value): value is { code: string; expires_in_s: number } => isObject(value)
+      && typeof value.code === "string" && value.code.length > 0
+      && typeof value.expires_in_s === "number" && Number.isSafeInteger(value.expires_in_s) && value.expires_in_s > 0,
+    { method: "POST", csrf })
+  return { code, expires_in_s }
+}
+
+export function disconnectCompanion(id: string, csrf: string | null) {
+  return requestJson(`/api/companions/${encodeURIComponent(id)}/revoke`,
+    (value): value is { ok: true } => isObject(value) && value.ok === true, { method: "POST", csrf })
+}
