@@ -126,7 +126,7 @@ Use the same key that last wrote an entry to update, move or delete it. The owne
 
 Pass `project` to read that project and any granted `general` memory. For searches and lists, set `include_general=false` for that project alone. To select exact scopes for searches and lists, use `scopes`. SwB logs reads outside the named project. Access to a private project requires a grant for that project or owner access. For searches and lists, name the private project in `project`.
 
-A new paired key gets `agent:<name>` and any memory scopes set for its name in `auth.key_scopes`. A project named in the pairing adds that project's scope. A paired key needs an explicit grant for `general`. SwB saves the grants by key. The owner can view them on **Tokens** and remove one scope at a time.
+A new paired key gets `agent:<name>` and any memory scopes set for its name in `auth.key_scopes`. A project named in the pairing adds that project's scope. A paired key needs an explicit grant for `general`. SwB saves the grants by key. The owner can view them on **Tokens** and remove one scope at a time. Grants are set once, when the key redeems its pairing code. To widen access, set `auth.key_scopes.<agent>` or name a project in the pairing code, then pair a new key. **Tokens** only narrows access.
 
 On upgrade, SwB grants each active paired key with open access `general` and all projects that exist at that time. SwB copies any specific `auth.key_scopes` list instead. Projects outside those grants need their own grants.
 
