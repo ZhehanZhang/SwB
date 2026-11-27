@@ -40,8 +40,9 @@ for (const file of locales.flatMap((locale) => files(join(root, locale)))) {
     const found = [];
     if (listLine.test(raw) || listElement.test(raw)) found.push('list');
     if (punct.test(line)) found.push('punctuation');
-    const prose = zh ? line.replace(/(分別|分别|識別|识别|類別|类别|特別|特别|別名|别名)/g, '') : line;
-    if ((zh ? negation.zh : negation.en).test(prose) && !(trademarks && legalQuote.test(raw))) found.push('negation');
+    const prose = zh ? line.replace(/(分別|分别|識別|识别|類別|类别|特別|特别|別名|别名|區別|区别|個別|个别|不同|不斷|不断|不久|不過|不过|非常|未來|未来|無論|无论)/g, '') : line;
+    const allowed = (trademarks && legalQuote.test(raw)) || (zh && raw.includes('{/* negation-ok */}'));
+    if ((zh ? negation.zh : negation.en).test(prose) && !allowed) found.push('negation');
     if (found.length) {
       problems += 1;
       console.log(`${relative(root, file)}:${index + 1} ${found.join(', ')}  ${raw.trim().slice(0, 120)}`);

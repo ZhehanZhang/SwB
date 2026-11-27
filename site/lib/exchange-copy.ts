@@ -2,8 +2,8 @@ import type { Locale } from './i18n';
 
 export const exchangeCopy = {
   en: { you: 'You', setup: 'Set this up' },
-  'zh-Hans': { you: '你', setup: '配置此场景' },
-  'zh-Hant': { you: '你', setup: '設定此情境' },
+  'zh-Hans': { you: '你', setup: '设置这个场景' },
+  'zh-Hant': { you: '你', setup: '設定這個情境' },
 } satisfies Record<Locale, { you: string; setup: string }>;
 
 export const agentNames = {
@@ -25,7 +25,7 @@ export const exchangeScenes: ExchangeScene[] = [
     messages: [
       ['claude', {
         en: 'Grok Bot, read the release replies.',
-        'zh-Hans': 'Grok Bot，看看发布公告下的回复。',
+        'zh-Hans': 'Grok Bot，看看发布公告下面的回复。',
         'zh-Hant': 'Grok Bot，看看版本公告下的留言。',
       }],
       ['grok-bot', {
@@ -50,8 +50,8 @@ export const exchangeScenes: ExchangeScene[] = [
     messages: [
       ['you', {
         en: 'Check my SwB inbox.',
-        'zh-Hans': '看一下我的 SwB 邮箱。',
-        'zh-Hant': '幫我查看 SwB 信箱。',
+        'zh-Hans': '看一下我的 SwB 收件箱。',
+        'zh-Hant': '幫我看一下 SwB 收件匣。',
       }],
       ['muse', {
         en: 'Grok Bot sent a Slack example.',
@@ -60,13 +60,13 @@ export const exchangeScenes: ExchangeScene[] = [
       }],
       ['you', {
         en: 'Ask for one more example.',
-        'zh-Hans': '请让 Grok Bot 再找一个。',
-        'zh-Hant': '請讓 Grok Bot 再找一個。',
+        'zh-Hans': '让 Grok Bot 再找一个。',
+        'zh-Hant': '讓 Grok Bot 再找一個。',
       }],
       ['muse', {
         en: 'I sent the request to Grok Bot.',
-        'zh-Hans': '我已经问 Grok Bot 了。',
-        'zh-Hant': '我已經問 Grok Bot 了。',
+        'zh-Hans': '已经转告 Grok Bot 了。',
+        'zh-Hant': '已經轉告 Grok Bot 了。',
       }],
     ],
   },
@@ -75,7 +75,7 @@ export const exchangeScenes: ExchangeScene[] = [
     messages: [
       ['grok-bot', {
         en: 'Claude, draft the release notes.',
-        'zh-Hans': 'Claude，起草发布说明。',
+        'zh-Hans': 'Claude，起草一下发布说明。',
         'zh-Hant': 'Claude，先寫一份版本說明。',
       }],
       ['claude', {
@@ -85,8 +85,8 @@ export const exchangeScenes: ExchangeScene[] = [
       }],
       ['grok-bot', {
         en: 'Capy Captain, run the tests.',
-        'zh-Hans': 'Capy Captain，运行测试。',
-        'zh-Hant': 'Capy Captain，請執行測試。',
+        'zh-Hans': 'Capy Captain，跑一下测试。',
+        'zh-Hant': 'Capy Captain，跑一下測試。',
       }],
       ['capy', {
         en: 'All tests passed.',
@@ -100,8 +100,8 @@ export const exchangeScenes: ExchangeScene[] = [
     messages: [
       ['you', {
         en: 'Share the release update here.',
-        'zh-Hans': '请在这里汇报发布进展。',
-        'zh-Hant': '請在這裡回報發布進度。',
+        'zh-Hans': '在这里同步一下发布进展。',
+        'zh-Hant': '在這裡同步一下發布進度。',
       }],
       ['claude', {
         en: 'The release notes are ready.',
@@ -125,18 +125,18 @@ export const exchangeScenes: ExchangeScene[] = [
     messages: [
       ['you', {
         en: 'Please add a Docker example.',
-        'zh-Hans': '请加一个 Docker 示例。',
-        'zh-Hant': '請加一個 Docker 範例。',
+        'zh-Hans': '能加一个 Docker 示例吗？',
+        'zh-Hant': '可以加一個 Docker 範例嗎？',
       }],
       ['grok-bot', {
         en: 'I added the documentation label.',
-        'zh-Hans': '我加上了文档标签。',
-        'zh-Hant': '我加上了文件標籤。',
+        'zh-Hans': '我加上了 documentation 标签。',
+        'zh-Hant': '我加上了 documentation 標籤。',
       }],
       ['grok-bot', {
         en: 'I linked the Docker guide.',
-        'zh-Hans': '我附上了 Docker 指南链接。',
-        'zh-Hant': '我附上了 Docker 指南連結。',
+        'zh-Hans': '我附上了 Docker 指南的链接。',
+        'zh-Hant': '我附上了 Docker 指南的連結。',
       }],
       ['you', {
         en: 'The guide answered my question.',
@@ -150,18 +150,18 @@ export const exchangeScenes: ExchangeScene[] = [
     messages: [
       ['capy', {
         en: 'Build the site on the paired Mac.',
-        'zh-Hans': '请在已配对的 Mac 上构建网站。',
-        'zh-Hant': '請在已配對的 Mac 上建置網站。',
+        'zh-Hans': '在已配对的 Mac 上构建网站。',
+        'zh-Hant': '在配對的 Mac 上建置網站。',
       }],
       ['claude-code', {
         en: 'The local build is running.',
-        'zh-Hans': '本机构建正在运行。',
+        'zh-Hans': '正在本地构建。',
         'zh-Hant': '本機正在建置。',
       }],
       ['claude-code', {
         en: 'The build passed.',
-        'zh-Hans': '网站构建完成。',
-        'zh-Hant': '網站建置完成。',
+        'zh-Hans': '构建通过了。',
+        'zh-Hant': '建置通過了。',
       }],
       ['capy', {
         en: 'I sent the result to Slack.',

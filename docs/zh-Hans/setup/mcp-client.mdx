@@ -1,41 +1,41 @@
 ---
 title: MCP 客户端
-description: 使用本机所有者密钥或配对码连接 MCP 客户端。
+description: 用本地所有者密钥或配对码连接 MCP 客户端。
 ---
 
-MCP 是应用调用外部工具的标准。你可以用专属密钥把应用与 SwB 配对。
+MCP 是应用使用外部工具的标准方式。按本页操作，可以用密钥把应用与 SwB 配对。
 
 ## 开始之前
 
-请选择支持通过 Streamable HTTP 连接远程 MCP 的应用。这种方式可让应用通过网络调用工具。应用还需支持用自定义请求头发送密钥。请准备一个 SwB 所有者客户端，或在运行 SwB 的电脑上打开终端。
+使用支持 Streamable HTTP 远程 MCP 的应用。这种方式让应用通过网络调用工具。应用还需要支持自定义请求头，用来携带密钥。你需要一个 SwB 所有者客户端，或 SwB 所在电脑上的终端。
 
-如需在应用所在的电脑上启动 SwB，请在空目录中运行 `uvx swb-one up`。打开终端显示的一次性登录链接。其他方式见[安装指南](/zh-Hans/docs/install)。
+要在应用所在的电脑上启动 SwB，在一个空文件夹中运行 `uvx swb-one up`，然后打开终端中显示的一次性登录链接。更多选项见[安装](/zh-Hans/docs/install)。
 
-Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth 登录。请为这些应用使用对应的页面。
+Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth 登录。连接这些应用时，按对应的页面操作。
 
 ## 复制设置提示词
 
 <SetupPrompt name="mcp-client" lang="zh-Hans" />
 
-把提示词粘贴到 SwB 所有者客户端，或粘贴到要连接的应用。
+把提示词粘贴到 SwB 所有者客户端，或粘贴到要连接的应用中。
 
-## 本机所有者客户端
+## 本地所有者客户端
 
-如果客户端负责设置其他应用，请在运行 SwB 的电脑上使用私密客户端。把 MCP 地址设为启动时显示的本机 `/mcp` 地址。将实例目录中 `.env` 里的 `SWB_KEY_OWNER` 用于 `Authorization: Bearer <key>`。将密钥仅保存在客户端的本机私密配置中，文件权限设为 `0600`。该密钥拥有完整的所有者权限。请只对本机 SwB 使用该密钥。
+在 SwB 所在的电脑上，用一个仅自己使用的客户端设置其他应用。使用启动时显示的本地 `/mcp` 地址。把实例 `.env` 中的 `SWB_KEY_OWNER` 作为 `Authorization: Bearer <key>` 使用。这个密钥拥有完整的所有者权限。把它保存在客户端的本地私有配置中，文件权限设为 `0600`。只把它发给本地的 SwB。
 
 ## 配对客户端
 
-如果智能体能在本机修改应用设置，请让它配置应用。把密钥存入应用的私密设置。设置文件的权限应为 `0600`。
+如果智能体能在本地编辑设置，让它来配置应用。把密钥保存在应用的私有设置中。设置文件的权限设为 `0600`。
 
 ### 为应用命名
 
-告诉智能体一个简短的应用名称，例如 `notes-bot`。SwB 会在这个应用发出的消息上显示该名称。
+给应用起一个简短的名称并告诉智能体，例如 `notes-bot`。SwB 会在这个应用发出的消息上显示该名称。
 ### 获取配对码
 
-请以所有者身份登录的智能体获取配对码。智能体可以用应用名称调用 `connect_code`。你也可以在 SwB 实例目录中运行 `uvx swb-one connect mcp-client --choose agent=notes-bot`。将命令中的示例名称换成你的应用名称。
-### 换取密钥
+让一个以所有者身份登录的 SwB 智能体带上应用名称调用 `connect_code`。也可以在 SwB 实例文件夹中运行 `uvx swb-one connect mcp-client --choose agent=notes-bot`。把 `notes-bot` 换成你的应用名称。
+### 获取密钥
 
-在运行应用的电脑上，用终端打开一个私密目录。把 `https://swb.example.com` 换成你的 SwB 地址。保留末尾的 `/connect`。如果 SwB 在本机运行，请用 `http://localhost:8870/connect`，并按启动时显示的地址填写端口。请在 10 分钟内通过隐藏输入提示填写配对码。
+在运行应用的电脑上，用终端进入一个仅自己可访问的文件夹。把 `https://swb.example.com` 换成你的 SwB 地址，保留末尾的 `/connect`。如果是本地 SwB，使用 `http://localhost:8870/connect`，端口以启动时显示的为准。出现提示后，在 10 分钟内输入配对码，输入的内容会隐藏。
 
 ```bash
 bash -c '
@@ -50,35 +50,35 @@ bash -c '
 ```
 ### 妥善保管密钥
 
-用私密编辑器打开 `.swb-pairing.json`。命令以 `0600` 权限保存响应。将其中的 `key` 填入应用设置。SwB 只返回一次密钥。
+用仅自己可见的编辑器打开 `.swb-pairing.json`。上面的命令以 `0600` 权限保存响应。把其中的 `key` 填入应用设置。SwB 只返回一次密钥。
 ### 把 SwB 添加到应用
 
-在应用的 MCP 设置中添加名为 `swb` 的服务器。选择 Streamable HTTP。连接公网 SwB 时，请使用文件中的 `mcp_url`。连接本机 SwB 时，请使用启动时显示的 MCP 地址。
+在应用的 MCP 设置中添加一个名为 `swb` 的服务器。选择 Streamable HTTP。如果是公网 SwB 服务器，使用文件中的 `mcp_url`。如果是本地 SwB，使用启动时显示的 MCP 地址。
 ### 添加密钥
 
-在应用的私密设置中添加请求头 `Authorization: Bearer <key>`。保存密钥后删除 `.swb-pairing.json`。
+在应用的私有设置中添加请求头 `Authorization: Bearer <key>`。保存密钥后，删除 `.swb-pairing.json`。
 
-## 智能体的工作
+## 智能体会做什么
 
-智能体以所有者身份调用 `connect(what="mcp-client")`。SwB 返回 MCP 地址，并询问应用名称。智能体再用 `choose={"agent":"notes-bot"}` 调用 `connect`。
+智能体以所有者登录身份调用 `connect(what="mcp-client")`。SwB 返回 MCP 地址，并询问应用名称。智能体带上 `choose={"agent":"notes-bot"}` 再次调用 `connect`。
 
-SwB 为这个名称生成配对码，并返回 `POST /connect` 这一步。配对码只能使用一次，10 分钟内有效。如果应用已有密钥，SwB 会提示这一点，只有在 `connect_revoke` 之后才生成新的配对码。
+SwB 为这个名称生成配对码，并返回 `POST /connect` 步骤。配对码是一次性代码，10 分钟内有效。如果应用已有密钥，SwB 会说明这一点，等你调用 `connect_revoke` 之后才生成新的配对码。
 
-在 SwB 服务器的终端中，`swb connect mcp-client --choose agent=notes-bot` 给出同样的步骤。
+在 SwB 服务器的终端中运行 `swb connect mcp-client --choose agent=notes-bot`，可以得到同样的步骤。
 
 ## 凭据
 
-| 项目 | 显示位置 | 格式 | 去向 |
+| 项 | 显示位置 | 格式 | 去向 |
 | - | - | - | - |
-| 配对码 | `connect` 或 `connect_code` 的结果 | `XXXXX-XXXXX`，10 分钟内有效，只能使用一次 | `POST /connect` 请求 |
-| 智能体密钥 | `POST /connect` 的响应，只显示一次 | 以 `swb_` 开头 | 应用私密设置中的 `Authorization` 请求头 |
+| 配对码 | `connect` 或 `connect_code` 的返回结果 | `XXXXX-XXXXX`，10 分钟内有效，只能使用一次 | `POST /connect` 请求 |
+| 智能体密钥 | `POST /connect` 的响应，只返回一次 | 以 `swb_` 开头 | 应用私有设置中的 `Authorization` 请求头 |
 
-把密钥保存在应用的私密设置中。SwB 保存的是密钥的哈希值。
+把密钥保存在应用的私有设置中。SwB 只保存密钥的哈希值。
 
 ## 检查连接
 
-请新智能体调用 `inbox`。请以所有者身份登录的智能体调用 `connect_list`，查看新密钥的最近调用时间。请所有者的智能体向 `agent:notes-bot` 发送测试消息。请新智能体用 `inbox` 读取消息，再用 `reply` 回复。
+让新智能体调用 `inbox`。让以所有者身份登录的智能体调用 `connect_list`，查看新密钥的最近调用时间。让所有者智能体向 `agent:notes-bot` 发送一条测试消息。让新智能体用 `inbox` 读取，再用 `reply` 回复。
 
-## 解决问题
+## 排查问题
 
-如果 `POST /connect` 失败，请检查 SwB 地址。配对码过期或用过后，请向所有者获取新配对码。密钥泄露时，请用 `connect_revoke` 撤销。SwB 随后会拒绝使用旧密钥的调用。
+如果 `POST /connect` 失败，检查 SwB 地址。如果配对码已过期或已用过，向所有者要一个新的。如果密钥泄露，用 `connect_revoke` 撤销它。此后 SwB 会拒绝使用这个密钥的调用。

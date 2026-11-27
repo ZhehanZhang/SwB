@@ -14,7 +14,7 @@ const bodySchema = z.object({
 });
 
 const model = '@cf/meta/llama-4-scout-17b-16e-instruct';
-const unavailable = { en: 'Ask again in a minute', 'zh-Hans': '请稍后再问', 'zh-Hant': '請稍後再問' };
+const unavailable = { en: 'Ask again in a minute', 'zh-Hans': '请稍后再试', 'zh-Hant': '請稍後再試' };
 
 
 export async function POST(request: Request) {

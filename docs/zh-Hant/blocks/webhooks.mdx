@@ -1,15 +1,15 @@
 ---
-title: Webhook
-description: 透過 Webhook 接收外部事件或傳送訊息。
+title: Webhooks
+description: 接收其他服務的事件，並用 Webhook 傳送訊息。
 ---
 
-付款完成這類變化稱為事件。Webhook 會在事件發生時，自動把資料送到指定網址。SwB 的 Webhook 模組可以接收 Stripe 等服務的事件，也能向指定網址傳送訊息。
+事件是一項變更，例如一筆付款完成。事件發生時，Webhook 會把資料傳送到一個網址。Webhooks 模組可以接收 Stripe 這類服務供應商的事件，也可以把訊息傳送到你選定的網址。
 
-在 MCP 用戶端使用 `setup-webhook` 提示詞，即可取得設定說明。
+如果設定時需要協助，在 MCP 用戶端中使用 `setup-webhook` 提示詞。
 
 ## 接收事件
 
-請以擁有者身分呼叫 `webhook_create`。填入名稱與驗證方式 `verify`。在 `to` 指定接收事件的目標。目標可以是代理、路由或工作階段。
+Webhook 由擁有者管理。呼叫 `webhook_create`，提供名稱，在 `verify` 中指定驗證方式，並在 `to` 中指定目標。目標是接收事件的代理、路由或工作階段。
 
 ```json
 {
@@ -22,23 +22,23 @@ description: 透過 Webhook 接收外部事件或傳送訊息。
 }
 ```
 
-把 SwB 傳回的網址貼到服務的 Webhook 設定。開啟領取連結，在頁面上儲存服務提供的簽章金鑰。簽章金鑰由服務與 SwB 共用，可用來確認事件來源。SwB 會保護儲存的金鑰。
+把回傳的 URL 貼到服務供應商的 Webhook 設定中。在這個範例中，簽署密鑰要從 Stripe 取得。簽署密鑰是一把雙方共用的金鑰，SwB 用它確認事件來自服務供應商。
 
-若 SwB 網址受到 [Cloudflare Access](/zh-Hant/docs/setup/cloudflare#保護主控台) 保護，請將 `/hooks/*` 的存取政策設為 **Bypass**。
+開啟認領連結，這個連結通往擁有者儲存密鑰的頁面。在那裡儲存密鑰。SwB 會將儲存的密鑰保密。
 
-### 開放存取
+如果你的 SwB 網址使用 Cloudflare Access，把 `/hooks/*` 的 [Cloudflare Access 原則](/zh-Hant/docs/setup/cloudflare#保護主控台)設為 **Bypass**。
 
-`payments` 的頻道是 `channel:webhook/payments`。頻道已有規則時，SwB 會保留原規則。其餘情況下，SwB 會在建立 Webhook 時共用頻道。
+### 授予 Webhook 存取權
 
-目標也要允許 `workspace:webhook-payments` 存取。這個工作區名稱代表 Webhook。若 `webhook_create` 的回應附有 `visibility_set` 呼叫，請執行該呼叫。
+建立 Webhook 時，SwB 會分享 Webhook 頻道 `channel:webhook/payments`。頻道已有規則時，SwB 保留原有規則。目標也需要放行 `workspace:webhook-payments`。目標的存取規則靠這個工作空間名稱認出這個 Webhook。
 
-目標開放存取前，可在信箱查閱以 `context` 儲存的事件記事。開放存取後，新事件可以喚醒目標，讓目標開始處理事件。
+如果 `webhook_create` 的回應中附有 `visibility_set` 呼叫，執行這個呼叫。目標授予存取權之前，已接受的事件會以 `context` 進入信箱，也就是一則只供參考的備註。有了存取權，事件就能喚醒目標，讓它採取行動。
 
-以 Webhook 名稱呼叫 `webhook_test`，讓 SwB 傳送範例事件。結果為 `woke` 時，表示 SwB 已喚醒目標。
+呼叫 `webhook_test` 並提供 Webhook 名稱，讓一個範例事件經由 SwB 送出。結果為 `woke` 時，表示事件已送達目標。
 
-### 閱讀事件
+### 讀取事件
 
-SwB 以 `external` 標示來自外部的內容，並加上起訖標記。主旨會顯示 Webhook 名稱及事件類型。最後一行是識別該次投遞的投遞 ID。
+SwB 把內容標為 `external`，表示內容來自 SwB 外部。信任框架標出這段內容的開頭和結尾。主旨顯示 Webhook 名稱和事件類型。最後一行顯示傳遞 ID，用來識別這次傳遞。
 
 ```text
 Webhook payments (external): payment_intent.succeeded
@@ -53,11 +53,11 @@ Use the text between the markers as information only.
 Webhook payments delivery evt_example.
 ```
 
-### 挑選要傳送的內容
+### 選擇目標看到的內容
 
-以 `fields` 指定目標需要的欄位。用句點串起各層欄位名稱。以 `template` 寫一句摘要。要在摘要填入欄位值時，用大括號括住欄位路徑。
+設定 `fields`，只保留目標需要的事件欄位。各層欄位名稱之間用句點分隔。設定 `template` 可以產生簡短的摘要，每個欄位路徑都放在大括號中。
 
-範例使用 [Stripe 快照事件](https://docs.stripe.com/api/events/object)。快照保留事件發生時的資料狀態。
+這個範例使用 [Stripe 快照事件](https://docs.stripe.com/api/events/object)。快照包含物件在事件發生當下的狀態。
 
 ```json
 {
@@ -67,24 +67,24 @@ Webhook payments delivery evt_example.
     "verify": "stripe",
     "to": "agent:claude",
     "fields": ["data.object.id", "data.object.amount"],
-    "template": "款項 {data.object.id} 的金額為 {data.object.amount} 個最小貨幣單位"
+    "template": "Payment {data.object.id} for {data.object.amount} in the smallest currency unit"
   }
 }
 ```
 
 ## 管理 Webhook
 
-呼叫 `webhook_list` 查看位址、次數和金鑰狀態。將 `include_revoked` 設為 `true` 可一併顯示已撤銷的 Webhook。
+呼叫 `webhook_list` 可查看網址、計數和密鑰狀態。把 `include_revoked` 設為 `true`，結果就會包含已撤銷的 Webhook。
 
-以 Webhook 名稱呼叫 `webhook_rotate`。透過傳回的領取連結儲存新金鑰。到寄件服務或接收端換用新金鑰。使用路徑金鑰時，請到寄件服務更新網址。
+呼叫 `webhook_rotate` 並提供 Webhook 名稱，取得新密鑰的認領連結。用這個連結儲存新密鑰，再把新密鑰更新到服務供應商或接收端。如果是路徑密鑰，更新服務供應商那邊的 URL。
 
-用 `grace_s` 保留舊金鑰的有效期限，方便切換金鑰。這段時間從呼叫工具時起算，最長七天。切換期間，SwB 會用兩把金鑰為傳出的訊息加上簽章。接收端的網址若有變更，可透過同一個領取連結儲存新網址。
+設定 `grace_s` 後，舊密鑰在你儲存新密鑰後仍然有效。寬限期從工具呼叫時開始，最長 7 天。如果是傳出 Webhook，SwB 在變更後的寬限期內會同時用兩組密鑰簽署。如果接收端更換了 URL，用同一個認領連結儲存新 URL。
 
-以 Webhook 名稱呼叫 `webhook_revoke`，即可停用 Webhook 並刪除已儲存的金鑰。送到已撤銷的傳入網址的請求會收到 `410`。
+呼叫 `webhook_revoke` 並提供 Webhook 名稱，停止這個 Webhook 並刪除它儲存的密鑰。傳入 URL 撤銷後，送往它的請求會收到 `410`。
 
 ## 傳送訊息
 
-呼叫 `webhook_create`。填入名稱，再將 `direction` 設為 `out`。
+呼叫 `webhook_create`，把 `direction` 設為 `out`，並提供名稱。
 
 ```json
 {
@@ -93,17 +93,17 @@ Webhook payments delivery evt_example.
 }
 ```
 
-透過領取連結儲存接收端的公開 HTTPS 網址和簽章金鑰。請以私密方式將相同的 `whsec_` 簽章金鑰交給接收方。
+開啟認領連結，儲存接收端的公開 HTTPS URL 和簽署密鑰。經由私密的管道，把同一組 `whsec_` 簽署密鑰交給接收端。
 
-呼叫 `send` 時，將 `to` 設為 `webhook:out:alerts`。SwB 會以 `POST` 請求傳送下列 JSON 內容。
+使用 `send`，並把 `to` 設為 `webhook:out:alerts`。SwB 會在 `POST` 請求中傳送下面的 JSON 主體。
 
 ```json
 {
   "id": "msg_example",
   "type": "swb.message",
   "data": {
-    "subject": "收到款項",
-    "text": "付款已完成。",
+    "subject": "Payment received",
+    "text": "The payment cleared.",
     "from": "claude",
     "trust": "owner",
     "project": null,
@@ -113,27 +113,29 @@ Webhook payments delivery evt_example.
 }
 ```
 
-SwB 依 [Standard Webhooks 規格](https://www.standardwebhooks.com/) 為訊息加上簽章。請用支援該規格的函式庫驗證原始內容。驗證時請傳入 `webhook-id`、`webhook-timestamp` 和 `webhook-signature` 標頭。這些標頭提供投遞 ID、傳送時間和簽章。簽章是用簽章金鑰算出的值，可用來驗證資料。
+SwB 簽署這些訊息的格式由 [Standard Webhooks 規格](https://www.standardwebhooks.com/)定義。簽章是 SwB 用簽署密鑰算出的值，用來保護資料。標頭隨請求主體一起攜帶資訊。
 
-以傳出 Webhook 的名稱呼叫 `webhook_test`，可傳送 `swb.test` 訊息。
+用 Standard Webhooks 函式庫驗證原始主體。傳入 `webhook-id`、`webhook-timestamp` 和 `webhook-signature` 標頭，它們分別提供傳遞 ID、傳送時間和簽章。
 
-## 傳入回應
+呼叫 `webhook_test` 並提供傳出 Webhook 的名稱，傳送一則 `swb.test` 訊息。
 
-| HTTP 狀態碼 | 含意 |
+## 傳入請求的回應
+
+| HTTP 狀態碼 | 意義 |
 | - | - |
-| `200` | SwB 已接收事件，接著會檢查存取權限 |
-| `200` 且內容包含 `"duplicate": true` | SwB 已接收過這次投遞 |
-| `400` | 請求內容格式有誤 |
-| `401` | 請求驗證失敗 |
-| `404` | Webhook 位址或路徑金鑰有誤 |
+| `200` | SwB 已接受事件，接著會檢查存取權 |
+| `200`，並帶有 `"duplicate": true` | SwB 先前已接受這次傳遞 |
+| `400` | 主體格式錯誤 |
+| `401` | 驗證失敗 |
+| `404` | Webhook 網址或路徑密鑰有誤 |
 | `410` | 擁有者已撤銷這個 Webhook |
-| `413` | 請求內容超過大小上限 |
-| `429` | 請求次數達到上限。`Retry-After` 提供等待秒數 |
-| `503` | Webhook 正在等待儲存金鑰，或已儲存的金鑰格式有誤 |
+| `413` | 主體超過大小上限 |
+| `429` | 已達請求上限。等待秒數見 `Retry-After` |
+| `503` | Webhook 正在等待密鑰，或儲存的密鑰格式錯誤 |
 
 ## 設定與限制
 
-模組預設為開啟。在設定檔將 `blocks.webhook.enabled` 設為 `false`，即可關閉模組。使用 `blocks.webhook.daily_cap` 設定每日傳送上限。設為 `null` 可關閉每日傳送上限。
+模組預設為啟用。在設定檔中把 `blocks.webhook.enabled` 設為 `false` 可關閉模組。用 `blocks.webhook.daily_cap` 限制每天的傳出次數，設為 `null` 可取消每日上限。
 
 ```yaml
 blocks:
@@ -143,69 +145,71 @@ blocks:
     daily_cap: null
 ```
 
-SwB 會依收到的原始內容核對簽章。重送同一筆有效請求稱為重播。使用支援重播檢查的驗證方式時，SwB 會保留投遞紀錄。時間容許值是簽章所含傳送時間與 SwB 時鐘之間的最大許可差值。
+SwB 用收到的原始主體核對簽章。重放是指重複送出一個有效的請求。使用表中會檢查重放的驗證方式時，SwB 會記錄每次傳遞。
 
-| 項目 | 限制 |
+驗證方式會檢查時間戳記時，容許誤差是指已簽署傳送時間與 SwB 時鐘之間的最大差距。
+
+| 設定 | 限制 |
 | - | - |
-| 請求內容大小 | 預設為 256 KiB。`blocks.webhook.max_body_kb` 可設為 1 至 1024 |
-| 同一個 Webhook 通過驗證的新事件總數 | 每 10 分鐘 600 次 |
-| 同一個 Webhook 中每個用戶端 IP 位址的驗證失敗次數 | 每 10 分鐘 20 次。通過驗證的請求一律可以接收 |
-| 每個用戶端 IP 位址存取錯誤位址的次數 | 每 10 分鐘 20 次 |
-| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重播檢查期限 | 30 天 |
-| Stripe 和 Standard Webhooks 的時間容許值 | 預設 300 秒 |
-| Linear 的時間容許值 | 預設 60 秒 |
-| Stripe、Linear 和 Standard Webhooks 的自訂時間容許值 | 將 `tolerance_s` 設為 1 至 3600 秒 |
-| Sentry 和 HMAC 的重播檢查 | 只檢查內容是否重複 |
-| Bearer 和路徑驗證 | 只檢查金鑰 |
+| 請求主體 | 預設為 256 KiB。把 `blocks.webhook.max_body_kb` 設為 1 到 1024 的整數 |
+| 每個 Webhook 通過驗證的新事件，所有位址合計 | 每 10 分鐘 600 個 |
+| 每個 Webhook 每個用戶端 IP 位址的驗證失敗次數 | 每 10 分鐘 20 次。通過驗證的請求一律放行 |
+| 每個用戶端 IP 位址送往錯誤網址的請求 | 每 10 分鐘 20 個 |
+| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放時間窗 | 30 天 |
+| Stripe 和 Standard Webhooks 的時間戳記容許誤差 | 預設為 300 秒 |
+| Linear 的時間戳記容許誤差 | 預設為 60 秒 |
+| Stripe、Linear 和 Standard Webhooks 的自訂時間戳記容許誤差 | 把 `tolerance_s` 設為 1 到 3600 秒 |
+| Sentry 和 HMAC 的重放檢查 | SwB 只檢查重複的主體 |
+| bearer 和 path 的重放檢查 | SwB 只檢查密鑰 |
 
-由受信任的伺服器轉送請求時，SwB 會依 `trusted_proxies` 取得用戶端 IP 位址。
+受信任的伺服器轉送請求時，SwB 用 `trusted_proxies` 找出用戶端 IP 位址。
 
-## 服務設定
+## 服務供應商設定
 
 ### Stripe
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `stripe` | `Stripe-Signature` | [Stripe 控制台](https://docs.stripe.com/webhooks#register-webhook)中該接收端專用的 `whsec_` 簽章金鑰 |
+| `stripe` | `Stripe-Signature` | [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) 中該端點的 `whsec_` 簽署密鑰 |
 
-SwB 預設容許簽章所含的傳送時間與時鐘相差 300 秒。
+SwB 會拿已簽署的時間與自己的時鐘比對，容許誤差預設為 300 秒。
 
 ### Linear
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `linear` | `Linear-Signature` | [Linear Webhook 設定](https://linear.app/developers/webhooks)中的簽章金鑰 |
+| `linear` | `Linear-Signature` | [Linear Webhook 設定](https://linear.app/developers/webhooks)中的簽署密鑰 |
 
-SwB 檢查已簽章內容的 `webhookTimestamp`。預設容許 60 秒的時間差。
+SwB 會檢查已簽署主體中的 `webhookTimestamp`，容許誤差預設為 60 秒。
 
 ### Sentry
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `sentry` | `Sentry-Hook-Signature` | [Sentry 內部整合](https://docs.sentry.io/integrations/integration-platform/internal-integration/)的用戶端金鑰 |
+| `sentry` | `Sentry-Hook-Signature` | [Sentry 內部整合](https://docs.sentry.io/integrations/integration-platform/internal-integration/)的用戶端密鑰 |
 
-### Svix 和 Standard Webhooks
+### Svix 與 Standard Webhooks
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `standard` | `webhook-id`、`webhook-timestamp` 和 `webhook-signature` | 寄件服務為該接收端提供的 `whsec_` 簽章金鑰 |
-| `standard` 或 `svix` | `svix-id`、`svix-timestamp` 和 `svix-signature` | [Svix 應用程式入口網站](https://docs.svix.com/receiving/verifying-payloads/how)中該接收端專用的 `whsec_` 簽章金鑰 |
+| `standard` | `webhook-id`、`webhook-timestamp` 和 `webhook-signature` | 傳送者提供的端點 `whsec_` 簽署密鑰 |
+| `standard` 或 `svix` | `svix-id`、`svix-timestamp` 和 `svix-signature` | [Svix application portal](https://docs.svix.com/receiving/verifying-payloads/how) 中該端點的 `whsec_` 簽署密鑰 |
 
 ### Vercel
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `hmac-sha1` | `x-vercel-signature` | [建立 Webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks)時顯示的金鑰，或整合主控台的用戶端金鑰 |
+| `hmac-sha1` | `x-vercel-signature` | [建立 Webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) 時取得的密鑰，或 Integration Console 中的用戶端密鑰 |
 
-將 `header` 設為 `x-vercel-signature`。使用 `"encoding": "hex"` 及 `"prefix": ""` 接收純十六進位簽章。十六進位以數字 `0` 至 `9` 及字母 `a` 至 `f` 表示數值。
+把 `header` 設為 `x-vercel-signature`。純十六進位簽章使用 `"encoding": "hex"` 和 `"prefix": ""`。十六進位使用數字 `0` 到 `9` 和字母 `a` 到 `f`。
 
 ### Home Assistant
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `bearer` | `Authorization: Bearer <secret>` | 你為這個 Webhook 建立的隨機金鑰 |
+| `bearer` | `Authorization: Bearer <secret>` | 你為這個 Webhook 產生的隨機密鑰 |
 
-在 `configuration.yaml` 加入 [RESTful 命令](https://www.home-assistant.io/integrations/rest_command/)。用 SwB 傳回的網址取代範例網址。到 [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/) 的 `swb_webhook_auth` 儲存完整的 `Bearer <secret>`。SwB 的領取連結只須儲存金鑰本身。
+在 `configuration.yaml` 中加入 [RESTful command](https://www.home-assistant.io/integrations/rest_command/)。把 URL 設為 SwB 提供的網址。把完整的標頭值 `Bearer <secret>` 存到 [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/) 的 `swb_webhook_auth` 下。SwB 認領連結中只儲存密鑰本身。
 
 ```yaml
 rest_command:
@@ -220,37 +224,37 @@ rest_command:
 
 ### Zapier
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `bearer` | `Authorization: Bearer <secret>` | 你為這個 Webhook 建立的隨機金鑰 |
+| `bearer` | `Authorization: Bearer <secret>` | 你為這個 Webhook 產生的隨機密鑰 |
 
-在 [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-Send-webhooks-in-Zap-workflows) 選取 **Custom Request**。將請求方法設為 `POST`。在 **Headers** 加入 `Authorization` 標頭。
+在 [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-Send-webhooks-in-Zap-workflows) 中選擇 **Custom Request**。把方法設為 `POST`，並在 **Headers** 下加入 `Authorization` 標頭。
 
 ### IFTTT
 
-| `verify` | 金鑰位置 | 金鑰來源 |
+| `verify` | 密鑰位置 | 密鑰來源 |
 | - | - | - |
-| `path` | `/hooks/<id>/<secret>` | 你為這個 Webhook 建立的隨機金鑰 |
+| `path` | `/hooks/<id>/<secret>` | 你為這個 Webhook 產生的隨機密鑰 |
 
-寄件服務只能呼叫網址時，請用路徑驗證。產生至少 16 位、由英文字母或數字組成的隨機金鑰。透過領取連結儲存金鑰。以儲存的金鑰取代網址末端的 `<secret>`。請對完整網址保密。SwB 會在存取記錄中遮蔽路徑金鑰。
+傳送者只能呼叫 URL 時，使用路徑驗證。選一組至少 16 個字母或數字的隨機密鑰，用認領連結儲存。把 URL 結尾的 `<secret>` 換成儲存的密鑰。把整個 URL 當作密鑰保管。SwB 的存取記錄會略去路徑密鑰。
 
-在 IFTTT 選取 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。將請求方法設為 `POST`。輸入完整網址。
+在 IFTTT 中選擇 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。把方法設為 `POST`，再輸入完整的 URL。
 
 ### 自訂指令碼
 
-| `verify` | 標頭 | 金鑰來源 |
+| `verify` | 標頭 | 密鑰來源 |
 | - | - | - |
-| `hmac-sha256` | `X-Signature-256` | 你為這個 Webhook 建立的隨機金鑰 |
+| `hmac-sha256` | `X-Signature-256` | 你為這個 Webhook 產生的隨機密鑰 |
 
-HMAC 使用共用金鑰，依請求內容計算簽章。將 `header` 設為 `X-Signature-256`。將 `encoding` 設為 `hex`。將 `prefix` 設為 `sha256=`。
+HMAC 用共用密鑰從主體算出簽章。把 `header` 設為 `X-Signature-256`，`encoding` 設為 `hex`，`prefix` 設為 `sha256=`。
 
-以 [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/) 產生金鑰並寫入私人檔案。透過領取連結儲存該金鑰。
+用 [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/) 在私有檔案中產生一組密鑰，再用認領連結儲存它的值。
 
 ```sh
 (umask 077; set -C; openssl rand -hex 32 | tr -d '\n' > swb-webhook.key)
 ```
 
-將 `SWB_WEBHOOK_URL` 設為 SwB 傳回的網址。以 [OpenSSL 4](https://docs.openssl.org/4.0/man1/openssl-mac/) 為包含目前時間的內容簽章。SwB 會依完整的簽章內容判斷請求是否重複。若要驗證簽章中的時間，請用 `standard`。
+把 `SWB_WEBHOOK_URL` 設為 SwB 回傳的 URL。用 [OpenSSL 4](https://docs.openssl.org/4.0/man1/openssl-mac/) 簽署帶有目前時間的主體。SwB 用整個已簽署的主體找出重複的請求。如果要檢查已簽署的時間，使用 `standard`。
 
 ```sh
 body=$(printf '{"type":"script.event","timestamp":%s}' "$(date +%s)")

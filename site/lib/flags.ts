@@ -19,8 +19,8 @@ export const deployProviders = {
     enabled: true,
     label: {
       en: 'Free with monthly allowance',
-      'zh-Hans': '月度额度内免费',
-      'zh-Hant': '月度額度內免費',
+      'zh-Hans': '每月额度内免费',
+      'zh-Hant': '每月額度內免費',
     },
   },
   render: {

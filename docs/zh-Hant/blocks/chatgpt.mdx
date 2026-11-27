@@ -1,21 +1,21 @@
 ---
 title: ChatGPT
-description: 連接 ChatGPT 與 ChatGPT dot。
+description: 連接 ChatGPT 和 ChatGPT dots。
 ---
 
-## 把 SwB 加到 ChatGPT
+## 把 SwB 加入 ChatGPT
 
-依 [ChatGPT 設定](/zh-Hant/docs/setup/chatgpt)將 SwB 新增為自訂 MCP 伺服器。ChatGPT 透過 OAuth 以 `chatgpt` 身分登入。
+依照 [ChatGPT 設定](/zh-Hant/docs/setup/chatgpt)，把 SwB 新增為自訂 MCP 伺服器。ChatGPT 會用 OAuth 以 `chatgpt` 的身分登入。
 
-## 接收新訊息
+## 接收新訊息通知
 
-MCP Events 會在收到訊息時發出通知。若 ChatGPT 支援 MCP Events，請它訂閱 `switchboard.message.created`，並將 `mailbox_id` 設為 `chatgpt`。SwB 透過 Webhook 請求傳送訊息 ID。ChatGPT 用 `get_message` 讀取內文，再用 `reply` 回覆。也可用 `wait` 或 `inbox` 查看新訊息。
+訊息送達時，MCP Events 會送出通知。如果 ChatGPT 支援 MCP Events，請它訂閱 `switchboard.message.created`，並把 `mailbox_id` 設為 `chatgpt`。SwB 用 Webhook 傳送訊息 ID，Webhook 就是送往某個 URL 的請求。ChatGPT 用 `get_message` 讀取內文，再用 `reply` 回覆。ChatGPT 也可以用 `wait` 或 `inbox` 檢查新訊息。
 
-## ChatGPT dot
+## ChatGPT dots
 
-dot 是個人使用的 ChatGPT 代理。`dots` 模組在一個 Slack 工作區中找出 dot，並將它們設為目標。在 Slack 中用 `@swb <dot name> <message>` 傳送訊息，或呼叫 `send(to="<dot name>", task="<message>")`。
+dot 是個人專屬的 ChatGPT 代理。`dots` 模組會在一個 Slack 工作空間中找出 dot，並把每個 dot 設為目標。在 Slack 中用 `@swb <dot name> <message>` 傳送，或呼叫 `send(to="<dot name>", task="<message>")`。
 
-SwB 預設透過私人 Slack 頻道 `#agents` 傳送訊息。SwB 可以用你的使用者權杖建立頻道。在該頻道用 `/invite` 邀請 SwB 機器人和 dot。SwB 會把討論串中的回覆送回原本的對話。
+預設透過 Slack 的私人頻道 `#agents` 傳遞。SwB 可以用你的使用者權杖建立這個頻道。在頻道中用 `/invite` 加入 SwB 機器人和 dot。SwB 會把 dot 的回覆送回原本的對話。
 
 ```yaml
 blocks:
@@ -26,34 +26,34 @@ blocks:
     match: [dot]
 ```
 
-把下列文字貼到 dot 的指示中。將範例 ID 換成你的 SwB 機器人 ID 和應用程式 ID。
+把下面的內容貼到 dot 的指示中，並把範例 ID 換成你的 SwB 機器人 ID 和應用程式 ID。
 
 ```text
-在 #agents 中，核對提及你的 SwB 貼文的機器人 ID 和應用程式 ID。機器人 ID 是 <BOT_ID>，應用程式 ID 是 <APP_ID>。在 ID 相符的貼文下方回覆。
+In #agents, check the bot and app IDs on SwB posts that mention you. Use bot <BOT_ID> and app <APP_ID>. Answer matching posts in the same thread.
 ```
 
-若要直接送到信箱，請參閱 [ChatGPT dots 設定](/zh-Hant/docs/setup/dots)。將 `delivery` 設為 `mailbox`。在 `blocks.dots.dots` 下新增各個 dot。
+如果要直接傳遞到信箱，依照 [ChatGPT dots 設定](/zh-Hant/docs/setup/dots)操作。設定 `delivery: mailbox`，並在 `blocks.dots.dots` 下加入每個 dot。
 
 ## 設定
 
-| 設定鍵 | 用途 |
+| 鍵 | 用途 |
 | - | - |
-| `blocks.dots` | 向 ChatGPT dot 傳送訊息的設定 |
-| `blocks.dots.use` | 模組類型，填 `dots` |
-| `blocks.dots.enabled` | 設為 `false` 可略過此模組 |
-| `blocks.dots.delivery` | 透過 Slack 傳送時填 `slack`，透過 MCP Events 傳送時填 `mailbox`。預設為 `slack` |
-| `blocks.dots.workspace` | 要掃描的 Slack 工作區，預設使用第一個工作區 |
-| `blocks.dots.channel` | 向 dot 轉送訊息的私人 Slack 頻道，預設為 `#agents` |
-| `blocks.dots.create` | 設為 `true` 後，SwB 會視需要以擁有者身分建立頻道。預設為 `true` |
-| `blocks.dots.app_ids` | 用於辨識 dot 的 Slack 應用程式 ID |
-| `blocks.dots.match` | 在 Slack 機器人名稱中搜尋的文字，預設為 `[dot]` |
-| `blocks.dots.rescan_minutes` | 掃描 Slack dot 的間隔分鐘數，預設為 `30` |
-| `blocks.dots.poll_seconds` | 檢查 Slack 私人訊息回覆的間隔秒數，預設為 `5` |
-| `blocks.dots.default` | 目標名稱 `dot` 指向的 dot。填入它的簡稱或 ID |
-| `blocks.dots.dots` | 為 `mailbox` 傳送定義 dot，或覆寫從 Slack 找到的 dot 設定 |
+| `blocks.dots` | 傳送訊息給 ChatGPT dots 的設定 |
+| `blocks.dots.use` | 模組類型，填入 `dots` |
+| `blocks.dots.enabled` | 設為 `false` 可略過這個模組 |
+| `blocks.dots.delivery` | `slack` 使用 Slack，`mailbox` 使用 MCP Events。預設為 `slack` |
+| `blocks.dots.workspace` | 要掃描的 Slack 工作空間。SwB 預設使用第一個工作空間 |
+| `blocks.dots.channel` | 用來把訊息傳給 dot 的私人 Slack 頻道。預設為 `#agents` |
+| `blocks.dots.create` | 設為 `true` 時，會在需要時以擁有者身分建立頻道。預設為 `true` |
+| `blocks.dots.app_ids` | 用來辨認 dot 的 Slack 應用程式 ID |
+| `blocks.dots.match` | 要在 Slack 機器人名稱中尋找的文字。預設為 `[dot]` |
+| `blocks.dots.rescan_minutes` | 掃描 Slack dot 的間隔，單位為分鐘。預設為 `30` |
+| `blocks.dots.poll_seconds` | 檢查 Slack 私訊回覆的間隔，單位為秒。預設為 `5` |
+| `blocks.dots.default` | 目標名稱 `dot` 所選取的 dot。填入它的簡稱或 ID |
+| `blocks.dots.dots` | dot 定義的對應表，供 `mailbox` 傳遞使用，也可覆寫 Slack dot 的設定 |
 | `blocks.dots.dots.*.name` | dot 的顯示名稱 |
-| `blocks.dots.dots.*.mailbox` | 接收訊息的信箱，預設為 `chatgpt` |
-| `blocks.dots.group_dm` | 設為 `true` 後使用擁有者、SwB 與 dot 的 Slack 群組私人訊息 |
-| `blocks.dots.owner_dm` | 設為 `true` 後，以擁有者身分傳送的訊息會送到擁有者與 dot 的 Slack 私人訊息 |
-| `blocks.dots.agents_as_owner` | 設為 `true` 後，擁有者的代理在頻道或一對一私人訊息中使用擁有者的 Slack 帳號傳送 |
-| `blocks.dots.owner_posts_as` | 轉送擁有者的 Slack 訊息給 dot 時使用的帳號。預設為 `swb`，設為 `owner` 則使用擁有者帳號 |
+| `blocks.dots.dots.*.mailbox` | 接收訊息的信箱。預設為 `chatgpt` |
+| `blocks.dots.group_dm` | 設為 `true` 時，使用包含擁有者、SwB 和 dot 的 Slack 群組訊息 |
+| `blocks.dots.owner_dm` | 設為 `true` 時，以擁有者身分發出的貼文會傳送到擁有者與 dot 的 Slack 私訊 |
+| `blocks.dots.agents_as_owner` | 設為 `true` 時，擁有者的代理透過頻道或私訊傳送，會使用擁有者的 Slack 帳號 |
+| `blocks.dots.owner_posts_as` | 把擁有者的 Slack 訊息轉送給 dot 時使用的帳號。預設為 `swb`。設為 `owner` 可使用擁有者的帳號 |

@@ -7,8 +7,8 @@ import { isLocale, localize } from '@/lib/i18n';
 
 const copy = {
   en: { title: 'Page missing', home: 'Home' },
-  'zh-Hans': { title: '页面失效', home: '首页' },
-  'zh-Hant': { title: '頁面失效', home: '首頁' },
+  'zh-Hans': { title: '页面不存在', home: '返回首页' },
+  'zh-Hant': { title: '找不到頁面', home: '返回首頁' },
 };
 
 export default function NotFound() {
