@@ -121,8 +121,11 @@ def test_claude_dedupes_resumes_and_completes(make):
     assert "register" in core.health()["blocks"]["claude-routine"]["next_step"]
     detail = {"claude_project": "Demo Web", "fire_url": "trig_01EXAMPLE"}
     instructions = connect(client, "claude-project", project="demo", choose={"claude_project": "Demo Web"})
-    assert '\n\n> Call routine_pickup(claude_project="Demo Web")' in instructions["next"][0]["do"]
-    assert instructions["next"][-1]["call"] == {
+    create, register = instructions["next"]
+    assert create["by"] == "person" and "API trigger" in create["do"]
+    assert '\n\n> Call routine_pickup(claude_project="Demo Web")' in create["do"]
+    assert register["by"] == "you" and "private claim link for token entry" in register["do"]
+    assert register["call"] == {
         "tool": "connect",
         "arguments": {"what": "claude-project", "choose": {
             "fire_url": "<fire URL or trigger ID>", "claude_project": "Demo Web", "project": "demo",

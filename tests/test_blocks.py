@@ -2,10 +2,11 @@
 config with its v1 translator, the additive handles migration, pairing codes, and route seeds."""
 
 import sqlite3
+from datetime import datetime, timezone
 
 import yaml
 
-from conftest import CAPTAIN, OWNER, PROJECT, STATIC_KEY, base_config, beacon, call, error_text, payload, register, rpc, sign_in
+from conftest import CAPTAIN, OWNER, PROJECT, STATIC_KEY, Clock, base_config, beacon, call, error_text, payload, register, rpc, sign_in
 
 from switchboard.blocks import BLOCKS, Address, load
 from switchboard.config import load_config, migrate_text, translate_v1
@@ -197,7 +198,8 @@ def test_handles_gain_a_target_column_without_losing_rows(tmp_path):
 
 
 def test_pairing_code_connects_an_agent_once_and_revokes(make):
-    core, c = make()
+    clock = Clock()
+    core, c = make(clock=clock)
     code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "codex", "client": "codex-cli"}))
     assert len(code["code"]) == 11 and code["agent"] == "codex" and code["code"] in code["curl"]
     bad = c.post("/connect", json={"code": "WRONG-CODE0"})
@@ -207,13 +209,25 @@ def test_pairing_code_connects_an_agent_once_and_revokes(make):
     key = got.json()["key"]
     assert key.startswith("swb_") and got.json()["mcp_url"].endswith("/mcp")
     assert c.post("/connect", json={"code": code["code"]}).status_code == 400
+    kid = got.json()["key_id"]
+    [row] = payload(call(c, STATIC_KEY, "connect_list"))["keys"]
+    assert row["id"] == kid and row["last_used_at"] is None and row["revoked_at"] is None
+    assert datetime.fromisoformat(row["created_at"]) == datetime.fromtimestamp(clock.t, timezone.utc)
+    clock.t += 1
     me = payload(call(c, key, "switchboard_status"))["you"]
     assert me == {"agent": "codex", "auth": "connect", "origin": "mcp"}
     assert "codex" in core.known_agents() and "codex" in payload(call(c, STATIC_KEY, "switchboard_status"))["connected"]
     assert "connected agent" in error_text(call(c, key, "connect_code", {"agent": "x"}))
-    kid = got.json()["key_id"]
-    assert payload(call(c, STATIC_KEY, "connect_list"))["keys"][0]["id"] == kid
+    [row] = payload(call(c, STATIC_KEY, "connect_list"))["keys"]
+    assert datetime.fromisoformat(row["last_used_at"]) == datetime.fromtimestamp(clock.t, timezone.utc)
+    assert error_text(call(c, STATIC_KEY, "connect_revoke", {"key_id": "ak_unknown"})).endswith("Unknown key ID. Check connect_list.")
+    assert core.audit.recent(action="connect_revoke")[0]["outcome"] == "refused"
+    clock.t += 1
     assert payload(call(c, STATIC_KEY, "connect_revoke", {"key_id": kid}))["revoked"] == 1
+    assert payload(call(c, STATIC_KEY, "connect_revoke", {"key_id": kid}))["revoked"] == 0
+    assert payload(call(c, STATIC_KEY, "connect_list"))["keys"] == []
+    [row] = payload(call(c, STATIC_KEY, "connect_list", {"include_revoked": True}))["keys"]
+    assert datetime.fromisoformat(row["revoked_at"]) == datetime.fromtimestamp(clock.t, timezone.utc)
     assert rpc(c, key, "tools/list").status_code == 401
     assert "lowercase" in error_text(call(c, STATIC_KEY, "connect_code", {"agent": "Slack"}))
     assert sqlite3.connect(core.store.path).execute("SELECT count(*) FROM agent_keys WHERE key_hash = ?", (key,)).fetchone()[0] == 0

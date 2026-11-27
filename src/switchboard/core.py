@@ -257,6 +257,11 @@ class Switchboard:
         names |= set(self.cfg.inbox_keys.values())
         names |= {r["agent"] for r in self.store.q("SELECT DISTINCT agent FROM routes WHERE agent IS NOT NULL AND agent != ''")}
         names |= set(self.connections.agents())
+        if resources := self.cfg.resources:
+            names |= {r["source"] for r in self.store.q(
+                f"SELECT DISTINCT source FROM oauth_tokens WHERE revoked_at IS NULL AND expires_at >= ? "
+                f"AND resource IN ({','.join('?' for _ in resources)})", (self.clock(), *resources)
+            )}
         return sorted(names)
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
@@ -607,7 +612,7 @@ class Switchboard:
         block = self.destination(destination)
         action = block.verb("send")
         if action is None:
-            raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
+            raise CoreError(block.send_unavailable())
         message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
         kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
         out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta, dry_run=dry_run)
@@ -731,8 +736,11 @@ class Switchboard:
                     self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
                                       destination="mailbox", action="cancel", outcome="ok", ref=h["handle"])
                 return {"conversation": h["handle"], "status": "cancelled"}
-            return {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"],
-                    "note": "a mailbox message; answer it with reply"}
+            out = {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"]}
+            recipient = h["owner"]
+            if principal.source == recipient and h["status"] in ("delivered", "working"):
+                out["note"] = "Answer this message with reply."
+            return out
         if block is None:
             raise CoreError(f"the block behind {ref!r} is not configured")
         action = block.verb(verb)

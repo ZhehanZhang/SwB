@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 from importlib.resources import files
 from ipaddress import ip_address
@@ -412,26 +413,56 @@ async def _pending_write(core: Any, row: dict[str, Any], agents: dict[str, str])
 
 
 async def inbox(request: Request) -> JSONResponse:
+    params = request.query_params
+    project = params.get("project")
+    if project and not re.fullmatch(_PROJECT, project):
+        return _error("invalid project")
+    before = None
+    try:
+        limit = _number(request, "limit", 20, 1, 100)
+    except ValueError as exc:
+        return _error(str(exc))
+    if "cursor" in params:
+        stamp, _, handle = params["cursor"].partition(":")
+        try:
+            before = (float(stamp), handle)
+        except ValueError:
+            return _error("invalid cursor")
+        if not math.isfinite(before[0]) or not 0 < len(handle) <= 256:
+            return _error("invalid cursor")
     core = request.app.state.core
     slack = core.slack
-    pending = []
-    if slack is not None:
+    pending, pauses = [], []
+    if before is None and slack is not None:
         rows = [row for row in slack.store.list_requests(status="pending", limit=50) if row["expires_at"] > slack.store.clock()]
         if rows:
             agents = {agent: agent for agent in core.known_agents()}
             agents.update({key["id"]: key["agent"] for key in core.connections.list(include_revoked=True)})
             pending = await asyncio.gather(*(_pending_write(core, row, agents) for row in rows))
-    pauses = core.store.q("SELECT root, turns, paused_at FROM conversation_turns WHERE paused_at IS NOT NULL ORDER BY paused_at DESC")
-    roots = core.inbox.handles(limit=100, roots_only=True)
-    endpoints = core.inbox.first_endpoints([row["handle"] for row in roots])
+    if before is None:
+        pauses = core.store.q("SELECT root, turns, paused_at FROM conversation_turns WHERE paused_at IS NOT NULL ORDER BY paused_at DESC")
+    roots = core.inbox.handles(limit=limit + 1, roots_only=True, project=project, before=before)
+    next_cursor = None
+    if len(roots) > limit:
+        roots.pop()
+        last = roots[-1]
+        stamp = last["updated_at"] if last["updated_at"] is not None else last["created_at"]
+        next_cursor = f"{stamp}:{last['handle']}"
+    by_handle = {row["handle"]: row for row in roots}
+    for pause in pauses:
+        if pause["root"] not in by_handle and (row := core.inbox.handle(pause["root"])) is not None:
+            by_handle[pause["root"]] = row
+    endpoints = core.inbox.first_endpoints(list(by_handle))
     captains = await captain_targets(core, core.blocks if any(
         isinstance(sender, dict) and sender.get("kind") in _CAPY_SENDERS
-        for row in roots if row["destination"] == "mailbox"
+        for row in by_handle.values() if row["destination"] == "mailbox"
         for sender in (row["meta"].get("from"), endpoints.get(row["handle"], (None, None))[0])
-    ) else (row["destination"] for row in roots))
+    ) else (row["destination"] for row in by_handle.values()))
+    conversations = {handle: _conversation(core, row, endpoints.get(handle, (None, None)), captains) for handle, row in by_handle.items()}
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
-                         "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"])} for row in pauses],
-                         "conversations": [_conversation(core, row, endpoints.get(row["handle"], (None, None)), captains) for row in roots]})
+                         "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"]),
+                                     "conversation": conversations.get(row["root"])} for row in pauses],
+                         "conversations": [conversations[row["handle"]] for row in roots], "next_cursor": next_cursor})
 
 
 async def conversation(request: Request) -> JSONResponse:

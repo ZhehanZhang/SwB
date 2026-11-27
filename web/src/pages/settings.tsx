@@ -46,7 +46,7 @@ const passkeysQuery = queryOptions({
   queryFn: ({ signal }) => listPasskeys(signal),
 })
 
-const commands = ["swb up", "swb status", "switchboard log"] as const
+const commands = ["swb up", "swb status", "swb log"] as const
 const rowClass = "grid min-h-[41px] grid-cols-[minmax(88px,24%)_1fr_auto] items-center gap-x-3 border-b text-body-sm"
 const headingClass = "text-heading-md"
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })

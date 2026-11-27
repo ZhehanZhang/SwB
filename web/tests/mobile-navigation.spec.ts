@@ -9,6 +9,7 @@ const board = {
 }
 const inbox = {
   pending_writes: [], turn_cap: null, pauses: [],
+  next_cursor: null,
   conversations: Array.from({ length: 25 }, (_, index) => ({
     handle: `task-${index}`, owner: "claude-code", destination: "capy", ref: `task-${index}`, project: "ops",
     title: `Fixture task ${index + 1}`, target: null, status: "working", open: true, created_at: null, updated_at: null,
