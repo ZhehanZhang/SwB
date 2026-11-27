@@ -1,6 +1,9 @@
 import { docs } from 'fumadocs-mdx:collections/server';
 import { createGetUrl, loader, type InferPageType } from 'fumadocs-core/source';
 import { i18n } from './i18n';
+import { siteUrl } from './urls';
+
+export { siteUrl };
 
 const docsUrl = createGetUrl('/docs', i18n);
 const aboutUrl = createGetUrl('/about', i18n);
@@ -13,7 +16,6 @@ export const source = loader(docs.toFumadocsSource(), {
 
 export type DocsPage = InferPageType<typeof source>;
 
-export const siteUrl = 'https://swb.one';
 export const repository = 'https://github.com/ZhehanZhang/SwB';
 
 export function markdownUrl(page: DocsPage) {
