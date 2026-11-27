@@ -236,7 +236,7 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="swb", epilog="Server tools: serve, export, log, config, blocks, targets (each accepts --help).")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -263,6 +263,11 @@ def main(argv: list[str] | None = None) -> None:
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
         command.add_argument("--url", help=f"server base URL or MCP endpoint (default: http://127.0.0.1:{DEFAULT_PORT}/mcp)")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
     args = parser.parse_args(argv)
     try:
         if args.command == "muse-bridge":

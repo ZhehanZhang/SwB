@@ -41,8 +41,7 @@ class _NoQuery(logging.Filter):
         return True
 
 
-def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
-         data_dir: Path | None = None) -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="swb")
     sub = parser.add_subparsers(dest="cmd")
     sub.add_parser("serve", help="run the server (default)")
@@ -56,6 +55,12 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     blk.add_argument("action", choices=["list", "show", "check"])
     blk.add_argument("block", nargs="?")
     sub.add_parser("targets", help="every target send can reach, with slugs and levels")
+    return parser
+
+
+def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
+         data_dir: Path | None = None) -> None:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     from .core import Switchboard

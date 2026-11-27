@@ -571,7 +571,7 @@ class Auth:
             Route("/.well-known/oauth-authorization-server", self.h_asm, methods=["GET"]),
             Route("/.well-known/openid-configuration", self.h_asm, methods=["GET"]),
             Route("/register", self.h_register, methods=["POST"]),
-            Route("/authorize", self.h_authorize, methods=["GET", "POST"]),
+            pages.PageRoute("/authorize", self.h_authorize, pages.AUTHORIZE_TITLE, methods=["GET", "POST"]),
             Route("/token", self.h_token, methods=["POST"]),
             Route("/revoke", self.h_revoke, methods=["POST"]),
         ]
@@ -658,7 +658,7 @@ class Auth:
 <div class="actions"><button class="pill-button primary" name="decision" value="approve">Approve</button>
 <button class="text-button" name="decision" value="deny" formnovalidate>Deny</button></div>
 </form>"""
-        return pages.page("Connect", body, 200)
+        return pages.page(pages.AUTHORIZE_TITLE, body, 200)
 
     async def h_token(self, request: Request) -> Response:
         if (d := self._disabled()) is not None:

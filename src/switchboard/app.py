@@ -563,7 +563,7 @@ def create_app(core: "Switchboard") -> Any:
     origin_routes = sorted((r for o in core.origins.values() for r in o.routes()), key=lambda r: isinstance(r, Mount) and not r.path)
     app: Any = Starlette(
         routes=[
-            Route("/classic", admin, methods=["GET"]),
+            pages.PageRoute("/classic", admin, pages.CLASSIC_TITLE, methods=["GET"]),
             Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
             Route("/avatars/{name}", avatar, methods=["GET"]),
             Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
@@ -573,14 +573,14 @@ def create_app(core: "Switchboard") -> Any:
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),
-            Route("/pairing/code", connect_code, methods=["POST"]),
+            pages.PageRoute("/pairing/code", connect_code, pages.PAIRING_TITLE, methods=["POST"]),
             Route("/pairing/keys/{kid}/revoke", connect_revoke, methods=["POST"]),
             Route("/visibility", visibility_set, methods=["POST"]),
             Route("/routines", routine_add, methods=["POST"]),
             Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
-            Route("/routines/claim/{code}", routine_claim, methods=["GET", "POST"]),
-            Route("/routines/claim/owner/{registration}", routine_claim, methods=["GET", "POST"]),
-            Route(CLAIM_PATH + "/{code}", token_claim, methods=["GET", "POST"]),
+            pages.PageRoute("/routines/claim/{code}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
+            pages.PageRoute("/routines/claim/owner/{registration}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
+            pages.PageRoute(CLAIM_PATH + "/{code}", token_claim, pages.TOKEN_CLAIM_TITLE, methods=["GET", "POST"]),
             Route("/claim-assets/{name}", claim_asset, methods=["GET"]),
             *pages.routes(),
             *login.routes(),
