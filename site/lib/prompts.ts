@@ -10,6 +10,10 @@ export function promptFiles() {
     .sort();
 }
 
+export function readPromptSource(name: string) {
+  return readFileSync(join(directory, `${name}.md`), 'utf8');
+}
+
 export function readPrompt(name: string) {
-  return readFileSync(join(directory, `${name}.md`), 'utf8').trim();
+  return readPromptSource(name).trim();
 }

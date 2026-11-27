@@ -3,6 +3,12 @@ title: 自托管
 description: 用 Docker Compose 和 Cloudflare 在服务器上运行 SwB。
 ---
 
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
+## 一键部署
+
+<DeployProviders lang="zh-Hans" />
+
 ## Docker Compose
 
 安装 Docker Compose 2.24 或更高版本。用拥有数据目录的普通用户账号运行以下命令。
@@ -31,9 +37,27 @@ docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 
 直接请求 `/healthz` 会返回 `status` 和 `version`。以所有者身份登录或使用所有者密钥，可查看完整的运行状态。
 
-## Cloudflare Tunnel
+## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-参照 [Cloudflare 隧道设置指南](/zh-Hans/docs/setup/cloudflare)为你的域名创建隧道。将 Compose 服务地址设为 `http://switchboard:8000`。按[发布版 Compose 文件](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37)中的名称，将隧道令牌存入 `.env`。将 `.env` 中的 `SWB_PUBLIC_URL` 改为隧道地址。使用 `tunnel` 配置启动 Compose。
+Cloudflare 隧道为 SwB 提供公网 HTTPS 地址。Cloudflare 的免费套餐包含隧道服务。
+
+### 临时隧道
+
+用快速隧道的临时地址试用 SwB。`cloudflared` 是把 SwB 接入 Cloudflare 的程序。在 SwB 主机上运行此命令。
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+将 `SWB_PUBLIC_URL` 设为终端显示的 HTTPS 地址。如果配置文件含有 `public_url`，也更新该配置项。重启 SwB。每次启动隧道时，地址都会改变。OAuth 登录和通行密钥都绑定到该地址。使用命名隧道可保留固定地址。
+
+### 命名隧道
+
+使用免费 Cloudflare 账号和自己的域名。按 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare) 创建隧道并配置 Access。将 `SWB_PUBLIC_URL` 设为公网地址，例如 `https://swb.example.com`。如果配置文件含有 `public_url`，也更新该配置项。
+
+若隧道运行在 SwB 主机上，将服务地址设为 `http://localhost:8870`。将 `SWB_TRUSTED_PROXIES` 设为连接器的地址。IPv4 环回连接可用 `127.0.0.1/32`。
+
+若使用 Compose 隧道，将服务地址设为 `http://switchboard:8000`。把隧道令牌作为 `TUNNEL_TOKEN` 写入 `.env`。将连接器的地址或专用网段添加到 `trusted_proxies`。用隧道配置启动 Compose。
 
 ```bash
 docker compose --profile tunnel up -d
@@ -57,8 +81,11 @@ docker compose --profile tunnel up -d
 
 ## Railway [#railway]
 
-[Railway 模板定义](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts)启动一个 SwB 服务，并在 `/data` 挂载一个 1 GB 存储卷。
-模板发布后，从 Railway 模板市场部署。
+使用 [Railway 上的 SwB 模板](https://railway.com/deploy/swb)部署。保留一个副本。模板会把存储卷挂载到 `/data`。
+
+使用 Hobby 套餐让 SwB 持续在线。Hobby 套餐每月 5 美元，包含 5 美元的使用额度。
+
+[免费套餐](https://docs.railway.com/reference/pricing/free-trial)每月提供 1 美元使用额度。这笔额度约可全天使用 100 MB 内存。测试中的 SwB 实例在空闲时占用约 107 MiB 内存。用完额度后，免费套餐的服务会停止。
 
 ## Fly.io [#fly]
 
