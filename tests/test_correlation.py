@@ -119,6 +119,28 @@ def test_mailbox_status_shows_sender_progress_and_preserves_an_answer(make):
     assert result["status"] == "answered" and result["final"]["text"] == "Passed"
 
 
+def test_mailbox_status_reply_hint_follows_the_recipient(make):
+    _, client = make()
+    request = payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Check the build"}))["conversation"]
+    reply = payload(call(client, SECOND_KEY, "reply", {"conversation": request, "text": "Checking", "final": False}))["conversation"]
+
+    for handle, sender, recipient, state in (
+        (request, STATIC_KEY, SECOND_KEY, "working"),
+        (reply, SECOND_KEY, STATIC_KEY, "delivered"),
+    ):
+        args = {"conversation": handle}
+        sent = payload(call(client, sender, "status", args))
+        received = payload(call(client, recipient, "status", args))
+        assert sent["status"] == received["status"] == state
+        assert "note" not in sent
+        assert received["note"] == "Answer this message with reply."
+
+    payload(call(client, SECOND_KEY, "reply", {"conversation": request, "text": "Passed"}))
+    for agent in (STATIC_KEY, SECOND_KEY):
+        answered = payload(call(client, agent, "status", {"conversation": request}))
+        assert answered["status"] == "answered" and "note" not in answered
+
+
 def test_mailbox_wait_and_inbox_share_consumption_in_both_directions(make):
     _, client = make()
     handle = payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Check the build"}))["conversation"]
