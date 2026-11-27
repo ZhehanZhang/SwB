@@ -45,6 +45,49 @@ def test_limiter_window_slides():
     assert lim.blocked("x", "ip") is None
 
 
+def test_limiter_evicts_the_least_recently_hit_peer_without_resetting_other_buckets():
+    lim = RateLimiter(clock=lambda: 0.0, limits={"peer": (1, 10.0), "total": (1, 20.0)},
+                      max_keys_per_bucket=2)
+    lim.hit("total", "*")
+    for peer in ("first", "oldest", "first", "new"):
+        lim.hit("peer", peer)
+    assert list(lim.hits["peer"]) == ["first", "new"]
+    for peer in ("oldest", "unknown"):
+        assert lim.blocked("peer", peer) is None
+    assert len(lim.hits["peer"]) == 2
+    assert lim.blocked("peer", "first") is not None
+    assert lim.blocked("total", "*") is not None
+
+
+def test_limiter_expires_idle_peers_without_looking_them_up():
+    now = [0.0]
+    lim = RateLimiter(clock=lambda: now[0], limits={"peer": (2, 10.0), "total": (1, 20.0)})
+    lim.hit("peer", "idle")
+    lim.hit("peer", "active")
+    lim.hit("total", "*")
+    now[0] = 4.0
+    lim.hit("peer", "active")
+    now[0] = 10.0
+    assert lim.blocked("peer", "unknown") is None
+    assert list(lim.hits["peer"]) == ["active"]
+    assert lim.blocked("peer", "active") is None
+    assert lim.blocked("total", "*") == 10.0
+
+
+def test_limiter_preserves_expiry_order_when_the_clock_moves_backward():
+    now = [1000.0]
+    lim = RateLimiter(clock=lambda: now[0], limits={"peer": (1, 600.0)})
+    lim.hit("peer", "first")
+    now[0] = 999.0
+    lim.hit("peer", "second")
+    assert lim.blocked("peer", "second") == 600.0
+    now[0] = 1599.5
+    assert lim.blocked("peer", "first") == lim.blocked("peer", "second") == 1.0
+    now[0] = 1600.0
+    assert lim.blocked("peer", "second") is None
+    assert not lim.hits["peer"]
+
+
 def test_auth_failures_say_what_was_wrong_without_the_key(make):
     core, c = make()
     bad = '"' + STATIC_KEY[:10] + ' ' + STATIC_KEY[10:]
