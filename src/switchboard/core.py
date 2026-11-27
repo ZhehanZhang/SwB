@@ -102,7 +102,6 @@ class Switchboard:
         self.slack_options = dict(slack_options or {})
         self.slack_connect = bool(self.slack_options.pop("connect", True))
         self._targets: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-        self._target_slugs: dict[str, dict[str, Any]] = {}
         self.target_errors: dict[str, str] = {}
         self._avatar_http: httpx.AsyncClient | None = None
         self._avatar_files: AvatarFiles | None = None
@@ -214,7 +213,8 @@ class Switchboard:
             self.memory.flush_mirror()
         self.store.close()
 
-    def status(self, principal: Principal | None = None, *, public: bool = False) -> dict[str, Any]:
+    def status(self, principal: Principal | None = None, *, public: bool = False,
+               mode_slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         problems = list(self.cfg.problems())
         next_steps = {n: b.next_step() for n, b in self.blocks.items()}
         for b in self.blocks.values():
@@ -226,7 +226,7 @@ class Switchboard:
             if public:
                 out.pop("modes", None)
             elif "modes" in out and restricted:
-                out["modes"] = self.modes.status(principal, block.name)
+                out["modes"] = self.modes.status(principal, block.name, slugs=mode_slugs)
             if block.manifest.id == "github" and (public or restricted):
                 for field in ("installation", "checked_at", "installations", "missing_installations", "installation_problem", "token_scopes"):
                     out.pop(field, None)
@@ -429,8 +429,6 @@ class Switchboard:
         if query:
             q = query.strip().lower()
             out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
-        if block is None and kind is None and query is None:
-            self._target_slugs = self.slug_map(out)
         slack = self.slack
         personas = slack.config.personas if slack is not None else {}
         for t in out:
@@ -454,8 +452,7 @@ class Switchboard:
         return dict(tgt.by_slug(targets, self.cfg.targets.get("priority") or (), {**(self.cfg.targets.get("aliases") or {}), **(aliases or {})}))
 
     def target_visibility_resources(self, selector: str, address: Address | None = None, *,
-                                    slugs: dict[str, dict[str, Any]] | None = None) -> list[str]:
-        slugs = self._target_slugs if slugs is None else slugs
+                                    slugs: dict[str, dict[str, Any]]) -> list[str]:
         name = selector.casefold()
         address = address or tgt.parse(selector, self.blocks)
         if address is None and (row := slugs.get(name) or slugs.get(tgt.slugify(name))):
@@ -469,10 +466,12 @@ class Switchboard:
         return [resource for slug in dict.fromkeys(names) if RESOURCE_RE.fullmatch(resource := f"target:{slug}")]
 
     async def visibility_resources(self) -> set[str]:
-        resources = {resource for target in await self.targets()
-                     for resource in self.target_visibility_resources(target["address"], Address(target["block"], target["kind"], target["id"]))}
+        targets = await self.targets()
+        slugs = self.slug_map(targets)
+        resources = {resource for target in targets for resource in self.target_visibility_resources(
+            target["address"], Address(target["block"], target["kind"], target["id"]), slugs=slugs)}
         resources.update(resource for agent in self.known_agents()
-                         for resource in self.target_visibility_resources(f"agent:{agent}"))
+                         for resource in self.target_visibility_resources(f"agent:{agent}", slugs=slugs))
         resources.update(f"route:{route.id}" for route in self.routes.list())
         resources.update((f"memory:{GENERAL}", *(f"memory:{p.scope}" for p in self.projects.list(include_archived=True))))
         resources.update(resource.lower() for resource in self.modes.channel_resources() if RESOURCE_RE.fullmatch(resource))
@@ -899,7 +898,6 @@ class Switchboard:
     def changed(self) -> None:
         """Routes or projects changed: let listeners (the Slack block's targets) refresh in the background."""
         self._targets.clear()
-        self._target_slugs.clear()
         for listener in self.change_listeners:
             task = asyncio.ensure_future(listener())
             self._tasks.add(task)
