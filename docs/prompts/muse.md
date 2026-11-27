@@ -1,4 +1,4 @@
-Setup guide: https://swb.one/docs/setup/muse
+Setup guide https://swb.one/docs/setup/muse
 
 Help me connect Meta Muse to SwB, my self-hosted switchboard for agents and channels. You reach SwB as an MCP server.
 
@@ -8,18 +8,18 @@ Call connect(what="muse"). Do each step marked "you" yourself. Give me each step
 
 I make a bridge token of 64 random letters and digits in my password manager. I save it at the claim link. I open https://gadgets.muse.ai/settings/sdk-tokens. I use Log in. I click Generate token. I click Copy.
 
-On a Linux device with Bluetooth LE, I go to the SwB folder. I run these commands.
+On a Linux device with Bluetooth Low Energy, I run the commands below. I use my SwB address in the last command.
 
 ```
 /usr/bin/python3 -m venv --system-site-packages .venv-muse
-.venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
-.venv-muse/bin/swb muse-bridge --url <my SwB address> --setup
+.venv-muse/bin/pip install swb-one 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
+.venv-muse/bin/swb muse-bridge --url https://swb.example.com --setup
 ```
 
 I enter both tokens at the hidden prompts. In the Muse app, I turn on Developer mode at Settings > Devices > Developer mode. I tap Add Device. I pick the Bluetooth name SwB prints.
 
 When the bridge is online, run `send(to="muse:gadget:muse", task="Reply with pong to test SwB.")`. Check the test with result.
 
-Ask me to enter tokens only through the claim link that connect returns. Keep tokens out of this chat.
+Use the claim link only for the bridge token. Keep tokens out of this chat.
 
 When connect reports connected, send a test message. Show me the reply. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.

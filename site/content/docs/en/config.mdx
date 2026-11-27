@@ -11,7 +11,7 @@ SwB can run with environment variables alone. The MCP block starts by default. S
 | - | - |
 | `SWITCHBOARD_KEY_OWNER` | The owner key for the `swb` command |
 | `SWITCHBOARD_PUBLIC_URL` | The browser sign-in address. Use `http://localhost:8870` for a local run. Use HTTPS for a remote server, for example `https://swb.example.com`. |
-| `SWITCHBOARD_DATA_DIR` | The data folder. The default for `swb up` is `~/.local/share/switchboard`. The image uses `/data` |
+| `SWITCHBOARD_DATA_DIR` | The data folder. The image uses `/data`. |
 | `SWITCHBOARD_OWNER_EMAILS` | Owner emails for OIDC and Cloudflare Access, separated by commas |
 | `SWITCHBOARD_KEY_<NAME>` | A bearer key for the agent `<name>` |
 | `SWITCHBOARD_CONFIG` | The path of the base YAML file |
@@ -20,7 +20,27 @@ SwB can run with environment variables alone. The MCP block starts by default. S
 
 Set `PORT` in the shell or in the instance's `.env` file. For local sign-in, use `http://localhost:<port>` as the public URL. The same file can hold `SWITCHBOARD_PUBLIC_URL` and `SWITCHBOARD_DATA_DIR`. A `public_url` in the YAML config takes priority over the environment.
 
-With `swb up --dir ./my-swb`, SwB reads `.env` and `config/switchboard.yaml` in that folder. It stores data in the `data` subfolder. Use the same `--dir` for `swb init`, `swb status`, `swb login-link`, `swb connect` and `swb claim`. Use `--url` on the last four commands to select a different server address.
+Use `swb up --dir ./my-swb` to read `.env` and `config/switchboard.yaml` from that folder. Use the same `--dir` with `swb init`. With plain `swb up`, use `SWITCHBOARD_CONFIG` to select a different config file.
+
+`swb status`, `swb login-link`, `swb connect` and `swb claim` use `--dir` to find `.env`. They use `--url` to select the server address.
+
+`swb muse-bridge` requires `--url`. Use `--state-dir` to choose the folder for its files.
+
+Run `swb export`, `swb log`, `swb blocks` and `swb targets` from the instance folder. These commands read `.env` in that folder. They use `SWITCHBOARD_CONFIG` or the local config file.
+
+`swb serve` reads settings from the shell and the config file.
+
+Use `swb config migrate [file]` to print a config in version 2 format. If you omit `file`, the command uses `SWITCHBOARD_CONFIG` from the shell or the default config file.
+
+## Data folder
+
+`swb init` creates a `data` folder for a new instance. `swb up` uses that folder by default. `swb up --dir` defaults to the `data` folder at the selected path. An environment-only run with plain `swb up` defaults to `~/.local/share/switchboard`.
+
+Set `data_dir` in the config or overlay to change the path. That setting takes priority. SwB then checks `SWITCHBOARD_DATA_DIR` and `SWITCHBOARD_DATA` in that order. The default applies when all three settings are empty.
+
+With plain `swb up`, an older instance with a config file and a missing `data` folder keeps its existing home database. SwB logs a notice once per instance.
+
+On Linux and macOS, SwB sets the data folder to private mode `0700`. It sets database files to private mode `0600`.
 
 ## Blocks
 
@@ -97,6 +117,8 @@ In a key, `*` stands for an entry name or a list item.
 | `auth.redirect_uris` | Allowed OAuth return addresses. This list replaces the built-in set. Use `/*` to match a path and its subpaths |
 | `auth.source_names` | Map from part of an OAuth host or client name to the agent name used for sign-in |
 | `auth.key_scopes` | Map from key name to allowed memory scopes, for example `[project:example]` |
+| `auth.key_tools` | Map from key name to allowed MCP tools, for example `[send]` |
+| `auth.key_targets` | Map from key name to allowed message targets, for example `[agent:claude]` |
 | `auth.inbox_keys` | Map from key name to the one agent whose inbox it can read. The built-in entry is `channel: claude-code` |
 
 ## Visibility

@@ -184,7 +184,7 @@ settings:
 
 The agent calls `connect` with `what="slack"`. SwB shows which tokens each workspace still needs and returns one claim link for them.
 
-The agent adds the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml` with its `team_id` and token names. If it has access to the server, it makes the change. If the server is out of its reach, it gives you the YAML to add.
+The agent adds the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml`. It uses the workspace ID and token names. It adds an owner grant under `blocks.slack.agents` so the owner can call `slack_workspaces`. If the agent needs you to edit the file, it gives you the YAML.
 
 This example connects one workspace with a bot and your account. Replace `T0DEMO0001` with your workspace ID.
 
@@ -202,9 +202,13 @@ blocks:
             token_env: SLACK_EXAMPLE_BOT_TOKEN
           user:
             token_env: SLACK_EXAMPLE_USER_TOKEN
+    agents:
+      owner:
+        workspaces:
+          example: [bot, user]
 ```
 
-For the account-only manifest, add `user_only: true` next to `team_id`. Remove the `bot` entry under `identities`.
+Use the same workspace label in the workspace entry and the grant. For the account-only manifest, add `user_only: true` next to `team_id`. Remove the `bot` entry under `identities`. Set the grant to `[user]`.
 
 When SwB asks for a restart, the agent tells you. After the restart, it uses `slack_workspaces` to check each identity. An identity is the bot or your own account. Last, it sends a test message with `slack_post`.
 

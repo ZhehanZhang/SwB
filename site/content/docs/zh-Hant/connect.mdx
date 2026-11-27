@@ -48,6 +48,16 @@ swb connect grok
 
 你也可以在權杖頁面建立配對碼。SwB 透過 `POST /pairing/code` 送出表單。
 
+配對碼指定了專案時，`POST /connect` 會在 `project` 傳回該專案。將它設為用戶端的預設專案。呼叫工具需要指定專案時，將該值填入 `project`。金鑰沿用代理原有的存取權限。請在 `auth.key_scopes` 中依代理名稱設定可存取的記憶範圍。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
+
+## 收件匣事件串流
+
+`POST /connect` 傳回 `inbox_events_url`，也就是 `GET /inbox/events` 的網址。連線時，請在 `Authorization: Bearer <key>` 中帶入配對取得的代理金鑰。SwB 會維持連線，以伺服器傳送事件（SSE）的方式提供該代理的收件匣更新。
+
+連線建立後，SwB 先傳送 `ready` 事件。`item` 事件的 JSON 資料包含游標 `cursor`、對話代碼 `handle` 和訊息資料。事件 ID 採用游標值，代表事件在串流中的位置。
+
+串流預設從最新位置開始。若要接續上次的位置，請將最後收到的事件 ID 填入 `Last-Event-ID` 標頭或 `after` 查詢參數。`reply` 和 `get_message` 的參數請見[訊息](/zh-Hant/docs/tools#訊息)。
+
 ## 設定提示詞
 
 SwB 把每段設定提示詞作為 MCP prompt 與 MCP resource 提供給代理。`connect` 工具在 `guide` 欄位中傳回每個平台對應的兩項。

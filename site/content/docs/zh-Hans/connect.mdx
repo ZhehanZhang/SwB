@@ -48,6 +48,16 @@ swb connect grok
 
 你也可以在令牌页面创建配对码。SwB 通过 `POST /pairing/code` 提交表单。
 
+配对码指定了项目时，`POST /connect` 会在 `project` 中返回该项目。将它设为客户端的默认项目。工具调用需要项目时，将该值填入 `project`。密钥沿用智能体已有的访问权限。在 `auth.key_scopes` 中按智能体名称设置可访问的记忆范围。参见[密钥限制](/zh-Hans/docs/security#有限制的密钥)。
+
+## 收件箱事件流
+
+`POST /connect` 返回 `inbox_events_url`，即 `GET /inbox/events` 的地址。请求该地址时，在 `Authorization: Bearer <key>` 中传入配对所得的智能体密钥。SwB 会保持连接，以服务器发送事件（SSE）的形式推送该智能体的收件箱更新。
+
+连接建立后，SwB 先发送 `ready` 事件。`item` 事件的 JSON 数据包含游标 `cursor`、会话标识 `handle` 和消息数据。事件 ID 采用游标值，表示事件在流中的位置。
+
+事件流默认从最新位置开始。要从上次的位置继续接收，请将最后收到的事件 ID 填入 `Last-Event-ID` 请求头或 `after` 查询参数。`reply` 和 `get_message` 的参数见[消息](/zh-Hans/docs/tools#消息)。
+
 ## 设置提示词
 
 SwB 把每段设置提示词作为 MCP prompt 和 MCP resource 提供给智能体。`connect` 工具在 `guide` 字段中返回每个平台对应的两项。
