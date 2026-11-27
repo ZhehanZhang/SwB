@@ -464,7 +464,7 @@ class ChannelModes:
         choice(mode, "mode", (*MODES, "inherit"))
         actions = parse_actions(actions, "actions")
         project = project_slug(project, "project")
-        if target is not None:
+        if target is not None and target != "":
             if not isinstance(target, str) or not target.strip():
                 raise ValueError("Enter a target address or slug.")
             target = target.strip()
@@ -473,7 +473,7 @@ class ChannelModes:
         else:
             self.core.store.x("INSERT INTO space_modes(block, space, channel, mode, actions, project, target, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,?,?) "
                               "ON CONFLICT(block, space, channel) DO UPDATE SET mode=excluded.mode, actions=excluded.actions, project=excluded.project, "
-                              "target=excluded.target, updated_at=excluded.updated_at, updated_by=excluded.updated_by",
+                              "target=COALESCE(excluded.target, space_modes.target), updated_at=excluded.updated_at, updated_by=excluded.updated_by",
                               (block, space, channel, mode, dumps(actions), project, target, self.core.clock(), principal.source))
         self.core.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=block, action="modes.set",
                                outcome="ok", target=f"{space}/{channel}", detail=mode)

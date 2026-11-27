@@ -146,10 +146,21 @@ def test_owner_http_sets_and_clears_a_channel_target(make):
     _, client = make(cfg)
     csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
     headers = {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": csrf}
-    args = {"block": "github", "space": repo, "channel": repo, "mode": "triage", "target": "agent:claude"}
-    response = client.post("/api/modes", headers=headers, json=args)
+    args = {"block": "github", "space": repo, "channel": repo, "mode": "triage"}
+    bound = {**args, "target": "agent:claude"}
+    response = client.post("/api/modes", headers=headers, json=bound)
     assert response.status_code == 200 and response.json()["space"]["target"] == "agent:claude"
-    response = client.post("/api/modes", headers=headers, json={**args, "mode": "inherit", "target": None})
+    edited = {**args, "actions": ["reply", "notify_owner"]}
+    response = client.post("/api/modes", headers=headers, json=edited)
+    assert response.status_code == 200 and response.json()["space"]["target"] == "agent:claude"
+    assert response.json()["space"]["actions"] == ["reply", "notify_owner"]
+    response = client.post("/api/modes", headers=headers, json={**args, "target": "   "})
+    assert response.status_code == 400
+    response = client.post("/api/modes", headers=headers, json={**args, "target": ""})
+    assert response.status_code == 200 and response.json()["space"]["target"] is None
+    response = client.post("/api/modes", headers=headers, json=bound)
+    assert response.status_code == 200
+    response = client.post("/api/modes", headers=headers, json={**args, "mode": "inherit"})
     assert response.status_code == 200 and response.json()["space"]["target"] is None
     response = client.post("/api/visibility", headers=headers, json={"resource": f"channel:{repo}", "visibility": "shared"})
     assert response.status_code == 400
