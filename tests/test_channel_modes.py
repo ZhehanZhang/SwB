@@ -32,6 +32,7 @@ from test_telegram import STRANGER as TELEGRAM_STRANGER
 from test_telegram import run as _telegram_fixture
 
 from switchboard.blocks.mcp.policy import MODE_REQUIRED
+from switchboard.trust import CLOSE, OPEN
 from switchboard.modes import ChatDrop
 
 MODES = {"off", "watch", "assist", "triage", "work"}
@@ -240,10 +241,10 @@ def test_watch_waits_for_due_time_and_batches_each_space_once(make):
     assert set(batches) == {DISCORD_CHANNEL, "41"} and len(digests(core)) == 2
     batch = batches[DISCORD_CHANNEL]
     assert (batch["owner"], batch["kind"], batch["space"], batch["count"]) == ("owner", "watch_digest", "home", 2)
-    assert batch["items"] == [
-        {"author": "Ava", "excerpt": "first", "link": link, "at": start},
-        {"author": "Bo", "excerpt": "second", "link": None, "at": start},
-    ]
+    assert batch["from"] == {"block": "discord", "space": "home", "trust": "external"}
+    assert [(item["author"], item["link"], item["at"]) for item in batch["items"]] == [("Ava", link, start), ("Bo", None, start)]
+    assert f"{OPEN}\nfirst\n{CLOSE}" in batch["items"][0]["excerpt"]
+    assert f"{OPEN}\nsecond\n{CLOSE}" in batch["items"][1]["excerpt"]
     assert batches["41"]["count"] == 1
 
 
@@ -257,7 +258,7 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
     core.modes.flush()
     [batch] = digests(core)
     assert batch["count"] == len(batch["items"]) == 50
-    assert batch["items"][-1]["excerpt"] == "item 49"
+    assert f"{OPEN}\nitem 49\n{CLOSE}" in batch["items"][-1]["excerpt"]
 
 
 def test_owner_console_displays_the_watch_digest_title_and_content(make):
@@ -275,7 +276,7 @@ def test_owner_console_displays_the_watch_digest_title_and_content(make):
     assert response.status_code == 200
     [item] = response.json()["items"]
     assert (item["kind"], item["count"], item["trust"]) == ("watch_digest", 1, "external")
-    assert item["text"] == f"1 event\n\nAva\nWatch excerpt\n{link}"
+    assert f"{OPEN}\n1 event\n\nAva\nWatch excerpt\n{link}\n{CLOSE}" in item["text"]
 
 
 @pytest.fixture(params=["discord", "telegram"])

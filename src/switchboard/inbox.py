@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from .audit import iso
 from .store import Store
+from .trust import frame_sender, neutralize
 
 log = logging.getLogger("switchboard.inbox")
 
@@ -273,9 +274,16 @@ class Inbox:
         data = json.loads(r["data"])
         if r["kind"] == "watch_digest":
             count = data["count"]
-            entries = ["\n".join(part for part in (entry["author"], entry["excerpt"], entry["link"]) if part) for entry in data["items"]]
-            data["text"] = "\n\n".join([f"{count} event{'s' if count != 1 else ''}", *entries])
-            data["trust"] = "external"
+            block, space = data["block"], data["space"]
+            where = f"in {block} {space}"
+            entries = [f"{count} event{'s' if count != 1 else ''}"]
+            for entry in data["items"]:
+                author, excerpt, link = entry["author"], entry["excerpt"], entry["link"]
+                entries.append("\n".join(part for part in (author, excerpt, link) if part))
+                _, framed = frame_sender(excerpt, author, None, where)
+                entry.update(excerpt=framed, author=neutralize(author), link=neutralize(link) if link else link)
+            trust, text = frame_sender("\n\n".join(entries), "Watch digest", None, where)
+            data.update(text=text, trust=trust, **{"from": {"block": block, "space": space, "trust": trust}})
         return {"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
                 "at": iso(r["at"]), **data, "message_id": Inbox.message_id(r["id"])}
 
