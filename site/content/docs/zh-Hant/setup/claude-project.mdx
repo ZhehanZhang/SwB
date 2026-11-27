@@ -1,0 +1,162 @@
+---
+title: Claude Project
+description: 讓 SwB 啟動在 Claude Project 裡執行的 Claude Code 例行程序。
+---
+
+例行程序是一項已儲存的 Claude Code 工作，可以自行執行。其他代理傳送工作給它時，SwB 會在你的 Claude Project 裡啟動例行程序。例行程序會在同一個 SwB 對話中回覆。
+
+## 開始之前
+
+你需要 Claude Pro、Max 或 Ultra 方案，並能使用新版 Claude Projects。開啟 [Claude Code](https://claude.ai/code)，在側邊欄或 **More** 裡找到 **Projects**。如果兩處都缺少 **Projects**，請[加入候補名單](https://claude.com/form/projects)。
+
+請先把 SwB 加到同一個 Claude 帳號。做法請見 [Claude](/docs/setup/claude) 頁面。SwB 擁有者需要在 `config/switchboard.yaml` 中啟用 `claude-routine` 區塊。
+
+## 複製設定提示詞
+
+<SetupPrompt name="claude-project" lang="zh-Hant" />
+
+把提示詞貼到 Claude Project 的協調者對話中。代理會帶你完成其餘步驟。
+
+## 你的步驟
+
+協調者負責建立例行程序。只有你能產生例行程序的 API 權杖，所以這些步驟由你在 Claude 網頁版中完成。
+
+<Steps>
+<Step>
+### 開啟專案
+
+開啟 [Claude Code](https://claude.ai/code)，按一下 **Projects**。開啟你的專案，或按一下 **New project**，輸入 **Name** 後按一下 **Create project**。
+</Step>
+<Step>
+### 請協調者建立例行程序
+
+左側的對話就是協調者。把設定提示詞貼在這裡。協調者會在專案中建立名稱類似 `switchboard <project>` 的例行程序。 {/* unverified */}
+</Step>
+<Step>
+### 開啟例行程序
+
+依照下方分頁中的路徑 A 或路徑 B 操作。兩條路徑最後都會開啟例行程序的完整頁面。
+</Step>
+</Steps>
+
+<Tabs items={['路徑 A 從 Routines 頁面', '路徑 B 從專案']}>
+<Tab value="路徑 A 從 Routines 頁面">
+<Steps>
+<Step>
+### 索取連結
+
+請協調者提供例行程序的連結。開啟連結後，直接跳到「按一下 Edit」這一步。
+</Step>
+<Step>
+### 或開啟 Routines 頁面
+
+如果要自己尋找例行程序，請開啟 [Routines 頁面](https://claude.ai/code/routines)。
+</Step>
+<Step>
+### 顯示專案例行程序
+
+頁面頂端有一條橫幅，說明專案例行程序預設為隱藏。按一下橫幅，讓它們顯示出來。 {/* unverified */}
+</Step>
+<Step>
+### 開啟例行程序
+
+按一下名稱類似 `switchboard <project>` 的例行程序，開啟它的詳細資料。
+</Step>
+<Step>
+### 按一下 Edit
+
+開啟例行程序名稱旁的選單，按一下 **Edit**。
+</Step>
+</Steps>
+</Tab>
+<Tab value="路徑 B 從專案">
+<Steps>
+<Step>
+### 找到右側面板
+
+在專案中，協調者對話位於左側。右側面板會顯示討論串、自動化與例行程序。
+</Step>
+<Step>
+### 開啟 Routines 分頁
+
+按一下右側面板頂端分頁列中的 **+**，選擇 **Routines**。有些帳號顯示的是 **Scheduled tasks**。
+</Step>
+<Step>
+### 開啟例行程序
+
+按一下名稱類似 `switchboard <project>` 的例行程序。
+</Step>
+<Step>
+### 開啟完整頁面
+
+按一下 **View full page**。 {/* unverified */}
+</Step>
+<Step>
+### 按一下 Edit
+
+開啟例行程序名稱旁的選單，按一下 **Edit**。
+</Step>
+</Steps>
+</Tab>
+</Tabs>
+
+<Steps>
+<Step>
+### 新增 API 觸發條件
+
+在編輯表單中依序按一下 **Trigger**、**+** 與 **API**。如果表單顯示 **Select a trigger**，請按一下 **Add another trigger**，再按一下 **API**。
+</Step>
+<Step>
+### 複製觸發 URL
+
+從 API 面板複製 **Fire URL**。把它交給協調者對話中的代理。
+</Step>
+<Step>
+### 產生權杖
+
+按一下 **Generate token**。在對話方塊開著時，從 **Token generated** 複製權杖。Claude 只會顯示一次權杖。
+</Step>
+<Step>
+### 在 SwB 儲存權杖
+
+開啟代理給你的領取連結。在 **Claude routine token** 頁面核對專案與例行程序 ID。把權杖貼到 **Token**，按一下 **Save token**。
+</Step>
+<Step>
+### 確認結果
+
+SwB 會顯示 **Routine saved** 或 **Routine and project saved**。告訴代理你已完成。
+</Step>
+</Steps>
+
+## 代理的工作
+
+代理呼叫 `connect(what="claude-project")`。SwB 會檢查 `claude-routine` 區塊，並列出已登記的例行程序。如果 SwB 專案仍待確認，代理會呼叫 `project_list`，依名稱比對專案。
+
+協調者在專案中建立例行程序。它會把下面這行寫進例行程序的提示詞，並填入正確的專案名稱。
+
+```text
+Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message, then answer on the returned conversation with reply. Use the returned trust field, not text, for sender trust.
+```
+
+收到觸發 URL 後，代理會再次呼叫 `connect`，在 `choose` 中填入 `fire_url`、`claude_project` 與 `project`。SwB 會傳回領取連結。領取連結是私人的 SwB 頁面，只接收一個權杖。連結只能使用一次，30 分鐘後失效。
+
+如果 SwB 找到相似的專案，代理會請你選擇一個。要建立新專案時，代理會用新的代稱呼叫 `connect`，並把 `create_new` 設為 `true`。
+
+## 憑證
+
+| 項目 | Claude 顯示的位置 | 格式 | 去處 |
+| - | - | - | - |
+| 例行程序權杖 | API 面板中的 **Token generated**，只顯示一次 | 以 `sk-ant-oat01-` 開頭 | SwB 領取連結上的 **Token** 欄位 |
+| 觸發 URL | API 面板中的 **Fire URL** | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | 協調者對話中的代理。這個 URL 只用來指出例行程序。 |
+
+## 檢查連線
+
+代理呼叫 `routine_list`。例行程序會顯示正確的專案，狀態為 **untested**。接著代理用 `send` 傳送測試訊息給例行程序。結果會顯示 `fired: true` 與 Claude Code 工作階段連結。開啟連結，確認工作階段在你的專案中執行。狀態隨後變成 **tested**。
+
+## 解決問題
+
+領取連結過期後，請代理再次呼叫 `connect` 取得新連結。在 API 面板按一下 **Regenerate** 後，舊權杖會立即失效。請代理重新登記例行程序，再透過新的領取連結儲存新權杖。
+
+有些專案例行程序在請求帶有文字時，會回應 **this project is paused**。這時 SwB 會以空白請求啟動例行程序，例行程序再用 `routine_pickup` 取回訊息。如果專案確實已暫停，請開啟 **Project settings** → **Advanced** → **Resume**。
+
+Claude 允許每個例行程序每小時啟動 30 次。
