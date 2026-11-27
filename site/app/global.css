@@ -266,3 +266,5 @@
   .swb-line { animation: none; opacity: 1; }
   .swb-flow .swb-pulse, .swb-route .swb-pulse { display: none; }
 }
+
+:root.light { color-scheme: light; }
