@@ -70,6 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
          instance: Instance | None = None, announce: bool = False,
+         announce_login: bool = False,
          on_home_fallback: Callable[[Path, Path], None] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -78,7 +79,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
 
     from .config import ConfigError, LOOPBACK_HOSTS, bind_address, config_path, migrate_text
     from .core import Switchboard
-    from .deployment import serve_env
+    from .deployment import OWNER_KEY, serve_env
 
     serving = args.cmd in (None, "serve")
     env = dict(os.environ)
@@ -165,7 +166,17 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     if deployment_env is not None and core.cfg.public_url:
         logging.getLogger("switchboard").info("Sign-in page %s/login", core.cfg.public_url)
     logging.getLogger("uvicorn.access").addFilter(_NoQuery())
-    app = create_app(core)
+
+    def first_login() -> None:
+        principal = core.auth.verify_bearer(core.cfg.env.get(OWNER_KEY))
+        if principal is None or not principal.is_unrestricted_owner or principal.source != "owner" or not core.cfg.public_url:
+            return
+        token = core.auth.sessions.mint_link(principal.client_id, principal.source)
+        core.audit.record(origin="cli", source=principal.source, client=principal.client_id, destination="core",
+                          action="login_link_minted", outcome="ok")
+        print(f"{core.cfg.public_url}/login#t={token}", flush=True)
+
+    app = create_app(core, on_started=first_login if announce_login else None)
     options = {
         "host": host,
         "port": port,
