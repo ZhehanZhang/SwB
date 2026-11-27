@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import html
 import os
 import secrets
 from typing import TYPE_CHECKING, Any, Callable
@@ -134,22 +133,18 @@ class Claims:
             try:
                 row = self.check(code)
             except ClaimError as e:
-                return pages.message_page("Link not usable", str(e), 410)
+                return pages.claim_message_page("Link not usable", str(e), 410)
             if request.method in ("GET", "HEAD"):
-                form = (f'<div class="card fade-in"><div class="setting"><div class="setting-label"><span>Token</span><span class="setting-hint">'
-                        f'{html.escape(hint(row["name"]))} Stored encrypted, never shown again. This link works once.</span></div><div class="setting-value">'
-                        f'<form method="post" action="/claims/{html.escape(self.block)}/{html.escape(code)}" autocomplete="off">'
-                        f'<input type="hidden" name="csrf" value="{self.core.auth.csrf(owner.csrf_key)}">'
-                        '<input name="token" type="password" required aria-label="Token" autocomplete="new-password">'
-                        '<button class="pill-button primary">Save</button></form></div></div></div>')
-                return pages.page(title, pages.hero(title, "Paste the token and save.") + form, 200)
+                return pages.claim_page(title, f'{hint(row["name"])} Stored encrypted, never shown again.',
+                                        self.core.auth.csrf(owner.csrf_key), requester=title.removesuffix(" bot token"),
+                                        host=request.url.hostname or "", expires_at=row["expires_at"], now=self.core.clock())
             form_data = await request.form()
             try:
                 name = self.complete(code, str(form_data.get("token") or ""), f"admin:{owner.label}", valid)
             except ClaimError as e:
-                return pages.message_page("Not saved", str(e), 400)
+                return pages.claim_message_page("Not saved", str(e), 400)
             self.core.audit.record(origin="http", source=f"admin:{owner.label}", client="claim", destination=self.block, action="secret_claim", outcome="ok", target=name)
             await saved(name)
-            return pages.message_page("Token saved", f"{self.block} has its {name} now and is reconnecting. You can close this tab.", 200)
+            return pages.claim_message_page("Token saved", f"{self.block} has its {name} now and is reconnecting. You can close this tab.", 200)
 
         return [Route(f"/claims/{self.block}/{{code}}", claim, methods=["GET", "POST"])]

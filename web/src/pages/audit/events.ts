@@ -1,3 +1,4 @@
+import { connectorKind } from "../../lib/connector-kind.js"
 import { displayReference } from "../../lib/display-reference.js"
 
 type AuditMetadata = {
@@ -81,6 +82,10 @@ export function auditActor({ source }: AuditEvent) {
   if (source === "owner" || source.startsWith("admin:")) return "you"
   if (source === "auto") return "SwB"
   return source === "-" ? "—" : displayReference(source)
+}
+
+export function auditActorKind({ origin, source }: AuditEvent) {
+  return connectorKind(origin) ?? source
 }
 
 const titles: Record<string, readonly [past: string, present: string]> = {

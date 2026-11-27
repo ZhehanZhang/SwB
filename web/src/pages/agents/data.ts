@@ -1,4 +1,5 @@
 import { requestJson } from "@/lib/api"
+import { connectorKind } from "@/lib/connector-kind"
 import { displayReference } from "@/lib/display-reference"
 import type { AuditEvent } from "../audit/events"
 
@@ -122,7 +123,8 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
     }))),
     ...keys.map((row): Agent => ({
       id: `key:${row.id}`, reference: row.id, type: "key", name: clientNames[row.agent] ?? row.agent, kind: "MCP client",
-      logo: Object.hasOwn(clientNames, row.agent) ? row.agent : "mcp", projects: row.project ? [row.project] : [],
+      logo: connectorKind(row.agent) ?? (Object.hasOwn(clientNames, row.agent) ? row.agent : "mcp"),
+      projects: row.project ? [row.project] : [],
       registered_by: principal(row.created_by), registered_at: row.created_at ?? null, last_seen: row.last_used_at ?? null,
       state: row.last_used_at ? "on" : "off",
     })),

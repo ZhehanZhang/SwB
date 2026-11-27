@@ -50,6 +50,8 @@ def _credential_refs(core: Switchboard) -> dict[str, tuple[str, str, list[str]]]
             for workspace, names in block.token_names.items():
                 for ref in names:
                     add(ref, "slack", "Slack token", _label(workspace))
+        elif kind in ("discord", "telegram"):
+            add(block.token_env, kind, f"{block.manifest.title} bot token", uses)
         elif kind == "github":
             add(block.secret_env, "github", "GitHub webhook secret", uses)
             for sink in (block.config.get("sinks") or {}).values():

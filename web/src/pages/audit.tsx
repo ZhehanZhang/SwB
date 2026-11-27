@@ -5,7 +5,7 @@ import { Logo } from "@/components/logo"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/tabs"
 import { Button } from "@/components/ui/button"
 import { requestJson } from "@/lib/api"
-import { auditActor, auditGroups, auditProject, auditText, isAuditGroup, isAuditPage, type AuditGroup } from "./audit/events"
+import { auditActor, auditActorKind, auditGroups, auditProject, auditText, isAuditGroup, isAuditPage, type AuditGroup } from "./audit/events"
 
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
 const clock = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" })
@@ -62,7 +62,7 @@ export function AuditPage() {
                   <td role="cell" className="font-mono text-mono-sm wrap-anywhere max-md:text-right md:py-2 md:pr-3">{auditProject(item) ?? "—"}</td>
                   <td role="cell" className="wrap-anywhere md:py-2 md:pr-3">
                     <span className="flex min-w-0 items-center gap-2">
-                      {who !== "you" && who !== "—" && <Logo kind={item.origin === "slack" || item.origin === "github" ? item.origin : who} className="size-5" />}
+                      {who !== "you" && who !== "—" && <Logo kind={auditActorKind(item)} className="size-5" />}
                       {who}
                     </span>
                   </td>

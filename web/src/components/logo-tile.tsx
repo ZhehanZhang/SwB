@@ -8,6 +8,7 @@ import grokRoutine from "@/assets/grok-routine.svg"
 import openai from "@/assets/openai.svg"
 import telegram from "@/assets/telegram.svg"
 import xai from "@/assets/xai.svg"
+import { connectorKind } from "@/lib/connector-kind"
 import { cn } from "@/lib/utils"
 
 const images: Record<string, string> = {
@@ -24,7 +25,7 @@ const aliases = [
 
 export function LogoTile({ kind, className }: { kind: string; className?: string }) {
   const id = kind.toLowerCase().replaceAll("_", "-")
-  const mark = aliases.find(([prefix]) => id === prefix || id.startsWith(`${prefix}-`) || id.startsWith(`${prefix}:`))?.[1]
+  const mark = connectorKind(id) ?? aliases.find(([prefix]) => id === prefix || id.startsWith(`${prefix}-`) || id.startsWith(`${prefix}:`))?.[1]
   const image = mark && images[mark]
   const mono = mark === "chatgpt" || mark === "github"
   return (

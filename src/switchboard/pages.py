@@ -23,12 +23,24 @@ _ASSETS = {
     "prefs.js": ("text/javascript; charset=utf-8", (_STATIC / "prefs.js").read_bytes()),
     "claim.css": ("text/css; charset=utf-8", (_STATIC / "claim.css").read_bytes()),
     "claim-brand.svg": ("image/svg+xml", (_STATIC / "claim-brand.svg").read_bytes()),
+    "claim-connectors.svg": ("image/svg+xml", (_STATIC / "claim-connectors.svg").read_bytes()),
 }
 
 ARC = '<div class="site-arc" aria-hidden="true"><svg viewBox="0 300 940 580" focusable="false"><path fill="currentColor" d="M922.2,588.9A1041.1,270.9 0 1 1 -1159.9,588.9A1041.1,270.9 0 1 1 922.2,588.9ZM734.2,478.4A620,151.5 -14.18 1 0 -468.0,782.2A620,151.5 -14.18 1 0 734.2,478.4Z"/></svg></div>'
 WORDMARK_DOT = '<svg class="wordmark-dot" viewBox="278.44 90.58 12.63 10.31" aria-hidden="true" focusable="false"><path fill="currentColor" d="M291.07,98.49c-.15.38-.29.76-.46,1.12-.48,1.08-1.29,1.52-2.44,1.14-.56-.19-1.14-.39-1.62-.71-2.92-1.95-5.47-4.29-7.47-7.18-.37-.53-.43-1.26-.64-1.9.15-.13.31-.25.46-.38,1.05.65,2.11,1.29,3.14,1.97.65.43,1.23.94,1.86,1.39,1.14.81,2.14.86,3.15-.33.83-.97,1.9-.61,2.67.11.58.53.91,1.33,1.35,2.02v2.75Z"/></svg>'
 
 CSP = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; form-action 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'"
+CLAIM_BRAND = '<img class="brand" src="/assets/claim-brand.svg" alt="SwB" width="56" height="56">'
+CLAIM_CONNECTORS = {
+    "slack": ("Slack", "Slack token"),
+    "discord": ("Discord", "Discord bot token"),
+    "telegram": ("Telegram", "Telegram bot token"),
+    "github": ("GitHub", "GitHub credential"),
+    "chatgpt": ("ChatGPT", ""),
+    "muse": ("Muse", ""),
+    "claude": ("Claude", ""),
+    "grok": ("Grok", "Grok credential"),
+}
 
 
 def icon(name: str, cls: str = "", mode: str | None = None) -> str:
@@ -169,8 +181,9 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
         button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
     return HTMLResponse(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark"><title>Sign in to SwB</title></head>
-<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}><h1>Sign in to SwB</h1>
+<meta name="color-scheme" content="light dark"><title>Sign in to SwB</title>
+<link rel="stylesheet" href="/assets/claim.css"></head>
+<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}>{CLAIM_BRAND}<h1>Sign in to SwB</h1>
 <p id="login-error" role="status">{messages.get(error, "")}</p>{button or "<p>Ask your agent for a sign-in link.</p>"}
 </main><script>{LOGIN_JS}</script></body></html>""", headers={"Content-Security-Policy": script_policy(LOGIN_JS)})
 
@@ -358,7 +371,7 @@ def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
 <title>{html.escape(title)} | SwB</title>
 <link rel="stylesheet" href="/assets/claim.css">
 </head><body><main>
-<img class="brand" src="/assets/claim-brand.svg" alt="SwB" width="56" height="56">
+{CLAIM_BRAND}
 {body}
 </main></body></html>"""
     return HTMLResponse(doc, status_code=status, headers={
@@ -378,9 +391,13 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
     key_field = ('<label for="owner-key">SwB owner key</label>'
                  '<input id="owner-key" name="owner_key" type="password" required autocomplete="new-password" '
                  'autocapitalize="none" spellcheck="false">') if owner_key else ""
-    asks = (f'<p class="requester"><svg viewBox="0 0 24 24" aria-hidden="true">'
-            '<path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5M8 3l8 18M3 8l18 8M3 16l18-8M8 21l8-18"/>'
-            f'</svg>{html.escape(requester)} asks for</p>') if requester else ""
+    connector = requester.lower().replace("_", "-").partition(":")[0].partition("-")[0]
+    if connector in {"openai", "dot"}:
+        connector = "chatgpt"
+    mark_kind = connector if connector in CLAIM_CONNECTORS and connector != "muse" else "agent"
+    mark = (f'<span class="requester-tile" data-connector="{mark_kind}" aria-hidden="true"><svg viewBox="0 0 24 24">'
+            f'<use href="/assets/claim-connectors.svg#{mark_kind}"/></svg></span>')
+    asks = f'<p class="requester">{mark}{html.escape(requester)} asks for</p>' if requester else ""
     context = f'<p class="scope">{html.escape(scope)}</p>' if scope else ""
     help_link = ('<a class="guide" href="https://claude.ai/code" rel="noreferrer">Claude Code, API trigger, Generate token'
                  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6m0-6-9 9m6-1v6H5V8h6"/></svg></a>') if guide else ""
@@ -404,9 +421,9 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
 def token_claim_page(name: str, csrf: str, *, require_https: bool = False, host: str = "",
                      expires_at: float | None = None, now: float | None = None) -> HTMLResponse:
     credential = "Webhook URL" if require_https else "Token"
-    label = {"DISCORD": "Discord bot token", "SLACK": "Slack token", "TELEGRAM": "Telegram bot token",
-             "GITHUB": "GitHub credential", "GROK": "Grok credential"}.get(name.partition("_")[0], f"Save a {credential.lower()}")
-    return claim_page(label, f"For {name}.", csrf, credential=credential,
+    connector = name.partition("_")[0].lower()
+    requester, label = CLAIM_CONNECTORS.get("chatgpt" if connector == "openai" else connector, ("", ""))
+    return claim_page(label or f"Save a {credential.lower()}", f"For {name}.", csrf, requester=requester, credential=credential,
                       host=host, expires_at=expires_at, now=now)
 
 

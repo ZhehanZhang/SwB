@@ -117,6 +117,18 @@ def test_agent_inventory_has_discovered_targets_and_only_credential_metadata(mak
     assert get(client, "/agents")["pending_claims"] == []
 
 
+def test_inbox_and_thread_use_configured_connector_kind_for_renamed_blocks(make):
+    core, client = make(base_config(version=2, blocks={
+        "release-bot": {"use": "discord", "connect": False},
+    }))
+    handle = core.inbox.open_handle(owner="chatgpt", destination="release-bot", ref="engineering",
+                                    project=None, title=None, meta={})
+
+    [row] = get(client, "/inbox")["conversations"]
+    assert row["destination"] == "release-bot"
+    assert row["destination_kind"] == get(client, f"/conversations/{handle}")["conversation"]["destination_kind"] == "discord"
+
+
 def test_project_and_inbox_reads_keep_safe_cross_system_and_conversation_data(make):
     config = base_config(slack={"workspaces": {"team": {"team_id": "T0123ABCD", "intake": "poll", "watched": ["#dev"],
                                                        "identities": {"bot": {"token_env": "FAKE_SLACK_TOKEN"}}}},
