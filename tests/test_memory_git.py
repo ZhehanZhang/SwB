@@ -180,11 +180,13 @@ def test_backup_console_routes_use_owner_csrf_and_never_return_creds(make):
     csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
     headers = {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": csrf}
     assert client.get("/api/memory/backup").status_code == 401
+    assert client.get("/api/memory/backup", headers=OWNER).json()["credential_saved"] is False
     for path in ("/api/memory/backup", "/api/memory/backup/now", "/api/memory/backup/restore"):
         assert client.post(path, headers={**OWNER, "Origin": PUBLIC}, json={}).status_code == 403
     token = "fixture-only-token"
     configured = client.post("/api/memory/backup", headers=headers, json={"remote": "https://example.test/repo", "credential": token})
     assert configured.status_code == 200 and token not in configured.text
+    assert configured.json()["credential_saved"] is True
     assert core.claims.secret(MEMORY_BACKUP_CREDENTIAL) == token
     assert client.get("/api/memory/backup", headers=OWNER).json() == configured.json()
     assert client.post("/api/memory/backup/now", headers=headers).json() == {"error": "Enable Git backup first."}
