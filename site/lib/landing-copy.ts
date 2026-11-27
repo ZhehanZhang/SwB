@@ -4,6 +4,7 @@ type Copy = {
   docs: string;
   about: string;
   license: string;
+  trademarks: string;
   install: string;
   copy: string;
   copied: string;
@@ -20,6 +21,7 @@ export const landingCopy: Record<Locale, Copy> = {
     docs: 'Docs',
     about: 'About',
     license: 'Apache-2.0',
+    trademarks: 'Trademarks',
     install: 'uvx swb-one up',
     copy: 'Copy',
     copied: 'Copied',
@@ -45,6 +47,7 @@ export const landingCopy: Record<Locale, Copy> = {
     docs: '文档',
     about: '关于',
     license: 'Apache-2.0',
+    trademarks: '商标',
     install: 'uvx swb-one up',
     copy: '复制',
     copied: '已复制',
@@ -70,6 +73,7 @@ export const landingCopy: Record<Locale, Copy> = {
     docs: '文件',
     about: '關於',
     license: 'Apache-2.0',
+    trademarks: '商標',
     install: 'uvx swb-one up',
     copy: '複製',
     copied: '已複製',
