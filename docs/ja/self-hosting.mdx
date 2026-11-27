@@ -69,7 +69,7 @@ docker compose --profile tunnel up -d
 
 `.env` で `SWB_TRUSTED_PROXIES` を設定することもできます。複数の項目はカンマで区切ってください。YAML の設定が優先されます。
 
-SwB のホストか Docker ネットワーク上で Cloudflare Tunnel を使うときは、トンネルのコネクターのアドレスか専用のネットワークを追加してください。コネクターは SwB に直接接続します。Cloudflare のエッジサーバーから直接接続するときは、`cloudflare` の項目を使ってください。
+SwB のホストか Docker ネットワーク上で Cloudflare Tunnel を使うときは、トンネルのコネクターのアドレスか専用のネットワークを追加してください。コネクターは SwB に直接接続します。Cloudflare のエッジサーバーからの直接の接続には、`cloudflare` の項目を使ってください。
 
 ## Cloudflare Access
 
@@ -85,15 +85,15 @@ SwB のホストか Docker ネットワーク上で Cloudflare Tunnel を使う�
 
 SwB を常時稼働させるときは、Hobby プランを使ってください。Hobby プランは月額 $5 で、$5 分の利用枠が含まれます。
 
-[Free プラン](https://docs.railway.com/reference/pricing/free-trial)には、月 $1 分の利用枠が含まれます。この額で、約 100 MB の RAM を 24 時間使えます。テストした SwB のインスタンスは、待機中に約 107 MiB を使いました。$1 を使い切ると、Free プランのサービスは停止します。
+[Free プラン](https://docs.railway.com/reference/pricing/free-trial)には、月 $1 分の利用枠が含まれます。この額で、約 100 MB の RAM を常時使えます。テストした SwB のインスタンスは、待機中に約 107 MiB を使いました。$1 を使い切ると、Free プランのサービスは停止します。
 
 ## Fly.io [#fly]
 
-[Docker Compose の例](#docker-compose)で取得した SwB のリリースのチェックアウトを使ってください。[Fly.io のコマンドラインツール](https://docs.fly.io/flyctl/)をインストールしてください。Fly.io にサインインしてください。
+[Docker Compose の例](#docker-compose)で取得した、SwB のリリース版のコードを使ってください。[Fly.io のコマンドラインツール](https://docs.fly.io/flyctl/)をインストールしてください。Fly.io にサインインしてください。
 
 SwB のフォルダーで `sh deploy/fly.sh my-swb` を実行してください。`my-swb` を、固有のアプリ名に置き換えてください。スクリプトは `fly deploy --ha=false` を使って、Machine を 1 つ起動します。
 
-アプリのサインインページを開いてください。チェックアウトにある `.env.swb-setup-fly-my-swb` から `SWB_SETUP_CODE` をコピーしてください。その値を **Setup code** に入力してください。サインインしたら、このファイルを削除してください。
+アプリのサインインページを開いてください。SwB のフォルダーにある `.env.swb-setup-fly-my-swb` から `SWB_SETUP_CODE` をコピーしてください。その値を **Setup code** に入力してください。サインインしたら、このファイルを削除してください。
 
 料金の詳細は、[Fly.io の Free プラン](https://docs.fly.io/about/free-plan)と[現在の料金](https://fly.io/docs/about/pricing/)をご覧ください。
 

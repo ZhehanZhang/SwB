@@ -21,7 +21,7 @@ description: デバイスを接続して、そのデバイスのローカル機�
 uvx swb-one companion connect https://swb.example.com --cap notify
 ```
 
-入力内容を隠すプロンプトに、ペアリングコードを入力してください。コードは 1 回だけ使えて、10 分で期限が切れます。コードを作った人は監査ログに記録されます。
+入力内容を隠すプロンプトに、ペアリングコードを入力してください。コードは 1 回だけ使えて、10 分で期限が切れます。監査ログには、コードを作った人が記録されます。
 
 デバイスは、専用のキーを非公開のファイルに保存します。
 
@@ -32,7 +32,7 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | オプション | 機能 |
 | --- | --- |
 | `--cap notify` | デバイスにデスクトップ通知を表示します |
-| `--cap drop` | `~/SwB Drop` フォルダーで、1 ファイル 10 MiB までのファイルを共有します |
+| `--cap drop` | `~/SwB Drop` フォルダーで、1 つ 10 MiB までのファイルを共有します |
 | `--cap mcp --mcp NAME=COMMAND` | デバイス上の MCP サーバーのツールをエージェントが使えるようにします |
 | `--cap herdr` | [Herdr](/ja/docs/blocks/local-sessions#herdr) |
 | `--cap codex` | [Codex app server](/ja/docs/blocks/local-sessions#codex) |

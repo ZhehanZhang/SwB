@@ -35,7 +35,7 @@ docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 
 원격 서버라면 링크를 열기 전에 서버의 `8870` 포트를 로컬 `8870` 포트로 포워딩하세요.
 
-로그인 전에 `/healthz`로 요청하면 `status`와 `version`을 돌려받습니다. 전체 상태 정보는 소유자 세션이나 소유자 키로 확인하세요.
+로그인 전에 `/healthz`에 요청하면 `status`와 `version`을 돌려받습니다. 전체 상태 정보는 소유자 세션이나 소유자 키로 확인하세요.
 
 ## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
@@ -83,9 +83,9 @@ SwB을 구성하고 소유자와 클라이언트 요청에 대한 접근 규칙�
 
 [Railway의 SwB 템플릿](https://railway.com/deploy/swb)으로 배포하세요. 레플리카는 하나로 유지하세요. 템플릿은 `/data`에 볼륨을 마운트합니다.
 
-SwB을 항상 켜 두려면 Hobby 플랜을 사용하세요. Hobby 플랜은 월 5달러이며 5달러어치 사용량이 포함됩니다.
+SwB을 항상 켜 두려면 Hobby 플랜을 사용하세요. Hobby 플랜은 월 5달러이며 5달러 상당의 사용량이 포함됩니다.
 
-[Free 플랜](https://docs.railway.com/reference/pricing/free-trial)에는 매달 1달러어치 사용량이 포함됩니다. 이 금액으로 약 100 MB의 RAM을 하루 종일 쓸 수 있습니다. 테스트용 SwB 인스턴스는 유휴 상태에서 약 107 MiB를 사용했습니다. 1달러를 모두 쓰면 Free 플랜 서비스가 멈춥니다.
+[Free 플랜](https://docs.railway.com/reference/pricing/free-trial)에는 매달 1달러 상당의 사용량이 포함됩니다. 이 금액으로 약 100 MB의 RAM을 24시간 내내 쓸 수 있습니다. 테스트용 SwB 인스턴스는 유휴 상태에서 약 107 MiB를 사용했습니다. 1달러를 모두 쓰면 Free 플랜 서비스가 멈춥니다.
 
 ## Fly.io [#fly]
 

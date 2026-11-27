@@ -29,7 +29,7 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Abre el enlace de inicio de sesión de un solo uso que aparece en la terminal en un plazo de cinco minutos. Mantén el enlace en privado.
+Abre en un plazo de cinco minutos el enlace de inicio de sesión de un solo uso que aparece en la terminal. Mantén el enlace en privado.
 
 El navegador usa `http://localhost:8870` para el inicio de sesión del propietario. El comando dentro del contenedor usa el puerto `8000`. Compose guarda los datos en `./data`. Después de cambiar `.env`, ejecuta `docker compose up -d` de nuevo.
 
@@ -39,7 +39,7 @@ Una petición anónima a `/healthz` devuelve `status` y `version`. Usa una sesi�
 
 ## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Un Cloudflare Tunnel da a SwB una dirección HTTPS pública. Cloudflare ofrece los túneles en su plan gratuito.
+Un Cloudflare Tunnel da a SwB una dirección HTTPS pública. Los túneles están incluidos en el plan gratuito de Cloudflare.
 
 ### Túnel rápido
 
@@ -49,13 +49,13 @@ Usa un túnel rápido para probar SwB en una dirección temporal. Ejecuta este c
 cloudflared tunnel --url http://localhost:8870
 ```
 
-Define `SWB_PUBLIC_URL` con la dirección HTTPS que aparece en la terminal. Si tu configuración contiene `public_url`, actualiza también ese ajuste. Reinicia SwB. La dirección cambia cada vez que inicias el túnel. Los inicios de sesión OAuth y las llaves de acceso usan esa dirección. Usa un túnel con nombre para tener una dirección permanente.
+Asigna a `SWB_PUBLIC_URL` la dirección HTTPS que aparece en la terminal. Si tu configuración contiene `public_url`, actualiza también ese ajuste. Reinicia SwB. La dirección cambia cada vez que inicias el túnel. Los inicios de sesión OAuth y las llaves de acceso usan esa dirección. Usa un túnel con nombre para tener una dirección permanente.
 
 ### Túnel con nombre
 
-Usa una cuenta gratuita de Cloudflare con tu dominio. Sigue la [guía de configuración de Cloudflare](/es/docs/setup/cloudflare) para crear el túnel y configurar Access. Define `SWB_PUBLIC_URL` con tu dirección pública, como `https://swb.example.com`. Si tu configuración contiene `public_url`, actualiza también esa dirección.
+Usa una cuenta gratuita de Cloudflare con tu dominio. Sigue la [guía de configuración de Cloudflare](/es/docs/setup/cloudflare) para crear el túnel y configurar Access. Asigna a `SWB_PUBLIC_URL` tu dirección pública, como `https://swb.example.com`. Si tu configuración contiene `public_url`, actualiza también esa dirección.
 
-Para un túnel en el host de SwB, apunta su dirección de servicio a `http://localhost:8870`. Define `SWB_TRUSTED_PROXIES` con la dirección del conector, como `127.0.0.1/32` para una conexión de loopback IPv4.
+Para un túnel en el host de SwB, apunta su dirección de servicio a `http://localhost:8870`. Asigna a `SWB_TRUSTED_PROXIES` la dirección del conector, como `127.0.0.1/32` para una conexión de loopback IPv4.
 
 Para el túnel de Compose, apunta su dirección de servicio a `http://switchboard:8000`. Guarda el token del túnel en `.env` como `TUNNEL_TOKEN`. Añade la dirección o la red dedicada del conector a `trusted_proxies`. Inicia Compose con el perfil del túnel.
 
@@ -65,7 +65,7 @@ docker compose --profile tunnel up -d
 
 ## Proxies de confianza
 
-Un proxy inverso pasa las peticiones a SwB. Añade la dirección del proxy o su red dedicada a `trusted_proxies` en `config/switchboard.yaml`. Escribe los rangos de red en formato CIDR, como `192.0.2.0/24`.
+Un proxy inverso reenvía las peticiones a SwB. Añade la dirección del proxy o su red dedicada a `trusted_proxies` en `config/switchboard.yaml`. Escribe los rangos de red en formato CIDR, como `192.0.2.0/24`.
 
 También puedes definir `SWB_TRUSTED_PROXIES` en `.env`. Separa las entradas con comas. El ajuste de YAML tiene prioridad.
 
@@ -109,4 +109,4 @@ Ejecuta la exportación dentro del contenedor de Compose.
 docker compose exec -T switchboard swb export /data/export
 ```
 
-La exportación guarda archivos Markdown por ámbito en `./data/export` en el host. Incluye un `INDEX.md`. Define `memory.mirror_dir` para mantener una copia actualizada en Markdown.
+La exportación guarda archivos Markdown por ámbito en `./data/export` en el host. Incluye un `INDEX.md`. Configura `memory.mirror_dir` para mantener una copia actualizada en Markdown.

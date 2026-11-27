@@ -55,9 +55,9 @@ Setzen Sie `SWB_PUBLIC_URL` auf die HTTPS-Adresse aus dem Terminal. Wenn Ihre Ko
 
 Verwenden Sie ein kostenloses Cloudflare-Konto mit Ihrer Domain. Folgen Sie der [Anleitung zur Cloudflare-Einrichtung](/de/docs/setup/cloudflare), um den Tunnel zu erstellen und Access einzurichten. Setzen Sie `SWB_PUBLIC_URL` auf Ihre öffentliche Adresse, zum Beispiel `https://swb.example.com`. Aktualisieren Sie die Adresse in `public_url`, wenn Ihre Konfiguration diese Einstellung enthält.
 
-Für einen Tunnel auf dem SwB-Host richten Sie seine Dienstadresse auf `http://localhost:8870`. Setzen Sie `SWB_TRUSTED_PROXIES` auf die Adresse des Connectors, zum Beispiel `127.0.0.1/32` für eine IPv4-Loopback-Verbindung.
+Für einen Tunnel auf dem SwB-Host setzen Sie seine Dienstadresse auf `http://localhost:8870`. Setzen Sie `SWB_TRUSTED_PROXIES` auf die Adresse des Connectors, zum Beispiel `127.0.0.1/32` für eine IPv4-Loopback-Verbindung.
 
-Für den Tunnel in Compose richten Sie seine Dienstadresse auf `http://switchboard:8000`. Tragen Sie das Tunnel-Token in `.env` als `TUNNEL_TOKEN` ein. Tragen Sie die Adresse oder das dedizierte Netzwerk des Connectors in `trusted_proxies` ein. Starten Sie Compose mit dem Profil `tunnel`.
+Für den Tunnel in Compose setzen Sie seine Dienstadresse auf `http://switchboard:8000`. Tragen Sie das Tunnel-Token in `.env` als `TUNNEL_TOKEN` ein. Tragen Sie die Adresse oder das dedizierte Netzwerk des Connectors in `trusted_proxies` ein. Starten Sie Compose mit dem Profil `tunnel`.
 
 ```bash
 docker compose --profile tunnel up -d
@@ -81,7 +81,7 @@ Verwenden Sie eine einzelne SwB-Instanz mit einem persistenten Datenträger unte
 
 ## Railway [#railway]
 
-Stellen Sie SwB über die [SwB-Vorlage auf Railway](https://railway.com/deploy/swb) bereit. Behalten Sie ein einzelnes Replikat bei. Die Vorlage hängt ein Volume unter `/data` ein.
+Stellen Sie SwB über die [SwB-Vorlage auf Railway](https://railway.com/deploy/swb) bereit. Verwenden Sie genau ein Replikat. Die Vorlage hängt ein Volume unter `/data` ein.
 
 Für ein dauerhaft laufendes SwB verwenden Sie den Hobby-Plan. Er kostet 5 $ im Monat und enthält Nutzung im Wert von 5 $.
 
