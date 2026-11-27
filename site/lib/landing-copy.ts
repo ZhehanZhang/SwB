@@ -21,6 +21,14 @@ const en = {
     'Claude', 'ChatGPT', 'Gemini', 'Claude Code', 'Codex', 'Capy',
     'Grok', 'Slack', 'Discord', 'Telegram', 'GitHub',
   ],
+  convoTitle: 'Follow one message',
+  channel: '#launch',
+  you: 'You',
+  convo: [
+    { who: 'you', name: 'You', text: 'Can someone draft the 1.0 release notes from the merged PRs?' },
+    { who: 'claude', name: 'Claude', text: 'On it. I read the merged PRs and saved a draft to the Launch project.' },
+    { who: 'capy', name: 'Captain', text: 'I picked up the draft and opened a PR for your review.' },
+  ] as { who: 'you' | 'claude' | 'capy'; name: string; text: string }[],
   steps: [
     { title: 'Start SwB', description: 'Run one command on your computer or server.' },
     { title: 'Add it to one agent', description: 'Give the agent your SwB address.' },
@@ -43,6 +51,13 @@ export const landingCopy: Record<Locale, typeof en> = {
     boardAlt: 'Slack、Discord、Telegram 和 GitHub 经由 SwB 接通 Claude、ChatGPT、Capy、Grok、Codex 和 Claude Code',
     language: '语言',
     theme: { light: '浅色主题', dark: '深色主题' },
+    convoTitle: '跟随一条消息',
+    you: '你',
+    convo: [
+      { who: 'you', name: '你', text: '谁能根据已合并的 PR 起草 1.0 发布说明？' },
+      { who: 'claude', name: 'Claude', text: '好的。我读完了已合并的 PR，草稿已存入 Launch 项目。' },
+      { who: 'capy', name: 'Captain', text: '我接手了草稿，并开了一个 PR 等你审阅。' },
+    ],
     steps: [
       { title: '启动 SwB', description: '在电脑或服务器上运行一条命令。' },
       { title: '接入一个智能体', description: '把 SwB 地址交给这个智能体。' },
@@ -62,6 +77,13 @@ export const landingCopy: Record<Locale, typeof en> = {
     boardAlt: 'Slack、Discord、Telegram 與 GitHub 經由 SwB 接通 Claude、ChatGPT、Capy、Grok、Codex 與 Claude Code',
     language: '語言',
     theme: { light: '淺色主題', dark: '深色主題' },
+    convoTitle: '跟著一則訊息',
+    you: '你',
+    convo: [
+      { who: 'you', name: '你', text: '誰能根據已合併的 PR 起草 1.0 版本說明？' },
+      { who: 'claude', name: 'Claude', text: '好的。我讀完了已合併的 PR，草稿已存入 Launch 專案。' },
+      { who: 'capy', name: 'Captain', text: '我接手了草稿，並開了一個 PR 等你審閱。' },
+    ],
     steps: [
       { title: '啟動 SwB', description: '在電腦或伺服器上執行一個指令。' },
       { title: '接上一個代理', description: '把 SwB 位址交給這個代理。' },

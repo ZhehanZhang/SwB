@@ -7,7 +7,7 @@ export type MarkKind =
 const color: Partial<Record<MarkKind, string>> = {
   claude: '/marks/claude.svg',
   'claude-code': '/marks/claude.svg',
-  gemini: '/marks/gemini.svg',
+  gemini: '/marks/gemini-star.webp',
   discord: '/marks/discord.svg',
   telegram: '/marks/telegram.svg',
 };

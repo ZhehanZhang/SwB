@@ -7,6 +7,8 @@ import { isLocale, localize } from '@/lib/i18n';
 import { landingCopy } from '@/lib/landing-copy';
 import { pageMetadata } from '@/lib/metadata';
 import { MarkTile, type MarkKind } from '@/components/mark-tile';
+import { Conversation } from '@/components/conversation';
+import { StepFlow } from '@/components/step-flow';
 import { SwitchboardHero } from '@/components/switchboard-hero';
 import { repository } from '@/lib/source';
 
@@ -53,11 +55,11 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </div>
         </section>
         <SwitchboardHero label={copy.boardAlt} />
-        <figure className="mt-16 overflow-hidden rounded-lg sm:mt-24">
-          <img className="block h-auto w-full dark:hidden" width={2400} height={1350}
+        <figure className="swb-shot mt-16 overflow-hidden rounded-xl border sm:mt-24">
+          <img className="block h-auto w-full dark:hidden" width={2400} height={1500}
             src="/shots/hero-light.webp" srcSet="/shots/hero-light-1200.webp 1200w, /shots/hero-light.webp 2400w"
             sizes="(min-width: 1152px) 1088px, 100vw" alt={copy.shotAlt} fetchPriority="high" />
-          <img className="hidden h-auto w-full dark:block" width={2400} height={1350}
+          <img className="hidden h-auto w-full dark:block" width={2400} height={1500}
             src="/shots/hero-dark.webp" srcSet="/shots/hero-dark-1200.webp 1200w, /shots/hero-dark.webp 2400w"
             sizes="(min-width: 1152px) 1088px, 100vw" alt={copy.shotAlt} loading="lazy" />
         </figure>
@@ -69,15 +71,8 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             </figure>
           ))}
         </div>
-        <section className="grid gap-8 border-t py-10 md:grid-cols-3 md:gap-12 md:py-14">
-          {copy.steps.map(({ title, description }, index) => (
-            <div key={title}>
-              <span className="text-display-xl block text-fd-muted-foreground" aria-hidden="true">{index + 1}</span>
-              <h2 className="mt-2.5 font-display text-xl font-extrabold">{title}</h2>
-              <p className="mt-1 text-sm text-fd-muted-foreground">{description}</p>
-            </div>
-          ))}
-        </section>
+        <Conversation title={copy.convoTitle} channel={copy.channel} you={copy.you} lines={copy.convo} />
+        <StepFlow steps={copy.steps} />
       </main>
       <footer className="border-t">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 text-sm text-fd-muted-foreground sm:px-8">
