@@ -171,9 +171,8 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
                     text += f"PORT={port}\n"
                 ensure_private_data_dir(base / "data")
                 _write_file(env_path, text, force=exists, mode=0o600)
-                local_url = f"http://localhost:{port}"
-                _instance_config(base, configured or local_url, force=False,
-                                 alias=origin if not configured and host in LOOPBACK_HOSTS and origin != local_url else None)
+                explicit_url = public_url or (env.get("SWITCHBOARD_PUBLIC_URL", "").strip().rstrip("/") or None)
+                _instance_config(base, explicit_url, force=False)
                 values[OWNER_KEY] = key
                 previous[OWNER_KEY] = os.environ.get(OWNER_KEY)
             os.environ.update(values)
