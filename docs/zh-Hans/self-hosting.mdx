@@ -1,0 +1,112 @@
+---
+title: 自托管
+description: 用 Docker Compose 和 Cloudflare 在服务器上运行 SwB。
+---
+
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
+## 一键部署
+
+<DeployProviders lang="zh-Hans" />
+
+## Docker Compose
+
+安装 Docker Compose 2.24 或更高版本。用拥有数据目录的普通用户账号运行以下命令。
+
+```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
+(umask 077; cp .env.example .env)
+{
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
+mkdir -p data
+docker compose up -d --build --wait
+curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
+```
+
+在五分钟内打开终端显示的一次性登录链接。请保管好链接。
+
+所有者在浏览器中通过 `http://localhost:8870` 登录。容器内的命令使用 `8000` 端口。Compose 将数据保存在 `./data`。修改 `.env` 后，再次运行 `docker compose up -d`。
+
+如果 SwB 在远程服务器上运行，请先将服务器的 `8870` 端口转发到本机的 `8870` 端口，再打开链接。
+
+直接请求 `/healthz` 会返回 `status` 和 `version`。以所有者身份登录或使用所有者密钥，可查看完整的运行状态。
+
+## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
+
+Cloudflare 隧道为 SwB 提供公网 HTTPS 地址。Cloudflare 的免费套餐包含隧道服务。
+
+### 临时隧道
+
+用快速隧道的临时地址试用 SwB。`cloudflared` 是把 SwB 接入 Cloudflare 的程序。在 SwB 主机上运行此命令。
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+将 `SWB_PUBLIC_URL` 设为终端显示的 HTTPS 地址。如果配置文件含有 `public_url`，也更新该配置项。重启 SwB。每次启动隧道时，地址都会改变。OAuth 登录和通行密钥都绑定到该地址。使用命名隧道可保留固定地址。
+
+### 命名隧道
+
+使用免费 Cloudflare 账号和自己的域名。按 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare) 创建隧道并配置 Access。将 `SWB_PUBLIC_URL` 设为公网地址，例如 `https://swb.example.com`。如果配置文件含有 `public_url`，也更新该配置项。
+
+若隧道运行在 SwB 主机上，将服务地址设为 `http://localhost:8870`。将 `SWB_TRUSTED_PROXIES` 设为连接器的地址。IPv4 环回连接可用 `127.0.0.1/32`。
+
+若使用 Compose 隧道，将服务地址设为 `http://switchboard:8000`。把隧道令牌作为 `TUNNEL_TOKEN` 写入 `.env`。将连接器的地址或专用网段添加到 `trusted_proxies`。用隧道配置启动 Compose。
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+## 受信任的代理
+
+反向代理把请求转发给 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 中添加代理的地址或专用网段。用 CIDR 格式填写网段，例如 `192.0.2.0/24`。
+
+也可以在 `.env` 中设置 `SWB_TRUSTED_PROXIES`。用逗号分隔各项。SwB 优先使用 YAML 中的设置。
+
+如果 Cloudflare 隧道和 SwB 共用主机或 Docker 网络，请添加隧道连接器的地址或专用网段。连接器直接连接 SwB。如果 Cloudflare 边缘服务器直接连接 SwB，请添加 `cloudflare`。
+
+## Cloudflare Access
+
+参照 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare)配置 SwB，并为所有者和客户端请求设置访问规则。
+
+## 托管平台
+
+运行一个 SwB 实例。将持久磁盘挂载到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)介绍 Railway、Render 和 Fly.io 的模板以及 Koyeb 脚本。
+
+## Railway [#railway]
+
+使用 [Railway 上的 SwB 模板](https://railway.com/deploy/swb)部署。保留一个副本。模板会把存储卷挂载到 `/data`。
+
+使用 Hobby 套餐让 SwB 持续在线。Hobby 套餐每月 5 美元，包含 5 美元的使用额度。
+
+[免费套餐](https://docs.railway.com/reference/pricing/free-trial)每月提供 1 美元使用额度。这笔额度约可全天使用 100 MB 内存。测试中的 SwB 实例在空闲时占用约 107 MiB 内存。用完额度后，免费套餐的服务会停止。
+
+## Fly.io [#fly]
+
+使用 [Docker Compose 示例](#docker-compose)下载的 SwB 发布分支。安装 [Fly.io 命令行工具](https://docs.fly.io/flyctl/)。登录 Fly.io。
+
+在 SwB 文件夹中运行 `sh deploy/fly.sh my-swb`。将 `my-swb` 换成唯一的应用名。脚本用 `fly deploy --ha=false` 启动一台虚拟机。
+
+打开应用的登录页。从本地 `.env.swb-setup-fly-my-swb` 文件复制 `SWB_SETUP_CODE`。将它填入 **Setup code**。登录后删除该文件。
+
+计费详情请查看 [Fly.io 免费套餐](https://docs.fly.io/about/free-plan)和[当前费率](https://fly.io/docs/about/pricing/)。
+
+## 备份与升级
+
+复制数据目录前，先停止 SwB。完整保留该目录、数据库和 `mcp-events.key`、`claim-key` 等密钥。也要备份配置文件和 `.env`。妥善保管备份。安装或构建新版本。使用原数据目录启动 SwB。
+
+## 导出记忆
+
+在 Compose 容器中执行导出。
+
+```bash
+docker compose exec -T switchboard swb export /data/export
+```
+
+导出的 Markdown 文件按范围存放在主机上的 `./data/export` 中。目录中还有一个 `INDEX.md`。设置 `memory.mirror_dir` 可保留随记忆更新的 Markdown 副本。

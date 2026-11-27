@@ -436,7 +436,7 @@ class Auth:
         return data
 
     async def access_email(self, request: Request) -> str | None:
-        assertion = request.headers.get("cf-access-jwt-assertion")
+        assertion = request.headers.get("cf-access-jwt-assertion") or request.cookies.get("CF_Authorization")
         if not assertion or not self.cfg.access_configured:
             return None
         if self._access_verifier:

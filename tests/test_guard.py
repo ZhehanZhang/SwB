@@ -30,7 +30,10 @@ def test_failed_bearer_keys_are_audited_and_locked_out(make):
      {"CF-Connecting-IP": "198.51.100.1", "X-Forwarded-For": "198.51.100.2, 198.51.100.3, 192.0.2.2"}, "198.51.100.3"),
     ("192.0.2.0/24", "192.0.2.1", [(b"x-forwarded-for", b"198.51.100.1"), (b"x-forwarded-for", b"198.51.100.3, 192.0.2.2")],
      "198.51.100.3"),
-    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "198.51.100.1, unknown"}, "192.0.2.1"),
+    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "198.51.100.1, unknown"}, "198.51.100.1"),
+    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "198.51.100.1, junk, 192.0.2.2, fe80::1%eth0"}, "198.51.100.1"),
+    ("192.0.2.0/24", "192.0.2.1", [(b"x-forwarded-for", b"198.51.100.4"), (b"x-forwarded-for", b"unknown, ")], "198.51.100.4"),
+    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "unknown, junk, 192.0.2.2"}, "192.0.2.1"),
     ("192.0.2.0/24", "192.0.2.1", [(b"cf-connecting-ip", b"\xff")], "192.0.2.1"),
 ])
 def test_rate_limits_and_audit_share_the_resolved_proxy_address(tmp_path, proxies, peer, headers, expected):
