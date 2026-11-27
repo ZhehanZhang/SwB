@@ -66,6 +66,7 @@ export function ChannelModeRow({ row, status, label, mapping, children, columns 
     </select>
   )
   const error = update.isError && <div role="alert" className="mt-1 text-caption text-destructive">Mode update failed</div>
+  const agent = row.target && <span className="min-w-0 wrap-anywhere">Agent <span className="font-mono">{row.target}</span></span>
   return (
     <>
       <tr className="border-b">
@@ -77,7 +78,10 @@ export function ChannelModeRow({ row, status, label, mapping, children, columns 
               <ChevronDown aria-hidden className={open ? "rotate-180" : undefined} />
             </Button>
           </div>
-          <div className="text-caption text-muted-foreground">{sourceLabel[row.source]}</div>
+          <div className="flex flex-wrap gap-x-3 text-caption text-muted-foreground">
+            <span>{sourceLabel[row.source]}</span>
+            {agent}
+          </div>
           {error}
         </td>
         <td colSpan={columns} className="p-0 md:hidden">
@@ -87,9 +91,10 @@ export function ChannelModeRow({ row, status, label, mapping, children, columns 
             <div className="pointer-events-none relative min-w-0 truncate text-label-sm">{label}</div>
             <div className="relative z-10">{select}</div>
             <ChevronDown aria-hidden className={`pointer-events-none relative size-4 text-muted-foreground ${open ? "rotate-180" : ""}`} />
-            <div className="pointer-events-none relative col-span-3 flex min-w-0 items-baseline gap-x-3 text-caption text-muted-foreground">
+            <div className="pointer-events-none relative col-span-3 flex min-w-0 flex-wrap items-baseline gap-x-3 text-caption text-muted-foreground">
               {mapping && <span className="min-w-0 truncate font-mono">{mapping}</span>}
               <span className="shrink-0">{sourceLabel[row.source]}</span>
+              {agent}
             </div>
           </div>
           {error}
@@ -97,16 +102,11 @@ export function ChannelModeRow({ row, status, label, mapping, children, columns 
       </tr>
       <tr id={detailId} hidden={!open} className="border-b">
         <td colSpan={columns} className="space-y-4 py-3">
-          {(row.target || row.digest) && (
+          {row.digest && (
             <dl className="grid gap-x-5 gap-y-1.5 sm:grid-cols-[auto_1fr]">
-              {row.target && <><dt className="text-muted-foreground">Agent</dt><dd className="font-mono">{row.target}</dd></>}
-              {row.digest && (
-                <>
-                  <dt className="text-muted-foreground">Pending messages</dt><dd>{row.digest.pending}</dd>
-                  {row.digest.next_at !== null && <><dt className="text-muted-foreground">Next report</dt><dd className="font-mono">{displayDate(row.digest.next_at)}</dd></>}
-                  <dt className="text-muted-foreground">Destination</dt><dd><Link to="/inbox" className="underline">Inbox</Link></dd>
-                </>
-              )}
+              <dt className="text-muted-foreground">Pending messages</dt><dd>{row.digest.pending}</dd>
+              {row.digest.next_at !== null && <><dt className="text-muted-foreground">Next report</dt><dd className="font-mono">{displayDate(row.digest.next_at)}</dd></>}
+              <dt className="text-muted-foreground">Destination</dt><dd><Link to="/inbox" className="underline">Inbox</Link></dd>
             </dl>
           )}
           {status.schema.actions.length > 0 && row.kind !== "dm" && (

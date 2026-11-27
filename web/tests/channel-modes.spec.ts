@@ -50,6 +50,39 @@ test("connection and project controls use the owner mode API", async ({ page, co
   await expect(page.getByRole("combobox", { name: "Mode for -1001000" })).toHaveValue("watch")
 })
 
+test("console mode and action edits keep the bound agent visible", async ({ page, request }) => {
+  const session = await request.get("/auth/session")
+  const { csrf } = await session.json()
+  const headers = { Origin: new URL(session.url()).origin, "X-CSRF-Token": csrf }
+  const repo = "example-org/example-repo"
+  const placement = { block: "repo-events", space: "release", channel: repo }
+  const target = "agent:claude-code"
+  const bound = await request.post("/api/modes", { headers, data: { ...placement, mode: "triage", target } })
+  expect(bound.ok()).toBeTruthy()
+  try {
+    await page.goto("/connections/github")
+    const mode = page.getByRole("combobox", { name: "Mode for " + repo })
+    const row = page.getByRole("row").filter({ has: mode })
+    const agent = row.getByText("Agent " + target, { exact: true }).filter({ visible: true })
+    await expect(agent).toBeVisible()
+    await mode.selectOption("assist")
+    await expect(mode).toHaveValue("assist")
+    await expect(agent).toBeVisible()
+    await mode.selectOption("triage")
+    await page.getByRole("button", { name: "Details for " + repo }).click()
+    const notify = page.getByRole("checkbox", { name: "Notify owner" })
+    await notify.click()
+    await expect(notify).toBeChecked()
+    await expect(agent).toBeVisible()
+    await page.reload()
+    await expect(mode).toHaveValue("triage")
+    await expect(agent).toBeVisible()
+  } finally {
+    const cleared = await request.post("/api/modes", { headers, data: { ...placement, mode: "inherit" } })
+    expect(cleared.ok()).toBeTruthy()
+  }
+})
+
 test("claims and login share the console theme and follow the system by default", async ({ page, browser }) => {
   const paths = ["/fixture/token", "/fixture/credentials", "/fixture/login"]
   await page.setExtraHTTPHeaders({ "cf-access-jwt-assertion": "invalid" })
