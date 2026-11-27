@@ -290,7 +290,7 @@ def _sender(sender: Any) -> dict[str, Any] | None:
                     "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot") or None
 
 
-def _conversation(row: dict[str, Any], endpoints: tuple[Any, str | None], captains: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | None], captains: dict[str, dict[str, Any]]) -> dict[str, Any]:
     sender, target = endpoints
     meta = row["meta"]
     first_sender = _sender(meta.get("from"))
@@ -305,9 +305,11 @@ def _conversation(row: dict[str, Any], endpoints: tuple[Any, str | None], captai
             first_target = dot
     first_target = capy_label(row.get("target") or first_target or row["ref"], row["destination"], captains,
                               name=first_target) or first_target
+    block = core.blocks.get(row["destination"])
     return {**_fields(row, "handle", "owner", "destination", "ref", "project", "title", "target", "status", "open"),
             "created_at": iso(row["created_at"]), "updated_at": iso(row["updated_at"]),
-            "first_sender": first_sender, "first_target": first_target}
+            "first_sender": first_sender, "first_target": first_target,
+            "destination_kind": block.manifest.id if block else None}
 
 
 def _pending_write(row: dict[str, Any]) -> dict[str, Any]:
@@ -329,7 +331,7 @@ async def inbox(request: Request) -> JSONResponse:
     captains = await captain_targets(core, (row["destination"] for row in roots))
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
                          "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"])} for row in pauses],
-                         "conversations": [_conversation(row, endpoints.get(row["handle"], (None, None)), captains) for row in roots]})
+                         "conversations": [_conversation(core, row, endpoints.get(row["handle"], (None, None)), captains) for row in roots]})
 
 
 async def conversation(request: Request) -> JSONResponse:
@@ -355,7 +357,7 @@ async def conversation(request: Request) -> JSONResponse:
         items.append(projected)
     endpoints = core.inbox.first_endpoints([handle])
     captains = await captain_targets(core, (row["destination"],))
-    return JSONResponse({"conversation": _conversation(row, endpoints.get(handle, (None, None)), captains),
+    return JSONResponse({"conversation": _conversation(core, row, endpoints.get(handle, (None, None)), captains),
                          "items": items, "cursor": out["cursor"]})
 
 

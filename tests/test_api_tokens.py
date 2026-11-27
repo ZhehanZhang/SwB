@@ -103,6 +103,25 @@ def test_only_owner_can_revoke_a_paired_key(make):
     assert core.audit.recent(action="connect_revoke", outcome="ok")[0]["target"] == key["key_id"]
 
 
+def test_chat_credential_kinds_come_from_configured_blocks(make):
+    token = "fake-env-value-must-not-be-disclosed"
+    cfg = base_config(version=2, blocks={
+        "release-bot": {"use": "discord", "connect": False, "token_env": "RELEASE_TOKEN"},
+        "ops-bot": {"use": "telegram", "connect": False, "token_env": "OPS_TOKEN"},
+    })
+    core, client = make(config=cfg, env={**default_env(), "RELEASE_TOKEN": token})
+    core.claims.mint("OPS_TOKEN", PUBLIC)
+    core.claims.mint("DISCORD_UNRELATED", PUBLIC)
+
+    response = client.get("/api/tokens", headers=OWNER)
+    assert token not in response.text
+    data = response.json()
+    assert [(row["label"], row["kind"]) for row in data["stored"]] == [("RELEASE_TOKEN", "discord")]
+    assert {row["label"]: row["kind"] for row in data["waiting"]} == {
+        "OPS_TOKEN": "telegram", "DISCORD_UNRELATED": "generic",
+    }
+
+
 def test_standalone_handoff_uses_only_local_accent_assets_and_a_password_field(make):
     core, client = make(env=default_env())
     path = urlsplit(core.claims.mint("EXAMPLE_TOKEN", PUBLIC)).path

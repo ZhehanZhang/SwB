@@ -22,6 +22,7 @@ export type Conversation = {
   handle: string
   owner: string
   destination: string
+  destination_kind?: string | null
   ref: string
   project: string | null
   title: string | null
@@ -105,7 +106,7 @@ function isPause(value: unknown): value is Pause {
 function isConversation(value: unknown): value is Conversation {
   return isRecord(value) && strings(value, ["handle", "owner", "destination", "ref"])
     && nullableStrings(value, ["project", "title", "target", "status", "created_at", "updated_at"]) && typeof value.open === "boolean"
-    && optionalStrings(value, ["first_target"])
+    && optionalStrings(value, ["first_target", "destination_kind"])
     && (value.first_sender == null || isSender(value.first_sender))
 }
 
@@ -153,19 +154,24 @@ export function principalLabel(value: string) {
 export function participants(row: Conversation): { from: string; to: string; fromKind?: string; toKind?: string } {
   const sender = row.first_sender ?? undefined
   const target = row.first_target || row.target
-  const kind = sender?.kind || undefined
   const channel = sender?.channel_name || sender?.channel
+  const destination = row.destination_kind || row.destination
   if (row.destination === "mailbox") {
     return {
-      from: principalLabel(kind === "slack" && channel ? channelLabel(channel) : senderLabel(sender) || row.ref),
+      from: principalLabel(sender?.kind === "slack" && channel ? channelLabel(channel) : senderLabel(sender) || row.ref),
       to: principalLabel(target || row.owner),
-      fromKind: kind,
+      fromKind: senderLogoKind(sender) ?? row.ref,
+      toKind: row.target?.match(/^agent:(.+)$/)?.[1],
     }
   }
-  if (row.destination === "slack") {
+  if (destination === "slack") {
     return { from: channel ? channelLabel(channel) : principalLabel(senderLabel(sender) || row.ref), to: principalLabel(target || row.owner), fromKind: "slack" }
   }
-  return { from: principalLabel(row.owner), to: principalLabel(target || row.ref || row.destination), toKind: row.destination }
+  return { from: principalLabel(row.owner), to: principalLabel(target || row.ref || row.destination), fromKind: row.owner, toKind: destination }
+}
+
+export function senderLogoKind(sender?: Sender) {
+  return (sender?.kind === "agent" ? sender.agent : sender?.kind) || undefined
 }
 
 export function senderLabel(sender?: Sender) {

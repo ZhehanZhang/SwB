@@ -1,7 +1,15 @@
 :root {
+  --background: #ffffff;
+  --foreground: #18181b;
+  --muted: #52525b;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --button-foreground: #fafafa;
+  --accent: #333338;
+  --logo-slack: #4a154b;
   color-scheme: light;
-  color: #18181b;
-  background: #fff;
+  color: var(--foreground);
+  background: var(--background);
   font-family: Inter, system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.5;
@@ -38,7 +46,7 @@ h1 {
   letter-spacing: -.03em;
 }
 
-.requester, .scope { color: #52525b; }
+.requester, .scope { color: var(--muted); }
 .requester {
   display: flex;
   align-items: center;
@@ -56,10 +64,10 @@ input[type="password"] {
   min-height: 36px;
   margin: 0;
   padding: 8px 12px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   color: inherit;
-  background: #fff;
+  background: var(--background);
   font: 13px ui-monospace, monospace;
 }
 
@@ -87,14 +95,19 @@ svg {
   stroke-linejoin: round;
 }
 
-.requester svg {
+.requester-tile {
+  display: grid;
   width: 22px;
   height: 22px;
-  padding: 2px;
-  border: 1px solid #e4e4e7;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: #bd6547;
+  color: var(--foreground);
 }
+
+.requester-tile[data-connector="slack"] { color: var(--logo-slack); }
+.requester-tile svg { stroke: none; }
 
 .actions {
   display: flex;
@@ -111,15 +124,17 @@ button {
   padding: 6px 16px;
   border: 0;
   border-radius: 6px;
-  color: #fafafa;
-  background: #18181b;
+  color: var(--button-foreground);
+  background: var(--foreground);
   font: inherit;
   font-weight: 500;
   cursor: pointer;
 }
 
-button:hover { background: #333338; }
-:focus-visible { outline: 2px solid #333338; outline-offset: 2px; }
+@media (hover: hover) {
+  button:hover { background: var(--accent); }
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 footer {
   display: flex;
@@ -128,12 +143,28 @@ footer {
   gap: 6px 16px;
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #e4e4e7;
-  color: #52525b;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
   font-size: 12px;
 }
 
 footer span:first-child { font-family: ui-monospace, monospace; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #fafafa;
+    --muted: #a1a1aa;
+    --border: #27272a;
+    --border-strong: #3f3f46;
+    --button-foreground: #18181b;
+    --accent: #e4e4e7;
+    --logo-slack: #e9d8ea;
+    color-scheme: dark;
+  }
+
+  .brand { filter: invert(1); }
+}
 
 @media (max-width: 560px) {
   body {

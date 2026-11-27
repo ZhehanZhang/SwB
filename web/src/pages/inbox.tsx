@@ -13,7 +13,7 @@ import { requestJson, sessionQuery } from "@/lib/api"
 import { displayReference } from "@/lib/display-reference"
 import { cn } from "@/lib/utils"
 import {
-  approvalTitle, channelLabel, isConversationPage, isInbox, isResumed, isWriteDecision, participants, principalLabel, senderLabel,
+  approvalTitle, channelLabel, isConversationPage, isInbox, isResumed, isWriteDecision, participants, principalLabel, senderLabel, senderLogoKind,
   type Conversation, type ConversationItem, type Pause, type PendingWrite,
 } from "./inbox/data"
 
@@ -45,7 +45,7 @@ function RelativeTime({ value }: { value: string | null }) {
 function Person({ label, kind, className }: { label: string; kind?: string | null; className?: string }) {
   return (
     <span className={cn("flex min-w-0 items-center gap-2", className)}>
-      <Logo kind={kind && kind !== "agent" ? kind : label} className="size-5" />
+      <Logo kind={kind || label} className="size-5" />
       <span className="min-w-0 wrap-anywhere">{label}</span>
     </span>
   )
@@ -140,7 +140,7 @@ function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conve
   return (
     <NeedsRow
       name={displayReference(conversation?.title || pause.root)}
-      kind={conversation?.destination}
+      kind={conversation?.destination_kind || conversation?.destination}
       title={<Link className="hover:underline" to={conversationLink(pause.root)}>Paused at the turn cap</Link>}
       at={pause.paused_at}
       preview={`${pause.turns} turns`}
@@ -273,7 +273,7 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
     <li id={`message-${item.cursor}`} className="scroll-mt-4">
       <ListRow className="block space-y-1.5 px-0 py-3.5">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <Person label={author ? principalLabel(author) : kind} kind={from?.kind} className="font-semibold" />
+          <Person label={author ? principalLabel(author) : kind} kind={senderLogoKind(from)} className="font-semibold" />
           <span className="font-mono text-mono-sm text-muted-foreground"><RelativeTime value={item.at} /></span>
         </div>
         {(provenance.length > 0 || item.in_reply_to || (author && kind !== "message") || item.status) && (

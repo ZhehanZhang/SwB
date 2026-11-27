@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { auditText, isAuditPage, type AuditEvent } from "../src/pages/audit/events.js"
-import { participants, type Conversation } from "../src/pages/inbox/data.js"
+import { connectorKind } from "../src/lib/connector-kind.js"
+import { auditActorKind, auditText, isAuditPage, type AuditEvent } from "../src/pages/audit/events.js"
+import { participants, senderLogoKind, type Conversation } from "../src/pages/inbox/data.js"
 
 const jam = "jam_CAPTAIN123"
 const captain = `capy:captain:${jam}`
@@ -42,6 +43,17 @@ test("audit displays the key from project and general memory paths", () => {
     "Deleted memory quick-start.md")
 })
 
+test("Audit Who uses explicit connector origins without overwriting MCP personas", () => {
+  for (const origin of ["slack", "discord", "telegram", "github", "chatgpt", "muse"]) {
+    assert.equal(auditActorKind(event("post", { source: "Alex", origin })), origin)
+  }
+  assert.equal(auditActorKind(event("post", { source: "codex", origin: "mcp" })), "codex")
+  assert.equal(auditActorKind(event("post", { source: "unrelated", origin: "discord-tools" })), "unrelated")
+  assert.equal(connectorKind("OpenAI"), "chatgpt")
+  assert.equal(connectorKind("dots"), "chatgpt")
+  assert.equal(connectorKind("muse_code"), "muse")
+})
+
 test("inbox participants prefer the Captain label and keep a human fallback", () => {
   const row: Conversation = {
     owner: "codex", handle: "h_test", destination: "capy", ref: jam, target: captain, project: null,
@@ -50,4 +62,18 @@ test("inbox participants prefer the Captain label and keep a human fallback", ()
   assert.equal(participants({ ...row, first_target: "Conductor" }).to, "Conductor")
   assert.equal(participants(row).to, "Captain")
   assert.equal(participants({ ...row, target: null }).to, "Capy thread")
+})
+
+test("inbox preserves participant labels and uses provider and agent identities for logos", () => {
+  const row: Conversation = {
+    owner: "chatgpt", handle: "h_chat", destination: "release-bot", destination_kind: "discord",
+    ref: "ops", target: null, project: null, title: null, status: null, open: true, created_at: null, updated_at: null,
+  }
+  assert.deepEqual(participants(row), { from: "chatgpt", to: "ops", fromKind: "chatgpt", toKind: "discord" })
+  const sender = { kind: "agent", label: "Ops helper", agent: "chatgpt" }
+  assert.deepEqual(participants({ ...row, destination: "mailbox", destination_kind: null, target: "agent:codex",
+    first_target: "Code reviewer", first_sender: sender }),
+  { from: "Ops helper", to: "Code reviewer", fromKind: "chatgpt", toKind: "codex" })
+  assert.equal(senderLogoKind({ kind: "telegram", user_name: "Ops helper" }), "telegram")
+  assert.equal(senderLogoKind({ kind: "capy_thread", title: "ChatGPT" }), "capy_thread")
 })
