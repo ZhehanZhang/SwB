@@ -101,12 +101,12 @@ test('each demo window uses canonical avatars and marks only relayed senders', a
   await page.goto('/');
 
   const scenes = [
-    { app: 'claude', title: 'Claude', senders: ['Claude', 'Grok Bot', 'Claude'], relayed: [1] },
-    { app: 'muse', title: 'Muse', senders: ['You', 'Muse', 'Muse'], relayed: [] },
-    { app: 'grok-bot', title: 'Grok Bot', senders: ['Grok Bot', 'Grok Bot', 'Claude', 'Capy Captain', 'Grok Bot'], relayed: [2, 3] },
+    { app: 'claude', title: 'Claude', senders: ['Claude', 'Grok Bot', 'Claude', 'Grok Bot'], relayed: [1, 3] },
+    { app: 'muse', title: 'Muse', senders: ['You', 'Muse', 'You', 'Muse'], relayed: [] },
+    { app: 'grok-bot', title: 'Grok Bot', senders: ['Grok Bot', 'Claude', 'Grok Bot', 'Capy Captain'], relayed: [1, 3] },
     { app: 'slack', title: 'Slack #launch', senders: ['You', 'Claude', 'Grok Bot', 'Capy Captain'], relayed: [1, 2, 3] },
-    { app: 'github', title: 'GitHub', senders: ['You', 'Grok Bot', 'Grok Bot'], relayed: [1, 2] },
-    { app: 'claude-code', title: 'Claude Code', senders: ['Capy Captain', 'Claude Code', 'Claude Code'], relayed: [0] },
+    { app: 'github', title: 'GitHub', senders: ['You', 'Grok Bot', 'Grok Bot', 'You'], relayed: [1, 2] },
+    { app: 'claude-code', title: 'Claude Code', senders: ['Capy Captain', 'Claude Code', 'Claude Code', 'Capy Captain'], relayed: [0, 3] },
   ];
   const marks: Record<string, string> = {
     Claude: '/avatars/claude.png',
@@ -155,7 +155,7 @@ test('each demo window uses canonical avatars and marks only relayed senders', a
   }
 });
 
-test('reduced motion keeps the diagram still and shows every final transcript', async ({ page }) => {
+test('reduced motion keeps the diagram still', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready);
@@ -164,13 +164,36 @@ test('reduced motion keeps the diagram still and shows every final transcript', 
   const app = board.getByRole('button', { name: 'Claude', exact: true });
   await expect(app).toHaveCSS('animation-name', 'none');
   const canvas = board.locator('canvas');
-  const cordImage = () => canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL());
-  await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => {
+  const spokes = board.locator('.swb-transit');
+  await expect(spokes).toHaveCount(14);
+  const stillSpokes = () => spokes.evaluateAll((paths) => paths.map((path) => {
+    const style = getComputedStyle(path);
+    return { d: path.getAttribute('d'), stroke: style.stroke, width: style.strokeWidth, active: path.hasAttribute('data-active') };
+  }));
+  const canvasHasPixels = () => canvas.evaluate((node: HTMLCanvasElement) => {
     const pixels = node.getContext('2d')!.getImageData(0, 0, node.width, node.height).data;
     return pixels.some((value, index) => index % 4 === 3 && value > 0);
-  })).toBe(true);
-  const cords = await cordImage();
+  });
+  const cords = await stillSpokes();
+  expect(cords.every(({ width, stroke }) => parseFloat(width) >= 1.75 && stroke !== 'none')).toBe(true);
+  expect(cords.filter(({ active }) => active)).toHaveLength(2);
+  expect(await canvasHasPixels()).toBe(false);
+  await page.waitForTimeout(1500);
+  expect(await stillSpokes()).toEqual(cords);
+  expect(await canvasHasPixels()).toBe(false);
 
+  await app.click();
+  const setup = page.getByRole('dialog', { name: 'Claude' });
+  await expect(setup.getByRole('button', { name: 'Copy prompt' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(setup).toBeHidden();
+  await expect(app).toBeFocused();
+});
+
+test('reduced motion shows every final transcript in a fitted row', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.evaluate(() => document.fonts.ready);
   const demo = page.locator('.swb-exchange');
   const messages = demo.locator('.swb-win-message:visible');
   const total = exchangeScenes.reduce((sum, scene) => sum + scene.messages.length, 0);
@@ -179,30 +202,38 @@ test('reduced motion keeps the diagram still and shows every final transcript', 
   const frame = await messages.allTextContents();
   await page.waitForTimeout(1500);
   expect(await messages.allTextContents()).toEqual(frame);
-  expect(await cordImage()).toBe(cords);
 
   for (const [path, lang] of [['/', 'en'], ['/zh-Hans', 'zh-Hans'], ['/zh-Hant', 'zh-Hant']] as const) {
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready);
-    for (const width of [390, 900, 1024, 1280, 1440]) {
+    for (const width of [320, 390, 899, 900, 1024, 1279, 1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      expect(await demo.locator('.swb-win-body').evaluateAll((bodies) => bodies.every((node) => {
-        const { top, bottom } = node.getBoundingClientRect();
-        return [...node.querySelectorAll('.swb-win-message')].every((entry) => {
-          const rect = entry.getBoundingClientRect();
-          return rect.height > 0 && rect.top >= top && rect.bottom <= bottom;
-        });
-      })), `${lang} ${width}px complete transcripts`).toBe(true);
+      const frames = await demo.locator('.swb-win-body').evaluateAll((bodies) => bodies.map((node) => {
+        const { top, bottom, height } = node.getBoundingClientRect();
+        const messages = [...node.querySelectorAll('.swb-win-message')];
+        const entries = messages.map((entry) => entry.getBoundingClientRect());
+        return {
+          top,
+          height,
+          fits: entries.length === 4 && entries.every((rect) => rect.height > 0 && rect.top >= top && rect.bottom <= bottom),
+          topGap: entries[0]?.top - top,
+          lines: messages.map((message) => {
+            const text = message.querySelector('p:last-child')!;
+            return text.getBoundingClientRect().height / parseFloat(getComputedStyle(text).lineHeight);
+          }),
+        };
+      }));
+      const rowHeights = new Map<number, number>();
+      for (const [index, { top, height, fits, topGap, lines }] of frames.entries()) {
+        const label = `${lang} ${width}px ${exchangeScenes[index].app}`;
+        expect(fits, `${label} complete transcript`).toBe(true);
+        expect(topGap, `${label} top gap`).toBeLessThanOrEqual(48);
+        if (width === 1440) expect(Math.max(...lines), `${label} lines per message`).toBeLessThanOrEqual(2);
+        if (rowHeights.has(top)) expect(height, `${label} row height`).toBe(rowHeights.get(top));
+        rowHeights.set(top, height);
+      }
     }
     const accessible = await demo.ariaSnapshot();
     for (const scene of exchangeScenes) expect(accessible).toContain(scene.messages.at(-1)![1][lang]);
   }
-
-  await page.goto('/');
-  await app.click();
-  const setup = page.getByRole('dialog', { name: 'Claude' });
-  await expect(setup.getByRole('button', { name: 'Copy prompt' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(setup).toBeHidden();
-  await expect(app).toBeFocused();
 });
