@@ -199,6 +199,7 @@ async def test_hook_cli_is_silent_and_receiver_enforces_permissions(hook_home, m
 async def test_hook_receiver_does_not_follow_state_directory_symlink(hook_home):
     private = hook_home.with_name("private")
     private.mkdir(mode=0o755)
+    private.chmod(0o755)
     hook_home.symlink_to(private, target_is_directory=True)
     with pytest.raises(OSError):
         await HooksCapability().run(CompanionContext("companion", None))
