@@ -68,18 +68,27 @@ def _write_file(path: Path, text: str, *, force: bool, mode: int) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def _init(base: Path, public_url: str | None, force: bool) -> None:
+def _instance_config(base: Path, public_url: str | None, *, force: bool, alias: str | None = None) -> None:
     config = {"version": 2, "blocks": {"mcp": {"use": "mcp"}}}
     if public_url is not None:
-        config["public_url"] = _url(public_url, public=True)
+        config["public_url"] = public_url
+    if alias is not None:
+        config["public_url_aliases"] = [alias]
+    config_path = base / CONFIG
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
+
+
+def _init(base: Path, public_url: str | None, force: bool) -> None:
+    if public_url is not None:
+        public_url = _url(public_url, public=True)
     config_path, env_path = base / CONFIG, base / ".env"
     for path in (config_path, env_path):
         if not force and os.path.lexists(path):
             raise CliError(f"{path} already exists; use --force to replace it.")
     if not os.path.lexists(config_path):
         ensure_private_data_dir(base / "data")
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
+    _instance_config(base, public_url, force=force)
     _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
     start = "swb up" if base == Path.cwd() else f"swb up --dir {shlex.quote(str(base))}"
     print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}, then {start.replace('swb up', 'swb login-link', 1)} to sign in.")
@@ -260,6 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
     up = commands.add_parser("up", help="run the SwB server")
     up.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
+    up.add_argument("--public-url", help="public base URL for this server")
     up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
     connect.add_argument("what", help="connection kind, for example mcp-client")
@@ -305,7 +315,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "up":
             from .cli_up import run
 
-            run(base, env, args.tunnel, host=args.host, instance=args.dir is not None)
+            run(base, env, args.tunnel, host=args.host, instance=args.dir is not None, public_url=args.public_url)
             return
         arguments = {}
         if args.command == "connect":
@@ -334,6 +344,6 @@ def main(argv: list[str] | None = None) -> None:
             request_log.setLevel(level)
         print(_display(tool, payload).replace(key, "[redacted]"))
     except (CliError, ConfigError) as error:
-        parser.exit(1, f"swb: {error}\n")
+        parser.exit(2 if args.command == "up" and isinstance(error, ConfigError) else 1, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(1, f"swb: couldn't read or write the instance files ({type(error).__name__}).\n")
