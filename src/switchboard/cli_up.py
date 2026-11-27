@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import platform
 import queue
@@ -13,8 +15,8 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from threading import Thread
 
-from .cli import CONFIG, CliError
-from .config import DEFAULT_PORT, bind_address
+from .cli import CliError
+from .config import DEFAULT_PORT, Instance, bind_address
 
 _TUNNELS = {
     "cloudflare": ("cloudflared", ("tunnel", "--no-autoupdate", "--url"), "trycloudflare.com"),
@@ -98,6 +100,18 @@ def _interrupt(*_: object) -> None:
     raise KeyboardInterrupt
 
 
+def _notice_home_data(data: Path, instance_data: Path) -> None:
+    instance_id = hashlib.sha256(os.fsencode(instance_data)).hexdigest()
+    marker = data / f".instance-data-notice-{instance_id}"
+    try:
+        marker.touch(mode=0o600, exist_ok=False)
+    except FileExistsError:
+        return
+    logging.getLogger("switchboard").warning(
+        "Using existing data in %s instead of %s. Set SWITCHBOARD_DATA_DIR to choose a location.", data, instance_data,
+    )
+
+
 def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | None, instance: bool) -> None:
     from .__main__ import main as serve
 
@@ -112,12 +126,6 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
         "PORT": str(port),
         "FORWARDED_ALLOW_IPS": "127.0.0.1,::1",
     }
-    data = None
-    if instance:
-        values["SWITCHBOARD_CONFIG"] = str(base / CONFIG)
-        data = base / "data"
-    elif not (env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA")):
-        values["SWITCHBOARD_DATA_DIR"] = str(Path.home() / ".local/share/switchboard")
     previous = {k: os.environ.get(k) for k in values}
     previous_sigterm = signal.signal(signal.SIGTERM, _interrupt)
     try:
@@ -132,7 +140,8 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
                     raise CliError(f"Could not bind {origin}. Choose another PORT.") from None
                 tunnel_url = stack.enter_context(_tunnel(tunnel, origin))
             os.environ.update(values)
-            serve(["serve"], listener=listener, tunnel_url=tunnel_url, data_dir=data, announce=True)
+            serve(["serve"], listener=listener, tunnel_url=tunnel_url,
+                  instance=Instance(base, explicit=instance), announce=True, on_home_fallback=_notice_home_data)
     except KeyboardInterrupt:
         pass
     finally:

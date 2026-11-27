@@ -6,20 +6,23 @@ from collections.abc import Mapping
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from .config import ConfigError
+from .config import ConfigError, Instance, instance_data_dir
+from .store import ensure_private_data_dir
 
 OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
 PLATFORM = "SWITCHBOARD_DEPLOY_PLATFORM"
 
 
-def volume_owner_key(env: Mapping[str, str], *, create: bool = False) -> str | None:
+def volume_owner_key(env: Mapping[str, str], *, create: bool = False, instance: Instance | None = None) -> str | None:
     if not env.get(PLATFORM):
         return None
-    data = env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA")
+    data = instance_data_dir(env, instance) if instance is not None else env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA")
     if not data:
         raise ConfigError("Set SWITCHBOARD_DATA to the persistent volume mount.")
     path = Path(data) / "owner-key"
     if create and not path.exists():
+        if not path.parent.is_dir():
+            ensure_private_data_dir(path.parent)
         with NamedTemporaryFile(mode="w", encoding="ascii", dir=path.parent) as key:
             key.write(secrets.token_hex(32) + "\n")
             key.flush()
@@ -37,7 +40,7 @@ def volume_owner_key(env: Mapping[str, str], *, create: bool = False) -> str | N
     return value
 
 
-def serve_env(env: Mapping[str, str]) -> dict[str, str] | None:
+def serve_env(env: Mapping[str, str], *, instance: Instance | None = None) -> dict[str, str] | None:
     if not (platform := env.get(PLATFORM)):
         return None
     values = dict(env)
@@ -55,7 +58,7 @@ def serve_env(env: Mapping[str, str]) -> dict[str, str] | None:
             raise ConfigError("The deployment requires a public URL. Set SWITCHBOARD_PUBLIC_URL.")
         values["SWITCHBOARD_PUBLIC_URL"] = url
     if not values.get(OWNER_KEY):
-        key = volume_owner_key(values, create=True)
+        key = volume_owner_key(values, create=True, instance=instance)
         if key is None:
             raise ConfigError("The deployment requires an owner key.")
         values[OWNER_KEY] = key
