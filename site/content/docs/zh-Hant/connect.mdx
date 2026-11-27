@@ -5,11 +5,12 @@ description: 把 SwB 加到一個代理，其餘交給代理完成。
 
 ## 把 SwB 加到代理
 
-把 SwB 加為遠端 MCP 伺服器。請使用你的公開 MCP 位址，例如 `https://swb.example.com/mcp`。代理以 OAuth 登入。你在 SwB 頁面核准這次登入。
+用戶端和 SwB 在同一台電腦上執行時，請在本機配對。若應用程式由服務商代管，請將 SwB 加為遠端 MCP 伺服器。使用公開的 MCP 位址，例如 `https://swb.example.com/mcp`。在 SwB 頁面核准應用程式的 OAuth 登入。
 
 | 應用程式 | 加入 SwB 的位置 |
 | - | - |
-| Claude 與 Claude Project | Settings → Connectors → Add custom connector |
+| [本機 MCP 用戶端](/zh-Hant/docs/setup/mcp-client) | 使用配對碼。在執行 SwB 的電腦上使用 `http://localhost:8870/mcp`。 |
+| Claude 與 Claude Project | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 以 Automatic OAuth 用戶端新增 MCP 伺服器 |
@@ -48,11 +49,13 @@ swb connect grok
 
 你也可以在權杖頁面建立配對碼。SwB 透過 `POST /pairing/code` 送出表單。
 
-配對碼指定了專案時，`POST /connect` 會在 `project` 傳回該專案。將它設為用戶端的預設專案。呼叫工具需要指定專案時，將該值填入 `project`。金鑰沿用代理原有的存取權限。請在 `auth.key_scopes` 中依代理名稱設定可存取的記憶範圍。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
+配對碼指定了專案時，`POST /connect` 會在 `project` 傳回該專案。將它設為用戶端的預設專案。呼叫工具需要指定專案時，將該值填入 `project`。
+
+配對金鑰只能讀取該代理送出或收到的訊息，且訊息須在擁有者授權的範圍內。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
 
 ## 收件匣事件串流
 
-`POST /connect` 傳回 `inbox_events_url`，也就是 `GET /inbox/events` 的網址。連線時，請在 `Authorization: Bearer <key>` 中帶入配對取得的代理金鑰。SwB 會維持連線，以伺服器傳送事件（SSE）的方式提供該代理的收件匣更新。
+`POST /connect` 傳回 `inbox_events_url`，也就是 `GET /inbox/events` 的網址。連線時，請在 `Authorization: Bearer <key>` 中帶入配對取得的代理金鑰。SwB 只提供該代理在金鑰授權範圍內的收件匣更新。更新以伺服器傳送事件（SSE）的方式透過同一條連線傳送。
 
 連線建立後，SwB 先傳送 `ready` 事件。`item` 事件的 JSON 資料包含游標 `cursor`、對話代碼 `handle` 和訊息資料。事件 ID 採用游標值，代表事件在串流中的位置。
 

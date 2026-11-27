@@ -10,7 +10,8 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 | 变量 | 用途 |
 | - | - |
 | `SWITCHBOARD_KEY_OWNER` | `swb` 命令使用的所有者密钥 |
-| `SWITCHBOARD_PUBLIC_URL` | 浏览器登录地址。本机运行时用 `http://localhost:8870`。远程服务器使用 HTTPS，例如 `https://swb.example.com`。 |
+| `SWITCHBOARD_PUBLIC_URL` | 登录和 MCP 使用的公开地址。远程服务器使用 HTTPS，例如 `https://swb.example.com`。 |
+| `SWITCHBOARD_HOST` | 监听地址，默认为 `127.0.0.1`。 |
 | `SWITCHBOARD_DATA_DIR` | 数据目录。镜像使用 `/data`。 |
 | `SWITCHBOARD_OWNER_EMAILS` | 用于 OIDC 和 Cloudflare Access 的所有者邮箱，用逗号分隔 |
 | `SWITCHBOARD_KEY_<NAME>` | 智能体 `<name>` 的 bearer 密钥 |
@@ -18,7 +19,11 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 | `SWITCHBOARD_OVERLAY` | 私有覆盖文件的路径 |
 | `PORT` | HTTP 端口。 `swb up` 默认为 `8870`。 |
 
-在终端或实例的 `.env` 文件中设置 `PORT`。本机登录时，公网地址填 `http://localhost:<port>`。也可以在同一个文件中设置 `SWITCHBOARD_PUBLIC_URL` 和 `SWITCHBOARD_DATA_DIR`。YAML 配置中的 `public_url` 优先于环境变量。
+在终端或实例的 `.env` 文件中设置 `PORT`。运行 `swb up` 时，本机登录地址默认为 `http://localhost:<port>`。SwB 在启动时根据端口生成此地址。
+
+用 `swb up --public-url https://swb.example.com` 在命令行中设置公开地址。该选项优先于 YAML 中的 `public_url`。YAML 设置优先于 `SWITCHBOARD_PUBLIC_URL`。
+
+用 `--host` 覆盖 `SWITCHBOARD_HOST`。监听 `0.0.0.0` 或局域网地址之前，请先设置公开地址。
 
 用 `swb up --dir ./my-swb` 读取该目录中的 `.env` 和 `config/switchboard.yaml`。运行 `swb init` 时，传入同一个 `--dir`。直接运行 `swb up` 时，可用 `SWITCHBOARD_CONFIG` 指定其他配置文件。
 
@@ -34,11 +39,11 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 ## 数据目录
 
-`swb init` 在新实例中创建 `data` 目录。`swb up` 默认使用这个目录。`swb up --dir` 默认使用指定目录下的 `data`。直接运行 `swb up` 并仅用环境变量配置时，默认使用 `~/.local/share/switchboard`。
+`swb up` 和 `swb init` 都会为新实例创建 `data/` 目录。SwB 默认使用这个目录。用 `swb up --dir` 可指定其他实例目录。
 
 在配置文件或覆盖文件中设置 `data_dir` 可更改路径。这项设置优先。SwB 接着按顺序检查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`。三项设置都为空时，SwB 使用默认路径。
 
-旧实例已有配置文件且缺少 `data` 目录时，直接运行 `swb up` 会沿用主目录中的现有数据库。SwB 为每个实例记录一次提示。
+直接运行 `swb up` 会保留已有配置文件。原先使用主目录数据库的实例会继续使用该数据库。如果 SwB 因为缺少 `data/` 目录而使用主目录中的数据库，日志会提示一次。
 
 在 Linux 和 macOS 上，SwB 将数据目录的权限设为 `0700`。数据库文件的权限设为 `0600`。
 
@@ -58,11 +63,15 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 ## 配置文件
 
+运行 `swb up` 会在当前目录中初始化新实例。SwB 将所有者密钥写入 `.env`，并将自定义的 `PORT` 保存在同一文件中。文件权限为 `0600`。
+
+如需在启动 SwB 前创建文件，请运行 `swb init`。
+
 ```bash
 swb init
 ```
 
-`swb init` 把所有者密钥写入私有文件 `.env`。基础配置存入 `config/switchboard.yaml`。也可以只靠环境变量启动 SwB。
+这两条命令生成的 `config/switchboard.yaml` 默认仅含 `version: 2`。用 `--public-url` 可将公开地址保存到此文件。创建新实例时，`swb up` 也会保存 `SWITCHBOARD_PUBLIC_URL` 中的地址。如需通过 YAML 选择模块，请参照下例添加 `blocks`。
 
 ```yaml
 version: 2
@@ -116,7 +125,7 @@ routes:
 | `auth.cloudflare_access.aud` | Access 应用的受众标记，也可用 `CLOUDFLARE_ACCESS_AUD` 设置 |
 | `auth.redirect_uris` | 允许的 OAuth 回调地址。此列表替换内置列表。用 `/*` 匹配路径及其子路径 |
 | `auth.source_names` | 将 OAuth 主机名或客户端名称的片段映射到登录时所用的智能体名称 |
-| `auth.key_scopes` | 按密钥名称设置可访问的记忆范围，例如 `[project:example]` |
+| `auth.key_scopes` | 按密钥名称设置允许的范围。适用于访问记忆和读取会话。例如 `[project:example]` |
 | `auth.key_tools` | 按密钥名称设置可调用的 MCP 工具，例如 `[send]` |
 | `auth.key_targets` | 按密钥名称设置可接收消息的目标，例如 `[agent:claude]` |
 | `auth.inbox_keys` | 为每把密钥指定唯一可读取的智能体收件箱。内置项为 `channel: claude-code` |

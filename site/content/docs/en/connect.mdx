@@ -5,11 +5,12 @@ description: Add SwB to an agent, then let the agent do the rest.
 
 ## Add SwB to an agent
 
-Add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. The agent signs in with OAuth. You approve the sign-in on the SwB page.
+For an MCP client on the SwB computer, use local pairing. For a hosted app, add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. Approve the app's OAuth sign-in on the SwB page.
 
 | App | Where to add SwB |
 | - | - |
-| Claude and Claude Projects | Settings → Connectors → Add custom connector |
+| [Local MCP client](/docs/setup/mcp-client) | Pair with a code. Use `http://localhost:8870/mcp` on the SwB computer. |
+| Claude and Claude Projects | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | grok.com → Connectors → New Connector → Custom |
 | Capy | Add an MCP server with the Automatic OAuth client |
@@ -48,11 +49,13 @@ To pair a new agent, ask an agent signed in as the owner to call `connect_code`.
 
 You can also create a pairing code in Tokens. SwB sends the form to `POST /pairing/code`.
 
-If the pairing code names a project, `POST /connect` returns it in `project`. Use this value as the client's default project. Pass it in `project` when a tool call needs the project. The key keeps the agent's configured access. To limit memory access, set `auth.key_scopes` for the agent name. See [Keys with limits](/docs/security#keys-with-limits).
+If the pairing code names a project, `POST /connect` returns it in `project`. Use this value as the client's default project. Pass it in `project` when a tool call needs the project.
+
+The paired key can read messages its agent sends or receives within the scopes the owner sets. See [Keys with limits](/docs/security#keys-with-limits).
 
 ## Inbox event stream
 
-`POST /connect` returns `inbox_events_url`, the URL for `GET /inbox/events`. Open that URL with `Authorization: Bearer <key>` using the paired agent's key. SwB uses server-sent events (SSE) to send that agent's inbox updates over an open connection.
+`POST /connect` returns `inbox_events_url`, the URL for `GET /inbox/events`. Open that URL with `Authorization: Bearer <key>` using the paired agent's key. SwB sends that agent's inbox updates within the scopes of the key. These server-sent events (SSE) arrive over an open connection.
 
 The stream starts with a `ready` event. Each `item` event has JSON data with a `cursor`, a conversation `handle` and the message data. The event ID is the cursor, which marks a position in the stream.
 

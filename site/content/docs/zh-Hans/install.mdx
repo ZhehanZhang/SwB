@@ -12,20 +12,18 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
 <Tabs items={['uvx', 'pipx', 'Docker']}>
   <Tab value="uvx">
     ```bash
-    uvx swb-one init --public-url http://localhost:8870
     uvx swb-one up
     ```
 
-    uvx 会下载并运行 SwB。`init` 把所有者密钥写入私有文件 `.env`。登录地址保存在 `config/switchboard.yaml` 中。运行其他示例时，把开头的 `swb` 换成 `uvx swb-one`。
+    uvx 会下载并启动 SwB。请在五分钟内打开终端显示的一次性登录链接。运行其他示例时，把开头的 `swb` 换成 `uvx swb-one`。
   </Tab>
   <Tab value="pipx">
     ```bash
     pipx install swb-one
-    swb init --public-url http://localhost:8870
     swb up
     ```
 
-    pipx 会为当前用户安装 `swb` 命令。`init` 会写入私有的所有者密钥和配置文件。
+    pipx 会为当前用户安装 `swb` 命令。请在五分钟内打开终端显示的一次性登录链接。
 
     如果 pipx 使用较旧的 Python，请运行 `pipx install --python 3.12 swb-one`。
   </Tab>
@@ -37,19 +35,17 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
       ghcr.io/zhehanzhang/swb:latest
     ```
 
-    这组命令先创建私有文件 `.env`，再启动容器。镜像把数据保存在 `/data`。运行其他示例时，把开头的 `swb` 换成 `docker exec swb swb`。
+    这组命令先创建私有文件 `.env`，再启动容器。镜像把数据保存在 `/data`。运行 `docker exec swb swb login-link` 获取登录链接。运行其他示例时，把开头的 `swb` 换成 `docker exec swb swb`。
   </Tab>
 </Tabs>
 
-通过 uvx 或 pipx 运行 `swb init` 时，SwB 会创建 `<folder>/data`。已初始化的目录和通过 `--dir` 选定的目录默认使用各自的 `data`。直接在空目录中运行 `swb up` 时，默认使用 `~/.local/share/switchboard`。在 Linux 和 macOS 上，数据目录的权限是 `0700`，数据库文件的权限是 `0600`。
+首次在本机运行 `swb up` 时，SwB 会在实例目录中创建 `.env`、`config/switchboard.yaml` 和 `data/`。之后可运行 `swb login-link` 获取新链接。
 
-`swb up` 默认在 `127.0.0.1` 的 `8870` 端口监听。本机 MCP 地址是 `http://127.0.0.1:8870/mcp`。浏览器登录地址用 `http://localhost:8870`。
+如需在启动前创建文件，请先运行 `swb init`。再运行 `swb up`。另开一个终端，在同一目录中运行 `swb login-link`。
 
-要更改 `swb up` 的端口，请在终端或 `.env` 中设置 `PORT`。登录地址也要使用同一个端口。要指定其他服务器，请在客户端命令中加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。
+`swb up` 默认在 `127.0.0.1` 的 `8870` 端口监听。默认的本机 MCP 地址是 `http://localhost:8870/mcp`。如需更改端口，请在终端或 `.env` 中设置 `PORT`。
 
-用 `swb up --dir ./my-swb` 指定实例目录。运行 `swb init` 时，传入同一个 `--dir`。SwB 根据 `SWITCHBOARD_CONFIG` 选择配置文件。指定 `--dir` 时，SwB 使用该目录里的配置文件。
-
-SwB 先读取 YAML 配置或覆盖文件中的 `data_dir`，再依次检查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`，最后使用默认路径。如果旧实例有配置文件但缺少 `data` 目录，直接运行 `swb up` 会继续使用主目录中已有的数据库。SwB 会在日志中提示一次。命令选项见[配置](/zh-Hans/docs/config)。
+用 `swb up --dir ./my-swb` 指定实例目录。运行其他命令时，请传入相同的 `--dir`。监听地址、配置文件和数据目录见[配置](/zh-Hans/docs/config)。
 
 ## 检查服务器
 
@@ -57,7 +53,7 @@ SwB 先读取 YAML 配置或覆盖文件中的 `data_dir`，再依次检查 `SWI
 curl -fsS http://127.0.0.1:8870/healthz
 ```
 
-上面的请求只返回 `status` 和 `version` 两个字段。以所有者身份登录或使用所有者密钥，即可查看各模块及其状态。
+这条命令在登录前即可使用，显示 `status` 和 `version`。运行 `swb status`，或用所有者密钥访问 `/healthz`，即可查看模块、运行状态和缺少的变量。
 
 ## 服务器命令
 

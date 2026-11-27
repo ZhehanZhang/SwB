@@ -10,7 +10,8 @@ SwB can run with environment variables alone. The MCP block starts by default. S
 | Variable | Use |
 | - | - |
 | `SWITCHBOARD_KEY_OWNER` | The owner key for the `swb` command |
-| `SWITCHBOARD_PUBLIC_URL` | The browser sign-in address. Use `http://localhost:8870` for a local run. Use HTTPS for a remote server, for example `https://swb.example.com`. |
+| `SWITCHBOARD_PUBLIC_URL` | Public address for sign-in and MCP. Use HTTPS for a remote server, for example `https://swb.example.com`. |
+| `SWITCHBOARD_HOST` | Address for incoming connections. The default is `127.0.0.1`. |
 | `SWITCHBOARD_DATA_DIR` | The data folder. The image uses `/data`. |
 | `SWITCHBOARD_OWNER_EMAILS` | Owner emails for OIDC and Cloudflare Access, separated by commas |
 | `SWITCHBOARD_KEY_<NAME>` | A bearer key for the agent `<name>` |
@@ -18,7 +19,11 @@ SwB can run with environment variables alone. The MCP block starts by default. S
 | `SWITCHBOARD_OVERLAY` | The path of a private overlay file |
 | `PORT` | HTTP port. The default for `swb up` is `8870`. |
 
-Set `PORT` in the shell or in the instance's `.env` file. For local sign-in, use `http://localhost:<port>` as the public URL. The same file can hold `SWITCHBOARD_PUBLIC_URL` and `SWITCHBOARD_DATA_DIR`. A `public_url` in the YAML config takes priority over the environment.
+Set `PORT` in the shell or in the instance's `.env` file. For local sign-in, `swb up` uses `http://localhost:<port>` by default. SwB calculates this address at startup.
+
+Use `swb up --public-url https://swb.example.com` to set the public URL on the command line. The command option takes priority over YAML `public_url`. YAML takes priority over `SWITCHBOARD_PUBLIC_URL`.
+
+Use `--host` to override `SWITCHBOARD_HOST`. Set a public URL before you use `--host 0.0.0.0` or an address on your local network.
 
 Use `swb up --dir ./my-swb` to read `.env` and `config/switchboard.yaml` from that folder. Use the same `--dir` with `swb init`. With plain `swb up`, use `SWITCHBOARD_CONFIG` to select a different config file.
 
@@ -34,11 +39,11 @@ Use `swb config migrate [file]` to print a config in version 2 format. Pass `fil
 
 ## Data folder
 
-`swb init` creates a `data` folder for a new instance. `swb up` uses that folder by default. `swb up --dir` defaults to the `data` folder at the selected path. An environment-only run with plain `swb up` defaults to `~/.local/share/switchboard`.
+`swb up` and `swb init` create a `data/` folder for a new instance. SwB uses that folder by default. Use `swb up --dir` to select a different instance folder.
 
 Set `data_dir` in the config or overlay to change the path. That setting takes priority. SwB then checks `SWITCHBOARD_DATA_DIR` and `SWITCHBOARD_DATA` in that order. The default applies when all three settings are empty.
 
-With plain `swb up`, an older instance with a config file and a missing `data` folder keeps its existing home database. SwB logs a notice once per instance.
+Plain `swb up` keeps existing config files. Older instances that use a home database keep using it. If SwB uses a home database in place of a missing `data/` folder, it logs a notice once.
 
 On Linux and macOS, SwB sets the data folder to private mode `0700`. It sets database files to private mode `0600`.
 
@@ -58,11 +63,15 @@ For a named Slack workspace, put the name after `SLACK_`, for example `SLACK_SUP
 
 ## The config file
 
+`swb up` sets up a new instance in its folder. It stores the owner key in `.env` and saves a custom `PORT` there. It sets the file mode to `0600`.
+
+Run `swb init` to create the files before you start SwB.
+
 ```bash
 swb init
 ```
 
-`swb init` writes the owner key to a private `.env` file. It writes the base config to `config/switchboard.yaml`. SwB can also start from environment variables alone.
+Both commands write only `version: 2` to `config/switchboard.yaml` by default. Use `--public-url` to save an address in this file. On a new instance, `swb up` also saves an address from `SWITCHBOARD_PUBLIC_URL`. To select blocks in YAML, add a `blocks` section as in this example.
 
 ```yaml
 version: 2
@@ -116,7 +125,7 @@ In a key, `*` stands for an entry name or a list item.
 | `auth.cloudflare_access.aud` | Audience tag from the Access application. You can use `CLOUDFLARE_ACCESS_AUD` |
 | `auth.redirect_uris` | Allowed OAuth return addresses. This list replaces the built-in set. Use `/*` to match a path and its subpaths |
 | `auth.source_names` | Map from part of an OAuth host or client name to the agent name used for sign-in |
-| `auth.key_scopes` | Map from key name to allowed memory scopes, for example `[project:example]` |
+| `auth.key_scopes` | Map from key name to allowed scopes. Applies to memory access and conversation reads. Example `[project:example]` |
 | `auth.key_tools` | Map from key name to allowed MCP tools, for example `[send]` |
 | `auth.key_targets` | Map from key name to allowed message targets, for example `[agent:claude]` |
 | `auth.inbox_keys` | Map from key name to the one agent whose inbox it can read. The built-in entry is `channel: claude-code` |
