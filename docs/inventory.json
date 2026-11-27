@@ -327,6 +327,7 @@
         "--code",
         "--drop-dir",
         "--help",
+        "--mcp",
         "--no-run",
         "-h"
       ],

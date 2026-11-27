@@ -97,3 +97,5 @@ Ask an agent signed in as the owner to call `companion_code`. On the device, run
 Choose which actions the device allows at pairing. Add `--cap notify` to allow notifications. Add `--cap drop` to allow access to the device’s SwB Drop folder.
 
 Use `swb companion run` to reconnect. Use `swb companion status` to view the device ID. Use `swb companion disconnect` to remove the device.
+
+Add `--cap mcp` to let your agents call tools on the device. Add one `--mcp` option for each server. Use a local address such as `--mcp notes=http://127.0.0.1:8000/mcp`. For a command, quote the value as in `--mcp 'notes=uvx notes-mcp'`. Use `companion_invoke` to list servers, view their tools, or call a tool.
