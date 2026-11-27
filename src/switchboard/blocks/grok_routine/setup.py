@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from ...targets import SLUG_RE
 from .. import BlockError
+from ..mcp.setup import PUBLIC_HTTPS_PREREQUISITE
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -96,7 +97,7 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
             done.append("Grok Bot is signed in.")
         else:
             if not oauth:
-                steps.append({"by": "person", "do": "Configure a public HTTPS URL and owner sign-in to use OAuth."})
+                steps.append({"by": "person", "do": PUBLIC_HTTPS_PREREQUISITE})
             steps.append({"by": "person", "do": f"In Grok Bot on desktop, open Connect apps > Add a custom connector > Remote HTTPS, add {connector}, and sign in with OAuth. "
                           'For API clients that support bearer headers, call connect(what="mcp-client", choose={"agent":"grok"}) for a pairing code instead.'})
         steps += [

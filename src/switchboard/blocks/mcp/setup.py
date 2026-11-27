@@ -4,6 +4,7 @@ import json
 from importlib.resources import files
 from textwrap import indent
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 from mcp.server.mcpserver import Context, MCPServer
@@ -36,6 +37,7 @@ CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
 MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web",
          "grok": "grok.com > Connectors > New Connector > Custom"}
 GUIDE_TITLE_WORDS = {"chatgpt": "ChatGPT", "github": "GitHub", "mcp": "MCP"}
+PUBLIC_HTTPS_PREREQUISITE = "Configure a public HTTPS URL and owner sign-in to use OAuth."
 
 
 def enable_steps(name: str) -> list[dict[str, str]]:
@@ -85,21 +87,22 @@ def hosted_client_instruction(kind: str, connector: str | None) -> str:
 def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
     core = kit.core
     base = core.base_url
-    url = f"{base}/mcp"
-    oauth = bool(core.cfg.issuer and core.cfg.owner_sign_in)
+    resource = core.cfg.resource
+    oauth = bool(resource and core.cfg.owner_sign_in)
+    if kind in MENUS and (not oauth or not resource or urlsplit(resource).scheme != "https"):
+        return {"done": [], "next": [{"by": "person", "do": PUBLIC_HTTPS_PREREQUISITE}]}
+    url = resource if kind in MENUS else f"{base}/mcp"
     done = [f"MCP URL: {url}.", f"OAuth sign-in: {'available' if oauth else 'unavailable'}."]
     if kind in MENUS:
         signed_in = principal.kind == "oauth" and principal.source == kind
-        if not signed_in and principal.is_unrestricted_owner and oauth:
+        if not signed_in and principal.is_unrestricted_owner:
             signed_in = core.store.one(
                 "SELECT 1 FROM oauth_tokens WHERE source = ? AND resource IN (SELECT value FROM json_each(?)) AND expires_at > ? AND revoked_at IS NULL LIMIT 1",
                 (kind, json.dumps(core.cfg.resources), core.clock()),
             ) is not None
         if signed_in:
             return {"done": [*done, "The client is signed in."], "next": []}
-        next_steps = [] if oauth else [{"by": "person", "do": "Configure a public URL and owner sign-in before connecting a hosted client."}]
-        next_steps.append({"by": "person", "do": hosted_client_instruction(kind, core.cfg.resource)})
-        return {"done": done, "next": next_steps}
+        return {"done": done, "next": [{"by": "person", "do": hosted_client_instruction(kind, resource)}]}
     if not principal.is_unrestricted_owner:
         return {"done": done, "next": [{"by": "person", "do": "Ask the owner to mint a pairing code from their own sign-in."}]}
     picked = choose.get("project")

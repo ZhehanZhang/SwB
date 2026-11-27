@@ -75,14 +75,28 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
         assert core.blocks[block].registered_repositories() == {"example-org/app"}
 
 
-@pytest.mark.parametrize(("kind", "menu"), [("chatgpt", "https://chatgpt.com/plugins"), ("claude", "Customize > Connectors")])
+@pytest.mark.parametrize(("kind", "menu"), [
+    ("chatgpt", "https://chatgpt.com/plugins"), ("claude", "Customize > Connectors"), ("grok", "grok.com > Connectors"),
+])
 def test_connect_hosted_clients(make, kind, menu):
     _, client = make()
     out = connect(client, kind)
     assert out["done"] == [f"MCP URL: {PUBLIC}/mcp.", "OAuth sign-in: available."]
     [step] = out["next"]
     assert step["by"] == "person" and menu in step["do"]
-    assert "OAuth" in step["do"]
+    assert f"{PUBLIC}/mcp" in step["do"] and "OAuth" in step["do"]
+
+
+@pytest.mark.parametrize("kind", ["claude", "chatgpt", "grok"])
+def test_connect_hosted_clients_require_https_even_with_local_oauth(make, kind):
+    core, client = make(config=base_config(public_url="http://localhost:8000", version=2, blocks={"mcp": {}, "grok-routine": {}}))
+    assert core.cfg.owner_sign_in
+    out = connect(client, kind)
+    [step] = out["next"]
+    assert step["by"] == "person" and "public HTTPS URL and owner sign-in" in step["do"]
+    assert step == connect(client, "grok-bot")["next"][0]
+    assert "localhost" not in json.dumps(out)
+    assert "http://localhost:8000/mcp" in connect(client, "mcp-client")["done"][0]
 
 
 def test_connect_hosted_resume_after_oauth_sign_in(make):
@@ -186,8 +200,9 @@ def test_status_missing_oauth_and_missing_github_routes(make):
     assert status["blocks"]["github"]["next_step"].startswith("Add a GitHub repository route")
     assert status["next_steps"] == core.status()["next_steps"] and secret not in json.dumps(status)
     out = connect(client, "claude")
-    assert out["done"] == ["MCP URL: http://localhost:8000/mcp.", "OAuth sign-in: unavailable."]
-    assert "owner sign-in" in out["next"][0]["do"]
+    assert out["done"] == []
+    [step] = out["next"]
+    assert "public HTTPS URL and owner sign-in" in step["do"]
 
 
 async def test_saved_slack_and_github_tokens_loaded_on_restart(tmp_path):
