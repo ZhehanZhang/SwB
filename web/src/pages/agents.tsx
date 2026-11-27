@@ -10,9 +10,10 @@ import { Logo } from "@/components/logo"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/tabs"
 import { Button } from "@/components/ui/button"
 import { Sheet } from "@/components/ui/sheet"
+import { principalLabel } from "@/lib/agent-identity"
 import { isObject, requestJson, sessionQuery } from "@/lib/api"
 import { auditText } from "./audit/events"
-import { agentListKey, isAgentDetail, isAgentSetup, listAgents, principalLabel, type Agent, type AgentDetail } from "./agents/data"
+import { agentListKey, isAgentDetail, isAgentSetup, listAgents, type Agent, type AgentDetail } from "./agents/data"
 
 const connections = [
   { id: "claude-code", label: "Claude Code", preview: "claude mcp add …" },
