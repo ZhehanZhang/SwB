@@ -3,6 +3,7 @@ WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
+COPY src/switchboard/static/theme.js /app/src/switchboard/static/theme.js
 RUN npm run build
 
 FROM python:3.13-slim AS base

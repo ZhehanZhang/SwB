@@ -8,6 +8,7 @@ type AuditMetadata = {
   memory_id?: string
   target_name?: string
   target_label?: string
+  target_avatar_url?: string | null
   ref_label?: string
   repo_count?: number
   turn_cap?: number
@@ -65,6 +66,7 @@ function isAuditMetadata(value: unknown): value is AuditMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
   const metadata = value as Record<string, unknown>
   return ["agent", "state", "to_scope", "memory_id", "target_name", "target_label", "ref_label", "visibility"].every((key) => !(key in metadata) || typeof metadata[key] === "string")
+    && (metadata.target_avatar_url == null || typeof metadata.target_avatar_url === "string")
     && ["repo_count", "turn_cap"].every((key) => !(key in metadata) || Number.isSafeInteger(metadata[key]))
 }
 
@@ -81,7 +83,7 @@ export function auditProject({ action, target, project }: AuditEvent): string | 
 export function auditActor({ source }: AuditEvent) {
   if (source === "owner" || source.startsWith("admin:")) return "you"
   if (source === "auto") return "SwB"
-  return source === "-" ? "—" : displayReference(source)
+  return !source || source === "-" ? null : displayReference(source)
 }
 
 export function auditActorKind({ origin, source }: AuditEvent) {
@@ -126,10 +128,10 @@ const titles: Record<string, readonly [past: string, present: string]> = {
   cancel: ["Stopped following", "stop following"],
   send_refused: ["Blocked message to", "send message to"],
   send_key_fallback: ["Used fallback key for", "use fallback key for"],
-  auth_failure: ["Rejected authentication", "authenticate"],
-  auth_missing: ["Missing authentication", "authenticate request for"],
+  auth_failure: ["Rejected credentials", "authenticate"],
+  auth_missing: ["Required credentials", "authenticate request for"],
   oauth_refused: ["Refused OAuth request", "authorize"],
-  rate_limited: ["Rate limited", "rate limited"],
+  rate_limited: ["Blocked request at rate limit", "rate limited"],
 }
 
 export function auditText(item: AuditEvent): string {
@@ -145,7 +147,8 @@ function auditSentence({ action, target, ref, destination, outcome, metadata, pr
   if (action === "route_set" && outcome === "ok" && metadata?.target_name) {
     const via = metadata.agent === "github" ? "GitHub" : metadata.agent === "slack" ? "Slack" : metadata.agent || project || "default"
     const count = metadata.repo_count
-    return `Routed ${via}${count ? ` (${count} ${count === 1 ? "repo" : "repos"})` : ""} to ${displayReference(metadata.target_name, "Captain")}`
+    const routed = count ? `${count} ${via} ${count === 1 ? "repository" : "repositories"}` : via
+    return `Routed ${routed} to ${displayReference(metadata.target_name, "Captain")}`
   }
   if (action === "turn_cap") return ["Paused conversation", ref, metadata?.turn_cap ? `at ${metadata.turn_cap} turns` : null].filter(Boolean).join(" ")
   if (action === "webhook") return [outcome === "dropped" ? "Dropped webhook for" : "Received webhook for", target || destination].join(" ")
@@ -175,8 +178,8 @@ function auditSentence({ action, target, ref, destination, outcome, metadata, pr
   }
   const [past, present] = words
   const result = outcome === "refused" ? `Refused to ${present}`
-    : outcome === "error" || outcome === "failed" ? `Couldn’t ${present}`
-    : outcome === "duplicate" ? `Skipped duplicate: ${present}`
+    : outcome === "error" || outcome === "failed" ? `Failed to ${present}`
+    : outcome === "duplicate" ? `Skipped duplicate attempt to ${present}`
     : past
   return [
     subject ? result : result.replace(/ (?:to|for|in)$/, ""),

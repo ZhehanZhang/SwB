@@ -1,5 +1,6 @@
-# Reference for an explicit block list. For an env-only setup, no YAML file is needed.
-# Copy only the settings you want to config/switchboard.yaml (git-ignored). Keep secrets in the environment.
+# Use this file as a reference for optional settings.
+# Copy the settings you need to config/switchboard.yaml. Set secrets in .env.
+# The examples use fictional accounts and IDs. Use your own values for your installation.
 # Version 2: everything in or out is a block under blocks:, the core (auth, projects, scoped memory, routes, inbox,
 # audit) knows only blocks. Legacy origins:, destinations: and slack: sections are translated at load time;
 # switchboard config migrate prints them as version 2.
@@ -163,16 +164,16 @@ blocks:
     # agents: {claude: [home]}                   # space list per agent, or "*" for all spaces
     # spaces:                                   # maps labels to one or more sets of groups
     #   home:                                   # label used in telegram_post and visibility
-    #     chats: [-100111222]                   # negative integer group ids, each in at most one space
+    #     chats: [-1001111111111]                   # negative integer group ids, each in at most one space
     #     owner_ids: [222222]                   # Telegram user ids trusted as owner
     #     known: {333333: Friend}               # known Telegram user ids and display names
     #     default_target: claude                # target when no slug or earlier thread target exists
     #     mode: watch                           # turn off bot privacy mode to see unaddressed group messages
     #     channels:
-    #       "-100111222": {mode: assist, project: example}
-    #     listen: [-100111222]                  # legacy alias for assist
+    #       "-1001111111111": {mode: assist, project: example}
+    #     listen: [-1001111111111]                  # legacy alias for assist
     #     project: example                      # default SwB project
-    #     channel_projects: {-100111222: null}  # override or opt out of the project by chat id
+    #     channel_projects: {-1001111111111: null}  # override or opt out of the project by chat id
     #     bot_posts_per_hour: 20                # limit in each conversation thread
 
   # Slack (optional): events in (watched channels, mentions, DMs, @swb <slug> routing) and slack_* tools out.
@@ -203,11 +204,11 @@ blocks:
     avatar_dirs: []                               # optional folders with files that override bundled marks
     target_aliases: {}                            # extra "@bot <slug>" names, e.g. {help: helper}
     workspaces:
-      # Replace all example IDs before enabling Slack.
-      # Workspace A: an agent room. The bot is @mentionable and can also act as the owner (with approval).
+      # Use IDs from Slack in your installation.
+      # Workspace A: an agent room. The bot is @demo_swb and can also act as the owner (with approval).
       a2a:
-        team_id: T0EXAMPLEA
-        app_id: A0EXAMPLEA                        # this Slack app; its own posts are never delivered back
+        team_id: T0DEMO0001
+        app_id: A0DEMO0001                         # this Slack app; its own posts are never delivered back
         app_token_env: SLACK_A2A_APP_TOKEN        # xapp-..., connections:write (Socket Mode)
         intake: socket                            # or poll (conversations.history every poll_seconds)
         identities:
@@ -215,9 +216,9 @@ blocks:
           user: {token_env: SLACK_A2A_USER_TOKEN, write: approval}  # xoxp-..., the owner's own account
         default_persona: switchboard
         default_target: captain                   # "@bot text" with no slug goes here (a Captain, agent or project slug)
-        approver_user_id: U0OWNER00               # optional: approval DMs for this workspace's requests come from its bot
-        owner_user_ids: [U0OWNER00]               # trust owner: passed on unchanged (defaults to the approver)
-        known: {U0EXAMPLE: Example User, B0OTHERBOT: example-agent}   # Slack user or bot IDs you trust
+        approver_user_id: U0DEMO0001               # optional: approval DMs for this workspace's requests come from its bot
+        owner_user_ids: [U0DEMO0001]               # trust owner: passed on unchanged (defaults to the approver)
+        known: {U0DEMO0002: Demo Teammate, U0DEMO0003: Demo Bot}   # trust known: Slack user or bot ids you trust, with names
         sender_rate: {count: 5, window_s: 600}    # context items per non-owner sender before the rest are dropped
         ack_reaction: eyes                        # added to @mentions and DMs on receipt
         watched: ["#agents"]                      # the bot must be a member (invite it yourself); "*" = every channel it is in
@@ -226,7 +227,7 @@ blocks:
           - {name: a2a-hook, url_env: SLACK_SINK_A2A_URL, secret_env: SLACK_SINK_A2A_SECRET, kinds: [watched, mention, dm], coalesce_seconds: 0, targets: [captain]}
       # Workspace B: private. User token only: no bot, no personas, never joins or invites.
       private:
-        team_id: T0EXAMPLEB
+        team_id: T0DEMO0002
         user_only: true
         app_token_env: SLACK_PRIVATE_APP_TOKEN
         identities:
@@ -236,7 +237,7 @@ blocks:
     approvals:
       ttl_minutes: 60
       notify_workspace: a2a
-      approver_user_id: U0OWNER00
+      approver_user_id: U0DEMO0001
     # What each SwB agent (OAuth agent or SWITCHBOARD_KEY_<NAME>) may do in Slack. Unlisted agents get nothing.
     # Each agent posts as the persona named like it (claude -> claude) unless persona / persona_by_workspace says otherwise.
     agents:
@@ -263,7 +264,7 @@ visibility:
   # resources:
   #   target:development: shared
   #   channel:a2a/#agents: shared
-  #   target:helper: [U0EXAMPLE, workspace:a2a]
+  #   target:helper: [U0DEMO0002, workspace:a2a]
 
 memory:
   # Optional one-way markdown mirror: general/, projects/<slug>/ and INDEX.md, rewritten atomically after changes.

@@ -7,7 +7,6 @@ import json
 import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
-from urllib.parse import urlsplit
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -16,8 +15,7 @@ from starlette.routing import Mount, Route
 
 from . import pages
 from .api_about import release_version
-from .auth import Principal
-from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
+from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable, GroupFieldError
 from .config import REQUEST_BASE
 from .guard import Guard, RateLimiter, client_ip, reject
 from .owner_login import OwnerLogin
@@ -33,6 +31,18 @@ INBOX_FEEDS = ("/inbox/poll", "/inbox/events")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
+TOKEN_CLAIM_MESSAGES = {
+    "Enter a token on a single line, at most 8 KiB.": "Enter a single-line token",
+    "Enter a public HTTPS webhook URL without credentials or a fragment.": "Enter a public HTTPS webhook URL",
+    "That doesn't look like the right kind of token.": "Use a bot token",
+}
+ROUTINE_CLAIM_MESSAGES = {
+    "this link isn't valid; ask the Claude session for a new one": "Request a new link",
+    "this link was replaced by a newer registration; use the latest link": "Use the latest link",
+    "this link was already used": "Link already used",
+    "this link has expired; ask the Claude session to call routine_register again": "Link expired",
+    "that doesn't look like a routine token (sk-ant-oat01-…)": "Use a Claude routine token",
+}
 
 
 class RequestBase:
@@ -212,35 +222,12 @@ def create_app(core: "Switchboard") -> Any:
                         headers={"Cache-Control": "public, max-age=3600"})
 
     async def targets(request: Request) -> JSONResponse:
-        _, refused = await owner_page(request)
+        _, refused = await core.auth.protect_owner(request)
+        headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
         if refused is not None:
-            return JSONResponse({"error": "forbidden"}, status_code=403)
-        return JSONResponse({"targets": await core.targets()}, headers={"Cache-Control": "no-store"})
-
-    async def modes(request: Request) -> JSONResponse:
-        owner, refused = await owner_page(request)
-        headers = {"Cache-Control": "no-store"}
-        if refused is not None:
-            return JSONResponse({"error": "forbidden"}, status_code=403, headers=headers)
-        if request.method == "GET":
-            await core.modes.refresh()
-            return JSONResponse(core.modes.status(), headers=headers)
-        try:
-            body = await request.json()
-        except ValueError:
-            body = None
-        if not isinstance(body, dict):
-            return JSONResponse({"error": "send a JSON object"}, status_code=400, headers=headers)
-        token = request.headers.get("x-csrf-token", body.get("csrf"))
-        if (not core.auth.origin_ok(request) or not isinstance(token, str)
-                or not hmac.compare_digest(token.encode(), core.auth.csrf(owner.csrf_key).encode())):
-            return JSONResponse({"error": "forbidden"}, status_code=403, headers=headers)
-        principal = Principal(source=f"admin:{owner.label}", client_id=client_ip(request.scope), kind="oauth", origin="http")
-        try:
-            row = core.modes.set(principal, **{k: v for k, v in body.items() if k != "csrf"})
-        except (TypeError, ValueError) as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400, headers=headers)
-        return JSONResponse({"space": row}, headers=headers)
+            refused.headers.update(headers)
+            return refused
+        return JSONResponse({"targets": await core.targets()}, headers=headers)
 
     async def avatar_upload(request: Request) -> Response:
         """The owner replaces a persona's picture."""
@@ -291,14 +278,14 @@ def create_app(core: "Switchboard") -> Any:
             scheme, _, key = auth.partition(" ")
             actor = claim_key_owner(key.strip()) if scheme.lower() == "bearer" else None
             if actor is None:
-                return None, None, pages.claim_message_page("Not allowed", "Use the SwB owner key.", 403)
+                return None, None, pages.claim_message_page("Use the SwB owner key", 403)
             form = await request.form()
         elif not core.cfg.owner_sign_in and claim_key_actor:
             form = await request.form()
             key = form.get("owner_key")
             actor = claim_key_owner(key) if isinstance(key, str) else None
             if actor is None:
-                return None, None, pages.claim_message_page("Not allowed", "Use the SwB owner key and reload the form if needed.", 403)
+                return None, None, pages.claim_message_page("Use the SwB owner key", 403)
             if not await core.auth.valid_csrf(request, f"claim:{request.path_params['code']}"):
                 return None, None, JSONResponse({"error": "csrf"}, status_code=403)
         else:
@@ -321,24 +308,24 @@ def create_app(core: "Switchboard") -> Any:
                 if refused is not None:
                     return refused
             return credentials.page(group, form_csrf, owner_key=owner_key,
-                                    host=urlsplit(core.base_url or "").hostname or "", now=core.clock())
+                                    host=request.url.hostname or "", now=core.clock())
         actor, form, refused = await claim_submission(request)
         if refused is not None:
             return refused
         values = {f.name: v for f in group["fields"] if isinstance(v := form.get(f.name), str)}
         try:
             names = core.claims.consume_group(code, values)
-        except ClaimUnavailable as e:
-            return pages.claim_message_page("Link not usable", str(e), 410)
-        except ClaimError as e:
-            return pages.claim_message_page("Not saved", f"{e} Return to the form and try again.", 400)
+        except ClaimUnavailable:
+            return pages.claim_message_page("Request a new link", 410)
+        except GroupFieldError as e:
+            return pages.claim_message_page(f"Check {e.field.label}", 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=",".join(names), excerpt=group["title"])
         for block in core.blocks.values():
             if saved := getattr(block, "secret_saved", None):
                 for name in names:
                     await saved(name)
-        return pages.claim_message_page("Saved", f"{group['title']} saved.", 200)
+        return pages.claim_message_page(f"{len(names)} credential{'s' if len(names) != 1 else ''} saved", 200)
 
     async def claim_asset(request: Request) -> Response:
         from . import credentials
@@ -357,8 +344,8 @@ def create_app(core: "Switchboard") -> Any:
                 return refused
             try:
                 claim = core.claims.inspect_details(code)
-            except ClaimUnavailable as e:
-                return pages.claim_message_page("Link not usable", str(e), 410)
+            except ClaimUnavailable:
+                return pages.claim_message_page("Request a new link", 410)
             return pages.token_claim_page(claim["name"], form_csrf, require_https=claim["require_https"],
                                           host=request.url.hostname or "", expires_at=claim["expires_at"], now=core.clock())
 
@@ -371,15 +358,15 @@ def create_app(core: "Switchboard") -> Any:
             if any(not block.token_re.fullmatch(token.strip()) for block in chats):
                 raise ClaimError("That doesn't look like the right kind of token.")
             name = core.claims.consume(code, token)
-        except ClaimUnavailable as e:
-            return pages.claim_message_page("Link not usable", str(e), 410)
+        except ClaimUnavailable:
+            return pages.claim_message_page("Request a new link", 410)
         except ClaimError as e:
-            return pages.claim_message_page("Not saved", str(e), 400)
+            return pages.claim_message_page(TOKEN_CLAIM_MESSAGES.get(str(e), "Check the token"), 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=name)
         for block in chats:
             await block.secret_saved("bot_token")
-        return pages.claim_message_page("Token saved", "Run connect again to check whether a restart is needed.", 200)
+        return pages.claim_message_page("Token saved", 200)
 
     async def connect_code(request: Request) -> Response:
         """The owner mints a pairing code; the code is shown once."""
@@ -393,8 +380,8 @@ def create_app(core: "Switchboard") -> Any:
             if project:
                 core.projects.get(project)
             code = core.connections.mint(agent=str(form.get("agent") or ""), project=project, client=None, by=f"admin:{owner.label}")
-        except (ConnectError, ValueError) as e:
-            return pages.message_page("Not minted", str(e), 400)
+        except (ConnectError, ValueError):
+            return pages.message_page("Pairing code unavailable", "", 400)
         core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination="core", action="connect_code", outcome="ok", target=code["agent"])
         return pages.connect_code_page(code, core.cfg.public_url or "")
 
@@ -422,12 +409,12 @@ def create_app(core: "Switchboard") -> Any:
             return refused
         block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
         if block is None:
-            return pages.claim_message_page("Not available", "The claude-routine block isn’t configured.", 400)
+            return pages.claim_message_page("Claude routine setup required", 400)
         try:
             out = block.add(fire=str(form.get("fire_url") or ""), token=str(form.get("token") or ""), project=str(form.get("project") or "") or None,
                             name=str(form.get("name") or "") or None, agent="claude", actor=f"admin:{owner.label}")
-        except (BlockError, CoreError) as e:
-            return pages.message_page("Not added", str(e), 400)
+        except (BlockError, CoreError):
+            return pages.claim_message_page("Routine setup failed", 400)
         core.audit.record(origin="http", source=f"admin:{owner.label}", client=client_ip(request.scope), destination=block.name, action="routine_add", outcome="ok",
                           target=out["name"], excerpt=f"{out['routine_id']} for {out['project'] or 'general'}")
         return RedirectResponse("/classic", status_code=303)
@@ -459,22 +446,20 @@ def create_app(core: "Switchboard") -> Any:
             return refused
         block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
         if block is None:
-            return pages.message_page("Not available", "The claude-routine block isn't configured (blocks.claude-routine).", 400)
+            return pages.message_page("Claude routine setup required", "", 400)
         if request.method != "POST":
             try:
                 return pages.routine_claim_page(block.claim(code, registration=registration), form_csrf,
                                                 host=request.url.hostname or "", now=core.clock())
             except BlockError as e:
-                return pages.claim_message_page("Link not usable", str(e), 410)
+                return pages.claim_message_page(ROUTINE_CLAIM_MESSAGES.get(str(e), "Request a new link"), 410)
         try:
             out = block.complete(code, token, actor=actor, registration=registration)
         except (BlockError, CoreError, ProjectError) as e:
-            return pages.claim_message_page("Not saved", str(e), 400)
+            return pages.claim_message_page(ROUTINE_CLAIM_MESSAGES.get(str(e), "Request a new link"), 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination=block.name, action="routine_claim", outcome="ok",
                           target=out["name"], excerpt=f"{out['routine_id']} for {out['project']}" + (" (new project)" if out["created_project"] else ""))
-        return pages.claim_message_page("Routine saved", f"{out['name']} ({out['routine_id']}) now answers for switchboard project {out['project']}"
-                                  + (", which was just created" if out["created_project"] else "") + ". You can close this tab; the Claude session "
-                                  "sees it in routine_list.", 200)
+        return pages.claim_message_page("Routine and project saved" if out["created_project"] else "Routine saved", 200)
 
     async def routine_remove(request: Request) -> Response:
         from .blocks import BlockError
@@ -589,7 +574,6 @@ def create_app(core: "Switchboard") -> Any:
             Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
             Route("/healthz", healthz),
             Route("/api/targets", targets),
-            Route("/api/modes", modes, methods=["GET", "POST"]),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),

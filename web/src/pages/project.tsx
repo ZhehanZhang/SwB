@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query"
 import { ChevronRight, Copy, ScrollText } from "lucide-react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import { PRODUCT_NAME } from "@/app/brand"
 import { usePageTitle } from "@/app/page-title"
+import { ChannelModeTable } from "@/components/console/channel-mode-table"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
+import { channelModesQuery } from "@/lib/channel-modes"
 import { displayReference } from "@/lib/display-reference"
 import {
   coordinatorQuery, formatAge, formatDay, formatTime, projectBoardQuery, quantity,
@@ -19,14 +21,14 @@ function CopyPrompt({ title }: { title: string | null }) {
   const copy = async () => {
     if (!prompt.data) {
       const result = await prompt.refetch()
-      if (result.isError) toast.error("Couldn’t load the agent prompt")
+      if (result.isError) toast.error("Agent prompt unavailable")
       return
     }
     try {
       await navigator.clipboard.writeText(prompt.data.text)
       toast.success("Agent prompt copied")
     } catch {
-      toast.error("Couldn’t copy the agent prompt")
+      toast.error("Copy failed")
     }
   }
   return (
@@ -54,7 +56,7 @@ function ProjectFacts({ data }: { data: ProjectBoard }) {
         <dl className="flex w-full flex-col gap-x-8 gap-y-1.5 text-body-sm lg:w-auto lg:flex-row">
           {facts.map(({ label, value }) => (
             <div key={label} className="flex justify-between gap-2">
-              <dt className="text-muted-foreground" title={label === "Turn cap" ? "Global limit per conversation" : undefined}>{label}</dt>
+              <dt className="text-muted-foreground">{label}</dt>
               <dd className="font-mono text-mono-sm">{value}</dd>
             </div>
           ))}
@@ -75,7 +77,7 @@ function RoutePoint({ endpoint, mode, short = false }: {
   return (
     <span className="flex min-w-0 items-center gap-2" title={endpoint.detail ?? endpoint.label}>
       <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${color}`} />
-      <LogoTile kind={endpoint.kind} className="size-[21px]" />
+      <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url} className="size-[21px]" />
       <span className={`truncate ${mode !== "route" && "font-mono text-mono-sm"}`}>
         {short ? endpoint.short_label ?? endpoint.label : endpoint.label}
       </span>
@@ -97,7 +99,7 @@ function ProjectRoutes({ routes }: { routes: ProjectRoute[] }) {
   return (
     <section aria-labelledby="project-routes-heading">
       <h2 id="project-routes-heading" className="text-heading-md">Routes</h2>
-      {!routes.length ? <DataState kind="empty" message="No project routes recorded." /> : (
+      {routes.length > 0 && (
         <>
           <table className="mt-1 hidden w-full table-fixed text-left text-body-sm lg:table">
             <thead className="text-muted-foreground">
@@ -122,7 +124,6 @@ function ProjectRoutes({ routes }: { routes: ProjectRoute[] }) {
                     <span className="flex items-center">
                       <Actor actor={route.by} />
                       {route.at && <time dateTime={route.at} className="shrink-0">{route.by && ", "}{formatTime(route.at)}</time>}
-                      {!route.by && !route.at && <span aria-label="Not recorded">—</span>}
                     </span>
                   </td>
                   <td className="text-right">{route.state && <Lamp state={route.state} label={route.state === "on" ? "Available" : route.state === "fault" ? "Failed" : "Unavailable or unverified"} />}</td>
@@ -176,7 +177,7 @@ function ProjectHistory({ data }: { data: ProjectBoard }) {
           <Link to={`/audit?${search}`}><ScrollText aria-hidden /> Audit</Link>
         </Button>
       </header>
-      {!data.history.length ? <DataState kind="empty" message="No project activity recorded." /> : (
+      {data.history.length > 0 && (
         <>
           <table className="mt-1 hidden w-full table-fixed text-left text-body-sm lg:table">
             <thead className="text-muted-foreground">
@@ -219,13 +220,13 @@ function ProjectActivity({ data }: { data: ProjectBoard }) {
     <div className="min-w-0 space-y-8 lg:space-y-9">
       <section aria-labelledby="project-conversations-heading">
         <h2 id="project-conversations-heading" className="text-heading-md">Open conversations</h2>
-        {!data.conversations.length ? <DataState kind="empty" message="No open conversations." /> : (
+        {data.conversations.length > 0 && (
           <ul className="mt-2">
             {data.conversations.map(({ handle, endpoint, title, at }) => (
               <li key={handle} className="border-b border-border">
                 <Link to={`/inbox/${encodeURIComponent(handle)}`} className="block py-2.5 hover:bg-muted">
                   <div className="flex min-w-0 items-center gap-2">
-                    <LogoTile kind={endpoint.kind} className="size-[18px]" />
+                    <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url} className="size-[18px]" />
                     <span className="truncate text-label-sm">{endpoint.label}</span>
                     {at && <time title={formatTime(at)} dateTime={at} className="ml-auto shrink-0 font-mono text-mono-sm text-subtle-foreground">{formatAge(at)}</time>}
                   </div>
@@ -243,7 +244,7 @@ function ProjectActivity({ data }: { data: ProjectBoard }) {
             <Link to={`/memory?${search}`}><ChevronRight aria-hidden /> All {data.project.memory_count}</Link>
           </Button>
         </header>
-        {!data.memory.length ? <DataState kind="empty" message="No project memory yet." /> : (
+        {data.memory.length > 0 && (
           <ul className="mt-1.5">
             {data.memory.map((note) => (
               <li key={note.id} className="border-b border-border">
@@ -267,23 +268,47 @@ function ProjectActivity({ data }: { data: ProjectBoard }) {
   )
 }
 
+function ProjectModes({ slug }: { slug: string }) {
+  const result = useQuery(channelModesQuery)
+  if (result.isPending) return <DataState kind="loading" />
+  if (result.isError) return <DataState kind="error" message="Modes unavailable" onRetry={() => void result.refetch()} />
+  const rows = result.data?.spaces.filter(row => row.project === slug) ?? []
+  if (!result.data || rows.length === 0) return <DataState kind="empty" message="Channels appear here when assigned to this project." />
+  return <ChannelModeTable label="Project modes" rows={rows} status={result.data} />
+}
+
 export function ProjectPage() {
   const { slug = "" } = useParams()
+  const [search, setSearch] = useSearchParams()
+  const showModes = search.get("tab") === "modes"
   const board = useQuery(projectBoardQuery(slug))
   usePageTitle(board.data?.project.name)
   if (board.isPending) return <DataState kind="loading" message="Loading project…" />
-  if (board.isError) return <DataState kind="error" message="Couldn’t load this project." onRetry={() => void board.refetch()} />
+  if (board.isError) return <DataState kind="error" message="Project unavailable" onRetry={() => void board.refetch()} />
   const data = board.data
   return (
     <div>
       <ProjectFacts data={data} />
-      <div className="mt-7 grid min-w-0 gap-x-12 gap-y-8 lg:mt-10 lg:grid-cols-[minmax(0,2.44fr)_minmax(0,1fr)]">
+      <nav aria-label="Project views" className="mt-5 flex border-b">
+        {([["overview", "Overview"], ["modes", "Modes"]] as const).map(([tab, label]) => {
+          const selected = showModes === (tab === "modes")
+          return <button key={tab} type="button" aria-current={selected ? "page" : undefined}
+            className={`border-b-2 px-3 py-2 text-body-sm ${selected ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setSearch(previous => {
+              const next = new URLSearchParams(previous)
+              if (tab === "modes") next.set("tab", "modes")
+              else next.delete("tab")
+              return next
+            })}>{label}</button>
+        })}
+      </nav>
+      {showModes ? <ProjectModes slug={data.project.slug} /> : <div className="mt-7 grid min-w-0 gap-x-12 gap-y-8 lg:mt-10 lg:grid-cols-[minmax(0,2.44fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-8 lg:space-y-9">
           <ProjectRoutes routes={data.routes} />
           <ProjectHistory data={data} />
         </div>
         <ProjectActivity data={data} />
-      </div>
+      </div>}
     </div>
   )
 }

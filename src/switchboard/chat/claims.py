@@ -99,20 +99,20 @@ class Claims:
     def check(self, code: str) -> dict[str, Any]:
         row = self.core.store.one("SELECT * FROM block_claims WHERE code_hash = ? AND block = ?", (_sha(code or ""), self.block))
         if row is None:
-            raise ClaimError("this link isn't valid; ask for a new one")
+            raise ClaimError("Request a new link")
         if row["used_at"] is not None:
-            raise ClaimError("this link was already used or replaced by a newer one")
+            raise ClaimError("Request a new link")
         if row["expires_at"] <= self.core.clock():
-            raise ClaimError("this link has expired; ask for a new one")
+            raise ClaimError("Link expired")
         return dict(row)
 
     def complete(self, code: str, value: str, actor: str, valid: Callable[[str], bool]) -> str:
         row = self.check(code)
         value = (value or "").strip()
         if not valid(value):
-            raise ClaimError("that doesn't look like the right kind of token")
+            raise ClaimError("Use a bot token")
         if not self.core.store.n("UPDATE block_claims SET used_at = ? WHERE code_hash = ? AND used_at IS NULL", (self.core.clock(), _sha(code))):
-            raise ClaimError("this link was already used")
+            raise ClaimError("Link already used")
         self.put(row["name"], value, actor)
         return row["name"]
 
@@ -133,18 +133,18 @@ class Claims:
             try:
                 row = self.check(code)
             except ClaimError as e:
-                return pages.claim_message_page("Link not usable", str(e), 410)
+                return pages.claim_message_page(str(e), 410)
             if request.method in ("GET", "HEAD"):
-                return pages.claim_page(title, f'{hint(row["name"])} Stored encrypted, never shown again.',
+                return pages.claim_page(title, f"For {self.block}.",
                                         self.core.auth.csrf(owner.csrf_key), requester=title.removesuffix(" bot token"),
                                         host=request.url.hostname or "", expires_at=row["expires_at"], now=self.core.clock())
             form_data = await request.form()
             try:
                 name = self.complete(code, str(form_data.get("token") or ""), f"admin:{owner.label}", valid)
             except ClaimError as e:
-                return pages.claim_message_page("Not saved", str(e), 400)
+                return pages.claim_message_page(str(e), 400)
             self.core.audit.record(origin="http", source=f"admin:{owner.label}", client="claim", destination=self.block, action="secret_claim", outcome="ok", target=name)
             await saved(name)
-            return pages.claim_message_page("Token saved", f"{self.block} has its {name} now and is reconnecting. You can close this tab.", 200)
+            return pages.claim_message_page("Token saved", 200)
 
         return [Route(f"/claims/{self.block}/{{code}}", claim, methods=["GET", "POST"])]

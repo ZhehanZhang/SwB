@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from conftest import CAPTAIN, CAPY_KEY, OWNER, SERVICE_KEY, STATIC_KEY, base_config, default_env
+from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, base_config, default_env
 
 PRIVATE = "fixture-secret-not-owner-console-data"
 READ_PATHS = ("/health", "/routes", "/visibility", "/audit", "/agents", "/projects", "/inbox",
@@ -115,6 +115,79 @@ def test_agent_inventory_has_discovered_targets_and_only_credential_metadata(mak
     ))
     core.clock.t += 1801
     assert get(client, "/agents")["pending_claims"] == []
+
+
+def test_captain_avatars_are_same_origin_on_console_reads(make):
+    core, client = make()
+    captain = f"capy:captain:{CAPTAIN}"
+    thread = f"capy:thread:{CAPTAIN}"
+    core.projects.create(slug="context", name="Context")
+    route = core.routes.set(destination="capy", agent="codex", project="context", target={"captain": CAPTAIN},
+                            defaults=None, allow_override=True, note="", by="config")
+    handle = core.inbox.open_handle(owner="codex", destination="capy", ref="jam_CONVERSATION", project="context",
+                                    title="A conversation", meta={}, target=captain)
+    thread_handle = core.inbox.open_handle(owner="codex", destination="capy", ref=CAPTAIN, project="context",
+                                           title="A thread", meta={}, target=thread)
+    for action, target, excerpt in (("delegate", f"captain Captain ({CAPTAIN})", ""), ("delegate", thread, ""),
+                                    ("route_set", "codex/context", route.audit_excerpt())):
+        core.audit.record(action=action, origin="mcp", outcome="ok", destination="capy", source="codex", client="key:codex",
+                          target=target, excerpt=excerpt)
+
+    targets = {row["id"]: row for row in client.portal.call(core.targets) if row["kind"] == "captain"}
+    inventory = {row["id"]: row for row in get(client, "/agents")["captains"]}
+    url = targets[CAPTAIN]["avatar_url"].removeprefix(PUBLIC)
+    assert url.startswith("/avatars/") and "?v=" in url and inventory[CAPTAIN]["avatar_url"] == url
+    other_url = inventory[CAPTAIN2]["avatar_url"]
+    assert other_url == targets[CAPTAIN2]["avatar_url"].removeprefix(PUBLIC)
+    assert other_url != url and "persona" not in inventory[CAPTAIN]
+    response = client.get(url)
+    assert response.status_code == 200 and response.headers["content-type"] == "image/png"
+
+    board = get(client, "/board")
+    assert board["projects"][0]["agents"][0]["avatar_url"] == url
+    assert next(row for row in board["unassigned"] if row["id"] == f"capy:captain:{CAPTAIN2}")["avatar_url"] == other_url
+    project = get(client, "/board/projects/context")
+    assert project["routes"][0]["to"]["avatar_url"] == url
+    activity = {row["handle"]: row["endpoint"] for row in project["conversations"]}
+    assert activity[handle]["avatar_url"] == url and "avatar_url" not in activity[thread_handle]
+    audit = {row["target"]: row["metadata"] for row in get(client, "/audit")["items"]}
+    assert audit[f"captain Captain ({CAPTAIN})"]["target_avatar_url"] == url
+    assert audit["codex/context"]["target_avatar_url"] == url
+    assert "target_avatar_url" not in audit[thread]
+    inbox = {row["handle"]: row for row in get(client, "/inbox")["conversations"]}
+    assert inbox[handle]["target_avatar_url"] == get(client, f"/conversations/{handle}")["conversation"]["target_avatar_url"] == url
+    assert "target_avatar_url" not in inbox[thread_handle]
+
+
+def test_agent_avatar_projection_drops_untrusted_urls_and_leaves_other_targets_alone(make, monkeypatch):
+    core, client = make()
+    wrong_values = ["https://elsewhere.test/avatars/example.png?v=1", "//elsewhere.test/avatars/example.png",
+                    f"{PUBLIC}/avatars/example.png?key={PRIVATE}", f"{PUBLIC}/avatars/%2fexample.png",
+                    f"{PUBLIC}.elsewhere.test/avatars/example.png?v=1", "data:image/png;base64,AAAA",
+                    {"url": PRIVATE}, None]
+
+    async def targets():
+        rows = [{"kind": "captain", "id": str(i), "address": f"capy:captain:{i}", "block": "capy", "name": f"Captain {i}",
+                 "slugs": [], "avatar_url": url, "persona": {"secret": PRIVATE}}
+                for i, url in enumerate([*wrong_values, "/avatars/example.png?v=123"])]
+        rows.append({**rows[-1], "kind": "dot", "address": "capy:dot:test"})
+        return rows
+
+    monkeypatch.setattr(core, "targets", targets)
+    inventory = get(client, "/agents")
+    assert all("avatar_url" not in row for row in inventory["captains"][:-1])
+    assert inventory["captains"][-1]["avatar_url"] == "/avatars/example.png?v=123"
+    assert "avatar_url" not in inventory["dots"][0]
+    assert PRIVATE not in json.dumps(inventory)
+
+
+def test_cached_captain_avatar_works_without_a_public_base_url(make, monkeypatch):
+    core, client = make()
+    monkeypatch.setattr(core.avatars, "public_base_url", None)
+    captain = next(row for row in get(client, "/agents")["captains"] if row["id"] == CAPTAIN)
+    assert captain["avatar_url"].startswith("/avatars/")
+    response = client.get(captain["avatar_url"])
+    assert response.status_code == 200 and response.headers["content-type"] == "image/png"
 
 
 def test_inbox_and_thread_use_configured_connector_kind_for_renamed_blocks(make):

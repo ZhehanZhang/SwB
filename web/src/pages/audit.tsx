@@ -12,7 +12,7 @@ const clock = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-dig
 
 function EventTime({ value }: { value: string | null }) {
   const at = value ? new Date(value) : null
-  if (!at || !Number.isFinite(at.getTime())) return "—"
+  if (!at || !Number.isFinite(at.getTime())) return null
   return <time dateTime={at.toISOString()} title={at.toLocaleString()}>{date.format(at)} {clock.format(at)}</time>
 }
 
@@ -59,14 +59,19 @@ export function AuditPage() {
               return (
                 <tr key={item.id} role="row" className="border-b text-body-sm max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-x-3 max-md:gap-y-1 max-md:py-3 md:h-[43px]">
                   <td role="cell" className="font-mono text-mono-sm text-muted-foreground md:py-2 md:pr-3"><EventTime value={item.at} /></td>
-                  <td role="cell" className="font-mono text-mono-sm wrap-anywhere max-md:text-right md:py-2 md:pr-3">{auditProject(item) ?? "—"}</td>
+                  <td role="cell" className="font-mono text-mono-sm wrap-anywhere max-md:text-right md:py-2 md:pr-3">{auditProject(item)}</td>
                   <td role="cell" className="wrap-anywhere md:py-2 md:pr-3">
                     <span className="flex min-w-0 items-center gap-2">
-                      {who !== "you" && who !== "—" && <Logo kind={auditActorKind(item)} className="size-5" />}
+                      {who && who !== "you" && <Logo kind={auditActorKind(item)} className="size-5" />}
                       {who}
                     </span>
                   </td>
-                  <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{auditText(item)}</td>
+                  <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">
+                    <span className="flex items-center gap-2">
+                      {item.metadata?.target_avatar_url !== undefined && <Logo kind="captain" avatarUrl={item.metadata.target_avatar_url} className="size-5" />}
+                      <span>{auditText(item)}</span>
+                    </span>
+                  </td>
                   <td role="cell" className="font-mono text-mono-sm text-muted-foreground max-md:text-right md:py-2">
                     {item.origin === "http" && who === "you" ? "web" : item.origin}
                   </td>
@@ -78,13 +83,13 @@ export function AuditPage() {
         {!items.length && (audit.isPending
           ? <DataState kind="loading" message="Loading audit…" />
           : audit.isError
-            ? <DataState kind="error" message="Couldn’t load audit events." onRetry={() => void audit.refetch()} />
-            : <DataState kind="empty" message="No audit events." />)}
+            ? <DataState kind="error" message="Audit events unavailable." onRetry={() => void audit.refetch()} />
+            : <DataState kind="empty" message="0 audit events" />)}
         {audit.isFetchNextPageError && (
-          <DataState kind="error" message="Couldn’t load more events." onRetry={() => void audit.fetchNextPage()} />
+          <DataState kind="error" message="Loading more events failed." onRetry={() => void audit.fetchNextPage()} />
         )}
         {items.length > 0 && audit.isRefetchError && (
-          <DataState kind="error" message="Couldn’t refresh audit events." onRetry={() => void audit.refetch()} />
+          <DataState kind="error" message="Audit refresh failed." onRetry={() => void audit.refetch()} />
         )}
         {audit.hasNextPage && !audit.isFetchNextPageError && (
           <Button variant="outline" size="sm" className="mt-4" disabled={audit.isFetching} onClick={() => void audit.fetchNextPage()}>
