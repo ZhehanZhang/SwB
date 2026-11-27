@@ -69,12 +69,12 @@ description: SwB 提供给你的智能体的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `routes_list` | 列出所有模块的路由 |
-| `routes_set` | 保存路由。将模块目标的地址填入 `target`，例如 `capy:captain:<name>`。用 `agent` 或 `project` 限定路由的适用范围 |
-| `routes_resolve` | 查看某个模块中匹配的路由。将模块名填入 `block`，例如 `grok-routine` |
+| `routes_list` | 列出所有路由，包括邮箱路由 |
+| `routes_set` | 保存路由。将智能体邮箱（例如 `agent:<name>`）或模块地址（例如 `capy:captain:<name>`）填入 `target`。用 `agent` 或 `project` 限定路由的适用范围 |
+| `routes_resolve` | 查看某个目的地匹配的路由。将名称填入 `block`，例如 `grok-routine` 或 `agent` |
 | `routes_remove` | 按 `agent` 和 `project` 删除指定 `block` 中完全匹配的路由 |
 
-`routes_resolve` 和 `routes_remove` 默认使用首个支持路由的模块。用 `block` 选择其他模块。
+`routes_resolve` 和 `routes_remove` 默认使用首个目的地。它是首个支持路由的模块。没有这类模块时，它是 `agent`。用 `block` 选择其他目的地。
 
 ## 模块工具
 

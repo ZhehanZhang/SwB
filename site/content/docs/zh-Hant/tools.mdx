@@ -69,12 +69,12 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `routes_list` | 列出所有模組的路由 |
-| `routes_set` | 儲存路由。將模組目標的位址填入 `target`，例如 `capy:captain:<name>`。用 `agent` 或 `project` 限定路由的適用範圍 |
-| `routes_resolve` | 查看單一模組中符合條件的路由。將模組名稱填入 `block`，例如 `grok-routine` |
+| `routes_list` | 列出所有路由，包括信箱路由 |
+| `routes_set` | 儲存路由。將代理信箱（例如 `agent:<name>`）或模組位址（例如 `capy:captain:<name>`）填入 `target`。用 `agent` 或 `project` 限定路由的適用範圍 |
+| `routes_resolve` | 查看單一目的地符合條件的路由。將名稱填入 `block`，例如 `grok-routine` 或 `agent` |
 | `routes_remove` | 依 `agent` 和 `project` 移除指定 `block` 中完全符合條件的路由 |
 
-`routes_resolve` 和 `routes_remove` 預設使用第一個支援路由的模組。用 `block` 選擇其他模組。
+`routes_resolve` 和 `routes_remove` 預設使用第一個目的地。它是第一個支援路由的模組。沒有這類模組時，它是 `agent`。用 `block` 選擇其他目的地。
 
 ## 模組工具
 
