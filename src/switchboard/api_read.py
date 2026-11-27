@@ -451,7 +451,7 @@ async def conversation(request: Request) -> JSONResponse:
     ) else (row["destination"],))
     for item in out["items"]:
         projected = _scalars(item, "cursor", "handle", "kind", "at", "text", "status", "final", "in_reply_to", "trust", "project",
-                             "target", "target_kind", "event_id", "slack_kind")
+                             "target", "target_kind", "event_id", "slack_kind", "count")
         if sender := _sender(core, item.get("from"), row["destination"], captains):
             projected["from"] = sender
         items.append(projected)

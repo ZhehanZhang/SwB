@@ -193,6 +193,24 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
     assert batch["items"][-1]["excerpt"] == "item 49"
 
 
+def test_owner_console_displays_the_watch_digest_title_and_content(make):
+    core, client = make(config=config(modes={"digest_minutes": 1}), env={})
+    link = f"https://discord.com/channels/{GUILD}/{DISCORD_CHANNEL}/10"
+    core.modes.watch("discord", "home", DISCORD_CHANNEL, "10", "7", "Ava", "Watch excerpt", link, None)
+    core.clock.t += 60
+    assert core.modes.flush() == 1
+    response = client.get("/api/inbox", headers=OWNER)
+    assert response.status_code == 200
+    [conversation] = response.json()["conversations"]
+    assert conversation["title"] == "Watch digest for home"
+    assert conversation["owner"] == "owner" and conversation["open"] is False
+    response = client.get(f"/api/conversations/{conversation['handle']}", headers=OWNER)
+    assert response.status_code == 200
+    [item] = response.json()["items"]
+    assert (item["kind"], item["count"], item["trust"]) == ("watch_digest", 1, "external")
+    assert item["text"] == f"1 event\n\nAva\nWatch excerpt\n{link}"
+
+
 @pytest.fixture(params=["discord", "telegram"])
 def intake(request, discord, telegram):
     @contextmanager
