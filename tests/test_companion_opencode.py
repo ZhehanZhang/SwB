@@ -54,6 +54,7 @@ class Server:
         self.has_more = False
         self.listed = True
         self.status = f"{self.sessions}/status"
+        self.active = {SESSION: {"type": "busy"}}
         self.paths = {
             self.sessions: {"get": {}},
             template: {"get": {}},
@@ -102,7 +103,7 @@ class Server:
         if path == self.one:
             return httpx.Response(200, json=self.wrap(self.info))
         if path == self.status:
-            return httpx.Response(200, json={SESSION: {"type": "busy"}})
+            return httpx.Response(200, json=self.wrap(self.active))
         if path in self.pending:
             return httpx.Response(200, json=self.wrap(self.pending[path]))
         if path == self.messages:
@@ -293,6 +294,22 @@ async def test_idle_arriving_before_prompt_ack_still_uses_new_wake(fixture, cont
         server.before_ack = before_ack
         assert await cap.invoke("prompt", PROMPT, context) == {"queued": True}
         assert (await events.get())[0] == "opencode.reply"
+
+
+async def test_active_snapshot_reconciles_sessions_without_idle_events(fixture, monkeypatch):
+    cap, server, _ = fixture("prompt")
+    monkeypatch.setattr(opencode, "_ACTIVE_REFRESH_S", 0.03)
+    server.paths.pop(server.status)
+    server.status = "/api/session/active"
+    server.paths[server.status] = {"get": {}}
+    server.active.clear()
+    async with running(cap) as events:
+        assert (await events.get())[1]["state"] == "idle"
+        server.active[SESSION] = {"type": "running"}
+        assert (await events.get())[1]["state"] == "working"
+        server.active.clear()
+        assert (await events.get())[1]["state"] == "idle"
+        assert not server.wait_started.is_set()
 
 
 @pytest.mark.parametrize("finish", [True, False])
