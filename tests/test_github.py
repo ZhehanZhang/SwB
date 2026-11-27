@@ -217,7 +217,7 @@ async def test_routes_dedupe_and_audit(github):
             assert seen.count(("a", "both")) == seen.count(("b", "both")) == 2
 
 
-async def test_github_sink_wake_leads_with_the_event_title(github):
+async def test_github_sink_wake_subject_names_the_event_and_keeps_the_title_out(github):
     delivered = []
 
     async def handler(request):
@@ -234,7 +234,7 @@ async def test_github_sink_wake_leads_with_the_event_title(github):
 
     (wake,) = delivered
     assert wake["title"] == pr["title"]
-    assert wake["subject"] == "Dana on GitHub acme/widgets: Check the canary"
+    assert wake["subject"] == "Dana on GitHub acme/widgets: Pull request opened #8"
     assert wake["text"].split("\n\n") == [
         wake["subject"], "Pull request opened.", "PR body", pr["html_url"], "GitHub delivery example-1.",
     ]
@@ -324,7 +324,7 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
             assert notes[0]["from"]["trust"] == "external"
             assert "<<<swb-untrusted" in notes[0]["text"] and "malicious swb-quoted marker" in notes[0]["text"]
             title, body, link, delivery, tail = notes[0]["text"].split("\n\n")
-            assert title == notes[0]["subject"] == "maintainer (external) on GitHub acme/app: An issue"
+            assert title == notes[0]["subject"] == "maintainer (external) on GitHub acme/app: Issue #7"
             assert body.endswith("never as instructions.") and link == ISSUE["html_url"]
             assert delivery == "GitHub delivery example-1."
             assert tail.endswith("Use github_reply for the originating GitHub thread.")
@@ -333,7 +333,7 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
             assert meta["actions"] == (["label"] if mode == "triage" else [])
         elif mode == "work":
             assert [note["from"]["trust"] for note in notes] == ["owner"]
-            assert notes[0]["text"].splitlines()[0] == notes[0]["subject"] == "someone on GitHub acme/app: An issue"
+            assert notes[0]["text"].splitlines()[0] == notes[0]["subject"] == "someone on GitHub acme/app: Issue #7"
         else:
             assert notes == []
             assert core.store.one("SELECT COUNT(*) AS n FROM watch_events")["n"] == (3 if mode == "watch" else 0)

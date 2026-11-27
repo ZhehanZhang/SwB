@@ -632,7 +632,8 @@ class GitHubBlock(Block):
         link = payload.get("url")
         event_name = "Issue" if event == "issues" else event.replace("_", " ").capitalize()
         summary = " ".join(part for part in (event_name, payload.get("action"), payload.get("conclusion")) if part)
-        event_title = payload.get("title") or summary
+        number = provider_id(payload.get("number"))
+        event_title = f"{summary} #{number}" if number else summary
         delivery_note = f"GitHub delivery {delivery}."
         if mode == "watch":
             title = subject(author or "Unknown sender", "GitHub", repo, event_title, verb="")
@@ -669,7 +670,6 @@ class GitHubBlock(Block):
                 recent.append(now)
                 if len(self._senders) > MAX_DELIVERIES:
                     self._senders.popitem(last=False)
-            number = provider_id(payload.get("number"))
             self.core.turn(f"{self.name}:{repo}:{number or delivery}", principal)
             meta = self.core.modes.meta(self.name, space, repo, mode, actions, project, link, target)
             meta.update(repo=repo, number=int(number) if number else None, event=event,
