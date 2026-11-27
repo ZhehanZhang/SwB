@@ -58,7 +58,7 @@ def _resolved_ip(scope: dict[str, Any], trusted_proxies: tuple[IPv4Network | IPv
             for value in reversed(field.split(",")):
                 address = _ip(value)
                 if address is None:
-                    return str(peer)
+                    continue
                 if not any(address in network for network in trusted_proxies):
                     return str(address)
         if not forwarded:

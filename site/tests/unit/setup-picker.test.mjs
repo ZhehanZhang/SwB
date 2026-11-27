@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { combineSetupPrompts, setupSourceIds } from '../../lib/setup-picker.ts';
+import { combineSetupPrompts, setupChoices, setupSourceIds } from '../../lib/setup-picker.ts';
 
 const sources = Object.fromEntries(setupSourceIds.map((id) =>
   [id, readFileSync(new URL(`../../../docs/prompts/${id}.md`, import.meta.url), 'utf8')],
@@ -68,12 +68,14 @@ test('uses the Muse OAuth connector and reads its mailbox in chat', () => {
   assert.ok(!prompt.includes('switchboard.message.created'));
 });
 
-test('includes the Companion guide and pairing commands when selected', () => {
-  const prompt = combineSetupPrompts(sources, ['companion']);
-  assert.match(prompt, /^### Companion$/m);
-  assert.ok(prompt.includes('https://swb.one/docs/companion'));
-  assert.ok(prompt.includes('uvx swb-one companion connect https://swb.example.com'));
-  assert.ok(prompt.includes("uvx --python 3.13 --from 'swb-one[companion]' swb companion connect"));
-  assert.ok(prompt.includes('Call `companion_list`'));
-  assert.equal(count(prompt, '### Muse'), 0);
+test('omits Companion from the choices and preserves its standalone prompt', () => {
+  assert.ok(setupChoices.every(({ id }) => id !== 'companion'));
+  assert.ok(!setupSourceIds.includes('companion'));
+  const prompt = combineSetupPrompts(sources, ['muse', 'companion']);
+  assert.ok(!prompt.includes('### Companion'));
+  const standalone = readFileSync(new URL('../../../docs/prompts/companion.md', import.meta.url), 'utf8');
+  assert.ok(standalone.includes('https://swb.one/docs/companion'));
+  assert.ok(standalone.includes('uvx swb-one companion connect https://swb.example.com'));
+  assert.ok(standalone.includes("uvx --python 3.13 --from 'swb-one[companion]' swb companion connect"));
+  assert.ok(standalone.includes('Call `companion_list`'));
 });
