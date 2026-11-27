@@ -374,7 +374,7 @@ class Switchboard:
                 return Address(owner, head.lower(), rest.strip())
         word = text.lower()
         if word in self.blocks:
-            return Address(word, "", "")
+            return self.blocks[word].default_address()
         if word in self.known_agents():
             for name, b in self.blocks.items():
                 if b.wakes_agents:

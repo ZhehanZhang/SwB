@@ -37,6 +37,7 @@ BLOCKS = {
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
     "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
+    "muse": "switchboard.blocks.muse:MuseBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")
@@ -240,6 +241,9 @@ class Block:
     def wake_target(self, agent: str, project: str) -> Address | None:
         """For a block that wakes agents: the target that wakes this agent for this project (a project routine), if any."""
         return None
+
+    def default_address(self) -> Address:
+        return Address(self.name, "", "")
 
     def effective_target(self, addr: Address, project: str | None) -> Address:
         """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""

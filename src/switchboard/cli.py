@@ -158,12 +158,7 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
 
 
 def _claim(url: str, key: str, *, routine: bool) -> None:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", getpass.GetPassWarning)
-            token = getpass.getpass("Token: ")
-    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
-        raise CliError("Use a terminal with hidden input to enter the token.") from None
+    token = _hidden_input("Token: ")
     if not token.strip():
         raise CliError("No token entered.")
     try:
@@ -175,6 +170,15 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
     if not response.is_success:
         raise CliError(f"Switchboard did not save the token (HTTP {response.status_code}). Check the claim link and owner key.")
     print("Routine saved." if routine else "Token saved. Run swb connect again to check the next step.")
+
+
+def _hidden_input(prompt: str) -> str:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            return getpass.getpass(prompt)
+    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
+        raise CliError("Use a terminal with hidden input to enter the token.") from None
 
 
 async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -241,12 +245,23 @@ def main(argv: list[str] | None = None) -> None:
     status = commands.add_parser("status", help="show server status and next steps")
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
+    muse = commands.add_parser("muse-bridge", help="pair and run SwB as a Muse gadget on Linux")
+    muse.add_argument("--url", required=True, help="SwB base URL or MCP endpoint")
+    muse.add_argument("--setup", action="store_true", help="enter the bridge token and pair in the Muse app")
+    muse.add_argument("--pair-again", action="store_true", help="replace this gadget's Meta pairing (requires --setup)")
+    muse.add_argument("--state-dir", type=Path, default=Path.home() / ".config" / "swb" / "muse")
     for command in (init, up, connect, status, claim):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
     for command in (connect, status, claim):
         command.add_argument("--url", help="server base URL or MCP endpoint (default: http://127.0.0.1:8000/mcp)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "muse-bridge":
+            from .muse_gadget import run_gadget
+
+            url = _url(args.url).removesuffix("/mcp")
+            run_gadget(url, args.state_dir, setup=args.setup, pair_again=args.pair_again)
+            return
         base = args.dir.resolve()
         if args.command == "init":
             _init(base, args.public_url, args.force)

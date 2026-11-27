@@ -17,6 +17,7 @@ from . import pages
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
 from .guard import Guard, RateLimiter, client_ip, reject
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
+from .muse_protocol import BRIDGE_PATH
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -63,7 +64,12 @@ class BearerGate:
             if wait is not None:
                 await reject(send, 429, "slow_down", "too many failed sign-ins from this address; try again later", wait)
                 return
-            principal = self.core.auth.verify_bearer(token)
+            if scope["path"] == BRIDGE_PATH:
+                muse = self.core.blocks.get("muse")
+                principal = (muse.verify_bridge(token) if muse and muse.manifest.id == "muse"
+                             and auth.lower().startswith("bearer ") else None)
+            else:
+                principal = self.core.auth.verify_bearer(token)
             if principal is None and token:
                 self.limiter.hit("bearer_fail", ip)
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
@@ -180,10 +186,12 @@ def create_app(core: "Switchboard") -> Any:
 
     async def avatar(request: Request) -> Response:
         """Persona avatars for Slack bot posts; Slack fetches them, so this path is public (no Access)."""
-        if core.slack is None:
-            return Response(status_code=404)
         name = request.path_params["name"]
-        path = core.slack.find_avatar(name)
+        path = core.slack.find_avatar(name) if core.slack is not None else None
+        if path is None and name == "muse.png" and "muse" in core.blocks:
+            from .slack.engine import BUNDLED_AVATARS
+
+            path = BUNDLED_AVATARS / name
         if path is None:
             return Response(status_code=404)
         return Response(path.read_bytes(), media_type="image/png" if name.endswith(".png") else ("image/gif" if name.endswith(".gif") else "image/jpeg"),
