@@ -1,5 +1,6 @@
 """Live setup directions for MCP clients and enabled blocks."""
 
+import json
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
@@ -11,7 +12,8 @@ from .coding import coding_steps
 from .kit import Kit
 
 CLIENTS = ("mcp-client", "chatgpt", "claude", "coding-agent")
-BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine", "discord": "discord", "telegram": "telegram"}
+BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
+          "grok": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
 MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web"}
 
@@ -30,8 +32,8 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
         signed_in = principal.kind == "oauth" and principal.source == kind
         if not signed_in and principal.is_unrestricted_owner and oauth:
             signed_in = core.store.one(
-                "SELECT 1 FROM oauth_tokens WHERE source = ? AND resource = ? AND expires_at > ? AND revoked_at IS NULL LIMIT 1",
-                (kind, core.cfg.resource, core.clock()),
+                "SELECT 1 FROM oauth_tokens WHERE source = ? AND resource IN (SELECT value FROM json_each(?)) AND expires_at > ? AND revoked_at IS NULL LIMIT 1",
+                (kind, json.dumps(core.cfg.resources), core.clock()),
             ) is not None
         if signed_in:
             return {"done": [*done, "The client is signed in."], "next": []}

@@ -7,11 +7,21 @@
     const meta = document.querySelector(`meta[name="theme-color"][media="(prefers-color-scheme: ${scheme})"]`)
     return { meta, color: meta?.content }
   })
-  const read = () => {
-    try { return localStorage.getItem(key) } catch { return null }
+  const read = (name = key) => {
+    try { return localStorage.getItem(name) } catch { return null }
+  }
+  const legacy = () => {
+    try {
+      const cookies = document.cookie.split(/;\s*/)
+      const cookie = name => cookies.find(item => item.startsWith(`${name}=`))?.slice(name.length + 1)
+      for (const value of [cookie("swbAppearance"), cookie("siteAppearance"), read("theme")]) {
+        if (value === "light" || value === "dark" || value === "system") return value
+      }
+    } catch {}
+    return read("theme")
   }
   const mode = value => value === "light" || value === "dark" ? value : "system"
-  let preference = mode(read())
+  let preference = mode(read() ?? legacy())
   const apply = () => {
     const dark = preference === "dark" || (preference === "system" && system.matches)
     const scheme = dark ? "dark" : "light"

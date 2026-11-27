@@ -2,14 +2,14 @@ import re
 
 import pytest
 
-from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, access_verifier, base_config, default_env
+from conftest import CAPTAIN, CAPTAIN2, CAPTAIN_CODE, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, access_verifier, base_config, default_env
 from switchboard.blocks import Action
 from switchboard.slack.writes import WriteError
 
 
 EMAIL = "owner@example.test"
 SECOND_OWNER = "second@example.test"
-ROUTE = {"destination": "capy", "target": {"captain": "BCN-1"}, "agent": "claude",
+ROUTE = {"destination": "capy", "target": {"captain": CAPTAIN_CODE}, "agent": "claude",
          "defaults": {"delivery": "queue"}, "allow_override": True, "note": "Owner route"}
 VISIBILITY = {"resource": "target:claude", "visibility": ["UOWNER01", "workspace:example"]}
 SEND = {"task": "Check the route", "to": "agent:claude"}

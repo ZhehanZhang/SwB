@@ -13,6 +13,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from .api_display import captain_avatar_url, captain_target, captain_targets, capy_label
+from .slack.avatar_files import agent_avatar_url
 from .audit import iso
 from .blocks import BLOCKS, load
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
@@ -237,7 +238,7 @@ async def _agents(core: Any) -> dict[str, Any]:
                         and isinstance(value := r.target.get(kind), str) and value.casefold() in names}
             if target.get("project"):
                 projects.add(target["project"])
-            avatar_url = captain_avatar_url(core, target)
+            avatar_url = captain_avatar_url(core, target) or (agent_avatar_url(kind) if kind == "dot" else None)
             discovered[kind].append({
                 **_fields(target, "id", "name", "kind", "block", "address", "slugs", "level", "project", "created_at"),
                 "created_by": _reference(target.get("created_by")),
@@ -315,11 +316,17 @@ def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | No
     captain = captain_target(reference, row["destination"], captains)
     avatar_url = captain_avatar_url(core, captain) if captain else None
     block = core.blocks.get(row["destination"])
+    destination_kind = block.manifest.id if block else None
+    if not avatar_url:
+        if row["target"] and row["target"].startswith("agent:"):
+            avatar_url = agent_avatar_url(row["target"].removeprefix("agent:"))
+        elif destination_kind:
+            avatar_url = agent_avatar_url(destination_kind)
     return {**_fields(row, "handle", "owner", "destination", "ref", "project", "title", "target", "status", "open"),
             "created_at": iso(row["created_at"]), "updated_at": iso(row["updated_at"]),
             "first_sender": first_sender, "first_target": first_target,
             **({"target_avatar_url": avatar_url} if avatar_url else {}),
-            "destination_kind": block.manifest.id if block else None}
+            "destination_kind": destination_kind}
 
 
 def _pending_write(row: dict[str, Any]) -> dict[str, Any]:

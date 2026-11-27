@@ -820,6 +820,16 @@ In front of everything:
 Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where `<NAME>` becomes the agent name, or
 a key from a pairing code (below).
 
+### Server addresses
+
+Set `public_url` to the new URL. Add the old URL to `public_url_aliases`.
+
+Each URL has its own OAuth issuer. Existing tokens work at both URLs. New links use the new URL.
+
+Register `/auth/oidc/callback` for every server URL in the sign-in provider.
+
+By default, each passkey belongs to its original host. Set `auth.passkey_rp_id` to a domain that all hosts share to enroll passkeys for that domain.
+
 ### Connecting a new agent with a pairing code
 
 For CLI and session agents started on a laptop when needed (Codex, Gemini CLI, Claude Code, a script), the owner

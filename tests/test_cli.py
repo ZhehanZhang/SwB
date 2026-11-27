@@ -3,6 +3,7 @@ import os
 import stat
 import warnings
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import parse_qs
 
@@ -12,6 +13,13 @@ import yaml
 from mcp.types import CallToolResult, TextContent
 
 from switchboard import __main__, cli
+
+
+def test_cli_version_matches_installed_distribution(capsys):
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["--version"])
+    assert exited.value.code == 0
+    assert capsys.readouterr().out == f"swb {version('swb-one')}\n"
 
 
 @pytest.fixture(autouse=True)
@@ -150,6 +158,16 @@ def test_status_lists_next_steps_and_redacts_owner_key(tmp_path, monkeypatch, ca
     out, err = capsys.readouterr()
     assert key not in out + err
     assert out == "Status: degraded\nNext steps:\n  - Configure OAuth.\n  - Echoed [redacted]\n"
+
+
+@pytest.mark.parametrize(("kind", "value", "parsed"), [("muse", "true", True), ("grok", "url", "url")])
+def test_connect_passes_block_specific_replacement(tmp_path, monkeypatch, kind, value, parsed):
+    key = "fixture-owner-key-not-a-secret"
+    monkeypatch.setenv(cli.OWNER_KEY, key)
+    call = AsyncMock(return_value={"what": kind, "next": []})
+    monkeypatch.setattr(cli, "_call", call)
+    cli.main(["connect", kind, "--choose", f"replace={value}", "--dir", str(tmp_path), "--url", "https://swb.example"])
+    call.assert_awaited_once_with("https://swb.example/mcp", key, "connect", {"what": kind, "choose": {"replace": parsed}})
 
 
 def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch, capsys):

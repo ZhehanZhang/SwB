@@ -14,10 +14,13 @@ from starlette.responses import JSONResponse, RedirectResponse, Response, Stream
 from starlette.routing import Mount, Route
 
 from . import pages
+from .api_about import release_version
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable, GroupFieldError
+from .config import REQUEST_BASE
 from .guard import Guard, RateLimiter, client_ip, reject
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
+from .muse_protocol import BRIDGE_PATH
 from .sessions import Owner, login_redirect
 from .web import web_routes
 
@@ -40,6 +43,24 @@ ROUTINE_CLAIM_MESSAGES = {
     "this link has expired; ask the Claude session to call routine_register again": "Link expired",
     "that doesn't look like a routine token (sk-ant-oat01-…)": "Use a Claude routine token",
 }
+
+
+class RequestBase:
+    """Records which public URL (public_url or one of public_url_aliases) a request reached, for issuer and origin checks."""
+
+    def __init__(self, app: Any, core: "Switchboard"):
+        self.app = app
+        self.core = core
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            return await self.app(scope, receive, send)
+        host = next((v.decode("latin-1") for k, v in scope.get("headers", []) if k == b"host"), None)
+        token = REQUEST_BASE.set(self.core.cfg.base_for_host(host))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            REQUEST_BASE.reset(token)
 
 
 class BearerGate:
@@ -69,7 +90,8 @@ class BearerGate:
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         path = scope.get("path", "")
         inbox_feed = path.rstrip("/") in INBOX_FEEDS
-        if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed):
+        muse_bridge = path == BRIDGE_PATH
+        if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed or muse_bridge):
             scope.pop(PRINCIPAL_SCOPE, None)
             headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
             auth = headers.get("authorization", "")
@@ -80,7 +102,12 @@ class BearerGate:
             if wait is not None:
                 await reject(send, 429, "slow_down", "too many failed sign-ins from this address; try again later", wait)
                 return
-            principal = self.core.auth.verify_bearer(token)
+            if muse_bridge:
+                muse = self.core.blocks.get("muse")
+                principal = (muse.verify_bridge(token) if muse and muse.manifest.id == "muse"
+                             and auth.lower().startswith("bearer ") else None)
+            else:
+                principal = self.core.auth.verify_bearer(token)
             if principal is None and token:
                 self.limiter.hit("bearer_fail", ip)
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",
@@ -135,7 +162,7 @@ def create_app(core: "Switchboard") -> Any:
                        and claim_principal.source == "owner" and claim_principal.is_unrestricted_owner else None)
 
     async def healthz(request: Request) -> JSONResponse:
-        return JSONResponse(core.health(public=True))
+        return JSONResponse({**core.health(public=True), "version": release_version(core.cfg.env)})
 
     async def owner_page(request: Request) -> tuple[Owner | None, Response | None]:
         owner = await core.auth.owner(request)
@@ -162,7 +189,7 @@ def create_app(core: "Switchboard") -> Any:
         routine_block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
         return pages.admin_page(core.health(), owner.label, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
                                 block_rows=rows, connected=core.connections.list(), csrf=csrf,
-                                add_passkey=bool(core.cfg.public_url and not core.store.one("SELECT 1 FROM owner_passkeys LIMIT 1")),
+                                add_passkey=bool(core.cfg.passkey_rp and not login.methods()["passkeys"]),
                                 routines=routine_block.rows() if routine_block else None, systems=core.project_systems(await core.targets()),
                                 visibility=core.visibility.rows([f"target:{t['slugs'][0]}" for t in await core.targets() if t.get("slugs") and t.get("block") != "agent"][:200]))
 
@@ -574,6 +601,6 @@ def create_app(core: "Switchboard") -> Any:
     def refused(ip: str, path: str, why: str) -> None:
         core.audit.record(origin="http", source="-", client=ip, destination="core", action="rate_limited", outcome="refused", target=path, detail=why)
 
-    gate = Guard(BearerGate(app, core, limiter), limiter, on_refusal=refused)
+    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused)
     gate.starlette = app
     return gate
