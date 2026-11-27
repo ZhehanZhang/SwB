@@ -74,7 +74,7 @@ A route picks a target for `send`. Use a block that accepts routes, such as `cap
 | `routes_resolve` | Show the matching route for one destination. Pass `block`, such as `grok-routine` or `agent` |
 | `routes_remove` | Remove the route for the exact `agent` and `project` on the chosen `block` |
 
-`routes_resolve` and `routes_remove` use the first destination by default. That is the first block that accepts routes, or `agent` when no such block is on. Pass `block` to select a different one.
+`routes_resolve` and `routes_remove` use the first destination by default. That is the first block that accepts routes. With only mailbox routes, it is `agent`. Pass `block` to select a different one.
 
 ## Block tools
 
