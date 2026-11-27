@@ -10,11 +10,12 @@ from starlette.routing import Route
 
 from .blocks import Block
 from .blocks.discord import DiscordBlock
+from .blocks.github import GitHubBlock
 from .blocks.slack import SlackBlock
 from .blocks.telegram import TelegramBlock
 from .chat import ChatBlock
 
-BLOCK_TYPES = {"discord": DiscordBlock, "slack": SlackBlock, "telegram": TelegramBlock}
+BLOCK_TYPES = {"discord": DiscordBlock, "github": GitHubBlock, "slack": SlackBlock, "telegram": TelegramBlock}
 AVATAR_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}
 
 
@@ -99,6 +100,9 @@ async def connection(request: Request) -> JSONResponse:
         elif isinstance(block, TelegramBlock):
             connected = status["connected"]
             details = _telegram(block, status)
+        elif isinstance(block, GitHubBlock):
+            connected = block.online
+            details = {"repositories": sorted(block.registered_repositories()), "credential": status["credential"], "dropped": status["dropped"]}
         else:
             workspaces = [
                 {"name": name, "intake": ws["intake"], "connected": ws["connected"]}
