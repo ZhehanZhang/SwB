@@ -77,6 +77,79 @@ test('the open-source statement is visible in all landing heroes', async ({ page
     await page.goto(path);
     const license = page.locator('.swb-hero-copy').getByRole('link', { name: text });
     await expect(license).toBeInViewport();
-    await expect(license).toHaveAttribute('href', 'https://github.com/ZhehanZhang/SwB/blob/main/LICENSE');
+    await expect(license).toHaveAttribute('href', 'https://github.com/ZhehanZhang/SwB/blob/release/1.0/LICENSE');
+  }
+});
+
+test('landing header, hero, sections and footer share both grid edges', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.evaluate(() => document.fonts.ready);
+
+  for (const width of [390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const edges = await page.evaluate(() => {
+      const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+      const headerItems = [...document.querySelectorAll('#nd-nav [data-header-item]')]
+        .filter((item) => item.getClientRects().length);
+      const sections = [...document.querySelectorAll('main [data-landing-section]')];
+      return {
+        headerLeft: rect('#nd-nav [data-header-item="brand"]').left,
+        headerRight: headerItems.at(-1)!.getBoundingClientRect().right,
+        left: [rect('main h1').left, ...sections.map((section) => section.querySelector('h2')!.getBoundingClientRect().left), rect('footer a').left],
+        right: [rect('.swb-hero-grid').right, ...sections.map((section) => section.getBoundingClientRect().right)],
+      };
+    });
+    expect(edges.left).toHaveLength(5);
+    for (const left of edges.left) expect(Math.abs(left - edges.headerLeft), `${width}px left edge`).toBeLessThanOrEqual(1);
+    for (const right of edges.right) expect(Math.abs(right - edges.headerRight), `${width}px right edge`).toBeLessThanOrEqual(1);
+  }
+});
+
+test('hero actions share a baseline, height and left edge with the command', async ({ page }) => {
+  for (const path of ['/', '/zh-Hans', '/zh-Hant']) {
+    await page.goto(path);
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of [390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const [setup, github, chip, license, copy, hub] = await page.evaluate(() =>
+        ['[data-hero-actions] > button', '[data-hero-actions] > a', '[data-install-chip]', '.swb-hero-copy a[href$="/LICENSE"]', '.swb-hero-copy', '.swb-hero']
+          .map((selector) => document.querySelector(selector)!.getBoundingClientRect().toJSON()),
+      );
+      expect(Math.abs(setup.height - github.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(setup.height - chip.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(setup.bottom - github.bottom)).toBeLessThanOrEqual(1);
+      expect(Math.abs(setup.left - chip.left)).toBeLessThanOrEqual(1);
+      expect(Math.abs(github.right - chip.right)).toBeLessThanOrEqual(1);
+      expect(Math.abs(setup.left - license.left)).toBeLessThanOrEqual(1);
+      expect(license.top).toBeGreaterThan(chip.bottom);
+      if (width >= 1024) expect(Math.abs((copy.top + copy.bottom) / 2 - (hub.top + hub.bottom) / 2)).toBeLessThanOrEqual(1);
+    }
+  }
+});
+
+test('landing shows supported deployment links and six usage examples in each locale', async ({ page }) => {
+  for (const [prefix, selfHosting] of [['', 'Self-hosting guide'], ['/zh-Hans', '自托管指南'], ['/zh-Hant', '自行代管指南']]) {
+    await page.goto(prefix || '/');
+    const deploy = page.locator('#landing-deploy').locator('..');
+    const commands = deploy.locator('code');
+    await expect(commands.first()).toHaveText('uvx swb-one up');
+    await expect(commands.last()).toContainText('git clone -b release/1.0');
+    await expect(commands.last()).toContainText('docker compose up');
+    const providers = deploy.locator('a[href^="https://"][class*="swb-button"]');
+    await expect(providers).toHaveCount(1);
+    await expect(providers.first()).toHaveAttribute('href', /render\.com\/deploy\?repo=.*release%2F1\.0/);
+    await expect(deploy.getByRole('link', { name: 'Fly.io', exact: true })).toHaveAttribute('href', `${prefix}/docs/self-hosting#flyio`);
+    const limits = deploy.locator('a[href="https://docs.fly.io/about/free-plan"]');
+    await expect(limits).toBeVisible();
+    if (!prefix) await expect(limits.locator('..')).toContainText("Runs within Fly's free monthly allowance");
+    const usage = page.locator('#landing-usage').locator('..');
+    await expect(usage.locator('p')).toHaveCount(6);
+    await deploy.getByRole('link', { name: selfHosting }).click();
+    await expect(page).toHaveURL(`${prefix}/docs/self-hosting`);
+    await expect(page.locator('h2#docker-compose')).toContainText('Docker Compose');
+    await expect(page.locator('h2#flyio')).toContainText('Fly.io');
+    await expect(page.getByText('fly deploy --ha=false', { exact: true })).toBeVisible();
+    await expect(page.locator('a[href="https://fly.io/docs/about/pricing/"]')).toBeVisible();
   }
 });

@@ -6,7 +6,7 @@ const pairs = trips.flatMap(([a, b], n) =>
 );
 
 for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', '/zh-Hant']]) {
-  test(`${locale} tweens pill widths through a full cycle without moving the text vertically`, async ({ page }) => {
+  test(`${locale} keeps pill edges and text fixed through a full cycle`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready.then(() => null));
@@ -18,7 +18,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       settled: string[];
       widthRanges: number[];
       crossfades: boolean[];
-      frameStep: number;
+      horizontalDrift: number;
       verticalDrift: number;
       prefixDrift: number;
       gap: number;
@@ -44,12 +44,12 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       const minWidths = slots.map(() => Infinity);
       const maxWidths = slots.map(() => -Infinity);
       const deadline = performance.now() + deadlineMs;
-      let frameStep = 0;
+      let horizontalDrift = 0;
       let verticalDrift = 0;
       let prefixDrift = 0;
       let gap = Infinity;
       let overflow = 0;
-      let previousX: number[] | undefined;
+      let baselineX: number[] | undefined;
       let baselineY: number[] | undefined;
       let baselinePrefix: number | undefined;
 
@@ -67,8 +67,8 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         const y = [lineRect, ...rects, root.nextElementSibling!.getBoundingClientRect()].flatMap(({ top, bottom }) => [top, bottom]);
         baselineY ??= y;
         baselinePrefix ??= prefixRect?.left;
-        if (previousX) frameStep = Math.max(frameStep, ...x.map((value, i) => Math.abs(value - previousX![i])));
-        previousX = x;
+        baselineX ??= x;
+        horizontalDrift = Math.max(horizontalDrift, ...x.map((value, i) => Math.abs(value - baselineX![i])));
         verticalDrift = Math.max(verticalDrift, ...y.map((value, i) => Math.abs(value - baselineY![i])));
         if (prefixRect) prefixDrift = Math.max(prefixDrift, Math.abs(prefixRect.left - baselinePrefix!));
         gap = Math.min(gap, andRect.left - pillRects[0].right, pillRects[1].left - andRect.right);
@@ -85,13 +85,13 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
           maxWidths[i] = Math.max(maxWidths[i], width);
           const { borderLeftWidth, borderRightWidth } = getComputedStyle(slot);
           const target = active.getBoundingClientRect().width + parseFloat(borderLeftWidth) + parseFloat(borderRightWidth);
-          return Math.abs(width - target) < 0.1 && Number(getComputedStyle(active).opacity) === 1;
+          return width >= target - 0.1 && Number(getComputedStyle(active).opacity) === 1;
         }).every(Boolean);
         if (atTarget) settled.add(index);
 
         if ((seen.length > 1 && index === seen[0] && atTarget) || now >= deadline) {
           resolve({ seen, settled: [...settled], widthRanges: maxWidths.map((width, i) => width - minWidths[i]),
-            crossfades, frameStep, verticalDrift, prefixDrift, gap, overflow });
+            crossfades, horizontalDrift, verticalDrift, prefixDrift, gap, overflow });
           return;
         }
         requestAnimationFrame(sample);
@@ -102,9 +102,9 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
 
     expect(result.seen).toEqual([...pairs, pairs[0]]);
     expect(result.settled).toEqual(pairs);
-    for (const range of result.widthRanges) expect(range).toBeGreaterThan(10);
+    for (const range of result.widthRanges) expect(range).toBeLessThanOrEqual(0.5);
     expect(result.crossfades).toEqual([true, true]);
-    expect(result.frameStep).toBeLessThanOrEqual(2);
+    expect(result.horizontalDrift).toBeLessThanOrEqual(0.5);
     expect(result.verticalDrift).toBeLessThanOrEqual(0.5);
     expect(result.prefixDrift).toBeLessThanOrEqual(0.5);
     expect(result.gap).toBeGreaterThanOrEqual(6);
@@ -118,7 +118,7 @@ test('reduced motion holds the first hero pair', async ({ page }) => {
   await page.goto('/');
   const line = page.locator('[data-hero-pair]');
   await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
-  await expect(line.locator('.swb-slot').first()).toHaveCSS('transition-duration', '0s');
+  await expect(line.locator('.swb-chip').first()).toHaveCSS('transition-duration', '0s');
   await page.clock.fastForward(STEP * 6000);
   await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
 });

@@ -3,40 +3,29 @@
 import { UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MarkTile } from './mark-tile';
+import { agentNames, exchangeCopy, exchangeScenes, type ExchangeScene } from '@/lib/exchange-copy';
 import type { Locale } from '@/lib/i18n';
-import { agentNames, exchangeCopy, exchangeScenes } from '@/lib/exchange-copy';
 
 const MESSAGE_DELAY = 1250;
-const SCENE_DELAY = 3600;
-const TRANSCRIPT_LENGTH = 8;
-const firstFrame = { scene: 0, shown: 1 };
-const stillFrame = { scene: 0, shown: exchangeScenes[0].messages.length };
-const transcript = exchangeScenes.flatMap(({ app, messages }, scene) =>
-  messages.map(([speaker, text], index) => ({ app, scene, index, speaker, text })),
-);
-const loop = [...transcript, ...transcript];
+const HOLD_DELAY = 3600;
+const STAGGER = 260;
 
-function usePlayback() {
-  const [frame, setFrame] = useState(firstFrame);
+function ExchangeWindow({ scene: { app, messages }, lang, index }: { scene: ExchangeScene; lang: Locale; index: number }) {
+  const [shown, setShown] = useState(0);
   useEffect(() => {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let timer: ReturnType<typeof setTimeout>;
-    let frame = firstFrame;
+    let count = 0;
     const play = () => {
-      const complete = frame.shown === exchangeScenes[frame.scene].messages.length;
-      timer = setTimeout(() => {
-        frame = complete
-          ? { scene: (frame.scene + 1) % exchangeScenes.length, shown: 1 }
-          : { scene: frame.scene, shown: frame.shown + 1 };
-        setFrame(frame);
-        play();
-      }, complete ? SCENE_DELAY : MESSAGE_DELAY);
+      count = count === messages.length ? 1 : count + 1;
+      setShown(count);
+      timer = setTimeout(play, count === messages.length ? HOLD_DELAY : MESSAGE_DELAY);
     };
     const update = () => {
       clearTimeout(timer);
-      frame = motion.matches ? stillFrame : firstFrame;
-      setFrame(frame);
-      if (!motion.matches) play();
+      count = 0;
+      setShown(count);
+      if (!motion.matches) timer = setTimeout(play, index * STAGGER);
     };
     update();
     motion.addEventListener('change', update);
@@ -44,49 +33,44 @@ function usePlayback() {
       clearTimeout(timer);
       motion.removeEventListener('change', update);
     };
-  }, []);
-  return frame;
+  }, [index, messages.length]);
+
+  const name = (speaker: typeof messages[number][0]) => speaker === 'you' ? exchangeCopy[lang].you : agentNames[speaker];
+
+  return (
+    <div className="swb-win overflow-hidden rounded-lg border" data-exchange-window={app}>
+      <h3 className="swb-win-bar flex items-center gap-2 border-b px-4 text-sm font-semibold">
+        <MarkTile kind={app} className="swb-win-avatar" />
+        {agentNames[app]}
+      </h3>
+      <div className="swb-win-body min-h-0 overflow-hidden px-4 py-3" aria-hidden="true">
+        {messages.map(([speaker, text], i) => (
+          <div key={i} className="swb-win-message flex items-start gap-2.5"
+            data-pending={i >= shown ? '' : undefined} data-new={i === shown - 1 ? '' : undefined}>
+            {speaker === 'you'
+              ? <span className="swb-mark-tile swb-win-avatar swb-win-you"><UserRound className="swb-mark-glyph" /></span>
+              : <MarkTile kind={speaker} className="swb-win-avatar" />}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">
+                {name(speaker)}
+                {speaker !== 'you' && speaker !== app && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
+              </p>
+              <p className="text-sm leading-5">{text[lang]}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="sr-only">
+        {messages.map(([speaker, text], i) => <p key={i}><strong>{name(speaker)}</strong> {text[lang]}</p>)}
+      </div>
+    </div>
+  );
 }
 
 export function AgentExchange({ lang }: { lang: Locale }) {
-  const { scene, shown } = usePlayback();
-  const { app } = exchangeScenes[scene];
-  const { you } = exchangeCopy[lang];
-  const end = transcript.length + 1 + transcript.findIndex((entry) => entry.scene === scene && entry.index === shown - 1);
-  const entries = loop.slice(end - TRANSCRIPT_LENGTH, end);
-
   return (
-    <div className="swb-exchange mt-10">
-      <div className="swb-win overflow-hidden rounded-xl border" aria-hidden="true">
-        <div className="swb-win-bar flex items-center gap-2 border-b px-4">
-          <MarkTile kind={app} className="swb-win-avatar" />
-          <span className="text-sm font-semibold">{app === 'slack' ? 'Slack #launch' : agentNames[app]}</span>
-        </div>
-        <div className="swb-win-body relative min-h-0 overflow-hidden">
-          <div className="absolute inset-x-4 bottom-4 sm:inset-x-5">
-            {entries.map(({ app: channel, scene: source, index, speaker, text }) => (
-              <div key={`${source}/${index}`}
-                className={`swb-win-entry flex gap-3${source === scene ? ' swb-win-message' : ''}${index === 0 ? ' swb-win-break' : ''}`}>
-                {speaker === 'you'
-                  ? <span className="swb-mark-tile swb-win-avatar swb-win-you" aria-hidden="true"><UserRound className="swb-mark-glyph" /></span>
-                  : <MarkTile kind={speaker} className="swb-win-avatar" />}
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">
-                    {speaker === 'you' ? you : agentNames[speaker]}
-                    {speaker !== 'you' && speaker !== channel && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
-                  </p>
-                  <p className="text-[15px] leading-6">{text[lang]}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="sr-only">
-        {exchangeScenes[0].messages.map(([speaker, text], index) => (
-          <p key={index}><strong>{speaker === 'you' ? you : agentNames[speaker]}</strong> {text[lang]}</p>
-        ))}
-      </div>
+    <div className="swb-exchange mt-7">
+      {exchangeScenes.map((scene, index) => <ExchangeWindow key={scene.app} scene={scene} lang={lang} index={index} />)}
     </div>
   );
 }
