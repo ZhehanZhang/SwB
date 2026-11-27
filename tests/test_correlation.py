@@ -1,17 +1,17 @@
-from conftest import CAPTAIN, STATIC_KEY, call, error_text, payload, sign_in, infra
+from conftest import CAPTAIN, STATIC_KEY, call, error_text, payload, sign_in, beacon
 
 
 def test_no_handle_inbox_returns_only_the_callers_items_and_handles_never_cross(make, capy):
     core, c = make()
-    infra(core)
+    beacon(core)
     tok = sign_in(c)["access_token"]
-    mine = payload(call(c, tok, "capy_delegate", {"task": "claude task", "project": "infra"}))
+    mine = payload(call(c, tok, "capy_delegate", {"task": "claude task", "project": "beacon"}))
     theirs = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "capy task"}))
     import asyncio
     asyncio.run(core.inbox.add(mine["handle"], "reply", {"text": "for claude"}))
     asyncio.run(core.inbox.add(theirs["handle"], "reply", {"text": "for capy"}))
     assert [i["text"] for i in payload(call(c, tok, "capy_inbox"))["items"]] == ["for claude"]
-    assert [i["text"] for i in payload(call(c, tok, "capy_inbox", {"since_cursor": 0, "project": "infra"}))["items"]] == ["for claude"]
+    assert [i["text"] for i in payload(call(c, tok, "capy_inbox", {"since_cursor": 0, "project": "beacon"}))["items"]] == ["for claude"]
     assert payload(call(c, tok, "capy_inbox", {"since_cursor": 0, "project": "other"}))["items"] == []
     stolen = payload(call(c, tok, "capy_wait", {"handle": theirs["handle"], "timeout_s": 0}))
     assert stolen["items"] == [] and stolen["handle_status"] == "unknown"
@@ -23,9 +23,9 @@ def test_no_handle_inbox_returns_only_the_callers_items_and_handles_never_cross(
 
 def test_agent_send_lands_in_the_named_agents_mailbox_attributed_to_the_caller(make):
     core, c = make()
-    infra(core)
+    beacon(core)
     tok = sign_in(c)["access_token"]
-    out = payload(call(c, STATIC_KEY, "agent_send", {"to": "claude", "text": "From: chatgpt\nPlease review the plan", "project": "infra"}))
+    out = payload(call(c, STATIC_KEY, "agent_send", {"to": "claude", "text": "From: chatgpt\nPlease review the plan", "project": "beacon"}))
     assert out["delivered"] and out["to"] == "claude"
     got = payload(call(c, tok, "capy_wait", {"timeout_s": 0}))["items"]
     assert len(got) == 1 and got[0]["kind"] == "message" and got[0]["text"].endswith("Please review the plan")

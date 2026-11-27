@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS write_requests (
   action TEXT NOT NULL,
   params TEXT NOT NULL,
   persona TEXT,
+  requester TEXT,
   key_id TEXT NOT NULL,
   status TEXT NOT NULL,
   created_at REAL NOT NULL,
@@ -63,7 +64,7 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 """
 
-REQUEST_JSON_FIELDS = ("params", "persona", "result", "notice")
+REQUEST_JSON_FIELDS = ("params", "persona", "requester", "result", "notice")
 
 
 class Store:
@@ -76,6 +77,8 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
+        if "requester" not in {row["name"] for row in self.db.execute("PRAGMA table_info(write_requests)")}:
+            self.db.execute("ALTER TABLE write_requests ADD COLUMN requester TEXT")
 
     def _exec(self, sql: str, args: Iterable[Any] = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -88,11 +91,17 @@ class Store:
         )
         return cur.rowcount == 1
 
+    def claim_event(self, event: dict[str, Any]) -> bool:
+        return self._exec(
+            "INSERT OR IGNORE INTO events (id, workspace, team, channel, ts, kind, payload, created_at) VALUES (?,?,?,?,?,'mode','{}',?)",
+            (event["id"], event["workspace"], event["team"], event["channel"], event["ts"], self.clock()),
+        ).rowcount == 1
+
     def recent_events(self, workspaces: Iterable[str], kind: str | None = None, since: float | None = None, limit: int = 50) -> list[dict[str, Any]]:
         ws = list(workspaces)
         if not ws:
             return []
-        sql = f"SELECT payload FROM events WHERE workspace IN ({','.join('?' * len(ws))})"
+        sql = f"SELECT payload FROM events WHERE workspace IN ({','.join('?' * len(ws))}) AND kind <> 'mode'"
         args: list[Any] = list(ws)
         if kind:
             sql += " AND kind = ?"
@@ -142,12 +151,15 @@ class Store:
             (workspace, channel, ts),
         )
 
-    def create_request(self, *, workspace: str, identity: str, action: str, params: dict, persona: dict | None, key_id: str, ttl_seconds: float) -> dict[str, Any]:
+    def create_request(self, *, workspace: str, identity: str, action: str, params: dict, persona: dict | None, key_id: str,
+                       ttl_seconds: float, requester: dict[str, str] | None = None) -> dict[str, Any]:
         now = self.clock()
         rid = "wr_" + secrets.token_urlsafe(9)
         self._exec(
-            "INSERT INTO write_requests (id, workspace, identity, action, params, persona, key_id, status, created_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (rid, workspace, identity, action, json.dumps(params), json.dumps(persona) if persona else None, key_id, "pending", now, now + ttl_seconds),
+            "INSERT INTO write_requests (id, workspace, identity, action, params, persona, key_id, status, created_at, expires_at, requester) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (rid, workspace, identity, action, json.dumps(params), json.dumps(persona) if persona else None, key_id, "pending", now,
+             now + ttl_seconds, json.dumps(requester) if requester else None),
         )
         return self.get_request(rid)  # type: ignore[return-value]
 

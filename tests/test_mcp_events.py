@@ -148,6 +148,7 @@ async def test_subscribe_delivery_get_message_and_reply(amake, caplog):
     message = {"name": "get_message", "arguments": {"message_id": event_data["message_id"]}}
     result = (await rpc(client, "tools/call", message, modern=True))["result"]["structuredContent"]
     assert result["text"] == "private inbox body"
+    assert result["subject"] == "Capy asks: private inbox body"
     assert result["from"]["agent"] == "capy" and result["from"]["trust"] == "owner"
     reply = await core.verb(principal("second"), "reply", sent["conversation"], text="reply")
     assert reply["in_reply_to"] == sent["conversation"]

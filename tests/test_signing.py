@@ -106,8 +106,11 @@ async def test_github_stripe_sink_signs_delivered_bytes(tmp_path, caplog, header
             assert not seen and sink.failed == 1
             return
         (body, headers), = seen
-        expected = "t=1700000000,v1=c8daf517b87180d027843b7594b968d3e0546174b6d25003e482d5a674ea7642"
-        assert body == (b'{"delivery":"stripe-delivery","event":"issues","repo":"acme/app","number":7,"title":"caf\xc3\xa9",'
+        expected = "t=1700000000,v1=8c1d9f5aca99a2129ed4360d0e0310c9cd9ca7465e16f2c814f4293f3a7447ae"
+        assert body == (b'{"subject":"Unknown sender on GitHub acme/app: Issue #7",'
+                        b'"text":"Unknown sender on GitHub acme/app: Issue #7\\n\\nIssue.\\n\\nIssue body\\n\\n'
+                        b'https://github.example/acme/app/issues/7\\n\\nGitHub delivery stripe-delivery.",'
+                        b'"delivery":"stripe-delivery","event":"issues","repo":"acme/app","number":7,"title":"caf\xc3\xa9",'
                         b'"url":"https://github.example/acme/app/issues/7","state":"open","body":"Issue body"}')
         assert headers[header or "Stripe-Signature"] == expected
         assert ("Stripe-Signature" in headers) == (header is None)

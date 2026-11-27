@@ -17,7 +17,7 @@ from .personas import persona_post_args
 if TYPE_CHECKING:
     from .engine import SlackEngine as Core
 
-DEFAULT_ICON = "default.png"
+DEFAULT_ICON = "swb.png"
 DEFAULT_EMOJI = ":electric_plug:"
 """The bundled neutral icon (no letters) for posts whose app has no picture of its own."""
 log = logging.getLogger("switchboard.slack")
@@ -88,9 +88,10 @@ class WorkspaceRuntime:
         self.inflight: set[asyncio.Task] = set()
         self.channel_names: dict[str, str] = {}
         self.channel_ids: dict[str, str] = {}
-        self.user_names: dict[str, str] = {}
+        self.user_profiles: dict[str, tuple[str, str | None]] = {}
         self.watched_ids: frozenset[str] = frozenset()
         self.listen_ids: frozenset[str] = frozenset()
+        self.bot_channels: frozenset[str] = frozenset()
         self.unresolved_watched: list[str] = []
         self.last_event_at: float | None = None
 
@@ -198,19 +199,25 @@ class WorkspaceRuntime:
                 await self._list_channels()
             except Exception as exc:
                 self.errors.append(f"conversations.list failed ({slack_error(exc)})")
-        if self.cfg.watch_all and "bot" in self.clients:
+        if (self.cfg.watch_all or (self.cfg.intake == "poll" and self.core.mode_poll_channels is not None)) and "bot" in self.clients:
+            membership: set[str] = set()
             try:
                 cursor = None
                 while True:
                     resp = await self.clients["bot"].users_conversations(types="public_channel,private_channel", exclude_archived=True, limit=500, cursor=cursor)
                     for ch in resp.get("channels", []):
-                        ids.add(ch["id"])
+                        membership.add(ch["id"])
                         self.channel_names[ch["id"]] = ch.get("name") or ch["id"]
+                        if ch.get("name"):
+                            self.channel_ids[ch["name"]] = ch["id"]
                     cursor = (resp.get("response_metadata") or {}).get("next_cursor")
                     if not cursor:
                         break
             except Exception as exc:
                 self.errors.append(f"users.conversations failed ({slack_error(exc)})")
+            self.bot_channels = frozenset(membership)
+            if self.cfg.watch_all:
+                ids.update(membership)
         listen_ids: set[str] = set()
         for refs, selected in ((self.cfg.watched, ids), (self.cfg.listen_channels, listen_ids)):
             for w in refs:
@@ -248,20 +255,25 @@ class WorkspaceRuntime:
         return name
 
     async def user_name(self, user: str | None) -> str | None:
-        if not user or not user.startswith(("U", "W")):
-            return None
-        if user in self.user_names:
-            return self.user_names[user]
+        return (await self.user_profile(user))[0]
+
+    async def user_profile(self, user: str | None) -> tuple[str | None, str | None]:
+        if not user or not re.fullmatch(r"[UW][A-Z0-9]+", user):
+            return None, None
+        if user in self.user_profiles:
+            return self.user_profiles[user]
         try:
             resp = await self.reader().users_info(user=user)
             u = resp.get("user") or {}
             prof = u.get("profile") or {}
             name = prof.get("display_name") or prof.get("real_name") or u.get("name")
+            image = prof.get("image_192") or prof.get("image_72")
         except Exception:
-            name = None
-        if name:
-            self.user_names[user] = name
-        return name
+            return None, None
+        result = (name if isinstance(name, str) else None, image if isinstance(image, str) else None)
+        if result[0]:
+            self.user_profiles[user] = (result[0], result[1])
+        return result
 
     async def _run_socket(self) -> None:
         from slack_sdk.socket_mode.aiohttp import SocketModeClient
@@ -292,9 +304,11 @@ class WorkspaceRuntime:
     async def _poll_loop(self) -> None:
         self.connected = True
         while True:
-            for channel in sorted(self.watched_ids | self.listen_ids):
+            legacy = self.watched_ids | self.listen_ids
+            modes = self.core.mode_poll_channels(self) if self.core.mode_poll_channels is not None else set()
+            for channel in sorted(legacy | modes):
                 try:
-                    await self.poll_channel(channel)
+                    await self.poll_channel(channel, bot_only=channel not in legacy and "bot" in self.clients)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -302,13 +316,13 @@ class WorkspaceRuntime:
                 await asyncio.sleep(1)
             await asyncio.sleep(self.cfg.poll_seconds)
 
-    async def poll_channel(self, channel: str) -> int:
+    async def poll_channel(self, channel: str, *, bot_only: bool = False) -> int:
         store = self.core.store
         cursor = store.get_cursor(self.label, channel)
         if cursor is None:
             store.set_cursor(self.label, channel, f"{self.core.clock():.6f}")
             return 0
-        reader = self.reader("user" if "user" in self.clients else None)
+        reader = self.reader("bot" if bot_only else "user" if "user" in self.clients else None)
         resp = await reader.conversations_history(channel=channel, oldest=cursor, inclusive=False, limit=100)
         messages = sorted(resp.get("messages", []), key=lambda m: float(m["ts"]))
         channel_type = {"D": "im", "G": "group"}.get(channel[0], "channel")

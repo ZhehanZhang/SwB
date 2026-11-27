@@ -1,6 +1,6 @@
 """The Slack block's out side: reads and writes in the owner's Slack workspaces, through the shared Slack engine.
 
-Ported from slackgate's MCP tools. A caller is a switchboard agent (OAuth agent or bearer key name), and
+A caller is a switchboard agent (OAuth agent or bearer key name), and
 slack.agents.<agent> says which workspaces and identities it may use. Writes follow each identity's policy: free,
 approval (queued until the owner approves out of band: the Slack DM buttons or the switchboard page), or never.
 No caller of this destination can approve a write.
@@ -218,8 +218,11 @@ class SlackActions(Block):
         _, rt, ident = self.scope(g, workspace, identity or None)
         params["channel"] = await self.slack(rt.resolve_channel(params["channel"]))
         call.note(target=f"{workspace}/{params['channel']}" + (f"/{params['thread_ts']}" if params.get("thread_ts") else ""), excerpt=params.get("text") or params.get("name") or "")
+        from .intake import slack_requester
+
         try:
-            out = await self.need().gate.submit(g, workspace, ident, action, params, persona or None, force_approval=force)
+            out = await self.need().gate.submit(g, workspace, ident, action, params, persona or None, force_approval=force,
+                                                requester=slack_requester(call.principal))
         except (WriteError, PersonaError) as exc:
             raise DestinationError(str(exc)) from exc
         call.note(ref=out.get("request_id") or out.get("ts"), detail=f"as {ident}: {out['status']}", outcome="queued" if out["status"] == "pending_approval" else None)

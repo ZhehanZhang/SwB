@@ -88,6 +88,45 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
 );
 CREATE INDEX IF NOT EXISTS oauth_tokens_family ON oauth_tokens(family);
 
+CREATE TABLE IF NOT EXISTS owner_sessions (
+  id TEXT PRIMARY KEY,
+  via TEXT NOT NULL,
+  client_id TEXT,
+  source TEXT,
+  created_at REAL NOT NULL,
+  last_seen REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_initialized (
+  id INTEGER PRIMARY KEY CHECK (id = 1)
+);
+CREATE TABLE IF NOT EXISTS owner_login_links (
+  token_hash TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  expires_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_webauthn_challenges (
+  id TEXT PRIMARY KEY,
+  challenge BLOB NOT NULL,
+  kind TEXT NOT NULL,
+  owner_key TEXT,
+  expires_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS owner_webauthn_challenges_expiry ON owner_webauthn_challenges(expires_at);
+CREATE TABLE IF NOT EXISTS owner_webauthn_user (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  handle BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_passkeys (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  public_key BLOB NOT NULL,
+  sign_count INTEGER NOT NULL,
+  created_at REAL NOT NULL,
+  last_used_at REAL,
+  rp_id TEXT
+);
+
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at REAL NOT NULL,
@@ -136,6 +175,7 @@ CREATE TABLE IF NOT EXISTS handles (
   state TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS handles_open ON handles(destination, open);
+CREATE INDEX IF NOT EXISTS handles_ref ON handles(destination, ref);
 CREATE TABLE IF NOT EXISTS inbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   owner TEXT NOT NULL,
@@ -146,6 +186,24 @@ CREATE TABLE IF NOT EXISTS inbox (
   at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS inbox_owner ON inbox(owner, id);
+CREATE INDEX IF NOT EXISTS inbox_handle ON inbox(handle, id);
+CREATE INDEX IF NOT EXISTS inbox_reply_to ON inbox(json_extract(data, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS handles_root ON handles(json_extract(meta, '$.root'));
+CREATE INDEX IF NOT EXISTS handles_reply_to ON handles(json_extract(meta, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS handles_forward_of ON handles(json_extract(meta, '$.forward_of'));
+CREATE TABLE IF NOT EXISTS space_modes (
+  block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, mode TEXT NOT NULL, actions TEXT NOT NULL,
+  project TEXT, updated_at REAL NOT NULL, updated_by TEXT NOT NULL,
+  PRIMARY KEY(block, space, channel)
+);
+CREATE TABLE IF NOT EXISTS watch_events (
+  block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL,
+  author_id TEXT NOT NULL, author TEXT NOT NULL, excerpt TEXT NOT NULL, link TEXT, at REAL NOT NULL,
+  target TEXT NOT NULL, project TEXT, dm INTEGER NOT NULL DEFAULT 0, delivered_at REAL,
+  PRIMARY KEY(block, space, channel, message)
+);
+CREATE INDEX IF NOT EXISTS watch_events_pending ON watch_events(block, space, dm, target, at) WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS handles_channel_mode ON handles(owner, created_at) WHERE json_extract(meta, '$.channel_mode.mode') IN ('assist', 'triage');
 CREATE TABLE IF NOT EXISTS inbox_cursors (
   owner TEXT NOT NULL,
   handle TEXT NOT NULL,
@@ -170,6 +228,15 @@ def _migrate(db: sqlite3.Connection) -> None:
     db.execute("DROP TABLE IF EXISTS login_failures")
     if "target" not in {r[1] for r in db.execute("PRAGMA table_info(handles)")}:
         db.execute("ALTER TABLE handles ADD COLUMN target TEXT")
+    if "rp_id" not in {r[1] for r in db.execute("PRAGMA table_info(owner_passkeys)")}:
+        db.execute("ALTER TABLE owner_passkeys ADD COLUMN rp_id TEXT")
+    db.execute("""
+        INSERT OR IGNORE INTO owner_initialized(id)
+        SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM owner_initialized) AND (
+            EXISTS (SELECT 1 FROM owner_sessions) OR EXISTS (SELECT 1 FROM owner_passkeys)
+            OR EXISTS (SELECT 1 FROM audit WHERE action = 'login_link_used' AND outcome = 'ok')
+        )
+    """)
     db.execute("CREATE TABLE IF NOT EXISTS alias_use (alias TEXT NOT NULL, agent TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, last_at REAL NOT NULL, PRIMARY KEY(alias, agent))")
     tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     if "delegations" in tables:

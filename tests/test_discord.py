@@ -1,6 +1,7 @@
 """Discord dispatch, the Gateway session, REST posts and owner provisioning, all without a network."""
 
 import asyncio
+import base64
 import json
 from collections import deque
 from contextlib import asynccontextmanager, contextmanager
@@ -11,6 +12,7 @@ import aiohttp
 import httpx
 import pytest
 import yaml
+from PIL import Image
 from starlette.testclient import TestClient
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload
@@ -33,6 +35,9 @@ class DiscordAPI:
         self.webhooks = []
         self.channels = {CHANNEL: {"id": CHANNEL, "name": "builds", "type": 0, "guild_id": GUILD}, DM: {"id": DM, "type": 1}}
         self.responses = deque()
+        self.application = {"id": APP, "owner": {"id": USER}}
+        self.avatar_status = 200
+        self.denied_webhooks = set()
 
     def handler(self, request):
         method, path = request.method, request.url.path.removeprefix("/api/v10")
@@ -42,10 +47,16 @@ class DiscordAPI:
         assert request.headers["User-Agent"].startswith("DiscordBot (")
         if path == "/gateway/bot":
             return httpx.Response(200, json={"url": "wss://gateway.discord.gg"})
+        if path == "/oauth2/applications/@me":
+            return httpx.Response(200, json=self.application)
+        if path == "/users/@me" and method == "PATCH":
+            return httpx.Response(self.avatar_status, json={"retry_after": 0} if self.avatar_status == 429 else {"id": BOT})
         if path == "/users/@me/channels":
             return httpx.Response(200, json=self.channels[DM])
         if "/reactions/" in path:
             self.reactions.append(request.url.raw_path)
+            return httpx.Response(204)
+        if "/thread-members/" in path:
             return httpx.Response(204)
         if path.endswith("/threads"):
             thread = self.channels[ROOT] = {"id": ROOT, "type": 11, "parent_id": CHANNEL, "name": data["name"]}
@@ -53,6 +64,8 @@ class DiscordAPI:
         if path == f"/channels/{CHANNEL}/messages/{ROOT}":
             return httpx.Response(200, json={"content": f"<@!{BOT}> build-check check the build\nSecond line"})
         if path == f"/channels/{CHANNEL}/webhooks":
+            if method in self.denied_webhooks:
+                return httpx.Response(403)
             if method == "GET":
                 return httpx.Response(200, json=self.webhooks)
             webhook = {"id": HOOK, "application_id": APP, "token": MOCK_WEBHOOK}
@@ -107,7 +120,7 @@ class Sockets:
 @pytest.fixture
 def discord(tmp_path):
     @contextmanager
-    def build(*, settings=None, sockets=None, token=True):
+    def build(*, settings=None, sockets=None, token=True, slack=None):
         api = DiscordAPI()
         cfg = {"version": 2, "public_url": PUBLIC,
                "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access.example.test", "aud": "test"}},
@@ -115,6 +128,8 @@ def discord(tmp_path):
                           "claude-routine": {"use": "claude-routine", "routines": {"build-check": {"routine_id": "trig_EXAMPLE", "token_env": "EXAMPLE_ROUTINE_TOKEN"}}},
                           "discord": {"use": "discord", "agents": {"claude": ["home"]}, "spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}},
                                       **(settings or {})}}}
+        if slack is not None:
+            cfg["blocks"]["slack"] = {"use": "slack", **slack}
         path = tmp_path / "config.yaml"
         path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         env = {"SWITCHBOARD_KEY_CLAUDE": STATIC_KEY, "EXAMPLE_ROUTINE_TOKEN": "mock-routine"}
@@ -143,8 +158,8 @@ def message(**kw):
             "member": {"nick": "Tester"}, "content": f"<@!{BOT}> build-check check the build", "mentions": [], **kw}
 
 
-@pytest.mark.parametrize(("settings", "permissions"), [({}, "309237713984"), ({"personas": True}, "309774584896"),
-                                                       ({"threads": False, "ack_reaction": None}, "274877975552")])
+@pytest.mark.parametrize(("settings", "permissions"), [({}, "309774584896"), ({"personas": False}, "309237713984"),
+                                                       ({"threads": False, "ack_reaction": None}, "275414846464")])
 def test_invite_uses_only_configured_bot_permissions(discord, settings, permissions):
     with discord(settings={"application_id": APP, **settings}) as (_, client, block, _):
         setup = payload(call(client, STATIC_KEY, "discord_status"))["setup"]
@@ -168,13 +183,33 @@ def test_dispatch_routes_owner_and_the_native_thread_keeps_the_target(discord):
         assert api.reactions == [f"/api/v10/channels/{CHANNEL}/messages/{ROOT}/reactions/%F0%9F%91%80/@me".encode()]
         handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
         client.portal.call(block.relay, {"kind": "final", "handle": handle, "text": "all green @everyone"})
-        assert ("POST", f"/channels/{CHANNEL}/messages/{ROOT}/threads", {"name": message()["content"]}) in api.calls
-        assert api.posts == [(f"/channels/{ROOT}/messages", {"allowed_mentions": {"parse": []}, "content": "all green @everyone"}, {})]
+        assert ("POST", f"/channels/{CHANNEL}/messages/{ROOT}/threads", {"name": "build-check check the build"}) in api.calls
+        [(path, data, params)] = api.posts
+        assert path.startswith(f"/webhooks/{HOOK}/") and params == {"wait": "true", "thread_id": ROOT}
+        assert data == {"allowed_mentions": {"parse": []}, "content": "all green @everyone", "username": "build-check (Claude routine)"}
         follow = dispatch("MESSAGE_CREATE", message(channel_id=ROOT, id="101", content="and staging?"))
         assert follow["target"] == "build-check" and follow["chat_kind"] == "reply"
         assert follow["from"]["root"] == ROOT and follow["from"]["channel"] == CHANNEL and follow["from"]["channel_name"] == "builds"
         assert follow["from"]["link"] == f"https://discord.com/channels/{GUILD}/{ROOT}/101"
         assert len(api.routines) == 2 and "and staging?" in api.routines[-1]
+
+
+def test_discord_event_and_delegate_share_the_ask_as_subject(discord):
+    with discord() as (core, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "channels": [api.channels[CHANNEL]], "threads": []})
+        event = client.portal.call(block.dispatch, "MESSAGE_CREATE", message(
+            content=f"<@!{BOT}> build-check **check** the canary", member={"nick": "Dana"}))
+        title = "Dana in Discord #builds asks: check the canary"
+        entries = core.inbox.read(owner="claude", since=0)["items"]
+        chat = next(item for item in entries if item["kind"] == "discord_event")
+        task = next(item for item in entries if item["kind"] == "message")
+        assert event["subject"] == chat["subject"] == task["subject"] == title
+        assert task["text"].split("\n\n") == [
+            title, "**check** the canary", event["from"]["link"],
+            "Your final reply is posted back in that Discord thread as build-check (Claude routine).",
+        ]
+        assert api.routines[0].splitlines()[0] == title
 
 
 def test_dispatch_filters_own_and_unknown_guild_messages_and_sends_dms_to_configured_space(discord):
@@ -227,6 +262,52 @@ def test_persona_webhooks_are_reused_per_parent_and_do_not_leak_secrets(discord,
         assert MOCK_WEBHOOK not in caplog.text and MOCK_TOKEN not in caplog.text
 
 
+def test_persona_webhooks_send_versioned_file_avatar_without_slack(discord):
+    with discord(settings={"personas": True}) as (core, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        core.avatar_cache.mkdir()
+        image = core.avatar_cache / "captain-example.png"
+        Image.new("RGB", (16, 16), "purple").save(image)
+        client.portal.call(lambda: block.post("home", CHANNEL, "hi", root=ROOT, persona=Persona("captain", "Captain", avatar=image.name)))
+        url = api.posts[0][1]["avatar_url"]
+        assert url == f"{PUBLIC}/avatars/{image.name}?v={image.stat().st_mtime_ns}"
+        response = client.get(url)
+        assert response.status_code == 200 and response.content == image.read_bytes()
+
+
+@pytest.mark.parametrize("persona", ["claude", "codex"])
+def test_provider_personas_use_bundled_marks(discord, persona):
+    with discord() as (core, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(lambda: block.post("home", CHANNEL, "hello", persona=Persona(persona, persona)))
+        assert api.posts[0][1]["avatar_url"] == core.avatar_url(f"{persona}.png")
+        assert client.get(api.posts[0][1]["avatar_url"]).status_code == 200
+
+
+@pytest.mark.parametrize("failure", ["GET", "POST", "execute"])
+@pytest.mark.parametrize("root", [None, ROOT])
+def test_webhook_403_falls_back_in_place_and_connect_offers_reinvite(discord, failure, root):
+    with discord() as (_, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        if failure == "execute":
+            api.responses.append(httpx.Response(403))
+        else:
+            api.denied_webhooks.add(failure)
+        client.portal.call(lambda: block.post("home", CHANNEL, "hello", root=root, persona=Persona("claude", "Claude")))
+        assert api.posts == [(f"/channels/{root or CHANNEL}/messages", {"allowed_mentions": {"parse": []}, "content": "hello"}, {})]
+        status = payload(call(client, STATIC_KEY, "discord_status"))
+        assert status["personas"] == "missing Manage Webhooks"
+        connection = payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))
+        assert [s["do"] for s in connection["next"] if "Manage Webhooks" in s["do"]] == [
+            f"Re-open the invite URL to grant Manage Webhooks: {status['setup']['invite_url']}"
+        ]
+        api.denied_webhooks.clear()
+        client.portal.call(lambda: block.post("home", CHANNEL, "again", root=root, persona=Persona("claude", "Claude")))
+        assert api.posts[-1][0].startswith(f"/webhooks/{HOOK}/")
+        assert api.posts[-1][2] == {"wait": "true", **({"thread_id": root} if root else {})}
+        assert "personas" not in payload(call(client, STATIC_KEY, "discord_status"))
+
+
 def test_in_place_references_dm_open_and_message_split(discord):
     with discord(settings={"threads": False, "personas": True, "ack_reaction": None}) as (_, client, block, api):
         text = "a" * 2000 + "👀" * 1000 + "z"
@@ -272,6 +353,54 @@ def test_rest_retries_json_and_header_rate_limits_with_a_bound(discord):
         with pytest.raises(BlockError, match="HTTP 429"):
             client.portal.call(block.post, "home", CHANNEL, "hello again")
         assert len(api.responses) == 1
+
+
+async def finish_ready(socket, block):
+    async with asyncio.timeout(3):
+        assert (await socket.outgoing.get())["op"] == 2
+        socket.feed(0, ready(), t="READY", s=1)
+        socket.feed(0, {"id": CHANNEL, "type": 0}, t="CHANNEL_CREATE", s=2)
+        while CHANNEL not in block.channels:
+            await asyncio.sleep(0)
+
+
+def test_gateway_applies_avatar_only_when_the_resolved_file_changes(discord, tmp_path):
+    uploaded = tmp_path / "data" / "avatars"
+    configured = tmp_path / "branding"
+    uploaded.mkdir(parents=True)
+    configured.mkdir()
+    name = "switchboard.png"
+    Image.new("RGBA", (8, 8), "red").save(uploaded / name)
+    Image.new("RGB", (8, 8), "blue").save(configured / name)
+    for image in (uploaded / name, None, configured / name):
+        socket = Socket()
+        with discord(settings={"avatar": name}, sockets=Sockets(socket), slack={"avatar_dirs": [str(configured)]}) as (_, client, block, api):
+            client.portal.call(finish_ready, socket, block)
+            status = payload(call(client, STATIC_KEY, "discord_status"))
+            assert status["connected"] and status["avatar"] == {"file": name, "applied": True, "error": None}
+            changes = [data["avatar"] for method, path, data in api.calls if (method, path) == ("PATCH", "/users/@me")]
+            assert len(changes) == (image is not None)
+            if image is not None:
+                assert changes == ["data:image/png;base64," + base64.b64encode(image.read_bytes()).decode("ascii")]
+        if image is None:
+            (uploaded / name).unlink()
+
+
+@pytest.mark.parametrize(("file", "patches", "error"), [
+    (None, 0, None),
+    ("missing-avatar.png", 0, "avatar file not found"),
+    ("switchboard.png", 1, "Discord REST returned HTTP 429"),
+])
+def test_gateway_avatar_failure_does_not_break_connection_or_retry(discord, caplog, file, patches, error):
+    socket = Socket()
+    with discord(settings={"avatar": file} if file else {}, sockets=Sockets(socket)) as (_, client, block, api):
+        api.avatar_status = 429
+        client.portal.call(finish_ready, socket, block)
+        status = payload(call(client, STATIC_KEY, "discord_status"))
+        assert status["connected"] and status["avatar"] == {"file": file, "applied": False, "error": error}
+        assert sum((method, path) == ("PATCH", "/users/@me") for method, path, _ in api.calls) == patches
+        if error:
+            assert caplog.text.count(error) == 1
 
 
 def test_gateway_identifies_heartbeats_resumes_and_reports_fatal_intents(discord):
@@ -365,8 +494,127 @@ def test_gateway_skips_optional_intent_and_reconnects_after_claim_rotation(disco
 
 @pytest.mark.parametrize(("settings", "key"), [({"spaces": {"home": {"guild_id": "bad"}}}, "spaces.home.guild_id"),
                                                ({"dm_space": "missing"}, "dm_space"), ({"application_id": -1}, "application_id"),
-                                               ({"personas": "true"}, "personas")])
+                                               ({"personas": "true"}, "personas"), ({"avatar": "../switchboard.png"}, "avatar")])
 def test_invalid_discord_config_names_the_path(discord, settings, key):
     with pytest.raises(BlockError, match=rf"blocks\.discord\.{key}"):
         with discord(settings=settings):
             pytest.fail("invalid Discord configuration was accepted")
+
+
+def test_a_space_without_guild_id_binds_the_owners_server_and_trusts_the_application_owner(discord):
+    spaces = {"spaces": {"home": {"project": None}}, "agents": {"claude": ["home"]}}
+    with discord(settings=spaces) as (core, client, block, api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}, {"id": GUILD_2}]))
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == {USER}
+        dispatch("GUILD_CREATE", {"id": GUILD, "name": "Home", "owner_id": USER, "channels": [api.channels[CHANNEL]], "threads": []})
+        dispatch("GUILD_CREATE", {"id": GUILD_2, "name": "Elsewhere", "owner_id": "999", "channels": [], "threads": []})
+        event = dispatch("MESSAGE_CREATE", message())
+        assert event["trust"] == "owner" and event["from"]["space"] == "home"
+        assert dispatch("MESSAGE_CREATE", message(guild_id=GUILD_2, channel_id="41", id="102")) is None
+        status = payload(call(client, STATIC_KEY, "discord_status"))
+        assert status["spaces"]["home"]["owners"] == 1
+        assert status["discovered"]["application_owner_ids"] == [USER]
+        assert [(g["id"], g["name"], g["space"]) for g in status["discovered"]["guilds"]] == [(GUILD, "Home", "home"), (GUILD_2, "Elsewhere", None)]
+        assert status["discovered"]["guilds"][0]["channels"] == [{"id": CHANNEL, "name": "builds", "type": 0}]
+        assert not any("owner_ids" in m for m in status["missing"])
+
+
+def test_the_auto_space_binds_nothing_when_two_owned_servers_are_joined(discord):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}, {"id": GUILD_2}]))
+        client.portal.call(block._load_owner)
+        for guild in (GUILD, GUILD_2):
+            dispatch("GUILD_CREATE", {"id": guild, "name": guild, "owner_id": USER, "channels": [], "threads": []})
+        assert block.space_for(GUILD) is None and block.space_for(GUILD_2) is None
+        assert dispatch("MESSAGE_CREATE", message()) is None
+
+
+def test_configured_owner_ids_win_and_a_team_owner_is_read(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": ["555"]}}, "agents": {}}) as (_, client, block, api):
+        api.application = {"id": APP, "owner": {"id": "1"}, "team": {"owner_user_id": USER}}
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == {USER}
+        assert block.owners(block.spaces["home"]) == {"555"}
+        assert block.trust_of(block.spaces["home"], USER) == "external"
+
+
+def test_dms_are_listed_as_candidates_but_never_trusted(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}}}) as (_, client, block, api):
+        api.application = {"id": APP, "owner": {}}
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block._load_owner)
+        client.portal.call(block.dispatch, "MESSAGE_CREATE", message(guild_id=None, channel_id=DM, id="103", author={"id": "777", "username": "someone"}))
+        discovered = payload(call(client, STATIC_KEY, "discord_status"))["discovered"]
+        assert discovered["dm_users"] == [{"id": "777", "name": "someone"}] and discovered["application_owner_ids"] == []
+        assert block.trust_of(block.spaces["home"], "777") == "external"
+
+
+def test_only_one_space_may_leave_out_guild_id(discord):
+    with pytest.raises(BlockError, match="only one space"):
+        with discord(settings={"spaces": {"a": {}, "b": {}}, "agents": {}}):
+            pass
+
+
+def test_connect_discord_hands_out_the_token_link_then_the_invite(discord):
+    with discord(token=False, settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        out = payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))
+        assert out["what"] == "discord" and "/claims/discord/" in out["next"][0]["link"]
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        client.portal.call(block.dispatch, "READY", ready(guilds=[]))
+        client.portal.call(block._load_owner)
+        block._gateway.ready = True
+        steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
+        assert any(s.startswith("Invite the bot to a server you own for space home: https://discord.com/oauth2/authorize?") for s in steps)
+
+
+def test_guild_ownership_transfer_unbinds_the_auto_space(discord):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}]))
+        client.portal.call(block._load_owner)
+        dispatch("GUILD_CREATE", {"id": GUILD, "name": "Home", "owner_id": USER, "channels": [], "threads": []})
+        assert block.space_for(GUILD) == "home"
+        dispatch("GUILD_UPDATE", {"id": GUILD, "name": "Home", "owner_id": "999"})
+        assert block.space_for(GUILD) is None
+
+
+def test_an_owner_lookup_for_a_replaced_token_is_discarded(discord, monkeypatch):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        tokens = iter(["old", "old", "new"])
+        monkeypatch.setattr(block, "token", lambda: next(tokens))
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == frozenset()
+
+
+def test_connect_discord_keeps_a_rejected_token_step(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}}, "agents": {}}) as (_, client, block, _api):
+        block._gateway.fatal_code = 4004
+        steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
+        assert any(s.startswith("Discord rejected the bot token.") for s in steps)
+
+
+@pytest.mark.parametrize(("content", "mentions", "name"), [
+    (f"<@{BOT}> ping", [], "ping"),
+    (f"<@!{BOT}>  ask <@{USER}> about <#{CHANNEL}> and <@&9>\nmore", [{"id": USER, "global_name": "Ana"}], "ask @Ana about #builds and"),
+    (f"<@{BOT}>", [], "Reply to Owner"),
+])
+def test_thread_names_drop_raw_mentions_and_the_author_joins_the_thread(discord, content, mentions, name):
+    with discord() as (_, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "channels": [api.channels[CHANNEL]], "threads": []})
+        original = {"content": content, "mentions": mentions, "author": {"id": USER, "username": "Owner"}}
+        block_request = block.request
+
+        async def request(method, path, **kw):
+            if method == "GET" and path == f"/channels/{CHANNEL}/messages/{ROOT}":
+                return original
+            return await block_request(method, path, **kw)
+
+        block.request = request
+        thread = client.portal.call(block._thread, CHANNEL, ROOT, True)
+        assert thread == ROOT and api.channels[ROOT]["name"] == name
+        assert ("PUT", f"/channels/{ROOT}/thread-members/{USER}", None) in api.calls

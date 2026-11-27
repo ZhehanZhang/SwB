@@ -4,8 +4,6 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping
 
-import yaml
-
 from ..signing import HEADER_NAME_RE
 
 IDENTITIES = ("bot", "user")
@@ -123,7 +121,7 @@ class Config:
     public_base_url: str | None = None
     avatar_dirs: tuple[str, ...] = ()
     target_aliases: Mapping[str, str] = field(default_factory=dict)
-    captain_avatars: bool = False
+    captain_avatars: bool = True
     max_text_chars: int = 4000
     event_retention_days: int = 14
     visibility: Mapping[str, Any] = field(default_factory=dict)
@@ -378,7 +376,7 @@ def parse_config(data: Any, env: Mapping[str, str], *, secret_lookup: Callable[[
         public_base_url=public_base_url,
         avatar_dirs=_str_list(data.get("avatar_dirs"), "avatar_dirs"),
         target_aliases={str(k).lower(): str(v).lower() for k, v in (data.get("target_aliases") or {}).items()},
-        captain_avatars=bool(data.get("captain_avatars", False)),
+        captain_avatars=bool(data.get("captain_avatars", True)),
         max_text_chars=int(data.get("max_text_chars", 4000)),
         event_retention_days=int(data.get("event_retention_days", 14)),
         visibility=dict(data.get("visibility") or {}),

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from typing import TYPE_CHECKING, Any
 
 from ...targets import SLUG_RE
@@ -26,7 +28,7 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
     if kind not in block.connect_kinds:
         return None
     if not principal.is_unrestricted_owner:
-        return {"done": [], "next": [{"by": "person", "do": "Run connect for Grok from the owner's sign-in."}]}
+        return {"done": [], "next": [{"by": "person", "do": "Run connect for Grok Bot from the owner's sign-in."}]}
 
     args = {k: v for k, v in (choose or {}).items() if v is not None}
     strings = {"name", "project", "auth", "header", "replace"}
@@ -84,19 +86,18 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
         signed_in = principal.kind == "oauth" and principal.source == "grok"
         if oauth and not signed_in:
             signed_in = core.store.one(
-                "SELECT 1 FROM oauth_tokens WHERE kind = 'access' AND source = 'grok' AND resource = ? "
-                "AND expires_at > ? AND revoked_at IS NULL LIMIT 1", (resource, core.clock()),
+                "SELECT 1 FROM oauth_tokens WHERE kind = 'access' AND source = 'grok' AND resource IN (SELECT value FROM json_each(?)) "
+                "AND expires_at > ? AND revoked_at IS NULL LIMIT 1", (json.dumps(core.cfg.resources), core.clock()),
             ) is not None
         connector = resource if https else "<public_https_url>/mcp"
         done = [f"MCP URL: {core.base_url}/mcp.", f"OAuth sign-in: {'available' if oauth else 'unavailable'}."]
         steps = []
         if signed_in:
-            done.append("Grok is signed in.")
+            done.append("Grok Bot is signed in.")
         else:
             if not oauth:
                 steps.append({"by": "person", "do": "Configure a public HTTPS URL and owner sign-in to use OAuth."})
-            steps.append({"by": "person", "do": f"Open grok.com > Connectors > New Connector > Custom, add {connector}, and sign in with OAuth. "
-                          "In Grok Bot on desktop, use Connect apps > Add a custom connector > Remote HTTPS. "
+            steps.append({"by": "person", "do": f"In Grok Bot on desktop, open Connect apps > Add a custom connector > Remote HTTPS, add {connector}, and sign in with OAuth. "
                           'For API clients that support bearer headers, call connect(what="mcp-client", choose={"agent":"grok"}) for a pairing code instead.'})
         steps += [
             {"by": "person", "do": "Ask Grok Bot to create a routine with a custom webhook trigger. Save this routine prompt:\n\n> " + DOORMAN},

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .. import Manifest, TargetKind
-from ...slack.config import parse_config
+from .. import BlockError, Manifest, TargetKind
+from ...slack.config import AVATAR_RE, parse_config
 from ...slack.engine import SlackEngine
 from .actions import SlackActions
 from .intake import SlackIntake
@@ -40,7 +40,11 @@ class SlackBlock(SlackIntake, SlackActions):
     )
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
+        self.app_icon = config.get("app_icon")
+        if self.app_icon is not None and (not isinstance(self.app_icon, str) or not AVATAR_RE.fullmatch(self.app_icon)):
+            raise BlockError(f"blocks.{config.get('_name', 'slack')}.app_icon must be a file name like switchboard.png")
         self.token_names: dict[str, list[str]] = {}
+        self.token_kinds: dict[str, dict[str, str]] = {}
         if config.get("engine", True):
             parsed = parse_config(config, core.cfg.env, secret_lookup=core.secret)
             env = dict(core.cfg.env)
@@ -48,6 +52,9 @@ class SlackBlock(SlackIntake, SlackActions):
                 names = [ident.token_env for ident in ws.identities.values()]
                 if ws.intake == "socket" and ws.app_token_env:
                     names.append(ws.app_token_env)
+                self.token_kinds[label] = {kind: ident.token_env for kind, ident in ws.identities.items() if kind in ("bot", "user")}
+                if ws.intake == "socket" and ws.app_token_env:
+                    self.token_kinds[label]["app"] = ws.app_token_env
                 self.token_names[label] = names
                 for name in names:
                     if value := core.secret(name):
@@ -77,11 +84,24 @@ class SlackBlock(SlackIntake, SlackActions):
                 for label, names in self.token_names.items()]
         step = self.next_step()
         if missing := self.missing_token():
+            from ...credentials import slack_workspace
+
+            label = missing[0]
+            names = self.token_kinds.get(label, {})
+            if len(names) > 1:
+                return {"done": done, "next": [self.group_step(principal, slack_workspace(label, names), step or f"Save the Slack tokens for workspace {label}.")]}
             return {"done": done, "next": [self.token_step(principal, missing[1], step)]}
         return {"done": done, "next": [{"by": "person", "do": step}] if step else []}
 
     def problems(self) -> list[str]:
         return SlackIntake.problems(self) + SlackActions.problems(self) if self.engine is not None else SlackIntake.problems(self)
+
+    def status(self) -> dict[str, Any]:
+        status = super().status()
+        status["modes"] = self.core.modes.status(block=self.name)
+        if self.app_icon is not None:
+            status["manual_steps"] = [f"Upload {self.app_icon} as the app icon at api.slack.com/apps, Basic Information, Display Information"]
+        return status
 
     async def start(self) -> None:
         if self.engine is not None:
