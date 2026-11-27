@@ -46,9 +46,12 @@ test('landing CTA combines and copies selected setup prompts without shifting th
   const preview = picker.getByRole('textbox', { name: 'Setup prompt' });
   await expect(picker).toBeVisible();
   await expect(copy).toBeDisabled();
+  await expect(preview).toHaveValue('');
+  await expect(picker.getByRole('checkbox', { checked: true })).toHaveCount(0);
   const opened = { picker: await dimensions(picker), preview: await dimensions(preview) };
 
   await picker.getByRole('checkbox', { name: 'Telegram', exact: true }).check();
+  expect(await dimensions(preview)).toEqual(opened.preview);
   await picker.getByRole('checkbox', { name: 'Slack', exact: true }).check();
   const prompt = await preview.inputValue();
   for (const phrase of [
@@ -70,6 +73,16 @@ test('landing CTA combines and copies selected setup prompts without shifting th
   expect(await preview.inputValue()).not.toContain('https://t.me/BotFather');
   expect(await dimensions(picker)).toEqual(opened.picker);
   expect(await dimensions(preview)).toEqual(opened.preview);
+  for (const name of ['Claude', 'Grok Bot', 'GitHub', 'Telegram']) {
+    await picker.getByRole('checkbox', { name, exact: true }).check();
+  }
+  await expect(picker.getByRole('checkbox', { checked: true })).toHaveCount(5);
+  expect(await dimensions(picker)).toEqual(opened.picker);
+  expect(await dimensions(preview)).toEqual(opened.preview);
+  expect(await preview.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+    return node.scrollTop;
+  })).toBeGreaterThan(0);
   await page.keyboard.press('Escape');
   await expect(picker).toBeHidden();
   await expect(cta).toBeFocused();
