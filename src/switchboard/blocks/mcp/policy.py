@@ -8,6 +8,8 @@ from ...refusals import (CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, GRANT_REQ
                          SCOPE_REQUIRED, TARGET_REQUIRED)
 
 if TYPE_CHECKING:
+    from mcp_types import Tool
+
     from ...auth import Principal
     from ...core import Switchboard
 
@@ -94,6 +96,23 @@ REFUSAL_DETAILS = frozenset({
 })
 
 
+def catalog_refusal(p: Principal | None, name: str, tool: Tool | None, role: Role | None) -> str | None:
+    if p is None or p.kind == "inbox_key":
+        return AUTH_REQUIRED
+    if p.tools is not None and name not in p.tools:
+        return TOOL_REQUIRED
+    if tool is not None:
+        if tool.annotations and tool.annotations.read_only_hint:
+            if name not in READ_ROLES and REFERENCE_ARGS.intersection(tool.input_schema.get("properties", {})):
+                return CONVERSATION_NOT_FOUND
+        elif role is None:
+            return POLICY_REQUIRED
+    read_role = READ_ROLES.get(name)
+    if not p.is_unrestricted_owner and (role == "owner" or (read_role and read_role[0] == "owner")):
+        return OWNER_REQUIRED
+    return None
+
+
 def can_read_conversation(core: Switchboard, p: Principal, handle: dict[str, Any] | None) -> bool:
     if handle is None:
         return False
@@ -103,8 +122,6 @@ def can_read_conversation(core: Switchboard, p: Principal, handle: dict[str, Any
 
 def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any]) -> str | None:
     role, parameter = READ_ROLES[name]
-    if role == "owner":
-        return None if p.is_unrestricted_owner else OWNER_REQUIRED
     reference = arguments.get(parameter) if parameter else None
     if role == "message" and isinstance(reference, str):
         handle = core.inbox.message_handle(reference)
