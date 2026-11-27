@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from ..config import LOOPBACK_HOSTS
+from .mcp_config import local_servers
 
 
 class CompanionError(ValueError):
@@ -40,6 +41,7 @@ class CompanionState:
     device_key: str = field(repr=False)
     enabled_caps: tuple[str, ...]
     drop_dir: str
+    mcp_servers: tuple[str, ...] = field(default=(), repr=False)
 
     @classmethod
     def load(cls, path: Path) -> CompanionState | None:
@@ -70,7 +72,13 @@ class CompanionState:
                     or not isinstance(caps, list) or not all(isinstance(cap, str) for cap in caps)
                     or not isinstance(drop_dir, str) or not Path(drop_dir).is_absolute()):
                 raise ValueError
-            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir)
+            servers = data.get("mcp_servers", [])
+            if not isinstance(servers, list) or not all(isinstance(server, str) for server in servers):
+                raise ValueError
+            specs = tuple(servers)
+            if ("mcp" in caps) != bool(local_servers(specs)):
+                raise ValueError
+            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs)
         except (TypeError, ValueError, KeyError):
             raise CompanionError("Check the companion settings file.") from None
 
@@ -85,7 +93,7 @@ class CompanionState:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
             temporary = Path(stream.name)
             try:
-                json.dump(asdict(self), stream)
+                json.dump(asdict(self), stream, ensure_ascii=False)
                 stream.close()
                 temporary.chmod(0o600)
                 if os.name == "nt":
