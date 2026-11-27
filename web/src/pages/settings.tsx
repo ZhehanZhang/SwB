@@ -1,14 +1,17 @@
 import { useState, type FormEvent } from "react"
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronRight, KeyRound, LogOut } from "lucide-react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { PRODUCT_NAME } from "@/app/brand"
+import { ConnectionStatus } from "@/components/console/connection-status"
 import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
+import { LogoTile } from "@/components/logo-tile"
 import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
 import { ApiError, isObject, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
+import { connectionNames, connectionQuery } from "@/lib/connections"
 import { addPasskey, listPasskeys, removePasskey, supportsPasskeys } from "@/lib/owner-auth"
 
 type Settings = {
@@ -48,6 +51,7 @@ const commands = [
 const rowClass = "grid min-h-[41px] grid-cols-[minmax(88px,24%)_1fr_auto] items-center gap-x-3 border-b text-body-sm"
 const headingClass = "text-heading-md"
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
+const connectionPlatforms = ["slack", "discord", "telegram"] as const
 
 function uptime(seconds: number) {
   if (seconds >= 86_400) return `${Math.floor(seconds / 86_400)} d`
@@ -66,6 +70,7 @@ export function SettingsPage() {
   const { data: session } = useQuery(sessionQuery)
   const settings = useQuery(settingsQuery)
   const passkeys = useQuery(passkeysQuery)
+  const connections = useQueries({ queries: connectionPlatforms.map(connectionQuery) })
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState("")
   const csrf = session?.csrf ?? null
@@ -154,6 +159,27 @@ export function SettingsPage() {
                 )}
               </dl>
             )}
+      </section>
+
+      <section aria-labelledby="settings-connections">
+        <h2 id="settings-connections" className={headingClass}>Connections</h2>
+        <ul className="mt-2">
+          {connectionPlatforms.map((platform, index) => {
+            const connection = connections[index]
+            return (
+              <li key={platform}>
+                <Link to={`/connections/${platform}`} className="group grid min-h-[41px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b py-2 text-body-sm">
+                  <span className="flex items-center gap-2.5">
+                    <LogoTile kind={platform} />
+                    <span className="group-hover:underline">{connectionNames[platform]}</span>
+                  </span>
+                  <ConnectionStatus state={connection.data?.state ?? (connection.isPending ? "loading" : "unavailable")} />
+                  <ChevronRight aria-hidden className="size-3.5" />
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
       </section>
 
       {settings.data && (

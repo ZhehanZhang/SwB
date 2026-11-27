@@ -13,6 +13,7 @@ from starlette.types import Message, Receive, Scope, Send
 from . import pages
 from .api_about import ABOUT_ROUTES
 from .api_board import BOARD_ROUTES
+from .api_connections import CONNECTION_ROUTES
 from .api_pages import PAGE_ROUTES
 from .api_read import READ_ROUTES
 from .api_settings import SETTINGS_ROUTES
@@ -21,7 +22,7 @@ from .api_write import WRITE_ROUTES
 from .sessions import login_redirect
 
 APP_DIST = Path(__file__).with_name("static") / "app"
-APP_SECTIONS = ("canvas", "agents", "tokens", "inbox", "provision", "projects", "memory", "audit", "settings", "about")
+APP_SECTIONS = ("canvas", "agents", "tokens", "inbox", "provision", "projects", "memory", "audit", "settings", "about", "connections")
 SPA_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
@@ -59,7 +60,7 @@ def web_routes() -> list[Route | Mount]:
             return login_redirect(request)
         return spa_index() or pages.message_page("Web UI not built", "Use /classic or build the web UI first.", 503)
 
-    api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES, *BOARD_ROUTES, *SETTINGS_ROUTES, *TOKEN_ROUTES, *PAGE_ROUTES, *ABOUT_ROUTES],
+    api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES, *BOARD_ROUTES, *SETTINGS_ROUTES, *TOKEN_ROUTES, *PAGE_ROUTES, *ABOUT_ROUTES, *CONNECTION_ROUTES],
                  redirect_slashes=False)
 
     async def owner_api(scope: Scope, receive: Receive, send: Send) -> None:
