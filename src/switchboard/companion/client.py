@@ -14,6 +14,7 @@ import httpx
 
 from .. import __version__
 from .caps.base import Capability, CapabilityError, CompanionContext, JobContext
+from .harness import harness
 from .state import CompanionError, CompanionState, valid_pair
 
 DISCONNECTED = "This device was disconnected."
@@ -194,6 +195,7 @@ async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) ->
                             response.raise_for_status()
                             if response.headers.get("content-type", "").partition(";")[0] != "text/event-stream":
                                 raise httpx.StreamError("Unexpected event stream.")
+                            harness().reset_reports()
                             hooks = [tasks.create_task(_run_capability(client, state.companion_id, cap))
                                      for cap in caps.values()]
                             async for event, data in _events(response):

@@ -9,16 +9,16 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import httpx
-
-from ..config import LOOPBACK_HOSTS
-
 
 class CompanionError(ValueError):
     pass
 
 
 def base_url(value: str) -> str:
+    import httpx
+
+    from ..config import LOOPBACK_HOSTS
+
     error = CompanionError("Use an HTTPS SwB URL or a loopback HTTP URL.")
     try:
         parsed = urlsplit(value)

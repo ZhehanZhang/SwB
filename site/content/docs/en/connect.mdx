@@ -95,3 +95,9 @@ Ask an agent signed in as the owner to call `companion_code`. On the device, run
 Choose which actions the device allows at pairing. Add `--cap notify` to allow notifications. Add `--cap drop` to allow access to the device’s SwB Drop folder.
 
 Use `swb companion run` to reconnect. Use `swb companion status` to view the device ID. Use `swb companion disconnect` to remove the device.
+
+## Local sessions
+
+Add `--cap hooks` when you pair the device to share local agent status. Install the SwB plugin for Claude Code. For Gemini CLI and Codex, use the hook files in the repository’s `integrations` folder. These hooks call `swb hook` on the device.
+
+Use `targets` to find sessions. Send to the session address to leave a message in the agent’s mailbox.

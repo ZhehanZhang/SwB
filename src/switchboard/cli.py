@@ -292,6 +292,8 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from .companion.hook import EVENT_STATES
+
     parser = argparse.ArgumentParser(prog="swb")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -315,11 +317,18 @@ def build_parser() -> argparse.ArgumentParser:
     for command in (connect, status, claim, login_link):
         command.add_argument("--url", help="server base URL or MCP endpoint (defaults to loopback and SWITCHBOARD_PORT, PORT, or 8870)")
     companion_commands.add_commands(commands)
+    hook = commands.add_parser("hook", help="forward a local agent event")
+    hook.add_argument("harness", choices=tuple(EVENT_STATES))
     add_server_commands(commands)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
+    if argv and argv[0] == "hook":
+        from .companion.hook import run
+
+        run(argv[1:])
+        return
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command in SERVER_COMMANDS:
