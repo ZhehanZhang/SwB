@@ -305,10 +305,11 @@ class Block:
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
 
-    def token_step(self, principal: "Principal", name: str, instruction: str, *, url: bool = False) -> dict[str, str]:
+    def token_step(self, principal: "Principal", name: str, instruction: str, *, url: bool = False,
+                   kind: str = "token", label: str = "") -> dict[str, str]:
         if not principal.is_unrestricted_owner:
             return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
-        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url)}
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url, kind=kind, label=label)}
 
     def group_step(self, principal: "Principal", group: tuple[str, str, list[Any]], instruction: str) -> dict[str, str]:
         """One link that collects several credentials together (credentials.github_app, credentials.slack_workspace)."""

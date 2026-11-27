@@ -230,7 +230,27 @@ def test_invalid_claim_requests_fail_without_registering_a_secret(make):
         core.claims.mint("not-a-name", PUBLIC)
     with pytest.raises(ClaimError, match="public_url"):
         core.claims.mint(NAME, None)
+    with pytest.raises(ClaimError, match="credential kind"):
+        core.claims.mint(NAME, PUBLIC, kind="unknown")
     assert core.store.q("SELECT name FROM secrets") == []
+
+
+def test_existing_claim_tables_gain_kind_and_label_without_losing_links(tmp_path):
+    store = Store(tmp_path / "legacy.db", clock=Clock())
+    try:
+        store.x("CREATE TABLE secrets (name TEXT PRIMARY KEY, code_hash TEXT UNIQUE, expires_at REAL, sealed BLOB, require_https INTEGER)")
+        code = "f" * 43
+        store.x("INSERT INTO secrets VALUES (?, ?, ?, NULL, 1)", (NAME, hashlib.sha256(code.encode()).hexdigest(), store.clock() + 100))
+        claims = Claims(store)
+        assert claims.inspect_details(code) == {
+            "name": NAME, "kind": "token", "label": "", "expires_at": store.clock() + 100, "require_https": 1,
+        }
+        with pytest.raises(ClaimError):
+            claims.consume(code, VALUE)
+        assert claims.consume(code, "https://hook.example.test") == NAME
+        assert claims.secret(NAME) == "https://hook.example.test"
+    finally:
+        store.close()
 
 
 @pytest.mark.parametrize("prefix", ["/claim/", "/routines/claim/"])

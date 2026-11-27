@@ -413,7 +413,7 @@ class GitHubBlock(Block):
         step = self.next_step()
         steps = []
         if not present:
-            steps.append(self.token_step(principal, self.secret_env, step))
+            steps.append(self.token_step(principal, self.secret_env, step, kind="webhook_secret", label="Webhook secret"))
         elif step:
             steps.append({"by": "person", "do": step})
         auth = self.api.auth_type()
@@ -440,10 +440,10 @@ class GitHubBlock(Block):
             app_id, _, key, _ = self.api.credentials()
             if not app_id:
                 steps.append(self.token_step(principal, self.api.app_id_env,
-                             "Open GitHub Settings → Developer settings → GitHub Apps. Open your GitHub App and save its numeric App ID."))
+                             "Save the numeric App ID from your GitHub App settings.", kind="id", label="App ID"))
             if not key:
                 steps.append(self.token_step(principal, self.api.private_key_env,
-                             "In the GitHub App settings, choose Generate a private key, then paste the full downloaded .pem into this private form."))
+                             "Generate a private key in your GitHub App settings and save the .pem file here.", kind="pem", label="Private key"))
             steps.append({"by": "you", "do": "For a fine-grained personal access token instead, call connect again with credential=pat.",
                           "call": {"tool": "connect", "arguments": {"what": kind, "choose": {"credential": "pat"}}}})
         return {"done": done, "next": steps,

@@ -1,5 +1,6 @@
 from urllib.parse import urlsplit
 
+import httpx
 import pytest
 from conftest import OWNER, PUBLIC, base_config, default_env
 from cryptography.hazmat.primitives import serialization
@@ -7,11 +8,91 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from test_claims import OWNER_KEY, form_csrf, private_page
 
 from switchboard import credentials
-from switchboard.claims import ClaimError, Field, normalize, normalize_pem
+from switchboard.auth import Principal
+from switchboard.claims import ClaimError, Field, check_slack_auth, normalize, normalize_pem
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 PKCS1 = KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()
 PKCS8 = KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+
+
+def test_single_github_claims_validate_before_saving(make):
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}, "github": {}}))
+    block = core.blocks["github"]
+    connect = client.portal.call(block.connect_steps, "github", Principal("owner", "test", "key"), None, {"credential": "app"})
+    paths = {core.claims.inspect(urlsplit(step["link"]).path.rsplit("/", 1)[1]): urlsplit(step["link"]).path
+             for step in connect["next"] if "link" in step}
+    examples = {
+        "GITHUB_APP_ID": ("abc", "001", "12345", "Enter a numeric App ID"),
+        "GITHUB_WEBHOOK_SECRET": ("short", "x" * 15, "x" * 16, "Use a webhook secret with at least 16 characters"),
+        "GITHUB_APP_PRIVATE_KEY": ("not a pem", "-----BEGIN PRIVATE KEY-----YWJj-----END PRIVATE KEY-----",
+                                   PKCS8, "Paste the full private key or upload the .pem file"),
+    }
+    assert set(paths) == set(examples)
+    for name, (bad, also_bad, good, error) in examples.items():
+        path = paths[name]
+        csrf = form_csrf(client.get(path, headers=OWNER))
+        invalid = client.post(path, headers=OWNER, data={"csrf": csrf, "token": bad})
+        assert invalid.status_code == 400 and error in invalid.text and bad not in invalid.text
+        assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": also_bad}).status_code == 400
+        assert core.claims.secret(name) is None and client.get(path, headers=OWNER).status_code == 200
+        assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": good}).status_code == 200
+        assert core.claims.secret(name) == good
+        assert client.get(path, headers=OWNER).status_code == 410
+
+
+def test_slack_group_checks_prefixes_and_retries_invalid_auth_atomically(make, monkeypatch):
+    core, client = make()
+    env = {"bot": "CUSTOM_BOT", "user": "CUSTOM_USER", "app": "CUSTOM_APP"}
+    values = {"CUSTOM_BOT": "xoxb-example", "CUSTOM_USER": "xoxp-example", "CUSTOM_APP": "xapp-example"}
+    title, provider, fields = credentials.slack_workspace("Example", env)
+    path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    checks = []
+    accepted = False
+
+    async def verify(kind, token):
+        checks.append((kind, token))
+        return accepted if kind == "slack_user" else None
+
+    monkeypatch.setattr(core.claims, "slack_auth_check", verify)
+    for name, bad in zip(values, ("abc", "def", "ghi")):
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, **values, name: bad})
+        assert response.status_code == 400 and bad not in response.text
+    assert not checks
+
+    rejected = client.post(path, headers=OWNER, data={"csrf": csrf, **values})
+    assert rejected.status_code == 400 and "Check User token" in rejected.text
+    assert set(checks) == {(f"slack_{kind}", values[name]) for kind, name in env.items()}
+    assert all(core.secret(name) is None for name in values)
+    assert client.get(path, headers=OWNER).status_code == 200
+
+    accepted = True
+    saved = client.post(path, headers=OWNER, data={"csrf": csrf, **values})
+    assert saved.status_code == 200 and "3 credentials saved" in saved.text
+    assert {name: core.secret(name) for name in values} == values
+    assert client.get(path, headers=OWNER).status_code == 410
+
+
+@pytest.mark.parametrize(("kind", "method", "status", "body", "expected"), [
+    ("slack_bot", "auth.test", 200, {"ok": True}, True),
+    ("slack_user", "auth.test", 200, {"ok": False, "error": "invalid_auth"}, False),
+    ("slack_app", "apps.connections.open", 200, {"ok": False, "error": "missing_scope"}, False),
+    ("slack_bot", "auth.test", 429, {"ok": False, "error": "ratelimited"}, None),
+    ("slack_bot", "auth.test", 503, {"ok": False}, None),
+    ("slack_bot", "auth.test", None, None, None),
+])
+async def test_slack_auth_checks_use_the_right_api_and_tolerate_offline(monkeypatch, kind, method, status, body, expected):
+    def slack(request):
+        assert request.method == "POST" and str(request.url) == f"https://slack.com/api/{method}"
+        assert request.headers["Authorization"] == "Bearer example-token"
+        if status is None:
+            raise httpx.ConnectError("offline", request=request)
+        return httpx.Response(status, json=body)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(slack))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_: client)
+    assert await check_slack_auth(kind, "example-token") is expected
 
 
 @pytest.mark.parametrize("pem", [PKCS1, PKCS8, PKCS1.replace("\n", ""), PKCS8.replace("\n", " "), "\n\n" + PKCS1 + "\n"])
