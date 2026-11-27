@@ -307,7 +307,8 @@ def test_to_owner_refused_for_non_listen_conversation(opened):
     with opened() as (core, client, world, fires):
         ingest(core, client, type="app_mention", user=OWNER_A, text=f"<@{BOT_USER}> claude hello")
         handle = handle_of(fires[0][1])
-        assert "only allowed" in error_text(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "no", "to_owner": True}))
+        assert "Use a forwarded Slack message or a triage conversation with owner notes enabled." in error_text(
+            call(client, KEY_FULL, "reply", {"conversation": handle, "text": "A note", "to_owner": True}))
         assert "chat_postMessage" not in world.names()
 
 

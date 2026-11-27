@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS claim_links (
   expires_at REAL NOT NULL,
   require_https INTEGER NOT NULL,
   kind TEXT NOT NULL,
-  label TEXT NOT NULL
+  label TEXT NOT NULL,
+  resolved INTEGER NOT NULL DEFAULT 0
 )
 """
 
@@ -195,6 +196,8 @@ class Claims:
         self._online_checks: dict[str, ClaimOnlineCheck] = {}
         store.x(SCHEMA)
         store.x(LINK_SCHEMA)
+        if "resolved" not in {r["name"] for r in store.q("PRAGMA table_info(claim_links)")}:
+            store.x("ALTER TABLE claim_links ADD COLUMN resolved INTEGER NOT NULL DEFAULT 0")
         store.x("CREATE INDEX IF NOT EXISTS claim_links_name ON claim_links(name, expires_at)")
         store.x(GROUP_SCHEMA)
         columns = {r["name"] for r in store.q("PRAGMA table_info(secrets)")}
@@ -262,7 +265,7 @@ class Claims:
         return dict(row)
 
     def pending(self, name: str) -> bool:
-        return self.store.one("SELECT 1 FROM claim_links WHERE name = ? AND expires_at > ? LIMIT 1",
+        return self.store.one("SELECT 1 FROM claim_links WHERE name = ? AND expires_at > ? AND resolved = 0 LIMIT 1",
                               (name, self.store.clock())) is not None
 
     async def submit(self, code: str, value: str) -> str:
@@ -285,10 +288,11 @@ class Claims:
         digest, sealed = _digest(code), self._cipher.encrypt(value.encode())
 
         def save(db: Any) -> str:
-            row = db.execute("DELETE FROM claim_links WHERE code_hash = ? AND expires_at > ? RETURNING name, require_https",
+            row = db.execute("DELETE FROM claim_links WHERE code_hash = ? AND expires_at > ? RETURNING rowid, name, require_https",
                              (digest, self.store.clock())).fetchone()
             if row is None:
                 raise ClaimUnavailable(UNUSABLE)
+            db.execute("UPDATE claim_links SET resolved = 1 WHERE name = ? AND rowid < ?", (row["name"], row["rowid"]))
             db.execute("""INSERT INTO secrets(name, sealed, require_https) VALUES (?, ?, ?)
                           ON CONFLICT(name) DO UPDATE SET sealed = excluded.sealed, require_https = excluded.require_https""",
                        (row["name"], sealed, row["require_https"]))
@@ -350,6 +354,7 @@ class Claims:
                           (_digest(code), self.store.clock())).fetchone() is None:
                 raise ClaimUnavailable(UNUSABLE)
             for name, value in sealed.items():
+                db.execute("UPDATE claim_links SET resolved = 1 WHERE name = ? AND expires_at <= ?", (name, found["expires_at"]))
                 db.execute("""INSERT INTO secrets(name, sealed) VALUES (?, ?)
                               ON CONFLICT(name) DO UPDATE SET sealed = excluded.sealed""", (name, value))
 

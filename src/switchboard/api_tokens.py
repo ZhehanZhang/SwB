@@ -78,7 +78,7 @@ async def tokens(request: Request) -> JSONResponse:
     claims = {r["name"]: r for r in core.store.q(
         """WITH pending AS (
              SELECT name, MAX(expires_at) AS pending_until, MAX(require_https) AS require_https
-             FROM claim_links WHERE expires_at > ? GROUP BY name
+             FROM claim_links WHERE expires_at > ? AND resolved = 0 GROUP BY name
            )
            SELECT s.name, COALESCE(p.require_https, s.require_https) AS require_https, s.sealed IS NOT NULL AS stored, p.pending_until
              FROM secrets s LEFT JOIN pending p ON p.name = s.name

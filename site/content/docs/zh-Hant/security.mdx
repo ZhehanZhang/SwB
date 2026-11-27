@@ -20,7 +20,7 @@ SwB 依平台提供的寄件者 ID 判定訊息的信任等級。
 | `owner` | 你和以你的身分登入的代理 |
 | `external` | 其他寄件者，包括 `known` 中的人員和機器人 |
 
-Slack、Discord 和 Telegram 透過 `known` 判斷哪些寄件者可以傳入訊息。獲准傳入的其他寄件者仍使用 `external` 信任框。GitHub 依每段文字的作者判定，詳見[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
+在 Slack、Discord 和 Telegram 中，`known` 是接收設定。SwB 用它判斷接受哪些寄件者的訊息。擁有者以外的寄件者即使透過 `known` 獲准，訊息的信任等級仍是 `external`。GitHub 依每段文字的作者判斷信任等級，詳見[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
 
 **信任框**由 SwB 為外部文字加上的標頭與一對標記組成。SwB 先改寫內容中仿造的標頭與標記，再加上信任框。標記為 `<<<swb-untrusted` 和 `swb-untrusted>>>`。代理只把標記內的文字當成參考資訊。
 
@@ -53,6 +53,7 @@ SwB 為每把配對金鑰單獨儲存記憶授權。升級時，原本可存取�
 | 限制 | 數值 |
 | - | - |
 | 錯誤的 bearer 權杖 | 每個位址 10 分鐘內 20 次，之後回應 429 |
+| SwB 為擁有者以外的寄件者轉送的 GitHub 事件 | 每位寄件者在最近 10 分鐘內最多 5 個事件 |
 | `/register` | 每個位址每小時 20 次 |
 | `/token` | 每個位址 10 分鐘內 120 次 |
 | `/authorize` | 每個位址 10 分鐘內 60 次 |

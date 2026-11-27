@@ -58,7 +58,7 @@ MUTATION_ROLES: dict[str, Role] = {
     "memory_write": "grant",
     "memory_delete": "owner_or_writer",
     "memory_move": "owner_or_writer",
-    "memory_promote": "owner_or_writer",
+    "memory_promote": "owner",
     "login_link": "owner",
     "visibility_set": "owner",
     "connect_code": "owner",
@@ -136,6 +136,14 @@ def can_read_conversation(core: Switchboard, p: Principal, handle: dict[str, Any
     return p.is_unrestricted_owner or (p.allows_routing_scope(scope) and core.inbox.participant(handle, p.source))
 
 
+def granted_memory_scopes(core: Switchboard, p: Principal, scopes: list[str]) -> list[str]:
+    return [s for s in scopes if core.allows_memory(p, s.strip().lower())]
+
+
+def default_memory_scopes(core: Switchboard, p: Principal) -> list[str]:
+    return list(p.memory_grants) if p.kind == "connect" else granted_memory_scopes(core, p, [GENERAL])
+
+
 def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any]) -> str | None:
     role, parameter = READ_ROLES[name]
     reference = arguments.get(parameter) if parameter else None
@@ -181,9 +189,9 @@ def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str
         effective_project = project.strip().lower().removeprefix("project:") if isinstance(project, str) and project else ""
         if effective_project and not core.allows_memory(p, GENERAL if effective_project == GENERAL else f"project:{effective_project}"):
             return MEMORY_NOT_FOUND
-        if isinstance(scopes, list) and any(isinstance(s, str) and not core.allows_memory(p, s.strip().lower()) for s in scopes):
+        if isinstance(scopes, list) and scopes and all(isinstance(s, str) for s in scopes) and not granted_memory_scopes(core, p, scopes):
             return MEMORY_NOT_FOUND
-        if not effective_project and not scopes and not core.allows_memory(p, GENERAL):
+        if not effective_project and not scopes and not default_memory_scopes(core, p):
             return MEMORY_NOT_FOUND
     return None
 
