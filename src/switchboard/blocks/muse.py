@@ -7,6 +7,7 @@ import hashlib
 import hmac
 from shlex import quote
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from starlette.requests import Request
@@ -16,6 +17,7 @@ from starlette.routing import Route
 from ..audit import iso
 from ..auth import Principal
 from ..claims import ClaimInputError
+from ..config import LOOPBACK_HOSTS
 from ..muse_protocol import BRIDGE_PATH, CLAIM_ID, DELIVERY_TIMEOUT, MESSAGE_LIMIT, NO_REPLY, TOKEN, TOKEN_ENV, UNKNOWN
 from . import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
 
@@ -121,14 +123,32 @@ class MuseBlock(Block):
         steps = []
         if not state["configured"] or args.get("replace"):
             if self.core.cfg.env.get(TOKEN_ENV):
-                steps.append({"by": "person", "do": f"Set {TOKEN_ENV} in .env to a random token of 43 to 128 letters, digits, hyphens, or underscores. Restart SwB."})
+                steps.extend([
+                    {"by": "person", "do": f"Set {TOKEN_ENV} in .env to a random URL-safe token of 43 to 128 characters."},
+                    {"by": "person", "do": "Restart SwB."},
+                ])
             else:
-                steps.append(self.token_step(principal, TOKEN_ENV,
-                             "Use a password manager to generate a bridge token with 64 random letters and digits. Save it through this link."))
+                steps.extend([
+                    {"by": "person", "do": "Generate a random bridge token with 64 letters and digits in your password manager."},
+                    self.token_step(principal, TOKEN_ENV, "Save the bridge token through this private link."),
+                ])
         if steps or state["state"] != "online":
-            steps.append({"by": "person", "do": f"Read {SDK_TERMS}. Create a personal Meta token.", "link": SDK_TOKENS})
-            steps.append({"by": "person", "do": f"Install Meta's Linux Device SDK on a device with Bluetooth Low Energy. Run swb muse-bridge --url {quote(self.core.base_url)} --setup. Enter both tokens at the hidden prompts. In the Muse app, turn on Settings > Devices > Developer mode. Choose Add Device. Select the Bluetooth name SwB prints. Leave SwB running.",
-                          "link": SDK_DOCS})
+            base = self.core.base_url
+            if urlsplit(base).hostname in LOOPBACK_HOSTS:
+                steps.append({"by": "person", "do": "Run swb up --tunnel cloudflare on the SwB computer so the Linux device can reach it."})
+                return {"done": done, "next": steps}
+            steps.extend([
+                {"by": "person", "do": "Read the Meta SDK terms.", "link": SDK_TERMS},
+                {"by": "person", "do": "Create a personal Meta token.", "link": SDK_TOKENS},
+                {"by": "person", "do": "Install the Meta Linux Device SDK on a device with Bluetooth Low Energy.", "link": SDK_DOCS},
+                {"by": "person", "do": f"Run swb muse-bridge --url {quote(base)} --setup on the Linux device."},
+                {"by": "person", "do": "Enter the SwB bridge token at its hidden prompt."},
+                {"by": "person", "do": "Enter the personal Meta token at its hidden prompt."},
+                {"by": "person", "do": "Turn on Developer mode under Settings > Devices in the Muse app."},
+                {"by": "person", "do": "Select Add Device."},
+                {"by": "person", "do": "Select the Bluetooth name SwB prints."},
+                {"by": "person", "do": "Keep SwB running."},
+            ])
         elif not state["verified"]:
             steps.append({"by": "you", "do": "Send the test message. Check the conversation with result.",
                           "call": {"tool": "send", "arguments": {"to": TARGET, "task": "Reply with pong to test SwB."}}})
