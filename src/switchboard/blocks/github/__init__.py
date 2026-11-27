@@ -385,7 +385,7 @@ class GitHubBlock(Block):
             self.checked_at = now if attempted else None
             self._last_check = credentials, repos
 
-    def drop(self, event: str, data: dict[str, Any], reason: str) -> None:
+    def drop(self, event: str, data: dict[str, Any], reason: str, ip: str, delivery: str | None) -> None:
         self.dropped += 1
         name = re.sub(r"[^\w.-]", "?", event[:64], flags=re.ASCII) or "-"
         action = data.get("action")
@@ -395,6 +395,8 @@ class GitHubBlock(Block):
         if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]{1,64}/[\w.-]{1,128}", repo, re.ASCII):
             repo = "-"
         log.info("github: dropped %s for %s: %s", name, repo, reason)
+        self.core.audit.record(origin=self.name, source="github", client=ip, destination=self.name, action="webhook",
+                               outcome="dropped", target=repo_name(repo), ref=delivery, detail=reason)
 
     def next_step(self) -> str | None:
         if not self.online:
@@ -571,35 +573,44 @@ class GitHubBlock(Block):
         return await self._write(call, "reply", repo, path, {"body": self._text(text, limit)}, handle, permissions=permissions, meta=meta)
 
     async def webhook(self, request: Request) -> Response:
+        ip = client_ip(request.scope)
+
+        def refuse(error: str, status: int) -> JSONResponse:
+            self.core.audit.record(origin=self.name, source="-", client=ip, destination=self.name, action="webhook",
+                                   outcome="refused", detail=error)
+            return JSONResponse({"error": error}, status)
+
         if not self.secret:
-            return JSONResponse({"error": "webhook secret unavailable"}, 503)
+            return refuse("webhook secret unavailable", 503)
         signature = request.headers.get("x-hub-signature-256")
         if not signature:
-            return JSONResponse({"error": "invalid signature"}, 401)
+            return refuse("invalid signature", 401)
         body = await request.body()
         expected = b"sha256=" + hmac.digest(self.secret, body, "sha256").hex().encode()
         if not hmac.compare_digest(signature.encode("latin-1"), expected):
-            return JSONResponse({"error": "invalid signature"}, 401)
+            return refuse("invalid signature", 401)
         event = request.headers.get("x-github-event", "")
+        delivery = request.headers.get("x-github-delivery", "")
+        if not re.fullmatch(r"[!-~]{1,128}", delivery):
+            delivery = None
         unsupported = event not in EVENTS and event != "ping"
         try:
             data = json.loads(body)
         except (ValueError, RecursionError):
             if not unsupported:
-                return JSONResponse({"error": "invalid JSON"}, 400)
+                return refuse("invalid JSON", 400)
             data = {}
         if unsupported:
-            self.drop(event, _object(data), "unhandled event")
+            self.drop(event, _object(data), "unhandled event", ip, delivery)
             return JSONResponse({"ok": True})
         if not isinstance(data, dict):
-            return JSONResponse({"error": "expected a JSON object"}, 400)
+            return refuse("expected a JSON object", 400)
         if event == "ping":
             zen = data.get("zen")
             return Response(_json({"ok": True, "zen": zen[:500] if isinstance(zen, str) else None}), media_type="application/json")
-        delivery = request.headers.get("x-github-delivery", "")
-        if not re.fullmatch(r"[!-~]{1,128}", delivery):
-            return JSONResponse({"error": "invalid delivery id"}, 400)
-        return JSONResponse({"ok": True}, background=BackgroundTask(self.dispatch, event, delivery, data, client_ip(request.scope)))
+        if delivery is None:
+            return refuse("invalid delivery id", 400)
+        return JSONResponse({"ok": True}, background=BackgroundTask(self.dispatch, event, delivery, data, ip))
 
     async def dispatch(self, event: str, delivery: str, data: dict[str, Any], ip: str) -> None:
         from ...core import CoreError
@@ -614,14 +625,12 @@ class GitHubBlock(Block):
         self.seen[delivery] = now
         payload = trim(event, delivery, data)
         if payload is None:
-            self.drop(event, data, "not completed")
+            self.drop(event, data, "not completed", ip, delivery)
             return
         repo = repo_name(payload.get("repo"))
         location = self.space_for(repo) if repo else None
         if location is None:
-            self.drop(event, data, "unrouted repository")
-            self.core.audit.record(origin=self.name, source="github", client=ip, destination=self.name, action="webhook",
-                                   outcome="dropped", target=repo, ref=delivery, detail="unrouted repository")
+            self.drop(event, data, "unrouted repository", ip, delivery)
             return
         space, project = location
         config_channel = next((key for key in self.space_config.get(space, {}).get("channels", {}) if repo_name(key) == repo), repo)
@@ -648,24 +657,29 @@ class GitHubBlock(Block):
         owner = (user_id is not None and user_id in self.space_owners.get(space, self.owner_ids)
                  and not payload.get("is_bot"))
         if mode == "off" or (mode == "work" and not owner):
-            self.drop(event, data, "channel mode ignored event")
+            self.drop(event, data, "channel mode ignored event", ip, delivery)
             return
         if not user_id or payload.get("is_bot") or (mode != "work" and user_id == self.api.pat_actor):
+            self.drop(event, data, "sender ignored", ip, delivery)
             return
         principal = Principal(self.name, ip, "github", origin=self.name, trust="owner" if owner else "external")
         who = Who(owner=owner, id=f"github:{user_id}", workspace=space)
         if not self.core.visibility.allows(who, f"channel:{space}/{repo}", f"channel:{self.name}/{repo}"):
+            self.drop(event, data, "channel access restricted", ip, delivery)
             return
         if not target:
+            self.drop(event, data, f"{mode} target is missing", ip, delivery)
             return
         try:
             addr = await self.core.resolve_to(target)
             if not self.core.visibility.allows(who, f"target:{slugify(target)}", f"target:{slugify(addr.id)}"):
+                self.drop(event, data, "target access restricted", ip, delivery)
                 return
             if not owner:
                 recent = [seen for seen in self._senders.pop(user_id, []) if now - seen < 600]
                 self._senders[user_id] = recent
                 if len(recent) >= 5:
+                    self.drop(event, data, "sender rate limit", ip, delivery)
                     return
                 recent.append(now)
                 if len(self._senders) > MAX_DELIVERIES:
