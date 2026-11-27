@@ -107,14 +107,16 @@ def test_up_log_and_export_share_configured_data(clean_env, tmp_path, monkeypatc
     home_db.touch()
     config = tmp_path / cli.CONFIG
     config.parent.mkdir()
-    config.write_text(f"version: 2\ndata_dir: {tmp_path / 'yaml-data'}\n")
-    data = tmp_path / "yaml-data"
-    if source != "yaml":
-        data = tmp_path / "overlay-data"
-        config.with_name("local.yaml").write_text(f"data_dir: {data}\n")
     if source.startswith("SWITCHBOARD_"):
+        config.write_text("version: 2\n")
         data = tmp_path / "env-data"
         (tmp_path / ".env").write_text(f"{source}={data}\n")
+    else:
+        config.write_text(f"version: 2\ndata_dir: {tmp_path / 'yaml-data'}\n")
+        data = tmp_path / "yaml-data"
+    if source == "overlay":
+        data = tmp_path / "overlay-data"
+        config.with_name("local.yaml").write_text(f"data_dir: {data}\n")
 
     def serve(app, **options):
         with TestClient(app):
@@ -250,12 +252,13 @@ def test_client_reads_the_owner_key_from_its_instance_data(clean_env, tmp_path, 
     config = tmp_path / cli.CONFIG
     config.parent.mkdir()
     data = tmp_path / "data"
-    if location == "default":
+    if location in ("default", "environment"):
         config.write_text("version: 2\n")
     else:
         config.write_text(f"version: 2\ndata_dir: {tmp_path / 'yaml-data'}\n")
+    if location != "default":
         data = tmp_path / f"{location}-data"
-    if location in ("overlay", "environment"):
+    if location == "overlay":
         config.with_name("local.yaml").write_text(f"data_dir: {tmp_path / 'overlay-data'}\n")
     if location == "environment":
         monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(data))

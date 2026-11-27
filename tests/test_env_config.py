@@ -212,7 +212,7 @@ def test_overlay_deep_merges_mappings_and_replaces_lists_over_yaml_and_env(tmp_p
         "CAPY_API_KEY": "fixture-capy", "GITHUB_WEBHOOK_SECRET": "unused-default-secret", "SLACK_BOT_TOKEN": "fixture-bot",
     })
     assert cfg.public_url == "https://private.example.test"
-    assert cfg.data_dir.as_posix() == "/env-data"
+    assert cfg.data_dir.as_posix() == "/srv/switchboard/data"
     assert cfg.owner_emails == ("private@example.test",)
     assert cfg.access_team_domain == "acme.cloudflareaccess.com" and cfg.access_aud == "example-aud"
     assert cfg.branding == Branding("Acme", "swb", "/logos/acme.svg", "#445566", None)
