@@ -75,6 +75,7 @@ class SlackIntake(Block):
             self.engine.mode_poll_channels = self.mode_poll_channels
             self.engine.target_agents = self.target_agents
             self.engine.context_listeners.append(self.deliver_context)
+            self.engine.context_limited = lambda push: self._drop(push, ChatDrop.SENDER_LIMIT)
             self.engine.visibility = core.visibility
             core.change_listeners.append(self.changed)
 
