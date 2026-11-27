@@ -24,3 +24,5 @@ web/test-results/
 src/switchboard/static/app/
 .coverage*
 htmlcov/
+# private deployment overlay: real hostnames, ids and branding for one instance
+deploy/local/

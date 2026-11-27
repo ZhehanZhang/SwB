@@ -66,6 +66,8 @@ def test_slack_assist_uses_actual_target_visibility_and_thread(opened):
         (url, prompt), = fires
         assert url.endswith("/trig_docsmain/fire")
         assert "Assist only" in prompt and "<<<swb-untrusted" in prompt
+        assert prompt.splitlines()[0] == "name-ustranger (external) in Slack #chan-cpublic01 asks: Can we fix this?"
+        assert prompt.index("swb-untrusted>>>") < prompt.index(push["permalink"]) < prompt.index("Assist only")
         handle = handle_of(prompt)
         assert core.inbox.handle(handle)["meta"]["channel_mode"]["permalink"] == push["permalink"]
         assert "requires its conversation handle" in error_text(call(client, KEY_FULL, "slack_post", {

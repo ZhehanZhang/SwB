@@ -501,7 +501,7 @@ def test_authorize_returns_to_full_request_and_accepts_session(make, no_spa_buil
     next_path = parse_qs(location.query)["next"][0]
     assert location.path == "/login" and next_path == "/authorize?" + redirect.request.url.query.decode()
     login = client.get(redirect.headers["location"])
-    assert "Ask your agent for a sign-in link." in login.text
+    assert "<h1>Ask your agent for a sign-in link</h1>" in login.text
     assert 'type="password"' not in login.text and "history.replaceState" in login.text
     assert sign_in(client).status_code == 204
     consent_page = client.get(next_path)

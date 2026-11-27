@@ -8,7 +8,7 @@ export type DataStateProps = (
   | { kind: "empty"; message?: string }
 ) & { className?: string }
 
-const messages = { loading: "Loading…", error: "Couldn’t load data.", empty: "No results." }
+const messages = { loading: "Loading…", error: "Data unavailable.", empty: "0 results" }
 
 export function DataState(props: DataStateProps) {
   const { kind, className, message = messages[kind] } = props

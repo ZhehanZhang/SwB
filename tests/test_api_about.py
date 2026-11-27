@@ -54,6 +54,18 @@ def test_about_reports_the_installed_plugin_distribution_version(make, monkeypat
     }
 
 
+def test_release_label_and_build_commit_are_reported_by_all_version_endpoints(make):
+    commit = "ABCDEF0" * 5 + "12345"
+    _, client = make(env={**default_env(), "SWITCHBOARD_RELEASE": " 1.0.0-canary ", "GIT_COMMIT": commit})
+    expected = "1.0.0-canary+abcdef0"
+
+    assert client.get("/healthz").json()["version"] == expected
+    assert client.get("/api/settings", headers=OWNER).json()["version"] == expected
+    about = client.get("/api/about", headers=OWNER).json()
+    assert about["version"] == expected and about["commit"] == commit.lower()
+    assert {block["version"] for block in about["blocks"]} == {expected}
+
+
 def test_about_omits_invalid_environment_values_and_handles_missing_package(make, monkeypatch, tmp_path):
     def missing_package(name):
         raise PackageNotFoundError(name)

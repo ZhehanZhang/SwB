@@ -34,7 +34,8 @@ def test_group_saves_every_field_together_or_nothing(make, caplog):
     title, provider, fields = credentials.github_app("GITHUB_WEBHOOK_SECRET")
     path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
     page = client.get(path, headers=OWNER)
-    assert page.status_code == 200 and 'data-connector="github"' in page.text and "GitHub asks for" in page.text and "https://github.com/settings/apps" in page.text
+    assert page.status_code == 200 and 'data-connector="github"' in page.text and "For GitHub App." in page.text
+    assert "https://github.com/settings/apps" in page.text
     assert 'type="file"' in page.text and 'accept=".pem,.key,.txt"' in page.text and "Webhook secret" in page.text
     private_page(page)
     csrf = form_csrf(page)
@@ -45,7 +46,7 @@ def test_group_saves_every_field_together_or_nothing(make, caplog):
     assert missing.status_code == 400 and core.secret("GITHUB_APP_ID") is None
     ok = client.post(path, data={"csrf": csrf, "GITHUB_APP_ID": " 12345 ", "GITHUB_APP_PRIVATE_KEY": PKCS1.replace("\n", "")},
                      headers={**OWNER, "Origin": PUBLIC})
-    assert ok.status_code == 200 and "GitHub credentials saved" in ok.text
+    assert ok.status_code == 200 and "2 credentials saved" in ok.text
     assert core.secret("GITHUB_APP_ID") == "12345" and core.secret("GITHUB_APP_PRIVATE_KEY") == normalize_pem(PKCS1)
     assert core.secret("GITHUB_WEBHOOK_SECRET") is None
     assert client.post(path, data={"csrf": csrf, "GITHUB_APP_ID": "1", "GITHUB_APP_PRIVATE_KEY": PKCS1}, headers=OWNER).status_code == 410
@@ -85,9 +86,18 @@ def test_claim_assets_are_served(make, name):
 
 def test_every_provider_mark_is_bundled():
     for p in credentials.PROVIDERS.values():
-        assert (credentials.MARKS / f"{p.mark}.svg").exists() and "asks for" in credentials.requester(p.key)
+        mark = credentials.mark(p.key)
+        assert f'data-connector="{p.key}"' in mark
+        if avatar := credentials.agent_avatar(p.key):
+            assert (credentials.BUNDLED_AVATARS / avatar).is_file() and f'src="/avatars/{avatar}"' in mark
+        else:
+            assert (credentials.MARKS / f"{p.mark}.svg").is_file() and f"class=\"mark mark-{p.key}\"" in mark
+
+
 def test_owner_key_installs_get_the_grouped_form(make):
-    core, client = make(config=base_config(auth={}, public_url=None), env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
+    config = base_config(auth={})
+    config.pop("public_url")
+    core, client = make(config=config, env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
     title, provider, fields = credentials.github_app()
     path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
     page = client.get(path)

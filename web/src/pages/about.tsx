@@ -8,15 +8,17 @@ import { SwbIcon } from "@/components/swb-icon"
 import { isObject, requestJson } from "@/lib/api"
 
 const repository = "https://github.com/ZhehanZhang/SwB"
+const mainFiles = `${repository}/blob/main`
 const openSourceLinks = [
-  ["License", "Apache-2.0", repository],
+  ["License", "Apache-2.0", `${mainFiles}/LICENSE`],
   ["Repository", "github.com/ZhehanZhang/SwB", repository],
-  ["Contributing", "GitHub repository", repository],
+  ["Contributing", "", `${mainFiles}/CONTRIBUTING.md`],
+  ["Code of Conduct", "", `${mainFiles}/CODE_OF_CONDUCT.md`],
   ["Website", "swb.one", "https://swb.one"],
 ] as const
 const projectLinks = [
-  ["Docs", "README.md", `${repository}/blob/main/README.md`],
-  ["Security policy", "GitHub repository", repository],
+  ["Docs", "README.md", `${mainFiles}/README.md`],
+  ["Security policy", "", `${mainFiles}/SECURITY.md`],
 ] as const
 
 type About = {
@@ -41,7 +43,7 @@ const link = `${row} group`
 function ExternalLinks({ links }: { links: readonly (readonly [string, string, string])[] }) {
   return links.map(([title, detail, href]) => (
     <li key={title}>
-      <a className={link} href={href} target="_blank" rel="noreferrer" aria-label={`${title}: ${detail}`}>
+      <a className={link} href={href} target="_blank" rel="noreferrer" aria-label={detail ? `${title} ${detail}` : title}>
         <span className={label}>{title}</span>
         <span className={`${value} pe-2 group-hover:underline`}>{detail}</span>
         <ExternalLink aria-hidden className="size-3.5" />
@@ -69,10 +71,7 @@ export function AboutPage() {
     <div className="w-full max-w-[1104px] space-y-6 text-body-sm md:space-y-8 md:pt-2">
       <header className="flex items-center gap-3 md:gap-4">
         <SwbIcon className="size-10 md:size-12" />
-        <div>
-          <p className="font-display text-display-lg">{PRODUCT_NAME}</p>
-          <p className="text-muted-foreground">A switchboard for the agents you already use.</p>
-        </div>
+        <p className="font-display text-display-lg">{PRODUCT_NAME}</p>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:gap-x-16">
@@ -80,7 +79,7 @@ export function AboutPage() {
           <section aria-labelledby="about-version">
             <h2 id="about-version" className="text-heading-md">Version</h2>
             {about.isPending ? <DataState kind="loading" /> : about.isError ? (
-              <DataState kind="error" message="Couldn’t load build information." onRetry={() => void about.refetch()} />
+              <DataState kind="error" message="Build information unavailable." onRetry={() => void about.refetch()} />
             ) : (
               <dl className="mt-2">
                 <div className={row}>
@@ -118,7 +117,7 @@ export function AboutPage() {
                     </div>
                   ))}
                 </dl>
-              ) : <p className="mt-2 text-muted-foreground">No blocks enabled.</p>}
+              ) : <p className="mt-2 text-muted-foreground">0 enabled blocks</p>}
             </section>
           )}
         </div>
@@ -134,9 +133,8 @@ export function AboutPage() {
             <ul className="mt-2">
               <ExternalLinks links={projectLinks} />
               <li>
-                <Link className={link} to="/audit" aria-label="Audit trail">
-                  <span className={label}>Audit trail</span>
-                  <span className={`${value} pe-2 group-hover:underline`}>Audit</span>
+                <Link className={link} to="/audit">
+                  <span className={`${label} col-span-2 group-hover:underline`}>Audit</span>
                   <ChevronRight aria-hidden className="size-3.5" />
                 </Link>
               </li>
@@ -144,7 +142,7 @@ export function AboutPage() {
           </section>
 
           <p className="mt-3 text-muted-foreground md:mt-8">
-            SwB isn't affiliated with Slack, Discord, Telegram, Anthropic, OpenAI, xAI, GitHub or Capy.
+            SwB is an independent open source project. Slack, Discord, Telegram, Anthropic, OpenAI, xAI, GitHub and Capy names and logos belong to their owners.
           </p>
         </div>
       </div>

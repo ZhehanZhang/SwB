@@ -17,7 +17,7 @@ from .personas import persona_post_args
 if TYPE_CHECKING:
     from .engine import SlackEngine as Core
 
-DEFAULT_ICON = "default.png"
+DEFAULT_ICON = "swb.png"
 DEFAULT_EMOJI = ":electric_plug:"
 """The bundled neutral icon (no letters) for posts whose app has no picture of its own."""
 log = logging.getLogger("switchboard.slack")

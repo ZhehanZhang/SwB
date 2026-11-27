@@ -13,6 +13,7 @@ import { LogoTile } from "@/components/logo-tile"
 import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
 import { ApiError, isObject, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
+import { channelModesQuery, hasGitHubConnection } from "@/lib/channel-modes"
 import { connectionQuery } from "@/lib/connections"
 import { addPasskey, listPasskeys, removePasskey, supportsPasskeys } from "@/lib/owner-auth"
 
@@ -45,11 +46,7 @@ const passkeysQuery = queryOptions({
   queryFn: ({ signal }) => listPasskeys(signal),
 })
 
-const commands = [
-  ["swb up", "Start the MCP server"],
-  ["swb status", "Server status and next steps"],
-  ["switchboard log", "Recent audit entries"],
-] as const
+const commands = ["swb up", "swb status", "switchboard log"] as const
 const rowClass = "grid min-h-[41px] grid-cols-[minmax(88px,24%)_1fr_auto] items-center gap-x-3 border-b text-body-sm"
 const headingClass = "text-heading-md"
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
@@ -73,6 +70,7 @@ export function SettingsPage() {
   const settings = useQuery(settingsQuery)
   const passkeys = useQuery(passkeysQuery)
   const connections = useQueries({ queries: connectionPlatforms.map(connectionQuery) })
+  const modes = useQuery(channelModesQuery)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState("")
   const csrf = session?.csrf ?? null
@@ -101,7 +99,7 @@ export function SettingsPage() {
     mutationFn: () => requestJson("/auth/logout", (value): value is undefined => value === undefined, { method: "POST", csrf }),
     onSuccess: () => markSignedOut(client),
     onError: (error) => {
-      if (!(error instanceof SignedOutError)) toast.error("Couldn’t sign out.")
+      if (!(error instanceof SignedOutError)) toast.error("Sign-out failed")
     },
   })
   const pending = register.isPending || remove.isPending
@@ -122,12 +120,11 @@ export function SettingsPage() {
       </section>
 
       <section aria-labelledby="settings-run">
-        <h2 id="settings-run" className={headingClass}>Run it</h2>
+        <h2 id="settings-run" className={headingClass}>Commands</h2>
         <ul className="mt-5 rounded-lg bg-surface-sunken px-4 py-3">
-          {commands.map(([command, description]) => (
-            <li key={command} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          {commands.map(command => (
+            <li key={command} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
               <code className="min-w-0 wrap-break-word text-mono-md">{command}</code>
-              <span className="col-start-1 row-start-2 pb-1 text-body-sm text-muted-foreground sm:col-start-auto sm:row-start-auto sm:pb-0">{description}</span>
               <CopyButton text={command} label={`Copy ${command}`} />
             </li>
           ))}
@@ -137,12 +134,12 @@ export function SettingsPage() {
       <section aria-labelledby="settings-server">
         <h2 id="settings-server" className={headingClass}>Server</h2>
         {settings.isPending ? <DataState kind="loading" />
-          : settings.isError ? <DataState kind="error" message="Couldn’t load server settings." onRetry={() => void settings.refetch()} />
+          : settings.isError ? <DataState kind="error" message="Server settings unavailable" onRetry={() => void settings.refetch()} />
             : (
               <dl className="mt-2">
                 <div className={rowClass}>
                   <dt className="text-muted-foreground">MCP endpoint</dt>
-                  <dd className="min-w-0 wrap-anywhere font-mono text-xs">{endpoint ?? "Not available"}</dd>
+                  <dd className="min-w-0 wrap-anywhere font-mono text-xs">{endpoint}</dd>
                   {endpoint && <CopyButton text={endpoint} label="Copy MCP endpoint" />}
                 </div>
                 <div className={rowClass}>
@@ -166,8 +163,11 @@ export function SettingsPage() {
       <section aria-labelledby="settings-connections">
         <h2 id="settings-connections" className={headingClass}>Connections</h2>
         <ul className="mt-2">
-          {connectionPlatforms.map((platform, index) => {
+          {[...connectionPlatforms, "github" as const].map((platform, index) => {
             const connection = connections[index]
+            const state = platform === "github"
+              ? modes.isPending ? "loading" : modes.isError ? "unavailable" : hasGitHubConnection(modes.data) ? "connected" : "not_configured"
+              : connection.data?.state ?? (connection.isPending ? "loading" : "unavailable")
             return (
               <li key={platform}>
                 <Link to={`/connections/${platform}`} {...preloadOnTouch(`/connections/${platform}`)}
@@ -176,7 +176,7 @@ export function SettingsPage() {
                     <LogoTile kind={platform} />
                     <span className="group-hover:underline">{connectionNames[platform]}</span>
                   </span>
-                  <ConnectionStatus state={connection.data?.state ?? (connection.isPending ? "loading" : "unavailable")} />
+                  <ConnectionStatus state={state} />
                   <ChevronRight aria-hidden className="size-3.5" />
                 </Link>
               </li>
@@ -223,11 +223,9 @@ export function SettingsPage() {
             </Button>
           )}
         </div>
-        {session?.methods.oidc && <p className="mt-2 text-[13px] text-muted-foreground">{session.methods.oidc.name} is configured.</p>}
         {passkeys.isPending ? <DataState kind="loading" message="Loading passkeys…" />
-          : passkeys.isError ? <DataState kind="error" message="Couldn’t load passkeys." onRetry={() => void passkeys.refetch()} />
-            : passkeys.data === null ? <DataState kind="empty" message="Passkey management is not available on this server." />
-              : passkeys.data.length === 0 ? null
+          : passkeys.isError ? <DataState kind="error" message="Passkeys unavailable" onRetry={() => void passkeys.refetch()} />
+            : !passkeys.data?.length ? null
                 : (
                   <ul className="mt-2">
                     {passkeys.data.map((passkey) => (
@@ -249,12 +247,11 @@ export function SettingsPage() {
                     ))}
                   </ul>
                 )}
-        {passkeys.data && !passkeysSupported && <p className="mt-2 text-xs text-muted-foreground">Passkeys can’t be added in this browser.</p>}
         {remove.isError && (
           <p role="alert" className="mt-3 text-sm text-destructive">
             {remove.error instanceof ApiError && remove.error.code === "last_method"
-              ? "Add another sign-in method before removing your last passkey."
-              : "Couldn’t remove the passkey."}
+              ? "Add a sign-in method first."
+              : "Passkey removal failed"}
           </p>
         )}
         {adding && (
@@ -268,16 +265,13 @@ export function SettingsPage() {
             </label>
             <Button variant="ghost" size="sm" disabled={pending} onClick={() => setAdding(false)}>Cancel</Button>
             <Button type="submit" size="sm" disabled={pending || !csrf}>{register.isPending ? "Adding…" : "Add passkey"}</Button>
-            {register.isError && <p role="alert" className="w-full text-sm text-destructive">Couldn’t add a passkey.</p>}
+            {register.isError && <p role="alert" className="w-full text-sm text-destructive">Passkey setup failed</p>}
           </form>
         )}
         {session?.via === "access" ? (
-          <div className="mt-1 flex min-h-[26px] flex-wrap items-center justify-between gap-2">
-            <p className="text-body-sm text-muted-foreground">Signed in through Access.</p>
-            <Button asChild variant="ghost" size="sm">
-              <a href="/cdn-cgi/access/logout"><LogOut aria-hidden /> Sign out</a>
-            </Button>
-          </div>
+          <Button asChild variant="ghost" size="sm" className="mt-2 -ml-3">
+            <a href="/cdn-cgi/access/logout"><LogOut aria-hidden /> Sign out</a>
+          </Button>
         ) : session?.signed_in && (
           <Button variant="ghost" size="sm" className="mt-2 -ml-3" disabled={!csrf || logout.isPending} onClick={() => logout.mutate()}>
             <LogOut aria-hidden /> Sign out

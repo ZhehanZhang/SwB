@@ -22,7 +22,7 @@ from switchboard.cli import build_parser as client_parser
 from switchboard.core import Switchboard
 from switchboard.credentials import MARKS, github_app, slack_workspace
 from switchboard.modes import ACTIONS, MODES
-from switchboard.slack.avatar_files import BUNDLED_AVATARS, find_avatar
+from switchboard.slack.avatar_files import BUNDLED_AVATARS, agent_avatar, find_avatar
 
 from inventory_config import config_items
 
@@ -34,6 +34,10 @@ WEB = ROOT / "web/src"
 
 def asset(*paths):
     return next((path.relative_to(ROOT).as_posix() for path in paths if path is not None and path.is_file()), None)
+
+
+def avatar_path(name):
+    return find_avatar(agent_avatar(name) or f"{name}.png")
 
 
 def item(kind, slug, label, icon=None, **fields):
@@ -60,7 +64,7 @@ def block_items(core):
                 labels[env] = html.unescape(match[1])
         yield item(
             "block", use, manifest.title,
-            asset(MARKS / f"{use}.svg", WEB / "assets" / f"{use}.svg", MARKS / f"{mark}.svg", find_avatar(f"{use}.png")),
+            asset(MARKS / f"{use}.svg", WEB / "assets" / f"{use}.svg", MARKS / f"{mark}.svg", avatar_path(use)),
             use=use,
             block_kind=manifest.kind,
             connect_target=next(iter(block.connect_kinds), None) or next((client for client in CLIENTS if client.startswith(f"{use}-")), None),
@@ -68,15 +72,21 @@ def block_items(core):
         )
 
 
-def provider_and_avatar_items(agent_specs):
-    providers = Agents.build(None, agent_specs).specs
+def provider_and_avatar_items(block_types):
+    providers = Agents.build(None, (spec for block in block_types.values() for spec in block.manifest.agents)).specs
+    labels = {
+        path.name: block.manifest.title for use, block in block_types.items() if (path := avatar_path(use))
+    }
+    labels.update({"swb.png": pages.CLASSIC_TITLE, "switchboard.png": pages.CLASSIC_TITLE})
     for provider in providers.values():
-        yield item("provider", provider.id, provider.label, asset(find_avatar(f"{provider.id}.png")))
-    for path in BUNDLED_AVATARS.iterdir():
+        path = avatar_path(provider.id)
+        if path is not None:
+            labels[path.name] = provider.label
+        yield item("provider", provider.id, provider.label, asset(path))
+    for path in BUNDLED_AVATARS.glob("*.png"):
         if path.is_file():
-            provider = providers.get(path.stem)
-            label = provider.label if provider else pages.CLASSIC_TITLE if path.stem == "switchboard" else path.stem
-            yield item("avatar", path.name, label, asset(path), sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+            yield item("avatar", path.name, labels.get(path.name, path.stem), asset(path),
+                       sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
 def page_items(routes):
@@ -148,7 +158,7 @@ async def generate():
             tools = await core.blocks["mcp"].mcp.list_tools()
             rows = [
                 *block_items(core),
-                *provider_and_avatar_items(spec for block in block_types.values() for spec in block.manifest.agents),
+                *provider_and_avatar_items(block_types),
                 *page_items(app.starlette.routes),
                 *command_items(),
                 *(item("mode", mode, mode, category="channel_mode") for mode in MODES),

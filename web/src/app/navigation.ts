@@ -14,7 +14,7 @@ export const utilitySections = [
 
 export const sections = [...primarySections, ...utilitySections, { name: "About", to: "/about", icon: Info }] as const
 
-export const connectionNames = { slack: "Slack", discord: "Discord", telegram: "Telegram" } as const
+export const connectionNames = { slack: "Slack", discord: "Discord", telegram: "Telegram", github: "GitHub" } as const
 export type ConnectionPlatform = keyof typeof connectionNames
 
 export function isConnectionPlatform(value: string | undefined): value is ConnectionPlatform {

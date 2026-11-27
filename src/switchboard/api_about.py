@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Mapping
 from datetime import datetime
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -43,9 +44,16 @@ def _build_date(value: str) -> str:
     return "unknown"
 
 
+def release_version(env: Mapping[str, str]) -> str | None:
+    if label := env.get("SWITCHBOARD_RELEASE", "").strip():
+        commit = _build_commit(env.get("GIT_COMMIT", ""))
+        return label if commit == "unknown" else f"{label}+{commit[:7]}"
+    return installed_version()
+
+
 def about(request: Request) -> JSONResponse:
     core = request.app.state.core
-    release = installed_version()
+    release = release_version(core.cfg.env)
     block_types = {name: str(core.cfg.blocks[name].get("use") or name) for name in core.blocks}
     block_versions = dict.fromkeys(BLOCKS, release)
     plugin_types = set(block_types.values()) - BLOCKS.keys()

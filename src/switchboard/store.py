@@ -120,7 +120,8 @@ CREATE TABLE IF NOT EXISTS owner_passkeys (
   public_key BLOB NOT NULL,
   sign_count INTEGER NOT NULL,
   created_at REAL NOT NULL,
-  last_used_at REAL
+  last_used_at REAL,
+  rp_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS audit (
@@ -224,6 +225,8 @@ def _migrate(db: sqlite3.Connection) -> None:
     db.execute("DROP TABLE IF EXISTS login_failures")
     if "target" not in {r[1] for r in db.execute("PRAGMA table_info(handles)")}:
         db.execute("ALTER TABLE handles ADD COLUMN target TEXT")
+    if "rp_id" not in {r[1] for r in db.execute("PRAGMA table_info(owner_passkeys)")}:
+        db.execute("ALTER TABLE owner_passkeys ADD COLUMN rp_id TEXT")
     db.execute("CREATE TABLE IF NOT EXISTS alias_use (alias TEXT NOT NULL, agent TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, last_at REAL NOT NULL, PRIMARY KEY(alias, agent))")
     tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     if "delegations" in tables:

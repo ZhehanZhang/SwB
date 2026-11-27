@@ -1,24 +1,23 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="SwB, say swib. A switchboard for the agents you already use." width="100%">
+  <img src="docs/assets/hero.svg" alt="SwB connects the agents you already use." width="100%">
 </p>
 
-SwB is a self-hosted switchboard for your assistants and agents. Claude, ChatGPT, Grok, Capy and your coding agents
-stay where they already run. SwB connects them over MCP, so they share projects and memory, hand each other work,
-and hear back in real time.
+SwB gives your agents one place to share memory and hand off work.
+
+Agents connect through MCP, a standard way for agents to use tools. The web console shows how messages move between agents and channels.
 
 <p align="center">
   <img src="docs/assets/connected.svg" alt="Slack, Discord, Telegram and GitHub patched into one project, out to Claude Projects, a ChatGPT dot, Grok, a Capy Captain, Claude Code and Codex" width="100%">
 </p>
 
-## Why SwB
+## Use SwB
 
-1. **It connects, it doesn't host.** Your agents stay in their own apps and terminals.
-2. **Real-time conversations.** Pushes wake the receiver, and replies land where the question was asked.
-3. **Shared projects.** Memory, routing and visibility span every system attached to a project.
-4. **Agents set themselves up.** `connect` walks them through it, and you only paste a token into a one-time link.
-5. **Safe by construction.** Trust comes from platform identity, and everything is private until you share it. Each conversation has a turn cap and every action is audited.
-6. **Open standards.** MCP, MCP events, Standard Webhooks and OAuth 2.1 with CIMD.
-7. **Small to run.** One process and one SQLite file.
+Give your agents access to the projects they work on. A project keeps related messages and memory together.
+
+Ask an agent to run `connect` to set up a connection. Enter a token on the page the agent opens for you.
+
+Use the web console to see where a message came from and where it went.
+Use [channel modes](docs/guide.md#channel-modes) to choose how SwB handles channel messages.
 
 ## See it work
 
@@ -29,14 +28,6 @@ Project finds the result later in the project's memory.
   <img src="docs/assets/flow-message.svg" alt="Eight steps from a Slack message through SwB to a ChatGPT dot and back, then a Claude Project reading the result" width="100%">
 </p>
 
-<p align="center">
-  <img src="docs/assets/shot-switchboard.png" alt="The SwitchBoard overview: channels in, projects, agents out" width="100%">
-</p>
-<p align="center">
-  <img src="docs/assets/shot-agents.png" alt="The Agents screen" width="75%">
-  <img src="docs/assets/shot-mobile.png" alt="The SwitchBoard overview on mobile" width="21%">
-</p>
-
 ## Quick start
 
 ~~~bash
@@ -44,12 +35,11 @@ Project finds the result later in the project's memory.
 uvx swb-one up --tunnel cloudflare
 ~~~
 
-This prints a public HTTPS MCP URL through a Cloudflare Quick Tunnel. Use `--tunnel tailscale` for Tailscale Funnel,
-or leave out `--tunnel` for `http://127.0.0.1:8870/mcp`. You don't need a config file. Blocks turn on from the
-credentials in your environment, and `/healthz` lists anything that's missing. The installed command is `swb`.
+The command opens a public HTTPS URL through a Cloudflare quick tunnel. Use `--tunnel tailscale` for a private connection. Omit `--tunnel` to use `http://localhost:8787/mcp`.
 
-For Docker, Compose with automatic HTTPS, Railway, Render or Fly.io, see [deploying](deploy/README.md). Clients that
-need OAuth, such as Claude Projects and ChatGPT, also need [owner sign-in](docs/guide.md#authentication-and-protection).
+Use `https://swb.example.com` as a sample public URL for a deployment. See [deployment options](deploy/README.md) and [owner sign-in](docs/guide.md#authentication-and-protection).
+
+See [server addresses](docs/guide.md#server-addresses) to move an instance to a new URL.
 
 ## Connections
 
@@ -69,7 +59,7 @@ Ask any connected agent to call `connect`, or run `swb connect <kind>`.
 | GitHub | Webhook secret | Signed webhooks |
 | [Muse](docs/muse.md) | Device pairing | Bridge replies |
 
-Logos in the figures only show which integrations exist and don't imply affiliation or endorsement.
+SwB is an independent project. Logos identify the available connections.
 
 ## How it works
 

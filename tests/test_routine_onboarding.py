@@ -80,7 +80,7 @@ def test_self_registration_link_takes_the_token_once(tmp_path):
         assert "isn't valid" in error_text_of(lambda: bad.claim("nope"))
         core.clock.t += 1801
         _, expired, _ = claim(c, held["link"])
-        assert expired.status_code == 410 and "this link has expired" in expired.text
+        assert expired.status_code == 410 and "<h1>Link expired</h1>" in expired.text
     finally:
         c.__exit__(None, None, None)
 
@@ -100,7 +100,7 @@ def test_registration_replaces_only_the_same_claude_projects_active_claim(tmp_pa
         second = payload(call(c, tok, "routine_register", again))
         assert second["name"] == first["name"] and second["superseded"] == [first["name"]]
         _, replaced, _ = claim(c, first["link"])
-        assert replaced.status_code == 410 and "this link was replaced by a newer registration; use the latest link" in replaced.text
+        assert replaced.status_code == 410 and "<h1>Use the latest link</h1>" in replaced.text
         pending = payload(call(c, tok, "routine_list"))["pending"]
         assert {p["routine_id"] for p in pending} == {"trig_01B", "trig_01OTHER"}
         path, page, csrf = claim(c, second["link"])
@@ -136,7 +136,7 @@ def test_registration_reads_projects_first_and_refuses_near_duplicates(tmp_path)
         assert fresh["pending"] and fresh["creates_project"]
         assert "beacon-web" not in {p.slug for p in core.projects.list()}
         path, page, csrf = claim(c, made["link"])
-        assert "Created when you save" in page.text
+        assert '<p class="scope">For beacon-web in Beacon Web (trig_01NEW).</p>' in page.text
         assert c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER).status_code == 200
         p = core.projects.get("beacon-web")
         assert p.name == "Beacon web" and p.links["claude_project"] == "Beacon Web"
@@ -168,7 +168,8 @@ def test_routines_can_share_a_pending_project_and_save_in_either_order(tmp_path,
             path, page, csrf = claim(c, reg["link"])
             assert page.status_code == 200
             saved = c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER)
-            assert saved.status_code == 200 and ("which was just created" in saved.text) == (i == 0)
+            title = "Routine and project saved" if i == 0 else "Routine saved"
+            assert saved.status_code == 200 and f"<h1>{title}</h1>" in saved.text
             p = core.projects.get("garden")
             assert p.name == "Garden" and p.description == "A seed calendar" and p.links == {"claude_project": "Garden Planner"}
             assert payload(call(c, tok, "project_list"))["pending_projects"] == []
@@ -218,7 +219,8 @@ def test_project_routine_refused_with_text_is_woken_without_it(tmp_path):
         assert payload(call(c, STATIC_KEY, "routine_pickup", {}))["conversation"] is None
         assert payload(call(c, tok, "routine_pickup", {"routine": "claude"}))["conversation"] is None
         got = payload(call(c, tok, "routine_pickup", {"routine": "trig_BEACON"}))
-        assert got["conversation"] == out["conversation"] and got["text"].startswith("deploy status?") and 'context_pack(project="beacon")' in got["text"]
+        assert got["conversation"] == out["conversation"] and got["text"].splitlines()[0] == "Capy asks: deploy status?"
+        assert 'context_pack(project="beacon")' in got["text"]
         assert got["trust"] == "owner" and got["from"]["agent"] == "capy"
         assert payload(call(c, tok, "routine_pickup", {}))["conversation"] is None
         big = "y" * 30_000
@@ -263,9 +265,9 @@ def test_pickup_filters_by_claude_project_and_switchboard_project(tmp_path):
             assert payload(call(c, tok, "routine_pickup", filters))["conversation"] is None
         assert payload(call(c, STATIC_KEY, "routine_pickup", {"claude_project": "Beacon Ops"}))["conversation"] is None
         got = payload(call(c, tok, "routine_pickup", {"claude_project": " bEacon Ops ", "project": "beacon", "routine": "trig_01OPS"}))
-        assert got["conversation"] == b["conversation"] and got["text"].startswith("ops")
+        assert got["conversation"] == b["conversation"] and got["text"].splitlines()[0] == "Capy asks: ops"
         got = payload(call(c, tok, "routine_pickup", {"claude_project": "web operations"}))
-        assert got["conversation"] == a["conversation"] and got["text"].startswith("web")
+        assert got["conversation"] == a["conversation"] and got["text"].splitlines()[0] == "Capy asks: web"
         for routine in ("claude-beacon", "claude-beacon-ops"):
             out = payload(call(c, STATIC_KEY, "send", {"task": "again", "to": routine}))
             assert payload(call(c, tok, "routine_pickup", {"project": "beacon"}))["conversation"] == out["conversation"]

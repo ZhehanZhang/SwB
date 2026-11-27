@@ -21,7 +21,7 @@ test("audit uses discovered labels and hides older raw Captain metadata", () => 
   assert.equal(auditText(event("delegate", { target: captain })), "Delegated to Captain")
   assert.equal(auditText(event("delegate", { target: `captain Conductor (${jam})` })), "Delegated to Conductor")
   assert.equal(auditText(event("route_set", { metadata: { agent: "github", repo_count: 1, target_name: captain } })),
-    "Routed GitHub (1 repo) to Captain")
+    "Routed 1 GitHub repository to Captain")
   assert.equal(auditText(event("route_set", { metadata: { agent: "slack", target_name: jam } })), "Routed Slack to Captain")
   assert.equal(auditText(event("route_set", { metadata: { agent: "slack", target_name: "Conductor" } })), "Routed Slack to Conductor")
 })
