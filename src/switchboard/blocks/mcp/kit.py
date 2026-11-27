@@ -183,7 +183,7 @@ class Kit:
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
                         final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
-                        to_owner: Annotated[bool, Field(description="For a triage conversation with notify_owner, send a note to the owner mailbox instead of replying in-thread")] = False) -> dict[str, Any]:
+                        to_owner: Annotated[bool, Field(description="Send an owner note from a forwarded Slack message or a triage conversation with notify_owner enabled.")] = False) -> dict[str, Any]:
             return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
@@ -197,7 +197,7 @@ class Kit:
             return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block, owner_facing=owner_facing)
 
         @mcp.tool(title="Your inbox", description="Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
-        async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
+        async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=50)] = 50,
                         project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
             return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)
 

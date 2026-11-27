@@ -158,12 +158,14 @@ class LimitedServer(MCPServer):
             if isinstance(exc, UnexpectedToolError) or not isinstance(error := exc.__cause__, ValidationError):
                 raise
             properties = (self._tool_input_schema(name) or {}).get("properties", {})
-            missing, invalid = [], []
+            parts, missing, invalid = [], [], []
             for issue in error.errors(include_input=False, include_context=False, include_url=False):
                 loc = issue["loc"]
-                if loc and loc[0] in properties:
+                if name == "inbox" and loc == ("limit",) and issue["type"] in ("greater_than_equal", "less_than_equal"):
+                    limits = properties["limit"]
+                    parts.append(f"Use a limit from {limits['minimum']} to {limits['maximum']}.")
+                elif loc and loc[0] in properties:
                     (missing if issue["type"] == "missing" else invalid).append(loc[0])
-            parts = []
             if missing:
                 parts.append(f"Provide {', '.join(dict.fromkeys(missing))}.")
             if invalid:

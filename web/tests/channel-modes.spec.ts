@@ -1,16 +1,34 @@
 import { expect, test } from "@playwright/test"
 
+test("settings shows the saved passkey and its last used date", async ({ page }, testInfo) => {
+  await page.goto("/settings")
+  const passkeys = page.getByRole("region", { name: "Sign-in" })
+  await expect(passkeys.getByText("Fixture passkey", { exact: true })).toBeVisible()
+  await expect(passkeys.getByText("Last used Jan 2, 2026", { exact: true })).toBeVisible()
+  await passkeys.screenshot({ path: testInfo.outputPath("settings-passkey.png"), animations: "disabled" })
+})
+
+test("a direct agent URL opens a mailbox absent from the registered list", async ({ page }, testInfo) => {
+  await page.goto("/agents/alpha")
+  const agent = page.getByRole("dialog", { name: "alpha" })
+  await expect(agent.getByRole("heading", { name: "alpha", exact: true })).toBeVisible()
+  await expect(agent.getByText("Mailbox", { exact: true })).toBeVisible()
+  await agent.screenshot({ path: testInfo.outputPath("agent-mailbox.png"), animations: "disabled" })
+})
+
 test("connection and project controls use the owner mode API", async ({ page, context }) => {
   const unsigned = await context.request.get("/api/modes", { headers: { "cf-access-jwt-assertion": "invalid" } })
   expect(unsigned.status()).toBe(401)
   expect(unsigned.headers()["cache-control"]).toBe("no-store")
 
-  const response = page.waitForResponse(value => new URL(value.url()).pathname === "/api/modes" && value.request().method() === "GET")
+  const response = page.waitForResponse(value => new URL(value.url()).pathname === "/api/connections/github")
   await page.goto("/settings")
-  expect((await response).headers()["cache-control"]).toBe("no-store")
+  const status = await response
+  expect(status.headers()["cache-control"]).toBe("no-store")
+  expect((await status.json()).state).toBe("disconnected")
   const github = page.getByRole("link", { name: /GitHub/ })
   await expect(github).toBeVisible()
-  await expect(github).toContainText("Setup pending")
+  await expect(github).toContainText("Disconnected")
   await page.getByRole("link", { name: /Discord/ }).click()
   const mode = page.getByRole("combobox", { name: "Mode for deployments" })
   await expect(mode).toHaveValue("assist")
@@ -47,6 +65,7 @@ test("connection and project controls use the owner mode API", async ({ page, co
     ["slack", "#planning", "watch"],
   ]) {
     await page.goto(`/connections/${platform}`)
+    if (platform === "github") await expect(page.getByText("Disconnected", { exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Channel modes", exact: true })).toBeVisible()
     const table = page.getByRole("table", { name: "Channel modes", exact: true })
     await expect(table.getByRole("combobox", { name: `Mode for ${channel}` })).toHaveValue(value)

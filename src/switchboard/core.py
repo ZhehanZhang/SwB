@@ -94,7 +94,7 @@ class Switchboard:
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
         self.connections = Connections(self.store, self.cfg.key_scopes)
-        if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None:
+        if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None and any(migrated):
             log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
@@ -748,7 +748,7 @@ class Switchboard:
             if channel_mode["mode"] == "assist":
                 kw["text"] = (kw.get("text") or "")[:self.modes.assist_max_chars]
         if to_owner and (verb != "reply" or h is None or h["destination"] != "mailbox" or not h["meta"].get("listen")):
-            raise CoreRefused(MODE_REQUIRED, "to_owner is only allowed when replying to a listen conversation")
+            raise CoreRefused(MODE_REQUIRED, "Use a forwarded Slack message or a triage conversation with owner notes enabled.")
         if h is not None and h["destination"] == "mailbox":
             if verb == "reply":
                 if to_owner:

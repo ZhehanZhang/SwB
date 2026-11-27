@@ -256,9 +256,8 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         return pages.claim_message_page(message, status)
 
     async def claim_submission(request: Request, *, unavailable: str = "", browser_only: bool = False) -> tuple[str | None, Any, str, Response | None]:
-        csrf_error = JSONResponse({"error": "csrf"}, status_code=403)
         if not core.auth.origin_ok(request):
-            return None, None, "", csrf_error
+            return None, None, "", core.auth.csrf_refused(request, target=CLAIM_PATH)
         csrf_key = None
         auth = request.headers.get("authorization")
         if auth is not None and not browser_only:
@@ -279,7 +278,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             return None, None, "", claim_error(request, 403, "claim_owner_key", "Use the SwB owner key")
         if (csrf_key is not None and (not unavailable or not core.cfg.owner_sign_in)
                 and not await core.auth.valid_csrf(request, csrf_key)):
-            return None, None, "", csrf_error
+            return None, None, "", core.auth.csrf_refused(request, target=CLAIM_PATH)
         if unavailable:
             return None, None, "", claim_error(request, 410, "claim_unavailable", unavailable)
         return actor, await request.form(), core.auth.csrf(csrf_key) if csrf_key is not None else "", None
@@ -370,7 +369,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                           outcome="ok", target=name)
         for block in chats:
             await block.secret_saved("bot_token")
-        label = claim["label"] or "Token"
+        label = claim["label"] or ("Webhook URL" if claim["kind"] == "url" or claim["require_https"] else "Token")
         return pages.claim_message_page(f"{label} saved", 200)
 
     async def connect_code(request: Request) -> Response:
