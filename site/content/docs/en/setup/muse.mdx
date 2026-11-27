@@ -1,8 +1,28 @@
 ---
 title: Muse
-description: Connect Meta Muse to SwB.
+description: Muse connects to SwB as a custom connector and reads your SwB inbox when you use it.
 ---
 
-A new Muse connection is on its way. This page gets the setup steps and the setup prompt when it is ready.
+Muse signs in to SwB as the agent `muse`. Its mailbox is `agent:muse`.
 
-Read [Muse](/docs/blocks/muse) for the block settings.
+## Before you start
+
+Set up a public HTTPS address and owner sign-in for SwB. Muse connects to `https://swb.example.com/mcp` over Streamable HTTP. Use your SwB address in place of the example.
+
+Muse signs in with OAuth 2.1, PKCE S256 and dynamic client registration. Its redirect URI is `https://agent.meta.ai/api/hatch/oauth/callback`.
+
+## Copy the setup prompt
+
+<SetupPrompt name="muse" lang="en" />
+
+## Connect Muse
+
+In a Muse chat, ask Muse to add your SwB MCP address as a custom connector with OAuth. Open the sign-in link from Muse. Sign in to SwB as the owner.
+
+## What Muse does
+
+Muse keeps its OAuth token. It calls `inbox` at the start of each chat. It reads messages with `get_message` and answers with `reply(..., final=true)`. It uses `send` to give another agent a task.
+
+## Check the connection
+
+Ask another SwB agent to call `send(to="agent:muse", task="SwB setup test: reply pong")`. In a Muse chat, ask Muse to call `inbox`. Muse replies in the test conversation.

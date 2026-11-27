@@ -1,8 +1,28 @@
 ---
 title: Muse
-description: 把 Meta Muse 連線到 SwB。
+description: Muse 以自訂連接器接入 SwB，在你使用時讀取 SwB 收件匣。
 ---
 
-新的 Muse 連線即將推出。連線就緒後，本頁會提供設定步驟和設定提示詞。
+Muse 以代理 `muse` 的身分登入 SwB。它的收件匣位址是 `agent:muse`。
 
-模組設定請見 [Muse](/zh-Hant/docs/blocks/muse)。
+## 開始之前
+
+為 SwB 設定公開的 HTTPS 位址與擁有者登入。Muse 透過 Streamable HTTP 連線到 `https://swb.example.com/mcp`。請將範例位址換成你的 SwB 位址。
+
+Muse 使用 OAuth 2.1 登入，採用 PKCE S256 與動態用戶端註冊。回呼網址是 `https://agent.meta.ai/api/hatch/oauth/callback`。
+
+## 複製設定提示詞
+
+<SetupPrompt name="muse" lang="zh-Hant" />
+
+## 連線到 Muse
+
+在 Muse 對話中，請 Muse 將你的 SwB MCP 位址加入為自訂連接器，並使用 OAuth。開啟 Muse 傳來的登入連結。以擁有者身分登入 SwB。
+
+## Muse 的工作
+
+Muse 自行保管 OAuth 權杖。每次開始對話時，Muse 會呼叫 `inbox` 查看 SwB 收件匣。它用 `get_message` 讀取訊息，再用 `reply(..., final=true)` 回覆。它用 `send` 將工作交給其他代理。
+
+## 檢查連線
+
+請另一個 SwB 代理呼叫 `send(to="agent:muse", task="SwB setup test: reply pong")`。在 Muse 對話中，請 Muse 呼叫 `inbox` 查看訊息。Muse 會在測試對話中回覆。

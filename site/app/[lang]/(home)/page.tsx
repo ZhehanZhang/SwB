@@ -5,6 +5,7 @@ import { AgentExchange } from '@/components/agent-exchange';
 import { GitHubMark } from '@/components/github-mark';
 import { HeroTitle } from '@/components/hero-title';
 import { CopyInstall } from '@/components/landing-controls';
+import { SetupPicker } from '@/components/setup-picker';
 import { SwitchboardHero } from '@/components/switchboard-hero';
 import { exchangeCopy } from '@/lib/exchange-copy';
 import { isLocale, localize } from '@/lib/i18n';
@@ -39,14 +40,14 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
         <section className="swb-hero-grid">
           <div className="swb-hero-copy">
             <HeroTitle stem={copy.hero.stem} endings={copy.hero.endings} between={copy.hero.between}
-              names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Captain', dots: 'Dot', muse: 'Muse' }} />
+              names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Captain', dots: 'ChatGPT dots' }} />
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <CopyInstall lang={lang} />
+              <SetupPicker lang={lang} modal />
               <a className="swb-button border hover:bg-fd-muted" href={repository}>
                 <GitHubMark />GitHub
               </a>
             </div>
-            <p className="mt-4 text-sm text-fd-muted-foreground">{copy.openSource}</p>
+            <div className="mt-3"><CopyInstall lang={lang} /></div>
           </div>
           <SwitchboardHero label={copy.boardAlt} lang={lang} prompts={prompts()} labels={copy.panel} />
         </section>

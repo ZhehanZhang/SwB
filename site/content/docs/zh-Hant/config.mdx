@@ -29,8 +29,6 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 `swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 尋找 `.env`。這四個指令用 `--url` 指定伺服器位址。
 
-`swb muse-bridge` 需要 `--url`。用 `--state-dir` 指定存放橋接檔案的資料夾。
-
 所有伺服器指令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 從指定的資料夾讀取 `.env` 和設定。需要存取資料庫的指令也從該資料夾尋找執行個體的資料。
 
 直接執行 `swb serve` 時，SwB 會讀取終端機環境和設定檔。其他伺服器指令預設採用目前的資料夾。

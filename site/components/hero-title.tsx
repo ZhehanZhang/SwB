@@ -13,16 +13,6 @@ type Props = {
 
 const agentPairs = trips.map(([a, b], n) => ({ a, b, n })).filter(({ a, b }) => a !== 'slack' && a !== 'github' && b !== 'slack' && b !== 'github');
 
-function useTick(ms: number) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const timer = setInterval(() => setTick((value) => value + 1), ms);
-    return () => clearInterval(timer);
-  }, [ms]);
-  return tick;
-}
-
 function Slot({ options, current, names }: { options: MarkKind[]; current: MarkKind; names: Props['names'] }) {
   return (
     <span className="swb-slot">
@@ -40,11 +30,32 @@ const starts = [...new Set(agentPairs.map(({ a }) => a))];
 const ends = [...new Set(agentPairs.map(({ b }) => b))];
 
 export function HeroTitle({ stem, endings, between, names }: Props) {
-  const word = useTick(2400) % endings.length;
-  useTick(250);
-  const now = typeof window === 'undefined' ? 0 : clock();
-  const step = Math.floor(now / STEP) % trips.length;
-  const pair = [...agentPairs].reverse().find(({ n }) => n <= step) ?? agentPairs[agentPairs.length - 1];
+  const [word, setWord] = useState(0);
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let timer: number | undefined;
+    function onMotionChange() {
+      window.clearInterval(timer);
+      if (motion.matches) {
+        setWord(0);
+        setStep(0);
+        return;
+      }
+      timer = window.setInterval(() => {
+        const now = clock();
+        setWord(Math.floor(now / 2.4) % endings.length);
+        setStep(Math.floor(now / STEP) % trips.length);
+      }, 100);
+    }
+    onMotionChange();
+    motion.addEventListener('change', onMotionChange);
+    return () => {
+      window.clearInterval(timer);
+      motion.removeEventListener('change', onMotionChange);
+    };
+  }, [endings.length]);
+  const pair = agentPairs.findLast(({ n }) => n <= step) ?? agentPairs[0];
   return (
     <>
       <h1 className="text-display-xl swb-hero-title">
@@ -55,8 +66,14 @@ export function HeroTitle({ stem, endings, between, names }: Props) {
           ))}
         </span>
       </h1>
-      <p className="swb-between mt-6 text-lg">
-        {between[0]}<Slot options={starts} current={pair.a} names={names} />{between[1]}<Slot options={ends} current={pair.b} names={names} />{between[2]}
+      <p className="swb-between mt-6 text-base sm:text-lg" data-hero-pair={pair.n}>
+        <span className="swb-between-text">{between[0]}</span>
+        <span className="swb-pair">
+          <Slot options={starts} current={pair.a} names={names} />
+          <span className="swb-between-text">{between[1]}</span>
+          <Slot options={ends} current={pair.b} names={names} />
+        </span>
+        <span className="swb-between-text">{between[2]}</span>
       </p>
     </>
   );

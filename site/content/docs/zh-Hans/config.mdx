@@ -29,8 +29,6 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 `swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 查找 `.env`。这四条命令用 `--url` 指定服务器地址。
 
-`swb muse-bridge` 需要 `--url`。用 `--state-dir` 指定存放桥接文件的目录。
-
 所有服务器命令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 从指定目录读取 `.env` 和配置。需要访问数据库的命令也从该目录查找实例数据。
 
 直接运行 `swb serve` 时，SwB 读取终端环境和配置文件。其他服务器命令默认使用当前目录。

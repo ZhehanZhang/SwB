@@ -1,127 +1,93 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MarkTile, type MarkKind } from './mark-tile';
+import { MarkTile } from './mark-tile';
 import type { Locale } from '@/lib/i18n';
-import { exchangeCopy, type Party } from '@/lib/exchange-copy';
+import { agentNames, exchangeCopy, exchangeScenes } from '@/lib/exchange-copy';
 
-const starters: Party[] = ['claude', 'grok-bot', 'capy', 'dots'];
-const targets: Party[] = ['claude', 'grok-bot', 'capy', 'dots', 'muse'];
-const app: Record<Party, string> = { claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy', dots: 'ChatGPT', muse: 'Muse' };
-const STEP = 900;
+const MESSAGE_DELAY = 1250;
+const SCENE_DELAY = 3600;
+const TRANSCRIPT_LENGTH = 8;
+const firstFrame = { scene: 0, shown: 1 };
+const stillFrame = { scene: 0, shown: exchangeScenes[0].messages.length };
+const transcript = exchangeScenes.flatMap(({ app, messages }, scene) =>
+  messages.map(([speaker, text], index) => ({ app, scene, index, speaker, text })),
+);
+const loop = [...transcript, ...transcript];
 
-function usePlay(key: string, steps: number) {
-  const [step, setStep] = useState(0);
+function usePlayback() {
+  const [frame, setFrame] = useState(firstFrame);
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setStep(steps);
-      return;
-    }
-    setStep(0);
-    const timers = Array.from({ length: steps }, (_, i) => setTimeout(() => setStep(i + 1), STEP * (i + 1)));
-    return () => timers.forEach(clearTimeout);
-  }, [key, steps]);
-  return step;
-}
-
-function Picker({ label, options, value, onChange, names }: {
-  label: string; options: Party[]; value: Party; onChange: (party: Party) => void; names: Record<Party, string>;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={label}>
-      <span className="mr-1 text-sm text-fd-muted-foreground">{label}</span>
-      {options.map((party) => (
-        <button key={party} type="button" aria-pressed={value === party} title={names[party]} aria-label={names[party]}
-          className="swb-pick" onClick={() => onChange(party)}>
-          <MarkTile kind={party as MarkKind} />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Window({ party, title, children }: { party: MarkKind; title: string; children: React.ReactNode }) {
-  return (
-    <div className={`swb-win swb-win-${party} min-w-0 overflow-hidden rounded-xl border`}>
-      <div className="swb-win-bar flex items-center gap-2 border-b px-3.5 py-2.5">
-        <MarkTile kind={party} className="swb-win-mark" />
-        <span className="text-sm font-semibold">{title}</span>
-      </div>
-      <div className="swb-win-body space-y-3 px-4 py-4">{children}</div>
-    </div>
-  );
-}
-
-function From({ party, name, text }: { party: Party; name: string; text: string }) {
-  return (
-    <>
-      <span className="swb-from"><MarkTile kind={party as MarkKind} className="swb-from-mark" />{name}</span>
-      {text}
-    </>
-  );
-}
-
-function Bubble({ show, mine, children }: { show: boolean; mine?: boolean; children: React.ReactNode }) {
-  return <p className={`swb-bubble ${mine ? 'swb-bubble-mine' : ''} ${show ? 'swb-bubble-in' : ''}`}>{children}</p>;
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let timer: ReturnType<typeof setTimeout>;
+    let frame = firstFrame;
+    const play = () => {
+      const complete = frame.shown === exchangeScenes[frame.scene].messages.length;
+      timer = setTimeout(() => {
+        frame = complete
+          ? { scene: (frame.scene + 1) % exchangeScenes.length, shown: 1 }
+          : { scene: frame.scene, shown: frame.shown + 1 };
+        setFrame(frame);
+        play();
+      }, complete ? SCENE_DELAY : MESSAGE_DELAY);
+    };
+    const update = () => {
+      clearTimeout(timer);
+      frame = motion.matches ? stillFrame : firstFrame;
+      setFrame(frame);
+      if (!motion.matches) play();
+    };
+    update();
+    motion.addEventListener('change', update);
+    return () => {
+      clearTimeout(timer);
+      motion.removeEventListener('change', update);
+    };
+  }, []);
+  return frame;
 }
 
 export function AgentExchange({ lang }: { lang: Locale }) {
-  const copy = exchangeCopy[lang];
-  const [mode, setMode] = useState<'agents' | 'slack'>('agents');
-  const [from, setFrom] = useState<Party>('claude');
-  const [to, setTo] = useState<Party>('grok-bot');
-  const target = to === from ? targets.find((party) => party !== from)! : to;
-  const step = usePlay(`${mode}-${from}-${target}`, mode === 'agents' ? 4 : 6);
-  const task = copy.tasks[target];
+  const { scene, shown } = usePlayback();
+  const { app } = exchangeScenes[scene];
+  const { you } = exchangeCopy[lang];
+  const end = transcript.length + 1 + transcript.findIndex((entry) => entry.scene === scene && entry.index === shown - 1);
+  const entries = loop.slice(end - TRANSCRIPT_LENGTH, end);
 
   return (
     <div className="swb-exchange mt-10">
-      <div className="mb-6 flex flex-wrap items-center gap-x-8 gap-y-4">
-        <div className="swb-tabs inline-flex rounded-lg border p-1" role="tablist">
-          {(['agents', 'slack'] as const).map((key) => (
-            <button key={key} type="button" role="tab" aria-selected={mode === key} className="swb-tab" onClick={() => setMode(key)}>
-              {copy.modes[key]}
-            </button>
-          ))}
+      <div className="swb-win overflow-hidden rounded-xl border" aria-hidden="true">
+        <div className="swb-win-bar flex items-center gap-2 border-b px-4">
+          <MarkTile kind={app} className="swb-win-mark" />
+          <span className="text-sm font-semibold">{app === 'slack' ? 'Slack #launch' : agentNames[app]}</span>
         </div>
-        {mode === 'agents' && (
-          <>
-            <Picker label={copy.from} options={starters} value={from} onChange={setFrom} names={copy.names} />
-            <Picker label={copy.to} options={targets.filter((party) => party !== from)} value={target} onChange={setTo} names={copy.names} />
-          </>
-        )}
-      </div>
-      {mode === 'agents' ? (
-        <div className="swb-exchange-grid">
-          <Window party={from} title={app[from]}>
-            <Bubble show mine>{copy.ask(copy.names[target], task.ask)}</Bubble>
-            <Bubble show={step >= 1}>{copy.sent(copy.names[target])}</Bubble>
-            <Bubble show={step >= 4}><From party={target} name={copy.names[target]} text={task.reply} /></Bubble>
-          </Window>
-          <div className="swb-exchange-link" aria-hidden="true">
-            <span className={`swb-exchange-pulse ${step >= 1 && step < 3 ? 'swb-go' : ''} ${step >= 3 && step < 4 ? 'swb-back' : ''}`} />
-            <img src="/avatars/swb.png" alt="" className="swb-exchange-hub" />
-          </div>
-          <Window party={target} title={app[target]}>
-            <Bubble show={step >= 2}><From party={from} name={copy.names[from]} text={lang === 'en' ? `${task.ask[0].toUpperCase()}${task.ask.slice(1)}.` : `${task.ask}。`} /></Bubble>
-            <Bubble show={step >= 3} mine>{task.reply}</Bubble>
-          </Window>
-        </div>
-      ) : (
-        <Window party="slack" title="#launch">
-          {copy.slack.map(([who, text, name], i) => (
-            <div key={i} className={`swb-slack-line flex gap-3 ${step >= i ? 'swb-bubble-in' : 'swb-bubble'}`}>
-              {who === 'you'
-                ? <span className="swb-you grid size-8 shrink-0 place-items-center rounded-md text-sm font-semibold" aria-hidden="true">{copy.you.slice(0, 1)}</span>
-                : <MarkTile kind={who} className="swb-line-avatar" />}
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">{who === 'you' ? copy.you : name ?? copy.names[who as Party]}</p>
-                <p className="text-[15px] leading-relaxed">{text}</p>
+        <div className="swb-win-body relative min-h-0 overflow-hidden">
+          <div className="absolute inset-x-4 bottom-4 sm:inset-x-5">
+            {entries.map(({ app: channel, scene: source, index, speaker, text }) => (
+              <div key={`${source}/${index}`}
+                className={`swb-win-entry flex gap-3${source === scene ? ' swb-win-message' : ''}${index === 0 ? ' swb-win-break' : ''}`}>
+                {speaker === 'you'
+                  ? <span className="swb-win-you grid size-8 shrink-0 place-items-center rounded-md text-sm font-semibold" aria-hidden="true">{you.slice(0, 1)}</span>
+                  : speaker === 'capy'
+                    ? <span className="swb-mark-tile swb-mark-avatar swb-win-avatar" aria-hidden="true"><img src="/avatars/capy-96.webp" alt="" /></span>
+                    : <MarkTile kind={speaker} className="swb-win-avatar" />}
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    {speaker === 'you' ? you : agentNames[speaker]}
+                    {channel === 'slack' && speaker !== 'you' && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
+                  </p>
+                  <p className="text-[15px] leading-6">{text[lang]}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </Window>
-      )}
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="sr-only">
+        {exchangeScenes[0].messages.map(([speaker, text], index) => (
+          <p key={index}><strong>{speaker === 'you' ? you : agentNames[speaker]}</strong> {text[lang]}</p>
+        ))}
+      </div>
     </div>
   );
 }
