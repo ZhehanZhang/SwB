@@ -6,11 +6,11 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult
 
-from conftest import OWNER, STATIC_KEY, base_config, call, error_text, payload, rpc
+from conftest import CHANNEL_KEY, OWNER, STATIC_KEY, base_config, call, error_text, payload, rpc
 from switchboard.blocks import BLOCKS
 from switchboard.blocks.mcp import PRINCIPAL_SCOPE, WRITE
 from switchboard.blocks.mcp.policy import (
-    BLOCK_ROLES, CHAT_ROLES, CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, MUTATION_ROLES, OWNER_REQUIRED, POLICY_REQUIRED, ROUTE_REQUIRED,
+    BLOCK_ROLES, CHAT_ROLES, CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, MUTATION_ROLES, OWNER_REQUIRED, POLICY_REQUIRED, READ_ROLES, ROUTE_REQUIRED,
     TARGET_REQUIRED,
 )
 
@@ -41,6 +41,42 @@ async def test_every_mutating_tool_declares_a_role(server):
     _, _, mcp = server
     annotated = {t.name for t in await mcp.list_tools() if not (t.annotations and t.annotations.read_only_hint)}
     assert set(mcp.roles) == annotated | CURSOR_TOOLS
+
+
+def test_tools_list_and_dispatch_share_owner_and_key_roles(server, paired):
+    core, client, mcp = server
+    core.cfg.key_scopes["scoped"] = ("project:example",)
+    scoped = pair(client, "scoped")
+    core.projects.create(slug="example", name="Example")
+
+    def names(key):
+        response = rpc(client, key, "tools/list")
+        assert response.status_code == 200
+        return {tool["name"] for tool in response.json()["result"]["tools"]}
+
+    owner = names(STATIC_KEY)
+    assert owner == {tool.name for tool in client.portal.call(mcp.list_tools)}
+    owner_only = {name for name, role in mcp.roles.items() if role == "owner"}
+    owner_only |= {name for name, (role, _) in READ_ROLES.items() if role == "owner"}
+    assert {"connect_list", "visibility_list", "login_link", "project_create", "space_mode", "telegram_provision"} <= owner_only
+    paired_names = names(paired)
+    assert names(scoped) == paired_names == owner - owner_only
+    assert {"routes_set", "reply", "inbox", "memory_read", "memory_write", "github_comment"} <= paired_names
+    for key in (paired, scoped):
+        for name in owner_only:
+            assert OWNER_REQUIRED in error_text(call(client, key, name))
+    payload(call(client, scoped, "memory_write", {
+        "scope": "project:example", "namespace": "notes", "title": "Fixture", "body": "Project note",
+    }))
+
+    core.cfg.key_tools["scoped"] = ("visibility_list", "memory_search")
+    assert names(scoped) == {"memory_search"}
+    assert OWNER_REQUIRED in error_text(call(client, scoped, "visibility_list"))
+    assert "may call only" in error_text(call(client, scoped, "memory_write"))
+
+    denied = rpc(client, CHANNEL_KEY, "tools/list")
+    assert denied.status_code == 403 and denied.json()["error"] == "insufficient_scope"
+    assert "result" not in denied.json()
 
 
 @pytest.mark.parametrize(("name", "role"), sorted({**MUTATION_ROLES, **PROVIDER_ROLES}.items()))

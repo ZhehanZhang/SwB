@@ -30,9 +30,8 @@ from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
-from .policy import (AUTH_REQUIRED, CONVERSATION_NOT_FOUND, CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
-                     POLICY_REQUIRED, READ_ROLES, REFERENCE_ARGS, ROUTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED,
-                     TOOL_REQUIRED, Role, mutation_roles, read_refusal)
+from .policy import (CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED, READ_ROLES, ROUTE_REQUIRED, SCOPE_REQUIRED,
+                     TARGET_REQUIRED, TOOL_REQUIRED, Role, catalog_refusal, mutation_roles, read_refusal)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -93,8 +92,7 @@ def principal_of(request: Any) -> Principal | None:
 
 
 class LimitedServer(MCPServer):
-    """An MCP server that holds a key to its tool allowlist (auth.key_tools): tools/list shows only those tools and
-    tools/call refuses any other."""
+    """Apply the same tool and role policy to discovery and dispatch."""
 
     modes: ChannelModes
     roles: dict[str, Role]
@@ -109,10 +107,9 @@ class LimitedServer(MCPServer):
         p = principal_of(getattr(request_context, "request", None))
         tool = next((t for t in await self.list_tools() if t.name == name), None)
         role = self.roles.get(name)
-        read = bool(tool and tool.annotations and tool.annotations.read_only_hint)
-        reason = await self._refusal(p, name, role, arguments,
-                                     writes=tool is not None and not read,
-                                     requires_read_role=bool(read and tool and REFERENCE_ARGS.intersection(tool.input_schema.get("properties", {}))))
+        reason = catalog_refusal(p, name, tool, role)
+        if reason is None and p is not None:
+            reason = await self._argument_refusal(p, name, role, arguments)
         if reason:
             self._audit_refusal(p, tool.name if tool else None, reason)
             if reason == OWNER_REQUIRED and p is not None and p.kind == "connect":
@@ -146,21 +143,10 @@ class LimitedServer(MCPServer):
                 parts.append(f"Check {', '.join(dict.fromkeys(invalid))}.")
             raise ToolError(" ".join(parts) or "Check the tool arguments.") from error
 
-    async def _refusal(self, p: Principal | None, name: str, role: Role | None, arguments: dict[str, Any], *,
-                       writes: bool, requires_read_role: bool) -> str | None:
-        if p is None:
-            return AUTH_REQUIRED
-        if p.tools is not None and name not in p.tools:
-            return TOOL_REQUIRED
-        if writes and role is None:
-            return POLICY_REQUIRED
-        if requires_read_role and name not in READ_ROLES:
-            return CONVERSATION_NOT_FOUND
+    async def _argument_refusal(self, p: Principal, name: str, role: Role | None, arguments: dict[str, Any]) -> str | None:
         if name in READ_ROLES:
             return read_refusal(self.modes.core, p, name, arguments)
         owner = p.is_unrestricted_owner
-        if role == "owner" and not owner:
-            return OWNER_REQUIRED
         if role == "route" and not owner:
             agent = arguments.get("agent")
             if not isinstance(agent, str) or agent.strip().lower() != p.source:
@@ -198,10 +184,7 @@ class LimitedServer(MCPServer):
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
         p = principal_of(getattr(ctx, "request", None))
-        if p is None or not p.is_unrestricted_owner:
-            out.tools = [t for t in out.tools if t.name != "login_link"]
-        if p is not None and p.tools is not None:
-            out.tools = [t for t in out.tools if t.name in p.tools]
+        out.tools = [t for t in out.tools if catalog_refusal(p, t.name, t, self.roles.get(t.name)) is None]
         return out
 
     def _check_mode(self, p: Principal, name: str, arguments: dict[str, Any]) -> None:
