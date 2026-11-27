@@ -6,10 +6,13 @@ import re
 import socket
 import stat
 import sys
+from contextlib import ExitStack
 from pathlib import Path
+from typing import Any
 
 from .harness import reply_text
-from .state import state_path
+from .memory import MEMORY_CONTENT_LIMIT, memory_filename, memory_source_key
+from .state import CompanionState, state_path
 
 STDIN_LIMIT = 1024 * 1024
 LINE_LIMIT = 64 * 1024
@@ -76,9 +79,67 @@ def _identifier(value: object) -> str:
     return value if isinstance(value, str) and _IDENTIFIER.fullmatch(value) else ""
 
 
+def _read_local(root: Path, parts: tuple[str, ...], limit: int) -> str | None:
+    with ExitStack() as stack:
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY
+        directory = os.open(root, flags)
+        stack.callback(os.close, directory)
+        for part in parts[:-1]:
+            directory = os.open(part, flags, dir_fd=directory)
+            stack.callback(os.close, directory)
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        stack.callback(os.close, fd)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > 4 * limit:
+            return None
+        with open(fd, encoding="utf-8", newline="", closefd=False) as stream:
+            text = stream.read(limit + 1)
+        return text if len(text) <= limit else None
+
+
+def _auto_memory(value: dict[str, Any]) -> dict[str, str] | None:
+    tool = value.get("tool_input")
+    raw = tool.get("file_path") if isinstance(tool, dict) else None
+    if value.get("tool_name") not in ("Write", "Edit", "MultiEdit") or not isinstance(raw, str):
+        return None
+    target = Path(raw)
+    if not target.is_absolute() or not memory_filename(target.name):
+        return None
+    if (state := CompanionState.load(state_path())) is not None and not state.memory_sync:
+        return None
+    target = target.resolve(strict=True)
+    if not memory_filename(target.name):
+        return None
+    default = Path.home() / ".claude"
+    config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or default).expanduser().resolve()
+    roots = tuple(dict.fromkeys((config, default.resolve())))
+    for root in roots:
+        if target.is_relative_to(root):
+            parts = target.relative_to(root).parts
+            if len(parts) == 4 and parts[0] == "projects" and parts[2] == "memory":
+                key = f"{parts[1]}/{parts[3]}"
+                if memory_source_key(key) and (content := _read_local(root, parts, MEMORY_CONTENT_LIMIT)) is not None:
+                    return {"path": key, "content": content, "kind": "auto-memory"}
+                return None
+    for root in roots:
+        try:
+            raw_settings = _read_local(root, ("settings.json",), 65_536)
+            settings = json.loads(raw_settings) if raw_settings is not None else None
+            directory = settings.get("autoMemoryDirectory") if isinstance(settings, dict) else None
+            if isinstance(directory, str) and directory:
+                custom = Path(directory).expanduser()
+                if custom.is_absolute() and (custom := custom.resolve(strict=True)) == target.parent:
+                    key = f"{custom.name}/{target.name}"
+                    if memory_source_key(key) and (content := _read_local(custom, (target.name,), MEMORY_CONTENT_LIMIT)) is not None:
+                        return {"path": key, "content": content, "kind": "auto-memory"}
+        except (OSError, ValueError, RuntimeError):
+            continue
+    return None
+
+
 def event_payload(
     harness: object, value: object, *, from_stdin: bool = False, pane_id: object = None,
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     if not isinstance(harness, str) or harness not in EVENT_STATES or not isinstance(value, dict):
         return None
     session, event = _identifier(value.get("session_id")), value.get("hook_event_name")
@@ -86,9 +147,16 @@ def event_payload(
         return None
     raw_notification = value.get("notification_type")
     notification = raw_notification if event == "Notification" and isinstance(raw_notification, str) else ""
-    if event_state(harness, event, notification) is None:
+    result: dict[str, Any] = {"harness": harness, "session_id": session, "hook_event_name": event}
+    if harness == "claude-code" and event == "PostToolUse":
+        memory = _auto_memory(value) if from_stdin else value.get("memory")
+        if (not isinstance(memory, dict) or memory.get("kind") != "auto-memory"
+                or not memory_source_key(memory.get("path")) or not isinstance(content := memory.get("content"), str)
+                or len(content) > MEMORY_CONTENT_LIMIT):
+            return None
+        result["memory"] = {key: memory[key] for key in ("path", "content", "kind")}
+    elif event_state(harness, event, notification) is None:
         return None
-    result = {"harness": harness, "session_id": session, "hook_event_name": event}
     if notification:
         result["notification_type"] = notification
     cwd = value.get("cwd" if from_stdin else "dir")

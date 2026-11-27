@@ -99,7 +99,7 @@ class Switchboard:
         if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None and any(migrated):
             log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
-        self.companions = Companions(self.store, self.audit)
+        self.companions = Companions(self.store, self.audit, self)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import socket
 import stat
 import sys
@@ -14,6 +15,8 @@ from switchboard.companion.caps.base import CompanionContext
 from switchboard.companion.caps.hooks import HooksCapability
 from switchboard.companion.harness import REPLY_MAX, Harness
 from switchboard.companion.hook import LINE_LIMIT, STDIN_LIMIT, event_payload, event_state, supported
+from switchboard.companion.memory import MEMORY_CONTENT_LIMIT, MEMORY_SYNC_SOURCE, sync_item
+from switchboard.companion.state import CompanionState
 
 
 @pytest.mark.parametrize(("agent", "event", "notification", "state"), [
@@ -110,9 +113,9 @@ def hook_home(monkeypatch):
 
 
 @asynccontextmanager
-async def receiver(home, ctx):
+async def receiver(home, ctx, **options):
     path = home / "hooks.sock"
-    task = asyncio.create_task(HooksCapability().run(ctx))
+    task = asyncio.create_task(HooksCapability(**options).run(ctx))
     try:
         async with asyncio.timeout(2):
             while True:
@@ -313,7 +316,7 @@ async def test_hook_completion_must_follow_a_wake_for_the_matching_agent(hook_ho
 
 @pytest.mark.parametrize(("harness", "filename", "events"), [
     ("claude-code", "channel/hooks/hooks.json",
-     "SessionStart UserPromptSubmit PreToolUse PermissionRequest Notification Stop StopFailure SessionEnd"),
+     "SessionStart UserPromptSubmit PreToolUse PostToolUse PermissionRequest Notification Stop StopFailure SessionEnd"),
     ("gemini", "integrations/gemini/hooks/hooks.json", "SessionStart BeforeAgent AfterAgent Notification SessionEnd"),
     ("codex", "integrations/codex/hooks.json",
      "SessionStart UserPromptSubmit PreToolUse PermissionRequest Stop Interrupt SessionEnd"),
@@ -322,10 +325,152 @@ def test_hook_package_commands(harness, filename, events):
     root = Path(__file__).resolve().parents[1]
     hooks = json.loads((root / filename).read_text())["hooks"]
     assert set(hooks) == set(events.split())
-    for groups in hooks.values():
+    for event, groups in hooks.items():
         assert groups[0]["hooks"] == [{
             "type": "command", "command": f"sh -c 'test -S \"${{SWB_COMPANION_HOME:-$HOME/.config/swb}}/hooks.sock\" && swb hook {harness}; exit 0'",
             "timeout": 1000 if harness == "gemini" else 1,
+            **({"async": True} if event == "PostToolUse" else {}),
         }]
     if harness == "gemini":
         assert json.loads((root / "integrations/gemini/gemini-extension.json").read_text())["name"] == "swb"
+    if harness == "claude-code":
+        assert hooks["PostToolUse"][0]["matcher"] == "Write|Edit|MultiEdit"
+
+
+@pytest.fixture
+def claude_home(hook_home, monkeypatch):
+    home = hook_home.with_name("home")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    path = home / ".claude" / "projects" / "-workspace-test" / "memory"
+    path.mkdir(parents=True)
+    return path
+
+
+def memory_event(path, tool="Write"):
+    return {"session_id": "test-123", "hook_event_name": "PostToolUse", "cwd": "/private/SwB",
+            "tool_name": tool, "tool_input": {"file_path": str(path), "content": "not the file"},
+            "transcript_path": "/private/transcript"}
+
+
+@pytest.mark.parametrize("tool", ["Write", "Edit", "MultiEdit"])
+def test_auto_memory_uses_resolved_file_and_sends_only_relative_path(claude_home, tool):
+    file = claude_home / "detail.md"
+    file.write_text("Read the current file.", encoding="utf-8")
+    alias = claude_home / "alias.md"
+    alias.symlink_to(file)
+    assert event_payload("claude-code", memory_event(alias, tool), from_stdin=True) == {
+        "harness": "claude-code", "session_id": "test-123", "hook_event_name": "PostToolUse", "dir": "SwB",
+        "memory": {"path": "-workspace-test/detail.md", "content": "Read the current file.", "kind": "auto-memory"},
+    }
+    assert event_payload("gemini", memory_event(file, tool), from_stdin=True) is None
+    assert event_payload("claude-code", memory_event(file, "Read"), from_stdin=True) is None
+
+
+def test_auto_memory_accepts_config_override_and_custom_setting(claude_home, monkeypatch):
+    home = claude_home.parents[3]
+    config = home / "config"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config))
+    file = config / "projects" / "repo" / "memory" / "fact.md"
+    file.parent.mkdir(parents=True)
+    file.write_text("Override.", encoding="utf-8")
+    payload = event_payload("claude-code", memory_event(file), from_stdin=True)
+    assert payload["memory"]["path"] == "repo/fact.md"
+
+    notes = home / "custom-notes"
+    notes.mkdir()
+    (home / ".claude" / "settings.json").write_text(json.dumps({"autoMemoryDirectory": "~/custom-notes"}), encoding="utf-8")
+    custom = notes / "fact.md"
+    custom.write_text("Custom.", encoding="utf-8")
+    assert event_payload("claude-code", memory_event(custom), from_stdin=True)["memory"] == {
+        "path": "custom-notes/fact.md", "content": "Custom.", "kind": "auto-memory",
+    }
+    alias = notes / "escape.md"
+    outside = home / "outside.md"
+    outside.write_text("Outside.", encoding="utf-8")
+    alias.symlink_to(outside)
+    assert event_payload("claude-code", memory_event(alias), from_stdin=True) is None
+
+
+def test_auto_memory_ignores_excluded_files_and_symlink_escapes(claude_home):
+    outside = claude_home.parents[3] / "outside"
+    outside.mkdir()
+    external = outside / "external.md"
+    external.write_text("Outside.", encoding="utf-8")
+    alias = claude_home / "escape.md"
+    alias.symlink_to(external)
+    sibling = claude_home.parents[1] / "symlinked-project"
+    sibling.mkdir()
+    (sibling / "memory").symlink_to(outside, target_is_directory=True)
+    (claude_home / "folder.md").mkdir()
+    os.mkfifo(claude_home / "pipe.md")
+    for name in ("MEMORY.md", "CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".hidden.md", "note.txt"):
+        (claude_home / name).write_text("Excluded.", encoding="utf-8")
+    (claude_home / "oversize.md").write_text("x" * (MEMORY_CONTENT_LIMIT + 1), encoding="utf-8")
+    for path in (external, sibling / "memory" / "external.md", *claude_home.iterdir()):
+        assert event_payload("claude-code", memory_event(path), from_stdin=True) is None
+
+
+def test_auto_memory_requires_the_local_users_file(claude_home, monkeypatch):
+    file = claude_home / "fact.md"
+    file.write_text("Owned by another user.", encoding="utf-8")
+    monkeypatch.setattr(os, "getuid", lambda: file.stat().st_uid + 1)
+    assert event_payload("claude-code", memory_event(file), from_stdin=True) is None
+
+
+@pytest.mark.parametrize(("text", "title", "body", "tags"), [
+    ("---\nname: 'Title'\ndescription: Other\ntype: feedback\n---\n\n# Heading\nText", "Title", "\n# Heading\nText", ["feedback"]),
+    ('---\r\ndescription: "A: B"\r\n---\r\nText', "A: B", "Text", []),
+    ("intro\n## Heading\nText", "Heading", "intro\n## Heading\nText", []),
+    ("---\nname: Broken\nText", "file", "---\nname: Broken\nText", []),
+])
+def test_auto_memory_frontmatter_and_title_fallback(text, title, body, tags):
+    assert sync_item("project/file.md", text) == {"source_key": "project/file.md", "title": title, "body": body, "tags": tags}
+
+
+async def test_auto_memory_hook_emits_large_utf8_payload(claude_home, hook_home):
+    text = "😀" * (MEMORY_CONTENT_LIMIT - len("# Title\n"))
+    file = claude_home / "fact.md"
+    file.write_text("# Title\n" + text, encoding="utf-8")
+    emitted = asyncio.Queue()
+
+    async def emit(kind, payload):
+        emitted.put_nowait((kind, payload))
+        return {}
+
+    async with receiver(hook_home, CompanionContext("companion", emit)):
+        await run_cli("claude-code", json.dumps(memory_event(file)).encode())
+        assert await asyncio.wait_for(emitted.get(), 2) == ("memory.sync", {
+            "source": MEMORY_SYNC_SOURCE, "dir": "SwB", "items": [
+                {"source_key": "-workspace-test/fact.md", "title": "Title", "body": "# Title\n" + text, "tags": []},
+            ],
+        })
+        assert emitted.empty()
+
+
+async def test_auto_memory_opt_out_and_hook_failure_are_silent(claude_home, hook_home):
+    file = claude_home / "fact.md"
+    file.write_bytes(b"\xff")
+    event = memory_event(file)
+    raw = json.dumps(event).encode()
+    async with asyncio.timeout(2):
+        await run_cli("claude-code", raw)
+    emitted = asyncio.Queue()
+
+    async def emit(kind, payload):
+        emitted.put_nowait(kind)
+        return {}
+
+    async with receiver(hook_home, CompanionContext("companion", emit), memory_sync=False) as socket_path:
+        async with asyncio.timeout(2):
+            await run_cli("claude-code", raw)
+        file.write_text("Private.", encoding="utf-8")
+        wire = event_payload("claude-code", event, from_stdin=True)
+        await send(socket_path, json.dumps(wire).encode() + b"\n")
+        state = CompanionState("https://swb.test", "cmp_" + "a" * 24, "swbd_" + "A" * 43,
+                               ("hooks",), str(hook_home / "drop"), memory_sync=False)
+        state.save(hook_home / "companion.json")
+        assert event_payload("claude-code", event, from_stdin=True) is None
+        await run_cli("claude-code", b'{"session_id":"test-123","hook_event_name":"SessionStart"}')
+        assert await asyncio.wait_for(emitted.get(), 2) == "hooks.session"
+        assert emitted.empty()
