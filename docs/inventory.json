@@ -345,6 +345,7 @@
         "--drop-dir",
         "--help",
         "--mcp",
+        "--name",
         "--no-run",
         "-h"
       ],
