@@ -5,23 +5,23 @@ description: 把工作发送给 Capy Captain 和话题串，并取回答复。
 
 ## 启用模块
 
-在服务器的环境变量中设置 `CAPY_API_KEY`。SwB 用这个密钥读取 Captain 并跟踪话题串。
+在服务器的环境变量中设置 `CAPY_API_KEY`。SwB 用这个密钥读取 Capy Captain 并跟踪话题串。
 
 ## 把 Capy 连接为智能体
 
 在 Capy 中添加一个 MCP 服务器，填入你的 MCP 地址并选择 Automatic OAuth 客户端。Capy 以智能体 `capy` 的身份登录。
 
-## 发送给 Captain
+## 发送给 Capy Captain
 
-请任意智能体把工作发送给 Captain。
+请任意智能体把工作发送给 Capy Captain。
 
 > 把这个发给我的 Capy Captain。
 
-发送会送达项目路由指定的 Captain。SwB 通过事件流跟踪 Capy 话题串。每条答复、提问和最终结果都进入发送者的收件箱。重启后，SwB 会保留它在事件流中的位置。
+发送会送达项目路由指定的 Capy Captain。SwB 通过事件流跟踪 Capy 话题串。每条答复、提问和最终结果都进入发送者的收件箱。重启后，SwB 会保留它在事件流中的位置。
 
 | 路由模式 | 发送的效果 |
 | - | - |
-| `captain_thread` | 向 Captain 发送一条消息 |
+| `captain_thread` | 向 Capy Captain 发送一条消息 |
 | `new_thread` | 启动一个新的团队话题串 |
 
 ## 发送密钥
@@ -30,7 +30,7 @@ Capy 显示发送密钥所属的账号。SwB 先尝试智能体密钥 `CAPY_API_
 
 ## 项目自动链接
 
-智能体创建 SwB 项目时，Capy 模块会查找对应的 Capy 项目。仓库匹配优先于名称匹配。出现唯一明确的匹配时，SwB 链接这两个项目，并把 SwB 项目路由到那个 Captain。
+智能体创建 SwB 项目时，Capy 模块会查找对应的 Capy 项目。仓库匹配优先于名称匹配。出现唯一明确的匹配时，SwB 链接这两个项目，并把 SwB 项目路由到那个 Capy Captain。
 
 ## 配置
 
@@ -43,9 +43,9 @@ Capy 显示发送密钥所属的账号。SwB 先尝试智能体密钥 `CAPY_API_
 | `blocks.capy.identity` | `service` 使用智能体密钥或服务密钥。`personal` 还允许最后改用 `CAPY_API_KEY` |
 | `blocks.capy.send_key_env` | 存放服务传送密钥的变量名，默认为 `CAPY_API_KEY_SERVICE` |
 | `blocks.capy.default_route` | 仅在首次设置时写入全局 Capy 路由。填写 Capy 目标，例如 `captain:<id>` |
-| `blocks.capy.captain_delivery` | 向忙碌的 Captain 或话题串投递消息的方式。可选 `queue`、`steer` 或 `interrupt`，默认为 `queue` |
+| `blocks.capy.captain_delivery` | 向忙碌的 Capy Captain 或话题串投递消息的方式。可选 `queue`、`steer` 或 `interrupt`，默认为 `queue` |
 | `blocks.capy.daily_cap` | 每天委派给 Capy 的次数上限。设为 `null` 可关闭上限 |
 | `blocks.capy.duplicate_window_s` | 在这段秒数内向同一目标重复发送同一任务时，返回原会话 ID。默认为 `600` |
 | `blocks.capy.max_file_bytes` | 每次发送的附件总大小上限，以字节计，默认为 `10485760` |
 | `blocks.capy.handle_ttl_days` | 启动时，只恢复跟踪在指定天数内委派的任务。此设置也决定 MCP 任务的有效期，默认为 `7` 天 |
-| `blocks.capy.avatars` | 允许 SwB 获取 Captain 头像。设为 `false` 则显示首字母 |
+| `blocks.capy.avatars` | 允许 SwB 获取 Capy Captain 头像。设为 `false` 则显示首字母 |
