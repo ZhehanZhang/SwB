@@ -2415,6 +2415,118 @@
       ]
     },
     {
+      "icon": null,
+      "id": "prompt:setup-capy-captain",
+      "kind": "prompt",
+      "label": "Set up Capy Captain",
+      "name": "setup-capy-captain"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-chatgpt",
+      "kind": "prompt",
+      "label": "Set up ChatGPT",
+      "name": "setup-chatgpt"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-claude",
+      "kind": "prompt",
+      "label": "Set up Claude",
+      "name": "setup-claude"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-claude-project",
+      "kind": "prompt",
+      "label": "Set up Claude Project",
+      "name": "setup-claude-project"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-coding-agent",
+      "kind": "prompt",
+      "label": "Set up Coding Agent",
+      "name": "setup-coding-agent"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-coordinator",
+      "kind": "prompt",
+      "label": "Set up Coordinator",
+      "name": "setup-coordinator"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-deploy",
+      "kind": "prompt",
+      "label": "Set up Deploy",
+      "name": "setup-deploy"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-discord",
+      "kind": "prompt",
+      "label": "Set up Discord",
+      "name": "setup-discord"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-dots",
+      "kind": "prompt",
+      "label": "Set up Dots",
+      "name": "setup-dots"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-github",
+      "kind": "prompt",
+      "label": "Set up GitHub",
+      "name": "setup-github"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-grok",
+      "kind": "prompt",
+      "label": "Set up Grok",
+      "name": "setup-grok"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-grok-bot",
+      "kind": "prompt",
+      "label": "Set up Grok Bot",
+      "name": "setup-grok-bot"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-mcp-client",
+      "kind": "prompt",
+      "label": "Set up MCP Client",
+      "name": "setup-mcp-client"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-muse",
+      "kind": "prompt",
+      "label": "Set up Muse",
+      "name": "setup-muse"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-slack",
+      "kind": "prompt",
+      "label": "Set up Slack",
+      "name": "setup-slack"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-telegram",
+      "kind": "prompt",
+      "label": "Set up Telegram",
+      "name": "setup-telegram"
+    },
+    {
       "icon": "src/switchboard/slack/avatars/capy.png",
       "id": "provider:capy",
       "kind": "provider",
@@ -2631,7 +2743,7 @@
       "name": "capy_wait"
     },
     {
-      "description": "When someone asks \"how do I connect/set up/link X to switchboard?\", call connect first. Kinds: capy-captain, chatgpt, claude, claude-project, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Follow each next step in order: run exact calls marked \"you\", give \"person\" steps and links to the owner, and call connect again to check progress. Pass choices such as a Captain, project or agent name in choose, never credentials; use the link for token entry.",
+      "description": "When someone asks \"how do I connect/set up/link X to switchboard?\", call connect first. Kinds: capy-captain, chatgpt, claude, claude-project, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Follow each next step in order: run exact calls marked \"you\", give \"person\" steps and links to the owner, and call connect again to check progress. Pass choices such as a Captain, project or agent name in choose, never credentials; use the link for token entry. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [

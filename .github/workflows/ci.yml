@@ -20,6 +20,7 @@ jobs:
       - run: uv run --no-sync pytest -q tests deploy/test_templates.py
       - run: uv run --no-sync ruff check
       - run: uv run --no-sync python scripts/inventory.py --check
+      - run: uv run --no-sync python scripts/sync_prompts.py --check
       - run: uv run --no-sync python scripts/inventory_coverage.py
       - uses: actions/setup-node@v6
         if: matrix.python-version == '3.13'
