@@ -98,6 +98,7 @@ def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, mon
     with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
         home = client.get("/")
         assert 'id="owner-setup"' in home.text
+        assert 'name="code" type="password" autocomplete="one-time-code"' in home.text
         assert setup_code not in home.text
         session = client.get("/auth/session").json()
         assert session["methods"]["setup"] and not session["signed_in"]

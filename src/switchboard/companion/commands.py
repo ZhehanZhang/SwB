@@ -11,7 +11,7 @@ from pathlib import Path
 from . import client
 from .caps import CAPABILITIES, registry
 from .mcp_config import local_servers
-from .state import CompanionError, CompanionState, base_url, state_path
+from .state import CompanionError, CompanionState, base_url, device_name, state_path
 
 
 def add_commands(commands: argparse._SubParsersAction) -> None:
@@ -20,6 +20,7 @@ def add_commands(commands: argparse._SubParsersAction) -> None:
     connect = actions.add_parser("connect", help="pair this device and run the companion")
     connect.add_argument("url", help="SwB server URL")
     connect.add_argument("--code", help="pairing code (entered privately by default)")
+    connect.add_argument("--name", help="device name (defaults to the hostname)")
     connect.add_argument("--no-run", action="store_true", help="pair this device and exit")
     connect.add_argument("--cap", action="append", choices=CAPABILITIES, help="opt in to a capability (repeat as needed)")
     connect.add_argument("--drop-dir", type=Path, help="use this Drop folder")
@@ -38,8 +39,6 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
         return
     if state is None and action == "run":
         raise CompanionError("Pair this device with swb companion connect.")
-    if state is not None and action == "connect":
-        raise CompanionError("Disconnect this device before pairing again.")
     loggers = [logging.getLogger(name) for name in ("httpx", "httpcore")]
     levels = [logger.level for logger in loggers]
     try:
@@ -47,6 +46,7 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
             logger.setLevel(logging.CRITICAL + 1)
         if action == "connect":
             url = base_url(args.url)
+            name = device_name(args.name) if args.name is not None else None
             enabled = tuple(dict.fromkeys(args.cap or ()))
             specs = tuple(args.mcp or ())
             if ("mcp" in enabled) != bool(specs):
@@ -61,10 +61,12 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
                 raise CompanionError(next(iter(unavailable.values())))
             for reason in unavailable.values():
                 print(reason, flush=True)
+            if state is not None and not asyncio.run(client.clear_if_revoked(state, path)):
+                raise CompanionError("Disconnect this device before pairing again.")
             code = args.code if args.code is not None else hidden_input("Pairing code: ")
             if not (code := code.strip()):
                 raise CompanionError("Enter a pairing code.")
-            state = asyncio.run(client.pair(url, code, caps, enabled, drop_dir))
+            state = asyncio.run(client.pair(url, code, caps, enabled, drop_dir, name=name))
             if specs:
                 state = replace(state, mcp_servers=specs)
             state.save(path)
@@ -87,6 +89,8 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
                 for name in servers:
                     print(name)
                 return
+            for reason in unavailable.values():
+                print(reason, flush=True)
         asyncio.run(client.run(state, path, caps))
     except KeyboardInterrupt:
         pass

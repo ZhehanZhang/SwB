@@ -3,12 +3,15 @@ import json
 import os
 import stat
 import sys
+from dataclasses import replace
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 
+from conftest import base_config, new_core
 from switchboard import cli
+from switchboard.app import create_app
 from switchboard.companion import client
 from switchboard.companion.caps.base import ActionSpec, Capability
 from switchboard.companion.state import CompanionError, CompanionState, state_path
@@ -79,6 +82,7 @@ def test_connect_pairs_with_hidden_code_and_persists_options(settings, tmp_path,
         return httpx.Response(200, json={"companion_id": COMPANION_ID, "device_key": KEY})
 
     monkeypatch.setattr(cli.getpass, "getpass", hidden)
+    monkeypatch.setattr(client.socket, "gethostname", lambda: "fixture-host")
     mock_client(monkeypatch, handler)
     drop = tmp_path / "my drop folder"
     cli.main(["companion", "connect", URL + "/", "--no-run", "--cap", "drop", "--drop-dir", str(drop)])
@@ -88,7 +92,7 @@ def test_connect_pairs_with_hidden_code_and_persists_options(settings, tmp_path,
     assert str(request.url) == URL + "/companion/pair"
     assert "authorization" not in request.headers
     payload = json.loads(request.content)
-    assert payload["code"] == CODE and payload["name"] and payload["platform"]
+    assert payload["code"] == CODE and payload["name"] == "fixture-host" and payload["platform"]
     assert [cap["id"] for cap in payload["capabilities"]] == ["drop"]
     state = CompanionState.load(settings)
     assert state == CompanionState(URL, COMPANION_ID, KEY, ("drop",), str(drop))
@@ -132,6 +136,92 @@ def test_connect_requires_opt_in_to_advertise_capabilities(settings, monkeypatch
     assert CompanionState.load(settings).enabled_caps == ()
     cli.main(["companion", "status"])
     assert capsys.readouterr().out == f"This device is paired as {COMPANION_ID}.\n"
+
+
+def test_connect_persists_device_name_for_hello(settings, monkeypatch):
+    async def handler(request):
+        assert json.loads(request.content)["name"] == "Desk companion"
+        if request.url.path.endswith("/pair"):
+            return httpx.Response(200, json={"companion_id": COMPANION_ID, "device_key": KEY})
+        return httpx.Response(401)
+
+    mock_client(monkeypatch, handler)
+    cli.main(["companion", "connect", URL, "--code", CODE, "--no-run", "--name", "  Desk companion  "])
+    assert CompanionState.load(settings).name == "Desk companion"
+    cli.main(["companion", "run"])
+
+
+@pytest.mark.parametrize("name", [" ", "a" * 121, "device\nname"])
+def test_connect_validates_device_name_before_pairing(settings, monkeypatch, capsys, name):
+    pair = AsyncMock()
+    monkeypatch.setattr(client, "pair", pair)
+    with pytest.raises(SystemExit) as error:
+        cli.main(["companion", "connect", URL, "--no-run", "--code", CODE, "--name", name])
+    assert error.value.code == 1 and "Enter a device name" in capsys.readouterr().err
+    pair.assert_not_awaited()
+
+
+def test_connect_replaces_pairing_revoked_while_stopped(settings, tmp_path, capy, monkeypatch, capsys):
+    core = new_core(tmp_path, capy, config=base_config(public_url=URL))
+    app = create_app(core)
+    factory = client._client
+
+    def make(url, key=None):
+        connection = factory(url, key)
+        connection._transport = httpx.ASGITransport(app=app)
+        return connection
+
+    def connect(code):
+        cli.main(["companion", "connect", URL, "--code", code, "--no-run"])
+
+    monkeypatch.setattr(client, "_client", make)
+    owner = {"origin": "core", "source": "owner", "client": "owner"}
+    connect(core.companions.mint(URL, **owner)["code"])
+    first = CompanionState.load(settings)
+    second_code = core.companions.mint(URL, **owner)["code"]
+    with pytest.raises(SystemExit) as error:
+        connect(second_code)
+    assert error.value.code == 1 and CompanionState.load(settings) == first
+    assert core.companions.list()[0]["last_seen"] is None
+    assert core.companions.revoke(first.companion_id, **owner)
+    connect(second_code)
+    assert CompanionState.load(settings).companion_id != first.companion_id
+    assert capsys.readouterr().out.splitlines() == [
+        "This device is paired.", "This device was disconnected.", "This device is paired.",
+    ]
+
+
+@pytest.mark.parametrize("response", [httpx.Response(401, text="Sign in."), httpx.Response(503)])
+def test_connect_preserves_pairing_when_server_does_not_confirm_revoke(settings, paired, monkeypatch, response):
+    async def handler(request):
+        assert request.method == "GET" and request.url.path == "/companion/hello"
+        return response
+
+    mock_client(monkeypatch, handler)
+    with pytest.raises(SystemExit) as error:
+        cli.main(["companion", "connect", URL, "--code", CODE, "--no-run"])
+    assert error.value.code == 1
+    assert CompanionState.load(settings) == paired
+
+
+@pytest.mark.parametrize("with_drop", [False, True])
+def test_connect_reports_linux_notification_package(settings, monkeypatch, capsys, with_drop):
+    monkeypatch.setattr("switchboard.companion.caps.notify.sys.platform", "linux")
+    monkeypatch.setattr("switchboard.companion.caps.notify.shutil.which", lambda program: None)
+
+    async def handler(request):
+        assert [cap["id"] for cap in json.loads(request.content)["capabilities"]] == ["drop"]
+        return httpx.Response(200, json={"companion_id": COMPANION_ID, "device_key": KEY})
+
+    mock_client(monkeypatch, handler)
+    flags = ["companion", "connect", URL, "--no-run", "--code", CODE, "--cap", "notify"]
+    if with_drop:
+        cli.main([*flags, "--cap", "drop"])
+        assert "Install libnotify-bin for desktop notifications." in capsys.readouterr().out
+    else:
+        with pytest.raises(SystemExit) as error:
+            cli.main(flags)
+        assert error.value.code == 1 and "Install libnotify-bin for desktop notifications." in capsys.readouterr().err
 
 
 def test_connect_reports_explicitly_enabled_unavailable_capability(settings, monkeypatch, capsys):
@@ -298,6 +388,29 @@ async def test_authenticated_401_disconnects(settings, paired, monkeypatch, wher
     mock_client(monkeypatch, handler)
     await asyncio.wait_for(client.run(paired, settings, {"test": Work(invoke)}), 2)
     assert not settings.exists()
+
+
+@pytest.mark.parametrize("revocation", ["event", "401"])
+@pytest.mark.parametrize("same_pairing", [True, False])
+async def test_revocation_clears_same_pairing_even_when_preferences_change(
+    settings, paired, monkeypatch, revocation, same_pairing,
+):
+    updated = replace(paired, enabled_caps=(), name="Updated device")
+    if not same_pairing:
+        updated = replace(updated, companion_id="cmp_" + "2" * 24, device_key="swbd_" + "B" * 43)
+    settings.unlink()
+    updated.save(settings)
+
+    async def handler(request):
+        if revocation == "401":
+            return httpx.Response(401)
+        if request.url.path.endswith("/events"):
+            return event_stream(b"event: revoked\ndata: {}\n\n")
+        return httpx.Response(204)
+
+    mock_client(monkeypatch, handler)
+    await asyncio.wait_for(client.run(paired, settings, {}), 2)
+    assert CompanionState.load(settings) == (None if same_pairing else updated)
 
 
 async def test_run_reconnects_with_bounded_backoff(settings, paired, monkeypatch):
