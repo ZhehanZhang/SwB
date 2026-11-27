@@ -11,6 +11,12 @@ timezone: America/New_York
 # A new send starts at zero. null switches it off.
 turn_cap: 200
 
+modes:
+  default: watch                             # without this setting, the default is off
+  digest_minutes: 60                         # watch also sends a digest after 50 messages
+  assist_max_chars: 1500                      # maximum length of one assist reply
+  # projects: {example: assist}              # defaults for spaces assigned to these projects
+
 auth:
   # Who may sign in through Cloudflare Access (checked only when cloudflare_access is set).
   owner_emails: [owner@example.com]
@@ -42,11 +48,16 @@ blocks:
     use: github
     enabled: false
     secret_env: GITHUB_WEBHOOK_SECRET
+    # app_id_env: GITHUB_APP_ID
+    # private_key_env: GITHUB_APP_PRIVATE_KEY
+    # token_env: GITHUB_TOKEN                 # alternative: fine-grained token with Issues: write
     sinks:
       team: {url_env: TEAM_GITHUB_SINK_URL}
     routes:
       "acme/app": [team]
       "acme/*": [team]
+    # spaces:
+    #   "acme/app": {mode: watch, project: example}
 
   mcp:
     use: mcp
@@ -72,6 +83,7 @@ blocks:
     # message_content: true                   # enable Message Content Intent under Bot in the Discord Developer Portal
     # ack_reaction: "👀"                        # null disables acknowledgements
     # dm_space: home                          # use this space's trust and routing in DMs; defaults to the first space
+    # dm_mode: watch                          # non-owners only; watch or off
     # connect: true                           # false skips the Gateway connection, for REST-only tests
     # daily_cap: null                         # optional limit on outbound tool calls per day
     # agents: {claude: [home]}                 # agent to space labels or "*"; controls posts and event inboxes
@@ -82,7 +94,11 @@ blocks:
     #     guild_id: "100000000000000001"      # may be omitted for one space to discover its server
     #     owner_ids: ["100000000000000002"]   # optional override for the discovered application owner
     #     known: {"100000000000000003": Friend}
-    #     listen: ["100000000000000004"]      # channel or thread IDs
+    #     mode: watch                        # default for channels and threads in this space
+    #     channels:
+    #       "100000000000000004": assist     # channel or thread ID; accepts a string or a mapping
+    #       "100000000000000005": {mode: triage, actions: [reply, notify_owner]}
+    #     listen: ["100000000000000006"]      # legacy alias for assist
     #     default_target: helper
     #     project: example
     #     channel_projects: {"#builds": example}
@@ -113,6 +129,7 @@ blocks:
     enabled: false                              # disabled until you opt in
     # token_env: TELEGRAM_BOT_TOKEN              # or enter the token at a telegram_provision claim link
     # dm_space: home                            # where private chats go; default is the first space
+    # dm_mode: watch                            # non-owners only; watch or off
     # ack_reaction: "👀"                         # reaction on addressed messages; null disables it
     # persona_prefix: true                      # include the persona on a bold first line
     # refresh_minutes: 30                       # how often to look up targets
@@ -124,7 +141,10 @@ blocks:
     #     owner_ids: [222222]                   # Telegram user ids trusted as owner
     #     known: {333333: Friend}               # known Telegram user ids and display names
     #     default_target: claude                # target when no slug or earlier thread target exists
-    #     listen: [-100111222]                  # file unaddressed messages from these chats; needs privacy mode off
+    #     mode: watch                           # turn off bot privacy mode to see unaddressed group messages
+    #     channels:
+    #       "-100111222": {mode: assist, project: example}
+    #     listen: [-100111222]                  # legacy alias for assist
     #     project: example                      # default switchboard project
     #     channel_projects: {-100111222: null}  # override or opt out of the project by chat id
     #     bot_posts_per_hour: 20                # limit in each conversation thread

@@ -25,12 +25,12 @@ import logging
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from .. import Block
+from .. import Block, BlockError
 from ...auth import Principal
 from ...projects import ProjectError
 from ...slack.config import Grant, Persona
 from ...slack.routing import Target
-from ...slack.slack import WorkspaceRuntime
+from ...slack.slack import CHANNEL_ID_RE, WorkspaceRuntime
 from ...slack.writes import WriteError
 from ...trust import neutralize
 
@@ -62,6 +62,8 @@ class SlackIntake(Block):
         if self.engine is not None:
             self.engine.listeners.append(self.deliver)
             self.engine.listen = self.listen
+            self.engine.mode_intake = self.mode_intake
+            self.engine.mode_poll_channels = self.mode_poll_channels
             self.engine.target_agents = self.target_agents
             self.engine.context_listeners.append(self.deliver_context)
             self.engine.visibility = core.visibility
@@ -150,7 +152,7 @@ class SlackIntake(Block):
         return self.core.inbox.open_handle(owner=agent, destination="slack", ref=workspace, project=self.projects.get(workspace),
                                            title=f"Slack {workspace}", meta={"workspace": workspace}, status="following")
 
-    async def deliver(self, push: dict[str, Any]) -> None:
+    async def deliver(self, push: dict[str, Any], *, private: bool = False) -> None:
         engine = self.engine
         assert engine is not None
         sender = {"kind": "slack", "workspace": push["workspace"], "team": push["team"], "channel": push["channel"], "channel_name": push["channel_name"],
@@ -158,14 +160,16 @@ class SlackIntake(Block):
                   "permalink": push["permalink"]}
         item = {"event_id": push["id"], "slack_kind": push["kind"], "addressed_to_us": push["addressed_to_us"], "text": push["text"],
                 "truncated": push["truncated"], "files": push["files"], "target": push.get("target"), "target_kind": push.get("target_kind"), "trust": push.get("trust", "external"), "from": sender}
-        agents = {agent for agent, grant in engine.config.grants.items() if grant.identities_for(push["workspace"])}
+        if "channel_mode" in push:
+            item["channel_mode"] = push["channel_mode"]
+        agents = set() if private else {agent for agent, grant in engine.config.grants.items() if grant.identities_for(push["workspace"])}
         target = engine.targets.get(push.get("target") or "")
         if target is not None and target.kind == "agent" and push["addressed_to_us"]:
             agents.add(target.id)
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, push["workspace"]), "slack_event", item)
         if (not push.get("_skip_delegate") and target is not None and target.kind != "agent" and push["addressed_to_us"]
-                and not engine.sink_accepts(push["workspace"], push)):
+                and (private or not engine.sink_accepts(push["workspace"], push))):
             await self.delegate(push, target)
 
     async def deliver_context(self, push: dict[str, Any]) -> None:
@@ -191,6 +195,132 @@ class SlackIntake(Block):
     def mapped_project(self, push: dict[str, Any]) -> str | None:
         channels = self.channel_projects.get(push["workspace"], {})
         return channels.get(push["channel"], channels.get(push.get("channel_name"), self.projects.get(push["workspace"])))
+
+    def mode_poll_channels(self, rt: WorkspaceRuntime) -> set[str]:
+        explicit = {row["channel"] for row in self.core.store.q("SELECT channel FROM space_modes WHERE block = ? AND space = ? AND channel <> ''",
+                                                              (self.name, rt.label))}
+        return {channel for row in self.core.modes.status(block=self.name)["spaces"]
+                if row["space"] == rt.label and row["kind"] == "channel" and row["mode"] != "off"
+                and CHANNEL_ID_RE.fullmatch(channel := rt.channel_ids.get(row["channel"].removeprefix("#"), row["channel"]))
+                and (channel in rt.bot_channels or row["source"] == "channel" or row["channel"] in explicit)}
+
+    def mode_inventory(self) -> dict[tuple[str, str], tuple[str | None, str, None]]:
+        engine = self.engine
+        assert engine is not None
+        out: dict[tuple[str, str], tuple[str | None, str, None]] = {}
+        for label, ws in engine.config.workspaces.items():
+            rt = engine.runtimes.get(label)
+            if rt is not None:
+                out.update({(label, channel): (name, "channel", None) for channel, name in rt.channel_names.items() if not channel.startswith("D")})
+            refs = {*ws.watched, *ws.listen_channels, *self.channel_projects.get(label, {})} - {"*"}
+            for ref in refs:
+                name = ref.removeprefix("#")
+                channel = rt.channel_ids.get(name, ref) if rt else ref
+                out.setdefault((label, channel), (name, "channel", None))
+        return out
+
+    async def mode_intake(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> tuple[bool, dict[str, Any] | None]:
+        engine = self.engine
+        assert engine is not None
+        modes = self.core.modes
+        workspace, channel = push["workspace"], push["channel"]
+        project, name = self.mapped_project(push), push["channel_name"]
+        trust = rt.cfg.trust_of(push["user"])
+        direct = push["kind"] == "dm" or (channel.startswith("D") and rt.cfg.has_bot)
+        if direct:
+            push.update(kind="dm", addressed_to_us=True)
+            mode, source = modes.dm(self.name)
+            actions, target_ref = (), None
+        else:
+            mode, source, actions, target_ref, project = modes.policy(self.name, workspace, channel, project, name=name)
+        if trust == "owner" and (direct or push["addressed_to_us"]):
+            mode = "work"
+        legacy = (not direct and source in ("legacy", "default") and modes.cfg.default.mode == "off"
+                  and not getattr(modes.cfg, "explicit_default", False))
+        if legacy and (mode != "watch" or trust == "owner" or (push["is_bot"] and trust != "known")):
+            return False, None
+        if (push["is_bot"] and trust not in ("owner", "known")) or mode == "off":
+            return True, None
+        if (mode == "work" and trust != "owner") or (trust == "owner" and mode != "watch" and not push["addressed_to_us"]):
+            return True, None
+        link = push["permalink"]
+        if mode == "watch":
+            if not legacy and not engine.store.claim_event(push):
+                return True, None
+            push["user_name"] = rt.cfg.known.get(push["user"]) or await rt.user_name(push["user"]) or push["user_name"]
+            added = modes.watch(self.name, workspace, channel, push["id"], push["user"] or "", push["user_name"],
+                                push["text"], link, target_ref, project=project, dm=direct)
+            engine.stamp(rt, push)
+            return (False, None) if legacy else (True, push if added else None)
+        if mode == "work":
+            if not engine.store.claim_event(push):
+                return True, None
+            target = await self.mode_target(target_ref, project)
+            engine.route(rt, push, default_target=target.slug if target else None)
+            if target is not None and target.slug == push["target"] and target.slug not in engine.targets:
+                push["target_kind"] = target.kind
+            else:
+                target = engine.targets.get(push["target"] or "")
+            push.update(addressed_to_us=True, channel_mode=modes.meta(self.name, workspace, channel, mode, actions, project, link, push["target"]))
+            push["user_name"] = await rt.user_name(push["user"]) or push["user_name"]
+            engine.stamp(rt, push)
+            if direct and target is not None and target.slug not in engine.targets:
+                await self.delegate(push, target)
+            elif direct:
+                await self.deliver(push, private=True)
+            else:
+                unknown = target is not None and target.slug not in engine.targets
+                await engine.fan_out(workspace, push, skip_delegate=unknown)
+                if unknown and not engine.sink_accepts(workspace, push):
+                    await self.delegate(push, target)
+            return True, push
+        if project:
+            try:
+                project = self.core.projects.get(project.removeprefix("project:"), allow_archived=False).slug
+            except ProjectError:
+                return True, None
+        target = await self.mode_target(target_ref, project)
+        if project is None and target is not None:
+            project = target.project
+        push.update(target=target.slug if target else None, target_kind=target.kind if target else None, trust=trust)
+        if (target is None or target.project not in (None, project) or not engine.reaches(rt, push)
+                or (target_ref in engine.targets and not engine.reaches(rt, {**push, "target": target_ref}))
+                or not engine.store.claim_event(push)):
+            return True, None
+        if engine.sender_allowed(rt, push, mode):
+            push["user_name"] = await rt.user_name(push["user"]) or push["user_name"]
+            engine.stamp(rt, push)
+            push["channel_mode"] = modes.meta(self.name, workspace, channel, mode, actions, project, link, target.slug)
+            await self.delegate(push, target)
+            return True, push
+        return True, None
+
+    async def mode_target(self, ref: str | None, project: str | None) -> Target | None:
+        from ...core import CoreError
+
+        engine = self.engine
+        assert engine is not None
+        known = engine.targets.get(ref or "")
+        try:
+            if ref:
+                if known is not None and known.address is None:
+                    return known
+                addr = await self.core.resolve_to(known.address if known and known.address else ref)
+            else:
+                addr = None
+            if project and (addr is None or (addr.block == "project" and addr.id == project)):
+                addr = next((addr for b in self.core.blocks.values() if b.wakes_agents and (addr := b.wake_target("claude", project))), None)
+                addr = addr or self.core.route_address(AGENT, project)
+            if addr is None or addr.block == "project" or not addr.id:
+                return None
+            if (block := self.core.blocks.get(addr.block)) is not None:
+                addr = block.effective_target(addr, project)
+        except (CoreError, BlockError, ValueError):
+            return None
+        if known is not None and known.address == str(addr):
+            return known
+        return next((t for t in engine.targets.values() if t.address == str(addr)), None) or Target(
+            addr.id, addr.kind, addr.id, addr.id, address=str(addr), project=project)
 
     async def listen(self, rt: WorkspaceRuntime, push: dict[str, Any], original: dict[str, Any]) -> bool:
         engine = self.engine
@@ -231,24 +361,32 @@ class SlackIntake(Block):
         where = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
         task = (f"Slack message from {push['user_name'] or push['user']} in {push['workspace']} {where} ({push['permalink'] or push['ts']}):\n\n"
                 f"{push['text']}\n\nYour final reply is posted back in that Slack thread as {target.name}.")
-        project = listen_project or self.mapped_project(push)
+        channel_mode = push.get("channel_mode")
+        scoped = bool(channel_mode and channel_mode["mode"] in ("assist", "triage"))
+        project = channel_mode["project"] if channel_mode else listen_project or self.mapped_project(push)
         trust = push.get("trust", "external")
         mapped = target.kind == "routine" and not target.project and project and trust == "owner"
         handle_meta = {"slack_trust": trust, **({"boundary": project} if project else {})}
-        if listen_project:
+        if channel_mode:
+            handle_meta["channel_mode"] = channel_mode
+        if listen_project or scoped:
             sender = " ".join(neutralize(push["sender"]["name"] or push["user"] or "unknown").split())[:120]
-            task = (f"Slack listen-mode message from {sender}, trust {trust}, in {push['workspace']} {where}:\n\n"
-                    f"{push['text']}\n\nA reply is optional. If anything needs action, send only a short note to the owner.")
-            handle_meta.update(listen=True, permalink=push["permalink"], slack_sender=sender,
+            if scoped:
+                task = f"Slack message from {sender} in {push['workspace']} {where} ({push['permalink'] or push['ts']}):\n\n{push['text']}\n\n{self.core.modes.wake_note(channel_mode)}"
+            else:
+                task = (f"Slack listen-mode message from {sender}, trust {trust}, in {push['workspace']} {where}:\n\n"
+                        f"{push['text']}\n\nA reply is optional. If anything needs action, send only a short note to the owner.")
+                handle_meta["listen"] = True
+            handle_meta.update(permalink=push["permalink"], slack_sender=sender,
                                slack_thread={"workspace": push["workspace"], "channel": push["channel"], "target": target.slug,
-                                             "channel_name": push["channel_name"], "thread_ts": push["thread_ts"] or push["ts"],
+                                             "channel_name": push["channel_name"], "thread_ts": push["thread_ts"] or push["ts"], "user": push["user"],
                                              "persona": target.persona or ("claude" if "claude" in engine.personas() else None)})
         kw: dict[str, Any] = {"task": task, "title": f"Slack {push['workspace']} {where}", "handle_meta": handle_meta}
         if target.kind == "project":
             kw["project"] = target.id
         else:
             kw["to"] = target.address or f"{target.kind}:{target.id}"
-            if mapped or listen_project:
+            if mapped or listen_project or scoped or channel_mode and project:
                 kw["project"] = project
         token = SLACK_SENDER.set({"workspace": push["workspace"], "user": push["user"], "user_name": push["user_name"], "trust": trust,
                                   "text": push["text"]})
@@ -263,7 +401,7 @@ class SlackIntake(Block):
         slug = target.slug
         if mapped and (routine := out.get("routine")) and routine != target.id:
             slug = next((t.slug for t in engine.targets.values() if t.kind == "routine" and t.id == routine), slug)
-        if not listen_project:
+        if not listen_project and not scoped:
             engine.store.add_relay(out["handle"], push["workspace"], push["channel"], push["thread_ts"] or push["ts"], slug)
         engine.store.audit(f"agent:{AGENT}", "routed", push["workspace"], message=push["id"], target=slug, handle=out["handle"])
 
@@ -290,14 +428,26 @@ class SlackIntake(Block):
         original = self.core.inbox.handle(handle)
         meta = original["meta"] if original else {}
         listen = bool(meta.get("listen"))
+        channel_mode = meta.get("channel_mode") or {}
+        mode = channel_mode.get("mode")
+        scoped = mode in ("assist", "triage")
+        thread_only = listen or scoped
         if listen and item["kind"] != "message":
             return
-        r = meta.get("slack_thread") if listen else engine.store.relay(handle)
+        r = meta.get("slack_thread") if thread_only else engine.store.relay(handle)
         if r is None:
             return
         target = engine.targets.get(r["target"])
         replier = ((data.get("from") or {}).get("agent") or "") if item.get("kind") == "message" else ""
-        if listen:
+        if scoped:
+            rt = engine.runtimes.get(r["workspace"])
+            active, _, actions, _ = self.core.modes.resolve(self.name, r["workspace"], r["channel"], self.mapped_project(r), name=r["channel_name"])
+            if (not r["thread_ts"] or rt is None or active != mode
+                    or (mode == "triage" and ("reply" not in channel_mode["actions"] or "reply" not in actions))
+                    or not engine.reaches(rt, {**r, "trust": meta["slack_trust"]})):
+                engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], handle=handle, target=r["target"], reason="channel mode no longer permits a reply")
+                return
+        if thread_only:
             place = r["channel"], r["thread_ts"], False
             persona = r["persona"]
         else:
@@ -311,15 +461,18 @@ class SlackIntake(Block):
         if to_dm:
             text = f"Reply from {target.name if target else r['target']} to a message in a shared channel:\n\n{text}"
         limit = engine.config.max_text_chars
-        if listen:
-            limit = min(limit, 1500)
+        if listen or mode == "assist":
+            limit = min(limit, 1500 if listen else self.core.modes.assist_max_chars)
             if len(text) > limit and limit > 0:
                 text = text[:limit - 1] + "…"
         key = Grant(id=AGENT, persona=persona, allow_persona_override=False, allowed_personas=None, scopes={r["workspace"]: ("bot",)})
         try:
             await engine.gate.submit(key, r["workspace"], "bot", "post_message",
-                                     {"channel": channel, "text": text[:limit], "thread_ts": thread_ts}, thread_only=listen)
+                                     {"channel": channel, "text": text[:limit], "thread_ts": thread_ts}, thread_only=thread_only)
         except WriteError as exc:
-            if not listen:
+            if not thread_only:
                 raise
             engine.store.audit(f"agent:{AGENT}", "reply_withheld", r["workspace"], handle=handle, target=r["target"], reason=str(exc))
+        else:
+            if mode == "triage" and item["kind"] == "final":
+                self.core.modes.audit_action(self.principal, channel_mode, "reply")

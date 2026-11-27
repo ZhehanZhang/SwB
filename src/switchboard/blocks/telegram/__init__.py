@@ -119,6 +119,7 @@ class TelegramBlock(ChatBlock):
         self._online = self._rejected = self._running = False
         self._unseen: set[int] = set()
         self._seen: dict[int, dict[str, Any]] = {}
+        self._group_names: dict[int, str] = {}
         self._connection: asyncio.Task[None] | None = None
         self._connection_lock = asyncio.Lock()
 
@@ -135,7 +136,8 @@ class TelegramBlock(ChatBlock):
             steps.append(f"no bot token: open the link from {self.name}_provision, or set {self.token_env}")
         if self._rejected:
             steps.append("token rejected: open a new token link")
-        if self._privacy and any(s.listen for s in self.spaces.values()):
+        if self._privacy and any(self.core.modes.resolve(self.name, label, str(chat))[0] in ("watch", "assist", "triage")
+                                 for chat, label in self._groups.items()):
             steps.append("in @BotFather: /setprivacy, choose the bot, Disable, then remove and re-add the bot to the group")
         steps.extend(f"add the bot to {label} chat {chat}" for chat, label in self._groups.items() if chat in self._unseen)
         steps.extend(f"set blocks.{self.name}.spaces.{s.label}.owner_ids (DM the bot and look up your id in {self.name}_status)"
@@ -283,22 +285,27 @@ class TelegramBlock(ChatBlock):
             return
         mention, text = _address(text, raw.get("entities") or raw.get("caption_entities") or [], bot_id, username)
         topic = raw.get("message_thread_id")
-        if raw.get("is_topic_message") and type(topic) is int and topic > 1:
-            self._save_topic(str(channel), str(mid), topic)
+        mode_channel = f"{channel}:{topic}" if raw.get("is_topic_message") and type(topic) is int and topic > 1 else None
         reply_to = (raw.get("reply_to_message") or {}).get("message_id")
         name = " ".join(n for n in (sender.get("first_name"), sender.get("last_name")) if n) or sender.get("username")
         internal = str(channel).removeprefix("-100") if kind == "supergroup" else ""
         link = f"https://t.me/c/{internal}/{mid}" if internal.isdecimal() else None
         await self.ingest(Incoming(space=space, channel=str(channel), message=str(mid), user=str(user), text=text, user_name=name,
                                    channel_name=chat.get("title"), is_bot=bool(sender.get("is_bot")), mention=mention, dm=dm,
-                                   reply_to=str(reply_to) if type(reply_to) is int else None, link=link))
+                                   reply_to=str(reply_to) if type(reply_to) is int else None, link=link, mode_channel=mode_channel))
+
+    def record_message(self, msg: Incoming) -> None:
+        if msg.channel_name and not msg.dm:
+            self._group_names[int(msg.channel)] = msg.channel_name
+        if msg.mode_channel:
+            self._save_topic(msg.channel, msg.message, int(msg.mode_channel.rsplit(":", 1)[1]))
 
     def _save_topic(self, channel: str, message: str, topic: int) -> None:
         self.core.store.x("INSERT OR REPLACE INTO telegram_topics(block, chat, message, topic, at) VALUES (?,?,?,?,?)",
                           (self.name, channel, message, topic, self.core.clock()))
 
     async def post(self, space: str, channel: str, text: str, *, root: str | None = None, reply_to: str | None = None,
-                   persona: Persona | None = None) -> str | list[str]:
+                   persona: Persona | None = None, require_reply: bool = False) -> str | list[str]:
         token = self.token()
         if not token or not self.token_re.fullmatch(token):
             raise BlockError("Telegram needs a valid bot token")
@@ -310,7 +317,7 @@ class TelegramBlock(ChatBlock):
         params: dict[str, Any] = {"chat_id": chat_id, "link_preview_options": {"is_disabled": True}}
         topic = None
         if reply_id is not None:
-            params["reply_parameters"] = {"message_id": reply_id, "allow_sending_without_reply": True}
+            params["reply_parameters"] = {"message_id": reply_id, "allow_sending_without_reply": not require_reply}
             found = self.core.store.one("SELECT topic FROM telegram_topics WHERE block = ? AND chat = ? AND message IN (?,?) ORDER BY message = ? DESC",
                                         (self.name, str(chat_id), str(reply_id), root, str(reply_id)))
             if found:

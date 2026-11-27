@@ -10,8 +10,7 @@ about who a message is from and where it may go lives here, the same rules as th
   or answered. "@swb <slug> ..." picks a target; otherwise the thread's earlier target, else the space's default_target.
 - Visibility: the owner reaches everything; anyone else only a channel and target that are both shared. A non-owner's
   message to something private is filed as context, never delegated or answered.
-- Listen mode: unaddressed messages are read only in channels listed under spaces.<label>.listen, and only filed to
-  the inboxes of granted agents.
+- Channel modes decide what to drop, store for a digest, or dispatch to a restricted handle.
 - Outgoing posts: replies relay the final answer back in the thread under the target's persona where the platform
   allows it. A private target in a shared channel answers in the owner's DM unless the owner asked in that thread.
   bot_posts_per_hour caps bot posts per thread, and every routed message and reply counts toward the core's turn_cap.
@@ -24,7 +23,6 @@ import contextlib
 import hashlib
 import logging
 import re
-import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
@@ -32,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 from ..auth import Principal
 from ..blocks import Action, Block, BlockError, Call
 from ..claims import CLAIM_TTL_S
+from ..modes import PROVIDERS
 from ..slack.config import AVATAR_RE
 from ..trust import wrap
 from ..visibility import Who
@@ -98,6 +97,7 @@ class Incoming:
     thread: str | None = None
     reply_to: str | None = None
     link: str | None = None
+    mode_channel: str | None = None
 
 
 @dataclass(frozen=True)
@@ -178,6 +178,9 @@ class ChatBlock(Block):
     async def ack(self, msg: Incoming) -> None:
         """Optional: acknowledge an addressed message (a reaction)."""
 
+    def record_message(self, msg: Incoming) -> None:
+        """Optional: record platform metadata for an admitted message."""
+
     def connected(self) -> bool:
         return False
 
@@ -239,7 +242,8 @@ class ChatBlock(Block):
                 "avatar": dict(self._avatar_status),
                 "spaces": {s.label: {"owners": len(self.owners(s)), "listen": sorted(s.listen), "default_target": s.default_target, "project": s.project}
                            for s in self.spaces.values()},
-                "targets": len(self.targets_by_slug), "refreshed_at": self.refreshed_at}
+                "targets": len(self.targets_by_slug), "refreshed_at": self.refreshed_at,
+                "modes": self.core.modes.status(block=self.name)}
 
     @property
     def online(self) -> bool:
@@ -336,23 +340,41 @@ class ChatBlock(Block):
         root, ours = self._root(msg)
         addressed = msg.mention or msg.dm or ours
         listened = msg.channel in space.listen or (msg.thread or "") in space.listen
-        if not addressed and not listened:
+        trust = self.trust_of(space, msg.user)
+        name = space.known.get(msg.user) or msg.user_name
+        policy = self.core.modes if self.platform in PROVIDERS else None
+        channel = msg.mode_channel or msg.thread or msg.channel
+        project = space.channel_projects.get(msg.channel, space.channel_projects.get(f"#{msg.channel_name}", space.project))
+        channel_mode = None
+        if policy is not None and not (trust == "owner" and addressed):
+            mode, _, actions, selected, project = policy.policy(self.name, msg.space, channel, project, parent=msg.channel, name=msg.channel_name)
+            if msg.dm:
+                mode, _ = policy.dm(self.name)
+            if mode in ("off", "work") or (msg.is_bot and trust == "external"):
+                return None
+            if mode == "watch":
+                if policy.watch(self.name, msg.space, channel, msg.message, msg.user, name, msg.text or "", msg.link, selected,
+                                project=project, dm=msg.dm):
+                    self.record_message(msg)
+                return None
+            channel_mode = policy.meta(self.name, msg.space, channel, mode, actions, project, msg.link, selected)
+            channel_mode.update(parent=msg.channel, channel_name=msg.channel_name, dm=msg.dm)
+        elif policy is None and not addressed and not listened:
             return None
         if not self.core.store.n("INSERT OR IGNORE INTO chat_events(block, space, channel, message, at) VALUES (?,?,?,?,?)",
                                  (self.name, msg.space, msg.channel, msg.message, self.core.clock())):
             return None
-        trust = self.trust_of(space, msg.user)
-        name = space.known.get(msg.user) or msg.user_name
+        self.record_message(msg)
         text, slug = msg.text or "", None
         explicit = False
-        if addressed:
+        if addressed and channel_mode is None:
             m = SLUG_RE.match(text)
             if m and m.group(1).lower() in self.targets_by_slug:
                 slug, explicit, text = m.group(1).lower(), True, text[m.end():].strip()
         sticky = self.core.store.one("SELECT target FROM chat_threads WHERE block = ? AND space = ? AND channel = ? AND root = ?",
                                      (self.name, msg.space, msg.channel, root))
-        slug = slug or (sticky["target"] if sticky else None) or space.default_target
-        target = self.targets_by_slug.get(slug or "")
+        slug = channel_mode["target"] if channel_mode else slug or (sticky["target"] if sticky else None) or space.default_target
+        target = self.targets_by_slug.get(slug or "") or next((t for t in self.targets_by_slug.values() if t["address"] == slug), None)
         where = f"in {self.platform} {msg.space} " + (f"#{msg.channel_name}" if msg.channel_name else msg.channel)
         sender = {"kind": self.platform, "space": msg.space, "channel": msg.channel, "channel_name": msg.channel_name, "user": msg.user, "user_name": name,
                   "is_bot": msg.is_bot, "trust": trust, "message": msg.message, "root": root, "link": msg.link}
@@ -362,6 +384,14 @@ class ChatBlock(Block):
         who = self.who(space, msg.user, trust)
         reaches = who.owner or (self.core.visibility.allows(who, *self.channel_resources(msg.space, msg.channel, msg.channel_name))
                                 and (target is None or self.core.visibility.allows(who, *self.target_resources(slug or ""))))
+        if channel_mode:
+            event.update({"mode": channel_mode["mode"], "actions": channel_mode["actions"], "note": policy.wake_note(channel_mode)})
+            event.pop("raw_text", None)
+            if not reaches or target is None:
+                await self.note_context(space, msg, event, target)
+            elif self._admit_sender(msg, event):
+                await self.delegate(space, msg, event, target, root, channel_mode)
+            return event
         if not reaches:
             await self.note_context(space, msg, event, target)
             return event
@@ -395,14 +425,8 @@ class ChatBlock(Block):
     async def note_context(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any] | None) -> None:
         """A non-owner's message to something private: a context item for the agents behind its target. It wakes
         nobody, is never delegated or answered, and is rate limited per sender."""
-        now, (count, window) = self.core.clock(), (5, 600.0)
-        hits = [t for t in self._senders.get(msg.user, []) if now - t < window]
-        actor = f"{self.platform}:{msg.user}"
-        if len(hits) >= count:
-            self.core.audit.record(origin=self.platform, source=actor, client=self.principal.client_id, destination=self.name, action="context_rate_limited",
-                                   outcome="refused", ref=event["event_id"])
+        if not self._admit_sender(msg, event):
             return
-        self._senders[msg.user] = [*hits, now]
         agents: set[str] = set()
         if target is not None and target["kind"] == "agent":
             agents = {target["id"]}
@@ -414,8 +438,18 @@ class ChatBlock(Block):
         item.pop("raw_text", None)
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, msg.space), "context", item)
-        self.core.audit.record(origin=self.platform, source=actor, client=self.principal.client_id, destination=self.name, action="context_noted",
+        self.core.audit.record(origin=self.platform, source=f"{self.platform}:{msg.user}", client=self.principal.client_id, destination=self.name, action="context_noted",
                                outcome="ok", ref=event["event_id"], target=event.get("target"))
+
+    def _admit_sender(self, msg: Incoming, event: dict[str, Any]) -> bool:
+        now = self.core.clock()
+        hits = [t for t in self._senders.get(msg.user, []) if now - t < 600]
+        if len(hits) >= 5:
+            self.core.audit.record(origin=self.platform, source=f"{self.platform}:{msg.user}", client=self.principal.client_id,
+                                   destination=self.name, action="context_rate_limited", outcome="refused", ref=event["event_id"])
+            return False
+        self._senders[msg.user] = [*hits, now]
+        return True
 
     def _count_turn(self, key: str) -> bool:
         """One more turn on a chat thread for the core's turn_cap. False (and the owner told once) when it is paused."""
@@ -443,7 +477,8 @@ class ChatBlock(Block):
     def _thread_key(self, space: str, channel: str, root: str) -> str:
         return f"{self.name}:{space}:{channel}:{root}"
 
-    async def delegate(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any], root: str) -> None:
+    async def delegate(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any], root: str,
+                       mode: dict[str, Any] | None = None) -> None:
         if not self._count_turn(self._thread_key(msg.space, msg.channel, root)):
             return
         where = f"#{msg.channel_name}" if msg.channel_name else msg.channel
@@ -456,21 +491,32 @@ class ChatBlock(Block):
         trust = event["trust"]
         kw: dict[str, Any] = {"task": task, "title": f"{self.manifest.title} {msg.space} {where}",
                               "handle_meta": {"chat_trust": trust, **({"boundary": project} if project else {})}}
+        if mode:
+            kw["task"] = f"{event['note']}\n\n{task}"
+            kw["handle_meta"].update(channel_mode=mode)
+            if mode["project"]:
+                kw["handle_meta"]["boundary"] = mode["project"]
         if target["kind"] == "project":
             kw["project"] = target["id"]
         else:
             kw["to"] = target["address"]
             if project and trust == "owner" and target["kind"] == "routine" and not target.get("project"):
                 kw["project"] = project
+            if mode and mode["project"] and not target.get("project"):
+                kw["project"] = mode["project"]
+        handle = self.core.inbox.new_handle()
+        self.core.store.x("INSERT INTO chat_relays(handle, block, space, channel, root, reply_to, target, trust, at) VALUES (?,?,?,?,?,?,?,?,?)",
+                          (handle, self.name, msg.space, msg.channel, root, msg.message, event["target"], trust, self.core.clock()))
         try:
-            out = await self.core.send(replace(self.principal, trust=trust), **kw)
+            out = await self.core.send(replace(self.principal, trust=trust), handle=handle, **kw)
         except Exception as exc:
+            self.core.store.x("DELETE FROM chat_relays WHERE handle = ?", (handle,))
             log.warning("%s %s: routing %s to %s failed: %s", self.name, msg.space, msg.message, event["target"], exc)
             self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name, action="route_failed",
                                    outcome="error", ref=event["event_id"], target=event["target"], detail=str(exc)[:300])
             return
-        self.core.store.x("INSERT OR REPLACE INTO chat_relays(handle, block, space, channel, root, reply_to, target, trust, at) VALUES (?,?,?,?,?,?,?,?,?)",
-                          (out["handle"], self.name, msg.space, msg.channel, root, msg.message, event["target"], trust, self.core.clock()))
+        if out["handle"] != handle:
+            self.core.store.x("UPDATE OR REPLACE chat_relays SET handle = ? WHERE handle = ?", (out["handle"], handle))
         self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name, action="routed",
                                outcome="ok", ref=out["handle"], target=event["target"])
 
@@ -510,14 +556,15 @@ class ChatBlock(Block):
         return n < self.spaces[space].bot_posts_per_hour
 
     async def send_text(self, space: str, channel: str, text: str, *, root: str | None = None, reply_to: str | None = None,
-                        persona: Persona | None = None) -> dict[str, Any]:
+                        persona: Persona | None = None, strict: bool = False) -> dict[str, Any]:
         """Every bot post goes through here: the loop guard, then the platform, then the record that makes replies to it
         part of the thread."""
         if not self._guard(space, channel, root):
             self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name, action="loop_guard",
                                    outcome="refused", ref=f"{space}:{channel}:{root}", detail=f"{self.spaces[space].bot_posts_per_hour} bot posts in the last hour")
             raise BlockError(f"loop guard: {self.spaces[space].bot_posts_per_hour} bot posts in this thread in the last hour")
-        sent = await self.post(space, channel, text, root=root, reply_to=reply_to, persona=persona)
+        sent = await self.post(space, channel, text, root=root, reply_to=reply_to, persona=persona,
+                               **({"require_reply": True} if strict and self.platform == "telegram" else {}))
         ids = [sent] if isinstance(sent, str) else list(sent)
         mid = ids[0]
         for part, i in enumerate(ids):
@@ -537,6 +584,19 @@ class ChatBlock(Block):
         r = self.core.store.one("SELECT * FROM chat_relays WHERE handle = ? AND block = ?", (handle, self.name))
         if r is None or r["space"] not in self.spaces:
             return
+        h = self.core.inbox.handle(handle)
+        mode = h["meta"].get("channel_mode") if h else None
+        if mode:
+            if mode.get("dm"):
+                current, actions = self.core.modes.dm(self.name)[0], tuple(mode["actions"])
+            else:
+                current, _, actions, _ = self.core.modes.resolve(self.name, mode["space"], mode["channel"], mode["project"],
+                                                                parent=mode.get("parent"), name=mode.get("channel_name"))
+            if current not in ("assist", "triage") or (current == "triage" and "reply" not in actions):
+                self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name,
+                                       action="reply_withheld", outcome="refused", ref=handle, target=r["target"], detail=f"channel is now {current}")
+                return
+            mode = {**mode, "mode": current, "actions": list(actions)}
         if not self._count_turn(self._thread_key(r["space"], r["channel"], r["root"])):
             return
         place = await self.reply_place(r["space"], r["channel"], r["root"], r["target"], r["trust"])
@@ -547,12 +607,17 @@ class ChatBlock(Block):
         channel, root, to_dm = place
         target = self.targets_by_slug.get(r["target"])
         text = data.get("raw_text") or item["text"]
+        if mode and mode["mode"] == "assist":
+            text = text[:self.core.modes.assist_max_chars]
         if to_dm:
             text = f"Reply from {(target or {}).get('name') or r['target']} to a message in a shared channel:\n\n{text}"
         try:
-            await self.send_text(r["space"], channel, text, root=root, reply_to=None if to_dm else r["reply_to"], persona=self.persona_for(target))
+            await self.send_text(r["space"], channel, text, root=root, reply_to=None if to_dm else r["reply_to"],
+                                 persona=self.persona_for(target), strict=bool(mode))
         except BlockError:
             return
+        if mode and item.get("kind") == "final":
+            self.core.modes.audit_action(self.principal, mode, "reply")
 
     # Out: actions and tools ----------------------------------------------------------------
 
@@ -594,7 +659,8 @@ class ChatBlock(Block):
         return await self._post(call, space, channel, text, root)
 
     async def _spaces(self, call: Call) -> dict[str, Any]:
-        return {**self.status(), "you": {"agent": call.principal.source, "spaces": list(self.grants.get(call.principal.source, ()))}}
+        return {**self.status(), "modes": self.core.modes.status(call.principal, self.name),
+                "you": {"agent": call.principal.source, "spaces": list(self.grants.get(call.principal.source, ()))}}
 
     async def _provision(self, call: Call) -> dict[str, Any]:
         if call.principal.trust != "owner":

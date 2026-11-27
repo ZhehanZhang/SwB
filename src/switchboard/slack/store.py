@@ -88,11 +88,17 @@ class Store:
         )
         return cur.rowcount == 1
 
+    def claim_event(self, event: dict[str, Any]) -> bool:
+        return self._exec(
+            "INSERT OR IGNORE INTO events (id, workspace, team, channel, ts, kind, payload, created_at) VALUES (?,?,?,?,?,'mode','{}',?)",
+            (event["id"], event["workspace"], event["team"], event["channel"], event["ts"], self.clock()),
+        ).rowcount == 1
+
     def recent_events(self, workspaces: Iterable[str], kind: str | None = None, since: float | None = None, limit: int = 50) -> list[dict[str, Any]]:
         ws = list(workspaces)
         if not ws:
             return []
-        sql = f"SELECT payload FROM events WHERE workspace IN ({','.join('?' * len(ws))})"
+        sql = f"SELECT payload FROM events WHERE workspace IN ({','.join('?' * len(ws))}) AND kind <> 'mode'"
         args: list[Any] = list(ws)
         if kind:
             sql += " AND kind = ?"

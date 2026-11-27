@@ -187,6 +187,19 @@ CREATE INDEX IF NOT EXISTS inbox_reply_to ON inbox(json_extract(data, '$.in_repl
 CREATE INDEX IF NOT EXISTS handles_root ON handles(json_extract(meta, '$.root'));
 CREATE INDEX IF NOT EXISTS handles_reply_to ON handles(json_extract(meta, '$.in_reply_to'));
 CREATE INDEX IF NOT EXISTS handles_forward_of ON handles(json_extract(meta, '$.forward_of'));
+CREATE TABLE IF NOT EXISTS space_modes (
+  block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, mode TEXT NOT NULL, actions TEXT NOT NULL,
+  project TEXT, updated_at REAL NOT NULL, updated_by TEXT NOT NULL,
+  PRIMARY KEY(block, space, channel)
+);
+CREATE TABLE IF NOT EXISTS watch_events (
+  block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL,
+  author_id TEXT NOT NULL, author TEXT NOT NULL, excerpt TEXT NOT NULL, link TEXT, at REAL NOT NULL,
+  target TEXT NOT NULL, project TEXT, dm INTEGER NOT NULL DEFAULT 0, delivered_at REAL,
+  PRIMARY KEY(block, space, channel, message)
+);
+CREATE INDEX IF NOT EXISTS watch_events_pending ON watch_events(block, space, dm, target, at) WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS handles_channel_mode ON handles(owner, created_at) WHERE json_extract(meta, '$.channel_mode.mode') IN ('assist', 'triage');
 CREATE TABLE IF NOT EXISTS inbox_cursors (
   owner TEXT NOT NULL,
   handle TEXT NOT NULL,

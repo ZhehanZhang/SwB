@@ -4,10 +4,13 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 from urllib.parse import urlsplit
 
 import yaml
+
+if TYPE_CHECKING:
+    from .modes import ModeConfig
 
 ENV_PREFIX = "SWITCHBOARD_"
 KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
@@ -71,6 +74,7 @@ class Config:
     targets: dict[str, Any] = field(default_factory=dict)
     routes: list[dict[str, Any]] = field(default_factory=list)
     visibility: dict[str, Any] = field(default_factory=dict)
+    modes: ModeConfig | None = None
     version: int = 2
     env: Mapping[str, str] = field(default_factory=dict)
 
@@ -172,6 +176,8 @@ def _oidc(raw: Any, public_url: str | None, emails: tuple[str, ...], env: Mappin
 
 
 def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -> Config:
+    from .modes import parse_config as parse_modes
+
     env = dict(os.environ if env is None else env)
     raw: dict[str, Any] = {}
     if path and Path(path).exists():
@@ -225,6 +231,7 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
         blocks=blocks,
+        modes=parse_modes(v2.get("modes"), blocks),
         agents=dict(v2["agents"]) if isinstance(v2.get("agents"), dict) else None,
         targets=dict(v2.get("targets") or {}),
         routes=[dict(r) for r in v2.get("routes") or [] if isinstance(r, dict)],

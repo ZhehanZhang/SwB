@@ -98,6 +98,7 @@ class SlackBlock(SlackIntake, SlackActions):
 
     def status(self) -> dict[str, Any]:
         status = super().status()
+        status["modes"] = self.core.modes.status(block=self.name)
         if self.app_icon is not None:
             status["manual_steps"] = [f"Upload {self.app_icon} as the app icon at api.slack.com/apps, Basic Information, Display Information"]
         return status
