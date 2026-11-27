@@ -130,11 +130,11 @@
 .swb-board-tall .swb-node-label { display: none; }
 .swb-board-tall .swb-mark-tile { width: 12cqw; height: 12cqw; }
 .swb-board-tall .swb-hub { width: 17cqw; height: 17cqw; }
-.swb-board-wide .swb-mark-tile { width: 6.6cqw; height: 6.6cqw; }
-.swb-board-wide .swb-hub { width: 9cqw; height: 9cqw; }
+.swb-board-wide .swb-mark-tile { width: 8.6cqw; height: 8.6cqw; }
+.swb-board-wide .swb-hub { width: 11.7cqw; height: 11.7cqw; }
 
 .swb-node-label {
-  font-family: var(--font-mono, ui-monospace), monospace;
+  @apply font-sans;
   font-size: max(9px, 1.3cqw);
   color: var(--foreground);
 }
@@ -302,6 +302,7 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
 }
 .swb-win-bar { background: var(--surface-sunken); }
 .swb-win-mark.swb-mark-tile { width: 24px; height: 24px; }
+.swb-win-body { mask-image: linear-gradient(to bottom, transparent, black 1.5rem); }
 .swb-win-message { animation: swb-message-in .25s ease-out; }
 .swb-win-message + .swb-win-message { margin-top: .625rem; }
 .swb-win-avatar.swb-mark-tile { width: 32px; height: 32px; }
@@ -323,7 +324,10 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
 .swb-between { line-height: 2.2; color: var(--muted-foreground, inherit); }
 .swb-between > .swb-between-text:last-child { white-space: nowrap; }
 .swb-pair { display: inline-block; white-space: nowrap; }
+@media (max-width: 639px) { .swb-pair { display: block; width: max-content; } }
 .swb-slot { display: inline-grid; vertical-align: middle; margin-inline: .15em; }
+.swb-slot:first-child { justify-items: end; }
+.swb-slot:last-child { justify-items: start; }
 .swb-chip {
   grid-area: 1 / 1;
   display: inline-flex;

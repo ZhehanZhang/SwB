@@ -54,23 +54,25 @@ export function AgentExchange({ lang }: { lang: Locale }) {
           <MarkTile kind={app} className="swb-win-mark" />
           <span className="text-sm font-semibold">{app === 'slack' ? 'Slack #launch' : agentNames[app]}</span>
         </div>
-        <div key={app} className="swb-win-body min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
-          {messages.slice(0, shown).map(([speaker, text], i) => (
-            <div key={i} className="swb-win-message flex gap-3">
-              {speaker === 'you'
-                ? <span className="swb-win-you grid size-8 shrink-0 place-items-center rounded-md text-sm font-semibold" aria-hidden="true">{you.slice(0, 1)}</span>
-                : speaker === 'capy'
-                  ? <span className="swb-mark-tile swb-mark-avatar swb-win-avatar" aria-hidden="true"><img src="/avatars/capy-96.webp" alt="" /></span>
-                  : <MarkTile kind={speaker} className="swb-win-avatar" />}
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-sm font-semibold">
-                  {speaker === 'you' ? you : agentNames[speaker]}
-                  {app === 'slack' && speaker !== 'you' && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
-                </p>
-                <p className="text-[15px] leading-6">{text[lang]}</p>
+        <div key={app} className="swb-win-body flex min-h-0 flex-col-reverse overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+          <div className="shrink-0">
+            {messages.slice(0, shown).map(([speaker, text], i) => (
+              <div key={i} className="swb-win-message flex gap-3">
+                {speaker === 'you'
+                  ? <span className="swb-win-you grid size-8 shrink-0 place-items-center rounded-md text-sm font-semibold" aria-hidden="true">{you.slice(0, 1)}</span>
+                  : speaker === 'capy'
+                    ? <span className="swb-mark-tile swb-mark-avatar swb-win-avatar" aria-hidden="true"><img src="/avatars/capy-96.webp" alt="" /></span>
+                    : <MarkTile kind={speaker} className="swb-win-avatar" />}
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    {speaker === 'you' ? you : agentNames[speaker]}
+                    {app === 'slack' && speaker !== 'you' && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
+                  </p>
+                  <p className="text-[15px] leading-6">{text[lang]}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

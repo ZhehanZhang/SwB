@@ -8,6 +8,13 @@ const pairs = trips.flatMap(([a, b], n) =>
 function geometry(line: Locator) {
   return line.evaluate((root) => {
     const box = ({ x, y, width, height }: DOMRect) => [x, y, width, height];
+    const conjunction = root.querySelector('.swb-pair .swb-between-text')!.firstChild!;
+    const text = conjunction.textContent!;
+    const word = document.createRange();
+    word.setStart(conjunction, text.length - text.trimStart().length);
+    word.setEnd(conjunction, text.trimEnd().length);
+    const and = word.getBoundingClientRect();
+    const pills = [...root.querySelectorAll('.swb-chip-on')].map((node) => node.getBoundingClientRect());
     return {
       pair: root.getAttribute('data-hero-pair')!,
       text: [...root.querySelectorAll('.swb-between-text')].map((node) => {
@@ -16,13 +23,14 @@ function geometry(line: Locator) {
         return [...range.getClientRects()].map(box);
       }),
       slots: [...root.querySelectorAll('.swb-slot')].map((node) => box(node.getBoundingClientRect())),
-      pills: [...root.querySelectorAll('.swb-chip-on')].map((node) => box(node.getBoundingClientRect())),
+      pillWidths: pills.map(({ width }) => width),
+      gaps: [and.left - pills[0].right, pills[1].left - and.right],
     };
   });
 }
 
 for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', '/zh-Hant']]) {
-  test(`${locale} keeps static text, slots and visible pill edges fixed for every rotating pair`, async ({ page }) => {
+  test(`${locale} keeps static text, slots and gaps fixed as pill widths change`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.clock.install();
     await page.goto(path);
@@ -30,13 +38,15 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
     const line = page.locator('[data-hero-pair]');
     const baseline = await geometry(line);
     const seen = new Set<string>();
+    const widths = [new Set<number>(), new Set<number>()];
 
     for (let i = 0; i <= trips.length * 3; i++) {
       const current = await geometry(line);
       expect(current.slots).toHaveLength(2);
-      expect(current.pills).toHaveLength(2);
+      expect(current.pillWidths).toHaveLength(2);
+      current.pillWidths.forEach((width, j) => widths[j].add(width));
       expect(current.text.map((rects) => rects.length)).toEqual(baseline.text.map((rects) => rects.length));
-      for (const group of ['text', 'slots', 'pills'] as const) {
+      for (const group of ['text', 'slots', 'gaps'] as const) {
         const initial = baseline[group].flat(2);
         current[group].flat(2).forEach((value, j) => {
           expect(Math.abs(value - initial[j]), `${group} moved in pair ${current.pair}`).toBeLessThanOrEqual(0.5);
@@ -49,6 +59,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
     }
 
     expect([...seen].sort()).toEqual(pairs);
+    widths.forEach((seenWidths) => expect(seenWidths.size).toBeGreaterThan(1));
   });
 }
 

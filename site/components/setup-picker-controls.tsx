@@ -40,7 +40,7 @@ export function SetupPickerControls({ labels, sources, modal }: Props) {
       </fieldset>
       <textarea ref={preview} aria-label={labels.prompt} lang={prompt ? 'en' : undefined}
         placeholder={labels.prompt} value={prompt} readOnly
-        className="mt-4 block h-44 w-full resize-none rounded-md border bg-fd-background px-3 py-2 font-mono text-[13px] leading-relaxed sm:h-52" />
+        className="mt-4 block h-44 w-full field-sizing-fixed resize-none overflow-y-auto rounded-md border bg-fd-background px-3 py-2 font-mono text-[13px] leading-relaxed sm:h-52" />
       <div className="mt-3 flex">
         <button type="button" disabled={!prompt} className="swb-button border hover:bg-fd-muted disabled:opacity-50"
           onClick={async () => {

@@ -10,11 +10,14 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
 
   const sample = () => demo.evaluate((section) => {
     const { x, y, width, height } = section.getBoundingClientRect();
+    const win = section.querySelector('.swb-win')!;
+    const messages = section.querySelectorAll('.swb-win-message');
     return {
       size: { x, y, width, height, scrollHeight: document.documentElement.scrollHeight },
       windows: section.querySelectorAll('.swb-win').length,
       title: section.querySelector('.swb-win-bar')?.textContent,
-      messages: section.querySelectorAll('.swb-win-message').length,
+      messages: messages.length,
+      bottomGap: win.getBoundingClientRect().bottom - messages[messages.length - 1].getBoundingClientRect().bottom,
       botMarks: section.querySelectorAll('.swb-win-bot').length,
     };
   });
@@ -24,9 +27,11 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
   const messagesByTitle = new Map<string | undefined, Set<number>>();
   const deadline = Date.now() + 45_000;
   do {
-    const { windows, size, title, messages, botMarks } = await sample();
+    const { windows, size, title, messages, botMarks, bottomGap } = await sample();
     expect(windows).toBe(1);
     expect(size).toEqual(baseline);
+    expect(bottomGap).toBeGreaterThanOrEqual(0);
+    expect(bottomGap).toBeLessThanOrEqual(24);
     if (titles.at(-1) !== title) titles.push(title);
     const counts = messagesByTitle.get(title) ?? new Set<number>();
     counts.add(messages);
