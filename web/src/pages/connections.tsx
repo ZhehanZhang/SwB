@@ -17,12 +17,13 @@ const chatStates = { direct: "Direct messages", listening: "Listening", unlisted
 const slackIntake = { socket: "Socket Mode", poll: "Polling", none: "None" }
 
 function StatusTable({ label, headings, children }: { label: string; headings: string[]; children: ReactNode }) {
+  const widths = headings.length === 4 ? ["w-[32%]", "w-[23%]", "w-[20%]"] : ["w-2/5"]
   return (
     <table aria-label={label} className="mt-1 w-full table-fixed border-collapse text-left">
       <thead>
         <tr className="border-b text-caption text-muted-foreground">
           {headings.map((heading, index) => (
-            <th key={heading} scope="col" className={`py-2 pe-2 font-normal ${index === 0 ? "w-2/5" : ""}`}>{heading}</th>
+            <th key={heading} scope="col" className={`py-2 pe-2 font-normal ${widths[index] ?? ""}`}>{heading}</th>
           ))}
         </tr>
       </thead>
