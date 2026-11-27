@@ -14,6 +14,7 @@ CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_d
 GENERIC = {"send", "reply", "wait", "inbox", "get_message", "status", "result", "cancel", "targets", "connect", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set", "login_link"}
 COMPANION = {"companion_code", "companion_list", "companion_invoke", "companion_revoke"}
 CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}
+WEBHOOK = {"webhook_create", "webhook_list", "webhook_rotate", "webhook_revoke", "webhook_test"}
 
 
 def tools(c):
@@ -23,7 +24,7 @@ def tools(c):
 def test_tool_set_and_schemas(make):
     _, c = make()
     t = tools(c)
-    assert set(t) == CORE | GENERIC | COMPANION | CAPY
+    assert set(t) == CORE | GENERIC | COMPANION | CAPY | WEBHOOK
     assert t["switchboard_status"]["title"] == "SwB status"
     for name, tool in t.items():
         assert 40 <= len(tool["description"]) <= 700, name
@@ -39,7 +40,7 @@ def test_tool_set_and_schemas(make):
 
 def test_capy_tools_only_with_the_capy_destination(make):
     _, c = make(config={"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["o@example.test"]}})
-    assert set(tools(c)) == CORE | GENERIC | COMPANION
+    assert set(tools(c)) == CORE | GENERIC | COMPANION | WEBHOOK
 
 
 def test_annotations_mark_reads_and_writes(make):
@@ -55,6 +56,23 @@ def test_annotations_mark_reads_and_writes(make):
     assert t["memory_delete"]["annotations"]["destructiveHint"] is True
     for name in ("memory_rename", "memory_restore"):
         assert t[name]["annotations"]["idempotentHint"] is True, name
+
+
+def test_webhook_schema_declares_provider_schemes_and_annotations(make):
+    _, c = make()
+    t = tools(c)
+    create = t["webhook_create"]["inputSchema"]
+    props = create["properties"]
+    assert create["required"] == ["name"]
+    assert props["direction"]["enum"] == ["in", "out"]
+    assert props["verify"]["anyOf"][0]["enum"] == [
+        "stripe", "linear", "sentry", "standard", "svix", "hmac-sha256", "hmac-sha1", "bearer", "path",
+    ]
+    assert props["encoding"]["anyOf"][0]["enum"] == ["hex", "base64"]
+    assert all(prop["description"] for prop in props.values())
+    assert t["webhook_list"]["annotations"]["readOnlyHint"] is True
+    assert t["webhook_revoke"]["annotations"]["destructiveHint"] is True
+    assert t["webhook_test"]["annotations"]["openWorldHint"] is True
 
 
 @pytest.mark.parametrize(("capy_enabled", "slack_enabled"), [(False, False), (True, False), (False, True), (True, True)])

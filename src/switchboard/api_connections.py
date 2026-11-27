@@ -13,10 +13,11 @@ from .blocks.discord import DiscordBlock
 from .blocks.github import GitHubBlock
 from .blocks.slack import SlackBlock
 from .blocks.telegram import TelegramBlock
+from .blocks.webhook import WebhookBlock
 from .chat import ChatBlock
 from .guard import audit_client_ip
 
-BLOCK_TYPES = {"discord": DiscordBlock, "github": GitHubBlock, "slack": SlackBlock, "telegram": TelegramBlock}
+BLOCK_TYPES = {"discord": DiscordBlock, "github": GitHubBlock, "slack": SlackBlock, "telegram": TelegramBlock, "webhook": WebhookBlock}
 AVATAR_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}
 
 
@@ -94,7 +95,10 @@ async def connection(request: Request) -> JSONResponse:
     details = None
     connected = False
     state = None
-    if block is not None:
+    if isinstance(block, WebhookBlock):
+        connected = True
+        details = {"webhooks": block.hook_views()}
+    elif block is not None:
         status = block.status()
         if isinstance(block, DiscordBlock):
             connected = status["connected"]

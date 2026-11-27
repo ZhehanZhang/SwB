@@ -76,14 +76,15 @@ def test_invalid_trusted_proxies_stop_config_loading(tmp_path, setting):
         load_config(path, {})
 
 
-def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch):
+def test_no_config_starts_default_blocks_and_reports_missing_env(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     core = Switchboard(env={})
     with TestClient(create_app(core)) as client:
         health = core.health()
         assert client.get("/healthz").json()["status"] == health["status"]
-    assert set(health["blocks"]) == {"mcp"}
+    assert set(health["blocks"]) == {"mcp", "webhook"}
     assert health["block_setup"]["mcp"] == {"enabled": True, "missing_env": []}
+    assert health["block_setup"]["webhook"] == {"enabled": True, "missing_env": []}
     assert health["block_setup"]["capy"] == {"enabled": False, "missing_env": ["CAPY_API_KEY", "CAPY_API_KEY_SERVICE"]}
     assert health["block_setup"]["slack"]["missing_env"] == ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"]
     assert health["block_setup"]["discord"] == {"enabled": False, "missing_env": ["DISCORD_BOT_TOKEN"]}
@@ -116,7 +117,7 @@ def test_token_env_loads_its_block_and_status_never_includes_credential_values(t
     core = Switchboard(env={token: marker})
     try:
         status = core.status()
-        assert set(status["blocks"]) == {"mcp", block}
+        assert set(status["blocks"]) == {"mcp", "webhook", block}
         assert status["block_setup"][block] == {"enabled": True, "missing_env": missing}
         assert marker not in str(status)
         assert marker not in repr(core.cfg)
@@ -129,7 +130,7 @@ async def test_env_chat_blocks_do_not_allow_unconfigured_intake_or_posts(tmp_pat
     env = {"DISCORD_BOT_TOKEN": "fixture-discord", "TELEGRAM_BOT_TOKEN": "fixture-telegram"}
     core = Switchboard(env=env)
     try:
-        assert set(core.blocks) == {"mcp", "discord", "telegram"}
+        assert set(core.blocks) == {"mcp", "webhook", "discord", "telegram"}
         for name, token in (("discord", "DISCORD_BOT_TOKEN"), ("telegram", "TELEGRAM_BOT_TOKEN")):
             block = core.blocks[name]
             assert block.token() == env[token]
@@ -145,7 +146,8 @@ def test_yaml_chat_token_overrides_and_explicit_blocks_take_precedence(tmp_path)
     base = tmp_path / "base.yaml"
     base.write_text("version: 2\nblocks:\n  community: {use: discord, token_env: CUSTOM_DISCORD_TOKEN}\n  telegram: {enabled: false}\n")
     cfg = load_config(base, {"DISCORD_BOT_TOKEN": "fixture-discord", "TELEGRAM_BOT_TOKEN": "fixture-telegram"})
-    assert cfg.blocks == {"mcp": {"use": "mcp"}, "community": {"use": "discord", "token_env": "CUSTOM_DISCORD_TOKEN"}}
+    assert cfg.blocks == {"mcp": {"use": "mcp"}, "webhook": {"use": "webhook"},
+                          "community": {"use": "discord", "token_env": "CUSTOM_DISCORD_TOKEN"}}
     assert cfg.block_env["community"] == ("CUSTOM_DISCORD_TOKEN",)
 
 
@@ -162,7 +164,7 @@ async def test_config_with_retired_capy_burst_still_loads(tmp_path):
 async def test_mcp_events_deliver_mailbox_messages_without_yaml(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     core = Switchboard(env={"SWITCHBOARD_KEY_OWNER": STATIC_KEY, "SWITCHBOARD_KEY_SECOND": SECOND_KEY})
-    assert set(core.blocks) == {"mcp"}
+    assert set(core.blocks) == {"mcp", "webhook"}
     delivered = []
 
     async def resolve(host, port):
@@ -249,7 +251,7 @@ def test_overlay_deep_merges_mappings_and_replaces_lists_over_yaml_and_env(tmp_p
     assert cfg.owner_emails == ("private@example.test",)
     assert cfg.access_team_domain == "acme.cloudflareaccess.com" and cfg.access_aud == "example-aud"
     assert cfg.branding == Branding("Acme", "swb", "/logos/acme.svg", "#445566", None)
-    assert set(cfg.blocks) == {"mcp", "github"}
+    assert set(cfg.blocks) == {"mcp", "webhook", "github"}
     assert cfg.block_env["github"] == ("EXAMPLE_WEBHOOK_SECRET",)
 
 
@@ -269,11 +271,11 @@ def test_local_overlay_is_optional_and_explicit_overlay_path_wins(tmp_path, monk
 def test_v2_without_blocks_uses_env_and_route_overlay_keeps_v1_blocks(tmp_path):
     base, overlay = tmp_path / "base.yaml", tmp_path / "overlay.yaml"
     base.write_text("version: 2\n")
-    assert set(load_config(base, {"GITHUB_WEBHOOK_SECRET": "fixture-github"}).blocks) == {"mcp", "github"}
+    assert set(load_config(base, {"GITHUB_WEBHOOK_SECRET": "fixture-github"}).blocks) == {"mcp", "webhook", "github"}
     base.write_text("destinations: {capy: {daily_cap: 3}}\n")
     overlay.write_text("version: 2\nblocks: {github: {use: github}}\n")
     assert load_config(base, {"SWITCHBOARD_OVERLAY": str(overlay)}).blocks == {
-        "mcp": {"use": "mcp"}, "capy": {"use": "capy", "daily_cap": 3}, "github": {"use": "github"},
+        "mcp": {"use": "mcp"}, "webhook": {"use": "webhook"}, "capy": {"use": "capy", "daily_cap": 3}, "github": {"use": "github"},
     }
 
 
@@ -288,7 +290,7 @@ def test_env_aliases_and_yaml_null_overrides(tmp_path, monkeypatch):
     base.write_text("version: 2\npublic_url: null\nauth: {cloudflare_access: null, owner_emails: []}\nblocks: {}\n")
     explicit = load_config(base, env)
     assert explicit.public_url is None and not explicit.owner_emails and not explicit.owner_sign_in
-    assert explicit.blocks == {"mcp": {"use": "mcp"}}
+    assert explicit.blocks == {"mcp": {"use": "mcp"}, "webhook": {"use": "webhook"}}
 
 
 def test_swb_up_without_dir_preserves_process_and_dotenv_paths(tmp_path, monkeypatch):
@@ -301,4 +303,4 @@ def test_swb_up_without_dir_preserves_process_and_dotenv_paths(tmp_path, monkeyp
         assert "SWITCHBOARD_CONFIG" not in os.environ
     args, cfg, config_path = called[0]
     assert config_path == "from-env.yaml"
-    assert args == ["serve"] and cfg.data_dir.as_posix() == "process-data" and set(cfg.blocks) == {"mcp"}
+    assert args == ["serve"] and cfg.data_dir.as_posix() == "process-data" and set(cfg.blocks) == {"mcp", "webhook"}

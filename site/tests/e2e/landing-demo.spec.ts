@@ -3,13 +3,21 @@ import { exchangeScenes } from '../../lib/exchange-copy';
 
 test('six demo windows keep the section and every window fixed over ten seconds', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.addInitScript(() => {
+    const metrics = Object.assign(window, { swbLayoutShift: 0 });
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as (PerformanceEntry & { hadRecentInput: boolean; value: number })[]) {
+        if (!entry.hadRecentInput) metrics.swbLayoutShift += entry.value;
+      }
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready);
   const demo = page.locator('#landing-demos').locator('..');
   const windows = demo.locator('.swb-win');
   await expect(windows).toHaveCount(6);
   await expect(demo.locator('button, [role="tablist"]')).toHaveCount(0);
-  await expect(windows.first().locator('.swb-win-message:visible').first()).toBeVisible();
+  await expect(windows.first().locator('.swb-win-live > .swb-win-message')).toBeVisible();
 
   const sample = () => demo.evaluate((section) => {
     const rect = (node: Element) => {
@@ -20,27 +28,92 @@ test('six demo windows keep the section and every window fixed over ten seconds'
     return {
       section: rect(section),
       windows: windows.map(rect),
-      counts: windows.map((window) => window.querySelectorAll('.swb-win-message:not([data-pending])').length),
+      titleBars: windows.map((window) => rect(window.querySelector('.swb-win-bar')!)),
     };
   });
 
   const baseline = await sample();
-  const counts = baseline.counts.map((count) => [count]);
+  expect(baseline.windows.every(({ height }) => height === 244)).toBe(true);
+  expect(baseline.titleBars.every(({ height }) => height === 44)).toBe(true);
   const deadline = Date.now() + 10_000;
   do {
     await page.waitForTimeout(125);
     const current = await sample();
-    expect(current.section).toEqual(baseline.section);
-    expect(current.windows).toEqual(baseline.windows);
-    current.counts.forEach((count, i) => {
-      if (counts[i].at(-1) !== count) counts[i].push(count);
-    });
+    expect(current).toEqual(baseline);
   } while (Date.now() < deadline);
+  expect(await page.evaluate(() => (window as Window & { swbLayoutShift?: number }).swbLayoutShift)).toBe(0);
+});
 
-  for (const [index, sequence] of counts.entries()) {
-    const length = exchangeScenes[index].messages.length;
-    expect(sequence).toContain(length);
-    expect(sequence.lastIndexOf(1)).toBeGreaterThan(sequence.indexOf(length));
+test('demo transcripts never disappear across two loops at 50ms intervals', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  await expect(page.locator('.swb-win-live')).toHaveCount(6);
+
+  const frames = await page.locator('.swb-exchange').evaluate((demo) => new Promise<{
+    time: number;
+    windows: { opacity: number; visible: number; latest: string | null }[];
+  }[]>((resolve) => {
+    const samples: {
+      time: number;
+      windows: { opacity: number; visible: number; latest: string | null }[];
+    }[] = [];
+    const bodies = [...demo.querySelectorAll('.swb-win-live')];
+    const start = performance.now();
+    const sample = () => {
+      samples.push({
+        time: performance.now() - start,
+        windows: bodies.map((body) => {
+          const { top, bottom } = body.getBoundingClientRect();
+          const entries = [...body.querySelectorAll('.swb-win-message')];
+          const history = body.querySelector('.swb-win-history');
+          const historyOpacity = history ? Number(getComputedStyle(history).opacity) : 1;
+          return {
+            opacity: Number(getComputedStyle(body).opacity),
+            visible: entries.filter((entry) => {
+              const style = getComputedStyle(entry);
+              const rect = entry.getBoundingClientRect();
+              const opacity = Number(style.opacity) * (entry.parentElement === history ? historyOpacity : 1);
+              return style.visibility === 'visible' && opacity > 0 &&
+                rect.height > 0 && rect.bottom > top && rect.top < bottom;
+            }).length,
+            latest: entries.at(-1)?.querySelector('p:last-child')?.textContent ?? null,
+          };
+        }),
+      });
+    };
+    sample();
+    const timer = window.setInterval(() => {
+      sample();
+      if (samples.at(-1)!.time < 18_500) return;
+      window.clearInterval(timer);
+      resolve(samples);
+    }, 50);
+  }));
+
+  const periods = [];
+  for (const [i, scene] of exchangeScenes.entries()) {
+    const copies = scene.messages.map(([, text]) => text.en);
+    const wrapTimes = [];
+    let previous: string | null = null;
+    let changes = 0;
+    for (const { time, windows } of frames) {
+      const { opacity, visible, latest } = windows[i];
+      expect(opacity, `${scene.app} opacity at ${time}ms`).toBeGreaterThan(0);
+      expect(visible, `${scene.app} visible messages at ${time}ms`).toBeGreaterThan(0);
+      if (latest === previous) continue;
+      if (previous !== null) {
+        expect(latest, `${scene.app} next message at ${time}ms`).toBe(copies[(copies.indexOf(previous) + 1) % copies.length]);
+        if (latest === copies[0]) wrapTimes.push(time);
+        changes++;
+      }
+      previous = latest;
+    }
+    expect(changes, `${scene.app} full cycles`).toBeGreaterThanOrEqual(copies.length * 2);
+    expect(wrapTimes.length, `${scene.app} observed wraps`).toBeGreaterThanOrEqual(2);
+    periods.push(wrapTimes[1] - wrapTimes[0]);
+  }
+  for (let i = 1; i < periods.length; i++) {
+    expect(periods[i], `${exchangeScenes[i].app} cycle period`).toBeGreaterThan(periods[i - 1]);
   }
 });
 
@@ -54,17 +127,17 @@ test('demo grid changes from one to two to three columns at 900px and 1280px', a
   }
 });
 
-test('demo windows start at staggered times and show their own conversations', async ({ page }) => {
+test('demo windows advance at staggered times and show their own conversations', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.clock.install();
   await page.clock.pauseAt(new Date(Date.now() + 1000));
   await page.goto('/');
-  const windows = page.locator('.swb-win');
+  const windows = page.locator('.swb-win-live');
   await expect(windows).toHaveCount(6);
   const visible = () => windows.evaluateAll((nodes) => nodes.map((node) =>
-    [...node.querySelectorAll('.swb-win-message:not([data-pending])')].map((entry) => entry.querySelector('p:last-child')!.textContent)));
+    [...node.querySelectorAll('.swb-win-message')].map((entry) => entry.querySelector('p:last-child')!.textContent)));
   await page.clock.runFor(250);
-  expect(await visible()).toEqual([[exchangeScenes[0].messages[0][1].en], [], [], [], [], []]);
+  expect(await visible()).toEqual(exchangeScenes.map(({ messages }) => [messages[0][1].en]));
   await page.clock.runFor(1600);
   const active = await visible();
   expect(active.map((messages) => messages.length)).toEqual([2, 2, 2, 1, 1, 1]);
@@ -73,25 +146,109 @@ test('demo windows start at staggered times and show their own conversations', a
   }
 });
 
+test('new messages fade and rise 8px while the earlier messages glide up', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await page.goto('/');
+  await page.clock.runFor(1260);
+  const body = page.locator('.swb-win-live').first();
+  const animations = await body.evaluate((transcript) => Object.fromEntries(transcript.getAnimations({ subtree: true }).map(({ effect }) => {
+    const track = effect as KeyframeEffect;
+    const [start, end] = track.getKeyframes();
+    const name = track.target?.classList.contains('swb-win-history') ? 'history' : 'entry';
+    return [name, { start, end, duration: track.getTiming().duration, easing: track.getTiming().easing }];
+  })));
+  const { history, entry } = animations;
+  expect(history).toMatchObject({ duration: 250, easing: 'ease-out', end: { transform: 'none' } });
+  expect(parseFloat(String(history.start.transform).match(/translateY\((.*)px\)/)![1])).toBeGreaterThan(8);
+  expect(entry).toMatchObject({ duration: 250, start: { opacity: '0', transform: 'translateY(8px)', easing: 'ease-out' } });
+});
+
 test('each demo keeps its last message within 24px of the bottom during playback', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.clock.install();
   await page.clock.pauseAt(new Date(Date.now() + 1000));
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready);
-  const windows = page.locator('.swb-win-body');
+  const windows = page.locator('.swb-win-live');
   await expect(windows).toHaveCount(6);
   await page.clock.runFor(4400);
   for (const width of [390, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const gaps = await windows.evaluateAll((bodies) => bodies.map((body) => {
-      const messages = body.querySelectorAll('.swb-win-message:not([data-pending])');
+      const messages = body.querySelectorAll('.swb-win-message');
       return { gap: body.getBoundingClientRect().bottom - messages[messages.length - 1].getBoundingClientRect().bottom, count: messages.length };
     }));
     for (const { gap, count } of gaps) {
       expect(count).toBeGreaterThan(1);
       expect(gap, `${width}px bottom gap`).toBeGreaterThanOrEqual(0);
       expect(gap, `${width}px bottom gap`).toBeLessThanOrEqual(24);
+    }
+  }
+});
+
+test('every demo title links to setup for its apps in each locale', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const agents = [
+    'claude,grok-bot',
+    'muse',
+    'grok-bot,claude,capy',
+    'slack,claude,grok-bot,capy',
+    'github,grok-bot',
+    'claude-code,capy',
+  ];
+  for (const [prefix, label] of [['', 'Set this up'], ['/zh-Hans', '配置此场景'], ['/zh-Hant', '設定此情境']]) {
+    await page.goto(`${prefix}/`);
+    for (const [i, { app }] of exchangeScenes.entries()) {
+      const window = page.locator(`[data-exchange-window="${app}"]`);
+      const link = window.locator('.swb-win-bar').getByRole('link', { name: label });
+      await expect(link).toBeVisible();
+      const href = new URL((await link.getAttribute('href'))!, page.url());
+      expect(href.pathname).toBe(`${prefix}/docs/get-started`);
+      expect(href.searchParams.get('agents')).toBe(agents[i]);
+      await expect(link.locator('svg')).toHaveCSS('width', '14px');
+    }
+  }
+});
+
+test('each demo title and setup label stays on one line at every target width', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const path of ['/', '/zh-Hans', '/zh-Hant']) {
+    await page.goto(path);
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of [390, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const bars = await page.locator('.swb-win-bar').evaluateAll((nodes) => nodes.map((bar) => {
+        const line = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return Array.from(range.getClientRects(), ({ top, right }) => ({ top, right }));
+        };
+        const title = bar.querySelector('h3 > span:last-child')!;
+        const link = bar.querySelector('a')!;
+        const label = link.querySelector('span')!;
+        return {
+          title: title.textContent,
+          titleLines: line(title),
+          labelLines: line(label),
+          titleRight: title.getBoundingClientRect().right,
+          linkLeft: link.getBoundingClientRect().left,
+          linkRight: link.getBoundingClientRect().right,
+          barRight: bar.getBoundingClientRect().right,
+        };
+      }));
+      expect(bars).toHaveLength(exchangeScenes.length);
+      for (const bar of bars) {
+        const at = `${path} at ${width}px: ${bar.title}`;
+        expect(bar.titleLines, at).toHaveLength(1);
+        expect(bar.labelLines, at).toHaveLength(1);
+        expect(Math.abs(bar.titleLines[0].top - bar.labelLines[0].top), at).toBeLessThanOrEqual(4);
+        expect(bar.titleLines[0].right, at).toBeLessThanOrEqual(bar.titleRight + 1);
+        expect(bar.titleRight, at).toBeLessThan(bar.linkLeft);
+        expect(bar.labelLines[0].right, at).toBeLessThanOrEqual(bar.linkRight + 1);
+        expect(bar.linkRight, at).toBeLessThan(bar.barRight);
+      }
     }
   }
 });
@@ -161,33 +318,26 @@ test('reduced motion keeps the diagram still', async ({ page }) => {
   await page.evaluate(() => document.fonts.ready);
 
   const board = page.locator('.swb-board:visible');
-  const app = board.getByRole('button', { name: 'Claude', exact: true });
+  const app = board.getByRole('link', { name: 'Claude', exact: true });
   await expect(app).toHaveCSS('animation-name', 'none');
-  const canvas = board.locator('canvas');
+  const pulse = board.locator('.swb-hub-pulse:visible');
   const spokes = board.locator('.swb-transit');
   await expect(spokes).toHaveCount(14);
   const stillSpokes = () => spokes.evaluateAll((paths) => paths.map((path) => {
     const style = getComputedStyle(path);
     return { d: path.getAttribute('d'), stroke: style.stroke, width: style.strokeWidth, active: path.hasAttribute('data-active') };
   }));
-  const canvasHasPixels = () => canvas.evaluate((node: HTMLCanvasElement) => {
-    const pixels = node.getContext('2d')!.getImageData(0, 0, node.width, node.height).data;
-    return pixels.some((value, index) => index % 4 === 3 && value > 0);
-  });
   const cords = await stillSpokes();
   expect(cords.every(({ width, stroke }) => parseFloat(width) >= 1.75 && stroke !== 'none')).toBe(true);
   expect(cords.filter(({ active }) => active)).toHaveLength(2);
-  expect(await canvasHasPixels()).toBe(false);
+  await expect(pulse).toHaveCount(0);
   await page.waitForTimeout(1500);
   expect(await stillSpokes()).toEqual(cords);
-  expect(await canvasHasPixels()).toBe(false);
+  await expect(pulse).toHaveCount(0);
 
-  await app.click();
-  const setup = page.getByRole('dialog', { name: 'Claude' });
-  await expect(setup.getByRole('button', { name: 'Copy prompt' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(setup).toBeHidden();
+  await app.focus();
   await expect(app).toBeFocused();
+  await expect(app).toHaveAttribute('href', '/docs/get-started?agents=claude');
 });
 
 test('reduced motion shows every final transcript in a fitted row', async ({ page }) => {
@@ -208,7 +358,7 @@ test('reduced motion shows every final transcript in a fitted row', async ({ pag
     await page.evaluate(() => document.fonts.ready);
     for (const width of [320, 390, 899, 900, 1024, 1279, 1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      const frames = await demo.locator('.swb-win-body').evaluateAll((bodies) => bodies.map((node) => {
+      const frames = await demo.locator('.swb-win-final').evaluateAll((bodies) => bodies.map((node) => {
         const { top, bottom, height } = node.getBoundingClientRect();
         const messages = [...node.querySelectorAll('.swb-win-message')];
         const entries = messages.map((entry) => entry.getBoundingClientRect());

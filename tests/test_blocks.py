@@ -52,9 +52,9 @@ def test_v1_config_translates_to_blocks(tmp_path):
     p1.write_text(yaml.safe_dump(v1))
     p2.write_text(migrate_text(p1.read_text()))
     a, b = load_config(p1, {}), load_config(p2, {})
-    assert a.blocks == b.blocks and list(a.blocks) == ["mcp", "slack", "capy"] and b.version == 2 and a.version == 1
+    assert a.blocks == b.blocks and list(a.blocks) == ["mcp", "webhook", "slack", "capy"] and b.version == 2 and a.version == 1
     assert migrate_text(p2.read_text()) == p2.read_text()
-    assert list(load_config(None, {}).blocks) == ["mcp"]
+    assert list(load_config(None, {}).blocks) == ["mcp", "webhook"]
     assert translate_v1({"destinations": {"capy": {"enabled": False}}})["blocks"]["capy"]["enabled"] is False
     assert translate_v1({"origins": {"slack": {}}})["blocks"]["slack"]["engine"] is False
 
@@ -75,14 +75,14 @@ def test_yaml_preserves_an_existing_named_mcp_block(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text("version: 2\nblocks:\n  primary: {use: mcp, legacy_aliases: false}\n")
     cfg = load_config(path, {})
-    assert cfg.blocks == {"primary": {"use": "mcp", "legacy_aliases": False}}
+    assert cfg.blocks == {"webhook": {"use": "webhook"}, "primary": {"use": "mcp", "legacy_aliases": False}}
     assert cfg.mcp_enabled
 
 
 def test_v2_config_runs_the_same_core(make):
     cfg = translate_v1(base_config())
     core, c = make(config=cfg)
-    assert set(core.blocks) == {"mcp", "capy"} and core.health()["blocks"]["capy"]["level"] == {"out": "L4", "in": "mcp"}
+    assert set(core.blocks) == {"mcp", "webhook", "capy"} and core.health()["blocks"]["capy"]["level"] == {"out": "L4", "in": "mcp"}
     assert not call(c, STATIC_KEY, "send", {"task": "from a v2 config"}).get("isError")
 
 

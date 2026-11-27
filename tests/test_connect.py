@@ -32,7 +32,7 @@ def test_connect_schema_and_unknown_kinds(make):
     assert out["what"] == "unknown"
     assert out["complete"] is False
     assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "cloudflare", "coding-agent", "discord",
-                            "dots", "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
+                            "dots", "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram", "webhook"]
 
 
 @pytest.mark.parametrize(("kind", "block", "env_names"), [
@@ -123,7 +123,7 @@ def test_connect_snippet_keeps_environment_discovered_blocks_after_reload(make):
         "GROK_ROUTINE_DEMO_SECRET": "fixture-grok-webhook-secret",
     }
     core, client = make(config=cfg, env=env)
-    assert set(core.blocks) == {"mcp", "github", "grok-routine"}
+    assert set(core.blocks) == {"mcp", "webhook", "github", "grok-routine"}
     configure, restart = connect(client, "dots")["next"]
     assert configure["by"] == "you" and "Add this blocks section" in configure["do"]
     assert restart["do"] == "Restart SwB."
@@ -134,7 +134,7 @@ def test_connect_snippet_keeps_environment_discovered_blocks_after_reload(make):
     for name, config in core.cfg.blocks.items():
         assert parsed["blocks"][name] == config
     reloaded, client = make(config={**cfg, **parsed}, env=env)
-    assert set(reloaded.blocks) == {"mcp", "github", "grok-routine", "dots"}
+    assert set(reloaded.blocks) == {"mcp", "webhook", "github", "grok-routine", "dots"}
     assert "state" not in connect(client, "dots")
 
 
@@ -152,12 +152,12 @@ def test_connect_enables_routine_through_environment_discovery(make, kind, block
     cfg = {"version": 2, "public_url": PUBLIC}
     env = {"SWITCHBOARD_KEY_OWNER": STATIC_KEY}
     core, client = make(config=cfg, env=env)
-    assert set(core.blocks) == {"mcp"}
+    assert set(core.blocks) == {"mcp", "webhook"}
     configure, restart = connect(client, kind)["next"]
     assert configure == {"by": "person", "do": f"Set {' and '.join(routine_env)} in .env."}
     assert restart == {"by": "you", "do": "Restart SwB."}
     reloaded, client = make(config=cfg, env={**env, **routine_env})
-    assert set(reloaded.blocks) == {"mcp", block}
+    assert set(reloaded.blocks) == {"mcp", "webhook", block}
     [routine] = reloaded.blocks[block].routines().values()
     assert routine["source"] == "config"
     assert set(reloaded.cfg.block_env[block]) == set(routine_env)

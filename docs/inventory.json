@@ -278,6 +278,16 @@
       "use": "telegram"
     },
     {
+      "block_kind": "both",
+      "connect_target": "webhook",
+      "credentials": [],
+      "icon": null,
+      "id": "block:webhook",
+      "kind": "block",
+      "label": "Webhooks",
+      "use": "webhook"
+    },
+    {
       "arguments": [
         {
           "choices": [
@@ -1932,6 +1942,13 @@
     },
     {
       "icon": null,
+      "id": "config_key:blocks.webhook.max_body_kb",
+      "key": "blocks.webhook.max_body_kb",
+      "kind": "config_key",
+      "label": "blocks.webhook.max_body_kb"
+    },
+    {
+      "icon": null,
       "id": "config_key:branding",
       "key": "branding",
       "kind": "config_key",
@@ -2343,7 +2360,8 @@
         "discord": "Discord",
         "github": "GitHub",
         "slack": "Slack",
-        "telegram": "Telegram"
+        "telegram": "Telegram",
+        "webhook": "Webhooks"
       },
       "surfaces": [
         "console"
@@ -2569,6 +2587,13 @@
       "kind": "prompt",
       "label": "Set up Telegram",
       "name": "setup-telegram"
+    },
+    {
+      "icon": null,
+      "id": "prompt:setup-webhook",
+      "kind": "prompt",
+      "label": "Set up Webhook",
+      "name": "setup-webhook"
     },
     {
       "icon": "src/switchboard/slack/avatars/capy.png",
@@ -2837,7 +2862,7 @@
       "name": "companion_revoke"
     },
     {
-      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. For Muse device pairing pass choose.gadget=true. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
+      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram, webhook. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. For Muse device pairing pass choose.gadget=true. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [
@@ -3897,6 +3922,73 @@
       "kind": "tool",
       "label": "Wait for replies",
       "name": "wait"
+    },
+    {
+      "description": "Create a webhook and get a private credential link.",
+      "icon": null,
+      "id": "tool:webhook_create",
+      "input_properties": [
+        "direction",
+        "encoding",
+        "event_field",
+        "fields",
+        "header",
+        "name",
+        "prefix",
+        "project",
+        "template",
+        "to",
+        "tolerance_s",
+        "verify"
+      ],
+      "kind": "tool",
+      "label": "Create a webhook",
+      "name": "webhook_create"
+    },
+    {
+      "description": "List webhook addresses, targets, event counts and credential state.",
+      "icon": null,
+      "id": "tool:webhook_list",
+      "input_properties": [
+        "include_revoked"
+      ],
+      "kind": "tool",
+      "label": "List webhooks",
+      "name": "webhook_list"
+    },
+    {
+      "description": "Revoke a webhook, delete its secrets and close its claim links.",
+      "icon": null,
+      "id": "tool:webhook_revoke",
+      "input_properties": [
+        "name"
+      ],
+      "kind": "tool",
+      "label": "Revoke a webhook",
+      "name": "webhook_revoke"
+    },
+    {
+      "description": "Get a private link to replace a webhook secret.",
+      "icon": null,
+      "id": "tool:webhook_rotate",
+      "input_properties": [
+        "grace_s",
+        "name"
+      ],
+      "kind": "tool",
+      "label": "Rotate a webhook secret",
+      "name": "webhook_rotate"
+    },
+    {
+      "description": "Send a signed sample event through a webhook.",
+      "icon": null,
+      "id": "tool:webhook_test",
+      "input_properties": [
+        "name"
+      ],
+      "kind": "tool",
+      "label": "Test a webhook",
+      "name": "webhook_test"
     }
   ],
   "schema_version": 1

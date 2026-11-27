@@ -23,6 +23,7 @@
   "block:muse": "docs/en/setup/muse.mdx",
   "block:slack": "docs/en/blocks/slack.mdx",
   "block:telegram": "docs/en/blocks/telegram.mdx",
+  "block:webhook": "docs/en/blocks/webhooks.mdx",
   "command:blocks": "docs/en/blocks/index.mdx",
   "command:claim": "docs/en/credentials.mdx",
   "command:companion": "docs/en/companion.mdx",
@@ -235,6 +236,7 @@
   "config_key:blocks.telegram.target_aliases": "docs/en/blocks/telegram.mdx",
   "config_key:blocks.telegram.token_env": "docs/en/blocks/telegram.mdx",
   "config_key:blocks.telegram.use": "docs/en/blocks/telegram.mdx",
+  "config_key:blocks.webhook.max_body_kb": "docs/en/blocks/webhooks.mdx",
   "config_key:branding": "docs/en/config.mdx",
   "config_key:branding.accent_color": "docs/en/config.mdx",
   "config_key:branding.display_name": "docs/en/config.mdx",
@@ -318,6 +320,7 @@
   "prompt:setup-muse": "docs/en/connect.mdx",
   "prompt:setup-slack": "docs/en/connect.mdx",
   "prompt:setup-telegram": "docs/en/connect.mdx",
+  "prompt:setup-webhook": "docs/en/blocks/webhooks.mdx",
   "provider:capy": "docs/en/setup/capy-captain.mdx",
   "provider:chatgpt": "docs/en/setup/chatgpt.mdx",
   "provider:claude": "docs/en/setup/claude-project.mdx",
@@ -426,5 +429,10 @@
   "tool:telegram_status": "docs/en/tools.mdx",
   "tool:visibility_list": "docs/en/tools.mdx",
   "tool:visibility_set": "docs/en/tools.mdx",
-  "tool:wait": "docs/en/tools.mdx"
+  "tool:wait": "docs/en/tools.mdx",
+  "tool:webhook_create": "docs/en/blocks/webhooks.mdx",
+  "tool:webhook_list": "docs/en/blocks/webhooks.mdx",
+  "tool:webhook_revoke": "docs/en/blocks/webhooks.mdx",
+  "tool:webhook_rotate": "docs/en/blocks/webhooks.mdx",
+  "tool:webhook_test": "docs/en/blocks/webhooks.mdx"
 }

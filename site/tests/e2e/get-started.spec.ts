@@ -74,6 +74,7 @@ test('switches run locations and copies the release install commands', async ({ 
     .toHaveAttribute('href', `${selfHosting}#fly`);
   await expect(run('cloud').getByRole('link', { name: 'Render Paid plan' })).toHaveAttribute('href', renderBlueprint);
   await expect(run('cloud').getByRole('link', { name: 'Railway Hobby plan' })).toHaveAttribute('href', railwayTemplate);
+  await expect(run('cloud').getByRole('link', { name: 'Self-hosting guide', exact: true })).toHaveAttribute('href', selfHosting);
   for (const provider of ['fly', 'render', 'railway']) {
     await expect(run('cloud').locator(`image[href="/marks/${provider}-on-light.svg"]`)).toBeVisible();
   }
@@ -230,6 +231,37 @@ for (const [prefix, title, cloud, pick, guide] of [
     await page.goto(`${prefix}/docs/setup`);
     await expect(page.locator('article p').filter({ hasText: 'MCP' }).first()).toBeVisible();
     await expect(page.locator(`article p a[href="${prefix}${start}"]`)).toHaveText(title);
+  });
+
+  test(`${prefix.slice(1) || 'en'} keeps all run and agent labels on one line`, async ({ page }) => {
+    const runs = setup(page).locator('[role="group"][aria-labelledby="start-run"] > button');
+    const tiles = setup(page).locator('[role="group"][aria-labelledby="start-agents"] > button');
+
+    for (const width of [360, 390, 430, 768, 1024, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${prefix}${start}`);
+      await page.evaluate(() => document.fonts.ready);
+      await expect(runs).toHaveCount(3);
+      await expect(tiles).toHaveCount(fallbackAgents.length);
+      const controls = width <= 430 ? runs.or(tiles) : tiles;
+      const layout = await controls.evaluateAll((buttons) => buttons.map((button) => {
+        const label = button.querySelector(':scope > span:last-of-type') ?? button;
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        const rects = Array.from(range.getClientRects(), ({ left, right }) => ({ left, right }));
+        const { left, right } = button.getBoundingClientRect();
+        const check = button.querySelector(':scope > svg')?.getBoundingClientRect();
+        const groupRight = button.parentElement!.getBoundingClientRect().right;
+        return { text: label.textContent, rects, left, right, checkLeft: check?.left, groupRight };
+      }));
+      for (const { text, rects, left, right, checkLeft, groupRight } of layout) {
+        const at = `${prefix || 'en'} at ${width}px, ${text}`;
+        expect(rects, at).toHaveLength(1);
+        expect(rects[0].left, at).toBeGreaterThan(left);
+        expect(rects[0].right, at).toBeLessThan(checkLeft ?? right);
+        expect(right, at).toBeLessThanOrEqual(Math.min(width, groupRight) + 1);
+      }
+    }
   });
 }
 

@@ -32,9 +32,9 @@ from ...targets import LEGACY_KINDS
 from ...trust import memory_label
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
-from .policy import (BLOCK_ROLES, CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MEMORY_NOT_FOUND, OWNER_REQUIRED, READ_ROLES,
-                     ROUTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED, Role, can_read_project, catalog_refusal,
-                     default_memory_scopes, granted_memory_scopes, mutation_roles, read_refusal)
+from .policy import (BLOCK_ROLES, CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MEMORY_NOT_FOUND, OWNER_REQUIRED,
+                     ROUTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED, ReadPolicy, Role, can_read_project, catalog_refusal,
+                     default_memory_scopes, granted_memory_scopes, mutation_roles, read_refusal, read_roles)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -128,6 +128,7 @@ class LimitedServer(MCPServer):
 
     modes: ChannelModes
     roles: dict[str, Role]
+    read_roles: dict[str, ReadPolicy]
     github_actions: dict[str, str]
 
     def _audit_refusal(self, p: Principal | None, tool: str | None, reason: str) -> None:
@@ -140,7 +141,7 @@ class LimitedServer(MCPServer):
         p = principal_of(getattr(request_context, "request", None))
         tool = next((t for t in await self.list_tools() if t.name == name), None)
         role = self.roles.get(name)
-        reason = catalog_refusal(p, name, tool, role)
+        reason = catalog_refusal(p, name, tool, role, self.read_roles.get(name))
         if reason is None and p is not None:
             if name in self.github_actions and (conversation := arguments.get("conversation")) is not None:
                 handle = arguments.get("handle")
@@ -199,8 +200,8 @@ class LimitedServer(MCPServer):
             raise ToolError(" ".join(parts) or "Check the tool arguments.") from error
 
     async def _argument_refusal(self, p: Principal, name: str, role: Role | None, arguments: dict[str, Any]) -> str | None:
-        if name in READ_ROLES:
-            return read_refusal(self.modes.core, p, name, arguments)
+        if read_role := self.read_roles.get(name):
+            return read_refusal(self.modes.core, p, name, arguments, read_role)
         owner = p.is_unrestricted_owner
         if role == "route" and not owner:
             agent = arguments.get("agent")
@@ -239,7 +240,7 @@ class LimitedServer(MCPServer):
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
         p = principal_of(getattr(ctx, "request", None))
-        out.tools = [t for t in out.tools if catalog_refusal(p, t.name, t, self.roles.get(t.name)) is None]
+        out.tools = [t for t in out.tools if catalog_refusal(p, t.name, t, self.roles.get(t.name), self.read_roles.get(t.name)) is None]
         return out
 
     def _check_mode(self, p: Principal, name: str, arguments: dict[str, Any]) -> None:
@@ -333,6 +334,7 @@ class MCPBlock(Block):
         mcp = LimitedServer(name="swb", title="SwB", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
         mcp.roles = mutation_roles(core)
+        mcp.read_roles = read_roles(core)
         mcp.github_actions = {f"{b.name}_{action}": action for b in core.blocks.values() if b.manifest.id == "github"
                               for action in BLOCK_ROLES["github"]}
         mcp.middleware.append(advertise_events)

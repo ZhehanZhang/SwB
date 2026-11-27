@@ -1,7 +1,7 @@
 'use client';
 
-import { Check, Copy, Plug, X } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { combineSetupPrompts, setupChoices, type SetupChoice, type SetupSources } from '@/lib/setup-picker';
 import type { setupPickerCopy } from '@/lib/setup-picker-copy';
 import { MarkTile } from './mark-tile';
@@ -9,18 +9,15 @@ import { MarkTile } from './mark-tile';
 type Props = {
   labels: (typeof setupPickerCopy)[keyof typeof setupPickerCopy];
   sources: SetupSources;
-  modal: boolean;
 };
 
-export function SetupPickerControls({ labels, sources, modal }: Props) {
-  const dialog = useRef<HTMLDialogElement>(null);
+export function SetupPickerControls({ labels, sources }: Props) {
   const preview = useRef<HTMLTextAreaElement>(null);
-  const titleId = useId();
   const [selection, setSelection] = useState<SetupChoice[]>([]);
   const [status, setStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const prompt = combineSetupPrompts(sources, selection);
 
-  const fields = (
+  return (
     <div data-setup-picker className="not-prose min-w-0">
       <fieldset className="grid min-w-0 grid-cols-2 gap-2 min-[600px]:grid-cols-3">
         <legend className="sr-only">{labels.apps}</legend>
@@ -60,25 +57,5 @@ export function SetupPickerControls({ labels, sources, modal }: Props) {
         </span>
       </div>
     </div>
-  );
-
-  if (!modal) return fields;
-  return (
-    <>
-      <button type="button" aria-haspopup="dialog" className="swb-button swb-button-primary whitespace-nowrap"
-        onClick={() => dialog.current?.showModal()}><Plug aria-hidden="true" />{labels.setupWithAgent}</button>
-      <dialog ref={dialog} aria-labelledby={titleId}
-        className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(40rem,calc(100%-1.5rem))] max-w-none overscroll-contain overflow-y-auto rounded-lg border bg-fd-popover p-4 text-fd-popover-foreground backdrop:bg-black/50 sm:p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 id={titleId} className="text-lg font-semibold">{labels.setup}</h2>
-          <form method="dialog">
-            <button aria-label={labels.close} className="swb-button swb-button-icon hover:bg-fd-muted">
-              <X aria-hidden="true" />
-            </button>
-          </form>
-        </div>
-        {fields}
-      </dialog>
-    </>
   );
 }

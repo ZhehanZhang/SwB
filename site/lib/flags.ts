@@ -38,7 +38,7 @@ export const deployProviders = {
     name: 'Railway',
     href: '/docs/self-hosting#railway',
     oneClickHref: RAILWAY_DEPLOY_LIVE ? 'https://railway.com/deploy/swb' : undefined,
-    enabled: process.env.NODE_ENV === 'development' && process.env.SWB_TEST_DEPLOY_RAILWAY === '1',
+    enabled: true,
     label: {
       en: 'Hobby plan',
       'zh-Hans': 'Hobby 套餐',

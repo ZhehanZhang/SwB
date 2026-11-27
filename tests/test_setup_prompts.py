@@ -39,13 +39,15 @@ def test_setup_prompts_and_resources_match_docs(make):
         assert result["contents"] == [{"uri": uri, "mimeType": "text/markdown", "text": text}]
 
 
-@pytest.mark.parametrize(("what", "kind"), [("grok-bot", "grok-bot"), ("grok-routine", "grok-bot"), ("deploy", "deploy")])
+@pytest.mark.parametrize(("what", "kind"), [("grok-bot", "grok-bot"), ("grok-routine", "grok-bot"), ("deploy", "deploy"), ("webhook", "webhook")])
 def test_connect_returns_setup_guide(make, what, kind):
     _, client = make(config=base_config(version=2, blocks={"mcp": {}}))
     out = payload(call(client, STATIC_KEY, "connect", {"what": what}))
     assert out["what"] == kind
     assert out["guide"] == {"prompt": f"setup-{kind}", "resource": f"swb://setup/{kind}"}
     assert out["complete"] is False
+    if kind == "webhook":
+        assert out["next"] == [{"by": "you", "do": "Call webhook_create with the webhook settings."}]
 
 
 def test_connect_unknown_lists_setup_guides(make):
