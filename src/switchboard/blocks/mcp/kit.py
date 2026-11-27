@@ -30,13 +30,16 @@ Conversation = Annotated[str, Field(description="The conversation: its handle (h
 DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. "
 
 
+DEVICE_TEXT = frozenset({"text", "body", "title", "description", "message", "error", "content"})
+
+
 def frame_device(value: Any, where: str, key: str = "") -> Any:
-    """Device results reach agents as external text, except base64 payloads, which carry bytes."""
+    """Free text from a device reaches agents framed as external; names, schemas and base64 stay exact."""
     if isinstance(value, dict):
         return {k: frame_device(v, where, k) for k, v in value.items()}
     if isinstance(value, list):
         return [frame_device(v, where, key) for v in value]
-    if isinstance(value, str) and not key.endswith(("base64", "b64")):
+    if isinstance(value, str) and key in DEVICE_TEXT:
         return wrap(value, None, None, "external", where)
     return value
 
@@ -255,7 +258,8 @@ class Kit:
         async def companion_invoke(ctx: Context, companion: str, capability: str, action: str, args: dict[str, Any] | None = None,
                                    timeout_s: Annotated[float, Field(gt=0, le=120)] = 30) -> dict[str, Any]:
             result = await kit.run(core.companions.invoke(companion, capability, action, args or {}, timeout_s, principal=kit.who(ctx)))
-            return frame_device(result, f"companion {companion} {capability}.{action}")
+            return {"trust": "external", "from": f"companion {companion} {capability}.{action}",
+                    "result": frame_device(result, f"companion {companion} {capability}.{action}")}
 
         @mcp.tool(title="Disconnect a companion", description="Revoke a paired device key and close its connection.", annotations=DELETE)
         async def companion_revoke(ctx: Context, companion: str) -> dict[str, Any]:
