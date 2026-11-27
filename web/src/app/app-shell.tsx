@@ -38,7 +38,7 @@ function MobileNavigation({ pathname, home }: { pathname: string; home: boolean 
   const more = sections.slice(3)
   const active = more.some(({ to }) => isSection(pathname, to))
   return (
-    <nav aria-label="Navigation" className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-30 h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 pt-[var(--mobile-tabbar-fade-height)] md:hidden">
+    <nav aria-label="Navigation" className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-30 h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 md:hidden">
       <div className="pointer-events-auto grid grid-cols-5">
         <Link to="/" aria-current={home ? "page" : undefined} className={mobileTabClass}>
           <SwbIcon tab className={mobileIconClass} /><span>Overview</span>
@@ -82,7 +82,7 @@ export function AppShell() {
         <div className="flex-1" />
         {utilitySections.map(section => <SectionNav key={section.to} section={section} selected={isSection(pathname, "/about")} />)}
       </nav>
-      <div className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
+      <div className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-clearance)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
         <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2">
             {project && <Link to="/" aria-label={`Back to ${PRODUCT_NAME}`} className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
