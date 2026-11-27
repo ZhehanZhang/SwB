@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from starlette.requests import Request
@@ -32,6 +33,8 @@ from .web import spa_index
 if TYPE_CHECKING:
     from .auth import Auth
 
+log = logging.getLogger(__name__)
+
 
 def error(name: str, status: int) -> JSONResponse:
     return JSONResponse({"error": name}, status_code=status)
@@ -52,8 +55,8 @@ class OwnerLogin:
         self.sessions = auth.sessions
         self.limiter = limiter
         self.oidc = OIDC(auth)
-        code = auth.cfg.env.get("SWB_SETUP_CODE", "")
-        self.setup_digest = hashlib.sha256(code.encode()).digest() if code.isascii() and 32 <= len(code) <= 128 else None
+        self.setup_digest = auth.cfg.owner_setup_digest
+        self.setup_throttled = 0
 
     @property
     def origin(self) -> str | None:
@@ -139,15 +142,18 @@ class OwnerLogin:
         if not request.headers.get("origin") or not self.auth.origin_ok(request):
             return error("csrf", 403)
         code = (await json_body(request)).get("code")
-        if not (isinstance(code, str) and code.isascii() and 32 <= len(code) <= 128
+        if not (isinstance(code, str) and len(code) in (44, 64) and code.isascii()
                 and hmac.compare_digest(hashlib.sha256(code.encode()).digest(), self.setup_digest)):
-            peer = request.client.host if request.client else "?"
-            buckets = (("owner_setup", peer), ("owner_setup_total", "*"))
-            for bucket, key in buckets:
-                if (limited := self.limited(bucket, key)) is not None:
-                    return limited
-            for bucket, key in buckets:
-                self.limiter.hit(bucket, key)
+            limited = self.limited("owner_setup_total", "*")
+            self.limiter.hit("owner_setup_total", "*")
+            if limited is None:
+                peer = request.client.host if request.client else "?"
+                limited = self.limited("owner_setup", peer)
+                self.limiter.hit("owner_setup", peer)
+            if limited is not None:
+                self.setup_throttled += 1
+                log.warning("Owner setup attempt rate limited (%d total)", self.setup_throttled)
+                return limited
             return error("setup_failed", 401)
         response = self.sessions.start(request, Response(status_code=204), "setup")
         if response.status_code == 409:

@@ -48,13 +48,10 @@ class RateLimiter:
 
     def _window(self, bucket: str, key: str) -> deque[float]:
         n, span = self.limits[bucket]
-        q = self.hits.setdefault((bucket, key), deque())
+        q = self.hits.setdefault((bucket, key), deque(maxlen=n))
         cutoff = self.clock() - span
         while q and q[0] < cutoff:
             q.popleft()
-        if not q:
-            self.hits.pop((bucket, key), None)
-            q = self.hits.setdefault((bucket, key), deque())
         return q
 
     def blocked(self, bucket: str, key: str) -> float | None:

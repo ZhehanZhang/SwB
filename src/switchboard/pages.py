@@ -216,7 +216,7 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
     if methods.get("setup"):
         button += ('<form id="owner-setup" method="post" action="/auth/setup">'
                    '<label>Setup code <input name="code" type="password" autocomplete="off" '
-                   'minlength="32" maxlength="128" required></label><button type="submit">Sign in</button></form>')
+                   'minlength="44" maxlength="64" required></label><button type="submit">Sign in</button></form>')
     title = LOGIN_TITLE if button else "Ask your agent for a sign-in link"
     return HTMLResponse(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
