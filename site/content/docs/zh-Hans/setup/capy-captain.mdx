@@ -3,11 +3,11 @@ title: Capy Captain
 description: 把 SwB 的工作发给 Capy Captain，并把答复带回来。
 ---
 
-Captain 是长期运行的 Capy 智能体，负责指挥一组线程。这个连接把 SwB 的工作发给一个 Captain，并把每条答复带回给发送方。
+Capy Captain 是长期运行的 Capy 智能体，负责协调一组话题串。SwB 通过此连接发送工作，再把答复交给发送方。
 
 ## 开始之前
 
-你需要在正确组织中的 Capy 账户、一个项目和一个 Captain。任何成员都可以创建 `read_write` 服务用户。服务用户是供软件使用的 Capy 账户，拥有自己的密钥。
+你需要在正确组织中的 Capy 账户、一个项目和一个 Capy Captain。任何成员都可以创建 `read_write` 服务用户。服务用户是供软件使用的 Capy 账户，拥有自己的密钥。
 
 你的 SwB 服务器需要 `capy` 模块。请把提示词粘贴到已用所有者身份接入 SwB 的智能体中。在 Capy 中，你可以在 **Settings** → **MCP & plugins** 下添加 SwB。
 
@@ -58,18 +58,18 @@ Captain 是长期运行的 Capy 智能体，负责指挥一组线程。这个连
 
 <Step>
 
-### 创建 Captain
+### 创建 Capy Captain
 
-仅在需要新的 Captain 时执行这一步。在 Capy 中打开 **New Captain**。设置名称、项目、**Machine** 和模型。
+按需创建 Capy Captain。设置名称、项目、**Machine** 和模型。
 
 </Step>
 {/* unverified */}
 
 <Step>
 
-### 选择 Captain
+### 选择 Capy Captain
 
-告诉智能体由哪个 Captain 接收工作。
+告诉智能体由哪个 Capy Captain 接收工作。
 
 </Step>
 
@@ -84,9 +84,9 @@ Captain 是长期运行的 Capy 智能体，负责指挥一组线程。这个连
 
 <Step>
 
-### 共享 Captain
+### 共享 Capy Captain
 
-打开 Captain 菜单。选择 **Share**。添加该服务用户。如果 Captain 运行在已配对设备上，也共享该设备。
+打开 Capy Captain 菜单。选择 **Share**。添加该服务用户。如果 Capy Captain 运行在已配对设备上，也共享该设备。
 
 </Step>
 {/* unverified */}
@@ -113,7 +113,7 @@ Captain 是长期运行的 Capy 智能体，负责指挥一组线程。这个连
 
 智能体以所有者身份调用 `connect(what="capy-captain")`。SwB 通过领取链接请求读取密钥 `CAPY_API_KEY`。领取链接是 SwB 上的一次性私密页面，每个页面对应一个令牌。
 
-重启后，`connect` 会列出每个可用的 Captain。智能体与你确认 Captain，然后调用 `connect(what="capy-captain", choose={"captain":"<Captain ID>"})`。如需项目路由，它会加上 `"project":"<project>"`。路由是 SwB 中指定工作去向的规则。新路由会把每条消息发到 Captain 线程。
+重启后，`connect` 会列出每个可用的 Capy Captain。智能体与你确认 Capy Captain，然后调用 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。如需项目路由，它会加上 `"project":"<project>"`。路由是 SwB 中指定工作去向的规则。新路由会把每条消息发到 Capy Captain 线程。
 
 然后 SwB 请求发送密钥 `CAPY_API_KEY_SERVICE`。智能体用 `capy_captains`、`routes_list` 和 `routes_resolve` 检查路由。它用 `send` 发送一个测试任务，再用 `result` 或 `inbox` 读取答复。最后，如果它所在的应用支持 MCP 事件，它会订阅 `switchboard.message.created`。否则它会调用 `wait`。
 
@@ -126,11 +126,11 @@ Captain 是长期运行的 Capy 智能体，负责指挥一组线程。这个连
 
 ## 检查连接
 
-让智能体再次调用 `connect(what="capy-captain")`。答复会显示状态 `connected`。运行 `routes_list` 查看路由。发送一个简短的测试任务。任务会出现在 Captain 中，答复通过 `result` 或 `inbox` 返回。以所有者身份登录后，可在 `/healthz` 查看各智能体使用的发送密钥。
+让智能体再次调用 `connect(what="capy-captain")`。答复会显示状态 `connected`。运行 `routes_list` 查看路由。发送一个简短的测试任务。任务会出现在 Capy Captain 中，答复通过 `result` 或 `inbox` 返回。以所有者身份登录后，可在 `/healthz` 查看各智能体使用的发送密钥。
 
 ## 解决问题
 
-Capy 密钥拥有其所有者的访问权限。如果 `connect` 要求新的读取密钥，请为该所有者授予 Captain 的访问权限。
+Capy 密钥拥有其所有者的访问权限。如果 `connect` 要求新的读取密钥，请为该所有者授予 Capy Captain 的访问权限。
 
 如果发送时出现访问错误，请把项目和已配对设备共享给服务用户。
 

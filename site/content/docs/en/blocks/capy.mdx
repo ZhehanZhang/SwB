@@ -5,23 +5,23 @@ description: Send work to Capy Captains and threads, and get the answers back.
 
 ## Turn on the block
 
-Set `CAPY_API_KEY` in the server environment. SwB uses this key to read Captains and follow threads.
+Set `CAPY_API_KEY` in the server environment. SwB uses this key to read Capy Captains and follow threads.
 
 ## Connect Capy as an agent
 
 In Capy, add an MCP server with your MCP address and the Automatic OAuth client. Capy signs in as the agent `capy`.
 
-## Send to a Captain
+## Send to a Capy Captain
 
-Ask any agent to send work to a Captain.
+Ask any agent to send work to a Capy Captain.
 
 > Send this to my Capy Captain.
 
-The send goes to the Captain that the project's route names. SwB follows the Capy thread over its event stream. Each reply, question and final result goes to the sender's inbox. SwB keeps its place in the stream after a restart.
+The send goes to the Capy Captain that the project's route names. SwB follows the Capy thread over its event stream. Each reply, question and final result goes to the sender's inbox. SwB keeps its place in the stream after a restart.
 
 | Route mode | What a send does |
 | - | - |
-| `captain_thread` | Sends a message to the Captain |
+| `captain_thread` | Sends a message to the Capy Captain |
 | `new_thread` | Starts a new crew thread |
 
 ## Send keys
@@ -30,7 +30,7 @@ Capy shows the account that owns the send key. SwB tries the agent key `CAPY_API
 
 ## Projects link themselves
 
-When an agent makes a SwB project, the Capy block looks for the matching Capy project. A repository match wins over a name match. With one clear match, SwB links the projects and routes the SwB project to that Captain.
+When an agent makes a SwB project, the Capy block looks for the matching Capy project. A repository match wins over a name match. With one clear match, SwB links the projects and routes the SwB project to that Capy Captain.
 
 ## Config
 
@@ -43,9 +43,9 @@ When an agent makes a SwB project, the Capy block looks for the matching Capy pr
 | `blocks.capy.identity` | Use `service` for agent and service keys. Use `personal` to also allow `CAPY_API_KEY` as the last choice |
 | `blocks.capy.send_key_env` | Name of the variable that holds the service send key. Default `CAPY_API_KEY_SERVICE` |
 | `blocks.capy.default_route` | Sets the initial global Capy route once. Use a Capy target such as `captain:<id>` |
-| `blocks.capy.captain_delivery` | How Capy delivers a message to a busy Captain or thread. Values are `queue`, `steer` and `interrupt`. Default `queue` |
+| `blocks.capy.captain_delivery` | How Capy delivers a message to a busy Capy Captain or thread. Values are `queue`, `steer` and `interrupt`. Default `queue` |
 | `blocks.capy.daily_cap` | Daily limit on Capy delegations. Use `null` for unlimited sends |
 | `blocks.capy.duplicate_window_s` | Seconds in which the same task to the same target returns the first conversation ID. Default `600` |
 | `blocks.capy.max_file_bytes` | Total attachment size limit in bytes per send. Default `10485760` |
 | `blocks.capy.handle_ttl_days` | Age limit in days for resuming thread tracking at startup. Also sets MCP task lifetime. Default `7` |
-| `blocks.capy.avatars` | Allows SwB to fetch Captain avatars. Set `false` to use initials instead |
+| `blocks.capy.avatars` | Allows SwB to fetch Capy Captain avatars. Set `false` to use initials instead |
