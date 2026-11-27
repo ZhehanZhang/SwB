@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
 MIN_KEY_LEN = 24
 CONFIG_PATHS = (Path("config/switchboard.yaml"), Path("/config/switchboard.yaml"))
+DEFAULT_HOST = "127.0.0.1"
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
