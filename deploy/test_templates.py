@@ -30,6 +30,7 @@ def test_deploy_templates_use_the_wildcard_docker_runtime():
     compose = yaml.safe_load((ROOT / "compose.yaml").read_text())["services"]["switchboard"]
     assert compose["build"]["target"] == "runtime"
     assert compose["environment"]["SWITCHBOARD_HOST"] == "0.0.0.0"
+    assert compose["environment"]["SWITCHBOARD_PORT"] == ""
     caddy = yaml.safe_load((ROOT / "deploy/compose/compose.yaml").read_text())["services"]["switchboard"]
     assert caddy["build"]["target"] == "paas"
 
