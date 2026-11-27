@@ -13,7 +13,7 @@ from mcp.types import INTERNAL_ERROR, CallToolResult, ImageContent, ListToolsRes
 SENTINEL = "companion-fixture-private-diagnostic"
 ECHO_SCHEMA = {
     "type": "object",
-    "properties": {"text": {"type": "string"}},
+    "properties": {"text": {"type": "string", "description": "Text to echo."}},
     "required": ["text"],
 }
 

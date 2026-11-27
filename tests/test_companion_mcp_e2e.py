@@ -130,6 +130,11 @@ def device_text(value):
     return body
 
 
+def device_servers(result):
+    return [{**row, "name": device_text(row["name"]), "kind": device_text(row["kind"])}
+            for row in device_payload(result)["servers"]]
+
+
 def assert_error(result, message):
     content = result.get("content") or [{}]
     text = content[0].get("text", "")
@@ -194,9 +199,9 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
             }
 
             async def servers():
-                result = device_payload(await invoke(client, state, "servers"))
-                assert len(result["servers"]) == len(expected)
-                return {item["name"]: item for item in result["servers"]}
+                rows = device_servers(await invoke(client, state, "servers"))
+                assert len(rows) == len(expected)
+                return {item["name"]: item for item in rows}
 
             assert await servers() == expected
             agent_code = payload(await acall(client, STATIC_KEY, "connect_code", {"agent": "mcp-stranger"}))["code"]
@@ -216,7 +221,7 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
             assert not events.exists() and not http_requests
 
             stdio_tools = device_payload(await invoke(client, state, "tools", {"server": "stdio"}))
-            assert {tool["name"] for tool in stdio_tools["tools"]} == {"echo", "report_error", "fail", "blob", "image", "crash", "slow"}
+            assert {device_text(tool["name"]) for tool in stdio_tools["tools"]} == {"echo", "report_error", "fail", "blob", "image", "crash", "slow"}
             expected["stdio"]["online"] = True
             assert await servers() == expected
             for transport in ("stdio", "http"):
@@ -224,14 +229,14 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
                 assert result["isError"] is False
                 [item] = result["content"]
                 assert item["type"] == "text" and device_text(item["text"]) == "echo café"
-                assert result["structuredContent"]["transport"] == transport
+                assert device_text(result["structuredContent"]["transport"]) == transport
                 assert device_text(result["structuredContent"]["text"]) == "echo café"
             expected["http"]["online"] = True
             assert await servers() == expected
             http_tools = device_payload(await invoke(client, state, "tools", {"server": "http"}))
             for tools in (stdio_tools, http_tools):
-                [echo] = [tool for tool in tools["tools"] if tool["name"] == "echo"]
-                assert echo["name"] == "echo" and echo["inputSchema"] == ECHO_SCHEMA
+                [echo] = [tool for tool in tools["tools"] if device_text(tool["name"]) == "echo"]
+                assert echo["inputSchema"] == ECHO_SCHEMA
                 assert device_text(echo["description"]) == "Echo text on this fixture."
             image = device_payload(await local_call(client, state, "stdio", "image"))
             assert image == {"content": [{"type": "image", "data": "YWJj", "mimeType": "image/png"}], "isError": False}
@@ -261,12 +266,12 @@ async def test_companion_mcp_crashes_without_replay_and_restarts_on_next_call(tm
         before = device_payload(await local_call(client, state, "stdio", "echo", text="before"))
         assert device_text(before["structuredContent"]["text"]) == "before"
         assert_error(await local_call(client, state, "stdio", "crash"), FAILED)
-        assert device_payload(await invoke(client, state, "servers")) == {"servers": [{"name": "stdio", "kind": "stdio", "online": False}]}
+        assert device_servers(await invoke(client, state, "servers")) == [{"name": "stdio", "kind": "stdio", "online": False}]
         assert events.read_text().splitlines() == ["start", "echo", "crash"]
 
         after = device_payload(await local_call(client, state, "stdio", "echo", text="after"))
         assert device_text(after["structuredContent"]["text"]) == "after"
-        assert device_payload(await invoke(client, state, "servers")) == {"servers": [{"name": "stdio", "kind": "stdio", "online": True}]}
+        assert device_servers(await invoke(client, state, "servers")) == [{"name": "stdio", "kind": "stdio", "online": True}]
         assert events.read_text().splitlines() == ["start", "echo", "crash", "start", "echo"]
         await revoke(client, state)
 
