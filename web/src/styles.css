@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --background: #ffffff;
   --surface: #ffffff;
   --surface-sunken: #f4f4f5;
@@ -40,10 +40,13 @@
   --topbar-height: 64px;
   --mobile-tabbar-height: 78px;
   --mobile-tabbar-clearance: 108px;
+  background-color: var(--background);
 }
 
+:root[data-theme-mode="light"] { color-scheme: light; }
+:root[data-theme-mode="dark"] { color-scheme: dark; }
+
 .dark {
-  color-scheme: dark;
   --background: #09090b;
   --surface: #09090b;
   --surface-sunken: #18181b;
