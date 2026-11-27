@@ -1,4 +1,4 @@
-// The siteAppearance theme cookie, scoped to this host.
+// The swbAppearance theme cookie, scoped to this host. A legacy siteAppearance cookie is read as a fallback.
 (function () {
   var root = document.documentElement
   var media = matchMedia('(prefers-color-scheme: dark)')
@@ -7,7 +7,7 @@
     return hit ? decodeURIComponent(hit.slice(name.length + 1)) : ''
   }
   function get() {
-    var v = read('siteAppearance')
+    var v = read('swbAppearance') || read('siteAppearance')
     if (v === 'light' || v === 'dark' || v === 'system') return v
     try { v = localStorage.getItem('theme') } catch (e) { v = null }
     return v === 'light' || v === 'dark' || v === 'system' ? v : 'system'
@@ -22,9 +22,7 @@
     root.style.backgroundColor = dark ? '#1c1917' : '#f5f5f4'
   }
   function set(theme) {
-    var parts = location.hostname.split('.')
-    for (var i = 0; i < parts.length - 1; i++) document.cookie = 'siteAppearance=; Path=/; Max-Age=0; Domain=' + parts.slice(i).join('.')
-    document.cookie = 'siteAppearance=' + encodeURIComponent(theme) + '; Path=/; Max-Age=31536000; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '')
+    document.cookie = 'swbAppearance=' + encodeURIComponent(theme) + '; Path=/; Max-Age=31536000; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '')
     try { localStorage.setItem('theme', theme) } catch (e) {}
     apply(theme)
   }
