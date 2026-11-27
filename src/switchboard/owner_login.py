@@ -60,7 +60,8 @@ class OwnerLogin:
         return self.auth.cfg.passkey_rp
 
     def methods(self) -> dict:
-        return {"passkeys": self.store.one("SELECT count(*) AS n FROM owner_passkeys WHERE rp_id IS NULL OR rp_id = ?", (self.rp_id,))["n"],
+        return {"passkeys": self.store.one("SELECT count(*) AS n FROM owner_passkeys WHERE rp_id = ? OR (rp_id IS NULL AND ?)",
+                                           (self.rp_id, self.rp_id == self.auth.cfg.legacy_passkey_rp))["n"],
                 "oidc": {"name": self.oidc.cfg.name} if self.oidc.cfg else None,
                 "access": self.auth.cfg.access_configured}
 
