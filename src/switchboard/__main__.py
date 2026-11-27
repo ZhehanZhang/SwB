@@ -133,6 +133,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
                 if missing:
                     for key in missing:
                         print(f"{name} requires {key}.")
+                elif step := b.config_step():
+                    print(f"{name} needs setup. {step}")
                 elif b.problems():
                     print(f"Check the {name} config with swb status.")
                 else:

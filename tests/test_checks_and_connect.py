@@ -62,18 +62,29 @@ def test_blocks_check_uses_status_missing_credentials(make, tmp_path, monkeypatc
         assert f"{block} is ready." not in out
 
 
-def test_blocks_check_treats_local_mcp_and_configured_slack_as_ready(tmp_path, monkeypatch, capsys):
+def test_blocks_check_separates_required_config_from_live_setup(tmp_path, monkeypatch, capsys):
     config = tmp_path / "config.yaml"
-    config.write_text(yaml.safe_dump({"version": 2, "blocks": {"mcp": {}, "slack": {"workspaces": {"sample": {
-        "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "FIXTURE_SLACK_APP_TOKEN",
-        "identities": {"bot": {"token_env": "FIXTURE_SLACK_BOT_TOKEN"}},
-    }}}}}))
+    config.write_text(yaml.safe_dump({"version": 2, "blocks": {
+        "mcp": {}, "dots": {"delivery": "mailbox"}, "slack-dots": {"use": "dots", "workspace": "sample"},
+        "github": {"secret_env": "FIXTURE_GITHUB_SECRET"},
+        "slack": {"workspaces": {"sample": {
+            "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "FIXTURE_SLACK_APP_TOKEN",
+            "identities": {"bot": {"token_env": "FIXTURE_SLACK_BOT_TOKEN"}},
+        }}},
+    }}))
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SWITCHBOARD_CONFIG", str(config))
     monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(tmp_path / "check-data"))
     monkeypatch.setenv("FIXTURE_SLACK_APP_TOKEN", "example-app-token")
     monkeypatch.setenv("FIXTURE_SLACK_BOT_TOKEN", "example-bot-token")
+    monkeypatch.setenv("FIXTURE_GITHUB_SECRET", "example-webhook-secret-value")
 
     __main__.cli_main(["blocks", "check"])
 
-    assert capsys.readouterr().out.splitlines() == ["mcp is ready.", "slack is ready."]
+    assert set(capsys.readouterr().out.splitlines()) == {
+        "mcp is ready.",
+        "slack is ready.",
+        "slack-dots is ready.",
+        "dots needs setup. Declare a dot under dots in the dots block config.",
+        "github needs setup. Add a GitHub repository route or space in config/switchboard.yaml and restart SwB.",
+    }

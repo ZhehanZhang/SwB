@@ -302,6 +302,10 @@ class Block:
     def next_step(self) -> str | None:
         return None
 
+    def config_step(self) -> str | None:
+        """Report setup requirements that can be checked before the block starts."""
+        return self.next_step()
+
     def validate_mode_space(self, space: str) -> None:
         pass
 
