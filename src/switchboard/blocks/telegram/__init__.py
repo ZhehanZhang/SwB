@@ -149,10 +149,10 @@ class TelegramBlock(ChatBlock):
                 "privacy_mode": self._privacy, "token_source": "env" if self.core.cfg.env.get(self.token_env) else
                 ("stored" if self.token() else None), "claim_pending": self.claim_pending(),
                 "seen_chats": list(reversed(self._seen.values())),
-                "steps": ["1. Create a bot in @BotFather with /newbot.",
-                          f"2. Open the token link from {self.name}_provision and paste the token.",
-                          f"3. Add the bot to the group, send /swb@<bot username>, then copy the id from {self.name}_status into chats.",
-                          f"4. DM the bot, find your id in {self.name}_status, and add it to owner_ids."]}
+                "steps": ["Create a bot in @BotFather with /newbot.",
+                          f"Open the token link from {self.name}_provision and paste the token.",
+                          f"Add the bot to the group, send /swb@<bot username>, then copy the id from {self.name}_status into chats.",
+                          f"DM the bot, find your id in {self.name}_status, and add it to owner_ids."]}
 
     @contextlib.asynccontextmanager
     async def _telegram_lifespan(self) -> AsyncIterator[None]:

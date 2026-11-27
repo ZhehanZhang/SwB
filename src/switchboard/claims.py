@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+import json
 import os
 import re
 import secrets
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Any
 from urllib.parse import urlsplit
 
 from cryptography.fernet import Fernet
@@ -31,8 +34,75 @@ CREATE TABLE IF NOT EXISTS secrets (
 """
 
 
+GROUP_SCHEMA = """
+CREATE TABLE IF NOT EXISTS claim_groups (
+  code_hash TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  provider TEXT NOT NULL DEFAULT '',
+  fields TEXT NOT NULL,
+  expires_at REAL NOT NULL
+)
+"""
+KINDS = ("token", "id", "url", "pem", "json")
+FILE_KINDS = ("pem", "json")
+MAX_FILE_BYTES = 64 * 1024
+PEM_RE = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
+
+
 class ClaimError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class Field:
+    """One credential in a grouped claim: the environment variable it fills, how it is checked, and its label."""
+
+    name: str
+    label: str
+    kind: str = "token"
+    hint: str = ""
+    optional: bool = False
+    link: str = ""
+
+
+def normalize_pem(value: str) -> str:
+    """Rebuild a PEM private key that lost its line breaks (a paste into a one-line field) and check that it loads."""
+    found = PEM_RE.search(value)
+    body = re.sub(r"\s+", "", found.group(2)) if found else ""
+    if not body or not re.fullmatch(r"[A-Za-z0-9+/]+=*", body):
+        raise ClaimError("Paste the whole private key, from -----BEGIN to -----END, or upload the .pem file.")
+    label = found.group(1)
+    pem = f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+    try:
+        load_pem_private_key(pem.encode(), password=None)
+    except (ValueError, TypeError) as e:
+        raise ClaimError("That private key doesn't load. Use the unencrypted .pem file GitHub gave you.") from e
+    return pem
+
+
+def normalize(kind: str, value: str) -> str:
+    value = value.strip()
+    if kind in FILE_KINDS:
+        if len(value.encode()) > MAX_FILE_BYTES or "\x00" in value:
+            raise ClaimError("That file is too large; the limit is 64 KiB.")
+        if kind == "pem":
+            return normalize_pem(value)
+        try:
+            parsed = json.loads(value)
+        except ValueError as e:
+            raise ClaimError("That isn't valid JSON.") from e
+        if not isinstance(parsed, dict):
+            raise ClaimError("Expected a JSON object.")
+        return value
+    if not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
+        raise ClaimError("Enter it on a single line, at most 8 KiB.")
+    if kind == "id" and not re.fullmatch(r"\d{1,20}", value):
+        raise ClaimError("Enter the number only.")
+    if kind == "url" and not valid_webhook_url(value):
+        raise ClaimError("Enter a public HTTPS URL without credentials or a fragment.")
+    return value
 
 
 class ClaimUnavailable(ClaimError):
@@ -86,6 +156,7 @@ class Claims:
         self.store = store
         self._cipher = Fernet(_key(store))
         store.x(SCHEMA)
+        store.x(GROUP_SCHEMA)
         if "require_https" not in {r["name"] for r in store.q("PRAGMA table_info(secrets)")}:
             store.x("ALTER TABLE secrets ADD COLUMN require_https INTEGER NOT NULL DEFAULT 0")
 
@@ -136,6 +207,56 @@ class Claims:
         if row is None:
             raise ClaimUnavailable(UNUSABLE)
         return row["name"]
+
+    def mint_group(self, title: str, fields: list[Field], public_url: str | None, provider: str = "") -> str:
+        """One link whose form saves every field together, after each one is checked."""
+        names = [f.name for f in fields]
+        if not fields or len(set(names)) != len(names) or not all(NAME_RE.fullmatch(n) and f.kind in KINDS for n, f in zip(names, fields)):
+            raise ClaimError("A grouped claim needs distinct environment variable names.")
+        if not public_url:
+            raise ClaimError("A claim link needs public_url configured.")
+        code = secrets.token_urlsafe(32)
+        self.store.x("INSERT INTO claim_groups(code_hash, title, provider, fields, expires_at) VALUES (?, ?, ?, ?, ?)",
+                     (_digest(code), title, provider, json.dumps([asdict(f) for f in fields]), self.store.clock() + CLAIM_TTL_S))
+        return f"{public_url.rstrip('/')}{CLAIM_PATH}/{code}"
+
+    def group(self, code: str) -> dict[str, Any] | None:
+        """The pending grouped claim behind a code: title, provider, fields and expiry, or None."""
+        if not CODE_RE.fullmatch(code):
+            return None
+        row = self.store.one("SELECT title, provider, fields, expires_at FROM claim_groups WHERE code_hash = ? AND expires_at > ?",
+                             (_digest(code), self.store.clock()))
+        if row is None:
+            return None
+        return {"title": row["title"], "provider": row["provider"], "expires_at": row["expires_at"],
+                "fields": [Field(**f) for f in json.loads(row["fields"])]}
+
+    def consume_group(self, code: str, values: dict[str, str]) -> list[str]:
+        found = self.group(code)
+        if found is None:
+            raise ClaimUnavailable(UNUSABLE)
+        sealed = {}
+        for f in found["fields"]:
+            raw = values.get(f.name) or ""
+            if not raw.strip():
+                if f.optional:
+                    continue
+                raise ClaimError(f"{f.label} is missing.")
+            try:
+                sealed[f.name] = self._cipher.encrypt(normalize(f.kind, raw).encode())
+            except ClaimError as e:
+                raise ClaimError(f"{f.label}: {e}") from None
+
+        def save(db: Any) -> None:
+            if db.execute("DELETE FROM claim_groups WHERE code_hash = ? AND expires_at > ? RETURNING code_hash",
+                          (_digest(code), self.store.clock())).fetchone() is None:
+                raise ClaimUnavailable(UNUSABLE)
+            for name, value in sealed.items():
+                db.execute("""INSERT INTO secrets(name, sealed) VALUES (?, ?)
+                              ON CONFLICT(name) DO UPDATE SET sealed = excluded.sealed, code_hash = NULL, expires_at = NULL""", (name, value))
+
+        self.store.tx(save)
+        return list(sealed)
 
     def secret(self, name: str) -> str | None:
         row = self.store.one("SELECT sealed FROM secrets WHERE name = ?", (name,))
