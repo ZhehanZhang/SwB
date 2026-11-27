@@ -1,11 +1,11 @@
 'use client';
 
+import { usePathname } from 'fumadocs-core/framework';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from 'fumadocs-ui/components/ui/popover';
 import { LanguageSelect } from 'fumadocs-ui/layouts/shared/slots/language-select';
 import { FullSearchTrigger, SearchTrigger } from 'fumadocs-ui/layouts/shared/slots/search-trigger';
 import { Languages, Menu } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { localize, type Locale } from '@/lib/i18n';
 import { headerLinks, navLabels } from '@/lib/layout.shared';
 import { Brand } from './brand';
@@ -16,7 +16,7 @@ const iconButton = 'grid size-9 shrink-0 place-items-center rounded-md text-fd-m
 const tab = 'rounded-md px-2.5 py-2 text-sm font-medium whitespace-nowrap text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground aria-[current]:text-fd-foreground';
 
 export function SiteHeader({ lang, repository }: { lang: Locale; repository: string }) {
-  const path = usePathname().replace(/^\/en(?=\/|$)/, '') || '/';
+  const path = usePathname();
   const links = headerLinks(lang);
   const active = links.findLast(({ href }) => path === href || path.startsWith(`${href}/`));
 

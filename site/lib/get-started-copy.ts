@@ -44,7 +44,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     open: 'Open in {app}',
     guide: 'Full guide',
     installGuide: 'Install guide',
-    selfHostingGuide: 'Self hosting guide',
+    selfHostingGuide: 'Self-hosting guide',
     reachAnywhere: 'Reach it from anywhere',
     companionGuide: 'Companion guide',
     companionHelp: 'For local Claude Code, Codex, OpenCode or dsh sessions, your agent guides companion installation and pairing on your device.',
