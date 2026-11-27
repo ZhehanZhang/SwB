@@ -369,7 +369,7 @@ def test_gateway_applies_avatar_only_when_the_resolved_file_changes(discord, tmp
     configured = tmp_path / "branding"
     uploaded.mkdir(parents=True)
     configured.mkdir()
-    name = "switchboard.png"
+    name = "swb.png"
     Image.new("RGBA", (8, 8), "red").save(uploaded / name)
     Image.new("RGB", (8, 8), "blue").save(configured / name)
     for image in (uploaded / name, None, configured / name):
@@ -389,7 +389,7 @@ def test_gateway_applies_avatar_only_when_the_resolved_file_changes(discord, tmp
 @pytest.mark.parametrize(("file", "patches", "error"), [
     (None, 0, None),
     ("missing-avatar.png", 0, "avatar file not found"),
-    ("switchboard.png", 1, "Discord REST returned HTTP 429"),
+    ("swb.png", 1, "Discord REST returned HTTP 429"),
 ])
 def test_gateway_avatar_failure_does_not_break_connection_or_retry(discord, caplog, file, patches, error):
     socket = Socket()
@@ -494,7 +494,7 @@ def test_gateway_skips_optional_intent_and_reconnects_after_claim_rotation(disco
 
 @pytest.mark.parametrize(("settings", "key"), [({"spaces": {"home": {"guild_id": "bad"}}}, "spaces.home.guild_id"),
                                                ({"dm_space": "missing"}, "dm_space"), ({"application_id": -1}, "application_id"),
-                                               ({"personas": "true"}, "personas"), ({"avatar": "../switchboard.png"}, "avatar")])
+                                               ({"personas": "true"}, "personas"), ({"avatar": "../swb.png"}, "avatar")])
 def test_invalid_discord_config_names_the_path(discord, settings, key):
     with pytest.raises(BlockError, match=rf"blocks\.discord\.{key}"):
         with discord(settings=settings):
