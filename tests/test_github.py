@@ -11,7 +11,7 @@ import pytest
 import yaml
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from conftest import Clock, acall, arpc, payload
+from conftest import CAPTAIN, CAPY_KEY, Clock, acall, arpc, payload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -383,6 +383,27 @@ async def test_webhook_uses_project_mailbox_route(github, mode):
         core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
         await send(client, delivery="off", sender={"id": 42}, action="opened")
         assert core.audit.recent(action="webhook", outcome="dropped")[0]["detail"] == "channel mode off"
+
+
+@pytest.mark.parametrize("agent", [None, "github"])
+async def test_assist_delivers_through_locked_capy_route(github, capy, agent):
+    config = {"spaces": {"team": {"repo": "acme/app", "mode": "assist", "project": "example"}}}
+    settings = {"blocks": {"capy": {"identity": "personal"}, "github": config}, "visibility": {
+        "resources": {"channel:team/acme/app": "shared", f"target:{CAPTAIN.lower().replace('_', '-')}": "shared"},
+    }}
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "CAPY_API_KEY": CAPY_KEY}
+    async with github(config, env, settings=settings, block_options={"capy": {"transport": httpx.MockTransport(capy.handler)}}) as (core, client):
+        core.projects.create(slug="example", name="Example")
+        core.routes.set(destination="capy", agent=agent, project="example", target={"captain": CAPTAIN},
+                        defaults={"delivery": "steer"}, allow_override=False, note="", by="test")
+        [row] = core.modes.status(block="github")["spaces"]
+        assert row["target"] == f"capy:captain:{CAPTAIN}"
+        assert (await send(client, sender={"id": 11, "type": "User"}, action="opened")).status_code == 200
+        [sent] = [body for method, path, body in capy.requests if method == "POST" and path == f"/api/v1/threads/{CAPTAIN}/message"]
+        assert sent["delivery"] == "steer" and "Issue body" in sent["text"] and "Assist only" in sent["text"]
+        [handle] = core.inbox.handles(owner="github", destination="capy")
+        assert handle["meta"]["route"] == ("agent+project" if agent else "project")
+        assert handle["meta"]["channel_mode"]["target"] == row["target"]
 
 
 @pytest.mark.parametrize("mode", ["off", "watch", "assist", "triage", "work"])
