@@ -51,7 +51,7 @@ def test_grok_discovery_returns_connector_prompt_and_registration(grok):
     assert all(text in connector["do"] for text in (f"{PUBLIC}/mcp", "Remote HTTPS", "sign in with OAuth",
                                                       'connect(what="mcp-client"', "pairing code"))
     assert routine["by"] == "person"
-    assert all(text in routine["do"] for text in ("custom webhook trigger", "text", "conversation", "project", "from", "trust",
+    assert all(text in routine["do"] for text in ("custom webhook trigger", "SwB project triage agent", "text", "conversation", "project", "from", "trust",
                                                     "Act only when trust is owner", "reply(conversation=", "final=true"))
     assert register["by"] == "you" and register["call"] == {
         "tool": "connect", "arguments": {"what": "grok-bot", "choose": {

@@ -678,8 +678,11 @@ class GitHubBlock(Block):
             return
         owner = (user_id is not None and user_id in self.space_owners.get(space, self.owner_ids)
                  and not payload.get("is_bot"))
-        if mode == "off" or (mode == "work" and not owner):
-            self.drop(event, data, "channel mode ignored event", ip, delivery)
+        if mode == "off":
+            self.drop(event, data, "channel mode off", ip, delivery)
+            return
+        if mode == "work" and not owner:
+            self.drop(event, data, "work mode requires an owner event", ip, delivery)
             return
         if not user_id or payload.get("is_bot") or (mode != "work" and user_id == self.api.pat_actor):
             self.drop(event, data, "sender ignored", ip, delivery)
@@ -694,6 +697,13 @@ class GitHubBlock(Block):
             return
         try:
             addr = await self.core.resolve_to(target)
+        except (BlockError, CoreError, ValueError):
+            self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            return
+        if addr.block == "agent" and addr.id not in self.core.known_agents():
+            self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            return
+        try:
             if not self.core.visibility.allows(who, f"target:{slugify(target)}", f"target:{slugify(addr.id)}"):
                 self.drop(event, data, "target access restricted", ip, delivery)
                 return

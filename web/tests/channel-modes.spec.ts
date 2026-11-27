@@ -25,11 +25,13 @@ test("connection and project controls use the owner mode API", async ({ page, co
   await expect(page.getByText("Next report")).toBeVisible()
   await expect(page.getByRole("cell").getByRole("link", { name: "Inbox" })).toHaveAttribute("href", "/inbox")
   await mode.selectOption("triage")
+  await expect(page.getByText("Choose a triage agent.")).toBeVisible()
+  await expect(page.getByRole("checkbox", { name: "Reply", exact: true })).toBeChecked()
   await expect(page.getByRole("checkbox", { name: "Label", exact: true })).toBeDisabled()
   await expect(page.getByRole("checkbox", { name: "Notify owner" })).toBeEnabled()
   await expect(page.getByRole("group", { name: "Triage actions" }).getByText("Issue actions require GitHub write access.")).toBeVisible()
   await page.getByRole("checkbox", { name: "Notify owner" }).click()
-  await expect(page.getByRole("checkbox", { name: "Notify owner" })).not.toBeChecked()
+  await expect(page.getByRole("checkbox", { name: "Notify owner" })).toBeChecked()
 
   await page.goto("/projects/operations")
   await page.getByRole("button", { name: "Modes", exact: true }).click()
@@ -77,6 +79,11 @@ test("claims and login share the console theme and follow the system by default"
   } finally {
     await fallback.close()
   }
+})
+
+test("dropped webhooks show the reason in the audit log", async ({ page }) => {
+  await page.goto("/audit")
+  await expect(page.getByText("Dropped webhook for example-org/example-repo. Channel mode off.")).toBeVisible()
 })
 
 test("agent tiles and claim pages display bundled avatars", async ({ page }) => {

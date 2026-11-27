@@ -13,6 +13,7 @@ type AuditMetadata = {
   repo_count?: number
   turn_cap?: number
   visibility?: string
+  reason?: string
 }
 
 export type AuditEvent = {
@@ -65,7 +66,7 @@ export function isAuditPage(value: unknown): value is AuditPageData {
 function isAuditMetadata(value: unknown): value is AuditMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
   const metadata = value as Record<string, unknown>
-  return ["agent", "state", "to_scope", "memory_id", "target_name", "target_label", "ref_label", "visibility"].every((key) => !(key in metadata) || typeof metadata[key] === "string")
+  return ["agent", "state", "to_scope", "memory_id", "target_name", "target_label", "ref_label", "visibility", "reason"].every((key) => !(key in metadata) || typeof metadata[key] === "string")
     && (metadata.target_avatar_url == null || typeof metadata.target_avatar_url === "string")
     && ["repo_count", "turn_cap"].every((key) => !(key in metadata) || Number.isSafeInteger(metadata[key]))
 }
@@ -151,7 +152,12 @@ function auditSentence({ action, target, ref, destination, outcome, metadata, pr
     return `Routed ${routed} to ${displayReference(metadata.target_name, "Captain")}`
   }
   if (action === "turn_cap") return ["Paused conversation", ref, metadata?.turn_cap ? `at ${metadata.turn_cap} turns` : null].filter(Boolean).join(" ")
-  if (action === "webhook") return [outcome === "dropped" ? "Dropped webhook for" : "Received webhook for", target || destination].join(" ")
+  if (action === "webhook") {
+    const label = [outcome === "dropped" ? "Dropped webhook for" : "Received webhook for", target || destination].join(" ")
+    const reason = metadata?.reason
+    if (!reason) return label
+    return `${label}. ${reason === "not completed" ? "Event is pending" : reason.charAt(0).toUpperCase() + reason.slice(1)}.`
+  }
   if (action === "auth_failure" || action === "auth_missing" || action === "oauth_refused" || action === "rate_limited") {
     return [titles[action][0], target ? `for ${target}` : null].filter(Boolean).join(" ")
   }

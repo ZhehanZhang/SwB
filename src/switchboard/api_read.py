@@ -196,6 +196,13 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
                     project = project or scope.removeprefix("project:")
             if re.fullmatch(r"mem_[0-9]{13}[a-f0-9]{8}", row["excerpt"]):
                 metadata["memory_id"] = row["excerpt"]
+        elif action == "webhook" and fields["outcome"] == "dropped":
+            detail = row["detail"] or ""
+            if detail in ("unhandled event", "not completed", "unrouted repository", "channel mode ignored event",
+                          "channel mode off", "work mode requires an owner event", "sender ignored",
+                          "channel access restricted", "target access restricted", "sender rate limit") or re.fullmatch(
+                              r"(?:assist|triage|work) target is (?:missing|unavailable)", detail):
+                metadata["reason"] = detail
         elif action == "turn_cap":
             if match := re.fullmatch(r"paused at ([0-9]{1,10}) turns", row["detail"] or ""):
                 metadata["turn_cap"] = int(match[1])

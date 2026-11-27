@@ -76,17 +76,17 @@ def test_resolver_precedence_and_legacy_alias(make):
     assert core.modes.resolve("discord", "legacy", "another", None)[:2] == ("off", "default")
 
 
-def test_unconfigured_defaults_to_off_and_triage_uses_full_actions(make):
+def test_unconfigured_defaults_to_off_and_triage_can_reply(make):
     core, _ = make(config=config({"home": {"guild_id": GUILD, "channels": {DISCORD_CHANNEL: "triage"}}}), env={})
     assert core.modes.resolve("discord", "home", "another", None)[:2] == ("off", "default")
     mode, source, actions, _ = core.modes.resolve("discord", "home", DISCORD_CHANNEL, None)
-    assert (mode, source, set(actions)) == ("triage", "channel", ACTIONS)
+    assert (mode, source, actions) == ("triage", "channel", ("reply",))
 
 
 def test_triage_prefers_registered_routine_and_reports_fallback(make):
     cfg = config({
-        "home": {"guild_id": GUILD, "project": "example", "default_target": "doorman", "channels": {DISCORD_CHANNEL: "triage"}},
-        "other": {"guild_id": GUILD_2, "project": "other", "default_target": "other-doorman", "channels": {"41": "triage"}},
+        "home": {"guild_id": GUILD, "project": "example", "default_target": "coordinator", "channels": {DISCORD_CHANNEL: "triage"}},
+        "other": {"guild_id": GUILD_2, "project": "other", "default_target": "other-coordinator", "channels": {"41": "triage"}},
     })
     cfg["blocks"]["claude-routine"] = {"use": "claude-routine", "routines": {
         "claude-example-triage": {"routine_id": "trig_EXAMPLE", "token_env": "EXAMPLE_TRIAGE_TOKEN", "project": "example"},
@@ -98,9 +98,9 @@ def test_triage_prefers_registered_routine_and_reports_fallback(make):
     selected = space_row(status, "discord", "home", DISCORD_CHANNEL)
     fallback = space_row(status, "discord", "other", "41")
     assert selected["target"] == "claude-example-triage"
-    assert "triage target is the doorman" not in selected["problems"]
-    assert fallback["target"] == "other-doorman"
-    assert "triage target is the doorman" in fallback["problems"]
+    assert "Triage uses the default agent." not in selected["problems"]
+    assert fallback["target"] == "other-coordinator"
+    assert "Triage uses the default agent." in fallback["problems"]
 
 
 def test_watch_waits_for_due_time_and_batches_each_space_once(make):
@@ -151,7 +151,7 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
 @pytest.fixture(params=["discord", "telegram"])
 def intake(request, discord, telegram):
     @contextmanager
-    def build(mode, *, shared=True, dm_mode=None, topic_mode=None):
+    def build(mode, *, shared=True, dm_mode=None, topic_mode=None, mailbox=False):
         is_discord = request.param == "discord"
         channel, target = (DISCORD_CHANNEL, "build-check") if is_discord else (str(GROUP), "example-runner")
         topic, topic_channel = 42, "42" if is_discord else f"{GROUP}:42"
@@ -160,12 +160,21 @@ def intake(request, discord, telegram):
             channels[topic_channel] = topic_mode
         placement = {"guild_id": GUILD, "owner_ids": [DISCORD_OWNER]} if is_discord else {"chats": [GROUP], "owner_ids": [TELEGRAM_OWNER]}
         choices = {"mode": mode, "project": "example", "default_target": target, "channels": channels}
+        if mailbox:
+            choices.pop("default_target")
+            channels[channel].pop("target")
+            target = "alpha"
         settings = {"spaces": {"home": {**placement, **choices}}, "dm_space": "home"}
         if dm_mode is not None:
             settings["dm_mode"] = dm_mode
         transport = discord(settings=settings) if is_discord else telegram(**settings)
         with transport as (core, client, block, wire, *routine):
             core.projects.create(slug="example", name="Example")
+            if mailbox:
+                pair = core.connections.mint(agent=target, project="example", client=None, by="owner")
+                core.connections.redeem(pair["code"])
+                core.routes.set(destination="agent", agent=None, project="example", target={"agent": target},
+                                defaults=None, allow_override=False, note="", by="owner")
             if shared:
                 core.visibility.set(f"channel:home/{channel}", "shared", "test", core.clock())
                 core.visibility.set(f"target:{target}", "shared", "test", core.clock())
@@ -253,6 +262,17 @@ def test_live_override_changes_provider_intake_and_inherit_restores_it(intake):
         chat.send(11, "handled after inheriting")
         [text] = chat.wakes()
         assert "handled after inheriting" in text
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+def test_chat_modes_use_project_mailbox_route(intake, mode):
+    with intake(mode, mailbox=True) as chat:
+        chat.send(10, "Message for the project", owner=mode == "work", mention=mode == "work")
+        status = space_row(chat.core.modes.status(), chat.block.name, "home", chat.channel)
+        assert status["target"] == "agent:alpha"
+        [wake] = chat.core.inbox.read(owner="alpha")["items"]
+        assert "Message for the project" in wake["text"] and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        assert not chat.wakes()
 
 
 @pytest.mark.parametrize("mode", ["assist", "triage"])
