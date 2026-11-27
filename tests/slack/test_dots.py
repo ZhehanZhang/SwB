@@ -527,6 +527,9 @@ def test_posts_without_a_persona_take_the_apps_own_name_and_picture_or_a_neutral
         client.portal.call(rt.execute, "bot", "post_message", {"channel": RELAY, "text": "x"}, None)
         post = calls(world, "chat_postMessage")[-1][1]
         assert post["username"] == "swb" and post["icon_emoji"] == ":electric_plug:" and "icon_url" not in post
+        rt.bot_name = None
+        client.portal.call(rt.execute, "bot", "post_message", {"channel": RELAY, "text": "x"}, None)
+        assert calls(world, "chat_postMessage")[-1][1]["username"] == "SwB"
 
 
 def test_config_default_identity_overrides_the_apps_own(tmp_path):

@@ -99,6 +99,15 @@ for (const [locale, path, heading, label] of [
   ['zh-Hans', '/zh-Hans/docs/setup', '设置你的应用', '设置提示词'],
   ['zh-Hant', '/zh-Hant/docs/setup', '設定你的應用程式', '設定提示詞'],
 ]) {
+  test(`${locale} coding agent guides show the SwB server and channel names`, async ({ page }) => {
+    const docs = path.replace(/\/setup$/, '');
+    await page.goto(`${docs}/setup/coding-agent`);
+    await expect(page.locator('pre').filter({ hasText: /^claude mcp add/ })).toContainText('--scope user swb ');
+
+    await page.goto(`${docs}/blocks/coding-agents`);
+    await expect(page.locator('pre').filter({ hasText: '/plugin marketplace add' })).toContainText('/plugin install swb@swb');
+  });
+
   test(`${locale} docs setup page uses the localized picker with an English prompt`, async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();

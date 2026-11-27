@@ -23,7 +23,7 @@ Claude、ChatGPT、Grok 與程式開發代理各有專屬頁面，使用 OAuth �
 
 ## 本機擁有者用戶端
 
-若用戶端負責設定其他應用程式，請在執行 SwB 的電腦上使用私人用戶端。把 MCP 位址設為啟動時顯示的本機 `/mcp` 位址。將執行個體資料夾中 `.env` 裡的 `SWITCHBOARD_KEY_OWNER` 用於 `Authorization: Bearer <key>`。請只把金鑰儲存在用戶端的本機私人設定檔中，並將檔案權限設為 `0600`。這組金鑰具備完整的擁有者權限。請只對本機 SwB 使用這組金鑰。
+若用戶端負責設定其他應用程式，請在執行 SwB 的電腦上使用私人用戶端。把 MCP 位址設為啟動時顯示的本機 `/mcp` 位址。將執行個體資料夾中 `.env` 裡的 `SWB_KEY_OWNER` 用於 `Authorization: Bearer <key>`。請只把金鑰儲存在用戶端的本機私人設定檔中，並將檔案權限設為 `0600`。這組金鑰具備完整的擁有者權限。請只對本機 SwB 使用這組金鑰。
 
 ## 配對用戶端
 
@@ -65,7 +65,7 @@ bash -c '
 <Step>
 ### 把 SwB 加到應用程式
 
-在應用程式的 MCP 設定中，填入檔案中的 `mcp_url`。若 SwB 在本機執行，請用啟動時顯示的 MCP 位址。傳輸方式選擇 Streamable HTTP。
+在應用程式的 MCP 設定中新增名為 `swb` 的伺服器。填入檔案中的 `mcp_url`。若 SwB 在本機執行，請用啟動時顯示的 MCP 位址。傳輸方式選擇 Streamable HTTP。
 </Step>
 <Step>
 ### 加入金鑰

@@ -21,6 +21,7 @@ def test_tool_set_and_schemas(make):
     _, c = make()
     t = tools(c)
     assert set(t) == CORE | GENERIC | COMPANION | CAPY
+    assert t["switchboard_status"]["title"] == "SwB status"
     for name, tool in t.items():
         assert 40 <= len(tool["description"]) <= 700, name
         assert tool["inputSchema"]["type"] == "object"

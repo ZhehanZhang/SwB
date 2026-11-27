@@ -580,7 +580,7 @@ class MCPBlock(Block):
             addr = core.address_for_route(r) if r else None
             return {"agent": agent or p.source, "project": project, "checked": tried, "route": r.as_dict() if r else None, "to": str(addr) if addr else None}
 
-        @mcp.tool(title="Switchboard status", description="Who you are signed in as (your agent name for routes), your wait limits, the blocks and their levels, and what is configured or degraded.", annotations=READ)
+        @mcp.tool(title="SwB status", description="Who you are signed in as (your agent name for routes), your wait limits, the blocks and their levels, and what is configured or degraded.", annotations=READ)
         async def switchboard_status(ctx: Context) -> dict[str, Any]:
             p = who(ctx)
             await core.modes.refresh(p)

@@ -2,13 +2,13 @@ Read the setup guide at https://swb.one/docs/deploy.
 
 Help me run SwB. Use your terminal where you can. Ask for choices and actions that need me.
 
-Ask me to choose where to run SwB. Offer this computer, Fly.io, Koyeb or my server with Docker.
+Ask me to choose where to run SwB. Offer this computer, Render, Railway, Fly.io, Koyeb or my server with Docker.
 
 ## This computer
 
 If needed, install uv using the [official guide](https://docs.astral.sh/uv/getting-started/installation/). SwB needs Python 3.12 or later. The command below downloads Python 3.12 when needed.
 
-Choose an empty folder with me. Check that port 8870 is free. To choose another port, use a command such as `PORT=8871 uvx swb-one up`.
+Choose an empty folder with me. Check that port 8870 is free. To choose another port, use a command such as `SWB_PORT=8871 uvx swb-one up`.
 
 If your terminal is on my SwB computer, run this in the chosen folder. Keep SwB running.
 
@@ -34,7 +34,11 @@ After a restart, use `login-link` to get a fresh link. Run `uvx --python 3.12 sw
 
 Use `http://localhost:8870/mcp` with the chosen port.
 
-## Fly.io, Koyeb, or a server
+## Render and Railway
+
+Read the deployment guide at https://github.com/ZhehanZhang/SwB/tree/main/deploy. Guide me through the Render Blueprint or Railway service setup. Use one instance with a volume at `/data`. Ask me to copy `SWB_SETUP_CODE` from the service settings. Keep the code out of chat and logs.
+
+## Fly.io, Koyeb and Docker
 
 Clone https://github.com/ZhehanZhang/SwB. Run these commands in the checkout.
 
@@ -44,11 +48,13 @@ For Koyeb, ask for an app name. Check the Koyeb CLI and my sign-in. Run `sh depl
 
 For my own server, ask for my domain. Ask me to point its DNS at the server. Wait for me to confirm. Run `sh deploy/compose/start.sh swb.example.com` with my domain.
 
-Keep the setup code in its private file. Give me the file path. Fly.io uses `.env.swb-setup-fly-my-swb`. Koyeb uses `.env.swb-setup-koyeb-my-swb`. Docker uses `deploy/compose/.env`.
+Keep the setup code in its private file. Give me the file path. Fly.io uses `.env.swb-setup-fly-my-swb`. Koyeb uses `.env.swb-setup-koyeb-my-swb`. Docker uses `deploy/compose/.env`. Ask me to copy `SWB_SETUP_CODE` from that file.
+
+## Sign in on a server
 
 Wait for SwB to start. Give me the public URL and the sign-in page address from the log. Add `/mcp` to the public URL for the MCP address.
 
-Ask me to copy `SWB_SETUP_CODE` from the private file. Ask me to paste it into **Setup code** on the sign-in page. The code works once. For Fly.io or Koyeb, ask me to delete the private file after sign-in.
+Ask me to paste the code into **Setup code** on the sign-in page. The code works once. For Fly.io or Koyeb, ask me to delete the private file after sign-in.
 
 ## Connect my first agent
 

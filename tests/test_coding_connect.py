@@ -22,12 +22,14 @@ def connect(client, agent=None, token=STATIC_KEY):
 
 def entry(agent, snippet):
     if agent == "codex":
-        return tomllib.loads(snippet)["mcp_servers"]["switchboard"]
+        return tomllib.loads(snippet)["mcp_servers"]["swb"]
     if agent == "goose":
-        return yaml.safe_load(snippet)["extensions"]["switchboard"]
+        config = yaml.safe_load(snippet)["extensions"]["swb"]
+        assert config["name"] == "swb"
+        return config
     if agent == "opencode":
-        return json.loads(snippet)["mcp"]["servers"]["switchboard"]
-    return json.loads(snippet)["mcpServers"]["switchboard"]
+        return json.loads(snippet)["mcp"]["servers"]["swb"]
+    return json.loads(snippet)["mcpServers"]["swb"]
 
 
 def test_discovery_lists_every_agent(make):
@@ -56,11 +58,13 @@ def test_coding_agent_snippet_uses_remote_url_and_oauth_where_supported(make, ag
         if agent == "claude-code":
             assert setup["do"] == "Add SwB with this command."
             assert out["next"][-2]["do"] == "Sign in to SwB from /mcp in Claude Code."
-            assert snippet == f"claude mcp add --transport http --scope user switchboard {PUBLIC}/mcp"
+            assert snippet == f"claude mcp add --transport http --scope user swb {PUBLIC}/mcp"
             assert "Claude Code channel" in out["next"][-1]["do"]
         else:
             config = entry(agent, snippet)
             assert (config.get("httpUrl") or config.get("url") or config["uri"]) == f"{PUBLIC}/mcp"
+            if agent in {"codex", "gemini-cli", "opencode", "cline"}:
+                assert " swb" in out["next"][-2]["do"]
 
 
 @pytest.mark.parametrize("agent", AGENTS)

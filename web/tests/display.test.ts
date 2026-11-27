@@ -19,16 +19,16 @@ test("audit uses discovered labels and hides older raw Captain metadata", () => 
   const discovered = event("delegate", { target: captain, metadata: { target_label: "Conductor" } })
   assert.ok(isAuditPage({ items: [discovered], next_cursor: null }))
   assert.equal(auditText(discovered), "Delegated to Conductor")
-  assert.equal(auditText(event("delegate", { target: captain })), "Delegated to Captain")
+  assert.equal(auditText(event("delegate", { target: captain })), "Delegated to Capy Captain")
   assert.equal(auditText(event("delegate", { target: `captain Conductor (${jam})` })), "Delegated to Conductor")
   assert.equal(auditText(event("route_set", { metadata: { agent: "github", repo_count: 1, target_name: captain } })),
-    "Routed 1 GitHub repository to Captain")
-  assert.equal(auditText(event("route_set", { metadata: { agent: "slack", target_name: jam } })), "Routed Slack to Captain")
+    "Routed 1 GitHub repository to Capy Captain")
+  assert.equal(auditText(event("route_set", { metadata: { agent: "slack", target_name: jam } })), "Routed Slack to Capy Captain")
   assert.equal(auditText(event("route_set", { metadata: { agent: "slack", target_name: "Conductor" } })), "Routed Slack to Conductor")
 })
 
 test("audit hides jam ids from fallback sentences", () => {
-  assert.equal(auditText(event("turn_cap", { ref: captain, metadata: { turn_cap: 8 } })), "Paused conversation Captain at 8 turns")
+  assert.equal(auditText(event("turn_cap", { ref: captain, metadata: { turn_cap: 8 } })), "Paused conversation Capy Captain at 8 turns")
   assert.equal(auditText(event("conversation_resume", { ref: jam, metadata: { ref_label: "Conductor" } })), "Resumed conversation Conductor")
   for (const row of [
     event("unknown_event", { destination: captain, outcome: `failed for ${jam}` }),
@@ -70,7 +70,7 @@ test("inbox participants prefer the Captain label and keep a human fallback", ()
     title: null, status: null, open: true, created_at: null, updated_at: null,
   }
   assert.equal(participants({ ...row, first_target: "Conductor" }).to, "Conductor")
-  assert.equal(participants(row).to, "Captain")
+  assert.equal(participants(row).to, "Capy Captain")
   assert.equal(participants({ ...row, target: null }).to, "Capy thread")
 })
 
@@ -98,11 +98,12 @@ test("agent deep links resolve server names and keep registered links disambigua
   })
   const paths: string[] = []
   const dot = { id: "dot-one", name: "Alpha", block: "team-dots", online: true, projects: ["context"] }
+  const captainTarget = { id: jam, name: jam, block: "capy", online: true }
   const detail = { keys: [], routines: [], audit: [] }
   const expected = {
     "/api/agents/alpha": { kind: "mailbox", agent: { id: "alpha", name: "alpha", agent: "alpha" }, ...detail },
     "/api/agents/Alpha": { kind: "dot", agent: dot, ...detail },
-    "/api/agents": { keys: [], routines: [], captains: [], dots: [dot], pending_claims: [] },
+    "/api/agents": { keys: [], routines: [], captains: [captainTarget], dots: [dot], pending_claims: [] },
     "/api/agents/detail?kind=dot&id=dot-one&block=team-dots": { kind: "dot", agent: dot, ...detail },
   }
   t.mock.method(globalThis, "fetch", async (url: URL) => {
@@ -121,8 +122,12 @@ test("agent deep links resolve server names and keep registered links disambigua
   const named = await getAgentDetail("Alpha", signal)
   assert.equal(named?.agent.name, "Alpha")
   assert.deepEqual(named?.agent.projects, ["context"])
-  const [registered] = await listAgents(signal)
+  const registeredAgents = await listAgents(signal)
+  const registered = registeredAgents.find(agent => agent.type === "dot")!
+  const registeredCaptain = registeredAgents.find(agent => agent.type === "captain")!
   assert.equal(registered.id, "dot:team-dots:dot-one")
+  assert.equal(registeredCaptain.id, `captain:capy:${jam}`)
+  assert.equal(registeredCaptain.name, "Capy Captain")
   assert.deepEqual(await getAgentDetail(registered, signal), named)
   assert.equal(await getAgentDetail("missing", signal), null)
   assert.deepEqual(paths, [...Object.keys(expected), "/api/agents/missing"])
