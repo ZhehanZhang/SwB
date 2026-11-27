@@ -539,6 +539,7 @@ class MCPBlock(Block):
         @mcp.tool(title="Switchboard status", description="Who you are signed in as (your agent name for routes), your wait limits, the blocks and their levels, and what is configured or degraded.", annotations=READ)
         async def switchboard_status(ctx: Context) -> dict[str, Any]:
             p = who(ctx)
+            await core.modes.refresh(p)
             default, mx = self.wait_caps.for_agent(p.source)
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})},
                     "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx},

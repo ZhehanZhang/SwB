@@ -216,9 +216,11 @@ class Switchboard:
     def status(self, principal: Principal | None = None, *, public: bool = False,
                mode_slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         problems = list(self.cfg.problems())
-        next_steps = {n: b.next_step() for n, b in self.blocks.items()}
-        for b in self.blocks.values():
-            problems += b.problems()
+        next_steps = {}
+        for name, block in self.blocks.items():
+            issues = block.problems()
+            problems += issues
+            next_steps[name] = block.next_step() or (f"Run swb connect {block.manifest.id} to check {block.manifest.title} setup." if issues else None)
 
         def block_status(block: Block) -> dict[str, Any]:
             out = block.status() if principal is None else block.status_for(principal)

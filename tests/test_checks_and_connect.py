@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
 
+import httpx
 import yaml
 
 from conftest import PUBLIC, STATIC_KEY, base_config, call, payload
@@ -64,6 +65,27 @@ def test_github_setup_reports_mode_and_project_targets_separately_from_sinks(mak
     for report in (connect, status):
         assert (report["repository_spaces"], report["bound_repositories"], report["sink_routes"]) == (2, 2, 0)
     assert "GitHub repositories with a target 2." in connect["done"]
+
+
+def test_signed_in_status_explains_github_installation_access_failure(make, monkeypatch):
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {"acme/app": {"mode": "watch"}}}})
+    core, client = make(cfg, env={cli.OWNER_KEY: STATIC_KEY, "GITHUB_WEBHOOK_SECRET": "fixture-webhook-secret"})
+    api = core.blocks["github"].api
+    monkeypatch.setattr(api, "auth_type", lambda: "app")
+    monkeypatch.setattr(api, "app_jwt", lambda: "fixture-app-jwt")
+    denied = AsyncMock(return_value=httpx.Response(401))
+    monkeypatch.setattr(api.http, "request", denied)
+    assert client.get("/healthz").status_code == 200
+    denied.assert_not_called()
+
+    step = "Check the GitHub App credentials and repository access."
+    result = payload(call(client, STATIC_KEY, "switchboard_status"))
+    health = client.get("/healthz", headers={"Authorization": f"Bearer {STATIC_KEY}"}).json()
+    denied.assert_awaited_once()
+    for status in (result, health):
+        assert status["status"] == "degraded" and step in status["next_steps"]
+        assert status["blocks"]["github"]["next_step"] == step
+    assert step in cli._display("switchboard_status", result)
 
 
 def test_blocks_check_uses_status_missing_credentials(make, tmp_path, monkeypatch, capsys):

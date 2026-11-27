@@ -319,7 +319,10 @@ class GitHubBlock(Block):
         return bool(self.secret)
 
     def problems(self) -> list[str]:
-        return [] if self.online else [f"{self.name}: webhook secret is missing"]
+        problems = [] if self.online else [f"{self.name}: webhook secret is missing"]
+        if step := self._credential_step():
+            problems.append(step)
+        return problems
 
     def has_write_credential(self) -> bool:
         return self.api.auth_type() is not None
@@ -417,7 +420,7 @@ class GitHubBlock(Block):
         self.core.audit.record(origin=self.name, source="github", client=ip, destination=self.name, action="webhook",
                                outcome="dropped", target=repo_name(repo), ref=delivery, detail=reason)
 
-    def next_step(self) -> str | None:
+    def config_step(self) -> str | None:
         if not self.online:
             if self.core.secret(self.secret_env):
                 return "Restart SwB to apply the saved GitHub webhook secret."
@@ -426,11 +429,21 @@ class GitHubBlock(Block):
             return "Add a GitHub repository route or space in config/switchboard.yaml and restart SwB."
         return None
 
+    def _credential_step(self) -> str | None:
+        if self.installation_problem:
+            return "Check the GitHub App credentials and repository access."
+        if self.pat_capabilities and not self.pat_capabilities["verified"]:
+            return "Check the GitHub token and its repository access."
+        return None
+
+    def next_step(self) -> str | None:
+        return self.config_step() or self._credential_step()
+
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
         present = bool(self.core.secret(self.secret_env))
         done = ["GitHub webhook secret present."] if present else []
         done.append(f"GitHub webhook endpoint {self.core.base_url}/github/webhook.")
-        step = self.next_step()
+        step = self.config_step()
         steps = []
         if not present:
             steps.append(self.token_step(principal, self.secret_env, step, kind="webhook_secret", label="Webhook secret"))
