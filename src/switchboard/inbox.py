@@ -179,11 +179,11 @@ class Inbox:
         r = self.store.one("SELECT cursor FROM inbox_cursors WHERE owner = ? AND handle = ?", (reader, handle or "*"))
         return r["cursor"] if r else 0
 
-    def _advance(self, reader: str, handle: str | None, cursor: int) -> None:
-        self.store.x(
+    def _advance(self, reader: str, cursors: dict[str, int]) -> None:
+        self.store.tx(lambda db: db.executemany(
             "INSERT INTO inbox_cursors(owner, handle, cursor) VALUES (?,?,?) ON CONFLICT(owner, handle) DO UPDATE SET cursor = MAX(cursor, excluded.cursor)",
-            (reader, handle or "*", cursor),
-        )
+            ((reader, handle, cursor) for handle, cursor in cursors.items()),
+        ))
 
     @staticmethod
     def _item(r: Any) -> dict[str, Any]:
@@ -202,7 +202,12 @@ class Inbox:
         so the channel never moves the position wait and inbox read from.
         """
         reader = reader or owner or "*"
-        start = self._cursor(reader, handle) if since is None else since
+        position = f"conversation:{handle}" if handle else "*"
+        start = since
+        if start is None:
+            start = self._cursor(reader, position)
+            if handle and not start:
+                start = self._cursor(reader, handle)
         with_clause = ""
         where, args = ["id > ?"], [start]
         if owner:
@@ -230,7 +235,8 @@ class Inbox:
         rows = self.store.q(f"{with_clause}SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
         cursor = rows[-1]["id"] if rows else start
         if rows and advance:
-            self._advance(reader, handle, cursor)
+            cursors = {r["handle"]: r["id"] for r in rows} if handle else {}
+            self._advance(reader, {**cursors, position: cursor})
         return {
             "items": [self._item(r) for r in rows],
             "cursor": cursor,
