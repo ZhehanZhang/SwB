@@ -5,7 +5,7 @@ description: 讓 SwB 可從外部連線、登入並檢視你的執行個體。
 
 ## 在本機執行
 
-若要在本機瀏覽器登入，請在啟動前設定 `SWITCHBOARD_PUBLIC_URL=http://localhost:8870`。位址中的連接埠須與 `PORT` 一致。若 YAML 設定檔已設定 `public_url`，請直接修改該欄位。[安裝指南](/zh-Hant/docs/install)使用連接埠 8870 設定本機登入。
+在空資料夾內執行 `uvx swb-one up`。請在五分鐘內開啟終端機顯示的一次性登入連結。SwB 預設使用 `http://localhost:8870`。若有設定 `PORT`，SwB 會在位址中使用該連接埠。其他啟動方式請參閱[安裝指南](/zh-Hant/docs/install)。
 
 ## 取得公開位址
 
@@ -32,6 +32,8 @@ swb status
 網頁會顯示你的專案、代理、收件匣、記憶與稽核記錄。它也是貼上權杖的安全位置。
 
 ![SwB 登入頁面](/shots/login-light.webp)
+
+若要取得新連結，請另開終端機，在同一個執行個體的資料夾內執行下列指令。
 
 ```bash
 swb login-link

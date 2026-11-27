@@ -29,7 +29,11 @@ Every resource is private or shared. A resource is a target, a channel, a memory
 
 ## Keys with limits
 
-A bearer key can have limits. `auth.key_scopes` limits the memory scopes of a key. `auth.key_tools` limits its tools. `auth.key_targets` limits where it can send.
+A scope is `general` or a project such as `project:example`. Use `auth.key_scopes` to set the scopes a key can access. These scopes apply to memory, messages and conversations.
+
+A paired key can read a message or conversation only if its agent sent or received it and the key has access to its scope.
+
+`auth.key_tools` limits the tools a key can call. `auth.key_targets` limits where it can send.
 
 ## Tokens
 
@@ -54,7 +58,7 @@ Capy and Muse can return the earlier conversation for a repeat send. Capy's `dup
 
 ## Audit log
 
-The SwB page shows records under **Audit**. Run `swb log` to print the recent records. Mailbox sends have the action `send`.
+The SwB page shows records under **Audit**. Run `swb log` to print the recent records. Mailbox sends have the action `send`. See [Channel modes](/docs/channel-modes#check-a-delivery) for records of dropped deliveries.
 
 ## Report a problem
 

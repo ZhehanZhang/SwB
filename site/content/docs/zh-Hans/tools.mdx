@@ -11,7 +11,7 @@ description: SwB 提供给你的智能体的 MCP 工具。
 
 | 用途 | 工具和权限 |
 | - | - |
-| 消息 | 可调用 `send`、`agent_send` 和 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` 处理自己的消息和会话 |
+| 消息 | 可调用 `send`、`agent_send` 和 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` 处理密钥授权范围内自己的消息和会话 |
 | 记忆与项目 | 可调用 `context_pack` 和 `project_list`。在获准的范围内使用记忆工具 |
 | 路由 | 可调用 `routes_list` 和 `routes_resolve`。调用 `routes_set` 或 `routes_remove` 时，把自己的智能体名称填入 `agent` |
 | 设置 | 用 `switchboard_status` 和 `modes_status` 查看状态。用 `connect` 获取客户端设置指引。设置模块和签发配对码需要所有者身份 |
@@ -35,9 +35,11 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `result` | 获取一个会话的最终答复。支持 `tail` 的会话可用它指定返回的近期回复或消息条数 |
 | `cancel` | 停止跟踪一个会话 |
 | `targets` | 列出 `send` 能访问的所有对象 |
-| `get_message` | 使用 MCP 事件回调中的 `message_id` 读取已存储的消息，例如 `msg_42` |
+| `get_message` | 用收件箱或 MCP 事件中的 `message_id` 读取已存储的消息 |
 
 `inbox` 工具和[收件箱事件流](/zh-Hans/docs/connect#收件箱事件流)直接提供消息数据。用 `inbox` 读取后续消息时，将 `cursor` 填入 `since_cursor`。回复时，将消息的 `handle` 填入 `reply` 的 `conversation`。
+
+消息或会话超出配对密钥的权限时，SwB 返回与 ID 查询失败时相同的错误。参见[密钥限制](/zh-Hans/docs/security#有限制的密钥)。
 
 ### 发送选项
 
@@ -54,7 +56,7 @@ description: SwB 提供给你的智能体的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `context_pack` | 获取一个项目的简报 |
+| `context_pack` | 获取项目简报。使用配对密钥时，Capy 部分只列出该智能体在授权范围内进行中的工作 |
 | `memory_write` | 保存记忆时，填写 `scope`、`namespace`、`title` 和 `body`。`namespace` 用于在同一范围内归类条目，最多三级，使用小写，例如 `notes/meetings`。保存项目记忆时，将项目简称填入 `project`，并设置 `scope="project:<slug>"`。写入通用记忆前，先向所有者确认。然后设置 `confirm_general=true` |
 | `memory_search` | 用 `query` 搜索记忆。默认搜索 `general`。将项目简称填入 `project` 后，优先搜索项目记忆，再搜索 `general`。设为 `include_general=false` 时，只搜索该项目 |
 | `memory_list` | 列出记忆条目 |
@@ -112,8 +114,8 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | 工具 | 用途 |
 | - | - |
 | `capy_captains` | 列出当前 Capy 连接有权访问的 Captain |
-| `capy_captain_digest` | 读取 Captain 的摘要并查看正在处理或需要所有者介入的话题串 |
-| `capy_list` | 列出通过 SwB 发送的任务。也可查看 Captain 团队或已关联 Capy 项目中的话题串 |
+| `capy_captain_digest` | 读取 Captain 的摘要并查看正在处理或需要所有者介入的话题串。此工具需要所有者身份 |
+| `capy_list` | 列出通过 SwB 发送的任务。也可查看 Captain 团队或已关联 Capy 项目中的话题串。使用配对密钥时，列表只显示该智能体在授权范围内的工作 |
 | `capy_delegate` | 将任务发给 Capy。新调用请用 `send` 并指定 `to="capy"` |
 | `capy_inbox` | 立即读取 Capy 收件箱。新调用请用 `inbox` 并指定 `block="capy"` |
 | `capy_wait` | 等待收件箱中的下一条消息。新调用请用 `wait` |
