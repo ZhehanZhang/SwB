@@ -120,7 +120,8 @@ class Inbox:
         if sets:
             sets.append("updated_at = ?")
             args.append(self.store.clock())
-            self.store.x(f"UPDATE handles SET {', '.join(sets)} WHERE handle = ?", [*args, handle])
+            guard = " AND (destination != 'mailbox' OR status IS NOT 'cancelled')" if status == "answered" else ""
+            self.store.x(f"UPDATE handles SET {', '.join(sets)} WHERE handle = ?{guard}", [*args, handle])
 
     async def cancel_mailbox(self, handle: str) -> None:
         self.update_handle(handle, status="cancelled", open=False)
