@@ -118,6 +118,8 @@ class Projects:
                 db.execute("UPDATE memories SET scope = ? WHERE scope = ?", (f"project:{target}", p.scope))
                 db.execute("UPDATE OR IGNORE paired_memory_grants SET scope = ? WHERE scope = ?", (f"project:{target}", p.scope))
                 db.execute("DELETE FROM paired_memory_grants WHERE scope = ?", (p.scope,))
+                db.execute("UPDATE connect_codes SET project = ? WHERE used_at IS NULL AND lower(trim(project)) IN (?, ?)",
+                           (target, p.slug, p.scope))
                 db.execute("UPDATE routes SET project = ? WHERE project = ?", (target, p.slug))
                 db.execute("UPDATE handles SET project = ? WHERE project = ?", (target, p.slug))
             db.execute(
