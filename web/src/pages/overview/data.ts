@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query"
-import { requestJson } from "@/lib/api"
+import { requestJson, requestMarkdown } from "@/lib/api"
 
 export type LampState = "on" | "off" | "fault"
 
@@ -160,14 +160,10 @@ export function projectBoardQuery(slug: string) {
   })
 }
 
-export function coordinatorQuery(title: string | null) {
-  const search = title ? `?${new URLSearchParams({ claude_project: title })}` : ""
-  return queryOptions({
-    queryKey: ["prompt", "coordinator", title],
-    queryFn: ({ signal }) => requestJson(`/api/prompts/coordinator${search}`, (value): value is { text: string } =>
-      object(value) && text(value.text), { signal }),
-  })
-}
+export const coordinatorQuery = queryOptions({
+  queryKey: ["prompt", "coordinator"],
+  queryFn: ({ signal }) => requestMarkdown("/api/prompts/coordinator", signal),
+})
 
 export function formatDay(at: string) {
   return new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
