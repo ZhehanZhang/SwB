@@ -11,14 +11,14 @@ export const translations = i18n.translations()
   .preset('zh-Hant', zhTW())
   .add({
     en: {
-      displayName: 'English',
+      displayName: 'EN',
       'Open(page actions)': 'Open in',
       'Ask a question(AI chat)': 'Question',
       'Ask a follow-up(AI chat)': 'Follow-up',
       'What do you want to know?(AI chat)': '',
     },
     'zh-Hans': {
-      displayName: '简体中文',
+      displayName: '简体',
       'Search(search trigger)': '搜索文档',
       'Search(search dialog)': '搜索文档',
       'On this page(table of contents)': '本页内容',
@@ -28,7 +28,7 @@ export const translations = i18n.translations()
       'What do you want to know?(AI chat)': '',
     },
     'zh-Hant': {
-      displayName: '繁體中文',
+      displayName: '繁體',
       'Search(search trigger)': '搜尋文件',
       'Search(search dialog)': '搜尋文件',
       'On this page(table of contents)': '本頁內容',

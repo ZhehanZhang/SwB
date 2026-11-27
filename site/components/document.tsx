@@ -1,4 +1,4 @@
-import { DocsBody, DocsPage, DocsTitle, MarkdownCopyButton, ViewOptionsPopover } from 'fumadocs-ui/layouts/docs/page';
+import { DocsBody, DocsPage, DocsTitle, MarkdownCopyButton, ViewOptionsPopover } from 'fumadocs-ui/layouts/notebook/page';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { markdownUrl, repository, siteUrl, source, type DocsPage as DocumentPage } from '@/lib/source';
 import { useMDXComponents } from '@/mdx-components';

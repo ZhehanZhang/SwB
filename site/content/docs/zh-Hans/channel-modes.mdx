@@ -37,4 +37,4 @@ SwB 采用第一个匹配项，顺序如下。先是在页面上或由智能体�
 
 空间的 `actions` 列表包含 triage 唤醒可以使用的操作。这些操作是 `reply`、`label`、`comment`、`open_issue`、`link_duplicate` 和 `notify_owner`。SwB 在服务器端强制执行该列表。GitHub 操作使用项目的 GitHub App。
 
-请为 triage 单独建一个连接器较少的例程，例如 `claude-<project>-triage`。SwB 为 triage 唤醒这个例程。每个 triage 操作都记入审计日志，并附指向该消息的链接。
+请为 triage 单独建一个连接器较少的 routine，例如 `claude-<project>-triage`。SwB 为 triage 唤醒这个 routine。每个 triage 操作都记入审计日志，并附指向该消息的链接。

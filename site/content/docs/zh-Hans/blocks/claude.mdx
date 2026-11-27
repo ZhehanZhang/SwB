@@ -1,6 +1,6 @@
 ---
 title: Claude
-description: 连接 Claude 和 Claude Project，并用例程唤醒它们。
+description: 连接 Claude 和 Claude Project，并用 routine 唤醒它们。
 ---
 
 ## 添加连接器
@@ -13,30 +13,30 @@ description: 连接 Claude 和 Claude Project，并用例程唤醒它们。
 
 > 如何连接我的 Claude Project？
 
-智能体会找到或创建对应的 SwB 项目。它创建一个带 API 触发器的 Claude Code 例程，或请你创建一个。然后它调用 `routine_register`。SwB 返回一个一次性链接。打开链接，粘贴例程的令牌并点击 Save。该链接 30 分钟内有效，且只能使用一次。最后，智能体向自己的例程发送一条测试消息，并报告完整的往返结果。
+智能体会找到或创建对应的 SwB 项目。它创建一个带 API 触发器的 Claude Code routine，或请你创建一个。然后它调用 `routine_register`。SwB 返回一个一次性链接。打开链接，粘贴 routine 的令牌并点击 Save。该链接 30 分钟内有效，且只能使用一次。最后，智能体向自己的 routine 发送一条测试消息，并报告完整的往返结果。
 
-## 例程
+## Routine
 
-**例程**是 SwB 可以唤醒的 Claude Code 任务。带项目发送给 `claude`，会唤醒该项目的主例程。SwB 同时把消息留在 Claude 的邮箱中。例程用 `reply` 回复，答复回到发送者。
+**routine**是 SwB 可以唤醒的 Claude Code 任务。带项目发送给 `claude`，会唤醒该项目的主 routine。SwB 同时把消息留在 Claude 的邮箱中。routine 用 `reply` 回复，答复回到发送者。
 
 | 发送给 | 唤醒 |
 | - | - |
-| `claude` 并带 `project=<slug>` | 该项目的主例程 |
-| `claude:<slug>` | 该项目的主例程 |
-| `<routine name>` | 该例程 |
+| `claude` 并带 `project=<slug>` | 该项目的主 routine |
+| `claude:<slug>` | 该项目的主 routine |
+| `<routine name>` | 该 routine |
 | `agent:claude` | 只写入邮箱 |
 
-一个项目可以有多个例程。第一个例程是主例程。用 `primary=true` 注册例程，可把它设为主例程。
+一个项目可以有多个 routine。第一个 routine 是主 routine。用 `primary=true` 注册 routine，可把它设为主 routine。
 
-有些 Project 例程只接受正文为空的唤醒。此时 SwB 用空正文唤醒例程，并保留消息。例程用 `routine_pickup` 取走消息。
+有些 Project routine 只接受正文为空的唤醒。此时 SwB 用空正文唤醒 routine，并保留消息。routine 用 `routine_pickup` 取走消息。
 
 ## 配置
 
 ```yaml
 blocks:
   claude-routine:
-    routines:
+ routines:
       claude: {routine_id: trig_..., token_env: CLAUDE_ROUTINE_TOKEN, agent: claude}
 ```
 
-环境变量 `CLAUDE_ROUTINE_TOKEN` 和 `CLAUDE_ROUTINE_ID` 可启用带一个例程的模块。
+环境变量 `CLAUDE_ROUTINE_TOKEN` 和 `CLAUDE_ROUTINE_ID` 可启用带一个 routine 的模块。

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { notFound } from 'next/navigation';
 import { i18nProvider } from 'fumadocs-ui/i18n';
-import { RootProvider } from 'fumadocs-ui/provider/next';
+import { Providers } from '@/components/providers';
 import { isLocale, locales } from '@/lib/i18n';
 import { siteUrl } from '@/lib/source';
 import { translations } from '@/lib/translations';
@@ -37,7 +37,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<'/[
         <meta name="darkreader-lock" />
       </head>
       <body>
-        <RootProvider i18n={i18nProvider(translations, lang)}>{children}</RootProvider>
+        <Providers i18n={i18nProvider(translations, lang)}>{children}</Providers>
       </body>
     </html>
   );

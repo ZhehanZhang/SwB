@@ -1,0 +1,7 @@
+import type { Locale } from './i18n';
+
+export const tagline: Record<Locale, string> = {
+  en: 'First-party agents working together.',
+  'zh-Hans': '第一方智能体协同工作。',
+  'zh-Hant': '第一方代理協同工作。',
+};

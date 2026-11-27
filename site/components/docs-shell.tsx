@@ -3,7 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import { AIChatPanel, AIChatProvider, AIChatSearch, useAIChat, type AIChatClientData } from '@fumadocs/ai-chat';
 import { DefaultChatTransport, type UIMessage } from 'ai';
-import { DocsLayout, type DocsLayoutProps } from 'fumadocs-ui/layouts/docs';
+import { DocsLayout, type DocsLayoutProps } from 'fumadocs-ui/layouts/notebook';
 import { useMemo } from 'react';
 import type { Locale } from '@/lib/i18n';
 
