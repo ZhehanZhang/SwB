@@ -218,6 +218,12 @@ async def test_online_progress_claims_results_and_stream_revocation(amake):
         assert await invoke == large_result
         assert (await client.post("/companion/results", headers=auth, json=result)).status_code == 404
         assert (await client.post("/companion/claims", headers=auth, json=claim)).status_code == 404
+        for error, shown in (("Bluetooth adapter unavailable.", "Bluetooth adapter unavailable"), ("\x1b[31mraw", "Companion action failed"), ("x" * 201, "Companion action failed")):
+            failing = asyncio.create_task(companions.invoke(device_id, "demo", "work", {}))
+            job = await next_job()
+            assert (await client.post("/companion/results", headers=auth, json={"job_id": job["job_id"], "ok": False, "error": error})).json() == {"ok": True}
+            with pytest.raises(BlockError, match=shown):
+                await failing
         with pytest.raises(BlockError, match="timed out"):
             await companions.invoke(device_id, "demo", "work", {}, timeout_s=0.01)
         assert await anext(stream) == ("ping", "{}")
