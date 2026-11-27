@@ -18,7 +18,7 @@ cd SwB
 } >> .env
 printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
 mkdir -p data
-docker compose up -d --build
+docker compose up -d --build --wait
 curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
