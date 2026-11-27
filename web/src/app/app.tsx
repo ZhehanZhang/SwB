@@ -34,15 +34,12 @@ export function App() {
           <Route path="/tokens" element={<TokensPage />} />
           <Route path="/inbox" element={<InboxPage />} />
           <Route path="/inbox/:handle" element={<InboxPage />} />
-          <Route path="/projects" element={<Navigate to="/" replace />} />
           <Route path="/projects/:slug" element={<ProjectPage />} />
           <Route path="/memory/*" element={<MemoryPage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/connections/:platform" element={<ConnectionsPage />} />
-          <Route path="/canvas/*" element={<Navigate to="/" replace />} />
-          <Route path="/provision/*" element={<Navigate to="/" replace />} />
           <Route path="*" element={<DataState kind="empty" message="Unknown page" />} />
         </Route>
       </Routes>
