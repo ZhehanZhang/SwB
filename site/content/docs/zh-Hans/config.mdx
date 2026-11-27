@@ -125,7 +125,7 @@ routes:
 | `auth.cloudflare_access.aud` | Access 应用的受众标记，也可用 `CLOUDFLARE_ACCESS_AUD` 设置 |
 | `auth.redirect_uris` | 允许的 OAuth 回调地址。此列表替换内置列表。用 `/*` 匹配路径及其子路径 |
 | `auth.source_names` | 将 OAuth 主机名或客户端名称的片段映射到登录时所用的智能体名称 |
-| `auth.key_scopes` | 按密钥名称设置允许的范围。适用于访问记忆和读取会话。例如 `[project:example]` |
+| `auth.key_scopes` | 按密钥名称指定范围，例如 `[project:example]`。限制路由、消息和会话。它也限制配置密钥的记忆访问，并在配对时提供额外的记忆授权。SwB 按配对密钥保存这些授权 |
 | `auth.key_tools` | 按密钥名称设置可调用的 MCP 工具，例如 `[send]` |
 | `auth.key_targets` | 按密钥名称设置可接收消息的目标，例如 `[agent:claude]` |
 | `auth.inbox_keys` | 为每把密钥指定唯一可读取的智能体收件箱。内置项为 `channel: claude-code` |

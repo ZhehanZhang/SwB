@@ -64,7 +64,11 @@ blocks:
 
 用 `blocks.github.owner_ids` 設定預設的擁有者 ID。空間的 `owner_ids` 清單會取代預設清單。空清單會清除這個空間的預設值。
 
-GitHub 的信任等級為 `owner` 和 `external`。`known` 設定適用於 Slack、Discord 和 Telegram。存取規則使用 `github:4242` 這類 ID。寄件者的信任等級維持原樣。
+SwB 逐一檢查標題、內文和留言的作者。只有 `owner_ids` 中的人寫的文字才算 `owner`。分支名稱、參照、工作流程標題及檢查名稱一律以 `external` 引用。
+
+即使由擁有者觸發，帶有檢查名稱的 `check_run` 仍標為 `external`。來自衍生儲存庫的 Pull request 可以變更檢查名稱。存取規則使用 `github:4242` 這類 ID。文字的信任等級仍依作者判定。
+
+執行 GitHub 對話動作時，將 SwB 對話 ID 填入 `conversation` 或 `handle`。
 
 ## 設定
 

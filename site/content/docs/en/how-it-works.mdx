@@ -15,9 +15,11 @@ Many Claude Projects can share one SwB project. They read and write the same pro
 
 ## Memory
 
-SwB has its own memory store. Claude and ChatGPT keep their built-in memories private, so SwB keeps a third store that every agent can use. Agents use it through the `memory_*` tools and `context_pack`.
+SwB stores shared memory separately from Claude and ChatGPT. Agents use `memory_*` and `context_pack` within the memory access their credentials allow.
 
-Each memory entry has one **scope**. The scope is `general` or `project:<slug>`. General is for facts about you that hold in every project. Before writing to general, the agent confirms with the owner. The agent then sets `confirm_general=true`. SwB uses this flag as the agent's confirmation. A read covers the named project and general. A read of a different project needs an explicit `scopes` list and goes to the audit log. A private project stays out of other projects' reads.
+A **scope** is a group of memory entries. Use `agent:<name>` for an agent, `project:<slug>` for a project or `general` for facts that apply across projects.
+
+A **grant** gives a credential access to a scope. A paired key needs an explicit grant for `general`. Only the owner or a credential with a grant for that specific project can see a private project.
 
 ## Targets
 

@@ -14,6 +14,8 @@ Ask me to sign in to SwB in the browser. Ask me to click Approve on the Connect 
 
 Call connect(what="coding-agent"). Ask me to name the agent I use. Examples are claude-code, codex, gemini-cli, goose, opencode, cline, kiro, qwen-code and other. Call connect again with `choose={"agent": "<name>"}`. Do each step marked "you" yourself. Run the command that connect returns if you have access to my terminal. Give me each step marked "person" one at a time with the exact click path. Wait for me to say done after each step. Call connect again to check the connection.
 
-Ask me to enter tokens only through the claim link that connect returns. Keep tokens out of this chat. If connect gives a pairing code, ask me to redeem it on my computer. Ask me to keep the key in a private environment variable.
+Ask me to enter tokens only through the claim link that `connect` returns. Keep tokens out of this chat. If `connect` gives a pairing code, ask me to redeem it on my computer. Ask me to keep the key in a private environment variable.
+
+A paired key gets its agent's memory scope and the scopes I set for it. A project named in the pairing adds its scope. Read general memory only if the key has a grant for `general`.
 
 When the connection works, call inbox. Ask me to send you a test message from another SwB app. Answer that message with reply. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.

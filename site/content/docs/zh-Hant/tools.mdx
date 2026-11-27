@@ -12,14 +12,14 @@ description: SwB 提供給你的代理的 MCP 工具。
 | 用途 | 工具與權限 |
 | - | - |
 | 訊息 | 可呼叫 `send`、`agent_send` 與 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 與 `get_message` 處理金鑰授權範圍內自己的訊息和對話 |
-| 記憶與專案 | 可呼叫 `context_pack` 與 `project_list`。在授權範圍內使用記憶工具 |
+| 記憶與專案 | 在金鑰允許的權限內呼叫 `context_pack` 和 `project_list`。在取得授權的範圍內使用記憶工具 |
 | 路由 | 可呼叫 `routes_list` 與 `routes_resolve`。呼叫 `routes_set` 或 `routes_remove` 時，將自己的代理名稱填入 `agent` |
 | 設定 | 用 `switchboard_status` 與 `modes_status` 查看狀態。用 `connect` 取得用戶端設定指引。設定模組和發出配對碼需要擁有者身分 |
 | 模組 | 在授權範圍內使用模組工具，並執行頻道模式允許的動作 |
 
 呼叫 `login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 與 `visibility_set` 需要擁有者身分。呼叫 `project_create`、`project_update`、`project_sync` 與 `space_mode` 也需要擁有者身分。擁有者還可呼叫 `routine_register`、`routine_add`、`routine_remove`、`discord_provision` 與 `telegram_provision`。
 
-擁有者可用 `auth.key_tools` 限制工具的顯示和呼叫。可用 `auth.key_scopes` 限制存取範圍，用 `auth.key_targets` 限制傳送目標。
+擁有者可用 `auth.key_tools` 限制工具，用 `auth.key_targets` 限制傳送對象。`auth.key_scopes` 限制路由、訊息和對話的存取範圍。記憶工具使用 SwB 為各配對金鑰單獨儲存的授權。
 
 ## 訊息
 
@@ -58,16 +58,18 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 ## 記憶與專案
 
-| 工具 | 用途 |
+請以擁有者身分登入，或使用已取得該記憶範圍授權的憑證。更新、移動或刪除項目時，請使用最後寫入該項目的金鑰。擁有者可以管理所有項目。只有擁有者能改動 `general` 中已有的項目。
+
+| 工具 | 用法 |
 | - | - |
-| `context_pack` | 取得專案簡報。使用配對金鑰時，Capy 部分只列出該代理在授權範圍內進行中的工作 |
-| `memory_write` | 儲存記憶時，填寫 `scope`、`namespace`、`title` 和 `body`。`namespace` 用來為同一範圍內的項目分類，最多三層，使用小寫，例如 `notes/meetings`。儲存專案記憶時，將專案簡稱填入 `project`，並設定 `scope="project:<slug>"`。寫入通用記憶前，先向擁有者確認。接著設定 `confirm_general=true` |
-| `memory_search` | 用 `query` 搜尋記憶。預設搜尋 `general`。將專案簡稱填入 `project`，即可先搜尋專案記憶，再搜尋 `general`。設為 `include_general=false` 時，只搜尋該專案 |
-| `memory_list` | 列出記憶項目 |
-| `memory_read` | 讀取一筆記憶與它的歷史 |
-| `memory_delete` | 移除一筆記憶 |
-| `memory_move` | 把一筆記憶移到另一個專案 |
-| `memory_promote` | 把一筆記憶移到 general |
+| `context_pack` | 讀取專案簡報。憑證取得 `general` 存取權時，簡報會納入通用記憶。使用配對金鑰時，Capy 區段顯示該代理在對話範圍內的工作 |
+| `memory_write` | 將項目儲存到已授權的範圍。填寫 `scope`、`namespace`、`title` 和 `body`。`namespace` 將同一範圍內的項目分類。名稱使用小寫，最多三層，例如 `notes/meetings`。儲存專案記憶時，在 `project` 和 `scope` 指定同一個專案。寫入 `general` 前，先請擁有者確認。接著設定 `confirm_general=true` |
+| `memory_search` | 用 `query` 搜尋。填寫 `project` 可搜尋該專案和已授權的 `general` 記憶。設為 `include_general=false` 可只搜尋該專案。用 `scopes` 指定已授權的範圍，例如 `agent:<name>` |
+| `memory_list` | 列出項目，範圍參數與 `memory_search` 相同 |
+| `memory_read` | 讀取已授權範圍內的一筆記憶和歷史 |
+| `memory_delete` | 刪除已授權範圍內的項目 |
+| `memory_move` | 將項目移到專案或代理範圍。兩個範圍都須取得授權 |
+| `memory_promote` | 將項目移到 `general`。請以擁有者身分登入 |
 | `project_list` | 列出專案與它們的連結 |
 | `project_create` | 建立專案 |
 | `project_update` | 重新命名、連結、封存專案，或把專案設為私人 |
@@ -82,7 +84,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `chatgpt_project` | ChatGPT 專案名稱或 ID |
 | `capy_project` | Capy 專案名稱或 ID |
 
-呼叫 `memory_search` 或 `memory_list` 時，將私人專案填入 `project`，即可讀取該專案的記憶。透過 `scopes` 加入其他專案時，請選擇公開專案。代理的金鑰須具備各專案的存取權限。
+讀取私人專案需要該專案的單獨授權或擁有者權限。呼叫 `memory_search` 或 `memory_list` 時，將私人專案填入 `project`。如要加入其他已授權的公開專案，請填寫 `scopes`。
 
 ## 設定
 
@@ -177,7 +179,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 ### GitHub
 
-執行與 GitHub 對話相關的動作時，將 SwB 對話 ID 填入 `handle`。呼叫 `github_reply` 或 `github_notify_owner` 時，將正文填入 `text`。
+執行 GitHub 對話動作時，將 SwB 對話 ID 填入 `conversation` 或 `handle`。呼叫 `github_reply` 或 `github_notify_owner` 時，將內文填入 `text`。
 
 | 工具 | 用途 |
 | - | - |

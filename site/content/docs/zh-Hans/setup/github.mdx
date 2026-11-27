@@ -118,7 +118,9 @@ blocks:
 
 要用工作模式，智能体将 `mode.mode` 设为 `work`。它将你的 GitHub 数字用户 ID 填入空间的 `owner_ids`。查询方法和示例见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
 
-GitHub 的信任等级为 `owner` 和 `external`。`known` 设置适用于 Slack、Discord 和 Telegram。访问规则使用 `github:4242` 这类发件人 ID。
+SwB 逐一检查每段文字的作者。只有 `owner_ids` 中的人写的文字才算 `owner`。分支名、引用、工作流标题和检查名称一律按 `external` 引用。
+
+即使所有者触发 `check_run`，带有检查名称的事件仍标为 `external`。来自派生仓库的拉取请求可以改变检查名称。
 
 通过领取链接保存同一个 webhook 密钥。智能体重启 SwB，载入密钥并应用路由。
 
@@ -141,6 +143,8 @@ GitHub 的信任等级为 `owner` 和 `external`。`known` 设置适用于 Slack
 | 私钥 | 点击 **Generate a private key** 后下载一次 | `.pem` 文件 | SwB 领取链接 |
 
 SwB 用私钥自行生成安装令牌。每个安装令牌有效一小时。
+
+请智能体调用 `connect(what="github", choose={"replace":"secret"})` 更换 webhook 密钥。`webhook_secret` 的作用相同。用 `all` 同时更换应用凭据或个人访问令牌。请按返回的提示更新各项凭据。详见[更换凭据](/zh-Hans/docs/credentials#更换凭据)。
 
 ## 检查连接
 

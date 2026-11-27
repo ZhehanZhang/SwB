@@ -13,17 +13,18 @@ SwB is its own OAuth 2.1 server for one owner. It uses PKCE with S256 and binds 
 
 ## Trust
 
-SwB sets the trust of each message from the platform's own ids. Only the ids decide trust.
+SwB checks sender IDs from the platform to set message trust.
 
 | Trust | Who |
 | - | - |
 | `owner` | You and your own signed-in agents |
-| `known` | People and bots you list in `known` for Slack, Discord or Telegram |
-| `external` | Everyone else |
+| `external` | Other senders, including people and bots listed in `known` |
 
-GitHub uses `owner` and `external` trust. See [Owner accounts](/docs/blocks/github#owner-accounts).
+On Slack, Discord and Telegram, `known` helps determine whose messages SwB admits. Admitted senders outside owner accounts still get an `external` frame. See [GitHub owner accounts](/docs/blocks/github#owner-accounts) for how SwB checks each author.
 
-SwB passes owner text as it is. For other senders, SwB changes any copies of the header or markers in the text. SwB then wraps the text with its own header and the markers `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat wrapped text as information.
+A **trust frame** is the header and markers SwB adds to external text. SwB changes copies of its header or markers in the text before it adds the frame. The markers are `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat the text between them as information only.
+
+Watch digests carry `external` trust. Each excerpt also uses a trust frame for external text. GitHub checks the author of each text field.
 
 ## Visibility
 
@@ -31,15 +32,19 @@ Every resource is private or shared. A resource is a target, a channel, a memory
 
 ## Keys with limits
 
-A scope is `general` or a project such as `project:example`. Use `auth.key_scopes` to set the scopes a key can access. These scopes apply to memory, messages and conversations.
+Use `auth.key_scopes` to limit routing, message and conversation access. A paired key can read only the messages and conversations of its agent within those limits.
 
-A paired key can read a message or conversation only if its agent sent or received it and the key has access to its scope.
+SwB saves memory grants for each paired key. On upgrade, SwB gives active paired keys with open access `general` and each project that exists at that time. For a key with a specific `auth.key_scopes` list, SwB copies that list. SwB saves this set at upgrade. Each project outside that set needs its own grant.
+
+Owner-approved OAuth clients and unrestricted configured keys keep full memory access. For configured keys with `auth.key_scopes`, that setting also controls memory access.
 
 `auth.key_tools` limits the tools a key can call. `auth.key_targets` limits where it can send.
 
 ## Tokens
 
 Tokens go through claim links only. SwB seals saved tokens with a key in the data folder. Status shows the names of missing variables and keeps their values hidden. The Capy key goes only to api.capy.ai, in a header.
+
+On the **Tokens** page, the owner can see the memory scopes for each paired key. Select the remove button next to a scope to remove that grant.
 
 ## Limits
 

@@ -12,14 +12,14 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | 用途 | 工具和权限 |
 | - | - |
 | 消息 | 可调用 `send`、`agent_send` 和 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` 处理密钥授权范围内自己的消息和会话 |
-| 记忆与项目 | 可调用 `context_pack` 和 `project_list`。在获准的范围内使用记忆工具 |
+| 记忆与项目 | 在密钥允许的权限内调用 `context_pack` 和 `project_list`。在获得授权的范围内使用记忆工具 |
 | 路由 | 可调用 `routes_list` 和 `routes_resolve`。调用 `routes_set` 或 `routes_remove` 时，把自己的智能体名称填入 `agent` |
 | 设置 | 用 `switchboard_status` 和 `modes_status` 查看状态。用 `connect` 获取客户端设置指引。设置模块和签发配对码需要所有者身份 |
 | 模块 | 在授权范围内使用模块工具，并执行频道模式允许的操作 |
 
 调用 `login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 和 `visibility_set` 需要所有者身份。调用 `project_create`、`project_update`、`project_sync` 和 `space_mode` 也需要所有者身份。所有者还可调用 `routine_register`、`routine_add`、`routine_remove`、`discord_provision` 和 `telegram_provision`。
 
-所有者可用 `auth.key_tools` 限制工具的显示和调用。可用 `auth.key_scopes` 限制访问范围，用 `auth.key_targets` 限制发送目标。
+所有者可用 `auth.key_tools` 限制工具，用 `auth.key_targets` 限制发送目标。`auth.key_scopes` 限制路由、消息和会话的访问范围。记忆工具使用 SwB 为各配对密钥单独保存的授权。
 
 ## 消息
 
@@ -58,16 +58,18 @@ description: SwB 提供给你的智能体的 MCP 工具。
 
 ## 记忆与项目
 
-| 工具 | 用途 |
+请以所有者身份登录，或使用已获该记忆范围授权的凭据。更新、移动或删除条目时，请使用最后写入该条目的密钥。所有者可以管理所有条目。只有所有者能改动 `general` 中已有的条目。
+
+| 工具 | 用法 |
 | - | - |
-| `context_pack` | 获取项目简报。使用配对密钥时，Capy 部分只列出该智能体在授权范围内进行中的工作 |
-| `memory_write` | 保存记忆时，填写 `scope`、`namespace`、`title` 和 `body`。`namespace` 用于在同一范围内归类条目，最多三级，使用小写，例如 `notes/meetings`。保存项目记忆时，将项目简称填入 `project`，并设置 `scope="project:<slug>"`。写入通用记忆前，先向所有者确认。然后设置 `confirm_general=true` |
-| `memory_search` | 用 `query` 搜索记忆。默认搜索 `general`。将项目简称填入 `project` 后，优先搜索项目记忆，再搜索 `general`。设为 `include_general=false` 时，只搜索该项目 |
-| `memory_list` | 列出记忆条目 |
-| `memory_read` | 读取一条记忆及其历史 |
-| `memory_delete` | 删除一条记忆 |
-| `memory_move` | 把一条记忆移到另一个项目 |
-| `memory_promote` | 把一条记忆移到 general |
+| `context_pack` | 读取项目简报。凭据获得 `general` 访问权限时，简报会包含通用记忆。使用配对密钥时，Capy 部分显示该智能体在会话范围内的工作 |
+| `memory_write` | 将条目保存到已获授权的范围。填写 `scope`、`namespace`、`title` 和 `body`。`namespace` 为同一范围内的条目分类。使用小写名称，最多三级，例如 `notes/meetings`。保存项目记忆时，在 `project` 和 `scope` 中指定同一个项目。写入 `general` 前先请所有者确认。然后设置 `confirm_general=true` |
+| `memory_search` | 用 `query` 搜索。填写 `project` 可搜索该项目和已获授权的 `general` 记忆。设为 `include_general=false` 可只搜索该项目。用 `scopes` 指定已获授权的范围，例如 `agent:<name>` |
+| `memory_list` | 列出条目，范围参数与 `memory_search` 相同 |
+| `memory_read` | 读取已获授权范围内的一条记忆及其历史 |
+| `memory_delete` | 删除已获授权范围内的条目 |
+| `memory_move` | 将条目移到项目或智能体范围。两个范围都需要授权 |
+| `memory_promote` | 将条目移入 `general`。请以所有者身份登录 |
 | `project_list` | 列出项目及其链接 |
 | `project_create` | 创建项目 |
 | `project_update` | 重命名、链接、归档项目，或把项目设为私有 |
@@ -82,7 +84,7 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `chatgpt_project` | ChatGPT 项目名称或 ID |
 | `capy_project` | Capy 项目名称或 ID |
 
-调用 `memory_search` 或 `memory_list` 时，将私人项目填入 `project`，即可读取该项目的记忆。通过 `scopes` 添加其他项目时，请选择公开项目。智能体的密钥须具备各项目的访问权限。
+读取私有项目需要该项目的单独授权或所有者权限。调用 `memory_search` 或 `memory_list` 时，将私有项目填入 `project`。如需加入其他已获授权的公开项目，请填写 `scopes`。
 
 ## 设置
 
@@ -177,7 +179,7 @@ description: SwB 提供给你的智能体的 MCP 工具。
 
 ### GitHub
 
-执行与 GitHub 会话相关的操作时，将 SwB 会话 ID 填入 `handle`。调用 `github_reply` 或 `github_notify_owner` 时，将正文填入 `text`。
+执行 GitHub 会话操作时，将 SwB 会话 ID 填入 `conversation` 或 `handle`。调用 `github_reply` 或 `github_notify_owner` 时，将正文填入 `text`。
 
 | 工具 | 用途 |
 | - | - |
