@@ -3,11 +3,11 @@ title: Capy Captain
 description: Route SwB work to a Capy Captain and bring the replies back.
 ---
 
-A Captain is a long-lived Capy agent that directs a crew of threads. This connection sends SwB work to one Captain and brings each reply back to the sender.
+A Capy Captain is a long-lived Capy agent that directs a crew of threads. This connection sends SwB work to the agent and brings each reply back to the sender.
 
 ## Before you start
 
-You need a Capy account in the right organization, a project and a Captain. Any member can create a `read_write` service user. A service user is a Capy account for software, with its own key.
+You need a Capy account in the right organization, a project and a Capy Captain. Any member can create a `read_write` service user. A service user is a Capy account for software, with its own key.
 
 Your SwB server needs the `capy` block. Paste the prompt into an agent that has SwB with owner sign-in. In Capy, you add SwB under **Settings** → **MCP & plugins**.
 
@@ -56,18 +56,18 @@ Restart SwB when your agent asks. SwB then loads the key.
 
 <Step>
 
-### Make a Captain
+### Make a Capy Captain
 
-Do this step only if you need a new Captain. Open **New Captain** in Capy. Set the name, project, **Machine** and model.
+Create a Capy Captain if you need one. Set the name, project, **Machine** and model.
 
 </Step>
 {/* unverified */}
 
 <Step>
 
-### Choose the Captain
+### Choose the Capy Captain
 
-Tell your agent which Captain gets the work.
+Tell your agent which Capy Captain gets the work.
 
 </Step>
 
@@ -82,9 +82,9 @@ In **Settings** → **API**, create a service user with the role `read_write`. G
 
 <Step>
 
-### Share the Captain
+### Share the Capy Captain
 
-Open the Captain menu. Select **Share**. Add the service user. If the Captain runs on a paired device, share the device too.
+Open the Capy Captain menu. Select **Share**. Add the service user. If the Capy Captain runs on a paired device, share the device too.
 
 </Step>
 {/* unverified */}
@@ -111,7 +111,7 @@ Restart SwB. Then tell your agent that you are done.
 
 The agent calls `connect(what="capy-captain")` from the owner sign-in. SwB asks for the read key, `CAPY_API_KEY`, through a claim link. A claim link is a private one-time SwB page for one token.
 
-After the restart, `connect` lists each available Captain. The agent confirms the Captain with you and calls `connect(what="capy-captain", choose={"captain":"<Captain ID>"})`. It adds `"project":"<project>"` for a project route. A route is the SwB rule that names where work goes. A new route sends each message to the Captain thread.
+After the restart, `connect` lists each available Capy Captain. The agent confirms the Capy Captain with you and calls `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`. It adds `"project":"<project>"` for a project route. A route is the SwB rule that names where work goes. A new route sends each message to the Capy Captain thread.
 
 Then SwB asks for the send key, `CAPY_API_KEY_SERVICE`. The agent checks the route with `capy_captains`, `routes_list` and `routes_resolve`. It sends a test task with `send` and reads the answer with `result` or `inbox`. Last, the agent subscribes to `switchboard.message.created` if its app supports MCP events. Otherwise it calls `wait`.
 
@@ -124,11 +124,11 @@ Then SwB asks for the send key, `CAPY_API_KEY_SERVICE`. The agent checks the rou
 
 ## Check the connection
 
-Ask your agent to call `connect(what="capy-captain")` again. The answer shows the state `connected`. Run `routes_list` to see the route. Send a short test task. The task appears in the Captain, and the answer comes back through `result` or `inbox`. Sign in as the owner to see the send key for each agent in `/healthz`.
+Ask your agent to call `connect(what="capy-captain")` again. The answer shows the state `connected`. Run `routes_list` to see the route. Send a short test task. The task appears in the Capy Captain, and the answer comes back through `result` or `inbox`. Sign in as the owner to see the send key for each agent in `/healthz`.
 
 ## Fix problems
 
-A Capy key acts with the access of its owner. If `connect` asks for a new read key, give that owner access to the Captain.
+A Capy key acts with the access of its owner. If `connect` asks for a new read key, give that owner access to the Capy Captain.
 
 If a send fails with an access error, share the project and the paired device with the service user.
 
