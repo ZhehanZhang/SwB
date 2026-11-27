@@ -1,13 +1,8 @@
 import { queryOptions } from "@tanstack/react-query"
+import type { ConnectionPlatform } from "@/app/navigation"
 import { isObject, requestJson } from "@/lib/api"
 
-export const connectionNames = { slack: "Slack", discord: "Discord", telegram: "Telegram" } as const
-export type ConnectionPlatform = keyof typeof connectionNames
 export type ConnectionState = "connected" | "disconnected" | "not_configured"
-
-export function isConnectionPlatform(value: string | undefined): value is ConnectionPlatform {
-  return value !== undefined && Object.hasOwn(connectionNames, value)
-}
 
 export type BotAvatar = {
   file: string | null
@@ -33,7 +28,7 @@ type TelegramChat = {
   listen: "direct" | "listening" | "unlisted"
 }
 export type TelegramDetails = Bot & { chats: TelegramChat[] }
-type SlackDetails = { workspaces: { name: string; intake: string; connected: boolean }[] }
+type SlackDetails = { workspaces: { name: string; intake: "socket" | "poll" | "none"; connected: boolean }[] }
 type Connection = { state: ConnectionState } & (
   | { platform: "discord"; details: DiscordDetails | null }
   | { platform: "telegram"; details: TelegramDetails | null }
@@ -59,7 +54,8 @@ function isConnection(value: unknown): value is Connection {
   if (!isObject(details) || (state !== "connected" && state !== "disconnected")) return false
   if (platform === "slack") {
     return Array.isArray(details.workspaces) && details.workspaces.every((workspace: unknown) => isObject(workspace)
-      && typeof workspace.name === "string" && typeof workspace.intake === "string" && typeof workspace.connected === "boolean")
+      && typeof workspace.name === "string" && typeof workspace.connected === "boolean"
+      && (workspace.intake === "socket" || workspace.intake === "poll" || workspace.intake === "none"))
   }
   if (!isBot(details, platform)) return false
   if (platform === "discord") {

@@ -14,6 +14,13 @@ export const utilitySections = [
 
 export const sections = [...primarySections, ...utilitySections, { name: "About", to: "/about", icon: Info }] as const
 
+export const connectionNames = { slack: "Slack", discord: "Discord", telegram: "Telegram" } as const
+export type ConnectionPlatform = keyof typeof connectionNames
+
+export function isConnectionPlatform(value: string | undefined): value is ConnectionPlatform {
+  return value !== undefined && Object.hasOwn(connectionNames, value)
+}
+
 export function isSection(pathname: string, to: string) {
   return pathname === to || pathname.startsWith(`${to}/`)
 }

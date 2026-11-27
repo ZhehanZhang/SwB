@@ -1,7 +1,6 @@
 import pytest
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, default_env
-from switchboard import api_connections
 
 DISCORD_TOKEN = ".".join(("a" * 24, "b" * 6, "c" * 35))
 TELEGRAM_TOKEN = "123456:" + "a" * 36
@@ -153,5 +152,5 @@ def test_avatar_serves_only_the_applied_image(providers, platform, tmp_path, mon
 
     changed = tmp_path / "switchboard.png"
     changed.write_bytes(response.content + b"changed")
-    monkeypatch.setattr(api_connections, "find_avatar", lambda _: changed)
+    monkeypatch.setattr(core, "find_avatar", lambda _: changed)
     assert client.get(route, headers=OWNER).status_code == 404
