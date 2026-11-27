@@ -51,6 +51,8 @@ credentials in your environment, and `/healthz` lists anything that's missing. T
 For Docker, Compose with automatic HTTPS, Railway, Render or Fly.io, see [deploying](deploy/README.md). Clients that
 need OAuth, such as Claude Projects and ChatGPT, also need [owner sign-in](docs/guide.md#authentication-and-protection).
 
+See [server addresses](docs/guide.md#server-addresses) to move an instance to a new URL.
+
 ## Connections
 
 Ask any connected agent to call `connect`, or run `swb connect <kind>`.
