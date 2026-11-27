@@ -323,6 +323,10 @@ class EventsExtension(Extension):
         mailbox = params.arguments.get("mailbox_id") if isinstance(params.arguments, dict) else None
         if not self._can_access(p, mailbox):
             raise MCPError(code=-32024, message="Forbidden")
+        try:
+            self.core.modes.check(p, None, "events/subscribe")
+        except PermissionError as e:
+            raise MCPError(code=-32024, message=str(e)) from e
         arguments, url = _event_filter(params.name, params.arguments, params.delivery)
         key = _signing_key(params.delivery.get("secret"))
         if params.cursor is not None and not isinstance(params.cursor, str):
@@ -400,6 +404,10 @@ class EventsExtension(Extension):
         p = _principal(ctx)
         if not _eligible(p):
             raise MCPError(code=-32024, message="Forbidden")
+        try:
+            self.core.modes.check(p, None, "events/unsubscribe")
+        except PermissionError as e:
+            raise MCPError(code=-32024, message=str(e)) from e
         sid = params.id
         if any(v is not None for v in (params.name, params.arguments, params.delivery)):
             _, url = _event_filter(params.name, params.arguments, params.delivery)

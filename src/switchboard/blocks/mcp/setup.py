@@ -6,6 +6,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ...auth import Principal
+from ...modes import PROVIDERS
 from .coding import coding_steps
 from .kit import Kit
 
@@ -87,7 +88,8 @@ def register(mcp: MCPServer, kit: Kit) -> None:
                 {"by": "person", "do": f"Enable the {BLOCKS[what]} block in config/switchboard.yaml and restart Switchboard."}]}
         if what not in CLIENTS and not p.is_unrestricted_owner:
             return {"what": what, "done": [], "next": [
-                {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}]}
+                {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}],
+                **({"modes": core.modes.summary(block.name, p)} if block is not None and block.manifest.id in PROVIDERS else {})}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
         outcome = "ok"
         try:
@@ -107,4 +109,6 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             if p.is_unrestricted_owner:
                 core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination=block.name if block else "core",
                                   action=f"connect_{what}", outcome=outcome)
+        if block is not None and block.manifest.id in PROVIDERS:
+            out.setdefault("modes", core.modes.summary(block.name, p))
         return {"what": what, **out, **({"state": "connected"} if all(step.get("optional") for step in out["next"]) else {})}
