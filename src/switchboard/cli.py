@@ -21,8 +21,9 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
+from .config import ConfigError
+from .deployment import OWNER_KEY, volume_owner_key
 
-OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
 CONFIG = Path("config/switchboard.yaml")
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
 DEFAULT_PORT = "8870"
@@ -291,11 +292,14 @@ def main(argv: list[str] | None = None) -> None:
             arguments["what"] = args.what
             if choose := _choices(args.choose, kind=args.what):
                 arguments["choose"] = choose
+        port = os.environ.get("PORT", env.get("PORT", DEFAULT_PORT))
+        local_url = f"http://127.0.0.1:{port}/mcp"
+        url = _url(args.url or local_url)
         key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
+        if not key and url == local_url:
+            key = volume_owner_key(os.environ)
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
-        port = os.environ.get("PORT", env.get("PORT", DEFAULT_PORT))
-        url = _url(args.url or f"http://127.0.0.1:{port}/mcp")
         request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")
         level = request_log.level
         try:
@@ -309,7 +313,7 @@ def main(argv: list[str] | None = None) -> None:
         finally:
             request_log.setLevel(level)
         print(_display(tool, payload).replace(key, "[redacted]"))
-    except CliError as error:
+    except (CliError, ConfigError) as error:
         parser.exit(1, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(1, f"swb: couldn't read or write the instance files ({type(error).__name__}).\n")
