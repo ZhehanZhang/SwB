@@ -78,6 +78,22 @@ def test_slack_legacy_mention_without_a_destination_is_a_drop(opened):
         assert not fires
 
 
+def test_slack_legacy_context_limit_counts_drops_without_delivering(opened):
+    with opened(channels=[], rate=1) as (core, client, world, fires):
+        pair = core.connections.mint(agent="alpha", project=None, client=None, by="owner")
+        core.connections.redeem(pair["code"])
+        client.portal.call(core.blocks["slack"].refresh)
+        core.visibility.set("target:alpha", "private", "test", core.clock())
+        attrs = {"type": "app_mention", "text": f"<@{BOT_USER}> alpha Check the report"}
+        for ts in (TS, "1700000500.000003", "1700000500.000004"):
+            ingest(core, client, ts=ts, **attrs)
+        assert core.blocks["slack"].status()["drop_reasons"] == {"target access restricted": 1, "sender rate limit": 2}
+        rows = core.audit.recent(action="chat_event", outcome="dropped")
+        assert [row["detail"] for row in rows] == ["sender rate limit", "target access restricted"]
+        assert [item["kind"] for item in core.inbox.read(owner="alpha")["items"]] == ["context"]
+        assert world.names().count("chat_postEphemeral") == 1 and not fires
+
+
 def test_slack_watch_deduplicates_and_never_fans_out(opened):
     with opened(hooks=Hooks()) as (core, client, world, fires):
         set_mode(core, client, "watch")
