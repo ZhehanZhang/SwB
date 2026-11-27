@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import secrets
 from typing import Any, Callable
 
@@ -48,8 +49,25 @@ class Inbox:
             return None
         return {**dict(r), "meta": json.loads(r["meta"]), "state": json.loads(r["state"]), "open": bool(r["open"])}
 
+    @staticmethod
+    def participant(handle: dict[str, Any], source: str) -> bool:
+        return handle["owner"] == source or (handle["destination"] == "mailbox" and handle["ref"] == source)
+
+    @staticmethod
+    def scope_filter(column: str, scopes: tuple[str, ...] | None) -> tuple[str, tuple[str, ...]]:
+        if scopes is None or "*" in scopes:
+            return "1", ()
+        if not scopes:
+            return "0", ()
+        return f"COALESCE('project:' || {column}, 'general') IN ({','.join('?' for _ in scopes)})", scopes
+
+    def provider_refs(self, destination: str, *, owner: str, scopes: tuple[str, ...] | None = None) -> set[str]:
+        clause, args = self.scope_filter("project", scopes)
+        return {r["ref"] for r in self.store.q(
+            f"SELECT DISTINCT ref FROM handles WHERE destination = ? AND owner = ? AND {clause}", (destination, owner, *args))}
+
     def handles(self, *, owner: str | None = None, destination: str | None = None, open_only: bool = False, project: str | None = None,
-                limit: int = 50, roots_only: bool = False) -> list[dict[str, Any]]:
+                limit: int = 50, roots_only: bool = False, scopes: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
         where, args = [], []
         for col, val in (("owner", owner), ("destination", destination), ("project", project)):
             if val:
@@ -57,6 +75,10 @@ class Inbox:
                 args.append(val)
         if open_only:
             where.append("open = 1")
+        if scopes is not None:
+            clause, values = self.scope_filter("h.project", scopes)
+            where.append(clause)
+            args.extend(values)
         if roots_only:
             where.append("""NOT EXISTS (
                 SELECT 1 FROM handles p WHERE p.handle != h.handle
@@ -199,6 +221,19 @@ class Inbox:
         return f"msg_{cursor}"
 
     @staticmethod
+    def message_cursor(message_id: str) -> int | None:
+        if re.fullmatch(r"msg_[1-9][0-9]{0,18}", message_id):
+            cursor = int(message_id[4:])
+            if cursor <= 2**63 - 1:
+                return cursor
+        return None
+
+    def message_handle(self, message_id: str) -> dict[str, Any] | None:
+        cursor = self.message_cursor(message_id)
+        row = self.store.one("SELECT handle FROM inbox WHERE id = ?", (cursor,)) if cursor is not None else None
+        return self.handle(row["handle"]) if row is not None else None
+
+    @staticmethod
     def _item(r: Any) -> dict[str, Any]:
         return {"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
                 "at": iso(r["at"]), **json.loads(r["data"]), "message_id": Inbox.message_id(r["id"])}
@@ -208,7 +243,8 @@ class Inbox:
         return {**self._item(row), "owner": row["owner"]} if row is not None else None
 
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
-             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
+             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None,
+             scopes: tuple[str, ...] | None = None) -> dict[str, Any]:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
 
         owner None reads every caller's items (the Claude Code channel does this). Each reader keeps its own cursor,
@@ -247,6 +283,10 @@ class Inbox:
         if project:
             where.append("handle IN (SELECT h.handle FROM handles h WHERE h.project = ?)")
             args.append(project)
+        if scopes is not None and "*" not in scopes:
+            clause, values = self.scope_filter("h.project", scopes)
+            where.append(f"handle IN (SELECT h.handle FROM handles h WHERE {clause})")
+            args.extend(values)
         rows = self.store.q(f"{with_clause}SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
         cursor = rows[-1]["id"] if rows else idle_cursor
         if rows and advance:
@@ -263,14 +303,16 @@ class Inbox:
         }
 
     async def wait(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
-                   timeout: float = 20.0, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
+                   timeout: float = 20.0, reader: str | None = None, advance: bool = True, project: str | None = None,
+                   scopes: tuple[str, ...] | None = None) -> dict[str, Any]:
         """Long-poll: return as soon as something new arrives, or an empty result when the timeout runs out."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + max(0.0, timeout)
         cond = self._condition()
         async with cond:
             while True:
-                out = self.read(owner=owner, handle=handle, since=since, destination=destination, reader=reader, advance=advance, project=project)
+                out = self.read(owner=owner, handle=handle, since=since, destination=destination, reader=reader, advance=advance,
+                                project=project, scopes=scopes)
                 remaining = deadline - loop.time()
                 cancelled = out.get("handle_status") == "cancelled"
                 if out["items"] or cancelled or remaining <= 0:

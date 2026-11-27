@@ -21,7 +21,7 @@ def register(block: "CapyBlock", mcp: MCPServer, kit: Any) -> None:
                         limit: Annotated[int, Field(ge=1, le=30)] = 10) -> dict[str, Any]:
         return await kit.invoke(ctx, name, "list", scope=scope, project=project, captain=captain, limit=limit)
 
-    @mcp.tool(title="Captain digest", description="A Captain's digest plus crew threads that need the owner or are working. Defaults to the Captain routed for you and project.", annotations=kit.READ_REMOTE)
+    @mcp.tool(title="Captain digest", description="Read a Captain digest and crew activity with the owner's sign-in. The Captain defaults to your project route.", annotations=kit.READ_REMOTE)
     async def capy_captain_digest(ctx: Context, captain: str | None = None, project: str | None = None) -> dict[str, Any]:
         return await kit.invoke(ctx, name, "captain_digest", captain=captain, project=project)
 
