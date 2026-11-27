@@ -11,7 +11,6 @@ from starlette.routing import Route
 
 from .audit import iso
 from .claims import CLAIM_TTL_S, NAME_RE
-from .muse_protocol import TOKEN_ENV as MUSE_TOKEN_ENV
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -53,8 +52,6 @@ def _credential_refs(core: Switchboard) -> dict[str, tuple[str, str, list[str]]]
                     add(ref, "slack", "Slack token", _label(workspace))
         elif kind in ("discord", "telegram"):
             add(block.token_env, kind, f"{block.manifest.title} bot token", uses)
-        elif kind == "muse":
-            add(MUSE_TOKEN_ENV, kind, "Muse bridge token", uses)
         elif kind == "github":
             add(block.secret_env, "github", "GitHub webhook secret", uses)
             add(block.api.app_id_env, "github", "GitHub App ID", uses)

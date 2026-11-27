@@ -20,9 +20,11 @@ async def test_generated_inventory(monkeypatch):
     assert {
         "block:discord", "provider:grok", "tool:send", "tool:slack_post", "mode:triage", "mode:triage:reply",
         "page:/settings", "page:/tokens", "page:/inbox", "command:up", "config_key:blocks.slack.workspaces.*.identities.bot.token_env",
-        "avatar:claude.png", "page:/projects/:slug", "page:/pairing/code",
+        "avatar:claude.png", "avatar:muse.png", "provider:muse", "prompt:setup-muse", "page:/projects/:slug", "page:/pairing/code",
     } <= items.keys()
     assert {"page:/classic", "page:/canvas/*", "page:/provision/*", "page:/projects", "config_key:blocks.capy.burst"}.isdisjoint(items)
+    assert {"block:muse", "command:" + "-".join(("muse", "bridge"))}.isdisjoint(items)
+    assert not any(key.startswith("config_key:blocks.muse") for key in items)
     assert {"task", "to"} <= set(items["tool:send"]["input_properties"])
     assert "ctx" not in items["tool:send"]["input_properties"]
     assert "--tunnel" in items["command:up"]["flags"]
@@ -31,6 +33,8 @@ async def test_generated_inventory(monkeypatch):
     avatar = items["avatar:claude.png"]
     assert avatar["sha256"] == hashlib.sha256((ROOT / avatar["icon"]).read_bytes()).hexdigest()
     assert items["provider:claude"]["icon"] == avatar["icon"]
+    assert items["provider:muse"]["label"] == "Muse"
+    assert items["provider:muse"]["icon"] == items["avatar:muse.png"]["icon"]
     assert all(not row["icon"] or (ROOT / row["icon"]).is_file() for row in items.values())
 
 
