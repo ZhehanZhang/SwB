@@ -227,9 +227,9 @@ def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     return page(PAIRING_TITLE, body, 200)
 
 
-def _claim_document(title: str, body: str, status: int = 200, *, grouped: bool = False) -> HTMLResponse:
-    group_assets = ('<link rel="stylesheet" href="/claim-assets/claim.css">'
-                    '<script src="/claim-assets/claim.js" defer></script>') if grouped else ""
+def _claim_document(title: str, body: str, status: int = 200, *, field_assets: bool = False) -> HTMLResponse:
+    form_assets = ('<link rel="stylesheet" href="/claim-assets/claim.css">'
+                   '<script src="/claim-assets/claim.js" defer></script>') if field_assets else ""
     doc = f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -239,7 +239,7 @@ def _claim_document(title: str, body: str, status: int = 200, *, grouped: bool =
 <title>{html.escape(title)} | SwB</title>
 <script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/claim.css">
-{group_assets}
+{form_assets}
 </head><body><main>
 {CLAIM_BRAND}
 {body}
@@ -257,7 +257,18 @@ def claim_message_page(title: str, status: int) -> HTMLResponse:
 
 def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, requester: str = "",
                credential: str = "Token", guide: bool = False, host: str = "", expires_at: float | None = None,
-               now: float | None = None) -> HTMLResponse:
+               now: float | None = None, kind: str = "token", typed: bool = False) -> HTMLResponse:
+    from .claims import FILE_KINDS, Field
+
+    field_assets = kind == "id" or kind in FILE_KINDS
+    if field_assets:
+        from .credentials import claim_field
+
+        field = claim_field(Field("token", credential, kind))
+    else:
+        field = (f'<label for="token">{html.escape(credential)}</label>'
+                 '<input id="token" name="token" type="password" required autocomplete="new-password" autocapitalize="none" spellcheck="false">')
+    save = "Save" if typed else f"Save {html.escape(credential.lower())}"
     key_field = ('<label for="owner-key">SwB owner key</label>'
                  '<input id="owner-key" name="owner_key" type="password" required autocomplete="new-password" '
                  'autocapitalize="none" spellcheck="false">') if owner_key else ""
@@ -282,22 +293,23 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
 <form method="post" autocomplete="off">
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
 {key_field}
-<label for="token">{html.escape(credential)}</label>
-<input id="token" name="token" type="password" required autocomplete="new-password" autocapitalize="none" spellcheck="false">
+{field}
 {help_link}
 <div class="actions">
-<button type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Save {html.escape(credential.lower())}</button>
+<button type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>{save}</button>
 </div>
-</form>{footer}""")
+</form>{footer}""", field_assets=field_assets)
 
 
-def token_claim_page(name: str, csrf: str, *, require_https: bool = False, host: str = "",
-                     expires_at: float | None = None, now: float | None = None) -> HTMLResponse:
-    credential = "Webhook URL" if require_https else "Token"
+def token_claim_page(name: str, csrf: str, *, kind: str = "token", label: str = "", require_https: bool = False,
+                     owner_key: bool = False, host: str = "", expires_at: float | None = None,
+                     now: float | None = None) -> HTMLResponse:
+    credential = label or ("Webhook URL" if require_https or kind == "url" else "Token")
     connector = name.partition("_")[0].lower()
-    requester, label = CLAIM_CONNECTORS.get("chatgpt" if connector == "openai" else connector, ("", ""))
-    return claim_page(label or (f"Save a {credential.lower()}" if require_https else TOKEN_CLAIM_TITLE), f"For {name}.", csrf, requester=requester, credential=credential,
-                      host=host, expires_at=expires_at, now=now)
+    requester, legacy_title = CLAIM_CONNECTORS.get("chatgpt" if connector == "openai" else connector, ("", ""))
+    title = label or legacy_title or ("Save a webhook URL" if credential == "Webhook URL" else TOKEN_CLAIM_TITLE)
+    return claim_page(title, f"For {name}.", csrf, requester=requester, credential=credential, owner_key=owner_key,
+                      host=host, expires_at=expires_at, now=now, kind=kind, typed=bool(label))
 
 
 def routine_claim_page(c: dict[str, Any], csrf: str, *, host: str = "", now: float | None = None) -> HTMLResponse:

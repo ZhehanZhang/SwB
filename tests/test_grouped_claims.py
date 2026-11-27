@@ -42,6 +42,51 @@ def test_single_github_claims_validate_before_saving(make):
         assert client.get(path, headers=OWNER).status_code == 410
 
 
+def test_github_single_claim_forms_and_inventory_show_the_credential_names(make):
+    config = base_config(version=2, blocks={"mcp": {}, "github": {"private_key_env": "CUSTOM_APP_KEY"}})
+    core, client = make(config=config)
+    block = core.blocks["github"]
+    connect = client.portal.call(block.connect_steps, "github", Principal("owner", "test", "key"), None, {"credential": "app"})
+    fields = {"GITHUB_APP_ID": ("App ID", 'inputmode="numeric"'),
+              "GITHUB_WEBHOOK_SECRET": ("Webhook secret", 'name="token" type="password"'),
+              "CUSTOM_APP_KEY": ("Private key", '<textarea id="f-token" name="token"')}
+    for step in connect["next"]:
+        if "link" not in step:
+            continue
+        path = urlsplit(step["link"]).path
+        assert client.get(path).status_code == 303
+        name = core.claims.inspect(path.rsplit("/", 1)[1])
+        label, control = fields[name]
+        page = client.get(path, headers=OWNER)
+        private_page(page)
+        assert f"<h1>{label}</h1>" in page.text and f">{label}</label>" in page.text
+        assert control in page.text and "GitHub credential" not in page.text
+        if name == "CUSTOM_APP_KEY":
+            assert 'type="file" accept=".pem,.key,.txt" data-target="f-token"' in page.text
+            assert '<script src="/claim-assets/claim.js" defer></script>' in page.text
+            assert "type=\"password\"" not in page.text
+            saved = client.post(path, headers=OWNER, data={"csrf": form_csrf(page), "token": PKCS8})
+            assert saved.status_code == 200 and "<h1>Private key saved</h1>" in saved.text
+
+    inventory = client.get("/api/tokens", headers=OWNER).json()
+    assert {(r["name"], r["kind"]) for r in inventory["waiting"]} == {
+        ("GitHub App ID", "github"), ("GitHub webhook secret", "github"),
+    }
+    assert [(r["name"], r["kind"]) for r in inventory["stored"]] == [("GitHub private key", "github")]
+
+
+def test_typed_private_key_form_can_be_used_with_an_owner_key(make):
+    config = base_config(auth={})
+    config.pop("public_url")
+    core, client = make(config=config, env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
+    path = urlsplit(core.claims.mint("EXAMPLE_KEY", PUBLIC, kind="pem", label="Private key")).path
+    page = client.get(path)
+    assert page.status_code == 200 and 'name="owner_key"' in page.text and '<textarea id="f-token"' in page.text
+    assert client.post(path, data={"csrf": form_csrf(page), "token": PKCS8}).status_code == 403
+    saved = client.post(path, data={"owner_key": OWNER_KEY, "csrf": form_csrf(page), "token": PKCS8})
+    assert saved.status_code == 200 and core.claims.secret("EXAMPLE_KEY") == PKCS8
+
+
 @pytest.mark.parametrize("legacy", ["not a pem", base64.b64encode(b"-----BEGIN PRIVATE KEY-----YWJj-----END PRIVATE KEY-----").decode()])
 def test_github_connect_reissues_claim_for_unloadable_stored_private_key(make, legacy):
     config = base_config(version=2, blocks={"mcp": {}, "github": {"app_id": 12345, "private_key_env": "CUSTOM_APP_KEY"}})

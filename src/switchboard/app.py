@@ -327,21 +327,28 @@ def create_app(core: "Switchboard") -> Any:
         if (group := core.claims.group(code)) is not None:
             return await group_claim(request, group)
         if request.method != "POST":
+            owner_key = not core.cfg.owner_sign_in and bool(claim_key_actor)
             form_csrf, refused = await claim_page_access(request)
-            if refused is not None:
+            if refused is not None and not owner_key:
                 return refused
             try:
                 claim = core.claims.inspect_details(code)
             except ClaimUnavailable:
-                return pages.claim_message_page("Request a new link", 410)
-            return pages.token_claim_page(claim["name"], form_csrf, require_https=claim["require_https"],
+                return refused if owner_key else pages.claim_message_page("Request a new link", 410)
+            if owner_key:
+                if not claim["label"]:
+                    return refused
+                form_csrf = core.auth.csrf(f"claim:{code}")
+            return pages.token_claim_page(claim["name"], form_csrf, require_https=claim["require_https"], kind=claim["kind"],
+                                          label=claim["label"], owner_key=owner_key,
                                           host=request.url.hostname or "", expires_at=claim["expires_at"], now=core.clock())
 
         actor, token, refused = await claim_form(request)
         if refused is not None:
             return refused
         try:
-            name = core.claims.inspect(code)
+            claim = core.claims.inspect_details(code)
+            name = claim["name"]
             chats = [block for block in core.blocks.values() if isinstance(block, ChatBlock) and block.token_env == name]
             if any(not block.token_re.fullmatch(token.strip()) for block in chats):
                 raise ClaimError("That doesn't look like the right kind of token.")
@@ -354,7 +361,8 @@ def create_app(core: "Switchboard") -> Any:
                           outcome="ok", target=name)
         for block in chats:
             await block.secret_saved("bot_token")
-        return pages.claim_message_page("Token saved", 200)
+        label = claim["label"] or "Token"
+        return pages.claim_message_page(f"{label} saved", 200)
 
     async def connect_code(request: Request) -> Response:
         """The owner mints a pairing code; the code is shown once."""
