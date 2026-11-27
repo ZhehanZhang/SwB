@@ -158,7 +158,7 @@ def test_init_writes_minimal_config_and_private_owner_key(tmp_path, capsys):
     instance = tmp_path / "my instance"
     cli.main(["init", "--dir", str(instance), "--public-url", "https://switchboard.example.test/"])
     assert yaml.safe_load((instance / cli.CONFIG).read_text()) == {
-        "version": 2, "blocks": {"mcp": {"use": "mcp"}}, "public_url": "https://switchboard.example.test",
+        "version": 2, "public_url": "https://switchboard.example.test",
     }
     env = instance / ".env"
     name, key = env.read_text().strip().split("=", 1)
