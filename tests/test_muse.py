@@ -44,7 +44,8 @@ def test_muse_connect_hands_the_linux_device_a_reachable_address(make, url):
         ]
         assert "Select Add Device." in actions and "Select the Bluetooth name SwB prints." in actions
     else:
-        assert "swb up --tunnel cloudflare" in actions[0] and "Linux device" in actions[0]
+        assert actions[0] == "Stop SwB on its computer."
+        assert "swb up --tunnel cloudflare" in actions[1] and "Linux device" in actions[1]
         assert "swb muse-bridge" not in json.dumps(setup) and url not in json.dumps(setup)
 
 
