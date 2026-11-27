@@ -58,7 +58,8 @@ export function MemoryHeader({ csrf }: { csrf: string }) {
       {settings.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Memory sync unavailable.</p>}
       {upload.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Restore from file failed.</p>}
       {result && <p role="status" className="mt-2 text-body-sm text-muted-foreground">
-        {result.created} created, {result.updated} updated, {result.unchanged} unchanged, {result.conflict} conflicts, {result.skipped} skipped
+        {([["created", result.created], ["updated", result.updated], ["unchanged", result.unchanged], ["conflicts", result.conflict], ["skipped", result.skipped]] as const)
+          .filter(([, count]) => count > 0).map(([label, count]) => `${count} ${label}`).join(", ") || "Restored"}
       </p>}
     </section>
   )

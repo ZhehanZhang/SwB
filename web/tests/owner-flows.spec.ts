@@ -201,7 +201,7 @@ test("Memory changes sync and restores an exported archive", async ({ page }) =>
   expect(archive.suggestedFilename()).toMatch(/^swb-memory-\d{8}\.zip$/)
   await page.getByLabel("Memory archive").setInputFiles(await archive.path())
   await expect(page.getByRole("region", { name: "Memory controls" }).getByRole("status"))
-    .toHaveText("0 created, 0 updated, 3 unchanged, 0 conflicts, 0 skipped")
+    .toHaveText("3 unchanged")
 })
 
 test("Memory saves a masked credential and shows only its saved state", async ({ page }) => {
