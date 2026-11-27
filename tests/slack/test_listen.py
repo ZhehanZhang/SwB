@@ -340,7 +340,9 @@ def test_listen_thread_reply_and_owner_note_share_turn_cap(opened):
         assert [(row["root"], row["turns"]) for row in rows] == [(handle, 3)]
         error = error_text(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "never delivered"}))
         assert f"{handle} is paused" in error
-        assert all(p["text"] != "never delivered" for p in posted(client, world, 3))
+        posts = posted(client, world, 3)
+        assert all(p["text"] != "never delivered" for p in posts)
+        assert any(p["text"].startswith(f"SwB paused conversation {handle} after 3 turns") for p in posts)
 
 
 def test_poll_resolves_listen_names_without_watching_owner_messages(opened):

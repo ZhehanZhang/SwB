@@ -19,23 +19,23 @@ class Guide(NamedTuple):
 
 
 JSON_BEARER = ', "headers": {"Authorization": "Bearer <key>"}'
-MCP_JSON = '{"mcpServers": {"switchboard": {%s@auth}}}'
+MCP_JSON = '{"mcpServers": {"swb": {%s@auth}}}'
 GUIDES = {
     "claude-code": Guide("~/.claude.json", MCP_JSON % '"type": "http", "url": @url',
                          "Sign in to SwB from /mcp in Claude Code.", JSON_BEARER,
-                         "claude mcp add --transport http --scope user switchboard @url"),
-    "codex": Guide("~/.codex/config.toml", "[mcp_servers.switchboard]\nurl = @url@auth",
-                   "Run codex mcp login switchboard to sign in.", '\nhttp_headers = { Authorization = "Bearer <key>" }'),
+                         "claude mcp add --transport http --scope user swb @url"),
+    "codex": Guide("~/.codex/config.toml", "[mcp_servers.swb]\nurl = @url@auth",
+                   "Run codex mcp login swb to sign in.", '\nhttp_headers = { Authorization = "Bearer <key>" }'),
     "gemini-cli": Guide("~/.gemini/settings.json", MCP_JSON % '"httpUrl": @url',
-                        "Sign in when Gemini CLI prompts, or run /mcp auth switchboard.", JSON_BEARER),
-    "goose": Guide("~/.config/goose/config.yaml", 'extensions:\n  switchboard:\n    type: streamable_http\n'
-                   '    name: switchboard\n    enabled: true\n    uri: @url\n    headers: {@auth}\n'
+                        "Sign in when Gemini CLI prompts, or run /mcp auth swb.", JSON_BEARER),
+    "goose": Guide("~/.config/goose/config.yaml", 'extensions:\n  swb:\n    type: streamable_http\n'
+                   '    name: swb\n    enabled: true\n    uri: @url\n    headers: {@auth}\n'
                    '    env_keys: []\n    envs: {}\n    timeout: 300',
                    "Sign in when Goose opens the browser on first connect.", '"Authorization": "Bearer <key>"'),
-    "opencode": Guide("opencode.json (OpenCode V2)", '{"mcp": {"servers": {"switchboard": {"type": "remote", "url": @url, "enabled": true@auth}}}}',
-                      "Run opencode mcp auth switchboard to sign in.", ', "oauth": false' + JSON_BEARER),
+    "opencode": Guide("opencode.json (OpenCode V2)", '{"mcp": {"servers": {"swb": {"type": "remote", "url": @url, "enabled": true@auth}}}}',
+                      "Run opencode mcp auth swb to sign in.", ', "oauth": false' + JSON_BEARER),
     "cline": Guide("~/.cline/data/settings/cline_mcp_settings.json", MCP_JSON % '"type": "streamableHttp", "url": @url',
-                   "Open cline mcp and select Authorize OAuth for the switchboard entry.", JSON_BEARER),
+                   "Open cline mcp and select Authorize OAuth for the swb entry.", JSON_BEARER),
     "kiro": Guide("~/.kiro/settings/mcp.json", MCP_JSON % '"url": @url',
                   "Sign in when Kiro opens the browser on first connect.", JSON_BEARER),
     "qwen-code": Guide("~/.qwen/settings.json", MCP_JSON % '"httpUrl": @url',

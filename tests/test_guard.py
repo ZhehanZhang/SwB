@@ -1,8 +1,13 @@
 from urllib.parse import urlsplit
 
-from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, Clock, rpc
+import pytest
+from starlette.testclient import TestClient
+
+from conftest import CLAUDE_CB, HEADERS, OWNER, PUBLIC, STATIC_KEY, Clock, rpc, rpc_body
+from switchboard.app import create_app
 from switchboard.audit import REFUSAL_AUDIT_INTERVAL_S
-from switchboard.guard import RateLimiter
+from switchboard.core import Switchboard
+from switchboard.guard import LIMITS, RateLimiter
 
 
 def test_failed_bearer_keys_are_audited_and_locked_out(make):
@@ -14,6 +19,54 @@ def test_failed_bearer_keys_are_audited_and_locked_out(make):
     assert locked.status_code == 429 and int(locked.headers["retry-after"]) > 0
     fails = core.audit.recent(action="auth_failure", limit=50)
     assert len(fails) == 20 and fails[0]["target"] == "/mcp" and fails[0]["outcome"] == "refused"
+
+
+@pytest.mark.parametrize(("proxies", "peer", "headers", "expected"), [
+    ("", "192.0.2.1", {"CF-Connecting-IP": "198.51.100.1", "X-Forwarded-For": "198.51.100.2"}, "192.0.2.1"),
+    ("192.0.2.0/24", "198.51.100.3", {"CF-Connecting-IP": "198.51.100.1"}, "198.51.100.3"),
+    ("192.0.2.0/24", "192.0.2.1", {"CF-Connecting-IP": "2001:0db8::1"}, "2001:db8::1"),
+    ("cloudflare", "2400:cb00::1", {"CF-Connecting-IP": "198.51.100.1"}, "198.51.100.1"),
+    ("192.0.2.0/24", "192.0.2.1",
+     {"CF-Connecting-IP": "198.51.100.1", "X-Forwarded-For": "198.51.100.2, 198.51.100.3, 192.0.2.2"}, "198.51.100.3"),
+    ("192.0.2.0/24", "192.0.2.1", [(b"x-forwarded-for", b"198.51.100.1"), (b"x-forwarded-for", b"198.51.100.3, 192.0.2.2")],
+     "198.51.100.3"),
+    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "198.51.100.1, unknown"}, "192.0.2.1"),
+    ("192.0.2.0/24", "192.0.2.1", [(b"cf-connecting-ip", b"\xff")], "192.0.2.1"),
+])
+def test_rate_limits_and_audit_share_the_resolved_proxy_address(tmp_path, proxies, peer, headers, expected):
+    core = Switchboard(data_dir=tmp_path, env={"SWB_TRUSTED_PROXIES": proxies})
+    app = create_app(core)
+    header_items = list(headers.items()) if isinstance(headers, dict) else headers
+    auth = [*HEADERS.items(), ("Authorization", "Bearer fixture-wrong-key")]
+    with TestClient(app, client=(peer, 10000)) as client:
+        response = client.post("/mcp", headers=[*auth, *header_items], content=rpc_body("tools/list", None))
+        assert response.status_code == 401
+        assert core.audit.recent(action="auth_failure")[0]["client"] == expected
+        assert list(app.limiter.hits["bearer_fail"]) == [expected]
+
+
+@pytest.mark.parametrize(("path", "bucket", "action", "body"), [
+    ("/mcp", "bearer_fail", "auth_failure", {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
+    ("/companion/pair", "companion_pair_fail", "companion_pair", {"code": "WRONG-CODE"}),
+])
+def test_untrusted_rotating_headers_leave_rate_limits_in_force(tmp_path, path, bucket, action, body):
+    core = Switchboard(data_dir=tmp_path, env={})
+    app = create_app(core)
+    peer = "192.0.2.1"
+    with TestClient(app, client=(peer, 10000)) as client:
+        limit = LIMITS[bucket][0]
+        for index in range(limit + 1):
+            headers = {**HEADERS, "Authorization": "Bearer fixture-wrong-key", "CF-Connecting-IP": f"198.51.100.{index + 1}",
+                       "X-Forwarded-For": f"203.0.113.{index + 1}"}
+            response = client.post(path, headers=headers, json=body)
+            assert response.status_code == (401 if index < limit else 429)
+        assert int(response.headers["Retry-After"]) > 0
+        rows = core.audit.recent(action=action, limit=50)
+        assert {row["client"] for row in rows} == {peer}
+        if action == "companion_pair":
+            assert [row["detail"] for row in rows] == ["Pairing attempt limit reached.", "Pairing code expired or invalid."]
+        else:
+            assert len(rows) == limit
 
 
 def test_missing_token_is_not_counted(make):

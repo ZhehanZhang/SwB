@@ -20,6 +20,7 @@ from threading import Thread
 from .cli import CONFIG, CliError, _instance_config, _port, _url, _write_file
 from .config import DEFAULT_PORT, INSTANCE_DB, LOOPBACK_HOSTS, Instance, bind_address, config_path, instance_data_dir, load_config
 from .deployment import OWNER_KEY
+from .env import env_value
 from .store import ensure_private_data_dir
 
 _TUNNELS = {
@@ -112,7 +113,7 @@ def _notice_home_data(data: Path, instance_data: Path) -> None:
     except FileExistsError:
         return
     logging.getLogger("switchboard").warning(
-        "Using existing data in %s instead of %s. Set SWITCHBOARD_DATA_DIR to choose a location.", data, instance_data,
+        "Using existing data in %s instead of %s. Set SWB_DATA_DIR to choose a location.", data, instance_data,
     )
 
 
@@ -121,13 +122,14 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
     from .__main__ import main as serve
 
     env = {**dotenv, **os.environ}
-    port = _port(env.get("PORT", DEFAULT_PORT))
+    port = _port(os.environ.get("PORT") or env.get("SWB_PORT") or dotenv.get("PORT")
+                 or env_value(env, "SWB_PORT") or DEFAULT_PORT)
     host, origin = bind_address(env, port, host=host)
     selected = Instance(base, explicit=instance)
     if public_url is not None:
         public_url = _url(public_url, public=True)
     path = config_path(None, env, instance=selected)
-    first_run = not (env.get("SWITCHBOARD_CONFIG") or os.path.lexists(base / CONFIG) or path is not None and path.is_file())
+    first_run = not (env_value(env, "SWB_CONFIG") or os.path.lexists(base / CONFIG) or path is not None and path.is_file())
     if first_run:
         prior_data = instance_data_dir(env, selected)
         first_run = not any((data / name).is_file() for data in {prior_data, base / "data"}
@@ -136,12 +138,11 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
     if first_run or host not in LOOPBACK_HOSTS:
         configured = load_config(env=env, instance=selected, tunnel_url=public_url).public_url
         if host not in LOOPBACK_HOSTS and not configured:
-            raise CliError("Set SWITCHBOARD_PUBLIC_URL to bind SwB beyond loopback.")
+            raise CliError("Set SWB_PUBLIC_URL to bind SwB beyond loopback.")
     values = {
         **{k: value for k, value in dotenv.items() if k not in os.environ},
-        "SWITCHBOARD_HOST": host,
+        "SWB_HOST": host,
         "PORT": str(port),
-        "FORWARDED_ALLOW_IPS": "127.0.0.1,::1",
     }
     previous = {k: os.environ.get(k) for k in values}
     previous_sigterm = signal.signal(signal.SIGTERM, _interrupt)
@@ -158,18 +159,18 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
                 tunnel_url = stack.enter_context(_tunnel(tunnel, origin))
             if first_run:
                 env_path = base / ".env"
-                key = env.get(OWNER_KEY) or secrets.token_hex(32)
+                key = env_value(env, OWNER_KEY) or secrets.token_hex(32)
                 if "\n" in key or "\r" in key:
                     raise CliError(f"Use a single line for {OWNER_KEY}.")
                 exists = os.path.lexists(env_path)
                 text = env_path.read_text(encoding="utf-8").rstrip("\n") + "\n" if exists else ""
-                if dotenv.get(OWNER_KEY) != key:
+                if env_value(dotenv, OWNER_KEY) != key:
                     text += f"{OWNER_KEY}={shlex.quote(key)}\n"
-                if (dotenv.get("PORT") or DEFAULT_PORT) != str(port):
-                    text += f"PORT={port}\n"
+                if (dotenv.get("SWB_PORT") or dotenv.get("PORT") or env_value(dotenv, "SWB_PORT") or DEFAULT_PORT) != str(port):
+                    text += f"SWB_PORT={port}\n"
                 ensure_private_data_dir(base / "data")
                 _write_file(env_path, text, force=exists, mode=0o600)
-                explicit_url = public_url or (env.get("SWITCHBOARD_PUBLIC_URL", "").strip().rstrip("/") or None)
+                explicit_url = public_url or ((env_value(env, "SWB_PUBLIC_URL") or "").strip().rstrip("/") or None)
                 _instance_config(base, explicit_url, force=False)
                 values[OWNER_KEY] = key
                 previous[OWNER_KEY] = os.environ.get(OWNER_KEY)

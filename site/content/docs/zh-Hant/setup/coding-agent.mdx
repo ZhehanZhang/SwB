@@ -34,13 +34,13 @@ Gemini CLI 需要 Gemini Code Assist Standard 或 Enterprise 授權，或付費�
 在終端機執行下面的指令，並換成你的 SwB 位址。
 
 ```bash
-claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp
+claude mcp add --transport http --scope user swb https://swb.example.com/mcp
 ```
 </Step>
 <Step>
 ### 開啟伺服器清單
 
-啟動 `claude`，輸入 `/mcp`。選擇 **switchboard**，按下 **Enter**。
+啟動 `claude`，輸入 `/mcp`。選擇 **swb**，按下 **Enter**。
 </Step>
 <Step>
 ### 登入
@@ -62,7 +62,7 @@ claude mcp add --transport http --scope user switchboard https://swb.example.com
 將下列設定項目加入 `~/.codex/config.toml`。請使用你的 SwB 位址。
 
 ```toml
-[mcp_servers.switchboard]
+[mcp_servers.swb]
 url = "https://swb.example.com/mcp"
 ```
 
@@ -71,7 +71,7 @@ url = "https://swb.example.com/mcp"
 <Step>
 ### 登入
 
-執行 `codex mcp login switchboard`。瀏覽器會開啟 SwB 登入頁面。
+執行 `codex mcp login swb`。瀏覽器會開啟 SwB 登入頁面。
 </Step>
 <Step>
 ### 核准
@@ -90,7 +90,7 @@ url = "https://swb.example.com/mcp"
 ```json
 {
   "mcpServers": {
-    "switchboard": {
+    "swb": {
       "httpUrl": "https://swb.example.com/mcp"
     }
   }
@@ -100,7 +100,7 @@ url = "https://swb.example.com/mcp"
 <Step>
 ### 登入
 
-啟動 Gemini CLI，輸入 `/mcp auth switchboard`。瀏覽器會開啟 SwB 登入頁面。
+啟動 Gemini CLI，輸入 `/mcp auth swb`。瀏覽器會開啟 SwB 登入頁面。
 </Step>
 <Step>
 ### 核准
@@ -150,7 +150,7 @@ OAuth 登入關閉時，`connect` 會使用配對碼。選擇 `other` 時也使�
 
 ## 檢查連線
 
-執行 `claude mcp list`、`codex mcp list` 或 `gemini mcp list`。`switchboard` 應顯示為已連線。接著請程式開發代理呼叫 `inbox`。從另一個 SwB 應用程式傳送測試訊息給 `agent:claude-code` 或它自己的名稱。程式開發代理用 `wait` 或 `inbox` 取得訊息，再用 `reply` 回覆。
+執行 `claude mcp list`、`codex mcp list` 或 `gemini mcp list`。`swb` 應顯示為已連線。接著請程式開發代理呼叫 `inbox`。從另一個 SwB 應用程式傳送測試訊息給 `agent:claude-code` 或它自己的名稱。程式開發代理用 `wait` 或 `inbox` 取得訊息，再用 `reply` 回覆。
 
 ## 解決問題
 

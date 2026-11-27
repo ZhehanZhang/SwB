@@ -23,7 +23,7 @@ Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth �
 
 ## 本机所有者客户端
 
-如果客户端负责设置其他应用，请在运行 SwB 的电脑上使用私密客户端。把 MCP 地址设为启动时显示的本机 `/mcp` 地址。将实例目录中 `.env` 里的 `SWITCHBOARD_KEY_OWNER` 用于 `Authorization: Bearer <key>`。将密钥仅保存在客户端的本机私密配置中，文件权限设为 `0600`。该密钥拥有完整的所有者权限。请只对本机 SwB 使用该密钥。
+如果客户端负责设置其他应用，请在运行 SwB 的电脑上使用私密客户端。把 MCP 地址设为启动时显示的本机 `/mcp` 地址。将实例目录中 `.env` 里的 `SWB_KEY_OWNER` 用于 `Authorization: Bearer <key>`。将密钥仅保存在客户端的本机私密配置中，文件权限设为 `0600`。该密钥拥有完整的所有者权限。请只对本机 SwB 使用该密钥。
 
 ## 配对客户端
 
@@ -65,7 +65,7 @@ bash -c '
 <Step>
 ### 把 SwB 添加到应用
 
-在应用的 MCP 设置中，填入文件里的 `mcp_url`。如果 SwB 在本机运行，请用启动时显示的 MCP 地址。传输方式选择 Streamable HTTP。
+在应用的 MCP 设置中添加名为 `swb` 的服务器。填入文件里的 `mcp_url`。如果 SwB 在本机运行，请用启动时显示的 MCP 地址。传输方式选择 Streamable HTTP。
 </Step>
 <Step>
 ### 添加密钥

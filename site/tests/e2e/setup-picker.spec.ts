@@ -15,22 +15,28 @@ async function pageGeometry(page: Page) {
 }
 
 test('landing and docs share links, with a menu on narrow screens', async ({ page }) => {
-  await page.goto('/');
-  const header = page.locator('#nd-nav');
-  if (page.viewportSize()!.width < 640) {
-    await expect(header.getByRole('link', { name: 'About', exact: true })).toBeHidden();
-    await header.getByRole('button', { name: 'Toggle Menu' }).click();
+  const narrow = page.viewportSize()!.width < 640;
+  for (const path of ['/', '/docs']) {
+    await page.goto(path);
+    const header = page.locator('#nd-nav');
+    await expect(header.getByRole('link', { name: 'GitHub' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Toggle Theme' })).toBeVisible();
+    const menu = header.getByRole('button', { name: 'Toggle Menu' });
+    if (narrow) {
+      await expect(header.getByRole('link', { name: 'About', exact: true })).toBeHidden();
+      await menu.click();
+    } else {
+      await expect(menu).toBeHidden();
+    }
+    const navigation = narrow ? page.getByRole('dialog') : header;
+    for (const [name, href] of [['Docs', '/docs'], ['Set up', '/docs/setup'], ['About', '/about']]) {
+      const link = navigation.getByRole('link', { name, exact: true });
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAttribute('href', href);
+    }
+    await navigation.getByRole('link', { name: 'Set up', exact: true }).click();
+    await expect(page).toHaveURL(/\/docs\/setup$/);
   }
-  for (const [name, href] of [['Docs', '/docs'], ['Set up', '/docs/setup'], ['About', '/about']]) {
-    const link = header.getByRole('link', { name, exact: true });
-    await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute('href', href);
-  }
-  await header.getByRole('link', { name: 'Set up', exact: true }).click();
-  await expect(page).toHaveURL(/\/docs\/setup$/);
-  await page.goto('/docs');
-  const setup = page.locator('header').getByRole('link', { name: 'Set up', exact: true });
-  if (page.viewportSize()!.width >= 640) await expect(setup.first()).toBeVisible();
 });
 
 test('landing CTA combines and copies selected setup prompts without shifting the page or picker', async ({ page, context }) => {
@@ -99,6 +105,15 @@ for (const [locale, path, heading, label] of [
   ['zh-Hans', '/zh-Hans/docs/setup', '设置你的应用', '设置提示词'],
   ['zh-Hant', '/zh-Hant/docs/setup', '設定你的應用程式', '設定提示詞'],
 ]) {
+  test(`${locale} coding agent guides show the SwB server and channel names`, async ({ page }) => {
+    const docs = path.replace(/\/setup$/, '');
+    await page.goto(`${docs}/setup/coding-agent`);
+    await expect(page.locator('pre').filter({ hasText: /^claude mcp add/ })).toContainText('--scope user swb ');
+
+    await page.goto(`${docs}/blocks/coding-agents`);
+    await expect(page.locator('pre').filter({ hasText: '/plugin marketplace add' })).toContainText('/plugin install swb@swb');
+  });
+
   test(`${locale} docs setup page uses the localized picker with an English prompt`, async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();

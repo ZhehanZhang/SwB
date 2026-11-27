@@ -33,7 +33,7 @@ def test_only_literal_loopback_http_hosts_are_accepted(target):
     ("test=ftp://localhost/mcp",), ("test=http://localhost/mcp#fragment",), ("test=http://localhost\\@outside.example/mcp",),
 ])
 def test_invalid_mcp_configuration_reports_only_a_fixed_error(specs):
-    with pytest.raises(ValueError, match="^Use --mcp NAME=COMMAND or an HTTP address on this device\\.$"):
+    with pytest.raises(ValueError, match=r"^Use --mcp NAME=COMMAND or NAME=URL\. HTTP servers must use loopback addresses\.$"):
         local_servers(specs)
 
 
@@ -41,11 +41,15 @@ def test_opt_in_validation_runs_before_hidden_pairing_prompt(monkeypatch, tmp_pa
     monkeypatch.setenv("SWB_COMPANION_HOME", str(tmp_path))
     hidden = Mock(side_effect=AssertionError("pairing prompt reached"))
     monkeypatch.setattr("switchboard.cli._hidden_input", hidden)
-    for extra in (["--cap", "mcp"], ["--mcp", "demo=test"], ["--cap", "mcp", "--mcp", "demo=http://outside.example/mcp"]):
+    for extra in (["--cap", "mcp"], ["--mcp", "demo=test"]):
         with pytest.raises(SystemExit) as exc:
             main(["companion", "connect", "http://127.0.0.1:8000", *extra])
         assert exc.value.code == 1
-        assert "outside.example" not in capsys.readouterr().err
+    with pytest.raises(SystemExit) as exc:
+        main(["companion", "connect", "http://127.0.0.1:8000", "--cap", "mcp", "--mcp", "demo=http://outside.example/mcp"])
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "HTTP servers must use loopback addresses." in err and "outside.example" not in err
     hidden.assert_not_called()
 
 
@@ -78,7 +82,7 @@ async def test_loopback_transport_pins_localhost_and_refuses_other_origins(monke
         return httpx2.Response(200)
 
     monkeypatch.setattr(httpx2.AsyncHTTPTransport, "handle_async_request", request)
-    async with _LoopbackTransport(httpx2.URL("http://localhost:1234/mcp")) as transport:
+    async with _LoopbackTransport(httpx2.URL("http://localhost:1234/mcp"), Mock()) as transport:
         request = httpx2.Request("POST", "http://localhost:1234/mcp")
         assert (await transport.handle_async_request(request)).status_code == 200
         assert request.url.host == "localhost"

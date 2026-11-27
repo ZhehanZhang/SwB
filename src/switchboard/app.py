@@ -22,6 +22,8 @@ from .auth import COMPANION_KEY_PREFIX
 from .claims import CLAIM_PATH, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
 from .companion_routes import COMPANION_ACTIONS, companion_routes
 from .config import REQUEST_BASE
+from .deployment import OWNER_KEY
+from .env import env_value
 from .guard import Guard, RateLimiter, audit_client_ip, client_ip, reject
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
@@ -196,7 +198,7 @@ def _cursor(request: Request) -> int | None:
 
 
 def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = None) -> Any:
-    claim_owner_key = core.cfg.env.get("SWITCHBOARD_KEY_OWNER")
+    claim_owner_key = env_value(core.cfg.env, OWNER_KEY)
     claim_principal = core.auth.verify_bearer(claim_owner_key)
     claim_key_actor = (claim_principal.client_id if claim_principal is not None and claim_principal.kind == "key"
                        and claim_principal.source == "owner" and claim_principal.is_unrestricted_owner else None)
@@ -614,9 +616,10 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         elif action := COMPANION_ACTIONS.get(verb):
             scheme, _, token = Headers(scope=scope).get("authorization", "").partition(" ")
             if scheme.lower() == "bearer" and (companion_id := core.companions.key_id(token.strip())):
-                core.audit.record_refusal(origin="companion", client=f"companion:{companion_id}", destination="core",
+                core.audit.record_refusal(origin="companion", client=audit_client_ip(scope), destination="core",
                                           action=f"companion_{action}", target=companion_id, detail=detail)
 
-    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused, on_large_body=large_body)
+    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused,
+                 on_large_body=large_body, trusted_proxies=core.cfg.trusted_proxies)
     gate.starlette = app
     return gate

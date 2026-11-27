@@ -4,7 +4,7 @@ You are connected to SwB, my switchboard for shared memory and agent handoffs. F
 
 Setup
 
-Get owner access for owner-only setup. Use an app where I approved OAuth, the sign-in that grants access in my browser. Use credentials with full access to scopes, tools and targets. On the SwB computer, use a private owner client instead. Have that client load `SWITCHBOARD_KEY_OWNER` from the instance `.env`. Keep the key only in its local config with file mode `0600`. Send it as a bearer key only to the local SwB address. Keep the key out of commands, logs and chat.
+Get owner access for owner-only setup. Use an app where I approved OAuth, the sign-in that grants access in my browser. Use credentials with full access to scopes, tools and targets. On the SwB computer, use a private owner client instead. Have that client load `SWB_KEY_OWNER` from the instance `.env`. Keep the key only in its local config with file mode `0600`. Send it as a bearer key only to the local SwB address. Keep the key out of commands, logs and chat.
 
 If you use a paired key, give me the equivalent terminal command for each owner-only setup call. Ask me to run it from my SwB instance folder. For example, give me `swb connect mcp-client --choose agent=notes-bot` to get a pairing code. For a block, give me a command such as `swb connect slack`. Use `uvx swb-one connect` in place of `swb connect` if I run SwB with uvx. Include the same choices in each follow-up command. Ask me to follow its steps and tell you what remains. Keep private links and codes in my terminal.
 

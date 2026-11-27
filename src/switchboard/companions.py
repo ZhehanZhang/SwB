@@ -205,7 +205,7 @@ class Companions:
         row = self.store.one("SELECT id FROM companions WHERE key_hash = ?", (sha(token),))
         return row["id"] if row else None
 
-    def hello(self, companion_id: str, body: dict[str, Any]) -> None:
+    def hello(self, companion_id: str, body: dict[str, Any], *, client: str) -> None:
         name, platform, version, declared = _declaration(body)
         caps = {cap["id"]: cap for cap in json.loads(declared)}
 
@@ -230,7 +230,7 @@ class Companions:
         if not accepted:
             raise CompanionError(REPAIR_CAPABILITIES, 403, audit_ref=ref)
         if ref is not None:
-            self.audit.record(origin="companion", source=companion_id, client=f"companion:{companion_id}", destination="core",
+            self.audit.record(origin="companion", source=companion_id, client=client, destination="core",
                               action="companion_capabilities", outcome="ok", target=companion_id, ref=ref)
 
     def list(self, *, details: bool = False) -> list[dict[str, Any]]:

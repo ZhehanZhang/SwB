@@ -34,7 +34,7 @@ Add one `--cap` option for each feature you want to enable.
 | `--cap notify` | Shows desktop notifications on the device |
 | `--cap drop` | Shares files up to 10 MiB each through the `~/SwB Drop` folder |
 | `--cap mcp --mcp NAME=COMMAND` | Gives your agents access to tools on an MCP server on the device |
-| `--cap herdr` | Reaches coding agents in herdr panes |
+| `--cap herdr` | Reaches coding agents in Herdr panes |
 | `--cap codex` | Reaches Codex through its app server |
 | `--cap opencode` | Reaches OpenCode through its server |
 | `--cap dsh` | Reaches DeepSeek Harness through the SwB bridge |
@@ -51,13 +51,13 @@ Companion text results have a 1 MiB limit. Read Drop file data from `structuredC
 
 ## Local sessions
 
-A local session is a coding agent that runs on the device. SwB lists each session as a target with its status. A message to the session goes into the agent's mailbox. SwB then delivers it into the live session. The answer comes back in the same conversation.
+A local session is a coding agent that runs on the device. SwB lists each session as a target with its status.
+
+SwB puts a message for the session in the agent's mailbox first. It then tries to deliver the message into the open session. The answer comes back in the same conversation.
 
 Use the session address from `targets`. Find the resource for that address in `visibility_list`. Share the resource with `visibility_set`.
 
-Start Codex with `codex app-server --listen unix://` and `codex --remote unix://`. Set `SWB_OPENCODE_URL` to the OpenCode server address. Install the [SwB bridge](https://github.com/ZhehanZhang/SwB/tree/main/integrations/dsh) into DeepSeek Harness with `dsh plugin --profile web add github:ZhehanZhang/SwB#path:/integrations/dsh`.
-
-The SwB plugin for Claude Code includes the status hooks. Use the hook files in the `integrations` folder for Gemini CLI and Codex. Each hook calls `swb hook` on the device.
+For commands and supported agents, see [Local sessions](/docs/blocks/local-sessions).
 
 ## Keep it running
 

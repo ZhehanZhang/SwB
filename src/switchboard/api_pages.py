@@ -99,7 +99,7 @@ async def agent_setup(request: Request) -> JSONResponse:
     url = connector or _mcp_url(f"{core.base_url}/mcp") or "<public_url>/mcp"
     oauth = bool(connector and core.cfg.owner_sign_in)
     prompt = (
-        f"Connect to Switchboard over Streamable HTTP at {url}. If it isn't already available, add this URL as an MCP server in your client.\n\n"
+        f"Connect to SwB over Streamable HTTP at {url}. Add this URL as an MCP server in your client if needed.\n\n"
         'Once connected, call connect(what="mcp-client") for the next setup step. If you know your platform, use its matching connect kind instead. '
         'Follow the steps the tool returns. Keep credentials out of chat and tool arguments; if a token is needed, use the owner link the tool provides.'
     )

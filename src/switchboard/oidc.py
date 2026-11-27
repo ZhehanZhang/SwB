@@ -12,6 +12,7 @@ import jwt
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
+from .env import env_value
 from .sessions import clear_cookie, safe_next, set_cookie
 
 if TYPE_CHECKING:
@@ -96,7 +97,8 @@ class OIDC:
         methods = discovery.get("token_endpoint_auth_methods_supported", ["client_secret_basic"])
         if not isinstance(methods, list):
             raise ValueError
-        secret = self.auth.cfg.env[self.cfg.client_secret_env]
+        if not (secret := env_value(self.auth.cfg.env, self.cfg.client_secret_env)):
+            raise ValueError
         if "client_secret_basic" in methods:
             auth = httpx.BasicAuth(quote_plus(self.cfg.client_id), quote_plus(secret))
         elif "client_secret_post" in methods:

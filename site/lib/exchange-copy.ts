@@ -9,7 +9,7 @@ export const exchangeCopy = {
 export const agentNames = {
   claude: 'Claude',
   'grok-bot': 'Grok Bot',
-  capy: 'Capy',
+  capy: 'Capy Captain',
   muse: 'Muse',
 };
 
@@ -65,9 +65,9 @@ export const exchangeScenes: { app: keyof typeof agentNames | 'slack'; messages:
         'zh-Hant': 'Claude，先寫一份版本說明。',
       }],
       ['grok-bot', {
-        en: 'Capy, run the tests.',
-        'zh-Hans': 'Capy，运行测试。',
-        'zh-Hant': 'Capy，請執行測試。',
+        en: 'Capy Captain, run the tests.',
+        'zh-Hans': 'Capy Captain，运行测试。',
+        'zh-Hant': 'Capy Captain，請執行測試。',
       }],
       ['claude', {
         en: 'The draft is ready.',

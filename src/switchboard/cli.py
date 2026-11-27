@@ -24,8 +24,9 @@ from . import __version__
 from .__main__ import SERVER_COMMANDS, add_server_commands
 from .companion import commands as companion_commands
 from .companion.state import CompanionError
-from .config import DEFAULT_PORT, INSTANCE_CONFIG, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
+from .config import DEFAULT_PORT, INSTANCE_CONFIG, MCP_OFF, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
+from .env import env_value
 from .store import ensure_private_data_dir
 
 CONFIG = INSTANCE_CONFIG
@@ -88,7 +89,7 @@ def _port(value: str) -> int:
 def _init(base: Path, public_url: str | None, force: bool) -> None:
     if public_url is not None:
         public_url = _url(public_url, public=True)
-    port = str(_port(os.environ.get("PORT", DEFAULT_PORT)))
+    port = str(_port(os.environ.get("PORT") or env_value(os.environ, "SWB_PORT") or DEFAULT_PORT))
     config_path, env_path = base / CONFIG, base / ".env"
     for path in (config_path, env_path):
         if not force and os.path.lexists(path):
@@ -96,7 +97,7 @@ def _init(base: Path, public_url: str | None, force: bool) -> None:
     if not os.path.lexists(config_path):
         ensure_private_data_dir(base / "data")
     _instance_config(base, public_url, force=force)
-    port_line = f"PORT={port}\n" if port != DEFAULT_PORT else ""
+    port_line = f"SWB_PORT={port}\n" if port != DEFAULT_PORT else ""
     _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n{port_line}", force=force, mode=0o600)
     start = "swb up" if base == Path.cwd() else f"swb up --dir {shlex.quote(str(base))}"
     print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}, then {start.replace('swb up', 'swb login-link', 1)} to sign in.")
@@ -217,21 +218,33 @@ def _hidden_input(prompt: str) -> str:
 
 async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
     rate_limit = None
+    mcp_missing = False
 
     async def inspect_response(response: httpx2.Response) -> None:
-        nonlocal rate_limit
-        if response.status_code == 429 and response.request.method == "POST":
-            rate_limit = _rate_limit(response)
+        nonlocal rate_limit, mcp_missing
+        if response.request.method == "POST":
+            if response.status_code == 429:
+                rate_limit = _rate_limit(response)
+            elif response.status_code == 404:
+                mcp_missing = True
 
     try:
-        async with (
-            httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False,
-                               event_hooks={"response": [inspect_response]}) as client,
-            streamable_http_client(url, http_client=client) as streams,
-            ClientSession(*streams, read_timeout_seconds=30) as session,
-        ):
-            await session.initialize()
-            result = await session.call_tool(tool, arguments)
+        async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False,
+                                      event_hooks={"response": [inspect_response]}) as client:
+            try:
+                async with (
+                    streamable_http_client(url, http_client=client) as streams,
+                    ClientSession(*streams, read_timeout_seconds=30) as session,
+                ):
+                    await session.initialize()
+                    result = await session.call_tool(tool, arguments)
+            except Exception:
+                parts = urlsplit(url)
+                if tool == "switchboard_status" and mcp_missing and parts.path.endswith("/mcp"):
+                    response = await client.get(parts._replace(path=f"{parts.path[:-4]}/healthz").geturl())
+                    if response.is_success and isinstance(health := response.json(), dict) and health.get("mcp_enabled") is False:
+                        return health
+                raise
     except Exception:
         if rate_limit is not None:
             raise rate_limit from None
@@ -261,6 +274,8 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
         lines = [f"Status: {payload.get('status', 'unknown')}"]
+        if payload.get("mcp_enabled") is False:
+            lines.append(MCP_OFF)
         if blocks := payload.get("block_setup"):
             lines.append("Blocks:")
             for name, block in blocks.items():
@@ -301,7 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--public-url", help="optional public base URL")
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
     up = commands.add_parser("up", help="run the SwB server")
-    up.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
+    up.add_argument("--host", help="bind address from SWB_HOST. The default is 127.0.0.1.")
     up.add_argument("--public-url", help="public base URL for this server")
     up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
@@ -313,9 +328,9 @@ def build_parser() -> argparse.ArgumentParser:
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
     up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
     for command in (init, connect, status, claim, login_link):
-        command.add_argument("--dir", type=Path, help="instance directory (default: current directory)")
+        command.add_argument("--dir", type=Path, help="instance directory. The default is the current directory.")
     for command in (connect, status, claim, login_link):
-        command.add_argument("--url", help="server base URL or MCP endpoint (defaults to loopback and SWITCHBOARD_PORT, PORT, or 8870)")
+        command.add_argument("--url", help="SwB address. The local default uses SWB_PORT or PORT. The default port is 8870.")
     companion_commands.add_commands(commands)
     hook = commands.add_parser("hook", help="forward a local agent event")
     hook.add_argument("harness", choices=tuple(EVENT_STATES))
@@ -341,10 +356,12 @@ def main(argv: list[str] | None = None) -> None:
             companion_commands.run(args, _hidden_input)
             return
         base = (args.dir or Path.cwd()).resolve()
+        env = {} if args.command == "init" else _read_env(base / ".env")
+        logging.basicConfig(level=os.environ.get("LOG_LEVEL", env.get("LOG_LEVEL", "INFO")),
+                            format="%(asctime)s %(levelname)s %(name)s %(message)s")
         if args.command == "init":
             _init(base, args.public_url, args.force)
             return
-        env = _read_env(base / ".env")
         if args.command == "up":
             from .cli_up import run
 
@@ -358,15 +375,15 @@ def main(argv: list[str] | None = None) -> None:
         env = {**env, **os.environ}
         local_url = client_endpoint(env)
         url = _url(args.url or local_url)
-        key = env.get(OWNER_KEY)
+        key = env_value(env, OWNER_KEY)
         if not key and url == local_url:
             key = volume_owner_key(env, instance=Instance(base, explicit=args.dir is not None))
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
-        request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")
-        level = request_log.level
+        request_logs = {logger: logger.level for logger in map(logging.getLogger, ("httpx2", "mcp"))}
         try:
-            request_log.setLevel(logging.CRITICAL + 1)
+            for logger in request_logs:
+                logger.setLevel(logging.CRITICAL + 1)
             if args.command == "claim":
                 claim_url, routine = _claim_url(url, args.link)
                 _claim(claim_url, key, routine=routine)
@@ -374,7 +391,8 @@ def main(argv: list[str] | None = None) -> None:
             tool = {"connect": "connect", "login-link": "login_link", "status": "switchboard_status"}[args.command]
             payload = asyncio.run(_call(url, key, tool, arguments))
         finally:
-            request_log.setLevel(level)
+            for logger, level in request_logs.items():
+                logger.setLevel(level)
         print(_display(tool, payload).replace(key, "[redacted]"))
     except (CliError, CompanionError, ConfigError) as error:
         parser.exit(2 if args.command == "up" and isinstance(error, ConfigError) else 1, f"swb: {error}\n")

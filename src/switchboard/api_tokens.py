@@ -11,6 +11,7 @@ from starlette.routing import Route
 
 from .audit import iso
 from .claims import CLAIM_TTL_S, NAME_RE
+from .env import env_value
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -99,7 +100,7 @@ async def tokens(request: Request) -> JSONResponse:
         item = {"id": f"credential:{ref}", "name": name, "label": ref, "kind": kind, "used_by": used_by}
         if claim and (expires := claim["pending_until"]) is not None:
             waiting.append({**item, "asked_by": None, "requested_at": iso(expires - CLAIM_TTL_S), "expires_at": iso(expires)})
-        from_env = bool(core.cfg.env.get(ref))
+        from_env = bool(env_value(core.cfg.env, ref))
         if from_env or (claim and claim["stored"]):
             last = saved.get(ref) if not from_env else None
             stored.append({**item, "added_by": _actor(last["source"]) if last else None,

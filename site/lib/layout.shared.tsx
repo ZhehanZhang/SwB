@@ -1,25 +1,17 @@
-import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
-import { Brand } from '@/components/brand';
-import { GitHubMark } from '@/components/github-mark';
 import { localize, type Locale } from './i18n';
 import { setupPickerCopy } from './setup-picker-copy';
-import { repository } from './source';
 
-const navLabels: Record<Locale, { docs: string; about: string }> = {
-  en: { docs: 'Docs', about: 'About' },
-  'zh-Hans': { docs: '文档', about: '关于' },
-  'zh-Hant': { docs: '文件', about: '關於' },
+export const navLabels: Record<Locale, { docs: string; about: string; menu: string }> = {
+  en: { docs: 'Docs', about: 'About', menu: 'Toggle Menu' },
+  'zh-Hans': { docs: '文档', about: '关于', menu: '菜单' },
+  'zh-Hant': { docs: '文件', about: '關於', menu: '選單' },
 };
 
-export function baseOptions(lang: Locale): BaseLayoutProps {
+export function headerLinks(lang: Locale) {
   const labels = navLabels[lang];
-  return {
-    nav: { title: <Brand name="SwB" />, url: localize(lang, '/') },
-    links: [
-      { text: labels.docs, url: localize(lang, '/docs'), active: 'url' },
-      { text: setupPickerCopy[lang].setup, url: localize(lang, '/docs/setup'), active: 'nested-url' },
-      { text: labels.about, url: localize(lang, '/about') },
-      { type: 'icon', text: 'GitHub', label: 'GitHub', icon: <GitHubMark />, url: repository, external: true },
-    ],
-  };
+  return [
+    { id: 'docs', text: labels.docs, href: localize(lang, '/docs') },
+    { id: 'setup', text: setupPickerCopy[lang].setup, href: localize(lang, '/docs/setup') },
+    { id: 'about', text: labels.about, href: localize(lang, '/about') },
+  ] as const;
 }
