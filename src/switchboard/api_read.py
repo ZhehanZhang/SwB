@@ -17,7 +17,7 @@ from starlette.routing import Route
 from .api_display import captain_avatar_url, captain_target, captain_targets, capy_label, local_avatar_url, slack_profile_avatar
 from .slack.avatar_files import agent_avatar_url
 from .audit import iso
-from .blocks import BLOCKS, load
+from .blocks import BLOCKS, ON_DEMAND_BLOCKS, load
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
 from .modes import CHAT_DROP_ACTION, ChatDrop
 from .refusals import CSRF_AUDIT_PATHS, OWNER_NOTE_REQUIRED, SIGN_IN_FAILURES
@@ -572,7 +572,7 @@ async def platforms(request: Request) -> JSONResponse:
     core = request.app.state.core
     configured = [(name, block.manifest, block) for name, block in core.visible_blocks().items()]
     active_types = {manifest.id for _, manifest, _ in configured}
-    available = [(use, load(use).manifest, None) for use in BLOCKS if use not in active_types and use != "local"]
+    available = [(use, load(use).manifest, None) for use in BLOCKS if use not in active_types and use not in ON_DEMAND_BLOCKS]
     items = []
     for name, manifest, block in sorted([*configured, *available], key=lambda item: item[0]):
         online = block is not None and block.online
