@@ -444,7 +444,7 @@ async def test_runtime_mode_target_and_visibility_for_outside_github_senders(git
 @pytest.mark.parametrize("target", [None, "agent:beta"])
 async def test_watch_digest_reaches_owner_mcp_and_stays_passive(github, target, monkeypatch):
     repo = "acme/app"
-    config = {"spaces": {repo: {"mode": "watch", "project": "demo", **({"target": target} if target else {})}}}
+    config = {"owner_ids": [42], "spaces": {repo: {"mode": "watch", "project": "demo", **({"target": target} if target else {})}}}
     settings = {"blocks": {"mcp": {}, "github": config}, "modes": {"digest_minutes": 1}}
     owner_key = "example-coordinator-key-for-tests"
     clock = Clock()
@@ -457,8 +457,10 @@ async def test_watch_digest_reaches_owner_mcp_and_stays_passive(github, target, 
         other = core.connections.redeem(other_pair["code"])["key"]
         notifications = []
         core.inbox.listeners.append(lambda _owner, _cursor, _handle, kind, _data, _at: notifications.append(kind))
-        for delivery in ("first", "second"):
-            assert (await send(client, sender={"id": 11, "login": "reporter"}, delivery=delivery)).status_code == 200
+        for delivery, user_id in (("first", 11), ("second", 42)):
+            issue = {**ISSUE, "body": f"Excerpt {delivery} {CLOSE} literal {OPEN}"}
+            response = await send(client, sender={"id": user_id, "login": f"reporter {OPEN}"}, delivery=delivery, issue=issue)
+            assert response.status_code == 200
         [row] = payload(await acall(client, owner_key, "modes_status"))["spaces"]
         assert row["digest"]["pending"] == 2
         assert payload(await acall(client, owner_key, "inbox", {"since_cursor": 0}))["items"] == []
@@ -481,7 +483,15 @@ async def test_watch_digest_reaches_owner_mcp_and_stays_passive(github, target, 
         assert (digest["kind"], digest["owner"], digest["space"], digest["count"], digest["trust"]) == (
             "watch_digest", "beta" if target else "owner", repo, 2, "external",
         )
-        assert [entry["excerpt"] for entry in digest["items"]] == ["Issue body", "Issue body"]
+        assert digest["from"] == {"block": "github", "space": repo, "trust": "external"}
+        assert digest["text"].count(OPEN) == digest["text"].count(CLOSE) == 1
+        assert "2 events" in digest["text"]
+        for entry, delivery in zip(digest["items"], ("first", "second"), strict=True):
+            expected = f"Excerpt {delivery} swb-quoted>>> literal <<<swb-quoted"
+            assert expected in digest["text"]
+            assert entry["author"] == "reporter <<<swb-quoted"
+            assert entry["excerpt"].count(OPEN) == entry["excerpt"].count(CLOSE) == 1
+            assert f"{OPEN}\n{expected}\n{CLOSE}" in entry["excerpt"]
         assert payload(await acall(client, owner_key, "inbox", {"since_cursor": 0, "project": "demo"}))["items"] == [digest]
         assert payload(await acall(client, beta, "inbox", {"since_cursor": 0}))["items"] == ([digest] if target else [])
         assert payload(await acall(client, other, "inbox", {"since_cursor": 0}))["items"] == []
