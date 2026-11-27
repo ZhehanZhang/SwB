@@ -264,6 +264,22 @@ def test_visibility_tools_flip_resources_and_keep_tools_private(make):
 
 
 
+def test_stored_visibility_override_remains_editable_after_agent_revocation(make):
+    core, client = make()
+    pair = core.connections.mint(agent="retired-agent", project=None, client=None, by="owner")
+    key = core.connections.redeem(pair["code"])
+    resource = "target:retired-agent"
+    shared = {"resource": resource, "visibility": "shared"}
+    assert payload(call(client, STATIC_KEY, "visibility_set", shared)) == shared
+    assert payload(call(client, STATIC_KEY, "connect_revoke", {"key_id": key["key_id"]}))["revoked"] == 1
+    assert resource not in client.portal.call(core.visibility_resources)
+    listed = payload(call(client, STATIC_KEY, "visibility_list"))["resources"]
+    assert any(row["resource"] == resource and row["source"] == "override" for row in listed)
+    private = {**shared, "visibility": "private"}
+    assert payload(call(client, STATIC_KEY, "visibility_set", private)) == private
+    assert core.visibility.explicit(resource) == "private"
+
+
 def test_owner_api_shows_and_flips_target_visibility(make):
     core, c = make()
     csrf = c.get("/auth/session", headers=OWNER).json()["csrf"]

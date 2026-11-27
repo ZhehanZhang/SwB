@@ -477,7 +477,7 @@ class Switchboard:
         resource = self.visibility.key(resource)
         if resource.startswith("tool:"):
             raise VisibilityError("Tools are always private.")
-        if resource not in self.visibility.config and resource not in await self.visibility_resources():
+        if self.visibility.explicit(resource) is None and resource not in await self.visibility_resources():
             raise VisibilityError("Unknown visibility resource. Choose a resource from visibility_list.")
         return resource, self.visibility.set(resource, value, actor, self.clock())
 
