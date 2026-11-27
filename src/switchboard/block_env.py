@@ -25,13 +25,13 @@ def grok_credential_envs(block: str, name: str) -> tuple[str, str]:
 
 
 def default_blocks() -> dict[str, dict[str, Any]]:
-    return {"mcp": {"use": "mcp"}}
+    return {"mcp": {"use": "mcp"}, "webhook": {"use": "webhook"}}
 
 
 def env_blocks(env: Mapping[str, str]) -> tuple[dict[str, dict[str, Any]], dict[str, tuple[str, ...]]]:
     blocks = default_blocks()
     required: dict[str, tuple[str, ...]] = {
-        "mcp": (), "slack": ("SLACK_BOT_TOKEN", "SLACK_TEAM_ID"), "capy": (CAPY_KEY, CAPY_SEND_KEY),
+        "mcp": (), "webhook": (), "slack": ("SLACK_BOT_TOKEN", "SLACK_TEAM_ID"), "capy": (CAPY_KEY, CAPY_SEND_KEY),
         "github": (GITHUB_SECRET,), "claude-routine": ("CLAUDE_ROUTINE_TOKEN", "CLAUDE_ROUTINE_ID"),
         "grok-routine": ("GROK_ROUTINE_SECRET", "GROK_ROUTINE_URL"), "dots": (),
         **{block: (token,) for block, token in CHAT_BOT_TOKENS.items()},

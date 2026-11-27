@@ -29,8 +29,8 @@ echo "Installed swb CLI: ok"
 clean "$venv/bin/python" -I -B "$root/scripts/smoke-wheel-web.py" "${wheels[0]}"
 : > empty.yaml
 blocks="$(clean SWB_CONFIG="$PWD/empty.yaml" SWB_DATA_DIR="$PWD/data" "$venv/bin/swb" blocks list)"
-if [[ "$(awk '{print $1}' <<< "$blocks")" != "mcp" ]]; then
-    echo "Expected only the default MCP block for an empty config." >&2
+if [[ "$(awk '{print $1}' <<< "$blocks")" != $'mcp\nwebhook' ]]; then
+    echo "Expected the default MCP and webhook blocks for an empty config." >&2
     exit 1
 fi
 clean SWB_CONFIG="$PWD/empty.yaml" SWB_DATA_DIR="$PWD/data" "$venv/bin/swb" blocks check

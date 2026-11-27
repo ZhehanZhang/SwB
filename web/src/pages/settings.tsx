@@ -4,7 +4,7 @@ import { Apple, ChevronRight, KeyRound, LogOut, Monitor, PanelsTopLeft, Smartpho
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { PRODUCT_NAME } from "@/app/brand"
-import { connectionNames } from "@/app/navigation"
+import { connectionNames, type ConnectionPlatform } from "@/app/navigation"
 import { preloadOnTouch } from "@/app/route-pages"
 import { ConnectionStatus } from "@/components/console/connection-status"
 import { Lamp } from "@/components/console/lamp"
@@ -50,7 +50,7 @@ const commands = ["swb up", "swb status", "swb log"] as const
 const rowClass = "grid min-h-[41px] grid-cols-[minmax(88px,24%)_1fr_auto] items-center gap-x-3 border-b text-body-sm"
 const headingClass = "text-heading-md"
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
-const connectionPlatforms = ["slack", "discord", "telegram", "github"] as const
+const connectionPlatforms = Object.keys(connectionNames) as ConnectionPlatform[]
 const deviceIcons = new Map([
   ["darwin", Apple], ["macos", Apple], ["linux", Terminal], ["windows", PanelsTopLeft], ["win32", PanelsTopLeft],
   ["ios", Smartphone], ["android", Smartphone],

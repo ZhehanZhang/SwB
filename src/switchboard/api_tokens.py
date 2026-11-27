@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from .audit import iso
+from .blocks.webhook import _secret_names
 from .claims import CLAIM_TTL_S, NAME_RE
 from .env import env_value
 
@@ -69,6 +70,15 @@ def _credential_refs(core: Switchboard) -> dict[str, tuple[str, str, list[str]]]
                 scope = _label(routine["project"]) or uses
                 add(routine["url_env"], "grok", "Grok webhook URL", scope)
                 add(routine["secret_env"], "grok", "Grok webhook secret", scope)
+        elif kind == "webhook":
+            for hook in core.store.q("SELECT id, name, direction FROM webhooks WHERE revoked_at IS NULL"):
+                secret, previous, url = _secret_names(hook["id"])
+                outbound = hook["direction"] == "out"
+                label = "Webhook signing secret" if outbound else "Webhook secret"
+                add(secret, kind, label, hook["name"])
+                add(previous, kind, label, hook["name"])
+                if outbound:
+                    add(url, kind, "Webhook URL", hook["name"])
     return refs
 
 

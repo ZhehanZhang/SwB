@@ -11,6 +11,7 @@
     "slack",
     "discord",
     "telegram",
-    "github"
+    "github",
+    "webhooks"
   ]
 }

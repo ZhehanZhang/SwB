@@ -10,7 +10,7 @@ from conftest import CHANNEL_KEY, OWNER, STATIC_KEY, base_config, call, error_te
 from switchboard.blocks import BLOCKS
 from switchboard.blocks.mcp import PRINCIPAL_SCOPE, WRITE
 from switchboard.blocks.mcp.policy import (
-    BLOCK_ROLES, CHAT_ROLES, CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, MUTATION_ROLES, OWNER_REQUIRED, POLICY_REQUIRED, READ_ROLES, ROUTE_REQUIRED,
+    BLOCK_ROLES, CHAT_ROLES, CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, MUTATION_ROLES, OWNER_REQUIRED, POLICY_REQUIRED, ROUTE_REQUIRED,
     TARGET_REQUIRED,
 )
 
@@ -57,7 +57,7 @@ def test_tools_list_and_dispatch_share_owner_and_key_roles(server, paired):
     owner = names(STATIC_KEY)
     assert owner == {tool.name for tool in client.portal.call(mcp.list_tools)}
     owner_only = {name for name, role in mcp.roles.items() if role == "owner"}
-    owner_only |= {name for name, (role, _) in READ_ROLES.items() if role == "owner"}
+    owner_only |= {name for name, (role, _) in mcp.read_roles.items() if role == "owner"}
     assert {"connect_list", "visibility_list", "login_link", "project_create", "space_mode", "telegram_provision"} <= owner_only
     paired_names = names(paired)
     assert names(scoped) == paired_names == owner - owner_only
@@ -77,6 +77,27 @@ def test_tools_list_and_dispatch_share_owner_and_key_roles(server, paired):
     denied = rpc(client, CHANNEL_KEY, "tools/list")
     assert denied.status_code == 403 and denied.json()["error"] == "insufficient_scope"
     assert "result" not in denied.json()
+
+
+@pytest.mark.parametrize("block", ["webhook", "custom"])
+def test_webhook_tools_are_hidden_and_refused_for_non_owner(make, block):
+    core, client = make(base_config(version=2, blocks={block: {"use": "webhook"}}))
+    paired = pair(client, "paired")
+    args = {"name": "receiver", "direction": "out"}
+    names = {f"{block}_{action}" for action in ("create", "list", "rotate", "revoke", "test")}
+    assert names <= {t["name"] for t in rpc(client, STATIC_KEY, "tools/list").json()["result"]["tools"]}
+    assert names.isdisjoint(t["name"] for t in rpc(client, paired, "tools/list").json()["result"]["tools"])
+    assert OWNER_REQUIRED in error_text(call(client, paired, f"{block}_create", args))
+    assert OWNER_REQUIRED in error_text(call(client, paired, f"{block}_list"))
+    assert {row["target"] for row in core.audit.recent(action="tool_refused")} == {f"{block}_create", f"{block}_list"}
+    assert payload(call(client, STATIC_KEY, f"{block}_list")) == {"webhooks": []}
+    created = payload(call(client, STATIC_KEY, f"{block}_create", args))
+    assert created["address"] == f"{block}:out:receiver"
+    assert [row["name"] for row in payload(call(client, STATIC_KEY, f"{block}_list"))["webhooks"]] == ["receiver"]
+    assert payload(call(client, STATIC_KEY, "switchboard_status"))["destinations"][block]["waiting"] == ["receiver"]
+    assert payload(call(client, paired, "switchboard_status"))["destinations"][block] == {
+        "online": True, "configured": True, "state": "connected",
+    }
 
 
 @pytest.mark.parametrize(("name", "role"), sorted({**MUTATION_ROLES, **PROVIDER_ROLES}.items()))

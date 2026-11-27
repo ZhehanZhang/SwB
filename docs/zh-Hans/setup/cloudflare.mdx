@@ -34,6 +34,7 @@ docker compose --profile tunnel up -d
 | `/inbox/poll`、`/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | 为 GitHub 设为 Bypass |
+| `/hooks/*` | 为 Webhook 设为 Bypass |
 | 其余路径，包括 `/pairing/companion`、`/authorize` 和 `/inbox` | 仅限所有者 |
 
 SwB 在 `/companion/pair` 检查配对码。SwB 在其他伴侣设备请求中检查设备密钥。使用 Access 时，请让拥有所有者权限的智能体调用 `companion_code`。
