@@ -34,7 +34,7 @@ SwB 可在 Linux、macOS 與 Windows 上執行。uvx 與 pipx 安裝方式需要
   <Tab value="Docker">
     ```bash
     docker run -d --name swb --env-file .env \
-      -p 127.0.0.1:8870:8000 -v swb-data:/data \
+      -e PORT=8870 -p 127.0.0.1:8870:8870 -v swb-data:/data \
       ghcr.io/zhehanzhang/swb:latest
     ```
 
