@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MarkTile, type MarkKind } from './mark-tile';
 import { STEP, clock, trips } from '@/lib/live';
 
@@ -12,10 +12,23 @@ type Props = {
 };
 
 const agentPairs = trips.map(([a, b], n) => ({ a, b, n })).filter(({ a, b }) => a !== 'slack' && a !== 'github' && b !== 'slack' && b !== 'github');
+const pillLayout: 'inline' | 'row' = 'inline';
 
 function Slot({ options, current, names }: { options: MarkKind[]; current: MarkKind; names: Props['names'] }) {
+  const slot = useRef<HTMLSpanElement>(null);
+  const [widths, setWidths] = useState<Partial<Record<MarkKind, number>>>({});
+
+  useLayoutEffect(() => {
+    const chips = Array.from(slot.current!.children);
+    const measure = () => setWidths(Object.fromEntries(options.map((kind, i) => [kind, chips[i].getBoundingClientRect().width])));
+    measure();
+    const observer = new ResizeObserver(measure);
+    chips.forEach((chip) => observer.observe(chip, { box: 'border-box' }));
+    return () => observer.disconnect();
+  }, [options]);
+
   return (
-    <span className="swb-slot">
+    <span ref={slot} className="swb-slot" style={{ inlineSize: widths[current] }}>
       {options.map((kind) => (
         <span key={kind} className={`swb-chip ${kind === current ? 'swb-chip-on' : ''}`} aria-hidden={kind !== current}>
           <MarkTile kind={kind} className="swb-chip-mark" />
@@ -66,14 +79,14 @@ export function HeroTitle({ stem, endings, between, names }: Props) {
           ))}
         </span>
       </h1>
-      <p className="swb-between mt-6 text-base sm:text-lg" data-hero-pair={pair.n}>
-        <span className="swb-between-text">{between[0]}</span>
+      <p className={`swb-between swb-between-${pillLayout} mt-6 text-base`} data-hero-pair={pair.n}>
+        {between[0] && <span className="swb-between-text">{between[0]}</span>}
         <span className="swb-pair">
           <Slot options={starts} current={pair.a} names={names} />
           <span className="swb-between-text">{between[1]}</span>
           <Slot options={ends} current={pair.b} names={names} />
         </span>
-        <span className="swb-between-text">{between[2]}</span>
+        {between[2] && <span className="swb-between-text">{between[2]}</span>}
       </p>
     </>
   );
