@@ -24,6 +24,7 @@ from switchboard.blocks import BlockError
 from switchboard.audit import REFUSAL_AUDIT_INTERVAL_S
 from switchboard.blocks.github import DELIVERY_TTL_S, EVENTS, _json, trim
 from switchboard.blocks.mcp.policy import CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MODE_REQUIRED, TOOL_REQUIRED
+from switchboard.companion.caps.base import CapabilityError
 from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
 from switchboard.refusals import OWNER_NOTE_REQUIRED
@@ -412,41 +413,66 @@ async def test_assist_without_target_records_drop_and_reports_it_in_status(githu
 
 async def test_shared_github_assist_wakes_local_session_and_keeps_context_on_refusal(github, monkeypatch):
     repo = "acme/app"
-    legacy = "local:session:codex:s-gh"
-    config = {"spaces": {repo: {"mode": "assist", "target": legacy}}}
+    config = {"spaces": {repo: {"mode": "assist"}}}
     settings = {"public_url": "https://example.test", "blocks": {"mcp": {}, "github": config},
-                "visibility": {"resources": {f"channel:github/{repo}": "shared"}}}
+                "visibility": {"resources": {f"channel:github/{repo}": "shared", "target:claude-code": "private"}}}
     async with github(config, settings=settings) as (core, client):
         code = payload(await acall(client, OWNER_KEY, "companion_code"))["code"]
         paired = (await client.post("/companion/pair", json={
             "code": code, "name": "Fixture", "platform": "linux",
-            "capabilities": [{"id": "codex", "title": "Codex", "version": "1", "actions": ["prompt"]}],
+            "capabilities": [{"id": "herdr", "title": "Herdr", "version": "1", "actions": ["prompt"]}],
         })).json()
         auth = {"Authorization": f"Bearer {paired['device_key']}"}
-        report = {"capability": "codex", "kind": "codex.session",
-                  "payload": {"harness": "codex", "session": "s-gh", "state": "idle"}}
+        report = {"capability": "herdr", "kind": "herdr.session",
+                  "payload": {"harness": "herdr", "session": "gh", "agent": "claude-code", "state": "idle"}}
         invoke = AsyncMock(return_value={})
         monkeypatch.setattr(core.companions, "invoke", invoke)
         async with aclosing(core.companions.events(paired["companion_id"], 3600)) as stream:
             await anext(stream)
             assert (await client.post("/companion/emit", headers=auth, json=report)).status_code == 200
             [target] = await core.targets(block="local")
-            resource = f"target:{target['address']}"
+            address = f"local:session:{paired['companion_id']}:herdr:gh"
+            assert target["address"] == address
+            resource = f"target:{address}"
             listed = payload(await acall(client, OWNER_KEY, "visibility_list"))["resources"]
             assert {r["resource"] for r in listed if r["resource"].startswith("target:local:session:")} == {resource}
             assert payload(await acall(client, OWNER_KEY, "visibility_set", {"resource": resource, "visibility": "shared"}))["resource"] == resource
-            assert core.visibility.explicit("target:codex") is None
-            sender = {"id": 9999, "type": "User"}
-            issue = {**ISSUE, "user": sender, "body": "External report."}
-            assert (await send(client, sender=sender, issue=issue)).status_code == 200
+            args = {"block": "github", "space": repo, "mode": "assist", "target": address}
+            assert payload(await acall(client, OWNER_KEY, "space_mode", args))["target"] == address
+            assert core.visibility.rule("target:claude-code") == "private"
+            mailbox = "claude-code"
+            observed = []
+            core.inbox.listeners.append(lambda *item: observed.append(item))
+
+            async def submit(ident, delivery, body="External report."):
+                sender = {"id": ident, "type": "User"}
+                issue = {**ISSUE, "user": sender, "body": body}
+                assert (await send(client, sender=sender, issue=issue, delivery=delivery)).status_code == 200
+
+            await submit(9999, "admitted")
             invoke.assert_awaited_once()
             args = invoke.await_args
-            assert args.args[:3] == (paired["companion_id"], "codex", "prompt")
+            assert args.args[:3] == (paired["companion_id"], "herdr", "prompt")
             outside, frames = split_frames(args.args[3]["text"])
             assert "External report." in frames and "External report." not in outside
             assert args.kwargs["principal"].trust == "external"
-            [wake] = core.inbox.read(owner="codex")["items"]
-            assert wake["trust"] == "external"
+            conversation = core.inbox.handle(args.args[3]["conversation"])
+            assert conversation["target"] == address and conversation["meta"]["channel_mode"]["mode"] == "assist"
+            assert not core.inbox.read(owner=mailbox)["items"]
+
+            invoke.side_effect = CapabilityError("Agent is waiting on a prompt.")
+            await submit(9998, "device-refused")
+            invoke.side_effect = None
+            for n in range(6):
+                await submit(9999, f"burst-{n}")
+            await submit(9997, "third-sender")
+            assert invoke.await_count == 7
+            assert [(row["ref"], row["detail"]) for row in core.audit.recent(action="webhook", outcome="dropped")] == [
+                ("burst-5", "sender rate limit"), ("burst-4", "sender rate limit"),
+            ]
+            [context] = core.inbox.read(owner=mailbox)["items"]
+            assert (context["kind"], context["trust"], context["target"]) == ("context", "external", address)
+            assert core.audit.recent(action="context_noted")[0]["ref"] == "device-refused"
 
             check = core.visibility.allows
             calls = 0
@@ -460,12 +486,12 @@ async def test_shared_github_assist_wakes_local_session_and_keeps_context_on_ref
                 return check(who, *resources)
 
             monkeypatch.setattr(core.visibility, "allows", restrict_at_wake)
-            assert (await send(client, sender=sender, issue=issue, delivery="refused-wake")).status_code == 200
-            [context] = core.inbox.read(owner="codex")["items"]
-            assert (context["kind"], context["trust"], context["target"]) == ("context", "external", legacy)
+            await submit(9997, "refused-wake")
+            [context] = core.inbox.read(owner=mailbox)["items"]
+            assert (context["kind"], context["trust"], context["target"]) == ("context", "external", address)
             assert core.audit.recent(action="context_noted")[0]["ref"] == "refused-wake"
             assert core.audit.recent(destination="local", action="wake")[0]["outcome"] == "refused"
-            invoke.assert_awaited_once()
+            assert invoke.await_count == 7 and observed == []
 
 
 @pytest.mark.parametrize("mode", ["assist", "triage", "work"])
@@ -724,6 +750,7 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
             assert "swb-quoted>>> literal <<<swb-quoted" in notes[0]["text"]
             title, metadata, framed_title, body, delivery, tail = notes[0]["text"].split("\n\n")
             assert title == notes[0]["subject"] == "User 11 (external) on GitHub acme/app: Issue #7"
+            assert "[swb from github:11 in GitHub acme/app, trust external]" in metadata
             fields = json.loads(split_frames(metadata)[1][0])
             assert {"title", "body"}.isdisjoint(fields)
             assert fields["url"] == ISSUE["html_url"] and fields["actor"] == "maintainer"

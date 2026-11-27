@@ -2,6 +2,7 @@ import asyncio
 import builtins
 import json
 from contextlib import aclosing
+from unittest.mock import Mock
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -225,6 +226,36 @@ async def test_pairing_api_failure_is_sanitized_and_saves_nothing(muse_app, monk
     assert result["pairing"] == "window_closed" and "Retry pairing" in result["next"][0]["do"]
     assert core.claims.secret(muse.PAIRING_SECRET) is None
     assert all(secret not in caplog.text + str(core.audit.recent()) + str(result) for secret in (SDK_TOKEN, ACCESS, REFRESH))
+
+
+async def test_muse_pairing_claim_allowlists_api_and_noise_hosts(muse_app, monkeypatch):
+    core, _, companions, block = muse_app
+    core.claims.save_secret(muse.TOKEN_ENV, SDK_TOKEN)
+    identity = Identity("02:00:00:00:00:01")
+    monkeypatch.setattr(block, "_pairing", (COMPANION, identity))
+    principal = Principal("test-device", f"companion:{COMPANION}", "companion", trust="external")
+    hosts = {"api_url": "https://hatch-api.meta.ai", "api_url_v2": "https://api.muse.ai", "noise_host": "hatch.metaaivm.com"}
+    credentials = {"access_token": ACCESS, "refresh_token": REFRESH, **hosts}
+    verify = Mock(return_value=([{"vm_id": "test-vm"}], 200))
+    monkeypatch.setattr(muse_api, "fetch_vms_with_status", verify)
+
+    for host in ("evil.example.com", "https://evil.example.com/pair", "gadgets.muse.ai.evil.com", "http://169.254.169.254/"):
+        for field in hosts:
+            result = await companions.handler(principal, {
+                "node_id": identity.setup_node_id, "credentials": {**credentials, field: host},
+            })
+            assert result["ok"] is False, (field, host)
+
+    verify.assert_not_called()
+    assert core.claims.secret(muse.PAIRING_SECRET) is None
+    assert block._gadget is None
+
+    result = await companions.handler(principal, {"node_id": identity.setup_node_id, "credentials": credentials})
+    assert result == {"ok": True}
+    verify.assert_called_once_with(ACCESS, hosts["api_url_v2"])
+    stored = json.loads(core.claims.secret(muse.PAIRING_SECRET))
+    assert {field: stored[field] for field in hosts} == hosts
+    assert isinstance(block._gadget, FakeGadget)
 
 
 async def test_gadget_routes_replies_and_dedupes_without_polling_oauth_mailbox(muse_app):

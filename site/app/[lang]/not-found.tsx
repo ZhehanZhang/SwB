@@ -1,5 +1,6 @@
 'use client';
 
+import { House } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { isLocale, localize } from '@/lib/i18n';
@@ -16,7 +17,7 @@ export default function NotFound() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col items-start justify-center gap-4 px-5">
       <h1 className="text-display-xl">{copy[lang].title}</h1>
-      <Link href={localize(lang, '/')} className="swb-button border hover:bg-fd-muted">{copy[lang].home}</Link>
+      <Link href={localize(lang, '/')} className="swb-button swb-button-outline"><House aria-hidden="true" />{copy[lang].home}</Link>
     </main>
   );
 }

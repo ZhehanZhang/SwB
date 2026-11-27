@@ -75,10 +75,9 @@ function relative(at: string | null) {
 }
 
 function Identity({ row }: { row: Stored }) {
-  const kind = row.revoke_id ? connectorKind(row.label) ?? row.kind : row.kind
   return (
     <span className="flex items-center gap-2">
-      <LogoTile kind={kind} />
+      <LogoTile kind={row.revoke_id ? connectorKind(row.label) ?? row.kind : row.kind} />
       <span className="min-w-0 wrap-anywhere">{row.name}, {row.label}</span>
     </span>
   )
@@ -93,7 +92,7 @@ function RevokeKey({ label, disabled, pending, onRevoke }: {
   return (
     <AlertDialog.Root>
       <AlertDialog.Trigger asChild>
-        <Button size="sm" variant="ghost" disabled={disabled} aria-label={`Revoke access key for ${label}`}>
+        <Button size="sm" variant="ghost" className="max-md:min-h-8 max-md:pr-0" disabled={disabled} aria-label={`Revoke access key for ${label}`}>
           {pending ? "Revoking…" : "Revoke"}
         </Button>
       </AlertDialog.Trigger>
@@ -167,8 +166,8 @@ export function TokensPage() {
                 ].filter(Boolean).join(" ")
                 const age = relative(row.requested_at)
                 return (
-                  <li key={row.id} className="flex min-h-[67px] flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b py-3">
-                    <div className="flex min-w-0 items-center gap-3">
+                  <li key={row.id} className="grid min-h-[67px] gap-x-4 gap-y-1.5 border-b py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                    <div className="flex min-w-0 items-center gap-2">
                       <LogoTile kind={row.kind} className="size-7" />
                       <div className="min-w-0">
                         <p className="text-[13px] leading-[18px] font-semibold wrap-anywhere">{row.name}, {row.label}</p>
@@ -177,7 +176,7 @@ export function TokensPage() {
                         </p>}
                       </div>
                     </div>
-                    <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground" title={row.expires_at
+                    <span className="ml-9 flex items-center gap-2 text-xs text-muted-foreground md:ml-0" title={row.expires_at
                       ? `Expires ${new Date(row.expires_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
                       : undefined}>
                       <Lamp state="off" /> Open the request link
@@ -210,31 +209,31 @@ export function TokensPage() {
           </LoadingSkeleton>
         ) : stored.length === 0
           ? <DataState kind="empty" message="0 stored tokens" />
-          : <table className="mt-2 w-full text-left text-[13px] leading-[18px]" aria-labelledby="stored-tokens" role="table">
+          : <table className="mt-2 w-full text-left text-[13px] leading-[18px] md:table-fixed" aria-labelledby="stored-tokens" role="table">
               <thead className="sr-only md:not-sr-only md:table-header-group" role="rowgroup">
                 <tr className="border-b text-[11px] text-muted-foreground" role="row">
-                  <th scope="col" className="w-[19%] pb-2 font-medium">Name</th>
-                  <th scope="col" className="w-[14%] pb-2 font-medium">Value</th>
+                  <th scope="col" className="w-[28%] pb-2 font-medium">Name</th>
+                  <th scope="col" className="w-14 pb-2 font-medium">Value</th>
                   <th scope="col" className="pb-2 font-medium">Used by</th>
-                  <th scope="col" className="w-[18%] pb-2 font-medium">Memory access</th>
-                  <th scope="col" className="w-[14%] pb-2 font-medium">Added by</th>
-                  <th scope="col" className="w-[11%] pb-2 font-medium">Added</th>
-                  <th scope="col" className="w-16"><span className="sr-only">Actions</span></th>
+                  <th scope="col" className="w-[22%] pb-2 font-medium">Memory access</th>
+                  <th scope="col" className="w-[12%] pb-2 font-medium">Added by</th>
+                  <th scope="col" className="w-[10%] pb-2 font-medium">Added</th>
+                  <th scope="col" className="w-20"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="block md:table-row-group" role="rowgroup">
                 {stored.map((row) => {
                   const id = row.revoke_id
                   return (
-                    <tr key={row.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 border-b py-3 md:table-row md:h-[49px]" role="row">
+                    <tr key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 border-b py-3 md:table-row md:h-[49px]" role="row">
                       <th scope="row" className="min-w-0 font-normal md:py-2 md:pr-4"><Identity row={row} /></th>
-                      <td className="font-mono text-xs text-muted-foreground md:pr-4" role="cell">
+                      <td className="justify-self-end font-mono text-xs text-muted-foreground md:pr-4" role="cell">
                         <span aria-hidden>••••</span><span className="sr-only">Hidden</span>
                       </td>
-                      <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.used_by.length && "max-md:hidden")} role="cell">
+                      <td className={cn("col-span-2 wrap-anywhere text-muted-foreground max-md:pl-8 md:pr-4 md:text-foreground", !row.used_by.length && "max-md:hidden")} role="cell">
                         {row.used_by.length > 0 && <><span className="md:sr-only">Used by </span>{row.used_by.join(", ")}</>}
                       </td>
-                      <td className={cn("col-span-2 md:pr-4", !row.memory_scopes && "max-md:hidden")} role="cell">
+                      <td className={cn("col-span-2 max-md:pl-8 md:pr-4", !row.memory_scopes && "max-md:hidden")} role="cell">
                         {row.memory_scopes && (
                           <div className="grid justify-items-start">
                             <span className="text-muted-foreground md:sr-only">Memory access</span>
@@ -243,7 +242,7 @@ export function TokensPage() {
                               const label = memoryScopeLabel(scope)
                               return (
                                 <div key={scope} className="inline-flex max-w-full items-center gap-1">
-                                  <span className="wrap-anywhere">{label}</span>
+                                  <span className="min-w-0 wrap-anywhere">{label}</span>
                                   {id && <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0"
                                     aria-label={`Remove ${label} from ${row.label}`} title="Remove scope"
                                     disabled={!session?.csrf || removeScope.isPending} onClick={() => removeScope.mutate({ id, scope })}>
@@ -255,10 +254,10 @@ export function TokensPage() {
                           </div>
                         )}
                       </td>
-                      <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.added_by && "max-md:hidden")} role="cell">
+                      <td className={cn("col-span-2 wrap-anywhere text-muted-foreground max-md:pl-8 md:pr-4 md:text-foreground", !row.added_by && "max-md:hidden")} role="cell">
                         {row.added_by && <><span className="md:sr-only">Added by </span>{row.added_by}</>}
                       </td>
-                      <td className={cn("font-mono text-xs text-muted-foreground md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
+                      <td className={cn("font-mono text-xs text-muted-foreground max-md:pl-8 md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
                         {row.added_at && <time dateTime={row.added_at}>{date.format(new Date(row.added_at))}</time>}
                       </td>
                       <td className={cn("col-start-2 justify-self-end text-right", !row.revoke_id && "max-md:hidden")} role="cell">

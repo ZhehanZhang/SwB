@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, X } from 'lucide-react';
+import { Check, Copy, Plug, X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { combineSetupPrompts, setupChoices, type SetupChoice, type SetupSources } from '@/lib/setup-picker';
 import type { setupPickerCopy } from '@/lib/setup-picker-copy';
@@ -42,7 +42,7 @@ export function SetupPickerControls({ labels, sources, modal }: Props) {
         placeholder={labels.prompt} value={prompt} readOnly
         className="mt-4 block h-44 w-full field-sizing-fixed resize-none overflow-y-auto rounded-md border bg-fd-background px-3 py-2 font-mono text-[13px] leading-relaxed sm:h-52" />
       <div className="mt-3 flex">
-        <button type="button" disabled={!prompt} className="swb-button border hover:bg-fd-muted disabled:opacity-50"
+        <button type="button" disabled={!prompt} className="swb-button swb-button-outline disabled:opacity-50"
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(prompt);
@@ -52,7 +52,7 @@ export function SetupPickerControls({ labels, sources, modal }: Props) {
               setStatus('error');
             }
           }}>
-          {status === 'copied' ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
+          {status === 'copied' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
           {labels.copy}
         </button>
         <span className="sr-only" role="status">
@@ -65,15 +65,15 @@ export function SetupPickerControls({ labels, sources, modal }: Props) {
   if (!modal) return fields;
   return (
     <>
-      <button type="button" aria-haspopup="dialog" className="swb-button bg-fd-primary text-fd-primary-foreground hover:brightness-110"
-        onClick={() => dialog.current?.showModal()}>{labels.setup}</button>
+      <button type="button" aria-haspopup="dialog" className="swb-button swb-button-primary whitespace-nowrap"
+        onClick={() => dialog.current?.showModal()}><Plug aria-hidden="true" />{labels.setupWithAgent}</button>
       <dialog ref={dialog} aria-labelledby={titleId}
         className="m-auto max-h-[calc(100dvh-1.5rem)] w-[min(40rem,calc(100%-1.5rem))] max-w-none overscroll-contain overflow-y-auto rounded-lg border bg-fd-popover p-4 text-fd-popover-foreground backdrop:bg-black/50 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 id={titleId} className="text-lg font-semibold">{labels.setup}</h2>
           <form method="dialog">
-            <button aria-label={labels.close} className="grid size-8 place-items-center rounded-sm hover:bg-fd-muted">
-              <X aria-hidden="true" className="size-5" />
+            <button aria-label={labels.close} className="swb-button swb-button-icon hover:bg-fd-muted">
+              <X aria-hidden="true" />
             </button>
           </form>
         </div>

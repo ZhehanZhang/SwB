@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from sqlite3 import Row
@@ -24,7 +25,7 @@ class Audit:
         self.store = store
         self.tz = ZoneInfo(tz)
         self.tz_name = tz
-        self._refusal_audited_at: dict[tuple[str, str, str, str | None, str], float] = {}
+        self._refusal_audited_at: OrderedDict[tuple[str, str, str, str, str | None, str], float] = OrderedDict()
 
     def today(self) -> str:
         return datetime.fromtimestamp(self.store.clock(), self.tz).date().isoformat()
@@ -49,14 +50,17 @@ class Audit:
             "INSERT INTO audit(at, day, origin, source, client, destination, action, target, ref, title, excerpt, outcome, detail) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (self.store.clock(), self.today(), origin, source, client[:200], destination, action, target, ref, title, excerpt[:300], outcome, detail),
         )
-        log.info("%s.%s %s by %s via %s (%s) -> %s %s", destination, action, outcome, source, origin, client[:60], target or "", ref or detail or "")
+        context = f"{ref} {detail}" if outcome == "refused" and ref and detail else ref or detail or ""
+        log.info("%s.%s %s by %s via %s (%s) -> %s %s", destination, action, outcome, source, origin, client[:60], target or "", context)
 
     def record_refusal(self, *, origin: str, client: str, destination: str, action: str, detail: str,
                        target: str | None = None, ref: str | None = None) -> None:
-        key = origin, destination, action, target, detail
         now = self.store.clock()
-        previous = self._refusal_audited_at.get(key)
-        if previous is None or now - previous >= REFUSAL_AUDIT_INTERVAL_S:
+        cutoff = now - REFUSAL_AUDIT_INTERVAL_S
+        while self._refusal_audited_at and next(iter(self._refusal_audited_at.values())) <= cutoff:
+            self._refusal_audited_at.popitem(last=False)
+        key = origin, client[:200], destination, action, target, detail
+        if key not in self._refusal_audited_at:
             self.record(origin=origin, source="-", client=client, destination=destination, action=action,
                         outcome="refused", target=target, detail=detail, ref=ref)
             self._refusal_audited_at[key] = now

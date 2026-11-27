@@ -55,6 +55,11 @@ Follow the [Cloudflare setup guide](/docs/setup/cloudflare) to configure SwB and
 
 Use one SwB instance with a persistent disk mounted at `/data`. See the [deployment guide](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy) for the Railway, Render and Fly.io templates and the Koyeb script.
 
+## Railway [#railway]
+
+The [Railway template definition](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts) runs one SwB service and mounts a 1 GB volume at `/data`.
+Deploy from the Railway marketplace after the template is published.
+
 ## Fly.io [#fly]
 
 Use the SwB release checkout from the [Docker Compose example](#docker-compose). Install the [Fly.io command line tool](https://docs.fly.io/flyctl/). Sign in to Fly.io.

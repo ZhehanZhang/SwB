@@ -36,30 +36,34 @@ function ExchangeWindow({ scene: { app, messages }, lang, index }: { scene: Exch
   }, [index, messages.length]);
 
   const name = (speaker: typeof messages[number][0]) => speaker === 'you' ? exchangeCopy[lang].you : agentNames[speaker];
+  const transcript = (sizing: boolean) => (
+    <div className={`swb-win-transcript min-h-0 overflow-hidden px-3 py-2.5 ${sizing ? 'swb-win-size' : 'swb-win-body'}`} aria-hidden="true">
+      {messages.map(([speaker, text], i) => (
+        <div key={i} className={`flex shrink-0 items-start gap-2${sizing ? '' : ' swb-win-message'}`}
+          data-pending={!sizing && i >= shown ? '' : undefined} data-new={!sizing && i === shown - 1 ? '' : undefined}>
+          {speaker === 'you'
+            ? <span className="swb-mark-tile swb-win-avatar swb-win-you"><UserRound className="swb-mark-glyph" /></span>
+            : <MarkTile kind={speaker} className="swb-win-avatar" />}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">
+              {name(speaker)}
+              {speaker !== 'you' && speaker !== app && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
+            </p>
+            <p className="text-sm leading-5">{text[lang]}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="swb-win overflow-hidden rounded-lg border" data-exchange-window={app}>
-      <h3 className="swb-win-bar flex items-center gap-2 border-b px-4 text-sm font-semibold">
+      <h3 className="swb-win-bar flex items-center gap-2 border-b px-3 text-sm font-semibold">
         <MarkTile kind={app} className="swb-win-avatar" />
         {agentNames[app]}
       </h3>
-      <div className="swb-win-body min-h-0 overflow-hidden px-4 py-3" aria-hidden="true">
-        {messages.map(([speaker, text], i) => (
-          <div key={i} className="swb-win-message flex items-start gap-2.5"
-            data-pending={i >= shown ? '' : undefined} data-new={i === shown - 1 ? '' : undefined}>
-            {speaker === 'you'
-              ? <span className="swb-mark-tile swb-win-avatar swb-win-you"><UserRound className="swb-mark-glyph" /></span>
-              : <MarkTile kind={speaker} className="swb-win-avatar" />}
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">
-                {name(speaker)}
-                {speaker !== 'you' && speaker !== app && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
-              </p>
-              <p className="text-sm leading-5">{text[lang]}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+      {transcript(true)}
+      {transcript(false)}
       <div className="sr-only">
         {messages.map(([speaker, text], i) => <p key={i}><strong>{name(speaker)}</strong> {text[lang]}</p>)}
       </div>
