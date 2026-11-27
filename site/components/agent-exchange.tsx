@@ -7,8 +7,13 @@ import { agentNames, exchangeCopy, exchangeScenes } from '@/lib/exchange-copy';
 
 const MESSAGE_DELAY = 1250;
 const SCENE_DELAY = 3600;
+const TRANSCRIPT_LENGTH = 8;
 const firstFrame = { scene: 0, shown: 1 };
 const stillFrame = { scene: 0, shown: exchangeScenes[0].messages.length };
+const transcript = exchangeScenes.flatMap(({ app, messages }, scene) =>
+  messages.map(([speaker, text], index) => ({ app, scene, index, speaker, text })),
+);
+const loop = [...transcript, ...transcript];
 
 function usePlayback() {
   const [frame, setFrame] = useState(firstFrame);
@@ -44,20 +49,23 @@ function usePlayback() {
 
 export function AgentExchange({ lang }: { lang: Locale }) {
   const { scene, shown } = usePlayback();
-  const { app, messages } = exchangeScenes[scene];
+  const { app } = exchangeScenes[scene];
   const { you } = exchangeCopy[lang];
+  const end = transcript.length + 1 + transcript.findIndex((entry) => entry.scene === scene && entry.index === shown - 1);
+  const entries = loop.slice(end - TRANSCRIPT_LENGTH, end);
 
   return (
     <div className="swb-exchange mt-10">
-      <div className="swb-win overflow-hidden rounded-xl border">
+      <div className="swb-win overflow-hidden rounded-xl border" aria-hidden="true">
         <div className="swb-win-bar flex items-center gap-2 border-b px-4">
           <MarkTile kind={app} className="swb-win-mark" />
           <span className="text-sm font-semibold">{app === 'slack' ? 'Slack #launch' : agentNames[app]}</span>
         </div>
-        <div key={app} className="swb-win-body flex min-h-0 flex-col-reverse overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
-          <div className="shrink-0">
-            {messages.slice(0, shown).map(([speaker, text], i) => (
-              <div key={i} className="swb-win-message flex gap-3">
+        <div className="swb-win-body relative min-h-0 overflow-hidden">
+          <div className="absolute inset-x-4 bottom-4 sm:inset-x-5">
+            {entries.map(({ app: channel, scene: source, index, speaker, text }) => (
+              <div key={`${source}/${index}`}
+                className={`swb-win-entry flex gap-3${source === scene ? ' swb-win-message' : ''}${index === 0 ? ' swb-win-break' : ''}`}>
                 {speaker === 'you'
                   ? <span className="swb-win-you grid size-8 shrink-0 place-items-center rounded-md text-sm font-semibold" aria-hidden="true">{you.slice(0, 1)}</span>
                   : speaker === 'capy'
@@ -66,7 +74,7 @@ export function AgentExchange({ lang }: { lang: Locale }) {
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-sm font-semibold">
                     {speaker === 'you' ? you : agentNames[speaker]}
-                    {app === 'slack' && speaker !== 'you' && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
+                    {channel === 'slack' && speaker !== 'you' && <img src="/avatars/swb.png" className="swb-win-bot" alt="SwB" title="SwB" />}
                   </p>
                   <p className="text-[15px] leading-6">{text[lang]}</p>
                 </div>
@@ -74,6 +82,11 @@ export function AgentExchange({ lang }: { lang: Locale }) {
             ))}
           </div>
         </div>
+      </div>
+      <div className="sr-only">
+        {exchangeScenes[0].messages.map(([speaker, text], index) => (
+          <p key={index}><strong>{speaker === 'you' ? you : agentNames[speaker]}</strong> {text[lang]}</p>
+        ))}
       </div>
     </div>
   );

@@ -303,8 +303,11 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
 .swb-win-bar { background: var(--surface-sunken); }
 .swb-win-mark.swb-mark-tile { width: 24px; height: 24px; }
 .swb-win-body { mask-image: linear-gradient(to bottom, transparent, black 1.5rem); }
-.swb-win-message { animation: swb-message-in .25s ease-out; }
-.swb-win-message + .swb-win-message { margin-top: .625rem; }
+.swb-win-message:last-child { animation: swb-message-in .25s ease-out; }
+.swb-win-entry + .swb-win-entry { margin-top: .625rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .swb-win-entry + .swb-win-break { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--border); }
+}
 .swb-win-avatar.swb-mark-tile { width: 32px; height: 32px; }
 .swb-win-you { background: var(--surface-sunken); }
 .swb-win-bot { width: 14px; height: 14px; border-radius: 50%; }
@@ -312,7 +315,10 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
 
 @media (prefers-reduced-motion: reduce) {
   button.swb-node, button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile,
-  .swb-win-message, .swb-panel { animation: none; }
+  .swb-win-message:last-child, .swb-panel { animation: none; }
+  .swb-win-body { mask-image: none; }
+  .swb-win-entry:not(.swb-win-message) { display: none; }
+  .swb-win-entry:not(.swb-win-message) + .swb-win-message { margin-top: 0; }
   button.swb-node .swb-mark-tile { transition: none; }
   button.swb-node:hover .swb-mark-tile { transform: none; }
 }
