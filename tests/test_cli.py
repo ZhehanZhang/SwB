@@ -15,6 +15,7 @@ from mcp.types import CallToolResult, TextContent
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, payload
 from switchboard import __main__, cli
+from switchboard.config import load_config
 
 
 def test_log_prints_one_json_object_per_line(make, tmp_path, monkeypatch, capsys):
@@ -56,6 +57,10 @@ def test_init_writes_minimal_config_and_private_owner_key(tmp_path, capsys):
     assert name == cli.OWNER_KEY
     assert len(bytes.fromhex(key)) == 32
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
+    data = instance / "data"
+    assert data.is_dir() and not list(data.iterdir())
+    if os.name == "posix":
+        assert stat.S_IMODE(data.stat().st_mode) == 0o700
     out, err = capsys.readouterr()
     assert key not in out + err
     assert f"Owner key saved in {env}." in out and f"swb up --dir '{instance}'" in out
@@ -72,6 +77,7 @@ def test_init_does_not_overwrite_or_create_other_file_when_one_exists(tmp_path, 
     assert path.read_text() == "existing"
     other = cli.CONFIG if existing == ".env" else ".env"
     assert not (tmp_path / other).exists()
+    assert not (tmp_path / "data").exists()
     assert "--force" in capsys.readouterr().err
 
 
@@ -129,12 +135,13 @@ def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(f"# comment\n{cli.OWNER_KEY}='owner-test-key'\nPORT=4567 # local port\n")
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv, *, data_dir, **_: calls.append(
-        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG")), data_dir)))
-    with patch.dict(os.environ, {"SWITCHBOARD_DATA": "/path/to/old-data", "SWITCHBOARD_CONFIG": "/path/to/old-config",
-                                 "PORT": "9876"}, clear=True):
+    monkeypatch.setattr(__main__, "main", lambda argv, *, instance, **_: calls.append(
+        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG")),
+         load_config(instance=instance, env={}).data_dir)))
+    with patch.dict(os.environ, {"SWITCHBOARD_CONFIG": "/path/to/old-config", "PORT": "9876",
+                                 "HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home")}, clear=True):
         cli.main(["up", "--dir", str(tmp_path)])
-    assert calls == [(["serve"], "owner-test-key", "9876", str(tmp_path / cli.CONFIG), tmp_path / "data")]
+    assert calls == [(["serve"], "owner-test-key", "9876", "/path/to/old-config", tmp_path / "data")]
 
 
 def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, capsys):
