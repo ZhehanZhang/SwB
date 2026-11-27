@@ -114,7 +114,7 @@ async def test_invalid_signature(github, signature):
         assert response.status_code == 401 and response.json() == {"error": "invalid signature"}
         (row,) = core.audit.recent(action="webhook")
         reason = "missing signature" if signature is None else "invalid signature"
-        assert (row["outcome"], row["detail"], row["ref"], row["excerpt"], row["client"]) == ("refused", reason, None, "", "-")
+        assert (row["outcome"], row["detail"], row["ref"], row["excerpt"], row["client"]) == ("refused", reason, None, "", "127.0.0.1")
         assert raw[:15].decode() not in str(row) and SECRET[:12] not in str(row)
         if isinstance(signature, str):
             assert signature[:12] not in str(row)

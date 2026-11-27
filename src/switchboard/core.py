@@ -253,6 +253,7 @@ class Switchboard:
             "status": "degraded" if problems else "ok",
             "problems": problems,
             "next_steps": [step for step in next_steps.values() if step],
+            "mcp_enabled": self.cfg.mcp_enabled,
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
             "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online, "next_step": next_steps[n]} for n, b in blocks.items()},

@@ -119,21 +119,22 @@ def test_companion_endpoints_refuse_strangers_owner_and_revoked_keys(make):
     id_, key = (out := client.post("/companion/pair", json={"code": code, **HELLO}).json())["companion_id"], out["device_key"]
     owner = passkey_session(core)
 
-    def assert_refused(headers, ip):
-        for path in COMPANION_ROUTES:
-            response = client.request("GET" if path.endswith("/events") else "POST", path,
-                                      headers={**headers, "CF-Connecting-IP": ip})
-            assert response.status_code == 401
+    async def assert_refused(headers, ip):
+        transport = httpx.ASGITransport(app=client.app, client=(ip, 50000))
+        async with httpx.AsyncClient(transport=transport, base_url=PUBLIC) as peer:
+            for path in COMPANION_ROUTES:
+                response = await peer.request("GET" if path.endswith("/events") else "POST", path, headers=headers)
+                assert response.status_code == 401
 
-    assert_refused({}, "192.0.2.1")
-    assert_refused(bearer("wrong"), "192.0.2.2")
-    assert_refused({**owner, **bearer(STATIC_KEY)}, "192.0.2.3")
+    client.portal.call(assert_refused, {}, "192.0.2.1")
+    client.portal.call(assert_refused, bearer("wrong"), "192.0.2.2")
+    client.portal.call(assert_refused, {**owner, **bearer(STATIC_KEY)}, "192.0.2.3")
     assert client.post("/companion/hello", headers=bearer(key), json={**HELLO, "name": "Renamed", "version": "1.0.0"}).json() == {"ok": True}
     assert core.companions.authenticate(key).source == "Renamed"
     assert client.post("/companion/results", headers=bearer(key), json={"job_id": "missing", "ok": True, "result": {}}).status_code == 404
     assert client.post("/companion/claims", headers=bearer(key), json={"kind": "missing"}).status_code == 404
     assert client.post("/companion/revoke", headers=bearer(key)).json() == {"ok": True}
-    assert_refused(bearer(key), "192.0.2.4")
+    client.portal.call(assert_refused, bearer(key), "192.0.2.4")
     assert rpc(client, key, "tools/list").status_code == 401
     assert client.get("/api/companions", headers=bearer(key)).status_code == 401
     assert core.audit.recent(action="companion_revoke")[0]["origin"] == "companion"
