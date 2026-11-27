@@ -67,6 +67,11 @@ docker compose --profile tunnel up -d
 
 运行一个 SwB 实例。将持久磁盘挂载到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)介绍 Railway、Render 和 Fly.io 的模板以及 Koyeb 脚本。
 
+## Railway [#railway]
+
+[Railway 模板定义](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts)启动一个 SwB 服务，并在 `/data` 挂载一个 1 GB 存储卷。
+模板发布后，从 Railway 模板市场部署。
+
 ## Fly.io [#fly]
 
 使用 [SwB 发布分支的本地副本](#docker-compose)。安装 [Fly.io 命令行工具](https://docs.fly.io/flyctl/)并登录。

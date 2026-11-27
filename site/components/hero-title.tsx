@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MarkTile, type MarkKind } from './mark-tile';
-import { STEP, clock, trips } from '@/lib/live';
+import { STEP, agentPair, agentPairs, clock, trips } from '@/lib/live';
 
 type Props = {
   stem: string;
@@ -11,7 +11,6 @@ type Props = {
   names: Partial<Record<MarkKind, string>>;
 };
 
-const agentPairs = trips.map(([a, b], n) => ({ a, b, n })).filter(({ a, b }) => a !== 'slack' && a !== 'github' && b !== 'slack' && b !== 'github');
 function Slot({ options, current, names }: { options: MarkKind[]; current: MarkKind; names: Props['names'] }) {
   const slot = useRef<HTMLSpanElement>(null);
   const [widths, setWidths] = useState<Partial<Record<MarkKind, number>>>({});
@@ -66,7 +65,7 @@ export function HeroTitle({ stem, endings, between, names }: Props) {
       motion.removeEventListener('change', onMotionChange);
     };
   }, [endings.length]);
-  const pair = agentPairs.findLast(({ n }) => n <= step) ?? agentPairs[0];
+  const pair = agentPair(step);
   return (
     <>
       <h1 id="landing-heading" className="text-display-xl swb-hero-title">
