@@ -11,12 +11,14 @@ const channels: { kind: MarkKind; label: string; y: number }[] = [
   { kind: 'github', label: 'acme/app', y: 380 },
 ];
 const agents: { kind: MarkKind; label: string; y: number }[] = [
-  { kind: 'claude', label: 'Claude Project', y: 55 },
-  { kind: 'chatgpt', label: 'ChatGPT dot', y: 125 },
-  { kind: 'capy', label: 'Capy Captain', y: 195 },
-  { kind: 'grok', label: 'Grok routine', y: 265 },
-  { kind: 'codex', label: 'Codex', y: 335 },
-  { kind: 'claude-code', label: 'Claude Code', y: 405 },
+  { kind: 'claude', label: 'Claude', y: 40 },
+  { kind: 'chatgpt', label: 'ChatGPT', y: 94 },
+  { kind: 'gemini', label: 'Gemini', y: 148 },
+  { kind: 'claude-code', label: 'Claude Code', y: 202 },
+  { kind: 'codex', label: 'Codex', y: 256 },
+  { kind: 'capy', label: 'Captain', y: 310 },
+  { kind: 'grok', label: 'Grok', y: 364 },
+  { kind: 'muse', label: 'Muse', y: 418 },
 ];
 
 const inPath = (y: number) => `M284 ${y} C410 ${y} 420 ${HUB.y} ${HUB.x - 34} ${HUB.y}`;
@@ -25,9 +27,9 @@ const pct = (value: number, total: number) => `${(value / total) * 100}%`;
 
 const trips = [
   { from: 0, to: 0, begin: 0 },
-  { from: 1, to: 2, begin: 1.6 },
+  { from: 1, to: 1, begin: 1.6 },
   { from: 3, to: 4, begin: 3.2 },
-  { from: 2, to: 1, begin: 4.8 },
+  { from: 2, to: 5, begin: 4.8 },
 ];
 
 export function SwitchboardHero({ label }: { label: string }) {
@@ -80,7 +82,7 @@ export function SwitchboardHero({ label }: { label: string }) {
         </div>
       ))}
       <span className="swb-hub-ring" style={{ left: pct(HUB.x, W), top: pct(HUB.y, H) }} aria-hidden="true" />
-      <img className="swb-hub" src="/marks/swb.svg" alt="" style={{ left: pct(HUB.x, W), top: pct(HUB.y, H) }} />
+      <img className="swb-hub" src="/avatars/swb.png" alt="" style={{ left: pct(HUB.x, W), top: pct(HUB.y, H) }} />
       {agents.map(({ kind, label: name, y }) => (
         <div key={name} className="swb-node swb-node-out" style={{ top: pct(y, H), left: pct(824, W) }}>
           <MarkTile kind={kind} />
