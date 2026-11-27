@@ -1,14 +1,15 @@
 'use client';
 
-import { Check, Globe } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import {
-  computerCommand, getStartedAgentIds, getStartedAgents, getStartedStorageKey, getStartedStyleId,
+  computerCommand, getStartedAgentIds, getStartedAgents, getStartedStorageKey, getStartedStyleId, museCompanionCommand,
   personalizePrompt, pipxCommand, readGetStartedSelection, runLocations, serverCommand, validSwbOrigin,
   type GetStartedAgent, type RunLocation,
 } from '@/lib/get-started';
 import { getStartedCopy } from '@/lib/get-started-copy';
 import { localize, type Locale } from '@/lib/i18n';
+import { ProviderMark } from './deploy-providers';
 import { MarkTile } from './mark-tile';
 import { CopyTextButton, PromptActions } from './prompt-actions';
 import styles from './get-started.module.css';
@@ -59,7 +60,7 @@ function replaceLocation({ run, agents }: View, address: string | null) {
 
 function Command({ text, labels }: { text: string; labels: { copyCommand: string; copied: string } }) {
   return (
-    <div className={styles.command} data-multiline={text.includes('\n')}>
+    <div className={styles.command} data-stacked={text.includes('\n') || text.length > 80}>
       <div className={styles.commandAction}>
         <CopyTextButton text={text} labels={{ copy: labels.copyCommand, copied: labels.copied }}
           className="swb-button swb-button-compact hover:bg-fd-muted" />
@@ -128,7 +129,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
 
   const tunnelLink = (
     <a className={styles.supportLink} href={`${selfHosting}#cloudflare-tunnel`}>
-      <Globe size={16} aria-hidden="true" />{labels.reachAnywhere}
+      <ProviderMark name="cloudflare" />{labels.reachAnywhere}
     </a>
   );
 
@@ -216,6 +217,15 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
                     <MarkTile kind={mark} className={styles.mark} />
                     {name}
                   </h3>
+                  {id === 'muse' && (
+                    <>
+                      <h4 className={styles.agentSubtitle}>{labels.muse.wake}</h4>
+                      <p className={styles.procedure}>{labels.muse.beforeCommand}</p>
+                      <Command text={museCompanionCommand} labels={labels} />
+                      <p className={styles.procedure}>{labels.muse.afterCommand}</p>
+                      <h4 className={styles.agentSubtitle}>{labels.muse.tools}</h4>
+                    </>
+                  )}
                   <div className={styles.prompt}>
                     <PromptActions text={text} labels={labels} targets={open} />
                     <pre tabIndex={0} lang="en"><code>{text}</code></pre>

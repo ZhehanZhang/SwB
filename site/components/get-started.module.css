@@ -110,7 +110,7 @@
   background: var(--color-fd-card);
 }
 
-.command[data-multiline='true'] .commandAction {
+.command[data-stacked='true'] .commandAction {
   position: static;
   justify-content: end;
   border-radius: .625rem .625rem 0 0;
@@ -132,7 +132,7 @@
   padding-right: 9rem;
 }
 
-.command[data-multiline='true'] pre {
+.command[data-stacked='true'] pre {
   padding-right: .75rem;
 }
 
@@ -286,6 +286,12 @@
   font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.agentSubtitle {
+  margin: 1rem 0 .5rem;
+  font-size: 1rem;
+  font-weight: 650;
 }
 
 .procedure {

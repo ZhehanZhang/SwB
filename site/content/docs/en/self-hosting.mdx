@@ -3,7 +3,7 @@ title: Self-hosting
 description: Run SwB on a server with Docker Compose and Cloudflare.
 ---
 
-import { DeployProviders } from '@/components/deploy-providers'
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## One-click deploy
 
@@ -37,7 +37,7 @@ Run `docker compose exec switchboard swb login-link` to get a sign-in link for `
 
 Signed-out requests to `/healthz` return two fields, `status` and `version`. Use an owner session or the owner key for full health details.
 
-## Cloudflare Tunnel [#cloudflare-tunnel]
+## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
 A Cloudflare Tunnel gives SwB a public HTTPS address. Cloudflare offers tunnels on its free plan.
 
@@ -91,8 +91,11 @@ Use one SwB instance with a persistent disk mounted at `/data`. See the [deploym
 
 ## Railway [#railway]
 
-The [Railway template definition](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts) runs one SwB service and mounts a 1 GB volume at `/data`.
-Deploy from the Railway marketplace after the template is published.
+Deploy from the [SwB template on Railway](https://railway.com/deploy/swb). Keep one replica. The template mounts a volume at `/data`.
+
+Use the Hobby plan for an always-on SwB. Hobby costs $5 a month and includes $5 of usage.
+
+The [Free plan](https://docs.railway.com/reference/pricing/free-trial) includes $1 of usage a month. That amount covers about 100 MB of RAM around the clock. A test SwB instance used about 107 MiB while idle. Free plan services stop when the $1 runs out.
 
 ## Fly.io [#fly]
 

@@ -1,14 +1,16 @@
 import { setup } from './setup';
-import { setupChoices } from './setup-picker';
+import { setupChoices, type SetupChoice } from './setup-picker';
 
 export const runLocations = ['local', 'server', 'cloud'] as const;
 export type RunLocation = (typeof runLocations)[number];
 
-const aliases = { dots: 'chatgpt-dots', 'capy-captain': 'capy', 'gemini-cli': 'gemini' } as const;
+const aliases: Partial<Record<SetupChoice, 'chatgpt-dots' | 'capy' | 'gemini'>> = {
+  dots: 'chatgpt-dots', 'capy-captain': 'capy', 'gemini-cli': 'gemini',
+};
 
 export const getStartedAgents = setupChoices.flatMap((choice) => {
   if (choice.id === 'companion') return [];
-  const id = aliases[choice.id as keyof typeof aliases] ?? choice.id;
+  const id = aliases[choice.id] ?? choice.id;
   const details = choice.id === 'claude'
     ? { open: ['claude'] as const, docs: '/docs/setup/claude' }
     : setup[choice.mark]!;
@@ -37,7 +39,7 @@ export function personalizePrompt(prompt: string, address: string | null) {
 }
 
 function parseSelection<Id extends string>(
-  search: string, ids: readonly Id[], replacements: Readonly<Record<string, string>>,
+  search: string, ids: readonly Id[], replacements: Readonly<Record<string, string | undefined>>,
 ): { run: RunLocation; agents: Id[] } {
   const params = new URLSearchParams(search);
   const run = params.get('run');
@@ -66,6 +68,7 @@ export function initialGetStartedScript() {
 
 export const computerCommand = 'uvx swb-one up';
 export const pipxCommand = 'pipx install swb-one\nswb up';
+export const museCompanionCommand = "uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse";
 export const serverCommand = String.raw`git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
 cd SwB
 (umask 077; cp .env.example .env)

@@ -5,6 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 const start = '/docs/get-started';
 const selfHosting = '/docs/self-hosting';
 const renderBlueprint = 'https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0';
+const railwayTemplate = 'https://railway.com/deploy/swb';
 const fallbackAgents = [
   'Claude Project', 'Claude', 'ChatGPT', 'ChatGPT dots', 'Muse', 'Grok', 'Grok Bot', 'Capy Captain',
   'Claude Code', 'Codex', 'Gemini CLI', 'Slack', 'Discord', 'Telegram', 'GitHub',
@@ -61,6 +62,7 @@ test('switches run locations and copies the release install commands', async ({ 
   await expect(run('local')).toBeHidden();
   await expect(run('server').getByRole('link', { name: 'Reach it from anywhere' }))
     .toHaveAttribute('href', `${selfHosting}#cloudflare-tunnel`);
+  await expect(run('server').locator('image[href="/marks/cloudflare-on-light.svg"]')).toBeVisible();
   await run('server').getByRole('button', { name: 'Copy command', exact: true }).click();
   const selfHostingSource = readFileSync(resolve(__dirname, '../../content/docs/en/self-hosting.mdx'), 'utf8');
   expect(await read()).toBe(selfHostingSource.split('```bash\n')[1].split('\n```')[0]);
@@ -71,6 +73,10 @@ test('switches run locations and copies the release install commands', async ({ 
   await expect(run('cloud').getByRole('link', { name: 'Fly.io Free with monthly allowance' }))
     .toHaveAttribute('href', `${selfHosting}#fly`);
   await expect(run('cloud').getByRole('link', { name: 'Render Paid plan' })).toHaveAttribute('href', renderBlueprint);
+  await expect(run('cloud').getByRole('link', { name: 'Railway Hobby plan' })).toHaveAttribute('href', railwayTemplate);
+  for (const provider of ['fly', 'render', 'railway']) {
+    await expect(run('cloud').locator(`image[href="/marks/${provider}-on-light.svg"]`)).toBeVisible();
+  }
   await expect(page).toHaveURL(/run=cloud$/);
 });
 
@@ -125,6 +131,21 @@ test('copies exact source prompt bytes for Claude and Codex', async ({ page, con
     await section.getByRole('button', { name: 'Copy prompt' }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sourcePrompt(source));
   }
+});
+
+test('recommends Muse gadget pairing before the connector and copies its command', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(`${start}?agents=muse`);
+  const section = agent(page, 'Muse');
+  await expect(section.getByRole('heading', { level: 4 })).toHaveText([
+    'Wake Muse with a gadget', 'Connect Muse to SwB tools',
+  ]);
+  await expect(section.getByText(/single-use code within ten minutes/)).toContainText('Add Device');
+  await expect(section.getByText(/single-use code within ten minutes/)).toContainText('Allow Bluetooth');
+  await section.getByRole('button', { name: 'Copy command' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse");
+  await expect(section.getByRole('link', { name: 'Full guide' })).toHaveAttribute('href', '/docs/setup/muse');
 });
 
 test('personalizes preview, open link and copy while the source prompt stays unchanged', async ({ page, context }) => {
@@ -195,7 +216,10 @@ test('Self-hosting keeps one-click command copy and deployment links', async ({ 
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto(selfHosting);
   await expect(page.getByRole('link', { name: 'Render Paid plan' })).toHaveAttribute('href', renderBlueprint);
-  await expect(page.getByRole('heading', { name: 'Cloudflare Tunnel' })).toHaveAttribute('id', 'cloudflare-tunnel');
+  await expect(page.getByRole('link', { name: 'Railway Hobby plan' })).toHaveAttribute('href', railwayTemplate);
+  const tunnelHeading = page.getByRole('heading', { name: 'Cloudflare Tunnel' });
+  await expect(tunnelHeading).toHaveAttribute('id', 'cloudflare-tunnel');
+  await expect(tunnelHeading.locator('image[href="/marks/cloudflare-on-light.svg"]')).toBeVisible();
   for (const block of await page.locator('figure.shiki').all()) {
     const copy = block.getByRole('button', { name: 'Copy Text' });
     await expect(copy).toBeVisible();

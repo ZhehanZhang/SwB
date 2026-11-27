@@ -3,7 +3,7 @@ title: 自托管
 description: 用 Docker Compose 和 Cloudflare 在服务器上运行 SwB。
 ---
 
-import { DeployProviders } from '@/components/deploy-providers'
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## 一键部署
 
@@ -37,7 +37,7 @@ docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 
 退出登录后，`/healthz` 只返回 `status` 和 `version` 两个字段。以所有者身份登录或使用所有者密钥，即可查看完整的运行状态。
 
-## Cloudflare Tunnel [#cloudflare-tunnel]
+## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
 Cloudflare 隧道为 SwB 提供公网 HTTPS 地址。Cloudflare 的免费套餐包含隧道服务。
 
@@ -91,8 +91,11 @@ docker compose --profile tunnel up -d
 
 ## Railway [#railway]
 
-[Railway 模板定义](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts)启动一个 SwB 服务，并在 `/data` 挂载一个 1 GB 存储卷。
-模板发布后，从 Railway 模板市场部署。
+使用 [Railway 上的 SwB 模板](https://railway.com/deploy/swb)部署。保留一个副本。模板会把存储卷挂载到 `/data`。
+
+使用 Hobby 套餐让 SwB 持续在线。Hobby 套餐每月 5 美元，包含 5 美元的使用额度。
+
+[免费套餐](https://docs.railway.com/reference/pricing/free-trial)每月提供 1 美元使用额度。这笔额度约可全天使用 100 MB 内存。测试中的 SwB 实例在空闲时占用约 107 MiB 内存。用完额度后，免费套餐的服务会停止。
 
 ## Fly.io [#fly]
 

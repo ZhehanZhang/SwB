@@ -17,6 +17,7 @@ type GetStartedCopy = {
   installGuide: string;
   selfHostingGuide: string;
   reachAnywhere: string;
+  muse: { wake: string; beforeCommand: string; afterCommand: string; tools: string };
   procedure: Record<string, string>;
 };
 
@@ -38,6 +39,12 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     installGuide: 'Install guide',
     selfHostingGuide: 'Self hosting guide',
     reachAnywhere: 'Reach it from anywhere',
+    muse: {
+      wake: 'Wake Muse with a gadget',
+      beforeCommand: 'Use a Mac or Linux computer with Bluetooth near your phone. Ask an agent with SwB owner access for a pairing code. Replace the example address with your SwB address.',
+      afterCommand: 'Enter the single-use code within ten minutes. Allow Bluetooth when your computer asks. Ask your agent to start Muse pairing. Select Add Device in the Muse app.',
+      tools: 'Connect Muse to SwB tools',
+    },
     procedure: {
       'claude-project': 'Paste the setup prompt into your project coordinator chat. Add an API trigger to the routine. Give its Fire URL to your agent. Save the routine token through the SwB claim link.',
       claude: 'Add SwB as a custom connector in Claude. Use your public SwB address ending in /mcp. Sign in to SwB. Approve access.',
@@ -73,6 +80,12 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     installGuide: '安装指南',
     selfHostingGuide: '自托管指南',
     reachAnywhere: '随处访问',
+    muse: {
+      wake: '用配对设备唤醒 Muse',
+      beforeCommand: '在手机附近使用配有蓝牙的 Mac 或 Linux 电脑。请拥有 SwB 所有者权限的智能体提供配对码。将命令中的示例地址换成你的 SwB 地址。',
+      afterCommand: '在十分钟内输入一次性配对码。电脑提示时允许蓝牙访问。请智能体开始 Muse 配对。在 Muse 应用中选择 Add Device。',
+      tools: '让 Muse 使用 SwB 工具',
+    },
     procedure: {
       'claude-project': '把设置提示词粘贴到项目协调者的会话中。为自动任务添加 API 触发器。把触发地址发给智能体。通过 SwB 领取链接保存自动任务的令牌。',
       claude: '在 Claude 中把 SwB 添加为自定义连接器。填入以 /mcp 结尾的 SwB 公网地址。登录 SwB。批准访问。',
@@ -108,6 +121,12 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     installGuide: '安裝指南',
     selfHostingGuide: '自行代管指南',
     reachAnywhere: '隨處存取',
+    muse: {
+      wake: '用配對裝置喚醒 Muse',
+      beforeCommand: '在手機附近使用支援藍牙的 Mac 或 Linux 電腦。請具有 SwB 擁有者權限的代理提供配對碼。將指令中的範例位址換成你的 SwB 位址。',
+      afterCommand: '在十分鐘內輸入一次性配對碼。電腦提示時允許使用藍牙。請代理開始配對 Muse。在 Muse 應用程式中選擇 Add Device。',
+      tools: '讓 Muse 使用 SwB 工具',
+    },
     procedure: {
       'claude-project': '把設定提示詞貼到專案協調者的對話。替 routine 加上 API 觸發條件。將觸發網址交給代理。透過 SwB 領取連結儲存 routine 權杖。',
       claude: '在 Claude 裡將 SwB 加入為自訂連接器。填入以 /mcp 結尾的 SwB 公開網址。登入 SwB。核准存取。',
