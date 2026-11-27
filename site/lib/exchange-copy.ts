@@ -1,98 +1,114 @@
 import type { Locale } from './i18n';
 
-export type Party = 'claude' | 'grok-bot' | 'capy' | 'dots' | 'muse';
-type Task = { ask: string; reply: string };
-type SlackLine = ['you' | Party, string, string?];
+export const exchangeCopy = {
+  en: { title: 'Agents work together', you: 'You' },
+  'zh-Hans': { title: '智能体协同工作', you: '你' },
+  'zh-Hant': { title: '代理協同工作', you: '你' },
+} satisfies Record<Locale, { title: string; you: string }>;
 
-type Copy = {
-  title: string;
-  modes: { agents: string; slack: string };
-  from: string;
-  to: string;
-  you: string;
-  names: Record<Party, string>;
-  ask: (name: string, task: string) => string;
-  sent: (name: string) => string;
-  tasks: Record<Party, Task>;
-  slack: SlackLine[];
+export const agentNames = {
+  claude: 'Claude',
+  'grok-bot': 'Grok Bot',
+  capy: 'Capy',
+  muse: 'Muse',
 };
 
-const names: Record<Party, string> = { claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Captain', dots: 'Dot', muse: 'Muse' };
+type Message = [speaker: keyof typeof agentNames | 'you', text: Record<Locale, string>];
 
-export const exchangeCopy: Record<Locale, Copy> = {
-  en: {
-    title: 'Ask one agent to work with another',
-    modes: { agents: 'Agent to agent', slack: 'Slack bot' },
-    from: 'Who starts',
-    to: 'Who they ask',
-    you: 'You',
-    names,
-    ask: (name, task) => `Ask ${name} to ${task}.`,
-    sent: (name) => `Sent to ${name} through SwB.`,
-    tasks: {
-      claude: { ask: 'draft the release notes from the merged PRs', reply: 'The draft is in the Launch project.' },
-      'grok-bot': { ask: "check today's posts about the launch", reply: 'I found 14 posts. Most ask about Docker setup.' },
-      capy: { ask: 'open a PR with the release notes', reply: 'PR 42 is open with the notes.' },
-      dots: { ask: "sum up this week's feedback", reply: 'Setup speed and Muse pairing come up most.' },
-      muse: { ask: 'remind me about the launch at 5 pm', reply: 'I set a reminder for 5 pm.' },
-    },
-    slack: [
-      ['you', '@SwB claude draft the release notes'],
-      ['claude', 'The draft is in the Launch project.'],
-      ['you', "@SwB grok-bot check today's launch posts"],
-      ['grok-bot', 'I found 14 posts. Most ask about Docker setup.'],
-      ['you', '@SwB atlas open the release PR'],
-      ['capy', 'PR 42 is open with the notes.', 'Atlas'],
+export const exchangeScenes: { app: keyof typeof agentNames | 'slack'; messages: Message[] }[] = [
+  {
+    app: 'claude',
+    messages: [
+      ['claude', {
+        en: 'Grok Bot, check the replies to today’s release post.',
+        'zh-Hans': 'Grok Bot，看看今天发布公告下的回复。',
+        'zh-Hant': 'Grok Bot，看看今天版本公告下的留言。',
+      }],
+      ['grok-bot', {
+        en: 'Readers asked how to start SwB with Docker.',
+        'zh-Hans': '有读者问怎么用 Docker 启动 SwB。',
+        'zh-Hant': '有讀者想知道怎麼用 Docker 啟動 SwB。',
+      }],
+      ['claude', {
+        en: 'I will add the Docker command to the release notes.',
+        'zh-Hans': '我把 Docker 启动命令补到发布说明里。',
+        'zh-Hant': '我會把 Docker 啟動指令加到版本說明裡。',
+      }],
     ],
   },
-  'zh-Hans': {
-    title: '让一个智能体请另一个智能体帮忙',
-    modes: { agents: '智能体之间', slack: 'Slack 机器人' },
-    from: '谁先开始',
-    to: '交给谁',
-    you: '你',
-    names,
-    ask: (name, task) => `请 ${name}${task}。`,
-    sent: (name) => `已通过 SwB 发给 ${name}。`,
-    tasks: {
-      claude: { ask: '根据已合并的 PR 起草发布说明', reply: '草稿已存入 Launch 项目。' },
-      'grok-bot': { ask: '查看今天关于发布的帖子', reply: '我找到 14 条帖子，大多在问 Docker 设置。' },
-      capy: { ask: '开一个包含发布说明的 PR', reply: 'PR 42 已开启，包含发布说明。' },
-      dots: { ask: '总结本周的反馈', reply: '提到最多的是设置速度和 Muse 配对。' },
-      muse: { ask: '下午 5 点提醒我发布的事', reply: '我已设好下午 5 点的提醒。' },
-    },
-    slack: [
-      ['you', '@SwB claude 起草发布说明'],
-      ['claude', '草稿已存入 Launch 项目。'],
-      ['you', '@SwB grok-bot 查看今天关于发布的帖子'],
-      ['grok-bot', '我找到 14 条帖子，大多在问 Docker 设置。'],
-      ['you', '@SwB atlas 开发布 PR'],
-      ['capy', 'PR 42 已开启，包含发布说明。', 'Atlas'],
+  {
+    app: 'muse',
+    messages: [
+      ['muse', {
+        en: 'Grok Bot, find an example for today’s talk.',
+        'zh-Hans': 'Grok Bot，给今天的演讲找个例子。',
+        'zh-Hant': 'Grok Bot，幫今天的演講找個例子。',
+      }],
+      ['grok-bot', {
+        en: 'A Slack bot can post as each agent.',
+        'zh-Hans': '一个 Slack 机器人可以用不同智能体的身份发消息。',
+        'zh-Hant': '同一個 Slack 機器人可以用各個代理的身分發訊息。',
+      }],
+      ['muse', {
+        en: 'I will use that example in the talk.',
+        'zh-Hans': '演讲就用这个例子。',
+        'zh-Hant': '我會在演講裡用這個例子。',
+      }],
     ],
   },
-  'zh-Hant': {
-    title: '請一個代理找另一個代理幫忙',
-    modes: { agents: '代理之間', slack: 'Slack 機器人' },
-    from: '誰先開始',
-    to: '交給誰',
-    you: '你',
-    names,
-    ask: (name, task) => `請 ${name}${task}。`,
-    sent: (name) => `已透過 SwB 傳給 ${name}。`,
-    tasks: {
-      claude: { ask: '根據已合併的 PR 起草版本說明', reply: '草稿已存入 Launch 專案。' },
-      'grok-bot': { ask: '查看今天關於發布的貼文', reply: '我找到 14 則貼文，多數在問 Docker 設定。' },
-      capy: { ask: '開一個包含版本說明的 PR', reply: 'PR 42 已開啟，包含版本說明。' },
-      dots: { ask: '總結本週的意見回饋', reply: '最常提到的是設定速度與 Muse 配對。' },
-      muse: { ask: '下午 5 點提醒我發布的事', reply: '我已設好下午 5 點的提醒。' },
-    },
-    slack: [
-      ['you', '@SwB claude 起草版本說明'],
-      ['claude', '草稿已存入 Launch 專案。'],
-      ['you', '@SwB grok-bot 查看今天關於發布的貼文'],
-      ['grok-bot', '我找到 14 則貼文，多數在問 Docker 設定。'],
-      ['you', '@SwB atlas 開版本 PR'],
-      ['capy', 'PR 42 已開啟，包含版本說明。', 'Atlas'],
+  {
+    app: 'grok-bot',
+    messages: [
+      ['grok-bot', {
+        en: 'Claude, draft the release notes.',
+        'zh-Hans': 'Claude，起草发布说明。',
+        'zh-Hant': 'Claude，先寫一份版本說明。',
+      }],
+      ['grok-bot', {
+        en: 'Capy, run the tests.',
+        'zh-Hans': 'Capy，运行测试。',
+        'zh-Hant': 'Capy，請執行測試。',
+      }],
+      ['claude', {
+        en: 'The draft is ready.',
+        'zh-Hans': '草稿写好了。',
+        'zh-Hant': '初稿寫好了。',
+      }],
+      ['capy', {
+        en: 'All tests passed.',
+        'zh-Hans': '测试全部通过。',
+        'zh-Hant': '所有測試都通過了。',
+      }],
+      ['grok-bot', {
+        en: 'I will send the release update.',
+        'zh-Hans': '我来发一下发布进展。',
+        'zh-Hant': '我會發訊息更新發布進度。',
+      }],
     ],
   },
-};
+  {
+    app: 'slack',
+    messages: [
+      ['you', {
+        en: '@SwB, ask the agents for a release update.',
+        'zh-Hans': '@SwB，问问各个智能体，发布进展如何？',
+        'zh-Hant': '@SwB，請各個代理回報發布進度。',
+      }],
+      ['claude', {
+        en: 'The release notes are ready.',
+        'zh-Hans': '发布说明写好了。',
+        'zh-Hant': '版本說明已經寫好。',
+      }],
+      ['grok-bot', {
+        en: 'I added the Docker command to the announcement.',
+        'zh-Hans': '公告里已补上 Docker 启动命令。',
+        'zh-Hant': '我把 Docker 啟動指令加進公告了。',
+      }],
+      ['capy', {
+        en: 'I opened pull request 42.',
+        'zh-Hans': '我发起了 PR 42。',
+        'zh-Hant': '我開了 PR 42。',
+      }],
+    ],
+  },
+];
