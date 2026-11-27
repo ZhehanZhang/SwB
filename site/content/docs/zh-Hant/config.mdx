@@ -142,6 +142,8 @@ routes:
 | `visibility.defaults.target` | 傳送目標的預設規則 |
 | `visibility.resources` | 針對指定資源設定規則，例如 `channel:home/#agents`。這些規則優先於該類型的預設規則 |
 
+在 Slack 中，`channel:home/#agents` 是一條頻道規則。在 GitHub 中，開放 `channel:github/acme/app` 和 `target:beta` 後，外部使用者就能存取 `agent:beta`。詳情請參閱[頻道可見度](/zh-Hant/docs/channel-modes#允許外部-github-使用者存取)。
+
 用 `private` 將存取權限限於擁有者及其代理。用 `shared` 開放存取。填入使用者 ID 或 `workspace:home` 這類項目，即可指定共用對象。透過 `visibility_set` 所做的變更優先於此檔。
 
 ## MCP

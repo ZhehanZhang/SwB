@@ -63,6 +63,11 @@ blocks:
 | `blocks.github.spaces` | 共用设置的仓库组。用 `acme/app` 这样的名称可选中该仓库 |
 | `blocks.github.spaces.*.repo` | `owner/repo` 格式的仓库名称 |
 | `blocks.github.spaces.*.mode` | 这个空间内各仓库的默认[频道模式](/zh-Hans/docs/channel-modes) |
+| `blocks.github.spaces.*.mode.target` | 模式设置中的目标，填写 `agent:beta` 这样的地址 |
 | `blocks.github.spaces.*.project` | 此空间的事件默认归入的 SwB 项目 |
 
-使用[频道模式](/zh-Hans/docs/channel-modes)，可通过项目路由唤醒智能体。
+调用 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`，将智能体绑定到仓库。使用 `mode="assist"` 可切换到协助模式。请从 `targets` 返回的列表中选择目标。关联项目的路由是备用选项。
+
+要接收外部用户的事件，请开放 `channel:github/acme/app` 和 `target:beta`。详情见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-用户访问)。
+
+观察模式按 `modes.digest_minutes` 的间隔将摘要送入目标邮箱。累积到 50 个事件时，SwB 提前发送摘要。查看方法见[观察摘要](/zh-Hans/docs/channel-modes#查看观察摘要)。

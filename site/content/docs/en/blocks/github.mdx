@@ -63,6 +63,11 @@ If Cloudflare Access protects your host, let `/github/webhook` through. The GitH
 | `blocks.github.spaces` | Named sets of repositories that share settings. A name such as `acme/app` selects that repository |
 | `blocks.github.spaces.*.repo` | Repository name in `owner/repo` form |
 | `blocks.github.spaces.*.mode` | Default [channel mode](/docs/channel-modes) for the repositories in this space |
+| `blocks.github.spaces.*.mode.target` | Target in the mode settings. Choose an address such as `agent:beta` |
 | `blocks.github.spaces.*.project` | Default SwB project for events from this space |
 
-Use [channel modes](/docs/channel-modes) to wake an agent through a project route.
+Bind an agent to a repository with `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`. Use `mode="assist"` for assist mode. Choose a target from `targets`. The linked project route is the fallback.
+
+For outside senders, grant access to both `channel:github/acme/app` and `target:beta`. See [channel visibility](/docs/channel-modes#allow-outside-github-senders) for the access rules.
+
+Watch puts a digest in the target mailbox at the interval set by `modes.digest_minutes` or at 50 events. See [Watch digests](/docs/channel-modes#read-a-watch-digest) for where to read them.

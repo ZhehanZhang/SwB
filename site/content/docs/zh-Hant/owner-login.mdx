@@ -88,10 +88,13 @@ SwB 拒絕[配對碼](/zh-Hant/docs/connect#用配對碼連接)時，`/connect` 
 
 ## 登入錯誤
 
+瀏覽器登入失敗時，SwB 會在 **Audit** 中記下原因。設定碼與權杖保持私密。部分錯誤會限制重複記錄的次數。
+
 | 錯誤 | 含義 |
 | - | - |
 | `link_used` | 已有人透過這個連結登入。 |
-| `link_expired` | 連結已過期或已失效。 |
+| `link_expired` | 連結已過期。 |
+| `link_invalid` | SwB 拒絕了這個連結。 |
 | `setup_failed` | 設定碼的格式有誤，或與 `SWB_SETUP_CODE` 的值有差異。 |
 | `setup_closed` | 設定碼登入已關閉。請改用其他登入方式。 |
 | `passkey_failed` | 通行金鑰設定或驗證失敗。 |
