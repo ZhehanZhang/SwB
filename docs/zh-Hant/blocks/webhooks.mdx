@@ -129,7 +129,7 @@ SwB 依 [Standard Webhooks 規格](https://www.standardwebhooks.com/) 為訊息�
 | `410` | 擁有者已撤銷這個 Webhook |
 | `413` | 請求內容超過大小上限 |
 | `429` | 請求次數達到上限。`Retry-After` 提供等待秒數 |
-| `503` | Webhook 正在等待儲存金鑰 |
+| `503` | Webhook 正在等待儲存金鑰，或已儲存的金鑰格式有誤 |
 
 ## 設定與限制
 
@@ -148,10 +148,10 @@ SwB 會依收到的原始內容核對簽章。重送同一筆有效請求稱為�
 | 項目 | 限制 |
 | - | - |
 | 請求內容大小 | 預設為 256 KiB。`blocks.webhook.max_body_kb` 可設為 1 至 1024 |
-| 同一個 Webhook 中每個用戶端 IP 位址的請求次數 | 每分鐘 60 次 |
-| 同一個 Webhook 通過驗證的請求總數 | 每 10 分鐘 600 次 |
-| 每個用戶端 IP 位址的位址錯誤和驗證失敗次數 | 每 10 分鐘 20 次 |
-| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重播檢查期限 | 24 小時 |
+| 同一個 Webhook 通過驗證的新事件總數 | 每 10 分鐘 600 次 |
+| 同一個 Webhook 中每個用戶端 IP 位址的驗證失敗次數 | 每 10 分鐘 20 次。通過驗證的請求一律可以接收 |
+| 每個用戶端 IP 位址存取錯誤位址的次數 | 每 10 分鐘 20 次 |
+| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重播檢查期限 | 30 天 |
 | Stripe 和 Standard Webhooks 的時間容許值 | 預設 300 秒 |
 | Linear 的時間容許值 | 預設 60 秒 |
 | Stripe、Linear 和 Standard Webhooks 的自訂時間容許值 | 將 `tolerance_s` 設為 1 至 3600 秒 |

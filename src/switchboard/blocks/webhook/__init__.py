@@ -22,9 +22,10 @@ import json
 import logging
 import re
 import secrets
+import sqlite3
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 from starlette.background import BackgroundTask
@@ -33,7 +34,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from ...auth import Principal
-from ...claims import Field, valid_webhook_url
+from ...claims import ClaimInputError, Field, valid_webhook_url
 from ...config import ConfigError
 from ...guard import RateLimiter, client_ip
 from ...inbox import CONTEXT_NOTE
@@ -86,13 +87,13 @@ PAYLOAD_LIMIT = 4000
 FORM_FIELDS = 200
 DEFAULT_BODY_KB = 256
 MAX_BODY_KB = 1024
-SEEN_TTL_S = 86_400
+SEEN_TTL_S = 30 * 86_400
 MAX_GRACE_S = 7 * 86_400
 RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
 LIMITS = {
-    "webhook_ip": (60, 60.0),
-    "webhook_hook": (600, 600.0),
+    "webhook_unknown": (20, 600.0),
     "webhook_fail": (20, 600.0),
+    "webhook_hook": (600, 600.0),
 }
 PRESET_EVENT = {"stripe": ("type",), "standard": ("type",)}
 GENERIC_EVENT = ("type", "event", "event_type", "action")
@@ -143,6 +144,13 @@ def _text(value: Any) -> str:
     return "" if value is None else value if isinstance(value, str) else json.dumps(value)
 
 
+def _standard_secret(value: str) -> None:
+    try:
+        v.standard_key(value)
+    except v.VerifyError:
+        raise ClaimInputError("Enter the whsec_ secret exactly as the sender shows it") from None
+
+
 def _secret_names(hook_id: str) -> tuple[str, str, str]:
     base = "WEBHOOK_" + hook_id.removeprefix("wh_").upper()
     return f"{base}_SECRET", f"{base}_PREVIOUS", f"{base}_URL"
@@ -167,6 +175,13 @@ class WebhookBlock(Block):
         self.http: httpx.AsyncClient | None = None
         for statement in filter(str.strip, SCHEMA.split(";")):
             core.store.x(statement)
+        for row in core.store.q("SELECT id, direction, verify FROM webhooks WHERE revoked_at IS NULL"):
+            self._check_secret(dict(row))
+
+    def _check_secret(self, row: dict[str, Any]) -> None:
+        """Refuse a Standard Webhooks secret that can't decode on the claim page, before it can break deliveries."""
+        if row["direction"] == "out" or row["verify"] == "standard":
+            self.core.claims.register_name(_secret_names(row["id"])[0], _standard_secret)
 
     # Storage ------------------------------------------------------------------------------------
 
@@ -294,8 +309,9 @@ class WebhookBlock(Block):
         if direction == "out":
             if any(value is not None for value in (verify, to, project, header, prefix, encoding, tolerance_s, fields, template, event_field)):
                 raise BlockError("an outbound webhook takes only a name; its URL and signing secret go in through the link")
-            self.core.store.x("INSERT INTO webhooks(id, name, direction, verify, created_at, created_by) VALUES (?, ?, 'out', 'standard', ?, ?)",
-                              (hook_id, name, now, actor))
+            self._insert("INSERT INTO webhooks(id, name, direction, verify, created_at, created_by) VALUES (?, ?, 'out', 'standard', ?, ?)",
+                         (hook_id, name, now, actor), name)
+            self._check_secret({"id": hook_id, "direction": "out", "verify": "standard"})
             link = self.core.claims.mint_group(f"Webhook {name}", [Field(url_name, "Webhook URL", "url"),
                                                                     Field(current, "Signing secret", "webhook_secret")],
                                                self.core.base_url)
@@ -336,8 +352,9 @@ class WebhookBlock(Block):
                 project = self.core.projects.get(project).slug
             except ProjectError as exc:
                 raise BlockError(str(exc)) from None
-        self.core.store.x("INSERT INTO webhooks(id, name, direction, verify, settings, target, project, created_at, created_by) "
-                          "VALUES (?, ?, 'in', ?, ?, ?, ?, ?, ?)", (hook_id, name, verify, dumps(opts), to, project, now, actor))
+        self._insert("INSERT INTO webhooks(id, name, direction, verify, settings, target, project, created_at, created_by) "
+                     "VALUES (?, ?, 'in', ?, ?, ?, ?, ?, ?)", (hook_id, name, verify, dumps(opts), to, project, now, actor), name)
+        self._check_secret({"id": hook_id, "direction": "in", "verify": verify})
         channel = f"channel:{self.name}/{name}"
         if self.core.visibility.explicit(channel) is None:
             self.core.visibility.set(channel, "shared", actor, now)
@@ -350,6 +367,20 @@ class WebhookBlock(Block):
             steps.append(share)
         steps.append({"by": "you", "do": f"Call webhook_test with name {name} after the link is used."})
         return {**view, "next": steps}
+
+    def _insert(self, sql: str, args: tuple[Any, ...], name: str) -> None:
+        try:
+            self.core.store.x(sql, args)
+        except sqlite3.IntegrityError:
+            raise BlockError(f"webhook {name!r} exists; rotate or revoke it, or pick another name") from None
+
+    def _close_links(self, db: Any, names: tuple[str, ...]) -> None:
+        marks = ", ".join("?" for _ in names)
+        db.execute(f"DELETE FROM claim_links WHERE name IN ({marks})", names)
+        db.execute(f"""DELETE FROM claim_groups WHERE EXISTS (
+                         SELECT 1 FROM json_each(claim_groups.fields) AS field
+                         WHERE json_extract(field.value, '$.name') IN ({marks})
+                      )""", names)
 
     @staticmethod
     def _secret_step(verify: str) -> str:
@@ -391,6 +422,7 @@ class WebhookBlock(Block):
         self.core.store.x("UPDATE webhooks SET rotated_at = ?, previous_until = ? WHERE id = ?",
                           (now, now + grace_s if grace_s and old else None, row["id"]))
         call.note(target=row["name"], ref=row["id"])
+        self.core.store.tx(lambda db: self._close_links(db, (current, url_name)))
         if row["direction"] == "in":
             link = self.core.claims.mint(current, self.core.base_url, kind="webhook_secret", label=f"Webhook secret for {row['name']}")
             step = "Save the new secret here, then set it in the sender."
@@ -406,14 +438,17 @@ class WebhookBlock(Block):
         row = self._active(name)
         names = _secret_names(row["id"])
 
+        entry = f"workspace:{self.name}-{row['name']}"
+
         def revoke(db: Any) -> None:
             db.execute("UPDATE webhooks SET revoked_at = ? WHERE id = ?", (self.core.clock(), row["id"]))
             db.execute("DELETE FROM secrets WHERE name IN (?, ?, ?)", names)
-            db.execute("DELETE FROM claim_links WHERE name IN (?, ?, ?)", names)
-            db.execute("""DELETE FROM claim_groups WHERE EXISTS (
-                             SELECT 1 FROM json_each(claim_groups.fields) AS field
-                             WHERE json_extract(field.value, '$.name') IN (?, ?, ?)
-                          )""", names)
+            self._close_links(db, names)
+            db.execute("DELETE FROM visibility WHERE resource IN (?, ?)",
+                       (f"channel:{self.name}/{row['name']}", f"target:{self.name}-{row['name']}"))
+            for grant in db.execute("SELECT resource, value FROM visibility WHERE ',' || value || ',' LIKE ?", (f"%,{entry},%",)).fetchall():
+                kept = [item for item in grant["value"].split(",") if item != entry]
+                db.execute("UPDATE visibility SET value = ? WHERE resource = ?", (",".join(kept) or "private", grant["resource"]))
 
         self.core.store.tx(revoke)
         call.note(target=row["name"], ref=row["id"])
@@ -465,20 +500,17 @@ class WebhookBlock(Block):
     async def receive(self, request: Request) -> Response:
         ip = client_ip(request.scope)
         hook_id, path_secret = request.path_params["hook"], request.path_params.get("secret")
-        if (wait := self.limiter.blocked("webhook_fail", ip)) is not None:
-            return self._refuse(None, ip, "rate limit", 429, retry_after=wait)
         found = self.core.store.one("SELECT * FROM webhooks WHERE id = ?", (hook_id,)) if HOOK_ID_RE.fullmatch(hook_id) else None
         row = dict(found) if found is not None else None
-        if row is None or row["direction"] != "in":
-            self.limiter.hit("webhook_fail", ip)
+        if row is None or row["direction"] != "in" or row["revoked_at"]:
+            if (wait := self.limiter.blocked("webhook_unknown", ip)) is not None:
+                return self._refuse(None, ip, "rate limit", 429, retry_after=wait)
+            self.limiter.hit("webhook_unknown", ip)
+            if row is not None and row["revoked_at"]:
+                return self._refuse(row, ip, "revoked webhook", 410)
             return self._refuse(None, ip, "unknown webhook", 404)
-        if row["revoked_at"]:
-            self.limiter.hit("webhook_fail", ip)
-            return self._refuse(row, ip, "revoked webhook", 410)
-        for bucket, key in (("webhook_hook", row["id"]), ("webhook_ip", f"{row['id']}:{ip}")):
-            if (wait := self.limiter.blocked(bucket, key)) is not None:
-                return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
-        self.limiter.hit("webhook_ip", f"{row['id']}:{ip}")
+        if (wait := self.limiter.blocked("webhook_hook", row["id"])) is not None:
+            return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
         chunks, size = [], 0
         async for chunk in request.stream():
             size += len(chunk)
@@ -488,8 +520,11 @@ class WebhookBlock(Block):
         headers = {k.lower(): val for k, val in request.headers.items()}
         status, response, work = self._ingest(row, headers, b"".join(chunks), ip, path_secret)
         if status in (401, 404):
-            self.limiter.hit("webhook_fail", ip)
-        elif status == 200:
+            key = f"{row['id']}:{ip}"
+            if (wait := self.limiter.blocked("webhook_fail", key)) is not None:
+                return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
+            self.limiter.hit("webhook_fail", key)
+        elif work is not None:
             self.limiter.hit("webhook_hook", row["id"])
         return JSONResponse(response, status, background=BackgroundTask(self._dispatch, *work) if work else None)
 
@@ -504,6 +539,9 @@ class WebhookBlock(Block):
         try:
             verified = v.verify_any(row["verify"], opts, found, body, headers, self.core.clock(), path_secret=path_secret)
         except v.VerifyError as exc:
+            if exc.reason == "unusable secret":
+                self._refuse(row, ip, "secret unusable", 503)
+                return 503, {"error": "secret unusable"}, None
             status = 404 if exc.reason == "unknown webhook" else 401
             self._refuse(row, ip, exc.reason, status)
             return status, {"error": "unknown webhook" if status == 404 else "invalid signature"}, None
@@ -602,7 +640,7 @@ class WebhookBlock(Block):
             addr = await self.core.resolve_to(target)
         except (BlockError, CoreError, ValueError):
             return await note_context(None, "target is unavailable")
-        if addr.block == "agent" and addr.id not in self.core.known_agents():
+        if addr.block == self.name or (addr.block == "agent" and addr.id not in self.core.known_agents()):
             return await note_context(None, "target is unavailable")
         try:
             slugs = self.core.slug_map(await self.core.targets()) if addr.block != "agent" else {}
@@ -643,6 +681,8 @@ class WebhookBlock(Block):
             raise BlockError(f"webhook {row['name']!r} waits for its URL and signing secret; open the link from webhook_create")
         if not valid_webhook_url(url):
             raise BlockError(f"webhook {row['name']!r} has an invalid URL; save a public HTTPS URL through webhook_rotate")
+        if urlsplit(url).netloc.lower() == urlsplit(self.core.base_url).netloc.lower():
+            raise BlockError(f"webhook {row['name']!r} points at this SwB; choose another receiver through webhook_rotate")
         keys = [secret] + ([old] if row["previous_until"] and row["previous_until"] > self.core.clock()
                            and (old := self.core.secret(previous)) and old != secret else [])
         msg_id = "msg_" + secrets.token_hex(12)

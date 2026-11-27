@@ -131,7 +131,7 @@ Call `webhook_test` with the outbound webhook name to send a `swb.test` message.
 | `410` | The owner revoked the webhook |
 | `413` | The body exceeds the size limit |
 | `429` | The request limit applies. Use `Retry-After` to find the wait time in seconds |
-| `503` | The webhook is waiting for its secret |
+| `503` | The webhook is waiting for its secret, or the saved secret has the wrong format |
 
 ## Settings and limits
 
@@ -152,10 +152,10 @@ For methods that check the timestamp, tolerance is the maximum difference betwee
 | Setting | Limit |
 | - | - |
 | Request body | 256 KiB by default. Set `blocks.webhook.max_body_kb` to a whole number from 1 to 1024 |
-| Requests per webhook per client IP address | 60 per minute |
-| Verified requests per webhook across all addresses | 600 per 10 minutes |
-| Address and verification failures per client IP address | 20 per 10 minutes |
-| Replay window for Stripe, Linear, Sentry, Standard Webhooks and HMAC | 24 hours |
+| New verified events per webhook across all addresses | 600 per 10 minutes |
+| Verification failures per webhook per client IP address | 20 per 10 minutes. A verified request always passes |
+| Requests to wrong addresses per client IP address | 20 per 10 minutes |
+| Replay window for Stripe, Linear, Sentry, Standard Webhooks and HMAC | 30 days |
 | Timestamp tolerance for Stripe and Standard Webhooks | 300 seconds by default |
 | Timestamp tolerance for Linear | 60 seconds by default |
 | Custom timestamp tolerance for Stripe, Linear and Standard Webhooks | Set `tolerance_s` from 1 to 3600 seconds |

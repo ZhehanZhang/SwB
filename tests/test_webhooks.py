@@ -359,30 +359,29 @@ async def test_webhook_framing_keeps_external_fields_inside_and_delivery_id_exac
 
 
 @pytest.mark.parametrize("trusted", [False, True], ids=["untrusted-peer", "trusted-peer"])
-async def test_ip_rate_limit_uses_resolved_proxy_client(webhook, monkeypatch, trusted):
+async def test_failure_lockout_uses_resolved_proxy_client_and_never_blocks_verified_events(webhook, monkeypatch, trusted):
     clock = Clock()
-    limits = {**webhooks.LIMITS, "webhook_ip": (1, 10.0)}
-    monkeypatch.setattr(webhooks, "LIMITS", limits)
+    monkeypatch.setattr(webhooks, "LIMITS", {**webhooks.LIMITS, "webhook_fail": (1, 10.0)})
     async with webhook(clock=clock, trusted_proxies=["127.0.0.0/8"] if trusted else []) as (core, client):
         view, _ = await inbound(core, "bearer")
         path = hook_path(view)
 
-        async def post(address):
+        async def post(address, secret=NEXT_SECRET):
             return await client.post(path, content=RAW, headers={
-                "Authorization": f"Bearer {SECRET}", "X-Forwarded-For": f"192.0.2.100, {address}, 127.0.0.2",
+                "Authorization": f"Bearer {secret}", "X-Forwarded-For": f"192.0.2.100, {address}, 127.0.0.2",
                 "CF-Connecting-IP": "192.0.2.200",
             })
 
-        assert (await post("198.51.100.1")).status_code == 200
+        assert (await post("198.51.100.1")).status_code == 401
         second = await post("198.51.100.2")
-        assert second.status_code == (200 if trusted else 429)
+        assert second.status_code == (401 if trusted else 429)
         clock.t += 2.25
         blocked = await post("198.51.100.1")
         assert blocked.status_code == 429 and blocked.headers["Retry-After"] == "8"
-        [row] = core.audit.recent(action="webhook", outcome="refused")
-        assert (row["detail"], row["client"]) == ("rate limit", "198.51.100.1" if trusted else "127.0.0.1")
+        assert core.audit.recent(action="webhook", outcome="refused")[0]["client"] == ("198.51.100.1" if trusted else "127.0.0.1")
+        assert (await post("198.51.100.1", SECRET)).status_code == 200
         clock.t += 7.75
-        assert (await post("198.51.100.1")).status_code == 200
+        assert (await post("198.51.100.1")).status_code == 401
 
 
 async def test_hook_rate_limit_counts_verified_requests_across_clients(webhook, monkeypatch):
@@ -407,22 +406,84 @@ async def test_hook_rate_limit_counts_verified_requests_across_clients(webhook, 
         assert (await post(4, hook=other)).status_code == 200
 
 
-async def test_auth_failure_rate_limit_applies_across_hooks(webhook, monkeypatch):
+async def test_unknown_id_probes_lock_out_probes_only(webhook, monkeypatch):
+    monkeypatch.setattr(webhooks, "LIMITS", {**webhooks.LIMITS, "webhook_unknown": (2, 15.0)})
+    async with webhook() as (core, client):
+        view, _ = await inbound(core, "bearer")
+        for _ in range(2):
+            assert (await client.post("/hooks/wh_" + "0" * 32, content=RAW)).status_code == 404
+        limited = await client.post("/hooks/wh_" + "1" * 32, content=RAW)
+        assert limited.status_code == 429 and limited.headers["Retry-After"] == "15"
+        valid = await client.post(hook_path(view), content=RAW, headers={"Authorization": f"Bearer {SECRET}"})
+        assert valid.status_code == 200
+
+
+async def test_other_hook_failures_never_lock_out_a_hook(webhook, monkeypatch):
     monkeypatch.setattr(webhooks, "LIMITS", {**webhooks.LIMITS, "webhook_fail": (2, 15.0)})
-    clock = Clock()
-    async with webhook(clock=clock) as (core, client):
+    async with webhook() as (core, client):
         one, _ = await inbound(core, "bearer")
         two, _ = await inbound(core, "bearer", name="other")
-        for view in (one, two):
-            response = await client.post(hook_path(view), content=RAW, headers={"Authorization": f"Bearer {NEXT_SECRET}"})
-            assert response.status_code == 401
-        valid_headers = {"Authorization": f"Bearer {SECRET}"}
-        limited = await client.post(hook_path(two), content=RAW, headers=valid_headers)
-        assert limited.status_code == 429 and limited.headers["Retry-After"] == "15"
-        assert items(core) == []
-        assert core.audit.recent(action="webhook", outcome="refused")[0]["detail"] == "rate limit"
-        clock.t += 15
-        assert (await client.post(hook_path(two), content=RAW, headers=valid_headers)).status_code == 200
+        for _ in range(3):
+            await client.post(hook_path(one), content=RAW, headers={"Authorization": f"Bearer {NEXT_SECRET}"})
+        assert (await client.post(hook_path(two), content=RAW, headers={"Authorization": f"Bearer {NEXT_SECRET}"})).status_code == 401
+        assert (await client.post(hook_path(two), content=RAW, headers={"Authorization": f"Bearer {SECRET}"})).status_code == 200
+
+
+async def test_duplicates_leave_the_hook_budget_for_fresh_events(webhook, monkeypatch):
+    monkeypatch.setattr(webhooks, "LIMITS", {**webhooks.LIMITS, "webhook_hook": (2, 600.0)})
+    async with webhook() as (core, client):
+        view, _ = await inbound(core)
+        stamp = int(core.clock())
+        for _ in range(4):
+            assert (await client.post(hook_path(view), content=RAW, headers=stripe_headers(RAW, stamp))).status_code == 200
+        fresh = RAW.replace(EVENT_ID.encode(), b"evt_fresh")
+        response = await client.post(hook_path(view), content=fresh, headers=stripe_headers(fresh, stamp))
+        assert response.json() == {"ok": True}
+
+
+async def test_body_hash_replay_is_refused_after_a_day(webhook):
+    clock = Clock()
+    async with webhook(clock=clock) as (core, client):
+        view, _ = await inbound(core, "sentry")
+        headers = {"Sentry-Hook-Signature": hmac.digest(SECRET.encode(), RAW, "sha256").hex()}
+        assert (await client.post(hook_path(view), content=RAW, headers=headers)).json() == {"ok": True}
+        clock.t += 86_401
+        assert (await client.post(hook_path(view), content=RAW, headers=headers)).json() == {"ok": True, "duplicate": True}
+
+
+async def test_standard_claim_refuses_an_undecodable_secret(webhook):
+    async with webhook() as (core, _):
+        view, _ = await inbound(core, "standard", secret=None)
+        with pytest.raises(Exception, match="whsec_"):
+            await core.claims.submit(claim_code(view), "whsec_not*base64*at-all")
+
+
+async def test_revoke_removes_visibility_grants_for_the_name(webhook):
+    async with webhook(visibility="private") as (core, _):
+        view, _ = await inbound(core, "bearer", name="ops")
+        share = next(step for step in view["next"] if step.get("call"))["call"]["arguments"]
+        await core.set_visibility(share["resource"], share["visibility"], "owner")
+        assert "workspace:webhook-ops" in core.visibility.rule(share["resource"])
+        await action(core, "revoke", name="ops")
+        assert core.visibility.rule(share["resource"]) == "private"
+        assert core.visibility.explicit("channel:webhook/ops") is None
+
+
+async def test_rotate_closes_older_claim_links(webhook):
+    async with webhook() as (core, _):
+        await inbound(core)
+        first = await action(core, "rotate", name="payments")
+        second = await action(core, "rotate", name="payments")
+        with pytest.raises(Exception):
+            await core.claims.submit(claim_code(first), NEXT_SECRET)
+        await core.claims.submit(claim_code(second), NEXT_SECRET)
+
+
+async def test_outbound_refuses_this_swb_as_receiver(webhook):
+    async with webhook() as (core, _):
+        view, _ = await outbound(core, url=f"{BASE_URL}/hooks/wh_{'2' * 32}")
+        with pytest.raises(BlockError, match="points at this SwB"):
+            await core.send(OWNER, to=view["address"], task="Fixture message")
 
 
 async def test_outbound_signed_message_retries_5xx_with_same_delivery(webhook, monkeypatch):

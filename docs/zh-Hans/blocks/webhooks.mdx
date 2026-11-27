@@ -129,7 +129,7 @@ SwB 遵循 [Standard Webhooks 规范](https://www.standardwebhooks.com/)。接�
 | `410` | 所有者已撤销该 Webhook |
 | `413` | 请求正文超出大小上限 |
 | `429` | 请求次数达到上限。`Retry-After` 给出等待秒数 |
-| `503` | Webhook 正在等待保存密钥 |
+| `503` | Webhook 正在等待保存密钥，或已保存的密钥格式有误 |
 
 ## 设置与限制
 
@@ -148,10 +148,10 @@ SwB 用收到的原始正文核验签名。重放指再次发送同一条有效�
 | 项目 | 限制 |
 | - | - |
 | 请求正文大小 | 默认为 256 KiB。可将 `blocks.webhook.max_body_kb` 设为 1 至 1024 |
-| 同一个 Webhook 中每个客户端 IP 地址的请求次数 | 每分钟 60 次 |
-| 同一个 Webhook 通过验证的请求总数 | 每 10 分钟 600 次 |
-| 每个客户端 IP 地址的地址错误和验证失败次数 | 每 10 分钟 20 次 |
-| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放检查期限 | 24 小时 |
+| 同一个 Webhook 通过验证的新事件总数 | 每 10 分钟 600 次 |
+| 同一个 Webhook 中每个客户端 IP 地址的验证失败次数 | 每 10 分钟 20 次。通过验证的请求始终可以接收 |
+| 每个客户端 IP 地址访问错误地址的次数 | 每 10 分钟 20 次 |
+| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放检查期限 | 30 天 |
 | Stripe 和 Standard Webhooks 的时间偏差 | 默认 300 秒 |
 | Linear 的时间偏差 | 默认 60 秒 |
 | Stripe、Linear 和 Standard Webhooks 的自定义时间偏差 | 将 `tolerance_s` 设为 1 至 3600 秒 |
