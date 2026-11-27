@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 import yaml
 
 from conftest import PUBLIC, STATIC_KEY, base_config, call, payload
@@ -48,6 +49,23 @@ def test_connect_reports_missing_provider_credentials_only_in_next(make):
         result = payload(call(client, STATIC_KEY, "connect", {"what": provider}))
         assert result["next"][0]["by"] == "person" and result["next"][0]["link"]
         assert not any(word in step.lower() for word in ("missing", "not connected", "none") for step in result["done"])
+
+
+@pytest.mark.parametrize("has_owner", [False, True])
+def test_connect_completion_distinguishes_required_and_optional_steps(make, monkeypatch, has_owner):
+    owners = [222222] if has_owner else []
+    cfg = base_config(version=2, blocks={"mcp": {}, "telegram": {
+        "connect": False, "spaces": {"home": {"chats": [-1001111111111], "owner_ids": owners}},
+    }})
+    core, client = make(cfg, env={cli.OWNER_KEY: STATIC_KEY, "TELEGRAM_BOT_TOKEN": "fixture-bot-token"})
+    monkeypatch.setattr(core.blocks["telegram"], "connected", lambda: True)
+
+    result = payload(call(client, STATIC_KEY, "connect", {"what": "telegram"}))
+
+    assert result["done"]
+    assert [step.get("optional", False) for step in result["next"]] == ([True] if has_owner else [False, True])
+    assert result["complete"] is has_owner
+    assert (result.get("state") == "connected") is has_owner
 
 
 def test_github_setup_reports_mode_and_project_targets_separately_from_sinks(make):

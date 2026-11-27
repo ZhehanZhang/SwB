@@ -20,7 +20,7 @@ from .audit import iso
 from .blocks import BLOCKS, load
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
 from .modes import CHAT_DROP_ACTION, ChatDrop
-from .refusals import OWNER_NOTE_REQUIRED, SIGN_IN_FAILURES
+from .refusals import CSRF_AUDIT_PATHS, OWNER_NOTE_REQUIRED, SIGN_IN_FAILURES
 from .routes import route_audit_name
 from .targets import SLUG_RE
 from .visibility import show
@@ -29,8 +29,9 @@ _SQLITE_MAX = 2**63 - 1
 _ROUTE_DEFAULTS = ("model", "mode", "delivery")
 _ROUTE_KINDS = ("captain", "project", "thread", "routine")
 _REPO = re.compile(r"[\w.-]+/[\w.-]+")
-_AUTH_PATHS = ("/mcp", "/inbox/poll", "/inbox/events", "/register", "/authorize", "/token", "/connect/redeem", *SIGN_IN_FAILURES)
+_AUTH_PATHS = ("/mcp", "/inbox/poll", "/inbox/events", "/register", "/token", "/connect/redeem", *SIGN_IN_FAILURES, *CSRF_AUDIT_PATHS)
 _MEMORY_FIELDS = ("id", "scope", "namespace", "key", "title", "tags", "source", "created_at", "updated_at")
+_PROMPT_PACKAGE = "switchboard.prompts.setup"
 _PROMPT_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
 _SCOPE = rf"(?:general|project:{_PROJECT})"
@@ -147,7 +148,8 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
     recorded_detail = row["detail"]
     if action == "webhook" and recorded_detail in _WEBHOOK_DETAILS:
         detail = recorded_detail
-    elif action == "auth_failure" and recorded_detail in SIGN_IN_FAILURES.get(target, ()):
+    elif action == "auth_failure" and (recorded_detail in SIGN_IN_FAILURES.get(target, ())
+                                      or (recorded_detail == "csrf" and (not target or target in CSRF_AUDIT_PATHS))):
         detail = recorded_detail
     elif action == CHAT_DROP_ACTION and fields["outcome"] == "dropped" and recorded_detail in ChatDrop:
         detail = recorded_detail
@@ -542,12 +544,23 @@ async def memory(request: Request) -> JSONResponse:
                          "next_offset": result.get("next_offset"), "mirror": bool(core.memory.mirror_dir)})
 
 
-async def prompts(request: Request) -> Response:
+async def prompts(request: Request) -> JSONResponse:
+    try:
+        names = sorted(
+            path.name.removesuffix(".md") for path in files(_PROMPT_PACKAGE).iterdir()
+            if path.name.endswith(".md") and _PROMPT_NAME.fullmatch(path.name.removesuffix(".md")) and path.is_file()
+        )
+    except OSError:
+        return _error("prompts unavailable", 503)
+    return JSONResponse({"prompts": names})
+
+
+async def prompt(request: Request) -> Response:
     name = request.path_params["name"]
     if not _PROMPT_NAME.fullmatch(name):
         return _error("prompt not found", 404)
     try:
-        content = files("switchboard.prompts.setup").joinpath(f"{name}.md").read_bytes()
+        content = files(_PROMPT_PACKAGE).joinpath(f"{name}.md").read_bytes()
     except (FileNotFoundError, IsADirectoryError):
         return _error("prompt not found", 404)
     except OSError:
@@ -583,6 +596,7 @@ READ_ROUTES = [
     Route("/inbox", inbox, methods=["GET"]),
     Route("/conversations/{handle}", conversation, methods=["GET"]),
     Route("/memory", memory, methods=["GET"]),
-    Route("/prompts/{name}", prompts, methods=["GET"]),
+    Route("/prompts", prompts, methods=["GET"]),
+    Route("/prompts/{name}", prompt, methods=["GET"]),
     Route("/platforms", platforms, methods=["GET"]),
 ]

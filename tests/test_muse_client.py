@@ -74,6 +74,7 @@ def test_connect_muse_guides_the_person_until_muse_signs_in(make):
     out = payload(call(client, STATIC_KEY, "connect", args))
     assert out == {
         "what": "muse",
+        "complete": False,
         "guide": {"prompt": "setup-muse", "resource": "swb://setup/muse"},
         "done": [f"MCP URL: {PUBLIC}/mcp.", "OAuth sign-in: available."],
         "next": [{"by": "person", "do": (
@@ -85,7 +86,7 @@ def test_connect_muse_guides_the_person_until_muse_signs_in(make):
     tokens = sign_in(client, redirect=MUSE_CALLBACK)
     for caller in (STATIC_KEY, tokens["access_token"]):
         assert payload(call(client, caller, "connect", args)) == {
-            **out, "done": [*out["done"], "The client is signed in."], "next": [], "state": "connected",
+            **out, "done": [*out["done"], "The client is signed in."], "next": [], "state": "connected", "complete": True,
         }
 
 

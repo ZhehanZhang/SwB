@@ -2734,7 +2734,7 @@
       "name": "companion_revoke"
     },
     {
-      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Call connect again to check progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
+      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [
@@ -2783,11 +2783,12 @@
       "name": "connect_revoke"
     },
     {
-      "description": "Read the granted project's memory and links and your conversations in progress. General memory is included only when granted. The owner's sign-in includes the routed Captain's digest and crew activity.",
+      "description": "Read granted memory and your conversations in progress. Pass a project for its links or scopes to select memory. Paired keys default to their grants. The owner's sign-in includes the routed Captain's digest and crew activity.",
       "icon": null,
       "id": "tool:context_pack",
       "input_properties": [
-        "project"
+        "project",
+        "scopes"
       ],
       "kind": "tool",
       "label": "Session briefing",
