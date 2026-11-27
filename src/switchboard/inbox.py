@@ -179,11 +179,11 @@ class Inbox:
         r = self.store.one("SELECT cursor FROM inbox_cursors WHERE owner = ? AND handle = ?", (reader, handle or "*"))
         return r["cursor"] if r else 0
 
-    def _advance(self, reader: str, handle: str | None, cursor: int) -> None:
-        self.store.x(
+    def _advance(self, reader: str, cursors: dict[str, int]) -> None:
+        self.store.tx(lambda db: db.executemany(
             "INSERT INTO inbox_cursors(owner, handle, cursor) VALUES (?,?,?) ON CONFLICT(owner, handle) DO UPDATE SET cursor = MAX(cursor, excluded.cursor)",
-            (reader, handle or "*", cursor),
-        )
+            ((reader, handle, cursor) for handle, cursor in cursors.items()),
+        ))
 
     @staticmethod
     def _item(r: Any) -> dict[str, Any]:
@@ -195,15 +195,19 @@ class Inbox:
         return {**self._item(row), "owner": row["owner"]} if row is not None else None
 
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
-             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None,
-             include_replies: bool = False) -> dict[str, Any]:
+             limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None) -> dict[str, Any]:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
 
         owner None reads every caller's items (the Claude Code channel does this). Each reader keeps its own cursor,
         so the channel never moves the position wait and inbox read from.
         """
         reader = reader or owner or "*"
-        start = self._cursor(reader, handle) if since is None else since
+        position = f"conversation:{handle}" if handle else "*"
+        start = since
+        if start is None:
+            start = self._cursor(reader, position)
+            if handle and not start:
+                start = self._cursor(reader, handle)
         with_clause = ""
         where, args = ["id > ?"], [start]
         if owner:
@@ -213,19 +217,15 @@ class Inbox:
             where.append("id > COALESCE((SELECT c.cursor FROM inbox_cursors c WHERE c.owner = ? AND c.handle = inbox.handle), 0)")
             args.append(reader)
         if handle:
-            if include_replies:
-                with_clause = """WITH RECURSIVE linked(handle) AS (
-                    VALUES (?)
-                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.root') = l.handle
-                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.in_reply_to') = l.handle
-                    UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.forward_of') = l.handle
-                    UNION SELECT i.handle FROM linked l JOIN inbox i ON json_extract(i.data, '$.in_reply_to') = l.handle
-                ) """
-                args.insert(0, handle)
-                where.append("handle IN (SELECT handle FROM linked)")
-            else:
-                where.append("handle = ?")
-                args.append(handle)
+            with_clause = """WITH RECURSIVE linked(handle) AS (
+                VALUES (?)
+                UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.root') = l.handle
+                UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.in_reply_to') = l.handle
+                UNION SELECT h.handle FROM linked l JOIN handles h ON json_extract(h.meta, '$.forward_of') = l.handle
+                UNION SELECT i.handle FROM linked l JOIN inbox i ON json_extract(i.data, '$.in_reply_to') = l.handle
+            ) """
+            args.insert(0, handle)
+            where.append("handle IN (SELECT handle FROM linked)")
         if destination:
             where.append("destination = ?")
             args.append(destination)
@@ -235,7 +235,8 @@ class Inbox:
         rows = self.store.q(f"{with_clause}SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
         cursor = rows[-1]["id"] if rows else start
         if rows and advance:
-            self._advance(reader, handle, cursor)
+            cursors = {r["handle"]: r["id"] for r in rows} if handle else {}
+            self._advance(reader, {**cursors, position: cursor})
         return {
             "items": [self._item(r) for r in rows],
             "cursor": cursor,

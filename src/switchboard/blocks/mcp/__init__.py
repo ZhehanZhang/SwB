@@ -14,10 +14,10 @@ from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field, create_model
+from mcp.types import CallToolResult, InputRequiredResult, TextContent, ToolAnnotations
+from pydantic import BaseModel, Field, ValidationError, create_model
 from starlette.routing import BaseRoute, Mount
 
 from ... import __version__
@@ -93,6 +93,25 @@ class LimitedServer(MCPServer):
     tools/call refuses any other."""
 
     modes: ChannelModes
+
+    async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None) -> CallToolResult | InputRequiredResult:
+        try:
+            return await super().call_tool(name, arguments, context)
+        except ToolError as exc:
+            if isinstance(exc, UnexpectedToolError) or not isinstance(error := exc.__cause__, ValidationError):
+                raise
+            properties = (self._tool_input_schema(name) or {}).get("properties", {})
+            missing, invalid = [], []
+            for issue in error.errors(include_input=False, include_context=False, include_url=False):
+                loc = issue["loc"]
+                if loc and loc[0] in properties:
+                    (missing if issue["type"] == "missing" else invalid).append(loc[0])
+            parts = []
+            if missing:
+                parts.append(f"Provide {', '.join(dict.fromkeys(missing))}.")
+            if invalid:
+                parts.append(f"Check {', '.join(dict.fromkeys(invalid))}.")
+            raise ToolError(" ".join(parts) or "Check the tool arguments.") from error
 
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
@@ -400,16 +419,13 @@ class MCPBlock(Block):
 
         # Routes ---------------------------------------------------------------------------
 
-        def routing_block(name: str | None) -> Block:
-            if name:
-                b = core.blocks.get(name)
-                if b is None or not b.supports_routes:
-                    raise ToolError(f"{name!r} is not a block that takes routes; those are {', '.join(n for n, x in core.blocks.items() if x.supports_routes) or 'none'}")
-                return b
-            routable = [b for b in core.blocks.values() if b.supports_routes]
-            if not routable:
-                raise ToolError("no configured block takes routes")
-            return routable[0]
+        def route_destinations(block: str | None) -> str | tuple[str, ...]:
+            names = core.route_destinations()
+            if not block:
+                return names
+            if block not in names:
+                raise ToolError(f"Choose a routing destination from {', '.join(names)}.")
+            return block
 
         @mcp.tool(title="List routes", description="Where send goes without to, per agent and project. Resolution: agent+project, then project, then agent, then global.", annotations=READ)
         async def routes_list(ctx: Context) -> dict[str, Any]:
@@ -418,7 +434,7 @@ class MCPBlock(Block):
 
         @mcp.tool(
             title="Set a route",
-            description="Point an agent (claude, chatgpt, claude-code, or a key name), a project, both, or neither (global) at a target: an address like 'capy:captain:<code, id or name>', or the short forms 'captain:<x>', 'project:<Capy project id or code>' and 'thread:<jam_id>'. allow_override lets callers pass an explicit to. Audited.",
+            description="Route sends from an agent, a project, both, or all callers. Use agent:<name> for a mailbox or a block address such as capy:captain:<name>. For Capy, allow_override lets callers pass an explicit target. Audited.",
             annotations=WRITE_IDEMPOTENT,
         )
         async def routes_set(ctx: Context, target: str, project: str | None = None, agent: str | None = None, defaults: RouteDefaults | None = None,
@@ -430,29 +446,36 @@ class MCPBlock(Block):
                                             defaults=defaults.model_dump(exclude_none=True) if defaults else {}, allow_override=allow_override, note=note))
 
         def route_target(text: str) -> tuple[str, dict[str, Any]]:
-            head = (text or "").strip().partition(":")[0].lower()
-            b = core.blocks.get(head) if head in core.blocks else None
+            text = text.strip()
+            prefix, sep, rest = text.partition(":")
+            head = prefix.lower()
+            if head == "agent" and sep:
+                return "agent", {"agent": rest}
+            b = core.blocks.get(head)
             if b is not None:
-                return b.name, b.parse_route_target(text.strip()[len(head) + 1:])
+                route_destinations(b.name)
+                return b.name, b.parse_route_target(rest)
             owner = core._kind_owner(head) if head in LEGACY_KINDS else None
             if owner is not None:
                 b = core.blocks[owner]
-                return b.name, b.parse_route_target(text.strip())
-            b = routing_block(None)
+                return b.name, b.parse_route_target(text)
+            name = core.route_destinations()[0]
+            if name == "agent":
+                raise ToolError("Use agent:<name> for a mailbox or enable a block that takes routes.")
+            b = core.blocks[name]
             return b.name, b.parse_route_target(text)
 
-        @mcp.tool(title="Remove a route", description="Remove the route for exactly this agent/project pair (both empty: the global route). Audited.", annotations=DELETE)
+        @mcp.tool(title="Remove a route", description="Remove the route for this exact agent and project. Omit both for the global route. Pass block to select a destination when several match. Audited.", annotations=DELETE)
         async def routes_remove(ctx: Context, project: str | None = None, agent: str | None = None, block: str | None = None) -> dict[str, Any]:
             p = who(ctx)
             unrestricted(p, "change routes")
-            return sync(core.remove_route, p, destination=routing_block(block).name, agent=agent, project=project)
+            return sync(core.remove_route, p, destination=route_destinations(block), agent=agent, project=project)
 
-        @mcp.tool(title="Explain a route", description="Which route send would use for an agent (default: you) and project, and the levels checked.", annotations=READ)
+        @mcp.tool(title="Explain a route", description="Show the route that send would use for an agent and project. The agent defaults to you. Pass block to check one destination.", annotations=READ)
         async def routes_resolve(ctx: Context, project: str | None = None, agent: str | None = None, block: str | None = None) -> dict[str, Any]:
             p = who(ctx)
-            b = routing_block(block)
-            r, tried = core.routes.resolve(destination=b.name, agent=agent or p.source, project=project)
-            addr = b.route_address(r.target) if r else None
+            r, tried = core.routes.resolve(destination=route_destinations(block), agent=agent or p.source, project=project)
+            addr = core.address_for_route(r) if r else None
             return {"agent": agent or p.source, "project": project, "checked": tried, "route": r.as_dict() if r else None, "to": str(addr) if addr else None}
 
         @mcp.tool(title="Switchboard status", description="Who you are signed in as (your agent name for routes), your wait limits, the blocks and their levels, and what is configured or degraded.", annotations=READ)

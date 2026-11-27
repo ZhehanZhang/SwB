@@ -133,6 +133,19 @@ def test_dot_discovery_preserves_a_known_registrant_and_leaves_unknown_registran
         assert core.blocks["dots"].dot(DOT)["created_by"] == "Alex Rivera"
 
 
+@pytest.mark.parametrize("slack", [None, {}])
+def test_dots_warn_once_and_skip_rescan_without_a_slack_workspace(make, caplog, slack):
+    config = {"version": 2, "blocks": {"dots": {}}}
+    if slack is not None:
+        config["blocks"]["slack"] = slack
+    core, client = make(config, env={})
+    dots = core.blocks["dots"]
+    assert getattr(dots, "_task", None) is None
+    assert client.portal.call(dots.rescan) == client.portal.call(dots.rescan) == []
+    warnings = [r for r in caplog.records if r.name == "switchboard.blocks.dots"]
+    assert [(r.getMessage(), r.exc_info) for r in warnings] == [(dots.next_step(), None)]
+
+
 def test_dots_use_configured_mailboxes_without_slack(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump({"version": 2, "public_url": PUBLIC, "blocks": {"mcp": {}, "dots": {

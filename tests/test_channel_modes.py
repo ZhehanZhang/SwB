@@ -367,6 +367,45 @@ def test_mcp_override_is_owner_only_and_persists_until_inherit(make):
     assert len(core2.audit.recent(action="modes.set", outcome="ok")) == 2
 
 
+def test_status_shows_effective_channel_and_repo_rows_after_overrides(make):
+    cfg = config()
+    cfg["blocks"]["github"] = {"spaces": {"acme/app": {"mode": "assist"}}}
+    _, client = make(config=cfg)
+    status = payload(call(client, STATIC_KEY, "modes_status"))
+    assert [(row["block"], row["space"], row["channel"], row["mode"]) for row in status["spaces"]] == [
+        ("discord", "home", "", "off"), ("github", "acme/app", "acme/app", "assist"),
+    ]
+    payload(call(client, STATIC_KEY, "space_mode", {"block": "discord", "space": "home", "channel": DISCORD_CHANNEL, "mode": "work"}))
+    payload(call(client, STATIC_KEY, "space_mode", {"block": "github", "space": "acme/app", "channel": "acme/app", "mode": "watch"}))
+    status = payload(call(client, STATIC_KEY, "modes_status"))
+    assert [(row["block"], row["space"], row["channel"], row["mode"], row["source"]) for row in status["spaces"]] == [
+        ("discord", "home", DISCORD_CHANNEL, "work", "override"),
+        ("github", "acme/app", "acme/app", "watch", "override"),
+    ]
+
+
+@pytest.mark.parametrize(("block", "space", "channel"), [("discord", "home", DISCORD_CHANNEL), ("github", "acme/app", "acme/app")])
+def test_explicit_space_default_stays_editable_with_a_channel_override(make, block, space, channel):
+    cfg = config()
+    cfg["blocks"]["github"] = {"spaces": {"acme/app": {"mode": "assist"}}}
+    core, client = make(config=cfg)
+    args = {"block": block, "space": space}
+    payload(call(client, STATIC_KEY, "space_mode", {**args, "mode": "watch"}))
+    payload(call(client, STATIC_KEY, "space_mode", {**args, "channel": channel, "mode": "work"}))
+    status = payload(call(client, STATIC_KEY, "modes_status"))
+    assert [(row["channel"], row["name"], row["mode"], row["source"]) for row in status["spaces"] if row["block"] == block] == [
+        ("", f"{space} default", "watch", "override"), (channel, channel, "work", "override"),
+    ]
+
+    csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
+    cleared = client.post("/api/modes", headers={**OWNER, "Origin": PUBLIC, "X-CSRF-Token": csrf},
+                          json={**args, "channel": "", "mode": "inherit"})
+    assert cleared.status_code == 200
+    assert core.store.one("SELECT 1 FROM space_modes WHERE block = ? AND space = ? AND channel = ''", (block, space)) is None
+    status = payload(call(client, STATIC_KEY, "modes_status"))
+    assert [(row["channel"], row["mode"]) for row in status["spaces"] if row["block"] == block] == [(channel, "work")]
+
+
 def test_modes_api_requires_owner_session_and_csrf(make):
     cfg = config({"home": {"guild_id": GUILD, "mode": "watch", "channels": {DISCORD_CHANNEL: "assist"}}})
     core, client = make(config=cfg, env=default_env())

@@ -1,6 +1,7 @@
 import time
 
 import pytest
+from pydantic import BaseModel
 
 from switchboard.memory import Memory, MemoryError_
 from switchboard.projects import ProjectError, Projects
@@ -122,6 +123,26 @@ def test_memory_and_project_tools_over_mcp(make):
     assert payload(call(c, STATIC_KEY, "memory_search", {"query": "fts5", "project": "switchboard"}))["items"][0]["id"] == w["id"]
     assert payload(call(c, STATIC_KEY, "project_list", {"hint": "Switchboard"}))["matches"][0]["slug"] == "switchboard"
     assert payload(call(c, STATIC_KEY, "project_update", {"slug": "switchboard", "archived": True}))["archived"] is True
+
+
+def test_memory_write_reports_field_names_without_echoing_arguments(make):
+    _, client = make()
+    args = {"scope": "general", "title": "A note", "body": "private sample text"}
+    assert error_text(call(client, STATIC_KEY, "memory_write", args)) == "Provide namespace."
+    assert error_text(call(client, STATIC_KEY, "memory_write", {**args, "namespace": ["private sample text"]})) == "Check namespace."
+
+
+def test_validation_inside_memory_write_remains_a_tool_failure(make, monkeypatch):
+    class InternalRecord(BaseModel):
+        namespace: str
+
+    def fail(**kwargs):
+        InternalRecord.model_validate({"namespace": []})
+
+    core, client = make()
+    monkeypatch.setattr(core.memory, "write", fail)
+    args = {"scope": "general", "namespace": "notes", "title": "A note", "body": "sample text"}
+    assert error_text(call(client, STATIC_KEY, "memory_write", args)) == "Error executing tool memory_write"
 
 
 def test_mirror_debounces_bursts_and_follows_renames(tmp_path, store):

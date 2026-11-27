@@ -8,12 +8,21 @@ from test_api_read import get
 
 def test_board_routes_require_the_owner(make):
     _, client = make()
-    for path in ("/api/board", "/api/board/projects/test"):
+    for path in ("/api/board", "/api/board/projects/test", "/api/projects/test"):
         for headers in ({}, {"Authorization": f"Bearer {STATIC_KEY}"}):
             response = client.get(path, headers=headers)
             assert response.status_code == 401
             assert response.json() == {"error": "signed_out"}
             assert response.headers["cache-control"] == "no-store"
+
+
+def test_projects_detail_url_uses_the_existing_project_read_model(make):
+    core, client = make()
+    core.projects.create(slug="demo", name="Demo")
+    detail = get(client, "/projects/demo")
+    assert detail["project"]["slug"] == "demo" and detail["project"]["name"] == "Demo"
+    assert detail == get(client, "/board/projects/demo")
+    assert get(client, "/projects/missing", status=404) == {"error": "project not found"}
 
 
 def test_board_uses_project_scoped_placements_and_real_counts(make, capy):

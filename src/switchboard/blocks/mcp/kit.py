@@ -104,7 +104,7 @@ class Kit:
         got = await self.core.inbox.wait(owner=p.source, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s), project=project, destination=block)
         if handle:
             h = self.core.inbox.handle(handle)
-            h = h if h and h["owner"] == p.source else None
+            h = h if h and (h["owner"] == p.source or (h["destination"] == "mailbox" and h["ref"] == p.source)) else None
             got["handle_status"] = (h["status"] if h else "unknown") if (h is None or not h["open"]) else "following"
         if got["timed_out"]:
             got["next"] = "Nothing new yet. Tell the owner it is still working; call wait again or inbox later."

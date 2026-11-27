@@ -99,7 +99,7 @@ def test_telegram_connection_uses_seen_chats_and_actual_spaces(providers):
     assert client.get("/api/connections/telegram", headers=OWNER).json()["state"] == "connected"
 
 
-@pytest.mark.parametrize("platform", ["discord", "telegram", "slack"])
+@pytest.mark.parametrize("platform", ["discord", "telegram", "slack", "github"])
 def test_connection_routes_require_owner_and_list_unconfigured(make, platform):
     _, client = make(base_config(version=2, blocks={}))
     route = f"/api/connections/{platform}"
@@ -112,7 +112,26 @@ def test_connection_routes_require_owner_and_list_unconfigured(make, platform):
     assert client.get(f"{route}/avatar", headers=OWNER).status_code == 404
     csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
     assert client.post(route, headers={**OWNER, "origin": PUBLIC, "x-csrf-token": csrf}).status_code == 405
-    assert client.get("/api/connections/github", headers=OWNER).status_code == 404
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_github_connection_exposes_safe_webhook_status(make, configured):
+    secret, token = "test-signing-secret", "test-github-token"
+    env = {"GITHUB_TOKEN": token}
+    if configured:
+        env["GITHUB_WEBHOOK_SECRET"] = secret
+    core, client = make(base_config(version=2, blocks={
+        "repos": {"use": "github", "spaces": {"team": {"repo": "ACME/App"}}},
+    }), env=env)
+    core.projects.create(slug="demo", name="Demo", links={"repos": ["acme/other"]})
+    response = client.get("/api/connections/github", headers=OWNER)
+    assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
+    assert response.json() == {
+        "platform": "github", "block": "repos", "state": "connected" if configured else "disconnected",
+        "details": {"repositories": ["acme/app", "acme/other"], "credential": "pat", "dropped": 0, "refused": 0},
+    }
+    assert secret not in response.text and token not in response.text
+    assert client.get("/api/connections/github/avatar", headers=OWNER).status_code == 404
 
 
 def test_slack_connection_summary_uses_runtime_status(make):

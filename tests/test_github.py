@@ -11,14 +11,14 @@ import pytest
 import yaml
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from conftest import acall, arpc
+from conftest import Clock, acall, arpc, payload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from switchboard.app import create_app
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
-from switchboard.blocks.github import DELIVERY_TTL_S, _json, trim
+from switchboard.blocks.github import DELIVERY_TTL_S, REFUSAL_AUDIT_INTERVAL_S, _json, trim
 from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
 
@@ -89,11 +89,14 @@ async def test_signature_and_ping(github):
 
 @pytest.mark.parametrize("signature", [None, "sha256=nope", "sha256=" + "0" * 64, "sha1=" + "0" * 40, b"\xff"])
 async def test_invalid_signature(github, signature):
-    async with github() as (_, client):
+    async with github() as (core, client):
         headers = {"X-GitHub-Event": "ping"}
         if signature is not None:
             headers["X-Hub-Signature-256"] = signature
         assert (await client.post(PATH, content=b"{}", headers=headers)).status_code == 401
+        (row,) = core.audit.recent(action="webhook")
+        assert (row["outcome"], row["detail"], row["ref"], row["excerpt"]) == ("refused", "invalid signature", None, "")
+        assert core.blocks["github"].status()["dropped"] == 0
 
 
 async def test_no_secret(github):
@@ -102,6 +105,29 @@ async def test_no_secret(github):
         block = (await client.get("/healthz")).json()["blocks"]["github"]
         assert block["configured"] and not block["secret_present"] and not block["online"]
         assert block["credential_problem"] == "no GitHub credential: GitHub triage actions unavailable"
+
+
+async def test_webhook_refusal_audit_is_bounded_by_reason_and_window(github):
+    token = "example-owner-key-value-for-tests"
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "SWITCHBOARD_KEY_OWNER": token}
+    clock = Clock()
+    async with github(env=env, settings={"blocks": {"mcp": {}, "github": {}}}, clock=clock) as (core, client):
+        for peer in range(50):
+            response = await client.post(PATH, content=b"{}", headers={
+                "X-Hub-Signature-256": "sha256=bad", "CF-Connecting-IP": f"192.0.2.{peer + 1}",
+            })
+            assert response.status_code == 401
+        (row,) = core.audit.recent(action="webhook", outcome="refused")
+        assert row["detail"] == "invalid signature"
+        status = payload(await acall(client, token, "github_status"))
+        assert (status["refused"], status["dropped"]) == (50, 0)
+
+        assert (await client.post(PATH, content=b"bad JSON", headers=signed(b"bad JSON"))).status_code == 400
+        clock.t += REFUSAL_AUDIT_INTERVAL_S
+        assert (await client.post(PATH)).status_code == 401
+        assert [row["detail"] for row in core.audit.recent(action="webhook", outcome="refused")] == [
+            "invalid signature", "invalid JSON", "invalid signature",
+        ]
 
 
 async def test_unconfigured(github):
@@ -167,7 +193,8 @@ async def test_incomplete_check_dropped(github, event):
     async with github() as (core, client):
         assert (await send(client, event, **{event: {"status": "in_progress"}})).status_code == 200
         assert core.blocks["github"].status()["dropped"] == 1
-        assert core.audit.recent() == []
+        (row,) = core.audit.recent(action="webhook")
+        assert (row["outcome"], row["detail"]) == ("dropped", "not completed")
 
 
 async def test_drops_log_only_event_action_repo_and_reason(github, caplog):
@@ -208,7 +235,9 @@ async def test_routes_dedupe_and_audit(github):
                 assert (await send(client, event, delivery=event)).status_code == 200
             await drained(core)
             assert sorted(seen) == [("a", "both"), ("a", "exact"), ("b", "both"), ("b", "wildcard")]
-            (audit,) = core.audit.recent()
+            drops = core.audit.recent(action="webhook", outcome="dropped")
+            assert len(drops) == 5
+            audit = next(row for row in drops if row["ref"] == "unrouted")
             assert (audit["action"], audit["outcome"], audit["target"], audit["ref"]) == ("webhook", "dropped", "no/route", "unrouted")
             assert core.blocks["github"].status()["dropped"] == 5
             now += DELIVERY_TTL_S + 1
@@ -305,6 +334,22 @@ def github_config(mode, actions=None):
 
 def shared():
     return {"visibility": {"resources": {"channel:team/acme/app": "shared", "target:claude": "shared"}}}
+
+
+async def test_assist_without_target_records_drop_and_reports_it_in_status(github):
+    token = "example-owner-key-value-for-tests"
+    config = {"spaces": {"team": {"repo": "acme/app", "mode": "assist"}}}
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "SWITCHBOARD_KEY_OWNER": token}
+    async with github(config, env, settings={**shared(), "blocks": {"mcp": {}, "github": config}}) as (core, client):
+        for _ in range(2):
+            response = await send(client, sender={"id": 11, "type": "User"}, action="opened")
+            assert response.status_code == 200 and response.json() == {"ok": True}
+        (row,) = core.audit.recent(action="webhook")
+        assert (row["outcome"], row["target"], row["ref"], row["detail"], row["excerpt"]) == (
+            "dropped", "acme/app", "example-1", "assist target is missing", "",
+        )
+        assert core.inbox.head() == 0
+        assert payload(await acall(client, token, "github_status"))["dropped"] == 1
 
 
 @pytest.mark.parametrize("mode", ["off", "watch", "assist", "triage", "work"])

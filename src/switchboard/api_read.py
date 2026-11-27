@@ -417,7 +417,7 @@ async def conversation(request: Request) -> JSONResponse:
         return _error("conversation not found", 404)
     row = core.inbox.thread_root(row)
     handle = row["handle"]
-    out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False, include_replies=True)
+    out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False)
     items = []
     endpoints = core.inbox.first_endpoints([handle])
     first_sender = endpoints.get(handle, (None, None))[0]

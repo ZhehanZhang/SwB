@@ -50,3 +50,17 @@ async def test_wait_returns_early_and_times_out_cleanly(inbox):
     got = await inbox.wait(owner="claude", handle="h_a", timeout=5)
     assert [i["text"] for i in got["items"]] == ["hello"] and got["timed_out"] is False and loop.time() - t0 < 2
     await task
+
+
+async def test_filtered_read_preserves_unconsumed_root_and_child_items(inbox):
+    inbox.open_handle(handle="h_child", owner="claude", destination="mailbox", ref="beta", project=None, title=None, meta={"root": "h_a"})
+    await inbox.add("h_a", "reply", {"text": "root item outside the block filter"})
+    await inbox.add("h_child", "message", {"text": "consumed child item"})
+    await inbox.add("h_b", "reply", {"text": "unrelated item"})
+    await inbox.add("h_child", "message", {"text": "child item beyond the limit"})
+
+    filtered = inbox.read(owner="claude", handle="h_a", destination="mailbox", limit=1)
+    assert [i["text"] for i in filtered["items"]] == ["consumed child item"]
+    assert [i["text"] for i in inbox.read(owner="claude")["items"]] == [
+        "root item outside the block filter", "unrelated item", "child item beyond the limit",
+    ]

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import aiohttp
 import pytest
 
-from conftest import STATIC_KEY, Clock, base_config, call, default_env, payload, principal, sign_in
+from conftest import CAPTAIN, STATIC_KEY, Clock, base_config, call, default_env, error_text, payload, principal, sign_in
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
 from switchboard.core import CoreError
@@ -118,6 +118,22 @@ async def test_project_primary_named_and_configured_routes(amake):
         await core.send(Principal("capy", "test:capy", "key", scopes=("project:other",)),
                         to="lint", task="Out of scope.")
     assert len(block.http.requests) == 5
+
+
+def test_unqualified_route_tools_find_grok_past_capy(make):
+    cfg = config(lint=ROUTINE)
+    cfg["blocks"]["capy"] = {"default_route": {"captain": CAPTAIN}}
+    core, client = make(cfg)
+    core.projects.create(slug="demo", name="Demo")
+    args = {"project": "demo"}
+    route = payload(call(client, STATIC_KEY, "routes_set", {**args, "target": "grok-routine:routine:lint"}))
+    assert route in payload(call(client, STATIC_KEY, "routes_list"))["routes"]
+    assert "no such route" in error_text(call(client, STATIC_KEY, "routes_remove", {**args, "block": "capy"}))
+    result = payload(call(client, STATIC_KEY, "routes_resolve", args))
+    assert result["to"] == "grok-routine:routine:lint" and result["route"] == route and result["checked"] == ["agent+project", "project"]
+    assert payload(call(client, STATIC_KEY, "send", {**args, "task": "Check the build"}))["routine"] == "lint"
+    assert payload(call(client, STATIC_KEY, "routes_remove", args))["removed"] == route
+    assert payload(call(client, STATIC_KEY, "routes_resolve", args))["to"] == f"capy:captain:{CAPTAIN}"
 
 
 @pytest.mark.parametrize("auth,custom_header", [("key", "X-Routine-Key"), ("key", "authorization"),
