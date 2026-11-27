@@ -50,6 +50,7 @@ class WriteGate:
         force_approval: bool = False,
         *,
         thread_only: bool = False,
+        requester: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         cfg = self.core.config
         store = self.core.store
@@ -85,6 +86,7 @@ class WriteGate:
                 persona=persona_d,
                 key_id=key.id,
                 ttl_seconds=cfg.approvals.ttl_minutes * 60,
+                requester=requester,
             )
             store.audit(f"agent:{key.id}", "write_requested", workspace, identity, request_id=req["id"], action=action, params=params, persona=persona_d)
             try:

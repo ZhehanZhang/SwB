@@ -1,6 +1,6 @@
-# Slack app for workspace B (private): user token ONLY. No bot user, no bot scopes, no bot
-# events, no interactivity. It never joins or invites; every post appears as the owner.
-# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> pick workspace B.
+# Example Slack app for a user-only workspace. No bot user, bot scopes, bot events, or interactivity.
+# It never joins or invites; every post appears as the owner.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
 display_information:
   name: Switchboard (personal)
   description: Lets the owner's agents read on their behalf; writes need approval

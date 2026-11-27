@@ -1,8 +1,11 @@
+from importlib.metadata import version
+
 from conftest import STATIC_KEY, rpc
 
 CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack", "project_list", "project_create",
-        "project_update", "project_sync", "memory_move", "memory_promote", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status", "agent_send"}
-GENERIC = {"send", "reply", "wait", "inbox", "get_message", "status", "result", "cancel", "targets", "connect", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set"}
+        "project_update", "project_sync", "memory_move", "memory_promote", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status", "agent_send",
+        "modes_status", "space_mode"}
+GENERIC = {"send", "reply", "wait", "inbox", "get_message", "status", "result", "cancel", "targets", "connect", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set", "login_link"}
 CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}
 
 
@@ -35,9 +38,9 @@ def test_annotations_mark_reads_and_writes(make):
     _, c = make()
     t = tools(c)
     for name in ("memory_search", "memory_read", "memory_list", "capy_status", "capy_result", "capy_list", "capy_captain_digest", "context_pack",
-                 "switchboard_status", "routes_list", "routes_resolve", "capy_wait", "capy_inbox", "get_message"):
+                 "switchboard_status", "routes_list", "routes_resolve", "capy_wait", "capy_inbox", "get_message", "modes_status"):
         assert t[name]["annotations"]["readOnlyHint"] is True, name
-    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply", "routes_set", "routes_remove", "connect"):
+    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply", "routes_set", "routes_remove", "connect", "space_mode"):
         assert t[name]["annotations"]["readOnlyHint"] is False, name
     assert t["memory_delete"]["annotations"]["destructiveHint"] is True
 
@@ -46,3 +49,4 @@ def test_initialize_advertises_instructions(make):
     _, c = make()
     r = rpc(c, STATIC_KEY, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}).json()
     assert "capy_wait" in r["result"]["instructions"] and r["result"]["serverInfo"]["name"] == "switchboard"
+    assert r["result"]["serverInfo"]["version"] == version("swb-one")

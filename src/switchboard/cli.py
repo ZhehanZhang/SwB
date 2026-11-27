@@ -20,9 +20,13 @@ import yaml
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
+from . import __version__
+from .config import ConfigError
+from .deployment import OWNER_KEY, volume_owner_key
+
 CONFIG = Path("config/switchboard.yaml")
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
+DEFAULT_PORT = "8870"
 
 
 class CliError(ValueError):
@@ -76,7 +80,7 @@ def _init(base: Path, public_url: str | None, force: bool) -> None:
     _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
     _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
     start = "swb up" if base == Path.cwd() else f"swb up --dir {shlex.quote(str(base))}"
-    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}")
+    print(f"Config: {config_path}\nOwner key saved in {env_path}.\nNext: {start}, then {start.replace('swb up', 'swb login-link', 1)} to sign in.")
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -108,17 +112,7 @@ def _read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def _up(base: Path, env: dict[str, str]) -> None:
-    from .__main__ import main as server
-
-    for name, value in env.items():
-        os.environ.setdefault(name, value)
-    os.environ["SWITCHBOARD_CONFIG"] = str(base / CONFIG)
-    os.environ["SWITCHBOARD_DATA"] = str(base / "data")
-    server(["serve"])
-
-
-def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
+def _choices(groups: list[list[str]], *, kind: str = "") -> dict[str, str | bool]:
     choices: dict[str, str | bool] = {}
     for group in groups:
         for pair in group:
@@ -127,7 +121,7 @@ def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
                 raise CliError("--choose expects key=value pairs.")
             if key in choices:
                 raise CliError("--choose cannot repeat a key.")
-            if key in ("create_new", "primary"):
+            if key in ("create_new", "primary") or (key == "replace" and kind.strip().lower() == "muse"):
                 if value.lower() not in ("true", "false"):
                     raise CliError(f"--choose {key} expects true or false.")
                 choices[key] = value.lower() == "true"
@@ -158,12 +152,7 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
 
 
 def _claim(url: str, key: str, *, routine: bool) -> None:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", getpass.GetPassWarning)
-            token = getpass.getpass("Token: ")
-    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
-        raise CliError("Use a terminal with hidden input to enter the token.") from None
+    token = _hidden_input("Token: ")
     if not token.strip():
         raise CliError("No token entered.")
     try:
@@ -175,6 +164,15 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
     if not response.is_success:
         raise CliError(f"Switchboard did not save the token (HTTP {response.status_code}). Check the claim link and owner key.")
     print("Routine saved." if routine else "Token saved. Run swb connect again to check the next step.")
+
+
+def _hidden_input(prompt: str) -> str:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            return getpass.getpass(prompt)
+    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
+        raise CliError("Use a terminal with hidden input to enter the token.") from None
 
 
 async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -202,10 +200,21 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
 
 
 def _display(tool: str, payload: dict[str, Any]) -> str:
+    if tool == "login_link":
+        url = payload.get("url")
+        if not isinstance(url, str) or not url:
+            raise CliError("Switchboard did not return a sign-in link.")
+        return url
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
-        return "\n".join([f"Status: {payload.get('status', 'unknown')}", "Next steps:",
-                          *([f"  - {step}" for step in steps] or ["  None."])])
+        lines = [f"Status: {payload.get('status', 'unknown')}"]
+        if blocks := payload.get("block_setup"):
+            lines.append("Blocks:")
+            for name, block in blocks.items():
+                state = "on" if block["enabled"] else "off"
+                missing = ", ".join(block["missing_env"])
+                lines.append(f"  - {name}: {state}" + (f" (missing env: {missing})" if missing else ""))
+        return "\n".join([*lines, "Next steps:", *([f"  - {step}" for step in steps] or ["  None."])])
     lines = [str(payload.get("what", "Connect"))]
     if payload.get("state"):
         lines[0] += f": {payload['state']}"
@@ -228,43 +237,69 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="swb")
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="swb", epilog="Server tools: serve, export, log, config, blocks, targets (each accepts --help).")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="create a minimal config and a local owner key")
     init.add_argument("--public-url", help="optional public base URL")
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
-    up = commands.add_parser("up", help="run the Switchboard server")
+    up = commands.add_parser("up", help="run the SwB server")
+    up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
     connect.add_argument("what", help="connection kind, for example mcp-client")
     connect.add_argument("--choose", action="append", nargs="+", default=[], metavar="KEY=VALUE")
     status = commands.add_parser("status", help="show server status and next steps")
+    login_link = commands.add_parser("login-link", help="mint a one-time owner sign-in link")
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
-    for command in (init, up, connect, status, claim):
+    muse = commands.add_parser("muse-bridge", help="pair and run SwB as a Muse gadget on Linux")
+    muse.add_argument("--url", required=True, help="SwB base URL or MCP endpoint")
+    muse.add_argument("--setup", action="store_true", help="enter the bridge token and pair in the Muse app")
+    muse.add_argument("--pair-again", action="store_true", help="replace this gadget's Meta pairing (requires --setup)")
+    muse.add_argument("--state-dir", type=Path, default=Path.home() / ".config" / "swb" / "muse")
+    up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
+    for command in (init, connect, status, claim, login_link):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
-    for command in (connect, status, claim):
-        command.add_argument("--url", help="server base URL or MCP endpoint (default: http://127.0.0.1:8000/mcp)")
+    for command in (connect, status, claim, login_link):
+        command.add_argument("--url", help=f"server base URL or MCP endpoint (default: http://127.0.0.1:{DEFAULT_PORT}/mcp)")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        base = args.dir.resolve()
+        if args.command == "muse-bridge":
+            from .muse_gadget import run_gadget
+
+            url = _url(args.url).removesuffix("/mcp")
+            run_gadget(url, args.state_dir, setup=args.setup, pair_again=args.pair_again)
+            return
+        base = (args.dir or Path.cwd()).resolve()
         if args.command == "init":
             _init(base, args.public_url, args.force)
             return
         env = _read_env(base / ".env")
         if args.command == "up":
-            _up(base, env)
+            from .cli_up import run
+
+            run(base, env, args.tunnel, instance=args.dir is not None)
             return
         arguments = {}
         if args.command == "connect":
             arguments["what"] = args.what
-            if choose := _choices(args.choose):
+            if choose := _choices(args.choose, kind=args.what):
                 arguments["choose"] = choose
+        port = os.environ.get("PORT", env.get("PORT", DEFAULT_PORT))
+        local_url = f"http://127.0.0.1:{port}/mcp"
+        url = _url(args.url or local_url)
         key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
+        if not key and url == local_url:
+            key = volume_owner_key(os.environ)
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
-        port = os.environ.get("PORT", env.get("PORT", "8000"))
-        url = _url(args.url or f"http://127.0.0.1:{port}/mcp")
         request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")
         level = request_log.level
         try:
@@ -273,12 +308,12 @@ def main(argv: list[str] | None = None) -> None:
                 claim_url, routine = _claim_url(url, args.link)
                 _claim(claim_url, key, routine=routine)
                 return
-            tool = "connect" if args.command == "connect" else "switchboard_status"
+            tool = {"connect": "connect", "login-link": "login_link", "status": "switchboard_status"}[args.command]
             payload = asyncio.run(_call(url, key, tool, arguments))
         finally:
             request_log.setLevel(level)
         print(_display(tool, payload).replace(key, "[redacted]"))
-    except CliError as error:
+    except (CliError, ConfigError) as error:
         parser.exit(1, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(1, f"swb: couldn't read or write the instance files ({type(error).__name__}).\n")

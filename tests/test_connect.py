@@ -27,8 +27,9 @@ def test_connect_schema_unknown_and_disabled_blocks(make):
     assert tool["description"].startswith('When someone asks "how do I connect/set up/link X to switchboard?", call connect')
     assert set(tool["inputSchema"]["properties"]) == {"what", "project", "choose"}
     out = connect(client, "unknown")
-    assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "coding-agent", "github", "grok", "mcp-client", "slack"]
-    for kind in ("capy-captain", "claude-project", "slack", "github", "grok"):
+    assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "coding-agent", "discord", "github",
+                            "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
+    for kind in ("capy-captain", "claude-project", "slack", "github", "grok-bot", "muse"):
         [step] = connect(client, kind)["next"]
         assert step["by"] == "person" and "Enable" in step["do"] and "link" not in step
 
@@ -124,6 +125,14 @@ def test_block_status_and_token_setup(make):
         assert "present" in out["done"][0] and token not in json.dumps(out)
     assert "Slack workspace" in connect(client, "dots")["next"][0]["do"]
     assert "dots" in connect(client, "unrecognized")["kinds"]
+
+
+def test_slack_app_icon_is_a_manual_step_in_status(make):
+    _, client = make(config=base_config(version=2, blocks={"mcp": {}, "slack": {"app_icon": "switchboard.png"}}))
+    status = payload(call(client, STATIC_KEY, "switchboard_status"))
+    assert status["destinations"]["slack"]["manual_steps"] == [
+        "Upload switchboard.png as the app icon at api.slack.com/apps, Basic Information, Display Information",
+    ]
 
 
 def test_status_missing_oauth_and_missing_github_routes(make):

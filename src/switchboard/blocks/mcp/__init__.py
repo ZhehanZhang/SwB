@@ -20,8 +20,10 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field, create_model
 from starlette.routing import BaseRoute, Mount
 
+from ... import __version__
 from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
+from ...modes import ChannelModes
 from ...projects import ProjectError
 from ...routes import RouteError
 from ...targets import LEGACY_KINDS
@@ -35,14 +37,14 @@ if TYPE_CHECKING:
 PRINCIPAL_SCOPE = "switchboard.principal"
 TASK_MODE: contextvars.ContextVar[bool] = contextvars.ContextVar("switchboard_task_mode", default=False)
 
-CORE_INSTRUCTIONS = """Switchboard is the owner's shared workspace across his assistants and agents.
+CORE_INSTRUCTIONS = """Switchboard is a shared workspace for your assistants and agents.
 Memory lives in scopes: 'general' (the owner's profile, preferences, cross-project decisions) or 'project:<slug>'.
 Switchboard can't see which project you are in, so you decide the project: find it with project_list
 (hint: your project's name or a repo), then call context_pack with it at the start of a session.
 Write project facts to project:<slug> and pass project=<slug> too, so a slip lands nowhere. Write to general only for
 things that apply everywhere, after the owner agrees, with confirm_general=true. Reads cover the named project plus
 general; another project's memory needs scopes=[...] and is logged. memory_move and memory_promote fix a wrong scope.
-Search before asking the owner something he may already have said.
+Search before asking the owner something they may already have said.
 When someone asks how to connect, set up or link something to Switchboard, call connect and follow its next steps.
 To hand off work or message someone, use send: without to, the owner's route for you and the project decides; to can
 be a slug from targets(), an agent's mailbox (agent:claude) or an address <block>:<kind>:<id>. Every agent (claude,
@@ -65,7 +67,7 @@ DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHin
 Scope = Annotated[str, Field(description="Required: 'general' for the owner's cross-project memory, or 'project:<slug>'")]
 ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
 Namespace = Annotated[str, Field(description="Inside the scope: profile, decisions, notes, or e.g. notes/meetings; lowercase, up to 3 levels")]
-ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:acme', 'general']. Logged")]
+ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:example', 'general']. Logged")]
 
 
 class FileIn(BaseModel):
@@ -94,9 +96,13 @@ class LimitedServer(MCPServer):
     """An MCP server that holds a key to its tool allowlist (auth.key_tools): tools/list shows only those tools and
     tools/call refuses any other."""
 
+    modes: ChannelModes
+
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
         p = principal_of(getattr(ctx, "request", None))
+        if p is None or not p.is_unrestricted_owner:
+            out.tools = [t for t in out.tools if t.name != "login_link"]
         if p is not None and p.tools is not None:
             out.tools = [t for t in out.tools if t.name in p.tools]
         return out
@@ -106,6 +112,28 @@ class LimitedServer(MCPServer):
         if p is not None and p.tools is not None and params.name not in p.tools:
             return CallToolResult(content=[TextContent(type="text", text=f"the {p.source} key may call only {', '.join(p.tools) or 'no tools'}")],
                                   is_error=True)
+        if p is not None:
+            arguments = params.arguments or {}
+            ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
+                        if isinstance(arguments.get(k), str)), None)
+            tool = next((t for t in await self.list_tools() if t.name == params.name), None)
+            if tool is not None and not (tool.annotations and tool.annotations.read_only_hint):
+                action = params.name
+                if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
+                    action = "notify_owner"
+                elif action == "send" and arguments.get("forward"):
+                    action = "forward"
+                repo = None
+                for block in self.modes.core.blocks.values():
+                    if block.manifest.id == "github" and action.startswith(f"{block.name}_"):
+                        candidate = action.removeprefix(f"{block.name}_")
+                        if candidate in ("label", "comment", "open_issue", "link_duplicate", "reply", "notify_owner"):
+                            action = candidate
+                            repo = arguments.get("repo") if isinstance(arguments.get("repo"), str) else None
+                try:
+                    self.modes.check(p, ref, action, repo)
+                except PermissionError as e:
+                    return CallToolResult(content=[TextContent(type="text", text=str(e))], is_error=True)
         return await super()._handle_call_tool(ctx, params)
 
 
@@ -175,7 +203,8 @@ class MCPBlock(Block):
         core = self.core
         senders = [b for b in core.blocks.values() if b.verb("send") is not None]
         extensions = [self.events, TasksExtension(self)] if senders else [self.events]
-        mcp = LimitedServer(name="switchboard", instructions=self.instructions(), extensions=extensions)
+        mcp = LimitedServer(name="switchboard", version=__version__, instructions=self.instructions(), extensions=extensions)
+        mcp.modes = core.modes
         mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
@@ -196,8 +225,7 @@ class MCPBlock(Block):
                 raise ToolError(str(e)) from e
 
         def need(p: Principal, scope: str) -> None:
-            if not p.allows(scope):
-                raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes or ())}; {scope} is outside it")
+            sync(core.check_memory_scope, p, scope)
 
         def unrestricted(p: Principal, what: str) -> None:
             if p.scopes is not None and "*" not in p.scopes:
@@ -227,7 +255,21 @@ class MCPBlock(Block):
 
             try:
                 return await coro
-            except (CoreError, DestinationError, MemoryError_, ProjectError, RouteError) as e:
+            except (CoreError, DestinationError, MemoryError_, ProjectError, RouteError, PermissionError) as e:
+                raise ToolError(str(e)) from e
+
+        @mcp.tool(title="Channel modes", description="Read the modes of the channels and repositories you can see.", annotations=READ)
+        async def modes_status(ctx: Context) -> dict[str, Any]:
+            p = who(ctx)
+            await core.modes.refresh(p)
+            return core.modes.status(p)
+
+        @mcp.tool(title="Set a channel mode", description="Owner only. Set a space or channel override now, or use inherit to clear it.", annotations=WRITE)
+        async def space_mode(ctx: Context, block: str, space: str, mode: str, channel: str = "",
+                             actions: list[str] | None = None, project: str | None = None) -> dict[str, Any]:
+            try:
+                return core.modes.set(who(ctx), block, space, mode, channel, actions, project)
+            except (ValueError, PermissionError) as e:
                 raise ToolError(str(e)) from e
 
         # Memory and projects ------------------------------------------------------------------
@@ -294,30 +336,15 @@ class MCPBlock(Block):
 
         @mcp.tool(title="Delete a memory", description="Delete a memory by id when it is wrong or obsolete. History is kept server-side.", annotations=DELETE)
         async def memory_delete(ctx: Context, id: str) -> dict[str, Any]:
-            p = who(ctx)
-            need(p, sync(core.memory.scope_of, id))
-            return sync(core.memory.delete, source=p.source, id=id)
+            return sync(core.delete_memory, who(ctx), id)
 
         @mcp.tool(title="Move a memory to another project", description="Move an entry that landed in the wrong project to project:<slug>. Keeps its id and history. Audited. Use memory_promote to move it to general.", annotations=WRITE_IDEMPOTENT)
         async def memory_move(ctx: Context, id: str, to_scope: Annotated[str, Field(description="'project:<slug>'")]) -> dict[str, Any]:
-            p = who(ctx)
-            if (to_scope or "").strip().lower() == GENERAL:
-                raise ToolError("moving to general is memory_promote, after the owner agrees it applies to every project")
-            frm = sync(core.memory.scope_of, id)
-            need(p, frm)
-            need(p, (to_scope or "").strip().lower())
-            out = sync(core.memory.move, source=p.source, id=id, to_scope=to_scope)
-            core.audit_memory(p, "memory_move", f"{out['from']} -> {out['to']}", id)
-            return out
+            return sync(core.move_memory, who(ctx), id, to_scope)
 
         @mcp.tool(title="Promote a memory to general", description="Move a project entry to general once the owner agrees it applies to every project. Keeps its id and history. Audited.", annotations=WRITE_IDEMPOTENT)
         async def memory_promote(ctx: Context, id: str, to: Literal["general"] = "general") -> dict[str, Any]:
-            p = who(ctx)
-            need(p, sync(core.memory.scope_of, id))
-            need(p, GENERAL)
-            out = sync(core.memory.move, source=p.source, id=id, to_scope=to)
-            core.audit_memory(p, "memory_promote", f"{out['from']} -> {out['to']}", id)
-            return out
+            return sync(core.move_memory, who(ctx), id, to, promote=True)
 
         @mcp.tool(
             title="Session briefing",
@@ -437,7 +464,7 @@ class MCPBlock(Block):
             p = who(ctx)
             default, mx = self.wait_caps.for_agent(p.source)
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})},
-                    "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health(),
+                    "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health(p),
                     "agents": core.known_agents(), "connected": sorted(set(core.connections.agents()))}
 
         kit = Kit(self, who, run, need, pscope, unrestricted)

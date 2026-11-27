@@ -37,6 +37,7 @@ BLOCKS = {
     "claude-routine": "switchboard.blocks.claude_routine:ClaudeRoutineBlock",
     "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
+    "muse": "switchboard.blocks.muse:MuseBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")
@@ -57,6 +58,7 @@ class Action:
     idempotent: bool = False
     capped: bool = False
     audited: bool | None = None
+    previewable: bool = False
 
     @property
     def is_audited(self) -> bool:
@@ -74,6 +76,7 @@ class Call:
     notes: dict[str, Any] = field(default_factory=dict)
     handle: str | None = None
     handle_meta: dict[str, Any] = field(default_factory=dict)
+    dry_run: bool = False
 
     @property
     def block(self) -> str:
@@ -241,6 +244,9 @@ class Block:
         """For a block that wakes agents: the target that wakes this agent for this project (a project routine), if any."""
         return None
 
+    def default_address(self) -> Address:
+        return Address(self.name, "", "")
+
     def effective_target(self, addr: Address, project: str | None) -> Address:
         """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""
         return addr
@@ -303,6 +309,13 @@ class Block:
         if not principal.is_unrestricted_owner:
             return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
         return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url)}
+
+    def group_step(self, principal: "Principal", group: tuple[str, str, list[Any]], instruction: str) -> dict[str, str]:
+        """One link that collects several credentials together (credentials.github_app, credentials.slack_workspace)."""
+        if not principal.is_unrestricted_owner:
+            return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
+        title, provider, fields = group
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint_group(title, fields, self.core.base_url, provider=provider)}
 
     @property
     def online(self) -> bool:

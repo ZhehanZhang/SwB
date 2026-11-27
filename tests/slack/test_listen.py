@@ -25,11 +25,11 @@ EXTERNAL = "USTRANGER"
 @pytest.fixture
 def opened(tmp_path):
     @contextmanager
-    def build(*, channels=None, mapped="docs", shared="shared", turn_cap=200, rate=5, write="free", intake="socket", hooks=None):
+    def build(*, channels=None, mapped="docs", workspace_project="workspace", shared="shared", turn_cap=200, rate=5, write="free", intake="socket", hooks=None):
         world, fires = FakeWorld(), []
         ws = {"team_id": TEAM_A, "app_token_env": "A_APP", "identities": {"bot": {"token_env": "A_BOT", "write": write}},
               "sender_rate": {"count": rate}, "known": {"BKNOWN001": "Build bot"}, "ack_reaction": "eyes", "intake": intake}
-        slack = {"workspaces": {"team": ws}, "workspace_projects": {"team": "workspace"},
+        slack = {"workspaces": {"team": ws}, "workspace_projects": {"team": workspace_project},
                  "channel_projects": {"team": {} if mapped == "default" else {CHANNEL: mapped}},
                  "listen_channels": {"team": [f"#{NAME}"] if channels is None else channels},
                  "approvals": {"notify_workspace": "team", "approver_user_id": OWNER_A},
@@ -99,7 +99,7 @@ def test_unaddressed_message_wakes_primary(opened, channels, mapped, project, tr
         assert push["addressed_to_us"] is False
         (fire,) = fires
         assert fire[0].endswith(trigger)
-        assert "listen-mode message from name-ustranger, trust external" in fire[1]
+        assert fire[1].splitlines()[0] == f"name-ustranger (external) in Slack #{NAME} asks: Can we fix this?"
         assert "<<<swb-untrusted\nCan we fix this?\nswb-untrusted>>>" in fire[1]
         assert "You may stay silent" in fire[1] and "to_owner=true" in fire[1] and "message the coordinator" not in fire[1]
         handle = core.inbox.handle(handle_of(fire[1]))
@@ -108,6 +108,22 @@ def test_unaddressed_message_wakes_primary(opened, channels, mapped, project, tr
             "listen": True, "boundary": project, "slack_trust": "external", "permalink": push["permalink"],
         }
         assert not {"chat_postMessage", "chat_postEphemeral", "reactions_add"}.intersection(world.names())
+
+
+def test_listen_wake_keeps_the_original_wrapper_and_the_optional_reply_tail(opened):
+    with opened() as (core, client, world, fires):
+        world.canned["users_info"] = lambda *_: {"user": {"name": "Dana"}}
+        push = ingest(core, client, text="> Can we check the **canary**?")
+        (_, text), = fires
+        title = f"Dana (external) in Slack #{NAME} asks: Can we check the canary?"
+        handle = core.inbox.handle(handle_of(text))
+        assert handle["title"] == title and text.startswith(title + "\n\n")
+        task, tail = text.split("\n\n---\n", 1)
+        assert task == (
+            f"{title}\n\n{push['text']}\n\n{push['permalink']}\n\n"
+            "A reply is optional. If anything needs action, send only a short note to the owner."
+        )
+        assert tail.endswith("Don't use another handle for this message.")
 
 
 @pytest.mark.parametrize(("options", "audit", "fires_general"), [
@@ -141,7 +157,7 @@ def test_listen_bots_and_own_posts(opened):
         assert not fires
         ingest(core, client, ts="1700000500.000005", user="UBUILD001", bot_id="BKNOWN001")
         (fire,) = fires
-        assert "from Build bot, trust known" in fire[1]
+        assert fire[1].splitlines()[0] == f"Build bot (known) in Slack #{NAME} asks: Can we fix this?"
         assert not {"chat_postMessage", "chat_postEphemeral"}.intersection(world.names())
 
 

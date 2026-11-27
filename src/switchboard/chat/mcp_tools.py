@@ -41,4 +41,4 @@ def register(block: "ChatBlock", mcp: Any, kit: Any) -> None:
              description=f"{title} connection, spaces and exactly what setup is missing.", annotations=kit.READ)(status)
     mcp.tool(name=f"{name}_provision", title=f"Provision {title}",
              description=f"Owner only. What {title} setup is missing, the invite or setup link, and a one-time link behind Access where the owner "
-                         "enters the bot token (never through chat).", annotations=kit.READ)(provision)
+                         "enters the bot token (never through chat).", annotations=kit.WRITE)(provision)

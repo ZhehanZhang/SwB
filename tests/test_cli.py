@@ -3,6 +3,7 @@ import os
 import stat
 import warnings
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import parse_qs
 
@@ -12,6 +13,13 @@ import yaml
 from mcp.types import CallToolResult, TextContent
 
 from switchboard import __main__, cli
+
+
+def test_cli_version_matches_installed_distribution(capsys):
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["--version"])
+    assert exited.value.code == 0
+    assert capsys.readouterr().out == f"swb {version('swb-one')}\n"
 
 
 @pytest.fixture(autouse=True)
@@ -70,15 +78,38 @@ def test_init_invalid_public_url_leaves_no_files(tmp_path, capsys):
     assert "--public-url" in capsys.readouterr().err
 
 
+def test_init_points_to_login_link(tmp_path, capsys):
+    cli.main(["init", "--dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert f"swb login-link --dir {tmp_path}" in out
+    assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] not in out
+
+
+def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv(cli.OWNER_KEY, raising=False)
+    cli.main(["init", "--dir", str(tmp_path)])
+    capsys.readouterr()
+    link = "https://switchboard.example.test/login#t=fixture"
+
+    async def call(url, key, tool, args):
+        assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] == key
+        assert (url, tool, args) == ("https://switchboard.example.test/mcp", "login_link", {})
+        return {"url": link, "expires_in": 300}
+
+    monkeypatch.setattr(cli, "_call", call)
+    cli.main(["login-link", "--dir", str(tmp_path), "--url", "https://switchboard.example.test"])
+    assert capsys.readouterr().out == link + "\n"
+
+
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(f"# comment\n{cli.OWNER_KEY}='owner-test-key'\nPORT=4567 # local port\n")
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv: calls.append(
-        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA")))))
+    monkeypatch.setattr(__main__, "main", lambda argv, *, data_dir, **_: calls.append(
+        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG")), data_dir)))
     with patch.dict(os.environ, {"SWITCHBOARD_DATA": "/path/to/old-data", "SWITCHBOARD_CONFIG": "/path/to/old-config",
                                  "PORT": "9876"}, clear=True):
         cli.main(["up", "--dir", str(tmp_path)])
-    assert calls == [(["serve"], "owner-test-key", "9876", str(tmp_path / cli.CONFIG), str(tmp_path / "data"))]
+    assert calls == [(["serve"], "owner-test-key", "9876", str(tmp_path / cli.CONFIG), tmp_path / "data")]
 
 
 def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, capsys):
@@ -129,6 +160,16 @@ def test_status_lists_next_steps_and_redacts_owner_key(tmp_path, monkeypatch, ca
     assert out == "Status: degraded\nNext steps:\n  - Configure OAuth.\n  - Echoed [redacted]\n"
 
 
+@pytest.mark.parametrize(("kind", "value", "parsed"), [("muse", "true", True), ("grok", "url", "url")])
+def test_connect_passes_block_specific_replacement(tmp_path, monkeypatch, kind, value, parsed):
+    key = "fixture-owner-key-not-a-secret"
+    monkeypatch.setenv(cli.OWNER_KEY, key)
+    call = AsyncMock(return_value={"what": kind, "next": []})
+    monkeypatch.setattr(cli, "_call", call)
+    cli.main(["connect", kind, "--choose", f"replace={value}", "--dir", str(tmp_path), "--url", "https://swb.example"])
+    call.assert_awaited_once_with("https://swb.example/mcp", key, "connect", {"what": kind, "choose": {"replace": parsed}})
+
+
 def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv(cli.OWNER_KEY, "fixture-owner-key-not-a-secret")
     call = AsyncMock()
@@ -140,7 +181,7 @@ def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize(("claim", "endpoint", "expected", "success"), [
-    ("fixture-code", None, "http://127.0.0.1:8000/claim/fixture-code", "Token saved."),
+    ("fixture-code", None, "http://127.0.0.1:8870/claim/fixture-code", "Token saved."),
     ("https://other.example.test/claim/fixture-code", "https://switchboard.example.test",
      "https://switchboard.example.test/claim/fixture-code", "Token saved."),
     ("https://other.example.test/prefix/routines/claim/fixture-code", "https://switchboard.example.test/prefix/mcp",

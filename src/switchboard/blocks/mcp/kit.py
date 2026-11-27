@@ -124,6 +124,18 @@ class Kit:
     # The generic tools ---------------------------------------------------------------------
 
     def register_generic(self, mcp: MCPServer) -> None:
+        @mcp.tool(title="Owner sign-in link", description="Mint a one-time web sign-in link that expires in five minutes. Show it directly to the owner and never paste it anywhere else.", annotations=WRITE)
+        async def login_link(ctx: Context) -> dict[str, Any]:
+            from ...sessions import LINK_TTL
+
+            p = self.owner(ctx, "mint a sign-in link")
+            if not (base := self.core.cfg.public_url):
+                raise ToolError("set public_url to enable owner sign-in links")
+            token = self.core.auth.sessions.mint_link(p.client_id, p.source)
+            self.core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core",
+                                   action="login_link_minted", outcome="ok")
+            return {"url": f"{base}/login#t={token}", "expires_in": LINK_TTL}
+
         core = self.core
         kit = self
 
@@ -162,7 +174,7 @@ class Kit:
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
                         final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
-                        to_owner: Annotated[bool, Field(description="Listen conversations only: DM the owner instead of posting in the Slack thread")] = False) -> dict[str, Any]:
+                        to_owner: Annotated[bool, Field(description="For a triage conversation with notify_owner, send a note to the owner mailbox instead of replying in-thread")] = False) -> dict[str, Any]:
             return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
@@ -212,8 +224,8 @@ class Kit:
             slugs = [f"target:{s}" for t in await core.targets() for s in t.get("slugs") or [] if t.get("block") != "agent"][:500]
             return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()}, "resources": core.visibility.rows(slugs)}
 
-        @mcp.tool(title="Make a resource private or shared", description="Owner only. Set one resource (e.g. target:teamcaptain, channel:acme/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
-        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list such as ['U0123', 'workspace:acme']")]) -> dict[str, Any]:
+        @mcp.tool(title="Make a resource private or shared", description="Owner only. Set one resource (e.g. target:build-bot, channel:example/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
+        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list such as ['U0123', 'workspace:example']")]) -> dict[str, Any]:
             from ...visibility import VisibilityError
 
             p = kit.owner(ctx, "change visibility")
@@ -251,10 +263,13 @@ class Kit:
             annotations=SEND,
         )
         async def agent_send(ctx: Context, to: Annotated[str, Field(description="The agent's name, as switchboard_status shows it")], text: str,
-                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None) -> dict[str, Any]:
+                             project: ProjectArg = None, in_reply_to: str | None = None, forward: str | None = None,
+                             conversation: str | None = None) -> dict[str, Any]:
             if in_reply_to is not None or forward is not None:
                 raise ToolError("use reply to answer a conversation or send to forward one")
             p = kit.alias(ctx, "agent_send")
+            if conversation is not None:
+                return await kit.run(core.notify_mode_owner(p, conversation, text, to=to))
             if project:
                 kit.need(p, kit.pscope(project))
             if p.targets is not None:

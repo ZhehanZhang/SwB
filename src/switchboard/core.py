@@ -28,9 +28,12 @@ from .config import Config, load_config
 from .connect import Connections
 from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
+from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
+from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store
+from .subject import subject
 from .visibility import Visibility
 
 DestinationError = BlockError
@@ -48,8 +51,8 @@ class CoreError(Exception):
 class Switchboard:
     def __init__(
         self,
-        config_path: str | Path | None,
-        data_dir: str | Path,
+        config_path: str | Path | None = None,
+        data_dir: str | Path | None = None,
         env: dict[str, str] | None = None,
         clock: Callable[[], float] = time.time,
         http_transport: httpx.AsyncBaseTransport | None = None,
@@ -58,10 +61,11 @@ class Switchboard:
         destination_options: dict[str, dict[str, Any]] | None = None,
         slack_options: dict[str, Any] | None = None,
         block_options: dict[str, dict[str, Any]] | None = None,
+        tunnel_url: str | None = None,
     ):
-        self.cfg: Config = load_config(config_path, env)
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url)
+        self.data_dir = Path(data_dir) if data_dir is not None else self.cfg.data_dir
+        self.data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.clock = clock
         self.http_transport = http_transport
         legacy = self.data_dir / "capy-bridge.db"
@@ -92,8 +96,11 @@ class Switchboard:
         self.slack_connect = bool(self.slack_options.pop("connect", True))
         self._targets: dict[str, tuple[float, list[dict[str, Any]]]] = {}
         self.target_errors: dict[str, str] = {}
+        self._avatar_http: httpx.AsyncClient | None = None
+        self._avatar_files: AvatarFiles | None = None
         opts = {**(destination_options or {}), **(block_options or {})}
         self.blocks: dict[str, Block] = {}
+        self.modes = ChannelModes(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
         for b in self.blocks.values():
@@ -118,6 +125,31 @@ class Switchboard:
             if engine is not None:
                 return engine
         return None
+
+    @property
+    def avatars(self) -> AvatarFiles:
+        slack = self.slack
+        if slack is not None and slack.config.public_base_url:
+            return slack.avatars
+        if self._avatar_files is None:
+            self._avatar_files = AvatarFiles(self.data_dir, self.cfg.public_url, slack.config.avatar_dirs if slack is not None else ())
+        return self._avatar_files
+
+    @property
+    def avatar_http(self) -> httpx.AsyncClient:
+        if self._avatar_http is None:
+            self._avatar_http = httpx.AsyncClient(transport=self.http_transport)
+        return self._avatar_http
+
+    @property
+    def avatar_cache(self) -> Path:
+        return self.avatars.rendered
+
+    def find_avatar(self, name: str) -> Path | None:
+        return self.avatars.find_avatar(name)
+
+    def avatar_url(self, name: str) -> str | None:
+        return self.avatars.avatar_url(name)
 
     def _seed_routes(self, seeds: list[dict[str, Any]]) -> None:
         """The config's routes: seed each agent/project slot once (routes_set and the page manage them after). Empty by default."""
@@ -158,12 +190,15 @@ class Switchboard:
     async def start(self) -> None:
         for b in self.blocks.values():
             await b.start()
+        self.spawn(self.modes.run(), name="watch-digests")
 
     async def aclose(self) -> None:
         for t in list(self._tasks):
             t.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+        if self._avatar_http is not None:
+            await self._avatar_http.aclose()
         for b in reversed(list(self.blocks.values())):
             await b.aclose()
         await self.auth.http.aclose()
@@ -171,20 +206,35 @@ class Switchboard:
             self.memory.flush_mirror()
         self.store.close()
 
-    def status(self) -> dict[str, Any]:
+    def status(self, principal: Principal | None = None, *, public: bool = False) -> dict[str, Any]:
         problems = list(self.cfg.problems())
         next_steps = {n: b.next_step() for n, b in self.blocks.items()}
         for b in self.blocks.values():
             problems += b.problems()
+
+        def block_status(block: Block) -> dict[str, Any]:
+            out = block.status()
+            restricted = principal is not None and not principal.is_unrestricted_owner
+            if public:
+                out.pop("modes", None)
+            elif "modes" in out and restricted:
+                out["modes"] = self.modes.status(principal, block.name)
+            if block.manifest.id == "github" and (public or restricted):
+                for field in ("installation", "checked_at", "installations", "missing_installations", "installation_problem", "token_scopes"):
+                    out.pop(field, None)
+            return out
+
         return {
             "status": "degraded" if problems else "ok",
             "problems": problems,
             "next_steps": [step for step in next_steps.values() if step],
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
-            "blocks": {n: {**(b.status() if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
+            "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
+            "block_setup": {n: {"enabled": n in self.blocks, "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
+                            for n, keys in self.cfg.block_env.items()},
             "origins": sorted(self.origins),
-            "destinations": {n: {"online": d.online, **d.status()} for n, d in self.destinations.items()},
+            "destinations": {n: {"online": d.online, **block_status(d)} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
             "mirror": bool(self.cfg.mirror_dir),
             "turn_cap": {"per_conversation": self.cfg.turn_cap,
@@ -205,18 +255,21 @@ class Switchboard:
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
-                         handle_meta: dict[str, Any] | None = None, _reply: bool = False) -> dict[str, Any]:
+                         handle_meta: dict[str, Any] | None = None, title: str | None = None,
+                         _reply: bool = False, _mode_notify: bool = False, dry_run: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
         to = (to or "").strip().lower()
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
+        if original is not None and original["meta"].get("channel_mode") and not _reply:
+            raise CoreError("channel-mode conversations can only be answered with reply")
         root = (original["meta"].get("root") or original["handle"]) if original is not None else None
         if original is not None and self._listen_conversation(original) and not (
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
             raise CoreError("listen conversations can only be answered with reply")
-        if to not in self.known_agents() and not (original is not None and original["ref"] == to):
+        if to not in self.known_agents() and not (original is not None and original["ref"] == to) and not (_mode_notify and to == "owner"):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
         if to == principal.source and not (allow_self or own):
@@ -225,16 +278,20 @@ class Switchboard:
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
+        if dry_run:
+            return {"to": f"agent:{to}", "mailbox": True, "project": p.slug if p else None}
         if root is not None:
             self.turn(root, principal)
         sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
                   "trust": principal.trust}
+        title = subject("", "", None, title or "", verb="") or subject(
+            sender["label"], "", None, text, verb="replies" if in_reply_to else "asks", trust=principal.trust)
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
-        handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=None,
+        handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=title,
                                         meta=meta, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
-        await self.inbox.add(handle, "message", {"text": text[:20_000], "project": p.slug if p else None, "from": sender,
+        await self.inbox.add(handle, "message", {"subject": title, "text": text[:20_000], "project": p.slug if p else None, "from": sender,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
@@ -271,6 +328,15 @@ class Switchboard:
             task.add_done_callback(self._tasks.discard)
         raise CoreError(stop)
 
+    def resume_conversation(self, principal: Principal, root: str) -> bool:
+        if not principal.is_unrestricted_owner and not (principal.kind == "owner_session" and principal.trust == "owner"):
+            raise CoreError("only the owner can resume paused conversations")
+        if not self.store.n("UPDATE conversation_turns SET turns = 0, paused_at = NULL WHERE root = ? AND paused_at IS NOT NULL", (root,)):
+            return False
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="core",
+                          action="conversation_resume", outcome="ok", ref=root)
+        return True
+
     def destination(self, name: str) -> Block:
         d = self.blocks.get(name)
         if d is None:
@@ -297,6 +363,19 @@ class Switchboard:
 
     # Targets ------------------------------------------------------------------------------------
 
+    async def _render_target(self, block: Block, target: dict[str, Any]) -> dict[str, Any]:
+        persona = target.get("persona")
+        if not persona:
+            return target
+        slack = self.slack
+        try:
+            avatar = await block.render_avatar({**persona, "target_id": target["id"]}, self.avatar_http, self.avatar_cache,
+                                               slack is None or slack.config.captain_avatars)
+        except OSError as exc:
+            log.warning("Avatar cache for %s:%s is unavailable: %s", block.name, target["id"], type(exc).__name__)
+            return target
+        return {**target, "persona": {**persona, "avatar_file": avatar}} if avatar else target
+
     async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> list[dict[str, Any]]:
         """Every block's targets, plus an agent:<name> mailbox per known agent and a project:<slug> route per project.
         A block that fails keeps its last good list, and the error shows in target_errors."""
@@ -308,7 +387,8 @@ class Switchboard:
             at, got = self._targets.get(name, (0.0, []))
             if refresh or now - at > TARGETS_TTL_S or not got:
                 try:
-                    got = await b.targets()
+                    found = await b.targets()
+                    got = list(await asyncio.gather(*(self._render_target(b, t) for t in found))) if type(b).render_avatar is not Block.render_avatar else found
                     self._targets[name] = (now, got)
                     self.target_errors.pop(name, None)
                 except Exception as exc:
@@ -330,6 +410,22 @@ class Switchboard:
         if query:
             q = query.strip().lower()
             out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
+        slack = self.slack
+        personas = slack.config.personas if slack is not None else {}
+        for t in out:
+            if p := t.get("persona"):
+                configured = personas.get(p.get("id"))
+                avatar = p.get("avatar_file") or p.get("avatar")
+                icon_url = p.get("icon_url")
+                if configured is not None:
+                    avatar, icon_url = configured.avatar, configured.icon_url
+                elif not avatar and not icon_url and p.get("id"):
+                    avatar = f"{p['id']}.png"
+                    if not self.find_avatar(avatar):
+                        avatar = agent_avatar(p["id"])
+                file = avatar if isinstance(avatar, str) and self.find_avatar(avatar) else None
+                t["persona"] = {**p, "avatar_file": file, "icon_url": icon_url}
+                t["avatar_url"] = (self.avatar_url(file) if file else None) or icon_url
         prio = tuple(self.cfg.targets.get("priority") or ())
         return sorted(out, key=lambda t: (tgt.rank(t, prio), t["address"]))
 
@@ -374,7 +470,7 @@ class Switchboard:
                 return Address(owner, head.lower(), rest.strip())
         word = text.lower()
         if word in self.blocks:
-            return Address(word, "", "")
+            return self.blocks[word].default_address()
         if word in self.known_agents():
             for name, b in self.blocks.items():
                 if b.wakes_agents:
@@ -412,12 +508,18 @@ class Switchboard:
 
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
-                   forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
+                   forward: str | None = None, handle_meta: dict[str, Any] | None = None,
+                   handle: str | None = None, dry_run: bool = False) -> dict[str, Any]:
+        """Send work or a message, or preview its resolved destination without delivering it."""
         if principal.targets is not None:
             await self.check_target(principal, to, project, forward)
-        handle = None
         if forward is not None:
+            if dry_run:
+                raise CoreError("a forwarded send cannot be previewed")
+            try:
+                self.modes.check(principal, forward, "forward")
+            except PermissionError as exc:
+                raise CoreError(str(exc)) from exc
             original = self.inbox.handle(forward)
             if original is None or original["destination"] != "mailbox" or original["owner"] != principal.source:
                 raise CoreError("you can only forward a conversation you received")
@@ -436,12 +538,13 @@ class Switchboard:
                 raise CoreError(f"conversation {forward} has already been forwarded")
             handle_meta = {**(handle_meta or {}), "forward_of": forward, "root": meta.get("root") or forward}
         try:
-            if handle is not None:
+            if forward is not None:
                 self.turn(handle_meta["root"], principal)
-            return await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
-                                    new_conversation=new_conversation, handle=handle, handle_meta=handle_meta)
+            out = await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
+                                   new_conversation=new_conversation, handle=handle, handle_meta=handle_meta, dry_run=dry_run)
+            return {**out, "dry_run": True} if dry_run else out
         except BaseException:
-            if handle is not None:
+            if forward is not None:
                 self.store.x("UPDATE handles SET meta = json_remove(meta, '$.forwarded_to') "
                              "WHERE handle = ? AND json_extract(meta, '$.forwarded_to') = ? "
                              "AND NOT EXISTS (SELECT 1 FROM inbox WHERE handle = ?)", (forward, handle, handle))
@@ -473,12 +576,13 @@ class Switchboard:
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
-                    handle: str | None, handle_meta: dict[str, Any] | None) -> dict[str, Any]:
+                    handle: str | None, handle_meta: dict[str, Any] | None, dry_run: bool) -> dict[str, Any]:
         addr = await self.resolve_to(to) if to else None
         if addr is not None and addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         if addr is not None and addr.block == "agent":
-            return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta), "to": str(addr)}
+            return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta,
+                                            title=title, dry_run=dry_run), "to": str(addr)}
         if addr is not None and addr.block == "project":
             project, addr = addr.id, None
         if addr is not None:
@@ -490,9 +594,10 @@ class Switchboard:
             raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
         message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
         kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
-        out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta)
+        out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta, dry_run=dry_run)
         if isinstance(out, dict):
-            out.setdefault("conversation", out.get("handle"))
+            if not dry_run:
+                out.setdefault("conversation", out.get("handle"))
             out.setdefault("block", block.name)
         return out
 
@@ -555,6 +660,19 @@ class Switchboard:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref)
         final = kw.pop("final", None)
+        channel_mode = None
+        if verb in ("reply", "cancel"):
+            try:
+                channel_mode = self.modes.check(principal, ref, "notify_owner" if verb == "reply" and to_owner else verb)
+            except PermissionError as exc:
+                raise CoreError(str(exc)) from exc
+        if channel_mode:
+            if to_owner:
+                return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
+            if self.blocks[channel_mode["block"]].manifest.id == "github":
+                raise CoreError(f"GitHub conversations use {channel_mode['block']}_reply to post a reply")
+            if channel_mode["mode"] == "assist":
+                kw["text"] = (kw.get("text") or "")[:self.modes.assist_max_chars]
         if to_owner and (verb != "reply" or h is None or h["destination"] != "mailbox" or not h["meta"].get("listen")):
             raise CoreError("to_owner is only allowed when replying to a listen conversation")
         if h is not None and h["destination"] == "mailbox":
@@ -581,8 +699,11 @@ class Switchboard:
                     self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="slack",
                                       action="listen_note", outcome="ok", ref=h["handle"], target="owner")
                     return {"conversation": h["handle"], "in_reply_to": h["handle"], "to_owner": True, "delivered": True, "final": final is not False}
-                return {**await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
-                                                final=final is not False, _reply=True),
+                out = await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
+                                            final=final is not False, _reply=True)
+                if channel_mode:
+                    self.modes.audit_action(principal, channel_mode, "reply")
+                return {**out,
                         "to": f"agent:{h['ref']}", "in_reply_to": h["handle"], "final": final is not False}
             if verb == "result":
                 replies = self.mailbox_replies(h["handle"], h["ref"])
@@ -597,16 +718,46 @@ class Switchboard:
         action = block.verb(verb)
         if action is None:
             raise CoreError(f"{block.name} conversations take no {verb}")
-        return await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
+        out = await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
+        if channel_mode:
+            self.modes.audit_action(principal, channel_mode, "reply")
+        return out
+
+    async def notify_mode_owner(self, principal: Principal, conversation: str, text: str, *, to: str | None = None) -> dict[str, Any]:
+        try:
+            meta = self.modes.check(principal, conversation, "notify_owner")
+        except PermissionError as exc:
+            raise CoreError(str(exc)) from exc
+        if meta is None:
+            raise CoreError("notify_owner needs a triage conversation")
+        target = meta["notify_target"]
+        if to is not None and to.removeprefix("agent:").lower() not in ("owner", target):
+            self.modes.audit_action(principal, meta, "notify_owner", "refused")
+            raise CoreError("notify_owner can only message the owner or space's default target")
+        if to is not None and to.removeprefix("agent:").lower() == "owner":
+            target = "owner"
+        if principal.targets is not None:
+            await self.check_target(principal, f"agent:{target}", meta["project"])
+        text = text.strip()
+        if not text:
+            raise CoreError("text is empty")
+        link = f"\n{meta['permalink']}" if meta["permalink"] else ""
+        out = await self.agent_send(principal, to=target, text=f"Triage note for {meta['space']}:{link}\n\n{text}",
+                                    project=meta["project"], allow_self=True, _mode_notify=True)
+        self.modes.audit_action(principal, meta, "notify_owner")
+        return out
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
-                     handle: str | None = None, handle_meta: dict[str, Any] | None = None) -> Any:
+                     handle: str | None = None, handle_meta: dict[str, Any] | None = None, dry_run: bool = False) -> Any:
         """Run one destination action for an origin's caller, enforcing the daily cap and writing the audit record."""
         dest = self.destination(destination)
-        call = Call(principal=principal, core=self, destination=destination, action=action.name, handle=handle, handle_meta=handle_meta or {})
+        if dry_run and not action.previewable:
+            raise DestinationError(f"{destination} does not support send previews")
+        call = Call(principal=principal, core=self, destination=destination, action=action.name, handle=handle, handle_meta=handle_meta or {},
+                    dry_run=dry_run)
 
         def record(outcome: str, detail: str | None = None) -> None:
-            if action.is_audited or outcome != "ok":
+            if not dry_run and (action.is_audited or outcome != "ok"):
                 self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
                                   action=action.name, outcome=call.notes.get("outcome", outcome) if outcome == "ok" else outcome,
                                   detail=detail or call.notes.get("detail"), target=call.notes.get("target"), ref=call.notes.get("ref"),
@@ -618,6 +769,8 @@ class Switchboard:
                 call.note(excerpt=str(kwargs.get("task") or ""))
                 record("refused", f"daily cap reached ({used}/{dest.daily_cap})")
                 raise DestinationError(f"daily {destination} {action.name} cap reached ({used}/{dest.daily_cap} today, {self.cfg.timezone}); try tomorrow or raise destinations.{destination}.daily_cap")
+        if dry_run:
+            return await action.handler(call, **kwargs)
         try:
             out = await action.handler(call, **kwargs)
         except DestinationError as e:
@@ -660,7 +813,7 @@ class Switchboard:
                             allow_override=allow_override, note=note, by=principal.source)
         self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return r.as_dict()
 
     def changed(self) -> None:
@@ -675,7 +828,7 @@ class Switchboard:
         r = self.routes.remove(destination=destination, agent=agent, project=project)
         self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return {"removed": r.as_dict()}
 
     # Projects: automatic links and routes ------------------------------------------------------
@@ -707,6 +860,26 @@ class Switchboard:
     def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "") -> None:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
                           action=action, outcome="ok", target=target, excerpt=excerpt)
+
+    @staticmethod
+    def check_memory_scope(principal: Principal, scope: str) -> None:
+        if not principal.allows(scope):
+            raise MemoryError_(f"the {principal.source} key is limited to {', '.join(principal.scopes or ())}; {scope} is outside it")
+
+    def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
+        out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        self.audit_memory(principal, "memory_delete", id)
+        return out
+
+    def move_memory(self, principal: Principal, id: str, to_scope: str, *, promote: bool = False) -> dict[str, Any]:
+        to_scope = to_scope.strip().lower()
+        if to_scope == GENERAL and not promote:
+            raise MemoryError_("moving to general is memory_promote, after the owner agrees it applies to every project")
+        self.check_memory_scope(principal, to_scope)
+        out = self.memory.move(source=principal.source, id=id, to_scope=to_scope,
+                               check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        self.audit_memory(principal, "memory_promote" if promote else "memory_move", f"{out['from']} -> {out['to']}", id)
+        return out
 
     # Context pack -----------------------------------------------------------------------------
 

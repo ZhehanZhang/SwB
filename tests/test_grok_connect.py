@@ -22,7 +22,7 @@ def grok(make):
 
 
 def connect(client, **kwargs):
-    response = call(client, STATIC_KEY, "connect", {"what": "grok", **kwargs})
+    response = call(client, STATIC_KEY, "connect", {"what": "grok-bot", **kwargs})
     assert not response.get("isError"), response
     return payload(response)
 
@@ -31,7 +31,8 @@ def enter_claim(client, step, value):
     assert step["by"] == "person" and step["link"].startswith(f"{PUBLIC}/claim/")
     path = urlsplit(step["link"]).path
     assert path.rsplit("/", 1)[-1] not in step["do"]
-    assert client.get(path).status_code == 403
+    refused = client.get(path)
+    assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Fclaim%2F")
     page = client.get(path, headers=OWNER)
     assert page.status_code == 200 and 'type="password"' in page.text
     csrf = page.text.split('name="csrf" value="', 1)[1].split('"', 1)[0]
@@ -47,13 +48,13 @@ def test_grok_discovery_returns_connector_prompt_and_registration(grok):
     assert result["done"] == [f"MCP URL: {PUBLIC}/mcp.", "OAuth sign-in: available."]
     connector, routine, register = result["next"]
     assert connector["by"] == "person"
-    assert all(text in connector["do"] for text in (f"{PUBLIC}/mcp", "New Connector > Custom", "sign in with OAuth",
+    assert all(text in connector["do"] for text in (f"{PUBLIC}/mcp", "Remote HTTPS", "sign in with OAuth",
                                                       'connect(what="mcp-client"', "pairing code"))
     assert routine["by"] == "person"
     assert all(text in routine["do"] for text in ("custom webhook trigger", "text", "conversation", "project", "from", "trust",
                                                     "Act only when trust is owner", "reply(conversation=", "final=true"))
     assert register["by"] == "you" and register["call"] == {
-        "tool": "connect", "arguments": {"what": "grok", "choose": {
+        "tool": "connect", "arguments": {"what": "grok-bot", "choose": {
             "name": "<routine name>", "project": "demo", "auth": "key",
         }},
     }
@@ -193,7 +194,7 @@ def test_grok_limited_caller_cannot_replace_existing_credential(grok, monkeypatc
     monkeypatch.setattr(core.auth, "verify_bearer", lambda _token: principal)
     choice = {"name": CHOICE["name"], "replace": "secret"}
     for result in (connect(client, choose=choice),
-                   client.portal.call(core.blocks["grok-routine"].connect_steps, "grok", principal, None, choice)):
+                   client.portal.call(core.blocks["grok-routine"].connect_steps, "grok-bot", principal, None, choice)):
         [step] = result["next"]
         assert set(step) == {"by", "do"} and step["by"] == "person"
     assert [dict(r) for r in core.store.q("SELECT * FROM secrets")] == before
@@ -203,7 +204,7 @@ def test_grok_discovery_resumes_after_oauth_and_preserves_partial_choices(grok):
     _, client = grok
     tokens = sign_in(client, redirect="https://grok.com/connectors/oauth/callback")
     result = connect(client, choose={"name": "grok-demo", "auth": "signature", "primary": True})
-    assert "Grok is signed in." in result["done"]
+    assert "Grok Bot is signed in." in result["done"]
     routine, register = result["next"]
     assert "webhook trigger" in routine["do"]
     assert register["call"]["arguments"]["choose"] == {
@@ -220,7 +221,7 @@ def test_grok_limited_callers_cannot_register_or_mint_claims(grok, monkeypatch, 
     principal = replace(Principal("limited", "key:limited", "key"), **restriction)
     monkeypatch.setattr(core.auth, "verify_bearer", lambda _token: principal)
     for result in (connect(client, project="demo", choose=CHOICE),
-                   client.portal.call(block.connect_steps, "grok", principal, "demo", CHOICE)):
+                   client.portal.call(block.connect_steps, "grok-bot", principal, "demo", CHOICE)):
         assert not result["done"] and "state" not in result
         step, = result["next"]
         assert set(step) == {"by", "do"} and step["by"] == "person"
@@ -245,7 +246,7 @@ def test_grok_resume_selects_among_routines_without_minting_claims(grok):
 
 def test_grok_connect_rejects_credentials_in_choose_without_echoing(grok):
     core, client = grok
-    response = call(client, STATIC_KEY, "connect", {"what": "grok", "choose": {**CHOICE, "url": WEBHOOK_URL}})
+    response = call(client, STATIC_KEY, "connect", {"what": "grok-bot", "choose": {**CHOICE, "url": WEBHOOK_URL}})
     message = error_text(response)
     assert "Never pass webhook credentials" in message and WEBHOOK_URL not in message
     assert not core.blocks["grok-routine"].routines()
@@ -255,7 +256,18 @@ def test_grok_connect_rejects_credentials_in_choose_without_echoing(grok):
 def test_grok_resume_rejects_different_routine_auth_without_rotating_claims(grok):
     core, client = grok
     initial = connect(client, choose=CHOICE)
-    response = call(client, STATIC_KEY, "connect", {"what": "grok", "choose": {**CHOICE, "auth": "signature"}})
+    response = call(client, STATIC_KEY, "connect", {"what": "grok-bot", "choose": {**CHOICE, "auth": "signature"}})
     assert "different authentication settings" in error_text(response)
     assert core.blocks["grok-routine"].routines()["grok-demo"]["auth"] == "key"
     assert all(client.get(step["link"], headers=OWNER).status_code == 200 for step in initial["next"])
+
+
+def test_grok_app_and_grok_bot_are_separate_connect_kinds(grok):
+    _, client = grok
+    app = payload(call(client, STATIC_KEY, "connect", {"what": "grok"}))
+    assert app["what"] == "grok"
+    assert any("grok.com > Connectors > New Connector > Custom" in step["do"] for step in app["next"])
+    assert not any("webhook" in step["do"] for step in app["next"])
+    bot = payload(call(client, STATIC_KEY, "connect", {"what": "grok-routine"}))
+    assert bot["what"] == "grok-bot"
+    assert any("Remote HTTPS" in step["do"] for step in bot["next"])

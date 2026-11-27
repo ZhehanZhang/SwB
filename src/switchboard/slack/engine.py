@@ -3,26 +3,26 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import secrets
 import time
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any
 
 import httpx
 
 from ..guard import RateLimiter
+from ..subject import subject
 from ..trust import wrap
 from ..visibility import Visibility, Who
-from .config import AVATAR_RE, Config, Persona
+from .avatar_files import BUNDLED_AVATARS, AvatarFiles, find_avatar
+from .config import Config, Persona
 from .events import build_event, classify, event_id
 from .push import WebhookSink
 from .routing import Target, near, split_slug
 from .slack import CHANNEL_ID_RE, WorkspaceRuntime, make_client, slack_error
 from .store import Store
 from .writes import Actor, WriteError, WriteGate
-
-BUNDLED_AVATARS = Path(__file__).parent / "avatars"
 
 log = logging.getLogger("switchboard.slack")
 
@@ -34,7 +34,7 @@ EventListener = Callable[[dict[str, Any]], Awaitable[None]]
 
 class SlackEngine:
     """Slack workspaces for switchboard: Socket Mode or polling intake, Web API reads and writes, personas, the write
-    policy and approval gate, the bot-to-bot loop guard, and optional webhook sinks. Ported from slackgate.
+    policy and approval gate, the bot-to-bot loop guard, and optional webhook sinks.
 
     Origins and destinations share one engine: the Slack origin listens to its events, the Slack destination calls its
     reads and writes. Auth is switchboard's: a caller is a switchboard agent, and config.grants says what it may do."""
@@ -56,6 +56,7 @@ class SlackEngine:
         self.clock = clock
         self.store = Store(self.data_dir / "slack.db", clock=clock)
         self.http = http or httpx.AsyncClient()
+        self.avatars = AvatarFiles(self.data_dir, config.public_base_url, config.avatar_dirs)
         self.client_factory = client_factory
         self.own_post_grace = own_post_grace
         self.config = config
@@ -68,6 +69,8 @@ class SlackEngine:
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
         self.listen: Callable[[WorkspaceRuntime, dict[str, Any], dict[str, Any]], Awaitable[bool]] | None = None
+        self.mode_intake: Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[tuple[bool, dict[str, Any] | None]]] | None = None
+        self.mode_poll_channels: Callable[[WorkspaceRuntime], set[str]] | None = None
         self.relays: dict[tuple[str, str], Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[bool]]] = {}
         self.owner_channels: set[tuple[str, str]] = set()
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
@@ -81,15 +84,12 @@ class SlackEngine:
     @property
     def avatar_dir(self) -> Path:
         """Uploads from the root page land here and win over avatar_dirs and the bundled monograms."""
-        return self.data_dir / "avatars"
+        return self.avatars.uploads
 
     @property
     def avatar_cache(self) -> Path:
         """Pictures blocks rendered for their dynamic personas (Captains, say), named by what they were rendered from."""
-        return self.data_dir / "avatar-cache"
-
-    def avatar_dirs(self) -> list[Path]:
-        return [self.avatar_dir, *(Path(d) for d in self.config.avatar_dirs), self.avatar_cache, BUNDLED_AVATARS]
+        return self.avatars.rendered
 
     def personas(self) -> dict[str, Persona]:
         """Configured personas, plus one per Captain target found automatically; the config wins on the same id."""
@@ -110,7 +110,7 @@ class SlackEngine:
             return None
         return target.persona
 
-    def route(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> list[str]:
+    def route(self, rt: WorkspaceRuntime, push: dict[str, Any], *, default_target: str | None = None) -> list[str]:
         """Set push target/target_kind (and strip a leading slug from text). Returns slugs to hint at for a near miss."""
         root = push["thread_ts"] or push["ts"]
         target: Target | None = None
@@ -124,7 +124,7 @@ class SlackEngine:
             elif word and push["kind"] in ("mention", "dm"):
                 hint = near(word, self.targets)
         sticky = self.store.thread_target(push["workspace"], push["channel"], root) if push["thread_ts"] else None
-        slug = target.slug if target else (sticky or rt.cfg.default_target)
+        slug = target.slug if target else (sticky or default_target or rt.cfg.default_target)
         if target is None and slug:
             target = self.targets.get(slug)
         push["target"] = slug
@@ -137,19 +137,10 @@ class SlackEngine:
         return [s.cfg.name for s in self.sinks.get(label, []) if s.accepts(push)]
 
     def find_avatar(self, name: str) -> Path | None:
-        if not AVATAR_RE.match(name):
-            return None
-        for d in self.avatar_dirs():
-            if (d / name).is_file():
-                return d / name
-        return None
+        return find_avatar(name, self.avatars.dirs)
 
     def avatar_url(self, name: str) -> str | None:
-        """Public URL for an avatar file, versioned by mtime so Slack refetches a replaced picture."""
-        path = self.find_avatar(name)
-        if path is None or not self.config.public_base_url:
-            return None
-        return f"{self.config.public_base_url}/avatars/{name}?v={int(path.stat().st_mtime)}"
+        return self.avatars.avatar_url(name)
 
     async def start(self, connect: bool = True) -> None:
         self.connect = connect
@@ -235,7 +226,7 @@ class SlackEngine:
         kind = classify(event, ctx)
         listen_only = kind is None
         listen_channels = rt.cfg.listen_channels if self.listen is not None else ()
-        if listen_only and listen_channels and rt.cfg.trust_of(event.get("user") or event.get("bot_id")) != "owner":
+        if listen_only and (self.mode_intake is not None or (listen_channels and rt.cfg.trust_of(event.get("user") or event.get("bot_id")) != "owner")):
             kind = classify(event, replace(ctx, watched=ctx.watched | {channel}))
         if kind is None:
             return None
@@ -243,11 +234,11 @@ class SlackEngine:
             await asyncio.sleep(self.own_post_grace)
         if self.store.is_sent(rt.team_id, channel, ts):
             return None
-        if listen_only and channel not in listen_channels and (
+        if self.mode_intake is None and listen_only and channel not in listen_channels and (
             all(CHANNEL_ID_RE.fullmatch(ref) for ref in listen_channels) or await rt.channel_name(channel) not in listen_channels
         ):
             return None
-        channel_name, user_name = await asyncio.gather(rt.channel_name(channel), rt.user_name(event.get("user")))
+        channel_name = await rt.channel_name(channel)
         listening = channel in listen_channels or channel_name in listen_channels
         thread_ts = event.get("thread_ts")
         in_our_thread = bool(thread_ts and thread_ts != ts and ((rt.bot_user_id and event.get("parent_user_id") == rt.bot_user_id) or self.store.is_sent(rt.team_id, channel, thread_ts)))
@@ -257,15 +248,23 @@ class SlackEngine:
             event=event,
             kind=kind,
             channel_name=channel_name,
-            user_name=user_name,
+            user_name=None,
             team_url=rt.team_url,
             max_text_chars=self.config.max_text_chars,
             addressed_to_us=kind in ("mention", "dm") or in_our_thread,
         )
+        candidate = {**push, "is_bot": bool(push["is_bot"] or event.get("is_bot") or event.get("subtype") == "bot_message")}
+        if candidate["is_bot"] and event.get("bot_id") in rt.cfg.known and rt.cfg.trust_of(candidate["user"]) == "external":
+            candidate["user"] = event["bot_id"]
+        if self.mode_intake is not None:
+            handled, routed = await self.mode_intake(rt, candidate)
+            if handled:
+                return routed
+        if listen_only and not listening:
+            return None
+        if user_name := await rt.user_name(event.get("user")):
+            candidate["user_name"] = push["user_name"] = user_name
         if listening and rt.cfg.trust_of(push["user"]) != "owner" and self.listen is not None:
-            candidate = {**push, "is_bot": bool(push["is_bot"] or event.get("is_bot") or event.get("subtype") == "bot_message")}
-            if candidate["is_bot"] and event.get("bot_id") in rt.cfg.known and rt.cfg.trust_of(candidate["user"]) != "known":
-                candidate["user"] = event["bot_id"]
             self.stamp(rt, candidate)
             if await self.listen(rt, candidate, push):
                 return candidate
@@ -300,8 +299,10 @@ class SlackEngine:
         name = rt.cfg.known.get(push["user"] or "") or push["user_name"]
         push["trust"] = trust
         push["sender"] = {"id": push["user"], "name": name, "trust": trust, "is_bot": push["is_bot"]}
+        channel = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
+        push["subject"] = subject(name or push["user"] or "unknown", "Slack", channel, raw, trust=trust)
         if trust != "owner":
-            where = f"in {push['workspace']} " + (f"#{push['channel_name']}" if push.get("channel_name") else push["channel"])
+            where = f"in {push['workspace']} {channel}"
             push["text"] = wrap(raw, name, push["user"], trust, where)
 
     def who(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> Who:
@@ -395,7 +396,6 @@ class SlackEngine:
                 log.exception("workspace %s: event listener failed", label)
 
     async def handle_block_actions(self, label: str, payload: dict[str, Any]) -> None:
-        approvals = self.config.approvals
         rt = self.runtime(label)
         user = (payload.get("user") or {}).get("id", "")
         team = (payload.get("team") or {}).get("id") or (payload.get("user") or {}).get("team_id")
@@ -517,14 +517,15 @@ class SlackEngine:
     def persona_rows(self) -> list[dict[str, Any]]:
         """Each persona with its picture's URL, the folder it comes from, and the agents that post as it by default."""
         cfg = self.config
-        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled monogram", self.avatar_cache: "rendered by a block"}
+        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled mark", self.avatar_cache: "rendered by a block"}
         rows = []
         for pid, p in self.personas().items():
             path = self.find_avatar(p.avatar) if p.avatar else None
+            url = (self.avatar_url(p.avatar) if p.avatar else None) or p.icon_url
             used = sorted({g.id for g in cfg.grants.values() if pid in (g.persona, g.id, *g.persona_by_workspace.values())}
                           | {f"default in {w.label}" for w in cfg.workspaces.values() if w.default_persona == pid}
                           | {f"target {t.slug}" for t in self.targets.values() if t.persona == pid})
-            rows.append({"id": pid, "name": p.name, "avatar": p.avatar, "url": self.avatar_url(p.avatar) if p.avatar else p.icon_url,
+            rows.append({"id": pid, "name": p.name, "avatar": p.avatar, "url": url, "avatar_url": url,
                          "emoji": p.emoji, "source": (sources.get(path.parent, "avatar folder") if path else ("icon_url" if p.icon_url else "none")),
                          "used_by": used})
         return rows

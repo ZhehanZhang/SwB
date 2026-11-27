@@ -7,6 +7,7 @@ import sqlite3
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,14 @@ CONFIRM_GENERAL = (
 
 class MemoryError_(ValueError):
     pass
+
+
+class MemoryNotFound(MemoryError_):
+    pass
+
+
+def summary(body: str) -> str:
+    return body.lstrip().partition("\n")[0].strip()[:200]
 
 
 def _row(r: sqlite3.Row, body: bool = True, limit: int | None = None) -> dict[str, Any]:
@@ -227,13 +236,25 @@ class Memory:
         out["history"] = [{"at": iso(v["at"]), "source": v["source"], "action": v["action"]} for v in revs]
         return out
 
-    def delete(self, *, source: str, id: str) -> dict[str, Any]:
+    def latest_writers(self, ids: list[str]) -> dict[str, str]:
+        if not ids:
+            return {}
+        rows = self.store.q(
+            "SELECT m.id, COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = m.id "
+            "AND r.action IN ('create', 'replace', 'append') ORDER BY r.at DESC, r.rowid DESC LIMIT 1), m.source) AS writer "
+            "FROM memories m WHERE m.id IN (" + ",".join("?" for _ in ids) + ")", ids,
+        )
+        return {r["id"]: r["writer"] for r in rows}
+
+    def delete(self, *, source: str, id: str, check_scope: Callable[[str], None] | None = None) -> dict[str, Any]:
         now = self.store.clock()
 
         def run(db: sqlite3.Connection) -> None:
             r = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
             if r is None:
-                raise MemoryError_("memory not found")
+                raise MemoryNotFound("memory not found")
+            if check_scope is not None:
+                check_scope(r["scope"])
             db.execute("UPDATE memories SET deleted_at = ?, updated_at = ?, source = ? WHERE id = ?", (now, now, source, id))
             db.execute(
                 "INSERT INTO memory_revisions(memory_id, at, source, action, title, body) VALUES (?,?,?,?,?,?)",
@@ -244,7 +265,7 @@ class Memory:
         self._sync_mirror()
         return {"deleted": id}
 
-    def move(self, *, source: str, id: str, to_scope: str) -> dict[str, Any]:
+    def move(self, *, source: str, id: str, to_scope: str, check_scope: Callable[[str], None] | None = None) -> dict[str, Any]:
         """Move one entry to another scope, keeping its id and revision history."""
         to = self.write_scope(to_scope)
         now = self.store.clock()
@@ -252,7 +273,9 @@ class Memory:
         def run(db: sqlite3.Connection) -> str:
             r = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
             if r is None:
-                raise MemoryError_("memory not found")
+                raise MemoryNotFound("memory not found")
+            if check_scope is not None:
+                check_scope(r["scope"])
             if r["scope"] == to:
                 raise MemoryError_(f"memory {id} is already in {to}")
             if r["key"] and db.execute("SELECT 1 FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL",
@@ -269,7 +292,8 @@ class Memory:
         self._sync_mirror()
         return {"moved": id, "from": frm, "to": to}
 
-    def list(self, *, scopes: list[str] | None, namespace: str | None = None, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+    def list(self, *, scopes: list[str] | None, namespace: str | None = None, limit: int = 50, offset: int = 0,
+             summaries: bool = False) -> dict[str, Any]:
         where, args = self._filter(scopes, namespace)
         rank, rargs = self._scope_rank(scopes)
         limit = max(1, min(limit, 200))
@@ -281,12 +305,14 @@ class Memory:
             f"SELECT m.scope AS s, m.namespace AS ns, COUNT(*) AS n FROM memories m WHERE m.deleted_at IS NULL{where} GROUP BY m.scope, m.namespace ORDER BY m.scope, m.namespace",
             args,
         )
-        summary: dict[str, dict[str, int]] = {}
+        totals: dict[str, dict[str, int]] = {}
         for c in counts:
-            summary.setdefault(c["s"], {})[c["ns"]] = c["n"]
-        return {"scopes": summary, "items": [_row(r, body=False) for r in rows], "next_offset": offset + limit if len(rows) == limit else None}
+            totals.setdefault(c["s"], {})[c["ns"]] = c["n"]
+        return {"scopes": totals, "items": [{**_row(r, body=False), **({"summary": summary(r["body"])} if summaries else {})} for r in rows],
+                "next_offset": offset + limit if len(rows) == limit else None}
 
-    def search(self, *, query: str, scopes: list[str] | None, namespace: str | None = None, limit: int = 10) -> dict[str, Any]:
+    def search(self, *, query: str, scopes: list[str] | None, namespace: str | None = None, limit: int = 10,
+               summaries: bool = False) -> dict[str, Any]:
         """Full-text search; with several scopes, matches in the first (the project) rank ahead of general."""
         limit = max(1, min(limit, 50))
         where, args = self._filter(scopes, namespace)
@@ -309,7 +335,8 @@ class Memory:
                     f"SELECT m.*, substr(m.body, 1, 200) AS snip FROM memories m WHERE m.deleted_at IS NULL{where} AND ({cond}) ORDER BY {rank}, m.updated_at DESC LIMIT ?",
                     [*args, *[f"%{w}%" for w in words], *rargs, limit],
                 )
-        return {"scopes": scopes, "items": [{**_row(r, body=False), "snippet": r["snip"]} for r in rows]}
+        return {"scopes": scopes, "items": [{**_row(r, body=False), "snippet": r["snip"],
+                                           **({"summary": summary(r["body"])} if summaries else {})} for r in rows]}
 
     def recent(self, *, scopes: list[str] | None, namespace: str | None = None, since: float | None = None, exclude_namespaces: tuple[str, ...] = (),
                limit: int = 10, body_limit: int = 600) -> list[dict[str, Any]]:

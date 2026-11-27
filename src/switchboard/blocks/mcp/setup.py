@@ -1,17 +1,27 @@
 """Live setup directions for MCP clients and enabled blocks."""
 
+import json
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ...auth import Principal
+from ...modes import PROVIDERS
 from .coding import coding_steps
 from .kit import Kit
 
-CLIENTS = ("mcp-client", "chatgpt", "claude", "coding-agent")
-BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine"}
-MENUS = {"chatgpt": "https://chatgpt.com/plugins in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web"}
+CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "coding-agent")
+BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
+          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse"}
+ALIASES = {"grok-routine": "grok-bot"}
+CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
+MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web",
+         "grok": "grok.com > Connectors > New Connector > Custom"}
+
+
+def hosted_client_instruction(kind: str, connector: str | None) -> str:
+    return f"Open {MENUS[kind]} to add {connector or '<public_url>/mcp'} as a custom connector and sign in with OAuth."
 
 
 def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
@@ -24,14 +34,13 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
         signed_in = principal.kind == "oauth" and principal.source == kind
         if not signed_in and principal.is_unrestricted_owner and oauth:
             signed_in = core.store.one(
-                "SELECT 1 FROM oauth_tokens WHERE source = ? AND resource = ? AND expires_at > ? AND revoked_at IS NULL LIMIT 1",
-                (kind, core.cfg.resource, core.clock()),
+                "SELECT 1 FROM oauth_tokens WHERE source = ? AND resource IN (SELECT value FROM json_each(?)) AND expires_at > ? AND revoked_at IS NULL LIMIT 1",
+                (kind, json.dumps(core.cfg.resources), core.clock()),
             ) is not None
         if signed_in:
             return {"done": [*done, "The client is signed in."], "next": []}
         next_steps = [] if oauth else [{"by": "person", "do": "Configure a public URL and owner sign-in before connecting a hosted client."}]
-        connector = core.cfg.resource or "<public_url>/mcp"
-        next_steps.append({"by": "person", "do": f"Open {MENUS[kind]} to add {connector} as a custom connector and sign in with OAuth."})
+        next_steps.append({"by": "person", "do": hosted_client_instruction(kind, core.cfg.resource)})
         return {"done": done, "next": next_steps}
     if not principal.is_unrestricted_owner:
         return {"done": done, "next": [{"by": "person", "do": "Ask the owner to mint a pairing code from their own sign-in."}]}
@@ -74,7 +83,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
     )
     async def connect(ctx: Context, what: str, project: str | None = None, choose: dict[str, Any] | None = None) -> dict[str, Any]:
         p = kit.who(ctx)
-        what = what.strip().lower()
+        what = ALIASES.get(what := what.strip().lower(), what)
         if what not in kinds:
             return {"what": "unknown", "done": [], "next": [], "kinds": kinds}
         block = owners.get(what)
@@ -83,7 +92,8 @@ def register(mcp: MCPServer, kit: Kit) -> None:
                 {"by": "person", "do": f"Enable the {BLOCKS[what]} block in config/switchboard.yaml and restart Switchboard."}]}
         if what not in CLIENTS and not p.is_unrestricted_owner:
             return {"what": what, "done": [], "next": [
-                {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}]}
+                {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}],
+                **({"modes": core.modes.summary(block.name, p)} if block is not None and block.manifest.id in PROVIDERS else {})}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
         outcome = "ok"
         try:
@@ -103,4 +113,6 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             if p.is_unrestricted_owner:
                 core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination=block.name if block else "core",
                                   action=f"connect_{what}", outcome=outcome)
-        return {"what": what, **out, **({"state": "connected"} if not out["next"] else {})}
+        if block is not None and block.manifest.id in PROVIDERS:
+            out.setdefault("modes", core.modes.summary(block.name, p))
+        return {"what": what, **out, **({"state": "connected"} if all(step.get("optional") for step in out["next"]) else {})}
