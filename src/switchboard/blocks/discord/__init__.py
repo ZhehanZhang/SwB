@@ -106,6 +106,7 @@ class DiscordBlock(ChatBlock):
         self._transport = config.get("transport") or httpx.AsyncHTTPTransport()
         self._gateway = self._new_gateway()
         self._gateway_task: asyncio.Task[None] | None = None
+        self._owner_task: asyncio.Future[None] | None = None
         self._running = False
 
     @classmethod
@@ -158,9 +159,12 @@ class DiscordBlock(ChatBlock):
         return {**super().status(), "discovered": self.discovered()}
 
     async def _load_owner(self) -> None:
+        token = self.token()
         try:
             app = await self.request("GET", "/oauth2/applications/@me")
         except Exception:
+            return
+        if self.token() != token:
             return
         team = app.get("team") or {}
         owner = team.get("owner_user_id") if team else (app.get("owner") or {}).get("id")
@@ -250,6 +254,10 @@ class DiscordBlock(ChatBlock):
             return
         async with self._connect_lock:
             await self._stop_gateway()
+            if self._owner_task is not None:
+                self._owner_task.cancel()
+                await asyncio.gather(self._owner_task, return_exceptions=True)
+                self._owner_task = None
             self._gateway = self._new_gateway()
             self.user_id = self.bot_name = None
             self.application_id = self._application_id
@@ -300,13 +308,18 @@ class DiscordBlock(ChatBlock):
             self.guilds = {guild["id"] for guild in data.get("guilds", [])}
             self.guild_info = {}
             self.channels.clear()
-            asyncio.ensure_future(self._load_owner()).add_done_callback(lambda t: t.cancelled() or t.exception())
+            if self._owner_task is not None:
+                self._owner_task.cancel()
+            self._owner_task = asyncio.ensure_future(self._load_owner())
+            self._owner_task.add_done_callback(lambda t: t.cancelled() or t.exception())
             await self.apply_avatar(user["id"], self._set_avatar)
         elif event == "GUILD_CREATE":
             self.guilds.add(data["id"])
             self.guild_info[data["id"]] = {"name": data.get("name"), "owner_id": data.get("owner_id")}
             for channel in (*data.get("channels", []), *data.get("threads", [])):
                 self._cache_channel(channel, data["id"])
+        elif event == "GUILD_UPDATE" and data["id"] in self.guild_info:
+            self.guild_info[data["id"]] = {"name": data.get("name"), "owner_id": data.get("owner_id")}
         elif event == "GUILD_DELETE" and not data.get("unavailable"):
             self.guilds.discard(data["id"])
             self.guild_info.pop(data["id"], None)

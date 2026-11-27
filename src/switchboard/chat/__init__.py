@@ -622,10 +622,11 @@ class ChatBlock(Block):
                 return {"done": done, "next": [{"by": "person", "do": f"Ask the owner to connect {self.manifest.title} from their own sign-in."}]}
             steps = " ".join(self.setup().get("steps", [])[:2])
             return {"done": done, "next": [{"by": "person", "do": f"{steps} Paste the token at the link.", "link": self.claim_link(principal.source)["link"]}]}
-        steps = [m for m in self.missing() if "token" not in m.lower()]
+        steps = list(self.missing())
         if not self.spaces:
             steps.append(f"Add a space under blocks.{self.name}.spaces with the project it belongs to.")
-        steps += [f"Space {s.label} has no owner ids. {self.owner_hint()}" for s in self.spaces.values() if not self.owners(s)]
+        steps += [f"Space {s.label} has no owner ids. {self.owner_hint()}" for s in self.spaces.values()
+                  if not self.owners(s) and f"spaces.{s.label}.owner_ids" not in " ".join(steps)]
         return {"done": done, "next": [{"by": "person", "do": step} for step in steps]}
 
     def owner_hint(self) -> str:
