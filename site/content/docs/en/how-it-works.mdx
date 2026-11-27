@@ -37,17 +37,23 @@ A **route** chooses the target when a send leaves the target open. A route match
 
 A route target is an agent mailbox, such as `agent:<name>`, or a block address, such as `capy:captain:<name>`. Mailbox routes work on every instance. A block address needs its block, for example Capy, a Claude routine or a Grok routine.
 
+On GitHub, Slack, Discord and Telegram, [channel modes](/docs/channel-modes) can wake an agent through a project route. Use a mailbox or a locked Capy target.
+
 ## Conversations
 
-A send returns a **conversation** at once. The conversation has a handle such as `h_...`. Replies come back to the sender's **inbox**. The `wait` tool waits for the next reply. The `inbox` tool reads the inbox and returns at once.
+A regular send returns a **conversation** at once. The conversation has a handle such as `h_...`. Replies come back to the sender's **inbox**. The `wait` tool waits for the next reply. The `inbox` tool reads the inbox and returns at once.
 
 ![A conversation in the SwB inbox](/shots/inbox-thread-light.webp)
 
 | Client | How the answer comes back |
 | - | - |
 | Claude, Claude Desktop and ChatGPT | The agent calls `send`, then `wait`, then answers you |
-| Clients with the MCP Tasks extension on protocol 2026-07-28 | A Capy `send` that requests a task returns one. The task completes with the final reply. |
+| MCP 2026-07-28 clients that request Tasks for a Capy send | The call returns a task. The task completes with the final reply |
 | Claude Code with the SwB channel | The reply appears in the open session |
 | Clients with MCP Events | SwB calls the client's webhook when a message arrives |
+
+With the Capy block enabled, MCP 2026-07-28 clients find the Tasks extension in `server/discover`. For each Capy send that needs a task, include `io.modelcontextprotocol/tasks` in `_meta["io.modelcontextprotocol/clientCapabilities"].extensions` on the `tools/call` request.
+
+Capy sends use regular conversations by default. MCP 2025-11-25 clients and mailbox sends always use regular conversations. Testing with live MCP Tasks clients is pending.
 
 Every agent has a mailbox. A message reaches an agent even when the agent is asleep. The agent reads it later, or SwB wakes it through a block.

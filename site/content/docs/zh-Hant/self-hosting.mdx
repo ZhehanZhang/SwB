@@ -21,6 +21,8 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 Compose 在 `http://127.0.0.1:8870` 提供 SwB，並把資料存放在 `./data`。修改 `.env` 之後，請再次執行 `docker compose up -d`。
 
+登出後，`/healthz` 只會傳回 `status` 和 `version` 兩個欄位。以擁有者身分登入或使用擁有者金鑰，即可查看完整的運作狀態。
+
 ## Cloudflare Tunnel
 
 通道讓 SwB 在你的網域上有公開位址，並讓連接埠保持關閉。請在 Cloudflare Zero Trust 建立通道。把它的公開主機名稱指向 `http://switchboard:8000`。把通道權杖放進 `.env`，名稱是 `TUNNEL_TOKEN`。用 tunnel profile 啟動 Compose。

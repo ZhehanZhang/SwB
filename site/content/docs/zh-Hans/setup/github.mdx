@@ -104,7 +104,7 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 
 智能体再次调用 `connect(what="github")`，获取仍需填写的 App ID 或私钥链接。若要把已有的个人访问令牌改为 GitHub App 凭据，选用 `choose={"credential":"app"}`。
 
-重启后，智能体调用 `github_status`，检查安装和它的权限。之后，智能体按频道模式使用 `github_label`、`github_comment`、`github_open_issue`、`github_link_duplicate`、`github_reply` 和 `github_notify_owner`。
+重启后，智能体调用 `github_status` 检查安装及其权限。请参阅[频道模式](/zh-Hans/docs/channel-modes)，了解如何绑定项目路由和启用分流操作。分流模式默认允许 `github_reply`。
 
 ## 凭据
 

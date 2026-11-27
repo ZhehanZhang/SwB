@@ -3,42 +3,62 @@ title: Channel modes
 description: Choose how SwB acts in each channel.
 ---
 
-A **space** is a place where messages arrive. A Slack channel, a Discord channel or thread, a Telegram group and a GitHub repository are spaces. Each space has one mode.
+A **space** is a place where messages arrive. Spaces include Slack channels, Discord channels and threads, Telegram groups, and GitHub repositories.
 
-| Mode | Messages from other people | What the agent does | Where replies go |
-| - | - | - | - |
-| `off` | SwB drops them | Stays asleep | Only to the owner |
-| `watch` | SwB stores them and sends you a digest | Reads only | Only to the owner |
-| `assist` | They wake the assist target | Answers from context with read tools | In the thread |
-| `triage` | They wake the triage agent | Reads and replies by default | In the thread |
-| `work` | Owner messages only | Anything you can ask for | In the thread |
+| Mode | What SwB does |
+| - | - |
+| `off` | Drops messages from other people |
+| `watch` | Collects messages in a digest |
+| `assist` | Wakes an agent to read context and reply in the thread |
+| `triage` | Wakes a triage agent. The default action is a reply in the thread |
+| `work` | Handles messages from the owner |
 
-Your own mention or DM is always `work`, in every mode. A mode can only narrow access. Visibility still decides who reaches a target.
+On Slack, Discord and Telegram, your mentions and direct messages use `work` in every mode. Visibility settings still control access to channels and targets.
 
 ## Set a mode
 
-Ask an agent, for example "Set #support to triage." The agent calls the mode tool. You can also choose a mode on the SwB page, or in the config.
+Set the mode on the SwB page, in YAML, or with `space_mode` as the owner. With `space_mode`, set the mode, project and allowed actions.
 
-```yaml
-modes:
-  default: watch
-blocks:
-  discord:
-    spaces:
-      home:
-        mode: watch
-        channels:
-          "100000000000000004": {mode: triage, project: app, actions: [reply, label, comment]}
+SwB first checks the saved setting, then the channel and space settings. It then checks older block settings, the project mode, and `modes.default`. The default is `off`.
+
+## Bind a target
+
+On GitHub, Slack, Discord and Telegram, the project route can wake an agent in `assist`, `triage` or `work` mode. SwB uses the first applicable target.
+
+| Order | Target |
+| - | - |
+| First | YAML `target` in the channel, space or project mode setting, in that order |
+| Next | In `triage`, an available target named `claude-<project>-triage`, such as a Claude routine |
+| Next | The space's `default_target` or its `target` alias |
+| Last | The route for the project |
+
+Call `routes_set` with the project slug and target address. Set the same `project` in the mode. This example uses an existing GitHub space, project and paired agent.
+
+```python
+routes_set(project="app", target="agent:alpha")
+space_mode(block="github", space="example-org/app", mode="triage", project="app")
 ```
 
-SwB uses the first match in this order. A mode set on the page or by an agent, then the channel, then the space, then `modes.projects.<project>`, then `modes.default`. The default of `modes.default` is `off`.
+Use `mode="assist"` to set assist mode instead. For a locked Capy route, use a target such as `capy:captain:<name>` and keep `allow_override=false`. Share the space and target to let other people reach the agent.
 
 ## Triage actions
 
-The `actions` list of a space holds the actions that a triage wake can use. The actions are `reply`, `label`, `comment`, `open_issue`, `link_duplicate` and `notify_owner`. SwB enforces the list on the server. The GitHub actions use the GitHub App of the project.
+The triage agent can read context. By default, its only action is `reply` in the same thread. Use `github_reply` for a GitHub thread.
 
-The triage agent can read and reply by default. Give it more actions with `actions`.
+Set `actions` in `space_mode` or in YAML to give the agent more actions. Include `reply` to keep replies enabled. For example, use `actions=["reply", "notify_owner"]`.
 
-Set `target` to choose an agent for a mode. Use `agent:example` for a mailbox. SwB uses the project route when the space has a project and the mode uses its default target.
+| Action | What it does |
+| - | - |
+| `label` | Adds labels to a GitHub issue or pull request |
+| `comment` | Adds a GitHub comment |
+| `open_issue` | Opens a GitHub issue |
+| `link_duplicate` | Links and closes a duplicate GitHub issue |
+| `notify_owner` | Sends a note to the owner |
 
-Use a separate routine such as `claude-<project>-triage` for triage. SwB records each triage action with a link to the message.
+GitHub changes require a GitHub credential with write access. SwB records triage actions in the audit log.
+
+## Check a delivery
+
+Use `modes_status` to see the mode, target, actions and setup problems. Both `space_mode` and `modes_status` show the message “Choose a triage agent.” when triage needs a target.
+
+SwB records a reason for each GitHub webhook it drops. Open **Audit** or run `swb log` to see the reason.

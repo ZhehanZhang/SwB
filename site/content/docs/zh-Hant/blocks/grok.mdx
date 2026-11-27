@@ -14,7 +14,7 @@ description: 連接 Grok，並用 Grok routine 喚醒它。
 建立 Grok Bot routine 時，加入自訂 webhook 觸發條件和這段提示詞。用下方指令向 SwB 註冊 routine。將 `example` 換成你的專案名稱。
 
 ```bash
-swb connect grok-bot --choose name=project-doorman project=example auth=key
+swb connect grok-bot --choose name=project-triage project=example auth=key
 ```
 
 Webhook 網址和金鑰各有一個領取連結。開啟對應的連結，貼上各自的值。再次執行同一條指令，取得測試指令。收到 `pong` 就表示 routine 已可使用。
@@ -27,7 +27,7 @@ SwB 發出 webhook 請求來啟動 routine。使用 `auth=key` 時，SwB 預設�
 blocks:
   grok-routine:
     routines:
-      project-doorman: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
+      project-triage: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
 ```
 
 用 routine 名稱傳送給它，或用 `grok:<slug>` 傳送給專案的主 routine。
