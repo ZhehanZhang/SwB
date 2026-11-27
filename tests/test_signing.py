@@ -112,7 +112,7 @@ async def test_github_stripe_sink_signs_delivered_bytes(tmp_path, caplog, header
         digest = hmac.digest(SECRET.encode(), f"{NOW}.".encode() + body, "sha256").hex()
         expected = f"t={NOW},v1={digest}"
         data = json.loads(body)
-        assert data["title"] == "café" and b"caf\xc3\xa9" in body
+        assert f"{OPEN}\ncafé\n{CLOSE}" in data["title"] and b"caf\xc3\xa9" in body
         assert data["subject"] == "Unknown sender (external) on GitHub acme/app: Issue #7"
         assert data["trust"] == "external" and f"{OPEN}\nIssue body\n{CLOSE}" in data["body"]
         assert data["body"] in data["text"] and data["text"].endswith("GitHub delivery stripe-delivery.")

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from .auth import Principal
     from .blocks import Address
     from .core import Switchboard
+    from .trust import AuthoredText
 
 MODES = ("off", "watch", "assist", "triage", "work")
 DM_MODES = ("off", "watch")
@@ -524,11 +525,13 @@ class ChannelModes:
         return "owner"
 
     def watch(self, block: str, space: str, channel: str, message: str, author_id: str, author: str | None,
-              excerpt: str, link: str | None, target: str | None, *, project: str | None = None, dm: bool = False) -> bool:
+              excerpt: str, link: str | None, target: str | None, *, project: str | None = None, dm: bool = False,
+              parts: dict[str, AuthoredText] | None = None) -> bool:
         added = self.core.store.n("INSERT OR IGNORE INTO watch_events(block, space, channel, message, author_id, author, excerpt, link, at, "
-                                  "target, project, dm) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                  "target, project, dm, parts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                                   (block, space, channel, message, author_id, author or author_id, excerpt[:500], link,
-                                   self.core.clock(), "owner" if dm else self._mailbox(target, project), project, int(dm)))
+                                   self.core.clock(), "owner" if dm else self._mailbox(target, project), project, int(dm),
+                                   dumps(parts) if parts is not None else None))
         if added:
             self.flush(block, space)
         return bool(added)
@@ -542,14 +545,16 @@ class ChannelModes:
                                 "HAVING COUNT(*) >= ? OR MIN(at) <= ?", (block, block, space, space, WATCH_BATCH, now - self.digest_s)).fetchall()
             for group in groups:
                 b, s, dm, target = group
-                rows = db.execute("SELECT channel, author, excerpt, link, at, project FROM watch_events "
+                rows = db.execute("SELECT channel, author, excerpt, link, at, project, parts FROM watch_events "
                                   "WHERE block=? AND space=? AND dm=? AND target=? AND delivered_at IS NULL ORDER BY at, rowid",
                                   (b, s, dm, target)).fetchall()
                 projects = {r["project"] for r in rows}
                 project = next(iter(projects)) if len(projects) == 1 else None
                 channels = {r["channel"] for r in rows}
+                items = [{**{key: r[key] for key in ("author", "excerpt", "link", "at")},
+                          **({"parts": json.loads(r["parts"])} if r["parts"] is not None else {})} for r in rows]
                 summary = {"block": b, "space": s, "channel": next(iter(channels)) if len(channels) == 1 else "",
-                           "count": len(rows), "items": [{k: r[k] for k in ("author", "excerpt", "link", "at")} for r in rows]}
+                           "count": len(rows), "items": items}
                 handle = Inbox.new_handle()
                 db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status) "
                            "VALUES (?, ?, 'mailbox', '', ?, ?, '{}', ?, 0, 'delivered')",
