@@ -8,13 +8,14 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from yarl import URL
 
-from .. import Action, Address, Block, BlockError, Call, Manifest, TargetKind
+from .. import Action, Address, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
 from ...agents import PRESETS
 from ...audit import iso
 from ...block_env import grok_credential_envs
 from ...claims import NAME_RE as SECRET_NAME_RE, valid_webhook_url
 from ...config import SLUG_RE as PROJECT_RE
 from ...projects import ProjectError
+from ...refusals import SCOPE_REQUIRED
 from ...signing import HEADER_NAME_RE, stripe_signature
 from ...subject import lead_with_subject, wake_text
 from ...targets import SLUG_RE as ROUTINE_RE
@@ -292,7 +293,7 @@ class GrokRoutineBlock(Block):
         effective_project = project or r["project"]
         scope = f"project:{effective_project}" if effective_project else "general"
         if not call.principal.allows(scope):
-            raise BlockError("This caller cannot send to that Grok routine's Switchboard scope")
+            raise BlockRefused(SCOPE_REQUIRED, "This caller cannot send to that Grok routine's Switchboard scope")
         out = await self.core.agent_send(call.principal, to="grok", text=task, project=effective_project,
                                          allow_self=True, handle=call.handle, handle_meta=call.handle_meta, title=title, dry_run=call.dry_run)
         if call.dry_run:

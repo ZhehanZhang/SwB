@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 from urllib.parse import quote_plus, urlencode, urlsplit
 
 import httpx
@@ -28,10 +28,15 @@ def _matches(value: object, expected: str) -> bool:
     return isinstance(value, str) and hmac.compare_digest(value.encode(), expected.encode())
 
 
+class RefusalRecorder(Protocol):
+    def __call__(self, request: Request, reason: str, *, bounded: bool) -> None: ...
+
+
 class OIDC:
-    def __init__(self, auth: Auth):
+    def __init__(self, auth: Auth, record_refusal: RefusalRecorder):
         self.auth = auth
         self.cfg = auth.cfg.oidc
+        self.record_refusal = record_refusal
 
     @property
     def callback_url(self) -> str:
@@ -124,7 +129,7 @@ class OIDC:
     async def callback(self, request: Request) -> RedirectResponse:
         from .auth import b64url_dec
 
-        response = RedirectResponse(FAILED, status_code=303)
+        response = None
         if self.cfg is not None:
             try:
                 payload, sep, sig = request.cookies.get(COOKIE, "").partition(".")
@@ -155,5 +160,8 @@ class OIDC:
             else:
                 response = RedirectResponse(safe_next(flow["next"]), status_code=303)
                 self.auth.sessions.start(request, response, "oidc")
+        if response is None:
+            self.record_refusal(request, "oidc_failed", bounded=True)
+            response = RedirectResponse(FAILED, status_code=303)
         clear_cookie(response, COOKIE)
         return response

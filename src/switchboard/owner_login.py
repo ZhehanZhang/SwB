@@ -26,8 +26,9 @@ from webauthn.helpers.structs import (
 )
 
 from . import pages
-from .guard import RateLimiter, client_ip
+from .guard import RateLimiter, audit_client_ip, client_ip
 from .oidc import OIDC
+from .refusals import SIGN_IN_FAILURES
 from .sessions import CHALLENGE_COOKIE, CHALLENGE_TTL, clear_cookie, safe_next, set_cookie
 from .web import spa_index
 
@@ -35,7 +36,6 @@ if TYPE_CHECKING:
     from .auth import Auth
 
 log = logging.getLogger(__name__)
-
 
 def error(name: str, status: int) -> JSONResponse:
     return JSONResponse({"error": name}, status_code=status)
@@ -55,7 +55,7 @@ class OwnerLogin:
         self.store = auth.store
         self.sessions = auth.sessions
         self.limiter = limiter
-        self.oidc = OIDC(auth)
+        self.oidc = OIDC(auth, self.record_refusal)
         self.setup_digest = auth.cfg.owner_setup_digest
         self.setup_throttled = 0
 
@@ -121,9 +121,25 @@ class OwnerLogin:
             return None
         return JSONResponse({"error": "slow_down"}, status_code=429, headers={"Retry-After": str(int(wait + 0.999))})
 
+    def record_refusal(self, request: Request, reason: str, *, bounded: bool) -> None:
+        path = request.url.path
+        if reason not in SIGN_IN_FAILURES.get(path, ()):
+            return
+        if bounded:
+            key = f"{path}:{reason}"
+            if self.limiter.blocked("sign_in_refusal_audit", key) is not None:
+                return
+            self.limiter.hit("sign_in_refusal_audit", key)
+        self.auth.audit.record(origin="http", source="-", client=audit_client_ip(request.scope), destination="core",
+                               action="auth_failure", outcome="refused", target=path, detail=reason)
+
+    def failed(self, request: Request, reason: str, status: int = 401, *, bounded: bool = False) -> JSONResponse:
+        self.record_refusal(request, reason, bounded=bounded)
+        return error(reason, status)
+
     async def link(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return error("csrf", 403)
+            return self.failed(request, "csrf", 403, bounded=True)
         ip = client_ip(request.scope)
         if (limited := self.limited("login_link_fail", ip)) is not None:
             return limited
@@ -133,7 +149,7 @@ class OwnerLogin:
                         else (None, "link_invalid"))
         if refused is not None:
             self.limiter.hit("login_link_fail", ip)
-            return error(refused, 401)
+            return self.failed(request, refused)
         response = self.sessions.start(request, Response(status_code=204), "link", row["client_id"], row["source"])
         self.auth.audit.record(origin="http", source=row["source"], client=row["client_id"], destination="core",
                                action="login_link_used", outcome="ok")
@@ -141,9 +157,9 @@ class OwnerLogin:
 
     async def setup(self, request: Request) -> Response:
         if not self.setup_open():
-            return error("setup_closed", 404)
+            return self.failed(request, "setup_closed", 404, bounded=True)
         if not request.headers.get("origin") or not self.auth.origin_ok(request):
-            return error("csrf", 403)
+            return self.failed(request, "csrf", 403, bounded=True)
         code = (await json_body(request)).get("code")
         if not (isinstance(code, str) and len(code) in (44, 64) and code.isascii()
                 and hmac.compare_digest(hashlib.sha256(code.encode()).digest(), self.setup_digest)):
@@ -157,18 +173,18 @@ class OwnerLogin:
                 self.setup_throttled += 1
                 log.warning("Owner setup attempt rate limited (%d total)", self.setup_throttled)
                 return limited
-            return error("setup_failed", 401)
+            return self.failed(request, "setup_failed")
         response = self.sessions.start(request, Response(status_code=204), "setup")
         if response.status_code == 409:
-            return error("setup_closed", 409)
+            return self.failed(request, "setup_closed", 409, bounded=True)
         self.auth.audit.record(origin="http", source="owner", client="setup", destination="core", action="owner_setup", outcome="ok")
         return response
 
     async def login_options(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return error("csrf", 403)
+            return self.failed(request, "csrf", 403, bounded=True)
         if not self.rp_id:
-            return error("passkey_failed", 401)
+            return self.failed(request, "passkey_failed", bounded=True)
         ip = client_ip(request.scope)
         if (limited := self.limited("passkey_options", ip)) is not None:
             return limited
@@ -185,7 +201,7 @@ class OwnerLogin:
         if refused is not None:
             return refused
         if not self.rp_id:
-            return error("passkey_failed", 401)
+            return self.failed(request, "passkey_failed", bounded=True)
         cookie, challenge = self.sessions.challenge("register", owner)
         options = generate_registration_options(
             rp_id=self.rp_id, rp_name="SwB", user_id=self.sessions.user_handle(), user_name="owner",
@@ -201,7 +217,7 @@ class OwnerLogin:
 
     async def login_verify(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return error("csrf", 403)
+            return self.failed(request, "csrf", 403, bounded=True)
         challenge = self.sessions.consume_challenge(request, "login", None)
         ip = client_ip(request.scope)
         response = self.limited("passkey_fail", ip)
@@ -234,13 +250,13 @@ class OwnerLogin:
                 response = self.sessions.start(request, Response(status_code=204), "passkey", source=row_id)
             else:
                 self.limiter.hit("passkey_fail", ip)
-                response = error("passkey_failed", 401)
+                response = self.failed(request, "passkey_failed")
         clear_cookie(response, CHALLENGE_COOKIE)
         return response
 
     async def register_verify(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return error("csrf", 403)
+            return self.failed(request, "csrf", 403, bounded=True)
         owner, refused = await self.auth.protect_owner(request)
         challenge = self.sessions.consume_challenge(request, "register", owner)
         if refused is not None:
@@ -268,7 +284,7 @@ class OwnerLogin:
                 response = JSONResponse({"id": cid}, status_code=201)
             else:
                 self.limiter.hit("passkey_fail", ip)
-                response = error("passkey_failed", 401)
+                response = self.failed(request, "passkey_failed")
         clear_cookie(response, CHALLENGE_COOKIE)
         return response
 
