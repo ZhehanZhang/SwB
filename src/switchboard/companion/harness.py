@@ -74,24 +74,36 @@ class Harness:
         self.reported.clear()
 
     def expect(self, keys: Iterable[str], session: str, conversation: str, agent: str) -> None:
-        wake = Wake(session, conversation, agent, time.monotonic() + WAKE_TTL_S)
+        now = time.monotonic()
+        for key in [key for key, wake in self.wakes.items() if wake.expires <= now]:
+            del self.wakes[key]
+        wake = Wake(session, conversation, agent, now + WAKE_TTL_S)
         for key in keys:
             if key:
                 self.wakes[key] = wake
 
-    def take(
+    def pending(
         self, keys: Iterable[str], *, received_at: float | None = None, expected_agent: str | None = None,
     ) -> Wake | None:
         now = time.monotonic()
-        for key in [k for k in keys if k]:
-            wake = self.wakes.get(key)
-            if (wake and wake.expires > now
-                    and (received_at is None or wake.expires - WAKE_TTL_S <= received_at)
+        for key in keys:
+            if not key or not (wake := self.wakes.get(key)):
+                continue
+            if wake.expires <= now:
+                del self.wakes[key]
+                continue
+            if ((received_at is None or wake.expires - WAKE_TTL_S <= received_at)
                     and (expected_agent is None or wake.agent == expected_agent)):
-                for k in [k for k, w in self.wakes.items() if w is wake]:
-                    del self.wakes[k]
                 return wake
         return None
+
+    def take(
+        self, keys: Iterable[str], *, received_at: float | None = None, expected_agent: str | None = None,
+    ) -> Wake | None:
+        if wake := self.pending(keys, received_at=received_at, expected_agent=expected_agent):
+            for key in [key for key, value in self.wakes.items() if value is wake]:
+                del self.wakes[key]
+        return wake
 
     async def report(self, ctx: CompanionContext, cap: str, session: Session) -> bool:
         payload = session.payload()
@@ -102,10 +114,11 @@ class Harness:
             return False
         if last and now - last[0] < COALESCE_S and payload["state"] == last[1]["state"]:
             return False
-        self.reported[key] = (now, payload)
+        await ctx.emit(f"{cap}.session", payload)
         if payload["state"] == "ended":
             self.reported.pop(key, None)
-        await ctx.emit(f"{cap}.session", payload)
+        else:
+            self.reported[key] = (now, payload)
         return True
 
     async def reply(
@@ -115,6 +128,16 @@ class Harness:
         text = reply_text(text)
         if not text.strip() or not (wake := self.take(keys, received_at=received_at, expected_agent=expected_agent)):
             return False
+        text = text[:REPLY_MAX].encode("utf-8", errors="replace").decode("utf-8")
+        if len(json.dumps(text, ensure_ascii=False).encode()) > REPLY_MAX + 2:
+            lower, upper = 0, len(text)
+            while lower < upper:
+                middle = (lower + upper + 1) // 2
+                if len(json.dumps(text[:middle], ensure_ascii=False).encode()) <= REPLY_MAX + 2:
+                    lower = middle
+                else:
+                    upper = middle - 1
+            text = text[:lower]
         await ctx.emit(f"{cap}.reply", {"session": wake.session, "conversation": wake.conversation, "agent": wake.agent,
                                         "text": text})
         return True
