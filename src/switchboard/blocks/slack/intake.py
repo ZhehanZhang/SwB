@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from .. import Address, Block, BlockError
 from ...auth import Principal
+from ...modes import ChatDrop, chat_target_drop
 from ...projects import ProjectError
 from ...slack.config import Grant, Persona
 from ...slack.routing import Target
@@ -74,6 +75,7 @@ class SlackIntake(Block):
             self.engine.mode_poll_channels = self.mode_poll_channels
             self.engine.target_agents = self.target_agents
             self.engine.context_listeners.append(self.deliver_context)
+            self.engine.context_limited = lambda push: self._drop(push, ChatDrop.SENDER_LIMIT)
             self.engine.visibility = core.visibility
             core.change_listeners.append(self.changed)
 
@@ -179,6 +181,9 @@ class SlackIntake(Block):
             agents.discard(skipped)
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, push["workspace"]), "slack_event", item)
+        if (target is None and push["addressed_to_us"] and "channel_mode" not in push and not push.get("_skip_delegate")
+                and not engine.sink_accepts(push["workspace"], push)):
+            self._drop(push, chat_target_drop("work", bool(push.get("target"))))
         if (not push.get("_skip_delegate") and target is not None and target.kind != "agent" and push["addressed_to_us"]
                 and (private or not engine.sink_accepts(push["workspace"], push))):
             await self.delegate(push, target)
@@ -188,6 +193,10 @@ class SlackIntake(Block):
         (or the workspace's granted agents when it has none). It wakes nobody and is never delegated or answered."""
         engine = self.engine
         assert engine is not None
+        if push["addressed_to_us"]:
+            channel = engine.channel_resources(push["workspace"], push["channel"], push.get("channel_name"))
+            shared = engine.visibility.allows(engine.who(engine.runtime(push["workspace"]), push), *channel)
+            self._drop(push, ChatDrop.TARGET_RESTRICTED if shared else ChatDrop.CHANNEL_RESTRICTED)
         target = engine.targets.get(push.get("target") or "")
         if target is None:
             agents = {agent for agent, grant in engine.config.grants.items() if grant.identities_for(push["workspace"])}
@@ -235,6 +244,9 @@ class SlackIntake(Block):
                 out.setdefault((label, channel), (name, "channel", None))
         return out
 
+    def _drop(self, push: dict[str, Any], reason: ChatDrop) -> None:
+        self.core.modes.chat_drop(self.name, push["workspace"], push["channel"], reason, dm=push["kind"] == "dm")
+
     async def mode_intake(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> tuple[bool, dict[str, Any] | None]:
         engine = self.engine
         assert engine is not None
@@ -255,9 +267,16 @@ class SlackIntake(Block):
                   and not getattr(modes.cfg, "explicit_default", False))
         if legacy and (mode != "watch" or trust == "owner" or (push["is_bot"] and trust != "known")):
             return False, None
-        if (push["is_bot"] and trust not in ("owner", "known")) or mode == "off":
+        addressed = push["addressed_to_us"]
+        if mode == "off" or (mode == "work" and trust != "owner"):
+            if addressed:
+                self._drop(push, ChatDrop.OFF if mode == "off" else ChatDrop.OWNER_REQUIRED)
             return True, None
-        if (mode == "work" and trust != "owner") or (trust == "owner" and mode != "watch" and not push["addressed_to_us"]):
+        if trust == "owner" and mode != "watch" and not addressed:
+            return True, None
+        if push["is_bot"] and trust == "external":
+            if addressed or mode in ("assist", "triage"):
+                self._drop(push, ChatDrop.EXTERNAL_BOT)
             return True, None
         link = push["permalink"]
         route = modes.project_route(self.name, project) if not target_ref else None
@@ -283,6 +302,9 @@ class SlackIntake(Block):
                                                                      project, link, str(route) if routed else push["target"]))
             push["user_name"] = await rt.user_name(push["user"]) or push["user_name"]
             engine.stamp(rt, push)
+            sink_accepts = not direct and bool(engine.sink_accepts(workspace, push))
+            if target is None and not sink_accepts:
+                self._drop(push, chat_target_drop("work", bool(push["target"] or target_ref or route)))
             separate = target is not None and (routed or target.slug not in engine.targets)
             if direct and separate:
                 await self.delegate(push, target, route=route if routed else None)
@@ -291,21 +313,32 @@ class SlackIntake(Block):
             else:
                 skip_agent = route.id if routed and route.block == "agent" else None
                 await engine.fan_out(workspace, push, skip_delegate=separate, skip_agent=skip_agent)
-                if separate and not engine.sink_accepts(workspace, push):
+                if separate and not sink_accepts:
                     await self.delegate(push, target, route=route if routed else None)
             return True, push
         if project:
             try:
                 project = self.core.projects.get(project.removeprefix("project:"), allow_archived=False).slug
             except ProjectError:
+                self._drop(push, ChatDrop.PROJECT_UNAVAILABLE)
                 return True, None
         target = await self.mode_target(target_ref, project, route=route)
         if project is None and target is not None:
             project = target.project
         push.update(target=target.slug if target else None, target_kind=target.kind if target else None, trust=trust)
-        if (target is None or target.project not in (None, project) or not engine.reaches(rt, push)
-                or (target_ref in engine.targets and not engine.reaches(rt, {**push, "target": target_ref}))
-                or not engine.store.claim_event(push)):
+        if not engine.visibility.allows(engine.who(rt, push), *engine.channel_resources(workspace, channel, name)):
+            self._drop(push, ChatDrop.CHANNEL_RESTRICTED)
+            return True, None
+        if target is None:
+            self._drop(push, chat_target_drop(mode, bool(target_ref or route)))
+            return True, None
+        if target.project not in (None, project):
+            self._drop(push, ChatDrop.PROJECT_MISMATCH)
+            return True, None
+        if not engine.reaches(rt, push) or (target_ref in engine.targets and not engine.reaches(rt, {**push, "target": target_ref})):
+            self._drop(push, ChatDrop.TARGET_RESTRICTED)
+            return True, None
+        if not engine.store.claim_event(push):
             return True, None
         if engine.sender_allowed(rt, push, mode):
             push["user_name"] = await rt.user_name(push["user"]) or push["user_name"]
@@ -313,6 +346,7 @@ class SlackIntake(Block):
             push["channel_mode"] = modes.meta(self.name, workspace, channel, mode, actions, project, link, str(route) if route else target.slug)
             await self.delegate(push, target, route=route)
             return True, push
+        self._drop(push, ChatDrop.SENDER_LIMIT)
         return True, None
 
     async def mode_target(self, ref: str | None, project: str | None, *, route: Address | None) -> Target | None:
@@ -351,10 +385,14 @@ class SlackIntake(Block):
             project = self.core.projects.get((self.mapped_project(push) or "").strip().lower().removeprefix("project:"), allow_archived=False).slug
         except ProjectError:
             engine.store.audit(actor, "listen_ignored", rt.label, reason="no mapped project", **details)
+            if not push["addressed_to_us"]:
+                self._drop(push, ChatDrop.PROJECT_UNAVAILABLE)
             return False
         channel_resources = engine.channel_resources(rt.label, push["channel"], push.get("channel_name"))
         if not engine.channel_shared(rt.label, push["channel"]) or not engine.visibility.allows(engine.who(rt, push), *channel_resources):
             engine.store.audit(actor, "listen_ignored", rt.label, reason="channel is not shared with sender", **details)
+            if not push["addressed_to_us"]:
+                self._drop(push, ChatDrop.CHANNEL_RESTRICTED)
             return False
         engine.route(rt, original)
         engine.stamp(rt, original)
@@ -363,16 +401,20 @@ class SlackIntake(Block):
         if engine.reaches(rt, original):
             await engine.fan_out(rt.label, original, skip_delegate=True)
         if push["is_bot"] and push["trust"] != "known":
+            self._drop(push, ChatDrop.EXTERNAL_BOT)
             return True
         address = next((addr for b in self.core.blocks.values() if b.wakes_agents and (addr := b.wake_target("claude", project))), None)
         if address is None:
             engine.store.audit(actor, "listen_ignored", rt.label, reason="no primary routine", project=project, **details)
+            self._drop(push, ChatDrop.ASSIST_TARGET)
             return True
         target = next((t for t in engine.targets.values() if t.address == str(address)), None)
         target = target or Target(address.id, address.kind, address.id, address.id, address=str(address), project=project)
         push.update(target=target.slug, target_kind=target.kind)
         if engine.sender_allowed(rt, push, "listen"):
             await self.delegate(push, target, listen_project=project)
+        else:
+            self._drop(push, ChatDrop.SENDER_LIMIT)
         return True
 
     async def delegate(self, push: dict[str, Any], target: Target, *, listen_project: str | None = None, route: Address | None = None) -> None:
@@ -384,6 +426,7 @@ class SlackIntake(Block):
         scoped = bool(channel_mode and channel_mode["mode"] in ("assist", "triage"))
         project = channel_mode["project"] if channel_mode else listen_project or self.mapped_project(push)
         if route is not None and self.core.modes.project_route(self.name, project) != route:
+            self._drop(push, ChatDrop.ROUTE_CHANGED)
             return
         trust = push.get("trust", "external")
         mapped = target.kind == "routine" and not target.project and project and trust == "owner"
@@ -417,6 +460,7 @@ class SlackIntake(Block):
         except Exception as exc:
             log.warning("slack %s: delegating %s to %s failed: %s", push["workspace"], push["id"], target.slug, exc)
             engine.store.audit(f"agent:{AGENT}", "route_failed", push["workspace"], message=push["id"], target=target.slug, error=str(exc)[:300])
+            self._drop(push, ChatDrop.DELIVERY_FAILED)
             return
         finally:
             SLACK_SENDER.reset(token)

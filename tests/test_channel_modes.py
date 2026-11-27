@@ -30,6 +30,7 @@ from test_telegram import STRANGER as TELEGRAM_STRANGER
 from test_telegram import run as _telegram_fixture
 
 from switchboard.blocks.mcp.policy import MODE_REQUIRED
+from switchboard.modes import ChatDrop
 
 MODES = {"off", "watch", "assist", "triage", "work"}
 ACTIONS = {"reply", "label", "comment", "open_issue", "link_duplicate", "notify_owner"}
@@ -178,7 +179,7 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
 @pytest.fixture(params=["discord", "telegram"])
 def intake(request, discord, telegram):
     @contextmanager
-    def build(mode, *, shared=True, dm_mode=None, topic_mode=None, mailbox=False, capy=None):
+    def build(mode, *, shared=True, dm_mode=None, topic_mode=None, mailbox=False, capy=None, targetless=False):
         is_discord = request.param == "discord"
         channel, target = (DISCORD_CHANNEL, "build-check") if is_discord else (str(GROUP), "example-runner")
         topic, topic_channel = 42, "42" if is_discord else f"{GROUP}:42"
@@ -187,10 +188,11 @@ def intake(request, discord, telegram):
             channels[topic_channel] = topic_mode
         placement = {"guild_id": GUILD, "owner_ids": [DISCORD_OWNER]} if is_discord else {"chats": [GROUP], "owner_ids": [TELEGRAM_OWNER]}
         choices = {"mode": mode, "project": "example", "default_target": target, "channels": channels}
-        if mailbox or capy:
+        if mailbox or capy or targetless:
             choices.pop("default_target")
             channels[channel].pop("target")
-            target = "alpha" if mailbox else f"capy:captain:{CAPTAIN}"
+            if mailbox or capy:
+                target = "alpha" if mailbox else f"capy:captain:{CAPTAIN}"
         settings = {"spaces": {"home": {**placement, **choices}}, "dm_space": "home"}
         if dm_mode is not None:
             settings["dm_mode"] = dm_mode
@@ -214,9 +216,9 @@ def intake(request, discord, telegram):
                 client.portal.call(block.dispatch, "GUILD_CREATE",
                                    {"id": GUILD, "channels": [wire.channels[channel]], "threads": [thread]})
 
-            def send(ident, text, *, owner=False, mention=False, dm=False, in_topic=False):
+            def send(ident, text, *, owner=False, mention=False, dm=False, in_topic=False, is_bot=False):
                 if is_discord:
-                    author = {"id": DISCORD_OWNER if owner else "987", "username": "Owner"}
+                    author = {"id": DISCORD_OWNER if owner else "987", "username": "Owner", "bot": is_bot}
                     content = f"<@{DISCORD_BOT}> {text}" if mention else text
                     frame = discord_message(id=str(ident), author=author, member={}, content=content,
                                             guild_id=None if dm else GUILD,
@@ -226,6 +228,7 @@ def intake(request, discord, telegram):
                     sender = TELEGRAM_OWNER if owner else TELEGRAM_STRANGER
                     frame = update(ident, user=sender, text=text, mention=mention, chat=sender if dm else GROUP,
                                    kind="private" if dm else "supergroup", topic=topic if in_topic else None)
+                    frame["message"]["from"]["is_bot"] = is_bot
                     client.portal.call(wire.deliver, frame)
 
             def wakes():
@@ -235,6 +238,51 @@ def intake(request, discord, telegram):
             yield SimpleNamespace(core=core, client=client, block=block, send=send, channel=channel, topic=topic_channel, target=target,
                                   wakes=wakes, posts=posts, reactions=reactions)
     return build
+
+
+@pytest.mark.parametrize(("mode", "mention", "is_bot", "reason"), [
+    ("off", True, False, "channel mode off"),
+    ("assist", False, False, "assist needs a target"),
+    ("triage", False, False, "triage needs an agent"),
+    ("assist", False, True, "external bot message"),
+])
+def test_chat_mode_drops_are_counted_and_throttled(intake, mode, mention, is_bot, reason):
+    with intake(mode, targetless=not is_bot) as chat:
+        for ident in (10, 11):
+            chat.send(ident, "Private message body", mention=mention, is_bot=is_bot)
+        [row] = chat.core.audit.recent(action="chat_event", outcome="dropped")
+        assert (row["origin"], row["target"], row["detail"], row["ref"], row["excerpt"]) == (
+            chat.block.name, f"home/{chat.channel}", reason, None, "",
+        )
+        status = chat.block.status()
+        assert status["dropped"] == 2 and status["drop_reasons"] == {reason: 2}
+        response = chat.client.get("/api/audit", headers=OWNER, params={"action": "chat_event"}).json()
+        [display] = response["items"]
+        assert display["detail"] == reason and display["source"] == chat.block.platform
+        chat.core.clock.t += 600
+        chat.send(12, "Another private body", mention=mention, is_bot=is_bot)
+        assert chat.block.status()["drop_reasons"] == {reason: 3}
+        assert len(chat.core.audit.recent(action="chat_event", outcome="dropped")) == 2
+        assert not chat.wakes()
+
+
+def test_ordinary_watch_chatter_has_no_drop_audit(intake):
+    with intake("watch") as chat:
+        chat.send(10, "Ordinary feedback")
+        chat.send(11, "Ordinary bot feedback", is_bot=True)
+        assert not chat.core.audit.recent(action="chat_event")
+        assert chat.block.status()["drop_reasons"] == {}
+
+
+def test_drop_throttle_separates_channels_and_reasons(make):
+    core, _ = make(config=config())
+    for channel, reason in (("40", ChatDrop.OFF), ("41", ChatDrop.OFF), ("40", ChatDrop.EXTERNAL_BOT)):
+        core.modes.chat_drop("discord", "home", channel, reason)
+        core.modes.chat_drop("discord", "home", channel, reason)
+    assert {(row["target"], row["detail"]) for row in core.audit.recent(action="chat_event")} == {
+        ("home/40", "channel mode off"), ("home/41", "channel mode off"), ("home/40", "external bot message"),
+    }
+    assert core.blocks["discord"].status()["drop_reasons"] == {"channel mode off": 4, "external bot message": 2}
 
 
 @pytest.mark.parametrize("mode", ["off", "watch", "work"])

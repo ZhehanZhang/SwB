@@ -38,7 +38,7 @@ export const auditGroups = {
   Routes: ["route_set", "route_remove", "auto_link", "auto_route", "visibility_set"],
   Tokens: ["token_claim", "routine_claim", "connect_code", "connect_redeem", "connect_revoke", "register", "routine_register", "routine_add", "routine_remove", "add", "remove"],
   Memory: ["memory_write", "memory_delete", "memory_move", "memory_promote", "cross_read"],
-  Messages: ["agent_send", "send", "delegate", "fire", "reply", "post", "react", "request_write", "listen_note", "turn_cap", "conversation_resume", "cancel", "webhook", "send_refused", "send_key_fallback"],
+  Messages: ["agent_send", "send", "delegate", "fire", "reply", "post", "react", "request_write", "listen_note", "turn_cap", "conversation_resume", "cancel", "webhook", "chat_event", "send_refused", "send_key_fallback"],
 } as const
 
 export type AuditGroup = keyof typeof auditGroups
@@ -158,6 +158,7 @@ function auditSentence({ action, target, ref, destination, outcome, metadata, pr
     const event = outcome === "dropped" ? "Dropped" : outcome === "refused" ? "Refused" : outcome === "error" ? "Failed" : "Received"
     return `${event} webhook for ${target || destination}`
   }
+  if (action === "chat_event" && outcome === "dropped") return `Dropped chat wake in ${target || destination}`
   if (action === "tool_refused") return target ? `Refused ${target}` : "Refused tool request"
   if (action === "memory_write" && metadata?.scope) return "Wrote memory"
   if (action === "auth_failure" || action === "auth_missing" || action === "oauth_refused" || action === "rate_limited") {

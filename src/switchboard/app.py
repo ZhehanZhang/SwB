@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import json
 import re
+from collections.abc import Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
@@ -151,7 +152,7 @@ def _cursor(request: Request) -> int | None:
         return None
 
 
-def create_app(core: "Switchboard") -> Any:
+def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = None) -> Any:
     claim_owner_key = core.cfg.env.get("SWITCHBOARD_KEY_OWNER")
     claim_principal = core.auth.verify_bearer(claim_owner_key)
     claim_key_actor = (claim_principal.client_id if claim_principal is not None and claim_principal.kind == "key"
@@ -519,6 +520,8 @@ def create_app(core: "Switchboard") -> Any:
                     await stack.enter_async_context(cm)
             await core.start()
             try:
+                if on_started is not None:
+                    on_started()
                 yield
             finally:
                 await core.aclose()
