@@ -415,7 +415,7 @@ class DotsBlock(Block):
             raise BlockError(f"no dot {target!r}; dots: {', '.join(d['slug'] for d in self.dots()) or 'none found yet'}")
         if self.delivery == "mailbox":
             out = await self.core.agent_send(call.principal, to=dot["mailbox"], text=task, project=project,
-                                            handle=call.handle, handle_meta=call.handle_meta, dry_run=call.dry_run)
+                                            handle=call.handle, handle_meta=call.handle_meta, title=title, dry_run=call.dry_run)
             if call.dry_run:
                 return {**out, "to": f"{self.name}:dot:{dot['id']}", "mode": "mailbox"}
             call.note(target=f"dot:{dot['slug']}", ref=out["handle"], title=title, excerpt=task)

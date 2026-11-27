@@ -218,7 +218,8 @@ def test_project_routine_refused_with_text_is_woken_without_it(tmp_path):
         assert payload(call(c, STATIC_KEY, "routine_pickup", {}))["conversation"] is None
         assert payload(call(c, tok, "routine_pickup", {"routine": "claude"}))["conversation"] is None
         got = payload(call(c, tok, "routine_pickup", {"routine": "trig_BEACON"}))
-        assert got["conversation"] == out["conversation"] and got["text"].startswith("deploy status?") and 'context_pack(project="beacon")' in got["text"]
+        assert got["conversation"] == out["conversation"] and got["text"].splitlines()[0] == "Capy asks: deploy status?"
+        assert 'context_pack(project="beacon")' in got["text"]
         assert got["trust"] == "owner" and got["from"]["agent"] == "capy"
         assert payload(call(c, tok, "routine_pickup", {}))["conversation"] is None
         big = "y" * 30_000
@@ -263,9 +264,9 @@ def test_pickup_filters_by_claude_project_and_switchboard_project(tmp_path):
             assert payload(call(c, tok, "routine_pickup", filters))["conversation"] is None
         assert payload(call(c, STATIC_KEY, "routine_pickup", {"claude_project": "Beacon Ops"}))["conversation"] is None
         got = payload(call(c, tok, "routine_pickup", {"claude_project": " bEacon Ops ", "project": "beacon", "routine": "trig_01OPS"}))
-        assert got["conversation"] == b["conversation"] and got["text"].startswith("ops")
+        assert got["conversation"] == b["conversation"] and got["text"].splitlines()[0] == "Capy asks: ops"
         got = payload(call(c, tok, "routine_pickup", {"claude_project": "web operations"}))
-        assert got["conversation"] == a["conversation"] and got["text"].startswith("web")
+        assert got["conversation"] == a["conversation"] and got["text"].splitlines()[0] == "Capy asks: web"
         for routine in ("claude-beacon", "claude-beacon-ops"):
             out = payload(call(c, STATIC_KEY, "send", {"task": "again", "to": routine}))
             assert payload(call(c, tok, "routine_pickup", {"project": "beacon"}))["conversation"] == out["conversation"]
