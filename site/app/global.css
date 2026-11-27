@@ -68,6 +68,10 @@
 }
 
 @layer components {
+  .swb-container {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-8;
+  }
+
   .text-display-xl {
     @apply font-display font-extrabold;
     font-size: 2rem;
@@ -95,11 +99,6 @@
   .dark .swb-connector[src$='/slack.svg'] {
     filter: brightness(0) invert(.89);
   }
-}
-
-.swb-hero-title {
-  font-size: clamp(2rem, 3.65vw, 3.25rem);
-  text-wrap: balance;
 }
 
 .swb-mdx [role='tabpanel'] > figure:has(pre) {
@@ -269,14 +268,18 @@
   display: grid;
   align-items: center;
   gap: 2rem;
-  min-height: calc(86dvh - 3.5rem);
-  padding-block: 2.5rem 1rem;
+  padding-block: 2.5rem 1.5rem;
 }
 @media (min-width: 1024px) {
-  .swb-hero-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 2rem; }
+  .swb-hero-grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    min-height: clamp(30rem, 68dvh, 42rem);
+    padding-block: 2rem;
+  }
 }
-.swb-hero-title { text-wrap: balance; }
-@media (min-width: 1024px) { .swb-hero-copy .swb-hero-title { font-size: clamp(2.75rem, 4.4vw, 4.5rem); line-height: 1.02; } }
+.swb-hero-copy { container-type: inline-size; }
+.swb-hero-title { font-size: clamp(2rem, 9.2cqw, 3.625rem); line-height: 1.07; }
+.swb-hero { width: min(100%, 39rem); justify-self: center; }
 
 button.swb-node { cursor: pointer; border-radius: 9999px; background: none; padding: 0; animation: swb-drift var(--drift-duration) var(--drift-delay) ease-in-out infinite alternate; }
 button.swb-node .swb-mark-tile { transition: transform .2s ease, box-shadow .2s ease; }
@@ -327,20 +330,25 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
   line-height: 1.6;
 }
 
-.swb-exchange { max-width: 48rem; margin-inline: auto; }
+.swb-exchange { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+@media (min-width: 900px) {
+  .swb-exchange { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  .swb-exchange { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .swb-win {
   display: grid;
   grid-template-rows: 3rem minmax(0, 1fr);
-  height: 22rem;
+  height: 20.5rem;
   background: var(--surface);
   box-shadow: var(--toast-shadow);
 }
 .swb-win-bar { background: var(--surface-sunken); }
-.swb-win-body { mask-image: linear-gradient(to bottom, transparent, black 1.5rem); }
-.swb-win-message:last-child { animation: swb-message-in .25s ease-out; }
-.swb-win-entry + .swb-win-entry { margin-top: .625rem; }
+.swb-win-message + .swb-win-message { margin-top: .55rem; }
 @media (prefers-reduced-motion: no-preference) {
-  .swb-win-entry + .swb-win-break { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--border); }
+  .swb-win-message[data-pending] { display: none; }
+  .swb-win-message[data-new] { animation: swb-message-in .25s ease-out; }
 }
 .swb-win-avatar.swb-mark-tile { width: 32px; height: 32px; border-radius: 50%; }
 .swb-win-you { color: var(--muted-foreground); background: var(--surface-sunken); }
@@ -356,44 +364,26 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
 
 @media (prefers-reduced-motion: reduce) {
   button.swb-node, button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile,
-  .swb-win-message:last-child, .swb-panel { animation: none; }
-  .swb-win-body { mask-image: none; }
-  .swb-win-entry:not(.swb-win-message) { display: none; }
-  .swb-win-entry:not(.swb-win-message) + .swb-win-message { margin-top: 0; }
+  .swb-panel { animation: none; }
   button.swb-node .swb-mark-tile { transition: none; }
   button.swb-node:hover .swb-mark-tile { transform: none; }
 }
 
-.swb-rotate { display: grid; color: var(--accent-strong, var(--foreground)); }
+.swb-rotate { display: grid; color: var(--accent-strong, var(--foreground)); font-size: .94em; }
 .swb-rotate-item { grid-area: 1 / 1; opacity: 0; transform: translateY(.12em); transition: opacity .25s ease, transform .25s ease; }
 .swb-rotate-on { opacity: 1; transform: none; transition: opacity .35s ease .25s, transform .35s ease .25s; }
 .swb-rotate-item:not(.swb-rotate-on) { pointer-events: none; }
-.swb-between { container-type: inline-size; line-height: 2; color: var(--muted-foreground, inherit); }
-.swb-between > .swb-between-text { display: inline-block; vertical-align: middle; }
-.swb-between-inline > .swb-between-text:first-child { margin-inline-end: .45em; }
-.swb-between-inline > .swb-between-text:last-child { margin-inline-start: .45em; }
-.swb-pair { display: inline-flex; align-items: center; gap: .45em; vertical-align: middle; white-space: nowrap; }
-.swb-between-row { text-align: center; }
-.swb-between-row > .swb-between-text { display: block; }
-@container (width < 33.5rem) {
-  .swb-between-inline > .swb-between-text:first-child { display: block; margin-inline: 0; }
-}
-@container (width < 24rem) {
-  .swb-between-inline > .swb-between-text:last-child { display: block; margin-inline: 0; }
-}
+.swb-between { display: flex; flex-wrap: wrap; align-items: center; gap: .35em .5em; line-height: 1.6; color: var(--muted-foreground, inherit); }
+.swb-pair { display: inline-flex; align-items: center; gap: .5em; white-space: nowrap; }
 .swb-slot {
   display: inline-grid;
-  position: relative;
-  grid-template-columns: minmax(0, 1fr);
   place-items: center;
-  box-sizing: content-box;
-  overflow: clip;
   border: 1px solid var(--border);
   border-radius: 9999px;
   background: var(--surface);
-  transition: inline-size 1.2s cubic-bezier(.3, .2, .7, .8);
 }
 .swb-chip {
+  grid-area: 1 / 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -408,10 +398,10 @@ button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { ani
   opacity: 0;
   transition: opacity .6s ease;
 }
-.swb-chip:not(.swb-chip-on) { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; pointer-events: none; }
+.swb-chip:not(.swb-chip-on) { pointer-events: none; }
 .swb-chip-on { opacity: 1; transition-delay: .2s; }
 .swb-chip-mark.swb-mark-tile { width: 1.4em; height: 1.4em; min-width: 0; min-height: 0; }
 .swb-picker-mark.swb-mark-tile { width: 1.5rem; height: 1.5rem; min-width: 0; min-height: 0; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .swb-rotate-item, .swb-slot, .swb-chip { transition: none; }
+  .swb-rotate-item, .swb-chip { transition: none; }
 }

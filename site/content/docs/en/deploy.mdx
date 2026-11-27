@@ -7,54 +7,6 @@ description: Run SwB on your computer or a server.
 
 Follow [Install](/docs/install). Open the one-time sign-in link that SwB prints on the first local start. To get a new link, run `swb login-link`. The deploy prompt also covers local setup.
 
-<DeployLive>
-
-## Deploy SwB
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB)
-
-<Steps>
-<Step>
-### Start the deploy
-
-Click **Deploy to Render**. Sign in to Render. Keep the default settings and click **Deploy**. {/* unverified */}
-</Step>
-<Step>
-### Wait for the service
-
-Render builds SwB in a few minutes. The service page shows **Live** when SwB is ready.
-</Step>
-<Step>
-### Copy your address
-
-Copy the service URL at the top of the page. Add `/mcp` to the URL for your MCP address.
-</Step>
-</Steps>
-
-## Sign in
-
-<Steps>
-<Step>
-### Copy the setup code
-
-Open **Environment** in your Render service. Copy the value of `SWB_SETUP_CODE`.
-</Step>
-<Step>
-### Open the sign-in page
-
-Open **Logs** in your Render service. Open the sign-in page address that the log shows. {/* unverified */}
-</Step>
-<Step>
-### Enter the code
-
-Paste the code in **Setup code**. Add a passkey to sign in again. The setup code works one time.
-</Step>
-</Steps>
-
-</DeployLive>
-
-<DeployHeld>
-
 ## Deploy SwB
 
 Paste this prompt into a coding agent such as Claude Code or Codex. The agent guides you through local or hosted setup.
@@ -65,20 +17,8 @@ Paste this prompt into a coding agent such as Claude Code or Codex. The agent gu
 
 Open the sign-in page address from the service log. Copy `SWB_SETUP_CODE` from the service settings or the private file named by the deploy command. Paste it in **Setup code**. Add a passkey for later sign-ins.
 
-</DeployHeld>
-
 ## Connect your agent
 
 [Connect SwB to one agent](/docs/connect). Then paste this prompt into that agent. Ask it to connect your other apps.
 
 <SetupPrompt name="coordinator" lang="en" />
-
-<DeployLive>
-
-## Use another platform
-
-Paste this prompt into a coding agent such as Claude Code or Codex. The agent guides you through setup on another platform.
-
-<SetupPrompt name="deploy" lang="en" />
-
-</DeployLive>

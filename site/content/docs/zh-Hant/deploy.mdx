@@ -7,54 +7,6 @@ description: 在電腦或伺服器上執行 SwB。
 
 依照[安裝指南](/zh-Hant/docs/install)啟動 SwB。開啟首次在本機啟動時顯示的一次性登入連結。若要取得新連結，請執行 `swb login-link`。部署提示詞也適用於本機。
 
-<DeployLive>
-
-## 部署 SwB
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB)
-
-<Steps>
-<Step>
-### 開始部署
-
-點選 **Deploy to Render**。登入 Render。保留預設設定，點選 **Deploy**。{/* unverified */}
-</Step>
-<Step>
-### 等待服務就緒
-
-Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live**。
-</Step>
-<Step>
-### 複製位址
-
-複製頁面頂端的服務 URL。在結尾加上 `/mcp`，就是 MCP 位址。
-</Step>
-</Steps>
-
-## 登入
-
-<Steps>
-<Step>
-### 複製設定碼
-
-在 Render 服務中開啟 **Environment**。複製 `SWB_SETUP_CODE` 的值。
-</Step>
-<Step>
-### 開啟登入頁面
-
-在 Render 服務中開啟 **Logs**。開啟記錄中顯示的登入頁面位址。{/* unverified */}
-</Step>
-<Step>
-### 輸入設定碼
-
-將設定碼貼到 **Setup code**。新增通行金鑰，之後用它登入。設定碼只能使用一次。
-</Step>
-</Steps>
-
-</DeployLive>
-
-<DeployHeld>
-
 ## 部署 SwB
 
 將提示詞貼到 Claude Code 或 Codex 等程式開發代理。請代理引導你在本機或託管平台部署 SwB。
@@ -67,8 +19,6 @@ Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live*
 
 開啟服務記錄中的登入位址。從服務設定或部署指令指定的私人檔案複製 `SWB_SETUP_CODE`。將它貼到 **Setup code**。新增通行金鑰供日後登入。
 
-</DeployHeld>
-
 ## 連接你的代理
 
 先[將 SwB 連接到一個代理](/zh-Hant/docs/connect)。再將提示詞貼給它。請它連接其他應用程式。
@@ -76,15 +26,3 @@ Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live*
 提示詞保留英文，供代理使用。
 
 <SetupPrompt name="coordinator" lang="zh-Hant" />
-
-<DeployLive>
-
-## 使用其他平台
-
-將提示詞貼到 Claude Code 或 Codex 等程式開發代理。請代理引導你在其他平台部署 SwB。
-
-提示詞保留英文，供代理使用。
-
-<SetupPrompt name="deploy" lang="zh-Hant" />
-
-</DeployLive>
