@@ -9,7 +9,7 @@ import { DocsNavigation } from './docs-navigation';
 export function Document({ page }: { page: DocumentPage }) {
   const { body: MDX, title, toc, full } = page.data;
   const markdown = markdownUrl(page);
-  const githubUrl = `${repository}/blob/${releaseBranch}/site/content/docs/${page.path.split('/').map(encodeURIComponent).join('/')}`;
+  const githubUrl = `${repository}/blob/${releaseBranch}/docs/${page.path.split('/').map(encodeURIComponent).join('/')}`;
   const startNext = page.slugs.join('/') === 'get-started' ? source.getPage([], page.locale) : undefined;
 
   return (

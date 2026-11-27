@@ -1,6 +1,7 @@
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { replaceSource } from 'fumadocs-core/mdx-plugins/stringifier';
 import remarkCjkFriendly from 'remark-cjk-friendly';
+import { locales } from './lib/i18n';
 import { readPrompt } from './lib/prompts';
 import { promptUrl } from './lib/urls';
 
@@ -27,8 +28,10 @@ function remarkDocSource() {
 }
 
 export const docs = defineDocs({
-  dir: 'content/docs',
+  dir: '../docs',
+  meta: { files: locales.map((locale) => `${locale}/**/{*.{json,yaml},meta{,.*}.{js,ts}}`) },
   docs: {
+    files: locales.map((locale) => `${locale}/**/*.{md,mdx}`),
     postprocess: {
       includeProcessedMarkdown: {
         output: 'string',

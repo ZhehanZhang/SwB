@@ -3,7 +3,7 @@ lockfileVersion: '9.0'
 
 importers:
 
-  .:
+  site:
     configDependencies: {}
     packageManagerDependencies:
       pnpm:
@@ -164,7 +164,7 @@ settings:
 
 importers:
 
-  .:
+  site:
     dependencies:
       '@ai-sdk/react':
         specifier: ^4.0.0
