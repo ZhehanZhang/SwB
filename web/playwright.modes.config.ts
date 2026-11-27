@@ -1,10 +1,10 @@
 import { defineConfig } from "@playwright/test"
 
-const baseURL = "http://localhost:4178"
+const baseURL = `http://localhost:${process.env.SWB_PLAYWRIGHT_PORT ?? "4178"}`
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["channel-modes.spec.ts", "inbox-senders.spec.ts"],
+  testMatch: ["channel-modes.spec.ts", "inbox-senders.spec.ts", "owner-flows.spec.ts"],
   use: {
     baseURL,
     browserName: "chromium",

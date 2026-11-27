@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { AlertDialog } from "radix-ui"
 import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
@@ -71,6 +72,34 @@ function Identity({ row }: { row: Stored }) {
       <LogoTile kind={kind} />
       <span className="min-w-0 wrap-anywhere">{row.name}, {row.label}</span>
     </span>
+  )
+}
+
+function RevokeKey({ label, disabled, pending, onRevoke }: {
+  label: string
+  disabled: boolean
+  pending: boolean
+  onRevoke: () => void
+}) {
+  return (
+    <AlertDialog.Root>
+      <AlertDialog.Trigger asChild>
+        <Button size="sm" variant="ghost" disabled={disabled} aria-label={`Revoke access key for ${label}`}>
+          {pending ? "Revoking…" : "Revoke"}
+        </Button>
+      </AlertDialog.Trigger>
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay className="fixed inset-0 z-40 bg-overlay/50" />
+        <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-1/2 rounded-lg border bg-card p-5 text-card-foreground shadow-lg">
+          <AlertDialog.Title className="text-heading-md">Revoke access key?</AlertDialog.Title>
+          <AlertDialog.Description className="mt-1 wrap-anywhere text-sm text-muted-foreground">{label}</AlertDialog.Description>
+          <div className="mt-5 flex justify-end gap-2">
+            <AlertDialog.Cancel asChild><Button variant="outline">Cancel</Button></AlertDialog.Cancel>
+            <AlertDialog.Action asChild><Button variant="destructive" onClick={onRevoke}>Revoke</Button></AlertDialog.Action>
+          </div>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
   )
 }
 
@@ -175,42 +204,52 @@ export function TokensPage() {
                 </tr>
               </thead>
               <tbody className="block md:table-row-group" role="rowgroup">
-                {stored.map((row) => (
-                  <tr key={row.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 border-b py-3 md:table-row md:h-[49px]" role="row">
-                    <th scope="row" className="min-w-0 font-normal md:py-2 md:pr-4"><Identity row={row} /></th>
-                    <td className="font-mono text-xs text-muted-foreground md:pr-4" role="cell">
-                      <span aria-hidden>••••</span><span className="sr-only">Hidden</span>
-                    </td>
-                    <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.used_by.length && "max-md:hidden")} role="cell">
-                      {row.used_by.length > 0 && <><span className="md:sr-only">Used by </span>{row.used_by.join(", ")}</>}
-                    </td>
-                    <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.added_by && "max-md:hidden")} role="cell">
-                      {row.added_by && <><span className="md:sr-only">Added by </span>{row.added_by}</>}
-                    </td>
-                    <td className={cn("font-mono text-xs text-muted-foreground md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
-                      {row.added_at && <time dateTime={row.added_at}>{date.format(new Date(row.added_at))}</time>}
-                    </td>
-                    <td className={cn("col-start-2 justify-self-end text-right", !row.revoke_id && "max-md:hidden")} role="cell">
-                      {row.revoke_id && <Button
-                        size="sm"
-                        variant="ghost"
-                        className="min-h-[26px]"
-                        disabled={!session?.csrf || revoke.isPending}
-                        aria-label={`Revoke access key for ${row.label}`}
-                        onClick={() => {
-                          if (row.revoke_id && window.confirm(`Revoke the access key for ${row.label}?`)) {
-                            revoke.mutate(row.revoke_id)
-                          }
-                        }}
-                      >
-                        {revoke.isPending && revoke.variables === row.revoke_id ? "Revoking…" : "Revoke"}
-                      </Button>}
-                    </td>
-                  </tr>
-                ))}
+                {stored.map((row) => {
+                  const id = row.revoke_id
+                  return (
+                    <tr key={row.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 border-b py-3 md:table-row md:h-[49px]" role="row">
+                      <th scope="row" className="min-w-0 font-normal md:py-2 md:pr-4"><Identity row={row} /></th>
+                      <td className="font-mono text-xs text-muted-foreground md:pr-4" role="cell">
+                        <span aria-hidden>••••</span><span className="sr-only">Hidden</span>
+                      </td>
+                      <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.used_by.length && "max-md:hidden")} role="cell">
+                        {row.used_by.length > 0 && <><span className="md:sr-only">Used by </span>{row.used_by.join(", ")}</>}
+                      </td>
+                      <td className={cn("col-span-2 wrap-anywhere text-muted-foreground md:pr-4 md:text-foreground", !row.added_by && "max-md:hidden")} role="cell">
+                        {row.added_by && <><span className="md:sr-only">Added by </span>{row.added_by}</>}
+                      </td>
+                      <td className={cn("font-mono text-xs text-muted-foreground md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
+                        {row.added_at && <time dateTime={row.added_at}>{date.format(new Date(row.added_at))}</time>}
+                      </td>
+                      <td className={cn("col-start-2 justify-self-end text-right", !row.revoke_id && "max-md:hidden")} role="cell">
+                        {id && <RevokeKey
+                          label={row.label}
+                          disabled={!session?.csrf || revoke.isPending}
+                          pending={revoke.isPending && revoke.variables === id}
+                          onRevoke={() => revoke.mutate(id)}
+                        />}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>}
       </section>
+      {session?.csrf && (
+        <details className="space-y-3">
+          <summary className="w-fit cursor-pointer text-sm font-medium">Pairing code</summary>
+          <form method="post" action="/pairing/code" className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="csrf" value={session.csrf} />
+            <label className="grid gap-1 text-sm">Agent name
+              <input name="agent" required pattern="[a-z0-9][a-z0-9\-]{0,39}" className="rounded-md border bg-surface px-2 py-1" />
+            </label>
+            <label className="grid gap-1 text-sm">Project
+              <input name="project" className="rounded-md border bg-surface px-2 py-1" />
+            </label>
+            <Button type="submit">Create code</Button>
+          </form>
+        </details>
+      )}
     </div>
   )
 }

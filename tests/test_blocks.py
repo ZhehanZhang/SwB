@@ -245,23 +245,23 @@ def test_visibility_tools_flip_resources_and_keep_tools_private(make):
 
 
 
-def test_root_page_shows_and_flips_visibility(make):
+def test_owner_api_shows_and_flips_target_visibility(make):
     core, c = make()
-    page = c.get("/classic", headers=OWNER)
-    assert page.status_code == 200 and "Who can reach what" in page.text
-    csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
-    assert c.post("/visibility", data={"resource": "target:captain", "visibility": "shared", "csrf": "nope"}, headers=OWNER).status_code == 403
-    assert c.post("/visibility", data={"resource": "target:captain", "visibility": "shared", "csrf": csrf}, headers=OWNER).status_code == 303
+    csrf = c.get("/auth/session", headers=OWNER).json()["csrf"]
+    path = "/api/visibility"
+    body = {"resource": "target:captain", "visibility": "shared"}
+    assert c.post(path, json=body, headers={**OWNER, "X-CSRF-Token": "nope"}).status_code == 403
+    headers = {**OWNER, "X-CSRF-Token": csrf}
+    assert c.post(path, json=body, headers=headers).status_code == 200
     assert core.visibility.rule("target:captain") == "shared"
-    assert "target:captain" in c.get("/classic", headers=OWNER).text
-    assert c.post("/visibility", data={"resource": "tool:deploy", "visibility": "shared", "csrf": csrf}, headers=OWNER).status_code == 400
+    rows = {row["resource"]: row for row in c.get(path, headers=OWNER).json()["resources"]}
+    assert rows["target:captain"]["visibility"] == "shared"
+    assert c.post(path, json={**body, "resource": "tool:deploy"}, headers=headers).status_code == 400
 
 
-def test_root_page_mints_and_revokes_codes_with_csrf(make):
+def test_pairing_form_mints_a_code_and_tokens_api_revokes_the_key(make):
     core, c = make()
-    page = c.get("/classic", headers=OWNER)
-    assert "Connected agents" in page.text and "Mint code" in page.text and "Block: capy" in page.text
-    csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
+    csrf = c.get("/auth/session", headers=OWNER).json()["csrf"]
     assert c.post("/pairing/code", data={"agent": "codex", "csrf": "nope"}, headers=OWNER).status_code == 403
     shown = c.post("/pairing/code", data={"agent": "codex", "csrf": csrf}, headers=OWNER)
     assert shown.status_code == 200 and "https://switchboard.example.test/connect" in shown.text
@@ -269,7 +269,11 @@ def test_root_page_mints_and_revokes_codes_with_csrf(make):
     got = c.post("/connect", json={"code": code})
     assert got.status_code == 200, (code, got.text)
     kid = got.json()["key_id"]
-    assert c.post(f"/pairing/keys/{kid}/revoke", data={"csrf": csrf}, headers=OWNER).status_code == 303
+    assert "Revoke it in Tokens at /tokens" in got.json()["note"]
+    assert any(row["revoke_id"] == kid for row in c.get("/api/tokens", headers=OWNER).json()["stored"])
+    response = c.post(f"/api/pairing/keys/{kid}/revoke", headers={**OWNER, "X-CSRF-Token": csrf})
+    assert response.status_code == 200 and response.json() == {"id": kid, "revoked": True}
+    assert all(row["revoke_id"] != kid for row in c.get("/api/tokens", headers=OWNER).json()["stored"])
     assert core.connections.list() == []
 
 

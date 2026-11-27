@@ -2274,16 +2274,6 @@
     },
     {
       "icon": null,
-      "id": "page:/classic",
-      "kind": "page",
-      "label": "SwB",
-      "path": "/classic",
-      "surfaces": [
-        "server"
-      ]
-    },
-    {
-      "icon": null,
       "id": "page:/connections/:platform",
       "kind": "page",
       "label": "Connections",

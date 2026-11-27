@@ -5,7 +5,7 @@ from pathlib import Path
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route, Router
 from starlette.staticfiles import StaticFiles
 from starlette.types import Message, Receive, Scope, Send
@@ -36,6 +36,23 @@ SPA_HEADERS = {
     "X-Robots-Tag": "noindex, nofollow",
 }
 API_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+CLASSIC_SECTIONS = {
+    "tokens": "/tokens", "pairing": "/tokens", "keys": "/tokens",
+    "inbox": "/inbox", "requests": "/inbox", "approvals": "/inbox",
+    "agents": "/agents", "avatars": "/agents", "personas": "/agents",
+}
+CLASSIC_NOTICES = {
+    "approved": "/inbox", "rejected": "/inbox", "send-failed": "/inbox",
+    "decide-refused": "/inbox", "avatar-saved": "/agents", "avatar-refused": "/agents",
+}
+
+
+async def classic_redirect(request: Request) -> Response:
+    notice = request.query_params.get("notice", "")
+    if (target := CLASSIC_NOTICES.get(notice)) is not None:
+        return RedirectResponse(f"{target}?notice={notice}", status_code=308)
+    section = request.path_params.get("rest", "").partition("/")[0]
+    return RedirectResponse(CLASSIC_SECTIONS.get(section, "/"), status_code=308)
 
 
 class AppAssets(StaticFiles):
@@ -90,6 +107,8 @@ def web_routes() -> list[Route | Mount]:
     return [
         *([Mount("/app-assets/assets", app=AppAssets(directory=APP_DIST / "assets"))] if (APP_DIST / "assets").is_dir() else []),
         Mount("/api", app=owner_api),
+        Route("/classic", classic_redirect),
+        Route("/classic/{rest:path}", classic_redirect),
         Route("/", shell),
         *(Route(f"/{section}", shell) for section in APP_SECTIONS),
         *(Route(f"/{section}/{{rest:path}}", shell) for section in APP_SECTIONS),

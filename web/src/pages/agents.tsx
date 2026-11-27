@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, Copy, ExternalLink } from "lucide-react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
 import { DataState, type DataStateProps } from "@/components/data-state"
@@ -10,7 +10,7 @@ import { Logo } from "@/components/logo"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/tabs"
 import { Button } from "@/components/ui/button"
 import { Sheet } from "@/components/ui/sheet"
-import { requestJson, sessionQuery } from "@/lib/api"
+import { isObject, requestJson, sessionQuery } from "@/lib/api"
 import { auditText } from "./audit/events"
 import { agentListKey, isAgentDetail, isAgentSetup, listAgents, principalLabel, type Agent, type AgentDetail } from "./agents/data"
 
@@ -341,6 +341,40 @@ function AgentInspector({ agent }: { agent: Agent }) {
   )
 }
 
+function PersonaAvatars() {
+  const [params] = useSearchParams()
+  const { data: session } = useQuery(sessionQuery)
+  const avatars = useQuery({
+    queryKey: ["persona-avatars"],
+    queryFn: ({ signal }) => requestJson("/api/agents/avatars",
+      (value): value is { personas: { id: string; name: string; accept: string }[] } =>
+        isObject(value) && Array.isArray(value.personas) && value.personas.every(
+          (persona) => isObject(persona) && typeof persona.id === "string" && typeof persona.name === "string"
+            && typeof persona.accept === "string",
+        ), { signal }),
+  })
+  const notice = params.get("notice")
+  const status = notice === "avatar-saved" ? "Avatar saved" : notice === "avatar-refused" ? "Choose a matching image up to 2 MB" : null
+  if (!status && !avatars.data?.personas.length) return null
+  return (
+    <section aria-labelledby="persona-avatars" className="mt-8">
+      <h2 id="persona-avatars" className="text-heading-md">Slack avatars</h2>
+      {status && <p role="status" className="mt-2 text-sm">{status}</p>}
+      {avatars.data?.personas.map(({ id, name, accept }) => (
+        <form key={id} action={`/slack/personas/${encodeURIComponent(id)}/avatar`} method="post" encType="multipart/form-data"
+          className="flex flex-wrap items-center justify-between gap-2 border-b py-3 text-sm">
+          <input type="hidden" name="csrf" value={session?.csrf ?? ""} />
+          <label className="flex min-w-0 flex-wrap items-center gap-3">
+            <span className="font-medium">{name}</span>
+            <input type="file" name="file" accept={accept} required className="max-w-full" />
+          </label>
+          <Button type="submit" variant="outline" disabled={!session?.csrf}>Save avatar</Button>
+        </form>
+      ))}
+    </section>
+  )
+}
+
 export function AgentsPage() {
   const id = useParams()["*"]
   const query = useQuery({ queryKey: agentListKey, queryFn: ({ signal }) => listAgents(signal) })
@@ -353,6 +387,7 @@ export function AgentsPage() {
       <div className={agent || (id && query.isPending) ? "hidden pt-2 md:block" : "pt-2"}>
         <ConnectionRow />
         <AgentList agents={query.data ?? []} state={state} />
+        <PersonaAvatars />
       </div>
       {id && query.isPending && (
         <section aria-label="Agent details" className="md:hidden">

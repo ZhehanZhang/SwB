@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, ArrowRight, Check, Play, X } from "lucide-react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
@@ -202,16 +202,21 @@ function Conversations({ items }: { items: Conversation[] }) {
 }
 
 function InboxList() {
+  const [params] = useSearchParams()
   const inbox = useQuery({
     queryKey: inboxKey,
     queryFn: ({ signal }) => requestJson("/api/inbox", isInbox, { signal }),
     refetchInterval: 30_000,
   })
   const data = inbox.data
+  const notice = params.get("notice")
+  const status = notice === "decide-refused" ? "Request closed" : notice === "send-failed" ? "Slack delivery failed"
+    : notice === "approved" ? "Approved Slack request" : notice === "rejected" ? "Denied Slack request" : null
   return (
     <div className="space-y-8 pt-2 md:space-y-[34px]">
       <section aria-labelledby="needs-you">
         <h2 id="needs-you" className="text-heading-md font-semibold tracking-[-0.01em]">Needs you</h2>
+        {status && <p role="status" className="mt-2 text-sm">{status}</p>}
         {inbox.isPending && <div className="flex h-[60px] items-center"><Skeleton className="h-3 w-28" /></div>}
         {inbox.isError && <DataState kind="error" message="Inbox unavailable." onRetry={() => void inbox.refetch()} />}
         {data && (data.pending_writes.length || data.pauses.length ? (
