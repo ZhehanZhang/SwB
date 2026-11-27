@@ -21,7 +21,7 @@ The Capy block enables [MCP Tasks](/docs/how-it-works#conversations) discovery t
 
 ## What every block shares
 
-Trust comes from the platform's own ids. SwB marks the owner's messages as `owner`. It marks messages from people you list as `known`. All other messages are `external`. SwB wraps text from anyone except the owner in an untrusted frame, so agents read it as information.
+SwB checks platform IDs to set message trust. On Slack, Discord and Telegram, `known` is an admission setting. It helps SwB decide whose messages to accept. Messages from other senders keep `external` trust, even when SwB admits them through `known`. See [Trust](/docs/security#trust).
 
 Every target, channel and memory scope starts private. Only the owner reaches a private resource. Share a resource to let other people reach it.
 

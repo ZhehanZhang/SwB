@@ -57,10 +57,11 @@ On the **Connect to SwB** page, check that the client is Claude Code. Click **Ap
 <Step>
 ### Add SwB
 
-Run this command in your terminal with your SwB address.
+Add this entry to `~/.codex/config.toml` with your SwB address.
 
-```bash
-codex mcp add switchboard --url https://swb.example.com/mcp
+```toml
+[mcp_servers.switchboard]
+url = "https://swb.example.com/mcp"
 ```
 
 For the IDE extension, open **Codex Settings** → **Open config.toml** and add the entry from the agent.
@@ -82,10 +83,16 @@ On the **Connect to SwB** page, click **Approve**. {/* unverified */}
 <Step>
 ### Add SwB
 
-Run this command in your terminal with your SwB address.
+Merge this entry into `~/.gemini/settings.json` with your SwB address.
 
-```bash
-gemini mcp add --scope user --transport http switchboard https://swb.example.com/mcp
+```json
+{
+  "mcpServers": {
+    "switchboard": {
+      "httpUrl": "https://swb.example.com/mcp"
+    }
+  }
+}
 ```
 </Step>
 <Step>
