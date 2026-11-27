@@ -27,7 +27,7 @@ SPA_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
         "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; "
+        "font-src 'self' data:; img-src 'self' data:; connect-src 'self'; form-action 'self'; "
         "frame-ancestors 'none'; base-uri 'none'"
     ),
     "Referrer-Policy": "same-origin",

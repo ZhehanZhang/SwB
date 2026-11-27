@@ -168,6 +168,19 @@ def test_authorize_rejects_unregistered_redirect_and_missing_pkce(make):
     assert r.status_code == 302 and q["error"] == ["invalid_request"]
 
 
+@pytest.mark.parametrize("redirect", [CLAUDE_CB, "http://localhost:3456/callback?state=&client=fixture"])
+def test_unsupported_response_type_echoes_authorization_state(make, redirect):
+    _, client = make()
+    cid = register(client, redirect=redirect)["client_id"]
+    response = client.get("/authorize", params={"response_type": "token", "client_id": cid,
+                                               "redirect_uri": redirect, "state": "st1"})
+    query = parse_qs(urlparse(response.headers["location"]).query, keep_blank_values=True)
+    assert response.status_code == 302 and query["error"] == ["unsupported_response_type"]
+    assert query["state"] == ["st1"]
+    if "client=fixture" in redirect:
+        assert query["client"] == ["fixture"]
+
+
 def test_pkce_mismatch_and_code_reuse_fail(make):
     _, c = make()
     cid = register(c)["client_id"]

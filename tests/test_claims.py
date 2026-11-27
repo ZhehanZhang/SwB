@@ -191,6 +191,15 @@ def test_webhook_url_claim_rejects_invalid_urls_without_spending_link(make):
     assert core.secret("EXAMPLE_WEBHOOK_URL") == valid
 
 
+def test_grok_url_claim_names_the_saved_field(make):
+    core, client = make()
+    path = urlsplit(core.claims.mint("GROK_ROUTINE_URL", PUBLIC, url=True)).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    response = client.post(path, data={"token": "https://webhook.example.test/grok", "csrf": csrf}, headers=OWNER)
+    assert response.status_code == 200
+    assert "<h1>Webhook URL saved</h1>" in response.text
+
+
 def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     core, client = make()
     link = core.claims.mint(NAME, PUBLIC)

@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from .store import Store
 
 log = logging.getLogger("switchboard.audit")
+REFUSAL_AUDIT_INTERVAL_S = 600
 
 
 def iso(ts: float | None) -> str | None:
@@ -23,6 +24,7 @@ class Audit:
         self.store = store
         self.tz = ZoneInfo(tz)
         self.tz_name = tz
+        self._refusal_audited_at: dict[tuple[str, str, str, str | None, str], float] = {}
 
     def today(self) -> str:
         return datetime.fromtimestamp(self.store.clock(), self.tz).date().isoformat()
@@ -48,6 +50,16 @@ class Audit:
             (self.store.clock(), self.today(), origin, source, client[:200], destination, action, target, ref, title, excerpt[:300], outcome, detail),
         )
         log.info("%s.%s %s by %s via %s (%s) -> %s %s", destination, action, outcome, source, origin, client[:60], target or "", ref or detail or "")
+
+    def record_refusal(self, *, origin: str, client: str, destination: str, action: str, detail: str,
+                       target: str | None = None) -> None:
+        key = origin, destination, action, target, detail
+        now = self.store.clock()
+        previous = self._refusal_audited_at.get(key)
+        if previous is None or now - previous >= REFUSAL_AUDIT_INTERVAL_S:
+            self.record(origin=origin, source="-", client=client, destination=destination, action=action,
+                        outcome="refused", target=target, detail=detail)
+            self._refusal_audited_at[key] = now
 
     def _recent_rows(self, *, destination: str | None = None, actions: Sequence[str] = (), origin: str | None = None,
                      outcome: str | None = None, limit: int = 20, cursor: int | None = None,

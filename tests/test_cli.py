@@ -359,6 +359,17 @@ def test_connect_cli_prints_done_only_after_setup():
     assert "Done" in out.splitlines() and "Progress" not in out.splitlines()
 
 
+def test_connect_cli_starts_discovery_with_supported_kinds(make, tmp_path, monkeypatch, capsys):
+    _, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    result = payload(call(client, STATIC_KEY, "connect", {"what": "anything"}))
+    monkeypatch.setenv(cli.OWNER_KEY, STATIC_KEY)
+    monkeypatch.setattr(cli, "_call", AsyncMock(return_value=result))
+
+    cli.main(["connect", "anything", "--dir", str(tmp_path), "--url", PUBLIC])
+
+    assert capsys.readouterr().out.splitlines() == ["Supported kinds: " + ", ".join(result["kinds"])]
+
+
 def test_blocks_show_unconfigured_block_prints_guidance(cli_instance, capsys):
     base, _ = cli_instance
     with pytest.raises(SystemExit) as exited:

@@ -19,6 +19,8 @@ SIGN_IN_FAILURES = {
     "/auth/passkey/register/verify": frozenset({"passkey_failed", "csrf"}),
     "/auth/oidc/callback": frozenset({"oidc_failed"}),
 }
+CSRF_AUDIT_PATHS = frozenset({"/authorize", "/auth/logout", "/auth/passkey/register/options", "/claim",
+                             *(path for path, reasons in SIGN_IN_FAILURES.items() if "csrf" in reasons)})
 
 
 class PolicyRefusal(Exception):

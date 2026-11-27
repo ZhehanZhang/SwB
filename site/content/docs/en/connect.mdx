@@ -1,15 +1,15 @@
 ---
 title: Connect your agents
-description: Add SwB to an agent, then let the agent do the rest.
+description: Add SwB to your agents and set up their connections.
 ---
 
 ## Add SwB to an agent
 
-For an MCP client on the SwB computer, use local pairing. For a hosted app, add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. Approve the app's OAuth sign-in on the SwB page.
+For an MCP client on the SwB computer, choose [owner access or pairing](/docs/setup/mcp-client). For a hosted app, add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. Approve the app's OAuth sign-in on the SwB page.
 
 | App | Where to add SwB |
 | - | - |
-| [Local MCP client](/docs/setup/mcp-client) | Pair with a code. Use `http://localhost:8870/mcp` on the SwB computer. |
+| [Local MCP client](/docs/setup/mcp-client) | Use an owner key or pair with a code. Use `http://localhost:8870/mcp` on the SwB computer. |
 | Claude and Claude Projects | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | grok.com → Connectors → New Connector → Custom |
@@ -21,12 +21,14 @@ For a coding agent, change `codex` to the name of your client. Run `swb connect 
 
 ## Ask your agent
 
-Your agent sets up the other connections. Ask it in plain words.
+An agent with owner access can set up the other connections. With a paired key, the agent gives you a terminal command for each owner-only step.
+
+Owner access needs an owner-approved OAuth sign-in or a key from `SWITCHBOARD_KEY_<NAME>`. Use a credential with full access to scopes, tools and targets. The settings `auth.key_scopes`, `auth.key_tools` and `auth.key_targets` limit this access.
 
 | Ask | The agent does |
 | - | - |
 | How do I connect my Claude Projects? | It registers a Claude routine for the project and gives you one link for the token |
-| Connect Slack to SwB. | It points you to the app manifest in the repository's `manifests/` folder and gets a claim link when needed |
+| Connect Slack to SwB. | It points you to the YAML manifest in [Slack setup](/docs/setup/slack#app-manifests) and gets a claim link when needed |
 | Connect my Discord bot. | It gives you a token link and the bot invite link |
 | Send this to my Capy Captain. | It sends the task and waits for the answer |
 | What can you send to? | It lists every target SwB can reach |
@@ -35,7 +37,7 @@ The agent calls the `connect` tool. SwB answers with the next step for that plat
 
 ## Connect from the terminal
 
-The same steps work from the `swb` command.
+Run `swb connect` in the SwB instance folder. It uses the owner key from `.env` and connects to the local SwB address by default. Use `--dir` to select an instance folder. Use `--url` to set the SwB address. Run `swb login-link` for a one-time owner sign-in link.
 
 ```bash
 swb connect mcp-client
