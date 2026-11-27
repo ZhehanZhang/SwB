@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 import re
 from contextvars import ContextVar
@@ -90,6 +92,7 @@ class Config:
     access_team_domain: str | None = None
     access_aud: str | None = None
     oidc: OIDCConfig | None = None
+    owner_setup_digest: bytes | None = field(default=None, repr=False)
     redirect_allow: tuple[str, ...] = ()
     cimd_hosts: tuple[str, ...] = ()
     access_token_ttl: int = 3600
@@ -255,6 +258,16 @@ def _read_yaml(path: Path | None, what: str, *, required: bool = False) -> dict[
     return raw
 
 
+def _owner_setup_digest(code: str | None) -> bytes | None:
+    if code is None:
+        return None
+    if re.fullmatch(r"[0-9a-f]{64}", code):
+        return hashlib.sha256(code.encode()).digest()
+    if re.fullmatch(r"[A-Za-z0-9+/]{43}=", code) and base64.b64encode(base64.b64decode(code)).decode() == code:
+        return hashlib.sha256(code.encode()).digest()
+    raise ConfigError("SWB_SETUP_CODE must encode 32 random bytes as lowercase hexadecimal or standard Base64.")
+
+
 def _merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
     return {**base, **{key: _merge(base[key], value) if isinstance(value, dict) and isinstance(base.get(key), dict) else value
                       for key, value in overlay.items()}}
@@ -280,6 +293,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     from .modes import parse_config as parse_modes
 
     env = dict(os.environ if env is None else env)
+    owner_setup_digest = _owner_setup_digest(env.pop("SWB_SETUP_CODE", None))
     base_path = config_path(path, env)
     base = _read_yaml(base_path, "config")
     overlay_path = env.get("SWITCHBOARD_OVERLAY")
@@ -350,6 +364,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         access_team_domain=access.get("team_domain", access_env.get("CLOUDFLARE_ACCESS_TEAM_DOMAIN")) or None,
         access_aud=access.get("aud", access_env.get("CLOUDFLARE_ACCESS_AUD")) or None,
         oidc=_oidc(auth.get("oidc"), public_url, owner_emails, env),
+        owner_setup_digest=owner_setup_digest,
         redirect_allow=as_tuple(auth.get("redirect_uris")),
         cimd_hosts=as_tuple(auth.get("cimd_hosts")),
         access_token_ttl=int(auth.get("access_token_ttl", 3600)),

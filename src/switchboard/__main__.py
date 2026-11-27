@@ -75,7 +75,19 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.error("no config file found")
         print(migrate_text(path.read_text()), end="")
         return
-    core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url)
+    from .config import ConfigError
+    from .deployment import serve_env
+
+    try:
+        env = serve_env(os.environ) if args.cmd in (None, "serve") else None
+    except ConfigError as error:
+        parser.error(str(error))
+    except (OSError, UnicodeError) as error:
+        parser.error(f"couldn't load the owner key on the volume ({type(error).__name__})")
+    try:
+        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env)
+    except ConfigError as error:
+        parser.error(str(error))
     if args.cmd == "blocks":
         import yaml
 
@@ -110,6 +122,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
 
     for problem in core.health()["problems"]:
         logging.getLogger("switchboard").warning("degraded: %s", problem)
+    if env is not None and core.cfg.public_url:
+        logging.getLogger("switchboard").info("Sign-in page %s/login", core.cfg.public_url)
     logging.getLogger("uvicorn.access").addFilter(_NoQuery())
     app = create_app(core)
     options = {

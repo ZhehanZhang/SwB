@@ -10,8 +10,10 @@ export default defineRailway(() => {
     replicas: 1,
     env: {
       SWITCHBOARD_DATA: "/data",
+      SWITCHBOARD_DEPLOY_PLATFORM: "railway",
       SWITCHBOARD_PUBLIC_URL: preserve(),
       SWITCHBOARD_KEY_OWNER: preserve(),
+      SWB_SETUP_CODE: preserve(),
     },
     volumeMounts: { "/data": data },
   });

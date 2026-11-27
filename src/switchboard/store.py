@@ -96,6 +96,9 @@ CREATE TABLE IF NOT EXISTS owner_sessions (
   created_at REAL NOT NULL,
   last_seen REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS owner_initialized (
+  id INTEGER PRIMARY KEY CHECK (id = 1)
+);
 CREATE TABLE IF NOT EXISTS owner_login_links (
   token_hash TEXT PRIMARY KEY,
   client_id TEXT NOT NULL,
@@ -227,6 +230,13 @@ def _migrate(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE handles ADD COLUMN target TEXT")
     if "rp_id" not in {r[1] for r in db.execute("PRAGMA table_info(owner_passkeys)")}:
         db.execute("ALTER TABLE owner_passkeys ADD COLUMN rp_id TEXT")
+    db.execute("""
+        INSERT OR IGNORE INTO owner_initialized(id)
+        SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM owner_initialized) AND (
+            EXISTS (SELECT 1 FROM owner_sessions) OR EXISTS (SELECT 1 FROM owner_passkeys)
+            OR EXISTS (SELECT 1 FROM audit WHERE action = 'login_link_used' AND outcome = 'ok')
+        )
+    """)
     db.execute("CREATE TABLE IF NOT EXISTS alias_use (alias TEXT NOT NULL, agent TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, last_at REAL NOT NULL, PRIMARY KEY(alias, agent))")
     tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     if "delegations" in tables:
