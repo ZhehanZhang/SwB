@@ -240,3 +240,29 @@ def test_no_companion_deployment_parity(tmp_path, capy, monkeypatch):
         assert rpc(before, STATIC_KEY, "tools/list").json() == rpc(after, STATIC_KEY, "tools/list").json()
         init = {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}
         assert rpc(before, STATIC_KEY, "initialize", init).json() == rpc(after, STATIC_KEY, "initialize", init).json()
+
+
+async def test_reply_relay_failure_keeps_the_wake_for_a_retry(amake, monkeypatch):
+    core, _ = await amake(config=CFG)
+
+    async def invoke(*args, **kwargs):
+        return {}
+
+    monkeypatch.setattr(core.companions, "invoke", invoke)
+    async with device(core, "herdr") as linked:
+        await emit(core, linked, "herdr.session", REPORT)
+        out = await core.send(principal("gemini"), task="Please review.", to=TARGET)
+        local = core.blocks["local"]
+        relay = local._relay
+
+        async def failing(*args):
+            raise RuntimeError("relay failed")
+
+        monkeypatch.setattr(local, "_relay", failing)
+        answer = {"session": "pane_1", "conversation": out["conversation"], "agent": "claude-code", "text": "Done."}
+        with pytest.raises(CompanionError):
+            await emit(core, linked, "herdr.reply", answer)
+        assert out["conversation"] in local.wakes
+        monkeypatch.setattr(local, "_relay", relay)
+        await emit(core, linked, "herdr.reply", answer)
+        assert out["conversation"] not in local.wakes

@@ -243,8 +243,9 @@ class LocalBlock(Block):
         if not pending.confirmed:
             pending.early = pending.early or text
             return
-        del self.wakes[conversation]
         await self._relay(conversation, pending, text)
+        if self.wakes.get(conversation) is pending:
+            del self.wakes[conversation]
 
     async def _relay(self, conversation: str, pending: Pending, text: str) -> None:
         handle = self.core.inbox.handle(conversation)
