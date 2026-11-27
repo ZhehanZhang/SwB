@@ -5,6 +5,7 @@ import { Providers } from '@/components/providers';
 import { isLocale, locales } from '@/lib/i18n';
 import { siteUrl } from '@/lib/source';
 import { translations } from '@/lib/translations';
+import { inter, interTight, jetbrainsMono } from '@/lib/fonts';
 import '../global.css';
 
 export const metadata: Metadata = {
@@ -32,7 +33,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<'/[
   if (!isLocale(lang)) notFound();
 
   return (
-    <html lang={lang} suppressHydrationWarning>
+    <html lang={lang} className={`${inter.variable} ${interTight.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <meta name="darkreader-lock" />
       </head>
