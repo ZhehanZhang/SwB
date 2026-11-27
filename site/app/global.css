@@ -373,14 +373,16 @@ button.swb-node:focus-visible { outline: none; }
 .swb-rotate-on { opacity: 1; transform: none; transition: opacity .35s ease .25s, transform .35s ease .25s; }
 .swb-rotate-item:not(.swb-rotate-on) { pointer-events: none; }
 .swb-between { line-height: 2.2; color: var(--muted-foreground, inherit); }
+.swb-between > .swb-between-text:last-child { white-space: nowrap; }
+.swb-pair { display: inline-block; white-space: nowrap; }
 .swb-slot { display: inline-grid; vertical-align: middle; margin-inline: .15em; }
 .swb-chip {
   grid-area: 1 / 1;
-  justify-self: start;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: .4em;
-  padding: .15em .6em .15em .2em;
+  padding: .15em .55em;
   border: 1px solid var(--border);
   border-radius: 9999px;
   background: var(--surface);
@@ -393,6 +395,7 @@ button.swb-node:focus-visible { outline: none; }
 }
 .swb-chip-on { opacity: 1; }
 .swb-chip-mark.swb-mark-tile { width: 1.4em; height: 1.4em; min-width: 0; min-height: 0; }
+.swb-picker-mark.swb-mark-tile { width: 1.5rem; height: 1.5rem; min-width: 0; min-height: 0; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   .swb-rotate-item, .swb-chip { transition: none; }
 }
