@@ -367,8 +367,10 @@ class MCPBlock(Block):
             need(p, (scope or "").strip().lower())
             if id:
                 need(p, sync(core.memory.scope_of, id))
-            return sync(core.memory.write, source=p.source, scope=scope, namespace=namespace, title=title, body=body, key=key, tags=tags, id=id,
-                        mode=mode, confirm_general=confirm_general, project=project)
+            out = sync(core.memory.write, source=p.source, scope=scope, namespace=namespace, title=title, body=body, key=key, tags=tags, id=id,
+                       mode=mode, confirm_general=confirm_general, project=project)
+            core.audit_memory(p, "memory_write", out["scope"], detail=out["title"])
+            return out
 
         @mcp.tool(title="Search shared memory", description="Full-text search. With project: that project's memory ranked first, then general (include_general=false for the project alone). Without: general only. Another project's memory only with an explicit scopes list, which is logged; private projects never show up there.", annotations=READ)
         async def memory_search(
@@ -441,6 +443,8 @@ class MCPBlock(Block):
             p = who(ctx)
             out = sync(core.projects.create, slug=slug, name=name, description=description, links=links.model_dump(exclude_none=True) if links else None,
                        private=private).as_dict()
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core",
+                              action="project_create", outcome="ok", target=out["slug"], detail="Created project.")
             out["auto"] = await run(core.project_sync(p, out["slug"]))
             return out
 
@@ -451,6 +455,16 @@ class MCPBlock(Block):
             p = who(ctx)
             out = sync(core.projects.update, slug, name=name, description=description, links=links.model_dump(exclude_unset=True) if links else None,
                        new_slug=new_slug, archived=archived, private=private).as_dict()
+            changes = [
+                "Renamed project." if name is not None or new_slug is not None else None,
+                "Updated description." if description is not None else None,
+                "Updated links." if links is not None else None,
+                ("Archived project." if archived else "Restored project.") if archived is not None else None,
+                ("Set project to private." if private else "Set project privacy to standard.") if private is not None else None,
+            ]
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core",
+                              action="project_update", outcome="ok", target=out["slug"],
+                              detail=" ".join(change for change in changes if change) or "Updated project.")
             if new_slug:
                 core.memory.schedule_mirror()
             given = links.model_dump(exclude_unset=True) if links else {}

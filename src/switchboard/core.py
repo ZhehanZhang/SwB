@@ -294,7 +294,7 @@ class Switchboard:
         self.inbox.update_handle(handle, open=False)
         await self.inbox.add(handle, "message", {"subject": title, "text": text[:20_000], "project": p.slug if p else None, "from": sender,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
-        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
         return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
 
@@ -864,9 +864,9 @@ class Switchboard:
         self.audit.record(origin=principal.origin, source="auto", client=principal.client_id, destination=destination,
                           action=action, outcome="ok", target=target, excerpt=excerpt, detail=f"automatic, during a call by {principal.source}")
 
-    def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "") -> None:
+    def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "", *, detail: str | None = None) -> None:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
-                          action=action, outcome="ok", target=target, excerpt=excerpt)
+                          action=action, outcome="ok", target=target, excerpt=excerpt, detail=detail)
 
     @staticmethod
     def check_memory_scope(principal: Principal, scope: str) -> None:
@@ -875,7 +875,7 @@ class Switchboard:
 
     def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
         out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
-        self.audit_memory(principal, "memory_delete", id)
+        self.audit_memory(principal, "memory_delete", id, detail="Deleted memory.")
         return out
 
     def move_memory(self, principal: Principal, id: str, to_scope: str, *, promote: bool = False) -> dict[str, Any]:
