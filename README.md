@@ -423,26 +423,21 @@ their default header is `Stripe-Signature`, configurable with `header`.
 
 ## Channel modes
 
-Use `modes_status` in MCP to see a space's mode, where it came from, and any setup problems. Ask your agent to
-call `space_mode` with a block, space, and mode to change it without a restart. Pass a channel ID to change
-just that channel, or omit it for the whole space. Set the mode to `inherit` to remove the override. Only
-the owner can change modes; SwB audits each change.
+Use `modes_status` to see each channel's mode, its source, and any setup problems. The owner can call
+`space_mode` to change a mode. Pass a channel ID for one channel. Pass the space to change its default.
+Select `inherit` to restore the configured mode. SwB records each change and applies it immediately.
 
-`off` ignores non-owner messages. `watch` batches untrusted excerpts, with authors and links when available,
-into the owner's inbox. It doesn't wake an agent or reply. `assist` wakes the assist target, which can answer
-only in the original thread without write tools. Replies are capped at 1,500 characters by default; change
-that with `modes.assist_max_chars`. `triage` wakes the triage target, which can take only the space's allowed
-actions. `work` lets only the owner route work.
+`off` keeps the channel for owner requests. `watch` collects message excerpts in an inbox report for the owner.
+`assist` lets the assigned agent reply in the original thread. Use `modes.assist_max_chars` to change the
+1,500-character reply limit. `triage` lets the assigned agent use the approved actions. `work` routes owner requests.
 
-The owner's bot mentions and DMs always get work handling, with replies in the original thread or DM.
-Non-owner DMs default to `watch`; set `blocks.<block>.dm_mode: off` to ignore them instead. Sender trust comes
-from platform IDs, and making a channel `assist` or `triage` does not grant access to a private target.
+The owner's direct messages and mentions use `work` in every mode. Direct messages from other people use
+`watch` by default. Use `blocks.<block>.dm_mode: off` to keep direct messages for the owner. SwB checks
+sender IDs and applies the same access rules in every mode.
 
-The first applicable setting wins: a runtime override, the channel's setting in
-`blocks.<block>.spaces.<space>.channels`, the space's `mode`, the project's setting in `modes.projects`, then
-`modes.default`. Existing `listen`/`listen_channels`, Slack `watched`, and GitHub sink settings still work as
-aliases. When no setting applies, the default is `off`; the example config opts in to `watch`.
-Watch digests arrive after `modes.digest_minutes` (60 by default) or 50 messages, whichever comes first.
+SwB checks overrides first. Then it checks the channel, space, legacy settings, project, and default in that
+order. The default is `off`. The sample config sets it to `watch`. Watch reports arrive after 50 messages
+or the interval in `modes.digest_minutes`, whichever comes first. The default interval is 60 minutes.
 
 ```yaml
 modes:
@@ -458,12 +453,12 @@ blocks:
           "100000000000000005": {mode: triage, actions: [reply, notify_owner]}
 ```
 
-Triage defaults to all supported actions if you omit `actions`: `reply`, `label`, `comment`, `open_issue`,
-`link_duplicate`, and `notify_owner`. For GitHub changes, run `connect(github)` to set up a GitHub App or a
-fine-grained token with issue write access to the relevant repositories. Status flags a fallback to the
-project's default target when no dedicated triage target is registered. Use a dedicated agent identity for
-public-channel wakes if you also use the same connector for owner work; SwB cannot tell two runs sharing a
-credential apart, so it temporarily blocks unrelated writes on that identity after a restricted wake.
+Triage starts with all supported actions. Set `actions` to choose the actions for a channel. For GitHub
+actions, use `connect(github)` to link a GitHub App or token. Grant the credential permission to change issues
+in the relevant repositories. Mode status shows when triage uses the project's default agent.
+
+Use separate agent credentials for public channels and owner work. A public channel can temporarily limit
+other writes for the same credential.
 
 ## Slack
 

@@ -16,6 +16,8 @@ test("connection and project controls use the owner mode API", async ({ page, co
   await expect(mode).toHaveValue("assist")
   const row = page.getByRole("row").filter({ has: mode })
   await expect(row).toContainText("From channel")
+  const community = page.getByRole("row").filter({ has: page.getByRole("combobox", { name: "Mode for community" }) })
+  await expect(community.getByRole("cell").nth(1)).toHaveText("community")
   await mode.selectOption("watch")
   await expect(row).toContainText("Override")
   await page.getByRole("button", { name: "Details for deployments" }).click()
