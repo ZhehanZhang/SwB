@@ -8,18 +8,24 @@ description: 用 Docker Compose 與 Cloudflare 在伺服器上執行 SwB。
 請以擁有資料夾的使用者身分執行下列指令。
 
 ```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
 (umask 077; cp .env.example .env)
 {
-  printf 'SWITCHBOARD_UID=%s\n' "$(id -u)"
-  printf 'SWITCHBOARD_KEY_OWNER='
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
   openssl rand -hex 32
 } >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
 mkdir -p data
-docker compose up -d
+docker compose up -d --build
 curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Compose 在 `http://127.0.0.1:8870` 提供 SwB，並把資料存放在 `./data`。修改 `.env` 之後，請再次執行 `docker compose up -d`。
+請在五分鐘內開啟終端機顯示的一次性登入連結。
+
+擁有者在瀏覽器中透過 `http://localhost:8870` 登入。容器內的指令使用 `8000` 連接埠。Compose 將資料存放在 `./data`。修改 `.env` 後，請再次執行 `docker compose up -d`。
 
 登出後，`/healthz` 只會傳回 `status` 和 `version` 兩個欄位。以擁有者身分登入或使用擁有者金鑰，即可查看完整的運作狀態。
 
