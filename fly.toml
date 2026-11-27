@@ -9,6 +9,7 @@ primary_region = "iad"
   SWB_DATA_DIR = "/data"
   SWB_DEPLOY_PLATFORM = "fly"
 
+# SwB runs as one Machine on one volume. Deploy with fly deploy --ha=false.
 [mounts]
   source = "switchboard_data"
   destination = "/data"
@@ -25,3 +26,7 @@ primary_region = "iad"
     interval = "30s"
     timeout = "5s"
     grace_period = "15s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
