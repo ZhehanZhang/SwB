@@ -274,7 +274,9 @@ def test_cancelled_listen_conversation_cannot_note_owner(opened):
         ingest(core, client, thread_ts=THREAD)
         handle = handle_of(fires[0][1])
         args = {"conversation": handle}
-        assert payload(call(client, KEY_FULL, "cancel", args))["status"] == "cancelled"
+        sender = core.blocks["slack"].principal
+        cancel = client.portal.call(core.verb, sender, "cancel", handle)
+        assert cancel["status"] == "cancelled"
         reply = payload(call(client, KEY_FULL, "reply", {**args, "text": "Check the report", "to_owner": True}))
         assert reply["status"] == "cancelled" and not reply["delivered"]
         assert core.inbox.handle(handle)["status"] == "cancelled"
@@ -286,10 +288,10 @@ def test_owner_note_in_flight_cannot_reopen_cancelled_listen_conversation(opened
     with opened() as (core, client, _, fires):
         ingest(core, client)
         handle = handle_of(fires[0][1])
-        principal = core.auth.verify_bearer(KEY_FULL)
+        sender = core.blocks["slack"].principal
 
         async def cancel_during_dm(_text):
-            assert (await core.verb(principal, "cancel", handle))["status"] == "cancelled"
+            assert (await core.verb(sender, "cancel", handle))["status"] == "cancelled"
             return True
 
         monkeypatch.setattr(core.slack, "dm_owner", cancel_during_dm)

@@ -665,6 +665,8 @@ class Switchboard:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref)
         final = kw.pop("final", None)
+        if verb == "cancel" and h is not None and h["destination"] == "mailbox" and h["ref"] != principal.source:
+            raise CoreError("Choose a mailbox conversation you sent.")
         if verb == "reply" and h is not None and h["destination"] == "mailbox":
             if h["owner"] != principal.source:
                 raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
