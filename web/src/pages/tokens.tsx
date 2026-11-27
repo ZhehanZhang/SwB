@@ -8,6 +8,7 @@ import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
 import { isObject, requestJson, sessionQuery } from "@/lib/api"
+import { connectorKind } from "@/lib/connector-kind"
 import { cn } from "@/lib/utils"
 
 type Credential = {
@@ -76,7 +77,7 @@ function relative(at: string | null) {
 function Identity({ row }: { row: Stored }) {
   return (
     <span className="flex items-center gap-2">
-      <LogoTile kind={row.revoke_id ? row.label : row.kind} />
+      <LogoTile kind={row.revoke_id ? connectorKind(row.label) ?? row.kind : row.kind} />
       <span className="min-w-0 wrap-anywhere">{row.name}, {row.label}</span>
     </span>
   )
