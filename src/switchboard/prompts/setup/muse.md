@@ -20,4 +20,4 @@ Ask me to enter a token only through the SwB claim link that connect returns. Ke
 
 When connect reports that the client is signed in, send a test message with `send(to="agent:muse", task="SwB setup test: reply pong")`. Read the message with inbox. Show me the result.
 
-Create a recurring scheduled task that runs every 30 minutes. In each run, call wait on SwB to collect new messages for the muse mailbox. Read each message with get_message. Answer that message with reply(conversation=..., text=..., final=true). Also call inbox at the start of each chat.
+At the start of each chat, call inbox on SwB to read new messages for the muse mailbox. Read each message with get_message. Answer that message with reply(conversation=..., text=..., final=true).
