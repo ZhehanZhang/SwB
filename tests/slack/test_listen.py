@@ -106,6 +106,9 @@ def test_unaddressed_message_wakes_primary(opened, channels, mapped, project, tr
         assert "You may stay silent" in fire[1] and "to_owner=true" in fire[1] and "message the coordinator" not in fire[1]
         handle = core.inbox.handle(handle_of(fire[1]))
         assert handle["project"] == project
+        [item] = core.inbox.read(owner="claude", handle=handle["handle"])["items"]
+        assert item["trust"] == item["from"]["trust"] == "external"
+        assert item["text"] == fire[1].split("\n\n---\n", 1)[0]
         assert {key: handle["meta"][key] for key in ("listen", "boundary", "slack_trust", "permalink")} == {
             "listen": True, "boundary": project, "slack_trust": "external", "permalink": push["permalink"],
         }
@@ -159,7 +162,7 @@ def test_listen_bots_and_own_posts(opened):
         assert not fires
         ingest(core, client, ts="1700000500.000005", user="UBUILD001", bot_id="BKNOWN001")
         (fire,) = fires
-        assert fire[1].splitlines()[0] == f"Build bot (known) in Slack #{NAME} asks: Can we fix this?"
+        assert fire[1].splitlines()[0] == f"Build bot (external) in Slack #{NAME} asks: Can we fix this?"
         assert not {"chat_postMessage", "chat_postEphemeral"}.intersection(world.names())
 
 

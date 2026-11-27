@@ -1,4 +1,6 @@
 import asyncio
+import hmac
+import json
 from types import SimpleNamespace
 
 import httpx
@@ -12,6 +14,7 @@ from switchboard.core import Switchboard
 from switchboard.signing import stripe_signature
 from switchboard.slack import push
 from switchboard.store import Store
+from switchboard.trust import CLOSE, OPEN
 
 NOW = 1_700_000_000
 SECRET = "stripe-signing-test-key"
@@ -106,12 +109,13 @@ async def test_github_stripe_sink_signs_delivered_bytes(tmp_path, caplog, header
             assert not seen and sink.failed == 1
             return
         (body, headers), = seen
-        expected = "t=1700000000,v1=8c1d9f5aca99a2129ed4360d0e0310c9cd9ca7465e16f2c814f4293f3a7447ae"
-        assert body == (b'{"subject":"Unknown sender on GitHub acme/app: Issue #7",'
-                        b'"text":"Unknown sender on GitHub acme/app: Issue #7\\n\\nIssue.\\n\\nIssue body\\n\\n'
-                        b'https://github.example/acme/app/issues/7\\n\\nGitHub delivery stripe-delivery.",'
-                        b'"delivery":"stripe-delivery","event":"issues","repo":"acme/app","number":7,"title":"caf\xc3\xa9",'
-                        b'"url":"https://github.example/acme/app/issues/7","state":"open","body":"Issue body"}')
+        digest = hmac.digest(SECRET.encode(), f"{NOW}.".encode() + body, "sha256").hex()
+        expected = f"t={NOW},v1={digest}"
+        data = json.loads(body)
+        assert data["title"] == "café" and b"caf\xc3\xa9" in body
+        assert data["subject"] == "Unknown sender (external) on GitHub acme/app: Issue #7"
+        assert data["trust"] == "external" and f"{OPEN}\nIssue body\n{CLOSE}" in data["body"]
+        assert data["body"] in data["text"] and data["text"].endswith("GitHub delivery stripe-delivery.")
         assert headers[header or "Stripe-Signature"] == expected
         assert ("Stripe-Signature" in headers) == (header is None)
         assert headers["Idempotency-Key"] == "stripe-delivery"

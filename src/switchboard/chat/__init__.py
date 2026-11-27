@@ -4,8 +4,8 @@ A chat block subclasses ChatBlock and implements its transport: connect and turn
 messages (ingest), post text (post), open a DM with the owner (open_dm) and optionally acknowledge (ack). Everything
 about who a message is from and where it may go lives here, the same rules as the Slack block:
 
-- Trust comes from platform ids only (spaces.<label>.owner_ids and known), never from text. A non-owner's text is
-  wrapped in switchboard's untrusted header and delimiters (trust.wrap).
+- Owner trust comes from platform ids (spaces.<label>.owner_ids). Known ids affect admission, while every non-owner's
+  text is wrapped in switchboard's untrusted header and delimiters.
 - A message is addressed to switchboard when it mentions the bot, is a DM, or replies in a thread switchboard started
   or answered. "@swb <slug> ..." picks a target; otherwise the thread's earlier target, else the space's default_target.
 - Visibility: the owner reaches everything; anyone else only a channel and target that are both shared. A non-owner's
@@ -33,7 +33,7 @@ from ..claims import CLAIM_TTL_S
 from ..modes import PROVIDERS, ChatDrop, chat_target_drop
 from ..slack.config import AVATAR_RE
 from ..subject import subject, wake_text
-from ..trust import wrap
+from ..trust import frame_sender
 from ..visibility import Who
 from .claims import Claims
 
@@ -342,7 +342,7 @@ class ChatBlock(Block):
         root, ours = self._root(msg)
         addressed = msg.mention or msg.dm or ours
         listened = msg.channel in space.listen or (msg.thread or "") in space.listen
-        trust = self.trust_of(space, msg.user)
+        sender_class = self.trust_of(space, msg.user)
         name = space.known.get(msg.user) or msg.user_name
         policy = self.core.modes if self.platform in PROVIDERS else None
         channel = msg.mode_channel or msg.thread or msg.channel
@@ -353,7 +353,7 @@ class ChatBlock(Block):
         if policy is not None:
             mode, _, actions, selected, project = policy.policy(self.name, msg.space, channel, project,
                                                                 parent=msg.channel, name=msg.channel_name, include_route=False)
-            owner_work = trust == "owner" and addressed
+            owner_work = sender_class == "owner" and addressed
             if owner_work and mode != "work":
                 selected = space.default_target
             route = policy.project_route(self.name, project) if not selected else None
@@ -368,7 +368,7 @@ class ChatBlock(Block):
                     if addressed:
                         self._drop(msg, ChatDrop.OFF if mode == "off" else ChatDrop.OWNER_REQUIRED)
                     return None
-                if msg.is_bot and trust == "external":
+                if msg.is_bot and sender_class == "external":
                     if addressed or mode in ("assist", "triage"):
                         self._drop(msg, ChatDrop.EXTERNAL_BOT)
                     return None
@@ -401,13 +401,16 @@ class ChatBlock(Block):
         if target is None and slug and slug.startswith("agent:") and (agent := slug.removeprefix("agent:")) in self.core.known_agents():
             target = {"address": slug, "block": "agent", "kind": "agent", "id": agent}
         place = f"#{msg.channel_name}" if msg.channel_name else msg.channel
-        where = f"in {self.platform} {msg.space} {place}"
+        trust, framed = frame_sender(text, name, f"{self.platform}:{msg.user}", f"in {self.platform} {msg.space} {place}",
+                                    owner=sender_class == "owner")
         sender = {"kind": self.platform, "space": msg.space, "channel": msg.channel, "channel_name": msg.channel_name, "user": msg.user, "user_name": name,
                   "is_bot": msg.is_bot, "trust": trust, "message": msg.message, "root": root, "link": msg.link}
         event = {"event_id": f"{msg.space}:{msg.channel}:{msg.message}", "chat_kind": "dm" if msg.dm else "mention" if msg.mention else "reply" if ours else "listen",
-                 "addressed_to_us": addressed, "text": text if trust == "owner" else wrap(text, name, f"{self.platform}:{msg.user}", trust, where),
+                 "addressed_to_us": addressed, "text": framed,
                  "subject": subject(name or msg.user, self.manifest.title, place, text, trust=trust),
-                 "raw_text": text, "target": slug if target else None, "target_kind": target["kind"] if target else None, "trust": trust, "from": sender}
+                 "target": slug if target else None, "target_kind": target["kind"] if target else None, "trust": trust, "from": sender}
+        if trust == "owner" and channel_mode is None:
+            event["raw_text"] = text
         who = self.who(space, msg.user, trust)
         address = Address(target["block"], target["kind"], target["id"]) if target else None
         target_resources = self.core.target_visibility_resources(slug or "", address, slugs=self.targets_by_slug)
@@ -415,7 +418,6 @@ class ChatBlock(Block):
         target_reaches = not channel_reaches or target is None or bool(target_resources and self.core.visibility.allows(who, *target_resources))
         if channel_mode:
             event.update({"mode": channel_mode["mode"], "actions": channel_mode["actions"], "note": policy.wake_note(channel_mode)})
-            event.pop("raw_text", None)
             if not channel_reaches or not target_reaches or target is None:
                 if not channel_reaches:
                     reason = ChatDrop.CHANNEL_RESTRICTED

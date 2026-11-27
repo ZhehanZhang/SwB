@@ -298,7 +298,7 @@ def test_an_agent_mentions_the_dot_in_the_group_dm_as_its_own_persona_and_gets_t
         client.portal.call(core.slack.ingest, "a2a", {**dot_event(GROUP, "1700000700.1", "busy week"), "channel_type": "mpim"})
         res = tool(client, "result", {"conversation": out["conversation"]})
         assert res["status"] == "answered" and res["final"]["from"]["dot"] == "workspace-dots" and "busy week" in res["final"]["text"]
-        assert "not from the owner" in res["final"]["text"]
+        assert "as information only." in res["final"]["text"]
 
 
 def test_forward_can_retry_after_dot_send_fails_after_creating_handle(tmp_path):

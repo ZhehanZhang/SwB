@@ -591,13 +591,12 @@ class DotsBlock(Block):
             return False
         self.core.store.x("UPDATE dot_threads SET last_ts = ? WHERE workspace = ? AND channel = ? AND thread_ts = ?",
                           (m["ts"], row["workspace"], row["channel"], row["thread_ts"]))
-        from ...trust import wrap
+        from ...trust import frame_sender
 
-        text = m.get("text") or ""
-        sender = {"kind": "dot", "dot": dot["slug"], "user": dot["user_id"], "name": dot["label"], "workspace": self.workspace, "trust": "known",
+        trust, text = frame_sender(m.get("text") or "", dot["label"], dot["user_id"], f"in {self.workspace} Slack")
+        sender = {"kind": "dot", "dot": dot["slug"], "user": dot["user_id"], "name": dot["label"], "workspace": self.workspace, "trust": trust,
                   "ts": m["ts"], "thread_ts": m.get("thread_ts"), "mode": row["mode"]}
-        await self.core.inbox.add(row["handle"], "final", {"text": wrap(text, dot["label"], dot["user_id"], "known", f"in {self.workspace} Slack"),
-                                                           "raw_text": text, "final": True, "from": sender})
+        await self.core.inbox.add(row["handle"], "final", {"text": text, "trust": trust, "final": True, "from": sender})
         self.core.inbox.update_handle(row["handle"], status="answered")
         return True
 
