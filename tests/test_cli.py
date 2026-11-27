@@ -58,6 +58,21 @@ def test_server_tools_appear_in_top_level_help(capsys):
     assert all(command in usage for command in __main__.SERVER_COMMANDS)
 
 
+@pytest.mark.parametrize(("command", "action", "description", "argument"), [
+    ("config", "migrate", "Print a version 1 config rewritten as version 2.", "[file]"),
+    ("blocks", "list", "List configured blocks.", "[block]"),
+    ("blocks", "show", "Print block details.", "[block]"),
+    ("blocks", "check", "Check block setup.", "[block]"),
+])
+def test_server_subcommand_help_names_its_action(capsys, command, action, description, argument):
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main([command, action, "--help"])
+    assert exited.value.code == 0
+    out, err = capsys.readouterr()
+    assert not err and out.startswith(f"usage: swb {command} {action} ")
+    assert description in out and argument in out and "--dir" in out
+
+
 def test_serve_reads_instance_config_data_and_dotenv(cli_instance, monkeypatch):
     base, core = cli_instance
     calls = []
@@ -122,14 +137,16 @@ def test_export_uses_instance_data_and_separate_destination(cli_instance, tmp_pa
     assert not (base / "snapshot").exists()
 
 
-def test_config_and_blocks_use_instance_config(cli_instance, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("dir_before_action", [False, True])
+def test_config_and_blocks_use_instance_config(cli_instance, tmp_path, monkeypatch, capsys, dir_before_action):
     base, _ = cli_instance
     other = tmp_path / "other.yaml"
     other.write_text("version: 2\nblocks:\n  mcp: {}\n")
     monkeypatch.setenv("SWITCHBOARD_CONFIG", str(other))
-    __main__.cli_main(["config", "migrate", "--dir", base.name])
+    instance = ["--dir", base.name]
+    __main__.cli_main(["config", *(instance + ["migrate"] if dir_before_action else ["migrate"] + instance)])
     assert yaml.safe_load(capsys.readouterr().out)["blocks"] == {"custom-mcp": {"use": "mcp"}}
-    __main__.cli_main(["blocks", "list", "--dir", base.name])
+    __main__.cli_main(["blocks", *(instance + ["list"] if dir_before_action else ["list"] + instance)])
     assert capsys.readouterr().out.split()[0:2] == ["custom-mcp", "mcp"]
 
 
@@ -154,7 +171,8 @@ def clear_owner_key(monkeypatch):
     monkeypatch.delenv(cli.OWNER_KEY, raising=False)
 
 
-def test_init_writes_minimal_config_and_private_owner_key(tmp_path, capsys):
+def test_init_writes_minimal_config_and_private_owner_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PORT", "8870")
     instance = tmp_path / "my instance"
     cli.main(["init", "--dir", str(instance), "--public-url", "https://switchboard.example.test/"])
     assert yaml.safe_load((instance / cli.CONFIG).read_text()) == {
@@ -224,6 +242,32 @@ def test_init_points_to_login_link(tmp_path, capsys):
     assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] not in out
 
 
+def test_init_saves_a_custom_port_for_login_link(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PORT", "18921")
+    monkeypatch.delenv("SWITCHBOARD_PORT", raising=False)
+    monkeypatch.delenv("SWITCHBOARD_HOST", raising=False)
+    cli.main(["init", "--dir", str(tmp_path)])
+    capsys.readouterr()
+    saved = cli._read_env(tmp_path / ".env")
+    assert saved["PORT"] == "18921"
+
+    monkeypatch.delenv("PORT")
+    call_tool = AsyncMock(return_value={"url": "http://localhost:18921/login#t=fixture"})
+    monkeypatch.setattr(cli, "_call", call_tool)
+    cli.main(["login-link", "--dir", str(tmp_path)])
+    call_tool.assert_awaited_once_with("http://localhost:18921/mcp", saved[cli.OWNER_KEY], "login_link", {})
+    assert capsys.readouterr().out == "http://localhost:18921/login#t=fixture\n"
+
+
+def test_init_refuses_an_invalid_port_before_writing_files(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PORT", "65536")
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["init", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert not list(tmp_path.iterdir())
+    assert "PORT must be a number from 1 to 65535." in capsys.readouterr().err
+
+
 def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv(cli.OWNER_KEY, raising=False)
     cli.main(["init", "--dir", str(tmp_path)])
@@ -238,6 +282,36 @@ def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "_call", call)
     cli.main(["login-link", "--dir", str(tmp_path), "--url", "https://switchboard.example.test"])
     assert capsys.readouterr().out == link + "\n"
+
+
+def test_login_link_connection_error_names_the_attempted_url(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.OWNER_KEY, STATIC_KEY)
+    monkeypatch.setattr(cli, "streamable_http_client", Mock(side_effect=OSError(STATIC_KEY)))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["login-link", "--dir", str(tmp_path), "--url", "http://localhost:18921"])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", "swb: Check that SwB is running at http://localhost:18921/mcp. Verify the owner key.\n")
+
+
+@pytest.mark.parametrize(("retry_after", "message"), [
+    ("600", "Slow down. Try again in 600 seconds."),
+    ("1", "Slow down. Try again in 1 second."),
+    (None, "Slow down. Try again shortly."),
+])
+def test_login_link_prints_the_rate_limit_wait(tmp_path, monkeypatch, capsys, retry_after, message):
+    monkeypatch.setenv(cli.OWNER_KEY, STATIC_KEY)
+    client = httpx2.AsyncClient
+
+    def post(request):
+        assert request.method == "POST"
+        headers = {"Retry-After": retry_after} if retry_after is not None else {}
+        return httpx2.Response(429, headers=headers, json={"error": "slow_down", "detail": STATIC_KEY})
+
+    monkeypatch.setattr(cli.httpx2, "AsyncClient", lambda **kw: client(transport=httpx2.MockTransport(post), **kw))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["login-link", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", f"swb: {message}\n")
 
 
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
@@ -493,6 +567,18 @@ def test_claim_does_not_follow_redirects_or_print_response(tmp_path, monkeypatch
     out, err = capsys.readouterr()
     assert "HTTP 307" in err
     assert all(value not in out + err for value in (key, token, code))
+
+
+def test_claim_prints_the_rate_limit_wait(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.OWNER_KEY, STATIC_KEY)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "fixture-token")
+    client = httpx2.Client
+    transport = httpx2.MockTransport(lambda _: httpx2.Response(429, headers={"Retry-After": "15"}, text=STATIC_KEY))
+    monkeypatch.setattr(cli.httpx2, "Client", lambda **kw: client(transport=transport, **kw))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["claim", "fixture-code", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", "swb: Slow down. Try again in 15 seconds.\n")
 
 
 @pytest.mark.parametrize(("error", "message", "visible"), [

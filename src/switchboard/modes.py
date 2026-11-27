@@ -300,7 +300,6 @@ class ChannelModes:
         provider = self.core.blocks[block]
         use, cfg = provider.manifest.id, self.core.cfg.blocks.get(block, {})
         names: dict[tuple[str, str], tuple[str | None, str, str | None]] = {}
-        repo_spaces = set()
         if use == "discord":
             for channel, info in provider.channels.items():
                 if info.guild_id and (space := provider.space_for(info.guild_id)):
@@ -318,8 +317,6 @@ class ChannelModes:
             for repo in provider.registered_repositories():
                 if placement := provider.space_for(repo):
                     names[placement[0], repo] = (repo, "repo", None)
-                    if placement[0] == repo:
-                        repo_spaces.add(repo)
         default_kind = {"github": "repo", "telegram": "group"}.get(use, "channel")
         spaces = dict(cfg.get("spaces") or {})
         if use == "slack":
@@ -341,8 +338,10 @@ class ChannelModes:
             if row["is_override"]:
                 overrides.add((space, channel))
         for space in {space for space, channel in names if channel}:
-            if (space, "") in overrides and (space not in repo_spaces or (space, space) in overrides):
-                continue
+            if (space, "") in overrides:
+                channels = [(s, c) for s, c in names if s == space and c]
+                if use != "github" or len(channels) > 1 or any(key in overrides for key in channels):
+                    continue
             names.pop((space, ""), None)
         return names
 
@@ -362,7 +361,12 @@ class ChannelModes:
             if provider.manifest.id not in PROVIDERS:
                 continue
             for (space, channel), (name, _, _) in self._inventory(block).items():
-                if channel and (provider.manifest.id != "github" or provider.space_for(channel) is not None):
+                if not channel:
+                    continue
+                if provider.manifest.id == "github":
+                    if provider.space_for(channel) is not None:
+                        resources.append(provider.channel_resource(channel))
+                else:
                     resources.extend(self._channel_resources(block, space, channel, name))
         return resources
 
@@ -473,6 +477,7 @@ class ChannelModes:
         inventory = self._inventory(block)
         if not any(s == space for s, _ in inventory):
             raise ValueError(f"unknown space {space!r} in {block}")
+        repos = [c for s, c in inventory if s == space and c and provider.space_for(c) is not None] if provider.manifest.id == "github" else []
         choice(mode, "mode", (*MODES, "inherit"))
         actions = parse_actions(actions, "actions")
         project = project_slug(project, "project")
@@ -490,6 +495,9 @@ class ChannelModes:
                         target = target.casefold()
                     elif not any(row["address"] == target for row in known):
                         raise ValueError("Choose a target from the targets list.")
+        response_channel = channel
+        if not channel and len(repos) == 1 and not self._override(block, space, repos[0]):
+            response_channel = repos[0]
         if mode == "inherit":
             self.core.store.x("DELETE FROM space_modes WHERE block = ? AND space = ? AND channel = ?", (block, space, channel))
         else:
@@ -499,7 +507,7 @@ class ChannelModes:
                               (block, space, channel, mode, dumps(actions), project, target, self.core.clock(), principal.source))
         self.core.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=block, action="modes.set",
                                outcome="ok", target=f"{space}/{channel}", detail=mode)
-        return self.row(block, space, channel, *inventory.get((space, channel), (None, None, None)))
+        return self.row(block, space, response_channel, *inventory.get((space, response_channel), (None, None, None)))
 
     def _mailbox(self, target: str | None, project: str | None = None) -> str:
         if target:

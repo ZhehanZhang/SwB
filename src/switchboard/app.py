@@ -162,6 +162,8 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         scheme, _, token = request.headers.get("authorization", "").partition(" ")
         owner_key = scheme.lower() == "bearer" and claim_key_owner(token.strip()) is not None
         owner = owner_key or await core.auth.owner(request) is not None
+        if owner:
+            await core.modes.refresh()
         health = core.health(public=not owner)
         return JSONResponse({**(health if owner else {"status": health["status"]}), "version": release_version(core.cfg.env)},
                             headers={"Cache-Control": "no-store"})

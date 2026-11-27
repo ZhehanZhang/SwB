@@ -2711,7 +2711,7 @@
       "name": "capy_wait"
     },
     {
-      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Call connect again to check progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
+      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Call connect again to check progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [
@@ -2815,11 +2815,12 @@
       "name": "get_message"
     },
     {
-      "description": "Comment in owner/repo. Pass the triage handle when called from a triage wake.",
+      "description": "Comment in owner/repo. Pass conversation or handle from a triage wake.",
       "icon": null,
       "id": "tool:github_comment",
       "input_properties": [
         "body",
+        "conversation",
         "handle",
         "number",
         "repo"
@@ -2829,10 +2830,11 @@
       "name": "github_comment"
     },
     {
-      "description": "Add existing labels in owner/repo. Pass the triage handle when called from a triage wake.",
+      "description": "Add existing labels in owner/repo. Pass conversation or handle from a triage wake.",
       "icon": null,
       "id": "tool:github_label",
       "input_properties": [
+        "conversation",
         "handle",
         "labels",
         "number",
@@ -2847,6 +2849,7 @@
       "icon": null,
       "id": "tool:github_link_duplicate",
       "input_properties": [
+        "conversation",
         "duplicate_of",
         "handle",
         "number",
@@ -2857,10 +2860,11 @@
       "name": "github_link_duplicate"
     },
     {
-      "description": "Put a triage note with the triggering permalink in the owner's inbox.",
+      "description": "Put a triage note with the triggering permalink in the owner's inbox. Pass conversation or handle.",
       "icon": null,
       "id": "tool:github_notify_owner",
       "input_properties": [
+        "conversation",
         "handle",
         "text"
       ],
@@ -2869,11 +2873,12 @@
       "name": "github_notify_owner"
     },
     {
-      "description": "Open an issue in owner/repo. Pass the triage handle when called from a triage wake.",
+      "description": "Open an issue in owner/repo. Pass conversation or handle from a triage wake.",
       "icon": null,
       "id": "tool:github_open_issue",
       "input_properties": [
         "body",
+        "conversation",
         "handle",
         "labels",
         "repo",
@@ -2884,10 +2889,11 @@
       "name": "github_open_issue"
     },
     {
-      "description": "Reply in the issue or pull request thread that woke this assist or triage conversation.",
+      "description": "Reply in the originating GitHub thread. Pass conversation or handle from the assist or triage wake.",
       "icon": null,
       "id": "tool:github_reply",
       "input_properties": [
+        "conversation",
         "handle",
         "text"
       ],

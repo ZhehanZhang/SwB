@@ -2,6 +2,7 @@ import logging
 import os
 import socket
 import stat
+import subprocess
 import sys
 from contextlib import nullcontext
 from pathlib import Path
@@ -520,6 +521,29 @@ def test_up_prints_only_the_startup_error(clean_env, tmp_path, capsys, setting, 
     assert exited.value.code == 2
     out, err = capsys.readouterr()
     assert not out and err.startswith(f"swb: {message}") and len(err.splitlines()) == 1
+
+
+def test_up_flushes_startup_logs_without_link_when_core_start_fails(clean_env):
+    failed = subprocess.run([sys.executable, "-c", """
+import logging
+from switchboard.__main__ import cli_main
+from switchboard.core import Switchboard
+
+async def fail(core):
+    logging.getLogger("switchboard").warning("Core startup diagnostic")
+    await core.aclose()
+    raise RuntimeError("Core startup failed")
+
+Switchboard.start = fail
+cli_main(["up"])
+"""], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=15)
+
+    if "/login#t=" in failed.stdout:
+        pytest.fail("A failed startup must not announce a sign-in link")
+    assert failed.returncode == __main__.STARTUP_FAILURE
+    assert "Core startup diagnostic" in failed.stdout
+    assert "RuntimeError: Core startup failed" in failed.stdout
+    assert "Application startup failed" in failed.stdout
 
 
 def test_wildcard_bind_requires_public_url_for_owner_link(clean_env, monkeypatch):

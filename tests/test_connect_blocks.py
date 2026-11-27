@@ -1,6 +1,7 @@
 import json
 from urllib.parse import urlparse
 
+import httpx
 import pytest
 
 from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OTHER_PROJECT, OWNER, SERVICE_KEY, STATIC_KEY, base_config, call, default_env, new_core, payload
@@ -17,6 +18,28 @@ def config(**capy_config):
 
 def connect(client, what, *, project=None, choose=None):
     return payload(call(client, STATIC_KEY, "connect", {"what": what, "project": project, "choose": choose}))
+
+
+@pytest.mark.parametrize("paired", [False, True], ids=["owner", "paired"])
+def test_cloudflare_connect_returns_manual_setup(make, monkeypatch, paired):
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    key = STATIC_KEY
+    if paired:
+        pairing = core.connections.mint(agent="fixture-agent", project=None, client=None, by="owner")
+        key = core.connections.redeem(pairing["code"])["key"]
+
+    async def unexpected_request(*args, **kwargs):
+        pytest.fail("Cloudflare setup should only return a link.")
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", unexpected_request)
+
+    result = payload(call(client, key, "connect", {"what": " Cloudflare "}))
+
+    assert result == {"what": "cloudflare", "done": [], "next": [{
+        "by": "person", "do": "Follow the Cloudflare setup guide.", "link": "https://swb.one/docs/setup/cloudflare",
+    }]}
+    assert not core.routes.list()
+    assert not core.store.q("SELECT * FROM secrets")
 
 
 def claim(client, link, token):
