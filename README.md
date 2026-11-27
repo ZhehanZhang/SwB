@@ -427,22 +427,37 @@ their default header is `Stripe-Signature`, configurable with `header`.
 
 ## Muse
 
-SwB can wake [Meta Muse](https://muse.ai/) through a device paired to your personal account. SwB registers as **SwB** in the app; it does not expose shell or file commands. This uses Meta's [Linux Device SDK](https://github.com/facebookincubator/muse-gadget-sdk/tree/main/linux), not the Model API or Muse Code. Review [Meta's Gadget SDK Token Terms](https://gadgets.muse.ai/sdk-terms): this is a personal, non-commercial integration, and the upstream SDK is provided as-is.
+SwB pairs with [Meta Muse](https://muse.ai/) as a text-only device named **SwB**. Read [Meta's terms for personal use](https://gadgets.muse.ai/sdk-terms).
 
-1. Enable `muse: {use: muse}` under `blocks:` in `config/switchboard.yaml` and restart SwB. Run `swb connect muse` or call `connect(what="muse")` from the owner's MCP sign-in. Generate a random URL-safe bridge token (for example, 32 random bytes encoded as unpadded base64url) and save it through the returned SwB claim link. Never send either token in chat.
-2. On a Linux device with Bluetooth LE and BlueZ, use a dedicated account. Install the SDK alongside the same SwB release as the server. For example, on Ubuntu 24.04 install the system packages `bluez python3-dbus python3-gi python3-venv`, then run the following as that account from the SwB checkout:
+### Connect SwB
 
-   ```sh
-   /usr/bin/python3 -m venv --system-site-packages .venv-muse
-   .venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
-   ```
+Enable `muse: {use: muse}` under `blocks:` in `config/switchboard.yaml`. Restart SwB. Run `swb connect muse`. You can also call `connect(what="muse")` from the owner account in your MCP client.
 
-3. Get a [personal Meta Gadget SDK token](https://gadgets.muse.ai/settings/sdk-tokens). On the gadget run `.venv-muse/bin/swb muse-bridge --url https://your-swb-host.example --setup`. Enter the SwB bridge token and then the Meta token in the hidden prompts. In the Muse app, turn on **Settings → Devices → Developer mode**, then **Add Device** and select the Bluetooth name printed by SwB. The Meta token and device pairing stay on that device.
-4. Leave the bridge running; start it again with the same URL and omit `--setup` after a restart. Run `swb connect muse` again to get the test message. Use `send(to="muse", task="…")` for subsequent messages, or set a route to `muse:gadget:muse`. Muse's text reply arrives in the sender's inbox and through `result` on the original conversation. The SwB server doesn't need Bluetooth if the gadget runs on another host; that host only needs outbound access to SwB's `/inbox/muse/bridge` endpoint and to Muse.
+A bridge token lets the device connect to SwB. Use a password manager to generate 64 random letters and digits. Save the token through the claim link.
 
-Only owner-trusted routed messages are sent to Muse, and only their text leaves SwB. `agent:muse` is the plain SwB mailbox and does not wake the device. If the bridge is offline, routed messages stay queued. Repeating the same message to Muse from the same sender and project within ten minutes returns the same conversation. Each wake uses its own Muse side chat to avoid picking up a reply from the main chat. If delivery can't be confirmed or a reply doesn't arrive in time, check the Muse app before resending; SwB won't automatically repeat an uncertain wake. You can rotate the SwB bridge token using `connect(what="muse", choose={"replace": true})` followed by `--setup` on the gadget.
+### Pair the device
 
-The packaged avatar is a neutral monogram. For deployment branding, the repository overlay uses the [official Muse mark](https://muse.ai/images/favicon/app-squiggle.svg). Keep the overlay out of distributed packages.
+Use a dedicated account on a Linux device with Bluetooth Low Energy. Give the device network access to Muse and SwB's `/inbox/muse/bridge` endpoint. On Ubuntu 24.04 install `bluez`, `python3-dbus`, `python3-gi`, and `python3-venv`.
+
+Get a [personal Meta token](https://gadgets.muse.ai/settings/sdk-tokens). Run these commands from the SwB checkout that matches your server release.
+
+```sh
+/usr/bin/python3 -m venv --system-site-packages .venv-muse
+.venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
+.venv-muse/bin/swb muse-bridge --url https://your-swb-host.example --setup
+```
+
+Enter the bridge token and the Meta token at the hidden prompts. In the Muse app, turn on **Settings → Devices → Developer mode**. Choose **Add Device**. Select the Bluetooth name SwB prints. The Meta token and pairing data stay on the device.
+
+### Send a message
+
+Leave the bridge running. After a restart, run `swb muse-bridge --url https://your-swb-host.example`. Run `swb connect muse` for a test message. Use `send(to="muse", task="…")` to wake Muse. You can also set a route to `muse:gadget:muse`. Replies return to the sender's inbox and to `result` on the original conversation. Use `agent:muse` for mailbox-only delivery.
+
+SwB queues routed messages while the device is offline. Matching text from the same sender and project shares one conversation for ten minutes. Each wake uses a separate chat in Muse. For uncertain delivery, check the Muse app before resending.
+
+The device keeps each pending reply in its private folder until SwB receives it.
+
+To replace the bridge token, run `swb connect muse --choose replace=true`. Start the device with `--setup`.
 
 ## Slack
 
