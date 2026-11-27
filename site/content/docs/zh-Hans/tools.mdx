@@ -51,7 +51,7 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | - | - |
 | `wait_s` | 如果模块返回会话 ID，按指定的秒数等待首条回复。等待上限因客户端而异。智能体收件箱使用 `wait` |
 | `forward` | 填入收到的会话 ID。会话须允许转交，且发送方的信任标记须为 `owner`。SwB 会把最终答复交给原发送方 |
-| `new_conversation` | 设为 `true` 时，在 Capy Captain 的项目中开启新话题串。设为 `false` 时，发到 Captain 的话题串 |
+| `new_conversation` | 设为 `true` 时，在 Capy Captain 的项目中开启新话题串。设为 `false` 时，发到 Capy Captain 的话题串 |
 | `files` | 为 Capy 任务添加附件。每个文件填写 `name`，内容填入 `text` 或 `base64`。用 `media_type` 指定文件类型 |
 | `repos` | 用 `owner/repo` 格式指定 Capy 任务涉及的仓库。请选择已关联到 SwB 项目的仓库 |
 | `in_reply_to` | 回复消息时，调用 `reply` 并填写 `conversation`。`send` 会拒绝 `in_reply_to` |
@@ -130,9 +130,9 @@ description: SwB 提供给你的智能体的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `capy_captains` | 列出当前 Capy 连接有权访问的 Captain |
-| `capy_captain_digest` | 读取 Captain 的摘要并查看正在处理或需要所有者介入的话题串。此工具需要所有者身份 |
-| `capy_list` | 列出通过 SwB 发送的任务。也可查看 Captain 团队或已关联 Capy 项目中的话题串。使用配对密钥时，列表只显示该智能体在授权范围内的工作 |
+| `capy_captains` | 列出当前 Capy 连接有权访问的 Capy Captain |
+| `capy_captain_digest` | 读取 Capy Captain 的摘要并查看正在处理或需要所有者介入的话题串。此工具需要所有者身份 |
+| `capy_list` | 列出通过 SwB 发送的任务。也可查看 Capy Captain 团队或已关联 Capy 项目中的话题串。使用配对密钥时，列表只显示该智能体在授权范围内的工作 |
 | `capy_delegate` | 将任务发给 Capy。新调用请用 `send` 并指定 `to="capy"` |
 | `capy_inbox` | 立即读取 Capy 收件箱。新调用请用 `inbox` 并指定 `block="capy"` |
 | `capy_wait` | 等待收件箱中的下一条消息。新调用请用 `wait` |

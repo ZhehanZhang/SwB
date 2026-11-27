@@ -39,7 +39,7 @@ The Simplified Chinese and Traditional Chinese docs follow the same rules. Write
 | conversation | 会话 | 對話 |
 | routine | routine | routine |
 | block | 模块 | 模組 |
-| Captain | Captain | Captain |
+| Capy Captain | Capy Captain | Capy Captain |
 | triage agent | 分流智能体 | 分流代理 |
 | mailbox | 邮箱 | 信箱 |
 | route | 路由 | 路由 |

@@ -19,7 +19,7 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
       messages: messages.length,
       transcript: [...messages].map((message) => message.querySelector('p:last-child')?.textContent),
       bottomGap: win.getBoundingClientRect().bottom - messages[messages.length - 1].getBoundingClientRect().bottom,
-      botMarks: section.querySelectorAll('.swb-win-bot').length,
+      botMarks: section.querySelectorAll('.swb-win-message .swb-win-bot').length,
     };
   });
 
@@ -52,6 +52,72 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
   expect(titles).toEqual(['Claude', 'Muse', 'Grok Bot', 'Slack #launch', 'Claude']);
   for (const [title, count] of [['Claude', 3], ['Muse', 3], ['Grok Bot', 5], ['Slack #launch', 4]] as const) {
     expect([...messagesByTitle.get(title) ?? []].sort()).toEqual(Array.from({ length: count }, (_, i) => i + 1));
+  }
+});
+
+test('each demo window uses its owner and flags only relayed senders', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await page.goto('/');
+
+  const win = page.locator('.swb-win');
+  const header = win.locator('.swb-win-bar');
+  const messages = win.locator('.swb-win-message');
+  const scenes = [
+    { title: 'Claude', owner: '/avatars/claude.png', senders: ['Claude', 'Grok Bot', 'Claude'], relayed: [1] },
+    { title: 'Muse', owner: '/avatars/muse.png', senders: ['You', 'Muse', 'Muse'], relayed: [] },
+    { title: 'Grok Bot', owner: '/avatars/grok-bot.png', senders: ['Grok Bot', 'Grok Bot', 'Claude', 'Capy Captain', 'Grok Bot'], relayed: [2, 3] },
+    { title: 'Slack #launch', owner: null, senders: ['You', 'Claude', 'Grok Bot', 'Capy Captain'], relayed: [1, 2, 3] },
+  ];
+  const marks: Record<string, string> = {
+    Claude: '/avatars/claude.png',
+    Muse: '/avatars/muse.png',
+    'Grok Bot': '/avatars/grok-bot.png',
+    'Capy Captain': '/marks/captain.webp',
+  };
+
+  for (const { title, owner, senders, relayed } of scenes) {
+    await expect(header).toHaveText(title);
+    const ownerMark = header.locator('.swb-win-avatar');
+    if (owner) await expect(ownerMark.locator('img')).toHaveAttribute('src', owner);
+    else await expect(ownerMark.locator('.swb-mark-glyph')).toHaveCSS('mask-image', /\/marks\/slack\.svg/);
+
+    for (const [index, sender] of senders.entries()) {
+      if (index) await page.clock.fastForward(1250);
+      await expect(messages).toHaveCount(index + 1);
+      const message = messages.nth(index);
+      const avatar = message.locator('.swb-win-avatar');
+      const name = message.locator('p').first();
+      await expect(name).toHaveText(sender);
+      if (sender === 'You') {
+        await expect(avatar.locator('svg')).toHaveClass(/lucide-user-round/);
+        await expect(avatar.locator('img')).toHaveCount(0);
+      } else {
+        await expect(avatar.locator('img')).toHaveAttribute('src', marks[sender]);
+      }
+
+      const badge = name.locator('.swb-win-bot');
+      if (relayed.includes(index)) {
+        await expect(badge).toHaveAttribute('src', '/avatars/swb.png');
+        await expect(badge).toHaveCSS('width', '14px');
+      } else {
+        await expect(badge).toHaveCount(0);
+      }
+    }
+
+    const frames = await win.locator('.swb-win-bar .swb-win-avatar, .swb-win-message .swb-win-avatar').evaluateAll(
+      (avatars) => avatars.map((avatar) => {
+        const style = getComputedStyle(avatar);
+        return [style.width, style.height, style.borderRadius, style.borderTopWidth, style.borderTopColor];
+      }),
+    );
+    expect(frames[0].slice(0, 4)).toEqual(['32px', '32px', '50%', '1px']);
+    expect(frames).toEqual(Array.from({ length: senders.length + 1 }, () => frames[0]));
+    await expect.poll(() => win.locator('img').evaluateAll(
+      (images: HTMLImageElement[]) => images.every((image) => image.complete && image.naturalWidth > 0),
+    )).toBe(true);
+    await page.clock.fastForward(3600);
   }
 });
 

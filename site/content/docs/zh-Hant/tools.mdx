@@ -51,7 +51,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 | - | - |
 | `wait_s` | 如果模組回傳對話 ID，依指定的秒數等待第一則回覆。各用戶端的等待上限各異。代理收件匣使用 `wait` |
 | `forward` | 填入收到的對話 ID。對話須允許轉交，且寄件者的信任等級須為 `owner`。SwB 會把最終回覆送給原寄件者 |
-| `new_conversation` | 設為 `true` 時，在 Capy Captain 的專案中開啟新討論串。設為 `false` 時，傳送到 Captain 的討論串 |
+| `new_conversation` | 設為 `true` 時，在 Capy Captain 的專案中開啟新討論串。設為 `false` 時，傳送到 Capy Captain 的討論串 |
 | `files` | 為 Capy 工作附加檔案。每個檔案填寫 `name`，內容使用 `text` 或 `base64`。用 `media_type` 指定檔案類型 |
 | `repos` | 用 `owner/repo` 格式指定 Capy 工作涉及的程式碼庫。請選擇已連結到 SwB 專案的程式碼庫 |
 | `in_reply_to` | 回覆訊息時，呼叫 `reply` 並填寫 `conversation`。`send` 會拒絕 `in_reply_to` |
@@ -130,9 +130,9 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `capy_captains` | 列出目前的 Capy 連線可以存取的 Captain |
-| `capy_captain_digest` | 讀取 Captain 的摘要並查看處理中或需要擁有者介入的討論串。此工具需要擁有者身分 |
-| `capy_list` | 列出透過 SwB 交付的工作。也能查看 Captain 團隊或已連結 Capy 專案的討論串。使用配對金鑰時，清單只顯示該代理在授權範圍內的工作 |
+| `capy_captains` | 列出目前的 Capy 連線可以存取的 Capy Captain |
+| `capy_captain_digest` | 讀取 Capy Captain 的摘要並查看處理中或需要擁有者介入的討論串。此工具需要擁有者身分 |
+| `capy_list` | 列出透過 SwB 交付的工作。也能查看 Capy Captain 團隊或已連結 Capy 專案的討論串。使用配對金鑰時，清單只顯示該代理在授權範圍內的工作 |
 | `capy_delegate` | 把工作交給 Capy。新呼叫請用 `send` 並指定 `to="capy"` |
 | `capy_inbox` | 立即讀取 Capy 收件匣。新呼叫請用 `inbox` 並指定 `block="capy"` |
 | `capy_wait` | 等待收件匣收到下一則訊息。新呼叫請用 `wait` |
