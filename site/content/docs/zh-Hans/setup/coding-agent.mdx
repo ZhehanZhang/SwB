@@ -59,10 +59,11 @@ claude mcp add --transport http --scope user switchboard https://swb.example.com
 <Step>
 ### 添加 SwB
 
-在终端中运行下面的命令，换成你的 SwB 地址。
+将以下配置项加入 `~/.codex/config.toml`。使用你的 SwB 地址。
 
-```bash
-codex mcp add switchboard --url https://swb.example.com/mcp
+```toml
+[mcp_servers.switchboard]
+url = "https://swb.example.com/mcp"
 ```
 
 使用 IDE 扩展时，打开 **Codex Settings** → **Open config.toml**，加入智能体给你的配置项。
@@ -84,10 +85,16 @@ codex mcp add switchboard --url https://swb.example.com/mcp
 <Step>
 ### 添加 SwB
 
-在终端中运行下面的命令，换成你的 SwB 地址。
+将以下配置项合并到 `~/.gemini/settings.json`。使用你的 SwB 地址。
 
-```bash
-gemini mcp add --scope user --transport http switchboard https://swb.example.com/mcp
+```json
+{
+  "mcpServers": {
+    "switchboard": {
+      "httpUrl": "https://swb.example.com/mcp"
+    }
+  }
+}
 ```
 </Step>
 <Step>
