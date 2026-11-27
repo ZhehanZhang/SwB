@@ -120,14 +120,17 @@ def test_config_renames_and_disables_dots_and_dots_are_private_by_default(tmp_pa
         assert core.visibility.rule("target:dots") == "private"
 
 
-def test_dot_registrants_come_from_the_slack_directory(tmp_path):
+def test_dot_discovery_preserves_a_known_registrant_and_leaves_unknown_registrants_blank(tmp_path):
     with started(tmp_path, dots={"dots": {
         "override": {"user_id": "UMISSING01"}, "workspace-dots": {"name": "Example alias"},
     }}) as (core, _, _, client):
         targets = {row["id"]: row for row in client.portal.call(core.targets) if row["kind"] == "dot"}
         assert targets[DOT]["name"] == "Example alias"
-        assert targets[DOT]["created_by"] == "Workspace Dots"
+        assert targets[DOT]["created_by"] is None
         assert targets["UMISSING01"]["created_by"] is None
+        core.store.x("UPDATE dots SET created_by = ? WHERE user_id = ?", ("Alex Rivera", DOT))
+        client.portal.call(core.blocks["dots"].rescan)
+        assert core.blocks["dots"].dot(DOT)["created_by"] == "Alex Rivera"
 
 
 def test_dots_use_configured_mailboxes_without_slack(tmp_path):
