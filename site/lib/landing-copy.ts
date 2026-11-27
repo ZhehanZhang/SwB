@@ -29,7 +29,7 @@ type Copy = {
     local: string; localIntro: string; localAlternative: string; localGuide: string;
     server: string; serverIntro: string; serverGuide: string;
     cloud: string; cloudIntro: string; cloudGuide: string;
-    flyClaim: string; paidPlan: string; freePlan: string; tunnelAttribution: string;
+    flyClaim: string; paidPlan: string; hobbyPlan: string; freePlan: string; tunnelAttribution: string;
   };
   usage: { title: string; examples: [string, string, string, string, string, string] };
   hero: { stem: string; endings: string[]; between: [string, string, string] };
@@ -72,8 +72,9 @@ export const landingCopy: Record<Locale, Copy> = {
       cloudGuide: 'Self-hosting guide',
       flyClaim: 'Free with monthly allowance',
       paidPlan: 'Paid plan',
+      hobbyPlan: 'Hobby plan',
       freePlan: 'Free',
-      tunnelAttribution: 'Cloudflare Tunnel is a trademark of Cloudflare, Inc.',
+      tunnelAttribution: 'Cloudflare Tunnel and the Cloudflare logo are trademarks of Cloudflare, Inc.',
     },
     usage: {
       title: 'What you can do with SwB',
@@ -123,8 +124,9 @@ export const landingCopy: Record<Locale, Copy> = {
       cloudGuide: '自托管指南',
       flyClaim: '月度额度内免费',
       paidPlan: '付费套餐',
+      hobbyPlan: 'Hobby 方案',
       freePlan: '免费',
-      tunnelAttribution: 'Cloudflare Tunnel 是 Cloudflare, Inc. 的商标。',
+      tunnelAttribution: 'Cloudflare Tunnel 与 Cloudflare 标志是 Cloudflare, Inc. 的商标。',
     },
     usage: {
       title: '用 SwB 完成日常工作',
@@ -174,8 +176,9 @@ export const landingCopy: Record<Locale, Copy> = {
       cloudGuide: '自行代管指南',
       flyClaim: '每月免費額度內免費',
       paidPlan: '付費方案',
+      hobbyPlan: 'Hobby 方案',
       freePlan: '免費',
-      tunnelAttribution: 'Cloudflare Tunnel 是 Cloudflare, Inc. 的商標。',
+      tunnelAttribution: 'Cloudflare Tunnel 與 Cloudflare 標誌是 Cloudflare, Inc. 的商標。',
     },
     usage: {
       title: '用 SwB 完成日常工作',

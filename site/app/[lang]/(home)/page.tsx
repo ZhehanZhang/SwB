@@ -1,6 +1,6 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import { BookOpen, Globe, Plane, Plug } from 'lucide-react';
+import { BookOpen, Plug } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -21,7 +21,7 @@ import { releaseBranch, repository } from '@/lib/urls';
 
 const sectionTitle = 'font-display text-3xl font-extrabold tracking-tight sm:text-4xl';
 const deployIntro = 'text-sm leading-5 text-fd-muted-foreground';
-const deployLink = 'swb-button swb-button-outline justify-start gap-2 whitespace-nowrap px-2.5';
+const providerButton = 'swb-button swb-button-outline justify-start gap-2 whitespace-nowrap px-2.5 py-2.5';
 const compose = `git clone -b ${releaseBranch} \\
   ${repository}.git
 cd SwB
@@ -63,7 +63,10 @@ function ProviderLabel({ name, plan }: { name: ReactNode; plan: string }) {
   return <span className="inline-flex items-baseline gap-1.5"><strong>{name}</strong>{' '}<span className="text-xs font-normal text-fd-muted-foreground">{plan}</span></span>;
 }
 
-function ProviderMark({ name }: { name: 'render' | 'railway' }) {
+function ProviderMark({ name }: { name: 'cloudflare' | 'fly' | 'render' | 'railway' }) {
+  if (name === 'cloudflare') {
+    return <svg aria-hidden="true" viewBox="0 0 16 16"><image href="/marks/cloudflare.svg" width="16" height="16" /></svg>;
+  }
   const size = name === 'render' ? 32 : 16;
   const offset = (16 - size) / 2;
   return (
@@ -82,7 +85,6 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const license = `${repository}/blob/${releaseBranch}/LICENSE`;
   const selfHosting = localize(lang, '/docs/self-hosting');
   const { render, railway } = deployProviders;
-  const providerButton = `${deployLink} ${railway.enabled ? 'py-2.5' : 'py-4'}`;
 
   return (
     <>
@@ -125,7 +127,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
               <DeployOption heading={deploy.server} intro={deploy.serverIntro} footer={
                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                   <Link className={providerButton} href={`${selfHosting}#cloudflare-tunnel`} prefetch={false} data-deploy-tunnel>
-                    <Globe aria-hidden="true" />
+                    <ProviderMark name="cloudflare" />
                     <ProviderLabel name={<>Cloudflare Tunnel<sup>™</sup></>} plan={deploy.freePlan} />
                   </Link>
                   <DeployGuide href={`${selfHosting}#docker-compose`}>{deploy.serverGuide}</DeployGuide>
@@ -137,19 +139,17 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 footer={<DeployGuide href={selfHosting}>{deploy.cloudGuide}</DeployGuide>}>
                 <div className="grid gap-3" data-deploy-providers>
                   <Link className={providerButton} href={`${selfHosting}#fly`}>
-                    <Plane aria-hidden="true" />
+                    <ProviderMark name="fly" />
                     <ProviderLabel name="Fly.io" plan={deploy.flyClaim} />
                   </Link>
                   <a className={providerButton} href={render.href}>
                     <ProviderMark name="render" />
                     <ProviderLabel name={render.name} plan={deploy.paidPlan} />
                   </a>
-                  {railway.enabled && (
-                    <Link className={providerButton} href={`${selfHosting}#railway`}>
-                      <ProviderMark name="railway" />
-                      <ProviderLabel name={railway.name} plan={deploy.paidPlan} />
-                    </Link>
-                  )}
+                  <a className={providerButton} href={railway.href}>
+                    <ProviderMark name="railway" />
+                    <ProviderLabel name={railway.name} plan={deploy.hobbyPlan} />
+                  </a>
                 </div>
               </DeployOption>
             </div>

@@ -251,10 +251,10 @@ test('docs GitHub option opens the release source file', async ({ page }) => {
 });
 
 test('landing shows supported deployment links and six usage examples in each locale', async ({ page }) => {
-  for (const [prefix, selfHosting, allowance, paid] of [
-    ['', 'Self-hosting guide', 'Free with monthly allowance', 'Paid plan'],
-    ['/zh-Hans', '自托管指南', '月度额度内免费', '付费套餐'],
-    ['/zh-Hant', '自行代管指南', '每月免費額度內免費', '付費方案'],
+  for (const [prefix, selfHosting, allowance, paid, hobby] of [
+    ['', 'Self-hosting guide', 'Free with monthly allowance', 'Paid plan', 'Hobby plan'],
+    ['/zh-Hans', '自托管指南', '月度额度内免费', '付费套餐', 'Hobby 方案'],
+    ['/zh-Hant', '自行代管指南', '每月免費額度內免費', '付費方案', 'Hobby 方案'],
   ]) {
     await page.goto(prefix || '/');
     const deploy = page.locator('#landing-deploy').locator('..');
@@ -265,18 +265,18 @@ test('landing shows supported deployment links and six usage examples in each lo
     expect(await commands.last().textContent()).toContain('\\\n');
     await expect(commands.last()).toContainText('docker compose up');
     const providers = deploy.locator('[data-deploy-providers] a');
-    await expect(providers).toHaveCount(2);
-    await expect(providers.last()).toHaveText(`Render ${paid}`);
-    await expect(providers.last()).toHaveAttribute('href', 'https://github.com/ZhehanZhang/SwB/blob/release/1.0/deploy/README.md#render');
-    await expect(deploy.getByRole('link', { name: new RegExp(`^Railway ${paid}$`) })).toHaveCount(0);
-    const fly = providers.first();
+    await expect(providers).toHaveCount(3);
+    const [fly, render, railway] = await providers.all();
+    await expect(render).toHaveText(`Render ${paid}`);
+    await expect(render).toHaveAttribute('href', 'https://github.com/ZhehanZhang/SwB/blob/release/1.0/deploy/README.md#render');
+    await expect(railway).toHaveText(`Railway ${hobby}`);
+    await expect(railway).toHaveAttribute('href', 'https://railway.com/deploy/swb');
     await expect(fly).toHaveText(`Fly.io ${allowance}`);
     await expect(fly).toHaveAttribute('href', `${prefix}/docs/self-hosting#fly`);
-    await expect(fly).toHaveClass((await providers.last().getAttribute('class'))!);
+    await expect(fly).toHaveClass((await render.getAttribute('class'))!);
     const tunnel = deploy.locator('[data-deploy-tunnel]');
     await expect(tunnel).toHaveAttribute('href', `${prefix}/docs/self-hosting#cloudflare-tunnel`);
-    await expect(tunnel).toHaveClass((await providers.last().getAttribute('class'))!);
-    await expect(tunnel.locator('svg.lucide-globe')).toHaveCount(1);
+    await expect(tunnel).toHaveClass((await render.getAttribute('class'))!);
     await expect(deploy.locator(`a[href="${prefix}/docs/install"] > .lucide-book-open`)).toHaveCount(1);
     await expect(deploy.locator(`a[href="${prefix}/docs/self-hosting#docker-compose"] > .lucide-book-open`)).toHaveCount(1);
     const usage = page.locator('#landing-usage').locator('..');
@@ -289,6 +289,25 @@ test('landing shows supported deployment links and six usage examples in each lo
     await expect(page.locator('h2#railway')).toContainText('Railway');
     await expect(page.getByText('fly deploy --ha=false', { exact: true })).toBeVisible();
     await expect(page.locator('a[href="https://fly.io/docs/about/pricing/"]')).toBeVisible();
+  }
+});
+
+test('deploy rows show the official service marks in light and dark', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`));
+    const rows = page.locator('[data-deploy-tunnel], [data-deploy-providers] a');
+    const marks = ['/marks/cloudflare.svg', ...['fly', 'render', 'railway'].map((name) => `/marks/${name}-on-${theme}.svg`)];
+    await expect(rows).toHaveCount(marks.length);
+    for (const [i, mark] of marks.entries()) {
+      const icon = rows.nth(i).locator('svg > image:visible');
+      await expect(icon).toHaveCount(1);
+      await expect(icon).toHaveAttribute('href', mark);
+      const asset = await page.request.get(mark);
+      expect(asset.ok()).toBe(true);
+      expect(await asset.text()).toMatch(/^<svg\b/);
+    }
   }
 });
 
@@ -344,9 +363,9 @@ test('provider and tunnel rows fit a single line in all three locales', async ({
           isTunnel: link.hasAttribute('data-deploy-tunnel'),
         };
       }));
-      expect(rows).toHaveLength(3);
+      expect(rows).toHaveLength(4);
       const cloud = rows.filter((row) => !row.isTunnel);
-      expect(cloud[0].width).toBe(cloud[1].width);
+      expect(new Set(cloud.map(({ width }) => width)).size).toBe(1);
       expect(new Set(rows.map(({ height }) => height)).size).toBe(1);
       for (const row of rows) {
         expect(row.whiteSpace).toBe('nowrap');

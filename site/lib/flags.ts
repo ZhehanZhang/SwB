@@ -11,6 +11,6 @@ export const deployProviders = {
   },
   railway: {
     name: 'Railway',
-    enabled: process.env.NODE_ENV === 'development' && process.env.SWB_TEST_DEPLOY_RAILWAY === '1',
+    href: 'https://railway.com/deploy/swb',
   },
 };
