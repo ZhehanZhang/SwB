@@ -60,7 +60,7 @@ dev = ["ruff>=0.11,<1"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-switchboard = ["brand.json", "static/**/*", "prompts/*.txt", "prompts/setup/*.md", "slack/avatars/*", "marks/*.svg", "marks/*.css"]
+switchboard = ["brand.json", "static/**/*", "prompts/setup/*.md", "slack/avatars/*", "marks/*.svg", "marks/*.css"]
 
 [tool.ruff.lint]
 select = ["F", "E9", "E401", "E711", "E722"]

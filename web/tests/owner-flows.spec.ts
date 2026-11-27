@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 
 test("Sign-in explains an invalid link", async ({ page }) => {
@@ -88,6 +89,22 @@ test("Settings shows the SwB commands", async ({ page }) => {
   const commands = page.getByRole("region", { name: "Commands", exact: true })
   await expect(commands.locator("code")).toHaveText(["swb up", "swb status", "swb log"])
   await expect(commands.getByRole("button", { name: "Copy swb log" })).toBeVisible()
+})
+
+test("Project copies the packaged coordinator prompt", async ({ page }, testInfo) => {
+  const prompt = await readFile(new URL("../../src/switchboard/prompts/setup/coordinator.md", import.meta.url), "utf-8")
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async (value: string) => { document.documentElement.dataset.testClipboard = value } },
+    })
+  })
+  await page.goto("/projects/operations")
+  const button = page.getByRole("button", { name: "Copy coordinator prompt" })
+  await expect(button).toBeEnabled()
+  await button.screenshot({ path: testInfo.outputPath("copy-coordinator.png") })
+  await button.click()
+  await expect(page.locator("html")).toHaveAttribute("data-test-clipboard", prompt)
+  await expect(page.getByText("Coordinator prompt copied", { exact: true })).toBeVisible()
 })
 
 test("Memory shows human keys and opens notes by summary when a key is absent", async ({ page }, testInfo) => {

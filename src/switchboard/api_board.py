@@ -286,7 +286,6 @@ async def project_board(request: Request) -> JSONResponse:
     if not claude_project:
         claude_project = next((name for item, row in routines.values() if row["project"] == slug and item["role"] == "primary routine"
                                and (name := _reference(row.get("claude_project")))), None)
-    # The coordinator endpoint accepts only printable titles up to 120 characters.
     if claude_project and (len(claude_project) > 120 or any(ord(c) < 32 or ord(c) == 127 for c in claude_project)):
         claude_project = None
     return JSONResponse({

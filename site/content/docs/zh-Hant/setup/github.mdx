@@ -146,6 +146,6 @@ SwB 會用私密金鑰自行產生安裝權杖。每個安裝權杖的效期是�
 
 ## 排解問題
 
-簽章錯誤表示 GitHub 和 SwB 儲存的 webhook 金鑰有差異。請產生新金鑰。將新金鑰填入 GitHub。使用新的領取連結將金鑰儲存到 SwB。
+發生簽章錯誤時，請用 `openssl rand -hex 32` 產生新的 webhook 金鑰。在 GitHub 應用程式的設定中填入新金鑰。請代理呼叫 `connect(what="github", choose={"replace":"secret"})`。使用領取連結儲存同一組金鑰。重新啟動 SwB。在 **Recent deliveries** 中重新傳送該事件。
 
 如果 `connect` 要求 **Issues** 寫入權限，請開啟應用程式設定 → **Permissions & events**。把 **Issues** 設為 **Read & write**，並在安裝上接受這項變更。

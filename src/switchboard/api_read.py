@@ -11,7 +11,7 @@ from ipaddress import ip_address
 from typing import Any
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from .api_display import captain_avatar_url, captain_target, captain_targets, capy_label, local_avatar_url, slack_profile_avatar
@@ -31,7 +31,7 @@ _ROUTE_KINDS = ("captain", "project", "thread", "routine")
 _REPO = re.compile(r"[\w.-]+/[\w.-]+")
 _AUTH_PATHS = ("/mcp", "/inbox/poll", "/inbox/events", "/register", "/authorize", "/token", "/connect/redeem", *SIGN_IN_FAILURES)
 _MEMORY_FIELDS = ("id", "scope", "namespace", "key", "title", "tags", "source", "created_at", "updated_at")
-_PROMPTS = {"coordinator": "v4", "routine": "v1", "dispatcher": "v1"}
+_PROMPT_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
 _SCOPE = rf"(?:general|project:{_PROJECT})"
 _CAPY_SENDERS = ("capy_thread", "capy", "captain")
@@ -542,22 +542,17 @@ async def memory(request: Request) -> JSONResponse:
                          "next_offset": result.get("next_offset"), "mirror": bool(core.memory.mirror_dir)})
 
 
-async def prompts(request: Request) -> JSONResponse:
+async def prompts(request: Request) -> Response:
     name = request.path_params["name"]
-    template = "coordinator" if name == "universal-coordinator" else name
-    version = _PROMPTS.get(template)
-    if version is None:
+    if not _PROMPT_NAME.fullmatch(name):
         return _error("prompt not found", 404)
-    project = request.query_params.get("claude_project", "").strip()
-    if len(project) > 120 or any(ord(c) < 32 or ord(c) == 127 for c in project):
-        return _error("invalid Claude Project name")
-    title = json.dumps(project or "<exact Claude Project name>", ensure_ascii=False)
     try:
-        text = files("switchboard").joinpath("prompts", f"{template}-{version}.txt").read_text(encoding="utf-8")
+        content = files("switchboard.prompts.setup").joinpath(f"{name}.md").read_bytes()
+    except (FileNotFoundError, IsADirectoryError):
+        return _error("prompt not found", 404)
     except OSError:
         return _error("prompt unavailable", 503)
-    text = text.rstrip().replace("{claude_project}", title)
-    return JSONResponse({"name": name, "version": version, "text": text})
+    return Response(content, media_type="text/markdown")
 
 
 async def platforms(request: Request) -> JSONResponse:
