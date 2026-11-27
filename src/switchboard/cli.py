@@ -245,6 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--public-url", help="optional public base URL")
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
     up = commands.add_parser("up", help="run the SwB server")
+    up.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
     up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
     connect.add_argument("what", help="connection kind, for example mcp-client")
@@ -284,7 +285,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "up":
             from .cli_up import run
 
-            run(base, env, args.tunnel, instance=args.dir is not None)
+            run(base, env, args.tunnel, host=args.host, instance=args.dir is not None)
             return
         arguments = {}
         if args.command == "connect":

@@ -14,6 +14,7 @@ from pathlib import Path
 from threading import Thread
 
 from .cli import CONFIG, DEFAULT_PORT, CliError
+from .config import DEFAULT_HOST
 
 _TUNNELS = {
     "cloudflare": ("cloudflared", ("tunnel", "--no-autoupdate", "--url"), "trycloudflare.com"),
@@ -97,19 +98,22 @@ def _interrupt(*_: object) -> None:
     raise KeyboardInterrupt
 
 
-def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, instance: bool) -> None:
+def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | None, instance: bool) -> None:
     from .__main__ import main as serve
 
     env = {**dotenv, **os.environ}
     raw_port = env.get("PORT", DEFAULT_PORT)
     if not raw_port.isascii() or not raw_port.isdecimal() or len(raw_port) > 5 or not 1 <= (port := int(raw_port)) <= 65535:
         raise CliError("PORT must be a number from 1 to 65535.")
-    origin = f"http://127.0.0.1:{port}"
+    host = host or env.get("SWITCHBOARD_HOST") or DEFAULT_HOST
+    origin_host = {"0.0.0.0": DEFAULT_HOST, "::": "::1"}.get(host, host)
+    netloc = f"[{origin_host}]" if ":" in origin_host else origin_host
+    origin = f"http://{netloc}:{port}"
     values = {
         **{k: value for k, value in dotenv.items() if k not in os.environ},
-        "SWITCHBOARD_HOST": "127.0.0.1",
+        "SWITCHBOARD_HOST": host,
         "PORT": str(port),
-        "FORWARDED_ALLOW_IPS": "127.0.0.1",
+        "FORWARDED_ALLOW_IPS": "127.0.0.1,::1",
     }
     data = None
     if instance:
@@ -124,11 +128,9 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, instance: boo
             listener = None
             tunnel_url = None
             if tunnel:
-                listener = stack.enter_context(socket.socket())
-                if os.name == "posix":
-                    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 try:
-                    listener.bind(("127.0.0.1", port))
+                    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+                    listener = stack.enter_context(socket.create_server((host, port), family=family))
                 except OSError:
                     raise CliError(f"Could not bind {origin}. Choose another PORT.") from None
                 tunnel_url = stack.enter_context(_tunnel(tunnel, origin))

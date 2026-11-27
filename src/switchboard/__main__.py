@@ -44,7 +44,8 @@ class _NoQuery(logging.Filter):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="swb")
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("serve", help="run the server (default)")
+    serve = sub.add_parser("serve", help="run the server (default)")
+    serve.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
     exp = sub.add_parser("export", help="write every memory as markdown, one folder per scope")
     exp.add_argument("dir")
     sub.add_parser("log", help="print the recent audit log")
@@ -75,11 +76,11 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.error("no config file found")
         print(migrate_text(path.read_text()), end="")
         return
-    from .config import ConfigError, LOOPBACK_HOSTS
+    from .config import DEFAULT_HOST, ConfigError, LOOPBACK_HOSTS
     from .deployment import serve_env
 
     serving = args.cmd in (None, "serve")
-    host = os.environ.get("SWITCHBOARD_HOST", "0.0.0.0")
+    host = getattr(args, "host", None) or os.environ.get("SWITCHBOARD_HOST") or DEFAULT_HOST
     port = int(os.environ.get("PORT", "8000")) if serving else 0
     default_public_url = f"http://localhost:{port}" if host in LOOPBACK_HOSTS and port else None
     try:

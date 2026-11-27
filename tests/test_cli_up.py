@@ -2,6 +2,7 @@ import logging
 import os
 import socket
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,41 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
     assert calls == [(["serve"], data, "127.0.0.1", "8870", "http://127.0.0.1:8870")]
     assert capsys.readouterr() == ("", "")
     assert "SWITCHBOARD_HOST" not in os.environ
+
+
+@pytest.mark.parametrize(("env_host", "flag", "expected", "origin"), [
+    (None, [], "localhost", "http://localhost:8870"),
+    ("0.0.0.0", [], "0.0.0.0", "http://127.0.0.1:8870"),
+    ("0.0.0.0", ["--host", "::1"], "::1", "http://[::1]:8870"),
+])
+def test_up_host_precedence(clean_env, tmp_path, monkeypatch, capsys, env_host, flag, expected, origin):
+    (tmp_path / ".env").write_text("SWITCHBOARD_HOST=localhost\n")
+    if env_host:
+        monkeypatch.setenv("SWITCHBOARD_HOST", env_host)
+    calls = []
+    monkeypatch.setattr(__main__.uvicorn, "run", lambda app, **options: calls.append(options))
+
+    __main__.cli_main(["up", *flag])
+
+    assert calls[0]["host"] == expected
+    assert capsys.readouterr() == (f"MCP URL: {origin}/mcp\n", "")
+    assert os.environ.get("SWITCHBOARD_HOST") == env_host
+
+
+@pytest.mark.parametrize(("env_host", "flag", "expected"), [
+    (None, [], "127.0.0.1"),
+    ("0.0.0.0", [], "0.0.0.0"),
+    ("0.0.0.0", ["--host", "::1"], "::1"),
+])
+def test_serve_host_precedence(clean_env, monkeypatch, env_host, flag, expected):
+    if env_host:
+        monkeypatch.setenv("SWITCHBOARD_HOST", env_host)
+    calls = []
+    monkeypatch.setattr(__main__.uvicorn, "run", lambda app, **options: calls.append(options))
+
+    __main__.cli_main(["serve", *flag])
+
+    assert calls[0]["host"] == expected
 
 
 def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, monkeypatch, capsys):
@@ -160,6 +196,30 @@ def test_up_never_tunnels_an_existing_service(clean_env, monkeypatch, capsys):
     out, err = capsys.readouterr()
     assert not out
     assert f"Could not bind http://127.0.0.1:{port}." in err
+
+
+def test_tunnel_uses_the_selected_ipv6_bind_host(clean_env, monkeypatch):
+    try:
+        with socket.socket(socket.AF_INET6) as bound:
+            bound.bind(("::1", 0))
+            port = bound.getsockname()[1]
+    except OSError:
+        pytest.skip("IPv6 loopback is unavailable")
+    monkeypatch.setenv("PORT", str(port))
+    tunnel = "https://sample.trycloudflare.com"
+
+    def open_tunnel(provider, origin):
+        assert provider == "cloudflare" and origin == f"http://[::1]:{port}"
+        return nullcontext(tunnel)
+
+    def serve(argv, *, listener, tunnel_url, **_):
+        assert listener.family == socket.AF_INET6
+        assert listener.getsockname()[:2] == ("::1", port)
+        assert tunnel_url == tunnel
+
+    monkeypatch.setattr(cli_up, "_tunnel", open_tunnel)
+    monkeypatch.setattr(__main__, "main", serve)
+    __main__.cli_main(["up", "--host", "::1", "--tunnel", "cloudflare"])
 
 
 def test_tunnel_failure_does_not_log_diagnostics(clean_env, tmp_path, monkeypatch, capsys, unused_tcp_port):
