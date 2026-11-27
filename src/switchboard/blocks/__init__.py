@@ -40,6 +40,7 @@ BLOCKS = {
     "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
     "local": "switchboard.blocks.local:LocalBlock",
+    "muse": "switchboard.blocks.muse:MuseBlock",
 }
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 VERBS = ("send", "reply", "status", "result", "cancel", "targets")

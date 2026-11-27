@@ -3,16 +3,17 @@ from __future__ import annotations
 from importlib import import_module
 from pathlib import Path
 
+from ..mcp_config import LocalServer
 from ..state import CompanionError
 from .base import Capability
 from .drop import DropCapability
 from .notify import NotifyCapability
 
-CAPABILITIES = ("notify", "drop", "muse", "hooks", "herdr", "codex", "opencode")
+CAPABILITIES = ("notify", "drop", "muse", "mcp", "hooks", "herdr", "codex", "opencode")
 HARNESSES = {"hooks": "HooksCapability", "herdr": "HerdrCapability", "codex": "CodexCapability", "opencode": "OpenCodeCapability"}
 
 
-def registry(enabled: tuple[str, ...], drop_dir: Path) -> tuple[dict[str, Capability], dict[str, str]]:
+def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalServer] | None = None) -> tuple[dict[str, Capability], dict[str, str]]:
     available = {}
     unavailable = {}
     for cap_id in dict.fromkeys(enabled):
@@ -20,6 +21,10 @@ def registry(enabled: tuple[str, ...], drop_dir: Path) -> tuple[dict[str, Capabi
             cap = DropCapability(drop_dir)
         elif cap_id == "notify":
             cap = NotifyCapability()
+        elif cap_id == "mcp":
+            from .mcp import MCPCapability
+
+            cap = MCPCapability(servers or {})
         elif cap_id == "muse":
             try:
                 from .muse import MuseCapability

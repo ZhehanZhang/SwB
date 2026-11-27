@@ -97,3 +97,5 @@ SwB 把每段設定提示詞作為 MCP prompt 與 MCP resource 提供給代理�
 各項裝置功能預設為關閉。加上 `--cap notify` 允許傳送通知。加上 `--cap drop` 允許存取裝置上的 SwB Drop 資料夾。
 
 執行 `swb companion run` 重新連線。執行 `swb companion status` 查看裝置編號。執行 `swb companion disconnect` 移除裝置。
+
+加上 `--cap mcp` 允許代理呼叫裝置上的工具。每台伺服器使用一個 `--mcp` 參數。本機位址範例為 `--mcp notes=http://127.0.0.1:8000/mcp`。如果填入指令，請加上引號，例如 `--mcp 'notes=uvx notes-mcp'`。呼叫 `companion_invoke` 查看伺服器和工具，或執行工具。
