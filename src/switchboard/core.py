@@ -462,6 +462,12 @@ class Switchboard:
     def slug_map(self, targets: list[dict[str, Any]], aliases: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
         return dict(tgt.by_slug(targets, self.cfg.targets.get("priority") or (), {**(self.cfg.targets.get("aliases") or {}), **(aliases or {})}))
 
+    def target_agents(self, address: Address) -> set[str]:
+        if address.block == "agent":
+            return {address.id}
+        block = self.blocks.get(address.block)
+        return {agent.id for agent in block.manifest.agents} if block is not None else set()
+
     def target_visibility_resources(self, selector: str, address: Address | None = None, *,
                                     slugs: dict[str, dict[str, Any]]) -> list[str]:
         name = selector.casefold()
@@ -984,7 +990,9 @@ class Switchboard:
             raise MemoryRefused(MEMORY_WRITER_REQUIRED)
 
     def write_memory(self, principal: Principal, *, scope: str, **fields: Any) -> dict[str, Any]:
-        self.check_memory_scope(principal, scope.strip().lower())
+        scope = scope.strip().lower()
+        if not self.allows_memory(principal, scope):
+            raise MemoryRefused(SCOPE_REQUIRED, f"{scope} is outside this key's grants.")
         out = self.memory.write(source=principal.source, scope=scope, writer_credential=principal.memory_writer,
                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer), **fields)
         self.audit_memory(principal, "memory_write", out["scope"], detail=out["title"])
@@ -1010,13 +1018,12 @@ class Switchboard:
 
     # Context pack -----------------------------------------------------------------------------
 
-    async def context_pack(self, principal: Principal, project: str | None) -> str:
+    async def context_pack(self, principal: Principal, project: str | None, scopes: list[str]) -> str:
         p = self.project(None if project and project.strip().lower().removeprefix("project:") == GENERAL else project)
         if p and not self.allows_memory(principal, p.scope):
             raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read {p.scope}")
-        if not p and not principal.allows(GENERAL):
-            raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read general; pass the project you work in")
-        general = principal.allows(GENERAL)
+        scopes = [s for s in scopes if self.allows_memory(principal, s)]
+        general = GENERAL in scopes
         now = self.clock()
         out = [f"# Shared context (switchboard, {iso(now)}){f' for project {p.slug}' if p else ''}"]
 
@@ -1029,7 +1036,10 @@ class Switchboard:
             out.append(f"\n## Project {p.name} ({p.scope})" + (f"\n{p.description}" if p.description else "") + (f"\nLinks: {p.links}" if p.links else ""))
             if p.archived:
                 out.append("This project is archived.")
-            section(f"{p.slug}: memory", self.memory.recent(scopes=[p.scope], limit=12, body_limit=500))
+            if p.scope in scopes:
+                section(f"{p.slug}: memory", self.memory.recent(scopes=[p.scope], limit=12, body_limit=500))
+        if extra := [s for s in scopes if s != GENERAL and (p is None or s != p.scope)]:
+            section("Other granted memory", self.memory.recent(scopes=extra, limit=12, body_limit=500))
         if general:
             section("General: profile", self.memory.recent(scopes=[GENERAL], namespace="profile", limit=8, body_limit=500))
             section("General: recent decisions", self.memory.recent(scopes=[GENERAL], namespace="decisions", since=now - 30 * 86400, limit=8, body_limit=300))

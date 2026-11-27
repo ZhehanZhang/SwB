@@ -110,14 +110,53 @@ def test_write_checks_the_grant_and_agent_scope_is_usable(workspace, tmp_path):
         items = payload(call(client, key, tool, {"scopes": [scope], **args}))["items"]
         assert [item["id"] for item in items] == [entry["id"]]
     assert error_text(call(client, agent["key"], "memory_read", {"id": entry["id"]})) == MEMORY_NOT_FOUND
-    for scope in ("agent:alpha", "project:demo", "general"):
-        assert error_text(write(client, key, scope, confirm_general=True)) == SCOPE_REQUIRED
-    assert error_text(write(client, SECOND_KEY, "project:secretproj")) == SCOPE_REQUIRED
+    for scope in ("agent:alpha", "project:demo", "general", "project:secretproj", "project:missing"):
+        assert error_text(write(client, key, scope, confirm_general=True)) == f"{scope} is outside this key's grants."
+    assert error_text(write(client, SECOND_KEY, "project:secretproj")) == "project:secretproj is outside this key's grants."
+    assert {row["detail"] for row in core.audit.recent(action="tool_refused") if row["target"] == "memory_write"} == {SCOPE_REQUIRED}
     assert rpc(client, "unknown-fixture-credential", "tools/call", {
         "name": "memory_write", "arguments": {"scope": "project:demo"},
     }).status_code == 401
     assert core.memory.export(tmp_path / "export") == 1
     assert (tmp_path / "export" / "agents" / "default" / "notes" / (entry["id"] + ".md")).is_file()
+
+
+@pytest.mark.parametrize(("name", "args"), [
+    ("memory_list", {}), ("memory_search", {"query": "Searchable"}), ("context_pack", {}),
+])
+def test_paired_memory_defaults_to_its_grants_and_skips_ungranted_scopes(workspace, name, args):
+    core, client, agent, _, _, default = workspace
+    scopes = ("agent:default", "agent:alpha", "project:demo", "project:secretproj", "general")
+    ids = {scope: payload(write(client, STATIC_KEY, scope, confirm_general=True))["id"] for scope in scopes}
+    oauth = core.auth._issue("fixture-client", core.cfg.resource, "oauth-owner")["access_token"]
+
+    def read(key, **extra):
+        result = call(client, key, name, {**args, **extra})
+        assert not result.get("isError"), result
+        return payload(result)
+
+    for key, expected in ((default["key"], {"agent:default"}), (agent["key"], {"agent:alpha", "project:demo"}),
+                          (STATIC_KEY, {"general"}), (oauth, {"general"})):
+        text = json.dumps(read(key))
+        assert {scope for scope, ident in ids.items() if ident in text} == expected
+
+    key = default["key"]
+    expected_note = "Skipped scopes outside this key's grants."
+    for dropped in ("project:secretproj", "project:missing", "general"):
+        mixed = read(key, scopes=[" Agent:Default ", dropped])
+        text = json.dumps(mixed)
+        assert ids["agent:default"] in text and dropped not in text
+        assert (mixed["note"] if isinstance(mixed, dict) else mixed.splitlines()[-1]) == expected_note
+        assert error_text(call(client, key, name, {**args, "scopes": [dropped]})) == MEMORY_NOT_FOUND
+    assert "Skipped" not in json.dumps(read(key, scopes=["agent:default"]))
+    assert {row["target"] for row in core.audit.recent(action="cross_read") if row["source"] == "default"} == {"agent:default"}
+
+
+def test_only_the_owner_discovers_memory_promote(workspace):
+    _, client, agent, _, scoped, _ = workspace
+    for key, visible in ((STATIC_KEY, True), (agent["key"], False), (scoped["key"], False), (SECOND_KEY, False)):
+        tools = rpc(client, key, "tools/list", {}).json()["result"]["tools"]
+        assert ("memory_promote" in {tool["name"] for tool in tools}) is visible
 
 
 @pytest.mark.parametrize("name", ["memory_delete", "memory_move", "memory_promote"])
@@ -134,9 +173,8 @@ def test_mutations_require_exact_writer_and_both_grants(workspace, name):
         return {"id": ident, **({"to_scope": "agent:alpha"} if name == "memory_move" else {})}
 
     if name == "memory_promote":
-        for key in (agent, sibling, default):
-            assert error_text(call(client, key["key"], name, args(agent_entry))) == OWNER_REQUIRED
-        assert error_text(call(client, scoped["key"], name, args(agent_entry))) == OWNER_REQUIRED
+        for key in (agent, sibling, default, scoped):
+            assert error_text(call(client, key["key"], name, args(agent_entry))) == f"This key belongs to a connected agent. {OWNER_REQUIRED}"
         assert payload(call(client, STATIC_KEY, name, args(owner_entry)))["to"] == "general"
     else:
         for key, ident in ((agent["key"], owner_entry), (sibling["key"], agent_entry), (default["key"], agent_entry)):
