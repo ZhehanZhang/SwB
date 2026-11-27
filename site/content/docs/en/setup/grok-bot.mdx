@@ -108,7 +108,7 @@ Say done in the Bot chat. Grok Bot then tests the routine.
 
 Grok Bot calls `connect(what="grok-bot")`. SwB returns the MCP address, the OAuth state and a routine prompt. The routine prompt tells each run to trust the `trust` field of the webhook and to answer with `reply`.
 
-Grok Bot creates the routine with that prompt. Then it registers the routine with `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB returns two claim links. After you save both, Grok Bot runs `send(to="grok-routine:routine:<routine>", task="switchboard setup test: reply pong")`. It calls `connect` again to see if Grok accepted the call.
+Grok Bot creates the routine with that prompt. Then it registers the routine with `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB returns two claim links. After you save both, Grok Bot runs `send(to="grok-routine:routine:<routine>", task="SwB setup test. Reply pong.")`. It calls `connect` again to see if Grok accepted the call.
 
 The webhook is the wake path for this connection. Each SwB message for the routine starts a new run.
 

@@ -55,13 +55,14 @@ def test_no_route_needs_a_target(make):
     assert payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "target": CAPTAIN}))["route"] == "explicit"
 
 
-def test_send_checks_for_a_route_before_capy_credentials(make):
+def test_send_checks_for_capy_credentials_before_a_route(make):
     cfg = {"version": 2, "blocks": {"mcp": {}, "capy": {}}}
     core, client = make(config=cfg, env={"SWITCHBOARD_KEY_CAPY": STATIC_KEY})
-    args = {"task": "Check the build"}
-    assert "No route is set for Capy" in error_text(call(client, STATIC_KEY, "send", args))
+    args = {"to": "capy", "task": "Check the build"}
+    expected = "Capy is unreachable. Run swb connect capy-captain to add an API key."
+    assert expected in error_text(call(client, STATIC_KEY, "send", args))
     put(core.routes, None, None, CAPTAIN)
-    assert "CAPY_API_KEY missing" in error_text(call(client, STATIC_KEY, "send", args))
+    assert expected in error_text(call(client, STATIC_KEY, "send", args))
 
 
 def test_route_tools_validate_and_audit(make):

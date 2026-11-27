@@ -23,6 +23,8 @@ from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
 
 SECRET = "example-test-only-secret"
+OWNER_KEY = "fixture-long-owner-key-only"
+HEALTH_OWNER = {"Authorization": f"Bearer {OWNER_KEY}"}
 PATH = "/github/webhook"
 ISSUE = {"number": 7, "title": "An issue", "html_url": "https://github.example/acme/app/issues/7",
          "body": "Issue body", "state": "open"}
@@ -40,7 +42,8 @@ def github(tmp_path):
     async def open_app(config=None, env=None, *, settings=None, **options):
         path = tmp_path / "config.yaml"
         path.write_text(yaml.safe_dump({"version": 2, "blocks": {"github": config or {}}, **(settings or {})}))
-        core = Switchboard(path, tmp_path / "data", env={"GITHUB_WEBHOOK_SECRET": SECRET} if env is None else env, **options)
+        env = {"GITHUB_WEBHOOK_SECRET": SECRET} if env is None else env
+        core = Switchboard(path, tmp_path / "data", env={"SWITCHBOARD_KEY_OWNER": OWNER_KEY, **env}, **options)
         app = create_app(core)
         async with app.starlette.router.lifespan_context(app.starlette):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://example.test") as client:
@@ -102,7 +105,7 @@ async def test_invalid_signature(github, signature):
 async def test_no_secret(github):
     async with github(env={}) as (_, client):
         assert (await client.post(PATH, content=b"{}", headers=signed(b"{}"))).status_code == 503
-        block = (await client.get("/healthz")).json()["blocks"]["github"]
+        block = (await client.get("/healthz", headers=HEALTH_OWNER)).json()["blocks"]["github"]
         assert block["configured"] and not block["secret_present"] and not block["online"]
         assert block["credential_problem"] == "no GitHub credential: GitHub triage actions unavailable"
 
@@ -133,7 +136,7 @@ async def test_webhook_refusal_audit_is_bounded_by_reason_and_window(github):
 async def test_unconfigured(github):
     async with github({"enabled": False}) as (_, client):
         assert (await client.post(PATH)).status_code == 404
-        assert "github" not in (await client.get("/healthz")).json()["blocks"]
+        assert "github" not in (await client.get("/healthz", headers=HEALTH_OWNER)).json()["blocks"]
 
 
 @pytest.mark.parametrize("streaming", [False, True])
@@ -294,7 +297,7 @@ async def test_sink_delivery_retry_and_secretless_status(github, caplog):
                 assert (await send(client, delivery=key)).status_code == 200
             await drained(core)
             assert attempts == {"retry": 2, "reject": 1, "network": 2}
-            health = await client.get("/healthz")
+            health = await client.get("/healthz", headers=HEALTH_OWNER)
             status = health.json()["blocks"]["github"]
             assert {key: status[key] for key in ("use", "kind", "level", "online", "configured", "secret_present", "routes", "dropped", "next_step", "sinks")} == {
                 "use": "github", "kind": "source", "level": {"in": "webhook", "out": None}, "online": True,

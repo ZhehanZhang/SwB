@@ -88,9 +88,10 @@ class Field:
 
 
 class GroupFieldError(ClaimError):
-    def __init__(self, field: Field, message: str):
+    def __init__(self, field: Field, guidance: str = ""):
         self.field = field
-        super().__init__(message)
+        self.guidance = guidance
+        super().__init__(f"Check {field.label}")
 
 
 def normalize_pem(value: str, *, check: ClaimCheck | None = None) -> str:
@@ -326,11 +327,15 @@ class Claims:
             if not raw.strip():
                 if f.optional:
                     continue
-                raise GroupFieldError(f, f"{f.label} is missing.")
+                raise GroupFieldError(f)
             try:
                 normalized.append((f, self._normalize(f.name, f.kind, raw)))
-            except ClaimError as e:
+            except ClaimInputError as e:
                 raise GroupFieldError(f, str(e)) from None
+            except ClaimUnavailable:
+                raise
+            except ClaimError:
+                raise GroupFieldError(f) from None
         online = [(f, value, check) for f, value in normalized if (check := self._online_checks.get(f.kind))]
         errors = await asyncio.gather(*(check(value) for _, value, check in online))
         for (f, _, _), error in zip(online, errors):

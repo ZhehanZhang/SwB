@@ -3,7 +3,7 @@ from subprocess import CompletedProcess, TimeoutExpired
 
 import pytest
 
-from conftest import OWNER, STATIC_KEY, base_config, default_env
+from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, default_env
 import switchboard
 from switchboard import api_about
 from switchboard.blocks import Block, Manifest
@@ -64,6 +64,28 @@ def test_release_label_and_build_commit_are_reported_by_all_version_endpoints(ma
     about = client.get("/api/about", headers=OWNER).json()
     assert about["version"] == expected and about["commit"] == commit.lower()
     assert {block["version"] for block in about["blocks"]} == {expected}
+
+
+def test_healthz_limits_details_to_owner_browser_and_canary_key(make):
+    cfg = base_config(version=2, blocks={"mcp": {}, "discord": {}})
+    core, client = make(cfg, env={**default_env(), "SWITCHBOARD_KEY_OWNER": "fixture-long-owner-key-only"})
+    redacted = {"status": core.health()["status"], "version": version("swb-one")}
+    for headers in ({}, {"Authorization": f"Bearer {STATIC_KEY}"}, {"cf-access-jwt-assertion": "other"}):
+        response = client.get("/healthz", headers=headers)
+        assert response.status_code == 200 and response.json() == redacted
+        assert response.headers["cache-control"] == "no-store"
+    token = core.auth.sessions.mint_link("fixture", "owner")
+    signed_in = client.post("/auth/link", json={"token": token}, headers={"Origin": PUBLIC})
+    assert signed_in.status_code == 204
+    session_cookie = signed_in.headers["set-cookie"].split(";", 1)[0]
+    client.cookies.clear()
+    for headers in (OWNER, {"Cookie": session_cookie}, {"Authorization": "Bearer fixture-long-owner-key-only"}):
+        response = client.get("/healthz", headers=headers)
+        body = response.json()
+        assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
+        assert body["blocks"]["discord"]["online"] is False
+        assert body["block_setup"]["discord"]["missing_env"] == ["DISCORD_BOT_TOKEN"]
+        assert body["problems"]
 
 
 def test_about_omits_invalid_environment_values_and_handles_missing_package(make, monkeypatch, tmp_path):
