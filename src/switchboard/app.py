@@ -518,7 +518,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                 got = await core.inbox.wait(owner=agent, since=cursor, timeout=HEARTBEAT_S, reader=f"channel:{p.source}",
                                             advance=False, scopes=None if p.kind == "inbox_key" else p.scopes)
                 for item in got["items"]:
-                    if item["kind"] == "watch_digest":
+                    if item["kind"] in ("watch_digest", "context"):
                         continue
                     yield f"id: {item['cursor']}\nevent: item\ndata: {json.dumps(item)}\n\n".encode()
                 if got["timed_out"]:
