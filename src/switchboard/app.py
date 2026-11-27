@@ -16,7 +16,7 @@ from starlette.routing import Mount, Route
 from . import pages
 from .api_about import release_version
 from .api_display import SLACK_PROFILE_PREFIX
-from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable, GroupFieldError
+from .claims import CLAIM_PATH, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
 from .config import REQUEST_BASE
 from .guard import Guard, RateLimiter, client_ip, reject
 from .owner_login import OwnerLogin
@@ -32,11 +32,6 @@ INBOX_FEEDS = ("/inbox/poll", "/inbox/events")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
-TOKEN_CLAIM_MESSAGES = {
-    "Enter it on a single line, at most 8 KiB.": "Enter a single-line value up to 8 KiB",
-    "Enter a public HTTPS URL without credentials or a fragment.": "Enter a public HTTPS webhook URL",
-    "That doesn't look like the right kind of token.": "Use a bot token",
-}
 ROUTINE_CLAIM_MESSAGES = {
     "this link isn't valid; ask the Claude session for a new one": "Request a new link",
     "this link was replaced by a newer registration; use the latest link": "Use the latest link",
@@ -351,12 +346,14 @@ def create_app(core: "Switchboard") -> Any:
             name = claim["name"]
             chats = [block for block in core.blocks.values() if isinstance(block, ChatBlock) and block.token_env == name]
             if any(not block.token_re.fullmatch(token.strip()) for block in chats):
-                raise ClaimError("That doesn't look like the right kind of token.")
+                raise ClaimInputError("Use a bot token")
             name = await core.claims.submit(code, token)
         except ClaimUnavailable:
             return pages.claim_message_page("Request a new link", 410)
-        except ClaimError as e:
-            return pages.claim_message_page(TOKEN_CLAIM_MESSAGES.get(str(e), str(e)), 400)
+        except ClaimInputError as e:
+            return pages.claim_message_page(str(e), 400)
+        except ClaimError:
+            return pages.claim_message_page("Check the value", 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=name)
         for block in chats:

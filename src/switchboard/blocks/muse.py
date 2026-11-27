@@ -15,6 +15,7 @@ from starlette.routing import Route
 
 from ..audit import iso
 from ..auth import Principal
+from ..claims import ClaimInputError
 from ..muse_protocol import BRIDGE_PATH, CLAIM_ID, DELIVERY_TIMEOUT, MESSAGE_LIMIT, NO_REPLY, TOKEN, TOKEN_ENV, UNKNOWN
 from . import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
 
@@ -28,6 +29,11 @@ SDK_TOKENS = "https://gadgets.muse.ai/settings/sdk-tokens"
 SDK_TERMS = "https://gadgets.muse.ai/sdk-terms"
 DUPLICATE_WINDOW = 600
 BRIDGE_PRINCIPAL = Principal(MAILBOX, "muse-gadget", "muse_bridge", origin="http", scopes=(), tools=(), targets=())
+
+
+def validate_bridge_token(value: str) -> None:
+    if not TOKEN.fullmatch(value):
+        raise ClaimInputError("Paste the bridge token from Muse.")
 
 
 class MuseBlock(Block):
@@ -50,7 +56,7 @@ class MuseBlock(Block):
         super().__init__(core, config)
         if self.name != MAILBOX:
             raise BlockError("Configure the Muse gadget under blocks.muse.")
-        core.claims.validators[TOKEN_ENV] = (TOKEN, "Enter a bridge token of 43 to 128 letters, digits, hyphens, or underscores.")
+        core.claims.register_name(TOKEN_ENV, validate_bridge_token)
         core.store.x("CREATE TABLE IF NOT EXISTS muse_bridge (id INTEGER PRIMARY KEY CHECK(id = 1), key_hash TEXT, "
                      "last_seen REAL, last_reply REAL)")
         core.store.x("CREATE UNIQUE INDEX IF NOT EXISTS muse_claim ON handles(json_extract(meta, '$.muse_claim')) "

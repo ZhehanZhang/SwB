@@ -4,12 +4,14 @@ workspace_projects and channel_projects for the intake."""
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from .. import BlockError, Manifest, TargetKind
 from ...slack.config import AVATAR_RE, parse_config
 from ...slack.engine import SlackEngine
 from .actions import SlackActions
+from .credentials import TOKEN_PREFIXES, check_slack_auth, slack_workspace, validate_token
 from .intake import SlackIntake
 
 if TYPE_CHECKING:
@@ -23,6 +25,7 @@ Messages that mention @swb reach your inbox when addressed to you."""
 
 class SlackBlock(SlackIntake, SlackActions):
     connect_kinds = ("slack",)
+    claim_auth_check = staticmethod(check_slack_auth)
     manifest = Manifest(
         id="slack",
         title="Slack",
@@ -63,6 +66,15 @@ class SlackBlock(SlackIntake, SlackActions):
             self.engine = SlackEngine(parsed, core.data_dir, env=env, **core.slack_options)
         super().__init__(core, config)
 
+    def bind(self) -> None:
+        for kind in TOKEN_PREFIXES:
+            self.core.claims.register_kind(kind, partial(validate_token, kind), check_online=partial(self._check_claim_auth, kind))
+
+    async def _check_claim_auth(self, kind: str, token: str) -> str | None:
+        if await self.claim_auth_check(kind, token) is False:
+            return "Use a token accepted by Slack"
+        return None
+
     def missing_token(self) -> tuple[str, str] | None:
         return next(((label, name) for label, names in self.token_names.items() for name in names if not self.core.secret(name)), None)
 
@@ -84,8 +96,6 @@ class SlackBlock(SlackIntake, SlackActions):
         done = [f"Tokens {'are present' if all(self.core.secret(name) for name in names) else 'are ready to save'} for Slack workspace {label}."
                 for label, names in self.token_names.items()]
         if missing := self.missing_token():
-            from ...credentials import slack_workspace
-
             label, name = missing
             group = slack_workspace(label, self.token_kinds[label])
             fields = group[2]

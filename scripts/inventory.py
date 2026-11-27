@@ -16,11 +16,12 @@ from switchboard.__main__ import build_parser as server_parser
 from switchboard.agents import Agents
 from switchboard.app import create_app
 from switchboard.blocks import BLOCKS, load
-from switchboard.blocks.github.api import INSTALLATION_ID_ENV
+from switchboard.blocks.github.api import INSTALLATION_ID_ENV, github_app
 from switchboard.blocks.mcp.setup import CLIENTS
+from switchboard.blocks.slack.credentials import slack_workspace
 from switchboard.cli import build_parser as client_parser
 from switchboard.core import Switchboard
-from switchboard.credentials import MARKS, github_app, slack_workspace
+from switchboard.credentials import MARKS
 from switchboard.modes import ACTIONS, MODES
 from switchboard.slack.avatar_files import BUNDLED_AVATARS, agent_avatar, find_avatar
 
