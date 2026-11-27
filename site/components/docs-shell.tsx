@@ -31,7 +31,7 @@ function EnabledChat({ lang, ...props }: DocsLayoutProps & { lang: Locale }) {
         lang,
         messages: messages.map(({ role, parts }) => ({
           role,
-          text: parts.filter((part) => part.type === 'text').map((part) => part.text).join('\n').slice(0, 2000),
+          text: parts.filter((part) => part.type === 'text').map((part) => part.text).join('\n').slice(0, 1000),
           location: parts.find((part) => part.type === 'data-client')?.data,
         })).filter(({ text }) => text.trim()).slice(-8),
       },
