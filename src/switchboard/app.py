@@ -33,8 +33,8 @@ HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
 TOKEN_CLAIM_MESSAGES = {
-    "Enter a token on a single line, at most 8 KiB.": "Enter a single-line token",
-    "Enter a public HTTPS webhook URL without credentials or a fragment.": "Enter a public HTTPS webhook URL",
+    "Enter it on a single line, at most 8 KiB.": "Enter a single-line value up to 8 KiB",
+    "Enter a public HTTPS URL without credentials or a fragment.": "Enter a public HTTPS webhook URL",
     "That doesn't look like the right kind of token.": "Use a bot token",
 }
 ROUTINE_CLAIM_MESSAGES = {
@@ -302,7 +302,7 @@ def create_app(core: "Switchboard") -> Any:
             return refused
         values = {f.name: v for f in group["fields"] if isinstance(v := form.get(f.name), str)}
         try:
-            names = core.claims.consume_group(code, values)
+            names = await core.claims.consume_group(code, values)
         except ClaimUnavailable:
             return pages.claim_message_page("Request a new link", 410)
         except GroupFieldError as e:
@@ -349,7 +349,7 @@ def create_app(core: "Switchboard") -> Any:
         except ClaimUnavailable:
             return pages.claim_message_page("Request a new link", 410)
         except ClaimError as e:
-            return pages.claim_message_page(TOKEN_CLAIM_MESSAGES.get(str(e), "Check the token"), 400)
+            return pages.claim_message_page(TOKEN_CLAIM_MESSAGES.get(str(e), str(e)), 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=name)
         for block in chats:

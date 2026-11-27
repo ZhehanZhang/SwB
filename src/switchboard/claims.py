@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import ipaddress
 import json
 import os
 import re
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 from urllib.parse import urlsplit
 
+import httpx
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.fernet import Fernet
 
 from .store import Store
@@ -29,7 +33,9 @@ CREATE TABLE IF NOT EXISTS secrets (
   code_hash TEXT UNIQUE,
   expires_at REAL,
   sealed BLOB,
-  require_https INTEGER NOT NULL DEFAULT 0
+  require_https INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'token',
+  label TEXT NOT NULL DEFAULT ''
 )
 """
 
@@ -43,7 +49,8 @@ CREATE TABLE IF NOT EXISTS claim_groups (
   expires_at REAL NOT NULL
 )
 """
-KINDS = ("token", "id", "url", "pem", "json")
+SLACK_PREFIXES = {"slack_bot": "xoxb-", "slack_user": "xoxp-", "slack_app": "xapp-"}
+KINDS = ("token", "id", "url", "pem", "json", "webhook_secret", *SLACK_PREFIXES)
 FILE_KINDS = ("pem", "json")
 MAX_FILE_BYTES = 64 * 1024
 PEM_RE = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
@@ -76,15 +83,15 @@ def normalize_pem(value: str) -> str:
     found = PEM_RE.search(value)
     body = re.sub(r"\s+", "", found.group(2)) if found else ""
     if not body or not re.fullmatch(r"[A-Za-z0-9+/]+=*", body):
-        raise ClaimError("Paste the whole private key, from -----BEGIN to -----END, or upload the .pem file.")
+        raise ClaimError("Paste the full private key or upload the .pem file")
     label = found.group(1)
     pem = f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
     from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
     try:
         load_pem_private_key(pem.encode(), password=None)
-    except (ValueError, TypeError) as e:
-        raise ClaimError("That private key doesn't load. Use the unencrypted .pem file GitHub gave you.") from e
+    except (ValueError, TypeError, UnsupportedAlgorithm) as e:
+        raise ClaimError("Use the unencrypted .pem file from GitHub") from e
     return pem
 
 
@@ -92,23 +99,43 @@ def normalize(kind: str, value: str) -> str:
     value = value.strip()
     if kind in FILE_KINDS:
         if len(value.encode()) > MAX_FILE_BYTES or "\x00" in value:
-            raise ClaimError("That file is too large; the limit is 64 KiB.")
+            raise ClaimError("Use a text file up to 64 KiB")
         if kind == "pem":
             return normalize_pem(value)
         try:
             parsed = json.loads(value)
         except ValueError as e:
-            raise ClaimError("That isn't valid JSON.") from e
+            raise ClaimError("Use a JSON object") from e
         if not isinstance(parsed, dict):
-            raise ClaimError("Expected a JSON object.")
+            raise ClaimError("Use a JSON object")
         return value
     if not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
         raise ClaimError("Enter it on a single line, at most 8 KiB.")
-    if kind == "id" and not re.fullmatch(r"\d{1,20}", value):
-        raise ClaimError("Enter the number only.")
+    if kind == "id" and not re.fullmatch(r"[1-9][0-9]{0,23}", value):
+        raise ClaimError("Enter a numeric App ID")
+    if kind == "webhook_secret" and len(value) < 16:
+        raise ClaimError("Use a webhook secret with at least 16 characters")
+    if (prefix := SLACK_PREFIXES.get(kind)) and not re.fullmatch(prefix + r"[A-Za-z0-9_-]+", value):
+        raise ClaimError(f"Use a Slack token that starts with {prefix}")
     if kind == "url" and not valid_webhook_url(value):
         raise ClaimError("Enter a public HTTPS URL without credentials or a fragment.")
     return value
+
+
+async def check_slack_auth(kind: str, token: str) -> bool | None:
+    method = "apps.connections.open" if kind == "slack_app" else "auth.test"
+    try:
+        async with httpx.AsyncClient(timeout=3) as http:
+            response = await http.post(f"https://slack.com/api/{method}", headers={"Authorization": f"Bearer {token}"})
+        if response.status_code == 429 or response.status_code >= 500:
+            return None
+        data = response.json()
+    except (httpx.RequestError, ValueError):
+        return None
+    if isinstance(data, dict) and data.get("error") not in ("internal_error", "fatal_error", "service_unavailable", "ratelimited"):
+        if isinstance(ok := data.get("ok"), bool):
+            return ok
+    return None
 
 
 class ClaimUnavailable(ClaimError):
@@ -158,26 +185,32 @@ def valid_webhook_url(value: str) -> bool:
 
 
 class Claims:
-    def __init__(self, store: Store):
+    def __init__(self, store: Store, *, slack_auth_check: Callable[[str, str], Awaitable[bool | None]] = check_slack_auth):
         self.store = store
         self._cipher = Fernet(_key(store))
         self.validators: dict[str, tuple[re.Pattern[str], str]] = {}
+        self.slack_auth_check = slack_auth_check
         store.x(SCHEMA)
         store.x(GROUP_SCHEMA)
-        if "require_https" not in {r["name"] for r in store.q("PRAGMA table_info(secrets)")}:
-            store.x("ALTER TABLE secrets ADD COLUMN require_https INTEGER NOT NULL DEFAULT 0")
+        columns = {r["name"] for r in store.q("PRAGMA table_info(secrets)")}
+        for name, definition in (("require_https", "INTEGER NOT NULL DEFAULT 0"),
+                                 ("kind", "TEXT NOT NULL DEFAULT 'token'"), ("label", "TEXT NOT NULL DEFAULT ''")):
+            if name not in columns:
+                store.x(f"ALTER TABLE secrets ADD COLUMN {name} {definition}")
 
-    def mint(self, name: str, public_url: str | None, *, url: bool = False) -> str:
+    def mint(self, name: str, public_url: str | None, *, url: bool = False, kind: str = "token", label: str = "") -> str:
         if not NAME_RE.fullmatch(name):
             raise ClaimError("A claim needs an environment variable name.")
         if not public_url:
             raise ClaimError("A claim link needs public_url configured.")
+        if kind not in KINDS:
+            raise ClaimError("Choose a credential kind.")
         code = secrets.token_urlsafe(32)
         self.store.x(
-            """INSERT INTO secrets(name, code_hash, expires_at, require_https) VALUES (?, ?, ?, ?)
+            """INSERT INTO secrets(name, code_hash, expires_at, require_https, kind, label) VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(name) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at,
-                                               require_https = excluded.require_https""",
-            (name, _digest(code), self.store.clock() + CLAIM_TTL_S, url),
+                                               require_https = excluded.require_https, kind = excluded.kind, label = excluded.label""",
+            (name, _digest(code), self.store.clock() + CLAIM_TTL_S, url, "url" if url else kind, label),
         )
         return f"{public_url.rstrip('/')}{CLAIM_PATH}/{code}"
 
@@ -185,7 +218,7 @@ class Claims:
         return self.inspect_details(code)["name"]
 
     def inspect_details(self, code: str) -> dict[str, Any]:
-        row = self.store.one("SELECT name, expires_at, require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
+        row = self.store.one("SELECT name, expires_at, require_https, kind, label FROM secrets WHERE code_hash = ? AND expires_at > ?",
                              (_digest(code), self.store.clock()))
         if row is None:
             raise ClaimUnavailable(UNUSABLE)
@@ -197,17 +230,11 @@ class Claims:
 
     def consume(self, code: str, value: str) -> str:
         code_hash = _digest(code)
-        value = value.strip()
-        if PEM_RE.search(value):
-            value = normalize("pem", value)
-        elif not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
-            raise ClaimError("Enter a token on a single line, at most 8 KiB.")
-        claim = self.store.one("SELECT name, require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
-                               (code_hash, self.store.clock()))
-        if claim is None:
-            raise ClaimUnavailable(UNUSABLE)
-        if claim["require_https"] and not valid_webhook_url(value):
-            raise ClaimError("Enter a public HTTPS webhook URL without credentials or a fragment.")
+        claim = self.inspect_details(code)
+        kind = "url" if claim["require_https"] else claim["kind"]
+        if kind == "token" and PEM_RE.search(value):
+            kind = "pem"
+        value = normalize(kind, value)
         if (validation := self.validators.get(claim["name"])) and not validation[0].fullmatch(value):
             raise ClaimError(validation[1])
         row = self.store.one(
@@ -242,11 +269,11 @@ class Claims:
         return {"title": row["title"], "provider": row["provider"], "expires_at": row["expires_at"],
                 "fields": [Field(**f) for f in json.loads(row["fields"])]}
 
-    def consume_group(self, code: str, values: dict[str, str]) -> list[str]:
+    async def consume_group(self, code: str, values: dict[str, str]) -> list[str]:
         found = self.group(code)
         if found is None:
             raise ClaimUnavailable(UNUSABLE)
-        sealed = {}
+        normalized = []
         for f in found["fields"]:
             raw = values.get(f.name) or ""
             if not raw.strip():
@@ -254,9 +281,15 @@ class Claims:
                     continue
                 raise GroupFieldError(f, f"{f.label} is missing.")
             try:
-                sealed[f.name] = self._cipher.encrypt(normalize(f.kind, raw).encode())
+                normalized.append((f, normalize(f.kind, raw)))
             except ClaimError as e:
-                raise GroupFieldError(f, f"{f.label}: {e}") from None
+                raise GroupFieldError(f, str(e)) from None
+        slack = [(f, token) for f, token in normalized if f.kind in SLACK_PREFIXES]
+        checked = await asyncio.gather(*(self.slack_auth_check(f.kind, token) for f, token in slack))
+        for (f, _), result in zip(slack, checked):
+            if result is False:
+                raise GroupFieldError(f, "Use a token accepted by Slack")
+        sealed = {f.name: self._cipher.encrypt(value.encode()) for f, value in normalized}
 
         def save(db: Any) -> None:
             if db.execute("DELETE FROM claim_groups WHERE code_hash = ? AND expires_at > ? RETURNING code_hash",

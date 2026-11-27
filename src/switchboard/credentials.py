@@ -49,7 +49,7 @@ def github_app(webhook_secret_env: str | None = None, *, webhook_secret_saved: b
               Field("GITHUB_APP_PRIVATE_KEY", "Private key", "pem",
                     "Under Private keys, Generate a private key, then upload the .pem file it downloads.", link=settings)]
     if webhook_secret_env and not webhook_secret_saved:
-        fields.append(Field(webhook_secret_env, "Webhook secret", "token", "The secret set under Webhook, if the app sends events.",
+        fields.append(Field(webhook_secret_env, "Webhook secret", "webhook_secret", "The secret set under Webhook, if the app sends events.",
                             optional=True, link=settings))
     return "GitHub App", "github", fields
 
@@ -60,7 +60,7 @@ def slack_workspace(label: str, names: dict[str, str]) -> tuple[str, str, list[F
     text = {"bot": ("Bot token", "OAuth & Permissions, Bot User OAuth Token (xoxb-)."),
             "user": ("User token", "OAuth & Permissions, User OAuth Token (xoxp-)."),
             "app": ("App-level token", "Basic Information, App-Level Tokens, with connections:write (xapp-).")}
-    fields = [Field(env, text[kind][0], "token", text[kind][1], link=apps) for kind, env in names.items() if kind in text]
+    fields = [Field(env, text[kind][0], f"slack_{kind}", text[kind][1], link=apps) for kind, env in names.items() if kind in text]
     return f"Slack workspace {label}", "slack", fields
 
 
