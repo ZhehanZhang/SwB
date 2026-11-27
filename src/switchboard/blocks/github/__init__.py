@@ -827,7 +827,7 @@ class GitHubBlock(Block):
                 if len(self._senders) > MAX_DELIVERIES:
                     self._senders.popitem(last=False)
             text = FramedText(details) if trust == "external" else details
-            principal = Principal(self.name, ip, "github", origin=self.name, trust=trust)
+            principal = Principal(self.name, ip, "github", origin=self.name, trust=trust, visibility_who=who)
             self.core.turn(f"{self.name}:{repo}:{number or delivery}", principal)
             link = neutralize(payload.get("url")) or None
             meta = self.core.modes.meta(self.name, space, repo, mode, actions, project, link, target)

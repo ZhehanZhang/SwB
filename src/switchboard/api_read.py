@@ -557,9 +557,9 @@ async def prompts(request: Request) -> Response:
 
 async def platforms(request: Request) -> JSONResponse:
     core = request.app.state.core
-    configured = [(name, block.manifest, block) for name, block in core.blocks.items()]
+    configured = [(name, block.manifest, block) for name, block in core.visible_blocks().items()]
     active_types = {manifest.id for _, manifest, _ in configured}
-    available = [(use, load(use).manifest, None) for use in BLOCKS if use not in active_types]
+    available = [(use, load(use).manifest, None) for use in BLOCKS if use not in active_types and use != "local"]
     items = []
     for name, manifest, block in sorted([*configured, *available], key=lambda item: item[0]):
         online = block is not None and block.online
@@ -567,7 +567,7 @@ async def platforms(request: Request) -> JSONResponse:
                   "degraded" if block.problems() else "online")
         config_keys = set(manifest.config_schema.get("properties", {}))
         if block is not None:
-            config_keys.update(core.cfg.blocks[name].keys() - {"use"})
+            config_keys.update(core.cfg.blocks.get(name, {}).keys() - {"use"})
         items.append({"name": name, "use": manifest.id, "title": manifest.title, "kind": manifest.kind,
                       "config_keys": sorted(config_keys), "status": status, "online": online})
     return JSONResponse({"platforms": items})

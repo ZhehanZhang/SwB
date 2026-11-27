@@ -18,7 +18,7 @@ import re
 import secrets
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -31,6 +31,9 @@ from .agents import PRESETS, Agents, host_allowed
 from .config import Config, LOOPBACK_HOSTS
 from .sessions import Owner, Sessions, SESSION_COOKIE, login_redirect
 from .store import Store, dumps
+
+if TYPE_CHECKING:
+    from .visibility import Who
 
 log = logging.getLogger("switchboard.auth")
 
@@ -74,6 +77,7 @@ class Principal:
                 and self.scopes is None and self.tools is None and self.targets is None)
     credential: str | None = field(default=None, repr=False, compare=False)
     memory_grants: tuple[str, ...] = field(default=(), repr=False)
+    visibility_who: Who | None = field(default=None, repr=False)
 
     @property
     def is_memory_owner(self) -> bool:
