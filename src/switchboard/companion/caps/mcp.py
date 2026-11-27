@@ -110,7 +110,7 @@ async def _transport(server: LocalServer, stop: asyncio.Event) -> AsyncIterator[
 class _Connection:
     ready: asyncio.Future[ClientSession | None]
     stop: asyncio.Event = field(default_factory=asyncio.Event)
-    task: asyncio.Task[None] | None = None
+    task: asyncio.Task[None] = field(init=False, repr=False)
     online: bool = False
 
     async def serve(self, server: LocalServer) -> None:
@@ -184,7 +184,7 @@ class MCPCapability(Capability):
             for connection in connections.values():
                 connection.stop.set()
             try:
-                await asyncio.gather(*(c.task for c in connections.values() if c.task is not None))
+                await asyncio.gather(*(c.task for c in connections.values()))
             finally:
                 for logger, level in levels:
                     logger.setLevel(level)
@@ -212,8 +212,8 @@ class MCPCapability(Capability):
                     connection = None
                 if connection is None:
                     connection = _Connection(asyncio.get_running_loop().create_future())
-                    self._connections[name] = connection
                     connection.task = asyncio.create_task(connection.serve(self.servers[name]))
+                    self._connections[name] = connection
                 session = await asyncio.shield(connection.ready)
                 if session is None or connection.stop.is_set():
                     raise CapabilityError(FAILED)
