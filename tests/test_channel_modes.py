@@ -98,6 +98,18 @@ def test_github_repo_space_has_one_row_after_override(make):
     assert (row["space"], row["channel"], row["mode"], row["source"]) == (repo, repo, "off", "override")
 
 
+def test_mode_target_must_appear_in_discovery(make):
+    repo = "example-org/app"
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {repo: {"mode": "watch"}}}})
+    core, client = make(cfg)
+    args = {"block": "github", "space": repo, "mode": "triage"}
+    for target in ("agent:unlisted", "unlisted", "github:repo:unknown"):
+        result = call(client, STATIC_KEY, "space_mode", {**args, "target": target})
+        assert "Choose a target from the targets list." in error_text(result)
+    assert not core.store.q("SELECT 1 FROM space_modes")
+    assert payload(call(client, STATIC_KEY, "space_mode", {**args, "target": "agent:claude"}))["target"] == "agent:claude"
+
+
 def test_listed_mailbox_visibility_applies_to_discord_and_github(make):
     repo = "acme/app"
     cfg = config()
@@ -423,10 +435,10 @@ def test_active_modes_wake_for_non_mentions_only_when_visible(intake, mode):
 def test_live_override_changes_provider_intake_and_inherit_restores_it(intake):
     with intake("assist") as chat:
         args = (principal(), chat.block.name, "home")
-        chat.core.modes.set(*args, mode="off")
+        chat.client.portal.call(lambda: chat.core.modes.set(*args, mode="off"))
         chat.send(10, "ignored while overridden")
         assert not chat.wakes()
-        chat.core.modes.set(*args, mode="inherit")
+        chat.client.portal.call(lambda: chat.core.modes.set(*args, mode="inherit"))
         chat.send(11, "handled after inheriting")
         [text] = chat.wakes()
         assert "handled after inheriting" in text
@@ -487,7 +499,7 @@ def test_restricted_wake_cannot_write_with_or_without_its_handle(intake, mode):
 
 def test_notify_owner_only_reaches_the_owner_or_default_mailbox(intake):
     with intake("triage") as chat:
-        chat.core.modes.set(principal(), chat.block.name, "home", "triage", chat.channel, ["notify_owner"])
+        chat.client.portal.call(chat.core.modes.set, principal(), chat.block.name, "home", "triage", chat.channel, ["notify_owner"])
         chat.send(100, "Feedback to summarize")
         handle = chat.core.store.one("SELECT handle FROM chat_relays")["handle"]
         bad = call(chat.client, STATIC_KEY, "agent_send", {"conversation": handle, "to": "someone-else", "text": "A note"})
@@ -668,7 +680,7 @@ def test_delayed_triage_reply_follows_the_current_mode_and_is_audited(intake):
         assert len(chat.posts) == before + 1
         [audit] = chat.core.audit.recent(action="triage.reply", outcome="ok")
         assert audit["ref"].endswith("/100")
-        chat.core.modes.set(principal(), chat.block.name, "home", "watch", chat.channel)
+        chat.client.portal.call(chat.core.modes.set, principal(), chat.block.name, "home", "watch", chat.channel)
         chat.client.portal.call(chat.block.relay, {"kind": "final", "handle": handle, "text": "Late answer"})
         assert len(chat.posts) == before + 1
         assert chat.core.audit.recent(action="reply_withheld", outcome="refused")

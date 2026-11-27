@@ -341,11 +341,11 @@ class MCPBlock(Block):
             await core.modes.refresh(p)
             return core.modes.status(p)
 
-        @mcp.tool(title="Set a channel mode", description="Owner only. Set a space or channel override. Use target to bind an address such as agent:beta. Use inherit to clear the override. The triage agent can reply by default.", annotations=WRITE)
+        @mcp.tool(title="Set a channel mode", description="Owner only. Set a space or channel override. Choose a target listed by targets, such as agent:beta. Omit target to keep the binding. Pass an empty target to clear it. Use inherit to clear the override. The triage agent can reply by default.", annotations=WRITE)
         async def space_mode(ctx: Context, block: str, space: str, mode: str, channel: str = "",
                              actions: list[str] | None = None, project: str | None = None, target: str | None = None) -> dict[str, Any]:
             try:
-                return core.modes.set(who(ctx), block, space, mode, channel, actions, project, target)
+                return await core.modes.set(who(ctx), block, space, mode, channel, actions, project, target)
             except (ValueError, PermissionError) as e:
                 raise ToolError(str(e)) from e
 

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from . import targets as tgt
 from .config import SLUG_RE, ConfigError
 from .inbox import Inbox
 from .store import dumps
@@ -445,8 +446,8 @@ class ChannelModes:
                 if provider.manifest.id == "github":
                     await provider.refresh_installation()
 
-    def set(self, principal: Principal, block: str, space: str, mode: str, channel: str = "",
-            actions: list[str] | None = None, project: str | None = None, target: str | None = None) -> dict[str, Any]:
+    async def set(self, principal: Principal, block: str, space: str, mode: str, channel: str = "",
+                  actions: list[str] | None = None, project: str | None = None, target: str | None = None) -> dict[str, Any]:
         if not principal.is_unrestricted_owner and not (
             principal.kind == "owner_session" and principal.trust == "owner"
             and principal.scopes is None and principal.tools is None and principal.targets is None
@@ -468,6 +469,16 @@ class ChannelModes:
             if not isinstance(target, str) or not target.strip():
                 raise ValueError("Enter a target address or slug.")
             target = target.strip()
+            if mode != "inherit":
+                addr = tgt.parse(target, self.core.blocks)
+                if addr is not None and addr.block == "agent" and addr.id in self.core.known_agents():
+                    target = str(addr)
+                else:
+                    known = await self.core.targets()
+                    if target.casefold() in self.core.slug_map(known):
+                        target = target.casefold()
+                    elif not any(row["address"] == target for row in known):
+                        raise ValueError("Choose a target from the targets list.")
         if mode == "inherit":
             self.core.store.x("DELETE FROM space_modes WHERE block = ? AND space = ? AND channel = ?", (block, space, channel))
         else:
