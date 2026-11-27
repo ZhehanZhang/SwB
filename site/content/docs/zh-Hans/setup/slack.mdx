@@ -1,0 +1,113 @@
+---
+title: Slack
+description: 用机器人和你自己的 Slack 账号把 Slack 工作区连接到 SwB。
+---
+
+SwB 通过一个 Slack 应用读取和发送 Slack 消息。你用清单创建这个应用。清单是一个文件，里面写好了应用的全部设置。
+
+这个应用使用 Socket Mode。Socket Mode 是 SwB 主动向 Slack 建立的连接，所以 SwB 服务器可以留在私有地址上。
+
+## 开始之前
+
+你需要目标工作区中的 Slack 账号，并且有权在该工作区创建和安装应用。在 Enterprise Grid 组织中，应用需要 Org Owner 或 Org Admin 批准。你还需要以所有者身份登录 SwB 服务器，例如 https://swb.example.com。
+
+SwB 提供两份清单。需要机器人和你自己的账号时，用 `manifests/workspace-a-agent.yaml`。只用你自己的账号时，用 `manifests/workspace-b-user-only.yaml`。
+
+## 复制设置提示词
+
+<SetupPrompt name="slack" lang="zh-Hans" />
+
+把提示词粘贴给你的智能体。智能体会带你完成其余步骤。
+
+## 你的步骤
+
+<Steps>
+<Step>
+### 打开 Slack 应用设置
+
+打开 https://api.slack.com/apps。点击 **Create New App** → **From a manifest**。
+</Step>
+<Step>
+### 选择工作区
+
+选择你的工作区。点击 **Next**。
+</Step>
+<Step>
+### 粘贴清单
+
+选择 **YAML**。粘贴完整的 SwB 清单。
+</Step>
+<Step>
+### 创建应用
+
+点击 **Next** → **Create**。
+</Step>
+<Step>
+### 创建应用级令牌
+
+点击 **Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**。输入令牌名称。
+</Step>
+<Step>
+### 添加权限范围
+
+点击 **Add Scope** → `connections:write`。点击 **Generate**。
+</Step>
+<Step>
+### 安装应用
+
+点击 **Install App** → **Install to Workspace**。以 SwB 代表的 Slack 用户身份点击 **Allow**。
+</Step>
+<Step>
+### 在 Enterprise Grid 中获得批准
+
+如果 Slack 要求批准，请把应用交给 Org Owner。Org Owner 在 **Organization settings** → **Integrations** → **Manage Apps** → **Approve an app** 中批准它。
+</Step>
+{/* unverified */}
+<Step>
+### 保存令牌
+
+打开智能体给你的 SwB 领取链接。把每个 Slack 令牌粘贴到对应字段。
+</Step>
+<Step>
+### 邀请机器人
+
+打开每个要接入 SwB 的 Slack 频道。在频道中发送 `/invite @<bot name>`。
+</Step>
+<Step>
+### 找到工作区 ID
+
+在桌面浏览器中打开 Slack。把地址中以 `T` 开头的那一段交给智能体。
+</Step>
+</Steps>
+
+## 智能体的工作
+
+智能体调用 `connect`，参数为 `what="slack"`。SwB 列出每个工作区还缺哪些令牌，并返回一个领取链接，一次收齐这些令牌。
+
+智能体把工作区写入 `config/switchboard.yaml` 的 `blocks.slack.workspaces`，包括 `team_id` 和令牌名称。如果智能体能访问服务器，它会直接修改。否则它把 YAML 交给你添加。
+
+SwB 要求重启时，智能体会告诉你。重启后，它用 `slack_workspaces` 检查每个身份。身份指机器人或你自己的账号。最后，它用 `slack_post` 发送一条测试消息。
+
+## 凭据
+
+| 令牌 | Slack 显示位置 | 格式 | 填写位置 |
+| --- | --- | --- | --- |
+| 应用级令牌 | **Basic Information** → **App-Level Tokens** | 以 `xapp-` 开头 | SwB 领取链接 |
+| 机器人令牌 | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | 以 `xoxb-` 开头 | SwB 领取链接 |
+| 用户令牌 | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | 以 `xoxp-` 开头 | SwB 领取链接 |
+
+工作区 ID 和频道 ID 只是 Slack 中位置的名称，可以放心写进配置文件。
+
+## 检查连接
+
+请智能体再次调用 `connect`。设置完成后，它会报告 `connected`。`slack_workspaces` 中每个身份显示 `ready`，Socket Mode 显示 `connected`。
+
+在频道中提及机器人，并写上目标名称。智能体用 `slack_events` 或 `slack_wait` 可以看到这条消息。
+
+## 解决问题
+
+如果 SwB 报告 Socket Mode 有问题，请在应用设置中打开 **Socket Mode**。打开 **Enable Socket Mode**。
+
+如果你修改了应用的权限范围，请重新安装应用。然后通过新的领取链接保存新令牌。
+
+`slack_search` 用你自己的账号搜索。它需要带有 `search:read` 权限范围的用户令牌。

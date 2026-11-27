@@ -1,0 +1,113 @@
+---
+title: Slack
+description: 用機器人和你自己的 Slack 帳號，把 Slack 工作區連接到 SwB。
+---
+
+SwB 透過一個 Slack 應用程式讀取和傳送 Slack 訊息。你用資訊清單建立這個應用程式。資訊清單是一個檔案，裡面寫好應用程式的全部設定。
+
+這個應用程式使用 Socket Mode。Socket Mode 是 SwB 主動連到 Slack 的連線，所以 SwB 伺服器可以留在私人位址。
+
+## 開始之前
+
+你需要目標工作區裡的 Slack 帳號，並有權在該工作區建立和安裝應用程式。在 Enterprise Grid 組織中，應用程式需要 Org Owner 或 Org Admin 核准。你也需要以擁有者身分登入 SwB 伺服器，例如 https://swb.example.com。
+
+SwB 提供兩份資訊清單。需要機器人和你自己的帳號時，請用 `manifests/workspace-a-agent.yaml`。只用你自己的帳號時，請用 `manifests/workspace-b-user-only.yaml`。
+
+## 複製設定提示詞
+
+<SetupPrompt name="slack" lang="zh-Hant" />
+
+把提示詞貼給你的代理。代理會帶你完成其餘步驟。
+
+## 你的步驟
+
+<Steps>
+<Step>
+### 開啟 Slack 應用程式設定
+
+開啟 https://api.slack.com/apps。點選 **Create New App** → **From a manifest**。
+</Step>
+<Step>
+### 選擇工作區
+
+選擇你的工作區。點選 **Next**。
+</Step>
+<Step>
+### 貼上資訊清單
+
+選擇 **YAML**。貼上完整的 SwB 資訊清單。
+</Step>
+<Step>
+### 建立應用程式
+
+點選 **Next** → **Create**。
+</Step>
+<Step>
+### 建立應用程式層級權杖
+
+點選 **Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**。輸入權杖名稱。
+</Step>
+<Step>
+### 加入權限範圍
+
+點選 **Add Scope** → `connections:write`。點選 **Generate**。
+</Step>
+<Step>
+### 安裝應用程式
+
+點選 **Install App** → **Install to Workspace**。以 SwB 代表的 Slack 使用者身分點選 **Allow**。
+</Step>
+<Step>
+### 在 Enterprise Grid 中取得核准
+
+如果 Slack 要求核准，請把應用程式交給 Org Owner。Org Owner 在 **Organization settings** → **Integrations** → **Manage Apps** → **Approve an app** 中核准它。
+</Step>
+{/* unverified */}
+<Step>
+### 儲存權杖
+
+開啟代理給你的 SwB 領取連結。把每個 Slack 權杖貼到對應欄位。
+</Step>
+<Step>
+### 邀請機器人
+
+開啟每個要接上 SwB 的 Slack 頻道。在頻道中傳送 `/invite @<bot name>`。
+</Step>
+<Step>
+### 找出工作區 ID
+
+在桌面瀏覽器中開啟 Slack。把網址中以 `T` 開頭的那一段交給代理。
+</Step>
+</Steps>
+
+## 代理的工作
+
+代理呼叫 `connect`，參數為 `what="slack"`。SwB 列出每個工作區還缺哪些權杖，並回傳一個領取連結，一次收齊這些權杖。
+
+代理把工作區寫進 `config/switchboard.yaml` 的 `blocks.slack.workspaces`，包括 `team_id` 和權杖名稱。如果代理能存取伺服器，它會直接修改。否則它會把 YAML 交給你加入。
+
+SwB 要求重新啟動時，代理會告訴你。重新啟動後，代理用 `slack_workspaces` 檢查每個身分。身分是指機器人或你自己的帳號。最後，代理用 `slack_post` 傳送一則測試訊息。
+
+## 憑證
+
+| 權杖 | Slack 顯示位置 | 格式 | 填寫位置 |
+| --- | --- | --- | --- |
+| 應用程式層級權杖 | **Basic Information** → **App-Level Tokens** | 以 `xapp-` 開頭 | SwB 領取連結 |
+| 機器人權杖 | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | 以 `xoxb-` 開頭 | SwB 領取連結 |
+| 使用者權杖 | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | 以 `xoxp-` 開頭 | SwB 領取連結 |
+
+工作區 ID 和頻道 ID 只是 Slack 裡位置的名稱，可以放心寫進設定檔。
+
+## 檢查連線
+
+請代理再次呼叫 `connect`。設定完成後，它會回報 `connected`。`slack_workspaces` 中每個身分顯示 `ready`，Socket Mode 顯示 `connected`。
+
+在頻道中提及機器人，並寫上目標名稱。代理用 `slack_events` 或 `slack_wait` 就能看到這則訊息。
+
+## 排解問題
+
+如果 SwB 回報 Socket Mode 有問題，請在應用程式設定中開啟 **Socket Mode**。開啟 **Enable Socket Mode**。
+
+如果你修改了應用程式的權限範圍，請重新安裝應用程式。接著透過新的領取連結儲存新權杖。
+
+`slack_search` 用你自己的帳號搜尋。它需要具備 `search:read` 權限範圍的使用者權杖。

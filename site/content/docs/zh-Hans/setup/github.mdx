@@ -1,0 +1,121 @@
+---
+title: GitHub
+description: 把 GitHub 事件发送到 SwB，并让智能体处理 issue 和 pull request。
+---
+
+SwB 从你注册的 GitHub App 接收仓库事件。有了应用的私钥，智能体还可以给 issue 加标签、发表评论和新建 issue。
+
+## 开始之前
+
+你需要一个 GitHub 账号和要接入的仓库。在组织中操作时，你需要组织所有者角色或 GitHub App 管理者角色。你还需要以所有者身份登录 SwB 服务器，例如 https://swb.example.com。
+
+GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook`。
+
+## 复制设置提示词
+
+<SetupPrompt name="github" lang="zh-Hans" />
+
+把提示词粘贴给你的智能体。智能体会带你完成其余步骤。
+
+## 你的步骤
+
+<Steps>
+<Step>
+### 打开 GitHub App 设置
+
+点击头像 → **Settings** → **Developer settings** → **GitHub Apps**。点击 **New GitHub App**。
+</Step>
+<Step>
+### 命名应用
+
+填写 **GitHub App name** 和 **Homepage URL**。主页可以填仓库地址。
+</Step>
+<Step>
+### 设置 webhook
+
+在 **Webhook** 下保持选中 **Active**。在 **Webhook URL** 中填写 `https://swb.example.com/github/webhook`。
+</Step>
+<Step>
+### 设置 webhook 密钥
+
+在密码管理器中生成一个 64 个字符的随机密钥。把它填入 **Webhook secret**。
+</Step>
+<Step>
+### 设置权限
+
+在 **Repository permissions** 下，为下表中的每项资源选择 **Read-only**。要让智能体回复，请把 **Issues** 和 **Pull requests** 设为 **Read & write**。
+</Step>
+<Step>
+### 订阅事件
+
+在 **Subscribe to events** 下，选中下表中的事件。
+</Step>
+{/* unverified */}
+<Step>
+### 创建应用
+
+在 **Where can this GitHub App be installed?** 下选择 **Only on this account**。点击 **Create GitHub App**。
+</Step>
+<Step>
+### 生成私钥
+
+在 **Private keys** 下点击 **Generate a private key**。浏览器会下载一个 `.pem` 文件，只下载一次。
+</Step>
+{/* unverified */}
+<Step>
+### 保存凭据
+
+打开智能体给你的每个 SwB 领取链接。在那里保存 webhook 密钥、**App ID** 和完整的 `.pem` 文件。
+</Step>
+<Step>
+### 安装应用
+
+点击 **Install App** → 你的账号旁边的 **Install**。选择 **Only select repositories**。
+</Step>
+<Step>
+### 选择仓库
+
+选中你的仓库。点击 **Install**。
+</Step>
+</Steps>
+
+| 仓库权限 | 事件 |
+| --- | --- |
+| **Issues** | `issues`、`issue_comment` |
+| **Pull requests** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | `push` |
+| **Checks** | `check_run`、`check_suite` |
+| **Actions** | `workflow_run` |
+| **Metadata** | 只读权限始终开启 |
+
+在组织中，GitHub 可能把 **Install** 显示为 **Request**。这时由组织所有者批准请求。
+
+## 智能体的工作
+
+智能体调用 `connect`，参数为 `what="github"`。SwB 显示 webhook 地址、webhook 密钥的状态和仓库路由数量。路由把一个仓库的事件发送给一个目标。
+
+如果应用需要写入，智能体调用 `connect`，参数为 `what="github"` 和 `choose={"credential":"app"}`。SwB 为每个缺少的值返回一个领取链接。智能体把仓库写入 `config/switchboard.yaml` 的 `blocks.github.spaces` 或 `blocks.github.routes`。
+
+重启后，智能体调用 `github_status`，检查安装和它的权限。之后，智能体按频道模式使用 `github_label`、`github_comment`、`github_open_issue`、`github_link_duplicate`、`github_reply` 和 `github_notify_owner`。
+
+## 凭据
+
+| 令牌 | GitHub 显示位置 | 格式 | 填写位置 |
+| --- | --- | --- | --- |
+| Webhook 密钥 | 你在密码管理器中生成 | 64 个字符的随机文本 | SwB 领取链接 |
+| App ID | 应用设置中的 **App ID** | 一串数字 | SwB 领取链接 |
+| 私钥 | 点击 **Generate a private key** 后下载一次 | `.pem` 文件 | SwB 领取链接 |
+
+SwB 用私钥自行生成安装令牌。每个安装令牌有效一小时。
+
+## 检查连接
+
+请智能体再次调用 `connect`。设置完成后，它会报告 `connected`。`github_status` 显示 `secret_present` 和安装的权限。
+
+在 GitHub 上打开应用设置 → **Advanced** → **Recent deliveries**。打开最新一次投递，确认 SwB 返回了成功代码。
+
+## 解决问题
+
+如果投递因签名错误失败，说明 GitHub 与 SwB 保存的密钥有差异。生成新密钥，填入 GitHub，再通过新的领取链接保存。
+
+如果 `connect` 要求 **Issues** 写入权限，请打开应用设置 → **Permissions & events**。把 **Issues** 设为 **Read & write**，并在安装上接受这项变更。
