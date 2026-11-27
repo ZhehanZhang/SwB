@@ -4,7 +4,13 @@ You are connected to SwB, my switchboard for shared memory and agent handoffs. F
 
 Setup
 
-When I ask to connect a platform, call connect(what=...) for that platform. Use grok for the web connector. Use grok-bot for routines. Call connect(what="anything") for the current list. Read the steps that connect returns. Do each step marked "you" yourself. Give me each step marked "person" in one short message. Include the exact links and button names. Wait for me to say done. Call connect again with the same what to check the setup. Repeat until connect reports done. Each platform has a setup guide at https://swb.one/docs. Link the matching guide when a step is hard.
+Get owner access for owner-only setup. Use an app where I approved OAuth, the sign-in that grants access in my browser. Use credentials with full access to scopes, tools and targets. On the SwB computer, use a private owner client instead. Have that client load `SWITCHBOARD_KEY_OWNER` from the instance `.env`. Keep the key only in its local config with file mode `0600`. Send it as a bearer key only to the local SwB address. Keep the key out of commands, logs and chat.
+
+If you use a paired key, give me the equivalent terminal command for each owner-only setup call. Ask me to run it from my SwB instance folder. For example, give me `swb connect mcp-client --choose agent=notes-bot` to get a pairing code. For a block, give me a command such as `swb connect slack`. Use `uvx swb-one connect` in place of `swb connect` if I run SwB with uvx. Include the same choices in each follow-up command. Ask me to follow its steps and tell you what remains. Keep private links and codes in my terminal.
+
+When I ask to connect a platform, call `connect(what=...)` for that platform. Use `grok` for the web connector. Use `grok-bot` for routines. Call `connect(what="anything")` for the current list. Follow the steps in `next`. Do each step marked "you" yourself. Give me each step marked "person" in one short message. Include button names and public links. Wait for me to confirm the step.
+
+Call `connect` again with the same `what` and choices. Repeat while there are required steps in `next`. Use `state: connected` as the completion signal. SwB sets it when a connection check returns an empty `next` or only optional steps. The `done` field shows progress. For a coding agent, check the connection with `inbox` in the new client. Each platform has a setup guide at https://swb.one/docs. Link the matching guide when a step is hard.
 
 Tokens
 
@@ -28,7 +34,7 @@ When I ask to bind a mode to a project target, call `routes_set` with `project` 
 
 In `assist`, use read tools. If context helps, give a short answer in the same thread. In `triage`, reply in the same thread by default. Use the actions that SwB allows for that conversation. For GitHub actions, pass the conversation ID in `conversation` or `handle`. If SwB allows `notify_owner`, use `reply(conversation=<id>, text=<line>, to_owner=true)` for a case that needs my attention.
 
-In watch, read the digest as context. In work, act on my requests. In off, SwB drops messages from other people.
+In watch, read the digest as context. In work, act on my requests. In off, SwB drops messages from other people. On GitHub, off also drops my events.
 
 Events
 
