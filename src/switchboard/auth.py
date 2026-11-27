@@ -209,7 +209,7 @@ class Auth:
         row = self.store.one(
             "SELECT * FROM oauth_tokens WHERE token_hash = ? AND kind = 'access' AND revoked_at IS NULL", (sha(token),)
         )
-        if row is None or row["expires_at"] < self.store.clock() or row["resource"] != self.cfg.resource:
+        if row is None or row["expires_at"] < self.store.clock() or row["resource"] not in self.cfg.resources:
             return None
         return Principal(source=row["source"], client_id=row["client_id"], kind="oauth", **self._limits(row["source"]), credential=row["family"])
 
@@ -230,15 +230,16 @@ class Auth:
                 return False
         elif self.store.one("SELECT 1 FROM oauth_clients WHERE client_id = ?", (client_id,)) is None:
             return False
-        return self.store.one(
-            "SELECT 1 FROM oauth_tokens WHERE family = ? AND client_id = ? AND source = ? AND resource = ? AND expires_at >= ? AND revoked_at IS NULL",
-            (credential, client_id, source, self.cfg.resource, self.store.clock()),
-        ) is not None
+        rows = self.store.q(
+            "SELECT resource FROM oauth_tokens WHERE family = ? AND client_id = ? AND source = ? AND expires_at >= ? AND revoked_at IS NULL",
+            (credential, client_id, source, self.store.clock()),
+        )
+        return any(row["resource"] in self.cfg.resources for row in rows)
 
     def challenge_header(self, error: str | None = None) -> str:
         parts = []
-        if self.cfg.public_url:
-            parts.append(f'resource_metadata="{self.cfg.public_url}/.well-known/oauth-protected-resource"')
+        if self.cfg.issuer:
+            parts.append(f'resource_metadata="{self.cfg.issuer}/.well-known/oauth-protected-resource"')
             parts.append(f'scope="{SCOPE}"')
         if error:
             parts.append(f'error="{error}"')
@@ -381,8 +382,9 @@ class Auth:
         if not resource:
             return self.cfg.resource or ""
         r = resource.rstrip("/")
-        if r in (self.cfg.resource, self.cfg.public_url):
-            return self.cfg.resource or ""
+        for base in self.cfg.public_urls:
+            if r in (base, f"{base}/mcp"):
+                return f"{base}/mcp"
         raise OAuthError("invalid_target", "unknown resource")
 
     def sign(self, params: dict[str, str]) -> str:

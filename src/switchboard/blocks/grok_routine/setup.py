@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from typing import TYPE_CHECKING, Any
 
 from ...targets import SLUG_RE
@@ -84,8 +86,8 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
         signed_in = principal.kind == "oauth" and principal.source == "grok"
         if oauth and not signed_in:
             signed_in = core.store.one(
-                "SELECT 1 FROM oauth_tokens WHERE kind = 'access' AND source = 'grok' AND resource = ? "
-                "AND expires_at > ? AND revoked_at IS NULL LIMIT 1", (resource, core.clock()),
+                "SELECT 1 FROM oauth_tokens WHERE kind = 'access' AND source = 'grok' AND resource IN (SELECT value FROM json_each(?)) "
+                "AND expires_at > ? AND revoked_at IS NULL LIMIT 1", (json.dumps(core.cfg.resources), core.clock()),
             ) is not None
         connector = resource if https else "<public_https_url>/mcp"
         done = [f"MCP URL: {core.base_url}/mcp.", f"OAuth sign-in: {'available' if oauth else 'unavailable'}."]
