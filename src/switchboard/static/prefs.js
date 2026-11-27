@@ -1,7 +1,7 @@
-// Same theme cookie as example.com, status.example.com and id (siteAppearance), so a choice made on one carries over.
+// The siteAppearance theme cookie, scoped to this host.
 (function () {
   var root = document.documentElement
-  var domain = ['example.com', 'example.com'].filter(function (d) { return location.hostname === d || location.hostname.slice(-d.length - 1) === '.' + d })[0]
+  var domain = ''
   var media = matchMedia('(prefers-color-scheme: dark)')
   function read(name) {
     var hit = document.cookie.split('; ').filter(function (c) { return c.indexOf(name + '=') === 0 })[0]
