@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import jwt
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
+from ...claims import load_rsa_private_key
 from .. import BlockError
 
 if TYPE_CHECKING:
@@ -38,7 +40,7 @@ def provider_id(value: Any) -> str | None:
     return None
 
 
-def private_key(value: str) -> str:
+def private_key(value: str) -> RSAPrivateKey:
     found = PEM_RE.fullmatch(value.strip().replace("\\n", "\n"))
     if found is None:
         found = PEM_RE.fullmatch(base64.b64decode(value, validate=True).decode().strip())
@@ -46,8 +48,8 @@ def private_key(value: str) -> str:
         raise ValueError("invalid PEM")
     label, body = found.groups()
     body = "".join(body.split())
-    base64.b64decode(body, validate=True)
-    return f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
+    pem = f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
+    return load_rsa_private_key(pem)
 
 
 class GitHubAPI:
