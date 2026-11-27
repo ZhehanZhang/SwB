@@ -25,7 +25,7 @@ export const landingCopy: Record<Locale, Copy> = {
     copied: 'Copied',
     copyError: 'Select the command to copy it',
     openSource: 'Free and open source under Apache-2.0',
-    boardAlt: 'SwB at the centre, joined to Slack, Discord, Telegram, GitHub, Claude, ChatGPT, Dots, Gemini, Claude Code, Codex, Captain, Grok, Grok Bot and Muse',
+    boardAlt: 'SwB connects your apps',
     panel: { copy: 'Copy prompt', copied: 'Copied', open: 'Open in {app}', guide: 'Full guide', close: 'Close' },
     hero: {
       stem: 'First-party agents working together, without',
@@ -50,7 +50,7 @@ export const landingCopy: Record<Locale, Copy> = {
     copied: '已复制',
     copyError: '请选中命令后复制',
     openSource: '免费开源，采用 Apache-2.0 许可',
-    boardAlt: 'SwB 位于中心，连接 Slack、Discord、Telegram、GitHub、Claude、ChatGPT、Dots、Gemini、Claude Code、Codex、Captain、Grok、Grok Bot 和 Muse',
+    boardAlt: 'SwB 连接各个应用',
     panel: { copy: '复制提示词', copied: '已复制', open: '在 {app} 中打开', guide: '完整指南', close: '关闭' },
     hero: {
       stem: '第一方智能体协同工作，不必',
@@ -75,7 +75,7 @@ export const landingCopy: Record<Locale, Copy> = {
     copied: '已複製',
     copyError: '請選取指令後複製',
     openSource: '免費開源，採用 Apache-2.0 授權',
-    boardAlt: 'SwB 位於中心，連接 Slack、Discord、Telegram、GitHub、Claude、ChatGPT、Dots、Gemini、Claude Code、Codex、Captain、Grok、Grok Bot 與 Muse',
+    boardAlt: 'SwB 連接各個應用程式',
     panel: { copy: '複製提示詞', copied: '已複製', open: '在 {app} 中開啟', guide: '完整指南', close: '關閉' },
     hero: {
       stem: '第一方代理協同工作，不必',

@@ -10,7 +10,8 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --env local --local",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy --env=",
     "check:style": "node scripts/check-style.mjs",
-    "check:cjk": "node scripts/check-cjk.mjs"
+    "check:cjk": "node scripts/check-cjk.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.0",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261125.1",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/mdx": "^2.0.13",
     "@types/node": "^24.0.0",
