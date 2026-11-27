@@ -17,7 +17,7 @@ export type PendingWrite = {
   thread_ts?: string | null
 }
 
-export type Pause = { root: string; turns: number; paused_at: string | null }
+export type Pause = { root: string; turns: number; paused_at: string | null; conversation: Conversation | null }
 
 export type Conversation = {
   handle: string
@@ -76,7 +76,13 @@ export type ConversationItem = {
   from?: Sender
 }
 
-type InboxData = { pending_writes: PendingWrite[]; turn_cap: number | null; pauses: Pause[]; conversations: Conversation[] }
+type InboxData = {
+  pending_writes: PendingWrite[]
+  turn_cap: number | null
+  pauses: Pause[]
+  conversations: Conversation[]
+  next_cursor: string | null
+}
 type ConversationData = { conversation: Conversation; items: ConversationItem[]; cursor: number }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,6 +111,7 @@ function isPendingWrite(value: unknown): value is PendingWrite {
 function isPause(value: unknown): value is Pause {
   return isRecord(value) && typeof value.root === "string" && Number.isSafeInteger(value.turns)
     && nullableStrings(value, ["paused_at"])
+    && (value.conversation === null || isConversation(value.conversation))
 }
 
 function isConversation(value: unknown): value is Conversation {
@@ -135,6 +142,7 @@ export function isInbox(value: unknown): value is InboxData {
     && (value.turn_cap === null || Number.isSafeInteger(value.turn_cap))
     && Array.isArray(value.pauses) && value.pauses.every(isPause)
     && Array.isArray(value.conversations) && value.conversations.every(isConversation)
+    && nullableStrings(value, ["next_cursor"])
 }
 
 export function isConversationPage(value: unknown): value is ConversationData {

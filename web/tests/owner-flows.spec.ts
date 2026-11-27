@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test"
 import { fileURLToPath } from "node:url"
 
+test("Sign-in explains an invalid link", async ({ page }) => {
+  await page.setExtraHTTPHeaders({ "cf-access-jwt-assertion": "invalid" })
+  await page.goto("/login#t=placeholder")
+  await expect(page.getByText("Check your sign-in link.", { exact: true })).toBeVisible()
+})
+
 test("Tokens cancels and confirms revoking a paired key", async ({ page, request }, testInfo) => {
   await page.goto("/tokens")
   await page.getByText("Pairing code", { exact: true }).click()
@@ -49,4 +55,57 @@ test("Agents saves a Slack persona avatar", async ({ page }) => {
   await page.getByRole("button", { name: "Save avatar" }).click()
   await expect(page).toHaveURL("/agents?notice=avatar-saved")
   await expect(page.getByRole("status").filter({ hasText: "Avatar saved" })).toBeVisible()
+})
+
+test("Settings shows the SwB commands", async ({ page }) => {
+  await page.goto("/settings")
+  const commands = page.getByRole("region", { name: "Commands", exact: true })
+  await expect(commands.locator("code")).toHaveText(["swb up", "swb status", "swb log"])
+  await expect(commands.getByRole("button", { name: "Copy swb log" })).toBeVisible()
+})
+
+test("Memory shows human keys and opens notes by summary when a key is absent", async ({ page }, testInfo) => {
+  await page.goto("/memory")
+  const table = page.getByRole("table", { name: "Notes in general" })
+  const keyed = table.getByRole("row").filter({ hasText: "Prepare the release." })
+  const keyless = table.getByRole("row").filter({ hasText: "Review the schedule." })
+  await expect(keyed.getByRole("cell").first()).toHaveText("release-plan")
+  await expect(keyless.getByRole("cell").first()).toBeEmpty()
+  await table.screenshot({ path: testInfo.outputPath("memory-keys.png"), animations: "disabled" })
+  const open = keyless.getByRole("button", { name: "Review the schedule." })
+  await open.click()
+  const note = page.getByRole("dialog", { name: "Meeting notes" })
+  await expect(note.getByText("Review the schedule.")).toBeVisible()
+  await expect(note.getByText(/mem_/)).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(open).toBeFocused()
+})
+
+test("Inbox shows more conversations and preserves the project filter through details", async ({ page }, testInfo) => {
+  await page.goto("/inbox?project=operations")
+  const conversations = page.getByRole("region", { name: "Conversations" })
+  const rows = conversations.getByRole("row")
+  const more = conversations.getByRole("button", { name: "More", exact: true })
+  const older = conversations.getByRole("link", { name: "Conversation 1", exact: true })
+  await expect(rows).toHaveCount(21)
+  await expect(older).toHaveCount(0)
+  await expect(page.getByRole("region", { name: "Needs you" }).getByText("Conversation 1", { exact: true })).toBeVisible()
+  await expect(more).toBeVisible()
+  await more.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath("inbox-more.png"), animations: "disabled" })
+  await more.click()
+  await expect(rows).toHaveCount(24)
+  await expect(more).toHaveCount(0)
+  await expect(conversations.getByRole("link", { name: "Conversation 23", exact: true })).toHaveCount(0)
+  await expect(older).toHaveAttribute("href", "/inbox/h_history_1?project=operations")
+  await older.click()
+  await expect(page.getByRole("heading", { name: "Conversation 1" })).toBeVisible()
+  await expect(page.getByText("The first conversation.")).toBeVisible()
+  await page.getByRole("link", { name: "Conversations", exact: true }).click()
+  await expect(page).toHaveURL("/inbox?project=operations")
+  await expect(older).toBeVisible()
+
+  await page.goto("/inbox/h_history_1")
+  await expect(page.getByRole("heading", { name: "Conversation 1" })).toBeVisible()
+  await expect(page.getByRole("link", { name: "Conversations", exact: true })).toHaveAttribute("href", "/inbox")
 })

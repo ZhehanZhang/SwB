@@ -16,6 +16,7 @@ from ...config import Config
 from ...connect import public_https_prerequisite
 from ...modes import PROVIDERS
 from ...muse_protocol import TOKEN_ENV as MUSE_TOKEN_ENV
+from ...targets import slugify
 from .coding import coding_steps
 from .kit import Kit
 
@@ -23,6 +24,8 @@ CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
           "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse", "dots": "dots"}
 BLOCK_EXAMPLES = {
+    "discord": {"spaces": {"home": {"guild_id": "100000000000000001", "owner_ids": ["100000000000000002"], "mode": "watch"}}},
+    "telegram": {"spaces": {"home": {"chats": [-1001111111111], "owner_ids": [222222], "mode": "watch"}}},
     "slack": {"agents": {"owner": {"workspaces": {"a2a": ["bot"]}}}, "workspaces": {"a2a": {
         "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "SLACK_A2A_APP_TOKEN",
         "identities": {"bot": {"token_env": "SLACK_A2A_BOT_TOKEN", "write": "free"}},
@@ -36,18 +39,23 @@ ROUTINE_ENV_ONLY = {
 }
 ALIASES = {"grok-routine": "grok-bot"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
-MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web",
+MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser. Select + > Add custom MCP server",
+         "claude": "Customize > Connectors > Add > Custom > Web",
          "grok": "grok.com > Connectors > New Connector > Custom"}
 GUIDE_TITLE_WORDS = {"chatgpt": "ChatGPT", "github": "GitHub", "mcp": "MCP"}
 
 
-def enable_steps(cfg: Config, name: str) -> list[dict[str, str]]:
+def enable_steps(cfg: Config, name: str, choose: dict[str, Any]) -> list[dict[str, str]]:
     restart = {"by": "you", "do": "Restart SwB."}
     routine_env = ROUTINE_ENV_ONLY.get(name)
     if routine_env and not cfg.blocks_from_file:
         return [{"by": "person", "do": f"Set {' and '.join(routine_env)} in .env."}, restart]
 
     config = {"use": name, "enabled": True, **BLOCK_EXAMPLES.get(name, {})}
+    if name == "dots" and (dot := choose.get("dot")) is not None:
+        if not isinstance(dot, str) or not (slug := slugify(dot)):
+            raise ToolError("Choose a dot name with letters or digits.")
+        config["dots"] = {slug: {"name": dot.strip(), "mailbox": "chatgpt"}}
     if cfg.blocks_from_file:
         instruction = "Merge this YAML under blocks in config/switchboard.yaml."
         snippet = indent(yaml.safe_dump({name: config}, sort_keys=False).rstrip(), "  ")
@@ -58,6 +66,10 @@ def enable_steps(cfg: Config, name: str) -> list[dict[str, str]]:
         instruction += " Replace T0DEMO0001 with the Slack workspace ID."
     elif name == "github":
         instruction += " Replace example-org/app with the GitHub repository."
+    elif name == "discord":
+        instruction += " Replace guild_id and owner_ids with your Discord server and user IDs."
+    elif name == "telegram":
+        instruction += " Replace chats and owner_ids with your Telegram group and user IDs."
     names = (MUSE_TOKEN_ENV,) if name == "muse" else configured_env(name, config)
     if names:
         instruction += f" Use {', '.join(names)} in .env or get private claim links after restart."
@@ -89,7 +101,7 @@ def register_guides(mcp: MCPServer) -> dict[str, dict[str, str]]:
 
 
 def hosted_client_instruction(kind: str, connector: str | None) -> str:
-    return f"Open {MENUS[kind]} to add {connector or '<public_url>/mcp'} as a custom connector and sign in with OAuth."
+    return f"Open {MENUS[kind]}. Add {connector or '<public_url>/mcp'} as a custom connector. Sign in with OAuth."
 
 
 def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
@@ -149,7 +161,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
         description=('When someone asks how to connect, set up or link something to SwB, call connect first. '
                      f'Supported kinds include {", ".join(kinds)}. Do steps marked "you" in order. '
                      'Share "person" steps and links with the owner. Call connect again to check progress. '
-                     'Use choose for details such as a Captain, project or agent name. Use private links for credentials. '
+                     'Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. '
                      'Read the prompt or resource in guide for detailed setup instructions.'),
         annotations=kit.SEND,
     )
@@ -168,9 +180,9 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             return {**result, "done": [], "next": [
                 {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}],
                 **({"modes": core.modes.summary(block.name, p)} if block is not None and block.manifest.id in PROVIDERS else {})}
-        if what in BLOCKS and block is None:
-            return {**result, "done": [], "next": enable_steps(core.cfg, BLOCKS[what])}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
+        if what in BLOCKS and block is None:
+            return {**result, "done": [], "next": enable_steps(core.cfg, BLOCKS[what], choose)}
         outcome = "ok"
         try:
             if what == "coding-agent":

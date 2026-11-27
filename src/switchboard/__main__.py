@@ -120,6 +120,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     if args.cmd == "blocks":
         import yaml
 
+        if args.block and args.block not in core.blocks:
+            parser.exit(1, f"Configure the {args.block} block or choose a block from swb blocks list.\n")
         names = [args.block] if args.block else list(core.blocks)
         setup = core.block_setup() if args.action == "check" else {}
         for name in names:

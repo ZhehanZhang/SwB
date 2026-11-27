@@ -15,6 +15,7 @@ SESSION_COOKIE = "__Host-swb_session"
 SESSION_LIFETIME = 30 * 86400
 SESSION_IDLE = 7 * 86400
 LINK_TTL = 300
+LINK_HISTORY_TTL = 86400
 CHALLENGE_TTL = 120
 CHALLENGE_COOKIE = "__Host-swb_wa"
 
@@ -103,8 +104,8 @@ class Sessions:
         token, now = secrets.token_urlsafe(32), self.store.clock()
 
         def mint(db):
-            db.execute("DELETE FROM owner_login_links WHERE expires_at <= ?", (now,))
-            db.execute("DELETE FROM owner_login_links_used WHERE expires_at <= ?", (now,))
+            db.execute("DELETE FROM owner_login_links WHERE expires_at <= ?", (now - LINK_HISTORY_TTL,))
+            db.execute("DELETE FROM owner_login_links_used WHERE expires_at <= ?", (now - LINK_HISTORY_TTL,))
             db.execute("INSERT INTO owner_login_links(token_hash, client_id, source, expires_at) VALUES (?,?,?,?)",
                        (_hash(token), client_id, source, now + LINK_TTL))
 
@@ -123,9 +124,12 @@ class Sessions:
             if row is not None:
                 db.execute("INSERT INTO owner_login_links_used(token_hash, expires_at) VALUES (?,?)", (key, row["expires_at"]))
                 return row, None
-            used = db.execute("SELECT 1 FROM owner_login_links_used WHERE token_hash = ? AND expires_at > ?",
-                              (key, now)).fetchone()
-            return None, "link_used" if used is not None else "link_expired"
+            used = db.execute("SELECT expires_at FROM owner_login_links_used WHERE token_hash = ?", (key,)).fetchone()
+            if used is not None:
+                return None, "link_used" if used["expires_at"] > now else "link_expired"
+            if db.execute("SELECT 1 FROM owner_login_links WHERE token_hash = ?", (key,)).fetchone() is not None:
+                return None, "link_expired"
+            return None, "link_invalid"
 
         return self.store.tx(consume)
 

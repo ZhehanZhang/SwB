@@ -49,7 +49,7 @@ def test_grok_discovery_returns_connector_prompt_and_registration(grok):
     connector, routine, register = result["next"]
     assert connector["by"] == "person"
     assert all(text in connector["do"] for text in (f"{PUBLIC}/mcp", "Remote HTTPS", "sign in with OAuth",
-                                                      'connect(what="mcp-client"', "pairing code"))
+                                                      "ask your SwB agent for a pairing code"))
     assert routine["by"] == "person"
     assert all(text in routine["do"] for text in ("custom webhook trigger", "SwB project triage agent", "trust field from the webhook payload",
                                                     "Act only when trust is owner", "reply(conversation=", "final=true"))
@@ -97,6 +97,14 @@ def test_grok_connect_claims_resumes_and_waits_for_successful_test(grok, monkeyp
     assert "state" not in partial
     remaining, = partial["next"]
     assert "webhook key" in remaining["do"] and remaining["link"] != key["link"]
+    path = urlsplit(remaining["link"]).path
+    page = client.get(path, headers=OWNER)
+    csrf = page.text.split('name="csrf" value="', 1)[1].split('"', 1)[0]
+    invalid = client.post(path, data={"csrf": csrf, "token": "abc"}, headers=OWNER)
+    assert invalid.status_code == 400
+    assert "<h1>Use a webhook key with at least 16 characters</h1>" in invalid.text
+    assert 'name="token" type="password"' in invalid.text
+    assert core.secret(block.routines()["grok-demo"]["secret_env"]) is None
     assert enter_claim(client, remaining, WEBHOOK_KEY).status_code == 200
     assert not posted
 
@@ -183,7 +191,7 @@ def test_grok_environment_secret_requires_restart_instead_of_claim(make, monkeyp
     assert not payload(call(client, STATIC_KEY, test["tool"], test["arguments"]))["fired"]
     for choose in ({"name": "grok-demo"}, {"name": "grok-demo", "replace": "secret"}):
         [step] = connect(client, choose=choose)["next"]
-        assert step == {"by": "person", "do": "Change GROK_TEST_KEY in .env and restart Switchboard."}
+        assert step == {"by": "person", "do": "Change GROK_TEST_KEY in .env and restart SwB."}
     assert not core.store.q("SELECT 1 FROM secrets")
 
 
@@ -250,7 +258,7 @@ def test_grok_connect_rejects_credentials_in_choose_without_echoing(grok):
     core, client = grok
     response = call(client, STATIC_KEY, "connect", {"what": "grok-bot", "choose": {**CHOICE, "url": WEBHOOK_URL}})
     message = error_text(response)
-    assert "Never pass webhook credentials" in message and WEBHOOK_URL not in message
+    assert "Enter webhook credentials through the private claim links" in message and WEBHOOK_URL not in message
     assert not core.blocks["grok-routine"].routines()
     assert not core.store.q("SELECT 1 FROM secrets")
 
