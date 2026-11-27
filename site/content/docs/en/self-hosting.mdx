@@ -21,6 +21,8 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 Compose serves SwB on `http://127.0.0.1:8870` and keeps the data in `./data`. After you change `.env`, run `docker compose up -d` again.
 
+Signed-out requests to `/healthz` return two fields, `status` and `version`. Use an owner session or the owner key for full health details.
+
 ## Cloudflare Tunnel
 
 A tunnel gives SwB a public address on your domain and keeps your ports closed. Make a tunnel in Cloudflare Zero Trust. Point its public hostname to `http://switchboard:8000`. Put the tunnel token in `.env` as `TUNNEL_TOKEN`. Start Compose with the tunnel profile.

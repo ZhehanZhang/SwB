@@ -35,19 +35,25 @@ SwB 有自己的记忆库。Claude 和 ChatGPT 让各自的内置记忆保持私
 
 发送留空目标时，**路由**负责选出目标。路由可以匹配一个智能体、一个项目、两者同时匹配，或匹配所有发送。SwB 按以下顺序检查路由。先看智能体加项目，再看项目，再看智能体，最后看全局路由。路由的每次变更都记入审计日志。
 
-路由目标可以是智能体邮箱，例如 `agent:<name>`，也可以是模块地址，例如 `capy:captain:<name>`。邮箱路由在每个实例上都可用。模块地址需要启用对应的模块，例如 Capy、Claude routine 或 Grok routine。
+路由目标可以是智能体的收件箱，例如 `agent:<name>`，也可以是模块地址，例如 `capy:captain:<name>`。收件箱路由在每个实例上都可用。模块地址需要启用对应的模块，例如 Capy、Claude routine 或 Grok routine。
+
+在 GitHub、Slack、Discord 和 Telegram 中，[频道模式](/zh-Hans/docs/channel-modes)可通过项目路由唤醒智能体。目标可以是收件箱，也可以是锁定的 Capy 目标。
 
 ## 会话
 
-每次发送立即返回一个**会话**。会话有一个形如 `h_...` 的句柄。答复回到发送者的**收件箱**。`wait` 工具等待下一条答复。`inbox` 工具读取收件箱并立即返回。
+普通发送会立即返回一个**会话**。会话有一个形如 `h_...` 的句柄。答复回到发送者的**收件箱**。`wait` 工具等待下一条答复。`inbox` 工具读取收件箱并立即返回。
 
 ![SwB 收件箱中的一段会话](/shots/inbox-thread-light.webp)
 
 | 客户端 | 答复返回的方式 |
 | - | - |
 | Claude、Claude Desktop 和 ChatGPT | 智能体先调用 `send`，再调用 `wait`，然后回答你 |
-| 使用 2026-07-28 协议并支持 MCP Tasks 扩展的客户端 | 向 Capy 调用 `send` 时可请求一个任务。最终答复到达后，任务完成。 |
+| 使用 MCP 2026-07-28 且为 Capy 发送请求任务的客户端 | 调用返回任务。最终答复送达后，任务完成 |
 | 带 SwB 频道的 Claude Code | 答复出现在已打开的窗口中 |
 | 支持 MCP Events 的客户端 | 消息到达时，SwB 调用客户端的 webhook |
 
-每个智能体都有一个邮箱。即使智能体处于休眠，消息也会送达。智能体稍后读取消息，或由 SwB 通过模块唤醒它。
+启用 Capy 模块后，使用 MCP 2026-07-28 的客户端可通过 `server/discover` 发现 Tasks 扩展。每次向 Capy 发送并请求任务时，将 `io.modelcontextprotocol/tasks` 加入 `tools/call` 请求的 `_meta["io.modelcontextprotocol/clientCapabilities"].extensions`。
+
+发往 Capy 的消息默认使用普通会话。MCP 2025-11-25 客户端和发往收件箱的消息始终使用普通会话。实际客户端的 MCP Tasks 测试尚待完成。
+
+每个智能体都有一个收件箱。智能体休眠时，收件箱也能接收消息。智能体可稍后读取消息，SwB 也可以通过模块唤醒它。

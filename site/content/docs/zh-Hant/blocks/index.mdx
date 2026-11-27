@@ -17,6 +17,8 @@ description: SwB 連接的每個平台。
 | [Telegram](/zh-Hant/docs/blocks/telegram) | 機器人權杖 | 討論串中的回覆 |
 | [GitHub App](/zh-Hant/docs/blocks/github) | Webhook 密鑰 | 已簽章的 webhook |
 
+啟用 Capy 模組後，使用 MCP 2026-07-28 的用戶端可透過 `server/discover` 找到 [MCP Tasks](/zh-Hant/docs/how-it-works#對話) 擴充功能。用戶端在每次傳送給 Capy 時選擇啟用。MCP 2025-11-25 用戶端和傳往收件匣的訊息都採用一般對話。
+
 ## 所有模組的共通點
 
 信任等級來自平台本身的 id。SwB 把擁有者的訊息標為 `owner`。它把你列出的人傳來的訊息標為 `known`。其他所有訊息標為 `external`。擁有者以外的任何人傳來的文字，SwB 都包在「外部內容」外框中，所以代理把它當成資訊閱讀。

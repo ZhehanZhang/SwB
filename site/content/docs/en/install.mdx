@@ -57,7 +57,7 @@ SwB checks `data_dir` in the YAML config or overlay first. It then checks `SWITC
 curl -fsS http://127.0.0.1:8870/healthz
 ```
 
-The answer lists each block and its state. A block that needs a setting shows the name of the missing variable.
+The response above has two fields, `status` and `version`. Sign in as the owner or use the owner key to see each block and its state.
 
 ## Server commands
 
@@ -74,7 +74,7 @@ Run `swb --help` to see the command groups. Add `--help` to a command to see its
 | `swb muse-bridge` | Pair and run a Muse gadget on Linux. |
 | `swb serve` | Run the server with its configured host and port. |
 | `swb export DIR` | Write saved memory to Markdown files in the output folder `DIR`. |
-| `swb log` | Print up to 50 recent audit entries. |
+| `swb log [--limit N]` | Print recent audit entries. The default limit is `50`. |
 | `swb config migrate` | Print a version 1 config in the version 2 format. |
 | `swb blocks list` | List the configured blocks. |
 | `swb blocks show BLOCK` | Show the settings for a block. |
