@@ -12,6 +12,7 @@ import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
 import { ApiError, isObject, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
 import { connectionNames, connectionQuery } from "@/lib/connections"
+import { preloadOnTouch } from "@/app/route-pages"
 import { addPasskey, listPasskeys, removePasskey, supportsPasskeys } from "@/lib/owner-auth"
 
 type Settings = {
@@ -168,7 +169,8 @@ export function SettingsPage() {
             const connection = connections[index]
             return (
               <li key={platform}>
-                <Link to={`/connections/${platform}`} className="group grid min-h-[41px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b py-2 text-body-sm">
+                <Link to={`/connections/${platform}`} {...preloadOnTouch(`/connections/${platform}`)}
+                  className="console-pressable group grid min-h-[41px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-sm border-b py-2 text-body-sm">
                   <span className="flex items-center gap-2.5">
                     <LogoTile kind={platform} />
                     <span className="group-hover:underline">{connectionNames[platform]}</span>

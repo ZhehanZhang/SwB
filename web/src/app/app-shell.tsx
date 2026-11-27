@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react"
-import { ChevronLeft, Menu } from "lucide-react"
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
+import { Suspense, useEffect, useRef, useState, ViewTransition, type MouseEvent, type PointerEvent } from "react"
+import { ChevronLeft } from "lucide-react"
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { PRODUCT_NAME } from "@/app/brand"
 import { CommandMenu } from "@/app/header-controls"
+import { MobileMore } from "@/app/mobile-more"
 import { PageTitle } from "@/app/page-title"
 import { isSection, primarySections, sections, utilitySections } from "@/app/navigation"
+import { preloadOnIdle, preloadOnTouch } from "@/app/route-pages"
 import { SwbIcon } from "@/components/swb-icon"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { connectionNames, isConnectionPlatform } from "@/lib/connections"
 import { cn } from "@/lib/utils"
+import "./mobile-navigation.css"
 
-const tabClass = "flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground hover:text-foreground"
-const mobileTabClass = "console-mobile-tab flex h-14 min-w-0 touch-manipulation flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground"
+const tabClass = "console-pressable flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground"
+const mobileTabClass = `console-mobile-hit console-mobile-tab ${tabClass} h-14 touch-manipulation`
+const mobileTabVisual = "console-tab-visual flex flex-col items-center gap-1"
 const mobileIconClass = "size-6 shrink-0"
 
 function HomeNav({ active }: { active: boolean }) {
@@ -28,39 +31,76 @@ function HomeNav({ active }: { active: boolean }) {
 function SectionNav({ section, selected = false }: { section: typeof sections[number]; selected?: boolean }) {
   const { name, to, icon: Icon } = section
   return (
-    <NavLink to={to} className={({ isActive }) => cn(tabClass, "h-14 w-16 hover:bg-muted",
-      (isActive || selected) && "bg-muted text-foreground")}>
+    <NavLink to={to} data-selected={selected || undefined} className={cn(tabClass, "console-mobile-tab h-14 w-16")}>
       <Icon aria-hidden className="size-5" /> {name}
     </NavLink>
   )
 }
 
-function MobileNavigation({ pathname, home }: { pathname: string; home: boolean }) {
-  const more = sections.slice(3)
-  const active = isSection(pathname, "/connections") || more.some(({ to }) => isSection(pathname, to))
+function MobileNavigation({ home, moreOpen, setMoreOpen }: { home: boolean; moreOpen: boolean; setMoreOpen: (open: boolean) => void }) {
+  const navigate = useNavigate()
+  const press = useRef<{ tab: HTMLElement; pointer: number; x: number; y: number } | null>(null)
+  const activation = useRef<{ tab: HTMLElement; when: number } | null>(null)
+
+  function findTab(target: EventTarget | null) {
+    return target instanceof Element ? target.closest<HTMLElement>(".console-mobile-hit") : null
+  }
+
+  function startTouch(event: PointerEvent<HTMLElement>) {
+    if (event.pointerType !== "touch" || !event.isPrimary) return
+    const tab = findTab(event.target)
+    press.current = tab ? { tab, pointer: event.pointerId, x: event.clientX, y: event.clientY } : null
+  }
+
+  function trackTouch(event: PointerEvent<HTMLElement>) {
+    const start = press.current
+    if (start?.pointer === event.pointerId && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) {
+      press.current = null
+    }
+  }
+
+  function finishTouch(event: PointerEvent<HTMLElement>) {
+    const start = press.current
+    if (!start || start.pointer !== event.pointerId) return
+    press.current = null
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12
+      || findTab(document.elementFromPoint(event.clientX, event.clientY)) !== start.tab) return
+    activation.current = { tab: start.tab, when: event.timeStamp }
+    if (start.tab instanceof HTMLAnchorElement) {
+      setMoreOpen(false)
+      void navigate(start.tab.pathname)
+    } else {
+      setMoreOpen(!moreOpen)
+    }
+  }
+
+  function suppressDuplicateClick(event: MouseEvent<HTMLElement>) {
+    const last = activation.current
+    const pointerType = "pointerType" in event.nativeEvent ? event.nativeEvent.pointerType : null
+    if (!last || findTab(event.target) !== last.tab || event.timeStamp - last.when > 700
+      || pointerType === "mouse" || (!pointerType && event.detail === 0)) return
+    activation.current = null
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   return (
-    <nav aria-label="Navigation" className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-30 h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 md:hidden">
+    <nav aria-label="Navigation" data-more-open={moreOpen || undefined}
+      className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-[45] h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 md:hidden"
+      onPointerDownCapture={startTouch} onPointerMoveCapture={trackTouch} onPointerUpCapture={finishTouch}
+      onPointerCancelCapture={() => { press.current = null }} onClickCapture={suppressDuplicateClick}>
       <div className="pointer-events-auto grid grid-cols-5">
-        <Link to="/" aria-current={home ? "page" : undefined} className={mobileTabClass}>
-          <SwbIcon tab className={mobileIconClass} /><span>Overview</span>
+        <Link to="/" aria-current={home ? "page" : undefined} className={mobileTabClass}
+          onClick={() => setMoreOpen(false)} {...preloadOnTouch("/")}>
+          <span className={mobileTabVisual}><SwbIcon tab className={mobileIconClass} /><span>Overview</span></span>
         </Link>
         {sections.slice(0, 3).map(({ name, to, icon: Icon }) => (
-          <NavLink key={to} to={to} className={mobileTabClass}>
-            <Icon aria-hidden className={mobileIconClass} /><span>{name}</span>
+          <NavLink key={to} to={to} className={mobileTabClass}
+            onClick={() => setMoreOpen(false)} {...preloadOnTouch(to)}>
+            <span className={mobileTabVisual}><Icon aria-hidden className={mobileIconClass} /><span>{name}</span></span>
           </NavLink>
         ))}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={mobileTabClass} data-selected={active || undefined}>
-              <Menu aria-hidden className={mobileIconClass} /><span>More</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" collisionPadding={12}>
-            {more.map(({ name, to, icon: Icon }) => (
-              <DropdownMenuItem key={to} asChild><NavLink to={to}><Icon aria-hidden /> {name}</NavLink></DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <MobileMore open={moreOpen} onOpenChange={setMoreOpen} tabClass={mobileTabClass} iconClass={mobileIconClass} tabVisual={mobileTabVisual} />
       </div>
     </nav>
   )
@@ -73,8 +113,19 @@ export function AppShell() {
   const connection = isConnectionPlatform(platform)
   const home = pathname === "/" || project || isSection(pathname, "/canvas")
   const [title, setTitle] = useState<string>()
+  const [moreOpen, setMoreOpen] = useState(false)
   const heading = connection ? connectionNames[platform] : title ?? (home ? PRODUCT_NAME : sections.find(({ to }) => isSection(pathname, to))?.name ?? PRODUCT_NAME)
   useEffect(() => { document.title = heading === PRODUCT_NAME ? heading : `${heading} | ${PRODUCT_NAME}` }, [heading])
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 48rem)")
+    const closeMoreOnDesktop = () => { if (desktop.matches) setMoreOpen(false) }
+    desktop.addEventListener("change", closeMoreOnDesktop)
+    const cancelPreload = desktop.matches ? undefined : preloadOnIdle()
+    return () => {
+      desktop.removeEventListener("change", closeMoreOnDesktop)
+      cancelPreload?.()
+    }
+  }, [])
 
   return (
     <PageTitle.Provider value={setTitle}>
@@ -85,20 +136,24 @@ export function AppShell() {
         <div className="flex-1" />
         {utilitySections.map(section => <SectionNav key={section.to} section={section} selected={connection || isSection(pathname, "/about")} />)}
       </nav>
-      <div className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-clearance)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
+      <div inert={moreOpen} className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-clearance)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
         <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2">
             {project && <Link to="/" aria-label={`Back to ${PRODUCT_NAME}`} className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
-            {connection && <Link to="/settings" aria-label="Back to Settings" className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
+            {connection && <Link to="/settings" aria-label="Back to Settings" className="console-pressable grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
             <h1 className="truncate text-page-title">{heading}</h1>
           </div>
           <CommandMenu />
         </header>
         <main id="main-content" tabIndex={-1} className="min-w-0">
-          <Outlet />
+          <Suspense fallback={<div className="min-h-72" aria-busy="true" />}>
+            <ViewTransition key={pathname} name="console-route" default="none" share="console-route-fade">
+              <div className="min-w-0"><Outlet /></div>
+            </ViewTransition>
+          </Suspense>
         </main>
       </div>
-      <MobileNavigation pathname={pathname} home={home} />
+      <MobileNavigation home={home} moreOpen={moreOpen} setMoreOpen={setMoreOpen} />
     </PageTitle.Provider>
   )
 }
