@@ -842,8 +842,10 @@ class Switchboard:
         try:
             out = await action.handler(call, **kwargs)
         except PolicyRefusal as e:
-            self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
-                              destination=destination, action=action.name, outcome="refused", detail=e.reason)
+            if not e.audited:
+                self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
+                                  destination=destination, action=action.name, outcome="refused", detail=e.reason)
+                e.audited = True
             if isinstance(e, DestinationError):
                 raise
             raise DestinationError(str(e)) from e

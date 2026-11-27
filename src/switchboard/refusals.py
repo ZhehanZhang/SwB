@@ -20,4 +20,5 @@ SIGN_IN_FAILURES = {
 class PolicyRefusal(Exception):
     def __init__(self, reason: str, message: str | None = None):
         self.reason = reason
+        self.audited = False
         super().__init__(message or reason)
