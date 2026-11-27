@@ -67,7 +67,8 @@ class Inbox:
             f"SELECT DISTINCT ref FROM handles WHERE destination = ? AND owner = ? AND {clause}", (destination, owner, *args))}
 
     def handles(self, *, owner: str | None = None, destination: str | None = None, open_only: bool = False, project: str | None = None,
-                limit: int = 50, roots_only: bool = False, scopes: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
+                limit: int = 50, roots_only: bool = False, scopes: tuple[str, ...] | None = None,
+                before: tuple[float, str] | None = None) -> list[dict[str, Any]]:
         where, args = [], []
         for col, val in (("owner", owner), ("destination", destination), ("project", project)):
             if val:
@@ -87,7 +88,12 @@ class Inbox:
                 SELECT 1 FROM inbox i JOIN handles p ON p.handle = json_extract(i.data, '$.in_reply_to')
                 WHERE i.handle = h.handle AND p.handle != h.handle
             )""")
-        sql = "SELECT handle FROM handles h" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY created_at DESC LIMIT ?"
+        timestamp = "COALESCE(updated_at, created_at)" if roots_only else "created_at"
+        if before is not None:
+            where.append(f"({timestamp}, handle) < (?, ?)")
+            args.extend(before)
+        order = f"{timestamp} DESC" + (", handle DESC" if roots_only or before is not None else "")
+        sql = "SELECT handle FROM handles h" + (" WHERE " + " AND ".join(where) if where else "") + f" ORDER BY {order} LIMIT ?"
         return [self.handle(r["handle"]) for r in self.store.q(sql, [*args, limit])]
 
     def thread_root(self, row: dict[str, Any]) -> dict[str, Any]:
@@ -176,12 +182,19 @@ class Inbox:
             raise KeyError(handle)
         item = self._add(h, kind, data)
         replied = None
-        if kind == "message" and data.get("final") and data.get("in_reply_to"):
-            replied = self.handle(data["in_reply_to"])
-            if replied is not None and replied["status"] == "cancelled":
-                replied = None
-            if replied is not None:
-                self.update_handle(replied["handle"], status="answered")
+        if kind == "message" and (original := data.get("in_reply_to")):
+            if data.get("final"):
+                replied = self.handle(original)
+                if replied is not None and replied["status"] == "cancelled":
+                    replied = None
+                if replied is not None:
+                    self.update_handle(replied["handle"], status="answered")
+            elif data.get("final") is False:
+                self.store.x(
+                    "UPDATE handles SET status = 'working', updated_at = ? "
+                    "WHERE handle = ? AND destination = 'mailbox' AND status = 'delivered'",
+                    (self.store.clock(), original),
+                )
         elif kind == "final" and data.get("final") is not False:
             replied = h
         while replied is not None and (original := replied["meta"].get("forward_of")):

@@ -69,7 +69,15 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
         assert core.blocks[block].dots()[0]["mailbox"] == "chatgpt"
         progress = connect(enabled, kind)
         assert "state" not in progress
-        assert 'connect(what="chatgpt")' in progress["next"][0]["do"]
+        [step] = progress["next"]
+        assert step["by"] == "person" and "https://chatgpt.com/plugins" in step["do"]
+        assert "sign in to SwB" in step["do"] and "connect(" not in step["do"]
+    elif kind == "discord":
+        assert core.blocks[block].guild_spaces == {"100000000000000001": "home"}
+        assert core.blocks[block].spaces["home"].owner_ids == {"100000000000000002"}
+    elif kind == "telegram":
+        assert core.blocks[block]._groups == {-1001111111111: "home"}
+        assert core.blocks[block].spaces["home"].owner_ids == {"222222"}
     elif kind == "slack":
         assert set(core.blocks[block].token_names["a2a"]) == set(env_names)
         assert "link" in connect(enabled, kind)["next"][0]
@@ -77,6 +85,30 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
         assert [(w["workspace"], list(w["identities"])) for w in workspaces] == [("a2a", ["bot"])]
     elif kind == "github":
         assert core.blocks[block].registered_repositories() == {"example-org/app"}
+
+
+def test_connect_uses_chosen_dot_in_the_config_snippet(make):
+    _, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    configure, _ = connect(client, "dots", choose={"dot": "Research Dot"})["next"]
+    assert yaml.safe_load(configure["snippet"])["dots"]["dots"] == {
+        "research-dot": {"name": "Research Dot", "mailbox": "chatgpt"},
+    }
+
+
+def test_connect_checks_the_chosen_dot_in_an_enabled_mailbox_block(make):
+    cfg = base_config(version=2, blocks={"mcp": {}, "dots": {"delivery": "mailbox", "dots": {
+        "first-dot": {"mailbox": "chatgpt"}, "second-dot": {"mailbox": "research-helper"},
+    }}})
+    core, client = make(config=cfg)
+    core.auth._issue("fixture-client", core.cfg.resource, "chatgpt")
+
+    assert connect(client, "dots", choose={"dot": "First Dot"})["state"] == "connected"
+    [step] = connect(client, "dots", choose={"dot": "Second Dot"})["next"]
+    assert step["by"] == "person" and "dot mailbox" in step["do"]
+    add, restart = connect(client, "dots", choose={"dot": "Third Dot"})["next"]
+    assert "blocks.dots.dots" in add["do"]
+    assert yaml.safe_load(add["snippet"]) == {"third-dot": {"name": "Third Dot", "mailbox": "chatgpt"}}
+    assert restart == {"by": "you", "do": "Restart SwB."}
 
 
 def test_connect_snippet_keeps_environment_discovered_blocks_after_reload(make):
@@ -275,7 +307,7 @@ def test_status_missing_oauth_and_missing_github_routes(make):
     core, client = make(config=cfg, env={**default_env(), "GITHUB_WEBHOOK_SECRET": secret})
     status = payload(call(client, STATIC_KEY, "switchboard_status"))
     assert status["blocks"]["mcp"]["next_step"] is None
-    assert status["blocks"]["mcp"]["manual_steps"] == ["Set public_url to let hosted MCP clients reach SwB."]
+    assert status["blocks"]["mcp"]["manual_steps"] == ["Give SwB a public HTTPS address for hosted MCP clients."]
     assert status["blocks"]["github"]["next_step"].startswith("Add a GitHub repository route")
     assert status["next_steps"] == core.status()["next_steps"] and secret not in json.dumps(status)
     out = connect(client, "claude")

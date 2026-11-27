@@ -10,6 +10,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
+from ...audit import iso
+
 if TYPE_CHECKING:
     from ...auth import Principal
     from . import MCPBlock
@@ -100,7 +102,8 @@ class Kit:
             out["replies"], out["cursor"], out["timed_out"] = got["items"], got["cursor"], got["timed_out"]
         return out
 
-    async def wait(self, p: "Principal", *, handle: str | None, timeout_s: float | None, project: str | None, block: str | None = None) -> dict[str, Any]:
+    async def wait(self, p: "Principal", *, handle: str | None, timeout_s: float | None, project: str | None, block: str | None = None,
+                   owner_facing: bool = False) -> dict[str, Any]:
         handle = handle.strip() if handle else None
         h = self.core.inbox.handle(handle) if handle else None
         owner, reader = self.inbox_reader(p, h)
@@ -111,7 +114,7 @@ class Kit:
             h = h if h and (p.is_unrestricted_owner or self.core.inbox.participant(h, p.source)) else None
             got["handle_status"] = (h["status"] if h else "unknown") if (h is None or not h["open"]) else "following"
         if got["timed_out"]:
-            got["next"] = "Nothing new yet. Tell the owner it is still working; call wait again or inbox later."
+            got["next"] = ("Tell the owner the work is still in progress. " if owner_facing else "") + "Check again with wait or inbox."
         return got
 
     def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None) -> dict[str, Any]:
@@ -196,8 +199,9 @@ class Kit:
             annotations=READ,
         )
         async def wait(ctx: Context, conversation: str | None = None, timeout_s: Annotated[float | None, Field(ge=0)] = None, project: ProjectArg = None,
-                       block: str | None = None) -> dict[str, Any]:
-            return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block)
+                       block: str | None = None,
+                       owner_facing: Annotated[bool, Field(description="Set true while you are speaking with the owner.")] = False) -> dict[str, Any]:
+            return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block, owner_facing=owner_facing)
 
         @mcp.tool(title="Your inbox", description="Your switchboard mailbox: replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. A reply to a message you sent carries in_reply_to with that conversation. Each item's from and trust say who sent it, from switchboard's own data. Answer a message with reply(conversation=<its handle>, text). No arguments needed; conversation, project and block only narrow it. Never blocks.", annotations=READ)
         async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
@@ -253,7 +257,8 @@ class Kit:
         @mcp.tool(title="Connected agents", description="Agents connected with a pairing code: their key ids, project, client, when they last called, and who minted the code. Keys themselves are never shown again.", annotations=READ)
         async def connect_list(ctx: Context, include_revoked: bool = False) -> dict[str, Any]:
             kit.owner(ctx, "list connected agents")
-            return {"keys": core.connections.list(include_revoked)}
+            return {"keys": [{**row, **{field: iso(row[field]) for field in ("created_at", "last_used_at", "revoked_at")}}
+                             for row in core.connections.list(include_revoked)]}
 
         @mcp.tool(title="Revoke a connected agent", description="Revoke one connected key (key_id) or every key of an agent. The agent's next call is refused; its memory and conversations stay. Audited.", annotations=DELETE)
         async def connect_revoke(ctx: Context, key_id: str | None = None, agent: str | None = None) -> dict[str, Any]:
@@ -264,7 +269,10 @@ class Kit:
                 n = core.connections.revoke(key_id=key_id, agent=agent)
             except ConnectError as e:
                 raise ToolError(str(e)) from e
-            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_revoke", outcome="ok", target=key_id or agent)
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="connect_revoke",
+                              outcome="refused" if n is None else "ok", target=None if n is None else key_id or agent)
+            if n is None:
+                raise ToolError("Unknown key ID. Check connect_list.")
             return {"revoked": n}
 
         if not self.aliases:
