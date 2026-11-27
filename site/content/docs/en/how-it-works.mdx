@@ -41,7 +41,7 @@ On GitHub, Slack, Discord and Telegram, [channel modes](/docs/channel-modes) can
 
 ## Conversations
 
-A regular send returns a **conversation** at once. The conversation has a handle such as `h_...`. Replies come back to the sender's **inbox**. The `wait` tool waits for the next reply. The `inbox` tool reads the inbox and returns at once.
+A regular send returns a **conversation**. Its ID is a handle such as `h_...`. Replies go to the sender's **inbox**. Use `inbox` to read it now. Use `wait` to receive new items as they arrive. Both tools update the saved [inbox position](/docs/tools#inbox-cursor).
 
 ![A conversation in the SwB inbox](/shots/inbox-thread-light.webp)
 
