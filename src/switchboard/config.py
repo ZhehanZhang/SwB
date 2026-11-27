@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -16,6 +17,17 @@ MIN_KEY_LEN = 24
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
 # channel uses SWITCHBOARD_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
 DEFAULT_INBOX_KEYS = {"channel": "claude-code"}
+
+REQUEST_BASE: ContextVar[str | None] = ContextVar("switchboard_request_base", default=None)
+
+
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    host = f"[{host}]" if ":" in host else host.encode("idna").decode()
+    port = parts.port
+    return f"{parts.scheme}://{host}" + (f":{port}" if port and port != {"https": 443, "http": 80}[parts.scheme] else "")
+
 
 NAMESPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}(/[a-z0-9][a-z0-9_.-]{0,59}){0,2}$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
@@ -48,6 +60,8 @@ class Config:
     """
 
     public_url: str | None = None
+    public_url_aliases: tuple[str, ...] = ()
+    passkey_rp_id: str | None = None
     owner_emails: tuple[str, ...] = ()
     access_team_domain: str | None = None
     access_aud: str | None = None
@@ -75,12 +89,33 @@ class Config:
     env: Mapping[str, str] = field(default_factory=dict)
 
     @property
-    def issuer(self) -> str | None:
+    def public_urls(self) -> tuple[str, ...]:
+        return (self.public_url, *self.public_url_aliases) if self.public_url else ()
+
+    def base_for_host(self, host: str | None) -> str | None:
+        """The public URL a request reached, by its Host header; the primary public_url for any other host."""
+        for url in self.public_urls:
+            if host and urlsplit(url).netloc.lower() == host.lower():
+                return url
         return self.public_url
 
     @property
+    def issuer(self) -> str | None:
+        """The base URL of the current request (one of public_urls), so each host is its own consistent issuer."""
+        base = REQUEST_BASE.get()
+        return base if base in self.public_urls else self.public_url
+
+    @property
     def resource(self) -> str | None:
-        return f"{self.public_url}/mcp" if self.public_url else None
+        return f"{self.issuer}/mcp" if self.issuer else None
+
+    @property
+    def resources(self) -> tuple[str, ...]:
+        return tuple(f"{url}/mcp" for url in self.public_urls)
+
+    @property
+    def passkey_rp(self) -> str | None:
+        return self.passkey_rp_id or (urlsplit(self.issuer).hostname if self.issuer else None)
 
     @property
     def access_configured(self) -> bool:
@@ -92,13 +127,7 @@ class Config:
 
     @property
     def public_origin(self) -> str | None:
-        if not self.public_url:
-            return None
-        url = urlsplit(self.public_url)
-        host = url.hostname or ""
-        host = f"[{host}]" if ":" in host else host.encode("idna").decode()
-        port = url.port
-        return f"{url.scheme}://{host}" + (f":{port}" if port and port != {"https": 443, "http": 80}[url.scheme] else "")
+        return _origin(self.issuer) if self.issuer else None
 
     def problems(self) -> list[str]:
         out = []
@@ -188,6 +217,16 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
     if public_url and not _web_url(public_url, local=True):
         raise ConfigError("public_url must be an HTTPS URL or use http://localhost")
     owner_emails = tuple(e.lower() for e in as_tuple(auth.get("owner_emails")))
+    aliases = tuple(str(u).strip().rstrip("/") for u in as_tuple(raw.get("public_url_aliases")))
+    if aliases and not public_url:
+        raise ConfigError("public_url_aliases needs public_url")
+    if not all(_web_url(u, local=True) and u != public_url for u in aliases):
+        raise ConfigError("public_url_aliases must be other HTTPS URLs (or http://localhost) for this same server")
+    rp_id = str(auth.get("passkey_rp_id") or "").strip().lower() or None
+    if rp_id is not None:
+        hosts = [urlsplit(u).hostname or "" for u in (public_url, *aliases) if u]
+        if not hosts or "." not in rp_id or not all(h == rp_id or h.endswith("." + rp_id) for h in hosts):
+            raise ConfigError("auth.passkey_rp_id must be every public host or a parent domain they share")
 
     keys = []
     for name, value in sorted(env.items()):
@@ -206,6 +245,8 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
     cfg = Config(
         visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
+        public_url_aliases=aliases,
+        passkey_rp_id=rp_id,
         owner_emails=owner_emails,
         access_team_domain=access.get("team_domain") or None,
         access_aud=access.get("aud") or None,

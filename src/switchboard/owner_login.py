@@ -3,7 +3,6 @@ from __future__ import annotations
 import hmac
 import json
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -51,8 +50,14 @@ class OwnerLogin:
         self.sessions = auth.sessions
         self.limiter = limiter
         self.oidc = OIDC(auth)
-        self.origin = auth.cfg.public_origin
-        self.rp_id = urlsplit(self.origin).hostname if self.origin else None
+
+    @property
+    def origin(self) -> str | None:
+        return self.auth.cfg.public_origin
+
+    @property
+    def rp_id(self) -> str | None:
+        return self.auth.cfg.passkey_rp
 
     def methods(self) -> dict:
         return {"passkeys": self.store.one("SELECT count(*) AS n FROM owner_passkeys")["n"],

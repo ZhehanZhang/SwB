@@ -1,5 +1,6 @@
 """Live setup directions for MCP clients and enabled blocks."""
 
+import json
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
@@ -24,8 +25,8 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
         signed_in = principal.kind == "oauth" and principal.source == kind
         if not signed_in and principal.is_unrestricted_owner and oauth:
             signed_in = core.store.one(
-                "SELECT 1 FROM oauth_tokens WHERE source = ? AND resource = ? AND expires_at > ? AND revoked_at IS NULL LIMIT 1",
-                (kind, core.cfg.resource, core.clock()),
+                "SELECT 1 FROM oauth_tokens WHERE source = ? AND resource IN (SELECT value FROM json_each(?)) AND expires_at > ? AND revoked_at IS NULL LIMIT 1",
+                (kind, json.dumps(core.cfg.resources), core.clock()),
             ) is not None
         if signed_in:
             return {"done": [*done, "The client is signed in."], "next": []}

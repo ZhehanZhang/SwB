@@ -14,6 +14,7 @@ from starlette.routing import Mount, Route
 
 from . import pages
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
+from .config import REQUEST_BASE
 from .guard import Guard, RateLimiter, client_ip, reject
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
@@ -26,6 +27,24 @@ PROTECTED = ("/mcp", "/inbox/")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
+
+
+class RequestBase:
+    """Records which public URL (public_url or one of public_url_aliases) a request reached, for issuer and origin checks."""
+
+    def __init__(self, app: Any, core: "Switchboard"):
+        self.app = app
+        self.core = core
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            return await self.app(scope, receive, send)
+        host = next((v.decode("latin-1") for k, v in scope.get("headers", []) if k == b"host"), None)
+        token = REQUEST_BASE.set(self.core.cfg.base_for_host(host))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            REQUEST_BASE.reset(token)
 
 
 class BearerGate:
@@ -482,6 +501,6 @@ def create_app(core: "Switchboard") -> Any:
     def refused(ip: str, path: str, why: str) -> None:
         core.audit.record(origin="http", source="-", client=ip, destination="core", action="rate_limited", outcome="refused", target=path, detail=why)
 
-    gate = Guard(BearerGate(app, core, limiter), limiter, on_refusal=refused)
+    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused)
     gate.starlette = app
     return gate
