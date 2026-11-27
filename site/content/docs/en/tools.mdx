@@ -51,7 +51,7 @@ For a paired key, a message or conversation outside its access gives the same er
 | - | - |
 | `wait_s` | Wait this many seconds for the first reply from a block that returns a conversation ID. The limit depends on the client. Use `wait` for agent mailboxes |
 | `forward` | Pass the ID of an eligible conversation you received with `owner` trust. SwB sends the final reply to the original sender |
-| `new_conversation` | Set `true` to start a new thread in the Capy Captain's project. Set `false` to send to the Captain's thread |
+| `new_conversation` | Set `true` to start a new thread in the Capy Captain's project. Set `false` to send to the Capy Captain's thread |
 | `files` | Attach files to a Capy task. Give each file a `name` and either `text` or `base64` content. Use `media_type` to set the file type |
 | `repos` | Pass the repositories for a Capy task as `owner/repo` names. Use repositories linked to the SwB project |
 | `in_reply_to` | Use `reply` with `conversation` to answer a message. `send` rejects `in_reply_to` |
@@ -130,9 +130,9 @@ A route picks a target for `send`. Use a block that accepts routes, such as `cap
 
 | Tool | Use |
 | - | - |
-| `capy_captains` | List the Captains your Capy connection can access |
-| `capy_captain_digest` | Read a Captain's summary and see which crew threads are working or need the owner's attention. Use the owner's sign-in |
-| `capy_list` | List work sent through SwB or threads in a Captain's crew or linked Capy project. A paired key sees only its agent's work within its scopes |
+| `capy_captains` | List the Capy Captains your Capy connection can access |
+| `capy_captain_digest` | Read a Capy Captain's summary and see which crew threads are working or need the owner's attention. Use the owner's sign-in |
+| `capy_list` | List work sent through SwB or threads in a Capy Captain's crew or linked Capy project. A paired key sees only its agent's work within its scopes |
 | `capy_delegate` | Send work to Capy. Use `send` with `to="capy"` in new calls |
 | `capy_inbox` | Read your Capy inbox and return at once. Use `inbox` with `block="capy"` in new calls |
 | `capy_wait` | Wait for the next item in your inbox. Use `wait` in new calls |
