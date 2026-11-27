@@ -312,7 +312,7 @@ def test_hook_package_commands(harness, filename, events):
     assert set(hooks) == set(events.split())
     for groups in hooks.values():
         assert groups[0]["hooks"] == [{
-            "type": "command", "command": f"sh -c 'command -v swb >/dev/null 2>&1 && swb hook {harness}; exit 0'",
+            "type": "command", "command": f"sh -c 'test -S \"${{SWB_COMPANION_HOME:-$HOME/.config/swb}}/hooks.sock\" && swb hook {harness}; exit 0'",
             "timeout": 1000 if harness == "gemini" else 1,
         }]
     if harness == "gemini":

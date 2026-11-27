@@ -2,27 +2,27 @@
   "hooks": {
     "SessionStart": [
       {
-        "hooks": [{ "type": "command", "command": "sh -c 'command -v swb >/dev/null 2>&1 && swb hook gemini; exit 0'", "timeout": 1000 }]
+        "hooks": [{ "type": "command", "command": "sh -c 'test -S \"${SWB_COMPANION_HOME:-$HOME/.config/swb}/hooks.sock\" && swb hook gemini; exit 0'", "timeout": 1000 }]
       }
     ],
     "BeforeAgent": [
       {
-        "hooks": [{ "type": "command", "command": "sh -c 'command -v swb >/dev/null 2>&1 && swb hook gemini; exit 0'", "timeout": 1000 }]
+        "hooks": [{ "type": "command", "command": "sh -c 'test -S \"${SWB_COMPANION_HOME:-$HOME/.config/swb}/hooks.sock\" && swb hook gemini; exit 0'", "timeout": 1000 }]
       }
     ],
     "AfterAgent": [
       {
-        "hooks": [{ "type": "command", "command": "sh -c 'command -v swb >/dev/null 2>&1 && swb hook gemini; exit 0'", "timeout": 1000 }]
+        "hooks": [{ "type": "command", "command": "sh -c 'test -S \"${SWB_COMPANION_HOME:-$HOME/.config/swb}/hooks.sock\" && swb hook gemini; exit 0'", "timeout": 1000 }]
       }
     ],
     "Notification": [
       {
-        "hooks": [{ "type": "command", "command": "sh -c 'command -v swb >/dev/null 2>&1 && swb hook gemini; exit 0'", "timeout": 1000 }]
+        "hooks": [{ "type": "command", "command": "sh -c 'test -S \"${SWB_COMPANION_HOME:-$HOME/.config/swb}/hooks.sock\" && swb hook gemini; exit 0'", "timeout": 1000 }]
       }
     ],
     "SessionEnd": [
       {
-        "hooks": [{ "type": "command", "command": "sh -c 'command -v swb >/dev/null 2>&1 && swb hook gemini; exit 0'", "timeout": 1000 }]
+        "hooks": [{ "type": "command", "command": "sh -c 'test -S \"${SWB_COMPANION_HOME:-$HOME/.config/swb}/hooks.sock\" && swb hook gemini; exit 0'", "timeout": 1000 }]
       }
     ]
   }
