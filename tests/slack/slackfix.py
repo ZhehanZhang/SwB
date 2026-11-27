@@ -33,9 +33,9 @@ TEAM_A, TEAM_B = "TAAAA1111", "TBBBB2222"
 BOT_USER, BOT_ID, OWNER_A, OWNER_B = "UBOT00001", "BBOT00001", "UOWNERA01", "UOWNERB01"
 
 AUTH = {
-    "xoxb-a": {"ok": True, "team_id": TEAM_A, "user_id": BOT_USER, "bot_id": BOT_ID, "url": "https://a.slack.com/"},
-    "xoxp-a": {"ok": True, "team_id": TEAM_A, "user_id": OWNER_A, "url": "https://a.slack.com/"},
-    "xoxp-b": {"ok": True, "team_id": TEAM_B, "user_id": OWNER_B, "url": "https://b.slack.com/"},
+    "xoxb-a": {"ok": True, "team_id": TEAM_A, "user_id": BOT_USER, "bot_id": BOT_ID, "url": "https://workspace-a.example.test/"},
+    "xoxp-a": {"ok": True, "team_id": TEAM_A, "user_id": OWNER_A, "url": "https://workspace-a.example.test/"},
+    "xoxp-b": {"ok": True, "team_id": TEAM_B, "user_id": OWNER_B, "url": "https://workspace-b.example.test/"},
 }
 
 

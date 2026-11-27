@@ -5,7 +5,7 @@ import sqlite3
 
 import yaml
 
-from conftest import CAPTAIN, OWNER, STATIC_KEY, base_config, call, error_text, payload, register, rpc, sign_in, infra
+from conftest import CAPTAIN, OWNER, STATIC_KEY, base_config, call, error_text, payload, register, rpc, sign_in, beacon
 
 from switchboard.blocks import BLOCKS, Address, load
 from switchboard.config import load_config, migrate_text, translate_v1
@@ -35,13 +35,13 @@ def test_old_module_paths_are_the_same_modules():
 
 
 def test_v1_config_translates_to_blocks(tmp_path):
-    v1 = {"public_url": "https://sb.example.test", "origins": {"mcp": {"wait": {"max_s": 100}}, "slack": {"workspaces": {"a2a": {"project": "acme"}}, "refresh_minutes": 5}},
+    v1 = {"public_url": "https://sb.example.test", "origins": {"mcp": {"wait": {"max_s": 100}}, "slack": {"workspaces": {"a2a": {"project": "orbit"}}, "refresh_minutes": 5}},
           "destinations": {"capy": {"daily_cap": 3}}, "slack": {"workspaces": {"a2a": {"bot_token_env": "X"}}, "captain_avatars": True}}
     v2 = translate_v1(v1)
     assert v2["version"] == 2 and v2["public_url"] == "https://sb.example.test"
     assert v2["blocks"]["mcp"] == {"use": "mcp", "wait": {"max_s": 100}}
     assert v2["blocks"]["capy"] == {"use": "capy", "daily_cap": 3}
-    assert v2["blocks"]["slack"]["workspace_projects"] == {"a2a": "acme"} and v2["blocks"]["slack"]["refresh_minutes"] == 5
+    assert v2["blocks"]["slack"]["workspace_projects"] == {"a2a": "orbit"} and v2["blocks"]["slack"]["refresh_minutes"] == 5
     assert v2["blocks"]["slack"]["workspaces"] == {"a2a": {"bot_token_env": "X"}} and v2["blocks"]["slack"]["captain_avatars"] is True
     p1, p2 = tmp_path / "v1.yaml", tmp_path / "v2.yaml"
     p1.write_text(yaml.safe_dump(v1))
@@ -73,9 +73,9 @@ def test_agents_come_from_presets_and_blocks(make):
 
 def test_send_reply_and_wait_through_mailboxes(make):
     core, c = make()
-    infra(core)
+    beacon(core)
     tok = sign_in(c)["access_token"]
-    sent = payload(call(c, STATIC_KEY, "send", {"task": "please review", "to": "agent:claude", "project": "infra"}))
+    sent = payload(call(c, STATIC_KEY, "send", {"task": "please review", "to": "agent:claude", "project": "beacon"}))
     assert sent["delivered"] and sent["to"] == "agent:claude"
     got = payload(call(c, tok, "wait", {"timeout_s": 0}))["items"]
     assert [i["text"] for i in got] == ["please review"] and got[0]["from"]["agent"] == "capy"
@@ -95,20 +95,20 @@ def test_send_without_to_follows_the_route_and_verbs_reach_the_block(make, capy)
     assert st["id"] == CAPTAIN
     assert payload(call(c, STATIC_KEY, "result", {"conversation": out["handle"]}))["id"] == CAPTAIN
     assert payload(call(c, STATIC_KEY, "cancel", {"conversation": out["handle"]}))["status"] == "cancelled"
-    explicit = payload(call(c, STATIC_KEY, "send", {"task": "to the captain by slug", "to": "zinf-1"}))
+    explicit = payload(call(c, STATIC_KEY, "send", {"task": "to the captain by slug", "to": "bcn-1"}))
     assert explicit["thread_id"] == CAPTAIN
     assert "no target" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "nobody-here"}))
 
 
 def test_targets_list_blocks_agents_and_projects(make):
     core, c = make()
-    infra(core)
+    beacon(core)
     got = payload(call(c, STATIC_KEY, "targets", {"refresh": True}))["targets"]
     addresses = {t["address"] for t in got}
-    assert {f"capy:captain:{CAPTAIN}", "agent:claude", "project:infra"} <= addresses
+    assert {f"capy:captain:{CAPTAIN}", "agent:claude", "project:beacon"} <= addresses
     cap = next(t for t in got if t["address"] == f"capy:captain:{CAPTAIN}")
-    assert cap["level"] == "L4" and cap["slugs"] == ["captain", "zinf-1"] and cap["persona"]["id"] == "captain"
-    assert next(t for t in got if t["address"] == "project:infra")["routed_to"] == f"capy:captain:{CAPTAIN}"
+    assert cap["level"] == "L4" and cap["slugs"] == ["captain", "bcn-1"] and cap["persona"]["id"] == "captain"
+    assert next(t for t in got if t["address"] == "project:beacon")["routed_to"] == f"capy:captain:{CAPTAIN}"
     assert [t["address"] for t in payload(call(c, STATIC_KEY, "targets", {"block": "agent", "query": "claude"}))["targets"]] == ["agent:claude", "agent:claude-code"]
 
 
@@ -199,12 +199,12 @@ def test_connected_agents_count_as_the_owner_but_cannot_change_access(make, capy
 
 def test_visibility_tools_flip_resources_and_keep_tools_private(make):
     core, c = make()
-    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:TeamCaptain", "visibility": "shared"}))["visibility"] == "shared"
-    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "channel:acme/#dev", "visibility": ["U0FRIEND0", "workspace:acme"]}))["visibility"] == ["U0FRIEND0", "workspace:acme"]
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:HelperBot", "visibility": "shared"}))["visibility"] == "shared"
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "channel:orbit/#dev", "visibility": ["U0FRIEND0", "workspace:orbit"]}))["visibility"] == ["U0FRIEND0", "workspace:orbit"]
     assert "always private" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "tool:slack_post", "visibility": "shared"}))
-    assert "not a resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "teamcaptain", "visibility": "shared"}))
+    assert "not a resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "helperbot", "visibility": "shared"}))
     rows = {r["resource"]: r for r in payload(call(c, STATIC_KEY, "visibility_list"))["resources"]}
-    assert rows["target:teamcaptain"]["visibility"] == "shared" and rows["target:teamcaptain"]["source"] == "override"
+    assert rows["target:helperbot"]["visibility"] == "shared" and rows["target:helperbot"]["source"] == "override"
     assert core.visibility.rule("target:other") == "private"
     assert any(a["action"] == "visibility_set" for a in core.audit.recent(limit=10))
 

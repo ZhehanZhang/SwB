@@ -9,12 +9,14 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from .block_env import configured_env, env_blocks
+
 if TYPE_CHECKING:
     from .modes import ModeConfig
 
-ENV_PREFIX = "SWITCHBOARD_"
 KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
 MIN_KEY_LEN = 24
+CONFIG_PATHS = (Path("config/switchboard.yaml"), Path("/config/switchboard.yaml"))
 
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
 # channel uses SWITCHBOARD_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
@@ -31,7 +33,16 @@ class ConfigError(ValueError):
 @dataclass(frozen=True)
 class StaticKey:
     name: str
-    secret: str
+    secret: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class Branding:
+    display_name: str = "SwB"
+    public_identity: str = "swb"
+    icon: str | None = None
+    accent_color: str = "#64748b"
+    logo_assets_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +62,8 @@ class Config:
     """
 
     public_url: str | None = None
+    data_dir: Path = Path("data")
+    branding: Branding = Branding()
     owner_emails: tuple[str, ...] = ()
     access_team_domain: str | None = None
     access_aud: str | None = None
@@ -65,18 +78,19 @@ class Config:
     key_tools: dict[str, tuple[str, ...]] = field(default_factory=dict)
     key_targets: dict[str, tuple[str, ...]] = field(default_factory=dict)
     inbox_keys: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_INBOX_KEYS))
-    timezone: str = "America/New_York"
+    timezone: str = "UTC"
     turn_cap: int | None = 200
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
     blocks: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {"use": "mcp"}})
+    block_env: dict[str, tuple[str, ...]] = field(default_factory=dict)
     agents: dict[str, Any] | None = None
     targets: dict[str, Any] = field(default_factory=dict)
     routes: list[dict[str, Any]] = field(default_factory=list)
     visibility: dict[str, Any] = field(default_factory=dict)
     modes: ModeConfig | None = None
     version: int = 2
-    env: Mapping[str, str] = field(default_factory=dict)
+    env: Mapping[str, str] = field(default_factory=dict, repr=False)
 
     @property
     def issuer(self) -> str | None:
@@ -107,7 +121,7 @@ class Config:
     def problems(self) -> list[str]:
         out = []
         if not self.public_url:
-            out.append("public_url is not set in config: OAuth sign-in is disabled (static keys still work)")
+            out.append("public_url or PUBLIC_URL is not set: OAuth sign-in is disabled (static keys still work)")
         if not self.owner_sign_in:
             out.append("Owner sign-in is not configured: set public_url or configure an upstream sign-in method (bearer keys still work)")
         return out
@@ -131,8 +145,7 @@ def _sections(raw: Any, what: str) -> dict[str, dict[str, Any]]:
         sec = sec or {}
         if not isinstance(sec, dict):
             raise ConfigError(f"{what}.{name} must be a mapping")
-        if sec.get("enabled", True):
-            out[str(name)] = sec
+        out[str(name)] = sec
     return out
 
 
@@ -159,9 +172,9 @@ def _oidc(raw: Any, public_url: str | None, emails: tuple[str, ...], env: Mappin
         raise ConfigError("auth.oidc needs public_url")
     fields = ("issuer", "client_id", "client_secret_env", "name")
     values = [raw.get(field) for field in fields]
-    for field, value in zip(fields, values):
+    for field_name, value in zip(fields, values):
         if not isinstance(value, str) or not value.strip():
-            raise ConfigError(f"auth.oidc.{field} must be a non-empty string")
+            raise ConfigError(f"auth.oidc.{field_name} must be a non-empty string")
     issuer, client_id, secret_env, name = values
     if not _web_url(issuer):
         raise ConfigError("auth.oidc.issuer must be an HTTPS URL without a query or fragment")
@@ -175,25 +188,75 @@ def _oidc(raw: Any, public_url: str | None, emails: tuple[str, ...], env: Mappin
     return OIDCConfig(issuer, client_id, secret_env, name, tuple(subjects))
 
 
-def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -> Config:
+def config_path(path: str | Path | None, env: Mapping[str, str]) -> Path | None:
+    path = path or env.get("SWITCHBOARD_CONFIG")
+    return Path(path) if path else next((p for p in CONFIG_PATHS if p.is_file()), None)
+
+
+def _read_yaml(path: Path | None, what: str, *, required: bool = False) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        if required:
+            raise ConfigError(f"{what} file not found") from None
+        return None
+    except (OSError, UnicodeError, yaml.YAMLError):
+        raise ConfigError(f"could not read {what} as YAML") from None
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{what} root must be a mapping")
+    return raw
+
+
+def _merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    return {**base, **{key: _merge(base[key], value) if isinstance(value, dict) and isinstance(base.get(key), dict) else value
+                      for key, value in overlay.items()}}
+
+
+def _branding(raw: Any) -> Branding:
+    if raw is None:
+        return Branding()
+    if not isinstance(raw, dict):
+        raise ConfigError("branding must be a mapping")
+    for name in ("display_name", "icon", "accent_color", "logo_assets_dir"):
+        if name in raw and raw[name] is not None and (not isinstance(raw[name], str) or not raw[name].strip()):
+            raise ConfigError(f"branding.{name} must be a nonempty string")
+    accent = raw.get("accent_color") or Branding.accent_color
+    if not re.fullmatch(r"#[a-fA-F0-9]{6}", accent):
+        raise ConfigError("branding.accent_color must be a #RRGGBB color")
+    return Branding(display_name=raw.get("display_name") or Branding.display_name, accent_color=accent,
+                    icon=raw.get("icon"), logo_assets_dir=raw.get("logo_assets_dir"))
+
+
+def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = None, *,
+                tunnel_url: str | None = None) -> Config:
     from .modes import parse_config as parse_modes
 
     env = dict(os.environ if env is None else env)
-    raw: dict[str, Any] = {}
-    if path and Path(path).exists():
-        raw = yaml.safe_load(Path(path).read_text()) or {}
-        if not isinstance(raw, dict):
-            raise ConfigError("config root must be a mapping")
+    base_path = config_path(path, env)
+    base = _read_yaml(base_path, "config")
+    overlay_path = env.get("SWITCHBOARD_OVERLAY")
+    local_paths = (p.with_name("local.yaml") for p in ((base_path,) if base_path else CONFIG_PATHS))
+    local_path = Path(overlay_path) if overlay_path else next((p for p in local_paths if p.is_file()), None)
+    overlay = _read_yaml(local_path, "overlay", required=bool(overlay_path)) or {}
+    raw = _merge(base or {}, overlay)
     auth = raw.get("auth") or {}
     if not isinstance(auth, dict):
         raise ConfigError("auth must be a mapping")
-    access = auth.get("cloudflare_access") or {}
+    access = auth.get("cloudflare_access", {})
+    access_env = env if access is not None else {}
+    access = access or {}
+    if not isinstance(access, dict):
+        raise ConfigError("auth.cloudflare_access must be a mapping")
     memory = raw.get("memory") or {}
 
-    public_url = (env.get(ENV_PREFIX + "PUBLIC_URL") or raw.get("public_url") or "").strip().rstrip("/") or None
+    public_url = (tunnel_url or raw.get("public_url", env.get("SWITCHBOARD_PUBLIC_URL") or env.get("PUBLIC_URL")) or "").strip().rstrip("/") or None
     if public_url and not _web_url(public_url, local=True):
         raise ConfigError("public_url must be an HTTPS URL or use http://localhost")
-    owner_emails = tuple(e.lower() for e in as_tuple(auth.get("owner_emails")))
+    owner_emails = tuple(e.strip().lower() for e in as_tuple(auth.get("owner_emails", (env.get("SWITCHBOARD_OWNER_EMAILS") or "").split(","))) if e.strip())
 
     keys = []
     for name, value in sorted(env.items()):
@@ -202,19 +265,34 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
                 raise ConfigError(f"{name} must be at least {MIN_KEY_LEN} characters")
             keys.append(StaticKey(name=agent_name(name[len(KEY_ENV_PREFIX):]), secret=value))
 
-    version = int(raw.get("version", 1) or 1)
+    legacy = any(k in raw for k in ("origins", "destinations", "slack"))
+    version = int(raw.get("version", 2 if "blocks" in raw or (not base and not legacy) else 1) or 1)
     if version not in (1, 2):
         raise ConfigError("version must be 1 or 2")
-    v2 = raw if version == 2 else translate_v1(raw)
-    blocks = _sections(v2.get("blocks"), "blocks") if "blocks" in v2 else {"mcp": {"use": "mcp"}}
-    for name, sec in blocks.items():
-        sec.setdefault("use", name)
+    if version == 1:
+        v2 = translate_v1(raw)
+        if "blocks" in overlay:
+            v2["blocks"] = _merge(v2["blocks"], overlay["blocks"]) if isinstance(overlay["blocks"], dict) else overlay["blocks"]
+    elif base and int(base.get("version", 2 if "blocks" in base else 1) or 1) == 1:
+        v2 = _merge(translate_v1(base), overlay)
+    else:
+        v2 = raw
+    discovered, block_env = env_blocks(env)
+    if "blocks" in v2:
+        sections = _sections(v2["blocks"], "blocks")
+        blocks = {name: {"use": name, **sec} for name, sec in sections.items() if sec.get("enabled", True)}
+        for name in sections:
+            block_env[name] = configured_env(name, blocks[name]) if name in blocks else block_env.get(name, ())
+    else:
+        blocks = discovered
     cfg = Config(
         visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
+        data_dir=Path(raw.get("data_dir", env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA")) or "data").expanduser(),
+        branding=_branding(raw.get("branding")),
         owner_emails=owner_emails,
-        access_team_domain=access.get("team_domain") or None,
-        access_aud=access.get("aud") or None,
+        access_team_domain=access.get("team_domain", access_env.get("CLOUDFLARE_ACCESS_TEAM_DOMAIN")) or None,
+        access_aud=access.get("aud", access_env.get("CLOUDFLARE_ACCESS_AUD")) or None,
         oidc=_oidc(auth.get("oidc"), public_url, owner_emails, env),
         redirect_allow=as_tuple(auth.get("redirect_uris")),
         cimd_hosts=as_tuple(auth.get("cimd_hosts")),
@@ -226,12 +304,13 @@ def load_config(path: str | Path | None, env: Mapping[str, str] | None = None) -
         key_tools={agent_name(k): tuple(str(s).strip().lower() for s in as_tuple(v)) for k, v in (auth.get("key_tools") or {}).items()},
         key_targets={agent_name(k): tuple(str(s).strip() for s in as_tuple(v)) for k, v in (auth.get("key_targets") or {}).items()},
         inbox_keys={**DEFAULT_INBOX_KEYS, **{agent_name(k): str(v).lower() for k, v in (auth.get("inbox_keys") or {}).items()}},
-        timezone=str(raw.get("timezone", "America/New_York")),
+        timezone=str(raw.get("timezone", "UTC")),
         turn_cap=int(raw.get("turn_cap", 200)) if raw.get("turn_cap", 200) else None,
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
         blocks=blocks,
         modes=parse_modes(v2.get("modes"), blocks),
+        block_env=block_env,
         agents=dict(v2["agents"]) if isinstance(v2.get("agents"), dict) else None,
         targets=dict(v2.get("targets") or {}),
         routes=[dict(r) for r in v2.get("routes") or [] if isinstance(r, dict)],

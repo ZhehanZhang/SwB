@@ -96,12 +96,12 @@ def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(f"# comment\n{cli.OWNER_KEY}='owner-test-key'\nPORT=4567 # local port\n")
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv: calls.append(
-        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA")))))
+    monkeypatch.setattr(__main__, "main", lambda argv, *, data_dir, **_: calls.append(
+        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG")), data_dir)))
     with patch.dict(os.environ, {"SWITCHBOARD_DATA": "/path/to/old-data", "SWITCHBOARD_CONFIG": "/path/to/old-config",
                                  "PORT": "9876"}, clear=True):
         cli.main(["up", "--dir", str(tmp_path)])
-    assert calls == [(["serve"], "owner-test-key", "9876", str(tmp_path / cli.CONFIG), str(tmp_path / "data"))]
+    assert calls == [(["serve"], "owner-test-key", "9876", str(tmp_path / cli.CONFIG), tmp_path / "data")]
 
 
 def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, capsys):
@@ -163,7 +163,7 @@ def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize(("claim", "endpoint", "expected", "success"), [
-    ("fixture-code", None, "http://127.0.0.1:8000/claim/fixture-code", "Token saved."),
+    ("fixture-code", None, "http://127.0.0.1:8870/claim/fixture-code", "Token saved."),
     ("https://other.example.test/claim/fixture-code", "https://switchboard.example.test",
      "https://switchboard.example.test/claim/fixture-code", "Token saved."),
     ("https://other.example.test/prefix/routines/claim/fixture-code", "https://switchboard.example.test/prefix/mcp",

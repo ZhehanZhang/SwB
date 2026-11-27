@@ -1,7 +1,7 @@
 import base64
 import json
 
-from conftest import CAPTAIN, CAPY_KEY, OWNER, PROJECT, STATIC_KEY, Clock, base_config, call, error_text, payload, sign_in, infra
+from conftest import CAPTAIN, CAPY_KEY, OWNER, PROJECT, STATIC_KEY, Clock, base_config, call, error_text, payload, sign_in, beacon
 
 
 def last(capy, method, path_end):
@@ -10,9 +10,9 @@ def last(capy, method, path_end):
 
 def test_delegate_follows_the_global_route_to_the_captain(make, capy):
     core, c = make()
-    infra(core)
+    beacon(core)
     tok = sign_in(c)["access_token"]
-    out = payload(call(c, tok, "capy_delegate", {"task": "Add a status check for switchboard", "project": "infra", "repos": ["example-org/status-service"]}))
+    out = payload(call(c, tok, "capy_delegate", {"task": "Add a status check for switchboard", "project": "beacon", "repos": ["example-org/status-service"]}))
     assert out["thread_id"] == CAPTAIN and out["route"] == "global" and "used_today" not in out and out["handle"].startswith("h_")
     _, _, body = last(capy, "POST", f"threads/{CAPTAIN}/message")
     assert body["text"].startswith("Add a status check for switchboard\n") and "switchboard" not in body["text"].split("\n")[0][:12] and "Repos: example-org/status-service" in body["text"]
@@ -20,16 +20,16 @@ def test_delegate_follows_the_global_route_to_the_captain(make, capy):
     row = core.audit.recent(action="delegate")[0]
     assert row["source"] == "claude" and row["outcome"] == "ok" and row["ref"] == CAPTAIN and row["origin"] == "mcp"
     h = core.inbox.handle(out["handle"])
-    assert h["open"] and h["owner"] == "claude" and h["project"] == "infra" and h["stream_cursor"] == "01A"
+    assert h["open"] and h["owner"] == "claude" and h["project"] == "beacon" and h["stream_cursor"] == "01A"
 
 
 def test_project_route_starts_a_thread_with_files_and_model(make, capy):
     core, c = make()
-    infra(core)
-    core.routes.set(destination="capy", agent=None, project="infra", target={"project": PROJECT, "name": "Infra"},
+    beacon(core)
+    core.routes.set(destination="capy", agent=None, project="beacon", target={"project": PROJECT, "name": "Beacon"},
                     defaults={"model": "anthropic/claude-opus-5-5"}, allow_override=False, note="", by="test")
     files = [{"name": "spec.md", "text": "# spec"}, {"name": "a.png", "base64": base64.b64encode(b"PNG").decode(), "media_type": "image/png"}]
-    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Build it", "project": "infra", "title": "Build", "files": files}))
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Build it", "project": "beacon", "title": "Build", "files": files}))
     assert out["route"] == "project" and out["mode"] == "new_thread"
     _, _, create = last(capy, "POST", "/threads")
     assert create["projectId"] == PROJECT and "captainId" not in create and create["title"] == "Build" and create["model"] == {"modelId": "anthropic/claude-opus-5-5"}
@@ -48,9 +48,9 @@ def test_captain_route_can_start_crew_threads(make, capy):
 
 def test_repo_allowlist_comes_from_project_links(make, capy):
     core, c = make()
-    infra(core)
-    assert "not linked" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "infra", "repos": ["example-org/site"]}))
-    assert "no project" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "acme"}))
+    beacon(core)
+    assert "not linked" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "beacon", "repos": ["example-org/unlinked-repo"]}))
+    assert "no project" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "orbit"}))
     assert not [x for x in capy.requests if x[0] == "POST" and not x[1].endswith("/send-now")]
     assert [d["outcome"] for d in core.audit.recent(action="delegate")] == ["refused", "refused"]
 
@@ -67,9 +67,9 @@ def test_optional_daily_cap_resets_next_day(make):
 
 def test_status_result_and_prs_by_handle(make, capy):
     core, c = make()
-    infra(core)
-    core.routes.set(destination="capy", agent=None, project="infra", target={"project": PROJECT}, defaults={}, allow_override=False, note="", by="t")
-    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "infra"}))
+    beacon(core)
+    core.routes.set(destination="capy", agent=None, project="beacon", target={"project": PROJECT}, defaults={}, allow_override=False, note="", by="t")
+    out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "beacon"}))
     tid = out["thread_id"]
     capy.threads[tid]["status"] = "idle"
     capy.messages[tid] += [
@@ -105,37 +105,37 @@ def test_reply_and_thread_scope(make, capy):
 
 def test_list_scopes_and_captains(make):
     core, c = make()
-    infra(core)
+    beacon(core)
     call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "title": "Doing"})
     d = payload(call(c, STATIC_KEY, "capy_list", {}))
     assert d["items"][0]["task"] == "Doing" and d["items"][0]["following"] is True
     crew = payload(call(c, STATIC_KEY, "capy_list", {"scope": "captain"}))
-    assert {t["title"] for t in crew["items"]} == {"slackgate", "needs owner", "other project work"}
-    assert payload(call(c, STATIC_KEY, "capy_list", {"scope": "project", "project": "infra"}))["project"] == "infra"
+    assert {t["title"] for t in crew["items"]} == {"Release check", "needs owner", "other project work"}
+    assert payload(call(c, STATIC_KEY, "capy_list", {"scope": "project", "project": "beacon"}))["project"] == "beacon"
     caps = payload(call(c, STATIC_KEY, "capy_captains"))["captains"]
-    assert [(x["name"], x["routed"]) for x in caps] == [("Captain", True), ("Acme Captain", False)]
+    assert [(x["name"], x["routed"]) for x in caps] == [("Captain", True), ("Orbit Captain", False)]
 
 
 def test_captain_digest(make):
     _, c = make()
     d = payload(call(c, STATIC_KEY, "capy_captain_digest", {}))
     assert d["file"] == "NOTES.md" and CAPTAIN in d["markdown"]
-    assert [t["ask"] for t in d["crew_needs_you"]] == ["Merge zhehanzhang/x#1"]
+    assert [t["ask"] for t in d["crew_needs_you"]] == ["Merge example-org/web-app#1"]
 
 
 def test_context_pack_includes_project_memory_and_the_routed_captain(make):
     from conftest import CAPTAIN2
 
     core, c = make()
-    infra(core)
-    core.routes.set(destination="capy", agent=None, project="infra", target={"captain": CAPTAIN2, "name": "Acme Captain"}, defaults={}, allow_override=False, note="", by="t")
-    call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "profile", "title": "Timezone", "body": "America/New_York"})
-    call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "decisions", "title": "Python stack", "body": "Match slackgate"})
-    call(c, STATIC_KEY, "memory_write", {"scope": "project:infra", "namespace": "notes", "title": "Port", "body": "8870"})
-    call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "infra", "title": "Doing"})
-    text = payload(call(c, STATIC_KEY, "context_pack", {"project": "infra"}))
-    for needle in ("Project Infra", "8870", "General: profile", "Timezone", "Python stack", "## Capy", "captain Acme Captain", "project route",
-                   "Delegations in progress", "Doing", f"Captain notes for {CAPTAIN2}", "needs you: Merge zhehanzhang/x#1", "working: slackgate"):
+    beacon(core)
+    core.routes.set(destination="capy", agent=None, project="beacon", target={"captain": CAPTAIN2, "name": "Orbit Captain"}, defaults={}, allow_override=False, note="", by="t")
+    call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "profile", "title": "Timezone", "body": "America/Chicago"})
+    call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "decisions", "title": "Python stack", "body": "Use the shared runtime"})
+    call(c, STATIC_KEY, "memory_write", {"scope": "project:beacon", "namespace": "notes", "title": "Port", "body": "8870"})
+    call(c, STATIC_KEY, "capy_delegate", {"task": "Do it", "project": "beacon", "title": "Doing"})
+    text = payload(call(c, STATIC_KEY, "context_pack", {"project": "beacon"}))
+    for needle in ("Project Beacon", "8870", "General: profile", "Timezone", "Python stack", "## Capy", "captain Orbit Captain", "project route",
+                   "Delegations in progress", "Doing", f"Captain notes for {CAPTAIN2}", "needs you: Merge example-org/web-app#1", "working: Release check"):
         assert needle in text, needle
     assert "other project work" not in text
     general = payload(call(c, STATIC_KEY, "context_pack", {}))

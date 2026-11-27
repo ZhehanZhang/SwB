@@ -17,6 +17,7 @@ from starlette.routing import Route
 
 from ...auth import Principal
 from ...claims import NAME_RE as SECRET_NAME_RE
+from ...block_env import GITHUB_SECRET as SECRET_ENV
 from ...config import ConfigError
 from ...guard import client_ip
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
@@ -39,7 +40,6 @@ from .api import (
 if TYPE_CHECKING:
     from ...core import Switchboard
 
-SECRET_ENV = "GITHUB_WEBHOOK_SECRET"
 CHECKS = {"check_run", "check_suite", "workflow_run"}
 EVENTS = CHECKS | {"issues", "issue_comment", "pull_request", "pull_request_review",
                    "pull_request_review_comment", "pull_request_review_thread", "push"}

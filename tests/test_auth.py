@@ -294,10 +294,10 @@ def test_capy_signs_in_with_oauth_as_agent_capy(make):
 
 def test_key_scopes_apply_to_an_oauth_agent_too(make):
     cfg = base_config()
-    cfg["auth"]["key_scopes"] = {"capy": ["project:acme"]}
+    cfg["auth"]["key_scopes"] = {"capy": ["project:orbit"]}
     core, c = make(config=cfg)
     tok = sign_in(c, redirect="https://capy.ai/web/callbacks/mcp")
-    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:acme"]
+    assert payload(call(c, tok["access_token"], "switchboard_status"))["you"]["scopes"] == ["project:orbit"]
 
 
 def test_capy_metadata_document_client_is_allowed_by_default(make, cimd):
