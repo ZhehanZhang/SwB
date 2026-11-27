@@ -838,7 +838,7 @@ class GitHubBlock(Block):
                 self.core.audit.record(origin=self.name, source=sender_id, client=ip, destination=self.name,
                                        action="context_noted", outcome="ok", ref=delivery, target=target)
                 return
-            principal = Principal(self.name, ip, "github", origin=self.name, trust=trust)
+            principal = Principal(self.name, ip, "github", origin=self.name, trust=trust, visibility_who=who)
             self.core.turn(f"{self.name}:{repo}:{number or delivery}", principal)
             link = neutralize(payload.get("url")) or None
             meta = self.core.modes.meta(self.name, space, repo, mode, actions, project, link, target)

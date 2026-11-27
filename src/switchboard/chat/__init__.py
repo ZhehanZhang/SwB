@@ -558,7 +558,7 @@ class ChatBlock(Block):
         self.core.store.x("INSERT INTO chat_relays(handle, block, space, channel, root, reply_to, target, trust, at) VALUES (?,?,?,?,?,?,?,?,?)",
                           (handle, self.name, msg.space, msg.channel, root, msg.message, event["target"], trust, self.core.clock()))
         try:
-            out = await self.core.send(replace(self.principal, trust=trust), handle=handle, **kw)
+            out = await self.core.send(replace(self.principal, trust=trust, visibility_who=self.who(space, msg.user, trust)), handle=handle, **kw)
         except Exception as exc:
             self.core.store.x("DELETE FROM chat_relays WHERE handle = ?", (handle,))
             log.warning("%s %s: routing %s to %s failed: %s", self.name, msg.space, msg.message, event["target"], exc)

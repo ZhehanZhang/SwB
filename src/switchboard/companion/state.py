@@ -9,17 +9,16 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import httpx
-
-from ..config import LOOPBACK_HOSTS
-from .mcp_config import local_servers
-
 
 class CompanionError(ValueError):
     pass
 
 
 def base_url(value: str) -> str:
+    import httpx
+
+    from ..config import LOOPBACK_HOSTS
+
     error = CompanionError("Use an HTTPS SwB URL or a loopback HTTP URL.")
     try:
         parsed = urlsplit(value)
@@ -76,6 +75,8 @@ class CompanionState:
             if not isinstance(servers, list) or not all(isinstance(server, str) for server in servers):
                 raise ValueError
             specs = tuple(servers)
+            from .mcp_config import local_servers
+
             if ("mcp" in caps) != bool(local_servers(specs)):
                 raise ValueError
             return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs)

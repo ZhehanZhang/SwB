@@ -22,7 +22,7 @@ from .audit import Audit, iso
 from . import targets as tgt
 from .agents import Agents
 from .auth import Auth, Principal
-from .blocks import Action, Address, Block, BlockError, Call
+from .blocks import ON_DEMAND_BLOCKS, Action, Address, Block, BlockError, Call, on_demand_blocks
 from .blocks import load as load_block
 from .claims import Claims
 from .companions import Companions
@@ -117,9 +117,15 @@ class Switchboard:
         self.modes = ChannelModes(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
+        for use, block_type in on_demand_blocks().items():
+            if use not in self.cfg.block_env and not any(issubclass(configured, block_type) for configured in types.values()):
+                block_type(self, {})
         for b in self.blocks.values():
             b.bind()
         self._seed_routes(self.cfg.routes)
+
+    def visible_blocks(self) -> dict[str, Block]:
+        return {name: block for name, block in self.blocks.items() if not block.hidden}
 
     @property
     def origins(self) -> dict[str, Block]:
@@ -224,7 +230,8 @@ class Switchboard:
                mode_slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         problems = list(self.cfg.problems())
         next_steps = {}
-        for name, block in self.blocks.items():
+        blocks = self.visible_blocks()
+        for name, block in blocks.items():
             issues = block.problems()
             problems += issues
             next_steps[name] = block.next_step() or (f"Run swb connect {block.manifest.id} to check {block.manifest.title} setup." if issues else None)
@@ -247,10 +254,10 @@ class Switchboard:
             "next_steps": [step for step in next_steps.values() if step],
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
             "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
-                           "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
+                           "online": b.online, "next_step": next_steps[n]} for n, b in blocks.items()},
             "block_setup": self.block_setup(),
             "origins": sorted(self.origins),
-            "destinations": {n: {"online": d.online, **block_status(d)} for n, d in self.destinations.items()},
+            "destinations": {n: {"online": d.online, **block_status(d)} for n, d in blocks.items() if d.has_out},
             "static_keys": [k.name for k in self.cfg.static_keys] if principal is None or principal.is_unrestricted_owner else [],
             **({"companions": self.companions.list()} if principal is not None and principal.is_unrestricted_owner and not public else {}),
             "mirror": bool(self.cfg.mirror_dir),
@@ -261,9 +268,11 @@ class Switchboard:
     health = status
 
     def block_setup(self) -> dict[str, dict[str, Any]]:
+        blocks = self.visible_blocks()
         return {name: {"enabled": name in self.blocks,
                        "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
-                for name, keys in self.cfg.block_env.items()}
+                for name, keys in self.cfg.block_env.items()
+                if name in blocks or (name not in self.blocks and name not in ON_DEMAND_BLOCKS)}
 
     # Routing an action to a destination -----------------------------------------------------
 
@@ -283,7 +292,7 @@ class Switchboard:
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
                          handle_meta: dict[str, Any] | None = None, title: str | None = None,
-                         _reply: bool = False, dry_run: bool = False) -> dict[str, Any]:
+                         _reply: bool = False, dry_run: bool = False, _allow_unregistered: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
@@ -296,7 +305,7 @@ class Switchboard:
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
             raise CoreRefused(MODE_REQUIRED, "listen conversations can only be answered with reply")
-        if to not in self.known_agents() and not (original is not None and original["ref"] == to):
+        if not _allow_unregistered and to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
         if to == principal.source and not (allow_self or own):
@@ -327,7 +336,7 @@ class Switchboard:
         await self.inbox.add(handle, "message", {"subject": title, "text": display, "project": p.slug if p else None, "from": sender, "trust": trust,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
-                          outcome="ok", target=to, ref=handle, excerpt=text)
+                          outcome="ok", target=to, ref=handle, excerpt="" if principal.kind == "companion" else text)
         return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
 
     def turn(self, root: str, principal: Principal) -> None:
@@ -373,7 +382,7 @@ class Switchboard:
     def destination(self, name: str) -> Block:
         d = self.blocks.get(name)
         if d is None:
-            raise CoreError(f"block {name!r} is not configured; configured: {', '.join(self.blocks) or 'none'}")
+            raise CoreError(f"block {name!r} is not configured; configured: {', '.join(self.visible_blocks()) or 'none'}")
         return d
 
     block = destination
@@ -418,7 +427,7 @@ class Switchboard:
             if type(b).targets is Block.targets or (block and block != name):
                 continue
             at, got = self._targets.get(name, (0.0, []))
-            if refresh or now - at > TARGETS_TTL_S or not got:
+            if refresh or now - at > TARGETS_TTL_S or not got or not b.cache_targets:
                 try:
                     found = await b.targets()
                     got = list(await asyncio.gather(*(self._render_target(b, t) for t in found))) if type(b).render_avatar is not Block.render_avatar else found
@@ -543,8 +552,8 @@ class Switchboard:
             if owner:
                 return Address(owner, head.lower(), rest.strip())
         word = text.lower()
-        if word in self.blocks:
-            return self.blocks[word].default_address()
+        if (block := self.visible_blocks().get(word)) is not None:
+            return block.default_address()
         if word in self.known_agents():
             for name, b in self.blocks.items():
                 if b.wakes_agents:
@@ -642,8 +651,8 @@ class Switchboard:
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         block = self.blocks.get(addr.block)
         if block is not None:
-            addr = block.effective_target(addr, project)
-        if str(addr) not in allowed:
+            addr = block.grant_target(block.effective_target(addr, project))
+        if addr is None or str(addr) not in allowed:
             raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
         if project and not principal.allows_routing_scope("project:" + project.strip().lower().removeprefix("project:")):
             raise CoreRefused(SCOPE_REQUIRED, f"the {principal.source} key can't send in project {project}")

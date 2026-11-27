@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 
 from ..mcp_config import LocalServer
@@ -8,7 +9,11 @@ from .base import Capability
 from .drop import DropCapability
 from .notify import NotifyCapability
 
-CAPABILITIES = ("notify", "drop", "muse", "mcp")
+CAPABILITIES = ("notify", "drop", "muse", "mcp", "hooks", "herdr", "codex", "opencode", "dsh")
+HARNESSES = {
+    "hooks": "HooksCapability", "herdr": "HerdrCapability", "codex": "CodexCapability", "opencode": "OpenCodeCapability",
+    "dsh": "DshCapability",
+}
 
 
 def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalServer] | None = None) -> tuple[dict[str, Capability], dict[str, str]]:
@@ -30,8 +35,11 @@ def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalS
                 unavailable[cap_id] = "Install swb-one[companion] to use Muse."
                 continue
             cap = MuseCapability()
+        elif cap_id in HARNESSES:
+            module = import_module(f".{cap_id}", __name__)
+            cap = getattr(module, HARNESSES[cap_id])()
         else:
-            raise CompanionError("Choose a capability from notify, drop, muse, or mcp.")
+            raise CompanionError(f"Choose a capability from {', '.join(CAPABILITIES)}.")
         if reason := cap.available():
             unavailable[cap_id] = reason
         else:

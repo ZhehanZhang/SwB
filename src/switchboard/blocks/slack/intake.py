@@ -456,7 +456,8 @@ class SlackIntake(Block):
         token = SLACK_SENDER.set({"workspace": push["workspace"], "user": push["user"], "user_name": push["user_name"], "trust": trust,
                                   "text": push["text"]})
         try:
-            out = await self.core.send(replace(self.principal, trust=trust), **kw)
+            out = await self.core.send(replace(self.principal, trust=trust,
+                                               visibility_who=engine.who(engine.runtime(push["workspace"]), push)), **kw)
         except Exception as exc:
             log.warning("slack %s: delegating %s to %s failed: %s", push["workspace"], push["id"], target.slug, exc)
             engine.store.audit(f"agent:{AGENT}", "route_failed", push["workspace"], message=push["id"], target=target.slug, error=str(exc)[:300])
