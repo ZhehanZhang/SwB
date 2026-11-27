@@ -12,6 +12,7 @@ import pytest
 import yaml
 from mcp.types import CallToolResult, TextContent
 
+from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, payload
 from switchboard import __main__, cli
 
 
@@ -135,6 +136,23 @@ def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, c
                  'Call: {"tool": "connect"', "person: Open the link.", "https://switchboard.example.test/claim/example",
                  "    [mcp_servers.switchboard]\n    url = 'https://switchboard.example.test/mcp'"):
         assert text in out
+
+
+@pytest.mark.parametrize(("kind", "create_token"), [
+    ("telegram", "Create a bot in @BotFather with /newbot."),
+    ("discord", "Under Bot, reset or generate the bot token."),
+])
+def test_connect_bot_cli_prints_one_token_entry_step(make, tmp_path, monkeypatch, capsys, kind, create_token):
+    _, client = make(config=base_config(version=2, blocks={"mcp": {}, kind: {}}))
+    (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={STATIC_KEY}\n")
+    result = payload(call(client, STATIC_KEY, "connect", {"what": kind}))
+    monkeypatch.setattr(cli, "_call", AsyncMock(return_value=result))
+    cli.main(["connect", kind, "--dir", str(tmp_path), "--url", PUBLIC])
+    out = capsys.readouterr().out
+    assert create_token in out and out.lower().count("paste the token") == 1
+    [step] = result["next"]
+    assert step["link"] in out
+    assert client.get(step["link"], headers=OWNER).status_code == 200
 
 
 @pytest.mark.parametrize("bad", [["missing-equals"], ["=value"], ["name=a", "name=b"], ["primary=wrong"]])

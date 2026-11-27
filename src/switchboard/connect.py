@@ -20,6 +20,7 @@ RESERVED = frozenset({"slack", "local", "mailbox", "agent", "auto", "admin", "co
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_TTL_S = 600
 KEY_PREFIX = "swb_"
+PUBLIC_HTTPS_PREREQUISITE = "Configure a public HTTPS URL and owner sign-in to use OAuth."
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS connect_codes (
