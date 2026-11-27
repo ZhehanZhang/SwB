@@ -38,6 +38,7 @@ CLAIM_CONNECTORS = {
     "telegram": ("Telegram", "Telegram bot token"),
     "github": ("GitHub", "GitHub credential"),
     "chatgpt": ("ChatGPT", ""),
+    "gemini": ("Gemini", ""),
     "muse": ("Muse", "Muse bridge token"),
     "claude": ("Claude", ""),
     "grok": ("Grok", "Grok credential"),
