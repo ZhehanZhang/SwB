@@ -275,6 +275,8 @@ class Switchboard:
         own = original is not None and original["ref"] == to and original["owner"] == to
         if to == principal.source and not (allow_self or own):
             raise CoreError("that is you; agent_send goes to another agent")
+        if _reply and original is not None and original["status"] == "cancelled":
+            return {"to": to, "conversation": in_reply_to, "delivered": False, "mailbox": True, "status": "cancelled"}
         text = (text or "").strip()
         if not text:
             raise CoreError("text is empty")
@@ -712,7 +714,11 @@ class Switchboard:
                 done = next((r for r in reversed(replies) if r.get("final", True)), None)
                 return {"conversation": h["handle"], "status": h["status"], "final": done, "replies": replies[-(kw.get("tail") or 10):]}
             if verb == "cancel":
-                return {"conversation": h["handle"], "status": h["status"]}
+                if h["status"] != "cancelled":
+                    await self.inbox.cancel_mailbox(h["handle"])
+                    self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
+                                      destination="mailbox", action="cancel", outcome="ok", ref=h["handle"])
+                return {"conversation": h["handle"], "status": "cancelled"}
             return {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"],
                     "note": "a mailbox message; answer it with reply"}
         if block is None:
