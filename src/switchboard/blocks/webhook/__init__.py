@@ -97,6 +97,19 @@ LIMITS = {
 PRESET_EVENT = {"stripe": ("type",), "standard": ("type",)}
 GENERIC_EVENT = ("type", "event", "event_type", "action")
 log = logging.getLogger("switchboard.webhook")
+SECRET_PATH_RE = re.compile(r"(/hooks/wh_[0-9a-f]{32})/[^?\s]*")
+
+
+class _RedactHookSecrets(logging.Filter):
+    """Keep path secrets out of the HTTP access log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and any(isinstance(a, str) and "/hooks/" in a for a in record.args):
+            record.args = tuple(SECRET_PATH_RE.sub(r"\1/<secret>", a) if isinstance(a, str) else a for a in record.args)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactHookSecrets())
 
 
 def _json(value: Any) -> bytes:
@@ -231,7 +244,7 @@ class WebhookBlock(Block):
 
     def actions(self) -> list[Action]:
         return [Action("create", "Create a webhook", "Create a named inbound or outbound webhook.", self.create),
-                Action("list", "List webhooks", "List webhooks with their URL, target, counts and secret state.", self.list, read_only=True),
+                Action("list", "List webhooks", "List webhooks with their URL, target, counts and secret state.", self.list_hooks, read_only=True),
                 Action("rotate", "Rotate a webhook secret", "Ask for a new webhook secret, keeping the old one for a grace period.", self.rotate),
                 Action("revoke", "Revoke a webhook", "Revoke a webhook and delete its secrets.", self.revoke, destructive=True, idempotent=True),
                 Action("test", "Test a webhook", "Send a signed sample event through the webhook.", self.test),
@@ -320,7 +333,7 @@ class WebhookBlock(Block):
         view = self._view(self._active(name))
         steps = [{"by": "person", "do": self._secret_step(verify), "link": link},
                  {"by": "person", "do": f"Paste {view['url']} into the provider's webhook settings."}]
-        if share := self._target_step(name, to, addr):
+        if share := await self._target_step(name, to, addr):
             steps.append(share)
         steps.append({"by": "you", "do": f"Call webhook_test with name {name} after the link is used."})
         return {**view, "next": steps}
@@ -333,10 +346,11 @@ class WebhookBlock(Block):
             return "Save a long random secret here, then add it to the end of the URL."
         return "Save a long random secret here, and set the same secret in the sender."
 
-    def _target_step(self, name: str, to: str, addr: Address) -> dict[str, Any] | None:
+    async def _target_step(self, name: str, to: str, addr: Address) -> dict[str, Any] | None:
         """The visibility_set call that lets this hook wake its target, when the target is private to it."""
         who = Who(owner=False, workspace=f"{self.name}-{name}")
-        resources = self.core.target_visibility_resources(to, addr, slugs={})
+        slugs = self.core.slug_map(await self.core.targets()) if addr.block != "agent" else {}
+        resources = self.core.target_visibility_resources(to, addr, slugs=slugs)
         if not resources or self.core.visibility.allows(who, *resources):
             return None
         rule = self.core.visibility.rule(*resources)
@@ -345,7 +359,7 @@ class WebhookBlock(Block):
         return {"by": "you", "do": f"Events wait as context until {resources[0]} admits this webhook.",
                 "call": {"tool": "visibility_set", "arguments": {"resource": resources[0], "visibility": value}}}
 
-    async def list(self, call: Call, *, include_revoked: bool = False) -> dict[str, Any]:
+    async def list_hooks(self, call: Call, *, include_revoked: bool = False) -> dict[str, Any]:
         self._owner(call)
         where = "" if include_revoked else "WHERE revoked_at IS NULL"
         return {"webhooks": [self._view(dict(r)) for r in self.core.store.q(f"SELECT * FROM webhooks {where} ORDER BY name, created_at")]}
@@ -364,12 +378,16 @@ class WebhookBlock(Block):
             self.core.claims.save_secret(previous, None)
         self.core.store.x("UPDATE webhooks SET rotated_at = ?, previous_until = ? WHERE id = ?",
                           (now, now + grace_s if grace_s and old else None, row["id"]))
-        label = f"Webhook secret for {row['name']}" if row["direction"] == "in" else "Signing secret"
-        link = self.core.claims.mint(current, self.core.base_url, kind="webhook_secret", label=label)
         call.note(target=row["name"], ref=row["id"])
-        return {**self._view(self._active(name)), "next": [
-            {"by": "person", "do": "Save the new secret here, then set it in the sender." if row["direction"] == "in"
-             else "Save the new secret here, then set it in the receiver.", "link": link}]}
+        if row["direction"] == "in":
+            link = self.core.claims.mint(current, self.core.base_url, kind="webhook_secret", label=f"Webhook secret for {row['name']}")
+            step = "Save the new secret here, then set it in the sender."
+        else:
+            link = self.core.claims.mint_group(f"Webhook {row['name']}", [Field(url_name, "Webhook URL", "url", optional=True),
+                                                                           Field(current, "Signing secret", "webhook_secret")],
+                                               self.core.base_url)
+            step = "Save the new signing secret here, and a new URL if it changed. Then set the secret in the receiver."
+        return {**self._view(self._active(name)), "next": [{"by": "person", "do": step, "link": link}]}
 
     async def revoke(self, call: Call, *, name: str) -> dict[str, Any]:
         self._owner(call)
@@ -439,7 +457,6 @@ class WebhookBlock(Block):
         for bucket, key in (("webhook_hook", row["id"]), ("webhook_ip", f"{row['id']}:{ip}")):
             if (wait := self.limiter.blocked(bucket, key)) is not None:
                 return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
-        self.limiter.hit("webhook_hook", row["id"])
         self.limiter.hit("webhook_ip", f"{row['id']}:{ip}")
         chunks, size = [], 0
         async for chunk in request.stream():
@@ -451,6 +468,8 @@ class WebhookBlock(Block):
         status, response, work = self._ingest(row, headers, b"".join(chunks), ip, path_secret)
         if status in (401, 404):
             self.limiter.hit("webhook_fail", ip)
+        elif status == 200:
+            self.limiter.hit("webhook_hook", row["id"])
         return JSONResponse(response, status, background=BackgroundTask(self._dispatch, *work) if work else None)
 
     def _ingest(self, row: dict[str, Any], headers: dict[str, str], body: bytes, ip: str,
@@ -602,7 +621,7 @@ class WebhookBlock(Block):
         if not url or not secret:
             raise BlockError(f"webhook {row['name']!r} waits for its URL and signing secret; open the link from webhook_create")
         if not valid_webhook_url(url):
-            raise BlockError(f"webhook {row['name']!r} has an invalid URL; save a public HTTPS URL with webhook_rotate or a new webhook")
+            raise BlockError(f"webhook {row['name']!r} has an invalid URL; save a public HTTPS URL through webhook_rotate")
         keys = [secret] + ([old] if row["previous_until"] and row["previous_until"] > self.core.clock()
                            and (old := self.core.secret(previous)) and old != secret else [])
         msg_id = "msg_" + secrets.token_hex(12)
