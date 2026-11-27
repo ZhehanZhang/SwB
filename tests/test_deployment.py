@@ -167,7 +167,7 @@ def test_setup_code_counts_and_logs_throttled_failures_without_exposing_codes(tm
             assert client.post("/auth/setup", json={"code": wrong}, headers=headers).status_code == 429
         assert caplog.messages[-2:] == ["Owner setup attempt rate limited (1 total)", "Owner setup attempt rate limited (2 total)"]
         assert SETUP_CODE not in caplog.text and wrong not in caplog.text
-        assert len(app.limiter.hits["owner_setup_total", "*"]) == cap
+        assert len(app.limiter.hits["owner_setup_total"]["*"]) == cap
         assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 204
 
 
