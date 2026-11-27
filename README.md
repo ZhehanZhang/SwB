@@ -81,3 +81,7 @@ Everything that comes in or goes out is a block behind one interface, and the co
 
 SwB is licensed under the [Apache License 2.0](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) and
 [SECURITY.md](SECURITY.md). Documentation also lives at [swb.one](https://swb.one).
+
+We welcome contributions to SwB. See the [trademark policy](TRADEMARKS.md).
+
+Tell us how you use SwB at [hello@swb.one](mailto:hello@swb.one).
