@@ -77,14 +77,19 @@ class Sessions:
         cookie, now = secrets.token_urlsafe(32), self.store.clock()
 
         def rotate(db):
+            if via == "setup" and db.execute("SELECT 1 FROM owner_initialized").fetchone() is not None:
+                return False
+            db.execute("INSERT OR IGNORE INTO owner_initialized(id) VALUES (1)")
             if previous:
                 db.execute("DELETE FROM owner_sessions WHERE id = ?", (_hash(previous),))
             db.execute("DELETE FROM owner_sessions WHERE created_at <= ? OR last_seen <= ?",
                        (now - SESSION_LIFETIME, now - SESSION_IDLE))
             db.execute("INSERT INTO owner_sessions(id, via, client_id, source, created_at, last_seen) VALUES (?,?,?,?,?,?)",
                        (_hash(cookie), via, client_id, source, now, now))
+            return True
 
-        self.store.tx(rotate)
+        if not self.store.tx(rotate):
+            return Response(status_code=409)
         set_cookie(response, SESSION_COOKIE, cookie, SESSION_LIFETIME)
         return response
 

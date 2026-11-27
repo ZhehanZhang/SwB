@@ -15,6 +15,7 @@ from starlette.datastructures import MutableHeaders
 
 BODY_LIMIT = 1 * 1024 * 1024
 MCP_BODY_LIMIT = 16 * 1024 * 1024
+SETUP_BODY_LIMIT = 1024
 LIMITS = {
     "register": (20, 3600.0),
     "token": (120, 600.0),
@@ -22,6 +23,8 @@ LIMITS = {
     "bearer_fail": (20, 600.0),
     "connect_fail": (10, 600.0),
     "login_link_fail": (10, 600.0),
+    "owner_setup": (8, 600.0),
+    "owner_setup_total": (120, 600.0),
     "passkey_options": (60, 600.0),
     "passkey_fail": (10, 600.0),
 }
@@ -45,13 +48,10 @@ class RateLimiter:
 
     def _window(self, bucket: str, key: str) -> deque[float]:
         n, span = self.limits[bucket]
-        q = self.hits.setdefault((bucket, key), deque())
+        q = self.hits.setdefault((bucket, key), deque(maxlen=n))
         cutoff = self.clock() - span
         while q and q[0] < cutoff:
             q.popleft()
-        if not q:
-            self.hits.pop((bucket, key), None)
-            q = self.hits.setdefault((bucket, key), deque())
         return q
 
     def blocked(self, bucket: str, key: str) -> float | None:
@@ -103,6 +103,8 @@ class Guard:
                 await original_send(message)
 
         limit = MCP_BODY_LIMIT if path == "/mcp" or path.startswith("/mcp/") else BODY_LIMIT
+        if path == "/auth/setup":
+            limit = SETUP_BODY_LIMIT
         for k, v in scope.get("headers", []):
             if k == b"content-length":
                 try:

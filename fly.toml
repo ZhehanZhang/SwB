@@ -1,13 +1,13 @@
-app = "your-swb"
 primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"
+  build-target = "paas"
 
 [env]
   PORT = "8000"
   SWITCHBOARD_DATA = "/data"
-  SWITCHBOARD_PUBLIC_URL = "https://your-swb.fly.dev"
+  SWITCHBOARD_DEPLOY_PLATFORM = "fly"
 
 [mounts]
   source = "switchboard_data"

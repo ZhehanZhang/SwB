@@ -2,9 +2,9 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query"
 
 export type Session = {
   signed_in: boolean
-  via: "passkey" | "link" | "oidc" | "access" | null
+  via: "passkey" | "link" | "oidc" | "access" | "setup" | null
   csrf: string | null
-  methods: { passkeys: number; oidc: { name: string } | null; access: boolean }
+  methods: { passkeys: number; oidc: { name: string } | null; access: boolean; setup?: boolean }
 }
 type Health = { status: "ok" | "degraded"; problems: string[]; commit?: string | null }
 
@@ -32,11 +32,12 @@ function sessionShape(value: unknown): value is Session {
   if (!isObject(value)) return false
   const { signed_in, via, csrf, methods } = value
   return typeof signed_in === "boolean"
-    && (via === null || via === "passkey" || via === "link" || via === "oidc" || via === "access")
+    && (via === null || via === "passkey" || via === "link" || via === "oidc" || via === "access" || via === "setup")
     && (csrf === null || typeof csrf === "string")
     && isObject(methods)
     && typeof methods.passkeys === "number" && Number.isSafeInteger(methods.passkeys) && methods.passkeys >= 0
     && typeof methods.access === "boolean"
+    && (methods.setup === undefined || typeof methods.setup === "boolean")
     && (methods.oidc === null || (isObject(methods.oidc) && typeof methods.oidc.name === "string"))
 }
 
@@ -49,7 +50,7 @@ function isHealth(value: unknown): value is Health {
 }
 
 type RequestOptions = Omit<RequestInit, "credentials" | "redirect" | "cache"> & { csrf?: string | null }
-const originOnlyPosts = new Set(["/auth/link", "/auth/passkey/login/options", "/auth/passkey/login/verify"])
+const originOnlyPosts = new Set(["/auth/link", "/auth/setup", "/auth/passkey/login/options", "/auth/passkey/login/verify"])
 
 export async function requestJson<T>(
   path: string,
