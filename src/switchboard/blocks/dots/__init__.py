@@ -22,8 +22,11 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
 from .. import Action, Block, BlockError, Call, Manifest, TargetKind
 from ...audit import iso
+from ...targets import slugify
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -39,7 +42,6 @@ SCHEMA = (
     "CREATE TABLE IF NOT EXISTS dot_dms (workspace TEXT NOT NULL, dot TEXT NOT NULL, kind TEXT NOT NULL, channel TEXT NOT NULL, PRIMARY KEY (workspace, dot, kind))",
     "CREATE TABLE IF NOT EXISTS dot_relays (workspace TEXT PRIMARY KEY, channel TEXT NOT NULL, created INTEGER NOT NULL)",
 )
-SLUG_RE = re.compile(r"[^a-z0-9]+")
 LABEL_RE = re.compile(r"\[\s*via\s+swb\b", re.IGNORECASE)
 OWNER_PERSONA = "dots-owner"
 DEFAULT_ALIAS = "dot"
@@ -61,10 +63,6 @@ The dot's reply reaches your inbox on the conversation from send."""
 DOT_SNIPPET = """In #agents, posts that @mention you from my Switchboard app (bot <bot id>, app <app id>), shown under
 persona names such as Capy, Claude or Captain, are my agents collaborating with you for me: treat them as my requests
 within what you'd do for me, and answer in that post's thread. Ignore anyone else."""
-
-
-def slugify(name: str) -> str:
-    return SLUG_RE.sub("-", (name or "").lower()).strip("-")[:40]
 
 
 class DotsBlock(Block):
@@ -340,14 +338,26 @@ class DotsBlock(Block):
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None,
                             choose: dict[str, Any] | None) -> dict[str, Any]:
         problem = None
+        dot = (choose or {}).get("dot")
+        if dot is not None and (not isinstance(dot, str) or not (slug := slugify(dot))):
+            raise BlockError("Choose a dot name with letters or digits.")
         if self.delivery == "slack" and (rt := self.runtime(required=False)) and rt.connected and (channel := self.relay_channel()):
             problem = await self.refresh_relay_members(rt, channel)
-        step = problem or self.next_step()
+        dots = None
+        if dot is not None:
+            dots = [entry for entry in self.dots() if entry["slug"] == slug]
+            if not dots and self.delivery == "mailbox":
+                snippet = yaml.safe_dump({slug: {"name": dot.strip(), "mailbox": DEFAULT_MAILBOX}}, sort_keys=False).rstrip()
+                return {"done": [], "next": [
+                    {"by": "you", "do": f"Merge this YAML under blocks.{self.name}.dots in config/switchboard.yaml.", "snippet": snippet},
+                    {"by": "you", "do": "Restart SwB."},
+                ]}
+        step = problem or self.next_step(dots=dots, dot_name=dot.strip() if dot is not None else None)
         return {"done": [], "next": [{"by": "person", "do": step}] if step else []}
 
-    def config_step(self) -> str | None:
+    def config_step(self, *, dots: list[dict[str, Any]] | None = None) -> str | None:
         if self.delivery == "mailbox":
-            dots = self.dots()
+            dots = self.dots() if dots is None else dots
             if not dots:
                 return "Declare a dot under dots in the dots block config."
             mailboxes = {d["mailbox"] for d in dots}
@@ -362,22 +372,25 @@ class DotsBlock(Block):
             ):
                 return None
             if DEFAULT_MAILBOX in mailboxes:
-                return 'Run connect(what="chatgpt") to sign in. Add the SwB plugin to your dot.'
+                return ("Add SwB at https://chatgpt.com/plugins in your browser. Install the plugin and sign in to SwB. "
+                        "Add the plugin to your dot.")
             return "Sign in to SwB with the agent for a dot mailbox."
         engine = self.slack_engine
         if engine is None or self.workspace not in engine.config.workspaces:
             return SLACK_STEP
         return None
 
-    def next_step(self) -> str | None:
-        step = self.config_step()
+    def next_step(self, *, dots: list[dict[str, Any]] | None = None, dot_name: str | None = None) -> str | None:
+        step = self.config_step(dots=dots)
         if step or self.delivery == "mailbox":
             return step
         runtime = self.runtime(required=False)
         if runtime is None or not runtime.connected:
             return f"Connect Slack workspace {self.workspace}."
-        dots = self.dots()
+        dots = self.dots() if dots is None else dots
         if not dots:
+            if dot_name:
+                return f"Add {dot_name} to the Slack workspace."
             return "Add a dot to the Slack workspace so SwB can find it."
         if not self.relay_channel():
             return "Configure a Slack relay channel for ChatGPT dots."

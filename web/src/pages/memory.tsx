@@ -27,10 +27,6 @@ function scopeName(scope: string) {
   return scope.replace(/^project:/, "")
 }
 
-function noteName(note: MemoryNote) {
-  return note.key || note.id
-}
-
 function NoteTime({ date, short = false }: { date: string | null; short?: boolean }) {
   if (!date) return null
   return <time dateTime={date} title={fullDate.format(new Date(date))}>{(short ? shortDate : fullDate).format(new Date(date))}</time>
@@ -77,17 +73,26 @@ function NotesTable({ scope, notes, state, onOpen }: {
         ) : notes.map((note) => (
           <tr key={note.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 border-b py-2.5 lg:table-row lg:h-[43px] lg:py-0">
             <td role="cell" className="col-span-2 min-w-0 lg:pr-4">
-              <button
+              {note.key && <button
                 className="block w-full truncate rounded-sm py-1 text-left font-mono text-mono-sm hover:underline focus-visible:outline-offset-1 lg:py-2"
                 type="button"
-                title={noteName(note)}
+                title={note.key}
                 onClick={(event) => onOpen(note, event.currentTarget)}
               >
-                {noteName(note)}
-              </button>
+                {note.key}
+              </button>}
             </td>
             <td role="cell" className="col-span-2 min-w-0 text-body-md text-muted-foreground lg:pr-4">
-              <span className="block wrap-anywhere lg:truncate" title={note.summary}>{note.summary}</span>
+              {note.key ? <span className="block wrap-anywhere lg:truncate" title={note.summary}>{note.summary}</span> : (
+                <button
+                  className="block w-full rounded-sm text-left wrap-anywhere hover:underline focus-visible:outline-offset-1 lg:truncate"
+                  type="button"
+                  title={note.summary || note.title}
+                  onClick={(event) => onOpen(note, event.currentTarget)}
+                >
+                  {note.summary || note.title}
+                </button>
+              )}
             </td>
             <td role="cell" className="min-w-0 text-body-sm lg:pr-4 lg:text-body-md"><Author source={note.writer} /></td>
             <td role="cell" className="self-center whitespace-nowrap font-mono text-mono-sm text-muted-foreground"><NoteTime date={note.updated_at} short /></td>
@@ -176,8 +181,10 @@ function NoteInspector({ note, onClose, onRelocate }: {
         ) : entry && (
           <>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2 border-b pb-4 text-xs">
-              <dt className="text-muted-foreground">Key</dt>
-              <dd className="font-mono break-all">{noteName(entry)}</dd>
+              {entry.key && <>
+                <dt className="text-muted-foreground">Key</dt>
+                <dd className="font-mono break-all">{entry.key}</dd>
+              </>}
               <dt className="text-muted-foreground">Scope</dt>
               <dd className="font-mono break-all">{scopeName(scope)}</dd>
               <dt className="text-muted-foreground">Namespace</dt>

@@ -51,7 +51,7 @@ Use send to hand off work or message an agent. The owner's route for you and the
 For to, use a slug from targets, an agent mailbox such as agent:claude, or a block address <block>:<kind>:<id>.
 SwB keeps messages in the agent's mailbox until the agent reads them.
 Replies reach your inbox with in_reply_to set to the conversation from send.
-Call wait for the reply. If wait times out, tell the owner the work is in progress and check again with wait or inbox.
+Call wait for the reply. If wait times out, check again with wait or inbox.
 Answer a message with reply(text, conversation)."""
 
 
@@ -255,7 +255,7 @@ class MCPBlock(Block):
 
     def status(self) -> dict[str, Any]:
         if not (self.core.cfg.public_url or "").startswith("https://"):
-            return {"manual_steps": ["Set public_url to let hosted MCP clients reach SwB."]}
+            return {"manual_steps": ["Give SwB a public HTTPS address for hosted MCP clients."]}
         return {}
 
     def lifespan(self) -> AbstractAsyncContextManager[None]:

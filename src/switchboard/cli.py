@@ -243,11 +243,12 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
         lines.append(str(payload["error"]))
     if payload.get("kinds"):
         lines.append("Supported kinds: " + ", ".join(payload["kinds"]))
+    steps = payload.get("next") or []
     if payload.get("done"):
-        lines.extend(["Done:", *(f"  - {line}" for line in payload["done"])])
-    if payload.get("next"):
+        lines.extend(["Progress" if steps else "Done", *payload["done"]])
+    if steps:
         lines.append("Next steps:")
-        for step in payload["next"]:
+        for step in steps:
             lines.append(f"  - {step['by']}: {step['do']}")
             if step.get("call"):
                 lines.append(f"    Call: {json.dumps(step['call'], ensure_ascii=False)}")

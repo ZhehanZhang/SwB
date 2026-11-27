@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, base_config, call, default_env, payload
+from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, Clock, base_config, call, default_env, payload
 
 PRIVATE = "fixture-secret-not-owner-console-data"
 READ_PATHS = ("/health", "/routes", "/visibility", "/audit", "/agents", "/projects", "/inbox",
@@ -322,6 +322,41 @@ def test_project_and_inbox_reads_keep_safe_cross_system_and_conversation_data(ma
     assert not core.store.q("SELECT 1 FROM inbox_cursors")
     assert PRIVATE not in json.dumps((inbox, thread))
     assert get(client, f"/conversations/{PRIVATE}", status=404) == {"error": "conversation not found"}
+
+
+def test_inbox_pages_root_conversations_by_activity_and_project(make):
+    clock = Clock()
+    core, client = make(clock=clock)
+
+    def open_(handle, project, **meta):
+        return core.inbox.open_handle(handle=handle, owner="codex", destination="mailbox", ref="claude",
+                                      project=project, title=handle, meta=meta)
+
+    older = open_("older", "context")
+    clock.t += 1
+    for i in range(21):
+        open_(f"context-{i:02}", "context")
+    open_("other", "other")
+    open_("reply", "context", root=older)
+    open_("paused", "other")
+    clock.t += 1
+    core.inbox.update_handle(older, status="answered")
+    core.store.x("INSERT INTO conversation_turns(root, turns, paused_at) VALUES (?, ?, ?)", ("paused", 200, clock()))
+
+    page = get(client, "/inbox")
+    assert len(page["conversations"]) == 20 and page["next_cursor"]
+    assert page["conversations"][0]["handle"] == older
+    first = get(client, "/inbox", project="context")
+    assert [row["handle"] for row in first["conversations"]] == [older, *(f"context-{i:02}" for i in range(20, 1, -1))]
+    [pause] = first["pauses"]
+    assert pause["conversation"]["title"] == "paused"
+    next_page = get(client, "/inbox", project="context", cursor=first["next_cursor"])
+    assert [row["handle"] for row in next_page["conversations"]] == ["context-01", "context-00"]
+    assert next_page["next_cursor"] is None
+    assert get(client, "/conversations/context-00")["conversation"]["handle"] == "context-00"
+    assert get(client, "/conversations/reply")["conversation"]["handle"] == older
+    assert get(client, "/inbox", cursor="nan:older", status=400) == {"error": "invalid cursor"}
+    assert get(client, "/inbox", limit=101, status=400) == {"error": "invalid limit"}
 
 
 def test_memory_folders_search_and_read_use_owner_scope_and_safe_errors(make):

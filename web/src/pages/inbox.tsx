@@ -20,8 +20,12 @@ import {
 const inboxKey = ["inbox"] as const
 const itemLimit = 100
 
-function conversationLink(handle: string) {
-  return `/inbox/${encodeURIComponent(handle)}`
+function projectSearch(project: string | null) {
+  return project ? `?${new URLSearchParams({ project })}` : ""
+}
+
+function conversationLink(handle: string, search: string) {
+  return `/inbox/${encodeURIComponent(handle)}${search}`
 }
 
 function relativeTime(value: string | null) {
@@ -124,7 +128,7 @@ function SlackApproval({ item }: { item: PendingWrite }) {
   )
 }
 
-function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conversation }) {
+function TurnPause({ pause, search }: { pause: Pause; search: string }) {
   const { data: session } = useQuery(sessionQuery)
   const client = useQueryClient()
   const resume = useMutation({
@@ -139,12 +143,13 @@ function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conve
       client.invalidateQueries({ queryKey: ["audit"] }),
     ]),
   })
+  const { conversation } = pause
   return (
     <NeedsRow
       name={displayReference(conversation?.title || pause.root)}
       kind={conversation?.destination_kind || conversation?.destination}
       avatarUrl={conversation?.target_avatar_url ?? null}
-      title={<Link className="hover:underline" to={conversationLink(pause.root)}>Paused at turn cap</Link>}
+      title={<Link className="hover:underline" to={conversationLink(pause.root, search)}>Paused at turn cap</Link>}
       at={pause.paused_at}
       preview={`${pause.turns} ${pause.turns === 1 ? "turn" : "turns"}`}
       actions={(
@@ -159,8 +164,7 @@ function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conve
   )
 }
 
-function Conversations({ items }: { items: Conversation[] }) {
-  const conversations = [...items].sort((a, b) => (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? ""))
+function Conversations({ items, search }: { items: Conversation[]; search: string }) {
   return (
     <table role="table" className="mt-1 w-full text-left max-md:block md:table-fixed">
       <caption className="sr-only">Conversations</caption>
@@ -175,7 +179,7 @@ function Conversations({ items }: { items: Conversation[] }) {
         </tr>
       </thead>
       <tbody role="rowgroup" className="max-md:block">
-        {conversations.map((row) => {
+        {items.map((row) => {
           const { from, to, fromKind, toKind } = participants(row)
           return (
             <tr key={row.handle} role="row" className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
@@ -183,7 +187,7 @@ function Conversations({ items }: { items: Conversation[] }) {
               <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} avatarUrl={row.first_sender?.avatar_url} /></td>
               <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? null} /></td>
               <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-1 max-md:font-semibold md:py-2 md:pr-3">
-                <Link to={conversationLink(row.handle)} className="after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring">
+                <Link to={conversationLink(row.handle, search)} className="after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring">
                   {displayReference(row.title || row.handle)}
                 </Link>
               </td>
@@ -203,12 +207,22 @@ function Conversations({ items }: { items: Conversation[] }) {
 
 function InboxList() {
   const [params] = useSearchParams()
-  const inbox = useQuery({
-    queryKey: inboxKey,
-    queryFn: ({ signal }) => requestJson("/api/inbox", isInbox, { signal }),
+  const project = params.get("project")
+  const search = projectSearch(project)
+  const inbox = useInfiniteQuery({
+    queryKey: [...inboxKey, project],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) => {
+      const query = new URLSearchParams(search)
+      if (pageParam) query.set("cursor", pageParam)
+      const suffix = query.size ? `?${query}` : ""
+      return requestJson(`/api/inbox${suffix}`, isInbox, { signal })
+    },
+    getNextPageParam: (page) => page.next_cursor,
     refetchInterval: 30_000,
   })
-  const data = inbox.data
+  const data = inbox.data?.pages[0]
+  const conversations = inbox.data?.pages.flatMap((page) => page.conversations) ?? []
   const notice = params.get("notice")
   const status = notice === "decide-refused" ? "Request closed" : notice === "send-failed" ? "Slack delivery failed"
     : notice === "approved" ? "Approved Slack request" : notice === "rejected" ? "Denied Slack request" : null
@@ -218,22 +232,25 @@ function InboxList() {
         <h2 id="needs-you" className="text-heading-md font-semibold tracking-[-0.01em]">Needs you</h2>
         {status && <p role="status" className="mt-2 text-sm">{status}</p>}
         {inbox.isPending && <div className="flex h-[60px] items-center"><Skeleton className="h-3 w-28" /></div>}
-        {inbox.isError && <DataState kind="error" message="Inbox unavailable." onRetry={() => void inbox.refetch()} />}
+        {inbox.isError && !data && <DataState kind="error" message="Inbox unavailable." onRetry={() => void inbox.refetch()} />}
         {data && (data.pending_writes.length || data.pauses.length ? (
           <ul className="mt-2">
             {data.pending_writes.map((item) => <SlackApproval key={item.id} item={item} />)}
-            {data.pauses.map((pause) => (
-              <TurnPause key={pause.root} pause={pause} conversation={data.conversations.find((row) => row.handle === pause.root)} />
-            ))}
+            {data.pauses.map((pause) => <TurnPause key={pause.root} pause={pause} search={search} />)}
           </ul>
         ) : <DataState kind="empty" message="All clear" />)}
       </section>
       {(inbox.isPending || data) && (
         <section aria-labelledby="conversations">
           <h2 id="conversations" className="text-heading-md font-semibold tracking-[-0.01em]">Conversations</h2>
-          {inbox.isPending ? <ConversationsSkeleton /> : data?.conversations.length
-            ? <Conversations items={data.conversations} />
+          {inbox.isPending ? <ConversationsSkeleton /> : conversations.length
+            ? <Conversations items={conversations} search={search} />
             : <DataState kind="empty" message="0 conversations" />}
+          {inbox.hasNextPage && (
+            <Button className="mt-4" variant="outline" size="sm" disabled={inbox.isFetching} onClick={() => void inbox.fetchNextPage()}>
+              {inbox.isFetchingNextPage ? "Loading…" : inbox.isFetchNextPageError ? "Retry" : "More"}
+            </Button>
+          )}
         </section>
       )}
     </div>
@@ -301,6 +318,7 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
 }
 
 function InboxConversation({ handle }: { handle: string }) {
+  const [params] = useSearchParams()
   const thread = useInfiniteQuery({
     queryKey: ["conversation", handle],
     initialPageParam: 0,
@@ -321,7 +339,7 @@ function InboxConversation({ handle }: { handle: string }) {
   }
   return (
     <div className="pt-2">
-      <Link to="/inbox" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+      <Link to={`/inbox${projectSearch(params.get("project"))}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Conversations
       </Link>
       {thread.isPending && (

@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
 
+from .brand import TAGLINE
 from .slack.avatar_files import agent_avatar_url
 
 _STATIC = resources.files("switchboard") / "static"
@@ -93,7 +94,7 @@ def page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <div class="footer-icons">
 <button type="button" class="foot-btn" aria-label="Theme" title="Theme" data-theme-cycle><span class="theme-cycle">{icon("foot_lightMode", mode="light")}{icon("foot_darkMode", mode="dark")}{icon("foot_desktopWindows", mode="system")}</span></button>
 </div></div>
-<div class="foot-line"><span>Shared memory and routing between assistants and agents.</span></div>
+<div class="foot-line"><span>{html.escape(TAGLINE["en"])}</span></div>
 </footer></div></body></html>"""
     return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "same-origin"})
 
@@ -177,9 +178,12 @@ if (fragment.has("t")) {
   history.replaceState(null, "", location.pathname + location.search);
   if (button) button.disabled = true;
   post("/auth/link", {token: fragment.get("t")}).then(next).catch((error) => {
-    const reason = error.message === "link_used" ? "Sign-in link already used." :
-      error.message === "link_expired" ? "Sign-in link expired." : "Sign-in failed.";
-    message.textContent = reason + " Ask your agent for a new link.";
+    const reasons = {
+      link_invalid: "Check your sign-in link.",
+      link_used: "This link was used. Ask your agent for a new link.",
+      link_expired: "This link expired. Ask your agent for a new link."
+    };
+    message.textContent = reasons[error.message] || "Try signing in again.";
     screen.hidden = false;
     if (button) button.disabled = false;
   });
@@ -194,7 +198,9 @@ def script_policy(script: str) -> str:
 
 
 def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, signed_in: bool = False) -> HTMLResponse:
-    messages = {"link_expired": "Sign-in link expired.", "link_used": "Sign-in link already used.",
+    messages = {"link_invalid": "Check your sign-in link.",
+                "link_expired": "This link expired. Ask your agent for a new link.",
+                "link_used": "This link was used. Ask your agent for a new link.",
                 "passkey_failed": "Try your passkey again.",
                 "oidc_failed": "Try signing in again."}
     button = '<button type="button" id="passkey-login">Sign in with a passkey</button>' if methods["passkeys"] else ""

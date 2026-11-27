@@ -233,6 +233,9 @@ class Block:
             return dict(message)
         return {**message, "target": f"{target.kind}:{target.id}" if target.kind else target.id}
 
+    def send_unavailable(self) -> str:
+        return f"{self.name} takes no send; its tools are {', '.join(self.manifest.tools) or 'none'}"
+
     def parse_route_target(self, text: str) -> dict[str, Any]:
         """A routes_set target as this block stores it: '<kind>:<id>' becomes {kind: id}."""
         kind, sep, ident = (text or "").strip().partition(":")

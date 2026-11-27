@@ -90,6 +90,32 @@ def test_mailbox_cancel_stops_delivery_and_following(make):
     assert len(core.audit.recent(action="cancel", outcome="ok")) == 1
 
 
+def test_mailbox_status_shows_sender_progress_and_preserves_an_answer(make):
+    core, client = make()
+    root = payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Check the build"}))["conversation"]
+    args = {"conversation": root}
+    initial = payload(call(client, STATIC_KEY, "status", args))
+    assert initial["status"] == "delivered" and "note" not in initial
+    assert payload(call(client, SECOND_KEY, "status", args))["note"] == "Answer this message with reply."
+    wait = payload(call(client, STATIC_KEY, "wait", {**args, "timeout_s": 0}))
+    assert wait["timed_out"] and wait["next"] == "Check again with wait or inbox."
+
+    interim = payload(call(client, SECOND_KEY, "reply", {**args, "text": "Checking", "final": False}))
+    assert payload(call(client, STATIC_KEY, "status", args))["status"] == "working"
+    wait = payload(call(client, STATIC_KEY, "wait", {**args, "timeout_s": 0}))
+    assert wait["handle_status"] == "working" and [item["text"] for item in wait["items"]] == ["Checking"]
+    core.store.x("DELETE FROM inbox WHERE handle = ?", (interim["conversation"],))
+    assert payload(call(client, STATIC_KEY, "status", args))["status"] == "working"
+    result = payload(call(client, STATIC_KEY, "result", args))
+    assert result["status"] == "working" and result["final"] is None
+
+    payload(call(client, SECOND_KEY, "reply", {**args, "text": "Passed"}))
+    payload(call(client, SECOND_KEY, "reply", {**args, "text": "Delayed progress update", "final": False}))
+    assert payload(call(client, STATIC_KEY, "status", args))["status"] == "answered"
+    result = payload(call(client, STATIC_KEY, "result", args))
+    assert result["status"] == "answered" and result["final"]["text"] == "Passed"
+
+
 def test_mailbox_wait_and_inbox_share_consumption_in_both_directions(make):
     _, client = make()
     handle = payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Check the build"}))["conversation"]

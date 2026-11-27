@@ -117,11 +117,11 @@ class Connections:
                             + ("" if include_revoked else " WHERE revoked_at IS NULL") + " ORDER BY created_at DESC")
         return [dict(r) for r in rows]
 
-    def revoke(self, *, key_id: str | None = None, agent: str | None = None) -> int:
+    def revoke(self, *, key_id: str | None = None, agent: str | None = None) -> int | None:
         if not key_id and not agent:
             raise ConnectError("pass key_id or agent")
         now = self.store.clock()
         if key_id:
-            return self.store.n("UPDATE agent_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL", (now, key_id))
-        else:
-            return self.store.n("UPDATE agent_keys SET revoked_at = ? WHERE agent = ? AND revoked_at IS NULL", (now, (agent or "").lower()))
+            revoked = self.store.n("UPDATE agent_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL", (now, key_id))
+            return revoked if revoked or self.store.one("SELECT 1 FROM agent_keys WHERE id = ?", (key_id,)) else None
+        return self.store.n("UPDATE agent_keys SET revoked_at = ? WHERE agent = ? AND revoked_at IS NULL", (now, (agent or "").lower()))

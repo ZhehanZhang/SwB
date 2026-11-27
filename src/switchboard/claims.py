@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS claim_groups (
   expires_at REAL NOT NULL
 )
 """
-KINDS = ("token", "id", "url", "pem", "json", "webhook_secret")
+KINDS = ("token", "id", "url", "pem", "json", "webhook_secret", "webhook_key")
 FILE_KINDS = ("pem", "json")
 MAX_FILE_BYTES = 64 * 1024
 PEM_RE = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
@@ -129,8 +129,8 @@ def normalize(kind: str, value: str, *, check: ClaimCheck | None = None) -> str:
         raise ClaimInputError("Enter a single-line value up to 8 KiB")
     if kind == "id" and not re.fullmatch(r"[0-9]+", value):
         raise ClaimInputError("Enter a numeric ID")
-    if kind == "webhook_secret" and len(value) < 16:
-        raise ClaimInputError("Use a webhook secret with at least 16 characters")
+    if kind in ("webhook_secret", "webhook_key") and len(value) < 16:
+        raise ClaimInputError(f"Use a {kind.replace('_', ' ')} with at least 16 characters")
     if kind == "url" and not valid_webhook_url(value):
         raise ClaimInputError("Enter a public HTTPS webhook URL")
     if check is not None:

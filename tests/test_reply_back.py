@@ -24,7 +24,9 @@ async def test_capy_wait_returns_early_on_a_stream_event(amake, capy):
     assert [i["text"] for i in got["items"]] == ["Working on it."] and got["timed_out"] is False and got["handle_status"] == "following"
     assert loop.time() - t0 < 5
     again = payload(await acall(c, STATIC_KEY, "capy_wait", {"handle": out["handle"], "timeout_s": 0.1}))
-    assert again["items"] == [] and again["timed_out"] is True and "still working" in again["next"]
+    assert again["items"] == [] and again["timed_out"] is True and again["next"] == "Check again with wait or inbox."
+    owner = payload(await acall(c, STATIC_KEY, "wait", {"conversation": out["handle"], "timeout_s": 0, "owner_facing": True}))
+    assert owner["timed_out"] is True and owner["next"].startswith("Tell the owner")
 
 
 async def test_capy_wait_is_capped_per_agent(amake):
