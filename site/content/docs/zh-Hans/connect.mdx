@@ -45,3 +45,5 @@ swb connect grok
 ## 用配对码连接
 
 请以所有者身份登录的智能体调用 `connect_code`。把新智能体的名称告诉它。配对码在 10 分钟内有效，只能使用一次。新智能体通过 `POST /connect` 用配对码换取自己的密钥。完整的配对方法见 [MCP 客户端](/zh-Hans/docs/setup/mcp-client)。
+
+你也可以在令牌页面创建配对码。SwB 通过 `POST /pairing/code` 提交表单。

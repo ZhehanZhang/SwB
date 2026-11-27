@@ -95,6 +95,16 @@ def test_yaml_chat_token_overrides_and_explicit_blocks_take_precedence(tmp_path)
     assert cfg.block_env["community"] == ("CUSTOM_DISCORD_TOKEN",)
 
 
+async def test_config_with_retired_capy_burst_still_loads(tmp_path):
+    config = tmp_path / "switchboard.yaml"
+    config.write_text("version: 2\nblocks:\n  capy: {burst: {limit: 5}, captain_delivery: steer}\n")
+    core = Switchboard(config, data_dir=tmp_path, env={})
+    try:
+        assert core.blocks["capy"].delivery == "steer"
+    finally:
+        await core.aclose()
+
+
 async def test_mcp_events_deliver_mailbox_messages_without_yaml(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     core = Switchboard(env={"SWITCHBOARD_KEY_OWNER": STATIC_KEY, "SWITCHBOARD_KEY_SECOND": SECOND_KEY})

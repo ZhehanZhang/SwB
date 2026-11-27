@@ -18,8 +18,8 @@ def web_dist(tmp_path, monkeypatch):
     return dist
 
 
-@pytest.mark.parametrize("path", ["/", "/canvas", "/agents", "/inbox", "/provision", "/projects", "/memory", "/audit", "/tokens", "/settings", "/about",
-                                  "/agents/client/setup", "/inbox/thread/one", "/canvas/"])
+@pytest.mark.parametrize("path", ["/", "/agents", "/inbox", "/projects/example?view=routes", "/memory", "/audit", "/tokens", "/settings", "/about",
+                                  "/agents/client/setup", "/inbox/thread/one"])
 def test_spa_paths_require_owner_and_serve_uncached_shell(make, web_dist, path):
     _, client = make()
     for headers in ({}, {"authorization": f"Bearer {STATIC_KEY}"}):
@@ -89,6 +89,22 @@ def test_no_route_serves_classic_templates(make):
     assert not hasattr(pages, "admin_page")
     for path in ("/visibility", "/routines", "/routines/example/remove", "/pairing/keys/example/revoke"):
         assert client.post(path, headers=OWNER).status_code == 404
+
+
+@pytest.mark.parametrize("path", ["/canvas", "/canvas/", "/canvas/old?next=//example.test", "/projects", "/projects/"])
+def test_legacy_overview_bookmarks_redirect(make, web_dist, path):
+    _, client = make()
+    for headers in ({}, OWNER):
+        for method in ("GET", "HEAD"):
+            response = client.request(method, path, headers=headers)
+            assert response.status_code == 308 and response.headers["location"] == "/"
+            assert not response.content
+
+
+@pytest.mark.parametrize("path", ["/provision", "/provision/", "/provision/old"])
+def test_provision_placeholder_is_removed(make, web_dist, path):
+    _, client = make()
+    assert client.get(path, headers=OWNER).status_code == 404
 
 
 def test_missing_build_does_not_prevent_login_or_mcp_starting(make, monkeypatch, tmp_path):

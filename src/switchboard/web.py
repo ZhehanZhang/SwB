@@ -22,7 +22,7 @@ from .api_write import WRITE_ROUTES
 from .sessions import login_redirect
 
 APP_DIST = Path(__file__).with_name("static") / "app"
-APP_SECTIONS = ("canvas", "agents", "tokens", "inbox", "provision", "projects", "memory", "audit", "settings", "about", "connections")
+APP_SECTIONS = ("agents", "tokens", "inbox", "memory", "audit", "settings", "about", "connections")
 SPA_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
@@ -53,6 +53,10 @@ async def classic_redirect(request: Request) -> Response:
         return RedirectResponse(f"{target}?notice={notice}", status_code=308)
     section = request.path_params.get("rest", "").partition("/")[0]
     return RedirectResponse(CLASSIC_SECTIONS.get(section, "/"), status_code=308)
+
+
+async def overview_redirect(request: Request) -> Response:
+    return RedirectResponse("/", status_code=308)
 
 
 class AppAssets(StaticFiles):
@@ -109,6 +113,11 @@ def web_routes() -> list[Route | Mount]:
         Mount("/api", app=owner_api),
         Route("/classic", classic_redirect),
         Route("/classic/{rest:path}", classic_redirect),
+        Route("/canvas", overview_redirect),
+        Route("/canvas/{rest:path}", overview_redirect),
+        Route("/projects", overview_redirect),
+        Route("/projects/", overview_redirect),
+        Route("/projects/{rest:path}", shell),
         Route("/", shell),
         *(Route(f"/{section}", shell) for section in APP_SECTIONS),
         *(Route(f"/{section}/{{rest:path}}", shell) for section in APP_SECTIONS),
