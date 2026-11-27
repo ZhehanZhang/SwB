@@ -38,7 +38,13 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 <Step>
 ### 设置 webhook 密钥
 
-在密码管理器中生成一个 64 个字符的随机密钥。把它填入 **Webhook secret**。
+将随机密钥生成到私有文件中。
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
+```
+
+将生成的密钥存入密码管理器。把密钥填入 **Webhook secret**。SwB 接受至少 16 个字符的密钥。
 </Step>
 <Step>
 ### 设置权限
@@ -65,7 +71,7 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 <Step>
 ### 保存凭据
 
-打开智能体给你的每个 SwB 领取链接。在那里保存 webhook 密钥、**App ID** 和完整的 `.pem` 文件。
+打开智能体给你的各个 SwB 领取链接。保存同一个 webhook 密钥、**App ID** 和完整的 `.pem` 文件。保存密钥后删除私有文件。
 </Step>
 <Step>
 ### 安装应用
@@ -94,7 +100,9 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 
 智能体调用 `connect`，参数为 `what="github"`。SwB 显示 webhook 地址、webhook 密钥的状态和仓库路由数量。路由把一个仓库的事件发送给一个目标。
 
-如果应用需要写入，智能体调用 `connect`，参数为 `what="github"` 和 `choose={"credential":"app"}`。SwB 为每个缺少的值返回一个领取链接。智能体把仓库写入 `config/switchboard.yaml` 的 `blocks.github.spaces` 或 `blocks.github.routes`。
+智能体将仓库添加到 `config/switchboard.yaml` 中的 `blocks.github.spaces` 或 `blocks.github.routes`。通过领取链接保存同一个 webhook 密钥。智能体重启 SwB，载入密钥并应用路由。
+
+智能体再次调用 `connect(what="github")`，获取仍需填写的 App ID 或私钥链接。若要把已有的个人访问令牌改为 GitHub App 凭据，选用 `choose={"credential":"app"}`。
 
 重启后，智能体调用 `github_status`，检查安装和它的权限。之后，智能体按频道模式使用 `github_label`、`github_comment`、`github_open_issue`、`github_link_duplicate`、`github_reply` 和 `github_notify_owner`。
 
@@ -102,7 +110,7 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 
 | 令牌 | GitHub 显示位置 | 格式 | 填写位置 |
 | --- | --- | --- | --- |
-| Webhook 密钥 | 你在密码管理器中生成 | 64 个字符的随机文本 | SwB 领取链接 |
+| Webhook 密钥 | 用 `openssl rand -hex 32` 生成 | 至少 16 个字符 | SwB 领取链接 |
 | App ID | 应用设置中的 **App ID** | 一串数字 | SwB 领取链接 |
 | 私钥 | 点击 **Generate a private key** 后下载一次 | `.pem` 文件 | SwB 领取链接 |
 

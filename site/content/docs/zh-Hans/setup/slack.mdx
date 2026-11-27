@@ -184,7 +184,7 @@ settings:
 
 智能体调用 `connect`，参数为 `what="slack"`。SwB 列出每个工作区还缺哪些令牌，并返回一个领取链接，一次收齐这些令牌。
 
-智能体把工作区写入 `config/switchboard.yaml` 的 `blocks.slack.workspaces`，包括 `team_id` 和令牌名称。如果智能体能访问服务器，它会直接修改。否则它把 YAML 交给你添加。
+智能体在 `config/switchboard.yaml` 的 `blocks.slack.workspaces` 下填入工作区 ID 和令牌名称。它在 `blocks.slack.agents` 下为自己的智能体名称添加授权，以便调用 `slack_workspaces`。如果需要你编辑配置文件，智能体会提供 YAML。
 
 此示例用机器人和你的账号连接一个工作区。把 `T0DEMO0001` 换成你的工作区 ID。
 
@@ -202,9 +202,13 @@ blocks:
             token_env: SLACK_EXAMPLE_BOT_TOKEN
           user:
             token_env: SLACK_EXAMPLE_USER_TOKEN
+    agents:
+      claude:
+        workspaces:
+          example: [bot, user]
 ```
 
-如果只用你的账号，在 `team_id` 同级添加 `user_only: true`。删除 `identities` 下的 `bot` 项。
+授权写明使用 Slack 的智能体。使用 `switchboard_status` 显示的名称，例如 `claude` 或 `chatgpt`。每个智能体添加一项授权。工作区配置和授权使用同一个工作区名称。如果只用你的账号，在 `team_id` 同级添加 `user_only: true`。删除 `identities` 下的 `bot` 项。把授权中的身份设为 `[user]`。
 
 SwB 要求重启时，智能体会告诉你。重启后，它用 `slack_workspaces` 检查每个身份。身份指机器人或你自己的账号。最后，它用 `slack_post` 发送一条测试消息。
 

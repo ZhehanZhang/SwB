@@ -90,10 +90,12 @@ SwB 所在的服务器必须能通过 7844 端口访问 Cloudflare。SwB 的 Com
 
 | 路径 | 策略 |
 | --- | --- |
-| `/mcp`、`/register`、`/token`、`/revoke`、`/healthz`、`/connect` | 放行 |
-| `/.well-known/*`、`/inbox`、`/inbox/*`、`/avatars/*` | 放行 |
-| `/github/webhook` | 放行，仅用于 GitHub |
-| 其余所有路径，包括 `/` 和 `/authorize` | 所有者 |
+| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | 放行 |
+| `/healthz`、`/connect`、`/avatars/*` | 放行 |
+| `/inbox/poll`、`/inbox/events` | 放行 |
+| `/inbox/muse/bridge` | 为 Muse 放行 |
+| `/github/webhook` | 为 GitHub 放行 |
+| 其余路径，包括 `/`、`/authorize`、`/inbox` 和会话页面 | 所有者 |
 
 ```sh
 SWITCHBOARD_PUBLIC_URL=https://swb.example.com
@@ -106,9 +108,9 @@ SwB 会检查每个所有者请求的 Access 登录。放行路径使用 SwB 自
 
 ## 智能体的工作
 
-带有 Cloudflare 连接器的智能体可以通过 Cloudflare API 创建隧道、Access 策略和应用。它会为你的账号和区域生成一个权限最小的 API 令牌。你自己的 Cloudflare 令牌留在你手中。
+请具备 Cloudflare 连接器的智能体按本页操作。它为 SwB 主机名设置隧道、DNS 和 Access。它使用这次设置所需的账号和区域权限，并将 API 令牌存入连接器的机密设置。
 
-地址可用后，智能体为你的应用调用 `connect`，例如 `what="claude"` 或 `what="chatgpt"`。SwB 返回 MCP 地址 `https://swb.example.com/mcp`。`switchboard_status` 显示应用使用哪个 SwB 身份。
+公网地址可用后，用 SwB 的 `connect` 接入应用。智能体可以使用 `what="claude"` 或 `what="chatgpt"`。SwB 返回 MCP 地址 `https://swb.example.com/mcp`。`switchboard_status` 显示应用使用哪个 SwB 身份。
 
 ## 凭据
 
@@ -130,6 +132,4 @@ SwB 会检查每个所有者请求的 Access 登录。放行路径使用 SwB 自
 
 OAuth 需要全部机器路径。OAuth 是应用连接 SwB 时使用的登录流程。缺少任何一个路径，应用都会停在登录这一步。
 
-路径 `/inbox/*` 只匹配下级路径，`/inbox` 本身要单独添加。请把两个路径都加上。
-
-让 `/` 和 `/authorize` 保持在所有者策略下。在这两个路径上放行，会让任何人都能打开控制台。
+用所有者策略保护 `/`、`/authorize`、`/inbox` 和会话页面。按上表放行收件箱的指定路径。

@@ -10,7 +10,7 @@ Agents see the tools that their sign-in allows. Block tools appear when the bloc
 | Tool | Use |
 | - | - |
 | `send` | Send work or a message to a target, or let the route choose the target |
-| `agent_send` | Deprecated name for `send` with `to="agent:<name>"`. Available in this release only. `blocks.mcp.legacy_aliases` enables it by default. Use `send` for new calls |
+| `agent_send` | Deprecated tool. Pass the agent name in `to`, for example `to="codex"`. `blocks.mcp.legacy_aliases` enables it by default. For new calls, use `send` with `to="agent:codex"` |
 | `wait` | Wait for the next reply on your conversations |
 | `inbox` | Read your inbox and return at once |
 | `reply` | Answer a message, or add a message to a conversation |
@@ -19,7 +19,9 @@ Agents see the tools that their sign-in allows. Block tools appear when the bloc
 | `result` | Get the final reply of a conversation. Use `tail` to set the number of recent replies or messages where supported |
 | `cancel` | Stop following a conversation |
 | `targets` | List everything `send` can reach |
-| `get_message` | Read one stored message by id |
+| `get_message` | Read a stored message with the `message_id` from an MCP event callback, such as `msg_42` |
+
+The `inbox` tool and the [inbox event stream](/docs/connect#inbox-event-stream) deliver message data directly. To read later items with `inbox`, pass the `cursor` as `since_cursor`. To reply, pass the item's `handle` as `conversation` to `reply`.
 
 ### Send options
 
@@ -48,6 +50,8 @@ Agents see the tools that their sign-in allows. Block tools appear when the bloc
 | `project_create` | Make a project |
 | `project_update` | Rename, link, archive or make a project private |
 | `project_sync` | Link projects to their matches again |
+
+For `memory_search` and `memory_list`, a private project is readable only as the current project. Set `project` to that project. When `scopes` names additional projects, choose public projects. The agent's key must allow access to each project.
 
 ## Setup
 

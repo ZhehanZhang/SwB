@@ -7,7 +7,7 @@ SwB pairs with Muse as a text gadget named **SwB**. A gadget is a device that th
 
 ## Before you start
 
-You need a Muse account and the Muse app on iOS or Android. You need a Linux device with Bluetooth Low Energy that can reach your SwB server, for example https://swb.example.com. SwB uses Ubuntu 24.04 with the packages `bluez`, `python3-dbus`, `python3-gi` and `python3-venv`.
+You need a Muse account and the Muse app on iOS or Android. Use a Linux device with Bluetooth Low Energy. Make sure it can reach your SwB server. On Ubuntu 24.04, install `bluez`, `git`, `python3-dbus`, `python3-gi` and `python3-venv`.
 
 The Muse block must be on in `config/switchboard.yaml` with `muse: {use: muse}` under `blocks`. You also need the owner sign-in to SwB.
 
@@ -44,7 +44,7 @@ Click **I agree to the Gadget SDK Terms** → **Generate token** → **Copy**. K
 <Step>
 ### Install the bridge
 
-Open the SwB folder for your server version on the Linux device. Run the commands below.
+Run the commands below on your Linux device. Use your SwB address in the last command.
 </Step>
 <Step>
 ### Type both tokens
@@ -71,7 +71,7 @@ Confirm the warning about community devices. If the app asks for Wi-Fi, select t
 
 ```sh
 /usr/bin/python3 -m venv --system-site-packages .venv-muse
-.venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
+.venv-muse/bin/pip install swb-one 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
 .venv-muse/bin/swb muse-bridge --url https://swb.example.com --setup
 ```
 
@@ -81,7 +81,7 @@ Keep the bridge running. The terminal shows **SwB is ready for Muse messages.** 
 
 The agent calls `connect` with `what="muse"`. SwB returns the claim link for the bridge token and your steps. It tracks the token, the bridge state and the first reply from Muse.
 
-When the bridge is online, the agent calls `connect` again. It sends the test with `send` to `muse:gadget:muse` and reads the answer with `result`. Later messages go to Muse with `send` and `to="muse"`, or through a route to `muse:gadget:muse`.
+When the bridge is online, the agent calls `connect` again. It sends a test message to `muse:gadget:muse` with `send`. It reads the answer with `result`. For later messages, use `send` with `to="muse"`. You can also set a route to `muse:gadget:muse`.
 
 To change the bridge token, the agent calls `connect` with `what="muse"` and `choose={"replace":true}`.
 
@@ -100,7 +100,7 @@ Check that **SwB** is under **Devices** in the Muse app. Ask the agent to call `
 
 ## Fix problems
 
-After a restart of the Linux device, run `swb muse-bridge --url https://swb.example.com` with the saved state. Add `--setup --pair-again` to pair again.
+After a restart, run `.venv-muse/bin/swb muse-bridge --url https://swb.example.com` from the same directory. Add `--setup --pair-again` to pair again.
 
 Meta keeps the pairing window open for ten minutes. Pair on a network that you trust.
 

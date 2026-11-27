@@ -33,17 +33,18 @@ Set `SWITCHBOARD_PUBLIC_URL` to the tunnel hostname, for example `https://swb.ex
 
 ## Cloudflare Access
 
-Access can protect the SwB page and the sign-in page. Make an Access application for your hostname. Allow your owner identities. Add bypass rules for the paths that machines use.
+Open the [Cloudflare setup guide](/docs/setup/cloudflare) to set up the owner and bypass policies.
 
-| Path | Who uses it |
-| - | - |
-| `/mcp`, `/token`, `/register`, `/revoke`, `/.well-known` | MCP clients and OAuth |
-| `/healthz` | Health checks |
-| `/inbox`, `/connect` | Channels and pairing codes |
-| `/avatars` | Slack and Discord pictures |
-| `/github/webhook` | GitHub |
+| Path | Policy |
+| --- | --- |
+| `/mcp`, `/register`, `/token`, `/revoke`, `/.well-known/*` | Bypass |
+| `/healthz`, `/connect`, `/avatars/*` | Bypass |
+| `/inbox/poll`, `/inbox/events` | Bypass |
+| `/inbox/muse/bridge` | Bypass for Muse |
+| `/github/webhook` | Bypass for GitHub |
+| All other paths, including `/`, `/authorize`, `/inbox` and its conversation pages | Owner |
 
-Then set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD`. Each path keeps its own sign-in check in SwB.
+Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD` from the owner application. SwB applies its own checks to requests on the bypass paths.
 
 ## Hosted platforms
 

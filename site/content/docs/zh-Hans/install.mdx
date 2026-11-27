@@ -26,6 +26,8 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
     ```
 
     pipx 会为当前用户安装 `swb` 命令。`init` 会写入私有的所有者密钥和配置文件。
+
+    如果 pipx 使用较旧的 Python，请运行 `pipx install --python 3.12 swb-one`。
   </Tab>
   <Tab value="Docker">
     ```bash
@@ -39,11 +41,15 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
   </Tab>
 </Tabs>
 
+通过 uvx 或 pipx 运行 `swb init` 时，SwB 会创建 `<folder>/data`。已初始化的目录和通过 `--dir` 选定的目录默认使用各自的 `data`。直接在空目录中运行 `swb up` 时，默认使用 `~/.local/share/switchboard`。在 Linux 和 macOS 上，数据目录的权限是 `0700`，数据库文件的权限是 `0600`。
+
 `swb up` 默认在 `127.0.0.1` 的 `8870` 端口监听。本机 MCP 地址是 `http://127.0.0.1:8870/mcp`。浏览器登录地址用 `http://localhost:8870`。
 
 要更改 `swb up` 的端口，请在终端或 `.env` 中设置 `PORT`。登录地址也要使用同一个端口。要指定其他服务器，请在客户端命令中加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。
 
-用 `swb up --dir ./my-swb` 将配置、`.env` 和数据放在独立的实例目录中。运行 `swb init` 和客户端命令时，传入同一个 `--dir`。详见[配置](/zh-Hans/docs/config)。
+用 `swb up --dir ./my-swb` 指定实例目录。运行 `swb init` 时，传入同一个 `--dir`。SwB 根据 `SWITCHBOARD_CONFIG` 选择配置文件。指定 `--dir` 时，SwB 使用该目录里的配置文件。
+
+SwB 先读取 YAML 配置或覆盖文件中的 `data_dir`，再依次检查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`，最后使用默认路径。如果旧实例有配置文件但缺少 `data` 目录，直接运行 `swb up` 会继续使用主目录中已有的数据库。SwB 会在日志中提示一次。命令选项见[配置](/zh-Hans/docs/config)。
 
 ## 检查服务器
 
@@ -55,6 +61,8 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 ## 服务器命令
 
+运行 `swb --help` 查看各类命令。在任一命令后加上 `--help`，即可查看该命令的选项。
+
 | 命令 | 用途 |
 | - | - |
 | `swb init` | 写入私有的所有者密钥和基本配置。 |
@@ -65,8 +73,8 @@ curl -fsS http://127.0.0.1:8870/healthz
 | `swb claim` | 用领取链接或领取码保存凭据。 |
 | `swb muse-bridge` | 在 Linux 上配对并运行 Muse 设备。 |
 | `swb serve` | 按配置的主机地址和端口运行服务器。 |
-| `swb export DIR` | 把已保存的记忆导出到指定目录中的 Markdown 文件。 |
-| `swb log` | 输出近期审计记录。 |
+| `swb export DIR` | 将已保存的记忆导出为 Markdown 文件，存入输出目录 `DIR`。 |
+| `swb log` | 输出最近的审计记录，最多 50 条。 |
 | `swb config migrate` | 将第 1 版配置转换为第 2 版格式并输出。 |
 | `swb blocks list` | 列出已配置的模块。 |
 | `swb blocks show BLOCK` | 显示指定模块的设置。 |

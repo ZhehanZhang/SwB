@@ -21,7 +21,7 @@ SwB sets the trust of each message from the platform's own ids. Only the ids dec
 | `known` | People and bots you list in `known` |
 | `external` | Everyone else |
 
-SwB passes owner text as it is. It wraps all other text in a header and the markers `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat wrapped text as information. SwB removes copies of the header and markers from the text, so a sender can fake neither.
+SwB passes owner text as it is. For other senders, SwB changes any copies of the header or markers in the text. SwB then wraps the text with its own header and the markers `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat wrapped text as information.
 
 ## Visibility
 

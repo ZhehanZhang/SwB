@@ -11,7 +11,7 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 | - | - |
 | `SWITCHBOARD_KEY_OWNER` | `swb` 命令使用的所有者密钥 |
 | `SWITCHBOARD_PUBLIC_URL` | 浏览器登录地址。本机运行时用 `http://localhost:8870`。远程服务器使用 HTTPS，例如 `https://swb.example.com`。 |
-| `SWITCHBOARD_DATA_DIR` | 数据目录。`swb up` 的默认值是 `~/.local/share/switchboard`。镜像使用 `/data` |
+| `SWITCHBOARD_DATA_DIR` | 数据目录。镜像使用 `/data`。 |
 | `SWITCHBOARD_OWNER_EMAILS` | 用于 OIDC 和 Cloudflare Access 的所有者邮箱，用逗号分隔 |
 | `SWITCHBOARD_KEY_<NAME>` | 智能体 `<name>` 的 bearer 密钥 |
 | `SWITCHBOARD_CONFIG` | 基础 YAML 文件的路径 |
@@ -20,7 +20,27 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 在终端或实例的 `.env` 文件中设置 `PORT`。本机登录时，公网地址填 `http://localhost:<port>`。也可以在同一个文件中设置 `SWITCHBOARD_PUBLIC_URL` 和 `SWITCHBOARD_DATA_DIR`。YAML 配置中的 `public_url` 优先于环境变量。
 
-运行 `swb up --dir ./my-swb` 时，SwB 会读取该目录中的 `.env` 和 `config/switchboard.yaml`，并把数据放在其中的 `data` 子目录。运行 `swb init`、`swb status`、`swb login-link`、`swb connect` 和 `swb claim` 时，传入同一个 `--dir`。后四条命令可用 `--url` 指定其他服务器地址。
+用 `swb up --dir ./my-swb` 读取该目录中的 `.env` 和 `config/switchboard.yaml`。运行 `swb init` 时，传入同一个 `--dir`。直接运行 `swb up` 时，可用 `SWITCHBOARD_CONFIG` 指定其他配置文件。
+
+`swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 查找 `.env`。这四条命令用 `--url` 指定服务器地址。
+
+`swb muse-bridge` 需要 `--url`。用 `--state-dir` 指定存放桥接文件的目录。
+
+在实例目录中运行 `swb export`、`swb log`、`swb blocks` 和 `swb targets`。这些命令读取该目录中的 `.env`。它们使用 `SWITCHBOARD_CONFIG` 指定的文件或本地配置文件。
+
+`swb serve` 读取终端中的环境变量和配置文件。
+
+用 `swb config migrate [file]` 输出第 2 版格式的配置。省略 `file` 时，命令会使用终端中的 `SWITCHBOARD_CONFIG` 或默认配置文件。
+
+## 数据目录
+
+`swb init` 在新实例中创建 `data` 目录。`swb up` 默认使用这个目录。`swb up --dir` 默认使用指定目录下的 `data`。直接运行 `swb up` 并仅用环境变量配置时，默认使用 `~/.local/share/switchboard`。
+
+在配置文件或覆盖文件中设置 `data_dir` 可更改路径。这项设置优先。SwB 接着按顺序检查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`。三项设置都为空时，SwB 使用默认路径。
+
+旧实例已有配置文件且缺少 `data` 目录时，直接运行 `swb up` 会沿用主目录中的现有数据库。SwB 为每个实例记录一次提示。
+
+在 Linux 和 macOS 上，SwB 将数据目录的权限设为 `0700`。数据库文件的权限设为 `0600`。
 
 ## 模块
 
@@ -97,6 +117,8 @@ routes:
 | `auth.redirect_uris` | 允许的 OAuth 回调地址。此列表替换内置列表。用 `/*` 匹配路径及其子路径 |
 | `auth.source_names` | 将 OAuth 主机名或客户端名称的片段映射到登录时所用的智能体名称 |
 | `auth.key_scopes` | 按密钥名称设置可访问的记忆范围，例如 `[project:example]` |
+| `auth.key_tools` | 按密钥名称设置可调用的 MCP 工具，例如 `[send]` |
+| `auth.key_targets` | 按密钥名称设置可接收消息的目标，例如 `[agent:claude]` |
 | `auth.inbox_keys` | 为每把密钥指定唯一可读取的智能体收件箱。内置项为 `channel: claude-code` |
 
 ## 访问权限

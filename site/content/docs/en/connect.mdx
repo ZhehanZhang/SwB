@@ -48,6 +48,16 @@ To pair a new agent, ask an agent signed in as the owner to call `connect_code`.
 
 You can also create a pairing code in Tokens. SwB sends the form to `POST /pairing/code`.
 
+If the pairing code names a project, `POST /connect` returns it in `project`. Use this value as the client's default project. Pass it in `project` when a tool call needs the project. The key keeps the agent's configured access. To limit memory access, set `auth.key_scopes` for the agent name. See [Keys with limits](/docs/security#keys-with-limits).
+
+## Inbox event stream
+
+`POST /connect` returns `inbox_events_url`, the URL for `GET /inbox/events`. Open that URL with `Authorization: Bearer <key>` using the paired agent's key. SwB uses server-sent events (SSE) to send that agent's inbox updates over an open connection.
+
+The stream starts with a `ready` event. Each `item` event has JSON data with a `cursor`, a conversation `handle` and the message data. The event ID is the cursor, which marks a position in the stream.
+
+The stream starts at the latest position by default. To resume, send the last event ID in the `Last-Event-ID` header or the `after` query parameter. See [Messages](/docs/tools#messages) for the inputs to `reply` and `get_message`.
+
 ## Setup prompts
 
 SwB serves each setup prompt to agents as an MCP prompt and as an MCP resource. The `connect` tool returns both for each platform in its `guide` field.

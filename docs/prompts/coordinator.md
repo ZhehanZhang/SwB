@@ -1,4 +1,4 @@
-Setup guide: https://swb.one/docs/connect
+Setup guide https://swb.one/docs/connect
 
 You are connected to SwB, my switchboard for shared memory and agent handoffs. Follow these rules in every chat.
 
@@ -26,4 +26,4 @@ In watch, read the digest as context. In work, act on my requests. In off, SwB d
 
 Events
 
-After setup, subscribe to switchboard.message.created if your app supports MCP events. Otherwise, call wait to collect new messages. Read those messages with inbox.
+After setup, subscribe to `switchboard.message.created` if your app supports MCP events. Otherwise, call `wait`. Read the messages in the returned `items`.

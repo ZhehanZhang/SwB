@@ -7,7 +7,7 @@ SwB 以名为 **SwB** 的文字小装置与 Muse 配对。小装置是 Muse 应�
 
 ## 开始之前
 
-你需要一个 Muse 账号，以及 iOS 或 Android 上的 Muse 应用。你需要一台支持低功耗蓝牙的 Linux 设备，它能访问你的 SwB 服务器，例如 `https://swb.example.com`。SwB 使用 Ubuntu 24.04，并安装 `bluez`、`python3-dbus`、`python3-gi` 和 `python3-venv`。
+你需要一个 Muse 账号，以及 iOS 或 Android 上的 Muse 应用。请使用支持低功耗蓝牙的 Linux 设备。确保这台设备能访问你的 SwB 服务器。在 Ubuntu 24.04 上安装 `bluez`、`git`、`python3-dbus`、`python3-gi` 和 `python3-venv`。
 
 `config/switchboard.yaml` 的 `blocks` 下必须有 `muse: {use: muse}`。你还需要以所有者身份登录 SwB。
 
@@ -44,7 +44,7 @@ SwB 以名为 **SwB** 的文字小装置与 Muse 配对。小装置是 Muse 应�
 <Step>
 ### 安装桥接程序
 
-在 Linux 设备上打开与服务器版本一致的 SwB 文件夹。运行下面的命令。
+在 Linux 设备上运行下面的命令。把最后一条命令中的地址换成你的 SwB 地址。
 </Step>
 <Step>
 ### 输入两个令牌
@@ -71,7 +71,7 @@ SwB 以名为 **SwB** 的文字小装置与 Muse 配对。小装置是 Muse 应�
 
 ```sh
 /usr/bin/python3 -m venv --system-site-packages .venv-muse
-.venv-muse/bin/pip install . 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
+.venv-muse/bin/pip install swb-one 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
 .venv-muse/bin/swb muse-bridge --url https://swb.example.com --setup
 ```
 
@@ -100,7 +100,7 @@ Meta 令牌只保存在 Linux 设备上。SwB 只保存桥接令牌。
 
 ## 解决问题
 
-Linux 设备重启后，运行 `swb muse-bridge --url https://swb.example.com`，使用已保存的状态。要重新配对，加上 `--setup --pair-again`。
+设备重启后，在原目录运行 `.venv-muse/bin/swb muse-bridge --url https://swb.example.com`。要重新配对，加上 `--setup --pair-again`。
 
 Meta 的配对窗口保持十分钟。请在你信任的网络中配对。
 
