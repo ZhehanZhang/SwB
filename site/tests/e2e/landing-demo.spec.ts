@@ -47,6 +47,42 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
   }
 });
 
+test('the continuous demo fills the top from the first frame through a full cycle', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.clock.install();
+  await page.goto('/');
+  await page.evaluate(() => document.fonts.ready);
+  const win = page.locator('.swb-win');
+  await expect(win).toHaveAttribute('aria-hidden', 'true');
+  const titles: string[] = [];
+  let previousMessage: string | null | undefined;
+
+  for (let i = 0; i < 130; i++) {
+    const { title, gap, messages } = await win.evaluate((node) => {
+      const header = node.querySelector('.swb-win-bar')!;
+      const headerBottom = header.getBoundingClientRect().bottom;
+      const entries = [...node.querySelectorAll('.swb-win-entry')];
+      const first = entries.map((entry) => entry.getBoundingClientRect()).find(({ bottom }) => bottom > headerBottom);
+      return {
+        title: header.textContent!,
+        gap: first ? Math.max(first.top, headerBottom) - headerBottom : Infinity,
+        messages: entries.map((entry) => entry.textContent),
+      };
+    });
+    expect(gap, `blank space below the ${title} header`).toBeLessThanOrEqual(24);
+    if (titles.at(-1) !== title) {
+      if (titles.length) expect(messages.at(-2)).toBe(previousMessage);
+      else expect(messages.at(-2)).toContain('I opened pull request 42.');
+      titles.push(title);
+      if (titles.length === 5) break;
+    }
+    previousMessage = messages.at(-1);
+    await page.clock.fastForward(250);
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  }
+  expect(titles).toEqual(['Claude', 'Muse', 'Grok Bot', 'Slack #launch', 'Claude']);
+});
+
 test('reduced motion keeps the diagram and demo still', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
@@ -66,6 +102,16 @@ test('reduced motion keeps the diagram and demo still', async ({ page }) => {
   const demo = page.locator('.swb-exchange');
   const messages = demo.locator('.swb-win-message');
   await expect(messages).toHaveCount(3);
+  await expect(demo.locator('.swb-win-entry:visible')).toHaveCount(3);
+  const body = demo.locator('.swb-win-body');
+  expect(await body.evaluate((node) => {
+    const { top, bottom } = node.getBoundingClientRect();
+    return [...node.querySelectorAll('.swb-win-message')].every((entry) => {
+      const rect = entry.getBoundingClientRect();
+      return rect.top >= top && rect.bottom <= bottom;
+    });
+  })).toBe(true);
+  expect(await demo.ariaSnapshot()).toContain('I will add the Docker command to the release notes.');
   await expect(messages.first()).toHaveCSS('animation-name', 'none');
   const text = await demo.textContent();
   await page.waitForTimeout(1400);
