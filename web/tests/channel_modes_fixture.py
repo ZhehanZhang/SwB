@@ -15,6 +15,7 @@ from switchboard.app import create_app
 from switchboard.blocks.discord import Channel
 from switchboard.claims import Field
 from switchboard.core import Switchboard
+from switchboard.modes import ChatDrop
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("SWB_PLAYWRIGHT_PORT", "4178"))
@@ -126,6 +127,7 @@ def run(path: Path) -> None:
                      "Release ready", None, None, project="operations")
     core.audit.record(action="webhook", origin="repo-events", outcome="dropped", destination="repo-events", source="github",
                       client="local", target="example-org/example-repo", detail="channel mode off")
+    core.modes.chat_drop("team-chat", "engineering", "2002", ChatDrop.TRIAGE_TARGET)
     asyncio.run(seed_inbox(core))
     app = create_app(core)
     base = f"http://localhost:{PORT}"
