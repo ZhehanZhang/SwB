@@ -10,7 +10,7 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | 工具 | 用途 |
 | - | - |
 | `send` | 把工作或消息发送给一个目标，或让路由选择目标 |
-| `agent_send` | 已弃用的工具名，仅本版本保留。`blocks.mcp.legacy_aliases` 默认启用此名称。新调用请用 `send` 并指定 `to="agent:<name>"` |
+| `agent_send` | 旧版工具。在 `to` 中直接填写智能体名称，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 默认启用此工具。新调用请用 `send`，例如 `to="agent:codex"` |
 | `wait` | 等待你的会话中的下一条答复 |
 | `inbox` | 读取你的收件箱并立即返回 |
 | `reply` | 回答一条消息，或向会话添加一条消息 |
@@ -19,7 +19,9 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `result` | 获取一个会话的最终答复。支持 `tail` 的会话可用它指定返回的近期回复或消息条数 |
 | `cancel` | 停止跟踪一个会话 |
 | `targets` | 列出 `send` 能访问的所有对象 |
-| `get_message` | 按 id 读取一条已存储的消息 |
+| `get_message` | 使用 MCP 事件回调中的 `message_id` 读取已存储的消息，例如 `msg_42` |
+
+`inbox` 工具和[收件箱事件流](/zh-Hans/docs/connect#收件箱事件流)直接提供消息数据。用 `inbox` 读取后续消息时，将 `cursor` 填入 `since_cursor`。回复时，将消息的 `handle` 填入 `reply` 的 `conversation`。
 
 ### 发送选项
 
@@ -48,6 +50,8 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `project_create` | 创建项目 |
 | `project_update` | 重命名、链接、归档项目，或把项目设为私有 |
 | `project_sync` | 重新把项目链接到它们的匹配项 |
+
+调用 `memory_search` 或 `memory_list` 时，将私人项目填入 `project`，即可读取该项目的记忆。通过 `scopes` 添加其他项目时，请选择公开项目。智能体的密钥须具备各项目的访问权限。
 
 ## 设置
 

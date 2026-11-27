@@ -10,7 +10,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 | 工具 | 用途 |
 | - | - |
 | `send` | 把工作或訊息傳送給目標，或交由路由選擇目標 |
-| `agent_send` | 已淘汰的工具名稱，僅在本版保留。`blocks.mcp.legacy_aliases` 預設啟用此名稱。新呼叫請用 `send` 並指定 `to="agent:<name>"` |
+| `agent_send` | 舊版工具。在 `to` 中直接填入代理名稱，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 預設啟用此工具。新的呼叫請使用 `send`，例如 `to="agent:codex"` |
 | `wait` | 等待你的對話中的下一則回覆 |
 | `inbox` | 讀取你的收件匣並立即回傳 |
 | `reply` | 回答訊息，或在對話中加入訊息 |
@@ -19,7 +19,9 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `result` | 取得對話的最終回覆。支援 `tail` 的對話可用它指定回傳的近期回覆或訊息則數 |
 | `cancel` | 停止追蹤對話 |
 | `targets` | 列出 `send` 能連到的所有對象 |
-| `get_message` | 依 id 讀取一則已儲存的訊息 |
+| `get_message` | 使用 MCP 事件回呼中的 `message_id` 讀取已儲存的訊息，例如 `msg_42` |
+
+`inbox` 工具和[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)會直接提供訊息資料。用 `inbox` 讀取後續訊息時，將 `cursor` 填入 `since_cursor`。回覆時，將訊息的 `handle` 填入 `reply` 的 `conversation`。
 
 ### 傳送選項
 
@@ -48,6 +50,8 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `project_create` | 建立專案 |
 | `project_update` | 重新命名、連結、封存專案，或把專案設為私人 |
 | `project_sync` | 重新把專案連結到它們的對應項目 |
+
+呼叫 `memory_search` 或 `memory_list` 時，將私人專案填入 `project`，即可讀取該專案的記憶。透過 `scopes` 加入其他專案時，請選擇公開專案。代理的金鑰須具備各專案的存取權限。
 
 ## 設定
 

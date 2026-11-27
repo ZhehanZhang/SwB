@@ -26,6 +26,8 @@ SwB 可在 Linux、macOS 與 Windows 上執行。uvx 與 pipx 安裝方式需要
     ```
 
     pipx 會為目前的使用者安裝 `swb` 指令。`init` 會寫入私有的擁有者金鑰與設定檔。
+
+    若 pipx 使用較舊的 Python，請執行 `pipx install --python 3.12 swb-one`。
   </Tab>
   <Tab value="Docker">
     ```bash
@@ -39,11 +41,15 @@ SwB 可在 Linux、macOS 與 Windows 上執行。uvx 與 pipx 安裝方式需要
   </Tab>
 </Tabs>
 
+透過 uvx 或 pipx 執行 `swb init` 時，SwB 會建立 `<folder>/data`。已初始化的資料夾和用 `--dir` 選取的資料夾預設各自使用其中的 `data`。直接在空資料夾執行 `swb up` 時，預設使用 `~/.local/share/switchboard`。在 Linux 和 macOS 上，資料夾權限是 `0700`，資料庫檔案的權限是 `0600`。
+
 `swb up` 預設在 `127.0.0.1` 的 `8870` 連接埠接收連線。本機 MCP 位址是 `http://127.0.0.1:8870/mcp`。瀏覽器登入位址使用 `http://localhost:8870`。
 
 若要更改 `swb up` 的連接埠，請在終端機或 `.env` 設定 `PORT`。登入位址也要使用同一個連接埠。若要指定其他伺服器，請在用戶端指令加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。
 
-使用 `swb up --dir ./my-swb` 將設定、`.env` 與資料集中在獨立的資料夾。執行 `swb init` 與用戶端指令時，請指定同一個 `--dir`。詳見[設定](/zh-Hant/docs/config)。
+用 `swb up --dir ./my-swb` 指定執行個體的資料夾。執行 `swb init` 時，請指定同一個 `--dir`。SwB 依照 `SWITCHBOARD_CONFIG` 選取設定檔。指定 `--dir` 時，SwB 會改用該資料夾裡的設定檔。
+
+SwB 先讀取 YAML 設定檔或覆寫檔中的 `data_dir`，再依序檢查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`，最後使用預設路徑。如果舊的執行個體有設定檔但缺少 `data` 資料夾，直接執行 `swb up` 會繼續使用家目錄中現有的資料庫。SwB 會在日誌中提示一次。指令選項請參閱[設定](/zh-Hant/docs/config)。
 
 ## 檢查伺服器
 
@@ -55,6 +61,8 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 ## 伺服器指令
 
+執行 `swb --help` 可查看各類指令。在任一指令後加上 `--help` 即可查看該指令的選項。
+
 | 指令 | 用途 |
 | - | - |
 | `swb init` | 寫入私有的擁有者金鑰與基本設定。 |
@@ -65,8 +73,8 @@ curl -fsS http://127.0.0.1:8870/healthz
 | `swb claim` | 使用領取連結或領取碼儲存憑證。 |
 | `swb muse-bridge` | 在 Linux 上配對並執行 Muse 裝置。 |
 | `swb serve` | 依照設定的主機位址與連接埠執行伺服器。 |
-| `swb export DIR` | 將已儲存的記憶匯出至指定資料夾中的 Markdown 檔案。 |
-| `swb log` | 印出近期稽核記錄。 |
+| `swb export DIR` | 將已儲存的記憶匯出為 Markdown 檔案，存入輸出資料夾 `DIR`。 |
+| `swb log` | 印出最近的稽核記錄，最多 50 筆。 |
 | `swb config migrate` | 將第 1 版設定轉為第 2 版格式並印出。 |
 | `swb blocks list` | 列出已設定的模組。 |
 | `swb blocks show BLOCK` | 顯示指定模組的設定。 |

@@ -26,6 +26,8 @@ Use an empty folder for your instance. The owner key lets the `swb` command sign
     ```
 
     pipx installs the `swb` command for your user account. The `init` command writes a private owner key and the config file.
+
+    If pipx uses an older Python, use `pipx install --python 3.12 swb-one`.
   </Tab>
   <Tab value="Docker">
     ```bash
@@ -39,11 +41,15 @@ Use an empty folder for your instance. The owner key lets the `swb` command sign
   </Tab>
 </Tabs>
 
+For uvx and pipx, `swb init` creates `<folder>/data`. An initialized folder or a folder selected with `--dir` uses its `data` folder by default. A bare `swb up` inside an empty folder uses `~/.local/share/switchboard` by default. On Linux and macOS, SwB uses mode `0700` for the data folder and `0600` for the database files.
+
 `swb up` listens on `127.0.0.1` at port `8870` by default. The local MCP address is `http://127.0.0.1:8870/mcp`. Use `http://localhost:8870` as the browser sign-in address.
 
 Set `PORT` in the shell or in `.env` to use a different port with `swb up`. Set the same port in the sign-in address. Use `--url` on client commands to select a different server, for example `swb status --url http://127.0.0.1:8871`.
 
-Use `swb up --dir ./my-swb` to keep the config, `.env` and data in a separate instance folder. Use the same `--dir` with `swb init` and the client commands. See [Config](/docs/config) for the settings.
+Use `swb up --dir ./my-swb` to select an instance folder. Use the same `--dir` with `swb init`. SwB uses `SWITCHBOARD_CONFIG` to select the config file. With `--dir`, it uses that folder’s config file instead.
+
+SwB checks `data_dir` in the YAML config or overlay first. It then checks `SWITCHBOARD_DATA_DIR`, followed by `SWITCHBOARD_DATA`. The default path applies last. With plain `swb up`, an older instance with a config file and a missing `data` folder keeps its existing home database. SwB logs a notice once. See [Config](/docs/config) for command options.
 
 ## Check the server
 
@@ -55,6 +61,8 @@ The answer lists each block and its state. A block that needs a setting shows th
 
 ## Server commands
 
+Run `swb --help` to see the command groups. Add `--help` to a command to see its options.
+
 | Command | Use |
 | - | - |
 | `swb init` | Write a private owner key and a minimal config. |
@@ -65,8 +73,8 @@ The answer lists each block and its state. A block that needs a setting shows th
 | `swb claim` | Save a credential from a claim link or code. |
 | `swb muse-bridge` | Pair and run a Muse gadget on Linux. |
 | `swb serve` | Run the server with its configured host and port. |
-| `swb export DIR` | Write saved memory to Markdown files in the given folder. |
-| `swb log` | Print recent audit entries. |
+| `swb export DIR` | Write saved memory to Markdown files in the output folder `DIR`. |
+| `swb log` | Print up to 50 recent audit entries. |
 | `swb config migrate` | Print a version 1 config in the version 2 format. |
 | `swb blocks list` | List the configured blocks. |
 | `swb blocks show BLOCK` | Show the settings for a block. |

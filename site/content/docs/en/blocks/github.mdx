@@ -5,13 +5,13 @@ description: Send GitHub events to your agents and services.
 
 ## Make the app
 
-Create a GitHub App on your account. Set the webhook address to your public SwB address plus `/github/webhook`. For example, use `https://swb.example.com/github/webhook`. Make a webhook secret.
+Create a GitHub App on your account. Set the webhook address to your public SwB address plus `/github/webhook`. For example, use `https://swb.example.com/github/webhook`. Generate a webhook secret in a private file. SwB accepts secrets of at least 16 characters.
 
 ```bash
-openssl rand -hex 32
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
 ```
 
-Ask an agent to connect GitHub. SwB gives you a separate claim link for each missing value. Use the links for the App ID, private key and webhook secret. Paste the full contents of the `.pem` file in the private key field.
+Enter the secret in **Webhook secret**. Ask an agent to connect GitHub. Save the same secret through its claim link. Delete the private file. Restart SwB to load the secret. Ask the agent to call `connect` again for any remaining App ID or private key links. Paste the full contents of the `.pem` file in the private key field.
 
 ## Permissions
 

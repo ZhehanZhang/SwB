@@ -38,7 +38,13 @@ Under **Webhook**, keep **Active** selected. Type `https://swb.example.com/githu
 <Step>
 ### Set the webhook secret
 
-Make a random secret of 64 characters in your password manager. Type it in **Webhook secret**.
+Generate a secret in a private file.
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
+```
+
+Save the result in your password manager. Enter it in **Webhook secret**. SwB accepts secrets of at least 16 characters.
 </Step>
 <Step>
 ### Set the permissions
@@ -65,7 +71,7 @@ Click **Generate a private key** under **Private keys**. Your browser downloads 
 <Step>
 ### Save the credentials
 
-Open each SwB claim link from your agent. Save the webhook secret, the **App ID** and the whole `.pem` file there.
+Open each SwB claim link from your agent. Save the same webhook secret, the **App ID** and the full `.pem` file. Delete the private file after you save the secret.
 </Step>
 <Step>
 ### Install the app
@@ -94,7 +100,9 @@ In an organization, GitHub can show **Request** in place of **Install**. Then an
 
 The agent calls `connect` with `what="github"`. SwB shows the webhook address, the webhook secret state and the number of repository routes. A route sends the events of one repository to a target.
 
-For an app that writes, the agent calls `connect` with `what="github"` and `choose={"credential":"app"}`. SwB returns one claim link for each missing value. The agent adds the repositories under `blocks.github.spaces` or `blocks.github.routes` in `config/switchboard.yaml`.
+The agent adds the repositories under `blocks.github.spaces` or `blocks.github.routes` in `config/switchboard.yaml`. Save the same webhook secret through its claim link. The agent restarts SwB to load the secret and apply the route changes.
+
+The agent calls `connect(what="github")` again for any remaining App ID or private key links. To switch from an existing personal access token to an App, it selects `choose={"credential":"app"}`.
 
 After a restart, the agent calls `github_status`. This checks the installation and its permissions. Agents then use `github_label`, `github_comment`, `github_open_issue`, `github_link_duplicate`, `github_reply` and `github_notify_owner` as the channel mode allows.
 
@@ -102,7 +110,7 @@ After a restart, the agent calls `github_status`. This checks the installation a
 
 | Token | Where GitHub shows it | Format | Where it goes |
 | --- | --- | --- | --- |
-| Webhook secret | You make it in your password manager | Random text, 64 characters | SwB claim link |
+| Webhook secret | You generate it with `openssl rand -hex 32` | At least 16 characters | SwB claim link |
 | App ID | App settings, **App ID** | A number | SwB claim link |
 | Private key | Downloaded once after **Generate a private key** | A `.pem` file | SwB claim link |
 
