@@ -1,40 +1,64 @@
 ---
 title: 頻道模式
-description: 選擇 SwB 在每個頻道中的行為。
+description: 設定 SwB 在各頻道中的行為。
 ---
 
-**空間**（space）是訊息抵達的地方。Slack 頻道、Discord 頻道或討論串、Telegram 群組與 GitHub 程式碼庫都是空間。每個空間有一種模式。
+**空間**是接收訊息的地方。Slack 頻道、Discord 頻道和討論串、Telegram 群組及 GitHub 程式碼庫都是空間。
 
-| 模式 | 其他人傳來的訊息 | 代理的動作 | 回覆送往 |
-| - | - | - | - |
-| `off` | SwB 丟棄訊息 | 保持休眠 | 只送給擁有者 |
-| `watch` | SwB 儲存訊息並寄給你一份摘要 | 只讀取 | 只送給擁有者 |
-| `assist` | 訊息喚醒 assist 目標 | 用讀取工具根據情境回答 | 討論串 |
-| `triage` | 訊息喚醒 triage 目標 | 使用該空間的動作 | 討論串，並附上給你的備註 |
-| `work` | 只接受擁有者的訊息 | 你能要求的任何事 | 討論串 |
+| 模式 | SwB 的行為 |
+| - | - |
+| `off` | 捨棄其他人傳來的訊息 |
+| `watch` | 收集訊息並彙整成摘要 |
+| `assist` | 喚醒代理，讓它參考上下文並在原討論串回覆 |
+| `triage` | 喚醒分流代理。預設動作是在原討論串回覆 |
+| `work` | 處理擁有者傳來的訊息 |
 
-你自己的提及或私訊在每種模式下一律是 `work`。模式只能縮小權限。可見度仍然決定誰能連到目標。
+在 Slack、Discord 和 Telegram 中，擁有者的提及和私訊一律依 `work` 處理。頻道與目標的存取範圍由可見性設定決定。
 
 ## 設定模式
 
-請詢問代理，例如「把 #support 設成 triage。」代理會呼叫模式工具。你也可以在 SwB 頁面或設定檔中選擇模式。
+可在 SwB 頁面或 YAML 設定模式。擁有者也可呼叫 `space_mode`，指定模式、專案及允許的動作。
 
-```yaml
-modes:
-  default: watch
-blocks:
-  discord:
-    spaces:
-      home:
-        mode: watch
-        channels:
-          "100000000000000004": {mode: triage, project: app, actions: [reply, label, comment]}
+SwB 先查看已儲存的設定，再查看頻道和空間設定。接著查看模組的舊版設定、專案模式和 `modes.default`。預設模式為 `off`。
+
+## 繫結目標
+
+在 GitHub、Slack、Discord 和 Telegram 中，`assist`、`triage` 和 `work` 模式可以透過專案路由喚醒代理。SwB 依下列順序選用第一個適用的目標。
+
+| 順序 | 目標 |
+| - | - |
+| 首先 | YAML 中的 `target`。依序查看頻道、空間和專案的模式設定 |
+| 其次 | 在 `triage` 模式下，選用名為 `claude-<project>-triage` 的可用目標，例如 Claude 例程 |
+| 再來 | 空間設定中的 `default_target` 或 `target` |
+| 最後 | 專案路由 |
+
+呼叫 `routes_set` 時指定專案代稱和目標位址。在模式設定中將 `project` 設為同一個專案。以下範例使用現有的 GitHub 空間、專案和已配對的代理。
+
+```python
+routes_set(project="app", target="agent:alpha")
+space_mode(block="github", space="example-org/app", mode="triage", project="app")
 ```
 
-SwB 採用第一個符合的設定，順序如下。先看在頁面上或由代理設定的模式，接著是頻道，再來是空間，然後是 `modes.projects.<project>`，最後是 `modes.default`。`modes.default` 的預設值是 `off`。
+若要啟用協助模式，請改用 `mode="assist"`。若要使用鎖定的 Capy 路由，請指定 `capy:captain:<name>` 這類目標，並保留 `allow_override=false`。共用空間和目標，即可讓其他人存取該代理。
 
-## Triage 動作
+## 分流動作
 
-空間的 `actions` 清單列出 triage 喚醒可以使用的動作。動作有 `reply`、`label`、`comment`、`open_issue`、`link_duplicate` 與 `notify_owner`。SwB 在伺服器端強制執行這份清單。GitHub 動作使用專案的 GitHub App。
+分流代理可以讀取上下文。預設是在原討論串執行 `reply`。在 GitHub 討論串中，請使用 `github_reply`。
 
-請使用獨立的 triage routine，並只連接少數連接器，例如 `claude-<project>-triage`。SwB 為 triage 喚醒這個 routine。每個 triage 動作都會進入稽核記錄，並附上訊息的連結。
+若要開放更多動作，請在 `space_mode` 或 YAML 中設定 `actions`。將 `reply` 加入清單即可保留回覆功能，例如 `actions=["reply", "notify_owner"]`。
+
+| 動作 | 用途 |
+| - | - |
+| `label` | 為 GitHub 議題或提取要求加上標籤 |
+| `comment` | 在 GitHub 上新增留言 |
+| `open_issue` | 建立 GitHub 議題 |
+| `link_duplicate` | 連結並關閉重複的 GitHub 議題 |
+| `notify_owner` | 傳一則通知給擁有者 |
+
+變更 GitHub 內容需要具備寫入權限的 GitHub 憑證。SwB 會將分流動作寫入稽核記錄。
+
+## 檢查訊息傳送
+
+呼叫 `modes_status` 查看模式、目標、動作和設定問題。分流需要指定目標時，`space_mode` 和 `modes_status` 都會提示選擇分流代理。
+
+SwB 會記錄捨棄每個 GitHub webhook 的原因。開啟 **Audit** 或執行 `swb log` 查看原因。

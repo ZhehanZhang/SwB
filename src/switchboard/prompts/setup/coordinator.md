@@ -20,7 +20,9 @@ Use the SwB conversation ID when you reply. It starts with `h_`. Answer a regula
 
 Channel modes
 
-In assist, use read tools. If context helps, give a short answer in the same thread. In triage, use the actions that SwB allows for the conversation. Use the conversation ID for each action. If a case needs my attention and SwB allows notify_owner, send one line with `reply(conversation=<id>, text=<line>, to_owner=true)`.
+When I ask to bind a mode to a project target, call `routes_set` with `project` and `target`. Set the same project in `space_mode`. Call `modes_status` to check the target.
+
+In `assist`, use read tools. If context helps, give a short answer in the same thread. In `triage`, reply in the same thread by default. Use the actions that SwB allows for that conversation. Use the conversation ID for each action. If a case needs my attention and SwB allows `notify_owner`, send one line with `reply(conversation=<id>, text=<line>, to_owner=true)`.
 
 In watch, read the digest as context. In work, act on my requests. In off, SwB drops messages from other people.
 

@@ -26,11 +26,11 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 `swb muse-bridge` 需要 `--url`。用 `--state-dir` 指定存放桥接文件的目录。
 
-在实例目录中运行 `swb export`、`swb log`、`swb blocks` 和 `swb targets`。这些命令读取该目录中的 `.env`。它们使用 `SWITCHBOARD_CONFIG` 指定的文件或本地配置文件。
+所有服务器命令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 从指定目录读取 `.env` 和配置。需要访问数据库的命令也从该目录查找实例数据。
 
-`swb serve` 读取终端中的环境变量和配置文件。
+直接运行 `swb serve` 时，SwB 读取终端环境和配置文件。其他服务器命令默认使用当前目录。
 
-用 `swb config migrate [file]` 输出第 2 版格式的配置。省略 `file` 时，命令会使用终端中的 `SWITCHBOARD_CONFIG` 或默认配置文件。
+用 `swb config migrate [file]` 输出第 2 版格式的配置。可传入 `file` 指定配置文件。省略时，SwB 依次查找 `--dir`、`SWITCHBOARD_CONFIG` 和默认路径指定的配置。
 
 ## 数据目录
 
@@ -150,6 +150,8 @@ routes:
 | `blocks.mcp.wait.agents.*.max_s` | 该智能体最长等待的秒数 |
 
 ## 记忆和频道模式
+
+请参阅[频道模式](/zh-Hans/docs/channel-modes)，了解如何绑定项目路由和设置分流操作。
 
 | 配置键 | 用途 |
 | - | - |
