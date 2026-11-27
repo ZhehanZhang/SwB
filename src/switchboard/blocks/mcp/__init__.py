@@ -327,13 +327,13 @@ class MCPBlock(Block):
             except (CoreError, DestinationError, MemoryError_, ProjectError, RouteError, PermissionError) as e:
                 raise ToolError(str(e)) from e
 
-        @mcp.tool(title="Channel modes", description="Read the modes of the channels and repositories you can see.", annotations=READ)
+        @mcp.tool(title="Channel modes", description="Read the modes and targets for channels and repositories you can see. See which agent handles triage.", annotations=READ)
         async def modes_status(ctx: Context) -> dict[str, Any]:
             p = who(ctx)
             await core.modes.refresh(p)
             return core.modes.status(p)
 
-        @mcp.tool(title="Set a channel mode", description="Owner only. Set a space or channel override now, or use inherit to clear it.", annotations=WRITE)
+        @mcp.tool(title="Set a channel mode", description="Owner only. Set a space or channel override. Use inherit to clear it. The triage agent can reply by default.", annotations=WRITE)
         async def space_mode(ctx: Context, block: str, space: str, mode: str, channel: str = "",
                              actions: list[str] | None = None, project: str | None = None) -> dict[str, Any]:
             try:

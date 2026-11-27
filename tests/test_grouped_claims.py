@@ -44,6 +44,25 @@ def test_single_github_claims_validate_before_saving(make):
         assert client.get(path, headers=OWNER).status_code == 410
 
 
+def test_reissued_github_claim_and_earlier_link_are_each_single_use(make):
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}, "github": {}}))
+    block = core.blocks["github"]
+
+    def app_id_link():
+        result = client.portal.call(block.connect_steps, "github", Principal("owner", "test", "key"), None, {"credential": "app"})
+        return next(urlsplit(step["link"]).path for step in result["next"] if "link" in step
+                    and core.claims.inspect(step["link"].rsplit("/", 1)[1]) == "GITHUB_APP_ID")
+
+    earlier, latest = app_id_link(), app_id_link()
+    assert earlier != latest
+    assert client.get(earlier, headers=OWNER).status_code == 200
+    for path, value in ((latest, "12345"), (earlier, "23456")):
+        csrf = form_csrf(client.get(path, headers=OWNER))
+        assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": value}).status_code == 200
+        assert client.get(path, headers=OWNER).status_code == 410
+        assert core.claims.secret("GITHUB_APP_ID") == value
+
+
 def test_github_single_claim_forms_and_inventory_show_the_credential_names(make):
     config = base_config(version=2, blocks={"mcp": {}, "github": {"private_key_env": "CUSTOM_APP_KEY"}})
     core, client = make(config=config)

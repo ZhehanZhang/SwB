@@ -1,4 +1,4 @@
-from conftest import CAPTAIN, STATIC_KEY, call, error_text, payload, sign_in, beacon
+from conftest import CAPTAIN, OWNER, SECOND_KEY, STATIC_KEY, call, error_text, payload, sign_in, beacon
 
 
 def test_no_handle_inbox_returns_only_the_callers_items_and_handles_never_cross(make, capy):
@@ -66,3 +66,39 @@ def test_conversation_filter_follows_mailbox_reply_handles(make):
     assert [item["text"] for item in unfiltered["items"]] == ["Unrelated"]
     inbox = payload(call(c, STATIC_KEY, "inbox", {"conversation": root, "since_cursor": 0}))
     assert inbox["items"] == got["items"]
+
+
+def test_mailbox_cancel_stops_delivery_and_following(make):
+    core, client = make()
+    handle = payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Check the build"}))["conversation"]
+    args = {"conversation": handle}
+    payload(call(client, SECOND_KEY, "reply", {**args, "text": "Checking", "final": False}))
+    for _ in range(2):
+        assert payload(call(client, STATIC_KEY, "cancel", args)) == {**args, "status": "cancelled"}
+    late = payload(call(client, SECOND_KEY, "reply", {**args, "text": "Passed"}))
+    assert late["status"] == "cancelled" and late["delivered"] is False
+    result = payload(call(client, STATIC_KEY, "result", args))
+    assert result["status"] == "cancelled" and result["final"] is None
+    assert [reply["text"] for reply in result["replies"]] == ["Checking"]
+    wait = payload(call(client, STATIC_KEY, "wait", {**args, "timeout_s": 10}))
+    assert wait["handle_status"] == "cancelled" and not wait["timed_out"] and wait["items"] == []
+    inbox = payload(call(client, STATIC_KEY, "inbox", {**args, "since_cursor": 0}))
+    assert inbox["handle_status"] == "cancelled" and inbox["items"] == []
+    assert [item["text"] for item in payload(call(client, STATIC_KEY, "inbox"))["items"]] == ["Checking"]
+    history = client.get(f"/api/conversations/{handle}", headers=OWNER).json()
+    assert [item["text"] for item in history["items"]] == ["Check the build", "Checking"]
+    assert len(core.audit.recent(action="cancel", outcome="ok")) == 1
+
+
+def test_mailbox_wait_and_inbox_share_consumption_in_both_directions(make):
+    _, client = make()
+    handle = payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Check the build"}))["conversation"]
+    first = {"conversation": handle, "text": "Checking", "final": False}
+    payload(call(client, SECOND_KEY, "reply", first))
+    unfiltered = payload(call(client, STATIC_KEY, "wait", {"timeout_s": 0}))["items"]
+    assert [item["text"] for item in unfiltered] == ["Checking"]
+    payload(call(client, SECOND_KEY, "reply", {"conversation": handle, "text": "Passed"}))
+    filtered = payload(call(client, STATIC_KEY, "wait", {"conversation": handle, "timeout_s": 0}))["items"]
+    assert [item["text"] for item in filtered] == ["Passed"]
+    assert payload(call(client, STATIC_KEY, "inbox"))["items"] == []
+    assert payload(call(client, STATIC_KEY, "inbox", {"conversation": handle, "since_cursor": 0}))["items"] == unfiltered + filtered

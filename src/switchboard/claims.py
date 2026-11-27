@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS secrets (
 )
 """
 
+LINK_SCHEMA = """
+CREATE TABLE IF NOT EXISTS claim_links (
+  code_hash TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  expires_at REAL NOT NULL,
+  require_https INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  label TEXT NOT NULL
+)
+"""
 
 GROUP_SCHEMA = """
 CREATE TABLE IF NOT EXISTS claim_groups (
@@ -182,12 +192,22 @@ class Claims:
         self._kind_checks: dict[str, ClaimCheck] = {}
         self._online_checks: dict[str, ClaimOnlineCheck] = {}
         store.x(SCHEMA)
+        store.x(LINK_SCHEMA)
+        store.x("CREATE INDEX IF NOT EXISTS claim_links_name ON claim_links(name, expires_at)")
         store.x(GROUP_SCHEMA)
         columns = {r["name"] for r in store.q("PRAGMA table_info(secrets)")}
         for name, definition in (("require_https", "INTEGER NOT NULL DEFAULT 0"),
                                  ("kind", "TEXT NOT NULL DEFAULT 'token'"), ("label", "TEXT NOT NULL DEFAULT ''")):
             if name not in columns:
                 store.x(f"ALTER TABLE secrets ADD COLUMN {name} {definition}")
+
+        def migrate(db: Any) -> None:
+            db.execute("""INSERT OR IGNORE INTO claim_links(code_hash, name, expires_at, require_https, kind, label)
+                          SELECT code_hash, name, expires_at, COALESCE(require_https, 0), kind, label FROM secrets
+                          WHERE code_hash IS NOT NULL AND expires_at > ?""", (store.clock(),))
+            db.execute("UPDATE secrets SET code_hash = NULL, expires_at = NULL WHERE code_hash IS NOT NULL")
+
+        store.tx(migrate)
 
     def register_name(self, name: str, check: ClaimCheck) -> None:
         self._name_checks[name] = check
@@ -219,26 +239,28 @@ class Claims:
         if not self._known_kind(kind):
             raise ClaimError("Choose a credential kind.")
         code = secrets.token_urlsafe(32)
-        self.store.x(
-            """INSERT INTO secrets(name, code_hash, expires_at, require_https, kind, label) VALUES (?, ?, ?, ?, ?, ?)
-               ON CONFLICT(name) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at,
-                                               require_https = excluded.require_https, kind = excluded.kind, label = excluded.label""",
-            (name, _digest(code), self.store.clock() + CLAIM_TTL_S, url, "url" if url else kind, label),
-        )
+        now = self.store.clock()
+
+        def register(db: Any) -> None:
+            db.execute("DELETE FROM claim_links WHERE expires_at <= ?", (now,))
+            db.execute("INSERT INTO claim_links(code_hash, name, expires_at, require_https, kind, label) VALUES (?, ?, ?, ?, ?, ?)",
+                       (_digest(code), name, now + CLAIM_TTL_S, url, "url" if url else kind, label))
+
+        self.store.tx(register)
         return f"{public_url.rstrip('/')}{CLAIM_PATH}/{code}"
 
     def inspect(self, code: str) -> str:
         return self.inspect_details(code)["name"]
 
     def inspect_details(self, code: str) -> dict[str, Any]:
-        row = self.store.one("SELECT name, expires_at, require_https, kind, label FROM secrets WHERE code_hash = ? AND expires_at > ?",
+        row = self.store.one("SELECT name, expires_at, require_https, kind, label FROM claim_links WHERE code_hash = ? AND expires_at > ?",
                              (_digest(code), self.store.clock()))
         if row is None:
             raise ClaimUnavailable(UNUSABLE)
         return dict(row)
 
     def pending(self, name: str) -> bool:
-        return self.store.one("SELECT 1 FROM secrets WHERE name = ? AND code_hash IS NOT NULL AND expires_at > ?",
+        return self.store.one("SELECT 1 FROM claim_links WHERE name = ? AND expires_at > ? LIMIT 1",
                               (name, self.store.clock())) is not None
 
     async def submit(self, code: str, value: str) -> str:
@@ -258,14 +280,19 @@ class Claims:
         return self._normalize(claim["name"], kind, value)
 
     def _save(self, code: str, value: str) -> str:
-        row = self.store.one(
-            """UPDATE secrets SET code_hash = NULL, expires_at = NULL, sealed = ?
-               WHERE code_hash = ? AND expires_at > ? RETURNING name""",
-            (self._cipher.encrypt(value.encode()), _digest(code), self.store.clock()),
-        )
-        if row is None:
-            raise ClaimUnavailable(UNUSABLE)
-        return row["name"]
+        digest, sealed = _digest(code), self._cipher.encrypt(value.encode())
+
+        def save(db: Any) -> str:
+            row = db.execute("DELETE FROM claim_links WHERE code_hash = ? AND expires_at > ? RETURNING name, require_https",
+                             (digest, self.store.clock())).fetchone()
+            if row is None:
+                raise ClaimUnavailable(UNUSABLE)
+            db.execute("""INSERT INTO secrets(name, sealed, require_https) VALUES (?, ?, ?)
+                          ON CONFLICT(name) DO UPDATE SET sealed = excluded.sealed, require_https = excluded.require_https""",
+                       (row["name"], sealed, row["require_https"]))
+            return row["name"]
+
+        return self.store.tx(save)
 
     def mint_group(self, title: str, fields: list[Field], public_url: str | None, provider: str = "") -> str:
         """One link whose form saves every field together, after each one is checked."""
@@ -322,7 +349,7 @@ class Claims:
                 raise ClaimUnavailable(UNUSABLE)
             for name, value in sealed.items():
                 db.execute("""INSERT INTO secrets(name, sealed) VALUES (?, ?)
-                              ON CONFLICT(name) DO UPDATE SET sealed = excluded.sealed, code_hash = NULL, expires_at = NULL""", (name, value))
+                              ON CONFLICT(name) DO UPDATE SET sealed = excluded.sealed""", (name, value))
 
         self.store.tx(save)
         return list(sealed)
