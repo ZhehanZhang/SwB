@@ -298,7 +298,7 @@ class CodexCapability(Capability):
             await harness().report(ctx, self.id, session)
         self._sessions = sessions
         for thread in tuple(self._turns):
-            if wait := self._waiting(rpc, thread):
+            if (wait := self._waiting(rpc, thread)) and not harness().replying(wait.wake):
                 await self._reconcile_turn(rpc, ctx, thread, wait)
 
     async def _reconcile_turn(self, rpc: _Connection, ctx: CompanionContext, thread: str, wait: _Waiting) -> None:
@@ -344,7 +344,7 @@ class CodexCapability(Capability):
     async def _completed(self, rpc: _Connection, ctx: CompanionContext, thread: str, wait: _Waiting,
                          turn: dict[str, Any]) -> None:
         status = turn.get("status")
-        if status not in ("completed", "failed", "interrupted"):
+        if status not in ("completed", "failed", "interrupted") or harness().replying(wait.wake):
             return
         text = ""
         if status == "completed":
@@ -362,13 +362,14 @@ class CodexCapability(Capability):
                     return
         if self._waiting(rpc, thread) is not wait:
             return
-        self._turns.pop(thread)
-        rpc.watched.discard(thread)
         key = f"codex:{thread}"
         if text:
-            await harness().reply(ctx, self.id, [key], text)
+            if not await harness().reply(ctx, self.id, [key], text):
+                return
         else:
             harness().take([key])
+        self._turns.pop(thread)
+        rpc.watched.discard(thread)
 
     async def _event(self, rpc: _Connection, ctx: CompanionContext, method: str, params: dict[str, Any]) -> None:
         thread = params["threadId"]

@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from ..client import Disconnected
-from ..harness import Session, harness
+from ..harness import REFRESH_S, Session, harness
 from ._harness import HARNESS_ACTIONS, check_list_args, folder_name, prompt_args, reconnect
 from .base import Capability, CapabilityError, CompanionContext, JobContext
 
@@ -29,6 +29,7 @@ _SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _STATES = {"busy": "working", "running": "working", "retry": "working", "idle": "idle"}
 _MAX_EVENT = 1 << 20
 _ACTIVE_REFRESH_S = 5
+_HISTORY_PAGES = 6
 
 
 def _obj(value: Any) -> dict[str, Any]:
@@ -159,32 +160,60 @@ def _folder(info: dict[str, Any]) -> str:
     return folder_name(info.get("directory") or _obj(info.get("location")).get("directory"))
 
 
-def _reply_text(items: list[Any], message_id: str, legacy: bool) -> tuple[bool, str]:
+async def _history_reply(
+    client: httpx.AsyncClient, routes: _Routes, session: str, directory: str, message_id: str,
+) -> tuple[bool, str]:
+    legacy = routes.body == "legacy"
+    params: dict[str, Any] = {"limit": 50}
+    if not legacy:
+        params["order"] = "desc"
+    if directory and routes.messages in routes.directory_params:
+        params["directory"] = directory
+    path = _route(routes.messages, session)
+    cursors: set[str] = set()
     latest = ""
     finished = False
-    for item in reversed(items) if legacy else items:
-        item = _obj(item)
-        info = _obj(item.get("info")) if legacy else item
-        role = info.get("role" if legacy else "type")
-        if role == "user":
-            return (finished, latest) if info.get("id") == message_id else (False, "")
-        if role == "idle":
-            finished = True
-        if role != "assistant" or latest or info.get("error") or info.get("summary"):
-            if role == "assistant" and info.get("error") and (not legacy or info.get("parentID") == message_id):
+    for _ in range(_HISTORY_PAGES):
+        response = await client.get(path, params=params)
+        response.raise_for_status()
+        page = response.json()
+        items = _items(page)
+        for item in map(_obj, reversed(items) if legacy else items):
+            info = _obj(item.get("info")) if legacy else item
+            role = info.get("role" if legacy else "type")
+            if role == "user":
+                if info.get("id") == message_id:
+                    return finished, latest
+                if not legacy:
+                    finished, latest = False, ""
+                continue
+            if role == "idle" and not legacy:
                 finished = True
-            continue
-        if legacy and info.get("parentID") != message_id:
-            continue
-        parts = item.get("parts" if legacy else "content")
-        if isinstance(parts, list):
-            latest = "\n".join(
-                part["text"] for part in map(_obj, parts)
-                if part.get("type") == "text" and isinstance(part.get("text"), str)
-                and part["text"].strip() and not part.get("synthetic") and not part.get("ignored")
-            )
+            parent = info.get("parentID")
+            if role != "assistant" or latest or info.get("summary") or (legacy and parent != message_id):
+                continue
+            if not legacy and parent is not None and parent != message_id:
+                continue
+            if info.get("error"):
+                finished = True
+                continue
+            parts = item.get("parts" if legacy else "content")
+            if isinstance(parts, list):
+                latest = "\n".join(
+                    part["text"] for part in map(_obj, parts)
+                    if part.get("type") == "text" and isinstance(part.get("text"), str)
+                    and part["text"].strip() and not part.get("synthetic") and not part.get("ignored")
+                )
             finished |= bool(latest) or _obj(info.get("time")).get("completed") is not None
-    return False, ""
+            if latest and parent == message_id:
+                return True, latest
+        cursor = response.headers.get("X-Next-Cursor") if legacy else _obj(_obj(page).get("cursor")).get("next")
+        if not isinstance(cursor, str) or not cursor or cursor in cursors:
+            break
+        cursors.add(cursor)
+        params.pop("order", None)
+        params["before" if legacy else "cursor"] = cursor
+    return (finished, "") if legacy else (False, "")
 
 
 class OpenCodeCapability(Capability):
@@ -247,8 +276,10 @@ class OpenCodeCapability(Capability):
         await harness().report(ctx, self.id, self._session(session))
         self._states.pop(session, None)
         self._dirs.pop(session, None)
-        self._expected.pop(session, None)
-        harness().take([f"{self.id}:{session}"])
+        keys = [f"{self.id}:{session}"]
+        if not (wake := harness().pending(keys)) or not harness().replying(wake):
+            self._expected.pop(session, None)
+            harness().take(keys)
 
     async def _list(self, client: httpx.AsyncClient, routes: _Routes) -> list[Session]:
         directories: dict[str, str] = {}
@@ -346,22 +377,20 @@ class OpenCodeCapability(Capability):
     async def _reply(self, client: httpx.AsyncClient, routes: _Routes, ctx: CompanionContext, session: str) -> None:
         key = f"{self.id}:{session}"
         async with self._lock:
+            monitor = harness()
             if (not (expected := self._expected.get(session)) or self._pending.get(session)
-                    or not harness().pending([key])):
+                    or not (wake := monitor.pending([key])) or monitor.replying(wake)):
                 return
             message_id, directory = expected
-            legacy = routes.body == "legacy"
-            params: dict[str, Any] = {"limit": 50}
-            if not legacy:
-                params["order"] = "desc"
-            if directory and routes.messages in routes.directory_params:
-                params["directory"] = directory
-            items = _items(await _get(client, _route(routes.messages, session), params=params))
-            finished, text = _reply_text(items, message_id, legacy)
-            if finished:
-                self._expected.pop(session, None)
-                if not await harness().reply(ctx, self.id, [key], text):
-                    harness().take([key])
+            finished, text = await _history_reply(client, routes, session, directory, message_id)
+            if not finished or monitor.pending([key]) is not wake:
+                return
+            if text:
+                if not await monitor.reply(ctx, self.id, [key], text):
+                    return
+            else:
+                monitor.take([key])
+            self._expected.pop(session, None)
 
     async def _event(
         self, client: httpx.AsyncClient, routes: _Routes, ctx: CompanionContext, event: dict[str, Any],
@@ -442,6 +471,11 @@ class OpenCodeCapability(Capability):
                 if session in self._dirs:
                     await harness().report(ctx, self.id, self._session(session))
 
+    async def _poll_sessions(self, client: httpx.AsyncClient, routes: _Routes, ctx: CompanionContext) -> None:
+        while True:
+            await asyncio.sleep(REFRESH_S)
+            await self._snapshot(client, routes, ctx)
+
     async def _snapshot(self, client: httpx.AsyncClient, routes: _Routes, ctx: CompanionContext) -> None:
         await self._refresh_states(client, routes)
         self._pending.clear()
@@ -495,9 +529,10 @@ class OpenCodeCapability(Capability):
                         try:
                             async with asyncio.TaskGroup() as tasks:
                                 waiters: dict[str, asyncio.Task[None]] = {}
-                                poll = tasks.create_task(self._poll_active(client, routes, ctx)) if (
-                                    routes.status == "/api/session/active"
-                                ) else None
+                                poll = tasks.create_task(
+                                    self._poll_active(client, routes, ctx) if routes.status == "/api/session/active"
+                                    else self._poll_sessions(client, routes, ctx),
+                                )
 
                                 def schedule(session: str, message_id: Any = None) -> None:
                                     if not routes.wait or not (expected := self._expected.get(session)):
@@ -524,8 +559,7 @@ class OpenCodeCapability(Capability):
                                 finally:
                                     for task in waiters.values():
                                         task.cancel()
-                                    if poll:
-                                        poll.cancel()
+                                    poll.cancel()
                         except* Disconnected:
                             raise Disconnected from None
             finally:
