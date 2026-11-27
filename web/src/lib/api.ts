@@ -52,16 +52,16 @@ function isHealth(value: unknown): value is Health {
 type RequestOptions = Omit<RequestInit, "credentials" | "redirect" | "cache"> & { csrf?: string | null }
 const originOnlyPosts = new Set(["/auth/link", "/auth/setup", "/auth/passkey/login/options", "/auth/passkey/login/verify"])
 
-export async function requestJson<T>(
+async function apiRequest(
   path: string,
-  validate: (value: unknown) => value is T,
+  accept: string,
   { csrf, method = "GET", headers: providedHeaders, ...options }: RequestOptions = {},
-): Promise<T> {
+) {
   const url = new URL(path, location.origin)
   if (url.origin !== location.origin) throw new Error("API requests must be same-origin")
 
   const headers = new Headers(providedHeaders)
-  headers.set("Accept", "application/json")
+  headers.set("Accept", accept)
   headers.delete("X-CSRF-Token")
   method = method.toUpperCase()
   if (method !== "GET" && !(method === "POST" && originOnlyPosts.has(url.pathname))) {
@@ -86,9 +86,22 @@ export async function requestJson<T>(
     }
     throw new ApiError(response.status, code)
   }
+  return response
+}
+
+export async function requestJson<T>(
+  path: string,
+  validate: (value: unknown) => value is T,
+  options?: RequestOptions,
+): Promise<T> {
+  const response = await apiRequest(path, "application/json", options)
   const value: unknown = response.status === 204 ? undefined : await response.json()
   if (!validate(value)) throw new Error("Unexpected server response")
   return value
+}
+
+export async function requestMarkdown(path: string, signal?: AbortSignal): Promise<string> {
+  return (await apiRequest(path, "text/markdown", { signal })).text()
 }
 
 export const sessionQuery = queryOptions({

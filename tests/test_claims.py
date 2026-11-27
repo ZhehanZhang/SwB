@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, base_config, default_env, sign_in
+from conftest import CAPTAIN, CAPY_KEY, OWNER, PUBLIC, STATIC_KEY, Clock, base_config, call, default_env, payload, sign_in
 from switchboard.__main__ import _NoQuery
 from switchboard.claims import CLAIM_TTL_S, ClaimError, ClaimUnavailable, Claims, Field
 from switchboard.store import Store
@@ -33,6 +33,52 @@ def assert_claim_error_title(response, title, status=400):
     rendered = html.unescape(re.search(r"<h1\b[^>]*>([^<]+)</h1>", response.text)[1])
     assert not re.search(r"[:;—]|\b(?:no|not|never|without)\b|n['’]t", rendered, re.I)
     assert rendered == title
+
+
+def test_github_webhook_secret_claim_rejects_whitespace_and_short_values(make):
+    name = "EXAMPLE_GITHUB_WEBHOOK_SECRET"
+    config = base_config(version=2, blocks={"mcp": {}, "github": {"secret_env": name}})
+    core, client = make(config, {"SWITCHBOARD_KEY_OWNER": STATIC_KEY})
+    out = payload(call(client, STATIC_KEY, "connect", {"what": "github"}))
+    path = urlsplit(out["next"][0]["link"]).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    secret = "A1b2C3d4E5f6G7h8"
+    invalid = [(secret[:-1], "Use a webhook secret with at least 16 characters")]
+    invalid.extend((value, "Enter a continuous webhook secret") for value in (
+        " " + secret, secret + " ", *(secret[:8] + c + secret[8:] for c in " \t\n\u00a0"),
+    ))
+    for value, title in invalid:
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": value})
+        assert_claim_error_title(response, title)
+        assert core.secret(name) is None
+    assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": secret}).status_code == 200
+    assert core.secret(name) == secret
+
+
+@pytest.mark.parametrize("name", ["CAPY_API_KEY", "EXAMPLE_CAPY_SEND_KEY"])
+def test_capy_key_claim_checks_format(make, capy, name):
+    env = {"SWITCHBOARD_KEY_OWNER": STATIC_KEY}
+    if name != "CAPY_API_KEY":
+        env["CAPY_API_KEY"] = CAPY_KEY
+    config = base_config(version=2, blocks={"mcp": {}, "capy": {"send_key_env": "EXAMPLE_CAPY_SEND_KEY"}})
+    core, client = make(config, env)
+    out = payload(call(client, STATIC_KEY, "connect", {"what": "capy-captain", "choose": {"captain": CAPTAIN}}))
+    path = urlsplit(out["next"][0]["link"]).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    suffix = "aA0-_" + "x" * 38
+    invalid = ("x", "other_" + suffix, "capy_" + suffix[:-1], "capy_" + suffix + "x",
+               *("capy_" + suffix[:10] + c + suffix[11:] for c in "+/=é "))
+    provider_calls = len(capy.requests)
+    for value in invalid:
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": value})
+        assert_claim_error_title(response, "Enter capy_ followed by 43 characters")
+        if len(value) > 1:
+            assert value not in response.text
+        assert core.secret(name) is None
+    key = "capy_" + suffix
+    response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": key})
+    assert response.status_code == 200 and key not in response.text
+    assert core.secret(name) == key and len(capy.requests) == provider_calls
 
 
 def test_credential_claim_error_titles_use_positive_copy(make, monkeypatch):
