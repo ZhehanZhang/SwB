@@ -158,6 +158,16 @@ def test_same_task_to_same_target_returns_the_existing_handle(make, capy):
     assert payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Fix the build"}))["handle"] != first["handle"]
 
 
+def test_same_task_with_a_different_subject_is_a_new_delegation(make, capy):
+    core, c = make(config=base_config(destinations={"capy": {"default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01}}))
+    first = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Check status and report", "title": "Review staging"}))
+    second = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Check status and report", "title": "Review production"}))
+    assert second["handle"] != first["handle"] and not second.get("duplicate")
+    messages = [r for r in capy.requests if r[0] == "POST" and r[1].endswith("/message")]
+    assert len(messages) == 2
+    assert len({m[2]["clientKey"] for m in messages}) == 2
+
+
 def ping_pong(c, turns):
     """capy and second answer each other on one conversation; returns how many replies went through and the last error."""
     h = payload(call(c, STATIC_KEY, "send", {"task": "ping", "to": "agent:second"}))["conversation"]

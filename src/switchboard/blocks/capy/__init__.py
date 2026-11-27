@@ -490,7 +490,7 @@ class CapyBlock(Block):
         if p and p.links.get("capy_project"):
             body += [f"Capy project: {p.links['capy_project']}"]
         forward = f"|forward:{call.handle_meta['forward_of']}" if "forward_of" in call.handle_meta else ""
-        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{task}{forward}".encode()).hexdigest()
+        same = hashlib.sha256(f"{call.principal.source}|{describe(tgt)}|{title or ''}|{task}{forward}".encode()).hexdigest()
         window = float(self.config.get("duplicate_window_s", 600))
         for h in call.core.inbox.handles(owner=call.principal.source, destination=self.name, limit=20):
             if h["meta"].get("same") == same and h["created_at"] >= call.core.clock() - window:
@@ -500,7 +500,7 @@ class CapyBlock(Block):
                         "next": f"You sent this exact task to {describe(tgt)} a moment ago, so this is that delegation's handle. "
                                 f"Call wait(conversation='{h['handle']}'); use reply to add to it."}
         uploaded = await send(lambda a: self._files(a, files)) if files else []
-        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}{forward}".encode()).hexdigest()
+        digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{title or ''}|{task}{forward}".encode()).hexdigest()
         try:
             if in_thread:
                 thread_id = tgt.get("thread") or tgt["captain"]
