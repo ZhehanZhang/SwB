@@ -23,7 +23,7 @@ async def test_cursor_per_reader_and_handle(inbox):
     first = inbox.read(owner="claude")
     assert [i["text"] for i in first["items"]] == ["one", "two"]
     assert inbox.read(owner="claude")["items"] == []
-    assert [i["text"] for i in inbox.read(owner="claude", handle="h_b")["items"]] == ["two"]
+    assert inbox.read(owner="claude", handle="h_b")["items"] == []
     assert [i["text"] for i in inbox.read(owner="claude", since=0)["items"]] == ["one", "two"]
     assert [i["text"] for i in inbox.read(owner="chatgpt")["items"]] == ["not yours"]
     everything = inbox.read(owner=None, reader="channel:x", advance=False)
@@ -64,3 +64,13 @@ async def test_filtered_read_preserves_unconsumed_root_and_child_items(inbox):
     assert [i["text"] for i in inbox.read(owner="claude")["items"]] == [
         "root item outside the block filter", "unrelated item", "child item beyond the limit",
     ]
+
+
+async def test_block_filter_shares_consumption_and_preserves_older_items(inbox):
+    inbox.open_handle(handle="h_child", owner="claude", destination="mailbox", ref="beta", project=None, title=None, meta={"root": "h_a"})
+    await inbox.add("h_b", "reply", {"text": "unrelated"})
+    await inbox.add("h_a", "reply", {"text": "root"})
+    await inbox.add("h_child", "message", {"text": "child"})
+    assert [i["text"] for i in inbox.read(owner="claude", destination="mailbox")["items"]] == ["child"]
+    assert [i["text"] for i in inbox.read(owner="claude", handle="h_a")["items"]] == ["root"]
+    assert [i["text"] for i in inbox.read(owner="claude")["items"]] == ["unrelated"]

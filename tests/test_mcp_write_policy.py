@@ -125,7 +125,9 @@ def test_paired_mailbox_reply_and_cancel_respect_sender_and_recipient(server):
     assert payload(call(client, recipient, "reply", {**args, "text": "Checking", "final": False}))["delivered"]
     assert error_text(call(client, stranger, "reply", {**args, "text": SECRET})) == CONVERSATION_REQUIRED
     assert error_text(call(client, recipient, "cancel", args)) == CONVERSATION_REQUIRED
-    assert payload(call(client, sender, "cancel", args))["conversation"] == args["conversation"]
+    assert payload(call(client, sender, "cancel", args)) == {**args, "status": "cancelled"}
+    late = payload(call(client, recipient, "reply", {**args, "text": "Finished"}))
+    assert late["status"] == "cancelled" and not late["delivered"]
 
     refusals = core.audit.recent(action="tool_refused")
     assert [(row["source"], row["target"], row["detail"]) for row in refusals] == [

@@ -10,7 +10,7 @@ A **space** is a place where messages arrive. A Slack channel, a Discord channel
 | `off` | SwB drops them | Stays asleep | Only to the owner |
 | `watch` | SwB stores them and sends you a digest | Reads only | Only to the owner |
 | `assist` | They wake the assist target | Answers from context with read tools | In the thread |
-| `triage` | They wake the triage target | Uses the actions of the space | In the thread, with a note to you |
+| `triage` | They wake the triage agent | Reads and replies by default | In the thread |
 | `work` | Owner messages only | Anything you can ask for | In the thread |
 
 Your own mention or DM is always `work`, in every mode. A mode can only narrow access. Visibility still decides who reaches a target.
@@ -37,4 +37,8 @@ SwB uses the first match in this order. A mode set on the page or by an agent, t
 
 The `actions` list of a space holds the actions that a triage wake can use. The actions are `reply`, `label`, `comment`, `open_issue`, `link_duplicate` and `notify_owner`. SwB enforces the list on the server. The GitHub actions use the GitHub App of the project.
 
-Use a separate triage routine with few connectors, for example `claude-<project>-triage`. SwB wakes that routine for triage. Every triage action goes to the audit log with a link to the message.
+The triage agent can read and reply by default. Give it more actions with `actions`.
+
+Set `target` to choose an agent for a mode. Use `agent:example` for a mailbox. SwB uses the project route when the space has a project and the mode uses its default target.
+
+Use a separate routine such as `claude-<project>-triage` for triage. SwB records each triage action with a link to the message.

@@ -656,7 +656,9 @@ class GitHubBlock(Block):
             return
         space, project = location
         config_channel = next((key for key in self.space_config.get(space, {}).get("channels", {}) if repo_name(key) == repo), repo)
-        mode, _, actions, target, project = self.core.modes.policy(self.name, space, repo, project, parent=config_channel)
+        mode, _, actions, to, project = self.core.modes.policy(self.name, space, repo, project, parent=config_channel, include_route=False)
+        route = self.core.modes.project_route(self.name, project) if not to else None
+        target = to or (str(route) if route else None)
         sender = _object(data.get("sender"))
         user_id = provider_id(sender.get("id"))
         author = payload.get("actor")
@@ -678,8 +680,11 @@ class GitHubBlock(Block):
             return
         owner = (user_id is not None and user_id in self.space_owners.get(space, self.owner_ids)
                  and not payload.get("is_bot"))
-        if mode == "off" or (mode == "work" and not owner):
-            self.drop(event, data, "channel mode ignored event", ip, delivery)
+        if mode == "off":
+            self.drop(event, data, "channel mode off", ip, delivery)
+            return
+        if mode == "work" and not owner:
+            self.drop(event, data, "work mode requires an owner event", ip, delivery)
             return
         if not user_id or payload.get("is_bot") or (mode != "work" and user_id == self.api.pat_actor):
             self.drop(event, data, "sender ignored", ip, delivery)
@@ -693,7 +698,14 @@ class GitHubBlock(Block):
             self.drop(event, data, f"{mode} target is missing", ip, delivery)
             return
         try:
-            addr = await self.core.resolve_to(target)
+            addr = await self.core.resolve_to(to) if to else route
+        except (BlockError, CoreError, ValueError):
+            self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            return
+        if addr is None or (addr.block == "agent" and addr.id not in self.core.known_agents()):
+            self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
+            return
+        try:
             if not self.core.visibility.allows(who, f"target:{slugify(target)}", f"target:{slugify(addr.id)}"):
                 self.drop(event, data, "target access restricted", ip, delivery)
                 return
@@ -723,7 +735,7 @@ class GitHubBlock(Block):
             tail = delivery_note
             if mode in {"assist", "triage"}:
                 tail += f"\n\n{self.core.modes.wake_note(meta)} Use github_reply for the originating GitHub thread."
-            await self.core.send(principal, to=target, task=wake_text(title, text, link, tail), project=project, title=title,
+            await self.core.send(principal, to=to, task=wake_text(title, text, link, tail), project=project, title=title,
                                  handle_meta={**({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
                                               **({"boundary": project} if project and mode != "work" else {})})
         except (BlockError, CoreError, ValueError) as exc:

@@ -148,6 +148,12 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
                         frames.append(json.loads(line[6:]))
                         break
             assert frames[0]["text"] == "pushed" and frames[0]["handle"] == out["handle"] and int(event_id) == frames[0]["cursor"]
+            pair = core.connections.mint(agent="claude-code", project=None, client=None, by="owner")
+            key = core.connections.redeem(pair["code"])["key"]
+            [item] = payload(await acall(c, key, "inbox"))["items"]
+            assert item["message_id"] == frames[0]["message_id"]
+            looked_up = payload(await acall(c, key, "get_message", {"message_id": item["message_id"]}))
+            assert looked_up == item
     finally:
         server.should_exit = True
         await task

@@ -15,7 +15,7 @@ import yaml
 from PIL import Image
 from starlette.testclient import TestClient
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload
+from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload, use_capy
 from switchboard.app import create_app
 from switchboard.blocks import BlockError
 from switchboard.blocks.discord import gateway
@@ -120,7 +120,7 @@ class Sockets:
 @pytest.fixture
 def discord(tmp_path):
     @contextmanager
-    def build(*, settings=None, sockets=None, token=True, slack=None):
+    def build(*, settings=None, sockets=None, token=True, slack=None, capy=None):
         api = DiscordAPI()
         cfg = {"version": 2, "public_url": PUBLIC,
                "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access.example.test", "aud": "test"}},
@@ -131,16 +131,18 @@ def discord(tmp_path):
         if slack is not None:
             cfg["blocks"]["slack"] = {"use": "slack", **slack}
         path = tmp_path / "config.yaml"
-        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         env = {"SWITCHBOARD_KEY_CLAUDE": STATIC_KEY, "EXAMPLE_ROUTINE_TOKEN": "mock-routine"}
         if token:
             env["DISCORD_BOT_TOKEN"] = MOCK_TOKEN
+        options = {"discord": {"transport": httpx.MockTransport(api.handler), "connect": sockets is not None,
+                               "gateway_connect": sockets.connect if sockets else None},
+                   "claude-routine": {"transport": httpx.MockTransport(api.routine)}}
+        use_capy(capy, cfg, env, options)
+        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         core = Switchboard(path, tmp_path / "data", env=env, clock=Clock(),
                            oauth_http=httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(404))),
                            access_verifier=access_verifier,
-                           destination_options={"discord": {"transport": httpx.MockTransport(api.handler), "connect": sockets is not None,
-                                                           "gateway_connect": sockets.connect if sockets else None},
-                                                "claude-routine": {"transport": httpx.MockTransport(api.routine)}})
+                           destination_options=options)
         with TestClient(create_app(core), base_url=PUBLIC) as client:
             block = core.blocks["discord"]
             client.portal.call(block.refresh)

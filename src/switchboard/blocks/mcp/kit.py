@@ -199,7 +199,7 @@ class Kit:
         async def result(ctx: Context, conversation: Conversation, tail: Annotated[int, Field(ge=0, le=30)] = 0) -> dict[str, Any]:
             return await kit.verb(ctx, "result", conversation, tail=tail)
 
-        @mcp.tool(title="Stop following a conversation", description="Stop reporting on a conversation (its handle). The work on the other side keeps running; use reply to stop it.", annotations=WRITE_IDEMPOTENT)
+        @mcp.tool(title="Stop following a conversation", description="Stop following a conversation you sent. The work on the other side continues.", annotations=WRITE_IDEMPOTENT)
         async def cancel(ctx: Context, conversation: Conversation) -> dict[str, Any]:
             return await kit.verb(ctx, "cancel", conversation)
 

@@ -34,9 +34,11 @@ _SCOPE = rf"(?:general|project:{_PROJECT})"
 _CAPY_SENDERS = ("capy_thread", "capy", "captain")
 _WEBHOOK_DETAILS = frozenset({
     "webhook secret unavailable", "invalid signature", "invalid JSON", "expected a JSON object", "invalid delivery id",
-    "unhandled event", "not completed", "unrouted repository", "channel mode ignored event", "sender ignored",
+    "unhandled event", "not completed", "unrouted repository", "channel mode ignored event", "channel mode off",
+    "work mode requires an owner event", "sender ignored",
     "channel access restricted", "target access restricted", "sender rate limit", "assist target is missing",
-    "triage target is missing", "work target is missing", "CoreError", "BlockError", "ValueError",
+    "triage target is missing", "work target is missing", "assist target is unavailable", "triage target is unavailable",
+    "work target is unavailable", "CoreError", "BlockError", "ValueError",
 })
 
 

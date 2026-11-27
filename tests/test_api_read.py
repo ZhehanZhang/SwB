@@ -85,6 +85,16 @@ def test_audit_filters_and_pages_at_equal_timestamps_without_exposing_raw_diagno
     assert get(client, "/audit", cursor="99999999999999999999", status=400) == {"error": "invalid cursor"}
 
 
+def test_audit_exposes_only_known_dropped_webhook_reasons(make):
+    core, client = make()
+    for detail in ("channel mode off", "assist target is missing", "triage target is unavailable", PRIVATE):
+        core.audit.record(action="webhook", origin="fixture", outcome="dropped", destination="fixture",
+                          source="fixture", client="local", detail=detail, excerpt=PRIVATE)
+    rows = get(client, "/audit", action="webhook")["items"]
+    assert [row["detail"] for row in rows] == [None, "triage target is unavailable", "assist target is missing", "channel mode off"]
+    assert PRIVATE not in json.dumps(rows)
+
+
 def test_audit_shows_webhook_refusal_and_drop_reasons_from_the_log(make):
     secret = "fixture-secret-for-webhook-signing"
     core, client = make(config=base_config(version=2, blocks={"mcp": {}, "github": {}}),
