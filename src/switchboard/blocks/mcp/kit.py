@@ -30,16 +30,19 @@ Conversation = Annotated[str, Field(description="The conversation: its handle (h
 DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. "
 
 
-DEVICE_TEXT = frozenset({"text", "body", "title", "description", "message", "error", "content"})
+DEVICE_VALUES = frozenset({"type", "mimeType", "uri", "isError", "size", "data"})
+DEVICE_SCHEMAS = frozenset({"inputSchema", "outputSchema", "schema"})
 
 
 def frame_device(value: Any, where: str, key: str = "") -> Any:
-    """Free text from a device reaches agents framed as external; names, schemas and base64 stay exact."""
+    """Frame device strings as external by default, preserving schemas and machine values."""
+    if key in DEVICE_SCHEMAS:
+        return value
     if isinstance(value, dict):
         return {k: frame_device(v, where, k) for k, v in value.items()}
     if isinstance(value, list):
         return [frame_device(v, where, key) for v in value]
-    if isinstance(value, str) and key in DEVICE_TEXT:
+    if isinstance(value, str) and key not in DEVICE_VALUES and not key.lower().endswith(("base64", "b64")):
         return wrap(value, None, None, "external", where)
     return value
 
