@@ -267,6 +267,35 @@ def test_listen_can_note_owner_without_posting_to_thread(opened):
         assert core.inbox.handle(handle)["status"] == "answered"
 
 
+def test_cancelled_listen_conversation_cannot_note_owner(opened):
+    with opened() as (core, client, world, fires):
+        ingest(core, client, thread_ts=THREAD)
+        handle = handle_of(fires[0][1])
+        args = {"conversation": handle}
+        assert payload(call(client, KEY_FULL, "cancel", args))["status"] == "cancelled"
+        reply = payload(call(client, KEY_FULL, "reply", {**args, "text": "Check the report", "to_owner": True}))
+        assert reply["status"] == "cancelled" and not reply["delivered"]
+        assert core.inbox.handle(handle)["status"] == "cancelled"
+        assert not {"conversations_open", "chat_postMessage"}.intersection(world.names())
+        assert not core.audit.recent(action="listen_note")
+
+
+def test_owner_note_in_flight_cannot_reopen_cancelled_listen_conversation(opened, monkeypatch):
+    with opened() as (core, client, _, fires):
+        ingest(core, client)
+        handle = handle_of(fires[0][1])
+        principal = core.auth.verify_bearer(KEY_FULL)
+
+        async def cancel_during_dm(_text):
+            assert (await core.verb(principal, "cancel", handle))["status"] == "cancelled"
+            return True
+
+        monkeypatch.setattr(core.slack, "dm_owner", cancel_during_dm)
+        reply = payload(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "Check the report", "to_owner": True}))
+        assert reply["delivered"]
+        assert core.inbox.handle(handle)["status"] == "cancelled"
+
+
 def test_to_owner_refused_for_non_listen_conversation(opened):
     with opened() as (core, client, world, fires):
         ingest(core, client, type="app_mention", user=OWNER_A, text=f"<@{BOT_USER}> claude hello")

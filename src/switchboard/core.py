@@ -664,6 +664,13 @@ class Switchboard:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref)
         final = kw.pop("final", None)
+        if verb == "reply" and h is not None and h["destination"] == "mailbox":
+            if h["owner"] != principal.source:
+                raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
+            if h["status"] == "cancelled":
+                return {"conversation": h["handle"], "in_reply_to": h["handle"], "final": final is not False,
+                        "delivered": False, "status": "cancelled",
+                        **({"to_owner": True} if to_owner else {"to": f"agent:{h['ref']}", "mailbox": True})}
         channel_mode = None
         if verb in ("reply", "cancel"):
             try:
@@ -681,8 +688,6 @@ class Switchboard:
             raise CoreError("to_owner is only allowed when replying to a listen conversation")
         if h is not None and h["destination"] == "mailbox":
             if verb == "reply":
-                if h["owner"] != principal.source:
-                    raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
                 if to_owner:
                     text = (kw.get("text") or "").strip()
                     if not text:
