@@ -11,7 +11,7 @@ A paired key can use these tools within the access the owner grants it.
 
 | Use | Tools and limits |
 | - | - |
-| Messages | Use `send`, `agent_send` and `targets`. Use `inbox`, `wait`, `reply`, `status`, `result`, `cancel` and `get_message` for your messages and conversations |
+| Messages | Use `send`, `agent_send` and `targets`. Use `inbox`, `wait`, `reply`, `status`, `result`, `cancel` and `get_message` for your messages and conversations within the key's scopes |
 | Memory and projects | Use `context_pack` and `project_list`. Use the memory tools within your granted scopes |
 | Routes | Use `routes_list` and `routes_resolve`. For `routes_set` and `routes_remove`, set `agent` to your own agent name |
 | Setup | Use `switchboard_status` and `modes_status` to check status. Use `connect` for client instructions. Use the owner's sign-in for block setup and to issue pairing codes |
@@ -35,9 +35,11 @@ The owner can set `auth.key_tools` to limit the tool list and calls. The owner c
 | `result` | Get the final reply of a conversation. Use `tail` to set the number of recent replies or messages where supported |
 | `cancel` | Stop following a conversation |
 | `targets` | List everything `send` can reach |
-| `get_message` | Read a stored message with the `message_id` from an MCP event callback, such as `msg_42` |
+| `get_message` | Read a stored message with the `message_id` from your inbox or an MCP event |
 
 The `inbox` tool and the [inbox event stream](/docs/connect#inbox-event-stream) deliver message data directly. To read later items with `inbox`, pass the `cursor` as `since_cursor`. To reply, pass the item's `handle` as `conversation` to `reply`.
+
+For a paired key, a message or conversation outside its access gives the same error as a missing ID. See [Keys with limits](/docs/security#keys-with-limits).
 
 ### Send options
 
@@ -54,7 +56,7 @@ The `inbox` tool and the [inbox event stream](/docs/connect#inbox-event-stream) 
 
 | Tool | Use |
 | - | - |
-| `context_pack` | Get the briefing for a project |
+| `context_pack` | Get the briefing for a project. For a paired key, the Capy section lists only the agent's work in progress within the key's scopes |
 | `memory_write` | Save an entry with `scope`, `namespace`, `title` and `body`. A namespace groups entries within a scope. Use up to three lowercase levels, such as `notes/meetings`. For project memory, pass its short name in `project` and use `scope="project:<slug>"`. For general memory, confirm with the owner first. Then set `confirm_general=true` |
 | `memory_search` | Search memory with `query`. The default scope is `general`. Pass the project slug in `project` to search that project first, then `general`. Set `include_general=false` to search that project alone |
 | `memory_list` | List memory entries |
@@ -112,8 +114,8 @@ A route picks a target for `send`. Use a block that accepts routes, such as `cap
 | Tool | Use |
 | - | - |
 | `capy_captains` | List the Captains your Capy connection can access |
-| `capy_captain_digest` | Read a Captain's summary and see which crew threads are working or need the owner's attention |
-| `capy_list` | List work sent through SwB or threads in a Captain's crew or linked Capy project |
+| `capy_captain_digest` | Read a Captain's summary and see which crew threads are working or need the owner's attention. Use the owner's sign-in |
+| `capy_list` | List work sent through SwB or threads in a Captain's crew or linked Capy project. A paired key sees only its agent's work within its scopes |
 | `capy_delegate` | Send work to Capy. Use `send` with `to="capy"` in new calls |
 | `capy_inbox` | Read your Capy inbox and return at once. Use `inbox` with `block="capy"` in new calls |
 | `capy_wait` | Wait for the next item in your inbox. Use `wait` in new calls |

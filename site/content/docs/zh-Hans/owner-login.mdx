@@ -18,7 +18,7 @@ swb login-link
 
 命令会打印形如 `https://swb.example.com/login#t=...` 的链接。请在五分钟内用浏览器打开。链接用过一次就会失效。以所有者身份登录的智能体也能用 `login_link` 工具生成链接。令牌在链接的 `#` 后面。
 
-在本机运行时，启动前将 `SWITCHBOARD_PUBLIC_URL` 设为 `http://localhost:8870`。地址中的端口须与 `PORT` 一致。如果 YAML 配置已设置 `public_url`，请在那里修改。用 `--url` 指定其他服务器。用 `--dir` 从其他实例目录读取所有者密钥。
+首次在本机运行 `swb up` 时，终端会显示一次性登录链接。本机地址默认为 `http://localhost:8870`。如果设置了 `PORT`，SwB 会在地址中使用该端口。运行 `swb login-link` 时，用 `--url` 指定其他服务器。用 `--dir` 从其他实例目录读取所有者密钥。
 
 用链接登录失败时，请重新运行 `swb login-link`。在浏览器中打开新链接。
 
