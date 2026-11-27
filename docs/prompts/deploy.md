@@ -2,11 +2,9 @@ Setup guide: https://swb.one/docs/deploy
 
 Help me deploy SwB, my self-hosted switchboard for agents. You are a coding agent with a terminal. Run every command yourself and tell me only what I must click or decide.
 
-First ask me which platform I want: Fly.io, Koyeb, or my own server with Docker. Then clone https://github.com/ZhehanZhang/SwB and work in that checkout.
+First ask me which platform I want: Fly.io or my own server with Docker. Then clone https://github.com/ZhehanZhang/SwB and work in that checkout.
 
 For Fly.io, check that flyctl is installed and that I am signed in with fly auth whoami. If I am signed out, run fly auth login and wait while I finish it in my browser. Then run fly launch --copy-config --generate-name --ha=false --no-github-workflow.
-
-For Koyeb, check that the koyeb CLI is installed and signed in. Then run sh deploy/koyeb.sh my-swb.
 
 For my own server, ask me for the domain. Ask me to point its DNS at the server and wait until I confirm. Set DOMAIN in deploy/compose, then run docker compose up -d --build in deploy/compose.
 
