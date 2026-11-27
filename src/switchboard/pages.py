@@ -42,6 +42,19 @@ CLAIM_CONNECTORS = {
     "grok": ("Grok", "Grok credential"),
 }
 
+CLASSIC_TITLE = "SwB"
+LOGIN_TITLE = "Sign in to SwB"
+AUTHORIZE_TITLE = "Connect"
+PAIRING_TITLE = "Pairing code"
+TOKEN_CLAIM_TITLE = "Save a token"
+ROUTINE_CLAIM_TITLE = "Claude routine token"
+
+
+class PageRoute(Route):
+    def __init__(self, path: str, endpoint, title: str, *, methods: list[str]):
+        super().__init__(path, endpoint, methods=methods)
+        self.title = title
+
 
 def icon(name: str, cls: str = "", mode: str | None = None) -> str:
     extra = f' data-mode="{mode}"' if mode else ""
@@ -181,9 +194,9 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
         button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
     return HTMLResponse(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark"><title>Sign in to SwB</title>
+<meta name="color-scheme" content="light dark"><title>{LOGIN_TITLE}</title>
 <link rel="stylesheet" href="/assets/claim.css"></head>
-<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}>{CLAIM_BRAND}<h1>Sign in to SwB</h1>
+<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}>{CLAIM_BRAND}<h1>{LOGIN_TITLE}</h1>
 <p id="login-error" role="status">{messages.get(error, "")}</p>{button or "<p>Ask your agent for a sign-in link.</p>"}
 </main><script>{LOGIN_JS}</script></body></html>""", headers={"Content-Security-Policy": script_policy(LOGIN_JS)})
 
@@ -253,14 +266,14 @@ def admin_page(health: dict[str, Any], actor: str, routes: list[dict[str, Any]],
     items += _row("Bearer keys", "Agents that sign in with a key instead of OAuth", ", ".join(health["static_keys"]) or "none")
     items += "".join(_row(a, b, c, d) for a, b, c, d in block_rows or [])
     problems = "".join(notice(p, "warn") for p in health["problems"])
-    status = (hero("SwB", ("Running" if ok else "Running, with parts switched off") + f". Signed in as {html.escape(actor)}.")
+    status = (hero(CLASSIC_TITLE, ("Running" if ok else "Running, with parts switched off") + f". Signed in as {html.escape(actor)}.")
               + f'<div class="card fade-in">{items}</div>{problems}')
     body = (status + _systems_body(systems or []) + (_routines_body(routines, projects, csrf) if routines is not None else "") + _visibility_body(visibility or [], csrf)
             + _connect_body(connected or [], csrf) + extra + _routes_body(routes, projects, changes))
     if add_passkey:
         body = (f'<button type="button" id="add-passkey" data-csrf="{csrf}">Add a passkey</button>'
                 f'<p id="passkey-error" role="status"></p>' + body + f"<script>{REGISTER_JS}</script>")
-    response = page("SwB", body, 200)
+    response = page(CLASSIC_TITLE, body, 200)
     if add_passkey:
         response.headers["Content-Security-Policy"] = script_policy(REGISTER_JS)
     return response
@@ -354,12 +367,12 @@ def _ago(at: float | None) -> str:
 
 def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     cmd = f"curl -s -X POST {public_url}/connect -H 'content-type: application/json' -d '{{\"code\": \"{code['code']}\"}}'"
-    body = (hero("Pairing code", f"For <strong>{html.escape(code['agent'])}</strong>" + (f" in project {html.escape(code['project'])}" if code.get("project") else "")
+    body = (hero(PAIRING_TITLE, f"For <strong>{html.escape(code['agent'])}</strong>" + (f" in project {html.escape(code['project'])}" if code.get("project") else "")
                  + ". It works once, for 10 minutes.")
             + f'<div class="card fade-in">{_row("Code", "Give it to the client that redeems it", code["code"])}'
             + _row("Redeem", "Run this on the machine the agent runs on; it prints the agent's key once, with the MCP URL", cmd) + "</div>"
             + '<p class="section-gap"><a href="/classic" class="text-button">Back</a></p>')
-    return page("Pairing code", body, 200)
+    return page(PAIRING_TITLE, body, 200)
 
 
 def _claim_document(title: str, body: str, status: int = 200) -> HTMLResponse:
@@ -423,7 +436,7 @@ def token_claim_page(name: str, csrf: str, *, require_https: bool = False, host:
     credential = "Webhook URL" if require_https else "Token"
     connector = name.partition("_")[0].lower()
     requester, label = CLAIM_CONNECTORS.get("chatgpt" if connector == "openai" else connector, ("", ""))
-    return claim_page(label or f"Save a {credential.lower()}", f"For {name}.", csrf, requester=requester, credential=credential,
+    return claim_page(label or (f"Save a {credential.lower()}" if require_https else TOKEN_CLAIM_TITLE), f"For {name}.", csrf, requester=requester, credential=credential,
                       host=host, expires_at=expires_at, now=now)
 
 
@@ -438,7 +451,7 @@ def routine_claim_page(c: dict[str, Any], csrf: str, *, host: str = "", now: flo
     if c["primary"]:
         scope += " Primary routine for this project."
     requester = c["created_by"].partition(":")[2] or c["created_by"]
-    return claim_page("Claude routine token", scope, csrf, requester=requester, guide=True,
+    return claim_page(ROUTINE_CLAIM_TITLE, scope, csrf, requester=requester, guide=True,
                       host=host, expires_at=c["expires_at"], now=now)
 
 

@@ -62,7 +62,7 @@ class OwnerLogin:
 
     def routes(self) -> list[Route]:
         return [
-            Route("/login", self.login, methods=["GET"]),
+            pages.PageRoute("/login", self.login, pages.LOGIN_TITLE, methods=["GET"]),
             Route("/auth/session", self.session, methods=["GET"]),
             Route("/auth/logout", self.logout, methods=["POST"]),
             Route("/auth/link", self.link, methods=["POST"]),
