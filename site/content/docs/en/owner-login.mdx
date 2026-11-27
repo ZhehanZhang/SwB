@@ -88,10 +88,13 @@ The browser reads your current sign-in state at `/auth/session`.
 
 ## Sign-in errors
 
+SwB records browser sign-in failures under **Audit**. Each row shows the reason and keeps codes and tokens private. SwB limits repeated rows for some failures.
+
 | Error | Meaning |
 | - | - |
 | `link_used` | Someone used the link to sign in before it expired. |
-| `link_expired` | The link expired or is invalid. |
+| `link_expired` | The link expired. |
+| `link_invalid` | SwB rejected the link. |
 | `setup_failed` | The setup code has the wrong format or differs from `SWB_SETUP_CODE`. |
 | `setup_closed` | Sign-in by setup code is closed. Use another sign-in method. |
 | `passkey_failed` | Passkey setup or verification failed. |

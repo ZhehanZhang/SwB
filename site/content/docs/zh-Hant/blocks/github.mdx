@@ -63,6 +63,11 @@ blocks:
 | `blocks.github.spaces` | 共用設定的程式碼庫群組。使用 `acme/app` 這類名稱可選取該程式碼庫 |
 | `blocks.github.spaces.*.repo` | `owner/repo` 格式的儲存庫名稱 |
 | `blocks.github.spaces.*.mode` | 這個空間內各程式碼庫的預設[頻道模式](/zh-Hant/docs/channel-modes) |
+| `blocks.github.spaces.*.mode.target` | 模式設定中的目標，填入 `agent:beta` 這類位址 |
 | `blocks.github.spaces.*.project` | 這個空間的事件預設歸入的 SwB 專案 |
 
-使用[頻道模式](/zh-Hant/docs/channel-modes)，可透過專案路由喚醒代理。
+呼叫 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`，將代理繫結至儲存庫。使用 `mode="assist"` 可切換至協助模式。請從 `targets` 回傳的清單中選擇目標。連結的專案路由是備用選項。
+
+若要接收外部使用者的事件，請開放 `channel:github/acme/app` 和 `target:beta`。詳情請參閱[頻道可見度](/zh-Hant/docs/channel-modes#允許外部-github-使用者存取)。
+
+觀察模式會依 `modes.digest_minutes` 的間隔將摘要送至目標信箱。累積到 50 個事件時，SwB 提前傳送摘要。查看方式請參閱[觀察摘要](/zh-Hant/docs/channel-modes#查看觀察摘要)。

@@ -53,6 +53,8 @@ swb connect grok
 
 配對金鑰只能讀取該代理送出或收到的訊息，且訊息須在擁有者授權的範圍內。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
 
+使用配對金鑰時，`tools/list` 會回傳已配對代理角色的工具。用 `auth.key_tools` 可縮小清單範圍。呼叫擁有者工具時，請以擁有者身分登入。詳情請參閱[配對金鑰](/zh-Hant/docs/tools#配對金鑰)。
+
 ## 收件匣事件串流
 
 `POST /connect` 傳回 `inbox_events_url`，也就是 `GET /inbox/events` 的網址。連線時，請在 `Authorization: Bearer <key>` 中帶入配對取得的代理金鑰。SwB 只提供該代理在金鑰授權範圍內的收件匣更新。更新以伺服器傳送事件（SSE）的方式透過同一條連線傳送。

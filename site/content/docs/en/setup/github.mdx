@@ -100,7 +100,7 @@ In an organization, GitHub can show **Request** in place of **Install**. Then an
 
 The agent calls `connect` with `what="github"`. SwB shows the webhook address, the webhook secret state and the number of repository routes. A route sends the events of one repository to a target.
 
-The agent adds the repositories under `blocks.github.spaces` or `blocks.github.routes` in `config/switchboard.yaml`. A space sets a default mode and project for a repository. In this example, `acme/app` uses `watch` mode in the SwB project `demo`.
+The agent adds each repository under `blocks.github.spaces` in `config/switchboard.yaml`. A space sets the mode, project and target for a repository. This example sends Watch digests for `acme/app` to `agent:beta` in project `demo`.
 
 ```yaml
 blocks:
@@ -108,7 +108,9 @@ blocks:
     use: github
     spaces:
       acme/app:
-        mode: watch
+        mode:
+          mode: watch
+          target: agent:beta
         project: demo
 ```
 
@@ -116,7 +118,13 @@ Save the same webhook secret through its claim link. The agent restarts SwB to l
 
 The agent calls `connect(what="github")` again for any remaining App ID or private key links. To switch from an existing personal access token to an App, it selects `choose={"credential":"app"}`.
 
-After a restart, the agent calls `github_status` to check the installation and its permissions. See [Channel modes](/docs/channel-modes) to bind the project route and enable triage actions. Triage allows `github_reply` by default.
+After a restart, the agent calls `github_status` to check the installation and its permissions.
+
+To bind the target in triage mode, the agent calls `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`. Use `mode="assist"` for assist mode. Choose a target from `targets`. The linked project route is the fallback. Triage allows `github_reply` by default.
+
+For outside senders, grant access to both `channel:github/acme/app` and `target:beta`. See [channel visibility](/docs/channel-modes#allow-outside-github-senders) for the access rules.
+
+Watch puts a digest in the target mailbox at the interval set by `modes.digest_minutes` or at 50 events. The owner reads every digest in the console **Inbox** or through MCP `inbox` and `wait`.
 
 ## Credentials
 
