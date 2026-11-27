@@ -68,23 +68,26 @@ for (const [lang, stem] of [
         const previous = await active.textContent();
         const boxes = await heading.evaluate((node) => {
           const lines = (selector: string) => {
-            const text = node.querySelector(selector)!.firstChild!;
+            const element = node.querySelector(selector)!;
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
             const range = document.createRange();
             const rows: { top: number; bottom: number; right: number; content: string }[] = [];
-            let offset = 0;
-            for (const char of text.textContent!) {
-              range.setStart(text, offset);
-              offset += char.length;
-              range.setEnd(text, offset);
-              const rect = range.getClientRects().item(0)!;
-              const line = rows.find(({ top, bottom }) =>
-                Math.min(bottom, rect.bottom) - Math.max(top, rect.top) > Math.min(bottom - top, rect.height) / 2);
-              if (line) {
-                line.content += char;
-                line.top = Math.min(line.top, rect.top);
-                line.bottom = Math.max(line.bottom, rect.bottom);
-                line.right = Math.max(line.right, rect.right);
-              } else rows.push({ top: rect.top, bottom: rect.bottom, right: rect.right, content: char });
+            for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+              let offset = 0;
+              for (const char of text.textContent!) {
+                range.setStart(text, offset);
+                offset += char.length;
+                range.setEnd(text, offset);
+                const rect = range.getClientRects().item(0)!;
+                const line = rows.find(({ top, bottom }) =>
+                  Math.min(bottom, rect.bottom) - Math.max(top, rect.top) > Math.min(bottom - top, rect.height) / 2);
+                if (line) {
+                  line.content += char;
+                  line.top = Math.min(line.top, rect.top);
+                  line.bottom = Math.max(line.bottom, rect.bottom);
+                  line.right = Math.max(line.right, rect.right);
+                } else rows.push({ top: rect.top, bottom: rect.bottom, right: rect.right, content: char });
+              }
             }
             return rows;
           };

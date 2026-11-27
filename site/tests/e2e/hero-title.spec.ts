@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { CYCLE, STEP, trips } from '../../lib/live';
+import { agentPair, CYCLE, STEP, trips } from '../../lib/live';
 
 const pairs = trips.flatMap(([a, b], n) =>
   [a, b].some((name) => name === 'github' || name === 'slack') ? [] : [String(n)],
@@ -37,7 +37,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       };
       const prefix = textRange(root.querySelector(':scope > .swb-between-text:first-child'));
       const conjunction = textRange(pair.querySelector('.swb-between-text'))!;
-      const suffix = textRange(root.querySelector(':scope > .swb-between-text:last-child'));
+      const suffix = textRange(pair.querySelector('.swb-pair-tail .swb-between-text'));
       const seen: string[] = [];
       const settled = new Set<string>();
       const crossfades = slots.map(() => false);
@@ -73,7 +73,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         if (prefixRect) prefixDrift = Math.max(prefixDrift, Math.abs(prefixRect.left - baselinePrefix!));
         gap = Math.min(gap, andRect.left - pillRects[0].right, pillRects[1].left - andRect.right);
         if (prefixRect && prefixRect.bottom > pairRect.top) gap = Math.min(gap, pairRect.left - prefixRect.right);
-        if (suffixRect && suffixRect.top < pairRect.bottom) gap = Math.min(gap, suffixRect.left - pairRect.right);
+        if (suffixRect) gap = Math.min(gap, suffixRect.left - pillRects[1].right);
         overflow = Math.max(overflow, ...rects.flatMap(({ left, right }) => [lineRect.left - left, right - lineRect.right]));
 
         const atTarget = slots.map((slot, i) => {
@@ -130,6 +130,59 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         return Math.abs(slot.getBoundingClientRect().width - contentAndPadding);
       }));
       for (const extra of extraWidths) expect(extra, `${locale} at ${width}px`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  test(`${locale} keeps the hero subtitle in intact groups for every mobile pair`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.clock.install();
+    for (const width of [360, 390, 430]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      await page.addStyleTag({ content: '.swb-slot { transition: none; }' });
+      const subtitle = page.locator('[data-hero-pair]');
+      const seen = new Set<string>();
+      for (let step = 0; step < trips.length; step++) {
+        const pair = String(agentPair(step).n);
+        await expect(subtitle).toHaveAttribute('data-hero-pair', pair);
+        seen.add(pair);
+        const group = await subtitle.evaluate((root) => {
+          const line = (element: Element) => {
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+            const range = document.createRange();
+            const rects: { top: number; left: number; right: number }[] = [];
+            for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+              if (!text.textContent?.trim()) continue;
+              range.selectNodeContents(text);
+              rects.push(...Array.from(range.getClientRects(), ({ top, left, right }) => ({ top, left, right })));
+            }
+            return rects;
+          };
+          const lead = root.querySelector('.swb-pair-lead')!;
+          const tail = root.querySelector('.swb-pair-tail')!;
+          const tops = (container: Element) => [
+            ...line(container.querySelector('.swb-chip-on')!),
+            ...Array.from(container.querySelectorAll('.swb-between-text'), line).flat(),
+          ];
+          const { left, right } = root.getBoundingClientRect();
+          return { leading: tops(lead), trailing: tops(tail), left, right };
+        });
+        const at = `${locale} at ${width}px with pair ${pair}`;
+        expect(group.leading, at).toHaveLength(2);
+        expect(group.trailing, at).toHaveLength(locale === 'en' ? 1 : 2);
+        for (const rects of [group.leading, group.trailing]) {
+          const tops = rects.map(({ top }) => top);
+          expect(Math.max(...tops) - Math.min(...tops), at).toBeLessThanOrEqual(4);
+          for (const rect of rects) {
+            expect(rect.left, at).toBeGreaterThanOrEqual(group.left - 1);
+            expect(rect.right, at).toBeLessThanOrEqual(group.right + 1);
+          }
+        }
+        if (locale === 'en') expect(Math.abs(group.leading[0].top - group.trailing[0].top), at).toBeLessThanOrEqual(4);
+        await page.clock.fastForward(STEP * 1000);
+      }
+      expect([...seen]).toEqual(pairs);
     }
   });
 }

@@ -212,6 +212,47 @@ test('every demo title links to setup for its apps in each locale', async ({ pag
   }
 });
 
+test('each demo title and setup label stays on one line at every target width', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const path of ['/', '/zh-Hans', '/zh-Hant']) {
+    await page.goto(path);
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of [390, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const bars = await page.locator('.swb-win-bar').evaluateAll((nodes) => nodes.map((bar) => {
+        const line = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return Array.from(range.getClientRects(), ({ top, right }) => ({ top, right }));
+        };
+        const title = bar.querySelector('h3 > span:last-child')!;
+        const link = bar.querySelector('a')!;
+        const label = link.querySelector('span')!;
+        return {
+          title: title.textContent,
+          titleLines: line(title),
+          labelLines: line(label),
+          titleRight: title.getBoundingClientRect().right,
+          linkLeft: link.getBoundingClientRect().left,
+          linkRight: link.getBoundingClientRect().right,
+          barRight: bar.getBoundingClientRect().right,
+        };
+      }));
+      expect(bars).toHaveLength(exchangeScenes.length);
+      for (const bar of bars) {
+        const at = `${path} at ${width}px: ${bar.title}`;
+        expect(bar.titleLines, at).toHaveLength(1);
+        expect(bar.labelLines, at).toHaveLength(1);
+        expect(Math.abs(bar.titleLines[0].top - bar.labelLines[0].top), at).toBeLessThanOrEqual(4);
+        expect(bar.titleLines[0].right, at).toBeLessThanOrEqual(bar.titleRight + 1);
+        expect(bar.titleRight, at).toBeLessThan(bar.linkLeft);
+        expect(bar.labelLines[0].right, at).toBeLessThanOrEqual(bar.linkRight + 1);
+        expect(bar.linkRight, at).toBeLessThan(bar.barRight);
+      }
+    }
+  }
+});
+
 test('each demo window uses canonical avatars and marks only relayed senders', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');

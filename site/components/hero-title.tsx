@@ -70,7 +70,9 @@ export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props
   return (
     <>
       <h1 id="landing-heading" className="text-display-xl swb-hero-title">
-        <span className="block text-balance" data-hero-stem>{stem}</span>
+        <span className="block text-balance" data-hero-stem>
+          {stem.endsWith('，') ? <>{stem.slice(0, -1)}<span className="swb-hero-comma">，</span></> : stem}
+        </span>
         <span className="swb-rotate" aria-live="off">
           {endings.map((text, index) => (
             <span key={text} className={`swb-rotate-item${index === word ? ' swb-rotate-on' : ''}${endingPrefix ? ' whitespace-nowrap' : ''}`}
@@ -80,12 +82,16 @@ export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props
       </h1>
       <p className="swb-between mt-3 text-base" data-hero-pair={pair.n}>
         {between[0] && <span className="swb-between-text">{between[0]}</span>}
-        <span className="swb-pair">
-          <Slot options={starts} current={pair.a} names={names} />
-          <span className="swb-between-text">{between[1]}</span>
-          <Slot options={ends} current={pair.b} names={names} />
+        <span className="swb-pair" data-with-suffix={between[2] ? '' : undefined}>
+          <span className="swb-pair-lead">
+            <Slot options={starts} current={pair.a} names={names} />
+            <span className="swb-between-text">{between[1]}</span>
+          </span>
+          <span className="swb-pair-tail">
+            <Slot options={ends} current={pair.b} names={names} />
+            {between[2] && <span className="swb-between-text">{between[2]}</span>}
+          </span>
         </span>
-        {between[2] && <span className="swb-between-text">{between[2]}</span>}
       </p>
     </>
   );

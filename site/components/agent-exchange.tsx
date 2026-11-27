@@ -73,12 +73,12 @@ function ExchangeWindow({ scene: { app, messages }, lang, index }: { scene: Exch
     <div className="swb-win overflow-hidden rounded-lg border" data-exchange-window={app}>
       <div className="swb-win-bar flex items-center justify-between gap-2 border-b px-3">
         <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-          <MarkTile kind={app} className="swb-win-avatar" />
+          <MarkTile kind={app} className="swb-win-avatar shrink-0" />
           <span className="truncate">{agentNames[app]}</span>
         </h3>
         <Link className="swb-win-setup swb-text-link inline-flex shrink-0 items-center gap-1.5 self-stretch whitespace-nowrap text-xs" href={href} prefetch={false}>
-          <Settings2 aria-hidden="true" className="size-3.5" />
-          {exchangeCopy[lang].setup}
+          <Settings2 aria-hidden="true" className="size-3.5 shrink-0" />
+          <span>{exchangeCopy[lang].setup}</span>
         </Link>
       </div>
       <div className="relative min-w-0">

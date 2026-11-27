@@ -105,7 +105,7 @@ export const landingCopy: Record<Locale, Copy> = {
       stem: '第一方智能体协同工作，',
       endingPrefix: '不必',
       endings: ['运行 CLI', '担心封号', '交出会话令牌', '离开自己的应用', '搬迁它们', '模拟网页操作'],
-      between: ['', ' 与 ', ' 之间的实时对话'],
+      between: ['', ' 与 ', ' 实时对话'],
     },
     positioning: {
       title: '每个智能体都在自己的应用里工作',
@@ -158,7 +158,7 @@ export const landingCopy: Record<Locale, Copy> = {
       stem: '第一方代理協同工作，',
       endingPrefix: '不必',
       endings: ['執行 CLI', '擔心封號', '交出工作階段權杖', '離開自己的應用程式', '搬移它們', '模擬網頁操作'],
-      between: ['', ' 與 ', ' 之間的即時對話'],
+      between: ['', ' 與 ', ' 即時對話'],
     },
     positioning: {
       title: '每個代理都在自己的應用程式裡工作',
