@@ -71,11 +71,12 @@ function DiscordServers({ guilds, rows, status }: { guilds: DiscordDetails["guil
               </div>
               {guild.channels.length > 0 && (
                 <StatusTable label={`Channels in ${guild.name ?? guild.id}`} headings={["Channel", "Space or project", "Mode"]}>
-                  {guild.channels.map(channel => (
-                    <ChannelRow key={channel.id} name={channel.name ?? channel.id} mapping={channel.project ?? guild.space}
-                      mode={channel.listening ? "Listening" : "Unlisted"} status={status}
-                      current={rows.find(row => row.channel === channel.id && row.space === guild.space)} />
-                  ))}
+                  {guild.channels.map(channel => {
+                    const current = rows.find(row => row.channel === channel.id && row.space === guild.space)
+                    return <ChannelRow key={channel.id} name={channel.name ?? channel.id}
+                      mapping={current ? current.project ?? current.space : channel.project ?? guild.space}
+                      mode={channel.listening ? "Listening" : "Unlisted"} status={status} current={current} />
+                  })}
                 </StatusTable>
               )}
             </section>

@@ -87,7 +87,9 @@ def test_every_provider_mark_is_bundled():
 
 
 def test_owner_key_installs_get_the_grouped_form(make):
-    core, client = make(config=base_config(auth={}), env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
+    config = base_config(auth={})
+    config.pop("public_url")
+    core, client = make(config=config, env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
     title, provider, fields = credentials.github_app()
     path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
     page = client.get(path)
