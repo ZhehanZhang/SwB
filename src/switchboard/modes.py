@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from . import targets as tgt
 from .config import SLUG_RE, ConfigError
 from .inbox import Inbox
+from .refusals import MODE_REQUIRED, PolicyRefusal
 from .store import dumps
 from .visibility import Who
 
@@ -32,6 +33,10 @@ TRIAGE_FALLBACK = "Triage uses the default agent."
 CHAT_DROP_ACTION = "chat_event"
 CHAT_DROP_WINDOW = 600
 CHAT_DROP_KEYS = 4096
+
+
+class ModeRefused(PolicyRefusal, PermissionError):
+    pass
 
 
 class ChatDrop(StrEnum):
@@ -415,7 +420,7 @@ class ChannelModes:
 
     def _visible(self, principal: Principal, row: dict[str, Any], slugs: dict[str, dict[str, Any]]) -> bool:
         project = row["project"]
-        if project and not principal.allows(f"project:{project}"):
+        if project and not principal.allows_routing_scope(f"project:{project}"):
             return False
         block, space = row["block"], row["space"]
         provider = self.core.blocks[block]
@@ -584,25 +589,20 @@ class ChannelModes:
         meta = row["meta"].get("channel_mode") if row else None
         if meta:
             if row["owner"] != principal.source:
-                raise PermissionError("that channel-mode conversation is not yours")
-            if meta["project"] and not principal.allows(f'project:{meta["project"]}'):
-                if action != "notify_owner":
-                    self.audit_action(principal, meta, action, "refused")
-                raise PermissionError("that channel-mode conversation is outside this key's project scope")
+                raise ModeRefused(MODE_REQUIRED, "that channel-mode conversation is not yours")
+            if meta["project"] and not principal.allows_routing_scope(f'project:{meta["project"]}'):
+                raise ModeRefused(MODE_REQUIRED, "that channel-mode conversation is outside this key's project scope")
             if meta["mode"] == "work" and action == "reply":
                 return None
             allowed = ("reply",) if meta["mode"] == "assist" else meta["actions"]
             if action not in allowed:
-                if action != "notify_owner":
-                    self.audit_action(principal, meta, action, "refused")
-                raise PermissionError(f"{meta['mode']} conversations cannot {action}; allowed actions: {', '.join(allowed) or 'none'}")
+                raise ModeRefused(MODE_REQUIRED, f"{meta['mode']} conversations cannot {action}; allowed actions: {', '.join(allowed) or 'none'}")
             if repo is not None:
                 project = self.core.project(meta["project"]) if meta["project"] else None
                 repos = project.links.get("repos", ()) if project else ()
                 if repo.casefold() not in repos and not (self.core.blocks[meta["block"]].manifest.id == "github"
                                                         and repo.casefold() == meta["channel"].casefold()):
-                    self.audit_action(principal, meta, action, "refused")
-                    raise PermissionError("the repository is outside this triage conversation's project")
+                    raise ModeRefused(MODE_REQUIRED, "the repository is outside this triage conversation's project")
             return meta
         chats = {b.name for b in self.core.blocks.values() if b.manifest.id in ("slack", "discord", "telegram")}
         public_reply = action == "reply" and handle is not None and (row is None or row["destination"] in chats)
@@ -610,5 +610,5 @@ class ChannelModes:
         if public_write and self.core.store.one("SELECT 1 FROM handles WHERE owner=? AND created_at>? "
                                                 "AND json_extract(meta, '$.channel_mode.mode') IN ('assist', 'triage') LIMIT 1",
                                                 (principal.source, self.core.clock() - WAKE_WINDOW)):
-            raise PermissionError("a recent assist or triage wake requires its conversation handle for public posts, replies and repository writes")
+            raise ModeRefused(MODE_REQUIRED, "a recent assist or triage wake requires its conversation handle for public posts, replies and repository writes")
         return None

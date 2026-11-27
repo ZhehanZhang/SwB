@@ -13,6 +13,7 @@ from typing import Any
 
 from .audit import iso
 from .config import NAMESPACE_RE
+from .connect import AGENT_RE
 from .projects import ProjectError, Projects
 from .refusals import CONFIRMATION_REQUIRED, PolicyRefusal
 from .store import Store, fts_query, new_id
@@ -63,7 +64,7 @@ def _row(r: sqlite3.Row, body: bool = True, limit: int | None = None) -> dict[st
 
 
 class Memory:
-    """Scoped memory: every entry lives in 'general' or in 'project:<slug>', with namespaces inside the scope."""
+    """Scoped memory with namespaces inside each general, project or agent scope."""
 
     def __init__(self, store: Store, projects: Projects, mirror_dir: str | None = None, mirror_debounce_s: float = 0):
         self.store = store
@@ -82,25 +83,25 @@ class Memory:
         """A scope for writing: required, explicit, and a live project when it isn't general."""
         s = (scope or "").strip().lower()
         if not s:
-            raise MemoryError_("scope is required: 'general' or 'project:<slug>' (writes are never implicitly general)")
-        if s == GENERAL:
+            raise MemoryError_("scope is required: 'general', 'project:<slug>' or 'agent:<name>'")
+        if s == GENERAL or (s.startswith("agent:") and AGENT_RE.fullmatch(s[6:])):
             return s
         if not s.startswith("project:"):
-            raise MemoryError_("scope must be 'general' or 'project:<slug>'")
+            raise MemoryError_("scope must be 'general', 'project:<slug>' or 'agent:<name>'")
         try:
             return self.projects.get(s[8:], allow_archived=False).scope
         except ProjectError as e:
             raise MemoryError_(str(e)) from e
 
     def explicit_scopes(self, scopes: list[str], project: str | None) -> list[str]:
-        """Scopes a caller named on purpose, the named project first. A private project is readable only as the named project."""
+        """Scopes a caller named on purpose, the named project first."""
         named = f"project:{project.strip().lower().removeprefix('project:')}" if project else None
         out: list[str] = []
         for raw in scopes:
             s = (raw or "").strip().lower()
-            if s != GENERAL:
+            if s != GENERAL and not (s.startswith("agent:") and AGENT_RE.fullmatch(s[6:])):
                 if not s.startswith("project:"):
-                    raise MemoryError_("scopes are 'general' or 'project:<slug>'")
+                    raise MemoryError_("scopes are 'general', 'project:<slug>' or 'agent:<name>'")
                 try:
                     p = self.projects.get(s[8:])
                 except ProjectError as e:
@@ -161,11 +162,12 @@ class Memory:
 
     def write(self, *, source: str, scope: str | None, namespace: str, title: str, body: str, key: str | None = None,
               tags: list[str] | None = None, id: str | None = None, mode: str = "replace", confirm_general: bool = False,
-              project: str | None = None) -> dict[str, Any]:
+              project: str | None = None, writer_credential: str | None = None,
+              check_writer: Callable[[str, str | None], None] | None = None) -> dict[str, Any]:
         scope = self.write_scope(scope)
-        if project:
+        if project and scope.startswith("project:"):
             named = project.strip().lower().removeprefix("project:")
-            if scope != GENERAL and scope != f"project:{named}":
+            if scope != f"project:{named}":
                 raise MemoryError_(f"scope {scope} is not the project you named ({named!r}): write to project:{named}, or drop project if {scope} is right")
         if scope == GENERAL and not confirm_general:
             raise MemoryRefused(CONFIRMATION_REQUIRED, CONFIRM_GENERAL)
@@ -182,8 +184,6 @@ class Memory:
                 existing = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
                 if existing is None:
                     raise MemoryError_(f"no memory with id {id}")
-                if existing["scope"] != scope:
-                    raise MemoryError_(f"memory {id} is in scope {existing['scope']}, not {scope}")
             elif key:
                 existing = db.execute(
                     "SELECT * FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL", (scope, namespace, key)
@@ -192,18 +192,23 @@ class Memory:
                 self.validate(namespace, key, title, body)
                 mid = new_id("mem")
                 db.execute(
-                    "INSERT INTO memories(id, scope, namespace, key, title, body, tags, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    (mid, scope, namespace, key, title.strip(), body, tag_s, source, now, now),
+                    "INSERT INTO memories(id, scope, namespace, key, title, body, tags, source, created_at, updated_at, writer_credential)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (mid, scope, namespace, key, title.strip(), body, tag_s, source, now, now, writer_credential),
                 )
                 action = "create"
             else:
+                if check_writer is not None:
+                    check_writer(existing["scope"], existing["writer_credential"])
+                if existing["scope"] != scope:
+                    raise MemoryError_(f"memory {id} is in scope {existing['scope']}, not {scope}")
                 mid = existing["id"]
                 new_body = (existing["body"].rstrip() + "\n\n" + body) if mode == "append" else body
                 new_title = title.strip() or existing["title"]
                 self.validate(existing["namespace"], existing["key"], new_title, new_body)
                 db.execute(
-                    "UPDATE memories SET title = ?, body = ?, tags = ?, source = ?, updated_at = ? WHERE id = ?",
-                    (new_title, new_body, tag_s or existing["tags"], source, now, mid),
+                    "UPDATE memories SET title = ?, body = ?, tags = ?, source = ?, updated_at = ?, writer_credential = ? WHERE id = ?",
+                    (new_title, new_body, tag_s or existing["tags"], source, now, writer_credential, mid),
                 )
                 action = mode
             r = db.execute("SELECT * FROM memories WHERE id = ?", (mid,)).fetchone()
@@ -249,15 +254,15 @@ class Memory:
         )
         return {r["id"]: r["writer"] for r in rows}
 
-    def delete(self, *, source: str, id: str, check_scope: Callable[[str], None] | None = None) -> dict[str, Any]:
+    def delete(self, *, source: str, id: str, check_writer: Callable[[str, str | None], None] | None = None) -> dict[str, Any]:
         now = self.store.clock()
 
         def run(db: sqlite3.Connection) -> None:
             r = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
             if r is None:
                 raise MemoryNotFound("memory not found")
-            if check_scope is not None:
-                check_scope(r["scope"])
+            if check_writer is not None:
+                check_writer(r["scope"], r["writer_credential"])
             db.execute("UPDATE memories SET deleted_at = ?, updated_at = ?, source = ? WHERE id = ?", (now, now, source, id))
             db.execute(
                 "INSERT INTO memory_revisions(memory_id, at, source, action, title, body) VALUES (?,?,?,?,?,?)",
@@ -268,7 +273,7 @@ class Memory:
         self._sync_mirror()
         return {"deleted": id}
 
-    def move(self, *, source: str, id: str, to_scope: str, check_scope: Callable[[str], None] | None = None) -> dict[str, Any]:
+    def move(self, *, source: str, id: str, to_scope: str, check_writer: Callable[[str, str | None], None] | None = None) -> dict[str, Any]:
         """Move one entry to another scope, keeping its id and revision history."""
         to = self.write_scope(to_scope)
         now = self.store.clock()
@@ -277,8 +282,8 @@ class Memory:
             r = db.execute("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,)).fetchone()
             if r is None:
                 raise MemoryNotFound("memory not found")
-            if check_scope is not None:
-                check_scope(r["scope"])
+            if check_writer is not None:
+                check_writer(r["scope"], r["writer_credential"])
             if r["scope"] == to:
                 raise MemoryError_(f"memory {id} is already in {to}")
             if r["key"] and db.execute("SELECT 1 FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL",
@@ -357,7 +362,11 @@ class Memory:
 
     @staticmethod
     def rel_path(scope: str, namespace: str, key: str | None, id: str) -> Path:
-        base = Path("general") if scope == GENERAL else Path("projects", scope.removeprefix("project:"))
+        if scope == GENERAL:
+            base = Path("general")
+        else:
+            kind, _, name = scope.partition(":")
+            base = Path("agents" if kind == "agent" else "projects", name)
         return base.joinpath(*namespace.split("/")) / f"{key or id}.md"
 
     @staticmethod

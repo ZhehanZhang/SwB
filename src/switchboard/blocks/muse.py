@@ -184,7 +184,7 @@ class MuseBlock(Block):
             raise BlockError(f"Muse accepts text only, up to {MESSAGE_LIMIT} characters.")
         proj = self.core.project(project)
         slug = proj.slug if proj else None
-        if not call.principal.allows(f"project:{slug}" if slug else "general"):
+        if not call.principal.allows_routing_scope(f"project:{slug}" if slug else "general"):
             raise BlockRefused(SCOPE_REQUIRED, "Choose a Muse send scope allowed by this key.")
         if target is None and not self.core.routes.resolve(destination=self.name, agent=call.principal.source, project=slug)[0]:
             raise BlockError("Name Muse explicitly or configure a Muse route before sending.")

@@ -130,9 +130,9 @@ def test_project_and_memory_audit_contains_only_intentional_details(make):
         return payload(result)
 
     change("project_create", {"slug": "example", "name": "Example", "description": PRIVATE})
-    change("project_update", {"slug": "example", "name": "New name", "new_slug": "renamed"})
-    pairing = change("connect_code", {"agent": "paired"})
+    pairing = change("connect_code", {"agent": "paired", "project": "example"})
     key = client.post("/connect", json={"code": pairing["code"]}).json()["key"]
+    change("project_update", {"slug": "example", "name": "New name", "new_slug": "renamed"})
     refused = call(client, key, "project_update", {"slug": "renamed", "description": PRIVATE})
     assert refused["isError"] is True
     [refusal] = get(client, "/audit", action="tool_refused")["items"]

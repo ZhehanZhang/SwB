@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS memories (
   deleted_at REAL
 );
 CREATE INDEX IF NOT EXISTS memories_updated ON memories(updated_at);
+CREATE TABLE IF NOT EXISTS paired_memory_grants (
+  key_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  PRIMARY KEY(key_id, scope)
+);
+CREATE TABLE IF NOT EXISTS paired_memory_grants_migration (
+  version INTEGER PRIMARY KEY CHECK(version = 1),
+  keys_migrated INTEGER NOT NULL,
+  grants_migrated INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(title, body, tags, namespace, content='memories', content_rowid='rowid', tokenize='porter unicode61');
 CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
   INSERT INTO memories_fts(rowid, title, body, tags, namespace) VALUES (new.rowid, new.title, new.body, new.tags, new.namespace);
@@ -229,6 +239,8 @@ def _migrate(db: sqlite3.Connection) -> None:
     cols = {r[1] for r in db.execute("PRAGMA table_info(memories)")}
     if "scope" not in cols:
         db.execute("ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'")
+    if "writer_credential" not in cols:
+        db.execute("ALTER TABLE memories ADD COLUMN writer_credential TEXT")
     db.execute("DROP INDEX IF EXISTS memories_ns_key")
     db.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_key ON memories(scope, namespace, key) WHERE key IS NOT NULL AND deleted_at IS NULL"

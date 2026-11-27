@@ -31,7 +31,8 @@ from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_, MemoryRefused
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
-from .refusals import CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal
+from .refusals import (CONVERSATION_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, OWNER_REQUIRED,
+                       SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal)
 from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
@@ -92,7 +93,9 @@ class Switchboard:
         types = {name: load_block(str(sec.get("use") or name)) for name, sec in self.cfg.blocks.items()}
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
-        self.connections = Connections(self.store)
+        self.connections = Connections(self.store, self.cfg.key_scopes)
+        if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None:
+            log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
@@ -631,7 +634,7 @@ class Switchboard:
             addr = block.effective_target(addr, project)
         if str(addr) not in allowed:
             raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
-        if project and not principal.allows("project:" + project.strip().lower().removeprefix("project:")):
+        if project and not principal.allows_routing_scope("project:" + project.strip().lower().removeprefix("project:")):
             raise CoreRefused(SCOPE_REQUIRED, f"the {principal.source} key can't send in project {project}")
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
@@ -957,13 +960,37 @@ class Switchboard:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
                           action=action, outcome="ok", target=target, excerpt=excerpt, detail=detail)
 
-    @staticmethod
-    def check_memory_scope(principal: Principal, scope: str) -> None:
+    def allows_memory(self, principal: Principal, scope: str) -> bool:
         if not principal.allows(scope):
-            raise MemoryRefused(SCOPE_REQUIRED, f"the {principal.source} key is limited to {', '.join(principal.scopes or ())}; {scope} is outside it")
+            return False
+        if scope.startswith("project:") and not principal.allows_private_memory(scope):
+            row = self.store.one("SELECT private FROM projects WHERE slug = ?", (scope[8:],))
+            return row is None or not row["private"]
+        return True
+
+    def check_memory_scope(self, principal: Principal, scope: str) -> None:
+        if not self.allows_memory(principal, scope):
+            raise MemoryRefused(SCOPE_REQUIRED)
+
+    def check_memory_writer(self, principal: Principal, scope: str, writer: str | None) -> None:
+        self.check_memory_scope(principal, scope)
+        if principal.is_memory_owner:
+            return
+        if scope == GENERAL:
+            raise MemoryRefused(OWNER_REQUIRED)
+        if writer is None or writer != principal.memory_writer:
+            raise MemoryRefused(MEMORY_WRITER_REQUIRED)
+
+    def write_memory(self, principal: Principal, *, scope: str, **fields: Any) -> dict[str, Any]:
+        self.check_memory_scope(principal, scope.strip().lower())
+        out = self.memory.write(source=principal.source, scope=scope, writer_credential=principal.memory_writer,
+                                check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer), **fields)
+        self.audit_memory(principal, "memory_write", out["scope"], detail=out["title"])
+        return out
 
     def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
-        out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        out = self.memory.delete(source=principal.source, id=id,
+                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
         self.audit_memory(principal, "memory_delete", id, detail="Deleted memory.")
         return out
 
@@ -971,17 +998,19 @@ class Switchboard:
         to_scope = to_scope.strip().lower()
         if to_scope == GENERAL and not promote:
             raise MemoryError_("moving to general is memory_promote, after the owner agrees it applies to every project")
+        if to_scope == GENERAL and not principal.is_memory_owner:
+            raise MemoryRefused(OWNER_REQUIRED)
         self.check_memory_scope(principal, to_scope)
         out = self.memory.move(source=principal.source, id=id, to_scope=to_scope,
-                               check_scope=lambda scope: self.check_memory_scope(principal, scope))
+                               check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
         self.audit_memory(principal, "memory_promote" if promote else "memory_move", f"{out['from']} -> {out['to']}", id)
         return out
 
     # Context pack -----------------------------------------------------------------------------
 
     async def context_pack(self, principal: Principal, project: str | None) -> str:
-        p = self.project(project)
-        if p and not principal.allows(p.scope):
+        p = self.project(None if project and project.strip().lower().removeprefix("project:") == GENERAL else project)
+        if p and not self.allows_memory(principal, p.scope):
             raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read {p.scope}")
         if not p and not principal.allows(GENERAL):
             raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read general; pass the project you work in")

@@ -127,7 +127,8 @@ async def tokens(request: Request) -> JSONResponse:
         project = _label(key["project"])
         stored.append({"id": key["id"], "name": "Agent access key", "label": key["agent"], "kind": "generic",
                        "used_by": [project] if project else [], "added_by": _actor(key["created_by"]),
-                       "added_at": iso(key["created_at"]), "revoke_id": key["id"]})
+                       "added_at": iso(key["created_at"]), "revoke_id": key["id"],
+                       "memory_scopes": list(core.connections.memory_scopes(key["id"]))})
 
     waiting.sort(key=lambda row: row["requested_at"] or "", reverse=True)
     return JSONResponse({"waiting": waiting, "stored": stored})

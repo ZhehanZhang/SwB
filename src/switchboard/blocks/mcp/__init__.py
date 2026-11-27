@@ -24,14 +24,14 @@ from ... import __version__
 from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
 from ...modes import ChannelModes
-from ...projects import ProjectError
+from ...projects import Project, ProjectError
 from ...refusals import PolicyRefusal
 from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
-from .policy import (CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED, READ_ROLES, ROUTE_REQUIRED, SCOPE_REQUIRED,
-                     TARGET_REQUIRED, TOOL_REQUIRED, Role, catalog_refusal, mutation_roles, read_refusal)
+from .policy import (CONVERSATION_REQUIRED, OWNER_REQUIRED, READ_ROLES, ROUTE_REQUIRED, SCOPE_REQUIRED,
+                     TARGET_REQUIRED, TOOL_REQUIRED, Role, can_read_project, catalog_refusal, mutation_roles, read_refusal)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -43,10 +43,11 @@ TASK_MODE: contextvars.ContextVar[bool] = contextvars.ContextVar("switchboard_ta
 CORE_INSTRUCTIONS = """SwB is a shared workspace for your assistants and agents.
 Use project_list to find your project by name or repository. Call context_pack with the project at the start of a session.
 Write project facts to project:<slug> and pass project=<slug> to check the scope.
+Use agent:<name> for memory in your agent's scope. New paired keys get their own agent scope and any project named in the pairing.
 Use general for facts that apply to all projects, such as the owner's preferences.
 For general writes, get the owner's agreement and pass confirm_general=true.
-Reads cover the named project and general. Pass scopes=[...] to read another project. SwB logs these reads.
-Use memory_move or memory_promote to correct the scope. Search before asking the owner.
+Read within your grants. Pass project=<slug> for a project or scopes=[...] to select exact scopes. Reads include general only when granted.
+Use the same credential that wrote an entry to update, move or delete it. The owner can manage any entry and promote it to general.
 Call connect for setup and follow its steps.
 Use send to hand off work or message an agent. The owner's route for you and the project is the default.
 For to, use a slug from targets, an agent mailbox such as agent:claude, or a block address <block>:<kind>:<id>.
@@ -63,10 +64,10 @@ WRITE_IDEMPOTENT = ToolAnnotations(readOnlyHint=False, destructiveHint=False, id
 SEND = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True)
 DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
 
-Scope = Annotated[str, Field(description="Required: 'general' for the owner's cross-project memory, or 'project:<slug>'")]
-ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
+Scope = Annotated[str, Field(description="A granted scope: 'project:<slug>', 'agent:<name>' or 'general'")]
+ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Memory reads add general only when granted")]
 Namespace = Annotated[str, Field(description="Inside the scope: profile, decisions, notes, or e.g. notes/meetings; lowercase, up to 3 levels")]
-ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:example', 'general']. Logged")]
+ScopesArg = Annotated[list[str] | None, Field(description="Exact granted scopes, e.g. ['agent:notes-bot'] or ['project:example', 'general']")]
 
 
 class FileIn(BaseModel):
@@ -111,12 +112,15 @@ class LimitedServer(MCPServer):
         if reason is None and p is not None:
             reason = await self._argument_refusal(p, name, role, arguments)
         if reason:
-            self._audit_refusal(p, tool.name if tool else None, reason)
+            message = reason
             if reason == OWNER_REQUIRED and p is not None and p.kind == "connect":
-                raise ToolError(f"This key belongs to a connected agent. {reason}")
-            if reason == TOOL_REQUIRED and p is not None:
-                raise ToolError(f"the {p.source} key may call only {', '.join(p.tools or ()) or 'no tools'}")
-            raise ToolError(reason)
+                message = f"This key belongs to a connected agent. {reason}"
+            elif reason == TOOL_REQUIRED and p is not None:
+                message = f"the {p.source} key may call only {', '.join(p.tools or ()) or 'no tools'}"
+            refusal = PolicyRefusal(reason, message)
+            self._audit_refusal(p, tool.name if tool else None, refusal.reason)
+            refusal.audited = True
+            raise ToolError(str(refusal)) from refusal
         if role and p is not None and name not in ("wait", "inbox", "capy_wait", "capy_inbox", "slack_wait"):
             self._check_mode(p, name, arguments)
         try:
@@ -155,7 +159,7 @@ class LimitedServer(MCPServer):
                 return ROUTE_REQUIRED
             project = arguments.get("project")
             scope = "project:" + project.strip().lower().removeprefix("project:") if isinstance(project, str) and project.strip() else None
-            if not p.allows(scope or "general"):
+            if not p.allows_routing_scope(scope or "general"):
                 return SCOPE_REQUIRED
             if name == "routes_set" and p.targets is not None and isinstance(target := arguments.get("target"), str):
                 from ...core import CoreError
@@ -208,9 +212,10 @@ class LimitedServer(MCPServer):
             return
         try:
             self.modes.check(p, ref, action, repo)
-        except PermissionError as e:
-            self._audit_refusal(p, name, MODE_REQUIRED)
-            raise ToolError(str(e)) from e
+        except PolicyRefusal as refusal:
+            self._audit_refusal(p, name, refusal.reason)
+            refusal.audited = True
+            raise ToolError(str(refusal)) from refusal
 
 
 class WaitCaps:
@@ -299,20 +304,16 @@ class MCPBlock(Block):
             except (MemoryError_, ProjectError, RouteError) as e:
                 raise ToolError(str(e)) from e
 
-        def need(p: Principal, scope: str) -> None:
-            sync(core.check_memory_scope, p, scope)
+        def need_routing(p: Principal, scope: str) -> None:
+            if not p.allows_routing_scope(scope):
+                raise PolicyRefusal(SCOPE_REQUIRED, f"the {p.source} key is limited to {', '.join(p.scopes or ())}; {scope} is outside it")
 
         def pscope(slug: str) -> str:
             return "project:" + slug.strip().lower().removeprefix("project:")
 
         def reading(p: Principal, project: str | None, include_general: bool, scopes: list[str] | None, what: str) -> list[str]:
             ss = sync(core.memory.explicit_scopes, scopes, project) if scopes else sync(core.memory.read_scopes, project, include_general)
-            if project:
-                need(p, pscope(project))
-            for s in ss:
-                if s != GENERAL:
-                    need(p, s)
-            ss = [s for s in ss if s != GENERAL or p.allows(GENERAL)]
+            ss = [s for s in ss if core.allows_memory(p, s)]
             if not ss:
                 raise PolicyRefusal(SCOPE_REQUIRED, "Pass the project you work in.")
             cross = [s for s in ss if s != GENERAL and (not project or s != pscope(project))]
@@ -347,7 +348,7 @@ class MCPBlock(Block):
 
         @mcp.tool(
             title="Save to shared memory",
-            description="Save or update a durable memory shared with every assistant and agent. scope is required: 'project:<slug>' for anything about one project (pass project=<slug> as well), or 'general' for the owner's profile, preferences and decisions that apply to every project, which also needs confirm_general=true after the owner agrees. The result echoes the scope it landed in. A key makes an entry you will update (e.g. profile/editor). mode=append adds to the existing body.",
+            description="Save memory in a granted scope. Use 'project:<slug>' for project facts or 'agent:<name>' for agent memory. With a general grant, pass confirm_general=true after the owner agrees. Update an entry you wrote by ID or by scope, namespace and key. The owner can update any entry.",
             annotations=WRITE,
         )
         async def memory_write(
@@ -363,16 +364,10 @@ class MCPBlock(Block):
             project: Annotated[str | None, Field(description="The project you are working in. A project scope that differs from it is rejected")] = None,
             confirm_general: Annotated[bool, Field(description="Required for scope 'general': the owner agreed this applies to every project")] = False,
         ) -> dict[str, Any]:
-            p = who(ctx)
-            need(p, (scope or "").strip().lower())
-            if id:
-                need(p, sync(core.memory.scope_of, id))
-            out = sync(core.memory.write, source=p.source, scope=scope, namespace=namespace, title=title, body=body, key=key, tags=tags, id=id,
-                       mode=mode, confirm_general=confirm_general, project=project)
-            core.audit_memory(p, "memory_write", out["scope"], detail=out["title"])
-            return out
+            return sync(core.write_memory, who(ctx), scope=scope, namespace=namespace, title=title, body=body, key=key, tags=tags, id=id,
+                        mode=mode, confirm_general=confirm_general, project=project)
 
-        @mcp.tool(title="Search shared memory", description="Full-text search. With project: that project's memory ranked first, then general (include_general=false for the project alone). Without: general only. Another project's memory only with an explicit scopes list, which is logged; private projects never show up there.", annotations=READ)
+        @mcp.tool(title="Search shared memory", description="Search granted scopes. Pass project for that project, or scopes for exact scopes such as agent:<name>. General is included only when granted. For a private project, use its project name.", annotations=READ)
         async def memory_search(
             ctx: Context,
             query: str,
@@ -388,10 +383,8 @@ class MCPBlock(Block):
         @mcp.tool(title="Read a memory", description="Read one memory in full by id, or by scope, namespace and key, with its recent edit history.", annotations=READ)
         async def memory_read(ctx: Context, id: str | None = None, scope: str | None = None, namespace: str | None = None, key: str | None = None) -> dict[str, Any]:
             p = who(ctx)
-            if scope:
-                need(p, scope.strip().lower())
             out = sync(core.memory.read, id=id, scope=scope, namespace=namespace, key=key)
-            need(p, out["scope"])
+            sync(core.check_memory_scope, p, out["scope"])
             return out
 
         @mcp.tool(title="List memories", description="List memories newest first with per-namespace counts. project works as in memory_search.", annotations=READ)
@@ -407,39 +400,44 @@ class MCPBlock(Block):
             ss = reading(who(ctx), project, include_general, scopes, "list")
             return sync(lambda: core.memory.list(scopes=ss, namespace=namespace, limit=limit, offset=offset))
 
-        @mcp.tool(title="Delete a memory", description="Delete a memory by id when it is wrong or obsolete. History is kept server-side.", annotations=DELETE)
+        @mcp.tool(title="Delete a memory", description="Delete an entry you wrote within your grants. The owner can delete any entry. SwB keeps the history.", annotations=DELETE)
         async def memory_delete(ctx: Context, id: str) -> dict[str, Any]:
             return sync(core.delete_memory, who(ctx), id)
 
-        @mcp.tool(title="Move a memory to another project", description="Move an entry that landed in the wrong project to project:<slug>. Keeps its id and history. Audited. Use memory_promote to move it to general.", annotations=WRITE_IDEMPOTENT)
-        async def memory_move(ctx: Context, id: str, to_scope: Annotated[str, Field(description="'project:<slug>'")]) -> dict[str, Any]:
+        @mcp.tool(title="Move a memory to another scope", description="Move an entry you wrote between granted project or agent scopes. The owner can move any entry. SwB keeps its ID and history.", annotations=WRITE_IDEMPOTENT)
+        async def memory_move(ctx: Context, id: str, to_scope: Annotated[str, Field(description="'project:<slug>' or 'agent:<name>'")]) -> dict[str, Any]:
             return sync(core.move_memory, who(ctx), id, to_scope)
 
-        @mcp.tool(title="Promote a memory to general", description="Move a project entry to general once the owner agrees it applies to every project. Keeps its id and history. Audited.", annotations=WRITE_IDEMPOTENT)
+        @mcp.tool(title="Promote a memory to general", description="Use the owner's sign-in to move an entry to general. SwB keeps its ID and history.", annotations=WRITE_IDEMPOTENT)
         async def memory_promote(ctx: Context, id: str, to: Literal["general"] = "general") -> dict[str, Any]:
             return sync(core.move_memory, who(ctx), id, to, promote=True)
 
         @mcp.tool(
             title="Session briefing",
-            description="Read the project's memory and links, the owner's general profile, recent decisions and your conversations in progress. The owner's sign-in includes the routed Captain's digest and crew activity.",
+            description="Read the granted project's memory and links and your conversations in progress. General memory is included only when granted. The owner's sign-in includes the routed Captain's digest and crew activity.",
             annotations=READ_REMOTE,
         )
         async def context_pack(ctx: Context, project: ProjectArg = None) -> str:
             return await run(core.context_pack(who(ctx), project))
 
-        @mcp.tool(title="List projects", description="Projects that scope memory and routes, with their links (repos, and the matching project in each block or assistant). hint finds the project for a repo or a project name. pending_projects lists new slugs waiting for an owner to save a routine registration.", annotations=READ)
+        @mcp.tool(title="List projects", description="List public projects and private projects you have a named grant to see. The owner sees every project. Pass hint to find a project by repository or name. pending_projects lists new slugs waiting for a routine registration.", annotations=READ)
         async def project_list(ctx: Context, include_archived: bool = False, hint: str | None = None) -> dict[str, Any]:
-            who(ctx)
+            p = who(ctx)
             block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
             pending = block.pending_projects() if block is not None else []
+
+            def visible(project: Project) -> bool:
+                return can_read_project(p, project)
+
             if hint:
-                return {"matches": sync(core.projects.resolve, hint), "pending_projects": pending}
-            return {"projects": [p.as_dict() for p in core.projects.list(include_archived)], "pending_projects": pending}
+                return {"matches": sync(core.projects.resolve, hint, visible=visible), "pending_projects": pending}
+            return {"projects": [project.as_dict() for project in core.projects.list(include_archived) if visible(project)],
+                    "pending_projects": pending}
 
         @mcp.tool(title="Create a project", description="Create a project, a memory scope 'project:<slug>'. Do this only when the owner starts a genuinely new project. Pass its repos: switchboard then links it to its counterpart in each block (a Capy project, say) and routes it (result.auto); ambiguous matches come back as candidates to ask the owner about.", annotations=WRITE)
         async def project_create(ctx: Context, slug: Annotated[str, Field(description="lowercase-dashed, e.g. switchboard")], name: str,
                                  description: str = "", links: Links | None = None,
-                                 private: Annotated[bool, Field(description="Keep its memory out of other projects' reads, even explicit ones")] = False) -> dict[str, Any]:
+                                 private: Annotated[bool, Field(description="Require a named project grant for non-owner reads")] = False) -> dict[str, Any]:
             p = who(ctx)
             out = sync(core.projects.create, slug=slug, name=name, description=description, links=links.model_dump(exclude_none=True) if links else None,
                        private=private).as_dict()
@@ -548,7 +546,7 @@ class MCPBlock(Block):
                     "agents": core.known_agents(),
                     "connected": (sorted(set(core.connections.agents())) if p.is_unrestricted_owner else [p.source] if p.kind == "connect" else [])}
 
-        kit = Kit(self, who, run, need, pscope)
+        kit = Kit(self, who, run, need_routing, pscope)
         kit.register_generic(mcp)
         from .setup import register
 
