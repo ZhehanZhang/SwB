@@ -2708,11 +2708,12 @@
       "name": "connect_revoke"
     },
     {
-      "description": "Read the granted project's memory and links and your conversations in progress. General memory is included only when granted. The owner's sign-in includes the routed Captain's digest and crew activity.",
+      "description": "Read granted memory and your conversations in progress. Pass a project for its links or scopes to select memory. Paired keys default to their grants. The owner's sign-in includes the routed Captain's digest and crew activity.",
       "icon": null,
       "id": "tool:context_pack",
       "input_properties": [
-        "project"
+        "project",
+        "scopes"
       ],
       "kind": "tool",
       "label": "Session briefing",

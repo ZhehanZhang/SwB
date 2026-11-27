@@ -20,6 +20,7 @@ from ...claims import NAME_RE as SECRET_NAME_RE
 from ...block_env import GITHUB_SECRET as SECRET_ENV
 from ...config import ConfigError
 from ...guard import audit_client_ip
+from ...inbox import CONTEXT_NOTE
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
@@ -759,7 +760,8 @@ class GitHubBlock(Block):
             parts[key] = {"text": text,
                           "author_id": f"github:{author_id}" if author_id else None,
                           "owner": author_id in owners and author.get("type") != "Bot"}
-        trust = "owner" if actor_is_owner and all(part["owner"] for part in parts.values()) else "external"
+        mixed_authors = any(part["owner"] != actor_is_owner for part in parts.values())
+        trust = "owner" if actor_is_owner and not mixed_authors else "external"
         generated = {"event": event, "repo": repo, "delivery": neutralize(delivery)}
         if "number" in payload:
             generated["number"] = payload["number"]
@@ -770,12 +772,12 @@ class GitHubBlock(Block):
             parts = {"metadata": {"text": json.dumps(metadata, ensure_ascii=False), "author_id": None, "owner": False}, **parts}
         rendered = frame_parts(parts, where)
         details = join_parts(rendered)
-        title_sender = f"User {user_id}" if user_id else "Unknown sender"
+        title_sender = "Mixed authors" if mixed_authors else f"User {user_id}" if user_id else "Unknown sender"
         event_name = "Issue" if event == "issues" else event.replace("_", " ").capitalize()
         summary = " ".join(filter(None, (event_name, generated.get("action"), generated.get("conclusion"))))
         number = provider_id(generated.get("number"))
         event_title = f"{summary} #{number}" if number else summary
-        title = subject(title_sender, "GitHub", repo, event_title, verb="", trust=trust)
+        title = subject(title_sender, "GitHub", repo, event_title, verb="", trust="owner" if mixed_authors else trust)
         delivery_note = f'GitHub delivery {generated["delivery"]}.'
         if mode == "watch":
             if sinks := self.sink_names(repo):
@@ -814,7 +816,8 @@ class GitHubBlock(Block):
         try:
             slugs = self.core.slug_map(await self.core.targets()) if not actor_is_owner and addr.block != "agent" else {}
             resources = self.core.target_visibility_resources(target, addr, slugs=slugs)
-            if not resources or not self.core.visibility.allows(who, *resources):
+            restricted = not resources or not self.core.visibility.allows(who, *resources)
+            if restricted and actor_is_owner:
                 self.drop(event, data, "target access restricted", ip, delivery)
                 return
             if not actor_is_owner:
@@ -827,6 +830,19 @@ class GitHubBlock(Block):
                 if len(self._senders) > MAX_DELIVERIES:
                     self._senders.popitem(last=False)
             text = FramedText(details) if trust == "external" else details
+            if restricted:
+                item = {**generated, "subject": title, "text": wake_text(title, text, None, delivery_note),
+                        "from": {"block": self.name, "space": space, "trust": trust}, "trust": trust,
+                        "target": target, "note": CONTEXT_NOTE}
+                for agent in sorted(self.core.target_agents(addr)):
+                    row = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? AND project IS ?",
+                                              (agent, self.name, repo, project))
+                    handle = row["handle"] if row else self.core.inbox.open_handle(
+                        owner=agent, destination=self.name, ref=repo, project=project, title=f"GitHub {repo}", meta={}, status="following")
+                    await self.core.inbox.add(handle, "context", item)
+                self.core.audit.record(origin=self.name, source=sender_id, client=ip, destination=self.name,
+                                       action="context_noted", outcome="ok", ref=delivery, target=target)
+                return
             principal = Principal(self.name, ip, "github", origin=self.name, trust=trust)
             self.core.turn(f"{self.name}:{repo}:{number or delivery}", principal)
             link = neutralize(payload.get("url")) or None
