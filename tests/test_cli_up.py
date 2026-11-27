@@ -31,8 +31,8 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
     if override:
         monkeypatch.setenv(override, str(data))
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv, *, announce, **_: calls.append(
-        (argv, load_config().data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"], announce)))
+    monkeypatch.setattr(__main__, "main", lambda argv, *, instance, announce, **_: calls.append(
+        (argv, load_config(instance=instance).data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"], announce)))
 
     __main__.cli_main(["up"])
 
@@ -100,6 +100,91 @@ def test_up_uses_instance_data_when_selected(clean_env, tmp_path, monkeypatch, c
     assert not list(home_data.glob(".instance-data-notice-*"))
 
 
+@pytest.mark.parametrize("source", ["yaml", "overlay", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR"])
+def test_up_log_and_export_share_configured_data(clean_env, tmp_path, monkeypatch, capsys, caplog, source):
+    home_db = Path.home() / ".local/share/switchboard/switchboard.db"
+    home_db.parent.mkdir(parents=True)
+    home_db.touch()
+    config = tmp_path / cli.CONFIG
+    config.parent.mkdir()
+    config.write_text(f"version: 2\ndata_dir: {tmp_path / 'yaml-data'}\n")
+    data = tmp_path / "yaml-data"
+    if source != "yaml":
+        data = tmp_path / "overlay-data"
+        config.with_name("local.yaml").write_text(f"data_dir: {data}\n")
+    if source.startswith("SWITCHBOARD_"):
+        data = tmp_path / "env-data"
+        (tmp_path / ".env").write_text(f"{source}={data}\n")
+
+    def serve(app, **options):
+        with TestClient(app):
+            core = app.starlette.state.core
+            assert core.data_dir == data
+            core.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
+                              action="saved-event", outcome="ok")
+            core.memory.write(source="owner", scope="general", namespace="notes", title="Saved memory",
+                              body="Memory from the configured database.", confirm_general=True)
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    capsys.readouterr()
+    __main__.cli_main(["log"])
+    assert '"action": "saved-event"' in capsys.readouterr().out
+    output = tmp_path / "export"
+    __main__.cli_main(["export", str(output)])
+    assert "exported 1 memories" in capsys.readouterr().out
+    assert "Saved memory" in (output / "INDEX.md").read_text()
+    assert not (tmp_path / "data").exists()
+    assert "Using existing data" not in caplog.text
+
+
+def test_implicit_commands_use_the_config_override_and_dir_forces_local(clean_env, tmp_path, monkeypatch, capsys):
+    local = tmp_path / cli.CONFIG
+    local.parent.mkdir()
+    local.write_text("version: 2\nblocks:\n  local-mcp: {use: mcp}\n")
+    selected = tmp_path / "external.yaml"
+    selected_data = tmp_path / "external-data"
+    selected.write_text(f"version: 2\ndata_dir: {selected_data}\nblocks:\n  external-mcp: {{use: mcp}}\n")
+    (tmp_path / ".env").write_text(f"SWITCHBOARD_CONFIG={local}\n")
+    monkeypatch.setenv("SWITCHBOARD_CONFIG", str(selected))
+    used = []
+
+    def serve(app, **options):
+        with TestClient(app):
+            core = app.starlette.state.core
+            used.append((core.data_dir, list(core.blocks)))
+            if core.data_dir == selected_data:
+                core.projects.create(slug="external", name="External project")
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    __main__.cli_main(["up", "--dir", str(tmp_path)])
+    assert used == [(selected_data, ["external-mcp"]), (tmp_path / "data", ["local-mcp"])]
+    capsys.readouterr()
+    __main__.cli_main(["blocks", "list"])
+    blocks = capsys.readouterr().out
+    assert "external-mcp" in blocks and "local-mcp" not in blocks
+    __main__.cli_main(["targets"])
+    assert "project:external" in capsys.readouterr().out
+
+
+def test_missing_config_override_does_not_discover_the_local_file(clean_env, tmp_path, monkeypatch):
+    local = tmp_path / cli.CONFIG
+    local.parent.mkdir()
+    local.write_text("version: 2\nblocks: {}\n")
+    (tmp_path / ".env").write_text("SWITCHBOARD_CONFIG=missing.yaml\n")
+
+    def serve(app, **options):
+        with TestClient(app):
+            core = app.starlette.state.core
+            assert list(core.blocks) == ["mcp"]
+            assert core.data_dir == Path.home() / ".local/share/switchboard"
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    assert not (tmp_path / "data").exists()
+
+
 def test_up_keeps_the_old_home_database_and_warns_once_per_instance(clean_env, tmp_path, monkeypatch, caplog, capsys):
     from switchboard.store import Store
 
@@ -144,7 +229,7 @@ def test_container_serve_keeps_its_data_volume(clean_env, monkeypatch):
     paths = []
 
     def build(**kwargs):
-        assert kwargs["data_dir"] is None
+        assert kwargs["instance"] is None
         paths.append(load_config(env=kwargs["env"]).data_dir)
         raise SystemExit(0)
 
@@ -155,7 +240,8 @@ def test_container_serve_keeps_its_data_volume(clean_env, monkeypatch):
     assert paths == [Path("/data")]
 
 
-def test_client_reads_the_owner_key_from_its_instance_data(clean_env, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("location", ["default", "yaml", "overlay", "environment"])
+def test_client_reads_the_owner_key_from_its_instance_data(clean_env, tmp_path, monkeypatch, capsys, location):
     import hmac
 
     from switchboard.deployment import OWNER_KEY, volume_owner_key
@@ -163,9 +249,19 @@ def test_client_reads_the_owner_key_from_its_instance_data(clean_env, tmp_path, 
     monkeypatch.delenv(OWNER_KEY, raising=False)
     config = tmp_path / cli.CONFIG
     config.parent.mkdir()
-    config.touch()
+    data = tmp_path / "data"
+    if location == "default":
+        config.write_text("version: 2\n")
+    else:
+        config.write_text(f"version: 2\ndata_dir: {tmp_path / 'yaml-data'}\n")
+        data = tmp_path / f"{location}-data"
+    if location in ("overlay", "environment"):
+        config.with_name("local.yaml").write_text(f"data_dir: {tmp_path / 'overlay-data'}\n")
+    if location == "environment":
+        monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(data))
+    monkeypatch.setenv("SWITCHBOARD_PUBLIC_URL", "https://swb.example.test")
     (tmp_path / ".env").write_text("SWITCHBOARD_DEPLOY_PLATFORM=compose\n")
-    key = volume_owner_key({"SWITCHBOARD_DEPLOY_PLATFORM": "compose", "SWITCHBOARD_DATA": str(tmp_path / "data")}, create=True)
+    key = volume_owner_key({"SWITCHBOARD_DEPLOY_PLATFORM": "compose", "SWITCHBOARD_DATA": str(data)}, create=True)
 
     async def call_with_volume_key(url, actual_key, tool, arguments):
         assert hmac.compare_digest(actual_key, key)
