@@ -21,14 +21,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import re
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from ..auth import Principal
 from ..blocks import Action, Block, BlockError, Call
+from ..slack.config import AVATAR_RE
+from ..slack.engine import find_avatar
 from ..trust import wrap
 from ..visibility import Who
 from .claims import Claims
@@ -50,6 +54,7 @@ CREATE TABLE IF NOT EXISTS chat_sent (block TEXT NOT NULL, space TEXT NOT NULL, 
   part INTEGER NOT NULL DEFAULT 0, at REAL NOT NULL, PRIMARY KEY (block, space, channel, message));
 CREATE TABLE IF NOT EXISTS chat_relays (handle TEXT PRIMARY KEY, block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, root TEXT NOT NULL,
   reply_to TEXT, target TEXT NOT NULL, trust TEXT NOT NULL, at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS block_state (block TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (block, key));
 """
 RETENTION_S = 14 * 86400
 
@@ -109,6 +114,10 @@ class ChatBlock(Block):
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
+        avatar = config.get("avatar")
+        if avatar is not None and (not isinstance(avatar, str) or not AVATAR_RE.fullmatch(avatar)):
+            raise BlockError(f"blocks.{self.name}.avatar must be a file name like switchboard.png")
+        self._avatar_status = {"file": avatar, "applied": False, "error": None}
         migrate(core.store)
         self.spaces = {label: self._space(label, raw) for label, raw in (config.get("spaces") or {}).items()}
         grants = config.get("agents") or {}
@@ -188,6 +197,32 @@ class ChatBlock(Block):
     async def secret_saved(self, name: str) -> None:
         """Called after the owner saves a token through a claim link: reconnect with it."""
 
+    async def apply_avatar(self, bot_id: str | int, upload: Callable[[bytes], Awaitable[None]]) -> None:
+        file = self._avatar_status["file"]
+        if file is None:
+            return
+        error = "could not apply avatar"
+        with contextlib.suppress(Exception):
+            try:
+                engine = self.core.slack
+                path = engine.find_avatar(file) if engine is not None else find_avatar(file)
+                if path is None:
+                    raise BlockError("avatar file not found")
+                data = path.read_bytes()
+                digest = hashlib.sha256(data).hexdigest()
+                store, key = self.core.store, f"avatar:{bot_id}"
+                row = store.one("SELECT value FROM block_state WHERE block = ? AND key = ?", (self.name, key))
+                if row is None or row["value"] != digest:
+                    await upload(data)
+                    store.x("INSERT OR REPLACE INTO block_state (block, key, value) VALUES (?, ?, ?)", (self.name, key, digest))
+            except BlockError as exc:
+                error = str(exc)
+            else:
+                error = None
+        if error is not None:
+            log.warning("%s avatar %s: %s", self.name, file, error)
+        self._avatar_status.update(applied=error is None, error=error)
+
     # Status ----------------------------------------------------------------------------------
 
     def problems(self) -> list[str]:
@@ -201,6 +236,7 @@ class ChatBlock(Block):
 
     def status(self) -> dict[str, Any]:
         return {"platform": self.platform, "connected": self.connected(), "missing": self.missing(), "setup": self.setup(),
+                "avatar": dict(self._avatar_status),
                 "spaces": {s.label: {"owners": len(self.owners(s)), "listen": sorted(s.listen), "default_target": s.default_target, "project": s.project}
                            for s in self.spaces.values()},
                 "targets": len(self.targets_by_slug), "refreshed_at": self.refreshed_at}

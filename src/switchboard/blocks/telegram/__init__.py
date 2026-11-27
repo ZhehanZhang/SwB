@@ -5,9 +5,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import html
+import json
 import logging
 import re
+from functools import partial
+from io import BytesIO
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
+
+from PIL import Image
 
 from ...chat import RETENTION_S, ChatBlock, Incoming, Persona
 from .. import BlockError, Manifest
@@ -203,6 +208,7 @@ class TelegramBlock(ChatBlock):
                         raise TelegramError("getMe", "invalid bot username")
                     self._bot = {"id": me["id"], "username": username, "name": me.get("first_name")}
                     self._privacy = not me.get("can_read_all_group_messages", False)
+                    await self.apply_avatar(me["id"], partial(self._set_avatar, token))
                     next_check = 0
                 if clock() >= next_check:
                     for chat in self._groups:
@@ -233,6 +239,13 @@ class TelegramBlock(ChatBlock):
                 log.warning("%s connection: update processing failed", self.name)
                 await asyncio.sleep(delay)
                 delay = min(2 * delay, 60)
+
+    async def _set_avatar(self, token: str, data: bytes) -> None:
+        out = BytesIO()
+        with Image.open(BytesIO(data)) as image:
+            image.convert("RGB").save(out, "JPEG", quality=92)
+        await self._api.multipart(token, "setMyProfilePhoto", data={"photo": json.dumps({"type": "static", "photo": "attach://p"})},
+                                  files={"p": ("avatar.jpg", out.getvalue(), "image/jpeg")})
 
     async def _poll(self, token: str, bot_id: int, username: str) -> int:
         row = self.core.store.one("SELECT next_id FROM telegram_offsets WHERE block = ? AND bot = ? AND at > ?",

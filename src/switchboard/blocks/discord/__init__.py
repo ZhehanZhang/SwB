@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import re
+from io import BytesIO
 from typing import TYPE_CHECKING, Any, AsyncIterator, NamedTuple
 from urllib.parse import quote, urlencode, urlsplit
 
 import httpx
+from PIL import Image
 
 from .. import BlockError, Manifest
 from ...chat import ChatBlock, Incoming, Persona
@@ -260,11 +263,20 @@ class DiscordBlock(ChatBlock):
                 self._start_gateway()
 
     async def request(self, method: str, path: str, *, json: dict[str, Any] | None = None,
-                      params: dict[str, str] | None = None, webhook: bool = False) -> Any:
+                      params: dict[str, str] | None = None, webhook: bool = False, retry: bool = True) -> Any:
         token = None if webhook else self.token()
         if not webhook and not token:
             raise BlockError(f"No Discord bot token: open the link from {self.name}_provision or set {self.token_env}.")
-        return await rest.request(self._transport, method, path, token, json=json, params=params)
+        return await rest.request(self._transport, method, path, token, json=json, params=params, retry=retry)
+
+    async def _set_avatar(self, data: bytes) -> None:
+        with Image.open(BytesIO(data)) as image:
+            if image.format != "PNG":
+                out = BytesIO()
+                image.convert("RGBA").save(out, "PNG")
+                data = out.getvalue()
+        avatar = base64.b64encode(data).decode("ascii")
+        await self.request("PATCH", "/users/@me", json={"avatar": f"data:image/png;base64,{avatar}"}, retry=False)
 
     def _cache_channel(self, data: dict[str, Any], guild_id: str | None = None) -> Channel:
         ident = data["id"]
@@ -289,6 +301,7 @@ class DiscordBlock(ChatBlock):
             self.guild_info = {}
             self.channels.clear()
             asyncio.ensure_future(self._load_owner()).add_done_callback(lambda t: t.cancelled() or t.exception())
+            await self.apply_avatar(user["id"], self._set_avatar)
         elif event == "GUILD_CREATE":
             self.guilds.add(data["id"])
             self.guild_info[data["id"]] = {"name": data.get("name"), "owner_id": data.get("owner_id")}

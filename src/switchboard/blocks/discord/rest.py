@@ -24,19 +24,20 @@ class DiscordHTTPError(BlockError):
 
 
 async def request(transport: httpx.AsyncBaseTransport, method: str, path: str, token: str | None,
-                  *, json: dict[str, Any] | None = None, params: dict[str, str] | None = None) -> Any:
+                  *, json: dict[str, Any] | None = None, params: dict[str, str] | None = None, retry: bool = True) -> Any:
     """Use the transport directly so the HTTP client never logs credential-bearing webhook URLs."""
     headers = {"User-Agent": USER_AGENT}
     if token:
         headers["Authorization"] = f"Bot {token}"
-    for attempt in range(ATTEMPTS):
+    attempts = ATTEMPTS if retry else 1
+    for attempt in range(attempts):
         try:
             req = httpx.Request(method, API + path, json=json, params=params, extensions={"timeout": TIMEOUT}, headers=headers)
             response = await transport.handle_async_request(req)
             try:
                 if response.is_success:
                     return response.json() if await response.aread() else None
-                if response.status_code != 429 or attempt == ATTEMPTS - 1:
+                if response.status_code != 429 or attempt == attempts - 1:
                     raise DiscordHTTPError(response.status_code)
                 try:
                     await response.aread()
