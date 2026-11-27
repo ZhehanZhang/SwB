@@ -125,7 +125,7 @@ routes:
 | `auth.cloudflare_access.aud` | Access 應用程式的對象標記，也可用 `CLOUDFLARE_ACCESS_AUD` 設定 |
 | `auth.redirect_uris` | 允許的 OAuth 回呼位址。這份清單會取代內建清單。用 `/*` 比對路徑及其子路徑 |
 | `auth.source_names` | 將 OAuth 主機名稱或用戶端名稱的片段對應到登入時使用的代理名稱 |
-| `auth.key_scopes` | 依金鑰名稱設定允許的範圍。適用於存取記憶和讀取對話。例如 `[project:example]` |
+| `auth.key_scopes` | 依金鑰名稱指定範圍，例如 `[project:example]`。限制路由、訊息和對話。它也限制設定金鑰的記憶存取，並在配對時提供額外的記憶授權。SwB 依配對金鑰單獨儲存這些授權 |
 | `auth.key_tools` | 依金鑰名稱設定可呼叫的 MCP 工具，例如 `[send]` |
 | `auth.key_targets` | 依金鑰名稱設定可接收訊息的目標，例如 `[agent:claude]` |
 | `auth.inbox_keys` | 為每把金鑰指定唯一可讀取的代理收件匣。內建項目為 `channel: claude-code` |

@@ -15,9 +15,11 @@ description: 项目、记忆、目标、路由和会话。
 
 ## 记忆
 
-SwB 有自己的记忆库。Claude 和 ChatGPT 让各自的内置记忆保持私有，因此 SwB 另设第三个记忆库，供每个智能体使用。智能体通过 `memory_*` 工具和 `context_pack` 使用它。
+SwB 的共享记忆与 Claude 和 ChatGPT 的记忆分开保存。智能体可在凭据授权的范围内调用 `memory_*` 工具和 `context_pack`。
 
-每条记忆属于一个**范围**。范围是 `general` 或 `project:<slug>`。`general` 保存在每个项目中都成立的个人事实。写入 `general` 前，智能体先向所有者确认，再设置 `confirm_general=true`。SwB 以这个参数作为智能体的确认。读取会覆盖指定的项目和 `general`。读取另一个项目需要明确的 `scopes` 列表，并记入审计日志。私有项目的记忆对其他项目的读取保持隐藏。
+**范围**是一组记忆条目。`agent:<name>` 存放智能体的记忆。`project:<slug>` 存放项目记忆。`general` 存放适用于各项目的信息。
+
+**授权**让凭据可以访问指定范围。配对密钥要读取 `general`，须有明确授权。所有者可以查看私有项目。其他凭据须获得该项目的单独授权。
 
 ## 目标
 

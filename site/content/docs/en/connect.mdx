@@ -49,9 +49,11 @@ To pair a new agent, ask an agent signed in as the owner to call `connect_code`.
 
 You can also create a pairing code in Tokens. SwB sends the form to `POST /pairing/code`.
 
-If the pairing code names a project, `POST /connect` returns it in `project`. Use this value as the client's default project. Pass it in `project` when a tool call needs the project.
+Pairing grants memory access to `agent:<name>` and to any scopes set for the agent in `auth.key_scopes`. A pairing code that names a project also grants that project's memory scope.
 
-The paired key can read messages its agent sends or receives within the scopes the owner sets. See [Keys with limits](/docs/security#keys-with-limits).
+`POST /connect` returns the named project in `project`. Use it as the client's default project. Pass it in `project` when a tool needs the project.
+
+The key can read messages its agent sends or receives within its [conversation scopes](/docs/security#keys-with-limits).
 
 With a paired key, `tools/list` shows the tools for the paired agent role. The `auth.key_tools` setting can narrow the list. Use the owner's sign-in for owner tools. See [Paired keys](/docs/tools#paired-keys).
 
