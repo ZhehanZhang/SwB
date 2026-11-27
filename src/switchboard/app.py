@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response, Stream
 from starlette.routing import Mount, Route
 
 from . import pages
+from .auth import Principal
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable
 from .guard import Guard, RateLimiter, client_ip, reject
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
@@ -118,7 +119,7 @@ def create_app(core: "Switchboard") -> Any:
                        and claim_principal.source == "owner" and claim_principal.is_unrestricted_owner else None)
 
     async def healthz(request: Request) -> JSONResponse:
-        return JSONResponse(core.health())
+        return JSONResponse(core.health(public=True))
 
     async def owner_page(request: Request) -> tuple[str | None, Response | None]:
         if not core.cfg.access_team_domain:
@@ -192,6 +193,29 @@ def create_app(core: "Switchboard") -> Any:
         if refused is not None:
             return JSONResponse({"error": "forbidden"}, status_code=403)
         return JSONResponse({"targets": await core.targets()}, headers={"Cache-Control": "no-store"})
+
+    async def modes(request: Request) -> JSONResponse:
+        email, refused = await owner_page(request)
+        headers = {"Cache-Control": "no-store"}
+        if refused is not None:
+            return JSONResponse({"error": "forbidden"}, status_code=403, headers=headers)
+        if request.method == "GET":
+            await core.modes.refresh()
+            return JSONResponse(core.modes.status(), headers=headers)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "send a JSON object"}, status_code=400, headers=headers)
+        if not valid_csrf(body, csrf(email)):
+            return JSONResponse({"error": "forbidden"}, status_code=403, headers=headers)
+        principal = Principal(source=f"admin:{email}", client_id=client_ip(request.scope), kind="oauth", origin="http")
+        try:
+            row = core.modes.set(principal, **{k: v for k, v in body.items() if k != "csrf"})
+        except (TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400, headers=headers)
+        return JSONResponse({"space": row}, headers=headers)
 
     async def avatar_upload(request: Request) -> Response:
         """The owner replaces a persona's picture from the root page: Access JWT for an owner plus a CSRF token."""
@@ -452,6 +476,8 @@ def create_app(core: "Switchboard") -> Any:
             while True:
                 got = await core.inbox.wait(owner=agent, since=cursor, timeout=HEARTBEAT_S, reader=f"channel:{p.source}", advance=False)
                 for item in got["items"]:
+                    if item["kind"] == "watch_digest":
+                        continue
                     yield f"id: {item['cursor']}\nevent: item\ndata: {json.dumps(item)}\n\n".encode()
                 if got["timed_out"]:
                     yield b"event: heartbeat\ndata: {}\n\n"
@@ -484,6 +510,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
             Route("/healthz", healthz),
             Route("/api/targets", targets),
+            Route("/api/modes", modes, methods=["GET", "POST"]),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),

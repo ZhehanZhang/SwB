@@ -22,6 +22,7 @@ from starlette.routing import BaseRoute, Mount
 
 from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
+from ...modes import ChannelModes
 from ...projects import ProjectError
 from ...routes import RouteError
 from ...targets import LEGACY_KINDS
@@ -94,6 +95,8 @@ class LimitedServer(MCPServer):
     """An MCP server that holds a key to its tool allowlist (auth.key_tools): tools/list shows only those tools and
     tools/call refuses any other."""
 
+    modes: ChannelModes
+
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
         p = principal_of(getattr(ctx, "request", None))
@@ -106,6 +109,28 @@ class LimitedServer(MCPServer):
         if p is not None and p.tools is not None and params.name not in p.tools:
             return CallToolResult(content=[TextContent(type="text", text=f"the {p.source} key may call only {', '.join(p.tools) or 'no tools'}")],
                                   is_error=True)
+        if p is not None:
+            arguments = params.arguments or {}
+            ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
+                        if isinstance(arguments.get(k), str)), None)
+            tool = next((t for t in await self.list_tools() if t.name == params.name), None)
+            if tool is not None and not (tool.annotations and tool.annotations.read_only_hint):
+                action = params.name
+                if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
+                    action = "notify_owner"
+                elif action == "send" and arguments.get("forward"):
+                    action = "forward"
+                repo = None
+                for block in self.modes.core.blocks.values():
+                    if block.manifest.id == "github" and action.startswith(f"{block.name}_"):
+                        candidate = action.removeprefix(f"{block.name}_")
+                        if candidate in ("label", "comment", "open_issue", "link_duplicate", "reply", "notify_owner"):
+                            action = candidate
+                            repo = arguments.get("repo") if isinstance(arguments.get("repo"), str) else None
+                try:
+                    self.modes.check(p, ref, action, repo)
+                except PermissionError as e:
+                    return CallToolResult(content=[TextContent(type="text", text=str(e))], is_error=True)
         return await super()._handle_call_tool(ctx, params)
 
 
@@ -176,6 +201,7 @@ class MCPBlock(Block):
         senders = [b for b in core.blocks.values() if b.verb("send") is not None]
         extensions = [self.events, TasksExtension(self)] if senders else [self.events]
         mcp = LimitedServer(name="switchboard", instructions=self.instructions(), extensions=extensions)
+        mcp.modes = core.modes
         mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
@@ -227,7 +253,21 @@ class MCPBlock(Block):
 
             try:
                 return await coro
-            except (CoreError, DestinationError, MemoryError_, ProjectError, RouteError) as e:
+            except (CoreError, DestinationError, MemoryError_, ProjectError, RouteError, PermissionError) as e:
+                raise ToolError(str(e)) from e
+
+        @mcp.tool(title="Channel modes", description="Read the modes of the channels and repositories you can see.", annotations=READ)
+        async def modes_status(ctx: Context) -> dict[str, Any]:
+            p = who(ctx)
+            await core.modes.refresh(p)
+            return core.modes.status(p)
+
+        @mcp.tool(title="Set a channel mode", description="Owner only. Set a space or channel override now, or use inherit to clear it.", annotations=WRITE)
+        async def space_mode(ctx: Context, block: str, space: str, mode: str, channel: str = "",
+                             actions: list[str] | None = None, project: str | None = None) -> dict[str, Any]:
+            try:
+                return core.modes.set(who(ctx), block, space, mode, channel, actions, project)
+            except (ValueError, PermissionError) as e:
                 raise ToolError(str(e)) from e
 
         # Memory and projects ------------------------------------------------------------------
@@ -437,7 +477,7 @@ class MCPBlock(Block):
             p = who(ctx)
             default, mx = self.wait_caps.for_agent(p.source)
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})},
-                    "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health(),
+                    "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health(p),
                     "agents": core.known_agents(), "connected": sorted(set(core.connections.agents()))}
 
         kit = Kit(self, who, run, need, pscope, unrestricted)

@@ -425,6 +425,50 @@ Use `auth: key` for `Authorization: Bearer <key>`; `header` overrides the header
 Slack and GitHub webhook sinks can also use Stripe-style signing with `signature: stripe` and `secret_env`;
 their default header is `Stripe-Signature`, configurable with `header`.
 
+## Channel modes
+
+Use `modes_status` in MCP to see a space's mode, where it came from, and any setup problems. Ask your agent to
+call `space_mode` with a block, space, and mode to change it without a restart. Pass a channel ID to change
+just that channel, or omit it for the whole space. Set the mode to `inherit` to remove the override. Only
+the owner can change modes; SwB audits each change.
+
+`off` ignores non-owner messages. `watch` batches untrusted excerpts, with authors and links when available,
+into the owner's inbox. It doesn't wake an agent or reply. `assist` wakes the assist target, which can answer
+only in the original thread without write tools. Replies are capped at 1,500 characters by default; change
+that with `modes.assist_max_chars`. `triage` wakes the triage target, which can take only the space's allowed
+actions. `work` lets only the owner route work.
+
+The owner's bot mentions and DMs always get work handling, with replies in the original thread or DM.
+Non-owner DMs default to `watch`; set `blocks.<block>.dm_mode: off` to ignore them instead. Sender trust comes
+from platform IDs, and making a channel `assist` or `triage` does not grant access to a private target.
+
+The first applicable setting wins: a runtime override, the channel's setting in
+`blocks.<block>.spaces.<space>.channels`, the space's `mode`, the project's setting in `modes.projects`, then
+`modes.default`. Existing `listen`/`listen_channels`, Slack `watched`, and GitHub sink settings still work as
+aliases. When no setting applies, the default is `off`; the example config opts in to `watch`.
+Watch digests arrive after `modes.digest_minutes` (60 by default) or 50 messages, whichever comes first.
+
+```yaml
+modes:
+  default: watch
+blocks:
+  discord:
+    spaces:
+      home:
+        mode: watch
+        project: example
+        channels:
+          "100000000000000004": assist
+          "100000000000000005": {mode: triage, actions: [reply, notify_owner]}
+```
+
+Triage defaults to all supported actions if you omit `actions`: `reply`, `label`, `comment`, `open_issue`,
+`link_duplicate`, and `notify_owner`. For GitHub changes, run `connect(github)` to set up a GitHub App or a
+fine-grained token with issue write access to the relevant repositories. Status flags a fallback to the
+project's default target when no dedicated triage target is registered. Use a dedicated agent identity for
+public-channel wakes if you also use the same connector for owner work; SwB cannot tell two runs sharing a
+credential apart, so it temporarily blocks unrelated writes on that identity after a restricted wake.
+
 ## Slack
 
 With a slack block in the config (or a `slack:` section in a version 1 file), Slack is both a way in and a way out. This is slackgate,
@@ -513,9 +557,9 @@ ported in: the same intake, write gate, personas and guarantees, but on switchbo
 - Config changes apply on restart. The Slack app manifests are in `manifests/`: workspace A, the agent room with a
   bot, and workspace B, user-only.
 
-### Listen mode
+### Assist mode
 
-Set `listen_channels: {team: ["#support"]}` under the Slack block to opt in by workspace and channel name or ID.
+The legacy `listen_channels: {team: ["#support"]}` setting still selects `assist` by workspace and channel name or ID.
 The channel must be shared with the sender and mapped to a project through `channel_projects` or
 `workspace_projects`. Non-owner messages, including mentions, wake the project's primary routine without an
 acknowledgment; only bots listed in the workspace's `known` map can wake it, and `sender_rate` limits each sender.
@@ -601,12 +645,12 @@ Nothing about a bot's look is hard-coded; every install reads it from Slack at r
 ## Discord
 
 The Discord block reads bot mentions, DMs, replies in conversations it has handled, and messages in channels you
-explicitly listen to. Mention the bot with a target slug (for example, `@swb helper check the build`) or set a space's
+configure with a [channel mode](#channel-modes). Mention the bot with a target slug (for example, `@swb helper check the build`) or set a space's
 `default_target`. The target stays attached to the thread for follow-ups. Final replies go back through the bot.
 `discord_post` lets your own agents post to spaces you've granted them.
 
 1. In the [Discord Developer Portal](https://discord.com/developers/applications), create a New Application. Under
-   **Bot**, turn on **Message Content Intent** if you want unmentioned server follow-ups and listen mode to have text.
+   **Bot**, turn on **Message Content Intent** if you want SwB to see the text of unmentioned server messages.
    Reset the bot token there. SwB learns the Application ID and owner when Discord connects.
 2. Enable the block with one space and restart switchboard. Leave out `guild_id` and `owner_ids` for automatic setup.
 3. As the owner, call `connect` with `what: discord` for a one-time token link. With Cloudflare Access, open the link
@@ -641,8 +685,8 @@ blocks:
   If Discord denies webhook access, SwB posts as the bot in the same place. Re-open the invite from `connect`
   to grant Manage Webhooks, or set `personas: false` to use the bot for all posts. `ack_reaction` defaults to 👀; set it to `null` to
   disable reactions. Posts don't ping users or roles. `daily_cap` optionally limits outbound tool calls per day.
-- Routing: at most one space can omit `guild_id`. Any others need distinct `guild_id` values. `known` maps Discord user IDs to names; `listen` lists channel
-  or thread IDs whose unaddressed messages go only to granted inboxes. `project` sets the default project and
+- Routing: at most one space can omit `guild_id`. Any others need distinct `guild_id` values. `known` maps Discord user IDs to names.
+  `listen` is the legacy alias for `assist` on the listed channel or thread IDs. `project` sets the default project and
   `channel_projects` overrides it by ID or `#name`. `bot_posts_per_hour` defaults to 20 per thread.
   The block's `agents` maps agent names to space lists or `"*"`, `target_aliases` adds local slugs, and
   `refresh_minutes` controls target refresh (30 by default).
@@ -665,8 +709,8 @@ target's persona on a bold first line.
    for a one-time token link. Open it through Cloudflare Access, or use `swb claim <link>` with a local owner key
    from `swb init`. `TELEGRAM_BOT_TOKEN` in the server environment takes precedence over a token saved with the link.
 3. Add the bot to each group and send `/swb@<bot username>` there. Copy the negative chat id from
-   `telegram_status` → `setup.seen_chats` into the space's `chats`. If using `listen`, turn off privacy
-   mode with `/setprivacy` in @BotFather, then remove and re-add the bot to the group.
+   `telegram_status` → `setup.seen_chats` into the space's `chats`. To see unmentioned group messages, turn off
+   privacy mode with `/setprivacy` in @BotFather, then remove and re-add the bot to the group.
 4. Open the bot's private chat and press Start. Copy your private chat id from `setup.seen_chats` into
    `owner_ids` for each space where you're the owner. Friends can be listed by Telegram user id in `known`;
    their text is still wrapped as untrusted.
@@ -690,11 +734,12 @@ blocks:
         owner_ids: [222222]
         known: {333333: Friend}
         default_target: claude
-        # listen: [-100111222]
+        mode: watch
 ```
 
-Each group belongs to one space. Private chats go to `dm_space` (the first space by default). Use
-`spaces.<label>.listen` to file unaddressed messages from specific chats in the inboxes of granted agents.
+Each group belongs to one space. Private chats go to `dm_space` (the first space by default).
+Use [channel modes](#channel-modes) to set how SwB handles groups or topics. Use the chat ID for a group or
+`<chat-id>:<topic-id>` for a topic, for example `"-100111222:42"`. The legacy `listen` setting selects `assist`.
 The shared chat settings `project`, `channel_projects`, and `bot_posts_per_hour` assign project context and cap
 bot posts per thread. `agents` grants agents access to a list of spaces or `"*"`, `target_aliases` adds slug
 aliases, and `refresh_minutes` controls target refresh (30 by default). Set `ack_reaction: null` to turn
