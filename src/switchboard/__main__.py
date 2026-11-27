@@ -5,6 +5,8 @@ import logging
 import os
 import sys
 from collections.abc import Callable
+from contextlib import ExitStack
+from logging.config import dictConfig
 from pathlib import Path
 from socket import socket
 
@@ -120,11 +122,62 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         parser.exit(2, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(2, f"swb: Check the owner key on the volume ({type(error).__name__}).\n")
-    try:
-        core = Switchboard(tunnel_url=tunnel_url, env=deployment_env if deployment_env is not None else env,
-                           loopback_origin=loopback_origin, instance=instance)
-    except ConfigError as error:
-        parser.exit(2, f"swb: {error}\n")
+    with ExitStack() as startup:
+        if announce_login:
+            dictConfig(uvicorn.config.LOGGING_CONFIG)
+            startup_logs = _StartupLogs()
+            startup.callback(startup_logs.close)
+            startup.callback(startup_logs.flush)
+            startup_logs.defer(logging.getLogger())
+            startup_logs.defer(logging.getLogger("uvicorn"))
+            startup_logs.defer(logging.getLogger("uvicorn.access"))
+        try:
+            core = Switchboard(tunnel_url=tunnel_url, env=deployment_env if deployment_env is not None else env,
+                               loopback_origin=loopback_origin, instance=instance)
+        except ConfigError as error:
+            parser.exit(2, f"swb: {error}\n")
+
+        if serving:
+            from .app import create_app
+
+            for problem in core.health()["problems"]:
+                logging.getLogger("switchboard").warning("degraded: %s", problem)
+            if deployment_env is not None and core.cfg.public_url:
+                logging.getLogger("switchboard").info("Sign-in page %s/login", core.cfg.public_url)
+            logging.getLogger("uvicorn.access").addFilter(_NoQuery())
+
+            def first_login() -> None:
+                principal = core.auth.verify_bearer(core.cfg.env.get(OWNER_KEY))
+                if principal is not None and principal.is_unrestricted_owner and principal.source == "owner" and core.cfg.public_url:
+                    token = core.auth.sessions.mint_link(principal.client_id, principal.source)
+                    core.audit.record(origin="cli", source=principal.source, client=principal.client_id, destination="core",
+                                      action="login_link_minted", outcome="ok")
+                    print(f"{core.cfg.public_url}/login#t={token}", flush=True)
+                startup.close()
+
+            app = create_app(core, on_started=first_login if announce_login else None)
+            options = {
+                "host": host,
+                "port": port,
+                "proxy_headers": True,
+                "forwarded_allow_ips": env.get("FORWARDED_ALLOW_IPS", "*"),
+                "timeout_graceful_shutdown": 5,
+            }
+            if announce_login:
+                options["log_config"] = None
+            if on_home_fallback is not None and core.cfg.legacy_instance_data is not None:
+                on_home_fallback(core.data_dir, core.cfg.legacy_instance_data)
+            if announce:
+                print(f"MCP URL: {core.cfg.public_url or origin}/mcp", flush=True)
+            if listener is None:
+                uvicorn.run(app, **options)
+            else:
+                server = uvicorn.Server(uvicorn.Config(app, **options))
+                server.run(sockets=[listener])
+                if not server.started:
+                    raise SystemExit(STARTUP_FAILURE)
+            return
+
     if args.cmd == "blocks":
         import yaml
 
@@ -169,42 +222,31 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             print(json.dumps(entry, ensure_ascii=False))
         return
 
-    from .app import create_app
 
-    for problem in core.health()["problems"]:
-        logging.getLogger("switchboard").warning("degraded: %s", problem)
-    if deployment_env is not None and core.cfg.public_url:
-        logging.getLogger("switchboard").info("Sign-in page %s/login", core.cfg.public_url)
-    logging.getLogger("uvicorn.access").addFilter(_NoQuery())
+class _StartupLogs(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self._handlers: dict[logging.Logger, list[logging.Handler]] = {}
+        self._records: list[logging.LogRecord] = []
 
-    def first_login() -> None:
-        principal = core.auth.verify_bearer(core.cfg.env.get(OWNER_KEY))
-        if principal is None or not principal.is_unrestricted_owner or principal.source != "owner" or not core.cfg.public_url:
-            return
-        token = core.auth.sessions.mint_link(principal.client_id, principal.source)
-        core.audit.record(origin="cli", source=principal.source, client=principal.client_id, destination="core",
-                          action="login_link_minted", outcome="ok")
-        print(f"{core.cfg.public_url}/login#t={token}", flush=True)
+    def defer(self, logger: logging.Logger) -> None:
+        self._handlers[logger] = logger.handlers
+        logger.handlers = [self]
 
-    app = create_app(core, on_started=first_login if announce_login else None)
-    options = {
-        "host": host,
-        "port": port,
-        "proxy_headers": True,
-        "forwarded_allow_ips": env.get("FORWARDED_ALLOW_IPS", "*"),
-        "timeout_graceful_shutdown": 5,
-    }
-    if on_home_fallback is not None and core.cfg.legacy_instance_data is not None:
-        on_home_fallback(core.data_dir, core.cfg.legacy_instance_data)
-    if announce:
-        print(f"MCP URL: {core.cfg.public_url or origin}/mcp", flush=True)
-    if listener is None:
-        uvicorn.run(app, **options)
-    else:
-        server = uvicorn.Server(uvicorn.Config(app, **options))
-        server.run(sockets=[listener])
-        if not server.started:
-            raise SystemExit(STARTUP_FAILURE)
+    def emit(self, record: logging.LogRecord) -> None:
+        if self._handlers:
+            self._records.append(record)
+        else:
+            logging.getLogger(record.name).callHandlers(record)
+
+    def flush(self) -> None:
+        with self.lock:
+            for logger, handlers in self._handlers.items():
+                logger.handlers = handlers
+            self._handlers.clear()
+            for record in self._records:
+                logging.getLogger(record.name).callHandlers(record)
+            self._records.clear()
 
 
 if __name__ == "__main__":
