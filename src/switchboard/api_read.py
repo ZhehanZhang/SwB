@@ -32,6 +32,12 @@ _PROMPTS = {"coordinator": "v4", "routine": "v1", "dispatcher": "v1"}
 _PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
 _SCOPE = rf"(?:general|project:{_PROJECT})"
 _CAPY_SENDERS = ("capy_thread", "capy", "captain")
+_WEBHOOK_DETAILS = frozenset({
+    "webhook secret unavailable", "invalid signature", "invalid JSON", "expected a JSON object", "invalid delivery id",
+    "unhandled event", "not completed", "unrouted repository", "channel mode ignored event", "sender ignored",
+    "channel access restricted", "target access restricted", "sender rate limit", "assist target is missing",
+    "triage target is missing", "work target is missing", "CoreError", "BlockError", "ValueError",
+})
 
 
 def _fields(row: Any, *names: str) -> dict[str, Any]:
@@ -138,6 +144,15 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
     action, target, ref = fields["action"], fields["target"] or "", fields["ref"]
     project: str | None = None
     metadata: dict[str, Any] = {}
+    detail = None
+    recorded_detail = row["detail"]
+    if action == "webhook" and recorded_detail in _WEBHOOK_DETAILS:
+        detail = recorded_detail
+    elif action == "tool_refused" and fields["destination"] == "mcp":
+        from .blocks.mcp.policy import REFUSAL_DETAILS
+
+        if recorded_detail in REFUSAL_DETAILS:
+            detail = recorded_detail
     if action in ("auth_failure", "auth_missing", "oauth_refused", "rate_limited"):
         if fields["target"] not in _AUTH_PATHS:
             fields["target"] = None
@@ -176,6 +191,8 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
                         metadata["repo_count"] = count
         elif action in ("auto_link", "project_create", "project_update") and re.fullmatch(_PROJECT, target):
             project = project or target
+            if action in ("project_create", "project_update") and fields["outcome"] == "ok":
+                detail = recorded_detail
         elif action in ("routine_add", "routine_claim"):
             if match := re.fullmatch(rf"(?:routine )?(trig_[A-Za-z0-9]{{1,80}}) for ({_PROJECT})( \(new project\))?", row["excerpt"]):
                 metadata["routine_id"] = match[1]
@@ -196,12 +213,20 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
                     project = project or scope.removeprefix("project:")
             if re.fullmatch(r"mem_[0-9]{13}[a-f0-9]{8}", row["excerpt"]):
                 metadata["memory_id"] = row["excerpt"]
+        elif action == "memory_write" and fields["destination"] == "memory" and re.fullmatch(_SCOPE, target):
+            metadata["scope"] = target
+            detail = recorded_detail
+        elif action == "memory_delete" and recorded_detail == "Deleted memory.":
+            detail = recorded_detail
         elif action == "turn_cap":
             if match := re.fullmatch(r"paused at ([0-9]{1,10}) turns", row["detail"] or ""):
                 metadata["turn_cap"] = int(match[1])
+                detail = recorded_detail
         elif action == "visibility_set" and row["detail"] in ("shared", "private"):
             metadata["visibility"] = row["detail"]
-    return {**fields, "at": iso(row["at"]), "project": project, "metadata": metadata}
+            detail = recorded_detail
+    return {**fields, "at": iso(row["at"]), "project": project, "metadata": metadata, "detail": detail,
+            "excerpt": "" if not row["excerpt"] else None}
 
 
 async def _agents(core: Any) -> dict[str, Any]:
