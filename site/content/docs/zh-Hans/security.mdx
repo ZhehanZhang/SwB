@@ -36,7 +36,7 @@ Slack、Discord 和 Telegram 通过 `known` 判断哪些发送者可以发来消
 
 SwB 为每把配对密钥单独保存记忆授权。升级时，原先可访问全部记忆的有效配对密钥会获得 `general` 和当时已有的每个项目范围。密钥若有明确的 `auth.key_scopes` 列表，SwB 会复制该列表。SwB 在升级时保存这组授权。其他项目需要单独授权。
 
-所有者批准的 OAuth 客户端和权限完整的配置密钥保留全部记忆访问权限。配置密钥若设有 `auth.key_scopes`，该设置也限制记忆的访问范围。
+若 `auth.key_scopes` 中没有对应名称的条目，所有者批准的 OAuth 客户端和配置密钥保留全部记忆访问权限。`auth.key_scopes` 中的条目会同时限制两者的记忆访问范围。
 
 `auth.key_tools` 限制密钥可调用的工具。`auth.key_targets` 限制发送目标。
 
