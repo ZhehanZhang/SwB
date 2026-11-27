@@ -12,6 +12,22 @@
   letter-spacing: -.02em;
 }
 
+.runHelp,
+.addressHelp {
+  color: var(--color-fd-muted-foreground);
+  font-size: .875rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.runHelp {
+  margin: -.25rem 0 .75rem;
+}
+
+.addressHelp {
+  margin: 0;
+}
+
 .segments {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

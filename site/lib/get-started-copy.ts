@@ -2,11 +2,13 @@ import type { Locale } from './i18n';
 
 type GetStartedCopy = {
   runTitle: string;
+  runHelp: string;
   runLocal: string;
   runServer: string;
   runCloud: string;
   agentsTitle: string;
   address: string;
+  addressHelp: string;
   addressError: string;
   pipx: string;
   copyCommand: string;
@@ -17,6 +19,9 @@ type GetStartedCopy = {
   installGuide: string;
   selfHostingGuide: string;
   reachAnywhere: string;
+  companionGuide: string;
+  companionHelp: string;
+  museCompanionHelp: string;
   muse: { wake: string; beforeCommand: string; afterCommand: string; tools: string };
   procedure: Record<string, string>;
 };
@@ -24,11 +29,13 @@ type GetStartedCopy = {
 export const getStartedCopy: Record<Locale, GetStartedCopy> = {
   en: {
     runTitle: 'Where SwB runs',
+    runHelp: 'Choose where SwB runs to see the install instructions for that location.',
     runLocal: 'On your computer',
     runServer: 'On your server',
     runCloud: 'In the cloud',
     agentsTitle: 'Pick your agents',
     address: 'Your SwB address',
+    addressHelp: 'The prompts below use your SwB address.',
     addressError: 'Enter a valid HTTP or HTTPS URL.',
     pipx: 'Use pipx',
     copyCommand: 'Copy command',
@@ -39,6 +46,9 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     installGuide: 'Install guide',
     selfHostingGuide: 'Self hosting guide',
     reachAnywhere: 'Reach it from anywhere',
+    companionGuide: 'Companion guide',
+    companionHelp: 'For local Claude Code, Codex, OpenCode or dsh sessions, your agent guides companion installation and pairing on your device.',
+    museCompanionHelp: 'For gadget wakes, your agent guides you to install and pair a companion on your device.',
     muse: {
       wake: 'Wake Muse with a gadget',
       beforeCommand: 'Use a Mac or Linux computer with Bluetooth near your phone. Ask an agent with SwB owner access for a pairing code. Replace the example address with your SwB address.',
@@ -65,11 +75,13 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
   },
   'zh-Hans': {
     runTitle: 'SwB 在哪里运行',
+    runHelp: '选择 SwB 的运行位置，查看对应的安装说明。',
     runLocal: '在本机运行',
     runServer: '在自己的服务器上运行',
     runCloud: '在云端运行',
     agentsTitle: '选择智能体',
     address: '你的 SwB 地址',
+    addressHelp: '下方的提示词会使用这个 SwB 地址。',
     addressError: '请输入有效的 HTTP 或 HTTPS 网址。',
     pipx: '用 pipx 安装',
     copyCommand: '复制命令',
@@ -80,6 +92,9 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     installGuide: '安装指南',
     selfHostingGuide: '自托管指南',
     reachAnywhere: '随处访问',
+    companionGuide: '伴侣设备指南',
+    companionHelp: '如果使用 Claude Code、Codex、OpenCode 或 dsh 的本机会话，智能体会指导你在自己的设备上安装并配对 SwB 伴侣设备。',
+    museCompanionHelp: '设置实时唤醒时，智能体会指导你在自己的设备上安装并配对 SwB 伴侣设备。',
     muse: {
       wake: '用配对设备唤醒 Muse',
       beforeCommand: '在手机附近使用配有蓝牙的 Mac 或 Linux 电脑。请拥有 SwB 所有者权限的智能体提供配对码。将命令中的示例地址换成你的 SwB 地址。',
@@ -106,11 +121,13 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
   },
   'zh-Hant': {
     runTitle: 'SwB 在哪裡執行',
+    runHelp: '選擇要執行 SwB 的位置，即可查看對應的安裝說明。',
     runLocal: '在自己的電腦上執行',
     runServer: '在自己的伺服器上執行',
     runCloud: '在雲端執行',
     agentsTitle: '選擇代理',
     address: '你的 SwB 位址',
+    addressHelp: '下方的提示詞會使用這個 SwB 位址。',
     addressError: '請輸入有效的 HTTP 或 HTTPS 網址。',
     pipx: '用 pipx 安裝',
     copyCommand: '複製指令',
@@ -121,6 +138,9 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     installGuide: '安裝指南',
     selfHostingGuide: '自行代管指南',
     reachAnywhere: '隨處存取',
+    companionGuide: '夥伴裝置指南',
+    companionHelp: '如果使用 Claude Code、Codex、OpenCode 或 dsh 的本機對話，代理會引導你在自己的裝置上安裝並配對 SwB 夥伴裝置。',
+    museCompanionHelp: '設定即時喚醒時，代理會引導你在自己的裝置上安裝並配對 SwB 夥伴裝置。',
     muse: {
       wake: '用配對裝置喚醒 Muse',
       beforeCommand: '在手機附近使用支援藍牙的 Mac 或 Linux 電腦。請具有 SwB 擁有者權限的代理提供配對碼。將指令中的範例位址換成你的 SwB 位址。',

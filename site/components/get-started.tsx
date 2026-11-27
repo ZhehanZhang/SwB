@@ -8,6 +8,7 @@ import {
   type GetStartedAgent, type RunLocation,
 } from '@/lib/get-started';
 import { getStartedCopy } from '@/lib/get-started-copy';
+import { getStartedExplanation } from '@/lib/get-started-explanation';
 import { localize, type Locale } from '@/lib/i18n';
 import { ProviderMark } from './deploy-providers';
 import { MarkTile } from './mark-tile';
@@ -75,6 +76,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
   const [address, setAddress] = useState('');
   const [checkAddress, setCheckAddress] = useState(false);
   const labels = getStartedCopy[lang];
+  const explanations = getStartedExplanation[lang];
   const runLabels = { local: labels.runLocal, server: labels.runServer, cloud: labels.runCloud };
   const origin = validSwbOrigin(address);
   const selfHosting = localize(lang, '/docs/self-hosting');
@@ -137,7 +139,8 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
     <div className={`not-prose ${styles.page}`} data-get-started data-ready={view.ready} data-animate={view.animate}>
       <section aria-labelledby="start-run">
         <h2 className={styles.title} id="start-run">{labels.runTitle}</h2>
-        <div className={styles.segments} role="group" aria-labelledby="start-run">
+        <p className={styles.runHelp} id="start-run-help">{labels.runHelp}</p>
+        <div className={styles.segments} role="group" aria-labelledby="start-run" aria-describedby="start-run-help">
           {runLocations.map((run) => (
             <button key={run} type="button" aria-pressed={view.run === run} onClick={() => changeRun(run)}>
               {runLabels[run]}
@@ -176,8 +179,9 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
         </div>
         <div className={styles.address}>
           <label htmlFor="start-address">{labels.address}</label>
+          <p className={styles.addressHelp} id="start-address-help">{labels.addressHelp}</p>
           <input id="start-address" type="url" value={address} placeholder="https://swb.example.com" autoComplete="url"
-            spellCheck={false} aria-invalid={showAddressError || undefined}
+            spellCheck={false} aria-describedby="start-address-help" aria-invalid={showAddressError || undefined}
             aria-description={showAddressError ? labels.addressError : undefined}
             onChange={(event) => {
               const value = event.currentTarget.value;
@@ -210,6 +214,8 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
             const { name, mark, prompt, open, docs } = agentsById.get(id)!;
             const active = view.agents.includes(id);
             const text = personalizePrompt(prompts[prompt], origin);
+            const companionHelp = id === 'muse' ? labels.museCompanionHelp
+              : id === 'claude-code' || id === 'codex' ? labels.companionHelp : '';
             return (
               <div key={id} className={styles.agent} data-start-agent={id} data-active={active} inert={!active}>
                 <section id={id} className={styles.agentBody} aria-labelledby={`${id}-heading`}>
@@ -226,10 +232,19 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
                       <h4 className={styles.agentSubtitle}>{labels.muse.tools}</h4>
                     </>
                   )}
+                  <p className={styles.procedure} data-agent-before>
+                    {explanations.before[id]}
+                    {companionHelp && (
+                      <> {companionHelp} <a className={styles.supportLink} href={localize(lang, '/docs/companion')}>
+                        {labels.companionGuide}
+                      </a></>
+                    )}
+                  </p>
                   <div className={styles.prompt}>
                     <PromptActions text={text} labels={labels} targets={open} />
                     <pre tabIndex={0} lang="en"><code>{text}</code></pre>
                   </div>
+                  <p className={styles.procedure} data-agent-after>{explanations.after[id]}</p>
                   <p className={styles.procedure}>{labels.procedure[id]}</p>
                   <a className={styles.supportLink} href={localize(lang, docs)}>{labels.guide}</a>
                 </section>

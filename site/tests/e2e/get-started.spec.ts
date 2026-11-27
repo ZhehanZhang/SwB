@@ -148,6 +148,21 @@ test('recommends Muse gadget pairing before the connector and copies its command
   await expect(section.getByRole('link', { name: 'Full guide' })).toHaveAttribute('href', '/docs/setup/muse');
 });
 
+test('explains the prompts and links companion setup without offering it as an agent', async ({ page }) => {
+  await page.goto(`${start}?agents=claude-code,codex,muse`);
+  await expect(page.getByText(/MCP, an open standard/)).toBeVisible();
+  await expect(setup(page).getByText('The prompts below use your SwB address.')).toBeVisible();
+  await expect(setup(page).getByText(/Choose where SwB runs to see/)).toBeVisible();
+  await expect(tile(page, 'Companion')).toHaveCount(0);
+  for (const name of ['Claude Code', 'Codex', 'Muse']) {
+    const section = agent(page, name);
+    await expect(section.locator('[data-agent-before]')).toContainText(/pairing|pair a companion/);
+    await expect(section.locator('[data-agent-after]')).toHaveText(/\S/);
+    await expect(section.locator('[data-agent-before]').getByRole('link', { name: 'Companion guide' }))
+      .toHaveAttribute('href', '/docs/companion');
+  }
+});
+
 test('personalizes preview, open link and copy while the source prompt stays unchanged', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto(`${start}?agents=claude,codex`);
@@ -209,6 +224,12 @@ for (const [prefix, title, cloud, pick, guide] of [
       .toHaveAttribute('href', `${prefix}/docs/setup/claude`);
     await expect(setup(page).getByRole('link', { name: /^Fly\.io / }))
       .toHaveAttribute('href', `${prefix}${selfHosting}#fly`);
+    await expect(agent(page, 'Claude').locator('[data-agent-before]')).toHaveText(/\S/);
+    await expect(agent(page, 'Claude').locator('[data-agent-after]')).toHaveText(/\S/);
+
+    await page.goto(`${prefix}/docs/setup`);
+    await expect(page.locator('article p').filter({ hasText: 'MCP' }).first()).toBeVisible();
+    await expect(page.locator(`article p a[href="${prefix}${start}"]`)).toHaveText(title);
   });
 }
 
