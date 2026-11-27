@@ -1,4 +1,4 @@
-export function StepFlow({ steps }: { steps: { title: string; description: string }[] }) {
+export function StepFlow({ steps }: { steps: string[] }) {
   return (
     <section className="swb-flow relative py-16 sm:py-24">
       <svg className="swb-flow-cord" viewBox="0 0 1000 20" preserveAspectRatio="none" aria-hidden="true">
@@ -8,11 +8,10 @@ export function StepFlow({ steps }: { steps: { title: string; description: strin
         </circle>
       </svg>
       <div className="relative grid gap-10 md:grid-cols-3 md:gap-12">
-        {steps.map(({ title, description }) => (
+        {steps.map((title) => (
           <div key={title} className="swb-flow-step">
             <span className="swb-flow-jack" aria-hidden="true" />
             <h2 className="mt-6 font-display text-xl font-extrabold">{title}</h2>
-            <p className="mt-1.5 text-sm text-fd-muted-foreground">{description}</p>
           </div>
         ))}
       </div>

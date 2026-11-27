@@ -30,9 +30,9 @@ const en = {
     { who: 'capy', name: 'Captain', text: 'I picked up the draft and opened a PR for your review.' },
   ] as { who: 'you' | 'claude' | 'capy'; name: string; text: string }[],
   steps: [
-    { title: 'Start SwB', description: 'Run one command on your computer or server.' },
-    { title: 'Add it to one agent', description: 'Give the agent your SwB address.' },
-    { title: 'Let that agent connect the rest', description: 'Paste each token on its one-time page.' },
+    'Start SwB',
+    'Add it to one agent',
+    'Let that agent connect the rest',
   ],
 };
 
@@ -59,9 +59,9 @@ export const landingCopy: Record<Locale, typeof en> = {
       { who: 'capy', name: 'Captain', text: '我接手了草稿，并开了一个 PR 等你审阅。' },
     ],
     steps: [
-      { title: '启动 SwB', description: '在电脑或服务器上运行一条命令。' },
-      { title: '接入一个智能体', description: '把 SwB 地址交给这个智能体。' },
-      { title: '让它接通其余平台', description: '每个令牌都在一次性页面上粘贴。' },
+      '启动 SwB',
+      '接入一个智能体',
+      '让它接通其余平台',
     ],
   },
   'zh-Hant': {
@@ -85,9 +85,9 @@ export const landingCopy: Record<Locale, typeof en> = {
       { who: 'capy', name: 'Captain', text: '我接手了草稿，並開了一個 PR 等你審閱。' },
     ],
     steps: [
-      { title: '啟動 SwB', description: '在電腦或伺服器上執行一個指令。' },
-      { title: '接上一個代理', description: '把 SwB 位址交給這個代理。' },
-      { title: '讓它接通其餘平台', description: '每個權杖都貼在一次性頁面上。' },
+      '啟動 SwB',
+      '接上一個代理',
+      '讓它接通其餘平台',
     ],
   },
 };
