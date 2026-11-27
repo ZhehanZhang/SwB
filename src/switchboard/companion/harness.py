@@ -17,6 +17,7 @@ COALESCE_S = 1.0
 class Session:
     harness: str
     session: str
+    agent: str = ""
     name: str = ""
     dir: str = ""
     state: str = "unknown"
@@ -26,6 +27,7 @@ class Session:
         out = asdict(self)
         out["state"] = self.state if self.state in STATES else "unknown"
         out["name"] = self.name[:64]
+        out["agent"] = self.agent[:32]
         out["dir"] = self.dir.rsplit("/", 1)[-1][:64]
         out["detail"] = self.detail[:120]
         return out
