@@ -6,8 +6,8 @@ primary_region = "iad"
 
 [env]
   PORT = "8000"
-  SWITCHBOARD_DATA = "/data"
-  SWITCHBOARD_DEPLOY_PLATFORM = "fly"
+  SWB_DATA_DIR = "/data"
+  SWB_DEPLOY_PLATFORM = "fly"
 
 [mounts]
   source = "switchboard_data"

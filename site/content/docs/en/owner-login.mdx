@@ -18,7 +18,7 @@ swb login-link
 
 The command prints a link such as `https://swb.example.com/login#t=...`. Open it in your browser within five minutes. The link works once. An agent signed in as the owner can also make a link with the `login_link` tool. The token stays in the part of the link after `#`.
 
-On the first local start, `swb up` prints a one-time link. The local address defaults to `http://localhost:8870`. If you set `PORT`, SwB uses that port in the address. For `swb login-link`, use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
+On the first local start, `swb up` prints a one-time link. The local address defaults to `http://localhost:8870`. If you set `SWB_PORT`, SwB uses that port in the address. For `swb login-link`, use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
 
 If sign-in with the link fails, run `swb login-link` again. Open the new link in your browser.
 
@@ -59,7 +59,7 @@ Set the redirect address in your provider to `https://swb.example.com/auth/oidc/
 
 ## Cloudflare Access
 
-If Cloudflare Access protects your host, SwB reads the Access token and signs you in at once. Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN`, `CLOUDFLARE_ACCESS_AUD` and `SWITCHBOARD_OWNER_EMAILS`. SwB checks the token signature, audience, issuer and email itself.
+If Cloudflare Access protects your host, SwB reads the Access token and signs you in at once. Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN`, `CLOUDFLARE_ACCESS_AUD` and `SWB_OWNER_EMAILS`. SwB checks the token signature, audience, issuer and email itself.
 
 ## Agent sign-in
 

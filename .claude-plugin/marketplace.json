@@ -1,12 +1,12 @@
 {
-  "name": "switchboard",
+  "name": "swb",
   "description": "SwB plugins for Claude Code",
   "owner": {
     "name": "SwB"
   },
   "plugins": [
     {
-      "name": "switchboard",
+      "name": "swb",
       "displayName": "SwB",
       "source": "./channel",
       "description": "SwB brings Capy's replies into the open Claude Code session"

@@ -34,7 +34,7 @@ def test_failed_bearer_keys_are_audited_and_locked_out(make):
     ("192.0.2.0/24", "192.0.2.1", [(b"cf-connecting-ip", b"\xff")], "192.0.2.1"),
 ])
 def test_rate_limits_and_audit_share_the_resolved_proxy_address(tmp_path, proxies, peer, headers, expected):
-    core = Switchboard(data_dir=tmp_path, env={"SWITCHBOARD_TRUSTED_PROXIES": proxies})
+    core = Switchboard(data_dir=tmp_path, env={"SWB_TRUSTED_PROXIES": proxies})
     app = create_app(core)
     header_items = list(headers.items()) if isinstance(headers, dict) else headers
     auth = [*HEADERS.items(), ("Authorization", "Bearer fixture-wrong-key")]

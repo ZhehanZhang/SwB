@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import sys
 from collections import deque
 from contextlib import asynccontextmanager, contextmanager
 from types import SimpleNamespace
@@ -413,6 +414,7 @@ def test_gateway_identifies_heartbeats_resumes_and_reports_fatal_intents(discord
             async with asyncio.timeout(3):
                 identify = await first.outgoing.get()
                 assert identify["op"] == 2 and identify["d"]["intents"] == DEFAULT_INTENTS
+                assert identify["d"]["properties"] == {"os": sys.platform, "browser": "swb", "device": "swb"}
                 first.feed(0, ready(), t="READY", s=42)
                 first.feed(1)
                 assert await first.outgoing.get() == {"op": 1, "d": 42}

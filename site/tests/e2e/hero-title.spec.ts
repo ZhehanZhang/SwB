@@ -1,65 +1,114 @@
-import { expect, test, type Locator } from '@playwright/test';
-import { STEP, trips } from '../../lib/live';
+import { expect, test } from '@playwright/test';
+import { CYCLE, STEP, trips } from '../../lib/live';
 
 const pairs = trips.flatMap(([a, b], n) =>
   [a, b].some((name) => name === 'github' || name === 'slack') ? [] : [String(n)],
 );
 
-function geometry(line: Locator) {
-  return line.evaluate((root) => {
-    const box = ({ x, y, width, height }: DOMRect) => [x, y, width, height];
-    const conjunction = root.querySelector('.swb-pair .swb-between-text')!.firstChild!;
-    const text = conjunction.textContent!;
-    const word = document.createRange();
-    word.setStart(conjunction, text.length - text.trimStart().length);
-    word.setEnd(conjunction, text.trimEnd().length);
-    const and = word.getBoundingClientRect();
-    const pills = [...root.querySelectorAll('.swb-chip-on')].map((node) => node.getBoundingClientRect());
-    return {
-      pair: root.getAttribute('data-hero-pair')!,
-      text: [...root.querySelectorAll('.swb-between-text')].map((node) => {
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        return [...range.getClientRects()].map(box);
-      }),
-      slots: [...root.querySelectorAll('.swb-slot')].map((node) => box(node.getBoundingClientRect())),
-      pillWidths: pills.map(({ width }) => width),
-      gaps: [and.left - pills[0].right, pills[1].left - and.right],
-    };
-  });
-}
-
 for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', '/zh-Hant']]) {
-  test(`${locale} keeps static text, slots and gaps fixed as pill widths change`, async ({ page }) => {
+  test(`${locale} tweens pill widths through a full cycle without moving the text vertically`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.clock.install();
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready.then(() => null));
     const line = page.locator('[data-hero-pair]');
-    const baseline = await geometry(line);
-    const seen = new Set<string>();
-    const widths = [new Set<number>(), new Set<number>()];
+    await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
 
-    for (let i = 0; i <= trips.length * 3; i++) {
-      const current = await geometry(line);
-      expect(current.slots).toHaveLength(2);
-      expect(current.pillWidths).toHaveLength(2);
-      current.pillWidths.forEach((width, j) => widths[j].add(width));
-      expect(current.text.map((rects) => rects.length)).toEqual(baseline.text.map((rects) => rects.length));
-      for (const group of ['text', 'slots', 'gaps'] as const) {
-        const initial = baseline[group].flat(2);
-        current[group].flat(2).forEach((value, j) => {
-          expect(Math.abs(value - initial[j]), `${group} moved in pair ${current.pair}`).toBeLessThanOrEqual(0.5);
-        });
+    const result = await line.evaluate((root, deadlineMs) => new Promise<{
+      seen: string[];
+      settled: string[];
+      widthRanges: number[];
+      crossfades: boolean[];
+      frameStep: number;
+      verticalDrift: number;
+      prefixDrift: number;
+      gap: number;
+      overflow: number;
+    }>((resolve) => {
+      const pair = root.querySelector('.swb-pair')!;
+      const slots = [...root.querySelectorAll('.swb-slot')];
+      const textRange = (element: Element | null) => {
+        const node = element?.firstChild;
+        if (!node?.textContent) return null;
+        const { textContent: text } = node;
+        const range = document.createRange();
+        range.setStart(node, text.length - text.trimStart().length);
+        range.setEnd(node, text.trimEnd().length);
+        return range;
+      };
+      const prefix = textRange(root.querySelector(':scope > .swb-between-text:first-child'));
+      const conjunction = textRange(pair.querySelector('.swb-between-text'))!;
+      const suffix = textRange(root.querySelector(':scope > .swb-between-text:last-child'));
+      const seen: string[] = [];
+      const settled = new Set<string>();
+      const crossfades = slots.map(() => false);
+      const minWidths = slots.map(() => Infinity);
+      const maxWidths = slots.map(() => -Infinity);
+      const deadline = performance.now() + deadlineMs;
+      let frameStep = 0;
+      let verticalDrift = 0;
+      let prefixDrift = 0;
+      let gap = Infinity;
+      let overflow = 0;
+      let previousX: number[] | undefined;
+      let baselineY: number[] | undefined;
+      let baselinePrefix: number | undefined;
+
+      function sample(now: number) {
+        const index = root.getAttribute('data-hero-pair')!;
+        if (seen.at(-1) !== index) seen.push(index);
+        const lineRect = root.getBoundingClientRect();
+        const pairRect = pair.getBoundingClientRect();
+        const pillRects = slots.map((slot) => slot.getBoundingClientRect());
+        const prefixRect = prefix?.getBoundingClientRect();
+        const andRect = conjunction.getBoundingClientRect();
+        const suffixRect = suffix?.getBoundingClientRect();
+        const rects = [pairRect, ...pillRects, prefixRect, andRect, suffixRect].filter((rect) => rect !== undefined);
+        const x = rects.flatMap(({ left, right }) => [left, right]);
+        const y = [lineRect, ...rects, root.nextElementSibling!.getBoundingClientRect()].flatMap(({ top, bottom }) => [top, bottom]);
+        baselineY ??= y;
+        baselinePrefix ??= prefixRect?.left;
+        if (previousX) frameStep = Math.max(frameStep, ...x.map((value, i) => Math.abs(value - previousX![i])));
+        previousX = x;
+        verticalDrift = Math.max(verticalDrift, ...y.map((value, i) => Math.abs(value - baselineY![i])));
+        if (prefixRect) prefixDrift = Math.max(prefixDrift, Math.abs(prefixRect.left - baselinePrefix!));
+        gap = Math.min(gap, andRect.left - pillRects[0].right, pillRects[1].left - andRect.right);
+        if (prefixRect && prefixRect.bottom > pairRect.top) gap = Math.min(gap, pairRect.left - prefixRect.right);
+        if (suffixRect && suffixRect.top < pairRect.bottom) gap = Math.min(gap, suffixRect.left - pairRect.right);
+        overflow = Math.max(overflow, ...rects.flatMap(({ left, right }) => [lineRect.left - left, right - lineRect.right]));
+
+        const atTarget = slots.map((slot, i) => {
+          const { width } = pillRects[i];
+          const active = slot.querySelector('.swb-chip-on')!;
+          const opacities = [...slot.children].map((chip) => Number(getComputedStyle(chip).opacity));
+          if (opacities.filter((opacity) => opacity > 0 && opacity < 1).length > 1) crossfades[i] = true;
+          minWidths[i] = Math.min(minWidths[i], width);
+          maxWidths[i] = Math.max(maxWidths[i], width);
+          const { borderLeftWidth, borderRightWidth } = getComputedStyle(slot);
+          const target = active.getBoundingClientRect().width + parseFloat(borderLeftWidth) + parseFloat(borderRightWidth);
+          return Math.abs(width - target) < 0.1 && Number(getComputedStyle(active).opacity) === 1;
+        }).every(Boolean);
+        if (atTarget) settled.add(index);
+
+        if ((seen.length > 1 && index === seen[0] && atTarget) || now >= deadline) {
+          resolve({ seen, settled: [...settled], widthRanges: maxWidths.map((width, i) => width - minWidths[i]),
+            crossfades, frameStep, verticalDrift, prefixDrift, gap, overflow });
+          return;
+        }
+        requestAnimationFrame(sample);
       }
-      seen.add(current.pair);
-      if (seen.size === pairs.length) break;
-      await page.clock.fastForward(STEP * 500);
-      await page.evaluate(() => new Promise(requestAnimationFrame));
-    }
 
-    expect([...seen].sort()).toEqual(pairs);
-    widths.forEach((seenWidths) => expect(seenWidths.size).toBeGreaterThan(1));
+      requestAnimationFrame(sample);
+    }), CYCLE * 1000 + 3000);
+
+    expect(result.seen).toEqual([...pairs, pairs[0]]);
+    expect(result.settled).toEqual(pairs);
+    for (const range of result.widthRanges) expect(range).toBeGreaterThan(10);
+    expect(result.crossfades).toEqual([true, true]);
+    expect(result.frameStep).toBeLessThanOrEqual(2);
+    expect(result.verticalDrift).toBeLessThanOrEqual(0.5);
+    expect(result.prefixDrift).toBeLessThanOrEqual(0.5);
+    expect(result.gap).toBeGreaterThanOrEqual(6);
+    expect(result.overflow).toBeLessThanOrEqual(0.5);
   });
 }
 
@@ -68,7 +117,8 @@ test('reduced motion holds the first hero pair', async ({ page }) => {
   await page.clock.install();
   await page.goto('/');
   const line = page.locator('[data-hero-pair]');
-  await expect(line).toHaveAttribute('data-hero-pair', '0');
+  await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
+  await expect(line.locator('.swb-slot').first()).toHaveCSS('transition-duration', '0s');
   await page.clock.fastForward(STEP * 6000);
-  await expect(line).toHaveAttribute('data-hero-pair', '0');
+  await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
 });

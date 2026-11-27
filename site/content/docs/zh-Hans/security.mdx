@@ -70,7 +70,7 @@ Capy 收到重复请求时可以返回已有会话。用 `duplicate_window_s` �
 
 ## 客户端地址
 
-SwB 默认按连接地址限制请求次数并记录操作。把代理添加到 `trusted_proxies` 后，SwB 会采用代理提供的客户端地址。请让代理用核实过的地址替换请求头里的客户端地址。
+SwB 默认按连接地址限制请求次数并记录操作。把代理添加到 `trusted_proxies` 或 `SWB_TRUSTED_PROXIES` 后，SwB 会采用代理提供的客户端地址。请让代理用核实过的地址替换请求头里的客户端地址。
 
 参照[自托管指南](/zh-Hans/docs/self-hosting)添加 Docker 网络中的 Cloudflare 隧道连接器或反向代理。
 

@@ -9,23 +9,23 @@ SwB can run with environment variables alone. The MCP block starts by default. S
 
 | Variable | Use |
 | - | - |
-| `SWITCHBOARD_KEY_OWNER` | The owner key for the `swb` command |
-| `SWITCHBOARD_PUBLIC_URL` | Public address for sign-in and MCP. Use HTTPS for a remote server, for example `https://swb.example.com`. |
-| `SWITCHBOARD_HOST` | Address for incoming connections. The default is `127.0.0.1`. |
-| `SWITCHBOARD_DATA_DIR` | The data folder. The image uses `/data`. |
-| `SWITCHBOARD_OWNER_EMAILS` | Owner emails for OIDC and Cloudflare Access, separated by commas |
-| `SWITCHBOARD_KEY_<NAME>` | A bearer key for the agent `<name>` |
-| `SWITCHBOARD_CONFIG` | The path of the base YAML file |
-| `SWITCHBOARD_OVERLAY` | The path of a private overlay file |
-| `PORT` | HTTP port. The default for `swb up` is `8870`. |
+| `SWB_KEY_OWNER` | The owner key for the `swb` command |
+| `SWB_PUBLIC_URL` | Public address for sign-in and MCP. Use HTTPS for a remote server, for example `https://swb.example.com`. |
+| `SWB_HOST` | Address for incoming connections. The default is `127.0.0.1`. |
+| `SWB_DATA_DIR` | The data folder. The image uses `/data`. |
+| `SWB_OWNER_EMAILS` | Owner emails for OIDC and Cloudflare Access, separated by commas |
+| `SWB_KEY_<NAME>` | A bearer key for the agent `<name>` |
+| `SWB_CONFIG` | The path of the base YAML file |
+| `SWB_OVERLAY` | The path of a private overlay file |
+| `SWB_PORT` | HTTP port. The default for `swb up` is `8870`. |
 
-Set `PORT` in the shell or in the instance's `.env` file. For local sign-in, `swb up` uses `http://localhost:<port>` by default. SwB calculates this address at startup.
+Set `SWB_PORT` in the shell or the instance `.env` file. Hosting platforms can also set `PORT`. The local sign-in address uses the selected port.
 
-Use `swb up --public-url https://swb.example.com` to set the public URL on the command line. The command option takes priority over YAML `public_url`. YAML takes priority over `SWITCHBOARD_PUBLIC_URL`.
+Use `swb up --public-url https://swb.example.com` to set the public URL on the command line. The command option takes priority over YAML `public_url`. YAML takes priority over `SWB_PUBLIC_URL`.
 
-Use `--host` to override `SWITCHBOARD_HOST`. Set a public URL before you use `--host 0.0.0.0` or an address on your local network.
+Use `--host` to override `SWB_HOST`. Set a public URL before you use `--host 0.0.0.0` or an address on your local network.
 
-Use `swb up --dir ./my-swb` to read `.env` and `config/switchboard.yaml` from that folder. Use the same `--dir` with `swb init`. With plain `swb up`, use `SWITCHBOARD_CONFIG` to select a different config file.
+Use `swb up --dir ./my-swb` to read `.env` and `config/switchboard.yaml` from that folder. Use the same `--dir` with `swb init`. With plain `swb up`, use `SWB_CONFIG` to select a different config file.
 
 `swb status`, `swb login-link`, `swb connect` and `swb claim` use `--dir` to find `.env`. They use `--url` to select the server address.
 
@@ -33,13 +33,13 @@ All server commands accept `--dir`. Use it with `swb serve`, `swb export`, `swb 
 
 With plain `swb serve`, SwB reads the shell and the config file. The other server commands use the current folder by default.
 
-Use `swb config migrate [file]` to print a config in version 2 format. Pass `file` to select a specific config. Otherwise, SwB uses the config from `--dir`, `SWITCHBOARD_CONFIG` or the default path.
+Use `swb config migrate [file]` to print a config in version 2 format. Pass `file` to select a specific config. Otherwise, SwB uses the config from `--dir`, `SWB_CONFIG` or the default path.
 
 ## Data folder
 
 `swb up` and `swb init` create a `data/` folder for a new instance. SwB uses that folder by default. Use `swb up --dir` to select a different instance folder.
 
-Set `data_dir` in the config or overlay to change the path. That setting takes priority. SwB then checks `SWITCHBOARD_DATA_DIR` and `SWITCHBOARD_DATA` in that order. The default applies when all three settings are empty.
+Set `data_dir` in the config or overlay to change the path. That setting takes priority. SwB then checks `SWB_DATA_DIR` and `SWB_DATA` in that order. The default applies when all three settings are empty.
 
 Plain `swb up` keeps existing config files. Older instances that use a home database keep using it. If SwB uses a home database in place of a missing `data/` folder, it logs a notice once.
 
@@ -61,7 +61,7 @@ For a named Slack workspace, put the name after `SLACK_`, for example `SLACK_SUP
 
 ## The config file
 
-`swb up` sets up a new instance in its folder. It stores the owner key in `.env` and saves a custom `PORT` there. It sets the file mode to `0600`.
+`swb up` sets up a new instance in its folder. It stores the owner key in `.env` and saves a custom `SWB_PORT` there. It sets the file mode to `0600`.
 
 Run `swb init` to create the files before you start SwB.
 
@@ -69,7 +69,7 @@ Run `swb init` to create the files before you start SwB.
 swb init
 ```
 
-Both commands write only `version: 2` to `config/switchboard.yaml` by default. Use `--public-url` to save an address in this file. On a new instance, `swb up` also saves an address from `SWITCHBOARD_PUBLIC_URL`. To select blocks in YAML, add a `blocks` section as in this example.
+Both commands write only `version: 2` to `config/switchboard.yaml` by default. Use `--public-url` to save an address in this file. On a new instance, `swb up` also saves an address from `SWB_PUBLIC_URL`. To select blocks in YAML, add a `blocks` section as in this example.
 
 ```yaml
 version: 2
@@ -82,14 +82,14 @@ blocks:
 targets:
   aliases: {}
 routes:
-  - {match: {}, to: capy:captain:<Captain id>}
+  - {match: {}, to: capy:captain:<Capy Captain id>}
 ```
 
 The `blocks` section takes priority over block selection from the environment. SwB uses the environment to select blocks when you omit `blocks`.
 
 ## Overlays
 
-An overlay is a private YAML file for your own names, ids and paths. Put it in `config/local.yaml`, or name it with `SWITCHBOARD_OVERLAY`. The overlay wins over the base file, and the base file wins over the environment. Mappings merge. Lists replace.
+An overlay is a private YAML file for your own names, ids and paths. Put it in `config/local.yaml`, or name it with `SWB_OVERLAY`. The overlay wins over the base file, and the base file wins over the environment. Mappings merge. Lists replace.
 
 In a key, `*` stands for an entry name or a list item.
 
@@ -98,8 +98,8 @@ In a key, `*` stands for an entry name or a list item.
 | Key | Use |
 | - | - |
 | `version` | YAML format version. Use `2` for `blocks` |
-| `public_url` | Address SwB uses for MCP and OAuth. See `SWITCHBOARD_PUBLIC_URL`. |
-| `data_dir` | Path to the data folder. Set it here or with `SWITCHBOARD_DATA_DIR` |
+| `public_url` | Address SwB uses for MCP and OAuth. See `SWB_PUBLIC_URL`. |
+| `data_dir` | Path to the data folder. Set it here or with `SWB_DATA_DIR` |
 | `timezone` | Time zone for daily counts and limits. Default `UTC` |
 | `turn_cap` | Turns before SwB pauses a conversation. Default `200`. Set `null` to turn off the limit |
 | `blocks` | Blocks to load, named by type or by your own label |

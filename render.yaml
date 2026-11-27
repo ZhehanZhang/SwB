@@ -10,11 +10,11 @@ services:
       mountPath: /data
       sizeGB: 1
     envVars:
-      - key: SWITCHBOARD_DATA
+      - key: SWB_DATA_DIR
         value: /data
-      - key: SWITCHBOARD_DEPLOY_PLATFORM
+      - key: SWB_DEPLOY_PLATFORM
         value: render
-      - key: SWITCHBOARD_KEY_OWNER
+      - key: SWB_KEY_OWNER
         generateValue: true
       - key: SWB_SETUP_CODE
         generateValue: true
