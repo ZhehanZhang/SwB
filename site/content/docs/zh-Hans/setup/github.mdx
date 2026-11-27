@@ -146,6 +146,6 @@ SwB 用私钥自行生成安装令牌。每个安装令牌有效一小时。
 
 ## 解决问题
 
-如果投递因签名错误失败，说明 GitHub 与 SwB 保存的密钥有差异。生成新密钥，填入 GitHub，再通过新的领取链接保存。
+出现签名错误时，请用 `openssl rand -hex 32` 生成新的 webhook 密钥。在 GitHub 应用的设置中填入新密钥。请智能体调用 `connect(what="github", choose={"replace":"secret"})`。通过领取链接保存同一个密钥。重启 SwB。在 **Recent deliveries** 中重新发送该事件。
 
 如果 `connect` 要求 **Issues** 写入权限，请打开应用设置 → **Permissions & events**。把 **Issues** 设为 **Read & write**，并在安装上接受这项变更。

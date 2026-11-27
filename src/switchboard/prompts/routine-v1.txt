@@ -1,1 +1,0 @@
-Call routine_pickup(claude_project={claude_project}) and handle the returned message. Repeat until conversation is null.

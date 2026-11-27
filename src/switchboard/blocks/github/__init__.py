@@ -424,10 +424,11 @@ class GitHubBlock(Block):
                                outcome="dropped", target=repo_name(repo), ref=delivery, detail=reason)
 
     def config_step(self) -> str | None:
-        if not self.online:
-            if self.core.secret(self.secret_env):
-                return "Restart SwB to apply the saved GitHub webhook secret."
+        secret = self.core.secret(self.secret_env)
+        if not secret:
             return "Save the GitHub webhook secret."
+        if not hmac.compare_digest(self.secret, secret.encode()):
+            return "Restart SwB to apply the saved GitHub webhook secret."
         if not self.registered_repositories() and not any(self.repo_routes.values()):
             return "Add a GitHub repository route or space in config/switchboard.yaml and restart SwB."
         return None
@@ -443,16 +444,61 @@ class GitHubBlock(Block):
         return self.config_step() or self._credential_step()
 
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
+        choice = choose or {}
+        replacement = choice.get("replace")
+        if replacement is not None and replacement not in ("secret", "webhook_secret", "all"):
+            raise BlockError("Use secret, webhook_secret or all for choose.replace.")
         present = bool(self.core.secret(self.secret_env))
         done = ["GitHub webhook secret present."] if present else []
         done.append(f"GitHub webhook endpoint {self.core.base_url}/github/webhook.")
+        credential = choice.get("credential")
+        steps = (self._replacement_steps(principal, replacement, credential) if replacement
+                 else await self._setup_steps(kind, principal, present, credential, done))
+        slugs = await self.core.modes.status_slugs(principal)
+        modes = self.core.modes.status(principal, self.name, slugs=slugs)
+        counts = self._repository_counts(modes)
+        for key, label in (("repository_spaces", "GitHub repository spaces"),
+                           ("bound_repositories", "GitHub repositories with a target"),
+                           ("sink_routes", "GitHub sink routes")):
+            if counts[key]:
+                done.append(f"{label} {counts[key]}.")
+        return {"done": done, "next": steps,
+                **counts,
+                "installations": self.installations, "missing_installations": self.missing_installations,
+                "pat_capabilities": self.pat_capabilities,
+                "modes": {**modes, **self.core.modes.summary(self.name, principal, slugs=slugs)}}
+
+    def _replacement_steps(self, principal: Principal, replacement: str, credential: Any) -> list[dict[str, str]]:
+        fields = [(self.secret_env, "webhook_secret", "Webhook secret",
+                   "Save the new GitHub webhook secret. Restart SwB after saving.")]
+        if replacement == "all":
+            auth = self.api.auth_type()
+            if auth != "app" and (credential == "pat" or (auth == "pat" and credential != "app")):
+                fields.append((self.api.token_env, "token", "",
+                               "Save a fine-grained GitHub token with Issues write access for the triage repositories."))
+            else:
+                fields.extend([
+                    (self.api.app_id_env, "id", "App ID", "Save the numeric App ID from your GitHub App settings."),
+                    (self.api.private_key_env, "pem", "Private key", "Save the .pem file from your GitHub App settings."),
+                ])
+        steps = []
+        for name, kind, label, instruction in fields:
+            if name == self.api.app_id_env and self.api.app_id:
+                steps.append({"by": "person", "do": f"Change blocks.{self.name}.app_id in config/switchboard.yaml and restart SwB."})
+            elif self.core.cfg.env.get(name):
+                steps.append({"by": "person", "do": f"Change {name} in .env and restart SwB."})
+            else:
+                steps.append(self.token_step(principal, name, instruction, kind=kind, label=label))
+        return steps
+
+    async def _setup_steps(self, kind: str, principal: Principal, present: bool, credential: Any,
+                           done: list[str]) -> list[dict[str, Any]]:
         step = self.config_step()
         steps = []
         if not present:
             steps.append(self.token_step(principal, self.secret_env, step, kind="webhook_secret", label="Webhook secret"))
         elif step:
             steps.append({"by": "person", "do": step})
-        credential = (choose or {}).get("credential")
         auth = self.api.auth_type()
         app_id, _, key, _ = self.api.credentials()
         valid_id = provider_id(app_id) is not None
@@ -492,19 +538,7 @@ class GitHubBlock(Block):
                 steps.append(self.token_step(principal, name, instruction, kind="pem", label="Private key"))
             steps.append({"by": "you", "do": "For a fine-grained personal access token instead, call connect again with credential=pat.",
                           "call": {"tool": "connect", "arguments": {"what": kind, "choose": {"credential": "pat"}}}})
-        slugs = await self.core.modes.status_slugs(principal)
-        modes = self.core.modes.status(principal, self.name, slugs=slugs)
-        counts = self._repository_counts(modes)
-        for key, label in (("repository_spaces", "GitHub repository spaces"),
-                           ("bound_repositories", "GitHub repositories with a target"),
-                           ("sink_routes", "GitHub sink routes")):
-            if counts[key]:
-                done.append(f"{label} {counts[key]}.")
-        return {"done": done, "next": steps,
-                **counts,
-                "installations": self.installations, "missing_installations": self.missing_installations,
-                "pat_capabilities": self.pat_capabilities,
-                "modes": {**modes, **self.core.modes.summary(self.name, principal, slugs=slugs)}}
+        return steps
 
     def actions(self) -> list[Action]:
         return [Action("status", "GitHub status", "Check the GitHub webhook, repository modes and installation permissions.", self.status_action, read_only=True),

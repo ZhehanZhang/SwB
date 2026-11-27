@@ -16,24 +16,24 @@ import {
   type Endpoint, type ProjectBoard, type ProjectRoute,
 } from "@/pages/overview/data"
 
-function CopyPrompt({ title }: { title: string | null }) {
-  const prompt = useQuery(coordinatorQuery(title))
+function CopyPrompt() {
+  const prompt = useQuery(coordinatorQuery)
   const copy = async () => {
     if (!prompt.data) {
       const result = await prompt.refetch()
-      if (result.isError) toast.error("Agent prompt unavailable")
+      if (result.isError) toast.error("Try again")
       return
     }
     try {
-      await navigator.clipboard.writeText(prompt.data.text)
-      toast.success("Agent prompt copied")
+      await navigator.clipboard.writeText(prompt.data)
+      toast.success("Coordinator prompt copied")
     } catch {
-      toast.error("Copy failed")
+      toast.error("Try again")
     }
   }
   return (
     <Button variant="outline" size="sm" disabled={prompt.isPending || prompt.isFetching} onClick={() => void copy()}>
-      <Copy aria-hidden /> {prompt.isError ? "Reload agent prompt" : "Copy agent prompt"}
+      <Copy aria-hidden /> {prompt.isError ? "Reload coordinator prompt" : "Copy coordinator prompt"}
     </Button>
   )
 }
@@ -63,7 +63,7 @@ function ProjectFacts({ data }: { data: ProjectBoard }) {
         </dl>
         {project.archived && <span className="text-body-sm text-muted-foreground">Archived</span>}
       </div>
-      <CopyPrompt title={data.claude_project} />
+      <CopyPrompt />
     </div>
   )
 }

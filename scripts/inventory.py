@@ -141,11 +141,13 @@ def command_items():
     yield item("command", parser.prog, parser.prog, command=parser.prog, flags=flags, arguments=[])
     subcommands = next(action for action in parser._actions if isinstance(action, argparse._SubParsersAction))
     for name, command in subcommands.choices.items():
-        flags = sorted(flag for action in command._actions for flag in action.option_strings)
-        arguments = [
-            {"name": action.dest, "choices": list(action.choices or ())}
-            for action in command._actions if not action.option_strings
-        ]
+        actions = [*command._actions, *(
+            option for action in command._actions if isinstance(action, argparse._SubParsersAction)
+            for child in action.choices.values() for option in child._actions
+        )]
+        flags = sorted({flag for action in actions for flag in action.option_strings})
+        positions = {action.dest: list(action.choices or ()) for action in actions if not action.option_strings}
+        arguments = [{"name": dest, "choices": choices} for dest, choices in positions.items()]
         yield item("command", name, command.prog, command=command.prog, flags=flags, arguments=arguments)
 
 
