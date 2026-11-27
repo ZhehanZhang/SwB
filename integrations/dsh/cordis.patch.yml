@@ -1,0 +1,3 @@
+- insert:
+    - id: swb-dsh-bridge
+      name: '@swb-one/dsh-bridge'

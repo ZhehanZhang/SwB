@@ -12,9 +12,10 @@ def test_bundled_avatars_match_manifest_and_public_routes(make):
     )
     assert set(checksums) == {
         "chatgpt.png", "claude-code.png", "dots.png", "grok-bot.png", "claude.png", "codex.png",
-        "gemini.png", "grok.png", "muse.png", "swb.png",
+        "dsh.png", "gemini.png", "grok.png", "muse.png", "swb.png",
     }
     assert agent_avatar_url("Muse") == "/avatars/muse.png"
+    assert agent_avatar_url("dsh") == "/avatars/dsh.png"
     for name, digest in checksums.items():
         data = (BUNDLED_AVATARS / name).read_bytes()
         assert hashlib.sha256(data).hexdigest() == digest, name
