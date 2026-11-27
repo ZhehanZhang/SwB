@@ -47,6 +47,6 @@ async def test_legacy_and_mailbox_sends_return_conversations(amake):
 
 
 async def test_send_only_block_does_not_advertise_tasks(amake):
-    _, client = await amake(base_config(version=2, blocks={"mcp": {}, "muse": {}}))
+    _, client = await amake(base_config(version=2, blocks={"mcp": {}, "dots": {"delivery": "mailbox"}}))
     discovery = (await arpc(client, STATIC_KEY, "server/discover", modern=True)).json()["result"]
     assert TASKS not in discovery["capabilities"].get("extensions", {})

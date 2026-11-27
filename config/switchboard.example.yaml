@@ -75,11 +75,6 @@ blocks:
       agents:
         claude-code: {default_s: 45, max_s: 55}
 
-  # Pair SwB as a Linux gadget in Meta's Muse app. Run swb connect muse after enabling it.
-  muse:
-    use: muse
-    enabled: false
-
   # Discord (optional): bot mentions, thread replies, DMs and the discord_* tools.
   discord:
     use: discord

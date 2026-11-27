@@ -47,7 +47,7 @@ CLAIM_CONNECTORS = {
     "github": ("GitHub", "GitHub credential"),
     "chatgpt": ("ChatGPT", ""),
     "gemini": ("Gemini", ""),
-    "muse": ("Muse", "Muse bridge token"),
+    "muse": ("Muse", ""),
     "claude": ("Claude", ""),
     "grok": ("Grok", "Grok credential"),
 }
