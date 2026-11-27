@@ -159,7 +159,9 @@ async def generate():
         core = Switchboard(config, data_dir=work, env={})
         try:
             app = create_app(core)
-            tools = await core.blocks["mcp"].mcp.list_tools()
+            mcp = core.blocks["mcp"].mcp
+            tools = await mcp.list_tools()
+            prompts = await mcp.list_prompts()
             rows = [
                 *block_items(core),
                 *provider_and_avatar_items(block_types),
@@ -170,6 +172,7 @@ async def generate():
                 *(item("tool", tool.name, tool.title or tool.name, name=tool.name,
                        description=tool.description, input_properties=sorted(tool.input_schema.get("properties", {})))
                   for tool in tools),
+                *(item("prompt", prompt.name, prompt.title or prompt.name, name=prompt.name) for prompt in prompts),
                 *(item("config_key", key, key, key=key) for key in config_items(EXAMPLE, block_types)),
             ]
         finally:
