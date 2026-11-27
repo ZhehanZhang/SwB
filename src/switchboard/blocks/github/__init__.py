@@ -420,9 +420,10 @@ class GitHubBlock(Block):
 
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
         present = bool(self.core.secret(self.secret_env))
-        done = [f"GitHub webhook secret: {'present' if present else 'missing'}.",
-                f"GitHub repository routes: {sum(bool(sinks) for sinks in self.repo_routes.values())}.",
-                f"GitHub webhook endpoint: {self.core.base_url}/github/webhook."]
+        done = ["GitHub webhook secret present."] if present else []
+        done.append(f"GitHub webhook endpoint {self.core.base_url}/github/webhook.")
+        if routes := sum(bool(sinks) for sinks in self.repo_routes.values()):
+            done.append(f"GitHub repository routes {routes}.")
         step = self.next_step()
         steps = []
         if not present:
@@ -437,11 +438,12 @@ class GitHubBlock(Block):
         repair_app = (app_id and not valid_id) or (key and not valid_key)
         if auth == "app":
             await self.refresh_installation()
-            done.append("GitHub App credentials: present.")
             if self.installation_problem:
                 steps.append({"by": "person", "do": self.installation_problem})
-            elif self.checked_at is not None and self.installation.get("issues") != "write":
-                steps.append({"by": "person", "do": "Grant Issues: write to the GitHub App installation for the triage repositories."})
+            elif self.checked_at is not None:
+                done.append("GitHub App credentials verified.")
+                if self.installation.get("issues") != "write":
+                    steps.append({"by": "person", "do": "Grant Issues: write to the GitHub App installation for the triage repositories."})
         elif auth == "pat" and (credential == "pat" or (credential != "app" and not repair_app)):
             await self.refresh_installation()
             pat = self.pat_capabilities
