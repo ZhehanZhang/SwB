@@ -118,8 +118,10 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         print(f"exported {n} memories to {args.dir}")
         return
     if args.cmd == "log":
-        for r in core.audit.recent(limit=50):
-            print(r)
+        import json
+
+        for entry in core.audit.recent(limit=50):
+            print(json.dumps(entry, ensure_ascii=False))
         return
 
     from .app import create_app
