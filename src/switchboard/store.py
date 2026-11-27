@@ -202,7 +202,7 @@ CREATE INDEX IF NOT EXISTS handles_reply_to ON handles(json_extract(meta, '$.in_
 CREATE INDEX IF NOT EXISTS handles_forward_of ON handles(json_extract(meta, '$.forward_of'));
 CREATE TABLE IF NOT EXISTS space_modes (
   block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, mode TEXT NOT NULL, actions TEXT NOT NULL,
-  project TEXT, updated_at REAL NOT NULL, updated_by TEXT NOT NULL,
+  project TEXT, target TEXT, updated_at REAL NOT NULL, updated_by TEXT NOT NULL,
   PRIMARY KEY(block, space, channel)
 );
 CREATE TABLE IF NOT EXISTS watch_events (
@@ -239,6 +239,8 @@ def _migrate(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE handles ADD COLUMN target TEXT")
     if "rp_id" not in {r[1] for r in db.execute("PRAGMA table_info(owner_passkeys)")}:
         db.execute("ALTER TABLE owner_passkeys ADD COLUMN rp_id TEXT")
+    if "target" not in {r[1] for r in db.execute("PRAGMA table_info(space_modes)")}:
+        db.execute("ALTER TABLE space_modes ADD COLUMN target TEXT")
     db.execute("""
         INSERT OR IGNORE INTO owner_initialized(id)
         SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM owner_initialized) AND (

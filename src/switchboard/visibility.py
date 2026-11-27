@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable
 
 KINDS = ("target", "channel", "memory", "route", "tool")
 ALWAYS_PRIVATE = ("tool",)
@@ -125,7 +125,7 @@ class Visibility:
                      "value = excluded.value, set_at = excluded.set_at, set_by = excluded.set_by", (key, stored, now, actor))
         return show(rule)
 
-    def rows(self, extra: list[str] = ()) -> list[dict[str, Any]]:
+    def rows(self, extra: Iterable[str] = ()) -> list[dict[str, Any]]:
         """Every resource with a rule (config or override) plus extra ones (known targets), for the page and the tool."""
         keys = dict.fromkeys([*self.config, *(self.key(e) for e in extra)])
         overrides = {r["resource"]: r for r in self.store.q("SELECT * FROM visibility")} if self.store is not None else {}

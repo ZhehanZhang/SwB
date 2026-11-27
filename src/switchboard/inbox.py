@@ -153,9 +153,20 @@ class Inbox:
 
     async def cancel_mailbox(self, handle: str) -> None:
         self.update_handle(handle, status="cancelled", open=False)
+        await self._notify_waiters()
+
+    async def _notify_waiters(self) -> None:
         cond = self._condition()
         async with cond:
             cond.notify_all()
+
+    def signal_waiters(self) -> None:
+        if self._cond is not None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return
+            loop.create_task(self._notify_waiters())
 
     # Items ----------------------------------------------------------------------------
 
@@ -209,9 +220,7 @@ class Inbox:
             self.update_handle(copy, open=False)
             self._add(self.handle(copy), "message", {**data, **meta, "project": replied["project"]})
             self.update_handle(original, status="answered")
-        cond = self._condition()
-        async with cond:
-            cond.notify_all()
+        await self._notify_waiters()
         return item
 
     def head(self) -> int:
@@ -248,8 +257,14 @@ class Inbox:
 
     @staticmethod
     def _item(r: Any) -> dict[str, Any]:
+        data = json.loads(r["data"])
+        if r["kind"] == "watch_digest":
+            count = data["count"]
+            entries = ["\n".join(part for part in (entry["author"], entry["excerpt"], entry["link"]) if part) for entry in data["items"]]
+            data["text"] = "\n\n".join([f"{count} event{'s' if count != 1 else ''}", *entries])
+            data["trust"] = "external"
         return {"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
-                "at": iso(r["at"]), **json.loads(r["data"]), "message_id": Inbox.message_id(r["id"])}
+                "at": iso(r["at"]), **data, "message_id": Inbox.message_id(r["id"])}
 
     def item(self, item_id: int) -> dict[str, Any] | None:
         row = self.store.one("SELECT * FROM inbox WHERE id = ?", (item_id,))
@@ -257,7 +272,7 @@ class Inbox:
 
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
              limit: int = 100, reader: str | None = None, advance: bool = True, project: str | None = None,
-             scopes: tuple[str, ...] | None = None) -> dict[str, Any]:
+             scopes: tuple[str, ...] | None = None, owner_digests: bool = False) -> dict[str, Any]:
         """Items after since (default: the reader's last position; the reader defaults to the owner), and the cursor to pass next time.
 
         owner None reads every caller's items (the Claude Code channel does this). Each reader keeps its own cursor,
@@ -275,7 +290,7 @@ class Inbox:
         with_clause = ""
         where, args = ["id > ?"], [start]
         if owner:
-            where.append("owner = ?")
+            where.append("(owner = ? OR kind = 'watch_digest')" if owner_digests else "owner = ?")
             args.append(owner)
         if since is None:
             where.append("id > COALESCE((SELECT c.cursor FROM inbox_cursors c WHERE c.owner = ? AND c.handle = inbox.handle), 0)")
@@ -317,7 +332,7 @@ class Inbox:
 
     async def wait(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
                    timeout: float = 20.0, reader: str | None = None, advance: bool = True, project: str | None = None,
-                   scopes: tuple[str, ...] | None = None) -> dict[str, Any]:
+                   scopes: tuple[str, ...] | None = None, owner_digests: bool = False) -> dict[str, Any]:
         """Long-poll: return as soon as something new arrives, or an empty result when the timeout runs out."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + max(0.0, timeout)
@@ -325,7 +340,7 @@ class Inbox:
         async with cond:
             while True:
                 out = self.read(owner=owner, handle=handle, since=since, destination=destination, reader=reader, advance=advance,
-                                project=project, scopes=scopes)
+                                project=project, scopes=scopes, owner_digests=owner_digests)
                 remaining = deadline - loop.time()
                 cancelled = out.get("handle_status") == "cancelled"
                 if out["items"] or cancelled or remaining <= 0:

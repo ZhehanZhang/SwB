@@ -247,16 +247,37 @@ def test_connected_agents_count_as_the_owner_but_cannot_change_access(make, capy
 
 
 def test_visibility_tools_flip_resources_and_keep_tools_private(make):
-    core, c = make()
-    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:HelperBot", "visibility": "shared"}))["visibility"] == "shared"
+    core, c = make(config=base_config(version=2, blocks={
+        "mcp": {},
+        "slack": {"workspaces": {"orbit": {"team_id": "TORBIT01", "intake": "none", "watched": ["#dev"],
+                                          "identities": {"bot": {"token_env": "ORBIT_BOT_TOKEN"}}}}},
+    }))
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:Claude", "visibility": "shared"}))["visibility"] == "shared"
     assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "channel:orbit/#dev", "visibility": ["U0FRIEND0", "workspace:orbit"]}))["visibility"] == ["U0FRIEND0", "workspace:orbit"]
     assert "always private" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "tool:slack_post", "visibility": "shared"}))
     assert "not a resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "helperbot", "visibility": "shared"}))
+    assert "Unknown visibility resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "target:helperbot", "visibility": "shared"}))
     rows = {r["resource"]: r for r in payload(call(c, STATIC_KEY, "visibility_list"))["resources"]}
-    assert rows["target:helperbot"]["visibility"] == "shared" and rows["target:helperbot"]["source"] == "override"
+    assert rows["target:claude"]["visibility"] == "shared" and rows["target:claude"]["source"] == "override"
     assert core.visibility.rule("target:other") == "private"
     assert any(a["action"] == "visibility_set" for a in core.audit.recent(limit=10))
 
+
+
+def test_stored_visibility_override_remains_editable_after_agent_revocation(make):
+    core, client = make()
+    pair = core.connections.mint(agent="retired-agent", project=None, client=None, by="owner")
+    key = core.connections.redeem(pair["code"])
+    resource = "target:retired-agent"
+    shared = {"resource": resource, "visibility": "shared"}
+    assert payload(call(client, STATIC_KEY, "visibility_set", shared)) == shared
+    assert payload(call(client, STATIC_KEY, "connect_revoke", {"key_id": key["key_id"]}))["revoked"] == 1
+    assert resource not in client.portal.call(core.visibility_resources)
+    listed = payload(call(client, STATIC_KEY, "visibility_list"))["resources"]
+    assert any(row["resource"] == resource and row["source"] == "override" for row in listed)
+    private = {**shared, "visibility": "private"}
+    assert payload(call(client, STATIC_KEY, "visibility_set", private)) == private
+    assert core.visibility.explicit(resource) == "private"
 
 
 def test_owner_api_shows_and_flips_target_visibility(make):

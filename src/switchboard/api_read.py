@@ -110,14 +110,8 @@ async def routes(request: Request) -> JSONResponse:
 
 async def visibility(request: Request) -> JSONResponse:
     core = request.app.state.core
-    resources = [f"target:{slug}" for target in await core.targets() for slug in target["slugs"] if SLUG_RE.fullmatch(slug)]
-    resources += [f"route:{route.id}" for route in core.routes.list()]
-    resources += [f"memory:{GENERAL}", *(f"memory:{p.scope}" for p in core.projects.list(include_archived=True))]
-    if core.slack is not None:
-        for label, workspace in core.slack.config.workspaces.items():
-            resources += [f"channel:{label}/{channel}" for channel in (*workspace.watched, *workspace.listen_channels)
-                          if re.fullmatch(r"#?[\w.-]+", channel)]
-    return JSONResponse({"resources": core.visibility.rows(resources), "defaults": {k: show(v) for k, v in core.visibility.defaults.items()}})
+    return JSONResponse({"resources": core.visibility.rows(await core.visibility_resources()),
+                         "defaults": {k: show(v) for k, v in core.visibility.defaults.items()}})
 
 
 async def audit(request: Request) -> JSONResponse:
@@ -491,7 +485,7 @@ async def conversation(request: Request) -> JSONResponse:
     ) else (row["destination"],))
     for item in out["items"]:
         projected = _scalars(item, "cursor", "handle", "kind", "at", "text", "status", "final", "in_reply_to", "trust", "project",
-                             "target", "target_kind", "event_id", "slack_kind")
+                             "target", "target_kind", "event_id", "slack_kind", "count")
         if sender := _sender(core, item.get("from"), row["destination"], captains):
             projected["from"] = sender
         items.append(projected)

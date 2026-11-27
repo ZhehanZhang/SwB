@@ -11,7 +11,7 @@ import pytest
 import yaml
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from conftest import CAPTAIN, CAPY_KEY, Clock, acall, arpc, payload
+from conftest import CAPTAIN, CAPY_KEY, Clock, acall, arpc, error_text, payload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -390,10 +390,100 @@ async def test_webhook_uses_project_mailbox_route(github, mode):
         [wake] = core.inbox.read(owner="alpha")["items"]
         assert wake["project"] == "example" and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
         if mode == "triage":
+            assert "Triage uses the default agent." in status["spaces"][0]["problems"]
             assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["actions"] == ["reply"]
-        core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
+        await core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
         await send(client, delivery="off", sender={"id": 42}, action="opened")
         assert core.audit.recent(action="webhook", outcome="dropped")[0]["detail"] == "channel mode off"
+
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage"])
+async def test_runtime_mode_target_and_visibility_for_outside_github_senders(github, mode):
+    repo = "acme/app"
+    config = {"spaces": {repo: {"mode": "watch"}}}
+    settings = {"blocks": {"mcp": {}, "github": config}}
+    async with github(config, settings=settings) as (core, client):
+        pair = core.connections.mint(agent="beta", project=None, client=None, by="owner")
+        core.connections.redeem(pair["code"])
+        args = {"block": "github", "space": repo, "mode": mode, "target": "agent:beta"}
+        assert payload(await acall(client, OWNER_KEY, "space_mode", args))["target"] == "agent:beta"
+        [row] = payload(await acall(client, OWNER_KEY, "modes_status"))["spaces"]
+        assert row["target"] == "agent:beta"
+        assert "Triage uses the default agent." not in row["problems"]
+
+        channel = f"channel:github/{repo}"
+        resources = {r["resource"] for r in payload(await acall(client, OWNER_KEY, "visibility_list"))["resources"]}
+        assert {channel, "target:beta"} <= resources
+        for invalid in (f"channel:{repo}", "target:agent:beta"):
+            assert invalid not in resources
+            failed = await acall(client, OWNER_KEY, "visibility_set", {"resource": invalid, "visibility": "shared"})
+            assert "Unknown visibility resource" in error_text(failed)
+            assert core.visibility.explicit(invalid) is None
+
+        sender = {"id": 11, "login": "reporter", "type": "User"}
+        assert (await send(client, sender=sender, delivery="private-channel")).status_code == 200
+        assert core.audit.recent(action="webhook")[0]["detail"] == "channel access restricted"
+        assert payload(await acall(client, OWNER_KEY, "visibility_set", {"resource": channel, "visibility": ["github:11"]}))["visibility"] == ["github:11"]
+        assert (await send(client, sender=sender, delivery="private-target")).status_code == 200
+        assert core.audit.recent(action="webhook")[0]["detail"] == "target access restricted"
+        payload(await acall(client, OWNER_KEY, "visibility_set", {"resource": "target:beta", "visibility": ["github:11"]}))
+        assert (await send(client, sender={**sender, "id": 12}, delivery="wrong-id")).status_code == 200
+        assert core.inbox.read(owner="beta")["items"] == []
+        assert (await send(client, sender=sender, delivery="allowed-id")).status_code == 200
+        [wake] = core.inbox.read(owner="beta")["items"]
+        assert wake["from"]["trust"] == "external"
+        assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["mode"] == mode
+
+
+@pytest.mark.parametrize("target", [None, "agent:beta"])
+async def test_watch_digest_reaches_owner_mcp_and_stays_passive(github, target, monkeypatch):
+    repo = "acme/app"
+    config = {"spaces": {repo: {"mode": "watch", "project": "demo", **({"target": target} if target else {})}}}
+    settings = {"blocks": {"mcp": {}, "github": config}, "modes": {"digest_minutes": 1}}
+    owner_key = "example-coordinator-key-for-tests"
+    clock = Clock()
+    async with github(config, env={"GITHUB_WEBHOOK_SECRET": SECRET, "SWITCHBOARD_KEY_COORDINATOR": owner_key},
+                      settings=settings, clock=clock) as (core, client):
+        core.projects.create(slug="demo", name="Demo")
+        beta_pair = core.connections.mint(agent="beta", project="demo", client=None, by="owner")
+        beta = core.connections.redeem(beta_pair["code"])["key"]
+        other_pair = core.connections.mint(agent="other", project="demo", client=None, by="owner")
+        other = core.connections.redeem(other_pair["code"])["key"]
+        notifications = []
+        core.inbox.listeners.append(lambda _owner, _cursor, _handle, kind, _data, _at: notifications.append(kind))
+        for delivery in ("first", "second"):
+            assert (await send(client, sender={"id": 11, "login": "reporter"}, delivery=delivery)).status_code == 200
+        [row] = payload(await acall(client, owner_key, "modes_status"))["spaces"]
+        assert row["digest"]["pending"] == 2
+        assert payload(await acall(client, owner_key, "inbox", {"since_cursor": 0}))["items"] == []
+
+        reading = asyncio.Event()
+        read = core.inbox.read
+
+        def notice_read(**kwargs):
+            result = read(**kwargs)
+            if kwargs.get("owner") == "coordinator":
+                reading.set()
+            return result
+
+        monkeypatch.setattr(core.inbox, "read", notice_read)
+        waiting = asyncio.create_task(acall(client, owner_key, "wait", {"timeout_s": 5}))
+        await asyncio.wait_for(reading.wait(), timeout=2)
+        clock.t = row["digest"]["next_at"]
+        assert core.modes.flush() == 1 and core.modes.flush() == 0
+        [digest] = payload(await asyncio.wait_for(waiting, timeout=2))["items"]
+        assert (digest["kind"], digest["owner"], digest["space"], digest["count"], digest["trust"]) == (
+            "watch_digest", "beta" if target else "owner", repo, 2, "external",
+        )
+        assert [entry["excerpt"] for entry in digest["items"]] == ["Issue body", "Issue body"]
+        assert payload(await acall(client, owner_key, "inbox", {"since_cursor": 0, "project": "demo"}))["items"] == [digest]
+        assert payload(await acall(client, beta, "inbox", {"since_cursor": 0}))["items"] == ([digest] if target else [])
+        assert payload(await acall(client, other, "inbox", {"since_cursor": 0}))["items"] == []
+        assert "message not found" in error_text(await acall(client, other, "get_message", {"message_id": digest["message_id"]}))
+        [row] = payload(await acall(client, owner_key, "modes_status"))["spaces"]
+        assert row["digest"]["pending"] == 0
+        assert notifications == []
 
 
 @pytest.mark.parametrize("agent", [None, "github"])
@@ -428,6 +518,7 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
         block = core.blocks["github"]
         modes = block.status()["modes"]
         assert [(row["space"], row["channel"], row["mode"]) for row in modes["spaces"]] == [("team", "acme/app", mode)]
+        assert "Triage uses the default agent." not in modes["spaces"][0]["problems"]
         notes = core.inbox.read(owner="claude")["items"]
         if mode in {"assist", "triage"}:
             assert len(notes) == 2
@@ -462,7 +553,7 @@ async def test_github_visibility_and_runtime_off_do_not_wake_or_forward(github):
             assert (await send(client, sender={"id": 11})).status_code == 200
             assert core.inbox.read(owner="claude")["items"] == []
             owner = Principal("owner", "local", "key")
-            assert core.modes.set(owner, "github", "team", "off", "acme/app")["mode"] == "off"
+            assert (await core.modes.set(owner, "github", "team", "off", "acme/app"))["mode"] == "off"
             assert (await send(client, delivery="override", sender={"id": 42})).status_code == 200
             assert (await send(client, delivery="legacy-wildcard", repo="acme/another", sender={"id": 11})).status_code == 200
             await drained(core)
