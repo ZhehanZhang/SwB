@@ -8,7 +8,7 @@ A fork is a separate copy of a project. Use a statement like this for a separate
 
 > This project is separate from SwB. It is not affiliated with SwB and has no endorsement from SwB.
 
-Ask ZhehanZ for written permission at `CONTACT_TBD`.
+Ask ZhehanZ for written permission at [hello@swb.one](mailto:hello@swb.one).
 
 You can make factual references such as “works with SwB”.
 
