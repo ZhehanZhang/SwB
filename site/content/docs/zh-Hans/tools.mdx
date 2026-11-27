@@ -3,7 +3,23 @@ title: 工具
 description: SwB 提供给你的智能体的 MCP 工具。
 ---
 
-智能体看到其登录身份允许使用的工具。模块启用时，该模块的工具随之出现。
+模块启用后，工具列表会显示该模块的工具。列表也可能显示需要所有者身份的工具。
+
+## 配对密钥
+
+配对密钥可在所有者授权的范围内调用下列工具。
+
+| 用途 | 工具和权限 |
+| - | - |
+| 消息 | 可调用 `send`、`agent_send` 和 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` 处理自己的消息和会话 |
+| 记忆与项目 | 可调用 `context_pack` 和 `project_list`。在获准的范围内使用记忆工具 |
+| 路由 | 可调用 `routes_list` 和 `routes_resolve`。调用 `routes_set` 或 `routes_remove` 时，把自己的智能体名称填入 `agent` |
+| 设置 | 用 `switchboard_status` 和 `modes_status` 查看状态。用 `connect` 获取客户端设置指引。设置模块和签发配对码需要所有者身份 |
+| 模块 | 在授权范围内使用模块工具，并执行频道模式允许的操作 |
+
+调用 `login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 和 `visibility_set` 需要所有者身份。调用 `project_create`、`project_update`、`project_sync` 和 `space_mode` 也需要所有者身份。所有者还可调用 `routine_register`、`routine_add`、`routine_remove`、`discord_provision` 和 `telegram_provision`。
+
+所有者可用 `auth.key_tools` 限制工具的显示和调用。可用 `auth.key_scopes` 限制访问范围，用 `auth.key_targets` 限制发送目标。
 
 ## 消息
 
@@ -39,7 +55,7 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | 工具 | 用途 |
 | - | - |
 | `context_pack` | 获取一个项目的简报 |
-| `memory_write` | 保存记忆时，填写 `scope`、`namespace`、`title` 和 `body`。`namespace` 用于在同一范围内归类条目，最多三级，使用小写，例如 `notes/meetings`。保存项目记忆时，将项目简称填入 `project`，并设置 `scope="project:<slug>"`。保存通用记忆时，在所有者同意后设置 `confirm_general=true` |
+| `memory_write` | 保存记忆时，填写 `scope`、`namespace`、`title` 和 `body`。`namespace` 用于在同一范围内归类条目，最多三级，使用小写，例如 `notes/meetings`。保存项目记忆时，将项目简称填入 `project`，并设置 `scope="project:<slug>"`。写入通用记忆前，先向所有者确认。然后设置 `confirm_general=true` |
 | `memory_search` | 用 `query` 搜索记忆。默认搜索 `general`。将项目简称填入 `project` 后，优先搜索项目记忆，再搜索 `general`。设为 `include_general=false` 时，只搜索该项目 |
 | `memory_list` | 列出记忆条目 |
 | `memory_read` | 读取一条记忆及其历史 |
@@ -50,6 +66,15 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `project_create` | 创建项目 |
 | `project_update` | 重命名、链接、归档项目，或把项目设为私有 |
 | `project_sync` | 重新把项目链接到它们的匹配项 |
+
+在 `project_update` 的 `links` 中填写下列值。可用的项目关联键取决于已配置的智能体和模块。
+
+| 键 | 值 |
+| - | - |
+| `repos` | 仓库名称列表，格式为 `owner/repo` |
+| `claude_project` | Claude 项目名称或 ID |
+| `chatgpt_project` | ChatGPT 项目名称或 ID |
+| `capy_project` | Capy 项目名称或 ID |
 
 调用 `memory_search` 或 `memory_list` 时，将私人项目填入 `project`，即可读取该项目的记忆。通过 `scopes` 添加其他项目时，请选择公开项目。智能体的密钥须具备各项目的访问权限。
 

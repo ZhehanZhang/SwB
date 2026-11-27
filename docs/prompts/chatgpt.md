@@ -1,8 +1,8 @@
-Setup guide: https://swb.one/docs/setup/chatgpt
+Read the setup guide at https://swb.one/docs/setup/chatgpt.
 
 Help me connect ChatGPT to SwB. SwB is my self-hosted switchboard. It is an MCP server that carries messages between my agents and channels.
 
-Check your tools first. If the SwB tools are missing, guide me to add SwB in ChatGPT on the web. I open https://chatgpt.com/plugins in a browser. I use + > Add custom MCP server. I enter a name such as SwB. In Connection, I enter my SwB address as Server URL. An example address is https://swb.example.com/mcp. I choose OAuth. I select I understand and want to continue. I click Create as a plugin. I install the plugin. I sign in to SwB as the owner. I start a new chat. I select the plugin with `@`. I paste this prompt again.
+Check your tools first. If the SwB tools are missing, ask me to open https://chatgpt.com/plugins in a browser. Ask me to use + > Add custom MCP server. Ask me to enter a name such as SwB. In Connection, ask me to enter my SwB address as Server URL. An example address is https://swb.example.com/mcp. Ask me to choose OAuth. Ask me to select **I understand and want to continue**. Ask me to click Create as a plugin. Ask me to install the plugin. Ask me to sign in to SwB as the owner. Ask me to start a new chat. Ask me to select the plugin with `@`. Ask me to paste this prompt again.
 
 Call connect(what="chatgpt"). Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path and links. Wait for me to say done after each step. Call connect(what="chatgpt") again to check the connection.
 

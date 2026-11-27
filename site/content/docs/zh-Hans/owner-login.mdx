@@ -8,7 +8,7 @@ SwB 只有一位所有者。所有者登录 SwB 页面，查看实例、批准�
 | 页面 | 用途 |
 | - | - |
 | `/login` | 以所有者身份登录。 |
-| `/authorize` | 审核智能体发起的 OAuth 连接请求。 |
+| `/authorize` | 审核智能体发起的连接请求。 |
 
 ## 一次性链接
 
@@ -20,12 +20,7 @@ swb login-link
 
 在本机运行时，启动前将 `SWITCHBOARD_PUBLIC_URL` 设为 `http://localhost:8870`。地址中的端口须与 `PORT` 一致。如果 YAML 配置已设置 `public_url`，请在那里修改。用 `--url` 指定其他服务器。用 `--dir` 从其他实例目录读取所有者密钥。
 
-若链接显示以下错误，请重新运行 `swb login-link`。在浏览器中打开新链接。
-
-| 错误 | 含义 |
-| - | - |
-| `link_used` | 已有人通过该链接登录。 |
-| `link_expired` | 链接已过期或已失效。 |
+用链接登录失败时，请重新运行 `swb login-link`。在浏览器中打开新链接。
 
 ## 设置码
 
@@ -64,6 +59,45 @@ auth:
 
 如果 Cloudflare Access 保护你的主机，SwB 会读取 Access 令牌并立即让你登录。设置 `CLOUDFLARE_ACCESS_TEAM_DOMAIN`、`CLOUDFLARE_ACCESS_AUD` 和 `SWITCHBOARD_OWNER_EMAILS`。SwB 自己检查令牌的签名、受众、签发者和邮箱。
 
+## 智能体登录
+
+OAuth 让应用在你批准后连接 SwB。请在 `/authorize` 批准连接。应用通过 `/token` 获取或更新令牌。
+
+应用收到 OAuth 错误时，请在 `error_description` 中查看详情。
+
+| 错误 | 含义 |
+| - | - |
+| `access_denied` | 所有者拒绝了连接。 |
+| `invalid_client` | SwB 拒绝了应用身份或凭据。 |
+| `invalid_client_metadata` | SwB 拒绝了应用的注册设置。 |
+| `invalid_redirect_uri` | 注册时需要填写 SwB 允许的回调地址。 |
+| `invalid_request` | 请求格式或必填值有误。 |
+| `invalid_grant` | SwB 拒绝了授权码或刷新令牌。 |
+| `invalid_target` | 请求中的 MCP 地址有误。 |
+| `unsupported_response_type` | 请使用 `response_type=code`。 |
+| `unsupported_grant_type` | 请使用 `grant_type=authorization_code` 或 `grant_type=refresh_token`。 |
+| `temporarily_unavailable` | 请设置 `public_url`，或检查客户端注册数量是否已达上限。 |
+
+SwB 拒绝[配对码](/zh-Hans/docs/connect#用配对码连接)时，`/connect` 也会返回 `invalid_grant`。
+
 ## 登录状态
 
 登录状态保存在 SwB 主机的安全 cookie 中。页面上的每次变更都带有 CSRF 令牌。在 Settings 中退出登录。
+
+浏览器通过 `/auth/session` 读取当前登录状态。
+
+## 登录错误
+
+| 错误 | 含义 |
+| - | - |
+| `link_used` | 已有人通过该链接登录。 |
+| `link_expired` | 链接已过期或已失效。 |
+| `setup_failed` | 设置码的格式有误，或与 `SWB_SETUP_CODE` 的值有差异。 |
+| `setup_closed` | 设置码登录已关闭。请改用其他登录方式。 |
+| `passkey_failed` | 通行密钥设置或验证失败。 |
+| `last_method` | OIDC 和 Cloudflare Access 均停用时，SwB 会保留最后一个通行密钥。 |
+| `not_found` | 通行密钥的编号有误，或密钥已移除。 |
+| `oidc_failed` | 通过身份提供方登录失败。 |
+| `signed_out` | 此请求需要以所有者身份登录。 |
+| `csrf` | SwB 拒绝了页面地址或安全令牌。 |
+| `slow_down` | 登录尝试次数已达上限。请按 `Retry-After` 指定的时长等待。 |

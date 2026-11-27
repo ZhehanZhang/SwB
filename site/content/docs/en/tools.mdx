@@ -3,7 +3,23 @@ title: Tools
 description: The MCP tools that SwB gives your agents.
 ---
 
-Agents see the tools that their sign-in allows. Block tools appear when the block is on.
+Block tools appear when their block is on. The tool list can show tools that require the owner's sign-in.
+
+## Paired keys
+
+A paired key can use these tools within the access the owner grants it.
+
+| Use | Tools and limits |
+| - | - |
+| Messages | Use `send`, `agent_send` and `targets`. Use `inbox`, `wait`, `reply`, `status`, `result`, `cancel` and `get_message` for your messages and conversations |
+| Memory and projects | Use `context_pack` and `project_list`. Use the memory tools within your granted scopes |
+| Routes | Use `routes_list` and `routes_resolve`. For `routes_set` and `routes_remove`, set `agent` to your own agent name |
+| Setup | Use `switchboard_status` and `modes_status` to check status. Use `connect` for client instructions. Use the owner's sign-in for block setup and to issue pairing codes |
+| Blocks | Use block tools within your granted access and the actions that the channel mode allows |
+
+The owner's sign-in is required for `login_link`, `connect_code`, `connect_list`, `connect_revoke`, `visibility_list` and `visibility_set`. Use it for `project_create`, `project_update`, `project_sync` and `space_mode`. It also grants `routine_register`, `routine_add`, `routine_remove`, `discord_provision` and `telegram_provision`.
+
+The owner can set `auth.key_tools` to limit the tool list and calls. The owner can also limit scopes with `auth.key_scopes` and send targets with `auth.key_targets`.
 
 ## Messages
 
@@ -39,7 +55,7 @@ The `inbox` tool and the [inbox event stream](/docs/connect#inbox-event-stream) 
 | Tool | Use |
 | - | - |
 | `context_pack` | Get the briefing for a project |
-| `memory_write` | Save an entry with `scope`, `namespace`, `title` and `body`. A namespace groups entries within a scope. Use up to three lowercase levels, such as `notes/meetings`. For project memory, pass its short name in `project` and use `scope="project:<slug>"`. For general memory, set `confirm_general=true` after the owner agrees |
+| `memory_write` | Save an entry with `scope`, `namespace`, `title` and `body`. A namespace groups entries within a scope. Use up to three lowercase levels, such as `notes/meetings`. For project memory, pass its short name in `project` and use `scope="project:<slug>"`. For general memory, confirm with the owner first. Then set `confirm_general=true` |
 | `memory_search` | Search memory with `query`. The default scope is `general`. Pass the project slug in `project` to search that project first, then `general`. Set `include_general=false` to search that project alone |
 | `memory_list` | List memory entries |
 | `memory_read` | Read one entry with its history |
@@ -50,6 +66,15 @@ The `inbox` tool and the [inbox event stream](/docs/connect#inbox-event-stream) 
 | `project_create` | Make a project |
 | `project_update` | Rename, link, archive or make a project private |
 | `project_sync` | Link projects to their matches again |
+
+Use `links` in `project_update` to set these values. SwB offers the project link keys for the configured agents and blocks.
+
+| Key | Value |
+| - | - |
+| `repos` | List of repository names in `owner/repo` form |
+| `claude_project` | Claude project name or ID |
+| `chatgpt_project` | ChatGPT project name or ID |
+| `capy_project` | Capy project name or ID |
 
 For `memory_search` and `memory_list`, a private project is readable only as the current project. Set `project` to that project. When `scopes` names additional projects, choose public projects. The agent's key must allow access to each project.
 

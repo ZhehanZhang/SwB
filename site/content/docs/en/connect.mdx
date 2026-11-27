@@ -5,11 +5,12 @@ description: Add SwB to an agent, then let the agent do the rest.
 
 ## Add SwB to an agent
 
-Add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. The agent signs in with OAuth. You approve the sign-in on the SwB page.
+For an MCP client on the SwB computer, use local pairing. For a hosted app, add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. Approve the app's OAuth sign-in on the SwB page.
 
 | App | Where to add SwB |
 | - | - |
-| Claude and Claude Projects | Settings → Connectors → Add custom connector |
+| [Local MCP client](/docs/setup/mcp-client) | Pair with a code. Use `http://localhost:8870/mcp` on the SwB computer. |
+| Claude and Claude Projects | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | grok.com → Connectors → New Connector → Custom |
 | Capy | Add an MCP server with the Automatic OAuth client |

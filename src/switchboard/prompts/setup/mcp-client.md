@@ -1,4 +1,4 @@
-Follow the MCP client setup guide at https://swb.one/docs/setup/mcp-client.
+Read the setup guide at https://swb.one/docs/setup/mcp-client.
 
 Help me connect a client that supports Streamable HTTP and custom request headers. Use `http://localhost:8870` if the client runs on the SwB computer. Use my configured port if it differs. Use my public HTTPS address if the client runs elsewhere.
 
@@ -10,24 +10,24 @@ swb connect mcp-client --choose agent=notes-bot
 
 Use `uvx swb-one connect mcp-client --choose agent=notes-bot` if I run SwB with uvx. The result gives me a pairing code. It works once within 10 minutes.
 
-Ask me to redeem the code from the computer that runs the client. Send a `POST /connect` request with JSON `{"code":"XXXXX-XXXXX"}`. Use this Bash command from a private folder for a local server on port 8870. Use the matching base address for other servers.
+Ask me to run this command in a private folder on the computer that runs the client. For a different server, give me the command with its base address. Ask me to enter the pairing code at the hidden prompt.
 
 ```bash
-(
+bash -c '
   umask 077
   set -C
-  read -rsp 'Pairing code: ' code
-  printf '\n'
-  printf '{"code":"%s"}' "$code" |
-    curl -fsS http://localhost:8870/connect -H 'Content-Type: application/json' \
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS http://localhost:8870/connect -H "Content-Type: application/json" \
       --data-binary @- > .swb-pairing.json
-)
+'
 ```
 
-Ask me to open `.swb-pairing.json` in a private editor. Copy its `key` into the client's private settings. SwB returns the key once. Keep it in the client settings and delete the file after setup.
+SwB returns the key once. Ask me to open `.swb-pairing.json` in a private editor.
 
-Ask me to add an MCP server in the client settings. Choose Streamable HTTP. Use the `mcp_url` from the response. For a local server, use `http://localhost:8870/mcp`. Set `Authorization: Bearer <key>` with the saved key.
+Ask me to add an MCP server in the client settings. Ask me to choose Streamable HTTP. Ask me to use the `mcp_url` from the file. For a local server, ask me to use `http://localhost:8870/mcp`. Ask me to set `Authorization: Bearer <key>` with the `key` from the file. Ask me to delete the file after setup.
 
-Call `connect` again with that app name. Call `connect_list` to see its key ID. Send a test message to `agent:notes-bot` with the chosen name. Show me the reply.
+From the app with SwB owner access, call `connect_list` to see the new agent's key ID. From the same app, send a test message to `agent:notes-bot` with the chosen name. Ask me to have the new agent read its `inbox`. Ask me to have that agent answer with `reply`. Call `result` in the owner app. Show me the reply.
 
 Ask me to paste the coordinator prompt from https://swb.one/prompts/coordinator.md into the new app. The client can subscribe to `switchboard.message.created` if it supports MCP events. It can also use `wait` or `inbox` to read messages.

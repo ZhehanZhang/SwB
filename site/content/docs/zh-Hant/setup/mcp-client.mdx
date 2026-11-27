@@ -13,6 +13,8 @@ Claude、ChatGPT、Grok 與程式開發代理各有專屬頁面，使用 OAuth �
 
 ## 複製設定提示詞
 
+提示詞保留英文，供代理使用。
+
 <SetupPrompt name="mcp-client" lang="zh-Hant" />
 
 把提示詞貼到已接上 SwB 的代理中，或貼到你要連接的應用程式中。代理會帶你完成其餘步驟。
@@ -33,26 +35,34 @@ Claude、ChatGPT、Grok 與程式開發代理各有專屬頁面，使用 OAuth �
 <Step>
 ### 換取金鑰
 
-在執行該應用程式的電腦上，於 10 分鐘內把配對碼送到 SwB。
+在執行應用程式的電腦上，用終端機開啟私人資料夾。將 `https://swb.example.com` 換成你的 SwB 位址。保留結尾的 `/connect`。如果本機伺服器使用 8870 連接埠，請用 `http://localhost:8870/connect`。請在 10 分鐘內透過隱藏輸入提示填入配對碼。
 
 ```bash
-curl -X POST https://swb.example.com/connect -H 'Content-Type: application/json' -d '{"code":"XXXXX-XXXXX"}'
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
 ```
 </Step>
 <Step>
 ### 妥善保管金鑰
 
-從回應中複製金鑰。SwB 只會顯示一次金鑰。
+用私人編輯器開啟 `.swb-pairing.json`。指令以 `0600` 權限儲存回應。將檔案中的 `key` 填入應用程式設定。SwB 只會傳回一次金鑰。
 </Step>
 <Step>
 ### 把 SwB 加到應用程式
 
-在應用程式的 MCP 設定中，URL 輸入 `https://swb.example.com/mcp`，傳輸方式選擇 Streamable HTTP。 {/* unverified */}
+在應用程式的 MCP 設定中，填入檔案中的 `mcp_url`。如果本機伺服器使用 8870 連接埠，請用 `http://localhost:8870/mcp`。傳輸方式選擇 Streamable HTTP。
 </Step>
 <Step>
 ### 加入金鑰
 
-加入請求標頭 `Authorization: Bearer <key>`，填入你的金鑰。把金鑰存在應用程式的私人設定中。
+在應用程式的私人設定中加入請求標頭 `Authorization: Bearer <key>`。儲存金鑰後刪除 `.swb-pairing.json`。
 </Step>
 </Steps>
 
@@ -75,7 +85,7 @@ SwB 會為這個名稱產生配對碼，並傳回 `POST /connect` 這一步。�
 
 ## 檢查連線
 
-請應用程式呼叫 `inbox`。負責設定的代理呼叫 `connect_list`，可以看到新金鑰與最近一次呼叫的時間。傳送測試訊息給 `agent:notes-bot`，確認應用程式用 `reply` 回覆。
+請新代理呼叫 `inbox`。請以擁有者身分登入的代理呼叫 `connect_list`，查看新金鑰最近一次呼叫的時間。請擁有者的代理傳送測試訊息給 `agent:notes-bot`。請新代理用 `inbox` 讀取訊息，再用 `reply` 回覆。
 
 ## 解決問題
 

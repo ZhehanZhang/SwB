@@ -57,7 +57,7 @@ SwB checks `data_dir` in the YAML config or overlay first. It then checks `SWITC
 curl -fsS http://127.0.0.1:8870/healthz
 ```
 
-The response above has two fields, `status` and `version`. Sign in as the owner or use the owner key to see each block and its state.
+This signed-out request shows `status` and `version`. Run `swb status` or call `/healthz` with the owner key to list blocks, their states and any missing variables.
 
 ## Server commands
 

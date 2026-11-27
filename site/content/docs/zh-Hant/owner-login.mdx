@@ -8,7 +8,7 @@ SwB 只有一位擁有者。以擁有者身分登入後，可以檢視 SwB、核
 | 頁面 | 用途 |
 | - | - |
 | `/login` | 以擁有者身分登入。 |
-| `/authorize` | 審查代理發出的 OAuth 連線請求。 |
+| `/authorize` | 審查代理發出的連線請求。 |
 
 ## 一次性連結
 
@@ -20,12 +20,7 @@ swb login-link
 
 在本機執行時，請在啟動前將 `SWITCHBOARD_PUBLIC_URL` 設為 `http://localhost:8870`。位址中的連接埠須與 `PORT` 一致。若 YAML 設定檔已設定 `public_url`，請直接修改該欄位。用 `--url` 指定其他伺服器。用 `--dir` 從其他資料夾讀取擁有者金鑰。
 
-連結顯示下列錯誤時，請重新執行 `swb login-link`。在瀏覽器中開啟新連結。
-
-| 錯誤 | 含義 |
-| - | - |
-| `link_used` | 已有人透過這個連結登入。 |
-| `link_expired` | 連結已過期或已失效。 |
+用連結登入失敗時，請重新執行 `swb login-link`。在瀏覽器中開啟新連結。
 
 ## 設定碼
 
@@ -64,6 +59,45 @@ auth:
 
 若 Cloudflare Access 保護你的主機，SwB 會讀取 Access 權杖並立即讓你登入。請設定 `CLOUDFLARE_ACCESS_TEAM_DOMAIN`、`CLOUDFLARE_ACCESS_AUD` 與 `SWITCHBOARD_OWNER_EMAILS`。SwB 自行檢查權杖的簽章、audience、issuer 與電子郵件。
 
+## 代理登入
+
+OAuth 讓應用程式在你核准後連線到 SwB。請在 `/authorize` 核准連線。應用程式會透過 `/token` 取得或更新權杖。
+
+應用程式收到 OAuth 錯誤時，請在 `error_description` 中查看詳細資訊。
+
+| 錯誤 | 含義 |
+| - | - |
+| `access_denied` | 擁有者拒絕了連線。 |
+| `invalid_client` | SwB 拒絕了應用程式的身分或憑證。 |
+| `invalid_client_metadata` | SwB 拒絕了應用程式的註冊設定。 |
+| `invalid_redirect_uri` | 註冊時需要填入 SwB 允許的回呼位址。 |
+| `invalid_request` | 請求格式或必填值有誤。 |
+| `invalid_grant` | SwB 拒絕了授權碼或更新權杖。 |
+| `invalid_target` | 請求中的 MCP 位址有誤。 |
+| `unsupported_response_type` | 請使用 `response_type=code`。 |
+| `unsupported_grant_type` | 請使用 `grant_type=authorization_code` 或 `grant_type=refresh_token`。 |
+| `temporarily_unavailable` | 請設定 `public_url`，或檢查用戶端註冊數量是否已達上限。 |
+
+SwB 拒絕[配對碼](/zh-Hant/docs/connect#用配對碼連接)時，`/connect` 也會傳回 `invalid_grant`。
+
 ## 工作階段
 
 工作階段是 SwB 主機上的安全 cookie。頁面上的每項變更都帶有 CSRF 權杖。請從 Settings 登出。
+
+瀏覽器會透過 `/auth/session` 讀取目前的登入狀態。
+
+## 登入錯誤
+
+| 錯誤 | 含義 |
+| - | - |
+| `link_used` | 已有人透過這個連結登入。 |
+| `link_expired` | 連結已過期或已失效。 |
+| `setup_failed` | 設定碼的格式有誤，或與 `SWB_SETUP_CODE` 的值有差異。 |
+| `setup_closed` | 設定碼登入已關閉。請改用其他登入方式。 |
+| `passkey_failed` | 通行金鑰設定或驗證失敗。 |
+| `last_method` | OIDC 和 Cloudflare Access 都停用時，SwB 會保留最後一個通行金鑰。 |
+| `not_found` | 通行金鑰的 ID 有誤，或金鑰已移除。 |
+| `oidc_failed` | 透過身分提供者登入失敗。 |
+| `signed_out` | 此請求需要以擁有者身分登入。 |
+| `csrf` | SwB 拒絕了頁面位址或安全權杖。 |
+| `slow_down` | 登入嘗試次數已達上限。請依 `Retry-After` 指定的時間等候。 |
