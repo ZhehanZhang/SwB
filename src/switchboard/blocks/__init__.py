@@ -263,6 +263,9 @@ class Block:
         """The target a send to addr with this project actually reaches (a routine block may pick the project's own)."""
         return addr
 
+    def canonical_target(self, addr: Address) -> Address:
+        return addr
+
     def grant_target(self, addr: Address) -> Address | None:
         """The address a key must have a grant for, or None if a scoped key cannot send here."""
         return addr

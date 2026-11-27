@@ -5,15 +5,19 @@ from contextlib import aclosing
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 
 from conftest import PUBLIC, SECOND_KEY, STATIC_KEY, acall, arpc, base_config, call, eventually, payload, sign_in
 from switchboard import muse_gadget
 from switchboard.auth import Principal
 from switchboard.blocks import muse
+from switchboard.companion import client as device_client
 from switchboard.companion.caps import registry
+from switchboard.companion.caps import muse as muse_cap
 from switchboard.companion.caps.muse import MuseCapability
 from switchboard.vendor.musegadget import muse_api
+from switchboard.vendor.musegadget.ble_setup import Credentials
 from switchboard.vendor.musegadget.identity import Identity
 
 SDK_TOKEN = "mgst_" + "U" * 43
@@ -375,3 +379,77 @@ async def test_live_companion_hub_pairs_muse_and_filters_job_errors(amake, tmp_p
     surfaces += json.dumps(await connect(client))
     assert all(secret not in surfaces for secret in (code, paired["device_key"], SDK_TOKEN, ACCESS, REFRESH))
     assert all(value not in surfaces for value in (username, *allowed_hosts.values(), forbidden_host))
+
+
+@pytest.mark.parametrize("unlisted", [None, "api_url", "api_url_v2", "noise_host"])
+async def test_muse_pairing_claim_uses_the_companion_client_transport(amake, monkeypatch, unlisted):
+    credentials = {
+        "access_token": ACCESS, "refresh_token": REFRESH, "username": "Test device",
+        "api_url": "https://hatch-api.meta.ai", "api_url_v2": "https://api.muse.ai", "noise_host": "hatch.metaaivm.com",
+    }
+    if unlisted:
+        credentials[unlisted] = "unlisted.example.test" if unlisted == "noise_host" else "https://unlisted.example.test"
+    verified = []
+    committed = []
+
+    def verify(_access_token, base):
+        verified.append(base)
+        return [{"vm_id": "test-vm"}], 200
+
+    def commit(save):
+        committed.append(save())
+        return committed[-1]
+
+    async def provision(controller):
+        await controller._provision(Credentials(**credentials), commit)
+
+    async def no_hardware(*_):
+        pass
+
+    monkeypatch.setattr(muse_gadget, "MuseGadget", FakeGadget)
+    monkeypatch.setattr(muse_api, "fetch_vms_with_status", verify)
+    monkeypatch.setattr(muse_cap, "_load_bless", lambda: None)
+    monkeypatch.setattr(muse_cap, "BLE_SHUTDOWN_DELAY_S", 0)
+    monkeypatch.setattr(MuseCapability, "available", lambda self: None)
+    monkeypatch.setattr(muse_cap._BlessTransport, "start", no_hardware)
+    monkeypatch.setattr(muse_cap._BlessTransport, "stop", no_hardware)
+    monkeypatch.setattr(muse_cap.SetupController, "run", provision)
+
+    core, client = await amake(config())
+    core.claims.save_secret(muse.TOKEN_ENV, SDK_TOKEN)
+    block = core.blocks["muse"]
+    cap = MuseCapability()
+    code = (await tool(client, "companion_code"))["code"]
+    response = await client.post("/companion/pair", json={"code": code, "name": "Test device", "platform": "linux",
+                                                         "capabilities": [cap.manifest()]})
+    assert response.status_code == 200
+    paired = response.json()
+    requests = []
+    async with aclosing(core.companions.events(paired["companion_id"], 1)) as stream:
+        assert await anext(stream) == ("ping", "{}")
+        assert (await connect(client, companion=paired["companion_id"]))["pairing"] == "in_progress"
+        event, data = await asyncio.wait_for(anext(stream), 1)
+        assert event == "job"
+        job = device_client._job(data)
+        assert job is not None and job[1:3] == ("muse", "pair")
+
+        async def forward(request):
+            response = await client.send(request)
+            requests.append((request.url.path, response.status_code, response.json()))
+            return response
+
+        async with device_client._client(PUBLIC, paired["device_key"]) as device:
+            device._transport = httpx.MockTransport(forward)
+            await device_client._execute(device, {"muse": cap}, *job)
+        assert [row[:2] for row in requests] == [
+            ("/companion/results", 200), ("/companion/claims", 200), ("/companion/results", 200),
+        ]
+        await eventually(lambda: block._pairing is None)
+        if unlisted:
+            assert requests[1][2]["ok"] is False
+            assert not verified and not committed
+            assert core.claims.secret(muse.PAIRING_SECRET) is None
+        else:
+            assert requests[1][2] == {"ok": True}
+            assert verified == [muse_api.api_root(credentials["api_url_v2"])] and committed == [True]
+            assert core.claims.secret(muse.PAIRING_SECRET) is not None

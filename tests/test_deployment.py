@@ -6,10 +6,11 @@ import logging
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import httpx2
 import pytest
 from starlette.testclient import TestClient
 
-from conftest import STATIC_KEY, call, payload
+from conftest import STATIC_KEY, call, payload, rpc
 from switchboard import __main__, cli, web
 from switchboard.app import create_app
 from switchboard.config import ConfigError, load_config
@@ -150,6 +151,88 @@ def test_legacy_notice_names_the_variable_once_without_the_value(tmp_path, monke
     assert STATIC_KEY not in caplog.text
 
 
+@pytest.mark.parametrize(("published_origin", "public_url", "expected"), [
+    ("http://127.0.0.1:8870", None, "http://localhost:8870"),
+    ("http://[::1]:18870", None, "http://localhost:18870"),
+    ("http://0.0.0.0:8870", None, None),
+    ("http://127.0.0.1:8870", "https://swb.example.test", "https://swb.example.test"),
+])
+def test_compose_keeps_internal_cli_port_and_browser_sign_in_separate(tmp_path, monkeypatch, capsys,
+                                                                  published_origin, public_url, expected):
+    monkeypatch.chdir(tmp_path)
+    for name in (PLATFORM, "SWITCHBOARD_PORT", "SWITCHBOARD_CONFIG", "SWITCHBOARD_PUBLIC_URL", "PUBLIC_URL"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in {OWNER_KEY: STATIC_KEY, "SWITCHBOARD_HOST": "0.0.0.0", "PORT": "8000",
+                        "SWB_COMPOSE_ORIGIN": published_origin, "SWITCHBOARD_DATA": str(tmp_path / "data")}.items():
+        monkeypatch.setenv(name, value)
+    if public_url:
+        monkeypatch.setenv("PUBLIC_URL", public_url)
+
+    def run(app, *, host, port, **options):
+        assert (host, port) == ("0.0.0.0", 8000)
+        assert options["proxy_headers"] is False
+        assert app.starlette.state.core.cfg.public_url == expected
+        with TestClient(app, base_url=expected or "http://localhost:8000") as browser:
+            assert browser.get("/healthz").json()["status"] == ("ok" if expected else "degraded")
+            if expected is None:
+                return
+
+            async def local_call(url, key, tool, arguments):
+                assert url == "http://localhost:8000/mcp"
+                return payload(call(browser, key, tool, arguments))
+
+            monkeypatch.setattr(cli, "_call", local_call)
+            cli.main(["login-link"])
+            link = urlsplit(capsys.readouterr().out.strip())
+            assert link._replace(fragment="").geturl() == f"{expected}/login"
+            token = link.fragment.removeprefix("t=")
+            signed_in = browser.post("/auth/link", json={"token": token}, headers={"Origin": expected})
+            assert signed_in.status_code == 204
+            cookie, _, attributes = signed_in.headers["Set-Cookie"].partition(";")
+            assert "Secure" in attributes and "HttpOnly" in attributes
+            assert browser.get("/auth/session", headers={"Cookie": cookie}).json()["signed_in"]
+
+    monkeypatch.setattr(__main__.uvicorn, "run", run)
+    __main__.main(["serve"])
+
+
+def test_explicit_mcp_disable_warns_at_start_and_in_status(tmp_path, monkeypatch, caplog, capsys):
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "config.yaml"
+    path.write_text("version: 2\nblocks:\n  mcp: {enabled: false}\n")
+    monkeypatch.delenv(PLATFORM, raising=False)
+    for name, value in {OWNER_KEY: STATIC_KEY, "SWITCHBOARD_CONFIG": str(path), "SWITCHBOARD_HOST": "127.0.0.1",
+                        "SWITCHBOARD_DATA": str(tmp_path / "data"), "PORT": "8000"}.items():
+        monkeypatch.setenv(name, value)
+
+    def run(app, **options):
+        with TestClient(app, base_url="http://localhost:8000") as server:
+            assert rpc(server, STATIC_KEY, "tools/list").status_code == 404
+            assert set(server.get("/healthz").json()) == {"status", "version"}
+            key_header = {"Authorization": f"Bearer {STATIC_KEY}"}
+            health = server.get("/healthz", headers=key_header).json()
+            assert health["mcp_enabled"] is False and "MCP is off." in health["problems"]
+            assert health["block_setup"]["mcp"]["enabled"] is False
+            requested = []
+
+            def request(req):
+                requested.append((req.method, req.url.path))
+                assert req.headers["Authorization"] == key_header["Authorization"]
+                response = server.request(req.method, req.url.path, headers=dict(req.headers), content=req.content)
+                return httpx2.Response(response.status_code, headers=dict(response.headers), content=response.content)
+
+            client = httpx2.AsyncClient
+            monkeypatch.setattr(cli.httpx2, "AsyncClient", lambda **kw: client(transport=httpx2.MockTransport(request), **kw))
+            cli.main(["status", "--url", "http://localhost:8000"])
+            assert requested == [("POST", "/mcp"), ("GET", "/healthz")]
+            assert "MCP is off." in capsys.readouterr().out.splitlines()
+
+    monkeypatch.setattr(__main__.uvicorn, "run", run)
+    with caplog.at_level(logging.WARNING, logger="switchboard"):
+        __main__.main(["serve"])
+    assert any("MCP is off." in record.message and record.levelno == logging.WARNING for record in caplog.records)
+
+
 @pytest.mark.parametrize("setup_code", [SETUP_CODE, base64.b64encode(bytes(range(32))).decode()], ids=["hex", "base64"])
 def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, monkeypatch, setup_code):
     monkeypatch.setattr(web, "APP_DIST", tmp_path / "no-spa")
@@ -158,6 +241,7 @@ def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, mon
     with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
         home = client.get("/")
         assert 'id="owner-setup"' in home.text
+        assert 'name="code" type="password" autocomplete="one-time-code"' in home.text
         assert setup_code not in home.text
         session = client.get("/auth/session").json()
         assert session["methods"]["setup"] and not session["signed_in"]
