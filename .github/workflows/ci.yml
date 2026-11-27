@@ -19,6 +19,8 @@ jobs:
       - run: uv sync --locked --extra test
       - run: uv run --no-sync pytest -q
       - run: uv run --no-sync ruff check
+      - run: uv run --no-sync python scripts/inventory.py --check
+      - run: uv run --no-sync python scripts/inventory_coverage.py
 
   docker:
     runs-on: ubuntu-latest
