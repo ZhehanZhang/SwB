@@ -11,7 +11,7 @@ import pytest
 import yaml
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from conftest import CAPTAIN, CAPY_KEY, Clock, acall, arpc, error_text, payload
+from conftest import CAPTAIN, CAPY_KEY, OWNER, Clock, acall, access_verifier, arpc, base_config, error_text, payload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -19,6 +19,7 @@ from switchboard.app import create_app
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
 from switchboard.blocks.github import DELIVERY_TTL_S, REFUSAL_AUDIT_INTERVAL_S, _json, trim
+from switchboard.blocks.mcp.policy import CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MODE_REQUIRED, TOOL_REQUIRED
 from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
 
@@ -749,7 +750,8 @@ async def test_app_tokens_are_scoped_and_review_replies_stay_in_their_thread(git
                             ("POST", "/repos/acme/app/pulls/8/comments/49/replies", {"body": "Second reply"})]
 
 
-async def test_github_mcp_write_tools_use_the_guarded_conversation(github):
+@pytest.mark.parametrize("fields", [("handle",), ("conversation",), ("handle", "conversation")])
+async def test_github_mcp_write_tools_use_the_guarded_conversation(github, fields):
     writes = []
 
     def api(request):
@@ -759,18 +761,80 @@ async def test_github_mcp_write_tools_use_the_guarded_conversation(github):
         return httpx.Response(201, json={"id": 53})
 
     token = "example-claude-key-value-for-tests"
-    config = github_config("triage", ["reply", "notify_owner"])
+    issue = {"repo": "acme/app", "number": 7}
+    calls = {
+        "label": {**issue, "labels": ["triaged"]},
+        "comment": {**issue, "body": "Looking into this."},
+        "open_issue": {"repo": "acme/app", "title": "Follow-up"},
+        "link_duplicate": {**issue, "duplicate_of": 3},
+        "notify_owner": {"text": "Asked for the version."},
+        "reply": {"text": "Which version are you on?"},
+    }
+    config = github_config("triage", list(calls))
     env = {"GITHUB_WEBHOOK_SECRET": SECRET, "GITHUB_TOKEN": "fake-fine-grained-token", "SWITCHBOARD_KEY_CLAUDE": token}
     async with github(config, env, settings={**shared(), "blocks": {"mcp": {}, "github": config}}, http_transport=httpx.MockTransport(api)) as (core, client):
         await send(client, sender={"id": 21})
         [item] = core.inbox.read(owner="claude")["items"]
-        tools = (await arpc(client, token, "tools/list")).json()["result"]["tools"]
-        assert {tool["name"] for tool in tools} >= {"github_status", "github_reply", "github_label", "github_comment", "github_notify_owner"}
-        result = await acall(client, token, "github_reply", {"handle": item["handle"], "text": "Which version are you on?"})
-        assert not result.get("isError"), result
-        result = await acall(client, token, "github_notify_owner", {"handle": item["handle"], "text": "Asked for the version."})
-        assert not result.get("isError"), result
-        assert writes == ["/repos/acme/app/issues/7/comments"]
+        tools = {t["name"]: t["inputSchema"]["properties"]
+                 for t in (await arpc(client, token, "tools/list")).json()["result"]["tools"]}
+        assert not {"conversation", "handle"} & tools["github_status"].keys()
+        reference = dict.fromkeys(fields, item["handle"])
+        for action, args in calls.items():
+            name = f"github_{action}"
+            assert {"conversation", "handle"} <= tools[name].keys()
+            result = await acall(client, token, name, args | reference)
+            assert payload(result)["ok"] is True
+        assert writes == [
+            "/repos/acme/app/issues/7/labels", "/repos/acme/app/issues/7/comments", "/repos/acme/app/issues",
+            "/repos/acme/app/issues/7/comments", "/repos/acme/app/issues/7/labels", "/repos/acme/app/issues/7",
+            "/repos/acme/app/issues/7/comments",
+        ]
+        [note] = core.inbox.read(owner="owner")["items"]
+        assert note["conversation"] == item["handle"] and note["permalink"] == ISSUE["html_url"]
+
+
+async def test_github_mcp_conversation_alias_preserves_refusals(github):
+    def api(request):
+        assert request.url.path == "/user"
+        return httpx.Response(200, json={"id": 987})
+
+    token = "example-claude-key-value-for-tests"
+    config = github_config("triage", ["reply"])
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "GITHUB_TOKEN": "fake-fine-grained-token", "SWITCHBOARD_KEY_CLAUDE": token}
+    settings = {**shared(), "blocks": {"mcp": {}, "github": config}, "auth": base_config()["auth"]}
+    async with github(config, env, settings=settings, access_verifier=access_verifier,
+                      http_transport=httpx.MockTransport(api)) as (core, client):
+        await send(client, sender={"id": 21})
+        [item] = core.inbox.read(owner="claude")["items"]
+        handle = item["handle"]
+        for field in ("handle", "conversation"):
+            reply = {field: handle, "text": "Fixture body to keep out of audit"}
+            comment = {field: handle, "repo": "acme/app", "number": 7, "body": reply["text"]}
+            assert "not yours" in error_text(await acall(client, OWNER_KEY, "github_reply", reply))
+            assert "cannot comment" in error_text(await acall(client, token, "github_comment", comment))
+        for tool in ("github_reply", "github_notify_owner"):
+            assert "Provide conversation or handle." in error_text(await acall(client, token, tool, {"text": "Fixture"}))
+
+        conflict = {"handle": handle, "conversation": "h_fixture_conflicting_id", "text": "Fixture body to keep out of audit"}
+        assert error_text(await acall(client, token, "github_reply", conflict)) == CONVERSATION_CONFLICT
+        core.cfg.key_tools["claude"] = ("github_status",)
+        assert "may call only github_status" in error_text(await acall(client, token, "github_reply", conflict))
+
+        public = await client.get("/api/audit", headers=OWNER, params={"action": "tool_refused"})
+        public.raise_for_status()
+        for rows in (core.audit.recent(action="tool_refused"), public.json()["items"]):
+            assert [(r["source"], r["target"], r["detail"]) for r in rows] == [
+                ("claude", "github_reply", TOOL_REQUIRED),
+                ("claude", "github_reply", CONVERSATION_CONFLICT),
+                ("claude", "github_notify_owner", CONVERSATION_REQUIRED),
+                ("claude", "github_reply", CONVERSATION_REQUIRED),
+                ("claude", "github_comment", MODE_REQUIRED),
+                ("owner", "github_reply", MODE_REQUIRED),
+                ("claude", "github_comment", MODE_REQUIRED),
+                ("owner", "github_reply", MODE_REQUIRED),
+            ]
+            serialized = json.dumps(rows)
+            assert all(value not in serialized for value in conflict.values())
 
 
 async def test_unloadable_app_key_allows_pat_auth_for_connect_and_writes(github):

@@ -5,6 +5,8 @@ TARGET_REQUIRED = "Choose a target granted to this key."
 MODE_REQUIRED = "Use an action allowed by the conversation mode."
 CONFIRMATION_REQUIRED = "Confirm a general memory write with the owner."
 GRANT_REQUIRED = "Use an account granted this action."
+PROJECT_LINK_REQUIRED = "Choose a supported project link key."
+ROUTE_TARGET_KIND = "Choose a supported route target kind."
 
 SIGN_IN_FAILURES = {
     "/auth/setup": frozenset({"setup_failed", "setup_closed", "csrf"}),

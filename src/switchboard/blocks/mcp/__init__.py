@@ -17,7 +17,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, InputRequiredResult, ToolAnnotations
-from pydantic import BaseModel, Field, ValidationError, create_model
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model, model_validator
 from starlette.routing import BaseRoute, Mount
 
 from ... import __version__
@@ -25,13 +25,14 @@ from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
 from ...modes import ChannelModes
 from ...projects import ProjectError
-from ...refusals import PolicyRefusal
+from ...refusals import PROJECT_LINK_REQUIRED, ROUTE_TARGET_KIND, PolicyRefusal
 from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
-from .policy import (CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED, READ_ROLES, ROUTE_REQUIRED, SCOPE_REQUIRED,
-                     TARGET_REQUIRED, TOOL_REQUIRED, Role, catalog_refusal, mutation_roles, read_refusal)
+from .policy import (BLOCK_ROLES, CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
+                     READ_ROLES, ROUTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED, Role, catalog_refusal,
+                     mutation_roles, read_refusal)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -76,6 +77,17 @@ class FileIn(BaseModel):
     media_type: str | None = Field(default=None, description="MIME type, e.g. text/markdown")
 
 
+class ProjectLinks(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def supported_keys(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.keys() - cls.model_fields.keys():
+            raise PolicyRefusal(PROJECT_LINK_REQUIRED)
+        return data
+
+
 class RouteDefaults(BaseModel):
     model: str | None = Field(default=None, description="Model id for new work on the target, e.g. anthropic/claude-opus-5-5")
     repos: list[str] | None = Field(default=None, description="Repos every task on this route concerns")
@@ -96,6 +108,7 @@ class LimitedServer(MCPServer):
 
     modes: ChannelModes
     roles: dict[str, Role]
+    github_actions: dict[str, str]
 
     def _audit_refusal(self, p: Principal | None, tool: str | None, reason: str) -> None:
         self.modes.core.audit.record(origin=p.origin if p else "mcp", source=p.source if p else "-",
@@ -109,7 +122,15 @@ class LimitedServer(MCPServer):
         role = self.roles.get(name)
         reason = catalog_refusal(p, name, tool, role)
         if reason is None and p is not None:
-            reason = await self._argument_refusal(p, name, role, arguments)
+            if name in self.github_actions and (conversation := arguments.get("conversation")) is not None:
+                handle = arguments.get("handle")
+                if handle is not None and handle != conversation:
+                    reason = CONVERSATION_CONFLICT
+                elif isinstance(conversation, str):
+                    arguments = {**arguments, "handle": conversation}
+                    del arguments["conversation"]
+            if reason is None:
+                reason = await self._argument_refusal(p, name, role, arguments)
         if reason:
             self._audit_refusal(p, tool.name if tool else None, reason)
             if reason == OWNER_REQUIRED and p is not None and p.kind == "connect":
@@ -190,22 +211,20 @@ class LimitedServer(MCPServer):
         return out
 
     def _check_mode(self, p: Principal, name: str, arguments: dict[str, Any]) -> None:
-        ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
-                    if isinstance(arguments.get(k), str)), None)
-        action = name
-        if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
-            action = "notify_owner"
-        elif action == "send" and arguments.get("forward"):
-            action = "forward"
         repo = None
-        for block in self.modes.core.blocks.values():
-            if block.manifest.id == "github" and action.startswith(f"{block.name}_"):
-                candidate = action.removeprefix(f"{block.name}_")
-                if candidate in ("label", "comment", "open_issue", "link_duplicate", "reply", "notify_owner"):
-                    action = candidate
-                    repo = arguments.get("repo") if isinstance(arguments.get("repo"), str) else None
+        if name in self.github_actions:
+            action = self.github_actions[name]
+            ref, repo = arguments.get("handle"), arguments.get("repo")
+        else:
+            ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
+                        if isinstance(arguments.get(k), str)), None)
+            action = name
+            if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
+                action = "notify_owner"
+            elif action == "send" and arguments.get("forward"):
+                action = "forward"
         try:
-            self.modes.check(p, ref, action, repo)
+            self.modes.check(p, ref if isinstance(ref, str) else None, action, repo if isinstance(repo, str) else None)
         except PermissionError as e:
             self._audit_refusal(p, name, MODE_REQUIRED)
             raise ToolError(str(e)) from e
@@ -278,10 +297,13 @@ class MCPBlock(Block):
         mcp = LimitedServer(name="swb", title="SwB", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
         mcp.roles = mutation_roles(core)
+        mcp.github_actions = {f"{b.name}_{action}": action for b in core.blocks.values() if b.manifest.id == "github"
+                              for action in BLOCK_ROLES["github"]}
         mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
-        Links = create_model("Links", repos=(list[str] | None, Field(default=None, description="owner/repo names that belong to the project")),
+        Links = create_model("Links", __base__=ProjectLinks,
+                             repos=(list[str] | None, Field(default=None, description="owner/repo names that belong to the project")),
                              **{k: (str | None, Field(default=None, description=f"The matching {k.removesuffix('_project').replace('_', ' ')} project (id or name)"))
                                 for k in link_keys})
 
@@ -513,11 +535,16 @@ class MCPBlock(Block):
             b = core.blocks.get(head)
             if b is not None:
                 route_destinations(b.name)
+                kind, kind_sep, _ = rest.partition(":")
+                if kind_sep and not any(k.kind == kind.strip().lower() for k in b.manifest.targets):
+                    raise PolicyRefusal(ROUTE_TARGET_KIND, f"Choose a supported route target kind for {text[:120]!r}.")
                 return b.name, b.parse_route_target(rest)
             owner = core._kind_owner(head) if head in LEGACY_KINDS else None
             if owner is not None:
                 b = core.blocks[owner]
                 return b.name, b.parse_route_target(text)
+            if sep:
+                raise PolicyRefusal(ROUTE_TARGET_KIND, f"Choose a supported route target kind for {text[:120]!r}.")
             name = core.route_destinations()[0]
             if name == "agent":
                 raise ToolError("Use agent:<name> for a mailbox or enable a block that takes routes.")
@@ -539,6 +566,7 @@ class MCPBlock(Block):
         @mcp.tool(title="Switchboard status", description="Who you are signed in as (your agent name for routes), your wait limits, the blocks and their levels, and what is configured or degraded.", annotations=READ)
         async def switchboard_status(ctx: Context) -> dict[str, Any]:
             p = who(ctx)
+            await core.modes.refresh(p)
             default, mx = self.wait_caps.for_agent(p.source)
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})},
                     "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx},
