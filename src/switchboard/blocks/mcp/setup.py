@@ -30,7 +30,7 @@ BLOCK_EXAMPLES = {
         "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "SLACK_A2A_APP_TOKEN",
         "identities": {"bot": {"token_env": "SLACK_A2A_BOT_TOKEN", "write": "free"}},
     }}},
-    "github": {"secret_env": GITHUB_SECRET, "spaces": {"example-org/app": {"mode": "watch"}}},
+    "github": {"secret_env": GITHUB_SECRET, "spaces": {"example-org/app": {"mode": {"mode": "watch", "target": "agent:beta"}}}},
     "dots": {"delivery": "mailbox", "dots": {"example-dot": {"name": "Example Dot", "mailbox": "chatgpt"}}},
 }
 ROUTINE_ENV_ONLY = {
@@ -66,7 +66,7 @@ def enable_steps(cfg: Config, name: str, choose: dict[str, Any]) -> list[dict[st
     if name == "slack":
         instruction += " Replace T0DEMO0001 with the Slack workspace ID."
     elif name == "github":
-        instruction += " Replace example-org/app with the GitHub repository."
+        instruction += " Replace example-org/app with the GitHub repository. Replace agent:beta with an address from targets."
     elif name == "discord":
         instruction += " Replace guild_id and owner_ids with your Discord server and user IDs."
     elif name == "telegram":
