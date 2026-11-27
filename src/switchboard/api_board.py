@@ -143,7 +143,7 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
             routines[ident] = (item, row)
     for route in core.routes.list():
         block = core.blocks.get(route.destination)
-        addr = block.route_address(route.target) if block else None
+        addr = core.address_for_route(route)
         if addr:
             connected.add(str(addr))
         if not route.project:
@@ -152,7 +152,7 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
         target = targets.get(ident, {})
         use = block.manifest.id if block else route.destination
         by = _actor(core, route.updated_by)
-        state = "off" if not block or not block.online else "on" if target else None
+        state = ("on" if target else "off") if route.destination == "agent" else "off" if not block or not block.online else "on" if target else None
         if ident in routines:
             item = routines[ident][0]
             state = item["state"]

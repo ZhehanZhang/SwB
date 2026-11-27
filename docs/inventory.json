@@ -3050,7 +3050,7 @@
       "name": "routes_list"
     },
     {
-      "description": "Remove the route for exactly this agent/project pair (both empty: the global route). Audited.",
+      "description": "Remove the route for this exact agent and project. Omit both for the global route. Pass block to select a destination when several match. Audited.",
       "icon": null,
       "id": "tool:routes_remove",
       "input_properties": [
@@ -3063,7 +3063,7 @@
       "name": "routes_remove"
     },
     {
-      "description": "Which route send would use for an agent (default: you) and project, and the levels checked.",
+      "description": "Show the route that send would use for an agent and project. The agent defaults to you. Pass block to check one destination.",
       "icon": null,
       "id": "tool:routes_resolve",
       "input_properties": [
@@ -3076,7 +3076,7 @@
       "name": "routes_resolve"
     },
     {
-      "description": "Point an agent (claude, chatgpt, claude-code, or a key name), a project, both, or neither (global) at a target: an address like 'capy:captain:<code, id or name>', or the short forms 'captain:<x>', 'project:<Capy project id or code>' and 'thread:<jam_id>'. allow_override lets callers pass an explicit to. Audited.",
+      "description": "Route sends from an agent, a project, both, or all callers. Use agent:<name> for a mailbox or a block address such as capy:captain:<name>. For Capy, allow_override lets callers pass an explicit target. Audited.",
       "icon": null,
       "id": "tool:routes_set",
       "input_properties": [
