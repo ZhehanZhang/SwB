@@ -165,7 +165,7 @@ def create_app(core: "Switchboard") -> Any:
         routine_block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
         return pages.admin_page(core.health(), owner.label, [r.as_dict() for r in core.routes.list()], [p.as_dict() for p in core.projects.list(include_archived=True)], changes, extra,
                                 block_rows=rows, connected=core.connections.list(), csrf=csrf,
-                                add_passkey=bool(core.cfg.public_url and not core.store.one("SELECT 1 FROM owner_passkeys LIMIT 1")),
+                                add_passkey=bool(core.cfg.public_url and not core.store.one("SELECT 1 FROM owner_passkeys WHERE rp_id = ? LIMIT 1", (core.cfg.passkey_rp,))),
                                 routines=routine_block.rows() if routine_block else None, systems=core.project_systems(await core.targets()),
                                 visibility=core.visibility.rows([f"target:{t['slugs'][0]}" for t in await core.targets() if t.get("slugs") and t.get("block") != "agent"][:200]))
 

@@ -29,6 +29,14 @@ def _origin(url: str) -> str:
     return f"{parts.scheme}://{host}" + (f":{port}" if port and port != {"https": 443, "http": 80}[parts.scheme] else "")
 
 
+def _host_port(url: str, scheme: str | None = None) -> tuple[str, int] | None:
+    try:
+        parts = urlsplit(url)
+        return (parts.hostname or "", parts.port or {"https": 443, "http": 80}[scheme or parts.scheme])
+    except (ValueError, KeyError):
+        return None
+
+
 NAMESPACE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}(/[a-z0-9][a-z0-9_.-]{0,59}){0,2}$")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 
@@ -94,9 +102,11 @@ class Config:
 
     def base_for_host(self, host: str | None) -> str | None:
         """The public URL a request reached, by its Host header; the primary public_url for any other host."""
-        for url in self.public_urls:
-            if host and urlsplit(url).netloc.lower() == host.lower():
-                return url
+        if host:
+            want = _host_port(f"//{host}", "https")
+            for url in self.public_urls:
+                if _host_port(url) == want or _host_port(url) == _host_port(f"//{host}", "http"):
+                    return url
         return self.public_url
 
     @property
