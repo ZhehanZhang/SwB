@@ -2,7 +2,7 @@
 
 import { Check, Copy, ExternalLink, X } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Locale } from '@/lib/i18n';
 import { localize } from '@/lib/i18n';
 import { openUrl, setup } from '@/lib/setup';
@@ -10,21 +10,21 @@ import { CYCLE, LEG, STEP, clock, trips as livePairs } from '@/lib/live';
 import { DEPLOY_BUTTONS_LIVE } from '@/lib/flags';
 import { MarkTile, type MarkKind } from './mark-tile';
 
-type Node = { kind: MarkKind; label: string; channel?: boolean };
+type Node = { kind: MarkKind; label: string };
 
 const nodes: Node[] = [
-  { kind: 'slack', label: 'Slack', channel: true },
+  { kind: 'slack', label: 'Slack' },
   { kind: 'claude', label: 'Claude' },
   { kind: 'capy', label: 'Captain' },
   { kind: 'dots', label: 'Dots' },
-  { kind: 'discord', label: 'Discord', channel: true },
+  { kind: 'discord', label: 'Discord' },
   { kind: 'chatgpt', label: 'ChatGPT' },
   { kind: 'codex', label: 'Codex' },
-  { kind: 'github', label: 'GitHub', channel: true },
+  { kind: 'github', label: 'GitHub' },
   { kind: 'gemini', label: 'Gemini' },
   { kind: 'claude-code', label: 'Claude Code' },
   { kind: 'grok', label: 'Grok' },
-  { kind: 'telegram', label: 'Telegram', channel: true },
+  { kind: 'telegram', label: 'Telegram' },
   { kind: 'grok-bot', label: 'Grok Bot' },
   { kind: 'muse', label: 'Muse' },
 ];
@@ -35,8 +35,8 @@ const trips = livePairs.map(([from, to]) => [index(from), index(to)] as const);
 const BEND = 0.14;
 
 const layouts = {
-  wide: { W: 1000, H: 820, r: 320, hub: 44, cord: [7, 2.4], pulse: 6, halo: 26 },
-  tall: { W: 1000, H: 1000, r: 385, hub: 85, cord: [5, 1.8], pulse: 4.5, halo: 58 },
+  wide: { W: 1000, H: 820, r: 282, pulse: 5.5 },
+  tall: { W: 1000, H: 1000, r: 338, pulse: 4.5 },
 };
 type Layout = keyof typeof layouts;
 
@@ -63,19 +63,15 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
     const context = element?.getContext('2d');
     if (!element || !context) return;
     const spec = layouts[layout];
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let colors = { intake: '#3b5bdb', route: '#2f7d4f', sink: '#c92a2a', accent: '#999', background: '#fff' };
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let foreground = '#18181b';
+    let background = '#fff';
     const readColors = () => {
       const style = getComputedStyle(element);
-      const pick = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
-      colors = { intake: pick('--cord-intake', colors.intake), route: pick('--cord-route', colors.route), sink: pick('--cord-sink', colors.sink), accent: pick('--accent', colors.accent), background: pick('--background', colors.background) };
+      foreground = style.getPropertyValue('--foreground').trim() || foreground;
+      background = style.getPropertyValue('--background').trim() || background;
     };
-    readColors();
-    const themeWatch = new MutationObserver(() => { readColors(); redraw(); });
-    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
     let scale = 1;
-    let redraw = () => {};
     const resize = () => {
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
       const { width } = element.getBoundingClientRect();
@@ -85,9 +81,6 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
       context.setTransform(ratio * scale, 0, 0, ratio * scale, 0, 0);
       redraw();
     };
-    resize();
-    const sizeWatch = new ResizeObserver(resize);
-    sizeWatch.observe(element);
 
     const cx = spec.W / 2;
     const cy = spec.H / 2;
@@ -108,127 +101,115 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
       };
     };
 
-    const legs = (time: number) => {
-      const active: { cord: number; from: number; to: number; tone: 'intake' | 'route' | 'sink'; p: number }[] = [];
-      const load = new Array(nodes.length).fill(0);
-      const halos: { node: number; p: number }[] = [];
+    const transit = (time: number) => {
+      const positions: number[][] = nodes.map(() => []);
       trips.forEach(([a, b], n) => {
-        const local = (time - n * STEP + CYCLE) % CYCLE;
-        const span = LEG * 4 + 0.2;
-        if (local < span + 0.6) {
-          const lift = smooth(Math.min(1, local / 0.4)) * smooth(Math.min(1, Math.max(0, (span + 0.6 - local) / 0.6)));
-          load[a] = Math.max(load[a], lift);
-          load[b] = Math.max(load[b], lift);
-        }
-        const tone = (i: number): 'intake' | 'route' => (nodes[i].channel ? 'intake' : 'route');
-        const plan = [
-          { cord: a, from: 1, to: 0, tone: tone(a), start: 0 },
-          { cord: b, from: 0, to: 1, tone: tone(b), start: LEG },
-          { cord: b, from: 1, to: 0, tone: 'sink' as const, start: LEG * 2 + 0.1 },
-          { cord: a, from: 0, to: 1, tone: 'sink' as const, start: LEG * 3 + 0.1 },
-        ];
-        plan.forEach(({ start, ...leg }) => {
+        const local = (time + CYCLE - n * STEP) % CYCLE;
+        const plan = [[a, 0, -1], [b, LEG, 1], [b, LEG * 2 + 0.1, -1], [a, LEG * 3 + 0.1, 1]];
+        plan.forEach(([cord, start, direction]) => {
           const p = (local - start) / LEG;
-          if (p >= 0 && p <= 1) active.push({ ...leg, p });
+          if (p >= 0 && p <= 1) positions[cord].push(direction === 1 ? p : 1 - p);
         });
-        if (local < 1.2) halos.push({ node: a, p: local / 1.2 });
-        if (local > LEG * 2 && local < LEG * 2 + 1.2) halos.push({ node: b, p: (local - LEG * 2) / 1.2 });
       });
-      return { active, load, halos };
+      return positions;
     };
 
-    const SAMPLES = 28;
-    const draw = (time: number) => {
+    const draw = (time: number, still: boolean) => {
+      if (!scale) return;
       context.clearRect(0, 0, spec.W, spec.H);
-      const { active, load, halos } = still ? { active: [], load: new Array(nodes.length).fill(0), halos: [] } : legs(time);
-      const grow = still ? 1 : smooth(Math.min(1, time / 1.2));
-      const [hubWidth, nodeWidth] = spec.cord.map((width) => width / scale);
-      nodes.forEach((node, i) => {
-        const phase = i * 2.39;
-        const breathe = still ? 0 : 0.1 * Math.sin(time * 0.7 + phase);
-        const alpha = still ? 0.9 : 0.72 + 0.12 * Math.sin(time * 0.45 + phase * 1.3) + 0.16 * load[i];
-        const swells = active.filter((leg) => leg.cord === i).map((leg) => leg.from + (leg.to - leg.from) * leg.p);
+      const positions = still ? [] : transit(time);
+      context.strokeStyle = foreground;
+      context.fillStyle = foreground;
+      context.lineWidth = 1.6 / scale;
+      curves.forEach(({ x, y, qx, qy }, i) => {
+        const fade = still ? 0.2 : 0.3 * smooth(Math.max(0, Math.sin(time * 0.72 + i * 2.39)));
+        if (!fade) return;
+        context.globalAlpha = fade;
+        context.beginPath();
+        context.moveTo(cx, cy);
+        context.quadraticCurveTo(qx, qy, x, y);
+        context.stroke();
+      });
+      positions.forEach((swells, i) => {
+        if (!swells.length) return;
         const left: [number, number][] = [];
         const right: [number, number][] = [];
-        for (let k = 0; k <= SAMPLES; k += 1) {
-          const t = (k / SAMPLES) * grow;
+        for (let k = 0; k <= 28; k += 1) {
+          const t = k / 28;
           const { x, y, dx, dy } = at(i, t);
-          const length = Math.hypot(dx, dy) || 1;
-          const swell = swells.reduce((sum, s) => sum + 1.6 * Math.exp(-((t - s) ** 2) / 0.006), 0);
-          const half = ((hubWidth + (nodeWidth - hubWidth) * t) * (1 + breathe + 0.45 * load[i]) + swell * hubWidth * 0.55) / 2;
-          left.push([x - (dy / length) * half, y + (dx / length) * half]);
-          right.push([x + (dy / length) * half, y - (dx / length) * half]);
+          const swell = swells.reduce((sum, s) => sum + 5 * Math.exp(-((t - s) ** 2) / 0.006), 0);
+          const offset = (4.2 - 2.4 * t + swell) / (2 * scale * Math.hypot(dx, dy));
+          left.push([x - dy * offset, y + dx * offset]);
+          right.push([x + dy * offset, y - dx * offset]);
         }
         context.beginPath();
-        left.forEach(([x, y], k) => (k ? context.lineTo(x, y) : context.moveTo(x, y)));
-        const end = left.length - 1;
-        context.arc((left[end][0] + right[end][0]) / 2, (left[end][1] + right[end][1]) / 2, Math.hypot(left[end][0] - right[end][0], left[end][1] - right[end][1]) / 2, Math.atan2(left[end][1] - right[end][1], left[end][0] - right[end][0]), Math.atan2(right[end][1] - left[end][1], right[end][0] - left[end][0]), true);
-        for (let k = right.length - 1; k >= 0; k -= 1) context.lineTo(right[k][0], right[k][1]);
+        context.moveTo(...left[0]);
+        left.slice(1).forEach(([x, y]) => context.lineTo(x, y));
+        right.reverse().forEach(([x, y]) => context.lineTo(x, y));
         context.closePath();
-        context.globalAlpha = alpha;
-        context.fillStyle = node.channel ? colors.intake : colors.route;
+        context.globalAlpha = 0.72;
         context.fill();
       });
-      context.globalAlpha = 1;
-      halos.forEach(({ node, p }) => {
-        const { x, y } = place(layout, node);
-        context.beginPath();
-        context.arc(x, y, spec.halo + 14 * p, 0, Math.PI * 2);
-        context.lineWidth = 2.5 / scale;
-        context.strokeStyle = colors.accent;
-        context.globalAlpha = 0.45 * (1 - p);
-        context.stroke();
-      });
-      context.globalAlpha = 1;
-      active.forEach(({ cord, from, to, tone, p }) => {
-        const { x, y } = at(cord, from + (to - from) * p);
+      context.globalAlpha = 0.92;
+      context.strokeStyle = background;
+      context.lineWidth = 1.5 / scale;
+      positions.forEach((swells, i) => swells.forEach((p) => {
+        const { x, y } = at(i, p);
         context.beginPath();
         context.arc(x, y, spec.pulse / scale, 0, Math.PI * 2);
-        context.fillStyle = colors[tone];
         context.fill();
-        context.lineWidth = 2 / scale;
-        context.strokeStyle = colors.background;
         context.stroke();
-      });
+      }));
     };
 
-    if (still) {
-      redraw = () => draw(0);
-      draw(0);
-      return () => { themeWatch.disconnect(); sizeWatch.disconnect(); };
-    }
+    const redraw = () => draw(motion.matches ? 0 : clock(), motion.matches);
     let frame = 0;
-    let visible = true;
+    let visible = false;
     const tick = () => {
-      if (visible) draw(clock());
+      redraw();
       frame = requestAnimationFrame(tick);
     };
-    const viewWatch = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; });
+    const update = () => {
+      cancelAnimationFrame(frame);
+      redraw();
+      if (visible && !motion.matches) frame = requestAnimationFrame(tick);
+    };
+    const viewWatch = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      update();
+    });
+    const themeWatch = new MutationObserver(() => { readColors(); redraw(); });
+    const sizeWatch = new ResizeObserver(resize);
+    readColors();
+    resize();
     viewWatch.observe(element);
-    frame = requestAnimationFrame(tick);
+    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    sizeWatch.observe(element);
+    motion.addEventListener('change', update);
     return () => {
       cancelAnimationFrame(frame);
       themeWatch.disconnect();
       sizeWatch.disconnect();
       viewWatch.disconnect();
+      motion.removeEventListener('change', update);
     };
   }, [canvas, layout]);
 }
 
-function Board({ layout, className, onPick }: { layout: Layout; className: string; onPick: (kind: MarkKind) => void }) {
+function Board({ layout, className, onPick }: { layout: Layout; className: string; onPick: (kind: MarkKind, trigger: HTMLButtonElement) => void }) {
   const { W, H } = layouts[layout];
   const canvas = useRef<HTMLCanvasElement>(null);
   useCords(canvas, layout);
   return (
     <div className={`swb-board swb-board-${layout} ${className}`} style={{ aspectRatio: `${W} / ${H}` }}>
       <canvas ref={canvas} className="swb-cords absolute inset-0 size-full" aria-hidden="true" />
-      <span className="swb-hub-ring" style={{ left: '50%', top: '50%' }} aria-hidden="true" />
-      <img className="swb-hub" src="/avatars/swb.png" alt="" style={{ left: '50%', top: '50%' }} />
+      <img className="swb-hub" src="/avatars/swb.png" alt="" />
       {nodes.map((node, i) => {
         const { x, y } = place(layout, i);
         return (
-          <button key={node.kind} type="button" className={`swb-node swb-node-${side(i)}`} style={{ left: pct(x, W), top: pct(y, H), animationDelay: `${0.6 + i * 0.12}s` }}
-            onClick={() => onPick(node.kind)} aria-label={node.label}>
+          <button key={node.kind} type="button" className={`swb-node swb-node-${side(i)}${node.kind === 'claude' ? ' swb-node-invite' : ''}`}
+            style={{ left: pct(x, W), top: pct(y, H), '--drift-delay': `-${i * 0.83}s`, '--drift-duration': `${8 + i % 4}s` } as CSSProperties}
+            onClick={(event) => onPick(node.kind, event.currentTarget)} aria-label={node.label} aria-haspopup="dialog">
             <MarkTile kind={node.kind} />
             <span className="swb-node-label">{node.label}</span>
           </button>
@@ -298,11 +279,20 @@ export function SwitchboardHero({ label, lang, prompts, labels }: {
   label: string; lang: Locale; prompts: Record<string, string>; labels: Labels;
 }) {
   const [picked, setPicked] = useState<MarkKind | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const pick = (kind: MarkKind, button: HTMLButtonElement) => {
+    trigger.current = button;
+    setPicked(kind);
+  };
+  const close = useCallback(() => {
+    setPicked(null);
+    trigger.current?.focus();
+  }, []);
   return (
     <figure className="swb-hero" aria-label={label}>
-      <Board layout="wide" className="hidden sm:block" onPick={setPicked} />
-      <Board layout="tall" className="sm:hidden" onPick={setPicked} />
-      {picked && <Panel kind={picked} lang={lang} prompts={prompts} labels={labels} onClose={() => setPicked(null)} />}
+      <Board layout="wide" className="hidden sm:block" onPick={pick} />
+      <Board layout="tall" className="sm:hidden" onPick={pick} />
+      {picked && <Panel kind={picked} lang={lang} prompts={prompts} labels={labels} onClose={close} />}
     </figure>
   );
 }

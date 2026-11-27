@@ -42,7 +42,6 @@ docker compose --profile tunnel up -d
 | `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | 放行 |
 | `/healthz`、`/connect`、`/avatars/*` | 放行 |
 | `/inbox/poll`、`/inbox/events` | 放行 |
-| `/inbox/muse/bridge` | 为 Muse 放行 |
 | `/github/webhook` | 为 GitHub 放行 |
 | 其余路径，包括 `/`、`/authorize`、`/inbox` 和会话页面 | 所有者 |
 

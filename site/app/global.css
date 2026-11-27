@@ -114,22 +114,6 @@
 }
 
 
-.swb-cord {
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.swb-cord-in { stroke: var(--cord-intake); }
-.swb-cord-out { stroke: var(--cord-route); }
-.swb-jack { stroke: var(--background); stroke-width: 2; }
-.swb-jack-in { fill: var(--cord-intake); }
-.swb-jack-out { fill: var(--cord-route); }
-.swb-pulse { stroke: var(--background); stroke-width: 2; }
-.swb-pulse-in { fill: var(--cord-intake); }
-.swb-pulse-out { fill: var(--cord-route); }
-.swb-pulse-back { fill: var(--cord-sink); }
-
 .swb-node {
   position: absolute;
   display: grid;
@@ -144,21 +128,21 @@
 .swb-node-top .swb-node-label { bottom: calc(100% + 2.2cqw); left: 50%; transform: translateX(-50%); }
 .swb-node-bottom .swb-node-label { top: calc(100% + 2.2cqw); left: 50%; transform: translateX(-50%); }
 .swb-board-tall .swb-node-label { display: none; }
-.swb-board-tall .swb-mark-tile { width: 10cqw; height: 10cqw; }
-.swb-board-tall .swb-hub, .swb-board-tall .swb-hub-ring { width: 17cqw; height: 17cqw; }
-.swb-board-wide .swb-mark-tile { width: 4.4cqw; height: 4.4cqw; }
-.swb-board-wide .swb-hub, .swb-board-wide .swb-hub-ring { width: 8cqw; height: 8cqw; }
+.swb-board-tall .swb-mark-tile { width: 12cqw; height: 12cqw; }
+.swb-board-tall .swb-hub { width: 17cqw; height: 17cqw; }
+.swb-board-wide .swb-mark-tile { width: 8.6cqw; height: 8.6cqw; }
+.swb-board-wide .swb-hub { width: 11.7cqw; height: 11.7cqw; }
 
 .swb-node-label {
-  font-family: var(--font-mono, ui-monospace), monospace;
+  @apply font-sans;
   font-size: max(9px, 1.3cqw);
   color: var(--foreground);
 }
 
 .swb-hub {
   position: absolute;
-  width: 6.4cqw;
-  height: 6.4cqw;
+  left: 50%;
+  top: 50%;
   border-radius: 9999px;
   transform: translate(-50%, -50%);
 }
@@ -206,16 +190,6 @@
   0%, 2% { opacity: 0; transform: translateY(8px); }
   6%, 92% { opacity: 1; transform: none; }
   100% { opacity: 0; }
-}
-
-.swb-hub-ring {
-  position: absolute;
-  width: 6.4cqw;
-  height: 6.4cqw;
-  border: 2px solid var(--accent);
-  border-radius: 9999px;
-  transform: translate(-50%, -50%);
-  animation: swb-ping 3.2s 1.6s ease-out infinite;
 }
 
 .swb-thread { box-shadow: var(--toast-shadow); }
@@ -269,14 +243,19 @@
 .swb-hero-title { text-wrap: balance; }
 @media (min-width: 1024px) { .swb-hero-copy .swb-hero-title { font-size: clamp(2.75rem, 4.4vw, 4.5rem); line-height: 1.02; } }
 
-button.swb-node { cursor: pointer; border-radius: 9999px; background: none; padding: 0; }
-button.swb-node .swb-mark-tile { transition: transform .2s ease, box-shadow .2s ease; animation: swb-invite 1s ease-out both; animation-delay: inherit; }
-button.swb-node:hover .swb-mark-tile, button.swb-node:focus-visible .swb-mark-tile { transform: scale(1.12); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 35%, transparent); }
-button.swb-node:focus-visible { outline: none; }
+button.swb-node { cursor: pointer; border-radius: 9999px; background: none; padding: 0; animation: swb-drift var(--drift-duration) var(--drift-delay) ease-in-out infinite alternate; }
+button.swb-node .swb-mark-tile { transition: transform .2s ease, box-shadow .2s ease; }
+button.swb-node:hover, button.swb-node:focus-visible { z-index: 1; animation-play-state: paused; }
+button.swb-node:hover .swb-mark-tile { transform: translateY(-3px); box-shadow: var(--toast-shadow); }
+button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { animation: swb-invite 8s 1.2s ease-out infinite; }
+@keyframes swb-drift {
+  0% { translate: -2px -2px; }
+  50% { translate: 0 2px; }
+  100% { translate: 3px -1px; }
+}
 @keyframes swb-invite {
-  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent); }
-  40% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 45%, transparent); }
-  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent); }
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 24%, transparent); }
+  18%, 100% { box-shadow: 0 0 0 7px transparent; }
 }
 .swb-board-wide .swb-node-label { font-size: max(12px, 1.9cqw); }
 
@@ -313,59 +292,35 @@ button.swb-node:focus-visible { outline: none; }
   line-height: 1.6;
 }
 
-.swb-tab { border-radius: .375rem; padding: .375rem .75rem; font-size: .875rem; color: var(--muted-foreground, inherit); }
-.swb-tab[aria-selected='true'] { background: var(--surface-sunken); color: var(--foreground); font-weight: 600; }
-.swb-pick { border-radius: 9999px; padding: 2px; opacity: .55; transition: opacity .2s, box-shadow .2s; }
-.swb-pick .swb-mark-tile { width: 34px; height: 34px; }
-.swb-pick:hover { opacity: .85; }
-.swb-pick[aria-pressed='true'] { opacity: 1; box-shadow: 0 0 0 2px var(--accent); }
-
-.swb-exchange-grid { display: grid; gap: 1rem; align-items: stretch; }
-@media (min-width: 768px) { .swb-exchange-grid { grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr); } }
-.swb-win { background: var(--surface); box-shadow: var(--toast-shadow); }
+.swb-exchange { max-width: 48rem; margin-inline: auto; }
+.swb-win {
+  display: grid;
+  grid-template-rows: 3rem minmax(0, 1fr);
+  height: 22rem;
+  background: var(--surface);
+  box-shadow: var(--toast-shadow);
+}
 .swb-win-bar { background: var(--surface-sunken); }
-.swb-win-mark.swb-mark-tile { width: 22px; height: 22px; }
-.swb-win-body { min-height: 13rem; }
-.swb-win-claude .swb-win-body { background: color-mix(in oklab, #d97757 6%, var(--surface)); }
-.swb-win-grok-bot .swb-win-body { background: color-mix(in oklab, #000 5%, var(--surface)); }
-.swb-win-dots .swb-win-body { background: color-mix(in oklab, #10a37f 5%, var(--surface)); }
-.swb-win-capy .swb-win-body { background: color-mix(in oklab, #8b5e3c 6%, var(--surface)); }
-.swb-win-muse .swb-win-body { background: color-mix(in oklab, #0866ff 5%, var(--surface)); }
-.swb-bubble {
-  max-width: 92%;
-  width: fit-content;
-  border-radius: .75rem;
-  padding: .5rem .75rem;
-  background: var(--surface-sunken);
-  font-size: 15px;
-  line-height: 1.5;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity .35s ease, transform .35s ease;
+.swb-win-mark.swb-mark-tile { width: 24px; height: 24px; }
+.swb-win-body { mask-image: linear-gradient(to bottom, transparent, black 1.5rem); }
+.swb-win-message:last-child { animation: swb-message-in .25s ease-out; }
+.swb-win-entry + .swb-win-entry { margin-top: .625rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .swb-win-entry + .swb-win-break { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--border); }
 }
-.swb-from { display: flex; align-items: center; gap: .4rem; margin-bottom: .2rem; font-size: 13px; font-weight: 600; }
-.swb-from-mark.swb-mark-tile { width: 18px; height: 18px; }
-.swb-bubble-mine { margin-left: auto; background: color-mix(in oklab, var(--accent) 14%, var(--surface)); }
-.swb-bubble-in { opacity: 1; transform: none; }
-.swb-slack-line { transition: opacity .35s ease, transform .35s ease; }
-.swb-slack-line.swb-bubble { background: none; padding: 0; max-width: none; width: auto; }
-.swb-exchange-link { position: relative; display: grid; place-items: center; min-height: 64px; }
-.swb-exchange-link::before { content: ''; position: absolute; inset: 50% 0 auto; height: 3px; border-radius: 3px; background: var(--cord-route); opacity: .6; }
-@media (max-width: 767px) { .swb-exchange-link::before { inset: 0 auto 0 50%; width: 3px; height: auto; } }
-.swb-exchange-hub { position: relative; width: 56px; height: 56px; border-radius: 9999px; }
-.swb-exchange-pulse { position: absolute; top: calc(50% - 7px); left: 0; width: 14px; height: 14px; border-radius: 9999px; background: var(--cord-intake); opacity: 0; }
-.swb-exchange-pulse.swb-go { animation: swb-go .9s linear both; }
-.swb-exchange-pulse.swb-back { background: var(--cord-sink); animation: swb-go .9s linear reverse both; }
-@keyframes swb-go { 0% { left: 0; opacity: 1; } 100% { left: calc(100% - 14px); opacity: 1; } }
-@media (max-width: 767px) {
-  .swb-exchange-pulse { left: calc(50% - 7px); top: 0; }
-  @keyframes swb-go { 0% { top: 0; opacity: 1; } 100% { top: calc(100% - 14px); opacity: 1; } }
-}
+.swb-win-avatar.swb-mark-tile { width: 32px; height: 32px; }
+.swb-win-you { background: var(--surface-sunken); }
+.swb-win-bot { width: 14px; height: 14px; border-radius: 50%; }
+@keyframes swb-message-in { from { opacity: 0; translate: 0 3px; } }
+
 @media (prefers-reduced-motion: reduce) {
-  button.swb-node .swb-mark-tile { animation: none; }
-  .swb-bubble, .swb-slack-line { transition: none; }
-  .swb-exchange-pulse { display: none; }
-  .swb-panel { animation: none; }
+  button.swb-node, button.swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile,
+  .swb-win-message:last-child, .swb-panel { animation: none; }
+  .swb-win-body { mask-image: none; }
+  .swb-win-entry:not(.swb-win-message) { display: none; }
+  .swb-win-entry:not(.swb-win-message) + .swb-win-message { margin-top: 0; }
+  button.swb-node .swb-mark-tile { transition: none; }
+  button.swb-node:hover .swb-mark-tile { transform: none; }
 }
 
 .swb-rotate { display: grid; color: var(--accent-strong, var(--foreground)); }
@@ -373,14 +328,19 @@ button.swb-node:focus-visible { outline: none; }
 .swb-rotate-on { opacity: 1; transform: none; transition: opacity .35s ease .25s, transform .35s ease .25s; }
 .swb-rotate-item:not(.swb-rotate-on) { pointer-events: none; }
 .swb-between { line-height: 2.2; color: var(--muted-foreground, inherit); }
+.swb-between > .swb-between-text:last-child { white-space: nowrap; }
+.swb-pair { display: inline-block; white-space: nowrap; }
+@media (max-width: 639px) { .swb-pair { display: block; width: max-content; } }
 .swb-slot { display: inline-grid; vertical-align: middle; margin-inline: .15em; }
+.swb-slot:first-child { justify-items: end; }
+.swb-slot:last-child { justify-items: start; }
 .swb-chip {
   grid-area: 1 / 1;
-  justify-self: start;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: .4em;
-  padding: .15em .6em .15em .2em;
+  padding: .15em .55em;
   border: 1px solid var(--border);
   border-radius: 9999px;
   background: var(--surface);
@@ -393,6 +353,7 @@ button.swb-node:focus-visible { outline: none; }
 }
 .swb-chip-on { opacity: 1; }
 .swb-chip-mark.swb-mark-tile { width: 1.4em; height: 1.4em; min-width: 0; min-height: 0; }
+.swb-picker-mark.swb-mark-tile { width: 1.5rem; height: 1.5rem; min-width: 0; min-height: 0; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   .swb-rotate-item, .swb-chip { transition: none; }
 }
