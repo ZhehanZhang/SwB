@@ -48,7 +48,7 @@
   "Search failed(search dialog)": "Suche fehlgeschlagen",
   "Search failed, showing results for {query}(search dialog)": "Suche fehlgeschlagen, Ergebnisse für {query}",
   "Search(search dialog)": "Dokumentation durchsuchen",
-  "Search(search trigger)": "Dokumentation durchsuchen",
+  "Search(search trigger)": "Suchen",
   "Show Sidebar(sidebar)": "Seitenleiste einblenden",
   "Skip to Content(skip link)": "Zum Inhalt springen",
   "System(theme switcher)(aria-label)": "System",

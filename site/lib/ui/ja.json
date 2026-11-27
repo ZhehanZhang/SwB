@@ -48,7 +48,7 @@
   "Search failed(search dialog)": "検索に失敗しました",
   "Search failed, showing results for {query}(search dialog)": "検索に失敗しました。{query} の結果を表示しています",
   "Search(search dialog)": "ドキュメントを検索",
-  "Search(search trigger)": "ドキュメントを検索",
+  "Search(search trigger)": "検索",
   "Show Sidebar(sidebar)": "サイドバーを表示",
   "Skip to Content(skip link)": "本文へスキップ",
   "System(theme switcher)(aria-label)": "システム",

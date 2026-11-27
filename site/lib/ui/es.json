@@ -48,7 +48,7 @@
   "Search failed(search dialog)": "Falló la búsqueda",
   "Search failed, showing results for {query}(search dialog)": "Falló la búsqueda. Se muestran resultados para {query}",
   "Search(search dialog)": "Buscar en la documentación",
-  "Search(search trigger)": "Buscar en la documentación",
+  "Search(search trigger)": "Buscar",
   "Show Sidebar(sidebar)": "Mostrar barra lateral",
   "Skip to Content(skip link)": "Saltar al contenido",
   "System(theme switcher)(aria-label)": "Sistema",
