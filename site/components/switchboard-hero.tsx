@@ -7,6 +7,7 @@ import type { Locale } from '@/lib/i18n';
 import { localize } from '@/lib/i18n';
 import { openUrl, setup } from '@/lib/setup';
 import { CYCLE, LEG, STEP, clock, trips as livePairs } from '@/lib/live';
+import { DEPLOY_BUTTONS_LIVE } from '@/lib/flags';
 import { MarkTile, type MarkKind } from './mark-tile';
 
 type Node = { kind: MarkKind; label: string; channel?: boolean };
@@ -283,9 +284,11 @@ function Panel({ kind, lang, prompts, labels, onClose }: {
           ))}
           <Link className="swb-button hover:bg-fd-muted" href={localize(lang, item.docs)}>{labels.guide}</Link>
         </div>
-        <a className="mt-5 inline-block" href="https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB" target="_blank" rel="noreferrer">
-          <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" width={153} height={40} />
-        </a>
+        {DEPLOY_BUTTONS_LIVE && (
+          <a className="mt-5 inline-block" href="https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB" target="_blank" rel="noreferrer">
+            <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" width={153} height={40} />
+          </a>
+        )}
       </section>
     </div>
   );
