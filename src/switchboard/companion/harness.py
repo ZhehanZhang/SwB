@@ -125,19 +125,9 @@ class Harness:
         self, ctx: CompanionContext, cap: str, keys: Iterable[str], text: str, *,
         received_at: float | None = None, expected_agent: str | None = None,
     ) -> bool:
-        text = reply_text(text)
         if not text.strip() or not (wake := self.take(keys, received_at=received_at, expected_agent=expected_agent)):
             return False
-        text = text[:REPLY_MAX].encode("utf-8", errors="replace").decode("utf-8")
-        if len(json.dumps(text, ensure_ascii=False).encode()) > REPLY_MAX + 2:
-            lower, upper = 0, len(text)
-            while lower < upper:
-                middle = (lower + upper + 1) // 2
-                if len(json.dumps(text[:middle], ensure_ascii=False).encode()) <= REPLY_MAX + 2:
-                    lower = middle
-                else:
-                    upper = middle - 1
-            text = text[:lower]
+        text = reply_text(text.encode("utf-8", errors="replace").decode("utf-8"))
         await ctx.emit(f"{cap}.reply", {"session": wake.session, "conversation": wake.conversation, "agent": wake.agent,
                                         "text": text})
         return True
