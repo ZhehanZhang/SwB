@@ -13,15 +13,17 @@ Use an empty folder for your instance. The owner key lets the `swb` command sign
   <Tab value="uvx">
     ```bash
     uvx swb-one init --public-url http://localhost:8870
+    echo "SWITCHBOARD_DATA_DIR=$PWD/data" >> .env
     uvx swb-one up
     ```
 
-    uvx downloads SwB and runs it. The `init` command writes a private owner key to `.env`. It writes the sign-in address to `config/switchboard.yaml`. In the other examples, replace the leading `swb` with `uvx swb-one`.
+    uvx downloads SwB and runs it. The `init` command writes a private owner key to `.env`. It writes the sign-in address to `config/switchboard.yaml`. The `echo` line keeps the data in this folder. In the other examples, replace the leading `swb` with `uvx swb-one`.
   </Tab>
   <Tab value="pipx">
     ```bash
     pipx install swb-one
     swb init --public-url http://localhost:8870
+    echo "SWITCHBOARD_DATA_DIR=$PWD/data" >> .env
     swb up
     ```
 

@@ -13,15 +13,17 @@ SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要
   <Tab value="uvx">
     ```bash
     uvx swb-one init --public-url http://localhost:8870
+    echo "SWITCHBOARD_DATA_DIR=$PWD/data" >> .env
     uvx swb-one up
     ```
 
-    uvx 会下载并运行 SwB。`init` 把所有者密钥写入私有文件 `.env`。登录地址保存在 `config/switchboard.yaml` 中。运行其他示例时，把开头的 `swb` 换成 `uvx swb-one`。
+    uvx 会下载并运行 SwB。`init` 把所有者密钥写入私有文件 `.env`。登录地址保存在 `config/switchboard.yaml` 中。`echo` 这一行让数据保存在这个文件夹中。运行其他示例时，把开头的 `swb` 换成 `uvx swb-one`。
   </Tab>
   <Tab value="pipx">
     ```bash
     pipx install swb-one
     swb init --public-url http://localhost:8870
+    echo "SWITCHBOARD_DATA_DIR=$PWD/data" >> .env
     swb up
     ```
 

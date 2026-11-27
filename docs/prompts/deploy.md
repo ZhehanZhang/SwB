@@ -6,7 +6,7 @@ Ask where I want to run SwB. Offer this computer, Fly.io, Koyeb, or my own serve
 
 ## This computer
 
-Check that uv is available. Use an empty instance folder. Check that port 8870 is free. Run `uvx swb-one init --public-url http://localhost:8870`. Start SwB with `uvx swb-one up`. Keep the server running. In a second terminal, run `(umask 077; set -C; uvx swb-one login-link > .swb-login-link)` from the same folder. The command writes a private file with a one-time owner sign-in link. Tell me the file path. Ask me to open the link in my local browser within five minutes. Ask me to delete the file after sign-in.
+Check that uv is available. Use an empty instance folder. Check that port 8870 is free. Run `uvx swb-one init --public-url http://localhost:8870`. Run `echo "SWITCHBOARD_DATA_DIR=$PWD/data" >> .env` to keep the data in this folder. Start SwB with `uvx swb-one up`. Keep the server running. In a second terminal, run `(umask 077; set -C; uvx swb-one login-link > .swb-login-link)` from the same folder. The command writes a private file with a one-time owner sign-in link. Tell me the file path. Ask me to open the link in my local browser within five minutes. Ask me to delete the file after sign-in.
 
 For a different port, use that port in `--public-url` when you run `init`. Set `PORT` in the instance's `.env` file. Use the same port in `--url` if you need to point `login-link` at that server. Use the MCP address that `up` prints for a client on this computer.
 
