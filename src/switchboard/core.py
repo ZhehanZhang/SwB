@@ -24,7 +24,7 @@ from .auth import Auth, Principal
 from .blocks import Action, Address, Block, BlockError, Call
 from .blocks import load as load_block
 from .claims import Claims
-from .config import Config, load_config
+from .config import INSTANCE_DB, Config, Instance, load_config
 from .connect import Connections
 from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
@@ -32,7 +32,7 @@ from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
 from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
-from .store import Store
+from .store import Store, ensure_private_data_dir
 from .subject import subject
 from .visibility import Visibility
 
@@ -63,14 +63,15 @@ class Switchboard:
         block_options: dict[str, dict[str, Any]] | None = None,
         tunnel_url: str | None = None,
         loopback_origin: str | None = None,
+        instance: Instance | None = None,
     ):
-        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url, loopback_origin=loopback_origin)
+        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url, loopback_origin=loopback_origin, instance=instance)
         self.data_dir = Path(data_dir) if data_dir is not None else self.cfg.data_dir
-        self.data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        ensure_private_data_dir(self.data_dir)
         self.clock = clock
         self.http_transport = http_transport
         legacy = self.data_dir / "capy-bridge.db"
-        db = self.data_dir / "switchboard.db"
+        db = self.data_dir / INSTANCE_DB
         if legacy.exists() and not db.exists():
             for suffix in ("", "-wal", "-shm"):
                 if Path(str(legacy) + suffix).exists():
