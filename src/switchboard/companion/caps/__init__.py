@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 
 from ..state import CompanionError
@@ -7,7 +8,8 @@ from .base import Capability
 from .drop import DropCapability
 from .notify import NotifyCapability
 
-CAPABILITIES = ("notify", "drop", "muse")
+CAPABILITIES = ("notify", "drop", "muse", "hooks", "herdr", "codex", "opencode")
+HARNESSES = {"hooks": "HooksCapability", "herdr": "HerdrCapability", "codex": "CodexCapability", "opencode": "OpenCodeCapability"}
 
 
 def registry(enabled: tuple[str, ...], drop_dir: Path) -> tuple[dict[str, Capability], dict[str, str]]:
@@ -25,8 +27,11 @@ def registry(enabled: tuple[str, ...], drop_dir: Path) -> tuple[dict[str, Capabi
                 unavailable[cap_id] = "Install swb-one[companion] to use Muse."
                 continue
             cap = MuseCapability()
+        elif cap_id in HARNESSES:
+            module = import_module(f".{cap_id}", __name__)
+            cap = getattr(module, HARNESSES[cap_id])()
         else:
-            raise CompanionError("Choose a capability from notify, drop, or muse.")
+            raise CompanionError(f"Choose a capability from {', '.join(CAPABILITIES)}.")
         if reason := cap.available():
             unavailable[cap_id] = reason
         else:
