@@ -9,9 +9,11 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
+from typing import Any
 
 from ..harness import Session, harness
 from ..hook import LINE_LIMIT, SOCKET_TIMEOUT, event_payload, event_state, socket_path, supported
+from ..memory import MEMORY_FRAME_LIMIT, MEMORY_SYNC_EVENT, MEMORY_SYNC_SOURCE, sync_item
 from .base import ActionSpec, Capability, CapabilityError, CompanionContext
 
 _PENDING_LIMIT = 64
@@ -54,23 +56,27 @@ class HooksCapability(Capability):
     title = "Local agent hooks"
     actions: dict[str, ActionSpec] = {}
 
+    def __init__(self, *, memory_sync: bool = True):
+        self.memory_sync = memory_sync
+
     def available(self) -> str | None:
         return None if supported() else "Local agent hooks require Linux or macOS."
 
     async def run(self, ctx: CompanionContext) -> None:
         if not supported():
             return
-        events: asyncio.Queue[tuple[float, dict[str, str]]] = asyncio.Queue(maxsize=_PENDING_LIMIT)
+        events: asyncio.Queue[tuple[float, dict[str, Any]]] = asyncio.Queue(maxsize=_PENDING_LIMIT)
         readers: dict[asyncio.Task[None], asyncio.StreamWriter] = {}
 
         async def receive(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             try:
                 line = await asyncio.wait_for(reader.readuntil(b"\n"), timeout=SOCKET_TIMEOUT)
                 received_at = time.monotonic()
-                if len(line) <= LINE_LIMIT:
+                if len(line) <= MEMORY_FRAME_LIMIT:
                     value = json.loads(line.decode("utf-8"))
                     if isinstance(value, dict) and (payload := event_payload(value.get("harness"), value)):
-                        events.put_nowait((received_at, payload))
+                        if ("memory" in payload and self.memory_sync) or ("memory" not in payload and len(line) <= LINE_LIMIT):
+                            events.put_nowait((received_at, payload))
             except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, asyncio.QueueFull,
                     OSError, ValueError, RecursionError):
                 pass
@@ -86,10 +92,17 @@ class HooksCapability(Capability):
             task.add_done_callback(readers.pop)
 
         with _listener(socket_path()) as listener:
-            server = await asyncio.start_unix_server(accept, sock=listener, limit=LINE_LIMIT)
+            server = await asyncio.start_unix_server(accept, sock=listener, limit=MEMORY_FRAME_LIMIT)
             try:
                 while True:
                     received_at, payload = await events.get()
+                    if memory := payload.get("memory"):
+                        with suppress(CapabilityError):
+                            await ctx.emit(MEMORY_SYNC_EVENT, {
+                                "source": MEMORY_SYNC_SOURCE, "items": [sync_item(memory["path"], memory["content"])],
+                                "dir": payload.get("dir", ""),
+                            })
+                        continue
                     agent, session, event = (payload[key] for key in ("harness", "session_id", "hook_event_name"))
                     state = event_state(agent, event, payload.get("notification_type", "")) or "unknown"
                     with suppress(CapabilityError):

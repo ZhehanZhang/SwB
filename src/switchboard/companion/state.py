@@ -42,6 +42,7 @@ class CompanionState:
     drop_dir: str
     mcp_servers: tuple[str, ...] = field(default=(), repr=False)
     name: str | None = None
+    memory_sync: bool = True
 
     @classmethod
     def load(cls, path: Path) -> CompanionState | None:
@@ -79,11 +80,14 @@ class CompanionState:
             name = data.get("name")
             if name is not None:
                 name = device_name(name)
+            memory_sync = data.get("memory_sync", True)
+            if not isinstance(memory_sync, bool):
+                raise ValueError
             from .mcp_config import local_servers
 
             if ("mcp" in caps) != bool(local_servers(specs)):
                 raise ValueError
-            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs, name)
+            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs, name, memory_sync)
         except (TypeError, ValueError, KeyError):
             raise CompanionError("Check the companion settings file.") from None
 

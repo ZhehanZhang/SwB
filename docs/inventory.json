@@ -346,6 +346,7 @@
         "--help",
         "--mcp",
         "--name",
+        "--no-memory-sync",
         "--no-run",
         "-h"
       ],
