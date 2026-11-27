@@ -13,7 +13,6 @@ from .blocks.discord import DiscordBlock
 from .blocks.slack import SlackBlock
 from .blocks.telegram import TelegramBlock
 from .chat import ChatBlock
-from .slack.engine import find_avatar
 
 BLOCK_TYPES = {"discord": DiscordBlock, "slack": SlackBlock, "telegram": TelegramBlock}
 AVATAR_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif"}
@@ -121,7 +120,7 @@ def avatar(request: Request) -> Response:
     if not photo["file"] or not photo["applied"] or bot_id is None:
         raise HTTPException(404)
     core = block.core
-    path = core.slack.find_avatar(photo["file"]) if core.slack is not None else find_avatar(photo["file"])
+    path = core.find_avatar(photo["file"])
     media = AVATAR_TYPES.get(path.suffix) if path is not None else None
     applied = core.store.one("SELECT value FROM block_state WHERE block = ? AND key = ?", (block.name, f"avatar:{bot_id}"))
     if path is None or media is None or not applied:

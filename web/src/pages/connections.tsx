@@ -2,17 +2,19 @@ import { useLayoutEffect, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronLeft, ExternalLink } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
+import { connectionNames, isConnectionPlatform, type ConnectionPlatform } from "@/app/navigation"
 import { ConnectionStatus } from "@/components/console/connection-status"
 import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
-import { connectionNames, connectionQuery, isConnectionPlatform, type BotAvatar, type ConnectionPlatform, type DiscordDetails, type TelegramDetails } from "@/lib/connections"
+import { connectionQuery, type BotAvatar, type DiscordDetails, type TelegramDetails } from "@/lib/connections"
 
 const cell = "py-3 pe-3 align-top wrap-anywhere"
 const identityRow = "grid min-h-[41px] grid-cols-[minmax(74px,25%)_minmax(0,1fr)] items-center gap-3 border-b py-2.5"
 const avatarLabels = { applied: "Applied", failed: "Couldn’t apply", pending: "Not applied", not_configured: "Not configured" }
 const chatStates = { direct: "Direct messages", listening: "Listening", unlisted: "Unlisted" }
+const slackIntake = { socket: "Socket Mode", poll: "Polling", none: "None" }
 
 function StatusTable({ label, headings, children }: { label: string; headings: string[]; children: ReactNode }) {
   return (
@@ -165,7 +167,7 @@ function ConnectionDetail({ platform }: { platform: ConnectionPlatform }) {
                     {data.details.workspaces.map(workspace => (
                       <tr key={workspace.name} className="border-b">
                         <td className={cell}>{workspace.name}</td>
-                        <td className={`${cell} text-muted-foreground`}>{workspace.intake === "socket" ? "Socket Mode" : "Polling"}</td>
+                        <td className={`${cell} text-muted-foreground`}>{slackIntake[workspace.intake]}</td>
                         <td className={cell}><ConnectionStatus state={workspace.connected ? "connected" : "disconnected"} /></td>
                       </tr>
                     ))}
