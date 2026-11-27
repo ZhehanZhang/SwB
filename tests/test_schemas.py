@@ -1,3 +1,5 @@
+from importlib.metadata import version
+
 from conftest import STATIC_KEY, rpc
 
 CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack", "project_list", "project_create",
@@ -47,3 +49,4 @@ def test_initialize_advertises_instructions(make):
     _, c = make()
     r = rpc(c, STATIC_KEY, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}).json()
     assert "capy_wait" in r["result"]["instructions"] and r["result"]["serverInfo"]["name"] == "switchboard"
+    assert r["result"]["serverInfo"]["version"] == version("swb-one")

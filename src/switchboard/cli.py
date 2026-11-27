@@ -20,6 +20,8 @@ import yaml
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from . import __version__
+
 OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
 CONFIG = Path("config/switchboard.yaml")
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
@@ -237,6 +239,7 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="swb", epilog="Server tools: serve, export, log, config, blocks, targets (each accepts --help).")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="create a minimal config and a local owner key")
     init.add_argument("--public-url", help="optional public base URL")

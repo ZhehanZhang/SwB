@@ -20,6 +20,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field, create_model
 from starlette.routing import BaseRoute, Mount
 
+from ... import __version__
 from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
 from ...modes import ChannelModes
@@ -202,7 +203,7 @@ class MCPBlock(Block):
         core = self.core
         senders = [b for b in core.blocks.values() if b.verb("send") is not None]
         extensions = [self.events, TasksExtension(self)] if senders else [self.events]
-        mcp = LimitedServer(name="switchboard", instructions=self.instructions(), extensions=extensions)
+        mcp = LimitedServer(name="switchboard", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
         mcp.middleware.append(advertise_events)
         global Links
