@@ -271,10 +271,10 @@ function ProjectActivity({ data }: { data: ProjectBoard }) {
 function ProjectModes({ slug }: { slug: string }) {
   const result = useQuery(channelModesQuery)
   if (result.isPending) return <DataState kind="loading" />
-  if (result.isError) return <DataState kind="error" message="Modes unavailable" onRetry={() => void result.refetch()} />
+  if (result.isError) return <DataState kind="error" message="Channel modes unavailable" onRetry={() => void result.refetch()} />
   const rows = result.data?.spaces.filter(row => row.project === slug) ?? []
   if (!result.data || rows.length === 0) return <DataState kind="empty" message="Channels appear here when assigned to this project." />
-  return <ChannelModeTable label="Project modes" rows={rows} status={result.data} />
+  return <ChannelModeTable label="Channel modes" rows={rows} status={result.data} />
 }
 
 export function ProjectPage() {
@@ -290,7 +290,7 @@ export function ProjectPage() {
     <div>
       <ProjectFacts data={data} />
       <nav aria-label="Project views" className="mt-5 flex border-b">
-        {([["overview", "Overview"], ["modes", "Modes"]] as const).map(([tab, label]) => {
+        {([["overview", "Overview"], ["modes", "Channel modes"]] as const).map(([tab, label]) => {
           const selected = showModes === (tab === "modes")
           return <button key={tab} type="button" aria-current={selected ? "page" : undefined}
             className={`border-b-2 px-3 py-2 text-body-sm ${selected ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
