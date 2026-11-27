@@ -85,6 +85,8 @@ class ModeConfig:
 
 
 def choice(value: Any, path: str, options: tuple[str, ...]) -> str:
+    if value is False:
+        value = "off"
     if value not in options:
         raise ConfigError(f"{path}: expected one of {', '.join(options)}")
     return value
@@ -479,7 +481,7 @@ class ChannelModes:
         if not any(s == space for s, _ in inventory):
             raise ValueError(f"unknown space {space!r} in {block}")
         repos = [c for s, c in inventory if s == space and c and provider.space_for(c) is not None] if provider.manifest.id == "github" else []
-        choice(mode, "mode", (*MODES, "inherit"))
+        mode = choice(mode, "mode", (*MODES, "inherit"))
         actions = parse_actions(actions, "actions")
         project = project_slug(project, "project")
         if target is not None and target != "":

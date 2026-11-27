@@ -1,5 +1,8 @@
+from urllib.parse import urlsplit
+
+from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, Clock, rpc
+from switchboard.audit import REFUSAL_AUDIT_INTERVAL_S
 from switchboard.guard import RateLimiter
-from conftest import CLAUDE_CB, STATIC_KEY, rpc
 
 
 def test_failed_bearer_keys_are_audited_and_locked_out(make):
@@ -19,6 +22,29 @@ def test_missing_token_is_not_counted(make):
         assert rpc(c, None, "tools/list").status_code == 401
     assert rpc(c, STATIC_KEY, "tools/list").status_code == 200
     assert core.audit.recent(action="auth_failure") == []
+
+
+def test_csrf_refusals_are_audited_without_request_values_and_rate_limited(make):
+    clock = Clock()
+    core, client = make(clock=clock)
+    claim = urlsplit(core.claims.mint("EXAMPLE_TOKEN", PUBLIC)).path
+    origin = "https://other.example.test"
+    for peer in range(20):
+        headers = {**OWNER, "cf-connecting-ip": f"192.0.2.{peer + 1}"}
+        for path, extra in ((f"/api/fixture-{peer}", {}), (claim, {"origin": origin})):
+            response = client.post(path, headers={**headers, **extra}, json={"token": "fixture-value"})
+            assert response.status_code == 403 and response.json() == {"error": "csrf"}
+
+    for rows in (core.audit.recent(action="auth_failure"), client.get("/api/audit", headers=OWNER,
+                                                                     params={"action": "auth_failure"}).json()["items"]):
+        assert [(row["target"], row["detail"], row["outcome"]) for row in rows] == [
+            ("/claim", "csrf", "refused"), (None, "csrf", "refused"),
+        ]
+        assert claim not in str(rows) and origin not in str(rows) and "fixture-value" not in str(rows)
+
+    clock.t += REFUSAL_AUDIT_INTERVAL_S
+    assert client.post(claim, headers={**OWNER, "origin": origin}).status_code == 403
+    assert len(core.audit.recent(action="auth_failure")) == 3
 
 
 def test_register_is_rate_limited(make):

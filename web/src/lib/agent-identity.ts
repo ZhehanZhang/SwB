@@ -1,4 +1,4 @@
-import { connectorKind } from "./connector-kind"
+import { connectorKind } from "./connector-kind.js"
 
 const clientNames: Record<string, string> = {
   claude: "Claude", "claude-code": "Claude Code", codex: "Codex", chatgpt: "ChatGPT", gemini: "Gemini", "gemini-cli": "Gemini CLI",

@@ -193,12 +193,13 @@ class Inbox:
 
     def deliver_triage_note(self, *, source: str, project: str | None, data: dict[str, Any]) -> str:
         handle = self.new_handle()
+        subject = "Triage note"
 
         def write(db: Any) -> None:
             db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status, target) "
-                       "VALUES (?, 'owner', 'mailbox', ?, ?, 'Triage note', '{}', ?, 0, 'delivered', 'agent:owner')",
-                       (handle, source, project, self.store.clock()))
-            self._add({"handle": handle, "owner": "owner", "destination": "mailbox"}, "triage_note", data, connection=db)
+                       "VALUES (?, 'owner', 'mailbox', ?, ?, ?, '{}', ?, 0, 'delivered', 'agent:owner')",
+                       (handle, source, project, subject, self.store.clock()))
+            self._add({"handle": handle, "owner": "owner", "destination": "mailbox"}, "triage_note", {**data, "subject": subject}, connection=db)
 
         self.store.tx(write)
         self.signal_waiters()

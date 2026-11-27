@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from starlette.requests import Request
@@ -139,7 +140,7 @@ class OwnerLogin:
 
     async def link(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return self.failed(request, "csrf", 403, bounded=True)
+            return self.auth.csrf_refused(request)
         ip = client_ip(request.scope)
         if (limited := self.limited("login_link_fail", ip)) is not None:
             return limited
@@ -159,7 +160,7 @@ class OwnerLogin:
         if not self.setup_open():
             return self.failed(request, "setup_closed", 404, bounded=True)
         if not request.headers.get("origin") or not self.auth.origin_ok(request):
-            return self.failed(request, "csrf", 403, bounded=True)
+            return self.auth.csrf_refused(request)
         code = (await json_body(request)).get("code")
         if not (isinstance(code, str) and len(code) in (44, 64) and code.isascii()
                 and hmac.compare_digest(hashlib.sha256(code.encode()).digest(), self.setup_digest)):
@@ -182,7 +183,7 @@ class OwnerLogin:
 
     async def login_options(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return self.failed(request, "csrf", 403, bounded=True)
+            return self.auth.csrf_refused(request)
         if not self.rp_id:
             return self.failed(request, "passkey_failed", bounded=True)
         ip = client_ip(request.scope)
@@ -217,7 +218,7 @@ class OwnerLogin:
 
     async def login_verify(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return self.failed(request, "csrf", 403, bounded=True)
+            return self.auth.csrf_refused(request)
         challenge = self.sessions.consume_challenge(request, "login", None)
         ip = client_ip(request.scope)
         response = self.limited("passkey_fail", ip)
@@ -256,7 +257,7 @@ class OwnerLogin:
 
     async def register_verify(self, request: Request) -> Response:
         if not self.auth.origin_ok(request):
-            return self.failed(request, "csrf", 403, bounded=True)
+            return self.auth.csrf_refused(request)
         owner, refused = await self.auth.protect_owner(request)
         challenge = self.sessions.consume_challenge(request, "register", owner)
         if refused is not None:
@@ -292,9 +293,14 @@ class OwnerLogin:
         _, refused = await self.auth.protect_owner(request)
         if refused is not None:
             return refused
-        return JSONResponse([dict(row) for row in self.store.q(
-            "SELECT id, name, created_at, last_used_at FROM owner_passkeys ORDER BY created_at, id"
-        )])
+        rows = self.store.q("SELECT id, name, created_at, last_used_at FROM owner_passkeys ORDER BY created_at, id")
+        return JSONResponse([{
+            "id": row["id"],
+            "name": row["name"],
+            "created_at": datetime.fromtimestamp(row["created_at"], timezone.utc).isoformat(timespec="milliseconds"),
+            "last_used_at": (datetime.fromtimestamp(last_used, timezone.utc).isoformat(timespec="milliseconds")
+                             if (last_used := row["last_used_at"]) is not None else None),
+        } for row in rows])
 
     async def remove_passkey(self, request: Request) -> Response:
         _, refused = await self.auth.protect_owner(request)

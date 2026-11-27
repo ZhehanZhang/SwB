@@ -32,8 +32,9 @@ from test_telegram import STRANGER as TELEGRAM_STRANGER
 from test_telegram import run as _telegram_fixture
 
 from switchboard.blocks.mcp.policy import MODE_REQUIRED
-from switchboard.trust import CLOSE, OPEN
+from switchboard.config import load_config
 from switchboard.modes import ChatDrop
+from switchboard.trust import CLOSE, OPEN
 
 MODES = {"off", "watch", "assist", "triage", "work"}
 ACTIONS = {"reply", "label", "comment", "open_issue", "link_duplicate", "notify_owner"}
@@ -81,6 +82,38 @@ def test_resolver_precedence_and_legacy_alias(make):
     assert core.modes.resolve("discord", "legacy", "42", None)[:2] == ("assist", "legacy")
     assert core.modes.resolve("discord", "legacy", "another", "example")[:2] == ("assist", "project")
     assert core.modes.resolve("discord", "legacy", "another", None)[:2] == ("off", "default")
+
+
+def test_unquoted_yaml_off_at_each_channel_mode_setting(tmp_path):
+    path = tmp_path / "switchboard.yaml"
+    path.write_text("""\
+version: 2
+modes:
+  default: off
+  projects:
+    example: off
+    release: {mode: off}
+blocks:
+  discord:
+    dm_mode: off
+    spaces:
+      home:
+        mode: off
+        channels:
+          "40": off
+          "41": {mode: off}
+  github:
+    spaces:
+      acme/repo:
+        mode: {mode: off, target: agent:beta}
+""")
+    modes = load_config(path, env={}).modes
+    assert modes.default.mode == "off" and modes.explicit_default
+    assert {project: spec.mode for project, spec in modes.projects.items()} == {"example": "off", "release": "off"}
+    assert modes.spaces["discord", "home"].mode == modes.spaces["github", "acme/repo"].mode == "off"
+    assert modes.channels["discord", "home", "40"].mode == modes.channels["discord", "home", "41"].mode == "off"
+    assert modes.spaces["github", "acme/repo"].target == "agent:beta"
+    assert modes.dm == {"discord": "off"}
 
 
 def test_unconfigured_defaults_to_off_and_triage_can_reply(make):
@@ -534,6 +567,17 @@ def test_notify_owner_only_reaches_the_owner_mailbox(intake):
         [audit] = chat.core.audit.recent(action="triage.notify_owner", outcome="ok")
         assert audit["ref"].endswith("/100")
         assert not chat.posts
+
+
+def test_owner_note_has_a_subject_in_mcp_inbox(make):
+    owner_key = "fixture-owner-inbox-key-only"
+    core, client = make(config(), env={**default_env(), "SWITCHBOARD_KEY_OWNER": owner_key})
+    meta = core.modes.meta("discord", "home", DISCORD_CHANNEL, "triage", ["notify_owner"], None, None, "agent:capy")
+    handle = core.inbox.open_handle(owner="capy", destination="mailbox", ref="discord", project=None, title="Feedback",
+                                    meta={"channel_mode": meta})
+    out = payload(call(client, STATIC_KEY, "reply", {"conversation": handle, "text": "A note", "to_owner": True}))
+    [note] = payload(call(client, owner_key, "inbox"))["items"]
+    assert (note["handle"], note["subject"], note["text"]) == (out["handle"], "Triage note", "A note")
 
 
 def test_thread_or_topic_can_override_its_parent_channel(intake):

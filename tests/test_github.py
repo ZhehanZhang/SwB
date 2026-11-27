@@ -21,7 +21,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from switchboard.app import create_app
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
-from switchboard.blocks.github import DELIVERY_TTL_S, EVENTS, REFUSAL_AUDIT_INTERVAL_S, _json, trim
+from switchboard.audit import REFUSAL_AUDIT_INTERVAL_S
+from switchboard.blocks.github import DELIVERY_TTL_S, EVENTS, _json, trim
 from switchboard.blocks.mcp.policy import CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MODE_REQUIRED, TOOL_REQUIRED
 from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
