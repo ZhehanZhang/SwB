@@ -109,7 +109,7 @@ svg {
 .requester-tile[data-connector="slack"] { color: var(--logo-slack); }
 .requester-tile svg { stroke: none; }
 .requester-tile:has(> .persona-mark) { border: 0; }
-.requester-tile .persona-mark { width: 100%; height: 100%; object-fit: contain; }
+.requester-tile .persona-mark { object-fit: contain; }
 
 .actions {
   display: flex;

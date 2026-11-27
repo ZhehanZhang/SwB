@@ -407,7 +407,7 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
         connector = "chatgpt"
     avatar = agent_avatar_url(requester)
     mark_kind = avatar.removeprefix("/avatars/").removesuffix(".png") if avatar else connector if connector in CLAIM_CONNECTORS else "agent"
-    mark = (f'<img class="persona-mark" src="{avatar}" alt="">' if avatar else
+    mark = (f'<img class="persona-mark" src="{avatar}" alt="" width="22" height="22">' if avatar else
             f'<svg viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/claim-connectors.svg#{mark_kind}"/></svg>')
     name = html.escape(requester)
     tile = (f'<div class="requester"><span class="requester-tile" data-connector="{mark_kind}" role="img" '
