@@ -31,6 +31,7 @@ from ...audit import iso
 from ...block_env import claude_token_env
 from ...config import SLUG_RE
 from ...projects import ProjectError
+from ...subject import lead_with_subject
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -685,17 +686,19 @@ class ClaudeRoutineBlock(Block):
         name = routine["name"]
         project = project or routine["project"]
         out = await self.core.agent_send(call.principal, to=routine["agent"], text=task, project=project, allow_self=True,
-                                         handle=call.handle, handle_meta=call.handle_meta, dry_run=call.dry_run)
+                                         handle=call.handle, handle_meta=call.handle_meta, title=title, dry_run=call.dry_run)
         if call.dry_run:
             return {**out, "to": f"{self.name}:routine:{name}"}
         handle = out["handle"]
+        title = self.core.inbox.handle(handle)["title"]
         call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
         token = self.token(routine)
         base = {**out, "routine": name, "routine_project": routine["project"]}
         if not token or not routine["routine_id"]:
             return {**base, "fired": False, "note": f"no token for routine {name}: left in the {routine['agent']} mailbox"}
         sender = self.core.agents.label(call.principal.source)
-        text = task[:MAX_TEXT] + reply_hint(handle, sender, routine["project"], listen=bool(call.handle_meta.get("listen")))
+        text = lead_with_subject(title, task.strip()[:MAX_TEXT]) + reply_hint(
+            handle, sender, routine["project"], listen=bool(call.handle_meta.get("listen")))
         headers = {"Authorization": f"Bearer {token}", "anthropic-version": API_VERSION}
         bare = False
         try:

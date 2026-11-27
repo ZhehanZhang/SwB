@@ -55,7 +55,7 @@ def test_send_to_claude_fires_the_routine_and_the_reply_correlates(tmp_path, cap
         assert req.headers["authorization"] == "Bearer sk-ant-oat01-test" and req.headers["anthropic-version"]
         text = json.loads(req.content)["text"]
         handle = out["conversation"]
-        assert text.startswith("please summarise the deploy log") and f'reply(conversation="{handle}"' in text
+        assert text.splitlines()[0] == "Capy asks: please summarise the deploy log" and f'reply(conversation="{handle}"' in text
         assert core.inbox.handle(handle)["state"]["routine"]["session_id"] == "session_01X"
         tok = sign_in(c)["access_token"]
         (item,) = payload(call(c, tok, "wait", {"timeout_s": 0}))["items"]
@@ -69,6 +69,21 @@ def test_send_to_claude_fires_the_routine_and_the_reply_correlates(tmp_path, cap
         assert payload(call(c, STATIC_KEY, "send", {"task": "just a note", "to": "agent:claude"}))["mailbox"] and len(anthropic.requests) == 1
     finally:
         c.__exit__(None, None, None)
+
+
+def test_claude_trigger_subject_precedes_body_and_reply_hint(tmp_path, capy):
+    anthropic = Anthropic()
+    core, client = build(tmp_path, capy, anthropic)
+    try:
+        out = payload(call(client, STATIC_KEY, "send", {"to": "claude", "title": "Canary review", "task": "Check status."}))
+        (req,) = anthropic.requests
+        text = json.loads(req.content)["text"]
+        assert text.split("\n\n", 2)[:2] == ["Canary review", "Check status."]
+        assert text.endswith("your own instructions still apply.")
+        assert f'reply(conversation="{out["handle"]}"' in text
+        assert core.inbox.handle(out["handle"])["title"] == "Canary review"
+    finally:
+        client.__exit__(None, None, None)
 
 
 def test_without_a_token_or_on_failure_the_message_stays_in_the_mailbox(tmp_path, capy):
