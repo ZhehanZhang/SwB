@@ -1,0 +1,96 @@
+---
+title: Local sessions
+description: Send messages to coding agents that run on a paired device.
+---
+
+A local session is a coding agent running on a paired device. SwB lists it as a target, which is an address that can receive a message.
+
+## Send a message
+
+Use the `targets` tool to find the session address. Set `block` to `local`. The address has the form `local:session:<harness>:<id>`. The harness is the program that runs the agent.
+
+Send a message to that address. SwB puts the message in the agent's mailbox first. It then tries to deliver the message into the open session. The agent's answer returns in the same SwB conversation.
+
+A session can be working, blocked, idle or done. SwB can also show an unknown status. Blocked means the session waits for approval or input. SwB keeps the message in the mailbox and leaves the session as it is. Respond to the request in the session.
+
+SwB sends the status and session details to your deployment. Details can include the session name and folder name. It can also send one answer to a message that SwB delivered. The rest of the session stays on the device.
+
+## Pair the device
+
+Use the [Companion setup prompt](/docs/companion#copy-the-setup-prompt). A companion is SwB running on your device. Run the command for your agent on that device. Replace the example address with your SwB HTTPS address. Add a `--cap` option for each feature you want. To change the features on a paired device, [disconnect it](/docs/companion#disconnect) first.
+
+### Herdr
+
+Open a coding agent in a Herdr pane. A pane is an area in the terminal. SwB connects to Herdr through Herdr's socket, a connection on the device.
+
+```sh
+swb companion connect https://swb.example.com --cap herdr --cap hooks
+```
+
+For Claude Code, Gemini CLI or Codex, enable [status hooks](#status-hooks) to return answers through the companion.
+
+### Codex
+
+Start the Codex app server in one terminal.
+
+```sh
+codex app-server --listen unix://
+```
+
+Attach Codex to it from another terminal.
+
+```sh
+codex --remote unix://
+```
+
+Pair the device from a separate terminal. For a custom socket path, set `SWB_CODEX_SOCKET` in the terminal that runs the companion.
+
+```sh
+swb companion connect https://swb.example.com --cap codex
+```
+
+### OpenCode
+
+Start the OpenCode server on the device. Set `SWB_OPENCODE_URL` to its local HTTP or HTTPS address. If the server uses a password, set `OPENCODE_SERVER_PASSWORD` in the terminal that runs the companion.
+
+```sh
+SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
+```
+
+### DeepSeek Harness
+
+Use DeepSeek Harness `0.2.2-rc.5`. Install the SwB bridge in the `web` profile. The bridge connects open sessions to the companion.
+
+Use this command when the repository's default branch includes the bridge.
+
+```sh
+dsh plugin --profile web add github:ZhehanZhang/SwB#path:/integrations/dsh
+```
+
+To install from a SwB checkout that includes the bridge, use its absolute path.
+
+```sh
+dsh plugin --profile web add /path/to/SwB/integrations/dsh
+```
+
+Restart the `web` profile after installation.
+
+```sh
+swb companion connect https://swb.example.com --cap dsh
+```
+
+## Status hooks
+
+A hook runs a command when the agent starts, changes state or ends. On macOS and Linux, `--cap hooks` receives status from Claude Code, Gemini CLI and Codex. Sessions that only use hooks receive messages through their mailboxes.
+
+The SwB Claude Code plugin in `channel/` includes the hooks. The [Claude Code channel](/docs/blocks/coding-agents#claude-code-channel) is a separate research preview.
+
+For Gemini CLI, install the extension from your SwB checkout.
+
+```sh
+gemini extensions install <path-to-SwB>/integrations/gemini
+```
+
+For Codex, use `integrations/codex/hooks.json` from that checkout.
+
+Each hook calls `swb hook <harness>` when the companion's hook socket exists. Make `swb` available to the agent on its command search path.

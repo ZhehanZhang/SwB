@@ -1,0 +1,96 @@
+---
+title: 本機工作階段
+description: 向已配對裝置上的程式開發代理傳送訊息。
+---
+
+本機工作階段是指正在已配對裝置上執行的程式開發代理。SwB 會將它列為目標。目標是可以接收訊息的位址。
+
+## 傳送訊息
+
+使用 `targets` 工具查詢工作階段的位址。將 `block` 設為 `local`。位址格式為 `local:session:<harness>:<id>`。其中 `harness` 是執行代理的程式。
+
+將訊息傳到該位址。SwB 先把訊息放進代理的信箱，再嘗試送到已開啟的工作階段。代理的回覆會回到原本的 SwB 對話。
+
+工作階段可能正在運作、等待處理、閒置或已完成。SwB 也可以將工作階段的狀態顯示為 `unknown`。等待處理表示工作階段正在等候核准或輸入。SwB 會將訊息留在信箱，並維持工作階段原狀。請在工作階段中處理請求。
+
+SwB 會將工作階段的狀態與基本資訊傳給你部署的 SwB。基本資訊包括工作階段名稱與資料夾名稱等。對於經 SwB 送達的訊息，裝置也可以傳回一則回覆。其餘工作階段內容留在裝置上。
+
+## 配對裝置
+
+請使用[夥伴裝置的設定提示詞](/zh-Hant/docs/companion#複製設定提示詞)。夥伴裝置是執行 SwB 的自有裝置。請在這台裝置上執行對應代理的指令。將範例位址換成你的 SwB HTTPS 位址。每啟用一項功能，加入一個 `--cap` 選項。若要變更已配對裝置的功能，請先[中斷連線](/zh-Hant/docs/companion#中斷連線)。
+
+### Herdr
+
+在 Herdr 的終端機窗格中開啟程式開發代理。窗格是終端機內的一塊區域。SwB 透過 Herdr 的通訊端連線。通訊端是裝置上的通訊介面。
+
+```sh
+swb companion connect https://swb.example.com --cap herdr --cap hooks
+```
+
+使用 Claude Code、Gemini CLI 或 Codex 時，可以啟用[狀態掛鉤](#狀態掛鉤)，讓夥伴裝置傳回回覆。
+
+### Codex
+
+在一個終端機中啟動 Codex 應用程式伺服器。
+
+```sh
+codex app-server --listen unix://
+```
+
+從另一個終端機將 Codex 連到這台伺服器。
+
+```sh
+codex --remote unix://
+```
+
+另外開啟終端機來配對裝置。若要自訂通訊端的路徑，請在執行夥伴裝置的終端機中設定 `SWB_CODEX_SOCKET`。
+
+```sh
+swb companion connect https://swb.example.com --cap codex
+```
+
+### OpenCode
+
+在裝置上啟動 OpenCode 伺服器。將 `SWB_OPENCODE_URL` 設為伺服器的本機 HTTP 或 HTTPS 位址。如果伺服器設有密碼，請在執行夥伴裝置的終端機中設定 `OPENCODE_SERVER_PASSWORD`。
+
+```sh
+SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
+```
+
+### DeepSeek Harness
+
+使用 DeepSeek Harness `0.2.2-rc.5`。將 SwB 橋接外掛安裝到 `web` 設定檔中。外掛會將已開啟的工作階段接到夥伴裝置。
+
+儲存庫的預設分支包含外掛時，請執行下方指令。
+
+```sh
+dsh plugin --profile web add github:ZhehanZhang/SwB#path:/integrations/dsh
+```
+
+如果從包含外掛的 SwB 本機副本安裝，請使用外掛的絕對路徑。
+
+```sh
+dsh plugin --profile web add /path/to/SwB/integrations/dsh
+```
+
+安裝後重新啟動 `web` 設定檔。
+
+```sh
+swb companion connect https://swb.example.com --cap dsh
+```
+
+## 狀態掛鉤
+
+掛鉤會在代理啟動、狀態改變或結束時執行指令。在 macOS 和 Linux 上，`--cap hooks` 可接收 Claude Code、Gemini CLI 和 Codex 的狀態。只使用掛鉤的工作階段透過信箱收取訊息。
+
+位於 `channel/` 的 SwB Claude Code 外掛已包含掛鉤。[Claude Code 頻道](/zh-Hant/docs/blocks/coding-agents)是另一項處於研究預覽階段的功能。
+
+在 Gemini CLI 中，請從 SwB 的本機副本安裝擴充功能。
+
+```sh
+gemini extensions install <path-to-SwB>/integrations/gemini
+```
+
+在 Codex 中，請使用該副本中的 `integrations/codex/hooks.json`。
+
+夥伴裝置的掛鉤通訊端存在時，掛鉤才會呼叫 `swb hook <harness>`。請將 `swb` 加入代理的指令搜尋路徑。
