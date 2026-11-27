@@ -702,6 +702,18 @@ reactions off, or `persona_prefix: false` to send plain text. Config edits take 
 storage, whether a claim is still open, and the most recent unconfigured groups and private chats seen this
 run. It never shows the token. Only the owner's agents with a grant can use `telegram_post`.
 
+### Bot and app icons
+
+- `blocks.discord.avatar`: SwB applies the bot avatar through the Discord API after Gateway READY.
+- `blocks.telegram.avatar`: SwB applies the bot profile photo through the Telegram Bot API after connecting.
+- `blocks.slack.app_icon`: SwB lists a manual step in status. Upload the file at [api.slack.com/apps](https://api.slack.com/apps)
+  under **Basic Information → Display Information**; Slack has no API for setting the app icon.
+
+For Discord and Telegram, set a file name such as `switchboard.png`. SwB looks in the Slack engine's upload directory
+(`<data>/avatars`), then its configured `avatar_dirs`, then the bundled avatars. Without the Slack engine, it looks
+only in the bundled avatars. Leave the key unset to keep the existing photo. SwB skips unchanged files, and
+`discord_status` and `telegram_status` report whether the configured file was applied or an upload failed.
+
 ## GitHub App
 
 Create a GitHub App you own. Set its webhook URL to `https://<your-host>/github/webhook` and generate a webhook

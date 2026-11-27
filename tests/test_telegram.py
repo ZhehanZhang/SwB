@@ -8,10 +8,14 @@ import time
 import traceback
 from collections import defaultdict
 from contextlib import contextmanager
+from email.parser import BytesParser
+from email.policy import default
+from io import BytesIO
 
 import httpx
 import pytest
 import yaml
+from PIL import Image
 from starlette.testclient import TestClient
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload
@@ -45,9 +49,18 @@ class FakeBotAPI:
         self.privacy = False
         self.hidden = set()
         self.bot_id = BOT
+        self.avatar_error = None
 
     async def handler(self, request):
         token, method = request.url.path.removeprefix("/bot").split("/")
+        if method == "setMyProfilePhoto":
+            content_type = request.headers["Content-Type"]
+            assert content_type.startswith("multipart/form-data; boundary=")
+            body = BytesParser(policy=default).parsebytes(f"Content-Type: {content_type}\r\n\r\n".encode() + request.content)
+            self.calls[method].append({part.get_param("name", header="Content-Disposition"): part for part in body.iter_parts()})
+            if self.avatar_error:
+                return httpx.Response(self.avatar_error, json={"ok": False, "description": f"Failed request {request.url}"})
+            return httpx.Response(200, json={"ok": True, "result": True})
         args = json.loads(request.content)
         self.calls[method].append(args)
         if method == "getMe":
@@ -107,7 +120,7 @@ def run(tmp_path):
     path = tmp_path / "switchboard.yaml"
 
     @contextmanager
-    def start(*, bot=None, token=TOKEN, connect=True, **config):
+    def start(*, bot=None, token=TOKEN, connect=True, slack=None, **config):
         bot = FakeBotAPI() if bot is None else bot
         anthropic = Anthropic()
         telegram = {"use": "telegram", "dm_space": "dm", "agents": {"claude": "*"}, "spaces": {
@@ -120,6 +133,8 @@ def run(tmp_path):
                    "claude-routine": {"use": "claude-routine", "routines": {
                        "example-runner": {"routine_id": "trig_000EXAMPLE", "token_env": "ROUTINE_TOKEN", "name": ROUTINE_NAME}}}},
                "visibility": {"resources": {f"channel:group/{GROUP}": "shared"}}}
+        if slack is not None:
+            cfg["blocks"]["slack"] = {"use": "slack", **slack}
         path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         env = {"ROUTINE_TOKEN": ROUTINE_TOKEN, "SWITCHBOARD_KEY_CLAUDE": STATIC_KEY}
         if token:
@@ -131,6 +146,38 @@ def run(tmp_path):
             yield core, client, core.blocks["telegram"], bot, anthropic
 
     return start
+
+
+def test_avatar_upload_uses_jpeg_multipart_and_skips_unchanged_file(run, tmp_path):
+    name = "switchboard.png"
+    source = tmp_path / name
+    for color, uploads in (("blue", 1), ("blue", 0), ("red", 1)):
+        Image.new("RGBA", (32, 32), color).save(source)
+        with run(avatar=name, slack={"avatar_dirs": [str(tmp_path)]}) as (_, client, _, bot, _):
+            client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+            status = payload(call(client, STATIC_KEY, "telegram_status"))
+            assert status["connected"] and status["avatar"] == {"file": name, "applied": True, "error": None}
+            assert len(bot.calls["setMyProfilePhoto"]) == uploads
+            if uploads:
+                [fields] = bot.calls["setMyProfilePhoto"]
+                assert set(fields) == {"photo", "p"}
+                assert json.loads(fields["photo"].get_payload(decode=True)) == {"type": "static", "photo": "attach://p"}
+                assert fields["p"].get_content_type() == "image/jpeg"
+                with Image.open(BytesIO(fields["p"].get_payload(decode=True))) as image:
+                    assert image.format == "JPEG" and image.mode == "RGB"
+                    assert image.getpixel((0, 0))[0 if color == "red" else 2] > 240
+
+
+def test_avatar_error_is_non_fatal_and_does_not_expose_the_token(run, caplog):
+    bot = FakeBotAPI()
+    bot.avatar_error = 400
+    with run(bot=bot, avatar="switchboard.png") as (_, client, _, _, _):
+        client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+        status = payload(call(client, STATIC_KEY, "telegram_status"))
+        error = "Telegram setMyProfilePhoto: API error 400"
+        assert status["connected"] and status["avatar"] == {"file": "switchboard.png", "applied": False, "error": error}
+        assert len(bot.calls["setMyProfilePhoto"]) == 1 and caplog.text.count(error) == 1
+        assert TOKEN not in caplog.text and TOKEN not in json.dumps(status)
 
 
 def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
@@ -335,6 +382,7 @@ def test_claim_saves_token_and_reconnects_and_status_orders_remaining_setup(run)
     ({"persona_prefix": "false"}, "persona_prefix"),
     ({"ack_reaction": False}, "ack_reaction"),
     ({"token_env": 42}, "token_env"),
+    ({"avatar": "https://example.test/icon.png"}, "avatar"),
 ])
 def test_invalid_config_reports_precise_path(run, config, path):
     with pytest.raises(BlockError, match=rf"blocks\.telegram\.{path}"):
