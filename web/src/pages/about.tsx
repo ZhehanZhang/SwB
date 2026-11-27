@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { ChevronRight, ExternalLink } from "lucide-react"
 import { Link } from "react-router-dom"
-import { PRODUCT_NAME } from "@/app/brand"
+import { PRODUCT_NAME, TAGLINE } from "@/app/brand"
 import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
 import { SwbIcon } from "@/components/swb-icon"
@@ -69,9 +69,12 @@ export function AboutPage() {
 
   return (
     <div className="w-full max-w-[1104px] space-y-6 text-body-sm md:space-y-8 md:pt-2">
-      <header className="flex items-center gap-3 md:gap-4">
-        <SwbIcon className="size-10 md:size-12" />
-        <p className="font-display text-display-lg">{PRODUCT_NAME}</p>
+      <header className="flex items-start gap-3 md:gap-4">
+        <SwbIcon className="size-10 shrink-0 md:size-12" />
+        <div className="space-y-1">
+          <p className="font-display text-display-lg">{PRODUCT_NAME}</p>
+          <p className="text-foreground">{TAGLINE.en}</p>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:gap-x-16">

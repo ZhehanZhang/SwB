@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test"
+import { PRODUCT_NAME, TAGLINE } from "../src/app/brand.ts"
 
 const board = {
   runtime: { online: true, mcp_url: null, host: "fixture", version: null, uptime_seconds: 0 },
@@ -25,6 +26,7 @@ test.beforeEach(async ({ page }) => {
     const { pathname } = new URL(route.request().url())
     if (pathname === "/api/board") return route.fulfill({ json: board })
     if (pathname === "/api/inbox") return route.fulfill({ json: inbox })
+    if (pathname === "/api/about") return route.fulfill({ json: { version: "1.0.0", commit: "unknown", build_date: "unknown", blocks: [] } })
     return route.fulfill({ status: 404, json: { error: "not_found" } })
   })
 })
@@ -49,6 +51,14 @@ async function expectTab(page: Page, label: string, to: string) {
   await expect(page).toHaveURL(new RegExp(`/${to}$`))
   await expect(navigation(page).getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-current", "page")
 }
+
+test("About and page metadata use the shared tagline", async ({ page }) => {
+  await page.goto("/about")
+  await expect(page.getByText(TAGLINE.en, { exact: true })).toBeVisible()
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", TAGLINE.en)
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", PRODUCT_NAME)
+  await expect(page.locator('meta[property="og:description"]')).toHaveAttribute("content", TAGLINE.en)
+})
 
 test("every tab responds to 20 touch taps, including after a route switch or while scrolled", async ({ page }) => {
   await page.goto("/")

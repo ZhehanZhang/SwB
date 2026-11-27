@@ -3,6 +3,7 @@ WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web ./
+COPY src/switchboard/brand.json /app/src/switchboard/brand.json
 COPY src/switchboard/static/theme.js /app/src/switchboard/static/theme.js
 COPY src/switchboard/slack/avatars/ /app/src/switchboard/slack/avatars/
 RUN npm run build
