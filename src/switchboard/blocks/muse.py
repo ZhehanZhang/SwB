@@ -140,7 +140,7 @@ class MuseBlock(Block):
         if not online:
             return {"done": done, **closed, "next": [
                 {"by": "you", "do": "Create a companion pairing code.", "call": {"tool": "companion_code", "arguments": {}}},
-                {"by": "person", "do": f"Run uvx --from 'swb-one[companion]' swb companion connect {quote(base)} --cap muse. "
+                {"by": "person", "do": f"Run uvx --python 3.13 --from 'swb-one[companion]' swb companion connect {quote(base)} --cap muse. "
                                       "Enter the pairing code at the prompt."},
             ]}
         step = {"tool": "connect", "arguments": {"what": "muse", "choose": {"companion": online[0]}}}
