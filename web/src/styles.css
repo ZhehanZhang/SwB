@@ -171,6 +171,30 @@
   }
 }
 
+.console-pressable {
+  -webkit-tap-highlight-color: transparent;
+
+  @media (prefers-reduced-motion: no-preference) {
+    transition: background-color 170ms ease-out, opacity 170ms ease-out, transform 170ms ease-out;
+  }
+}
+
+@media (hover: hover) {
+  .console-pressable:hover:where(:not(:disabled, [aria-disabled="true"], [data-disabled])) {
+    background-color: var(--console-pressable-bg, var(--surface-sunken));
+  }
+}
+
+.console-pressable:active:where(:not(:disabled, [aria-disabled="true"], [data-disabled])) {
+  background-color: var(--console-pressable-bg, var(--surface-sunken));
+  opacity: .92;
+
+  @media (prefers-reduced-motion: no-preference) {
+    transform: scale(.97);
+    transition-duration: 0s;
+  }
+}
+
 .console-mobile-nav {
   background: var(--background);
 }
@@ -180,6 +204,7 @@
   position: absolute;
   inset: auto 0 100%;
   height: 60px;
+  pointer-events: none;
   background: linear-gradient(
     to bottom,
     transparent,
@@ -196,7 +221,7 @@
 }
 
 .console-mobile-tab:is(:active, [aria-current="page"], [data-selected]) {
-  background: var(--surface-sunken);
+  background-color: var(--surface-sunken);
   color: var(--foreground);
 }
 

@@ -4,15 +4,15 @@ import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-label-sm whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "console-pressable inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-label-sm whitespace-nowrap disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/85",
-        secondary: "bg-muted hover:bg-border",
-        outline: "border border-border-strong bg-surface hover:bg-muted",
-        ghost: "hover:bg-muted",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/85",
+        default: "bg-primary text-primary-foreground [--console-pressable-bg:color-mix(in_srgb,var(--primary)_85%,transparent)]",
+        secondary: "bg-muted [--console-pressable-bg:var(--border)]",
+        outline: "border border-border-strong bg-surface",
+        ghost: "",
+        destructive: "bg-destructive text-destructive-foreground [--console-pressable-bg:color-mix(in_srgb,var(--destructive)_85%,transparent)]",
       },
       size: {
         default: "min-h-[34px] px-4",
