@@ -235,6 +235,12 @@ class Claims:
         return self.store.one("SELECT 1 FROM secrets WHERE name = ? AND code_hash IS NOT NULL AND expires_at > ?",
                               (name, self.store.clock())) is not None
 
+    async def submit(self, code: str, value: str) -> str:
+        kind = self.inspect_details(code)["kind"]
+        if kind in SLACK_PREFIXES and await self.slack_auth_check(kind, normalize(kind, value)) is False:
+            raise ClaimError("Use a token accepted by Slack")
+        return self.consume(code, value)
+
     def consume(self, code: str, value: str) -> str:
         code_hash = _digest(code)
         claim = self.inspect_details(code)
