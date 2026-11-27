@@ -62,7 +62,11 @@ def test_untrusted_rotating_headers_leave_rate_limits_in_force(tmp_path, path, b
             assert response.status_code == (401 if index < limit else 429)
         assert int(response.headers["Retry-After"]) > 0
         rows = core.audit.recent(action=action, limit=50)
-        assert len(rows) == limit and {row["client"] for row in rows} == {peer}
+        assert {row["client"] for row in rows} == {peer}
+        if action == "companion_pair":
+            assert [row["detail"] for row in rows] == ["Pairing attempt limit reached.", "Pairing code expired or invalid."]
+        else:
+            assert len(rows) == limit
 
 
 def test_missing_token_is_not_counted(make):

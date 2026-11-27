@@ -15,8 +15,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from .companion import COMPANION_ID
+
 KINDS = ("target", "channel", "memory", "route", "tool")
 ALWAYS_PRIVATE = ("tool",)
+LOCAL_SESSION_RESOURCE = "target:local:session:"
 RESOURCE_RE = re.compile(r"(target|channel|memory|route|tool):\S+")
 ENTRY_RE = re.compile(r"[UWB][A-Z0-9]{2,}|workspace:[a-z0-9][a-z0-9_-]*|[a-z][a-z0-9-]*:-?[0-9]{1,24}")
 
@@ -72,7 +75,10 @@ class Visibility:
 
     @staticmethod
     def key(resource: str) -> str:
-        res = resource.strip().lower()
+        raw = resource.strip()
+        res = raw.lower()
+        if res.startswith(LOCAL_SESSION_RESOURCE):
+            res = LOCAL_SESSION_RESOURCE + raw[len(LOCAL_SESSION_RESOURCE):]
         if not RESOURCE_RE.fullmatch(res):
             raise VisibilityError(f"{resource!r} is not a resource; use <kind>:<id> with kind one of {', '.join(KINDS)}")
         return res
@@ -132,6 +138,8 @@ class Visibility:
         keys.update(dict.fromkeys(overrides))
         out = []
         for key in keys:
+            if key.startswith(LOCAL_SESSION_RESOURCE) and not COMPANION_ID.fullmatch(key[len(LOCAL_SESSION_RESOURCE):].partition(":")[0]):
+                continue
             rule = self.rule(key)
             src = "override" if key in overrides else "config" if key in self.config else "default"
             out.append({"resource": key, "visibility": show(rule), "source": src, "fixed": key.partition(":")[0] in ALWAYS_PRIVATE})

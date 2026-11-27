@@ -297,6 +297,19 @@ def test_disconnect_revokes_and_clears_state(settings, paired, monkeypatch, caps
     assert not settings.exists()
 
 
+def test_run_explains_hello_capability_refusal(settings, paired, monkeypatch, capsys):
+    async def handler(request):
+        assert request.url.path == "/companion/hello"
+        return httpx.Response(403, json={"error": "Fixture message"})
+
+    mock_client(monkeypatch, handler)
+    with pytest.raises(SystemExit) as error:
+        cli.main(["companion", "run"])
+    assert error.value.code == 1
+    assert "Disconnect and pair again to add capabilities." in capsys.readouterr().err
+    assert CompanionState.load(settings) == paired
+
+
 class Work(Capability):
     id = "test"
     title = "Test"

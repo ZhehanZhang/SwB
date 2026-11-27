@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from .. import __version__
+from . import REPAIR_CAPABILITIES
 from .caps.base import Capability, CapabilityError, CompanionContext, JobContext
 from .harness import harness
 from .state import CompanionError, CompanionState, valid_pair
@@ -187,6 +188,7 @@ async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) ->
     delay = 1.0
     slots = asyncio.Semaphore(4)
     disconnected = False
+    pair_again = False
     async with _client(state.url, state.device_key) as client:
         try:
             while True:
@@ -202,7 +204,13 @@ async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) ->
 
                 async with asyncio.TaskGroup() as tasks:
                     try:
-                        await _post(client, "hello", {"version": __version__, **_hello(caps, state.name)})
+                        try:
+                            await _post(client, "hello", {"version": __version__, **_hello(caps, state.name)})
+                        except httpx.HTTPStatusError as error:
+                            if error.response.status_code == 403:
+                                pair_again = True
+                                break
+                            raise
                         async with client.stream("GET", "events", headers={"Accept": "text/event-stream"},
                                                  timeout=httpx.Timeout(15, read=75)) as response:
                             if response.status_code == 401:
@@ -229,6 +237,8 @@ async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) ->
                 delay = min(delay * 2, 60.0)
         except* Disconnected:
             disconnected = True
+    if pair_again:
+        raise CompanionError(REPAIR_CAPABILITIES)
     if disconnected:
         state.clear(path)
         print(DISCONNECTED, flush=True)
