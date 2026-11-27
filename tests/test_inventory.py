@@ -20,9 +20,9 @@ async def test_generated_inventory(monkeypatch):
     assert {
         "block:discord", "provider:grok", "tool:send", "tool:slack_post", "mode:triage", "mode:triage:reply",
         "page:/settings", "page:/tokens", "page:/inbox", "command:up", "config_key:blocks.slack.workspaces.*.identities.bot.token_env",
-        "avatar:claude.png",
+        "avatar:claude.png", "page:/projects/:slug", "page:/pairing/code",
     } <= items.keys()
-    assert "page:/classic" not in items
+    assert {"page:/classic", "page:/canvas/*", "page:/provision/*", "page:/projects", "config_key:blocks.capy.burst"}.isdisjoint(items)
     assert {"task", "to"} <= set(items["tool:send"]["input_properties"])
     assert "ctx" not in items["tool:send"]["input_properties"]
     assert "--tunnel" in items["command:up"]["flags"]
@@ -78,6 +78,7 @@ def test_inventory_coverage(tmp_path, capsys, monkeypatch):
     ("key", "label", "mention", "unrelated"),
     [
         ("tool:send", "Send", "Call `send`.", "Call `send_later`."),
+        ("prompt:setup-grok-bot", "Set up Grok Bot", "Open `setup-grok-bot`.", "Open `setup-grok`."),
         ("command:up", "swb up", "Run `swb up --tunnel`.", "Run `swb upgrade`."),
         ("command:swb", "swb", "Run `swb`.", "Install `swb-one`."),
         ("page:/", "SwB", "Open `/`.", "Open `/settings` or `/.well-known/*`."),

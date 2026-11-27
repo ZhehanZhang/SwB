@@ -37,24 +37,20 @@ if TYPE_CHECKING:
 PRINCIPAL_SCOPE = "switchboard.principal"
 TASK_MODE: contextvars.ContextVar[bool] = contextvars.ContextVar("switchboard_task_mode", default=False)
 
-CORE_INSTRUCTIONS = """Switchboard is a shared workspace for your assistants and agents.
-Memory lives in scopes: 'general' (the owner's profile, preferences, cross-project decisions) or 'project:<slug>'.
-Switchboard can't see which project you are in, so you decide the project: find it with project_list
-(hint: your project's name or a repo), then call context_pack with it at the start of a session.
-Write project facts to project:<slug> and pass project=<slug> too, so a slip lands nowhere. Write to general only for
-things that apply everywhere, after the owner agrees, with confirm_general=true. Reads cover the named project plus
-general; another project's memory needs scopes=[...] and is logged. memory_move and memory_promote fix a wrong scope.
-Search before asking the owner something they may already have said.
-When someone asks how to connect, set up or link something to Switchboard, call connect and follow its next steps.
-To hand off work or message someone, use send: without to, the owner's route for you and the project decides; to can
-be a slug from targets(), an agent's mailbox (agent:claude) or an address <block>:<kind>:<id>. Every agent (claude,
-claude-code, chatgpt, gemini, capy, and each persona's agent) has a switchboard mailbox, so you can always message it,
-even when it isn't running: it reads the mailbox on its own schedule, in a live chat, or when switchboard wakes it. Its
-reply comes back to your inbox with in_reply_to set to the conversation send returned. Never say you can't reach an
-agent; send to it. Then call wait() for
-the reply and answer with it. If wait times out, tell the owner it is still working and check again with wait or
-inbox. Answer a message with reply(text, conversation). Older names (capy_delegate, capy_wait, capy_inbox,
-agent_send, ...) still work this release; prefer the new ones."""
+CORE_INSTRUCTIONS = """SwB is a shared workspace for your assistants and agents.
+Use project_list to find your project by name or repository. Call context_pack with the project at the start of a session.
+Write project facts to project:<slug> and pass project=<slug> to check the scope.
+Use general for facts that apply to all projects, such as the owner's preferences.
+For general writes, get the owner's agreement and pass confirm_general=true.
+Reads cover the named project and general. Pass scopes=[...] to read another project. SwB logs these reads.
+Use memory_move or memory_promote to correct the scope. Search before asking the owner.
+Call connect for setup and follow its steps.
+Use send to hand off work or message an agent. The owner's route for you and the project is the default.
+For to, use a slug from targets, an agent mailbox such as agent:claude, or a block address <block>:<kind>:<id>.
+SwB keeps messages in the agent's mailbox until the agent reads them.
+Replies reach your inbox with in_reply_to set to the conversation from send.
+Call wait for the reply. If wait times out, tell the owner the work is in progress and check again with wait or inbox.
+Answer a message with reply(text, conversation)."""
 
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -222,7 +218,7 @@ class MCPBlock(Block):
         core = self.core
         senders = [b for b in core.blocks.values() if b.verb("send") is not None]
         extensions = [self.events, TasksExtension(self)] if senders else [self.events]
-        mcp = LimitedServer(name="switchboard", version=__version__, instructions=self.instructions(), extensions=extensions)
+        mcp = LimitedServer(name="swb", title="SwB", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
         mcp.middleware.append(advertise_events)
         global Links

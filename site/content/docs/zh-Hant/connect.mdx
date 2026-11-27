@@ -45,3 +45,5 @@ swb connect grok
 ## 用配對碼連接
 
 請以擁有者身分登入的代理呼叫 `connect_code`。告訴它新代理的名稱。配對碼的有效期限是 10 分鐘，只能使用一次。新代理透過 `POST /connect`，用配對碼換取自己的金鑰。完整的配對方式請見 [MCP 用戶端](/zh-Hant/docs/setup/mcp-client)。
+
+你也可以在權杖頁面建立配對碼。SwB 透過 `POST /pairing/code` 送出表單。
