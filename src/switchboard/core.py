@@ -36,6 +36,7 @@ from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
 from .subject import subject
+from .trust import FramedText, frame_sender
 from .visibility import RESOURCE_RE, Visibility, VisibilityError
 
 DestinationError = BlockError
@@ -294,7 +295,9 @@ class Switchboard:
             raise CoreError("that is you; agent_send goes to another agent")
         if _reply and original is not None and original["status"] == "cancelled":
             return {"to": to, "conversation": in_reply_to, "delivered": False, "mailbox": True, "status": "cancelled"}
-        text = (text or "").strip()
+        framed = isinstance(text, FramedText)
+        if not framed:
+            text = (text or "").strip()
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
@@ -302,16 +305,18 @@ class Switchboard:
             return {"to": f"agent:{to}", "mailbox": True, "project": p.slug if p else None}
         if root is not None:
             self.turn(root, principal)
-        sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
+        label = self.agents.label(principal.source)
+        trust, display = frame_sender(text if framed else text[:20_000], label, principal.source, owner=principal.trust == "owner")
+        sender = {"kind": "agent", "agent": principal.source, "label": label,
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
-                  "trust": principal.trust}
+                  "trust": trust}
         title = subject("", "", None, title or "", verb="") or subject(
-            sender["label"], "", None, text, verb="replies" if in_reply_to else "asks", trust=principal.trust)
+            label, "", None, text, verb="replies" if in_reply_to else "asks", trust=trust)
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
         handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=title,
                                         meta=meta, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
-        await self.inbox.add(handle, "message", {"subject": title, "text": text[:20_000], "project": p.slug if p else None, "from": sender,
+        await self.inbox.add(handle, "message", {"subject": title, "text": display, "project": p.slug if p else None, "from": sender, "trust": trust,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
@@ -807,9 +812,14 @@ class Switchboard:
         text = text.strip()
         if not 0 < len(text) <= 4000:
             raise CoreError("Enter a note with up to 4000 characters.")
+        label = self.agents.label(principal.source)
+        trust, display = frame_sender(text, label, principal.source, owner=principal.trust == "owner")
         try:
             note = self.inbox.deliver_triage_note(source=principal.source, project=meta["project"], data={
-                "text": text, "conversation": conversation, **{key: meta[key] for key in ("permalink", "block", "space", "channel")},
+                "text": display, "trust": trust, "conversation": conversation,
+                "from": {"kind": "agent", "agent": principal.source, "label": label, "auth": principal.kind,
+                         "client_id": principal.client_id, "origin": principal.origin, "trust": trust},
+                **{key: meta[key] for key in ("permalink", "block", "space", "channel")},
             })
         except sqlite3.Error as exc:
             refusal = CoreRefused(OWNER_NOTE_REQUIRED)
