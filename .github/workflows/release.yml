@@ -1,11 +1,18 @@
 name: Publish to PyPI
 
 on:
+  release:
+    types: [published]
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: pypi-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -16,6 +23,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Verify the release tag matches the package version
+        if: github.event_name != 'workflow_dispatch'
         run: |
           uv run --no-project python - <<'PY'
           import os, tomllib
@@ -24,7 +32,15 @@ jobs:
           if os.environ["GITHUB_REF_NAME"] != f"v{version}":
               raise SystemExit(f"Release tag must match the package version: v{version}")
           PY
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+      - run: npm run build --prefix web
       - run: uv build
+      - run: uvx twine check dist/*
       - uses: actions/upload-artifact@v4
         with:
           name: distributions
@@ -32,11 +48,9 @@ jobs:
           if-no-files-found: error
 
   publish:
+    if: github.event_name != 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
-    # Once: create the "pypi" GitHub environment, restrict it to release tags,
-    # and register a PyPI (pending if new) Trusted Publisher for swb-one:
-    # this repo's owner/name, workflow release.yml, environment pypi.
     environment:
       name: pypi
       url: https://pypi.org/project/swb-one/
@@ -48,3 +62,23 @@ jobs:
           name: distributions
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  publish-test:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/swb-one/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
