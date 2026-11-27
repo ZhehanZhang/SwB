@@ -120,6 +120,16 @@ def test_config_renames_and_disables_dots_and_dots_are_private_by_default(tmp_pa
         assert core.visibility.rule("target:dots") == "private"
 
 
+def test_dot_registrants_come_from_the_slack_directory(tmp_path):
+    with started(tmp_path, dots={"dots": {
+        "override": {"user_id": "UMISSING01"}, "workspace-dots": {"name": "Example alias"},
+    }}) as (core, _, _, client):
+        targets = {row["id"]: row for row in client.portal.call(core.targets) if row["kind"] == "dot"}
+        assert targets[DOT]["name"] == "Example alias"
+        assert targets[DOT]["created_by"] == "Workspace Dots"
+        assert targets["UMISSING01"]["created_by"] is None
+
+
 def test_dots_use_configured_mailboxes_without_slack(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump({"version": 2, "public_url": PUBLIC, "blocks": {"mcp": {}, "dots": {

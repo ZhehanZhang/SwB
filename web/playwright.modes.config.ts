@@ -4,7 +4,7 @@ const baseURL = "http://localhost:4178"
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: "channel-modes.spec.ts",
+  testMatch: ["channel-modes.spec.ts", "inbox-senders.spec.ts"],
   use: {
     baseURL,
     browserName: "chromium",

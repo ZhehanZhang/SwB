@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from importlib.resources import files
@@ -12,7 +13,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from .api_display import captain_avatar_url, captain_target, captain_targets, capy_label
+from .api_display import captain_avatar_url, captain_target, captain_targets, capy_label, local_avatar_url, slack_profile_avatar
 from .slack.avatar_files import agent_avatar_url
 from .audit import iso
 from .blocks import BLOCKS, load
@@ -291,19 +292,37 @@ async def projects(request: Request) -> JSONResponse:
     return JSONResponse({"projects": projects, "systems": systems})
 
 
-def _sender(sender: Any) -> dict[str, Any] | None:
+def _sender(core: Any, sender: Any, destination: str, captains: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     if not isinstance(sender, dict):
         return None
-    return _scalars(sender, "kind", "name", "label", "agent", "auth", "origin", "trust", "workspace", "channel", "channel_name", "user", "user_name",
-                    "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot") or None
+    out = _scalars(sender, "kind", "name", "label", "agent", "auth", "origin", "trust", "workspace", "channel", "channel_name", "user", "user_name",
+                   "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot")
+    avatar = local_avatar_url(core, sender.get("avatar_url"))
+    if out.get("kind") in ("capy_thread", "capy", "captain"):
+        upstream = sender.get("sender")
+        ident = _reference(upstream.get("id") if isinstance(upstream, dict) else out.get("thread_id"))
+        captain = captain_target(ident, destination, captains)
+        if captain is None and ident:
+            matches = [target for address, target in captains.items() if address.endswith(f":captain:{ident}")]
+            captain = matches[0] if len(matches) == 1 else None
+        if captain:
+            avatar = avatar or captain_avatar_url(core, captain)
+            if name := _reference(captain["name"]):
+                out["author"] = name
+    if not avatar:
+        avatar = agent_avatar_url(_reference(out.get("agent")) or _reference(out.get("kind")) or "")
+    if avatar:
+        out["avatar_url"] = avatar
+    return out or None
 
 
 def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | None], captains: dict[str, dict[str, Any]]) -> dict[str, Any]:
     sender, target = endpoints
     meta = row["meta"]
-    first_sender = _sender(meta.get("from"))
+    first_sender = _sender(core, meta.get("from"), row["destination"], captains)
     if first_sender is None:
-        first_sender = _sender(sender) if row["destination"] in ("slack", "mailbox") else {"kind": "agent", "agent": row["owner"]}
+        first_sender = _sender(core, sender if row["destination"] in ("slack", "mailbox") else
+                               {"kind": "agent", "agent": row["owner"]}, row["destination"], captains)
     first_target = row.get("target") or target
     if row.get("target"):
         parts = row["target"].split(":", 2)
@@ -329,23 +348,55 @@ def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | No
             "destination_kind": destination_kind}
 
 
-def _pending_write(row: dict[str, Any]) -> dict[str, Any]:
+async def _pending_write(core: Any, row: dict[str, Any], agents: dict[str, str]) -> dict[str, Any]:
     persona = (row.get("persona") or {}).get("name")
+    requester = row.get("requester") or {}
+    key = row["key_id"]
+    user = requester.get("user") or key.removeprefix("slack:")
+    workspace = requester.get("workspace") or row["workspace"]
+    sender = {"kind": "slack"}
+    if not requester.get("agent") and re.fullmatch(r"[UW][A-Z0-9]+", user):
+        if name := _reference(requester.get("user_name")):
+            sender["name"] = name
+        if runtime := core.slack.runtimes.get(workspace):
+            try:
+                async with asyncio.timeout(4):
+                    name, image = await runtime.user_profile(user)
+                    if name := _reference(name):
+                        sender["name"] = name
+                    if avatar := await slack_profile_avatar(core, image):
+                        sender["avatar_url"] = avatar
+            except TimeoutError:
+                pass
+    elif agent := _reference(requester.get("agent") or agents.get(key) or agents.get(key.removeprefix("dots:"))):
+        name = _reference(core.agents.label(agent)) or agent
+        sender = {"kind": "agent", "agent": agent, "name": name}
+        if avatar := agent_avatar_url(agent) or agent_avatar_url(name):
+            sender["avatar_url"] = avatar
     return {"platform": "slack", **_fields(row, "id", "workspace", "identity", "action", "key_id"),
             **_scalars(row["params"], "channel", "thread_ts", "ts", "timestamp", "text", "name"),
             "persona": persona if isinstance(persona, str) else None,
+            "sender": sender,
             "created_at": iso(row["created_at"]), "expires_at": iso(row["expires_at"])}
 
 
 async def inbox(request: Request) -> JSONResponse:
     core = request.app.state.core
     slack = core.slack
-    pending = [_pending_write(row) for row in slack.store.list_requests(status="pending", limit=50)
-               if row["expires_at"] > slack.store.clock()] if slack is not None else []
+    pending = []
+    if slack is not None:
+        rows = [row for row in slack.store.list_requests(status="pending", limit=50) if row["expires_at"] > slack.store.clock()]
+        if rows:
+            agents = {agent: agent for agent in core.known_agents()}
+            agents.update({key["id"]: key["agent"] for key in core.connections.list(include_revoked=True)})
+            pending = await asyncio.gather(*(_pending_write(core, row, agents) for row in rows))
     pauses = core.store.q("SELECT root, turns, paused_at FROM conversation_turns WHERE paused_at IS NOT NULL ORDER BY paused_at DESC")
     roots = core.inbox.handles(limit=100, roots_only=True)
     endpoints = core.inbox.first_endpoints([row["handle"] for row in roots])
-    captains = await captain_targets(core, (row["destination"] for row in roots))
+    captains = await captain_targets(core, core.blocks if any(
+        isinstance(sender, dict) and sender.get("kind") in ("capy_thread", "capy", "captain")
+        for row in roots for sender in (row["meta"].get("from"), endpoints.get(row["handle"], (None, None))[0])
+    ) else (row["destination"] for row in roots))
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
                          "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"])} for row in pauses],
                          "conversations": [_conversation(core, row, endpoints.get(row["handle"], (None, None)), captains) for row in roots]})
@@ -366,14 +417,17 @@ async def conversation(request: Request) -> JSONResponse:
     handle = row["handle"]
     out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False, include_replies=True)
     items = []
+    captains = await captain_targets(core, core.blocks if any(
+        isinstance(sender := item.get("from"), dict) and sender.get("kind") in ("capy_thread", "capy", "captain")
+        for item in out["items"]
+    ) else (row["destination"],))
     for item in out["items"]:
         projected = _scalars(item, "cursor", "handle", "kind", "at", "text", "status", "final", "in_reply_to", "trust", "project",
                              "target", "target_kind", "event_id", "slack_kind")
-        if sender := _sender(item.get("from")):
+        if sender := _sender(core, item.get("from"), row["destination"], captains):
             projected["from"] = sender
         items.append(projected)
     endpoints = core.inbox.first_endpoints([handle])
-    captains = await captain_targets(core, (row["destination"],))
     return JSONResponse({"conversation": _conversation(core, row, endpoints.get(handle, (None, None)), captains),
                          "items": items, "cursor": out["cursor"]})
 

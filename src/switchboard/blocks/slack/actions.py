@@ -218,8 +218,11 @@ class SlackActions(Block):
         _, rt, ident = self.scope(g, workspace, identity or None)
         params["channel"] = await self.slack(rt.resolve_channel(params["channel"]))
         call.note(target=f"{workspace}/{params['channel']}" + (f"/{params['thread_ts']}" if params.get("thread_ts") else ""), excerpt=params.get("text") or params.get("name") or "")
+        from .intake import slack_requester
+
         try:
-            out = await self.need().gate.submit(g, workspace, ident, action, params, persona or None, force_approval=force)
+            out = await self.need().gate.submit(g, workspace, ident, action, params, persona or None, force_approval=force,
+                                                requester=slack_requester(call.principal))
         except (WriteError, PersonaError) as exc:
             raise DestinationError(str(exc)) from exc
         call.note(ref=out.get("request_id") or out.get("ts"), detail=f"as {ident}: {out['status']}", outcome="queued" if out["status"] == "pending_approval" else None)

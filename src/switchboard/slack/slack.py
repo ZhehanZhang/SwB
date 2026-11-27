@@ -88,7 +88,7 @@ class WorkspaceRuntime:
         self.inflight: set[asyncio.Task] = set()
         self.channel_names: dict[str, str] = {}
         self.channel_ids: dict[str, str] = {}
-        self.user_names: dict[str, str] = {}
+        self.user_profiles: dict[str, tuple[str, str | None]] = {}
         self.watched_ids: frozenset[str] = frozenset()
         self.listen_ids: frozenset[str] = frozenset()
         self.bot_channels: frozenset[str] = frozenset()
@@ -255,20 +255,25 @@ class WorkspaceRuntime:
         return name
 
     async def user_name(self, user: str | None) -> str | None:
-        if not user or not user.startswith(("U", "W")):
-            return None
-        if user in self.user_names:
-            return self.user_names[user]
+        return (await self.user_profile(user))[0]
+
+    async def user_profile(self, user: str | None) -> tuple[str | None, str | None]:
+        if not user or not re.fullmatch(r"[UW][A-Z0-9]+", user):
+            return None, None
+        if user in self.user_profiles:
+            return self.user_profiles[user]
         try:
             resp = await self.reader().users_info(user=user)
             u = resp.get("user") or {}
             prof = u.get("profile") or {}
             name = prof.get("display_name") or prof.get("real_name") or u.get("name")
+            image = prof.get("image_192") or prof.get("image_72")
         except Exception:
-            name = None
-        if name:
-            self.user_names[user] = name
-        return name
+            return None, None
+        result = (name if isinstance(name, str) else None, image if isinstance(image, str) else None)
+        if result[0]:
+            self.user_profiles[user] = (result[0], result[1])
+        return result
 
     async def _run_socket(self) -> None:
         from slack_sdk.socket_mode.aiohttp import SocketModeClient
