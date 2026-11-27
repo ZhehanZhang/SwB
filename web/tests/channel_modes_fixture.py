@@ -1,9 +1,13 @@
+import asyncio
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 
+import httpx
 import uvicorn
 import yaml
+from PIL import Image, ImageDraw
 
 from switchboard import pages
 from switchboard.app import create_app
@@ -13,10 +17,52 @@ from switchboard.core import Switchboard
 
 HOST = "127.0.0.1"
 PORT = 4178
+CAPTAIN = "jam_EXAMPLEATLAS"
 
 
 async def verify_access(assertion: str) -> str | None:
     return "owner@example.test" if assertion == "channel-mode-fixture" else None
+
+
+async def capy_fixture(request: httpx.Request) -> httpx.Response:
+    if request.url.host == "swb.example.com":
+        if request.url.path == "/api/v1/captains":
+            return httpx.Response(200, json={"items": [{
+                "id": CAPTAIN, "name": "Atlas", "authorId": "user_EXAMPLE",
+                "avatar": {"kind": "preset", "value": "atlas", "image": "https://swb.example.com/atlas.png"},
+            }]})
+        if request.url.path == "/api/v1/users":
+            return httpx.Response(200, json={"items": [{"id": "user_EXAMPLE", "firstName": "Alex", "lastName": "Rivera"}]})
+        if request.url.path == "/atlas.png":
+            image = Image.new("RGB", (512, 512), "#132b42")
+            draw = ImageDraw.Draw(image)
+            draw.ellipse((60, 60, 452, 452), fill="#50cea2")
+            draw.polygon([(256, 105), (408, 365), (104, 365)], fill="#174563")
+            output = BytesIO()
+            image.save(output, format="PNG")
+            return httpx.Response(200, content=output.getvalue())
+    return httpx.Response(404)
+
+
+async def seed_inbox(core: Switchboard) -> None:
+    pairing = core.connections.mint(agent="claude-code", project="operations", client=None, by="owner")
+    key = core.connections.redeem(pairing["code"])
+    core.slack.store.create_request(
+        workspace="studio", identity="bot", action="post_message", params={
+            "channel": "planning", "text": "The release checklist is ready for review.",
+        }, persona=None, key_id=key["key_id"], ttl_seconds=3600,
+    )
+    handle = core.inbox.open_handle(
+        handle="h_example_release", owner="claude-code", destination="capy", ref=CAPTAIN, project="operations",
+        title="Release preparation", meta={}, target=f"capy:captain:{CAPTAIN}",
+    )
+    await core.inbox.add(handle, "message", {
+        "text": "Please review the release checklist.", "from": {"kind": "agent", "agent": "claude-code", "name": "Claude Code"},
+    })
+    await core.inbox.add(handle, "reply", {
+        "text": "The checklist is ready to share.", "from": core.blocks["capy"]._from(CAPTAIN, {"source": "assistant"}),
+    })
+    core.inbox.update_handle(handle, status="completed", open=False)
 
 
 def run(path: Path) -> None:
@@ -29,6 +75,7 @@ def run(path: Path) -> None:
         }},
         "blocks": {
             "mcp": {"use": "mcp"},
+            "capy": {"use": "capy", "api_base": "https://swb.example.com/api/v1"},
             "muse": {"use": "muse"},
             "team-chat": {"use": "discord", "connect": False, "spaces": {"engineering": {
                 "guild_id": "1000", "project": "operations", "channels": {
@@ -48,8 +95,9 @@ def run(path: Path) -> None:
             }}},
         },
     }))
-    core = Switchboard(config, path / "data", env={}, access_verifier=verify_access,
-                       slack_options={"connect": False})
+    transport = httpx.MockTransport(capy_fixture)
+    core = Switchboard(config, path / "data", env={"CAPY_API_KEY": "example-capy-fixture"}, access_verifier=verify_access,
+                       block_options={"capy": {"transport": transport}}, http_transport=transport, slack_options={"connect": False})
     core.projects.create(slug="operations", name="Operations")
     core.projects.create(slug="community", name="Community")
     discord = core.blocks["team-chat"]
@@ -60,6 +108,7 @@ def run(path: Path) -> None:
     core.blocks["telegram"]._seen[-1001000] = {"id": -1001000, "title": None, "type": "supergroup"}
     core.modes.watch("team-chat", "engineering", "2001", "msg-example", "1001", "Alex",
                      "Release ready", None, None, project="operations")
+    asyncio.run(seed_inbox(core))
     app = create_app(core)
     base = f"http://localhost:{PORT}"
     fixtures = {

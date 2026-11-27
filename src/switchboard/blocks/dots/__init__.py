@@ -32,7 +32,7 @@ log = logging.getLogger("switchboard.blocks.dots")
 
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS dots (workspace TEXT NOT NULL, user_id TEXT NOT NULL, bot_id TEXT, name TEXT NOT NULL, real_name TEXT, app_id TEXT, "
-    "slug TEXT NOT NULL, seen_at REAL NOT NULL, PRIMARY KEY (workspace, user_id))",
+    "slug TEXT NOT NULL, seen_at REAL NOT NULL, created_by TEXT, PRIMARY KEY (workspace, user_id))",
     "CREATE TABLE IF NOT EXISTS dot_threads (workspace TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, handle TEXT NOT NULL, "
     "dot TEXT NOT NULL, PRIMARY KEY (workspace, channel, thread_ts))",
     "CREATE TABLE IF NOT EXISTS dot_dms (workspace TEXT NOT NULL, dot TEXT NOT NULL, kind TEXT NOT NULL, channel TEXT NOT NULL, PRIMARY KEY (workspace, dot, kind))",
@@ -108,6 +108,8 @@ class DotsBlock(Block):
         self.delivery_notes: dict[str, str] = {}
         for sql in SCHEMA:
             core.store.x(sql)
+        if "created_by" not in {r["name"] for r in core.store.q("PRAGMA table_info(dots)")}:
+            core.store.x("ALTER TABLE dots ADD COLUMN created_by TEXT")
         cols = {r["name"] for r in core.store.q("PRAGMA table_info(dot_threads)")}
         for col, decl in (("mode", "TEXT NOT NULL DEFAULT 'relay'"), ("last_ts", "TEXT"), ("created_at", "REAL NOT NULL DEFAULT 0")):
             if col not in cols:
@@ -189,19 +191,24 @@ class DotsBlock(Block):
             if not cursor:
                 break
         found = [m for m in members if self.looks_like_dot(m, rt.bot_user_id)]
+        member_ids = {m.get("id") for m in members}
         for uid, o in self.overrides.items():
             if o.get("user_id") and not any(m["id"] == o["user_id"] for m in found):
                 found.append(next((m for m in members if m.get("id") == o["user_id"]), {"id": o["user_id"], "name": uid, "profile": {}}))
         now = self.core.clock()
         for m in found:
             profile = m.get("profile") or {}
+            registrant = next((value.strip() for value in (
+                profile.get("display_name"), m.get("real_name"), profile.get("real_name"), m.get("name"), m["id"],
+            ) if isinstance(value, str) and value.strip()), None) if m["id"] in member_ids else None
             if profile.get("image_192") or profile.get("image_72"):
                 self.images[m["id"]] = profile.get("image_192") or profile.get("image_72")
-            self.core.store.x("INSERT INTO dots(workspace, user_id, bot_id, name, real_name, app_id, slug, seen_at) VALUES (?,?,?,?,?,?,?,?) "
+            self.core.store.x("INSERT INTO dots(workspace, user_id, bot_id, name, real_name, app_id, slug, seen_at, created_by) VALUES (?,?,?,?,?,?,?,?,?) "
                               "ON CONFLICT(workspace, user_id) DO UPDATE SET bot_id = excluded.bot_id, name = excluded.name, real_name = excluded.real_name, "
-                              "app_id = excluded.app_id, slug = excluded.slug, seen_at = excluded.seen_at",
+                              "app_id = excluded.app_id, slug = excluded.slug, seen_at = excluded.seen_at, "
+                              "created_by = COALESCE(dots.created_by, excluded.created_by)",
                               (self.workspace, m["id"], profile.get("bot_id"), m.get("name") or m["id"], m.get("real_name") or profile.get("real_name"),
-                               profile.get("api_app_id"), slugify(m.get("name") or m["id"]), now))
+                               profile.get("api_app_id"), slugify(m.get("name") or m["id"]), now, registrant))
         self.core.changed()
         try:
             await self.ensure_channel(rt)
@@ -296,6 +303,7 @@ class DotsBlock(Block):
             "AND CAST(last_ts AS REAL) > CAST(thread_ts AS REAL) GROUP BY dot", (self.workspace,),
         )} if self.delivery == "slack" else {}
         return [{"kind": "dot", "id": d["id"], "name": d["label"],
+                 "created_by": d.get("created_by"),
                  "source": "config" if self.delivery != "slack" else "discovered", "last_seen_at": activity.get(d["id"]),
                  "persona": {"id": f"dot-{d['slug']}", "name": d["label"], "icon_url": self.images.get(d["id"])},
                  "slugs": [d["slug"], *([DEFAULT_ALIAS] if default is d and d["slug"] != DEFAULT_ALIAS else [])]} for d in dots]
@@ -422,7 +430,7 @@ class DotsBlock(Block):
             return {**out, "dot": dot["slug"], "mode": "mailbox"}
         from ...slack.config import Grant
         from ...slack.writes import OWNER_RELAY, WriteError
-        from ..slack.intake import SLACK_SENDER
+        from ..slack.intake import SLACK_SENDER, slack_requester
 
         rt = self.runtime()
         p = call.principal
@@ -475,7 +483,8 @@ class DotsBlock(Block):
                         scopes={self.workspace: ("bot",)}, persona_by_workspace=by_ws)
             identity = "bot"
         try:
-            out = await engine.gate.submit(key, self.workspace, identity, "post_message", {"channel": channel, "text": text[:3900], "thread_ts": None})
+            out = await engine.gate.submit(key, self.workspace, identity, "post_message", {"channel": channel, "text": text[:3900], "thread_ts": None},
+                                           requester=slack_requester(p))
         except WriteError as exc:
             raise BlockError(str(exc)) from exc
         if as_him:

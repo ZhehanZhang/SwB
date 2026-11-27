@@ -951,10 +951,23 @@ class CapyBlock(Block):
         if self.api is None:
             return []
         out = []
+        captains = [c for c in await self.api.list_captains() if not c.get("archived")]
+        authors = {c["authorId"] for c in captains if isinstance(c.get("authorId"), str)}
+        registrants = {}
+        if authors:
+            try:
+                async with asyncio.timeout(4):
+                    registrants = {
+                        user["id"]: " ".join(
+                            user[key].strip() for key in ("firstName", "lastName")
+                            if isinstance(user.get(key), str) and user[key].strip()
+                        )
+                        for user in await self.api.list_users() if user.get("id") in authors
+                    }
+            except (CapyError, TimeoutError, httpx.HTTPError):
+                pass
         persona_ids = set(self.core.known_agents())
-        for c in await self.api.list_captains():
-            if c.get("archived"):
-                continue
+        for c in captains:
             name = c.get("name") or c.get("title") or c["id"]
             slug = _slug(name)
             code = str(c.get("code") or "").lower()
@@ -963,6 +976,7 @@ class CapyBlock(Block):
                 pid = f"{pid[:29]}-{hashlib.sha256(c['id'].encode()).hexdigest()[:10]}"
             persona_ids.add(pid)
             out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [slug, code],
+                        "created_by": registrants.get(c["authorId"]) or None if isinstance(c.get("authorId"), str) else None,
                         "created_at": _api_timestamp(c.get("createdAt")),
                         "last_seen_at": _api_timestamp(c.get("lastActivityAt")) or _api_timestamp(c.get("updatedAt")),
                         "persona": {"id": pid, "name": name, "avatar": c.get("avatar")}})
