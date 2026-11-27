@@ -8,8 +8,7 @@ services:
       PORT: "8000"
       SWB_DEPLOY_PLATFORM: compose
       SWB_PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
-      SWB_KEY_OWNER:
-      SWITCHBOARD_KEY_OWNER:
+      SWB_KEY_OWNER: "${SWB_KEY_OWNER-${SWITCHBOARD_KEY_OWNER-}}"
       SWB_TRUSTED_PROXIES:
       SWB_SETUP_CODE:
     volumes:
