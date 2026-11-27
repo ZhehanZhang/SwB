@@ -399,7 +399,7 @@ class ClaudeRoutineBlock(Block):
                 "project": slug, "creates_project": new_project is not None, "claude_project": title,
                 "primary": bool(primary) or lead is None or lead["name"] == name,
                 **({"superseded": superseded} if superseded else {}),
-                "next": "Give the owner this link. He opens it (SSO), pastes the routine's token and clicks Save; the token never goes "
+                "next": "Give the owner this link. The owner signs in, pastes the routine's token and clicks Save; the token never goes "
                         "through chat or MCP. routine_list shows the routine once saved (untested until its first fire)."}
 
     def _claim_row(self, code: str, registration: str | None = None) -> Any:

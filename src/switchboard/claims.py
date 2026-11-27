@@ -113,6 +113,10 @@ class Claims:
             raise ClaimUnavailable(UNUSABLE)
         return dict(row)
 
+    def pending(self, name: str) -> bool:
+        return self.store.one("SELECT 1 FROM secrets WHERE name = ? AND code_hash IS NOT NULL AND expires_at > ?",
+                              (name, self.store.clock())) is not None
+
     def consume(self, code: str, value: str) -> str:
         code_hash = _digest(code)
         value = value.strip()

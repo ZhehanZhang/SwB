@@ -147,7 +147,7 @@ class TelegramBlock(ChatBlock):
         return {"bot_father_url": "https://t.me/BotFather", "bot_url": url,
                 "add_to_group_url": f"{url}?startgroup=swb" if url else None, "bot": dict(self._bot) if self._bot else None,
                 "privacy_mode": self._privacy, "token_source": "env" if self.core.cfg.env.get(self.token_env) else
-                ("stored" if self.token() else None), "claim_pending": self.claims.pending("bot_token"),
+                ("stored" if self.token() else None), "claim_pending": self.claim_pending(),
                 "seen_chats": list(reversed(self._seen.values())),
                 "steps": ["1. Create a bot in @BotFather with /newbot.",
                           f"2. Open the token link from {self.name}_provision and paste the token.",

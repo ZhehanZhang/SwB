@@ -174,15 +174,19 @@ def create_app(core: "Switchboard") -> Any:
         return RedirectResponse(f"/classic?notice={outcome}", status_code=303)
 
     async def avatar(request: Request) -> Response:
-        """Persona avatars for Slack bot posts; Slack fetches them, so this path is public (no Access)."""
-        if core.slack is None:
-            return Response(status_code=404)
+        """Public avatar file for clients such as Slack and Discord, including rendered Captain avatars."""
         name = request.path_params["name"]
-        path = core.slack.find_avatar(name)
+        path = core.find_avatar(name)
         if path is None:
             return Response(status_code=404)
         return Response(path.read_bytes(), media_type="image/png" if name.endswith(".png") else ("image/gif" if name.endswith(".gif") else "image/jpeg"),
                         headers={"Cache-Control": "public, max-age=3600"})
+
+    async def targets(request: Request) -> JSONResponse:
+        _, refused = await owner_page(request)
+        if refused is not None:
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+        return JSONResponse({"targets": await core.targets()}, headers={"Cache-Control": "no-store"})
 
     async def avatar_upload(request: Request) -> Response:
         """The owner replaces a persona's picture."""
@@ -247,6 +251,8 @@ def create_app(core: "Switchboard") -> Any:
         return actor, token if isinstance(token, str) else "", None
 
     async def token_claim(request: Request) -> Response:
+        from .chat import ChatBlock
+
         code = request.path_params["code"]
         if request.method != "POST":
             form_csrf, refused = await claim_page_access(request)
@@ -263,6 +269,10 @@ def create_app(core: "Switchboard") -> Any:
         if refused is not None:
             return refused
         try:
+            name = core.claims.inspect(code)
+            chats = [block for block in core.blocks.values() if isinstance(block, ChatBlock) and block.token_env == name]
+            if any(not block.token_re.fullmatch(token.strip()) for block in chats):
+                raise ClaimError("That doesn't look like the right kind of token.")
             name = core.claims.consume(code, token)
         except ClaimUnavailable as e:
             return pages.claim_message_page("Link not usable", str(e), 410)
@@ -270,6 +280,8 @@ def create_app(core: "Switchboard") -> Any:
             return pages.claim_message_page("Not saved", str(e), 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=name)
+        for block in chats:
+            await block.secret_saved("bot_token")
         return pages.claim_message_page("Token saved", "Run connect again to check whether a restart is needed.", 200)
 
     async def connect_code(request: Request) -> Response:
@@ -477,6 +489,7 @@ def create_app(core: "Switchboard") -> Any:
             Route("/avatars/{name}", avatar, methods=["GET"]),
             Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
             Route("/healthz", healthz),
+            Route("/api/targets", targets),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),
