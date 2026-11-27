@@ -1,5 +1,6 @@
 {
   "avatar:switchboard.png": "Legacy avatar alias pending inventory removal.",
+  "config_key:blocks.capy.burst": "Schema-only key in release 1.0.",
   "page:/canvas/*": "Compatibility redirect to the main console.",
   "page:/classic": "retired, flows moving to the SPA",
   "page:/pairing/code": "Legacy form action from the classic console.",

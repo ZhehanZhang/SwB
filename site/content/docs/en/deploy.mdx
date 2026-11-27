@@ -1,9 +1,11 @@
 ---
 title: Deploy
-description: Run SwB on a cloud platform and let your agent do the setup.
+description: Run SwB on your computer or a server.
 ---
 
-This page is for people who work through agents. You deploy SwB on a cloud platform, sign in one time, and give your agent the setup prompt.
+## Run on your computer
+
+Follow [Install](/docs/install). Run `swb login-link` to get a one-time owner sign-in link. Open the link in your browser. The deploy prompt also covers local setup.
 
 <DeployLive>
 
@@ -25,7 +27,7 @@ Render builds SwB in a few minutes. The service page shows **Live** when SwB is 
 <Step>
 ### Copy your address
 
-Copy the service URL at the top of the page, for example `https://swb-example.onrender.com`. Your MCP address is this URL with `/mcp` at the end.
+Copy the service URL at the top of the page. Add `/mcp` to the URL for your MCP address.
 </Step>
 </Steps>
 
@@ -55,19 +57,19 @@ Paste the code in **Setup code**. Add a passkey to sign in again. The setup code
 
 ## Deploy SwB
 
-Paste this prompt into a coding agent, for example Claude Code or Codex. The agent deploys SwB on Fly.io, Koyeb or your server with Docker. It tells you the private file that holds your setup code.
+Paste this prompt into a coding agent such as Claude Code or Codex. The agent can run SwB on your computer. It can also deploy SwB to Fly.io, Koyeb or a server with Docker.
 
 <SetupPrompt name="deploy" lang="en" />
 
 ## Sign in
 
-Open the sign-in page address from the service log. Paste the code from the private file in **Setup code**. Add a passkey to sign in again. The setup code works one time.
+For a hosted server, open the sign-in page address from the service log. Paste the code from the private file in **Setup code**. The code works once, for the first owner sign-in. Add a passkey for later sign-ins.
 
 </DeployHeld>
 
 ## Connect your agent
 
-Paste this prompt into the agent that you use. The agent adds SwB, connects your other apps and starts to talk to them.
+[Connect SwB to one agent](/docs/connect). Then paste this prompt into that agent. Ask it to connect your other apps.
 
 <SetupPrompt name="coordinator" lang="en" />
 
@@ -75,7 +77,7 @@ Paste this prompt into the agent that you use. The agent adds SwB, connects your
 
 ## Use another platform
 
-Fly.io, Koyeb and a server with Docker use a coding agent, for example Claude Code or Codex. Paste this prompt into the coding agent. The agent runs the deploy and tells you where to find your setup code.
+Paste this prompt into a coding agent such as Claude Code or Codex. The agent can run SwB on your computer. It can also deploy SwB to Fly.io, Koyeb or a server with Docker.
 
 <SetupPrompt name="deploy" lang="en" />
 

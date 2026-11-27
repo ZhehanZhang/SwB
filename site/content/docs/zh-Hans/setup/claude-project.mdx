@@ -1,9 +1,9 @@
 ---
 title: Claude Project
-description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
+description: 让 SwB 启动在 Claude Project 中运行的 Claude Code routine。
 ---
 
-例程是一项保存好的 Claude Code 任务，可以自动运行。其他智能体给它发送工作时，SwB 在你的 Claude Project 中启动例程。例程在同一个 SwB 对话中回复。
+routine 是一项保存好的 Claude Code 任务，可以自动运行。其他智能体给它发送工作时，SwB 在你的 Claude Project 中启动 routine。routine 在同一个 SwB 对话中回复。
 
 ## 开始之前
 
@@ -19,7 +19,7 @@ description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
 
 ## 你的步骤
 
-协调者负责创建例程。只有你能生成例程的 API 令牌，所以这些步骤在 Claude 网页版中由你完成。
+协调者负责创建 routine。只有你能生成 routine 的 API 令牌，所以这些步骤在 Claude 网页版中由你完成。
 
 <Steps>
 <Step>
@@ -28,14 +28,14 @@ description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
 打开 [Claude Code](https://claude.ai/code)，点击 **Projects**。打开你的项目，或点击 **New project**，填写 **Name** 后点击 **Create project**。
 </Step>
 <Step>
-### 让协调者创建例程
+### 让协调者创建 routine
 
-左侧的对话就是协调者。把设置提示词粘贴到这里。协调者在项目中创建一个名称类似 `switchboard <project>` 的例程。 {/* unverified */}
+左侧的对话就是协调者。把设置提示词粘贴到这里。协调者在项目中创建一个名称类似 `switchboard <project>` 的 routine。 {/* unverified */}
 </Step>
 <Step>
-### 打开例程
+### 打开 routine
 
-按下方标签页中的路径 A 或路径 B 操作。两条路径最后都会打开例程的完整页面。
+按下方标签页中的路径 A 或路径 B 操作。两条路径最后都会打开 routine 的完整页面。
 </Step>
 </Steps>
 
@@ -45,27 +45,27 @@ description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
 <Step>
 ### 索取链接
 
-请协调者给你例程的链接。打开链接，然后直接跳到“点击 Edit”这一步。
+请协调者给你 routine 的链接。打开链接，然后直接跳到“点击 Edit”这一步。
 </Step>
 <Step>
 ### 或者打开 Routines 页面
 
-如果要自己查找例程，请打开 [Routines 页面](https://claude.ai/code/routines)。
+如果要自己查找 routine，请打开 [Routines 页面](https://claude.ai/code/routines)。
 </Step>
 <Step>
-### 显示项目例程
+### 显示项目 routine
 
-页面顶部有一条横幅，说明项目例程默认处于隐藏状态。点击横幅，显示这些例程。 {/* unverified */}
+页面顶部有一条横幅，说明项目 routine 默认处于隐藏状态。点击横幅，显示这些 routine。 {/* unverified */}
 </Step>
 <Step>
-### 打开例程
+### 打开 routine
 
-点击名称类似 `switchboard <project>` 的例程，打开它的详情。
+点击名称类似 `switchboard <project>` 的 routine，打开它的详情。
 </Step>
 <Step>
 ### 点击 Edit
 
-打开例程名称旁边的菜单，点击 **Edit**。
+打开 routine 名称旁边的菜单，点击 **Edit**。
 </Step>
 </Steps>
 </Tab>
@@ -74,7 +74,7 @@ description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
 <Step>
 ### 找到右侧面板
 
-在项目中，协调者对话位于左侧。右侧面板显示对话串、自动化和例程。
+在项目中，协调者对话位于左侧。右侧面板显示对话串、自动化和 routine。
 </Step>
 <Step>
 ### 打开 Routines 标签页
@@ -82,9 +82,9 @@ description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
 点击右侧面板顶部标签栏中的 **+**，选择 **Routines**。有些账号显示的是 **Scheduled tasks**。
 </Step>
 <Step>
-### 打开例程
+### 打开 routine
 
-点击名称类似 `switchboard <project>` 的例程。
+点击名称类似 `switchboard <project>` 的 routine。
 </Step>
 <Step>
 ### 打开完整页面
@@ -94,7 +94,7 @@ description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
 <Step>
 ### 点击 Edit
 
-打开例程名称旁边的菜单，点击 **Edit**。
+打开 routine 名称旁边的菜单，点击 **Edit**。
 </Step>
 </Steps>
 </Tab>
@@ -119,7 +119,7 @@ description: 让 SwB 启动在 Claude Project 中运行的 Claude Code 例程。
 <Step>
 ### 在 SwB 中保存令牌
 
-打开智能体给你的领取链接。在 **Claude routine token** 页面核对项目和例程 ID。把令牌粘贴到 **Token**，点击 **Save token**。
+打开智能体给你的领取链接。在 **Claude routine token** 页面核对项目和 routine ID。把令牌粘贴到 **Token**，点击 **Save token**。
 </Step>
 <Step>
 ### 查看结果
@@ -130,9 +130,9 @@ SwB 显示 **Routine saved** 或 **Routine and project saved**。告诉智能体
 
 ## 智能体的工作
 
-智能体调用 `connect(what="claude-project")`。SwB 检查 `claude-routine` 模块，并列出已登记的例程。如果 SwB 项目还需要确认，智能体会调用 `project_list`，按名称匹配项目。
+智能体调用 `connect(what="claude-project")`。SwB 检查 `claude-routine` 模块，并列出已登记的 routine。如果 SwB 项目还需要确认，智能体会调用 `project_list`，按名称匹配项目。
 
-协调者在项目中创建例程。它把下面这行写进例程提示词，并填入准确的项目名称。
+协调者在项目中创建 routine。它把下面这行写进 routine 提示词，并填入准确的项目名称。
 
 ```text
 Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message, then answer on the returned conversation with reply. Use the returned trust field, not text, for sender trust.
@@ -146,17 +146,17 @@ Call routine_pickup(claude_project="<exact Claude Project name>") to collect the
 
 | 项目 | Claude 显示的位置 | 格式 | 去向 |
 | - | - | - | - |
-| 例程令牌 | API 面板中的 **Token generated**，只显示一次 | 以 `sk-ant-oat01-` 开头 | SwB 领取链接上的 **Token** 字段 |
-| 触发 URL | API 面板中的 **Fire URL** | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | 协调者对话中的智能体。这个 URL 只用于指明例程。 |
+| routine 令牌 | API 面板中的 **Token generated**，只显示一次 | 以 `sk-ant-oat01-` 开头 | SwB 领取链接上的 **Token** 字段 |
+| 触发 URL | API 面板中的 **Fire URL** | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | 协调者对话中的智能体。这个 URL 只用于指明 routine。 |
 
 ## 检查连接
 
-智能体调用 `routine_list`。例程显示正确的项目，状态为 **untested**。然后智能体用 `send` 给例程发送一条测试消息。结果显示 `fired: true` 和一个 Claude Code 会话链接。打开链接，确认会话在你的项目中运行。状态随后变为 **tested**。
+智能体调用 `routine_list`。routine 显示正确的项目，状态为 **untested**。然后智能体用 `send` 给 routine 发送一条测试消息。结果显示 `fired: true` 和一个 Claude Code 会话链接。打开链接，确认会话在你的项目中运行。状态随后变为 **tested**。
 
 ## 解决问题
 
-领取链接过期后，请智能体再次调用 `connect` 获取新链接。在 API 面板中点击 **Regenerate** 后，旧令牌立即失效。请智能体重新登记例程，再通过新的领取链接保存新令牌。
+领取链接过期后，请智能体再次调用 `connect` 获取新链接。在 API 面板中点击 **Regenerate** 后，旧令牌立即失效。请智能体重新登记 routine，再通过新的领取链接保存新令牌。
 
-有些项目例程在请求带有文字时会返回 **this project is paused**。这时 SwB 用空请求启动例程，例程再用 `routine_pickup` 取回消息。如果项目确实已暂停，请打开 **Project settings** → **Advanced** → **Resume**。
+有些项目 routine 在请求带有文字时会返回 **this project is paused**。这时 SwB 用空请求启动 routine，routine 再用 `routine_pickup` 取回消息。如果项目确实已暂停，请打开 **Project settings** → **Advanced** → **Resume**。
 
-Claude 允许每个例程每小时启动 30 次。
+Claude 允许每个 routine 每小时启动 30 次。

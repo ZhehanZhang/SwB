@@ -3,6 +3,10 @@ title: First run
 description: Make SwB reachable, sign in and see your instance.
 ---
 
+## Run on this computer
+
+For local browser sign-in, set `SWITCHBOARD_PUBLIC_URL=http://localhost:8870` before you start SwB. Use the port from `PORT` in the address. If the YAML config sets `public_url`, change it there. The [Install](/docs/install) commands set up local sign-in on port 8870.
+
 ## Get a public address
 
 Claude, ChatGPT and Grok run in the cloud. They need a public HTTPS address to reach SwB. Start SwB with a tunnel to get one.
@@ -19,7 +23,9 @@ SwB opens a Cloudflare Quick Tunnel and prints the public MCP address. Use `--tu
 swb status
 ```
 
-The status shows each block and the next step for each block. Your agents read the same status through the `switchboard_status` tool.
+The command shows the server status and whether each block is on or off. It prints one **Next steps** list. The `switchboard_status` tool also reports the next step for each block.
+
+For a server at another address, set `--url`, for example `swb status --url http://127.0.0.1:8871`. The CLI uses the `PORT` value from the shell or instance `.env` for its default local address. Pass the same instance folder with `--dir` if you used it with `swb up`.
 
 ## Sign in to the web page
 
@@ -31,7 +37,7 @@ The web page shows your projects, agents, inbox, memory and audit log. It is als
 swb login-link
 ```
 
-The command prints a sign-in link. The link works one time, for five minutes. Open it in your browser. On the first sign-in, add a passkey. Use the passkey for the next sign-ins. [Owner sign-in](/docs/owner-login) has the other methods.
+The command prints a one-time sign-in link. Open it in your browser within five minutes. Use `--url` and `--dir` here as you would with `swb status`. After your first sign-in, add a passkey. Use it for later sign-ins. See [Owner sign-in](/docs/owner-login) for setup codes and other methods.
 
 ## Web console
 
