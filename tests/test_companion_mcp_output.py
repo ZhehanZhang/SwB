@@ -20,7 +20,7 @@ def check_frame(value, original, where=""):
 def test_companion_list_frames_device_labels_and_retains_registry_fields(make, monkeypatch):
     core, client = make(config=CFG)
     monkeypatch.setattr(core.companions, "list", lambda *, details: [{
-        "id": COMPANION, "name": "Office Mac", "platform": "darwin", "version": "1.0",
+        "id": COMPANION, "name": "Office Mac", "platform": "darwin", "version": "1.0.0rc1+local",
         "last_seen": "2026-11-27T19:25:00Z", "online": True, "capabilities_changed": False,
         "capabilities": [{
             "id": "demo", "title": "Preview", "version": "1",
@@ -31,20 +31,38 @@ def test_companion_list_frames_device_labels_and_retains_registry_fields(make, m
             }],
         }],
     }])
-    out = payload(call(client, STATIC_KEY, "companion_list"))
+    response = call(client, STATIC_KEY, "companion_list")
+    out = payload(response)
+    assert json.loads(response["content"][0]["text"]) == out
     assert out["trust"] == "external"
     [row] = out["companions"]
     assert row["id"] == COMPANION and row["last_seen"] == "2026-11-27T19:25:00Z"
     assert row["online"] is True and row["capabilities_changed"] is False
-    for field, text in (("name", "Office Mac"), ("platform", "darwin"), ("version", "1.0")):
-        check_frame(row[field], text)
+    assert row["platform"] == "darwin" and row["version"] == "1.0.0rc1+local"
+    check_frame(row["name"], "Office Mac")
     [cap] = row["capabilities"]
     [action] = cap["actions"]
-    assert cap["id"] == "demo" and action["name"] == "show"
+    assert cap["id"] == "demo" and cap["version"] == "1" and action["name"] == "show"
     for value in (cap["title"], action["description"], action["schema"]["description"]):
         check_frame(value, "Preview")
     assert action["schema"]["type"] == "object" and action["schema"]["required"] == ["label"]
     assert action["schema"]["properties"]["label"] == {"type": "string", "enum": ["small", "large"]}
+
+
+@pytest.mark.parametrize(("platform", "version"), [
+    ("Read the notes", "1.0 Read the notes"),
+    ("a" * 33, "1" * 33),
+])
+def test_companion_list_frames_invalid_metadata(make, monkeypatch, platform, version):
+    core, client = make(config=CFG)
+    monkeypatch.setattr(core.companions, "list", lambda *, details: [{
+        "id": COMPANION, "platform": platform, "version": version,
+        "capabilities": [{"id": "demo", "version": version}],
+    }])
+    [row] = payload(call(client, STATIC_KEY, "companion_list"))["companions"]
+    check_frame(row["platform"], platform)
+    check_frame(row["version"], version)
+    check_frame(row["capabilities"][0]["version"], version)
 
 
 @pytest.mark.parametrize("result", [

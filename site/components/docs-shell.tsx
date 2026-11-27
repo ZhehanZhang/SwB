@@ -19,7 +19,7 @@ function ChatLayout({ children, ...props }: DocsLayoutProps) {
   return (
     <DocsLayout {...props} aiChat={{ open, onOpenChange: setOpen, panel: <AIChatPanel /> }}>
       {children}
-      <AIChatTrigger className="swb-ask-trigger" />
+      <AIChatTrigger className="swb-button swb-ask-trigger" />
     </DocsLayout>
   );
 }

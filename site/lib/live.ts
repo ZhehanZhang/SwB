@@ -9,6 +9,13 @@ export const trips: [MarkKind, MarkKind][] = [
   ['dots', 'claude'],
 ];
 
+export const agentPairs = trips.map(([a, b], n) => ({ a, b, n }))
+  .filter(({ a, b }) => a !== 'slack' && a !== 'github' && b !== 'slack' && b !== 'github');
+
+export function agentPair(step: number) {
+  return agentPairs.findLast(({ n }) => n <= step) ?? agentPairs[0];
+}
+
 export const LEG = 0.85;
 export const STEP = 2.2;
 export const CYCLE = trips.length * STEP;

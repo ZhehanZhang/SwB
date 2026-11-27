@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from conftest import base_config, new_core
+from conftest import STATIC_KEY, base_config, new_core, payload
+from conftest import call as call_tool
 from switchboard import cli
 from switchboard.app import create_app
 from switchboard.companion import client
@@ -149,6 +150,33 @@ def test_connect_persists_device_name_for_hello(settings, monkeypatch):
     cli.main(["companion", "connect", URL, "--code", CODE, "--no-run", "--name", "  Desk companion  "])
     assert CompanionState.load(settings).name == "Desk companion"
     cli.main(["companion", "run"])
+
+
+def test_connect_registers_distinct_device_names_on_one_host(make, tmp_path, monkeypatch):
+    _, server = make(config=base_config(version=2, blocks={"mcp": {}}, public_url=URL))
+    factory = client._client
+
+    def make_client(url, key=None):
+        connection = factory(url, key)
+        connection._transport = httpx.ASGITransport(app=server.app)
+        return connection
+
+    monkeypatch.setattr(client, "_client", make_client)
+    monkeypatch.setattr(client.socket, "gethostname", lambda: "fixture-host")
+    expected = {}
+    for name in ("Desk companion", "Studio companion", None):
+        code = payload(call_tool(server, STATIC_KEY, "companion_code"))["code"]
+        monkeypatch.setenv("SWB_COMPANION_HOME", str(tmp_path / (name or "default")))
+        args = ["companion", "connect", URL, "--code", code, "--no-run"]
+        cli.main(args + (["--name", name] if name else []))
+        state = CompanionState.load(state_path())
+        expected[state.companion_id] = name or "fixture-host"
+
+    rows = payload(call_tool(server, STATIC_KEY, "companion_list"))["companions"]
+    assert len(rows) == len(expected) == 3
+    assert {row["id"] for row in rows} == set(expected)
+    for row in rows:
+        assert f'\n{expected[row["id"]]}\nswb-untrusted>>>' in row["name"]
 
 
 @pytest.mark.parametrize("name", [" ", "a" * 121, "device\nname"])

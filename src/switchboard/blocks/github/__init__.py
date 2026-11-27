@@ -765,7 +765,7 @@ class GitHubBlock(Block):
             if payload.get(key) in allowed:
                 generated[key] = payload[key]
         if metadata := {key: value for key, value in payload.items() if key not in generated}:
-            parts = {"metadata": {"text": json.dumps(metadata, ensure_ascii=False), "author_id": None, "owner": False}, **parts}
+            parts = {"metadata": {"text": json.dumps(metadata, ensure_ascii=False), "author_id": sender_id or repo, "owner": False}, **parts}
         rendered = frame_parts(parts, where)
         details = join_parts(rendered)
         title_sender = "Mixed authors" if mixed_authors else f"User {user_id}" if user_id else "Unknown sender"

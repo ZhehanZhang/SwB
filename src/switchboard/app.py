@@ -111,7 +111,11 @@ class BearerGate:
         mcp_or_inbox = mcp or inbox_feed
         if wrong_realm and not mcp_or_inbox:
             target = CLAIM_PATH if path.startswith(CLAIM_PATH + "/") else None
-            self._companion_refused(scope, target, "companion key outside the companion API", token)
+            detail = "companion key outside the companion API"
+            if path.rstrip("/") == "/api/companions":
+                target = "/api/companions"
+                detail = "companion key on the owner companion API"
+            self._companion_refused(scope, target, detail, token)
             response = JSONResponse({"error": "invalid_token", "error_description": "Use a credential for this endpoint."},
                                     status_code=401, headers={"WWW-Authenticate": 'Bearer error="invalid_token"', "Cache-Control": "no-store"})
             return await response(scope, receive, send)
