@@ -51,8 +51,17 @@ def test_override_needs_permission(make, capy):
 def test_no_route_needs_a_target(make):
     cfg = {"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["owner@example.test"]}, "destinations": {"capy": {}}}
     _, c = make(config=cfg)
-    assert "no Capy route" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
+    assert "No route is set for Capy" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
     assert payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "target": CAPTAIN}))["route"] == "explicit"
+
+
+def test_send_checks_for_a_route_before_capy_credentials(make):
+    cfg = {"version": 2, "blocks": {"mcp": {}, "capy": {}}}
+    core, client = make(config=cfg, env={"SWITCHBOARD_KEY_CAPY": STATIC_KEY})
+    args = {"task": "Check the build"}
+    assert "No route is set for Capy" in error_text(call(client, STATIC_KEY, "send", args))
+    put(core.routes, None, None, CAPTAIN)
+    assert "CAPY_API_KEY missing" in error_text(call(client, STATIC_KEY, "send", args))
 
 
 def test_route_tools_validate_and_audit(make):

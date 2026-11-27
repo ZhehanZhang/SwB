@@ -610,7 +610,7 @@ class Switchboard:
             return min(found, key=lambda x: (x[0], x[1]))[2]
         if routable:
             return routable[0]
-        raise CoreError("nothing to send to: no block that takes routes is configured; pass to (an agent:<name> mailbox or a block target)")
+        raise CoreError("No route is set. Set a route or pass a target.")
 
     def project_systems(self, targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Per switchboard project, its counterpart in each system: the target each route reaches, block targets that
