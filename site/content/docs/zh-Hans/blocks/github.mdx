@@ -48,6 +48,8 @@ blocks:
 
 ## 所有者账号
 
+在 `off` 模式下，SwB 丢弃该空间的所有 GitHub 事件，包括所有者账号的事件。
+
 工作模式只接收来自已配置的所有者账号的事件。将 `https://api.github.com/users/USERNAME` 中的 `USERNAME` 换成你的 GitHub 用户名。打开该地址。将数字 `id` 填入空间的 `owner_ids` 列表。重启 SwB 以应用设置。
 
 ```yaml

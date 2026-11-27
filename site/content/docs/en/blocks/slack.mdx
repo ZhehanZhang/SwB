@@ -5,7 +5,7 @@ description: Route Slack messages to agents and post the answers in the thread.
 
 ## Make the Slack app
 
-Get the app manifest from `manifests/` in the SwB repository. Use `workspace-a-agent.yaml` for a workspace with a bot. Use `workspace-b-user-only.yaml` for a workspace where SwB acts as your account only.
+Copy the YAML app manifest from [Slack setup](/docs/setup/slack#app-manifests). Choose the manifest for a bot or for your account only.
 
 Install the app in your workspace. Ask an agent to connect Slack, or run `swb connect slack`. If a token is missing, SwB gives you a claim link for that workspace. The fields match the workspace settings.
 

@@ -1,7 +1,7 @@
-import { requestJson } from "@/lib/api"
-import { agentLogo, principalLabel } from "@/lib/agent-identity"
-import { displayReference } from "@/lib/display-reference"
-import type { AuditEvent } from "../audit/events"
+import { agentLogo, principalLabel } from "../../lib/agent-identity.js"
+import { ApiError, requestJson } from "../../lib/api.js"
+import { displayReference } from "../../lib/display-reference.js"
+import type { AuditEvent } from "../audit/events.js"
 
 export type Key = {
   id: string
@@ -39,7 +39,7 @@ type Target = {
 }
 type Pending = { name: string; project: string; created_by: string; created_at: string; claim_url?: string | null }
 type Inventory = { keys: Key[]; routines: Routine[]; captains: Target[]; dots: Target[]; pending_claims: Pending[] }
-type AgentKind = "routine" | "captain" | "dot" | "key" | "pending"
+type AgentKind = "routine" | "captain" | "dot" | "key" | "mailbox" | "pending"
 
 export type Agent = {
   id: string
@@ -63,7 +63,13 @@ export type AgentSetup = {
   any: { prompt: string }
   coding_agents: { id: string; snippet: string; where: string }[]
 }
-export type AgentDetail = { keys: Key[]; routines: Routine[]; audit: AuditEvent[] }
+export type AgentDetail = { agent: Agent; keys: Key[]; routines: Routine[]; audit: AuditEvent[] }
+type AgentDetailResponse = Omit<AgentDetail, "agent"> & (
+  | { kind: "routine"; agent: Routine }
+  | { kind: "captain"; agent: Target }
+  | { kind: "dot"; agent: Target }
+  | { kind: "key" | "mailbox"; agent: Key }
+)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -103,9 +109,17 @@ export function isAgentSetup(value: unknown): value is AgentSetup {
     && value.coding_agents.every((row: unknown) => isRecord(row) && typeof row.id === "string" && typeof row.snippet === "string" && typeof row.where === "string")
 }
 
-export function isAgentDetail(value: unknown): value is AgentDetail {
-  return isRecord(value) && Array.isArray(value.keys) && value.keys.every(isKey)
-    && Array.isArray(value.routines) && value.routines.every(isRoutine) && Array.isArray(value.audit)
+function isAgentDetail(value: unknown): value is AgentDetailResponse {
+  if (!isRecord(value) || !Array.isArray(value.keys) || !value.keys.every(isKey)
+    || !Array.isArray(value.routines) || !value.routines.every(isRoutine) || !Array.isArray(value.audit)) return false
+  switch (value.kind) {
+    case "routine": return isRoutine(value.agent)
+    case "captain":
+    case "dot": return isTarget(value.agent)
+    case "key":
+    case "mailbox": return isKey(value.agent)
+    default: return false
+  }
 }
 
 function principal(value?: string | null): string | null {
@@ -116,30 +130,67 @@ function principal(value?: string | null): string | null {
 
 export const agentListKey = ["registered-agents"]
 
+function routineAgent(row: Routine): Agent {
+  return {
+    id: `routine:${row.block}:${row.name}`, reference: row.name, block: row.block, type: "routine", name: row.name, kind: "routine",
+    logo: row.agent === "grok" ? "grok-routine" : row.agent, projects: row.project ? [row.project] : [],
+    registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
+    last_seen: row.last_seen_at ?? null, state: row.status.startsWith("tested") ? "on" : row.status === "untested" ? "off" : "fault",
+  }
+}
+
+function targetAgent(kind: "captain" | "dot", row: Target): Agent {
+  return {
+    id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
+    name: kind === "captain" ? displayReference(row.name, "Captain") : row.name, kind,
+    logo: kind, projects: row.projects ?? (row.project ? [row.project] : []),
+    avatar_url: row.avatar_url,
+    registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
+    last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",
+  }
+}
+
+function clientAgent(kind: "key" | "mailbox", row: Key): Agent {
+  return {
+    id: `${kind}:${row.id}`, reference: row.id, type: kind, name: principalLabel(row.agent), kind: kind === "key" ? "MCP client" : "Mailbox",
+    logo: agentLogo(row.agent),
+    projects: row.project ? [row.project] : [],
+    registered_by: principal(row.created_by), registered_at: row.created_at ?? null, last_seen: row.last_used_at ?? null,
+    state: row.last_used_at ? "on" : "off",
+  }
+}
+
+export const agentDetailKey = ["agent-detail"]
+
+export async function getAgentDetail(subject: string | Agent, signal: AbortSignal): Promise<AgentDetail | null> {
+  let path: string
+  if (typeof subject === "string") {
+    if (subject === "." || subject === "..") return null
+    path = `/api/agents/${encodeURIComponent(subject)}`
+  } else {
+    const params = new URLSearchParams({ kind: subject.type, id: subject.reference })
+    if (subject.block) params.set("block", subject.block)
+    path = `/api/agents/detail?${params}`
+  }
+  try {
+    const detail = await requestJson(path, isAgentDetail, { signal })
+    const agent = detail.kind === "routine" ? routineAgent(detail.agent)
+      : detail.kind === "captain" || detail.kind === "dot" ? targetAgent(detail.kind, detail.agent)
+        : clientAgent(detail.kind, detail.agent)
+    return { agent, keys: detail.keys, routines: detail.routines, audit: detail.audit }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null
+    throw error
+  }
+}
+
 export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
   const { keys, routines, captains, dots, pending_claims: pending } = await requestJson("/api/agents", isInventory, { signal })
   return [
-    ...routines.map((row): Agent => ({
-      id: `routine:${row.block}:${row.name}`, reference: row.name, block: row.block, type: "routine", name: row.name, kind: "routine",
-      logo: row.agent === "grok" ? "grok-routine" : row.agent, projects: row.project ? [row.project] : [],
-      registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
-      last_seen: row.last_seen_at ?? null, state: row.status.startsWith("tested") ? "on" : row.status === "untested" ? "off" : "fault",
-    })),
-    ...(["captain", "dot"] as const).flatMap((kind) => (kind === "captain" ? captains : dots).map((row): Agent => ({
-      id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
-      name: kind === "captain" ? displayReference(row.name, "Captain") : row.name, kind,
-      logo: kind, projects: row.projects ?? (row.project ? [row.project] : []),
-      avatar_url: row.avatar_url,
-      registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
-      last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",
-    }))),
-    ...keys.map((row): Agent => ({
-      id: `key:${row.id}`, reference: row.id, type: "key", name: principalLabel(row.agent), kind: "MCP client",
-      logo: agentLogo(row.agent),
-      projects: row.project ? [row.project] : [],
-      registered_by: principal(row.created_by), registered_at: row.created_at ?? null, last_seen: row.last_used_at ?? null,
-      state: row.last_used_at ? "on" : "off",
-    })),
+    ...routines.map(routineAgent),
+    ...captains.map((row) => targetAgent("captain", row)),
+    ...dots.map((row) => targetAgent("dot", row)),
+    ...keys.map((row) => clientAgent("key", row)),
     ...pending.map((row): Agent => ({
       id: `pending:${row.name}`, reference: row.name, type: "pending", name: row.name, kind: "routine", logo: "claude",
       projects: [row.project], registered_by: principal(row.created_by), registered_at: row.created_at,

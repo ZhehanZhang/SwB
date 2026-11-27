@@ -1,6 +1,6 @@
 import pytest
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, default_env
+from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, default_env, payload
 
 DISCORD_TOKEN = ".".join(("a" * 24, "b" * 6, "c" * 35))
 TELEGRAM_TOKEN = "123456:" + "a" * 36
@@ -115,21 +115,30 @@ def test_connection_routes_require_owner_and_list_unconfigured(make, platform):
 
 
 @pytest.mark.parametrize("configured", [False, True])
-def test_github_connection_exposes_safe_webhook_status(make, configured):
+def test_github_connection_exposes_safe_webhook_status(make, monkeypatch, configured):
     secret, token = "test-signing-secret", "test-github-token"
-    env = {"GITHUB_TOKEN": token}
+    owner_key = "example-owner-key-for-connection-tests"
+    env = {"GITHUB_TOKEN": token, "SWITCHBOARD_KEY_OWNER": owner_key}
     if configured:
         env["GITHUB_WEBHOOK_SECRET"] = secret
     core, client = make(base_config(version=2, blocks={
+        "mcp": {},
         "repos": {"use": "github", "spaces": {"team": {"repo": "ACME/App"}}},
     }), env=env)
     core.projects.create(slug="demo", name="Demo", links={"repos": ["acme/other"]})
+
+    async def verify_pat(_):
+        return []
+
+    monkeypatch.setattr(core.blocks["repos"].api, "verify_pat", verify_pat)
     response = client.get("/api/connections/github", headers=OWNER)
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
     assert response.json() == {
         "platform": "github", "block": "repos", "state": "connected" if configured else "disconnected",
         "details": {"repositories": ["acme/app", "acme/other"], "credential": "pat", "dropped": 0, "refused": 0},
     }
+    status = payload(call(client, owner_key, "repos_status"))
+    assert status["state"] == response.json()["state"]
     assert secret not in response.text and token not in response.text
     assert client.get("/api/connections/github/avatar", headers=OWNER).status_code == 404
 

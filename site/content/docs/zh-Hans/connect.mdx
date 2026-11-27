@@ -1,15 +1,15 @@
 ---
 title: 连接你的智能体
-description: 把 SwB 添加到智能体，然后让智能体完成其余工作。
+description: 把 SwB 添加到智能体并设置连接。
 ---
 
 ## 把 SwB 添加到智能体
 
-客户端和 SwB 在同一台电脑上运行时，请在本机配对。对于托管应用，请把 SwB 添加为远程 MCP 服务器。使用公网 MCP 地址，例如 `https://swb.example.com/mcp`。在 SwB 页面批准应用的 OAuth 登录。
+客户端和 SwB 在同一台电脑上运行时，请选择[所有者权限或配对](/zh-Hans/docs/setup/mcp-client)。对于托管应用，请把 SwB 添加为远程 MCP 服务器。使用公网 MCP 地址，例如 `https://swb.example.com/mcp`。在 SwB 页面批准应用的 OAuth 登录。
 
 | 应用 | 添加 SwB 的位置 |
 | - | - |
-| [本机 MCP 客户端](/zh-Hans/docs/setup/mcp-client) | 使用配对码。在运行 SwB 的电脑上使用 `http://localhost:8870/mcp`。 |
+| [本机 MCP 客户端](/zh-Hans/docs/setup/mcp-client) | 使用所有者密钥，或用配对码配对。在运行 SwB 的电脑上使用 `http://localhost:8870/mcp`。 |
 | Claude 和 Claude Project | Customize → Connectors → Add → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → 添加自定义 MCP 服务器 |
 | Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
@@ -21,12 +21,14 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 
 ## 询问你的智能体
 
-你的智能体负责设置其他连接。用日常的话询问它即可。
+拥有所有者权限的智能体可以设置其他连接。使用配对密钥时，智能体会为每个仅限所有者的步骤提供终端命令。
+
+所有者权限需要所有者批准的 OAuth 登录，或来自 `SWITCHBOARD_KEY_<NAME>` 的密钥。请使用可访问所有范围、工具和目标的凭据。`auth.key_scopes`、`auth.key_tools` 和 `auth.key_targets` 会限制访问权限。
 
 | 询问 | 智能体的操作 |
 | - | - |
 | 如何连接我的 Claude Project？ | 它为项目注册 Claude routine，并给你一个领取链接 |
-| 把 Slack 连接到 SwB。 | 它会指引你从仓库的 `manifests/` 目录获取应用清单，并在需要时提供领取链接 |
+| 把 Slack 连接到 SwB。 | 它会引导你查看 [Slack 设置](/zh-Hans/docs/setup/slack#应用清单)中的 YAML 清单，并在需要时提供领取链接 |
 | 连接我的 Discord 机器人。 | 它给你一个领取链接和机器人邀请链接 |
 | 把这个发给我的 Capy Captain。 | 它发送任务并等待答复 |
 | 你能发送给哪些目标？ | 它列出 SwB 能访问的所有目标 |
@@ -35,7 +37,7 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 
 ## 在终端中连接
 
-同样的步骤也可用 `swb` 命令完成。
+在 SwB 实例目录中运行 `swb connect`。该命令使用 `.env` 中的所有者密钥，默认连接本机 SwB 地址。用 `--dir` 指定实例目录。用 `--url` 指定 SwB 地址。运行 `swb login-link` 可获取一次性所有者登录链接。
 
 ```bash
 swb connect mcp-client

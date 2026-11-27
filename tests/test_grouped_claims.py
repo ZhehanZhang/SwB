@@ -44,6 +44,18 @@ def test_single_github_claims_validate_before_saving(make):
         assert client.get(path, headers=OWNER).status_code == 410
 
 
+def test_github_app_id_claim_accepts_positive_signed_64_bit_values(make):
+    core, client = make(base_config(version=2, blocks={"github": {}}))
+    path = urlsplit(core.claims.mint("GITHUB_APP_ID", PUBLIC, kind="id")).path
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    for invalid in ("0", str(2**63), "9" * 23):
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": invalid})
+        assert response.status_code == 400 and core.secret("GITHUB_APP_ID") is None
+    maximum = str(2**63 - 1)
+    response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": maximum})
+    assert response.status_code == 200 and core.secret("GITHUB_APP_ID") == maximum
+
+
 def test_reissued_github_claim_and_earlier_link_are_each_single_use(make):
     core, client = make(config=base_config(version=2, blocks={"mcp": {}, "github": {}}))
     block = core.blocks["github"]

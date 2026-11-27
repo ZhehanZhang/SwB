@@ -7,7 +7,7 @@ description: 設定 SwB 在各空間中處理訊息的方式。
 
 | 模式 | SwB 的行為 |
 | - | - |
-| `off` | 捨棄其他人傳來的訊息 |
+| `off` | 捨棄所有 GitHub 事件，包含擁有者的事件。在 Slack、Discord 和 Telegram 中捨棄其他人傳來的訊息 |
 | `watch` | 收集訊息並彙整成摘要 |
 | `assist` | 喚醒代理，讓它參考上下文並在原討論串回覆 |
 | `triage` | 喚醒分流代理。預設動作是在原討論串回覆 |
@@ -20,6 +20,17 @@ description: 設定 SwB 在各空間中處理訊息的方式。
 ## 設定模式
 
 在連線或專案頁面的 **Channel modes** 設定模式。也可以在 YAML 設定。擁有者可以用 `space_mode` 指定模式、目標、專案和允許的動作。
+
+在 YAML 中為 `"off"` 加上引號，SwB 就會將它讀成文字。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      example-org/app:
+        mode: "off"
+```
 
 SwB 先查看已儲存的設定，再查看頻道和空間設定。接著查看模組的舊版設定、專案模式和 `modes.default`。預設模式為 `off`。
 

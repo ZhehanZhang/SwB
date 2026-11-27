@@ -26,9 +26,11 @@ def test_connect_schema_and_unknown_kinds(make):
     tool = next(t for t in tools if t["name"] == "connect")
     assert tool["title"] == "Connect to SwB"
     assert "call connect first" in tool["description"]
+    assert "until complete is true" in tool["description"]
     assert set(tool["inputSchema"]["properties"]) == {"what", "project", "choose"}
     out = connect(client, "unknown")
     assert out["what"] == "unknown"
+    assert out["complete"] is False
     assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "cloudflare", "coding-agent", "discord",
                             "dots", "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
 
@@ -49,6 +51,7 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
     _, client = make(config=cfg, env=env)
     out = connect(client, kind)
     assert out["what"] == kind and out["done"] == []
+    assert out["complete"] is False
     configure, restart = out["next"]
     assert configure["by"] == "you" and "config/switchboard.yaml" in configure["do"]
     assert "link" not in configure
