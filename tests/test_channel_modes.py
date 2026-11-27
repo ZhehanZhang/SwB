@@ -1,5 +1,6 @@
 """Resolver, chat intake, watch batching and owner controls, without live providers."""
 
+import json
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -24,6 +25,7 @@ from test_discord import GUILD, GUILD_2, ready
 from test_discord import USER as DISCORD_OWNER
 from test_discord import discord as _discord_fixture
 from test_discord import message as discord_message
+from test_github import ISSUE, SECRET, signed
 from test_telegram import GROUP, FakeBotAPI, update
 from test_telegram import OWNER_ID as TELEGRAM_OWNER
 from test_telegram import STRANGER as TELEGRAM_STRANGER
@@ -94,6 +96,88 @@ def test_github_repo_space_has_one_row_after_override(make):
     payload(call(client, STATIC_KEY, "space_mode", {"block": "github", "space": repo, "mode": "off"}))
     [row] = payload(call(client, STATIC_KEY, "modes_status"))["spaces"]
     assert (row["space"], row["channel"], row["mode"], row["source"]) == (repo, repo, "off", "override")
+
+
+def test_mode_target_must_appear_in_discovery(make):
+    repo = "example-org/app"
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {repo: {"mode": "watch"}}}})
+    core, client = make(cfg)
+    args = {"block": "github", "space": repo, "mode": "triage"}
+    for target in ("agent:unlisted", "unlisted", "github:repo:unknown"):
+        result = call(client, STATIC_KEY, "space_mode", {**args, "target": target})
+        assert "Choose a target from the targets list." in error_text(result)
+    assert not core.store.q("SELECT 1 FROM space_modes")
+    assert payload(call(client, STATIC_KEY, "space_mode", {**args, "target": "agent:claude"}))["target"] == "agent:claude"
+
+
+def test_listed_mailbox_visibility_applies_to_discord_and_github(make):
+    repo = "acme/app"
+    cfg = config()
+    cfg["blocks"]["discord"]["connect"] = False
+    cfg["blocks"]["github"] = {"spaces": {repo: {"mode": "watch"}}}
+    core, client = make(config=cfg, env={**default_env(), "GITHUB_WEBHOOK_SECRET": SECRET})
+    block = core.blocks["discord"]
+    client.portal.call(block.dispatch, "READY", ready())
+    channel = {"id": DISCORD_CHANNEL, "type": 0, "name": "deployments", "guild_id": GUILD}
+    client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "channels": [channel]})
+    pair = core.connections.mint(agent="beta", project=None, client=None, by="owner")
+    core.connections.redeem(pair["code"])
+    for provider, space, ref in (("discord", "home", DISCORD_CHANNEL), ("github", repo, repo)):
+        args = {"block": provider, "space": space, "channel": ref, "mode": "assist", "target": "agent:beta"}
+        assert payload(call(client, STATIC_KEY, "space_mode", args))["target"] == "agent:beta"
+    listed = payload(call(client, STATIC_KEY, "visibility_list"))["resources"]
+    beta_resources = [row["resource"] for row in listed if row["resource"].startswith("target:") and row["resource"].endswith("beta")]
+    assert beta_resources == ["target:beta"]
+
+    def set_visibility(resource, rule):
+        assert payload(call(client, STATIC_KEY, "visibility_set", {"resource": resource, "visibility": rule}))["visibility"] == rule
+
+    def outside_reports(ident):
+        frame = discord_message(id=str(ident), author={"id": "987", "username": "Reporter"}, member={},
+                                content="Discord report", guild_id=GUILD, channel_id=DISCORD_CHANNEL)
+        client.portal.call(block.dispatch, "MESSAGE_CREATE", frame)
+        body = json.dumps({"repository": {"full_name": repo}, "issue": ISSUE, "action": "opened",
+                           "sender": {"id": 321, "login": "reporter"}}).encode()
+        assert client.post("/github/webhook", content=body, headers=signed(body, "issues", f"example-{ident}")).status_code == 200
+
+    for resource in (f"channel:home/{DISCORD_CHANNEL}", f"channel:github/{repo}", *beta_resources):
+        set_visibility(resource, "shared")
+    outside_reports(10)
+    assert {item["from"]["origin"] for item in core.inbox.read(owner="beta")["items"]} == {"discord", "github"}
+    for resource in beta_resources:
+        set_visibility(resource, "private")
+    outside_reports(11)
+    assert core.inbox.read(owner="beta")["items"] == []
+    assert core.audit.recent(action="chat_event")[0]["detail"] == "target access restricted"
+    assert core.audit.recent(action="webhook")[0]["detail"] == "target access restricted"
+
+
+def test_owner_http_sets_and_clears_a_channel_target(make):
+    repo = "example-org/app"
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {repo: {"mode": "watch"}}}})
+    _, client = make(cfg)
+    csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
+    headers = {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": csrf}
+    args = {"block": "github", "space": repo, "channel": repo, "mode": "triage"}
+    bound = {**args, "target": "agent:claude"}
+    response = client.post("/api/modes", headers=headers, json=bound)
+    assert response.status_code == 200 and response.json()["space"]["target"] == "agent:claude"
+    edited = {**args, "actions": ["reply", "notify_owner"]}
+    response = client.post("/api/modes", headers=headers, json=edited)
+    assert response.status_code == 200 and response.json()["space"]["target"] == "agent:claude"
+    assert response.json()["space"]["actions"] == ["reply", "notify_owner"]
+    response = client.post("/api/modes", headers=headers, json={**args, "target": "   "})
+    assert response.status_code == 400
+    response = client.post("/api/modes", headers=headers, json={**args, "target": ""})
+    assert response.status_code == 200 and response.json()["space"]["target"] is None
+    response = client.post("/api/modes", headers=headers, json=bound)
+    assert response.status_code == 200
+    response = client.post("/api/modes", headers=headers, json={**args, "mode": "inherit"})
+    assert response.status_code == 200 and response.json()["space"]["target"] is None
+    response = client.post("/api/visibility", headers=headers, json={"resource": f"channel:{repo}", "visibility": "shared"})
+    assert response.status_code == 400
+    response = client.post("/api/visibility", headers=headers, json={"resource": f"channel:github/{repo}", "visibility": "shared"})
+    assert response.status_code == 200
 
 
 def test_slack_mode_requires_connected_workspace(make, monkeypatch):
@@ -174,6 +258,24 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
     [batch] = digests(core)
     assert batch["count"] == len(batch["items"]) == 50
     assert batch["items"][-1]["excerpt"] == "item 49"
+
+
+def test_owner_console_displays_the_watch_digest_title_and_content(make):
+    core, client = make(config=config(modes={"digest_minutes": 1}), env={})
+    link = f"https://discord.com/channels/{GUILD}/{DISCORD_CHANNEL}/10"
+    core.modes.watch("discord", "home", DISCORD_CHANNEL, "10", "7", "Ava", "Watch excerpt", link, None)
+    core.clock.t += 60
+    assert core.modes.flush() == 1
+    response = client.get("/api/inbox", headers=OWNER)
+    assert response.status_code == 200
+    [conversation] = response.json()["conversations"]
+    assert conversation["title"] == "Watch digest for home"
+    assert conversation["owner"] == "owner" and conversation["open"] is False
+    response = client.get(f"/api/conversations/{conversation['handle']}", headers=OWNER)
+    assert response.status_code == 200
+    [item] = response.json()["items"]
+    assert (item["kind"], item["count"], item["trust"]) == ("watch_digest", 1, "external")
+    assert item["text"] == f"1 event\n\nAva\nWatch excerpt\n{link}"
 
 
 @pytest.fixture(params=["discord", "telegram"])
@@ -333,10 +435,10 @@ def test_active_modes_wake_for_non_mentions_only_when_visible(intake, mode):
 def test_live_override_changes_provider_intake_and_inherit_restores_it(intake):
     with intake("assist") as chat:
         args = (principal(), chat.block.name, "home")
-        chat.core.modes.set(*args, mode="off")
+        chat.client.portal.call(lambda: chat.core.modes.set(*args, mode="off"))
         chat.send(10, "ignored while overridden")
         assert not chat.wakes()
-        chat.core.modes.set(*args, mode="inherit")
+        chat.client.portal.call(lambda: chat.core.modes.set(*args, mode="inherit"))
         chat.send(11, "handled after inheriting")
         [text] = chat.wakes()
         assert "handled after inheriting" in text
@@ -397,7 +499,7 @@ def test_restricted_wake_cannot_write_with_or_without_its_handle(intake, mode):
 
 def test_notify_owner_only_reaches_the_owner_or_default_mailbox(intake):
     with intake("triage") as chat:
-        chat.core.modes.set(principal(), chat.block.name, "home", "triage", chat.channel, ["notify_owner"])
+        chat.client.portal.call(chat.core.modes.set, principal(), chat.block.name, "home", "triage", chat.channel, ["notify_owner"])
         chat.send(100, "Feedback to summarize")
         handle = chat.core.store.one("SELECT handle FROM chat_relays")["handle"]
         bad = call(chat.client, STATIC_KEY, "agent_send", {"conversation": handle, "to": "someone-else", "text": "A note"})
@@ -578,7 +680,7 @@ def test_delayed_triage_reply_follows_the_current_mode_and_is_audited(intake):
         assert len(chat.posts) == before + 1
         [audit] = chat.core.audit.recent(action="triage.reply", outcome="ok")
         assert audit["ref"].endswith("/100")
-        chat.core.modes.set(principal(), chat.block.name, "home", "watch", chat.channel)
+        chat.client.portal.call(chat.core.modes.set, principal(), chat.block.name, "home", "watch", chat.channel)
         chat.client.portal.call(chat.block.relay, {"kind": "final", "handle": handle, "text": "Late answer"})
         assert len(chat.posts) == before + 1
         assert chat.core.audit.recent(action="reply_withheld", outcome="refused")

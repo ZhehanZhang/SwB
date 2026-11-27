@@ -24,7 +24,6 @@ from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
 from ...subject import subject, wake_text
-from ...targets import slugify
 from ...trust import wrap
 from ...visibility import Who
 from .. import Action, Block, BlockError, BlockRefused, Call, Manifest
@@ -274,6 +273,9 @@ class GitHubBlock(Block):
 
     def sink_names(self, repo: str) -> set[str]:
         return self.repo_routes.get(repo, set()) | self.repo_routes.get(f"{repo.split('/', 1)[0]}/*", set())
+
+    def channel_resources(self, space: str, repo: str) -> list[str]:
+        return list(dict.fromkeys((f"channel:{space}/{repo}", f"channel:{self.name}/{repo}")))
 
     def legacy_watch(self, repo: str) -> bool:
         return bool(self.sink_names(repo.casefold()))
@@ -695,7 +697,7 @@ class GitHubBlock(Block):
             return
         principal = Principal(self.name, ip, "github", origin=self.name, trust="owner" if owner else "external")
         who = Who(owner=owner, id=f"github:{user_id}", workspace=space)
-        if not self.core.visibility.allows(who, f"channel:{space}/{repo}", f"channel:{self.name}/{repo}"):
+        if not self.core.visibility.allows(who, *self.channel_resources(space, repo)):
             self.drop(event, data, "channel access restricted", ip, delivery)
             return
         if not target:
@@ -710,7 +712,10 @@ class GitHubBlock(Block):
             self.drop(event, data, f"{mode} target is unavailable", ip, delivery)
             return
         try:
-            if not self.core.visibility.allows(who, f"target:{slugify(target)}", f"target:{slugify(addr.id)}"):
+            if not owner and addr.block != "agent":
+                await self.core.targets()
+            resources = self.core.target_visibility_resources(target, addr)
+            if not resources or not self.core.visibility.allows(who, *resources):
                 self.drop(event, data, "target access restricted", ip, delivery)
                 return
             if not owner:

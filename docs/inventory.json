@@ -2905,7 +2905,7 @@
       "name": "github_status"
     },
     {
-      "description": "Your switchboard mailbox: replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. A reply to a message you sent carries in_reply_to with that conversation. Each item's from and trust say who sent it, from switchboard's own data. Answer a message with reply(conversation=<its handle>, text). No arguments needed; conversation, project and block only narrow it. Never blocks.",
+      "description": "Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
       "icon": null,
       "id": "tool:inbox",
       "input_properties": [
@@ -3448,7 +3448,7 @@
       "name": "slack_write_requests"
     },
     {
-      "description": "Owner only. Set a space or channel override. Use inherit to clear it. The triage agent can reply by default.",
+      "description": "Owner only. Set a space or channel override. Choose a target listed by targets, such as agent:beta. Omit target to keep the binding. Pass an empty target to clear it. Use inherit to clear the override. The triage agent can reply by default.",
       "icon": null,
       "id": "tool:space_mode",
       "input_properties": [
@@ -3457,7 +3457,8 @@
         "channel",
         "mode",
         "project",
-        "space"
+        "space",
+        "target"
       ],
       "kind": "tool",
       "label": "Set a channel mode",
@@ -3533,7 +3534,7 @@
       "name": "telegram_status"
     },
     {
-      "description": "Every resource's visibility: private (only the owner and his own agents) or shared (anyone in that workspace, or a narrowed list). Resources are target:<slug>, channel:<workspace>/<id or #name>, memory:<scope>, route:<id> and tool:<name>; defaults are per kind.",
+      "description": "List the resource names and visibility rules for targets, channels, memory and routes. Tools use private visibility. Use a listed resource with visibility_set.",
       "icon": null,
       "id": "tool:visibility_list",
       "input_properties": [],
@@ -3542,7 +3543,7 @@
       "name": "visibility_list"
     },
     {
-      "description": "Owner only. Set one resource (e.g. target:build-bot, channel:example/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.",
+      "description": "Owner only. Use a resource from visibility_list such as target:beta or channel:github/acme/app. Tools stay private. Audited.",
       "icon": null,
       "id": "tool:visibility_set",
       "input_properties": [

@@ -101,7 +101,7 @@ class Kit:
         h = self.core.inbox.handle(handle) if handle else None
         owner, reader = self.inbox_reader(p, h)
         got = await self.core.inbox.wait(owner=owner, reader=reader, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s),
-                                         project=project, destination=block, scopes=p.scopes)
+                                         project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         if handle:
             h = self.core.inbox.handle(handle)
             h = h if h and (p.is_unrestricted_owner or self.core.inbox.participant(h, p.source)) else None
@@ -114,7 +114,7 @@ class Kit:
         handle = handle.strip() if handle else None
         owner, reader = self.inbox_reader(p, self.core.inbox.handle(handle) if handle else None)
         out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit,
-                                   project=project, destination=block, scopes=p.scopes)
+                                   project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         senders = [block] if block else [n for n, b in self.core.blocks.items() if b.verb("send") is not None]
         open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True,
                                                                       project=project, scopes=p.scopes, limit=20)]
@@ -196,7 +196,7 @@ class Kit:
                        owner_facing: Annotated[bool, Field(description="Set true while you are speaking with the owner.")] = False) -> dict[str, Any]:
             return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block, owner_facing=owner_facing)
 
-        @mcp.tool(title="Your inbox", description="Your switchboard mailbox: replies on your conversations and messages other agents left you since since_cursor (default: since you last read), plus your open conversations. A reply to a message you sent carries in_reply_to with that conversation. Each item's from and trust say who sent it, from switchboard's own data. Answer a message with reply(conversation=<its handle>, text). No arguments needed; conversation, project and block only narrow it. Never blocks.", annotations=READ)
+        @mcp.tool(title="Your inbox", description="Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
         async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=100)] = 50,
                         project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
             return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)
@@ -228,23 +228,23 @@ class Kit:
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
                     "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
 
-        @mcp.tool(title="Who can reach what", description="Every resource's visibility: private (only the owner and his own agents) or shared (anyone in that workspace, or a narrowed list). Resources are target:<slug>, channel:<workspace>/<id or #name>, memory:<scope>, route:<id> and tool:<name>; defaults are per kind.", annotations=READ)
+        @mcp.tool(title="Who can reach what", description="List the resource names and visibility rules for targets, channels, memory and routes. Tools use private visibility. Use a listed resource with visibility_set.", annotations=READ)
         async def visibility_list() -> dict[str, Any]:
-            slugs = [f"target:{s}" for t in await core.targets() for s in t.get("slugs") or [] if t.get("block") != "agent"][:500]
-            return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()}, "resources": core.visibility.rows(slugs)}
+            return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()},
+                    "resources": core.visibility.rows(await core.visibility_resources())}
 
-        @mcp.tool(title="Make a resource private or shared", description="Owner only. Set one resource (e.g. target:build-bot, channel:example/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
-        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list such as ['U0123', 'workspace:example']")]) -> dict[str, Any]:
+        @mcp.tool(title="Make a resource private or shared", description="Owner only. Use a resource from visibility_list such as target:beta or channel:github/acme/app. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
+        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list of verified sender IDs or workspace labels, such as ['github:1234']")]) -> dict[str, Any]:
             from ...visibility import VisibilityError
 
             p = kit.who(ctx)
             try:
-                rule = core.visibility.set(resource, visibility, f"{p.kind}:{p.source}", core.clock())
+                resource, rule = await core.set_visibility(resource, visibility, f"{p.kind}:{p.source}")
             except VisibilityError as e:
                 raise ToolError(str(e)) from e
             core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="visibility_set", outcome="ok",
                               target=resource, detail=str(rule))
-            return {"resource": resource.lower(), "visibility": rule}
+            return {"resource": resource, "visibility": rule}
 
         @mcp.tool(title="Connected agents", description="Agents connected with a pairing code: their key ids, project, client, when they last called, and who minted the code. Keys themselves are never shown again.", annotations=READ)
         async def connect_list(include_revoked: bool = False) -> dict[str, Any]:
