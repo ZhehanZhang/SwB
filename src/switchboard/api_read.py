@@ -18,6 +18,7 @@ from .slack.avatar_files import agent_avatar_url
 from .audit import iso
 from .blocks import BLOCKS, load
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
+from .modes import CHAT_DROP_ACTION, ChatDrop
 from .refusals import SIGN_IN_FAILURES
 from .routes import route_audit_name
 from .targets import SLUG_RE
@@ -152,6 +153,8 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
     if action == "webhook" and recorded_detail in _WEBHOOK_DETAILS:
         detail = recorded_detail
     elif action == "auth_failure" and recorded_detail in SIGN_IN_FAILURES.get(target, ()):
+        detail = recorded_detail
+    elif action == CHAT_DROP_ACTION and fields["outcome"] == "dropped" and recorded_detail in ChatDrop:
         detail = recorded_detail
     elif action == "tool_refused" and fields["destination"] == "mcp":
         from .blocks.mcp.policy import REFUSAL_DETAILS

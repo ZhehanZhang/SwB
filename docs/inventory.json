@@ -487,6 +487,7 @@
         "--dir",
         "--help",
         "--host",
+        "--public-url",
         "--tunnel",
         "-h"
       ],
