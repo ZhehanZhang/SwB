@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import stat
@@ -13,6 +14,22 @@ import yaml
 from mcp.types import CallToolResult, TextContent
 
 from switchboard import __main__, cli
+
+
+def test_log_prints_one_json_object_per_line(make, tmp_path, monkeypatch, capsys):
+    core, _ = make()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(core.data_dir))
+    monkeypatch.delenv("SWITCHBOARD_CONFIG", raising=False)
+    for title in ("First", "Second café\nStill one line"):
+        core.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
+                          action="read", outcome="ok", title=title)
+
+    __main__.cli_main(["log"])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 2
+    assert [json.loads(line) for line in lines] == core.audit.recent()
 
 
 def test_cli_version_matches_installed_distribution(capsys):
