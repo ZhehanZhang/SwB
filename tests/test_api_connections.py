@@ -11,13 +11,13 @@ def providers(make):
     return make(
         base_config(version=2, blocks={
             "discord-bot": {
-                "use": "discord", "application_id": "111", "avatar": "switchboard.png", "connect": False,
+                "use": "discord", "application_id": "111", "avatar": "swb.png", "connect": False,
                 "spaces": {
                     "engineering": {"guild_id": "201", "owner_ids": ["303"], "listen": ["501"],
                                     "project": "default", "channel_projects": {"501": "release", "#builds": "ignored", "503": None}},
                 },
             },
-            "telegram": {"avatar": "switchboard.png", "connect": False,
+            "telegram": {"avatar": "swb.png", "connect": False,
                          "spaces": {"ops": {"owner_ids": ["811"], "chats": [-100813], "listen": [-100813]}}},
         }),
         env={**default_env(), "DISCORD_BOT_TOKEN": DISCORD_TOKEN, "TELEGRAM_BOT_TOKEN": TELEGRAM_TOKEN},
@@ -56,7 +56,7 @@ def test_discord_connection_uses_discovery_and_safe_status_fields(providers):
         "details": {
             "bot_name": status["setup"]["bot_name"], "invite_url": status["setup"]["invite_url"],
             "owner_ids": ["301", "303"],
-            "avatar": {"file": "switchboard.png", "state": "applied", "url": "/api/connections/discord/avatar"},
+            "avatar": {"file": "swb.png", "state": "applied", "url": "/api/connections/discord/avatar"},
             "guilds": [
                 {"id": "201", "name": "Engineering", "space": "engineering", "owner_id": "302", "channels": [
                     {"id": "501", "name": "builds", "project": "release", "listening": True},
@@ -88,7 +88,7 @@ def test_telegram_connection_uses_seen_chats_and_actual_spaces(providers):
         "platform": "telegram", "block": "telegram", "state": "disconnected",
         "details": {
             "bot_name": "@ReleaseSwbBot", "owner_ids": ["811"],
-            "avatar": {"file": "switchboard.png", "state": "pending", "url": None},
+            "avatar": {"file": "swb.png", "state": "pending", "url": None},
             "chats": [
                 {"id": "-100812", "title": "Release Ops", "type": "supergroup", "space": None, "listen": "unlisted"},
                 {"id": "811", "title": None, "type": "private", "space": "ops", "listen": "direct"},
@@ -150,7 +150,7 @@ def test_avatar_serves_only_the_applied_image(providers, platform, tmp_path, mon
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
 
-    changed = tmp_path / "switchboard.png"
+    changed = tmp_path / "swb.png"
     changed.write_bytes(response.content + b"changed")
     monkeypatch.setattr(core, "find_avatar", lambda _: changed)
     assert client.get(route, headers=OWNER).status_code == 404

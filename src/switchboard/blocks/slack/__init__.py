@@ -42,7 +42,7 @@ class SlackBlock(SlackIntake, SlackActions):
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         self.app_icon = config.get("app_icon")
         if self.app_icon is not None and (not isinstance(self.app_icon, str) or not AVATAR_RE.fullmatch(self.app_icon)):
-            raise BlockError(f"blocks.{config.get('_name', 'slack')}.app_icon must be a file name like switchboard.png")
+            raise BlockError(f"blocks.{config.get('_name', 'slack')}.app_icon must be a file name like swb.png")
         self.token_names: dict[str, list[str]] = {}
         self.token_kinds: dict[str, dict[str, str]] = {}
         if config.get("engine", True):

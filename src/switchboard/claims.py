@@ -198,7 +198,9 @@ class Claims:
     def consume(self, code: str, value: str) -> str:
         code_hash = _digest(code)
         value = value.strip()
-        if not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
+        if PEM_RE.search(value):
+            value = normalize("pem", value)
+        elif not value or len(value.encode()) > 8192 or any(c in value for c in "\r\n\x00"):
             raise ClaimError("Enter a token on a single line, at most 8 KiB.")
         claim = self.store.one("SELECT name, require_https FROM secrets WHERE code_hash = ? AND expires_at > ?",
                                (code_hash, self.store.clock()))
