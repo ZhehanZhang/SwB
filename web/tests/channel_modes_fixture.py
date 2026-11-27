@@ -56,6 +56,7 @@ def run(path: Path) -> None:
     discord.guild_info["1000"] = {"name": "Engineering", "owner_id": "1001"}
     discord.channels["2001"] = Channel(None, "deployments", 0, "1000")
     discord.channels["2002"] = Channel(None, "community", 0, "1000")
+    core.blocks["telegram"]._seen[-1001000] = {"id": -1001000, "title": None, "type": "supergroup"}
     core.modes.watch("team-chat", "engineering", "2001", "msg-example", "1001", "Alex",
                      "Release ready", None, None, project="operations")
     app = create_app(core)
