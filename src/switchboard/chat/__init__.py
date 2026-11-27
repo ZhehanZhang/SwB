@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 from ..auth import Principal
 from ..blocks import Action, Block, BlockError, Call
 from ..claims import CLAIM_TTL_S
-from ..modes import PROVIDERS
+from ..modes import PROVIDERS, ChatDrop, chat_target_drop
 from ..slack.config import AVATAR_RE
 from ..subject import subject, wake_text
 from ..targets import slugify
@@ -248,7 +248,7 @@ class ChatBlock(Block):
                 "spaces": {s.label: {"owners": len(self.owners(s)), "listen": sorted(s.listen), "default_target": s.default_target, "project": s.project}
                            for s in self.spaces.values()},
                 "targets": len(self.targets_by_slug), "refreshed_at": self.refreshed_at,
-                "modes": self.core.modes.status(block=self.name)}
+                "modes": self.core.modes.status(block=self.name), **self.core.modes.chat_drop_status(self.name)}
 
     @property
     def online(self) -> bool:
@@ -338,6 +338,9 @@ class ChatBlock(Block):
             return msg.thread, ours is not None
         return msg.message, False
 
+    def _drop(self, msg: Incoming, reason: ChatDrop) -> None:
+        self.core.modes.chat_drop(self.name, msg.space, msg.mode_channel or msg.thread or msg.channel, reason, dm=msg.dm)
+
     async def ingest(self, msg: Incoming) -> dict[str, Any] | None:
         """Classify, dedupe, stamp trust, route and fan out one platform message. Returns the event, or None if dropped."""
         space = self.spaces.get(msg.space)
@@ -368,7 +371,13 @@ class ChatBlock(Block):
             else:
                 if msg.dm:
                     mode, _ = policy.dm(self.name)
-                if mode in ("off", "work") or (msg.is_bot and trust == "external"):
+                if mode in ("off", "work"):
+                    if addressed:
+                        self._drop(msg, ChatDrop.OFF if mode == "off" else ChatDrop.OWNER_REQUIRED)
+                    return None
+                if msg.is_bot and trust == "external":
+                    if addressed or mode in ("assist", "triage"):
+                        self._drop(msg, ChatDrop.EXTERNAL_BOT)
                     return None
                 if mode == "watch":
                     if policy.watch(self.name, msg.space, channel, msg.message, msg.user, name, msg.text or "", msg.link, selected,
@@ -408,19 +417,32 @@ class ChatBlock(Block):
                  "raw_text": text, "target": slug if target else None, "target_kind": target["kind"] if target else None, "trust": trust, "from": sender}
         who = self.who(space, msg.user, trust)
         target_resources = self.target_resources(slug or "") + ([f"target:{slugify(route.id)}"] if routed else [])
-        reaches = who.owner or (self.core.visibility.allows(who, *self.channel_resources(msg.space, msg.channel, msg.channel_name))
-                                and (target is None or self.core.visibility.allows(who, *target_resources)))
+        channel_reaches = self.core.visibility.allows(who, *self.channel_resources(msg.space, msg.channel, msg.channel_name))
+        target_reaches = not channel_reaches or target is None or self.core.visibility.allows(who, *target_resources)
         if channel_mode:
             event.update({"mode": channel_mode["mode"], "actions": channel_mode["actions"], "note": policy.wake_note(channel_mode)})
             event.pop("raw_text", None)
-            if not reaches or target is None:
+            if not channel_reaches or not target_reaches or target is None:
+                if not channel_reaches:
+                    reason = ChatDrop.CHANNEL_RESTRICTED
+                elif not target_reaches:
+                    reason = ChatDrop.TARGET_RESTRICTED
+                else:
+                    reason = chat_target_drop(channel_mode["mode"], bool(slug))
+                self._drop(msg, reason)
                 await self.note_context(space, msg, event, target)
-            elif self._admit_sender(msg, event):
+            elif self._admit_sender(msg, event, audit=False):
                 await self.delegate(space, msg, event, target, root, channel_mode, route_project=project if routed else None)
+            else:
+                self._drop(msg, ChatDrop.SENDER_LIMIT)
             return event
-        if not reaches:
+        if not channel_reaches or not target_reaches:
+            if addressed:
+                self._drop(msg, ChatDrop.CHANNEL_RESTRICTED if not channel_reaches else ChatDrop.TARGET_RESTRICTED)
             await self.note_context(space, msg, event, target)
             return event
+        if addressed and target is None:
+            self._drop(msg, chat_target_drop("work", bool(slug)))
         if addressed and target is not None and (explicit or not (sticky and sticky["target"])):
             self.core.store.x("INSERT INTO chat_threads(block, space, channel, root, target, at) VALUES (?,?,?,?,?,?) ON CONFLICT(block, space, channel, root) "
                               "DO UPDATE SET target = excluded.target, at = excluded.at", (self.name, msg.space, msg.channel, root, slug, self.core.clock()))
@@ -433,6 +455,8 @@ class ChatBlock(Block):
                 agents.discard(target["id"])
             elif self._count_turn(self._thread_key(msg.space, msg.channel, root)):
                 agents.add(target["id"])
+            else:
+                self._drop(msg, ChatDrop.PAUSED)
         for agent in sorted(agents):
             thread = (msg.channel, root) if addressed else None
             await self.core.inbox.add(self._handle(agent, msg.space, thread), f"{self.platform}_event", event)
@@ -470,12 +494,13 @@ class ChatBlock(Block):
         self.core.audit.record(origin=self.platform, source=f"{self.platform}:{msg.user}", client=self.principal.client_id, destination=self.name, action="context_noted",
                                outcome="ok", ref=event["event_id"], target=event.get("target"))
 
-    def _admit_sender(self, msg: Incoming, event: dict[str, Any]) -> bool:
+    def _admit_sender(self, msg: Incoming, event: dict[str, Any], *, audit: bool = True) -> bool:
         now = self.core.clock()
         hits = [t for t in self._senders.get(msg.user, []) if now - t < 600]
         if len(hits) >= 5:
-            self.core.audit.record(origin=self.platform, source=f"{self.platform}:{msg.user}", client=self.principal.client_id,
-                                   destination=self.name, action="context_rate_limited", outcome="refused", ref=event["event_id"])
+            if audit:
+                self.core.audit.record(origin=self.platform, source=f"{self.platform}:{msg.user}", client=self.principal.client_id,
+                                       destination=self.name, action="context_rate_limited", outcome="refused", ref=event["event_id"])
             return False
         self._senders[msg.user] = [*hits, now]
         return True
@@ -509,6 +534,7 @@ class ChatBlock(Block):
     async def delegate(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any], root: str,
                        mode: dict[str, Any] | None = None, *, route_project: str | None = None) -> None:
         if not self._count_turn(self._thread_key(msg.space, msg.channel, root)):
+            self._drop(msg, ChatDrop.PAUSED)
             return
         name = (self.persona_for(target) or Persona(target["id"], target.get("name") or target["id"])).name
         title = event["subject"]
@@ -542,8 +568,7 @@ class ChatBlock(Block):
         except Exception as exc:
             self.core.store.x("DELETE FROM chat_relays WHERE handle = ?", (handle,))
             log.warning("%s %s: routing %s to %s failed: %s", self.name, msg.space, msg.message, event["target"], exc)
-            self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name, action="route_failed",
-                                   outcome="error", ref=event["event_id"], target=event["target"], detail=str(exc)[:300])
+            self._drop(msg, ChatDrop.DELIVERY_FAILED)
             return
         if out["handle"] != handle:
             self.core.store.x("UPDATE OR REPLACE chat_relays SET handle = ? WHERE handle = ?", (out["handle"], handle))
