@@ -26,9 +26,9 @@ description: SwB이 에이전트에게 제공하는 MCP 도구입니다.
 | 도구 | 용도 |
 | - | - |
 | `send` | 작업이나 메시지를 `task`에 넣습니다. 대상을 고르려면 `to`를 설정합니다. 키가 허용하면 `to`를 비워 라우트를 사용합니다 |
-| `agent_send` | 지원이 중단된 도구입니다. `to="codex"`처럼 `to`에 에이전트 이름을 넘깁니다. `blocks.mcp.legacy_aliases`가 기본으로 이 도구를 켭니다. 새 호출에는 `to="agent:codex"`와 함께 `send`를 사용합니다 |
+| `agent_send` | 지원이 중단된 도구입니다. `to="codex"`처럼 `to`에 에이전트 이름을 넘깁니다. `blocks.mcp.legacy_aliases`가 기본적으로 이 도구를 켭니다. 새 호출에는 `to="agent:codex"`와 함께 `send`를 사용합니다 |
 | `wait` | 새 메시지나 답장을 기다립니다 |
-| `inbox` | 받은편지함을 읽고 바로 돌아옵니다 |
+| `inbox` | 받은편지함을 읽고 바로 반환합니다 |
 | `reply` | 전송이나 받은편지함 항목의 `handle`을 `conversation`에 넘깁니다. 답장은 `text`에 넣습니다 |
 | `status` | 대화 하나의 상태를 보여 줍니다. Capy에서는 `messages`로 최근 메시지 수를 정합니다. 도구 활동까지 보려면 `include_tools=true`를 설정합니다 |
 | `switchboard_status` | 로그인한 신원, 대기 한도, 블록, 인스턴스 상태를 보여 줍니다 |
@@ -41,7 +41,7 @@ description: SwB이 에이전트에게 제공하는 MCP 도구입니다.
 
 커서는 받은편지함에서의 위치를 표시합니다. `inbox`와 `wait` 도구는 항목을 돌려줄 때 새 위치를 저장합니다. 필터를 쓰면 별도의 위치가 앞으로 이동할 수 있습니다. 나중에 호출한 `wait`는 저장된 위치부터 읽습니다. 처음부터 읽으려면 `inbox`에 `since_cursor=0`을 넘기세요. 특정 위치부터 이어 읽으려면 돌려받은 `cursor`를 `since_cursor`로 넘기세요.
 
-스크립트는 bearer 키로 `GET /inbox/poll`을 호출해 자기 받은편지함의 항목을 기다릴 수 있습니다. 이어서 받으려면 돌려받은 `cursor`를 `after`로 넘기세요. 기본적으로 받은편지함의 현재 끝에서 시작합니다. 항목이 도착하거나 대기 시간이 끝나면 호출이 돌아옵니다. 이때 MCP 커서는 그대로 유지됩니다. 메시지가 도착하는 대로 받으려면 [받은편지함 이벤트 스트림](/ko/docs/connect#받은편지함-이벤트-스트림)을 사용하세요. 내 로그인으로 볼 수 있는 맥락 항목과 Watch 요약본은 `inbox`로 읽으세요.
+스크립트는 bearer 키로 `GET /inbox/poll`을 호출해 자기 받은편지함의 항목을 기다릴 수 있습니다. 이어서 받으려면 돌려받은 `cursor`를 `after`로 넘기세요. 기본적으로 받은편지함의 현재 끝에서 시작합니다. 항목이 도착하거나 대기 시간이 끝나면 호출이 반환됩니다. 이때 MCP 커서는 그대로 유지됩니다. 메시지가 도착하는 대로 받으려면 [받은편지함 이벤트 스트림](/ko/docs/connect#받은편지함-이벤트-스트림)을 사용하세요. 내 로그인으로 볼 수 있는 맥락 항목과 Watch 요약본은 `inbox`로 읽으세요.
 
 페어링 키로 접근 범위 밖의 메시지나 대화를 요청하면 존재하지 않는 ID를 요청했을 때와 같은 오류가 납니다. [제한이 있는 키](/ko/docs/security#제한이-있는-키)를 참고하세요.
 
@@ -96,13 +96,13 @@ description: SwB이 에이전트에게 제공하는 MCP 도구입니다.
 | `connect_revoke` | 에이전트 키를 제거합니다 |
 | `login_link` | 소유자용 일회용 로그인 링크를 만듭니다 |
 | `modes_status` | 접근할 수 있는 채널과 저장소의 모드, 대상, 설정 문제를 보여 줍니다 |
-| `space_mode` | 소유자로서 모드, 프로젝트, 허용할 동작을 설정합니다. 설정을 지우려면 `inherit`을 사용합니다 |
+| `space_mode` | 소유자 권한으로 모드, 프로젝트, 허용할 동작을 설정합니다. 설정을 지우려면 `inherit`을 사용합니다 |
 | `visibility_list` | 기본 접근 규칙과 개별 리소스 규칙을 보여 줍니다. 소유자 로그인을 사용합니다 |
-| `visibility_set` | 소유자로서 리소스를 비공개나 공유로 설정합니다. 도구는 항상 비공개입니다 |
+| `visibility_set` | 소유자 권한으로 리소스를 비공개나 공유로 설정합니다. 도구는 항상 비공개입니다 |
 
 ### 컴패니언 도구
 
-이 도구는 소유자로서 사용하세요.
+이 도구는 소유자 로그인으로 사용하세요.
 
 | 도구 | 제목 | 용도 |
 | - | - | - |
@@ -135,7 +135,7 @@ description: SwB이 에이전트에게 제공하는 MCP 도구입니다.
 | `capy_captain_digest` | Capy Captain의 요약을 읽고 작업 중이거나 소유자 확인이 필요한 크루 스레드를 봅니다. 소유자 로그인을 사용합니다 |
 | `capy_list` | SwB으로 보낸 작업이나 Capy Captain 크루, 연결된 Capy 프로젝트의 스레드를 나열합니다. 페어링 키는 범위 안에서 자기 에이전트의 작업만 봅니다 |
 | `capy_delegate` | Capy에 작업을 보냅니다. 새 호출에는 `to="capy"`와 함께 `send`를 사용합니다 |
-| `capy_inbox` | Capy 받은편지함을 읽고 바로 돌아옵니다. 새 호출에는 `block="capy"`와 함께 `inbox`를 사용합니다 |
+| `capy_inbox` | Capy 받은편지함을 읽고 바로 반환합니다. 새 호출에는 `block="capy"`와 함께 `inbox`를 사용합니다 |
 | `capy_wait` | 받은편지함의 다음 항목을 기다립니다. 새 호출에는 `wait`를 사용합니다 |
 | `capy_status` | Capy 스레드의 상태와 최근 메시지를 보여 줍니다. 새 호출에는 `status`를 사용합니다 |
 | `capy_reply` | Capy 스레드에 후속 메시지를 보냅니다. 새 호출에는 `reply`를 사용합니다 |
@@ -151,8 +151,8 @@ description: SwB이 에이전트에게 제공하는 MCP 도구입니다.
 | `routine_register` | 루틴을 등록하고 소유자가 토큰을 입력할 등록 링크를 받습니다 |
 | `routine_list` | SwB이 시작할 수 있는 루틴을 나열합니다 |
 | `routine_pickup` | 루틴이 빈 프롬프트로 시작하면 메시지를 가져옵니다 |
-| `routine_add` | 소유자로서 루틴을 토큰과 함께 추가합니다 |
-| `routine_remove` | 소유자로서 SwB으로 저장한 루틴을 제거합니다 |
+| `routine_add` | 소유자 권한으로 루틴을 토큰과 함께 추가합니다 |
+| `routine_remove` | SwB으로 저장한 루틴을 소유자 권한으로 제거합니다 |
 
 ### Slack
 
@@ -178,7 +178,7 @@ description: SwB이 에이전트에게 제공하는 MCP 도구입니다.
 | 도구 | 용도 |
 | - | - |
 | `discord_status` | Discord 연결, 공간, 남은 설정을 보여 줍니다 |
-| `discord_provision` | 소유자로서 설정 링크와 일회용 봇 토큰 입력 링크를 받습니다 |
+| `discord_provision` | 소유자 권한으로 설정 링크와 일회용 봇 토큰 입력 링크를 받습니다 |
 | `discord_post` | 소유자의 권한을 받아 채널이나 스레드에 봇으로 게시합니다 |
 
 ### Telegram
@@ -186,7 +186,7 @@ description: SwB이 에이전트에게 제공하는 MCP 도구입니다.
 | 도구 | 용도 |
 | - | - |
 | `telegram_status` | Telegram 연결, 공간, 남은 설정을 보여 줍니다 |
-| `telegram_provision` | 소유자로서 설정 링크와 일회용 봇 토큰 입력 링크를 받습니다 |
+| `telegram_provision` | 소유자 권한으로 설정 링크와 일회용 봇 토큰 입력 링크를 받습니다 |
 | `telegram_post` | 소유자의 권한을 받아 채팅이나 스레드에 봇으로 게시합니다 |
 
 ### GitHub

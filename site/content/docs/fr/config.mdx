@@ -3,7 +3,7 @@ title: Configuration
 description: Variables d'environnement, fichier de configuration et surcouches.
 ---
 
-SwB peut fonctionner avec les seules variables d'environnement. Le bloc MCP démarre par défaut. Certains blocs démarrent quand vous définissez leurs variables. Pour d'autres réglages, utilisez un fichier YAML. YAML est un format texte pour les réglages.
+SwB peut fonctionner avec les seules variables d'environnement. Le bloc MCP démarre par défaut. Certains blocs démarrent quand vous définissez leurs variables. Pour d'autres paramètres, utilisez un fichier YAML. YAML est un format texte pour les paramètres.
 
 ## Instance
 
@@ -39,7 +39,7 @@ Utilisez `swb config migrate [file]` pour afficher une configuration au format v
 
 `swb up` et `swb init` créent un dossier `data/` pour une nouvelle instance. SwB utilise ce dossier par défaut. Choisissez un autre dossier d'instance avec `swb up --dir`.
 
-Définissez `data_dir` dans la configuration ou la surcouche pour changer le chemin. Ce réglage est prioritaire. SwB regarde ensuite `SWB_DATA_DIR` puis `SWB_DATA`. La valeur par défaut s'applique quand ces trois réglages sont vides.
+Définissez `data_dir` dans la configuration ou la surcouche pour changer le chemin. Ce paramètre est prioritaire. SwB regarde ensuite `SWB_DATA_DIR` puis `SWB_DATA`. La valeur par défaut s'applique quand ces trois paramètres sont vides.
 
 `swb up` seul conserve les fichiers de configuration existants. Si l'instance a un fichier de configuration et que `data/` est absent, SwB cherche l'ancienne base de données dans `~/.local/share/switchboard`. S'il utilise cette base, SwB l'indique une seule fois dans le journal.
 
@@ -75,11 +75,11 @@ routes:
   - {match: {}, to: capy:captain:CAPTAIN_ID}
 ```
 
-SwB suit la section `blocks` à la place du choix automatique des blocs. Mettez `enabled: false` sur le bloc MCP pour le désactiver. Les réglages des blocs peuvent toujours lire des identifiants dans l'environnement.
+SwB utilise la section `blocks` au lieu de choisir les blocs automatiquement. Pour désactiver le bloc MCP, indiquez-y `enabled: false`. Les paramètres des blocs peuvent quand même lire des identifiants dans l'environnement.
 
 ## Surcouches
 
-Une surcouche est un fichier YAML pour les réglages propres à votre instance. Enregistrez-la sous le nom `local.yaml` à côté du fichier de configuration de base, ou indiquez son chemin avec `SWB_OVERLAY`. La surcouche l'emporte sur le fichier de base. Le fichier de base l'emporte sur les valeurs par défaut de l'environnement. Les réglages regroupés par nom fusionnent. La surcouche remplace les listes.
+Une surcouche est un fichier YAML pour les paramètres propres à votre instance. Enregistrez-la sous le nom `local.yaml` à côté du fichier de configuration de base, ou indiquez son chemin avec `SWB_OVERLAY`. La surcouche l'emporte sur le fichier de base. Le fichier de base l'emporte sur les valeurs par défaut de l'environnement. Les paramètres regroupés par nom fusionnent. La surcouche remplace les listes.
 
 Dans une clé, `*` représente un nom d'entrée ou un élément de liste.
 
@@ -91,7 +91,7 @@ Dans une clé, `*` représente un nom d'entrée ou un élément de liste.
 | `public_url` | Adresse publique pour MCP et la connexion. OAuth permet à une application de se connecter avec votre approbation |
 | `data_dir` | Chemin du dossier de données. Définissez-le ici ou avec `SWB_DATA_DIR` |
 | `timezone` | Fuseau horaire des décomptes et des limites quotidiens. Valeur par défaut `UTC` |
-| `turn_cap` | Nombre de tours avant que SwB mette une conversation en pause. Valeur par défaut `200`. Mettez `null` pour supprimer la limite |
+| `turn_cap` | Nombre de tours avant que SwB mette une conversation en pause. Valeur par défaut `200`. Indiquez `null` pour supprimer la limite |
 | `blocks` | Blocs à charger, nommés par type ou par votre propre libellé |
 | `agents` | Définitions des agents par nom |
 | `agents.*.label` | Nom affiché d'un agent |
@@ -106,24 +106,24 @@ Dans une clé, `*` représente un nom d'entrée ou un élément de liste.
 
 | Clé | Usage |
 | - | - |
-| `auth` | Réglages de connexion et de clés |
-| `auth.owner_emails` | Adresses e-mail qui se connectent en tant que propriétaire par OIDC ou Cloudflare Access |
-| `auth.cloudflare_access` | Réglages de connexion Cloudflare Access. Renseignez les deux champs et définissez `auth.owner_emails` |
+| `auth` | Paramètres de connexion et de clés |
+| `auth.owner_emails` | Adresses e-mail autorisées à se connecter en tant que propriétaire par OIDC ou Cloudflare Access |
+| `auth.cloudflare_access` | Paramètres de connexion Cloudflare Access. Renseignez les deux champs et définissez `auth.owner_emails` |
 | `auth.cloudflare_access.team_domain` | Votre domaine d'équipe Cloudflare Access |
-| `auth.cloudflare_access.aud` | Étiquette d'audience qui identifie l'application Access |
+| `auth.cloudflare_access.aud` | Balise d'audience qui identifie l'application Access |
 | `auth.redirect_uris` | Adresses de retour OAuth autorisées. Cette liste remplace la liste intégrée. Utilisez `/*` pour un chemin et ses sous-chemins |
 | `auth.source_names` | Associe une partie d'un hôte ou d'un nom de client OAuth au nom d'agent utilisé pour la connexion |
 | `auth.key_scopes` | Portées d'accès par clé ou par nom d'agent, comme `[project:example]`. Ces portées limitent les routes, les messages et les conversations. Elles limitent aussi l'accès à la mémoire des clés configurées et des clients OAuth. Pour les clés appairées, SwB ajoute les portées de mémoire nommées aux autorisations lors de l'appairage |
-| `auth.key_tools` | Associe un nom de clé aux outils MCP permis, par exemple `[send]` |
-| `auth.key_targets` | Cibles de message permises par nom de clé, par exemple `[agent:claude]`. Une clé soumise à cette limite doit nommer une cible permise |
-| `auth.inbox_keys` | Associe un nom de clé au seul agent dont elle lit la boîte de réception. L'entrée intégrée est `channel: claude-code` |
+| `auth.key_tools` | Associe un nom de clé aux outils MCP autorisés, par exemple `[send]` |
+| `auth.key_targets` | Cibles de message autorisées par nom de clé, par exemple `[agent:claude]`. Une clé soumise à cette limite doit nommer une cible autorisée |
+| `auth.inbox_keys` | Associe un nom de clé au seul agent dont elle peut lire la boîte de réception. L'entrée intégrée est `channel: claude-code` |
 
 ## Visibilité
 
 | Clé | Usage |
 | - | - |
-| `visibility` | Règles qui décident qui accède à une ressource. Les outils restent privés |
-| `visibility.defaults` | Règles par défaut par type de ressource. Tous les types commencent en `private` |
+| `visibility` | Règles qui définissent qui peut accéder à une ressource. Les outils restent privés |
+| `visibility.defaults` | Règles par défaut par type de ressource. Tous les types valent `private` au départ |
 | `visibility.defaults.channel` | Règle par défaut des canaux |
 | `visibility.defaults.memory` | Règle par défaut des portées de mémoire |
 | `visibility.defaults.route` | Règle par défaut des routes |
@@ -147,7 +147,7 @@ GitHub utilise les niveaux de confiance `owner` et `external`. Sur Slack, Discor
 
 | Clé | Usage |
 | - | - |
-| `blocks.mcp` | Réglages du bloc qui sert les clients MCP |
+| `blocks.mcp` | Paramètres du bloc qui sert les clients MCP |
 | `blocks.mcp.use` | Type de bloc. Utilisez `mcp` |
 | `blocks.mcp.legacy_aliases` | Garde disponibles les anciens noms d'outils MCP comme `agent_send`, `capy_delegate`, `capy_wait` et `capy_reply`. Valeur par défaut `true` |
 | `blocks.mcp.wait` | Limites des appels d'outils qui attendent une réponse |
@@ -163,11 +163,11 @@ Pour lier une route de projet et définir les actions de tri, consultez [Modes d
 
 | Clé | Usage |
 | - | - |
-| `memory` | Réglages de la copie Markdown de la mémoire |
-| `memory.mirror` | Pilote la copie Markdown. Mettez `false` pour arrêter les mises à jour |
+| `memory` | Paramètres de la copie Markdown de la mémoire |
+| `memory.mirror` | Contrôle la copie Markdown. Indiquez `false` pour arrêter les mises à jour |
 | `memory.mirror_dir` | Dossier de la copie Markdown |
 | `memory.mirror_debounce_s` | Secondes d'attente après un changement de mémoire avant l'écriture de la copie. Valeur par défaut `2` |
-| `modes` | Réglages de la façon dont SwB traite les événements entrants |
+| `modes` | Paramètres du traitement des événements entrants par SwB |
 | `modes.default` | Mode par défaut. La valeur par défaut est `off` |
 | `modes.projects` | Mode par défaut des espaces rattachés à chaque projet |
 | `modes.assist_max_chars` | Limite de caractères que SwB donne aux agents pour une réponse `assist`. Valeur par défaut `1500` |
@@ -183,7 +183,7 @@ branding:
 
 | Clé | Usage |
 | - | - |
-| `branding` | Réglages du nom, de l'icône et des couleurs que SwB affiche |
+| `branding` | Paramètres du nom, de l'icône et des couleurs que SwB affiche |
 | `branding.display_name` | Nom affiché. Valeur par défaut `SwB` |
 | `branding.accent_color` | Couleur d'accent au format `#RRGGBB` |
 | `branding.icon` | Icône personnalisée |

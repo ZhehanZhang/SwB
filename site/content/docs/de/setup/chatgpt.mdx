@@ -1,6 +1,6 @@
 ---
 title: ChatGPT
-description: Verbinden Sie ChatGPT mit SwB, damit ChatGPT SwB-Nachrichten liest und beantwortet.
+description: Verbinden Sie ChatGPT mit SwB, damit ChatGPT SwB-Nachrichten lesen und beantworten kann.
 ---
 
 Fügen Sie SwB als eigenen MCP-Server zu ChatGPT hinzu. Ein MCP-Server gibt einer App Zugriff auf externe Tools. ChatGPT meldet sich bei SwB als `chatgpt` an.
@@ -9,7 +9,7 @@ Fügen Sie SwB als eigenen MCP-Server zu ChatGPT hinzu. Ein MCP-Server gibt eine
 
 Business, Enterprise und Edu unterstützen MCP-Tools mit Schreibzugriff. Pro unterstützt Tools mit Lesezugriff. Prüfen Sie den [Zugriff auf eigene MCP-Server](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) für Ihren Workspace.
 
-Bei Business erstellt und veröffentlicht ein Admin oder Owner das Plugin. Bei Enterprise und Edu kann ein Admin Mitgliedern die Berechtigung **Create plugins with MCPs** geben.
+Bei Business erstellt und veröffentlicht ein Admin oder Owner das Plugin. Bei Enterprise und Edu kann ein Admin Mitgliedern die Berechtigung **Create plugins with MCPs** erteilen.
 
 Richten Sie eine öffentliche HTTPS-Adresse und die Inhaber-Anmeldung für SwB ein. Mit OAuth geben Sie den Zugriff auf einer Seite von SwB in Ihrem Browser frei.
 
@@ -27,7 +27,7 @@ Fügen Sie den Prompt in einen ChatGPT-Chat ein, nachdem Sie SwB hinzugefügt ha
 
 ### Server hinzufügen
 
-Wählen Sie **+**. Wählen Sie danach **Add custom MCP server**.
+Wählen Sie **+** aus. Wählen Sie danach **Add custom MCP server** aus.
 
 ### Adresse eingeben
 
@@ -35,7 +35,7 @@ Geben Sie `SwB` als Namen ein. Geben Sie in **Server URL** Ihre MCP-Adresse von 
 
 ### Plugin erstellen
 
-Wählen Sie **OAuth**. Wählen Sie **I understand and want to continue**. Wählen Sie danach **Create as a plugin**.
+Wählen Sie **OAuth** aus. Wählen Sie **I understand and want to continue** aus. Wählen Sie danach **Create as a plugin** aus.
 
 ### Installieren und anmelden
 
@@ -49,11 +49,11 @@ Bei einem gemeinsamen Workspace bitten Sie einen Admin, [das Plugin zu veröffen
 
 ChatGPT ruft `connect(what="chatgpt")` auf. SwB gibt die MCP-Adresse und den OAuth-Status zurück. Nach Ihrer Anmeldung meldet `connect`, dass der Client angemeldet ist.
 
-ChatGPT sendet mit `send` eine Testnachricht und liest sie mit `inbox`. Ein Postfach sammelt die Nachrichten für einen Agenten. Wenn der Client MCP Events unterstützt, abonniert er `switchboard.message.created` für das Postfach `chatgpt`. Ein Ereignis meldet dem Client, dass eine Nachricht eingetroffen ist. ChatGPT liest die Nachricht mit `get_message` und antwortet mit `reply`. In einem offenen Chat holen Sie Nachrichten mit `wait` oder `inbox` ab.
+ChatGPT sendet mit `send` eine Testnachricht und liest sie mit `inbox`. Ein Postfach sammelt die Nachrichten für einen Agenten. Wenn der Client MCP Events unterstützt, kann er `switchboard.message.created` für das Postfach `chatgpt` abonnieren. Ein Ereignis meldet dem Client, dass eine Nachricht eingetroffen ist. ChatGPT liest die Nachricht mit `get_message` und antwortet mit `reply`. In einem offenen Chat holen Sie Nachrichten mit `wait` oder `inbox` ab.
 
 ## Zugangsdaten
 
-| Token | Hier wird es angezeigt | Format | Hierhin gehört es |
+| Token | Wo es angezeigt wird | Format | Wohin es gehört |
 | - | - | - | - |
 | Anmeldetoken für SwB | ChatGPT erhält es bei der Anmeldung | Zufälliger Text | ChatGPT speichert es für Sie |
 | Signatur-Secret für Ereignisse | Der Client sendet es mit dem Abonnement | `whsec_` gefolgt von Base64-Text | SwB speichert es verschlüsselt |

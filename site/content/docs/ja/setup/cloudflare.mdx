@@ -3,15 +3,15 @@ title: Cloudflare
 description: Cloudflare Tunnel で SwB の公開アドレスを用意し、Cloudflare Access でオーナーのサインインを守ります。
 ---
 
-Cloudflare Tunnel は、SwB に固定の公開 HTTPS アドレスを与えます。**トンネル**は、あなたのサーバーを Cloudflare につなぎます。Cloudflare Access は、SwB のコンソールをあなたのアカウントだけに限定します。
+Cloudflare Tunnel は、SwB に固定の公開 HTTPS アドレスを与えます。**トンネル**は、サーバーを Cloudflare につなぎます。Cloudflare Access は、SwB のコンソールへのアクセスを自分のアカウントだけに制限します。
 
 ## 始める前に
 
-[Docker Compose](/ja/docs/self-hosting#docker-compose) の手順に従って SwB を起動してください。あなたのドメインのトンネルと Access アプリケーションを管理できる Cloudflare アカウントを使ってください。サーバーからポート 7844 で Cloudflare に接続できるようにしてください。
+[Docker Compose](/ja/docs/self-hosting#docker-compose) の手順に従って SwB を起動してください。自分のドメインのトンネルと Access アプリケーションを管理できる Cloudflare アカウントを使ってください。サーバーからポート 7844 で Cloudflare に接続できるようにしてください。
 
 ## トンネルを作成する
 
-[Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/) の手順に従ってください。インストールコマンドからトンネルのトークンをコピーしてください。そのトークンを、[Compose ファイル](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39)にある名前で SwB の `.env` に入れてください。トークンは自分だけの秘密にしてください。
+[Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/) の手順に従ってください。インストールコマンドからトンネルのトークンをコピーしてください。そのトークンを、[Compose ファイル](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39)にある名前で SwB の `.env` に入れてください。トークンは安全に保管してください。
 
 SwB のサーバーで、トンネルのコネクターを起動してください。
 
@@ -19,13 +19,13 @@ SwB のサーバーで、トンネルのコネクターを起動してくださ�
 docker compose --profile tunnel up -d
 ```
 
-Cloudflare にコネクターが表示されたら、**Continue** を選択します。
+Cloudflare にコネクターが表示されたら、**Continue** を選択してください。
 
 ## コンソールを保護する
 
-SwB のホスト名に対して [Access アプリケーションを作成](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)してください。ポリシーのアクションを **Allow** にしてください。**Include** → **Emails** に、あなたのメールアドレスを入力してください。
+SwB のホスト名に対して [Access アプリケーションを作成](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)してください。ポリシーのアクションを **Allow** にしてください。**Include** → **Emails** に、自分のメールアドレスを入力してください。
 
-同じホスト名に、**Bypass** の印があるパス用の Access アプリケーションをもう 1 つ作成してください。そのポリシーのアクションを **Bypass** にしてください。**Include** で **Everyone** を選択します。
+同じホスト名に、**Bypass** の印があるパス用の Access アプリケーションをもう 1 つ作成してください。そのポリシーのアクションを **Bypass** にしてください。**Include** で **Everyone** を選択してください。
 
 | パス | Access ポリシー |
 | --- | --- |
@@ -40,13 +40,13 @@ SwB は、`/companion/pair` でペアリングコードを確認します。ほ�
 
 ## SwB のアドレスを設定する
 
-`.env` の `SWB_PUBLIC_URL` に、あなたの公開アドレスを設定してください。たとえば `https://swb.example.com` を使います。`config/switchboard.yaml` に、チームのドメインと、オーナー用アプリケーションの Audience タグを追加してください。このタグは、トークンを発行したアプリケーションを SwB に伝えます。
+`.env` の `SWB_PUBLIC_URL` に、SwB の公開アドレスを設定してください。たとえば `https://swb.example.com` を使います。`config/switchboard.yaml` に、チームのドメインと、オーナー用アプリケーションの Audience タグを追加してください。このタグは、トークンを発行したアプリケーションを SwB に伝えます。
 
 | 値 | 確認する場所 | 設定キー |
 | --- | --- | --- |
 | チームのドメイン | **Zero Trust** → **Settings** | `auth.cloudflare_access.team_domain` |
 | Application Audience (AUD) Tag | オーナー用アプリケーション → **Additional settings** | `auth.cloudflare_access.aud` |
-| あなたのメールアドレス | オーナー用ポリシー → **Emails** | `auth.owner_emails` |
+| 自分のメールアドレス | オーナー用ポリシー → **Emails** | `auth.owner_emails` |
 
 ```yaml
 auth:
@@ -60,7 +60,7 @@ auth:
 
 ## ホスト名を公開する
 
-トンネルの **Routes** タブを開いてください。**Add route** を選択します。**Published application** を選びます。公開するホスト名を入力してください。**Service URL** を `http://switchboard:8000` に設定してください。**Add route** を選択して保存します。
+トンネルの **Routes** タブを開いてください。**Add route** を選択してください。**Published application** を選んでください。公開するホスト名を入力してください。**Service URL** を `http://switchboard:8000` に設定してください。**Add route** を選択して保存してください。
 
 ## 接続を確認する
 
@@ -70,4 +70,4 @@ auth:
 
 ## アプリを設定する
 
-ホスト名が動いたら、[接続](/ja/docs/connect)の手順でアプリを設定してください。`https://swb.example.com/mcp` のような公開 MCP アドレスを使ってください。SwB での ID を確認するために、`switchboard_status` を呼び出すようエージェントに頼んでください。
+ホスト名にアクセスできるようになったら、[接続](/ja/docs/connect)の手順でアプリを設定してください。`https://swb.example.com/mcp` のような公開 MCP アドレスを使ってください。SwB での ID を確認するために、`switchboard_status` を呼び出すようエージェントに頼んでください。

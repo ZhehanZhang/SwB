@@ -9,7 +9,7 @@ Un Capy Captain es un agente de Capy que dirige un grupo de hilos. SwB envía ta
 
 Necesitas una cuenta de Capy, un proyecto y un Captain en la misma organización. Un usuario de servicio es una cuenta de Capy para software.
 
-Activa el bloque `capy`. En Capy, añade SwB en **Settings** → **MCP & plugins**. Usa un cliente de SwB con acceso de propietario completo.
+Activa el bloque `capy`. En Capy, añade SwB en **Settings** → **MCP & plugins**. Usa un cliente de SwB con acceso completo de propietario.
 
 ## Copiar el prompt de configuración
 
@@ -61,7 +61,7 @@ Reinicia SwB. Después dile a tu agente que has terminado.
 
 ## Lo que hace el agente
 
-Desde un cliente con acceso de propietario completo, llama a `connect(what="capy-captain")`. Si SwB necesita la clave de lectura, devuelve un enlace de entrega. Un enlace de entrega es una página privada para escribir una credencial.
+Desde un cliente con acceso completo de propietario, llama a `connect(what="capy-captain")`. Si SwB necesita la clave de lectura, devuelve un enlace de entrega. Un enlace de entrega es una página privada para escribir una credencial.
 
 Tras el reinicio, `connect` lista los Captains disponibles. Confirma qué Captain debe recibir el trabajo. Llama a `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`. Para una ruta de proyecto, añade `"project":"<project>"` a `choose`. Una ruta indica a SwB adónde enviar el trabajo.
 
@@ -88,4 +88,4 @@ Si un envío falla con un error de acceso, revisa el acceso del usuario de servi
 
 Un valor del entorno del servidor tiene prioridad sobre un valor entregado. Cámbialo en el entorno del servidor y reinicia SwB.
 
-Para sustituir una clave perdida, revócala en **Settings** → **API**. Crea una clave nueva. Cada enlace de entrega sirve una vez y caduca a los 30 minutos.
+Para sustituir una clave perdida, revócala en **Settings** → **API**. Crea una clave nueva. Cada enlace de entrega funciona una sola vez y caduca a los 30 minutos.

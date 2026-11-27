@@ -8,7 +8,7 @@ El propietario inicia sesión para gestionar SwB. Con este acceso, el propietari
 | Página | Uso |
 | - | - |
 | `/login` | Iniciar sesión como propietario. |
-| `/authorize` | Revisar la petición de conexión de un agente. |
+| `/authorize` | Revisar la solicitud de conexión de un agente. |
 
 ## Enlace de un solo uso
 
@@ -16,7 +16,7 @@ El propietario inicia sesión para gestionar SwB. Con este acceso, el propietari
 swb login-link
 ```
 
-El comando muestra un enlace como `https://swb.example.com/login#t=...`. Ábrelo en tu navegador antes de cinco minutos. El enlace sirve una vez. Un agente con sesión de propietario también puede crear un enlace con la herramienta `login_link`. El token va en la parte del enlace que sigue a `#`.
+El comando muestra un enlace como `https://swb.example.com/login#t=...`. Ábrelo en tu navegador en un plazo de cinco minutos. El enlace funciona una sola vez. Un agente conectado como propietario también puede crear un enlace con la herramienta `login_link`. El token va en la parte del enlace que sigue a `#`.
 
 En el primer arranque local, `swb up` muestra un enlace de un solo uso. La dirección local predeterminada es `http://localhost:8870`. Si defines `SWB_PORT`, SwB usa ese puerto en la dirección. Con `swb login-link`, usa `--url` para elegir otro servidor. Usa `--dir` para leer la clave de propietario de otra carpeta de instancia.
 
@@ -24,7 +24,7 @@ Si el inicio de sesión con el enlace falla, ejecuta `swb login-link` de nuevo. 
 
 ## Código de configuración
 
-Un código de configuración sirve una vez, para el primer inicio de sesión del propietario. Úsalo cuando SwB gestiona el inicio de sesión directamente. La [guía de despliegue](/es/docs/deploy) indica dónde obtener el código para un servidor alojado.
+Un código de configuración funciona una sola vez, en el primer inicio de sesión del propietario. Úsalo cuando SwB gestione el inicio de sesión directamente. La [guía de despliegue](/es/docs/deploy) indica dónde obtener el código para un servidor alojado.
 
 Para definir tu propio código, genera 32 bytes aleatorios. Codifícalos como 64 caracteres hexadecimales en minúscula o en Base64 estándar. Este comando añade un código hexadecimal al archivo privado `.env`. Ejecútalo en la carpeta de la instancia después de `swb init`.
 
@@ -75,7 +75,7 @@ Consulta `error_description` para ver los detalles cuando la app reciba un error
 | `invalid_redirect_uri` | SwB exige una dirección de retorno permitida en el registro. |
 | `invalid_request` | El formato de la petición o un valor obligatorio es incorrecto. |
 | `invalid_grant` | SwB rechazó el código de autorización o el token de renovación. |
-| `invalid_target` | La petición nombra una dirección MCP incorrecta. |
+| `invalid_target` | La petición indica una dirección MCP incorrecta. |
 | `unsupported_response_type` | Usa `response_type=code`. |
 | `unsupported_grant_type` | Usa `grant_type=authorization_code` o `grant_type=refresh_token`. |
 | `temporarily_unavailable` | Define `public_url` o revisa el límite de registro de clientes. |
@@ -84,7 +84,7 @@ Consulta `error_description` para ver los detalles cuando la app reciba un error
 
 ## Sesiones
 
-Una **cookie** es un valor que tu navegador guarda para mantener tu sesión. SwB pone la marca `Secure` en esta cookie. Usa HTTPS para una dirección pública.
+Una **cookie** es un valor que tu navegador guarda para mantener tu sesión. SwB activa el atributo `Secure` de esta cookie. Usa HTTPS para una dirección pública.
 
 Cuando cambias un ajuste, el navegador envía un token que SwB usa para comprobar la petición. Cierra la sesión desde **Settings**.
 

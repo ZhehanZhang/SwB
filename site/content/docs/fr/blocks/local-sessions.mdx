@@ -1,6 +1,6 @@
 ---
 title: Sessions locales
-description: Envoyez des messages aux agents de code qui tournent sur un appareil appairé.
+description: Envoyez des messages aux agents de code qui s'exécutent sur un appareil appairé.
 ---
 
 Une session locale est l'environnement de travail ouvert d'un agent de code sur un appareil appairé. SwB l'affiche comme cible. Une cible est une adresse qui peut recevoir un message.
@@ -13,7 +13,7 @@ Depuis un agent propriétaire, appelez `targets(block="local")` pour vérifier c
 
 ## Envoyer un message
 
-Passez l'adresse de la session dans le paramètre `to` de `send`. SwB essaie de livrer le message à la session ouverte. Pour une session liée à un agent, la livraison en boîte aux lettres demande l'accès à la boîte aux lettres de cet agent. Dans les autres sessions, un message du propriétaire arrive dans sa propre boîte aux lettres. Passez l'ID de conversation renvoyé à `result` pour lire la réponse.
+Passez l'adresse de la session dans le paramètre `to` de `send`. SwB essaie de livrer le message à la session ouverte. Pour une session liée à un agent, la livraison en boîte aux lettres nécessite l'accès à la boîte aux lettres de cet agent. Dans les autres sessions, un message du propriétaire arrive dans sa propre boîte aux lettres. Passez l'ID de conversation renvoyé à `result` pour lire la réponse.
 
 | État | Signification |
 | --- | --- |
@@ -40,10 +40,10 @@ Installez la commande `swb` avec [pipx](/fr/docs/install). Placez `swb` dans le 
 | Agent | Commande d'événement | Configuration |
 | --- | --- | --- |
 | Claude Code | `swb hook claude-code` | Fusionnez les `hooks` de `channel/hooks/hooks.json` dans `~/.claude/settings.json` |
-| Gemini CLI | `swb hook gemini` | Installez l'extension SwB depuis la copie locale, comme indiqué ci-dessous |
+| Gemini CLI | `swb hook gemini` | Installez l'extension SwB depuis le clone local, comme indiqué ci-dessous |
 | Codex | `swb hook codex` | Fusionnez les `hooks` de `integrations/codex/hooks.json` dans `~/.codex/hooks.json` |
 
-Utilisez les fichiers de la [copie locale de la version publiée de SwB](/fr/docs/self-hosting#docker-compose). Le plugin SwB pour Claude Code inclut aussi ces hooks. Pour un dossier de réglages Codex personnalisé, utilisez le `hooks.json` de ce dossier.
+Utilisez les fichiers de la [clone local de la version publiée de SwB](/fr/docs/self-hosting#docker-compose). Le plugin SwB pour Claude Code inclut aussi ces hooks. Pour un dossier de paramètres Codex personnalisé, utilisez le `hooks.json` de ce dossier.
 
 ```sh
 gemini extensions install /path/to/SwB/integrations/gemini
@@ -55,7 +55,7 @@ Ouvrez une nouvelle session après la configuration du hook. Cherchez son adress
 
 Ouvrez un agent de code dans un volet Herdr, c'est-à-dire une zone du terminal. Le compagnon reçoit les événements de session par le socket de Herdr. Un socket est une connexion entre programmes d'un même appareil.
 
-Pour une session nommée ou un chemin de socket personnalisé, consultez les [réglages du compagnon Herdr](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48).
+Pour une session nommée ou un chemin de socket personnalisé, consultez les [paramètres du compagnon Herdr](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48).
 
 ```sh
 swb companion connect https://swb.example.com --cap herdr --cap hooks
@@ -77,7 +77,7 @@ Ouvrez une session depuis un deuxième terminal.
 codex --remote unix://
 ```
 
-Utilisez un troisième terminal pour le compagnon. Utilisez le même dossier de réglages Codex dans tous les terminaux. Pour un socket personnalisé, utilisez `unix://<path>` dans les deux commandes ci-dessus. Dans le terminal du compagnon, réglez `SWB_CODEX_SOCKET` sur ce chemin.
+Utilisez un troisième terminal pour le compagnon. Utilisez le même dossier de paramètres Codex dans tous les terminaux. Pour un socket personnalisé, utilisez `unix://<path>` dans les deux commandes ci-dessus. Dans le terminal du compagnon, définissez `SWB_CODEX_SOCKET` sur ce chemin.
 
 ```sh
 swb companion connect https://swb.example.com --cap codex
@@ -93,7 +93,7 @@ Lancez le serveur OpenCode sur l'appareil.
 opencode serve --hostname 127.0.0.1 --port 4096
 ```
 
-Ouvrez une session sur ce serveur. Réglez `SWB_OPENCODE_URL` sur l'adresse locale du serveur. Pour un serveur protégé par mot de passe, consultez les [réglages du compagnon OpenCode](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228).
+Ouvrez une session sur ce serveur. Définissez `SWB_OPENCODE_URL` sur l'adresse locale du serveur. Pour un serveur protégé par mot de passe, consultez les [paramètres du compagnon OpenCode](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228).
 
 ```sh
 SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
@@ -103,7 +103,7 @@ Le compagnon lit les événements de session sur le serveur OpenCode. Vérifiez 
 
 ## DeepSeek Harness
 
-Utilisez DeepSeek Harness `0.2.2-rc.5`. Un profil est un ensemble de réglages de l'application. Installez la passerelle SwB dans le profil `web`. La passerelle transmet les événements de session au compagnon.
+Utilisez DeepSeek Harness `0.2.2-rc.5`. Un profil est un ensemble de paramètres de l'application. Installez la passerelle SwB dans le profil `web`. La passerelle transmet les événements de session au compagnon.
 
 Utilisez une copie locale de la branche `release/1.0`. Remplacez `/path/to/SwB` par le chemin complet de cette copie.
 

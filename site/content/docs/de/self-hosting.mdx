@@ -23,13 +23,13 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Öffnen Sie den Einmal-Anmeldelink aus dem Terminal innerhalb von fünf Minuten. Halten Sie den Link privat.
+Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus dem Terminal. Behandeln Sie den Link vertraulich.
 
 Der Browser verwendet `http://localhost:8870` für die Anmeldung des Inhabers. Der Befehl im Container verwendet Port `8000`. Compose speichert die Daten in `./data`. Nachdem Sie `.env` geändert haben, führen Sie `docker compose up -d` erneut aus.
 
 Bei einem entfernten Server leiten Sie dessen Port `8870` auf den lokalen Port `8870` weiter, bevor Sie den Link öffnen.
 
-Eine Anfrage ohne Anmeldung an `/healthz` gibt `status` und `version` zurück. Für alle Details zum Zustand verwenden Sie eine Inhabersitzung oder den Inhaberschlüssel.
+Eine Anfrage ohne Anmeldung an `/healthz` gibt `status` und `version` zurück. Für vollständige Statusdetails verwenden Sie eine Inhabersitzung oder den Inhaberschlüssel.
 
 ## Cloudflare Tunnel
 
@@ -41,11 +41,11 @@ docker compose --profile tunnel up -d
 
 ## Vertrauenswürdige Proxys
 
-Ein Reverse Proxy leitet Anfragen an SwB weiter. Tragen Sie die Adresse oder das eigene Netzwerk des Proxys in `trusted_proxies` in `config/switchboard.yaml` ein. Schreiben Sie Netzbereiche in CIDR-Notation, zum Beispiel `192.0.2.0/24`.
+Ein Reverse Proxy leitet Anfragen an SwB weiter. Tragen Sie die Adresse oder das dedizierte Netzwerk des Proxys in `trusted_proxies` in `config/switchboard.yaml` ein. Schreiben Sie Netzbereiche in CIDR-Notation, zum Beispiel `192.0.2.0/24`.
 
 Sie können auch `SWB_TRUSTED_PROXIES` in `.env` setzen. Trennen Sie die Einträge durch Kommas. Die YAML-Einstellung hat Vorrang.
 
-Für einen Cloudflare Tunnel auf dem SwB-Host oder im Docker-Netzwerk tragen Sie die Adresse oder das eigene Netzwerk des Tunnel-Connectors ein. Der Connector verbindet sich direkt mit SwB. Für direkte Verbindungen von Cloudflare-Edge-Servern verwenden Sie den Eintrag `cloudflare`.
+Für einen Cloudflare Tunnel auf dem SwB-Host oder im Docker-Netzwerk tragen Sie die Adresse oder das dedizierte Netzwerk des Tunnel-Connectors ein. Der Connector verbindet sich direkt mit SwB. Für direkte Verbindungen von Cloudflare-Edge-Servern verwenden Sie den Eintrag `cloudflare`.
 
 ## Cloudflare Access
 
@@ -72,7 +72,7 @@ Details zur Abrechnung finden Sie im [Free-Plan von Fly.io](https://docs.fly.io/
 
 ## Sicherungen und Upgrades
 
-Beenden Sie SwB, bevor Sie den Datenordner kopieren. Halten Sie den ganzen Ordner zusammen, mit der Datenbank und ihren Schlüsseln, auch `mcp-events.key` und `claim-key`. Sichern Sie auch Ihre Konfigurationsdateien und `.env`. Halten Sie die Sicherung privat. Installieren oder bauen Sie die neue Version. Starten Sie SwB mit demselben Datenordner.
+Beenden Sie SwB, bevor Sie den Datenordner kopieren. Kopieren Sie den Ordner vollständig, mit der Datenbank und ihren Schlüsseln einschließlich `mcp-events.key` und `claim-key`. Sichern Sie auch Ihre Konfigurationsdateien und `.env`. Bewahren Sie die Sicherung vertraulich auf. Installieren oder bauen Sie die neue Version. Starten Sie SwB mit demselben Datenordner.
 
 ## Gedächtnis exportieren
 

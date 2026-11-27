@@ -5,11 +5,11 @@ description: ChatGPT와 ChatGPT dots를 연결합니다.
 
 ## ChatGPT에 SwB 추가
 
-[ChatGPT 설정](/ko/docs/setup/chatgpt)을 따라 SwB을 사용자 지정 MCP 서버로 추가하세요. ChatGPT는 OAuth로 `chatgpt`로서 로그인합니다.
+[ChatGPT 설정](/ko/docs/setup/chatgpt)을 따라 SwB을 사용자 지정 MCP 서버로 추가하세요. ChatGPT는 OAuth를 사용해 `chatgpt`로 로그인합니다.
 
 ## 새 메시지 받기
 
-MCP Events는 메시지가 도착하면 알림을 보냅니다. ChatGPT가 MCP Events를 지원하면 `mailbox_id`를 `chatgpt`로 지정해 `switchboard.message.created`를 구독하도록 요청하세요. SwB은 웹훅으로 메시지 ID를 보냅니다. 웹훅은 URL로 보내는 요청입니다. ChatGPT는 `get_message`로 텍스트를 읽습니다. 답할 때는 `reply`를 사용합니다. ChatGPT는 `wait`나 `inbox`로 새 메시지를 확인할 수도 있습니다.
+MCP Events는 메시지가 도착하면 알림을 보냅니다. MCP Events를 지원한다면 ChatGPT에게 `mailbox_id`를 `chatgpt`로 지정해 `switchboard.message.created`를 구독하도록 요청하세요. SwB은 웹훅으로 메시지 ID를 보냅니다. 웹훅은 URL로 보내는 요청입니다. ChatGPT는 `get_message`로 텍스트를 읽습니다. 답할 때는 `reply`를 사용합니다. ChatGPT는 `wait`나 `inbox`로 새 메시지를 확인할 수도 있습니다.
 
 ## ChatGPT dots
 
@@ -42,18 +42,18 @@ In #agents, check the bot and app IDs on SwB posts that mention you. Use bot <BO
 | `blocks.dots.use` | 블록 유형. `dots`를 사용합니다 |
 | `blocks.dots.enabled` | 이 블록을 건너뛰려면 `false`로 설정합니다 |
 | `blocks.dots.delivery` | Slack에는 `slack`을, MCP Events에는 `mailbox`를 사용합니다. 기본값 `slack` |
-| `blocks.dots.workspace` | 검색할 Slack 워크스페이스. 기본적으로 첫 번째 워크스페이스를 사용합니다 |
+| `blocks.dots.workspace` | 스캔할 Slack 워크스페이스. 기본적으로 첫 번째 워크스페이스를 사용합니다 |
 | `blocks.dots.channel` | dot에게 메시지를 전달하는 비공개 Slack 채널. 기본값 `#agents` |
-| `blocks.dots.create` | 필요할 때 소유자로서 채널을 만들려면 `true`로 설정합니다. 기본값 `true` |
+| `blocks.dots.create` | 필요할 때 소유자 계정으로 채널을 만들려면 `true`로 설정합니다. 기본값 `true` |
 | `blocks.dots.app_ids` | dot을 식별하는 Slack 앱 ID |
 | `blocks.dots.match` | Slack 봇 이름에서 찾을 텍스트. 기본값 `[dot]` |
-| `blocks.dots.rescan_minutes` | Slack dot을 다시 검색하는 간격(분). 기본값 `30` |
+| `blocks.dots.rescan_minutes` | Slack dot을 다시 스캔하는 간격(분). 기본값 `30` |
 | `blocks.dots.poll_seconds` | Slack 다이렉트 메시지의 답장을 확인하는 간격(초). 기본값 `5` |
 | `blocks.dots.default` | 대상 이름 `dot`으로 고르는 dot. 짧은 이름이나 ID를 사용합니다 |
 | `blocks.dots.dots` | `mailbox` 전달용 dot 정의, 또는 Slack dot의 재정의 |
 | `blocks.dots.dots.*.name` | dot의 표시 이름 |
 | `blocks.dots.dots.*.mailbox` | 메시지를 받는 우편함. 기본값 `chatgpt` |
 | `blocks.dots.group_dm` | 소유자, SwB, dot이 함께 있는 Slack 그룹 메시지를 쓰려면 `true`로 설정합니다 |
-| `blocks.dots.owner_dm` | 소유자로서 쓴 게시물을 소유자와 dot의 Slack 다이렉트 메시지로 보내려면 `true`로 설정합니다 |
+| `blocks.dots.owner_dm` | 소유자 계정으로 쓴 게시물을 소유자와 dot의 Slack 다이렉트 메시지로 보내려면 `true`로 설정합니다 |
 | `blocks.dots.agents_as_owner` | 채널이나 다이렉트 메시지 전달에서 소유자 에이전트가 보내는 메시지에 소유자의 Slack 계정을 쓰려면 `true`로 설정합니다 |
 | `blocks.dots.owner_posts_as` | 소유자의 Slack 메시지를 dot에게 전달할 때 쓸 계정. 기본값 `swb`. 소유자 계정을 쓰려면 `owner`로 설정합니다 |

@@ -1,6 +1,6 @@
 ---
 title: GitHub
-description: GitHub のイベントを SwB に送り、エージェントが Issue と Pull Request を操作できるようにします。
+description: GitHub のイベントを SwB に送り、エージェントが Issue とプルリクエストを操作できるようにします。
 ---
 
 SwB は、GitHub App からリポジトリのイベントを受け取ります。イベントとは、GitHub 上の操作についての通知です。アプリの秘密鍵があれば、エージェントは Issue へのラベル付け、コメント、作成もできます。
@@ -9,7 +9,7 @@ SwB は、GitHub App からリポジトリのイベントを受け取ります�
 
 接続したいリポジトリにアプリを作成してインストールできる GitHub アカウントを使ってください。オーナーとして SwB にサインインしてください。
 
-GitHub から、あなたのサーバーの `https://swb.example.com/github/webhook` に届く必要があります。
+GitHub からサーバーの `https://swb.example.com/github/webhook` にアクセスできる必要があります。
 
 ## セットアップ用プロンプトをコピーする
 
@@ -46,17 +46,17 @@ GitHub から、あなたのサーバーの `https://swb.example.com/github/webh
 
 ### アプリを作成する
 
-**Where can this GitHub App be installed?** で **Only on this account** を選択します。**Create GitHub App** をクリックしてください。
+**Where can this GitHub App be installed?** で **Only on this account** を選択してください。**Create GitHub App** をクリックしてください。
 ### 秘密鍵を作成する
 
-**Private keys** で **Generate a private key** を選択します。ダウンロードした `.pem` ファイルは自分だけの秘密にしてください。
+**Private keys** で **Generate a private key** を選択してください。ダウンロードした `.pem` ファイルは安全に保管してください。
 
 ### 認証情報を保存する
 
 SwB の受け取りリンクで Webhook シークレットを保存してください。シークレットを保存したら、一時的なシークレットのファイルを削除してください。SwB に求められたら、**App ID** と `.pem` ファイルもそれぞれの受け取りリンクで保存してください。
 ### アプリをインストールする
 
-あなたのアカウントの横にある **Install App** → **Install** をクリックしてください。**Only select repositories** を選択します。
+自分のアカウントの横にある **Install App** → **Install** をクリックしてください。**Only select repositories** を選択してください。
 ### リポジトリを選ぶ
 
 リポジトリを選んでください。**Install** をクリックしてください。
@@ -90,15 +90,15 @@ blocks:
         project: demo
 ```
 
-Work モードでは、エージェントは `mode.mode` を `work` にします。そして、あなたの数値の GitHub ユーザー ID を、スペースの `owner_ids` に追加します。ID の調べ方と例は、[オーナーのアカウント](/ja/docs/blocks/github#オーナーのアカウント)をご覧ください。
+Work モードでは、エージェントは `mode.mode` を `work` にします。そして、オーナーの数値の GitHub ユーザー ID を、スペースの `owner_ids` に追加します。ID の調べ方と例は、[オーナーのアカウント](/ja/docs/blocks/github#オーナーのアカウント)をご覧ください。
 
-SwB は、イベントのテキストの作成者を確認します。`owner_ids` にいる人のテキストは、`owner` の信頼レベルになれます。SwB は、ブランチ名、ref、ワークフローのタイトル、チェック名を `external` として扱います。
+SwB は、イベントのテキストの作成者を確認します。`owner_ids` にいる人のテキストは、`owner` の信頼レベルを得られます。SwB は、ブランチ名、ref、ワークフローのタイトル、チェック名を `external` として扱います。
 
-チェック名は、オーナーがチェックを始めた場合でも `external` です。フォークからの Pull Request がその名前を変えられるためです。
+チェック名は、オーナーがチェックを始めた場合でも `external` です。フォークからのプルリクエストがその名前を変えられるためです。
 
 Webhook シークレットを保存し、ルートを更新したら、SwB を再起動してください。
 
-App ID や秘密鍵のリンクが残っていれば、エージェントはもう一度 `connect(what="github")` を呼び出します。既存の個人用アクセストークンから App に切り替えるときは、`choose={"credential":"app"}` を選びます。
+App ID や秘密鍵のリンクが残っていれば、エージェントはもう一度 `connect(what="github")` を呼び出します。既存の個人用アクセストークンから App に切り替えるときは、`choose={"credential":"app"}` を指定します。
 
 再起動後、エージェントは `github_status` を呼び出して、インストールとその権限を確認します。
 

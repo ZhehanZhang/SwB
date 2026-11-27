@@ -9,7 +9,7 @@ SwB은 Linux, macOS, Windows에서 실행됩니다. 소스에서 SwB을 빌드�
 
 ## 설치와 시작
 
-SwB 파일을 둘 빈 폴더를 준비하세요. 소유자 키가 있으면 `swb` 명령이 사용자 본인으로 로그인합니다.
+SwB 파일을 둘 빈 폴더를 준비하세요. 소유자 키를 쓰면 `swb` 명령이 나 대신 로그인합니다.
 
 <Tabs items={['uvx', 'pipx', 'Docker']}>
   <Tab value="uvx">
@@ -19,7 +19,7 @@ SwB 파일을 둘 빈 폴더를 준비하세요. 소유자 키가 있으면 `swb
     uvx swb-one up
     ```
 
-    uvx가 SwB을 내려받아 시작합니다. 터미널에 나온 일회용 로그인 링크를 5분 안에 여세요. 다른 예제에서는 맨 앞의 `swb`를 `uvx swb-one`로 바꾸세요.
+    uvx가 SwB을 내려받아 시작합니다. 터미널에 나온 일회용 로그인 링크를 5분 안에 여세요. 다른 예제에서는 맨 앞의 `swb`를 `uvx swb-one`으로 바꾸세요.
   </Tab>
   <Tab value="pipx">
     [pipx를 설치하세요](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB에는 Python 3.12 이상이 필요합니다.
@@ -47,7 +47,7 @@ SwB 파일을 둘 빈 폴더를 준비하세요. 소유자 키가 있으면 `swb
   </Tab>
 </Tabs>
 
-처음 로컬에서 시작하면 `swb up`이 인스턴스 폴더에 `.env`, `config/switchboard.yaml`, `data/`를 만듭니다. 인스턴스 폴더는 SwB 파일을 두는 폴더입니다. 나중에 새 링크가 필요하면 `swb login-link`를 실행하세요.
+로컬에서 처음 시작하면 `swb up`이 인스턴스 폴더에 `.env`, `config/switchboard.yaml`, `data/`를 만듭니다. 나중에 새 링크가 필요하면 `swb login-link`를 실행하세요.
 
 서버를 시작하기 전에 파일을 만들려면 `swb init`을 실행하세요. 그다음 `swb up`을 실행하세요. 같은 폴더의 두 번째 터미널에서 `swb login-link`를 실행하세요.
 
@@ -69,16 +69,16 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 | 명령어 | 용도 |
 | - | - |
-| `swb init` | 비공개 소유자 키와 최소 설정을 씁니다. |
+| `swb init` | 비공개 소유자 키와 최소 설정 파일을 만듭니다. |
 | `swb up` | 이 컴퓨터에서 SwB을 시작합니다. |
-| `swb connect PLATFORM` | 플랫폼을 연결하는 단계를 받습니다. |
+| `swb connect PLATFORM` | 플랫폼 연결 단계를 안내받습니다. |
 | `swb companion` | 컴패니언을 페어링하거나 실행하거나 연결 해제합니다. |
 | `swb hook HARNESS` | 로컬 에이전트 이벤트를 컴패니언으로 전달합니다. |
 | `swb status` | 상태와 다음 단계를 보여 줍니다. |
 | `swb login-link` | 일회용 소유자 로그인 링크를 만듭니다. |
 | `swb claim` | 등록 링크나 코드로 받은 자격 증명을 저장합니다. |
 | `swb serve` | 설정된 호스트와 포트로 서버를 실행합니다. |
-| `swb export DIR` | 저장된 메모리를 출력 폴더 `DIR`에 Markdown 파일로 씁니다. |
+| `swb export DIR` | 저장된 메모리를 출력 폴더 `DIR`에 Markdown 파일로 저장합니다. |
 | `swb log [--limit N]` | 최근 감사 항목을 출력합니다. 기본 한도는 `50`입니다. |
 | `swb config migrate` | 버전 1 설정을 버전 2 형식으로 출력합니다. |
 | `swb blocks list` | 설정된 블록을 나열합니다. |

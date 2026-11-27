@@ -45,7 +45,7 @@ docker compose --profile tunnel up -d
 
 `.env`에 `SWB_TRUSTED_PROXIES`를 설정해도 됩니다. 항목은 쉼표로 구분하세요. YAML 설정이 우선합니다.
 
-SwB 호스트나 Docker 네트워크에 있는 Cloudflare Tunnel은 터널 커넥터의 주소나 전용 네트워크를 추가하세요. 커넥터는 SwB에 직접 연결합니다. Cloudflare 엣지 서버에서 직접 들어오는 연결에는 `cloudflare` 항목을 사용하세요.
+Cloudflare Tunnel이 SwB 호스트나 Docker 네트워크에 있으면 터널 커넥터의 주소나 전용 네트워크를 추가하세요. 커넥터는 SwB에 직접 연결합니다. Cloudflare 엣지 서버에서 직접 들어오는 연결에는 `cloudflare` 항목을 사용하세요.
 
 ## Cloudflare Access
 

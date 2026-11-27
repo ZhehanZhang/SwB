@@ -7,7 +7,7 @@ SwB interroge Telegram pour recevoir les nouveaux messages. Votre serveur SwB pe
 
 ## Créer le bot
 
-Dans [@BotFather](https://t.me/BotFather), envoyez `/newbot`. Demandez à un agent de connecter Telegram. L'agent appelle `telegram_provision` et vous donne un lien de dépôt. Ouvrez le lien et collez le jeton du bot.
+Dans [@BotFather](https://t.me/BotFather), envoyez `/newbot`. Demandez à un agent de connecter Telegram. L'agent appelle `telegram_provision` et vous donne un lien de saisie. Ouvrez le lien et collez le jeton du bot.
 
 ## Ajouter le bot à un groupe
 
@@ -33,18 +33,18 @@ Envoyez un message privé au bot, mentionnez le bot ou utilisez `/swb <target> <
 
 Pour que le bot lise tous les messages du groupe, désactivez le mode confidentialité avec `/setprivacy` dans @BotFather. Retirez ensuite le bot du groupe, puis ajoutez-le de nouveau.
 
-## Réglages du bloc
+## Paramètres du bloc
 
 | Clé | Usage |
 | - | - |
-| `blocks.telegram` | Réglages du bot Telegram et de ses espaces |
+| `blocks.telegram` | Paramètres du bot Telegram et de ses espaces |
 | `blocks.telegram.use` | Charge le bloc `telegram` |
-| `blocks.telegram.enabled` | Mettez `true` pour charger le bloc ou `false` pour le désactiver |
+| `blocks.telegram.enabled` | Indiquez `true` pour charger le bloc ou `false` pour le désactiver |
 | `blocks.telegram.token_env` | Nom de la variable d'environnement du jeton du bot |
-| `blocks.telegram.dm_space` | Espace dont les réglages de routage et de propriétaire s'appliquent aux discussions privées. Par défaut, le premier espace configuré |
+| `blocks.telegram.dm_space` | Espace dont les paramètres de routage et de propriétaire s'appliquent aux discussions privées. Par défaut, le premier espace configuré |
 | `blocks.telegram.dm_mode` | Mode des messages privés envoyés par d'autres personnes. Indiquez `watch` pour les réunir dans un résumé ou `off` pour les ignorer |
-| `blocks.telegram.ack_reaction` | Emoji qui confirme la réception d'un message adressé au bot. Mettez `null` pour désactiver cette réaction |
-| `blocks.telegram.persona_prefix` | Mettez `true` pour afficher en gras, sur la première ligne, le nom utilisé par l'agent |
+| `blocks.telegram.ack_reaction` | Emoji qui confirme la réception d'un message adressé au bot. Indiquez `null` pour désactiver cette réaction |
+| `blocks.telegram.persona_prefix` | Indiquez `true` pour afficher en gras, sur la première ligne, le nom utilisé par l'agent |
 | `blocks.telegram.refresh_minutes` | Minutes entre deux mises à jour de la liste des cibles. Valeur par défaut `30` |
 | `blocks.telegram.target_aliases` | Associe des noms de cibles supplémentaires à des cibles existantes |
 | `blocks.telegram.agents` | Espaces où chaque agent peut publier et recevoir des événements. Indiquez `*` pour tous les espaces |
@@ -55,7 +55,7 @@ Utilisez les [modes de canal](/fr/docs/channel-modes) pour réveiller un agent v
 
 | Clé | Usage |
 | - | - |
-| `blocks.telegram.spaces` | Associe des noms utilisés dans SwB aux réglages d'ensembles de groupes Telegram |
+| `blocks.telegram.spaces` | Associe des noms utilisés dans SwB aux paramètres d'ensembles de groupes Telegram |
 | `blocks.telegram.spaces.*.chats` | ID de discussion des groupes de cet espace. Indiquez des entiers négatifs. Placez chaque groupe dans un seul espace |
 | `blocks.telegram.spaces.*.owner_ids` | ID utilisateur Telegram traités comme propriétaires |
 | `blocks.telegram.spaces.*.known` | Associe des ID utilisateur Telegram connus à des noms affichés |
@@ -63,8 +63,8 @@ Utilisez les [modes de canal](/fr/docs/channel-modes) pour réveiller un agent v
 | `blocks.telegram.spaces.*.project` | Projet SwB par défaut de cet espace |
 | `blocks.telegram.spaces.*.channel_projects` | Définit le projet SwB par ID de discussion de groupe |
 | `blocks.telegram.spaces.*.mode` | Mode de l'espace. Le mode d'un groupe peut le remplacer |
-| `blocks.telegram.spaces.*.channels` | Définit un mode ou des réglages détaillés par ID de discussion de groupe |
+| `blocks.telegram.spaces.*.channels` | Définit un mode ou des paramètres détaillés par ID de discussion de groupe |
 | `blocks.telegram.spaces.*.channels.*.mode` | Mode d'un groupe |
 | `blocks.telegram.spaces.*.channels.*.project` | Projet SwB d'un groupe. Il l'emporte sur le projet de l'espace |
-| `blocks.telegram.spaces.*.listen` | Ancien réglage pour les ID de discussion de groupe en mode `assist` |
+| `blocks.telegram.spaces.*.listen` | Ancien paramètre pour les ID de discussion de groupe en mode `assist` |
 | `blocks.telegram.spaces.*.bot_posts_per_hour` | Nombre maximal de messages du bot par fil de discussion en une heure. Valeur par défaut `20` |

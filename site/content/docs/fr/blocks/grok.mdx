@@ -17,7 +17,7 @@ Avec ce prompt, créez une routine Grok Bot dotée d'un déclencheur webhook. Le
 swb connect grok-bot --choose name=project-triage project=example auth=key
 ```
 
-SwB vous donne des liens de dépôt distincts pour l'adresse du webhook et pour la clé. Enregistrez chaque valeur via son lien. Relancez la même commande pour l'appel de test. Demandez à votre agent d'exécuter l'appel et de vérifier la réponse `pong`.
+SwB vous donne des liens de saisie distincts pour l'adresse du webhook et pour la clé. Enregistrez chaque valeur via son lien. Relancez la même commande pour l'appel de test. Demandez à votre agent d'exécuter l'appel et de vérifier la réponse `pong`.
 
 ## Fonctionnement d'un réveil
 
@@ -38,12 +38,12 @@ Envoyez à une routine par son nom, ou à `grok:<slug>` pour la routine principa
 
 | Clé | Usage |
 | - | - |
-| `blocks.grok-routine` | Réglages pour réveiller les routines Grok Bot |
+| `blocks.grok-routine` | Paramètres pour réveiller les routines Grok Bot |
 | `blocks.grok-routine.use` | Type de bloc. Indiquez `grok-routine` |
-| `blocks.grok-routine.enabled` | Mettez `false` pour ignorer ce bloc |
-| `blocks.grok-routine.routines` | Table qui associe chaque nom de routine à ses réglages |
-| `blocks.grok-routine.routines.*.project` | Nom court du projet SwB. Mettez `null` pour une routine générale |
-| `blocks.grok-routine.routines.*.primary` | Mettez `true` pour choisir cette routine en premier pour son projet |
+| `blocks.grok-routine.enabled` | Indiquez `false` pour ignorer ce bloc |
+| `blocks.grok-routine.routines` | Table qui associe chaque nom de routine à ses paramètres |
+| `blocks.grok-routine.routines.*.project` | Nom court du projet SwB. Indiquez `null` pour une routine générale |
+| `blocks.grok-routine.routines.*.primary` | Indiquez `true` pour choisir cette routine en premier pour son projet |
 | `blocks.grok-routine.routines.*.auth` | Indiquez `key` pour envoyer une clé ou `signature` pour signer la requête. Valeur par défaut `key` |
 | `blocks.grok-routine.routines.*.header` | En-tête HTTP de la clé ou de la signature. Valeurs par défaut `Authorization` pour `key` et `Webhook-Signature` pour `signature` |
 | `blocks.grok-routine.routines.*.url_env` | Nom de la variable qui contient l'adresse HTTPS publique du webhook |

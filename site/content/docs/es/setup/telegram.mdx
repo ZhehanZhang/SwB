@@ -52,7 +52,7 @@ Quita el bot de cada grupo. Añade el bot al grupo otra vez.
 
 El agente llama a `connect(what="telegram")`. Si hace falta, activa el bloque `telegram`. Con el bloque activo, `connect` o `telegram_provision` devuelve un enlace de entrega para el token del bot.
 
-Cuando guardas el token, el agente llama a `telegram_status`. Comprueba el bot y el modo de privacidad. La invitación al grupo está en `setup.add_to_group_url`. Los IDs de los chats recientes están en `setup.seen_chats`.
+Después de que guardes el token, el agente llama a `telegram_status`. Comprueba el bot y el modo de privacidad. La invitación al grupo está en `setup.add_to_group_url`. Los IDs de los chats recientes están en `setup.seen_chats`.
 
 El agente configura un espacio en `blocks.telegram.spaces` dentro de `config/switchboard.yaml`. Un espacio asocia un conjunto de chats a un proyecto de SwB. Pon los IDs de los grupos en `chats`. Pon tu ID de usuario en `owner_ids`. Reinicia SwB después de editar el archivo.
 
@@ -64,7 +64,7 @@ El agente configura un espacio en `blocks.telegram.spaces` dentro de `config/swi
 
 ## Comprobar la conexión
 
-Pide al agente que llame a `connect` otra vez. Indica `connected` cuando la configuración está completa.
+Pide al agente que llame a `connect` otra vez. Devuelve `connected` cuando la configuración está completa.
 
 Usa la cuenta de Telegram que figura en `owner_ids`. Envía `/swb <target> hello` al bot en un chat privado. Cambia `<target>` por un nombre de destino de `targets`. Comprueba que llega una respuesta.
 
@@ -72,4 +72,4 @@ Usa la cuenta de Telegram que figura en `owner_ids`. Envía `/swb <target> hello
 
 Si en un grupo el bot solo lee comandos, desactiva el modo de privacidad en BotFather. Después quita el bot y añádelo de nuevo.
 
-Un webhook es una dirección web a la que Telegram envía mensajes. Pide al dueño del bot que borre cualquier webhook antiguo con el método `deleteWebhook` de Telegram.
+Un webhook es una dirección web a la que Telegram envía mensajes. Pide al propietario del bot que borre cualquier webhook antiguo con el método `deleteWebhook` de Telegram.

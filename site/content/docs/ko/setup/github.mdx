@@ -30,7 +30,7 @@ GitHub가 내 서버의 `https://swb.example.com/github/webhook`에 접속할 �
 **Webhook**에서 **Active**를 선택된 상태로 두세요. 웹훅은 GitHub가 이벤트를 보내는 웹 주소입니다. **Webhook URL**에 `/github/webhook`을 붙인 SwB 주소를 입력하세요.
 ### 웹훅 시크릿 설정
 
-비공개 파일에 시크릿을 만드세요.
+시크릿을 생성해 비공개 파일에 저장하세요.
 
 ```bash
 (umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
@@ -106,7 +106,7 @@ triage 모드에서는 `space_mode(block="github", space="acme/app", mode="triag
 
 외부 발신자에게는 `channel:github/acme/app`과 `target:beta` 모두에 접근 권한을 주세요. 접근 규칙은 [채널 공개 범위](/ko/docs/channel-modes#외부-github-발신자-허용)를 참고하세요.
 
-Watch는 `modes.digest_minutes`가 지나거나 이벤트가 50개 모이면 대상 우편함으로 요약본을 보냅니다. 요약본은 소유자로서 콘솔의 **Inbox**에서 읽거나 `inbox` 또는 `wait`로 읽으세요.
+Watch는 `modes.digest_minutes`가 지나거나 이벤트가 50개 모이면 대상 우편함으로 요약본을 보냅니다. 요약본은 소유자로 로그인해 콘솔의 **Inbox**에서 읽거나 `inbox` 또는 `wait`로 읽으세요.
 
 ## 자격 증명
 

@@ -3,13 +3,13 @@ title: Claude
 description: Claude のアカウントに、SwB をカスタムコネクターとして追加します。
 ---
 
-コネクターを使うと、Claude は外部のサービスのツールを使えます。SwB のコネクターがあれば、Claude はあなたのプロジェクトを読み、ほかのエージェントに作業を送り、メッセージに回答します。
+コネクターを使うと、Claude は外部のサービスのツールを使えます。SwB のコネクターがあれば、Claude は SwB のプロジェクトを読み、ほかのエージェントに作業を送り、メッセージに回答します。
 
 ## 始める前に
 
 Claude の Free プランでは、カスタムコネクターを 1 つ使えます。Pro、Max、Ultra、Team、Enterprise でもカスタムコネクターを使えます。
 
-SwB のオーナーのサインインを設定してください。Claude が `/mcp` に届くように、ポート 443 の公開 HTTPS アドレスを使ってください。
+SwB のオーナーのサインインを設定してください。Claude が `/mcp` にアクセスできるように、ポート 443 の公開 HTTPS アドレスを使ってください。
 
 ## セットアップ用プロンプトをコピーする
 
@@ -24,13 +24,13 @@ SwB のオーナーのサインインを設定してください。Claude が `/
 ### カスタムコネクターを追加する
 
 Claude で [Customize → Connectors](https://claude.ai/customize/connectors) を開いてください。
-**+ Add** を選択します。**Add custom connector** を選択します。
+**+ Add** を選択してください。**Add custom connector** を選択してください。
 ### アドレスを入力する
 
 名前に `SwB` と入力してください。`https://swb.example.com/mcp` のような SwB の MCP アドレスを入力してください。
 ### 既定のサインイン設定のまま進む
 
-**Continue** を選択して、サインインの設定を確認してください。**Authentication** で **Sign in now** を選択します。**OAuth client** で **Use Claude’s published identity (Recommended)** を選択します。**Request headers** は空のままにしてください。
+**Continue** を選択して、サインインの設定を確認してください。**Authentication** で **Sign in now** を選択してください。**OAuth client** で **Use Claude’s published identity (Recommended)** を選択してください。**Request headers** は空のままにしてください。
 ### 追加して接続する
 
 **Add** をクリックしてください。一覧の SwB に **Connect** が表示されたら、**Connect** をクリックしてください。
@@ -47,7 +47,7 @@ Claude で [Customize → Connectors](https://claude.ai/customize/connectors) �
 **Add** をクリックしてください。**Custom** にポインターを合わせ、**Web** をクリックしてください。
 ### アドレスを入力する
 
-名前に `SwB` と入力してください。SwB の MCP アドレスを入力してください。**Continue** を選択します。サインインの設定を確認してください。**Sign in now** か **Sign in when needed** を選択します。**Use Claude’s published identity (Recommended)** を選択します。**Add** を選択します。
+名前に `SwB` と入力してください。SwB の MCP アドレスを入力してください。**Continue** を選択してください。サインインの設定を確認してください。**Sign in now** か **Sign in when needed** を選択してください。**Use Claude’s published identity (Recommended)** を選択してください。**Add** を選択してください。
 ### アカウントを接続する
 
 **Customize** → **Connectors** を開いてください。`SwB` を探し、**Connect** をクリックしてください。
@@ -59,13 +59,13 @@ Claude で [Customize → Connectors](https://claude.ai/customize/connectors) �
 
 ### チャットで SwB を有効にする
 
-チャットで **+** → **Connectors** を選択します。SwB を有効にしてください。Claude Project では、コーディネーターのチャットを使ってください。
+チャットで **+** → **Connectors** を選択してください。SwB を有効にしてください。Claude Project では、コーディネーターのチャットを使ってください。
 
 ## エージェントの動作
 
 エージェントは `connect(what="claude")` を呼び出します。SwB は、MCP アドレスと、OAuth を使えるかどうかを返します。OAuth では、ブラウザーでアクセスを承認します。
 
-エージェントは、クリックする場所の順番とアドレスをあなたに伝えます。あなたが承認すると、エージェントはもう一度 `connect` を呼び出します。SwB は、クライアントがサインイン済みであることを返します。
+エージェントは、クリックする場所の順番とアドレスを伝えます。承認すると、エージェントはもう一度 `connect` を呼び出します。SwB は、クライアントがサインイン済みであることを返します。
 
 ## 認証情報
 
@@ -76,8 +76,8 @@ Claude で [Customize → Connectors](https://claude.ai/customize/connectors) �
 
 ## 接続を確認する
 
-**Customize** → **Connectors** を開き、`SwB` が接続済みになっていることを確認してください。`project_list` を呼び出すよう Claude に頼んでください。SwB のプロジェクトの一覧が出れば、接続できています。
+**Customize** → **Connectors** を開き、`SwB` が接続済みになっていることを確認してください。`project_list` を呼び出すよう Claude に頼んでください。SwB のプロジェクトの一覧が表示されれば、接続できています。
 
 ## 問題を解決する
 
-`/mcp` で終わる公開 HTTPS アドレスを使ってください。Claude が `/mcp` に直接届くようにしてください。SwB のアドレスが変わったら、コネクターを削除してください。新しいアドレスで、もう一度追加してください。
+`/mcp` で終わる公開 HTTPS アドレスを使ってください。Claude から `/mcp` に直接アクセスできるようにしてください。SwB のアドレスが変わったら、コネクターを削除してください。新しいアドレスで、もう一度追加してください。

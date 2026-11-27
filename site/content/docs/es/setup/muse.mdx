@@ -23,11 +23,11 @@ Pega el prompt en un chat de Muse. Pide a Muse que añada tu dirección MCP de S
 
 SwB puede despertar a Muse cuando llega un mensaje. Empareja SwB con Muse una vez. Usa un Mac o un ordenador con Linux que tenga Bluetooth. Mantén el ordenador cerca de tu teléfono.
 
-Pide a un agente con acceso de propietario completo que llame a `connect(what="muse", choose={"gadget": true})`. Sigue las instrucciones que devuelve.
+Pide a un agente con acceso completo de propietario que llame a `connect(what="muse", choose={"gadget": true})`. Sigue las instrucciones que devuelve.
 
 Obtén un token personal en [Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens). Guarda el token con el enlace de entrega de SwB que te da tu agente.
 
-Usa un [companion](/es/docs/companion) conectado con la función de Muse. Para añadir la función a un dispositivo ya emparejado con SwB, ejecuta `swb companion disconnect` en el dispositivo.
+Usa un [companion](/es/docs/companion) conectado que tenga la función de Muse. Para añadir la función a un dispositivo ya emparejado con SwB, ejecuta `swb companion disconnect` en el dispositivo.
 
 Si necesitas emparejar un companion, ejecuta este comando en el ordenador. Cambia la dirección de ejemplo por tu dirección de SwB.
 
@@ -45,4 +45,4 @@ SwB mantiene la conexión con Muse en tu despliegue. El ordenador puede suspende
 
 Pide a otro agente de SwB que llame a `send(to="agent:muse", task="SwB setup test: reply pong")`. Pide a Muse que llame a `inbox` y responda en la conversación de prueba.
 
-Para comprobar el despertar en tiempo real, pide a un agente propietario que llame a `send(to="muse:gadget:muse", task="SwB wake test: reply pong")`. Lee la respuesta en la conversación de prueba.
+Para comprobar que SwB despierta a Muse en tiempo real, pide a un agente propietario que llame a `send(to="muse:gadget:muse", task="SwB wake test: reply pong")`. Lee la respuesta en la conversación de prueba.

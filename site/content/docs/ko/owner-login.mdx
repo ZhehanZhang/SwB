@@ -18,7 +18,7 @@ swb login-link
 
 이 명령은 `https://swb.example.com/login#t=...` 같은 링크를 출력합니다. 5분 안에 브라우저에서 여세요. 링크는 한 번만 쓸 수 있습니다. 소유자로 로그인한 에이전트도 `login_link` 도구로 링크를 만들 수 있습니다. 토큰은 링크에서 `#` 뒤에 있습니다.
 
-처음 로컬에서 시작하면 `swb up`이 일회용 링크를 출력합니다. 로컬 주소의 기본값은 `http://localhost:8870`입니다. `SWB_PORT`를 설정하면 주소에 그 포트를 사용합니다. `swb login-link`에서 다른 서버를 고르려면 `--url`을 사용하세요. 다른 인스턴스 폴더의 소유자 키를 읽으려면 `--dir`를 사용하세요.
+로컬에서 처음 시작하면 `swb up`이 일회용 링크를 출력합니다. 로컬 주소의 기본값은 `http://localhost:8870`입니다. `SWB_PORT`를 설정하면 주소에 그 포트를 사용합니다. `swb login-link`에서 다른 서버를 고르려면 `--url`을 사용하세요. 다른 인스턴스 폴더의 소유자 키를 읽으려면 `--dir`를 사용하세요.
 
 링크로 로그인하다가 실패하면 `swb login-link`를 다시 실행하세요. 새 링크를 브라우저에서 여세요.
 
@@ -42,7 +42,7 @@ swb login-link
 
 ## OIDC
 
-OIDC(OpenID Connect)는 Google 같은 로그인 서비스가 내 신원을 확인하게 해 주는 규약입니다. 설정 파일에 사용하는 서비스를 추가하세요. `SWB_OIDC_CLIENT_SECRET`에 그 서비스의 시크릿을 설정하세요.
+OIDC(OpenID Connect)는 Google 같은 로그인 서비스가 내 신원을 확인하게 해 주는 프로토콜입니다. 설정 파일에 사용하는 서비스를 추가하세요. `SWB_OIDC_CLIENT_SECRET`에 그 서비스의 시크릿을 설정하세요.
 
 ```yaml
 public_url: https://swb.example.com
@@ -63,7 +63,7 @@ Cloudflare Access로 콘솔을 보호하려면 [Cloudflare 설정](/ko/docs/setu
 
 ## 에이전트 로그인
 
-OAuth는 내 승인을 받아 앱이 SwB에 연결하게 해 주는 규약입니다. `/authorize`에서 연결을 승인하세요. 앱은 OAuth 범위 `switchboard`를 받습니다. 이 값은 앱이 요청하는 접근 권한의 이름입니다. 앱은 `/token`으로 토큰을 받거나 갱신합니다.
+OAuth는 내 승인을 받아 앱이 SwB에 연결하게 해 주는 프로토콜입니다. `/authorize`에서 연결을 승인하세요. 앱은 OAuth 범위 `switchboard`를 받습니다. 이 값은 앱이 요청하는 접근 권한의 이름입니다. 앱은 `/token`으로 토큰을 받거나 갱신합니다.
 
 앱에 OAuth 오류가 나면 `error_description`에서 자세한 내용을 확인하세요.
 
@@ -92,7 +92,7 @@ SwB이 [페어링 코드](/ko/docs/connect#페어링-코드로-연결)를 거부
 
 ## 로그인 오류
 
-SwB은 브라우저 로그인 실패를 **Audit**에 기록합니다. 각 행에는 이유가 나오고 코드와 토큰은 비공개로 유지됩니다. 일부 실패는 반복 기록 수를 제한합니다.
+SwB은 브라우저 로그인 실패를 **Audit**에 기록합니다. 각 행에는 이유가 나오고 코드와 토큰은 비공개로 유지됩니다. 일부 실패는 반복 기록 수가 제한됩니다.
 
 | 오류 | 의미 |
 | - | - |

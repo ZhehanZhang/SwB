@@ -32,7 +32,7 @@ Telegram で https://t.me/BotFather を開いてください。BotFather と初�
 エージェントから届いた SwB の受け取りリンクを開いてください。欄にトークンを貼り付けてください。
 ### 個人チャットを始める
 
-ボットとの個人チャットで **Start** をタップしてください。SwB があなたのユーザー ID を見つけられるように、メッセージを 1 つ送ってください。
+ボットとの個人チャットで **Start** をタップしてください。SwB がユーザー ID を確認できるように、メッセージを 1 つ送ってください。
 ### ボットをグループに追加する
 
 エージェントから届いたグループ用のリンクを開いてください。グループを選んでください。
@@ -42,7 +42,7 @@ Telegram で https://t.me/BotFather を開いてください。BotFather と初�
 グループで `/swb@<bot username>` を送ってください。これで、SwB がグループの ID を把握します。
 ### グループのすべてのメッセージを読む
 
-ボットにすべてのメッセージを読ませたいグループがある場合は、BotFather に `/setprivacy` を送ってください。あなたのボットを選んでください。**Disable** を選択します。
+ボットにすべてのメッセージを読ませたいグループがある場合は、BotFather に `/setprivacy` を送ってください。作成したボットを選んでください。**Disable** を選択してください。
 
 ### ボットをもう一度追加する
 
@@ -52,9 +52,9 @@ Telegram で https://t.me/BotFather を開いてください。BotFather と初�
 
 エージェントは `connect(what="telegram")` を呼び出します。必要に応じて `telegram` ブロックを有効にします。ブロックが有効になると、`connect` か `telegram_provision` がボットトークン用の受け取りリンクを返します。
 
-あなたがトークンを保存すると、エージェントは `telegram_status` を呼び出します。ボットとプライバシーモードを確認します。グループへの招待は `setup.add_to_group_url` にあります。最近のチャット ID は `setup.seen_chats` にあります。
+トークンを保存すると、エージェントは `telegram_status` を呼び出します。ボットとプライバシーモードを確認します。グループへの招待は `setup.add_to_group_url` にあります。最近のチャット ID は `setup.seen_chats` にあります。
 
-エージェントは、`config/switchboard.yaml` の `blocks.telegram.spaces` でスペースを設定します。スペースは、チャットのまとまりを SwB のプロジェクトに結び付けます。グループの ID を `chats` に設定してください。あなたのユーザー ID を `owner_ids` に設定してください。ファイルを編集したら、SwB を再起動してください。
+エージェントは、`config/switchboard.yaml` の `blocks.telegram.spaces` でスペースを設定します。スペースは、チャットのまとまりを SwB のプロジェクトに結び付けます。グループの ID を `chats` に設定してください。自分のユーザー ID を `owner_ids` に設定してください。ファイルを編集したら、SwB を再起動してください。
 
 ## 認証情報
 

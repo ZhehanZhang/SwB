@@ -3,13 +3,13 @@ title: GitHub
 description: Senden Sie GitHub-Ereignisse an SwB und lassen Sie Agenten auf Issues und Pull Requests reagieren.
 ---
 
-SwB empfängt Repository-Ereignisse von einer GitHub App. Ein Ereignis ist eine Meldung über eine Aktion auf GitHub. Mit dem Private Key der App können Agenten auch Issues mit Labels versehen, kommentieren und eröffnen.
+SwB empfängt Repository-Ereignisse von einer GitHub App. Ein Ereignis ist eine Meldung über eine Aktion auf GitHub. Mit dem Private Key der App können Agenten auch Issues mit Labels versehen, kommentieren und erstellen.
 
 ## Voraussetzungen
 
 Verwenden Sie ein GitHub-Konto, das eine App für die gewünschten Repositories erstellen und installieren darf. Melden Sie sich als Inhaber bei SwB an.
 
-GitHub muss `https://swb.example.com/github/webhook` auf Ihrem Server erreichen.
+GitHub muss `https://swb.example.com/github/webhook` auf Ihrem Server erreichen können.
 
 ## Einrichtungsprompt kopieren
 
@@ -42,24 +42,24 @@ Speichern Sie das Secret in Ihrem Passwortmanager. Geben Sie es in **Webhook sec
 Verwenden Sie unter **Repository permissions** die Zugriffsstufen aus der Tabelle.
 ### Ereignisse abonnieren
 
-Wählen Sie unter **Subscribe to events** die Ereignisse aus der Tabelle unten.
+Wählen Sie unter **Subscribe to events** die Ereignisse in der Tabelle unten aus.
 
 ### App erstellen
 
-Wählen Sie unter **Where can this GitHub App be installed?** die Option **Only on this account**. Klicken Sie auf **Create GitHub App**.
+Wählen Sie unter **Where can this GitHub App be installed?** die Option **Only on this account** aus. Klicken Sie auf **Create GitHub App**.
 ### Private Key erstellen
 
-Wählen Sie unter **Private keys** die Option **Generate a private key**. Halten Sie die heruntergeladene Datei `.pem` privat.
+Wählen Sie unter **Private keys** die Option **Generate a private key** aus. Bewahren Sie die heruntergeladene Datei `.pem` sicher auf.
 
 ### Zugangsdaten speichern
 
 Speichern Sie das Webhook-Secret über seinen Claim-Link von SwB. Löschen Sie danach die temporäre Datei mit dem Secret. Speichern Sie die **App ID** und die Datei `.pem` über ihre Claim-Links, sobald SwB danach fragt.
 ### App installieren
 
-Klicken Sie auf **Install App** → **Install** neben Ihrem Konto. Wählen Sie **Only select repositories**.
+Klicken Sie auf **Install App** → **Install** neben Ihrem Konto. Wählen Sie **Only select repositories** aus.
 ### Repositories wählen
 
-Wählen Sie Ihre Repositories. Klicken Sie auf **Install**.
+Wählen Sie Ihre Repositories aus. Klicken Sie auf **Install**.
 
 | Repository-Ressource | Zugriff | Ereignisse |
 | --- | --- | --- |
@@ -90,7 +90,7 @@ blocks:
         project: demo
 ```
 
-Für den Modus Work setzt der Agent `mode.mode` auf `work`. Er trägt Ihre numerische GitHub-Benutzer-ID in `owner_ids` des Raums ein. Wie Sie die ID finden, zeigt mit Beispiel [Inhaberkonten](/de/docs/blocks/github#inhaberkonten).
+Für den Modus `work` setzt der Agent `mode.mode` auf `work`. Er trägt Ihre numerische GitHub-Benutzer-ID in `owner_ids` des Raums ein. Wie Sie die ID finden, zeigt [Inhaberkonten](/de/docs/blocks/github#inhaberkonten) mit einem Beispiel.
 
 SwB prüft die Autoren von Ereignistexten. Text einer Person aus `owner_ids` kann die Vertrauensstufe `owner` haben. Branch-Namen, Refs, Workflow-Titel und Check-Namen behandelt SwB als `external`.
 
@@ -102,15 +102,15 @@ Für die verbleibenden Links zu App ID und Private Key ruft der Agent `connect(w
 
 Nach einem Neustart ruft der Agent `github_status` auf, um die Installation und ihre Berechtigungen zu prüfen.
 
-Für den Modus Triage rufen Sie `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")` auf. Wählen Sie eine Adresse aus `targets`. Für den Modus Assist verwenden Sie `mode="assist"`. Im Modus Triage ist `github_reply` die Standardaktion zum Schreiben auf GitHub.
+Für den Modus `triage` rufen Sie `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")` auf. Wählen Sie eine Adresse aus `targets`. Für den Modus `assist` verwenden Sie `mode="assist"`. Im Modus `triage` ist `github_reply` die Standardaktion zum Schreiben auf GitHub.
 
-Für externe Absender geben Sie `channel:github/acme/app` und `target:beta` beide frei. Die Zugriffsregeln beschreibt [Sichtbarkeit von Kanälen](/de/docs/channel-modes#externe-github-absender-zulassen).
+Für externe Absender geben Sie sowohl `channel:github/acme/app` als auch `target:beta` frei. Die Zugriffsregeln beschreibt [Sichtbarkeit von Kanälen](/de/docs/channel-modes#externe-github-absender-zulassen).
 
-Watch sendet eine Zusammenfassung an das Zielpostfach, wenn `modes.digest_minutes` abgelaufen ist oder 50 Ereignisse erreicht sind. Als Inhaber lesen Sie Zusammenfassungen in der Konsole unter **Inbox** oder mit `inbox` oder `wait`.
+Der Modus Watch sendet eine Zusammenfassung an das Zielpostfach, wenn `modes.digest_minutes` abgelaufen ist oder 50 Ereignisse erreicht sind. Als Inhaber lesen Sie Zusammenfassungen in der Konsole unter **Inbox** oder mit `inbox` oder `wait`.
 
 ## Zugangsdaten
 
-| Token | Hier zeigt GitHub es an | Format | Hierhin gehört es |
+| Token | Wo GitHub es anzeigt | Format | Wohin es gehört |
 | --- | --- | --- | --- |
 | Webhook-Secret | Sie erzeugen es mit `openssl rand -hex 32` | Mindestens 16 Zeichen | Claim-Link von SwB |
 | App ID | Einstellungen der App, **App ID** | Eine Zahl | Claim-Link von SwB |

@@ -1,6 +1,6 @@
 ---
 title: Slack
-description: ボットとあなた自身の Slack アカウントで、Slack のワークスペースを SwB に接続します。
+description: ボットと自分の Slack アカウントで、Slack のワークスペースを SwB に接続します。
 ---
 
 SwB は、マニフェストから作成した Slack アプリを通じて、Slack を読み、投稿します。マニフェストとは、アプリのすべての設定を入れたファイルです。
@@ -27,7 +27,7 @@ SwB は、マニフェストから作成した Slack アプリを通じて、Sla
 ワークスペースを選んでください。**Next** をクリックしてください。
 ### マニフェストを貼り付ける
 
-**YAML** を選択します。下にあるアプリマニフェストのどちらかをコピーしてください。全体をそのまま貼り付けてください。
+**YAML** を選択してください。下にあるアプリマニフェストのどちらかをコピーしてください。全体をそのまま貼り付けてください。
 ### アプリを作成する
 
 **Next** → **Create** をクリックしてください。
@@ -56,7 +56,7 @@ Slack に承認を求められたら、ワークスペースか組織の管理�
 
 ## アプリマニフェスト
 
-### ボットとあなたのアカウント
+### ボットと自分のアカウント
 
 ```yaml
 # Example Slack app for an agent-to-agent workspace: a bot user and the owner's user token.
@@ -117,7 +117,7 @@ settings:
   token_rotation_enabled: false
 ```
 
-### あなたのアカウントだけ
+### 自分のアカウントだけ
 
 ```yaml
 # Example Slack app for a user-only workspace. No bot user, bot scopes, bot events, or interactivity.
@@ -162,7 +162,7 @@ settings:
 
 エージェントは、`config/switchboard.yaml` の `blocks.slack.workspaces` にワークスペースを追加します。ワークスペース ID とトークンの名前を設定します。`blocks.slack.agents` でアクセスを与えます。
 
-この例では、ボットとあなたのアカウントで 1 つのワークスペースを接続します。`T0DEMO0001` を、あなたのワークスペース ID に置き換えてください。
+この例では、ボットと自分のアカウントで 1 つのワークスペースを接続します。`T0DEMO0001` を、実際のワークスペース ID に置き換えてください。
 
 ```yaml
 blocks:
@@ -184,9 +184,9 @@ blocks:
           example: [bot, user]
 ```
 
-`switchboard_status` に表示されるエージェント名を使ってください。エージェントごとにグラントを 1 つずつ追加してください。ワークスペースの項目とグラントには、同じワークスペースのラベルを使ってください。アカウントだけのマニフェストを使う場合は、`team_id` の隣に `user_only: true` を追加してください。`identities` から `bot` を削除してください。グラントを `[user]` にしてください。
+`switchboard_status` に表示されるエージェント名を使ってください。エージェントごとにグラントを 1 つずつ追加してください。ワークスペースの項目とグラントには、同じワークスペースのラベルを使ってください。自分のアカウントだけのマニフェストを使う場合は、`team_id` の隣に `user_only: true` を追加してください。`identities` から `bot` を削除してください。グラントを `[user]` にしてください。
 
-`connect` に求められたら、SwB を再起動してください。エージェントは `slack_workspaces` で、Slack の各 ID を確認できます。ここでの ID とは、ボットかあなたのアカウントのことです。
+`connect` に求められたら、SwB を再起動してください。エージェントは `slack_workspaces` で、Slack の各アカウントを確認できます。ここでのアカウントとは、ボットか自分の Slack アカウントのことです。
 
 ## 認証情報
 
@@ -198,9 +198,9 @@ blocks:
 
 ## 接続を確認する
 
-もう一度 `connect(what="slack")` を実行し、`connected` と表示されることを確認してください。`slack_workspaces` を呼び出してください。各 ID で `ready` が `true`、ワークスペースで `connected` が `true` になっていることを確認してください。
+もう一度 `connect(what="slack")` を実行し、`connected` と表示されることを確認してください。`slack_workspaces` を呼び出してください。各アカウントで `ready` が `true`、ワークスペースで `connected` が `true` になっていることを確認してください。
 
-ボットを設定した場合は、チャンネルでボットをメンションし、送信先の名前を書き加えてください。`slack_events` か `slack_wait` を確認するよう、エージェントに頼んでください。投稿をテストするときは、書き込み権限のある ID で `slack_post` を使ってください。
+ボットを設定した場合は、チャンネルでボットをメンションし、送信先の名前を書き加えてください。`slack_events` か `slack_wait` を確認するよう、エージェントに頼んでください。投稿をテストするときは、書き込み権限のあるアカウントで `slack_post` を使ってください。
 
 ## 問題を解決する
 
@@ -208,4 +208,4 @@ SwB が Socket Mode の問題を報告したら、アプリの設定で **Socket
 
 アプリのスコープを変更したら、アプリをもう一度インストールしてください。そのあと、新しい受け取りリンクで新しいトークンを保存してください。
 
-`slack_search` での検索には、あなた自身のアカウントを使います。スコープ `search:read` を持つユーザートークンが必要です。
+`slack_search` での検索には、自分のアカウントを使います。スコープ `search:read` を持つユーザートークンが必要です。

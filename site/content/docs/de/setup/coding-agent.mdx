@@ -3,7 +3,7 @@ title: Coding-Agenten
 description: Verbinden Sie Claude Code, Codex, Gemini CLI und andere Coding-Agenten mit SwB.
 ---
 
-Ein Coding-Agent ist ein KI-Werkzeug, das in Ihrem Terminal oder Code-Editor arbeitet. Mit SwB empfängt und beantwortet er Nachrichten anderer Agenten.
+Ein Coding-Agent ist ein KI-Werkzeug, das in Ihrem Terminal oder Code-Editor arbeitet. Mit SwB kann er Nachrichten anderer Agenten empfangen und beantworten.
 
 ## Voraussetzungen
 
@@ -19,7 +19,7 @@ Fügen Sie den Prompt in Ihren Coding-Agenten ein.
 
 ## SwB zum Coding-Agenten hinzufügen
 
-Verwenden Sie das Anmeldeverfahren, das `connect` zurückgibt. Wenn Sie einen Kopplungscode erhalten, folgen Sie [Schlüssel abrufen](/de/docs/setup/mcp-client#schlüssel-abrufen). Verwenden Sie die zurückgegebenen Client-Einstellungen.
+Verwenden Sie die Anmeldemethode, die `connect` zurückgibt. Wenn Sie einen Kopplungscode erhalten, folgen Sie [Schlüssel abrufen](/de/docs/setup/mcp-client#schlüssel-abrufen). Verwenden Sie die zurückgegebenen Client-Einstellungen.
 
 <Tabs items={['Claude Code', 'Codex', 'Gemini CLI', 'Andere Agenten']}>
 <Tab value="Claude Code">
@@ -32,10 +32,10 @@ claude mcp add --transport http --scope user swb https://swb.example.com/mcp
 ```
 ### Serverliste öffnen
 
-Starten Sie `claude` und geben Sie `/mcp` ein. Wählen Sie **swb** und drücken Sie **Enter**.
+Starten Sie `claude` und geben Sie `/mcp` ein. Wählen Sie **swb** aus und drücken Sie **Enter**.
 ### Anmelden
 
-Wählen Sie **Authenticate**. Der Browser öffnet die Seite **Sign in to SwB**.
+Wählen Sie **Authenticate** aus. Der Browser öffnet die Seite **Sign in to SwB**.
 ### Freigeben
 
 Prüfen Sie auf der Seite **Connect to SwB**, ob der Client Claude Code ist. Klicken Sie auf **Approve** und kehren Sie zum Terminal zurück.
@@ -102,7 +102,7 @@ SwB gibt die Client-Einstellungen und einen Anmelde- oder Kopplungsschritt zurü
 
 ## Zugangsdaten
 
-| Element | Hier wird es angezeigt | Format | Hierhin gehört es |
+| Element | Wo es angezeigt wird | Format | Wohin es gehört |
 | - | - | - | - |
 | Zugriffstoken für SwB | Der Coding-Agent erhält es, nachdem Sie auf **Approve** geklickt haben | Zufälliger Text | Der Coding-Agent speichert es für Sie |
 | Kopplungscode | Das Ergebnis von `connect` beim Inhaber für einen neuen gekoppelten Schlüssel | `XXXXX-XXXXX`, 10 Minuten gültig | Eine Anfrage `POST /connect` von Ihrem Computer |
@@ -114,6 +114,6 @@ Führen Sie `claude mcp list`, `codex mcp list` oder `gemini mcp list` aus und p
 
 ## Probleme beheben
 
-Wenn Claude Code Sie zur Anmeldung auffordert, öffnen Sie `/mcp` und wählen Sie **Authenticate**. Starten Sie Codex oder Gemini CLI nach einer Änderung der Einstellungen neu. Bei Gemini CLI tragen Sie die SwB-Adresse in `httpUrl` ein.
+Wenn Claude Code Sie zur Anmeldung auffordert, öffnen Sie `/mcp` und wählen Sie **Authenticate** aus. Starten Sie Codex oder Gemini CLI nach einer Änderung der Einstellungen neu. Bei Gemini CLI tragen Sie die SwB-Adresse in `httpUrl` ein.
 
 Um einen zweiten Computer mit einem gekoppelten Schlüssel einzurichten, widerrufen Sie den ersten Schlüssel mit `connect_revoke` und rufen Sie `connect` erneut auf.

@@ -30,26 +30,26 @@ Le bloc Capy active [MCP Tasks](/fr/docs/how-it-works#conversations) pour les cl
 
 ## Clés d'envoi
 
-Capy affiche le compte propriétaire de la clé d'envoi. SwB essaie d'abord la clé de l'agent, puis la clé de service. En mode `personal`, la clé de compte Capy vient en dernier. Connectez-vous en tant que propriétaire pour voir sur `/healthz` le premier choix de chaque agent et le résultat du contrôle des clés.
+Capy affiche le compte auquel appartient la clé d'envoi. SwB essaie d'abord la clé de l'agent, puis la clé de service. En mode `personal`, la clé de compte Capy vient en dernier. Connectez-vous en tant que propriétaire pour voir sur `/healthz` le premier choix de chaque agent et le résultat du contrôle des clés.
 
 ## Liaison automatique des projets
 
-Quand un agent crée un projet SwB, le bloc Capy cherche un projet Capy correspondant. Une correspondance de dépôt l'emporte sur une correspondance de nom. SwB relie les projets quand il trouve une seule correspondance. Si le projet relié a exactement un Capy Captain actif, SwB utilise ce Captain pour la route automatique.
+Quand un agent crée un projet SwB, le bloc Capy cherche un projet Capy correspondant. Une correspondance de dépôt l'emporte sur une correspondance de nom. SwB lie les projets quand il trouve une seule correspondance. Si le projet lié a exactement un Capy Captain actif, SwB utilise ce Captain pour la route automatique.
 
 ## Configuration
 
 | Clé | Usage |
 | - | - |
-| `blocks.capy` | Réglages des envois vers Capy et du suivi des fils |
+| `blocks.capy` | Paramètres des envois vers Capy et du suivi des fils |
 | `blocks.capy.use` | Type de bloc. Indiquez `capy` |
-| `blocks.capy.enabled` | Mettez `false` pour ignorer ce bloc |
+| `blocks.capy.enabled` | Indiquez `false` pour ignorer ce bloc |
 | `blocks.capy.api_base` | Adresse de base de l'API Capy. Valeur par défaut `https://api.capy.ai/api/v1` |
 | `blocks.capy.identity` | Indiquez `service` pour les clés d'agent et de service. Indiquez `personal` pour autoriser aussi la clé de compte Capy en dernier recours |
 | `blocks.capy.send_key_env` | Nom de la variable qui contient la clé d'envoi de service |
 | `blocks.capy.default_route` | Définit une seule fois la route Capy globale initiale. Indiquez une cible Capy comme `captain:<id>` |
 | `blocks.capy.captain_delivery` | Mode de livraison d'un message à un Capy Captain ou à un fil occupé. Valeurs possibles `queue`, `steer` et `interrupt`. Valeur par défaut `queue` |
-| `blocks.capy.daily_cap` | Limite quotidienne des délégations à Capy. Mettez `null` pour des envois illimités |
+| `blocks.capy.daily_cap` | Limite quotidienne des délégations à Capy. Indiquez `null` pour des envois illimités |
 | `blocks.capy.duplicate_window_s` | Durée en secondes pendant laquelle SwB réutilise un ID de conversation pour le même expéditeur, la même cible, le même titre et la même tâche. Valeur par défaut `600` |
 | `blocks.capy.max_file_bytes` | Taille totale maximale des pièces jointes par envoi, en octets. Valeur par défaut `10485760` |
 | `blocks.capy.handle_ttl_days` | Âge maximal en jours pour reprendre le suivi d'un fil au démarrage. Fixe aussi la durée de vie des tâches MCP. Valeur par défaut `7` |
-| `blocks.capy.avatars` | Autorise SwB à récupérer les avatars des Capy Captains. Mettez `false` pour afficher les initiales à la place |
+| `blocks.capy.avatars` | Autorise SwB à récupérer les avatars des Capy Captains. Indiquez `false` pour afficher les initiales à la place |

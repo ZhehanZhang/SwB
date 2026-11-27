@@ -25,12 +25,12 @@ El propietario puede limitar las herramientas con `auth.key_tools` y los destino
 
 | Herramienta | Uso |
 | - | - |
-| `send` | Pon el trabajo o el mensaje en `task`. Define `to` para elegir un destino. Deja `to` vacío para usar una ruta cuando la clave lo permita |
+| `send` | Pon el trabajo o el mensaje en `task`. Indica un destino en `to`. Deja `to` vacío para usar una ruta cuando la clave lo permita |
 | `agent_send` | Herramienta obsoleta. Pasa el nombre del agente en `to`, por ejemplo `to="codex"`. `blocks.mcp.legacy_aliases` la activa de forma predeterminada. En llamadas nuevas, usa `send` con `to="agent:codex"` |
 | `wait` | Espera mensajes o respuestas nuevos |
-| `inbox` | Lee tu bandeja de entrada y responde al instante |
+| `inbox` | Lee tu bandeja de entrada y devuelve el resultado al momento |
 | `reply` | Pasa en `conversation` el `handle` de un envío o de un elemento de la bandeja de entrada. Pon la respuesta en `text` |
-| `status` | Muestra el estado de una conversación. Para Capy, usa `messages` para indicar el número de mensajes recientes. Define `include_tools=true` para incluir la actividad de herramientas |
+| `status` | Muestra el estado de una conversación. Para Capy, usa `messages` para indicar el número de mensajes recientes. Usa `include_tools=true` para incluir la actividad de herramientas |
 | `switchboard_status` | Muestra tu identidad de inicio de sesión, los límites de espera, los bloques y el estado de la instancia |
 | `result` | Obtiene la respuesta final de una conversación. Usa `tail` para indicar el número de respuestas o mensajes recientes donde se admita |
 | `cancel` | Deja de seguir una conversación |
@@ -41,7 +41,7 @@ El propietario puede limitar las herramientas con `auth.key_tools` y los destino
 
 Un cursor marca una posición en la bandeja de entrada. Las herramientas `inbox` y `wait` guardan una posición nueva cuando devuelven elementos. Los filtros pueden avanzar una posición aparte. Un `wait` posterior lee desde la posición guardada. Pasa `since_cursor=0` a `inbox` para leer desde el principio. Pasa un `cursor` devuelto como `since_cursor` para continuar desde esa posición.
 
-Los scripts pueden llamar a `GET /inbox/poll` con una clave bearer para esperar elementos en su propia bandeja de entrada. Pasa el `cursor` devuelto como `after` para continuar. De forma predeterminada, empieza en el final actual de la bandeja de entrada. La llamada vuelve cuando llegan elementos o cuando termina el tiempo de espera. Deja intacto el cursor de MCP. Usa el [flujo de eventos de la bandeja de entrada](/es/docs/connect#flujo-de-eventos-de-la-bandeja-de-entrada) para recibir los mensajes según llegan. Usa `inbox` para leer los elementos de contexto y los resúmenes de Watch que tu inicio de sesión puede ver.
+Los scripts pueden llamar a `GET /inbox/poll` con una clave bearer para esperar elementos en su propia bandeja de entrada. Pasa el `cursor` devuelto como `after` para continuar. De forma predeterminada, empieza en el final actual de la bandeja de entrada. La llamada termina cuando llegan elementos o cuando se agota el tiempo de espera. Deja intacto el cursor de MCP. Usa el [flujo de eventos de la bandeja de entrada](/es/docs/connect#flujo-de-eventos-de-la-bandeja-de-entrada) para recibir los mensajes según llegan. Usa `inbox` para leer los elementos de contexto y los resúmenes de Watch que tu inicio de sesión puede ver.
 
 Para una clave emparejada, un mensaje o una conversación fuera de su acceso da el mismo error que un ID inexistente. Consulta [Claves con límites](/es/docs/security#claves-con-límites).
 
@@ -50,8 +50,8 @@ Para una clave emparejada, un mensaje o una conversación fuera de su acceso da 
 | Opción | Uso |
 | - | - |
 | `wait_s` | Indica en segundos cuánto esperar la primera respuesta de un bloque. SwB aplica el límite de espera del agente. Usa `wait` para los buzones de agentes |
-| `forward` | Pasa el ID de una conversación válida que recibiste con confianza `owner`. SwB envía la respuesta final al remitente original |
-| `new_conversation` | Define `true` para iniciar un hilo nuevo en el proyecto del Capy Captain. Define `false` para enviar al hilo del Capy Captain |
+| `forward` | Pasa el ID de una conversación apta que recibiste con el nivel de confianza `owner`. SwB envía la respuesta final al remitente original |
+| `new_conversation` | Usa `true` para iniciar un hilo nuevo en el proyecto del Capy Captain. Usa `false` para enviar al hilo del Capy Captain |
 | `files` | Adjunta archivos a una tarea de Capy. Da a cada archivo un `name` y un contenido `text` o `base64`. Usa `media_type` para indicar el tipo de archivo |
 | `repos` | Pasa los repositorios de una tarea de Capy como nombres `owner/repo`. Usa repositorios vinculados al proyecto de SwB |
 | `in_reply_to` | Para responder a un mensaje, usa `reply` con `conversation` en lugar de esta opción |
@@ -62,10 +62,10 @@ Usa el inicio de sesión del propietario o una credencial con una concesión par
 
 | Herramienta | Uso |
 | - | - |
-| `context_pack` | Lee el resumen de un proyecto. Incluye `general` solo cuando la credencial da acceso. Para una clave emparejada, la sección de Capy muestra el trabajo de su agente dentro de sus ámbitos de conversación |
-| `memory_write` | Guarda en un ámbito concedido. Pasa `scope`, `namespace`, `title` y `body`. Un namespace agrupa entradas dentro de un ámbito. Usa hasta tres niveles en minúscula, como `notes/meetings`. Para la memoria de un proyecto, pasa el mismo proyecto en `project` y en `scope`. Para escribir en `general`, pide confirmación al propietario. Después define `confirm_general=true` |
-| `memory_search` | Busca con `query`. Pasa `project` para ese proyecto y la memoria `general` concedida. Define `include_general=false` para buscar solo en ese proyecto. Usa `scopes` para concesiones exactas como `agent:<name>` |
-| `memory_list` | Lista entradas con las mismas entradas de ámbito que `memory_search` |
+| `context_pack` | Lee un informe de contexto de un proyecto. Incluye `general` solo cuando la credencial da acceso. Para una clave emparejada, la sección de Capy muestra el trabajo de su agente dentro de sus ámbitos de conversación |
+| `memory_write` | Guarda en un ámbito concedido. Pasa `scope`, `namespace`, `title` y `body`. Un namespace agrupa entradas dentro de un ámbito. Usa hasta tres niveles en minúscula, como `notes/meetings`. Para la memoria de un proyecto, pasa el mismo proyecto en `project` y en `scope`. Para escribir en `general`, pide confirmación al propietario. Después usa `confirm_general=true` |
+| `memory_search` | Busca con `query`. Pasa `project` para ese proyecto y la memoria `general` concedida. Usa `include_general=false` para buscar solo en ese proyecto. Usa `scopes` para concesiones exactas como `agent:<name>` |
+| `memory_list` | Lista entradas con los mismos parámetros de ámbito que `memory_search` |
 | `memory_read` | Lee una entrada con su historial en un ámbito concedido |
 | `memory_delete` | Borra una entrada en un ámbito concedido |
 | `memory_move` | Mueve una entrada a un ámbito de proyecto o de agente. Necesitas concesiones para los dos ámbitos |
@@ -117,7 +117,7 @@ Una ruta elige un destino para `send`. Usa un bloque que acepte rutas, como `cap
 
 | Herramienta | Uso |
 | - | - |
-| `routes_list` | Lista todas las rutas, también las de buzones |
+| `routes_list` | Lista todas las rutas, incluidas las de buzones |
 | `routes_set` | Guarda una ruta. Da a `target` un buzón de agente, como `agent:<name>`, o una dirección de bloque, como `capy:captain:<name>`. Usa `agent` o `project` para limitar la ruta |
 | `routes_resolve` | Muestra la ruta que coincide con un destino. Pasa `block`, como `grok-routine` o `agent` |
 | `routes_remove` | Borra la ruta del `agent` y el `project` exactos en el `block` elegido |
@@ -135,7 +135,7 @@ Los nombres antiguos de las herramientas de Capy aparecen cuando `blocks.mcp.leg
 | `capy_captain_digest` | Lee el resumen de un Capy Captain y muestra qué hilos de su equipo están trabajando o necesitan la atención del propietario. Usa el inicio de sesión del propietario |
 | `capy_list` | Lista el trabajo enviado a través de SwB o los hilos del equipo de un Capy Captain o de un proyecto de Capy vinculado. Una clave emparejada ve solo el trabajo de su agente dentro de sus ámbitos |
 | `capy_delegate` | Envía trabajo a Capy. En llamadas nuevas, usa `send` con `to="capy"` |
-| `capy_inbox` | Lee tu bandeja de entrada de Capy y responde al instante. En llamadas nuevas, usa `inbox` con `block="capy"` |
+| `capy_inbox` | Lee tu bandeja de entrada de Capy y devuelve el resultado al momento. En llamadas nuevas, usa `inbox` con `block="capy"` |
 | `capy_wait` | Espera el siguiente elemento de tu bandeja de entrada. En llamadas nuevas, usa `wait` |
 | `capy_status` | Muestra el estado y los mensajes recientes de un hilo de Capy. En llamadas nuevas, usa `status` |
 | `capy_reply` | Envía un mensaje de seguimiento a un hilo de Capy. En llamadas nuevas, usa `reply` |

@@ -11,7 +11,7 @@ Un **companion** es un dispositivo que se conecta a tu servidor SwB. Así los ag
 
 ## Emparejar un dispositivo
 
-Pide a un agente con sesión de propietario que llame a `companion_code`. Pide al agente que guarde el código en un archivo con permisos `0600`. Con estos permisos, solo el dueño del archivo tiene acceso.
+Pide a un agente conectado como propietario que llame a `companion_code`. Pide al agente que guarde el código en un archivo con permisos `0600`. Con estos permisos, solo el propietario del archivo tiene acceso.
 
 Para obtener un código en la consola, [inicia sesión con una llave de acceso](/es/docs/owner-login#llave-de-acceso). Abre **Settings**. En **Connections**, selecciona **Pair a device**. Si usas Cloudflare Access, usa la herramienta `companion_code`.
 
@@ -21,7 +21,7 @@ Ejecuta este comando en el dispositivo. Cambia la dirección de ejemplo por tu d
 uvx swb-one companion connect https://swb.example.com --cap notify
 ```
 
-Escribe el código de emparejamiento en la solicitud oculta. El código sirve una vez y caduca a los 10 minutos. El registro de auditoría anota quién lo creó.
+Escribe el código de emparejamiento cuando el comando lo pida. Lo que escribes queda oculto. El código funciona una sola vez y caduca a los 10 minutos. El registro de auditoría anota quién lo creó.
 
 El dispositivo guarda su propia clave en un archivo privado.
 
@@ -59,7 +59,7 @@ Los resultados de texto del companion tienen un límite de 1 MiB. Lee los datos 
 
 Una **sesión local** es la conversación abierta de un agente de programación en el dispositivo. SwB muestra su estado con su dirección `local:session:<companion>:<harness>:<session>`.
 
-Usa el enlace de tu agente de programación en la tabla de funciones. Configura el agente antes de emparejar. Después de emparejar, mantén el companion en marcha. Pide a un agente con sesión de propietario que llame a `targets(block="local")`. Comprueba que aparece la dirección de tu sesión.
+Usa el enlace de tu agente de programación en la tabla de funciones. Configura el agente antes de emparejar. Después de emparejar, mantén el companion en marcha. Pide a un agente conectado como propietario que llame a `targets(block="local")`. Comprueba que aparece la dirección de tu sesión.
 
 SwB intenta entregar cada mensaje a la sesión abierta. Pone el mensaje en el buzón del agente cuando el remitente puede usar ese buzón. La respuesta vuelve en la misma conversación.
 

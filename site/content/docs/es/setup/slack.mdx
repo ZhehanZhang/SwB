@@ -27,7 +27,7 @@ Abre los [ajustes de apps de Slack](https://api.slack.com/apps). Haz clic en **C
 Elige tu espacio de trabajo. Haz clic en **Next**.
 ### Pegar el manifiesto
 
-Selecciona **YAML**. Copia uno de los manifiestos de app de abajo. Pégalo completo.
+Selecciona **YAML**. Copia uno de los manifiestos de abajo. Pégalo completo.
 ### Crear la app
 
 Haz clic en **Next** → **Create**.
@@ -184,7 +184,7 @@ blocks:
           example: [bot, user]
 ```
 
-Usa el nombre de agente que muestra `switchboard_status`. Añade una concesión por cada agente. Usa la misma etiqueta de espacio de trabajo en la entrada del espacio y en la concesión. Para el manifiesto de solo tu cuenta, añade `user_only: true` junto a `team_id`. Quita `bot` de `identities`. Pon la concesión en `[user]`.
+Usa el nombre de agente que muestra `switchboard_status`. Añade una concesión por cada agente. Usa la misma etiqueta de espacio de trabajo en la entrada del espacio y en la concesión. Para el manifiesto «Solo tu cuenta», añade `user_only: true` junto a `team_id`. Quita `bot` de `identities`. Cambia la concesión a `[user]`.
 
 Reinicia SwB cuando `connect` lo pida. El agente puede comprobar cada identidad de Slack con `slack_workspaces`. Una identidad es el bot o tu cuenta.
 

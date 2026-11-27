@@ -5,7 +5,7 @@ description: Ejecuta SwB en un servidor con Docker Compose y Cloudflare.
 
 ## Docker Compose
 
-Instala Docker Compose 2.24 o una versión posterior. Ejecuta estos comandos como un usuario normal que sea dueño de la carpeta de datos.
+Instala Docker Compose 2.24 o una versión posterior. Ejecuta estos comandos como un usuario normal que sea propietario de la carpeta de datos.
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -23,7 +23,7 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Abre el enlace de inicio de sesión de un solo uso que aparece en la terminal antes de cinco minutos. Mantén el enlace en privado.
+Abre el enlace de inicio de sesión de un solo uso que aparece en la terminal en un plazo de cinco minutos. Mantén el enlace en privado.
 
 El navegador usa `http://localhost:8870` para el inicio de sesión del propietario. El comando dentro del contenedor usa el puerto `8000`. Compose guarda los datos en `./data`. Después de cambiar `.env`, ejecuta `docker compose up -d` de nuevo.
 
@@ -33,7 +33,7 @@ Una petición anónima a `/healthz` devuelve `status` y `version`. Usa una sesi�
 
 ## Cloudflare Tunnel
 
-Sigue las [instrucciones de Cloudflare Tunnel](/es/docs/setup/cloudflare) para crear un túnel para tu dominio. Usa `http://switchboard:8000` como dirección de servicio para Compose. Guarda el token del túnel en `.env` con el nombre que indica el [archivo Compose de la versión](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37). Cambia `SWB_PUBLIC_URL` en `.env` por la dirección del túnel. Inicia Compose con el perfil del túnel.
+Sigue las [instrucciones de Cloudflare Tunnel](/es/docs/setup/cloudflare) para crear un túnel para tu dominio. Usa `http://switchboard:8000` como dirección de servicio para Compose. Guarda el token del túnel en `.env` con el nombre que indica el [archivo Compose de la versión](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37). En `.env`, cambia el valor de `SWB_PUBLIC_URL` por la dirección del túnel. Inicia Compose con el perfil del túnel.
 
 ```bash
 docker compose --profile tunnel up -d
@@ -62,7 +62,7 @@ Despliega desde el marketplace de Railway cuando se publique la plantilla.
 
 ## Fly.io [#fly]
 
-Usa la copia de la versión de SwB del [ejemplo de Docker Compose](#docker-compose). Instala la [herramienta de línea de comandos de Fly.io](https://docs.fly.io/flyctl/). Inicia sesión en Fly.io.
+Usa la copia local de SwB que clonaste en el [ejemplo de Docker Compose](#docker-compose). Instala la [herramienta de línea de comandos de Fly.io](https://docs.fly.io/flyctl/). Inicia sesión en Fly.io.
 
 Ejecuta `sh deploy/fly.sh my-swb` desde la carpeta de SwB. Cambia `my-swb` por un nombre de app único. El script usa `fly deploy --ha=false` para iniciar una Machine.
 

@@ -5,13 +5,13 @@ description: Envoyez les événements GitHub à vos agents et à vos services.
 
 ## Créer l'application
 
-Créez une GitHub App sur votre compte. Réglez l'adresse du webhook sur votre adresse publique SwB suivie de `/github/webhook`. Par exemple, utilisez `https://swb.example.com/github/webhook`. Générez un secret de webhook dans un fichier privé. SwB accepte les secrets d'au moins 16 caractères.
+Créez une GitHub App sur votre compte. Définissez l'adresse du webhook sur votre adresse publique SwB suivie de `/github/webhook`. Par exemple, utilisez `https://swb.example.com/github/webhook`. Générez un secret de webhook dans un fichier privé. SwB accepte les secrets d'au moins 16 caractères.
 
 ```bash
 (umask 077; set -C; openssl rand -hex 32 > ~/.swb-github-secret)
 ```
 
-Saisissez le secret dans **Webhook secret**. Demandez à un agent de connecter GitHub. Enregistrez le même secret via son lien de dépôt. Supprimez le fichier privé. Redémarrez SwB pour charger le secret. Demandez à l'agent d'appeler de nouveau `connect` pour obtenir les liens restants de l'App ID ou de la clé privée. Collez tout le contenu du fichier `.pem` dans le champ de la clé privée.
+Saisissez le secret dans **Webhook secret**. Demandez à un agent de connecter GitHub. Enregistrez le même secret via son lien de saisie. Supprimez le fichier privé. Redémarrez SwB pour charger le secret. Demandez à l'agent d'appeler de nouveau `connect` pour obtenir les liens restants de l'App ID ou de la clé privée. Collez tout le contenu du fichier `.pem` dans le champ de la clé privée.
 
 ## Permissions
 
@@ -41,9 +41,9 @@ blocks:
       "acme/*": [team]
 ```
 
-Dans l'environnement de votre serveur, réglez `SWB_EXAMPLE_GITHUB_SINK_URL` sur l'adresse du récepteur.
+Dans l'environnement de votre serveur, définissez `SWB_EXAMPLE_GITHUB_SINK_URL` sur l'adresse du récepteur.
 
-Un **récepteur** est une URL qui reçoit une copie d'un événement. SwB envoie à chaque récepteur correspondant un événement JSON compact en mode `watch`. Un dépôt doté d'une route vers un récepteur utilise `watch` par défaut. Les modes de canal et d'espace l'emportent. SwB cite les détails supplémentaires dans `metadata`. Chaque requête utilise l'ID de livraison de l'événement comme `Idempotency-Key`. SwB réessaie après un échec de connexion, un délai dépassé ou une réponse HTTP 5xx.
+Un **récepteur** est une URL qui reçoit une copie d'un événement. SwB envoie à chaque récepteur correspondant un événement JSON compact en mode `watch`. Un dépôt doté d'une route vers un récepteur utilise `watch` par défaut. Les modes de canal et d'espace l'emportent. SwB cite les détails supplémentaires dans `metadata`. Chaque requête utilise l'ID de livraison de l'événement comme `Idempotency-Key`. SwB réessaie après un échec de connexion, un dépassement de délai ou une réponse HTTP 5xx.
 
 Si Cloudflare Access protège votre hôte, laissez passer `/github/webhook`. La signature GitHub protège ce chemin.
 
@@ -51,7 +51,7 @@ Si Cloudflare Access protège votre hôte, laissez passer `/github/webhook`. La 
 
 En mode `off`, SwB écarte tous les événements GitHub de l'espace, y compris ceux des comptes propriétaires.
 
-Utilisez le mode `work` pour accepter uniquement les événements des comptes propriétaires configurés. Dans `https://api.github.com/users/USERNAME`, remplacez `USERNAME` par votre nom d'utilisateur GitHub. Ouvrez l'URL. Copiez l'`id` numérique dans la liste `owner_ids` de l'espace. Redémarrez SwB pour appliquer le réglage.
+Utilisez le mode `work` pour accepter uniquement les événements des comptes propriétaires configurés. Dans `https://api.github.com/users/USERNAME`, remplacez `USERNAME` par votre nom d'utilisateur GitHub. Ouvrez l'URL. Copiez l'`id` numérique dans la liste `owner_ids` de l'espace. Redémarrez SwB pour appliquer le paramètre.
 
 ```yaml
 blocks:
@@ -77,22 +77,22 @@ Pour les actions sur les conversations GitHub, passez l'ID de conversation SwB d
 
 | Clé | Usage |
 | - | - |
-| `blocks.github` | Réglages des événements et des actions GitHub |
+| `blocks.github` | Paramètres des événements et des actions GitHub |
 | `blocks.github.use` | Type de bloc. Indiquez `github` |
-| `blocks.github.enabled` | Mettez `false` pour ignorer ce bloc |
+| `blocks.github.enabled` | Indiquez `false` pour ignorer ce bloc |
 | `blocks.github.app_id_env` | Nom de la variable qui contient l'App ID |
 | `blocks.github.private_key_env` | Nom de la variable qui contient la clé privée de l'App |
 | `blocks.github.token_env` | Nom de la variable qui contient un jeton à granularité fine, à la place des identifiants de l'App |
 | `blocks.github.secret_env` | Nom de la variable qui contient le secret du webhook |
-| `blocks.github.sinks` | Réglages par nom de récepteur |
+| `blocks.github.sinks` | Paramètres par nom de récepteur |
 | `blocks.github.sinks.*.url_env` | Nom de la variable qui contient l'adresse du récepteur |
 | `blocks.github.routes` | Table qui associe des noms de dépôts ou `owner/*` à des listes de récepteurs |
 | `blocks.github.owner_ids` | Liste par défaut des ID utilisateur GitHub numériques reconnus comme propriétaires |
-| `blocks.github.spaces` | Ensembles nommés de dépôts qui partagent des réglages. Un nom comme `acme/app` désigne ce dépôt |
+| `blocks.github.spaces` | Ensembles nommés de dépôts qui partagent des paramètres. Un nom comme `acme/app` désigne ce dépôt |
 | `blocks.github.spaces.*.repo` | Nom du dépôt sous la forme `owner/repo` |
 | `blocks.github.spaces.*.owner_ids` | Liste d'ID utilisateur GitHub numériques qui remplace la valeur par défaut pour cet espace |
 | `blocks.github.spaces.*.mode` | [Mode de canal](/fr/docs/channel-modes) par défaut des dépôts de cet espace |
-| `blocks.github.spaces.*.mode.target` | Cible des réglages du mode. Choisissez une adresse comme `agent:beta` |
+| `blocks.github.spaces.*.mode.target` | Cible des paramètres du mode. Choisissez une adresse comme `agent:beta` |
 | `blocks.github.spaces.*.project` | Projet SwB par défaut des événements de cet espace |
 
 Liez un agent à un dépôt avec `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`. Utilisez `mode="assist"` pour le mode assist. Choisissez une cible avec `targets`. La route du projet lié sert de repli.

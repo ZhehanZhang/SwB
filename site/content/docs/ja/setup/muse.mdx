@@ -7,7 +7,7 @@ Muse に、SwB をカスタムコネクターとして追加してください�
 
 ## 始める前に
 
-SwB の公開 HTTPS アドレスと、オーナーのサインインを設定してください。`https://swb.example.com/mcp` の代わりに、あなたの SwB のアドレスを使ってください。
+SwB の公開 HTTPS アドレスと、オーナーのサインインを設定してください。`https://swb.example.com/mcp` の代わりに、実際の SwB のアドレスを使ってください。
 
 Muse は OAuth でサインインします。OAuth では、ブラウザーでアクセスを承認します。
 
@@ -29,7 +29,7 @@ Muse は OAuth でサインインします。OAuth では、ブラウザーで�
 
 Muse の機能を持つ、オンラインの[コンパニオン](/ja/docs/companion)を使ってください。すでに SwB とペアリング済みのデバイスにこの機能を追加するときは、そのデバイスで `swb companion disconnect` を実行してください。
 
-コンパニオンをペアリングするときは、パソコンでこのコマンドを実行してください。例のアドレスを、あなたの SwB のアドレスに置き換えてください。
+コンパニオンをペアリングするときは、パソコンでこのコマンドを実行してください。例のアドレスを、実際の SwB のアドレスに置き換えてください。
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
@@ -37,9 +37,9 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 コマンドに求められたら、エージェントから届いたペアリングコードを入力してください。Muse のペアリングを始めるよう、エージェントに頼んでください。
 
-Muse のアプリで **Settings** を開きます。**Devices** を開きます。**Developer mode** を有効にします。**Add Device** を選択します。エージェントが伝えたデバイス名を選んでください。アプリが Wi-Fi を求めたら、**Use current connection** を選択します。
+Muse のアプリで **Settings** を開いてください。**Devices** を開いてください。**Developer mode** を有効にしてください。**Add Device** を選択してください。エージェントが伝えたデバイス名を選んでください。アプリが Wi-Fi を求めたら、**Use current connection** を選択してください。
 
-SwB は、あなたのデプロイ環境で Muse との接続を保ちます。ペアリングのあとは、パソコンがスリープしても接続は続きます。
+SwB は、デプロイ先のサーバーで Muse との接続を保ちます。ペアリングのあとは、パソコンがスリープしても接続は続きます。
 
 ## 接続を確認する
 

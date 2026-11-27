@@ -90,9 +90,9 @@ blocks:
         project: demo
 ```
 
-Para el modo Work, el agente pone `mode.mode` en `work`. Añade tu ID numérico de usuario de GitHub a los `owner_ids` del espacio. Consulta [Cuentas de propietario](/es/docs/blocks/github#cuentas-de-propietario) para saber cómo encontrar el ID y ver un ejemplo.
+Para el modo Work, el agente establece `mode.mode` en `work`. Añade tu ID numérico de usuario de GitHub a los `owner_ids` del espacio. Consulta [Cuentas de propietario](/es/docs/blocks/github#cuentas-de-propietario) para saber cómo encontrar el ID y ver un ejemplo.
 
-SwB comprueba los autores del texto de los eventos. El texto de una persona que figura en `owner_ids` puede tener la confianza `owner`. SwB trata como `external` los nombres de ramas, las refs, los títulos de workflows y los nombres de checks.
+SwB comprueba los autores del texto de los eventos. El texto de una persona que figura en `owner_ids` puede tener el nivel de confianza `owner`. SwB trata como `external` los nombres de ramas, las refs, los títulos de workflows y los nombres de checks.
 
 Un nombre de check es `external` aunque el propietario inicie el check. Una pull request desde un fork puede cambiar ese nombre.
 
@@ -106,7 +106,7 @@ Para el modo triage, llama a `space_mode(block="github", space="acme/app", mode=
 
 Para los remitentes externos, da acceso a `channel:github/acme/app` y también a `target:beta`. Consulta la [visibilidad de canales](/es/docs/channel-modes#permitir-remitentes-externos-de-github) para las reglas de acceso.
 
-Watch envía un resumen al buzón del destino al pasar `modes.digest_minutes` o al llegar a 50 eventos. Como propietario, lee los resúmenes en la **Inbox** de la consola o con `inbox` o `wait`.
+Watch envía un resumen al buzón del destino cuando pasa el tiempo de `modes.digest_minutes` o cuando llega a 50 eventos. Como propietario, lee los resúmenes en **Inbox**, en la consola, o con `inbox` o `wait`.
 
 ## Credenciales
 
@@ -122,7 +122,7 @@ Pide a tu agente que llame a `connect(what="github", choose={"replace":"secret"}
 
 ## Comprobar la conexión
 
-Pide al agente que llame a `connect` otra vez. Indica `connected` cuando la configuración está completa. `github_status` muestra `secret_present` y los permisos de la instalación.
+Pide al agente que llame a `connect` otra vez. Devuelve `connected` cuando la configuración está completa. `github_status` muestra `secret_present` y los permisos de la instalación.
 
 En GitHub, abre los ajustes de la app → **Advanced** → **Recent deliveries**. Abre la entrega más reciente y comprueba que SwB respondió con un código de éxito.
 
@@ -130,4 +130,4 @@ En GitHub, abre los ajustes de la app → **Advanced** → **Recent deliveries**
 
 Si hay un error de firma, sigue [Definir el secreto del webhook](#definir-el-secreto-del-webhook) para generar un secreto nuevo. Escríbelo en los ajustes de la GitHub App. Pide a tu agente que llame a `connect(what="github", choose={"replace":"secret"})`. Guarda el mismo secreto con el enlace de entrega. Reinicia SwB. Envía el evento otra vez desde **Recent deliveries**.
 
-Si `connect` pide permiso de escritura en **Issues**, abre los ajustes de la app → **Permissions & events**. Pon **Issues** en **Read & write** y acepta el cambio en la instalación.
+Si `connect` pide permiso de escritura en **Issues**, abre los ajustes de la app → **Permissions & events**. Cambia **Issues** a **Read & write** y acepta el cambio en la instalación.

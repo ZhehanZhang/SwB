@@ -9,11 +9,11 @@ SwB a un seul propriétaire. Le propriétaire approuve la connexion des agents. 
 
 ## Connexion des agents
 
-OAuth permet à une application de se connecter avec l'approbation du propriétaire. SwB utilise PKCE avec S256 pour vérifier que la même application commence et termine la connexion. SwB attache chaque jeton OAuth à une adresse de `/mcp`. Par défaut, un jeton d'accès dure une heure et un jeton de rafraîchissement dure 30 jours. SwB remplace chaque jeton de rafraîchissement après usage. Il conserve les empreintes SHA-256 des jetons OAuth. Une empreinte est une valeur courte calculée à partir du jeton, qui permet de le vérifier. Les agents peuvent aussi utiliser une clé configurée, ou échanger un code d'appairage contre une clé.
+OAuth permet à une application de se connecter avec l'approbation du propriétaire. SwB utilise PKCE avec S256 pour vérifier que la même application commence et termine la connexion. SwB lie chaque jeton OAuth à une adresse `/mcp`. Par défaut, un jeton d'accès dure une heure et un jeton d'actualisation dure 30 jours. SwB remplace chaque jeton d'actualisation après usage. Il conserve les empreintes SHA-256 des jetons OAuth, qui lui servent à vérifier les jetons. Les agents peuvent aussi utiliser une clé configurée, ou échanger un code d'appairage contre une clé.
 
 ## Confiance
 
-SwB vérifie les ID des expéditeurs fournis par la plateforme pour fixer la confiance d'un message.
+SwB vérifie les ID des expéditeurs fournis par la plateforme pour définir le niveau de confiance d'un message.
 
 | Confiance | Qui |
 | - | - |
@@ -22,7 +22,7 @@ SwB vérifie les ID des expéditeurs fournis par la plateforme pour fixer la con
 
 Sur Slack, Discord et Telegram, `known` aide SwB à choisir les expéditeurs dont il accepte les messages. Les messages de ces expéditeurs externes gardent la confiance `external`. Pour savoir comment SwB vérifie les auteurs GitHub, consultez [Comptes propriétaires GitHub](/fr/docs/blocks/github#comptes-propriétaires).
 
-Un **cadre de confiance** est l'en-tête et les marqueurs que SwB ajoute autour d'un texte externe. Avant d'ajouter le cadre, SwB modifie les copies de son en-tête ou de ses marqueurs présentes dans le texte. Les marqueurs sont `<<<swb-untrusted` et `swb-untrusted>>>`. Les agents traitent le texte entre eux uniquement comme une information.
+Un **cadre de confiance** est l'en-tête et les marqueurs que SwB ajoute autour d'un texte externe. Avant d'ajouter le cadre, SwB modifie les copies de son en-tête ou de ses marqueurs présentes dans le texte. Les marqueurs sont `<<<swb-untrusted` et `swb-untrusted>>>`. Les agents traitent le texte placé entre ces marqueurs uniquement comme une information.
 
 Un résumé du mode `watch` porte la confiance `external`. Chaque extrait contient un cadre de confiance pour le texte externe. GitHub vérifie l'auteur de chaque champ de texte.
 
@@ -30,23 +30,23 @@ La clé d'un [compagnon](/fr/docs/companion) sert uniquement à la connexion de 
 
 ## Visibilité
 
-Une ressource est une cible, un canal, une portée de mémoire, une route ou un outil. La règle d'accès par défaut est `private`, pour le propriétaire et ses agents. Vous pouvez partager des ressources avec un espace de travail ou avec certaines personnes. Les outils restent privés. Un expéditeur externe joint une cible quand les règles du canal et de la cible l'autorisent toutes les deux. Quand SwB enregistre un message comme contexte, ce message arrive dans la boîte de réception comme une information. L'agent reste en veille.
+Une ressource est une cible, un canal, une portée de mémoire, une route ou un outil. La règle d'accès par défaut est `private`, pour le propriétaire et ses agents. Vous pouvez partager des ressources avec un espace de travail ou avec certaines personnes. Les outils restent privés. Un expéditeur externe peut joindre une cible quand les règles du canal et de la cible l'autorisent toutes les deux. Quand SwB enregistre un message comme contexte, ce message arrive dans la boîte de réception comme une information. L'agent reste en veille.
 
 ## Clés avec limites
 
-Utilisez `auth.key_scopes` pour limiter l'accès au routage, aux messages et aux conversations. Une clé appairée lit uniquement les messages et les conversations de son agent, dans ces limites.
+Utilisez `auth.key_scopes` pour limiter l'accès au routage, aux messages et aux conversations. Une clé appairée peut lire uniquement les messages et les conversations de son agent, dans ces limites.
 
 SwB enregistre des autorisations de mémoire pour chaque clé appairée. Quand il met à jour d'anciennes autorisations, SwB donne aux clés appairées actives à accès large la portée `general` et les projets existants à ce moment. Pour les clés qui ont des portées nommées dans `auth.key_scopes`, SwB copie ces portées.
 
-Un client OAuth ou une clé configurée à accès complet accède à toute la mémoire comme le propriétaire. Utilisez `auth.key_scopes` pour limiter l'accès à la mémoire par nom d'agent. Un identifiant restreint a besoin d'une autorisation qui nomme le projet privé.
+Un client OAuth ou une clé configurée à accès complet peut accéder à toute la mémoire, comme le propriétaire. Utilisez `auth.key_scopes` pour limiter l'accès à la mémoire par nom d'agent. Un identifiant restreint a besoin d'une autorisation qui nomme le projet privé.
 
 `auth.key_tools` limite les outils qu'une clé peut appeler. `auth.key_targets` limite ses destinations d'envoi.
 
 ## Jetons
 
-Saisissez les jetons sur leurs pages de dépôt. SwB chiffre les jetons qu'il enregistre avec une clé du dossier de données. L'état affiche le nom des variables manquantes et masque leurs valeurs. Par défaut, la clé Capy part dans un en-tête de requête vers `api.capy.ai`.
+Saisissez les jetons sur leurs pages de saisie. SwB chiffre les jetons qu'il enregistre avec une clé du dossier de données. Le rapport d'état affiche le nom des variables manquantes et masque leurs valeurs. Par défaut, la clé Capy est envoyée dans un en-tête de requête vers `api.capy.ai`.
 
-Ouvrez **Tokens** pour voir les portées de mémoire de chaque clé appairée. Choisissez **Remove scope** à côté d'une portée pour retirer cette autorisation.
+Ouvrez **Tokens** pour voir les portées de mémoire de chaque clé appairée. Sélectionnez **Remove scope** à côté d'une portée pour retirer cette autorisation.
 
 Une nouvelle clé appairée reçoit sa propre portée d'agent quand elle échange son code d'appairage. Elle reçoit aussi le projet nommé dans le code et les portées nommées dans `auth.key_scopes.<agent>`. Pour élargir l'accès, définissez les portées supplémentaires ou ajoutez un projet au code d'appairage. Appairez ensuite une nouvelle clé.
 
@@ -54,7 +54,7 @@ Une nouvelle clé appairée reçoit sa propre portée d'agent quand elle échang
 
 | Limite | Valeur |
 | - | - |
-| Clés bearer invalides | 20 essais par adresse en 10 minutes, puis HTTP `429` |
+| Clés bearer invalides | 20 tentatives par adresse en 10 minutes, puis HTTP `429` |
 | Événements GitHub routés depuis des expéditeurs hors des comptes propriétaires | 5 par expéditeur sur les 10 dernières minutes |
 | `/register` | 20 par adresse et par heure |
 | `/token` | 120 par adresse en 10 minutes |
@@ -67,11 +67,11 @@ Une nouvelle clé appairée reçoit sa propre portée d'agent quand elle échang
 | Corps de requête sur `/auth/setup` | 1 024 octets |
 | Tours par conversation d'agent | 200 |
 
-La limite des clés bearer s'applique aussi aux clés valides venant de la même adresse. SwB renvoie HTTP `429` sur les points d'accès concernés jusqu'à la fin de la limite.
+La limite des clés bearer s'applique aussi aux clés valides venant de la même adresse. SwB renvoie HTTP `429` sur les points d'accès concernés jusqu'à la levée de la limite.
 
-SwB met une conversation en pause à la limite de tours. Il note la pause dans le journal d'audit. Si Slack est actif, il envoie un message direct au propriétaire.
+SwB met une conversation en pause à la limite de tours. Il enregistre la pause dans le journal d'audit. Si Slack est actif, il envoie un message direct au propriétaire.
 
-Le bloc Capy peut renvoyer la conversation précédente pour la même tâche et la même cible. Réglez la fenêtre de temps avec `blocks.capy.duplicate_window_s`. La valeur par défaut est 600 secondes.
+Le bloc Capy peut renvoyer la conversation précédente pour la même tâche et la même cible. Définissez la fenêtre de temps avec `blocks.capy.duplicate_window_s`. La valeur par défaut est 600 secondes.
 
 ## Adresses des clients
 
@@ -81,11 +81,11 @@ Suivez le [guide d'auto-hébergement](/fr/docs/self-hosting#proxys-de-confiance)
 
 ## Journal d'audit
 
-SwB note les appels d'outils que ses règles d'accès refusent. Il note les échecs de connexion dans le navigateur pour les codes de configuration, les liens utilisés, expirés ou invalides, les clés d'accès, les contrôles CSRF et OIDC.
+SwB enregistre les appels d'outils que ses règles d'accès refusent. Il enregistre les échecs de connexion dans le navigateur pour les codes de configuration, les liens utilisés, expirés ou invalides, les clés d'accès, les contrôles CSRF et OIDC.
 
-SwB note les signatures de webhook GitHub manquantes ou invalides. Il limite les lignes répétées pour certains échecs du navigateur et pour les refus de webhook. Les lignes d'échec donnent la raison et gardent privés les codes, les jetons et les signatures.
+SwB enregistre les signatures de webhook GitHub manquantes ou invalides. Il limite les lignes répétées pour certains échecs du navigateur et pour les refus de webhook. Les lignes d'échec donnent la raison et gardent privés les codes, les jetons et les signatures.
 
-La page SwB affiche le journal sous **Audit**. Lancez `swb log` pour afficher les entrées récentes. Les envois vers une boîte aux lettres ont l'action `send`. Pour les livraisons écartées, consultez [Modes de canal](/fr/docs/channel-modes#vérifier-une-livraison).
+La page SwB affiche le journal sous **Audit**. Lancez `swb log` pour afficher les entrées récentes. Les envois vers une boîte aux lettres ont l'action `send`. Pour les livraisons ignorées, consultez [Modes de canal](/fr/docs/channel-modes#vérifier-une-livraison).
 
 ## Signaler un problème
 

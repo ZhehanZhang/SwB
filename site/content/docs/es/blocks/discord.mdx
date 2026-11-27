@@ -31,7 +31,7 @@ Para definir el propietario, envía un mensaje directo al bot. Busca tu ID de us
 
 ## Enviar desde Discord
 
-Menciona al bot y escribe el nombre corto del destino, como en `@swb claude check the build`. Con los hilos activos, SwB puede abrir un hilo a partir de tu mensaje y añadirte a él. SwB publica allí la respuesta. Los mensajes de seguimiento pueden reutilizar el destino del hilo. Con las personas activas, las respuestas que cumplan los requisitos usan el nombre y la imagen del agente.
+Menciona al bot y escribe el nombre corto del destino, como en `@swb claude check the build`. Con los hilos activos, SwB puede abrir un hilo a partir de tu mensaje y añadirte a él. SwB publica allí la respuesta. Los mensajes de seguimiento pueden reutilizar el destino del hilo. Con `personas` activo, las respuestas que cumplan los requisitos usan el nombre y la imagen del agente.
 
 ## Compartir con otras personas
 
@@ -43,18 +43,18 @@ Los canales y los destinos son privados de forma predeterminada. Para dar acceso
 | - | - |
 | `blocks.discord` | Ajustes del bot de Discord y de sus espacios |
 | `blocks.discord.use` | Carga el bloque `discord` |
-| `blocks.discord.enabled` | Define `true` para cargar el bloque o `false` para desactivarlo |
+| `blocks.discord.enabled` | Usa `true` para cargar el bloque o `false` para desactivarlo |
 | `blocks.discord.token_env` | Nombre de la variable de entorno del token del bot |
 | `blocks.discord.application_id` | ID de la aplicación de Discord para el enlace de invitación. SwB también puede leer el ID desde Discord |
-| `blocks.discord.connect` | Define `true` para recibir eventos en directo de Discord. Define `false` para probar solo las llamadas a la API |
-| `blocks.discord.message_content` | Define `true` para leer el contenido de los mensajes, también los de seguimiento en hilos. Activa Message Content Intent en el Developer Portal |
-| `blocks.discord.threads` | Define `true` para abrir un hilo público para cada respuesta en un canal de texto del servidor |
-| `blocks.discord.personas` | Define `true` para usar los nombres y las imágenes de los agentes en las publicaciones del servidor enviadas por webhooks. Da al bot el permiso Manage Webhooks |
+| `blocks.discord.connect` | Usa `true` para recibir eventos en directo de Discord. Usa `false` para probar solo las llamadas a la API |
+| `blocks.discord.message_content` | Usa `true` para leer el contenido de los mensajes, también los de seguimiento en hilos. Activa Message Content Intent en el Developer Portal |
+| `blocks.discord.threads` | Usa `true` para abrir un hilo público para cada respuesta en un canal de texto del servidor |
+| `blocks.discord.personas` | Usa `true` para mostrar los nombres y las imágenes de los agentes en las publicaciones del servidor enviadas por webhooks. Da al bot el permiso Manage Webhooks |
 | `blocks.discord.avatar` | Nombre del archivo de imagen del perfil del bot |
-| `blocks.discord.ack_reaction` | Emoji que confirma la recepción de un mensaje dirigido al bot. Define `null` para desactivar esta reacción |
+| `blocks.discord.ack_reaction` | Emoji que confirma la recepción de un mensaje dirigido al bot. Usa `null` para desactivar esta reacción |
 | `blocks.discord.dm_space` | Espacio cuyos ajustes de enrutamiento y de propietario se aplican a los mensajes directos. El valor predeterminado es el primer espacio configurado |
 | `blocks.discord.dm_mode` | Modo para los mensajes directos de otras personas. Usa `watch` para reunirlos en un resumen u `off` para ignorarlos |
-| `blocks.discord.daily_cap` | Límite diario de cada acción que publica o responde a través de una herramienta. Define `null` para quitar el límite |
+| `blocks.discord.daily_cap` | Límite diario de cada acción que publica o responde a través de una herramienta. Usa `null` para quitar el límite |
 | `blocks.discord.refresh_minutes` | Minutos entre actualizaciones de la lista de destinos. El valor predeterminado es `30` |
 | `blocks.discord.target_aliases` | Asigna nombres de destino adicionales a destinos existentes |
 | `blocks.discord.agents` | Espacios donde cada agente puede publicar y recibir eventos. Usa `*` para todos los espacios |
@@ -66,8 +66,8 @@ Usa los [modos de canal](/es/docs/channel-modes) para despertar a un agente a tr
 | Clave | Uso |
 | - | - |
 | `blocks.discord.spaces` | Asigna los nombres usados en SwB a los ajustes de los servidores de Discord |
-| `blocks.discord.spaces.*.guild_id` | ID del servidor de Discord. Omítelo en un espacio para la asociación automática. SwB necesita exactamente un servidor disponible cuyo dueño sea un propietario del espacio |
-| `blocks.discord.spaces.*.owner_ids` | IDs de usuario de Discord que se tratan como propietarios. El valor predeterminado es el dueño de la app de Discord |
+| `blocks.discord.spaces.*.guild_id` | ID del servidor de Discord. Omítelo en un espacio para la asociación automática. SwB necesita exactamente un servidor disponible que pertenezca a un propietario del espacio |
+| `blocks.discord.spaces.*.owner_ids` | IDs de usuario de Discord que se tratan como propietarios. El valor predeterminado es el propietario de la app de Discord |
 | `blocks.discord.spaces.*.known` | Asigna nombres visibles a IDs conocidos de usuarios de Discord |
 | `blocks.discord.spaces.*.default_target` | Destino de un mensaje nuevo dirigido a SwB que omite el nombre del destino |
 | `blocks.discord.spaces.*.project` | Proyecto de SwB predeterminado de este espacio |

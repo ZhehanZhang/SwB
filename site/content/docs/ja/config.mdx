@@ -25,13 +25,13 @@ SwB は環境変数だけでも動きます。MCP ブロックは既定で起動
 
 `SWB_HOST` を上書きするときは `--host` を使います。`--host 0.0.0.0` やローカルネットワークのアドレスを使う前に、公開 URL を設定してください。
 
-`swb up --dir ./my-swb` を使うと、そのフォルダーから `.env` と `config/switchboard.yaml` を読みます。`swb init` にも同じ `--dir` を付けてください。オプションを付けずに `swb up` を使う場合は、`SWB_CONFIG` で別の設定ファイルを選べます。
+`swb up --dir ./my-swb` を使うと、そのフォルダーから `.env` と `config/switchboard.yaml` を読みます。`swb init` にも同じ `--dir` を付けてください。`swb up` だけを使う場合は、`SWB_CONFIG` で別の設定ファイルを選べます。
 
 `swb status`、`swb login-link`、`swb connect`、`swb claim` は、`--dir` で `.env` を探します。サーバーのアドレスは `--url` で選びます。
 
 サーバーコマンドも `--dir` を受け付けます。対象は `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks`、`swb targets` です。SwB は、選んだフォルダーから `.env` と設定を読みます。データベースを使うコマンドでは、そのフォルダーでインスタンスのデータも探します。
 
-オプションを付けずに `swb serve` を使うと、SwB はシェルと設定ファイルを読みます。ほかのサーバーコマンドは、既定で現在のフォルダーを使います。
+`swb serve` を単体で実行すると、SwB はシェルと設定ファイルを読みます。ほかのサーバーコマンドは、既定で現在のフォルダーを使います。
 
 設定をバージョン 2 の形式で表示するときは、`swb config migrate [file]` を使います。特定の設定を選ぶときは `file` を渡します。`file` を省略すると、SwB は `--dir`、`SWB_CONFIG`、既定のパスのいずれかにある設定を使います。
 
@@ -41,9 +41,9 @@ SwB は環境変数だけでも動きます。MCP ブロックは既定で起動
 
 パスを変えるときは、設定かオーバーレイで `data_dir` を設定してください。この設定が最も優先されます。次に、SwB は `SWB_DATA_DIR`、`SWB_DATA` の順で確認します。3 つの設定がすべて空のときは、既定値を使います。
 
-オプションを付けずに `swb up` を実行すると、既存の設定ファイルはそのまま残ります。インスタンスに設定ファイルがあり、`data/` が欠けている場合、SwB は `~/.local/share/switchboard` にある古いデータベースを確認します。そのデータベースを使うと、SwB はログにお知らせを 1 回記録します。
+`swb up` を単体で実行しても、既存の設定ファイルはそのまま残ります。インスタンスに設定ファイルがあり、`data/` が未作成の場合、SwB は `~/.local/share/switchboard` にある古いデータベースを確認します。そのデータベースを使うときは、SwB がログに通知を 1 回出力します。
 
-Linux と macOS では、SwB はデータフォルダーを非公開のモード `0700` に設定します。データベースファイルは非公開のモード `0600` に設定します。
+Linux と macOS では、SwB はデータフォルダーの権限を `0700` に、データベースファイルの権限を `0600` に設定します。どちらも所有者だけがアクセスできる権限です。
 
 ## ブロック
 
@@ -51,7 +51,7 @@ Linux と macOS では、SwB はデータフォルダーを非公開のモード
 
 ## 設定ファイル
 
-`swb up` は、新しいインスタンスをそのフォルダーに用意します。オーナーキーを `.env` に保存し、独自の `SWB_PORT` もそこに保存します。ファイルのモードは `0600` に設定します。
+`swb up` は、新しいインスタンスをそのフォルダーに用意します。オーナーキーを `.env` に保存し、独自の `SWB_PORT` もそこに保存します。ファイルの権限は `0600` に設定します。
 
 SwB を起動する前にファイルを作成するときは、`swb init` を実行してください。
 
@@ -59,7 +59,7 @@ SwB を起動する前にファイルを作成するときは、`swb init` を�
 swb init
 ```
 
-どちらのコマンドも、既定で `config/switchboard.yaml` に `version: 2` を書き込みます。アドレスをそこに保存するときは、`swb init --public-url` にアドレスを渡します。初回の実行で、`swb up` は `--public-url` か `SWB_PUBLIC_URL` のアドレスを保存します。読み込むブロックを選ぶときは `blocks` を追加してください。`CAPTAIN_ID` を、あなたの Capy Captain の ID に置き換えてください。
+どちらのコマンドも、既定で `config/switchboard.yaml` に `version: 2` を書き込みます。アドレスをそこに保存するときは、`swb init --public-url` にアドレスを渡します。初回の実行で、`swb up` は `--public-url` か `SWB_PUBLIC_URL` のアドレスを保存します。読み込むブロックを選ぶときは `blocks` を追加してください。`CAPTAIN_ID` を、実際の Capy Captain の ID に置き換えてください。
 
 ```yaml
 version: 2
@@ -79,7 +79,7 @@ routes:
 
 ## オーバーレイ
 
-オーバーレイとは、インスタンス固有の設定を入れる YAML ファイルです。ベースの設定ファイルと同じ場所に `local.yaml` として保存するか、`SWB_OVERLAY` でパスを設定してください。オーバーレイはベースのファイルより優先されます。ベースのファイルは、環境の既定値より優先されます。名前でまとめた設定はマージします。リストはオーバーレイで置き換えます。
+オーバーレイとは、インスタンス固有の設定を入れる YAML ファイルです。ベースの設定ファイルと同じ場所に `local.yaml` として保存するか、`SWB_OVERLAY` でパスを設定してください。オーバーレイはベースのファイルより優先されます。ベースのファイルは、環境の既定値より優先されます。名前でまとめた設定はマージされます。リストはオーバーレイの内容で置き換わります。
 
 キーの中の `*` は、項目の名前かリストの要素を表します。
 
@@ -88,7 +88,7 @@ routes:
 | キー | 用途 |
 | - | - |
 | `version` | YAML 形式のバージョン。`blocks` を使うときは `2` にします |
-| `public_url` | MCP とサインインの公開アドレス。OAuth を使うと、アプリはあなたの承認を得てサインインできます |
+| `public_url` | MCP とサインインの公開アドレス。OAuth を使うと、アプリはオーナーの承認を得てサインインできます |
 | `data_dir` | データフォルダーのパス。ここか `SWB_DATA_DIR` で設定します |
 | `timezone` | 日ごとの集計と上限に使うタイムゾーン。既定値は `UTC` |
 | `turn_cap` | SwB が会話を一時停止するまでのターン数。既定値は `200`。上限を外すときは `null` を設定します |
@@ -123,16 +123,16 @@ routes:
 | キー | 用途 |
 | - | - |
 | `visibility` | リソースにアクセスできる相手を決めるルール。ツールは常に非公開です |
-| `visibility.defaults` | リソースの種類ごとの既定のルール。すべての種類は `private` から始まります |
+| `visibility.defaults` | リソースの種類ごとの既定のルール。どの種類も、最初は `private` です |
 | `visibility.defaults.channel` | チャンネルの既定のルール |
 | `visibility.defaults.memory` | メモリスコープの既定のルール |
 | `visibility.defaults.route` | ルートの既定のルール |
 | `visibility.defaults.target` | 送信先の既定のルール |
 | `visibility.resources` | `channel:home/#agents` のような特定のリソースのルール。各ルールは、その種類の既定より優先されます |
 
-Slack では、`channel:home/#agents` はチャンネルのルールです。GitHub で外部の送信者を `agent:beta` に届けるときは、`channel:github/acme/app` と `target:beta` の両方を共有してください。詳しくは[チャンネルの公開範囲](/ja/docs/channel-modes#外部の-github-送信者を許可する)をご覧ください。
+Slack では、`channel:home/#agents` はチャンネルのルールです。GitHub で外部の送信者が `agent:beta` に送信できるようにするときは、`channel:github/acme/app` と `target:beta` の両方を共有してください。詳しくは[チャンネルの公開範囲](/ja/docs/channel-modes#外部の-github-送信者を許可する)をご覧ください。
 
-オーナーとそのエージェントだけにするときは `private` を使います。アクセスを開くときは `shared` を使います。特定の人と共有するときは、ユーザー ID か `workspace:home` のような項目を列挙します。`visibility_set` での変更は、このファイルより優先されます。
+オーナーとそのエージェントだけがアクセスできるようにするときは `private` を使います。アクセスを公開するときは `shared` を使います。特定の人と共有するときは、ユーザー ID か `workspace:home` のような項目を列挙します。`visibility_set` での変更は、このファイルより優先されます。
 
 ## GitHub の送信者の信頼
 
@@ -151,7 +151,7 @@ GitHub は `owner` と `external` の信頼レベルを使います。Slack、Di
 | `blocks.mcp.use` | ブロックの種類。`mcp` を使います |
 | `blocks.mcp.legacy_aliases` | `agent_send`、`capy_delegate`、`capy_wait`、`capy_reply` などの以前の MCP ツール名を使える状態に保ちます。既定値は `true` |
 | `blocks.mcp.wait` | 返信を待つツール呼び出しの上限 |
-| `blocks.mcp.wait.default_s` | 呼び出し側が空にしたときの待ち時間（秒）。既定値は `60` |
+| `blocks.mcp.wait.default_s` | 呼び出し側が値を省略したときの待ち時間（秒）。既定値は `60` |
 | `blocks.mcp.wait.max_s` | 最大の待ち時間（秒）。既定値は `200` |
 | `blocks.mcp.wait.agents` | エージェントごとの待ち時間の上限。Claude Code は既定で `45` 秒、最大 `55` 秒を使います |
 | `blocks.mcp.wait.agents.*.default_s` | このエージェントの既定の待ち時間（秒） |
@@ -188,7 +188,7 @@ branding:
 | `branding.accent_color` | `#RRGGBB` 形式のアクセントカラー |
 | `branding.icon` | 独自のアイコン |
 | `branding.logo_assets_dir` | 独自のロゴファイルのフォルダー |
-| `branding.public_identity` | このリリースでは `swb` に固定した内部の項目 |
+| `branding.public_identity` | このリリースでは `swb` に固定されている内部の項目 |
 
 ## 完全なリファレンス
 

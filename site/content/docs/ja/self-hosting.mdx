@@ -23,17 +23,17 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-ターミナルに出るワンタイムのサインインリンクを 5 分以内に開いてください。リンクは自分だけの秘密にしてください。
+ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。リンクは自分だけで使ってください。
 
 オーナーのサインインには、ブラウザーで `http://localhost:8870` を使います。コンテナー内のコマンドはポート `8000` を使います。Compose はデータを `./data` に保存します。`.env` を変更したら、もう一度 `docker compose up -d` を実行してください。
 
 リモートのサーバーでは、リンクを開く前に、サーバーのポート `8870` をローカルのポート `8870` に転送してください。
 
-サインイン前に `/healthz` にリクエストすると、`status` と `version` を返します。すべての状態の詳細を見るときは、オーナーのセッションかオーナーキーを使ってください。
+`/healthz` へのリクエストは、サインイン前でも `status` と `version` を返します。ヘルスチェックの詳細をすべて見るときは、オーナーのセッションかオーナーキーを使ってください。
 
 ## Cloudflare Tunnel
 
-[Cloudflare Tunnel の手順](/ja/docs/setup/cloudflare)に従って、あなたのドメイン用のトンネルを作成してください。Compose では、サービスのアドレスに `http://switchboard:8000` を使います。トンネルのトークンは、[リリースの Compose ファイル](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37)にある名前で `.env` に保存してください。`.env` の `SWB_PUBLIC_URL` を、トンネルのアドレスに置き換えてください。tunnel プロファイルを付けて Compose を起動してください。
+[Cloudflare Tunnel の手順](/ja/docs/setup/cloudflare)に従って、自分のドメイン用のトンネルを作成してください。Compose では、サービスのアドレスに `http://switchboard:8000` を使います。トンネルのトークンは、[リリースの Compose ファイル](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37)にある名前で `.env` に保存してください。`.env` の `SWB_PUBLIC_URL` を、トンネルのアドレスに置き換えてください。tunnel プロファイルを付けて Compose を起動してください。
 
 ```bash
 docker compose --profile tunnel up -d
@@ -72,7 +72,7 @@ SwB のフォルダーで `sh deploy/fly.sh my-swb` を実行してください�
 
 ## バックアップとアップグレード
 
-データフォルダーをコピーする前に、SwB を停止してください。データベースとキーを含むフォルダー全体をまとめて保管してください。キーには `mcp-events.key` と `claim-key` も含みます。設定ファイルと `.env` もバックアップしてください。バックアップは自分だけの秘密にしてください。新しいバージョンをインストールまたはビルドしてください。同じデータフォルダーを使って SwB を起動してください。
+データフォルダーをコピーする前に、SwB を停止してください。データベースとキーを含むフォルダー全体をまとめて保管してください。キーには `mcp-events.key` と `claim-key` も含まれます。設定ファイルと `.env` もバックアップしてください。バックアップは安全な場所に保管してください。新しいバージョンをインストールまたはビルドしてください。同じデータフォルダーを使って SwB を起動してください。
 
 ## メモリを書き出す
 
@@ -82,4 +82,4 @@ Compose のコンテナー内で書き出しを実行してください。
 docker compose exec -T switchboard swb export /data/export
 ```
 
-書き出しでは、ホストの `./data/export` に、スコープごとの Markdown ファイルを保存します。`INDEX.md` も含みます。常に最新の Markdown コピーを保つときは、`memory.mirror_dir` を設定してください。
+書き出すと、ホストの `./data/export` に、スコープごとの Markdown ファイルが保存されます。`INDEX.md` も作成されます。常に最新の Markdown コピーを保つときは、`memory.mirror_dir` を設定してください。

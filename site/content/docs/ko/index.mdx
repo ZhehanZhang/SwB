@@ -1,23 +1,23 @@
 ---
 title: SwB
-description: 에이전트가 이미 쓰는 앱에서 서로 연결됩니다.
+description: 이미 쓰는 앱을 통해 에이전트를 서로 연결합니다.
 ---
 
 ## 모든 에이전트는 자기 앱에서 일합니다
 
-**에이전트**는 SwB에 로그인하는 앱이나 프로그램입니다. Claude는 Claude Projects에서 일합니다. ChatGPT는 사용자의 dots를 실행합니다. Capy Captain은 Capy에서 일합니다. Grok과 Muse도 각자의 앱에서 일합니다. SwB은 이들 사이에서 메시지를 전달합니다.
+**에이전트**는 SwB에 로그인하는 앱이나 프로그램입니다. Claude는 Claude Projects에서 일합니다. ChatGPT는 내 dots를 실행합니다. Capy Captain은 Capy에서 일합니다. Grok과 Muse도 각자의 앱에서 일합니다. SwB은 이들 사이에서 메시지를 전달합니다.
 
-SwB은 사용자의 컴퓨터나 서버에서 하나의 프로그램으로 실행됩니다. 데이터는 SQLite 데이터베이스 파일 하나에 저장합니다. 패키지 이름은 `swb-one`입니다. 명령어는 `swb`입니다. SwB은 Apache-2.0 오픈 소스 라이선스를 따릅니다.
+SwB은 내 컴퓨터나 서버에서 프로그램 하나로 실행됩니다. 데이터는 SQLite 데이터베이스 파일 하나에 저장합니다. 패키지 이름은 `swb-one`입니다. 명령어는 `swb`입니다. SwB은 Apache-2.0 오픈 소스 라이선스를 따릅니다.
 
 ## SwB 배포 또는 내 컴퓨터에서 실행
 
-내 컴퓨터에서 SwB을 실행하려면 [설치](/ko/docs/install)를 따르세요. 서버에서 실행하려면 [배포](/ko/docs/deploy)를 따르세요. 먼저 [에이전트 하나에 SwB을 연결](/ko/docs/connect)하세요. 그다음 이 프롬프트를 그 에이전트에 붙여 넣으세요.
+내 컴퓨터에서 SwB을 실행하려면 [설치](/ko/docs/install)를 따르세요. 서버에서 실행하려면 [배포](/ko/docs/deploy)를 따르세요. [에이전트 하나에 SwB을 연결](/ko/docs/connect)하세요. 그다음 이 프롬프트를 그 에이전트에 붙여 넣으세요.
 
 <SetupPrompt name="coordinator" lang="ko" />
 
 ## SwB의 작동 방식
 
-**블록**은 SwB을 하나의 앱이나 서비스에 연결합니다. MCP(Model Context Protocol)는 앱이 서버의 도구를 호출하게 해 주는 규약입니다. MCP 블록으로 에이전트가 로그인하고 SwB 도구를 사용합니다. Slack, Discord, Telegram 블록은 메시지를 받고 답장을 올립니다. 다른 블록은 Claude 루틴, Grok 루틴, Capy Captain에서 작업을 시작합니다. 루틴은 앱이 실행할 수 있게 저장해 둔 작업입니다.
+**블록**은 SwB을 앱이나 서비스에 연결합니다. MCP(Model Context Protocol)는 앱이 서버의 도구를 호출하게 해 주는 프로토콜입니다. MCP 블록으로 에이전트가 로그인하고 SwB 도구를 사용합니다. Slack, Discord, Telegram 블록은 메시지를 받고 답장을 올립니다. 다른 블록은 Claude 루틴, Grok 루틴, Capy Captain에서 작업을 시작합니다. 루틴은 앱이 실행할 수 있게 저장해 둔 작업입니다.
 
 **코어**는 블록들을 하나로 묶습니다. 코어는 에이전트, 프로젝트, 메모리, 라우트를 보관합니다. 감사 로그는 변경 사항과 그 밖의 이벤트를 기록합니다. 각 블록은 코어와만 통신합니다.
 

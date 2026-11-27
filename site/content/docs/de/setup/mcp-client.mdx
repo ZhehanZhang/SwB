@@ -21,7 +21,7 @@ Fügen Sie den Prompt in einen Inhaber-Client von SwB oder in die App ein, die S
 
 ## Lokaler Inhaber-Client
 
-Richten Sie andere Apps mit einem privaten Client auf dem SwB-Computer ein. Verwenden Sie die lokale Adresse `/mcp`, die beim Start erscheint. Verwenden Sie `SWB_KEY_OWNER` aus der `.env` der Instanz als `Authorization: Bearer <key>`. Dieser Schlüssel gibt vollen Inhaberzugriff. Speichern Sie ihn in der privaten lokalen Konfiguration des Clients mit dem Dateimodus `0600`. Senden Sie ihn nur an das lokale SwB.
+Richten Sie andere Apps mit einem privaten Client auf dem SwB-Computer ein. Verwenden Sie die lokale Adresse `/mcp`, die beim Start erscheint. Verwenden Sie `SWB_KEY_OWNER` aus der `.env` der Instanz als `Authorization: Bearer <key>`. Dieser Schlüssel gewährt vollen Inhaberzugriff. Speichern Sie ihn in der privaten lokalen Konfiguration des Clients mit dem Dateimodus `0600`. Senden Sie ihn nur an das lokale SwB.
 
 ## Client koppeln
 
@@ -53,7 +53,7 @@ bash -c '
 Öffnen Sie `.swb-pairing.json` in einem privaten Editor. Der Befehl speichert die Antwort mit dem Dateimodus `0600`. Verwenden Sie den enthaltenen `key` in den Einstellungen der App. SwB gibt den Schlüssel nur einmal aus.
 ### SwB zur App hinzufügen
 
-Fügen Sie in den MCP-Einstellungen der App einen Server namens `swb` hinzu. Wählen Sie Streamable HTTP. Für einen öffentlichen SwB-Server verwenden Sie `mcp_url` aus der Datei. Für ein lokales SwB verwenden Sie die MCP-Adresse, die beim Start erscheint.
+Fügen Sie in den MCP-Einstellungen der App einen Server namens `swb` hinzu. Wählen Sie Streamable HTTP aus. Für einen öffentlichen SwB-Server verwenden Sie `mcp_url` aus der Datei. Für ein lokales SwB verwenden Sie die MCP-Adresse, die beim Start erscheint.
 ### Schlüssel hinzufügen
 
 Fügen Sie in den privaten Einstellungen der App den Header `Authorization: Bearer <key>` hinzu. Löschen Sie `.swb-pairing.json`, nachdem Sie den Schlüssel gespeichert haben.
@@ -68,9 +68,9 @@ Im Terminal auf dem SwB-Server liefert `swb connect mcp-client --choose agent=no
 
 ## Zugangsdaten
 
-| Element | Hier wird es angezeigt | Format | Hierhin gehört es |
+| Element | Wo es angezeigt wird | Format | Wohin es gehört |
 | - | - | - | - |
-| Kopplungscode | Das Ergebnis von `connect` oder `connect_code` | `XXXXX-XXXXX`, 10 Minuten gültig, einmal verwendbar | Die Anfrage `POST /connect` |
+| Kopplungscode | Das Ergebnis von `connect` oder `connect_code` | `XXXXX-XXXXX`, 10 Minuten gültig, einmalig verwendbar | Die Anfrage `POST /connect` |
 | Agentenschlüssel | Die Antwort auf `POST /connect`, einmalig | Beginnt mit `swb_` | Der Header `Authorization` in den privaten Einstellungen der App |
 
 Speichern Sie den Schlüssel in den privaten Einstellungen der App. SwB speichert statt des Schlüssels selbst nur einen Hash.

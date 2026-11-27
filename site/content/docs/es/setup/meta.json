@@ -1,4 +1,4 @@
 {
-  "title": "Configuración",
+  "title": "Configurar apps",
   "pages": ["index", "claude-project", "claude", "dots", "chatgpt", "muse", "grok", "grok-bot", "capy-captain", "coding-agent", "mcp-client", "slack", "discord", "telegram", "github", "cloudflare"]
 }

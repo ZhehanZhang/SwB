@@ -25,7 +25,7 @@ Para usar MCP Tasks con Capy, consulta [MCP Tasks](/es/docs/blocks/capy#mcp-task
 
 ## Canal de Claude Code
 
-El canal envía los mensajes del buzón `claude-code` a una sesión abierta de Claude Code. Los canales de Claude Code están en fase de vista previa de investigación.
+El canal envía los mensajes del buzón `claude-code` a una sesión abierta de Claude Code. Los canales de Claude Code son una versión preliminar de investigación.
 
 Genera una clave aleatoria de 24 caracteres como mínimo. Guárdala como `SWB_KEY_CHANNEL` en el archivo `.env` privado del servidor. Reinicia SwB para cargar la clave. Esta clave da acceso de lectura al buzón `claude-code`. Instala [Bun](https://bun.sh). Añade el plugin en Claude Code.
 
@@ -40,4 +40,4 @@ Escribe la URL base de tu SwB en **SwB URL**. Escribe el valor de `SWB_KEY_CHANN
 claude --dangerously-load-development-channels plugin:swb@swb
 ```
 
-En su primera ejecución, el canal empieza por los mensajes nuevos. En las siguientes continúa desde su posición guardada. Para responder a través de SwB, usa `reply` desde la conexión MCP aparte.
+En su primera ejecución, el canal empieza por los mensajes nuevos. En las siguientes continúa desde su posición guardada. Para responder a través de SwB, usa `reply` desde la conexión MCP independiente.

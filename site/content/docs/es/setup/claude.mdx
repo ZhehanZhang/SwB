@@ -9,7 +9,7 @@ Un conector permite a Claude usar las herramientas de un servicio externo. Con e
 
 El plan Free de Claude permite un conector personalizado. Pro, Max, Ultra, Team y Enterprise también admiten conectores personalizados.
 
-Configura el inicio de sesión del propietario en SwB. Usa una dirección HTTPS pública en el puerto 443 para que Claude llegue a `/mcp`.
+Configura el inicio de sesión del propietario en SwB. Usa una dirección HTTPS pública en el puerto 443 para que Claude pueda acceder a `/mcp`.
 
 ## Copiar el prompt de configuración
 
@@ -65,14 +65,14 @@ En el chat, selecciona **+** → **Connectors**. Activa SwB. En un Claude Projec
 
 El agente llama a `connect(what="claude")`. SwB devuelve la dirección MCP e indica si OAuth está disponible. Con OAuth, apruebas el acceso en tu navegador.
 
-El agente te da la ruta de clics y la dirección. Cuando apruebas, vuelve a llamar a `connect`. SwB responde que el cliente ha iniciado sesión.
+El agente te da la secuencia de clics y la dirección. Cuando apruebes el acceso, el agente vuelve a llamar a `connect`. SwB responde que el cliente ha iniciado sesión.
 
 ## Credenciales
 
 | Elemento | Dónde aparece | Formato | Dónde va |
 | - | - | - | - |
 | Dirección MCP | Los ajustes de SwB y el resultado de `connect` | `https://swb.example.com/mcp` | El campo URL del conector de Claude |
-| Token de acceso de SwB | Claude lo guarda cuando haces clic en **Approve** | Texto aleatorio | Claude lo guarda por ti |
+| Token de acceso de SwB | Claude lo conserva cuando haces clic en **Approve** | Texto aleatorio | Claude lo guarda por ti |
 
 ## Comprobar la conexión
 
@@ -80,4 +80,4 @@ Abre **Customize** → **Connectors** y comprueba que `SwB` aparece como conecta
 
 ## Resolver problemas
 
-Usa la dirección HTTPS pública que termina en `/mcp`. Deja que Claude llegue directamente a `/mcp`. Si cambia la dirección de SwB, quita el conector. Añádelo de nuevo con la dirección nueva.
+Usa la dirección HTTPS pública que termina en `/mcp`. Permite que Claude acceda directamente a `/mcp`. Si cambia la dirección de SwB, quita el conector. Añádelo de nuevo con la dirección nueva.

@@ -11,7 +11,7 @@ Starten Sie SwB nach der Anleitung [Docker Compose](/de/docs/self-hosting#docker
 
 ## Tunnel erstellen
 
-Folgen Sie [Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/). Kopieren Sie das Tunnel-Token aus dem Installationsbefehl. Tragen Sie es in den Eintrag der SwB-`.env` ein, den [die Compose-Datei](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39) nennt. Halten Sie das Token privat.
+Folgen Sie [Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/). Kopieren Sie das Tunnel-Token aus dem Installationsbefehl. Tragen Sie es in den Eintrag der SwB-`.env` ein, den [die Compose-Datei](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39) nennt. Behandeln Sie das Token vertraulich.
 
 Starten Sie den Tunnel-Connector auf dem SwB-Server.
 
@@ -19,13 +19,13 @@ Starten Sie den Tunnel-Connector auf dem SwB-Server.
 docker compose --profile tunnel up -d
 ```
 
-Wählen Sie **Continue**, sobald der Connector in Cloudflare erscheint.
+Wählen Sie **Continue** aus, sobald der Connector in Cloudflare erscheint.
 
 ## Konsole schützen
 
 [Erstellen Sie eine Access-Anwendung](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) für Ihren SwB-Hostnamen. Setzen Sie die Aktion der Richtlinie auf **Allow**. Geben Sie unter **Include** → **Emails** Ihre E-Mail-Adresse ein.
 
-Erstellen Sie auf demselben Hostnamen eine weitere Access-Anwendung für die Pfade mit **Bypass**. Setzen Sie die Aktion ihrer Richtlinie auf **Bypass**. Wählen Sie unter **Include** die Option **Everyone**.
+Erstellen Sie auf demselben Hostnamen eine weitere Access-Anwendung für die Pfade, die in der Tabelle mit **Bypass** markiert sind. Setzen Sie die Aktion ihrer Richtlinie auf **Bypass**. Wählen Sie unter **Include** die Option **Everyone** aus.
 
 | Pfad | Access-Richtlinie |
 | --- | --- |
@@ -40,7 +40,7 @@ SwB prüft Kopplungscodes unter `/companion/pair`. Bei anderen Companion-Anfrage
 
 ## SwB-Adresse festlegen
 
-Setzen Sie `SWB_PUBLIC_URL` in `.env` auf Ihre öffentliche Adresse. Verwenden Sie zum Beispiel `https://swb.example.com`. Tragen Sie die Team-Domain und das Audience-Tag der Inhaber-Anwendung in `config/switchboard.yaml` ein. Am Tag erkennt SwB, welche Anwendung das Token ausgestellt hat.
+Setzen Sie `SWB_PUBLIC_URL` in `.env` auf Ihre öffentliche Adresse. Verwenden Sie zum Beispiel `https://swb.example.com`. Tragen Sie die Team-Domain und das Audience-Tag der Inhaber-Anwendung in `config/switchboard.yaml` ein. Anhand des Tags erkennt SwB, welche Anwendung das Token ausgestellt hat.
 
 | Wert | Fundort | Konfigurationsschlüssel |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ Führen Sie `docker compose --profile tunnel up -d` erneut aus, um die Einstellu
 
 ## Hostnamen veröffentlichen
 
-Öffnen Sie im Tunnel den Tab **Routes**. Wählen Sie **Add route**. Wählen Sie **Published application**. Geben Sie Ihren öffentlichen Hostnamen ein. Setzen Sie **Service URL** auf `http://switchboard:8000`. Wählen Sie **Add route**, um die Route zu speichern.
+Öffnen Sie im Tunnel den Tab **Routes**. Wählen Sie **Add route** aus. Wählen Sie **Published application** aus. Geben Sie Ihren öffentlichen Hostnamen ein. Setzen Sie **Service URL** auf `http://switchboard:8000`. Wählen Sie **Add route** aus, um die Route zu speichern.
 
 ## Verbindung prüfen
 

@@ -41,21 +41,21 @@ Dans la discussion de votre Bot, ouvrez la routine sous **Details**. Vérifiez l
 
 ### Enregistrer l'URL du webhook
 
-Ouvrez le lien de dépôt de l'adresse du webhook. Copiez **POST to** depuis la routine. Collez cette valeur dans **Webhook URL**. Sélectionnez **Save webhook url**.
+Ouvrez le lien de saisie de l'adresse du webhook. Copiez **POST to** depuis la routine. Collez cette valeur dans **Webhook URL**. Sélectionnez **Save webhook url**.
 
 ### Enregistrer la clé
 
-Ouvrez le lien de dépôt de la clé du webhook. Copiez **key** depuis la routine. Collez cette valeur dans **Token**. Sélectionnez **Save token**.
+Ouvrez le lien de saisie de la clé du webhook. Copiez **key** depuis la routine. Collez cette valeur dans **Token**. Sélectionnez **Save token**.
 
 ### Prévenir Grok Bot
 
-Écrivez « terminé » dans la discussion du Bot. Grok Bot teste alors la routine.
+Écrivez « terminé » dans la discussion du Bot. Grok Bot teste alors la routine.
 
 ## Ce que fait l'agent
 
 Demandez à un agent doté de l'accès propriétaire d'appeler `connect(what="grok-bot")`. SwB renvoie l'adresse MCP, l'état OAuth et un prompt de routine. Ce prompt s'appuie sur le champ `trust` du webhook pour indiquer à la routine les requêtes qu'elle peut traiter. La routine répond avec `reply`.
 
-Demandez à Grok Bot de créer la routine avec ce prompt. Dans votre client propriétaire, enregistrez-la avec `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB crée un lien de dépôt pour l'adresse et un autre pour la clé. Une fois les deux valeurs enregistrées, exécutez l'appel `send` que renvoie `connect`.
+Demandez à Grok Bot de créer la routine avec ce prompt. Dans votre client propriétaire, enregistrez-la avec `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB crée un lien de saisie pour l'adresse et un autre pour la clé. Une fois les deux valeurs enregistrées, exécutez l'appel `send` que renvoie `connect`.
 
 Quand vous envoyez un message à la routine, SwB appelle son webhook pour la lancer.
 
@@ -63,11 +63,11 @@ Quand vous envoyez un message à la routine, SwB appelle son webhook pour la lan
 
 | Jeton | Où il apparaît | Format | Destination |
 | - | - | - | - |
-| URL du webhook | **POST to** sous **Webhook** dans **Details** de la routine | Adresse HTTPS | **Webhook URL** sur son lien de dépôt SwB |
-| Clé du webhook | **key** sous **Webhook** dans **Details** de la routine | Texte aléatoire | **Token** sur son lien de dépôt SwB |
+| URL du webhook | **POST to** sous **Webhook** dans **Details** de la routine | Adresse HTTPS | **Webhook URL** sur son lien de saisie SwB |
+| Clé du webhook | **key** sous **Webhook** dans **Details** de la routine | Texte aléatoire | **Token** sur son lien de saisie SwB |
 | Jeton de connexion SwB | Grok Bot l'obtient à votre connexion | Texte aléatoire | Grok Bot le conserve pour vous |
 
-Un lien de dépôt est une page SwB privée à usage unique, réservée à un seul jeton. Collez chaque valeur uniquement à cet endroit.
+Un lien de saisie ouvre une page SwB privée à usage unique, réservée à un seul jeton. Collez chaque valeur uniquement à cet endroit.
 
 ## Vérifier la connexion
 
@@ -81,4 +81,4 @@ Copiez la valeur de **key**. Avec l'en-tête par défaut, SwB ajoute `Authorizat
 
 Utilisez `grok-routine:routine:<routine>` pour lancer la routine. Utilisez `agent:grok` pour écrire dans la boîte aux lettres de Grok.
 
-Un lien de dépôt sert une seule fois et expire au bout de 30 minutes. Pour obtenir un nouveau lien, appelez de nouveau `connect`. Pour remplacer une valeur enregistrée, appelez `connect` avec `choose.replace` réglé sur `url` ou `secret`.
+Un lien de saisie sert une seule fois et expire au bout de 30 minutes. Pour obtenir un nouveau lien, appelez de nouveau `connect`. Pour remplacer une valeur enregistrée, appelez `connect` avec `choose.replace` défini sur `url` ou `secret`.

@@ -37,9 +37,9 @@ Los agentes publican con `slack_post`. Usa `blocks.slack.agents.<agent>.workspac
 
 El propietario aprueba las publicaciones desde el mensaje directo de Slack o desde la página de SwB. Las herramientas MCP solo pueden pedir una aprobación.
 
-## Personas
+## Perfiles
 
-Una persona es el nombre y la imagen de una publicación del bot. SwB da una persona a cada Capy Captain. Pide a tu agente que llame a `slack_personas` para ver las personas disponibles. El agente puede elegir una persona permitida con `slack_post`. Pon los archivos de imagen personalizados en `<data>/avatars`.
+Un perfil (persona) es el nombre y la imagen de una publicación del bot. SwB da un perfil a cada Capy Captain. Pide a tu agente que llame a `slack_personas` para ver los perfiles disponibles. El agente puede elegir un perfil permitido con `slack_post`. Pon los archivos de imagen personalizados en `<data>/avatars`.
 
 ## Proyectos por canal
 
@@ -51,7 +51,7 @@ Una persona es el nombre y la imagen de una publicación del bot. SwB da una per
 | - | - |
 | `blocks.slack` | Ajustes del bloque de Slack y de sus espacios de trabajo |
 | `blocks.slack.use` | Carga el bloque `slack` |
-| `blocks.slack.enabled` | Define `true` para cargar el bloque o `false` para desactivarlo |
+| `blocks.slack.enabled` | Usa `true` para cargar el bloque o `false` para desactivarlo |
 | `blocks.slack.refresh_minutes` | Minutos entre actualizaciones de la lista de destinos. El valor predeterminado es `30` |
 | `blocks.slack.target_aliases` | Asigna nombres de destino adicionales a destinos existentes |
 | `blocks.slack.workspace_projects` | Define el proyecto de SwB predeterminado de cada espacio de trabajo |
@@ -78,7 +78,7 @@ Usa los [modos de canal](/es/docs/channel-modes) para despertar a un agente a tr
 | `blocks.slack.workspaces.*.identities.user` | Ajustes de la cuenta de usuario de Slack |
 | `blocks.slack.workspaces.*.identities.user.token_env` | Nombre de la variable de entorno del token de usuario |
 | `blocks.slack.workspaces.*.identities.user.write` | Política de escritura de la cuenta de usuario. El valor predeterminado es `approval` |
-| `blocks.slack.workspaces.*.user_only` | Define `true` para usar solo la cuenta de usuario. Pon su política de escritura en `approval` o `never` |
+| `blocks.slack.workspaces.*.user_only` | Usa `true` para trabajar solo con la cuenta de usuario. Con esta opción, usa la política de escritura `approval` o `never` |
 | `blocks.slack.workspaces.*.watched` | Activa el modo `watch` en los canales de la lista. Usa `*` para todos los canales en los que está el bot |
 | `blocks.slack.workspaces.*.default_target` | Destino de un mensaje nuevo dirigido a SwB que omite el nombre del destino |
 | `blocks.slack.workspaces.*.ack_reaction` | Nombre del emoji de Slack que confirma la recepción de menciones y mensajes directos. El valor predeterminado del bot es `eyes` |
@@ -95,8 +95,8 @@ Usa los [modos de canal](/es/docs/channel-modes) para despertar a un agente a tr
 | - | - |
 | `blocks.slack.agents` | Asigna a los agentes de SwB sus permisos de Slack |
 | `blocks.slack.agents.*.workspaces` | Define las cuentas que puede usar el agente en cada espacio de trabajo |
-| `blocks.slack.agents.*.allow_persona_override` | Define `true` para que el agente elija una persona en una publicación del bot |
-| `blocks.slack.agents.*.allowed_personas` | IDs de las personas que puede elegir el agente cuando tiene permiso para elegir una |
+| `blocks.slack.agents.*.allow_persona_override` | Usa `true` para que el agente elija un perfil en una publicación del bot |
+| `blocks.slack.agents.*.allowed_personas` | IDs de los perfiles que puede elegir el agente cuando tiene permiso para elegir uno |
 | `blocks.slack.approvals` | Ajustes predeterminados de las solicitudes de aprobación de publicaciones en Slack |
 | `blocks.slack.approvals.approver_user_id` | ID de usuario de Slack que recibe y decide las solicitudes de aprobación predeterminadas |
 | `blocks.slack.approvals.notify_workspace` | Espacio de trabajo cuyo bot envía las solicitudes de aprobación a quien aprueba de forma predeterminada |
@@ -108,21 +108,21 @@ Usa los [modos de canal](/es/docs/channel-modes) para despertar a un agente a tr
 | Clave | Uso |
 | - | - |
 | `blocks.slack.personas` | Define los nombres y las imágenes que el bot puede usar en sus publicaciones |
-| `blocks.slack.personas.*.name` | Nombre visible de las publicaciones del bot que usan la persona |
-| `blocks.slack.personas.*.avatar` | Nombre del archivo de imagen de la persona. Define `blocks.slack.public_base_url` para que Slack pueda descargarla |
-| `blocks.slack.personas.*.emoji` | Emoji de Slack de reserva para la imagen de la persona |
+| `blocks.slack.personas.*.name` | Nombre visible de las publicaciones del bot que usan el perfil |
+| `blocks.slack.personas.*.avatar` | Nombre del archivo de imagen del perfil. Define `blocks.slack.public_base_url` para que Slack pueda descargarla |
+| `blocks.slack.personas.*.emoji` | Emoji de Slack de reserva para la imagen del perfil |
 | `blocks.slack.avatar_dirs` | Carpetas adicionales donde SwB busca archivos de avatar antes que en sus imágenes incluidas |
 | `blocks.slack.public_base_url` | Dirección HTTPS pública que usa Slack para descargar los archivos de avatar, como `https://swb.example.com` |
-| `blocks.slack.workspaces.*.default_persona` | ID de la persona predeterminada para las publicaciones del bot en este espacio de trabajo |
+| `blocks.slack.workspaces.*.default_persona` | ID del perfil predeterminado para las publicaciones del bot en este espacio de trabajo |
 
 ## Entrega de eventos
 
 | Clave | Uso |
 | - | - |
 | `blocks.slack.workspaces.*.sinks` | Configura webhooks que envían los eventos de Slack a otros servicios |
-| `blocks.slack.workspaces.*.sinks.*.name` | Nombre que identifica el webhook en los logs y en el estado |
+| `blocks.slack.workspaces.*.sinks.*.name` | Nombre que identifica el webhook en los registros y en el estado |
 | `blocks.slack.workspaces.*.sinks.*.url_env` | Nombre de la variable de entorno de la URL del webhook |
-| `blocks.slack.workspaces.*.sinks.*.signature` | Define `stripe` para firmar las peticiones con el formato de Stripe |
+| `blocks.slack.workspaces.*.sinks.*.signature` | Usa `stripe` para firmar las peticiones con el formato de Stripe |
 | `blocks.slack.workspaces.*.sinks.*.secret_env` | Nombre de la variable de entorno de la clave de firma |
 | `blocks.slack.workspaces.*.sinks.*.kinds` | Tipos de evento que se envían. Elige entre `watched`, `mention` y `dm`. De forma predeterminada se envían los tres |
 | `blocks.slack.workspaces.*.sinks.*.targets` | Envía solo los eventos de estos nombres de destino |

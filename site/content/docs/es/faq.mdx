@@ -9,7 +9,7 @@ SwB se ejecuta en tu propio ordenador o servidor. Guarda allí su base de datos 
 
 ## ¿SwB puede leer la memoria de Claude o ChatGPT?
 
-Cada app mantiene privada su propia memoria. Los agentes pueden usar la memoria compartida de SwB dentro del acceso que permiten sus credenciales.
+Cada app mantiene privada su propia memoria. Los agentes pueden usar la memoria compartida de SwB según el acceso que les den sus credenciales.
 
 ## ¿Qué agentes funcionan con SwB?
 
@@ -19,9 +19,9 @@ Usa un cliente MCP compatible con Streamable HTTP. Este método permite al clien
 
 Abre el enlace de entrega que te da tu agente. Pega el token en esa página.
 
-## ¿Cómo hago que Claude o ChatGPT lleguen a SwB?
+## ¿Cómo hago que SwB sea accesible desde Claude o ChatGPT?
 
-Usa el [túnel temporal de Cloudflare](/es/docs/first-run#obtener-una-dirección-pública) para tener rápido una dirección HTTPS pública. Para una dirección fija, consulta [Autoalojamiento](/es/docs/self-hosting).
+Usa el [túnel temporal de Cloudflare](/es/docs/first-run#obtener-una-dirección-pública) para obtener rápidamente una dirección HTTPS pública. Para una dirección fija, consulta [Autoalojamiento](/es/docs/self-hosting).
 
 ## ¿Cómo responde un agente más tarde?
 
@@ -29,11 +29,11 @@ SwB devuelve un ID de conversación cuando un envío inicia una conversación. U
 
 ## ¿Otras personas pueden usar mis agentes?
 
-Comparte el canal y también el destino con las personas a las que quieras dar acceso. Tus agentes reciben el texto de remitentes externos como información.
+Comparte tanto el canal como el destino con las personas a las que quieras dar acceso. Tus agentes reciben el texto de remitentes externos como información.
 
 ## ¿Cómo detengo un bucle de agentes?
 
-SwB pausa una conversación entre agentes a los 200 turnos de forma predeterminada. Ajusta `turn_cap` para cambiar el límite. SwB registra la pausa en **Audit**.
+SwB pausa una conversación entre agentes a los 200 turnos de forma predeterminada. Usa `turn_cap` para cambiar el límite. SwB registra la pausa en **Audit**.
 
 ## ¿Cómo hago una copia de seguridad de SwB?
 

@@ -39,7 +39,7 @@ Inicia sesión en SwB como propietario. Aprueba el acceso en la página de SwB.
 
 ## Lo que hace el agente
 
-Grok llama a `connect(what="grok")`. SwB devuelve la dirección MCP y el estado de OAuth. Cuando inicias sesión, `connect` indica que el cliente ha iniciado sesión.
+Grok llama a `connect(what="grok")`. SwB devuelve la dirección MCP y el estado de OAuth. Después de que inicies sesión, `connect` indica que el cliente ha iniciado sesión.
 
 Grok puede enviar un mensaje de prueba con `send` y leerlo con `inbox`. Un buzón guarda los mensajes de un agente. Si tu app de Grok admite eventos MCP, suscríbete a `switchboard.message.created`. Para leer bajo demanda, pide a Grok que llame a `wait` o `inbox` en un chat abierto.
 
@@ -55,4 +55,4 @@ Pide a Grok que llame a `connect(what="grok")` para comprobar el inicio de sesi�
 
 ## Resolver problemas
 
-Para el trabajo que empieza solo, usa [Grok Bot](/es/docs/setup/grok-bot). SwB despierta una rutina de Grok Bot con un webhook.
+Para que el trabajo se inicie por sí solo, usa [Grok Bot](/es/docs/setup/grok-bot). SwB despierta una rutina de Grok Bot con un webhook.

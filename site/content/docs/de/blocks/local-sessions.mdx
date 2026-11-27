@@ -19,7 +19,7 @@ Rufen Sie von einem Inhaber-Agenten aus `targets(block="local")` auf, um jede Ei
 | --- | --- |
 | `working` | Der Agent arbeitet |
 | `blocked` | Der Agent wartet auf eine Freigabe oder Eingabe |
-| `idle` | Der Agent ist bereit für Arbeit |
+| `idle` | Der Agent ist bereit für neue Aufgaben |
 | `done` | Der Agent hat seine Arbeit abgeschlossen |
 | `unknown` | Der Status ist noch unbestätigt |
 
@@ -35,7 +35,7 @@ Ein Hook führt einen Befehl aus, wenn ein Agent eine Änderung meldet. Status-H
 swb companion connect https://swb.example.com --cap hooks
 ```
 
-Installieren Sie den Befehl `swb` mit [pipx](/de/docs/install). Machen Sie `swb` im Suchpfad für Befehle des Agenten verfügbar. Wenn Sie `SWB_COMPANION_HOME` setzen, verwenden Sie denselben Ordner für den Agenten und den Companion.
+Installieren Sie den Befehl `swb` mit [pipx](/de/docs/install). Stellen Sie sicher, dass der Agent `swb` über seinen Suchpfad findet. Wenn Sie `SWB_COMPANION_HOME` setzen, verwenden Sie denselben Ordner für den Agenten und den Companion.
 
 | Agent | Ereignisbefehl | Konfiguration |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Verwenden Sie die Dateien aus dem [Release-Checkout von SwB](/de/docs/self-hosti
 gemini extensions install /path/to/SwB/integrations/gemini
 ```
 
-Öffnen Sie nach der Einrichtung des Hooks eine neue Sitzung. Prüfen Sie, ob ihre Adresse in `targets(block="local")` erscheint. Mit der Funktion hooks allein empfangen Sitzungen Nachrichten über ihre Postfächer.
+Öffnen Sie nach der Einrichtung des Hooks eine neue Sitzung. Prüfen Sie, ob ihre Adresse in `targets(block="local")` erscheint. Mit der Funktion `hooks` allein empfangen Sitzungen Nachrichten über ihre Postfächer.
 
 ## Herdr
 

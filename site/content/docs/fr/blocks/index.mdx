@@ -5,7 +5,7 @@ description: Découvrez les connexions et les fonctions de SwB.
 
 Un bloc ajoute une connexion ou une fonction à SwB. Configurez les blocs dans le fichier de configuration. Avec la configuration par défaut, SwB détecte certains blocs à partir des variables d'environnement. Lancez `swb status` pour voir l'état des blocs et des conseils de configuration. Connectez-vous en tant que propriétaire pour voir le détail sur `/healthz`.
 
-| Connexion | Mode de connexion | Transmission des messages |
+| Connexion | Moyen de connexion | Transmission des messages |
 | - | - | - |
 | [Claude](/fr/docs/blocks/claude) | Connecteur personnalisé et routines Claude | `wait`, `inbox` et réveils de routines |
 | [ChatGPT](/fr/docs/blocks/chatgpt) | Serveur MCP personnalisé et dots ChatGPT | MCP Events |
@@ -22,7 +22,7 @@ Un bloc ajoute une connexion ou une fonction à SwB. Configurez les blocs dans l
 
 ## Confiance et accès
 
-SwB vérifie les ID de plateforme pour fixer la confiance d'un message. Dans Slack, Discord et Telegram, utilisez `known` pour aider SwB à choisir les messages à accepter. Les messages des personnes autres que le propriétaire portent une confiance `external`. Consultez la section [Confiance](/fr/docs/security#confiance).
+SwB vérifie les ID de plateforme pour définir le niveau de confiance d'un message. Dans Slack, Discord et Telegram, utilisez `known` pour aider SwB à choisir les messages à accepter. Les messages des personnes autres que le propriétaire portent une confiance `external`. Consultez la section [Confiance](/fr/docs/security#confiance).
 
 Les cibles, les canaux et les portées de mémoire sont privés par défaut. Partagez une ressource pour en donner l'accès à d'autres personnes.
 

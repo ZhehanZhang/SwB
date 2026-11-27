@@ -16,7 +16,7 @@ Der Inhaber meldet sich an, um SwB zu verwalten. Mit diesem Zugriff gibt der Inh
 swb login-link
 ```
 
-Der Befehl gibt einen Link wie `https://swb.example.com/login#t=...` aus. Öffnen Sie ihn innerhalb von fünf Minuten in Ihrem Browser. Der Link gilt einmal. Ein Agent, der als Inhaber angemeldet ist, erstellt einen Link auch mit dem Tool `login_link`. Das Token steht im Teil des Links nach `#`.
+Der Befehl gibt einen Link wie `https://swb.example.com/login#t=...` aus. Öffnen Sie ihn innerhalb von fünf Minuten in Ihrem Browser. Der Link gilt einmalig. Ein Agent, der als Inhaber angemeldet ist, kann mit dem Tool `login_link` ebenfalls einen Link erstellen. Das Token steht im Teil des Links nach `#`.
 
 Beim ersten lokalen Start gibt `swb up` einen Einmal-Link aus. Die lokale Adresse ist standardmäßig `http://localhost:8870`. Wenn Sie `SWB_PORT` setzen, verwendet SwB diesen Port in der Adresse. Für `swb login-link` wählen Sie mit `--url` einen anderen Server. Mit `--dir` lesen Sie den Inhaberschlüssel aus einem anderen Instanzordner.
 
@@ -24,21 +24,21 @@ Wenn die Anmeldung mit dem Link fehlschlägt, führen Sie `swb login-link` erneu
 
 ## Einrichtungscode
 
-Ein Einrichtungscode gilt einmal, für die erste Anmeldung des Inhabers. Verwenden Sie ihn, wenn SwB die Anmeldung selbst verwaltet. Die [Bereitstellungsanleitung](/de/docs/deploy) zeigt, wo Sie den Code für einen gehosteten Server finden.
+Ein Einrichtungscode gilt einmalig für die erste Anmeldung des Inhabers. Verwenden Sie ihn, wenn SwB die Anmeldung selbst verwaltet. Die [Bereitstellungsanleitung](/de/docs/deploy) zeigt, wo Sie den Code für einen gehosteten Server finden.
 
-Für einen eigenen Code erzeugen Sie 32 zufällige Bytes. Kodieren Sie diese als 64 hexadezimale Kleinbuchstaben oder als Standard-Base64. Dieser Befehl fügt einen hexadezimalen Code zur privaten Datei `.env` hinzu. Führen Sie ihn nach `swb init` im Instanzordner aus.
+Für einen eigenen Code erzeugen Sie 32 zufällige Bytes. Kodieren Sie diese als 64 hexadezimale Zeichen in Kleinschreibung oder als Standard-Base64. Dieser Befehl fügt einen hexadezimalen Code zur privaten Datei `.env` hinzu. Führen Sie ihn nach `swb init` im Instanzordner aus.
 
 ```bash
 (umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
 ```
 
-Starten Sie SwB mit gesetztem `SWB_SETUP_CODE`. Öffnen Sie `/login` in Ihrem Browser. Fügen Sie den Code in **Setup code** ein. Wählen Sie **Sign in**.
+Starten Sie SwB mit gesetztem `SWB_SETUP_CODE`. Öffnen Sie `/login` in Ihrem Browser. Fügen Sie den Code in **Setup code** ein. Wählen Sie **Sign in** aus.
 
 ## Passkey
 
-Ein **Passkey** bestätigt Ihre Anmeldung mit Ihrem Gerät. Geben Sie nach der ersten Anmeldung den Namen Ihres Geräts in **Passkey name** ein. Wählen Sie **Add a passkey**.
+Ein **Passkey** bestätigt Ihre Anmeldung mit Ihrem Gerät. Geben Sie nach der ersten Anmeldung den Namen Ihres Geräts in **Passkey name** ein. Wählen Sie **Add a passkey** aus.
 
-Für ein weiteres Gerät öffnen Sie **Settings**. Wählen Sie unter **Sign-in** die Option **Add a passkey**. Geben Sie einen Namen ein. Wählen Sie **Add passkey**, um ihn zu speichern. Verwenden Sie Ihren Passkey für spätere Anmeldungen.
+Für ein weiteres Gerät öffnen Sie **Settings**. Wählen Sie unter **Sign-in** die Option **Add a passkey** aus. Geben Sie einen Namen ein. Wählen Sie **Add passkey** aus, um ihn zu speichern. Verwenden Sie Ihren Passkey für spätere Anmeldungen.
 
 ## OIDC
 
@@ -63,7 +63,7 @@ Folgen Sie der [Cloudflare-Einrichtung](/de/docs/setup/cloudflare), um die Konso
 
 ## Agent-Anmeldung
 
-Mit OAuth verbindet sich eine App mit Ihrer Freigabe mit SwB. Geben Sie die Verbindung auf `/authorize` frei. Die App erhält den OAuth-Scope `switchboard`, den Namen des angefragten Zugriffs. Die App holt oder erneuert ihre Tokens über `/token`.
+Mit OAuth kann sich eine App nach Ihrer Freigabe mit SwB verbinden. Geben Sie die Verbindung auf `/authorize` frei. Die App erhält den OAuth-Scope `switchboard`, den Namen des angefragten Zugriffs. Die App holt oder erneuert ihre Tokens über `/token`.
 
 Wenn die App einen OAuth-Fehler erhält, finden Sie Details in `error_description`.
 
@@ -92,7 +92,7 @@ Der Browser liest Ihren aktuellen Anmeldestatus unter `/auth/session`.
 
 ## Anmeldefehler
 
-SwB vermerkt fehlgeschlagene Browser-Anmeldungen unter **Audit**. Jede Zeile nennt den Grund und hält Codes und Tokens privat. Für einige Fehler begrenzt SwB wiederholte Zeilen.
+SwB vermerkt fehlgeschlagene Browser-Anmeldungen unter **Audit**. Jede Zeile nennt den Grund und verbirgt Codes und Tokens. Für einige Fehler begrenzt SwB wiederholte Zeilen.
 
 | Fehler | Bedeutung |
 | - | - |
@@ -100,11 +100,11 @@ SwB vermerkt fehlgeschlagene Browser-Anmeldungen unter **Audit**. Jede Zeile nen
 | `link_expired` | Der Link ist abgelaufen. |
 | `link_invalid` | SwB hat den Link abgelehnt. |
 | `setup_failed` | Der Einrichtungscode hat ein falsches Format oder weicht von `SWB_SETUP_CODE` ab. |
-| `setup_closed` | Die Anmeldung per Einrichtungscode ist geschlossen. Verwenden Sie ein anderes Anmeldeverfahren. |
+| `setup_closed` | Die Anmeldung per Einrichtungscode ist deaktiviert. Verwenden Sie eine andere Anmeldemethode. |
 | `passkey_failed` | Die Einrichtung oder Prüfung des Passkeys ist fehlgeschlagen. |
 | `last_method` | SwB behält den letzten Passkey, wenn OIDC und Cloudflare Access beide inaktiv sind. |
 | `not_found` | Die Passkey-ID ist falsch oder der Passkey wurde entfernt. |
 | `oidc_failed` | Die Anmeldung über den Identitätsanbieter ist fehlgeschlagen. |
-| `signed_out` | Die Anfrage braucht eine Inhabersitzung. |
+| `signed_out` | Die Anfrage erfordert eine Inhabersitzung. |
 | `csrf` | SwB hat die Seitenadresse oder das Sicherheitstoken abgelehnt. |
 | `slow_down` | Die Anmeldeversuche haben ein Limit erreicht. Warten Sie die Zeit aus `Retry-After` ab. |

@@ -57,7 +57,7 @@ Usa un agente con acceso de propietario para llamar a `connect(what="grok-bot")`
 
 Pide a Grok Bot que cree la rutina con el prompt. En tu cliente de propietario, regístrala con `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB crea enlaces de entrega distintos para la dirección y para la clave. Cuando guardes los dos, ejecuta la llamada `send` que devuelve `connect`.
 
-Cuando envías a la rutina, SwB llama a su webhook para iniciarla.
+Cuando envías un mensaje a la rutina, SwB llama a su webhook para iniciarla.
 
 ## Credenciales
 
@@ -71,7 +71,7 @@ Un enlace de entrega es una página privada de SwB, de un solo uso, para un toke
 
 ## Comprobar la conexión
 
-Abre **Details** de la rutina. Comprueba el disparador **Webhook**. Llama de nuevo a `connect(what="grok-bot")` desde tu cliente de propietario. La línea de estado nombra la rutina. Comprueba `inbox` en el cliente que envía para ver la respuesta de prueba.
+Abre **Details** de la rutina. Comprueba el disparador **Webhook**. Llama de nuevo a `connect(what="grok-bot")` desde tu cliente de propietario. La línea de estado muestra el nombre de la rutina. Comprueba `inbox` en el cliente que envía para ver la respuesta de prueba.
 
 ## Resolver problemas
 
@@ -81,4 +81,4 @@ Copia el valor de **key**. Con la cabecera predeterminada, SwB añade `Authoriza
 
 Usa `grok-routine:routine:<routine>` para iniciar la rutina. Usa `agent:grok` para enviar al buzón de Grok.
 
-Los enlaces de entrega sirven una vez y caducan a los 30 minutos. Para obtener un enlace nuevo, llama a `connect` otra vez. Para cambiar un valor guardado, llama a `connect` con `choose.replace` en `url` o `secret`.
+Los enlaces de entrega funcionan una sola vez y caducan a los 30 minutos. Para obtener un enlace nuevo, llama a `connect` otra vez. Para cambiar un valor guardado, llama a `connect` con `choose.replace` establecido en `url` o `secret`.

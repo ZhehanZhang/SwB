@@ -19,7 +19,7 @@ Para el modo `work` de GitHub, añade tu número de cuenta a la [lista de propie
 
 ## Definir un modo
 
-Define el modo en **Channel modes** en la página de la conexión o del proyecto. También puedes definirlo en YAML. El propietario puede usar `space_mode` para definir el modo, el destino, el proyecto y las acciones permitidas.
+Elige el modo en **Channel modes**, en la página de la conexión o del proyecto. También puedes definirlo en YAML. El propietario puede usar `space_mode` para definir el modo, el destino, el proyecto y las acciones permitidas.
 
 YAML es el formato de texto del archivo de configuración de SwB. En YAML, escribe `"off"` entre comillas.
 
@@ -52,9 +52,9 @@ Elige un destino de `targets`. Este ejemplo vincula el buzón de un agente a un 
 space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
 ```
 
-Usa `mode="assist"` para el modo assist. Omite `target` para conservar la vinculación. Define `target=""` para borrarla.
+Usa `mode="assist"` para el modo assist. Omite `target` para conservar la vinculación. Usa `target=""` para quitarla.
 
-Para definir la ruta de reserva, llama a `routes_set` con el proyecto vinculado y la dirección del destino. Para una ruta de Capy bloqueada, usa un destino como `capy:captain:<name>` y deja `allow_override=false`.
+Para definir la ruta de reserva, llama a `routes_set` con el proyecto vinculado y la dirección del destino. Para una ruta de Capy bloqueada, usa un destino como `capy:captain:<name>` y mantén `allow_override=false`.
 
 ## Permitir remitentes externos de GitHub
 
@@ -65,13 +65,13 @@ visibility_set(resource="channel:github/acme/app", visibility="shared")
 visibility_set(resource="target:beta", visibility="shared")
 ```
 
-Para limitar el acceso a un solo remitente, usa el mismo ID de remitente verificado en los dos recursos. Por ejemplo, define `visibility=["github:1234"]` en ambos.
+Para limitar el acceso a un solo remitente, usa el mismo ID de remitente verificado en los dos recursos. Por ejemplo, usa `visibility=["github:1234"]` en ambos.
 
 ## Leer un resumen de Watch
 
 Define el intervalo con `modes.digest_minutes`. El valor predeterminado es 60 minutos. SwB pone el resumen en el buzón del destino cuando termina el intervalo o cuando el lote llega a 50 eventos. Si falta el destino, SwB usa el buzón del propietario.
 
-Lee cada resumen como propietario en la **Inbox** de la consola o por MCP con `inbox` y `wait`. El resumen indica el número de eventos. Muestra el autor, un fragmento y el enlace disponible de cada evento. Su confianza es `external`.
+Lee cada resumen como propietario en **Inbox**, en la consola, o por MCP con `inbox` y `wait`. El resumen indica el número de eventos. Muestra el autor, un fragmento y el enlace disponible de cada evento. Su nivel de confianza es `external`.
 
 En modo Watch, los agentes siguen dormidos. Usa la bandeja de entrada para leer un resumen. Los [destinos de eventos de GitHub](/es/docs/blocks/github) siguen recibiendo una copia de cada evento.
 
@@ -93,7 +93,7 @@ Los cambios en GitHub necesitan una credencial de GitHub con permiso de escritur
 
 ## Comprobar una entrega
 
-Usa `modes_status` para comprobar el modo, su destino, sus acciones y los problemas de configuración. La fila de modo de la consola muestra el agente vinculado. En triage, la sugerencia de agente predeterminado aparece solo cuando SwB recurre a la ruta de reserva. Tanto `space_mode` como `modes_status` te piden que elijas un agente de triage cuando triage necesita un destino.
+Usa `modes_status` para comprobar el modo, su destino, sus acciones y los problemas de configuración. La fila de modo de la consola muestra el agente vinculado. En triage, la sugerencia de agente predeterminado aparece solo cuando SwB recurre a la ruta de reserva. Tanto `space_mode` como `modes_status` te piden que elijas un agente de triage cuando el modo triage necesita un destino.
 
 SwB anota en el registro de auditoría los motivos de descarte en Slack, Discord y Telegram. Anota como máximo una entrada cada 10 minutos para el mismo bloque, espacio, canal y motivo.
 

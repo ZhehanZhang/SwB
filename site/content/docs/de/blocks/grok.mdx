@@ -21,7 +21,7 @@ SwB gibt Ihnen getrennte Claim-Links für die Webhook-Adresse und den Schlüssel
 
 ## So funktioniert das Wecken
 
-Mit `auth=key` sendet SwB den Schlüssel standardmäßig im Header `Authorization`. Mit `auth=signature` signiert SwB die Anfrage. Die Anfrage enthält den Text, die Unterhaltungs-ID, den Absender und die Vertrauensstufe. Sie enthält auch das Projekt, sofern vorhanden. Die Routine ruft bei Anfragen mit der Vertrauensstufe `owner` `reply` auf.
+Mit `auth=key` sendet SwB den Schlüssel standardmäßig im Header `Authorization`. Mit `auth=signature` signiert SwB die Anfrage. Die Anfrage enthält den Text, die Unterhaltungs-ID, den Absender und die Vertrauensstufe. Sie enthält auch das Projekt, sofern vorhanden. Bei Anfragen mit der Vertrauensstufe `owner` ruft die Routine `reply` auf.
 
 Für die manuelle Einrichtung setzen Sie die Variablen aus `url_env` und `secret_env` in Ihrer Serverumgebung.
 

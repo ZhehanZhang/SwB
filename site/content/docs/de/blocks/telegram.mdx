@@ -31,7 +31,7 @@ blocks:
 
 Senden Sie dem Bot eine private Nachricht, erwähnen Sie den Bot oder verwenden Sie `/swb <target> <message>`. Um eine Unterhaltung fortzusetzen, antworten Sie auf die Antwort des Bots. Mit aktivem `persona_prefix` zeigen Antworten von Agenten den Namen des Agenten in Fettschrift.
 
-Damit der Bot jede Gruppennachricht liest, schalten Sie in @BotFather mit `/setprivacy` den Privatsphäremodus ab. Entfernen Sie danach den Bot aus der Gruppe und fügen Sie ihn erneut hinzu.
+Damit der Bot jede Gruppennachricht lesen kann, schalten Sie in @BotFather mit `/setprivacy` den Privatsphäremodus ab. Entfernen Sie danach den Bot aus der Gruppe und fügen Sie ihn erneut hinzu.
 
 ## Blockeinstellungen
 
@@ -47,7 +47,7 @@ Damit der Bot jede Gruppennachricht liest, schalten Sie in @BotFather mit `/setp
 | `blocks.telegram.persona_prefix` | Mit `true` setzt SwB den Namen des Agenten fett in die erste Zeile |
 | `blocks.telegram.refresh_minutes` | Minuten zwischen Aktualisierungen der Zielliste. Standard ist `30` |
 | `blocks.telegram.target_aliases` | Ordnet zusätzliche Zielnamen vorhandenen Zielen zu |
-| `blocks.telegram.agents` | Räume, in denen jeder Agent postet und Ereignisse empfängt. `*` steht für alle Räume |
+| `blocks.telegram.agents` | Räume, in denen jeder Agent posten und Ereignisse empfangen darf. `*` steht für alle Räume |
 
 Mit [Kanalmodi](/de/docs/channel-modes) wecken Sie einen Agenten über eine Projektroute.
 

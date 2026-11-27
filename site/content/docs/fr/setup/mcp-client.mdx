@@ -25,7 +25,7 @@ Utilisez un client privé sur l'ordinateur de SwB pour configurer d'autres appli
 
 ## Appairer un client
 
-Laissez votre agent configurer l'application s'il peut modifier ses réglages en local. Gardez la clé dans les réglages privés de l'application. Utilisez le mode de fichier `0600` pour un fichier de réglages.
+Laissez votre agent configurer l'application s'il peut modifier ses paramètres en local. Gardez la clé dans les paramètres privés de l'application. Utilisez le mode de fichier `0600` pour un fichier de paramètres.
 
 ### Nommer l'application
 
@@ -50,13 +50,13 @@ bash -c '
 ```
 ### Garder la clé privée
 
-Ouvrez `.swb-pairing.json` dans un éditeur privé. La commande enregistre la réponse avec le mode de fichier `0600`. Reportez sa valeur `key` dans les réglages de l'application. SwB renvoie la clé une seule fois.
+Ouvrez `.swb-pairing.json` dans un éditeur privé. La commande enregistre la réponse avec le mode de fichier `0600`. Reportez sa valeur `key` dans les paramètres de l'application. SwB renvoie la clé une seule fois.
 ### Ajouter SwB à l'application
 
-Ajoutez un serveur nommé `swb` dans les réglages MCP de l'application. Sélectionnez Streamable HTTP. Pour un serveur SwB public, utilisez `mcp_url` du fichier. Pour un SwB local, utilisez l'adresse MCP affichée au démarrage.
+Ajoutez un serveur nommé `swb` dans les paramètres MCP de l'application. Sélectionnez Streamable HTTP. Pour un serveur SwB public, utilisez `mcp_url` du fichier. Pour un SwB local, utilisez l'adresse MCP affichée au démarrage.
 ### Ajouter la clé
 
-Ajoutez l'en-tête `Authorization: Bearer <key>` dans les réglages privés de l'application. Supprimez `.swb-pairing.json` après l'enregistrement de la clé.
+Ajoutez l'en-tête `Authorization: Bearer <key>` dans les paramètres privés de l'application. Supprimez `.swb-pairing.json` après l'enregistrement de la clé.
 
 ## Ce que fait l'agent
 
@@ -71,9 +71,9 @@ Depuis le terminal du serveur SwB, `swb connect mcp-client --choose agent=notes-
 | Élément | Où il apparaît | Format | Destination |
 | - | - | - | - |
 | Code d'appairage | Le résultat de `connect` ou de `connect_code` | `XXXXX-XXXXX`, valable 10 minutes, un seul usage | La requête `POST /connect` |
-| Clé d'agent | La réponse à `POST /connect`, une seule fois | Commence par `swb_` | L'en-tête `Authorization` dans les réglages privés de l'application |
+| Clé d'agent | La réponse à `POST /connect`, une seule fois | Commence par `swb_` | L'en-tête `Authorization` dans les paramètres privés de l'application |
 
-Gardez la clé dans les réglages privés de l'application. SwB conserve uniquement une empreinte de la clé.
+Gardez la clé dans les paramètres privés de l'application. SwB conserve uniquement une empreinte de la clé.
 
 ## Vérifier la connexion
 
@@ -81,4 +81,4 @@ Demandez au nouvel agent d'appeler `inbox`. Demandez à l'agent connecté en tan
 
 ## Résoudre les problèmes
 
-Vérifiez l'adresse SwB si `POST /connect` échoue. Demandez un nouveau code au propriétaire si le code a expiré ou a déjà servi. Si une clé fuite, révoquez-la avec `connect_revoke`. SwB refuse ensuite les appels qui utilisent cette clé.
+Vérifiez l'adresse SwB si `POST /connect` échoue. Demandez un nouveau code au propriétaire si le code a expiré ou a déjà servi. Si une clé a fuité, révoquez-la avec `connect_revoke`. SwB refuse ensuite les appels qui utilisent cette clé.

@@ -19,7 +19,7 @@ La **mémoire** est l'information que SwB enregistre pour les agents. SwB la gar
 
 Une **portée** est un groupe d'entrées de mémoire. Utilisez `agent:<name>` pour un agent, `project:<slug>` pour un projet ou `general` pour les informations valables dans tous les projets.
 
-Une **autorisation** donne à un identifiant l'accès à une portée. Une clé appairée demande une autorisation explicite pour `general`. Un projet privé est visible uniquement par le propriétaire et par les identifiants qui ont une autorisation pour ce projet précis.
+Une **autorisation** donne à un identifiant l'accès à une portée. Une clé appairée nécessite une autorisation explicite pour `general`. Un projet privé est visible uniquement par le propriétaire et par les identifiants qui ont une autorisation pour ce projet précis.
 
 ## Cibles
 
@@ -37,7 +37,7 @@ L'outil `targets` liste les cibles accessibles avec votre connexion.
 
 Une **route** est une règle qui choisit où envoyer un message. Laissez `to` vide pour utiliser la route. Une route peut correspondre à l'agent, au projet, aux deux ou à tous les messages. SwB vérifie d'abord l'agent et le projet ensemble. Il vérifie ensuite le projet, puis l'agent, puis la route de tous les messages. Chaque modification d'une route est inscrite au journal d'audit.
 
-La cible d'une route est une boîte aux lettres d'agent, comme `agent:<name>`, ou une adresse de bloc, comme `capy:captain:<name>`. Les routes vers une boîte aux lettres fonctionnent sur toutes les instances. Une adresse de bloc demande son bloc, par exemple Capy, une routine Claude ou une routine Grok.
+La cible d'une route est une boîte aux lettres d'agent, comme `agent:<name>`, ou une adresse de bloc, comme `capy:captain:<name>`. Les routes vers une boîte aux lettres fonctionnent sur toutes les instances. Une adresse de bloc nécessite le bloc correspondant, par exemple Capy, une routine Claude ou une routine Grok.
 
 Sur GitHub, Slack, Discord et Telegram, les [modes de canal](/fr/docs/channel-modes) peuvent réveiller un agent par une route de projet. Utilisez une boîte aux lettres ou une cible Capy verrouillée.
 
@@ -58,4 +58,4 @@ Quand le bloc Capy est actif, les clients MCP 2026-07-28 trouvent l'extension Ta
 
 Par défaut, les envois Capy utilisent des conversations ordinaires. Les clients MCP 2025-11-25 et les envois vers une boîte aux lettres utilisent toujours des conversations ordinaires.
 
-Chaque agent a une boîte aux lettres. Un message atteint un agent même quand l'agent dort. L'agent le lit plus tard, ou SwB le réveille par un bloc.
+Chaque agent a une boîte aux lettres. Un message atteint un agent même quand l'agent est en veille. L'agent le lit plus tard, ou SwB le réveille par un bloc.

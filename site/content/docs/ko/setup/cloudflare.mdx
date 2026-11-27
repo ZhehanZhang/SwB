@@ -7,7 +7,7 @@ Cloudflare Tunnel은 SwB에 고정된 공개 HTTPS 주소를 줍니다. **터널
 
 ## 시작하기 전에
 
-[Docker Compose](/ko/docs/self-hosting#docker-compose)를 따라 SwB을 시작하세요. 내 도메인의 터널과 Access 애플리케이션을 관리할 수 있는 Cloudflare 계정을 사용하세요. 서버가 7844 포트로 Cloudflare에 연결할 수 있게 허용하세요.
+[Docker Compose](/ko/docs/self-hosting#docker-compose)를 따라 SwB을 시작하세요. 내 도메인의 터널과 Access 애플리케이션을 관리할 수 있는 Cloudflare 계정을 사용하세요. 서버가 7844번 포트로 Cloudflare에 연결할 수 있게 허용하세요.
 
 ## 터널 만들기
 
@@ -23,7 +23,7 @@ Cloudflare에 커넥터가 나타나면 **Continue**를 선택하세요.
 
 ## 콘솔 보호
 
-SwB 호스트 이름에 대해 [Access 애플리케이션을 만드세요](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/). 정책 동작을 **Allow**로 설정하세요. **Include** → **Emails**에 내 이메일 주소를 입력하세요.
+SwB 호스트 이름용 [Access 애플리케이션을 만드세요](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/). 정책 동작을 **Allow**로 설정하세요. **Include** → **Emails**에 내 이메일 주소를 입력하세요.
 
 같은 호스트 이름에 **Bypass**로 표시된 경로용 Access 애플리케이션을 하나 더 만드세요. 정책 동작을 **Bypass**로 설정하세요. **Include**에서 **Everyone**을 선택하세요.
 

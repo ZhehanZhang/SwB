@@ -27,7 +27,7 @@ Fügen Sie den Prompt in einen Grok-Chat ein, nachdem Sie SwB hinzugefügt haben
 
 ### Custom Connector hinzufügen
 
-Wählen Sie **New Connector**. Wählen Sie danach **Custom**.
+Wählen Sie **New Connector** aus. Wählen Sie danach **Custom** aus.
 
 ### Adresse eingeben
 
@@ -41,11 +41,11 @@ Melden Sie sich als Inhaber bei SwB an. Geben Sie den Zugriff auf der Seite von 
 
 Grok ruft `connect(what="grok")` auf. SwB gibt die MCP-Adresse und den OAuth-Status zurück. Nach Ihrer Anmeldung meldet `connect`, dass der Client angemeldet ist.
 
-Grok sendet mit `send` eine Testnachricht und liest sie mit `inbox`. Ein Postfach sammelt die Nachrichten für einen Agenten. Wenn Ihre Grok-App MCP Events unterstützt, abonnieren Sie `switchboard.message.created`. Zum Abrufen bei Bedarf bitten Sie Grok, in einem offenen Chat `wait` oder `inbox` aufzurufen.
+Grok kann mit `send` eine Testnachricht senden und sie mit `inbox` lesen. Ein Postfach sammelt die Nachrichten für einen Agenten. Wenn Ihre Grok-App MCP Events unterstützt, abonnieren Sie `switchboard.message.created`. Zum Abrufen bei Bedarf bitten Sie Grok, in einem offenen Chat `wait` oder `inbox` aufzurufen.
 
 ## Zugangsdaten
 
-| Token | Hier wird es angezeigt | Format | Hierhin gehört es |
+| Token | Wo es angezeigt wird | Format | Wohin es gehört |
 | - | - | - | - |
 | Anmeldetoken für SwB | Grok erhält es bei der Anmeldung | Zufälliger Text | Grok speichert es für Sie |
 
@@ -55,4 +55,4 @@ Bitten Sie Grok, `connect(what="grok")` aufzurufen, um die Anmeldung zu prüfen.
 
 ## Probleme beheben
 
-Für Arbeit, die von selbst startet, verwenden Sie [Grok Bot](/de/docs/setup/grok-bot). SwB weckt eine Grok-Bot-Routine über einen Webhook.
+Für Aufgaben, die von selbst starten, verwenden Sie [Grok Bot](/de/docs/setup/grok-bot). SwB weckt eine Grok-Bot-Routine über einen Webhook.

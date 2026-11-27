@@ -3,7 +3,7 @@ title: Slack
 description: Connectez un espace de travail Slack à SwB avec un bot et votre propre compte Slack.
 ---
 
-SwB lit et publie dans Slack grâce à une application Slack que vous créez à partir d'un manifeste. Un manifeste est un fichier qui contient tous les réglages de l'application.
+SwB lit et publie dans Slack grâce à une application Slack que vous créez à partir d'un manifeste. Un manifeste est un fichier qui contient tous les paramètres de l'application.
 
 L'application utilise Socket Mode. SwB ouvre lui-même cette connexion vers Slack. Votre serveur peut donc garder une adresse privée.
 
@@ -19,9 +19,9 @@ Collez le prompt dans votre client propriétaire SwB.
 
 ## Configurer l'application Slack
 
-### Ouvrir les réglages des applications Slack
+### Ouvrir les paramètres des applications Slack
 
-Ouvrez les [réglages des applications Slack](https://api.slack.com/apps). Cliquez sur **Create New App** → **From a manifest**.
+Ouvrez les [paramètres des applications Slack](https://api.slack.com/apps). Cliquez sur **Create New App** → **From a manifest**.
 ### Choisir l'espace de travail
 
 Choisissez votre espace de travail. Cliquez sur **Next**.
@@ -46,7 +46,7 @@ Si Slack demande une approbation, envoyez l'application à un administrateur de 
 
 ### Enregistrer les jetons
 
-Ouvrez le lien de dépôt de votre espace de travail. Collez chaque jeton Slack dans son champ.
+Ouvrez le lien de saisie de votre espace de travail. Collez chaque jeton Slack dans son champ.
 ### Inviter le bot
 
 Si vous utilisez un bot, envoyez `/invite @<bot name>` dans chaque canal Slack destiné à SwB.
@@ -158,7 +158,7 @@ settings:
 
 ## Ce que fait l'agent
 
-L'agent appelle `connect(what="slack")`. SwB vérifie quels jetons manquent. Il renvoie un lien de dépôt pour l'espace de travail concerné.
+L'agent appelle `connect(what="slack")`. SwB vérifie quels jetons manquent. Il renvoie un lien de saisie pour l'espace de travail concerné.
 
 L'agent ajoute l'espace de travail sous `blocks.slack.workspaces` dans `config/switchboard.yaml`. Il indique l'ID de l'espace de travail et les noms des jetons. Il accorde l'accès sous `blocks.slack.agents`.
 
@@ -184,7 +184,7 @@ blocks:
           example: [bot, user]
 ```
 
-Utilisez le nom d'agent qu'affiche `switchboard_status`. Ajoutez une autorisation pour chaque agent. Reprenez le même libellé d'espace de travail dans l'entrée de l'espace de travail et dans l'autorisation. Pour le manifeste réservé à votre compte, ajoutez `user_only: true` à côté de `team_id`. Retirez `bot` de `identities`. Réglez l'autorisation sur `[user]`.
+Utilisez le nom d'agent qu'affiche `switchboard_status`. Ajoutez une autorisation pour chaque agent. Reprenez le même libellé d'espace de travail dans l'entrée de l'espace de travail et dans l'autorisation. Pour le manifeste réservé à votre compte, ajoutez `user_only: true` à côté de `team_id`. Retirez `bot` de `identities`. Définissez l'autorisation sur `[user]`.
 
 Redémarrez SwB quand `connect` le demande. L'agent peut vérifier chaque identité Slack avec `slack_workspaces`. Une identité est le bot ou votre compte.
 
@@ -192,9 +192,9 @@ Redémarrez SwB quand `connect` le demande. L'agent peut vérifier chaque identi
 
 | Jeton | Où Slack l'affiche | Format | Destination |
 | --- | --- | --- | --- |
-| Jeton de niveau application | **Basic Information** → **App-Level Tokens** | Commence par `xapp-` | Lien de dépôt SwB |
-| Jeton du bot | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | Commence par `xoxb-` | Lien de dépôt SwB |
-| Jeton utilisateur | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | Commence par `xoxp-` | Lien de dépôt SwB |
+| Jeton de niveau application | **Basic Information** → **App-Level Tokens** | Commence par `xapp-` | Lien de saisie SwB |
+| Jeton du bot | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | Commence par `xoxb-` | Lien de saisie SwB |
+| Jeton utilisateur | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | Commence par `xoxp-` | Lien de saisie SwB |
 
 ## Vérifier la connexion
 
@@ -204,8 +204,8 @@ Avec un bot, mentionnez le bot dans un canal et ajoutez un nom de cible. Demande
 
 ## Résoudre les problèmes
 
-Si SwB signale un problème de Socket Mode, ouvrez **Socket Mode** dans les réglages de l'application. Activez **Enable Socket Mode**.
+Si SwB signale un problème de Socket Mode, ouvrez **Socket Mode** dans les paramètres de l'application. Activez **Enable Socket Mode**.
 
-Si vous modifiez les portées de l'application, réinstallez-la. Enregistrez ensuite les nouveaux jetons avec un nouveau lien de dépôt.
+Si vous modifiez les portées de l'application, réinstallez-la. Enregistrez ensuite les nouveaux jetons avec un nouveau lien de saisie.
 
-La recherche avec `slack_search` passe par votre propre compte. Elle demande le jeton utilisateur avec la portée `search:read`.
+La recherche avec `slack_search` passe par votre propre compte. Elle nécessite le jeton utilisateur avec la portée `search:read`.

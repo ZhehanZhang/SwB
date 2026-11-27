@@ -15,7 +15,7 @@ Ajoutez SwB au même compte Claude. Consultez [Claude](/fr/docs/setup/claude). A
 
 <SetupPrompt name="claude-project" lang="fr" />
 
-Ouvrez votre projet dans [Claude Code](https://claude.ai/code). Collez le prompt dans le chat du coordinateur, à gauche. Le coordinateur crée dans votre projet une routine nommée `swb <project>`.
+Ouvrez votre projet dans [Claude Code](https://claude.ai/code). Collez le prompt dans la discussion du coordinateur, à gauche. Le coordinateur crée dans votre projet une routine nommée `swb <project>`.
 
 ## Ouvrir la routine
 
@@ -39,7 +39,7 @@ Copiez la **Fire URL**. Donnez cette URL au coordinateur.
 
 Le propriétaire génère le jeton dans Claude. Sélectionnez **Generate token**. Copiez le jeton tant que la fenêtre **Token generated** est ouverte.
 
-Ouvrez le lien de dépôt fourni par le coordinateur. Vérifiez le projet et l'ID de la routine sur la page **Claude routine token**. Collez le jeton dans **Token**. Sélectionnez **Save token**.
+Ouvrez le lien de saisie fourni par le coordinateur. Vérifiez le projet et l'ID de la routine sur la page **Claude routine token**. Collez le jeton dans **Token**. Sélectionnez **Save token**.
 
 SwB affiche **Routine saved** ou **Routine and project saved**. Prévenez le coordinateur quand le jeton est enregistré.
 
@@ -53,16 +53,16 @@ Le coordinateur ajoute un déclencheur API. Il place cette instruction dans le p
 Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
 ```
 
-Le coordinateur rappelle `connect` avec `fire_url`, `claude_project` et `project` dans `choose`. SwB renvoie un lien de dépôt. Un lien de dépôt est une page SwB privée où vous déposez un identifiant. Ce lien sert une seule fois et expire après 30 minutes.
+Le coordinateur rappelle `connect` avec `fire_url`, `claude_project` et `project` dans `choose`. SwB renvoie un lien de saisie. Un lien de saisie ouvre une page SwB privée où vous saisissez un identifiant. Ce lien sert une seule fois et expire après 30 minutes.
 
-Si SwB trouve des projets proches, l'agent vous demande d'en choisir un. Pour un nouveau projet, il appelle `connect` avec un nouveau nom court et `create_new` réglé sur `true`.
+Si SwB trouve des projets proches, l'agent vous demande d'en choisir un. Pour un nouveau projet, il appelle `connect` avec un nouveau nom court et `create_new` défini sur `true`.
 
 ## Identifiants
 
 | Élément | Où Claude l'affiche | Format | Destination |
 | - | - | - | - |
-| Jeton de routine | **Token generated** dans le panneau API, une seule fois | Commence par `sk-ant-oat01-` | Le champ **Token** du lien de dépôt SwB |
-| Fire URL | **Fire URL** dans le panneau API | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | L'agent dans le chat du coordinateur. L'URL désigne uniquement la routine. |
+| Jeton de routine | **Token generated** dans le panneau API, une seule fois | Commence par `sk-ant-oat01-` | Le champ **Token** du lien de saisie SwB |
+| Fire URL | **Fire URL** dans le panneau API | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | L'agent dans la discussion du coordinateur. L'URL désigne uniquement la routine. |
 
 ## Vérifier la connexion
 
@@ -70,6 +70,6 @@ Le coordinateur appelle `routine_list` pour vérifier le projet et l'état `unte
 
 ## Résoudre les problèmes
 
-Si le lien de dépôt a expiré, demandez à l'agent de rappeler `connect` pour obtenir un nouveau lien. Si vous cliquez sur **Regenerate** dans le panneau API, l'ancien jeton cesse aussitôt de fonctionner. Demandez à l'agent d'enregistrer de nouveau la routine, puis déposez le nouveau jeton sur le nouveau lien de dépôt.
+Si le lien de saisie a expiré, demandez à l'agent de rappeler `connect` pour obtenir un nouveau lien. Si vous cliquez sur **Regenerate** dans le panneau API, l'ancien jeton cesse aussitôt de fonctionner. Demandez à l'agent d'enregistrer de nouveau la routine, puis enregistrez le nouveau jeton via le nouveau lien de saisie.
 
 Si Claude renvoie **this project is paused** pour une requête avec du texte, SwB réessaie avec une requête vide. La routine récupère alors le message avec `routine_pickup`. Si votre projet est en pause, reprenez-le dans Claude.

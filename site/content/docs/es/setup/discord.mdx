@@ -45,7 +45,7 @@ Abre el enlace de invitación que te da tu agente. Si Discord lo pide, elige tu 
 
 El agente llama a `connect(what="discord")`. Si hace falta, activa el bloque `discord`. Con el bloque activo, `connect` o `discord_provision` devuelve un enlace de entrega para el token del bot.
 
-Cuando guardas el token, el agente llama a `discord_status`. Comprueba el bot, la conexión con el Gateway y el servidor. Te da el enlace de invitación de `setup.invite_url`.
+Después de que guardes el token, el agente llama a `discord_status`. Comprueba el bot, la conexión con el Gateway y el servidor. Te da el enlace de invitación de `setup.invite_url`.
 
 El agente configura el servidor en `blocks.discord.spaces` dentro de `config/switchboard.yaml`. Un espacio asocia un servidor a un proyecto de SwB. El agente define `guild_id` y `owner_ids`. Para que un agente pueda llamar a `discord_post`, dale acceso en `blocks.discord.agents`. Reinicia SwB después de editar el archivo.
 
@@ -58,7 +58,7 @@ El agente configura el servidor en `blocks.discord.spaces` dentro de `config/swi
 
 ## Comprobar la conexión
 
-Pide al agente que llame a `connect` otra vez. Indica `connected` cuando la configuración está completa. `discord_status` muestra que el Gateway está listo y que el bot está en tu servidor.
+Pide al agente que llame a `connect` otra vez. Devuelve `connected` cuando la configuración está completa. `discord_status` muestra que el Gateway está listo y que el bot está en tu servidor.
 
 Usa la cuenta de Discord que figura en `owner_ids`. Menciona al bot en un canal. Añade un nombre de destino de `targets` y un mensaje de prueba. Comprueba que la respuesta llega al mismo canal.
 

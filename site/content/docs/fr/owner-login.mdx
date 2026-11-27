@@ -16,7 +16,7 @@ Le propriétaire se connecte pour gérer SwB. Cet accès lui permet d'approuver 
 swb login-link
 ```
 
-La commande affiche un lien comme `https://swb.example.com/login#t=...`. Ouvrez-le dans votre navigateur dans les cinq minutes. Le lien fonctionne une seule fois. Un agent connecté en tant que propriétaire peut aussi créer un lien avec l'outil `login_link`. Le jeton reste dans la partie du lien qui suit `#`.
+La commande affiche un lien comme `https://swb.example.com/login#t=...`. Dans les cinq minutes, ouvrez-le dans votre navigateur. Le lien fonctionne une seule fois. Un agent connecté en tant que propriétaire peut aussi créer un lien avec l'outil `login_link`. Le jeton reste dans la partie du lien qui suit `#`.
 
 Au premier démarrage local, `swb up` affiche un lien à usage unique. L'adresse locale par défaut est `http://localhost:8870`. Si vous définissez `SWB_PORT`, SwB utilise ce port dans l'adresse. Avec `swb login-link`, utilisez `--url` pour choisir un autre serveur. Utilisez `--dir` pour lire la clé propriétaire dans un autre dossier d'instance.
 
@@ -71,22 +71,22 @@ Quand l'application reçoit une erreur OAuth, consultez `error_description` pour
 | - | - |
 | `access_denied` | Le propriétaire a refusé la connexion. |
 | `invalid_client` | SwB a refusé l'identité ou les identifiants de l'application. |
-| `invalid_client_metadata` | SwB a refusé les réglages d'enregistrement de l'application. |
+| `invalid_client_metadata` | SwB a refusé les paramètres d'enregistrement de l'application. |
 | `invalid_redirect_uri` | SwB exige une adresse de rappel autorisée à l'enregistrement. |
 | `invalid_request` | Le format de la requête ou une valeur obligatoire est invalide. |
-| `invalid_grant` | SwB a refusé le code d'autorisation ou le jeton de renouvellement. |
+| `invalid_grant` | SwB a refusé le code d'autorisation ou le jeton d'actualisation. |
 | `invalid_target` | La requête indique une mauvaise adresse MCP. |
 | `unsupported_response_type` | Utilisez `response_type=code`. |
 | `unsupported_grant_type` | Utilisez `grant_type=authorization_code` ou `grant_type=refresh_token`. |
 | `temporarily_unavailable` | Définissez `public_url` ou vérifiez la limite d'enregistrement des clients. |
 
-`/connect` renvoie aussi `invalid_grant` quand SwB refuse un [code d'appairage](/fr/docs/connect#se-connecter-avec-un-code-dappairage).
+`/connect` renvoie aussi `invalid_grant` quand SwB refuse un [code d'appairage](/fr/docs/connect#connecter-un-agent-avec-un-code-dappairage).
 
 ## Sessions
 
-Un **cookie** est une valeur que votre navigateur enregistre pour garder votre connexion. SwB active l'option `Secure` sur ce cookie. Utilisez HTTPS pour une adresse publique.
+Un **cookie** est une valeur que votre navigateur enregistre pour que vous restiez connecté. SwB active l'option `Secure` sur ce cookie. Utilisez HTTPS pour une adresse publique.
 
-Quand vous modifiez un réglage, le navigateur envoie un jeton. SwB l'utilise pour vérifier la requête. Déconnectez-vous depuis **Settings**.
+Quand vous modifiez un paramètre, le navigateur envoie un jeton. SwB l'utilise pour vérifier la requête. Déconnectez-vous depuis **Settings**.
 
 Le navigateur lit l'état de votre connexion sur `/auth/session`.
 
@@ -103,8 +103,8 @@ SwB enregistre les échecs de connexion du navigateur sous **Audit**. Chaque lig
 | `setup_closed` | La connexion par code de configuration est fermée. Utilisez une autre méthode de connexion. |
 | `passkey_failed` | La création ou la vérification de la clé d'accès a échoué. |
 | `last_method` | SwB garde la dernière clé d'accès quand OIDC et Cloudflare Access sont tous deux inactifs. |
-| `not_found` | L'ID de la clé d'accès est faux, ou la clé a été supprimée. |
+| `not_found` | L'ID de la clé d'accès est incorrect, ou la clé a été supprimée. |
 | `oidc_failed` | La connexion par le fournisseur d'identité a échoué. |
-| `signed_out` | La requête demande une session propriétaire. |
+| `signed_out` | La requête nécessite une session propriétaire. |
 | `csrf` | SwB a refusé l'adresse de la page ou le jeton de sécurité. |
 | `slow_down` | Les tentatives de connexion ont atteint une limite. Attendez la durée indiquée dans `Retry-After`. |

@@ -21,7 +21,7 @@ Pega el prompt en un cliente de propietario de SwB o en la app que quieres conec
 
 ## Cliente local de propietario
 
-Usa un cliente privado en el ordenador de SwB para configurar otras apps. Usa la dirección local `/mcp` que aparece al arrancar. Usa `SWB_KEY_OWNER` del `.env` de la instancia como `Authorization: Bearer <key>`. Esta clave da acceso de propietario completo. Guárdala en la configuración local privada del cliente con el modo de archivo `0600`. Envíala solo al SwB local.
+Usa un cliente privado en el ordenador de SwB para configurar otras apps. Usa la dirección local `/mcp` que aparece al arrancar. Usa `SWB_KEY_OWNER` del `.env` de la instancia como `Authorization: Bearer <key>`. Esta clave da acceso completo de propietario. Guárdala en la configuración local privada del cliente con el modo de archivo `0600`. Envíala solo al SwB local.
 
 ## Emparejar un cliente
 
@@ -35,7 +35,7 @@ Dile al agente un nombre corto para la app, por ejemplo `notes-bot`. SwB muestra
 Pide a un agente propietario de SwB que llame a `connect_code` con el nombre de la app. También puedes ejecutar `uvx swb-one connect mcp-client --choose agent=notes-bot` desde la carpeta de la instancia de SwB. Cambia `notes-bot` por el nombre de tu app.
 ### Obtener la clave
 
-En el ordenador donde se ejecuta la app, abre una carpeta privada en tu terminal. Cambia `https://swb.example.com` por tu dirección de SwB. Mantén `/connect` al final. Para un SwB local, usa `http://localhost:8870/connect` con el puerto que aparece al arrancar. Escribe el código de emparejamiento en la solicitud oculta antes de 10 minutos.
+En el ordenador donde se ejecuta la app, abre una carpeta privada en tu terminal. Cambia `https://swb.example.com` por tu dirección de SwB. Mantén `/connect` al final. Para un SwB local, usa `http://localhost:8870/connect` con el puerto que aparece al arrancar. Escribe el código de emparejamiento cuando el comando lo pida, en un plazo de 10 minutos. Lo que escribes queda oculto.
 
 ```bash
 bash -c '
@@ -77,7 +77,7 @@ Guarda la clave en los ajustes privados de la app. SwB guarda un hash de la clav
 
 ## Comprobar la conexión
 
-Pide al agente nuevo que llame a `inbox`. Pide al agente con sesión de propietario que llame a `connect_list` y compruebe la hora de la última llamada de la clave nueva. Haz que el agente propietario envíe un mensaje de prueba a `agent:notes-bot`. Haz que el agente nuevo lo lea con `inbox` y responda con `reply`.
+Pide al agente nuevo que llame a `inbox`. Pide al agente conectado como propietario que llame a `connect_list` y compruebe la hora de la última llamada de la clave nueva. Haz que el agente propietario envíe un mensaje de prueba a `agent:notes-bot`. Haz que el agente nuevo lo lea con `inbox` y responda con `reply`.
 
 ## Resolver problemas
 

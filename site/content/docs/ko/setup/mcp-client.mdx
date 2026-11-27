@@ -35,7 +35,7 @@ Claude, ChatGPT, Grok, 코딩 에이전트는 OAuth 로그인을 다루는 별�
 SwB 소유자 에이전트에게 앱 이름으로 `connect_code`를 호출하도록 요청하세요. SwB 인스턴스 폴더에서 `uvx swb-one connect mcp-client --choose agent=notes-bot`을 실행해도 됩니다. `notes-bot`을 내 앱 이름으로 바꾸세요.
 ### 키 받기
 
-앱을 실행하는 컴퓨터의 터미널에서 비공개 폴더를 여세요. `https://swb.example.com`을 내 SwB 주소로 바꾸세요. 끝의 `/connect`는 그대로 두세요. 로컬 SwB이면 시작할 때 표시된 포트로 `http://localhost:8870/connect`를 사용하세요. 숨김 입력란에 페어링 코드를 10분 안에 입력하세요.
+앱을 실행하는 컴퓨터의 터미널에서 비공개 폴더를 여세요. `https://swb.example.com`을 내 SwB 주소로 바꾸세요. 끝의 `/connect`는 그대로 두세요. 로컬 SwB이면 시작할 때 표시된 포트로 `http://localhost:8870/connect`를 사용하세요. 입력 내용이 가려지는 프롬프트에 페어링 코드를 10분 안에 입력하세요.
 
 
 ```bash
@@ -63,7 +63,7 @@ bash -c '
 
 에이전트가 소유자 로그인으로 `connect(what="mcp-client")`를 호출합니다. SwB은 MCP 주소를 돌려주고 앱 이름을 묻습니다. 에이전트는 `choose={"agent":"notes-bot"}`로 `connect`를 다시 호출합니다.
 
-SwB은 그 이름으로 페어링 코드를 만들고 `POST /connect` 단계를 돌려줍니다. 페어링 코드는 10분 동안 유효한 일회용 코드입니다. 앱에 이미 키가 있으면 SwB이 그 사실을 알리고, `connect_revoke`를 한 뒤에만 새 코드를 만듭니다.
+SwB은 그 이름으로 페어링 코드를 만들고 `POST /connect` 단계를 돌려줍니다. 페어링 코드는 10분 동안 유효한 일회용 코드입니다. 앱에 이미 키가 있으면 SwB이 그 사실을 알리고, `connect_revoke`를 호출한 뒤에만 새 코드를 만듭니다.
 
 SwB 서버의 터미널에서 `swb connect mcp-client --choose agent=notes-bot`을 실행해도 같은 단계를 받습니다.
 

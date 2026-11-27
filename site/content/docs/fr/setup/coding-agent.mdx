@@ -7,7 +7,7 @@ Un agent de code est un outil d'IA qui travaille dans votre terminal ou votre é
 
 ## Avant de commencer
 
-Installez votre agent de code. Connectez-vous à celui-ci. SwB fournit des réglages pour Claude Code, Codex, Gemini CLI, Goose, OpenCode, Cline, Kiro et Qwen Code. MCP est la méthode standard qui permet à une application d'utiliser des outils externes.
+Installez votre agent de code. Connectez-vous à celui-ci. SwB fournit des paramètres pour Claude Code, Codex, Gemini CLI, Goose, OpenCode, Cline, Kiro et Qwen Code. MCP est la méthode standard qui permet à une application d'utiliser des outils externes.
 
 Pour exécuter SwB en local, suivez [Installer](/fr/docs/install). Pour un agent local compatible HTTP, utilisez l'adresse MCP affichée au démarrage. Pour un agent hébergé, utilisez une adresse HTTPS publique.
 
@@ -19,7 +19,7 @@ Collez le prompt dans votre agent de code.
 
 ## Ajouter SwB à votre agent de code
 
-Utilisez la méthode de connexion que renvoie `connect`. S'il vous donne un code d'appairage, suivez [Obtenir la clé](/fr/docs/setup/mcp-client#obtenir-la-clé). Utilisez les réglages client renvoyés.
+Utilisez la méthode de connexion que renvoie `connect`. S'il vous donne un code d'appairage, suivez [Obtenir la clé](/fr/docs/setup/mcp-client#obtenir-la-clé). Utilisez les paramètres client renvoyés.
 
 <Tabs items={['Claude Code', 'Codex', 'Gemini CLI', 'Autres agents']}>
 <Tab value="Claude Code">
@@ -80,14 +80,14 @@ Lancez Gemini CLI et saisissez `/mcp auth swb`. Le navigateur ouvre la page de c
 Sur la page **Connect to SwB**, cliquez sur **Approve**.
 </Tab>
 <Tab value="Autres agents">
-### Obtenir les réglages
+### Obtenir les paramètres
 
-Indiquez à l'agent le client que vous utilisez. Choisissez `other` pour les réglages génériques en Streamable HTTP.
+Indiquez à l'agent le client que vous utilisez. Choisissez `other` pour les paramètres génériques en Streamable HTTP.
 ### Ajouter SwB
 
-Si SwB fournit un code d'appairage, utilisez-le pour [obtenir une clé](/fr/docs/setup/mcp-client#obtenir-la-clé). Reportez la clé dans les réglages renvoyés.
+Si SwB fournit un code d'appairage, utilisez-le pour [obtenir une clé](/fr/docs/setup/mcp-client#obtenir-la-clé). Reportez la clé dans les paramètres renvoyés.
 
-Appliquez les réglages que SwB vous donne. Pour Goose, utilisez `~/.config/goose/config.yaml`.
+Appliquez les paramètres que SwB vous donne. Pour Goose, utilisez `~/.config/goose/config.yaml`.
 ### Se connecter
 
 Si SwB indique une étape de connexion, lancez l'agent de code. Connectez-vous quand le navigateur s'ouvre. Sur la page **Connect to SwB**, cliquez sur **Approve**.
@@ -98,9 +98,9 @@ Si SwB indique une étape de connexion, lancez l'agent de code. Connectez-vous q
 
 L'agent appelle `connect(what="coding-agent")`. SwB liste les agents de code qu'il connaît. L'agent vous demande lequel vous utilisez, puis rappelle `connect` avec `choose={"agent":"codex"}` ou un autre nom.
 
-SwB renvoie les réglages client et une étape de connexion ou d'appairage. Si l'agent peut exécuter la commande de configuration sur votre ordinateur, il l'exécute. Vous effectuez vous-même la connexion dans le navigateur.
+SwB renvoie les paramètres client et une étape de connexion ou d'appairage. Si l'agent peut exécuter la commande de configuration sur votre ordinateur, il l'exécute. Vous effectuez vous-même la connexion dans le navigateur.
 
-SwB renvoie les réglages et une étape de connexion ou d'appairage. Vous approuvez vous-même la connexion dans le navigateur.
+SwB renvoie les paramètres et une étape de connexion ou d'appairage. Vous approuvez vous-même la connexion dans le navigateur.
 
 ## Identifiants
 
@@ -108,7 +108,7 @@ SwB renvoie les réglages et une étape de connexion ou d'appairage. Vous approu
 | - | - | - | - |
 | Jeton d'accès SwB | L'agent de code le conserve après votre clic sur **Approve** | Texte aléatoire | L'agent de code le stocke pour vous |
 | Code d'appairage | Le résultat `connect` du propriétaire pour une nouvelle clé appairée | `XXXXX-XXXXX`, valable 10 minutes | Une requête `POST /connect` depuis votre ordinateur |
-| Clé d'agent | La réponse à `POST /connect`, une seule fois | Commence par `swb_` | Les réglages privés du client |
+| Clé d'agent | La réponse à `POST /connect`, une seule fois | Commence par `swb_` | Les paramètres privés du client |
 
 ## Vérifier la connexion
 
@@ -116,6 +116,6 @@ Exécutez `claude mcp list`, `codex mcp list` ou `gemini mcp list` et vérifiez 
 
 ## Résoudre les problèmes
 
-Si Claude Code vous demande de vous connecter, ouvrez `/mcp` et choisissez **Authenticate**. Redémarrez Codex ou Gemini CLI après un changement de réglages. Pour Gemini CLI, placez l'adresse SwB dans `httpUrl`.
+Si Claude Code vous demande de vous connecter, ouvrez `/mcp` et choisissez **Authenticate**. Redémarrez Codex ou Gemini CLI après un changement de paramètres. Pour Gemini CLI, placez l'adresse SwB dans `httpUrl`.
 
 Pour configurer un second ordinateur avec une clé appairée, révoquez la première clé avec `connect_revoke` et rappelez `connect`.

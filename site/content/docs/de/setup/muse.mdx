@@ -21,13 +21,13 @@ Fügen Sie den Prompt in einen Muse-Chat ein. Bitten Sie Muse, Ihre MCP-Adresse 
 
 ## Muse in Echtzeit wecken
 
-SwB weckt Muse, wenn eine Nachricht eintrifft. Koppeln Sie SwB einmalig mit Muse. Verwenden Sie einen Mac oder einen Linux-Computer mit Bluetooth. Halten Sie den Computer in der Nähe Ihres Telefons.
+SwB kann Muse wecken, wenn eine Nachricht eintrifft. Koppeln Sie SwB einmalig mit Muse. Verwenden Sie einen Mac oder einen Linux-Computer mit Bluetooth. Halten Sie den Computer in der Nähe Ihres Telefons.
 
 Bitten Sie einen Agenten mit vollem Inhaberzugriff, `connect(what="muse", choose={"gadget": true})` aufzurufen. Folgen Sie den Anweisungen, die er zurückgibt.
 
 Holen Sie ein persönliches Token unter [Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens). Speichern Sie das Token über den Claim-Link von SwB, den Ihnen Ihr Agent gibt.
 
-Verwenden Sie einen verbundenen [Companion](/de/docs/companion) mit der Funktion Muse. Um die Funktion zu einem Gerät hinzuzufügen, das bereits mit SwB gekoppelt ist, führen Sie `swb companion disconnect` auf dem Gerät aus.
+Verwenden Sie einen verbundenen [Companion](/de/docs/companion) mit der Muse-Funktion. Um die Funktion zu einem Gerät hinzuzufügen, das bereits mit SwB gekoppelt ist, führen Sie `swb companion disconnect` auf dem Gerät aus.
 
 Wenn Sie einen Companion koppeln müssen, führen Sie diesen Befehl auf dem Computer aus. Ersetzen Sie die Beispieladresse durch Ihre SwB-Adresse.
 
@@ -37,9 +37,9 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 Wenn der Befehl Sie auffordert, geben Sie den Kopplungscode von Ihrem Agenten ein. Bitten Sie Ihren Agenten, die Kopplung mit Muse zu starten.
 
-Öffnen Sie in der Muse-App **Settings**. Öffnen Sie **Devices**. Aktivieren Sie **Developer mode**. Wählen Sie **Add Device**. Wählen Sie den Gerätenamen, den Ihr Agent Ihnen nennt. Wenn die App nach WLAN fragt, wählen Sie **Use current connection**.
+Öffnen Sie in der Muse-App **Settings**. Öffnen Sie **Devices**. Aktivieren Sie **Developer mode**. Wählen Sie **Add Device** aus. Wählen Sie den Gerätenamen aus, den Ihr Agent Ihnen nennt. Wenn die App nach WLAN fragt, wählen Sie **Use current connection** aus.
 
-SwB hält die Verbindung zu Muse auf Ihrer Bereitstellung. Der Computer darf nach der Kopplung in den Ruhezustand gehen.
+SwB hält die Verbindung zu Muse in Ihrer SwB-Instanz aufrecht. Der Computer darf nach der Kopplung in den Ruhezustand gehen.
 
 ## Verbindung prüfen
 

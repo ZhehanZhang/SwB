@@ -7,13 +7,13 @@ description: Routez les messages Discord vers les agents et répondez dans un fi
 
 Suivez la [configuration de Discord](/fr/docs/setup/discord) pour créer un bot. Activez Message Content Intent pour lire le texte et les messages de suivi.
 
-Demandez à un agent de connecter Discord. L'agent appelle `discord_provision` et vous donne un lien de dépôt. Ouvrez le lien et collez le jeton du bot.
+Demandez à un agent de connecter Discord. L'agent appelle `discord_provision` et vous donne un lien de saisie. Ouvrez le lien et collez le jeton du bot.
 
 ## Ajouter le bot à un serveur
 
 Appelez `discord_status` une fois le bot connecté. Ouvrez le lien indiqué dans `setup.invite_url`. Ajoutez le bot à votre serveur. Le lien demande les permissions des fonctions activées.
 
-Trouvez l'ID du serveur dans `discovered.guilds` de `discord_status`. Ajoutez cet ID à un espace de votre configuration. Un espace regroupe les réglages d'un serveur Discord.
+Trouvez l'ID du serveur dans `discovered.guilds` de `discord_status`. Ajoutez cet ID à un espace de votre configuration. Un espace regroupe les paramètres d'un serveur Discord.
 
 ```yaml
 blocks:
@@ -37,24 +37,24 @@ Mentionnez le bot et indiquez le nom court de la cible, par exemple `@swb claude
 
 Les canaux et les cibles sont privés par défaut. Pour donner l'accès à d'autres personnes, partagez à la fois le canal et la cible. Utilisez `channel:<space>/<channel id>` et `target:<slug>`. Pour donner l'accès à un utilisateur précis, ajoutez `discord:<user id>` à la liste d'accès.
 
-## Réglages du bloc
+## Paramètres du bloc
 
 | Clé | Usage |
 | - | - |
-| `blocks.discord` | Réglages du bot Discord et de ses espaces |
+| `blocks.discord` | Paramètres du bot Discord et de ses espaces |
 | `blocks.discord.use` | Charge le bloc `discord` |
-| `blocks.discord.enabled` | Mettez `true` pour charger le bloc ou `false` pour le désactiver |
+| `blocks.discord.enabled` | Indiquez `true` pour charger le bloc ou `false` pour le désactiver |
 | `blocks.discord.token_env` | Nom de la variable d'environnement du jeton du bot |
 | `blocks.discord.application_id` | ID de l'application Discord pour le lien d'invitation. SwB peut aussi lire cet ID auprès de Discord |
-| `blocks.discord.connect` | Mettez `true` pour recevoir les événements Discord en direct. Mettez `false` pour tester uniquement les appels API |
-| `blocks.discord.message_content` | Mettez `true` pour lire le contenu des messages, y compris les messages de suivi dans les fils. Activez Message Content Intent dans le Developer Portal |
-| `blocks.discord.threads` | Mettez `true` pour ouvrir un fil public à chaque réponse dans un canal textuel du serveur |
-| `blocks.discord.personas` | Mettez `true` pour afficher le nom et l'image des agents sur les messages du serveur envoyés par webhook. Donnez au bot la permission Manage Webhooks |
+| `blocks.discord.connect` | Indiquez `true` pour recevoir les événements Discord en direct. Indiquez `false` pour tester uniquement les appels API |
+| `blocks.discord.message_content` | Indiquez `true` pour lire le contenu des messages, y compris les messages de suivi dans les fils. Activez Message Content Intent dans le Developer Portal |
+| `blocks.discord.threads` | Indiquez `true` pour ouvrir un fil public à chaque réponse dans un canal textuel du serveur |
+| `blocks.discord.personas` | Indiquez `true` pour afficher le nom et l'image des agents sur les messages du serveur envoyés par webhook. Donnez au bot la permission Manage Webhooks |
 | `blocks.discord.avatar` | Nom du fichier image du profil du bot |
-| `blocks.discord.ack_reaction` | Emoji qui confirme la réception d'un message adressé au bot. Mettez `null` pour désactiver cette réaction |
-| `blocks.discord.dm_space` | Espace dont les réglages de routage et de propriétaire s'appliquent aux messages directs. Par défaut, le premier espace configuré |
+| `blocks.discord.ack_reaction` | Emoji qui confirme la réception d'un message adressé au bot. Indiquez `null` pour désactiver cette réaction |
+| `blocks.discord.dm_space` | Espace dont les paramètres de routage et de propriétaire s'appliquent aux messages directs. Par défaut, le premier espace configuré |
 | `blocks.discord.dm_mode` | Mode des messages directs envoyés par d'autres personnes. Indiquez `watch` pour les réunir dans un résumé ou `off` pour les ignorer |
-| `blocks.discord.daily_cap` | Limite quotidienne de chaque action qui publie ou répond via un outil. Mettez `null` pour supprimer la limite |
+| `blocks.discord.daily_cap` | Limite quotidienne de chaque action qui publie ou répond via un outil. Indiquez `null` pour supprimer la limite |
 | `blocks.discord.refresh_minutes` | Minutes entre deux mises à jour de la liste des cibles. Valeur par défaut `30` |
 | `blocks.discord.target_aliases` | Associe des noms de cibles supplémentaires à des cibles existantes |
 | `blocks.discord.agents` | Espaces où chaque agent peut publier et recevoir des événements. Indiquez `*` pour tous les espaces |
@@ -65,16 +65,16 @@ Utilisez les [modes de canal](/fr/docs/channel-modes) pour réveiller un agent v
 
 | Clé | Usage |
 | - | - |
-| `blocks.discord.spaces` | Associe des noms utilisés dans SwB aux réglages de serveurs Discord |
-| `blocks.discord.spaces.*.guild_id` | ID du serveur Discord. Omettez-le dans un seul espace pour une détection automatique. SwB demande alors exactement un serveur disponible détenu par un propriétaire de l'espace |
+| `blocks.discord.spaces` | Associe des noms utilisés dans SwB aux paramètres de serveurs Discord |
+| `blocks.discord.spaces.*.guild_id` | ID du serveur Discord. Omettez-le dans un seul espace pour une détection automatique. SwB a alors besoin d'exactement un serveur disponible, détenu par un propriétaire de l'espace |
 | `blocks.discord.spaces.*.owner_ids` | ID utilisateur Discord traités comme propriétaires. Par défaut, le propriétaire de l'application Discord |
 | `blocks.discord.spaces.*.known` | Associe des ID utilisateur Discord connus à des noms affichés |
 | `blocks.discord.spaces.*.default_target` | Cible d'un nouveau message adressé à SwB qui omet le nom de la cible |
 | `blocks.discord.spaces.*.project` | Projet SwB par défaut de cet espace |
 | `blocks.discord.spaces.*.channel_projects` | Définit le projet SwB par ID de canal ou par un nom qui commence par `#` |
 | `blocks.discord.spaces.*.mode` | Mode de l'espace. Le mode d'un canal ou d'un fil peut le remplacer |
-| `blocks.discord.spaces.*.channels` | Définit un mode ou des réglages détaillés par ID de canal ou de fil |
+| `blocks.discord.spaces.*.channels` | Définit un mode ou des paramètres détaillés par ID de canal ou de fil |
 | `blocks.discord.spaces.*.channels.*.mode` | Mode d'un canal ou d'un fil |
 | `blocks.discord.spaces.*.channels.*.actions` | Actions autorisées en mode `triage`, par exemple `reply` et `notify_owner` |
-| `blocks.discord.spaces.*.listen` | Ancien réglage pour les ID de canaux ou de fils en mode `assist` |
+| `blocks.discord.spaces.*.listen` | Ancien paramètre pour les ID de canaux ou de fils en mode `assist` |
 | `blocks.discord.spaces.*.bot_posts_per_hour` | Nombre maximal de messages du bot par fil en une heure. Valeur par défaut `20` |

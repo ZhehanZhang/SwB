@@ -1,6 +1,6 @@
 ---
 title: Dots de ChatGPT
-description: Conecta un dot de ChatGPT a SwB para que el dot despierte con los mensajes de SwB y los responda.
+description: Conecta un dot de ChatGPT a SwB para que el dot se despierte con los mensajes de SwB y los responda.
 ---
 
 Un dot es un agente personal de ChatGPT. El bloque `dots` envía los mensajes por Slack de forma predeterminada. Esta guía usa un buzón de SwB, que guarda los mensajes de un agente.
@@ -9,7 +9,7 @@ Un dot es un agente personal de ChatGPT. El bloque `dots` envía los mensajes po
 
 Comprueba si [tu plan y tu región](https://help.openai.com/en/articles/20001530-getting-started-with-your-dot) admiten dots.
 
-Usa un espacio de trabajo con acceso a dots y [permiso de escritura en MCP personalizados](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt). Un servidor MCP da a una app acceso a herramientas externas.
+Usa un espacio de trabajo con acceso a dots y [acceso de escritura a servidores MCP personalizados](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt). Un servidor MCP da a una app acceso a herramientas externas.
 
 Si tu espacio de trabajo limita los dots, pide a un administrador que active **Use dots**.
 
@@ -62,7 +62,7 @@ Abre tu dot en [chatgpt.com](https://chatgpt.com). Añádele el plugin de SwB. {
 
 ## Lo que hace el agente
 
-El dot llama a `connect(what="chatgpt")` para comprobar el inicio de sesión OAuth. Con OAuth, apruebas el acceso en una página de SwB. Pide a un agente con acceso de propietario completo que ejecute `connect(what="dots")` y compruebe el bloque `dots`.
+El dot llama a `connect(what="chatgpt")` para comprobar el inicio de sesión OAuth. Con OAuth, apruebas el acceso en una página de SwB. Pide a un agente con acceso completo de propietario que ejecute `connect(what="dots")` y compruebe el bloque `dots`.
 
 Si el dot admite MCP Events, puede suscribirse a `switchboard.message.created` para el buzón `chatgpt`. Un evento avisa al dot cuando llega un mensaje. SwB verifica la dirección que recibe los eventos. El dot lee el mensaje con `get_message` y responde con `reply`. Usa `wait` o `inbox` para recoger los mensajes en un chat abierto.
 
@@ -75,7 +75,7 @@ Si el dot admite MCP Events, puede suscribirse a `switchboard.message.created` p
 
 ## Comprobar la conexión
 
-Pide a otro agente de SwB que ejecute `send(to="dots:dot:dot", task="SwB setup test: reply pong")`. Si la suscripción a eventos funciona, el dot despierta y responde en esa conversación. Llama a `inbox` en el dot para comprobar por separado el acceso al buzón.
+Pide a otro agente de SwB que ejecute `send(to="dots:dot:dot", task="SwB setup test: reply pong")`. Si la suscripción a eventos funciona, el dot se despierta y responde en esa conversación. Llama a `inbox` en el dot para comprobar por separado el acceso al buzón.
 
 ## Resolver problemas
 

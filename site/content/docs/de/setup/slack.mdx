@@ -1,6 +1,6 @@
 ---
 title: Slack
-description: Verbinden Sie einen Slack-Workspace mit einem Bot und Ihrem eigenen Slack-Konto mit SwB.
+description: Verbinden Sie einen Slack-Workspace über einen Bot und Ihr eigenes Slack-Konto mit SwB.
 ---
 
 SwB liest und postet in Slack über eine Slack-App, die Sie aus einem Manifest erstellen. Ein Manifest ist eine Datei mit allen Einstellungen der App.
@@ -24,10 +24,10 @@ Fügen Sie den Prompt in Ihren Inhaber-Client von SwB ein.
 Öffnen Sie die [Einstellungen der Slack-Apps](https://api.slack.com/apps). Klicken Sie auf **Create New App** → **From a manifest**.
 ### Workspace wählen
 
-Wählen Sie Ihren Workspace. Klicken Sie auf **Next**.
+Wählen Sie Ihren Workspace aus. Klicken Sie auf **Next**.
 ### Manifest einfügen
 
-Wählen Sie **YAML**. Kopieren Sie eines der App-Manifeste unten. Fügen Sie es vollständig ein.
+Wählen Sie **YAML** aus. Kopieren Sie eines der App-Manifeste unten. Fügen Sie es vollständig ein.
 ### App erstellen
 
 Klicken Sie auf **Next** → **Create**.
@@ -184,13 +184,13 @@ blocks:
           example: [bot, user]
 ```
 
-Verwenden Sie den Agentennamen, den `switchboard_status` zeigt. Fügen Sie für jeden Agenten eine Freigabe hinzu. Verwenden Sie im Workspace-Eintrag und in der Freigabe dieselbe Workspace-Bezeichnung. Für das Manifest mit nur Ihrem Konto fügen Sie neben `team_id` die Zeile `user_only: true` hinzu. Entfernen Sie `bot` aus `identities`. Setzen Sie die Freigabe auf `[user]`.
+Verwenden Sie den Agentennamen, den `switchboard_status` zeigt. Fügen Sie für jeden Agenten eine Freigabe hinzu. Verwenden Sie im Workspace-Eintrag und in der Freigabe dieselbe Workspace-Bezeichnung. Für das Manifest, das nur Ihr Konto nutzt, fügen Sie neben `team_id` die Zeile `user_only: true` hinzu. Entfernen Sie `bot` aus `identities`. Setzen Sie die Freigabe auf `[user]`.
 
-Starten Sie SwB neu, wenn `connect` Sie dazu auffordert. Der Agent prüft jede Slack-Identität mit `slack_workspaces`. Eine Identität ist der Bot oder Ihr Konto.
+Starten Sie SwB neu, wenn `connect` Sie dazu auffordert. Der Agent kann jede Slack-Identität mit `slack_workspaces` prüfen. Eine Identität ist der Bot oder Ihr Konto.
 
 ## Zugangsdaten
 
-| Token | Hier zeigt Slack es an | Format | Hierhin gehört es |
+| Token | Wo Slack es anzeigt | Format | Wohin es gehört |
 | --- | --- | --- | --- |
 | App-Level-Token | **Basic Information** → **App-Level Tokens** | Beginnt mit `xapp-` | Claim-Link von SwB |
 | Bot-Token | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | Beginnt mit `xoxb-` | Claim-Link von SwB |
@@ -208,4 +208,4 @@ Wenn SwB ein Problem mit Socket Mode meldet, öffnen Sie **Socket Mode** in den 
 
 Wenn Sie die Scopes der App ändern, installieren Sie die App erneut. Speichern Sie danach die neuen Tokens über einen neuen Claim-Link.
 
-Die Suche mit `slack_search` nutzt Ihr eigenes Konto. Sie braucht das User-Token mit dem Scope `search:read`.
+Die Suche mit `slack_search` nutzt Ihr eigenes Konto. Sie erfordert das User-Token mit dem Scope `search:read`.

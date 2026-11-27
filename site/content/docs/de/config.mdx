@@ -3,7 +3,7 @@ title: Konfiguration
 description: Umgebungsvariablen, die Konfigurationsdatei und Overlays.
 ---
 
-SwB läuft auch allein mit Umgebungsvariablen. Der MCP-Block startet standardmäßig. Einige Blöcke starten, sobald Sie ihre Variablen setzen. Für weitere Einstellungen verwenden Sie eine YAML-Datei. YAML ist ein Textformat für Einstellungen.
+SwB läuft auch nur mit Umgebungsvariablen. Der MCP-Block startet standardmäßig. Einige Blöcke starten, sobald Sie ihre Variablen setzen. Für weitere Einstellungen verwenden Sie eine YAML-Datei. YAML ist ein Textformat für Einstellungen.
 
 ## Instanz
 
@@ -31,7 +31,7 @@ Mit `swb up --dir ./my-swb` liest SwB `.env` und `config/switchboard.yaml` aus d
 
 Die Serverbefehle akzeptieren `--dir`. Das sind `swb serve`, `swb export`, `swb log`, `swb config migrate`, `swb blocks` und `swb targets`. SwB liest `.env` und die Konfiguration aus dem gewählten Ordner. Bei Befehlen, die die Datenbank nutzen, findet SwB dort auch die Daten der Instanz.
 
-Beim einfachen `swb serve` liest SwB die Shell und die Konfigurationsdatei. Die anderen Serverbefehle verwenden standardmäßig den aktuellen Ordner.
+Beim einfachen `swb serve` liest SwB die Umgebung der Shell und die Konfigurationsdatei. Die anderen Serverbefehle verwenden standardmäßig den aktuellen Ordner.
 
 Mit `swb config migrate [file]` geben Sie eine Konfiguration im Format der Version 2 aus. Mit `file` wählen Sie eine bestimmte Konfiguration. Sonst verwendet SwB die Konfiguration aus `--dir`, `SWB_CONFIG` oder dem Standardpfad.
 
@@ -47,7 +47,7 @@ Unter Linux und macOS setzt SwB den Datenordner auf den privaten Modus `0700`. D
 
 ## Blöcke
 
-Einige Blöcke starten mit Zugangsdaten aus der Umgebung. Die Einrichtung beschreibt [Blöcke](/de/docs/blocks). Das [Umgebungsbeispiel des Releases](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example) zeigt die Namen der Zugangsdaten für benannte Workspaces und Routinen.
+Einige Blöcke können mit Zugangsdaten aus der Umgebung starten. Die Einrichtung beschreibt [Blöcke](/de/docs/blocks). Das [Umgebungsbeispiel des Releases](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example) zeigt die Namen der Zugangsdaten für benannte Workspaces und Routinen.
 
 ## Die Konfigurationsdatei
 
@@ -75,7 +75,7 @@ routes:
   - {match: {}, to: capy:captain:CAPTAIN_ID}
 ```
 
-SwB verwendet den Abschnitt `blocks` anstelle der automatischen Blockauswahl. Setzen Sie `enabled: false` für den MCP-Block, um ihn abzuschalten. Blockeinstellungen lesen Zugangsdaten weiterhin aus der Umgebung.
+SwB verwendet den Abschnitt `blocks` anstelle der automatischen Blockauswahl. Setzen Sie `enabled: false` für den MCP-Block, um ihn zu deaktivieren. Blockeinstellungen können Zugangsdaten weiterhin aus der Umgebung lesen.
 
 ## Overlays
 
@@ -88,7 +88,7 @@ In einem Schlüssel steht `*` für einen Eintragsnamen oder ein Listenelement.
 | Schlüssel | Zweck |
 | - | - |
 | `version` | Version des YAML-Formats. Verwenden Sie `2` für `blocks` |
-| `public_url` | Öffentliche Adresse für MCP und Anmeldung. Mit OAuth meldet sich eine App mit Ihrer Freigabe an |
+| `public_url` | Öffentliche Adresse für MCP und Anmeldung. Mit OAuth kann sich eine App nach Ihrer Freigabe anmelden |
 | `data_dir` | Pfad zum Datenordner. Setzen Sie ihn hier oder mit `SWB_DATA_DIR` |
 | `timezone` | Zeitzone für Tageszählungen und Tageslimits. Standard `UTC` |
 | `turn_cap` | Runden, nach denen SwB eine Unterhaltung pausiert. Standard `200`. `null` hebt das Limit auf |
@@ -116,32 +116,32 @@ In einem Schlüssel steht `*` für einen Eintragsnamen oder ein Listenelement.
 | `auth.key_scopes` | Zugriffsbereiche nach Schlüssel- oder Agentenname, zum Beispiel `[project:example]`. Diese Bereiche begrenzen Routen, Nachrichten und Unterhaltungen. Sie begrenzen auch konfigurierte Schlüssel und OAuth-Clients beim Zugriff auf das Gedächtnis. Bei gekoppelten Schlüsseln fügt SwB die benannten Gedächtnisbereiche bei der Kopplung zu den Freigaben hinzu |
 | `auth.key_tools` | Zuordnung von Schlüsselnamen zu erlaubten MCP-Tools, zum Beispiel `[send]` |
 | `auth.key_targets` | Erlaubte Nachrichtenziele nach Schlüsselname, zum Beispiel `[agent:claude]`. Ein Schlüssel mit diesem Limit muss ein erlaubtes Ziel nennen |
-| `auth.inbox_keys` | Zuordnung von Schlüsselnamen zu dem einen Agenten, dessen Posteingang der Schlüssel liest. Der eingebaute Eintrag ist `channel: claude-code` |
+| `auth.inbox_keys` | Zuordnung von Schlüsselnamen zu dem einen Agenten, dessen Posteingang der Schlüssel lesen darf. Der eingebaute Eintrag ist `channel: claude-code` |
 
 ## Sichtbarkeit
 
 | Schlüssel | Zweck |
 | - | - |
-| `visibility` | Regeln dafür, wer auf eine Ressource zugreift. Tools bleiben privat |
-| `visibility.defaults` | Standardregeln nach Ressourcentyp. Alle Typen beginnen mit `private` |
+| `visibility` | Regeln dafür, wer auf eine Ressource zugreifen darf. Tools bleiben privat |
+| `visibility.defaults` | Standardregeln nach Ressourcentyp. Alle Typen sind anfangs `private` |
 | `visibility.defaults.channel` | Standardregel für Kanäle |
 | `visibility.defaults.memory` | Standardregel für Gedächtnisbereiche |
 | `visibility.defaults.route` | Standardregel für Routen |
 | `visibility.defaults.target` | Standardregel für Sendeziele |
 | `visibility.resources` | Regeln für einzelne Ressourcen wie `channel:home/#agents`. Jede Regel hat Vorrang vor dem Standard ihres Typs |
 
-Für Slack ist `channel:home/#agents` eine Kanalregel. Für GitHub geben Sie `channel:github/acme/app` und `target:beta` beide frei, damit externe Absender `agent:beta` erreichen. Lesen Sie [Sichtbarkeit von Kanälen](/de/docs/channel-modes#externe-github-absender-zulassen).
+Für Slack ist `channel:home/#agents` eine Kanalregel. Für GitHub geben Sie sowohl `channel:github/acme/app` als auch `target:beta` frei, damit externe Absender `agent:beta` erreichen. Lesen Sie [Sichtbarkeit von Kanälen](/de/docs/channel-modes#externe-github-absender-zulassen).
 
 Verwenden Sie `private` für den Inhaber und seine Agenten. Mit `shared` öffnen Sie den Zugriff. Um mit ausgewählten Personen zu teilen, nennen Sie Benutzer-IDs oder Einträge wie `workspace:home`. Änderungen mit `visibility_set` haben Vorrang vor dieser Datei.
 
-## Vertrauen von GitHub-Absendern
+## Vertrauensstufe von GitHub-Absendern
 
 | Schlüssel | Zweck |
 | - | - |
 | `blocks.github.owner_ids` | Standardliste numerischer GitHub-Benutzer-IDs, die als Inhaber gelten |
 | `blocks.github.spaces.*.owner_ids` | Liste numerischer GitHub-Benutzer-IDs, die den Standard für diesen Raum ersetzt |
 
-GitHub verwendet die Vertrauensstufen `owner` und `external`. Auf Slack, Discord und Telegram hilft `known` SwB bei der Wahl, wessen Nachrichten es annimmt. Nachrichten anderer Absender behalten die Vertrauensstufe `external`. Die Einrichtung des Modus Work beschreibt [Inhaberkonten](/de/docs/blocks/github#inhaberkonten).
+GitHub verwendet die Vertrauensstufen `owner` und `external`. Auf Slack, Discord und Telegram entscheidet SwB anhand von `known`, wessen Nachrichten es annimmt. Nachrichten anderer Absender behalten die Vertrauensstufe `external`. Die Einrichtung des Modus `work` beschreibt [Inhaberkonten](/de/docs/blocks/github#inhaberkonten).
 
 ## MCP
 
@@ -151,11 +151,11 @@ GitHub verwendet die Vertrauensstufen `owner` und `external`. Auf Slack, Discord
 | `blocks.mcp.use` | Blocktyp. Verwenden Sie `mcp` |
 | `blocks.mcp.legacy_aliases` | Hält ältere MCP-Tool-Namen wie `agent_send`, `capy_delegate`, `capy_wait` und `capy_reply` verfügbar. Standard `true` |
 | `blocks.mcp.wait` | Limits für Tool-Aufrufe, die auf eine Antwort warten |
-| `blocks.mcp.wait.default_s` | Wartezeit in Sekunden, wenn der Aufrufer sie offen lässt. Standard `60` |
-| `blocks.mcp.wait.max_s` | Höchste Wartezeit in Sekunden. Standard `200` |
+| `blocks.mcp.wait.default_s` | Wartezeit in Sekunden, wenn der Aufrufer das Feld leer lässt. Standard `60` |
+| `blocks.mcp.wait.max_s` | Maximale Wartezeit in Sekunden. Standard `200` |
 | `blocks.mcp.wait.agents` | Wartelimits nach Agent. Claude Code verwendet standardmäßig `45` Sekunden und höchstens `55` Sekunden |
 | `blocks.mcp.wait.agents.*.default_s` | Standardwartezeit in Sekunden für diesen Agenten |
-| `blocks.mcp.wait.agents.*.max_s` | Höchste Wartezeit in Sekunden für diesen Agenten |
+| `blocks.mcp.wait.agents.*.max_s` | Maximale Wartezeit in Sekunden für diesen Agenten |
 
 ## Gedächtnis und Kanalmodi
 

@@ -45,7 +45,7 @@ Setzen Sie in Ihrer Serverumgebung `SWB_EXAMPLE_GITHUB_SINK_URL` auf die Adresse
 
 Ein **Sink** ist eine URL, die eine Kopie eines Ereignisses empfängt. SwB sendet jedem passenden Sink im Modus `watch` ein kompaktes JSON-Ereignis. Ein Repository mit einer Sink-Route nutzt standardmäßig `watch`. Kanal- und Raummodi haben Vorrang. Weitere Details zitiert SwB in `metadata`. Jede Anfrage verwendet die Delivery-ID des Ereignisses als `Idempotency-Key`. Bei Verbindungsfehlern, Zeitüberschreitungen und HTTP-5xx-Antworten versucht SwB es erneut.
 
-Wenn Cloudflare Access Ihren Host schützt, lassen Sie `/github/webhook` durch. Die GitHub-Signatur schützt diesen Pfad.
+Wenn Cloudflare Access Ihren Host schützt, lassen Sie Anfragen an `/github/webhook` passieren. Die GitHub-Signatur schützt diesen Pfad.
 
 ## Inhaberkonten
 
@@ -67,7 +67,7 @@ blocks:
 
 Mit `blocks.github.owner_ids` legen Sie die Standard-Inhaber-IDs fest. Die Liste `owner_ids` eines Raums ersetzt diesen Standard. Eine leere Liste im Raum löscht ihn.
 
-SwB prüft den Autor jedes Titels, jedes Textkörpers und jedes Kommentars. Der Text gilt nur dann als `owner`, wenn sein eigener Autor in `owner_ids` steht und eine Person ist. Branch-Namen, Refs, Workflow-Titel und Check-Namen zitiert SwB als `external`.
+SwB prüft den Autor jedes Titels, jedes Beschreibungstexts und jedes Kommentars. Der Text gilt nur dann als `owner`, wenn sein eigener Autor in `owner_ids` steht und eine Person ist. Branch-Namen, Refs, Workflow-Titel und Check-Namen zitiert SwB als `external`.
 
 Ein `check_run` mit einem Check-Namen hat die Vertrauensstufe `external`, auch wenn der Inhaber ihn auslöst. Ein Pull Request aus einem Fork kann den Check-Namen festlegen. Verwenden Sie in Zugriffsregeln IDs wie `github:4242`. Diese Regeln steuern den Zugriff getrennt von der Vertrauensstufe.
 
@@ -97,6 +97,6 @@ Für Aktionen in GitHub-Unterhaltungen übergeben Sie die Unterhaltungs-ID von S
 
 Binden Sie einen Agenten mit `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")` an ein Repository. Für den Modus `assist` verwenden Sie `mode="assist"`. Wählen Sie ein Ziel aus `targets`. Die verknüpfte Projektroute dient als Ausweichroute.
 
-Für externe Absender geben Sie `channel:github/acme/app` und `target:beta` beide frei. Die Zugriffsregeln beschreibt [Sichtbarkeit von Kanälen](/de/docs/channel-modes#externe-github-absender-zulassen).
+Für externe Absender geben Sie sowohl `channel:github/acme/app` als auch `target:beta` frei. Die Zugriffsregeln beschreibt [Sichtbarkeit von Kanälen](/de/docs/channel-modes#externe-github-absender-zulassen).
 
 Im Modus `watch` sendet SwB eine Zusammenfassung an das Zielpostfach, wenn `modes.digest_minutes` abgelaufen ist oder SwB 50 Ereignisse für dieses Postfach und diesen Raum gesammelt hat. Lesen Sie [Watch-Zusammenfassungen](/de/docs/channel-modes#watch-zusammenfassung-lesen).

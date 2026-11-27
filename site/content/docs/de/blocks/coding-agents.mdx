@@ -9,7 +9,7 @@ description: Verbinden Sie Claude Code, Codex, Gemini CLI und andere Coding-Agen
 swb connect coding-agent --choose agent=codex
 ```
 
-Der Befehl zeigt, wie Sie SwB als Remote-MCP-Server hinzufügen. Verwenden Sie OAuth, wenn SwB und der Client es beide unterstützen. Verwenden Sie die Kopplungsanleitung, wenn der Befehl sie anzeigt.
+Der Befehl zeigt, wie Sie SwB als Remote-MCP-Server hinzufügen. Verwenden Sie OAuth, wenn sowohl SwB als auch der Client es unterstützen. Verwenden Sie die Kopplungsanleitung, wenn der Befehl sie anzeigt.
 
 | Client | Einrichtung |
 | - | - |
@@ -27,7 +27,7 @@ Wie Sie MCP Tasks mit Capy nutzen, beschreibt [MCP Tasks](/de/docs/blocks/capy#m
 
 Der Kanal sendet Nachrichten aus dem Postfach `claude-code` an eine offene Sitzung von Claude Code. Kanäle in Claude Code sind eine Research Preview.
 
-Erzeugen Sie einen zufälligen Schlüssel mit mindestens 24 Zeichen. Speichern Sie ihn als `SWB_KEY_CHANNEL` in der privaten Datei `.env` des Servers. Starten Sie SwB neu, um den Schlüssel zu laden. Dieser Schlüssel gibt Lesezugriff auf das Postfach `claude-code`. Installieren Sie [Bun](https://bun.sh). Fügen Sie das Plugin in Claude Code hinzu.
+Erzeugen Sie einen zufälligen Schlüssel mit mindestens 24 Zeichen. Speichern Sie ihn als `SWB_KEY_CHANNEL` in der privaten Datei `.env` des Servers. Starten Sie SwB neu, um den Schlüssel zu laden. Dieser Schlüssel gewährt Lesezugriff auf das Postfach `claude-code`. Installieren Sie [Bun](https://bun.sh). Fügen Sie das Plugin in Claude Code hinzu.
 
 ```text
 /plugin marketplace add ZhehanZhang/SwB
@@ -40,4 +40,4 @@ Geben Sie Ihre SwB-Basis-URL in **SwB URL** ein. Geben Sie den Wert von `SWB_KEY
 claude --dangerously-load-development-channels plugin:swb@swb
 ```
 
-Beim ersten Start beginnt der Kanal mit neuen Nachrichten. Bei späteren Starts setzt er an seiner gespeicherten Position fort. Um über SwB zu antworten, verwenden Sie `reply` über die separate MCP-Verbindung.
+Beim ersten Start beginnt der Kanal mit neuen Nachrichten. Bei späteren Starts macht er an seiner gespeicherten Position weiter. Um über SwB zu antworten, verwenden Sie `reply` über die separate MCP-Verbindung.

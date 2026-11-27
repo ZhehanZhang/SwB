@@ -26,11 +26,11 @@ La ruta del proyecto elige adónde va el trabajo. SwB sigue las actualizaciones 
 
 ## MCP Tasks
 
-El bloque de Capy activa [MCP Tasks](/es/docs/how-it-works#conversaciones) para los clientes MCP 2026-07-28. Los clientes lo encuentran con `server/discover` y lo piden en cada `send` a Capy. Los demás envíos usan conversaciones normales.
+El bloque de Capy activa [MCP Tasks](/es/docs/how-it-works#conversaciones) para los clientes MCP 2026-07-28. Los clientes lo encuentran con `server/discover` y lo activan en cada `send` a Capy. Los demás envíos usan conversaciones normales.
 
 ## Claves de envío
 
-Capy muestra la cuenta dueña de la clave de envío. SwB prueba primero la clave del agente y después la clave de servicio. En el modo `personal`, la clave de la cuenta de Capy es la última opción. Inicia sesión como propietario para ver en `/healthz` la primera opción de cada agente y el resultado de la comprobación de claves.
+Capy muestra la cuenta propietaria de la clave de envío. SwB prueba primero la clave del agente y después la clave de servicio. En el modo `personal`, la clave de la cuenta de Capy es la última opción. Inicia sesión como propietario para ver en `/healthz` la primera opción de cada agente y el resultado de la comprobación de claves.
 
 ## Los proyectos se vinculan solos
 
@@ -42,7 +42,7 @@ Cuando un agente crea un proyecto de SwB, el bloque de Capy busca un proyecto de
 | - | - |
 | `blocks.capy` | Ajustes para los envíos a Capy y el seguimiento de hilos |
 | `blocks.capy.use` | Tipo de bloque. Usa `capy` |
-| `blocks.capy.enabled` | Define `false` para omitir este bloque |
+| `blocks.capy.enabled` | Usa `false` para omitir este bloque |
 | `blocks.capy.api_base` | Dirección base de la API de Capy. Valor predeterminado `https://api.capy.ai/api/v1` |
 | `blocks.capy.identity` | Usa `service` para las claves de agente y de servicio. Usa `personal` para permitir también la clave de la cuenta de Capy como última opción |
 | `blocks.capy.send_key_env` | Nombre de la variable que contiene la clave de envío del servicio |
@@ -51,5 +51,5 @@ Cuando un agente crea un proyecto de SwB, el bloque de Capy busca un proyecto de
 | `blocks.capy.daily_cap` | Límite diario de delegaciones a Capy. Usa `null` para envíos ilimitados |
 | `blocks.capy.duplicate_window_s` | Tiempo en segundos durante el que se reutiliza un ID de conversación para el mismo remitente, destino, título y tarea. Valor predeterminado `600` |
 | `blocks.capy.max_file_bytes` | Límite del tamaño total de adjuntos por envío, en bytes. Valor predeterminado `10485760` |
-| `blocks.capy.handle_ttl_days` | Antigüedad máxima en días para retomar el seguimiento de hilos al arrancar. También fija la vida de las tareas MCP. Valor predeterminado `7` |
-| `blocks.capy.avatars` | Permite a SwB descargar los avatares de los Capy Captains. Define `false` para usar iniciales |
+| `blocks.capy.handle_ttl_days` | Antigüedad máxima en días para retomar el seguimiento de hilos al arrancar. También fija la duración de las tareas MCP. Valor predeterminado `7` |
+| `blocks.capy.avatars` | Permite a SwB descargar los avatares de los Capy Captains. Usa `false` para mostrar iniciales en su lugar |

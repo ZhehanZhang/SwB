@@ -5,7 +5,7 @@ description: GitHub のイベントをエージェントやサービスに送り
 
 ## アプリを作成する
 
-あなたのアカウントで GitHub App を作成してください。Webhook のアドレスには、SwB の公開アドレスに `/github/webhook` を付けたものを設定してください。たとえば `https://swb.example.com/github/webhook` を使います。Webhook シークレットを非公開のファイルに生成してください。SwB は 16 文字以上のシークレットを受け付けます。
+自分のアカウントで GitHub App を作成してください。Webhook のアドレスには、SwB の公開アドレスに `/github/webhook` を付けたものを設定してください。たとえば `https://swb.example.com/github/webhook` を使います。Webhook シークレットを非公開のファイルに生成してください。SwB は 16 文字以上のシークレットを受け付けます。
 
 ```bash
 (umask 077; set -C; openssl rand -hex 32 > ~/.swb-github-secret)
@@ -51,7 +51,7 @@ Cloudflare Access でホストを保護している場合は、`/github/webhook`
 
 `off` モードでは、SwB はそのスペースの GitHub のイベントをすべて破棄します。オーナーのアカウントからのイベントも破棄します。
 
-設定済みのオーナーのアカウントからのイベントだけを受け付けるときは、`work` モードを使います。`https://api.github.com/users/USERNAME` の `USERNAME` を、あなたの GitHub のユーザー名に置き換えてください。その URL を開いてください。数値の `id` を、スペースの `owner_ids` のリストにコピーしてください。設定を反映するために、SwB を再起動してください。
+設定済みのオーナーのアカウントからのイベントだけを受け付けるときは、`work` モードを使います。`https://api.github.com/users/USERNAME` の `USERNAME` を、自分の GitHub のユーザー名に置き換えてください。その URL を開いてください。数値の `id` を、スペースの `owner_ids` のリストにコピーしてください。設定を反映するために、SwB を再起動してください。
 
 ```yaml
 blocks:
@@ -65,11 +65,11 @@ blocks:
           target: agent:beta
 ```
 
-既定のオーナー ID は `blocks.github.owner_ids` で設定します。スペースの `owner_ids` のリストは、その既定値を置き換えます。スペースのリストを空にすると、既定値を消します。
+既定のオーナー ID は `blocks.github.owner_ids` で設定します。スペースの `owner_ids` のリストは、その既定値を置き換えます。スペースのリストを空にすると、そのスペースでは既定値が解除されます。
 
 SwB は、タイトル、本文、コメントごとに作成者を確認します。テキストが `owner` として扱われるのは、そのテキスト自体の作成者が `owner_ids` にあり、人間である場合だけです。SwB は、ブランチ名、ref、ワークフローのタイトル、チェック名を `external` として引用します。
 
-チェック名を持つ `check_run` は、オーナーが実行した場合でも `external` の信頼レベルになります。フォークからの Pull Request がチェック名を設定できるためです。アクセスルールには、`github:4242` のような ID を使ってください。これらのルールは、信頼レベルとは別にアクセスを与えます。
+チェック名を持つ `check_run` は、オーナーが実行した場合でも `external` の信頼レベルになります。フォークからのプルリクエストがチェック名を設定できるためです。アクセスルールには、`github:4242` のような ID を使ってください。これらのルールは、信頼レベルとは別にアクセスを与えます。
 
 GitHub の会話の操作では、SwB の会話 ID を `conversation` か `handle` に渡してください。
 

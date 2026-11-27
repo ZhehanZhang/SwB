@@ -24,7 +24,7 @@ Eine **Routine** ist eine Aufgabe in Claude Code, die SwB starten kann. SwB legt
 | `<routine name>` | Diese Routine |
 | `agent:claude` | Nur das Postfach |
 
-Ein Projekt kann viele Routinen haben. Standardmäßig wählt SwB die erste Routine für diesen Agenten und dieses Projekt. Setzen Sie bei der Registrierung `primary=true`, damit SwB diese Routine zuerst wählt.
+Ein Projekt kann mehrere Routinen haben. Standardmäßig wählt SwB die erste Routine für diesen Agenten und dieses Projekt. Setzen Sie bei der Registrierung `primary=true`, damit SwB diese Routine zuerst wählt.
 
 Wenn Claude ein pausiertes Projekt meldet, versucht SwB es mit einer leeren Anfrage erneut. Die Routine liest die Nachricht mit `routine_pickup`.
 

@@ -3,11 +3,11 @@ title: Claude Project
 description: Lassen Sie SwB eine Claude-Code-Routine starten, die in Ihrem Claude Project arbeitet.
 ---
 
-Eine Routine ist eine gespeicherte Aufgabe in Claude Code, die selbstständig läuft. SwB startet die Routine in Ihrem Claude Project, wenn ein anderer Agent ihr Arbeit sendet. Die Routine antwortet in derselben SwB-Unterhaltung.
+Eine Routine ist eine gespeicherte Aufgabe in Claude Code, die selbstständig läuft. SwB startet die Routine in Ihrem Claude Project, wenn ein anderer Agent ihr eine Aufgabe sendet. Die Routine antwortet in derselben SwB-Unterhaltung.
 
 ## Voraussetzungen
 
-Sie brauchen Claude Pro, Max oder Ultra mit Zugriff auf Claude Code Projects. Öffnen Sie [Claude Code](https://claude.ai/code) und wählen Sie **Projects**. Für den Zugriff [tragen Sie sich in die Warteliste ein](https://claude.com/form/projects).
+Sie brauchen Claude Pro, Max oder Ultra mit Zugriff auf Claude Code Projects. Öffnen Sie [Claude Code](https://claude.ai/code) und wählen Sie **Projects** aus. Für den Zugriff [tragen Sie sich in die Warteliste ein](https://claude.com/form/projects).
 
 Fügen Sie SwB zum selben Claude-Konto hinzu. Lesen Sie [Claude](/de/docs/setup/claude). Aktivieren Sie den Block `claude-routine` in `config/switchboard.yaml`.
 
@@ -27,25 +27,25 @@ Fügen Sie SwB zum selben Claude-Konto hinzu. Lesen Sie [Claude](/de/docs/setup/
 
 ### Über das Projekt
 
-Klicken Sie in der oberen Tab-Leiste des rechten Bereichs auf **+**. Wählen Sie **Routines**. Öffnen Sie `swb <project>`. Klicken Sie auf **View full page**.
+Klicken Sie in der oberen Tab-Leiste des rechten Bereichs auf **+**. Wählen Sie **Routines** aus. Öffnen Sie `swb <project>`. Klicken Sie auf **View full page**.
 
 ## API-Trigger öffnen
 
-Öffnen Sie das Menü neben dem Namen der Routine. Wählen Sie **Edit**. Wählen Sie im Bearbeitungsformular **Trigger**, dann **+** und dann **API**.
+Öffnen Sie das Menü neben dem Namen der Routine. Wählen Sie **Edit** aus. Wählen Sie im Bearbeitungsformular nacheinander **Trigger**, **+** und **API** aus.
 
 Kopieren Sie die **Fire URL**. Geben Sie diese URL dem Koordinator.
 
 ## Token erzeugen und speichern
 
-Der Inhaber erzeugt das Token in Claude. Wählen Sie **Generate token**. Kopieren Sie das Token, solange der Dialog **Token generated** offen ist.
+Der Inhaber erzeugt das Token in Claude. Wählen Sie **Generate token** aus. Kopieren Sie das Token, solange der Dialog **Token generated** offen ist.
 
-Öffnen Sie den Claim-Link aus dem Koordinator. Prüfen Sie auf der Seite **Claude routine token** das Projekt und die Routinen-ID. Fügen Sie das Token in **Token** ein. Wählen Sie **Save token**.
+Öffnen Sie den Claim-Link aus dem Koordinator. Prüfen Sie auf der Seite **Claude routine token** das Projekt und die Routinen-ID. Fügen Sie das Token in **Token** ein. Wählen Sie **Save token** aus.
 
 SwB zeigt **Routine saved** oder **Routine and project saved**. Sagen Sie dem Koordinator, dass das Token gespeichert ist.
 
 ## Das macht der Agent
 
-Der Koordinator ruft `connect(what="claude-project")` über einen SwB-Client mit uneingeschränktem Inhaberzugriff auf. SwB prüft den Block `claude-routine` und listet seine Routinen auf. Mit `project_list` findet der Koordinator Ihr SwB-Projekt.
+Der Koordinator ruft `connect(what="claude-project")` über einen SwB-Client mit uneingeschränktem Inhaberzugriff auf. SwB prüft den Block `claude-routine` und listet seine Routinen auf. Mit `project_list` kann der Koordinator Ihr SwB-Projekt finden.
 
 Der Koordinator fügt einen API-Trigger hinzu. Er nimmt diese Anweisung mit dem genauen Namen des Claude Project in den Prompt der Routine auf.
 
@@ -53,13 +53,13 @@ Der Koordinator fügt einen API-Trigger hinzu. Er nimmt diese Anweisung mit dem 
 Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
 ```
 
-Der Koordinator ruft `connect` erneut mit `fire_url`, `claude_project` und `project` in `choose` auf. SwB gibt einen Claim-Link zurück. Ein Claim-Link ist eine private SwB-Seite für Zugangsdaten. Dieser Link gilt einmal und läuft nach 30 Minuten ab.
+Der Koordinator ruft `connect` erneut mit `fire_url`, `claude_project` und `project` in `choose` auf. SwB gibt einen Claim-Link zurück. Ein Claim-Link ist eine private SwB-Seite für Zugangsdaten. Dieser Link gilt einmalig und läuft nach 30 Minuten ab.
 
-Wenn SwB ähnliche Projekte findet, bittet Sie der Agent, eines auszuwählen. Für ein neues Projekt ruft er `connect` mit einem neuen Kurznamen und `create_new` gleich `true` auf.
+Wenn SwB ähnliche Projekte findet, bittet Sie der Agent, eines auszuwählen. Für ein neues Projekt ruft er `connect` mit einem neuen Kurznamen auf und setzt `create_new` auf `true`.
 
 ## Zugangsdaten
 
-| Element | Hier zeigt Claude es an | Format | Hierhin gehört es |
+| Element | Wo Claude es anzeigt | Format | Wohin es gehört |
 | - | - | - | - |
 | Token der Routine | **Token generated** im API-Bereich, einmalig | Beginnt mit `sk-ant-oat01-` | Das Feld **Token** auf dem Claim-Link von SwB |
 | Fire URL | **Fire URL** im API-Bereich | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | Der Agent im Koordinator-Chat. Die URL benennt nur die Routine. |

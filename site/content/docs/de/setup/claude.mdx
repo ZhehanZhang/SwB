@@ -3,13 +3,13 @@ title: Claude
 description: Fügen Sie SwB als Custom Connector zu Ihrem Claude-Konto hinzu.
 ---
 
-Mit einem Connector nutzt Claude die Tools eines externen Dienstes. Mit dem SwB-Connector liest Claude Ihre Projekte, sendet Arbeit an andere Agenten und beantwortet Nachrichten.
+Mit einem Connector kann Claude die Tools eines externen Dienstes nutzen. Mit dem SwB-Connector liest Claude Ihre Projekte, sendet Aufgaben an andere Agenten und beantwortet Nachrichten.
 
 ## Voraussetzungen
 
 Der Claude-Free-Plan erlaubt einen Custom Connector. Pro, Max, Ultra, Team und Enterprise unterstützen ebenfalls Custom Connectors.
 
-Richten Sie die Inhaber-Anmeldung für SwB ein. Verwenden Sie eine öffentliche HTTPS-Adresse auf Port 443, damit Claude `/mcp` erreicht.
+Richten Sie die Inhaber-Anmeldung für SwB ein. Verwenden Sie eine öffentliche HTTPS-Adresse auf Port 443, damit Claude `/mcp` erreichen kann.
 
 ## Einrichtungsprompt kopieren
 
@@ -24,16 +24,16 @@ Fügen Sie den Prompt in einen Claude-Chat ein.
 ### Custom Connector hinzufügen
 
 Öffnen Sie in Claude [Customize → Connectors](https://claude.ai/customize/connectors).
-Wählen Sie **+ Add**. Wählen Sie **Add custom connector**.
+Wählen Sie **+ Add** aus. Wählen Sie **Add custom connector** aus.
 ### Adresse eingeben
 
 Geben Sie `SwB` als Namen ein. Geben Sie Ihre MCP-Adresse von SwB ein, zum Beispiel `https://swb.example.com/mcp`.
 ### Standardanmeldung beibehalten
 
-Wählen Sie **Continue**, um die Anmeldeeinstellungen zu prüfen. Wählen Sie unter **Authentication** die Option **Sign in now**. Wählen Sie unter **OAuth client** die Option **Use Claude’s published identity (Recommended)**. Lassen Sie **Request headers** leer.
+Wählen Sie **Continue** aus, um die Anmeldeeinstellungen zu prüfen. Wählen Sie unter **Authentication** die Option **Sign in now** aus. Wählen Sie unter **OAuth client** die Option **Use Claude’s published identity (Recommended)** aus. Lassen Sie **Request headers** leer.
 ### Hinzufügen und verbinden
 
-Klicken Sie auf **Add**. Wenn SwB in der Liste **Connect** zeigt, klicken Sie auf **Connect**.
+Klicken Sie auf **Add**. Wenn SwB in der Liste **Connect** anzeigt, klicken Sie auf **Connect**.
 ### In SwB freigeben
 
 Melden Sie sich auf der Seite **Sign in to SwB** an. Prüfen Sie auf der Seite **Connect to SwB** den Namen und klicken Sie auf **Approve**.
@@ -47,7 +47,7 @@ Melden Sie sich auf der Seite **Sign in to SwB** an. Prüfen Sie auf der Seite *
 Klicken Sie auf **Add**. Zeigen Sie auf **Custom** und klicken Sie dann auf **Web**.
 ### Adresse eingeben
 
-Geben Sie `SwB` als Namen ein. Geben Sie Ihre MCP-Adresse von SwB ein. Wählen Sie **Continue**. Prüfen Sie die Anmeldeeinstellungen. Wählen Sie **Sign in now** oder **Sign in when needed**. Wählen Sie **Use Claude’s published identity (Recommended)**. Wählen Sie **Add**.
+Geben Sie `SwB` als Namen ein. Geben Sie Ihre MCP-Adresse von SwB ein. Wählen Sie **Continue** aus. Prüfen Sie die Anmeldeeinstellungen. Wählen Sie **Sign in now** oder **Sign in when needed** aus. Wählen Sie **Use Claude’s published identity (Recommended)** aus. Wählen Sie **Add** aus.
 ### Konto verbinden
 
 Öffnen Sie **Customize** → **Connectors**. Suchen Sie `SwB` und klicken Sie auf **Connect**.
@@ -59,7 +59,7 @@ Melden Sie sich auf der Seite **Sign in to SwB** an. Klicken Sie auf der Seite *
 
 ### SwB im Chat aktivieren
 
-Wählen Sie im Chat **+** → **Connectors**. Aktivieren Sie SwB. Bei einem Claude Project verwenden Sie den Koordinator-Chat.
+Wählen Sie im Chat **+** → **Connectors** aus. Aktivieren Sie SwB. Bei einem Claude Project verwenden Sie den Koordinator-Chat.
 
 ## Das macht der Agent
 
@@ -69,7 +69,7 @@ Der Agent nennt Ihnen den Klickpfad und die Adresse. Nach Ihrer Freigabe ruft er
 
 ## Zugangsdaten
 
-| Element | Hier wird es angezeigt | Format | Hierhin gehört es |
+| Element | Wo es angezeigt wird | Format | Wohin es gehört |
 | - | - | - | - |
 | MCP-Adresse | Einstellungen von SwB und das Ergebnis von `connect` | `https://swb.example.com/mcp` | Das URL-Feld des Claude-Connectors |
 | Zugriffstoken für SwB | Claude erhält es, nachdem Sie auf **Approve** geklickt haben | Zufälliger Text | Claude speichert es für Sie |
@@ -80,4 +80,4 @@ Der Agent nennt Ihnen den Klickpfad und die Adresse. Nach Ihrer Freigabe ruft er
 
 ## Probleme beheben
 
-Verwenden Sie die öffentliche HTTPS-Adresse, die auf `/mcp` endet. Claude muss `/mcp` direkt erreichen. Wenn sich die Adresse von SwB ändert, entfernen Sie den Connector. Fügen Sie ihn mit der neuen Adresse erneut hinzu.
+Verwenden Sie die öffentliche HTTPS-Adresse, die auf `/mcp` endet. Claude muss `/mcp` direkt erreichen können. Wenn sich die Adresse von SwB ändert, entfernen Sie den Connector. Fügen Sie ihn mit der neuen Adresse erneut hinzu.

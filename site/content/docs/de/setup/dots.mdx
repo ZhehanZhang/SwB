@@ -42,7 +42,7 @@ blocks:
 
 ### Server hinzufügen
 
-Wählen Sie **+**. Wählen Sie danach **Add custom MCP server**.
+Wählen Sie **+** aus. Wählen Sie danach **Add custom MCP server** aus.
 
 ### Adresse eingeben
 
@@ -50,7 +50,7 @@ Geben Sie `SwB` als Namen ein. Geben Sie in **Server URL** Ihre MCP-Adresse von 
 
 ### Plugin erstellen
 
-Wählen Sie **OAuth**. Wählen Sie **I understand and want to continue**. Wählen Sie danach **Create as a plugin**.
+Wählen Sie **OAuth** aus. Wählen Sie **I understand and want to continue** aus. Wählen Sie danach **Create as a plugin** aus.
 
 ### Installieren und anmelden
 
@@ -64,11 +64,11 @@ Installieren Sie das Plugin. Melden Sie sich als Inhaber bei SwB an. Geben Sie d
 
 Der Dot ruft `connect(what="chatgpt")` auf, um die OAuth-Anmeldung zu prüfen. Mit OAuth geben Sie den Zugriff auf einer Seite von SwB frei. Bitten Sie einen Agenten mit vollem Inhaberzugriff, `connect(what="dots")` auszuführen und den Block `dots` zu prüfen.
 
-Wenn der Dot MCP Events unterstützt, abonniert er `switchboard.message.created` für das Postfach `chatgpt`. Ein Ereignis meldet dem Dot, dass eine Nachricht eingetroffen ist. SwB prüft die Adresse, die Ereignisse empfängt. Der Dot liest die Nachricht mit `get_message` und antwortet mit `reply`. In einem offenen Chat holen Sie Nachrichten mit `wait` oder `inbox` ab.
+Wenn der Dot MCP Events unterstützt, kann er `switchboard.message.created` für das Postfach `chatgpt` abonnieren. Ein Ereignis meldet dem Dot, dass eine Nachricht eingetroffen ist. SwB prüft die Adresse, die Ereignisse empfängt. Der Dot liest die Nachricht mit `get_message` und antwortet mit `reply`. In einem offenen Chat holen Sie Nachrichten mit `wait` oder `inbox` ab.
 
 ## Zugangsdaten
 
-| Token | Hier wird es angezeigt | Format | Hierhin gehört es |
+| Token | Wo es angezeigt wird | Format | Wohin es gehört |
 | - | - | - | - |
 | Anmeldetoken für SwB | ChatGPT erhält es bei der Anmeldung | Zufälliger Text | ChatGPT speichert es für Sie |
 | Signatur-Secret für Ereignisse | Der Client sendet es mit dem Abonnement | `whsec_` gefolgt von Base64-Text | SwB speichert es verschlüsselt |

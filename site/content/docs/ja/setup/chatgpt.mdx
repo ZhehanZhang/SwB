@@ -27,7 +27,7 @@ SwB を追加したあと、このプロンプトを ChatGPT のチャットに�
 
 ### サーバーを追加する
 
-**+** を選択します。次に **Add custom MCP server** を選択します。
+**+** を選択してください。次に **Add custom MCP server** を選択してください。
 
 ### アドレスを入力する
 
@@ -35,7 +35,7 @@ SwB を追加したあと、このプロンプトを ChatGPT のチャットに�
 
 ### プラグインを作成する
 
-**OAuth** を選択します。**I understand and want to continue** を選択します。次に **Create as a plugin** を選択します。
+**OAuth** を選択してください。**I understand and want to continue** を選択してください。次に **Create as a plugin** を選択してください。
 
 ### インストールしてサインインする
 
@@ -47,7 +47,7 @@ SwB を追加したあと、このプロンプトを ChatGPT のチャットに�
 
 ## エージェントの動作
 
-ChatGPT は `connect(what="chatgpt")` を呼び出します。SwB は、MCP アドレスと OAuth の状態を返します。あなたがサインインすると、`connect` はクライアントがサインイン済みであることを報告します。
+ChatGPT は `connect(what="chatgpt")` を呼び出します。SwB は、MCP アドレスと OAuth の状態を返します。サインインすると、`connect` はクライアントがサインイン済みであることを報告します。
 
 ChatGPT は `send` でテストメッセージを送り、`inbox` で読みます。メールボックスには、1 つのエージェント宛てのメッセージが入ります。クライアントが MCP Events に対応している場合は、`chatgpt` のメールボックスについて `switchboard.message.created` を購読できます。イベントは、メッセージが届いたことをクライアントに知らせます。ChatGPT は `get_message` でメッセージを読み、`reply` で回答します。開いているチャットでメッセージを集めるときは、`wait` か `inbox` を使います。
 

@@ -15,7 +15,7 @@ MCP Events は、メッセージが届いたときに通知を送るしくみで
 
 dot とは、個人用の ChatGPT エージェントです。`dots` ブロックは、1 つの Slack ワークスペースから dots を見つけ、各 dot を送信先にします。Slack からは `@swb <dot name> <message>` で送ります。または `send(to="<dot name>", task="<message>")` を呼び出します。
 
-Slack での既定の配信には、非公開チャンネルの `#agents` を使います。SwB は、あなたのユーザートークンでこのチャンネルを作成できます。そのチャンネルで `/invite` を使い、SwB のボットと dots を追加してください。SwB は、dot の返信を元の会話に返します。
+Slack での既定の配信には、非公開チャンネルの `#agents` を使います。SwB は、オーナーのユーザートークンでこのチャンネルを作成できます。そのチャンネルで `/invite` を使い、SwB のボットと dots を追加してください。SwB は、dot の返信を元の会話に返します。
 
 ```yaml
 blocks:
@@ -26,7 +26,7 @@ blocks:
     match: [dot]
 ```
 
-これを dot の指示に貼り付けてください。例の ID を、あなたの SwB のボット ID とアプリ ID に置き換えてください。
+これを dot の指示に貼り付けてください。例の ID を、実際の SwB のボット ID とアプリ ID に置き換えてください。
 
 ```text
 In #agents, check the bot and app IDs on SwB posts that mention you. Use bot <BOT_ID> and app <APP_ID>. Answer matching posts in the same thread.

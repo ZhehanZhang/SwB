@@ -29,7 +29,7 @@ Envoyez `/newbot`. Répondez avec un nom d'affichage.
 Répondez avec un nom d'utilisateur qui se termine par `bot`. BotFather vous répond avec le jeton.
 ### Enregistrer le jeton
 
-Ouvrez le lien de dépôt SwB fourni par votre agent. Collez le jeton dans le champ.
+Ouvrez le lien de saisie SwB fourni par votre agent. Collez le jeton dans le champ.
 ### Démarrer une discussion privée
 
 Touchez **Start** dans la discussion privée avec votre bot. Envoyez un message pour que SwB trouve votre ID utilisateur.
@@ -50,17 +50,17 @@ Retirez le bot de chaque groupe. Ajoutez-le ensuite de nouveau au groupe.
 
 ## Ce que fait l'agent
 
-L'agent appelle `connect(what="telegram")`. Au besoin, il active le bloc `telegram`. Une fois le bloc activé, `connect` ou `telegram_provision` renvoie un lien de dépôt pour le jeton du bot.
+L'agent appelle `connect(what="telegram")`. Au besoin, il active le bloc `telegram`. Une fois le bloc activé, `connect` ou `telegram_provision` renvoie un lien de saisie pour le jeton du bot.
 
 Une fois le jeton enregistré, l'agent appelle `telegram_status`. Cet appel vérifie le bot et le mode de confidentialité. Le lien d'invitation au groupe se trouve dans `setup.add_to_group_url`. Les ID des discussions récentes se trouvent dans `setup.seen_chats`.
 
-L'agent configure un espace sous `blocks.telegram.spaces` dans `config/switchboard.yaml`. Un espace relie un ensemble de discussions à un projet SwB. Indiquez les ID de groupe dans `chats`. Indiquez votre ID utilisateur dans `owner_ids`. Redémarrez SwB après avoir modifié le fichier.
+L'agent configure un espace sous `blocks.telegram.spaces` dans `config/switchboard.yaml`. Un espace associe un ensemble de discussions à un projet SwB. Indiquez les ID de groupe dans `chats`. Indiquez votre ID utilisateur dans `owner_ids`. Redémarrez SwB après avoir modifié le fichier.
 
 ## Identifiants
 
 | Jeton | Où Telegram l'affiche | Format | Destination |
 | --- | --- | --- | --- |
-| Jeton du bot | Réponse de BotFather après `/newbot` ou `/token` | Des chiffres, un deux-points, puis des lettres et des chiffres | Lien de dépôt SwB |
+| Jeton du bot | Réponse de BotFather après `/newbot` ou `/token` | Des chiffres, un deux-points, puis des lettres et des chiffres | Lien de saisie SwB |
 
 ## Vérifier la connexion
 

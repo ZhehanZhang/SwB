@@ -13,7 +13,7 @@ Un **espace** est un lieu où arrivent des messages. Les canaux Slack, les canau
 | `triage` | Réveille un agent pour examiner un événement et choisir une réponse. L'action par défaut est une réponse dans le fil |
 | `work` | Traite les messages du propriétaire |
 
-Sur Slack, Discord et Telegram, vos mentions et vos messages directs utilisent `work` dans tous les modes. Les réglages de visibilité contrôlent toujours l'accès aux canaux et aux cibles.
+Sur Slack, Discord et Telegram, vos mentions et vos messages directs utilisent `work` dans tous les modes. Les paramètres de visibilité continuent de contrôler l'accès aux canaux et aux cibles.
 
 Pour le mode `work` de GitHub, ajoutez votre numéro de compte à la [liste des propriétaires](/fr/docs/blocks/github#comptes-propriétaires) de l'espace.
 
@@ -32,7 +32,7 @@ blocks:
         mode: "off"
 ```
 
-SwB vérifie d'abord le réglage enregistré, puis les réglages du canal et de l'espace. Il vérifie ensuite les anciens réglages du bloc, le mode du projet et `modes.default`. La valeur par défaut est `off`.
+SwB vérifie d'abord le paramètre enregistré, puis les paramètres du canal et de l'espace. Il vérifie ensuite les anciens paramètres du bloc, le mode du projet et `modes.default`. La valeur par défaut est `off`.
 
 ## Lier une cible
 
@@ -40,8 +40,8 @@ Sur GitHub, Slack, Discord et Telegram, la route du projet peut réveiller un ag
 
 | Ordre | Cible |
 | - | - |
-| D'abord | La cible du réglage `space_mode` enregistré. Un réglage de canal remplace tout le réglage de l'espace |
-| Ensuite | La `target` YAML du réglage de mode du canal, de l'espace ou du projet, dans cet ordre |
+| D'abord | La cible du paramètre `space_mode` enregistré. Un paramètre de canal remplace tout le paramètre de l'espace |
+| Ensuite | La `target` YAML du paramètre de mode du canal, de l'espace ou du projet, dans cet ordre |
 | Ensuite | En `triage`, une cible disponible nommée `claude-<project>-triage`, par exemple une routine Claude |
 | Ensuite | La `default_target` de l'espace ou son alias `target` |
 | Enfin | La route du projet |
@@ -52,7 +52,7 @@ Choisissez une cible dans `targets`. Cet exemple lie la boîte aux lettres d'un 
 space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
 ```
 
-Utilisez `mode="assist"` pour le mode assist. Laissez `target` de côté pour garder la liaison. Définissez `target=""` pour l'effacer.
+Utilisez `mode="assist"` pour le mode assist. Omettez `target` pour conserver la liaison. Définissez `target=""` pour l'effacer.
 
 Pour définir la cible de repli, appelez `routes_set` avec le projet lié et l'adresse de la cible. Pour une route Capy verrouillée, utilisez une cible comme `capy:captain:<name>` et gardez `allow_override=false`.
 
@@ -71,9 +71,9 @@ Pour limiter l'accès à un seul expéditeur, utilisez le même ID d'expéditeur
 
 Définissez l'intervalle avec `modes.digest_minutes`. La valeur par défaut est de 60 minutes. SwB dépose le résumé dans la boîte aux lettres de la cible à la fin de l'intervalle, ou quand le lot atteint 50 événements. La boîte aux lettres du propriétaire sert de repli.
 
-En tant que propriétaire, lisez chaque résumé dans la **Inbox** de la console, ou avec `inbox` et `wait` par MCP. Le résumé indique le nombre d'événements. Il indique l'auteur, un extrait et le lien disponible de chaque événement. Son niveau de confiance est `external`.
+En tant que propriétaire, lisez chaque résumé dans la page **Inbox** de la console, ou par MCP avec `inbox` et `wait`. Le résumé indique le nombre d'événements. Il indique l'auteur, un extrait et le lien disponible de chaque événement. Son niveau de confiance est `external`.
 
-Le mode Watch laisse les agents endormis. Utilisez la boîte de réception pour lire un résumé. Les [destinations d'événements GitHub](/fr/docs/blocks/github) reçoivent toujours une copie de chaque événement.
+Le mode Watch laisse les agents en veille. Utilisez la boîte de réception pour lire un résumé. Les [destinations d'événements GitHub](/fr/docs/blocks/github) reçoivent quand même une copie de chaque événement.
 
 ## Actions de tri
 
@@ -89,12 +89,12 @@ Pour donner plus d'actions à l'agent, définissez `actions` dans `space_mode` o
 | `link_duplicate` | Lie et ferme un ticket GitHub en double |
 | `notify_owner` | Envoie une note au propriétaire |
 
-Les modifications sur GitHub demandent un identifiant GitHub avec un accès en écriture. SwB enregistre les actions de tri dans le journal d'audit.
+Les modifications sur GitHub nécessitent un identifiant GitHub avec un accès en écriture. SwB enregistre les actions de tri dans le journal d'audit.
 
 ## Vérifier une livraison
 
-Utilisez `modes_status` pour vérifier le mode, sa cible, ses actions et les problèmes de configuration. Dans la console, la ligne du mode indique l'agent lié. En mode triage, l'indication d'agent par défaut apparaît uniquement quand SwB utilise le repli. `space_mode` et `modes_status` vous invitent tous deux à choisir un agent de tri quand le mode triage demande une cible.
+Utilisez `modes_status` pour vérifier le mode, sa cible, ses actions et les problèmes de configuration. Dans la console, la ligne du mode indique l'agent lié. En mode triage, l'indication d'agent par défaut apparaît uniquement quand SwB utilise le repli. `space_mode` et `modes_status` vous invitent tous deux à choisir un agent de tri quand le mode triage a besoin d'une cible.
 
-SwB enregistre dans le journal d'audit les raisons des messages ignorés sur Slack, Discord et Telegram. Il enregistre une entrée toutes les 10 minutes au maximum pour le même bloc, le même espace, le même canal et la même raison.
+SwB enregistre dans le journal d'audit les raisons des messages ignorés sur Slack, Discord et Telegram. Il enregistre au plus une entrée par période de 10 minutes pour le même bloc, le même espace, le même canal et la même raison.
 
 SwB enregistre aussi les raisons des webhooks GitHub ignorés. Ouvrez **Audit** ou exécutez `swb log` pour voir la raison.

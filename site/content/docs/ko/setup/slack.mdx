@@ -3,7 +3,7 @@ title: Slack
 description: 봇과 내 Slack 계정으로 Slack 워크스페이스를 SwB에 연결합니다.
 ---
 
-SwB은 매니페스트로 만든 Slack 앱을 통해 Slack을 읽고 게시합니다. 매니페스트는 앱의 모든 설정을 담은 파일입니다.
+SwB은 매니페스트로 만든 Slack 앱을 통해 Slack에서 메시지를 읽고 게시합니다. 매니페스트는 앱의 모든 설정을 담은 파일입니다.
 
 앱은 Socket Mode를 사용합니다. SwB이 Slack으로 이 연결을 직접 열기 때문에 서버는 비공개 주소를 써도 됩니다.
 
@@ -187,7 +187,7 @@ blocks:
           example: [bot, user]
 ```
 
-`switchboard_status`에 나온 에이전트 이름을 사용하세요. 에이전트마다 권한을 하나씩 추가하세요. 워크스페이스 항목과 권한에는 같은 워크스페이스 라벨을 사용하세요. 계정 전용 매니페스트를 쓴다면 `team_id` 옆에 `user_only: true`를 추가하세요. `identities`에서 `bot`을 제거하세요. 권한은 `[user]`로 설정하세요.
+`switchboard_status`에 나온 에이전트 이름을 사용하세요. 에이전트마다 권한을 하나씩 추가하세요. 워크스페이스 항목과 권한에는 같은 워크스페이스 라벨을 사용하세요. 내 계정 전용 매니페스트를 쓴다면 `team_id` 옆에 `user_only: true`를 추가하세요. `identities`에서 `bot`을 제거하세요. 권한은 `[user]`로 설정하세요.
 
 `connect`가 요청하면 SwB을 다시 시작하세요. 에이전트는 `slack_workspaces`로 각 Slack 계정을 확인할 수 있습니다. 여기서 계정은 봇 계정이나 내 계정을 말합니다.
 

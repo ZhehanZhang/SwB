@@ -1,5 +1,5 @@
 ---
-title: Conecta tus agentes
+title: Conectar tus agentes
 description: Añade SwB a tus agentes y configura sus conexiones.
 ---
 
@@ -25,13 +25,13 @@ Un agente con acceso de propietario puede configurar las demás conexiones. Con 
 
 El acceso de propietario necesita un inicio de sesión OAuth aprobado por el propietario o una clave de `SWB_KEY_<NAME>`. Usa una credencial con acceso completo a ámbitos, herramientas y destinos. Los ajustes `auth.key_scopes`, `auth.key_tools` y `auth.key_targets` limitan este acceso.
 
-| Petición | Lo que hace el agente |
+| Lo que pides | Lo que hace el agente |
 | - | - |
 | ¿Cómo conecto mis Claude Projects? | Registra una rutina de Claude para el proyecto y te da un enlace para el token |
 | Conecta Slack a SwB. | Te remite al manifiesto YAML de [Configuración de Slack](/es/docs/setup/slack#manifiestos-de-la-app) y obtiene un enlace de entrega cuando hace falta |
 | Conecta mi bot de Discord. | Te da un enlace para el token y el enlace de invitación del bot |
 | Envía esto a mi Capy Captain. | Envía la tarea y espera la respuesta |
-| ¿A quién puedes enviar mensajes? | Lista los destinos a los que llega el agente |
+| ¿A quién puedes enviar mensajes? | Lista los destinos a los que puede enviar el agente |
 
 El agente llama a la herramienta `connect`. SwB responde con el siguiente paso para esa plataforma. Cuando un paso necesita un token, SwB da un enlace de entrega de un solo uso. Abre el enlace y pega allí el token. [Credenciales](/es/docs/credentials) explica los enlaces de entrega.
 
@@ -47,7 +47,7 @@ swb connect grok
 
 ## Conectar con un código de emparejamiento
 
-El emparejamiento da a un agente nuevo su propia clave. Pide a un agente con sesión de propietario que llame a `connect_code`. Dale el nombre del agente nuevo. El código sirve una vez durante diez minutos. El agente nuevo usa `POST /connect` para canjear el código por su propia clave. Consulta [Cliente MCP](/es/docs/setup/mcp-client) para el procedimiento completo.
+El emparejamiento da a un agente nuevo su propia clave. Pide a un agente conectado como propietario que llame a `connect_code`. Dale el nombre del agente nuevo. El código es de un solo uso y caduca a los diez minutos. El agente nuevo usa `POST /connect` para canjear el código por su propia clave. Consulta [Cliente MCP](/es/docs/setup/mcp-client) para el procedimiento completo.
 
 Para crear un código en la consola, abre **Tokens**. Abre **Pairing code**. Escribe el nombre del agente. Selecciona **Create code**. SwB envía el formulario a `POST /pairing/code`.
 

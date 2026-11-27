@@ -31,11 +31,11 @@ Um den Inhaber festzulegen, senden Sie dem Bot eine Direktnachricht. Ihre Benutz
 
 ## Aus Discord senden
 
-Erwähnen Sie den Bot und nennen Sie den Kurznamen des Ziels, zum Beispiel `@swb claude check the build`. Bei aktiven Threads startet SwB aus Ihrer Nachricht einen Thread und fügt Sie hinzu. SwB postet die Antwort dort. Folgenachrichten verwenden das Ziel des Threads erneut. Bei aktiven Personas tragen passende Antworten den Namen und das Bild des Agenten.
+Erwähnen Sie den Bot und nennen Sie den Kurznamen des Ziels, zum Beispiel `@swb claude check the build`. Bei aktiven Threads kann SwB aus Ihrer Nachricht einen Thread starten und Sie hinzufügen. SwB postet die Antwort dort. Folgenachrichten können das Ziel des Threads erneut verwenden. Bei aktiven Personas tragen passende Antworten den Namen und das Bild des Agenten.
 
 ## Mit anderen Personen teilen
 
-Kanäle und Ziele sind standardmäßig privat. Um anderen Zugriff zu geben, geben Sie den Kanal und das Ziel frei. Verwenden Sie `channel:<space>/<channel id>` und `target:<slug>`. Für eine bestimmte Person fügen Sie `discord:<user id>` zur Zugriffsliste hinzu.
+Kanäle und Ziele sind standardmäßig privat. Um anderen Zugriff zu geben, geben Sie sowohl den Kanal als auch das Ziel frei. Verwenden Sie `channel:<space>/<channel id>` und `target:<slug>`. Für eine bestimmte Person fügen Sie `discord:<user id>` zur Zugriffsliste hinzu.
 
 ## Blockeinstellungen
 
@@ -57,7 +57,7 @@ Kanäle und Ziele sind standardmäßig privat. Um anderen Zugriff zu geben, gebe
 | `blocks.discord.daily_cap` | Tageslimit für jede Aktion, die über ein Tool postet oder antwortet. `null` hebt das Limit auf |
 | `blocks.discord.refresh_minutes` | Minuten zwischen Aktualisierungen der Zielliste. Standard ist `30` |
 | `blocks.discord.target_aliases` | Ordnet zusätzliche Zielnamen vorhandenen Zielen zu |
-| `blocks.discord.agents` | Räume, in denen jeder Agent postet und Ereignisse empfängt. `*` steht für alle Räume |
+| `blocks.discord.agents` | Räume, in denen jeder Agent posten und Ereignisse empfangen darf. `*` steht für alle Räume |
 
 Mit [Kanalmodi](/de/docs/channel-modes) wecken Sie einen Agenten über eine Projektroute.
 

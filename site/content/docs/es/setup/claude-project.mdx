@@ -45,7 +45,7 @@ SwB muestra **Routine saved** o **Routine and project saved**. Avisa al coordina
 
 ## Lo que hace el agente
 
-El coordinador llama a `connect(what="claude-project")` desde un cliente de SwB con acceso de propietario completo. SwB comprueba el bloque `claude-routine` y lista sus rutinas. El coordinador puede llamar a `project_list` para encontrar tu proyecto de SwB.
+El coordinador llama a `connect(what="claude-project")` desde un cliente de SwB con acceso completo de propietario. SwB comprueba el bloque `claude-routine` y lista sus rutinas. El coordinador puede llamar a `project_list` para encontrar tu proyecto de SwB.
 
 El coordinador añade un disparador de API. Incluye esta instrucción en el prompt de la rutina con el nombre exacto del Claude Project.
 
@@ -53,9 +53,9 @@ El coordinador añade un disparador de API. Incluye esta instrucción en el prom
 Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
 ```
 
-El coordinador llama de nuevo a `connect` con `fire_url`, `claude_project` y `project` en `choose`. SwB devuelve un enlace de entrega. Un enlace de entrega es una página privada de SwB para una credencial. Este enlace sirve una vez y caduca a los 30 minutos.
+El coordinador llama de nuevo a `connect` con `fire_url`, `claude_project` y `project` en `choose`. SwB devuelve un enlace de entrega. Un enlace de entrega es una página privada de SwB para una credencial. Este enlace funciona una sola vez y caduca a los 30 minutos.
 
-Si SwB encuentra proyectos parecidos, el agente te pide que elijas uno. Para un proyecto nuevo, llama a `connect` con un slug nuevo y `create_new` en `true`.
+Si SwB encuentra proyectos parecidos, el agente te pide que elijas uno. Para un proyecto nuevo, llama a `connect` con un slug nuevo y `create_new` establecido en `true`.
 
 ## Credenciales
 

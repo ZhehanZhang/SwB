@@ -5,7 +5,7 @@ description: Installieren Sie SwB mit uvx, pipx oder Docker.
 
 {/* prepublication */}
 
-SwB läuft unter Linux, macOS und Windows. Um SwB aus dem Quellcode zu bauen, folgen Sie [Docker Compose](/de/docs/self-hosting#docker-compose). Die folgenden Verfahren gelten nach der Veröffentlichung des Pakets oder Images.
+SwB läuft unter Linux, macOS und Windows. Um SwB aus dem Quellcode zu bauen, folgen Sie [Docker Compose](/de/docs/self-hosting#docker-compose). Die folgenden Methoden funktionieren, sobald das Paket oder Image veröffentlicht ist.
 
 ## Installieren und starten
 
@@ -13,23 +13,23 @@ Verwenden Sie einen leeren Ordner für Ihre SwB-Dateien. Mit dem Inhaberschlüss
 
 <Tabs items={['uvx', 'pipx', 'Docker']}>
   <Tab value="uvx">
-    [Installieren Sie uv](https://docs.astral.sh/uv/getting-started/installation/). SwB braucht Python 3.12 oder neuer.
+    [Installieren Sie uv](https://docs.astral.sh/uv/getting-started/installation/). SwB benötigt Python 3.12 oder neuer.
 
     ```bash
     uvx swb-one up
     ```
 
-    uvx lädt SwB herunter und startet es. Öffnen Sie den Einmal-Anmeldelink aus Ihrem Terminal innerhalb von fünf Minuten. Ersetzen Sie in den anderen Beispielen das führende `swb` durch `uvx swb-one`.
+    uvx lädt SwB herunter und startet es. Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus Ihrem Terminal. Ersetzen Sie in den anderen Beispielen das führende `swb` durch `uvx swb-one`.
   </Tab>
   <Tab value="pipx">
-    [Installieren Sie pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB braucht Python 3.12 oder neuer.
+    [Installieren Sie pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB benötigt Python 3.12 oder neuer.
 
     ```bash
     pipx install swb-one
     swb up
     ```
 
-    pipx installiert den Befehl `swb` für Ihr Benutzerkonto. Öffnen Sie den Einmal-Anmeldelink aus Ihrem Terminal innerhalb von fünf Minuten.
+    pipx installiert den Befehl `swb` für Ihr Benutzerkonto. Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus Ihrem Terminal.
 
     Wenn pipx eine ältere Python-Version verwendet, nutzen Sie `pipx install --python 3.12 swb-one`.
   </Tab>
@@ -76,7 +76,7 @@ Führen Sie `swb --help` aus, um die Befehlsgruppen zu sehen. Hängen Sie `--hel
 | `swb hook HARNESS` | Leitet ein lokales Agentenereignis an den Companion weiter. |
 | `swb status` | Zeigt den Status und die nächsten Schritte. |
 | `swb login-link` | Erstellt einen Einmal-Anmeldelink für den Inhaber. |
-| `swb claim` | Speichert Zugangsdaten aus einem Claim-Link oder Code. |
+| `swb claim` | Speichert Zugangsdaten aus einem Claim-Link oder Claim-Code. |
 | `swb serve` | Startet den Server mit dem konfigurierten Host und Port. |
 | `swb export DIR` | Schreibt das gespeicherte Gedächtnis als Markdown-Dateien in den Ausgabeordner `DIR`. |
 | `swb log [--limit N]` | Gibt die letzten Audit-Einträge aus. Das Standardlimit ist `50`. |
@@ -90,4 +90,4 @@ Führen Sie `swb --help` aus, um die Befehlsgruppen zu sehen. Hängen Sie `--hel
 
 {/* prepublication */}
 
-Nach der Veröffentlichung stellt PyPI das Paket `swb-one` bereit. Die GitHub Container Registry stellt das Image `ghcr.io/zhehanzhang/swb` bereit. Für ein bestimmtes Release verwenden Sie eine Version wie `1.0.0`. Das Image-Tag `latest` folgt dem neuesten stabilen Release.
+Nach der Veröffentlichung stellt PyPI das Paket `swb-one` bereit. Die GitHub Container Registry stellt das Image `ghcr.io/zhehanzhang/swb` bereit. Für ein bestimmtes Release verwenden Sie eine Version wie `1.0.0`. Das Image-Tag `latest` verweist immer auf das neueste stabile Release.

@@ -7,9 +7,9 @@ description: Die MCP-Tools, die SwB Ihren Agenten bereitstellt.
 
 ## Gekoppelte Schlüssel
 
-Ein gekoppelter Schlüssel nutzt diese Tools im Rahmen des Zugriffs, den der Inhaber ihm gibt.
+Ein gekoppelter Schlüssel kann diese Tools im Rahmen des Zugriffs nutzen, den der Inhaber ihm gewährt.
 
-| Bereich | Tools und Limits |
+| Zweck | Tools und Limits |
 | - | - |
 | Nachrichten | Verwenden Sie `send` und `targets`. Bei aktiven Legacy-Namen verwenden Sie `agent_send`. Verwenden Sie `inbox`, `wait`, `reply`, `status`, `result`, `cancel` und `get_message` im Rahmen des Unterhaltungszugriffs Ihres Schlüssels |
 | Gedächtnis und Projekte | Verwenden Sie `context_pack` und `project_list` im Rahmen des Zugriffs Ihres Schlüssels. Verwenden Sie die Gedächtnis-Tools in freigegebenen Bereichen |
@@ -17,33 +17,33 @@ Ein gekoppelter Schlüssel nutzt diese Tools im Rahmen des Zugriffs, den der Inh
 | Einrichtung | Prüfen Sie den Status mit `switchboard_status` und `modes_status`. Client-Anleitungen erhalten Sie mit `connect`. Für die Einrichtung von Blöcken und für Kopplungscodes verwenden Sie die Anmeldung des Inhabers |
 | Blöcke | Verwenden Sie Block-Tools im Rahmen Ihres freigegebenen Zugriffs und der Aktionen, die der Kanalmodus erlaubt |
 
-`login_link`, `connect_code`, `connect_list`, `connect_revoke`, `visibility_list` und `visibility_set` brauchen die uneingeschränkte Anmeldung des Inhabers. Verwenden Sie diese Anmeldung auch für `project_create`, `project_update`, `project_sync` und `space_mode`. Sie gibt außerdem Zugriff auf `memory_promote`, `routine_register`, `routine_add`, `routine_remove`, `discord_provision` und `telegram_provision`.
+`login_link`, `connect_code`, `connect_list`, `connect_revoke`, `visibility_list` und `visibility_set` erfordern die uneingeschränkte Anmeldung des Inhabers. Verwenden Sie diese Anmeldung auch für `project_create`, `project_update`, `project_sync` und `space_mode`. Sie gibt außerdem Zugriff auf `memory_promote`, `routine_register`, `routine_add`, `routine_remove`, `discord_provision` und `telegram_provision`.
 
-Der Inhaber begrenzt Tools mit `auth.key_tools` und Sendeziele mit `auth.key_targets`. Die Einstellung `auth.key_scopes` begrenzt Routing, Nachrichten und Unterhaltungen. Gedächtnis-Tools nutzen die Freigaben, die SwB für jeden gekoppelten Schlüssel speichert.
+Der Inhaber kann Tools mit `auth.key_tools` und Sendeziele mit `auth.key_targets` begrenzen. Die Einstellung `auth.key_scopes` begrenzt Routing, Nachrichten und Unterhaltungen. Gedächtnis-Tools nutzen die Freigaben, die SwB für jeden gekoppelten Schlüssel speichert.
 
 ## Nachrichten
 
 | Tool | Zweck |
 | - | - |
-| `send` | Schreiben Sie die Arbeit oder Nachricht in `task`. Mit `to` wählen Sie ein Ziel. Lassen Sie `to` leer, um eine Route zu verwenden, sofern der Schlüssel es erlaubt |
+| `send` | Schreiben Sie die Aufgabe oder Nachricht in `task`. Mit `to` wählen Sie ein Ziel. Lassen Sie `to` leer, um eine Route zu verwenden, sofern der Schlüssel es erlaubt |
 | `agent_send` | Veraltetes Tool. Übergeben Sie den Agentennamen in `to`, zum Beispiel `to="codex"`. `blocks.mcp.legacy_aliases` aktiviert es standardmäßig. Für neue Aufrufe verwenden Sie `send` mit `to="agent:codex"` |
 | `wait` | Wartet auf neue Nachrichten oder Antworten |
 | `inbox` | Liest Ihren Posteingang und kehrt sofort zurück |
-| `reply` | Übergeben Sie das `handle` aus einer Sendung oder einem Posteingangseintrag in `conversation`. Schreiben Sie die Antwort in `text` |
+| `reply` | Übergeben Sie das `handle` aus einem `send`-Aufruf oder einem Posteingangseintrag in `conversation`. Schreiben Sie die Antwort in `text` |
 | `status` | Zeigt den Zustand einer Unterhaltung. Für Capy legen Sie mit `messages` die Anzahl der letzten Nachrichten fest. Mit `include_tools=true` erscheinen auch Tool-Aktivitäten |
 | `switchboard_status` | Zeigt Ihre Anmeldeidentität, Wartelimits, Blöcke und den Zustand der Instanz |
 | `result` | Holt die abschließende Antwort einer Unterhaltung. Mit `tail` legen Sie, wo unterstützt, die Anzahl der letzten Antworten oder Nachrichten fest |
 | `cancel` | Beendet die Verfolgung einer Unterhaltung |
-| `targets` | Listet die verfügbaren Zieladressen auf. Ihr Schlüssel und die Regeln des Ziels bestimmen, wohin Sie senden |
+| `targets` | Listet die verfügbaren Zieladressen auf. Ihr Schlüssel und die Regeln des Ziels bestimmen, wohin Sie senden dürfen |
 | `get_message` | Liest eine gespeicherte Nachricht mit der `message_id` aus Ihrem Posteingang oder einem MCP-Ereignis |
 
 ### Posteingangsposition
 
 Ein Cursor markiert eine Position im Posteingang. `inbox` und `wait` speichern eine neue Position, wenn sie Einträge zurückgeben. Filter können eine separate Position weiterschieben. Ein späteres `wait` liest ab der gespeicherten Position. Übergeben Sie `since_cursor=0` an `inbox`, um von Anfang an zu lesen. Übergeben Sie einen zurückgegebenen `cursor` als `since_cursor`, um ab dieser Position fortzufahren.
 
-Skripte rufen `GET /inbox/poll` mit einem Bearer-Schlüssel auf, um auf Einträge im eigenen Posteingang zu warten. Übergeben Sie den zurückgegebenen `cursor` als `after`, um fortzufahren. Standardmäßig beginnt der Aufruf am aktuellen Ende des Posteingangs. Der Aufruf kehrt zurück, sobald Einträge eintreffen oder die Wartezeit endet. Den MCP-Cursor lässt er unverändert. Mit dem [Ereignisstrom des Posteingangs](/de/docs/connect#ereignisstrom-des-posteingangs) empfangen Sie Nachrichten, sobald sie eintreffen. Mit `inbox` lesen Sie Kontexteinträge und Watch-Zusammenfassungen, die Ihre Anmeldung sieht.
+Skripte können `GET /inbox/poll` mit einem Bearer-Schlüssel aufrufen, um auf Einträge im eigenen Posteingang zu warten. Übergeben Sie den zurückgegebenen `cursor` als `after`, um fortzufahren. Standardmäßig beginnt der Aufruf am aktuellen Ende des Posteingangs. Der Aufruf kehrt zurück, sobald Einträge eintreffen oder die Wartezeit endet. Den MCP-Cursor lässt er unverändert. Mit dem [Ereignisstrom des Posteingangs](/de/docs/connect#ereignisstrom-des-posteingangs) empfangen Sie Nachrichten, sobald sie eintreffen. Mit `inbox` lesen Sie Kontexteinträge und Watch-Zusammenfassungen, die Ihre Anmeldung sehen darf.
 
-Bei einem gekoppelten Schlüssel liefert eine Nachricht oder Unterhaltung außerhalb seines Zugriffs denselben Fehler wie eine fehlende ID. Lesen Sie [Schlüssel mit Grenzen](/de/docs/security#schlüssel-mit-grenzen).
+Bei einem gekoppelten Schlüssel liefert eine Nachricht oder Unterhaltung außerhalb seines Zugriffs denselben Fehler wie eine fehlende ID. Lesen Sie [Schlüssel mit Beschränkungen](/de/docs/security#schlüssel-mit-beschränkungen).
 
 ### Sendeoptionen
 
@@ -58,11 +58,11 @@ Bei einem gekoppelten Schlüssel liefert eine Nachricht oder Unterhaltung außer
 
 ## Gedächtnis und Projekte
 
-Verwenden Sie die Anmeldung des Inhabers oder Zugangsdaten mit einer Freigabe für den Gedächtnisbereich. Um als Agent einen Eintrag zu aktualisieren, zu verschieben oder zu löschen, verwenden Sie die Zugangsdaten, die ihn zuletzt geschrieben haben. Der Inhaber verwaltet jeden Eintrag. Änderungen an einem vorhandenen Eintrag in `general` brauchen Inhaberzugriff.
+Verwenden Sie die Anmeldung des Inhabers oder Zugangsdaten mit einer Freigabe für den Gedächtnisbereich. Um als Agent einen Eintrag zu aktualisieren, zu verschieben oder zu löschen, verwenden Sie die Zugangsdaten, die ihn zuletzt geschrieben haben. Der Inhaber kann jeden Eintrag verwalten. Änderungen an einem vorhandenen Eintrag in `general` erfordern Inhaberzugriff.
 
 | Tool | Zweck |
 | - | - |
-| `context_pack` | Liest eine Projektübersicht. Sie enthält `general` nur, wenn die Zugangsdaten diesen Zugriff haben. Bei einem gekoppelten Schlüssel zeigt der Capy-Abschnitt die Arbeit seines Agenten innerhalb seiner Unterhaltungsbereiche |
+| `context_pack` | Liest eine Projektübersicht. Sie enthält `general` nur, wenn die Zugangsdaten diesen Zugriff haben. Bei einem gekoppelten Schlüssel zeigt der Capy-Abschnitt die Aufgaben seines Agenten innerhalb seiner Unterhaltungsbereiche |
 | `memory_write` | Speichert in einem freigegebenen Bereich. Übergeben Sie `scope`, `namespace`, `title` und `body`. Ein Namespace gruppiert Einträge innerhalb eines Bereichs. Verwenden Sie bis zu drei Ebenen in Kleinbuchstaben, zum Beispiel `notes/meetings`. Für Projektgedächtnis übergeben Sie dasselbe Projekt in `project` und `scope`. Bevor Sie in `general` schreiben, bitten Sie den Inhaber um Bestätigung. Setzen Sie danach `confirm_general=true` |
 | `memory_search` | Sucht mit `query`. Mit `project` durchsucht SwB dieses Projekt und freigegebenes Gedächtnis in `general`. Mit `include_general=false` durchsucht SwB nur dieses Projekt. Mit `scopes` nennen Sie genaue Freigaben wie `agent:<name>` |
 | `memory_list` | Listet Einträge mit denselben Bereichsangaben wie `memory_search` auf |
@@ -84,7 +84,7 @@ Mit `links` in `project_update` setzen Sie diese Werte. SwB bietet die Verknüpf
 | `chatgpt_project` | Name oder ID des ChatGPT-Projekts |
 | `capy_project` | Name oder ID des Capy-Projekts |
 
-Ein privates Projekt braucht eine Freigabe, die dieses Projekt nennt, oder Inhaberzugriff. Für `memory_search` und `memory_list` nennen Sie das private Projekt in `project`. Mit `scopes` nennen Sie weitere öffentliche Projekte, auf die Sie Zugriff haben.
+Für ein privates Projekt brauchen Sie eine Freigabe, die dieses Projekt nennt, oder Inhaberzugriff. Für `memory_search` und `memory_list` nennen Sie das private Projekt in `project`. Mit `scopes` nennen Sie weitere öffentliche Projekte, auf die Sie Zugriff haben.
 
 ## Einrichtung
 
@@ -133,14 +133,14 @@ Die älteren Capy-Tool-Namen erscheinen, wenn `blocks.mcp.legacy_aliases` aktiv 
 | - | - |
 | `capy_captains` | Listet die Capy Captains auf, auf die Ihre Capy-Verbindung Zugriff hat |
 | `capy_captain_digest` | Liest die Zusammenfassung eines Capy Captain und zeigt, welche Crew-Threads arbeiten oder die Aufmerksamkeit des Inhabers brauchen. Verwenden Sie die Anmeldung des Inhabers |
-| `capy_list` | Listet Arbeit, die über SwB gesendet wurde, oder Threads in der Crew eines Capy Captain oder in einem verknüpften Capy-Projekt auf. Ein gekoppelter Schlüssel sieht nur die Arbeit seines Agenten innerhalb seiner Bereiche |
-| `capy_delegate` | Sendet Arbeit an Capy. Für neue Aufrufe verwenden Sie `send` mit `to="capy"` |
+| `capy_list` | Listet Aufgaben, die über SwB gesendet wurden, oder Threads in der Crew eines Capy Captain oder in einem verknüpften Capy-Projekt auf. Ein gekoppelter Schlüssel sieht nur die Aufgaben seines Agenten innerhalb seiner Bereiche |
+| `capy_delegate` | Sendet Aufgaben an Capy. Für neue Aufrufe verwenden Sie `send` mit `to="capy"` |
 | `capy_inbox` | Liest Ihren Capy-Posteingang und kehrt sofort zurück. Für neue Aufrufe verwenden Sie `inbox` mit `block="capy"` |
 | `capy_wait` | Wartet auf den nächsten Eintrag in Ihrem Posteingang. Für neue Aufrufe verwenden Sie `wait` |
 | `capy_status` | Zeigt den Zustand und die letzten Nachrichten eines Capy-Threads. Für neue Aufrufe verwenden Sie `status` |
 | `capy_reply` | Sendet eine Folgenachricht an einen Capy-Thread. Für neue Aufrufe verwenden Sie `reply` |
 | `capy_result` | Holt die neueste Antwort aus einem Capy-Thread mit verfügbaren Links zu Dateien und Pull Requests. Für neue Aufrufe verwenden Sie `result` |
-| `capy_cancel` | Beendet die Verfolgung von Arbeit, die an Capy gesendet wurde. Der Capy-Thread kann weiterlaufen. Für neue Aufrufe verwenden Sie `cancel` |
+| `capy_cancel` | Beendet die Verfolgung von Aufgaben, die an Capy gesendet wurden. Der Capy-Thread kann weiterlaufen. Für neue Aufrufe verwenden Sie `cancel` |
 
 ### Claude-Code-Routinen
 
@@ -198,7 +198,7 @@ Für Aktionen in GitHub-Unterhaltungen übergeben Sie die Unterhaltungs-ID von S
 | `github_status` | Prüft den Webhook, die Repository-Modi und die Berechtigungen der GitHub App |
 | `github_label` | Fügt einem Issue oder Pull Request vorhandene Labels hinzu |
 | `github_comment` | Kommentiert ein Issue oder einen Pull Request |
-| `github_open_issue` | Eröffnet ein Issue in einem Repository |
+| `github_open_issue` | Erstellt ein Issue in einem Repository |
 | `github_link_duplicate` | Verknüpft ein Issue mit seinem Original im selben Repository. SwB setzt `duplicate` und schließt das Duplikat als `not_planned` |
-| `github_notify_owner` | Sendet dem Inhaber eine Notiz in den Posteingang mit einem Link zum Issue oder Pull Request, das die Unterhaltung gestartet hat |
+| `github_notify_owner` | Sendet dem Inhaber eine Posteingangsnotiz mit einem Link zum Issue oder Pull Request, das die Unterhaltung gestartet hat |
 | `github_reply` | Antwortet im GitHub-Thread, der die SwB-Unterhaltung gestartet hat |

@@ -37,19 +37,19 @@ blocks:
       claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
 ```
 
-Para una configuración manual, pon en `token_env` una variable que contenga el token de la rutina. El ejemplo usa `SWB_EXAMPLE_CLAUDE_TOKEN`.
+Para una configuración manual, asigna a `token_env` el nombre de una variable que contenga el token de la rutina. El ejemplo usa `SWB_EXAMPLE_CLAUDE_TOKEN`.
 
 | Clave | Uso |
 | - | - |
 | `blocks.claude-routine` | Ajustes para despertar rutinas de Claude Code |
 | `blocks.claude-routine.use` | Tipo de bloque. Usa `claude-routine` |
-| `blocks.claude-routine.enabled` | Define `false` para omitir este bloque |
-| `blocks.claude-routine.routines` | Relación entre nombres de rutina y sus ajustes |
+| `blocks.claude-routine.enabled` | Usa `false` para omitir este bloque |
+| `blocks.claude-routine.routines` | Ajustes de cada rutina, por nombre |
 | `blocks.claude-routine.routines.*.agent` | Agente que recibe el mensaje. Valor predeterminado `claude` |
 | `blocks.claude-routine.routines.*.kind` | Usa `project` para una rutina con proyecto. Usa `general` para una rutina general |
 | `blocks.claude-routine.routines.*.project` | Nombre del proyecto de SwB para una rutina de proyecto |
 | `blocks.claude-routine.routines.*.name` | Nombre visible de la rutina |
-| `blocks.claude-routine.routines.*.primary` | Define `true` para elegir primero esta rutina para su agente y su proyecto |
+| `blocks.claude-routine.routines.*.primary` | Usa `true` para elegir primero esta rutina para su agente y su proyecto |
 | `blocks.claude-routine.routines.*.routine_id` | ID del disparador de la API de Claude, como `trig_...` |
 | `blocks.claude-routine.routines.*.slugs` | Nombres cortos adicionales a los que puedes enviar |
 | `blocks.claude-routine.routines.*.token_env` | Nombre de la variable que contiene el token de la rutina |

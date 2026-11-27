@@ -3,7 +3,7 @@ title: Agents de code
 description: Connectez Claude Code, Codex, Gemini CLI et d'autres agents de code.
 ---
 
-## Obtenir les réglages
+## Obtenir les paramètres
 
 ```bash
 swb connect coding-agent --choose agent=codex
@@ -18,14 +18,14 @@ La commande indique comment ajouter SwB comme serveur MCP distant. Utilisez OAut
 | Gemini CLI et Qwen Code | `settings.json` |
 | Goose | `config.yaml` |
 | OpenCode | `opencode.json` |
-| Cline et Kiro | Leurs réglages MCP |
+| Cline et Kiro | Leurs paramètres MCP |
 | Autres clients | Streamable HTTP avec un code d'appairage |
 
 Pour utiliser MCP Tasks avec Capy, consultez [MCP Tasks](/fr/docs/blocks/capy#mcp-tasks).
 
 ## Canal Claude Code
 
-Le canal transmet les messages de la boîte aux lettres `claude-code` à une session Claude Code ouverte. Les canaux Claude Code sont un aperçu de recherche.
+Le canal transmet les messages de la boîte aux lettres `claude-code` à une session Claude Code ouverte. Les canaux Claude Code sont en préversion de recherche.
 
 Générez une clé aléatoire d'au moins 24 caractères. Enregistrez-la sous `SWB_KEY_CHANNEL` dans le fichier `.env` privé du serveur. Redémarrez SwB pour charger la clé. Cette clé donne un accès en lecture à la boîte aux lettres `claude-code`. Installez [Bun](https://bun.sh). Ajoutez le plugin dans Claude Code.
 

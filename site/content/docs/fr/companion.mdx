@@ -1,9 +1,9 @@
 ---
 title: Compagnon
-description: Reliez un appareil pour que vos agents utilisent ses fonctions locales.
+description: Connectez un appareil pour que vos agents puissent utiliser ses fonctions locales.
 ---
 
-Un **compagnon** est un appareil relié à votre serveur SwB. Vos agents peuvent alors utiliser les fonctions de cet appareil.
+Un **compagnon** est un appareil connecté à votre serveur SwB. Vos agents peuvent alors utiliser les fonctions de cet appareil.
 
 ## Copier le prompt de configuration
 
@@ -32,7 +32,7 @@ Ajoutez une option `--cap` pour chaque fonction à activer.
 | Option | Fonction |
 | --- | --- |
 | `--cap notify` | Affiche des notifications de bureau sur l'appareil |
-| `--cap drop` | Partage des fichiers de 10 MiB au maximum chacun par le dossier `~/SwB Drop` |
+| `--cap drop` | Partage des fichiers d'au plus 10 Mio chacun via le dossier `~/SwB Drop` |
 | `--cap mcp --mcp NAME=COMMAND` | Donne à vos agents l'accès aux outils d'un serveur MCP de l'appareil |
 | `--cap herdr` | [Herdr](/fr/docs/blocks/local-sessions#herdr) |
 | `--cap codex` | [Serveur d'application Codex](/fr/docs/blocks/local-sessions#codex) |
@@ -53,13 +53,13 @@ Ajoutez une option `--mcp` par serveur MCP. Pour un programme, utilisez `--mcp '
 
 Vos agents utilisent `companion_list` pour voir chaque appareil appairé et ses actions. Ils utilisent `companion_invoke` pour exécuter une action.
 
-Les résultats texte du compagnon sont limités à 1 MiB. Lisez les données des fichiers Drop dans `structuredContent.result.content_b64`.
+Les résultats texte du compagnon sont limités à 1 Mio. Lisez les données des fichiers Drop dans `structuredContent.result.content_b64`.
 
 ## Sessions locales
 
-Une **session locale** est la conversation ouverte d'un agent de code sur l'appareil. SwB indique son état avec son adresse `local:session:<companion>:<harness>:<session>`.
+Une **session locale** est la conversation ouverte d'un agent de code sur l'appareil. SwB affiche son état avec son adresse `local:session:<companion>:<harness>:<session>`.
 
-Suivez le lien de votre agent de code dans le tableau des fonctions. Configurez l'agent avant l'appairage. Après l'appairage, gardez le compagnon en marche. Demandez à un agent connecté en tant que propriétaire d'appeler `targets(block="local")`. Vérifiez que l'adresse de votre session apparaît.
+Suivez le lien de votre agent de code dans le tableau des fonctions. Configurez l'agent avant l'appairage. Après l'appairage, laissez le compagnon actif. Demandez à un agent connecté en tant que propriétaire d'appeler `targets(block="local")`. Vérifiez que l'adresse de votre session apparaît.
 
 SwB essaie de livrer chaque message à la session ouverte. Il dépose le message dans la boîte aux lettres de l'agent quand l'expéditeur peut utiliser cette boîte. La réponse revient dans la même conversation.
 
@@ -67,7 +67,7 @@ Utilisez l'adresse de session indiquée par `targets`. Trouvez la ressource de c
 
 Pour les commandes et les agents pris en charge, consultez [Sessions locales](/fr/docs/blocks/local-sessions).
 
-## Garder le compagnon en marche
+## Garder le compagnon actif
 
 L'appairage démarre le compagnon. Utilisez `swb companion run` pour le redémarrer. Utilisez `swb companion status` pour voir l'ID local de l'appareil et ses fonctions.
 
@@ -79,4 +79,4 @@ L'appareil ouvre lui-même chaque connexion vers SwB.
 
 Exécutez `swb companion disconnect` sur l'appareil pour supprimer sa clé. Pour révoquer la clé dans la console, ouvrez **Connections** dans **Settings**. Sélectionnez **Disconnect** pour l'appareil.
 
-Un compagnon en marche supprime sa clé locale quand il détecte la révocation. Si une clé reste sur l'appareil, exécutez `swb companion disconnect` avant un nouvel appairage.
+Un compagnon actif supprime sa clé locale quand il détecte la révocation. Si une clé reste sur l'appareil, exécutez `swb companion disconnect` avant un nouvel appairage.

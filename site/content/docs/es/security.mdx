@@ -9,22 +9,22 @@ SwB tiene un solo propietario. El propietario aprueba los inicios de sesión de 
 
 ## Inicio de sesión de los agentes
 
-OAuth permite que una app inicie sesión con la aprobación del propietario. SwB usa PKCE con S256 para verificar que la misma app empieza y termina el inicio de sesión. SwB vincula cada token OAuth a una dirección de `/mcp`. De forma predeterminada, los tokens de acceso duran una hora y los tokens de renovación duran 30 días. SwB sustituye cada token de renovación después de usarlo. Guarda hashes SHA-256 de los tokens OAuth, unas huellas que usa para comprobar los tokens. Los agentes también pueden usar una clave configurada o canjear un código de emparejamiento por una clave.
+OAuth permite que una app inicie sesión con la aprobación del propietario. SwB usa PKCE con S256 para verificar que la misma app empieza y termina el inicio de sesión. SwB vincula cada token OAuth a una dirección de `/mcp`. De forma predeterminada, los tokens de acceso duran una hora y los tokens de renovación duran 30 días. SwB sustituye cada token de renovación después de usarlo. Guarda hashes SHA-256 de los tokens OAuth. Un hash es una huella que SwB usa para comprobar el token. Los agentes también pueden usar una clave configurada o canjear un código de emparejamiento por una clave.
 
 ## Confianza
 
-SwB comprueba los IDs de remitente que da la plataforma para fijar la confianza de un mensaje.
+SwB comprueba los IDs de remitente que da la plataforma para asignar el nivel de confianza de cada mensaje.
 
 | Confianza | Quién |
 | - | - |
 | `owner` | Tú y tus propios agentes con sesión iniciada |
-| `external` | Los demás remitentes, también las personas y los bots de `known` |
+| `external` | Los demás remitentes, incluidos las personas y los bots que figuran en `known` |
 
-En Slack, Discord y Telegram, `known` ayuda a SwB a elegir de quién acepta mensajes. Los mensajes de estos remitentes externos mantienen la confianza `external`. Consulta [Cuentas de propietario de GitHub](/es/docs/blocks/github#cuentas-de-propietario) para ver cómo comprueba SwB a los autores de GitHub.
+En Slack, Discord y Telegram, `known` ayuda a SwB a elegir de quién acepta mensajes. Los mensajes de estos remitentes externos conservan el nivel de confianza `external`. Consulta [Cuentas de propietario de GitHub](/es/docs/blocks/github#cuentas-de-propietario) para ver cómo comprueba SwB a los autores de GitHub.
 
 Un **marco de confianza** es la cabecera y los marcadores que SwB añade al texto externo. SwB modifica las copias de su cabecera o de sus marcadores en el texto antes de añadir el marco. Los marcadores son `<<<swb-untrusted` y `swb-untrusted>>>`. Los agentes tratan el texto entre ellos solo como información.
 
-Un resumen del modo Watch tiene la confianza `external`. Cada fragmento incluye un marco de confianza para el texto externo. GitHub comprueba el autor de cada campo de texto.
+Un resumen del modo Watch tiene el nivel de confianza `external`. Cada fragmento incluye un marco de confianza para el texto externo. GitHub comprueba el autor de cada campo de texto.
 
 La clave de un [companion](/es/docs/companion) sirve solo para la conexión de su dispositivo. SwB guarda solo un hash de la clave para comprobarla. SwB marca los resultados del dispositivo como `external` y pone su texto libre en un marco de confianza.
 
@@ -36,7 +36,7 @@ Un recurso es un destino, un canal, un ámbito de memoria, una ruta o una herram
 
 Usa `auth.key_scopes` para limitar el acceso a las rutas, los mensajes y las conversaciones. Una clave emparejada puede leer solo los mensajes y las conversaciones de su agente dentro de esos límites.
 
-SwB guarda las concesiones de memoria de cada clave emparejada. Cuando actualiza concesiones antiguas, SwB da a las claves emparejadas activas con acceso amplio `general` y los proyectos que existen en ese momento. Para las claves con ámbitos nombrados en `auth.key_scopes`, SwB copia esos ámbitos.
+SwB guarda las concesiones de memoria de cada clave emparejada. Cuando actualiza concesiones antiguas, SwB da `general` y los proyectos que existen en ese momento a las claves emparejadas activas con acceso amplio. Para las claves con ámbitos nombrados en `auth.key_scopes`, SwB copia esos ámbitos.
 
 Un cliente OAuth o una clave configurada con acceso completo puede acceder a toda la memoria como el propietario. Usa `auth.key_scopes` para limitar el acceso a la memoria por nombre de agente. Una credencial limitada necesita una concesión que nombre el proyecto privado.
 
@@ -48,7 +48,7 @@ Escribe los tokens en sus páginas de entrega. SwB usa una clave de la carpeta d
 
 Abre **Tokens** para ver los ámbitos de memoria de cada clave emparejada. Selecciona **Remove scope** junto a un ámbito para quitar esa concesión.
 
-Una clave emparejada nueva recibe su propio ámbito de agente al canjear su código de emparejamiento. También recibe el proyecto nombrado en el código y los ámbitos nombrados en `auth.key_scopes.<agent>`. Para ampliar el acceso, define los ámbitos extra o incluye un proyecto en el código de emparejamiento. Después empareja una clave nueva.
+Una clave emparejada nueva recibe su propio ámbito de agente al canjear su código de emparejamiento. También recibe el proyecto nombrado en el código y los ámbitos nombrados en `auth.key_scopes.<agent>`. Para ampliar el acceso, define los ámbitos adicionales o incluye un proyecto en el código de emparejamiento. Después empareja una clave nueva.
 
 ## Límites
 
@@ -67,7 +67,7 @@ Una clave emparejada nueva recibe su propio ámbito de agente al canjear su cód
 | Cuerpo de petición en `/auth/setup` | 1.024 bytes |
 | Turnos por conversación entre agentes | 200 |
 
-El límite de claves bearer también se aplica a las claves válidas desde la misma dirección. SwB devuelve HTTP `429` en los endpoints afectados hasta que se libera el límite.
+El límite de claves bearer también se aplica a las claves válidas desde la misma dirección. SwB devuelve HTTP `429` en los endpoints afectados hasta que el límite se restablece.
 
 SwB pausa una conversación al llegar al límite de turnos. Anota la pausa en el registro de auditoría. Si Slack está activo, envía un mensaje directo al propietario.
 

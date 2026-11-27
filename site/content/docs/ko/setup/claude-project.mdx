@@ -45,7 +45,7 @@ SwB에 **Routine saved** 또는 **Routine and project saved**가 표시됩니다
 
 ## 에이전트가 하는 일
 
-코디네이터는 전체 소유자 권한을 가진 SwB 클라이언트에서 `connect(what="claude-project")`를 호출합니다. SwB은 `claude-routine` 블록을 확인하고 그 루틴을 나열합니다. 코디네이터는 `project_list`를 호출해 SwB 프로젝트를 찾을 수 있습니다.
+코디네이터는 소유자 권한을 모두 가진 SwB 클라이언트에서 `connect(what="claude-project")`를 호출합니다. SwB은 `claude-routine` 블록을 확인하고 그 루틴을 나열합니다. 코디네이터는 `project_list`를 호출해 SwB 프로젝트를 찾을 수 있습니다.
 
 코디네이터는 API 트리거를 추가합니다. 정확한 Claude Project 이름을 넣어 루틴 프롬프트에 이 지침을 포함합니다.
 
@@ -55,7 +55,7 @@ Call routine_pickup(claude_project="<exact Claude Project name>") to collect the
 
 코디네이터는 `choose`에 `fire_url`, `claude_project`, `project`를 넣어 `connect`를 다시 호출합니다. SwB은 등록 링크를 돌려줍니다. 등록 링크는 자격 증명을 입력하는 비공개 SwB 페이지입니다. 이 링크는 한 번만 쓸 수 있고 30분 뒤에 만료됩니다.
 
-SwB이 비슷한 프로젝트를 찾으면 에이전트가 하나를 고르라고 요청합니다. 새 프로젝트라면 새 슬러그와 `true`로 설정한 `create_new`로 `connect`를 호출합니다.
+SwB이 비슷한 프로젝트를 찾으면 에이전트가 하나를 고르라고 요청합니다. 새 프로젝트라면 새 슬러그를 넣고 `create_new`를 `true`로 설정해 `connect`를 호출합니다.
 
 ## 자격 증명
 
@@ -72,4 +72,4 @@ SwB이 비슷한 프로젝트를 찾으면 에이전트가 하나를 고르라�
 
 등록 링크가 만료되었다면 에이전트에게 `connect`를 다시 호출해 새 링크를 받아 달라고 요청하세요. API 패널에서 **Regenerate**를 클릭하면 이전 토큰은 즉시 무효가 됩니다. 에이전트에게 루틴을 다시 등록해 달라고 요청하고, 새 등록 링크에 새 토큰을 저장하세요.
 
-텍스트가 있는 요청에 Claude가 **this project is paused**를 돌려주면 SwB은 빈 요청으로 다시 시도합니다. 그러면 루틴이 `routine_pickup`으로 메시지를 가져옵니다. 프로젝트가 일시 중지되었다면 Claude에서 다시 시작하세요.
+텍스트가 있는 요청에 Claude가 **this project is paused**를 돌려주면 SwB은 빈 요청으로 다시 시도합니다. 그러면 루틴이 `routine_pickup`으로 메시지를 가져옵니다. 프로젝트가 일시 중지되었다면 Claude에서 재개하세요.
