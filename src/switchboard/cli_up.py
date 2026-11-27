@@ -13,8 +13,8 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from threading import Thread
 
-from .cli import CONFIG, DEFAULT_PORT, CliError
-from .config import bind_address
+from .cli import CONFIG, CliError
+from .config import DEFAULT_PORT, bind_address
 
 _TUNNELS = {
     "cloudflare": ("cloudflared", ("tunnel", "--no-autoupdate", "--url"), "trycloudflare.com"),
