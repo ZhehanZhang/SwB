@@ -1,0 +1,96 @@
+---
+title: 本地会话
+description: 向已配对设备上的编程智能体发送消息。
+---
+
+本地会话是指正在已配对设备上运行的编程智能体。SwB 会把它列为目标。目标是可以接收消息的地址。
+
+## 发送消息
+
+用 `targets` 工具查找会话地址。将 `block` 设为 `local`。地址格式为 `local:session:<harness>:<id>`。其中 `harness` 指运行智能体的程序。
+
+向该地址发送消息。SwB 先将消息放入智能体的邮箱，再尝试送到已打开的会话。智能体的答复会回到原来的 SwB 会话。
+
+会话状态包括运行中、等待处理、空闲和已完成。SwB 也可以将会话状态显示为 `unknown`。等待处理表示会话正在等待批准或输入。SwB 会把消息留在邮箱中，并保持会话原样。请在会话中处理请求。
+
+SwB 会把会话状态和基本信息发给你部署的 SwB。基本信息包括会话名称和文件夹名称等。对于经 SwB 送达的消息，设备还可以发回一条答复。其余会话内容留在设备上。
+
+## 配对设备
+
+请使用[伴侣设备的设置提示词](/zh-Hans/docs/companion#复制设置提示词)。伴侣设备是运行 SwB 的自有设备。在这台设备上运行对应智能体的命令。将示例地址换成你的 SwB HTTPS 地址。每启用一项功能，添加一个 `--cap` 选项。要更改已配对设备的功能，请先[断开连接](/zh-Hans/docs/companion#断开连接)。
+
+### Herdr
+
+在 Herdr 的终端窗格中打开编程智能体。窗格是终端内的一块区域。SwB 通过 Herdr 的套接字连接它。套接字是设备上的通信接口。
+
+```sh
+swb companion connect https://swb.example.com --cap herdr --cap hooks
+```
+
+使用 Claude Code、Gemini CLI 或 Codex 时，可以启用[状态钩子](#状态钩子)，让伴侣设备传回答复。
+
+### Codex
+
+在一个终端中启动 Codex 应用服务器。
+
+```sh
+codex app-server --listen unix://
+```
+
+再从另一个终端将 Codex 连到该服务器。
+
+```sh
+codex --remote unix://
+```
+
+另开一个终端来配对设备。如果使用自定义套接字路径，请在运行伴侣设备的终端中设置 `SWB_CODEX_SOCKET`。
+
+```sh
+swb companion connect https://swb.example.com --cap codex
+```
+
+### OpenCode
+
+在设备上启动 OpenCode 服务器。将 `SWB_OPENCODE_URL` 设为服务器的本机 HTTP 或 HTTPS 地址。如果服务器设有密码，请在运行伴侣设备的终端中设置 `OPENCODE_SERVER_PASSWORD`。
+
+```sh
+SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
+```
+
+### DeepSeek Harness
+
+使用 DeepSeek Harness `0.2.2-rc.5`。将 SwB 桥接插件装到 `web` 配置中。该插件将已打开的会话接入伴侣设备。
+
+仓库的默认分支包含该插件时，请运行以下命令。
+
+```sh
+dsh plugin --profile web add github:ZhehanZhang/SwB#path:/integrations/dsh
+```
+
+如果从包含该插件的 SwB 本地副本安装，请使用插件的绝对路径。
+
+```sh
+dsh plugin --profile web add /path/to/SwB/integrations/dsh
+```
+
+安装后重启 `web` 配置。
+
+```sh
+swb companion connect https://swb.example.com --cap dsh
+```
+
+## 状态钩子
+
+钩子会在智能体启动、状态变化或结束时运行命令。在 macOS 和 Linux 上，`--cap hooks` 可以接收 Claude Code、Gemini CLI 和 Codex 的状态。仅使用钩子的会话通过邮箱收取消息。
+
+位于 `channel/` 的 SwB Claude Code 插件已包含钩子。[Claude Code 频道](/zh-Hans/docs/blocks/coding-agents)是另一项处于研究预览阶段的功能。
+
+在 Gemini CLI 中，请从 SwB 的本地副本安装扩展。
+
+```sh
+gemini extensions install <path-to-SwB>/integrations/gemini
+```
+
+在 Codex 中，请使用该副本中的 `integrations/codex/hooks.json`。
+
+伴侣设备的钩子套接字存在时，钩子才会调用 `swb hook <harness>`。请将 `swb` 加入智能体的命令搜索路径。
