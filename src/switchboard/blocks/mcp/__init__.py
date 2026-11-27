@@ -97,6 +97,8 @@ class LimitedServer(MCPServer):
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
         p = principal_of(getattr(ctx, "request", None))
+        if p is None or not p.is_unrestricted_owner:
+            out.tools = [t for t in out.tools if t.name != "login_link"]
         if p is not None and p.tools is not None:
             out.tools = [t for t in out.tools if t.name in p.tools]
         return out

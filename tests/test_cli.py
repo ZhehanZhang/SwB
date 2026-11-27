@@ -70,6 +70,29 @@ def test_init_invalid_public_url_leaves_no_files(tmp_path, capsys):
     assert "--public-url" in capsys.readouterr().err
 
 
+def test_init_points_to_login_link(tmp_path, capsys):
+    cli.main(["init", "--dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert f"swb login-link --dir {tmp_path}" in out
+    assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] not in out
+
+
+def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv(cli.OWNER_KEY, raising=False)
+    cli.main(["init", "--dir", str(tmp_path)])
+    capsys.readouterr()
+    link = "https://switchboard.example.test/login#t=fixture"
+
+    async def call(url, key, tool, args):
+        assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] == key
+        assert (url, tool, args) == ("https://switchboard.example.test/mcp", "login_link", {})
+        return {"url": link, "expires_in": 300}
+
+    monkeypatch.setattr(cli, "_call", call)
+    cli.main(["login-link", "--dir", str(tmp_path), "--url", "https://switchboard.example.test"])
+    assert capsys.readouterr().out == link + "\n"
+
+
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(f"# comment\n{cli.OWNER_KEY}='owner-test-key'\nPORT=4567 # local port\n")
     calls = []

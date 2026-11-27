@@ -39,7 +39,8 @@ def test_capy_claim_resume_and_restart(make, tmp_path, capy):
     assert response["done"] == ["Capy API key: absent."]
     assert step["by"] == "person"
     assert step["link"].rsplit("/", 1)[-1] not in step["do"]
-    assert client.get(urlparse(step["link"]).path).status_code == 403
+    refused = client.get(urlparse(step["link"]).path)
+    assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Fclaim%2F")
     claim(client, step["link"], CAPY_KEY)
     response = connect(client, "capy-captain")
     assert response["done"] and "restart" in response["next"][0]["do"].lower()

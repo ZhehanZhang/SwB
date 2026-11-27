@@ -63,10 +63,10 @@ def test_coding_agent_snippet_uses_remote_url_and_oauth_where_supported(make, ag
 
 @pytest.mark.parametrize("agent", AGENTS)
 def test_coding_agent_bearer_configuration_without_oauth(make, agent):
-    _, client = make(base_config(auth={}))
+    _, client = make(base_config(auth={}, public_url=None))
     out = connect(client, agent)
     [snippet] = [s["snippet"] for s in out["next"] if "snippet" in s]
-    assert f"{PUBLIC}/mcp" in snippet and "Bearer <key>" in snippet
+    assert "http://localhost:8000/mcp" in snippet and "Bearer <key>" in snippet
     if agent != "other":
         headers = entry(agent, snippet)
         assert (headers.get("http_headers") or headers["headers"]) == {"Authorization": "Bearer <key>"}
