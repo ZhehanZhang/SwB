@@ -45,10 +45,11 @@ def test_default_local_public_url_adds_bound_alias_once(tmp_path, aliases):
     assert cfg.public_urls == ("https://swb.example.test", *aliases)
 
 
-def test_trusted_proxies_accept_yaml_and_environment(tmp_path):
+@pytest.mark.parametrize("env_name", ["SWB_TRUSTED_PROXIES", "SWITCHBOARD_TRUSTED_PROXIES"])
+def test_trusted_proxies_accept_yaml_and_environment(tmp_path, env_name):
     path = tmp_path / "switchboard.yaml"
     path.write_text("trusted_proxies: [192.0.2.0/24, '2001:db8::/32']\n")
-    env = {"SWITCHBOARD_TRUSTED_PROXIES": " 198.51.100.12, cloudflare, "}
+    env = {env_name: " 198.51.100.12, cloudflare, "}
     assert load_config(path, env).trusted_proxies == (ip_network("192.0.2.0/24"), ip_network("2001:db8::/32"))
     path.write_text("trusted_proxies: []\n")
     assert not load_config(path, env).trusted_proxies
@@ -57,6 +58,14 @@ def test_trusted_proxies_accept_yaml_and_environment(tmp_path):
     assert networks[0] == ip_network("198.51.100.12/32")
     assert ip_network("173.245.48.0/20") in networks and ip_network("2400:cb00::/32") in networks
     assert not load_config(path, {}).trusted_proxies
+
+
+def test_canonical_trusted_proxies_override_the_legacy_env(tmp_path):
+    path = tmp_path / "switchboard.yaml"
+    path.write_text("version: 2\n")
+    env = {"SWB_TRUSTED_PROXIES": "192.0.2.0/24", "SWITCHBOARD_TRUSTED_PROXIES": "cloudflare"}
+    assert load_config(path, env).trusted_proxies == (ip_network("192.0.2.0/24"),)
+    assert not load_config(path, {**env, "SWB_TRUSTED_PROXIES": ""}).trusted_proxies
 
 
 @pytest.mark.parametrize("setting", ["'*'", "[example.test]", "[192.0.2.1/24]", "[42]"])

@@ -6,19 +6,20 @@ from collections.abc import Mapping
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from .config import ConfigError, Instance, instance_data_dir
+from .config import ConfigError, Instance, configured_data_dir, instance_data_dir
+from .env import env_value
 from .store import ensure_private_data_dir
 
-OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
-PLATFORM = "SWITCHBOARD_DEPLOY_PLATFORM"
+OWNER_KEY = "SWB_KEY_OWNER"
+PLATFORM = "SWB_DEPLOY_PLATFORM"
 
 
 def volume_owner_key(env: Mapping[str, str], *, create: bool = False, instance: Instance | None = None) -> str | None:
-    if not env.get(PLATFORM):
+    if not env_value(env, PLATFORM):
         return None
-    data = instance_data_dir(env, instance) if instance is not None else env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA")
+    data = instance_data_dir(env, instance) if instance is not None else configured_data_dir(env)
     if not data:
-        raise ConfigError("Set SWITCHBOARD_DATA to the persistent volume mount.")
+        raise ConfigError("Set SWB_DATA_DIR to the persistent volume mount.")
     path = Path(data) / "owner-key"
     if create and not path.exists():
         if not path.parent.is_dir():
@@ -41,10 +42,10 @@ def volume_owner_key(env: Mapping[str, str], *, create: bool = False, instance: 
 
 
 def serve_env(env: Mapping[str, str], *, instance: Instance | None = None) -> dict[str, str] | None:
-    if not (platform := env.get(PLATFORM)):
+    if not (platform := env_value(env, PLATFORM)):
         return None
     values = dict(env)
-    if not (values.get("SWITCHBOARD_PUBLIC_URL") or values.get("PUBLIC_URL")):
+    if not (env_value(values, "SWB_PUBLIC_URL") or values.get("PUBLIC_URL")):
         url = None
         if platform == "render":
             url = values.get("RENDER_EXTERNAL_URL")
@@ -55,9 +56,9 @@ def serve_env(env: Mapping[str, str], *, instance: Instance | None = None) -> di
         elif platform == "railway" and (host := values.get("RAILWAY_PUBLIC_DOMAIN")):
             url = f"https://{host}"
         if not url:
-            raise ConfigError("The deployment requires a public URL. Set SWITCHBOARD_PUBLIC_URL.")
-        values["SWITCHBOARD_PUBLIC_URL"] = url
-    if not values.get(OWNER_KEY):
+            raise ConfigError("Set SWB_PUBLIC_URL for this deployment.")
+        values["SWB_PUBLIC_URL"] = url
+    if not env_value(values, OWNER_KEY):
         key = volume_owner_key(values, create=True, instance=instance)
         if key is None:
             raise ConfigError("The deployment requires an owner key.")

@@ -151,7 +151,7 @@ function auditSentence({ action, target, ref, destination, outcome, metadata, pr
     const via = metadata.agent === "github" ? "GitHub" : metadata.agent === "slack" ? "Slack" : metadata.agent || project || "default"
     const count = metadata.repo_count
     const routed = count ? `${count} ${via} ${count === 1 ? "repository" : "repositories"}` : via
-    return `Routed ${routed} to ${displayReference(metadata.target_name, "Captain")}`
+    return `Routed ${routed} to ${displayReference(metadata.target_name, "Capy Captain")}`
   }
   if (action === "turn_cap") return ["Paused conversation", ref, metadata?.turn_cap ? `at ${metadata.turn_cap} turns` : null].filter(Boolean).join(" ")
   if (action === "webhook") {

@@ -15,6 +15,7 @@ from PIL import Image
 
 from .. import BlockError, Manifest
 from ...chat import ChatBlock, Incoming, Persona
+from ...env import env_value
 from . import rest
 from .gateway import Gateway
 
@@ -194,7 +195,7 @@ class DiscordBlock(ChatBlock):
         code = self._gateway.fatal_code
         if code == 4004:
             step = f"Open a new token link from {tool} and save a new Discord bot token."
-            if self.core.cfg.env.get(self.token_env):
+            if env_value(self.core.cfg.env, self.token_env):
                 step = f"Replace {self.token_env} and restart SwB, or unset it and restart to use a claim link. {step}"
             out.append(f"Discord rejected the bot token. {step}")
         elif code in FATAL_STEPS:
@@ -217,7 +218,7 @@ class DiscordBlock(ChatBlock):
                 + (" Turn on Message Content Intent under Bot." if self.message_content else "")]
 
     def setup(self) -> dict[str, Any]:
-        source = "env" if self.core.cfg.env.get(self.token_env) else "stored" if self.token() else None
+        source = "env" if env_value(self.core.cfg.env, self.token_env) else "stored" if self.token() else None
         return {"developer_portal_url": PORTAL, "invite_url": self._invite(), "application_id": self.application_id,
                 "bot_user_id": self.user_id, "bot_name": self.bot_name, "token_source": source,
                 "claim_pending": self.claim_pending(), "intents": [name for name, bit in INTENTS.items() if self.intents & bit],
@@ -259,7 +260,7 @@ class DiscordBlock(ChatBlock):
         await self._transport.aclose()
 
     async def secret_saved(self, name: str) -> None:
-        if name != "bot_token" or self.core.cfg.env.get(self.token_env):
+        if name != "bot_token" or env_value(self.core.cfg.env, self.token_env):
             return
         async with self._connect_lock:
             await self._stop_gateway()

@@ -18,6 +18,7 @@ from .api_display import captain_avatar_url, captain_target, captain_targets, ca
 from .slack.avatar_files import agent_avatar_url
 from .audit import iso
 from .blocks import BLOCKS, ON_DEMAND_BLOCKS, load
+from .env import env_value
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
 from .modes import CHAT_DROP_ACTION, ChatDrop
 from .refusals import CSRF_AUDIT_PATHS, OWNER_NOTE_REQUIRED, SIGN_IN_FAILURES
@@ -77,7 +78,7 @@ async def health(request: Request) -> JSONResponse:
     problems = core.cfg.problems()
     # Provider diagnostics can include upstream errors and URLs. Show which block needs attention, not its raw error.
     problems += [f"{name}: check block status" for name, block in core.blocks.items() if block.problems()]
-    revision = core.cfg.env.get("SWITCHBOARD_REVISION", "")
+    revision = env_value(core.cfg.env, "SWB_REVISION") or ""
     return JSONResponse({
         **_fields(report, "status", "mirror", "static_keys", "turn_cap", "mcp_enabled"),
         **({"commit": revision.lower()} if re.fullmatch(r"[0-9a-fA-F]{40}", revision) else {}),

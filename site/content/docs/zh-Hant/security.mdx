@@ -70,7 +70,7 @@ Capy 收到重複的請求時，可以回傳先前的對話。用 `duplicate_win
 
 ## 用戶端位址
 
-SwB 預設依連線位址限制請求次數並記錄操作。將代理加入 `trusted_proxies` 後，SwB 會採用代理提供的用戶端位址。請讓代理用已驗證的位址替換請求標頭中的用戶端位址。
+SwB 預設依連線位址限制請求次數並記錄操作。將代理加入 `trusted_proxies` 或 `SWB_TRUSTED_PROXIES` 後，SwB 會採用代理提供的用戶端位址。請讓代理用已驗證的位址替換請求標頭中的用戶端位址。
 
 參考[自行代管指南](/zh-Hant/docs/self-hosting)，加入 Docker 網路中的 Cloudflare 通道連接器或反向代理。
 

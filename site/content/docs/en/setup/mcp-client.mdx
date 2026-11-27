@@ -21,7 +21,7 @@ Paste the prompt into an agent that already has SwB, or into the app that you co
 
 ## Local owner client
 
-Use a private client on the SwB computer if it will set up other apps. Set its MCP address to the local `/mcp` address shown at startup. Use `SWITCHBOARD_KEY_OWNER` from the instance `.env` in `Authorization: Bearer <key>`. Keep that key only in the client's private local config with file mode `0600`. The key gives full owner access. Use it only with local SwB.
+Use a private client on the SwB computer if it will set up other apps. Set its MCP address to the local `/mcp` address shown at startup. Use `SWB_KEY_OWNER` from the instance `.env` in `Authorization: Bearer <key>`. Keep that key only in the client's private local config with file mode `0600`. The key gives full owner access. Use it only with local SwB.
 
 ## Pair a client
 
@@ -63,7 +63,7 @@ Open `.swb-pairing.json` in a private editor. The command saves the response wit
 <Step>
 ### Add SwB to the app
 
-In the app's MCP settings, use the `mcp_url` from the file. For local SwB, use the MCP address shown at startup. Select Streamable HTTP.
+In the app's MCP settings, add a server named `swb`. Use `mcp_url` from the file. For local SwB, use the MCP address shown at startup. Select Streamable HTTP.
 </Step>
 <Step>
 ### Add the key

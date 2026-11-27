@@ -18,8 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_deploy_templates_use_the_wildcard_docker_runtime():
     docker = (ROOT / "Dockerfile").read_text()
     runtime, paas = docker.split("FROM base AS runtime", 1)[1].split("FROM runtime AS paas", 1)
-    assert re.search(r"^ENV .*\bSWITCHBOARD_HOST=0\.0\.0\.0(?: |$)", runtime, flags=re.M)
     assert re.search(r"^ENV .*\bPORT=8000(?: |$)", runtime, flags=re.M)
+    assert re.search(r"^ENV .*\bSWB_DEFAULT_HOST=0\.0\.0\.0(?: |$)", runtime, flags=re.M)
+    assert re.search(r"^ENV .*\bSWB_DEFAULT_DATA_DIR=/data(?: |$)", runtime, flags=re.M)
     assert 'CMD ["swb", "serve"]' in runtime and 'CMD ["swb", "serve"]' in paas
 
     render = yaml.safe_load((ROOT / "render.yaml").read_text())["services"][0]
@@ -30,15 +31,16 @@ def test_deploy_templates_use_the_wildcard_docker_runtime():
 
     compose = yaml.safe_load((ROOT / "compose.yaml").read_text())["services"]["switchboard"]
     assert compose["build"]["target"] == "runtime"
-    assert compose["environment"]["SWITCHBOARD_HOST"] == "0.0.0.0"
-    assert compose["environment"]["SWITCHBOARD_PORT"] == ""
+    assert compose["environment"]["SWB_HOST"] == "0.0.0.0"
+    assert compose["environment"]["SWB_PORT"] == ""
     assert compose["environment"]["PORT"] == "8000"
-    assert compose["environment"]["SWB_COMPOSE_ORIGIN"] == "http://${SWITCHBOARD_BIND:-127.0.0.1}:${SWITCHBOARD_PORT:-8870}"
-    assert compose["ports"] == ["${SWITCHBOARD_BIND:-127.0.0.1}:${SWITCHBOARD_PORT:-8870}:8000"]
+    published = "${SWB_BIND:-${SWITCHBOARD_BIND:-127.0.0.1}}:${SWB_PORT:-${SWITCHBOARD_PORT:-8870}}"
+    assert compose["environment"]["SWB_COMPOSE_ORIGIN"] == f"http://{published}"
+    assert compose["ports"] == [f"{published}:8000"]
     caddy = yaml.safe_load((ROOT / "deploy/compose/compose.yaml").read_text())["services"]["switchboard"]
     assert caddy["build"]["target"] == "paas"
     for service in (compose, caddy):
-        assert service["environment"]["SWITCHBOARD_TRUSTED_PROXIES"] == "${SWITCHBOARD_TRUSTED_PROXIES:-}"
+        assert service["environment"]["SWB_TRUSTED_PROXIES"] is None
 
 
 def test_render_generates_a_256_bit_setup_code():

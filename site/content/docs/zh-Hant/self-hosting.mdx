@@ -10,8 +10,8 @@ description: 用 Docker Compose 與 Cloudflare 在伺服器上執行 SwB。
 ```bash
 (umask 077; cp .env.example .env)
 {
-  printf 'SWITCHBOARD_UID=%s\n' "$(id -u)"
-  printf 'SWITCHBOARD_KEY_OWNER='
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
   openssl rand -hex 32
 } >> .env
 mkdir -p data
@@ -33,11 +33,13 @@ Compose 在 `http://127.0.0.1:8870` 提供 SwB，並把資料存放在 `./data`�
 docker compose --profile tunnel up -d
 ```
 
-把 `SWITCHBOARD_PUBLIC_URL` 設為通道主機名稱，例如 `https://swb.example.com`。
+把 `SWB_PUBLIC_URL` 設為通道主機名稱，例如 `https://swb.example.com`。
 
 ## 信任的代理
 
 反向代理會將請求轉送給 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 加入代理的位址或專用網段。請用 CIDR 格式填寫位址範圍。
+
+也可以在 `.env` 設定 `SWB_TRUSTED_PROXIES`。請用逗號分隔各項。SwB 優先採用 YAML 內的設定。
 
 如果 Cloudflare 通道與 SwB 共用主機或 Docker 網路，請加入通道連接器的位址或專用網段。連接器會直接連到 SwB。如果 Cloudflare 邊緣伺服器直接連到 SwB，請加入 `cloudflare`。
 
@@ -57,7 +59,7 @@ docker compose --profile tunnel up -d
 
 ## 託管平台
 
-程式碼庫提供 Railway（`.railway/railway.ts`）、Render（`render.yaml`）與 Fly.io（`fly.toml`）的範本。請使用一個副本，並在 `/data` 掛載一個儲存卷。在平台的機密設定中設定 `SWITCHBOARD_PUBLIC_URL` 與 `SWITCHBOARD_KEY_OWNER`。
+執行一個 SwB 執行個體。將持久磁碟掛載到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/main/deploy)說明 Railway、Render 和 Fly.io 的範本及 Koyeb 指令稿。
 
 ## 備份與升級
 

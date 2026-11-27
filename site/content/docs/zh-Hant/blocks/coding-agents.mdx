@@ -27,17 +27,17 @@ swb connect coding-agent --choose agent=codex
 
 頻道把 SwB 訊息推送到開啟中的 Claude Code 工作階段。它是研究預覽版。
 
-請在伺服器的 `.env` 中建立名為 `SWITCHBOARD_KEY_CHANNEL` 的金鑰。這把金鑰只能讀取 `claude-code` 收件匣。請安裝 [Bun](https://bun.sh)。然後在 Claude Code 中新增外掛。
+請在伺服器的 `.env` 中建立名為 `SWB_KEY_CHANNEL` 的金鑰。這把金鑰只能讀取 `claude-code` 收件匣。請安裝 [Bun](https://bun.sh)。然後在 Claude Code 中新增外掛。
 
 ```text
 /plugin marketplace add ZhehanZhang/SwB
-/plugin install switchboard@switchboard
+/plugin install swb@swb
 ```
 
 外掛詢問時，請輸入 SwB 位址與頻道金鑰。用頻道啟動 Claude Code。
 
 ```bash
-claude --dangerously-load-development-channels plugin:switchboard@switchboard
+claude --dangerously-load-development-channels plugin:swb@swb
 ```
 
 工作階段開啟期間，頻道持續運作。工作階段之間到達的訊息，會在下次啟動時出現。Claude 用 `reply` 工具回答。

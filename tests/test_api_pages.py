@@ -152,11 +152,12 @@ def test_setup_returns_canonical_snippets_without_minting_or_exposing_credential
     assert all(text in chatgpt["instruction"] for text in (
         chatgpt["plugins_url"], "web browser", "Add custom MCP server", chatgpt["connector_url"], "OAuth",
     ))
-    assert f"{PUBLIC}/mcp" in setup["any"]["prompt"] and 'connect(what="mcp-client")' in setup["any"]["prompt"]
+    assert f"Connect to SwB over Streamable HTTP at {PUBLIC}/mcp." in setup["any"]["prompt"]
+    assert 'connect(what="mcp-client")' in setup["any"]["prompt"]
     assert "Claude" not in setup["any"]["prompt"]
     agents = {guide["id"]: guide for guide in setup["coding_agents"]}
     assert set(agents) == {"claude-code", "codex", "gemini-cli", "goose", "opencode", "cline", "kiro", "qwen-code", "other"}
-    assert agents["claude-code"]["snippet"] == f"claude mcp add --transport http --scope user switchboard {PUBLIC}/mcp"
+    assert agents["claude-code"]["snippet"] == f"claude mcp add --transport http --scope user swb {PUBLIC}/mcp"
     assert agents["codex"]["auth"] == agents["gemini-cli"]["auth"] == "oauth"
     assert "Bearer <key>" in agents["other"]["snippet"]
     assert not core.store.q("SELECT 1 FROM connect_codes")
