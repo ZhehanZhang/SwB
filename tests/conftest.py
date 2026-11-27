@@ -87,6 +87,7 @@ class FakeCapy:
         self.device_denied: set[str] = set()
         self.client_keys: dict[str, str] = {}
         self.hidden_from: dict[str, set[str]] = {}
+        self.users: list[dict[str, Any]] = []
         self.auths: list[tuple[str, str, str]] = []
         self.captains: list[dict[str, Any]] = [
             {"id": CAPTAIN, "code": CAPTAIN_CODE, "name": "Captain", "title": "Captain", "projectId": PROJECT},
@@ -197,6 +198,8 @@ class FakeCapy:
             ]})
         if p == "captains":
             return httpx.Response(200, json={"items": [c for c in self.captains if c["id"] not in self.hidden_from.get(key, set())], "cursor": None})
+        if p == "users" and m == "GET":
+            return httpx.Response(200, json={"items": self.users})
         if (mm := re.fullmatch(r"projects/([^/]+)", p)):
             return httpx.Response(200, json={"id": mm.group(1), "name": "Beacon", "code": "BCN"}) if mm.group(1) in (PROJECT, OTHER_PROJECT) else httpx.Response(404, json={"_tag": "capy/ProjectNotFound"})
         if p == "projects":

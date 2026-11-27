@@ -168,9 +168,9 @@ def test_conversation_list_and_thread_follow_root_and_legacy_reply_edges(make):
     by_handle = {row["handle"]: row for row in inbox["conversations"]}
     assert set(by_handle) == {root, outbound}
     assert by_handle[root]["first_sender"] == {"kind": "agent", "agent": "codex", "label": "Codex", "auth": "key",
-                                                "origin": "mcp", "trust": "owner"}
+                                                "origin": "mcp", "trust": "owner", "avatar_url": "/avatars/codex.png"}
     assert by_handle[root]["first_target"] == "agent:claude"
-    assert by_handle[outbound]["first_sender"] == {"kind": "agent", "agent": "codex"}
+    assert by_handle[outbound]["first_sender"] == {"kind": "agent", "agent": "codex", "avatar_url": "/avatars/codex.png"}
     assert by_handle[outbound]["first_target"] == "Captain"
     first = read(client, f"/conversations/{legacy}", limit=2)
     assert first["conversation"]["handle"] == root

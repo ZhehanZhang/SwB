@@ -15,6 +15,7 @@ from starlette.routing import Mount, Route
 
 from . import pages
 from .api_about import release_version
+from .api_display import SLACK_PROFILE_PREFIX
 from .claims import CLAIM_PATH, ClaimError, ClaimUnavailable, GroupFieldError
 from .config import REQUEST_BASE
 from .guard import Guard, RateLimiter, client_ip, reject
@@ -215,11 +216,17 @@ def create_app(core: "Switchboard") -> Any:
     async def avatar(request: Request) -> Response:
         """Public avatar file for clients such as Slack and Discord, including rendered Captain avatars."""
         name = request.path_params["name"]
+        private = name.startswith(SLACK_PROFILE_PREFIX)
+        if private:
+            _, refused = await core.auth.protect_owner(request)
+            if refused is not None:
+                return refused
         path = core.find_avatar(name)
         if path is None:
             return Response(status_code=404)
         return Response(path.read_bytes(), media_type="image/png" if name.endswith(".png") else ("image/gif" if name.endswith(".gif") else "image/jpeg"),
-                        headers={"Cache-Control": "public, max-age=3600"})
+                        headers={"Cache-Control": "private, max-age=3600" if private else "public, max-age=3600",
+                                 "X-Content-Type-Options": "nosniff"})
 
     async def targets(request: Request) -> JSONResponse:
         _, refused = await core.auth.protect_owner(request)

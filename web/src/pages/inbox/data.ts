@@ -6,6 +6,7 @@ export type PendingWrite = {
   identity: string
   action: string
   key_id: string
+  sender?: Sender
   created_at: string | null
   expires_at: string | null
   channel?: string | null
@@ -38,6 +39,7 @@ export type Conversation = {
 
 export type Sender = {
   kind?: string | null
+  avatar_url?: string | null
   name?: string | null
   label?: string | null
   agent?: string | null
@@ -97,6 +99,7 @@ function isPendingWrite(value: unknown): value is PendingWrite {
   return isRecord(value) && strings(value, ["id", "workspace", "identity", "action", "key_id"])
     && nullableStrings(value, ["created_at", "expires_at"])
     && optionalStrings(value, ["channel", "channel_name", "persona", "text", "name", "thread_ts"])
+    && (value.sender === undefined || isSender(value.sender))
 }
 
 function isPause(value: unknown): value is Pause {
@@ -113,7 +116,7 @@ function isConversation(value: unknown): value is Conversation {
 
 function isSender(value: unknown): value is Sender {
   return isRecord(value) && optionalStrings(value, [
-    "kind", "name", "label", "agent", "trust", "workspace", "channel", "channel_name", "user", "user_name",
+    "kind", "avatar_url", "name", "label", "agent", "trust", "workspace", "channel", "channel_name", "user", "user_name",
     "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot",
   ])
 }
@@ -168,7 +171,12 @@ export function participants(row: Conversation): { from: string; to: string; fro
   if (destination === "slack") {
     return { from: channel ? channelLabel(channel) : principalLabel(senderLabel(sender) || row.ref), to: principalLabel(target || row.owner), fromKind: "slack" }
   }
-  return { from: principalLabel(row.owner), to: principalLabel(target || row.ref || row.destination), fromKind: row.owner, toKind: destination }
+  return {
+    from: principalLabel(senderLabel(sender) || row.owner),
+    to: principalLabel(target || row.ref || row.destination),
+    fromKind: senderLogoKind(sender) ?? row.owner,
+    toKind: destination,
+  }
 }
 
 export function senderLogoKind(sender?: Sender) {

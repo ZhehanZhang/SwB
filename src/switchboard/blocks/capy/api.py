@@ -151,6 +151,9 @@ class CapyAPI:
     async def get_captain(self, captain_id: str) -> dict[str, Any]:
         return await self.request("GET", f"captains/{captain_id}")
 
+    async def list_users(self) -> list[dict[str, Any]]:
+        return (await self.request("GET", "users")).get("items", [])
+
     async def captain_digest(self, captain_id: str) -> dict[str, Any]:
         return await self.request("GET", f"captains/{captain_id}/digest")
 
