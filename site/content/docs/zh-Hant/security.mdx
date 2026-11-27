@@ -36,7 +36,7 @@ Slack、Discord 和 Telegram 透過 `known` 判斷哪些寄件者可以傳入訊
 
 SwB 為每把配對金鑰單獨儲存記憶授權。升級時，原本可存取全部記憶的有效配對金鑰會取得 `general` 和當時已有的每個專案範圍。金鑰若有明確的 `auth.key_scopes` 清單，SwB 會複製該清單。SwB 在升級時儲存這組授權。其他專案須另外授權。
 
-若 `auth.key_scopes` 中沒有對應名稱的項目，擁有者核准的 OAuth 用戶端和設定金鑰保有完整的記憶存取權。`auth.key_scopes` 中的項目會同時限制兩者的記憶存取範圍。
+擁有者核准的 OAuth 用戶端和設定金鑰預設擁有完整的記憶存取權。`auth.key_scopes` 中對應名稱的項目會限制這項權限。
 
 `auth.key_tools` 限制金鑰可呼叫的工具。`auth.key_targets` 限制傳送對象。
 

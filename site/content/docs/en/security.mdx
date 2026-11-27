@@ -36,7 +36,7 @@ Use `auth.key_scopes` to limit routing, message and conversation access. A paire
 
 SwB saves memory grants for each paired key. On upgrade, SwB gives active paired keys with open access `general` and each project that exists at that time. For a key with a specific `auth.key_scopes` list, SwB copies that list. SwB saves this set at upgrade. Each project outside that set needs its own grant.
 
-Owner-approved OAuth clients and configured keys keep full memory access when `auth.key_scopes` has no entry for their name. An entry in `auth.key_scopes` limits memory access for both.
+Owner-approved OAuth clients and configured keys get full memory access by default. An entry for their name in `auth.key_scopes` limits that access.
 
 `auth.key_tools` limits the tools a key can call. `auth.key_targets` limits where it can send.
 
