@@ -3,6 +3,12 @@ title: Self-hosting
 description: Run SwB on a server with Docker Compose and Cloudflare.
 ---
 
+import { DeployProviders } from '@/components/deploy-providers'
+
+## One-click deploy
+
+<DeployProviders lang="en" />
+
 ## Docker Compose
 
 Run these commands as the user who owns the data folder.
@@ -31,15 +37,31 @@ Run `docker compose exec switchboard swb login-link` to get a sign-in link for `
 
 Signed-out requests to `/healthz` return two fields, `status` and `version`. Use an owner session or the owner key for full health details.
 
-## Cloudflare Tunnel
+## Cloudflare Tunnel [#cloudflare-tunnel]
 
-A tunnel gives SwB a public address on your domain and keeps your ports closed. Make a tunnel in Cloudflare Zero Trust. Point its public hostname to `http://switchboard:8000`. Put the tunnel token in `.env` as `TUNNEL_TOKEN`. Start Compose with the tunnel profile.
+A Cloudflare Tunnel gives SwB a public HTTPS address. Cloudflare offers tunnels on its free plan.
+
+### Quick tunnel
+
+Use a quick tunnel to try SwB at a temporary address. Run this command on the host with `cloudflared`, the program that connects SwB to Cloudflare.
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+Set `SWB_PUBLIC_URL` to the HTTPS address in the terminal. If your config contains `public_url`, update that setting too. Restart SwB. The address changes each time you start the tunnel. OAuth sign-ins and passkeys use that address. Use a named tunnel for a lasting address.
+
+### Named tunnel
+
+Use a free Cloudflare account with your domain. Follow the [Cloudflare setup guide](/docs/setup/cloudflare) to create the tunnel and set up Access. Set `SWB_PUBLIC_URL` to your public address, such as `https://swb.example.com`. Update the address in `public_url` if your config contains it.
+
+For a tunnel on the SwB host, point its service address to `http://localhost:8870`. Set `SWB_TRUSTED_PROXIES` to the connector's address, such as `127.0.0.1/32` for an IPv4 loopback connection.
+
+For the Compose tunnel, point its service address to `http://switchboard:8000`. Put the tunnel token in `.env` as `TUNNEL_TOKEN`. Add the connector's address or dedicated network to `trusted_proxies`. Start Compose with the tunnel profile.
 
 ```bash
 docker compose --profile tunnel up -d
 ```
-
-Set `SWB_PUBLIC_URL` to the tunnel hostname, for example `https://swb.example.com`.
 
 ## Trusted proxies
 
