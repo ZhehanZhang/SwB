@@ -46,6 +46,13 @@ AGENT = "slack"
 RELAY_READER = "slack-relay"
 
 
+def slack_requester(principal: Principal) -> dict[str, str]:
+    sender = SLACK_SENDER.get() if principal.kind == "slack" else None
+    if sender and sender.get("user"):
+        return {key: sender[key] for key in ("user", "workspace", "user_name") if isinstance(sender.get(key), str)}
+    return {"agent": principal.source}
+
+
 class SlackIntake(Block):
     engine: Any = None
 
@@ -468,7 +475,8 @@ class SlackIntake(Block):
         key = Grant(id=AGENT, persona=persona, allow_persona_override=False, allowed_personas=None, scopes={r["workspace"]: ("bot",)})
         try:
             await engine.gate.submit(key, r["workspace"], "bot", "post_message",
-                                     {"channel": channel, "text": text[:limit], "thread_ts": thread_ts}, thread_only=thread_only)
+                                     {"channel": channel, "text": text[:limit], "thread_ts": thread_ts}, thread_only=thread_only,
+                                     requester={"agent": replier} if replier else None)
         except WriteError as exc:
             if not thread_only:
                 raise

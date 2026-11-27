@@ -99,8 +99,9 @@ function SlackApproval({ item }: { item: PendingWrite }) {
   const disabled = !session?.csrf || decide.isPending || decide.isSuccess
   return (
     <NeedsRow
-      name={principalLabel(item.key_id)}
-      kind="slack"
+      name={senderLabel(item.sender) || "Slack"}
+      kind={senderLogoKind(item.sender) || "slack"}
+      avatarUrl={item.sender?.avatar_url}
       title={approvalTitle(item)}
       at={item.created_at}
       preview={item.text ? `“${item.text}”` : item.name || undefined}
@@ -179,7 +180,7 @@ function Conversations({ items }: { items: Conversation[] }) {
           return (
             <tr key={row.handle} role="row" className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
               <td role="cell" className="font-mono text-xs wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project}</td>
-              <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} /></td>
+              <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} avatarUrl={row.first_sender?.avatar_url} /></td>
               <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? null} /></td>
               <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-1 max-md:font-semibold md:py-2 md:pr-3">
                 <Link to={conversationLink(row.handle)} className="after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring">
@@ -275,7 +276,7 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
     <li id={`message-${item.cursor}`} className="scroll-mt-4">
       <ListRow className="block space-y-1.5 px-0 py-3.5">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <Person label={author ? principalLabel(author) : kind} kind={senderLogoKind(from)} className="font-semibold" />
+          <Person label={author ? principalLabel(author) : kind} kind={senderLogoKind(from)} avatarUrl={from?.avatar_url} className="font-semibold" />
           <span className="font-mono text-mono-sm text-muted-foreground"><RelativeTime value={item.at} /></span>
         </div>
         {(provenance.length > 0 || item.in_reply_to || (author && kind !== "message") || item.status) && (
@@ -351,7 +352,7 @@ function InboxConversation({ handle }: { handle: string }) {
         <section aria-labelledby="conversation-title" className="mt-4">
           <h2 id="conversation-title" className="text-page-title wrap-anywhere">{displayReference(conversation.title || conversation.handle)}</h2>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-            <Person label={people.from} kind={people.fromKind} />
+            <Person label={people.from} kind={people.fromKind} avatarUrl={conversation.first_sender?.avatar_url} />
             <ArrowRight aria-label="to" className="size-4 text-muted-foreground" strokeWidth={1.5} />
             <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url ?? null} />
           </div>

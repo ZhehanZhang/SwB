@@ -1,10 +1,94 @@
 import json
 
-from conftest import CAPTAIN2, CAPTAIN2_NAME, base_config, default_env
+import httpx
+
+from conftest import CAPTAIN2, CAPTAIN2_NAME, OWNER, base_config, default_env
+from switchboard.slack.avatar_files import BUNDLED_AVATARS
 from test_api_read import get
 
 
 UNKNOWN = "jam_UNKNOWNCAPTAIN"
+
+
+def test_discovered_captain_registrant_comes_from_capy_author(make, capy):
+    capy.captains.extend([
+        {"id": "jam_EXAMPLEREGISTERED", "name": "Atlas", "authorId": "user_EXAMPLE", "previousAuthorId": "user_PREVIOUS"},
+        {"id": "jam_EXAMPLEUNREGISTERED", "name": "Crew", "previousAuthorId": "user_PREVIOUS"},
+    ])
+    capy.users.extend([
+        {"id": "user_EXAMPLE", "firstName": "Alex", "lastName": "Rivera", "email": "private@swb.example.com"},
+        {"id": "user_PREVIOUS", "firstName": "Prior", "lastName": "Owner", "email": None},
+    ])
+    _, client = make()
+    rows = {row["id"]: row for row in get(client, "/agents")["captains"]}
+    assert rows["jam_EXAMPLEREGISTERED"]["created_by"] == "Alex Rivera"
+    assert rows["jam_EXAMPLEUNREGISTERED"]["created_by"] is None
+    assert "private@swb.example.com" not in json.dumps(rows)
+
+
+def test_message_sender_uses_its_own_captain_avatar_not_the_conversation_target(make):
+    core, client = make()
+    handle = core.inbox.open_handle(owner="codex", destination="capy", ref="jam_EXAMPLECREW", project=None,
+                                    title="Example discussion", meta={}, target=f"capy:captain:{UNKNOWN}")
+    for sender in (
+        core.blocks["capy"]._from("jam_EXAMPLECREW", {"authorName": "Old name", "sender": {"id": CAPTAIN2, "relation": "captain"}}),
+        core.blocks["capy"]._from(CAPTAIN2, {"source": "assistant"}),
+        {"kind": "capy_thread", "thread_id": "jam_EXAMPLECREW", "avatar_url": "https://swb.example.com/profile?token=example"},
+        {"kind": "agent", "agent": "claude-code"},
+    ):
+        client.portal.call(core.inbox.add, handle, "reply", {"text": "Example reply", "from": sender})
+
+    avatar = next(row["avatar_url"] for row in get(client, "/agents")["captains"] if row["id"] == CAPTAIN2)
+    detail = get(client, f"/conversations/{handle}")
+    first, second, crew, known = [item["from"] for item in detail["items"]]
+    assert detail["conversation"]["first_sender"]["avatar_url"] == "/avatars/codex.png"
+    assert first["author"] == second["author"] == CAPTAIN2_NAME
+    assert first["avatar_url"] == second["avatar_url"] == avatar
+    assert "sender" not in first and "avatar_url" not in crew
+    assert known["avatar_url"] == "/avatars/claude-code.png"
+    assert client.get(avatar).content == (BUNDLED_AVATARS / "capy.png").read_bytes()
+
+
+def test_slack_approvals_project_verified_sender_names_and_same_origin_avatars(make, monkeypatch):
+    config = base_config(slack={"workspaces": {"team": {"team_id": "TEXAMPLE", "identities": {"bot": {
+        "token_env": "EXAMPLE_SLACK_TOKEN", "write": "approval",
+    }}}}})
+    core, client = make(config)
+    avatar_bytes = (BUNDLED_AVATARS / "default.png").read_bytes()
+    upstream = "https://avatars.slack-edge.com/example/profile.png"
+
+    class Slack:
+        async def users_info(self, *, user):
+            assert user == "UEXAMPLE"
+            return {"user": {"profile": {"display_name": "Alex Rivera", "real_name": "Other name",
+                                         "image_192": upstream, "email": "private@swb.example.com"}}}
+
+    def image(request):
+        assert str(request.url) == upstream and "authorization" not in request.headers
+        return httpx.Response(200, content=avatar_bytes)
+
+    core.slack.runtime("team").clients["bot"] = Slack()
+    monkeypatch.setattr(core, "_avatar_http", httpx.AsyncClient(transport=httpx.MockTransport(image)))
+    with_user = core.slack.store.create_request(
+        workspace="team", identity="bot", action="post_message", params={"text": "Example post"}, persona=None,
+        key_id="dots:slack", ttl_seconds=60, requester={"user": "UEXAMPLE", "workspace": "team"},
+    )
+    pairing = core.connections.mint(agent="claude-code", project=None, client=None, by="owner")
+    key = core.connections.redeem(pairing["code"])
+    with_agent = core.slack.store.create_request(
+        workspace="team", identity="bot", action="add_reaction", params={"name": "wave"}, persona={"name": "Another label"},
+        key_id=key["key_id"], ttl_seconds=60,
+    )
+    rows = {row["id"]: row for row in get(client, "/inbox")["pending_writes"]}
+    sender = rows[with_user["id"]]["sender"]
+    assert sender["name"] == "Alex Rivera" and sender["avatar_url"].startswith("/avatars/slack-profile-")
+    assert client.get(sender["avatar_url"], headers=OWNER).content == avatar_bytes
+    assert client.get(sender["avatar_url"]).status_code in (401, 403)
+    assert rows[with_agent["id"]]["sender"] == {
+        "kind": "agent", "agent": "claude-code", "name": "Claude Code", "avatar_url": "/avatars/claude-code.png",
+    }
+    assert rows[with_agent["id"]]["key_id"] == key["key_id"]
+    assert all(value not in json.dumps(rows) for value in (upstream, "private@swb.example.com", key["key"], pairing["code"]))
 
 
 def test_audit_labels_capy_references_but_preserves_event_identities(make):
