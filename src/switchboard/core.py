@@ -31,7 +31,7 @@ from .memory import GENERAL, Memory, MemoryError_
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
-from .slack.avatar_files import AvatarFiles
+from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store
 from .subject import subject
 from .visibility import Visibility
@@ -421,6 +421,8 @@ class Switchboard:
                     avatar, icon_url = configured.avatar, configured.icon_url
                 elif not avatar and not icon_url and p.get("id"):
                     avatar = f"{p['id']}.png"
+                    if not self.find_avatar(avatar):
+                        avatar = agent_avatar(p["id"])
                 file = avatar if isinstance(avatar, str) and self.find_avatar(avatar) else None
                 t["persona"] = {**p, "avatar_file": file, "icon_url": icon_url}
                 t["avatar_url"] = (self.avatar_url(file) if file else None) or icon_url

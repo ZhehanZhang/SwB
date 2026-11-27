@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from .api_display import captain_avatar_url, captain_target, capy_label
+from .slack.avatar_files import agent_avatar_url
 from .api_read import _REPO, _error, _reference
 from .api_runtime import runtime_info
 from .audit import iso
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 
 def _item(id: str, label: str, kind: str, *, short_label: str | None = None, detail: str | None = None,
           avatar_url: str | None = None) -> dict[str, Any]:
+    avatar_url = avatar_url or agent_avatar_url(kind)
     return {"id": id, "label": label, "kind": kind, "short_label": short_label, "detail": detail,
             **({"avatar_url": avatar_url} if avatar_url else {})}
 

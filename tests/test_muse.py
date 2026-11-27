@@ -44,9 +44,9 @@ def test_muse_connect_claim_status_and_credential_scope(make):
     assert refused.status_code == 401 and refused.json() == {"error": "signed_out"}
     assert core.secret("MUSE_BRIDGE_TOKEN") is None
     page = client.get(path, headers=OWNER)
-    assert 'data-connector="muse"' in page.text and 'href="/assets/claim-connectors.svg#muse"' in page.text
+    assert 'data-connector="muse"' in page.text and 'src="/avatars/muse.png"' in page.text
     sprite = client.get("/assets/claim-connectors.svg")
-    assert sprite.status_code == 200 and '<symbol id="muse"' in sprite.text
+    assert sprite.status_code == 200 and '<symbol id="muse"' not in sprite.text
     [pending] = client.get("/api/tokens", headers=OWNER).json()["waiting"]
     assert (pending["label"], pending["kind"]) == ("MUSE_BRIDGE_TOKEN", "muse")
     csrf = page.text.split('name="csrf" value="', 1)[1].split('"', 1)[0]
