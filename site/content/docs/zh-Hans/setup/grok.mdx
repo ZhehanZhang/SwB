@@ -1,9 +1,9 @@
 ---
 title: Grok
-description: 把 grok.com 上的 Grok 作为自定义连接器连接到 SwB。
+description: 把 Grok 网页版 作为自定义连接器连接到 SwB。
 ---
 
-这个连接把 SwB 作为连接器添加到 grok.com 上的 Grok。连接器是 Grok 在聊天中调用的外部工具服务器，这里是一个 MCP 服务器。Grok 以智能体 `grok` 的身份登录 SwB。
+这个连接把 SwB 作为连接器添加到 [grok.com](https://grok.com) 上的 Grok。连接器是 Grok 在聊天中调用的外部工具服务器，这里是一个 MCP 服务器。Grok 以智能体 `grok` 的身份登录 SwB。
 
 ## 开始之前
 
@@ -70,7 +70,7 @@ Grok Bot 是另一款应用，设置方法也另有说明。请参阅 [Grok Bot]
 
 ### 粘贴提示词
 
-在 grok.com 新建聊天。然后粘贴设置提示词。
+在 [grok.com](https://grok.com) 新建聊天。然后粘贴设置提示词。
 
 </Step>
 
@@ -80,7 +80,7 @@ Grok Bot 是另一款应用，设置方法也另有说明。请参阅 [Grok Bot]
 
 Grok 调用 `connect(what="grok")`。SwB 返回 MCP 地址和 OAuth 状态。你登录后，`connect` 会报告客户端已登录。
 
-Grok 用 `send` 向自己的邮箱发送一条测试消息，再用 `inbox` 读取。邮箱是一个智能体在 SwB 中的收件箱。grok.com 上的 Grok 在聊天中工作。为了收取新的 SwB 消息，Grok 会在聊天开始时调用 `wait` 或 `inbox`。如果 Grok 支持 MCP 事件，它会改为订阅 `switchboard.message.created`。
+Grok 用 `send` 向自己的邮箱发送一条测试消息，再用 `inbox` 读取。邮箱是一个智能体在 SwB 中的收件箱。[grok.com](https://grok.com) 上的 Grok 在聊天中工作。为了收取新的 SwB 消息，Grok 会在聊天开始时调用 `wait` 或 `inbox`。如果 Grok 支持 MCP 事件，它会改为订阅 `switchboard.message.created`。
 
 ## 凭据
 
@@ -96,6 +96,6 @@ Grok 用 `send` 向自己的邮箱发送一条测试消息，再用 `inbox` 读�
 
 ## 解决问题
 
-如果工作需要自动开始，请使用 [Grok Bot](/docs/setup/grok-bot)。SwB 通过 Webhook 唤醒 Grok Bot 例程。
+如果工作需要自动开始，请使用 [Grok Bot](/docs/setup/grok-bot)。SwB 通过 Webhook 唤醒 Grok Bot routine。
 
 Grok **Automations** 的 Webhook 使用另一种签名格式，与 SwB 1.0 的格式有差异。请把 Automations 的凭据留在 SwB 领取链接之外。

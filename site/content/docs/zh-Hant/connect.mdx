@@ -9,11 +9,11 @@ description: 把 SwB 加到一個代理，其餘交給代理完成。
 
 | 應用程式 | 加入 SwB 的位置 |
 | - | - |
-| Claude 與 Claude Projects | Settings → Connectors → Add custom connector |
+| Claude 與 Claude Project | Settings → Connectors → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
-| Grok | grok.com → Connectors → New Connector → Custom |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 以 Automatic OAuth 用戶端新增 MCP 伺服器 |
-| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
+| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
 | Codex、Gemini CLI 與其他程式開發代理 | `swb connect coding-agent --choose agent=codex` |
 
 對於程式開發代理，請把 `codex` 換成你的用戶端名稱。單獨執行 `swb connect coding-agent` 可以看到清單。清單包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 與 Kiro。
@@ -24,9 +24,9 @@ description: 把 SwB 加到一個代理，其餘交給代理完成。
 
 | 你說的話 | 代理的動作 |
 | - | - |
-| 我要怎麼連接我的 Claude Projects？ | 為專案註冊一個 Claude routine，並給你一個權杖連結 |
+| 我要怎麼連接我的 Claude Project？ | 為專案登記 Claude routine，並給你一個領取連結 |
 | 幫我把 Slack 連到 SwB。 | 引導你從程式碼庫的 `manifests/` 資料夾取得資訊清單，並在需要時提供領取連結 |
-| 幫我連接我的 Discord 機器人。 | 給你權杖連結與機器人邀請連結 |
+| 幫我連接我的 Discord 機器人。 | 給你領取連結與機器人邀請連結 |
 | 把這件事交給我的 Capy Captain。 | 傳送任務並等待答案 |
 | 你可以傳送給哪些對象？ | 列出 SwB 能連到的所有目標 |
 
@@ -47,3 +47,26 @@ swb connect grok
 請以擁有者身分登入的代理呼叫 `connect_code`。告訴它新代理的名稱。配對碼的有效期限是 10 分鐘，只能使用一次。新代理透過 `POST /connect`，用配對碼換取自己的金鑰。完整的配對方式請見 [MCP 用戶端](/zh-Hant/docs/setup/mcp-client)。
 
 你也可以在權杖頁面建立配對碼。SwB 透過 `POST /pairing/code` 送出表單。
+
+## 設定提示詞
+
+SwB 把每段設定提示詞作為 MCP prompt 與 MCP resource 提供給代理。`connect` 工具在 `guide` 欄位中傳回每個平台對應的兩項。
+
+| Prompt | Resource | 指南 |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/docs/setup/capy-captain](/zh-Hant/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/docs/setup/chatgpt](/zh-Hant/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/docs/setup/claude](/zh-Hant/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/docs/setup/claude-project](/zh-Hant/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/docs/setup/coding-agent](/zh-Hant/docs/setup/coding-agent) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/docs/connect](/zh-Hant/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/docs/deploy](/zh-Hant/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/docs/setup/discord](/zh-Hant/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/docs/setup/dots](/zh-Hant/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/docs/setup/github](/zh-Hant/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/docs/setup/grok](/zh-Hant/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/docs/setup/grok-bot](/zh-Hant/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/docs/setup/mcp-client](/zh-Hant/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/zh-Hant/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/zh-Hant/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/zh-Hant/docs/setup/telegram) |

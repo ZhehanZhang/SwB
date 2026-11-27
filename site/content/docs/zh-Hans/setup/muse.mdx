@@ -7,7 +7,7 @@ SwB 以名为 **SwB** 的文字小装置与 Muse 配对。小装置是 Muse 应�
 
 ## 开始之前
 
-你需要一个 Muse 账号，以及 iOS 或 Android 上的 Muse 应用。你需要一台支持低功耗蓝牙的 Linux 设备，它能访问你的 SwB 服务器，例如 https://swb.example.com。SwB 使用 Ubuntu 24.04，并安装 `bluez`、`python3-dbus`、`python3-gi` 和 `python3-venv`。
+你需要一个 Muse 账号，以及 iOS 或 Android 上的 Muse 应用。你需要一台支持低功耗蓝牙的 Linux 设备，它能访问你的 SwB 服务器，例如 `https://swb.example.com`。SwB 使用 Ubuntu 24.04，并安装 `bluez`、`python3-dbus`、`python3-gi` 和 `python3-venv`。
 
 `config/switchboard.yaml` 的 `blocks` 下必须有 `muse: {use: muse}`。你还需要以所有者身份登录 SwB。
 
@@ -33,7 +33,7 @@ SwB 以名为 **SwB** 的文字小装置与 Muse 配对。小装置是 Muse 应�
 <Step>
 ### 打开 Meta 令牌页面
 
-打开 https://gadgets.muse.ai/settings/sdk-tokens。点击 **Log in**，使用 Muse 应用的账号。
+打开 [https://gadgets.muse.ai/settings/sdk-tokens](https://gadgets.muse.ai/settings/sdk-tokens)。点击 **Log in**，使用 Muse 应用的账号。
 </Step>
 <Step>
 ### 生成 Meta 令牌
@@ -90,7 +90,7 @@ SwB 以名为 **SwB** 的文字小装置与 Muse 配对。小装置是 Muse 应�
 | 令牌 | 显示位置 | 格式 | 填写位置 |
 | --- | --- | --- | --- |
 | 桥接令牌 | 你在密码管理器中生成 | 64 个字母和数字 | SwB 领取链接，然后是 Linux 设备上的隐藏提示 |
-| Meta Gadget SDK 令牌 | https://gadgets.muse.ai/settings/sdk-tokens，只显示一次 | 以 `mgst_` 开头 | 只填在 Linux 设备上的隐藏提示中 |
+| Meta Gadget SDK 令牌 | [https://gadgets.muse.ai/settings/sdk-tokens](https://gadgets.muse.ai/settings/sdk-tokens)，只显示一次 | 以 `mgst_` 开头 | 只填在 Linux 设备上的隐藏提示中 |
 
 Meta 令牌只保存在 Linux 设备上。SwB 只保存桥接令牌。
 

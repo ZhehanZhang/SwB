@@ -1,5 +1,3 @@
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
@@ -7,13 +5,13 @@ import { AgentExchange } from '@/components/agent-exchange';
 import { GitHubMark } from '@/components/github-mark';
 import { HeroTitle } from '@/components/hero-title';
 import { CopyInstall } from '@/components/landing-controls';
-import { readPrompt } from '@/components/setup-prompt';
 import { SwitchboardHero } from '@/components/switchboard-hero';
 import { exchangeCopy } from '@/lib/exchange-copy';
 import { isLocale, localize } from '@/lib/i18n';
 import { landingCopy } from '@/lib/landing-copy';
 import { baseOptions } from '@/lib/layout.shared';
 import { pageMetadata } from '@/lib/metadata';
+import { promptFiles, readPrompt } from '@/lib/prompts';
 import { repository } from '@/lib/source';
 import { tagline } from '@/lib/tagline';
 
@@ -24,9 +22,10 @@ export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
 }
 
 function prompts() {
-  return Object.fromEntries(readdirSync(join(process.cwd(), '..', 'docs', 'prompts'))
-    .filter((file) => file.endsWith('.md'))
-    .map((file) => [file.slice(0, -3), readPrompt(file.slice(0, -3))]));
+  return Object.fromEntries(promptFiles().map((file) => {
+    const name = file.slice(0, -3);
+    return [name, readPrompt(name)];
+  }));
 }
 
 export default async function Landing({ params }: PageProps<'/[lang]'>) {

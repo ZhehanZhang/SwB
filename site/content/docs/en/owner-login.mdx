@@ -1,6 +1,6 @@
 ---
 title: Owner sign-in
-description: Sign in to the SwB page with a passkey, a one-time link or your identity provider.
+description: Sign in with a passkey, a one-time link, a setup code or your identity provider.
 ---
 
 SwB has one owner. The owner signs in to the SwB page to see the instance, approve agent sign-ins and paste tokens. SwB uses passkeys, one-time links and OIDC in place of passwords.
@@ -16,7 +16,21 @@ SwB has one owner. The owner signs in to the SwB page to see the instance, appro
 swb login-link
 ```
 
-The command prints a link such as `https://swb.example.com/login#t=...`. The link works one time, for five minutes. An agent that you signed in can also make a link with the `login_link` tool. The token is in the part of the link after `#`, so it stays out of server logs and link previews.
+The command prints a link such as `https://swb.example.com/login#t=...`. Open it in your browser within five minutes. The link works once. An agent signed in as the owner can also make a link with the `login_link` tool. The token stays in the part of the link after `#`.
+
+For a local run, set `SWITCHBOARD_PUBLIC_URL` to `http://localhost:8870` before you start SwB. Set the port in the address to match `PORT`. If the YAML config sets `public_url`, change it there. Use `--url` to select another server. Use `--dir` to read the owner key from another instance folder.
+
+## Setup code
+
+A setup code works once, for the first owner sign-in. Use it when SwB handles sign-in directly. The [cloud and Docker deploy scripts](/docs/deploy) create the code for you.
+
+To set your own code, generate 32 random bytes. Encode them as 64 lowercase hexadecimal characters or standard Base64. This command adds a hexadecimal code to the private `.env` file. Run it in the instance folder after `swb init`.
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+Start SwB with `SWB_SETUP_CODE` set. Open `/login` in your browser. Paste the code in **Setup code**.
 
 ## Passkey
 
@@ -29,7 +43,7 @@ Use your own identity provider, for example Google, Okta or Authentik. Add it to
 ```yaml
 public_url: https://swb.example.com
 auth:
-  owner_emails: [owner@example.com]
+  owner_emails: [owner@swb.example.com]
   oidc:
     name: Google
     issuer: https://accounts.google.com

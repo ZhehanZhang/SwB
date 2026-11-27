@@ -1,9 +1,9 @@
 ---
 title: 擁有者登入
-description: 用密碼金鑰、一次性連結或你的身分提供者登入 SwB 頁面。
+description: 使用通行金鑰、一次性連結、設定碼或身分提供者登入 SwB。
 ---
 
-SwB 只有一位擁有者。擁有者登入 SwB 頁面，檢視執行個體、核准代理登入並貼上權杖。SwB 以密碼金鑰、一次性連結與 OIDC 取代密碼。
+SwB 只有一位擁有者。以擁有者身分登入後，可以檢視 SwB、核准代理登入及儲存權杖。
 
 | 頁面 | 用途 |
 | - | - |
@@ -16,11 +16,25 @@ SwB 只有一位擁有者。擁有者登入 SwB 頁面，檢視執行個體、�
 swb login-link
 ```
 
-指令會印出類似 `https://swb.example.com/login#t=...` 的連結。連結只能使用一次，有效時間是五分鐘。你已登入的代理也可以用 `login_link` 工具產生連結。權杖位於連結中 `#` 之後的部分，所以伺服器記錄與連結預覽只會顯示 `#` 之前的位址。
+指令會印出類似 `https://swb.example.com/login#t=...` 的連結。請在五分鐘內用瀏覽器開啟。連結使用一次後就會失效。以擁有者身分登入的代理也可用 `login_link` 工具產生連結。權杖位於連結的 `#` 後方。
 
-## 密碼金鑰
+在本機執行時，請在啟動前將 `SWITCHBOARD_PUBLIC_URL` 設為 `http://localhost:8870`。位址中的連接埠須與 `PORT` 一致。若 YAML 設定檔已設定 `public_url`，請直接修改該欄位。用 `--url` 指定其他伺服器。用 `--dir` 從其他資料夾讀取擁有者金鑰。
 
-第一次登入後，頁面會請你新增密碼金鑰。請依裝置為密碼金鑰命名，例如 MacBook。之後的登入使用這個密碼金鑰。你使用的每台裝置都要新增一個密碼金鑰。Settings 會顯示你的密碼金鑰，並可移除其中一個。
+## 設定碼
+
+設定碼用於擁有者第一次登入，使用一次後即失效。由 SwB 直接處理登入時，可使用設定碼。[雲端與 Docker 部署指令](/zh-Hant/docs/deploy)會產生設定碼。
+
+若要自訂設定碼，請產生 32 個隨機位元組。將前述位元組編碼成 64 個小寫十六進位字元，或用標準 Base64 編碼。下列指令會將十六進位設定碼加到私有的 `.env`。先執行 `swb init`，再於執行個體的資料夾內執行此指令。
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+設定好 `SWB_SETUP_CODE` 後啟動 SwB。在瀏覽器中開啟 `/login`。將設定碼貼到 **Setup code**。
+
+## 通行金鑰
+
+首次登入後，頁面會請你新增通行金鑰。用裝置名稱為金鑰命名。往後用通行金鑰登入。在每台裝置上新增一個通行金鑰。你可以在 **Settings** 查看或移除通行金鑰。
 
 ## OIDC
 
@@ -29,7 +43,7 @@ swb login-link
 ```yaml
 public_url: https://swb.example.com
 auth:
-  owner_emails: [owner@example.com]
+  owner_emails: [owner@swb.example.com]
   oidc:
     name: Google
     issuer: https://accounts.google.com

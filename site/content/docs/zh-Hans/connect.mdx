@@ -11,12 +11,12 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 | - | - |
 | Claude 和 Claude Project | Settings → Connectors → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → 添加自定义 MCP 服务器 |
-| Grok | grok.com → Connectors → New Connector → Custom |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 添加 MCP 服务器，选择 Automatic OAuth 客户端 |
-| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
-| Codex、Gemini CLI 和其他编码智能体 | `swb connect coding-agent --choose agent=codex` |
+| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
+| Codex、Gemini CLI 和其他编程智能体 | `swb connect coding-agent --choose agent=codex` |
 
-对于编码智能体，把 `codex` 改成你的客户端的名称。单独运行 `swb connect coding-agent` 可查看列表。列表包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 和 Kiro。
+对于编程智能体，把 `codex` 改成你的客户端的名称。单独运行 `swb connect coding-agent` 可查看列表。列表包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 和 Kiro。
 
 ## 询问你的智能体
 
@@ -24,9 +24,9 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 
 | 询问 | 智能体的操作 |
 | - | - |
-| 如何连接我的 Claude Project？ | 它为该项目注册一个 Claude routine，并给你一个用于令牌的链接 |
+| 如何连接我的 Claude Project？ | 它为项目注册 Claude routine，并给你一个领取链接 |
 | 把 Slack 连接到 SwB。 | 它会指引你从仓库的 `manifests/` 目录获取应用清单，并在需要时提供领取链接 |
-| 连接我的 Discord 机器人。 | 它给你一个令牌链接和机器人邀请链接 |
+| 连接我的 Discord 机器人。 | 它给你一个领取链接和机器人邀请链接 |
 | 把这个发给我的 Capy Captain。 | 它发送任务并等待答复 |
 | 你能发送给哪些目标？ | 它列出 SwB 能访问的所有目标 |
 
@@ -47,3 +47,26 @@ swb connect grok
 请以所有者身份登录的智能体调用 `connect_code`。把新智能体的名称告诉它。配对码在 10 分钟内有效，只能使用一次。新智能体通过 `POST /connect` 用配对码换取自己的密钥。完整的配对方法见 [MCP 客户端](/zh-Hans/docs/setup/mcp-client)。
 
 你也可以在令牌页面创建配对码。SwB 通过 `POST /pairing/code` 提交表单。
+
+## 设置提示词
+
+SwB 把每段设置提示词作为 MCP prompt 和 MCP resource 提供给智能体。`connect` 工具在 `guide` 字段中返回每个平台对应的两项。
+
+| Prompt | Resource | 指南 |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/docs/setup/capy-captain](/zh-Hans/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/docs/setup/chatgpt](/zh-Hans/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/docs/setup/claude](/zh-Hans/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/docs/setup/claude-project](/zh-Hans/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/docs/setup/coding-agent](/zh-Hans/docs/setup/coding-agent) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/docs/connect](/zh-Hans/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/docs/deploy](/zh-Hans/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/docs/setup/discord](/zh-Hans/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/docs/setup/dots](/zh-Hans/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/docs/setup/github](/zh-Hans/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/docs/setup/grok](/zh-Hans/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/docs/setup/grok-bot](/zh-Hans/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/docs/setup/mcp-client](/zh-Hans/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/zh-Hans/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/zh-Hans/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/zh-Hans/docs/setup/telegram) |

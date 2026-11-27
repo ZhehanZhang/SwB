@@ -3,7 +3,7 @@ title: ChatGPT dots
 description: 把 ChatGPT dot 连接到 SwB，让 dot 在收到 SwB 消息时自动唤醒并答复。
 ---
 
-dot 是 ChatGPT 的个人智能体，在聊天之间也会持续工作。这个连接为你的 dot 提供一个 SwB 邮箱，并在消息到达时唤醒 dot。
+**dot** 是 ChatGPT 的个人智能体，在两次对话之间也会继续工作。`dots` 模块默认通过 Slack 投递消息。本指南改用 SwB 邮箱。消息到达时，邮箱会通过 MCP 事件唤醒 dot。
 
 ## 开始之前
 
@@ -87,7 +87,7 @@ blocks:
 
 ### 打开你的 dot
 
-在 chatgpt.com 打开你的 dot。把 SwB 插件添加到 dot。
+在 [chatgpt.com](https://chatgpt.com) 打开你的 dot。把 SwB 插件添加到 dot。
 
 </Step>
 {/* unverified */}
@@ -135,4 +135,4 @@ dot 调用 `connect(what="chatgpt")`，确认 OAuth 登录。OAuth 是一种登�
 
 如果 `connect` 要求连接 Slack 工作区，说明该模块使用 Slack 投递。设置 `delivery: mailbox`，然后重启 SwB。
 
-请在浏览器中通过 chatgpt.com 添加服务器。桌面应用只能打开你已添加的插件。如果 dot 几天后停止唤醒，请重新登录插件。
+请在浏览器中通过 [chatgpt.com](https://chatgpt.com) 添加服务器。桌面应用只能打开你已添加的插件。如果 dot 几天后停止唤醒，请重新登录插件。

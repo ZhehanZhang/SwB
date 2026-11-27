@@ -9,9 +9,7 @@ SwB 透過一個 Slack 應用程式讀取和傳送 Slack 訊息。你用資訊�
 
 ## 開始之前
 
-你需要目標工作區裡的 Slack 帳號，並有權在該工作區建立和安裝應用程式。在 Enterprise Grid 組織中，應用程式需要 Org Owner 或 Org Admin 核准。你也需要以擁有者身分登入 SwB 伺服器，例如 https://swb.example.com。
-
-SwB 提供兩份資訊清單。需要機器人和你自己的帳號時，請用 `manifests/workspace-a-agent.yaml`。只用你自己的帳號時，請用 `manifests/workspace-b-user-only.yaml`。
+你需要目標工作區裡的 Slack 帳號，並有權在該工作區建立和安裝應用程式。在 Enterprise Grid 組織中，應用程式需要 Org Owner 或 Org Admin 核准。你也需要以擁有者身分登入 SwB 伺服器，例如 `https://swb.example.com`。
 
 ## 複製設定提示詞
 
@@ -25,7 +23,7 @@ SwB 提供兩份資訊清單。需要機器人和你自己的帳號時，請用 
 <Step>
 ### 開啟 Slack 應用程式設定
 
-開啟 https://api.slack.com/apps。點選 **Create New App** → **From a manifest**。
+開啟 [Slack 應用程式設定](https://api.slack.com/apps)。點選 **Create New App** → **From a manifest**。
 </Step>
 <Step>
 ### 選擇工作區
@@ -35,7 +33,7 @@ SwB 提供兩份資訊清單。需要機器人和你自己的帳號時，請用 
 <Step>
 ### 貼上資訊清單
 
-選擇 **YAML**。貼上完整的 SwB 資訊清單。
+選擇 **YAML**。複製下方其中一份應用程式資訊清單。貼上完整內容。
 </Step>
 <Step>
 ### 建立應用程式
@@ -80,11 +78,133 @@ SwB 提供兩份資訊清單。需要機器人和你自己的帳號時，請用 
 </Step>
 </Steps>
 
+## 應用程式資訊清單
+
+### 機器人和你的帳號
+
+```yaml
+# Example Slack app for an agent-to-agent workspace: a bot user and the owner's user token.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
+# The bot's @handle and member-list profile come from features.bot_user.display_name and the
+# app icon; they do not change per message. Per-message name/avatar = personas (chat:write.customize).
+display_information:
+  name: Switchboard
+  description: Agent switchboard for the owner's assistants
+  background_color: "#1d2733"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: switchboard
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read      # @mentions -> push kind "mention"
+      - channels:history       # watched public channels the bot is in
+      - channels:read
+      - groups:history         # watched private channels the bot is in
+      - groups:read
+      - im:history             # DMs to the bot -> push kind "dm"
+      - im:read
+      - im:write               # approval DMs to the owner
+      - chat:write
+      - chat:write.customize   # personas: per-message username + icon
+      - reactions:write        # ack reaction on mentions/DMs
+      - users:read             # names in pushed events
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # posts as the owner (policy-gated)
+      - reactions:write
+      - search:read            # search_messages
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  interactivity:
+    is_enabled: true           # Approve/Reject buttons, delivered over Socket Mode
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+```
+
+### 只用你的帳號
+
+```yaml
+# Example Slack app for a user-only workspace. No bot user, bot scopes, bot events, or interactivity.
+# It never joins or invites; every post appears as the owner.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
+display_information:
+  name: Switchboard (personal)
+  description: Lets the owner's agents read on their behalf; writes need approval
+  background_color: "#333333"
+oauth_config:
+  scopes:
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # only ever used after the owner approves a request
+      - reactions:write        # same
+      - search:read
+      - users:read
+settings:
+  event_subscriptions:
+    user_events:
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+```
+
 ## 代理的工作
 
 代理呼叫 `connect`，參數為 `what="slack"`。SwB 列出每個工作區還缺哪些權杖，並回傳一個領取連結，一次收齊這些權杖。
 
 代理把工作區寫進 `config/switchboard.yaml` 的 `blocks.slack.workspaces`，包括 `team_id` 和權杖名稱。如果代理能存取伺服器，它會直接修改。否則它會把 YAML 交給你加入。
+
+這個範例用機器人和你的帳號連線到一個工作區。把 `T0DEMO0001` 換成你的工作區 ID。
+
+```yaml
+blocks:
+  slack:
+    use: slack
+    enabled: true
+    workspaces:
+      example:
+        team_id: T0DEMO0001
+        app_token_env: SLACK_EXAMPLE_APP_TOKEN
+        identities:
+          bot:
+            token_env: SLACK_EXAMPLE_BOT_TOKEN
+          user:
+            token_env: SLACK_EXAMPLE_USER_TOKEN
+```
+
+若只用你的帳號，在 `team_id` 同一層加入 `user_only: true`。移除 `identities` 下的 `bot` 項目。
 
 SwB 要求重新啟動時，代理會告訴你。重新啟動後，代理用 `slack_workspaces` 檢查每個身分。身分是指機器人或你自己的帳號。最後，代理用 `slack_post` 傳送一則測試訊息。
 

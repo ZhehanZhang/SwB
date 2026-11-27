@@ -1,6 +1,6 @@
 ---
 title: 所有者登录
-description: 用通行密钥、一次性链接或你的身份提供方登录 SwB 页面。
+description: 用通行密钥、一次性链接、设置码或身份提供方登录 SwB。
 ---
 
 SwB 只有一位所有者。所有者登录 SwB 页面，查看实例、批准智能体登录并粘贴令牌。SwB 用通行密钥、一次性链接和 OIDC 取代密码。
@@ -16,7 +16,21 @@ SwB 只有一位所有者。所有者登录 SwB 页面，查看实例、批准�
 swb login-link
 ```
 
-命令会打印形如 `https://swb.example.com/login#t=...` 的链接。该链接五分钟内有效，且只能使用一次。你已登录的智能体也可以用 `login_link` 工具生成链接。令牌位于链接中 `#` 之后的部分，因此服务器日志和链接预览会隐藏它。
+命令会打印形如 `https://swb.example.com/login#t=...` 的链接。请在五分钟内用浏览器打开。链接用过一次就会失效。以所有者身份登录的智能体也能用 `login_link` 工具生成链接。令牌在链接的 `#` 后面。
+
+在本机运行时，启动前将 `SWITCHBOARD_PUBLIC_URL` 设为 `http://localhost:8870`。地址中的端口须与 `PORT` 一致。如果 YAML 配置已设置 `public_url`，请在那里修改。用 `--url` 指定其他服务器。用 `--dir` 从其他实例目录读取所有者密钥。
+
+## 设置码
+
+设置码仅用于所有者首次登录，用过即失效。由 SwB 直接处理登录时，可使用设置码。[云平台和 Docker 部署脚本](/zh-Hans/docs/deploy)会生成设置码。
+
+要自行设置，请生成 32 个随机字节。将它们编码为 64 个小写十六进制字符，或使用标准 Base64 编码。下面的命令把十六进制设置码追加到私有文件 `.env`。先运行 `swb init`，再在实例目录中运行此命令。
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+设置好 `SWB_SETUP_CODE` 后启动 SwB。在浏览器中打开 `/login`。把设置码粘贴到 **Setup code**。
 
 ## 通行密钥
 
@@ -29,7 +43,7 @@ swb login-link
 ```yaml
 public_url: https://swb.example.com
 auth:
-  owner_emails: [owner@example.com]
+  owner_emails: [owner@swb.example.com]
   oidc:
     name: Google
     issuer: https://accounts.google.com

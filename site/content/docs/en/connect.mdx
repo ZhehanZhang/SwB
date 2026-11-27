@@ -13,7 +13,7 @@ Add SwB as a remote MCP server. Use your public MCP address, for example `https:
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | grok.com → Connectors → New Connector → Custom |
 | Capy | Add an MCP server with the Automatic OAuth client |
-| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
+| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
 | Codex, Gemini CLI and other coding agents | `swb connect coding-agent --choose agent=codex` |
 
 For a coding agent, change `codex` to the name of your client. Run `swb connect coding-agent` alone to see the list. The list has Claude Code, Codex, Gemini CLI, Qwen Code, Goose, OpenCode, Cline and Kiro.
@@ -47,3 +47,26 @@ swb connect grok
 To pair a new agent, ask an agent signed in as the owner to call `connect_code`. Give it the name of the new agent. The code works one time for ten minutes. The new agent uses `POST /connect` to exchange the code for its own key. See [MCP client](/docs/setup/mcp-client) for the full pairing procedure.
 
 You can also create a pairing code in Tokens. SwB sends the form to `POST /pairing/code`.
+
+## Setup prompts
+
+SwB serves each setup prompt to agents as an MCP prompt and as an MCP resource. The `connect` tool returns both for each platform in its `guide` field.
+
+| Prompt | Resource | Guide |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/docs/setup/capy-captain](/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/docs/setup/chatgpt](/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/docs/setup/claude](/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/docs/setup/claude-project](/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/docs/setup/coding-agent](/docs/setup/coding-agent) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/docs/connect](/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/docs/deploy](/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/docs/setup/discord](/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/docs/setup/dots](/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/docs/setup/github](/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/docs/setup/grok](/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/docs/setup/grok-bot](/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/docs/setup/mcp-client](/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/docs/setup/telegram) |
