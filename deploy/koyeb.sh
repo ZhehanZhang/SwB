@@ -2,8 +2,8 @@
 set +x
 set -eu
 
-app=${1:?Usage: deploy/koyeb.sh APP [BRANCH] [REGION]}
-branch=${2:-main}
+app=${1:?Usage: sh deploy/koyeb.sh APP [BRANCH] [REGION]}
+branch=${2:-$(git branch --show-current)}
 region=${3:-was}
 case "$app" in
     ""|-*|*[!a-z0-9-]*) printf '%s\n' 'Use lowercase letters, digits and hyphens for the app name.' >&2; exit 2 ;;
@@ -12,6 +12,10 @@ case "$region" in
     was|fra) ;;
     *) printf '%s\n' 'Use was or fra for the volume region.' >&2; exit 2 ;;
 esac
+if [ -z "$branch" ]; then
+    printf '%s\n' 'Pass the published SwB branch to deploy.' >&2
+    exit 2
+fi
 
 volume="swb-$app"
 secret="swb-$app-setup"

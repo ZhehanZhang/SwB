@@ -115,15 +115,28 @@ def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, mon
         assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 404
 
 
-def test_setup_code_rate_limit_cannot_be_reset_with_cf_header(tmp_path):
+def test_setup_code_rate_limits_failures_without_blocking_the_owner(tmp_path):
     env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE, "SWITCHBOARD_DATA": str(tmp_path)}
     with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
         for i in range(8):
             headers = {"Origin": SETUP_URL, "CF-Connecting-IP": f"192.0.2.{i}"}
             assert client.post("/auth/setup", json={"code": "x" * 32}, headers=headers).status_code == 401
-        response = client.post("/auth/setup", json={"code": SETUP_CODE},
+        response = client.post("/auth/setup", json={"code": "x" * 32},
                                headers={"Origin": SETUP_URL, "CF-Connecting-IP": "192.0.2.99"})
         assert response.status_code == 429 and "Retry-After" in response.headers
+        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers={"Origin": SETUP_URL}).status_code == 204
+
+
+def test_setup_code_allows_owner_when_the_global_limit_is_full(tmp_path):
+    env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE, "SWITCHBOARD_DATA": str(tmp_path)}
+    app = create_app(Switchboard(env=env))
+    for _ in range(app.limiter.limits["owner_setup_total"][0]):
+        app.limiter.hit("owner_setup_total", "*")
+    with TestClient(app, base_url=SETUP_URL) as client:
+        headers = {"Origin": SETUP_URL}
+        assert client.post("/auth/setup", json={"code": "x" * 2000}, headers=headers).status_code == 413
+        assert client.post("/auth/setup", json={"code": "x" * 32}, headers=headers).status_code == 429
+        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 204
 
 
 def test_existing_sign_in_closes_setup(tmp_path):

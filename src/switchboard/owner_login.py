@@ -138,16 +138,16 @@ class OwnerLogin:
             return error("setup_closed", 404)
         if not request.headers.get("origin") or not self.auth.origin_ok(request):
             return error("csrf", 403)
-        peer = request.client.host if request.client else "?"
-        buckets = (("owner_setup", peer), ("owner_setup_total", "*"))
-        for bucket, key in buckets:
-            if (limited := self.limited(bucket, key)) is not None:
-                return limited
-        for bucket, key in buckets:
-            self.limiter.hit(bucket, key)
         code = (await json_body(request)).get("code")
         if not (isinstance(code, str) and code.isascii() and 32 <= len(code) <= 128
                 and hmac.compare_digest(hashlib.sha256(code.encode()).digest(), self.setup_digest)):
+            peer = request.client.host if request.client else "?"
+            buckets = (("owner_setup", peer), ("owner_setup_total", "*"))
+            for bucket, key in buckets:
+                if (limited := self.limited(bucket, key)) is not None:
+                    return limited
+            for bucket, key in buckets:
+                self.limiter.hit(bucket, key)
             return error("setup_failed", 401)
         response = self.sessions.start(request, Response(status_code=204), "setup")
         if response.status_code == 409:
