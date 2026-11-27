@@ -110,6 +110,8 @@ def run(path: Path) -> None:
     core.blocks["telegram"]._seen[-1001000] = {"id": -1001000, "title": None, "type": "supergroup"}
     core.modes.watch("team-chat", "engineering", "2001", "msg-example", "1001", "Alex",
                      "Release ready", None, None, project="operations")
+    core.audit.record(action="webhook", origin="repo-events", outcome="dropped", destination="repo-events", source="github",
+                      client="local", target="example-org/example-repo", detail="channel mode off")
     asyncio.run(seed_inbox(core))
     app = create_app(core)
     base = f"http://localhost:{PORT}"

@@ -55,6 +55,23 @@ def test_slack_assist_can_wake_configured_target_without_project(opened):
         assert core.inbox.handle(handle_of(prompt))["project"] is None
 
 
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+def test_slack_modes_use_project_mailbox_route(opened, mode):
+    with opened(channels=[]) as (core, client, _, fires):
+        pair = core.connections.mint(agent="alpha", project="docs", client=None, by="owner")
+        core.connections.redeem(pair["code"])
+        core.routes.set(destination="agent", agent=None, project="docs", target={"agent": "alpha"},
+                        defaults=None, allow_override=False, note="", by="owner")
+        assert set_mode(core, client, mode)["target"] == "agent:alpha"
+        if mode == "work":
+            ingest(core, client, type="app_mention", text=f"<@{BOT_USER}> status", user=OWNER_A)
+        else:
+            ingest(core, client)
+        [wake] = core.inbox.read(owner="alpha")["items"]
+        assert wake["project"] == "docs" and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        assert not fires
+
+
 def test_slack_assist_uses_actual_target_visibility_and_thread(opened):
     with opened(channels=[]) as (core, client, world, fires):
         set_mode(core, client, "assist")

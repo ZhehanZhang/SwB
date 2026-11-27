@@ -16,7 +16,6 @@ const problemWords = /\b(?:no|not|never|without|nothing|none|\w+n[â€™']t)\b|[:;â
 
 function problemCopy(problem: string) {
   if (/privacy mode.*mention/i.test(problem)) return "Telegram shares mentions in privacy mode."
-  if (/triage target is the doorman/i.test(problem)) return "Triage uses the default agent."
   if (/github credential/i.test(problem)) return "GitHub actions require a credential."
   if (/permission|access|installation|\bissues\b.*write/i.test(problem)) return "GitHub App permissions need review."
   return problemWords.test(problem) || problem.trim().split(/\s+/).length > 20 ? "Check the connection settings." : problem

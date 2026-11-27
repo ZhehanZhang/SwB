@@ -24,7 +24,7 @@ WATCH_BATCH = 50
 WATCH_RETENTION = 14 * 86400
 WAKE_WINDOW = 3600
 GITHUB_CREDENTIAL_PROBLEM = "no GitHub credential: GitHub triage actions unavailable"
-TRIAGE_FALLBACK = "triage target is the doorman"
+TRIAGE_FALLBACK = "Triage uses the default agent."
 
 
 @dataclass(frozen=True)
@@ -169,7 +169,10 @@ class ChannelModes:
     def _default_target(self, block: str, space: str, project: str | None) -> str | None:
         section = self._section(block, space)
         target = section.get("default_target") or section.get("target")
-        return str(target).lower() if target else project
+        if target:
+            return str(target).lower()
+        route = self.core.route_address(None, project) if project else None
+        return str(route) if route else None
 
     def _triage_target(self, block: str, project: str | None) -> str | None:
         if not project:
@@ -215,7 +218,7 @@ class ChannelModes:
         actions = ()
         if spec.mode == "triage":
             action_sets = (*(s.actions for s in base if s is not None), section.get("actions"), project_mode.actions if project_mode else None)
-            actions = tuple(next((a for a in action_sets if a is not None), ACTIONS))
+            actions = tuple(next((a for a in action_sets if a is not None), ("reply",)))
         target = next((s.target for s in (*base, project_mode) if s is not None and s.target), None)
         if spec.mode == "triage" and not target:
             target = self._triage_target(block, project)
@@ -288,8 +291,11 @@ class ChannelModes:
             digest = {"pending": pending["n"], "next_at": (pending["first_at"] if pending["n"] else self.core.clock()) + self.digest_s}
             if use == "telegram" and provider._privacy is True:
                 problems.append("Telegram privacy mode is on, so watch only sees mentions")
-        if mode == "triage" and target == self._default_target(block, space, project) and not self._triage_target(block, project):
-            problems.append(TRIAGE_FALLBACK)
+        if mode == "triage":
+            if not target:
+                problems.append("Choose a triage agent.")
+            elif target == self._default_target(block, space, project) and not self._triage_target(block, project):
+                problems.append(TRIAGE_FALLBACK)
         if use == "github" and not provider.has_write_credential():
             problems.append(GITHUB_CREDENTIAL_PROBLEM)
         elif use == "github" and channel in provider.missing_installations:
@@ -340,7 +346,8 @@ class ChannelModes:
             channel.append(f"channel:{space}/#{name}")
         if not self.core.visibility.allows(Who(False), *channel):
             return False
-        return not row["target"] or self.core.visibility.allows(Who(False), f"target:{row['target']}")
+        target = row["target"]
+        return not target or self.core.visibility.allows(Who(False), f"target:{target}", f"target:{target.removeprefix('agent:')}")
 
     def summary(self, block: str, principal: Principal | None = None) -> dict[str, Any]:
         payload = self.status(principal, block)

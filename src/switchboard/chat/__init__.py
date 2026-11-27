@@ -320,9 +320,10 @@ class ChatBlock(Block):
         return [f"channel:{space}/{channel}", *([f"channel:{space}/#{alias}"] if NAME_RE.fullmatch(alias) else [])]
 
     def target_resources(self, slug: str) -> list[str]:
-        t = self.targets_by_slug.get(slug)
+        t = self.targets_by_slug.get(slug) or next((t for t in self.targets_by_slug.values() if t["address"] == slug), None)
         others = sorted(s for s, x in self.targets_by_slug.items() if t is not None and s != slug and x["address"] == t["address"])
-        return [f"target:{s}" for s in (slug, *others)]
+        slugs = dict.fromkeys((slug, *others, slug.removeprefix("agent:")))
+        return [f"target:{s}" for s in slugs]
 
     def _root(self, msg: Incoming) -> tuple[str, bool]:
         """The thread a message belongs to, and whether switchboard started or answered it."""
@@ -350,6 +351,7 @@ class ChatBlock(Block):
         channel = msg.mode_channel or msg.thread or msg.channel
         project = space.channel_projects.get(msg.channel, space.channel_projects.get(f"#{msg.channel_name}", space.project))
         channel_mode = None
+        work_target = None
         if policy is not None and not (trust == "owner" and addressed):
             mode, _, actions, selected, project = policy.policy(self.name, msg.space, channel, project, parent=msg.channel, name=msg.channel_name)
             if msg.dm:
@@ -363,6 +365,10 @@ class ChatBlock(Block):
                 return None
             channel_mode = policy.meta(self.name, msg.space, channel, mode, actions, project, msg.link, selected)
             channel_mode.update(parent=msg.channel, channel_name=msg.channel_name, dm=msg.dm)
+        elif policy is not None:
+            mode, _, _, selected, project = policy.policy(self.name, msg.space, channel, project, parent=msg.channel, name=msg.channel_name)
+            route = self.core.route_address(None, project) if project and not space.default_target else None
+            work_target = selected if mode == "work" else str(route) if route else None
         elif policy is None and not addressed and not listened:
             return None
         if not self.core.store.n("INSERT OR IGNORE INTO chat_events(block, space, channel, message, at) VALUES (?,?,?,?,?)",
@@ -377,8 +383,10 @@ class ChatBlock(Block):
                 slug, explicit, text = m.group(1).lower(), True, text[m.end():].strip()
         sticky = self.core.store.one("SELECT target FROM chat_threads WHERE block = ? AND space = ? AND channel = ? AND root = ?",
                                      (self.name, msg.space, msg.channel, root))
-        slug = channel_mode["target"] if channel_mode else slug or (sticky["target"] if sticky else None) or space.default_target
+        slug = channel_mode["target"] if channel_mode else slug or (sticky["target"] if sticky else None) or work_target or space.default_target
         target = self.targets_by_slug.get(slug or "") or next((t for t in self.targets_by_slug.values() if t["address"] == slug), None)
+        if target is None and slug and slug.startswith("agent:") and (agent := slug.removeprefix("agent:")) in self.core.known_agents():
+            target = {"address": slug, "block": "agent", "kind": "agent", "id": agent}
         place = f"#{msg.channel_name}" if msg.channel_name else msg.channel
         where = f"in {self.platform} {msg.space} {place}"
         sender = {"kind": self.platform, "space": msg.space, "channel": msg.channel, "channel_name": msg.channel_name, "user": msg.user, "user_name": name,

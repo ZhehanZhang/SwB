@@ -352,6 +352,39 @@ async def test_assist_without_target_records_drop_and_reports_it_in_status(githu
         assert payload(await acall(client, token, "github_status"))["dropped"] == 1
 
 
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+async def test_webhook_uses_project_mailbox_route(github, mode):
+    token = "example-owner-key-value-for-tests"
+    config = {"owner_ids": [42], "spaces": {"acme/app": {}}}
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "SWITCHBOARD_KEY_OWNER": token}
+    settings = {"blocks": {"mcp": {}, "github": config}, "visibility": {
+        "resources": {"channel:acme/app/acme/app": "shared", "target:alpha": "shared"},
+    }}
+    async with github(config, env, settings=settings) as (core, client):
+        core.projects.create(slug="example", name="Example")
+        pair = core.connections.mint(agent="alpha", project="example", client=None, by="owner")
+        core.connections.redeem(pair["code"])
+        payload(await acall(client, token, "routes_set", {"target": "agent:alpha", "project": "example"}))
+        payload(await acall(client, token, "space_mode", {"block": "github", "space": "acme/app",
+                                                        "mode": mode, "project": "example"}))
+        status = payload(await acall(client, token, "modes_status"))
+        assert status["spaces"] and all(row["target"] == "agent:alpha" for row in status["spaces"])
+        response = await send(client, sender={"id": 11, "type": "User"}, action="opened")
+        assert response.status_code == 200
+        if mode == "work":
+            [drop] = core.audit.recent(action="webhook", outcome="dropped")
+            assert drop["detail"] == "work mode requires an owner event"
+            assert core.inbox.read(owner="alpha")["items"] == []
+            await send(client, delivery="owner", sender={"id": 42, "type": "User"}, action="opened")
+        [wake] = core.inbox.read(owner="alpha")["items"]
+        assert wake["project"] == "example" and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        if mode == "triage":
+            assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["actions"] == ["reply"]
+        core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
+        await send(client, delivery="off", sender={"id": 42}, action="opened")
+        assert core.audit.recent(action="webhook", outcome="dropped")[0]["detail"] == "channel mode off"
+
+
 @pytest.mark.parametrize("mode", ["off", "watch", "assist", "triage", "work"])
 async def test_webhook_modes_route_only_the_right_events(github, mode):
     async with github(github_config(mode, ["label"]), settings=shared()) as (core, client):

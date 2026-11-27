@@ -3022,7 +3022,7 @@
       "name": "memory_write"
     },
     {
-      "description": "Read the modes of the channels and repositories you can see.",
+      "description": "Read the modes and targets for channels and repositories you can see. See which agent handles triage.",
       "icon": null,
       "id": "tool:modes_status",
       "input_properties": [],
@@ -3440,7 +3440,7 @@
       "name": "slack_write_requests"
     },
     {
-      "description": "Owner only. Set a space or channel override now, or use inherit to clear it.",
+      "description": "Owner only. Set a space or channel override. Use inherit to clear it. The triage agent can reply by default.",
       "icon": null,
       "id": "tool:space_mode",
       "input_properties": [
