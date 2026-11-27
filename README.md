@@ -67,6 +67,7 @@ Ask any connected agent to call `connect`, or run `swb connect <kind>`.
 | Discord | Bot token | Replies in the thread |
 | Telegram | Bot token | Replies in the thread |
 | GitHub | Webhook secret | Signed webhooks |
+| [Muse](docs/muse.md) | Device pairing | Bridge replies |
 
 Logos in the figures only show which integrations exist and don't imply affiliation or endorsement.
 
