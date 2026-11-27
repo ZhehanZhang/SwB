@@ -1,10 +1,11 @@
+import base64
 from urllib.parse import urlsplit
 
 import httpx
 import pytest
 from conftest import OWNER, PUBLIC, base_config, default_env
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from test_claims import OWNER_KEY, form_csrf, private_page
 
 from switchboard import credentials
@@ -39,6 +40,33 @@ def test_single_github_claims_validate_before_saving(make):
         assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": good}).status_code == 200
         assert core.claims.secret(name) == good
         assert client.get(path, headers=OWNER).status_code == 410
+
+
+@pytest.mark.parametrize("legacy", ["not a pem", base64.b64encode(b"-----BEGIN PRIVATE KEY-----YWJj-----END PRIVATE KEY-----").decode()])
+def test_github_connect_reissues_claim_for_unloadable_stored_private_key(make, legacy):
+    config = base_config(version=2, blocks={"mcp": {}, "github": {"app_id": 12345, "private_key_env": "CUSTOM_APP_KEY"}})
+    core, client = make(config=config)
+    block = core.blocks["github"]
+    old_claim = core.claims.mint("CUSTOM_APP_KEY", PUBLIC).rsplit("/", 1)[1]
+    core.claims.consume(old_claim, legacy)
+    assert core.claims.secret("CUSTOM_APP_KEY") == legacy
+
+    def steps():
+        return client.portal.call(block.connect_steps, "github", Principal("owner", "test", "key"), None, None)["next"]
+
+    path, = [urlsplit(step["link"]).path for step in steps() if "link" in step
+             and core.claims.inspect(step["link"].rsplit("/", 1)[1]) == "CUSTOM_APP_KEY"]
+    assert path != f"/claim/{old_claim}"
+    assert core.claims.inspect_details(path.rsplit("/", 1)[1])["kind"] == "pem"
+    csrf = form_csrf(client.get(path, headers=OWNER))
+    key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption(),
+    ).decode()
+    assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": key}).status_code == 400
+    assert core.claims.secret("CUSTOM_APP_KEY") == legacy
+    assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": PKCS1}).status_code == 200
+    assert block.api.app_jwt().count(".") == 2
+    assert all("link" not in step or core.claims.inspect(step["link"].rsplit("/", 1)[1]) != "CUSTOM_APP_KEY" for step in steps())
 
 
 def test_slack_group_checks_prefixes_and_retries_invalid_auth_atomically(make, monkeypatch):

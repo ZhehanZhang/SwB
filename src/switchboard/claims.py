@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 import httpx
 from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 from .store import Store
 
@@ -78,6 +80,16 @@ class GroupFieldError(ClaimError):
         super().__init__(message)
 
 
+def load_rsa_private_key(pem: str) -> RSAPrivateKey:
+    try:
+        key = load_pem_private_key(pem.encode(), password=None)
+    except (ValueError, TypeError, UnsupportedAlgorithm) as e:
+        raise ClaimError("Use the unencrypted .pem file from GitHub") from e
+    if not isinstance(key, RSAPrivateKey):
+        raise ClaimError("Use the RSA private key from GitHub")
+    return key
+
+
 def normalize_pem(value: str) -> str:
     """Rebuild a PEM private key that lost its line breaks (a paste into a one-line field) and check that it loads."""
     found = PEM_RE.search(value)
@@ -86,12 +98,7 @@ def normalize_pem(value: str) -> str:
         raise ClaimError("Paste the full private key or upload the .pem file")
     label = found.group(1)
     pem = f"-----BEGIN {label}-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + f"\n-----END {label}-----\n"
-    from cryptography.hazmat.primitives.serialization import load_pem_private_key
-
-    try:
-        load_pem_private_key(pem.encode(), password=None)
-    except (ValueError, TypeError, UnsupportedAlgorithm) as e:
-        raise ClaimError("Use the unencrypted .pem file from GitHub") from e
+    load_rsa_private_key(pem)
     return pem
 
 
