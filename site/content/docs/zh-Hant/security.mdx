@@ -29,7 +29,11 @@ SwB 原樣傳遞擁有者的文字。對於其他寄件者，SwB 會改寫文字
 
 ## 受限金鑰
 
-bearer 金鑰可以設定限制。`auth.key_scopes` 限制金鑰的記憶範圍。`auth.key_tools` 限制它的工具。`auth.key_targets` 限制它能傳送的對象。
+範圍分為通用範圍 `general` 和專案範圍，例如 `project:example`。用 `auth.key_scopes` 設定金鑰可存取的範圍。這些範圍適用於記憶、訊息和對話。
+
+配對金鑰只允許代理讀取自己收發的訊息和參與的對話。讀取的內容須在金鑰獲准存取的範圍內。
+
+`auth.key_tools` 限制金鑰可呼叫的工具。`auth.key_targets` 限制傳送對象。
 
 ## 權杖
 
@@ -54,7 +58,7 @@ Capy 和 Muse 收到重複的請求時，可以回傳先前的對話。Capy 用 
 
 ## 稽核記錄
 
-在 SwB 頁面開啟 **Audit** 查看記錄。執行 `swb log` 可印出最近的記錄。傳送到收件匣的動作記為 `send`。
+在 SwB 頁面開啟 **Audit** 查看記錄。執行 `swb log` 可印出最近的記錄。傳送到收件匣的動作記為 `send`。訊息傳送遭捨棄時的稽核記錄請見[頻道模式](/zh-Hant/docs/channel-modes#檢查訊息傳送)。
 
 ## 回報問題
 

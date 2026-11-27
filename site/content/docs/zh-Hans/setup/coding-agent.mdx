@@ -9,9 +9,13 @@ description: 把 Claude Code、Codex、Gemini CLI 和其他编程智能体连接
 
 请先安装编程智能体并登录。SwB 支持 Claude Code、Codex、Gemini CLI、Goose、OpenCode、Cline、Kiro 和 Qwen Code。其他远程 MCP 客户端使用通用设置。MCP 是应用使用外部工具的标准方式。
 
-你的 SwB 服务器需要公开的 HTTPS 地址和所有者登录。Gemini CLI 需要 Gemini Code Assist Standard 或 Enterprise 许可，或者付费的 Gemini API 密钥。你的组织可能会限制 MCP 服务器。如果 SwB 地址被拦截，请联系管理员。
+如需在本机启动新 SwB 服务器，请按[安装指南](/zh-Hans/docs/install)操作。打开终端显示的一次性登录链接。如果智能体支持本机 HTTP，请在下方命令中使用启动时显示的 MCP 地址。托管的智能体需使用公开的 HTTPS 地址。
+
+Gemini CLI 需要 Gemini Code Assist Standard 或 Enterprise 许可，或者付费的 Gemini API 密钥。你的组织可能会限制 MCP 服务器。如果 SwB 地址被拦截，请联系管理员。
 
 ## 复制设置提示词
+
+提示词保留英文，供智能体使用。
 
 <SetupPrompt name="coding-agent" lang="zh-Hans" />
 

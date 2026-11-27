@@ -7,7 +7,9 @@ MCP is the standard way an app uses outside tools. This page connects any app th
 
 ## Before you start
 
-Your app must support remote MCP servers over Streamable HTTP and custom request headers. Streamable HTTP is the web transport of MCP. You also need an agent that already has SwB and the owner sign-in, or terminal access to the SwB server.
+Your app must support remote MCP servers over Streamable HTTP and custom request headers. Streamable HTTP is the web transport of MCP. You also need an agent signed in to SwB as the owner or a terminal on the SwB computer.
+
+To start SwB on the same computer as the app, run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from your terminal. See [Install](/docs/install) for more options.
 
 Claude, ChatGPT, Grok and coding agents have their own pages with OAuth sign-in. Use those pages for those apps.
 
@@ -28,31 +30,39 @@ Tell the agent a short name for the app, for example `notes-bot`. SwB shows this
 <Step>
 ### Get the pairing code
 
-Ask an agent signed in as the owner to get a pairing code. The agent can call `connect_code` with the app name.
+Ask an agent signed in as the owner to get a pairing code. The agent can call `connect_code` with the app name. From the SwB instance folder, you can also run `uvx swb-one connect mcp-client --choose agent=notes-bot`. Use your app's name in the command.
 </Step>
 <Step>
 ### Get the key
 
-From the computer that runs the app, send the code to SwB within 10 minutes.
+On the computer that runs the app, open a private folder in your terminal. Replace `https://swb.example.com` with your SwB address. Keep `/connect` at the end. For local SwB, use `http://localhost:8870/connect` with the port shown at startup. Enter the pairing code at the hidden prompt within 10 minutes.
 
 ```bash
-curl -X POST https://swb.example.com/connect -H 'Content-Type: application/json' -d '{"code":"XXXXX-XXXXX"}'
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
 ```
 </Step>
 <Step>
 ### Keep the key private
 
-Copy the key from the answer. SwB shows the key only once.
+Open `.swb-pairing.json` in a private editor. The command saves the response with file mode `0600`. Use its `key` in the app settings. SwB returns the key once.
 </Step>
 <Step>
 ### Add SwB to the app
 
-In the MCP settings of the app, enter the URL `https://swb.example.com/mcp` and the transport Streamable HTTP. {/* unverified */}
+In the app's MCP settings, use the `mcp_url` from the file. For local SwB, use the MCP address shown at startup. Select Streamable HTTP.
 </Step>
 <Step>
 ### Add the key
 
-Add the header `Authorization: Bearer <key>` with your key. Keep the key in a private setting of the app.
+Add the header `Authorization: Bearer <key>` in the app's private settings. Delete `.swb-pairing.json` after you save the key.
 </Step>
 </Steps>
 
@@ -75,7 +85,7 @@ Keep the key out of chat and shared files. SwB stores only a hash of the key.
 
 ## Check the connection
 
-Ask the app to call `inbox`. The agent that set up the app calls `connect_list` and sees the new key with its last call time. Send a test message to `agent:notes-bot` and check that the app answers with `reply`.
+Ask the new agent to call `inbox`. Ask the agent signed in as the owner to call `connect_list` and check the new key's last call time. Have the owner agent send a test message to `agent:notes-bot`. Have the new agent read it with `inbox` and answer with `reply`.
 
 ## Fix problems
 

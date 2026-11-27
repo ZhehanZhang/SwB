@@ -28,7 +28,7 @@ SwB 先查找已保存的设置，再查找频道和空间设置。接着查找�
 | 顺序 | 目标 |
 | - | - |
 | 首先 | YAML 中的 `target`。依次查看频道、空间和项目的模式设置 |
-| 其次 | 在 `triage` 模式下，选用名为 `claude-<project>-triage` 的可用目标，例如 Claude 例程 |
+| 其次 | 在 `triage` 模式下，选用名为 `claude-<project>-triage` 的可用目标，例如 Claude routine |
 | 再次 | 空间设置中的 `default_target` 或 `target` |
 | 最后 | 项目路由 |
 
@@ -61,4 +61,6 @@ space_mode(block="github", space="example-org/app", mode="triage", project="app"
 
 调用 `modes_status` 查看模式、目标、操作和配置问题。分流需要指定目标时，`space_mode` 和 `modes_status` 都会提示选择分流智能体。
 
-SwB 会记录每个被丢弃的 GitHub webhook 的原因。打开 **Audit** 或运行 `swb log` 查看原因。
+SwB 会在审计日志中记录 Slack、Discord 和 Telegram 事件被丢弃的原因。同一模块、空间、频道和原因的组合每 10 分钟最多记一条。
+
+SwB 也会记录丢弃 GitHub webhook 的原因。打开 **Audit** 或运行 `swb log` 查看原因。

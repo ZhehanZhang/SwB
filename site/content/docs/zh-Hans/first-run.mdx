@@ -5,7 +5,7 @@ description: 让 SwB 可被访问，登录并查看你的实例。
 
 ## 在本机运行
 
-要在本机浏览器登录，请在启动前设置 `SWITCHBOARD_PUBLIC_URL=http://localhost:8870`。地址中的端口须与 `PORT` 一致。如果 YAML 配置已设置 `public_url`，请在那里修改。[安装指南](/zh-Hans/docs/install)使用端口 8870 设置本机登录。
+在空目录中运行 `uvx swb-one up`。请在五分钟内打开终端显示的一次性登录链接。SwB 默认使用 `http://localhost:8870`。如果设置了 `PORT`，SwB 会在地址中使用该端口。其他启动方式见[安装指南](/zh-Hans/docs/install)。
 
 ## 获取公网地址
 
@@ -32,6 +32,8 @@ swb status
 SwB 页面显示你的项目、智能体、收件箱、记忆和审计日志。它也是粘贴令牌的安全位置。
 
 ![SwB 登录页面](/shots/login-light.webp)
+
+如需获取新链接，请另开一个终端，在同一实例目录中运行以下命令。
 
 ```bash
 swb login-link

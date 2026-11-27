@@ -5,25 +5,26 @@ description: 把 GitHub 事件送給你的代理與服務。
 
 ## 建立應用程式
 
-在你的帳號下建立 GitHub App。將 SwB 公開位址加上 `/github/webhook` 作為 webhook 位址，例如 `https://swb.example.com/github/webhook`。將 webhook 密鑰產生到私用檔案中。SwB 接受至少 16 個字元的密鑰。
+在你的帳號下建立 GitHub App。將 SwB 公開位址加上 `/github/webhook` 作為 webhook 位址，例如 `https://swb.example.com/github/webhook`。將 webhook 金鑰產生到私用檔案中。SwB 接受至少 16 個字元的金鑰。
 
 ```bash
 (umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
 ```
 
-將密鑰填入 **Webhook secret**。請代理連接 GitHub。使用領取連結儲存同一組 webhook 密鑰。儲存密鑰後刪除私用檔案。重新啟動 SwB 以載入密鑰。請代理再次呼叫 `connect`，取得尚待填寫的 App ID 或私密金鑰連結。填寫私密金鑰時，請貼上 `.pem` 檔案的完整內容。
+將金鑰填入 **Webhook secret**。請代理連接 GitHub。使用領取連結儲存同一組 webhook 金鑰。儲存金鑰後刪除私用檔案。重新啟動 SwB 以載入金鑰。請代理再次呼叫 `connect`，取得尚待填寫的 App ID 或私密金鑰連結。填寫私密金鑰時，請貼上 `.pem` 檔案的完整內容。
 
 ## 權限
 
-為你需要的事件授予唯讀權限。
+在 **Repository permissions** 中，依下表設定權限。
 
-| 權限 | 事件 |
-| - | - |
-| Issues | `issues`、`issue_comment` |
-| Pull requests | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
-| Contents | `push` |
-| Checks | `check_run`、`check_suite` |
-| Actions | `workflow_run` |
+| 儲存庫資源 | 存取權限 | 事件 |
+| - | - | - |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自動設為 **Read-only** | |
 
 把應用程式安裝到你想要的程式碼庫。
 
@@ -55,12 +56,13 @@ blocks:
 | `blocks.github.app_id_env` | 存放應用程式 ID 的變數名稱，預設為 `GITHUB_APP_ID` |
 | `blocks.github.private_key_env` | 存放應用程式私密金鑰的變數名稱，預設為 `GITHUB_APP_PRIVATE_KEY` |
 | `blocks.github.token_env` | 存放細粒度權杖的變數名稱。此權杖可替代應用程式憑證。預設為 `GITHUB_TOKEN` |
-| `blocks.github.secret_env` | 存放 webhook 密鑰的變數名稱，預設為 `GITHUB_WEBHOOK_SECRET` |
+| `blocks.github.secret_env` | 存放 webhook 金鑰的變數名稱，預設為 `GITHUB_WEBHOOK_SECRET` |
 | `blocks.github.sinks` | 依接收端名稱設定事件接收端 |
 | `blocks.github.sinks.*.url_env` | 存放接收端位址的變數名稱 |
 | `blocks.github.routes` | 為程式碼庫名稱或 `owner/*` 指定接收端清單 |
 | `blocks.github.spaces` | 共用設定的程式碼庫群組。使用 `acme/app` 這類名稱可選取該程式碼庫 |
-| `blocks.github.spaces.*.mode` | 這個空間內各程式碼庫的預設[頻道模式](/docs/channel-modes) |
+| `blocks.github.spaces.*.repo` | `owner/repo` 格式的儲存庫名稱 |
+| `blocks.github.spaces.*.mode` | 這個空間內各程式碼庫的預設[頻道模式](/zh-Hant/docs/channel-modes) |
 | `blocks.github.spaces.*.project` | 這個空間的事件預設歸入的 SwB 專案 |
 
 使用[頻道模式](/zh-Hant/docs/channel-modes)，可透過專案路由喚醒代理。

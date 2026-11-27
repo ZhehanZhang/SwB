@@ -17,7 +17,7 @@ description: 專案、記憶、目標、路由與對話。
 
 SwB 有自己的記憶儲存區。Claude 與 ChatGPT 各自把內建記憶保持私人，所以 SwB 另外提供第三個儲存區，讓每個代理都能使用。代理透過 `memory_*` 工具與 `context_pack` 使用它。
 
-每筆記憶都屬於一個**範圍**（scope）。範圍是 `general` 或 `project:<slug>`。General 用來放適用於每個專案的個人事實。寫入 general 需要 `confirm_general=true`。讀取時會涵蓋指定的專案與 general。若要讀取另一個專案，需要明確的 `scopes` 清單，而且這次讀取會進入稽核記錄。私人專案的記憶只出現在它自己的讀取結果中。
+每筆記憶都屬於一個**範圍**（scope）。範圍是 `general` 或 `project:<slug>`。General 用來放適用於每個專案的個人事實。寫入 `general` 前，代理先向擁有者確認，再設定 `confirm_general=true`。SwB 以這個參數作為代理的確認。讀取時會涵蓋指定的專案與 general。若要讀取另一個專案，需要明確的 `scopes` 清單，而且這次讀取會進入稽核記錄。私人專案的記憶只出現在它自己的讀取結果中。
 
 ## 目標
 
