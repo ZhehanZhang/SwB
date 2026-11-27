@@ -38,6 +38,8 @@ WEBHOOK_TOKEN_RE = re.compile(r"[A-Za-z0-9_-]+")
 PERSONA_NAME_RE = re.compile(r"discord|clyde", re.IGNORECASE)
 
 
+MENTION_RE = re.compile(r"<(@!?|@&|#)(\d+)>")
+
 class Channel(NamedTuple):
     parent_id: str | None
     name: str | None
@@ -381,12 +383,22 @@ class DiscordBlock(ChatBlock):
                 return root
             if not create:
                 return None
-            name = "swb"
+            name, author = "swb", None
             with contextlib.suppress(BlockError):
                 original = await self.request("GET", f"/channels/{channel}/messages/{root}")
-                lines = (original.get("content") or "").splitlines()
-                if lines:
-                    name = lines[0].strip()[:100] or name
+                author = (original.get("author") or {}).get("id")
+                names = {u["id"]: u.get("global_name") or u.get("username") for u in original.get("mentions") or [] if u.get("id") != self.user_id}
+                def label(m: re.Match[str]) -> str:
+                    kind, ident = m.groups()
+                    if kind == "#":
+                        known = self.channels.get(ident)
+                        return f"#{known.name}" if known and known.name else ""
+                    return f"@{names[ident]}" if kind != "@&" and ident in names else ""
+
+                text = MENTION_RE.sub(label, original.get("content") or "")
+                first = " ".join(next((line for line in text.splitlines() if line.strip()), "").split())
+                who = (original.get("author") or {}).get("global_name") or (original.get("author") or {}).get("username")
+                name = first[:100] or (f"Reply to {who}"[:100] if who else name)
             try:
                 created = await self.request("POST", f"/channels/{channel}/messages/{root}/threads", json={"name": name})
             except rest.DiscordHTTPError:
@@ -398,6 +410,9 @@ class DiscordBlock(ChatBlock):
                     raise
                 return root
             self._cache_channel(created)
+            if author and author != self.user_id:
+                with contextlib.suppress(BlockError):
+                    await self.request("PUT", f"/channels/{created['id']}/thread-members/{author}", retry=False)
             return created["id"]
 
     async def _webhook(self, channel: str) -> tuple[str, str]:

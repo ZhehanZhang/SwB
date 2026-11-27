@@ -55,6 +55,8 @@ class DiscordAPI:
         if "/reactions/" in path:
             self.reactions.append(request.url.raw_path)
             return httpx.Response(204)
+        if "/thread-members/" in path:
+            return httpx.Response(204)
         if path.endswith("/threads"):
             thread = self.channels[ROOT] = {"id": ROOT, "type": 11, "parent_id": CHANNEL, "name": data["name"]}
             return httpx.Response(201, json=thread)
@@ -178,7 +180,7 @@ def test_dispatch_routes_owner_and_the_native_thread_keeps_the_target(discord):
         assert api.reactions == [f"/api/v10/channels/{CHANNEL}/messages/{ROOT}/reactions/%F0%9F%91%80/@me".encode()]
         handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
         client.portal.call(block.relay, {"kind": "final", "handle": handle, "text": "all green @everyone"})
-        assert ("POST", f"/channels/{CHANNEL}/messages/{ROOT}/threads", {"name": message()["content"]}) in api.calls
+        assert ("POST", f"/channels/{CHANNEL}/messages/{ROOT}/threads", {"name": "build-check check the build"}) in api.calls
         assert api.posts == [(f"/channels/{ROOT}/messages", {"allowed_mentions": {"parse": []}, "content": "all green @everyone"}, {})]
         follow = dispatch("MESSAGE_CREATE", message(channel_id=ROOT, id="101", content="and staging?"))
         assert follow["target"] == "build-check" and follow["chat_kind"] == "reply"
@@ -524,3 +526,26 @@ def test_connect_discord_keeps_a_rejected_token_step(discord):
         block._gateway.fatal_code = 4004
         steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
         assert any(s.startswith("Discord rejected the bot token.") for s in steps)
+
+
+@pytest.mark.parametrize(("content", "mentions", "name"), [
+    (f"<@{BOT}> ping", [], "ping"),
+    (f"<@!{BOT}>  ask <@{USER}> about <#{CHANNEL}> and <@&9>\nmore", [{"id": USER, "global_name": "Ana"}], "ask @Ana about #builds and"),
+    (f"<@{BOT}>", [], "Reply to Owner"),
+])
+def test_thread_names_drop_raw_mentions_and_the_author_joins_the_thread(discord, content, mentions, name):
+    with discord() as (_, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "channels": [api.channels[CHANNEL]], "threads": []})
+        original = {"content": content, "mentions": mentions, "author": {"id": USER, "username": "Owner"}}
+        block_request = block.request
+
+        async def request(method, path, **kw):
+            if method == "GET" and path == f"/channels/{CHANNEL}/messages/{ROOT}":
+                return original
+            return await block_request(method, path, **kw)
+
+        block.request = request
+        thread = client.portal.call(block._thread, CHANNEL, ROOT, True)
+        assert thread == ROOT and api.channels[ROOT]["name"] == name
+        assert ("PUT", f"/channels/{ROOT}/thread-members/{USER}", None) in api.calls
