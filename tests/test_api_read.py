@@ -1,9 +1,10 @@
 import hashlib
+import hmac
 import json
 
 import pytest
 
-from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, base_config, default_env
+from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, STATIC_KEY, base_config, call, default_env, payload
 
 PRIVATE = "fixture-secret-not-owner-console-data"
 READ_PATHS = ("/health", "/routes", "/visibility", "/audit", "/agents", "/projects", "/inbox",
@@ -82,6 +83,80 @@ def test_audit_filters_and_pages_at_equal_timestamps_without_exposing_raw_diagno
     assert PRIVATE not in json.dumps(refusal)
     assert get(client, "/audit", limit=PRIVATE, status=400) == {"error": "invalid limit"}
     assert get(client, "/audit", cursor="99999999999999999999", status=400) == {"error": "invalid cursor"}
+
+
+def test_audit_exposes_only_known_dropped_webhook_reasons(make):
+    core, client = make()
+    for detail in ("channel mode off", "assist target is missing", "triage target is unavailable", PRIVATE):
+        core.audit.record(action="webhook", origin="fixture", outcome="dropped", destination="fixture",
+                          source="fixture", client="local", detail=detail, excerpt=PRIVATE)
+    rows = get(client, "/audit", action="webhook")["items"]
+    assert [row["detail"] for row in rows] == [None, "triage target is unavailable", "assist target is missing", "channel mode off"]
+    assert PRIVATE not in json.dumps(rows)
+
+
+def test_audit_shows_webhook_refusal_and_drop_reasons_from_the_log(make):
+    secret = "fixture-secret-for-webhook-signing"
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}, "github": {}}),
+                        env={**default_env(), "GITHUB_WEBHOOK_SECRET": secret})
+    assert client.post("/github/webhook", content=PRIVATE).status_code == 401
+    body = b'{"repository":{"full_name":"example/repo"}}'
+    signature = "sha256=" + hmac.digest(secret.encode(), body, "sha256").hex()
+    response = client.post("/github/webhook", content=body, headers={"X-Hub-Signature-256": signature, "X-GitHub-Event": "fixture"})
+    assert response.status_code == 200
+    items = get(client, "/audit", action="webhook")["items"]
+    cli_rows = core.audit.recent(action="webhook")
+    assert [r["detail"] for r in items] == [r["detail"] for r in cli_rows] == ["unhandled event", "invalid signature"]
+    assert [r["excerpt"] for r in items] == [r["excerpt"] for r in cli_rows] == ["", ""]
+    assert all(secret_value not in json.dumps(items) for secret_value in (PRIVATE, secret, signature))
+
+
+def test_project_and_memory_audit_contains_only_intentional_details(make):
+    core, client = make()
+
+    def change(tool, args, key=STATIC_KEY):
+        result = call(client, key, tool, args)
+        assert not result.get("isError"), result
+        return payload(result)
+
+    change("project_create", {"slug": "example", "name": "Example", "description": PRIVATE})
+    change("project_update", {"slug": "example", "name": "New name", "new_slug": "renamed"})
+    pairing = change("connect_code", {"agent": "paired"})
+    key = client.post("/connect", json={"code": pairing["code"]}).json()["key"]
+    refused = call(client, key, "project_update", {"slug": "renamed", "description": PRIVATE})
+    assert refused["isError"] is True
+    [refusal] = get(client, "/audit", action="tool_refused")["items"]
+    assert (refusal["source"], refusal["target"], refusal["detail"]) == (
+        "paired", "project_update", "Use the owner's sign-in to call this tool.",
+    )
+    written = change("memory_write", {"scope": "project:renamed", "namespace": "notes", "title": "Test note", "body": PRIVATE}, key)
+    change("memory_delete", {"id": written["id"]}, key)
+    change("project_update", {"slug": "renamed", "archived": True, "private": True})
+    actions = "project_create,project_update,memory_write,memory_delete"
+    rows = get(client, "/audit", actions=actions)["items"]
+    cli_rows = [r for r in core.audit.recent() if r["action"] in actions.split(",")]
+    assert [(r["action"], r["target"], r["detail"]) for r in rows] == [
+        (r["action"], r["target"], r["detail"]) for r in cli_rows
+    ] == [
+        ("project_update", "renamed", "Archived project. Set project to private."),
+        ("memory_delete", written["id"], "Deleted memory."),
+        ("memory_write", "project:renamed", "Test note"),
+        ("project_update", "renamed", "Renamed project."),
+        ("project_create", "example", "Created project."),
+    ]
+    assert rows[2]["metadata"] == {"scope": "project:renamed"}
+    assert {r["source"] for r in rows[1:3]} == {"paired"}
+    assert all(secret not in json.dumps((rows, cli_rows, refusal)) for secret in (PRIVATE, key, pairing["code"]))
+
+
+def test_audit_reads_legacy_mailbox_send_rows_with_the_new_action(make):
+    core, client = make()
+    core.audit.record(origin="mcp", source="second", client="key:second", destination="mailbox",
+                      action="agent_send", outcome="ok", target="capy")
+    payload(call(client, STATIC_KEY, "send", {"to": "agent:second", "task": "Test mailbox audit"}))
+    assert [r["action"] for r in get(client, "/audit", action="send")["items"]] == ["send", "agent_send"]
+    assert [r["action"] for r in core.audit.recent(action="send")] == ["send", "agent_send"]
+    assert [r["action"] for r in core.audit.recent(action="agent_send")] == ["agent_send"]
 
 
 def test_agent_inventory_has_discovered_targets_and_only_credential_metadata(make):

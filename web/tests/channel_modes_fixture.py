@@ -19,6 +19,18 @@ from switchboard.core import Switchboard
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("SWB_PLAYWRIGHT_PORT", "4178"))
 CAPTAIN = "jam_EXAMPLEATLAS"
+SLACK_TEAM_ID = "T000EXAMPLE"
+
+
+class SlackFixture:
+    async def auth_test(self) -> dict:
+        return {"ok": True, "team_id": SLACK_TEAM_ID, "user_id": "U000EXAMPLE", "bot_id": "B000EXAMPLE"}
+
+    async def users_info(self, *, user: str) -> dict:
+        return {"ok": True, "user": {"id": user, "name": "SwB"}}
+
+    async def users_conversations(self, **kwargs) -> dict:
+        return {"ok": True, "channels": []}
 
 
 async def verify_access(assertion: str) -> str | None:
@@ -86,7 +98,7 @@ def run(path: Path) -> None:
             "slack": {"use": "slack", "public_base_url": "https://swb.example.com",
                       "personas": {"example": {"name": "Review bot", "avatar": "review-bot.png"}},
                       "workspaces": {"studio": {
-                          "team_id": "T000EXAMPLE", "identities": {"bot": {"token_env": "EXAMPLE_SLACK_TOKEN"}},
+                          "team_id": SLACK_TEAM_ID, "identities": {"bot": {"token_env": "EXAMPLE_SLACK_TOKEN"}},
                       }},
                       "spaces": {"studio": {"channels": {"#planning": "watch"}}}},
             "telegram": {"use": "telegram", "connect": False, "spaces": {"dispatch": {
@@ -98,8 +110,10 @@ def run(path: Path) -> None:
         },
     }))
     transport = httpx.MockTransport(capy_fixture)
-    core = Switchboard(config, path / "data", env={"CAPY_API_KEY": "example-capy-fixture"}, access_verifier=verify_access,
-                       block_options={"capy": {"transport": transport}}, http_transport=transport, slack_options={"connect": False})
+    core = Switchboard(config, path / "data",
+                       env={"CAPY_API_KEY": "example-capy-fixture", "EXAMPLE_SLACK_TOKEN": "example-slack-fixture"},
+                       access_verifier=verify_access, block_options={"capy": {"transport": transport}}, http_transport=transport,
+                       slack_options={"connect": False, "client_factory": lambda _token: SlackFixture()})
     core.projects.create(slug="operations", name="Operations")
     core.projects.create(slug="community", name="Community")
     discord = core.blocks["team-chat"]
@@ -110,6 +124,8 @@ def run(path: Path) -> None:
     core.blocks["telegram"]._seen[-1001000] = {"id": -1001000, "title": None, "type": "supergroup"}
     core.modes.watch("team-chat", "engineering", "2001", "msg-example", "1001", "Alex",
                      "Release ready", None, None, project="operations")
+    core.audit.record(action="webhook", origin="repo-events", outcome="dropped", destination="repo-events", source="github",
+                      client="local", target="example-org/example-repo", detail="channel mode off")
     asyncio.run(seed_inbox(core))
     app = create_app(core)
     base = f"http://localhost:{PORT}"

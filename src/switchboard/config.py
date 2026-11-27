@@ -268,7 +268,11 @@ def _oidc(raw: Any, public_url: str | None, emails: tuple[str, ...], env: Mappin
     return OIDCConfig(issuer, client_id, secret_env, name, tuple(subjects))
 
 
-def config_path(path: str | Path | None, env: Mapping[str, str]) -> Path | None:
+def config_path(path: str | Path | None, env: Mapping[str, str], *, instance: Instance | None = None) -> Path | None:
+    if instance is not None:
+        local = instance.base / INSTANCE_CONFIG
+        if instance.explicit or (not path and not env.get("SWITCHBOARD_CONFIG") and local.is_file()):
+            path = local
     path = path or env.get("SWITCHBOARD_CONFIG")
     return Path(path) if path else next((p for p in CONFIG_PATHS if p.is_file()), None)
 
@@ -308,11 +312,7 @@ def _merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
 
 def _config_files(path: str | Path | None, env: Mapping[str, str],
                   instance: Instance | None) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-    if instance is not None:
-        local = instance.base / INSTANCE_CONFIG
-        if instance.explicit or (not path and not env.get("SWITCHBOARD_CONFIG") and local.is_file()):
-            path = local
-    base_path = config_path(path, env)
+    base_path = config_path(path, env, instance=instance)
     base = _read_yaml(base_path, "config")
     overlay_path = env.get("SWITCHBOARD_OVERLAY")
     local_paths = (p.with_name("local.yaml") for p in ((base_path,) if base_path else CONFIG_PATHS))

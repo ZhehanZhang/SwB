@@ -25,7 +25,7 @@ import logging
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from .. import Block, BlockError
+from .. import Address, Block, BlockError
 from ...auth import Principal
 from ...projects import ProjectError
 from ...slack.config import Grant, Persona
@@ -175,6 +175,8 @@ class SlackIntake(Block):
         target = engine.targets.get(push.get("target") or "")
         if target is not None and target.kind == "agent" and push["addressed_to_us"]:
             agents.add(target.id)
+        if skipped := push.get("_skip_agent"):
+            agents.discard(skipped)
         for agent in sorted(agents):
             await self.core.inbox.add(self._handle(agent, push["workspace"]), "slack_event", item)
         if (not push.get("_skip_delegate") and target is not None and target.kind != "agent" and push["addressed_to_us"]
@@ -213,6 +215,11 @@ class SlackIntake(Block):
                 and CHANNEL_ID_RE.fullmatch(channel := rt.channel_ids.get(row["channel"].removeprefix("#"), row["channel"]))
                 and (channel in rt.bot_channels or row["source"] == "channel" or row["channel"] in explicit)}
 
+    def validate_mode_space(self, space: str) -> None:
+        runtime = self.engine.runtimes.get(space) if self.engine is not None else None
+        if runtime is None or not runtime.clients:
+            raise ValueError(f"Connect Slack workspace {space} first.")
+
     def mode_inventory(self) -> dict[tuple[str, str], tuple[str | None, str, None]]:
         engine = self.engine
         assert engine is not None
@@ -239,9 +246,9 @@ class SlackIntake(Block):
         if direct:
             push.update(kind="dm", addressed_to_us=True)
             mode, source = modes.dm(self.name)
-            actions, target_ref = (), None
+            actions, target_ref = (), rt.cfg.default_target
         else:
-            mode, source, actions, target_ref, project = modes.policy(self.name, workspace, channel, project, name=name)
+            mode, source, actions, target_ref, project = modes.policy(self.name, workspace, channel, project, name=name, include_route=False)
         if trust == "owner" and (direct or push["addressed_to_us"]):
             mode = "work"
         legacy = (not direct and source in ("legacy", "default") and modes.cfg.default.mode == "off"
@@ -253,42 +260,46 @@ class SlackIntake(Block):
         if (mode == "work" and trust != "owner") or (trust == "owner" and mode != "watch" and not push["addressed_to_us"]):
             return True, None
         link = push["permalink"]
+        route = modes.project_route(self.name, project) if not target_ref else None
         if mode == "watch":
             if not legacy and not engine.store.claim_event(push):
                 return True, None
             push["user_name"] = rt.cfg.known.get(push["user"]) or await rt.user_name(push["user"]) or push["user_name"]
             added = modes.watch(self.name, workspace, channel, push["id"], push["user"] or "", push["user_name"],
-                                push["text"], link, target_ref, project=project, dm=direct)
+                                push["text"], link, str(route) if route else target_ref, project=project, dm=direct)
             engine.stamp(rt, push)
             return (False, None) if legacy else (True, push if added else None)
         if mode == "work":
             if not engine.store.claim_event(push):
                 return True, None
-            target = await self.mode_target(target_ref, project)
-            engine.route(rt, push, default_target=target.slug if target else None)
-            if target is not None and target.slug == push["target"] and target.slug not in engine.targets:
+            target = await self.mode_target(target_ref, project, route=route)
+            _, explicit = engine.route(rt, push, default_target=target.slug if target else None)
+            routed = route is not None and target is not None and target.slug == push["target"] and not explicit
+            if target is not None and target.slug == push["target"] and (routed or target.slug not in engine.targets):
                 push["target_kind"] = target.kind
             else:
                 target = engine.targets.get(push["target"] or "")
-            push.update(addressed_to_us=True, channel_mode=modes.meta(self.name, workspace, channel, mode, actions, project, link, push["target"]))
+            push.update(addressed_to_us=True, channel_mode=modes.meta(self.name, workspace, channel, mode, actions,
+                                                                     project, link, str(route) if routed else push["target"]))
             push["user_name"] = await rt.user_name(push["user"]) or push["user_name"]
             engine.stamp(rt, push)
-            if direct and target is not None and target.slug not in engine.targets:
-                await self.delegate(push, target)
+            separate = target is not None and (routed or target.slug not in engine.targets)
+            if direct and separate:
+                await self.delegate(push, target, route=route if routed else None)
             elif direct:
                 await self.deliver(push, private=True)
             else:
-                unknown = target is not None and target.slug not in engine.targets
-                await engine.fan_out(workspace, push, skip_delegate=unknown)
-                if unknown and not engine.sink_accepts(workspace, push):
-                    await self.delegate(push, target)
+                skip_agent = route.id if routed and route.block == "agent" else None
+                await engine.fan_out(workspace, push, skip_delegate=separate, skip_agent=skip_agent)
+                if separate and not engine.sink_accepts(workspace, push):
+                    await self.delegate(push, target, route=route if routed else None)
             return True, push
         if project:
             try:
                 project = self.core.projects.get(project.removeprefix("project:"), allow_archived=False).slug
             except ProjectError:
                 return True, None
-        target = await self.mode_target(target_ref, project)
+        target = await self.mode_target(target_ref, project, route=route)
         if project is None and target is not None:
             project = target.project
         push.update(target=target.slug if target else None, target_kind=target.kind if target else None, trust=trust)
@@ -299,12 +310,12 @@ class SlackIntake(Block):
         if engine.sender_allowed(rt, push, mode):
             push["user_name"] = await rt.user_name(push["user"]) or push["user_name"]
             engine.stamp(rt, push)
-            push["channel_mode"] = modes.meta(self.name, workspace, channel, mode, actions, project, link, target.slug)
-            await self.delegate(push, target)
+            push["channel_mode"] = modes.meta(self.name, workspace, channel, mode, actions, project, link, str(route) if route else target.slug)
+            await self.delegate(push, target, route=route)
             return True, push
         return True, None
 
-    async def mode_target(self, ref: str | None, project: str | None) -> Target | None:
+    async def mode_target(self, ref: str | None, project: str | None, *, route: Address | None) -> Target | None:
         from ...core import CoreError
 
         engine = self.engine
@@ -316,13 +327,13 @@ class SlackIntake(Block):
                     return known
                 addr = await self.core.resolve_to(known.address if known and known.address else ref)
             else:
-                addr = None
+                addr = route
             if project and (addr is None or (addr.block == "project" and addr.id == project)):
                 addr = next((addr for b in self.core.blocks.values() if b.wakes_agents and (addr := b.wake_target("claude", project))), None)
                 addr = addr or self.core.route_address(AGENT, project)
             if addr is None or addr.block == "project" or not addr.id:
                 return None
-            if (block := self.core.blocks.get(addr.block)) is not None:
+            if route is None and (block := self.core.blocks.get(addr.block)) is not None:
                 addr = block.effective_target(addr, project)
         except (CoreError, BlockError, ValueError):
             return None
@@ -364,7 +375,7 @@ class SlackIntake(Block):
             await self.delegate(push, target, listen_project=project)
         return True
 
-    async def delegate(self, push: dict[str, Any], target: Target, *, listen_project: str | None = None) -> None:
+    async def delegate(self, push: dict[str, Any], target: Target, *, listen_project: str | None = None, route: Address | None = None) -> None:
         engine = self.engine
         assert engine is not None
         title = push["subject"]
@@ -372,6 +383,8 @@ class SlackIntake(Block):
         channel_mode = push.get("channel_mode")
         scoped = bool(channel_mode and channel_mode["mode"] in ("assist", "triage"))
         project = channel_mode["project"] if channel_mode else listen_project or self.mapped_project(push)
+        if route is not None and self.core.modes.project_route(self.name, project) != route:
+            return
         trust = push.get("trust", "external")
         mapped = target.kind == "routine" and not target.project and project and trust == "owner"
         handle_meta = {"slack_trust": trust, **({"boundary": project} if project else {})}
@@ -389,7 +402,9 @@ class SlackIntake(Block):
                                              "channel_name": push["channel_name"], "thread_ts": push["thread_ts"] or push["ts"], "user": push["user"],
                                              "persona": target.persona or ("claude" if "claude" in engine.personas() else None)})
         kw: dict[str, Any] = {"task": wake_text(title, push["text"], push["permalink"], tail), "title": title, "handle_meta": handle_meta}
-        if target.kind == "project":
+        if route is not None:
+            kw["project"] = project
+        elif target.kind == "project":
             kw["project"] = target.id
         else:
             kw["to"] = target.address or f"{target.kind}:{target.id}"

@@ -13,7 +13,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from ...auth import Principal
 from ...block_env import GITHUB_SECRET, configured_env
 from ...config import Config
-from ...connect import PUBLIC_HTTPS_PREREQUISITE
+from ...connect import public_https_prerequisite
 from ...modes import PROVIDERS
 from ...muse_protocol import TOKEN_ENV as MUSE_TOKEN_ENV
 from .coding import coding_steps
@@ -23,7 +23,7 @@ CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
           "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse", "dots": "dots"}
 BLOCK_EXAMPLES = {
-    "slack": {"workspaces": {"a2a": {
+    "slack": {"agents": {"owner": {"workspaces": {"a2a": ["bot"]}}}, "workspaces": {"a2a": {
         "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "SLACK_A2A_APP_TOKEN",
         "identities": {"bot": {"token_env": "SLACK_A2A_BOT_TOKEN", "write": "free"}},
     }}},
@@ -98,7 +98,7 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
     resource = core.cfg.resource
     oauth = bool(resource and core.cfg.owner_sign_in)
     if kind in MENUS and (not oauth or not resource or urlsplit(resource).scheme != "https"):
-        return {"done": [], "next": [{"by": "person", "do": PUBLIC_HTTPS_PREREQUISITE}]}
+        return {"done": [], "next": [{"by": "person", "do": public_https_prerequisite(core.cfg.owner_sign_in)}]}
     url = resource if kind in MENUS else f"{base}/mcp"
     done = [f"MCP URL: {url}.", f"OAuth sign-in: {'available' if oauth else 'unavailable'}."]
     if kind in MENUS:

@@ -110,6 +110,10 @@ CREATE TABLE IF NOT EXISTS owner_login_links (
   source TEXT NOT NULL,
   expires_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS owner_login_links_used (
+  token_hash TEXT PRIMARY KEY,
+  expires_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS owner_webauthn_challenges (
   id TEXT PRIMARY KEY,
   challenge BLOB NOT NULL,

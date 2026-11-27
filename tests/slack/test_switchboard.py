@@ -73,7 +73,7 @@ def test_slack_tools_use_switchboard_keys_and_grants(sb):
     assert sent["status"] == "sent"
     rows = {(r["source"], r["action"], r["outcome"]) for r in core.audit.recent(destination="slack", limit=10)}
     assert ("fixed", "post", "ok") in rows and ("full", "post", "queued") in rows
-    health = client.get("/healthz").json()
+    health = client.get("/healthz", headers=OWNER).json()
     assert "slack" in health["origins"] and health["destinations"]["slack"]["online"] and health["destinations"]["slack"]["pending_approvals"] == 1
     assert not [v for v in ENV.values() if v in json.dumps(health)]
 

@@ -66,7 +66,7 @@ def test_self_registration_link_takes_the_token_once(tmp_path):
         assert c.post(path, data={"token": TOKEN, "csrf": "bad"}, headers=OWNER).status_code == 403
         assert c.post(path, data={"token": "nope", "csrf": csrf}, headers=OWNER).status_code == 400
         assert c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER).status_code == 200
-        assert c.post(path, data={"token": TOKEN, "csrf": csrf}, headers=OWNER).status_code == 400
+        assert c.post(path, data={"token": TOKEN}, headers=OWNER).status_code == 410
         assert c.get(path, headers=OWNER).status_code == 410
         rows = {r["name"]: r for r in payload(call(c, STATIC_KEY, "routine_list"))["routines"]}
         assert rows["claude-beacon"]["routine_id"] == "trig_01SELF" and rows["claude-beacon"]["claude_project"] == "Web Operations"

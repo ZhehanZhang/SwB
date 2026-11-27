@@ -44,6 +44,25 @@ def test_single_github_claims_validate_before_saving(make):
         assert client.get(path, headers=OWNER).status_code == 410
 
 
+def test_reissued_github_claim_and_earlier_link_are_each_single_use(make):
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}, "github": {}}))
+    block = core.blocks["github"]
+
+    def app_id_link():
+        result = client.portal.call(block.connect_steps, "github", Principal("owner", "test", "key"), None, {"credential": "app"})
+        return next(urlsplit(step["link"]).path for step in result["next"] if "link" in step
+                    and core.claims.inspect(step["link"].rsplit("/", 1)[1]) == "GITHUB_APP_ID")
+
+    earlier, latest = app_id_link(), app_id_link()
+    assert earlier != latest
+    assert client.get(earlier, headers=OWNER).status_code == 200
+    for path, value in ((latest, "12345"), (earlier, "23456")):
+        csrf = form_csrf(client.get(path, headers=OWNER))
+        assert client.post(path, headers=OWNER, data={"csrf": csrf, "token": value}).status_code == 200
+        assert client.get(path, headers=OWNER).status_code == 410
+        assert core.claims.secret("GITHUB_APP_ID") == value
+
+
 def test_github_single_claim_forms_and_inventory_show_the_credential_names(make):
     config = base_config(version=2, blocks={"mcp": {}, "github": {"private_key_env": "CUSTOM_APP_KEY"}})
     core, client = make(config=config)
@@ -133,13 +152,17 @@ def test_slack_group_checks_prefixes_and_retries_invalid_auth_atomically(make, m
         return accepted if kind == "slack_user" else None
 
     monkeypatch.setattr(core.blocks["slack"], "claim_auth_check", verify)
-    for name, bad in zip(values, ("abc", "def", "ghi")):
+    for name, bad, prefix in zip(values, ("example-bad-bot", "example-bad-user", "example-bad-app"), ("xoxb-", "xoxp-", "xapp-")):
         response = client.post(path, headers=OWNER, data={"csrf": csrf, **values, name: bad})
         assert response.status_code == 400 and bad not in response.text
+        assert form_csrf(response) == csrf and f'id="f-{name}-error" role="alert"' in response.text
+        assert f"Use a Slack token that starts with {prefix}" in response.text
+        assert all(value not in response.text for value in values.values())
     assert not checks
 
     rejected = client.post(path, headers=OWNER, data={"csrf": csrf, **values})
     assert rejected.status_code == 400 and "Check User token" in rejected.text
+    assert "Use a token accepted by Slack" in rejected.text and form_csrf(rejected) == csrf
     assert set(checks) == {(f"slack_{kind}", values[name]) for kind, name in env.items()}
     assert all(core.secret(name) is None for name in values)
     assert client.get(path, headers=OWNER).status_code == 200
@@ -149,6 +172,7 @@ def test_slack_group_checks_prefixes_and_retries_invalid_auth_atomically(make, m
     assert saved.status_code == 200 and "3 credentials saved" in saved.text
     assert {name: core.secret(name) for name in values} == values
     assert client.get(path, headers=OWNER).status_code == 410
+    assert client.post(path, headers=OWNER, data=values).status_code == 410
 
 
 @pytest.mark.parametrize(("kind", "method", "status", "body", "expected"), [

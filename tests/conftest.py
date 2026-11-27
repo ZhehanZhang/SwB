@@ -223,6 +223,13 @@ def capy() -> FakeCapy:
     return FakeCapy()
 
 
+def use_capy(capy, config, env, options):
+    if capy is not None:
+        config["blocks"]["capy"] = {"identity": "personal"}
+        env["CAPY_API_KEY"] = CAPY_KEY
+        options["capy"] = {"transport": httpx.MockTransport(capy.handler)}
+
+
 @pytest.fixture
 def cimd() -> CIMDHost:
     return CIMDHost()

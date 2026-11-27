@@ -120,7 +120,14 @@ class Inbox:
         if sets:
             sets.append("updated_at = ?")
             args.append(self.store.clock())
-            self.store.x(f"UPDATE handles SET {', '.join(sets)} WHERE handle = ?", [*args, handle])
+            guard = " AND (destination != 'mailbox' OR status IS NOT 'cancelled')" if status == "answered" else ""
+            self.store.x(f"UPDATE handles SET {', '.join(sets)} WHERE handle = ?{guard}", [*args, handle])
+
+    async def cancel_mailbox(self, handle: str) -> None:
+        self.update_handle(handle, status="cancelled", open=False)
+        cond = self._condition()
+        async with cond:
+            cond.notify_all()
 
     # Items ----------------------------------------------------------------------------
 
@@ -149,13 +156,15 @@ class Inbox:
         replied = None
         if kind == "message" and data.get("final") and data.get("in_reply_to"):
             replied = self.handle(data["in_reply_to"])
+            if replied is not None and replied["status"] == "cancelled":
+                replied = None
             if replied is not None:
                 self.update_handle(replied["handle"], status="answered")
         elif kind == "final" and data.get("final") is not False:
             replied = h
         while replied is not None and (original := replied["meta"].get("forward_of")):
             parent = self.handle(original)
-            if parent is None or parent["meta"].get("forwarded_to") != replied["handle"]:
+            if parent is None or parent["status"] == "cancelled" or parent["meta"].get("forwarded_to") != replied["handle"]:
                 break
             replied = parent
             meta = {"in_reply_to": original, "final": True, "from": data.get("from")}
@@ -186,9 +195,13 @@ class Inbox:
         ))
 
     @staticmethod
+    def message_id(cursor: int) -> str:
+        return f"msg_{cursor}"
+
+    @staticmethod
     def _item(r: Any) -> dict[str, Any]:
         return {"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
-                "at": iso(r["at"]), **json.loads(r["data"])}
+                "at": iso(r["at"]), **json.loads(r["data"]), "message_id": Inbox.message_id(r["id"])}
 
     def item(self, item_id: int) -> dict[str, Any] | None:
         row = self.store.one("SELECT * FROM inbox WHERE id = ?", (item_id,))
@@ -202,18 +215,20 @@ class Inbox:
         so the channel never moves the position wait and inbox read from.
         """
         reader = reader or owner or "*"
-        position = f"conversation:{handle}" if handle else "*"
-        start = since
-        if start is None:
-            start = self._cursor(reader, position)
-            if handle and not start:
-                start = self._cursor(reader, handle)
+        start = self._cursor(reader, None) if since is None else since
+        position = f"conversation:{handle}" if handle else None
+        idle_cursor = max(start, self._cursor(reader, position)) if position and since is None else start
+        if handle and owner is not None and self.store.one(
+            "SELECT 1 FROM handles WHERE handle = ? AND destination = 'mailbox' AND status = 'cancelled' "
+            "AND (owner = ? OR ref = ?)", (handle, owner, owner),
+        ):
+            return {"items": [], "cursor": idle_cursor, "handle_status": "cancelled"}
         with_clause = ""
         where, args = ["id > ?"], [start]
         if owner:
             where.append("owner = ?")
             args.append(owner)
-        if since is None and not handle:
+        if since is None:
             where.append("id > COALESCE((SELECT c.cursor FROM inbox_cursors c WHERE c.owner = ? AND c.handle = inbox.handle), 0)")
             args.append(reader)
         if handle:
@@ -233,10 +248,15 @@ class Inbox:
             where.append("handle IN (SELECT h.handle FROM handles h WHERE h.project = ?)")
             args.append(project)
         rows = self.store.q(f"{with_clause}SELECT * FROM inbox WHERE {' AND '.join(where)} ORDER BY id LIMIT ?", [*args, limit])
-        cursor = rows[-1]["id"] if rows else start
+        cursor = rows[-1]["id"] if rows else idle_cursor
         if rows and advance:
-            cursors = {r["handle"]: r["id"] for r in rows} if handle else {}
-            self._advance(reader, {**cursors, position: cursor})
+            if handle or destination or project:
+                cursors = {r["handle"]: r["id"] for r in rows}
+                if position:
+                    cursors[position] = cursor
+            else:
+                cursors = {"*": cursor}
+            self._advance(reader, cursors)
         return {
             "items": [self._item(r) for r in rows],
             "cursor": cursor,
@@ -252,8 +272,9 @@ class Inbox:
             while True:
                 out = self.read(owner=owner, handle=handle, since=since, destination=destination, reader=reader, advance=advance, project=project)
                 remaining = deadline - loop.time()
-                if out["items"] or remaining <= 0:
-                    out["timed_out"] = not out["items"]
+                cancelled = out.get("handle_status") == "cancelled"
+                if out["items"] or cancelled or remaining <= 0:
+                    out["timed_out"] = not (out["items"] or cancelled)
                     return out
                 try:
                     await asyncio.wait_for(cond.wait(), timeout=remaining)

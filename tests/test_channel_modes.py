@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import (
+    CAPTAIN,
     OWNER,
     PUBLIC,
     SECOND_KEY,
@@ -27,6 +28,8 @@ from test_telegram import GROUP, FakeBotAPI, update
 from test_telegram import OWNER_ID as TELEGRAM_OWNER
 from test_telegram import STRANGER as TELEGRAM_STRANGER
 from test_telegram import run as _telegram_fixture
+
+from switchboard.blocks.mcp.policy import MODE_REQUIRED
 
 MODES = {"off", "watch", "assist", "triage", "work"}
 ACTIONS = {"reply", "label", "comment", "open_issue", "link_duplicate", "notify_owner"}
@@ -76,17 +79,41 @@ def test_resolver_precedence_and_legacy_alias(make):
     assert core.modes.resolve("discord", "legacy", "another", None)[:2] == ("off", "default")
 
 
-def test_unconfigured_defaults_to_off_and_triage_uses_full_actions(make):
+def test_unconfigured_defaults_to_off_and_triage_can_reply(make):
     core, _ = make(config=config({"home": {"guild_id": GUILD, "channels": {DISCORD_CHANNEL: "triage"}}}), env={})
     assert core.modes.resolve("discord", "home", "another", None)[:2] == ("off", "default")
     mode, source, actions, _ = core.modes.resolve("discord", "home", DISCORD_CHANNEL, None)
-    assert (mode, source, set(actions)) == ("triage", "channel", ACTIONS)
+    assert (mode, source, actions) == ("triage", "channel", ("reply",))
+
+
+def test_github_repo_space_has_one_row_after_override(make):
+    repo = "example-org/app"
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {repo: {"mode": "watch"}}}})
+    _, client = make(cfg)
+    payload(call(client, STATIC_KEY, "space_mode", {"block": "github", "space": repo, "mode": "off"}))
+    [row] = payload(call(client, STATIC_KEY, "modes_status"))["spaces"]
+    assert (row["space"], row["channel"], row["mode"], row["source"]) == (repo, repo, "off", "override")
+
+
+def test_slack_mode_requires_connected_workspace(make, monkeypatch):
+    workspace = "example"
+    cfg = base_config(version=2, blocks={"mcp": {}, "slack": {"workspaces": {workspace: {
+        "team_id": "T0DEMO0001", "intake": "socket", "app_token_env": "FIXTURE_APP_TOKEN",
+        "identities": {"bot": {"token_env": "FIXTURE_BOT_TOKEN"}},
+    }}}})
+    core, client = make(cfg)
+    args = {"block": "slack", "space": workspace, "channel": "C123", "mode": "watch"}
+    runtime = core.blocks["slack"].engine.runtimes[workspace]
+    assert "Connect Slack workspace example first." in error_text(call(client, STATIC_KEY, "space_mode", args))
+    assert not core.store.q("SELECT 1 FROM space_modes")
+    monkeypatch.setattr(runtime, "clients", {"bot": object()})
+    assert payload(call(client, STATIC_KEY, "space_mode", args))["mode"] == "watch"
 
 
 def test_triage_prefers_registered_routine_and_reports_fallback(make):
     cfg = config({
-        "home": {"guild_id": GUILD, "project": "example", "default_target": "doorman", "channels": {DISCORD_CHANNEL: "triage"}},
-        "other": {"guild_id": GUILD_2, "project": "other", "default_target": "other-doorman", "channels": {"41": "triage"}},
+        "home": {"guild_id": GUILD, "project": "example", "default_target": "coordinator", "channels": {DISCORD_CHANNEL: "triage"}},
+        "other": {"guild_id": GUILD_2, "project": "other", "default_target": "other-coordinator", "channels": {"41": "triage"}},
     })
     cfg["blocks"]["claude-routine"] = {"use": "claude-routine", "routines": {
         "claude-example-triage": {"routine_id": "trig_EXAMPLE", "token_env": "EXAMPLE_TRIAGE_TOKEN", "project": "example"},
@@ -98,9 +125,9 @@ def test_triage_prefers_registered_routine_and_reports_fallback(make):
     selected = space_row(status, "discord", "home", DISCORD_CHANNEL)
     fallback = space_row(status, "discord", "other", "41")
     assert selected["target"] == "claude-example-triage"
-    assert "triage target is the doorman" not in selected["problems"]
-    assert fallback["target"] == "other-doorman"
-    assert "triage target is the doorman" in fallback["problems"]
+    assert "Triage uses the default agent." not in selected["problems"]
+    assert fallback["target"] == "other-coordinator"
+    assert "Triage uses the default agent." in fallback["problems"]
 
 
 def test_watch_waits_for_due_time_and_batches_each_space_once(make):
@@ -151,7 +178,7 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
 @pytest.fixture(params=["discord", "telegram"])
 def intake(request, discord, telegram):
     @contextmanager
-    def build(mode, *, shared=True, dm_mode=None, topic_mode=None):
+    def build(mode, *, shared=True, dm_mode=None, topic_mode=None, mailbox=False, capy=None):
         is_discord = request.param == "discord"
         channel, target = (DISCORD_CHANNEL, "build-check") if is_discord else (str(GROUP), "example-runner")
         topic, topic_channel = 42, "42" if is_discord else f"{GROUP}:42"
@@ -160,12 +187,24 @@ def intake(request, discord, telegram):
             channels[topic_channel] = topic_mode
         placement = {"guild_id": GUILD, "owner_ids": [DISCORD_OWNER]} if is_discord else {"chats": [GROUP], "owner_ids": [TELEGRAM_OWNER]}
         choices = {"mode": mode, "project": "example", "default_target": target, "channels": channels}
+        if mailbox or capy:
+            choices.pop("default_target")
+            channels[channel].pop("target")
+            target = "alpha" if mailbox else f"capy:captain:{CAPTAIN}"
         settings = {"spaces": {"home": {**placement, **choices}}, "dm_space": "home"}
         if dm_mode is not None:
             settings["dm_mode"] = dm_mode
-        transport = discord(settings=settings) if is_discord else telegram(**settings)
+        transport = discord(settings=settings, capy=capy) if is_discord else telegram(capy=capy, **settings)
         with transport as (core, client, block, wire, *routine):
             core.projects.create(slug="example", name="Example")
+            if mailbox:
+                pair = core.connections.mint(agent=target, project="example", client=None, by="owner")
+                core.connections.redeem(pair["code"])
+                core.routes.set(destination="agent", agent=None, project="example", target={"agent": target},
+                                defaults=None, allow_override=False, note="", by="owner")
+            if capy:
+                core.routes.set(destination="capy", agent=None, project="example", target={"captain": CAPTAIN},
+                                defaults={"delivery": "steer"}, allow_override=False, note="", by="owner")
             if shared:
                 core.visibility.set(f"channel:home/{channel}", "shared", "test", core.clock())
                 core.visibility.set(f"target:{target}", "shared", "test", core.clock())
@@ -253,6 +292,34 @@ def test_live_override_changes_provider_intake_and_inherit_restores_it(intake):
         chat.send(11, "handled after inheriting")
         [text] = chat.wakes()
         assert "handled after inheriting" in text
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+def test_chat_modes_use_project_mailbox_route(intake, mode):
+    with intake(mode, mailbox=True) as chat:
+        chat.send(10, "Message for the project", owner=mode == "work", mention=mode == "work")
+        status = space_row(chat.core.modes.status(), chat.block.name, "home", chat.channel)
+        assert status["target"] == "agent:alpha"
+        [wake] = chat.core.inbox.read(owner="alpha")["items"]
+        assert "Message for the project" in wake["text"] and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        assert wake["destination"] == "mailbox" and wake["project"] == "example"
+        result = chat.client.portal.call(chat.core.verb, chat.block.principal, "cancel", wake["handle"])
+        assert result["status"] == "cancelled"
+        assert not chat.wakes()
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+def test_chat_modes_dispatch_to_locked_capy_route(intake, capy, mode):
+    with intake(mode, capy=capy) as chat:
+        chat.send(10, "Message for the locked route", owner=mode == "work", mention=mode == "work")
+        assert space_row(chat.core.modes.status(), chat.block.name, "home", chat.channel)["target"] == f"capy:captain:{CAPTAIN}"
+        [sent] = [body for method, path, body in capy.requests if method == "POST" and path == f"/api/v1/threads/{CAPTAIN}/message"]
+        assert sent["delivery"] == "steer" and "Message for the locked route" in sent["text"]
+        [handle] = chat.core.inbox.handles(owner=chat.block.platform, destination="capy")
+        assert handle["meta"]["route"] == "project"
+        if mode != "work":
+            assert handle["meta"]["channel_mode"]["mode"] == mode
+        assert not chat.wakes()
 
 
 @pytest.mark.parametrize("mode", ["assist", "triage"])
@@ -478,6 +545,8 @@ def test_recent_restricted_wake_blocks_legacy_chat_replies(intake):
                           "VALUES ('h_legacy', ?, ?, 'old', NULL, '{}', ?, 1, 'open')", (owner, chat.block.name, chat.core.clock() - 7200))
         refused = call(chat.client, STATIC_KEY, "reply", {"conversation": "h_legacy", "text": "public write"})
         assert "requires its conversation handle" in error_text(refused)
+        [row] = chat.core.audit.recent(action="tool_refused")
+        assert (row["target"], row["detail"]) == ("reply", MODE_REQUIRED)
 
 
 def test_mode_project_reaches_the_send(intake):
