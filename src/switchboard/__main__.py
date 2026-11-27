@@ -60,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
-         data_dir: Path | None = None, announce_url: str | None = None) -> None:
+         data_dir: Path | None = None, announce: bool = False) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -76,13 +76,13 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.error("no config file found")
         print(migrate_text(path.read_text()), end="")
         return
-    from .config import DEFAULT_HOST, ConfigError, LOOPBACK_HOSTS
+    from .config import ConfigError, LOOPBACK_HOSTS, bind_address
     from .deployment import serve_env
 
     serving = args.cmd in (None, "serve")
-    host = getattr(args, "host", None) or os.environ.get("SWITCHBOARD_HOST") or DEFAULT_HOST
     port = int(os.environ.get("PORT", "8000")) if serving else 0
-    default_public_url = f"http://localhost:{port}" if host in LOOPBACK_HOSTS and port else None
+    host, origin = bind_address(os.environ, port, host=getattr(args, "host", None))
+    loopback_origin = origin if host in LOOPBACK_HOSTS and port else None
     try:
         env = serve_env(os.environ) if serving else None
     except ConfigError as error:
@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     except (OSError, UnicodeError) as error:
         parser.exit(2, f"swb: Check the owner key on the volume ({type(error).__name__}).\n")
     try:
-        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, default_public_url=default_public_url)
+        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, loopback_origin=loopback_origin)
     except ConfigError as error:
         parser.exit(2, f"swb: {error}\n")
     if args.cmd == "blocks":
@@ -140,8 +140,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,
     }
-    if announce_url:
-        print(f"MCP URL: {announce_url}/mcp", flush=True)
+    if announce:
+        print(f"MCP URL: {core.cfg.public_url or origin}/mcp", flush=True)
     if listener is None:
         uvicorn.run(app, **options)
     else:
