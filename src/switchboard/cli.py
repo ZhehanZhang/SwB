@@ -20,6 +20,8 @@ import yaml
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from . import __version__
+
 OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
 CONFIG = Path("config/switchboard.yaml")
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
@@ -109,7 +111,7 @@ def _read_env(path: Path) -> dict[str, str]:
     return values
 
 
-def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
+def _choices(groups: list[list[str]], *, kind: str = "") -> dict[str, str | bool]:
     choices: dict[str, str | bool] = {}
     for group in groups:
         for pair in group:
@@ -118,7 +120,7 @@ def _choices(groups: list[list[str]]) -> dict[str, str | bool]:
                 raise CliError("--choose expects key=value pairs.")
             if key in choices:
                 raise CliError("--choose cannot repeat a key.")
-            if key in ("create_new", "primary"):
+            if key in ("create_new", "primary") or (key == "replace" and kind.strip().lower() == "muse"):
                 if value.lower() not in ("true", "false"):
                     raise CliError(f"--choose {key} expects true or false.")
                 choices[key] = value.lower() == "true"
@@ -149,12 +151,7 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
 
 
 def _claim(url: str, key: str, *, routine: bool) -> None:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", getpass.GetPassWarning)
-            token = getpass.getpass("Token: ")
-    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
-        raise CliError("Use a terminal with hidden input to enter the token.") from None
+    token = _hidden_input("Token: ")
     if not token.strip():
         raise CliError("No token entered.")
     try:
@@ -166,6 +163,15 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
     if not response.is_success:
         raise CliError(f"Switchboard did not save the token (HTTP {response.status_code}). Check the claim link and owner key.")
     print("Routine saved." if routine else "Token saved. Run swb connect again to check the next step.")
+
+
+def _hidden_input(prompt: str) -> str:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            return getpass.getpass(prompt)
+    except (getpass.GetPassWarning, EOFError, KeyboardInterrupt):
+        raise CliError("Use a terminal with hidden input to enter the token.") from None
 
 
 async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -233,6 +239,7 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="swb", epilog="Server tools: serve, export, log, config, blocks, targets (each accepts --help).")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="create a minimal config and a local owner key")
     init.add_argument("--public-url", help="optional public base URL")
@@ -246,6 +253,11 @@ def main(argv: list[str] | None = None) -> None:
     login_link = commands.add_parser("login-link", help="mint a one-time owner sign-in link")
     claim = commands.add_parser("claim", help="save a token using a one-time claim link")
     claim.add_argument("link", metavar="LINK-OR-CODE", help="claim link, or the code for a generic token claim")
+    muse = commands.add_parser("muse-bridge", help="pair and run SwB as a Muse gadget on Linux")
+    muse.add_argument("--url", required=True, help="SwB base URL or MCP endpoint")
+    muse.add_argument("--setup", action="store_true", help="enter the bridge token and pair in the Muse app")
+    muse.add_argument("--pair-again", action="store_true", help="replace this gadget's Meta pairing (requires --setup)")
+    muse.add_argument("--state-dir", type=Path, default=Path.home() / ".config" / "swb" / "muse")
     up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
     for command in (init, connect, status, claim, login_link):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
@@ -253,6 +265,12 @@ def main(argv: list[str] | None = None) -> None:
         command.add_argument("--url", help=f"server base URL or MCP endpoint (default: http://127.0.0.1:{DEFAULT_PORT}/mcp)")
     args = parser.parse_args(argv)
     try:
+        if args.command == "muse-bridge":
+            from .muse_gadget import run_gadget
+
+            url = _url(args.url).removesuffix("/mcp")
+            run_gadget(url, args.state_dir, setup=args.setup, pair_again=args.pair_again)
+            return
         base = (args.dir or Path.cwd()).resolve()
         if args.command == "init":
             _init(base, args.public_url, args.force)
@@ -266,7 +284,7 @@ def main(argv: list[str] | None = None) -> None:
         arguments = {}
         if args.command == "connect":
             arguments["what"] = args.what
-            if choose := _choices(args.choose):
+            if choose := _choices(args.choose, kind=args.what):
                 arguments["choose"] = choose
         key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
         if not key:

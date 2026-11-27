@@ -9,7 +9,7 @@ from switchboard.slack.writes import WriteError
 
 EMAIL = "owner@example.test"
 SECOND_OWNER = "second@example.test"
-ROUTE = {"destination": "capy", "target": {"captain": "ZINF-1"}, "agent": "claude",
+ROUTE = {"destination": "capy", "target": {"captain": "BCN-1"}, "agent": "claude",
          "defaults": {"delivery": "queue"}, "allow_override": True, "note": "Owner route"}
 VISIBILITY = {"resource": "target:claude", "visibility": ["UOWNER01", "workspace:example"]}
 SEND = {"task": "Check the route", "to": "agent:claude"}
