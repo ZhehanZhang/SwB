@@ -306,6 +306,13 @@ class Block:
             return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
         return {"by": "person", "do": instruction, "link": self.core.claims.mint(name, self.core.base_url, url=url)}
 
+    def group_step(self, principal: "Principal", group: tuple[str, str, list[Any]], instruction: str) -> dict[str, str]:
+        """One link that collects several credentials together (credentials.github_app, credentials.slack_workspace)."""
+        if not principal.is_unrestricted_owner:
+            return {"by": "person", "do": "Ask the owner to connect from their own sign-in."}
+        title, provider, fields = group
+        return {"by": "person", "do": instruction, "link": self.core.claims.mint_group(title, fields, self.core.base_url, provider=provider)}
+
     @property
     def online(self) -> bool:
         return True

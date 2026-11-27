@@ -181,6 +181,15 @@ def test_agent_avatar_projection_drops_untrusted_urls_and_leaves_other_targets_a
     assert PRIVATE not in json.dumps(inventory)
 
 
+def test_cached_captain_avatar_works_without_a_public_base_url(make, monkeypatch):
+    core, client = make()
+    monkeypatch.setattr(core.avatars, "public_base_url", None)
+    captain = next(row for row in get(client, "/agents")["captains"] if row["id"] == CAPTAIN)
+    assert captain["avatar_url"].startswith("/avatars/")
+    response = client.get(captain["avatar_url"])
+    assert response.status_code == 200 and response.headers["content-type"] == "image/png"
+
+
 def test_inbox_and_thread_use_configured_connector_kind_for_renamed_blocks(make):
     core, client = make(base_config(version=2, blocks={
         "release-bot": {"use": "discord", "connect": False},

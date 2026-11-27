@@ -1,11 +1,14 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import urlsplit
 
 import uvicorn
 import yaml
 
+from switchboard import pages
 from switchboard.app import create_app
 from switchboard.blocks.discord import Channel
+from switchboard.claims import Field
 from switchboard.core import Switchboard
 
 HOST = "127.0.0.1"
@@ -20,7 +23,7 @@ def run(path: Path) -> None:
     config = path / "switchboard.yaml"
     config.write_text(yaml.safe_dump({
         "version": 2,
-        "public_url": f"http://{HOST}:{PORT}",
+        "public_url": f"http://localhost:{PORT}",
         "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {
             "team_domain": "access.example.test", "aud": "channel-mode-fixture",
         }},
@@ -31,10 +34,11 @@ def run(path: Path) -> None:
                     "2001": "assist", "2002": {"mode": "off", "project": "community"},
                 },
             }}},
-            "slack": {"use": "slack", "workspaces": {"studio": {
-                "team_id": "T000EXAMPLE", "identities": {"bot": {"token_env": "EXAMPLE_SLACK_TOKEN"}},
-                "channels": {"#planning": "watch"},
-            }}},
+            "slack": {"use": "slack",
+                      "workspaces": {"studio": {
+                          "team_id": "T000EXAMPLE", "identities": {"bot": {"token_env": "EXAMPLE_SLACK_TOKEN"}},
+                      }},
+                      "spaces": {"studio": {"channels": {"#planning": "watch"}}}},
             "telegram": {"use": "telegram", "connect": False, "spaces": {"dispatch": {
                 "chats": [-1001000], "mode": "watch",
             }}},
@@ -54,7 +58,26 @@ def run(path: Path) -> None:
     discord.channels["2002"] = Channel(None, "community", 0, "1000")
     core.modes.watch("team-chat", "engineering", "2001", "msg-example", "1001", "Alex",
                      "Release ready", None, None, project="operations")
-    uvicorn.run(create_app(core), host=HOST, port=PORT)
+    app = create_app(core)
+    base = f"http://localhost:{PORT}"
+    fixtures = {
+        "/fixture/token": urlsplit(core.claims.mint("DISCORD_BOT_TOKEN", base)).path,
+        "/fixture/credentials": urlsplit(core.claims.mint_group(
+            "GitHub App", [Field("EXAMPLE_APP_ID", "App ID", "id"), Field("EXAMPLE_PRIVATE_KEY", "Private key", "pem")],
+            base, provider="github",
+        )).path,
+    }
+
+    async def service(scope, receive, send):
+        if scope["type"] == "http" and scope["path"] == "/fixture/login":
+            return await pages.login_page({"passkeys": True, "oidc": None}, "/", None)(scope, receive, send)
+        if scope["type"] == "http" and scope["path"] in fixtures:
+            headers = tuple((key, value) for key, value in scope["headers"] if key != b"cf-access-jwt-assertion")
+            scope = {**scope, "path": fixtures[scope["path"]],
+                     "headers": (*headers, (b"cf-access-jwt-assertion", b"channel-mode-fixture"))}
+        await app(scope, receive, send)
+
+    uvicorn.run(service, host=HOST, port=PORT, access_log=False)
 
 
 if __name__ == "__main__":

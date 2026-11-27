@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet } from "@/components/ui/sheet"
 import { requestJson, sessionQuery } from "@/lib/api"
 import { auditText } from "./audit/events"
-import { agentListKey, isAgentDetail, isAgentSetup, listAgents, type Agent, type AgentDetail } from "./agents/data"
+import { agentListKey, isAgentDetail, isAgentSetup, listAgents, principalLabel, type Agent, type AgentDetail } from "./agents/data"
 
 const connections = [
   { id: "claude-code", label: "Claude Code", preview: "claude mcp add …" },
@@ -110,10 +110,10 @@ function ConnectionRow() {
 
 function Registration({ agent }: { agent: Agent }) {
   const at = agent.registered_at && Number.isFinite(Date.parse(agent.registered_at)) ? agent.registered_at : null
-  if (!agent.registered_by) return at ? <time dateTime={at}>{shortDate(at)}</time> : null
+  if (!agent.registered_by) return at ? <time className="text-muted-foreground" dateTime={at}>{shortDate(at)}</time> : null
   return <span className="flex min-w-0 items-center gap-2">
     {agent.registered_by !== "you" && <Logo kind={agent.registered_by} className="size-5" />}
-    <span className="truncate">{agent.registered_by}{at ? `, ${shortDate(at)}` : ""}</span>
+    <span className="truncate">{principalLabel(agent.registered_by)}{at && <>, <time dateTime={at}>{shortDate(at)}</time></>}</span>
   </span>
 }
 

@@ -25,11 +25,11 @@ EXTERNAL = "USTRANGER"
 @pytest.fixture
 def opened(tmp_path):
     @contextmanager
-    def build(*, channels=None, mapped="docs", shared="shared", turn_cap=200, rate=5, write="free", intake="socket", hooks=None):
+    def build(*, channels=None, mapped="docs", workspace_project="workspace", shared="shared", turn_cap=200, rate=5, write="free", intake="socket", hooks=None):
         world, fires = FakeWorld(), []
         ws = {"team_id": TEAM_A, "app_token_env": "A_APP", "identities": {"bot": {"token_env": "A_BOT", "write": write}},
               "sender_rate": {"count": rate}, "known": {"BKNOWN001": "Build bot"}, "ack_reaction": "eyes", "intake": intake}
-        slack = {"workspaces": {"team": ws}, "workspace_projects": {"team": "workspace"},
+        slack = {"workspaces": {"team": ws}, "workspace_projects": {"team": workspace_project},
                  "channel_projects": {"team": {} if mapped == "default" else {CHANNEL: mapped}},
                  "listen_channels": {"team": [f"#{NAME}"] if channels is None else channels},
                  "approvals": {"notify_workspace": "team", "approver_user_id": OWNER_A},

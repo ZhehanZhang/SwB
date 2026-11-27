@@ -23,10 +23,18 @@ def test_audit_labels_capy_references_but_preserves_event_identities(make):
                           action=action, outcome="ok", target=target, ref=ref, excerpt=excerpt)
 
     events = {row["target"]: row for row in get(client, "/audit")["items"]}
-    assert events["github/context"]["metadata"] == {"agent": "github", "target_name": "DemoLab Captain", "repo_count": 1}
+    avatar = events["github/context"]["metadata"]["target_avatar_url"]
+    assert avatar.startswith("/avatars/") and client.get(avatar).headers["content-type"] == "image/png"
+    assert events["github/context"]["metadata"] == {
+        "agent": "github", "target_name": "DemoLab Captain", "repo_count": 1, "target_avatar_url": avatar,
+    }
     assert events["*/*"]["metadata"]["target_name"] == "Captain"
-    assert events[f"captain Previous name ({CAPTAIN2})"]["metadata"] == {"target_label": "DemoLab Captain", "ref_label": "Capy thread"}
-    assert events[CAPTAIN2]["metadata"] == {"target_label": "DemoLab Captain", "ref_label": "DemoLab Captain"}
+    assert events[f"captain Previous name ({CAPTAIN2})"]["metadata"] == {
+        "target_label": "DemoLab Captain", "ref_label": "Capy thread", "target_avatar_url": avatar,
+    }
+    assert events[CAPTAIN2]["metadata"] == {
+        "target_label": "DemoLab Captain", "ref_label": "DemoLab Captain", "target_avatar_url": avatar,
+    }
     assert events[CAPTAIN2]["ref"] == CAPTAIN2
     assert events[f"capy:captain:{UNKNOWN}"]["metadata"]["target_label"] == "Captain"
 

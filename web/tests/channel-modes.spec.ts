@@ -25,8 +25,8 @@ test("connection and project controls use the owner mode API", async ({ page, co
   await mode.selectOption("triage")
   await expect(page.getByRole("checkbox", { name: "Label", exact: true })).toBeDisabled()
   await expect(page.getByRole("checkbox", { name: "Notify owner" })).toBeEnabled()
-  await expect(page.getByText("Issue actions require GitHub write access.")).toBeVisible()
-  await page.getByRole("checkbox", { name: "Notify owner" }).uncheck()
+  await expect(page.getByRole("group", { name: "Triage actions" }).getByText("Issue actions require GitHub write access.")).toBeVisible()
+  await page.getByRole("checkbox", { name: "Notify owner" }).click()
   await expect(page.getByRole("checkbox", { name: "Notify owner" })).not.toBeChecked()
 
   await page.goto("/projects/operations")
@@ -44,4 +44,35 @@ test("connection and project controls use the owner mode API", async ({ page, co
   await expect(page.getByRole("combobox", { name: "Mode for #planning" })).toHaveValue("watch")
   await page.goto("/connections/telegram")
   await expect(page.getByRole("combobox", { name: "Mode for -1001000" })).toHaveValue("watch")
+})
+
+test("claims and login share the console theme and follow the system by default", async ({ page, browser }) => {
+  const paths = ["/fixture/token", "/fixture/credentials", "/fixture/login"]
+  await page.setExtraHTTPHeaders({ "cf-access-jwt-assertion": "invalid" })
+  await page.emulateMedia({ colorScheme: "dark" })
+  for (const path of paths) {
+    const response = await page.goto(path)
+    expect(response?.ok()).toBe(true)
+    expect(response?.headers()["content-security-policy"]).toContain("script-src 'self'")
+    await expect(page.locator("html")).toHaveCSS("background-color", "rgb(9, 9, 11)")
+  }
+  await page.evaluate(() => localStorage.setItem("swb-theme", "light"))
+  for (const path of paths) {
+    await page.goto(path)
+    await expect(page.locator("html")).toHaveCSS("background-color", "rgb(255, 255, 255)")
+  }
+  await page.emulateMedia({ colorScheme: "light" })
+  await page.evaluate(() => localStorage.setItem("swb-theme", "dark"))
+  for (const path of paths) {
+    await page.goto(path)
+    await expect(page.locator("html")).toHaveCSS("background-color", "rgb(9, 9, 11)")
+  }
+
+  const fallback = await browser.newPage({ baseURL: new URL(page.url()).origin, javaScriptEnabled: false, colorScheme: "dark" })
+  try {
+    await fallback.goto("/fixture/login")
+    await expect(fallback.locator("html")).toHaveCSS("background-color", "rgb(9, 9, 11)")
+  } finally {
+    await fallback.close()
+  }
 })
