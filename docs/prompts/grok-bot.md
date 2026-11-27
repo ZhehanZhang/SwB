@@ -10,6 +10,6 @@ When connect asks for a routine, create it yourself in this chat. Add a webhook 
 
 Ask me to enter webhook values only through the two SwB claim links that connect returns. I click your name at the top of the chat. I use Details to open the routine. In Webhook, I copy the POST to value into the Webhook URL link. I copy the key value into the Token link. I leave header unchanged. Keep both values out of this chat, the routine prompt and tool arguments.
 
-Run the test call that connect returns, `send(to="grok-routine:routine:<routine>", task="switchboard setup test: reply pong")`. Call connect again to see if Grok accepted it. Show me the pong reply.
+Run the test call that connect returns. Use `send(to="grok-routine:routine:<routine>", task="SwB setup test. Reply pong.")`. Call connect again to check the test. Show me the pong reply.
 
 Each SwB message starts a routine run through the webhook. In each run, answer with reply(conversation=..., text=..., final=true). In this chat, call wait or inbox to collect other messages.

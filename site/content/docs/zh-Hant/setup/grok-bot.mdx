@@ -108,7 +108,7 @@ Grok Bot 是 xAI 的桌面代理應用程式。這項連線會把 SwB 加入 Gro
 
 Grok Bot 會呼叫 `connect(what="grok-bot")`。SwB 會回傳 MCP 位址、OAuth 狀態與一段 routine 提示詞。這段提示詞要求每次執行以 Webhook 中的 `trust` 欄位為準，並用 `reply` 回覆。
 
-Grok Bot 會用這段提示詞建立 routine。接著它呼叫 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 註冊 routine。SwB 會回傳兩個領取連結。你儲存兩項內容後，Grok Bot 會執行 `send(to="grok-routine:routine:<routine>", task="switchboard setup test: reply pong")`。它會再次呼叫 `connect`，查看 Grok 是否接受這次呼叫。
+Grok Bot 會用這段提示詞建立 routine。接著它呼叫 `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})` 註冊 routine。SwB 會回傳兩個領取連結。你儲存兩項內容後，Grok Bot 會執行 `send(to="grok-routine:routine:<routine>", task="SwB setup test. Reply pong.")`。它會再次呼叫 `connect`，查看 Grok 是否接受這次呼叫。
 
 Webhook 是這項連線的喚醒方式。每則傳給該 routine 的 SwB 訊息都會啟動一次新的執行。
 

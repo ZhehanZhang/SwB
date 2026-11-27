@@ -91,10 +91,15 @@ class MuseBlock(Block):
     def status(self) -> dict[str, Any]:
         return self._state()
 
+    def config_step(self) -> str | None:
+        if not self.credential():
+            return 'Run connect(what="muse") for a bridge token claim link.'
+        return None
+
     def next_step(self) -> str | None:
         state = self._state()
         if not state["configured"]:
-            return 'Run connect(what="muse") for a bridge token claim link.'
+            return self.config_step()
         if state["state"] != "online":
             return "Start the SwB bridge on your paired Linux Muse gadget."
         if not state["verified"]:

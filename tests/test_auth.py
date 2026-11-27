@@ -122,13 +122,13 @@ def test_approving_needs_the_owners_access_jwt_and_csrf_on_the_post_too(make):
 def test_without_access_sign_in_uses_the_login_page_and_there_is_no_password_form(make):
     cfg = base_config()
     cfg["auth"] = {"owner_emails": ["owner@example.test"]}
-    _, c = make(config=cfg)
+    core, c = make(config=cfg)
     cid = register(c)["client_id"]
     page, req = consent(c, cid)
     assert page.status_code == 303 and req is None
     login = c.get(page.headers["location"])
     assert login.status_code == 200 and 'type="password"' not in login.text
-    assert c.get("/healthz").json()["oauth"] is True
+    assert core.health()["oauth"] is True
 
 
 def test_deny_redirects_with_access_denied_and_iss(make):

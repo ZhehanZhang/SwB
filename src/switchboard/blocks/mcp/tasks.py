@@ -22,6 +22,7 @@ from ...audit import iso
 
 EXTENSION = "io.modelcontextprotocol/tasks"
 CAPS_KEY = "io.modelcontextprotocol/clientCapabilities"
+PROTOCOL_VERSIONS = frozenset({"2026-07-28"})
 POLL_MS = 10_000
 INVALID_PARAMS = -32602
 TASK_FAILED = -32000
@@ -51,8 +52,9 @@ def _structured(result: Any) -> tuple[bool, dict[str, Any] | None]:
 class TasksExtension(Extension):
     identifier = EXTENSION
 
-    def __init__(self, origin: Any):
+    def __init__(self, origin: Any, destinations: set[str]):
         self.origin = origin
+        self.destinations = destinations
 
     @property
     def core(self) -> Any:
@@ -65,7 +67,7 @@ class TasksExtension(Extension):
     async def intercept_tool_call(self, params: Any, ctx: Any, call_next: Any) -> Any:
         from . import TASK_MODE
 
-        if params.name not in ("send", "capy_delegate") or not wants_tasks(ctx.meta):
+        if ctx.protocol_version not in PROTOCOL_VERSIONS or params.name not in ("send", "capy_delegate") or not wants_tasks(ctx.meta):
             return await call_next(ctx)
         token = TASK_MODE.set(True)
         try:
@@ -76,7 +78,7 @@ class TasksExtension(Extension):
         if is_error or not data or not data.get("handle"):
             return result
         h = self.core.inbox.handle(data["handle"])
-        if h is None or h["destination"] not in self.core.blocks:
+        if h is None or h["destination"] not in self.destinations:
             return result
         return {"resultType": "task", **self._task(h, detailed=False)}
 
@@ -91,7 +93,7 @@ class TasksExtension(Extension):
     def _handle(self, ctx: Any, task_id: str) -> dict[str, Any]:
         p = self._principal(ctx)
         h = self.core.inbox.handle(task_id)
-        if h is None or h["owner"] != p.source or h["destination"] not in self.core.blocks:
+        if h is None or h["owner"] != p.source or h["destination"] not in self.destinations:
             raise MCPError(code=INVALID_PARAMS, message=f"unknown task {task_id!r}")
         return h
 
@@ -123,6 +125,7 @@ class TasksExtension(Extension):
         prs = state.get("pull_requests") or []
         body = text + ("\n\nPull requests:\n" + "\n".join(f"- {u}" for u in prs) if prs else "") + f"\n\n({title} {where}, handle {h['handle']})"
         result = {
+            "resultType": "complete",
             "content": [{"type": "text", "text": body}],
             "structuredContent": {"handle": h["handle"], "thread_id": h["ref"], "status": status, "reply": text, "pull_requests": prs},
             "isError": False,
@@ -147,7 +150,7 @@ class TasksExtension(Extension):
             return {"resultType": "complete"}
 
         return [
-            MethodBinding(method="tasks/get", params_type=TaskParams, handler=get),
-            MethodBinding(method="tasks/update", params_type=UpdateParams, handler=update),
-            MethodBinding(method="tasks/cancel", params_type=TaskParams, handler=cancel),
+            MethodBinding(method="tasks/get", params_type=TaskParams, handler=get, protocol_versions=PROTOCOL_VERSIONS),
+            MethodBinding(method="tasks/update", params_type=UpdateParams, handler=update, protocol_versions=PROTOCOL_VERSIONS),
+            MethodBinding(method="tasks/cancel", params_type=TaskParams, handler=cancel, protocol_versions=PROTOCOL_VERSIONS),
         ]

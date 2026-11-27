@@ -46,7 +46,7 @@ SwB 有自己的记忆库。Claude 和 ChatGPT 让各自的内置记忆保持私
 | 客户端 | 答复返回的方式 |
 | - | - |
 | Claude、Claude Desktop 和 ChatGPT | 智能体先调用 `send`，再调用 `wait`，然后回答你 |
-| 支持 MCP Tasks 的客户端 | `send` 返回一个任务，任务随最终答复完成 |
+| 使用 2026-07-28 协议并支持 MCP Tasks 扩展的客户端 | 向 Capy 调用 `send` 时可请求一个任务。最终答复到达后，任务完成。 |
 | 带 SwB 频道的 Claude Code | 答复出现在已打开的窗口中 |
 | 支持 MCP Events 的客户端 | 消息到达时，SwB 调用客户端的 webhook |
 

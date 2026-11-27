@@ -46,7 +46,7 @@ SwB 有自己的記憶儲存區。Claude 與 ChatGPT 各自把內建記憶保持
 | 用戶端 | 答案如何回來 |
 | - | - |
 | Claude、Claude Desktop 與 ChatGPT | 代理依序呼叫 `send` 與 `wait`，然後回答你 |
-| 支援 MCP Tasks 的用戶端 | `send` 回傳一個任務，任務在最終回覆到達時完成 |
+| 使用 2026-07-28 協定並支援 MCP Tasks 擴充功能的用戶端 | 向 Capy 呼叫 `send` 時可要求建立任務。最終回覆送達後，任務完成。 |
 | 使用 SwB 頻道的 Claude Code | 回覆出現在開啟中的工作階段 |
 | 支援 MCP Events 的用戶端 | 訊息到達時，SwB 呼叫用戶端的 webhook |
 

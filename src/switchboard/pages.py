@@ -111,7 +111,10 @@ async function post(path, body, csrf) {
   const headers = {"Content-Type": "application/json"};
   if (csrf) headers["X-CSRF-Token"] = csrf;
   const response = await fetch(path, {method: "POST", headers, body: JSON.stringify(body)});
-  if (!response.ok) throw new Error("Request refused");
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Request refused");
+  }
   return response.status === 204 ? null : response.json();
 }
 function decode(value) {
@@ -173,8 +176,10 @@ if (button) button.addEventListener("click", async () => {
 if (fragment.has("t")) {
   history.replaceState(null, "", location.pathname + location.search);
   if (button) button.disabled = true;
-  post("/auth/link", {token: fragment.get("t")}).then(next).catch(() => {
-    message.textContent = "Request a fresh sign-in link.";
+  post("/auth/link", {token: fragment.get("t")}).then(next).catch((error) => {
+    const reason = error.message === "link_used" ? "Sign-in link already used." :
+      error.message === "link_expired" ? "Sign-in link expired." : "Sign-in failed.";
+    message.textContent = reason + " Ask your agent for a new link.";
     screen.hidden = false;
     if (button) button.disabled = false;
   });
@@ -189,7 +194,8 @@ def script_policy(script: str) -> str:
 
 
 def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, signed_in: bool = False) -> HTMLResponse:
-    messages = {"link_expired": "Request a fresh sign-in link.", "passkey_failed": "Try your passkey again.",
+    messages = {"link_expired": "Sign-in link expired.", "link_used": "Sign-in link already used.",
+                "passkey_failed": "Try your passkey again.",
                 "oidc_failed": "Try signing in again."}
     button = '<button type="button" id="passkey-login">Sign in with a passkey</button>' if methods["passkeys"] else ""
     oidc = methods["oidc"]
@@ -257,7 +263,7 @@ def claim_message_page(title: str, status: int) -> HTMLResponse:
 
 def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, requester: str = "",
                credential: str = "Token", guide: bool = False, host: str = "", expires_at: float | None = None,
-               now: float | None = None, kind: str = "token", typed: bool = False) -> HTMLResponse:
+               now: float | None = None, kind: str = "token", typed: bool = False, error: str = "") -> HTMLResponse:
     from .claims import FILE_KINDS, Field
 
     field_assets = kind == "id" or kind in FILE_KINDS
@@ -289,7 +295,8 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
               if expires_at is not None and now is not None else "")
     footer = (f'<footer><span>{html.escape(host)}</span><span>{expiry}</span></footer>'
               if host or expiry else "")
-    return _claim_document(title, f"""{tile}<h1>{html.escape(title)}</h1>{context}
+    heading = error or title
+    return _claim_document(heading, f"""{tile}<h1>{html.escape(heading)}</h1>{context}
 <form method="post" autocomplete="off">
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
 {key_field}
@@ -298,21 +305,22 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
 <div class="actions">
 <button type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>{save}</button>
 </div>
-</form>{footer}""", field_assets=field_assets)
+</form>{footer}""", 400 if error else 200, field_assets=field_assets)
 
 
 def token_claim_page(name: str, csrf: str, *, kind: str = "token", label: str = "", require_https: bool = False,
                      owner_key: bool = False, host: str = "", expires_at: float | None = None,
-                     now: float | None = None) -> HTMLResponse:
+                     now: float | None = None, error: str = "") -> HTMLResponse:
     credential = label or ("Webhook URL" if require_https or kind == "url" else "Token")
     connector = name.partition("_")[0].lower()
     requester, legacy_title = CLAIM_CONNECTORS.get("chatgpt" if connector == "openai" else connector, ("", ""))
     title = label or legacy_title or ("Save a webhook URL" if credential == "Webhook URL" else TOKEN_CLAIM_TITLE)
     return claim_page(title, f"For {name}.", csrf, requester=requester, credential=credential, owner_key=owner_key,
-                      host=host, expires_at=expires_at, now=now, kind=kind, typed=bool(label))
+                      host=host, expires_at=expires_at, now=now, kind=kind, typed=bool(label), error=error)
 
 
-def routine_claim_page(c: dict[str, Any], csrf: str, *, host: str = "", now: float | None = None) -> HTMLResponse:
+def routine_claim_page(c: dict[str, Any], csrf: str, *, host: str = "", now: float | None = None,
+                       error: str = "") -> HTMLResponse:
     project = c["project"]
     scope = f"For {project}"
     if c["title"]:
@@ -320,7 +328,7 @@ def routine_claim_page(c: dict[str, Any], csrf: str, *, host: str = "", now: flo
     scope += f" ({c['routine_id']})."
     requester = c["created_by"].partition(":")[2] or c["created_by"]
     return claim_page(ROUTINE_CLAIM_TITLE, scope, csrf, requester=requester, guide=True,
-                      host=host, expires_at=c["expires_at"], now=now)
+                      host=host, expires_at=c["expires_at"], now=now, error=error)
 
 
 async def asset(request: Request) -> Response:
