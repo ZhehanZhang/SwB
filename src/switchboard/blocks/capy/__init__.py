@@ -808,8 +808,8 @@ class CapyBlock(Block):
                 return {"scope": scope, "project": entry.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
             if not p.allows(entry.scope):
                 raise DestinationError("Choose a project granted to this key.")
-            refs = dict.fromkeys(h["ref"] for h in self.core.inbox.handles(owner=owner, destination=self.name, project=entry.slug,
-                                                                           scopes=p.scopes, limit=limit))
+            refs = list(dict.fromkeys(h["ref"] for h in self.core.inbox.handles(owner=owner, destination=self.name, project=entry.slug,
+                                                                                scopes=p.scopes, limit=500)))[:limit]
             threads = await asyncio.gather(*(api.get_thread(ref) for ref in refs), return_exceptions=True)
             for t in threads:
                 if isinstance(t, BaseException) and not isinstance(t, CapyError):

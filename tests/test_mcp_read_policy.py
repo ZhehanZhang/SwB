@@ -197,9 +197,12 @@ def test_capy_work_lists_only_the_callers_conversations(workspace, monkeypatch, 
 def test_capy_project_list_finds_the_callers_threads_past_the_provider_page(workspace, monkeypatch):
     core, client, keys = workspace
     api = core.blocks["capy"].api
+    CAPTAIN3 = "jam_CAPTAIN3000000000000000000"
     core.projects.update("example", links={"capy_project": "project_fixture"})
     core.inbox.open_handle(owner="alpha", destination="capy", ref=CAPTAIN, project="example", title="alpha delegation", meta={})
-    entries = [{"id": CAPTAIN2, "title": PRIVATE_TEXT}, {"id": CAPTAIN, "title": "First conversation"}]
+    for _ in range(2):
+        core.inbox.open_handle(owner="alpha", destination="capy", ref=CAPTAIN3, project="example", title="alpha follow-up", meta={})
+    entries = [{"id": CAPTAIN2, "title": PRIVATE_TEXT}, {"id": CAPTAIN, "title": "First conversation"}, {"id": CAPTAIN3, "title": "Later"}]
 
     async def threads(_, limit=20):
         return {"items": entries[:limit]}
@@ -211,8 +214,10 @@ def test_capy_project_list_finds_the_callers_threads_past_the_provider_page(work
     monkeypatch.setattr(api, "get_thread", thread)
     args = {"scope": "project", "project": "example", "limit": 1}
     mine = access(client, keys["alpha"], "capy_list", args)["items"]
-    assert [item["id"] for item in mine] == [CAPTAIN]
+    assert len(mine) == 1 and mine[0]["id"] in (CAPTAIN, CAPTAIN3)
     assert PRIVATE_TEXT not in json.dumps(mine)
+    both = access(client, keys["alpha"], "capy_list", {**args, "limit": 2})["items"]
+    assert sorted(item["id"] for item in both) == sorted([CAPTAIN, CAPTAIN3])
     assert [item["id"] for item in access(client, STATIC_KEY, "capy_list", args)["items"]] == [CAPTAIN2]
 
 
