@@ -31,14 +31,19 @@ Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live*
 
 <Steps>
 <Step>
-### 開啟位址
+### 複製設定碼
 
-在瀏覽器中開啟服務 URL。SwB 會顯示登入頁面。
+在 Render 服務中開啟 **Environment**。複製 `SWB_SETUP_CODE` 的值。
 </Step>
 <Step>
-### 登入
+### 開啟登入頁面
 
-依照登入頁面的步驟建立擁有者登入。{/* unverified */}
+在 Render 服務中開啟 **Logs**。開啟記錄中顯示的登入頁面位址。{/* unverified */}
+</Step>
+<Step>
+### 輸入設定碼
+
+將設定碼貼到 **Setup code**。新增通行金鑰，之後用它登入。設定碼只能使用一次。
 </Step>
 </Steps>
 
@@ -50,6 +55,6 @@ Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live*
 
 ## 使用其他平台
 
-Fly.io 與裝有 Docker 的伺服器需要程式開發代理，例如 Claude Code 或 Codex。把這段提示詞貼給程式開發代理。它會完成部署，並給你登入連結。
+Fly.io、Koyeb 與裝有 Docker 的伺服器需要程式開發代理，例如 Claude Code 或 Codex。把這段提示詞貼給程式開發代理。它會完成部署，並告訴你設定碼存放在哪個檔案中。
 
 <SetupPrompt name="deploy" lang="zh-Hant" />

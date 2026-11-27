@@ -31,14 +31,19 @@ Copy the service URL at the top of the page, for example `https://swb-example.on
 
 <Steps>
 <Step>
-### Open your address
+### Copy the setup code
 
-Open the service URL in your browser. SwB shows its sign-in page.
+Open **Environment** in your Render service. Copy the value of `SWB_SETUP_CODE`.
 </Step>
 <Step>
-### Sign in
+### Open the sign-in page
 
-Follow the sign-in page to make your owner sign-in. {/* unverified */}
+Open **Logs** in your Render service. Open the sign-in page address that the log shows. {/* unverified */}
+</Step>
+<Step>
+### Enter the code
+
+Paste the code in **Setup code**. Add a passkey to sign in again. The setup code works one time.
 </Step>
 </Steps>
 
@@ -50,6 +55,6 @@ Paste this prompt into the agent that you use. The agent adds SwB, connects your
 
 ## Use another platform
 
-Fly.io and a server with Docker use a coding agent, for example Claude Code or Codex. Paste this prompt into the coding agent. The agent runs the deploy and gives you the sign-in link.
+Fly.io, Koyeb and a server with Docker use a coding agent, for example Claude Code or Codex. Paste this prompt into the coding agent. The agent runs the deploy and tells you where to find your setup code.
 
 <SetupPrompt name="deploy" lang="en" />
