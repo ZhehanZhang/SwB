@@ -16,6 +16,7 @@ const ProjectPage = lazy(() => import("@/pages/project").then(({ ProjectPage }) 
 const TokensPage = lazy(() => import("@/pages/tokens").then(({ TokensPage }) => ({ default: TokensPage })))
 const SettingsPage = lazy(() => import("@/pages/settings").then(({ SettingsPage }) => ({ default: SettingsPage })))
 const AboutPage = lazy(() => import("@/pages/about").then(({ AboutPage }) => ({ default: AboutPage })))
+const ConnectionsPage = lazy(() => import("@/pages/connections").then(({ ConnectionsPage }) => ({ default: ConnectionsPage })))
 
 function RequireSession() {
   const session = useQuery(sessionQuery)
@@ -51,6 +52,7 @@ export function App() {
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/connections/:platform" element={<ConnectionsPage />} />
             <Route path="/canvas/*" element={<Navigate to="/" replace />} />
             <Route path="/provision/*" element={<Navigate to="/" replace />} />
             <Route path="*" element={<DataState kind="empty" message="Page not found." />} />

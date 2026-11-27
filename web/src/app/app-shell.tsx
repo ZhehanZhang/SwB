@@ -7,6 +7,7 @@ import { PageTitle } from "@/app/page-title"
 import { isSection, primarySections, sections, utilitySections } from "@/app/navigation"
 import { SwbIcon } from "@/components/swb-icon"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { connectionNames, isConnectionPlatform } from "@/lib/connections"
 import { cn } from "@/lib/utils"
 
 const tabClass = "flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground hover:text-foreground"
@@ -36,7 +37,7 @@ function SectionNav({ section, selected = false }: { section: typeof sections[nu
 
 function MobileNavigation({ pathname, home }: { pathname: string; home: boolean }) {
   const more = sections.slice(3)
-  const active = more.some(({ to }) => isSection(pathname, to))
+  const active = isSection(pathname, "/connections") || more.some(({ to }) => isSection(pathname, to))
   return (
     <nav aria-label="Navigation" className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-30 h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 md:hidden">
       <div className="pointer-events-auto grid grid-cols-5">
@@ -68,9 +69,11 @@ function MobileNavigation({ pathname, home }: { pathname: string; home: boolean 
 export function AppShell() {
   const { pathname } = useLocation()
   const project = isSection(pathname, "/projects")
+  const platform = isSection(pathname, "/connections") ? pathname.split("/")[2] : undefined
+  const connection = isConnectionPlatform(platform)
   const home = pathname === "/" || project || isSection(pathname, "/canvas")
   const [title, setTitle] = useState<string>()
-  const heading = title ?? (home ? PRODUCT_NAME : sections.find(({ to }) => isSection(pathname, to))?.name ?? PRODUCT_NAME)
+  const heading = connection ? connectionNames[platform] : title ?? (home ? PRODUCT_NAME : sections.find(({ to }) => isSection(pathname, to))?.name ?? PRODUCT_NAME)
   useEffect(() => { document.title = heading === PRODUCT_NAME ? heading : `${heading} | ${PRODUCT_NAME}` }, [heading])
 
   return (
@@ -80,12 +83,13 @@ export function AppShell() {
         <HomeNav active={home} />
         {primarySections.map(section => <SectionNav key={section.to} section={section} />)}
         <div className="flex-1" />
-        {utilitySections.map(section => <SectionNav key={section.to} section={section} selected={isSection(pathname, "/about")} />)}
+        {utilitySections.map(section => <SectionNav key={section.to} section={section} selected={connection || isSection(pathname, "/about")} />)}
       </nav>
       <div className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-clearance)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
         <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2">
             {project && <Link to="/" aria-label={`Back to ${PRODUCT_NAME}`} className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
+            {connection && <Link to="/settings" aria-label="Back to Settings" className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
             <h1 className="truncate text-page-title">{heading}</h1>
           </div>
           <CommandMenu />
