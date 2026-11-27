@@ -69,7 +69,7 @@ def mark(provider: str) -> str:
     if p is None:
         return ""
     if avatar := agent_avatar(p.key):
-        body = f'<img class="persona-mark" src="/avatars/{avatar}" alt="">'
+        body = f'<img class="persona-mark" src="/avatars/{avatar}" alt="" width="22" height="22">'
     elif (path := MARKS / f"{p.mark}.svg").is_file():
         body = path.read_text().strip().replace("<svg ", f'<svg class="mark mark-{p.key}" aria-hidden="true" ', 1)
     else:
