@@ -19,8 +19,11 @@ from . import Action, Address, Block, BlockError, BlockRefused, Call, Manifest, 
 if TYPE_CHECKING:
     from ..core import Switchboard
 
-CAPS = ("hooks", "herdr", "codex", "opencode")
-AGENTS = {"claude": "claude-code", "claude-code": "claude-code", "codex": "codex", "gemini": "gemini", "opencode": "opencode"}
+CAPS = ("hooks", "herdr", "codex", "opencode", "dsh")
+AGENTS = {
+    "claude": "claude-code", "claude-code": "claude-code", "codex": "codex", "gemini": "gemini", "opencode": "opencode",
+    "dsh": "dsh",
+}
 SESSION_TTL_S = 86_400
 SESSION_ID = re.compile(r"[A-Za-z0-9_.:-]{1,160}")
 SessionKey = tuple[str, str, str]
