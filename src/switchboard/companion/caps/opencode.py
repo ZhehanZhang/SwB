@@ -28,6 +28,7 @@ _SESSION_UNAVAILABLE = "The OpenCode session is unavailable."
 _SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _STATES = {"busy": "working", "running": "working", "retry": "working", "idle": "idle"}
 _MAX_EVENT = 1 << 20
+_ACTIVE_REFRESH_S = 5
 
 
 def _obj(value: Any) -> dict[str, Any]:
@@ -197,7 +198,9 @@ class OpenCodeCapability(Capability):
         password = os.environ.get("OPENCODE_SERVER_PASSWORD")
         self._auth = ("opencode", password) if password else None
         self._routes: _Routes | None = None
+        self._default_state = "unknown"
         self._states: dict[str, str] = {}
+        self._state_revision = 0
         self._dirs: dict[str, str] = {}
         self._pending: dict[str, set[tuple[str, str]]] = {}
         self._expected: dict[str, tuple[str, str]] = {}
@@ -231,13 +234,14 @@ class OpenCodeCapability(Capability):
             raise CapabilityError(_UNAVAILABLE) from None
 
     def _state(self, session: str) -> str:
-        return "blocked" if self._pending.get(session) else self._states.get(session, "unknown")
+        return "blocked" if self._pending.get(session) else self._states.get(session, self._default_state)
 
     def _session(self, session: str) -> Session:
         return Session(harness=self.id, session=session, agent=self.id, dir=self._dirs.get(session, ""),
                        state=self._state(session))
 
     async def _end(self, ctx: CompanionContext, session: str) -> None:
+        self._state_revision += 1
         self._states[session] = "ended"
         self._pending.pop(session, None)
         await harness().report(ctx, self.id, self._session(session))
@@ -405,19 +409,42 @@ class OpenCodeCapability(Capability):
             else:
                 return
         if state:
+            self._state_revision += 1
             self._states[session] = state
         await harness().report(ctx, self.id, self._session(session))
         if state == "idle" and kind not in {"session.execution.failed", "session.execution.interrupted"}:
             await self._reply(client, routes, ctx, session)
 
-    async def _snapshot(self, client: httpx.AsyncClient, routes: _Routes, ctx: CompanionContext) -> None:
-        self._states.clear()
-        self._pending.clear()
+    async def _refresh_states(self, client: httpx.AsyncClient, routes: _Routes) -> bool:
+        revision = self._state_revision
+        states = {}
         if routes.status:
-            statuses = _obj(await _get(client, routes.status))
-            for session, value in _obj(statuses.get("data", statuses)).items():
+            statuses = await _get(client, routes.status)
+            if isinstance(statuses, dict):
+                statuses = statuses.get("data", statuses)
+            if not isinstance(statuses, dict):
+                raise CapabilityError(_FAILED)
+            for session, value in statuses.items():
                 if _session_id(session) and isinstance(status := _obj(value).get("type"), str):
-                    self._states[session] = _STATES.get(status, "unknown")
+                    states[session] = _STATES.get(status, "unknown")
+        if revision != self._state_revision:
+            return False
+        self._states = states
+        self._default_state = "idle" if routes.status == "/api/session/active" else "unknown"
+        return True
+
+    async def _poll_active(self, client: httpx.AsyncClient, routes: _Routes, ctx: CompanionContext) -> None:
+        while True:
+            await asyncio.sleep(_ACTIVE_REFRESH_S)
+            if not await self._refresh_states(client, routes):
+                continue
+            for session in tuple(self._dirs):
+                if session in self._dirs:
+                    await harness().report(ctx, self.id, self._session(session))
+
+    async def _snapshot(self, client: httpx.AsyncClient, routes: _Routes, ctx: CompanionContext) -> None:
+        await self._refresh_states(client, routes)
+        self._pending.clear()
         for family, path in (("permission", routes.all_permissions), (
             "form" if routes.all_forms == "/api/form" else "question", routes.all_forms,
         )):
@@ -468,6 +495,9 @@ class OpenCodeCapability(Capability):
                         try:
                             async with asyncio.TaskGroup() as tasks:
                                 waiters: dict[str, asyncio.Task[None]] = {}
+                                poll = tasks.create_task(self._poll_active(client, routes, ctx)) if (
+                                    routes.status == "/api/session/active"
+                                ) else None
 
                                 def schedule(session: str, message_id: Any = None) -> None:
                                     if not routes.wait or not (expected := self._expected.get(session)):
@@ -494,6 +524,8 @@ class OpenCodeCapability(Capability):
                                 finally:
                                     for task in waiters.values():
                                         task.cancel()
+                                    if poll:
+                                        poll.cancel()
                         except* Disconnected:
                             raise Disconnected from None
             finally:
