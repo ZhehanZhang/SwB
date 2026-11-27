@@ -1,16 +1,20 @@
 import logging
 import os
 import socket
+import stat
 import sys
 from contextlib import nullcontext
 from pathlib import Path
+from unittest.mock import AsyncMock
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+import yaml
 from starlette.testclient import TestClient
 
 from conftest import CLAUDE_CB, STATIC_KEY, call, error_text, payload, pkce, register
 from switchboard import __main__, cli, cli_up
+from switchboard.blocks.capy import CapyBlock
 from switchboard.config import load_config
 
 
@@ -19,15 +23,16 @@ def clean_env(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
-    for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR",
+    for name in ("PORT", "SWITCHBOARD_PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR",
                  "SWITCHBOARD_PUBLIC_URL", "PUBLIC_URL", "SWITCHBOARD_DEPLOY_PLATFORM", "CLOUDFLARE_ACCESS_TEAM_DOMAIN",
-                 "CLOUDFLARE_ACCESS_AUD", "SWITCHBOARD_OWNER_EMAILS", "SWB_SETUP_CODE"):
+                 "CLOUDFLARE_ACCESS_AUD", "SWITCHBOARD_OWNER_EMAILS", "SWB_SETUP_CODE", "CAPY_API_KEY", "GITHUB_WEBHOOK_SECRET",
+                 cli.OWNER_KEY):
         monkeypatch.delenv(name, raising=False)
 
 
 @pytest.mark.parametrize("override", [None, "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR"])
 def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path, monkeypatch, capsys, override):
-    data = tmp_path / "custom-data" if override else Path.home() / ".local/share/switchboard"
+    data = tmp_path / ("custom-data" if override else "data")
     if override:
         monkeypatch.setenv(override, str(data))
     calls = []
@@ -39,6 +44,147 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
     assert calls == [(["serve"], data, "127.0.0.1", "8870", True)]
     assert capsys.readouterr() == ("", "")
     assert "SWITCHBOARD_HOST" not in os.environ
+
+
+def test_up_initializes_and_prints_one_usable_login_link(clean_env, tmp_path, monkeypatch, capsys):
+    origin = "http://localhost:18871"
+    monkeypatch.setenv("PORT", "18871")
+
+    def serve(app, **options):
+        with TestClient(app, base_url=origin) as client:
+            core = app.starlette.state.core
+            config = yaml.safe_load((tmp_path / cli.CONFIG).read_text())
+            assert config == {"version": 2}
+            env_path = tmp_path / ".env"
+            saved = cli._read_env(env_path)
+            lines = capsys.readouterr().out.splitlines()
+            assert saved["PORT"] == "18871"
+            owner_key = saved[cli.OWNER_KEY]
+            assert len(owner_key) == 64
+            assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+            assert core.data_dir == tmp_path / "data" and stat.S_IMODE(core.data_dir.stat().st_mode) == 0o700
+            assert len(lines) == 2 and owner_key not in "".join(lines)
+            assert lines[1].startswith(f"{origin}/login#t="), "Expected a localhost sign-in link"
+            token = lines[1].partition("#t=")[2]
+            assert len(token) == 43 and client.post("/auth/link", json={"token": token}, headers={"Origin": origin}).status_code == 204
+            assert len(core.audit.recent(action="login_link_minted")) == 1
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    assert not (Path.home() / ".local/share/switchboard").exists()
+
+
+@pytest.mark.parametrize("init", [False, True])
+def test_generated_config_keeps_discovering_env_blocks(clean_env, tmp_path, monkeypatch, capsys, init):
+    env_path = tmp_path / ".env"
+    if init:
+        __main__.cli_main(["init"])
+    with env_path.open("a") as env:
+        env.write("CAPY_API_KEY=fixture-capy-discovery-key\n")
+    monkeypatch.setattr(CapyBlock, "start", AsyncMock())
+    configs = []
+
+    def serve(app, **options):
+        with TestClient(app):
+            configs.append(set(app.starlette.state.core.blocks))
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    capsys.readouterr()
+    with env_path.open("a") as env:
+        env.write("GITHUB_WEBHOOK_SECRET=fixture-github-discovery-key\n")
+    __main__.cli_main(["up"])
+
+    assert configs == [{"mcp", "capy"}, {"mcp", "capy", "github"}]
+    assert yaml.safe_load((tmp_path / cli.CONFIG).read_text()) == {"version": 2}
+    capsys.readouterr()
+
+
+def test_generated_config_follows_port_changes(clean_env, tmp_path, monkeypatch, capsys):
+    ports = []
+
+    def serve(app, *, port, **options):
+        origin = f"http://localhost:{port}"
+        alias = f"http://127.0.0.1:{port}"
+        with TestClient(app, base_url=origin) as client:
+            lines = capsys.readouterr().out.splitlines()
+            ports.append(port)
+            assert lines[0] == f"MCP URL: {origin}/mcp"
+            core = app.starlette.state.core
+            assert core.cfg.public_urls == (origin, alias)
+            assert core.cfg.passkey_rp == "localhost"
+            if port == 9000:
+                async def mcp_request(url, key, tool, args):
+                    assert url == f"{origin}/mcp"
+                    return payload(call(client, key, tool, args))
+
+                with monkeypatch.context() as cli_env:
+                    cli_env.delenv("PORT")
+                    cli_env.delenv("SWITCHBOARD_HOST")
+                    cli_env.delenv(cli.OWNER_KEY)
+                    cli_env.setattr(cli, "_call", mcp_request)
+                    __main__.cli_main(["login-link"])
+                link = capsys.readouterr().out.strip()
+                assert link.startswith(f"{origin}/login#t="), "Expected a sign-in link on the new port"
+                token = link.partition("#t=")[2]
+                assert client.post("/auth/link", json={"token": token}, headers={"Origin": origin}).status_code == 204
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    with (tmp_path / ".env").open("a") as env:
+        env.write("PORT=9000\n")
+    __main__.cli_main(["up"])
+    assert ports == [8870, 9000]
+
+
+@pytest.mark.parametrize("source", ["flag", "SWITCHBOARD_PUBLIC_URL", "PUBLIC_URL"])
+def test_generated_config_persists_only_explicit_public_url(clean_env, tmp_path, monkeypatch, capsys, source):
+    public = "https://swb.example.test"
+    args = ["up", "--host", "0.0.0.0"]
+    if source == "flag":
+        args += ["--public-url", f"{public}/"]
+    else:
+        monkeypatch.setenv(source, f"{public}/")
+    monkeypatch.setattr(__main__.uvicorn, "run", lambda *_, **__: None)
+
+    __main__.cli_main(args)
+
+    config = yaml.safe_load((tmp_path / cli.CONFIG).read_text())
+    assert config == ({"version": 2} if source == "PUBLIC_URL" else {"version": 2, "public_url": public})
+    assert capsys.readouterr().out == f"MCP URL: {public}/mcp\n"
+
+
+def test_bare_up_preserves_legacy_home_data(clean_env, tmp_path, monkeypatch, capsys):
+    from switchboard.store import Store
+
+    home_data = Path.home() / ".local/share/switchboard"
+    home_data.mkdir(parents=True)
+    db = Store(home_data / "switchboard.db")
+    db.x("CREATE TABLE legacy_fixture(value TEXT)")
+    db.x("INSERT INTO legacy_fixture VALUES ('kept')")
+    db.close()
+
+    def serve(app, **options):
+        with TestClient(app):
+            core = app.starlette.state.core
+            assert core.data_dir == home_data and core.store.one("SELECT value FROM legacy_fixture")["value"] == "kept"
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    assert not (tmp_path / cli.CONFIG).exists() and not (tmp_path / ".env").exists()
+    assert not (tmp_path / "data").exists()
+    assert "/login#t=" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.0.2.1"])
+def test_up_rejects_nonloopback_bind_before_initializing(clean_env, tmp_path, monkeypatch, capsys, host):
+    monkeypatch.setattr(__main__.uvicorn, "run", lambda app, **options: pytest.fail("Started without a public address."))
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["up", "--host", host])
+    assert exited.value.code == 1
+    out, err = capsys.readouterr()
+    assert not out and "Set SWITCHBOARD_PUBLIC_URL" in err
+    assert not (tmp_path / cli.CONFIG).exists() and not (tmp_path / ".env").exists()
 
 
 @pytest.mark.parametrize("existing_home_db", [False, True])
@@ -278,7 +424,7 @@ def test_client_reads_the_owner_key_from_its_instance_data(clean_env, tmp_path, 
 
 @pytest.mark.parametrize(("env_host", "flag", "expected", "origin"), [
     (None, [], "localhost", "http://localhost:8870"),
-    ("0.0.0.0", [], "0.0.0.0", "http://127.0.0.1:8870"),
+    ("0.0.0.0", ["--public-url", "https://swb.example.test"], "0.0.0.0", "https://swb.example.test"),
     ("0.0.0.0", ["--host", "::1"], "::1", "http://localhost:8870"),
 ])
 def test_up_host_precedence(clean_env, tmp_path, monkeypatch, capsys, env_host, flag, expected, origin):
@@ -312,7 +458,12 @@ def test_serve_host_precedence(clean_env, monkeypatch, env_host, flag, expected)
 
 
 def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, monkeypatch, capsys):
-    (tmp_path / ".env").write_text(f"SWITCHBOARD_KEY_OWNER={STATIC_KEY}\n")
+    config = tmp_path / cli.CONFIG
+    config.parent.mkdir()
+    config.write_text("version: 2\n")
+    env_path = tmp_path / ".env"
+    env_text = f"SWITCHBOARD_KEY_OWNER={STATIC_KEY}\n"
+    env_path.write_text(env_text)
     monkeypatch.delenv("SWITCHBOARD_KEY_OWNER", raising=False)
     monkeypatch.setenv("PORT", "18871")
     base = "http://localhost:18871"
@@ -329,6 +480,7 @@ def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, m
     monkeypatch.setattr(__main__.uvicorn, "run", serve)
     __main__.cli_main(["up"])
     assert capsys.readouterr() == ("MCP URL: http://localhost:18871/mcp\n", "")
+    assert config.read_text() == "version: 2\n" and env_path.read_text() == env_text
 
 
 @pytest.mark.parametrize(("host", "bound_origin"), [
