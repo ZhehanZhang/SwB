@@ -283,6 +283,9 @@ function Panel({ kind, lang, prompts, labels, onClose }: {
           ))}
           <Link className="swb-button hover:bg-fd-muted" href={localize(lang, item.docs)}>{labels.guide}</Link>
         </div>
+        <a className="mt-5 inline-block" href="https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB" target="_blank" rel="noreferrer">
+          <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" width={153} height={40} />
+        </a>
       </section>
     </div>
   );

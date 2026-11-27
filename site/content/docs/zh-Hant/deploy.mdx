@@ -1,0 +1,55 @@
+---
+title: 一鍵部署
+description: 在雲端平台上執行 SwB，再讓代理完成設定。
+---
+
+本頁適合透過代理工作的人。你在雲端平台上部署 SwB，登入一次，再把設定提示詞交給代理。
+
+## 部署 SwB
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB)
+
+<Steps>
+<Step>
+### 開始部署
+
+點選 **Deploy to Render**。登入 Render。保留預設設定，點選 **Deploy**。{/* unverified */}
+</Step>
+<Step>
+### 等待服務就緒
+
+Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live**。
+</Step>
+<Step>
+### 複製位址
+
+複製頁面頂端的服務 URL，例如 `https://swb-example.onrender.com`。在這個 URL 結尾加上 `/mcp`，就是你的 MCP 位址。
+</Step>
+</Steps>
+
+## 登入
+
+<Steps>
+<Step>
+### 開啟 Shell
+
+在 Render 中開啟你的 SwB 服務，點選 **Shell**。
+</Step>
+<Step>
+### 取得登入連結
+
+在 Shell 中貼上 `swb login-link` 並按 Enter。開啟它顯示的連結。這個連結只能使用一次。
+</Step>
+</Steps>
+
+## 連接你的代理
+
+把這段提示詞貼給你正在用的代理。它會加入 SwB，接通你的其他應用程式，並開始與它們對話。
+
+<SetupPrompt name="coordinator" lang="zh-Hant" />
+
+## 使用其他平台
+
+Fly.io、Koyeb 與裝有 Docker 的伺服器需要程式開發代理，例如 Claude Code 或 Codex。把這段提示詞貼給程式開發代理。它會完成部署，並給你登入連結。
+
+<SetupPrompt name="deploy" lang="zh-Hant" />

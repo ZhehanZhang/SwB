@@ -1,0 +1,55 @@
+---
+title: 一键部署
+description: 在云平台上运行 SwB，再让智能体完成设置。
+---
+
+本页适合通过智能体工作的人。你在云平台上部署 SwB，登录一次，再把设置提示词交给智能体。
+
+## 部署 SwB
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB)
+
+<Steps>
+<Step>
+### 开始部署
+
+点击 **Deploy to Render**。登录 Render。保留默认设置，点击 **Deploy**。{/* unverified */}
+</Step>
+<Step>
+### 等待服务就绪
+
+Render 会在几分钟内构建 SwB。SwB 就绪后，服务页面显示 **Live**。
+</Step>
+<Step>
+### 复制地址
+
+复制页面顶部的服务 URL，例如 `https://swb-example.onrender.com`。在这个 URL 末尾加上 `/mcp`，就是你的 MCP 地址。
+</Step>
+</Steps>
+
+## 登录
+
+<Steps>
+<Step>
+### 打开 Shell
+
+在 Render 中打开你的 SwB 服务，点击 **Shell**。
+</Step>
+<Step>
+### 获取登录链接
+
+在 Shell 中粘贴 `swb login-link` 并按回车。打开它显示的链接。该链接只能使用一次。
+</Step>
+</Steps>
+
+## 连接你的智能体
+
+把这段提示词粘贴给你正在用的智能体。它会添加 SwB，接通你的其他应用，并开始与它们对话。
+
+<SetupPrompt name="coordinator" lang="zh-Hans" />
+
+## 使用其他平台
+
+Fly.io、Koyeb 和装有 Docker 的服务器需要编程智能体，例如 Claude Code 或 Codex。把这段提示词粘贴给编程智能体。它会完成部署，并给你登录链接。
+
+<SetupPrompt name="deploy" lang="zh-Hans" />

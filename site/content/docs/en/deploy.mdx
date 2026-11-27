@@ -1,0 +1,55 @@
+---
+title: Deploy in one click
+description: Run SwB on a cloud platform and let your agent do the setup.
+---
+
+This page is for people who work through agents. You deploy SwB on a cloud platform, sign in one time, and give your agent the setup prompt.
+
+## Deploy SwB
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB)
+
+<Steps>
+<Step>
+### Start the deploy
+
+Click **Deploy to Render**. Sign in to Render. Keep the default settings and click **Deploy**. {/* unverified */}
+</Step>
+<Step>
+### Wait for the service
+
+Render builds SwB in a few minutes. The service page shows **Live** when SwB is ready.
+</Step>
+<Step>
+### Copy your address
+
+Copy the service URL at the top of the page, for example `https://swb-example.onrender.com`. Your MCP address is this URL with `/mcp` at the end.
+</Step>
+</Steps>
+
+## Sign in
+
+<Steps>
+<Step>
+### Open the shell
+
+In Render, open your SwB service and click **Shell**.
+</Step>
+<Step>
+### Get your sign-in link
+
+Paste `swb login-link` into the shell and press Enter. Open the link that it shows. The link works one time.
+</Step>
+</Steps>
+
+## Connect your agent
+
+Paste this prompt into the agent that you use. The agent adds SwB, connects your other apps and starts to talk to them.
+
+<SetupPrompt name="coordinator" lang="en" />
+
+## Use another platform
+
+Fly.io, Koyeb and a server with Docker use a coding agent, for example Claude Code or Codex. Paste this prompt into the coding agent. The agent runs the deploy and gives you the sign-in link.
+
+<SetupPrompt name="deploy" lang="en" />

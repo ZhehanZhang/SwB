@@ -38,6 +38,7 @@ jobs:
       - run: pnpm check:style
       - run: pnpm typecheck
       - run: pnpm build
+      - run: pnpm check:cjk
       - run: pnpm exec opennextjs-cloudflare build
 
   deploy:
