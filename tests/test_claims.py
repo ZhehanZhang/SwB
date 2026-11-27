@@ -83,7 +83,7 @@ def test_capy_key_claim_checks_format(make, capy, name):
 
 def test_credential_claim_error_titles_use_positive_copy(make, monkeypatch):
     core, client = make(base_config(version=2, blocks={
-        "github": {}, "muse": {}, "slack": {"engine": False},
+        "github": {}, "slack": {"engine": False},
         "discord": {"connect": False, "token_env": "COPY_DISCORD_TOKEN"},
     }))
     pem = "-----BEGIN PRIVATE KEY-----" + "YWJj" + "-----END PRIVATE KEY-----"
@@ -103,7 +103,6 @@ def test_credential_claim_error_titles_use_positive_copy(make, monkeypatch):
         ("COPY_SLACK_APP", "slack_app", "abc", "Use a Slack token that starts with xapp-"),
         ("COPY_SLACK_BOT", "slack_bot", "xoxb-example", "Use a token accepted by Slack"),
         ("COPY_DISCORD_TOKEN", "token", "wrong", "Use a bot token"),
-        ("MUSE_BRIDGE_TOKEN", "token", "bad", "Paste the bridge token from Muse."),
         ("COPY_INTERNAL_ERROR", "token", "test", "Check the value"),
     ]
 
@@ -128,6 +127,19 @@ def test_credential_claim_error_titles_use_positive_copy(make, monkeypatch):
         path = urlsplit(core.claims.mint_group("Example group", [Field("COPY_FIELD", label)], PUBLIC)).path
         csrf = form_csrf(client.get(path, headers=OWNER))
         assert_claim_error_title(client.post(path, headers=OWNER, data={"csrf": csrf}), f"Check {label}")
+
+
+def test_muse_has_no_dedicated_claim_kind_or_token_title(make):
+    core, client = make()
+    name = "MUSE_EXAMPLE_TOKEN"
+    with pytest.raises(ClaimError, match="Choose a credential kind"):
+        core.claims.mint(name, PUBLIC, kind="muse")
+    path = urlsplit(core.claims.mint(name, PUBLIC)).path
+    page = client.get(path, headers=OWNER)
+    assert_claim_error_title(page, "Save a token", 200)
+    assert 'data-connector="muse"' in page.text and 'src="/avatars/muse.png"' in page.text
+    [claim] = client.get("/api/tokens", headers=OWNER).json()["waiting"]
+    assert (claim["label"], claim["kind"]) == (name, "generic")
     assert_claim_error_title(client.get("/routines/claim/unknown", headers=OWNER), "Claude routine setup required")
 
 
