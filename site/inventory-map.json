@@ -318,7 +318,7 @@
   "provider:claude": "site/content/docs/en/setup/claude-project.mdx",
   "provider:claude-code": "site/content/docs/en/blocks/coding-agents.mdx",
   "provider:codex": "site/content/docs/en/setup/coding-agent.mdx",
-  "provider:dsh": "site/content/docs/en/connect.mdx",
+  "provider:dsh": "site/content/docs/en/companion.mdx",
   "provider:gemini": "site/content/docs/en/setup/coding-agent.mdx",
   "provider:goose": "site/content/docs/en/setup/coding-agent.mdx",
   "provider:grok": "site/content/docs/en/setup/grok.mdx",
