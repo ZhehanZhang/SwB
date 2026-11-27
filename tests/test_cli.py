@@ -276,6 +276,27 @@ def test_login_link_connection_error_names_the_attempted_url(tmp_path, monkeypat
     assert capsys.readouterr() == ("", "swb: Check that SwB is running at http://localhost:18921/mcp. Verify the owner key.\n")
 
 
+@pytest.mark.parametrize(("retry_after", "message"), [
+    ("600", "Slow down. Try again in 600 seconds."),
+    ("1", "Slow down. Try again in 1 second."),
+    (None, "Slow down. Try again shortly."),
+])
+def test_login_link_prints_the_rate_limit_wait(tmp_path, monkeypatch, capsys, retry_after, message):
+    monkeypatch.setenv(cli.OWNER_KEY, STATIC_KEY)
+    client = httpx2.AsyncClient
+
+    def post(request):
+        assert request.method == "POST"
+        headers = {"Retry-After": retry_after} if retry_after is not None else {}
+        return httpx2.Response(429, headers=headers, json={"error": "slow_down", "detail": STATIC_KEY})
+
+    monkeypatch.setattr(cli.httpx2, "AsyncClient", lambda **kw: client(transport=httpx2.MockTransport(post), **kw))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["login-link", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", f"swb: {message}\n")
+
+
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(f"# comment\n{cli.OWNER_KEY}='owner-test-key'\nPORT=4567 # local port\n")
     calls = []
@@ -529,6 +550,18 @@ def test_claim_does_not_follow_redirects_or_print_response(tmp_path, monkeypatch
     out, err = capsys.readouterr()
     assert "HTTP 307" in err
     assert all(value not in out + err for value in (key, token, code))
+
+
+def test_claim_prints_the_rate_limit_wait(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.OWNER_KEY, STATIC_KEY)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _: "fixture-token")
+    client = httpx2.Client
+    transport = httpx2.MockTransport(lambda _: httpx2.Response(429, headers={"Retry-After": "15"}, text=STATIC_KEY))
+    monkeypatch.setattr(cli.httpx2, "Client", lambda **kw: client(transport=transport, **kw))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["claim", "fixture-code", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", "swb: Slow down. Try again in 15 seconds.\n")
 
 
 @pytest.mark.parametrize(("error", "message", "visible"), [
