@@ -6,7 +6,7 @@ from uuid import UUID
 import httpx
 import pytest
 
-from conftest import OWNER, SECOND_KEY, STATIC_KEY, base_config, call, payload
+from conftest import OWNER, PUBLIC, SECOND_KEY, STATIC_KEY, base_config, call, payload
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
 from switchboard.claims import ClaimError
@@ -20,8 +20,8 @@ OTHER = "b" * 32
 ADDR = "muse:gadget:muse"
 
 
-def make_muse(make, *, configured=True):
-    cfg = base_config(version=2, blocks={"mcp": {"use": "mcp"}, "muse": {"use": "muse"}})
+def make_muse(make, *, configured=True, public_url=PUBLIC):
+    cfg = base_config(version=2, public_url=public_url, blocks={"mcp": {"use": "mcp"}, "muse": {"use": "muse"}})
     env = {"SWITCHBOARD_KEY_OWNER": STATIC_KEY, "SWITCHBOARD_KEY_SECOND": SECOND_KEY}
     return make(cfg, {**env, **({"MUSE_BRIDGE_TOKEN": SECRET} if configured else {})})
 
@@ -30,13 +30,31 @@ def bridge(client, claim=CLAIM, token=SECRET, **data):
     return client.post(BRIDGE_PATH, headers={"Authorization": f"Bearer {token}"}, json={"claim": claim, **data})
 
 
+@pytest.mark.parametrize("url", ["http://localhost:18902", "http://127.0.0.1:18902", "http://[::1]:18902", PUBLIC])
+def test_muse_connect_hands_the_linux_device_a_reachable_address(make, url):
+    _, client = make_muse(make, public_url=url)
+    setup = payload(call(client, STATIC_KEY, "connect", {"what": "muse"}))
+    assert all(step["by"] == "person" for step in setup["next"])
+    actions = [step["do"] for step in setup["next"]]
+    if url == PUBLIC:
+        command = f"Run swb muse-bridge --url {url} --setup on the Linux device."
+        assert command in actions
+        assert actions[actions.index(command) + 1:actions.index(command) + 3] == [
+            "Enter the SwB bridge token at its hidden prompt.", "Enter the personal Meta token at its hidden prompt.",
+        ]
+        assert "Select Add Device." in actions and "Select the Bluetooth name SwB prints." in actions
+    else:
+        assert "swb up --tunnel cloudflare" in actions[0] and "Linux device" in actions[0]
+        assert "swb muse-bridge" not in json.dumps(setup) and url not in json.dumps(setup)
+
+
 def test_muse_connect_claim_status_and_credential_scope(make):
     core, client = make_muse(make, configured=False)
     status = payload(call(client, STATIC_KEY, "switchboard_status"))
     assert status["blocks"]["muse"]["online"] is False and "claim link" in status["blocks"]["muse"]["next_step"]
     setup = payload(call(client, STATIC_KEY, "connect", {"what": "muse"}))
     assert setup["done"] == ["Muse bridge setup is ready."]
-    path = urlparse(setup["next"][0]["link"]).path
+    path = urlparse(setup["next"][1]["link"]).path
     assert path.startswith("/claim/")
     refused = client.get(path)
     assert refused.status_code == 303 and refused.headers["location"].startswith("/login?next=%2Fclaim%2F")
@@ -62,7 +80,7 @@ def test_muse_connect_claim_status_and_credential_scope(make):
     assert setup["next"][0]["call"]["arguments"]["to"] == ADDR
     assert "state" not in setup and SECRET not in json.dumps(core.status())
     rotate = payload(call(client, STATIC_KEY, "connect", {"what": "muse", "choose": {"replace": True}}))
-    code = urlparse(rotate["next"][0]["link"]).path.rsplit("/", 1)[1]
+    code = urlparse(rotate["next"][1]["link"]).path.rsplit("/", 1)[1]
     with pytest.raises(ClaimError, match="bridge token"):
         core.claims.consume(code, "mistyped")
     assert bridge(client).is_success
