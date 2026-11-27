@@ -69,7 +69,7 @@ def mark(provider: str) -> str:
     if path is None or not path.exists():
         return ""
     svg = path.read_text().strip().replace("<svg ", f'<svg class="mark mark-{p.key}" aria-hidden="true" ', 1)
-    return f'<span class="tile" title="{html.escape(p.title)}">{svg}</span>'
+    return f'<span class="requester-tile" data-connector="{p.key}" title="{html.escape(p.title)}">{svg}</span>'
 
 
 def _field(f: Field) -> str:
@@ -112,7 +112,7 @@ def _marks_css() -> str:
     return "\n".join(f".mark-{p.key} {{ color: light-dark({p.light}, {p.dark}); }}" for p in PROVIDERS.values())
 
 
-CSS = """.tile { display: grid; width: 22px; height: 22px; margin-bottom: 8px; place-items: center; border: 1px solid var(--border); border-radius: 6px; }
+CSS = """.requester-tile { margin-bottom: 8px; }
 .mark { fill: currentColor; stroke: none; }
 .field { margin-bottom: 20px; }
 .field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }

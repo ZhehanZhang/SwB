@@ -23,7 +23,6 @@ import contextlib
 import hashlib
 import logging
 import re
-import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
@@ -359,6 +358,7 @@ class ChatBlock(Block):
                     self.record_message(msg)
                 return None
             channel_mode = policy.meta(self.name, msg.space, channel, mode, actions, project, msg.link, selected)
+            channel_mode.update(parent=msg.channel, channel_name=msg.channel_name, dm=msg.dm)
         elif policy is None and not addressed and not listened:
             return None
         if not self.core.store.n("INSERT OR IGNORE INTO chat_events(block, space, channel, message, at) VALUES (?,?,?,?,?)",
@@ -502,6 +502,8 @@ class ChatBlock(Block):
             kw["to"] = target["address"]
             if project and trust == "owner" and target["kind"] == "routine" and not target.get("project"):
                 kw["project"] = project
+            if mode and mode["project"] and not target.get("project"):
+                kw["project"] = mode["project"]
         handle = self.core.inbox.new_handle()
         self.core.store.x("INSERT INTO chat_relays(handle, block, space, channel, root, reply_to, target, trust, at) VALUES (?,?,?,?,?,?,?,?,?)",
                           (handle, self.name, msg.space, msg.channel, root, msg.message, event["target"], trust, self.core.clock()))
@@ -584,12 +586,20 @@ class ChatBlock(Block):
             return
         h = self.core.inbox.handle(handle)
         mode = h["meta"].get("channel_mode") if h else None
-        if mode and mode["mode"] == "triage" and "reply" not in mode["actions"]:
-            return
+        if mode:
+            if mode.get("dm"):
+                current, actions = self.core.modes.dm(self.name)[0], tuple(mode["actions"])
+            else:
+                current, _, actions, _ = self.core.modes.resolve(self.name, mode["space"], mode["channel"], mode["project"],
+                                                                parent=mode.get("parent"), name=mode.get("channel_name"))
+            if current not in ("assist", "triage") or (current == "triage" and "reply" not in actions):
+                self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name,
+                                       action="reply_withheld", outcome="refused", ref=handle, target=r["target"], detail=f"channel is now {current}")
+                return
+            mode = {**mode, "mode": current, "actions": list(actions)}
         if not self._count_turn(self._thread_key(r["space"], r["channel"], r["root"])):
             return
-        place = ((r["channel"], r["root"], False) if mode else
-                 await self.reply_place(r["space"], r["channel"], r["root"], r["target"], r["trust"]))
+        place = await self.reply_place(r["space"], r["channel"], r["root"], r["target"], r["trust"])
         if place is None:
             self.core.audit.record(origin=self.platform, source=self.platform, client=self.principal.client_id, destination=self.name, action="reply_withheld",
                                    outcome="refused", ref=handle, target=r["target"], detail="private target, shared channel, no owner DM")
@@ -606,6 +616,8 @@ class ChatBlock(Block):
                                  persona=self.persona_for(target), strict=bool(mode))
         except BlockError:
             return
+        if mode and item.get("kind") == "final":
+            self.core.modes.audit_action(self.principal, mode, "reply")
 
     # Out: actions and tools ----------------------------------------------------------------
 

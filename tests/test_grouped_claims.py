@@ -1,10 +1,10 @@
 from urllib.parse import urlsplit
 
 import pytest
-from conftest import OWNER, PUBLIC
+from conftest import OWNER, PUBLIC, base_config, default_env
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from test_claims import form_csrf, private_page
+from test_claims import OWNER_KEY, form_csrf, private_page
 
 from switchboard import credentials
 from switchboard.claims import ClaimError, Field, normalize, normalize_pem
@@ -34,7 +34,8 @@ def test_group_saves_every_field_together_or_nothing(make, caplog):
     title, provider, fields = credentials.github_app("GITHUB_WEBHOOK_SECRET")
     path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
     page = client.get(path, headers=OWNER)
-    assert page.status_code == 200 and 'class="mark mark-github"' in page.text and "https://github.com/settings/apps" in page.text
+    assert page.status_code == 200 and 'data-connector="github"' in page.text and "For GitHub App." in page.text
+    assert "https://github.com/settings/apps" in page.text
     assert 'type="file"' in page.text and 'accept=".pem,.key,.txt"' in page.text and "Webhook secret" in page.text
     private_page(page)
     csrf = form_csrf(page)
@@ -82,4 +83,15 @@ def test_claim_assets_are_served(make, name):
 
 def test_every_provider_mark_is_bundled():
     for p in credentials.PROVIDERS.values():
-        assert (credentials.MARKS / f"{p.mark}.svg").exists() and f"mark-{p.key}" in credentials.mark(p.key)
+        assert (credentials.MARKS / f"{p.mark}.svg").exists() and f'data-connector="{p.key}"' in credentials.mark(p.key)
+
+
+def test_owner_key_installs_get_the_grouped_form(make):
+    core, client = make(config=base_config(auth={}), env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
+    title, provider, fields = credentials.github_app()
+    path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
+    page = client.get(path)
+    assert page.status_code == 200 and 'name="owner_key"' in page.text
+    assert 'name="GITHUB_APP_ID"' in page.text and 'name="GITHUB_APP_PRIVATE_KEY"' in page.text and 'name="token"' not in page.text
+    saved = client.post(path, data={"owner_key": OWNER_KEY, "csrf": form_csrf(page), "GITHUB_APP_ID": "12345", "GITHUB_APP_PRIVATE_KEY": PKCS8})
+    assert saved.status_code == 200 and core.secret("GITHUB_APP_ID") == "12345"
