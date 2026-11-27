@@ -1,13 +1,13 @@
 from urllib.parse import urlsplit
 
 import pytest
+from conftest import OWNER, PUBLIC
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from test_claims import form_csrf, private_page
 
-from conftest import OWNER, PUBLIC
 from switchboard import credentials
 from switchboard.claims import ClaimError, Field, normalize, normalize_pem
-from test_claims import form_csrf, private_page
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 PKCS1 = KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()
