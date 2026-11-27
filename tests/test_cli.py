@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import stat
@@ -14,6 +15,22 @@ from mcp.types import CallToolResult, TextContent
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, payload
 from switchboard import __main__, cli
+
+
+def test_log_prints_one_json_object_per_line(make, tmp_path, monkeypatch, capsys):
+    core, _ = make()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(core.data_dir))
+    monkeypatch.delenv("SWITCHBOARD_CONFIG", raising=False)
+    for title in ("First", "Second café\nStill one line"):
+        core.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
+                          action="read", outcome="ok", title=title)
+
+    __main__.cli_main(["log"])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 2
+    assert [json.loads(line) for line in lines] == core.audit.recent()
 
 
 def test_cli_version_matches_installed_distribution(capsys):
@@ -77,6 +94,13 @@ def test_init_invalid_public_url_leaves_no_files(tmp_path, capsys):
         cli.main(["init", "--dir", str(tmp_path), "--public-url", "http://example.test"])
     assert not list(tmp_path.iterdir())
     assert "--public-url" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "[::1]"])
+def test_init_accepts_http_loopback_public_urls(tmp_path, host):
+    origin = f"http://{host}:8870"
+    cli.main(["init", "--dir", str(tmp_path), "--public-url", origin])
+    assert yaml.safe_load((tmp_path / cli.CONFIG).read_text())["public_url"] == origin
 
 
 def test_init_points_to_login_link(tmp_path, capsys):
@@ -198,6 +222,40 @@ def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch
     assert "--url must be HTTPS" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(("dotenv_host", "env_host", "origin"), [
+    ("::1", None, "http://[::1]:1234"),
+    ("0.0.0.0", None, "http://127.0.0.1:1234"),
+    ("0.0.0.0", "::1", "http://[::1]:1234"),
+    ("::", None, "http://[::1]:1234"),
+])
+def test_client_defaults_to_the_instance_bind_address(tmp_path, monkeypatch, dotenv_host, env_host, origin):
+    key = "fixture-owner-key-not-a-secret"
+    (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={key}\nPORT=1234\nSWITCHBOARD_HOST={dotenv_host}\n")
+    for name in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_HOST"):
+        monkeypatch.delenv(name, raising=False)
+    if env_host:
+        monkeypatch.setenv("SWITCHBOARD_HOST", env_host)
+    call = AsyncMock(return_value={"url": "http://localhost:1234/login#t=fixture"})
+    claim = Mock()
+    monkeypatch.setattr(cli, "_call", call)
+    monkeypatch.setattr(cli, "_claim", claim)
+
+    cli.main(["login-link", "--dir", str(tmp_path)])
+    cli.main(["claim", "fixture-code", "--dir", str(tmp_path)])
+
+    call.assert_awaited_once_with(f"{origin}/mcp", key, "login_link", {})
+    claim.assert_called_once_with(f"{origin}/claim/fixture-code", key, routine=False)
+
+
+def test_status_uses_swb_branding_if_connection_fails(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.OWNER_KEY, "fixture-owner-key-not-a-secret")
+    monkeypatch.setattr(cli, "streamable_http_client", Mock(side_effect=OSError))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["status", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", "swb: Check that SwB is running. Verify --url and the owner key.\n")
+
+
 @pytest.mark.parametrize(("claim", "endpoint", "expected", "success"), [
     ("fixture-code", None, "http://127.0.0.1:8870/claim/fixture-code", "Token saved."),
     ("https://other.example.test/claim/fixture-code", "https://switchboard.example.test",
@@ -280,8 +338,8 @@ def test_claim_requires_hidden_input(tmp_path, monkeypatch, capsys):
     assert "hidden input" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("structured", [True, False])
-async def test_mcp_transport_initializes_and_sends_bearer(monkeypatch, structured):
+@pytest.mark.parametrize("result_kind", ["structured", "text", "error", "empty error"])
+async def test_mcp_transport_initializes_and_sends_bearer(monkeypatch, result_kind):
     calls = []
     url, key = "https://switchboard.example.test/mcp", "fixture-owner-key-not-a-secret"
 
@@ -306,12 +364,23 @@ async def test_mcp_transport_initializes_and_sends_bearer(monkeypatch, structure
 
         async def call_tool(self, tool, arguments):
             calls.append((tool, arguments))
+            if result_kind in ("error", "empty error"):
+                content = [TextContent(type="text", text=f"Set SWITCHBOARD_PUBLIC_URL. Key {key}.")]
+                return CallToolResult(content=content if result_kind == "error" else [], is_error=True)
             return CallToolResult(content=[TextContent(type="text", text='{"what":"mcp-client"}')],
-                                  structured_content={"what": "mcp-client"} if structured else None)
+                                  structured_content={"what": "mcp-client"} if result_kind == "structured" else None)
 
     monkeypatch.setattr(cli, "streamable_http_client", transport)
     monkeypatch.setattr(cli, "ClientSession", Session)
-    assert await cli._call(url, key, "connect", {"what": "mcp-client"}) == {"what": "mcp-client"}
+    if result_kind == "error":
+        with pytest.raises(cli.CliError) as refused:
+            await cli._call(url, key, "connect", {"what": "mcp-client"})
+        assert str(refused.value) == "Set SWITCHBOARD_PUBLIC_URL. Key [redacted]."
+    elif result_kind == "empty error":
+        with pytest.raises(cli.CliError, match="SwB refused the connect tool call"):
+            await cli._call(url, key, "connect", {"what": "mcp-client"})
+    else:
+        assert await cli._call(url, key, "connect", {"what": "mcp-client"}) == {"what": "mcp-client"}
     assert calls == [(url, f"Bearer {key}"), "initialize", ("connect", {"what": "mcp-client"})]
 
 

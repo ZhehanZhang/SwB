@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 ARG APP_UID=10001
 RUN useradd --uid ${APP_UID} --create-home --shell /usr/sbin/nologin switchboard
 WORKDIR /app
-COPY pyproject.toml README.md LICENSE NOTICE ./
+COPY pyproject.toml setup.py README.md LICENSE NOTICE ./
 COPY web/licenses/lobe-icons.txt ./web/licenses/lobe-icons.txt
 COPY src ./src
 COPY --from=web /app/src/switchboard/static/app ./src/switchboard/static/app
@@ -35,7 +35,7 @@ LABEL org.opencontainers.image.title="SwB" \
 RUN install -d -m 0700 -o switchboard -g switchboard /data
 WORKDIR /
 USER switchboard
-ENV SWITCHBOARD_DATA=/data GIT_COMMIT=${GIT_COMMIT} BUILD_DATE=${BUILD_DATE}
+ENV SWITCHBOARD_HOST=0.0.0.0 SWITCHBOARD_DATA=/data GIT_COMMIT=${GIT_COMMIT} BUILD_DATE=${BUILD_DATE}
 VOLUME ["/data"]
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/healthz', timeout=4)"

@@ -44,7 +44,8 @@ class _NoQuery(logging.Filter):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="swb")
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("serve", help="run the server (default)")
+    serve = sub.add_parser("serve", help="run the server (default)")
+    serve.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
     exp = sub.add_parser("export", help="write every memory as markdown, one folder per scope")
     exp.add_argument("dir")
     sub.add_parser("log", help="print the recent audit log")
@@ -59,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
-         data_dir: Path | None = None) -> None:
+         data_dir: Path | None = None, announce: bool = False) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -75,19 +76,23 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.error("no config file found")
         print(migrate_text(path.read_text()), end="")
         return
-    from .config import ConfigError
+    from .config import ConfigError, LOOPBACK_HOSTS, bind_address
     from .deployment import serve_env
 
+    serving = args.cmd in (None, "serve")
+    port = int(os.environ.get("PORT", "8000")) if serving else 0
+    host, origin = bind_address(os.environ, port, host=getattr(args, "host", None))
+    loopback_origin = origin if host in LOOPBACK_HOSTS and port else None
     try:
-        env = serve_env(os.environ) if args.cmd in (None, "serve") else None
+        env = serve_env(os.environ) if serving else None
     except ConfigError as error:
-        parser.error(str(error))
+        parser.exit(2, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
-        parser.error(f"couldn't load the owner key on the volume ({type(error).__name__})")
+        parser.exit(2, f"swb: Check the owner key on the volume ({type(error).__name__}).\n")
     try:
-        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env)
+        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, loopback_origin=loopback_origin)
     except ConfigError as error:
-        parser.error(str(error))
+        parser.exit(2, f"swb: {error}\n")
     if args.cmd == "blocks":
         import yaml
 
@@ -114,8 +119,10 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         print(f"exported {n} memories to {args.dir}")
         return
     if args.cmd == "log":
-        for r in core.audit.recent(limit=50):
-            print(r)
+        import json
+
+        for entry in core.audit.recent(limit=50):
+            print(json.dumps(entry, ensure_ascii=False))
         return
 
     from .app import create_app
@@ -127,12 +134,14 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     logging.getLogger("uvicorn.access").addFilter(_NoQuery())
     app = create_app(core)
     options = {
-        "host": os.environ.get("SWITCHBOARD_HOST", "0.0.0.0"),
-        "port": int(os.environ.get("PORT", "8000")),
+        "host": host,
+        "port": port,
         "proxy_headers": True,
         "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,
     }
+    if announce:
+        print(f"MCP URL: {core.cfg.public_url or origin}/mcp", flush=True)
     if listener is None:
         uvicorn.run(app, **options)
     else:

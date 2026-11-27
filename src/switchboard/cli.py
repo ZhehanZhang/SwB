@@ -21,11 +21,10 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
-from .config import ConfigError
+from .config import ConfigError, LOOPBACK_HOSTS, bind_address
 from .deployment import OWNER_KEY, volume_owner_key
 
 CONFIG = Path("config/switchboard.yaml")
-LOOPBACK = ("localhost", "127.0.0.1", "::1")
 DEFAULT_PORT = "8870"
 
 
@@ -34,7 +33,7 @@ class CliError(ValueError):
 
 
 def _url(value: str, *, public: bool = False) -> str:
-    message = ("--public-url must be an HTTPS base URL or use http://localhost"
+    message = ("--public-url must be an HTTPS base URL or use a loopback address for HTTP"
                if public else "--url must be HTTPS or use a loopback address for HTTP")
     try:
         url = urlsplit(value)
@@ -44,8 +43,7 @@ def _url(value: str, *, public: bool = False) -> str:
         raise CliError(message) from None
     if not host or port == 0 or url.username is not None or re.search(r"[\s?#]", value):
         raise CliError(message)
-    local = ("localhost",) if public else LOOPBACK
-    if url.scheme != "https" and not (url.scheme == "http" and host in local):
+    if url.scheme != "https" and not (url.scheme == "http" and host in LOOPBACK_HOSTS):
         raise CliError(message)
     path = url.path.rstrip("/")
     if not public and not path:
@@ -136,7 +134,7 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
     if re.fullmatch(r"[A-Za-z0-9_-]+", link):
         path = f"/claim/{link}"
     else:
-        invalid = CliError("Provide a Switchboard claim link or code.")
+        invalid = CliError("Provide a SwB claim link or code.")
         try:
             parsed = urlsplit(link)
         except ValueError:
@@ -160,9 +158,9 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
                            follow_redirects=False, trust_env=False) as client:
             response = client.post(url, data={"token": token})
     except (httpx2.HTTPError, ValueError):
-        raise CliError("Couldn't submit the claim. Check that Switchboard is running and verify --url.") from None
+        raise CliError("Check that SwB is running and verify --url.") from None
     if not response.is_success:
-        raise CliError(f"Switchboard did not save the token (HTTP {response.status_code}). Check the claim link and owner key.")
+        raise CliError(f"Token claim failed (HTTP {response.status_code}). Check the claim link and owner key.")
     print("Routine saved." if routine else "Token saved. Run swb connect again to check the next step.")
 
 
@@ -185,9 +183,10 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
             await session.initialize()
             result = await session.call_tool(tool, arguments)
     except Exception:
-        raise CliError("Couldn't reach or authenticate to Switchboard. Check that it's running and verify --url and the owner key.") from None
+        raise CliError("Check that SwB is running. Verify --url and the owner key.") from None
     if result.is_error:
-        raise CliError(f"Switchboard refused the {tool} tool call.")
+        reason = "\n".join(item.text for item in result.content if item.type == "text" and item.text.strip())
+        raise CliError(reason.replace(key, "[redacted]") or f"SwB refused the {tool} tool call.")
     payload = result.structured_content
     if payload is None and len(result.content) == 1 and result.content[0].type == "text":
         try:
@@ -195,7 +194,7 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
         except ValueError:
             pass
     if not isinstance(payload, dict):
-        raise CliError("Switchboard returned an unexpected MCP result.")
+        raise CliError("SwB returned an unexpected MCP result.")
     return payload
 
 
@@ -203,7 +202,7 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
     if tool == "login_link":
         url = payload.get("url")
         if not isinstance(url, str) or not url:
-            raise CliError("Switchboard did not return a sign-in link.")
+            raise CliError("Ask SwB for a new sign-in link.")
         return url
     if tool == "switchboard_status":
         steps = payload.get("next_steps") or []
@@ -246,6 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--public-url", help="optional public base URL")
     init.add_argument("--force", action="store_true", help="replace both config and owner key")
     up = commands.add_parser("up", help="run the SwB server")
+    up.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
     up.add_argument("--tunnel", choices=("cloudflare", "tailscale"), help="publish the local server over HTTPS")
     connect = commands.add_parser("connect", help="get or advance connection steps")
     connect.add_argument("what", help="connection kind, for example mcp-client")
@@ -263,7 +263,7 @@ def build_parser() -> argparse.ArgumentParser:
     for command in (init, connect, status, claim, login_link):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
-        command.add_argument("--url", help=f"server base URL or MCP endpoint (default: http://127.0.0.1:{DEFAULT_PORT}/mcp)")
+        command.add_argument("--url", help="server base URL or MCP endpoint (defaults to the local bind address and PORT)")
     return parser
 
 
@@ -285,17 +285,18 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "up":
             from .cli_up import run
 
-            run(base, env, args.tunnel, instance=args.dir is not None)
+            run(base, env, args.tunnel, host=args.host, instance=args.dir is not None)
             return
         arguments = {}
         if args.command == "connect":
             arguments["what"] = args.what
             if choose := _choices(args.choose, kind=args.what):
                 arguments["choose"] = choose
-        port = os.environ.get("PORT", env.get("PORT", DEFAULT_PORT))
-        local_url = f"http://127.0.0.1:{port}/mcp"
+        env = {**env, **os.environ}
+        _, origin = bind_address(env, env.get("PORT", DEFAULT_PORT))
+        local_url = f"{origin}/mcp"
         url = _url(args.url or local_url)
-        key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
+        key = env.get(OWNER_KEY)
         if not key and url == local_url:
             key = volume_owner_key(os.environ)
         if not key:

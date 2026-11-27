@@ -1,16 +1,37 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import stat
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_deploy_templates_use_the_wildcard_docker_runtime():
+    docker = (ROOT / "Dockerfile").read_text()
+    runtime, paas = docker.split("FROM base AS runtime", 1)[1].split("FROM runtime AS paas", 1)
+    assert re.search(r"^ENV .*\bSWITCHBOARD_HOST=0\.0\.0\.0(?: |$)", runtime, flags=re.M)
+    assert 'CMD ["swb", "serve"]' in runtime and 'CMD ["swb", "serve"]' in paas
+
+    render = yaml.safe_load((ROOT / "render.yaml").read_text())["services"][0]
+    assert render["runtime"] == "docker"
+    assert tomllib.loads((ROOT / "fly.toml").read_text())["build"]["build-target"] == "paas"
+    assert json.loads((ROOT / "railway.json").read_text())["build"]["builder"] == "DOCKERFILE"
+    assert "--git-docker-target paas" in (ROOT / "deploy/koyeb.sh").read_text()
+
+    compose = yaml.safe_load((ROOT / "compose.yaml").read_text())["services"]["switchboard"]
+    assert compose["build"]["target"] == "runtime"
+    assert compose["environment"]["SWITCHBOARD_HOST"] == "0.0.0.0"
+    caddy = yaml.safe_load((ROOT / "deploy/compose/compose.yaml").read_text())["services"]["switchboard"]
+    assert caddy["build"]["target"] == "paas"
 
 
 def test_render_generates_a_256_bit_setup_code():
