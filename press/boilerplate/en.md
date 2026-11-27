@@ -2,7 +2,7 @@
 
 ## One sentence
 
-SwB 1.0 is a switchboard for the agents you already use.
+Start with any agent
 
 ## Short
 
