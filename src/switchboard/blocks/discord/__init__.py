@@ -216,11 +216,11 @@ class DiscordBlock(ChatBlock):
         return {"developer_portal_url": PORTAL, "invite_url": self._invite(), "application_id": self.application_id,
                 "bot_user_id": self.user_id, "bot_name": self.bot_name, "token_source": source,
                 "claim_pending": self.claim_pending(), "intents": [name for name, bit in INTENTS.items() if self.intents & bit],
-                "steps": ["1. Create a New Application in the Discord Developer Portal.",
-                          "2. Under Bot, reset or generate the bot token."
+                "steps": ["Create a New Application in the Discord Developer Portal.",
+                          "Under Bot, reset or generate the bot token."
                           + (" Turn on Message Content Intent under Bot." if self.message_content else ""),
-                          f"3. Save the token in the link from {self.name}_provision, or set {self.token_env}.",
-                          "4. Open the invite URL and add the bot to each configured Discord server."]}
+                          f"Save the token in the link from {self.name}_provision, or set {self.token_env}.",
+                          "Open the invite URL and add the bot to each configured Discord server."]}
 
     def _new_gateway(self) -> Gateway:
         return Gateway(self, connect=self.config.get("gateway_connect"))
