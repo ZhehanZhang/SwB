@@ -211,14 +211,17 @@ class DiscordBlock(ChatBlock):
         out.extend(f"Set blocks.{self.name}.spaces.{s.label}.owner_ids to the owner's Discord user ID." for s in self.spaces.values() if not self.owners(s))
         return out
 
+    def get_token_steps(self) -> list[str]:
+        return ["Create a New Application in the Discord Developer Portal.",
+                "Under Bot, reset or generate the bot token."
+                + (" Turn on Message Content Intent under Bot." if self.message_content else "")]
+
     def setup(self) -> dict[str, Any]:
         source = "env" if self.core.cfg.env.get(self.token_env) else "stored" if self.token() else None
         return {"developer_portal_url": PORTAL, "invite_url": self._invite(), "application_id": self.application_id,
                 "bot_user_id": self.user_id, "bot_name": self.bot_name, "token_source": source,
                 "claim_pending": self.claim_pending(), "intents": [name for name, bit in INTENTS.items() if self.intents & bit],
-                "steps": ["Create a New Application in the Discord Developer Portal.",
-                          "Under Bot, reset or generate the bot token."
-                          + (" Turn on Message Content Intent under Bot." if self.message_content else ""),
+                "steps": [*self.get_token_steps(),
                           f"Save the token in the link from {self.name}_provision, or set {self.token_env}.",
                           "Open the invite URL and add the bot to each configured Discord server."]}
 

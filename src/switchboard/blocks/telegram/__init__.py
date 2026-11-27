@@ -144,6 +144,9 @@ class TelegramBlock(ChatBlock):
                      for s in self.spaces.values() if not s.owner_ids)
         return steps
 
+    def get_token_steps(self) -> list[str]:
+        return ["Create a bot in @BotFather with /newbot."]
+
     def setup(self) -> dict[str, Any]:
         url = f"https://t.me/{self._bot['username']}" if self._bot else None
         return {"bot_father_url": "https://t.me/BotFather", "bot_url": url,
@@ -151,7 +154,7 @@ class TelegramBlock(ChatBlock):
                 "privacy_mode": self._privacy, "token_source": "env" if self.core.cfg.env.get(self.token_env) else
                 ("stored" if self.token() else None), "claim_pending": self.claim_pending(),
                 "seen_chats": list(reversed(self._seen.values())),
-                "steps": ["Create a bot in @BotFather with /newbot.",
+                "steps": [*self.get_token_steps(),
                           f"Open the token link from {self.name}_provision and paste the token.",
                           f"Add the bot to the group, send /swb@<bot username>, then copy the id from {self.name}_status into chats.",
                           f"DM the bot, find your id in {self.name}_status, and add it to owner_ids."]}

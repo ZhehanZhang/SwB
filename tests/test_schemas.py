@@ -1,6 +1,9 @@
+import re
 from importlib.metadata import version
 
-from conftest import STATIC_KEY, rpc
+import pytest
+
+from conftest import STATIC_KEY, base_config, rpc
 
 CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack", "project_list", "project_create",
         "project_update", "project_sync", "memory_move", "memory_promote", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status", "agent_send",
@@ -45,8 +48,20 @@ def test_annotations_mark_reads_and_writes(make):
     assert t["memory_delete"]["annotations"]["destructiveHint"] is True
 
 
-def test_initialize_advertises_instructions(make):
-    _, c = make()
+@pytest.mark.parametrize(("capy_enabled", "slack_enabled"), [(False, False), (True, False), (False, True), (True, True)])
+def test_initialize_advertises_swb_and_enabled_block_instructions(make, capy_enabled, slack_enabled):
+    blocks = {"mcp": {}, "capy": {"enabled": capy_enabled}, "slack": {"enabled": slack_enabled},
+              "dots": {"delivery": "mailbox"}, "claude-routine": {}}
+    _, c = make(config=base_config(version=2, blocks=blocks), env={"SWITCHBOARD_KEY_CAPY": STATIC_KEY})
     r = rpc(c, STATIC_KEY, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}).json()
-    assert "capy_wait" in r["result"]["instructions"] and r["result"]["serverInfo"]["name"] == "switchboard"
-    assert r["result"]["serverInfo"]["version"] == version("swb-one")
+    info = r["result"]["serverInfo"]
+    assert (info["name"], info["title"], info["version"]) == ("swb", "SwB", version("swb-one"))
+    instructions = r["result"]["instructions"]
+    assert instructions.startswith("SwB is a shared workspace")
+    assert re.search(r"\b(switchboard|he|him|his)\b", instructions, re.IGNORECASE) is None
+    assert ("capy" in instructions.lower()) == capy_enabled
+    assert ("Slack" in instructions) == slack_enabled
+    if capy_enabled:
+        assert "their Captain" in instructions and "capy_captain_digest" in instructions
+    if slack_enabled:
+        assert "Posts as the owner wait for their approval." in instructions and "slack_*" in instructions
