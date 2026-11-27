@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 import sqlite3
+import stat
 import threading
 import time
 from pathlib import Path
@@ -251,18 +253,43 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{int(time.time() * 1000):013d}{secrets.token_hex(4)}"
 
 
+def ensure_private_data_dir(path: Path) -> None:
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix" and stat.S_IMODE(path.stat().st_mode) != 0o700:
+        path.chmod(0o700)
+
+
+def open_database(path: str | Path) -> sqlite3.Connection:
+    if str(path) != ":memory:":
+        path = Path(path)
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if os.name == "posix":
+            try:
+                path.touch(mode=0o600, exist_ok=False)
+            except FileExistsError:
+                pass
+            for suffix in ("", "-wal", "-shm", "-journal"):
+                file = path.with_name(path.name + suffix)
+                try:
+                    if stat.S_IMODE(file.stat().st_mode) != 0o600:
+                        file.chmod(0o600)
+                except FileNotFoundError:
+                    if not suffix:
+                        raise
+    db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    return db
+
+
 class Store:
     """One SQLite file for projects, memories, OAuth state, and the audit log. Calls are short and serialized."""
 
     def __init__(self, path: str | Path, clock: Callable[[], float] = time.time):
         self.path = str(path)
-        if self.path != ":memory:":
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.clock = clock
         self._lock = threading.RLock()
-        self.db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
-        self.db.row_factory = sqlite3.Row
-        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db = open_database(path)
         self.db.executescript(SCHEMA)
         self.tx(_migrate)
 

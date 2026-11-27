@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from .config import ConfigError
+from .store import ensure_private_data_dir
 
 OWNER_KEY = "SWITCHBOARD_KEY_OWNER"
 PLATFORM = "SWITCHBOARD_DEPLOY_PLATFORM"
@@ -20,6 +21,7 @@ def volume_owner_key(env: Mapping[str, str], *, create: bool = False) -> str | N
         raise ConfigError("Set SWITCHBOARD_DATA to the persistent volume mount.")
     path = Path(data) / "owner-key"
     if create and not path.exists():
+        ensure_private_data_dir(path.parent)
         with NamedTemporaryFile(mode="w", encoding="ascii", dir=path.parent) as key:
             key.write(secrets.token_hex(32) + "\n")
             key.flush()

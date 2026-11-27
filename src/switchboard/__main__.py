@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from socket import socket
 
@@ -60,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
-         data_dir: Path | None = None, announce: bool = False) -> None:
+         data_dir: Path | None = None, announce: bool = False, on_start: Callable[[], None] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -76,7 +77,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.error("no config file found")
         print(migrate_text(path.read_text()), end="")
         return
-    from .config import ConfigError, LOOPBACK_HOSTS, bind_address
+    from .config import ConfigError, LOOPBACK_HOSTS, bind_address, instance_paths
     from .deployment import serve_env
 
     serving = args.cmd in (None, "serve")
@@ -89,6 +90,18 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         parser.exit(2, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(2, f"swb: Check the owner key on the volume ({type(error).__name__}).\n")
+    if not serving:
+        from .cli import CliError, _read_env
+
+        base = Path.cwd()
+        try:
+            env = {**_read_env(base / ".env"), **os.environ}
+        except (CliError, OSError, UnicodeError):
+            parser.exit(2, "swb: Check the instance .env file.\n")
+        config, instance_data, _ = instance_paths(base, env, explicit=False)
+        if config is not None:
+            env["SWITCHBOARD_CONFIG"] = str(config)
+            data_dir = instance_data
     try:
         core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, loopback_origin=loopback_origin)
     except ConfigError as error:
@@ -140,6 +153,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,
     }
+    if on_start is not None:
+        on_start()
     if announce:
         print(f"MCP URL: {core.cfg.public_url or origin}/mcp", flush=True)
     if listener is None:

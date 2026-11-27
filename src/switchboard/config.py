@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 
 KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
 MIN_KEY_LEN = 24
-CONFIG_PATHS = (Path("config/switchboard.yaml"), Path("/config/switchboard.yaml"))
+INSTANCE_CONFIG = Path("config/switchboard.yaml")
+INSTANCE_DB = "switchboard.db"
+CONFIG_PATHS = (INSTANCE_CONFIG, Path("/config/switchboard.yaml"))
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = "8870"
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
@@ -48,6 +50,21 @@ def client_endpoint(env: Mapping[str, str]) -> str:
         host = "localhost"
     port = env.get("SWITCHBOARD_PORT") or env.get("PORT") or DEFAULT_PORT
     return f"{_http_origin(host, port)}/mcp"
+
+
+def instance_paths(base: Path, env: Mapping[str, str], *, explicit: bool) -> tuple[Path | None, Path, Path | None]:
+    config = base / INSTANCE_CONFIG
+    if not (explicit or config.exists()):
+        config = None
+    if override := env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA"):
+        return config, Path(override).expanduser(), None
+    home_data = Path.home() / ".local/share/switchboard"
+    if config is None:
+        return None, home_data, None
+    data = base / "data"
+    if data != home_data and (home_data / INSTANCE_DB).is_file() and not (data / INSTANCE_DB).exists():
+        return config, home_data, data
+    return config, data, None
 
 
 def _origin(url: str) -> str:
