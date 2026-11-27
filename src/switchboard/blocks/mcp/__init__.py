@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import CallToolResult, InputRequiredResult, TextContent, ToolAnnotations
+from mcp.types import CallToolResult, InputRequiredResult, ToolAnnotations
 from pydantic import BaseModel, Field, ValidationError, create_model
 from starlette.routing import BaseRoute, Mount
 
@@ -29,6 +29,8 @@ from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
+from .policy import (AUTH_REQUIRED, CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED, POLICY_REQUIRED, ROUTE_REQUIRED,
+                     SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED, Role, mutation_roles)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -93,8 +95,29 @@ class LimitedServer(MCPServer):
     tools/call refuses any other."""
 
     modes: ChannelModes
+    roles: dict[str, Role]
+
+    def _audit_refusal(self, p: Principal | None, tool: str | None, reason: str) -> None:
+        self.modes.core.audit.record(origin=p.origin if p else "mcp", source=p.source if p else "-",
+                                     client=p.client_id if p else "-", destination="mcp", action="tool_refused",
+                                     outcome="refused", target=tool, detail=reason)
 
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None) -> CallToolResult | InputRequiredResult:
+        request_context = getattr(context, "request_context", None)
+        p = principal_of(getattr(request_context, "request", None))
+        tool = next((t for t in await self.list_tools() if t.name == name), None)
+        role = self.roles.get(name)
+        reason = await self._refusal(p, name, role, arguments,
+                                     writes=tool is not None and not (tool.annotations and tool.annotations.read_only_hint))
+        if reason:
+            self._audit_refusal(p, tool.name if tool else None, reason)
+            if reason == OWNER_REQUIRED and p is not None and p.kind == "connect":
+                raise ToolError(f"This key belongs to a connected agent. {reason}")
+            if reason == TOOL_REQUIRED and p is not None:
+                raise ToolError(f"the {p.source} key may call only {', '.join(p.tools or ()) or 'no tools'}")
+            raise ToolError(reason)
+        if role and p is not None and name not in ("wait", "inbox", "capy_wait", "capy_inbox", "slack_wait"):
+            self._check_mode(p, name, arguments)
         try:
             return await super().call_tool(name, arguments, context)
         except ToolError as exc:
@@ -113,6 +136,50 @@ class LimitedServer(MCPServer):
                 parts.append(f"Check {', '.join(dict.fromkeys(invalid))}.")
             raise ToolError(" ".join(parts) or "Check the tool arguments.") from error
 
+    async def _refusal(self, p: Principal | None, name: str, role: Role | None, arguments: dict[str, Any], *, writes: bool) -> str | None:
+        if p is None:
+            return AUTH_REQUIRED
+        if p.tools is not None and name not in p.tools:
+            return TOOL_REQUIRED
+        if writes and role is None:
+            return POLICY_REQUIRED
+        owner = p.is_unrestricted_owner
+        if role == "owner" and not owner:
+            return OWNER_REQUIRED
+        if role == "route" and not owner:
+            agent = arguments.get("agent")
+            if not isinstance(agent, str) or agent.strip().lower() != p.source:
+                return ROUTE_REQUIRED
+            project = arguments.get("project")
+            scope = "project:" + project.strip().lower().removeprefix("project:") if isinstance(project, str) and project.strip() else None
+            if not p.allows(scope or "general"):
+                return SCOPE_REQUIRED
+            if name == "routes_set" and p.targets is not None and isinstance(target := arguments.get("target"), str):
+                from ...core import CoreError
+
+                try:
+                    await self.modes.core.check_target(p, target, scope.removeprefix("project:") if scope else None)
+                except CoreError:
+                    return TARGET_REQUIRED
+        if role == "self" and name in ("reply", "cancel", "capy_reply", "capy_cancel"):
+            ref = arguments.get("conversation" if name in ("reply", "cancel") else "thread_id" if name == "capy_reply" else "handle")
+            if isinstance(ref, str):
+                ref = ref.strip()
+                core = self.modes.core
+                if ref.startswith("h_"):
+                    handle = core.inbox.handle(ref)
+                    if handle and handle["destination"] == "mailbox":
+                        if name == "reply":
+                            return None if p.source in (handle["owner"], handle["ref"]) else CONVERSATION_REQUIRED
+                        if name == "cancel":
+                            return None if p.source == handle["ref"] else CONVERSATION_REQUIRED
+                    own = bool(handle and handle["owner"] == p.source)
+                else:
+                    own = bool(core.store.one("SELECT 1 FROM handles WHERE owner = ? AND ref = ?", (p.source, ref)))
+                if not owner and not own:
+                    return CONVERSATION_REQUIRED
+        return None
+
     async def _handle_list_tools(self, ctx: Any, params: Any) -> Any:
         out = await super()._handle_list_tools(ctx, params)
         p = principal_of(getattr(ctx, "request", None))
@@ -122,34 +189,26 @@ class LimitedServer(MCPServer):
             out.tools = [t for t in out.tools if t.name in p.tools]
         return out
 
-    async def _handle_call_tool(self, ctx: Any, params: Any) -> Any:
-        p = principal_of(getattr(ctx, "request", None))
-        if p is not None and p.tools is not None and params.name not in p.tools:
-            return CallToolResult(content=[TextContent(type="text", text=f"the {p.source} key may call only {', '.join(p.tools) or 'no tools'}")],
-                                  is_error=True)
-        if p is not None:
-            arguments = params.arguments or {}
-            ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
-                        if isinstance(arguments.get(k), str)), None)
-            tool = next((t for t in await self.list_tools() if t.name == params.name), None)
-            if tool is not None and not (tool.annotations and tool.annotations.read_only_hint):
-                action = params.name
-                if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
-                    action = "notify_owner"
-                elif action == "send" and arguments.get("forward"):
-                    action = "forward"
-                repo = None
-                for block in self.modes.core.blocks.values():
-                    if block.manifest.id == "github" and action.startswith(f"{block.name}_"):
-                        candidate = action.removeprefix(f"{block.name}_")
-                        if candidate in ("label", "comment", "open_issue", "link_duplicate", "reply", "notify_owner"):
-                            action = candidate
-                            repo = arguments.get("repo") if isinstance(arguments.get("repo"), str) else None
-                try:
-                    self.modes.check(p, ref, action, repo)
-                except PermissionError as e:
-                    return CallToolResult(content=[TextContent(type="text", text=str(e))], is_error=True)
-        return await super()._handle_call_tool(ctx, params)
+    def _check_mode(self, p: Principal, name: str, arguments: dict[str, Any]) -> None:
+        ref = next((arguments[k] for k in ("conversation", "handle", "forward", "in_reply_to", "ref")
+                    if isinstance(arguments.get(k), str)), None)
+        action = name
+        if (action == "reply" and arguments.get("to_owner") is True) or (action == "agent_send" and ref):
+            action = "notify_owner"
+        elif action == "send" and arguments.get("forward"):
+            action = "forward"
+        repo = None
+        for block in self.modes.core.blocks.values():
+            if block.manifest.id == "github" and action.startswith(f"{block.name}_"):
+                candidate = action.removeprefix(f"{block.name}_")
+                if candidate in ("label", "comment", "open_issue", "link_duplicate", "reply", "notify_owner"):
+                    action = candidate
+                    repo = arguments.get("repo") if isinstance(arguments.get("repo"), str) else None
+        try:
+            self.modes.check(p, ref, action, repo)
+        except PermissionError as e:
+            self._audit_refusal(p, name, MODE_REQUIRED)
+            raise ToolError(str(e)) from e
 
 
 class WaitCaps:
@@ -220,6 +279,7 @@ class MCPBlock(Block):
         extensions = [self.events, TasksExtension(self)] if senders else [self.events]
         mcp = LimitedServer(name="swb", title="SwB", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
+        mcp.roles = mutation_roles(core)
         mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
@@ -241,10 +301,6 @@ class MCPBlock(Block):
 
         def need(p: Principal, scope: str) -> None:
             sync(core.check_memory_scope, p, scope)
-
-        def unrestricted(p: Principal, what: str) -> None:
-            if p.scopes is not None and "*" not in p.scopes:
-                raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes)}, so it can't {what}")
 
         def pscope(slug: str) -> str:
             return "project:" + slug.strip().lower().removeprefix("project:")
@@ -383,7 +439,6 @@ class MCPBlock(Block):
                                  description: str = "", links: Links | None = None,
                                  private: Annotated[bool, Field(description="Keep its memory out of other projects' reads, even explicit ones")] = False) -> dict[str, Any]:
             p = who(ctx)
-            unrestricted(p, "create projects")
             out = sync(core.projects.create, slug=slug, name=name, description=description, links=links.model_dump(exclude_none=True) if links else None,
                        private=private).as_dict()
             out["auto"] = await run(core.project_sync(p, out["slug"]))
@@ -394,9 +449,6 @@ class MCPBlock(Block):
                                  new_slug: str | None = None, archived: bool | None = None, private: bool | None = None,
                                  force: Annotated[bool, Field(description="Let the automatic link and route replace existing ones")] = False) -> dict[str, Any]:
             p = who(ctx)
-            need(p, pscope(slug))
-            if new_slug:
-                need(p, pscope(new_slug))
             out = sync(core.projects.update, slug, name=name, description=description, links=links.model_dump(exclude_unset=True) if links else None,
                        new_slug=new_slug, archived=archived, private=private).as_dict()
             if new_slug:
@@ -411,10 +463,6 @@ class MCPBlock(Block):
         @mcp.tool(title="Sync projects with blocks", description="Link projects to their counterparts in each block (an exact repo match beats a name match) and route each where that block suggests (for Capy: its project's only Captain). One project or all. Never replaces an existing link or route unless force. Reports what changed and the candidates when a match is ambiguous.", annotations=WRITE_IDEMPOTENT)
         async def project_sync(ctx: Context, slug: str | None = None, force: bool = False) -> dict[str, Any]:
             p = who(ctx)
-            if slug:
-                need(p, pscope(slug))
-            else:
-                unrestricted(p, "sync every project")
             return await run(core.project_sync(p, slug, force=force))
 
         # Routes ---------------------------------------------------------------------------
@@ -440,7 +488,6 @@ class MCPBlock(Block):
         async def routes_set(ctx: Context, target: str, project: str | None = None, agent: str | None = None, defaults: RouteDefaults | None = None,
                              allow_override: bool = False, note: str = "") -> dict[str, Any]:
             p = who(ctx)
-            unrestricted(p, "change routes")
             name, parsed = route_target(target)
             return await run(core.set_route(p, destination=name, agent=agent, project=project, target=parsed,
                                             defaults=defaults.model_dump(exclude_none=True) if defaults else {}, allow_override=allow_override, note=note))
@@ -468,7 +515,6 @@ class MCPBlock(Block):
         @mcp.tool(title="Remove a route", description="Remove the route for this exact agent and project. Omit both for the global route. Pass block to select a destination when several match. Audited.", annotations=DELETE)
         async def routes_remove(ctx: Context, project: str | None = None, agent: str | None = None, block: str | None = None) -> dict[str, Any]:
             p = who(ctx)
-            unrestricted(p, "change routes")
             return sync(core.remove_route, p, destination=route_destinations(block), agent=agent, project=project)
 
         @mcp.tool(title="Explain a route", description="Show the route that send would use for an agent and project. The agent defaults to you. Pass block to check one destination.", annotations=READ)
@@ -486,7 +532,7 @@ class MCPBlock(Block):
                     "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health(p),
                     "agents": core.known_agents(), "connected": sorted(set(core.connections.agents()))}
 
-        kit = Kit(self, who, run, need, pscope, unrestricted)
+        kit = Kit(self, who, run, need, pscope)
         kit.register_generic(mcp)
         from .setup import register
 
