@@ -113,6 +113,8 @@ def normalize_pem(value: str, *, check: ClaimCheck | None = None) -> str:
 
 
 def normalize(kind: str, value: str, *, check: ClaimCheck | None = None) -> str:
+    if kind == "webhook_secret" and any(c.isspace() for c in value):
+        raise ClaimInputError("Enter a continuous webhook secret")
     value = value.strip()
     if kind in FILE_KINDS:
         if len(value.encode()) > MAX_FILE_BYTES or "\x00" in value:
