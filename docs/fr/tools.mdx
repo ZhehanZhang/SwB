@@ -202,3 +202,13 @@ Pour les actions de conversation GitHub, passez l'ID de la conversation SwB dans
 | `github_link_duplicate` | Lie un ticket à son original dans le même dépôt. SwB ajoute `duplicate` et ferme le doublon avec l'état `not_planned` |
 | `github_notify_owner` | Dépose une note dans la boîte de réception du propriétaire avec un lien vers le ticket ou la pull request à l'origine de la conversation |
 | `github_reply` | Répond dans le fil de discussion GitHub à l'origine de la conversation SwB |
+
+### [Webhooks](/fr/docs/blocks/webhooks)
+
+| Outil | Usage |
+| - | - |
+| `webhook_create` | Crée un webhook entrant ou sortant nommé |
+| `webhook_list` | Liste les webhooks avec leurs adresses, leurs compteurs et l'état de leur secret |
+| `webhook_rotate` | Obtient un lien de saisie pour un nouveau secret et définit une période de grâce facultative |
+| `webhook_revoke` | Arrête un webhook et supprime ses secrets enregistrés |
+| `webhook_test` | Envoie un événement entrant ou un message sortant d'exemple |

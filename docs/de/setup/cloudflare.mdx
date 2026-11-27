@@ -34,6 +34,7 @@ Erstellen Sie auf demselben Hostnamen eine weitere Access-Anwendung für die Pfa
 | `/inbox/poll`, `/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | Bypass für GitHub |
+| `/hooks/*` | Bypass für Webhooks |
 | Alle anderen Pfade, auch `/pairing/companion`, `/authorize` und `/inbox` | Inhaber |
 
 SwB prüft Kopplungscodes unter `/companion/pair`. Bei anderen Companion-Anfragen prüft es den Geräteschlüssel. Wenn Sie Access verwenden, bitten Sie einen Agenten mit Inhaberzugriff, `companion_code` aufzurufen.

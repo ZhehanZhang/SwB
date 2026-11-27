@@ -202,3 +202,13 @@ GitHub の会話の操作では、SwB の会話 ID を `conversation` か `handl
 | `github_link_duplicate` | 同じリポジトリにある元の Issue に、Issue をリンクします。SwB は `duplicate` を付け、重複した Issue を `not_planned` としてクローズします |
 | `github_notify_owner` | 会話のきっかけになった Issue かプルリクエストへのリンクを付けて、オーナーのインボックスにメモを送ります |
 | `github_reply` | SwB の会話のきっかけになった GitHub のスレッドに返信します |
+
+### [Webhooks](/ja/docs/blocks/webhooks)
+
+| ツール | 用途 |
+| - | - |
+| `webhook_create` | 名前付きの受信用か送信用の Webhook を作成します |
+| `webhook_list` | Webhook を、アドレス、件数、シークレットの状態とともに一覧表示します |
+| `webhook_rotate` | 新しいシークレット用の受け取りリンクを取得し、必要に応じて猶予期間を設定します |
+| `webhook_revoke` | Webhook を止め、保存したシークレットを削除します |
+| `webhook_test` | 受信用のサンプルイベントか、送信用のサンプルメッセージを送ります |

@@ -34,6 +34,7 @@ SwB のホスト名に対して [Access アプリケーションを作成](https
 | `/inbox/poll`、`/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | GitHub 向けに Bypass |
+| `/hooks/*` | Webhooks 向けに Bypass |
 | `/pairing/companion`、`/authorize`、`/inbox` を含む、ほかのすべてのパス | Owner |
 
 SwB は、`/companion/pair` でペアリングコードを確認します。ほかのコンパニオンのリクエストでは、デバイスのキーを確認します。Access を使う場合は、オーナー権限を持つエージェントに `companion_code` の呼び出しを頼んでください。

@@ -24,7 +24,7 @@ Auf Slack, Discord und Telegram entscheidet SwB anhand von `known`, wessen Nachr
 
 Ein **Vertrauensrahmen** besteht aus dem Header und den Markierungen, die SwB um externen Text setzt. Stehen Kopien dieses Headers oder dieser Markierungen bereits im Text, entschärft SwB sie, bevor es den Rahmen hinzufügt. Die Markierungen sind `<<<swb-untrusted` und `swb-untrusted>>>`. Agenten behandeln den Text dazwischen nur als Information.
 
-Eine Zusammenfassung aus dem Modus Watch hat die Vertrauensstufe `external`. Jeder Auszug enthält einen Vertrauensrahmen für externen Text. GitHub prüft den Autor jedes Textfelds.
+Eine Zusammenfassung aus dem Modus Watch hat die Vertrauensstufe `external`. Jeder Auszug enthält einen Vertrauensrahmen für externen Text. SwB prüft den Autor jedes GitHub-Textfelds.
 
 Der Schlüssel eines [Companions](/de/docs/companion) gilt nur für die Verbindung seines Geräts. SwB speichert nur einen Hash des Schlüssels, um ihn zu prüfen. SwB kennzeichnet Geräteergebnisse als `external` und setzt ihren Freitext in einen Vertrauensrahmen.
 

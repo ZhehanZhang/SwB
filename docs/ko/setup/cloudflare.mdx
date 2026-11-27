@@ -34,6 +34,7 @@ SwB 호스트 이름용 [Access 애플리케이션을 만드세요](https://deve
 | `/inbox/poll`, `/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | GitHub용 Bypass |
+| `/hooks/*` | Webhooks용 Bypass |
 | `/pairing/companion`, `/authorize`, `/inbox`를 포함한 나머지 모든 경로 | Owner |
 
 SwB은 `/companion/pair`에서 페어링 코드를 확인합니다. 그 밖의 컴패니언 요청에서는 기기 키를 확인합니다. Access를 쓴다면 소유자 권한이 있는 에이전트에게 `companion_code` 호출을 요청하세요.

@@ -202,3 +202,13 @@ GitHub 대화 동작에서는 SwB 대화 ID를 `conversation`이나 `handle`에 
 | `github_link_duplicate` | 이슈를 같은 저장소의 원래 이슈에 연결합니다. SwB은 `duplicate` 라벨을 붙이고 중복 이슈를 `not_planned`로 닫습니다 |
 | `github_notify_owner` | 대화를 시작한 이슈나 풀 리퀘스트 링크를 담아 소유자 받은편지함에 알림을 보냅니다 |
 | `github_reply` | SwB 대화를 시작한 GitHub 스레드에 답장합니다 |
+
+### [웹훅](/ko/docs/blocks/webhooks)
+
+| 도구 | 용도 |
+| - | - |
+| `webhook_create` | 이름을 붙인 수신 웹훅이나 발신 웹훅을 만듭니다 |
+| `webhook_list` | 웹훅을 주소, 횟수, 시크릿 상태와 함께 나열합니다 |
+| `webhook_rotate` | 새 시크릿용 등록 링크를 받고 원하면 유예 기간을 설정합니다 |
+| `webhook_revoke` | 웹훅을 멈추고 저장된 시크릿을 삭제합니다 |
+| `webhook_test` | 샘플 수신 이벤트나 발신 메시지를 보냅니다 |

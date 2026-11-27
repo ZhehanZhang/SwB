@@ -34,6 +34,7 @@ Créez une deuxième application Access sur le même nom d'hôte pour les chemin
 | `/inbox/poll`, `/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | Bypass pour GitHub |
+| `/hooks/*` | Bypass pour Webhooks |
 | Tous les autres chemins, dont `/pairing/companion`, `/authorize` et `/inbox` | Propriétaire |
 
 SwB vérifie les codes d'appairage sur `/companion/pair`. Il vérifie la clé de l'appareil sur les autres requêtes du compagnon. Si vous utilisez Access, demandez à un agent doté de l'accès propriétaire d'appeler `companion_code`.

@@ -34,6 +34,7 @@ Crea otra aplicación de Access en el mismo nombre de host para las rutas marcad
 | `/inbox/poll`, `/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | Bypass para GitHub |
+| `/hooks/*` | Bypass para Webhooks |
 | Todas las demás rutas, incluidas `/pairing/companion`, `/authorize` e `/inbox` | Propietario |
 
 SwB comprueba los códigos de emparejamiento en `/companion/pair`. Comprueba la clave del dispositivo en las demás peticiones del companion. Si usas Access, pide a un agente con acceso de propietario que llame a `companion_code`.

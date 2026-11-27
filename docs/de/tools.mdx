@@ -202,3 +202,13 @@ Für Aktionen in GitHub-Unterhaltungen übergeben Sie die Unterhaltungs-ID von S
 | `github_link_duplicate` | Verknüpft ein Issue mit seinem Original im selben Repository. SwB setzt `duplicate` und schließt das Duplikat als `not_planned` |
 | `github_notify_owner` | Sendet dem Inhaber eine Posteingangsnotiz mit einem Link zum Issue oder Pull Request, das die Unterhaltung gestartet hat |
 | `github_reply` | Antwortet im GitHub-Thread, der die SwB-Unterhaltung gestartet hat |
+
+### [Webhooks](/de/docs/blocks/webhooks)
+
+| Tool | Zweck |
+| - | - |
+| `webhook_create` | Erstellt einen benannten eingehenden oder ausgehenden Webhook |
+| `webhook_list` | Listet Webhooks mit ihren Adressen, Zählern und dem Status des Secrets auf |
+| `webhook_rotate` | Holt einen Claim-Link für ein neues Secret und legt optional eine Übergangsfrist fest |
+| `webhook_revoke` | Stoppt einen Webhook und löscht seine gespeicherten Secrets |
+| `webhook_test` | Sendet ein Beispielereignis an SwB oder eine Testnachricht an den Empfänger |
