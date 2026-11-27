@@ -21,7 +21,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
-from .config import ConfigError, LOOPBACK_HOSTS
+from .config import ConfigError, LOOPBACK_HOSTS, bind_address
 from .deployment import OWNER_KEY, volume_owner_key
 
 CONFIG = Path("config/switchboard.yaml")
@@ -263,7 +263,7 @@ def build_parser() -> argparse.ArgumentParser:
     for command in (init, connect, status, claim, login_link):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
-        command.add_argument("--url", help=f"server base URL or MCP endpoint (default: http://127.0.0.1:{DEFAULT_PORT}/mcp)")
+        command.add_argument("--url", help="server base URL or MCP endpoint (defaults to the local bind address and PORT)")
     return parser
 
 
@@ -292,10 +292,11 @@ def main(argv: list[str] | None = None) -> None:
             arguments["what"] = args.what
             if choose := _choices(args.choose, kind=args.what):
                 arguments["choose"] = choose
-        port = os.environ.get("PORT", env.get("PORT", DEFAULT_PORT))
-        local_url = f"http://127.0.0.1:{port}/mcp"
+        env = {**env, **os.environ}
+        _, origin = bind_address(env, env.get("PORT", DEFAULT_PORT))
+        local_url = f"{origin}/mcp"
         url = _url(args.url or local_url)
-        key = os.environ.get(OWNER_KEY, env.get(OWNER_KEY))
+        key = env.get(OWNER_KEY)
         if not key and url == local_url:
             key = volume_owner_key(os.environ)
         if not key:

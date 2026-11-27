@@ -14,7 +14,7 @@ from pathlib import Path
 from threading import Thread
 
 from .cli import CONFIG, DEFAULT_PORT, CliError
-from .config import DEFAULT_HOST
+from .config import bind_address
 
 _TUNNELS = {
     "cloudflare": ("cloudflared", ("tunnel", "--no-autoupdate", "--url"), "trycloudflare.com"),
@@ -105,10 +105,7 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
     raw_port = env.get("PORT", DEFAULT_PORT)
     if not raw_port.isascii() or not raw_port.isdecimal() or len(raw_port) > 5 or not 1 <= (port := int(raw_port)) <= 65535:
         raise CliError("PORT must be a number from 1 to 65535.")
-    host = host or env.get("SWITCHBOARD_HOST") or DEFAULT_HOST
-    origin_host = {"0.0.0.0": DEFAULT_HOST, "::": "::1"}.get(host, host)
-    netloc = f"[{origin_host}]" if ":" in origin_host else origin_host
-    origin = f"http://{netloc}:{port}"
+    host, origin = bind_address(env, port, host=host)
     values = {
         **{k: value for k, value in dotenv.items() if k not in os.environ},
         "SWITCHBOARD_HOST": host,
@@ -135,7 +132,7 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
                     raise CliError(f"Could not bind {origin}. Choose another PORT.") from None
                 tunnel_url = stack.enter_context(_tunnel(tunnel, origin))
             os.environ.update(values)
-            serve(["serve"], listener=listener, tunnel_url=tunnel_url, data_dir=data, announce_url=tunnel_url or origin)
+            serve(["serve"], listener=listener, tunnel_url=tunnel_url, data_dir=data, announce=True)
     except KeyboardInterrupt:
         pass
     finally:

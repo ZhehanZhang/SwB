@@ -29,9 +29,19 @@ def test_loopback_public_url_and_aliases(tmp_path):
         "public_url: http://127.0.0.1:8870\n"
         "public_url_aliases: ['http://[::1]:8870', 'http://localhost:8870']\n"
     )
-    cfg = load_config(config, env={}, default_public_url="http://localhost:8000")
+    cfg = load_config(config, env={}, loopback_origin="http://127.0.0.1:8000")
     assert cfg.public_urls == ("http://127.0.0.1:8870", "http://[::1]:8870", "http://localhost:8870")
     assert cfg.base_for_host("[::1]:8870") == "http://[::1]:8870"
+
+
+@pytest.mark.parametrize("aliases", [(), ("http://127.0.0.1:8870",)])
+def test_default_local_public_url_adds_bound_alias_once(tmp_path, aliases):
+    config = tmp_path / "switchboard.yaml"
+    config.write_text(yaml.safe_dump({"public_url_aliases": list(aliases)}))
+    cfg = load_config(config, env={}, loopback_origin="http://127.0.0.1:8870")
+    assert cfg.public_urls == ("http://localhost:8870", "http://127.0.0.1:8870")
+    cfg = load_config(config, env={}, tunnel_url="https://swb.example.test", loopback_origin="http://127.0.0.1:8870")
+    assert cfg.public_urls == ("https://swb.example.test", *aliases)
 
 
 def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch):

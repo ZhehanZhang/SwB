@@ -204,6 +204,31 @@ def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch
     assert "--url must be HTTPS" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(("dotenv_host", "env_host", "origin"), [
+    ("::1", None, "http://[::1]:1234"),
+    ("0.0.0.0", None, "http://127.0.0.1:1234"),
+    ("0.0.0.0", "::1", "http://[::1]:1234"),
+    ("::", None, "http://[::1]:1234"),
+])
+def test_client_defaults_to_the_instance_bind_address(tmp_path, monkeypatch, dotenv_host, env_host, origin):
+    key = "fixture-owner-key-not-a-secret"
+    (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={key}\nPORT=1234\nSWITCHBOARD_HOST={dotenv_host}\n")
+    for name in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_HOST"):
+        monkeypatch.delenv(name, raising=False)
+    if env_host:
+        monkeypatch.setenv("SWITCHBOARD_HOST", env_host)
+    call = AsyncMock(return_value={"url": "http://localhost:1234/login#t=fixture"})
+    claim = Mock()
+    monkeypatch.setattr(cli, "_call", call)
+    monkeypatch.setattr(cli, "_claim", claim)
+
+    cli.main(["login-link", "--dir", str(tmp_path)])
+    cli.main(["claim", "fixture-code", "--dir", str(tmp_path)])
+
+    call.assert_awaited_once_with(f"{origin}/mcp", key, "login_link", {})
+    claim.assert_called_once_with(f"{origin}/claim/fixture-code", key, routine=False)
+
+
 def test_status_uses_swb_branding_if_connection_fails(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv(cli.OWNER_KEY, "fixture-owner-key-not-a-secret")
     monkeypatch.setattr(cli, "streamable_http_client", Mock(side_effect=OSError))
