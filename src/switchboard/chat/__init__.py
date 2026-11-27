@@ -23,7 +23,6 @@ import contextlib
 import hashlib
 import logging
 import re
-import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
