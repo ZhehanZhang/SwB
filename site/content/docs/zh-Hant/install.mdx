@@ -21,7 +21,7 @@ SwB 可在 Linux、macOS 與 Windows 上執行。uvx 與 pipx 安裝方式需要
     uvx swb-one up
     ```
 
-    uvx 會下載 SwB 並執行。本文件中的每個 `swb` 指令，請在前面加上 `uvx swb-one`。
+    uvx 會下載並執行 SwB。請將範例指令開頭的 `swb` 換成 `uvx swb-one`。
   </Tab>
   <Tab value="pipx">
     ```bash
@@ -38,7 +38,7 @@ SwB 可在 Linux、macOS 與 Windows 上執行。uvx 與 pipx 安裝方式需要
       ghcr.io/zhehanzhang/swb:latest
     ```
 
-    映像檔把資料存放在 `/data`。本文件中的每個 `swb` 指令，請在前面加上 `docker exec swb swb`。
+    映像檔將資料存放在 `/data`。請將範例指令開頭的 `swb` 換成 `docker exec swb swb`。
   </Tab>
 </Tabs>
 
@@ -62,4 +62,4 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 ## 版本
 
-每個版本都發佈在 PyPI（套件 `swb-one`）與 GitHub Container Registry（映像檔 `ghcr.io/zhehanzhang/swb`）。想固定使用某個版本，請使用版本標籤，例如 `1.0.0`。標籤 `latest` 會跟隨最新版本。
+版本發布後，可從 PyPI 取得 `swb-one` 套件，或從 GitHub Container Registry 取得 `ghcr.io/zhehanzhang/swb` 映像檔。若要固定使用某個版本，請指定版本號碼，例如 `1.0.0`。映像檔的 `latest` 標籤指向最新的穩定版本。

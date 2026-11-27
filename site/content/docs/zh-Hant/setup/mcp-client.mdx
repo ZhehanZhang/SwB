@@ -28,7 +28,7 @@ Claude、ChatGPT、Grok 與程式開發代理各有專屬頁面，使用 OAuth �
 <Step>
 ### 取得配對碼
 
-代理會透過 `connect` 給你配對碼。你也可以在 SwB 首頁按一下 **Mint code**。
+請以擁有者身分登入的代理取得配對碼。代理可以用應用程式名稱呼叫 `connect_code`。
 </Step>
 <Step>
 ### 換取金鑰
@@ -68,7 +68,7 @@ SwB 會為這個名稱產生配對碼，並傳回 `POST /connect` 這一步。�
 
 | 項目 | 顯示位置 | 格式 | 去處 |
 | - | - | - | - |
-| 配對碼 | `connect` 的結果或 **Pairing code** 頁面 | `XXXXX-XXXXX`，10 分鐘內有效，只能使用一次 | `POST /connect` 請求 |
+| 配對碼 | `connect` 或 `connect_code` 的結果 | `XXXXX-XXXXX`，10 分鐘內有效，只能使用一次 | `POST /connect` 請求 |
 | 代理金鑰 | `POST /connect` 的回應，只顯示一次 | 以 `swb_` 開頭 | 應用程式私人設定中的 `Authorization` 請求標頭 |
 
 請把金鑰留在聊天與共用檔案之外。SwB 只保存金鑰的雜湊值。

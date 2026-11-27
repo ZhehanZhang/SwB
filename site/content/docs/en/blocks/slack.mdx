@@ -5,9 +5,9 @@ description: Route Slack messages to agents and post the answers in the thread.
 
 ## Make the Slack app
 
-Ask any agent to connect Slack, or run `swb connect slack`. SwB gives you the app manifest. The repository has two manifests in `manifests/`. One manifest is for a workspace with a bot. The other is for a workspace where SwB acts as your own account only.
+Get the app manifest from `manifests/` in the SwB repository. Use `workspace-a-agent.yaml` for a workspace with a bot. Use `workspace-b-user-only.yaml` for a workspace where SwB acts as your account only.
 
-Install the app in your workspace. SwB then gives you one claim link for the workspace tokens. The link has a field for each token.
+Install the app in your workspace. Ask an agent to connect Slack, or run `swb connect slack`. If a token is missing, SwB gives you a claim link for that workspace. The fields match the workspace settings.
 
 | Token | Where to find it |
 | - | - |
@@ -39,7 +39,7 @@ The owner approves posts from the Slack DM or from the SwB page. MCP tools can o
 
 ## Personas
 
-A post from the bot can carry a persona, which is a name and a picture for one message. Each Captain gets a persona with its own Capy picture. Upload more pictures on the SwB page, or drop files in `<data>/avatars`.
+A persona is the name and picture on a bot post. SwB gives each Captain a persona. Ask your agent to call `slack_personas` to see the available personas. The agent can choose an allowed persona with `slack_post`. Put custom picture files in `<data>/avatars`.
 
 ## Projects per channel
 

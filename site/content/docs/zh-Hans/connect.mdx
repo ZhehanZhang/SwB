@@ -25,7 +25,7 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 | 询问 | 智能体的操作 |
 | - | - |
 | 如何连接我的 Claude Project？ | 它为该项目注册一个 Claude routine，并给你一个用于令牌的链接 |
-| 把 Slack 连接到 SwB。 | 它给你 Slack 应用清单和一个用于令牌的链接 |
+| 把 Slack 连接到 SwB。 | 它会指引你从仓库的 `manifests/` 目录获取应用清单，并在需要时提供领取链接 |
 | 连接我的 Discord 机器人。 | 它给你一个令牌链接和机器人邀请链接 |
 | 把这个发给我的 Capy Captain。 | 它发送任务并等待答复 |
 | 你能发送给哪些目标？ | 它列出 SwB 能访问的所有目标 |
@@ -44,4 +44,4 @@ swb connect grok
 
 ## 用配对码连接
 
-有些智能体只在你需要时才在笔记本电脑上启动。给这样的智能体一个配对码。在 SwB 页面的 Connected agents 下创建配对码，或请智能体调用 `connect_code`。配对码对应一个智能体名称，有效期十分钟。智能体在 `/connect` 用配对码换取自己的密钥。
+请以所有者身份登录的智能体调用 `connect_code`。把新智能体的名称告诉它。配对码在 10 分钟内有效，只能使用一次。新智能体通过 `POST /connect` 用配对码换取自己的密钥。完整的配对方法见 [MCP 客户端](/zh-Hans/docs/setup/mcp-client)。

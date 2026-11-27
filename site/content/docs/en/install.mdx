@@ -21,7 +21,7 @@ The owner key is the password of your SwB instance. The `swb` command uses it to
     uvx swb-one up
     ```
 
-    uvx downloads SwB and runs it. Use `uvx swb-one` in front of every `swb` command in these docs.
+    uvx downloads SwB and runs it. Replace the leading `swb` in each example with `uvx swb-one`.
   </Tab>
   <Tab value="pipx">
     ```bash
@@ -38,7 +38,7 @@ The owner key is the password of your SwB instance. The `swb` command uses it to
       ghcr.io/zhehanzhang/swb:latest
     ```
 
-    The image keeps its data in `/data`. Use `docker exec swb swb` in front of every `swb` command in these docs.
+    The image keeps its data in `/data`. Replace the leading `swb` in each example with `docker exec swb swb`.
   </Tab>
 </Tabs>
 
@@ -62,4 +62,4 @@ The answer lists each block and its state. A block that needs a setting shows th
 
 ## Versions
 
-Each release is on PyPI as `swb-one` and on GitHub Container Registry as `ghcr.io/zhehanzhang/swb`. Use a version tag such as `1.0.0` to stay on one release. The tag `latest` follows the newest release.
+After publication, use the `swb-one` package from PyPI or the `ghcr.io/zhehanzhang/swb` image from GitHub Container Registry. Use a version such as `1.0.0` to select one release. The image tag `latest` follows the newest stable release.

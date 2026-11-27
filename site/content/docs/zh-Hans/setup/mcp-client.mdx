@@ -28,7 +28,7 @@ Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth �
 <Step>
 ### 获取配对码
 
-智能体会通过 `connect` 给你一个配对码。你也可以在 SwB 首页点击 **Mint code**。
+请以所有者身份登录的智能体获取配对码。智能体可以用应用名称调用 `connect_code`。
 </Step>
 <Step>
 ### 换取密钥
@@ -68,7 +68,7 @@ SwB 为这个名称生成配对码，并返回 `POST /connect` 这一步。配�
 
 | 项目 | 显示位置 | 格式 | 去向 |
 | - | - | - | - |
-| 配对码 | `connect` 的结果或 **Pairing code** 页面 | `XXXXX-XXXXX`，10 分钟内有效，只能使用一次 | `POST /connect` 请求 |
+| 配对码 | `connect` 或 `connect_code` 的结果 | `XXXXX-XXXXX`，10 分钟内有效，只能使用一次 | `POST /connect` 请求 |
 | 智能体密钥 | `POST /connect` 的响应，只显示一次 | 以 `swb_` 开头 | 应用私密设置中的 `Authorization` 请求头 |
 
 请把密钥留在聊天和共享文件之外。SwB 只保存密钥的哈希值。

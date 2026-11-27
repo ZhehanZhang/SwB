@@ -25,7 +25,7 @@ Your agent sets up the other connections. Ask it in plain words.
 | Ask | The agent does |
 | - | - |
 | How do I connect my Claude Projects? | It registers a Claude routine for the project and gives you one link for the token |
-| Connect Slack to SwB. | It gives you the Slack app manifest and one link for the tokens |
+| Connect Slack to SwB. | It points you to the app manifest in the repository's `manifests/` folder and gets a claim link when needed |
 | Connect my Discord bot. | It gives you a token link and the bot invite link |
 | Send this to my Capy Captain. | It sends the task and waits for the answer |
 | What can you send to? | It lists every target SwB can reach |
@@ -44,4 +44,4 @@ swb connect grok
 
 ## Connect with a pairing code
 
-Some agents start on a laptop only when you need them. Give such an agent a pairing code. Make the code on the SwB page under Connected agents, or ask an agent to call `connect_code`. The code names the agent and works for ten minutes. The agent exchanges the code for its own key at `/connect`.
+To pair a new agent, ask an agent signed in as the owner to call `connect_code`. Give it the name of the new agent. The code works one time for ten minutes. The new agent uses `POST /connect` to exchange the code for its own key. See [MCP client](/docs/setup/mcp-client) for the full pairing procedure.
