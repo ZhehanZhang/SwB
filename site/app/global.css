@@ -416,9 +416,9 @@
   flex-direction: column;
   gap: .375rem;
 }
-.swb-win-body { justify-content: flex-end; overflow: hidden; padding: .625rem .75rem; }
+.swb-win-body { --swb-win-pad-y: .625rem; --swb-win-pad-x: .75rem; justify-content: flex-end; overflow: hidden; padding: var(--swb-win-pad-y) var(--swb-win-pad-x); }
 .swb-win-history { flex: none; }
-.swb-win-live { display: none; position: absolute; inset: 0; }
+.swb-win-live { display: none; position: absolute; inset: var(--swb-win-pad-y) var(--swb-win-pad-x) 0; padding: 0 0 var(--swb-win-pad-y); }
 @media (prefers-reduced-motion: no-preference) {
   .swb-win-final { visibility: hidden; }
   .swb-win-live { display: flex; }
