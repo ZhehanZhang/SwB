@@ -119,9 +119,18 @@ class SlackBlock(SlackIntake, SlackActions):
     def status(self) -> dict[str, Any]:
         status = super().status()
         status["modes"] = self.core.modes.status(block=self.name)
+        status.update(self.core.modes.chat_drop_status(self.name))
         if self.app_icon is not None:
             status["manual_steps"] = [f"Upload {self.app_icon} as the app icon at api.slack.com/apps, Basic Information, Display Information"]
         return status
+
+    def status_for(self, principal: Principal) -> dict[str, Any]:
+        if principal.is_unrestricted_owner:
+            return self.status()
+        grant = self.engine.config.grant(principal.source) if self.engine is not None else None
+        return {"workspaces": {} if grant is None else {
+            label: {"intake": runtime.cfg.intake} for label, runtime in self.engine.runtimes.items() if grant.identities_for(label)
+        }, "modes": self.core.modes.status(principal, self.name)}
 
     async def start(self) -> None:
         if self.engine is not None:

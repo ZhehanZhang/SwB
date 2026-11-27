@@ -5,6 +5,7 @@ import httpx
 import uvicorn
 
 from switchboard.app import create_app
+from switchboard.blocks.mcp.policy import CONVERSATION_NOT_FOUND
 
 from switchboard.origins.mcp import WaitCaps
 from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, base_config, eventually, payload
@@ -59,7 +60,12 @@ async def test_tasks_extension_end_to_end_and_across_restart(amake, capy):
     tid = created["taskId"]
     got = (await arpc(c, STATIC_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["result"]
     assert got["resultType"] == "complete" and got["status"] == "working" and CAPTAIN in got["statusMessage"]
-    assert (await arpc(c, SECOND_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["error"]["code"] == -32602
+    outsider = core.connections.mint(agent="outsider", project=None, client=None, by="owner")
+    outside_key = core.connections.redeem(outsider["code"])["key"]
+    foreign = (await arpc(c, outside_key, "tasks/get", {"taskId": tid}, modern=True)).json()["error"]
+    missing = (await arpc(c, outside_key, "tasks/get", {"taskId": "h_missing"}, modern=True)).json()["error"]
+    assert foreign == missing == {"code": -32602, "message": CONVERSATION_NOT_FOUND}
+    assert (await arpc(c, SECOND_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["result"]["status"] == "working"
     await eventually(lambda: capy.streams(CAPTAIN))
     capy.ack(CAPTAIN)
     capy.emit(CAPTAIN, "transcript", {"id": "x", "source": "assistant", "text": "Report attached."}, id="01B")
@@ -154,6 +160,26 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
             assert item["message_id"] == frames[0]["message_id"]
             looked_up = payload(await acall(c, key, "get_message", {"message_id": item["message_id"]}))
             assert looked_up == item
+            core.projects.create(slug="allowed", name="Allowed")
+            core.projects.create(slug="other", name="Other")
+            core.cfg.key_scopes["stream-reader"] = ("project:allowed",)
+            pair = core.connections.mint(agent="stream-reader", project=None, client=None, by="owner")
+            scoped = core.connections.redeem(pair["code"])["key"]
+            outside = await acall(c, STATIC_KEY, "send", {"to": "agent:stream-reader", "project": "other", "task": "Outside scope"})
+            assert not outside.get("isError")
+            allowed = payload(await acall(c, STATIC_KEY, "send", {"to": "agent:stream-reader", "project": "allowed", "task": "Within scope"}))
+            async with c.stream("GET", "/inbox/events", headers={
+                "Authorization": f"Bearer {scoped}", "Last-Event-ID": str(int(event_id) - 1),
+            }) as r:
+                assert r.status_code == 200
+                lines = r.aiter_lines()
+                async for line in lines:
+                    if line == "event: item":
+                        data = json.loads((await anext(lines))[6:])
+                        assert (data["handle"], data["text"]) == (allowed["handle"], "Within scope")
+                        break
+                else:
+                    raise AssertionError("The scoped stream closed before its allowed item")
     finally:
         server.should_exit = True
         await task

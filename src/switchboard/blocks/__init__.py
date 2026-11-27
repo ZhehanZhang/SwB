@@ -299,6 +299,9 @@ class Block:
     def status(self) -> dict[str, Any]:
         return {}
 
+    def status_for(self, principal: "Principal") -> dict[str, Any]:
+        return self.status()
+
     def next_step(self) -> str | None:
         return None
 
