@@ -139,6 +139,8 @@ def test_paired_mailbox_reply_and_cancel_respect_sender_and_recipient(server):
 
 def test_ordinary_tool_errors_do_not_emit_policy_refusals(server, paired):
     core, client, _ = server
-    assert "memory not found" in error_text(call(client, paired, "memory_read", {"id": "missing"}))
+    assert "confirm_general" in error_text(call(client, paired, "memory_write", {
+        "scope": "general", "namespace": "notes", "title": "Fixture", "body": "General note",
+    }))
     assert "Provide" in error_text(call(client, paired, "memory_write"))
     assert core.audit.recent(action="tool_refused") == []

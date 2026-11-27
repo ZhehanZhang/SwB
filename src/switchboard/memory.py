@@ -111,11 +111,8 @@ class Memory:
             raise MemoryError_("scopes is empty")
         return sorted(out, key=lambda s: (s != named, s == GENERAL))
 
-    def scope_of(self, id: str) -> str:
-        r = self.store.one("SELECT scope FROM memories WHERE id = ? AND deleted_at IS NULL", (id,))
-        if r is None:
-            raise MemoryError_("memory not found")
-        return r["scope"]
+    def scope_of(self, id: str | None, *, scope: str | None = None, namespace: str | None = None, key: str | None = None) -> str:
+        return self._find("scope", id, scope, namespace, key)["scope"]
 
     def read_scopes(self, project: str | None, include_general: bool = True) -> list[str]:
         """Scopes a read covers, project first: the project plus general, or general alone."""
@@ -219,18 +216,22 @@ class Memory:
         self._sync_mirror()
         return {"action": action, **{k: entry[k] for k in ("id", "scope", "namespace", "key", "title", "updated_at", "source")}}
 
-    def read(self, *, id: str | None = None, scope: str | None = None, namespace: str | None = None, key: str | None = None) -> dict[str, Any]:
+    def _find(self, fields: str, id: str | None, scope: str | None, namespace: str | None, key: str | None) -> Any:
         if id:
-            r = self.store.one("SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL", (id,))
+            r = self.store.one(f"SELECT {fields} FROM memories WHERE id = ? AND deleted_at IS NULL", (id,))
         elif scope and namespace and key:
             r = self.store.one(
-                "SELECT * FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL",
+                f"SELECT {fields} FROM memories WHERE scope = ? AND namespace = ? AND key = ? AND deleted_at IS NULL",
                 (scope.strip().lower(), namespace.strip("/").lower(), key.lower()),
             )
         else:
             raise MemoryError_("pass id, or scope, namespace and key")
         if r is None:
             raise MemoryError_("memory not found")
+        return r
+
+    def read(self, *, id: str | None = None, scope: str | None = None, namespace: str | None = None, key: str | None = None) -> dict[str, Any]:
+        r = self._find("*", id, scope, namespace, key)
         out = _row(r)
         revs = self.store.q("SELECT at, source, action FROM memory_revisions WHERE memory_id = ? ORDER BY at DESC LIMIT 5", (r["id"],))
         out["history"] = [{"at": iso(v["at"]), "source": v["source"], "action": v["action"]} for v in revs]

@@ -173,8 +173,8 @@ class MuseBlock(Block):
                    files: list[dict[str, Any]] | None = None, **_: Any) -> dict[str, Any]:
         if target not in (None, MAILBOX, f"gadget:{MAILBOX}"):
             raise BlockError(f"The Muse target is {TARGET}.")
-        if call.principal.trust != "owner":
-            raise BlockError("Only owner-trusted callers can wake Muse.")
+        if call.principal.kind == "connect" or call.principal.trust != "owner":
+            raise BlockError("Use the owner's sign-in to wake Muse.")
         if not self.credential():
             raise BlockError('Set up Muse with connect(what="muse").')
         task = task.strip()

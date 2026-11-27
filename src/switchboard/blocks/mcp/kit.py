@@ -104,22 +104,35 @@ class Kit:
 
     async def wait(self, p: "Principal", *, handle: str | None, timeout_s: float | None, project: str | None, block: str | None = None,
                    owner_facing: bool = False) -> dict[str, Any]:
-        got = await self.core.inbox.wait(owner=p.source, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s), project=project, destination=block)
+        handle = handle.strip() if handle else None
+        h = self.core.inbox.handle(handle) if handle else None
+        owner, reader = self.inbox_reader(p, h)
+        got = await self.core.inbox.wait(owner=owner, reader=reader, handle=handle, timeout=self.wait_caps.clamp(p.source, timeout_s),
+                                         project=project, destination=block, scopes=p.scopes)
         if handle:
             h = self.core.inbox.handle(handle)
-            h = h if h and (h["owner"] == p.source or (h["destination"] == "mailbox" and h["ref"] == p.source)) else None
+            h = h if h and (p.is_unrestricted_owner or self.core.inbox.participant(h, p.source)) else None
             got["handle_status"] = (h["status"] if h else "unknown") if (h is None or not h["open"]) else "following"
         if got["timed_out"]:
             got["next"] = ("Tell the owner the work is still in progress. " if owner_facing else "") + "Check again with wait or inbox."
         return got
 
     def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None) -> dict[str, Any]:
-        out = self.core.inbox.read(owner=p.source, handle=handle, since=since_cursor, limit=limit, project=project, destination=block)
+        handle = handle.strip() if handle else None
+        owner, reader = self.inbox_reader(p, self.core.inbox.handle(handle) if handle else None)
+        out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit,
+                                   project=project, destination=block, scopes=p.scopes)
         senders = [block] if block else [n for n, b in self.core.blocks.items() if b.verb("send") is not None]
-        open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True, project=project, limit=20)]
+        open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True,
+                                                                      project=project, scopes=p.scopes, limit=20)]
         out["open"] = [{"handle": h["handle"], "conversation": h["handle"], "block": h["destination"], "target": h.get("target"), "thread_id": h["ref"],
                         "status": h["status"], "title": h["title"] or h["meta"].get("task", "")[:80]} for h in open_]
         return out
+
+    def inbox_reader(self, p: "Principal", handle: dict[str, Any] | None) -> tuple[str | None, str]:
+        if handle and p.is_unrestricted_owner and not self.core.inbox.participant(handle, p.source):
+            return None, f"owner-read:{p.source}"
+        return p.source, p.source
 
     async def verb(self, ctx: Context, verb: str, ref: str, **kw: Any) -> Any:
         return await self.run(self.core.verb(self.who(ctx), verb, ref, **kw))
