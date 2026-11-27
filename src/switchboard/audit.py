@@ -50,7 +50,8 @@ class Audit:
             "INSERT INTO audit(at, day, origin, source, client, destination, action, target, ref, title, excerpt, outcome, detail) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (self.store.clock(), self.today(), origin, source, client[:200], destination, action, target, ref, title, excerpt[:300], outcome, detail),
         )
-        log.info("%s.%s %s by %s via %s (%s) -> %s %s", destination, action, outcome, source, origin, client[:60], target or "", ref or detail or "")
+        context = f"{ref} {detail}" if outcome == "refused" and ref and detail else ref or detail or ""
+        log.info("%s.%s %s by %s via %s (%s) -> %s %s", destination, action, outcome, source, origin, client[:60], target or "", context)
 
     def record_refusal(self, *, origin: str, client: str, destination: str, action: str, detail: str,
                        target: str | None = None, ref: str | None = None) -> None:

@@ -65,10 +65,11 @@ Event = Callable[[Principal, dict[str, Any]], Awaitable[dict[str, Any] | None]]
 
 
 class CompanionError(BlockError):
-    def __init__(self, message: str, status: int = 400, *, audit_ref: str | None = None):
+    def __init__(self, message: str, status: int = 400, *, audit_ref: str | None = None, audit_detail: str | None = None):
         super().__init__(message)
         self.status = status
         self.audit_ref = audit_ref
+        self.audit_detail = audit_detail or message
 
 
 class InvalidCode(CompanionError):
