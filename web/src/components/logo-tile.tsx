@@ -7,10 +7,10 @@ import { connectorKind } from "@/lib/connector-kind"
 import { cn } from "@/lib/utils"
 
 const images: Record<string, string> = { discord, github, telegram }
-const avatars = new Set(["claude-code", "claude", "chatgpt", "codex", "gemini", "grok", "muse", "swb", "capy"])
+const avatars = new Set(["claude-code", "claude", "chatgpt", "codex", "gemini", "grok", "grok-bot", "dots", "muse", "swb", "capy"])
 const aliases = [
-  ["claude-code", "claude-code"], ["claude", "claude"], ["anthropic", "claude"], ["grok", "grok"], ["xai", "grok"],
-  ["openai", "chatgpt"], ["chatgpt", "chatgpt"], ["dot", "chatgpt"], ["dots", "chatgpt"], ["capy", "capy"], ["captain", "capy"],
+  ["grok-bot", "grok-bot"], ["grok-routine", "grok-bot"], ["claude-code", "claude-code"], ["claude", "claude"], ["anthropic", "claude"], ["grok", "grok"], ["xai", "grok"],
+  ["openai", "chatgpt"], ["chatgpt", "chatgpt"], ["dots", "dots"], ["dot", "dots"], ["capy", "capy"], ["captain", "capy"],
   ["github", "github"], ["slack", "slack"], ["discord", "discord"], ["telegram", "telegram"],
   ["gemini", "gemini"], ["codex", "codex"], ["muse", "muse"], ["swb", "swb"], ["switchboard", "swb"], ["mcp", "mcp"],
 ] as const

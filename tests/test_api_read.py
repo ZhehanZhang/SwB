@@ -177,7 +177,7 @@ def test_agent_avatar_projection_drops_untrusted_urls_and_leaves_other_targets_a
     inventory = get(client, "/agents")
     assert all("avatar_url" not in row for row in inventory["captains"][:-1])
     assert inventory["captains"][-1]["avatar_url"] == "/avatars/example.png?v=123"
-    assert inventory["dots"][0]["avatar_url"] == "/avatars/chatgpt.png"
+    assert inventory["dots"][0]["avatar_url"] == "/avatars/dots.png"
     assert PRIVATE not in json.dumps(inventory)
 
 
