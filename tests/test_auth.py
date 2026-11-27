@@ -317,6 +317,16 @@ def test_cloudflare_access_gate(make):
     assert r.status_code == 302 and "code=" in r.headers["location"]
 
 
+
+def test_access_cookie_signs_the_owner_in_on_paths_access_bypasses(make):
+    _, c = make()
+    assert c.get("/auth/session").json()["signed_in"] is False
+    c.cookies.set("CF_Authorization", "other")
+    assert c.get("/auth/session").json()["signed_in"] is False
+    c.cookies.set("CF_Authorization", "good")
+    session = c.get("/auth/session").json()
+    assert session["signed_in"] is True and session["via"] == "access"
+
 def test_no_public_url_disables_oauth_but_keeps_keys(make):
     cfg = base_config()
     cfg.pop("public_url")
