@@ -95,6 +95,16 @@ def test_audit_exposes_only_known_dropped_webhook_reasons(make):
     assert PRIVATE not in json.dumps(rows)
 
 
+def test_audit_chat_drop_details_are_allowlisted(make):
+    core, client = make()
+    for detail in ("external bot message", PRIVATE):
+        core.audit.record(action="chat_event", origin="fixture", outcome="dropped", destination="fixture",
+                          source="fixture", client="", detail=detail, excerpt=PRIVATE)
+    rows = get(client, "/audit", action="chat_event")["items"]
+    assert [row["detail"] for row in rows] == [None, "external bot message"]
+    assert PRIVATE not in json.dumps(rows)
+
+
 def test_audit_shows_webhook_refusal_and_drop_reasons_from_the_log(make):
     secret = "fixture-secret-for-webhook-signing"
     core, client = make(config=base_config(version=2, blocks={"mcp": {}, "github": {}}),
