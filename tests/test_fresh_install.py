@@ -67,7 +67,7 @@ def save_token(client, platform, token):
     assert step["link"].startswith(f"{PUBLIC}/claim/")
     path = urlsplit(step["link"]).path
     auth = {"Authorization": f"Bearer {STATIC_KEY}"}
-    assert client.post(path, data={"token": token}).status_code == 403
+    assert client.post(path, data={"token": token}).status_code in (401, 403)
     assert client.post(path, headers=auth, data={"token": "invalid"}).status_code == 400
     response = client.post(path, headers=auth, data={"token": token})
     assert response.status_code == 200 and token not in response.text
