@@ -195,13 +195,13 @@ class ChatBlock(Block):
         if not self.spaces:
             out.append(f"{self.name}: no spaces configured (blocks.{self.name}.spaces)")
         for s in self.spaces.values():
-            if not s.owner_ids:
+            if not self.owners(s):
                 out.append(f"{self.name} space {s.label}: no owner_ids, so nobody's messages are trusted as the owner's")
         return out
 
     def status(self) -> dict[str, Any]:
         return {"platform": self.platform, "connected": self.connected(), "missing": self.missing(), "setup": self.setup(),
-                "spaces": {s.label: {"owners": len(s.owner_ids), "listen": sorted(s.listen), "default_target": s.default_target, "project": s.project}
+                "spaces": {s.label: {"owners": len(self.owners(s)), "listen": sorted(s.listen), "default_target": s.default_target, "project": s.project}
                            for s in self.spaces.values()},
                 "targets": len(self.targets_by_slug), "refreshed_at": self.refreshed_at}
 
@@ -262,8 +262,11 @@ class ChatBlock(Block):
 
     # Intake ----------------------------------------------------------------------------------
 
+    def owners(self, space: Space) -> frozenset[str]:
+        return space.owner_ids
+
     def trust_of(self, space: Space, user: str) -> str:
-        return "owner" if user in space.owner_ids else "known" if user in space.known else "external"
+        return "owner" if user in self.owners(space) else "known" if user in space.known else "external"
 
     def who(self, space: Space, user: str, trust: str) -> Who:
         return Who(owner=trust == "owner", id=f"{self.platform}:{user}", workspace=space.label)
@@ -394,7 +397,7 @@ class ChatBlock(Block):
 
     async def dm_owner(self, text: str) -> None:
         for space in self.spaces.values():
-            for owner in sorted(space.owner_ids):
+            for owner in sorted(self.owners(space)):
                 with contextlib.suppress(Exception):
                     channel = await self.open_dm(space.label, owner)
                     if channel:
@@ -458,7 +461,7 @@ class ChatBlock(Block):
         private = not target or self.core.visibility.rule(*self.target_resources(target)) == "private"
         if trust == "owner" or not private or not self.channel_shared(space, channel):
             return channel, root, False
-        owner = next(iter(sorted(self.spaces[space].owner_ids)), None)
+        owner = next(iter(sorted(self.owners(self.spaces[space]))), None)
         dm = await self.open_dm(space, owner) if owner else None
         return (dm, None, True) if dm else None
 
@@ -572,6 +575,25 @@ class ChatBlock(Block):
 
     def token(self) -> str | None:
         return self.secret("bot_token", self.token_env)
+
+    async def connect_steps(self, kind: str, principal: Principal, project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
+        token = bool(self.token())
+        done = [f"{self.manifest.title} bot token: {'saved' if token else 'missing'}.",
+                f"{self.manifest.title} connection: {'connected' if self.connected() else 'not connected'}.",
+                *(f"Space {s.label}: {len(self.owners(s))} owner id(s), project {s.project or 'none'}." for s in self.spaces.values())]
+        if not token:
+            if not principal.is_unrestricted_owner:
+                return {"done": done, "next": [{"by": "person", "do": f"Ask the owner to connect {self.manifest.title} from their own sign-in."}]}
+            steps = " ".join(self.setup().get("steps", [])[:2])
+            return {"done": done, "next": [{"by": "person", "do": f"{steps} Paste the token at the link.", "link": self.claim_link(principal.source)["link"]}]}
+        steps = [m for m in self.missing() if "token" not in m.lower()]
+        if not self.spaces:
+            steps.append(f"Add a space under blocks.{self.name}.spaces with the project it belongs to.")
+        steps += [f"Space {s.label} has no owner ids. {self.owner_hint()}" for s in self.spaces.values() if not self.owners(s)]
+        return {"done": done, "next": [{"by": "person", "do": step} for step in steps]}
+
+    def owner_hint(self) -> str:
+        return f"DM the bot once, then copy your id from {self.name}_status into owner_ids."
 
     def claim_link(self, actor: str) -> dict[str, Any]:
         """A one-time link where the owner enters (or rotates) the bot token behind Access."""

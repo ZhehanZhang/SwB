@@ -10,7 +10,7 @@ from .coding import coding_steps
 from .kit import Kit
 
 CLIENTS = ("mcp-client", "chatgpt", "claude", "coding-agent")
-BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine"}
+BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine", "discord": "discord", "telegram": "telegram"}
 MENUS = {"chatgpt": "https://chatgpt.com/plugins in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web"}
 
 

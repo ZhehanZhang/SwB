@@ -76,6 +76,7 @@ def _chunks(text: str, prefix: str | None) -> Iterator[str]:
 
 class TelegramBlock(ChatBlock):
     platform = "telegram"
+    connect_kinds = ("telegram",)
     manifest = Manifest(id="telegram", title="Telegram", kind="both", level_out="L3", level_in="events",
                         verbs={"reply": "reply"}, tools=("post", "status", "provision"),
                         secrets=("TELEGRAM_BOT_TOKEN",), network=("api.telegram.org",))

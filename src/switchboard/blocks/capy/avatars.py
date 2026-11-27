@@ -4,7 +4,7 @@ UNDOCUMENTED, so opt-in (blocks.capy.avatars: true, or slack.captain_avatars: tr
 {kind: preset|emoji, value, background, image?}. As of 2026-11 the web app (capy.ai/assets/index-*.js) shows a preset
 as <img src="/avatars/<preset>.png"> filling a rounded square whose CSS background is avatar.background, an emoji as
 the character on that background, and image as that URL. /avatars/<preset>.png is a public, unhashed 512 px PNG with
-a transparent background; it is not part of Capy's documented API and may move. Every failure falls back to a
+a transparent background, drawn at SAFE of the square so a circle crop keeps the whole face; it is not part of Capy's documented API and may move. Every failure falls back to a
 monogram on the Captain's background colour, which is also what runs with the option off. Emoji avatars become a
 monogram too (no colour emoji font in the image).
 
@@ -27,10 +27,11 @@ from ...targets import slugify
 log = logging.getLogger("switchboard.slack.avatars")
 ASSET_BASE = "https://capy.ai/avatars/"
 SIZE = 512
+SAFE = 0.8
 
 
 def cache_name(name: str, avatar: dict[str, Any] | None, capy_assets: bool) -> str:
-    key = json.dumps([avatar or {}, capy_assets], sort_keys=True)
+    key = json.dumps([avatar or {}, capy_assets, SAFE], sort_keys=True)
     return f"captain-{slugify(name) or 'x'}-{hashlib.sha256(key.encode()).hexdigest()[:10]}.png"
 
 
@@ -72,9 +73,10 @@ async def render_captain(http: httpx.AsyncClient, out_dir: Path, name: str, avat
             if isinstance(avatar.get("image"), str) and avatar["image"].startswith("https://"):
                 img, square = _cover(await _fetch(http, avatar["image"])), True
             elif avatar.get("kind") == "preset" and isinstance(avatar.get("value"), str) and avatar["value"].replace("-", "").isalnum():
-                face = _cover(await _fetch(http, ASSET_BASE + avatar["value"] + ".png"))
+                inner = round(SIZE * SAFE)
+                face = _cover(await _fetch(http, ASSET_BASE + avatar["value"] + ".png")).resize((inner, inner))
                 img = Image.new("RGBA", (SIZE, SIZE), bg)
-                img.alpha_composite(face)
+                img.alpha_composite(face, ((SIZE - inner) // 2, (SIZE - inner) // 2))
                 square = True
         except Exception as exc:
             log.info("Captain avatar for %s fell back to a monogram: %s", name, exc)
