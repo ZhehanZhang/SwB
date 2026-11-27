@@ -26,7 +26,7 @@ def test_single_github_claims_validate_before_saving(make):
     paths = {core.claims.inspect(urlsplit(step["link"]).path.rsplit("/", 1)[1]): urlsplit(step["link"]).path
              for step in connect["next"] if "link" in step}
     examples = {
-        "GITHUB_APP_ID": ("abc", "001", "12345", "Enter a numeric ID"),
+        "GITHUB_APP_ID": ("app-id-x", "001", "12345", "Enter a numeric ID"),
         "GITHUB_WEBHOOK_SECRET": ("short", "x" * 15, "x" * 16, "Use a webhook secret with at least 16 characters"),
         "GITHUB_APP_PRIVATE_KEY": ("not a pem", "-----BEGIN PRIVATE KEY-----YWJj-----END PRIVATE KEY-----",
                                    PKCS8, "Paste the full private key or upload the .pem file"),
