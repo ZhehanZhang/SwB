@@ -125,8 +125,8 @@ class Config:
 
     @property
     def legacy_passkey_rp(self) -> str | None:
-        """Passkeys saved before RP IDs were recorded belong to the primary host (or the configured RP ID)."""
-        return self.passkey_rp_id or (urlsplit(self.public_url).hostname if self.public_url else None)
+        """Passkeys saved before RP IDs were recorded belong to the primary host."""
+        return urlsplit(self.public_url).hostname if self.public_url else None
 
     @property
     def passkey_rp(self) -> str | None:
