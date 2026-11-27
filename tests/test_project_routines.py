@@ -83,7 +83,7 @@ def test_interim_and_final_replies_on_one_conversation(tmp_path):
         h = payload(call(c, STATIC_KEY, "send", {"task": "build the thing", "to": "claude", "project": "beacon"}))["conversation"]
         tok = sign_in(c)["access_token"]
         assert payload(call(c, tok, "reply", {"conversation": h, "text": "handed to the beacon coordinator", "final": False}))["final"] is False
-        assert core.inbox.handle(h)["status"] == "delivered"
+        assert core.inbox.handle(h)["status"] == "working"
         assert payload(call(c, tok, "reply", {"conversation": h, "text": "built and deployed"}))["final"] is True
         assert core.inbox.handle(h)["status"] == "answered"
         got = payload(call(c, STATIC_KEY, "inbox", {"since_cursor": 0}))["items"]

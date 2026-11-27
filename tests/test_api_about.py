@@ -88,6 +88,20 @@ def test_healthz_limits_details_to_owner_browser_and_canary_key(make):
         assert body["problems"]
 
 
+@pytest.mark.parametrize("url", ["http://localhost:8870", PUBLIC])
+def test_owner_healthz_notes_public_https_only_for_local_mcp(make, url):
+    cfg = base_config(version=2, public_url=url, blocks={"mcp": {}})
+    _, client = make(cfg)
+    response = client.get("/healthz", headers=OWNER)
+    assert response.status_code == 200
+    block = response.json()["blocks"]["mcp"]
+    assert block["next_step"] is None
+    if url == PUBLIC:
+        assert "manual_steps" not in block
+    else:
+        assert block["manual_steps"] == ["Give SwB a public HTTPS address for hosted MCP clients."]
+
+
 def test_about_omits_invalid_environment_values_and_handles_missing_package(make, monkeypatch, tmp_path):
     def missing_package(name):
         raise PackageNotFoundError(name)
