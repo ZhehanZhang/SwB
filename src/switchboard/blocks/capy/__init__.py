@@ -803,11 +803,18 @@ class CapyBlock(Block):
             pid = entry.links.get("capy_project") if entry else None
             if not pid:
                 raise DestinationError("project must be a switchboard project linked to a Capy project (links.capy_project)")
-            if visible is not None and not p.allows(entry.scope):
+            if visible is None:
+                page = await api.list_threads(pid, limit=limit)
+                return {"scope": scope, "project": entry.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
+            if not p.allows(entry.scope):
                 raise DestinationError("Choose a project granted to this key.")
-            page = await api.list_threads(pid, limit=limit)
-            items = [thread_summary(t) for t in page.get("items", []) if visible is None or t["id"] in visible]
-            return {"scope": scope, "project": entry.slug, "items": items}
+            refs = dict.fromkeys(h["ref"] for h in self.core.inbox.handles(owner=owner, destination=self.name, project=entry.slug,
+                                                                           scopes=p.scopes, limit=limit))
+            threads = await asyncio.gather(*(api.get_thread(ref) for ref in refs), return_exceptions=True)
+            for t in threads:
+                if isinstance(t, BaseException) and not isinstance(t, CapyError):
+                    raise t
+            return {"scope": scope, "project": entry.slug, "items": [thread_summary(t) for t in threads if not isinstance(t, BaseException)]}
         raise DestinationError("scope must be delegated, captain or project")
 
     async def autolink(self, principal: Principal, project: Project, *, force: bool = False) -> dict[str, Any]:

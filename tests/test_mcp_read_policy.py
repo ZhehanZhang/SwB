@@ -194,6 +194,28 @@ def test_capy_work_lists_only_the_callers_conversations(workspace, monkeypatch, 
     assert len(access(client, STATIC_KEY, "capy_list", args)["items"]) == 2
 
 
+def test_capy_project_list_finds_the_callers_threads_past_the_provider_page(workspace, monkeypatch):
+    core, client, keys = workspace
+    api = core.blocks["capy"].api
+    core.projects.update("example", links={"capy_project": "project_fixture"})
+    core.inbox.open_handle(owner="alpha", destination="capy", ref=CAPTAIN, project="example", title="alpha delegation", meta={})
+    entries = [{"id": CAPTAIN2, "title": PRIVATE_TEXT}, {"id": CAPTAIN, "title": "First conversation"}]
+
+    async def threads(_, limit=20):
+        return {"items": entries[:limit]}
+
+    async def thread(ref):
+        return next(t for t in entries if t["id"] == ref)
+
+    monkeypatch.setattr(api, "list_threads", threads)
+    monkeypatch.setattr(api, "get_thread", thread)
+    args = {"scope": "project", "project": "example", "limit": 1}
+    mine = access(client, keys["alpha"], "capy_list", args)["items"]
+    assert [item["id"] for item in mine] == [CAPTAIN]
+    assert PRIVATE_TEXT not in json.dumps(mine)
+    assert [item["id"] for item in access(client, STATIC_KEY, "capy_list", args)["items"]] == [CAPTAIN2]
+
+
 def test_briefing_filters_open_work_and_captain_digest(workspace):
     core, client, keys = workspace
     for owner, title in (("alpha", "Alpha delegation"), ("beta", PRIVATE_TEXT)):
