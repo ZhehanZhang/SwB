@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
 import { ListRow } from "@/components/list-row"
+import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { requestJson, sessionQuery } from "@/lib/api"
@@ -174,7 +175,7 @@ function Conversations({ items }: { items: Conversation[] }) {
         {conversations.map((row) => {
           const { from, to, fromKind, toKind } = participants(row)
           return (
-            <tr key={row.handle} role="row" className="relative border-b text-[13px] leading-[18px] hover:bg-muted/40 focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
+            <tr key={row.handle} role="row" className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
               <td role="cell" className="font-mono text-xs wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project ?? "—"}</td>
               <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} /></td>
               <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} /></td>
@@ -208,7 +209,7 @@ function InboxList() {
     <div className="space-y-8 pt-2 md:space-y-[34px]">
       <section aria-labelledby="needs-you">
         <h2 id="needs-you" className="text-heading-md font-semibold tracking-[-0.01em]">Needs you</h2>
-        {inbox.isPending && <DataState kind="loading" message="Loading inbox…" />}
+        {inbox.isPending && <div className="flex h-[60px] items-center"><Skeleton className="h-3 w-28" /></div>}
         {inbox.isError && <DataState kind="error" message="Couldn’t load the inbox." onRetry={() => void inbox.refetch()} />}
         {data && (data.pending_writes.length || data.pauses.length ? (
           <ul className="mt-2">
@@ -219,15 +220,39 @@ function InboxList() {
           </ul>
         ) : <DataState kind="empty" message="Nothing needs you." />)}
       </section>
-      {data && (
+      {(inbox.isPending || data) && (
         <section aria-labelledby="conversations">
           <h2 id="conversations" className="text-heading-md font-semibold tracking-[-0.01em]">Conversations</h2>
-          {data.conversations.length
+          {inbox.isPending ? <ConversationsSkeleton /> : data?.conversations.length
             ? <Conversations items={data.conversations} />
             : <DataState kind="empty" message="No conversations yet." />}
         </section>
       )}
     </div>
+  )
+}
+
+function ConversationsSkeleton() {
+  return (
+    <LoadingSkeleton message="Loading inbox…" className="mt-1">
+      <div className="hidden h-[33px] items-center gap-4 border-b md:flex">
+        {[0, 1, 2, 3].map((column) => <Skeleton key={column} className="h-2.5 w-[12%] first:w-[8%]" />)}
+      </div>
+      {[0, 1].map((row) => (
+        <div key={row} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] grid-rows-[18px_20px_16px] items-center gap-x-2 gap-y-1 border-b py-3.5 md:h-[43px] md:grid-cols-[9.75%_16%_16%_minmax(0,1fr)_9.25%_16px] md:grid-rows-1 md:gap-x-0 md:py-0">
+          <Skeleton className="h-2.5 w-12 max-w-[85%] max-md:col-span-2 max-md:row-start-3" />
+          {[1, 2].map((person) => (
+            <div key={person} className="flex min-w-0 items-center gap-2 max-md:row-start-2 md:pr-3">
+              <Skeleton className="size-5 rounded-md" />
+              <Skeleton className="h-3 min-w-0 max-w-1/2 flex-1" />
+            </div>
+          ))}
+          <Skeleton className="h-3 w-36 max-w-full max-md:col-span-2 max-md:row-start-1" />
+          <Skeleton className="h-2.5 w-7 max-w-full max-md:row-start-1" />
+          <Skeleton className="size-2 justify-self-end rounded-full max-md:col-start-3 max-md:row-start-2" />
+        </div>
+      ))}
+    </LoadingSkeleton>
   )
 }
 
@@ -290,7 +315,32 @@ function InboxConversation({ handle }: { handle: string }) {
       <Link to="/inbox" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Conversations
       </Link>
-      {thread.isPending && <DataState kind="loading" message="Loading conversation…" />}
+      {thread.isPending && (
+        <LoadingSkeleton message="Loading conversation…" className="mt-4">
+          <div className="flex h-7 items-center"><Skeleton className="h-4 w-44 max-w-full" /></div>
+          <div className="mt-2 flex h-5 items-center gap-3">
+            {[0, 1].map((person) => (
+              <div key={person} className="flex items-center gap-2">
+                <Skeleton className="size-5 rounded-md" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex h-[33px] gap-5 border-b pt-0.5">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <ListRow className="block space-y-2 px-0 py-3.5">
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-5 rounded-md" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="ml-auto h-2.5 w-8" />
+            </div>
+            <Skeleton className="h-2.5 w-24" />
+            <Skeleton className="h-3 w-2/3" />
+          </ListRow>
+        </LoadingSkeleton>
+      )}
       {thread.isError && !conversation && (
         <DataState kind="error" message="Couldn’t load this conversation." onRetry={() => void thread.refetch()} />
       )}
