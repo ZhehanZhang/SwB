@@ -86,7 +86,7 @@ def test_owner_session_shape_cookie_rotation_and_logout(make):
     security_headers(first_session)
     assert first_session.json() == {"signed_in": True, "via": "link", "csrf": core.auth.csrf(digest),
                                    "methods": {"passkeys": 0, "oidc": None, "access": False}}
-    assert "Add a passkey" in client.get("/classic").text
+    assert client.get("/auth/passkeys").json() == []
     assert sign_in(client).status_code == 204
     assert core.store.one("SELECT 1 FROM owner_sessions WHERE id = ?", (digest,)) is None
     new = client.cookies[SESSION_COOKIE]
@@ -272,7 +272,7 @@ def test_passkey_registration_discoverable_login_and_counter(make, caplog, no_sp
         added = add_key(client, key, opts)
         assert added.status_code == 201 and added.json() == {"id": b64url(key.id)}
         cookie_attributes(added, CHALLENGE_COOKIE, 0)
-        assert "Add a passkey" not in client.get("/classic").text
+        assert [entry["id"] for entry in client.get("/auth/passkeys").json()] == [b64url(key.id)]
         client.cookies.set(CHALLENGE_COOKIE, ref)
         replay = add_key(client, key, opts)
         assert replay.status_code == 401 and replay.json() == {"error": "passkey_failed"}
