@@ -35,10 +35,10 @@ export function SwitchboardHero({ label }: { label: string }) {
     <figure className="swb-board" role="img" aria-label={label}>
       <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
         {channels.map(({ y }, index) => (
-          <path key={`in${index}`} id={`swb-in-${index}`} d={inPath(y)} className="swb-cord swb-cord-in" />
+          <path key={`in${index}`} id={`swb-in-${index}`} d={inPath(y)} className="swb-cord swb-cord-in" pathLength={1} />
         ))}
         {agents.map(({ y }, index) => (
-          <path key={`out${index}`} id={`swb-out-${index}`} d={outPath(y)} className="swb-cord swb-cord-out" />
+          <path key={`out${index}`} id={`swb-out-${index}`} d={outPath(y)} className="swb-cord swb-cord-out" pathLength={1} />
         ))}
         {channels.map(({ y }, index) => <circle key={`ji${index}`} cx={284} cy={y} r={4} className="swb-jack swb-jack-in" />)}
         {agents.map(({ y }, index) => <circle key={`jo${index}`} cx={816} cy={y} r={4} className="swb-jack swb-jack-out" />)}
@@ -79,6 +79,7 @@ export function SwitchboardHero({ label }: { label: string }) {
           <MarkTile kind={kind} />
         </div>
       ))}
+      <span className="swb-hub-ring" style={{ left: pct(HUB.x, W), top: pct(HUB.y, H) }} aria-hidden="true" />
       <img className="swb-hub" src="/marks/swb.svg" alt="" style={{ left: pct(HUB.x, W), top: pct(HUB.y, H) }} />
       {agents.map(({ kind, label: name, y }) => (
         <div key={name} className="swb-node swb-node-out" style={{ top: pct(y, H), left: pct(824, W) }}>
