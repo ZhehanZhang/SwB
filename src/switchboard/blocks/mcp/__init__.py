@@ -29,8 +29,9 @@ from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
-from .policy import (AUTH_REQUIRED, CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED, POLICY_REQUIRED, ROUTE_REQUIRED,
-                     SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED, Role, mutation_roles)
+from .policy import (AUTH_REQUIRED, CONVERSATION_NOT_FOUND, CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
+                     POLICY_REQUIRED, READ_ROLES, REFERENCE_ARGS, ROUTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED,
+                     TOOL_REQUIRED, Role, mutation_roles, read_refusal)
 from .tasks import TasksExtension
 
 if TYPE_CHECKING:
@@ -107,8 +108,10 @@ class LimitedServer(MCPServer):
         p = principal_of(getattr(request_context, "request", None))
         tool = next((t for t in await self.list_tools() if t.name == name), None)
         role = self.roles.get(name)
+        read = bool(tool and tool.annotations and tool.annotations.read_only_hint)
         reason = await self._refusal(p, name, role, arguments,
-                                     writes=tool is not None and not (tool.annotations and tool.annotations.read_only_hint))
+                                     writes=tool is not None and not read,
+                                     requires_read_role=bool(read and tool and REFERENCE_ARGS.intersection(tool.input_schema.get("properties", {}))))
         if reason:
             self._audit_refusal(p, tool.name if tool else None, reason)
             if reason == OWNER_REQUIRED and p is not None and p.kind == "connect":
@@ -136,13 +139,18 @@ class LimitedServer(MCPServer):
                 parts.append(f"Check {', '.join(dict.fromkeys(invalid))}.")
             raise ToolError(" ".join(parts) or "Check the tool arguments.") from error
 
-    async def _refusal(self, p: Principal | None, name: str, role: Role | None, arguments: dict[str, Any], *, writes: bool) -> str | None:
+    async def _refusal(self, p: Principal | None, name: str, role: Role | None, arguments: dict[str, Any], *,
+                       writes: bool, requires_read_role: bool) -> str | None:
         if p is None:
             return AUTH_REQUIRED
         if p.tools is not None and name not in p.tools:
             return TOOL_REQUIRED
         if writes and role is None:
             return POLICY_REQUIRED
+        if requires_read_role and name not in READ_ROLES:
+            return CONVERSATION_NOT_FOUND
+        if name in READ_ROLES:
+            return read_refusal(self.modes.core, p, name, arguments)
         owner = p.is_unrestricted_owner
         if role == "owner" and not owner:
             return OWNER_REQUIRED
@@ -170,7 +178,7 @@ class LimitedServer(MCPServer):
                     handle = core.inbox.handle(ref)
                     if handle and handle["destination"] == "mailbox":
                         if name == "reply":
-                            return None if p.source in (handle["owner"], handle["ref"]) else CONVERSATION_REQUIRED
+                            return None if core.inbox.participant(handle, p.source) else CONVERSATION_REQUIRED
                         if name == "cancel":
                             return None if p.source == handle["ref"] else CONVERSATION_REQUIRED
                     own = bool(handle and handle["owner"] == p.source)
@@ -419,7 +427,7 @@ class MCPBlock(Block):
 
         @mcp.tool(
             title="Session briefing",
-            description="Read at the start of a session: the project's memory and links, the owner's general profile and recent decisions, and each block's section (for a routed Captain: its digest, relevant active work and conversations in progress).",
+            description="Read the project's memory and links, the owner's general profile, recent decisions and your conversations in progress. The owner's sign-in includes the routed Captain's digest and crew activity.",
             annotations=READ_REMOTE,
         )
         async def context_pack(ctx: Context, project: ProjectArg = None) -> str:
@@ -542,7 +550,8 @@ class MCPBlock(Block):
             default, mx = self.wait_caps.for_agent(p.source)
             return {"you": {"agent": p.source, "auth": p.kind, "origin": p.origin, **({"scopes": list(p.scopes)} if p.scopes is not None else {})},
                     "wait": {"default_s": default, "max_s": mx}, "capy_wait": {"default_s": default, "max_s": mx}, **core.health(p),
-                    "agents": core.known_agents(), "connected": sorted(set(core.connections.agents()))}
+                    "agents": core.known_agents(),
+                    "connected": (sorted(set(core.connections.agents())) if p.is_unrestricted_owner else [p.source] if p.kind == "connect" else [])}
 
         kit = Kit(self, who, run, need, pscope)
         kit.register_generic(mcp)

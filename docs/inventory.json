@@ -2592,7 +2592,7 @@
       "name": "capy_cancel"
     },
     {
-      "description": "A Captain's digest plus crew threads that need the owner or are working. Defaults to the Captain routed for you and project.",
+      "description": "Read a Captain digest and crew activity with the owner's sign-in. The Captain defaults to your project route.",
       "icon": null,
       "id": "tool:capy_captain_digest",
       "input_properties": [
@@ -2759,7 +2759,7 @@
       "name": "connect_revoke"
     },
     {
-      "description": "Read at the start of a session: the project's memory and links, the owner's general profile and recent decisions, and each block's section (for a routed Captain: its digest, relevant active work and conversations in progress).",
+      "description": "Read the project's memory and links, the owner's general profile, recent decisions and your conversations in progress. The owner's sign-in includes the routed Captain's digest and crew activity.",
       "icon": null,
       "id": "tool:context_pack",
       "input_properties": [

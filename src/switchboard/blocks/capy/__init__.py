@@ -275,6 +275,12 @@ class CapyBlock(Block):
         return {"identity": self.identity, "sends_as": (self.chain(None) or [None])[0], "sends_as_agents": {a: (self.chain(a) or [None])[0] for a in self.agents()},
                 "send_keys": {env: self.key_checks.get(env, {"status": "unchecked"}) for env in self.keys}, "following": sorted(self.followers), "open_handles": len(self.core.inbox.handles(destination=self.name, open_only=True, limit=500))}
 
+    def status_for(self, principal: "Principal") -> dict[str, Any]:
+        if principal.is_unrestricted_owner:
+            return self.status()
+        handles = self.core.inbox.handles(owner=principal.source, destination=self.name, open_only=True, scopes=principal.scopes, limit=500)
+        return {"open_handles": len(handles)}
+
     def config_step(self) -> str | None:
         if self.api is None:
             if self.core.secret(CAPY_KEY):
@@ -694,10 +700,10 @@ class CapyBlock(Block):
             return t
         raise DestinationError("that thread is outside the Captains, projects and threads routed here")
 
-    def _thread_ref(self, ref: str, call: Call) -> str:
+    def _thread_ref(self, ref: str, call: Call, *, read: bool = False) -> str:
         if ref.startswith("h_"):
             h = self.core.inbox.handle(ref)
-            if h is None or h["owner"] != call.principal.source:
+            if h is None or not (h["owner"] == call.principal.source or (read and call.principal.is_unrestricted_owner)):
                 raise DestinationError(f"no handle {ref!r}")
             return h["ref"]
         return ref
@@ -712,7 +718,7 @@ class CapyBlock(Block):
 
     async def thread_status(self, call: Call, *, thread_id: str, messages: int = 5, include_tools: bool = False) -> dict[str, Any]:
         api = self.need_api()
-        thread_id = self._thread_ref(thread_id, call)
+        thread_id = self._thread_ref(thread_id, call, read=True)
         t = await self.check_thread_allowed(thread_id)
         tail = await api.tail_messages(thread_id, limit=50)
         shown = [m for m in tail if include_tools or m.get("source") != "tool"][-max(1, min(messages, 20)):]
@@ -720,7 +726,7 @@ class CapyBlock(Block):
 
     async def result(self, call: Call, *, thread_id: str, tail: int = 0) -> dict[str, Any]:
         api = self.need_api()
-        thread_id = self._thread_ref(thread_id, call)
+        thread_id = self._thread_ref(thread_id, call, read=True)
         t = await self.check_thread_allowed(thread_id)
         msgs = await api.tail_messages(thread_id, limit=60)
         final = next((m for m in reversed(msgs) if m.get("source") == "assistant"), None)
@@ -770,8 +776,10 @@ class CapyBlock(Block):
     async def list_work(self, call: Call, *, scope: str = "delegated", project: str | None = None, captain: str | None = None, limit: int = 10) -> dict[str, Any]:
         api = self.need_api()
         limit = max(1, min(limit, 30))
+        p = call.principal
+        owner = None if p.is_unrestricted_owner else p.source
         if scope == "delegated":
-            hs = self.core.inbox.handles(destination=self.name, project=project, limit=limit)
+            hs = self.core.inbox.handles(owner=owner, destination=self.name, project=project, scopes=p.scopes, limit=limit)
 
             async def one(h: dict[str, Any]) -> dict[str, Any]:
                 base = {"handle": h["handle"], "thread_id": h["ref"], "by": h["owner"], "project": h["project"], "following": h["open"],
@@ -782,20 +790,24 @@ class CapyBlock(Block):
                     return {**base, "error": str(e)}
 
             return {"scope": scope, "items": list(await asyncio.gather(*(one(h) for h in hs)))}
+        visible = self.core.inbox.provider_refs(self.name, owner=owner, scopes=p.scopes) if owner is not None else None
         if scope == "captain":
             cid = (await self.resolve_captain(captain))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
             if not cid:
                 raise DestinationError("no Captain is routed; pass captain")
-            crew = await api.captain_crew(cid)
+            crew = [t for t in await api.captain_crew(cid) if visible is None or t["id"] in visible]
             crew.sort(key=lambda t: t.get("lastActivityAt") or t.get("updatedAt") or "", reverse=True)
             return {"scope": scope, "captain": cid, "items": [thread_summary(t) for t in crew[:limit]]}
         if scope == "project":
-            p = call.core.project(project)
-            pid = p.links.get("capy_project") if p else None
+            entry = call.core.project(project)
+            pid = entry.links.get("capy_project") if entry else None
             if not pid:
                 raise DestinationError("project must be a switchboard project linked to a Capy project (links.capy_project)")
+            if visible is not None and not p.allows(entry.scope):
+                raise DestinationError("Choose a project granted to this key.")
             page = await api.list_threads(pid, limit=limit)
-            return {"scope": scope, "project": p.slug, "items": [thread_summary(t) for t in page.get("items", [])]}
+            items = [thread_summary(t) for t in page.get("items", []) if visible is None or t["id"] in visible]
+            return {"scope": scope, "project": entry.slug, "items": items}
         raise DestinationError("scope must be delegated, captain or project")
 
     async def autolink(self, principal: Principal, project: Project, *, force: bool = False) -> dict[str, Any]:
@@ -921,12 +933,14 @@ class CapyBlock(Block):
         out = ["## Capy"]
         route, _ = self.core.routes.resolve(destination=self.name, agent=principal.source, project=project.slug if project else None)
         out.append(f"send goes to {describe(route.target)} ({route.level} route)." if route else "No route applies to you here; send needs to=<target>.")
-        open_handles = [h for h in self.core.inbox.handles(destination=self.name, open_only=True, project=project.slug if project else None, limit=10)]
+        owner = None if principal.is_unrestricted_owner else principal.source
+        open_handles = self.core.inbox.handles(owner=owner, destination=self.name, open_only=True,
+                                               project=project.slug if project else None, scopes=principal.scopes, limit=10)
         if open_handles:
             out.append("\n### Delegations in progress")
             out += [f"- {h['title'] or h['meta'].get('task', '')[:80]} [{h['status']}] handle {h['handle']}, thread {h['ref']}" for h in open_handles]
         cid = route.target.get("captain") if route else None
-        if cid:
+        if cid and principal.is_unrestricted_owner:
             try:
                 d, crew = await asyncio.gather(self.api.captain_digest(cid), self.api.captain_crew(cid))
             except CapyError as e:
