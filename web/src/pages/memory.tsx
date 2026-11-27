@@ -1,47 +1,19 @@
 import { useEffect, useRef, useState } from "react"
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Search, X } from "lucide-react"
 import { useSearchParams } from "react-router-dom"
-import { toast } from "sonner"
 import { DataState, type DataStateProps } from "@/components/data-state"
-import { Field, Input } from "@/components/field"
-import { Logo } from "@/components/logo"
+import { Input } from "@/components/field"
 import { Button } from "@/components/ui/button"
-import { Sheet } from "@/components/ui/sheet"
 import { sessionQuery } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import {
-  applyMemoryAction,
-  fetchMemoryDetail,
-  fetchMemoryList,
-  fetchMoveScopes,
-  type MemoryAction,
-  type MemoryNote,
-} from "./memory/api"
+import { fetchMemoryList, type MemoryNote } from "./memory/api"
+import { GitBackup } from "./memory/backup"
+import { Author, NoteTime, scopeName } from "./memory/display"
+import { MemoryHeader } from "./memory/header"
+import { NoteInspector } from "./memory/inspector"
 
 const pageSize = 50
-const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
-const fullDate = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" })
-
-function scopeName(scope: string) {
-  return scope.replace(/^project:/, "")
-}
-
-function NoteTime({ date, short = false }: { date: string | null; short?: boolean }) {
-  if (!date) return null
-  return <time dateTime={date} title={fullDate.format(new Date(date))}>{(short ? shortDate : fullDate).format(new Date(date))}</time>
-}
-
-function Author({ source }: { source: string }) {
-  if (!source) return null
-  const name = source.startsWith("admin:") ? "Owner" : source
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <Logo kind={source} className="size-5" />
-      <span className="truncate" title={name}>{name}</span>
-    </span>
-  )
-}
 
 function NotesTable({ scope, notes, state, onOpen }: {
   scope: string
@@ -103,181 +75,9 @@ function NotesTable({ scope, notes, state, onOpen }: {
   )
 }
 
-function NoteInspector({ note, onClose, onRelocate }: {
-  note: MemoryNote
-  onClose: () => void
-  onRelocate: (scope: string) => void
-}) {
-  const client = useQueryClient()
+export function MemoryPage() {
   const { data: session } = useQuery(sessionQuery)
   const csrf = session?.signed_in ? session.csrf : null
-  const [action, setAction] = useState<MemoryAction["kind"] | null>(null)
-  const [toScope, setToScope] = useState("")
-  const actionButtons = useRef<HTMLDivElement>(null)
-  const confirmation = useRef<HTMLFormElement>(null)
-  const triggeredAction = useRef<MemoryAction["kind"] | null>(null)
-  const detail = useQuery({
-    queryKey: ["memory", "detail", note.id],
-    queryFn: ({ signal }) => fetchMemoryDetail(note.id, signal),
-  })
-  const projects = useQuery({
-    queryKey: ["memory", "destinations"],
-    queryFn: ({ signal }) => fetchMoveScopes(signal),
-    enabled: action === "move" && !!csrf,
-  })
-  const mutation = useMutation({
-    mutationFn: (next: MemoryAction) => {
-      if (!csrf) throw new Error("A CSRF token is required")
-      return applyMemoryAction(note.id, next, csrf)
-    },
-    retry: false,
-    onSuccess: async (_, saved) => {
-      void client.invalidateQueries({ queryKey: ["memory", "scopes"] })
-      void client.invalidateQueries({ queryKey: ["memory", "notes"] })
-      if (saved.kind === "delete") {
-        client.removeQueries({ queryKey: ["memory", "detail", note.id], exact: true })
-        onClose()
-        toast.success("Note deleted.")
-      } else {
-        onRelocate(saved.kind === "move" ? saved.toScope : "general")
-        await client.invalidateQueries({ queryKey: ["memory", "detail", note.id], exact: true })
-        setAction(null)
-        setToScope("")
-        toast.success(saved.kind === "promote" ? "Note promoted to general." : "Note moved.")
-      }
-    },
-  })
-  const entry = detail.data
-  const scope = entry?.scope ?? note.scope
-  const destinations = projects.data?.filter((destination) => destination !== scope) ?? []
-  const validDestination = destinations.includes(toScope)
-
-  useEffect(() => {
-    if (action) confirmation.current?.focus()
-    else if (triggeredAction.current) {
-      const buttons = actionButtons.current
-      const trigger = buttons?.querySelector<HTMLButtonElement>(`[data-action="${triggeredAction.current}"]`) ?? buttons?.querySelector("button")
-      trigger?.focus()
-      triggeredAction.current = null
-    }
-  }, [action])
-
-  function startAction(next: MemoryAction["kind"] | null) {
-    if (next) triggeredAction.current = next
-    mutation.reset()
-    setAction(next)
-    setToScope("")
-  }
-
-  return (
-    <Sheet
-      open
-      title={entry?.title ?? note.title}
-      onOpenChange={(open) => { if (!open && !mutation.isPending) onClose() }}
-    >
-      {detail.isPending ? <DataState kind="loading" message="Loading note…" />
-        : detail.isError ? (
-          <DataState kind="error" message="Note unavailable." onRetry={() => void detail.refetch()} />
-        ) : entry && (
-          <>
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2 border-b pb-4 text-xs">
-              {entry.key && <>
-                <dt className="text-muted-foreground">Key</dt>
-                <dd className="font-mono break-all">{entry.key}</dd>
-              </>}
-              <dt className="text-muted-foreground">Scope</dt>
-              <dd className="font-mono break-all">{scopeName(scope)}</dd>
-              <dt className="text-muted-foreground">Namespace</dt>
-              <dd className="font-mono break-all">{entry.namespace}</dd>
-              <dt className="text-muted-foreground">Written by</dt>
-              <dd><Author source={entry.writer} /></dd>
-              <dt className="text-muted-foreground">Updated</dt>
-              <dd><NoteTime date={entry.updated_at} /></dd>
-              {!!entry.tags.length && <>
-                <dt className="text-muted-foreground">Tags</dt>
-                <dd className="break-words">{entry.tags.join(", ")}</dd>
-              </>}
-            </dl>
-            {entry.body && <div className="py-4 text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">
-              {entry.body}
-            </div>}
-            {!!entry.history.length && (
-              <details className="border-t py-3">
-                <summary className="cursor-pointer rounded-sm text-sm font-medium">History</summary>
-                <ul className="mt-2 divide-y text-xs">
-                  {entry.history.map((revision, index) => (
-                    <li key={index} className="space-y-1 py-2">
-                      <p className="break-words">{revision.action}</p>
-                      <p className="break-words text-muted-foreground">{revision.source.startsWith("admin:") ? "Owner" : revision.source}</p>
-                      {revision.at && <p className="text-muted-foreground"><NoteTime date={revision.at} /></p>}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-            {csrf && (
-              <section aria-label="Note actions" className="border-t pt-4">
-                {!action ? (
-                  <div ref={actionButtons} className="flex flex-wrap items-center gap-2">
-                    {scope !== "general" && <Button size="sm" variant="outline" data-action="promote" onClick={() => startAction("promote")}>Promote</Button>}
-                    <Button size="sm" variant="outline" data-action="move" onClick={() => startAction("move")}>Move</Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" data-action="delete" onClick={() => startAction("delete")}>Delete</Button>
-                  </div>
-                ) : (
-                  <form ref={confirmation} tabIndex={-1} aria-label={`Confirm ${action}`} className="space-y-3" onSubmit={(event) => {
-                    event.preventDefault()
-                    if (mutation.isPending) return
-                    if (action === "move") {
-                      if (validDestination) mutation.mutate({ kind: "move", toScope })
-                    } else mutation.mutate({ kind: action })
-                  }}>
-                    {action === "move" ? (
-                      projects.isPending ? <DataState kind="loading" message="Loading projects…" className="py-0" />
-                        : projects.isError ? (
-                          <DataState kind="error" message="Projects unavailable." onRetry={() => void projects.refetch()} className="py-0" />
-                        ) : destinations.length ? (
-                          <Field label="Move to project">
-                            <select
-                              value={toScope}
-                              disabled={mutation.isPending}
-                              onChange={(event) => { setToScope(event.target.value); mutation.reset() }}
-                              className="block min-h-9 w-full rounded-md border border-border-strong bg-surface px-2 text-body-md"
-                            >
-                              <option value="">Select a project</option>
-                              {destinations.map((destination) => <option value={destination} key={destination}>{scopeName(destination)}</option>)}
-                            </select>
-                          </Field>
-                        ) : <DataState kind="empty" message="0 other projects" className="py-0" />
-                    ) : action === "promote" && (
-                      <p className="text-sm">All projects can read promoted notes.</p>
-                    )}
-                    {mutation.isError && (
-                      <p role="alert" className="text-sm text-destructive">
-                        {action === "delete" ? "Try deleting the note again." : action === "promote" ? "Try promoting the note again." : "Try moving the note again."}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="submit"
-                        size="sm"
-                        variant={action === "delete" ? "destructive" : "default"}
-                        disabled={mutation.isPending || (action === "move" && !validDestination)}
-                      >
-                        {mutation.isPending ? "Saving…" : action === "delete" ? "Delete note" : action === "promote" ? "Promote to general" : "Move note"}
-                      </Button>
-                      <Button size="sm" variant="ghost" disabled={mutation.isPending} onClick={() => startAction(null)}>Cancel</Button>
-                    </div>
-                  </form>
-                )}
-              </section>
-            )}
-          </>
-        )}
-    </Sheet>
-  )
-}
-
-export function MemoryPage() {
   const [params, setParams] = useSearchParams()
   const [selected, setSelected] = useState<MemoryNote | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -349,8 +149,9 @@ export function MemoryPage() {
   }
 
   return (
-    <div className="grid min-w-0 gap-y-4 md:grid-cols-[176px_minmax(0,1fr)] md:gap-x-6 lg:min-h-[calc(100dvh-var(--topbar-height)-3rem)] lg:grid-cols-[208px_minmax(0,1fr)] lg:gap-x-8">
-      <aside aria-label="Memory scopes" className="border-b pb-3 md:border-r md:border-b-0 md:pr-4 md:pb-0 lg:-mb-8 lg:-ml-2 lg:pt-2">
+    <div className="grid min-w-0 gap-y-4 md:grid-cols-[176px_minmax(0,1fr)] md:gap-x-6 lg:grid-cols-[208px_minmax(0,1fr)] lg:gap-x-8">
+      {csrf && <MemoryHeader csrf={csrf} />}
+      <aside aria-label="Memory scopes" className="border-b pb-3 md:row-span-2 md:border-r md:border-b-0 md:pr-4 md:pb-0 lg:-ml-2 lg:pt-2">
         {scopeCounts ? (
           <ul className="grid gap-0.5">
             {counts.map(({ name, count }) => (
@@ -438,6 +239,7 @@ export function MemoryPage() {
           </div>
         )}
       </section>
+      {csrf && <GitBackup csrf={csrf} />}
       {selected && (
         <NoteInspector
           key={selected.id}

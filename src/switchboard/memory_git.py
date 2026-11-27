@@ -233,10 +233,13 @@ class MemoryGit:
         opts = self._settings()
         pending = self.core.store.one("SELECT COUNT(*) AS n FROM memory_revisions WHERE rowid > ?", (opts["last_rev"],))["n"]
         available = shutil.which("git") is not None
+        credential_saved = self.core.store.one("SELECT 1 FROM secrets WHERE name = ? AND sealed IS NOT NULL",
+                                               (MEMORY_BACKUP_CREDENTIAL,)) is not None
         return {"enabled": opts["enabled"], "remote": _public_remote(opts["remote"]), "branch": opts["branch"],
                 "author_name": opts["author_name"], "author_email": opts["author_email"], "last_success_at": iso(opts["last_success_at"]),
                 "last_commit": opts["last_commit"], "last_error": (opts["last_error"] if available else "Install git to use backup."),
-                "pending_changes": pending, "next_retry_at": iso(opts["next_retry_at"]), "git_available": available}
+                "pending_changes": pending, "next_retry_at": iso(opts["next_retry_at"]), "git_available": available,
+                "credential_saved": credential_saved}
 
     def changed(self) -> None:
         with self._wake:
