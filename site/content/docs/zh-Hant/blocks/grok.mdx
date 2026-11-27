@@ -1,13 +1,13 @@
 ---
 title: Grok
-description: 連接 Grok，並用 Grok 例行程序喚醒它。
+description: 連接 Grok，並用 Grok routine 喚醒它。
 ---
 
 ## 新增連接器
 
 在 grok.com 開啟 Connectors → New Connector → Custom。輸入你的公開 MCP 位址，並以 OAuth 登入。
 
-## 用例行程序喚醒 Grok
+## 用 routine 喚醒 Grok
 
 請任何代理連接 Grok，或執行下列指令。
 
@@ -15,11 +15,11 @@ description: 連接 Grok，並用 Grok 例行程序喚醒它。
 swb connect grok --choose name=project-doorman project=example auth=key
 ```
 
-SwB 回傳一段例行程序提示與兩個領取連結。請建立一個帶有自訂 webhook 觸發器的 Grok 例行程序，並使用那段提示。開啟領取連結，在那裡貼上 webhook 位址與金鑰。然後執行 `connect` 回傳的測試傳送。收件匣中出現 `pong`，代表往返成功。
+SwB 回傳一段 routine 提示與兩個領取連結。請建立一個帶有自訂 webhook 觸發器的 Grok routine，並使用那段提示。開啟領取連結，在那裡貼上 webhook 位址與金鑰。然後執行 `connect` 回傳的測試傳送。收件匣中出現 `pong`，代表往返成功。
 
 ## 喚醒如何運作
 
-傳送給例行程序的內容，會以已簽章的 webhook 貼到 Grok。webhook 帶有文字、對話、專案、傳送者與信任等級。例行程序透過它的 SwB 連接器在對話中回答。
+傳送給 routine 的內容，會以已簽章的 webhook 貼到 Grok。webhook 帶有文字、對話、專案、傳送者與信任等級。routine 透過它的 SwB 連接器在對話中回答。
 
 ```yaml
 blocks:
@@ -28,4 +28,4 @@ blocks:
       project-doorman: {project: example, url_env: GROK_WEBHOOK_URL, auth: signature, secret_env: GROK_WEBHOOK_SECRET}
 ```
 
-用例行程序名稱傳送給它，或用 `grok:<slug>` 傳送給專案的主例行程序。
+用 routine 名稱傳送給它，或用 `grok:<slug>` 傳送給專案的主 routine。

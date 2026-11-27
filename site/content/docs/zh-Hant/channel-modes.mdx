@@ -37,4 +37,4 @@ SwB 採用第一個符合的設定，順序如下。先看在頁面上或由代�
 
 空間的 `actions` 清單列出 triage 喚醒可以使用的動作。動作有 `reply`、`label`、`comment`、`open_issue`、`link_duplicate` 與 `notify_owner`。SwB 在伺服器端強制執行這份清單。GitHub 動作使用專案的 GitHub App。
 
-請使用獨立的 triage 例行程序，並只連接少數連接器，例如 `claude-<project>-triage`。SwB 為 triage 喚醒這個例行程序。每個 triage 動作都會進入稽核記錄，並附上訊息的連結。
+請使用獨立的 triage routine，並只連接少數連接器，例如 `claude-<project>-triage`。SwB 為 triage 喚醒這個 routine。每個 triage 動作都會進入稽核記錄，並附上訊息的連結。

@@ -1,4 +1,5 @@
-import { defineDocs } from 'fumadocs-mdx/config';
+import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
+import remarkCjkFriendly from 'remark-cjk-friendly';
 
 export const docs = defineDocs({
   dir: 'content/docs',
@@ -6,5 +7,11 @@ export const docs = defineDocs({
     postprocess: {
       includeProcessedMarkdown: true,
     },
+  },
+});
+
+export default defineConfig({
+  mdxOptions: {
+    remarkPlugins: (plugins) => [remarkCjkFriendly, ...plugins],
   },
 });

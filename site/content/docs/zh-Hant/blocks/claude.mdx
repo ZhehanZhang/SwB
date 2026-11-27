@@ -1,6 +1,6 @@
 ---
 title: Claude
-description: 連接 Claude 與 Claude Projects，並用例行程序喚醒它們。
+description: 連接 Claude 與 Claude Projects，並用 routine 喚醒它們。
 ---
 
 ## 新增連接器
@@ -13,22 +13,22 @@ description: 連接 Claude 與 Claude Projects，並用例行程序喚醒它們�
 
 > 我要怎麼連接我的 Claude Projects？
 
-代理會找到或建立對應的 SwB 專案。它會建立一個帶有 API 觸發器的 Claude Code 例行程序，或請你建立一個。接著它呼叫 `routine_register`。SwB 回傳一次性連結。請開啟連結，貼上例行程序的權杖並按下 Save。連結只能使用一次，有效時間是 30 分鐘。最後，代理向自己的例行程序傳送測試訊息，並回報往返結果。
+代理會找到或建立對應的 SwB 專案。它會建立一個帶有 API 觸發器的 Claude Code routine，或請你建立一個。接著它呼叫 `routine_register`。SwB 回傳一次性連結。請開啟連結，貼上 routine 的權杖並按下 Save。連結只能使用一次，有效時間是 30 分鐘。最後，代理向自己的 routine 傳送測試訊息，並回報往返結果。
 
-## 例行程序
+## Routine
 
-**例行程序**（routine）是 SwB 能喚醒的 Claude Code 任務。向 `claude` 傳送並指定專案，會喚醒該專案的主例行程序。SwB 也會把訊息留在 Claude 的信箱。例行程序用 `reply` 回答，答案回到傳送者。
+**routine**是 SwB 能喚醒的 Claude Code 任務。向 `claude` 傳送並指定專案，會喚醒該專案的主 routine。SwB 也會把訊息留在 Claude 的信箱。routine 用 `reply` 回答，答案回到傳送者。
 
 | 傳送給 | 喚醒 |
 | - | - |
-| `claude` 加上 `project=<slug>` | 該專案的主例行程序 |
-| `claude:<slug>` | 該專案的主例行程序 |
-| `<routine name>` | 該例行程序 |
+| `claude` 加上 `project=<slug>` | 該專案的主 routine |
+| `claude:<slug>` | 該專案的主 routine |
+| `<routine name>` | 該 routine |
 | `agent:claude` | 只有信箱 |
 
-一個專案可以有多個例行程序。第一個例行程序是主例行程序。註冊例行程序時加上 `primary=true`，即可讓它成為主例行程序。
+一個專案可以有多個 routine。第一個 routine 是主 routine。註冊 routine 時加上 `primary=true`，即可讓它成為主 routine。
 
-有些 Project 例行程序只接受空本文的喚醒。這時 SwB 以空本文喚醒例行程序，並保留訊息。例行程序用 `routine_pickup` 取回訊息。
+有些 Project routine 只接受空本文的喚醒。這時 SwB 以空本文喚醒 routine，並保留訊息。routine 用 `routine_pickup` 取回訊息。
 
 ## 設定
 
@@ -39,4 +39,4 @@ blocks:
       claude: {routine_id: trig_..., token_env: CLAUDE_ROUTINE_TOKEN, agent: claude}
 ```
 
-環境變數 `CLAUDE_ROUTINE_TOKEN` 與 `CLAUDE_ROUTINE_ID` 可用一個例行程序啟用這個模組。
+環境變數 `CLAUDE_ROUTINE_TOKEN` 與 `CLAUDE_ROUTINE_ID` 可用一個 routine 啟用這個模組。

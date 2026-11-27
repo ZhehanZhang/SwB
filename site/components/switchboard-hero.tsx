@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { Check, Copy, ExternalLink, X } from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import type { Locale } from '@/lib/i18n';
+import { localize } from '@/lib/i18n';
+import { openUrl, setup } from '@/lib/setup';
+import { CYCLE, LEG, STEP, clock, trips as livePairs } from '@/lib/live';
 import { MarkTile, type MarkKind } from './mark-tile';
 
 type Node = { kind: MarkKind; label: string; channel?: boolean };
@@ -23,24 +29,12 @@ const nodes: Node[] = [
 ];
 
 const index = (kind: MarkKind) => nodes.findIndex((node) => node.kind === kind);
-const trips = ([
-  ['slack', 'claude'],
-  ['claude', 'capy'],
-  ['dots', 'codex'],
-  ['github', 'claude-code'],
-  ['capy', 'telegram'],
-  ['grok-bot', 'chatgpt'],
-  ['gemini', 'muse'],
-  ['discord', 'grok'],
-] as [MarkKind, MarkKind][]).map(([from, to]) => [index(from), index(to)] as const);
+const trips = livePairs.map(([from, to]) => [index(from), index(to)] as const);
 
-const LEG = 0.85;
-const STEP = 2.2;
-const CYCLE = trips.length * STEP;
 const BEND = 0.14;
 
 const layouts = {
-  wide: { W: 1000, H: 640, r: 255, hub: 44, cord: [6.5, 2.2], pulse: 5.5, halo: 28 },
+  wide: { W: 1000, H: 820, r: 320, hub: 44, cord: [7, 2.4], pulse: 6, halo: 30 },
   tall: { W: 1000, H: 1000, r: 385, hub: 85, cord: [5, 1.8], pulse: 4.5, halo: 58 },
 };
 type Layout = keyof typeof layouts;
@@ -76,10 +70,11 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
       colors = { intake: pick('--cord-intake', colors.intake), route: pick('--cord-route', colors.route), sink: pick('--cord-sink', colors.sink), accent: pick('--accent', colors.accent), background: pick('--background', colors.background) };
     };
     readColors();
-    const themeWatch = new MutationObserver(readColors);
+    const themeWatch = new MutationObserver(() => { readColors(); redraw(); });
     themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     let scale = 1;
+    let redraw = () => {};
     const resize = () => {
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
       const { width } = element.getBoundingClientRect();
@@ -87,6 +82,7 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
       element.width = Math.round(width * ratio);
       element.height = Math.round((width * spec.H / spec.W) * ratio);
       context.setTransform(ratio * scale, 0, 0, ratio * scale, 0, 0);
+      redraw();
     };
     resize();
     const sizeWatch = new ResizeObserver(resize);
@@ -196,14 +192,14 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
     };
 
     if (still) {
+      redraw = () => draw(0);
       draw(0);
       return () => { themeWatch.disconnect(); sizeWatch.disconnect(); };
     }
     let frame = 0;
     let visible = true;
-    const begin = performance.now();
-    const tick = (now: number) => {
-      if (visible) draw((now - begin) / 1000);
+    const tick = () => {
+      if (visible) draw(clock());
       frame = requestAnimationFrame(tick);
     };
     const viewWatch = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; });
@@ -218,7 +214,7 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
   }, [canvas, layout]);
 }
 
-function Board({ layout, className }: { layout: Layout; className: string }) {
+function Board({ layout, className, onPick }: { layout: Layout; className: string; onPick: (kind: MarkKind) => void }) {
   const { W, H } = layouts[layout];
   const canvas = useRef<HTMLCanvasElement>(null);
   useCords(canvas, layout);
@@ -230,21 +226,77 @@ function Board({ layout, className }: { layout: Layout; className: string }) {
       {nodes.map((node, i) => {
         const { x, y } = place(layout, i);
         return (
-          <div key={node.kind} className={`swb-node swb-node-${side(i)}`} style={{ left: pct(x, W), top: pct(y, H) }}>
+          <button key={node.kind} type="button" className={`swb-node swb-node-${side(i)}`} style={{ left: pct(x, W), top: pct(y, H), animationDelay: `${0.6 + i * 0.12}s` }}
+            onClick={() => onPick(node.kind)} aria-label={node.label}>
             <MarkTile kind={node.kind} />
             <span className="swb-node-label">{node.label}</span>
-          </div>
+          </button>
         );
       })}
     </div>
   );
 }
 
-export function SwitchboardHero({ label }: { label: string }) {
+type Labels = { copy: string; copied: string; open: string; guide: string; close: string };
+
+function Panel({ kind, lang, prompts, labels, onClose }: {
+  kind: MarkKind; lang: Locale; prompts: Record<string, string>; labels: Labels; onClose: () => void;
+}) {
+  const item = setup[kind];
+  const node = nodes.find((entry) => entry.kind === kind);
+  const [copied, setCopied] = useState(false);
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    close.current?.focus();
+    const key = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [onClose]);
+  if (!item || !node) return null;
+  const prompt = prompts[item.prompt] ?? '';
+  const names = { claude: 'Claude', chatgpt: 'ChatGPT', grok: 'Grok' };
   return (
-    <figure className="swb-hero" role="img" aria-label={label}>
-      <Board layout="wide" className="hidden sm:block" />
-      <Board layout="tall" className="sm:hidden" />
+    <div className="swb-panel-wrap" onClick={onClose}>
+      <section className="swb-panel" role="dialog" aria-modal="true" aria-label={node.label} onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-center gap-3">
+          <MarkTile kind={kind} className="swb-panel-mark" />
+          <h2 className="font-display text-xl font-extrabold">{node.label}</h2>
+          <button ref={close} type="button" className="ml-auto grid size-9 place-items-center rounded-md hover:bg-fd-muted" aria-label={labels.close} onClick={onClose}>
+            <X aria-hidden="true" className="size-4" />
+          </button>
+        </header>
+        <p className="mt-4 text-[15px]">{item.step[lang]}</p>
+        <pre className="swb-panel-prompt">{prompt}</pre>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" className="swb-button bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/85" onClick={async () => {
+            await navigator.clipboard.writeText(prompt);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+          }}>
+            {copied ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
+            {copied ? labels.copied : labels.copy}
+          </button>
+          {item.open.map((target) => (
+            <a key={target} className="swb-button border hover:bg-fd-muted" href={openUrl[target](prompt)} target="_blank" rel="noreferrer">
+              {labels.open.replace('{app}', names[target])}<ExternalLink aria-hidden="true" className="size-3.5" />
+            </a>
+          ))}
+          <Link className="swb-button hover:bg-fd-muted" href={localize(lang, item.docs)}>{labels.guide}</Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function SwitchboardHero({ label, lang, prompts, labels }: {
+  label: string; lang: Locale; prompts: Record<string, string>; labels: Labels;
+}) {
+  const [picked, setPicked] = useState<MarkKind | null>(null);
+  return (
+    <figure className="swb-hero" aria-label={label}>
+      <Board layout="wide" className="hidden sm:block" onPick={setPicked} />
+      <Board layout="tall" className="sm:hidden" onPick={setPicked} />
+      {picked && <Panel kind={picked} lang={lang} prompts={prompts} labels={labels} onClose={() => setPicked(null)} />}
     </figure>
   );
 }
