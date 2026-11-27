@@ -13,6 +13,7 @@ from starlette.routing import Route
 
 from . import installed_version
 from .blocks import BLOCKS
+from .env import env_value
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _COMMIT = re.compile(r"[0-9a-fA-F]{7,64}")
@@ -45,7 +46,7 @@ def _build_date(value: str) -> str:
 
 
 def release_version(env: Mapping[str, str]) -> str | None:
-    if label := env.get("SWITCHBOARD_RELEASE", "").strip():
+    if label := (env_value(env, "SWB_RELEASE") or "").strip():
         commit = _build_commit(env.get("GIT_COMMIT", ""))
         return label if commit == "unknown" else f"{label}+{commit[:7]}"
     return installed_version()

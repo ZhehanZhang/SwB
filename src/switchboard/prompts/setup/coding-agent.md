@@ -2,15 +2,15 @@ Read the setup guide at https://swb.one/docs/setup/coding-agent.
 
 Help me connect my coding agent to SwB. SwB is my switchboard for shared memory and agent handoffs. You reach it as an MCP server.
 
-If the SwB tools are missing, help me add a remote MCP server named switchboard. Use my SwB address, such as https://swb.example.com/mcp.
+If the SwB tools are missing, help me add a remote MCP server named `swb`. Use my SwB address, such as https://swb.example.com/mcp.
 
 Use the following commands to add an OAuth connection before you can call `connect`.
 
-For Claude Code, run `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp`. Ask me to open `/mcp`. Ask me to select switchboard. Ask me to choose Authenticate.
+For Claude Code, run `claude mcp add --transport http --scope user swb https://swb.example.com/mcp`. Ask me to open `/mcp`. Ask me to select `swb`. Ask me to choose Authenticate.
 
-For Codex, run `codex mcp add switchboard --url https://swb.example.com/mcp` to add SwB for OAuth. If `connect` gives you settings, merge them into `~/.codex/config.toml` instead. For OAuth, run `codex mcp login switchboard`.
+For Codex, run `codex mcp add swb --url https://swb.example.com/mcp` to add SwB for OAuth. If `connect` gives you settings, merge them into `~/.codex/config.toml` instead. For OAuth, run `codex mcp login swb`.
 
-For Gemini CLI, run `gemini mcp add --scope user --transport http switchboard https://swb.example.com/mcp` to add SwB for OAuth. If `connect` gives you settings, merge them into `~/.gemini/settings.json` instead. Use the `httpUrl` field for the SwB address. For OAuth, ask me to enter `/mcp auth switchboard`.
+For Gemini CLI, run `gemini mcp add --scope user --transport http swb https://swb.example.com/mcp` to add SwB for OAuth. If `connect` gives you settings, merge them into `~/.gemini/settings.json` instead. Use the `httpUrl` field for the SwB address. For OAuth, ask me to enter `/mcp auth swb`.
 
 Ask me to sign in to SwB in the browser. Ask me to click Approve on the Connect to SwB page. Wait for me to confirm. Ask me to start a new session.
 

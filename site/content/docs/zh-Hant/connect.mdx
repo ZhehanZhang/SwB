@@ -14,7 +14,7 @@ description: 把 SwB 加到代理並設定連線。
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 以 Automatic OAuth 用戶端新增 MCP 伺服器 |
-| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
+| Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
 | Codex、Gemini CLI 與其他程式開發代理 | `swb connect coding-agent --choose agent=codex` |
 
 對於程式開發代理，請把 `codex` 換成你的用戶端名稱。單獨執行 `swb connect coding-agent` 可以看到清單。清單包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 與 Kiro。
@@ -23,7 +23,7 @@ description: 把 SwB 加到代理並設定連線。
 
 具備擁有者權限的代理可以設定其他連線。若使用配對金鑰，代理會為每個限擁有者執行的步驟提供終端機指令。
 
-擁有者權限需要擁有者核准的 OAuth 登入，或來自 `SWITCHBOARD_KEY_<NAME>` 的金鑰。請使用可存取所有範圍、工具和目標的憑證。`auth.key_scopes`、`auth.key_tools` 和 `auth.key_targets` 會限制存取權限。
+擁有者權限需要擁有者核准的 OAuth 登入，或來自 `SWB_KEY_<NAME>` 的金鑰。請使用可存取所有範圍、工具和目標的憑證。`auth.key_scopes`、`auth.key_tools` 和 `auth.key_targets` 會限制存取權限。
 
 | 你說的話 | 代理的動作 |
 | - | - |

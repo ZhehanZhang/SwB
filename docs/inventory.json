@@ -3579,7 +3579,7 @@
       "id": "tool:switchboard_status",
       "input_properties": [],
       "kind": "tool",
-      "label": "Switchboard status",
+      "label": "SwB status",
       "name": "switchboard_status"
     },
     {

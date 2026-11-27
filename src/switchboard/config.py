@@ -13,11 +13,12 @@ from urllib.parse import urlsplit
 import yaml
 
 from .block_env import configured_env, env_blocks
+from .env import canonical_env_name, env_value
 
 if TYPE_CHECKING:
     from .modes import ModeConfig
 
-KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
+KEY_ENV_PREFIX = "SWB_KEY_"
 MIN_KEY_LEN = 24
 INSTANCE_CONFIG = Path("config/switchboard.yaml")
 INSTANCE_DB = "switchboard.db"
@@ -27,7 +28,7 @@ DEFAULT_PORT = "8870"
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
-# channel uses SWITCHBOARD_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
+# channel uses SWB_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
 DEFAULT_INBOX_KEYS = {"channel": "claude-code"}
 
 REQUEST_BASE: ContextVar[str | None] = ContextVar("switchboard_request_base", default=None)
@@ -39,16 +40,16 @@ def _http_origin(host: str, port: int | str) -> str:
 
 
 def bind_address(env: Mapping[str, str], port: int | str, *, host: str | None = None) -> tuple[str, str]:
-    host = host or env.get("SWITCHBOARD_HOST") or DEFAULT_HOST
+    host = host or env_value(env, "SWB_HOST", env.get("SWB_DEFAULT_HOST")) or DEFAULT_HOST
     origin_host = {"0.0.0.0": DEFAULT_HOST, "::": "::1"}.get(host, host)
     return host, _http_origin(origin_host, port)
 
 
 def client_endpoint(env: Mapping[str, str]) -> str:
-    host = env.get("SWITCHBOARD_HOST")
+    host = env_value(env, "SWB_HOST")
     if host is None or host not in (DEFAULT_HOST, "::1"):
         host = "localhost"
-    port = env.get("SWITCHBOARD_PORT") or env.get("PORT") or DEFAULT_PORT
+    port = env_value(env, "SWB_PORT") or env.get("PORT") or DEFAULT_PORT
     return f"{_http_origin(host, port)}/mcp"
 
 
@@ -201,9 +202,9 @@ class Config:
     def problems(self) -> list[str]:
         out = []
         if not self.public_url:
-            out.append("Set SWITCHBOARD_PUBLIC_URL to enable OAuth sign-in")
+            out.append("Set SWB_PUBLIC_URL to enable OAuth sign-in")
         if not self.owner_sign_in:
-            out.append("Set SWITCHBOARD_PUBLIC_URL or configure an upstream method for owner sign-in")
+            out.append("Set SWB_PUBLIC_URL or configure an upstream method for owner sign-in")
         return out
 
 
@@ -258,7 +259,7 @@ def _oidc(raw: Any, public_url: str | None, emails: tuple[str, ...], env: Mappin
     issuer, client_id, secret_env, name = values
     if not _web_url(issuer):
         raise ConfigError("auth.oidc.issuer must be an HTTPS URL without a query or fragment")
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", secret_env) or not env.get(secret_env):
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", secret_env) or not env_value(env, secret_env):
         raise ConfigError("auth.oidc.client_secret_env must name a set environment variable")
     subjects = raw.get("owner_subjects", [])
     if not isinstance(subjects, list) or not all(isinstance(s, str) and s.strip() for s in subjects):
@@ -271,9 +272,9 @@ def _oidc(raw: Any, public_url: str | None, emails: tuple[str, ...], env: Mappin
 def config_path(path: str | Path | None, env: Mapping[str, str], *, instance: Instance | None = None) -> Path | None:
     if instance is not None:
         local = instance.base / INSTANCE_CONFIG
-        if instance.explicit or (not path and not env.get("SWITCHBOARD_CONFIG") and local.is_file()):
+        if instance.explicit or (not path and local.is_file() and not env_value(env, "SWB_CONFIG")):
             path = local
-    path = path or env.get("SWITCHBOARD_CONFIG")
+    path = path or env_value(env, "SWB_CONFIG")
     return Path(path) if path else next((p for p in CONFIG_PATHS if p.is_file()), None)
 
 
@@ -314,16 +315,21 @@ def _config_files(path: str | Path | None, env: Mapping[str, str],
                   instance: Instance | None) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     base_path = config_path(path, env, instance=instance)
     base = _read_yaml(base_path, "config")
-    overlay_path = env.get("SWITCHBOARD_OVERLAY")
+    overlay_path = env_value(env, "SWB_OVERLAY")
     local_paths = (p.with_name("local.yaml") for p in ((base_path,) if base_path else CONFIG_PATHS))
     local_path = Path(overlay_path) if overlay_path else next((p for p in local_paths if p.is_file()), None)
     overlay = _read_yaml(local_path, "overlay", required=bool(overlay_path)) or {}
     return base, overlay
 
 
+def configured_data_dir(env: Mapping[str, str]) -> str | None:
+    return (env.get("SWB_DATA_DIR") or env.get("SWB_DATA")
+            or env_value(env, "SWB_DATA_DIR") or env_value(env, "SWB_DATA") or env.get("SWB_DEFAULT_DATA_DIR"))
+
+
 def _data_paths(env: Mapping[str, str], raw: Mapping[str, Any], instance: Instance | None, *,
                 has_config: bool) -> tuple[Path, Path | None]:
-    if configured := raw.get("data_dir") or env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA"):
+    if configured := raw.get("data_dir") or configured_data_dir(env):
         return Path(configured).expanduser(), None
     if instance is None:
         return Path("data"), None
@@ -376,7 +382,8 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         raise ConfigError("auth.cloudflare_access must be a mapping")
     memory = raw.get("memory") or {}
 
-    configured_url = tunnel_url or raw.get("public_url", env.get("SWITCHBOARD_PUBLIC_URL") or env.get("PUBLIC_URL"))
+    configured_url = tunnel_url or (raw["public_url"] if "public_url" in raw
+                                    else env_value(env, "SWB_PUBLIC_URL") or env.get("PUBLIC_URL"))
     if isinstance(configured_url, str):
         configured_url = configured_url.strip().rstrip("/") or None
     public_url = configured_url
@@ -384,7 +391,8 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         public_url = f"http://localhost:{urlsplit(loopback_origin).port}"
     if public_url is not None and (not isinstance(public_url, str) or not _web_url(public_url, local=True)):
         raise ConfigError("public_url must be an HTTPS URL or use a loopback address for HTTP")
-    owner_emails = tuple(e.strip().lower() for e in as_tuple(auth.get("owner_emails", (env.get("SWITCHBOARD_OWNER_EMAILS") or "").split(","))) if e.strip())
+    emails = auth["owner_emails"] if "owner_emails" in auth else (env_value(env, "SWB_OWNER_EMAILS") or "").split(",")
+    owner_emails = tuple(e.strip().lower() for e in as_tuple(emails) if e.strip())
     aliases = tuple(str(u).strip().rstrip("/") for u in as_tuple(raw.get("public_url_aliases")))
     if configured_url is None and loopback_origin and loopback_origin != public_url and loopback_origin not in aliases:
         aliases = (*aliases, loopback_origin)
@@ -399,8 +407,8 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
             raise ConfigError("auth.passkey_rp_id must be every public host or a parent domain they share")
 
     keys = []
-    for name, value in sorted(env.items()):
-        if name.startswith(KEY_ENV_PREFIX) and value:
+    for name in sorted({canonical_env_name(name) for name in env}):
+        if name.startswith(KEY_ENV_PREFIX) and (value := env_value(env, name)):
             if len(value) < MIN_KEY_LEN:
                 raise ConfigError(f"{name} must be at least {MIN_KEY_LEN} characters")
             keys.append(StaticKey(name=agent_name(name[len(KEY_ENV_PREFIX):]), secret=value))

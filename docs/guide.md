@@ -4,14 +4,14 @@ The reference for configuring and running SwB. Start with the [README](../README
 
 ## Connect a client
 
-Give the client the printed MCP URL, or use `https://YOUR_DOMAIN/mcp` for a hosted instance. Cloud clients
-need a public HTTPS URL. OAuth requires owner sign-in to be configured; for clients that accept an
-Authorization header, you can use a separate client bearer key instead. Keep the owner key private.
+Use the MCP address shown at startup. Use a public HTTPS address for a hosted client. Set up owner sign-in for OAuth. For clients that accept an authorization header, you can use a separate client key. Keep the owner key private.
 
-- **Claude Project or Claude Desktop:** In Claude, open Settings, then Connectors, and add a custom connector with the MCP URL. Enable it in your Project or conversation.
-- **ChatGPT:** Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a browser and add a custom MCP server there. Enable developer mode if required. The interactive plugin editor and desktop apps don't add custom servers reliably.
-- **Claude Code:** Run `claude mcp add --transport http switchboard https://YOUR_DOMAIN/mcp`.
-- **Other clients:** Add a Streamable HTTP MCP server. Run `swb connect mcp-client --choose agent=CLIENT` from your local instance to get client-specific settings.
+| Client | Setup |
+| - | - |
+| Claude Project or Claude Desktop | Add a custom connector under **Settings** → **Connectors**. Enable it in your project or conversation. |
+| ChatGPT | Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a browser. Add a custom MCP server. Enable developer mode if prompted. |
+| Claude Code | Run `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` with your MCP address. |
+| Other clients | Add a Streamable HTTP MCP server named `swb`. Run `swb connect mcp-client --choose agent=CLIENT` to get the settings. |
 
 ## Coding agents
 
@@ -50,24 +50,21 @@ Use YAML to grant other agents Slack access.
 
 | Instance setting | Environment variables |
 | - | - |
-| Public base URL | `SWITCHBOARD_PUBLIC_URL` or `PUBLIC_URL`. Needed for hosted OAuth. |
-| Persistent data | `SWITCHBOARD_DATA_DIR` (`SWITCHBOARD_DATA` also works). Defaults to `~/.local/share/switchboard` with `swb up`, `./data` with bare `swb serve`, and `/data` in the image. |
-| Owner sign-in | `SWITCHBOARD_OWNER_EMAILS` (comma-separated), `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD`. See [authentication](#authentication-and-protection). |
-| Static bearer keys | `SWITCHBOARD_KEY_OWNER` for the local CLI, or `SWITCHBOARD_KEY_<AGENT>` for other agents. |
-| YAML paths | `SWITCHBOARD_CONFIG` for the base file, `SWITCHBOARD_OVERLAY` for the private overlay. Both are optional. |
+| Public address | `SWB_PUBLIC_URL`. Use HTTPS for hosted OAuth. |
+| Persistent data | `SWB_DATA_DIR`. The image uses `/data`. |
+| HTTP port | `SWB_PORT`. The default for `swb up` is `8870`. Hosting platforms can also set `PORT`. |
+| Owner sign-in | `SWB_OWNER_EMAILS` (comma-separated), `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD`. See [authentication](#authentication-and-protection). |
+| Static bearer keys | `SWB_KEY_OWNER` for the local CLI, or `SWB_KEY_<AGENT>` for other agents. |
+| YAML paths | `SWB_CONFIG` for the base file, `SWB_OVERLAY` for the private overlay. Both are optional. |
 
 Keep credentials in the process environment or a private `.env` file loaded by `swb up` or Compose.
-`swb init` is optional and writes an explicit MCP-only YAML config and an owner key file. Remove its
-`blocks` mapping to use environment discovery, or add blocks to it explicitly.
+`swb init` creates an owner key in `.env` and a minimal YAML config. Add a `blocks` mapping to choose blocks in YAML.
 
-**YAML and overlays.** Set `SWITCHBOARD_CONFIG` to choose a base file. An explicit `swb up --dir PATH` instead uses
-that instance's `config/switchboard.yaml` and data directory. By default, SwB uses an existing
-`config/switchboard.yaml` or `/config/switchboard.yaml` if found. Select an
-optional private overlay with `SWITCHBOARD_OVERLAY`, or use `local.yaml` next to the base file. With no base file,
-SwB looks for `config/local.yaml` or `/config/local.yaml` (the latter is the path inside Compose).
-Settings in the base YAML override environment defaults; overlay settings take highest precedence. Mappings are
-merged recursively, and lists are replaced, not appended. If an overlay declares `blocks`, that mapping becomes
-explicit even if the base omitted it.
+Set `SWB_CONFIG` to choose a base file. An explicit `swb up --dir PATH` uses that instance's config and data folders. Default base paths are `config/switchboard.yaml` and `/config/switchboard.yaml`.
+
+An overlay is a private YAML file with settings that override the base file. Set `SWB_OVERLAY` to choose it. The default is `local.yaml` next to the base file. SwB can also find it at `config/local.yaml` or `/config/local.yaml`.
+
+The overlay takes priority over the base file. The base file takes priority over environment settings. Mappings merge. Lists replace. An overlay can also select the `blocks` mapping.
 With `swb up --tunnel`, the active tunnel URL overrides the configured public URL while the tunnel is running.
 
 Use [the full config example](../config/switchboard.example.yaml) as a reference for block policies and routes. Copy
@@ -89,7 +86,7 @@ overlay if desired. Use `#RRGGBB` for the accent. The public CLI identity stays 
 their use identifies integrations and does not imply affiliation or endorsement.
 
 Legacy files using `origins`, `destinations` or top-level `slack` are translated at load time.
-`switchboard config migrate [file]` prints the version 2 form. The database migration is
+`swb config migrate [file]` prints the version 2 form. The database migration is
 additive only (a `target` column on conversations, and new tables for pairing codes, agent keys and alias use).
 
 ## Blocks
@@ -102,10 +99,9 @@ project link keys, the secrets and network it needs, its identities and write po
 instructions fragment for the MCP server. The block's actions run through the core's caps and audit log. A block
 reports back through the core (the inbox) and never imports another block.
 
-`switchboard blocks list|show|check [<block>]` prints them (`show` prints the manifest as YAML), `switchboard targets`
-lists every target. `/healthz` returns status and version. Sign in as the owner to see block details. Third-party blocks register in the
-`switchboard.blocks` entry-point group. The old `origins/` and `destinations/` modules are aliases of the block
-modules for this release.
+Run `swb blocks list` to list blocks. Run `swb blocks show <block>` to read its manifest as YAML. Run `swb blocks check` to check configuration. Run `swb targets` to list targets. Sign in as the owner to see block details in `/healthz`.
+
+Third-party blocks register in the `switchboard.blocks` entry-point group. The old `origins/` and `destinations/` modules are aliases of the block modules for this release.
 
 **Targets** are written `<block>:<kind>:<id>` (`capy:captain:jam_...`), `agent:<name>` for an agent's mailbox, or
 `project:<slug>` for a project's route. The short forms `captain:`, `project:` and `thread:` still mean the capy
@@ -198,23 +194,30 @@ replies show up in the Claude Code session that's open. **It only works while th
 arrive in between are delivered at the next start, from the cursor it saves. It's one-way: to answer, Claude uses
 the SwB MCP server's `reply`.
 
-Install, during the research preview (custom channels aren't on Anthropic's allowlist, so they need the development
-flag, and Team or Enterprise organizations must enable channels):
+Enable channels in your Team or Enterprise organization during the research preview.
 
-1. The channel needs a key named `SWITCHBOARD_KEY_CHANNEL` (generate it with `openssl rand -hex 32` into `.env`). It is
-   an inbox-only key: `auth.inbox_keys` (default `{channel: claude-code}`) binds it to agent `claude-code`, the agent
-   Claude Code signs in as over OAuth, so it pushes exactly what Claude Code's `wait` would see. It may only call
-   `GET /inbox/poll` and `GET /inbox/events`, gets 403 on `/mcp` and on any other agent's inbox, and never moves Claude
-   Code's own `wait` cursor. Enter the key only in the channel's private configuration, never in chat.
-2. Install [Bun](https://bun.sh), then add the plugin in Claude Code. From GitHub:
-   Run `/plugin marketplace add ZhehanZhang/SwB`, then `/plugin install switchboard@switchboard`. For a local
-   checkout, use `/plugin marketplace add /path/to/SwB` instead. Enter the URL and the key when it asks.
-3. Start sessions with `claude --dangerously-load-development-channels plugin:switchboard@switchboard`.
+Generate `SWB_KEY_CHANNEL` with `openssl rand -hex 32` and save it in the server `.env`. The default `auth.inbox_keys` mapping binds it to `claude-code`. This key can read the `claude-code` inbox through `GET /inbox/poll` and `GET /inbox/events`. It uses a separate read position from `wait`.
 
-Without the plugin wrapper, a bare server works too. Set `SWITCHBOARD_URL` to your server's base URL (without
-`/mcp`), set `SWITCHBOARD_KEY` privately, and add
-`{"mcpServers": {"switchboard-channel": {"command": "bun", "args": ["/path/to/channel/switchboard-channel.ts"]}}}`
-to `.mcp.json`. Start with `--dangerously-load-development-channels server:switchboard-channel`.
+Install [Bun](https://bun.sh). Run these commands in Claude Code.
+
+```text
+/plugin marketplace add ZhehanZhang/SwB
+/plugin install swb@swb
+```
+
+For a local checkout, use `/plugin marketplace add /path/to/SwB`. Enter the URL and key in the plugin's private settings. Start Claude Code with the channel.
+
+```bash
+claude --dangerously-load-development-channels plugin:swb@swb
+```
+
+To run the channel directly, set `SWB_URL` to your server's base address, such as `https://swb.example.com`. Set `SWB_KEY` in your private environment. Add this entry to `.mcp.json`.
+
+```json
+{"mcpServers": {"swb-channel": {"command": "bun", "args": ["/path/to/channel/switchboard-channel.ts"]}}}
+```
+
+Start Claude Code with `--dangerously-load-development-channels server:swb-channel`.
 
 ### Claude routines
 
@@ -439,7 +442,7 @@ Watch digests carry `external` trust. Each excerpt also uses a trust frame for e
 - **Out.** The tools are `slack_workspaces`, `slack_channels`, `slack_search`, `slack_history`,
   `slack_thread`, `slack_watched`, `slack_events`, `slack_personas`, `slack_post`, `slack_react`,
   `slack_request_write`, `slack_write_requests` and `slack_wait`. The caller is the SwB agent (OAuth or
-  `SWITCHBOARD_KEY_<NAME>`), and `slack.agents.<agent>` grants it workspaces, identities and a persona. Unlisted
+  `SWB_KEY_<NAME>`), and `slack.agents.<agent>` grants it workspaces, identities and a persona. Unlisted
   agents get nothing. Every write is in the audit log.
 - **Identities and policy.** `bot` is the app, and its posts can carry a persona name and avatar. `user` is the
   owner's own account. Each identity has a write policy: `free`, `approval` or `never`. A user-only workspace has
@@ -476,7 +479,7 @@ Watch digests carry `external` trust. Each excerpt also uses a trust frame for e
   a persona: they always show as the account owner, behind the identity's write policy.
 - **Avatars.** A persona's picture is the file named in `avatar:`, or `<persona id>.png` when the persona sets no
   `icon_url`. Files are looked up in `<data>/avatars` (uploads from the root page's Personas list), then each
-  `slack.avatar_dirs` folder, then pictures blocks rendered, then the neutral monograms bundled for `switchboard`,
+  `slack.avatar_dirs` folder, then pictures blocks rendered, then the neutral monograms bundled for `swb`,
   `claude`, `chatgpt`, `gemini`, `codex`, `claude-code` and `capy`. Dropping a new file in replaces the picture with no
   restart; the URL carries the file's mtime so Slack fetches the new one. `scripts/monogram.py` draws more.
   `/avatars/<file>` is served without Access, because Slack fetches it. The limit: the picture shows on each message,
@@ -780,8 +783,7 @@ In front of everything:
   (`rate_limited`).
 - Request bodies are limited to 1 MiB, or 16 MiB on `/mcp` for file attachments.
 
-Clients without OAuth use bearer keys: `SWITCHBOARD_KEY_<NAME>` in `.env`, where `<NAME>` becomes the agent name, or
-a key from a pairing code (below).
+A client can use a bearer key in place of OAuth. Set `SWB_KEY_<NAME>` in `.env`. SwB uses `<NAME>` as the agent name. You can also get a key from a pairing code.
 
 ### Server addresses
 
@@ -800,7 +802,7 @@ mints a one-time code on the root page (**Connected agents → Mint code**) or w
 It names the agent and lasts ten minutes. Redeem it and save the response to a new private file:
 
 ```bash
-(umask 077; mkdir -p secrets && curl -fsS https://switchboard.example.com/connect \
+(umask 077; mkdir -p secrets && curl -fsS https://swb.example.com/connect \
   -H 'content-type: application/json' -d '{"code": "<PAIRING_CODE>"}' -o secrets/pairing-response.json)
 ```
 
@@ -839,19 +841,20 @@ resolve. Wrong codes count against the address (10 per 10 minutes). Revoke a key
 - Bearer sign-in failures are in the audit log without the key: `auth_failure` records a wrong token's length and
   paste mistakes (whitespace, quotes, a doubled "Bearer") or a non-Bearer header, and `auth_missing` records a
   request with no header, at most once per address per 10 minutes.
-- Every action that changes something, and every refusal, is in the audit log (`docker compose exec switchboard switchboard log`).
+- Every action that changes something, and every refusal, is in the audit log (`docker compose exec switchboard swb log`).
 - The Capy API key is only ever sent as a header to api.capy.ai; it is never logged, and access logs drop query strings.
 
 ## Running it
 
-For a new Compose deployment, run this as the non-root user who will own the data directory. It creates a private
-`.env` and generates an owner key without displaying it:
+See the [deployment guide](../deploy/README.md) for hosted platforms and Docker Compose with HTTPS.
+
+For a new Compose deployment, run these commands as the user who owns the data folder. The commands create a private `.env` file with an owner key.
 
 ```bash
 (umask 077; cp .env.example .env)
 {
-  printf 'SWITCHBOARD_UID=%s\n' "$(id -u)"
-  printf 'SWITCHBOARD_KEY_OWNER='
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
   openssl rand -hex 32
 } >> .env
 mkdir -p data
@@ -859,10 +862,9 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:8870/healthz
 ```
 
-Compose binds MCP to `http://127.0.0.1:8870/mcp` by default and keeps persistent state in `./data`. Set
-`SWITCHBOARD_UID` to the non-root host UID that owns the data directory, or give the image's default UID (10001)
-write access there. Paths in `SWITCHBOARD_CONFIG` and `SWITCHBOARD_OVERLAY` must be visible inside the container;
-for example, `SWITCHBOARD_OVERLAY=/config/local.yaml` points at `./config/local.yaml` on the host.
+Compose uses `http://127.0.0.1:8870/mcp` by default. It keeps data in `./data`. Set `SWB_UID` to the user ID that owns the data folder. You can also grant write access to user ID `10001`.
+
+Use paths inside the container for `SWB_CONFIG` and `SWB_OVERLAY`. For example, `SWB_OVERLAY=/config/local.yaml` points to `./config/local.yaml` on the host.
 
 For a remote deployment, set the public URL and put an HTTPS reverse proxy in front of the server. If you already
 have a Cloudflare Tunnel, set `TUNNEL_TOKEN` in `.env`, configure the tunnel's hostname to forward to
@@ -872,7 +874,7 @@ have a Cloudflare Tunnel, set `TUNNEL_TOKEN` in `.env`, configure the tunnel's h
 Tests run in the image build (`docker build --target test .`); the channel has its own (`cd channel && bun test`).
 A legacy `capy-bridge.db` in the data directory is renamed to `switchboard.db` on first start.
 
-Markdown export: `docker compose exec switchboard switchboard export /data/export` writes one folder per scope
+Run `docker compose exec switchboard swb export /data/export` to write one Markdown folder per scope
 (`general/`, `projects/<slug>/`) plus `INDEX.md`. Setting `memory.mirror_dir` keeps that tree in sync: after a change, and once at startup,
 it's rewritten with atomic renames, and files and folders for deleted or moved entries are removed. A burst of
 writes collapses into one export after `mirror_debounce_s` (default 2 s) of quiet, at most ten times that after the
@@ -905,7 +907,7 @@ extends the existing subscription; when it replaces the signing key, both keys a
 rechecked before delivery. Unsubscribing removes pending deliveries, and there is no historical replay. Keep
 `mcp-events.key` with the data directory when backing it up; it protects the stored signing keys.
 
-For example, connect the public MCP endpoint (`https://switchboard.example.test/mcp`) to a ChatGPT plugin with OAuth,
+For example, connect the public MCP endpoint (`https://swb.example.com/mcp`) to a ChatGPT plugin with OAuth,
 then rescan the plugin for events. In a Work chat or a dot with the plugin enabled, ask it to monitor
 `switchboard.message.created` for `mailbox_id: chatgpt`, read each new item via `get_message`, and reply on its
 conversation when appropriate. Send a test message to `agent:chatgpt` (or a dot using mailbox delivery). Other clients
@@ -914,12 +916,12 @@ that support MCP Events can subscribe to their own mailbox in the same way.
 ## Connecting the assistants
 
 To connect Claude, ChatGPT, Claude Code, or a generic MCP client, see [Connect a client](#connect-a-client).
-Replace `switchboard.example.com` with your public hostname in the examples below.
+Replace `swb.example.com` with your public hostname in the examples below.
 
-- **Capy**: an MCP server with URL `https://switchboard.example.com/mcp` and OAuth with the Automatic client. Capy registers
+- **Capy**: an MCP server with URL `https://swb.example.com/mcp` and OAuth with the Automatic client. Capy registers
   itself (DCR, redirect `https://capy.ai/web/callbacks/mcp`), the consent page shows "Capy", and any client that
   returns to capy.ai signs in as agent `capy`, so routes, `key_scopes` and the audit log treat it the same as the old
-  key. The fallback is a header `Authorization: Bearer <SWITCHBOARD_KEY_CAPY>`; a bare key without `Bearer ` works too.
+  key. The fallback is a header `Authorization: Bearer <SWB_KEY_CAPY>`; a bare key without `Bearer ` works too.
   Enter the key directly in Capy's private settings, never in chat.
 
 ## Instruction snippets
@@ -981,7 +983,7 @@ registers it itself):
 >
 > 1. **Connector.** Check that you have the SwB connector (tools such as project_list, routine_register and
 >    reply). If it's missing, stop and tell me to add it: claude.ai → Settings → Connectors → Add custom connector, URL
->    https://switchboard.example.com/mcp (replace the hostname with your instance's), then enable it for this project.
+>    https://swb.example.com/mcp (replace the hostname with your instance's), then enable it for this project.
 >    Continue once it's there.
 > 2. **Project.** Call project_list. Find the SwB project this Claude Project belongs to, matching on name,
 >    description, repos and links.claude_project. Several Claude Projects can share one SwB project, so prefer
