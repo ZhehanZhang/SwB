@@ -5,7 +5,7 @@ description: Make SwB reachable, sign in and see your instance.
 
 ## Run on this computer
 
-For local browser sign-in, set `SWITCHBOARD_PUBLIC_URL=http://localhost:8870` before you start SwB. Use the port from `PORT` in the address. If the YAML config sets `public_url`, change it there. The [Install](/docs/install) commands set up local sign-in on port 8870.
+Run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from your terminal within five minutes. SwB uses `http://localhost:8870` by default. If you set `PORT`, SwB uses that port in the address. See [Install](/docs/install) for other ways to start.
 
 ## Get a public address
 
@@ -32,6 +32,8 @@ For a server at another address, set `--url`, for example `swb status --url http
 The web page shows your projects, agents, inbox, memory and audit log. It is also the safe place to paste tokens.
 
 ![The SwB sign-in page](/shots/login-light.webp)
+
+To get a new link, run this command in a second terminal from the same instance folder.
 
 ```bash
 swb login-link

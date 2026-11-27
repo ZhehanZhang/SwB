@@ -13,6 +13,8 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 
 ## 复制设置提示词
 
+提示词保留英文，供智能体使用。
+
 <SetupPrompt name="github" lang="zh-Hans" />
 
 把提示词粘贴给你的智能体。智能体会带你完成其余步骤。
@@ -49,7 +51,7 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 <Step>
 ### 设置权限
 
-在 **Repository permissions** 下，为下表中的每项资源选择 **Read-only**。要让智能体回复，请把 **Issues** 和 **Pull requests** 设为 **Read & write**。
+在 **Repository permissions** 中，按下表设置权限。
 </Step>
 <Step>
 ### 订阅事件
@@ -85,14 +87,14 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 </Step>
 </Steps>
 
-| 仓库权限 | 事件 |
-| --- | --- |
-| **Issues** | `issues`、`issue_comment` |
-| **Pull requests** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
-| **Contents** | `push` |
-| **Checks** | `check_run`、`check_suite` |
-| **Actions** | `workflow_run` |
-| **Metadata** | 只读权限始终开启 |
+| 仓库资源 | 访问权限 | 事件 |
+| --- | --- | --- |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自动设为 **Read-only** | |
 
 在组织中，GitHub 可能把 **Install** 显示为 **Request**。这时由组织所有者批准请求。
 
@@ -100,7 +102,19 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 
 智能体调用 `connect`，参数为 `what="github"`。SwB 显示 webhook 地址、webhook 密钥的状态和仓库路由数量。路由把一个仓库的事件发送给一个目标。
 
-智能体将仓库添加到 `config/switchboard.yaml` 中的 `blocks.github.spaces` 或 `blocks.github.routes`。通过领取链接保存同一个 webhook 密钥。智能体重启 SwB，载入密钥并应用路由。
+智能体将仓库添加到 `config/switchboard.yaml` 中的 `blocks.github.spaces` 或 `blocks.github.routes`。通过空间为仓库设置默认模式和项目。此示例将 `acme/app` 归入 SwB 项目 `demo`，并设为 `watch` 模式。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode: watch
+        project: demo
+```
+
+通过领取链接保存同一个 webhook 密钥。智能体重启 SwB，载入密钥并应用路由。
 
 智能体再次调用 `connect(what="github")`，获取仍需填写的 App ID 或私钥链接。若要把已有的个人访问令牌改为 GitHub App 凭据，选用 `choose={"credential":"app"}`。
 

@@ -15,15 +15,16 @@ Enter the secret in **Webhook secret**. Ask an agent to connect GitHub. Save the
 
 ## Permissions
 
-Give the app read access for the events you need.
+Under **Repository permissions**, use the access levels in the table.
 
-| Permission | Events |
-| - | - |
-| Issues | `issues`, `issue_comment` |
-| Pull requests | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
-| Contents | `push` |
-| Checks | `check_run`, `check_suite` |
-| Actions | `workflow_run` |
+| Repository resource | Access | Events |
+| - | - | - |
+| **Issues** | **Read & write** | `issues`, `issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`, `check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | **Read-only** automatically | |
 
 Install the app on the repositories you want.
 
@@ -60,6 +61,7 @@ If Cloudflare Access protects your host, let `/github/webhook` through. The GitH
 | `blocks.github.sinks.*.url_env` | Name of the variable that holds the receiver address |
 | `blocks.github.routes` | Map from repo names or `owner/*` to lists of event receivers |
 | `blocks.github.spaces` | Named sets of repositories that share settings. A name such as `acme/app` selects that repository |
+| `blocks.github.spaces.*.repo` | Repository name in `owner/repo` form |
 | `blocks.github.spaces.*.mode` | Default [channel mode](/docs/channel-modes) for the repositories in this space |
 | `blocks.github.spaces.*.project` | Default SwB project for events from this space |
 

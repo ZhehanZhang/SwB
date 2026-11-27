@@ -24,6 +24,24 @@ Carry structure with headings, short paragraphs and tables. Use tabs for alterna
 
 The Simplified Chinese and Traditional Chinese docs follow the same rules. Write them natively, with short plain sentences and one idea per sentence. Keep the terms consistent across pages. Simplified Chinese uses mainland terms. Traditional Chinese uses Taiwan terms. Use full-width punctuation, and use none of the full-width colon, semicolon or dash in prose.
 
+| en | zh-Hans | zh-Hant |
+| - | - | - |
+| agent | 智能体 | 代理 |
+| coding agent | 编程智能体 | 程式開發代理 |
+| key | 密钥 | 金鑰 |
+| private key | 私钥 | 私密金鑰 |
+| passkey | 通行密钥 | 通行金鑰 |
+| token | 令牌 | 權杖 |
+| claim link | 领取链接 | 領取連結 |
+| setup code | 设置码 | 設定碼 |
+| conversation | 会话 | 對話 |
+| routine | routine | routine |
+| block | 模块 | 模組 |
+| Captain | Captain | Captain |
+| triage agent | 分流智能体 | 分流代理 |
+| mailbox | 邮箱 | 信箱 |
+| route | 路由 | 路由 |
+
 ## Check
 
 Run `node site/scripts/check-style.mjs` before you open a pull request. The script flags the banned forms in prose.
