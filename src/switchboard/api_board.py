@@ -160,7 +160,7 @@ def _placements(core: Switchboard, targets: dict[str, dict[str, Any]]) -> tuple[
             label = _reference(target.get("name")) or _reference(route.target.get("name")) or (_reference(addr.id) if addr else None)
             label = capy_label(ident, route.destination, targets, name=label) or label
             item = {**_item(ident, label or (block.manifest.title if block else route.destination),
-                            "chatgpt" if use == "dots" else use, avatar_url=captain_avatar_url(core, target)),
+                            use, avatar_url=captain_avatar_url(core, target)),
                     "role": addr.kind if addr else "destination", "state": state, "by": by, "at": route.updated_at}
         agents[route.project].setdefault(ident, item)
         routes[route.project].append({"id": str(route.id), "from": _agent(core, route.agent) if route.agent else _item("any-agent", "Any agent", "agent"),
