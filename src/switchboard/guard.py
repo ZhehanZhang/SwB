@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import time
 from collections import OrderedDict, deque
+from ipaddress import ip_address
 from typing import Any, Callable
 
 from starlette.exceptions import HTTPException
@@ -27,6 +28,7 @@ LIMITS = {
     "owner_setup_total": (120, 600.0),
     "passkey_options": (60, 600.0),
     "passkey_fail": (10, 600.0),
+    "sign_in_refusal_audit": (1, 60.0),
 }
 
 
@@ -36,6 +38,14 @@ def client_ip(scope: dict[str, Any]) -> str:
             return v.decode()[:64]
     client = scope.get("client")
     return str(client[0]) if client else "?"
+
+
+def audit_client_ip(scope: dict[str, Any]) -> str:
+    peer = client_ip(scope)
+    try:
+        return str(ip_address(peer)) if "%" not in peer else "-"
+    except ValueError:
+        return "-"
 
 
 class RateLimiter:

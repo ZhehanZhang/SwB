@@ -4,8 +4,12 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from ...chat import ChatBlock
 from ...memory import GENERAL, MemoryError_
+from ...refusals import (CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, GRANT_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
+                         SCOPE_REQUIRED, TARGET_REQUIRED)
 
 if TYPE_CHECKING:
+    from mcp_types import Tool
+
     from ...auth import Principal
     from ...core import Switchboard
 
@@ -27,6 +31,8 @@ READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
     "memory_list": ("memory_scope", None),
     "context_pack": ("memory_scope", None),
     "capy_captain_digest": ("owner", None),
+    "visibility_list": ("owner", None),
+    "connect_list": ("owner", None),
 }
 REFERENCE_ARGS = frozenset({"message_id", "conversation", "handle", "thread_id", "ref"})
 
@@ -76,23 +82,35 @@ BLOCK_ROLES: dict[str, dict[str, Role]] = {
 }
 
 AUTH_REQUIRED = "Sign in to call tools."
-OWNER_REQUIRED = "Use the owner's sign-in to call this tool."
 ROUTE_REQUIRED = "Use a route for your own agent or sign in as the owner."
-CONVERSATION_REQUIRED = "Choose a conversation for your own agent."
 CONVERSATION_NOT_FOUND = "Conversation not found."
 MESSAGE_NOT_FOUND = "message not found"
 MEMORY_NOT_FOUND = "memory not found"
-SCOPE_REQUIRED = "Choose a project granted to this key."
-TARGET_REQUIRED = "Choose a target granted to this key."
 TOOL_REQUIRED = "Use a key granted this tool."
 POLICY_REQUIRED = "Use a tool with a SwB write policy."
-MODE_REQUIRED = "Use an action allowed by the conversation mode."
 
 REFUSAL_DETAILS = frozenset({
     AUTH_REQUIRED, OWNER_REQUIRED, ROUTE_REQUIRED, CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED,
-    POLICY_REQUIRED, MODE_REQUIRED,
+    POLICY_REQUIRED, MODE_REQUIRED, CONFIRMATION_REQUIRED, GRANT_REQUIRED,
     CONVERSATION_NOT_FOUND, MESSAGE_NOT_FOUND, MEMORY_NOT_FOUND,
 })
+
+
+def catalog_refusal(p: Principal | None, name: str, tool: Tool | None, role: Role | None) -> str | None:
+    if p is None or p.kind == "inbox_key":
+        return AUTH_REQUIRED
+    if p.tools is not None and name not in p.tools:
+        return TOOL_REQUIRED
+    if tool is not None:
+        if tool.annotations and tool.annotations.read_only_hint:
+            if name not in READ_ROLES and REFERENCE_ARGS.intersection(tool.input_schema.get("properties", {})):
+                return CONVERSATION_NOT_FOUND
+        elif role is None:
+            return POLICY_REQUIRED
+    read_role = READ_ROLES.get(name)
+    if not p.is_unrestricted_owner and (role == "owner" or (read_role and read_role[0] == "owner")):
+        return OWNER_REQUIRED
+    return None
 
 
 def can_read_conversation(core: Switchboard, p: Principal, handle: dict[str, Any] | None) -> bool:
@@ -104,8 +122,6 @@ def can_read_conversation(core: Switchboard, p: Principal, handle: dict[str, Any
 
 def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any]) -> str | None:
     role, parameter = READ_ROLES[name]
-    if role == "owner":
-        return None if p.is_unrestricted_owner else OWNER_REQUIRED
     reference = arguments.get(parameter) if parameter else None
     if role == "message" and isinstance(reference, str):
         handle = core.inbox.message_handle(reference)
