@@ -19,7 +19,7 @@ function ChatLayout({ children, ...props }: DocsLayoutProps) {
   return (
     <DocsLayout {...props} aiChat={{ open, onOpenChange: setOpen, panel: <AIChatPanel /> }}>
       {children}
-      <AIChatTrigger className="swb-button swb-ask-trigger" />
+      <AIChatTrigger className="swb-button swb-ask-trigger hidden md:inline-flex" />
     </DocsLayout>
   );
 }
@@ -64,7 +64,7 @@ export function DocsShell({ lang, askAI, ...props }: Pick<DocsLayoutProps, 'tree
     nav: { enabled: false, mode: 'top' },
     themeSwitch: { enabled: false },
     i18n: false,
-    containerProps: { className: askAI ? 'swb-docs swb-docs-with-chat' : 'swb-docs' },
+    containerProps: { className: `swb-container swb-docs${askAI ? ' swb-docs-with-chat' : ''}` },
   };
   return askAI ? <EnabledChat key={lang} lang={lang} {...layoutProps} /> : <DocsLayout {...layoutProps} />;
 }

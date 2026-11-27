@@ -43,7 +43,79 @@ test('header and all items stay within 0.5px across home and docs without a them
   }
 });
 
+test('docs sidebar, content and TOC align to the shared header grid', async ({ page }) => {
+  for (const width of [768, 1024, 1280, 1440, 1920, 2560, 3440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ['/docs', '/docs/install']) {
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      const edges = await page.evaluate(() => {
+        const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+        const article = document.querySelector('#nd-page')!;
+        const nav = rect('#nd-nav > nav');
+        const layout = rect('#nd-notebook-layout');
+        const toc = rect('#nd-toc');
+        return {
+          logo: rect('[data-header-item="brand"]').left,
+          sidebar: rect('#nd-sidebar a').left,
+          heading: rect('#nd-page h1').left,
+          content: article.getBoundingClientRect().left + parseFloat(getComputedStyle(article).paddingInlineStart),
+          body: rect('.swb-mdx').left,
+          tocRight: toc.width ? toc.right : null,
+          contentRight: rect('#nd-page').right,
+          headerRight: nav.right - parseFloat(getComputedStyle(document.querySelector('#nd-nav > nav')!).paddingInlineEnd),
+          containerOffsets: [layout.left - nav.left, layout.right - nav.right],
+        };
+      });
+      const at = `${path} at ${width}px`;
+      expect(Math.abs(edges.logo - edges.sidebar), `${at} sidebar edge`).toBeLessThanOrEqual(1);
+      expect(Math.abs(edges.heading - edges.content), `${at} heading edge`).toBeLessThanOrEqual(1);
+      expect(Math.abs(edges.heading - edges.body), `${at} body edge`).toBeLessThanOrEqual(1);
+      for (const offset of edges.containerOffsets) expect(Math.abs(offset), `${at} container edge`).toBeLessThanOrEqual(1);
+      expect(Math.abs((edges.tocRight ?? edges.contentRight) - edges.headerRight), `${at} right edge`).toBeLessThanOrEqual(1);
+    }
+  }
+});
+
+test('the docs sidebar first item starts within 8px of the content title', async ({ page }) => {
+  for (const width of [768, 1024, 1280, 1440, 1920, 2560, 3440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ['/docs', '/docs/install', '/docs/setup/claude']) {
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      const { sidebar, heading, toc } = await page.evaluate(() => {
+        const top = (selector: string) => {
+          const box = document.querySelector(selector)?.getBoundingClientRect();
+          return box?.width ? box.top : null;
+        };
+        return { sidebar: top('#nd-sidebar a'), heading: top('#nd-page h1'), toc: top('#toc-title') };
+      });
+      expect(sidebar).not.toBeNull();
+      expect(heading).not.toBeNull();
+      expect(Math.abs(sidebar! - heading!), `${path} at ${width}px sidebar top`).toBeLessThanOrEqual(8);
+      if (toc !== null) expect(Math.abs(toc - heading!), `${path} at ${width}px TOC top`).toBeLessThanOrEqual(8);
+    }
+  }
+});
+
+test('the mobile docs drawer opens, navigates and closes inside the shared grid', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/docs/install');
+  const brand = await page.locator('[data-header-item="brand"]').boundingBox();
+  const title = await page.locator('#nd-page h1').boundingBox();
+  expect(Math.abs(brand!.x - title!.x)).toBeLessThanOrEqual(1);
+  const drawer = page.locator('#nd-sidebar-mobile');
+  await expect(drawer).toBeHidden();
+  await page.getByRole('button', { name: 'Open Sidebar', exact: true }).click();
+  const overview = drawer.getByRole('link', { name: 'SwB', exact: true });
+  await expect(overview).toBeInViewport();
+  await overview.click();
+  await expect(page).toHaveURL(/\/docs$/);
+  await expect(drawer).toBeHidden();
+});
+
 test('Ask AI clears the last paragraph, footer and cards on short and long docs pages', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   for (const path of ['/docs', '/docs/install']) {
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready);
@@ -68,6 +140,47 @@ test('Ask AI clears the last paragraph, footer and cards on short and long docs 
       expect(intersects, `${path} ${await item.innerText()}`).toBe(false);
     }
   }
+});
+
+test('the mobile Ask AI icon never overlaps docs text while scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const prefix of ['', '/zh-Hans', '/zh-Hant']) {
+    for (const slug of ['about', 'install', 'self-hosting']) {
+      const path = `${prefix}/docs/${slug}`;
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      const fixed = page.locator('.swb-ask-trigger');
+      const ask = page.locator('.swb-ask-mobile');
+      await expect(fixed).toBeHidden();
+      await expect(ask).toBeInViewport();
+      await expect(ask).toHaveAccessibleName((await fixed.textContent())!.trim());
+      await expect(ask.locator('.lucide-message-circle')).toHaveCount(1);
+      await expect(ask).toHaveCSS('position', 'static');
+      const collision = await ask.evaluate(async (control) => {
+        const elements = Array.from(document.querySelectorAll('.swb-docs :is(p, li, pre, table, h1, h2, h3)'));
+        const end = document.documentElement.scrollHeight - window.innerHeight;
+        const step = Math.round(window.innerHeight / 4);
+        for (let y = 0; y <= end + step; y += step) {
+          window.scrollTo(0, Math.min(y, end));
+          await new Promise(requestAnimationFrame);
+          const icon = control.getBoundingClientRect();
+          const hit = elements.find((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && icon.left < rect.right && rect.left < icon.right
+              && icon.top < rect.bottom && rect.top < icon.bottom;
+          });
+          if (hit) return { top: window.scrollY, tag: hit.tagName, text: hit.textContent?.trim().slice(0, 80) };
+        }
+        return null;
+      });
+      expect(collision, path).toBeNull();
+    }
+  }
+  const ask = page.locator('.swb-ask-mobile');
+  await ask.click();
+  await expect(ask).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(ask).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('the open-source statement is visible in all landing heroes', async ({ page }) => {
@@ -193,6 +306,12 @@ test('every shared action has a leading 16px icon', async ({ page }) => {
         const icon = action.locator(':scope > svg').first();
         await expect(icon, await action.innerText()).toHaveCSS('width', '16px');
         await expect(icon).toHaveCSS('height', '16px');
+        if (await action.evaluate((node) => getComputedStyle(node).fontSize === '0px')) {
+          const buttonBox = (await action.boundingBox())!;
+          const iconBox = (await icon.boundingBox())!;
+          expect(Math.abs((buttonBox.x + buttonBox.width / 2) - (iconBox.x + iconBox.width / 2))).toBeLessThanOrEqual(1);
+          continue;
+        }
         await expect(action).toHaveCSS('column-gap', '8px');
         expect(await action.evaluate((node) => {
           const glyph = node.querySelector('svg')!;
