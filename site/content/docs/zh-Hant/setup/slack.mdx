@@ -203,12 +203,12 @@ blocks:
           user:
             token_env: SLACK_EXAMPLE_USER_TOKEN
     agents:
-      owner:
+      claude:
         workspaces:
           example: [bot, user]
 ```
 
-工作區設定和授權使用相同的工作區名稱。若只用你的帳號，在 `team_id` 同一層加入 `user_only: true`。移除 `identities` 下的 `bot` 項目。將授權中的身分設為 `[user]`。
+授權寫明使用 Slack 的代理。使用 `switchboard_status` 顯示的名稱，例如 `claude` 或 `chatgpt`。每個代理加入一項授權。`swb` 指令使用 `owner`。工作區設定和授權使用相同的工作區名稱。若只用你的帳號，在 `team_id` 同一層加入 `user_only: true`。移除 `identities` 下的 `bot` 項目。將授權中的身分設為 `[user]`。
 
 SwB 要求重新啟動時，代理會告訴你。重新啟動後，代理用 `slack_workspaces` 檢查每個身分。身分是指機器人或你自己的帳號。最後，代理用 `slack_post` 傳送一則測試訊息。
 
