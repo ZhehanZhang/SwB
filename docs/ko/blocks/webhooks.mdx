@@ -3,7 +3,7 @@ title: 웹훅
 description: 다른 서비스에서 이벤트를 받고 웹훅으로 메시지를 보냅니다.
 ---
 
-이벤트는 결제 완료 같은 변화입니다. 웹훅은 이벤트가 일어나면 웹 주소로 데이터를 보냅니다. Webhooks 블록은 Stripe 같은 제공업체에서 이벤트를 받거나 내가 고른 주소로 메시지를 보냅니다.
+이벤트는 결제 완료 같은 변화입니다. 웹훅은 이벤트가 일어나면 웹 주소로 데이터를 보냅니다. 웹훅 블록은 Stripe 같은 제공업체에서 이벤트를 받거나 내가 고른 주소로 메시지를 보냅니다.
 
 설정에 도움이 필요하면 MCP 클라이언트에서 `setup-webhook` 프롬프트를 사용하세요.
 
@@ -32,9 +32,9 @@ SwB 주소에 Cloudflare Access를 쓴다면 `/hooks/*`의 [Cloudflare Access �
 
 SwB은 웹훅을 만들 때 웹훅 채널 `channel:webhook/payments`를 공유합니다. 채널에 이미 규칙이 있으면 그 규칙을 그대로 둡니다. 대상도 `workspace:webhook-payments`를 허용해야 합니다. 이 워크스페이스 이름은 대상의 접근 규칙에서 웹훅을 식별합니다.
 
-`webhook_create` 응답에 `visibility_set` 호출이 들어 있으면 그 호출을 실행하세요. 대상이 접근을 허용하기 전까지는 받은 이벤트가 `context`로 우편함에 들어갑니다. `context`는 읽기만 하는 메모입니다. 접근 권한이 있으면 이벤트가 대상을 깨워 대상이 바로 처리할 수 있습니다.
+`webhook_create` 응답에 `visibility_set` 호출이 들어 있으면 그 호출을 실행하세요. 대상이 접근을 허용하기 전까지는 받은 이벤트가 `context`로 우편함에 들어갑니다. `context`는 참고용 메모입니다. 접근 권한이 있으면 이벤트가 대상을 깨워 대상이 바로 처리할 수 있습니다.
 
-SwB을 거쳐 샘플 이벤트를 보내려면 웹훅 이름으로 `webhook_test`를 호출하세요. 결과가 `woke`이면 SwB이 대상에 닿은 것입니다.
+SwB을 거쳐 샘플 이벤트를 보내려면 웹훅 이름으로 `webhook_test`를 호출하세요. 결과가 `woke`이면 SwB이 대상에 도달했다는 뜻입니다.
 
 ### 이벤트 읽기
 
@@ -55,7 +55,7 @@ Webhook payments delivery evt_example.
 
 ### 대상에게 보여 줄 내용 고르기
 
-대상에게 필요한 이벤트 부분만 남기려면 `fields`를 설정하세요. 이어지는 필드 이름은 점으로 구분하세요. 짧은 요약을 만들려면 `template`을 설정하세요. 각 필드 경로는 중괄호로 감싸세요.
+대상에게 필요한 이벤트 부분만 남기려면 `fields`를 설정하세요. 필드 이름을 차례로 이어 쓸 때는 점으로 구분하세요. 짧은 요약을 만들려면 `template`을 설정하세요. 각 필드 경로는 중괄호로 감싸세요.
 
 이 예제는 [Stripe 스냅숏 이벤트](https://docs.stripe.com/api/events/object)를 사용합니다. 스냅숏에는 이벤트가 일어난 시점의 객체가 들어 있습니다.
 
@@ -78,7 +78,7 @@ Webhook payments delivery evt_example.
 
 새 시크릿용 등록 링크를 받으려면 웹훅 이름으로 `webhook_rotate`를 호출하세요. 그 링크로 새 시크릿을 저장하세요. 제공업체나 수신처에도 새 시크릿을 반영하세요. 경로 시크릿이면 제공업체의 URL을 업데이트하세요.
 
-새 시크릿을 저장한 뒤에도 이전 시크릿을 계속 쓰게 하려면 `grace_s`를 설정하세요. 유예 기간은 도구를 호출한 시점에 시작하고 최대 7일 동안 이어집니다. 발신 웹훅이면 시크릿을 바꾼 뒤 유예 기간 동안 SwB이 두 시크릿으로 모두 서명합니다. 수신처의 URL이 바뀌면 같은 등록 링크로 새 URL을 저장하세요.
+새 시크릿을 저장한 뒤에도 이전 시크릿을 계속 유효하게 두려면 `grace_s`를 설정하세요. 유예 기간은 도구를 호출한 시점에 시작하고 최대 7일 동안 이어집니다. 발신 웹훅이면 시크릿을 바꾼 뒤 유예 기간 동안 SwB이 두 시크릿으로 모두 서명합니다. 수신처의 URL이 바뀌면 같은 등록 링크로 새 URL을 저장하세요.
 
 웹훅을 멈추고 저장된 시크릿을 삭제하려면 웹훅 이름으로 `webhook_revoke`를 호출하세요. 폐기한 수신 URL로 온 요청은 `410`을 받습니다.
 
@@ -115,7 +115,7 @@ Webhook payments delivery evt_example.
 
 [Standard Webhooks 사양](https://www.standardwebhooks.com/)은 SwB이 이 메시지에 서명하는 형식을 정의합니다. 서명은 데이터를 보호하려고 SwB이 서명 시크릿으로 계산하는 값입니다. 헤더는 요청 본문과 함께 정보를 전달합니다.
 
-Standard Webhooks 라이브러리로 정확한 본문을 확인하세요. `webhook-id`, `webhook-timestamp`, `webhook-signature` 헤더를 넘기세요. 이 헤더는 전달 ID, 보낸 시각, 서명을 담고 있습니다.
+Standard Webhooks 라이브러리로 받은 본문을 그대로 검증하세요. `webhook-id`, `webhook-timestamp`, `webhook-signature` 헤더를 넘기세요. 이 헤더는 전달 ID, 보낸 시각, 서명을 담고 있습니다.
 
 `swb.test` 메시지를 보내려면 발신 웹훅 이름으로 `webhook_test`를 호출하세요.
 
@@ -124,7 +124,7 @@ Standard Webhooks 라이브러리로 정확한 본문을 확인하세요. `webho
 | HTTP 상태 | 의미 |
 | - | - |
 | `200` | SwB이 이벤트를 받았고 접근 권한을 확인합니다 |
-| `"duplicate": true`와 함께 `200` | SwB이 이미 받은 전달입니다 |
+| `200`과 `"duplicate": true` | SwB이 이미 받은 전달입니다 |
 | `400` | 본문 형식이 잘못되었습니다 |
 | `401` | 검증에 실패했습니다 |
 | `404` | 웹훅 주소나 경로 시크릿이 잘못되었습니다 |
@@ -145,14 +145,14 @@ blocks:
     daily_cap: null
 ```
 
-SwB은 받은 본문 그대로를 기준으로 서명을 확인합니다. 재전송(replay)은 유효한 요청을 반복해 보내는 것입니다. 표에서 재전송을 확인하는 방식에 대해 SwB은 전달 기록을 남깁니다.
+SwB은 받은 본문 그대로를 기준으로 서명을 확인합니다. 재전송(replay)은 유효한 요청을 반복해 보내는 것입니다. 표에서 재전송을 확인하는 방식이면 SwB이 전달 기록을 남깁니다.
 
 타임스탬프를 확인하는 방식에서 허용 오차는 서명된 전송 시각과 SwB 시계 사이의 최대 차이입니다.
 
 | 설정 | 한도 |
 | - | - |
 | 요청 본문 | 기본 256 KiB. `blocks.webhook.max_body_kb`를 1에서 1024 사이의 정수로 설정합니다 |
-| 모든 주소를 합친 웹훅당 새 검증 이벤트 | 10분에 600개 |
+| 웹훅당 검증된 새 이벤트(모든 주소 합산) | 10분에 600개 |
 | 웹훅당, 클라이언트 IP 주소당 검증 실패 | 10분에 20회. 검증된 요청은 항상 통과합니다 |
 | 클라이언트 IP 주소당 잘못된 주소로 보낸 요청 | 10분에 20회 |
 | Stripe, Linear, Sentry, Standard Webhooks, HMAC의 재전송 확인 기간 | 30일 |
@@ -201,7 +201,7 @@ SwB은 서명된 본문의 `webhookTimestamp`를 확인합니다. 기본 허용 
 | - | - | - |
 | `hmac-sha1` | `x-vercel-signature` | [웹훅을 만들 때](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) 받은 시크릿 또는 Integration Console의 클라이언트 시크릿 |
 
-`header`를 `x-vercel-signature`로 설정하세요. 일반 16진수 서명에는 `"encoding": "hex"`와 `"prefix": ""`를 사용하세요. 16진수는 숫자 `0`부터 `9`까지와 문자 `a`부터 `f`까지를 씁니다.
+`header`를 `x-vercel-signature`로 설정하세요. 16진수 값만으로 된 서명에는 `"encoding": "hex"`와 `"prefix": ""`를 사용하세요. 16진수는 숫자 `0`부터 `9`까지와 문자 `a`부터 `f`까지를 씁니다.
 
 ### Home Assistant
 
@@ -236,7 +236,7 @@ rest_command:
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | 이 웹훅용으로 직접 만든 임의 시크릿 |
 
-URL 호출만 할 수 있는 발신자에는 경로 검증을 사용하세요. 영문자나 숫자 16자 이상의 임의 시크릿을 정하세요. 등록 링크로 시크릿을 저장하세요. URL 끝의 `<secret>`을 저장한 시크릿으로 바꾸세요. URL 전체를 시크릿처럼 다루세요. SwB은 접근 로그에서 경로 시크릿을 가립니다.
+URL만 호출할 수 있는 발신자에는 경로 검증을 사용하세요. 영문자나 숫자 16자 이상의 임의 시크릿을 정하세요. 등록 링크로 시크릿을 저장하세요. URL 끝의 `<secret>`을 저장한 시크릿으로 바꾸세요. URL 전체를 시크릿처럼 다루세요. SwB은 접근 로그에서 경로 시크릿을 가립니다.
 
 IFTTT에서 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)를 고르세요. 메서드를 `POST`로 설정하세요. 전체 URL을 입력하세요.
 

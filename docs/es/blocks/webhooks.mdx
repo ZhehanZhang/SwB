@@ -26,7 +26,7 @@ Pega la URL devuelta en los ajustes de webhooks del proveedor. En este ejemplo, 
 
 Abre el enlace de entrega, un enlace a la página donde el propietario guarda el secreto. Guarda allí el secreto. SwB mantiene en privado el secreto guardado.
 
-Si tu dirección de SwB usa Cloudflare Access, pon la [política de Cloudflare Access](/es/docs/setup/cloudflare#proteger-la-consola) de `/hooks/*` en **Bypass**.
+Si tu dirección de SwB usa Cloudflare Access, configura como **Bypass** la [política de Cloudflare Access](/es/docs/setup/cloudflare#proteger-la-consola) de `/hooks/*`.
 
 ### Dar acceso al webhook
 
@@ -76,15 +76,15 @@ Este ejemplo usa un [evento snapshot de Stripe](https://docs.stripe.com/api/even
 
 Llama a `webhook_list` para ver la dirección, los recuentos y el estado del secreto. Usa `include_revoked` con el valor `true` para incluir los webhooks revocados.
 
-Llama a `webhook_rotate` con el nombre del webhook para obtener un enlace de entrega para un secreto nuevo. Guarda el secreto nuevo con ese enlace. Actualiza el secreto en el proveedor o en el receptor. Para un secreto de ruta, actualiza la URL en el proveedor.
+Llama a `webhook_rotate` con el nombre del webhook para obtener el enlace de entrega de un secreto nuevo. Guarda el secreto nuevo con ese enlace. Actualiza el secreto en el proveedor o en el receptor. Para un secreto de ruta, actualiza la URL en el proveedor.
 
 Usa `grace_s` para que el secreto anterior siga siendo válido después de guardar el nuevo. El periodo de gracia empieza con la llamada a la herramienta y dura hasta siete días. En los webhooks salientes, SwB firma con los dos secretos tras el cambio y durante ese periodo. Si el receptor cambia su URL, guarda la URL nueva con el mismo enlace de entrega.
 
-Llama a `webhook_revoke` con el nombre del webhook para detenerlo y borrar sus secretos guardados. Las peticiones a una URL entrante revocada reciben `410`.
+Llama a `webhook_revoke` con el nombre del webhook para detenerlo y borrar sus secretos guardados. Las peticiones a una URL entrante revocada reciben el código `410`.
 
 ## Enviar mensajes
 
-Llama a `webhook_create` con un nombre y `direction` establecido en `out`.
+Llama a `webhook_create` con un nombre y el valor `out` en `direction`.
 
 ```json
 {
@@ -95,7 +95,7 @@ Llama a `webhook_create` con un nombre y `direction` establecido en `out`.
 
 Abre el enlace de entrega para guardar la URL HTTPS pública del receptor y el secreto de firma. Comparte el mismo secreto de firma `whsec_` con el receptor por un canal privado.
 
-Usa `send` con `to` establecido en `webhook:out:alerts`. SwB envía este cuerpo JSON en una petición `POST`.
+Usa `send` con `webhook:out:alerts` en `to`. SwB envía este cuerpo JSON en una petición `POST`.
 
 ```json
 {
@@ -131,11 +131,11 @@ Llama a `webhook_test` con el nombre del webhook saliente para enviar un mensaje
 | `410` | El propietario revocó el webhook |
 | `413` | El cuerpo supera el límite de tamaño |
 | `429` | Se aplica el límite de peticiones. Usa `Retry-After` para saber el tiempo de espera en segundos |
-| `503` | El webhook espera su secreto, o el secreto guardado tiene un formato incorrecto |
+| `503` | El webhook está a la espera de su secreto o el secreto guardado tiene un formato incorrecto |
 
 ## Ajustes y límites
 
-El bloque está activo de forma predeterminada. Usa `false` en `blocks.webhook.enabled` en el archivo de configuración para desactivarlo. Usa `blocks.webhook.daily_cap` para limitar los envíos salientes por día. Usa `null` para permitir envíos diarios ilimitados.
+El bloque está activo de forma predeterminada. Para desactivarlo, usa `false` en `blocks.webhook.enabled` del archivo de configuración. Usa `blocks.webhook.daily_cap` para limitar los envíos salientes por día. Usa `null` para permitir envíos diarios ilimitados.
 
 ```yaml
 blocks:
@@ -145,20 +145,20 @@ blocks:
     daily_cap: null
 ```
 
-SwB comprueba la firma con el cuerpo exacto que recibió. Una repetición es una copia de una petición válida. SwB registra las entregas de los métodos de la tabla que comprueban repeticiones.
+SwB comprueba la firma con el cuerpo exacto que recibió. Una repetición es el reenvío de una petición válida. SwB registra las entregas de los métodos de la tabla que comprueban repeticiones.
 
 En los métodos que comprueban la marca de tiempo, la tolerancia es la diferencia máxima entre la hora de envío firmada y el reloj de SwB.
 
 | Ajuste | Límite |
 | - | - |
-| Cuerpo de la petición | 256 KiB de forma predeterminada. Usa en `blocks.webhook.max_body_kb` un número entero de 1 a 1024 |
+| Cuerpo de la petición | 256 KiB de forma predeterminada. Asigna a `blocks.webhook.max_body_kb` un número entero de 1 a 1024 |
 | Eventos verificados nuevos por webhook, en todas las direcciones | 600 cada 10 minutos |
 | Fallos de verificación por webhook y por dirección IP de cliente | 20 cada 10 minutos. Una petición verificada pasa siempre |
 | Peticiones a direcciones incorrectas por dirección IP de cliente | 20 cada 10 minutos |
-| Ventana de repetición para Stripe, Linear, Sentry, Standard Webhooks y HMAC | 30 días |
+| Ventana de detección de repeticiones para Stripe, Linear, Sentry, Standard Webhooks y HMAC | 30 días |
 | Tolerancia de la marca de tiempo para Stripe y Standard Webhooks | 300 segundos de forma predeterminada |
 | Tolerancia de la marca de tiempo para Linear | 60 segundos de forma predeterminada |
-| Tolerancia personalizada para Stripe, Linear y Standard Webhooks | Usa `tolerance_s` con un valor de 1 a 3600 segundos |
+| Tolerancia personalizada de la marca de tiempo para Stripe, Linear y Standard Webhooks | Usa `tolerance_s` con un valor de 1 a 3600 segundos |
 | Comprobación de repeticiones para Sentry y HMAC | SwB comprueba solo los cuerpos repetidos |
 | Comprobación de repeticiones para bearer y path | SwB comprueba solo el secreto |
 
@@ -199,7 +199,7 @@ SwB comprueba `webhookTimestamp` en el cuerpo firmado, con una tolerancia predet
 
 | `verify` | Cabecera | Origen del secreto |
 | - | - | - |
-| `hmac-sha1` | `x-vercel-signature` | El secreto de la [creación del webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) o el secreto de cliente de la Integration Console |
+| `hmac-sha1` | `x-vercel-signature` | El secreto que obtienes al [crear el webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) o el secreto de cliente de la Integration Console |
 
 Usa `x-vercel-signature` en `header`. Usa `"encoding": "hex"` y `"prefix": ""` para la firma hexadecimal simple. El sistema hexadecimal usa las cifras del `0` al `9` y las letras de la `a` a la `f`.
 
@@ -254,7 +254,7 @@ Genera un secreto en un archivo privado con [OpenSSL](https://docs.openssl.org/4
 (umask 077; set -C; openssl rand -hex 32 | tr -d '\n' > swb-webhook.key)
 ```
 
-Define `SWB_WEBHOOK_URL` con la URL que devolvió SwB. Usa [OpenSSL 4](https://docs.openssl.org/4.0/man1/openssl-mac/) para firmar un cuerpo con la hora actual. SwB usa todo el cuerpo firmado para detectar repeticiones. Para comprobar la hora firmada, usa `standard`.
+Asigna a `SWB_WEBHOOK_URL` la URL que devolvió SwB. Usa [OpenSSL 4](https://docs.openssl.org/4.0/man1/openssl-mac/) para firmar un cuerpo con la hora actual. SwB usa todo el cuerpo firmado para detectar repeticiones. Para comprobar la hora firmada, usa `standard`.
 
 ```sh
 body=$(printf '{"type":"script.event","timestamp":%s}' "$(date +%s)")

@@ -9,7 +9,7 @@ description: ほかのサービスからイベントを受け取り、Webhook �
 
 ## イベントを受け取る
 
-Webhook はオーナーが管理します。名前、`verify` の検証方法、`to` の送信先を指定して `webhook_create` を呼び出してください。送信先とは、イベントを受け取るエージェント、ルート、セッションのことです。
+Webhook はオーナーが管理します。名前を指定し、`verify` に検証方法、`to` に送信先を設定して、`webhook_create` を呼び出してください。送信先とは、イベントを受け取るエージェント、ルート、セッションのことです。
 
 ```json
 {
@@ -24,21 +24,21 @@ Webhook はオーナーが管理します。名前、`verify` の検証方法、
 
 返ってきた URL を、プロバイダーの Webhook 設定に貼り付けてください。この例では、Stripe から署名用シークレットを取得してください。署名用シークレットとは、イベントがプロバイダーから届いたことを SwB が確認するための共有キーです。
 
-受け取りリンクを開いてください。受け取りリンクとは、オーナーがシークレットを保存するページへのリンクです。そのページでシークレットを保存してください。SwB は保存したシークレットを非公開で保管します。
+受け取りリンクを開いてください。受け取りリンクとは、オーナーがシークレットを保存するページへのリンクです。そのページでシークレットを保存してください。SwB は保存したシークレットを安全に保管します。
 
 SwB のアドレスで Cloudflare Access を使っている場合は、`/hooks/*` の [Cloudflare Access のポリシー](/ja/docs/setup/cloudflare#コンソールを保護する)を **Bypass** にしてください。
 
-### Webhook にアクセスを与える
+### Webhook にアクセスを許可する
 
-SwB は Webhook を作成するときに、Webhook のチャンネル `channel:webhook/payments` を共有します。チャンネルにすでにルールがある場合は、そのルールを使います。送信先の側でも `workspace:webhook-payments` を受け入れる必要があります。このワークスペース名は、送信先のアクセスルールに対して Webhook を識別します。
+SwB は Webhook を作成するときに、Webhook のチャンネル `channel:webhook/payments` を共有します。チャンネルにすでにルールがある場合は、既存のルールをそのまま残します。送信先の側でも `workspace:webhook-payments` を受け入れる必要があります。送信先のアクセスルールは、このワークスペース名で Webhook を見分けます。
 
-`webhook_create` の応答に `visibility_set` の呼び出しが含まれている場合は、それを実行してください。送信先がアクセスを許可するまでは、受け付けたイベントは `context` としてメールボックスに入ります。`context` とは、受け身のメモです。アクセスがあれば、イベントで送信先を起こし、対応させることができます。
+`webhook_create` の応答に `visibility_set` の呼び出しが含まれている場合は、それを実行してください。送信先がアクセスを許可するまでは、受け付けたイベントは `context` としてメールボックスに入ります。`context` とは、参考情報として置かれるメモです。アクセスが許可されると、イベントが送信先を起こし、送信先がイベントに対応できます。
 
-Webhook の名前を指定して `webhook_test` を呼び出すと、SwB を通じてサンプルのイベントを送れます。結果が `woke` であれば、SwB が送信先に届いたことを確認できます。
+Webhook の名前を指定して `webhook_test` を呼び出すと、SwB を通じてサンプルのイベントを送れます。結果が `woke` なら、SwB が送信先まで配信できたことを確認できます。
 
 ### イベントを読む
 
-SwB は内容を `external` として扱います。これは、内容が SwB の外から来たことを意味します。フレームは、その内容の始まりと終わりを示します。件名には、Webhook の名前とイベントの種類が表示されます。最後の行には配信 ID が表示されます。配信 ID は、その配信を識別する値です。
+SwB は内容に `external` の印を付けます。`external` は、内容が SwB の外から来たことを示します。フレームは、その内容の始まりと終わりを示します。件名には、Webhook の名前とイベントの種類が表示されます。最後の行には配信 ID が表示されます。配信 ID は、その配信を識別する値です。
 
 ```text
 Webhook payments (external): payment_intent.succeeded
@@ -55,7 +55,7 @@ Webhook payments delivery evt_example.
 
 ### 送信先に見せる内容を選ぶ
 
-送信先に必要な部分だけを残すときは、`fields` を設定してください。続くフィールド名はドットで区切ってください。短い要約を作るときは、`template` を設定してください。各フィールドのパスは波かっこで囲んでください。
+イベントのうち送信先に必要な部分だけを残すときは、`fields` を設定してください。フィールド名を順に並べ、ドットで区切ってください。短い要約を作るときは、`template` を設定してください。各フィールドのパスは波かっこで囲んでください。
 
 この例では、[Stripe のスナップショットイベント](https://docs.stripe.com/api/events/object)を使います。スナップショットには、イベントが起きた時点のオブジェクトが含まれます。
 
@@ -76,11 +76,11 @@ Webhook payments delivery evt_example.
 
 アドレス、件数、シークレットの状態を確認するときは、`webhook_list` を呼び出してください。取り消した Webhook も含めるときは、`include_revoked` を `true` にしてください。
 
-新しいシークレット用の受け取りリンクを取得するときは、Webhook の名前を指定して `webhook_rotate` を呼び出してください。そのリンクで新しいシークレットを保存してください。プロバイダーか受信側を、新しいシークレットで更新してください。パスのシークレットの場合は、プロバイダーの URL を更新してください。
+新しいシークレット用の受け取りリンクを取得するときは、Webhook の名前を指定して `webhook_rotate` を呼び出してください。そのリンクで新しいシークレットを保存してください。プロバイダーか受信側の設定も、新しいシークレットに更新してください。パスのシークレットの場合は、プロバイダーの URL を更新してください。
 
 新しいシークレットを保存したあとも古いシークレットを有効にしておくときは、`grace_s` を設定してください。猶予期間はツールを呼び出した時点から始まり、最長 7 日間続きます。送信用の Webhook では、変更後の猶予期間中、SwB は両方のシークレットで署名します。受信側が URL を変えた場合は、同じ受け取りリンクで新しい URL を保存してください。
 
-Webhook を止めて、保存したシークレットを削除するときは、Webhook の名前を指定して `webhook_revoke` を呼び出してください。取り消した受信用の URL へのリクエストには `410` を返します。
+Webhook を止めて、保存したシークレットを削除するときは、Webhook の名前を指定して `webhook_revoke` を呼び出してください。取り消した受信用の URL へのリクエストには、SwB が `410` を返します。
 
 ## メッセージを送る
 
@@ -113,9 +113,9 @@ Webhook を止めて、保存したシークレットを削除するときは、
 }
 ```
 
-SwB がこれらのメッセージに署名する形式は、[Standard Webhooks の仕様](https://www.standardwebhooks.com/)で定められています。署名とは、データを保護するために SwB が署名用シークレットで計算する値です。ヘッダーは、リクエストの本文とともに情報を運びます。
+SwB がこれらのメッセージに署名する形式は、[Standard Webhooks の仕様](https://www.standardwebhooks.com/)で定められています。署名とは、データを保護するために SwB が署名用シークレットで計算する値です。ヘッダーとは、リクエストの本文に添えて送る情報です。
 
-Standard Webhooks のライブラリで、受け取った本文をそのまま検証してください。`webhook-id`、`webhook-timestamp`、`webhook-signature` のヘッダーを渡してください。これらのヘッダーは、配信 ID、送信時刻、署名を表します。
+Standard Webhooks のライブラリで、受け取った本文をそのまま検証してください。ライブラリには、`webhook-id`、`webhook-timestamp`、`webhook-signature` のヘッダーを渡してください。これらのヘッダーは、配信 ID、送信時刻、署名を表します。
 
 `swb.test` メッセージを送るときは、送信用の Webhook の名前を指定して `webhook_test` を呼び出してください。
 
@@ -123,7 +123,7 @@ Standard Webhooks のライブラリで、受け取った本文をそのまま�
 
 | HTTP ステータス | 意味 |
 | - | - |
-| `200` | SwB がイベントを受け付け、アクセスを確認します |
+| `200` | SwB がイベントを受け付けました。このあとアクセスを確認します |
 | `"duplicate": true` 付きの `200` | SwB はこの配信をすでに受け付けています |
 | `400` | 本文の形式が無効です |
 | `401` | 検証に失敗しました |
@@ -135,7 +135,7 @@ Standard Webhooks のライブラリで、受け取った本文をそのまま�
 
 ## 設定と上限
 
-このブロックは既定で有効です。止めるときは、設定ファイルで `blocks.webhook.enabled` を `false` にしてください。1 日あたりの送信数を制限するときは、`blocks.webhook.daily_cap` を使ってください。1 日の送信数を無制限にするときは `null` にしてください。
+このブロックは既定で有効です。無効にするときは、設定ファイルで `blocks.webhook.enabled` を `false` にしてください。1 日あたりの送信数を制限するときは、`blocks.webhook.daily_cap` を使ってください。1 日の送信数を無制限にするときは `null` にしてください。
 
 ```yaml
 blocks:
@@ -145,9 +145,9 @@ blocks:
     daily_cap: null
 ```
 
-SwB は、受け取った本文そのものに対して署名を確認します。リプレイとは、有効なリクエストの繰り返しです。表の中でリプレイを確認する方式について、SwB は配信を記録します。
+SwB は、受け取った本文そのものに対して署名を確認します。リプレイとは、有効なリクエストの繰り返しです。下の表でリプレイを確認する方式では、SwB が配信を記録します。
 
-タイムスタンプを確認する方式では、許容差とは、署名された送信時刻と SwB の時計との差の最大値です。
+許容差とは、タイムスタンプを確認する方式で認める、署名された送信時刻と SwB の時計との差の最大値です。
 
 | 設定 | 上限 |
 | - | - |
@@ -155,10 +155,10 @@ SwB は、受け取った本文そのものに対して署名を確認します�
 | すべてのアドレスを合わせた、Webhook ごとの検証済みの新しいイベント | 10 分あたり 600 件 |
 | Webhook とクライアントの IP アドレスごとの検証の失敗 | 10 分あたり 20 回。検証済みのリクエストは常に通ります |
 | クライアントの IP アドレスごとの、誤ったアドレスへのリクエスト | 10 分あたり 20 回 |
-| Stripe、Linear、Sentry、Standard Webhooks、HMAC のリプレイの期間 | 30 日 |
+| Stripe、Linear、Sentry、Standard Webhooks、HMAC でリプレイを確認する期間 | 30 日 |
 | Stripe と Standard Webhooks のタイムスタンプの許容差 | 既定で 300 秒 |
 | Linear のタイムスタンプの許容差 | 既定で 60 秒 |
-| Stripe、Linear、Standard Webhooks の独自の許容差 | `tolerance_s` に 1 から 3600 秒を設定します |
+| Stripe、Linear、Standard Webhooks のタイムスタンプの許容差の変更 | `tolerance_s` に 1 から 3600 秒を設定します |
 | Sentry と HMAC のリプレイの確認 | SwB は本文の繰り返しだけを確認します |
 | bearer と path のリプレイの確認 | SwB はシークレットだけを確認します |
 
@@ -172,7 +172,7 @@ SwB は、受け取った本文そのものに対して署名を確認します�
 | - | - | - |
 | `stripe` | `Stripe-Signature` | [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) にある、そのエンドポイントの `whsec_` 署名用シークレット |
 
-SwB は、署名された時刻を自分の時計と比べます。許容差は既定で 300 秒です。
+SwB は、署名された時刻を SwB の時計と比べます。許容差は既定で 300 秒です。
 
 ### Linear
 
@@ -228,7 +228,7 @@ rest_command:
 | - | - | - |
 | `bearer` | `Authorization: Bearer <secret>` | この Webhook 用に自分で生成するランダムなシークレット |
 
-[Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-Send-webhooks-in-Zap-workflows) で **Custom Request** を選んでください。メソッドを `POST` にしてください。**Headers** に `Authorization` ヘッダーを追加してください。
+[Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-Send-webhooks-in-Zap-workflows) で **Custom Request** を選択してください。メソッドを `POST` にしてください。**Headers** に `Authorization` ヘッダーを追加してください。
 
 ### IFTTT
 
@@ -236,9 +236,9 @@ rest_command:
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | この Webhook 用に自分で生成するランダムなシークレット |
 
-URL の呼び出しだけに対応する送信元には、パスによる検証を使ってください。16 文字以上の英数字で、ランダムなシークレットを選んでください。受け取りリンクでそのシークレットを保存してください。URL の末尾の `<secret>` を、保存したシークレットに置き換えてください。URL 全体をシークレットとして扱ってください。SwB は、アクセスログでパスのシークレットを伏せます。
+URL の呼び出しだけに対応する送信元には、パスによる検証を使ってください。16 文字以上の英数字で、ランダムなシークレットを用意してください。受け取りリンクでそのシークレットを保存してください。URL の末尾の `<secret>` を、保存したシークレットに置き換えてください。URL 全体をシークレットとして扱ってください。SwB は、パスのシークレットをアクセスログから除外します。
 
-IFTTT で [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request) を選んでください。メソッドを `POST` にしてください。URL 全体を入力してください。
+IFTTT で [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request) を選択してください。メソッドを `POST` にしてください。URL 全体を入力してください。
 
 ### 独自のスクリプト
 
@@ -246,7 +246,7 @@ IFTTT で [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make
 | - | - | - |
 | `hmac-sha256` | `X-Signature-256` | この Webhook 用に自分で生成するランダムなシークレット |
 
-HMAC は、共有シークレットを使って本文から署名を計算します。`header` を `X-Signature-256`、`encoding` を `hex`、`prefix` を `sha256=` にしてください。
+HMAC は、共有シークレットを使って本文から署名を計算する方式です。`header` を `X-Signature-256`、`encoding` を `hex`、`prefix` を `sha256=` にしてください。
 
 [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/) で、シークレットを非公開のファイルに生成してください。その値を受け取りリンクで保存してください。
 

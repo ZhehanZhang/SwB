@@ -24,21 +24,21 @@ Le propriétaire gère les webhooks. Appelez `webhook_create` avec un nom, une m
 
 Collez l'URL renvoyée dans les paramètres de webhook du fournisseur. Pour cet exemple, récupérez le secret de signature dans Stripe. Un secret de signature est une clé partagée qui permet à SwB de vérifier que l'événement vient bien du fournisseur.
 
-Ouvrez le lien de saisie, c'est-à-dire la page où le propriétaire enregistre le secret. Enregistrez-y le secret. SwB garde le secret enregistré privé.
+Ouvrez le lien de saisie, qui mène à la page où le propriétaire enregistre le secret. Enregistrez-y le secret. SwB garde privé le secret enregistré.
 
 Si votre adresse SwB utilise Cloudflare Access, définissez la [stratégie Cloudflare Access](/fr/docs/setup/cloudflare#protéger-la-console) de `/hooks/*` sur **Bypass**.
 
 ### Donner l'accès au webhook
 
-À la création du webhook, SwB partage le canal du webhook `channel:webhook/payments`, sauf si ce canal a déjà une règle. La cible doit aussi admettre `workspace:webhook-payments`. Ce nom d'espace de travail identifie le webhook auprès de la règle d'accès de la cible.
+À la création du webhook, SwB partage le canal du webhook `channel:webhook/payments`, sauf si ce canal a déjà une règle. La cible doit aussi autoriser `workspace:webhook-payments`. Ce nom d'espace de travail identifie le webhook auprès de la règle d'accès de la cible.
 
-Si la réponse de `webhook_create` contient un appel `visibility_set`, exécutez-le. Avant que la cible donne l'accès, les événements acceptés arrivent dans la boîte aux lettres en tant que `context`, une note passive. Avec l'accès, un événement peut réveiller la cible pour qu'elle agisse.
+Si la réponse de `webhook_create` contient un appel `visibility_set`, exécutez-le. Jusqu'à ce que la cible accorde l'accès, les événements acceptés arrivent dans la boîte aux lettres en tant que `context`, une note passive. Avec l'accès, un événement peut réveiller la cible pour qu'elle agisse.
 
 Appelez `webhook_test` avec le nom du webhook pour envoyer un événement d'exemple par SwB. Le résultat `woke` confirme que SwB a atteint la cible.
 
 ### Lire l'événement
 
-SwB marque le contenu comme `external`, ce qui signifie qu'il vient de l'extérieur de SwB. Le cadre marque le début et la fin de ce contenu. Le sujet indique le nom du webhook et le type d'événement. La dernière ligne indique l'ID de livraison, qui identifie la livraison.
+SwB marque le contenu comme `external`, ce qui signifie qu'il vient de l'extérieur de SwB. Le cadre marque le début et la fin de ce contenu. La ligne d'objet indique le nom du webhook et le type d'événement. La dernière ligne indique l'ID de livraison, qui identifie la livraison.
 
 ```text
 Webhook payments (external): payment_intent.succeeded
@@ -80,7 +80,7 @@ Appelez `webhook_rotate` avec le nom du webhook pour obtenir un lien de saisie p
 
 Définissez `grace_s` pour garder l'ancien secret valide après l'enregistrement de son remplaçant. La période de grâce commence à l'appel de l'outil et dure jusqu'à sept jours. Pour les webhooks sortants, SwB signe avec les deux secrets après le changement et pendant cette période. Si le destinataire change d'URL, enregistrez la nouvelle URL par le même lien de saisie.
 
-Appelez `webhook_revoke` avec le nom du webhook pour arrêter le webhook et supprimer ses secrets enregistrés. Les requêtes vers une URL entrante révoquée reçoivent `410`.
+Appelez `webhook_revoke` avec le nom du webhook pour arrêter le webhook et supprimer ses secrets enregistrés. Les requêtes vers une URL entrante révoquée reçoivent le code `410`.
 
 ## Envoyer des messages
 
@@ -115,11 +115,11 @@ Utilisez `send` avec `to` défini sur `webhook:out:alerts`. SwB envoie ce corps 
 
 La [spécification Standard Webhooks](https://www.standardwebhooks.com/) définit le format que SwB utilise pour signer ces messages. Une signature est une valeur que SwB calcule avec le secret de signature pour protéger les données. Les en-têtes transportent des informations en plus du corps de la requête.
 
-Vérifiez le corps exact avec une bibliothèque Standard Webhooks. Passez les en-têtes `webhook-id`, `webhook-timestamp` et `webhook-signature`. Ils fournissent l'ID de livraison, l'heure d'envoi et la signature.
+Vérifiez le corps exact avec une bibliothèque Standard Webhooks. Transmettez-lui les en-têtes `webhook-id`, `webhook-timestamp` et `webhook-signature`. Ils fournissent l'ID de livraison, l'heure d'envoi et la signature.
 
 Appelez `webhook_test` avec le nom du webhook sortant pour envoyer un message `swb.test`.
 
-## Réponses entrantes
+## Réponses aux requêtes entrantes
 
 | Statut HTTP | Signification |
 | - | - |
@@ -130,7 +130,7 @@ Appelez `webhook_test` avec le nom du webhook sortant pour envoyer un message `s
 | `404` | L'adresse du webhook ou le secret de chemin est invalide |
 | `410` | Le propriétaire a révoqué le webhook |
 | `413` | Le corps dépasse la taille maximale |
-| `429` | La limite de requêtes s'applique. `Retry-After` indique le temps d'attente en secondes |
+| `429` | La limite de requêtes est atteinte. `Retry-After` indique le temps d'attente en secondes |
 | `503` | Le webhook attend son secret, ou le secret enregistré a un format incorrect |
 
 ## Paramètres et limites
@@ -153,9 +153,9 @@ Pour les méthodes qui vérifient l'horodatage, la tolérance est l'écart maxim
 | - | - |
 | Corps de la requête | 256 Kio par défaut. Définissez `blocks.webhook.max_body_kb` sur un nombre entier de 1 à 1024 |
 | Nouveaux événements vérifiés par webhook, toutes adresses confondues | 600 par période de 10 minutes |
-| Échecs de vérification par webhook et par adresse IP cliente | 20 par période de 10 minutes. Une requête vérifiée passe toujours |
-| Requêtes vers de mauvaises adresses par adresse IP cliente | 20 par période de 10 minutes |
-| Fenêtre de rejeu pour Stripe, Linear, Sentry, Standard Webhooks et HMAC | 30 jours |
+| Échecs de vérification par webhook et par adresse IP cliente | 20 par période de 10 minutes. Une requête vérifiée est toujours acceptée |
+| Requêtes vers des adresses erronées par adresse IP cliente | 20 par période de 10 minutes |
+| Fenêtre de détection des rejeux pour Stripe, Linear, Sentry, Standard Webhooks et HMAC | 30 jours |
 | Tolérance d'horodatage pour Stripe et Standard Webhooks | 300 secondes par défaut |
 | Tolérance d'horodatage pour Linear | 60 secondes par défaut |
 | Tolérance d'horodatage personnalisée pour Stripe, Linear et Standard Webhooks | Définissez `tolerance_s` entre 1 et 3600 secondes |
@@ -209,7 +209,7 @@ Définissez `header` sur `x-vercel-signature`. Utilisez `"encoding": "hex"` et `
 | - | - | - |
 | `bearer` | `Authorization: Bearer <secret>` | Un secret aléatoire que vous générez pour ce webhook |
 
-Ajoutez une [commande RESTful](https://www.home-assistant.io/integrations/rest_command/) à `configuration.yaml`. Indiquez l'adresse fournie par SwB comme URL. Enregistrez la valeur complète de l'en-tête `Bearer <secret>` sous `swb_webhook_auth` dans [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/). Dans le lien de saisie SwB, enregistrez uniquement le secret lui-même.
+Ajoutez une [commande RESTful](https://www.home-assistant.io/integrations/rest_command/) à `configuration.yaml`. Indiquez l'adresse fournie par SwB comme URL. Enregistrez la valeur complète de l'en-tête `Bearer <secret>` sous `swb_webhook_auth` dans [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/). Par le lien de saisie SwB, enregistrez uniquement le secret lui-même.
 
 ```yaml
 rest_command:
@@ -236,7 +236,7 @@ Dans [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/849632644698
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | Un secret aléatoire que vous générez pour ce webhook |
 
-Utilisez la vérification par chemin pour les expéditeurs qui savent uniquement appeler une URL. Choisissez un secret aléatoire d'au moins 16 lettres ou chiffres. Enregistrez-le par le lien de saisie. À la fin de l'URL, remplacez `<secret>` par le secret enregistré. Traitez l'URL entière comme un secret. SwB garde les secrets de chemin hors de son journal d'accès.
+Utilisez la vérification par chemin pour les expéditeurs qui savent uniquement appeler une URL. Choisissez un secret aléatoire d'au moins 16 lettres ou chiffres. Enregistrez-le par le lien de saisie. À la fin de l'URL, remplacez `<secret>` par le secret enregistré. Traitez l'URL entière comme un secret. SwB exclut les secrets de chemin de son journal d'accès.
 
 Dans IFTTT, choisissez [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request). Définissez la méthode sur `POST`. Saisissez l'URL complète.
 

@@ -5,7 +5,7 @@ description: Empfangen Sie Ereignisse von anderen Diensten und senden Sie Nachri
 
 Ein Ereignis ist eine Änderung, zum Beispiel eine abgeschlossene Zahlung. Ein Webhook sendet Daten an eine Webadresse, sobald ein Ereignis eintritt. Der Block Webhooks empfängt Ereignisse von einem Anbieter wie Stripe oder sendet Nachrichten an eine Adresse Ihrer Wahl.
 
-Hilfe bei der Einrichtung gibt der Prompt `setup-webhook` in Ihrem MCP-Client.
+Für Hilfe bei der Einrichtung verwenden Sie den Prompt `setup-webhook` in Ihrem MCP-Client.
 
 ## Ereignisse empfangen
 
@@ -22,9 +22,9 @@ Der Inhaber verwaltet Webhooks. Rufen Sie `webhook_create` mit einem Namen, eine
 }
 ```
 
-Fügen Sie die zurückgegebene URL in die Webhook-Einstellungen des Anbieters ein. Holen Sie für dieses Beispiel das Signatur-Secret von Stripe. Ein Signatur-Secret ist ein gemeinsamer Schlüssel, mit dem SwB prüft, dass das Ereignis vom Anbieter stammt.
+Fügen Sie die zurückgegebene URL in die Webhook-Einstellungen des Anbieters ein. Kopieren Sie für dieses Beispiel das Signatur-Secret aus Stripe. Ein Signatur-Secret ist ein gemeinsamer Schlüssel, mit dem SwB prüft, ob das Ereignis vom Anbieter stammt.
 
-Öffnen Sie den Claim-Link, also den Link zu der Seite, auf der der Inhaber das Secret speichert. Speichern Sie das Secret dort. SwB bewahrt das gespeicherte Secret vertraulich auf.
+Öffnen Sie den Claim-Link, also den Link zu der Seite, auf der der Inhaber das Secret speichert. Speichern Sie das Secret dort. SwB behandelt das gespeicherte Secret vertraulich.
 
 Wenn Ihre SwB-Adresse Cloudflare Access verwendet, setzen Sie die [Access-Richtlinie](/de/docs/setup/cloudflare#konsole-schützen) für `/hooks/*` auf **Bypass**.
 
@@ -32,7 +32,7 @@ Wenn Ihre SwB-Adresse Cloudflare Access verwendet, setzen Sie die [Access-Richtl
 
 Beim Erstellen des Webhooks gibt SwB den Webhook-Kanal `channel:webhook/payments` frei. Wenn der Kanal bereits eine Regel hat, bleibt diese bestehen. Das Ziel muss außerdem `workspace:webhook-payments` zulassen. Über diesen Workspace-Namen erkennt die Zugriffsregel des Ziels den Webhook.
 
-Wenn die Antwort von `webhook_create` einen Aufruf `visibility_set` enthält, führen Sie ihn aus. Bis das Ziel den Zugriff freigibt, landen angenommene Ereignisse als `context` im Postfach, also als passive Notiz. Mit Zugriff kann ein Ereignis das Ziel wecken, damit es handeln kann.
+Wenn die Antwort von `webhook_create` einen Aufruf `visibility_set` enthält, führen Sie ihn aus. Bis das Ziel den Zugriff freigibt, gelangen angenommene Ereignisse als `context` ins Postfach, also als passive Notiz. Mit Zugriff kann ein Ereignis das Ziel wecken, damit es handeln kann.
 
 Rufen Sie `webhook_test` mit dem Namen des Webhooks auf, um ein Beispielereignis über SwB zu senden. Das Ergebnis `woke` bestätigt, dass SwB das Ziel erreicht hat.
 
@@ -84,7 +84,7 @@ Rufen Sie `webhook_revoke` mit dem Namen des Webhooks auf, um den Webhook zu sto
 
 ## Nachrichten senden
 
-Rufen Sie `webhook_create` mit einem Namen und `direction` gleich `out` auf.
+Rufen Sie `webhook_create` mit einem Namen auf und setzen Sie `direction` auf `out`.
 
 ```json
 {
@@ -95,7 +95,7 @@ Rufen Sie `webhook_create` mit einem Namen und `direction` gleich `out` auf.
 
 Öffnen Sie den Claim-Link, um die öffentliche HTTPS-URL des Empfängers und das Signatur-Secret zu speichern. Geben Sie dasselbe Signatur-Secret `whsec_` über einen vertraulichen Kanal an den Empfänger weiter.
 
-Verwenden Sie `send` mit `to` gleich `webhook:out:alerts`. SwB sendet diesen JSON-Body in einer `POST`-Anfrage.
+Verwenden Sie `send` und setzen Sie `to` auf `webhook:out:alerts`. SwB sendet diesen JSON-Body in einer `POST`-Anfrage.
 
 ```json
 {
@@ -113,7 +113,7 @@ Verwenden Sie `send` mit `to` gleich `webhook:out:alerts`. SwB sendet diesen JSO
 }
 ```
 
-Die [Spezifikation Standard Webhooks](https://www.standardwebhooks.com/) legt das Format fest, mit dem SwB diese Nachrichten signiert. Eine Signatur ist ein Wert, den SwB mit dem Signatur-Secret berechnet, um die Daten zu schützen. Header übertragen Informationen zusätzlich zum Anfrage-Body.
+Die Spezifikation [Standard Webhooks](https://www.standardwebhooks.com/) legt das Format fest, mit dem SwB diese Nachrichten signiert. Eine Signatur ist ein Wert, den SwB mit dem Signatur-Secret berechnet, um die Daten zu schützen. Header übertragen Informationen zusätzlich zum Anfrage-Body.
 
 Prüfen Sie den exakten Body mit einer Bibliothek für Standard Webhooks. Übergeben Sie die Header `webhook-id`, `webhook-timestamp` und `webhook-signature`. Sie enthalten die Delivery-ID, den Sendezeitpunkt und die Signatur.
 
@@ -135,7 +135,7 @@ Rufen Sie `webhook_test` mit dem Namen des ausgehenden Webhooks auf, um eine Nac
 
 ## Einstellungen und Limits
 
-Der Block ist standardmäßig aktiv. Setzen Sie `blocks.webhook.enabled` in der Konfigurationsdatei auf `false`, um ihn abzuschalten. Mit `blocks.webhook.daily_cap` begrenzen Sie ausgehende Nachrichten pro Tag. Mit `null` sind die täglichen Nachrichten unbegrenzt.
+Der Block ist standardmäßig aktiv. Setzen Sie `blocks.webhook.enabled` in der Konfigurationsdatei auf `false`, um ihn abzuschalten. Mit `blocks.webhook.daily_cap` begrenzen Sie ausgehende Nachrichten pro Tag. Mit `null` ist die Zahl der Nachrichten pro Tag unbegrenzt.
 
 ```yaml
 blocks:
@@ -145,15 +145,15 @@ blocks:
     daily_cap: null
 ```
 
-SwB prüft die Signatur anhand des exakten Bodys, den es empfangen hat. Ein Replay ist die Wiederholung einer gültigen Anfrage. Für die Methoden in der Tabelle mit Replay-Prüfung vermerkt SwB die Zustellungen.
+SwB prüft die Signatur anhand des exakten Bodys, den es empfangen hat. Ein Replay ist die Wiederholung einer gültigen Anfrage. Für die Methoden in der Tabelle, die auf Replays prüfen, protokolliert SwB die Zustellungen.
 
-Bei Methoden mit Prüfung des Zeitstempels ist die Toleranz die größte erlaubte Differenz zwischen dem signierten Sendezeitpunkt und der Uhr von SwB.
+Bei Methoden, die den Zeitstempel prüfen, ist die Toleranz die größte erlaubte Differenz zwischen dem signierten Sendezeitpunkt und der Uhr von SwB.
 
 | Einstellung | Limit |
 | - | - |
 | Anfrage-Body | Standardmäßig 256 KiB. Setzen Sie `blocks.webhook.max_body_kb` auf eine ganze Zahl von 1 bis 1024 |
-| Neue geprüfte Ereignisse pro Webhook über alle Adressen | 600 pro 10 Minuten |
-| Fehlgeschlagene Prüfungen pro Webhook und Client-IP-Adresse | 20 pro 10 Minuten. Eine geprüfte Anfrage kommt immer durch |
+| Neue erfolgreich geprüfte Ereignisse pro Webhook über alle Adressen | 600 pro 10 Minuten |
+| Fehlgeschlagene Prüfungen pro Webhook und Client-IP-Adresse | 20 pro 10 Minuten. Eine erfolgreich geprüfte Anfrage wird immer angenommen |
 | Anfragen an falsche Adressen pro Client-IP-Adresse | 20 pro 10 Minuten |
 | Replay-Fenster für Stripe, Linear, Sentry, Standard Webhooks und HMAC | 30 Tage |
 | Zeitstempel-Toleranz für Stripe und Standard Webhooks | Standardmäßig 300 Sekunden |
@@ -172,7 +172,7 @@ Wenn ein vertrauenswürdiger Server Anfragen weiterleitet, ermittelt SwB die Cli
 | - | - | - |
 | `stripe` | `Stripe-Signature` | Das Signatur-Secret `whsec_` für den Endpunkt im [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) |
 
-SwB vergleicht den signierten Zeitpunkt mit seiner Uhr, mit einer Standardtoleranz von 300 Sekunden.
+SwB vergleicht den signierten Zeitpunkt mit seiner Uhr. Die Standardtoleranz beträgt 300 Sekunden.
 
 ### Linear
 
@@ -192,16 +192,16 @@ SwB prüft `webhookTimestamp` im signierten Body mit einer Standardtoleranz von 
 
 | `verify` | Header | Herkunft des Secrets |
 | - | - | - |
-| `standard` | `webhook-id`, `webhook-timestamp` und `webhook-signature` | Das Signatur-Secret `whsec_` für den Endpunkt vom Absender |
+| `standard` | `webhook-id`, `webhook-timestamp` und `webhook-signature` | Das Signatur-Secret `whsec_` für den Endpunkt, das Sie vom Absender erhalten |
 | `standard` oder `svix` | `svix-id`, `svix-timestamp` und `svix-signature` | Das Signatur-Secret `whsec_` für den Endpunkt im [Svix Application Portal](https://docs.svix.com/receiving/verifying-payloads/how) |
 
 ### Vercel
 
 | `verify` | Header | Herkunft des Secrets |
 | - | - | - |
-| `hmac-sha1` | `x-vercel-signature` | Das Secret aus der [Webhook-Erstellung](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) oder das Client-Secret in der Integration Console |
+| `hmac-sha1` | `x-vercel-signature` | Das beim [Erstellen des Webhooks](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) erzeugte Secret oder das Client-Secret in der Integration Console |
 
-Setzen Sie `header` auf `x-vercel-signature`. Verwenden Sie `"encoding": "hex"` und `"prefix": ""` für die reine hexadezimale Signatur. Hexadezimal verwendet die Ziffern `0` bis `9` und die Buchstaben `a` bis `f`.
+Setzen Sie `header` auf `x-vercel-signature`. Verwenden Sie `"encoding": "hex"` und `"prefix": ""` für die reine hexadezimale Signatur. Hexadezimale Werte bestehen aus den Ziffern `0` bis `9` und den Buchstaben `a` bis `f`.
 
 ### Home Assistant
 
@@ -209,7 +209,7 @@ Setzen Sie `header` auf `x-vercel-signature`. Verwenden Sie `"encoding": "hex"` 
 | - | - | - |
 | `bearer` | `Authorization: Bearer <secret>` | Ein zufälliges Secret, das Sie für diesen Webhook erzeugen |
 
-Fügen Sie in `configuration.yaml` einen [RESTful Command](https://www.home-assistant.io/integrations/rest_command/) hinzu. Setzen Sie die URL auf die Adresse von SwB. Speichern Sie den vollständigen Header-Wert `Bearer <secret>` unter `swb_webhook_auth` in [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/). Speichern Sie im Claim-Link von SwB nur das Secret selbst.
+Fügen Sie in `configuration.yaml` einen [RESTful Command](https://www.home-assistant.io/integrations/rest_command/) hinzu. Setzen Sie die URL auf die Adresse von SwB. Speichern Sie den vollständigen Header-Wert `Bearer <secret>` unter `swb_webhook_auth` in [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/). Speichern Sie über den Claim-Link von SwB nur das Secret selbst.
 
 ```yaml
 rest_command:
@@ -236,7 +236,7 @@ Wählen Sie in [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/84
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | Ein zufälliges Secret, das Sie für diesen Webhook erzeugen |
 
-Verwenden Sie die Prüfung über den Pfad für Absender, die nur eine URL aufrufen können. Wählen Sie ein zufälliges Secret aus mindestens 16 Buchstaben oder Ziffern. Speichern Sie es über den Claim-Link. Ersetzen Sie `<secret>` am Ende der URL durch das gespeicherte Secret. Behandeln Sie die gesamte URL als Secret. SwB hält Pfad-Secrets aus seinem Zugriffsprotokoll heraus.
+Verwenden Sie die Prüfung über den Pfad für Absender, die nur eine URL aufrufen können. Wählen Sie ein zufälliges Secret aus mindestens 16 Buchstaben oder Ziffern. Speichern Sie es über den Claim-Link. Ersetzen Sie `<secret>` am Ende der URL durch das gespeicherte Secret. Behandeln Sie die gesamte URL als Secret. SwB lässt Pfad-Secrets in seinem Zugriffsprotokoll weg.
 
 Wählen Sie in IFTTT [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request) aus. Setzen Sie die Methode auf `POST`. Geben Sie die vollständige URL ein.
 
