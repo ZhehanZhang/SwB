@@ -61,7 +61,7 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 配對前，請依表格中的連結設定本機代理。配對後，讓夥伴裝置持續執行。請以擁有者身分登入的代理呼叫 `targets(block="local")`。確認結果中列出你的工作階段位址。
 
-SwB 先把傳給工作階段的訊息放進代理的信箱，再嘗試送到已開啟的工作階段。回覆會回到原本的 SwB 對話。
+SwB 會嘗試把訊息送到已開啟的工作階段。寄件者有權使用代理信箱時，SwB 也會把訊息放進信箱。回覆會回到原本的 SwB 對話。
 
 從 `targets` 取得工作階段的位址。在 `visibility_list` 中查找該位址對應的資源。用 `visibility_set` 分享該資源。
 

@@ -49,7 +49,7 @@ Capy Captain 是负责协调一组线程的 Capy 智能体。SwB 把任务发给
 
 ### 共享 Capy Captain
 
-打开 Capy Captain 菜单。选择 **Share**。授予服务用户访问权限。如果 Captain 使用已配对设备，也给服务用户授予该设备的访问权限。
+打开 Capy Captain 菜单。选择 **Share**。授予服务用户访问权限。如果 Captain 使用已配对设备，也给服务用户授予该设备的访问权限。 {/* unverified */}
 
 ### 保存发送密钥
 
@@ -66,6 +66,8 @@ Capy Captain 是负责协调一组线程的 Capy 智能体。SwB 把任务发给
 重启后，`connect` 会列出可用的 Captain。确认由哪个 Captain 接收任务。调用 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。需要项目路由时，在 `choose` 中加入 `"project":"<project>"`。路由指定任务的去向。
 
 如果智能体需要服务密钥才能发送，SwB 会要求提供密钥。用 `capy_captains`、`routes_list` 和 `routes_resolve` 检查路由。
+
+如果应用支持 MCP 事件，请订阅 `switchboard.message.created`。要主动读取消息，请调用 `wait` 或 `inbox`。
 
 ## 凭据
 

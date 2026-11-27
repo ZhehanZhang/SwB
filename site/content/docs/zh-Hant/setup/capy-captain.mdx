@@ -49,7 +49,7 @@ Capy Captain 是負責協調一組執行緒的 Capy 代理。SwB 把工作交給
 
 ### 分享 Capy Captain
 
-開啟 Capy Captain 選單。選取 **Share**。授予服務使用者存取權。如果 Captain 使用已配對的裝置，也授予服務使用者該裝置的存取權。
+開啟 Capy Captain 選單。選取 **Share**。授予服務使用者存取權。如果 Captain 使用已配對的裝置，也授予服務使用者該裝置的存取權。 {/* unverified */}
 
 ### 儲存傳送金鑰
 
@@ -66,6 +66,8 @@ Capy Captain 是負責協調一組執行緒的 Capy 代理。SwB 把工作交給
 重新啟動後，`connect` 會列出可用的 Captain。確認哪個 Captain 要接收工作。呼叫 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。若要設定專案路由，在 `choose` 加入 `"project":"<project>"`。路由會指定工作送往何處。
 
 代理若需要服務金鑰才能傳送，SwB 會要求提供金鑰。用 `capy_captains`、`routes_list` 和 `routes_resolve` 檢查路由。
+
+若應用程式支援 MCP 事件，請訂閱 `switchboard.message.created`。若要主動讀取訊息，請呼叫 `wait` 或 `inbox`。
 
 ## 憑證
 

@@ -15,21 +15,29 @@ routine 是一项已保存的 Claude Code 任务，可以自动运行。其他�
 
 <SetupPrompt name="claude-project" lang="zh-Hans" />
 
-把提示词粘贴到 Claude Project 的协调会话。
+在 [Claude Code](https://claude.ai/code) 中打开项目。把提示词粘贴到左侧的协调会话。协调智能体会在项目中创建名为 `swb <project>` 的 routine。
 
-## 创建 routine
+## 打开 routine
 
-在 [Claude Code](https://claude.ai/code) 中打开项目。打开项目中的 routine，或新建一项。添加协调智能体提供的 routine 提示词。
+打开协调智能体发来的 routine 链接。也可以通过下面任一路径打开。
 
-## 添加 API 触发器
+### 从 Routines 页面打开
 
-打开 routine。也可以在[定时任务页面](https://claude.ai/code/routines)查找。
+打开 [Routines 页面](https://claude.ai/code/routines)。点击页面顶部的横幅，显示隐藏的项目 routine。打开 `swb <project>`。
 
-打开 routine 名称旁的菜单。点击 **Edit**。在 **Trigger** 一行中点击 **+**。选择 **API**。
+### 从项目中打开
 
-复制 **Fire URL**。把这个地址发给协调智能体。点击 **Generate token**。在 **Token generated** 弹窗关闭前复制令牌。
+点击右侧面板顶部标签栏中的 **+**。选择 **Routines**。打开 `swb <project>`。点击 **View full page**。
 
-## 保存令牌
+## 打开 API 触发器
+
+打开 routine 名称旁的菜单。点击 **Edit**。在编辑表单中依次点击 **Trigger**、**+** 和 **API**。
+
+复制 **Fire URL**。把这个地址发给协调智能体。
+
+## 生成并保存令牌
+
+由所有者在 Claude 中生成令牌。点击 **Generate token**。在 **Token generated** 弹窗关闭前复制令牌。
 
 打开协调智能体发来的领取链接。在 **Claude routine token** 页面核对项目和 routine ID。把令牌粘贴到 **Token**。点击 **Save token**。
 
@@ -37,9 +45,9 @@ SwB 会显示 **Routine saved** 或 **Routine and project saved**。保存后告
 
 ## 智能体的工作
 
-协调智能体调用 `connect(what="claude-project")`。SwB 检查 `claude-routine` 模块并列出已登记的 routine。协调智能体可用 `project_list` 查找你的 SwB 项目。
+协调智能体从拥有完整所有者权限的 SwB 客户端调用 `connect(what="claude-project")`。SwB 检查 `claude-routine` 模块并列出已登记的 routine。协调智能体可用 `project_list` 查找你的 SwB 项目。
 
-协调智能体会返回 routine 的提示词。其中包含以下说明和准确的项目名称。
+协调智能体添加 API 触发器。它把以下说明加入 routine 的提示词，并填入准确的 Claude Project 名称。
 
 ```text
 Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.

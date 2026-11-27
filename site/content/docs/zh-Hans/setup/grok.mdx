@@ -41,7 +41,7 @@ Grok Bot 是另一款应用。请参阅 [Grok Bot](/zh-Hans/docs/setup/grok-bot)
 
 Grok 调用 `connect(what="grok")`。SwB 返回 MCP 地址和 OAuth 状态。你登录后，`connect` 会报告客户端已登录。
 
-Grok 可以用 `send` 发送测试消息，再用 `inbox` 读取。邮箱接收发给一个智能体的消息。在打开的会话中，请 Grok 用 `wait` 或 `inbox` 收取新消息。
+Grok 可以用 `send` 发送测试消息，再用 `inbox` 读取。邮箱接收发给一个智能体的消息。如果 Grok 应用支持 MCP 事件，请订阅 `switchboard.message.created`。要主动读取消息，请让 Grok 在已打开的会话中调用 `wait` 或 `inbox`。
 
 ## 凭据
 

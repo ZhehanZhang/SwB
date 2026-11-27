@@ -13,7 +13,7 @@ From an owner agent, call `targets(block="local")` to check each setup. Copy the
 
 ## Send a message
 
-Pass the session address as `to` in `send`. For a session with a matching agent, SwB leaves the message in that agent's mailbox. In other sessions, an owner send goes to the owner's mailbox. For eligible open sessions, SwB also tries direct delivery. Use the returned conversation ID with `result` to read the reply.
+Pass the session address as `to` in `send`. SwB tries to deliver the message to the open session. For a session with a matching agent, mailbox delivery requires access to that agent's mailbox. In other sessions, a message from the owner goes to the owner's mailbox. Use the returned conversation ID with `result` to read the reply.
 
 | Status | Meaning |
 | --- | --- |
@@ -23,7 +23,7 @@ Pass the session address as `to` in `send`. For a session with a matching agent,
 | `done` | The agent completed its work |
 | `unknown` | The status is still to be confirmed |
 
-For a blocked session, respond to the request in the session. SwB keeps the message in the mailbox.
+For a blocked session, respond to the request in the session. SwB keeps the message in the mailbox if the sender can use that mailbox.
 
 The companion reports session status to your SwB server. It can also report the session name and folder name. The companion can send back one answer to each message it delivers directly. The rest of the session stays on the device.
 

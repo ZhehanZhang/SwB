@@ -18,4 +18,4 @@ If `connect` gives a pairing code, redeem that code as described at https://swb.
 
 A scope is a group of memory entries. A paired key gets its agent scope and any scope I grant. A project named in the pairing adds its scope. Read `general` if the key has access to it.
 
-In the new client, call `inbox` to check the connection. Ask me to send a test message from another SwB app. Answer with `reply` and the item's `handle`. For on-demand reads, use `wait` or `inbox`.
+In the new client, call `inbox` to check the connection. Ask me to send a test message from another SwB app. Answer with `reply` and the item's `handle`. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
