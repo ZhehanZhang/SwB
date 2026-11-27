@@ -17,7 +17,7 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from threading import Thread
 
-from .cli import CONFIG, CliError, _instance_config, _url, _write_file
+from .cli import CONFIG, CliError, _instance_config, _port, _url, _write_file
 from .config import DEFAULT_PORT, INSTANCE_DB, LOOPBACK_HOSTS, Instance, bind_address, config_path, instance_data_dir, load_config
 from .deployment import OWNER_KEY
 from .store import ensure_private_data_dir
@@ -121,9 +121,7 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
     from .__main__ import main as serve
 
     env = {**dotenv, **os.environ}
-    raw_port = env.get("PORT", DEFAULT_PORT)
-    if not raw_port.isascii() or not raw_port.isdecimal() or len(raw_port) > 5 or not 1 <= (port := int(raw_port)) <= 65535:
-        raise CliError("PORT must be a number from 1 to 65535.")
+    port = _port(env.get("PORT", DEFAULT_PORT))
     host, origin = bind_address(env, port, host=host)
     selected = Instance(base, explicit=instance)
     if public_url is not None:

@@ -154,7 +154,8 @@ def clear_owner_key(monkeypatch):
     monkeypatch.delenv(cli.OWNER_KEY, raising=False)
 
 
-def test_init_writes_minimal_config_and_private_owner_key(tmp_path, capsys):
+def test_init_writes_minimal_config_and_private_owner_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PORT", "8870")
     instance = tmp_path / "my instance"
     cli.main(["init", "--dir", str(instance), "--public-url", "https://switchboard.example.test/"])
     assert yaml.safe_load((instance / cli.CONFIG).read_text()) == {
@@ -224,6 +225,32 @@ def test_init_points_to_login_link(tmp_path, capsys):
     assert cli._read_env(tmp_path / ".env")[cli.OWNER_KEY] not in out
 
 
+def test_init_saves_a_custom_port_for_login_link(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PORT", "18921")
+    monkeypatch.delenv("SWITCHBOARD_PORT", raising=False)
+    monkeypatch.delenv("SWITCHBOARD_HOST", raising=False)
+    cli.main(["init", "--dir", str(tmp_path)])
+    capsys.readouterr()
+    saved = cli._read_env(tmp_path / ".env")
+    assert saved["PORT"] == "18921"
+
+    monkeypatch.delenv("PORT")
+    call_tool = AsyncMock(return_value={"url": "http://localhost:18921/login#t=fixture"})
+    monkeypatch.setattr(cli, "_call", call_tool)
+    cli.main(["login-link", "--dir", str(tmp_path)])
+    call_tool.assert_awaited_once_with("http://localhost:18921/mcp", saved[cli.OWNER_KEY], "login_link", {})
+    assert capsys.readouterr().out == "http://localhost:18921/login#t=fixture\n"
+
+
+def test_init_refuses_an_invalid_port_before_writing_files(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PORT", "65536")
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["init", "--dir", str(tmp_path)])
+    assert exited.value.code == 1
+    assert not list(tmp_path.iterdir())
+    assert "PORT must be a number from 1 to 65535." in capsys.readouterr().err
+
+
 def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv(cli.OWNER_KEY, raising=False)
     cli.main(["init", "--dir", str(tmp_path)])
@@ -238,6 +265,15 @@ def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "_call", call)
     cli.main(["login-link", "--dir", str(tmp_path), "--url", "https://switchboard.example.test"])
     assert capsys.readouterr().out == link + "\n"
+
+
+def test_login_link_connection_error_names_the_attempted_url(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv(cli.OWNER_KEY, STATIC_KEY)
+    monkeypatch.setattr(cli, "streamable_http_client", Mock(side_effect=OSError(STATIC_KEY)))
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["login-link", "--dir", str(tmp_path), "--url", "http://localhost:18921"])
+    assert exited.value.code == 1
+    assert capsys.readouterr() == ("", "swb: Check that SwB is running at http://localhost:18921/mcp. Verify the owner key.\n")
 
 
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
