@@ -253,12 +253,10 @@ class MCPBlock(Block):
     def routes(self) -> list[BaseRoute]:
         return [Mount("/", app=self.app)]
 
-    def next_step(self) -> str | None:
-        if not self.core.cfg.public_url:
-            return "Set public_url to let hosted MCP clients reach Switchboard."
-        if not self.core.cfg.owner_sign_in:
-            return "Configure owner sign-in to enable OAuth for MCP clients."
-        return None
+    def status(self) -> dict[str, Any]:
+        if not (self.core.cfg.public_url or "").startswith("https://"):
+            return {"manual_steps": ["Set public_url to let hosted MCP clients reach SwB."]}
+        return {}
 
     def lifespan(self) -> AbstractAsyncContextManager[None]:
         return self.app.router.lifespan_context(self.app)
@@ -275,8 +273,8 @@ class MCPBlock(Block):
 
     def build(self) -> MCPServer:
         core = self.core
-        senders = [b for b in core.blocks.values() if b.verb("send") is not None]
-        extensions = [self.events, TasksExtension(self)] if senders else [self.events]
+        task_destinations = {b.name for b in core.blocks.values() if b.manifest.id == "capy"}
+        extensions = [self.events, TasksExtension(self, task_destinations)] if task_destinations else [self.events]
         mcp = LimitedServer(name="swb", title="SwB", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
         mcp.roles = mutation_roles(core)

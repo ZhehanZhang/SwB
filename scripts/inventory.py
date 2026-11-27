@@ -12,7 +12,6 @@ from tempfile import TemporaryDirectory
 import yaml
 
 from switchboard import pages
-from switchboard.__main__ import build_parser as server_parser
 from switchboard.agents import Agents
 from switchboard.app import create_app
 from switchboard.blocks import BLOCKS, load
@@ -137,18 +136,17 @@ def page_items(routes):
 
 
 def command_items():
-    client, server = client_parser(), server_parser()
-    flags = sorted(flag for action in client._actions for flag in action.option_strings)
-    yield item("command", client.prog, client.prog, command=client.prog, flags=flags, arguments=[])
-    for parser in (client, server):
-        subcommands = next(action for action in parser._actions if isinstance(action, argparse._SubParsersAction))
-        for name, command in subcommands.choices.items():
-            flags = sorted(flag for action in command._actions for flag in action.option_strings)
-            arguments = [
-                {"name": action.dest, "choices": list(action.choices or ())}
-                for action in command._actions if not action.option_strings
-            ]
-            yield item("command", name, command.prog, command=command.prog, flags=flags, arguments=arguments)
+    parser = client_parser()
+    flags = sorted(flag for action in parser._actions for flag in action.option_strings)
+    yield item("command", parser.prog, parser.prog, command=parser.prog, flags=flags, arguments=[])
+    subcommands = next(action for action in parser._actions if isinstance(action, argparse._SubParsersAction))
+    for name, command in subcommands.choices.items():
+        flags = sorted(flag for action in command._actions for flag in action.option_strings)
+        arguments = [
+            {"name": action.dest, "choices": list(action.choices or ())}
+            for action in command._actions if not action.option_strings
+        ]
+        yield item("command", name, command.prog, command=command.prog, flags=flags, arguments=arguments)
 
 
 async def generate():

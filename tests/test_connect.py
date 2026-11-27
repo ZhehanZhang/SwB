@@ -47,7 +47,7 @@ def test_connect_schema_and_unknown_kinds(make):
 ])
 def test_connect_offers_working_config_for_disabled_block(make, kind, block, env_names):
     cfg = base_config(version=2, blocks={"mcp": {}, block: {"enabled": False}})
-    env = {"SWITCHBOARD_KEY_CAPY": STATIC_KEY}
+    env = {"SWITCHBOARD_KEY_OWNER": STATIC_KEY}
     _, client = make(config=cfg, env=env)
     out = connect(client, kind)
     assert out["what"] == kind and out["done"] == []
@@ -67,10 +67,14 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
     assert block in core.blocks
     if kind == "dots":
         assert core.blocks[block].dots()[0]["mailbox"] == "chatgpt"
-        assert connect(enabled, kind)["state"] == "connected"
+        progress = connect(enabled, kind)
+        assert "state" not in progress
+        assert 'connect(what="chatgpt")' in progress["next"][0]["do"]
     elif kind == "slack":
         assert set(core.blocks[block].token_names["a2a"]) == set(env_names)
         assert "link" in connect(enabled, kind)["next"][0]
+        workspaces = payload(call(enabled, STATIC_KEY, "slack_workspaces"))["workspaces"]
+        assert [(w["workspace"], list(w["identities"])) for w in workspaces] == [("a2a", ["bot"])]
     elif kind == "github":
         assert core.blocks[block].registered_repositories() == {"example-org/app"}
 
@@ -96,7 +100,7 @@ def test_connect_snippet_keeps_environment_discovered_blocks_after_reload(make):
         assert parsed["blocks"][name] == config
     reloaded, client = make(config={**cfg, **parsed}, env=env)
     assert set(reloaded.blocks) == {"mcp", "github", "grok-routine", "dots"}
-    assert connect(client, "dots")["state"] == "connected"
+    assert "state" not in connect(client, "dots")
 
 
 @pytest.mark.parametrize(("kind", "block", "routine_env"), [
@@ -143,7 +147,10 @@ def test_connect_hosted_clients_require_https_even_with_local_oauth(make, kind):
     assert core.cfg.owner_sign_in
     out = connect(client, kind)
     [step] = out["next"]
-    assert step["by"] == "person" and "public HTTPS URL and owner sign-in" in step["do"]
+    assert step["by"] == "person"
+    assert "swb up --tunnel cloudflare" in step["do"]
+    assert "https://swb.one/docs/first-run#get-a-public-address" in step["do"]
+    assert "owner sign-in" not in step["do"]
     assert step == connect(client, "grok-bot")["next"][0]
     assert "localhost" not in json.dumps(out)
     assert "http://localhost:8000/mcp" in connect(client, "mcp-client")["done"][0]
@@ -267,13 +274,15 @@ def test_status_missing_oauth_and_missing_github_routes(make):
     secret = "local-webhook-test-value"
     core, client = make(config=cfg, env={**default_env(), "GITHUB_WEBHOOK_SECRET": secret})
     status = payload(call(client, STATIC_KEY, "switchboard_status"))
-    assert status["blocks"]["mcp"]["next_step"].startswith("Set public_url")
+    assert status["blocks"]["mcp"]["next_step"] is None
+    assert status["blocks"]["mcp"]["manual_steps"] == ["Set public_url to let hosted MCP clients reach SwB."]
     assert status["blocks"]["github"]["next_step"].startswith("Add a GitHub repository route")
     assert status["next_steps"] == core.status()["next_steps"] and secret not in json.dumps(status)
     out = connect(client, "claude")
     assert out["done"] == []
     [step] = out["next"]
-    assert "public HTTPS URL and owner sign-in" in step["do"]
+    assert "swb up --tunnel cloudflare" in step["do"]
+    assert "Set up owner sign-in for OAuth." in step["do"]
 
 
 async def test_saved_slack_and_github_tokens_loaded_on_restart(tmp_path):

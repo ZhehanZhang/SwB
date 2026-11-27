@@ -144,9 +144,9 @@ def test_context_pack_includes_project_memory_and_the_routed_captain(make):
 
 def test_degraded_without_api_key(make):
     _, c = make(env={"SWITCHBOARD_KEY_CAPY": STATIC_KEY})
-    h = c.get("/healthz").json()
+    h = c.get("/healthz", headers=OWNER).json()
     assert h["status"] == "degraded" and [p for p in h["problems"] if "CAPY_API_KEY" in p] and h["destinations"]["capy"]["online"] is False
-    assert "CAPY_API_KEY" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
+    assert "swb connect capy-captain" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x"}))
     assert not call(c, STATIC_KEY, "memory_write", {"scope": "general", "confirm_general": True, "namespace": "notes", "title": "t", "body": "b"}).get("isError")
     assert "CAPY_API_KEY missing" in payload(call(c, STATIC_KEY, "context_pack", {}))
     health = c.get("/api/health", headers=OWNER)
@@ -159,14 +159,14 @@ def test_api_key_never_appears_in_logs_or_health(make, caplog):
     _, c = make()
     caplog.set_level("DEBUG")
     call(c, STATIC_KEY, "capy_delegate", {"task": "x"})
-    assert CAPY_KEY not in caplog.text and CAPY_KEY not in json.dumps(c.get("/healthz").json())
+    assert CAPY_KEY not in caplog.text and CAPY_KEY not in json.dumps(c.get("/healthz", headers=OWNER).json())
 
 
 def test_sends_go_as_the_service_user_and_reads_as_the_main_key(make, capy):
     from conftest import SERVICE_KEY, last_auth
     core, c = make()
     out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "Ship it"}))
-    health = c.get("/healthz").json()["destinations"]["capy"]
+    health = c.get("/healthz", headers=OWNER).json()["destinations"]["capy"]
     assert health["sends_as"] == "CAPY_API_KEY_SERVICE" and health["identity"] == "service" and health["sends_as_agents"]["claude"] == "CAPY_API_KEY_SERVICE"
     assert last_auth(capy, "POST", f"threads/{CAPTAIN}/message") == SERVICE_KEY
     assert last_auth(capy, "GET", f"threads/{CAPTAIN}/messages") == CAPY_KEY
@@ -179,7 +179,7 @@ def test_without_a_service_key_sends_are_refused_never_sent_as_the_owner(make, c
     from conftest import default_env
     env = {k: v for k, v in default_env().items() if k != "CAPY_API_KEY_SERVICE"}
     core, c = make(env=env)
-    assert "CAPY_API_KEY_SERVICE" in " ".join(c.get("/healthz").json()["problems"])
+    assert "CAPY_API_KEY_SERVICE" in " ".join(c.get("/healthz", headers=OWNER).json()["problems"])
     assert "never sends as CAPY_API_KEY" in error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "Ship it"}))
     assert not [r for r in capy.requests if r[0] == "POST" and r[1].endswith("/message")]
     assert core.audit.recent(action="delegate")[0]["outcome"] != "ok"
@@ -192,7 +192,7 @@ def test_identity_personal_opts_in_to_sending_as_the_main_key(make, capy):
     core, c = make(config=cfg, env=env)
     call(c, STATIC_KEY, "capy_delegate", {"task": "Ship it"})
     assert last_auth(capy, "POST", f"threads/{CAPTAIN}/message") == CAPY_KEY
-    assert core.audit.recent(action="delegate")[0]["detail"] == "sent as CAPY_API_KEY" and not c.get("/healthz").json()["problems"]
+    assert core.audit.recent(action="delegate")[0]["detail"] == "sent as CAPY_API_KEY" and not c.get("/healthz", headers=OWNER).json()["problems"]
 
 
 def test_an_agent_key_sends_for_that_agent_and_falls_back_to_the_service_user_only(make, capy):
@@ -201,7 +201,7 @@ def test_an_agent_key_sends_for_that_agent_and_falls_back_to_the_service_user_on
     capy.keys |= {claude_key, cc_key}
     core, c = make(env={**default_env(), "CAPY_API_KEY_AS_CLAUDE": claude_key, "CAPY_API_KEY_AS_CLAUDE_CODE": cc_key})
     tok = sign_in(c)["access_token"]
-    health = c.get("/healthz").json()["destinations"]["capy"]
+    health = c.get("/healthz", headers=OWNER).json()["destinations"]["capy"]
     assert health["sends_as_agents"]["claude"] == "CAPY_API_KEY_AS_CLAUDE" and health["sends_as_agents"]["capy"] == "CAPY_API_KEY_SERVICE"
     assert health["sends_as_agents"]["claude-code"] == "CAPY_API_KEY_AS_CLAUDE_CODE"
     out = payload(call(c, tok, "capy_delegate", {"task": "Ship it"}))
@@ -232,6 +232,6 @@ async def test_key_checks_report_project_and_device_access(amake, capy):
     checks = {env: v["status"] for env, v in dest.key_checks.items()}
     assert checks == {"CAPY_API_KEY": "ok", "CAPY_API_KEY_SERVICE": "ok", "CAPY_API_KEY_AS_GEMINI": "no project access", "CAPY_API_KEY_AS_SLACK": "no device access"}
     assert CAPTAIN in dest.key_checks["CAPY_API_KEY_AS_GEMINI"]["detail"] and "DeviceAccessDenied" in dest.key_checks["CAPY_API_KEY_AS_SLACK"]["detail"]
-    health = (await c.get("/healthz")).json()
+    health = (await c.get("/healthz", headers=OWNER)).json()
     assert health["status"] == "degraded" and health["destinations"]["capy"]["send_keys"]["CAPY_API_KEY_AS_SLACK"]["status"] == "no device access"
     assert SERVICE_KEY not in json.dumps(health) and a not in json.dumps(health)

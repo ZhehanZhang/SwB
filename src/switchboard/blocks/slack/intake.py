@@ -213,6 +213,11 @@ class SlackIntake(Block):
                 and CHANNEL_ID_RE.fullmatch(channel := rt.channel_ids.get(row["channel"].removeprefix("#"), row["channel"]))
                 and (channel in rt.bot_channels or row["source"] == "channel" or row["channel"] in explicit)}
 
+    def validate_mode_space(self, space: str) -> None:
+        runtime = self.engine.runtimes.get(space) if self.engine is not None else None
+        if runtime is None or not runtime.clients:
+            raise ValueError(f"Connect Slack workspace {space} first.")
+
     def mode_inventory(self) -> dict[tuple[str, str], tuple[str | None, str, None]]:
         engine = self.engine
         assert engine is not None
