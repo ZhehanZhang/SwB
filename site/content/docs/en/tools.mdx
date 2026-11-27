@@ -69,12 +69,12 @@ A route picks a target for `send`. Use a block that accepts routes, such as `cap
 
 | Tool | Use |
 | - | - |
-| `routes_list` | List routes across all blocks |
-| `routes_set` | Save a route. Give `target` the block address, such as `capy:captain:<name>`. Use `agent` or `project` to limit the route |
-| `routes_resolve` | Show the matching route on one block. Pass its name in `block`, such as `grok-routine` |
+| `routes_list` | List all routes, mailbox routes included |
+| `routes_set` | Save a route. Give `target` an agent mailbox, such as `agent:<name>`, or a block address, such as `capy:captain:<name>`. Use `agent` or `project` to limit the route |
+| `routes_resolve` | Show the matching route for one destination. Pass `block`, such as `grok-routine` or `agent` |
 | `routes_remove` | Remove the route for the exact `agent` and `project` on the chosen `block` |
 
-`routes_resolve` and `routes_remove` use the first block that accepts routes by default. Pass `block` to select a different one.
+`routes_resolve` and `routes_remove` use the first destination by default. That is the first block that accepts routes. With only mailbox routes, it is `agent`. Pass `block` to select a different one.
 
 ## Block tools
 

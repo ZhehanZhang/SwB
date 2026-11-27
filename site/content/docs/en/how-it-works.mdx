@@ -35,6 +35,8 @@ The `targets` tool lists every target.
 
 A **route** chooses the target when a send leaves the target open. A route matches an agent, a project, both, or all sends. SwB checks the routes in this order. Agent and project first, then project, then agent, then the global route. Every change to a route goes to the audit log.
 
+A route target is an agent mailbox, such as `agent:<name>`, or a block address, such as `capy:captain:<name>`. Mailbox routes work on every instance. A block address needs its block, for example Capy, a Claude routine or a Grok routine.
+
 ## Conversations
 
 A send returns a **conversation** at once. The conversation has a handle such as `h_...`. Replies come back to the sender's **inbox**. The `wait` tool waits for the next reply. The `inbox` tool reads the inbox and returns at once.
