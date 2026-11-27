@@ -99,6 +99,32 @@ def test_connect_snippet_keeps_environment_discovered_blocks_after_reload(make):
     assert connect(client, "dots")["state"] == "connected"
 
 
+@pytest.mark.parametrize(("kind", "block", "routine_env"), [
+    ("claude-project", "claude-routine", {
+        "CLAUDE_ROUTINE_ID": "trig_fixture",
+        "CLAUDE_ROUTINE_TOKEN": "fixture-claude-routine-token",
+    }),
+    ("grok-bot", "grok-routine", {
+        "GROK_ROUTINE_URL": "https://example.test/demo-webhook",
+        "GROK_ROUTINE_SECRET": "fixture-grok-webhook-secret",
+    }),
+])
+def test_connect_enables_routine_through_environment_discovery(make, kind, block, routine_env):
+    cfg = {"version": 2, "public_url": PUBLIC}
+    env = {"SWITCHBOARD_KEY_OWNER": STATIC_KEY}
+    core, client = make(config=cfg, env=env)
+    assert set(core.blocks) == {"mcp"}
+    configure, restart = connect(client, kind)["next"]
+    assert configure == {"by": "you", "do": f"Set {' and '.join(routine_env)} in .env."}
+    assert restart == {"by": "you", "do": "Restart SwB."}
+    reloaded, client = make(config=cfg, env={**env, **routine_env})
+    assert set(reloaded.blocks) == {"mcp", block}
+    [routine] = reloaded.blocks[block].routines().values()
+    assert routine["source"] == "config"
+    assert set(reloaded.cfg.block_env[block]) == set(routine_env)
+    assert "mcp-client" in connect(client, "unknown")["kinds"]
+
+
 @pytest.mark.parametrize(("kind", "menu"), [
     ("chatgpt", "https://chatgpt.com/plugins"), ("claude", "Customize > Connectors"), ("grok", "grok.com > Connectors"),
 ])

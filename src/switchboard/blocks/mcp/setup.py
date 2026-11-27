@@ -42,6 +42,11 @@ GUIDE_TITLE_WORDS = {"chatgpt": "ChatGPT", "github": "GitHub", "mcp": "MCP"}
 
 
 def enable_steps(cfg: Config, name: str) -> list[dict[str, str]]:
+    restart = {"by": "you", "do": "Restart SwB."}
+    routine_env = ROUTINE_ENV_ONLY.get(name)
+    if routine_env and not cfg.blocks_from_file:
+        return [{"by": "you", "do": f"Set {' and '.join(routine_env)} in .env."}, restart]
+
     config = {"use": name, "enabled": True, **BLOCK_EXAMPLES.get(name, {})}
     if cfg.blocks_from_file:
         instruction = "Merge this YAML under blocks in config/switchboard.yaml."
@@ -56,15 +61,12 @@ def enable_steps(cfg: Config, name: str) -> list[dict[str, str]]:
     names = (MUSE_TOKEN_ENV,) if name == "muse" else configured_env(name, config)
     if names:
         instruction += f" Use {', '.join(names)} in .env or get private claim links after restart."
-    elif name in ROUTINE_ENV_ONLY:
+    elif routine_env:
         instruction += (
             " Get private claim links after restart."
-            f" For an environment-only config, omit blocks and set {', '.join(ROUTINE_ENV_ONLY[name])} in .env."
+            f" Environment-only installs use {' and '.join(routine_env)} in .env."
         )
-    return [
-        {"by": "you", "do": instruction, "snippet": snippet},
-        {"by": "you", "do": "Restart SwB."},
-    ]
+    return [{"by": "you", "do": instruction, "snippet": snippet}, restart]
 
 
 def register_guides(mcp: MCPServer) -> dict[str, dict[str, str]]:
