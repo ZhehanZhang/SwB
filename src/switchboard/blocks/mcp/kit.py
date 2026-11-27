@@ -8,10 +8,16 @@ from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.types import ToolAnnotations
+from mcp.shared.tool_name_validation import TOOL_NAME_REGEX
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
+from pydantic_core import to_json
 
 from ...audit import iso
+from ...companion.caps.base import CapabilityError
+from ...companion.caps.drop import decode_file_content, valid_name
+from ...companion.mcp_config import NAME as LOCAL_MCP_NAME
+from ...companions import COMPANION_ID, SLUG
 from ...refusals import OWNER_REQUIRED, SCOPE_REQUIRED, PolicyRefusal
 from ...trust import neutralize, wrap
 
@@ -33,25 +39,85 @@ DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. 
 
 DEVICE_VALUES = frozenset({"type", "mimeType", "uri", "size"})
 DEVICE_SCHEMAS = frozenset({"inputSchema", "outputSchema"})
+SCHEMA_TEXT = frozenset({"title", "description", "$comment", "examples"})
 DEVICE_TOKEN = re.compile(r"[A-Za-z0-9_.+/:#@=-]{1,256}")
 DEVICE_BASE64 = re.compile(r"[A-Za-z0-9+/_-]*={0,2}")
+DEVICE_OUTPUT_LIMIT = 1024 * 1024
+DEVICE_OUTPUT_ERROR = "Companion output exceeds 1 MiB. Request less data."
+DEVICE_LIST_IDS = {
+    ("id",): COMPANION_ID.fullmatch,
+    ("last_seen",): DEVICE_TOKEN.fullmatch,
+    ("capabilities", None): SLUG.fullmatch,
+    ("capabilities", None, "id"): SLUG.fullmatch,
+    ("capabilities", None, "actions", None, "name"): SLUG.fullmatch,
+}
+DEVICE_LIST_SCHEMA = ("capabilities", None, "actions", None, "schema")
+DEVICE_ACTION_IDS = {
+    ("mcp", "servers"): {("servers", None, "name"): LOCAL_MCP_NAME.fullmatch},
+    ("mcp", "tools"): {("tools", None, "name"): TOOL_NAME_REGEX.fullmatch},
+    ("drop", "list"): {("files", None, "name"): valid_name},
+    ("drop", "get"): {("name",): valid_name},
+    ("drop", "put"): {("name",): valid_name},
+}
 
 
-def frame_device(value: Any, where: str, key: str = "", schema: bool = False) -> Any:
-    """Frame device strings as external by default. Exact strings are short tokens in machine fields or schemas, and base64."""
-    if isinstance(value, dict):
-        binary = value.get("type") in ("image", "audio")
-        return {neutralize(str(k))[:128]: frame_device(v, where, "text" if k == "data" and not binary else k,
-                                                       schema or k in DEVICE_SCHEMAS) for k, v in value.items()}
-    if isinstance(value, list):
-        return [frame_device(v, where, key, schema) for v in value]
-    if not isinstance(value, str):
-        return value
-    if (key in DEVICE_VALUES or schema) and DEVICE_TOKEN.fullmatch(value):
-        return value
-    if (key == "data" or key.lower().endswith(("base64", "b64"))) and DEVICE_BASE64.fullmatch(value):
-        return value
-    return wrap(value, None, None, "external", where)
+def frame_device(value: Any, where: str, *, sender: str | None = None,
+                 exact: dict[tuple[str | None, ...], Callable[[str], Any]] | None = None,
+                 schema_path: tuple[str | None, ...] | None = None, limit: int = DEVICE_OUTPUT_LIMIT) -> Any:
+    """Frame device strings and bound the fields before building the full response."""
+    remaining = limit
+
+    def charge(size: int) -> None:
+        nonlocal remaining
+        remaining -= size
+        if remaining < 0:
+            raise ToolError(DEVICE_OUTPUT_ERROR)
+
+    def frame(item: Any, path: tuple[str | None, ...], key: str = "", schema: bool = False) -> Any:
+        if len(path) > 64:
+            raise ToolError("Companion output contains too many nested fields.")
+        if isinstance(item, dict):
+            charge(2)
+            out = {}
+            binary = item.get("type") in ("image", "audio")
+            for name, child in item.items():
+                display = neutralize(str(name))[:128]
+                charge(len(to_json(display)) + 1 + bool(out))
+                next_path = (*path, name)
+                out[display] = frame(child, next_path, "text" if name == "data" and not binary else name,
+                                     schema or name in DEVICE_SCHEMAS or next_path == schema_path)
+            return out
+        if isinstance(item, list):
+            charge(2 + max(0, len(item) - 1))
+            return [frame(child, (*path, None), key, schema) for child in item]
+        if isinstance(item, str) and item:
+            if len(item) > remaining:
+                raise ToolError(DEVICE_OUTPUT_ERROR)
+            check = exact.get(path) if exact else None
+            machine = key in DEVICE_VALUES or (schema and key not in SCHEMA_TEXT)
+            binary = not schema and (key == "data" or key.lower().endswith(("base64", "b64")))
+            if not ((check and check(item)) or (machine and DEVICE_TOKEN.fullmatch(item))
+                    or (binary and DEVICE_BASE64.fullmatch(item))):
+                item = wrap(item, "companion" if sender else None, sender, "external", where)
+        charge(len(to_json(item)))
+        return item
+
+    try:
+        return frame(value, ())
+    except ValueError:
+        raise ToolError("Companion output contains invalid text.") from None
+
+
+def device_output(out: dict[str, Any], file_data: str | None = None) -> CallToolResult:
+    text = to_json(out if file_data is None else {**out, "file_data": "Read result.content_b64 in structuredContent."})
+    if len(text) > DEVICE_OUTPUT_LIMIT:
+        raise ToolError(DEVICE_OUTPUT_ERROR)
+    structured = out if file_data is None else {**out, "result": {**out["result"], "content_b64": file_data}}
+    return CallToolResult(content=[TextContent(type="text", text=text.decode("utf-8"))], structured_content=structured)
+
+
+def frame_companion(row: dict[str, Any], limit: int = DEVICE_OUTPUT_LIMIT) -> dict[str, Any]:
+    return frame_device(row, "", sender=row["id"], exact=DEVICE_LIST_IDS, schema_path=DEVICE_LIST_SCHEMA, limit=limit)
 
 
 class FileIn(BaseModel):
@@ -261,15 +327,33 @@ class Kit:
             return core.companions.mint(url, origin=p.origin, source=p.source, client=p.client_id)
 
         @mcp.tool(title="List companions", description="List paired devices, their connection status, and their available actions.", annotations=READ)
-        async def companion_list() -> dict[str, Any]:
-            return {"companions": core.companions.list(details=True)}
+        async def companion_list() -> Annotated[CallToolResult, dict[str, Any]]:
+            rows = []
+            remaining = DEVICE_OUTPUT_LIMIT - len('{"companions":[],"trust":"external"}')
+            for row in core.companions.list(details=True):
+                framed = frame_companion(row, limit=remaining - bool(rows))
+                remaining -= len(to_json(framed)) + bool(rows)
+                rows.append(framed)
+            return device_output({"companions": rows, "trust": "external"})
 
         @mcp.tool(title="Run a companion action", description="Run an advertised capability action on a connected device. Use the device ID and action schema from companion_list.", annotations=SEND)
         async def companion_invoke(ctx: Context, companion: str, capability: str, action: str, args: dict[str, Any] | None = None,
-                                   timeout_s: Annotated[float, Field(gt=0, le=120)] = 30) -> dict[str, Any]:
+                                   timeout_s: Annotated[float, Field(gt=0, le=120)] = 30) -> Annotated[CallToolResult, dict[str, Any]]:
             result = await kit.run(core.companions.invoke(companion, capability, action, args or {}, timeout_s, principal=kit.who(ctx)))
-            return {"trust": "external", "from": f"companion {companion} {capability}.{action}",
-                    "result": frame_device(result, f"companion {companion} {capability}.{action}")}
+            file_data = None
+            if (capability, action) == ("drop", "get"):
+                if set(result) != {"name", "content_b64"} or not valid_name(result["name"]):
+                    raise ToolError("Invalid Drop file result.")
+                file_data = result["content_b64"]
+                try:
+                    decode_file_content(file_data)
+                except CapabilityError as e:
+                    raise ToolError(str(e)) from e
+                result = {"name": result["name"]}
+            framed = frame_device(result, f"{capability}.{action}", sender=companion,
+                                  exact=DEVICE_ACTION_IDS.get((capability, action)))
+            return device_output({"trust": "external", "from": f"companion {companion} {capability}.{action}",
+                                  "result": framed}, file_data)
 
         @mcp.tool(title="Disconnect a companion", description="Revoke a paired device key and close its connection.", annotations=DELETE)
         async def companion_revoke(ctx: Context, companion: str) -> dict[str, Any]:

@@ -42,6 +42,10 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 
 智能体用 `companion_list` 查看已配对的设备及其操作。它用 `companion_invoke` 执行操作。
 
+伴侣设备返回的文本上限为 1 MiB。请从 `structuredContent.result.content_b64` 读取 Drop 文件数据。
+
+从 `targets` 获取会话地址。在 `visibility_list` 中查找该地址对应的资源。用 `visibility_set` 共享该资源。
+
 ## 保持运行
 
 配对后，伴侣设备会开始运行。运行 `swb companion run` 可重新启动。运行 `swb companion status` 可查看本机设备编号和功能。
