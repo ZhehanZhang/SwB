@@ -22,6 +22,8 @@ LIMITS = {
     "bearer_fail": (20, 600.0),
     "connect_fail": (10, 600.0),
     "login_link_fail": (10, 600.0),
+    "owner_setup": (8, 600.0),
+    "owner_setup_total": (120, 600.0),
     "passkey_options": (60, 600.0),
     "passkey_fail": (10, 600.0),
 }

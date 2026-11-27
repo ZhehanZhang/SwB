@@ -7,11 +7,14 @@ import pytest
 from starlette.testclient import TestClient
 
 from conftest import STATIC_KEY, call, payload
-from switchboard import cli
+from switchboard import cli, web
 from switchboard.app import create_app
 from switchboard.config import ConfigError
 from switchboard.core import Switchboard
 from switchboard.deployment import OWNER_KEY, PLATFORM, serve_env, volume_owner_key
+
+SETUP_CODE = "synthetic-deployment-setup-code-for-tests"
+SETUP_URL = "https://swb.example.test"
 
 
 @pytest.mark.parametrize(("platform", "name", "value", "url"), [
@@ -82,3 +85,54 @@ def test_login_cli_reads_the_volume_key(tmp_path, monkeypatch, capsys):
         cli.main(["login-link", "--url", "https://other.example.test"])
     assert rejected.value.code == 1
     assert "SWITCHBOARD_KEY_OWNER is missing" in capsys.readouterr().err
+
+
+def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr(web, "APP_DIST", tmp_path / "no-spa")
+    env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE, "SWITCHBOARD_DATA": str(tmp_path)}
+    headers = {"Origin": SETUP_URL}
+    with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
+        home = client.get("/")
+        assert 'id="owner-setup"' in home.text
+        assert SETUP_CODE not in home.text
+        session = client.get("/auth/session").json()
+        assert session["methods"]["setup"] and not session["signed_in"]
+        assert client.post("/auth/setup", json={"code": SETUP_CODE}).status_code == 403
+        bad_origin = {"Origin": "https://other.example.test"}
+        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=bad_origin).status_code == 403
+        assert client.post("/auth/setup", json={"code": "x" * 32}, headers=headers).status_code == 401
+        response = client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers)
+        assert response.status_code == 204
+        assert response.headers["Cache-Control"] == "no-store"
+        assert "HttpOnly" in response.headers["Set-Cookie"] and "Secure" in response.headers["Set-Cookie"]
+        session = client.get("/auth/session").json()
+        assert session["signed_in"] and session["via"] == "setup" and "setup" not in session["methods"]
+        headers["X-CSRF-Token"] = session["csrf"]
+        assert client.post("/auth/logout", headers=headers).status_code == 204
+        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 404
+    with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
+        assert "setup" not in client.get("/auth/session").json()["methods"]
+        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 404
+
+
+def test_setup_code_rate_limit_cannot_be_reset_with_cf_header(tmp_path):
+    env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE, "SWITCHBOARD_DATA": str(tmp_path)}
+    with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
+        for i in range(8):
+            headers = {"Origin": SETUP_URL, "CF-Connecting-IP": f"192.0.2.{i}"}
+            assert client.post("/auth/setup", json={"code": "x" * 32}, headers=headers).status_code == 401
+        response = client.post("/auth/setup", json={"code": SETUP_CODE},
+                               headers={"Origin": SETUP_URL, "CF-Connecting-IP": "192.0.2.99"})
+        assert response.status_code == 429 and "Retry-After" in response.headers
+
+
+def test_existing_sign_in_closes_setup(tmp_path):
+    env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE,
+           "SWITCHBOARD_DATA": str(tmp_path), OWNER_KEY: STATIC_KEY}
+    with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
+        link = payload(call(client, STATIC_KEY, "login_link"))["url"]
+        headers = {"Origin": SETUP_URL}
+        code = urlsplit(link).fragment.removeprefix("t=")
+        assert client.post("/auth/link", json={"token": code}, headers=headers).status_code == 204
+        assert "setup" not in client.get("/auth/session").json()["methods"]
+        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 404

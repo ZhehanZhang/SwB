@@ -10,6 +10,7 @@ services:
       SWITCHBOARD_DEPLOY_PLATFORM: compose
       SWITCHBOARD_PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
       SWITCHBOARD_KEY_OWNER: ${SWITCHBOARD_KEY_OWNER:-}
+      SWB_SETUP_CODE: ${SWB_SETUP_CODE:-}
     volumes:
       - switchboard_data:/data
     restart: unless-stopped
