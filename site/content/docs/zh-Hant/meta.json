@@ -1,0 +1,22 @@
+{
+  "title": "文件",
+  "pages": [
+    "index",
+    "deploy",
+    "install",
+    "first-run",
+    "connect",
+    "setup",
+    "how-it-works",
+    "blocks",
+    "channel-modes",
+    "owner-login",
+    "credentials",
+    "config",
+    "self-hosting",
+    "security",
+    "tools",
+    "faq",
+    "about"
+  ]
+}

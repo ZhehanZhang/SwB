@@ -1,0 +1,115 @@
+---
+title: Claude
+description: Add SwB to your Claude account as a custom connector.
+---
+
+A connector lets Claude use the tools of an outside service. With the SwB connector, Claude reads your projects, sends work to other agents and answers messages.
+
+## Before you start
+
+You need a Claude account. Free, Pro, Max, Ultra, Team and Enterprise plans all work. A Free plan has one custom connector slot. On Team and Enterprise, an Owner or Primary Owner adds the connector for the organization.
+
+Your SwB server needs a public HTTPS address and owner sign-in. Claude connects to `https://swb.example.com/mcp` from the internet, so a local or VPN address will fail.
+
+## Copy the setup prompt
+
+<SetupPrompt name="claude" lang="en" />
+
+Paste the prompt into a Claude chat. The agent walks you through the rest.
+
+## Your steps
+
+<Tabs items={['Personal plan', 'Team or Enterprise']}>
+<Tab value="Personal plan">
+<Steps>
+<Step>
+### Open Connectors
+
+Open [Customize → Connectors](https://claude.ai/customize/connectors) in Claude. In some layouts the path is **Settings** → **Connectors**. {/* unverified */}
+</Step>
+<Step>
+### Add a custom connector
+
+Click **Add**, then **Add custom connector**. If the menu shows **Custom**, choose **Custom** → **Web**.
+</Step>
+<Step>
+### Enter the address
+
+Enter `SwB` as the name. Enter your SwB MCP address, for example `https://swb.example.com/mcp`.
+</Step>
+<Step>
+### Keep the default sign-in
+
+Under **OAuth client**, keep **Use Claude’s published identity (Recommended)**. Leave the client ID, client secret and **Request headers** empty.
+</Step>
+<Step>
+### Add and connect
+
+Click **Add**. If SwB shows **Connect** in the list, click **Connect**.
+</Step>
+<Step>
+### Approve in SwB
+
+Sign in on the **Sign in to SwB** page. On the **Connect to SwB** page, check the name and click **Approve**.
+</Step>
+</Steps>
+</Tab>
+<Tab value="Team or Enterprise">
+<Steps>
+<Step>
+### Open the admin page
+
+As a Claude admin, open [Organization settings → Connectors](https://claude.ai/admin-settings/connectors).
+</Step>
+<Step>
+### Add a web connector
+
+Click **Add**. Point to **Custom**, then click **Web**.
+</Step>
+<Step>
+### Enter the address
+
+Enter `SwB` as the name and your SwB MCP address. Click **Continue**, then click **Add**.
+</Step>
+<Step>
+### Connect your seat
+
+Open **Customize** → **Connectors**. Find `SwB` and click **Connect**.
+</Step>
+<Step>
+### Approve in SwB
+
+Sign in on the **Sign in to SwB** page. On the **Connect to SwB** page, click **Approve**.
+</Step>
+</Steps>
+</Tab>
+</Tabs>
+
+<Steps>
+<Step>
+### Turn on SwB in the chat
+
+In the chat box, click **+** → **Connectors** and turn on `SwB`. In a Claude Project, use the same menu in the coordinator chat. {/* unverified */}
+</Step>
+</Steps>
+
+## What the agent does
+
+The agent calls `connect(what="claude")`. SwB returns the MCP address and tells the agent if OAuth sign-in is available. OAuth is a sign-in where you approve access in your browser.
+
+The agent gives you the click path and the address. After you approve, it calls `connect` again. SwB answers that the client is signed in.
+
+## Credentials
+
+| Item | Where it is shown | Format | Where it goes |
+| - | - | - | - |
+| MCP address | SwB settings and the `connect` result | `https://swb.example.com/mcp` | The URL field of the Claude connector |
+| SwB access token | Claude keeps it after you click **Approve** | Random text | Claude stores it for you |
+
+## Check the connection
+
+Open **Customize** → **Connectors** and look for `SwB` as connected. Ask Claude to call `project_list`. A list of your SwB projects confirms the connection.
+
+## Fix problems
+
+If Claude fails to reach SwB, check that the address ends with `/mcp` and opens from the public internet. A browser check page in front of `/mcp` blocks Claude. If you change the SwB address, remove the connector and add it again. An older chat picks up the connector after your next message.

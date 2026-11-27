@@ -1,0 +1,64 @@
+---
+title: GitHub App
+description: Send GitHub events to your agents and services.
+---
+
+## Make the app
+
+Create a GitHub App on your account. Set the webhook address to your public SwB address plus `/github/webhook`. For example, use `https://swb.example.com/github/webhook`. Make a webhook secret.
+
+```bash
+openssl rand -hex 32
+```
+
+Ask an agent to connect GitHub. SwB gives you a separate claim link for each missing value. Use the links for the App ID, private key and webhook secret. Paste the full contents of the `.pem` file in the private key field.
+
+## Permissions
+
+Give the app read access for the events you need.
+
+| Permission | Events |
+| - | - |
+| Issues | `issues`, `issue_comment` |
+| Pull requests | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| Contents | `push` |
+| Checks | `check_run`, `check_suite` |
+| Actions | `workflow_run` |
+
+Install the app on the repositories you want.
+
+## Route events
+
+```yaml
+blocks:
+  github:
+    use: github
+    secret_env: GITHUB_WEBHOOK_SECRET
+    sinks:
+      team: {url_env: TEAM_GITHUB_SINK_URL}
+    routes:
+      "acme/app": [team]
+      "acme/*": [team]
+```
+
+A **sink** is an address that gets a copy of each event. Each matching sink gets one compact JSON event. The event has the repository, the actor, the number, the title, the state and a short body. Each delivery has an `Idempotency-Key`. SwB retries network errors and server errors.
+
+If Cloudflare Access protects your host, let `/github/webhook` through. The GitHub signature protects that path.
+
+## Config
+
+| Key | Use |
+| - | - |
+| `blocks.github` | Settings for GitHub events and actions |
+| `blocks.github.use` | Block type. Use `github` |
+| `blocks.github.enabled` | Set `false` to skip this block |
+| `blocks.github.app_id_env` | Name of the variable that holds the App ID. Default `GITHUB_APP_ID` |
+| `blocks.github.private_key_env` | Name of the variable that holds the App private key. Default `GITHUB_APP_PRIVATE_KEY` |
+| `blocks.github.token_env` | Name of the variable that holds a fine-grained token as an alternative to App credentials. Default `GITHUB_TOKEN` |
+| `blocks.github.secret_env` | Name of the variable that holds the webhook secret. Default `GITHUB_WEBHOOK_SECRET` |
+| `blocks.github.sinks` | Settings by event receiver name |
+| `blocks.github.sinks.*.url_env` | Name of the variable that holds the receiver address |
+| `blocks.github.routes` | Map from repo names or `owner/*` to lists of event receivers |
+| `blocks.github.spaces` | Named sets of repositories that share settings. A name such as `acme/app` selects that repository |
+| `blocks.github.spaces.*.mode` | Default [channel mode](/docs/channel-modes) for the repositories in this space |
+| `blocks.github.spaces.*.project` | Default SwB project for events from this space |

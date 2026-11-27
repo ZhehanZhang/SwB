@@ -1,0 +1,69 @@
+---
+title: Telegram
+description: 把 Telegram 消息路由给智能体并发布答复。
+---
+
+Telegram 使用长轮询。机器人从你的服务器访问 Telegram，因此 SwB 可以留在私有地址上。
+
+## 创建机器人
+
+在 [@BotFather](https://t.me/BotFather) 中发送 `/newbot`。请智能体连接 Telegram。智能体调用 `telegram_provision` 并给你一个领取链接。打开链接并粘贴机器人令牌。你也可以在服务器的环境变量中设置 `TELEGRAM_BOT_TOKEN`。
+
+## 把机器人添加到群组
+
+把机器人添加到群组。在群组中发送 `/swb@<bot username>`。`telegram_status` 随后在 `setup.seen_chats` 中显示该群组的聊天 id。把该 id 填入空间的 `chats`。
+
+打开机器人的私聊并点击 Start。把你自己的聊天 id 填入 `owner_ids`。
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    token_env: TELEGRAM_BOT_TOKEN
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        default_target: claude
+```
+
+## 从 Telegram 发送
+
+给机器人发私信，提及机器人，或使用 `/swb <target> <message>`。回复机器人的消息发往同一个目标。答复在第一行用粗体显示目标的名称。
+
+要让机器人读取群组中的每条消息，请在 @BotFather 中用 `/setprivacy` 关闭隐私模式。然后把机器人移出群组，再重新添加。
+
+## 模块设置
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.telegram` | 设置 Telegram 机器人及其空间 |
+| `blocks.telegram.use` | 加载 `telegram` 模块 |
+| `blocks.telegram.enabled` | 设为 `true` 启用模块，设为 `false` 关闭模块 |
+| `blocks.telegram.token_env` | 存放机器人令牌的环境变量名。默认值为 `TELEGRAM_BOT_TOKEN` |
+| `blocks.telegram.dm_space` | 指定私聊所用的路由和所有者设置来自哪个空间。默认使用配置中的第一个空间 |
+| `blocks.telegram.dm_mode` | 其他人发来私信时的处理模式。设为 `watch` 收集消息以生成摘要，设为 `off` 跳过消息 |
+| `blocks.telegram.ack_reaction` | 收到发给机器人的消息时用来确认的表情。设为 `null` 可关闭此反应 |
+| `blocks.telegram.persona_prefix` | 设为 `true` 后，在首行用粗体显示智能体使用的名称 |
+| `blocks.telegram.refresh_minutes` | 目标列表的更新间隔，单位为分钟。默认值为 `30` |
+| `blocks.telegram.target_aliases` | 为现有目标添加其他可用名称 |
+| `blocks.telegram.agents` | 各智能体可发帖和接收事件的空间。用 `*` 选择所有空间 |
+
+## 空间和群组
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.telegram.spaces` | 为 SwB 中的各个空间设置一组 Telegram 群组 |
+| `blocks.telegram.spaces.*.chats` | 此空间中的群聊 ID。使用负整数。每个群组归入一个空间 |
+| `blocks.telegram.spaces.*.owner_ids` | 视为所有者的 Telegram 用户 ID |
+| `blocks.telegram.spaces.*.known` | 为已登记的 Telegram 用户 ID 设置显示名称 |
+| `blocks.telegram.spaces.*.default_target` | 发给 SwB 的新消息省去目标名称时使用的目标 |
+| `blocks.telegram.spaces.*.project` | 此空间的默认 SwB 项目 |
+| `blocks.telegram.spaces.*.channel_projects` | 按群聊 ID 设置 SwB 项目 |
+| `blocks.telegram.spaces.*.mode` | 空间的处理模式。群组的模式可以覆盖此设置 |
+| `blocks.telegram.spaces.*.channels` | 按群聊 ID 设置处理模式，也可填写详细设置 |
+| `blocks.telegram.spaces.*.channels.*.mode` | 单个群组的处理模式 |
+| `blocks.telegram.spaces.*.channels.*.project` | 单个群组使用的 SwB 项目。此设置优先于空间的项目 |
+| `blocks.telegram.spaces.*.listen` | 旧版设置。让指定 ID 的群聊使用 `assist` 模式 |
+| `blocks.telegram.spaces.*.bot_posts_per_hour` | 机器人每小时可向同一会话串发帖的次数上限。默认值为 `20` |

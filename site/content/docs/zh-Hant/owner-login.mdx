@@ -1,0 +1,48 @@
+---
+title: 擁有者登入
+description: 用密碼金鑰、一次性連結或你的身分提供者登入 SwB 頁面。
+---
+
+SwB 只有一位擁有者。擁有者登入 SwB 頁面，檢視執行個體、核准代理登入並貼上權杖。SwB 以密碼金鑰、一次性連結與 OIDC 取代密碼。
+
+| 頁面 | 用途 |
+| - | - |
+| `/login` | 以擁有者身分登入。 |
+| `/authorize` | 審查代理發出的 OAuth 連線請求。 |
+
+## 一次性連結
+
+```bash
+swb login-link
+```
+
+指令會印出類似 `https://swb.example.com/login#t=...` 的連結。連結只能使用一次，有效時間是五分鐘。你已登入的代理也可以用 `login_link` 工具產生連結。權杖位於連結中 `#` 之後的部分，所以伺服器記錄與連結預覽只會顯示 `#` 之前的位址。
+
+## 密碼金鑰
+
+第一次登入後，頁面會請你新增密碼金鑰。請依裝置為密碼金鑰命名，例如 MacBook。之後的登入使用這個密碼金鑰。你使用的每台裝置都要新增一個密碼金鑰。Settings 會顯示你的密碼金鑰，並可移除其中一個。
+
+## OIDC
+
+你可以使用自己的身分提供者，例如 Google、Okta 或 Authentik。請把它加入設定檔。
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: OIDC_CLIENT_SECRET
+```
+
+請在提供者端把重新導向位址設為 `https://swb.example.com/auth/oidc/callback`。登入頁面隨即顯示你的提供者按鈕。SwB 接受已驗證信箱的擁有者電子郵件。你也可以把提供者的 subject id 列在 `owner_subjects`。
+
+## Cloudflare Access
+
+若 Cloudflare Access 保護你的主機，SwB 會讀取 Access 權杖並立即讓你登入。請設定 `CLOUDFLARE_ACCESS_TEAM_DOMAIN`、`CLOUDFLARE_ACCESS_AUD` 與 `SWITCHBOARD_OWNER_EMAILS`。SwB 自行檢查權杖的簽章、audience、issuer 與電子郵件。
+
+## 工作階段
+
+工作階段是 SwB 主機上的安全 cookie。頁面上的每項變更都帶有 CSRF 權杖。請從 Settings 登出。

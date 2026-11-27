@@ -1,0 +1,62 @@
+---
+title: Self-hosting
+description: Run SwB on a server with Docker Compose and Cloudflare.
+---
+
+## Docker Compose
+
+Run these commands as the user who owns the data folder.
+
+```bash
+(umask 077; cp .env.example .env)
+{
+  printf 'SWITCHBOARD_UID=%s\n' "$(id -u)"
+  printf 'SWITCHBOARD_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+mkdir -p data
+docker compose up -d
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+Compose serves SwB on `http://127.0.0.1:8870` and keeps the data in `./data`. After you change `.env`, run `docker compose up -d` again.
+
+## Cloudflare Tunnel
+
+A tunnel gives SwB a public address on your domain and keeps your ports closed. Make a tunnel in Cloudflare Zero Trust. Point its public hostname to `http://switchboard:8000`. Put the tunnel token in `.env` as `TUNNEL_TOKEN`. Start Compose with the tunnel profile.
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+Set `SWITCHBOARD_PUBLIC_URL` to the tunnel hostname, for example `https://swb.example.com`.
+
+## Cloudflare Access
+
+Access can protect the SwB page and the sign-in page. Make an Access application for your hostname. Allow your owner identities. Add bypass rules for the paths that machines use.
+
+| Path | Who uses it |
+| - | - |
+| `/mcp`, `/token`, `/register`, `/revoke`, `/.well-known` | MCP clients and OAuth |
+| `/healthz` | Health checks |
+| `/inbox`, `/connect` | Channels and pairing codes |
+| `/avatars` | Slack and Discord pictures |
+| `/github/webhook` | GitHub |
+
+Then set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD`. Each path keeps its own sign-in check in SwB.
+
+## Hosted platforms
+
+The repository has templates for Railway (`.railway/railway.ts`), Render (`render.yaml`) and Fly.io (`fly.toml`). Use one replica with a volume at `/data`. Set `SWITCHBOARD_PUBLIC_URL` and `SWITCHBOARD_KEY_OWNER` in the platform's secret settings.
+
+## Backups and upgrades
+
+All state is in the data folder. Back it up before an upgrade. Keep `mcp-events.key` and `claim-key` with the database, because they seal stored secrets. To upgrade, install the new version and start SwB. Database changes only add tables and columns.
+
+## Export memory
+
+```bash
+swb export /data/export
+```
+
+The export writes one Markdown folder per scope and an `INDEX.md`. Set `memory.mirror_dir` to keep a live copy in a folder.

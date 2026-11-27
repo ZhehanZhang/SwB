@@ -1,0 +1,59 @@
+---
+title: ChatGPT
+description: Connect ChatGPT and ChatGPT dots.
+---
+
+## Add SwB to ChatGPT
+
+Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a browser. Add a custom MCP server with your MCP address. Turn on developer mode if ChatGPT asks for it. ChatGPT signs in with OAuth as the agent `chatgpt`.
+
+## Hear new messages
+
+ChatGPT uses MCP Events. Ask ChatGPT to watch `switchboard.message.created` for `mailbox_id` `chatgpt`. SwB calls ChatGPT's webhook when a message arrives. The webhook carries ids only. ChatGPT reads the message with `get_message` and answers with `reply`.
+
+## ChatGPT dots
+
+A **dot** is a ChatGPT agent with its own bot in Slack. The `dots` block finds the dots in one Slack workspace and makes each dot a target. Send to a dot with `@swb <dot name>` in Slack, or with `send(to="<dot name>")`.
+
+Dots talk in one private Slack channel, `#agents` by default. SwB makes the channel with your user token. Each send is a new post that mentions the dot. The dot's answer in that thread comes back on the conversation.
+
+```yaml
+blocks:
+  dots:
+    delivery: slack
+    workspace: home
+    channel: "#agents"
+    match: [dot]
+```
+
+Paste this into the dot's instructions. Use your own bot and app ids.
+
+```text
+In #agents, posts that @mention you from my SwB app (bot <BOT_ID>, app <APP_ID>) are my agents working with you for me. Treat them as my requests and answer in that post's thread.
+```
+
+Set `delivery: mailbox` to send to dots through MCP Events instead of Slack.
+
+## Config
+
+| Key | Use |
+| - | - |
+| `blocks.dots` | Settings for sending to ChatGPT dots |
+| `blocks.dots.use` | Block type. Use `dots` |
+| `blocks.dots.enabled` | Set `false` to skip this block |
+| `blocks.dots.delivery` | Use `slack` for Slack or `mailbox` for MCP Events. Default `slack` |
+| `blocks.dots.workspace` | Slack workspace to scan. SwB uses the first workspace by default |
+| `blocks.dots.channel` | Private Slack channel that carries messages to dots. Default `#agents` |
+| `blocks.dots.create` | Set `true` to create the channel as the owner when needed. Default `true` |
+| `blocks.dots.app_ids` | Slack app IDs that identify dots |
+| `blocks.dots.match` | Text to find in Slack bot names. Default `[dot]` |
+| `blocks.dots.rescan_minutes` | Minutes between scans for Slack dots. Default `30` |
+| `blocks.dots.poll_seconds` | Seconds between checks for replies in Slack direct messages. Default `5` |
+| `blocks.dots.default` | The dot selected by the target name `dot`. Use its short name or ID |
+| `blocks.dots.dots` | Map of dot definitions for `mailbox` delivery or overrides for Slack dots |
+| `blocks.dots.dots.*.name` | Display name for a dot |
+| `blocks.dots.dots.*.mailbox` | Inbox that receives messages in `mailbox` mode. Default `chatgpt` |
+| `blocks.dots.group_dm` | Set `true` to use a Slack group message with the owner, SwB and the dot |
+| `blocks.dots.owner_dm` | Set `true` to send posts made as the owner to the owner's Slack direct message with the dot |
+| `blocks.dots.agents_as_owner` | Set `true` to use the owner's Slack account for sends from the owner's agents in channel or direct message delivery |
+| `blocks.dots.owner_posts_as` | Account to use when forwarding the owner's Slack messages to a dot. Default `swb`. Set `owner` to use the owner's account |

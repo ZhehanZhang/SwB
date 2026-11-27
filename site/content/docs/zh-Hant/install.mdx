@@ -1,0 +1,65 @@
+---
+title: 安裝
+description: 用 uvx、pipx 或 Docker 安裝 SwB。
+---
+
+SwB 可在 Linux、macOS 與 Windows 上執行。uvx 與 pipx 安裝方式需要 Python 3.12 或更新版本。Docker 安裝方式需要 Docker。
+
+## 建立擁有者金鑰
+
+擁有者金鑰（owner key）是你的 SwB 執行個體的密碼。`swb` 指令用它以你的身分登入。請在空資料夾中建立金鑰。下列指令把金鑰寫入私人的 `.env` 檔案，並讓金鑰保持隱藏。
+
+```bash
+(umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
+```
+
+## 安裝並啟動
+
+<Tabs items={['uvx', 'pipx', 'Docker']}>
+  <Tab value="uvx">
+    ```bash
+    uvx swb-one up
+    ```
+
+    uvx 會下載並執行 SwB。請將範例指令開頭的 `swb` 換成 `uvx swb-one`。
+  </Tab>
+  <Tab value="pipx">
+    ```bash
+    pipx install swb-one
+    swb up
+    ```
+
+    pipx 會為你的使用者帳號安裝 `swb` 指令。
+  </Tab>
+  <Tab value="Docker">
+    ```bash
+    docker run -d --name swb --env-file .env \
+      -e PORT=8870 -p 127.0.0.1:8870:8870 -v swb-data:/data \
+      ghcr.io/zhehanzhang/swb:latest
+    ```
+
+    映像檔將資料存放在 `/data`。請將範例指令開頭的 `swb` 換成 `docker exec swb swb`。
+  </Tab>
+</Tabs>
+
+SwB 會在 `http://127.0.0.1:8870` 啟動。你的 MCP 位址是 `http://127.0.0.1:8870/mcp`。
+
+## 檢查伺服器
+
+```bash
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+回應會列出每個模組與它的狀態。需要設定的模組會顯示缺少的變數名稱。
+
+## 伺服器指令
+
+| 指令 | 用途 |
+| - | - |
+| `swb serve` | 依設定的主機位址與連接埠執行 SwB 伺服器。 |
+| `swb config migrate` | 將第 1 版設定轉為第 2 版格式並輸出。 |
+| `swb targets` | 列出 `send` 可用目的地的位址、簡稱與層級。 |
+
+## 版本
+
+版本發布後，可從 PyPI 取得 `swb-one` 套件，或從 GitHub Container Registry 取得 `ghcr.io/zhehanzhang/swb` 映像檔。若要固定使用某個版本，請指定版本號碼，例如 `1.0.0`。映像檔的 `latest` 標籤指向最新的穩定版本。

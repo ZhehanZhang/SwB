@@ -1,0 +1,59 @@
+---
+title: Security
+description: How SwB decides who can do what.
+---
+
+## One owner
+
+SwB has one owner. Only the owner approves agent sign-ins, opens the SwB page and pastes tokens. The owner's own agents act for the owner.
+
+## Sign-in for agents
+
+SwB is its own OAuth 2.1 server for one owner. It uses PKCE with S256 and binds each token to your `/mcp` address. Access tokens last one hour. Refresh tokens last 30 days and rotate on each use. SwB stores only SHA-256 hashes of tokens. Other agents use a bearer key or a pairing code.
+
+## Trust
+
+SwB sets the trust of each message from the platform's own ids. Only the ids decide trust.
+
+| Trust | Who |
+| - | - |
+| `owner` | You and your own signed-in agents |
+| `known` | People and bots you list in `known` |
+| `external` | Everyone else |
+
+SwB passes owner text as it is. It wraps all other text in a header and the markers `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat wrapped text as information. SwB removes copies of the header and markers from the text, so a sender can fake neither.
+
+## Visibility
+
+Every resource is private or shared. A resource is a target, a channel, a memory scope, a route or a tool. Every resource starts private, and only the owner reaches it. Share a resource with a workspace or with a list of people. A non-owner reaches a target only when the channel and the target are both shared. Other messages from non-owners become context items. A context item goes to the inbox as information, and the agent stays asleep.
+
+## Keys with limits
+
+A bearer key can have limits. `auth.key_scopes` limits the memory scopes of a key. `auth.key_tools` limits its tools. `auth.key_targets` limits where it can send.
+
+## Tokens
+
+Tokens go through claim links only. SwB seals saved tokens with a key in the data folder. Status shows the names of missing variables and keeps their values hidden. The Capy key goes only to api.capy.ai, in a header.
+
+## Limits
+
+| Limit | Value |
+| - | - |
+| Wrong bearer tokens | 20 per address in 10 minutes, then 429 |
+| `/register` | 20 per address per hour |
+| `/token` | 120 per address in 10 minutes |
+| `/authorize` | 60 per address in 10 minutes |
+| Request body | 1 MiB, or 16 MiB on `/mcp` |
+| Turns per agent conversation | 200 |
+
+A conversation pauses at the turn cap. SwB tells the owner.
+
+Capy and Muse can return the earlier conversation for a repeat send. Capy's `duplicate_window_s` sets the time window. Its default is 600 seconds. Muse uses a 600-second window.
+
+## Audit log
+
+Every change and every refusal goes to the audit log. The SwB page shows it under Audit. `swb log` prints the recent entries.
+
+## Report a problem
+
+Report security problems through GitHub private vulnerability reporting on the [SwB repository](https://github.com/ZhehanZhang/SwB/security).

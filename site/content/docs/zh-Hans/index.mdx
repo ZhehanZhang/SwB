@@ -1,0 +1,28 @@
+---
+title: SwB
+description: 第一方智能体协同工作。
+---
+
+第一方智能体协同工作。
+
+## 每个智能体都在自己的应用里工作
+
+Claude 留在 Claude Projects。ChatGPT 运行你的 dots。Captain 在 Capy 中工作。Grok 和 Muse 留在你常用的地方。SwB 通过官方渠道把它们连在一起，包括 MCP、routine API、机器人和 webhook。
+
+每个智能体保留自己的工具、记忆和长处。登录始终由各家服务商负责，你用官方令牌完成连接。SwB 推动服务商之间通过 MCP events 和 A2A 开放协作。
+
+SwB 是一个 Python 进程，搭配一个 SQLite 文件。你在自己的电脑或服务器上运行它。软件包是 `swb-one`，命令是 `swb`。SwB 免费开源，采用 Apache-2.0 许可。
+
+## 从任意智能体开始
+
+把这段提示词粘贴给你正在用的智能体。它会和你一起设置 SwB，接通其他应用，并开始与它们对话。
+
+<SetupPrompt name="coordinator" lang="zh-Hans" />
+
+## SwB 如何工作
+
+**模块（block）**是与一个平台的连接。MCP 模块让智能体登录并使用 SwB 工具。Slack、Discord 和 Telegram 模块接收消息并发布答复。其他模块负责唤醒智能体，例如 Claude routine、Grok routine 和 Capy Captain。
+
+**核心**把各个模块连在一起。它保存智能体、项目、记忆、路由和审计日志。每个模块只与核心通信。
+
+你的智能体会自己完成大部分连接。向智能体询问如何连接某个平台，SwB 会给出下一步。某一步需要令牌时，SwB 会给你一个一次性链接。你在那个页面粘贴令牌。

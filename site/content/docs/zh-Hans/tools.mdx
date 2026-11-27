@@ -1,0 +1,90 @@
+---
+title: 工具
+description: SwB 提供给你的智能体的 MCP 工具。
+---
+
+智能体看到其登录身份允许使用的工具。模块启用时，该模块的工具随之出现。
+
+## 消息
+
+| 工具 | 用途 |
+| - | - |
+| `send` | 把工作或消息发送给一个目标，或让路由选择目标 |
+| `agent_send` | 给另一个智能体发消息。新调用请用 `send` 并指定 `to="agent:<name>"` |
+| `wait` | 等待你的会话中的下一条答复 |
+| `inbox` | 读取你的收件箱并立即返回 |
+| `reply` | 回答一条消息，或向会话添加一条消息 |
+| `status` | 显示一个会话的状态 |
+| `switchboard_status` | 显示你的登录身份、等待时限、模块和实例运行状况 |
+| `result` | 获取一个会话的最终答复 |
+| `cancel` | 停止跟踪一个会话 |
+| `targets` | 列出 `send` 能访问的所有对象 |
+| `get_message` | 按 id 读取一条已存储的消息 |
+
+## 记忆与项目
+
+| 工具 | 用途 |
+| - | - |
+| `context_pack` | 获取一个项目的简报 |
+| `memory_write` | 创建或修改一条记忆 |
+| `memory_search` | 搜索记忆 |
+| `memory_list` | 列出记忆条目 |
+| `memory_read` | 读取一条记忆及其历史 |
+| `memory_delete` | 删除一条记忆 |
+| `memory_move` | 把一条记忆移到另一个项目 |
+| `memory_promote` | 把一条记忆移到 general |
+| `project_list` | 列出项目及其链接 |
+| `project_create` | 创建项目 |
+| `project_update` | 重命名、链接、归档项目，或把项目设为私有 |
+| `project_sync` | 重新把项目链接到它们的匹配项 |
+
+## 设置
+
+| 工具 | 用途 |
+| - | - |
+| `connect` | 获取一个平台的下一步设置 |
+| `connect_code` | 为新智能体生成配对码 |
+| `connect_list` | 列出智能体密钥 |
+| `connect_revoke` | 删除一个智能体密钥 |
+| `login_link` | 为所有者生成一次性登录链接 |
+| `routes_list`、`routes_set`、`routes_remove`、`routes_resolve` | 管理路由 |
+| `routine_register`、`routine_list`、`routine_pickup` | 管理 Claude Code 例程 |
+| `routine_add` | 以所有者身份使用令牌添加 Claude Code 例程 |
+| `routine_remove` | 以所有者身份移除已注册的 Claude Code 例程 |
+| `modes_status` | 查看你有权访问的频道和仓库所用的模式 |
+| `space_mode` | 以所有者身份设置空间或频道的模式。用 `inherit` 清除这项设置 |
+| `visibility_list` | 以所有者身份查看默认访问规则和各个资源的访问规则 |
+| `visibility_set` | 以所有者身份将资源设为私有或共享。工具始终为私有 |
+
+## 模块工具
+
+其他模块工具包括 `discord_status` 和 `telegram_provision`。
+
+### Capy
+
+| 工具 | 用途 |
+| - | - |
+| `capy_captains` | 列出当前 Capy 连接有权访问的 Captain |
+| `capy_captain_digest` | 读取 Captain 的摘要并查看正在处理或需要所有者介入的话题串 |
+| `capy_list` | 列出通过 SwB 发送的任务。也可查看 Captain 团队或已关联 Capy 项目中的话题串 |
+| `capy_delegate` | 将任务发给 Capy。新调用请用 `send` 并指定 `to="capy"` |
+| `capy_inbox` | 立即读取 Capy 收件箱。新调用请用 `inbox` 并指定 `block="capy"` |
+| `capy_wait` | 等待收件箱中的下一条消息。新调用请用 `wait` |
+| `capy_status` | 查看 Capy 话题串的状态和近期消息。新调用请用 `status` |
+| `capy_reply` | 向 Capy 话题串发消息。新调用请用 `reply` |
+| `capy_result` | 获取 Capy 话题串的最新答复以及可用的文件和拉取请求链接。新调用请用 `result` |
+| `capy_cancel` | 停止跟踪发给 Capy 的任务。Capy 仍可继续处理任务。新调用请用 `cancel` |
+
+### Slack
+
+| 工具 | 用途 |
+| - | - |
+| `slack_channels` | 列出所选 Slack 账号可见的频道。结果会标明 SwB 正在关注的频道 |
+| `slack_history` | 读取频道近期的消息。最新消息排在前面 |
+| `slack_thread` | 按时间顺序读取话题串的首条消息及其回复 |
+| `slack_watched` | 列出会将新消息送到你的 SwB 收件箱的频道 |
+| `slack_personas` | 查看机器人发消息时可用的名称和头像以及默认选项 |
+| `slack_targets` | 列出在 Slack 提及机器人后可填写的目标名称 |
+| `slack_react` | 用表情回应消息。此操作遵循与 `slack_post` 相同的规则 |
+| `slack_request_write` | 将拟发送的 Slack 消息提交给所有者审批 |
+| `slack_write_requests` | 查看你的 Slack 审批申请状态。用 `request_id` 查看单条申请 |
