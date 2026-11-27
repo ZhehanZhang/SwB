@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
 import secrets
 import sqlite3
+import stat
 import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -255,18 +260,60 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{int(time.time() * 1000):013d}{secrets.token_hex(4)}"
 
 
+def ensure_private_data_dir(path: Path) -> None:
+    if not path.is_dir():
+        try:
+            path.mkdir(mode=0o700, parents=True)
+        except FileExistsError:
+            if not path.is_dir():
+                raise
+        else:
+            _private_mode(path, 0o700, existing=False)
+            return
+    _private_mode(path, 0o700, existing=True)
+
+
+def _private_mode(path: Path, mode: int, *, existing: bool) -> None:
+    if os.name != "posix" or stat.S_IMODE(path.stat().st_mode) == mode:
+        return
+    try:
+        path.chmod(mode)
+    except OSError:
+        if not existing:
+            raise
+        log.warning("Could not set mode %04o on %s. Check its permissions.", mode, path)
+
+
+def open_database(path: str | Path) -> sqlite3.Connection:
+    if str(path) != ":memory:":
+        path = Path(path)
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if os.name == "posix":
+            try:
+                path.touch(mode=0o600, exist_ok=False)
+            except FileExistsError:
+                _private_mode(path, 0o600, existing=True)
+            else:
+                _private_mode(path, 0o600, existing=False)
+            for suffix in ("-wal", "-shm", "-journal"):
+                try:
+                    _private_mode(path.with_name(path.name + suffix), 0o600, existing=True)
+                except FileNotFoundError:
+                    pass
+    db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    return db
+
+
 class Store:
     """One SQLite file for projects, memories, OAuth state, and the audit log. Calls are short and serialized."""
 
     def __init__(self, path: str | Path, clock: Callable[[], float] = time.time):
         self.path = str(path)
-        if self.path != ":memory:":
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.clock = clock
         self._lock = threading.RLock()
-        self.db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
-        self.db.row_factory = sqlite3.Row
-        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db = open_database(path)
         self.db.executescript(SCHEMA)
         self.tx(_migrate)
 

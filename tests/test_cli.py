@@ -15,6 +15,7 @@ from mcp.types import CallToolResult, TextContent
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, payload
 from switchboard import __main__, cli
+from switchboard.config import load_config
 from switchboard.core import Switchboard
 
 
@@ -82,19 +83,23 @@ def test_log_reads_instance_data_and_honors_limit(cli_instance, capsys):
 
 
 @pytest.mark.parametrize("setting", ["yaml", "env", "both"])
-def test_explicit_dir_keeps_data_in_instance(cli_instance, monkeypatch, capsys, setting):
-    base, core = cli_instance
+def test_log_explicit_dir_uses_yaml_then_environment_data(cli_instance, monkeypatch, capsys, setting):
+    base, default = cli_instance
+    config = base / cli.CONFIG
+    yaml_data, env_data = base / "yaml-data", base / "env-data"
     if setting in ("yaml", "both"):
-        config = base / cli.CONFIG
-        config.write_text(config.read_text() + f"data_dir: {base / 'yaml-data'}\n")
+        config.write_text(config.read_text() + f"data_dir: {yaml_data}\n")
     if setting in ("env", "both"):
-        monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(base / "env-data"))
-    core.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
-                      action="read", outcome="ok", title="Instance data")
+        monkeypatch.setenv("SWITCHBOARD_DATA_DIR", str(env_data))
+    chosen = Switchboard(config_path=config, data_dir=env_data if setting == "env" else yaml_data, env={})
+    default.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
+                         action="read", outcome="ok", title="Default data")
+    chosen.audit.record(origin="mcp", source="owner", client="key:owner", destination="core",
+                        action="read", outcome="ok", title="Configured data")
 
     __main__.cli_main(["log", "--dir", base.name])
 
-    assert [json.loads(line) for line in capsys.readouterr().out.splitlines()] == core.audit.recent()
+    assert [json.loads(line) for line in capsys.readouterr().out.splitlines()] == chosen.audit.recent()
 
 
 @pytest.mark.parametrize("bad_limit", ["0", "-1", "9223372036854775808"])
@@ -117,8 +122,11 @@ def test_export_uses_instance_data_and_separate_destination(cli_instance, tmp_pa
     assert not (base / "snapshot").exists()
 
 
-def test_config_and_blocks_use_instance_config(cli_instance, capsys):
+def test_config_and_blocks_use_instance_config(cli_instance, tmp_path, monkeypatch, capsys):
     base, _ = cli_instance
+    other = tmp_path / "other.yaml"
+    other.write_text("version: 2\nblocks:\n  mcp: {}\n")
+    monkeypatch.setenv("SWITCHBOARD_CONFIG", str(other))
     __main__.cli_main(["config", "migrate", "--dir", base.name])
     assert yaml.safe_load(capsys.readouterr().out)["blocks"] == {"custom-mcp": {"use": "mcp"}}
     __main__.cli_main(["blocks", "list", "--dir", base.name])
@@ -157,6 +165,10 @@ def test_init_writes_minimal_config_and_private_owner_key(tmp_path, capsys):
     assert name == cli.OWNER_KEY
     assert len(bytes.fromhex(key)) == 32
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
+    data = instance / "data"
+    assert data.is_dir() and not list(data.iterdir())
+    if os.name == "posix":
+        assert stat.S_IMODE(data.stat().st_mode) == 0o700
     out, err = capsys.readouterr()
     assert key not in out + err
     assert f"Owner key saved in {env}." in out and f"swb up --dir '{instance}'" in out
@@ -173,6 +185,7 @@ def test_init_does_not_overwrite_or_create_other_file_when_one_exists(tmp_path, 
     assert path.read_text() == "existing"
     other = cli.CONFIG if existing == ".env" else ".env"
     assert not (tmp_path / other).exists()
+    assert not (tmp_path / "data").exists()
     assert "--force" in capsys.readouterr().err
 
 
@@ -230,12 +243,13 @@ def test_login_link_calls_owner_tool(tmp_path, monkeypatch, capsys):
 def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(f"# comment\n{cli.OWNER_KEY}='owner-test-key'\nPORT=4567 # local port\n")
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv, *, data_dir, **_: calls.append(
-        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG")), data_dir)))
-    with patch.dict(os.environ, {"SWITCHBOARD_DATA": "/path/to/old-data", "SWITCHBOARD_CONFIG": "/path/to/old-config",
-                                 "PORT": "9876"}, clear=True):
+    monkeypatch.setattr(__main__, "main", lambda argv, *, instance, **_: calls.append(
+        (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG")),
+         load_config(instance=instance, env={}).data_dir)))
+    with patch.dict(os.environ, {"SWITCHBOARD_CONFIG": "/path/to/old-config", "PORT": "9876",
+                                 "HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home")}, clear=True):
         cli.main(["up", "--dir", str(tmp_path)])
-    assert calls == [(["serve"], "owner-test-key", "9876", str(tmp_path / cli.CONFIG), tmp_path / "data")]
+    assert calls == [(["serve"], "owner-test-key", "9876", "/path/to/old-config", tmp_path / "data")]
 
 
 def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, capsys):

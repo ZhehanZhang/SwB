@@ -22,10 +22,11 @@ from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
 from .__main__ import SERVER_COMMANDS, add_server_commands
-from .config import ConfigError, LOOPBACK_HOSTS, client_endpoint
+from .config import INSTANCE_CONFIG, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
+from .store import ensure_private_data_dir
 
-CONFIG = Path("config/switchboard.yaml")
+CONFIG = INSTANCE_CONFIG
 CLAIM_ERRORS = {400: "claim_input", 403: "claim_owner_key", 410: "claim_unavailable"}
 
 
@@ -75,6 +76,8 @@ def _init(base: Path, public_url: str | None, force: bool) -> None:
     for path in (config_path, env_path):
         if not force and os.path.lexists(path):
             raise CliError(f"{path} already exists; use --force to replace it.")
+    if not os.path.lexists(config_path):
+        ensure_private_data_dir(base / "data")
     config_path.parent.mkdir(parents=True, exist_ok=True)
     _write_file(config_path, yaml.safe_dump(config, sort_keys=False), force=force, mode=0o644)
     _write_file(env_path, f"{OWNER_KEY}={secrets.token_hex(32)}\n", force=force, mode=0o600)
@@ -272,7 +275,7 @@ def build_parser() -> argparse.ArgumentParser:
     muse.add_argument("--state-dir", type=Path, default=Path.home() / ".config" / "swb" / "muse")
     up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
     for command in (init, connect, status, claim, login_link):
-        command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
+        command.add_argument("--dir", type=Path, help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
         command.add_argument("--url", help="server base URL or MCP endpoint (defaults to loopback and SWITCHBOARD_PORT, PORT, or 8870)")
     add_server_commands(commands)
@@ -314,7 +317,7 @@ def main(argv: list[str] | None = None) -> None:
         url = _url(args.url or local_url)
         key = env.get(OWNER_KEY)
         if not key and url == local_url:
-            key = volume_owner_key(os.environ)
+            key = volume_owner_key(env, instance=Instance(base, explicit=args.dir is not None))
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
         request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")
