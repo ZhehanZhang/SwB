@@ -144,7 +144,7 @@ export function AboutPage() {
           </section>
 
           <p className="mt-3 text-muted-foreground md:mt-8">
-            SwB isn't affiliated with Slack, Discord, Telegram, Anthropic, OpenAI, xAI, GitHub or Capy. Logos only show what each block connects to.
+            SwB isn't affiliated with Slack, Discord, Telegram, Anthropic, OpenAI, xAI, GitHub or Capy.
           </p>
         </div>
       </div>
