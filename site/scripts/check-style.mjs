@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { locales } from '../lib/i18n.ts';
 
-const root = new URL('../content/docs/', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../../docs/', import.meta.url));
 const negation = {
   en: /\b(no|not|never|without|none|nothing|nobody|cannot|can't|don't|doesn't|isn't|aren't|won't|wasn't|shouldn't)\b/i,
   zh: /(不|没有|沒有|无法|無法|未|勿|别|別|非|无须|無須|毋)/,
@@ -20,7 +22,7 @@ function files(dir) {
 }
 
 let problems = 0;
-for (const file of files(root)) {
+for (const file of locales.flatMap((locale) => files(join(root, locale)))) {
   const zh = /\/zh-Han[st]\//.test(file);
   const trademarks = file.endsWith('/trademarks.mdx');
   let fence = false;
