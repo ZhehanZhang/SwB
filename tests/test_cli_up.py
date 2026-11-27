@@ -19,7 +19,7 @@ def clean_env(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR",
                  "SWITCHBOARD_PUBLIC_URL", "PUBLIC_URL", "SWITCHBOARD_DEPLOY_PLATFORM", "CLOUDFLARE_ACCESS_TEAM_DOMAIN",
-                 "CLOUDFLARE_ACCESS_AUD", "SWITCHBOARD_OWNER_EMAILS"):
+                 "CLOUDFLARE_ACCESS_AUD", "SWITCHBOARD_OWNER_EMAILS", "SWB_SETUP_CODE"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -29,17 +29,17 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
     if override:
         monkeypatch.setenv(override, str(data))
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv, **_: calls.append(
-        (argv, load_config().data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"])))
+    monkeypatch.setattr(__main__, "main", lambda argv, *, announce_url, **_: calls.append(
+        (argv, load_config().data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"], announce_url)))
 
     __main__.cli_main(["up"])
 
-    assert calls == [(["serve"], data, "127.0.0.1", "8870")]
-    assert capsys.readouterr().out == "MCP URL: http://127.0.0.1:8870/mcp\n"
+    assert calls == [(["serve"], data, "127.0.0.1", "8870", "http://127.0.0.1:8870")]
+    assert capsys.readouterr() == ("", "")
     assert "SWITCHBOARD_HOST" not in os.environ
 
 
-def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, monkeypatch):
+def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, monkeypatch, capsys):
     (tmp_path / ".env").write_text(f"SWITCHBOARD_KEY_OWNER={STATIC_KEY}\n")
     monkeypatch.delenv("SWITCHBOARD_KEY_OWNER", raising=False)
     monkeypatch.setenv("PORT", "18871")
@@ -56,6 +56,20 @@ def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, m
 
     monkeypatch.setattr(__main__.uvicorn, "run", serve)
     __main__.cli_main(["up"])
+    assert capsys.readouterr() == ("MCP URL: http://127.0.0.1:18871/mcp\n", "")
+
+
+@pytest.mark.parametrize(("setting", "message"), [
+    ("SWB_SETUP_CODE=abc", "SWB_SETUP_CODE must encode 32 random bytes"),
+    ("SWITCHBOARD_PUBLIC_URL=http://swb.example.test", "public_url must be an HTTPS URL"),
+])
+def test_up_prints_only_the_startup_error(clean_env, tmp_path, capsys, setting, message):
+    (tmp_path / ".env").write_text(f"{setting}\n")
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["up"])
+    assert exited.value.code == 2
+    out, err = capsys.readouterr()
+    assert not out and err.startswith(f"swb: {message}") and len(err.splitlines()) == 1
 
 
 def test_wildcard_bind_requires_public_url_for_owner_link(clean_env, monkeypatch):
@@ -105,10 +119,11 @@ while True:
     (tmp_path / cli.CONFIG).write_text("public_url: https://base.example.test\n")
     (tmp_path / cli.CONFIG.with_name("local.yaml")).write_text("public_url: https://overlay.example.test\n")
 
-    def serve(argv, *, listener, tunnel_url, **_):
+    def serve(argv, *, listener, tunnel_url, announce_url, **_):
         assert argv == ["serve"]
         assert listener.getsockname() == ("127.0.0.1", port)
         assert load_config(tunnel_url=tunnel_url).public_url == url
+        assert announce_url == url
         assert not stopped.exists()
         raise KeyboardInterrupt
 
@@ -117,7 +132,7 @@ while True:
 
     assert stopped.exists()
     assert os.environ["SWITCHBOARD_PUBLIC_URL"] == "https://previous.example.test"
-    assert capsys.readouterr() == (f"MCP URL: {url}/mcp\n", "")
+    assert capsys.readouterr() == ("", "")
 
 
 def test_missing_cloudflared_prints_install_command(clean_env, tmp_path, monkeypatch, capsys, unused_tcp_port):

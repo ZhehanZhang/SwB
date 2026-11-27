@@ -127,10 +127,22 @@ def test_short_or_invalid_setup_code_stops_startup_without_logging_it(tmp_path, 
     with pytest.raises(SystemExit) as stopped:
         __main__.main(["serve"])
     assert stopped.value.code == 2
-    error = capsys.readouterr().err
-    assert "SWB_SETUP_CODE must encode 32 random bytes" in error
+    out, error = capsys.readouterr()
+    assert not out and error.startswith("swb: SWB_SETUP_CODE must encode 32 random bytes")
+    assert len(error.splitlines()) == 1
     assert not code or code not in error
     assert not (tmp_path / "data" / "switchboard.db").exists()
+
+
+def test_bad_public_url_in_yaml_stops_startup_without_usage(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "switchboard.yaml"
+    path.write_text("public_url: 42\n")
+    monkeypatch.setenv("SWITCHBOARD_CONFIG", str(path))
+    monkeypatch.delenv(PLATFORM, raising=False)
+    with pytest.raises(SystemExit) as stopped:
+        __main__.main(["serve"])
+    assert stopped.value.code == 2
+    assert capsys.readouterr() == ("", "swb: public_url must be an HTTPS URL or use a loopback address for HTTP\n")
 
 
 def test_setup_code_is_removed_from_application_environment():

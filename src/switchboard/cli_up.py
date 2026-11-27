@@ -133,8 +133,7 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, instance: boo
                     raise CliError(f"Could not bind {origin}. Choose another PORT.") from None
                 tunnel_url = stack.enter_context(_tunnel(tunnel, origin))
             os.environ.update(values)
-            print(f"MCP URL: {tunnel_url or origin}/mcp", flush=True)
-            serve(["serve"], listener=listener, tunnel_url=tunnel_url, data_dir=data)
+            serve(["serve"], listener=listener, tunnel_url=tunnel_url, data_dir=data, announce_url=tunnel_url or origin)
     except KeyboardInterrupt:
         pass
     finally:
