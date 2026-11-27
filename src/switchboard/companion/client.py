@@ -34,18 +34,20 @@ def _client(url: str, key: str | None = None) -> httpx.AsyncClient:
     )
 
 
-def _hello(caps: dict[str, Capability]) -> dict[str, Any]:
+def _hello(caps: dict[str, Capability], name: str | None) -> dict[str, Any]:
     return {
-        "name": socket.gethostname()[:120] or "Companion",
+        "name": name if name is not None else (socket.gethostname()[:120] or "Companion"),
         "platform": platform.system().lower()[:64] or "unknown",
         "capabilities": [cap.manifest() for cap in caps.values()],
     }
 
 
-async def pair(url: str, code: str, caps: dict[str, Capability], enabled: tuple[str, ...], drop_dir: Path) -> CompanionState:
+async def pair(
+    url: str, code: str, caps: dict[str, Capability], enabled: tuple[str, ...], drop_dir: Path, *, name: str | None = None,
+) -> CompanionState:
     try:
         async with _client(url) as client:
-            response = await client.post("pair", json={"code": code, **_hello(caps)})
+            response = await client.post("pair", json={"code": code, **_hello(caps, name)})
         if response.status_code in (400, 401, 403, 404, 410):
             raise CompanionError("Check the SwB URL and pairing code.")
         response.raise_for_status()
@@ -57,7 +59,7 @@ async def pair(url: str, code: str, caps: dict[str, Capability], enabled: tuple[
         raise
     except (httpx.HTTPError, httpx.InvalidURL, ValueError, TypeError, KeyError, RecursionError):
         raise CompanionError("Check the connection to your SwB server.") from None
-    return CompanionState(url, companion_id, key, enabled, str(drop_dir))
+    return CompanionState(url, companion_id, key, enabled, str(drop_dir), name=name)
 
 
 async def _post(client: httpx.AsyncClient, endpoint: str, data: dict[str, Any]) -> httpx.Response:
@@ -91,6 +93,19 @@ async def disconnect(state: CompanionState, path: Path) -> None:
         raise CompanionError("Check the connection to SwB and try disconnecting again.") from None
     state.clear(path)
     print(DISCONNECTED, flush=True)
+
+
+async def clear_if_revoked(state: CompanionState, path: Path) -> bool:
+    try:
+        async with _client(state.url, state.device_key) as client:
+            response = await client.get("hello")
+        body = response.json() if response.status_code == 401 else None
+    except (httpx.HTTPError, ValueError, RecursionError):
+        return False
+    if not isinstance(body, dict) or body.get("error") != "invalid_token" or not state.clear(path):
+        return False
+    print(DISCONNECTED, flush=True)
+    return True
 
 
 async def _events(response: httpx.Response) -> AsyncIterator[tuple[str, str]]:
@@ -187,7 +202,7 @@ async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) ->
 
                 async with asyncio.TaskGroup() as tasks:
                     try:
-                        await _post(client, "hello", {"version": __version__, **_hello(caps)})
+                        await _post(client, "hello", {"version": __version__, **_hello(caps, state.name)})
                         async with client.stream("GET", "events", headers={"Accept": "text/event-stream"},
                                                  timeout=httpx.Timeout(15, read=75)) as response:
                             if response.status_code == 401:

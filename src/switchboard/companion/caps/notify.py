@@ -61,6 +61,8 @@ class NotifyCapability(Capability):
 
     def available(self) -> str | None:
         if self._executable() is None:
+            if sys.platform.startswith("linux"):
+                return "Install libnotify-bin for desktop notifications."
             return "Desktop notifications are unavailable on this device."
         return None
 

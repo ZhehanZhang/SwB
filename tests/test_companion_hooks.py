@@ -152,6 +152,17 @@ async def run_cli(agent, data):
     assert proc.returncode == 0
 
 
+@pytest.mark.parametrize("flag", ["-h", "--help"])
+async def test_hook_help_prints_usage(flag):
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "switchboard", "hook", flag,
+        stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await asyncio.wait_for(proc.communicate(), 5)
+    assert proc.returncode == 0 and not err
+    assert b"Usage" in out and b"swb hook {claude-code,gemini,codex}" in out
+
+
 async def test_hook_cli_is_silent_and_receiver_enforces_permissions(hook_home, monkeypatch):
     await run_cli("claude-code", b"{}")
     assert not hook_home.exists()
