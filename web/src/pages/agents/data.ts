@@ -135,7 +135,7 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
     ...(["captain", "dot"] as const).flatMap((kind) => (kind === "captain" ? captains : dots).map((row): Agent => ({
       id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
       name: kind === "captain" ? displayReference(row.name, "Captain") : row.name, kind,
-      logo: kind === "captain" ? "captain" : "chatgpt", projects: row.projects ?? (row.project ? [row.project] : []),
+      logo: kind, projects: row.projects ?? (row.project ? [row.project] : []),
       avatar_url: row.avatar_url,
       registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
       last_seen: row.last_seen_at ?? null, state: row.online ? "on" : "off",

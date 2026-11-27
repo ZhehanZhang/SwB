@@ -6,8 +6,10 @@ import claudeCode from "../../../src/switchboard/slack/avatars/claude-code.png?n
 import claude from "../../../src/switchboard/slack/avatars/claude.png?no-inline"
 import codex from "../../../src/switchboard/slack/avatars/codex.png?no-inline"
 import defaultAvatar from "../../../src/switchboard/slack/avatars/default.png?no-inline"
+import dots from "../../../src/switchboard/slack/avatars/dots.png?no-inline"
 import gemini from "../../../src/switchboard/slack/avatars/gemini.png?no-inline"
 import grok from "../../../src/switchboard/slack/avatars/grok.png?no-inline"
+import grokBot from "../../../src/switchboard/slack/avatars/grok-bot.png?no-inline"
 import muse from "../../../src/switchboard/slack/avatars/muse.png?no-inline"
 import swb from "../../../src/switchboard/slack/avatars/swb.png?no-inline"
 import discord from "@/assets/discord.svg?no-inline"
@@ -17,10 +19,11 @@ import { connectorKind } from "@/lib/connector-kind"
 import { cn } from "@/lib/utils"
 
 const images: Record<string, string> = { discord, github, telegram }
-const avatars: Record<string, string> = { capy, chatgpt, "claude-code": claudeCode, claude, codex, gemini, grok, muse, swb }
+const avatars: Record<string, string> = { capy, chatgpt, "claude-code": claudeCode, claude, codex, dots, gemini, grok, "grok-bot": grokBot, muse, swb }
 const aliases = [
+  ["grok-bot", "grok-bot"], ["grok-routine", "grok-bot"],
   ["claude-code", "claude-code"], ["claude", "claude"], ["anthropic", "claude"], ["grok", "grok"], ["xai", "grok"],
-  ["openai", "chatgpt"], ["chatgpt", "chatgpt"], ["dot", "chatgpt"], ["dots", "chatgpt"], ["capy", "capy"], ["captain", "captain"],
+  ["openai", "chatgpt"], ["chatgpt", "chatgpt"], ["dots", "dots"], ["dot", "dots"], ["capy", "capy"], ["captain", "captain"],
   ["github", "github"], ["slack", "slack"], ["discord", "discord"], ["telegram", "telegram"],
   ["gemini", "gemini"], ["codex", "codex"], ["muse", "muse"], ["swb", "swb"], ["switchboard", "swb"], ["mcp", "mcp"],
 ] as const
