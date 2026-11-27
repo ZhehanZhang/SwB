@@ -39,6 +39,26 @@ CREATE TABLE IF NOT EXISTS memories (
   deleted_at REAL
 );
 CREATE INDEX IF NOT EXISTS memories_updated ON memories(updated_at);
+CREATE TABLE IF NOT EXISTS connect_codes (
+  code_hash TEXT PRIMARY KEY,
+  agent TEXT NOT NULL,
+  project TEXT,
+  client TEXT,
+  created_by TEXT NOT NULL,
+  created_at REAL NOT NULL,
+  expires_at REAL NOT NULL,
+  used_at REAL
+);
+CREATE TABLE IF NOT EXISTS paired_memory_grants (
+  key_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  PRIMARY KEY(key_id, scope)
+);
+CREATE TABLE IF NOT EXISTS paired_memory_grants_migration (
+  version INTEGER PRIMARY KEY CHECK(version = 1),
+  keys_migrated INTEGER NOT NULL,
+  grants_migrated INTEGER NOT NULL
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(title, body, tags, namespace, content='memories', content_rowid='rowid', tokenize='porter unicode61');
 CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
   INSERT INTO memories_fts(rowid, title, body, tags, namespace) VALUES (new.rowid, new.title, new.body, new.tags, new.namespace);
@@ -208,7 +228,7 @@ CREATE TABLE IF NOT EXISTS space_modes (
 CREATE TABLE IF NOT EXISTS watch_events (
   block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, message TEXT NOT NULL,
   author_id TEXT NOT NULL, author TEXT NOT NULL, excerpt TEXT NOT NULL, link TEXT, at REAL NOT NULL,
-  target TEXT NOT NULL, project TEXT, dm INTEGER NOT NULL DEFAULT 0, delivered_at REAL,
+  target TEXT NOT NULL, project TEXT, dm INTEGER NOT NULL DEFAULT 0, delivered_at REAL, parts TEXT,
   PRIMARY KEY(block, space, channel, message)
 );
 CREATE INDEX IF NOT EXISTS watch_events_pending ON watch_events(block, space, dm, target, at) WHERE delivered_at IS NULL;
@@ -229,6 +249,8 @@ def _migrate(db: sqlite3.Connection) -> None:
     cols = {r[1] for r in db.execute("PRAGMA table_info(memories)")}
     if "scope" not in cols:
         db.execute("ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'general'")
+    if "writer_credential" not in cols:
+        db.execute("ALTER TABLE memories ADD COLUMN writer_credential TEXT")
     db.execute("DROP INDEX IF EXISTS memories_ns_key")
     db.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_key ON memories(scope, namespace, key) WHERE key IS NOT NULL AND deleted_at IS NULL"
@@ -241,6 +263,8 @@ def _migrate(db: sqlite3.Connection) -> None:
         db.execute("ALTER TABLE owner_passkeys ADD COLUMN rp_id TEXT")
     if "target" not in {r[1] for r in db.execute("PRAGMA table_info(space_modes)")}:
         db.execute("ALTER TABLE space_modes ADD COLUMN target TEXT")
+    if "parts" not in {r[1] for r in db.execute("PRAGMA table_info(watch_events)")}:
+        db.execute("ALTER TABLE watch_events ADD COLUMN parts TEXT")
     db.execute("""
         INSERT OR IGNORE INTO owner_initialized(id)
         SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM owner_initialized) AND (

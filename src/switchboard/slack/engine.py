@@ -13,7 +13,7 @@ import httpx
 
 from ..guard import RateLimiter
 from ..subject import subject
-from ..trust import wrap
+from ..trust import frame_sender
 from ..visibility import Visibility, Who
 from .avatar_files import BUNDLED_AVATARS, AvatarFiles, find_avatar
 from .config import Config, Persona
@@ -297,15 +297,13 @@ class SlackEngine:
     def stamp(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> None:
         """Set sender and trust from the Slack ids, and wrap a non-owner's text."""
         raw = push["text"]
-        trust = rt.cfg.trust_of(push["user"])
         name = rt.cfg.known.get(push["user"] or "") or push["user_name"]
+        channel = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
+        trust, push["text"] = frame_sender(raw, name, push["user"], f"in {push['workspace']} {channel}",
+                                           owner=rt.cfg.trust_of(push["user"]) == "owner")
         push["trust"] = trust
         push["sender"] = {"id": push["user"], "name": name, "trust": trust, "is_bot": push["is_bot"]}
-        channel = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
         push["subject"] = subject(name or push["user"] or "unknown", "Slack", channel, raw, trust=trust)
-        if trust != "owner":
-            where = f"in {push['workspace']} {channel}"
-            push["text"] = wrap(raw, name, push["user"], trust, where)
 
     def who(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> Who:
         return Who(owner=push.get("trust") == "owner", id=push.get("user"), workspace=rt.label)

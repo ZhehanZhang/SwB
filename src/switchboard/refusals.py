@@ -5,6 +5,8 @@ TARGET_REQUIRED = "Choose a target granted to this key."
 MODE_REQUIRED = "Use an action allowed by the conversation mode."
 CONFIRMATION_REQUIRED = "Confirm a general memory write with the owner."
 GRANT_REQUIRED = "Use an account granted this action."
+OWNER_NOTE_REQUIRED = "Try sending the owner note again."
+MEMORY_WRITER_REQUIRED = "Use the owner's sign-in or the credential that wrote this memory."
 PROJECT_LINK_REQUIRED = "Choose a supported project link key."
 ROUTE_TARGET_KIND = "Choose a supported route target kind."
 

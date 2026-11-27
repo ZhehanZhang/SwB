@@ -2760,7 +2760,7 @@
       "name": "connect_revoke"
     },
     {
-      "description": "Read the project's memory and links, the owner's general profile, recent decisions and your conversations in progress. The owner's sign-in includes the routed Captain's digest and crew activity.",
+      "description": "Read the granted project's memory and links and your conversations in progress. General memory is included only when granted. The owner's sign-in includes the routed Captain's digest and crew activity.",
       "icon": null,
       "id": "tool:context_pack",
       "input_properties": [
@@ -2935,7 +2935,7 @@
       "name": "login_link"
     },
     {
-      "description": "Delete a memory by id when it is wrong or obsolete. History is kept server-side.",
+      "description": "Delete an entry you wrote within your grants. The owner can delete any entry. SwB keeps the history.",
       "icon": null,
       "id": "tool:memory_delete",
       "input_properties": [
@@ -2962,7 +2962,7 @@
       "name": "memory_list"
     },
     {
-      "description": "Move an entry that landed in the wrong project to project:<slug>. Keeps its id and history. Audited. Use memory_promote to move it to general.",
+      "description": "Move an entry you wrote between granted project or agent scopes. The owner can move any entry. SwB keeps its ID and history.",
       "icon": null,
       "id": "tool:memory_move",
       "input_properties": [
@@ -2970,11 +2970,11 @@
         "to_scope"
       ],
       "kind": "tool",
-      "label": "Move a memory to another project",
+      "label": "Move a memory to another scope",
       "name": "memory_move"
     },
     {
-      "description": "Move a project entry to general once the owner agrees it applies to every project. Keeps its id and history. Audited.",
+      "description": "Use the owner's sign-in to move an entry to general. SwB keeps its ID and history.",
       "icon": null,
       "id": "tool:memory_promote",
       "input_properties": [
@@ -3000,7 +3000,7 @@
       "name": "memory_read"
     },
     {
-      "description": "Full-text search. With project: that project's memory ranked first, then general (include_general=false for the project alone). Without: general only. Another project's memory only with an explicit scopes list, which is logged; private projects never show up there.",
+      "description": "Search granted scopes. Pass project for that project, or scopes for exact scopes such as agent:<name>. General is included only when granted. For a private project, use its project name.",
       "icon": null,
       "id": "tool:memory_search",
       "input_properties": [
@@ -3016,7 +3016,7 @@
       "name": "memory_search"
     },
     {
-      "description": "Save or update a durable memory shared with every assistant and agent. scope is required: 'project:<slug>' for anything about one project (pass project=<slug> as well), or 'general' for the owner's profile, preferences and decisions that apply to every project, which also needs confirm_general=true after the owner agrees. The result echoes the scope it landed in. A key makes an entry you will update (e.g. profile/editor). mode=append adds to the existing body.",
+      "description": "Save memory in a granted scope. Use 'project:<slug>' for project facts or 'agent:<name>' for agent memory. With a general grant, pass confirm_general=true after the owner agrees. Update an entry you wrote by ID or by scope, namespace and key. The owner can update any entry.",
       "icon": null,
       "id": "tool:memory_write",
       "input_properties": [
@@ -3060,7 +3060,7 @@
       "name": "project_create"
     },
     {
-      "description": "Projects that scope memory and routes, with their links (repos, and the matching project in each block or assistant). hint finds the project for a repo or a project name. pending_projects lists new slugs waiting for an owner to save a routine registration.",
+      "description": "List public projects and private projects you have a named grant to see. The owner sees every project. Pass hint to find a project by repository or name. pending_projects lists new slugs waiting for a routine registration.",
       "icon": null,
       "id": "tool:project_list",
       "input_properties": [
