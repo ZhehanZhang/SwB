@@ -10,9 +10,11 @@ export function CopyInstall({ lang }: { lang: Locale }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'error'>('idle');
 
   return (
-    <div className="inline-flex h-11 w-full items-center justify-between gap-3 rounded-md border bg-fd-muted pl-4 pr-1.5" data-install-chip>
-      <code className="min-w-0 text-sm">{copy.install}</code>
-      <button type="button" className="grid size-8 shrink-0 place-items-center rounded-sm hover:bg-fd-background"
+    <div className="inline-flex shrink-0 items-center gap-1" data-install-chip>
+      <code className="border-b pb-0.5 font-mono text-sm leading-5 whitespace-nowrap">
+        <span aria-hidden="true" className="text-fd-muted-foreground">$ </span>{copy.install}
+      </code>
+      <button type="button" className="swb-button swb-button-icon size-7 min-h-0 text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground"
         title={copy.copy} aria-label={copy.copy} onClick={async () => {
           try {
             await navigator.clipboard.writeText(copy.install);
@@ -21,7 +23,7 @@ export function CopyInstall({ lang }: { lang: Locale }) {
             setStatus('error');
           }
         }}>
-        {status === 'copied' ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
+        {status === 'copied' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
       </button>
       <span className="sr-only" role="status">
         {status === 'copied' ? copy.copied : status === 'error' ? copy.copyError : ''}

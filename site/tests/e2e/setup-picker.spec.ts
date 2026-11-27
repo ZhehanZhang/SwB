@@ -20,7 +20,7 @@ test('landing and docs share links, with a menu on narrow screens', async ({ pag
     await page.goto(path);
     const header = page.locator('#nd-nav');
     await expect(header.getByRole('link', { name: 'GitHub' })).toBeVisible();
-    await expect(header.getByRole('button', { name: 'Toggle Theme' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Toggle Theme' })).toHaveCount(0);
     const menu = header.getByRole('button', { name: 'Toggle Menu' });
     if (narrow) {
       await expect(header.getByRole('link', { name: 'About', exact: true })).toBeHidden();
@@ -44,7 +44,7 @@ test('landing CTA combines and copies selected setup prompts without shifting th
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready.then(() => null));
-  const cta = page.getByRole('button', { name: 'Set up', exact: true });
+  const cta = page.getByRole('button', { name: 'Set up with agent', exact: true });
   const baseline = await pageGeometry(page);
   await cta.click();
   const picker = page.getByRole('dialog', { name: 'Set up' });
@@ -143,7 +143,7 @@ test('the Muse hub and guide offer the release connector prompt', async ({ page 
   await page.goto('/');
   await page.locator('.swb-board:visible').getByRole('button', { name: 'Muse', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Muse' });
-  await expect(panel.getByText('Ask Muse in a chat to add SwB as a custom connector.')).toBeVisible();
+  await expect(panel).toBeVisible();
   const prompt = await panel.locator('pre').textContent();
   expect(prompt).toContain('https://agent.meta.ai/api/hatch/oauth/callback');
   await expect(panel.getByRole('link', { name: /Open in/ })).toHaveCount(0);

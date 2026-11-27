@@ -1,11 +1,16 @@
 import { releaseBranch, repository } from './urls';
 
-export const deployProviders: Record<string, { enabled: boolean; name: string; href?: string }> = {
+export const DEPLOY_BUTTONS_LIVE = false;
+
+export const deployProviders = {
   render: {
-    enabled: true,
     name: 'Render',
-    href: `https://render.com/deploy?repo=${encodeURIComponent(`${repository}/tree/${releaseBranch}`)}`,
+    href: DEPLOY_BUTTONS_LIVE
+      ? `https://render.com/deploy?repo=${encodeURIComponent(`${repository}/tree/${releaseBranch}`)}`
+      : `${repository}/blob/${releaseBranch}/deploy/README.md#render`,
   },
-  fly: { enabled: false, name: 'Fly.io' },
-  koyeb: { enabled: false, name: 'Koyeb' },
+  railway: {
+    name: 'Railway',
+    enabled: process.env.NODE_ENV === 'development' && process.env.SWB_TEST_DEPLOY_RAILWAY === '1',
+  },
 };
