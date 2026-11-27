@@ -1,48 +1,46 @@
 ---
 title: Muse
-description: 把 Muse 连接到 SwB，并实时唤醒 Muse。
+description: 配对 Muse 装置以实时唤醒 Muse，或添加连接器以使用 SwB 工具。
 ---
-
-在 Muse 中把 SwB 添加为自定义连接器。连接器让 Muse 使用 SwB 工具。Muse 以 `muse` 身份登录。
-
-## 开始之前
-
-为 SwB 设置公网 HTTPS 地址和所有者登录。请把 `https://swb.example.com/mcp` 换成你的 SwB 地址。
-
-Muse 使用 OAuth 登录。使用 OAuth 时，你会在浏览器中批准访问。
-
-## 复制设置提示词
-
-<SetupPrompt name="muse" lang="zh-Hans" />
-
-## 连接 Muse
-
-把提示词粘贴到 Muse 会话。请 Muse 把你的 SwB MCP 地址添加为自定义连接器，并使用 OAuth。打开 Muse 发来的登录链接。以所有者身份登录 SwB。
 
 ## 实时唤醒 Muse
 
-收到消息时，SwB 可以唤醒 Muse。请将 SwB 与 Muse 配对一次。准备一台带蓝牙的 Mac 或 Linux 电脑。将电脑放在手机附近。
+要在收到消息时启动 Muse，建议使用 Muse 装置。装置是一种可以与 Muse 应用配对的设备。
 
-请具有完整所有者权限的智能体调用 `connect(what="muse", choose={"gadget": true})`。按返回的说明操作。
+[伴侣设备](/zh-Hans/docs/companion)是在你电脑上运行的 SwB 程序。配对时，它通过蓝牙充当 Muse 装置。配对完成后，由 SwB 服务器保持与 Muse 的连接。这时可以停止伴侣设备上的程序。
 
-在 [Muse SDK 令牌](https://gadgets.muse.ai/settings/sdk-tokens)页面获取个人令牌。通过智能体提供的 SwB 领取链接保存令牌。
+为 SwB 设置公网 HTTPS 地址。把这段提示词粘贴给拥有完整所有者权限的 SwB 智能体。
 
-请使用已上线并启用 Muse 功能的[伴侣设备](/zh-Hans/docs/companion)。要给已配对的设备添加这项功能，请先在设备上运行 `swb companion disconnect`。
+<SetupPrompt name="muse" lang="zh-Hans" />
 
-需要配对伴侣设备时，请在电脑上运行以下命令。将示例地址换成你的 SwB 地址。
+请智能体调用 `connect(what="muse", choose={"gadget": true})`。按返回的说明操作。
+
+在 [Muse SDK 令牌页面](https://gadgets.muse.ai/settings/sdk-tokens)创建个人令牌。通过智能体提供的 SwB 一次性领取链接保存令牌。
+
+准备一台支持蓝牙的 Mac 或 Linux 电脑。把电脑放在手机附近。在 macOS 上使用“终端”。系统提示时，允许“终端”访问蓝牙。在 Linux 上，允许伴侣设备访问系统蓝牙服务 BlueZ。
+
+如果要给已配对的伴侣设备添加 Muse 功能，请先运行 `swb companion disconnect`。获取[伴侣设备配对码](/zh-Hans/docs/companion)。配对码只可使用一次，有效期为 10 分钟。
+
+把示例地址换成你的 SwB 地址。在电脑上运行以下命令。
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-按提示输入智能体给你的配对码。请智能体启动 Muse 配对。
+在隐藏输入提示中输入配对码。配对 Muse 时，让伴侣设备上的程序保持运行。请智能体启动 Muse 配对。
 
-在 Muse 应用中打开 **Settings**。进入 **Devices**。开启 **Developer mode**。点按 **Add Device**。选中智能体给出的设备名称。如果应用询问 Wi-Fi，请选择 **Use current connection**。
+在 Muse 应用中打开 **Settings**。进入 **Devices**。开启 **Developer mode**。点按 **Add Device**。选中智能体给出的装置名称。如果应用询问 Wi-Fi，请选择 **Use current connection**。
 
-你部署的 SwB 会保持与 Muse 的连接。配对完成后，电脑可以进入睡眠。
+## 添加连接器以使用工具
+
+连接器通过模型上下文协议（MCP）让 Muse 使用 SwB 工具。使用 OAuth 时，你在浏览器中批准访问。
+
+在 SwB 中启用所有者登录。请 Muse 把以 `/mcp` 结尾的公网 HTTPS 地址添加为自定义连接器，并选用 OAuth。将 `https://agent.meta.ai/api/hatch/oauth/callback` 设为重定向 URI，用来接收登录结果。
+
+打开 Muse 提供的登录链接。以所有者身份登录 SwB。Muse 以 `muse` 身份连接 SwB。
 
 ## 检查连接
 
-请另一个 SwB 智能体调用 `send(to="agent:muse", task="SwB setup test: reply pong")`。请 Muse 调用 `inbox`，在测试会话中回复。
+要检查装置，请具有所有者权限的智能体调用 `send(to="muse:gadget:muse", task="Reply with pong.")`。在测试会话中查看答复。
 
-要检查实时唤醒，请以所有者身份登录的智能体调用 `send(to="muse:gadget:muse", task="SwB wake test: reply pong")`。在测试会话中查看答复。
+要检查连接器，请另一个 SwB 智能体调用 `send(to="agent:muse", task="Reply with pong.")`。请 Muse 用 `inbox` 读取消息。请 Muse 用 `reply` 在同一会话中回复。

@@ -11,13 +11,16 @@ export function Document({ page }: { page: DocumentPage }) {
   const { body: MDX, title, toc, full } = page.data;
   const markdown = markdownUrl(page);
   const githubUrl = `${repository}/blob/${releaseBranch}/site/content/docs/${page.path.split('/').map(encodeURIComponent).join('/')}`;
+  const startNext = page.slugs.join('/') === 'get-started' ? source.getPage([], page.locale) : undefined;
 
   return (
     <DocsPage toc={toc} full={full} tableOfContent={{ enabled: Boolean(toc?.length) }}
       tableOfContentPopover={{ enabled: Boolean(toc?.length) }}
       footer={{ component: (
         <footer data-docs-footer>
-          <PageFooter />
+          <PageFooter items={startNext ? {
+            next: { name: startNext.data.title, description: startNext.data.description, url: startNext.url },
+          } : undefined} />
           <div className="mt-4 flex justify-end"><ThemeSwitch className="swb-theme-toggle" /></div>
         </footer>
       ) }}>

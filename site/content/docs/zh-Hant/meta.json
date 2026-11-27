@@ -1,6 +1,7 @@
 {
   "title": "文件",
   "pages": [
+    "get-started",
     "index",
     "deploy",
     "install",
