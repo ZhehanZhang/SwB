@@ -20,7 +20,15 @@ RESERVED = frozenset({"slack", "local", "mailbox", "agent", "auto", "admin", "co
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_TTL_S = 600
 KEY_PREFIX = "swb_"
-PUBLIC_HTTPS_PREREQUISITE = "Configure a public HTTPS URL and owner sign-in to use OAuth."
+PUBLIC_HTTPS_PREREQUISITE = (
+    "Run swb up --tunnel cloudflare to get a public HTTPS address. "
+    "See https://swb.one/docs/first-run#get-a-public-address for setup."
+)
+
+
+def public_https_prerequisite(owner_sign_in: bool) -> str:
+    return PUBLIC_HTTPS_PREREQUISITE if owner_sign_in else f"{PUBLIC_HTTPS_PREREQUISITE} Set up owner sign-in for OAuth."
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS connect_codes (
