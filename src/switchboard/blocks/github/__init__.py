@@ -19,6 +19,7 @@ from ...auth import Principal
 from ...claims import NAME_RE as SECRET_NAME_RE
 from ...block_env import GITHUB_SECRET as SECRET_ENV
 from ...config import ConfigError
+from ...env import env_value
 from ...guard import audit_client_ip
 from ...inbox import CONTEXT_NOTE
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
@@ -505,7 +506,7 @@ class GitHubBlock(Block):
         for name, kind, label, instruction in fields:
             if name == self.api.app_id_env and self.api.app_id:
                 steps.append({"by": "person", "do": f"Change blocks.{self.name}.app_id in config/switchboard.yaml and restart SwB."})
-            elif self.core.cfg.env.get(name):
+            elif env_value(self.core.cfg.env, name):
                 steps.append({"by": "person", "do": f"Change {name} in .env and restart SwB."})
             else:
                 steps.append(self.token_step(principal, name, instruction, kind=kind, label=label))
@@ -547,13 +548,13 @@ class GitHubBlock(Block):
             if not valid_id:
                 name = self.api.app_id_env
                 instruction = "Save the numeric App ID from your GitHub App settings."
-                if self.core.cfg.env.get(name):
+                if env_value(self.core.cfg.env, name):
                     instruction += f" Clear {name} from the environment and restart SwB to use the saved App ID."
                 steps.append(self.token_step(principal, name, instruction, kind="id", label="App ID"))
             if not valid_key:
                 name = self.api.private_key_env
                 instruction = "Save the .pem file from your GitHub App settings."
-                if self.core.cfg.env.get(name):
+                if env_value(self.core.cfg.env, name):
                     instruction += f" Clear {name} from the environment and restart SwB to use the saved private key."
                 steps.append(self.token_step(principal, name, instruction, kind="pem", label="Private key"))
             steps.append({"by": "you", "do": "For a fine-grained personal access token instead, call connect again with credential=pat.",

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 from PIL import Image
 
 from ...chat import RETENTION_S, ChatBlock, Incoming, Persona
+from ...env import env_value
 from .. import BlockError, Manifest
 from .api import BotAPI, TelegramError
 
@@ -151,7 +152,7 @@ class TelegramBlock(ChatBlock):
         url = f"https://t.me/{self._bot['username']}" if self._bot else None
         return {"bot_father_url": "https://t.me/BotFather", "bot_url": url,
                 "add_to_group_url": f"{url}?startgroup=swb" if url else None, "bot": dict(self._bot) if self._bot else None,
-                "privacy_mode": self._privacy, "token_source": "env" if self.core.cfg.env.get(self.token_env) else
+                "privacy_mode": self._privacy, "token_source": "env" if env_value(self.core.cfg.env, self.token_env) else
                 ("stored" if self.token() else None), "claim_pending": self.claim_pending(),
                 "seen_chats": list(reversed(self._seen.values())),
                 "steps": [*self.get_token_steps(),

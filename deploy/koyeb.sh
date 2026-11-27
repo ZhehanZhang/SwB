@@ -31,4 +31,4 @@ koyeb apps init "$app" \
     --git-docker-dockerfile Dockerfile --git-docker-target paas --git-no-deploy-on-push \
     --instance-type small --regions "$region" --scale 1 --volumes "$volume:/data" \
     --ports 8000:http --routes /:8000 --checks 8000:http:/healthz --checks-grace-period 8000=15 \
-    --env PORT=8000 --env SWITCHBOARD_DEPLOY_PLATFORM=koyeb --env "SWB_SETUP_CODE={{ secret.$secret }}"
+    --env PORT=8000 --env SWB_DEPLOY_PLATFORM=koyeb --env "SWB_SETUP_CODE={{ secret.$secret }}"

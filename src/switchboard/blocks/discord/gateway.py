@@ -210,7 +210,7 @@ class Gateway:
                     "d": {
                         "token": token,
                         "intents": self.block.intents,
-                        "properties": {"os": sys.platform, "browser": "switchboard", "device": "switchboard"},
+                        "properties": {"os": sys.platform, "browser": "swb", "device": "swb"},
                     },
                 })
 

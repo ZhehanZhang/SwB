@@ -38,13 +38,13 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
         monkeypatch.setenv(override, str(data))
     calls = []
     monkeypatch.setattr(__main__, "main", lambda argv, *, instance, announce, **_: calls.append(
-        (argv, load_config(instance=instance).data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"], announce)))
+        (argv, load_config(instance=instance).data_dir, os.environ["SWB_HOST"], os.environ["PORT"], announce)))
 
     __main__.cli_main(["up"])
 
     assert calls == [(["serve"], data, "127.0.0.1", "8870", True)]
     assert capsys.readouterr() == ("", "")
-    assert "SWITCHBOARD_HOST" not in os.environ
+    assert "SWB_HOST" not in os.environ
 
 
 def test_up_initializes_and_prints_one_usable_login_link(clean_env, tmp_path, monkeypatch, capsys):
@@ -59,7 +59,8 @@ def test_up_initializes_and_prints_one_usable_login_link(clean_env, tmp_path, mo
             env_path = tmp_path / ".env"
             saved = cli._read_env(env_path)
             lines = capsys.readouterr().out.splitlines()
-            assert saved["PORT"] == "18871"
+            assert saved["SWB_PORT"] == "18871"
+            assert set(saved) == {"SWB_KEY_OWNER", "SWB_PORT"}
             owner_key = saved[cli.OWNER_KEY]
             assert len(owner_key) == 64
             assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
@@ -101,7 +102,8 @@ def test_generated_config_keeps_discovering_env_blocks(clean_env, tmp_path, monk
     capsys.readouterr()
 
 
-def test_generated_config_follows_port_changes(clean_env, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("port_name", ["PORT", "SWB_PORT"])
+def test_generated_config_follows_port_changes(clean_env, tmp_path, monkeypatch, capsys, port_name):
     ports = []
 
     def serve(app, *, port, **options):
@@ -121,7 +123,7 @@ def test_generated_config_follows_port_changes(clean_env, tmp_path, monkeypatch,
 
                 with monkeypatch.context() as cli_env:
                     cli_env.delenv("PORT")
-                    cli_env.delenv("SWITCHBOARD_HOST")
+                    cli_env.delenv("SWB_HOST")
                     cli_env.delenv(cli.OWNER_KEY)
                     cli_env.setattr(cli, "_call", mcp_request)
                     __main__.cli_main(["login-link"])
@@ -133,7 +135,7 @@ def test_generated_config_follows_port_changes(clean_env, tmp_path, monkeypatch,
     monkeypatch.setattr(__main__.uvicorn, "run", serve)
     __main__.cli_main(["up"])
     with (tmp_path / ".env").open("a") as env:
-        env.write("PORT=9000\n")
+        env.write(f"{port_name}=9000\n")
     __main__.cli_main(["up"])
     assert ports == [8870, 9000]
 
@@ -184,7 +186,7 @@ def test_up_rejects_nonloopback_bind_before_initializing(clean_env, tmp_path, mo
         __main__.cli_main(["up", "--host", host])
     assert exited.value.code == 1
     out, err = capsys.readouterr()
-    assert not out and "Set SWITCHBOARD_PUBLIC_URL" in err
+    assert not out and "Set SWB_PUBLIC_URL" in err
     assert not (tmp_path / cli.CONFIG).exists() and not (tmp_path / ".env").exists()
 
 
@@ -364,17 +366,26 @@ def test_up_keeps_the_old_home_database_and_warns_once_per_instance(clean_env, t
         assert '"action": "saved-event"' in capsys.readouterr().out
         __main__.cli_main(["up"])
         __main__.cli_main(["up"])
-        notice = f"Using existing data in {home_data} instead of {folder / 'data'}. Set SWITCHBOARD_DATA_DIR"
+        notice = f"Using existing data in {home_data} instead of {folder / 'data'}. Set SWB_DATA_DIR"
         assert caplog.text.count(notice) == 1
         assert not (folder / "data").exists()
     assert len(list(home_data.glob(".instance-data-notice-*"))) == 2
 
 
-def test_container_serve_keeps_its_data_volume(clean_env, monkeypatch):
+@pytest.mark.parametrize(("setting", "path"), [
+    (None, "/data"),
+    ("SWITCHBOARD_DATA", "/old-data"),
+    ("SWITCHBOARD_DATA_DIR", "/data"),
+    ("SWITCHBOARD_DATA_DIR", "/old-data-dir"),
+    ("SWB_DATA_DIR", "/new-data"),
+])
+def test_container_serve_keeps_its_data_volume(clean_env, monkeypatch, setting, path):
     from switchboard import core
 
-    monkeypatch.setenv("SWITCHBOARD_DATA", "/data")
-    monkeypatch.setenv("SWITCHBOARD_HOST", "0.0.0.0")
+    monkeypatch.setenv("SWB_DEFAULT_DATA_DIR", "/data")
+    monkeypatch.setenv("SWB_DEFAULT_HOST", "0.0.0.0")
+    if setting:
+        monkeypatch.setenv(setting, path)
     paths = []
 
     def build(**kwargs):
@@ -386,7 +397,7 @@ def test_container_serve_keeps_its_data_volume(clean_env, monkeypatch):
     with pytest.raises(SystemExit) as stopped:
         __main__.cli_main(["serve"])
     assert stopped.value.code == 0
-    assert paths == [Path("/data")]
+    assert paths == [Path(path)]
 
 
 @pytest.mark.parametrize("location", ["default", "yaml", "overlay", "environment"])
@@ -483,6 +494,15 @@ def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, m
     assert capsys.readouterr() == ("MCP URL: http://localhost:18871/mcp\n", "")
     assert config.read_text() == "version: 2\n" and env_path.read_text() == env_text
 
+    async def call_with_legacy_key(url, key, tool, arguments):
+        assert url == f"{base}/mcp"
+        assert key == STATIC_KEY and tool == "login_link"
+        return {"url": f"{base}/login"}
+
+    monkeypatch.setattr(cli, "_call", call_with_legacy_key)
+    __main__.cli_main(["login-link"])
+    assert capsys.readouterr() == (f"{base}/login\n", "")
+
 
 @pytest.mark.parametrize(("host", "bound_origin"), [
     ("127.0.0.1", "http://127.0.0.1:18871"),
@@ -552,7 +572,7 @@ def test_wildcard_bind_requires_public_url_for_owner_link(clean_env, monkeypatch
 
     def serve(app, **options):
         with TestClient(app) as client:
-            assert "Set SWITCHBOARD_PUBLIC_URL" in error_text(call(client, STATIC_KEY, "login_link"))
+            assert "Set SWB_PUBLIC_URL" in error_text(call(client, STATIC_KEY, "login_link"))
 
     monkeypatch.setattr(__main__.uvicorn, "run", serve)
     __main__.cli_main(["serve"])
