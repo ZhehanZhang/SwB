@@ -1,0 +1,120 @@
+---
+title: ローカルセッション
+description: ペアリング済みのデバイスで動くコーディングエージェントにメッセージを送ります。
+---
+
+ローカルセッションとは、ペアリング済みのデバイス上で、コーディングエージェントが開いている作業場所です。SwB はこれを送信先として一覧表示します。送信先とは、メッセージを受け取れるアドレスです。
+
+## デバイスをペアリングする
+
+[デバイスをペアリングする](/ja/docs/companion#デバイスをペアリングする)の手順に従ってください。下にある、お使いのエージェント用のコマンドを使ってください。`https://swb.example.com` を、あなたの SwB のアドレスに置き換えてください。機能ごとに `--cap` オプションを 1 つずつ使ってください。ペアリング済みのデバイスの機能を変えるときは、先に[接続を解除](/ja/docs/companion#接続を解除する)してください。
+
+オーナーのエージェントから `targets(block="local")` を呼び出し、各セットアップを確認してください。セッションのアドレスをコピーしてください。形式は `local:session:<companion>:<harness>:<session>` です。ハーネスとは、エージェントを動かすプログラムです。
+
+## メッセージを送る
+
+`send` の `to` にセッションのアドレスを渡してください。SwB は、開いているセッションにメッセージを届けようとします。対応するエージェントがあるセッションでは、メールボックスへの配信に、そのエージェントのメールボックスへのアクセスが必要です。それ以外のセッションでは、オーナーからのメッセージはオーナーのメールボックスに入ります。返ってきた会話 ID を `result` に渡して、返信を読んでください。
+
+| 状態 | 意味 |
+| --- | --- |
+| `working` | エージェントが作業中です |
+| `blocked` | エージェントが承認か入力を待っています |
+| `idle` | エージェントは作業を受け付けられます |
+| `done` | エージェントが作業を完了しました |
+| `unknown` | 状態を確認中です |
+
+`blocked` のセッションでは、セッションの中で要求に応えてください。送信者がそのメールボックスを使える場合、SwB はメッセージをメールボックスに残します。
+
+コンパニオンは、セッションの状態を SwB サーバーに報告します。セッション名とフォルダー名も報告できます。コンパニオンが直接届けたメッセージには、それぞれ 1 つの回答を返せます。セッションのそれ以外の内容は、デバイスの中にとどまります。
+
+## ステータスフック
+
+フックは、エージェントが変化を報告したときにコマンドを実行するしくみです。ステータスフックは macOS と Linux で動きます。
+
+```sh
+swb companion connect https://swb.example.com --cap hooks
+```
+
+[pipx](/ja/docs/install) で `swb` コマンドをインストールしてください。エージェントのコマンド検索パスで `swb` を使えるようにしてください。`SWB_COMPANION_HOME` を設定する場合は、エージェントとコンパニオンで同じフォルダーを使ってください。
+
+| エージェント | イベントのコマンド | 設定 |
+| --- | --- | --- |
+| Claude Code | `swb hook claude-code` | `channel/hooks/hooks.json` の `hooks` を `~/.claude/settings.json` にマージします |
+| Gemini CLI | `swb hook gemini` | 下の例のように、チェックアウトから SwB の拡張機能をインストールします |
+| Codex | `swb hook codex` | `integrations/codex/hooks.json` の `hooks` を `~/.codex/hooks.json` にマージします |
+
+ファイルは [SwB のリリースのチェックアウト](/ja/docs/self-hosting#docker-compose)にあるものを使ってください。SwB の Claude Code プラグインにも、これらのフックが入っています。Codex の設定フォルダーを変えている場合は、そのフォルダーの `hooks.json` を使ってください。
+
+```sh
+gemini extensions install /path/to/SwB/integrations/gemini
+```
+
+フックを設定したら、新しいセッションを開いてください。`targets(block="local")` にそのアドレスが出ることを確認してください。hooks の機能だけを使う場合、セッションはメールボックスでメッセージを受け取ります。
+
+## Herdr
+
+Herdr のペインでコーディングエージェントを開いてください。ペインとは、ターミナル内の 1 つの領域です。コンパニオンは、Herdr のソケットからセッションのイベントを受け取ります。ソケットとは、同じデバイス上のプログラム同士が使う接続です。
+
+名前付きのセッションや独自のソケットのパスについては、[Herdr のコンパニオン設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48)をご覧ください。
+
+```sh
+swb companion connect https://swb.example.com --cap herdr --cap hooks
+```
+
+ペインから返信を受け取るときは、対応する[ステータスフック](#ステータスフック)を設定してください。`local:session:<companion>:herdr:<session>` の送信先があることを確認してください。その送信先に短いテストメッセージを送ってください。メッセージがペインに表示されることを確認してください。ステータスフックを設定した場合は、`result` で返信を確認してください。
+
+## Codex
+
+Codex app server は、開いている Codex のセッションをほかのプログラムから使えるようにするプロセスです。1 つ目のターミナルで起動してください。
+
+```sh
+codex app-server --listen unix://
+```
+
+2 つ目のターミナルでセッションを開いてください。
+
+```sh
+codex --remote unix://
+```
+
+コンパニオンには別のターミナルを使ってください。すべてのターミナルで、同じ Codex の設定フォルダーを使ってください。独自のソケットを使うときは、上の両方のコマンドで `unix://<path>` を使います。コンパニオンのターミナルで、`SWB_CODEX_SOCKET` にそのパスを設定してください。
+
+```sh
+swb companion connect https://swb.example.com --cap codex
+```
+
+コンパニオンは、app server からセッションのイベントを読みます。`local:session:<companion>:codex:<session>` の送信先があることを確認してください。その送信先に短いテストメッセージを送ってください。`result` で返信を確認してください。
+
+## OpenCode
+
+デバイスで OpenCode のサーバーを起動してください。
+
+```sh
+opencode serve --hostname 127.0.0.1 --port 4096
+```
+
+そのサーバーでセッションを開いてください。`SWB_OPENCODE_URL` に、サーバーのローカルアドレスを設定してください。パスワードで保護したサーバーについては、[OpenCode のコンパニオン設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228)をご覧ください。
+
+```sh
+SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
+```
+
+コンパニオンは、OpenCode のサーバーからセッションのイベントを読みます。`local:session:<companion>:opencode:<session>` の送信先があることを確認してください。その送信先に短いテストメッセージを送ってください。`result` で返信を確認してください。
+
+## DeepSeek Harness
+
+DeepSeek Harness `0.2.2-rc.5` を使ってください。プロファイルとは、アプリの設定をまとめたものです。`web` プロファイルに SwB のブリッジをインストールしてください。ブリッジは、セッションのイベントをコンパニオンに送ります。
+
+`release/1.0` ブランチのローカルコピーを使ってください。`/path/to/SwB` を、そのコピーの完全なパスに置き換えてください。
+
+```sh
+dsh plugin --profile web add /path/to/SwB/integrations/dsh
+```
+
+`web` プロファイルで DeepSeek Harness を再起動してください。セッションを開いてください。`SWB_COMPANION_HOME` を設定する場合は、DeepSeek Harness とコンパニオンで同じ絶対パスを使ってください。
+
+```sh
+swb companion connect https://swb.example.com --cap dsh
+```
+
+`local:session:<companion>:dsh:<session>` の送信先があることを確認してください。その送信先に短いテストメッセージを送ってください。`result` で返信を確認してください。

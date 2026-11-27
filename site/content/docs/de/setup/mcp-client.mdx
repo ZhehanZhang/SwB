@@ -1,0 +1,84 @@
+---
+title: MCP-Client
+description: Verbinden Sie einen MCP-Client mit einem lokalen Inhaberschlüssel oder einem Kopplungscode.
+---
+
+MCP ist der Standard, über den eine App externe Tools nutzt. Diese Anleitung koppelt eine App über einen Schlüssel mit SwB.
+
+## Voraussetzungen
+
+Verwenden Sie eine App, die Remote-MCP über Streamable HTTP unterstützt. Mit diesem Verfahren rufen Apps Tools über das Web auf. Die App muss außerdem eigene Anfrage-Header für den Schlüssel unterstützen. Sie brauchen einen Inhaber-Client von SwB oder ein Terminal auf dem SwB-Computer.
+
+Um SwB auf demselben Computer wie die App zu starten, führen Sie `uvx swb-one up` in einem leeren Ordner aus. Öffnen Sie den Einmal-Anmeldelink aus Ihrem Terminal. Weitere Möglichkeiten beschreibt [Installation](/de/docs/install).
+
+Claude, ChatGPT, Grok und Coding-Agenten haben eigene Seiten mit OAuth-Anmeldung. Verwenden Sie für diese Apps die jeweilige Seite.
+
+## Einrichtungsprompt kopieren
+
+<SetupPrompt name="mcp-client" lang="de" />
+
+Fügen Sie den Prompt in einen Inhaber-Client von SwB oder in die App ein, die Sie verbinden möchten.
+
+## Lokaler Inhaber-Client
+
+Richten Sie andere Apps mit einem privaten Client auf dem SwB-Computer ein. Verwenden Sie die lokale Adresse `/mcp`, die beim Start erscheint. Verwenden Sie `SWB_KEY_OWNER` aus der `.env` der Instanz als `Authorization: Bearer <key>`. Dieser Schlüssel gibt vollen Inhaberzugriff. Speichern Sie ihn in der privaten lokalen Konfiguration des Clients mit dem Dateimodus `0600`. Senden Sie ihn nur an das lokale SwB.
+
+## Client koppeln
+
+Lassen Sie Ihren Agenten die App konfigurieren, wenn er die Einstellungen lokal bearbeiten kann. Speichern Sie den Schlüssel in den privaten Einstellungen der App. Verwenden Sie für eine Einstellungsdatei den Dateimodus `0600`.
+
+### App benennen
+
+Nennen Sie dem Agenten einen kurzen Namen für die App, zum Beispiel `notes-bot`. SwB zeigt diesen Namen bei Nachrichten der App.
+### Kopplungscode abrufen
+
+Bitten Sie einen Inhaber-Agenten von SwB, `connect_code` mit dem App-Namen aufzurufen. Alternativ führen Sie im SwB-Instanzordner `uvx swb-one connect mcp-client --choose agent=notes-bot` aus. Ersetzen Sie `notes-bot` durch den Namen Ihrer App.
+### Schlüssel abrufen
+
+Öffnen Sie auf dem Computer, auf dem die App läuft, einen privaten Ordner im Terminal. Ersetzen Sie `https://swb.example.com` durch Ihre SwB-Adresse. Behalten Sie `/connect` am Ende bei. Für ein lokales SwB verwenden Sie `http://localhost:8870/connect` mit dem Port, der beim Start erscheint. Geben Sie den Kopplungscode innerhalb von 10 Minuten an der verdeckten Eingabeaufforderung ein.
+
+```bash
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
+```
+### Schlüssel privat halten
+
+Öffnen Sie `.swb-pairing.json` in einem privaten Editor. Der Befehl speichert die Antwort mit dem Dateimodus `0600`. Verwenden Sie den enthaltenen `key` in den Einstellungen der App. SwB gibt den Schlüssel nur einmal aus.
+### SwB zur App hinzufügen
+
+Fügen Sie in den MCP-Einstellungen der App einen Server namens `swb` hinzu. Wählen Sie Streamable HTTP. Für einen öffentlichen SwB-Server verwenden Sie `mcp_url` aus der Datei. Für ein lokales SwB verwenden Sie die MCP-Adresse, die beim Start erscheint.
+### Schlüssel hinzufügen
+
+Fügen Sie in den privaten Einstellungen der App den Header `Authorization: Bearer <key>` hinzu. Löschen Sie `.swb-pairing.json`, nachdem Sie den Schlüssel gespeichert haben.
+
+## Das macht der Agent
+
+Der Agent ruft `connect(what="mcp-client")` mit der Inhaber-Anmeldung auf. SwB gibt die MCP-Adresse zurück und fragt nach dem App-Namen. Der Agent ruft `connect` erneut mit `choose={"agent":"notes-bot"}` auf.
+
+SwB erstellt einen Kopplungscode für diesen Namen und gibt den Schritt `POST /connect` zurück. Ein Kopplungscode ist ein Einmal-Code, der 10 Minuten gilt. Wenn die App bereits einen Schlüssel hat, meldet SwB das und erstellt erst nach `connect_revoke` einen neuen Code.
+
+Im Terminal auf dem SwB-Server liefert `swb connect mcp-client --choose agent=notes-bot` dieselben Schritte.
+
+## Zugangsdaten
+
+| Element | Hier wird es angezeigt | Format | Hierhin gehört es |
+| - | - | - | - |
+| Kopplungscode | Das Ergebnis von `connect` oder `connect_code` | `XXXXX-XXXXX`, 10 Minuten gültig, einmal verwendbar | Die Anfrage `POST /connect` |
+| Agentenschlüssel | Die Antwort auf `POST /connect`, einmalig | Beginnt mit `swb_` | Der Header `Authorization` in den privaten Einstellungen der App |
+
+Speichern Sie den Schlüssel in den privaten Einstellungen der App. SwB speichert statt des Schlüssels selbst nur einen Hash.
+
+## Verbindung prüfen
+
+Bitten Sie den neuen Agenten, `inbox` aufzurufen. Bitten Sie den als Inhaber angemeldeten Agenten, `connect_list` aufzurufen und den Zeitpunkt des letzten Aufrufs des neuen Schlüssels zu prüfen. Lassen Sie den Inhaber-Agenten eine Testnachricht an `agent:notes-bot` senden. Lassen Sie den neuen Agenten sie mit `inbox` lesen und mit `reply` antworten.
+
+## Probleme beheben
+
+Wenn `POST /connect` fehlschlägt, prüfen Sie die SwB-Adresse. Wenn der Code abgelaufen oder bereits verwendet ist, bitten Sie den Inhaber um einen neuen Code. Wenn ein Schlüssel offengelegt wurde, widerrufen Sie ihn mit `connect_revoke`. SwB lehnt danach Aufrufe mit diesem Schlüssel ab.

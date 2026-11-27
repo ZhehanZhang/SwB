@@ -1,0 +1,70 @@
+---
+title: Telegram
+description: Envía los mensajes de Telegram a los agentes y publica las respuestas.
+---
+
+SwB consulta a Telegram si hay mensajes nuevos. Tu servidor SwB puede usar una dirección privada.
+
+## Crear el bot
+
+En [@BotFather](https://t.me/BotFather), envía `/newbot`. Pide a un agente que conecte Telegram. El agente llama a `telegram_provision` y te da un enlace de entrega. Abre el enlace y pega el token del bot.
+
+## Añadir el bot a un grupo
+
+Añade el bot al grupo. Envía `/swb@<bot username>` en el grupo. Después, `telegram_status` muestra el ID de chat del grupo en `setup.seen_chats`. Pon ese ID en los `chats` del espacio.
+
+Abre un chat privado con el bot. Envíale un mensaje. Busca el ID de tu chat privado en `setup.seen_chats`. Usa ese ID en `owner_ids`.
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        default_target: claude
+```
+
+## Enviar desde Telegram
+
+Envía un mensaje privado al bot, menciona al bot o usa `/swb <target> <message>`. Para continuar una conversación, responde a la respuesta del bot. Con `persona_prefix` activo, las respuestas de los agentes pueden mostrar el nombre del agente en negrita.
+
+Para que el bot lea todos los mensajes del grupo, desactiva el modo de privacidad con `/setprivacy` en @BotFather. Después quita el bot del grupo y añádelo de nuevo.
+
+## Ajustes del bloque
+
+| Clave | Uso |
+| - | - |
+| `blocks.telegram` | Ajustes del bot de Telegram y de sus espacios |
+| `blocks.telegram.use` | Carga el bloque `telegram` |
+| `blocks.telegram.enabled` | Define `true` para cargar el bloque o `false` para desactivarlo |
+| `blocks.telegram.token_env` | Nombre de la variable de entorno del token del bot |
+| `blocks.telegram.dm_space` | Espacio cuyos ajustes de enrutamiento y de propietario se aplican a los chats privados. El valor predeterminado es el primer espacio configurado |
+| `blocks.telegram.dm_mode` | Modo para los mensajes privados de otras personas. Usa `watch` para reunirlos en un resumen u `off` para ignorarlos |
+| `blocks.telegram.ack_reaction` | Emoji que confirma la recepción de un mensaje dirigido al bot. Define `null` para desactivar esta reacción |
+| `blocks.telegram.persona_prefix` | Define `true` para poner en negrita, en la primera línea, el nombre que usa el agente |
+| `blocks.telegram.refresh_minutes` | Minutos entre actualizaciones de la lista de destinos. El valor predeterminado es `30` |
+| `blocks.telegram.target_aliases` | Asigna nombres de destino adicionales a destinos existentes |
+| `blocks.telegram.agents` | Espacios donde cada agente puede publicar y recibir eventos. Usa `*` para todos los espacios |
+
+Usa los [modos de canal](/es/docs/channel-modes) para despertar a un agente a través de la ruta de un proyecto.
+
+## Espacios y grupos
+
+| Clave | Uso |
+| - | - |
+| `blocks.telegram.spaces` | Asigna los nombres usados en SwB a los ajustes de conjuntos de grupos de Telegram |
+| `blocks.telegram.spaces.*.chats` | IDs de chat de los grupos de este espacio. Usa enteros negativos. Pon cada grupo en un solo espacio |
+| `blocks.telegram.spaces.*.owner_ids` | IDs de usuario de Telegram que se tratan como propietarios |
+| `blocks.telegram.spaces.*.known` | Asigna nombres visibles a IDs conocidos de usuarios de Telegram |
+| `blocks.telegram.spaces.*.default_target` | Destino de un mensaje nuevo dirigido a SwB que omite el nombre del destino |
+| `blocks.telegram.spaces.*.project` | Proyecto de SwB predeterminado de este espacio |
+| `blocks.telegram.spaces.*.channel_projects` | Define el proyecto de SwB por ID de chat del grupo |
+| `blocks.telegram.spaces.*.mode` | Modo del espacio. Un modo de grupo puede sustituirlo |
+| `blocks.telegram.spaces.*.channels` | Define un modo o ajustes más detallados por ID de chat del grupo |
+| `blocks.telegram.spaces.*.channels.*.mode` | Modo de un grupo |
+| `blocks.telegram.spaces.*.channels.*.project` | Proyecto de SwB de un grupo. Tiene prioridad sobre el proyecto del espacio |
+| `blocks.telegram.spaces.*.listen` | Ajuste antiguo para los IDs de chat de grupo que usan el modo `assist` |
+| `blocks.telegram.spaces.*.bot_posts_per_hour` | Número máximo de publicaciones del bot por hilo de conversación en una hora. El valor predeterminado es `20` |

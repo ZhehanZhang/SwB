@@ -5,6 +5,7 @@ import { markdownUrl, repository, siteUrl, source, type DocsPage as DocumentPage
 import { releaseBranch } from '@/lib/urls';
 import { useMDXComponents } from '@/mdx-components';
 import { DocsNavigation } from './docs-navigation';
+import { TranslationNote } from './translation-note';
 
 export function Document({ page }: { page: DocumentPage }) {
   const { body: MDX, title, toc, full } = page.data;
@@ -26,6 +27,7 @@ export function Document({ page }: { page: DocumentPage }) {
         <ViewOptionsPopover className="swb-button swb-button-compact flex-row-reverse" markdownUrl={markdown} githubUrl={githubUrl} pageUrl={new URL(markdown, siteUrl).href} />
         <DocsNavigation />
       </div>
+      <TranslationNote lang={page.locale ?? 'en'} />
       <DocsBody className="swb-mdx">
         <MDX components={useMDXComponents({
           a: createRelativeLink(source, { ...page, path: page.path.split('/').slice(1).join('/') }),

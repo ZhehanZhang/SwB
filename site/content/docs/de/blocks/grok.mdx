@@ -1,0 +1,50 @@
+---
+title: Grok
+description: Verbinden Sie Grok im Browser oder wecken Sie Grok Bot mit einer Routine.
+---
+
+## Connector hinzufügen
+
+Folgen Sie der [Grok-Einrichtung](/de/docs/setup/grok), um Grok im Browser zu verbinden. Für die separate Desktop-App verwenden Sie die [Einrichtung von Grok Bot](/de/docs/setup/grok-bot).
+
+## Grok Bot mit einer Routine wecken
+
+Bitten Sie einen Agenten, Grok Bot zu verbinden. Im Terminal führen Sie `swb connect grok-bot` aus. Folgen Sie den Einrichtungshinweisen, um den Prompt für die Routine zu erhalten.
+
+Erstellen Sie mit dem Prompt eine Grok-Bot-Routine mit Webhook-Trigger. Ein Webhook startet die Routine, wenn SwB eine Anfrage an ihre URL sendet. Ersetzen Sie `example` durch den Kurznamen eines aktiven SwB-Projekts. Führen Sie den Befehl aus, um die Routine zu registrieren.
+
+```bash
+swb connect grok-bot --choose name=project-triage project=example auth=key
+```
+
+SwB gibt Ihnen getrennte Claim-Links für die Webhook-Adresse und den Schlüssel. Speichern Sie mit jedem Link seinen Wert. Führen Sie denselben Befehl für den Testaufruf erneut aus. Bitten Sie Ihren Agenten, den Aufruf auszuführen und auf die Antwort `pong` zu prüfen.
+
+## So funktioniert das Wecken
+
+Mit `auth=key` sendet SwB den Schlüssel standardmäßig im Header `Authorization`. Mit `auth=signature` signiert SwB die Anfrage. Die Anfrage enthält den Text, die Unterhaltungs-ID, den Absender und die Vertrauensstufe. Sie enthält auch das Projekt, sofern vorhanden. Die Routine ruft bei Anfragen mit der Vertrauensstufe `owner` `reply` auf.
+
+Für die manuelle Einrichtung setzen Sie die Variablen aus `url_env` und `secret_env` in Ihrer Serverumgebung.
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-triage: {project: example, url_env: SWB_EXAMPLE_GROK_URL, auth: key, secret_env: SWB_EXAMPLE_GROK_SECRET}
+```
+
+Senden Sie an eine Routine über ihren Namen oder an `grok:<slug>` für die Hauptroutine eines Projekts.
+
+## Konfiguration
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.grok-routine` | Einstellungen zum Wecken von Grok-Bot-Routinen |
+| `blocks.grok-routine.use` | Blocktyp. Verwenden Sie `grok-routine` |
+| `blocks.grok-routine.enabled` | Mit `false` überspringt SwB diesen Block |
+| `blocks.grok-routine.routines` | Zuordnung von Routinennamen zu Einstellungen |
+| `blocks.grok-routine.routines.*.project` | Kurzname des SwB-Projekts. `null` für eine allgemeine Routine |
+| `blocks.grok-routine.routines.*.primary` | Mit `true` wählt SwB diese Routine zuerst für ihr Projekt |
+| `blocks.grok-routine.routines.*.auth` | `key` sendet einen Schlüssel, `signature` signiert die Anfrage. Standard `key` |
+| `blocks.grok-routine.routines.*.header` | HTTP-Header für den Schlüssel oder die Signatur. Standard ist `Authorization` für `key` und `Webhook-Signature` für `signature` |
+| `blocks.grok-routine.routines.*.url_env` | Name der Variablen mit der öffentlichen HTTPS-Adresse des Webhooks |
+| `blocks.grok-routine.routines.*.secret_env` | Name der Variablen mit dem Schlüssel oder dem Signatur-Secret |

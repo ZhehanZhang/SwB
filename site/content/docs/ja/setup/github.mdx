@@ -1,0 +1,133 @@
+---
+title: GitHub
+description: GitHub のイベントを SwB に送り、エージェントが Issue と Pull Request を操作できるようにします。
+---
+
+SwB は、GitHub App からリポジトリのイベントを受け取ります。イベントとは、GitHub 上の操作についての通知です。アプリの秘密鍵があれば、エージェントは Issue へのラベル付け、コメント、作成もできます。
+
+## 始める前に
+
+接続したいリポジトリにアプリを作成してインストールできる GitHub アカウントを使ってください。オーナーとして SwB にサインインしてください。
+
+GitHub から、あなたのサーバーの `https://swb.example.com/github/webhook` に届く必要があります。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="github" lang="ja" />
+
+このプロンプトを、SwB のオーナー用クライアントに貼り付けてください。
+
+## GitHub App を設定する
+
+### GitHub App の設定を開く
+
+プロフィール画像 → **Settings** → **Developer settings** → **GitHub Apps** の順にクリックしてください。**New GitHub App** をクリックしてください。
+### アプリに名前を付ける
+
+**GitHub App name** と **Homepage URL** を入力してください。ホームページには、リポジトリのアドレスを使うと便利です。
+### Webhook を設定する
+
+**Webhook** で **Active** を選択したままにしてください。Webhook とは、GitHub がイベントを送る Web アドレスです。**Webhook URL** に、SwB のアドレスに `/github/webhook` を付けたものを入力してください。
+### Webhook シークレットを設定する
+
+シークレットを非公開のファイルに生成してください。
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
+```
+
+シークレットをパスワードマネージャーに保存してください。**Webhook secret** にシークレットを入力してください。SwB は 16 文字以上のシークレットを受け付けます。
+### 権限を設定する
+
+**Repository permissions** では、表のアクセスレベルを使ってください。
+### イベントを購読する
+
+**Subscribe to events** で、下の表にあるイベントを選択してください。
+
+### アプリを作成する
+
+**Where can this GitHub App be installed?** で **Only on this account** を選択します。**Create GitHub App** をクリックしてください。
+### 秘密鍵を作成する
+
+**Private keys** で **Generate a private key** を選択します。ダウンロードした `.pem` ファイルは自分だけの秘密にしてください。
+
+### 認証情報を保存する
+
+SwB の受け取りリンクで Webhook シークレットを保存してください。シークレットを保存したら、一時的なシークレットのファイルを削除してください。SwB に求められたら、**App ID** と `.pem` ファイルもそれぞれの受け取りリンクで保存してください。
+### アプリをインストールする
+
+あなたのアカウントの横にある **Install App** → **Install** をクリックしてください。**Only select repositories** を選択します。
+### リポジトリを選ぶ
+
+リポジトリを選んでください。**Install** をクリックしてください。
+
+| リポジトリのリソース | アクセス | イベント |
+| --- | --- | --- |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自動で **Read-only** | |
+
+Organization では、GitHub が **Install** の代わりに **Request** を表示することがあります。その場合は、Organization のオーナーがリクエストを承認します。
+
+## エージェントの動作
+
+エージェントは `connect(what="github")` を呼び出します。SwB は、Webhook のアドレス、シークレットの状態、リポジトリのルートの数を表示します。ルートは、イベントを送信先に送ります。
+
+エージェントは、`config/switchboard.yaml` の `blocks.github.spaces` に各リポジトリを追加します。スペースは、リポジトリのモード、プロジェクト、送信先を決めます。この例では、プロジェクト `demo` で、`acme/app` の Watch のダイジェストを `agent:beta` に送ります。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode:
+          mode: watch
+          target: agent:beta
+        project: demo
+```
+
+Work モードでは、エージェントは `mode.mode` を `work` にします。そして、あなたの数値の GitHub ユーザー ID を、スペースの `owner_ids` に追加します。ID の調べ方と例は、[オーナーのアカウント](/ja/docs/blocks/github#オーナーのアカウント)をご覧ください。
+
+SwB は、イベントのテキストの作成者を確認します。`owner_ids` にいる人のテキストは、`owner` の信頼レベルになれます。SwB は、ブランチ名、ref、ワークフローのタイトル、チェック名を `external` として扱います。
+
+チェック名は、オーナーがチェックを始めた場合でも `external` です。フォークからの Pull Request がその名前を変えられるためです。
+
+Webhook シークレットを保存し、ルートを更新したら、SwB を再起動してください。
+
+App ID や秘密鍵のリンクが残っていれば、エージェントはもう一度 `connect(what="github")` を呼び出します。既存の個人用アクセストークンから App に切り替えるときは、`choose={"credential":"app"}` を選びます。
+
+再起動後、エージェントは `github_status` を呼び出して、インストールとその権限を確認します。
+
+トリアージモードでは、`space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")` を呼び出します。アドレスは `targets` から選んでください。assist モードには `mode="assist"` を使います。トリアージモードでの GitHub への既定の書き込み操作は `github_reply` です。
+
+外部の送信者には、`channel:github/acme/app` と `target:beta` の両方へのアクセスを与えてください。アクセスルールについては[チャンネルの公開範囲](/ja/docs/channel-modes#外部の-github-送信者を許可する)をご覧ください。
+
+Watch は、`modes.digest_minutes` が過ぎるか、イベントが 50 件たまると、送信先のメールボックスにダイジェストを送ります。オーナーは、コンソールの **Inbox** か、`inbox` や `wait` でダイジェストを読みます。
+
+## 認証情報
+
+| トークン | GitHub で表示される場所 | 形式 | 入力する場所 |
+| --- | --- | --- | --- |
+| Webhook シークレット | `openssl rand -hex 32` で自分で生成します | 16 文字以上 | SwB の受け取りリンク |
+| App ID | アプリの設定の **App ID** | 数値 | SwB の受け取りリンク |
+| 秘密鍵 | **Generate a private key** のあとに 1 回だけダウンロード | `.pem` ファイル | SwB の受け取りリンク |
+
+SwB は、秘密鍵を使って GitHub からインストールトークンを取得します。各インストールトークンは 1 時間有効です。
+
+Webhook シークレットを置き換えるときは、`connect(what="github", choose={"replace":"secret"})` の呼び出しをエージェントに頼んでください。`webhook_secret` でも同じ結果になります。App の認証情報か個人用アクセストークンも置き換えるときは `all` を使います。値ごとに、返ってきた手順に従ってください。詳しくは[認証情報](/ja/docs/credentials#認証情報を置き換える)をご覧ください。
+
+## 接続を確認する
+
+もう一度 `connect` を呼び出すよう、エージェントに頼んでください。セットアップが完了すると、`connected` と報告します。`github_status` には、`secret_present` とインストールの権限が表示されます。
+
+GitHub で、アプリの設定 → **Advanced** → **Recent deliveries** を開いてください。最新の配信を開き、SwB が成功のコードで応答したことを確認してください。
+
+## 問題を解決する
+
+署名のエラーが出たら、[Webhook シークレットを設定する](#webhook-シークレットを設定する)の手順で新しいシークレットを生成してください。そのシークレットを GitHub App の設定に入力してください。`connect(what="github", choose={"replace":"secret"})` の呼び出しをエージェントに頼んでください。受け取りリンクで同じシークレットを保存してください。SwB を再起動してください。**Recent deliveries** から、イベントをもう一度送ってください。
+
+`connect` が **Issues** の書き込み権限を求めたら、アプリの設定 → **Permissions & events** を開いてください。**Issues** を **Read & write** にし、インストール側で変更を承認してください。

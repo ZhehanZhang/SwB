@@ -1,0 +1,82 @@
+---
+title: Companion
+description: Conecta un dispositivo para que tus agentes usen sus funciones locales.
+---
+
+Un **companion** es un dispositivo que se conecta a tu servidor SwB. Así los agentes pueden usar funciones de ese dispositivo.
+
+## Copiar el prompt de configuración
+
+<SetupPrompt name="companion" lang="es" />
+
+## Emparejar un dispositivo
+
+Pide a un agente con sesión de propietario que llame a `companion_code`. Pide al agente que guarde el código en un archivo con permisos `0600`. Con estos permisos, solo el dueño del archivo tiene acceso.
+
+Para obtener un código en la consola, [inicia sesión con una llave de acceso](/es/docs/owner-login#llave-de-acceso). Abre **Settings**. En **Connections**, selecciona **Pair a device**. Si usas Cloudflare Access, usa la herramienta `companion_code`.
+
+Ejecuta este comando en el dispositivo. Cambia la dirección de ejemplo por tu dirección HTTPS de SwB. Para un SwB en este mismo dispositivo, puedes usar `http://127.0.0.1:8870`.
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+Escribe el código de emparejamiento en la solicitud oculta. El código sirve una vez y caduca a los 10 minutos. El registro de auditoría anota quién lo creó.
+
+El dispositivo guarda su propia clave en un archivo privado.
+
+## Elegir funciones
+
+Añade una opción `--cap` por cada función que quieras activar.
+
+| Opción | Función |
+| --- | --- |
+| `--cap notify` | Muestra notificaciones de escritorio en el dispositivo |
+| `--cap drop` | Comparte archivos de hasta 10 MiB cada uno a través de la carpeta `~/SwB Drop` |
+| `--cap mcp --mcp NAME=COMMAND` | Da a tus agentes acceso a las herramientas de un servidor MCP del dispositivo |
+| `--cap herdr` | [Herdr](/es/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Servidor de la app Codex](/es/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [Servidor OpenCode](/es/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/es/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [Hooks de estado](/es/docs/blocks/local-sessions#hooks-de-estado) |
+| `--cap muse` | Empareja Muse por Bluetooth en un Mac o en un ordenador con Linux |
+
+En Linux, las notificaciones usan `notify-send`. En Debian y Ubuntu, instálalo con el paquete `libnotify-bin`.
+
+Usa Python 3.13 para la función de Muse. Sigue la [guía de emparejamiento de Muse](/es/docs/setup/muse).
+
+```sh
+uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
+```
+
+Añade una opción `--mcp` por cada servidor MCP. Para un programa, usa `--mcp 'NAME=COMMAND'`. Cambia `NAME` por un nombre para tu servidor. Cambia `COMMAND` por el comando que inicia el programa. Para un servidor HTTP en el dispositivo, usa su dirección local, como `--mcp notes=http://127.0.0.1:8000/mcp`.
+
+Tus agentes usan `companion_list` para ver cada dispositivo emparejado y sus acciones. Usan `companion_invoke` para ejecutar una acción.
+
+Los resultados de texto del companion tienen un límite de 1 MiB. Lee los datos de los archivos de Drop en `structuredContent.result.content_b64`.
+
+## Sesiones locales
+
+Una **sesión local** es la conversación abierta de un agente de programación en el dispositivo. SwB muestra su estado con su dirección `local:session:<companion>:<harness>:<session>`.
+
+Usa el enlace de tu agente de programación en la tabla de funciones. Configura el agente antes de emparejar. Después de emparejar, mantén el companion en marcha. Pide a un agente con sesión de propietario que llame a `targets(block="local")`. Comprueba que aparece la dirección de tu sesión.
+
+SwB intenta entregar cada mensaje a la sesión abierta. Pone el mensaje en el buzón del agente cuando el remitente puede usar ese buzón. La respuesta vuelve en la misma conversación.
+
+Usa la dirección de sesión que da `targets`. Busca el recurso de esa dirección en `visibility_list`. Comparte el recurso con `visibility_set`.
+
+Para los comandos y los agentes compatibles, consulta [Sesiones locales](/es/docs/blocks/local-sessions).
+
+## Mantenerlo en marcha
+
+El emparejamiento inicia el companion. Usa `swb companion run` para iniciarlo de nuevo. Usa `swb companion status` para ver el ID local del dispositivo y sus funciones.
+
+Usa `uvx swb-one` en lugar de `swb` para ejecutar estos comandos con `uvx`. Para Muse, conserva las opciones de paquete y de Python de la [guía de Muse](/es/docs/setup/muse).
+
+El dispositivo inicia cada conexión con SwB.
+
+## Desconectar
+
+Ejecuta `swb companion disconnect` en el dispositivo para borrar su clave. Para revocar la clave en la consola, abre **Connections** en **Settings**. Selecciona **Disconnect** para el dispositivo.
+
+Un companion en marcha borra su clave local cuando detecta la revocación. Si queda una clave en el dispositivo, ejecuta `swb companion disconnect` antes de emparejarlo otra vez.

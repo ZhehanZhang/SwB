@@ -1,0 +1,71 @@
+---
+title: Discord
+description: Verbinden Sie einen Discord-Server über einen Bot mit SwB.
+---
+
+SwB meldet sich als Bot bei Discord an. Neue Nachrichten erhält SwB über das Discord Gateway, eine Verbindung, die SwB zu Discord aufbaut.
+
+## Voraussetzungen
+
+Verwenden Sie ein Discord-Konto mit der Berechtigung **Manage Server** auf dem Server, den Sie verbinden möchten. Melden Sie sich als Inhaber bei SwB an.
+
+## Einrichtungsprompt kopieren
+
+<SetupPrompt name="discord" lang="de" />
+
+Fügen Sie den Prompt in Ihren Inhaber-Client von SwB ein.
+
+## Discord-Bot einrichten
+
+### Anwendung erstellen
+
+Öffnen Sie https://discord.com/developers/applications. Klicken Sie auf **New Application**.
+### Anwendung benennen
+
+Geben Sie einen Namen ein. Klicken Sie auf **Create**.
+### Bot-Token zurücksetzen
+
+Klicken Sie auf **Bot** → **Reset Token**. Bestätigen Sie das Zurücksetzen.
+
+### Bot-Token kopieren
+
+Klicken Sie auf **Copy**, solange Discord das Token anzeigt. Discord zeigt es nur einmal.
+### Message Content Intent aktivieren
+
+Aktivieren Sie auf der Seite **Bot** unter **Privileged Gateway Intents** die Option **Message Content Intent**. Klicken Sie auf **Save Changes**.
+
+### Token speichern
+
+Öffnen Sie den Claim-Link von SwB, den Ihnen Ihr Agent gibt. Fügen Sie das Token in das Feld ein.
+### Bot einladen
+
+Öffnen Sie den Einladungslink von Ihrem Agenten. Wählen Sie Ihren Server, wenn Discord danach fragt. Klicken Sie auf **Authorize**.
+
+## Das macht der Agent
+
+Der Agent ruft `connect(what="discord")` auf. Bei Bedarf aktiviert er den Block `discord`. Bei aktivem Block geben `connect` oder `discord_provision` einen Claim-Link für das Bot-Token zurück.
+
+Nachdem Sie das Token gespeichert haben, ruft der Agent `discord_status` auf. Er prüft den Bot, die Gateway-Verbindung und den Server. Er gibt Ihnen den Einladungslink aus `setup.invite_url`.
+
+Der Agent konfiguriert den Server unter `blocks.discord.spaces` in `config/switchboard.yaml`. Ein Raum verbindet einen Server mit einem SwB-Projekt. Der Agent setzt `guild_id` und `owner_ids`. Damit ein Agent `discord_post` aufrufen darf, geben Sie ihm unter `blocks.discord.agents` Zugriff. Starten Sie SwB nach der Bearbeitung der Datei neu.
+
+## Zugangsdaten
+
+| Token | Hier zeigt Discord es an | Format | Hierhin gehört es |
+| --- | --- | --- | --- |
+| Bot-Token | **Bot** → **Reset Token**, nur einmal angezeigt | Drei Teile, getrennt durch Punkte | Claim-Link von SwB |
+| Application ID | **General Information** → **Application ID** | Eine Zahl | `blocks.discord.application_id`, oder SwB ermittelt sie selbst |
+
+## Verbindung prüfen
+
+Bitten Sie den Agenten, `connect` erneut aufzurufen. Nach abgeschlossener Einrichtung meldet er `connected`. `discord_status` zeigt, dass das Gateway bereit und der Bot auf Ihrem Server ist.
+
+Verwenden Sie das Discord-Konto aus `owner_ids`. Erwähnen Sie den Bot in einem Kanal. Fügen Sie einen Zielnamen aus `targets` und eine Testnachricht hinzu. Prüfen Sie, ob die Antwort im selben Kanal erscheint.
+
+## Probleme beheben
+
+Bei Gateway-Code `4014` aktivieren Sie **Message Content Intent**. Um Erwähnungen als Auslöser zu verwenden, setzen Sie `message_content: false` und erwähnen den Bot in jeder Nachricht.
+
+Bei Gateway-Code `4004` setzen Sie das Bot-Token in Discord zurück. Wenn das Token aus der Serverumgebung stammt, ersetzen Sie es dort und starten Sie SwB neu. Andernfalls verwenden Sie einen neuen Claim-Link.
+
+Wenn der Bot auf dem Server ist, aber in einem Kanal stumm bleibt, prüfen Sie die Berechtigungen dieses Kanals.

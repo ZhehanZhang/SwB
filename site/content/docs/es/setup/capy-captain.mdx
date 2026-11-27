@@ -1,0 +1,91 @@
+---
+title: Capy Captain
+description: Envía el trabajo de SwB a un Capy Captain y recibe las respuestas.
+---
+
+Un Capy Captain es un agente de Capy que dirige un grupo de hilos. SwB envía tareas al Captain y devuelve cada respuesta al remitente.
+
+## Antes de empezar
+
+Necesitas una cuenta de Capy, un proyecto y un Captain en la misma organización. Un usuario de servicio es una cuenta de Capy para software.
+
+Activa el bloque `capy`. En Capy, añade SwB en **Settings** → **MCP & plugins**. Usa un cliente de SwB con acceso de propietario completo.
+
+## Copiar el prompt de configuración
+
+<SetupPrompt name="capy-captain" lang="es" />
+
+Pega el prompt en tu cliente de propietario de SwB.
+
+## Configurar la ruta al Captain
+
+### Abrir los ajustes de API
+
+En Capy, abre **Settings** → **API**. Comprueba que está abierta la organización correcta.
+
+### Crear la clave de lectura
+
+Crea una clave de API personal con acceso a tu Captain. Copia la clave mientras Capy la muestra.
+
+### Guardar la clave de lectura
+
+Abre el enlace de entrega que te da tu agente. Pega la clave en **Token**. Selecciona **Save token**.
+
+### Reiniciar SwB
+
+Reinicia SwB cuando te lo pida tu agente. Así SwB carga la clave.
+
+### Crear un Capy Captain
+
+Crea un Capy Captain si lo necesitas. Elige el proyecto y la máquina en la que se ejecuta el Captain.
+
+### Elegir el Capy Captain
+
+Dile a tu agente qué Capy Captain recibe el trabajo.
+
+### Crear la clave de envío
+
+En **Settings** → **API**, crea un usuario de servicio con el rol `read_write`. Dale acceso al proyecto. Crea una clave para el usuario de servicio.
+
+### Compartir el Capy Captain
+
+Abre el menú del Capy Captain. Selecciona **Share**. Da acceso al usuario de servicio. Para un Captain en un dispositivo emparejado, da también al usuario de servicio acceso al dispositivo. {/* unverified */}
+
+### Guardar la clave de envío
+
+Abre el segundo enlace de entrega. Pega la clave en **Token**. Selecciona **Save token**.
+
+### Reiniciar SwB otra vez
+
+Reinicia SwB. Después dile a tu agente que has terminado.
+
+## Lo que hace el agente
+
+Desde un cliente con acceso de propietario completo, llama a `connect(what="capy-captain")`. Si SwB necesita la clave de lectura, devuelve un enlace de entrega. Un enlace de entrega es una página privada para escribir una credencial.
+
+Tras el reinicio, `connect` lista los Captains disponibles. Confirma qué Captain debe recibir el trabajo. Llama a `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`. Para una ruta de proyecto, añade `"project":"<project>"` a `choose`. Una ruta indica a SwB adónde enviar el trabajo.
+
+SwB pide una clave de servicio si el agente la necesita para enviar. Usa `capy_captains`, `routes_list` y `routes_resolve` para comprobar la ruta.
+
+Si tu app admite eventos MCP, suscríbete a `switchboard.message.created`. Para leer bajo demanda, llama a `wait` o `inbox`.
+
+## Credenciales
+
+| Token | Dónde aparece | Formato | Dónde va |
+| - | - | - | - |
+| Clave de lectura | **Settings** → **API**, una sola vez | `capy_` y 43 caracteres aleatorios | **Token** en su enlace de entrega de SwB |
+| Clave de envío | **Settings** → **API**, una sola vez | `capy_` y 43 caracteres aleatorios | **Token** en su enlace de entrega de SwB |
+
+## Comprobar la conexión
+
+Pide a tu agente que llame de nuevo a `connect(what="capy-captain")`. Comprueba que aparece `connected`. Envía una tarea corta de prueba a la ruta. Comprueba que la tarea aparece en el hilo del Captain. Lee la respuesta con `result` o `inbox`. Usa `/healthz` como propietario para comprobar el nombre y el estado de la clave de envío configurada.
+
+## Resolver problemas
+
+Una clave de Capy usa los permisos de su cuenta. Si `connect` pide una clave de lectura nueva, crea una con acceso al Captain.
+
+Si un envío falla con un error de acceso, revisa el acceso del usuario de servicio al proyecto, al Captain y al dispositivo emparejado.
+
+Un valor del entorno del servidor tiene prioridad sobre un valor entregado. Cámbialo en el entorno del servidor y reinicia SwB.
+
+Para sustituir una clave perdida, revócala en **Settings** → **API**. Crea una clave nueva. Cada enlace de entrega sirve una vez y caduca a los 30 minutos.

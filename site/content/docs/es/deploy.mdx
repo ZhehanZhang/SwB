@@ -1,0 +1,24 @@
+---
+title: Despliegue
+description: Ejecuta SwB en tu ordenador o en un servidor.
+---
+
+## Ejecutar en tu ordenador
+
+Sigue [Instalación](/es/docs/install). Abre el enlace de inicio de sesión de un solo uso que SwB muestra en el primer arranque local. Para obtener un enlace nuevo, ejecuta `swb login-link`. El prompt de despliegue también sirve para la configuración local.
+
+## Desplegar SwB
+
+Pega este prompt en un agente de programación como Claude Code o Codex. El agente te guía en la configuración local o alojada. El prompt está en inglés para el agente.
+
+<SetupPrompt name="deploy" lang="es" />
+
+## Iniciar sesión
+
+Abre la dirección de inicio de sesión que aparece en el log del servicio. Copia `SWB_SETUP_CODE` de los ajustes del servicio o del archivo privado que indica el comando de despliegue. Pégalo en **Setup code**. Selecciona **Sign in**. Añade una [llave de acceso](/es/docs/owner-login#llave-de-acceso) para los próximos inicios de sesión.
+
+## Conectar tu agente
+
+[Conecta SwB a un agente](/es/docs/connect). Después pega este prompt en ese agente. Pídele que conecte tus otras apps.
+
+<SetupPrompt name="coordinator" lang="es" />

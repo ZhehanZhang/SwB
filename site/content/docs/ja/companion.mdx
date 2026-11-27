@@ -1,0 +1,82 @@
+---
+title: コンパニオン
+description: デバイスを接続して、そのデバイスのローカル機能をエージェントが使えるようにします。
+---
+
+**コンパニオン**とは、SwB サーバーに接続するデバイスです。接続すると、エージェントがそのデバイスの機能を使えます。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="companion" lang="ja" />
+
+## デバイスをペアリングする
+
+オーナーとしてサインインしたエージェントに、`companion_code` の呼び出しを頼んでください。コードを権限 `0600` のファイルに保存するよう、エージェントに頼んでください。この権限では、ファイルの所有者だけがアクセスできます。
+
+コンソールでコードを取得するときは、[パスキーでサインイン](/ja/docs/owner-login#パスキー)してください。**Settings** を開きます。**Connections** で **Pair a device** を選択します。Cloudflare Access を使っている場合は、`companion_code` ツールを使ってください。
+
+デバイスでこのコマンドを実行してください。例のアドレスを、あなたの SwB の HTTPS アドレスに置き換えてください。SwB が同じデバイスにある場合は、`http://127.0.0.1:8870` も使えます。
+
+```sh
+uvx swb-one companion connect https://swb.example.com --cap notify
+```
+
+入力内容が隠れるプロンプトに、ペアリングコードを入力してください。コードは 1 回だけ使えて、10 分で期限が切れます。コードを作った人は監査ログに記録されます。
+
+デバイスは、専用のキーを非公開のファイルに保存します。
+
+## 機能を選ぶ
+
+有効にする機能ごとに、`--cap` オプションを 1 つずつ追加してください。
+
+| オプション | 機能 |
+| --- | --- |
+| `--cap notify` | デバイスにデスクトップ通知を表示します |
+| `--cap drop` | `~/SwB Drop` フォルダーで、1 ファイル 10 MiB までのファイルを共有します |
+| `--cap mcp --mcp NAME=COMMAND` | デバイス上の MCP サーバーのツールをエージェントが使えるようにします |
+| `--cap herdr` | [Herdr](/ja/docs/blocks/local-sessions#herdr) |
+| `--cap codex` | [Codex app server](/ja/docs/blocks/local-sessions#codex) |
+| `--cap opencode` | [OpenCode server](/ja/docs/blocks/local-sessions#opencode) |
+| `--cap dsh` | [DeepSeek Harness](/ja/docs/blocks/local-sessions#deepseek-harness) |
+| `--cap hooks` | [ステータスフック](/ja/docs/blocks/local-sessions#ステータスフック) |
+| `--cap muse` | Mac または Linux のパソコンで、Bluetooth を使って Muse とペアリングします |
+
+Linux では、通知に `notify-send` を使います。Debian と Ubuntu では、`libnotify-bin` パッケージでインストールしてください。
+
+Muse の機能には Python 3.13 を使ってください。[Muse のペアリングガイド](/ja/docs/setup/muse)に従ってください。
+
+```sh
+uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
+```
+
+MCP サーバーごとに `--mcp` オプションを 1 つずつ追加してください。プログラムの場合は `--mcp 'NAME=COMMAND'` を使います。`NAME` をサーバーの名前に置き換えてください。`COMMAND` をプログラムの起動コマンドに置き換えてください。デバイス上の HTTP サーバーの場合は、`--mcp notes=http://127.0.0.1:8000/mcp` のようにローカルアドレスを使ってください。
+
+エージェントは `companion_list` で、ペアリング済みの各デバイスとその操作を確認します。操作の実行には `companion_invoke` を使います。
+
+コンパニオンのテキスト結果の上限は 1 MiB です。Drop のファイルデータは `structuredContent.result.content_b64` から読み取ってください。
+
+## ローカルセッション
+
+**ローカルセッション**とは、デバイス上でコーディングエージェントが開いている会話です。SwB は、そのセッションの状態を `local:session:<companion>:<harness>:<session>` というアドレスとともに一覧表示します。
+
+機能の表にある、お使いのコーディングエージェントのリンクを使ってください。ペアリングの前にエージェントを設定してください。ペアリング後は、コンパニオンを動かし続けてください。オーナーとしてサインインしたエージェントに、`targets(block="local")` の呼び出しを頼んでください。セッションのアドレスが表示されることを確認してください。
+
+SwB は、各メッセージを開いているセッションに届けようとします。送信者がエージェントのメールボックスを使える場合は、メッセージをそのメールボックスに入れます。回答は同じ会話に返ってきます。
+
+`targets` に出るセッションのアドレスを使ってください。そのアドレスのリソースを `visibility_list` で探してください。`visibility_set` でそのリソースを共有してください。
+
+コマンドと対応エージェントについては、[ローカルセッション](/ja/docs/blocks/local-sessions)をご覧ください。
+
+## 動かし続ける
+
+ペアリングするとコンパニオンが起動します。もう一度起動するときは `swb companion run` を使います。ローカルのデバイス ID と機能は `swb companion status` で確認できます。
+
+`uvx` でこれらのコマンドを実行するときは、`swb` の代わりに `uvx swb-one` を使ってください。Muse の場合は、[Muse のガイド](/ja/docs/setup/muse)にあるパッケージと Python のオプションをそのまま使ってください。
+
+SwB への接続は、毎回デバイスの側から始めます。
+
+## 接続を解除する
+
+デバイスで `swb companion disconnect` を実行すると、デバイスのキーを削除します。コンソールでキーを取り消すときは、**Settings** の **Connections** を開きます。そのデバイスの **Disconnect** を選択します。
+
+動作中のコンパニオンは、取り消しを検出するとローカルのキーを削除します。デバイスにキーが残っている場合は、再びペアリングする前に `swb companion disconnect` を実行してください。

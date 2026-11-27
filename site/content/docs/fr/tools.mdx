@@ -1,0 +1,204 @@
+---
+title: Outils
+description: Les outils MCP que SwB fournit à vos agents.
+---
+
+`tools/list` affiche les outils que votre connexion autorise. Une connexion propriétaire complète affiche les outils de tous les blocs activés.
+
+## Clés appairées
+
+Une clé appairée utilise ces outils dans les limites de l'accès que le propriétaire lui accorde.
+
+| Usage | Outils et limites |
+| - | - |
+| Messages | Utilisez `send` et `targets`. Utilisez `agent_send` quand les anciens noms sont activés. Utilisez `inbox`, `wait`, `reply`, `status`, `result`, `cancel` et `get_message` dans l'accès aux conversations de votre clé |
+| Mémoire et projets | Utilisez `context_pack` et `project_list` dans l'accès que votre clé permet. Utilisez les outils de mémoire dans les portées autorisées |
+| Routes | Utilisez `routes_list` et `routes_resolve`. Pour `routes_set` et `routes_remove`, indiquez votre propre nom d'agent dans `agent`. Choisissez un projet dans les portées de votre clé |
+| Configuration | Vérifiez l'état avec `switchboard_status` et `modes_status`. Obtenez les instructions du client avec `connect`. Utilisez la connexion du propriétaire pour configurer les blocs et créer des codes d'appairage |
+| Blocs | Utilisez les outils des blocs dans votre accès autorisé, avec les actions que le mode de canal permet |
+
+La connexion propriétaire complète est obligatoire pour `login_link`, `connect_code`, `connect_list`, `connect_revoke`, `visibility_list` et `visibility_set`. Utilisez-la aussi pour `project_create`, `project_update`, `project_sync` et `space_mode`. Elle donne également accès à `memory_promote`, `routine_register`, `routine_add`, `routine_remove`, `discord_provision` et `telegram_provision`.
+
+Le propriétaire peut limiter les outils avec `auth.key_tools` et les cibles d'envoi avec `auth.key_targets`. Le réglage `auth.key_scopes` limite le routage, les messages et les conversations. Les outils de mémoire utilisent les autorisations que SwB enregistre pour chaque clé appairée.
+
+## Messages
+
+| Outil | Usage |
+| - | - |
+| `send` | Placez le travail ou le message dans `task`. Indiquez la cible dans `to`. Laissez `to` vide pour utiliser une route quand la clé le permet |
+| `agent_send` | Outil obsolète. Indiquez le nom de l'agent dans `to`, par exemple `to="codex"`. `blocks.mcp.legacy_aliases` l'active par défaut. Pour les nouveaux appels, utilisez `send` avec `to="agent:codex"` |
+| `wait` | Attend de nouveaux messages ou de nouvelles réponses |
+| `inbox` | Lit votre boîte de réception et rend la main aussitôt |
+| `reply` | Placez dans `conversation` la référence `handle` d'un envoi ou d'un élément de la boîte de réception. Placez la réponse dans `text` |
+| `status` | Affiche l'état d'une conversation. Pour Capy, indiquez dans `messages` le nombre de messages récents. Ajoutez `include_tools=true` pour inclure l'activité des outils |
+| `switchboard_status` | Affiche votre identité de connexion, vos limites d'attente, les blocs et l'état de l'instance |
+| `result` | Renvoie la réponse finale d'une conversation. Quand c'est possible, `tail` fixe le nombre de réponses ou de messages récents |
+| `cancel` | Arrête le suivi d'une conversation |
+| `targets` | Liste les adresses des cibles disponibles. Votre clé et les règles de la cible décident des envois possibles |
+| `get_message` | Lit un message enregistré grâce au `message_id` de votre boîte de réception ou d'un événement MCP |
+
+### Position de lecture
+
+La position de lecture marque un point dans la boîte de réception. Les outils `inbox` et `wait` enregistrent une nouvelle position quand ils renvoient des éléments. Les filtres peuvent faire avancer une position distincte. Un appel suivant à `wait` lit à partir de la position enregistrée. Passez `since_cursor=0` à `inbox` pour lire depuis le début. Passez un `cursor` renvoyé dans `since_cursor` pour reprendre à cette position.
+
+Un script peut appeler `GET /inbox/poll` avec une clé bearer pour attendre les éléments de sa propre boîte de réception. Une clé bearer est une clé envoyée dans l'en-tête de la requête. Passez le `cursor` renvoyé dans `after` pour reprendre. Par défaut, l'appel commence à la fin actuelle de la boîte de réception. L'appel se termine à l'arrivée d'éléments ou à la fin du délai d'attente. La position de lecture MCP reste inchangée. Utilisez le [flux des événements de la boîte de réception](/fr/docs/connect#flux-des-événements-de-la-boîte-de-réception) pour recevoir les messages dès leur arrivée. Utilisez `inbox` pour lire les éléments de contexte et les résumés du mode `watch` visibles par votre connexion.
+
+Pour une clé appairée, un message ou une conversation hors de son accès renvoie la même erreur qu'un ID inconnu. Consultez [Clés avec limites](/fr/docs/security#clés-avec-limites).
+
+### Options d'envoi
+
+| Option | Usage |
+| - | - |
+| `wait_s` | Fixe en secondes l'attente de la première réponse d'un bloc. SwB applique la limite d'attente de l'agent. Pour les boîtes aux lettres des agents, utilisez `wait` |
+| `forward` | Passez l'ID d'une conversation éligible reçue avec la confiance `owner`. SwB envoie la réponse finale à l'expéditeur d'origine |
+| `new_conversation` | Choisissez `true` pour ouvrir un nouveau fil de discussion dans le projet du Capy Captain. Choisissez `false` pour envoyer dans le fil de discussion du Capy Captain |
+| `files` | Joint des fichiers à une tâche Capy. Donnez à chaque fichier un `name` et un contenu `text` ou `base64`. Indiquez le type de fichier avec `media_type` |
+| `repos` | Indiquez les dépôts d'une tâche Capy sous la forme `owner/repo`. Choisissez des dépôts liés au projet SwB |
+| `in_reply_to` | Pour répondre à un message, utilisez plutôt `reply` avec `conversation` |
+
+## Mémoire et projets
+
+Utilisez la connexion du propriétaire ou un identifiant avec une autorisation pour la portée de mémoire. Pour qu'un agent mette à jour, déplace ou supprime une entrée, utilisez l'identifiant qui l'a écrite en dernier. Le propriétaire gère toutes les entrées. Modifier une entrée existante de `general` demande l'accès propriétaire.
+
+| Outil | Usage |
+| - | - |
+| `context_pack` | Lit le dossier d'un projet. Il inclut `general` uniquement si l'identifiant donne cet accès. Pour une clé appairée, la section Capy montre le travail de son agent dans ses portées de conversation |
+| `memory_write` | Enregistre une entrée dans une portée autorisée. Passez `scope`, `namespace`, `title` et `body`. Un espace de noms regroupe des entrées dans une portée. Utilisez au plus trois niveaux en minuscules, comme `notes/meetings`. Pour la mémoire d'un projet, indiquez le même projet dans `project` et `scope`. Pour écrire dans `general`, demandez la confirmation du propriétaire. Ajoutez ensuite `confirm_general=true` |
+| `memory_search` | Cherche avec `query`. Passez `project` pour ce projet et la mémoire `general` autorisée. Ajoutez `include_general=false` pour ce projet seul. Utilisez `scopes` pour des autorisations précises comme `agent:<name>` |
+| `memory_list` | Liste les entrées avec les mêmes paramètres de portée que `memory_search` |
+| `memory_read` | Lit une entrée et son historique dans une portée autorisée |
+| `memory_delete` | Supprime une entrée dans une portée autorisée |
+| `memory_move` | Déplace une entrée vers la portée d'un projet ou d'un agent. Il faut une autorisation pour les deux portées |
+| `memory_promote` | Déplace une entrée vers `general`. Utilisez la connexion du propriétaire |
+| `project_list` | Liste les projets et leurs liens |
+| `project_create` | Crée un projet |
+| `project_update` | Renomme, lie, archive ou rend privé un projet |
+| `project_sync` | Relie de nouveau les projets à leurs correspondances |
+
+Indiquez ces valeurs dans `links` de `project_update`. SwB propose les clés de lien de projet selon les agents et les blocs configurés.
+
+| Clé | Valeur |
+| - | - |
+| `repos` | Liste de noms de dépôts sous la forme `owner/repo` |
+| `claude_project` | Nom ou ID du projet Claude |
+| `chatgpt_project` | Nom ou ID du projet ChatGPT |
+| `capy_project` | Nom ou ID du projet Capy |
+
+Un projet privé demande une autorisation qui le nomme, ou l'accès propriétaire. Pour `memory_search` et `memory_list`, indiquez le projet privé dans `project`. Ajoutez dans `scopes` les autres projets publics auxquels vous avez accès.
+
+## Configuration
+
+| Outil | Usage |
+| - | - |
+| `connect` | Donne l'étape de configuration suivante pour une plateforme |
+| `connect_code` | Crée un code d'appairage pour un nouvel agent |
+| `connect_list` | Liste les clés des agents |
+| `connect_revoke` | Supprime la clé d'un agent |
+| `login_link` | Crée un lien de connexion à usage unique pour le propriétaire |
+| `modes_status` | Affiche les modes, les cibles et les problèmes de configuration des canaux et des dépôts accessibles |
+| `space_mode` | Fixe le mode, le projet et les actions permises, en tant que propriétaire. Utilisez `inherit` pour effacer le réglage |
+| `visibility_list` | Affiche les règles d'accès par défaut et les règles de chaque ressource. Utilisez la connexion du propriétaire |
+| `visibility_set` | Rend une ressource privée ou partagée, en tant que propriétaire. Les outils restent privés |
+
+### Outils du compagnon
+
+Utilisez ces outils en tant que propriétaire.
+
+| Outil | Titre | Usage |
+| - | - | - |
+| `companion_code` | Pair a companion | Crée un code d'appairage pour un appareil |
+| `companion_list` | List companions | Affiche les appareils appairés, leur état et leurs actions |
+| `companion_invoke` | Run a companion action | Lance une action sur un appareil connecté. Prenez l'ID de l'appareil et le détail de l'action dans `companion_list` |
+| `companion_revoke` | Disconnect a companion | Révoque la clé de l'appareil et ferme sa connexion |
+
+## Routes
+
+Une route choisit une cible pour `send`. Choisissez un bloc qui accepte les routes, comme `capy`, `claude-routine` ou `grok-routine`. Utilisez `to="agent:<name>"` pour joindre directement la boîte aux lettres d'un agent. Utilisez `to="agent:muse"` pour écrire dans la boîte aux lettres de Muse. Utilisez `to="muse:gadget:muse"` pour [réveiller Muse](/fr/docs/setup/muse#réveiller-muse-en-temps-réel).
+
+| Outil | Usage |
+| - | - |
+| `routes_list` | Liste toutes les routes, y compris celles des boîtes aux lettres |
+| `routes_set` | Enregistre une route. Indiquez dans `target` une boîte aux lettres d'agent, comme `agent:<name>`, ou l'adresse d'un bloc, comme `capy:captain:<name>`. Limitez la route avec `agent` ou `project` |
+| `routes_resolve` | Affiche la route qui correspond à une destination. Passez `block`, par exemple `grok-routine` ou `agent` |
+| `routes_remove` | Supprime la route qui correspond exactement à `agent` et `project` sur le `block` choisi |
+
+Utilisez `block` pour vérifier ou supprimer la route d'une destination. Par défaut, `routes_resolve` vérifie d'abord l'agent et le projet ensemble. Il vérifie ensuite le projet, puis l'agent, puis la route globale. À chaque niveau, il vérifie les blocs dans l'ordre, puis `agent`. Par défaut, `routes_remove` suit le même ordre de destinations pour l'agent et le projet exacts.
+
+## Outils des blocs
+
+### Capy
+
+Les anciens noms des outils Capy apparaissent quand `blocks.mcp.legacy_aliases` est activé.
+| Outil | Usage |
+| - | - |
+| `capy_captains` | Liste les Capy Captains accessibles par votre connexion Capy |
+| `capy_captain_digest` | Lit le résumé d'un Capy Captain et montre les fils de discussion de l'équipe en cours ou en attente du propriétaire. Utilisez la connexion du propriétaire |
+| `capy_list` | Liste le travail envoyé par SwB, ou les fils de discussion de l'équipe d'un Capy Captain ou d'un projet Capy lié. Une clé appairée voit uniquement le travail de son agent dans ses portées |
+| `capy_delegate` | Envoie du travail à Capy. Pour les nouveaux appels, utilisez `send` avec `to="capy"` |
+| `capy_inbox` | Lit votre boîte de réception Capy et rend la main aussitôt. Pour les nouveaux appels, utilisez `inbox` avec `block="capy"` |
+| `capy_wait` | Attend l'élément suivant de votre boîte de réception. Pour les nouveaux appels, utilisez `wait` |
+| `capy_status` | Affiche l'état et les messages récents d'un fil de discussion Capy. Pour les nouveaux appels, utilisez `status` |
+| `capy_reply` | Envoie un message de suivi dans un fil de discussion Capy. Pour les nouveaux appels, utilisez `reply` |
+| `capy_result` | Renvoie la dernière réponse d'un fil de discussion Capy avec les liens disponibles vers les fichiers et les pull requests. Pour les nouveaux appels, utilisez `result` |
+| `capy_cancel` | Arrête le suivi du travail envoyé à Capy. Le fil de discussion Capy peut continuer. Pour les nouveaux appels, utilisez `cancel` |
+
+### Routines Claude Code
+
+Ces outils apparaissent quand le bloc `claude-routine` est activé. Une routine est une tâche Claude Code que SwB peut lancer.
+
+| Outil | Usage |
+| - | - |
+| `routine_register` | Enregistre une routine et renvoie un lien de dépôt où le propriétaire saisit son jeton |
+| `routine_list` | Liste les routines que SwB peut lancer |
+| `routine_pickup` | Récupère le message quand une routine démarre avec un prompt vide |
+| `routine_add` | Ajoute une routine avec son jeton, en tant que propriétaire |
+| `routine_remove` | Supprime une routine enregistrée par SwB, en tant que propriétaire |
+
+### Slack
+
+| Outil | Usage |
+| - | - |
+| `slack_workspaces` | Liste les espaces de travail Slack disponibles, les comptes de chacun et leurs règles de publication |
+| `slack_channels` | Liste les canaux visibles par le compte Slack choisi. La liste signale les canaux que SwB surveille |
+| `slack_search` | Cherche des messages dans un espace de travail avec le compte Slack du propriétaire |
+| `slack_history` | Lit les messages récents d'un canal, du plus récent au plus ancien |
+| `slack_thread` | Lit le premier message d'un fil de discussion et ses réponses, du plus ancien au plus récent |
+| `slack_watched` | Liste les canaux dont les nouveaux messages arrivent dans votre boîte de réception SwB |
+| `slack_events` | Lit les messages récents des canaux surveillés, les mentions du bot et les messages directs. Les éléments les plus récents viennent en premier |
+| `slack_wait` | Attend l'élément Slack suivant dans votre boîte de réception |
+| `slack_personas` | Affiche les noms et les images disponibles pour les publications du bot, ainsi que le choix par défaut |
+| `slack_targets` | Liste les noms de cibles à écrire après une mention du bot dans Slack |
+| `slack_post` | Publie avec le bot ou le compte Slack du propriétaire. Utilisez `thread_ts` pour répondre dans un fil de discussion. Les règles de publication peuvent exiger l'approbation du propriétaire |
+| `slack_react` | Ajoute une réaction emoji à un message. Les règles de `slack_post` s'appliquent aussi |
+| `slack_request_write` | Envoie une proposition de publication Slack au propriétaire pour approbation |
+| `slack_write_requests` | Vérifie l'état de vos demandes d'approbation Slack. Utilisez `request_id` pour lire une seule demande |
+
+### Discord
+
+| Outil | Usage |
+| - | - |
+| `discord_status` | Affiche la connexion Discord, les espaces et la configuration restante |
+| `discord_provision` | Renvoie au propriétaire les liens de configuration et un lien à usage unique pour saisir le jeton du bot |
+| `discord_post` | Publie avec le bot dans un canal ou un fil de discussion, grâce à une autorisation du propriétaire |
+
+### Telegram
+
+| Outil | Usage |
+| - | - |
+| `telegram_status` | Affiche la connexion Telegram, les espaces et la configuration restante |
+| `telegram_provision` | Renvoie au propriétaire les liens de configuration et un lien à usage unique pour saisir le jeton du bot |
+| `telegram_post` | Publie avec le bot dans une discussion ou un fil de discussion, grâce à une autorisation du propriétaire |
+
+### GitHub
+
+Pour les actions de conversation GitHub, passez l'ID de la conversation SwB dans `conversation` ou `handle`. Utilisez `text` avec `github_reply` et `github_notify_owner`.
+
+| Outil | Usage |
+| - | - |
+| `github_status` | Vérifie le webhook, les modes des dépôts et les permissions de la GitHub App |
+| `github_label` | Ajoute des libellés existants à un ticket ou une pull request |
+| `github_comment` | Commente un ticket ou une pull request |
+| `github_open_issue` | Ouvre un ticket dans un dépôt |
+| `github_link_duplicate` | Relie un ticket à son original dans le même dépôt. SwB ajoute `duplicate` et ferme le doublon avec l'état `not_planned` |
+| `github_notify_owner` | Dépose une note dans la boîte de réception du propriétaire avec un lien vers le ticket ou la pull request à l'origine de la conversation |
+| `github_reply` | Répond dans le fil de discussion GitHub à l'origine de la conversation SwB |

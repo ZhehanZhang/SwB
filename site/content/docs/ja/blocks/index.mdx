@@ -1,0 +1,51 @@
+---
+title: ブロック
+description: SwB が提供する接続と機能を確認します。
+---
+
+ブロックは、SwB に接続や機能を追加する部品です。ブロックは設定ファイルで設定します。既定の設定を使うとき、SwB は一部のブロックを環境変数から検出します。ブロックの状態とセットアップの案内は `swb status` で確認できます。`/healthz` で詳細を見るときは、オーナーとしてサインインしてください。
+
+| 接続 | 接続の方法 | SwB がメッセージを渡す方法 |
+| - | - | - |
+| [Claude](/ja/docs/blocks/claude) | カスタムコネクターと Claude のルーティン | `wait`、`inbox`、ルーティンの起動 |
+| [ChatGPT](/ja/docs/blocks/chatgpt) | カスタム MCP サーバーと ChatGPT の dots | MCP Events |
+| [Capy](/ja/docs/blocks/capy) | Capy の API キー | Capy のスレッドのストリーム |
+| [Grok](/ja/docs/blocks/grok) | MCP コネクターと Grok Bot のルーティン | `wait`、`inbox`、ルーティンの起動 |
+| [コーディングエージェント](/ja/docs/blocks/coding-agents) | OAuth かペアリングコード | `wait`、`inbox`、Claude Code のチャンネル |
+| [ローカルセッション](/ja/docs/blocks/local-sessions) | ペアリング済みのデバイス | メールボックス、または開いているセッションへの直接の配信 |
+| [Slack](/ja/docs/blocks/slack) | Socket Mode で動く Slack アプリ | スレッドでの返信 |
+| [Discord](/ja/docs/blocks/discord) | ボットトークン | スレッドでの返信 |
+| [Telegram](/ja/docs/blocks/telegram) | ボットトークン | スレッドでの返信 |
+| [GitHub](/ja/docs/blocks/github) | Webhook シークレット | 署名付きの Webhook |
+| [Muse](/ja/docs/setup/muse) | MCP コネクターとペアリング済みの Muse ガジェット | メールボックスとガジェットの起動 |
+| [ほかの MCP クライアント](/ja/docs/setup/mcp-client) | OAuth かペアリングコード | `wait` と `inbox` |
+
+## 信頼とアクセス
+
+SwB は、プラットフォームの ID を確認して、メッセージの信頼レベルを決めます。Slack、Discord、Telegram では、`known` を使って、SwB が受け入れるメッセージの送信者を決めます。オーナー以外の人からのメッセージは、`external` の信頼レベルになります。詳しくは[信頼](/ja/docs/security#信頼)をご覧ください。
+
+送信先、チャンネル、メモリスコープは、既定で非公開です。ほかの人にアクセスを与えるときは、リソースを共有してください。
+
+## 同梱のアバター
+
+[Slack のペルソナ](/ja/docs/blocks/slack#ペルソナ)では、ファイル名を指定して同梱の画像を選べます。
+
+| ファイル | 名前 |
+| - | - |
+| `capy.png` | Capy |
+| `chatgpt.png` | ChatGPT |
+| `claude-code.png` | Claude Code |
+| `claude.png` | Claude |
+| `codex.png` | Codex |
+| `default.png` | `default` |
+| `dots.png` | ChatGPT dots |
+| `dsh.png` | DeepSeek Harness |
+| `gemini.png` | Gemini |
+| `grok-bot.png` | Grok Bot |
+| `grok.png` | Grok |
+| `muse.png` | Muse |
+| `swb.png` | SwB |
+
+## 独自のブロックを追加する
+
+ブロックは、マニフェストを持つ Python のクラスです。マニフェストには、ブロックにできること、メッセージを送れる先、使うシークレットを書きます。ブロックは `switchboard.blocks` のエントリーポイントグループに登録してください。サーバーで設定済みのブロックは `swb blocks list` で確認できます。

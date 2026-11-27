@@ -1,0 +1,51 @@
+---
+title: 블록
+description: SwB이 제공하는 연결과 기능을 찾아봅니다.
+---
+
+블록은 SwB에 연결이나 기능을 하나 더합니다. 블록은 설정 파일에서 설정하세요. 기본 설정을 쓰면 SwB이 일부 블록을 환경 변수에서 감지합니다. 블록 상태와 설정 안내를 보려면 `swb status`를 실행하세요. 소유자로 로그인하면 `/healthz`에서 자세한 내용을 볼 수 있습니다.
+
+| 연결 | 연결 방식 | SwB이 메시지를 전달하는 방식 |
+| - | - | - |
+| [Claude](/ko/docs/blocks/claude) | 사용자 지정 커넥터와 Claude 루틴 | `wait`, `inbox`, 루틴 깨우기 |
+| [ChatGPT](/ko/docs/blocks/chatgpt) | 사용자 지정 MCP 서버와 ChatGPT dots | MCP Events |
+| [Capy](/ko/docs/blocks/capy) | Capy API 키 | Capy 스레드 스트림 |
+| [Grok](/ko/docs/blocks/grok) | MCP 커넥터와 Grok Bot 루틴 | `wait`, `inbox`, 루틴 깨우기 |
+| [코딩 에이전트](/ko/docs/blocks/coding-agents) | OAuth 또는 페어링 코드 | `wait`, `inbox`, Claude Code 채널 |
+| [로컬 세션](/ko/docs/blocks/local-sessions) | 페어링된 기기 | 우편함 또는 열린 세션에 직접 전달 |
+| [Slack](/ko/docs/blocks/slack) | Socket Mode로 연결한 Slack 앱 | 스레드에 답장 |
+| [Discord](/ko/docs/blocks/discord) | 봇 토큰 | 스레드에 답장 |
+| [Telegram](/ko/docs/blocks/telegram) | 봇 토큰 | 스레드에 답장 |
+| [GitHub](/ko/docs/blocks/github) | 웹훅 시크릿 | 서명된 웹훅 |
+| [Muse](/ko/docs/setup/muse) | MCP 커넥터와 페어링된 Muse 가젯 | 우편함과 가젯 깨우기 |
+| [그 밖의 MCP 클라이언트](/ko/docs/setup/mcp-client) | OAuth 또는 페어링 코드 | `wait`, `inbox` |
+
+## 신뢰와 접근
+
+SwB은 플랫폼 ID로 메시지의 신뢰 수준을 정합니다. Slack, Discord, Telegram에서는 `known`으로 어떤 발신자의 메시지를 받을지 SwB에 알려 주세요. 소유자가 아닌 사람이 보낸 메시지는 `external` 신뢰 수준을 가집니다. [신뢰 수준](/ko/docs/security#신뢰-수준)을 참고하세요.
+
+대상, 채널, 메모리 범위는 기본적으로 비공개입니다. 다른 사람에게 접근을 주려면 리소스를 공유하세요.
+
+## 기본 제공 아바타
+
+[Slack 페르소나](/ko/docs/blocks/slack#페르소나)에 기본 제공 그림을 쓰려면 파일 이름으로 고르세요.
+
+| 파일 | 이름 |
+| - | - |
+| `capy.png` | Capy |
+| `chatgpt.png` | ChatGPT |
+| `claude-code.png` | Claude Code |
+| `claude.png` | Claude |
+| `codex.png` | Codex |
+| `default.png` | `default` |
+| `dots.png` | ChatGPT dots |
+| `dsh.png` | DeepSeek Harness |
+| `gemini.png` | Gemini |
+| `grok-bot.png` | Grok Bot |
+| `grok.png` | Grok |
+| `muse.png` | Muse |
+| `swb.png` | SwB |
+
+## 직접 블록 만들기
+
+블록은 매니페스트가 있는 Python 클래스입니다. 매니페스트에는 블록이 할 수 있는 일, 메시지를 보낼 수 있는 곳, 사용하는 시크릿이 적혀 있습니다. 만든 블록은 `switchboard.blocks` 엔트리 포인트 그룹에 등록하세요. 서버에 설정된 블록을 보려면 `swb blocks list`를 실행하세요.

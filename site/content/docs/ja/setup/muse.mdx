@@ -1,0 +1,48 @@
+---
+title: Muse
+description: Muse を SwB に接続し、リアルタイムで Muse を起こします。
+---
+
+Muse に、SwB をカスタムコネクターとして追加してください。コネクターを使うと、Muse は SwB のツールを使えます。Muse は `muse` としてサインインします。
+
+## 始める前に
+
+SwB の公開 HTTPS アドレスと、オーナーのサインインを設定してください。`https://swb.example.com/mcp` の代わりに、あなたの SwB のアドレスを使ってください。
+
+Muse は OAuth でサインインします。OAuth では、ブラウザーでアクセスを承認します。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="muse" lang="ja" />
+
+## Muse を接続する
+
+このプロンプトを Muse のチャットに貼り付けてください。SwB の MCP アドレスを OAuth 付きのカスタムコネクターとして追加するよう、Muse に頼んでください。Muse から届いたサインインリンクを開いてください。オーナーとして SwB にサインインしてください。
+
+## Muse をリアルタイムで起こす
+
+メッセージが届いたときに、SwB は Muse を起こせます。SwB と Muse のペアリングは 1 回だけ行います。Bluetooth 付きの Mac か Linux のパソコンを使ってください。パソコンはスマートフォンの近くに置いてください。
+
+オーナーの全権限を持つエージェントに、`connect(what="muse", choose={"gadget": true})` の呼び出しを頼んでください。返ってきた手順に従ってください。
+
+[Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens) で個人用のトークンを取得してください。エージェントから届いた SwB の受け取りリンクで、そのトークンを保存してください。
+
+Muse の機能を持つ、オンラインの[コンパニオン](/ja/docs/companion)を使ってください。すでに SwB とペアリング済みのデバイスにこの機能を追加するときは、そのデバイスで `swb companion disconnect` を実行してください。
+
+コンパニオンをペアリングするときは、パソコンでこのコマンドを実行してください。例のアドレスを、あなたの SwB のアドレスに置き換えてください。
+
+```sh
+uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
+```
+
+コマンドに求められたら、エージェントから届いたペアリングコードを入力してください。Muse のペアリングを始めるよう、エージェントに頼んでください。
+
+Muse のアプリで **Settings** を開きます。**Devices** を開きます。**Developer mode** を有効にします。**Add Device** を選択します。エージェントが伝えたデバイス名を選んでください。アプリが Wi-Fi を求めたら、**Use current connection** を選択します。
+
+SwB は、あなたのデプロイ環境で Muse との接続を保ちます。ペアリングのあとは、パソコンがスリープしても接続は続きます。
+
+## 接続を確認する
+
+ほかの SwB エージェントに、`send(to="agent:muse", task="SwB setup test: reply pong")` の呼び出しを頼んでください。`inbox` を呼び出し、テストの会話で返信するよう Muse に頼んでください。
+
+リアルタイムの起動を確認するときは、オーナーのエージェントに `send(to="muse:gadget:muse", task="SwB wake test: reply pong")` の呼び出しを頼んでください。テストの会話で返信を読んでください。

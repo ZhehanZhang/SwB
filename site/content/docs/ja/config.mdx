@@ -1,0 +1,195 @@
+---
+title: 設定
+description: 環境変数、設定ファイル、オーバーレイについて説明します。
+---
+
+SwB は環境変数だけでも動きます。MCP ブロックは既定で起動します。一部のブロックは、対応する変数を設定すると起動します。さらに細かく設定するときは YAML ファイルを使ってください。YAML は設定用のテキスト形式です。
+
+## インスタンス
+
+| 変数 | 用途 |
+| - | - |
+| `SWB_KEY_OWNER` | SwB のツールとコマンドで使うオーナーキー |
+| `SWB_PUBLIC_URL` | サインインと MCP の公開アドレス。リモートのサーバーでは HTTPS を使います。例は `https://swb.example.com` です。 |
+| `SWB_HOST` | 受信する接続のアドレス。既定値は `127.0.0.1` です。 |
+| `SWB_DATA_DIR` | データフォルダー。イメージでは `/data` を使います。 |
+| `SWB_OWNER_EMAILS` | OpenID Connect（OIDC）と Cloudflare Access で使うオーナーのメールアドレス。複数のアドレスはカンマで区切ります |
+| `SWB_KEY_<NAME>` | エージェント `<name>` のキー。エージェントは、`Authorization` ヘッダーのベアラーキーとしてこのキーを送ります |
+| `SWB_CONFIG` | ベースの YAML ファイルのパス |
+| `SWB_OVERLAY` | 非公開のオーバーレイファイルのパス |
+| `SWB_PORT` | HTTP のポート。`swb up` の既定値は `8870` です。 |
+
+`SWB_PORT` は、シェルかインスタンスの `.env` ファイルで設定してください。ホスティング先のプラットフォームが別のポートを設定する場合は、クライアントのコマンドで `--url` を使い、動作中のサーバーを指定してください。
+
+コマンドラインで公開 URL を設定するときは、`swb up --public-url https://swb.example.com` を使います。その実行では、このオプションが YAML の `public_url` より優先されます。YAML は `SWB_PUBLIC_URL` より優先されます。
+
+`SWB_HOST` を上書きするときは `--host` を使います。`--host 0.0.0.0` やローカルネットワークのアドレスを使う前に、公開 URL を設定してください。
+
+`swb up --dir ./my-swb` を使うと、そのフォルダーから `.env` と `config/switchboard.yaml` を読みます。`swb init` にも同じ `--dir` を付けてください。オプションを付けずに `swb up` を使う場合は、`SWB_CONFIG` で別の設定ファイルを選べます。
+
+`swb status`、`swb login-link`、`swb connect`、`swb claim` は、`--dir` で `.env` を探します。サーバーのアドレスは `--url` で選びます。
+
+サーバーコマンドも `--dir` を受け付けます。対象は `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks`、`swb targets` です。SwB は、選んだフォルダーから `.env` と設定を読みます。データベースを使うコマンドでは、そのフォルダーでインスタンスのデータも探します。
+
+オプションを付けずに `swb serve` を使うと、SwB はシェルと設定ファイルを読みます。ほかのサーバーコマンドは、既定で現在のフォルダーを使います。
+
+設定をバージョン 2 の形式で表示するときは、`swb config migrate [file]` を使います。特定の設定を選ぶときは `file` を渡します。`file` を省略すると、SwB は `--dir`、`SWB_CONFIG`、既定のパスのいずれかにある設定を使います。
+
+## データフォルダー
+
+`swb up` と `swb init` は、新しいインスタンス用に `data/` フォルダーを作成します。SwB は既定でこのフォルダーを使います。別のインスタンスフォルダーを選ぶときは `swb up --dir` を使います。
+
+パスを変えるときは、設定かオーバーレイで `data_dir` を設定してください。この設定が最も優先されます。次に、SwB は `SWB_DATA_DIR`、`SWB_DATA` の順で確認します。3 つの設定がすべて空のときは、既定値を使います。
+
+オプションを付けずに `swb up` を実行すると、既存の設定ファイルはそのまま残ります。インスタンスに設定ファイルがあり、`data/` が欠けている場合、SwB は `~/.local/share/switchboard` にある古いデータベースを確認します。そのデータベースを使うと、SwB はログにお知らせを 1 回記録します。
+
+Linux と macOS では、SwB はデータフォルダーを非公開のモード `0700` に設定します。データベースファイルは非公開のモード `0600` に設定します。
+
+## ブロック
+
+一部のブロックは、環境にある認証情報から起動できます。セットアップについては[ブロック](/ja/docs/blocks)をご覧ください。名前付きのワークスペースとルーティンで使う認証情報の名前は、[リリースの環境変数の例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)にあります。
+
+## 設定ファイル
+
+`swb up` は、新しいインスタンスをそのフォルダーに用意します。オーナーキーを `.env` に保存し、独自の `SWB_PORT` もそこに保存します。ファイルのモードは `0600` に設定します。
+
+SwB を起動する前にファイルを作成するときは、`swb init` を実行してください。
+
+```bash
+swb init
+```
+
+どちらのコマンドも、既定で `config/switchboard.yaml` に `version: 2` を書き込みます。アドレスをそこに保存するときは、`swb init --public-url` にアドレスを渡します。初回の実行で、`swb up` は `--public-url` か `SWB_PUBLIC_URL` のアドレスを保存します。読み込むブロックを選ぶときは `blocks` を追加してください。`CAPTAIN_ID` を、あなたの Capy Captain の ID に置き換えてください。
+
+```yaml
+version: 2
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+blocks:
+  mcp: {use: mcp}
+  capy: {use: capy, identity: service}
+targets:
+  aliases: {}
+routes:
+  - {match: {}, to: capy:captain:CAPTAIN_ID}
+```
+
+`blocks` セクションがあると、SwB はブロックの自動選択の代わりにこのセクションを使います。MCP ブロックを止めるときは、そのブロックに `enabled: false` を設定します。ブロックの設定は、引き続き環境から認証情報を読めます。
+
+## オーバーレイ
+
+オーバーレイとは、インスタンス固有の設定を入れる YAML ファイルです。ベースの設定ファイルと同じ場所に `local.yaml` として保存するか、`SWB_OVERLAY` でパスを設定してください。オーバーレイはベースのファイルより優先されます。ベースのファイルは、環境の既定値より優先されます。名前でまとめた設定はマージします。リストはオーバーレイで置き換えます。
+
+キーの中の `*` は、項目の名前かリストの要素を表します。
+
+## コア
+
+| キー | 用途 |
+| - | - |
+| `version` | YAML 形式のバージョン。`blocks` を使うときは `2` にします |
+| `public_url` | MCP とサインインの公開アドレス。OAuth を使うと、アプリはあなたの承認を得てサインインできます |
+| `data_dir` | データフォルダーのパス。ここか `SWB_DATA_DIR` で設定します |
+| `timezone` | 日ごとの集計と上限に使うタイムゾーン。既定値は `UTC` |
+| `turn_cap` | SwB が会話を一時停止するまでのターン数。既定値は `200`。上限を外すときは `null` を設定します |
+| `blocks` | 読み込むブロック。種類か独自のラベルで名前を付けます |
+| `agents` | 名前ごとのエージェントの定義 |
+| `agents.*.label` | エージェントの表示名 |
+| `targets` | 送信先の名前とその優先順位 |
+| `targets.aliases` | 短い名前を、送信先の名前かアドレスに対応付けます |
+| `targets.priority` | 送信先の名前が重なるときの順番。例は `[capy:captain, agent, project]` |
+| `routes` | 初期のルート。設定済みのルートはそのまま残します |
+| `routes.*.match` | エージェント、プロジェクト、またはその両方に一致させます。全体のルートには `{}` を使います |
+| `routes.*.to` | ルートが一致したときの送り先のアドレス |
+
+## サインインとキー
+
+| キー | 用途 |
+| - | - |
+| `auth` | サインインとキーの設定 |
+| `auth.owner_emails` | OIDC か Cloudflare Access でオーナーとしてサインインできるメールアドレス |
+| `auth.cloudflare_access` | Cloudflare Access のサインイン設定。両方の項目を指定し、`auth.owner_emails` を設定します |
+| `auth.cloudflare_access.team_domain` | Cloudflare Access のチームドメイン |
+| `auth.cloudflare_access.aud` | Access アプリケーションを識別する Audience タグ |
+| `auth.redirect_uris` | 許可する OAuth の戻り先アドレス。このリストは組み込みの値を置き換えます。パスとその下位のパスに一致させるときは `/*` を使います |
+| `auth.source_names` | OAuth のホスト名かクライアント名の一部を、サインインに使うエージェント名に対応付けます |
+| `auth.key_scopes` | キー名かエージェント名ごとのアクセススコープ。例は `[project:example]`。これらのスコープは、ルート、メッセージ、会話を制限します。設定済みのキーと OAuth クライアントがメモリを使うときも制限します。ペアリング済みのキーでは、SwB がペアリング時に、指定したメモリスコープをグラントに追加します |
+| `auth.key_tools` | キー名を、許可する MCP ツールに対応付けます。例は `[send]` |
+| `auth.key_targets` | キー名ごとに許可するメッセージの送信先。例は `[agent:claude]`。この制限があるキーは、許可された送信先を指定する必要があります |
+| `auth.inbox_keys` | キー名を、インボックスを読める 1 つのエージェントに対応付けます。組み込みの項目は `channel: claude-code` です |
+
+## 公開範囲
+
+| キー | 用途 |
+| - | - |
+| `visibility` | リソースにアクセスできる相手を決めるルール。ツールは常に非公開です |
+| `visibility.defaults` | リソースの種類ごとの既定のルール。すべての種類は `private` から始まります |
+| `visibility.defaults.channel` | チャンネルの既定のルール |
+| `visibility.defaults.memory` | メモリスコープの既定のルール |
+| `visibility.defaults.route` | ルートの既定のルール |
+| `visibility.defaults.target` | 送信先の既定のルール |
+| `visibility.resources` | `channel:home/#agents` のような特定のリソースのルール。各ルールは、その種類の既定より優先されます |
+
+Slack では、`channel:home/#agents` はチャンネルのルールです。GitHub で外部の送信者を `agent:beta` に届けるときは、`channel:github/acme/app` と `target:beta` の両方を共有してください。詳しくは[チャンネルの公開範囲](/ja/docs/channel-modes#外部の-github-送信者を許可する)をご覧ください。
+
+オーナーとそのエージェントだけにするときは `private` を使います。アクセスを開くときは `shared` を使います。特定の人と共有するときは、ユーザー ID か `workspace:home` のような項目を列挙します。`visibility_set` での変更は、このファイルより優先されます。
+
+## GitHub の送信者の信頼
+
+| キー | 用途 |
+| - | - |
+| `blocks.github.owner_ids` | オーナーとして信頼する、数値の GitHub ユーザー ID の既定のリスト |
+| `blocks.github.spaces.*.owner_ids` | このスペースで既定のリストを置き換える、数値の GitHub ユーザー ID のリスト |
+
+GitHub は `owner` と `external` の信頼レベルを使います。Slack、Discord、Telegram では、`known` を使って、SwB が受け入れるメッセージの送信者を選びます。ほかの送信者からのメッセージは `external` のままです。Work モードの設定については[オーナーのアカウント](/ja/docs/blocks/github#オーナーのアカウント)をご覧ください。
+
+## MCP
+
+| キー | 用途 |
+| - | - |
+| `blocks.mcp` | MCP クライアントに応答するブロックの設定 |
+| `blocks.mcp.use` | ブロックの種類。`mcp` を使います |
+| `blocks.mcp.legacy_aliases` | `agent_send`、`capy_delegate`、`capy_wait`、`capy_reply` などの以前の MCP ツール名を使える状態に保ちます。既定値は `true` |
+| `blocks.mcp.wait` | 返信を待つツール呼び出しの上限 |
+| `blocks.mcp.wait.default_s` | 呼び出し側が空にしたときの待ち時間（秒）。既定値は `60` |
+| `blocks.mcp.wait.max_s` | 最大の待ち時間（秒）。既定値は `200` |
+| `blocks.mcp.wait.agents` | エージェントごとの待ち時間の上限。Claude Code は既定で `45` 秒、最大 `55` 秒を使います |
+| `blocks.mcp.wait.agents.*.default_s` | このエージェントの既定の待ち時間（秒） |
+| `blocks.mcp.wait.agents.*.max_s` | このエージェントの最大の待ち時間（秒） |
+
+## メモリとチャンネルモード
+
+プロジェクトのルートの割り当てと、トリアージの操作の設定については、[チャンネルモード](/ja/docs/channel-modes)をご覧ください。
+
+| キー | 用途 |
+| - | - |
+| `memory` | メモリの Markdown コピーの設定 |
+| `memory.mirror` | Markdown コピーを管理します。更新を止めるときは `false` を設定します |
+| `memory.mirror_dir` | Markdown コピーのフォルダー |
+| `memory.mirror_debounce_s` | メモリの変更からコピーを書き込むまでの待ち時間（秒）。既定値は `2` |
+| `modes` | 届いたイベントへの SwB の対応の設定 |
+| `modes.default` | 既定のモード。既定値は `off` です |
+| `modes.projects` | 各プロジェクトに割り当てたスペースの既定のモード |
+| `modes.assist_max_chars` | `assist` の返信で SwB がエージェントに伝える文字数の上限。既定値は `1500` |
+| `modes.digest_minutes` | 要約を作るまで `watch` のイベントを集める時間（分）。既定値は `60`。イベントが `50` 件になったときも要約を送ります |
+
+## ブランディング
+
+```yaml
+branding:
+  display_name: SwB
+  accent_color: "#64748b"
+```
+
+| キー | 用途 |
+| - | - |
+| `branding` | SwB が表示する名前、アイコン、色の設定 |
+| `branding.display_name` | 表示名。既定値は `SwB` |
+| `branding.accent_color` | `#RRGGBB` 形式のアクセントカラー |
+| `branding.icon` | 独自のアイコン |
+| `branding.logo_assets_dir` | 独自のロゴファイルのフォルダー |
+| `branding.public_identity` | このリリースでは `swb` に固定した内部の項目 |
+
+## 完全なリファレンス
+
+注釈付きの YAML の例は [config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/release/1.0/config/switchboard.example.yaml) にあります。

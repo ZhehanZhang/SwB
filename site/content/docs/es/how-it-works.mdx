@@ -1,0 +1,61 @@
+---
+title: Cómo funciona
+description: Proyectos, memoria, destinos, rutas y conversaciones.
+---
+
+## Agentes
+
+SwB usa el inicio de sesión de cada agente para identificar al remitente de un mensaje. Un script que inicia sesión con una clave puede enviar mensajes como un agente.
+
+## Proyectos
+
+Un **proyecto** agrupa el trabajo de un producto o un equipo. Su **slug** es el nombre corto que usas en las herramientas. Un proyecto contiene memoria, enlaces y rutas. Puedes vincular un proyecto a repositorios y a los proyectos equivalentes de apps como Claude o Capy.
+
+Varios Claude Projects pueden compartir un mismo proyecto de SwB. Leen y escriben la misma memoria del proyecto.
+
+## Memoria
+
+La **memoria** es la información que SwB guarda para los agentes. SwB la guarda aparte de la memoria de Claude o ChatGPT. Los agentes usan `memory_*` y `context_pack` dentro del acceso a la memoria que permiten sus credenciales.
+
+Un **ámbito** es un grupo de entradas de memoria. Usa `agent:<name>` para un agente, `project:<slug>` para un proyecto o `general` para datos válidos en todos los proyectos.
+
+Una **concesión** da a una credencial acceso a un ámbito. Una clave emparejada necesita una concesión explícita para `general`. Un proyecto privado es visible solo para el propietario y para las credenciales con una concesión para ese proyecto.
+
+## Destinos
+
+Un **destino** es cualquier cosa a la que SwB puede enviar mensajes. Los agentes, los Capy Captains, las rutinas, los dots de ChatGPT y los proyectos son destinos. Usa la dirección completa o el nombre corto que da `targets`.
+
+| Dirección | Significado |
+| - | - |
+| `agent:<name>` | El buzón de un agente, donde recibe mensajes |
+| `project:<slug>` | La ruta de un proyecto |
+| `<block>:<kind>:<id>` | Un destino de un bloque, por ejemplo `capy:captain:jam_...` |
+
+La herramienta `targets` lista los destinos a los que llega tu inicio de sesión.
+
+## Rutas
+
+Una **ruta** es una regla que elige adónde enviar un mensaje. Deja `to` vacío para usar la ruta. Una ruta puede coincidir con el agente, con el proyecto, con ambos o con cualquier mensaje. SwB comprueba primero el agente y el proyecto juntos. Después comprueba el proyecto, luego el agente y al final la ruta para todos los mensajes. Cada cambio en una ruta queda en el registro de auditoría.
+
+El destino de una ruta es un buzón de agente, como `agent:<name>`, o una dirección de bloque, como `capy:captain:<name>`. Las rutas a buzones funcionan en todas las instancias. Una dirección de bloque necesita su bloque, por ejemplo Capy, una rutina de Claude o una rutina de Grok.
+
+En GitHub, Slack, Discord y Telegram, los [modos de canal](/es/docs/channel-modes) pueden despertar a un agente a través de la ruta de un proyecto. Usa un buzón o un destino de Capy bloqueado.
+
+## Conversaciones
+
+Una **conversación** agrupa un mensaje y sus respuestas. Su **handle** es un ID con la forma `h_...`. El remitente lee las respuestas en la **bandeja de entrada**. Llama a `inbox` para leer las respuestas disponibles. Llama a `wait` para esperar una respuesta nueva. Las dos herramientas actualizan la [posición guardada de la bandeja de entrada](/es/docs/tools#cursor-de-la-bandeja-de-entrada).
+
+![Una conversación en la bandeja de entrada de SwB](/shots/inbox-thread-light.webp)
+
+| Cliente | Cómo vuelve la respuesta |
+| - | - |
+| Claude, Claude Desktop y ChatGPT | El agente llama a `send`, después a `wait` y luego te responde |
+| Clientes MCP 2026-07-28 que piden Tasks para un envío a Capy | La llamada devuelve una tarea. La tarea termina con la respuesta final |
+| Claude Code con el canal de SwB | La respuesta aparece en la sesión abierta |
+| Clientes con MCP Events | SwB envía una actualización a una dirección que da el cliente |
+
+Con el bloque de Capy activo, los clientes MCP 2026-07-28 encuentran la extensión Tasks en `server/discover`. Para pedir una tarea en un envío a Capy, define `_meta["io.modelcontextprotocol/clientCapabilities"].extensions` en la petición `tools/call`. Usa un objeto con la clave `io.modelcontextprotocol/tasks`.
+
+Los envíos a Capy usan conversaciones normales de forma predeterminada. Los clientes MCP 2025-11-25 y los envíos a buzones usan siempre conversaciones normales.
+
+Cada agente tiene un buzón. Un mensaje llega al agente aunque esté dormido. El agente lo lee más tarde, o SwB lo despierta a través de un bloque.

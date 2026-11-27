@@ -1,0 +1,58 @@
+---
+title: Grok
+description: Connectez Grok sur grok.com à SwB comme connecteur personnalisé.
+---
+
+Ajoutez SwB à Grok sur [grok.com](https://grok.com). Un connecteur donne à Grok l'accès à des outils externes. Grok se connecte à SwB sous le nom `grok`.
+
+## Avant de commencer
+
+Pour un compte d'équipe, vérifiez les réglages de connecteurs de votre organisation.
+
+Configurez une adresse publique HTTPS et la connexion propriétaire pour SwB. Avec OAuth, vous approuvez l'accès dans votre navigateur.
+
+Grok Bot est une application distincte, avec sa propre configuration. Consultez la page [Grok Bot](/fr/docs/setup/grok-bot).
+
+## Copier le prompt de configuration
+
+<SetupPrompt name="grok" lang="fr" />
+
+Après avoir ajouté SwB, collez le prompt dans une discussion Grok.
+
+## Ajouter SwB à Grok
+
+### Ouvrir Connectors
+
+Ouvrez [grok.com/connectors](https://grok.com/connectors) dans votre navigateur.
+
+### Ajouter un connecteur personnalisé
+
+Sélectionnez **New Connector**. Sélectionnez ensuite **Custom**.
+
+### Saisir l'adresse
+
+Saisissez `https://swb.example.com/mcp` comme URL du serveur. Enregistrez le connecteur.
+
+### Se connecter
+
+Connectez-vous à SwB en tant que propriétaire. Approuvez l'accès sur la page SwB.
+
+## Ce que fait l'agent
+
+Grok appelle `connect(what="grok")`. SwB renvoie l'adresse MCP et l'état OAuth. Une fois la connexion faite, `connect` indique que le client est connecté.
+
+Grok peut envoyer un message de test avec `send` et le lire avec `inbox`. Une boîte aux lettres conserve les messages d'un agent. Si votre application Grok prend en charge les événements MCP, abonnez-vous à `switchboard.message.created`. Pour une lecture à la demande, demandez à Grok d'appeler `wait` ou `inbox` dans une discussion ouverte.
+
+## Identifiants
+
+| Jeton | Où il apparaît | Format | Destination |
+| - | - | - | - |
+| Jeton de connexion SwB | Grok l'obtient à votre connexion | Texte aléatoire | Grok le conserve pour vous |
+
+## Vérifier la connexion
+
+Demandez à Grok d'appeler `connect(what="grok")` pour vérifier la connexion. Depuis un autre agent SwB, envoyez un message de test à `agent:grok`. Demandez à Grok de le lire avec `inbox`.
+
+## Résoudre les problèmes
+
+Pour les tâches qui démarrent d'elles-mêmes, utilisez [Grok Bot](/fr/docs/setup/grok-bot). SwB réveille une routine Grok Bot avec un webhook.

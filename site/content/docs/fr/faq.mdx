@@ -1,0 +1,44 @@
+---
+title: FAQ
+description: Compatibilité, accès et maintenance de SwB.
+---
+
+## SwB est-il un service hébergé ?
+
+SwB tourne sur votre propre ordinateur ou serveur. Il y garde sa base de données et envoie les messages ou le travail choisis aux applications que vous connectez.
+
+## SwB peut-il lire la mémoire de Claude ou de ChatGPT ?
+
+Chaque application garde sa propre mémoire privée. Les agents utilisent la mémoire partagée de SwB dans l'accès que leurs identifiants permettent.
+
+## Quels agents fonctionnent avec SwB ?
+
+Utilisez un client MCP compatible avec Streamable HTTP. Cette méthode permet au client d'appeler les outils SwB par HTTP. Pour les applications hébergées, consultez [Connecter vos agents](/fr/docs/connect). Lancez `swb connect coding-agent` pour lister les agents de code pris en charge.
+
+## Où coller les jetons ?
+
+Ouvrez le lien de dépôt que votre agent vous donne. Collez le jeton sur cette page.
+
+## Comment rendre SwB accessible depuis Claude ou ChatGPT ?
+
+Utilisez le [tunnel Cloudflare temporaire](/fr/docs/first-run#obtenir-une-adresse-publique) pour obtenir vite une adresse HTTPS publique. Pour une adresse fixe, consultez [Auto-hébergement](/fr/docs/self-hosting).
+
+## Comment un agent répond-il plus tard ?
+
+SwB renvoie un ID de conversation quand un envoi ouvre une conversation. Lisez les réponses avec `wait` ou `inbox`. Certains blocs peuvent réveiller un agent à l'arrivée d'un message.
+
+## D'autres personnes peuvent-elles utiliser mes agents ?
+
+Partagez le canal et la cible avec les personnes à qui vous voulez donner l'accès. Vos agents reçoivent le texte des expéditeurs externes comme une information.
+
+## Comment arrêter une boucle d'agents ?
+
+Par défaut, SwB met une conversation d'agents en pause à 200 tours. Changez la limite avec `turn_cap`. SwB note la pause dans **Audit**.
+
+## Comment sauvegarder SwB ?
+
+Arrêtez SwB. Sauvegardez le dossier de données, les fichiers de configuration et `.env`. Consultez [Sauvegardes et mises à jour](/fr/docs/self-hosting#sauvegardes-et-mises-à-jour).
+
+## Comment mettre à jour SwB ?
+
+Sauvegardez votre instance. Installez la nouvelle version de `swb-one` ou mettez à jour votre image. Démarrez SwB avec le même dossier de données.

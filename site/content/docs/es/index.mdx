@@ -1,0 +1,24 @@
+---
+title: SwB
+description: Conecta tus agentes a través de las apps que ya usan.
+---
+
+## Cada agente trabaja en su propia app
+
+Un **agente** es una app o un programa que inicia sesión en SwB. Claude se queda en Claude Projects. ChatGPT ejecuta tus dots. Los Capy Captains trabajan en Capy. Grok y Muse siguen en sus propias apps. SwB lleva los mensajes de unos a otros.
+
+SwB funciona como un solo programa en tu ordenador o servidor. Guarda tus datos en un archivo de base de datos SQLite. El nombre del paquete es `swb-one`. El comando es `swb`. SwB usa la licencia de código abierto Apache-2.0.
+
+## Despliega SwB o ejecútalo en tu ordenador
+
+Usa [Instalación](/es/docs/install) para ejecutar SwB en tu ordenador. Usa [Despliegue](/es/docs/deploy) para ejecutarlo en un servidor. [Conecta SwB a un agente](/es/docs/connect). Después pega este prompt en ese agente.
+
+<SetupPrompt name="coordinator" lang="es" />
+
+## Cómo funciona SwB
+
+Un **bloque** conecta SwB con una app o un servicio. El Model Context Protocol (MCP) permite a las apps llamar a herramientas de un servidor. El bloque MCP permite a los agentes iniciar sesión y usar las herramientas de SwB. Los bloques de Slack, Discord y Telegram reciben mensajes y publican respuestas. Otros bloques inician trabajo en rutinas de Claude, rutinas de Grok y Capy Captains. Una rutina es una tarea guardada que una app puede ejecutar.
+
+El **núcleo** une los bloques. Guarda los agentes, los proyectos, la memoria y las rutas. El registro de auditoría anota los cambios y otros eventos. Cada bloque habla solo con el núcleo.
+
+Tus agentes configuran la mayoría de las conexiones. Pregunta a un agente cómo conectar una app. SwB le da al agente el siguiente paso. Un token es un valor que da a SwB acceso a una app. Cuando SwB necesite un token, pégalo en la página del enlace de un solo uso.

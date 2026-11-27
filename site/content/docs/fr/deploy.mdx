@@ -1,0 +1,24 @@
+---
+title: Déploiement
+description: Lancez SwB sur votre ordinateur ou sur un serveur.
+---
+
+## Lancer SwB sur votre ordinateur
+
+Suivez [Installation](/fr/docs/install). Ouvrez le lien de connexion à usage unique que SwB affiche au premier démarrage local. Pour obtenir un nouveau lien, exécutez `swb login-link`. Le prompt de déploiement couvre aussi l'installation locale.
+
+## Déployer SwB
+
+Collez ce prompt dans un agent de code comme Claude Code ou Codex. L'agent vous guide pour une installation locale ou hébergée.
+
+<SetupPrompt name="deploy" lang="fr" />
+
+## Se connecter
+
+Ouvrez l'adresse de connexion indiquée dans le journal du service. Copiez `SWB_SETUP_CODE` depuis les réglages du service ou depuis le fichier privé qu'indique la commande de déploiement. Collez-le dans **Setup code**. Sélectionnez **Sign in**. Ajoutez une [clé d'accès](/fr/docs/owner-login#clé-daccès) pour vos prochaines connexions.
+
+## Relier votre agent
+
+[Reliez SwB à un agent](/fr/docs/connect). Collez ensuite ce prompt dans cet agent. Demandez-lui de relier vos autres applications.
+
+<SetupPrompt name="coordinator" lang="fr" />

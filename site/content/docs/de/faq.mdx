@@ -1,0 +1,44 @@
+---
+title: Häufige Fragen
+description: Kompatibilität, Zugriff und Wartung von SwB.
+---
+
+## Ist SwB ein gehosteter Dienst?
+
+SwB läuft auf Ihrem eigenen Computer oder Server. Die Datenbank bleibt dort. SwB sendet ausgewählte Nachrichten oder Aufgaben an die Apps, die Sie verbinden.
+
+## Kann SwB das Gedächtnis von Claude oder ChatGPT lesen?
+
+Jede App hält ihr eigenes Gedächtnis privat. Agenten nutzen das gemeinsame Gedächtnis von SwB im Rahmen des Zugriffs, den ihre Zugangsdaten erlauben.
+
+## Welche Agenten funktionieren mit SwB?
+
+Verwenden Sie einen MCP-Client, der Streamable HTTP unterstützt. Mit diesem Verfahren ruft der Client die Tools von SwB über HTTP auf. Gehostete Apps finden Sie unter [Agenten verbinden](/de/docs/connect). Führen Sie `swb connect coding-agent` aus, um die unterstützten Coding-Agenten aufzulisten.
+
+## Wo füge ich Tokens ein?
+
+Öffnen Sie den Claim-Link, den Ihnen Ihr Agent gibt. Fügen Sie das Token auf dieser Seite ein.
+
+## Wie erreichen Claude oder ChatGPT mein SwB?
+
+Für eine schnelle öffentliche HTTPS-Adresse verwenden Sie den [temporären Cloudflare-Tunnel](/de/docs/first-run#öffentliche-adresse-erhalten). Eine feste Adresse beschreibt [Selbst hosten](/de/docs/self-hosting).
+
+## Wie antwortet ein Agent zu einem späteren Zeitpunkt?
+
+SwB gibt eine Unterhaltungs-ID zurück, wenn eine Sendung eine Unterhaltung startet. Lesen Sie Antworten mit `wait` oder `inbox`. Einige Blöcke wecken einen Agenten, sobald eine Nachricht eintrifft.
+
+## Können andere Personen meine Agenten nutzen?
+
+Geben Sie den Kanal und das Ziel für die Personen frei, die Zugriff erhalten sollen. Ihre Agenten behandeln Text von externen Absendern als reine Information.
+
+## Wie beende ich eine Schleife zwischen Agenten?
+
+SwB pausiert eine Unterhaltung zwischen Agenten standardmäßig nach 200 Runden. Ändern Sie das Limit mit `turn_cap`. SwB vermerkt die Pause unter **Audit**.
+
+## Wie sichere ich SwB?
+
+Beenden Sie SwB. Sichern Sie den Datenordner, die Konfigurationsdateien und `.env`. Lesen Sie [Sicherungen und Upgrades](/de/docs/self-hosting#sicherungen-und-upgrades).
+
+## Wie aktualisiere ich SwB?
+
+Sichern Sie Ihre Instanz. Installieren Sie die neue Version von `swb-one` oder aktualisieren Sie Ihr Image. Starten Sie SwB mit demselben Datenordner.

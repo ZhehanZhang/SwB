@@ -13,7 +13,7 @@ function files(dir) {
 }
 
 let problems = 0;
-for (const lang of ['zh-Hans', 'zh-Hant']) {
+for (const lang of ['zh-Hans', 'zh-Hant', 'ko', 'ja']) {
   for (const file of files(join(root, lang))) {
     const html = readFileSync(file, 'utf8');
     const main = html.match(/<article[\s\S]*?<\/article>/)?.[0] ?? html.match(/<main[\s\S]*?<\/main>/)?.[0] ?? '';

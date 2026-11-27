@@ -1,0 +1,61 @@
+---
+title: Fonctionnement
+description: Projets, mémoire, cibles, routes et conversations.
+---
+
+## Agents
+
+SwB utilise la connexion de chaque agent pour identifier l'expéditeur d'un message. Un script qui se connecte avec une clé peut envoyer des messages en tant qu'agent.
+
+## Projets
+
+Un **projet** regroupe le travail d'un produit ou d'une équipe. Son **nom court** est le nom que vous utilisez dans les outils. Un projet contient de la mémoire, des liens et des routes. Vous pouvez lier un projet à des dépôts et aux projets correspondants dans des applications comme Claude ou Capy.
+
+Plusieurs Claude Projects peuvent partager un même projet SwB. Ils lisent et écrivent la même mémoire de projet.
+
+## Mémoire
+
+La **mémoire** est l'information que SwB enregistre pour les agents. SwB la garde à part de la mémoire de Claude ou de ChatGPT. Les agents utilisent `memory_*` et `context_pack` dans les limites de l'accès à la mémoire que leurs identifiants autorisent.
+
+Une **portée** est un groupe d'entrées de mémoire. Utilisez `agent:<name>` pour un agent, `project:<slug>` pour un projet ou `general` pour les informations valables dans tous les projets.
+
+Une **autorisation** donne à un identifiant l'accès à une portée. Une clé appairée demande une autorisation explicite pour `general`. Un projet privé est visible uniquement par le propriétaire et par les identifiants qui ont une autorisation pour ce projet précis.
+
+## Cibles
+
+Une **cible** est tout ce à quoi SwB peut envoyer un message. Les agents, les Capy Captains, les routines, les dots ChatGPT et les projets sont des cibles. Utilisez l'adresse complète ou le nom court donné par `targets`.
+
+| Adresse | Signification |
+| - | - |
+| `agent:<name>` | La boîte aux lettres d'un agent, où il reçoit ses messages |
+| `project:<slug>` | La route d'un projet |
+| `<block>:<kind>:<id>` | Une cible d'un bloc, par exemple `capy:captain:jam_...` |
+
+L'outil `targets` liste les cibles accessibles avec votre connexion.
+
+## Routes
+
+Une **route** est une règle qui choisit où envoyer un message. Laissez `to` vide pour utiliser la route. Une route peut correspondre à l'agent, au projet, aux deux ou à tous les messages. SwB vérifie d'abord l'agent et le projet ensemble. Il vérifie ensuite le projet, puis l'agent, puis la route de tous les messages. Chaque modification d'une route est inscrite au journal d'audit.
+
+La cible d'une route est une boîte aux lettres d'agent, comme `agent:<name>`, ou une adresse de bloc, comme `capy:captain:<name>`. Les routes vers une boîte aux lettres fonctionnent sur toutes les instances. Une adresse de bloc demande son bloc, par exemple Capy, une routine Claude ou une routine Grok.
+
+Sur GitHub, Slack, Discord et Telegram, les [modes de canal](/fr/docs/channel-modes) peuvent réveiller un agent par une route de projet. Utilisez une boîte aux lettres ou une cible Capy verrouillée.
+
+## Conversations
+
+Une **conversation** regroupe un message et ses réponses. Sa **référence** est un ID de la forme `h_...`. L'expéditeur lit les réponses dans sa **boîte de réception**. Appelez `inbox` pour lire les réponses disponibles. Appelez `wait` pour attendre une nouvelle réponse. Ces deux outils mettent à jour la [position de lecture](/fr/docs/tools#position-de-lecture) enregistrée.
+
+![Une conversation dans la boîte de réception de SwB](/shots/inbox-thread-light.webp)
+
+| Client | Retour de la réponse |
+| - | - |
+| Claude, Claude Desktop et ChatGPT | L'agent appelle `send`, puis `wait`, puis vous répond |
+| Clients MCP 2026-07-28 qui demandent des Tasks pour un envoi Capy | L'appel renvoie une tâche. La tâche se termine avec la réponse finale |
+| Claude Code avec le canal SwB | La réponse apparaît dans la session ouverte |
+| Clients avec MCP Events | SwB envoie une mise à jour à une adresse fournie par le client |
+
+Quand le bloc Capy est actif, les clients MCP 2026-07-28 trouvent l'extension Tasks dans `server/discover`. Pour demander une tâche lors d'un envoi Capy, définissez `_meta["io.modelcontextprotocol/clientCapabilities"].extensions` dans la requête `tools/call`. Utilisez un objet avec la clé `io.modelcontextprotocol/tasks`.
+
+Par défaut, les envois Capy utilisent des conversations ordinaires. Les clients MCP 2025-11-25 et les envois vers une boîte aux lettres utilisent toujours des conversations ordinaires.
+
+Chaque agent a une boîte aux lettres. Un message atteint un agent même quand l'agent dort. L'agent le lit plus tard, ou SwB le réveille par un bloc.

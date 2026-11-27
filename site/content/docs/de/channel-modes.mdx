@@ -1,0 +1,100 @@
+---
+title: Kanalmodi
+description: Legen Sie fest, wie SwB Nachrichten in jedem Raum behandelt.
+---
+
+Ein **Raum** ist ein Ort, an dem Nachrichten eintreffen. Räume sind Slack-Kanäle, Discord-Kanäle und Threads, Telegram-Gruppen und GitHub-Repositories.
+
+| Modus | Das macht SwB |
+| - | - |
+| `off` | Verwirft alle GitHub-Ereignisse, auch die des Inhabers. Verwirft Nachrichten anderer Personen auf Slack, Discord und Telegram |
+| `watch` | Sammelt Nachrichten in einer Zusammenfassung der letzten Ereignisse |
+| `assist` | Weckt einen Agenten, der den Kontext liest und im Thread antwortet |
+| `triage` | Weckt einen Agenten, der ein Ereignis prüft und eine Reaktion wählt. Die Standardaktion ist eine Antwort im Thread |
+| `work` | Bearbeitet Nachrichten des Inhabers |
+
+Auf Slack, Discord und Telegram nutzen Ihre Erwähnungen und Direktnachrichten in jedem Modus `work`. Die Sichtbarkeitseinstellungen steuern weiterhin den Zugriff auf Kanäle und Ziele.
+
+Für den Modus `work` auf GitHub tragen Sie Ihre Kontonummer in die [Inhaberliste](/de/docs/blocks/github#inhaberkonten) des Raums ein.
+
+## Modus festlegen
+
+Legen Sie den Modus unter **Channel modes** auf der Verbindungs- oder Projektseite fest. Sie können ihn auch in YAML festlegen. Der Inhaber legt mit `space_mode` den Modus, das Ziel, das Projekt und die erlaubten Aktionen fest.
+
+YAML ist das Textformat der SwB-Konfigurationsdatei. Schreiben Sie in YAML `"off"` mit Anführungszeichen.
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      example-org/app:
+        mode: "off"
+```
+
+SwB prüft zuerst die gespeicherte Einstellung und danach die Kanal- und Raumeinstellungen. Danach prüft SwB ältere Blockeinstellungen, den Projektmodus und `modes.default`. Der Standard ist `off`.
+
+## Ziel binden
+
+Auf GitHub, Slack, Discord und Telegram weckt die Projektroute in den Modi `assist`, `triage` oder `work` einen Agenten. SwB verwendet das erste passende Ziel.
+
+| Reihenfolge | Ziel |
+| - | - |
+| Zuerst | Ziel aus der gespeicherten Einstellung `space_mode`. Eine Kanaleinstellung ersetzt die gesamte Raumeinstellung |
+| Danach | YAML-`target` in der Modus-Einstellung von Kanal, Raum oder Projekt, in dieser Reihenfolge |
+| Danach | In `triage` ein verfügbares Ziel namens `claude-<project>-triage`, zum Beispiel eine Claude-Routine |
+| Danach | Das `default_target` des Raums oder sein Alias `target` |
+| Zuletzt | Die Route des Projekts |
+
+Wählen Sie ein Ziel aus `targets`. Dieses Beispiel bindet ein Agentenpostfach an einen vorhandenen GitHub-Raum.
+
+```python
+space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
+```
+
+Für den Modus `assist` verwenden Sie `mode="assist"`. Lassen Sie `target` weg, um die Bindung zu behalten. Setzen Sie `target=""`, um sie zu löschen.
+
+Für die Ausweichroute rufen Sie `routes_set` mit dem verknüpften Projekt und der Zieladresse auf. Für eine gesperrte Capy-Route verwenden Sie ein Ziel wie `capy:captain:<name>` und behalten `allow_override=false` bei.
+
+## Externe GitHub-Absender zulassen
+
+Rufen Sie `visibility_list` auf, um die Namen für `visibility_set` zu sehen. Die Adresse `agent:beta` zeigt auf das Postfach. Die Regel `target:beta` steuert, wer es erreicht.
+
+```python
+visibility_set(resource="channel:github/acme/app", visibility="shared")
+visibility_set(resource="target:beta", visibility="shared")
+```
+
+Um den Zugriff auf einen Absender zu begrenzen, verwenden Sie auf beiden Ressourcen dieselbe verifizierte Absender-ID. Setzen Sie zum Beispiel auf beiden `visibility=["github:1234"]`.
+
+## Watch-Zusammenfassung lesen
+
+Legen Sie das Intervall mit `modes.digest_minutes` fest. Der Standard ist 60 Minuten. SwB legt die Zusammenfassung im Zielpostfach ab, wenn das Intervall endet oder der Stapel 50 Ereignisse erreicht. Das Postfach des Inhabers dient als Ausweichziel.
+
+Lesen Sie jede Zusammenfassung als Inhaber in der Konsole unter **Inbox** oder über MCP mit `inbox` und `wait`. Die Zusammenfassung nennt die Anzahl der Ereignisse. Sie nennt für jedes Ereignis den Autor, einen Auszug und den verfügbaren Link. Ihre Vertrauensstufe ist `external`.
+
+Im Modus Watch schlafen die Agenten weiter. Lesen Sie die Zusammenfassung im Posteingang. [Ziele für GitHub-Ereignisse](/de/docs/blocks/github) erhalten weiterhin einzelne Kopien der Ereignisse.
+
+## Triage-Aktionen
+
+Der Triage-Agent liest Informationen über das Ereignis. Standardmäßig ist seine einzige Aktion `reply` im selben Thread. Für einen GitHub-Thread verwenden Sie `github_reply`. Übergeben Sie die Unterhaltungs-ID in `handle`. Schreiben Sie die Antwort in `text`.
+
+Setzen Sie `actions` in `space_mode` oder in YAML, um dem Agenten weitere Aktionen zu geben. Nehmen Sie `reply` auf, damit Antworten aktiv bleiben. Verwenden Sie zum Beispiel `actions=["reply", "notify_owner"]`.
+
+| Aktion | Das bewirkt sie |
+| - | - |
+| `label` | Fügt einem GitHub-Issue oder Pull Request Labels hinzu |
+| `comment` | Fügt einen GitHub-Kommentar hinzu |
+| `open_issue` | Eröffnet ein GitHub-Issue |
+| `link_duplicate` | Verknüpft und schließt ein doppeltes GitHub-Issue |
+| `notify_owner` | Sendet dem Inhaber eine Notiz |
+
+Änderungen auf GitHub brauchen GitHub-Zugangsdaten mit Schreibzugriff. SwB vermerkt Triage-Aktionen im Audit-Protokoll.
+
+## Zustellung prüfen
+
+Prüfen Sie mit `modes_status` den Modus, sein Ziel, seine Aktionen und offene Einrichtungsprobleme. Die Moduszeile in der Konsole zeigt den gebundenen Agenten. In `triage` erscheint der Hinweis auf den Standardagenten nur dann, wenn SwB die Ausweichroute verwendet. `space_mode` und `modes_status` fordern Sie beide auf, einen Triage-Agenten zu wählen, wenn `triage` ein Ziel braucht.
+
+SwB vermerkt die Gründe für verworfene Nachrichten auf Slack, Discord und Telegram im Audit-Protokoll. Für denselben Block, Raum, Kanal und Grund vermerkt SwB höchstens einen Eintrag alle 10 Minuten.
+
+SwB vermerkt auch die Gründe für verworfene GitHub-Webhooks. Öffnen Sie **Audit** oder führen Sie `swb log` aus, um den Grund zu sehen.

@@ -1,0 +1,91 @@
+---
+title: Capy Captain
+description: Leiten Sie Arbeit aus SwB an einen Capy Captain und holen Sie die Antworten zurück.
+---
+
+Ein Capy Captain ist ein Capy-Agent, der eine Gruppe von Threads steuert. SwB sendet Aufgaben an den Captain und gibt jede Antwort an den Absender zurück.
+
+## Voraussetzungen
+
+Sie brauchen ein Capy-Konto, ein Projekt und einen Captain in derselben Organisation. Ein Service User ist ein Capy-Konto für Software.
+
+Aktivieren Sie den Block `capy`. Fügen Sie SwB in Capy unter **Settings** → **MCP & plugins** hinzu. Verwenden Sie einen SwB-Client mit vollem Inhaberzugriff.
+
+## Einrichtungsprompt kopieren
+
+<SetupPrompt name="capy-captain" lang="de" />
+
+Fügen Sie den Prompt in Ihren Inhaber-Client von SwB ein.
+
+## Route zum Captain einrichten
+
+### API-Einstellungen öffnen
+
+Öffnen Sie in Capy **Settings** → **API**. Prüfen Sie, ob die richtige Organisation geöffnet ist.
+
+### Leseschlüssel erstellen
+
+Erstellen Sie einen persönlichen API-Schlüssel mit Zugriff auf Ihren Captain. Kopieren Sie den Schlüssel, solange Capy ihn anzeigt.
+
+### Leseschlüssel speichern
+
+Öffnen Sie den Claim-Link von Ihrem Agenten. Fügen Sie den Schlüssel in **Token** ein. Wählen Sie **Save token**.
+
+### SwB neu starten
+
+Starten Sie SwB neu, wenn Ihr Agent Sie darum bittet. SwB lädt danach den Schlüssel.
+
+### Capy Captain erstellen
+
+Erstellen Sie bei Bedarf einen Capy Captain. Wählen Sie das Projekt und die Maschine, auf der der Captain läuft.
+
+### Capy Captain wählen
+
+Sagen Sie Ihrem Agenten, welcher Capy Captain die Arbeit erhält.
+
+### Sendeschlüssel erstellen
+
+Erstellen Sie unter **Settings** → **API** einen Service User mit der Rolle `read_write`. Geben Sie ihm Zugriff auf das Projekt. Erstellen Sie einen Schlüssel für den Service User.
+
+### Capy Captain teilen
+
+Öffnen Sie das Menü des Capy Captain. Wählen Sie **Share**. Geben Sie dem Service User Zugriff. Bei einem Captain auf einem gekoppelten Gerät geben Sie dem Service User auch Zugriff auf das Gerät. {/* unverified */}
+
+### Sendeschlüssel speichern
+
+Öffnen Sie den zweiten Claim-Link. Fügen Sie den Schlüssel in **Token** ein. Wählen Sie **Save token**.
+
+### SwB erneut neu starten
+
+Starten Sie SwB neu. Sagen Sie Ihrem Agenten danach, dass Sie fertig sind.
+
+## Das macht der Agent
+
+Rufen Sie in einem Client mit vollem Inhaberzugriff `connect(what="capy-captain")` auf. Wenn SwB den Leseschlüssel braucht, gibt es einen Claim-Link zurück. Ein Claim-Link ist eine private Seite zur Eingabe von Zugangsdaten.
+
+Nach dem Neustart listet `connect` die verfügbaren Captains auf. Bestätigen Sie, welcher Captain die Arbeit erhält. Rufen Sie `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})` auf. Für eine Projektroute fügen Sie `"project":"<project>"` zu `choose` hinzu. Eine Route sagt SwB, wohin es Arbeit sendet.
+
+SwB fragt nach einem Dienstschlüssel, wenn der Agent einen zum Senden braucht. Prüfen Sie die Route mit `capy_captains`, `routes_list` und `routes_resolve`.
+
+Wenn Ihre App MCP Events unterstützt, abonnieren Sie `switchboard.message.created`. Zum Abrufen bei Bedarf rufen Sie `wait` oder `inbox` auf.
+
+## Zugangsdaten
+
+| Token | Hier wird es angezeigt | Format | Hierhin gehört es |
+| - | - | - | - |
+| Leseschlüssel | **Settings** → **API**, einmalig | `capy_` und 43 zufällige Zeichen | **Token** auf seinem Claim-Link von SwB |
+| Sendeschlüssel | **Settings** → **API**, einmalig | `capy_` und 43 zufällige Zeichen | **Token** auf seinem Claim-Link von SwB |
+
+## Verbindung prüfen
+
+Bitten Sie Ihren Agenten, `connect(what="capy-captain")` erneut aufzurufen. Prüfen Sie, ob `connected` erscheint. Senden Sie eine kurze Testaufgabe an die Route. Prüfen Sie, ob die Aufgabe im Thread des Captain erscheint. Lesen Sie die Antwort mit `result` oder `inbox`. Prüfen Sie als Inhaber unter `/healthz` den Namen und Status des konfigurierten Sendeschlüssels.
+
+## Probleme beheben
+
+Ein Capy-Schlüssel hat die Berechtigungen seines Kontos. Wenn `connect` nach einem neuen Leseschlüssel fragt, erstellen Sie einen mit Zugriff auf den Captain.
+
+Wenn eine Sendung mit einem Zugriffsfehler scheitert, prüfen Sie den Zugriff des Service User auf das Projekt, den Captain und das gekoppelte Gerät.
+
+Ein Wert aus der Serverumgebung hat Vorrang vor einem über Claim-Link gespeicherten Wert. Ändern Sie ihn in der Serverumgebung und starten Sie SwB neu.
+
+Um einen verlorenen Schlüssel zu ersetzen, widerrufen Sie ihn unter **Settings** → **API**. Erstellen Sie einen neuen Schlüssel. Jeder Claim-Link gilt einmal und läuft nach 30 Minuten ab.

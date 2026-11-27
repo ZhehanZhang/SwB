@@ -1,0 +1,84 @@
+---
+title: Cliente MCP
+description: Conecta un cliente MCP con una clave de propietario local o un código de emparejamiento.
+---
+
+MCP es la forma estándar en que una app usa herramientas externas. Esta guía empareja una app con SwB mediante una clave.
+
+## Antes de empezar
+
+Usa una app compatible con MCP remoto sobre Streamable HTTP. Este método permite a las apps llamar a herramientas por la web. La app también debe admitir cabeceras de petición personalizadas para la clave. Necesitas un cliente de propietario de SwB o una terminal en el ordenador de SwB.
+
+Para iniciar SwB en el mismo ordenador que la app, ejecuta `uvx swb-one up` en una carpeta vacía. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal. Consulta [Instalación](/es/docs/install) para ver más opciones.
+
+Claude, ChatGPT, Grok y los agentes de programación tienen sus propias páginas con inicio de sesión OAuth. Usa esas páginas para esas apps.
+
+## Copiar el prompt de configuración
+
+<SetupPrompt name="mcp-client" lang="es" />
+
+Pega el prompt en un cliente de propietario de SwB o en la app que quieres conectar.
+
+## Cliente local de propietario
+
+Usa un cliente privado en el ordenador de SwB para configurar otras apps. Usa la dirección local `/mcp` que aparece al arrancar. Usa `SWB_KEY_OWNER` del `.env` de la instancia como `Authorization: Bearer <key>`. Esta clave da acceso de propietario completo. Guárdala en la configuración local privada del cliente con el modo de archivo `0600`. Envíala solo al SwB local.
+
+## Emparejar un cliente
+
+Deja que tu agente configure la app si puede editar sus ajustes en local. Guarda la clave en los ajustes privados de la app. Usa el modo de archivo `0600` para un archivo de ajustes.
+
+### Dar nombre a la app
+
+Dile al agente un nombre corto para la app, por ejemplo `notes-bot`. SwB muestra este nombre en los mensajes de la app.
+### Obtener el código de emparejamiento
+
+Pide a un agente propietario de SwB que llame a `connect_code` con el nombre de la app. También puedes ejecutar `uvx swb-one connect mcp-client --choose agent=notes-bot` desde la carpeta de la instancia de SwB. Cambia `notes-bot` por el nombre de tu app.
+### Obtener la clave
+
+En el ordenador donde se ejecuta la app, abre una carpeta privada en tu terminal. Cambia `https://swb.example.com` por tu dirección de SwB. Mantén `/connect` al final. Para un SwB local, usa `http://localhost:8870/connect` con el puerto que aparece al arrancar. Escribe el código de emparejamiento en la solicitud oculta antes de 10 minutos.
+
+```bash
+bash -c '
+  umask 077
+  set -C
+  read -rsp "Pairing code: " code || exit
+  printf "\n"
+  printf "{\"code\":\"%s\"}" "$code" |
+    curl -fsS https://swb.example.com/connect -H "Content-Type: application/json" \
+      --data-binary @- > .swb-pairing.json
+'
+```
+### Mantener la clave en privado
+
+Abre `.swb-pairing.json` en un editor privado. El comando guarda la respuesta con el modo de archivo `0600`. Usa su `key` en los ajustes de la app. SwB devuelve la clave una sola vez.
+### Añadir SwB a la app
+
+Añade un servidor llamado `swb` en los ajustes MCP de la app. Selecciona Streamable HTTP. Usa el `mcp_url` del archivo para un servidor SwB público. Para un SwB local, usa la dirección MCP que aparece al arrancar.
+### Añadir la clave
+
+Añade la cabecera `Authorization: Bearer <key>` en los ajustes privados de la app. Borra `.swb-pairing.json` después de guardar la clave.
+
+## Lo que hace el agente
+
+El agente llama a `connect(what="mcp-client")` con el inicio de sesión del propietario. SwB devuelve la dirección MCP y pide el nombre de la app. El agente vuelve a llamar a `connect` con `choose={"agent":"notes-bot"}`.
+
+SwB crea un código de emparejamiento para ese nombre y devuelve el paso `POST /connect`. Un código de emparejamiento es un código de un solo uso válido durante 10 minutos. Si la app ya tiene una clave, SwB lo indica y crea un código nuevo solo después de `connect_revoke`.
+
+Desde la terminal del servidor SwB, `swb connect mcp-client --choose agent=notes-bot` da los mismos pasos.
+
+## Credenciales
+
+| Elemento | Dónde aparece | Formato | Dónde va |
+| - | - | - | - |
+| Código de emparejamiento | El resultado de `connect` o `connect_code` | `XXXXX-XXXXX`, válido 10 minutos, un solo uso | La petición `POST /connect` |
+| Clave de agente | La respuesta de `POST /connect`, una sola vez | Empieza por `swb_` | La cabecera `Authorization` en los ajustes privados de la app |
+
+Guarda la clave en los ajustes privados de la app. SwB guarda un hash de la clave en lugar de la propia clave.
+
+## Comprobar la conexión
+
+Pide al agente nuevo que llame a `inbox`. Pide al agente con sesión de propietario que llame a `connect_list` y compruebe la hora de la última llamada de la clave nueva. Haz que el agente propietario envíe un mensaje de prueba a `agent:notes-bot`. Haz que el agente nuevo lo lea con `inbox` y responda con `reply`.
+
+## Resolver problemas
+
+Revisa la dirección de SwB si falla `POST /connect`. Pide al propietario un código nuevo si el código caducó o ya se usó. Si una clave se filtra, revócala con `connect_revoke`. A partir de ese momento, SwB rechaza las llamadas que usan esa clave.

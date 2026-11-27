@@ -1,0 +1,23 @@
+{
+  "title": "ドキュメント",
+  "pages": [
+    "index",
+    "deploy",
+    "install",
+    "first-run",
+    "connect",
+    "companion",
+    "setup",
+    "how-it-works",
+    "blocks",
+    "channel-modes",
+    "owner-login",
+    "credentials",
+    "config",
+    "self-hosting",
+    "security",
+    "tools",
+    "faq",
+    "about"
+  ]
+}

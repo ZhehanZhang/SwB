@@ -1,0 +1,59 @@
+---
+title: ChatGPT
+description: ChatGPT と ChatGPT の dots を接続します。
+---
+
+## ChatGPT に SwB を追加する
+
+[ChatGPT のセットアップ](/ja/docs/setup/chatgpt)に従って、SwB をカスタム MCP サーバーとして追加してください。ChatGPT は OAuth を使い、`chatgpt` としてサインインします。
+
+## 新しいメッセージを受け取る
+
+MCP Events は、メッセージが届いたときに通知を送るしくみです。ChatGPT が MCP Events に対応している場合は、`mailbox_id` を `chatgpt` にして `switchboard.message.created` を購読するよう頼んでください。SwB は、Webhook でメッセージ ID を送ります。Webhook とは、URL に送るリクエストです。ChatGPT は `get_message` で本文を読みます。回答には `reply` を使います。ChatGPT は `wait` か `inbox` で新しいメッセージを確認することもできます。
+
+## ChatGPT の dots
+
+dot とは、個人用の ChatGPT エージェントです。`dots` ブロックは、1 つの Slack ワークスペースから dots を見つけ、各 dot を送信先にします。Slack からは `@swb <dot name> <message>` で送ります。または `send(to="<dot name>", task="<message>")` を呼び出します。
+
+Slack での既定の配信には、非公開チャンネルの `#agents` を使います。SwB は、あなたのユーザートークンでこのチャンネルを作成できます。そのチャンネルで `/invite` を使い、SwB のボットと dots を追加してください。SwB は、dot の返信を元の会話に返します。
+
+```yaml
+blocks:
+  dots:
+    delivery: slack
+    workspace: home
+    channel: "#agents"
+    match: [dot]
+```
+
+これを dot の指示に貼り付けてください。例の ID を、あなたの SwB のボット ID とアプリ ID に置き換えてください。
+
+```text
+In #agents, check the bot and app IDs on SwB posts that mention you. Use bot <BOT_ID> and app <APP_ID>. Answer matching posts in the same thread.
+```
+
+メールボックスへの直接の配信については、[ChatGPT の dots のセットアップ](/ja/docs/setup/dots)に従ってください。`delivery: mailbox` を設定し、各 dot を `blocks.dots.dots` に追加してください。
+
+## 設定
+
+| キー | 用途 |
+| - | - |
+| `blocks.dots` | ChatGPT の dots に送るための設定 |
+| `blocks.dots.use` | ブロックの種類。`dots` を使います |
+| `blocks.dots.enabled` | このブロックを無効にするときは `false` を設定します |
+| `blocks.dots.delivery` | Slack には `slack`、MCP Events には `mailbox` を使います。既定値は `slack` |
+| `blocks.dots.workspace` | 検索する Slack ワークスペース。既定では最初のワークスペースを使います |
+| `blocks.dots.channel` | dots にメッセージを運ぶ、Slack の非公開チャンネル。既定値は `#agents` |
+| `blocks.dots.create` | `true` にすると、必要なときにオーナーとしてチャンネルを作成します。既定値は `true` |
+| `blocks.dots.app_ids` | dots を識別する Slack のアプリ ID |
+| `blocks.dots.match` | Slack のボット名から探すテキスト。既定値は `[dot]` |
+| `blocks.dots.rescan_minutes` | Slack の dots を検索する間隔（分）。既定値は `30` |
+| `blocks.dots.poll_seconds` | Slack のダイレクトメッセージで返信を確認する間隔（秒）。既定値は `5` |
+| `blocks.dots.default` | 送信先の名前 `dot` で選ばれる dot。短い名前か ID を使います |
+| `blocks.dots.dots` | `mailbox` の配信に使う dot の定義、または Slack の dots の上書き設定 |
+| `blocks.dots.dots.*.name` | dot の表示名 |
+| `blocks.dots.dots.*.mailbox` | メッセージを受け取るメールボックス。既定値は `chatgpt` |
+| `blocks.dots.group_dm` | `true` にすると、オーナー、SwB、dot の Slack グループメッセージを使います |
+| `blocks.dots.owner_dm` | `true` にすると、オーナーとして作った投稿を、オーナーと dot の Slack のダイレクトメッセージに送ります |
+| `blocks.dots.agents_as_owner` | `true` にすると、チャンネルかダイレクトメッセージでの配信で、オーナーのエージェントからの送信にオーナーの Slack アカウントを使います |
+| `blocks.dots.owner_posts_as` | オーナーの Slack メッセージを dot に転送するときのアカウント。既定値は `swb`。オーナーのアカウントを使うときは `owner` を設定します |

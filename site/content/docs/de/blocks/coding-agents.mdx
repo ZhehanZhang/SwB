@@ -1,0 +1,43 @@
+---
+title: Coding-Agenten
+description: Verbinden Sie Claude Code, Codex, Gemini CLI und andere Coding-Agenten.
+---
+
+## Einstellungen abrufen
+
+```bash
+swb connect coding-agent --choose agent=codex
+```
+
+Der Befehl zeigt, wie Sie SwB als Remote-MCP-Server hinzufügen. Verwenden Sie OAuth, wenn SwB und der Client es beide unterstützen. Verwenden Sie die Kopplungsanleitung, wenn der Befehl sie anzeigt.
+
+| Client | Einrichtung |
+| - | - |
+| Claude Code | `claude mcp add` |
+| Codex | `config.toml` |
+| Gemini CLI und Qwen Code | `settings.json` |
+| Goose | `config.yaml` |
+| OpenCode | `opencode.json` |
+| Cline und Kiro | Ihre MCP-Einstellungen |
+| Andere Clients | Streamable HTTP mit einem Kopplungscode |
+
+Wie Sie MCP Tasks mit Capy nutzen, beschreibt [MCP Tasks](/de/docs/blocks/capy#mcp-tasks).
+
+## Claude-Code-Kanal
+
+Der Kanal sendet Nachrichten aus dem Postfach `claude-code` an eine offene Sitzung von Claude Code. Kanäle in Claude Code sind eine Research Preview.
+
+Erzeugen Sie einen zufälligen Schlüssel mit mindestens 24 Zeichen. Speichern Sie ihn als `SWB_KEY_CHANNEL` in der privaten Datei `.env` des Servers. Starten Sie SwB neu, um den Schlüssel zu laden. Dieser Schlüssel gibt Lesezugriff auf das Postfach `claude-code`. Installieren Sie [Bun](https://bun.sh). Fügen Sie das Plugin in Claude Code hinzu.
+
+```text
+/plugin marketplace add ZhehanZhang/SwB
+/plugin install swb@swb
+```
+
+Geben Sie Ihre SwB-Basis-URL in **SwB URL** ein. Geben Sie den Wert von `SWB_KEY_CHANNEL` in **Channel key** ein. Starten Sie Claude Code mit dem Kanal.
+
+```bash
+claude --dangerously-load-development-channels plugin:swb@swb
+```
+
+Beim ersten Start beginnt der Kanal mit neuen Nachrichten. Bei späteren Starts setzt er an seiner gespeicherten Position fort. Um über SwB zu antworten, verwenden Sie `reply` über die separate MCP-Verbindung.

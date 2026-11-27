@@ -1,0 +1,50 @@
+---
+title: Grok
+description: ブラウザーの Grok を接続するか、ルーティンで Grok Bot を起こします。
+---
+
+## コネクターを追加する
+
+ブラウザーの Grok を接続するときは、[Grok のセットアップ](/ja/docs/setup/grok)に従ってください。別のデスクトップアプリには、[Grok Bot のセットアップ](/ja/docs/setup/grok-bot)を使ってください。
+
+## ルーティンで Grok Bot を起こす
+
+Grok Bot の接続をエージェントに頼んでください。ターミナルからは `swb connect grok-bot` を実行します。その案内に従って、ルーティン用のプロンプトを取得してください。
+
+そのプロンプトを使い、Webhook トリガー付きの Grok Bot のルーティンを作成してください。Webhook は、SwB が URL にリクエストを送ったときにルーティンを開始します。`example` を、有効な SwB プロジェクトの短い名前に置き換えてください。コマンドを実行して、ルーティンを登録してください。
+
+```bash
+swb connect grok-bot --choose name=project-triage project=example auth=key
+```
+
+SwB は、Webhook のアドレスとキーについて、別々の受け取りリンクを渡します。各リンクで、それぞれの値を保存してください。テストの呼び出しでは、同じコマンドをもう一度実行します。エージェントに呼び出しを実行してもらい、`pong` の返信を確認してもらってください。
+
+## 起動のしくみ
+
+`auth=key` では、SwB は既定で `Authorization` ヘッダーにキーを入れて送ります。`auth=signature` では、SwB がリクエストに署名します。リクエストには、本文、会話 ID、送信者、信頼レベルが入ります。プロジェクトがあれば、それも入ります。ルーティンは、`owner` の信頼レベルのリクエストに `reply` を呼び出します。
+
+手動でセットアップするときは、`url_env` と `secret_env` で指定した変数を、サーバーの環境で設定してください。
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-triage: {project: example, url_env: SWB_EXAMPLE_GROK_URL, auth: key, secret_env: SWB_EXAMPLE_GROK_SECRET}
+```
+
+ルーティンには、その名前で送ります。プロジェクトのメインのルーティンには `grok:<slug>` で送ります。
+
+## 設定
+
+| キー | 用途 |
+| - | - |
+| `blocks.grok-routine` | Grok Bot のルーティンを起こすための設定 |
+| `blocks.grok-routine.use` | ブロックの種類。`grok-routine` を使います |
+| `blocks.grok-routine.enabled` | このブロックを無効にするときは `false` を設定します |
+| `blocks.grok-routine.routines` | ルーティン名と設定の対応表 |
+| `blocks.grok-routine.routines.*.project` | SwB のプロジェクトの短い名前。汎用のルーティンには `null` を使います |
+| `blocks.grok-routine.routines.*.primary` | `true` にすると、そのプロジェクトでこのルーティンを最初に選びます |
+| `blocks.grok-routine.routines.*.auth` | キーを送るときは `key`、リクエストに署名するときは `signature` を使います。既定値は `key` |
+| `blocks.grok-routine.routines.*.header` | キーか署名を入れる HTTP ヘッダー。既定値は、`key` では `Authorization`、`signature` では `Webhook-Signature` です |
+| `blocks.grok-routine.routines.*.url_env` | 公開 HTTPS の Webhook アドレスを入れた変数の名前 |
+| `blocks.grok-routine.routines.*.secret_env` | キーか署名用シークレットを入れた変数の名前 |

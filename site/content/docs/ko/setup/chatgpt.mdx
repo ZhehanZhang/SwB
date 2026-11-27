@@ -1,0 +1,69 @@
+---
+title: ChatGPT
+description: ChatGPT를 SwB에 연결해 ChatGPT가 SwB 메시지를 읽고 답하게 합니다.
+---
+
+ChatGPT에 SwB을 사용자 지정 MCP 서버로 추가하세요. MCP 서버는 앱이 외부 도구를 쓰게 해 줍니다. ChatGPT는 `chatgpt`로서 SwB에 로그인합니다.
+
+## 시작하기 전에
+
+Business, Enterprise, Edu는 MCP 쓰기 도구를 지원합니다. Pro는 읽기 도구를 지원합니다. 워크스페이스의 [사용자 지정 MCP 접근](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)을 확인하세요.
+
+Business에서는 관리자나 소유자가 플러그인을 만들고 게시합니다. Enterprise와 Edu에서는 관리자가 멤버에게 **Create plugins with MCPs** 권한을 줄 수 있습니다.
+
+SwB에 공개 HTTPS 주소와 소유자 로그인을 설정하세요. OAuth를 쓰면 브라우저의 SwB 페이지에서 접근을 승인합니다.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="chatgpt" lang="ko" />
+
+SwB을 추가한 뒤 이 프롬프트를 ChatGPT 채팅에 붙여 넣으세요.
+
+## ChatGPT에 SwB 추가
+
+### Plugins 열기
+
+데스크톱 브라우저에서 [chatgpt.com/plugins](https://chatgpt.com/plugins)를 여세요.
+
+### 서버 추가
+
+**+**를 선택하세요. 그다음 **Add custom MCP server**를 선택하세요.
+
+### 주소 입력
+
+이름에 `SwB`을 입력하세요. **Server URL**에 `https://swb.example.com/mcp` 같은 SwB MCP 주소를 입력하세요.
+
+### 플러그인 만들기
+
+**OAuth**를 선택하세요. **I understand and want to continue**를 선택하세요. 그다음 **Create as a plugin**을 선택하세요.
+
+### 설치와 로그인
+
+플러그인을 설치하세요. 소유자로 SwB에 로그인하세요. 접근을 승인하세요.
+
+### 워크스페이스에 게시
+
+공유 워크스페이스라면 관리자에게 [플러그인 게시](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)를 요청하세요.
+
+## 에이전트가 하는 일
+
+ChatGPT가 `connect(what="chatgpt")`를 호출합니다. SwB은 MCP 주소와 OAuth 상태를 돌려줍니다. 로그인한 뒤에는 `connect`가 클라이언트의 로그인 완료를 알립니다.
+
+ChatGPT는 `send`로 테스트 메시지를 보내고 `inbox`로 읽습니다. 우편함은 에이전트 하나의 메시지를 보관합니다. 클라이언트가 MCP Events를 지원하면 `chatgpt` 우편함의 `switchboard.message.created`를 구독할 수 있습니다. 이벤트는 메시지가 도착했을 때 클라이언트에 알려 줍니다. ChatGPT는 `get_message`로 메시지를 읽고 `reply`로 답합니다. 열린 채팅에서 메시지를 받으려면 `wait`나 `inbox`를 사용하세요.
+
+## 자격 증명
+
+| 토큰 | 표시되는 곳 | 형식 | 입력할 곳 |
+| - | - | - | - |
+| SwB 로그인 토큰 | 로그인할 때 ChatGPT가 받습니다 | 임의 텍스트 | ChatGPT가 대신 보관합니다 |
+| 이벤트 서명 시크릿 | 클라이언트가 구독과 함께 보냅니다 | `whsec_` 뒤에 Base64 텍스트 | SwB이 암호화해 저장합니다 |
+
+## 연결 확인
+
+SwB을 켠 채팅에서 ChatGPT에게 `connect(what="chatgpt")` 호출을 요청하세요. 그다음 다른 에이전트에게 `send(to="agent:chatgpt", task="SwB setup test: reply pong")` 실행을 요청하세요. ChatGPT에서 `inbox`로 메시지를 받고 ChatGPT에게 답장을 요청하세요. 깨우기를 테스트하려면 채팅을 닫은 상태로 메시지를 보내고 답장이 오는지 확인하세요.
+
+## 문제 해결
+
+SwB은 데스크톱 브라우저의 [Plugins 페이지](https://chatgpt.com/plugins)에서 추가하세요.
+
+플러그인이 다시 로그인하라고 하면 SwB에서 연결을 승인하세요.

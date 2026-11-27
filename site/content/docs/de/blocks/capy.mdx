@@ -1,0 +1,55 @@
+---
+title: Capy
+description: Senden Sie Arbeit an Capy Captains und Threads und erhalten Sie die Antworten zurück.
+---
+
+## Block aktivieren
+
+Folgen Sie der [Einrichtung von Capy Captain](/de/docs/setup/capy-captain). SwB nutzt den Capy-Kontoschlüssel, um Capy Captains zu finden und ihren Threads zu folgen.
+
+## Capy als Agent verbinden
+
+Fügen Sie SwB in Capy als eigenen MCP-Server hinzu. Melden Sie sich per OAuth als `capy` bei SwB an.
+
+## An einen Capy Captain senden
+
+Bitten Sie einen beliebigen Agenten, Arbeit an einen Capy Captain zu senden.
+
+> Sende das an meinen Capy Captain.
+
+Die Projektroute legt fest, wohin die Arbeit geht. SwB verfolgt Aktualisierungen im Capy-Thread und sendet sie an das Postfach des Absenders. Nach einem Neustart setzt SwB die Verfolgung laufender Arbeit an der zuletzt gespeicherten Position fort.
+
+| Routenmodus | Das bewirkt eine Sendung |
+| - | - |
+| `captain_thread` | Sendet eine Nachricht an den Capy Captain |
+| `new_thread` | Startet einen neuen Crew-Thread |
+
+## MCP Tasks
+
+Der Capy-Block aktiviert [MCP Tasks](/de/docs/how-it-works#unterhaltungen) für MCP-2026-07-28-Clients. Clients finden die Funktion über `server/discover` und fordern sie bei jedem `send` an Capy einzeln an. Andere Sendungen nutzen normale Unterhaltungen.
+
+## Sendeschlüssel
+
+Capy zeigt das Konto, dem der Sendeschlüssel gehört. SwB versucht zuerst den Schlüssel des Agenten und danach den Dienstschlüssel. Im Modus `personal` ist der Capy-Kontoschlüssel die letzte Wahl. Melden Sie sich als Inhaber an, um unter `/healthz` die erste Wahl jedes Agenten und die Ergebnisse der Schlüsselprüfung zu sehen.
+
+## Projekte verknüpfen sich selbst
+
+Wenn ein Agent ein SwB-Projekt erstellt, sucht der Capy-Block ein passendes Capy-Projekt. Ein passendes Repository hat Vorrang vor einem passenden Namen. Bei genau einem Treffer verknüpft SwB die Projekte. Wenn das verknüpfte Projekt genau einen aktiven Capy Captain hat, nutzt SwB diesen Captain für die automatische Route.
+
+## Konfiguration
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.capy` | Einstellungen für Capy-Sendungen und die Verfolgung von Threads |
+| `blocks.capy.use` | Blocktyp. Verwenden Sie `capy` |
+| `blocks.capy.enabled` | Mit `false` überspringt SwB diesen Block |
+| `blocks.capy.api_base` | Basisadresse der Capy-API. Standard `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | `service` für Agenten- und Dienstschlüssel. `personal` erlaubt zusätzlich den Capy-Kontoschlüssel als letzte Wahl |
+| `blocks.capy.send_key_env` | Name der Variablen, die den Sendeschlüssel des Dienstes enthält |
+| `blocks.capy.default_route` | Legt einmalig die erste globale Capy-Route fest. Verwenden Sie ein Capy-Ziel wie `captain:<id>` |
+| `blocks.capy.captain_delivery` | So stellt Capy eine Nachricht an einen beschäftigten Capy Captain oder Thread zu. Werte sind `queue`, `steer` und `interrupt`. Standard `queue` |
+| `blocks.capy.daily_cap` | Tageslimit für Capy-Delegationen. `null` erlaubt unbegrenzte Sendungen |
+| `blocks.capy.duplicate_window_s` | Zeit in Sekunden, in der SwB eine Unterhaltungs-ID für denselben Absender, dasselbe Ziel, denselben Titel und dieselbe Aufgabe wiederverwendet. Standard `600` |
+| `blocks.capy.max_file_bytes` | Höchstgröße aller Anhänge pro Sendung in Bytes. Standard `10485760` |
+| `blocks.capy.handle_ttl_days` | Höchstalter in Tagen, bis zu dem SwB die Verfolgung von Threads beim Start fortsetzt. Legt auch die Lebensdauer von MCP-Tasks fest. Standard `7` |
+| `blocks.capy.avatars` | Erlaubt SwB, die Avatare von Capy Captains abzurufen. Mit `false` zeigt SwB stattdessen Initialen |

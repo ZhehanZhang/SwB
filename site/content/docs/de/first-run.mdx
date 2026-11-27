@@ -1,0 +1,74 @@
+---
+title: Erster Start
+description: Machen Sie SwB erreichbar, melden Sie sich an und sehen Sie Ihre Instanz.
+---
+
+## Auf diesem Computer ausführen
+
+{/* prepublication */}
+
+Führen Sie nach der Veröffentlichung des Pakets `uvx swb-one up` in einem leeren Ordner aus. Öffnen Sie den Einmal-Anmeldelink aus Ihrem Terminal innerhalb von fünf Minuten. SwB verwendet standardmäßig `http://localhost:8870`. Wenn Sie `SWB_PORT` setzen, verwendet SwB diesen Port in der Adresse. Weitere Startverfahren, auch einen Build aus dem Quellcode, beschreibt [Installation](/de/docs/install).
+
+## Öffentliche Adresse erhalten
+
+Claude, ChatGPT und Grok laufen in der Cloud. Sie brauchen eine öffentliche HTTPS-Adresse, um SwB zu erreichen. Ein Tunnel gibt Ihrem lokalen SwB-Server eine öffentliche Adresse.
+
+Installieren Sie [cloudflared](https://developers.cloudflare.com/tunnel/downloads/). Prüfen Sie, dass Ihr Terminal `cloudflared --version` ausführt. Wenn SwB läuft, beenden Sie es zuerst. Führen Sie diesen Befehl in Ihrem SwB-Instanzordner aus.
+
+```bash
+uvx swb-one up --tunnel cloudflare
+```
+
+SwB öffnet einen Cloudflare Quick Tunnel und gibt die öffentliche MCP-Adresse aus. Jeder Neustart mit dieser Option erzeugt eine neue Adresse. Aktualisieren Sie die Adresse in Ihren Apps.
+
+Für Tailscale [installieren Sie Tailscale](https://tailscale.com/download). Melden Sie sich bei Tailscale an. Aktivieren Sie [Funnel](https://tailscale.com/docs/features/tailscale-funnel). Prüfen Sie, dass Ihr Terminal `tailscale version` ausführt. Verwenden Sie im obigen Befehl `--tunnel tailscale`.
+
+Für eine feste Adresse auf Ihrer eigenen Domain lesen Sie [Selbst hosten](/de/docs/self-hosting).
+
+## Nächsten Schritt anzeigen
+
+```bash
+swb status
+```
+
+Der Befehl zeigt den Serverstatus und die aktiven Blöcke. Unter **Next steps** sehen Sie, was noch einzurichten ist. Das Tool `switchboard_status` meldet die nächsten Schritte ebenfalls.
+
+Um einen Server unter einer anderen Adresse zu prüfen, setzen Sie `--url`. Führen Sie zum Beispiel `swb status --url http://127.0.0.1:8871` aus. Für die lokale Standardadresse liest die CLI den Wert `SWB_PORT` aus der Shell oder aus der `.env` der Instanz. Geben Sie mit `--dir` denselben Instanzordner an, wenn Sie ihn mit `swb up` verwendet haben.
+
+## Bei der Weboberfläche anmelden
+
+Die Weboberfläche zeigt Ihre Projekte, Agenten, den Posteingang, das Gedächtnis und das Audit-Protokoll. Sie ist auch der sichere Ort, um Tokens einzufügen.
+
+![Die Anmeldeseite von SwB](/shots/login-light.webp)
+
+Für einen neuen Link führen Sie diesen Befehl in einem zweiten Terminal im selben Instanzordner aus.
+
+```bash
+swb login-link
+```
+
+Der Befehl gibt einen Einmal-Anmeldelink aus. Öffnen Sie ihn innerhalb von fünf Minuten in Ihrem Browser. Verwenden Sie hier `--url` und `--dir` wie bei `swb status`. Fügen Sie nach der ersten Anmeldung einen [Passkey](/de/docs/owner-login#passkey) hinzu. Verwenden Sie ihn für spätere Anmeldungen. Einrichtungscodes und weitere Verfahren beschreibt [Inhaber-Anmeldung](/de/docs/owner-login).
+
+## Webkonsole
+
+| Seite | Zweck |
+| - | - |
+| `/` | Zeigt den Serverstatus und die Projektliste. |
+| `/agents/*` | Zeigt registrierte Agenten und öffnet die Details jedes Agenten. |
+| `/audit` | Filtert das Protokoll der Änderungen und anderen Ereignisse. |
+| `/inbox` | Zeigt Unterhaltungen und Anfragen, die Ihre Aufmerksamkeit brauchen. |
+| `/inbox/:handle` | Zeigt die Nachrichten einer Unterhaltung. |
+| `/memory/*` | Durchsucht und zeigt gespeicherte Notizen. |
+| `/projects/:slug` | Zeigt Routen, Verlauf, Unterhaltungen und Gedächtnis eines Projekts. |
+| `/connections/:platform` | Zeigt den Verbindungsstatus und die [**Channel modes**](/de/docs/channel-modes) für Slack, Discord, Telegram oder GitHub. |
+| `/settings` | Zeigt die Servereinstellungen und verwaltet Passkeys. |
+| `/tokens` | Zeigt Token-Anfragen und gespeicherte Zugangsdaten. |
+| `/about` | Zeigt die SwB-Version und die Liste der aktiven Blöcke. |
+
+## Ersten Agenten verbinden
+
+Geben Sie Ihrem ersten Agenten Inhaberzugriff, wenn er andere Apps einrichten soll. Für eine App, die auf einem Server läuft, geben Sie ihre [OAuth-Anmeldung](/de/docs/owner-login#agent-anmeldung) im Browser frei. Verwenden Sie eine Verbindung mit Zugriff auf alle SwB-Tools.
+
+Richten Sie auf dem SwB-Computer einen [lokalen Inhaber-Client](/de/docs/setup/mcp-client#lokaler-inhaber-client) ein. Verwenden Sie für die Anmeldung des Clients `SWB_KEY_OWNER` aus der `.env` der Instanz. Senden Sie diesen Schlüssel nur an die lokale Adresse `/mcp`.
+
+Wenn der erste Agent einen gekoppelten Schlüssel verwendet, bitten Sie ihn um den passenden Terminalbefehl für jeden Schritt, der dem Inhaber vorbehalten ist. Führen Sie den Befehl im SwB-Instanzordner aus. Führen Sie zum Beispiel `swb connect slack` aus. Die anderen Apps beschreibt [Agenten verbinden](/de/docs/connect).

@@ -1,0 +1,85 @@
+---
+title: 자체 호스팅
+description: Docker Compose와 Cloudflare로 서버에서 SwB을 실행합니다.
+---
+
+## Docker Compose
+
+Docker Compose 2.24 이상을 설치하세요. 데이터 폴더를 소유한 일반 사용자로 이 명령을 실행하세요.
+
+```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
+(umask 077; cp .env.example .env)
+{
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
+mkdir -p data
+docker compose up -d --build --wait
+curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
+```
+
+터미널에 나온 일회용 로그인 링크를 5분 안에 여세요. 링크는 비공개로 유지하세요.
+
+브라우저는 소유자 로그인에 `http://localhost:8870`을 사용합니다. 컨테이너 안의 명령은 `8000` 포트를 사용합니다. Compose는 데이터를 `./data`에 보관합니다. `.env`를 바꾼 뒤에는 `docker compose up -d`를 다시 실행하세요.
+
+원격 서버라면 링크를 열기 전에 서버의 `8870` 포트를 로컬 `8870` 포트로 포워딩하세요.
+
+로그인 전에 `/healthz`로 요청하면 `status`와 `version`을 돌려받습니다. 전체 상태 정보는 소유자 세션이나 소유자 키로 확인하세요.
+
+## Cloudflare Tunnel
+
+내 도메인용 터널을 만들려면 [Cloudflare Tunnel 안내](/ko/docs/setup/cloudflare)를 따르세요. Compose에서는 터널의 서비스 주소로 `http://switchboard:8000`을 사용하세요. 터널 토큰은 [릴리스 Compose 파일](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37)에 나온 이름으로 `.env`에 저장하세요. `.env`의 `SWB_PUBLIC_URL`을 터널 주소로 바꾸세요. tunnel 프로필로 Compose를 시작하세요.
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+## 신뢰할 수 있는 프록시
+
+리버스 프록시는 요청을 SwB으로 넘겨줍니다. `config/switchboard.yaml`의 `trusted_proxies`에 프록시 주소나 전용 네트워크를 추가하세요. 네트워크 범위는 `192.0.2.0/24` 같은 CIDR 형식으로 쓰세요.
+
+`.env`에 `SWB_TRUSTED_PROXIES`를 설정해도 됩니다. 항목은 쉼표로 구분하세요. YAML 설정이 우선합니다.
+
+SwB 호스트나 Docker 네트워크에 있는 Cloudflare Tunnel은 터널 커넥터의 주소나 전용 네트워크를 추가하세요. 커넥터는 SwB에 직접 연결합니다. Cloudflare 엣지 서버에서 직접 들어오는 연결에는 `cloudflare` 항목을 사용하세요.
+
+## Cloudflare Access
+
+SwB을 구성하고 소유자와 클라이언트 요청에 대한 접근 규칙을 정하려면 [Cloudflare 설정 가이드](/ko/docs/setup/cloudflare)를 따르세요.
+
+## 호스팅 플랫폼
+
+`/data`에 영구 디스크를 마운트한 SwB 인스턴스 하나를 사용하세요. Railway, Render, Fly.io 템플릿과 Koyeb 스크립트는 [배포 가이드](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)를 참고하세요.
+
+## Railway [#railway]
+
+[Railway 템플릿 정의](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts)는 SwB 서비스 하나를 실행하고 `/data`에 1 GB 볼륨을 마운트합니다.
+템플릿이 공개되면 Railway 마켓플레이스에서 배포하세요.
+
+## Fly.io [#fly]
+
+[Docker Compose 예제](#docker-compose)에서 받은 SwB 릴리스 체크아웃을 사용하세요. [Fly.io 명령줄 도구](https://docs.fly.io/flyctl/)를 설치하세요. Fly.io에 로그인하세요.
+
+SwB 폴더에서 `sh deploy/fly.sh my-swb`를 실행하세요. `my-swb`는 고유한 앱 이름으로 바꾸세요. 이 스크립트는 `fly deploy --ha=false`로 Machine 하나를 시작합니다.
+
+앱의 로그인 페이지를 여세요. 체크아웃 폴더의 `.env.swb-setup-fly-my-swb`에서 `SWB_SETUP_CODE`를 복사하세요. 그 값을 **Setup code**에 입력하세요. 로그인한 뒤 이 파일을 삭제하세요.
+
+요금 정보는 [Fly.io Free plan](https://docs.fly.io/about/free-plan)과 [현재 요금](https://fly.io/docs/about/pricing/)을 참고하세요.
+
+## 백업과 업그레이드
+
+데이터 폴더를 복사하기 전에 SwB을 멈추세요. 데이터베이스와 키를 포함해 폴더 전체를 함께 보관하세요. 키에는 `mcp-events.key`와 `claim-key`도 포함됩니다. 설정 파일과 `.env`도 백업하세요. 백업은 비공개로 보관하세요. 새 버전을 설치하거나 빌드하세요. 같은 데이터 폴더로 SwB을 시작하세요.
+
+## 메모리 내보내기
+
+Compose 컨테이너 안에서 내보내기를 실행하세요.
+
+```bash
+docker compose exec -T switchboard swb export /data/export
+```
+
+내보내기는 호스트의 `./data/export` 아래에 범위별 Markdown 파일을 저장합니다. `INDEX.md`도 함께 만듭니다. 최신 Markdown 사본을 계속 유지하려면 `memory.mirror_dir`를 설정하세요.

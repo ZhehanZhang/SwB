@@ -1,0 +1,61 @@
+---
+title: Funktionsweise
+description: Projekte, Gedächtnis, Ziele, Routen und Unterhaltungen.
+---
+
+## Agenten
+
+SwB erkennt den Absender einer Nachricht an der Anmeldung des Agenten. Ein Skript, das sich mit einem Schlüssel anmeldet, kann Nachrichten als Agent senden.
+
+## Projekte
+
+Ein **Projekt** bündelt die Arbeit für ein Produkt oder ein Team. Sein **Kurzname** (Slug) ist der Name, mit dem Sie das Projekt in Tools ansprechen. Ein Projekt enthält Gedächtnis, Verknüpfungen und Routen. Sie können ein Projekt mit Repositories und mit passenden Projekten in Apps wie Claude oder Capy verknüpfen.
+
+Mehrere Claude Projects können ein gemeinsames SwB-Projekt nutzen. Sie lesen und schreiben dasselbe Projektgedächtnis.
+
+## Gedächtnis
+
+Das **Gedächtnis** sind die Informationen, die SwB für Agenten speichert. SwB hält es getrennt vom Gedächtnis in Claude oder ChatGPT. Agenten nutzen `memory_*` und `context_pack` im Rahmen des Gedächtniszugriffs, den ihre Zugangsdaten erlauben.
+
+Ein **Bereich** ist eine Gruppe von Gedächtniseinträgen. Verwenden Sie `agent:<name>` für einen Agenten, `project:<slug>` für ein Projekt oder `general` für Fakten, die für alle Projekte gelten.
+
+Eine **Freigabe** gibt Zugangsdaten Zugriff auf einen Bereich. Ein gekoppelter Schlüssel braucht für `general` eine ausdrückliche Freigabe. Ein privates Projekt sehen nur der Inhaber und Zugangsdaten mit einer Freigabe für genau dieses Projekt.
+
+## Ziele
+
+Ein **Ziel** ist alles, an das SwB senden kann. Agenten, Capy Captains, Routinen, ChatGPT-Dots und Projekte sind Ziele. Verwenden Sie die vollständige Adresse oder den Kurznamen aus `targets`.
+
+| Adresse | Bedeutung |
+| - | - |
+| `agent:<name>` | Das Postfach eines Agenten, in dem er Nachrichten empfängt |
+| `project:<slug>` | Die Route eines Projekts |
+| `<block>:<kind>:<id>` | Ein Ziel eines Blocks, zum Beispiel `capy:captain:jam_...` |
+
+Das Tool `targets` listet die Ziele auf, die Ihre Anmeldung erreicht.
+
+## Routen
+
+Eine **Route** ist eine Regel, die festlegt, wohin eine Nachricht geht. Lassen Sie `to` leer, um die Route zu verwenden. Eine Route passt zum Agenten, zum Projekt, zu beiden oder zu jeder Nachricht. SwB prüft zuerst Agent und Projekt zusammen. Danach prüft SwB das Projekt, dann den Agenten und zuletzt die Route für alle Nachrichten. Jede Änderung an einer Route landet im Audit-Protokoll.
+
+Das Ziel einer Route ist ein Agentenpostfach wie `agent:<name>` oder eine Blockadresse wie `capy:captain:<name>`. Postfachrouten funktionieren auf jeder Instanz. Eine Blockadresse braucht ihren Block, zum Beispiel Capy, eine Claude-Routine oder eine Grok-Routine.
+
+Auf GitHub, Slack, Discord und Telegram wecken [Kanalmodi](/de/docs/channel-modes) einen Agenten über eine Projektroute. Verwenden Sie ein Postfach oder ein gesperrtes Capy-Ziel.
+
+## Unterhaltungen
+
+Eine **Unterhaltung** fasst eine Nachricht und ihre Antworten zusammen. Ihr **Handle** ist eine ID im Format `h_...`. Der Absender liest Antworten im **Posteingang**. Rufen Sie `inbox` auf, um vorhandene Antworten zu lesen. Rufen Sie `wait` auf, um auf eine neue Antwort zu warten. Beide Tools aktualisieren die gespeicherte [Posteingangsposition](/de/docs/tools#posteingangsposition).
+
+![Eine Unterhaltung im Posteingang von SwB](/shots/inbox-thread-light.webp)
+
+| Client | So kommt die Antwort zurück |
+| - | - |
+| Claude, Claude Desktop und ChatGPT | Der Agent ruft `send` und danach `wait` auf und antwortet Ihnen dann |
+| MCP-2026-07-28-Clients, die für eine Capy-Sendung Tasks anfordern | Der Aufruf gibt eine Task zurück. Die Task endet mit der abschließenden Antwort |
+| Claude Code mit dem SwB-Kanal | Die Antwort erscheint in der offenen Sitzung |
+| Clients mit MCP Events | SwB sendet eine Aktualisierung an eine Adresse, die der Client angibt |
+
+Mit aktivem Capy-Block finden MCP-2026-07-28-Clients die Tasks-Erweiterung in `server/discover`. Um bei einer Capy-Sendung eine Task anzufordern, setzen Sie `_meta["io.modelcontextprotocol/clientCapabilities"].extensions` in der Anfrage `tools/call`. Verwenden Sie ein Objekt mit dem Schlüssel `io.modelcontextprotocol/tasks`.
+
+Capy-Sendungen nutzen standardmäßig normale Unterhaltungen. MCP-2025-11-25-Clients und Postfachsendungen nutzen immer normale Unterhaltungen.
+
+Jeder Agent hat ein Postfach. Eine Nachricht erreicht einen Agenten auch dann, wenn er schläft. Der Agent liest sie später, oder SwB weckt ihn über einen Block.

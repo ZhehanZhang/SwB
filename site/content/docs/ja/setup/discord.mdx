@@ -1,0 +1,71 @@
+---
+title: Discord
+description: ボットを使って、Discord のサーバーを SwB に接続します。
+---
+
+SwB はボットとして Discord にサインインします。新しいメッセージは Discord Gateway で受け取ります。Discord Gateway とは、SwB が Discord に対して開く接続です。
+
+## 始める前に
+
+接続したいサーバーで **Manage Server** の権限を持つ Discord アカウントを使ってください。オーナーとして SwB にサインインしてください。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="discord" lang="ja" />
+
+このプロンプトを、SwB のオーナー用クライアントに貼り付けてください。
+
+## Discord のボットを設定する
+
+### アプリケーションを作成する
+
+https://discord.com/developers/applications を開いてください。**New Application** をクリックしてください。
+### アプリケーションに名前を付ける
+
+名前を入力してください。**Create** をクリックしてください。
+### ボットトークンをリセットする
+
+**Bot** → **Reset Token** をクリックしてください。リセットを確定してください。
+
+### ボットトークンをコピーする
+
+Discord にトークンが表示されている間に、**Copy** をクリックしてください。トークンが表示されるのは 1 回だけです。
+### Message Content Intent を有効にする
+
+**Bot** ページの **Privileged Gateway Intents** で、**Message Content Intent** を有効にしてください。**Save Changes** をクリックしてください。
+
+### トークンを保存する
+
+エージェントから届いた SwB の受け取りリンクを開いてください。欄にトークンを貼り付けてください。
+### ボットを招待する
+
+エージェントから届いた招待リンクを開いてください。Discord に求められたら、あなたのサーバーを選んでください。**Authorize** をクリックしてください。
+
+## エージェントの動作
+
+エージェントは `connect(what="discord")` を呼び出します。必要に応じて `discord` ブロックを有効にします。ブロックが有効になると、`connect` か `discord_provision` がボットトークン用の受け取りリンクを返します。
+
+あなたがトークンを保存すると、エージェントは `discord_status` を呼び出します。ボット、Gateway の接続、サーバーを確認します。そして、`setup.invite_url` の招待リンクをあなたに渡します。
+
+エージェントは、`config/switchboard.yaml` の `blocks.discord.spaces` でサーバーを設定します。スペースは、サーバーを SwB のプロジェクトに結び付けます。エージェントは `guild_id` と `owner_ids` を設定します。エージェントに `discord_post` を使わせるときは、`blocks.discord.agents` でアクセスを与えてください。ファイルを編集したら、SwB を再起動してください。
+
+## 認証情報
+
+| トークン | Discord で表示される場所 | 形式 | 入力する場所 |
+| --- | --- | --- | --- |
+| ボットトークン | **Bot** → **Reset Token**。1 回だけ表示 | ドットで区切った 3 つの部分 | SwB の受け取りリンク |
+| アプリケーション ID | **General Information** → **Application ID** | 数値 | `blocks.discord.application_id`。SwB が自動で見つけることもできます |
+
+## 接続を確認する
+
+もう一度 `connect` を呼び出すよう、エージェントに頼んでください。セットアップが完了すると、`connected` と報告します。`discord_status` には、Gateway が準備完了で、ボットがあなたのサーバーにいることが表示されます。
+
+`owner_ids` にある Discord アカウントを使ってください。チャンネルでボットをメンションしてください。`targets` にある送信先の名前と、テストメッセージを書き加えてください。同じチャンネルに返信が届くことを確認してください。
+
+## 問題を解決する
+
+Gateway のコード `4014` が出たら、**Message Content Intent** を有効にしてください。メンションをきっかけにするときは、`message_content: false` を設定し、メッセージごとにボットをメンションしてください。
+
+Gateway のコード `4004` が出たら、Discord のボットトークンをリセットしてください。トークンをサーバーの環境で設定している場合は、そこで置き換えて SwB を再起動してください。受け取りリンクで保存した場合は、新しい受け取りリンクを使ってください。
+
+ボットがサーバーにいるのに、チャンネルで黙ったままの場合は、そのチャンネルの権限を確認してください。

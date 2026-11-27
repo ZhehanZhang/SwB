@@ -1,0 +1,16 @@
+{
+  "title": "Blocs",
+  "pages": [
+    "index",
+    "claude",
+    "chatgpt",
+    "capy",
+    "grok",
+    "coding-agents",
+    "local-sessions",
+    "slack",
+    "discord",
+    "telegram",
+    "github"
+  ]
+}

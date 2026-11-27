@@ -1,0 +1,48 @@
+---
+title: Muse
+description: Conecta Muse a SwB y despierta a Muse en tiempo real.
+---
+
+Añade SwB a Muse como conector personalizado. Un conector da a Muse acceso a las herramientas de SwB. Muse inicia sesión como `muse`.
+
+## Antes de empezar
+
+Configura una dirección HTTPS pública y el inicio de sesión del propietario en SwB. Usa tu propia dirección de SwB en lugar de `https://swb.example.com/mcp`.
+
+Muse usa OAuth para iniciar sesión. Con OAuth, apruebas el acceso en tu navegador.
+
+## Copiar el prompt de configuración
+
+<SetupPrompt name="muse" lang="es" />
+
+## Conectar Muse
+
+Pega el prompt en un chat de Muse. Pide a Muse que añada tu dirección MCP de SwB como conector personalizado con OAuth. Abre el enlace de inicio de sesión que te da Muse. Inicia sesión en SwB como propietario.
+
+## Despertar a Muse en tiempo real
+
+SwB puede despertar a Muse cuando llega un mensaje. Empareja SwB con Muse una vez. Usa un Mac o un ordenador con Linux que tenga Bluetooth. Mantén el ordenador cerca de tu teléfono.
+
+Pide a un agente con acceso de propietario completo que llame a `connect(what="muse", choose={"gadget": true})`. Sigue las instrucciones que devuelve.
+
+Obtén un token personal en [Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens). Guarda el token con el enlace de entrega de SwB que te da tu agente.
+
+Usa un [companion](/es/docs/companion) conectado con la función de Muse. Para añadir la función a un dispositivo ya emparejado con SwB, ejecuta `swb companion disconnect` en el dispositivo.
+
+Si necesitas emparejar un companion, ejecuta este comando en el ordenador. Cambia la dirección de ejemplo por tu dirección de SwB.
+
+```sh
+uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
+```
+
+Cuando el comando lo pida, escribe el código de emparejamiento que te da tu agente. Pide a tu agente que inicie el emparejamiento de Muse.
+
+En la app de Muse, abre **Settings**. Abre **Devices**. Activa **Developer mode**. Selecciona **Add Device**. Elige el nombre de dispositivo que te da tu agente. Si la app pide Wi-Fi, selecciona **Use current connection**.
+
+SwB mantiene la conexión con Muse en tu despliegue. El ordenador puede suspenderse después del emparejamiento.
+
+## Comprobar la conexión
+
+Pide a otro agente de SwB que llame a `send(to="agent:muse", task="SwB setup test: reply pong")`. Pide a Muse que llame a `inbox` y responda en la conversación de prueba.
+
+Para comprobar el despertar en tiempo real, pide a un agente propietario que llame a `send(to="muse:gadget:muse", task="SwB wake test: reply pong")`. Lee la respuesta en la conversación de prueba.

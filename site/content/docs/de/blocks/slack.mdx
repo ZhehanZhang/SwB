@@ -1,0 +1,129 @@
+---
+title: Slack
+description: Leiten Sie Slack-Nachrichten an Agenten weiter und posten Sie die Antworten im Thread.
+---
+
+## Slack-App erstellen
+
+Öffnen Sie die [Slack-Einrichtung](/de/docs/setup/slack#app-manifeste). Wählen Sie das Manifest für beide Konten oder für Ihr Benutzerkonto. Ein Manifest ist eine Datei mit den Einstellungen der Slack-App.
+
+Installieren Sie die App in Ihrem Workspace. Bitten Sie einen Agenten, Slack zu verbinden, oder führen Sie `swb connect slack` aus. Speichern Sie die Tokens des Workspace über den Claim-Link. Starten Sie SwB neu, um die gespeicherten Tokens zu laden.
+
+| Token | Fundort |
+| - | - |
+| Bot-Token, `xoxb-` | OAuth & Permissions → Bot User OAuth Token |
+| User-Token, `xoxp-` | OAuth & Permissions → User OAuth Token |
+| App-Level-Token, `xapp-` | Basic Information → App-Level Tokens, mit `connections:write` |
+
+## Aus Slack senden
+
+Erwähnen Sie den Bot und nennen Sie den Kurznamen des Ziels. Mit `targets` schlagen Sie Namen nach.
+
+```text
+@swb claude check the release notes
+```
+
+SwB entfernt den Zielnamen und sendet den Rest der Nachricht. Eine normale Bot-Antwort postet SwB im Thread unter dem Namen und Bild des Ziels. Bei einer Folgenachricht verwendet SwB das Ziel des Threads erneut. Das `default_target` des Workspace dient als Ausweichziel.
+
+## Als Agent posten
+
+Agenten posten mit `slack_post`. Mit `blocks.slack.agents.<agent>.workspaces` legen Sie fest, wo und über welche Konten ein Agent postet. Jedes Konto hat eine Schreibrichtlinie.
+
+| Richtlinie | Wirkung |
+| - | - |
+| `free` | Der Agent postet sofort |
+| `approval` | Der Inhaber gibt jeden Beitrag vorher frei |
+| `never` | Die Identität hat nur Lesezugriff |
+
+Der Inhaber gibt Beiträge in der Slack-Direktnachricht oder auf der Seite von SwB frei. MCP-Tools können nur eine Freigabe anfragen.
+
+## Personas
+
+Eine Persona ist der Name und das Bild auf einem Bot-Beitrag. SwB gibt jedem Capy Captain eine Persona. Bitten Sie Ihren Agenten, `slack_personas` aufzurufen, um die verfügbaren Personas zu sehen. Der Agent wählt mit `slack_post` eine erlaubte Persona. Legen Sie eigene Bilddateien in `<data>/avatars` ab.
+
+## Projekte pro Kanal
+
+`workspace_projects` ordnet einen Workspace einem Projekt zu. `channel_projects` ordnet einen einzelnen Kanal einem Projekt zu. Die Zuordnung bestimmt das Projektgedächtnis und die Hauptroutine für `@swb claude`.
+
+## Blockeinstellungen
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.slack` | Einstellungen für den Slack-Block und seine Workspaces |
+| `blocks.slack.use` | Lädt den Block `slack` |
+| `blocks.slack.enabled` | `true` lädt den Block, `false` schaltet ihn ab |
+| `blocks.slack.refresh_minutes` | Minuten zwischen Aktualisierungen der Zielliste. Standard ist `30` |
+| `blocks.slack.target_aliases` | Ordnet zusätzliche Zielnamen vorhandenen Zielen zu |
+| `blocks.slack.workspace_projects` | Legt das Standardprojekt in SwB für jeden Workspace fest |
+| `blocks.slack.channel_projects` | Legt ein SwB-Projekt nach Workspace und Kanalname oder Kanal-ID fest |
+| `blocks.slack.listen_channels` | Legt den Modus `assist` für Kanalnamen oder Kanal-IDs in jedem Workspace fest. Ein Kanalmodus kann ihn überschreiben |
+| `blocks.slack.max_text_chars` | Höchstzahl an Zeichen, die SwB von jeder eingehenden Nachricht behält. Standard ist `4000` |
+| `blocks.slack.event_retention_days` | Tage, die SwB Slack-Ereignisse aufbewahrt. Standard ist `14` |
+
+Mit [Kanalmodi](/de/docs/channel-modes) wecken Sie einen Agenten über eine Projektroute.
+
+## Workspaces und Konten
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.slack.workspaces` | Ordnet die in SwB verwendeten Workspace-Namen ihren Slack-Einstellungen zu |
+| `blocks.slack.workspaces.*.team_id` | ID des Slack-Workspace |
+| `blocks.slack.workspaces.*.app_id` | ID der Slack-App. Damit überspringt SwB Nachrichten der eigenen App |
+| `blocks.slack.workspaces.*.intake` | `socket` für Live-Ereignisse, `poll` zum Lesen des Kanalverlaufs oder `none`, um den Nachrichtenempfang abzuschalten |
+| `blocks.slack.workspaces.*.app_token_env` | Name der Umgebungsvariablen für das App-Token, das Socket Mode verwendet |
+| `blocks.slack.workspaces.*.identities` | Slack-Konten, die SwB in diesem Workspace verwendet |
+| `blocks.slack.workspaces.*.identities.bot` | Einstellungen für das Bot-Konto |
+| `blocks.slack.workspaces.*.identities.bot.token_env` | Name der Umgebungsvariablen für das Bot-Token |
+| `blocks.slack.workspaces.*.identities.bot.write` | Schreibrichtlinie für das Bot-Konto. Standard ist `free` |
+| `blocks.slack.workspaces.*.identities.user` | Einstellungen für das Slack-Benutzerkonto |
+| `blocks.slack.workspaces.*.identities.user.token_env` | Name der Umgebungsvariablen für das User-Token |
+| `blocks.slack.workspaces.*.identities.user.write` | Schreibrichtlinie für das Benutzerkonto. Standard ist `approval` |
+| `blocks.slack.workspaces.*.user_only` | Mit `true` verwendet SwB nur das Benutzerkonto. Setzen Sie dessen Schreibrichtlinie auf `approval` oder `never` |
+| `blocks.slack.workspaces.*.watched` | Legt den Modus `watch` für die aufgeführten Kanäle fest. `*` steht für jeden Kanal, dem der Bot beigetreten ist |
+| `blocks.slack.workspaces.*.default_target` | Ziel für eine neue Nachricht an SwB, wenn der Zielname fehlt |
+| `blocks.slack.workspaces.*.ack_reaction` | Name des Slack-Emojis, mit dem SwB Erwähnungen und Direktnachrichten bestätigt. Standard für den Bot ist `eyes` |
+| `blocks.slack.workspaces.*.owner_user_ids` | Slack-Benutzer-IDs, die als Inhaber gelten. Standard ist die Person, die den Workspace freigegeben hat |
+| `blocks.slack.workspaces.*.known` | Ordnet bekannte Slack-Benutzer- oder Bot-IDs Anzeigenamen zu. Hilft bei der Wahl, wessen Nachrichten SwB annimmt |
+| `blocks.slack.workspaces.*.sender_rate` | Begrenzt den Nachrichtenempfang für jeden Absender außer dem Inhaber. Gilt für `assist`, `triage` und Nachrichten, die als Kontext dienen |
+| `blocks.slack.workspaces.*.sender_rate.count` | Höchstzahl an Nachrichten pro Absender im Zeitfenster. Standard ist `5` |
+| `blocks.slack.workspaces.*.sender_rate.window_s` | Länge des Zeitfensters in Sekunden. Standard ist `600` |
+| `blocks.slack.workspaces.*.bot_thread_posts_per_hour` | Bot-Beiträge pro Thread und Stunde, ab denen weitere Beiträge eine Freigabe brauchen. Standard ist `20` |
+
+## Agentenzugriff und Freigaben
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.slack.agents` | Ordnet SwB-Agenten ihren Slack-Berechtigungen zu |
+| `blocks.slack.agents.*.workspaces` | Legt die Konten fest, die der Agent in jedem Workspace verwendet |
+| `blocks.slack.agents.*.allow_persona_override` | Mit `true` wählt der Agent eine Persona für einen Bot-Beitrag |
+| `blocks.slack.agents.*.allowed_personas` | Persona-IDs, die der Agent wählen kann, wenn er Personas wählen darf |
+| `blocks.slack.approvals` | Standardeinstellungen für Anfragen zur Freigabe von Slack-Beiträgen |
+| `blocks.slack.approvals.approver_user_id` | Slack-Benutzer-ID, die Standardanfragen zur Freigabe erhält und entscheidet |
+| `blocks.slack.approvals.notify_workspace` | Workspace, dessen Bot die Freigabeanfragen an die Standardperson sendet |
+| `blocks.slack.approvals.ttl_minutes` | Minuten, bis eine Freigabeanfrage abläuft. Standard ist `60` |
+| `blocks.slack.workspaces.*.approver_user_id` | Slack-Benutzer-ID, die Anfragen aus diesem Workspace erhält und entscheidet. Hat Vorrang vor dem Standard |
+
+## Namen und Bilder
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.slack.personas` | Legt die Namen und Bilder fest, die der Bot in Beiträgen verwendet |
+| `blocks.slack.personas.*.name` | Anzeigename für Bot-Beiträge mit dieser Persona |
+| `blocks.slack.personas.*.avatar` | Dateiname des Bildes für die Persona. Setzen Sie `blocks.slack.public_base_url`, damit Slack es abrufen kann |
+| `blocks.slack.personas.*.emoji` | Slack-Emoji als Ersatz für das Bild der Persona |
+| `blocks.slack.avatar_dirs` | Zusätzliche Ordner, in denen SwB vor den mitgelieferten Bildern nach Avatar-Dateien sucht |
+| `blocks.slack.public_base_url` | Öffentliche HTTPS-Adresse, über die Slack Avatar-Dateien abruft, zum Beispiel `https://swb.example.com` |
+| `blocks.slack.workspaces.*.default_persona` | Standard-Persona-ID für Bot-Beiträge in diesem Workspace |
+
+## Zustellung von Ereignissen
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.slack.workspaces.*.sinks` | Richtet Webhooks ein, die Slack-Ereignisse an andere Dienste senden |
+| `blocks.slack.workspaces.*.sinks.*.name` | Name, der den Webhook in Protokollen und im Status kennzeichnet |
+| `blocks.slack.workspaces.*.sinks.*.url_env` | Name der Umgebungsvariablen für die Webhook-URL |
+| `blocks.slack.workspaces.*.sinks.*.signature` | Mit `stripe` signiert SwB Anfragen im Stripe-Format |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | Name der Umgebungsvariablen für den Signaturschlüssel |
+| `blocks.slack.workspaces.*.sinks.*.kinds` | Zu sendende Ereignistypen. Zur Wahl stehen `watched`, `mention` und `dm`. Standardmäßig sendet SwB alle drei |
+| `blocks.slack.workspaces.*.sinks.*.targets` | Sendet nur Ereignisse für diese Zielnamen |
+| `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | Sekunden, in denen SwB Ereignisse für eine Anfrage sammelt. Mit dem Standard `0` sendet SwB jedes Ereignis einzeln |

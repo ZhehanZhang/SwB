@@ -1,0 +1,102 @@
+---
+title: GitHub App
+description: GitHub のイベントをエージェントやサービスに送ります。
+---
+
+## アプリを作成する
+
+あなたのアカウントで GitHub App を作成してください。Webhook のアドレスには、SwB の公開アドレスに `/github/webhook` を付けたものを設定してください。たとえば `https://swb.example.com/github/webhook` を使います。Webhook シークレットを非公開のファイルに生成してください。SwB は 16 文字以上のシークレットを受け付けます。
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > ~/.swb-github-secret)
+```
+
+**Webhook secret** にシークレットを入力してください。GitHub の接続をエージェントに頼んでください。受け取りリンクで同じシークレットを保存してください。非公開のファイルを削除してください。シークレットを読み込むために、SwB を再起動してください。App ID と秘密鍵のリンクが残っていれば、もう一度 `connect` を呼び出すようエージェントに頼んでください。秘密鍵の欄には、`.pem` ファイルの内容全体を貼り付けてください。
+
+## 権限
+
+**Repository permissions** では、表のアクセスレベルを使ってください。
+
+| リポジトリのリソース | アクセス | イベント |
+| - | - | - |
+| **Issues** | **Read & write** | `issues`、`issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`、`check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | 自動で **Read-only** | |
+
+使いたいリポジトリにアプリをインストールしてください。
+
+## イベントをルーティングする
+
+```yaml
+blocks:
+  github:
+    use: github
+    sinks:
+      team: {url_env: SWB_EXAMPLE_GITHUB_SINK_URL}
+    routes:
+      "acme/app": [team]
+      "acme/*": [team]
+```
+
+サーバーの環境で、`SWB_EXAMPLE_GITHUB_SINK_URL` に受信側のアドレスを設定してください。
+
+**シンク**とは、イベントのコピーを受け取る URL です。SwB は `watch` モードで、一致する各シンクにコンパクトな JSON のイベントを送ります。シンクのルートがあるリポジトリは、既定で `watch` を使います。チャンネルとスペースのモードが優先されます。SwB は追加の詳細を `metadata` に引用して入れます。各リクエストでは、イベントの配信 ID を `Idempotency-Key` に使います。SwB は、接続の失敗、タイムアウト、HTTP 5xx の応答のときに再試行します。
+
+Cloudflare Access でホストを保護している場合は、`/github/webhook` を通過させてください。このパスは GitHub の署名で保護されます。
+
+## オーナーのアカウント
+
+`off` モードでは、SwB はそのスペースの GitHub のイベントをすべて破棄します。オーナーのアカウントからのイベントも破棄します。
+
+設定済みのオーナーのアカウントからのイベントだけを受け付けるときは、`work` モードを使います。`https://api.github.com/users/USERNAME` の `USERNAME` を、あなたの GitHub のユーザー名に置き換えてください。その URL を開いてください。数値の `id` を、スペースの `owner_ids` のリストにコピーしてください。設定を反映するために、SwB を再起動してください。
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        owner_ids: [4242]
+        mode:
+          mode: work
+          target: agent:beta
+```
+
+既定のオーナー ID は `blocks.github.owner_ids` で設定します。スペースの `owner_ids` のリストは、その既定値を置き換えます。スペースのリストを空にすると、既定値を消します。
+
+SwB は、タイトル、本文、コメントごとに作成者を確認します。テキストが `owner` として扱われるのは、そのテキスト自体の作成者が `owner_ids` にあり、人間である場合だけです。SwB は、ブランチ名、ref、ワークフローのタイトル、チェック名を `external` として引用します。
+
+チェック名を持つ `check_run` は、オーナーが実行した場合でも `external` の信頼レベルになります。フォークからの Pull Request がチェック名を設定できるためです。アクセスルールには、`github:4242` のような ID を使ってください。これらのルールは、信頼レベルとは別にアクセスを与えます。
+
+GitHub の会話の操作では、SwB の会話 ID を `conversation` か `handle` に渡してください。
+
+## 設定
+
+| キー | 用途 |
+| - | - |
+| `blocks.github` | GitHub のイベントと操作の設定 |
+| `blocks.github.use` | ブロックの種類。`github` を使います |
+| `blocks.github.enabled` | このブロックを無効にするときは `false` を設定します |
+| `blocks.github.app_id_env` | App ID を入れた変数の名前 |
+| `blocks.github.private_key_env` | App の秘密鍵を入れた変数の名前 |
+| `blocks.github.token_env` | App の認証情報の代わりに使う、Fine-grained トークンを入れた変数の名前 |
+| `blocks.github.secret_env` | Webhook シークレットを入れた変数の名前 |
+| `blocks.github.sinks` | イベントの受信側の名前ごとの設定 |
+| `blocks.github.sinks.*.url_env` | 受信側のアドレスを入れた変数の名前 |
+| `blocks.github.routes` | リポジトリ名か `owner/*` を、イベントの受信側のリストに対応付けます |
+| `blocks.github.owner_ids` | オーナーとして信頼する、数値の GitHub ユーザー ID の既定のリスト |
+| `blocks.github.spaces` | 設定を共有するリポジトリの名前付きのまとまり。`acme/app` のような名前は、そのリポジトリを選びます |
+| `blocks.github.spaces.*.repo` | `owner/repo` の形のリポジトリ名 |
+| `blocks.github.spaces.*.owner_ids` | このスペースで既定のリストを置き換える、数値の GitHub ユーザー ID のリスト |
+| `blocks.github.spaces.*.mode` | このスペースのリポジトリの既定の[チャンネルモード](/ja/docs/channel-modes) |
+| `blocks.github.spaces.*.mode.target` | モードの設定にある送信先。`agent:beta` のようなアドレスを選びます |
+| `blocks.github.spaces.*.project` | このスペースからのイベントの既定の SwB プロジェクト |
+
+リポジトリにエージェントを割り当てるときは、`space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")` を使います。assist モードには `mode="assist"` を使います。送信先は `targets` から選んでください。リンク済みのプロジェクトのルートが予備の送信先になります。
+
+外部の送信者には、`channel:github/acme/app` と `target:beta` の両方へのアクセスを与えてください。アクセスルールについては[チャンネルの公開範囲](/ja/docs/channel-modes#外部の-github-送信者を許可する)をご覧ください。
+
+`watch` モードでは、`modes.digest_minutes` が過ぎるか、そのメールボックスとスペースのイベントが 50 件たまると、SwB は送信先のメールボックスにダイジェストを送ります。詳しくは [Watch のダイジェスト](/ja/docs/channel-modes#watch-のダイジェストを読む)をご覧ください。

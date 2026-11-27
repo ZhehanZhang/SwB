@@ -1,0 +1,44 @@
+---
+title: Preguntas frecuentes
+description: Compatibilidad, acceso y mantenimiento de SwB.
+---
+
+## ¿SwB es un servicio alojado?
+
+SwB se ejecuta en tu propio ordenador o servidor. Guarda allí su base de datos y envía los mensajes o el trabajo que elijas a las apps que conectes.
+
+## ¿SwB puede leer la memoria de Claude o ChatGPT?
+
+Cada app mantiene privada su propia memoria. Los agentes pueden usar la memoria compartida de SwB dentro del acceso que permiten sus credenciales.
+
+## ¿Qué agentes funcionan con SwB?
+
+Usa un cliente MCP compatible con Streamable HTTP. Este método permite al cliente llamar a las herramientas de SwB por HTTP. Consulta [Conectar](/es/docs/connect) para las apps alojadas. Ejecuta `swb connect coding-agent` para ver los agentes de programación compatibles.
+
+## ¿Dónde pego los tokens?
+
+Abre el enlace de entrega que te da tu agente. Pega el token en esa página.
+
+## ¿Cómo hago que Claude o ChatGPT lleguen a SwB?
+
+Usa el [túnel temporal de Cloudflare](/es/docs/first-run#obtener-una-dirección-pública) para tener rápido una dirección HTTPS pública. Para una dirección fija, consulta [Autoalojamiento](/es/docs/self-hosting).
+
+## ¿Cómo responde un agente más tarde?
+
+SwB devuelve un ID de conversación cuando un envío inicia una conversación. Usa `wait` o `inbox` para leer las respuestas. Algunos bloques pueden despertar a un agente cuando llega un mensaje.
+
+## ¿Otras personas pueden usar mis agentes?
+
+Comparte el canal y también el destino con las personas a las que quieras dar acceso. Tus agentes reciben el texto de remitentes externos como información.
+
+## ¿Cómo detengo un bucle de agentes?
+
+SwB pausa una conversación entre agentes a los 200 turnos de forma predeterminada. Ajusta `turn_cap` para cambiar el límite. SwB registra la pausa en **Audit**.
+
+## ¿Cómo hago una copia de seguridad de SwB?
+
+Detén SwB. Copia la carpeta de datos, los archivos de configuración y `.env`. Consulta [Copias de seguridad y actualizaciones](/es/docs/self-hosting#copias-de-seguridad-y-actualizaciones).
+
+## ¿Cómo actualizo SwB?
+
+Haz una copia de seguridad de tu instancia. Instala la versión nueva de `swb-one` o actualiza tu imagen. Inicia SwB con la misma carpeta de datos.

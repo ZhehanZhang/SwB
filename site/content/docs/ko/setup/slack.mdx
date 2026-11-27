@@ -1,0 +1,214 @@
+---
+title: Slack
+description: 봇과 내 Slack 계정으로 Slack 워크스페이스를 SwB에 연결합니다.
+---
+
+SwB은 매니페스트로 만든 Slack 앱을 통해 Slack을 읽고 게시합니다. 매니페스트는 앱의 모든 설정을 담은 파일입니다.
+
+앱은 Socket Mode를 사용합니다. SwB이 Slack으로 이 연결을 직접 열기 때문에 서버는 비공개 주소를 써도 됩니다.
+
+## 시작하기 전에
+
+워크스페이스에서 앱을 만들고 설치할 수 있는 Slack 계정을 사용하세요. 조직에 따라 앱 승인이 필요할 수 있습니다. 소유자로 SwB에 로그인하세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="slack" lang="ko" />
+
+이 프롬프트를 SwB 소유자 클라이언트에 붙여 넣으세요.
+
+## Slack 앱 설정
+
+### Slack 앱 설정 열기
+
+[Slack 앱 설정](https://api.slack.com/apps)을 여세요. **Create New App** → **From a manifest**를 클릭하세요.
+### 워크스페이스 선택
+
+워크스페이스를 선택하세요. **Next**를 클릭하세요.
+### 매니페스트 붙여 넣기
+
+**YAML**을 선택하세요. 아래 앱 매니페스트 중 하나를 복사하세요. 전체를 그대로 붙여 넣으세요.
+### 앱 만들기
+
+**Next** → **Create**를 클릭하세요.
+### 앱 수준 토큰 만들기
+
+**Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**를 클릭하세요. 토큰 이름을 입력하세요.
+### 범위 추가
+
+**Add Scope** → `connections:write`를 클릭하세요. **Generate**를 클릭하세요.
+### 앱 설치
+
+**Install App** → **Install to Workspace**를 클릭하세요. SwB이 대신 활동할 Slack 사용자로 **Allow**를 클릭하세요.
+### Enterprise Grid에서 승인 받기
+
+Slack이 승인을 요청하면 워크스페이스 관리자나 조직 관리자에게 앱 승인을 요청하세요.
+
+### 토큰 저장
+
+워크스페이스용 등록 링크를 여세요. 각 Slack 토큰을 해당 필드에 붙여 넣으세요.
+### 봇 초대
+
+봇을 쓴다면 SwB을 쓸 Slack 채널마다 `/invite @<bot name>`을 보내세요.
+### 워크스페이스 ID 찾기
+
+브라우저에서 Slack을 여세요. 주소에 있는 워크스페이스 ID를 에이전트에게 알려 주세요. ID는 `T`로 시작합니다.
+
+## 앱 매니페스트
+
+### 봇과 내 계정
+
+
+```yaml
+# Example Slack app for an agent-to-agent workspace: a bot user and the owner's user token.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
+# The bot's @handle and member-list profile come from features.bot_user.display_name and the
+# app icon; they do not change per message. Per-message name/avatar = personas (chat:write.customize).
+display_information:
+  name: SwB
+  description: Agent switchboard for the owner's assistants
+  background_color: "#1d2733"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: swb
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read      # @mentions -> push kind "mention"
+      - channels:history       # watched public channels the bot is in
+      - channels:read
+      - groups:history         # watched private channels the bot is in
+      - groups:read
+      - im:history             # DMs to the bot -> push kind "dm"
+      - im:read
+      - im:write               # approval DMs to the owner
+      - chat:write
+      - chat:write.customize   # personas: per-message username + icon
+      - reactions:write        # ack reaction on mentions/DMs
+      - users:read             # names in pushed events
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # posts as the owner (policy-gated)
+      - reactions:write
+      - search:read            # search_messages
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  interactivity:
+    is_enabled: true           # Approve/Reject buttons, delivered over Socket Mode
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+```
+
+### 내 계정만
+
+
+```yaml
+# Example Slack app for a user-only workspace. No bot user, bot scopes, bot events, or interactivity.
+# It never joins or invites; every post appears as the owner.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
+display_information:
+  name: SwB (personal)
+  description: Lets the owner's agents read on their behalf; writes need approval
+  background_color: "#333333"
+oauth_config:
+  scopes:
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # only ever used after the owner approves a request
+      - reactions:write        # same
+      - search:read
+      - users:read
+settings:
+  event_subscriptions:
+    user_events:
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+```
+
+## 에이전트가 하는 일
+
+에이전트가 `connect(what="slack")`를 호출합니다. SwB은 어떤 토큰이 빠졌는지 확인합니다. 토큰이 필요한 워크스페이스의 등록 링크를 돌려줍니다.
+
+에이전트는 `config/switchboard.yaml`의 `blocks.slack.workspaces` 아래에 워크스페이스를 추가합니다. 워크스페이스 ID와 토큰 이름을 설정합니다. `blocks.slack.agents` 아래에서 접근 권한을 줍니다.
+
+이 예제는 봇과 내 계정으로 워크스페이스 하나를 연결합니다. `T0DEMO0001`을 내 워크스페이스 ID로 바꾸세요.
+
+
+```yaml
+blocks:
+  slack:
+    use: slack
+    enabled: true
+    workspaces:
+      example:
+        team_id: T0DEMO0001
+        app_token_env: SWB_SLACK_EXAMPLE_APP_TOKEN
+        identities:
+          bot:
+            token_env: SWB_SLACK_EXAMPLE_BOT_TOKEN
+          user:
+            token_env: SWB_SLACK_EXAMPLE_USER_TOKEN
+    agents:
+      claude:
+        workspaces:
+          example: [bot, user]
+```
+
+`switchboard_status`에 나온 에이전트 이름을 사용하세요. 에이전트마다 권한을 하나씩 추가하세요. 워크스페이스 항목과 권한에는 같은 워크스페이스 라벨을 사용하세요. 계정 전용 매니페스트를 쓴다면 `team_id` 옆에 `user_only: true`를 추가하세요. `identities`에서 `bot`을 제거하세요. 권한은 `[user]`로 설정하세요.
+
+`connect`가 요청하면 SwB을 다시 시작하세요. 에이전트는 `slack_workspaces`로 각 Slack 계정을 확인할 수 있습니다. 여기서 계정은 봇 계정이나 내 계정을 말합니다.
+
+## 자격 증명
+
+| 토큰 | Slack에서 표시되는 곳 | 형식 | 입력할 곳 |
+| --- | --- | --- | --- |
+| 앱 수준 토큰 | **Basic Information** → **App-Level Tokens** | `xapp-`로 시작 | SwB 등록 링크 |
+| 봇 토큰 | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | `xoxb-`로 시작 | SwB 등록 링크 |
+| 사용자 토큰 | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | `xoxp-`로 시작 | SwB 등록 링크 |
+
+## 연결 확인
+
+`connect(what="slack")`를 다시 실행하고 `connected`가 나오는지 확인하세요. `slack_workspaces`를 호출하세요. 계정마다 `ready`가 `true`이고 워크스페이스의 `connected`가 `true`인지 확인하세요.
+
+봇을 설정했다면 채널에서 봇을 멘션하고 대상 이름을 덧붙이세요. 에이전트에게 `slack_events`나 `slack_wait`를 확인해 달라고 요청하세요. 게시를 테스트하려면 쓰기 권한이 있는 계정에서 `slack_post`를 사용하세요.
+
+## 문제 해결
+
+SwB이 Socket Mode 문제를 알리면 앱 설정에서 **Socket Mode**를 여세요. **Enable Socket Mode**를 켜세요.
+
+앱의 범위를 바꾸면 앱을 다시 설치하세요. 그다음 새 등록 링크로 새 토큰을 저장하세요.
+
+`slack_search` 검색은 내 계정으로 이루어집니다. `search:read` 범위가 있는 사용자 토큰이 필요합니다.

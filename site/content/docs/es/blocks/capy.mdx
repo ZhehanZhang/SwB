@@ -1,0 +1,55 @@
+---
+title: Capy
+description: Envía trabajo a Capy Captains e hilos, y recibe las respuestas.
+---
+
+## Activar el bloque
+
+Sigue la [configuración de Capy Captain](/es/docs/setup/capy-captain). SwB usa la clave de la cuenta de Capy para encontrar Capy Captains y seguir sus hilos.
+
+## Conectar Capy como agente
+
+Añade SwB como servidor MCP personalizado en Capy. Usa OAuth para iniciar sesión en SwB como `capy`.
+
+## Enviar a un Capy Captain
+
+Pide a cualquier agente que envíe trabajo a un Capy Captain.
+
+> Envía esto a mi Capy Captain.
+
+La ruta del proyecto elige adónde va el trabajo. SwB sigue las actualizaciones del hilo de Capy y las envía al buzón del remitente. Tras un reinicio, SwB retoma el seguimiento del trabajo reciente desde su última posición guardada.
+
+| Modo de ruta | Lo que hace un envío |
+| - | - |
+| `captain_thread` | Envía un mensaje al Capy Captain |
+| `new_thread` | Inicia un hilo nuevo del equipo |
+
+## MCP Tasks
+
+El bloque de Capy activa [MCP Tasks](/es/docs/how-it-works#conversaciones) para los clientes MCP 2026-07-28. Los clientes lo encuentran con `server/discover` y lo piden en cada `send` a Capy. Los demás envíos usan conversaciones normales.
+
+## Claves de envío
+
+Capy muestra la cuenta dueña de la clave de envío. SwB prueba primero la clave del agente y después la clave de servicio. En el modo `personal`, la clave de la cuenta de Capy es la última opción. Inicia sesión como propietario para ver en `/healthz` la primera opción de cada agente y el resultado de la comprobación de claves.
+
+## Los proyectos se vinculan solos
+
+Cuando un agente crea un proyecto de SwB, el bloque de Capy busca un proyecto de Capy equivalente. Una coincidencia de repositorio tiene prioridad sobre una coincidencia de nombre. SwB vincula los proyectos cuando encuentra una sola coincidencia. Si el proyecto vinculado tiene exactamente un Capy Captain activo, SwB usa ese Captain para la ruta automática.
+
+## Configuración
+
+| Clave | Uso |
+| - | - |
+| `blocks.capy` | Ajustes para los envíos a Capy y el seguimiento de hilos |
+| `blocks.capy.use` | Tipo de bloque. Usa `capy` |
+| `blocks.capy.enabled` | Define `false` para omitir este bloque |
+| `blocks.capy.api_base` | Dirección base de la API de Capy. Valor predeterminado `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | Usa `service` para las claves de agente y de servicio. Usa `personal` para permitir también la clave de la cuenta de Capy como última opción |
+| `blocks.capy.send_key_env` | Nombre de la variable que contiene la clave de envío del servicio |
+| `blocks.capy.default_route` | Define una vez la ruta global inicial de Capy. Usa un destino de Capy como `captain:<id>` |
+| `blocks.capy.captain_delivery` | Cómo entrega Capy un mensaje a un Capy Captain o a un hilo ocupado. Los valores son `queue`, `steer` e `interrupt`. Valor predeterminado `queue` |
+| `blocks.capy.daily_cap` | Límite diario de delegaciones a Capy. Usa `null` para envíos ilimitados |
+| `blocks.capy.duplicate_window_s` | Tiempo en segundos durante el que se reutiliza un ID de conversación para el mismo remitente, destino, título y tarea. Valor predeterminado `600` |
+| `blocks.capy.max_file_bytes` | Límite del tamaño total de adjuntos por envío, en bytes. Valor predeterminado `10485760` |
+| `blocks.capy.handle_ttl_days` | Antigüedad máxima en días para retomar el seguimiento de hilos al arrancar. También fija la vida de las tareas MCP. Valor predeterminado `7` |
+| `blocks.capy.avatars` | Permite a SwB descargar los avatares de los Capy Captains. Define `false` para usar iniciales |

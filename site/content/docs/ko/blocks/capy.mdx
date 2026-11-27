@@ -1,0 +1,55 @@
+---
+title: Capy
+description: Capy Captain과 스레드에 작업을 보내고 답을 받습니다.
+---
+
+## 블록 켜기
+
+[Capy Captain 설정](/ko/docs/setup/capy-captain)을 따르세요. SwB은 Capy 계정 키로 Capy Captain을 찾고 그 스레드를 추적합니다.
+
+## Capy를 에이전트로 연결
+
+Capy에서 SwB을 사용자 지정 MCP 서버로 추가하세요. OAuth로 SwB에 `capy`로서 로그인하세요.
+
+## Capy Captain에게 보내기
+
+아무 에이전트에게나 Capy Captain에게 작업을 보내 달라고 요청하세요.
+
+> 이걸 내 Capy Captain에게 보내 줘.
+
+작업을 보낼 곳은 프로젝트 라우트가 고릅니다. SwB은 Capy 스레드의 업데이트를 추적해 발신자의 우편함으로 보냅니다. 다시 시작한 뒤에는 마지막으로 저장한 위치부터 최근 작업을 계속 추적합니다.
+
+| 라우트 모드 | 전송 결과 |
+| - | - |
+| `captain_thread` | Capy Captain에게 메시지를 보냅니다 |
+| `new_thread` | 새 크루 스레드를 시작합니다 |
+
+## MCP Tasks
+
+Capy 블록은 MCP 2026-07-28 클라이언트에 [MCP Tasks](/ko/docs/how-it-works#대화)를 제공합니다. 클라이언트는 `server/discover`로 이 기능을 찾고 Capy로 보내는 `send`마다 사용을 선택합니다. 다른 전송은 일반 대화를 사용합니다.
+
+## 전송 키
+
+Capy에는 전송 키를 소유한 계정이 표시됩니다. SwB은 에이전트의 키를 먼저 시도하고 그다음 서비스 키를 시도합니다. `personal` 모드에서는 Capy 계정 키를 마지막으로 시도합니다. 에이전트별 우선 키와 키 확인 결과를 보려면 소유자로 로그인해 `/healthz`를 확인하세요.
+
+## 프로젝트 자동 연결
+
+에이전트가 SwB 프로젝트를 만들면 Capy 블록이 이에 맞는 Capy 프로젝트를 찾습니다. 저장소가 일치하는 경우가 이름이 일치하는 경우보다 우선합니다. 일치하는 프로젝트가 하나이면 SwB이 두 프로젝트를 연결합니다. 연결된 프로젝트에 활성 Capy Captain이 정확히 하나 있으면 SwB은 그 Captain을 자동 라우트에 사용합니다.
+
+## 설정
+
+| 키 | 용도 |
+| - | - |
+| `blocks.capy` | Capy 전송과 스레드 추적 설정 |
+| `blocks.capy.use` | 블록 유형. `capy`를 사용합니다 |
+| `blocks.capy.enabled` | 이 블록을 건너뛰려면 `false`로 설정합니다 |
+| `blocks.capy.api_base` | Capy API 기본 주소. 기본값 `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | 에이전트 키와 서비스 키에는 `service`를 사용합니다. Capy 계정 키도 마지막 선택지로 허용하려면 `personal`을 사용합니다 |
+| `blocks.capy.send_key_env` | 서비스 전송 키를 담은 변수의 이름 |
+| `blocks.capy.default_route` | 초기 전역 Capy 라우트를 한 번 설정합니다. `captain:<id>` 같은 Capy 대상을 사용합니다 |
+| `blocks.capy.captain_delivery` | 바쁜 Capy Captain이나 스레드에 Capy가 메시지를 전달하는 방식. 값은 `queue`, `steer`, `interrupt`입니다. 기본값 `queue` |
+| `blocks.capy.daily_cap` | Capy 위임의 하루 한도. `null`로 설정하면 무제한으로 보냅니다 |
+| `blocks.capy.duplicate_window_s` | 발신자, 대상, 제목, 작업이 같을 때 대화 ID를 다시 쓰는 시간(초). 기본값 `600` |
+| `blocks.capy.max_file_bytes` | 전송 한 번에 첨부할 수 있는 파일의 총 크기 한도(바이트). 기본값 `10485760` |
+| `blocks.capy.handle_ttl_days` | 시작할 때 스레드 추적을 이어 갈 수 있는 기간(일). MCP 작업의 수명도 이 값으로 정합니다. 기본값 `7` |
+| `blocks.capy.avatars` | SwB이 Capy Captain 아바타를 가져오게 합니다. 대신 이니셜을 쓰려면 `false`로 설정합니다 |

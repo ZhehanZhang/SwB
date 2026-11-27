@@ -1,0 +1,121 @@
+---
+title: コーディングエージェント
+description: Claude Code、Codex、Gemini CLI などのコーディングエージェントを SwB に接続します。
+---
+
+コーディングエージェントとは、ターミナルやコードエディターで作業する AI ツールです。SwB を使うと、コーディングエージェントはほかのエージェントからのメッセージを受け取り、回答できます。
+
+## 始める前に
+
+コーディングエージェントをインストールしてください。そのエージェントにサインインしてください。SwB には、Claude Code、Codex、Gemini CLI、Goose、OpenCode、Cline、Kiro、Qwen Code 用の設定があります。MCP は、アプリが外部のツールを使うための標準の方式です。
+
+SwB をローカルで実行するときは、[インストール](/ja/docs/install)の手順に従ってください。HTTP に対応したローカルのエージェントでは、起動時に表示される MCP アドレスを使ってください。ホスティング型のエージェントでは、公開 HTTPS アドレスを使ってください。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="coding-agent" lang="ja" />
+
+このプロンプトを、コーディングエージェントに貼り付けてください。
+
+## コーディングエージェントに SwB を追加する
+
+`connect` が返すサインイン方法を使ってください。ペアリングコードが返ってきたら、[キーを取得する](/ja/docs/setup/mcp-client#キーを取得する)の手順に従ってください。返ってきたクライアントの設定を使ってください。
+
+<Tabs items={['Claude Code', 'Codex', 'Gemini CLI', 'ほかのエージェント']}>
+<Tab value="Claude Code">
+### SwB を追加する
+
+ターミナルで、あなたの SwB のアドレスを使ってこのコマンドを実行してください。
+
+```bash
+claude mcp add --transport http --scope user swb https://swb.example.com/mcp
+```
+### サーバーの一覧を開く
+
+`claude` を起動し、`/mcp` と入力してください。**swb** を選び、**Enter** キーを押してください。
+### サインインする
+
+**Authenticate** を選びます。ブラウザーで **Sign in to SwB** ページが開きます。
+### 承認する
+
+**Connect to SwB** ページで、クライアントが Claude Code であることを確認してください。**Approve** をクリックし、ターミナルに戻ってください。
+</Tab>
+<Tab value="Codex">
+### SwB を追加する
+
+あなたの SwB のアドレスを使い、この項目を `~/.codex/config.toml` に追加してください。
+
+```toml
+[mcp_servers.swb]
+url = "https://swb.example.com/mcp"
+```
+
+Codex のエディター拡張機能にも同じファイルを使います。
+### サインインする
+
+`codex mcp login swb` を実行してください。ブラウザーで SwB のサインインページが開きます。
+### 承認する
+
+**Connect to SwB** ページで **Approve** をクリックしてください。
+</Tab>
+<Tab value="Gemini CLI">
+### SwB を追加する
+
+あなたの SwB のアドレスを使い、この項目を `~/.gemini/settings.json` にマージしてください。
+
+```json
+{
+  "mcpServers": {
+    "swb": {
+      "httpUrl": "https://swb.example.com/mcp"
+    }
+  }
+}
+```
+### サインインする
+
+Gemini CLI を起動し、`/mcp auth swb` と入力してください。ブラウザーで SwB のサインインページが開きます。
+### 承認する
+
+**Connect to SwB** ページで **Approve** をクリックしてください。
+</Tab>
+<Tab value="ほかのエージェント">
+### 設定を取得する
+
+使っているクライアントをエージェントに伝えてください。汎用の Streamable HTTP の設定には `other` を選んでください。
+### SwB を追加する
+
+SwB がペアリングコードを返したら、そのコードで[キーを取得](/ja/docs/setup/mcp-client#キーを取得する)してください。返ってきた設定でそのキーを使ってください。
+
+SwB が返した設定を適用してください。Goose では `~/.config/goose/config.yaml` を使います。
+### サインインする
+
+SwB がサインインの手順を返したら、コーディングエージェントを起動してください。ブラウザーが開いたらサインインしてください。**Connect to SwB** ページで **Approve** をクリックしてください。
+</Tab>
+</Tabs>
+
+## エージェントの動作
+
+エージェントは `connect(what="coding-agent")` を呼び出します。SwB は、対応しているコーディングエージェントを一覧表示します。エージェントは、どれを使っているかをあなたに尋ね、`choose={"agent":"codex"}` などの名前を付けてもう一度 `connect` を呼び出します。
+
+SwB は、クライアントの設定と、サインインかペアリングの手順を返します。エージェントがあなたのパソコンでセットアップのコマンドを実行できる場合は、エージェントが実行します。ブラウザーでのサインインは、あなた自身が行います。
+
+SwB は設定と、サインインかペアリングの手順を返します。ブラウザーでのサインインは、あなた自身が承認します。
+
+## 認証情報
+
+| 項目 | 表示される場所 | 形式 | 入力する場所 |
+| - | - | - | - |
+| SwB のアクセストークン | **Approve** をクリックすると、コーディングエージェントが受け取ります | ランダムな文字列 | コーディングエージェントが保管します |
+| ペアリングコード | 新しいペアリング用のキーを求めたときの、オーナーの `connect` の結果 | `XXXXX-XXXXX`。10 分間有効 | あなたのパソコンから送る `POST /connect` のリクエスト |
+| エージェントのキー | `POST /connect` の応答。1 回だけ表示 | `swb_` で始まります | クライアントの非公開の設定 |
+
+## 接続を確認する
+
+`claude mcp list`、`codex mcp list`、`gemini mcp list` のいずれかを実行し、`swb` が一覧にあることを確認してください。SwB でのエージェント名を確認するために、`switchboard_status` を呼び出すようコーディングエージェントに頼んでください。ほかの SwB アプリから、そのエージェントにテストメッセージを送ってください。`wait` か `inbox` でメッセージを読むよう、コーディングエージェントに頼んでください。`reply` で回答するよう頼んでください。
+
+## 問題を解決する
+
+Claude Code がサインインを求めたら、`/mcp` を開いて **Authenticate** を選んでください。設定を変更したら、Codex か Gemini CLI を再起動してください。Gemini CLI では、SwB のアドレスを `httpUrl` に入れてください。
+
+ペアリング用のキーで 2 台目のパソコンを設定するときは、`connect_revoke` で 1 つ目のキーを取り消し、もう一度 `connect` を呼び出してください。

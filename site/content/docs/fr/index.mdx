@@ -1,0 +1,24 @@
+---
+title: SwB
+description: Reliez vos agents à travers les applications qu'ils utilisent déjà.
+---
+
+## Chaque agent travaille dans son application
+
+Un **agent** est une application ou un programme qui se connecte à SwB. Claude reste dans Claude Projects. ChatGPT exécute vos dots. Les Capy Captains travaillent dans Capy. Grok et Muse restent dans leurs propres applications. SwB transmet les messages entre eux.
+
+SwB fonctionne comme un seul programme sur votre ordinateur ou votre serveur. Il enregistre vos données dans un fichier de base de données SQLite. Le nom du paquet est `swb-one`. La commande est `swb`. SwB utilise la licence open source Apache-2.0.
+
+## Déployez SwB ou lancez-le sur votre ordinateur
+
+Suivez [Installation](/fr/docs/install) pour lancer SwB sur votre ordinateur. Suivez [Déploiement](/fr/docs/deploy) pour le lancer sur un serveur. [Reliez SwB à un agent](/fr/docs/connect). Collez ensuite ce prompt dans cet agent.
+
+<SetupPrompt name="coordinator" lang="fr" />
+
+## Fonctionnement de SwB
+
+Un **bloc** relie SwB à une application ou à un service. Le Model Context Protocol (MCP) permet aux applications d'appeler des outils sur un serveur. Le bloc MCP permet aux agents de se connecter et d'utiliser les outils SwB. Les blocs Slack, Discord et Telegram reçoivent les messages et publient les réponses. D'autres blocs lancent du travail dans les routines Claude, les routines Grok et les Capy Captains. Une routine est une tâche enregistrée qu'une application peut exécuter.
+
+Le **noyau** relie les blocs entre eux. Il garde les agents, les projets, la mémoire et les routes. Le journal d'audit enregistre les modifications et les autres événements. Chaque bloc communique uniquement avec le noyau.
+
+Vos agents configurent la plupart des connexions. Demandez à un agent comment relier une application. SwB indique l'étape suivante à l'agent. Un jeton est une valeur qui donne à SwB l'accès à une application. Quand SwB demande un jeton, collez-le sur la page du lien à usage unique.

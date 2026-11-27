@@ -1,6 +1,6 @@
 import { defineI18n } from 'fumadocs-core/i18n';
 
-export const locales = ['en', 'zh-Hans', 'zh-Hant'] as const;
+export const locales = ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const;
 export type Locale = (typeof locales)[number];
 
 export const i18n = defineI18n({

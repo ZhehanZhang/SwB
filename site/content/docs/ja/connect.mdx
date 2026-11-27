@@ -1,0 +1,96 @@
+---
+title: エージェントを接続する
+description: エージェントに SwB を追加して、各アプリとの接続を設定します。
+---
+
+## エージェントに SwB を追加する
+
+SwB と同じパソコンにあるアプリでは、[オーナー権限かペアリング](/ja/docs/setup/mcp-client)を選んでください。サーバーで動くアプリでは、SwB をリモート MCP サーバーとして追加してください。`https://swb.example.com/mcp` のような公開 MCP アドレスを使ってください。SwB のページで、そのアプリの [OAuth サインイン](/ja/docs/owner-login#エージェントのサインイン)を承認してください。
+
+| アプリ | SwB を追加する場所 |
+| - | - |
+| [ローカル MCP クライアント](/ja/docs/setup/mcp-client) | オーナーキーを使うか、コードでペアリングします。SwB のパソコンでは `http://localhost:8870/mcp` を使います。 |
+| Claude と Claude Projects | Customize → Connectors → Add → Add custom connector |
+| ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
+| Capy | Settings → MCP & plugins → Add a custom MCP server |
+| Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
+| Codex、Gemini CLI などのコーディングエージェント | `swb connect coding-agent --choose agent=codex` |
+
+コーディングエージェントで使える名前は、`swb connect coding-agent` を実行すると一覧できます。`codex` を、その一覧にある名前に置き換えてください。
+
+## エージェントに頼む
+
+オーナー権限を持つエージェントは、ほかの接続を設定できます。ペアリング済みのキーを使うエージェントは、オーナー専用の各手順でターミナルコマンドを示します。
+
+オーナー権限には、オーナーが承認した OAuth サインインか、`SWB_KEY_<NAME>` のキーが必要です。スコープ、ツール、送信先のすべてにアクセスできる認証情報を使ってください。設定の `auth.key_scopes`、`auth.key_tools`、`auth.key_targets` がこのアクセスを制限します。
+
+| 頼むこと | エージェントの動作 |
+| - | - |
+| Claude Projects を接続するには？ | プロジェクト用の Claude ルーティンを登録し、トークン用のリンクを 1 つ渡します |
+| Slack を SwB に接続して。 | [Slack のセットアップ](/ja/docs/setup/slack#アプリマニフェスト)にある YAML マニフェストを案内し、必要なときは受け取りリンクを取得します |
+| Discord ボットを接続して。 | トークン用のリンクと、ボットの招待リンクを渡します |
+| これを Capy Captain に送って。 | タスクを送り、回答を待ちます |
+| どこに送れる？ | エージェントが届く送信先を一覧表示します |
+
+エージェントは `connect` ツールを呼び出します。SwB は、そのプラットフォームの次の手順を返します。トークンが必要な手順では、SwB がワンタイムの受け取りリンクを発行します。リンクを開いて、トークンを貼り付けてください。受け取りリンクについては[認証情報](/ja/docs/credentials)で説明しています。
+
+## ターミナルから接続する
+
+SwB のインスタンスフォルダーで `swb connect PLATFORM` を実行してください。`PLATFORM` を `slack` などのプラットフォーム名に置き換えてください。このコマンドは `.env` のオーナーキーを使います。既定ではローカルの SwB アドレスを使います。インスタンスフォルダーを選ぶときは `--dir` を使います。SwB のアドレスを設定するときは `--url` を使います。オーナー用のワンタイムのサインインリンクは `swb login-link` で取得できます。
+
+```bash
+swb connect mcp-client
+swb connect capy-captain
+swb connect grok
+```
+
+## ペアリングコードで接続する
+
+ペアリングを使うと、新しいエージェントに専用のキーを与えられます。オーナーとしてサインインしたエージェントに、`connect_code` の呼び出しを頼んでください。そのとき、新しいエージェントの名前を伝えてください。コードは 10 分間、1 回だけ使えます。新しいエージェントは `POST /connect` でコードを自分のキーに交換します。ペアリングの全手順は [MCP クライアント](/ja/docs/setup/mcp-client)をご覧ください。
+
+コンソールでコードを作るときは、**Tokens** を開きます。**Pairing code** を開きます。エージェント名を入力します。**Create code** を選択します。SwB はこのフォームを `POST /pairing/code` に送ります。
+
+ペアリングすると、`agent:<name>` と、`auth.key_scopes` でそのエージェントに設定したスコープのメモリにアクセスできます。プロジェクトを指定したペアリングコードでは、そのプロジェクトのメモリスコープにもアクセスできます。
+
+`POST /connect` は、指定したプロジェクトを `project` で返します。この値をクライアントの既定のプロジェクトにしてください。プロジェクトが必要なツールでは、`project` に渡してください。
+
+このキーで読めるのは、そのエージェントが[会話スコープ](/ja/docs/security#制限付きのキー)の範囲で送受信するメッセージです。
+
+ペアリング済みのキーでは、`tools/list` がペアリング済みエージェントのロールに応じたツールを表示します。`auth.key_tools` の設定で、この一覧をさらに絞り込めます。オーナー用のツールには、オーナーのサインインを使ってください。詳しくは[ペアリング済みのキー](/ja/docs/tools#ペアリング済みのキー)をご覧ください。
+
+## インボックスのイベントストリーム
+
+`POST /connect` は `inbox_events_url` を返します。これは `GET /inbox/events` の URL です。ペアリング済みエージェントのキーを使い、`Authorization: Bearer <key>` を付けてこの URL を開いてください。SwB は、キーのアクセス範囲にあるそのエージェントのインボックスのメッセージを送ります。このサーバー送信イベント（SSE）は、接続が開いている間に届きます。Watch のダイジェストとコンテキスト項目は、`inbox` で読み取ってください。
+
+ストリームは `ready` イベントから始まります。各 `item` イベントには、`cursor`、会話の `handle`、メッセージのデータを含む JSON データがあります。イベント ID はカーソルです。カーソルはストリーム内の位置を示します。
+
+ストリームは、既定では最新の位置から始まります。続きから再開するときは、最後のイベント ID を `Last-Event-ID` ヘッダーか `after` クエリパラメーターで送ってください。`reply` と `get_message` の入力については[メッセージ](/ja/docs/tools#メッセージ)をご覧ください。
+
+## セットアップ用プロンプト
+
+エージェントは、セットアップ用の文章を MCP のプロンプトまたはリソースとして読めます。プロンプトは、エージェントに渡す文章です。リソースは、エージェントがアドレスで読める文章です。プラットフォームにセットアップ用プロンプトがあるとき、`connect` ツールは `guide` に両方の名前を返します。
+
+| プロンプト | リソース | ガイド |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/docs/setup/capy-captain](/ja/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/docs/setup/chatgpt](/ja/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/docs/setup/claude](/ja/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/docs/setup/claude-project](/ja/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/docs/setup/coding-agent](/ja/docs/setup/coding-agent) |
+| `setup-companion` | `swb://setup/companion` | [/docs/companion](/ja/docs/companion) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/docs/connect](/ja/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/docs/deploy](/ja/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/docs/setup/discord](/ja/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/docs/setup/dots](/ja/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/docs/setup/github](/ja/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/docs/setup/grok](/ja/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/docs/setup/grok-bot](/ja/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/docs/setup/mcp-client](/ja/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/docs/setup/muse](/ja/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/docs/setup/slack](/ja/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/docs/setup/telegram](/ja/docs/setup/telegram) |
+
+## コンパニオン
+
+デバイスのペアリングと、エージェントが使う機能の選択については、[コンパニオンのガイド](/ja/docs/companion)をご覧ください。

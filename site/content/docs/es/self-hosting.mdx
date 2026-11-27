@@ -1,0 +1,85 @@
+---
+title: Autoalojamiento
+description: Ejecuta SwB en un servidor con Docker Compose y Cloudflare.
+---
+
+## Docker Compose
+
+Instala Docker Compose 2.24 o una versión posterior. Ejecuta estos comandos como un usuario normal que sea dueño de la carpeta de datos.
+
+```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
+(umask 077; cp .env.example .env)
+{
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
+mkdir -p data
+docker compose up -d --build --wait
+curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
+```
+
+Abre el enlace de inicio de sesión de un solo uso que aparece en la terminal antes de cinco minutos. Mantén el enlace en privado.
+
+El navegador usa `http://localhost:8870` para el inicio de sesión del propietario. El comando dentro del contenedor usa el puerto `8000`. Compose guarda los datos en `./data`. Después de cambiar `.env`, ejecuta `docker compose up -d` de nuevo.
+
+Para un servidor remoto, reenvía su puerto `8870` al puerto local `8870` antes de abrir el enlace.
+
+Una petición anónima a `/healthz` devuelve `status` y `version`. Usa una sesión de propietario o la clave de propietario para ver todos los detalles de estado.
+
+## Cloudflare Tunnel
+
+Sigue las [instrucciones de Cloudflare Tunnel](/es/docs/setup/cloudflare) para crear un túnel para tu dominio. Usa `http://switchboard:8000` como dirección de servicio para Compose. Guarda el token del túnel en `.env` con el nombre que indica el [archivo Compose de la versión](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37). Cambia `SWB_PUBLIC_URL` en `.env` por la dirección del túnel. Inicia Compose con el perfil del túnel.
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+## Proxies de confianza
+
+Un proxy inverso pasa las peticiones a SwB. Añade la dirección del proxy o su red dedicada a `trusted_proxies` en `config/switchboard.yaml`. Escribe los rangos de red en formato CIDR, como `192.0.2.0/24`.
+
+También puedes definir `SWB_TRUSTED_PROXIES` en `.env`. Separa las entradas con comas. El ajuste de YAML tiene prioridad.
+
+Para un Cloudflare Tunnel en el host de SwB o en la red de Docker, añade la dirección o la red dedicada del conector del túnel. El conector se conecta directamente a SwB. Usa la entrada `cloudflare` para las conexiones directas desde los servidores perimetrales de Cloudflare.
+
+## Cloudflare Access
+
+Sigue la [guía de configuración de Cloudflare](/es/docs/setup/cloudflare) para configurar SwB y definir las reglas de acceso del propietario y de las peticiones de clientes.
+
+## Plataformas de alojamiento
+
+Usa una sola instancia de SwB con un disco persistente montado en `/data`. Consulta la [guía de despliegue](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy) para las plantillas de Railway, Render y Fly.io y el script de Koyeb.
+
+## Railway [#railway]
+
+La [definición de la plantilla de Railway](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts) ejecuta un servicio de SwB y monta un volumen de 1 GB en `/data`.
+Despliega desde el marketplace de Railway cuando se publique la plantilla.
+
+## Fly.io [#fly]
+
+Usa la copia de la versión de SwB del [ejemplo de Docker Compose](#docker-compose). Instala la [herramienta de línea de comandos de Fly.io](https://docs.fly.io/flyctl/). Inicia sesión en Fly.io.
+
+Ejecuta `sh deploy/fly.sh my-swb` desde la carpeta de SwB. Cambia `my-swb` por un nombre de app único. El script usa `fly deploy --ha=false` para iniciar una Machine.
+
+Abre la página de inicio de sesión de tu app. Copia `SWB_SETUP_CODE` de `.env.swb-setup-fly-my-swb` en tu copia local. Escríbelo en **Setup code**. Borra el archivo después de iniciar sesión.
+
+Consulta el [plan Free de Fly.io](https://docs.fly.io/about/free-plan) y las [tarifas actuales](https://fly.io/docs/about/pricing/) para los detalles de facturación.
+
+## Copias de seguridad y actualizaciones
+
+Detén SwB antes de copiar su carpeta de datos. Mantén toda la carpeta junta, con la base de datos y sus claves, incluidas `mcp-events.key` y `claim-key`. Copia también tus archivos de configuración y `.env`. Mantén la copia en privado. Instala o compila la versión nueva. Inicia SwB con la misma carpeta de datos.
+
+## Exportar la memoria
+
+Ejecuta la exportación dentro del contenedor de Compose.
+
+```bash
+docker compose exec -T switchboard swb export /data/export
+```
+
+La exportación guarda archivos Markdown por ámbito en `./data/export` en el host. Incluye un `INDEX.md`. Define `memory.mirror_dir` para mantener una copia actualizada en Markdown.
