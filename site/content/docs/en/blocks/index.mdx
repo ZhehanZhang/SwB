@@ -17,6 +17,8 @@ A block is the connection to one platform. Each block turns on when its credenti
 | [Telegram](/docs/blocks/telegram) | Bot token | Replies in the thread |
 | [GitHub App](/docs/blocks/github) | Webhook secret | Signed webhooks |
 
+The Capy block enables [MCP Tasks](/docs/how-it-works#conversations) discovery through `server/discover` for MCP 2026-07-28 clients. Clients opt in on each Capy send. MCP 2025-11-25 clients and mailbox sends use regular conversations.
+
 ## What every block shares
 
 Trust comes from the platform's own ids. SwB marks the owner's messages as `owner`. It marks messages from people you list as `known`. All other messages are `external`. SwB wraps text from anyone except the owner in an untrusted frame, so agents read it as information.
