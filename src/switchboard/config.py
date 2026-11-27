@@ -108,6 +108,7 @@ class Config:
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
     blocks: dict[str, dict[str, Any]] = field(default_factory=lambda: {"mcp": {"use": "mcp"}})
+    blocks_from_file: bool = False
     block_env: dict[str, tuple[str, ...]] = field(default_factory=dict)
     agents: dict[str, Any] | None = None
     targets: dict[str, Any] = field(default_factory=dict)
@@ -346,7 +347,8 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     else:
         v2 = raw
     discovered, block_env = env_blocks(env)
-    if "blocks" in v2:
+    blocks_from_file = "blocks" in v2
+    if blocks_from_file:
         sections = _sections(v2["blocks"], "blocks")
         blocks = {name: {"use": name, **sec} for name, sec in sections.items() if sec.get("enabled", True)}
         for name in sections:
@@ -380,6 +382,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
         blocks=blocks,
+        blocks_from_file=blocks_from_file,
         modes=parse_modes(v2.get("modes"), blocks),
         block_env=block_env,
         agents=dict(v2["agents"]) if isinstance(v2.get("agents"), dict) else None,

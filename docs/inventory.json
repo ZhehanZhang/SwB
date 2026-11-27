@@ -593,13 +593,6 @@
     },
     {
       "icon": null,
-      "id": "config_key:blocks.capy.burst",
-      "key": "blocks.capy.burst",
-      "kind": "config_key",
-      "label": "blocks.capy.burst"
-    },
-    {
-      "icon": null,
       "id": "config_key:blocks.capy.captain_delivery",
       "key": "blocks.capy.captain_delivery",
       "kind": "config_key",
@@ -2253,17 +2246,6 @@
     },
     {
       "icon": null,
-      "id": "page:/canvas/*",
-      "kind": "page",
-      "label": "SwB",
-      "path": "/canvas/*",
-      "redirect_to": "/",
-      "surfaces": [
-        "console"
-      ]
-    },
-    {
-      "icon": null,
       "id": "page:/claim/{code}",
       "kind": "page",
       "label": "Save a token",
@@ -2342,32 +2324,10 @@
     },
     {
       "icon": null,
-      "id": "page:/projects",
-      "kind": "page",
-      "label": "SwB",
-      "path": "/projects",
-      "redirect_to": "/",
-      "surfaces": [
-        "console"
-      ]
-    },
-    {
-      "icon": null,
       "id": "page:/projects/:slug",
       "kind": "page",
       "label": "Project",
       "path": "/projects/:slug",
-      "surfaces": [
-        "console"
-      ]
-    },
-    {
-      "icon": null,
-      "id": "page:/provision/*",
-      "kind": "page",
-      "label": "SwB",
-      "path": "/provision/*",
-      "redirect_to": "/",
       "surfaces": [
         "console"
       ]
@@ -2741,7 +2701,7 @@
       "name": "capy_wait"
     },
     {
-      "description": "When someone asks \"how do I connect/set up/link X to switchboard?\", call connect first. Kinds: capy-captain, chatgpt, claude, claude-project, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Follow each next step in order: run exact calls marked \"you\", give \"person\" steps and links to the owner, and call connect again to check progress. Pass choices such as a Captain, project or agent name in choose, never credentials; use the link for token entry. Read the prompt or resource in guide for detailed setup instructions.",
+      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Call connect again to check progress. Use choose for details such as a Captain, project or agent name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [
@@ -2750,7 +2710,7 @@
         "what"
       ],
       "kind": "tool",
-      "label": "Connect to Switchboard",
+      "label": "Connect to SwB",
       "name": "connect"
     },
     {

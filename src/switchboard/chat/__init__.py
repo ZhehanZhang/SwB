@@ -193,6 +193,9 @@ class ChatBlock(Block):
         """Provisioning details for status: invite URLs, bot name, the claim link if one is open."""
         return {}
 
+    def get_token_steps(self) -> list[str]:
+        return []
+
     # Secrets -------------------------------------------------------------------------------------
 
     def secret(self, name: str, env: str | None) -> str | None:
@@ -694,8 +697,8 @@ class ChatBlock(Block):
         if not token:
             if not principal.is_unrestricted_owner:
                 return {"done": done, "next": [{"by": "person", "do": f"Ask the owner to connect {self.manifest.title} from their own sign-in."}]}
-            steps = " ".join(self.setup().get("steps", [])[:2])
-            return {"done": done, "next": [{"by": "person", "do": f"{steps} Paste the token at the link.", "link": self.claim_link(principal.source)["link"]}]}
+            steps = " ".join([*self.get_token_steps(), "Paste the token at this link."])
+            return {"done": done, "next": [{"by": "person", "do": steps, "link": self.claim_link(principal.source)["link"]}]}
         steps = list(self.missing())
         if not self.spaces:
             steps.append(f"Add a space under blocks.{self.name}.spaces with the project it belongs to.")
