@@ -323,7 +323,7 @@ def _config_files(path: str | Path | None, env: Mapping[str, str],
 
 def _data_paths(env: Mapping[str, str], raw: Mapping[str, Any], instance: Instance | None, *,
                 has_config: bool) -> tuple[Path, Path | None]:
-    if configured := env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA") or raw.get("data_dir"):
+    if configured := raw.get("data_dir") or env.get("SWITCHBOARD_DATA_DIR") or env.get("SWITCHBOARD_DATA"):
         return Path(configured).expanduser(), None
     if instance is None:
         return Path("data"), None
