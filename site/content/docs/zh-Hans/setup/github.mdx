@@ -116,6 +116,10 @@ blocks:
         project: demo
 ```
 
+要用工作模式，智能体将 `mode.mode` 设为 `work`。它将你的 GitHub 数字用户 ID 填入空间的 `owner_ids`。查询方法和示例见[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
+
+GitHub 的信任等级为 `owner` 和 `external`。`known` 设置适用于 Slack、Discord 和 Telegram。访问规则使用 `github:4242` 这类发件人 ID。
+
 通过领取链接保存同一个 webhook 密钥。智能体重启 SwB，载入密钥并应用路由。
 
 智能体再次调用 `connect(what="github")`，获取仍需填写的 App ID 或私钥链接。若要把已有的个人访问令牌改为 GitHub App 凭据，选用 `choose={"credential":"app"}`。

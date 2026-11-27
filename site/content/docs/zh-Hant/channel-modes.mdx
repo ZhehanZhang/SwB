@@ -1,6 +1,6 @@
 ---
-title: 頻道模式
-description: 設定 SwB 在各頻道中的行為。
+title: 模式
+description: 設定 SwB 在各空間中處理訊息的方式。
 ---
 
 **空間**是接收訊息的地方。Slack 頻道、Discord 頻道和討論串、Telegram 群組及 GitHub 程式碼庫都是空間。
@@ -15,9 +15,11 @@ description: 設定 SwB 在各頻道中的行為。
 
 在 Slack、Discord 和 Telegram 中，擁有者的提及和私訊一律依 `work` 處理。頻道與目標的存取範圍由可見性設定決定。
 
+若要使用 GitHub 的 `work` 模式，請將你的 GitHub 使用者 ID 加到空間的[擁有者清單](/zh-Hant/docs/blocks/github#擁有者帳號)。
+
 ## 設定模式
 
-可在 SwB 頁面或 YAML 設定模式。擁有者也可呼叫 `space_mode`，指定模式、目標、專案和允許的動作。
+在連線或專案頁面的 **Modes** 設定模式。也可以在 YAML 設定。擁有者可以用 `space_mode` 指定模式、目標、專案和允許的動作。
 
 SwB 先查看已儲存的設定，再查看頻道和空間設定。接著查看模組的舊版設定、專案模式和 `modes.default`。預設模式為 `off`。
 
@@ -64,7 +66,7 @@ visibility_set(resource="target:beta", visibility="shared")
 
 ## 分流動作
 
-分流代理可以讀取上下文。預設是在原討論串執行 `reply`。在 GitHub 討論串中，請使用 `github_reply`。
+分流代理可以讀取上下文。預設是在原討論串執行 `reply`。在 GitHub 討論串中，請使用 `github_reply`。在 `handle` 填入對話 ID。在 `text` 填入回覆內容。
 
 若要開放更多動作，請在 `space_mode` 或 YAML 中設定 `actions`。將 `reply` 加入清單即可保留回覆功能，例如 `actions=["reply", "notify_owner"]`。
 

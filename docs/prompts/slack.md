@@ -2,11 +2,15 @@ Read the setup guide at https://swb.one/docs/setup/slack.
 
 Help me connect Slack to SwB, my self-hosted switchboard for agents and channels. You reach SwB as an MCP server.
 
-If the SwB tools are missing, ask me to add SwB as a custom MCP server. Ask me to enter my SwB address, such as https://swb.example.com/mcp. In Claude, ask me to use Customize > Connectors > Add > Custom > Web. In ChatGPT, ask me to open https://chatgpt.com/plugins in a browser. Ask me to use + > Add custom MCP server. In Grok, ask me to use grok.com > Connectors > New Connector > Custom. For other apps, ask me to open the MCP server settings. Wait for me to confirm.
+If the SwB tools are missing, ask me to add SwB as a custom MCP server. Ask me to enter my SwB MCP address. Use `https://swb.example.com/mcp` as the example.
+
+For Claude, give me the path `Customize > Connectors > Add > Custom > Web`. For ChatGPT, ask me to open `https://chatgpt.com/plugins`. Give me the path `+ > Add custom MCP server`. For Grok, give me the path `grok.com > Connectors > New Connector > Custom`. For other apps, ask me to open the MCP server settings. Wait for me to confirm.
 
 Call connect(what="slack"). Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path. Wait for me to say done after each step. Call connect(what="slack") again to check the connection.
 
-Ask me to open https://api.slack.com/apps. Ask me to use Create New App > From a manifest. Ask me to pick the workspace. Ask me to click Next. Ask me to select YAML. For the bot and my account, ask me to paste the YAML at https://swb.one/docs/setup/slack#bot-and-your-account. For my account only, ask me to paste the YAML at https://swb.one/docs/setup/slack#your-account-only. Ask me to click Next. Ask me to click Create.
+Ask me to open `https://api.slack.com/apps`. Give me the path `Create New App > From a manifest`. Ask me to pick the workspace. Ask me to click Next. Ask me to select YAML.
+
+For both identities, point me to `https://swb.one/docs/setup/slack#bot-and-your-account`. For my account only, point me to `https://swb.one/docs/setup/slack#your-account-only`. Ask me to paste the YAML from that section. Ask me to click Next. Ask me to click Create.
 
 Ask me to use Basic Information > App-Level Tokens > Generate Token and Scopes. Ask me to add `connections:write`. Ask me to click Generate. Ask me to use Install App > Install to Workspace. Ask me to click Allow. Ask me to find the `xapp-` token at Basic Information > App-Level Tokens. Ask me to find the `xoxb-` and `xoxp-` tokens at OAuth & Permissions > OAuth Tokens. Ask me to send `/invite @<bot>` in each channel. The workspace ID is the `T...` part of `app.slack.com/client/T.../` in a browser.
 

@@ -18,8 +18,10 @@ SwB 依据平台自己的 id 设定每条消息的信任等级。信任等级只
 | 信任等级 | 对象 |
 | - | - |
 | `owner` | 你，以及你自己已登录的智能体 |
-| `known` | 你在 `known` 中列出的人和机器人 |
+| `known` | 你在 Slack、Discord 或 Telegram 的 `known` 中列出的人和机器人 |
 | `external` | 所有其他人 |
+
+GitHub 的信任等级为 `owner` 和 `external`。请参阅[所有者账号](/zh-Hans/docs/blocks/github#所有者账号)。
 
 SwB 原样传递所有者的文本。对于其他发送者，SwB 会替换正文中的消息头或标记。然后，SwB 为正文添加自己的消息头和标记 `<<<swb-untrusted` 与 `swb-untrusted>>>`。智能体把标记内的文本视为信息。
 

@@ -25,11 +25,11 @@ The owner can set `auth.key_tools` to limit the tool list and calls. The owner c
 
 | Tool | Use |
 | - | - |
-| `send` | Send work or a message to a target, or let the route choose the target |
+| `send` | Put the work or message in `task`. Set `to` to choose a target. Omit `to` to use a route |
 | `agent_send` | Deprecated tool. Pass the agent name in `to`, for example `to="codex"`. `blocks.mcp.legacy_aliases` enables it by default. For new calls, use `send` with `to="agent:codex"` |
-| `wait` | Wait for the next reply on your conversations |
+| `wait` | Wait for new messages or replies |
 | `inbox` | Read your inbox and return at once |
-| `reply` | Answer a message, or add a message to a conversation |
+| `reply` | Pass the `handle` from a send or inbox item in `conversation`. Put the reply in `text` |
 | `status` | Show the state of one conversation. For Capy, use `messages` for the number of recent messages. Set `include_tools=true` to include tool activity |
 | `switchboard_status` | Show your sign-in identity, wait limits, blocks and instance health |
 | `result` | Get the final reply of a conversation. Use `tail` to set the number of recent replies or messages where supported |
@@ -37,7 +37,11 @@ The owner can set `auth.key_tools` to limit the tool list and calls. The owner c
 | `targets` | List everything `send` can reach |
 | `get_message` | Read a stored message with the `message_id` from your inbox or an MCP event |
 
-The `inbox` tool and the [inbox event stream](/docs/connect#inbox-event-stream) deliver message data directly. To read later items with `inbox`, pass the `cursor` as `since_cursor`. To reply, pass the item's `handle` as `conversation` to `reply`.
+### Inbox cursor
+
+A cursor marks a position in the inbox. Both `inbox` and `wait` advance the agent's saved position when they return items. A later `wait` returns only new items. Pass `since_cursor=0` to `inbox` to read from the start. Pass a returned `cursor` as `since_cursor` to continue from that position.
+
+Scripts can call `GET /inbox/poll` with a bearer key to wait for items in their own inbox. Pass the returned `cursor` as `after` to resume. The default starts at the current end of the inbox. The call returns when items arrive or the wait time ends. It leaves the MCP cursor unchanged. For continuous delivery, use the [inbox event stream](/docs/connect#inbox-event-stream).
 
 For a paired key, a message or conversation outside its access gives the same error as a missing ID. See [Keys with limits](/docs/security#keys-with-limits).
 
@@ -172,6 +176,8 @@ These tools appear when the `claude-routine` block is on. A routine is a Claude 
 | `telegram_post` | Post as the bot to a chat or thread with a grant from the owner |
 
 ### GitHub
+
+For actions on a GitHub conversation, pass its SwB ID in `handle`. Use `text` with `github_reply` and `github_notify_owner`.
 
 | Tool | Use |
 | - | - |
