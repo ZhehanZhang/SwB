@@ -52,14 +52,22 @@ def add_server_commands(sub: argparse._SubParsersAction) -> None:
     log = sub.add_parser("log", help="print the recent audit log")
     log.add_argument("--limit", type=int, default=50, help="maximum rows to print (default 50)")
     cfg = sub.add_parser("config", help="config tools")
-    cfg.add_argument("action", choices=["migrate"], help="migrate: print a version 1 config rewritten as version 2")
-    cfg.add_argument("file", nargs="?", help="config file (default: SWITCHBOARD_CONFIG)")
+    migrate_help = "Print a version 1 config rewritten as version 2."
+    migrate = cfg.add_subparsers(dest="action", required=True).add_parser("migrate", help=migrate_help, description=migrate_help)
+    migrate.add_argument("file", nargs="?", help="config file (default: SWITCHBOARD_CONFIG)")
     blk = sub.add_parser("blocks", help="the configured blocks")
-    blk.add_argument("action", choices=["list", "show", "check"])
-    blk.add_argument("block", nargs="?")
+    block_actions = blk.add_subparsers(dest="action", required=True)
+    nested = [migrate]
+    for action, description in (("list", "List configured blocks."), ("show", "Print block details."), ("check", "Check block setup.")):
+        command = block_actions.add_parser(action, help=description, description=description)
+        command.add_argument("block", nargs="?", help="block name")
+        nested.append(command)
     targets = sub.add_parser("targets", help="every target send can reach, with slugs and levels")
+    dir_help = "instance directory for config, data and .env"
     for command in (serve, exp, log, cfg, blk, targets):
-        command.add_argument("--dir", type=Path, help="instance directory for config, data and .env")
+        command.add_argument("--dir", type=Path, help=dir_help)
+    for command in nested:
+        command.add_argument("--dir", type=Path, help=dir_help, default=argparse.SUPPRESS)
 
 
 def build_parser() -> argparse.ArgumentParser:
