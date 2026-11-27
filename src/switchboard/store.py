@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -66,7 +67,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
   INSERT INTO memories_fts(memories_fts, rowid, title, body, tags, namespace) VALUES ('delete', old.rowid, old.title, old.body, old.tags, old.namespace);
 END;
-CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE OF title, body, tags, namespace ON memories BEGIN
   INSERT INTO memories_fts(memories_fts, rowid, title, body, tags, namespace) VALUES ('delete', old.rowid, old.title, old.body, old.tags, old.namespace);
   INSERT INTO memories_fts(rowid, title, body, tags, namespace) VALUES (new.rowid, new.title, new.body, new.tags, new.namespace);
 END;
@@ -79,6 +80,12 @@ CREATE TABLE IF NOT EXISTS memory_revisions (
   body TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS memory_revisions_id ON memory_revisions(memory_id, at);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at REAL NOT NULL,
+  updated_by TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS oauth_clients (
   client_id TEXT PRIMARY KEY,
@@ -256,6 +263,7 @@ def _migrate(db: sqlite3.Connection) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS memories_scope_key ON memories(scope, namespace, key) WHERE key IS NOT NULL AND deleted_at IS NULL"
     )
     db.execute("CREATE INDEX IF NOT EXISTS memories_scope ON memories(scope, updated_at)")
+    _migrate_memory_provenance(db)
     db.execute("DROP TABLE IF EXISTS login_failures")
     if "target" not in {r[1] for r in db.execute("PRAGMA table_info(handles)")}:
         db.execute("ALTER TABLE handles ADD COLUMN target TEXT")
@@ -280,6 +288,53 @@ def _migrate(db: sqlite3.Connection) -> None:
                SELECT at, day, 'mcp', source, client, 'capy', kind, target, thread_id, title, excerpt, outcome, detail FROM delegations"""
         )
         db.execute("DROP TABLE delegations")
+
+
+MEMORY_COLUMNS = {
+    "created_by": "TEXT",
+    "content_by": "TEXT",
+    "content_trust": "TEXT NOT NULL DEFAULT 'agent'",
+    "content_hash": "TEXT",
+    "sync_source": "TEXT",
+    "sync_key": "TEXT",
+    "deleted_by": "TEXT",
+}
+REVISION_COLUMNS = {"scope": "TEXT", "namespace": "TEXT", "key": "TEXT", "tags": "TEXT", "trust": "TEXT"}
+
+
+def memory_hash(body: str) -> str:
+    """The dedupe key of a memory body: case and whitespace do not count."""
+    return hashlib.sha256(" ".join((body or "").split()).casefold().encode("utf-8")).hexdigest()
+
+
+def _migrate_memory_provenance(db: sqlite3.Connection) -> None:
+    """Add provenance, dedupe and sync columns to memories and backfill them. Every existing row stays."""
+    trigger = db.execute("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'memories_au'").fetchone()
+    if trigger is None or "UPDATE OF" not in trigger[0]:
+        db.execute("DROP TRIGGER IF EXISTS memories_au")
+        db.execute("""CREATE TRIGGER memories_au AFTER UPDATE OF title, body, tags, namespace ON memories BEGIN
+  INSERT INTO memories_fts(memories_fts, rowid, title, body, tags, namespace) VALUES ('delete', old.rowid, old.title, old.body, old.tags, old.namespace);
+  INSERT INTO memories_fts(rowid, title, body, tags, namespace) VALUES (new.rowid, new.title, new.body, new.tags, new.namespace);
+END""")
+    cols = {r[1] for r in db.execute("PRAGMA table_info(memories)")}
+    for name, definition in MEMORY_COLUMNS.items():
+        if name not in cols:
+            db.execute(f"ALTER TABLE memories ADD COLUMN {name} {definition}")
+    rcols = {r[1] for r in db.execute("PRAGMA table_info(memory_revisions)")}
+    for name, definition in REVISION_COLUMNS.items():
+        if name not in rcols:
+            db.execute(f"ALTER TABLE memory_revisions ADD COLUMN {name} {definition}")
+    db.execute("""UPDATE memories SET created_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id
+                  ORDER BY r.at, r.rowid LIMIT 1), source) WHERE created_by IS NULL""")
+    db.execute("""UPDATE memories SET content_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id
+                  AND r.action IN ('create', 'replace', 'append') ORDER BY r.at DESC, r.rowid DESC LIMIT 1), source) WHERE content_by IS NULL""")
+    db.execute("""UPDATE memories SET deleted_by = COALESCE((SELECT r.source FROM memory_revisions r WHERE r.memory_id = memories.id
+                  AND r.action = 'delete' ORDER BY r.at DESC, r.rowid DESC LIMIT 1), source)
+                  WHERE deleted_at IS NOT NULL AND deleted_by IS NULL""")
+    for row in db.execute("SELECT id, body FROM memories WHERE content_hash IS NULL").fetchall():
+        db.execute("UPDATE memories SET content_hash = ? WHERE id = ?", (memory_hash(row[1]), row[0]))
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS memories_sync ON memories(sync_source, sync_key) WHERE sync_key IS NOT NULL")
+    db.execute("CREATE INDEX IF NOT EXISTS memories_hash ON memories(scope, content_hash) WHERE deleted_at IS NULL")
 
 
 def new_id(prefix: str) -> str:
