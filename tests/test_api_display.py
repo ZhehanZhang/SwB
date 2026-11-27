@@ -26,21 +26,21 @@ def test_audit_labels_capy_references_but_preserves_event_identities(make):
     avatar = events["github/context"]["metadata"]["target_avatar_url"]
     assert avatar.startswith("/avatars/") and client.get(avatar).headers["content-type"] == "image/png"
     assert events["github/context"]["metadata"] == {
-        "agent": "github", "target_name": "DemoLab Captain", "repo_count": 1, "target_avatar_url": avatar,
+        "agent": "github", "target_name": "Orbit Captain", "repo_count": 1, "target_avatar_url": avatar,
     }
     assert events["*/*"]["metadata"]["target_name"] == "Captain"
     assert events[f"captain Previous name ({CAPTAIN2})"]["metadata"] == {
-        "target_label": "DemoLab Captain", "ref_label": "Capy thread", "target_avatar_url": avatar,
+        "target_label": "Orbit Captain", "ref_label": "Capy thread", "target_avatar_url": avatar,
     }
     assert events[CAPTAIN2]["metadata"] == {
-        "target_label": "DemoLab Captain", "ref_label": "DemoLab Captain", "target_avatar_url": avatar,
+        "target_label": "Orbit Captain", "ref_label": "Orbit Captain", "target_avatar_url": avatar,
     }
     assert events[CAPTAIN2]["ref"] == CAPTAIN2
     assert events[f"capy:captain:{UNKNOWN}"]["metadata"]["target_label"] == "Captain"
 
     selected = get(client, "/agents/detail", kind="captain", id=CAPTAIN2, block="capy")
     [reply] = [row for row in selected["audit"] if row["action"] == "reply"]
-    assert reply["metadata"]["target_label"] == "DemoLab Captain"
+    assert reply["metadata"]["target_label"] == "Orbit Captain"
 
 
 def test_capy_targets_use_the_same_display_labels_across_board_and_inbox(make, capy):
@@ -52,7 +52,7 @@ def test_capy_targets_use_the_same_display_labels_across_board_and_inbox(make, c
                         defaults=None, allow_override=False, note="", by="owner")
         core.inbox.open_handle(owner=agent, destination="capy", ref=f"jam_CREW_{agent}", project="context",
                                title="A delegation", meta={}, target=f"capy:captain:{captain}")
-    expected = {f"capy:captain:{CAPTAIN2}": "DemoLab Captain", f"capy:captain:{UNKNOWN}": "Captain"}
+    expected = {f"capy:captain:{CAPTAIN2}": "Orbit Captain", f"capy:captain:{UNKNOWN}": "Captain"}
     board = get(client, "/board")["projects"][0]
     assert {row["id"]: row["label"] for row in board["agents"]} == expected
     project = get(client, "/board/projects/context")

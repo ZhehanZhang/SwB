@@ -25,7 +25,7 @@ async def access(assertion):
 @pytest.fixture
 def sb(tmp_path):
     world, hooks = FakeWorld(), Hooks()
-    cfg = {"public_url": PUBLIC, "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access.example.test", "aud": "a"}},
+    cfg = {"public_url": PUBLIC, "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access-team.example.test", "aud": "a"}},
            "slack": base_config(), "visibility": {"defaults": {"target": "shared", "channel": "shared"}}}
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(cfg))
@@ -120,13 +120,13 @@ def test_captain_final_reply_is_posted_back_as_the_captain(sb):
     core, client, world = sb
     names = {t["name"] for t in rpc(client, KEY_FULL, "tools/list").json()["result"]["tools"]}
     assert "slack_targets" in names
-    core.slack.set_targets(build_targets([{"id": "jam_P", "name": "DemoAgent"}], [], []), {"demoagent": Persona(id="demoagent", name="DemoAgent")})
-    core.slack.store.add_relay("h_test", "a2a", "CPUBLIC01", "1700000000.000001", "demoagent")
+    core.slack.set_targets(build_targets([{"id": "jam_P", "name": "HelperBot"}], [], []), {"helperbot": Persona(id="helperbot", name="HelperBot")})
+    core.slack.store.add_relay("h_test", "a2a", "CPUBLIC01", "1700000000.000001", "helperbot")
     origin = core.origins["slack"]
     client.portal.call(origin.relay, {"kind": "reply", "handle": "h_test", "text": "interim"})
     client.portal.call(origin.relay, {"kind": "final", "handle": "h_test", "text": "all done"})
     client.portal.call(origin.relay, {"kind": "final", "handle": "h_other", "text": "not ours"})
     posts = [kw for t, n, kw in world.calls if n == "chat_postMessage"]
-    assert [(p["text"], p["username"], p["thread_ts"]) for p in posts] == [("all done", "DemoAgent", "1700000000.000001")]
+    assert [(p["text"], p["username"], p["thread_ts"]) for p in posts] == [("all done", "HelperBot", "1700000000.000001")]
     _, got = tool(client, KEY_FULL, "slack_targets")
-    assert any(t["slug"] == "demoagent" and t["kind"] == "captain" for t in got["targets"])
+    assert any(t["slug"] == "helperbot" and t["kind"] == "captain" for t in got["targets"])

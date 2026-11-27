@@ -224,7 +224,7 @@ class Kit:
             slugs = [f"target:{s}" for t in await core.targets() for s in t.get("slugs") or [] if t.get("block") != "agent"][:500]
             return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()}, "resources": core.visibility.rows(slugs)}
 
-        @mcp.tool(title="Make a resource private or shared", description="Owner only. Set one resource (e.g. target:helper, channel:example/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
+        @mcp.tool(title="Make a resource private or shared", description="Owner only. Set one resource (e.g. target:build-bot, channel:example/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
         async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list such as ['U0123', 'workspace:example']")]) -> dict[str, Any]:
             from ...visibility import VisibilityError
 

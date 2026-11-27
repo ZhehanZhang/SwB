@@ -27,7 +27,7 @@ SERVICE_KEY = "capy_service_" + "y" * 30
 PUBLIC = "https://switchboard.example.test"
 CAPTAIN = "jam_CAPTAIN0000000000000000000"
 CAPTAIN2 = "jam_CAPTAIN2000000000000000000"
-PROJECT = "project_ZINF"
+PROJECT = "project_BCN"
 OTHER_PROJECT = "project_OTHER"
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 CLAUDE_CB = "https://claude.ai/api/mcp/auth_callback"
@@ -41,7 +41,7 @@ def last_auth(capy: "FakeCapy", method: str, path_end: str) -> str:
 def base_config(**over: Any) -> dict[str, Any]:
     cfg = {
         "public_url": PUBLIC,
-        "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access.example.test", "aud": "aud1"}},
+        "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access-team.example.test", "aud": "aud1"}},
         "destinations": {"capy": {"daily_cap": 3, "default_route": {"captain": CAPTAIN}, "reconnect_base_s": 0.01}},
     }
     cfg.update(over)
@@ -71,7 +71,7 @@ class FakeCapy:
         self.requests: list[tuple[str, str, Any]] = []
         self.threads: dict[str, dict[str, Any]] = {
             CAPTAIN: self.thread(CAPTAIN, PROJECT, title="Captain"),
-            CAPTAIN2: self.thread(CAPTAIN2, OTHER_PROJECT, title="DemoLab Captain"),
+            CAPTAIN2: self.thread(CAPTAIN2, OTHER_PROJECT, title="Orbit Captain"),
             "jam_OTHER": self.thread("jam_OTHER", OTHER_PROJECT, title="Someone else's"),
         }
         self.messages: dict[str, list[dict[str, Any]]] = {CAPTAIN: [{"id": "01A", "source": "assistant", "text": "earlier", "createdAt": "x"}]}
@@ -87,13 +87,13 @@ class FakeCapy:
         self.hidden_from: dict[str, set[str]] = {}
         self.auths: list[tuple[str, str, str]] = []
         self.captains: list[dict[str, Any]] = [
-            {"id": CAPTAIN, "code": "ZINF-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
-            {"id": CAPTAIN2, "code": "DEMOLAB-3", "name": "DemoLab Captain", "title": "DemoLab Captain", "projectId": OTHER_PROJECT},
+            {"id": CAPTAIN, "code": "BCN-1", "name": "Captain", "title": "Captain", "projectId": PROJECT},
+            {"id": CAPTAIN2, "code": "ORBIT-3", "name": "Orbit Captain", "title": "Orbit Captain", "projectId": OTHER_PROJECT},
         ]
         self.projects: list[dict[str, Any]] = [
-            {"id": PROJECT, "name": "Infra", "code": "ZINF", "repos": [{"repoFullName": "demo-org/sample-app", "baseBranch": "main", "mode": "primary"},
-                                                                   {"repoFullName": "demo-org/sample-tools", "baseBranch": "main", "mode": "lazy"}]},
-            {"id": OTHER_PROJECT, "name": "DemoLab", "code": "DEMOLAB", "repos": [{"repoFullName": "example-user/demolab", "baseBranch": "main", "mode": "primary"}]},
+            {"id": PROJECT, "name": "Beacon", "code": "BCN", "repos": [{"repoFullName": "Example-Org/Web-App", "baseBranch": "main", "mode": "primary"},
+                                                                   {"repoFullName": "Example-Org/Status-Service", "baseBranch": "main", "mode": "lazy"}]},
+            {"id": OTHER_PROJECT, "name": "Orbit", "code": "ORBIT", "repos": [{"repoFullName": "sample-team/orbit", "baseBranch": "main", "mode": "primary"}]},
         ]
 
     @staticmethod
@@ -149,7 +149,7 @@ class FakeCapy:
             return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=frames())
         if re.fullmatch(r"threads/([^/]+)/messages/([^/]+)/send-now", p) and m == "POST":
             if key in self.device_denied:
-                return httpx.Response(403, json={"_tag": "capy/DeviceAccessDenied", "deviceId": "dev_1", "deviceName": "your-host", "status": "none", "held": False})
+                return httpx.Response(403, json={"_tag": "capy/DeviceAccessDenied", "deviceId": "dev_1", "deviceName": "Build Machine", "status": "none", "held": False})
             return httpx.Response(200, json={"outcome": "tooLate"})
         if m == "POST" and p == "threads":
             tid = "jam_NEW" + hashlib.sha256(body["requestId"].encode()).hexdigest()[:8].upper()
@@ -189,14 +189,14 @@ class FakeCapy:
             return httpx.Response(200, json={"path": "NOTES.md", "markdown": f"# Captain notes for {mm.group(1)}\n- doing things", "updatedAt": "2026-11-25T10:45:00Z"})
         if (mm := re.fullmatch(r"captains/([^/]+)/crew", p)):
             return httpx.Response(200, json={"items": [
-                self.thread("jam_CREW1", PROJECT, title="slackgate", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
-                self.thread("jam_CREW2", PROJECT, title="needs owner", status="idle", needsYou=True, ask={"key": "a", "kind": "conversation", "text": "Merge demo-org/sample-service#1", "causeKey": None}, captain={"jamId": CAPTAIN, "name": "Captain"}),
+                self.thread("jam_CREW1", PROJECT, title="Release check", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
+                self.thread("jam_CREW2", PROJECT, title="needs owner", status="idle", needsYou=True, ask={"key": "a", "kind": "conversation", "text": "Merge example-org/web-app#1", "causeKey": None}, captain={"jamId": CAPTAIN, "name": "Captain"}),
                 self.thread("jam_CREW3", OTHER_PROJECT, title="other project work", status="working", captain={"jamId": CAPTAIN, "name": "Captain"}),
             ]})
         if p == "captains":
             return httpx.Response(200, json={"items": [c for c in self.captains if c["id"] not in self.hidden_from.get(key, set())], "cursor": None})
         if (mm := re.fullmatch(r"projects/([^/]+)", p)):
-            return httpx.Response(200, json={"id": mm.group(1), "name": "Infra", "code": "ZINF"}) if mm.group(1) in (PROJECT, OTHER_PROJECT) else httpx.Response(404, json={"_tag": "capy/ProjectNotFound"})
+            return httpx.Response(200, json={"id": mm.group(1), "name": "Beacon", "code": "BCN"}) if mm.group(1) in (PROJECT, OTHER_PROJECT) else httpx.Response(404, json={"_tag": "capy/ProjectNotFound"})
         if p == "projects":
             return httpx.Response(200, json={"items": self.projects})
         return httpx.Response(404, json={"_tag": "test/Unhandled", "message": f"{m} {p}"})
@@ -239,8 +239,8 @@ def new_core(tmp_path, capy, cimd=None, config=None, env=None, clock=None, acces
     )
 
 
-def infra(core: Switchboard) -> None:
-    core.projects.create(slug="infra", name="Infra", links={"capy_project": PROJECT, "repos": ["demo-org/sample-app", "demo-org/sample-tools"]})
+def beacon(core: Switchboard) -> None:
+    core.projects.create(slug="beacon", name="Beacon", links={"capy_project": PROJECT, "repos": ["example-org/web-app", "example-org/status-service"]})
 
 
 @pytest.fixture

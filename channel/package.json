@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Claude Code channel that pushes Capy replies from switchboard into an open session",
+  "description": "Claude Code channel that pushes Capy replies from SwB into an open session",
   "bin": {
     "switchboard-channel": "./switchboard-channel.ts"
   },

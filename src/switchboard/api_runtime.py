@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 import socket
 import time
-from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import urlsplit
+
+from . import installed_version
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -22,10 +23,7 @@ class RuntimeInfo(TypedDict):
 
 
 def runtime_info(core: Switchboard) -> RuntimeInfo:
-    try:
-        release = version("switchboard")
-    except PackageNotFoundError:
-        release = None
+    release = installed_version()
     mcp = next((block for block in core.blocks.values() if block.manifest.id == "mcp"), None)
     url = "/mcp" if mcp else None
     if mcp and (public_url := core.cfg.public_url):

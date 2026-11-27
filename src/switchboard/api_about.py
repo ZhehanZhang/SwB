@@ -3,13 +3,14 @@ from __future__ import annotations
 import re
 import subprocess
 from datetime import datetime
-from importlib.metadata import PackageNotFoundError, entry_points, version
+from importlib.metadata import entry_points
 from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from . import installed_version
 from .blocks import BLOCKS
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,10 +45,7 @@ def _build_date(value: str) -> str:
 
 def about(request: Request) -> JSONResponse:
     core = request.app.state.core
-    try:
-        release = version("switchboard")
-    except PackageNotFoundError:
-        release = None
+    release = installed_version()
     block_types = {name: str(core.cfg.blocks[name].get("use") or name) for name in core.blocks}
     block_versions = dict.fromkeys(BLOCKS, release)
     plugin_types = set(block_types.values()) - BLOCKS.keys()

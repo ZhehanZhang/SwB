@@ -15,13 +15,13 @@ def test_pages_use_site_assets_and_strict_csp(make):
 
 def test_classic_admin_page_needs_the_owners_access_identity(make):
     core, c = make(env={"SWITCHBOARD_KEY_CAPY": "s" * 32})
-    core.projects.create(slug="infra", name="Infra", links={"repos": ["demo-org/sample-app"]})
+    core.projects.create(slug="beacon", name="Beacon", links={"repos": ["example-org/web-app"]})
     for headers in ({}, {"cf-access-jwt-assertion": "other"}):
         redirect = c.get("/classic", headers=headers, follow_redirects=False)
         assert redirect.status_code == 303 and redirect.headers["location"] == "/login?next=%2Fclassic"
     page = c.get("/classic", headers=OWNER)
     assert page.status_code == 200 and "style=" not in page.text and 'type="password"' not in page.text
-    for needle in ("Signed in as owner@example.test", "global route", CAPTAIN, "Infra", "CAPY_API_KEY", "Bearer keys"):
+    for needle in ("Signed in as owner@example.test", "global route", CAPTAIN, "Beacon", "CAPY_API_KEY", "Bearer keys"):
         assert needle in page.text, needle
     assert c.get("/routes").status_code == 404
     assert c.get("/healthz").status_code == 200

@@ -24,7 +24,7 @@ def test_settings_is_owner_only_and_reports_runtime_facts_without_secrets(make, 
     assert response.headers["cache-control"] == "no-store"
     payload = response.json()
     assert payload == {
-        "version": version("switchboard"),
+        "version": version("swb-one"),
         "mcp_url": f"{PUBLIC}/mcp",
         "data_dir": str(core.data_dir.resolve()),
         "owner_key_masked": "••••••••",

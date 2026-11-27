@@ -33,7 +33,7 @@ def test_a_manifest_has_personas_scope():
 
 @pytest.mark.parametrize("method", ["conversations_join", "conversations_invite", "conversations_inviteShared"])
 async def test_client_refuses_join_and_invite(method):
-    client = make_client("xoxp-not-a-real-token")
+    client = make_client("fixture-token")
     with pytest.raises(ForbiddenSlackMethod):
         await getattr(client, method)(channel="C0123456", users="U1", emails=["a@b.c"])
     with pytest.raises(ForbiddenSlackMethod):
