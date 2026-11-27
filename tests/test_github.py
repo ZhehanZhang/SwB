@@ -382,8 +382,6 @@ async def test_app_claim_accepts_pasted_pem_and_checks_each_installation(github,
     config = github_config("triage") | {"routes": {"acme/missing": [], "acme/other": []}, "app_id_env": "ALTERNATE_APP_ID",
                                        "private_key_env": "ALTERNATE_PRIVATE_KEY"}
     env = {"GITHUB_WEBHOOK_SECRET": SECRET}
-    if separator == "\n":
-        env["ALTERNATE_PRIVATE_KEY"] = pem
     async with github(config, env=env, http_transport=httpx.MockTransport(api)) as (core, _):
         block = core.blocks["github"]
         principal = Principal("owner", "local", "key")
@@ -391,8 +389,7 @@ async def test_app_claim_accepts_pasted_pem_and_checks_each_installation(github,
         links = {core.claims.inspect(step["link"].rsplit("/", 1)[1]): step["link"].rsplit("/", 1)[1]
                  for step in result["next"] if "link" in step}
         core.claims.consume(links["ALTERNATE_APP_ID"], "123")
-        if separator != "\n":
-            core.claims.consume(links["ALTERNATE_PRIVATE_KEY"], separator.join(pem.splitlines()))
+        core.claims.consume(links["ALTERNATE_PRIVATE_KEY"], separator.join(pem.splitlines()))
         assert not requests and block.status()["checked_at"] is None
         await block.refresh_installation()
         await block.refresh_installation()
