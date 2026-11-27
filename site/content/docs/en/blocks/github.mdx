@@ -46,6 +46,26 @@ A **sink** is an address that gets a copy of each event. Each matching sink gets
 
 If Cloudflare Access protects your host, let `/github/webhook` through. The GitHub signature protects that path.
 
+## Owner accounts
+
+Work mode accepts events only from a configured owner account. Open `https://api.github.com/users/USERNAME` with your GitHub username. Copy the numeric `id` into the space's `owner_ids` list. Restart SwB to apply the setting.
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        owner_ids: [4242]
+        mode:
+          mode: work
+          target: agent:beta
+```
+
+Use `blocks.github.owner_ids` to set the default owner IDs. A space's `owner_ids` list replaces that default. An empty space list clears it.
+
+GitHub uses `owner` and `external` trust. The `known` setting applies to Slack, Discord and Telegram. Access rules use IDs such as `github:4242` and leave sender trust unchanged.
+
 ## Config
 
 | Key | Use |
@@ -60,8 +80,10 @@ If Cloudflare Access protects your host, let `/github/webhook` through. The GitH
 | `blocks.github.sinks` | Settings by event receiver name |
 | `blocks.github.sinks.*.url_env` | Name of the variable that holds the receiver address |
 | `blocks.github.routes` | Map from repo names or `owner/*` to lists of event receivers |
+| `blocks.github.owner_ids` | Default list of numeric GitHub user IDs trusted as owners |
 | `blocks.github.spaces` | Named sets of repositories that share settings. A name such as `acme/app` selects that repository |
 | `blocks.github.spaces.*.repo` | Repository name in `owner/repo` form |
+| `blocks.github.spaces.*.owner_ids` | List of numeric GitHub user IDs that replaces the default for this space |
 | `blocks.github.spaces.*.mode` | Default [channel mode](/docs/channel-modes) for the repositories in this space |
 | `blocks.github.spaces.*.mode.target` | Target in the mode settings. Choose an address such as `agent:beta` |
 | `blocks.github.spaces.*.project` | Default SwB project for events from this space |

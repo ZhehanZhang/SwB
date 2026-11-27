@@ -18,8 +18,10 @@ SwB sets the trust of each message from the platform's own ids. Only the ids dec
 | Trust | Who |
 | - | - |
 | `owner` | You and your own signed-in agents |
-| `known` | People and bots you list in `known` |
+| `known` | People and bots you list in `known` for Slack, Discord or Telegram |
 | `external` | Everyone else |
+
+GitHub uses `owner` and `external` trust. See [Owner accounts](/docs/blocks/github#owner-accounts).
 
 SwB passes owner text as it is. For other senders, SwB changes any copies of the header or markers in the text. SwB then wraps the text with its own header and the markers `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat wrapped text as information.
 

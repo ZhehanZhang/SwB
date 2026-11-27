@@ -36,7 +36,9 @@ Start SwB with `SWB_SETUP_CODE` set. Open `/login` in your browser. Paste the co
 
 ## Passkey
 
-After your first sign-in, the page asks you to add a passkey. Name the passkey after your device, for example MacBook. Use the passkey for the next sign-ins. Add a passkey on each device you use. Settings shows your passkeys and lets you remove one.
+A passkey uses your device to confirm your sign-in. After your first sign-in, name the passkey after your device. Select **Add a passkey**.
+
+For another device, open **Settings**. Under **Sign-in**, select **Add a passkey**. Enter a name. Select **Add passkey** to save it. Use your passkey for later sign-ins.
 
 ## OIDC
 
@@ -82,7 +84,9 @@ Check `error_description` for details when the app gets an OAuth error.
 
 ## Sessions
 
-A session is a secure cookie on the SwB host. Each change on the page carries a CSRF token. Sign out from Settings.
+A session cookie keeps you signed in. SwB sets the `Secure` flag on the cookie, including on `http://localhost`. Chrome and Firefox accept this cookie on `localhost`.
+
+Each change on the page carries a CSRF token. Sign out from **Settings**.
 
 The browser reads your current sign-in state at `/auth/session`.
 

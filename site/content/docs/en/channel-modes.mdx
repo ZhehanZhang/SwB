@@ -1,6 +1,6 @@
 ---
 title: Channel modes
-description: Choose how SwB acts in each channel.
+description: Choose how SwB handles messages in each space.
 ---
 
 A **space** is a place where messages arrive. Spaces include Slack channels, Discord channels and threads, Telegram groups, and GitHub repositories.
@@ -15,9 +15,11 @@ A **space** is a place where messages arrive. Spaces include Slack channels, Dis
 
 On Slack, Discord and Telegram, your mentions and direct messages use `work` in every mode. Visibility settings still control access to channels and targets.
 
+For GitHub `work` mode, add your GitHub user ID to the space's [owner list](/docs/blocks/github#owner-accounts).
+
 ## Set a mode
 
-Set the mode on the SwB page, in YAML, or with `space_mode` as the owner. With `space_mode`, set the mode, target, project and allowed actions.
+Set the mode under **Channel modes** on the connection or project page. You can also set it in YAML. The owner can use `space_mode` to set the mode, target, project and allowed actions.
 
 SwB first checks the saved setting, then the channel and space settings. It then checks older block settings, the project mode, and `modes.default`. The default is `off`.
 
@@ -64,7 +66,7 @@ Watch keeps agents asleep. SwB delivers digests through inbox reads instead of p
 
 ## Triage actions
 
-The triage agent can read context. By default, its only action is `reply` in the same thread. Use `github_reply` for a GitHub thread.
+The triage agent can read context. By default, its only action is `reply` in the same thread. Use `github_reply` for a GitHub thread. Pass the conversation ID in `handle`. Put the reply in `text`.
 
 Set `actions` in `space_mode` or in YAML to give the agent more actions. Include `reply` to keep replies enabled. For example, use `actions=["reply", "notify_owner"]`.
 

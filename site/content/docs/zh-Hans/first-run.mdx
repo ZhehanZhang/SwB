@@ -9,13 +9,19 @@ description: 让 SwB 可被访问，登录并查看你的实例。
 
 ## 获取公网地址
 
-Claude、ChatGPT 和 Grok 在云端运行。它们需要一个公网 HTTPS 地址来访问 SwB。启动 SwB 时加上隧道，即可获得该地址。
+Claude、ChatGPT 和 Grok 在云端运行。它们需要公网 HTTPS 地址来访问 SwB。隧道为本机的 SwB 提供公网地址。
+
+安装 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)。确认终端可以运行 `cloudflared --version`。如果 SwB 正在运行，请先停止。在 SwB 实例目录中运行以下命令。
 
 ```bash
-swb up --tunnel cloudflare
+uvx swb-one up --tunnel cloudflare
 ```
 
-SwB 会打开 Cloudflare Quick Tunnel，并打印公网 MCP 地址。使用 `--tunnel tailscale` 可改用 Tailscale Funnel。要在自己的域名上使用固定地址，请阅读[自托管](/zh-Hans/docs/self-hosting)。
+SwB 会启动 Cloudflare Quick Tunnel，并显示公网 MCP 地址。使用此选项重新启动时，地址每次都会变更。请更新各应用中的地址。
+
+如需使用 Tailscale，请[安装并登录 Tailscale](https://tailscale.com/download)。启用 [Funnel](https://tailscale.com/docs/features/tailscale-funnel)。确认终端可以运行 `tailscale version`。将上方命令的选项改为 `--tunnel tailscale`。
+
+要在自己的域名上使用固定地址，请阅读[自托管](/zh-Hans/docs/self-hosting)。
 
 ## 查看下一步
 
@@ -52,7 +58,7 @@ swb login-link
 | `/inbox/:handle` | 阅读单个会话中的消息。 |
 | `/memory/*` | 浏览和搜索已保存的笔记。 |
 | `/projects/:slug` | 查看单个项目的路由、历史、会话和记忆。 |
-| `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的连接状态和[频道模式](/zh-Hans/docs/channel-modes)。 |
+| `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的连接状态和 [**Channel modes**](/zh-Hans/docs/channel-modes)。 |
 | `/settings` | 查看服务器设置并管理通行密钥。 |
 | `/tokens` | 查看令牌请求和已保存的凭据。 |
 | `/about` | 查看 SwB 版本和已启用的模块。 |

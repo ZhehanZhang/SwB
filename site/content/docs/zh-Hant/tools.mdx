@@ -25,11 +25,11 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `send` | 把工作或訊息傳送給目標，或交由路由選擇目標 |
+| `send` | 將工作或訊息填入 `task`。用 `to` 指定目標，或留白以使用路由 |
 | `agent_send` | 舊版工具。在 `to` 中直接填入代理名稱，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 預設啟用此工具。新的呼叫請使用 `send`，例如 `to="agent:codex"` |
-| `wait` | 等待你的對話中的下一則回覆 |
+| `wait` | 等待新訊息或回覆 |
 | `inbox` | 讀取你的收件匣並立即回傳 |
-| `reply` | 回答訊息，或在對話中加入訊息 |
+| `reply` | 將傳送結果或收件匣訊息中的 `handle` 填入 `conversation`。將回覆內容填入 `text` |
 | `status` | 顯示單一對話的狀態。查看 Capy 對話時，用 `messages` 指定回傳的近期訊息則數。用 `include_tools=true` 一併查看工具呼叫記錄 |
 | `switchboard_status` | 顯示你的登入身分、等待時限、模組與執行個體的運作狀況 |
 | `result` | 取得對話的最終回覆。支援 `tail` 的對話可用它指定回傳的近期回覆或訊息則數 |
@@ -37,7 +37,11 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `targets` | 列出 `send` 能連到的所有對象 |
 | `get_message` | 用收件匣或 MCP 事件中的 `message_id` 讀取已儲存的訊息 |
 
-`inbox` 工具和[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)會直接提供訊息資料。用 `inbox` 讀取後續訊息時，將 `cursor` 填入 `since_cursor`。回覆時，將訊息的 `handle` 填入 `reply` 的 `conversation`。
+### 收件匣游標
+
+游標標記收件匣中的位置。`inbox` 和 `wait` 傳回訊息後，都會更新代理的讀取位置。接著呼叫 `wait` 時，只會收到新訊息。呼叫 `inbox` 時，設定 `since_cursor=0` 可從頭讀取。將上次傳回的 `cursor` 填入 `since_cursor` 可接續讀取。
+
+指令碼可用 bearer 金鑰呼叫 `GET /inbox/poll`，等待自己的收件匣訊息。將上次傳回的 `cursor` 填入 `after` 可接續讀取。預設從收件匣末端開始等待。訊息送達或等待時間結束時，端點會傳回結果。MCP 的讀取位置保持原樣。持續接收訊息時，請使用[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)。
 
 訊息或對話超出配對金鑰的權限時，SwB 會回傳與 ID 查詢失敗時相同的錯誤。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
 
@@ -172,6 +176,8 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `telegram_post` | 取得擁有者授權後，以機器人身分傳送訊息到聊天室或討論串 |
 
 ### GitHub
+
+執行與 GitHub 對話相關的動作時，將 SwB 對話 ID 填入 `handle`。呼叫 `github_reply` 或 `github_notify_owner` 時，將正文填入 `text`。
 
 | 工具 | 用途 |
 | - | - |

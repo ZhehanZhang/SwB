@@ -1,42 +1,50 @@
 Read the setup guide at https://swb.one/docs/deploy.
 
-Help me run SwB, my switchboard for agents. Use your terminal for commands it can run. Ask me for choices and actions that need me.
+Help me run SwB. Use your terminal where you can. Ask for choices and actions that need me.
 
 Ask me to choose where to run SwB. Offer this computer, Fly.io, Koyeb or my server with Docker.
 
 ## This computer
 
-Help me check that uv is available. Help me choose an empty folder for SwB. Check that port 8870 is free. Ask me to run this command in that folder in my terminal.
+If needed, install uv using the [official guide](https://docs.astral.sh/uv/getting-started/installation/). SwB needs Python 3.12 or later. The command below downloads Python 3.12 when needed.
+
+Choose an empty folder with me. Check that port 8870 is free. Set `PORT` to choose another port.
+
+If your terminal is on my SwB computer, run this in the chosen folder. Keep SwB running.
 
 ```bash
-uvx swb-one up
+(umask 077; set -C; uvx --python 3.12 swb-one up > .swb-startup.log)
 ```
 
-SwB creates `.env`, `config/switchboard.yaml` and `data/` in that folder. Ask me to keep the server running. Ask me to open the one-time sign-in link from my terminal within five minutes. Keep the link private.
+Use file mode `0600` for each private link file. Use equivalent protection in other shells. Give me the file path.
 
-To get a new link, ask me to run `uvx swb-one login-link` in a second terminal from the same folder.
+If I need to use my terminal, give me the `uvx` command by itself. The link appears after the startup messages.
 
-For another port, set `PORT` before you start SwB. The default local MCP address is `http://localhost:8870/mcp`. Use the MCP address shown at startup.
+Ask me to open the `/login#t=` link within five minutes. Ask me to delete any private link file after sign-in.
+
+For a fresh link, run `uvx --python 3.12 swb-one login-link` from the same folder in another terminal. Save it to a new private file. If I run the command, ask me to open the link there. Keep links out of chat and shared output.
+
+Use `http://localhost:8870/mcp` with the chosen port.
 
 ## Fly.io, Koyeb, or a server
 
-Clone https://github.com/ZhehanZhang/SwB. Work in the checkout.
+Clone https://github.com/ZhehanZhang/SwB. Run these commands in the checkout.
 
-For Fly.io, ask me to pick an app name such as `my-swb`. Check that Fly CLI is available. Run `fly auth whoami` to check my sign-in. If I am signed out, run `fly auth login`. Ask me to finish signing in through my browser. Wait for me to confirm. Run `sh deploy/fly.sh my-swb` with my app name.
+For Fly.io, ask for an app name. Check the Fly CLI. Run `fly auth whoami`. If needed, run `fly auth login` and wait for me to sign in. Run `sh deploy/fly.sh my-swb` with my app name.
 
-For Koyeb, ask me to pick an app name such as `my-swb`. Check that the Koyeb CLI is available. Check my sign-in. Run `sh deploy/koyeb.sh my-swb` with my app name.
+For Koyeb, ask for an app name. Check the Koyeb CLI and my sign-in. Run `sh deploy/koyeb.sh my-swb` with my app name.
 
-For my own server, ask me to give you my domain. Ask me to point its DNS at the server. Wait for me to confirm. Run `sh deploy/compose/start.sh swb.example.com` with my domain.
+For my own server, ask for my domain. Ask me to point its DNS at the server. Wait for me to confirm. Run `sh deploy/compose/start.sh swb.example.com` with my domain.
 
-The setup code is a secret. Keep it in its private file. Give me the file name for my platform. Fly.io uses `.env.swb-setup-fly-my-swb`. Koyeb uses `.env.swb-setup-koyeb-my-swb`. The Docker setup uses `deploy/compose/.env`.
+Keep the setup code in its private file. Give me the file path. Fly.io uses `.env.swb-setup-fly-my-swb`. Koyeb uses `.env.swb-setup-koyeb-my-swb`. Docker uses `deploy/compose/.env`.
 
-Wait for SwB to start. Give me the public service URL. Give me the sign-in page address from the service log. Give me the MCP address. Add `/mcp` to the public service URL for that address.
+Wait for SwB to start. Give me the public URL and the sign-in page address from the log. Add `/mcp` to the public URL for the MCP address.
 
-Ask me to open the private file. Ask me to copy the value of `SWB_SETUP_CODE`. Ask me to paste it into **Setup code** on the sign-in page. The code works once, for the first owner sign-in. For Fly.io or Koyeb, ask me to delete the private file after sign-in.
+Ask me to copy `SWB_SETUP_CODE` from the private file. Ask me to paste it into **Setup code** on the sign-in page. The code works once. For Fly.io or Koyeb, ask me to delete the private file after sign-in.
 
 ## Connect my first agent
 
-Ask me to tell you where the app runs. For an MCP client on the SwB computer, use the local MCP address and https://swb.one/prompts/mcp-client.md. For a coding agent, use https://swb.one/docs/setup/coding-agent.
+Ask me where the app runs. For an MCP client on the SwB computer, use the local MCP address. Follow https://swb.one/prompts/mcp-client.md. For a coding agent, use https://swb.one/docs/setup/coding-agent.
 
 Cloud clients need a public HTTPS address. If SwB is running only on my computer, offer a [public address](https://swb.one/docs/first-run#get-a-public-address) or a hosted deployment. For Claude, use https://swb.one/prompts/claude.md. For ChatGPT, use https://swb.one/prompts/chatgpt.md. For Grok, use https://swb.one/prompts/grok.md.
 
