@@ -23,6 +23,8 @@ Gemini CLI 需要 Gemini Code Assist Standard 或 Enterprise 许可，或者付�
 
 ## 你的步骤
 
+如果 `connect` 给出配对码，请按 **其他智能体** 中的配对说明操作。
+
 <Tabs items={['Claude Code', 'Codex', 'Gemini CLI', '其他智能体']}>
 <Tab value="Claude Code">
 <Steps>
@@ -103,19 +105,21 @@ gemini mcp add --scope user --transport http switchboard https://swb.example.com
 <Tab value="其他智能体">
 <Steps>
 <Step>
-### 获取配置项
+### 获取配置
 
-告诉智能体你用的编程智能体名称。SwB 会给出该智能体的文件名和准确的配置项。
+告诉智能体你用的是哪个客户端。选择 `other` 可获取通用的 Streamable HTTP 配置。
 </Step>
 <Step>
-### 加入配置项
+### 添加 SwB
 
-把配置项合并到 SwB 指定的文件中。Goose 的文件是 `~/.config/goose/config.yaml`。
+如果 SwB 给出配对码，请用它[换取密钥](/zh-Hans/docs/setup/mcp-client#换取密钥)。把密钥填入返回的配置中。
+
+应用 SwB 给出的配置。Goose 使用 `~/.config/goose/config.yaml`。
 </Step>
 <Step>
 ### 登录
 
-启动编程智能体，在它打开浏览器时登录。在 **Connect to SwB** 页面点击 **Approve**。
+如果 SwB 提示登录，请启动编程智能体。浏览器打开后登录。在 **Connect to SwB** 页面点击 **Approve**。
 </Step>
 </Steps>
 </Tab>
@@ -125,16 +129,16 @@ gemini mcp add --scope user --transport http switchboard https://swb.example.com
 
 智能体调用 `connect(what="coding-agent")`。SwB 列出它支持的编程智能体。智能体问你用的是哪一个，再用 `choose={"agent":"codex"}` 或其他名称调用 `connect`。
 
-SwB 返回命令或配置项，以及登录步骤。如果智能体可以在你的电脑上运行命令，它会自己运行命令。浏览器中的登录由你完成。
+SwB 返回客户端配置，以及登录或配对步骤。如果智能体可以在你的电脑上运行设置命令，它会自己执行。浏览器中的登录由你完成。
 
-如果 SwB 服务器关闭了 OAuth 登录，`connect` 会改为给出配对码。配对码是一次性的短代码，客户端用它换取自己的密钥。
+OAuth 登录关闭时，`connect` 会使用配对码。选择 `other` 时也使用配对码。需要发放新密钥时，所有者会收到配对码。客户端用这个一次性代码换取自己的密钥。
 
 ## 凭据
 
 | 项目 | 显示位置 | 格式 | 去向 |
 | - | - | - | - |
 | SwB 访问令牌 | 你点击 **Approve** 后由编程智能体保存 | 随机文本 | 编程智能体自动保存 |
-| 配对码 | `connect` 的结果，仅在 OAuth 关闭时出现 | `XXXXX-XXXXX`，10 分钟内有效 | 从你的电脑发出的 `POST /connect` 请求 |
+| 配对码 | 发放新配对密钥时，所有者收到的 `connect` 结果 | `XXXXX-XXXXX`，10 分钟内有效 | 从你的电脑发出的 `POST /connect` 请求 |
 | 智能体密钥 | `POST /connect` 的响应，只显示一次 | 以 `swb_` 开头 | 编程智能体的私密环境变量 |
 
 ## 检查连接

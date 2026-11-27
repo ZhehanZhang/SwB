@@ -146,6 +146,15 @@ routes:
 
 用 `private` 將存取權限限於擁有者及其代理。用 `shared` 開放存取。填入使用者 ID 或 `workspace:home` 這類項目，即可指定共用對象。透過 `visibility_set` 所做的變更優先於此檔。
 
+## GitHub 寄件者信任等級
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.github.owner_ids` | 預設視為擁有者的 GitHub 數字使用者 ID 清單 |
+| `blocks.github.spaces.*.owner_ids` | 取代此空間預設清單的 GitHub 數字使用者 ID 清單 |
+
+GitHub 的信任等級為 `owner` 和 `external`。`known` 設定適用於 Slack、Discord 和 Telegram。若要設定工作模式，請參閱[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
+
 ## MCP
 
 | 設定鍵 | 用途 |

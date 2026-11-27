@@ -1,6 +1,6 @@
 ---
 title: 频道模式
-description: 设置 SwB 在各频道中的行为。
+description: 设置 SwB 在各空间中如何处理消息。
 ---
 
 **空间**是接收消息的地方。Slack 频道、Discord 频道和话题串、Telegram 群组及 GitHub 仓库都是空间。
@@ -15,9 +15,11 @@ description: 设置 SwB 在各频道中的行为。
 
 在 Slack、Discord 和 Telegram 中，所有者的提及和私信始终按 `work` 处理。频道和目标的访问范围由可见性设置决定。
 
+要使用 GitHub 的 `work` 模式，请把你的 GitHub 用户 ID 加入空间的[所有者列表](/zh-Hans/docs/blocks/github#所有者账号)。
+
 ## 设置模式
 
-可在 SwB 页面或 YAML 中设置模式。所有者也可调用 `space_mode`，指定模式、目标、项目和允许的操作。
+在连接或项目页面的 **Channel modes** 中设置模式。也可以在 YAML 中设置。所有者可以用 `space_mode` 指定模式、目标、项目和允许的操作。
 
 SwB 先查找已保存的设置，再查找频道和空间设置。接着查找模块的旧版设置、项目模式和 `modes.default`。默认模式为 `off`。
 
@@ -64,7 +66,7 @@ visibility_set(resource="target:beta", visibility="shared")
 
 ## 分流操作
 
-分流智能体可以读取上下文。默认操作是在原话题串中执行 `reply`。在 GitHub 话题串中，请使用 `github_reply`。
+分流智能体可以读取上下文。默认操作是在原话题串中执行 `reply`。在 GitHub 话题串中，请使用 `github_reply`。在 `handle` 中填入会话 ID。在 `text` 中填入回复内容。
 
 要开放更多操作，请在 `space_mode` 或 YAML 中设置 `actions`。将 `reply` 加入列表可保留回复功能，例如 `actions=["reply", "notify_owner"]`。
 

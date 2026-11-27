@@ -9,13 +9,19 @@ Run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from you
 
 ## Get a public address
 
-Claude, ChatGPT and Grok run in the cloud. They need a public HTTPS address to reach SwB. Start SwB with a tunnel to get one.
+Claude, ChatGPT and Grok run in the cloud. They need a public HTTPS address to reach SwB. A tunnel gives your local SwB server a public address.
+
+Install [cloudflared](https://developers.cloudflare.com/tunnel/downloads/). Make sure your terminal can run `cloudflared --version`. If SwB is running, stop it first. Run this command in your SwB instance folder.
 
 ```bash
-swb up --tunnel cloudflare
+uvx swb-one up --tunnel cloudflare
 ```
 
-SwB opens a Cloudflare Quick Tunnel and prints the public MCP address. Use `--tunnel tailscale` to use Tailscale Funnel. For a fixed address on your own domain, read [Self-hosting](/docs/self-hosting).
+SwB opens a Cloudflare Quick Tunnel and prints the public MCP address. Each restart with this option gives you a new address. Update the address in your apps.
+
+For Tailscale, [install and sign in to Tailscale](https://tailscale.com/download). Enable [Funnel](https://tailscale.com/docs/features/tailscale-funnel). Make sure your terminal can run `tailscale version`. Use `--tunnel tailscale` in the command above.
+
+For a fixed address on your own domain, read [Self-hosting](/docs/self-hosting).
 
 ## See the next step
 
@@ -52,7 +58,7 @@ The command prints a one-time sign-in link. Open it in your browser within five 
 | `/inbox/:handle` | Read the messages in one conversation. |
 | `/memory/*` | Browse and search saved notes. |
 | `/projects/:slug` | See one project's routes, history, conversations and memory. |
-| `/connections/:platform` | See the connection status and [channel modes](/docs/channel-modes) for Slack, Discord, Telegram or GitHub. |
+| `/connections/:platform` | See the connection status and [**Channel modes**](/docs/channel-modes) for Slack, Discord, Telegram or GitHub. |
 | `/settings` | View server settings and manage passkeys. |
 | `/tokens` | See token requests and stored credentials. |
 | `/about` | See the SwB version and the list of enabled blocks. |
