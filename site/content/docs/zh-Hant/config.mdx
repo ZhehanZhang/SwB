@@ -9,23 +9,23 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 | 變數 | 用途 |
 | - | - |
-| `SWITCHBOARD_KEY_OWNER` | `swb` 指令使用的擁有者金鑰 |
-| `SWITCHBOARD_PUBLIC_URL` | 登入與 MCP 使用的公開位址。遠端伺服器請用 HTTPS，例如 `https://swb.example.com`。 |
-| `SWITCHBOARD_HOST` | 接收連線的位址，預設為 `127.0.0.1`。 |
-| `SWITCHBOARD_DATA_DIR` | 資料夾。映像檔使用 `/data`。 |
-| `SWITCHBOARD_OWNER_EMAILS` | OIDC 與 Cloudflare Access 的擁有者電子郵件，以逗號分隔 |
-| `SWITCHBOARD_KEY_<NAME>` | 代理 `<name>` 的 bearer 金鑰 |
-| `SWITCHBOARD_CONFIG` | 基礎 YAML 檔的路徑 |
-| `SWITCHBOARD_OVERLAY` | 私人覆寫檔的路徑 |
-| `PORT` | HTTP 連接埠。 `swb up` 預設為 `8870`。 |
+| `SWB_KEY_OWNER` | `swb` 指令使用的擁有者金鑰 |
+| `SWB_PUBLIC_URL` | 登入與 MCP 使用的公開位址。遠端伺服器請用 HTTPS，例如 `https://swb.example.com`。 |
+| `SWB_HOST` | 接收連線的位址，預設為 `127.0.0.1`。 |
+| `SWB_DATA_DIR` | 資料夾。映像檔使用 `/data`。 |
+| `SWB_OWNER_EMAILS` | OIDC 與 Cloudflare Access 的擁有者電子郵件，以逗號分隔 |
+| `SWB_KEY_<NAME>` | 代理 `<name>` 的 bearer 金鑰 |
+| `SWB_CONFIG` | 基礎 YAML 檔的路徑 |
+| `SWB_OVERLAY` | 私人覆寫檔的路徑 |
+| `SWB_PORT` | HTTP 連接埠。`swb up` 預設為 `8870`。 |
 
-在終端機或執行個體的 `.env` 中設定 `PORT`。執行 `swb up` 時，本機登入位址預設為 `http://localhost:<port>`。SwB 會在啟動時依連接埠產生這個位址。
+在終端機或執行個體的 `.env` 中設定 `SWB_PORT`。託管平台也可以設定 `PORT`。本機登入位址使用所選的連接埠。
 
-用 `swb up --public-url https://swb.example.com` 在指令中設定公開位址。這個選項優先於 YAML 的 `public_url`。YAML 設定優先於 `SWITCHBOARD_PUBLIC_URL`。
+用 `swb up --public-url https://swb.example.com` 在指令中設定公開位址。這個選項優先於 YAML 的 `public_url`。YAML 設定優先於 `SWB_PUBLIC_URL`。
 
-用 `--host` 覆寫 `SWITCHBOARD_HOST`。若要在 `0.0.0.0` 或區域網路位址接收連線，請先設定公開位址。
+用 `--host` 覆寫 `SWB_HOST`。若要在 `0.0.0.0` 或區域網路位址接收連線，請先設定公開位址。
 
-用 `swb up --dir ./my-swb` 讀取該資料夾內的 `.env` 和 `config/switchboard.yaml`。執行 `swb init` 時，請指定同一個 `--dir`。直接執行 `swb up` 時，可用 `SWITCHBOARD_CONFIG` 指定其他設定檔。
+用 `swb up --dir ./my-swb` 讀取該資料夾內的 `.env` 和 `config/switchboard.yaml`。執行 `swb init` 時，請指定同一個 `--dir`。直接執行 `swb up` 時，可用 `SWB_CONFIG` 指定其他設定檔。
 
 `swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 尋找 `.env`。這四個指令用 `--url` 指定伺服器位址。
 
@@ -33,13 +33,13 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 直接執行 `swb serve` 時，SwB 會讀取終端機環境和設定檔。其他伺服器指令預設採用目前的資料夾。
 
-用 `swb config migrate [file]` 印出第 2 版格式的設定。可傳入 `file` 指定設定檔。省略時，SwB 依序查看 `--dir`、`SWITCHBOARD_CONFIG` 和預設路徑所指定的設定。
+用 `swb config migrate [file]` 印出第 2 版格式的設定。可傳入 `file` 指定設定檔。省略時，SwB 依序查看 `--dir`、`SWB_CONFIG` 和預設路徑所指定的設定。
 
 ## 資料夾
 
 `swb up` 和 `swb init` 都會為新的執行個體建立 `data/` 資料夾。SwB 預設使用這個資料夾。用 `swb up --dir` 可選取其他執行個體的資料夾。
 
-在設定檔或覆寫檔中設定 `data_dir`，即可更改路徑。這項設定優先。SwB 接著依序檢查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`。三項設定都是空值時，SwB 會採用預設路徑。
+在設定檔或覆寫檔中設定 `data_dir`，即可更改路徑。這項設定優先。SwB 接著依序檢查 `SWB_DATA_DIR` 和 `SWB_DATA`。三項設定都是空值時，SwB 會採用預設路徑。
 
 直接執行 `swb up` 會保留現有設定檔。原本使用家目錄資料庫的執行個體會繼續使用該資料庫。若 SwB 因缺少 `data/` 資料夾而改用家目錄的資料庫，會在日誌中提示一次。
 
@@ -61,7 +61,7 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 ## 設定檔
 
-執行 `swb up` 會在目前的資料夾中建立新的執行個體。SwB 將擁有者金鑰寫入 `.env`，並將自訂的 `PORT` 存在同一個檔案。檔案權限為 `0600`。
+執行 `swb up` 會在目前的資料夾中建立新的執行個體。SwB 將擁有者金鑰寫入 `.env`，並將自訂的 `SWB_PORT` 存在同一個檔案。檔案權限為 `0600`。
 
 若要在啟動 SwB 前建立檔案，請執行 `swb init`。
 
@@ -69,7 +69,7 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 swb init
 ```
 
-這兩個指令產生的 `config/switchboard.yaml` 預設只有 `version: 2`。用 `--public-url` 可將公開位址存入此檔案。建立執行個體時，`swb up` 也會儲存 `SWITCHBOARD_PUBLIC_URL` 中的位址。若要用 YAML 選取模組，請依下例加入 `blocks`。
+這兩個指令產生的 `config/switchboard.yaml` 預設只有 `version: 2`。用 `--public-url` 可將公開位址存入此檔案。建立執行個體時，`swb up` 也會儲存 `SWB_PUBLIC_URL` 中的位址。若要用 YAML 選取模組，請依下例加入 `blocks`。
 
 ```yaml
 version: 2
@@ -89,7 +89,7 @@ routes:
 
 ## 覆寫檔
 
-覆寫檔是一個私人的 YAML 檔，用來放你自己的名稱、id 與路徑。請放在 `config/local.yaml`，或用 `SWITCHBOARD_OVERLAY` 指定。覆寫檔優先於基礎檔，基礎檔優先於環境變數。對應表會合併。清單會被取代。
+覆寫檔是一個私人的 YAML 檔，用來放你自己的名稱、id 與路徑。請放在 `config/local.yaml`，或用 `SWB_OVERLAY` 指定。覆寫檔優先於基礎檔，基礎檔優先於環境變數。對應表會合併。清單會被取代。
 
 鍵中的 `*` 代表一個名稱或清單項目。
 
@@ -98,8 +98,8 @@ routes:
 | 設定鍵 | 用途 |
 | - | - |
 | `version` | YAML 設定格式版本。使用 `blocks` 時設為 `2` |
-| `public_url` | SwB 用於 MCP 與 OAuth 的位址。請參閱 `SWITCHBOARD_PUBLIC_URL`。 |
-| `data_dir` | 資料目錄的路徑。可在此設定，也可用 `SWITCHBOARD_DATA_DIR` |
+| `public_url` | SwB 用於 MCP 與 OAuth 的位址。請參閱 `SWB_PUBLIC_URL`。 |
+| `data_dir` | 資料目錄的路徑。可在此設定，也可用 `SWB_DATA_DIR` |
 | `timezone` | 每日計數與限額使用的時區，預設為 `UTC` |
 | `turn_cap` | 對話暫停前的輪數，預設為 `200`。設為 `null` 可關閉上限 |
 | `blocks` | 要載入的模組，可用模組類型或自訂名稱命名 |

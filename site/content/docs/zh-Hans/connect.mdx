@@ -14,7 +14,7 @@ description: 把 SwB 添加到智能体并设置连接。
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → 添加自定义 MCP 服务器 |
 | Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 添加 MCP 服务器，选择 Automatic OAuth 客户端 |
-| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
+| Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
 | Codex、Gemini CLI 和其他编程智能体 | `swb connect coding-agent --choose agent=codex` |
 
 对于编程智能体，把 `codex` 改成你的客户端的名称。单独运行 `swb connect coding-agent` 可查看列表。列表包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 和 Kiro。
@@ -23,7 +23,7 @@ description: 把 SwB 添加到智能体并设置连接。
 
 拥有所有者权限的智能体可以设置其他连接。使用配对密钥时，智能体会为每个仅限所有者的步骤提供终端命令。
 
-所有者权限需要所有者批准的 OAuth 登录，或来自 `SWITCHBOARD_KEY_<NAME>` 的密钥。请使用可访问所有范围、工具和目标的凭据。`auth.key_scopes`、`auth.key_tools` 和 `auth.key_targets` 会限制访问权限。
+所有者权限需要所有者批准的 OAuth 登录，或来自 `SWB_KEY_<NAME>` 的密钥。请使用可访问所有范围、工具和目标的凭据。`auth.key_scopes`、`auth.key_tools` 和 `auth.key_targets` 会限制访问权限。
 
 | 询问 | 智能体的操作 |
 | - | - |

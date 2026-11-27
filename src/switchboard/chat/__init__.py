@@ -30,6 +30,8 @@ from typing import TYPE_CHECKING, Any
 from ..auth import Principal
 from ..blocks import Action, Address, Block, BlockError, Call
 from ..claims import CLAIM_TTL_S
+from ..deployment import OWNER_KEY
+from ..env import env_value
 from ..inbox import CONTEXT_NOTE
 from ..modes import PROVIDERS, ChatDrop, chat_target_drop
 from ..slack.config import AVATAR_RE
@@ -201,7 +203,7 @@ class ChatBlock(Block):
 
     def secret(self, name: str, env: str | None) -> str | None:
         """A token from the environment (env names it) or, failing that, the one the owner entered through a claim link."""
-        return (self.core.cfg.env.get(env) if env else None) or self.claims.get(name)
+        return (env_value(self.core.cfg.env, env) if env else None) or self.claims.get(name)
 
     async def secret_saved(self, name: str) -> None:
         """Called after the owner saves a token through a claim link: reconnect with it."""
@@ -775,7 +777,7 @@ class ChatBlock(Block):
         """A one-time link where the signed-in owner enters or rotates the bot token."""
         from .claims import ClaimError
 
-        if not self.core.cfg.access_team_domain and self.core.cfg.env.get("SWITCHBOARD_KEY_OWNER"):
+        if not self.core.cfg.access_team_domain and env_value(self.core.cfg.env, OWNER_KEY):
             return {"link": self.core.claims.mint(self.token_env, self.core.base_url), "expires_in_s": CLAIM_TTL_S, "secret": "bot_token",
                     "next": "Use swb claim with this link to save the token from your terminal."}
         try:

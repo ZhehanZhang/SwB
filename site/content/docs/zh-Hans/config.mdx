@@ -9,23 +9,23 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 | 变量 | 用途 |
 | - | - |
-| `SWITCHBOARD_KEY_OWNER` | `swb` 命令使用的所有者密钥 |
-| `SWITCHBOARD_PUBLIC_URL` | 登录和 MCP 使用的公开地址。远程服务器使用 HTTPS，例如 `https://swb.example.com`。 |
-| `SWITCHBOARD_HOST` | 监听地址，默认为 `127.0.0.1`。 |
-| `SWITCHBOARD_DATA_DIR` | 数据目录。镜像使用 `/data`。 |
-| `SWITCHBOARD_OWNER_EMAILS` | 用于 OIDC 和 Cloudflare Access 的所有者邮箱，用逗号分隔 |
-| `SWITCHBOARD_KEY_<NAME>` | 智能体 `<name>` 的 bearer 密钥 |
-| `SWITCHBOARD_CONFIG` | 基础 YAML 文件的路径 |
-| `SWITCHBOARD_OVERLAY` | 私有覆盖文件的路径 |
-| `PORT` | HTTP 端口。 `swb up` 默认为 `8870`。 |
+| `SWB_KEY_OWNER` | `swb` 命令使用的所有者密钥 |
+| `SWB_PUBLIC_URL` | 登录和 MCP 使用的公开地址。远程服务器使用 HTTPS，例如 `https://swb.example.com`。 |
+| `SWB_HOST` | 监听地址，默认为 `127.0.0.1`。 |
+| `SWB_DATA_DIR` | 数据目录。镜像使用 `/data`。 |
+| `SWB_OWNER_EMAILS` | 用于 OIDC 和 Cloudflare Access 的所有者邮箱，用逗号分隔 |
+| `SWB_KEY_<NAME>` | 智能体 `<name>` 的 bearer 密钥 |
+| `SWB_CONFIG` | 基础 YAML 文件的路径 |
+| `SWB_OVERLAY` | 私有覆盖文件的路径 |
+| `SWB_PORT` | HTTP 端口。`swb up` 默认为 `8870`。 |
 
-在终端或实例的 `.env` 文件中设置 `PORT`。运行 `swb up` 时，本机登录地址默认为 `http://localhost:<port>`。SwB 在启动时根据端口生成此地址。
+在终端或实例的 `.env` 文件中设置 `SWB_PORT`。托管平台也可以设置 `PORT`。本机登录地址使用所选端口。
 
-用 `swb up --public-url https://swb.example.com` 在命令行中设置公开地址。该选项优先于 YAML 中的 `public_url`。YAML 设置优先于 `SWITCHBOARD_PUBLIC_URL`。
+用 `swb up --public-url https://swb.example.com` 在命令行中设置公开地址。该选项优先于 YAML 中的 `public_url`。YAML 设置优先于 `SWB_PUBLIC_URL`。
 
-用 `--host` 覆盖 `SWITCHBOARD_HOST`。监听 `0.0.0.0` 或局域网地址之前，请先设置公开地址。
+用 `--host` 覆盖 `SWB_HOST`。监听 `0.0.0.0` 或局域网地址之前，请先设置公开地址。
 
-用 `swb up --dir ./my-swb` 读取该目录中的 `.env` 和 `config/switchboard.yaml`。运行 `swb init` 时，传入同一个 `--dir`。直接运行 `swb up` 时，可用 `SWITCHBOARD_CONFIG` 指定其他配置文件。
+用 `swb up --dir ./my-swb` 读取该目录中的 `.env` 和 `config/switchboard.yaml`。运行 `swb init` 时，传入同一个 `--dir`。直接运行 `swb up` 时，可用 `SWB_CONFIG` 指定其他配置文件。
 
 `swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 查找 `.env`。这四条命令用 `--url` 指定服务器地址。
 
@@ -33,13 +33,13 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 直接运行 `swb serve` 时，SwB 读取终端环境和配置文件。其他服务器命令默认使用当前目录。
 
-用 `swb config migrate [file]` 输出第 2 版格式的配置。可传入 `file` 指定配置文件。省略时，SwB 依次查找 `--dir`、`SWITCHBOARD_CONFIG` 和默认路径指定的配置。
+用 `swb config migrate [file]` 输出第 2 版格式的配置。可传入 `file` 指定配置文件。省略时，SwB 依次查找 `--dir`、`SWB_CONFIG` 和默认路径指定的配置。
 
 ## 数据目录
 
 `swb up` 和 `swb init` 都会为新实例创建 `data/` 目录。SwB 默认使用这个目录。用 `swb up --dir` 可指定其他实例目录。
 
-在配置文件或覆盖文件中设置 `data_dir` 可更改路径。这项设置优先。SwB 接着按顺序检查 `SWITCHBOARD_DATA_DIR` 和 `SWITCHBOARD_DATA`。三项设置都为空时，SwB 使用默认路径。
+在配置文件或覆盖文件中设置 `data_dir` 可更改路径。这项设置优先。SwB 接着按顺序检查 `SWB_DATA_DIR` 和 `SWB_DATA`。三项设置都为空时，SwB 使用默认路径。
 
 直接运行 `swb up` 会保留已有配置文件。原先使用主目录数据库的实例会继续使用该数据库。如果 SwB 因为缺少 `data/` 目录而使用主目录中的数据库，日志会提示一次。
 
@@ -61,7 +61,7 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 
 ## 配置文件
 
-运行 `swb up` 会在当前目录中初始化新实例。SwB 将所有者密钥写入 `.env`，并将自定义的 `PORT` 保存在同一文件中。文件权限为 `0600`。
+运行 `swb up` 会在当前目录中初始化新实例。SwB 将所有者密钥写入 `.env`，并将自定义的 `SWB_PORT` 保存在同一文件中。文件权限为 `0600`。
 
 如需在启动 SwB 前创建文件，请运行 `swb init`。
 
@@ -69,7 +69,7 @@ SwB 可以只用环境变量运行。MCP 模块默认启用。部分模块会在
 swb init
 ```
 
-这两条命令生成的 `config/switchboard.yaml` 默认仅含 `version: 2`。用 `--public-url` 可将公开地址保存到此文件。创建新实例时，`swb up` 也会保存 `SWITCHBOARD_PUBLIC_URL` 中的地址。如需通过 YAML 选择模块，请参照下例添加 `blocks`。
+这两条命令生成的 `config/switchboard.yaml` 默认仅含 `version: 2`。用 `--public-url` 可将公开地址保存到此文件。创建新实例时，`swb up` 也会保存 `SWB_PUBLIC_URL` 中的地址。如需通过 YAML 选择模块，请参照下例添加 `blocks`。
 
 ```yaml
 version: 2
@@ -89,7 +89,7 @@ routes:
 
 ## 覆盖文件
 
-覆盖文件是存放你自己的名称、id 和路径的私有 YAML 文件。把它放在 `config/local.yaml`，或用 `SWITCHBOARD_OVERLAY` 指定它。覆盖文件优先于基础文件，基础文件优先于环境变量。映射会合并。列表会被替换。
+覆盖文件是存放你自己的名称、id 和路径的私有 YAML 文件。把它放在 `config/local.yaml`，或用 `SWB_OVERLAY` 指定它。覆盖文件优先于基础文件，基础文件优先于环境变量。映射会合并。列表会被替换。
 
 键中的 `*` 代表一个名称或列表项。
 
@@ -98,8 +98,8 @@ routes:
 | 配置键 | 用途 |
 | - | - |
 | `version` | YAML 配置格式版本。使用 `blocks` 时设为 `2` |
-| `public_url` | SwB 用于 MCP 和 OAuth 的地址。请参见 `SWITCHBOARD_PUBLIC_URL`。 |
-| `data_dir` | 数据目录的路径。可在此设置，也可用 `SWITCHBOARD_DATA_DIR` |
+| `public_url` | SwB 用于 MCP 和 OAuth 的地址。请参见 `SWB_PUBLIC_URL`。 |
+| `data_dir` | 数据目录的路径。可在此设置，也可用 `SWB_DATA_DIR` |
 | `timezone` | 每日计数和限额所用的时区，默认为 `UTC` |
 | `turn_cap` | 会话暂停前的轮数，默认为 `200`。设为 `null` 可关闭上限 |
 | `blocks` | 要加载的模块，可用模块类型或自定义名称命名 |

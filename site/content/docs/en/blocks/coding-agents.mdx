@@ -27,17 +27,17 @@ For [MCP Tasks](/docs/how-it-works#conversations), MCP 2026-07-28 clients discov
 
 The channel pushes SwB messages into an open Claude Code session. It is a research preview.
 
-Make a key named `SWITCHBOARD_KEY_CHANNEL` in the server `.env`. This key can read the `claude-code` inbox only. Install [Bun](https://bun.sh). Then add the plugin in Claude Code.
+Make a key named `SWB_KEY_CHANNEL` in the server `.env`. This key can read the `claude-code` inbox only. Install [Bun](https://bun.sh). Then add the plugin in Claude Code.
 
 ```text
 /plugin marketplace add ZhehanZhang/SwB
-/plugin install switchboard@switchboard
+/plugin install swb@swb
 ```
 
 Enter the SwB address and the channel key when the plugin asks. Start Claude Code with the channel.
 
 ```bash
-claude --dangerously-load-development-channels plugin:switchboard@switchboard
+claude --dangerously-load-development-channels plugin:swb@swb
 ```
 
 The channel works while the session is open. Messages that arrive between sessions appear at the next start. To answer, Claude uses the `reply` tool.

@@ -37,13 +37,14 @@ Project finds the result later in the project's memory.
 ## Quick start
 
 ~~~bash
-(umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
-uvx swb-one up --tunnel cloudflare
+uvx swb-one up
 ~~~
 
-The command opens a public HTTPS URL through a Cloudflare quick tunnel. Use `--tunnel tailscale` for a private connection. Omit `--tunnel` to use `http://localhost:8787/mcp`.
+Run the command in an empty folder. Open the one-time sign-in link from your terminal within five minutes.
 
-Use `https://swb.example.com` as a sample public URL for a deployment. See [deployment options](deploy/README.md) and [owner sign-in](docs/guide.md#authentication-and-protection).
+The local MCP address is `http://localhost:8870/mcp`. Add `--tunnel cloudflare` for a public HTTPS address. Add `--tunnel tailscale` for an address on your private network.
+
+See [deployment options](deploy/README.md) and [owner sign-in](docs/guide.md#authentication-and-protection).
 
 See [server addresses](docs/guide.md#server-addresses) to move an instance to a new URL.
 
@@ -57,7 +58,7 @@ Ask any connected agent to call `connect`, or run `swb connect <kind>`.
 | ChatGPT and dots | Custom MCP server, OAuth | MCP events |
 | Grok | MCP connector, Grok routines | Signed routine webhook |
 | Capy | API key | Thread stream |
-| Claude Code | `claude mcp add`, channel plugin | Push into the open session |
+| Claude Code | `claude mcp add`, [`swb@swb` channel plugin](channel/README.md) | Push into the open session |
 | Codex, Gemini CLI and other coding agents | OAuth or a pairing code | `wait` and `inbox`, MCP events |
 | Slack | Slack app, Socket Mode | Replies in the thread |
 | Discord | Bot token | Replies in the thread |
@@ -73,9 +74,7 @@ SwB is an independent project. Logos identify the available connections.
   <img src="docs/assets/flow-architecture.svg" alt="Agents and people pass through identity and trust, targets and routes, and conversations and mailboxes, out to wakes and deliveries" width="100%">
 </p>
 
-Everything that comes in or goes out is a block behind one interface, and the core names no vendor. The
-[guide](docs/guide.md) covers configuration, blocks, projects and memory, routing, every integration, the
-[security model](docs/guide.md#authentication-and-protection) and the tool list.
+Blocks connect apps to SwB. See the [guide](docs/guide.md) for configuration, routing, memory and tools. See [authentication](docs/guide.md#authentication-and-protection) for access settings.
 
 ## License and contributing
 
