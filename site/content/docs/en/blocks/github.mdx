@@ -64,7 +64,11 @@ blocks:
 
 Use `blocks.github.owner_ids` to set the default owner IDs. A space's `owner_ids` list replaces that default. An empty space list clears it.
 
-GitHub uses `owner` and `external` trust. The `known` setting applies to Slack, Discord and Telegram. Access rules use IDs such as `github:4242` and leave sender trust unchanged.
+SwB checks the author of each title, body or comment. The text counts as `owner` only when its own author is in `owner_ids` and is a person. SwB quotes branch names, refs, workflow titles and check names as `external`.
+
+An owner-triggered `check_run` carries `external` trust when it contains a check name. A fork of the repository can change the name in its pull request. Access rules use IDs such as `github:4242` and leave sender trust unchanged.
+
+For GitHub conversation actions, pass the SwB conversation ID in `conversation` or `handle`.
 
 ## Config
 

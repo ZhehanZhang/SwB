@@ -49,9 +49,11 @@ swb connect grok
 
 你也可以在令牌页面创建配对码。SwB 通过 `POST /pairing/code` 提交表单。
 
-配对码指定了项目时，`POST /connect` 会在 `project` 中返回该项目。将它设为客户端的默认项目。工具调用需要项目时，将该值填入 `project`。
+配对密钥可访问 `agent:<name>` 的记忆，以及 `auth.key_scopes` 中为该智能体设置的范围。配对码指定项目时，密钥也会获得该项目的记忆授权。
 
-配对密钥只能读取该智能体发送或接收的消息，且消息须在所有者授权的范围内。参见[密钥限制](/zh-Hans/docs/security#有限制的密钥)。
+`POST /connect` 会在 `project` 中返回配对码指定的项目。将它设为客户端的默认项目。工具调用需要项目时，将该值填入 `project`。
+
+配对密钥可在[会话范围](/zh-Hans/docs/security#有限制的密钥)内读取该智能体收发的消息。
 
 使用配对密钥时，`tools/list` 返回已配对智能体角色的工具。用 `auth.key_tools` 可缩小列表范围。调用所有者工具时，请以所有者身份登录。详见[配对密钥](/zh-Hans/docs/tools#配对密钥)。
 

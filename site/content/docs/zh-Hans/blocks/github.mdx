@@ -64,7 +64,11 @@ blocks:
 
 用 `blocks.github.owner_ids` 设置默认的所有者 ID。空间的 `owner_ids` 列表会覆盖默认列表。将空间的列表设为空即可清除默认值。
 
-GitHub 的信任等级为 `owner` 和 `external`。`known` 设置适用于 Slack、Discord 和 Telegram。访问规则使用 `github:4242` 之类的 ID。发件人的信任等级保持原样。
+SwB 逐一检查标题、正文和评论的作者。只有 `owner_ids` 中的人写的文字才算 `owner`。分支名、引用、工作流标题和检查名称一律按 `external` 引用。
+
+即使所有者触发 `check_run`，带有检查名称的事件仍标为 `external`。来自派生仓库的拉取请求可以改变检查名称。访问规则使用 `github:4242` 这类 ID。文字的信任等级仍由作者决定。
+
+执行 GitHub 会话操作时，将 SwB 会话 ID 填入 `conversation` 或 `handle`。
 
 ## 配置
 
