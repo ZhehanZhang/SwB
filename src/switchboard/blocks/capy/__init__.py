@@ -13,6 +13,7 @@ import hashlib
 import logging
 import re
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 import httpx
@@ -44,6 +45,16 @@ INSTRUCTIONS = """Capy is a coding agent with cloud machines, git and PRs, organ
 real machine, a repo, a PR, or more than a few minutes: send(task) goes where the owner's route for you and the project
 points (usually his Captain), or send(task, to='capy:captain:<name>') when your route allows choosing. Then wait() for
 the reply. capy_captain_digest, capy_captains and capy_list read Captains and their crews."""
+
+
+def _api_timestamp(value: Any) -> str | None:
+    if isinstance(value, str):
+        try:
+            if datetime.fromisoformat(value).tzinfo is not None:
+                return value
+        except ValueError:
+            pass
+    return None
 
 
 def parse_target(text: str) -> dict[str, str]:
@@ -381,7 +392,7 @@ class CapyBlock(Block):
 
     def actions(self) -> list[Action]:
         return [
-            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True),
+            Action("delegate", "Delegate to Capy", "Hand a task to the routed Capy target.", self.delegate, capped=True, previewable=True),
             Action("status", "Capy thread status", "Status and latest messages of a Capy thread.", self.thread_status, read_only=True),
             Action("list", "List Capy work", "Delegations, a Captain's crew, or a project's threads.", self.list_work, read_only=True),
             Action("reply", "Reply to a Capy thread", "Send a follow-up into a thread.", self.reply),
@@ -459,8 +470,16 @@ class CapyBlock(Block):
         if new_thread is not None and "captain" in tgt:
             mode = "new_thread" if new_thread else "captain_thread"
 
-        handle = call.handle or call.core.inbox.new_handle()
+        project_id = tgt.get("project") or tgt.get("captain_project")
+        in_thread = "thread" in tgt or ("captain" in tgt and mode == "captain_thread")
+        if not in_thread and not project_id:
+            raise DestinationError(f"{describe(tgt)} has no Capy project to start a thread in")
         send = self.sending(call)
+        if call.dry_run:
+            address = self.route_address(tgt)
+            return {"to": str(address) if address else None, "project": p.slug if p else None, "route": level, "mode": mode}
+
+        handle = call.handle or call.core.inbox.new_handle()
         body = [task]
         if repos:
             body += ["", "Repos: " + ", ".join(repos)]
@@ -479,7 +498,7 @@ class CapyBlock(Block):
         uploaded = await send(lambda a: self._files(a, files)) if files else []
         digest = hashlib.sha256(f"{call.principal.source}|{call.core.audit.today()}|{tgt}|{task}{forward}".encode()).hexdigest()
         try:
-            if "thread" in tgt or ("captain" in tgt and mode == "captain_thread"):
+            if in_thread:
                 thread_id = tgt.get("thread") or tgt["captain"]
                 cursor = await api.latest_cursor(thread_id)
                 receipt = await send(lambda a: a.send_message(thread_id, "\n".join(body), files=uploaded or None, model=model,
@@ -487,9 +506,6 @@ class CapyBlock(Block):
                 meta: dict[str, Any] = {"mode": "message", "message_id": receipt.get("id"), "client_key": digest[:64], "deduped": bool(receipt.get("deduped"))}
                 status = "sent"
             else:
-                project_id = tgt.get("project") or tgt.get("captain_project")
-                if not project_id:
-                    raise DestinationError(f"{describe(tgt)} has no Capy project to start a thread in")
                 t = await send(lambda a: a.create_thread(request_id=str(uuid.UUID(digest[:32])), project_id=project_id, title=title, model=model,
                                                          message="\n".join(body) + ("\n\n(Attachments follow in the next message.)" if uploaded else ""),
                                                          captain_id=tgt.get("captain")))
@@ -820,7 +836,7 @@ class CapyBlock(Block):
         target, defaults = await self.validate_route_target({"captain": captains[0]["id"]}, defaults)
         r = core.routes.set(destination=self.name, agent=None, project=project.slug, target=target, defaults=defaults,
                             allow_override=False, note="set automatically from the linked Capy project", by="auto")
-        core.audit_auto(principal, self.name, "auto_route", f"*/{project.slug}", str(r.target))
+        core.audit_auto(principal, self.name, "auto_route", f"*/{project.slug}", r.audit_excerpt())
         out["changed"].append({"route": r.as_dict()})
         return out
 
@@ -931,19 +947,28 @@ class CapyBlock(Block):
         if self.api is None:
             return []
         out = []
+        persona_ids = set(self.core.known_agents())
         for c in await self.api.list_captains():
             if c.get("archived"):
                 continue
             name = c.get("name") or c.get("title") or c["id"]
-            pid = _slug(name)
-            out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [pid, str(c.get("code") or "").lower()],
+            slug = _slug(name)
+            code = str(c.get("code") or "").lower()
+            pid = slug or code or c["id"]
+            if pid in persona_ids:
+                pid = f"{pid[:29]}-{hashlib.sha256(c['id'].encode()).hexdigest()[:10]}"
+            persona_ids.add(pid)
+            out.append({"kind": "captain", "id": c["id"], "name": name, "slugs": [slug, code],
+                        "created_at": _api_timestamp(c.get("createdAt")),
+                        "last_seen_at": _api_timestamp(c.get("lastActivityAt")) or _api_timestamp(c.get("updatedAt")),
                         "persona": {"id": pid, "name": name, "avatar": c.get("avatar")}})
         return out
 
-    async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = False) -> str | None:
+    async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = True) -> str | None:
         from .avatars import render_captain
 
-        return await render_captain(http, out_dir, persona.get("name") or persona["id"], persona.get("avatar"), remote or bool(self.config.get("avatars")))
+        return await render_captain(http, out_dir, persona.get("name") or persona["id"], persona.get("avatar"),
+                                    remote and bool(self.config.get("avatars", True)), captain_id=persona.get("target_id"))
 
     def parse_route_target(self, text: str) -> dict[str, Any]:
         return parse_target(text)

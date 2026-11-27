@@ -10,8 +10,13 @@ from .coding import coding_steps
 from .kit import Kit
 
 CLIENTS = ("mcp-client", "chatgpt", "claude", "coding-agent")
-BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine"}
-MENUS = {"chatgpt": "https://chatgpt.com/plugins in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web"}
+BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github", "grok": "grok-routine", "discord": "discord", "telegram": "telegram"}
+CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
+MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser (the desktop apps and the plugin editor can't add one), then + > Add custom MCP server,", "claude": "Customize > Connectors > Add > Custom > Web"}
+
+
+def hosted_client_instruction(kind: str, connector: str | None) -> str:
+    return f"Open {MENUS[kind]} to add {connector or '<public_url>/mcp'} as a custom connector and sign in with OAuth."
 
 
 def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
@@ -30,8 +35,7 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
         if signed_in:
             return {"done": [*done, "The client is signed in."], "next": []}
         next_steps = [] if oauth else [{"by": "person", "do": "Configure a public URL and owner sign-in before connecting a hosted client."}]
-        connector = core.cfg.resource or "<public_url>/mcp"
-        next_steps.append({"by": "person", "do": f"Open {MENUS[kind]} to add {connector} as a custom connector and sign in with OAuth."})
+        next_steps.append({"by": "person", "do": hosted_client_instruction(kind, core.cfg.resource)})
         return {"done": done, "next": next_steps}
     if not principal.is_unrestricted_owner:
         return {"done": done, "next": [{"by": "person", "do": "Ask the owner to mint a pairing code from their own sign-in."}]}
@@ -103,4 +107,4 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             if p.is_unrestricted_owner:
                 core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination=block.name if block else "core",
                                   action=f"connect_{what}", outcome=outcome)
-        return {"what": what, **out, **({"state": "connected"} if not out["next"] else {})}
+        return {"what": what, **out, **({"state": "connected"} if all(step.get("optional") for step in out["next"]) else {})}

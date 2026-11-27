@@ -5,9 +5,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import html
+import json
 import logging
 import re
+from functools import partial
+from io import BytesIO
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
+
+from PIL import Image
 
 from ...chat import RETENTION_S, ChatBlock, Incoming, Persona
 from .. import BlockError, Manifest
@@ -76,6 +81,7 @@ def _chunks(text: str, prefix: str | None) -> Iterator[str]:
 
 class TelegramBlock(ChatBlock):
     platform = "telegram"
+    connect_kinds = ("telegram",)
     manifest = Manifest(id="telegram", title="Telegram", kind="both", level_out="L3", level_in="events",
                         verbs={"reply": "reply"}, tools=("post", "status", "provision"),
                         secrets=("TELEGRAM_BOT_TOKEN",), network=("api.telegram.org",))
@@ -141,7 +147,7 @@ class TelegramBlock(ChatBlock):
         return {"bot_father_url": "https://t.me/BotFather", "bot_url": url,
                 "add_to_group_url": f"{url}?startgroup=swb" if url else None, "bot": dict(self._bot) if self._bot else None,
                 "privacy_mode": self._privacy, "token_source": "env" if self.core.cfg.env.get(self.token_env) else
-                ("stored" if self.token() else None), "claim_pending": self.claims.pending("bot_token"),
+                ("stored" if self.token() else None), "claim_pending": self.claim_pending(),
                 "seen_chats": list(reversed(self._seen.values())),
                 "steps": ["1. Create a bot in @BotFather with /newbot.",
                           f"2. Open the token link from {self.name}_provision and paste the token.",
@@ -202,6 +208,7 @@ class TelegramBlock(ChatBlock):
                         raise TelegramError("getMe", "invalid bot username")
                     self._bot = {"id": me["id"], "username": username, "name": me.get("first_name")}
                     self._privacy = not me.get("can_read_all_group_messages", False)
+                    await self.apply_avatar(me["id"], partial(self._set_avatar, token))
                     next_check = 0
                 if clock() >= next_check:
                     for chat in self._groups:
@@ -232,6 +239,13 @@ class TelegramBlock(ChatBlock):
                 log.warning("%s connection: update processing failed", self.name)
                 await asyncio.sleep(delay)
                 delay = min(2 * delay, 60)
+
+    async def _set_avatar(self, token: str, data: bytes) -> None:
+        out = BytesIO()
+        with Image.open(BytesIO(data)) as image:
+            image.convert("RGB").save(out, "JPEG", quality=92)
+        await self._api.multipart(token, "setMyProfilePhoto", data={"photo": json.dumps({"type": "static", "photo": "attach://p"})},
+                                  files={"p": ("avatar.jpg", out.getvalue(), "image/jpeg")})
 
     async def _poll(self, token: str, bot_id: int, username: str) -> int:
         row = self.core.store.one("SELECT next_id FROM telegram_offsets WHERE block = ? AND bot = ? AND at > ?",

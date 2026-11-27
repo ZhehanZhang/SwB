@@ -30,6 +30,7 @@ from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
 from .projects import Project, ProjectError, Projects
 from .routes import RouteError, Routes
+from .slack.avatar_files import AvatarFiles
 from .store import Store
 from .visibility import Visibility
 
@@ -92,6 +93,8 @@ class Switchboard:
         self.slack_connect = bool(self.slack_options.pop("connect", True))
         self._targets: dict[str, tuple[float, list[dict[str, Any]]]] = {}
         self.target_errors: dict[str, str] = {}
+        self._avatar_http: httpx.AsyncClient | None = None
+        self._avatar_files: AvatarFiles | None = None
         opts = {**(destination_options or {}), **(block_options or {})}
         self.blocks: dict[str, Block] = {}
         for name, sec in self.cfg.blocks.items():
@@ -118,6 +121,31 @@ class Switchboard:
             if engine is not None:
                 return engine
         return None
+
+    @property
+    def avatars(self) -> AvatarFiles:
+        slack = self.slack
+        if slack is not None and slack.config.public_base_url:
+            return slack.avatars
+        if self._avatar_files is None:
+            self._avatar_files = AvatarFiles(self.data_dir, self.cfg.public_url, slack.config.avatar_dirs if slack is not None else ())
+        return self._avatar_files
+
+    @property
+    def avatar_http(self) -> httpx.AsyncClient:
+        if self._avatar_http is None:
+            self._avatar_http = httpx.AsyncClient(transport=self.http_transport)
+        return self._avatar_http
+
+    @property
+    def avatar_cache(self) -> Path:
+        return self.avatars.rendered
+
+    def find_avatar(self, name: str) -> Path | None:
+        return self.avatars.find_avatar(name)
+
+    def avatar_url(self, name: str) -> str | None:
+        return self.avatars.avatar_url(name)
 
     def _seed_routes(self, seeds: list[dict[str, Any]]) -> None:
         """The config's routes: seed each agent/project slot once (routes_set and the page manage them after). Empty by default."""
@@ -164,6 +192,8 @@ class Switchboard:
             t.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+        if self._avatar_http is not None:
+            await self._avatar_http.aclose()
         for b in reversed(list(self.blocks.values())):
             await b.aclose()
         await self.auth.http.aclose()
@@ -205,7 +235,7 @@ class Switchboard:
 
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
-                         handle_meta: dict[str, Any] | None = None, _reply: bool = False) -> dict[str, Any]:
+                         handle_meta: dict[str, Any] | None = None, _reply: bool = False, dry_run: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
@@ -225,6 +255,8 @@ class Switchboard:
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
+        if dry_run:
+            return {"to": f"agent:{to}", "mailbox": True, "project": p.slug if p else None}
         if root is not None:
             self.turn(root, principal)
         sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
@@ -271,6 +303,15 @@ class Switchboard:
             task.add_done_callback(self._tasks.discard)
         raise CoreError(stop)
 
+    def resume_conversation(self, principal: Principal, root: str) -> bool:
+        if not principal.is_unrestricted_owner and not (principal.kind == "owner_session" and principal.trust == "owner"):
+            raise CoreError("only the owner can resume paused conversations")
+        if not self.store.n("UPDATE conversation_turns SET turns = 0, paused_at = NULL WHERE root = ? AND paused_at IS NOT NULL", (root,)):
+            return False
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="core",
+                          action="conversation_resume", outcome="ok", ref=root)
+        return True
+
     def destination(self, name: str) -> Block:
         d = self.blocks.get(name)
         if d is None:
@@ -297,6 +338,19 @@ class Switchboard:
 
     # Targets ------------------------------------------------------------------------------------
 
+    async def _render_target(self, block: Block, target: dict[str, Any]) -> dict[str, Any]:
+        persona = target.get("persona")
+        if not persona:
+            return target
+        slack = self.slack
+        try:
+            avatar = await block.render_avatar({**persona, "target_id": target["id"]}, self.avatar_http, self.avatar_cache,
+                                               slack is None or slack.config.captain_avatars)
+        except OSError as exc:
+            log.warning("Avatar cache for %s:%s is unavailable: %s", block.name, target["id"], type(exc).__name__)
+            return target
+        return {**target, "persona": {**persona, "avatar_file": avatar}} if avatar else target
+
     async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> list[dict[str, Any]]:
         """Every block's targets, plus an agent:<name> mailbox per known agent and a project:<slug> route per project.
         A block that fails keeps its last good list, and the error shows in target_errors."""
@@ -308,7 +362,8 @@ class Switchboard:
             at, got = self._targets.get(name, (0.0, []))
             if refresh or now - at > TARGETS_TTL_S or not got:
                 try:
-                    got = await b.targets()
+                    found = await b.targets()
+                    got = list(await asyncio.gather(*(self._render_target(b, t) for t in found))) if type(b).render_avatar is not Block.render_avatar else found
                     self._targets[name] = (now, got)
                     self.target_errors.pop(name, None)
                 except Exception as exc:
@@ -330,6 +385,20 @@ class Switchboard:
         if query:
             q = query.strip().lower()
             out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
+        slack = self.slack
+        personas = slack.config.personas if slack is not None else {}
+        for t in out:
+            if p := t.get("persona"):
+                configured = personas.get(p.get("id"))
+                avatar = p.get("avatar_file") or p.get("avatar")
+                icon_url = p.get("icon_url")
+                if configured is not None:
+                    avatar, icon_url = configured.avatar, configured.icon_url
+                elif not avatar and not icon_url and p.get("id"):
+                    avatar = f"{p['id']}.png"
+                file = avatar if isinstance(avatar, str) and self.find_avatar(avatar) else None
+                t["persona"] = {**p, "avatar_file": file, "icon_url": icon_url}
+                t["avatar_url"] = (self.avatar_url(file) if file else None) or icon_url
         prio = tuple(self.cfg.targets.get("priority") or ())
         return sorted(out, key=lambda t: (tgt.rank(t, prio), t["address"]))
 
@@ -412,12 +481,14 @@ class Switchboard:
 
     async def send(self, principal: Principal, *, task: str, to: str | None = None, project: str | None = None, title: str | None = None,
                    files: list[dict[str, Any]] | None = None, repos: list[str] | None = None, new_conversation: bool | None = None,
-                   forward: str | None = None, handle_meta: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Send work or a message. Without to, the route for the caller and project decides; agent:<x> leaves it in a mailbox."""
+                   forward: str | None = None, handle_meta: dict[str, Any] | None = None, dry_run: bool = False) -> dict[str, Any]:
+        """Send work or a message, or preview its resolved destination without delivering it."""
         if principal.targets is not None:
             await self.check_target(principal, to, project, forward)
         handle = None
         if forward is not None:
+            if dry_run:
+                raise CoreError("a forwarded send cannot be previewed")
             original = self.inbox.handle(forward)
             if original is None or original["destination"] != "mailbox" or original["owner"] != principal.source:
                 raise CoreError("you can only forward a conversation you received")
@@ -438,8 +509,9 @@ class Switchboard:
         try:
             if handle is not None:
                 self.turn(handle_meta["root"], principal)
-            return await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
-                                    new_conversation=new_conversation, handle=handle, handle_meta=handle_meta)
+            out = await self._send(principal, task=task, to=to, project=project, title=title, files=files, repos=repos,
+                                   new_conversation=new_conversation, handle=handle, handle_meta=handle_meta, dry_run=dry_run)
+            return {**out, "dry_run": True} if dry_run else out
         except BaseException:
             if handle is not None:
                 self.store.x("UPDATE handles SET meta = json_remove(meta, '$.forwarded_to') "
@@ -473,12 +545,13 @@ class Switchboard:
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
-                    handle: str | None, handle_meta: dict[str, Any] | None) -> dict[str, Any]:
+                    handle: str | None, handle_meta: dict[str, Any] | None, dry_run: bool) -> dict[str, Any]:
         addr = await self.resolve_to(to) if to else None
         if addr is not None and addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         if addr is not None and addr.block == "agent":
-            return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta), "to": str(addr)}
+            return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta,
+                                            dry_run=dry_run), "to": str(addr)}
         if addr is not None and addr.block == "project":
             project, addr = addr.id, None
         if addr is not None:
@@ -490,9 +563,10 @@ class Switchboard:
             raise CoreError(f"{block.name} takes no send; its tools are {', '.join(block.manifest.tools) or 'none'}")
         message = {"task": task, "title": title, "project": project, "repos": repos, "files": files, "new_thread": new_conversation}
         kw = block.send_args(addr if addr is not None and (addr.kind or addr.id) else None, {k: v for k, v in message.items() if v is not None})
-        out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta)
+        out = await self.invoke(principal, block.name, action, kw, handle=handle, handle_meta=handle_meta, dry_run=dry_run)
         if isinstance(out, dict):
-            out.setdefault("conversation", out.get("handle"))
+            if not dry_run:
+                out.setdefault("conversation", out.get("handle"))
             out.setdefault("block", block.name)
         return out
 
@@ -600,13 +674,16 @@ class Switchboard:
         return await self.invoke(principal, block.name, action, block.verb_args(verb, ref, {k: v for k, v in kw.items() if v is not None}))
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
-                     handle: str | None = None, handle_meta: dict[str, Any] | None = None) -> Any:
+                     handle: str | None = None, handle_meta: dict[str, Any] | None = None, dry_run: bool = False) -> Any:
         """Run one destination action for an origin's caller, enforcing the daily cap and writing the audit record."""
         dest = self.destination(destination)
-        call = Call(principal=principal, core=self, destination=destination, action=action.name, handle=handle, handle_meta=handle_meta or {})
+        if dry_run and not action.previewable:
+            raise DestinationError(f"{destination} does not support send previews")
+        call = Call(principal=principal, core=self, destination=destination, action=action.name, handle=handle, handle_meta=handle_meta or {},
+                    dry_run=dry_run)
 
         def record(outcome: str, detail: str | None = None) -> None:
-            if action.is_audited or outcome != "ok":
+            if not dry_run and (action.is_audited or outcome != "ok"):
                 self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
                                   action=action.name, outcome=call.notes.get("outcome", outcome) if outcome == "ok" else outcome,
                                   detail=detail or call.notes.get("detail"), target=call.notes.get("target"), ref=call.notes.get("ref"),
@@ -618,6 +695,8 @@ class Switchboard:
                 call.note(excerpt=str(kwargs.get("task") or ""))
                 record("refused", f"daily cap reached ({used}/{dest.daily_cap})")
                 raise DestinationError(f"daily {destination} {action.name} cap reached ({used}/{dest.daily_cap} today, {self.cfg.timezone}); try tomorrow or raise destinations.{destination}.daily_cap")
+        if dry_run:
+            return await action.handler(call, **kwargs)
         try:
             out = await action.handler(call, **kwargs)
         except DestinationError as e:
@@ -660,7 +739,7 @@ class Switchboard:
                             allow_override=allow_override, note=note, by=principal.source)
         self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+                          action="route_set", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return r.as_dict()
 
     def changed(self) -> None:
@@ -675,7 +754,7 @@ class Switchboard:
         r = self.routes.remove(destination=destination, agent=agent, project=project)
         self.changed()
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=destination,
-                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=str(r.target))
+                          action="route_remove", outcome="ok", target=f"{r.agent or '*'}/{r.project or '*'}", excerpt=r.audit_excerpt())
         return {"removed": r.as_dict()}
 
     # Projects: automatic links and routes ------------------------------------------------------
@@ -707,6 +786,26 @@ class Switchboard:
     def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "") -> None:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
                           action=action, outcome="ok", target=target, excerpt=excerpt)
+
+    @staticmethod
+    def check_memory_scope(principal: Principal, scope: str) -> None:
+        if not principal.allows(scope):
+            raise MemoryError_(f"the {principal.source} key is limited to {', '.join(principal.scopes or ())}; {scope} is outside it")
+
+    def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
+        out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        self.audit_memory(principal, "memory_delete", id)
+        return out
+
+    def move_memory(self, principal: Principal, id: str, to_scope: str, *, promote: bool = False) -> dict[str, Any]:
+        to_scope = to_scope.strip().lower()
+        if to_scope == GENERAL and not promote:
+            raise MemoryError_("moving to general is memory_promote, after the owner agrees it applies to every project")
+        self.check_memory_scope(principal, to_scope)
+        out = self.memory.move(source=principal.source, id=id, to_scope=to_scope,
+                               check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        self.audit_memory(principal, "memory_promote" if promote else "memory_move", f"{out['from']} -> {out['to']}", id)
+        return out
 
     # Context pack -----------------------------------------------------------------------------
 

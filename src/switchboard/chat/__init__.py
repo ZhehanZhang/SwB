@@ -21,14 +21,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import re
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from ..auth import Principal
 from ..blocks import Action, Block, BlockError, Call
+from ..claims import CLAIM_TTL_S
+from ..slack.config import AVATAR_RE
 from ..trust import wrap
 from ..visibility import Who
 from .claims import Claims
@@ -50,6 +54,7 @@ CREATE TABLE IF NOT EXISTS chat_sent (block TEXT NOT NULL, space TEXT NOT NULL, 
   part INTEGER NOT NULL DEFAULT 0, at REAL NOT NULL, PRIMARY KEY (block, space, channel, message));
 CREATE TABLE IF NOT EXISTS chat_relays (handle TEXT PRIMARY KEY, block TEXT NOT NULL, space TEXT NOT NULL, channel TEXT NOT NULL, root TEXT NOT NULL,
   reply_to TEXT, target TEXT NOT NULL, trust TEXT NOT NULL, at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS block_state (block TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (block, key));
 """
 RETENTION_S = 14 * 86400
 
@@ -100,6 +105,7 @@ class Persona:
     id: str
     name: str
     icon_url: str | None = None
+    avatar: str | None = None
 
 
 class ChatBlock(Block):
@@ -109,6 +115,10 @@ class ChatBlock(Block):
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
         super().__init__(core, config)
+        avatar = config.get("avatar")
+        if avatar is not None and (not isinstance(avatar, str) or not AVATAR_RE.fullmatch(avatar)):
+            raise BlockError(f"blocks.{self.name}.avatar must be a file name like switchboard.png")
+        self._avatar_status = {"file": avatar, "applied": False, "error": None}
         migrate(core.store)
         self.spaces = {label: self._space(label, raw) for label, raw in (config.get("spaces") or {}).items()}
         grants = config.get("agents") or {}
@@ -188,6 +198,31 @@ class ChatBlock(Block):
     async def secret_saved(self, name: str) -> None:
         """Called after the owner saves a token through a claim link: reconnect with it."""
 
+    async def apply_avatar(self, bot_id: str | int, upload: Callable[[bytes], Awaitable[None]]) -> None:
+        file = self._avatar_status["file"]
+        if file is None:
+            return
+        error = "could not apply avatar"
+        with contextlib.suppress(Exception):
+            try:
+                path = self.core.find_avatar(file)
+                if path is None:
+                    raise BlockError("avatar file not found")
+                data = path.read_bytes()
+                digest = hashlib.sha256(data).hexdigest()
+                store, key = self.core.store, f"avatar:{bot_id}"
+                row = store.one("SELECT value FROM block_state WHERE block = ? AND key = ?", (self.name, key))
+                if row is None or row["value"] != digest:
+                    await upload(data)
+                    store.x("INSERT OR REPLACE INTO block_state (block, key, value) VALUES (?, ?, ?)", (self.name, key, digest))
+            except BlockError as exc:
+                error = str(exc)
+            else:
+                error = None
+        if error is not None:
+            log.warning("%s avatar %s: %s", self.name, file, error)
+        self._avatar_status.update(applied=error is None, error=error)
+
     # Status ----------------------------------------------------------------------------------
 
     def problems(self) -> list[str]:
@@ -195,13 +230,14 @@ class ChatBlock(Block):
         if not self.spaces:
             out.append(f"{self.name}: no spaces configured (blocks.{self.name}.spaces)")
         for s in self.spaces.values():
-            if not s.owner_ids:
+            if not self.owners(s):
                 out.append(f"{self.name} space {s.label}: no owner_ids, so nobody's messages are trusted as the owner's")
         return out
 
     def status(self) -> dict[str, Any]:
         return {"platform": self.platform, "connected": self.connected(), "missing": self.missing(), "setup": self.setup(),
-                "spaces": {s.label: {"owners": len(s.owner_ids), "listen": sorted(s.listen), "default_target": s.default_target, "project": s.project}
+                "avatar": dict(self._avatar_status),
+                "spaces": {s.label: {"owners": len(self.owners(s)), "listen": sorted(s.listen), "default_target": s.default_target, "project": s.project}
                            for s in self.spaces.values()},
                 "targets": len(self.targets_by_slug), "refreshed_at": self.refreshed_at}
 
@@ -258,12 +294,15 @@ class ChatBlock(Block):
                 return None
         p = target.get("persona") or {}
         name = p.get("name") or target.get("name") or p.get("id")
-        return Persona(id=p.get("id") or target["id"], name=str(name), icon_url=p.get("icon_url")) if name else None
+        return Persona(id=p.get("id") or target["id"], name=str(name), icon_url=p.get("icon_url"), avatar=p.get("avatar_file")) if name else None
 
     # Intake ----------------------------------------------------------------------------------
 
+    def owners(self, space: Space) -> frozenset[str]:
+        return space.owner_ids
+
     def trust_of(self, space: Space, user: str) -> str:
-        return "owner" if user in space.owner_ids else "known" if user in space.known else "external"
+        return "owner" if user in self.owners(space) else "known" if user in space.known else "external"
 
     def who(self, space: Space, user: str, trust: str) -> Who:
         return Who(owner=trust == "owner", id=f"{self.platform}:{user}", workspace=space.label)
@@ -394,7 +433,7 @@ class ChatBlock(Block):
 
     async def dm_owner(self, text: str) -> None:
         for space in self.spaces.values():
-            for owner in sorted(space.owner_ids):
+            for owner in sorted(self.owners(space)):
                 with contextlib.suppress(Exception):
                     channel = await self.open_dm(space.label, owner)
                     if channel:
@@ -458,7 +497,7 @@ class ChatBlock(Block):
         private = not target or self.core.visibility.rule(*self.target_resources(target)) == "private"
         if trust == "owner" or not private or not self.channel_shared(space, channel):
             return channel, root, False
-        owner = next(iter(sorted(self.spaces[space].owner_ids)), None)
+        owner = next(iter(sorted(self.owners(self.spaces[space]))), None)
         dm = await self.open_dm(space, owner) if owner else None
         return (dm, None, True) if dm else None
 
@@ -571,12 +610,45 @@ class ChatBlock(Block):
         return str(self.config.get("token_env") or f"{self.name.upper().replace('-', '_')}_BOT_TOKEN")
 
     def token(self) -> str | None:
+        if not self.core.cfg.access_team_domain:
+            return self.core.secret(self.token_env) or self.claims.get("bot_token")
         return self.secret("bot_token", self.token_env)
 
+    def claim_pending(self) -> bool:
+        if not self.core.cfg.access_team_domain:
+            return self.core.claims.pending(self.token_env)
+        return self.claims.pending("bot_token")
+
+    async def connect_steps(self, kind: str, principal: Principal, project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
+        token = bool(self.token())
+        done = [f"{self.manifest.title} bot token: {'saved' if token else 'missing'}.",
+                f"{self.manifest.title} connection: {'connected' if self.connected() else 'not connected'}.",
+                *(f"Space {s.label}: {len(self.owners(s))} owner id(s), project {s.project or 'none'}." for s in self.spaces.values())]
+        if not token:
+            if not principal.is_unrestricted_owner:
+                return {"done": done, "next": [{"by": "person", "do": f"Ask the owner to connect {self.manifest.title} from their own sign-in."}]}
+            steps = " ".join(self.setup().get("steps", [])[:2])
+            return {"done": done, "next": [{"by": "person", "do": f"{steps} Paste the token at the link.", "link": self.claim_link(principal.source)["link"]}]}
+        steps = list(self.missing())
+        if not self.spaces:
+            steps.append(f"Add a space under blocks.{self.name}.spaces with the project it belongs to.")
+        steps += [f"Space {s.label} has no owner ids. {self.owner_hint()}" for s in self.spaces.values()
+                  if not self.owners(s) and f"spaces.{s.label}.owner_ids" not in " ".join(steps)]
+        next_steps = [{"by": "person", "do": step} for step in steps]
+        if self.connected() and self._avatar_status["file"] is None:
+            next_steps.append({"by": "person", "do": f"Set blocks.{self.name}.avatar to an image file to give the bot an icon.", "optional": True})
+        return {"done": done, "next": next_steps}
+
+    def owner_hint(self) -> str:
+        return f"DM the bot once, then copy your id from {self.name}_status into owner_ids."
+
     def claim_link(self, actor: str) -> dict[str, Any]:
-        """A one-time link where the owner enters (or rotates) the bot token behind Access."""
+        """A one-time link where the signed-in owner enters or rotates the bot token."""
         from .claims import ClaimError
 
+        if not self.core.cfg.access_team_domain and self.core.cfg.env.get("SWITCHBOARD_KEY_OWNER"):
+            return {"link": self.core.claims.mint(self.token_env, self.core.base_url), "expires_in_s": CLAIM_TTL_S, "secret": "bot_token",
+                    "next": "Use swb claim with this link to save the token from your terminal."}
         try:
             return self.claims.open("bot_token", actor)
         except ClaimError as e:

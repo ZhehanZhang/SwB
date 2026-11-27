@@ -212,19 +212,19 @@ def test_visibility_tools_flip_resources_and_keep_tools_private(make):
 
 def test_root_page_shows_and_flips_visibility(make):
     core, c = make()
-    page = c.get("/", headers=OWNER)
+    page = c.get("/classic", headers=OWNER)
     assert page.status_code == 200 and "Who can reach what" in page.text
     csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
     assert c.post("/visibility", data={"resource": "target:captain", "visibility": "shared", "csrf": "nope"}, headers=OWNER).status_code == 403
     assert c.post("/visibility", data={"resource": "target:captain", "visibility": "shared", "csrf": csrf}, headers=OWNER).status_code == 303
     assert core.visibility.rule("target:captain") == "shared"
-    assert "target:captain" in c.get("/", headers=OWNER).text
+    assert "target:captain" in c.get("/classic", headers=OWNER).text
     assert c.post("/visibility", data={"resource": "tool:deploy", "visibility": "shared", "csrf": csrf}, headers=OWNER).status_code == 400
 
 
 def test_root_page_mints_and_revokes_codes_with_csrf(make):
     core, c = make()
-    page = c.get("/", headers=OWNER)
+    page = c.get("/classic", headers=OWNER)
     assert "Connected agents" in page.text and "Mint code" in page.text and "Block: capy" in page.text
     csrf = page.text.split('name="csrf" value="')[1].split('"')[0]
     assert c.post("/pairing/code", data={"agent": "codex", "csrf": "nope"}, headers=OWNER).status_code == 403

@@ -14,6 +14,10 @@ class RouteError(ValueError):
     pass
 
 
+def route_audit_name(value: Any) -> str | None:
+    return value if isinstance(value, str) and 0 < len(value) <= 120 and value.isprintable() and "://" not in value else None
+
+
 @dataclass
 class Route:
     id: int
@@ -41,6 +45,15 @@ class Route:
         return {"id": self.id, "destination": self.destination, "agent": self.agent, "project": self.project, "level": self.level,
                 "target": self.target, "defaults": self.defaults, "allow_override": self.allow_override, "note": self.note,
                 "updated_at": self.updated_at, "updated_by": self.updated_by}
+
+    def audit_excerpt(self) -> str:
+        repos = self.defaults.get("repos")
+        name = route_audit_name(self.target.get("name"))
+        captain = self.target.get("captain")
+        if isinstance(captain, str) and captain.startswith("jam_") and (not name or name == captain):
+            name = route_audit_name(f"{self.destination}:captain:{captain}")
+        return json.dumps({"target_name": name, "repo_count": len(repos) if isinstance(repos, list) else 0},
+                          ensure_ascii=False)
 
 
 def _route(r: Any) -> Route:

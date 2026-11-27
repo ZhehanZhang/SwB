@@ -65,7 +65,7 @@ DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHin
 Scope = Annotated[str, Field(description="Required: 'general' for the owner's cross-project memory, or 'project:<slug>'")]
 ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
 Namespace = Annotated[str, Field(description="Inside the scope: profile, decisions, notes, or e.g. notes/meetings; lowercase, up to 3 levels")]
-ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:acme', 'general']. Logged")]
+ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:example', 'general']. Logged")]
 
 
 class FileIn(BaseModel):
@@ -198,8 +198,7 @@ class MCPBlock(Block):
                 raise ToolError(str(e)) from e
 
         def need(p: Principal, scope: str) -> None:
-            if not p.allows(scope):
-                raise ToolError(f"the {p.source} key is limited to {', '.join(p.scopes or ())}; {scope} is outside it")
+            sync(core.check_memory_scope, p, scope)
 
         def unrestricted(p: Principal, what: str) -> None:
             if p.scopes is not None and "*" not in p.scopes:
@@ -296,30 +295,15 @@ class MCPBlock(Block):
 
         @mcp.tool(title="Delete a memory", description="Delete a memory by id when it is wrong or obsolete. History is kept server-side.", annotations=DELETE)
         async def memory_delete(ctx: Context, id: str) -> dict[str, Any]:
-            p = who(ctx)
-            need(p, sync(core.memory.scope_of, id))
-            return sync(core.memory.delete, source=p.source, id=id)
+            return sync(core.delete_memory, who(ctx), id)
 
         @mcp.tool(title="Move a memory to another project", description="Move an entry that landed in the wrong project to project:<slug>. Keeps its id and history. Audited. Use memory_promote to move it to general.", annotations=WRITE_IDEMPOTENT)
         async def memory_move(ctx: Context, id: str, to_scope: Annotated[str, Field(description="'project:<slug>'")]) -> dict[str, Any]:
-            p = who(ctx)
-            if (to_scope or "").strip().lower() == GENERAL:
-                raise ToolError("moving to general is memory_promote, after the owner agrees it applies to every project")
-            frm = sync(core.memory.scope_of, id)
-            need(p, frm)
-            need(p, (to_scope or "").strip().lower())
-            out = sync(core.memory.move, source=p.source, id=id, to_scope=to_scope)
-            core.audit_memory(p, "memory_move", f"{out['from']} -> {out['to']}", id)
-            return out
+            return sync(core.move_memory, who(ctx), id, to_scope)
 
         @mcp.tool(title="Promote a memory to general", description="Move a project entry to general once the owner agrees it applies to every project. Keeps its id and history. Audited.", annotations=WRITE_IDEMPOTENT)
         async def memory_promote(ctx: Context, id: str, to: Literal["general"] = "general") -> dict[str, Any]:
-            p = who(ctx)
-            need(p, sync(core.memory.scope_of, id))
-            need(p, GENERAL)
-            out = sync(core.memory.move, source=p.source, id=id, to_scope=to)
-            core.audit_memory(p, "memory_promote", f"{out['from']} -> {out['to']}", id)
-            return out
+            return sync(core.move_memory, who(ctx), id, to, promote=True)
 
         @mcp.tool(
             title="Session briefing",
