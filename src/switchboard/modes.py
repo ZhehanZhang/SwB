@@ -477,17 +477,11 @@ class ChannelModes:
                     self.audit_action(principal, meta, action, "refused")
                     raise PermissionError("the repository is outside this triage conversation's project")
             return meta
-        public_write = repo is not None or action.endswith("_post")
+        chats = {b.name for b in self.core.blocks.values() if b.manifest.id in ("slack", "discord", "telegram")}
+        public_reply = action == "reply" and handle is not None and (row is None or row["destination"] in chats)
+        public_write = repo is not None or action.endswith("_post") or public_reply
         if public_write and self.core.store.one("SELECT 1 FROM handles WHERE owner=? AND created_at>? "
                                                 "AND json_extract(meta, '$.channel_mode.mode') IN ('assist', 'triage') LIMIT 1",
                                                 (principal.source, self.core.clock() - WAKE_WINDOW)):
-            raise PermissionError("a recent assist or triage wake requires its conversation handle for public posts and repository writes")
-        return None
-        rows = self.core.store.q("SELECT DISTINCT json_extract(meta, '$.channel_mode.project') AS project FROM handles WHERE owner=? "
-                                 "AND created_at>? AND json_extract(meta, '$.channel_mode.mode') IN ('assist', 'triage')",
-                                 (principal.source, self.core.clock() - WAKE_WINDOW))
-        for r in rows:
-            project = self.core.project(r["project"]) if r["project"] else None
-            if project and repo.casefold() in project.links.get("repos", ()):
-                raise PermissionError("a recent assist or triage wake for this repository's project: use its conversation handle")
+            raise PermissionError("a recent assist or triage wake requires its conversation handle for public posts, replies and repository writes")
         return None

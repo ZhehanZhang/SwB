@@ -409,3 +409,36 @@ def test_modes_api_requires_owner_session_and_csrf(make):
     cleared = client.post("/api/modes", headers=headers, json={**args, "mode": "inherit"})
     assert cleared.status_code == 200
     assert cleared.json()["space"] == space_row(status, "discord", "home", DISCORD_CHANNEL)
+
+
+def test_delayed_triage_reply_follows_the_current_mode_and_is_audited(intake):
+    with intake("triage") as chat:
+        chat.send(100, "Bug report")
+        handle = chat.core.store.one("SELECT handle FROM chat_relays")["handle"]
+        before = len(chat.posts)
+        chat.client.portal.call(chat.block.relay, {"kind": "final", "handle": handle, "text": "Thanks, triaged"})
+        assert len(chat.posts) == before + 1
+        [audit] = chat.core.audit.recent(action="triage.reply", outcome="ok")
+        assert audit["ref"].endswith("/100")
+        chat.core.modes.set(principal(), chat.block.name, "home", "watch", chat.channel)
+        chat.client.portal.call(chat.block.relay, {"kind": "final", "handle": handle, "text": "Late answer"})
+        assert len(chat.posts) == before + 1
+        assert chat.core.audit.recent(action="reply_withheld", outcome="refused")
+
+
+def test_recent_restricted_wake_blocks_legacy_chat_replies(intake):
+    with intake("assist") as chat:
+        chat.send(100, "Question from a stranger")
+        handle = chat.core.store.one("SELECT handle FROM chat_relays")["handle"]
+        owner = chat.core.inbox.handle(handle)["owner"]
+        chat.core.store.x("INSERT INTO handles(handle, owner, destination, ref, project, meta, created_at, open, status) "
+                          "VALUES ('h_legacy', ?, ?, 'old', NULL, '{}', ?, 1, 'open')", (owner, chat.block.name, chat.core.clock() - 7200))
+        refused = call(chat.client, STATIC_KEY, "reply", {"conversation": "h_legacy", "text": "public write"})
+        assert "requires its conversation handle" in error_text(refused)
+
+
+def test_mode_project_reaches_the_send(intake):
+    with intake("assist") as chat:
+        chat.send(100, "Question from a stranger")
+        handle = chat.core.store.one("SELECT handle FROM chat_relays")["handle"]
+        assert chat.core.inbox.handle(handle)["project"] == "example"
