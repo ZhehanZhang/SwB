@@ -186,6 +186,7 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
         server.should_exit = True
         await task
 
+
 async def test_inbox_events_skips_context_items(tmp_path, capy):
     from conftest import new_core
 
@@ -209,7 +210,7 @@ async def test_inbox_events_skips_context_items(tmp_path, capy):
                     if line == "event: item":
                         data = json.loads((await anext(lines))[6:])
                         break
-            assert (data["kind"], data["text"]) != ("context", "context only") and data["text"] == "after context"
+            assert data["text"] == "after context"
     finally:
         server.should_exit = True
         await task
