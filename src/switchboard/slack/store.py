@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
+from ..store import open_database
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY,
@@ -71,11 +73,7 @@ class Store:
     def __init__(self, path: str | Path, clock: Callable[[], float] = time.time):
         self.clock = clock
         self._lock = threading.Lock()
-        if str(path) != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
-        self.db.row_factory = sqlite3.Row
-        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db = open_database(path)
         self.db.executescript(SCHEMA)
         if "requester" not in {row["name"] for row in self.db.execute("PRAGMA table_info(write_requests)")}:
             self.db.execute("ALTER TABLE write_requests ADD COLUMN requester TEXT")

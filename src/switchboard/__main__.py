@@ -4,11 +4,14 @@ import argparse
 import logging
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from socket import socket
 
 import uvicorn
 from uvicorn.main import STARTUP_FAILURE
+
+from .config import Instance
 
 SERVER_COMMANDS = ("serve", "export", "log", "config", "blocks", "targets")
 
@@ -66,7 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
-         data_dir: Path | None = None, announce: bool = False) -> None:
+         instance: Instance | None = None, announce: bool = False,
+         on_home_fallback: Callable[[Path, Path], None] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.cmd == "log" and not 1 <= args.limit < 2 ** 63:
@@ -76,14 +80,14 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     from .core import Switchboard
     from .deployment import serve_env
 
+    serving = args.cmd in (None, "serve")
     env = dict(os.environ)
-    instance_config = None
-    if (directory := getattr(args, "dir", None)) is not None:
-        from .cli import CONFIG, CliError, _read_env
+    directory = getattr(args, "dir", None)
+    if directory is not None or not serving:
+        from .cli import CliError, _read_env
 
-        base = directory.resolve()
-        instance_config = base / CONFIG
-        data_dir = base / "data"
+        base = directory.resolve() if directory is not None else Path.cwd()
+        instance = Instance(base, explicit=True) if directory is not None else Instance(base, bare_home=False)
         try:
             env = {**_read_env(base / ".env"), **env}
         except (CliError, OSError, UnicodeError):
@@ -92,25 +96,24 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     logging.basicConfig(level=env.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     if args.cmd == "config":
-        path = config_path(args.file or instance_config, env)
+        path = config_path(args.file, env, instance=instance if args.file is None else None)
         if path is None or not path.is_file():
             parser.error("Choose an existing config file.")
         print(migrate_text(path.read_text()), end="")
         return
 
-    serving = args.cmd in (None, "serve")
     port = int(env.get("PORT", "8000")) if serving else 0
     host, origin = bind_address(env, port, host=getattr(args, "host", None))
     loopback_origin = origin if host in LOOPBACK_HOSTS and port else None
     try:
-        deployment_env = serve_env(env) if serving else None
+        deployment_env = serve_env(env, instance=instance) if serving else None
     except ConfigError as error:
         parser.exit(2, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
         parser.exit(2, f"swb: Check the owner key on the volume ({type(error).__name__}).\n")
     try:
-        core = Switchboard(config_path=instance_config, data_dir=data_dir, tunnel_url=tunnel_url,
-                           env=deployment_env if deployment_env is not None else env, loopback_origin=loopback_origin)
+        core = Switchboard(tunnel_url=tunnel_url, env=deployment_env if deployment_env is not None else env,
+                           loopback_origin=loopback_origin, instance=instance)
     except ConfigError as error:
         parser.exit(2, f"swb: {error}\n")
     if args.cmd == "blocks":
@@ -169,6 +172,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         "forwarded_allow_ips": env.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,
     }
+    if on_home_fallback is not None and core.cfg.legacy_instance_data is not None:
+        on_home_fallback(core.data_dir, core.cfg.legacy_instance_data)
     if announce:
         print(f"MCP URL: {core.cfg.public_url or origin}/mcp", flush=True)
     if listener is None:
