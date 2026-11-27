@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.testclient import TestClient
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, acall, arpc, base_config, call, error_text, eventually, new_core, payload, rpc
+from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, acall, arpc, base_config, call, error_text, eventually, new_core, payload, principal, rpc
 from switchboard.app import create_app
 from switchboard.auth import sha
 from switchboard.blocks import BlockError
@@ -252,13 +252,27 @@ async def test_companion_routes_refuse_and_audit_conflicting_sessions_and_unboun
         send = payload(await acall(client, STATIC_KEY, "send", {"to": entry["address"], "task": "Fixture task."}))
         answer = {"conversation": send["conversation"], "session": "session_1", "agent": "codex", "text": "Fixture answer."}
         assert (await emit(second, "reply", answer)).status_code == 404
+        for _ in range(2):
+            assert (await emit(first, "reply", {**answer, "session": "session_2"})).status_code == 404
         assert (await emit(first, "reply", {**answer, "conversation": "h_unused"})).status_code == 404
+        assert (await emit(first, "session", {**report, "state": "blocked"})).status_code == 200
+        blocked = payload(await acall(client, STATIC_KEY, "send", {"to": entry["address"], "task": "Fixture task."}))
+        assert blocked["mailbox"] and not blocked["woke"]
+        assert (await core.verb(principal("codex"), "reply", blocked["conversation"], text="Mailbox answer."))["delivered"]
         assert (await emit(first, "reply", answer)).status_code == 200
-        assert (await emit(first, "reply", answer)).status_code == 404
-        assert {(row["target"], row["detail"]) for row in core.audit.recent(action="companion_emit", outcome="refused")} == {
+        for data in (answer, {**answer, "conversation": blocked["conversation"]}):
+            response = await emit(first, "reply", data)
+            assert response.status_code == 404 and response.json() == {"error": "Local wake reply unavailable."}
+        rows = core.audit.recent(action="companion_emit", outcome="refused")
+        assert {row["client"] for row in rows} == {"127.0.0.1"}
+        assert len(rows) == 6
+        assert {(row["target"], row["detail"]) for row in rows} == {
             (second["companion_id"], "Local session belongs to another companion."),
-            (second["companion_id"], "Local wake reply unavailable."),
-            (first["companion_id"], "Local wake reply unavailable."),
+            (second["companion_id"], "Use the original local session."),
+            (first["companion_id"], "Use the original local session."),
+            (first["companion_id"], "Use a known local conversation."),
+            (first["companion_id"], "A local reply requires an active wake."),
+            (first["companion_id"], "A local reply already exists."),
         }
 
 

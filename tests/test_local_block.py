@@ -6,7 +6,7 @@ from hashlib import sha256
 import pytest
 from starlette.testclient import TestClient
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, acall, base_config, call, new_core, payload, principal, rpc
+from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, acall, base_config, call, error_text, new_core, payload, principal, rpc
 from switchboard.app import create_app
 from switchboard.auth import Principal
 from switchboard.blocks import BLOCKS, BlockError
@@ -114,16 +114,55 @@ async def test_send_mailbox_first_and_fallbacks(amake, monkeypatch):
         await emit(core, linked, "hooks.session", {**REPORT, "harness": "gemini"})
         out = await core.send(sender, task="Please review.", to="local:session:gemini:pane_1")
         assert out["agent"] == "gemini" and not out["woke"] and "mailbox" in out["note"] and len(attempts) == 3
-        out = await core.send(sender, task="Please review.", to="local:session:codex:missing")
-        assert out["agent"] == "codex" and not out["woke"] and "session unavailable" in out["note"]
+        with pytest.raises(BlockError, match=r"Local session is offline\."):
+            await core.send(sender, task="Please review.", to="local:session:codex:missing")
+        assert not core.inbox.read(owner="codex")["items"]
         await emit(core, linked, "herdr.session", {**REPORT, "state": "idle", "agent": "not-registered"})
         out = await core.send(sender, task="Please review.", to=TARGET)
         assert out["agent"] == "owner" and not out["woke"] and core.inbox.handle(out["handle"])["owner"] == "owner"
         await emit(core, linked, "herdr.session", REPORT)
-    out = await core.send(sender, task="Please review.", to=TARGET)
-    assert out["agent"] == "claude-code" and not out["woke"] and OFFLINE in out["note"]
+    with pytest.raises(BlockError, match=r"Local session is offline\."):
+        await core.send(sender, task="Please review.", to=TARGET)
     audited = core.audit.recent(destination="local", action="wake")
-    assert len(audited) == 8 and audited[0]["outcome"] == "mailbox" and audited[-1]["outcome"] == "ok"
+    assert len(audited) == 8 and audited[0]["outcome"] == "refused" and audited[-1]["outcome"] == "ok"
+
+
+async def test_unreported_and_offline_session_sends_leave_mailboxes_unchanged(amake, monkeypatch):
+    core, client = await amake(config=CFG)
+    wakes = []
+
+    async def invoke(companion, capability, action, args, *, timeout_s, principal):
+        wakes.append((companion, capability, action, args["session"]))
+        return {}
+
+    async def send(to):
+        return await acall(client, STATIC_KEY, "send", {"to": to, "task": "Please review."})
+
+    monkeypatch.setattr(core.companions, "invoke", invoke)
+    async with device(core, "herdr") as linked:
+        companion = linked.client_id.removeprefix("companion:")
+        address = f"local:session:{companion}:herdr:pane_1"
+        assert "local" not in core.blocks
+        assert "Local session is offline." in error_text(await send(address))
+        await emit(core, linked, "herdr.session", REPORT)
+        unreported = f"local:session:{companion}:herdr:pane_2"
+        assert "Local session is offline." in error_text(await send(unreported))
+        assert not core.inbox.handles() and not wakes
+        out = payload(await send(address))
+        assert out["delivered"] and out["mailbox"] and out["woke"]
+        assert wakes == [(companion, "herdr", "prompt", "pane_1")]
+    assert "Local session is offline." in error_text(await send(address))
+    rows = core.audit.recent(destination="local", action="wake", outcome="refused")
+    assert [(row["target"], row["detail"]) for row in rows] == [
+        (address, "Local session is offline."),
+        (unreported, "Local session is offline."),
+        (address, "Local session is offline."),
+    ]
+    [handle] = core.inbox.handles()
+    assert handle["handle"] == out["handle"] and handle["owner"] == "claude-code"
+    [item] = core.inbox.read(owner="claude-code")["items"]
+    assert item["handle"] == out["handle"]
+    assert not core.inbox.read(owner="owner")["items"]
 
 
 async def test_local_visibility_uses_session_and_key_grants_use_backing_agent(amake, monkeypatch):
@@ -239,15 +278,15 @@ async def test_known_local_session_is_offline_after_restart(amake):
 
 
 @pytest.mark.parametrize("field", ["session", "harness"])
-async def test_local_session_report_fields_require_single_segments(amake, field):
+@pytest.mark.parametrize("malformed", [".", "..", "...", ".hidden", "dir/session", "dir\\session", "herdr:session"])
+async def test_local_session_report_fields_require_single_segments(amake, field, malformed):
     core, client = await amake(config=CFG)
     code = core.companions.mint(PUBLIC, origin="test", source="owner", client="local")["code"]
     paired = core.companions.pair({"code": code, "name": "Device", "platform": "linux",
                                   "capabilities": [{"id": "herdr", "version": "1", "title": "Herdr", "actions": ["prompt"]}]},
                                  client="local")
-    async with device(core, "hooks") as other, aclosing(core.companions.events(paired["companion_id"], 3600)) as stream:
+    async with aclosing(core.companions.events(paired["companion_id"], 3600)) as stream:
         await anext(stream)
-        malformed = f"{other.client_id.removeprefix('companion:')}:claude-code:s-dev2"
         response = await client.post("/companion/emit", headers={"Authorization": f"Bearer {paired['device_key']}"},
                                      json={"capability": "herdr", "kind": "herdr.session", "payload": {**REPORT, field: malformed}})
     assert response.status_code == 400 and response.json()["error"] == "Invalid local session report."

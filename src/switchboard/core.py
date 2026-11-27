@@ -115,12 +115,13 @@ class Switchboard:
         self._avatar_files: AvatarFiles | None = None
         opts = {**(destination_options or {}), **(block_options or {})}
         self.blocks: dict[str, Block] = {}
+        self._on_demand: dict[str, Block] = {}
         self.modes = ChannelModes(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
         for use, block_type in on_demand_blocks().items():
             if use not in self.cfg.block_env and not any(issubclass(configured, block_type) for configured in types.values()):
-                block_type(self, {})
+                self._on_demand[use] = block_type(self, {})
         for b in self.blocks.values():
             b.bind()
         self._seed_routes(self.cfg.routes)
@@ -386,7 +387,7 @@ class Switchboard:
         return True
 
     def destination(self, name: str) -> Block:
-        d = self.blocks.get(name)
+        d = self.blocks.get(name) or self._on_demand.get(name)
         if d is None:
             raise CoreError(f"block {name!r} is not configured; configured: {', '.join(self.visible_blocks()) or 'none'}")
         return d
@@ -543,7 +544,7 @@ class Switchboard:
     async def resolve_to(self, to: str) -> Address:
         """A send's to: an address, a legacy captain:/project:/thread: target, an agent name, a block name or a slug."""
         text = (to or "").strip()
-        addr = tgt.parse(text, self.blocks)
+        addr = tgt.parse(text, self.blocks.keys() | self._on_demand.keys())
         if addr is not None:
             if addr.block == "project" and not self._is_project(addr.id):
                 owner = self._kind_owner("project")
