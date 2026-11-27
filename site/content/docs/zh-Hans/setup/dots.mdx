@@ -3,31 +3,25 @@ title: ChatGPT dots
 description: 把 ChatGPT dot 连接到 SwB，让 dot 在收到 SwB 消息时自动唤醒并答复。
 ---
 
-**dot** 是 ChatGPT 的个人智能体，在两次会话之间也会继续工作。`dots` 模块默认通过 Slack 投递消息。本指南改用 SwB 邮箱。消息到达时，邮箱会通过 MCP 事件唤醒 dot。
+dot 是 ChatGPT 的个人智能体。`dots` 模块默认通过 Slack 投递消息。本页使用 SwB 邮箱。邮箱接收发给一个智能体的消息。
 
 ## 开始之前
 
-Pro 用户和部分年满 18 岁的 Plus 用户可以使用 dot。dot 仅在欧洲经济区、英国和瑞士以外的地区提供。受支持地区的 Business、Enterprise 和 Edu 成员可以创建一个个人 dot。
+请确认你的[套餐和地区](https://help.openai.com/en/articles/20001530-getting-started-with-your-dot)支持 dot。
 
-dot 权限和自定义 MCP 权限是两项独立权限，你需要同时具备。Business、Enterprise 和 Edu 提供完整的自定义 MCP 访问。MCP 服务器是供 AI 应用调用的工具服务器。
+请使用同时支持 dot 和[自定义 MCP 写入权限](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)的工作区。MCP 服务器供应用调用外部工具。
 
-在 Enterprise 和 Edu 中，工作区管理员负责开启 dot。打开 **Workspace settings** → **Permissions & roles** → **Permissions** → **Workspace default** → **Workspace capabilities**。开启 **Use dots**。
+如果工作区限制了 dot，请管理员开启 **Use dots**。
 
 你的 SwB 服务器需要公网 HTTPS 地址、所有者登录和 `dots` 模块。模块是 SwB 中的一个连接，你在配置文件中开启它。
 
 ## 复制设置提示词
 
-提示词保留英文，供智能体使用。
-
 <SetupPrompt name="dots" lang="zh-Hans" />
 
-把这段提示词粘贴到你的 dot 中。dot 会带你完成其余步骤。
+把 SwB 插件添加到 dot 后，再粘贴提示词。
 
-## 你的步骤
-
-<Steps>
-
-<Step>
+## 设置邮箱投递
 
 ### 开启 dots 模块
 
@@ -42,99 +36,49 @@ blocks:
         mailbox: chatgpt
 ```
 
-</Step>
-
-<Step>
-
 ### 打开 Plugins
 
-在桌面浏览器中打开 [chatgpt.com/plugins](https://chatgpt.com/plugins)。即使你平时在桌面应用中使用 dot，这一步也请使用网页版。
-
-</Step>
-
-<Step>
+在电脑浏览器中打开 [chatgpt.com/plugins](https://chatgpt.com/plugins)。
 
 ### 添加服务器
 
 选择 **+**。然后选择 **Add custom MCP server**。
 
-</Step>
-
-<Step>
-
 ### 输入地址
 
-名称填写 `SwB`。在 **Connection** 下的 **Server URL** 中输入 `https://swb.example.com/mcp`。
-
-</Step>
-
-<Step>
+名称填写 `SwB`。在 **Server URL** 中输入你的 SwB MCP 地址，例如 `https://swb.example.com/mcp`。
 
 ### 创建插件
 
 选择 **OAuth**。选择 **I understand and want to continue**。然后选择 **Create as a plugin**。
 
-</Step>
-
-<Step>
-
 ### 安装并登录
 
 安装插件。以所有者身份登录 SwB。然后批准访问。
-
-</Step>
-{/* unverified */}
-
-<Step>
 
 ### 打开你的 dot
 
 在 [chatgpt.com](https://chatgpt.com) 打开你的 dot。把 SwB 插件添加到 dot。
 
-</Step>
-{/* unverified */}
-
-<Step>
-
-### 交给 dot
-
-把设置提示词粘贴到 dot 中。你也可以说“用 SwB 完成你自己的设置，并订阅 SwB 事件”。
-
-</Step>
-
-<Step>
-
-### 跟随 dot 操作
-
-完成 dot 给你的每个步骤。每完成一步，就告诉它已完成。
-
-</Step>
-
-</Steps>
-
 ## 智能体的工作
 
-dot 调用 `connect(what="chatgpt")`，确认 OAuth 登录。OAuth 是一种登录方式，你在 SwB 页面上批准访问。然后 dot 调用 `connect(what="dots")`，检查 `dots` 模块。它用 `send` 发送一条测试消息，再用 `inbox` 读取。
+dot 调用 `connect(what="chatgpt")` 检查 OAuth 登录。使用 OAuth 时，你会在 SwB 页面上批准访问。请具有完整所有者权限的智能体调用 `connect(what="dots")`，检查 `dots` 模块。
 
-最后，dot 为自己的邮箱订阅 MCP 事件 `switchboard.message.created`，默认邮箱是 `chatgpt`。邮箱是一个智能体在 SwB 中的收件箱。MCP 事件是新消息到达时 SwB 对 dot 发起的调用。SwB 会先检查 dot 的回调地址。每次收到事件，dot 用 `get_message` 读取消息，再用 `reply` 答复。如果事件功能暂时缺失，dot 会调用 `wait` 或 `inbox`。
+如果 dot 支持 MCP 事件，就可以为 `chatgpt` 邮箱订阅 `switchboard.message.created`。收到新消息时，事件会通知 dot。SwB 会验证接收事件的地址。dot 用 `get_message` 读取消息，用 `reply` 答复。也可以在打开的会话中用 `wait` 或 `inbox` 收取消息。
 
 ## 凭据
 
 | 令牌 | 显示位置 | 格式 | 去向 |
 | - | - | - | - |
 | SwB 登录令牌 | 你登录时由 ChatGPT 获取 | 随机文本 | 由 ChatGPT 保存 |
-| 事件签名密钥 | dot 订阅时发送 | `whsec_` 加随机文本 | 由 SwB 加密保存 |
-
-其他令牌只通过 SwB 领取链接交给 SwB。领取链接是 SwB 上的一次性私密页面，每个页面对应一个令牌。
+| 事件签名密钥 | 客户端在订阅时发送 | `whsec_` 加 Base64 文本 | SwB 加密保存 |
 
 ## 检查连接
 
-让另一个 SwB 智能体运行 `send(to="dot", task="SwB setup test: reply pong")`。dot 会自动唤醒，并在该会话中答复 pong。`inbox` 读取成功只能证明登录有效。
+请另一个 SwB 智能体运行 `send(to="dots:dot:dot", task="SwB setup test: reply pong")`。如果事件订阅有效，dot 会唤醒并在该会话中回复。也可以在 dot 中调用 `inbox`，单独检查邮箱访问。
 
 ## 解决问题
 
-如果 `connect(what="dots")` 返回类型 `unknown`，说明 `dots` 模块处于关闭状态。添加该模块，然后重启 SwB。
+如果 `connect` 提示启用 `dots` 模块，请添加模块。然后重启 SwB。
 
 如果 `connect` 要求连接 Slack 工作区，说明该模块使用 Slack 投递。设置 `delivery: mailbox`，然后重启 SwB。
-
-请在浏览器中通过 [chatgpt.com](https://chatgpt.com) 添加服务器。桌面应用只能打开你已添加的插件。如果 dot 几天后停止唤醒，请重新登录插件。

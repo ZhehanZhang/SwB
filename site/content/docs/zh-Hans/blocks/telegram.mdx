@@ -3,23 +3,22 @@ title: Telegram
 description: 把 Telegram 消息路由给智能体并发布答复。
 ---
 
-Telegram 使用长轮询。机器人从你的服务器访问 Telegram，因此 SwB 可以留在私有地址上。
+SwB 主动向 Telegram 获取新消息。SwB 服务器可以使用私有地址。
 
 ## 创建机器人
 
-在 [@BotFather](https://t.me/BotFather) 中发送 `/newbot`。请智能体连接 Telegram。智能体调用 `telegram_provision` 并给你一个领取链接。打开链接并粘贴机器人令牌。你也可以在服务器的环境变量中设置 `TELEGRAM_BOT_TOKEN`。
+在 [@BotFather](https://t.me/BotFather) 中发送 `/newbot`。请智能体连接 Telegram。智能体调用 `telegram_provision` 并给你一个领取链接。打开链接并粘贴机器人令牌。
 
 ## 把机器人添加到群组
 
 把机器人添加到群组。在群组中发送 `/swb@<bot username>`。`telegram_status` 随后在 `setup.seen_chats` 中显示该群组的聊天 id。把该 id 填入空间的 `chats`。
 
-打开机器人的私聊并点击 Start。把你自己的聊天 id 填入 `owner_ids`。
+打开与机器人的私聊。向它发送一条消息。在 `setup.seen_chats` 中找到你的私聊 ID。将该 ID 填入 `owner_ids`。
 
 ```yaml
 blocks:
   telegram:
     use: telegram
-    token_env: TELEGRAM_BOT_TOKEN
     agents: {claude: [home]}
     spaces:
       home:
@@ -30,7 +29,7 @@ blocks:
 
 ## 从 Telegram 发送
 
-给机器人发私信，提及机器人，或使用 `/swb <target> <message>`。回复机器人的消息发往同一个目标。答复在第一行用粗体显示目标的名称。
+给机器人发私信、提及机器人，或使用 `/swb <target> <message>`。要继续会话，请直接回复机器人的答复。启用 `persona_prefix` 后，智能体的答复可以用粗体显示其名称。
 
 要让机器人读取群组中的每条消息，请在 @BotFather 中用 `/setprivacy` 关闭隐私模式。然后把机器人移出群组，再重新添加。
 
@@ -41,7 +40,7 @@ blocks:
 | `blocks.telegram` | 设置 Telegram 机器人及其空间 |
 | `blocks.telegram.use` | 加载 `telegram` 模块 |
 | `blocks.telegram.enabled` | 设为 `true` 启用模块，设为 `false` 关闭模块 |
-| `blocks.telegram.token_env` | 存放机器人令牌的环境变量名。默认值为 `TELEGRAM_BOT_TOKEN` |
+| `blocks.telegram.token_env` | 存放机器人令牌的环境变量名 |
 | `blocks.telegram.dm_space` | 指定私聊所用的路由和所有者设置来自哪个空间。默认使用配置中的第一个空间 |
 | `blocks.telegram.dm_mode` | 其他人发来私信时的处理模式。设为 `watch` 收集消息以生成摘要，设为 `off` 跳过消息 |
 | `blocks.telegram.ack_reaction` | 收到发给机器人的消息时用来确认的表情。设为 `null` 可关闭此反应 |

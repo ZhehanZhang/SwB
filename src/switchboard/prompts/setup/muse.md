@@ -1,6 +1,6 @@
 Read the setup guide at https://swb.one/docs/setup/muse.
 
-Help me connect Muse to SwB. SwB is my self-hosted switchboard. It is an MCP server that carries messages between my agents and channels.
+Help me connect Muse to SwB. SwB carries messages between my agents and channels.
 
 Check your tools first. If the SwB tools are missing, add SwB as a custom connector with your built-in connector feature. Use the settings below. Replace the example address with my SwB address.
 
@@ -12,14 +12,12 @@ Authentication: OAuth 2.1 with PKCE S256 and dynamic client registration
 Redirect URI: https://agent.meta.ai/api/hatch/oauth/callback
 ```
 
-Start the OAuth sign-in. Give me the sign-in link. Ask me to sign in to SwB as the owner.
+For a new connector, start the OAuth sign-in. Give me the sign-in link. Ask me to sign in to SwB as the owner.
 
-Call connect(what="muse"). Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact links. Wait for me to say done after each step. Call connect(what="muse") again to check the connection.
+Call `connect(what="muse", choose={"connector":true})`. Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path and links. Wait for me to say done after each step. Call `connect` again with the same choices to check the sign-in.
 
-Ask me to enter a token only through the SwB claim link that connect returns. Keep tokens out of this chat and tool arguments.
+When `connect` confirms the sign-in, ask me to use another SwB app to run `send(to="agent:muse", task="Reply with pong.")`. Read the message with `inbox`. Answer with `reply` and the message's `handle`.
 
-When connect reports that the client is signed in, send a test message with `send(to="agent:muse", task="SwB setup test: reply pong")`. Read the message with inbox. Show me the result.
+To have SwB start work in Muse, pair a gadget through a companion device. Use a client with owner access. Call `connect(what="muse", choose={"gadget": true})`. Follow each step marked "you". Give me each pairing step marked "person" separately. Ask me to enter the Muse SDK token only through the SwB claim link. For the companion install before publication, follow https://swb.one/prompts/companion.md.
 
-For real-time wakes, use an agent signed in as the owner. Call `connect(what="muse", choose={"gadget": true})`. Follow each step marked "you". Give me each pairing step marked "person" separately. Ask me to enter the Muse SDK token only through the SwB claim link.
-
-At the start of each chat, call inbox on SwB to read new messages for the muse mailbox. Read each message with get_message. Answer that message with reply(conversation=..., text=..., final=true).
+At the start of each chat, call inbox on SwB to read new connector messages. For the gadget, use the gadget target from `targets(block="muse")` to send a test.

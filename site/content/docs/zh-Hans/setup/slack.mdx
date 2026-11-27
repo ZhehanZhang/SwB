@@ -5,80 +5,54 @@ description: 用机器人和你自己的 Slack 账号把 Slack 工作区连接�
 
 SwB 通过一个 Slack 应用读取和发送 Slack 消息。你用清单创建这个应用。清单是一个文件，里面写好了应用的全部设置。
 
-这个应用使用 Socket Mode。Socket Mode 是 SwB 主动向 Slack 建立的连接，所以 SwB 服务器可以留在私有地址上。
+应用使用 Socket Mode。SwB 主动连接 Slack，因此服务器可以使用私网地址。
 
 ## 开始之前
 
-你需要目标工作区中的 Slack 账号，并且有权在该工作区创建和安装应用。在 Enterprise Grid 组织中，应用需要 Org Owner 或 Org Admin 批准。你还需要以所有者身份登录 SwB 服务器，例如 `https://swb.example.com`。
+请使用有权在工作区创建和安装应用的 Slack 账号。你的组织可能要求审批应用。请以所有者身份登录 SwB。
 
 ## 复制设置提示词
 
-提示词保留英文，供智能体使用。
-
 <SetupPrompt name="slack" lang="zh-Hans" />
 
-把提示词粘贴给你的智能体。智能体会带你完成其余步骤。
+把提示词粘贴到 SwB 所有者客户端。
 
-## 你的步骤
+## 设置 Slack 应用
 
-<Steps>
-<Step>
 ### 打开 Slack 应用设置
 
 打开 [Slack 应用设置](https://api.slack.com/apps)。点击 **Create New App** → **From a manifest**。
-</Step>
-<Step>
 ### 选择工作区
 
 选择你的工作区。点击 **Next**。
-</Step>
-<Step>
 ### 粘贴清单
 
 选择 **YAML**。复制下方的一份应用清单。粘贴完整内容。
-</Step>
-<Step>
 ### 创建应用
 
 点击 **Next** → **Create**。
-</Step>
-<Step>
 ### 创建应用级令牌
 
 点击 **Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**。输入令牌名称。
-</Step>
-<Step>
 ### 添加权限范围
 
 点击 **Add Scope** → `connections:write`。点击 **Generate**。
-</Step>
-<Step>
 ### 安装应用
 
 点击 **Install App** → **Install to Workspace**。以 SwB 代表的 Slack 用户身份点击 **Allow**。
-</Step>
-<Step>
 ### 在 Enterprise Grid 中获得批准
 
-如果 Slack 要求批准，请把应用交给 Org Owner。Org Owner 在 **Organization settings** → **Integrations** → **Manage Apps** → **Approve an app** 中批准它。
-</Step>
-{/* unverified */}
-<Step>
+如果 Slack 要求审批，请把应用交给工作区或组织管理员。
+
 ### 保存令牌
 
-打开智能体给你的 SwB 领取链接。把每个 Slack 令牌粘贴到对应字段。
-</Step>
-<Step>
+打开该工作区的领取链接。把每个 Slack 令牌粘贴到对应字段。
 ### 邀请机器人
 
-打开每个要接入 SwB 的 Slack 频道。在频道中发送 `/invite @<bot name>`。
-</Step>
-<Step>
+如果使用机器人，请在每个要接入 SwB 的频道发送 `/invite @<bot name>`。
 ### 找到工作区 ID
 
-在桌面浏览器中打开 Slack。把地址中以 `T` 开头的那一段交给智能体。
-</Step>
-</Steps>
+在浏览器中打开 Slack。把地址中的工作区 ID 发给智能体。ID 以 `T` 开头。
 
 ## 应用清单
 
@@ -184,9 +158,9 @@ settings:
 
 ## 智能体的工作
 
-智能体调用 `connect`，参数为 `what="slack"`。SwB 列出每个工作区还缺哪些令牌，并返回一个领取链接，一次收齐这些令牌。
+智能体调用 `connect(what="slack")`。SwB 检查缺少哪些令牌，再为对应的工作区返回领取链接。
 
-智能体在 `config/switchboard.yaml` 的 `blocks.slack.workspaces` 下填入工作区 ID 和令牌名称。它在 `blocks.slack.agents` 下为自己的智能体名称添加授权，以便调用 `slack_workspaces`。如果需要你编辑配置文件，智能体会提供 YAML。
+智能体在 `config/switchboard.yaml` 的 `blocks.slack.workspaces` 下添加工作区。它填写工作区 ID 和令牌名称，然后在 `blocks.slack.agents` 下授予访问权限。
 
 此示例用机器人和你的账号连接一个工作区。把 `T0DEMO0001` 换成你的工作区 ID。
 
@@ -198,21 +172,21 @@ blocks:
     workspaces:
       example:
         team_id: T0DEMO0001
-        app_token_env: SLACK_EXAMPLE_APP_TOKEN
+        app_token_env: SWB_SLACK_EXAMPLE_APP_TOKEN
         identities:
           bot:
-            token_env: SLACK_EXAMPLE_BOT_TOKEN
+            token_env: SWB_SLACK_EXAMPLE_BOT_TOKEN
           user:
-            token_env: SLACK_EXAMPLE_USER_TOKEN
+            token_env: SWB_SLACK_EXAMPLE_USER_TOKEN
     agents:
       claude:
         workspaces:
           example: [bot, user]
 ```
 
-授权写明使用 Slack 的智能体。使用 `switchboard_status` 显示的名称，例如 `claude` 或 `chatgpt`。每个智能体添加一项授权。工作区配置和授权使用同一个工作区名称。如果只用你的账号，在 `team_id` 同级添加 `user_only: true`。删除 `identities` 下的 `bot` 项。把授权中的身份设为 `[user]`。
+使用 `switchboard_status` 显示的智能体名称。每个智能体添加一项授权。工作区配置和授权使用同一个工作区名称。如果只用你的账号，在 `team_id` 同一级添加 `user_only: true`。删除 `identities` 中的 `bot`。把授权中的身份设为 `[user]`。
 
-SwB 要求重启时，智能体会告诉你。重启后，它用 `slack_workspaces` 检查每个身份。身份指机器人或你自己的账号。最后，它用 `slack_post` 发送一条测试消息。
+`connect` 提示后，重启 SwB。智能体可以用 `slack_workspaces` 检查每个身份。身份指机器人或你的账号。
 
 ## 凭据
 
@@ -222,13 +196,11 @@ SwB 要求重启时，智能体会告诉你。重启后，它用 `slack_workspac
 | 机器人令牌 | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | 以 `xoxb-` 开头 | SwB 领取链接 |
 | 用户令牌 | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | 以 `xoxp-` 开头 | SwB 领取链接 |
 
-工作区 ID 和频道 ID 只是 Slack 中位置的名称，可以放心写进配置文件。
-
 ## 检查连接
 
-请智能体再次调用 `connect`。设置完成后，它会报告 `connected`。`slack_workspaces` 中每个身份显示 `ready`，Socket Mode 显示 `connected`。
+再次调用 `connect(what="slack")`，确认结果为 `connected`。调用 `slack_workspaces`。确认各身份的 `ready` 和工作区的 `connected` 均为 `true`。
 
-在频道中提及机器人，并写上目标名称。智能体用 `slack_events` 或 `slack_wait` 可以看到这条消息。
+使用机器人时，在频道中提及机器人并写上目标名称。请智能体用 `slack_events` 或 `slack_wait` 查看消息。要测试发送，请让有写入权限的身份用 `slack_post` 发消息。
 
 ## 解决问题
 

@@ -1,33 +1,35 @@
 ---
 title: Grok
-description: 連接 Grok，並用 Grok routine 喚醒它。
+description: 在瀏覽器中連接 Grok，或用 routine 喚醒 Grok Bot。
 ---
 
 ## 新增連接器
 
-在 [grok.com](https://grok.com) 開啟 Connectors → New Connector → Custom。輸入你的公開 MCP 位址，並以 OAuth 登入。
+依 [Grok 設定](/zh-Hant/docs/setup/grok)在瀏覽器中連接 Grok。桌面版是另一個應用程式，請依 [Grok Bot 設定](/zh-Hant/docs/setup/grok-bot)操作。
 
 ## 用 routine 喚醒 Grok Bot
 
-請代理連接 Grok Bot，或在終端機執行 `swb connect grok-bot` 取得 routine 的提示詞。
+請代理連接 Grok Bot，也可以在終端機執行 `swb connect grok-bot`。依設定提示操作，取得 routine 的提示詞。
 
-建立 Grok Bot routine 時，加入自訂 webhook 觸發條件和這段提示詞。用下方指令向 SwB 註冊 routine。將 `example` 換成你的專案名稱。
+用提示詞建立帶有 Webhook 觸發條件的 Grok Bot routine。SwB 向該網址送出請求時，routine 就會啟動。將 `example` 換成仍在使用的 SwB 專案簡稱。執行下方指令註冊 routine。
 
 ```bash
 swb connect grok-bot --choose name=project-triage project=example auth=key
 ```
 
-Webhook 網址和金鑰各有一個領取連結。開啟對應的連結，貼上各自的值。再次執行同一條指令，取得測試指令。收到 `pong` 就表示 routine 已可使用。
+Webhook 網址和金鑰各有一個領取連結。用對應的連結儲存各自的值。再次執行上方指令，取得測試呼叫。請代理執行測試並查看 `pong` 回覆。
 
 ## 喚醒如何運作
 
-SwB 發出 webhook 請求來啟動 routine。使用 `auth=key` 時，SwB 預設以 bearer 權杖傳送金鑰。使用 `auth=signature` 時，SwB 會為請求加上簽章。請求包含訊息內容、對話、專案、傳送者及信任等級。routine 會透過 SwB 連接器回覆。
+使用 `auth=key` 時，SwB 預設在 `Authorization` 標頭送出金鑰。使用 `auth=signature` 時，SwB 會為請求加上簽章。請求包含內文、對話 ID、傳送者和信任等級。有對應專案時，也會帶上專案。routine 用 `reply` 回覆信任等級為 `owner` 的請求。
+
+手動設定時，在伺服器環境中設定 `url_env` 和 `secret_env` 指定的變數。
 
 ```yaml
 blocks:
   grok-routine:
     routines:
-      project-triage: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
+      project-triage: {project: example, url_env: SWB_EXAMPLE_GROK_URL, auth: key, secret_env: SWB_EXAMPLE_GROK_SECRET}
 ```
 
 用 routine 名稱傳送給它，或用 `grok:<slug>` 傳送給專案的主 routine。

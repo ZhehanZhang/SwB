@@ -3,7 +3,7 @@ title: 工具
 description: SwB 提供給你的代理的 MCP 工具。
 ---
 
-`tools/list` 依呼叫者的角色回傳工具。以擁有者身分登入後，可以查看所有已啟用模組的工具。
+`tools/list` 依登入權限顯示可用工具。具備完整權限的擁有者可查看所有已啟用模組的工具。
 
 ## 配對金鑰
 
@@ -11,13 +11,13 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 用途 | 工具與權限 |
 | - | - |
-| 訊息 | 可呼叫 `send`、`agent_send` 與 `targets`。用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 與 `get_message` 處理金鑰授權範圍內自己的訊息和對話 |
+| 訊息 | 用 `send` 傳送，用 `targets` 查看目標。啟用舊版名稱時，可使用 `agent_send`。在金鑰的對話權限範圍內使用 `inbox`、`wait`、`reply`、`status`、`result`、`cancel` 和 `get_message` |
 | 記憶與專案 | 在金鑰允許的權限內呼叫 `context_pack` 和 `project_list`。在取得授權的範圍內使用記憶工具 |
-| 路由 | 可呼叫 `routes_list` 與 `routes_resolve`。呼叫 `routes_set` 或 `routes_remove` 時，將自己的代理名稱填入 `agent` |
+| 路由 | 可呼叫 `routes_list` 和 `routes_resolve`。呼叫 `routes_set` 或 `routes_remove` 時，把自己的代理名稱填入 `agent`。選擇這把金鑰可存取的專案 |
 | 設定 | 用 `switchboard_status` 與 `modes_status` 查看狀態。用 `connect` 取得用戶端設定指引。設定模組和發出配對碼需要擁有者身分 |
 | 模組 | 在授權範圍內使用模組工具，並執行頻道模式允許的動作 |
 
-呼叫 `login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 與 `visibility_set` 需要擁有者身分。呼叫 `project_create`、`project_update`、`project_sync` 與 `space_mode` 也需要擁有者身分。擁有者還可呼叫 `routine_register`、`routine_add`、`routine_remove`、`discord_provision` 與 `telegram_provision`。
+呼叫 `login_link`、`connect_code`、`connect_list`、`connect_revoke`、`visibility_list` 和 `visibility_set` 需要擁有者的完整權限。`project_create`、`project_update`、`project_sync` 和 `space_mode` 也需要這項權限。擁有者也能呼叫 `memory_promote`、`routine_register`、`routine_add`、`routine_remove`、`discord_provision` 和 `telegram_provision`。
 
 擁有者可用 `auth.key_tools` 限制工具，用 `auth.key_targets` 限制傳送對象。`auth.key_scopes` 限制路由、訊息和對話的存取範圍。記憶工具使用 SwB 為各配對金鑰單獨儲存的授權。
 
@@ -25,7 +25,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 工具 | 用途 |
 | - | - |
-| `send` | 將工作或訊息填入 `task`。用 `to` 指定目標，或留白以使用路由 |
+| `send` | 把工作或訊息填入 `task`。用 `to` 指定目標。金鑰權限允許時，可留白以使用路由 |
 | `agent_send` | 舊版工具。在 `to` 中直接填入代理名稱，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 預設啟用此工具。新的呼叫請使用 `send`，例如 `to="agent:codex"` |
 | `wait` | 等待新訊息或回覆 |
 | `inbox` | 讀取你的收件匣並立即回傳 |
@@ -34,14 +34,14 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `switchboard_status` | 顯示你的登入身分、等待時限、模組與執行個體的運作狀況 |
 | `result` | 取得對話的最終回覆。支援 `tail` 的對話可用它指定回傳的近期回覆或訊息則數 |
 | `cancel` | 停止追蹤對話 |
-| `targets` | 列出 `send` 能連到的所有對象 |
+| `targets` | 列出可用目標的位址。金鑰權限和目標規則決定可以傳送到哪裡 |
 | `get_message` | 用收件匣或 MCP 事件中的 `message_id` 讀取已儲存的訊息 |
 
 ### 收件匣游標
 
-游標標記收件匣中的位置。`inbox` 和 `wait` 傳回訊息後，都會更新代理的讀取位置。接著呼叫 `wait` 時，只會收到新訊息。呼叫 `inbox` 時，設定 `since_cursor=0` 可從頭讀取。將上次傳回的 `cursor` 填入 `since_cursor` 可接續讀取。
+游標記錄收件匣的讀取位置。`inbox` 和 `wait` 傳回項目時會儲存新位置。套用篩選條件時，可以分開記錄位置。再次呼叫 `wait` 時，會從上次儲存的位置接著讀。將 `since_cursor` 設為 `0` 可從頭讀取。也可以把上次傳回的 `cursor` 填入 `since_cursor`，接著讀取。
 
-指令碼可用 bearer 金鑰呼叫 `GET /inbox/poll`，等待自己的收件匣訊息。將上次傳回的 `cursor` 填入 `after` 可接續讀取。預設從收件匣末端開始等待。訊息送達或等待時間結束時，端點會傳回結果。MCP 的讀取位置保持原樣。持續接收訊息時，請使用[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)。
+指令碼可用 bearer 金鑰呼叫 `GET /inbox/poll`，等待自己收件匣裡的訊息。將傳回的 `cursor` 填入 `after` 可接著讀取。預設從收件匣末端開始等待。訊息送達或等待時間結束時，端點會傳回結果。MCP 的讀取位置維持原樣。用[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)接收新訊息。用 `inbox` 查看你有權讀取的背景訊息和觀察摘要。
 
 訊息或對話超出配對金鑰的權限時，SwB 會回傳與 ID 查詢失敗時相同的錯誤。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
 
@@ -49,16 +49,16 @@ description: SwB 提供給你的代理的 MCP 工具。
 
 | 選項 | 用途 |
 | - | - |
-| `wait_s` | 如果模組回傳對話 ID，依指定的秒數等待第一則回覆。各用戶端的等待上限各異。代理收件匣使用 `wait` |
+| `wait_s` | 設定等待模組第一則回覆的秒數。SwB 依代理限制等待時間。代理信箱使用 `wait` |
 | `forward` | 填入收到的對話 ID。對話須允許轉交，且寄件者的信任等級須為 `owner`。SwB 會把最終回覆送給原寄件者 |
 | `new_conversation` | 設為 `true` 時，在 Capy Captain 的專案中開啟新討論串。設為 `false` 時，傳送到 Capy Captain 的討論串 |
 | `files` | 為 Capy 工作附加檔案。每個檔案填寫 `name`，內容使用 `text` 或 `base64`。用 `media_type` 指定檔案類型 |
 | `repos` | 用 `owner/repo` 格式指定 Capy 工作涉及的程式碼庫。請選擇已連結到 SwB 專案的程式碼庫 |
-| `in_reply_to` | 回覆訊息時，呼叫 `reply` 並填寫 `conversation`。`send` 會拒絕 `in_reply_to` |
+| `in_reply_to` | 回覆訊息時，改用 `reply`，並填寫 `conversation` |
 
 ## 記憶與專案
 
-請以擁有者身分登入，或使用已取得該記憶範圍授權的憑證。更新、移動或刪除項目時，請使用最後寫入該項目的金鑰。擁有者可以管理所有項目。只有擁有者能改動 `general` 中已有的項目。
+以擁有者身分登入，或使用已取得該記憶範圍授權的憑證。代理更新、移動或刪除項目時，請使用最後寫入該項目的憑證。擁有者可管理所有項目。變更 `general` 內現有的項目需要擁有者權限。
 
 | 工具 | 用法 |
 | - | - |
@@ -108,7 +108,7 @@ description: SwB 提供給你的代理的 MCP 工具。
 | - | - | - |
 | `companion_code` | Pair a companion | 建立裝置配對碼 |
 | `companion_list` | List companions | 查看已配對的裝置、連線狀態與可用操作 |
-| `companion_invoke` | Run a companion action | 在已連線的裝置上執行操作 |
+| `companion_invoke` | Run a companion action | 在已連線的裝置上執行操作。用 `companion_list` 取得裝置 ID 和操作細節 |
 | `companion_revoke` | Disconnect a companion | 撤銷裝置金鑰並結束連線 |
 
 ## 路由
@@ -122,12 +122,13 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `routes_resolve` | 查看單一目的地符合條件的路由。將名稱填入 `block`，例如 `grok-routine` 或 `agent` |
 | `routes_remove` | 依 `agent` 和 `project` 移除指定 `block` 中完全符合條件的路由 |
 
-`routes_resolve` 和 `routes_remove` 預設使用第一個目的地。它是第一個支援路由的模組。只有信箱路由時，它是 `agent`。用 `block` 選擇其他目的地。
+用 `block` 查看或移除單一目的地的路由。`routes_resolve` 預設依序查找代理與專案的組合、專案、代理和全域路由。在每一層，SwB 依序查找各模組，最後查 `agent`。`routes_remove` 依相同的目的地順序查找，並要求代理和專案完全相符。
 
 ## 模組工具
 
 ### Capy
 
+啟用 `blocks.mcp.legacy_aliases` 時，可以使用舊版 Capy 工具名稱。
 | 工具 | 用途 |
 | - | - |
 | `capy_captains` | 列出目前的 Capy 連線可以存取的 Capy Captain |

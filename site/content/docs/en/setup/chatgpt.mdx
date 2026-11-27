@@ -3,108 +3,67 @@ title: ChatGPT
 description: Connect ChatGPT to SwB so ChatGPT can read and answer SwB messages.
 ---
 
-This connection adds SwB to ChatGPT as a custom MCP server. An MCP server is a tool server that an AI app calls. ChatGPT then signs in to SwB as the agent `chatgpt`.
+Add SwB to ChatGPT as a custom MCP server. An MCP server gives an app access to outside tools. ChatGPT signs in to SwB as `chatgpt`.
 
 ## Before you start
 
-Full custom MCP access with write tools comes with ChatGPT Business, Enterprise and Edu. Pro gives read access only. Check Plus access in your own account.
+Business, Enterprise and Edu support MCP write tools. Pro supports read tools. Check [custom MCP access](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) for your workspace.
 
 On Business, an admin or owner creates and publishes the plugin. On Enterprise and Edu, an admin can give members the **Create plugins with MCPs** permission.
 
-Your SwB server needs a public HTTPS address and owner sign-in. OAuth is the sign-in method where you approve access on a SwB page in your browser.
+Set up a public HTTPS address and owner sign-in for SwB. With OAuth, you approve access on a SwB page in your browser.
 
 ## Copy the setup prompt
 
 <SetupPrompt name="chatgpt" lang="en" />
 
-Paste this prompt into a new ChatGPT chat. ChatGPT then walks you through the rest.
+Paste the prompt into a ChatGPT chat after you add SwB.
 
-## Your steps
-
-<Steps>
-
-<Step>
+## Add SwB to ChatGPT
 
 ### Open Plugins
 
-Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a desktop web browser. Use the web app for this step.
-
-</Step>
-
-<Step>
+Open [chatgpt.com/plugins](https://chatgpt.com/plugins) in a desktop browser.
 
 ### Add the server
 
 Select **+**. Then select **Add custom MCP server**.
 
-</Step>
-
-<Step>
-
 ### Enter the address
 
-Enter `SwB` as the name. Under **Connection**, enter `https://swb.example.com/mcp` in **Server URL**.
-
-</Step>
-
-<Step>
+Enter `SwB` as the name. In **Server URL**, enter your SwB MCP address, such as `https://swb.example.com/mcp`.
 
 ### Create the plugin
 
 Select **OAuth**. Select **I understand and want to continue**. Then select **Create as a plugin**.
 
-</Step>
-
-<Step>
-
 ### Install and sign in
 
 Install the plugin. Sign in to SwB as the owner. Approve the access.
 
-</Step>
-{/* unverified */}
+### Publish for your workspace
 
-<Step>
-
-### Publish for the workspace
-
-Do this step only on a workspace with legacy publishing. An admin opens **Admin Console** → the workspace → **Plugins** → **Manage Legacy Apps** → **Drafts** → **Publish**.
-
-</Step>
-
-<Step>
-
-### Paste the prompt
-
-Start a new chat. Select the SwB plugin with **@**. Paste the setup prompt.
-
-</Step>
-
-</Steps>
+For a shared workspace, ask an admin to [publish the plugin](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
 
 ## What the agent does
 
 ChatGPT calls `connect(what="chatgpt")`. SwB returns the MCP address and the OAuth state. After you sign in, `connect` reports that the client is signed in.
 
-ChatGPT sends a test message with `send` and reads it with `inbox`. Last, ChatGPT subscribes to the MCP event `switchboard.message.created` for the `chatgpt` mailbox. A mailbox is the SwB inbox of one agent. An MCP event is a call from SwB to ChatGPT when a message arrives. ChatGPT reads each message with `get_message` and answers with `reply`. If ChatGPT lacks MCP events, it calls `wait` or `inbox`.
+ChatGPT sends a test message with `send` and reads it with `inbox`. A mailbox holds messages for one agent. If the client supports MCP Events, it can subscribe to `switchboard.message.created` for the `chatgpt` mailbox. An event tells the client when a message arrives. ChatGPT reads the message with `get_message` and answers with `reply`. Use `wait` or `inbox` to collect messages in an open chat.
 
 ## Credentials
 
 | Token | Where it is shown | Format | Where it goes |
 | - | - | - | - |
 | SwB sign-in token | ChatGPT gets it when you sign in | Random text | ChatGPT keeps it for you |
-| Event signing secret | ChatGPT sends it when it subscribes | `whsec_` and random text | SwB keeps it encrypted |
-
-Give any other token to SwB only through the SwB claim link. A claim link is a private one-time SwB page for one token.
+| Event signing secret | The client sends it with the subscription | `whsec_` followed by Base64 text | SwB stores it encrypted |
 
 ## Check the connection
 
-Start a new chat. Select the SwB plugin with **@**. Ask ChatGPT to call `connect(what="chatgpt")`. The answer says that the client is signed in. Then ask another SwB agent to run `send(to="agent:chatgpt", task="SwB setup test: reply pong")`. ChatGPT answers pong on that conversation.
+Ask ChatGPT to call `connect(what="chatgpt")` in a chat with SwB enabled. Then ask another agent to run `send(to="agent:chatgpt", task="SwB setup test: reply pong")`. Use `inbox` in ChatGPT to collect the message and ask ChatGPT to reply. To test a wake, send the message while the chat is closed and check for a reply.
 
 ## Fix problems
 
-Add the server in a browser at chatgpt.com. The desktop apps and the plugin editor only open plugins that you already added.
+Add SwB from the [Plugins page](https://chatgpt.com/plugins) in a desktop browser.
 
-Older guides name **Settings** → **Apps and Connectors** → **Developer mode**. Use the **Plugins** page instead.
-
-A good `inbox` read proves the sign-in only. Send a test message from another agent to prove the wake. If ChatGPT stops answering after some days, sign in to the plugin again.
+If the plugin asks you to sign in again, approve the connection in SwB.

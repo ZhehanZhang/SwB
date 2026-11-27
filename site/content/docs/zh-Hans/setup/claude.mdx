@@ -7,97 +7,65 @@ description: 把 SwB 作为自定义连接器添加到你的 Claude 账号。
 
 ## 开始之前
 
-你需要一个 Claude 账号。Free、Pro、Max、Ultra、Team 和 Enterprise 套餐都可以使用。Free 套餐有一个自定义连接器名额。在 Team 和 Enterprise 中，由 Owner 或 Primary Owner 为组织添加连接器。
+Claude 免费套餐支持一个自定义连接器。Pro、Max、Ultra、Team 和 Enterprise 套餐也支持自定义连接器。
 
-你的 SwB 服务器需要公开的 HTTPS 地址和所有者登录。Claude 从互联网访问 `https://swb.example.com/mcp`，所以本地地址或 VPN 地址会连接失败。
+先为 SwB 设置所有者登录。使用 443 端口上的公网 HTTPS 地址，让 Claude 能访问 `/mcp`。
 
 ## 复制设置提示词
 
-提示词保留英文，供智能体使用。
-
 <SetupPrompt name="claude" lang="zh-Hans" />
 
-把提示词粘贴到 Claude 会话中。智能体会带你完成其余步骤。
+把提示词粘贴到 Claude 会话。
 
-## 你的步骤
+## 在 Claude 中添加 SwB
 
 <Tabs items={['个人套餐', 'Team 或 Enterprise']}>
 <Tab value="个人套餐">
-<Steps>
-<Step>
 ### 打开 Connectors
 
-在 Claude 中打开 [Customize → Connectors](https://claude.ai/customize/connectors)。有些界面的路径是 **Settings** → **Connectors**。 {/* unverified */}
-</Step>
-<Step>
+在 Claude 中打开 [Customize → Connectors](https://claude.ai/customize/connectors)。
 ### 添加自定义连接器
 
-点击 **Add**，再点击 **Add custom connector**。如果菜单显示 **Custom**，请选择 **Custom** → **Web**。
-</Step>
-<Step>
+点击 **+ Add**。选择 **Add custom connector**。
 ### 填写地址
 
 名称填写 `SwB`。地址填写你的 SwB MCP 地址，例如 `https://swb.example.com/mcp`。
-</Step>
-<Step>
 ### 保留默认登录方式
 
-在 **OAuth client** 下，保留 **Use Claude’s published identity (Recommended)**。客户端 ID、客户端密钥和 **Request headers** 保持空白。
-</Step>
-<Step>
+点击 **Continue** 查看登录设置。在 **Authentication** 下选择 **Sign in now**。在 **OAuth client** 下选择 **Use Claude’s published identity (Recommended)**。将 **Request headers** 留空。
 ### 添加并连接
 
 点击 **Add**。如果列表中的 SwB 显示 **Connect**，请点击 **Connect**。
-</Step>
-<Step>
 ### 在 SwB 中批准
 
 在 **Sign in to SwB** 页面登录。在 **Connect to SwB** 页面核对名称，然后点击 **Approve**。
-</Step>
-</Steps>
 </Tab>
 <Tab value="Team 或 Enterprise">
-<Steps>
-<Step>
 ### 打开管理页面
 
-以 Claude 管理员身份打开 [Organization settings → Connectors](https://claude.ai/admin-settings/connectors)。
-</Step>
-<Step>
+使用有权添加自定义连接器的账号打开 [Organization settings → Connectors](https://claude.ai/admin-settings/connectors)。Team 需要 Owner 或 Primary Owner。
 ### 添加网页连接器
 
 点击 **Add**。把鼠标移到 **Custom** 上，再点击 **Web**。
-</Step>
-<Step>
 ### 填写地址
 
-名称填写 `SwB`，并填写你的 SwB MCP 地址。点击 **Continue**，再点击 **Add**。
-</Step>
-<Step>
-### 连接你的席位
+名称填写 `SwB`。输入 SwB 的 MCP 地址。点击 **Continue**。检查登录设置。选择 **Sign in now** 或 **Sign in when needed**。选择 **Use Claude’s published identity (Recommended)**。点击 **Add**。
+### 连接你的账号
 
-打开 **Customize** → **Connectors**。找到 `SwB`，点击 **Connect**。
-</Step>
-<Step>
+打开 **Customize** → **Connectors**。找到 `SwB`。点击 **Connect**。
 ### 在 SwB 中批准
 
 在 **Sign in to SwB** 页面登录。在 **Connect to SwB** 页面点击 **Approve**。
-</Step>
-</Steps>
 </Tab>
 </Tabs>
 
-<Steps>
-<Step>
-### 在会话中开启 SwB
+### 在会话中启用 SwB
 
-在输入框中点击 **+** → **Connectors**，开启 `SwB`。在 Claude Project 中，请在协调者会话里使用同一个菜单。 {/* unverified */}
-</Step>
-</Steps>
+在会话中点击 **+** → **Connectors**。开启 SwB。连接 Claude Project 时，请使用协调会话。
 
 ## 智能体的工作
 
-智能体调用 `connect(what="claude")`。SwB 返回 MCP 地址，并告诉智能体 OAuth 登录的状态。OAuth 是一种登录方式，你在浏览器中批准访问。
+智能体调用 `connect(what="claude")`。SwB 返回 MCP 地址和 OAuth 的可用状态。使用 OAuth 时，你会在浏览器中批准访问。
 
 智能体给你点击路径和地址。你批准后，它再次调用 `connect`。SwB 回复客户端已登录。
 
@@ -114,4 +82,4 @@ description: 把 SwB 作为自定义连接器添加到你的 Claude 账号。
 
 ## 解决问题
 
-请确认 SwB 地址以 `/mcp` 结尾。请确认 Claude 可以通过公网访问该地址。`/mcp` 前面的浏览器验证页面会挡住 Claude。更换 SwB 地址后，请删除连接器并重新添加。旧会话在你发送下一条消息后才会用上连接器。
+请使用以 `/mcp` 结尾的公网 HTTPS 地址。让 Claude 直接访问 `/mcp`。更换 SwB 地址时，请移除原连接器，再用新地址添加。

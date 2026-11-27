@@ -3,14 +3,16 @@ title: Install
 description: Install SwB with uvx, pipx or Docker.
 ---
 
-SwB runs on Linux, macOS and Windows. The uvx and pipx installs need Python 3.12 or later. The Docker install needs Docker.
+SwB runs on Linux, macOS and Windows. To build SwB from source, follow [Docker Compose](/docs/self-hosting#docker-compose). Use the methods below after package or image publication.
 
 ## Install and start
 
-Use an empty folder for your instance. The owner key lets the `swb` command sign in as you.
+Use an empty folder for your SwB files. The owner key lets the `swb` command sign in as you.
 
 <Tabs items={['uvx', 'pipx', 'Docker']}>
   <Tab value="uvx">
+    [Install uv](https://docs.astral.sh/uv/getting-started/installation/). SwB needs Python 3.12 or later.
+
     ```bash
     uvx swb-one up
     ```
@@ -18,6 +20,8 @@ Use an empty folder for your instance. The owner key lets the `swb` command sign
     uvx downloads and starts SwB. Open the one-time sign-in link from your terminal within five minutes. In the other examples, replace the leading `swb` with `uvx swb-one`.
   </Tab>
   <Tab value="pipx">
+    [Install pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB needs Python 3.12 or later.
+
     ```bash
     pipx install swb-one
     swb up
@@ -28,14 +32,16 @@ Use an empty folder for your instance. The owner key lets the `swb` command sign
     If pipx uses an older Python, use `pipx install --python 3.12 swb-one`.
   </Tab>
   <Tab value="Docker">
+    [Install Docker](https://docs.docker.com/get-started/get-docker/).
+
     ```bash
     (umask 077; set -C; printf 'SWB_KEY_OWNER=%s\nSWB_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
     docker run -d --name swb --env-file .env \
-      -e PORT=8870 -p 127.0.0.1:8870:8870 -v swb-data:/data \
+      -p 127.0.0.1:8870:8000 -v swb-data:/data \
       ghcr.io/zhehanzhang/swb:latest
     ```
 
-    These commands create a private `.env` file and start the container. The image keeps its data in `/data`. Run `docker exec swb swb login-link` to get a sign-in link. In the other examples, replace the leading `swb` with `docker exec swb swb`.
+    These commands create a private `.env` file and start the container. The image keeps its data in `/data`. Run `docker exec swb swb login-link` to get a sign-in link. To run another SwB command inside the container, start it with `docker exec -it swb swb`.
   </Tab>
 </Tabs>
 
@@ -45,7 +51,7 @@ To create the files before you start the server, run `swb init`. Then run `swb u
 
 `swb up` listens on `127.0.0.1` at port `8870` by default. The default local MCP address is `http://localhost:8870/mcp`. Set `SWB_PORT` in the shell or in `.env` to use a different port.
 
-Use `swb up --dir ./my-swb` to select an instance folder. Pass the same `--dir` to the other commands. See [Config](/docs/config) for bind addresses, config files and data folders.
+Use `swb up --dir ./my-swb` to select an instance folder. Use the same `--dir` with `swb init`, `swb status`, `swb login-link`, `swb connect` and `swb claim`. See [Config](/docs/config) for bind addresses, config files and data folders.
 
 ## Check the server
 
@@ -63,7 +69,7 @@ Run `swb --help` to see the command groups. Add `--help` to a command to see its
 | - | - |
 | `swb init` | Write a private owner key and a minimal config. |
 | `swb up` | Start SwB on this computer. |
-| `swb connect` | Get the steps to connect a platform. |
+| `swb connect PLATFORM` | Get the steps to connect a platform. |
 | `swb companion` | Pair, run or disconnect a companion. |
 | `swb hook HARNESS` | Forward a local agent event to the companion. |
 | `swb status` | Show the status and next steps. |
@@ -80,4 +86,4 @@ Run `swb --help` to see the command groups. Add `--help` to a command to see its
 
 ## Versions
 
-After publication, use the `swb-one` package from PyPI or the `ghcr.io/zhehanzhang/swb` image from GitHub Container Registry. Use a version such as `1.0.0` to select one release. The image tag `latest` follows the newest stable release.
+After publication, PyPI hosts the `swb-one` package. GitHub Container Registry hosts the `ghcr.io/zhehanzhang/swb` image. To select one release, use a version such as `1.0.0`. The image tag `latest` follows the newest stable release.

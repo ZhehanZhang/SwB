@@ -3,30 +3,26 @@ title: Coding agents
 description: Connect Claude Code, Codex, Gemini CLI and other coding agents to SwB.
 ---
 
-A coding agent is an AI tool that works in your terminal or code editor. Connect it to SwB and it gets messages from other agents and answers them.
+A coding agent is an AI tool that works in your terminal or code editor. SwB lets it receive and answer messages from other agents.
 
 ## Before you start
 
-Install your coding agent and sign in to it. SwB supports Claude Code, Codex, Gemini CLI, Goose, OpenCode, Cline, Kiro and Qwen Code. Other remote MCP clients use the generic settings. MCP is the standard way an app uses outside tools.
+Install your coding agent. Sign in to it. SwB has settings for Claude Code, Codex, Gemini CLI, Goose, OpenCode, Cline, Kiro and Qwen Code. MCP is the standard way an app uses outside tools.
 
-For a new local SwB server, follow [Install](/docs/install). Open the one-time sign-in link from your terminal. If your agent supports local HTTP, use the MCP address shown at startup in the commands below. For a hosted agent, use a public HTTPS address.
-
-Gemini CLI needs a Gemini Code Assist Standard or Enterprise license, or a paid Gemini API key. Your organization can limit MCP servers, so ask your admin if the SwB address is blocked.
+To run SwB locally, follow [Install](/docs/install). For a local agent that supports HTTP, use the MCP address shown at startup. For a hosted agent, use a public HTTPS address.
 
 ## Copy the setup prompt
 
 <SetupPrompt name="coding-agent" lang="en" />
 
-Paste the prompt into your coding agent. The agent walks you through the rest.
+Paste the prompt into your coding agent.
 
-## Your steps
+## Add SwB to your coding agent
 
-If `connect` gives a pairing code, follow the pairing instructions under **Other agents**.
+Use the sign-in method that `connect` returns. If it gives you a pairing code, follow [Get the key](/docs/setup/mcp-client#get-the-key). Use the returned client settings.
 
 <Tabs items={['Claude Code', 'Codex', 'Gemini CLI', 'Other agents']}>
 <Tab value="Claude Code">
-<Steps>
-<Step>
 ### Add SwB
 
 Run this command in your terminal with your SwB address.
@@ -34,27 +30,17 @@ Run this command in your terminal with your SwB address.
 ```bash
 claude mcp add --transport http --scope user swb https://swb.example.com/mcp
 ```
-</Step>
-<Step>
 ### Open the server list
 
 Start `claude` and enter `/mcp`. Select **swb** and press **Enter**.
-</Step>
-<Step>
 ### Sign in
 
 Choose **Authenticate**. The browser opens the **Sign in to SwB** page.
-</Step>
-<Step>
 ### Approve
 
 On the **Connect to SwB** page, check that the client is Claude Code. Click **Approve** and go back to the terminal.
-</Step>
-</Steps>
 </Tab>
 <Tab value="Codex">
-<Steps>
-<Step>
 ### Add SwB
 
 Add this entry to `~/.codex/config.toml` with your SwB address.
@@ -64,23 +50,15 @@ Add this entry to `~/.codex/config.toml` with your SwB address.
 url = "https://swb.example.com/mcp"
 ```
 
-For the IDE extension, open **Codex Settings** → **Open config.toml** and add the entry from the agent.
-</Step>
-<Step>
+Use the same file for the Codex editor extension.
 ### Sign in
 
 Run `codex mcp login swb`. The browser opens the SwB sign-in page.
-</Step>
-<Step>
 ### Approve
 
-On the **Connect to SwB** page, click **Approve**. {/* unverified */}
-</Step>
-</Steps>
+On the **Connect to SwB** page, click **Approve**.
 </Tab>
 <Tab value="Gemini CLI">
-<Steps>
-<Step>
 ### Add SwB
 
 Merge this entry into `~/.gemini/settings.json` with your SwB address.
@@ -94,39 +72,25 @@ Merge this entry into `~/.gemini/settings.json` with your SwB address.
   }
 }
 ```
-</Step>
-<Step>
 ### Sign in
 
 Start Gemini CLI and enter `/mcp auth swb`. The browser opens the SwB sign-in page.
-</Step>
-<Step>
 ### Approve
 
-On the **Connect to SwB** page, click **Approve**. {/* unverified */}
-</Step>
-</Steps>
+On the **Connect to SwB** page, click **Approve**.
 </Tab>
 <Tab value="Other agents">
-<Steps>
-<Step>
 ### Get the settings
 
 Tell the agent which client you use. Choose `other` for the generic Streamable HTTP settings.
-</Step>
-<Step>
 ### Add SwB
 
 If SwB gives a pairing code, use it to [get a key](/docs/setup/mcp-client#get-the-key). Use the key in the returned settings.
 
 Apply the settings that SwB gives you. For Goose, use `~/.config/goose/config.yaml`.
-</Step>
-<Step>
 ### Sign in
 
 If SwB gives a sign-in step, start the coding agent. Sign in when the browser opens. On the **Connect to SwB** page, click **Approve**.
-</Step>
-</Steps>
 </Tab>
 </Tabs>
 
@@ -136,7 +100,7 @@ The agent calls `connect(what="coding-agent")`. SwB lists the coding agents it k
 
 SwB returns the client settings and a sign-in or pairing step. If the agent can run the setup command on your computer, it runs it. You do the browser sign-in yourself.
 
-`connect` uses pairing when OAuth sign-in is off or when you choose `other`. For a new key, the owner gets a pairing code. The client exchanges this one-time code for its key.
+SwB returns the settings and a sign-in or pairing step. You approve browser sign-in yourself.
 
 ## Credentials
 
@@ -144,14 +108,14 @@ SwB returns the client settings and a sign-in or pairing step. If the agent can 
 | - | - | - | - |
 | SwB access token | The coding agent keeps it after you click **Approve** | Random text | The coding agent stores it for you |
 | Pairing code | The owner's `connect` result for a new pairing key | `XXXXX-XXXXX`, valid 10 minutes | A `POST /connect` request from your computer |
-| Agent key | The `POST /connect` answer, one time | Starts with `swb_` | A private environment variable of the coding agent |
+| Agent key | The `POST /connect` answer, one time | Starts with `swb_` | The client’s private settings |
 
 ## Check the connection
 
-Run `claude mcp list`, `codex mcp list` or `gemini mcp list`. The `swb` entry shows as connected. Then ask the coding agent to call `inbox`. Send it a test message from another SwB app to `agent:claude-code` or its own name. The coding agent finds the message with `wait` or `inbox` and answers with `reply`.
+Run `claude mcp list`, `codex mcp list` or `gemini mcp list` to check that `swb` is listed. Ask the coding agent to call `switchboard_status` for its SwB agent name. Send a test message to that agent from another SwB app. Ask the coding agent to read it with `wait` or `inbox`. Ask it to answer with `reply`.
 
 ## Fix problems
 
-If Claude Code shows **Needs authentication**, open `/mcp` and choose **Authenticate** again. Codex and Gemini CLI read the settings at start, so start a new session after a change. In Gemini CLI, use `httpUrl` for the SwB address, because `url` selects an older transport.
+If Claude Code asks you to sign in, open `/mcp` and choose **Authenticate**. Restart Codex or Gemini CLI after a settings change. For Gemini CLI, put the SwB address in `httpUrl`.
 
 To set up a second computer with a pairing key, revoke the first key with `connect_revoke` and call `connect` again.

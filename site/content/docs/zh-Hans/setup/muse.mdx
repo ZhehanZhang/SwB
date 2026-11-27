@@ -3,13 +3,13 @@ title: Muse
 description: 把 Muse 连接到 SwB，并实时唤醒 Muse。
 ---
 
-Muse 以智能体 `muse` 的身份登录 SwB。它的收件箱地址是 `agent:muse`。
+在 Muse 中把 SwB 添加为自定义连接器。连接器让 Muse 使用 SwB 工具。Muse 以 `muse` 身份登录。
 
 ## 开始之前
 
-为 SwB 配置公网 HTTPS 地址和所有者登录。Muse 通过 Streamable HTTP 连接 `https://swb.example.com/mcp`。请把示例地址换成你的 SwB 地址。
+为 SwB 设置公网 HTTPS 地址和所有者登录。请把 `https://swb.example.com/mcp` 换成你的 SwB 地址。
 
-Muse 使用 OAuth 2.1 登录，采用 PKCE S256 和动态客户端注册。回调地址是 `https://agent.meta.ai/api/hatch/oauth/callback`。
+Muse 使用 OAuth 登录。使用 OAuth 时，你会在浏览器中批准访问。
 
 ## 复制设置提示词
 
@@ -17,21 +17,17 @@ Muse 使用 OAuth 2.1 登录，采用 PKCE S256 和动态客户端注册。回�
 
 ## 连接 Muse
 
-在 Muse 对话中，请 Muse 把你的 SwB MCP 地址添加为自定义连接器，并使用 OAuth。打开 Muse 发来的登录链接。以所有者身份登录 SwB。
-
-## Muse 的工作
-
-Muse 自行保存 OAuth 令牌。每次开始对话时，Muse 调用 `inbox` 查看 SwB 收件箱。它用 `get_message` 读取消息，用 `reply(..., final=true)` 答复。它用 `send` 给其他智能体发任务。
+把提示词粘贴到 Muse 会话。请 Muse 把你的 SwB MCP 地址添加为自定义连接器，并使用 OAuth。打开 Muse 发来的登录链接。以所有者身份登录 SwB。
 
 ## 实时唤醒 Muse
 
 收到消息时，SwB 可以唤醒 Muse。请将 SwB 与 Muse 配对一次。准备一台带蓝牙的 Mac 或 Linux 电脑。将电脑放在手机附近。
 
-请以所有者身份登录的智能体调用 `connect(what="muse", choose={"gadget": true})`。按智能体给出的说明操作。
+请具有完整所有者权限的智能体调用 `connect(what="muse", choose={"gadget": true})`。按返回的说明操作。
 
 在 [Muse SDK 令牌](https://gadgets.muse.ai/settings/sdk-tokens)页面获取个人令牌。通过智能体提供的 SwB 领取链接保存令牌。
 
-请使用已上线且启用了 Muse 功能的[伴侣设备](/zh-Hans/docs/companion)。要为已配对的设备添加这项功能，请先断开该设备。
+请使用已上线并启用 Muse 功能的[伴侣设备](/zh-Hans/docs/companion)。要给已配对的设备添加这项功能，请先在设备上运行 `swb companion disconnect`。
 
 需要配对伴侣设备时，请在电脑上运行以下命令。将示例地址换成你的 SwB 地址。
 
@@ -41,12 +37,12 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 按提示输入智能体给你的配对码。请智能体启动 Muse 配对。
 
-在 Muse 应用中打开 **Settings**。进入 **Devices**。开启 **Developer mode**。点按 **Add Device**。选择智能体告诉你的设备名称，例如 `MuseGadget5C9C67`。如果应用询问 Wi-Fi，请选择 **Use current connection**。
+在 Muse 应用中打开 **Settings**。进入 **Devices**。开启 **Developer mode**。点按 **Add Device**。选中智能体给出的设备名称。如果应用询问 Wi-Fi，请选择 **Use current connection**。
 
 你部署的 SwB 会保持与 Muse 的连接。配对完成后，电脑可以进入睡眠。
 
 ## 检查连接
 
-要检查连接器，请另一个 SwB 智能体调用 `send(to="agent:muse", task="SwB setup test: reply pong")`。在 Muse 会话中，请 Muse 调用 `inbox`。在测试会话中查看答复。
+请另一个 SwB 智能体调用 `send(to="agent:muse", task="SwB setup test: reply pong")`。请 Muse 调用 `inbox`，在测试会话中回复。
 
 要检查实时唤醒，请以所有者身份登录的智能体调用 `send(to="muse:gadget:muse", task="SwB wake test: reply pong")`。在测试会话中查看答复。

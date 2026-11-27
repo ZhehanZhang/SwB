@@ -5,11 +5,11 @@ description: How SwB decides who can do what.
 
 ## One owner
 
-SwB has one owner. Only the owner approves agent sign-ins, opens the SwB page and pastes tokens. The owner's own agents act for the owner.
+SwB has one owner. The owner approves agent sign-ins and uses the SwB console to manage access and save tokens.
 
 ## Sign-in for agents
 
-SwB is its own OAuth 2.1 server for one owner. It uses PKCE with S256 and binds each token to your `/mcp` address. Access tokens last one hour. Refresh tokens last 30 days and rotate on each use. SwB stores only SHA-256 hashes of tokens. Other agents use a bearer key or a pairing code.
+OAuth lets an app sign in with the owner's approval. SwB uses PKCE with S256 to verify that the same app starts and completes sign-in. SwB ties each OAuth token to an address for `/mcp`. By default, access tokens last one hour and refresh tokens last 30 days. SwB replaces each refresh token after use. It stores SHA-256 hashes of OAuth tokens, which are fingerprints it uses to check the tokens. Agents can also use a configured key or redeem a pairing code for a key.
 
 ## Trust
 
@@ -20,41 +20,41 @@ SwB checks sender IDs from the platform to set message trust.
 | `owner` | You and your own signed-in agents |
 | `external` | Other senders, including people and bots listed in `known` |
 
-On Slack, Discord and Telegram, `known` is an admission setting. It helps SwB decide whose messages to accept. Messages from other senders keep `external` trust, even when SwB admits them through `known`. See [GitHub owner accounts](/docs/blocks/github#owner-accounts) for how SwB checks each author.
+On Slack, Discord and Telegram, `known` helps SwB choose whose messages to accept. Messages from these outside senders keep `external` trust. See [GitHub owner accounts](/docs/blocks/github#owner-accounts) for how SwB checks GitHub authors.
 
 A **trust frame** is the header and markers SwB adds to external text. SwB changes copies of its header or markers in the text before it adds the frame. The markers are `<<<swb-untrusted` and `swb-untrusted>>>`. Agents treat the text between them as information only.
 
-Watch digests carry `external` trust. Each excerpt also uses a trust frame for external text. GitHub checks the author of each text field.
+A summary from Watch mode carries `external` trust. Each excerpt includes a trust frame for external text. GitHub checks the author of each text field.
 
 A [companion](/docs/companion) key works only for its device connection. SwB keeps only a hash of the key to check it. SwB marks device results as `external` and puts their free text in a trust frame.
 
 ## Visibility
 
-Every resource is private or shared. A resource is a target, a channel, a memory scope, a route or a tool. Every resource starts private, and only the owner reaches it. Share a resource with a workspace or with a list of people. A non-owner reaches a target only when the channel and the target are both shared. Other messages from non-owners become context items. A context item goes to the inbox as information, and the agent stays asleep.
+A resource is a target, channel, memory scope, route or tool. The default access rule is `private` for the owner and their agents. You can share resources with a workspace or selected people. Tools stay private. Outside senders can reach a target when both the channel and target rules allow them. When SwB saves a message as context, it goes to the inbox as information. The agent stays asleep.
 
 ## Keys with limits
 
 Use `auth.key_scopes` to limit routing, message and conversation access. A paired key can read only the messages and conversations of its agent within those limits.
 
-SwB saves memory grants for each paired key. On upgrade, SwB gives active paired keys with open access `general` and each project that exists at that time. For a key with a specific `auth.key_scopes` list, SwB copies that list. SwB saves this set at upgrade. Each project outside that set needs its own grant.
+SwB saves memory grants for each paired key. When it upgrades old grants, SwB gives active paired keys with broad access `general` and the projects that exist at that time. For keys with named scopes in `auth.key_scopes`, SwB copies those scopes.
 
-Owner-approved OAuth clients and configured keys get full memory access by default. An entry for their name in `auth.key_scopes` limits that access.
+An unrestricted OAuth client or configured key can access all memory as the owner. Use `auth.key_scopes` to limit memory access by agent name. A restricted credential needs a grant that names the private project.
 
 `auth.key_tools` limits the tools a key can call. `auth.key_targets` limits where it can send.
 
 ## Tokens
 
-Tokens go through claim links only. SwB seals saved tokens with a key in the data folder. Status shows the names of missing variables and keeps their values hidden. The Capy key goes only to api.capy.ai, in a header.
+Enter tokens on their claim pages. SwB uses a key in the data folder to encrypt tokens it saves. Status shows the names of missing variables and hides their values. The Capy key goes in a request header to `api.capy.ai` by default.
 
-On the **Tokens** page, the owner can see the memory scopes for each paired key. Select the remove button next to a scope to remove that grant.
+Open **Tokens** to see the memory scopes for each paired key. Select **Remove scope** next to a scope to remove that grant.
 
-A paired key gets its grants once, when it redeems its pairing code. To give a key more access, set `auth.key_scopes.<agent>` or name a project in the pairing code. Then pair a new key. The **Tokens** page narrows access only.
+A new paired key gets its own agent scope when it redeems its pairing code. It also gets the project named in the code and the scopes named in `auth.key_scopes.<agent>`. To expand access, set the extra scopes or include a project in the pairing code. Then pair a new key.
 
 ## Limits
 
 | Limit | Value |
 | - | - |
-| Wrong bearer tokens | 20 per address in 10 minutes, then 429 |
+| Invalid bearer keys | 20 attempts per address in 10 minutes, then HTTP `429` |
 | GitHub events routed from senders outside owner accounts | 5 per sender in the last 10 minutes |
 | `/register` | 20 per address per hour |
 | `/token` | 120 per address in 10 minutes |
@@ -67,15 +67,15 @@ A paired key gets its grants once, when it redeems its pairing code. To give a k
 | Request body at `/auth/setup` | 1,024 bytes |
 | Turns per agent conversation | 200 |
 
-The bearer token limit applies to every key from the same address, including valid keys. SwB returns `429` on bearer-protected endpoints until the limit clears.
+The bearer key limit applies to valid keys from the same address too. SwB returns HTTP `429` on the affected endpoints until the limit clears.
 
-A conversation pauses at the turn cap. SwB tells the owner.
+SwB pauses a conversation at the turn limit. It records the pause in the audit log. If Slack is active, it sends the owner a direct message.
 
-Capy can return the earlier conversation for a repeat send. Its `duplicate_window_s` sets the time window. Its default is 600 seconds.
+The Capy block can return the earlier conversation for the same task and target. Set the time window with `blocks.capy.duplicate_window_s`. The default is 600 seconds.
 
 ## Client addresses
 
-SwB uses the address of the connection for limits and audit records by default. Add your proxy to `trusted_proxies` or `SWB_TRUSTED_PROXIES` to use the client address it sends. Configure the proxy to replace incoming client address headers with values it verifies.
+SwB uses the connection address for limits and audit records by default. Add your proxy to `trusted_proxies` or `SWB_TRUSTED_PROXIES`. SwB then uses the client address the proxy sends. Configure the proxy to set client address headers from a source it verifies.
 
 Use the [self-hosting guide](/docs/self-hosting#trusted-proxies) to add a Cloudflare Tunnel connector or a reverse proxy on your Docker network.
 
@@ -89,4 +89,4 @@ The SwB page shows records under **Audit**. Run `swb log` to print the recent re
 
 ## Report a problem
 
-Report security problems through GitHub private vulnerability reporting on the [SwB repository](https://github.com/ZhehanZhang/SwB/security).
+Report security problems privately through [GitHub Security Advisories for SwB](https://github.com/ZhehanZhang/SwB/security/advisories).
