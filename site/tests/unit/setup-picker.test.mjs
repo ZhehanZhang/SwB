@@ -53,3 +53,12 @@ test('shows one coding-agent section with commands for each selected app', () =>
   assert.equal(count(prompt, 'codex mcp add switchboard'), 1);
   assert.equal(count(prompt, 'gemini mcp add --scope user'), 0);
 });
+
+test('uses the Muse OAuth connector and reads its mailbox in chat', () => {
+  const prompt = combineSetupPrompts(sources, ['muse']);
+  assert.match(prompt, /^### Muse$/m);
+  assert.ok(prompt.includes('https://agent.meta.ai/api/hatch/oauth/callback'));
+  assert.ok(prompt.includes('send(to="agent:muse"'));
+  assert.ok(prompt.includes('At the start of each chat, call inbox'));
+  assert.ok(!prompt.includes('switchboard.message.created'));
+});

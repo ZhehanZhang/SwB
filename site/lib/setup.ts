@@ -42,10 +42,10 @@ export const setup: Record<MarkKind, { prompt: string; open: Target[]; docs: str
     en: 'Run one command in your terminal.', 'zh-Hans': '在终端运行一条命令。', 'zh-Hant': '在終端機執行一個指令。' } },
   gemini: { prompt: 'coding-agent', open: [], docs: '/docs/setup/coding-agent', step: {
     en: 'Run one command in your terminal.', 'zh-Hans': '在终端运行一条命令。', 'zh-Hant': '在終端機執行一個指令。' } },
-  muse: { prompt: 'muse', open: ['claude', 'chatgpt'], docs: '/docs/setup/muse', step: {
-    en: 'Pair a Linux device with the Muse app over Bluetooth.',
-    'zh-Hans': '通过蓝牙把一台 Linux 设备与 Muse 应用配对。',
-    'zh-Hant': '透過藍牙把一台 Linux 裝置與 Muse 應用程式配對。' } },
+  muse: { prompt: 'muse', open: [], docs: '/docs/setup/muse', step: {
+    en: 'Ask Muse in a chat to add SwB as a custom connector.',
+    'zh-Hans': '在 Muse 对话中请 Muse 把 SwB 添加为自定义连接器。',
+    'zh-Hant': '在 Muse 對話中請 Muse 把 SwB 新增為自訂連接器。' } },
   slack: { prompt: 'slack', open: ['claude', 'chatgpt'], docs: '/docs/setup/slack', step: {
     en: 'Create the Slack app from the manifest and paste its tokens on the claim page.',
     'zh-Hans': '用清单创建 Slack 应用，并把令牌粘贴到领取页面。',

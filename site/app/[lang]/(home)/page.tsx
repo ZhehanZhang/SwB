@@ -40,7 +40,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
         <section className="swb-hero-grid">
           <div className="swb-hero-copy">
             <HeroTitle stem={copy.hero.stem} endings={copy.hero.endings} between={copy.hero.between}
-              names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Captain', dots: 'ChatGPT dots', muse: 'Muse' }} />
+              names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Captain', dots: 'ChatGPT dots' }} />
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <SetupPicker lang={lang} modal />
               <a className="swb-button border hover:bg-fd-muted" href={repository}>

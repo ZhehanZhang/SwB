@@ -7,8 +7,6 @@ export const trips: [MarkKind, MarkKind][] = [
   ['capy', 'claude'],
   ['github', 'capy'],
   ['dots', 'claude'],
-  ['claude', 'muse'],
-  ['grok-bot', 'muse'],
 ];
 
 export const LEG = 0.85;

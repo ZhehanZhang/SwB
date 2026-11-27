@@ -98,12 +98,33 @@ for (const [locale, path, heading, label] of [
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
     const picker = page.locator('[data-setup-picker]');
-    await expect(picker.getByRole('checkbox', { name: 'Muse' })).toHaveCount(0);
+    const muse = picker.getByRole('checkbox', { name: 'Muse', exact: true });
+    await expect(muse).toBeVisible();
+    await expect(muse).not.toBeChecked();
     const preview = picker.getByRole('textbox', { name: label });
     await page.evaluate(() => document.fonts.ready.then(() => null));
     const start = await dimensions(picker);
     await picker.getByRole('checkbox', { name: 'Grok Bot', exact: true }).check();
     await expect(preview).toHaveValue(/Add a custom connector/);
+    await muse.check();
+    await expect(preview).toHaveValue(/https:\/\/agent\.meta\.ai\/api\/hatch\/oauth\/callback/);
     expect(await dimensions(picker)).toEqual(start);
   });
 }
+
+test('the Muse hub and guide offer the release connector prompt', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.locator('.swb-board:visible').getByRole('button', { name: 'Muse', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'Muse' });
+  await expect(panel.getByText('Ask Muse in a chat to add SwB as a custom connector.')).toBeVisible();
+  const prompt = await panel.locator('pre').textContent();
+  expect(prompt).toContain('https://agent.meta.ai/api/hatch/oauth/callback');
+  await expect(panel.getByRole('link', { name: /Open in/ })).toHaveCount(0);
+  await panel.getByRole('link', { name: 'Full guide' }).click();
+  await expect(page).toHaveURL(/\/docs\/setup\/muse$/);
+  const guide = page.locator('.swb-prompt');
+  expect(await guide.locator('pre').textContent()).toBe(prompt);
+  await expect(guide.getByRole('button', { name: 'Copy prompt' })).toBeVisible();
+  await expect(guide.getByRole('link', { name: /Open in/ })).toHaveCount(0);
+});
