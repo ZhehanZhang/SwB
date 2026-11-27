@@ -14,6 +14,7 @@ from uvicorn.main import STARTUP_FAILURE
 
 from .config import Instance
 from .entrypoint import cli_main
+from .env import env_value
 
 SERVER_COMMANDS = ("serve", "export", "log", "config", "blocks", "targets")
 
@@ -35,8 +36,8 @@ class _NoQuery(logging.Filter):
 
 
 def add_server_commands(sub: argparse._SubParsersAction) -> None:
-    serve = sub.add_parser("serve", help="run the server (default)")
-    serve.add_argument("--host", help="bind address from SWITCHBOARD_HOST or 127.0.0.1 by default")
+    serve = sub.add_parser("serve", help="run the SwB server (default)")
+    serve.add_argument("--host", help="bind address from SWB_HOST. The default is 127.0.0.1.")
     exp = sub.add_parser("export", help="write every memory as markdown, one folder per scope")
     exp.add_argument("destination", metavar="DIR")
     log = sub.add_parser("log", help="print the recent audit log")
@@ -44,7 +45,7 @@ def add_server_commands(sub: argparse._SubParsersAction) -> None:
     cfg = sub.add_parser("config", help="config tools")
     migrate_help = "Print a version 1 config rewritten as version 2."
     migrate = cfg.add_subparsers(dest="action", required=True).add_parser("migrate", help=migrate_help, description=migrate_help)
-    migrate.add_argument("file", nargs="?", help="config file (default: SWITCHBOARD_CONFIG)")
+    migrate.add_argument("file", nargs="?", help="config file from SWB_CONFIG by default")
     blk = sub.add_parser("blocks", help="the configured blocks")
     block_actions = blk.add_subparsers(dest="action", required=True)
     nested = [migrate]
@@ -75,7 +76,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     if args.cmd == "log" and not 1 <= args.limit < 2 ** 63:
         parser.error("Set --limit between 1 and 9223372036854775807.")
 
-    from .config import ConfigError, LOOPBACK_HOSTS, bind_address, config_path, migrate_text
+    from .config import ConfigError, bind_address, config_path, local_origin, migrate_text
     from .core import Switchboard
     from .deployment import OWNER_KEY, serve_env
 
@@ -103,7 +104,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
 
     port = int(env.get("PORT", "8000")) if serving else 0
     host, origin = bind_address(env, port, host=getattr(args, "host", None))
-    loopback_origin = origin if host in LOOPBACK_HOSTS and port else None
+    loopback_origin = local_origin(host, origin, env) if port else None
     try:
         deployment_env = serve_env(env, instance=instance) if serving else None
     except ConfigError as error:
@@ -135,7 +136,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             logging.getLogger("uvicorn.access").addFilter(_NoQuery())
 
             def first_login() -> None:
-                principal = core.auth.verify_bearer(core.cfg.env.get(OWNER_KEY))
+                principal = core.auth.verify_bearer(env_value(core.cfg.env, OWNER_KEY))
                 if principal is not None and principal.is_unrestricted_owner and principal.source == "owner" and core.cfg.public_url:
                     token = core.auth.sessions.mint_link(principal.client_id, principal.source)
                     core.audit.record(origin="cli", source=principal.source, client=principal.client_id, destination="core",
@@ -147,8 +148,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             options = {
                 "host": host,
                 "port": port,
-                "proxy_headers": True,
-                "forwarded_allow_ips": env.get("FORWARDED_ALLOW_IPS", "*"),
+                "proxy_headers": False,
                 "timeout_graceful_shutdown": 5,
             }
             if announce_login:

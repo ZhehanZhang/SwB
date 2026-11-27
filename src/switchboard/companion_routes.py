@@ -84,7 +84,7 @@ def companion_routes(core: Switchboard, limiter: RateLimiter, heartbeat_s: float
             else:
                 body = await _body(request)
                 if verb == "hello":
-                    companions.hello(companion_id, body)
+                    companions.hello(companion_id, body, client=audit_client_ip(request.scope))
                 elif verb == "results":
                     await companions.result(companion_id, body)
                 elif verb == "claims":
@@ -92,7 +92,7 @@ def companion_routes(core: Switchboard, limiter: RateLimiter, heartbeat_s: float
                 else:
                     return JSONResponse(await companions.emit(principal, body), headers=NO_STORE)
         except CompanionError as exc:
-            core.audit.record_refusal(origin="companion", client=principal.client_id, destination="core",
+            core.audit.record_refusal(origin="companion", client=audit_client_ip(request.scope), destination="core",
                                       action=f"companion_{COMPANION_ACTIONS[verb]}", detail=str(exc), target=companion_id, ref=exc.audit_ref)
             return _error(exc)
         return JSONResponse({"ok": True}, headers=NO_STORE)

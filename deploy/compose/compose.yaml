@@ -6,10 +6,11 @@ services:
       target: paas
     environment:
       PORT: "8000"
-      SWITCHBOARD_DATA: /data
-      SWITCHBOARD_DEPLOY_PLATFORM: compose
-      SWITCHBOARD_PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
-      SWITCHBOARD_KEY_OWNER: ${SWITCHBOARD_KEY_OWNER:-}
+      SWB_DEPLOY_PLATFORM: compose
+      SWB_PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      SWB_KEY_OWNER:
+      SWITCHBOARD_KEY_OWNER:
+      SWB_TRUSTED_PROXIES:
       SWB_SETUP_CODE:
     volumes:
       - switchboard_data:/data

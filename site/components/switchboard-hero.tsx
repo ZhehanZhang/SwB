@@ -15,7 +15,7 @@ type Node = { kind: MarkKind; label: string };
 const nodes: Node[] = [
   { kind: 'slack', label: 'Slack' },
   { kind: 'claude', label: 'Claude' },
-  { kind: 'capy', label: 'Captain' },
+  { kind: 'capy', label: 'Capy Captain' },
   { kind: 'dots', label: 'Dots' },
   { kind: 'discord', label: 'Discord' },
   { kind: 'chatgpt', label: 'ChatGPT' },
@@ -47,6 +47,14 @@ function place(layout: Layout, i: number) {
   return { x: W / 2 + r * Math.cos(angle(i)), y: H / 2 + r * Math.sin(angle(i)) };
 }
 
+function cord(layout: Layout, i: number) {
+  const { W, H } = layouts[layout];
+  const { x, y } = place(layout, i);
+  const dx = x - W / 2;
+  const dy = y - H / 2;
+  return { x, y, qx: W / 2 + dx / 2 - dy * BEND, qy: H / 2 + dy / 2 + dx * BEND };
+}
+
 function side(i: number) {
   const c = Math.cos(angle(i));
   const s = Math.sin(angle(i));
@@ -57,7 +65,7 @@ function side(i: number) {
 const pct = (value: number, total: number) => `${(value / total) * 100}%`;
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
-function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Layout) {
+function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, overlay: React.RefObject<SVGSVGElement | null>, layout: Layout) {
   useEffect(() => {
     const element = canvas.current;
     const context = element?.getContext('2d');
@@ -84,31 +92,28 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
 
     const cx = spec.W / 2;
     const cy = spec.H / 2;
-    const curves = nodes.map((_, i) => {
-      const { x, y } = place(layout, i);
-      const dx = x - cx;
-      const dy = y - cy;
-      return { x, y, qx: cx + dx / 2 - dy * BEND, qy: cy + dy / 2 + dx * BEND };
-    });
+    const curves = nodes.map((_, i) => cord(layout, i));
+    const highlights = overlay.current?.querySelectorAll('path');
     const at = (i: number, t: number) => {
       const { x, y, qx, qy } = curves[i];
       const u = 1 - t;
       return {
         x: u * u * cx + 2 * u * t * qx + t * t * x,
         y: u * u * cy + 2 * u * t * qy + t * t * y,
-        dx: 2 * u * (qx - cx) + 2 * t * (x - qx),
-        dy: 2 * u * (qy - cy) + 2 * t * (y - qy),
       };
     };
 
     const transit = (time: number) => {
-      const positions: number[][] = nodes.map(() => []);
+      const positions: { point: number; opacity: number }[][] = nodes.map(() => []);
       trips.forEach(([a, b], n) => {
         const local = (time + CYCLE - n * STEP) % CYCLE;
         const plan = [[a, 0, -1], [b, LEG, 1], [b, LEG * 2 + 0.1, -1], [a, LEG * 3 + 0.1, 1]];
         plan.forEach(([cord, start, direction]) => {
           const p = (local - start) / LEG;
-          if (p >= 0 && p <= 1) positions[cord].push(direction === 1 ? p : 1 - p);
+          if (p >= 0 && p <= 1) {
+            const opacity = 0.92 * smooth(Math.min(p / .16, (1 - p) / .16, 1));
+            positions[cord].push({ point: direction === 1 ? p : 1 - p, opacity });
+          }
         });
       });
       return positions;
@@ -118,6 +123,7 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
       if (!scale) return;
       context.clearRect(0, 0, spec.W, spec.H);
       const positions = still ? [] : transit(time);
+      highlights?.forEach((path, i) => path.toggleAttribute('data-flow', Boolean(positions[i]?.length)));
       context.strokeStyle = foreground;
       context.fillStyle = foreground;
       context.lineWidth = 1.6 / scale;
@@ -130,31 +136,11 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
         context.quadraticCurveTo(qx, qy, x, y);
         context.stroke();
       });
-      positions.forEach((swells, i) => {
-        if (!swells.length) return;
-        const left: [number, number][] = [];
-        const right: [number, number][] = [];
-        for (let k = 0; k <= 28; k += 1) {
-          const t = k / 28;
-          const { x, y, dx, dy } = at(i, t);
-          const swell = swells.reduce((sum, s) => sum + 5 * Math.exp(-((t - s) ** 2) / 0.006), 0);
-          const offset = (4.2 - 2.4 * t + swell) / (2 * scale * Math.hypot(dx, dy));
-          left.push([x - dy * offset, y + dx * offset]);
-          right.push([x + dy * offset, y - dx * offset]);
-        }
-        context.beginPath();
-        context.moveTo(...left[0]);
-        left.slice(1).forEach(([x, y]) => context.lineTo(x, y));
-        right.reverse().forEach(([x, y]) => context.lineTo(x, y));
-        context.closePath();
-        context.globalAlpha = 0.72;
-        context.fill();
-      });
-      context.globalAlpha = 0.92;
       context.strokeStyle = background;
       context.lineWidth = 1.5 / scale;
-      positions.forEach((swells, i) => swells.forEach((p) => {
-        const { x, y } = at(i, p);
+      positions.forEach((blobs, i) => blobs.forEach(({ point, opacity }) => {
+        const { x, y } = at(i, point);
+        context.globalAlpha = opacity;
         context.beginPath();
         context.arc(x, y, spec.pulse / scale, 0, Math.PI * 2);
         context.fill();
@@ -193,15 +179,22 @@ function useCords(canvas: React.RefObject<HTMLCanvasElement | null>, layout: Lay
       viewWatch.disconnect();
       motion.removeEventListener('change', update);
     };
-  }, [canvas, layout]);
+  }, [canvas, overlay, layout]);
 }
 
 function Board({ layout, className, onPick }: { layout: Layout; className: string; onPick: (kind: MarkKind, trigger: HTMLButtonElement) => void }) {
   const { W, H } = layouts[layout];
   const canvas = useRef<HTMLCanvasElement>(null);
-  useCords(canvas, layout);
+  const overlay = useRef<SVGSVGElement>(null);
+  useCords(canvas, overlay, layout);
   return (
     <div className={`swb-board swb-board-${layout} ${className}`} style={{ aspectRatio: `${W} / ${H}` }}>
+      <svg ref={overlay} viewBox={`0 0 ${W} ${H}`} className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
+        {nodes.map(({ kind }, i) => {
+          const { x, y, qx, qy } = cord(layout, i);
+          return <path key={kind} className="swb-transit" d={`M ${W / 2} ${H / 2} Q ${qx} ${qy} ${x} ${y}`} vectorEffect="non-scaling-stroke" />;
+        })}
+      </svg>
       <canvas ref={canvas} className="swb-cords absolute inset-0 size-full" aria-hidden="true" />
       <img className="swb-hub" src="/avatars/swb.png" alt="" />
       {nodes.map((node, i) => {

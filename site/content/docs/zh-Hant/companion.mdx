@@ -34,6 +34,11 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | `--cap notify` | 在裝置桌面顯示通知 |
 | `--cap drop` | 透過 `~/SwB Drop` 資料夾分享檔案，每個檔案上限為 10 MiB |
 | `--cap mcp --mcp NAME=COMMAND` | 讓代理使用裝置上 MCP 伺服器提供的工具 |
+| `--cap herdr` | 向 Herdr 窗格中的程式開發代理傳送訊息 |
+| `--cap codex` | 透過 Codex 應用程式伺服器向 Codex 傳送訊息 |
+| `--cap opencode` | 透過 OpenCode 伺服器向 OpenCode 傳送訊息 |
+| `--cap dsh` | 透過 SwB 橋接外掛向 DeepSeek Harness 傳送訊息 |
+| `--cap hooks` | 接收 Claude Code、Gemini CLI 與 Codex 的狀態 |
 | `--cap muse` | 在 Mac 或 Linux 電腦上透過藍牙與 Muse 配對。請使用 [Muse 指南](/zh-Hant/docs/setup/muse)中的指令 |
 
 在 Linux 上，通知功能使用 `notify-send`。
@@ -44,7 +49,15 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 
 夥伴裝置回傳的文字上限為 1 MiB。請從 `structuredContent.result.content_b64` 讀取 Drop 檔案資料。
 
+## 本機工作階段
+
+本機工作階段是指正在這台裝置上執行的程式開發代理。SwB 會在目標中列出工作階段及其狀態。
+
+SwB 先把傳給工作階段的訊息放進代理的信箱，再嘗試送到已開啟的工作階段。回覆會回到原本的 SwB 對話。
+
 從 `targets` 取得工作階段的位址。在 `visibility_list` 中查找該位址對應的資源。用 `visibility_set` 分享該資源。
+
+如需指令與適用的代理，請參閱[本機工作階段](/zh-Hant/docs/blocks/local-sessions)。
 
 ## 保持執行
 

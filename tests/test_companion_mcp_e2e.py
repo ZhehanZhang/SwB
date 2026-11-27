@@ -17,6 +17,7 @@ import pytest
 import uvicorn
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from starlette.responses import Response
 
 from conftest import HEADERS, STATIC_KEY, acall, arpc, base_config, eventually, new_core, payload, rpc_body
 from fixtures.companion_mcp_server import ECHO_SCHEMA, SENTINEL, make_server
@@ -203,7 +204,7 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
 
             expected = {
                 "stdio": {"name": "stdio", "kind": "stdio", "online": False},
-                "http": {"name": "http", "kind": "http", "online": False},
+                "http": {"name": "http", "kind": "http", "online": True},
                 "unavailable": {"name": "unavailable", "kind": "http", "online": False},
             }
 
@@ -212,8 +213,6 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
                 assert len(rows) == len(expected)
                 return {item["name"]: item for item in rows}
 
-            discovered = await servers()
-            assert discovered == expected
             agent_code = payload(await acall(client, STATIC_KEY, "connect_code", {"agent": "mcp-stranger"}))["code"]
             agent_key = (await client.post("/connect", json={"code": agent_code})).json()["key"]
             listing = await arpc(client, agent_key, "tools/list")
@@ -229,6 +228,9 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
                     headers = {**HEADERS, "Authorization": f"Bearer {token}"} if token else HEADERS
                     assert (await client.post("/mcp", headers=headers, content=body)).status_code == 401
             assert not events.exists() and not http_requests
+            discovered = await servers()
+            assert discovered == expected
+            assert not events.exists()
 
             stdio_tools = device_payload(await invoke(client, state, "tools", {"server": discovered["stdio"]["name"]}))
             stdio_names = {tool["name"]: tool["name"] for tool in stdio_tools["tools"]}
@@ -243,7 +245,6 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
                 assert item["text"].startswith(f"[swb from companion ({state.companion_id}) mcp.call, trust external]")
                 assert device_text(result["structuredContent"]["transport"]) == transport
                 assert device_text(result["structuredContent"]["text"]) == "echo café"
-            expected["http"]["online"] = True
             assert await servers() == expected
             http_tools = device_payload(await invoke(client, state, "tools", {"server": "http"}))
             for tools in (stdio_tools, http_tools):
@@ -258,7 +259,10 @@ async def test_companion_mcp_stdio_and_http_round_trip_with_owner_only(tmp_path,
             assert events.read_text().splitlines() == ["start", "echo", "image"]
 
             async with asyncio.timeout(2):
-                assert_error(await invoke(client, state, "tools", {"server": "unavailable"}), FAILED, companion=state.companion_id)
+                assert_error(await invoke(client, state, "tools", {"server": "unavailable"}),
+                             "Local MCP connection refused.", companion=state.companion_id)
+                assert_error(await invoke(client, state, "tools", {"server": "unknown"}),
+                             "Unknown local MCP server.", companion=state.companion_id)
             assert await servers() == expected
 
             await revoke(client, state)
@@ -297,8 +301,14 @@ async def test_companion_mcp_sanitizes_failures_and_bounds_results_and_time(tmp_
     async with companion(
         "--cap", "mcp", "--mcp", f"stdio={stdio_flag(events)}", "--mcp", f"catalogue={catalogue}", call_timeout=3,
     ) as (state, _, _, _):
-        assert_error(await local_call(client, state, "stdio", "report_error"), FAILED, companion=state.companion_id)
-        assert_error(await local_call(client, state, "stdio", "fail"), FAILED, companion=state.companion_id)
+        assert_error(await local_call(client, state, "stdio", "report_error", text="Choose a smaller file."),
+                     "Local MCP tool returned an error. Choose a smaller file.", companion=state.companion_id)
+        assert_error(await local_call(client, state, "stdio", "fail", text="Choose a supported format."),
+                     "Local MCP tool returned an error. Choose a supported format.", companion=state.companion_id)
+        for text in (SENTINEL, "Check /private/example.", "Check private.txt.", "Check the token fixturesecret.",
+                     "Open https://example.test/private and try again."):
+            assert_error(await local_call(client, state, "stdio", "report_error", text=text),
+                         "Local MCP tool returned an error.", companion=state.companion_id)
         below = MIB - 1024
         blob = device_payload(await local_call(client, state, "stdio", "blob", size=below))
         assert blob["isError"] is False and "structuredContent" not in blob
@@ -340,3 +350,37 @@ async def test_companion_drop_round_trips_documented_file_size(tmp_path, swb, co
             assert len(content.text.encode()) < MIB
             assert json.loads(content.text)["result"] == {"name": name}
         await revoke(client, state)
+
+
+async def test_companion_mcp_reports_http_status_without_following_redirects(swb, companion):
+    _, client = swb
+    requests = []
+    target = f"/{SENTINEL}"
+    live = make_server("http").streamable_http_app(streamable_http_path="/live")
+    fail_live = False
+
+    async def errors(scope, receive, send):
+        if scope["type"] != "http" or (scope["path"] == "/live" and (not fail_live or scope["method"] != "POST")):
+            await live(scope, receive, send)
+            return
+        path = scope["path"]
+        requests.append(path)
+        response = (Response(status_code=307, headers={"Location": target}) if path == "/redirect"
+                    else Response(target, status_code=500))
+        await response(scope, receive, send)
+
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        local = f"http://127.0.0.1:{listener.getsockname()[1]}"
+        async with serve(listener, errors), companion(
+            "--cap", "mcp", "--mcp", f"redirect={local}/redirect", "--mcp", f"error={local}/error", "--mcp", f"live={local}/live",
+        ) as (state, _, _, _):
+            assert_error(await local_call(client, state, "redirect", "echo"), "Local MCP returned HTTP 307.", companion=state.companion_id)
+            assert_error(await local_call(client, state, "error", "echo"), "Local MCP returned HTTP 500.", companion=state.companion_id)
+            assert requests == ["/redirect", "/error"]
+            result = device_payload(await local_call(client, state, "live", "echo", text="before failure"))
+            assert device_text(result["structuredContent"]["text"]) == "before failure"
+            fail_live = True
+            assert_error(await local_call(client, state, "live", "echo", text="after failure"),
+                         "Local MCP returned HTTP 500.", companion=state.companion_id)
+            await revoke(client, state)

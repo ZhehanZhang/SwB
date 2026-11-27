@@ -1,9 +1,11 @@
-# Copy to config/local.yaml, or point SWITCHBOARD_OVERLAY at your private file.
+# Copy to config/local.yaml, or point SWB_OVERLAY at your private file.
 # Delete sections you don't need and replace placeholders before using them.
 # Keep tokens in the environment. A blocks mapping makes the enabled block list explicit.
 version: 2
 
 # public_url: https://switchboard.example.com
+# Use SWB_TRUSTED_PROXIES to set the ranges in the environment.
+# trusted_proxies: []
 # data_dir: /data
 # timezone: Etc/UTC
 # auth:

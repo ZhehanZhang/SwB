@@ -28,6 +28,7 @@ from .claims import Claims
 from .companions import Companions
 from .config import INSTANCE_DB, Config, Instance, load_config
 from .connect import Connections
+from .env import env_value
 from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_, MemoryRefused
 from .modes import ChannelModes
@@ -193,7 +194,7 @@ class Switchboard:
         return path.read_bytes()
 
     def secret(self, name: str) -> str | None:
-        return self.cfg.env.get(name) or self.claims.secret(name)
+        return env_value(self.cfg.env, name) or self.claims.secret(name)
 
     @property
     def base_url(self) -> str:
@@ -252,6 +253,7 @@ class Switchboard:
             "status": "degraded" if problems else "ok",
             "problems": problems,
             "next_steps": [step for step in next_steps.values() if step],
+            "mcp_enabled": self.cfg.mcp_enabled,
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
             "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online, "next_step": next_steps[n]} for n, b in blocks.items()},
@@ -364,8 +366,8 @@ class Switchboard:
                           outcome="refused", ref=root, detail=f"paused at {cap} turns")
         engine = self.slack
         if engine is not None:
-            task = asyncio.ensure_future(engine.dm_owner(f"switchboard paused conversation {root} after {cap} turns (last from "
-                                                         f"{principal.source}); it looks like a loop. Other conversations are unaffected."))
+            task = asyncio.ensure_future(engine.dm_owner(f"SwB paused conversation {root} after {cap} turns. "
+                                                         f"The last turn came from {principal.source}. Other conversations continue."))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
         raise CoreError(stop)

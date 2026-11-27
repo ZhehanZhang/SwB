@@ -7,6 +7,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from ...connect import public_https_prerequisite
+from ...env import env_value
 from ...targets import SLUG_RE
 from .. import BlockError
 
@@ -120,7 +121,7 @@ async def connect_steps(block: GrokRoutineBlock, kind: str, principal: Principal
         env_name = routine[f"{field}_env"]
         if (replace and field != replace) or (not replace and field != rejected and core.secret(env_name)):
             continue
-        if core.cfg.env.get(env_name):
+        if env_value(core.cfg.env, env_name):
             steps.append({"by": "person", "do": f"Change {env_name} in .env and restart SwB."})
         elif field == "url":
             steps.append(block.token_step(principal, env_name, f"Enter the Grok routine's {label} through this private link.", url=True))

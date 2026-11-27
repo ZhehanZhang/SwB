@@ -351,7 +351,7 @@ class WorkspaceRuntime:
         """Name and picture for a post with no persona of its own: config's default_identity, else the app's own, else the
         bundled neutral icon. Never empty, so Slack never draws its generated initials."""
         cfg = self.cfg.default_identity
-        out = {"username": cfg.get("name") or self.bot_name or "Switchboard"}
+        out = {"username": cfg.get("name") or self.bot_name or "SwB"}
         icon = cfg.get("icon_url") or self.bot_image or self.core.avatar_url(DEFAULT_ICON)
         if icon:
             out["icon_url"] = icon
