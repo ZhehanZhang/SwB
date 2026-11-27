@@ -131,12 +131,12 @@ def test_key_scope_allowlist(make):
     w = payload(call(c, STATIC_KEY, "memory_write", {"scope": "project:beacon", "namespace": "notes", "title": "Z", "body": "beacon only"}))
     assert payload(call(c, SECOND_KEY, "memory_write", {"scope": "project:orbit", "namespace": "notes", "title": "P", "body": "orbit"}))["scope"] == "project:orbit"
     for tool, args in (("memory_write", {"scope": "project:beacon", "namespace": "notes", "title": "x", "body": "y"}),
-                       ("memory_read", {"id": w["id"]}),
                        ("memory_delete", {"id": w["id"]}),
-                       ("memory_search", {"query": "beacon", "project": "beacon"}),
-                       ("context_pack", {"project": "beacon"}),
                        ("capy_delegate", {"task": "x", "project": "beacon"})):
         assert "limited to project:orbit" in error_text(call(c, SECOND_KEY, tool, args)) or "may not read" in error_text(call(c, SECOND_KEY, tool, args)), tool
+    for tool, args in (("memory_read", {"id": w["id"]}), ("memory_search", {"query": "beacon", "project": "beacon"}),
+                       ("context_pack", {"project": "beacon"})):
+        assert error_text(call(c, SECOND_KEY, tool, args)) == "memory not found", tool
     assert "your own agent" in error_text(call(c, SECOND_KEY, "routes_set", {"target": "captain:Captain"}))
     assert "owner's sign-in" in error_text(call(c, SECOND_KEY, "project_create", {"slug": "new", "name": "New"}))
     items = payload(call(c, SECOND_KEY, "memory_search", {"query": "orbit", "project": "orbit"}))["items"]

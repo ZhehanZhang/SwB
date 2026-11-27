@@ -215,7 +215,7 @@ class Switchboard:
             problems += b.problems()
 
         def block_status(block: Block) -> dict[str, Any]:
-            out = block.status()
+            out = block.status() if principal is None else block.status_for(principal)
             restricted = principal is not None and not principal.is_unrestricted_owner
             if public:
                 out.pop("modes", None)
@@ -236,7 +236,7 @@ class Switchboard:
             "block_setup": self.block_setup(),
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **block_status(d)} for n, d in self.destinations.items()},
-            "static_keys": [k.name for k in self.cfg.static_keys],
+            "static_keys": [k.name for k in self.cfg.static_keys] if principal is None or principal.is_unrestricted_owner else [],
             "mirror": bool(self.cfg.mirror_dir),
             "turn_cap": {"per_conversation": self.cfg.turn_cap,
                          "paused": self.store.one("SELECT COUNT(*) AS n FROM conversation_turns WHERE paused_at IS NOT NULL")["n"]},
@@ -657,12 +657,12 @@ class Switchboard:
                 out.append({"text": d.get("text"), "final": d.get("final", True), "from": d.get("from"), "at": iso(row["at"])})
         return out
 
-    def _conversation(self, principal: Principal, ref: str) -> tuple[Block | None, dict[str, Any] | None]:
+    def _conversation(self, principal: Principal, ref: str, *, read: bool = False) -> tuple[Block | None, dict[str, Any] | None]:
         """The block and handle behind a conversation reference (h_ handle, or a block's own id such as a thread id)."""
         ref = (ref or "").strip()
         if ref.startswith("h_"):
             h = self.inbox.handle(ref)
-            if h is None or (h["owner"] != principal.source and not (h["destination"] == "mailbox" and h["ref"] == principal.source)):
+            if h is None or not (self.inbox.participant(h, principal.source) or (read and principal.is_unrestricted_owner)):
                 raise CoreError(f"no conversation {ref!r}")
             return self.blocks.get(h["destination"]), h
         owner = next((b for b in self.blocks.values() if b.owns_ref(ref)), None)
@@ -672,7 +672,7 @@ class Switchboard:
 
     async def verb(self, principal: Principal, verb: str, ref: str, *, to_owner: bool = False, **kw: Any) -> Any:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
-        block, h = self._conversation(principal, ref)
+        block, h = self._conversation(principal, ref, read=verb in ("status", "result"))
         final = kw.pop("final", None)
         if verb == "cancel" and h is not None and h["destination"] == "mailbox" and h["ref"] != principal.source:
             raise CoreError("Choose a mailbox conversation you sent.")

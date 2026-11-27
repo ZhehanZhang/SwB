@@ -6,7 +6,7 @@ from uuid import UUID
 import httpx
 import pytest
 
-from conftest import OWNER, PUBLIC, SECOND_KEY, STATIC_KEY, base_config, call, payload
+from conftest import OWNER, PUBLIC, SECOND_KEY, STATIC_KEY, base_config, call, error_text, payload
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
 from switchboard.claims import ClaimError
@@ -151,6 +151,16 @@ async def test_muse_routes_require_owner_trust_and_explicit_slot(make):
     await core.set_route(owner, destination="muse", agent="owner", project="demo", target={"gadget": "muse"}, defaults={}, allow_override=False)
     queued = await core.send(owner, task="routed", project="demo")
     assert queued["to"] == ADDR and queued["project"] == "demo"
+
+
+def test_default_paired_key_does_not_wake_the_owners_muse(make):
+    core, client = make_muse(make)
+    code = payload(call(client, STATIC_KEY, "connect_code", {"agent": "paired"}))["code"]
+    key = client.post("/connect", json={"code": code}).json()["key"]
+    args = {"to": ADDR, "task": "Check the example"}
+    assert "owner's sign-in" in error_text(call(client, key, "send", args))
+    assert core.inbox.head() == 0
+    assert payload(call(client, STATIC_KEY, "send", args))["mailbox"]
 
 
 @pytest.mark.asyncio

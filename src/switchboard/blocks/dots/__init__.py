@@ -417,7 +417,7 @@ class DotsBlock(Block):
 
     async def result(self, call: Call, *, ref: str, tail: int | None = None, **_: Any) -> dict[str, Any]:
         h = self.core.inbox.handle(ref)
-        if h is None or h["destination"] != self.name or h["owner"] != call.principal.source:
+        if h is None or h["destination"] != self.name or not (h["owner"] == call.principal.source or call.principal.is_unrestricted_owner):
             raise BlockError(f"no dots conversation {ref!r}")
         replies = [{"text": d.get("text"), "final": d.get("final", True), "from": d.get("from")}
                    for d in (json.loads(r["data"]) for r in self.core.store.q("SELECT data FROM inbox WHERE handle = ? ORDER BY id", (ref,)))]
