@@ -115,12 +115,13 @@ def test_trust_comes_from_ids_and_a_strangers_text_is_wrapped_and_spoofs_neutral
 def test_a_known_sender_reaches_a_target_shared_with_them_in_a_shared_channel_and_the_reply_stays_in_the_thread(env):
     core, c, block, anthropic = env
     event = c.portal.call(block.ingest, msg(user=FRIEND, channel="60", text="claude-beacon hi"))
-    assert event["trust"] == "known" and len(anthropic.fired) == 1 and "trust known" in event["text"] and "<<<swb-untrusted" in event["text"]
+    assert event["trust"] == event["from"]["trust"] == "external" and len(anthropic.fired) == 1
+    assert "trust external" in event["text"] and "<<<swb-untrusted" in event["text"] and "raw_text" not in event
     handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
     c.portal.call(block.relay, {"kind": "final", "handle": handle, "text": "hello friend"})
     assert block.posts[-1]["channel"] == "60" and block.posts[-1]["root"] == "100" and block.dms == []
     private = c.portal.call(block.ingest, msg(user=FRIEND, channel="40", message="102", text="claude-beacon hi"))
-    assert len(anthropic.fired) == 1 and private["trust"] == "known"
+    assert len(anthropic.fired) == 1 and private["trust"] == "external"
 
 
 def test_listen_mode_only_in_opted_in_channels_and_never_delegates(env):

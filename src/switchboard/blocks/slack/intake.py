@@ -34,7 +34,7 @@ from ...slack.routing import Target
 from ...slack.slack import CHANNEL_ID_RE, WorkspaceRuntime
 from ...slack.writes import WriteError
 from ...subject import wake_text
-from ...trust import neutralize
+from ...trust import CLOSE, OPEN, neutralize
 
 SLACK_SENDER: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("slack_sender", default=None)
 """The verified Slack sender (from Slack ids, never text) of the message being delegated, for blocks that act on it."""
@@ -400,7 +400,7 @@ class SlackIntake(Block):
             return True
         if engine.reaches(rt, original):
             await engine.fan_out(rt.label, original, skip_delegate=True)
-        if push["is_bot"] and push["trust"] != "known":
+        if push["is_bot"] and rt.cfg.trust_of(push["user"]) != "known":
             self._drop(push, ChatDrop.EXTERNAL_BOT)
             return True
         address = next((addr for b in self.core.blocks.values() if b.wakes_agents and (addr := b.wake_target("claude", project))), None)
@@ -524,6 +524,11 @@ class SlackIntake(Block):
             return
         channel, thread_ts, to_dm = place
         text = data.get("raw_text") or item["text"]
+        if (data.get("from") or {}).get("kind") == "dot":
+            _, start, framed = text.partition(f"\n{OPEN}\n")
+            excerpt, end, _ = framed.partition(f"\n{CLOSE}\n")
+            if start and end:
+                text = excerpt
         if to_dm:
             text = f"Reply from {target.name if target else r['target']} to a message in a shared channel:\n\n{text}"
         limit = engine.config.max_text_chars

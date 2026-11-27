@@ -12,6 +12,8 @@ from starlette.routing import Route
 from .auth import Principal
 from .blocks import BlockError
 from .blocks.mcp import RouteDefaults
+from .config import SLUG_RE
+from .connect import AGENT_RE
 from .core import CoreError
 from .guard import client_ip
 from .routes import RouteError
@@ -40,6 +42,10 @@ class _RouteBody(_Body):
 class _VisibilityBody(_Body):
     resource: str
     visibility: str | list[str]
+
+
+class _MemoryGrantBody(_Body):
+    scope: str
 
 
 class _ModeBody(_Body):
@@ -136,6 +142,26 @@ async def pairing_revoke(request: Request) -> JSONResponse:
     return JSONResponse({"id": kid, "revoked": True})
 
 
+async def pairing_memory_remove(request: Request) -> JSONResponse:
+    core = request.app.state.core
+    body = await _body(request, _MemoryGrantBody)
+    if body is None:
+        return _error("invalid_request")
+    scope = body.scope
+    if not (scope == "general" or (scope.startswith("project:") and SLUG_RE.fullmatch(scope[8:]))
+            or (scope.startswith("agent:") and AGENT_RE.fullmatch(scope[6:]))):
+        return _error("invalid_request")
+    kid = request.path_params["kid"]
+    removed = core.connections.remove_memory_scope(kid, scope)
+    if removed is None:
+        return _error("key_not_found", 404)
+    if removed:
+        owner = _owner(request)
+        core.audit.record(origin=owner.origin, source=owner.source, client=owner.client_id, destination="core", action="memory_grant_removed",
+                          outcome="ok", target=kid, ref=scope, detail="Removed a paired key memory scope.")
+    return JSONResponse({"id": kid, "scopes": list(core.connections.memory_scopes(kid)), "removed": removed})
+
+
 async def routine_remove(request: Request) -> JSONResponse:
     core = request.app.state.core
     name = request.path_params["name"]
@@ -197,6 +223,7 @@ WRITE_ROUTES = [
     Route("/routes/{id}", route_remove, methods=["DELETE"]),
     Route("/visibility", visibility_set, methods=["POST"]),
     Route("/pairing/keys/{kid}/revoke", pairing_revoke, methods=["POST"]),
+    Route("/pairing/keys/{kid}/memory/remove", pairing_memory_remove, methods=["POST"]),
     Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
     Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
     Route("/send", send, methods=["POST"]),

@@ -11,6 +11,7 @@ import contextlib
 import json
 import logging
 import secrets
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -30,11 +31,13 @@ from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_, MemoryRefused
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
-from .refusals import CONVERSATION_REQUIRED, MODE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal
+from .refusals import (CONVERSATION_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, OWNER_REQUIRED,
+                       SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal)
 from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
 from .subject import subject
+from .trust import FramedText, frame_sender
 from .visibility import RESOURCE_RE, Visibility, VisibilityError
 
 DestinationError = BlockError
@@ -90,7 +93,9 @@ class Switchboard:
         types = {name: load_block(str(sec.get("use") or name)) for name, sec in self.cfg.blocks.items()}
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
-        self.connections = Connections(self.store)
+        self.connections = Connections(self.store, self.cfg.key_scopes)
+        if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None:
+            log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
@@ -275,7 +280,7 @@ class Switchboard:
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
                          handle_meta: dict[str, Any] | None = None, title: str | None = None,
-                         _reply: bool = False, _mode_notify: bool = False, dry_run: bool = False) -> dict[str, Any]:
+                         _reply: bool = False, dry_run: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
@@ -288,14 +293,16 @@ class Switchboard:
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
             raise CoreRefused(MODE_REQUIRED, "listen conversations can only be answered with reply")
-        if to not in self.known_agents() and not (original is not None and original["ref"] == to) and not (_mode_notify and to == "owner"):
+        if to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
         if to == principal.source and not (allow_self or own):
             raise CoreError("that is you; agent_send goes to another agent")
         if _reply and original is not None and original["status"] == "cancelled":
             return {"to": to, "conversation": in_reply_to, "delivered": False, "mailbox": True, "status": "cancelled"}
-        text = (text or "").strip()
+        framed = isinstance(text, FramedText)
+        if not framed:
+            text = (text or "").strip()
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
@@ -303,16 +310,18 @@ class Switchboard:
             return {"to": f"agent:{to}", "mailbox": True, "project": p.slug if p else None}
         if root is not None:
             self.turn(root, principal)
-        sender = {"kind": "agent", "agent": principal.source, "label": self.agents.label(principal.source),
+        label = self.agents.label(principal.source)
+        trust, display = frame_sender(text if framed else text[:20_000], label, principal.source, owner=principal.trust == "owner")
+        sender = {"kind": "agent", "agent": principal.source, "label": label,
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
-                  "trust": principal.trust}
+                  "trust": trust}
         title = subject("", "", None, title or "", verb="") or subject(
-            sender["label"], "", None, text, verb="replies" if in_reply_to else "asks", trust=principal.trust)
+            label, "", None, text, verb="replies" if in_reply_to else "asks", trust=trust)
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
         handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=title,
                                         meta=meta, status="delivered", target=f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
-        await self.inbox.add(handle, "message", {"subject": title, "text": text[:20_000], "project": p.slug if p else None, "from": sender,
+        await self.inbox.add(handle, "message", {"subject": title, "text": display, "project": p.slug if p else None, "from": sender, "trust": trust,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
@@ -627,7 +636,7 @@ class Switchboard:
             addr = block.effective_target(addr, project)
         if str(addr) not in allowed:
             raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
-        if project and not principal.allows("project:" + project.strip().lower().removeprefix("project:")):
+        if project and not principal.allows_routing_scope("project:" + project.strip().lower().removeprefix("project:")):
             raise CoreRefused(SCOPE_REQUIRED, f"the {principal.source} key can't send in project {project}")
 
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
@@ -716,6 +725,8 @@ class Switchboard:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref, read=verb in ("status", "result"))
         final = kw.pop("final", None)
+        if verb == "reply" and to_owner and h is not None and h["meta"].get("channel_mode"):
+            return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
         if verb == "cancel" and h is not None and h["destination"] == "mailbox" and h["ref"] != principal.source:
             raise CoreRefused(CONVERSATION_REQUIRED, "Choose a mailbox conversation you sent.")
         if verb == "reply" and h is not None and h["destination"] == "mailbox":
@@ -728,12 +739,10 @@ class Switchboard:
         channel_mode = None
         if verb in ("reply", "cancel"):
             try:
-                channel_mode = self.modes.check(principal, ref, "notify_owner" if verb == "reply" and to_owner else verb)
+                channel_mode = self.modes.check(principal, ref, verb)
             except PermissionError as exc:
                 raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
         if channel_mode:
-            if to_owner:
-                return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
             if self.blocks[channel_mode["block"]].manifest.id == "github":
                 raise CoreError(f"GitHub conversations use {channel_mode['block']}_reply to post a reply")
             if channel_mode["mode"] == "assist":
@@ -794,28 +803,37 @@ class Switchboard:
         return out
 
     async def notify_mode_owner(self, principal: Principal, conversation: str, text: str, *, to: str | None = None) -> dict[str, Any]:
+        conversation = conversation.strip()
         try:
             meta = self.modes.check(principal, conversation, "notify_owner")
         except PermissionError as exc:
             raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
-        if meta is None:
-            raise CoreRefused(MODE_REQUIRED, "notify_owner needs a triage conversation")
-        target = meta["notify_target"]
-        if to is not None and to.removeprefix("agent:").lower() not in ("owner", target):
-            self.modes.audit_action(principal, meta, "notify_owner", "refused")
-            raise CoreRefused(TARGET_REQUIRED, "notify_owner can only message the owner or space's default target")
-        if to is not None and to.removeprefix("agent:").lower() == "owner":
-            target = "owner"
+        if meta is None or meta["mode"] != "triage" or not (row := self.inbox.handle(conversation)) or row["status"] == "cancelled":
+            raise CoreRefused(MODE_REQUIRED, "Use an active triage conversation to send the owner a note.")
+        if to is not None and to.strip().lower().removeprefix("agent:") != "owner":
+            raise CoreRefused(TARGET_REQUIRED, "Choose the owner as the target.")
         if principal.targets is not None:
-            await self.check_target(principal, f"agent:{target}", meta["project"])
+            await self.check_target(principal, "agent:owner", meta["project"])
         text = text.strip()
-        if not text:
-            raise CoreError("text is empty")
-        link = f"\n{meta['permalink']}" if meta["permalink"] else ""
-        out = await self.agent_send(principal, to=target, text=f"Triage note for {meta['space']}:{link}\n\n{text}",
-                                    project=meta["project"], allow_self=True, _mode_notify=True)
+        if not 0 < len(text) <= 4000:
+            raise CoreError("Enter a note with up to 4000 characters.")
+        label = self.agents.label(principal.source)
+        trust, display = frame_sender(text, label, principal.source, owner=principal.trust == "owner")
+        try:
+            note = self.inbox.deliver_triage_note(source=principal.source, project=meta["project"], data={
+                "text": display, "trust": trust, "conversation": conversation,
+                "from": {"kind": "agent", "agent": principal.source, "label": label, "auth": principal.kind,
+                         "client_id": principal.client_id, "origin": principal.origin, "trust": trust},
+                **{key: meta[key] for key in ("permalink", "block", "space", "channel")},
+            })
+        except sqlite3.Error as exc:
+            refusal = CoreRefused(OWNER_NOTE_REQUIRED)
+            self.modes.audit_action(principal, meta, "notify_owner", "refused", detail=refusal.reason)
+            refusal.audited = True
+            raise refusal from exc
         self.modes.audit_action(principal, meta, "notify_owner")
-        return out
+        return {"ok": True, "handle": note, "conversation": note, "to": "owner", "delivered": True, "mailbox": True,
+                "project": meta["project"]}
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
                      handle: str | None = None, handle_meta: dict[str, Any] | None = None, dry_run: bool = False) -> Any:
@@ -944,13 +962,37 @@ class Switchboard:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
                           action=action, outcome="ok", target=target, excerpt=excerpt, detail=detail)
 
-    @staticmethod
-    def check_memory_scope(principal: Principal, scope: str) -> None:
+    def allows_memory(self, principal: Principal, scope: str) -> bool:
         if not principal.allows(scope):
-            raise MemoryRefused(SCOPE_REQUIRED, f"the {principal.source} key is limited to {', '.join(principal.scopes or ())}; {scope} is outside it")
+            return False
+        if scope.startswith("project:") and not principal.allows_private_memory(scope):
+            row = self.store.one("SELECT private FROM projects WHERE slug = ?", (scope[8:],))
+            return row is None or not row["private"]
+        return True
+
+    def check_memory_scope(self, principal: Principal, scope: str) -> None:
+        if not self.allows_memory(principal, scope):
+            raise MemoryRefused(SCOPE_REQUIRED)
+
+    def check_memory_writer(self, principal: Principal, scope: str, writer: str | None) -> None:
+        self.check_memory_scope(principal, scope)
+        if principal.is_memory_owner:
+            return
+        if scope == GENERAL:
+            raise MemoryRefused(OWNER_REQUIRED)
+        if writer is None or writer != principal.memory_writer:
+            raise MemoryRefused(MEMORY_WRITER_REQUIRED)
+
+    def write_memory(self, principal: Principal, *, scope: str, **fields: Any) -> dict[str, Any]:
+        self.check_memory_scope(principal, scope.strip().lower())
+        out = self.memory.write(source=principal.source, scope=scope, writer_credential=principal.memory_writer,
+                                check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer), **fields)
+        self.audit_memory(principal, "memory_write", out["scope"], detail=out["title"])
+        return out
 
     def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
-        out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
+        out = self.memory.delete(source=principal.source, id=id,
+                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
         self.audit_memory(principal, "memory_delete", id, detail="Deleted memory.")
         return out
 
@@ -958,17 +1000,19 @@ class Switchboard:
         to_scope = to_scope.strip().lower()
         if to_scope == GENERAL and not promote:
             raise MemoryError_("moving to general is memory_promote, after the owner agrees it applies to every project")
+        if to_scope == GENERAL and not principal.is_memory_owner:
+            raise MemoryRefused(OWNER_REQUIRED)
         self.check_memory_scope(principal, to_scope)
         out = self.memory.move(source=principal.source, id=id, to_scope=to_scope,
-                               check_scope=lambda scope: self.check_memory_scope(principal, scope))
+                               check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
         self.audit_memory(principal, "memory_promote" if promote else "memory_move", f"{out['from']} -> {out['to']}", id)
         return out
 
     # Context pack -----------------------------------------------------------------------------
 
     async def context_pack(self, principal: Principal, project: str | None) -> str:
-        p = self.project(project)
-        if p and not principal.allows(p.scope):
+        p = self.project(None if project and project.strip().lower().removeprefix("project:") == GENERAL else project)
+        if p and not self.allows_memory(principal, p.scope):
             raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read {p.scope}")
         if not p and not principal.allows(GENERAL):
             raise CoreRefused(SCOPE_REQUIRED, f"{principal.source} may not read general; pass the project you work in")

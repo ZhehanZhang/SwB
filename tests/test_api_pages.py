@@ -250,9 +250,9 @@ def test_memory_preview_and_owner_mutations_reuse_scoped_storage_and_emit_safe_a
     assert read(client, "/memory", id=item)["entry"]["body"].endswith(PRIVATE)
 
     limited = Principal("test", "key:test", "key", scopes=("project:second",))
-    with pytest.raises(MemoryError_, match="project:first is outside"):
+    with pytest.raises(MemoryError_, match="Choose a project granted to this key"):
         core.delete_memory(limited, item)
-    with pytest.raises(MemoryError_, match="project:first is outside"):
+    with pytest.raises(MemoryError_, match="Choose a project granted to this key"):
         core.move_memory(limited, item, "project:second")
     path = f"/api/memory/{item}"
     headers = csrf(client)

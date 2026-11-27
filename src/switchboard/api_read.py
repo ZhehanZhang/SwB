@@ -20,7 +20,7 @@ from .audit import iso
 from .blocks import BLOCKS, load
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
 from .modes import CHAT_DROP_ACTION, ChatDrop
-from .refusals import SIGN_IN_FAILURES
+from .refusals import OWNER_NOTE_REQUIRED, SIGN_IN_FAILURES
 from .routes import route_audit_name
 from .targets import SLUG_RE
 from .visibility import show
@@ -150,6 +150,8 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
     elif action == "auth_failure" and recorded_detail in SIGN_IN_FAILURES.get(target, ()):
         detail = recorded_detail
     elif action == CHAT_DROP_ACTION and fields["outcome"] == "dropped" and recorded_detail in ChatDrop:
+        detail = recorded_detail
+    elif action == "triage.notify_owner" and fields["outcome"] == "refused" and recorded_detail == OWNER_NOTE_REQUIRED:
         detail = recorded_detail
     elif action == "tool_refused" and fields["destination"] == "mcp":
         from .blocks.mcp.policy import REFUSAL_DETAILS
@@ -501,7 +503,9 @@ async def memory(request: Request) -> JSONResponse:
         return _error("invalid namespace")
     scope, key, ident = params.get("scope"), params.get("key"), params.get("id")
     scopes = [scope] if scope else None
-    known_scopes = [GENERAL, *(p.scope for p in core.projects.list(include_archived=True))]
+    known_scopes = [GENERAL, *(p.scope for p in core.projects.list(include_archived=True)), *(
+        row["scope"] for row in core.store.q("SELECT DISTINCT scope FROM memories WHERE deleted_at IS NULL AND scope LIKE 'agent:%' ORDER BY scope")
+    )]
     if scope and scope not in known_scopes:
         return _error("scope not found", 404)
     if "id" in params or "key" in params:

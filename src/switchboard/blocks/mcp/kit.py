@@ -24,7 +24,7 @@ WRITE_IDEMPOTENT = ToolAnnotations(readOnlyHint=False, destructiveHint=False, id
 SEND = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True)
 DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
 
-ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
+ProjectArg = Annotated[str | None, Field(description="Project slug (project_list)")]
 Conversation = Annotated[str, Field(description="The conversation: its handle (h_...) from send or an inbox item, or the block's own id (a jam_ thread id)")]
 DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. "
 

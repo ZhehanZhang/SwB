@@ -72,9 +72,32 @@ class Principal:
         return (self.kind in ("key", "oauth") and self.trust == "owner"
                 and self.scopes is None and self.tools is None and self.targets is None)
     credential: str | None = field(default=None, repr=False, compare=False)
+    memory_grants: tuple[str, ...] = field(default=(), repr=False)
+
+    @property
+    def is_memory_owner(self) -> bool:
+        return self.kind == "owner_session" or self.is_unrestricted_owner
+
+    @property
+    def memory_writer(self) -> str | None:
+        if self.is_memory_owner:
+            return None
+        if self.kind == "connect" or (self.kind in ("key", "oauth") and self.credential is not None):
+            return sha(dumps([self.kind, self.client_id, self.credential]))
+        return None
 
     def allows(self, scope: str) -> bool:
-        """Whether this caller may use a memory scope ('general' or 'project:<slug>'); None means every scope."""
+        """Whether this caller has a grant for the memory scope."""
+        if self.kind == "connect":
+            return scope in self.memory_grants
+        return self.allows_routing_scope(scope)
+
+    def allows_private_memory(self, scope: str) -> bool:
+        grants = self.memory_grants if self.kind == "connect" else self.scopes
+        return self.is_memory_owner or scope in (grants or ())
+
+    def allows_routing_scope(self, scope: str) -> bool:
+        """The configured conversation, route and provider scope limit."""
         return self.scopes is None or "*" in self.scopes or scope in self.scopes
 
 
@@ -202,7 +225,8 @@ class Auth:
                 return Principal(source=key.name, client_id=f"key:{key.name}", kind="key", **self._limits(key.name), credential=self._key_grant(key.secret))
         row = self.connections.verify(token) if self.connections is not None else None
         if row is not None:
-            return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect", **self._limits(row["agent"]))
+            return Principal(source=row["agent"], client_id=f"connect:{row['id']}", kind="connect",
+                             memory_grants=self.connections.memory_scopes(row["id"]), **self._limits(row["agent"]))
         if not self.cfg.resource:
             return None
         row = self.store.one(

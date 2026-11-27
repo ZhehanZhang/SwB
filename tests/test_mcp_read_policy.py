@@ -8,6 +8,7 @@ from conftest import CAPTAIN, CAPTAIN2, OWNER, STATIC_KEY, base_config, call, er
 from switchboard.blocks import BLOCKS, BlockError
 from switchboard.blocks.mcp import PRINCIPAL_SCOPE, READ
 from switchboard.blocks.mcp.policy import CONVERSATION_NOT_FOUND, MEMORY_NOT_FOUND, MESSAGE_NOT_FOUND, READ_ROLES, REFERENCE_ARGS
+from switchboard.refusals import PolicyRefusal
 
 MAILBOX_TOOLS = {
     "get_message": "message_id", "status": "conversation", "result": "conversation", "inbox": "conversation", "wait": "conversation",
@@ -17,8 +18,8 @@ PROVIDER_TOOLS = {"capy_result": "thread_id", "capy_status": "thread_id", "statu
 PRIVATE_TEXT = "Only the conversation participants can read this"
 
 
-def pair(client, name):
-    code = payload(call(client, STATIC_KEY, "connect_code", {"agent": name}))["code"]
+def pair(client, name, project=None):
+    code = payload(call(client, STATIC_KEY, "connect_code", {"agent": name, "project": project}))["code"]
     response = client.post("/connect", json={"code": code})
     assert response.status_code == 200
     return response.json()["key"]
@@ -30,8 +31,9 @@ def workspace(make):
     cfg["auth"]["key_scopes"] = {"scoped": ["project:example"]}
     core, client = make(cfg)
     core.projects.create(slug="example", name="Example")
-    core.projects.create(slug="private", name="Private")
-    keys = {name: pair(client, name) for name in ("alpha", "beta", "gamma", "scoped")}
+    core.projects.create(slug="private", name="Private", private=True)
+    keys = {name: pair(client, name, project) for name, project in
+            (("alpha", "example"), ("beta", "private"), ("gamma", None), ("scoped", None))}
     return core, client, keys
 
 
@@ -74,10 +76,17 @@ async def test_every_id_taking_read_tool_has_a_role(make):
     def unclassified_read(message_id: str):
         raise AssertionError("A read without a role must not run")
 
+    @mcp.tool(annotations=READ)
+    def unclassified_id_read(id: str):
+        raise AssertionError("An ID read without a role must not run")
+
     context = SimpleNamespace(request_context=SimpleNamespace(
         request=SimpleNamespace(scope={PRINCIPAL_SCOPE: core.auth.verify_bearer(STATIC_KEY)})))
     with pytest.raises(ToolError, match="Conversation not found"):
         await mcp.call_tool("unclassified_read", {"message_id": "fixture"}, context)
+    with pytest.raises(ToolError, match="Conversation not found") as denied:
+        await mcp.call_tool("unclassified_id_read", {"id": "fixture"}, context)
+    assert isinstance(denied.value.__cause__, PolicyRefusal) and denied.value.__cause__.audited
 
 
 @pytest.mark.parametrize(("name", "field"), MAILBOX_TOOLS.items())
@@ -155,8 +164,10 @@ def test_memory_reads_enforce_scopes_and_audit_refusals(workspace, name):
             return {"id": ids[slug]}
         return {"project": slug, **({"query": "Fixture"} if name == "memory_search" else {})}
 
-    for key in (STATIC_KEY, keys["alpha"], keys["beta"]):
+    for key in (STATIC_KEY, keys["beta"]):
         access(client, key, name, args("private"))
+    access(client, keys["alpha"], name, args("example"))
+    assert error_text(call(client, keys["alpha"], name, args("private"))) == MEMORY_NOT_FOUND
     access(client, keys["scoped"], name, args("example"))
     assert error_text(call(client, keys["scoped"], name, args("private"))) == MEMORY_NOT_FOUND
     if name == "memory_read":
@@ -291,7 +302,7 @@ def test_target_setting_narrows_a_default_paired_agents_mailbox_access(workspace
     assert error_text(call(client, keys["alpha"], tool, args))
 
 
-def test_missing_limits_keep_default_memory_but_do_not_create_owner_access(workspace):
+def test_missing_limits_use_paired_memory_grants_but_do_not_create_owner_access(workspace):
     core, client, keys = workspace
     p = core.auth.verify_bearer(keys["alpha"])
     assert p.scopes is p.tools is p.targets is None and not p.is_unrestricted_owner
@@ -299,7 +310,8 @@ def test_missing_limits_keep_default_memory_but_do_not_create_owner_access(works
         assert "connected agent" in error_text(call(client, keys["alpha"], name, args))
     entry = core.memory.write(source="owner", scope="general", namespace="notes", title="General",
                               body="Shared workspace facts", confirm_general=True)
-    assert access(client, keys["alpha"], "memory_read", {"id": entry["id"]})["body"] == "Shared workspace facts"
+    assert error_text(call(client, keys["alpha"], "memory_read", {"id": entry["id"]})) == MEMORY_NOT_FOUND
+    assert access(client, STATIC_KEY, "memory_read", {"id": entry["id"]})["body"] == "Shared workspace facts"
 
 
 @pytest.mark.parametrize("name", ["visibility_list", "connect_list"])

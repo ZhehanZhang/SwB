@@ -32,6 +32,7 @@ from test_telegram import STRANGER as TELEGRAM_STRANGER
 from test_telegram import run as _telegram_fixture
 
 from switchboard.blocks.mcp.policy import MODE_REQUIRED
+from switchboard.trust import CLOSE, OPEN
 from switchboard.modes import ChatDrop
 
 MODES = {"off", "watch", "assist", "triage", "work"}
@@ -259,10 +260,10 @@ def test_watch_waits_for_due_time_and_batches_each_space_once(make):
     assert set(batches) == {DISCORD_CHANNEL, "41"} and len(digests(core)) == 2
     batch = batches[DISCORD_CHANNEL]
     assert (batch["owner"], batch["kind"], batch["space"], batch["count"]) == ("owner", "watch_digest", "home", 2)
-    assert batch["items"] == [
-        {"author": "Ava", "excerpt": "first", "link": link, "at": start},
-        {"author": "Bo", "excerpt": "second", "link": None, "at": start},
-    ]
+    assert batch["from"] == {"block": "discord", "space": "home", "trust": "external"}
+    assert [(item["author"], item["link"], item["at"]) for item in batch["items"]] == [("Ava", link, start), ("Bo", None, start)]
+    assert f"{OPEN}\nfirst\n{CLOSE}" in batch["items"][0]["excerpt"]
+    assert f"{OPEN}\nsecond\n{CLOSE}" in batch["items"][1]["excerpt"]
     assert batches["41"]["count"] == 1
 
 
@@ -276,7 +277,7 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
     core.modes.flush()
     [batch] = digests(core)
     assert batch["count"] == len(batch["items"]) == 50
-    assert batch["items"][-1]["excerpt"] == "item 49"
+    assert f"{OPEN}\nitem 49\n{CLOSE}" in batch["items"][-1]["excerpt"]
 
 
 def test_owner_console_displays_the_watch_digest_title_and_content(make):
@@ -294,7 +295,7 @@ def test_owner_console_displays_the_watch_digest_title_and_content(make):
     assert response.status_code == 200
     [item] = response.json()["items"]
     assert (item["kind"], item["count"], item["trust"]) == ("watch_digest", 1, "external")
-    assert item["text"] == f"1 event\n\nAva\nWatch excerpt\n{link}"
+    assert f"{OPEN}\n1 event\n\nAva\nWatch excerpt\n{link}\n{CLOSE}" in item["text"]
 
 
 @pytest.fixture(params=["discord", "telegram"])
@@ -516,17 +517,18 @@ def test_restricted_wake_cannot_write_with_or_without_its_handle(intake, mode):
             assert audit["ref"] == meta["permalink"]
 
 
-def test_notify_owner_only_reaches_the_owner_or_default_mailbox(intake):
+def test_notify_owner_only_reaches_the_owner_mailbox(intake):
     with intake("triage") as chat:
         chat.client.portal.call(chat.core.modes.set, principal(), chat.block.name, "home", "triage", chat.channel, ["notify_owner"])
         chat.send(100, "Feedback to summarize")
         handle = chat.core.store.one("SELECT handle FROM chat_relays")["handle"]
         bad = call(chat.client, STATIC_KEY, "agent_send", {"conversation": handle, "to": "someone-else", "text": "A note"})
-        assert "can only message the owner" in error_text(bad)
+        assert "Choose the owner as the target." in error_text(bad)
         out = payload(call(chat.client, STATIC_KEY, "reply", {"conversation": handle, "text": "A note", "to_owner": True}))
-        assert out["delivered"]
-        note = chat.core.inbox.read(owner=out["to"], since=0, advance=False)["items"][-1]
-        assert "A note" in note["text"] and "/100" in note["text"]
+        assert out["delivered"] and out["to"] == "owner"
+        [note] = chat.core.inbox.read(owner="owner", since=0, advance=False)["items"]
+        assert note["text"] == "A note" and note["permalink"].endswith("/100")
+        assert note["kind"] == "triage_note" and note["handle"] == out["handle"]
         [audit] = chat.core.audit.recent(action="triage.notify_owner", outcome="ok")
         assert audit["ref"].endswith("/100")
         assert not chat.posts

@@ -42,7 +42,7 @@ blocks:
       "acme/*": [team]
 ```
 
-A **sink** is an address that gets a copy of each event. Each matching sink gets one compact JSON event. The event has the repository, the actor, the number, the title, the state and a short body. Each delivery has an `Idempotency-Key`. SwB retries network errors and server errors.
+A **sink** is an address that gets a copy of each event. Each matching sink gets one compact JSON event. SwB quotes event details in `metadata`. Each delivery has an `Idempotency-Key`. SwB retries network errors and server errors.
 
 If Cloudflare Access protects your host, let `/github/webhook` through. The GitHub signature protects that path.
 

@@ -292,7 +292,7 @@ class GrokRoutineBlock(Block):
         name = r["name"]
         effective_project = project or r["project"]
         scope = f"project:{effective_project}" if effective_project else "general"
-        if not call.principal.allows(scope):
+        if not call.principal.allows_routing_scope(scope):
             raise BlockRefused(SCOPE_REQUIRED, "This caller cannot send to that Grok routine's Switchboard scope")
         out = await self.core.agent_send(call.principal, to="grok", text=task, project=effective_project,
                                          allow_self=True, handle=call.handle, handle_meta=call.handle_meta, title=title, dry_run=call.dry_run)

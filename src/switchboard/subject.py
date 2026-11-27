@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from html import unescape
 
-from .trust import neutralize
+from .trust import FramedText, neutralize
 
 
 def _plain(text: str) -> str:
@@ -49,7 +49,8 @@ def subject(sender: str, platform: str, where: str | None, text: str, *, verb: s
 
 def wake_text(subject: str, body: str, link: str | None, tail: str | None) -> str:
     """Put the subject first and the delivery instructions last, leaving the body intact."""
-    return "\n\n".join(part for part in (subject, body, link, tail) if part)
+    text = "\n\n".join(part for part in (subject, body, link, tail) if part)
+    return FramedText(text) if isinstance(body, FramedText) else text
 
 
 def lead_with_subject(title: str, body: str) -> str:

@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from .audit import iso
 from .store import Store
+from .trust import frame_parts, frame_sender, join_parts, neutralize
 
 log = logging.getLogger("switchboard.inbox")
 
@@ -170,7 +171,7 @@ class Inbox:
 
     # Items ----------------------------------------------------------------------------
 
-    def _add(self, h: dict[str, Any], kind: str, data: dict[str, Any]) -> int:
+    def _add(self, h: dict[str, Any], kind: str, data: dict[str, Any], *, connection: Any = None) -> int:
         def write(db: Any) -> int:
             at = self.store.clock()
             db.execute("UPDATE handles SET updated_at = ? WHERE handle = ?", (at, h["handle"]))
@@ -185,7 +186,20 @@ class Inbox:
                     log.exception("inbox listener failed for item %s", item)
             return item
 
-        return self.store.tx(write)
+        return self.store.tx(write) if connection is None else write(connection)
+
+    def deliver_triage_note(self, *, source: str, project: str | None, data: dict[str, Any]) -> str:
+        handle = self.new_handle()
+
+        def write(db: Any) -> None:
+            db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status, target) "
+                       "VALUES (?, 'owner', 'mailbox', ?, ?, 'Triage note', '{}', ?, 0, 'delivered', 'agent:owner')",
+                       (handle, source, project, self.store.clock()))
+            self._add({"handle": handle, "owner": "owner", "destination": "mailbox"}, "triage_note", data, connection=db)
+
+        self.store.tx(write)
+        self.signal_waiters()
+        return handle
 
     async def add(self, handle: str, kind: str, data: dict[str, Any]) -> int:
         h = self.handle(handle)
@@ -260,9 +274,25 @@ class Inbox:
         data = json.loads(r["data"])
         if r["kind"] == "watch_digest":
             count = data["count"]
-            entries = ["\n".join(part for part in (entry["author"], entry["excerpt"], entry["link"]) if part) for entry in data["items"]]
-            data["text"] = "\n\n".join([f"{count} event{'s' if count != 1 else ''}", *entries])
-            data["trust"] = "external"
+            block, space = data["block"], data["space"]
+            where = f"in {block} {space}"
+            heading = f"{count} event{'s' if count != 1 else ''}"
+            authored = any("parts" in entry for entry in data["items"])
+            entries = []
+            for entry in data["items"]:
+                author, excerpt, link = entry["author"], entry["excerpt"], entry["link"]
+                safe_link = neutralize(link) if link else link
+                if (parts := entry.pop("parts", None)) is not None:
+                    framed = "\n\n".join(filter(None, (neutralize(excerpt), join_parts(frame_parts(parts, where)))))
+                    entries.append("\n".join(filter(None, (framed, safe_link))))
+                else:
+                    _, framed = frame_sender(excerpt, author, None, where)
+                    entries.append("\n".join(filter(None, (framed, safe_link) if authored else (author, excerpt, link))))
+                entry.update(excerpt=framed, author=neutralize(author), link=safe_link)
+            trust, text = frame_sender(heading if authored else "\n\n".join([heading, *entries]), "Watch digest", None, where)
+            if authored:
+                text = "\n\n".join([text, *entries])
+            data.update(text=text, trust=trust, **{"from": {"block": block, "space": space, "trust": trust}})
         return {"cursor": r["id"], "handle": r["handle"], "owner": r["owner"], "destination": r["destination"], "kind": r["kind"],
                 "at": iso(r["at"]), **data, "message_id": Inbox.message_id(r["id"])}
 
