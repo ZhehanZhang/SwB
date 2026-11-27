@@ -203,12 +203,12 @@ blocks:
           user:
             token_env: SLACK_EXAMPLE_USER_TOKEN
     agents:
-      owner:
+      claude:
         workspaces:
           example: [bot, user]
 ```
 
-工作区配置和授权使用同一个工作区名称。如果只用你的账号，在 `team_id` 同级添加 `user_only: true`。删除 `identities` 下的 `bot` 项。把授权中的身份设为 `[user]`。
+授权写明使用 Slack 的智能体。使用 `switchboard_status` 显示的名称，例如 `claude` 或 `chatgpt`。每个智能体添加一项授权。`swb` 命令使用 `owner`。工作区配置和授权使用同一个工作区名称。如果只用你的账号，在 `team_id` 同级添加 `user_only: true`。删除 `identities` 下的 `bot` 项。把授权中的身份设为 `[user]`。
 
 SwB 要求重启时，智能体会告诉你。重启后，它用 `slack_workspaces` 检查每个身份。身份指机器人或你自己的账号。最后，它用 `slack_post` 发送一条测试消息。
 

@@ -10,18 +10,18 @@ I open https://api.slack.com/apps. I use Create New App > From a manifest. I pic
 
 I use Basic Information > App-Level Tokens > Generate Token and Scopes. I add `connections:write`. I click Generate. I use Install App > Install to Workspace. I click Allow. I find the `xapp-` token at Basic Information > App-Level Tokens. I find the `xoxb-` and `xoxp-` tokens at OAuth & Permissions > OAuth Tokens. I send `/invite @<bot>` in each channel. The workspace ID is the `T...` part of `app.slack.com/client/T.../` in a browser.
 
-Add the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml`. Before the first restart, add the owner grant under `blocks.slack.agents`. The grant lets the owner call `slack_workspaces`.
+Add the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml`. Call `switchboard_status` to get your agent name. Before the first restart, add a grant for that name under `blocks.slack.agents`. The grant lets you call `slack_workspaces` and `slack_post`.
 
 ```yaml
 blocks:
   slack:
     agents:
-      owner:
+      claude:
         workspaces:
           example: [bot, user]
 ```
 
-Replace `example` with the workspace label. Use the identities set up for that workspace. For my account only, use `[user]`. If I need to edit the file myself, give me the YAML. Tell me when SwB needs a restart. Check identities with `slack_workspaces`.
+Replace `claude` with your agent name. Replace `example` with the workspace label. Add the same grant for `owner` if I use the `swb` command for Slack. Use the identities set up for that workspace. For my account only, use `[user]`. If I need to edit the file myself, give me the YAML. Tell me when SwB needs a restart. Check identities with `slack_workspaces`.
 
 Ask me to enter tokens only through the claim link that connect returns. Keep tokens out of this chat.
 

@@ -203,12 +203,12 @@ blocks:
           user:
             token_env: SLACK_EXAMPLE_USER_TOKEN
     agents:
-      owner:
+      claude:
         workspaces:
           example: [bot, user]
 ```
 
-Use the same workspace label in the workspace entry and the grant. For the account-only manifest, add `user_only: true` next to `team_id`. Remove the `bot` entry under `identities`. Set the grant to `[user]`.
+The grant names the agent that uses Slack. Use the name that `switchboard_status` shows, for example `claude` or `chatgpt`. Add one grant for each agent. Add `owner` for the `swb` command. Use the same workspace label in the workspace entry and the grant. For the account-only manifest, add `user_only: true` next to `team_id`. Remove the `bot` entry under `identities`. Set the grant to `[user]`.
 
 When SwB asks for a restart, the agent tells you. After the restart, it uses `slack_workspaces` to check each identity. An identity is the bot or your own account. Last, it sends a test message with `slack_post`.
 
