@@ -22,6 +22,7 @@ from ...config import ConfigError
 from ...guard import client_ip
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
+from ...subject import subject, wake_text
 from ...targets import slugify
 from ...trust import wrap
 from ...visibility import Who
@@ -629,8 +630,15 @@ class GitHubBlock(Block):
         user_id = provider_id(sender.get("id"))
         author = payload.get("actor")
         link = payload.get("url")
+        event_name = "Issue" if event == "issues" else event.replace("_", " ").capitalize()
+        summary = " ".join(part for part in (event_name, payload.get("action"), payload.get("conclusion")) if part)
+        event_title = payload.get("title") or summary
+        delivery_note = f"GitHub delivery {delivery}."
         if mode == "watch":
-            body = _json(payload)
+            title = subject(author or "Unknown sender", "GitHub", repo, event_title, verb="")
+            details = "\n\n".join(part for part in (summary + ".", payload.get("body")) if part)
+            text = wake_text(title, details, link, delivery_note)
+            body = _json({"subject": title, "text": text, **payload})
             for sink in self.sink_names(repo):
                 self.sinks[sink].put(delivery, body)
             self.core.modes.watch(self.name, space, repo, delivery, user_id or "", author,
@@ -675,10 +683,11 @@ class GitHubBlock(Block):
                 if reply_to:
                     meta["review_comment"] = int(reply_to)
             text = wrap(json.dumps(payload, ensure_ascii=False), author, f"github:{user_id}", "external", f"in GitHub {repo}")
-            task = f"GitHub {event} in {repo}.\n\n{text}"
+            title = subject(author or user_id, "GitHub", repo, event_title, verb="", trust=principal.trust)
+            tail = delivery_note
             if mode in {"assist", "triage"}:
-                task += f"\n\n{self.core.modes.wake_note(meta)} Use github_reply for the originating GitHub thread."
-            await self.core.send(principal, to=target, task=task, project=project, title=f"GitHub {event} in {repo}",
+                tail += f"\n\n{self.core.modes.wake_note(meta)} Use github_reply for the originating GitHub thread."
+            await self.core.send(principal, to=target, task=wake_text(title, text, link, tail), project=project, title=title,
                                  handle_meta={**({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
                                               **({"boundary": project} if project and mode != "work" else {})})
         except (BlockError, CoreError, ValueError) as exc:

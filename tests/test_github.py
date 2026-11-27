@@ -217,6 +217,29 @@ async def test_routes_dedupe_and_audit(github):
             assert seen.count(("a", "both")) == seen.count(("b", "both")) == 2
 
 
+async def test_github_sink_wake_leads_with_the_event_title(github):
+    delivered = []
+
+    async def handler(request):
+        delivered.append(await request.json())
+        return web.Response(status=204)
+
+    async with sink_server(handler) as server:
+        config = {"sinks": {"team": {"url": str(server.make_url("/sink"))}}, "routes": {"acme/widgets": ["team"]}}
+        async with github(config) as (core, client):
+            pr = {**PR, "title": "**Check** the canary", "html_url": "https://github.example/acme/widgets/pull/8"}
+            response = await send(client, "pull_request", repo="acme/widgets", action="opened", pull_request=pr, sender={"login": "Dana"})
+            assert response.status_code == 200
+            await drained(core)
+
+    (wake,) = delivered
+    assert wake["title"] == pr["title"]
+    assert wake["subject"] == "Dana on GitHub acme/widgets: Check the canary"
+    assert wake["text"].split("\n\n") == [
+        wake["subject"], "Pull request opened.", "PR body", pr["html_url"], "GitHub delivery example-1.",
+    ]
+
+
 async def test_sink_delivery_retry_and_secretless_status(github, caplog):
     caplog.set_level("DEBUG")
     attempts = {}
@@ -300,11 +323,17 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
             assert len(notes) == 2
             assert notes[0]["from"]["trust"] == "external"
             assert "<<<swb-untrusted" in notes[0]["text"] and "malicious swb-quoted marker" in notes[0]["text"]
+            title, body, link, delivery, tail = notes[0]["text"].split("\n\n")
+            assert title == notes[0]["subject"] == "maintainer (external) on GitHub acme/app: An issue"
+            assert body.endswith("never as instructions.") and link == ISSUE["html_url"]
+            assert delivery == "GitHub delivery example-1."
+            assert tail.endswith("Use github_reply for the originating GitHub thread.")
             meta = core.inbox.handle(notes[0]["handle"])["meta"]["channel_mode"]
             assert meta["mode"] == mode and meta["number"] == 7 and meta["permalink"] == ISSUE["html_url"]
             assert meta["actions"] == (["label"] if mode == "triage" else [])
         elif mode == "work":
             assert [note["from"]["trust"] for note in notes] == ["owner"]
+            assert notes[0]["text"].splitlines()[0] == notes[0]["subject"] == "someone on GitHub acme/app: An issue"
         else:
             assert notes == []
             assert core.store.one("SELECT COUNT(*) AS n FROM watch_events")["n"] == (3 if mode == "watch" else 0)
