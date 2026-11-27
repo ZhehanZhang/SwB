@@ -478,7 +478,8 @@ def create_app(core: "Switchboard") -> Any:
             timeout = 25.0
         since = _cursor(request)
         out = await core.inbox.wait(owner=p.source, since=since if since is not None else core.inbox.head(),
-                                    timeout=timeout, reader=f"channel:{p.source}", advance=False)
+                                    timeout=timeout, reader=f"channel:{p.source}", advance=False,
+                                    scopes=None if p.kind == "inbox_key" else p.scopes)
         return JSONResponse(out)
 
     async def inbox_events(request: Request) -> Response:
@@ -495,7 +496,8 @@ def create_app(core: "Switchboard") -> Any:
             cursor = start if start is not None else core.inbox.head()
             yield f"retry: 3000\nevent: ready\ndata: {json.dumps({'cursor': cursor, 'agent': agent})}\n\n".encode()
             while True:
-                got = await core.inbox.wait(owner=agent, since=cursor, timeout=HEARTBEAT_S, reader=f"channel:{p.source}", advance=False)
+                got = await core.inbox.wait(owner=agent, since=cursor, timeout=HEARTBEAT_S, reader=f"channel:{p.source}",
+                                            advance=False, scopes=None if p.kind == "inbox_key" else p.scopes)
                 for item in got["items"]:
                     if item["kind"] == "watch_digest":
                         continue

@@ -123,6 +123,14 @@ class SlackBlock(SlackIntake, SlackActions):
             status["manual_steps"] = [f"Upload {self.app_icon} as the app icon at api.slack.com/apps, Basic Information, Display Information"]
         return status
 
+    def status_for(self, principal: Principal) -> dict[str, Any]:
+        if principal.is_unrestricted_owner:
+            return self.status()
+        grant = self.engine.config.grant(principal.source) if self.engine is not None else None
+        return {"workspaces": {} if grant is None else {
+            label: {"intake": runtime.cfg.intake} for label, runtime in self.engine.runtimes.items() if grant.identities_for(label)
+        }, "modes": self.core.modes.status(principal, self.name)}
+
     async def start(self) -> None:
         if self.engine is not None:
             await self.engine.start(connect=self.core.slack_connect)

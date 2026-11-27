@@ -1,4 +1,5 @@
 from conftest import CAPTAIN, OWNER, SECOND_KEY, STATIC_KEY, call, error_text, payload, sign_in, beacon
+from switchboard.blocks.mcp.policy import CONVERSATION_NOT_FOUND
 
 
 def test_no_handle_inbox_returns_only_the_callers_items_and_handles_never_cross(make, capy):
@@ -13,10 +14,12 @@ def test_no_handle_inbox_returns_only_the_callers_items_and_handles_never_cross(
     assert [i["text"] for i in payload(call(c, tok, "capy_inbox"))["items"]] == ["for claude"]
     assert [i["text"] for i in payload(call(c, tok, "capy_inbox", {"since_cursor": 0, "project": "beacon"}))["items"]] == ["for claude"]
     assert payload(call(c, tok, "capy_inbox", {"since_cursor": 0, "project": "other"}))["items"] == []
-    stolen = payload(call(c, tok, "capy_wait", {"handle": theirs["handle"], "timeout_s": 0}))
-    assert stolen["items"] == [] and stolen["handle_status"] == "unknown"
+    code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "claude"}))["code"]
+    paired = c.post("/connect", json={"code": code}).json()["key"]
+    assert error_text(call(c, paired, "capy_wait", {"handle": theirs["handle"], "timeout_s": 0})) == CONVERSATION_NOT_FOUND
     assert "no handle" in error_text(call(c, tok, "capy_reply", {"thread_id": theirs["handle"], "text": "hijack"}))
-    assert "no handle" in error_text(call(c, tok, "capy_status", {"thread_id": theirs["handle"]}))
+    assert error_text(call(c, paired, "capy_status", {"thread_id": theirs["handle"]})) == CONVERSATION_NOT_FOUND
+    assert not call(c, tok, "capy_status", {"thread_id": theirs["handle"]}).get("isError")
     assert "no Capy handle" in error_text(call(c, tok, "capy_cancel", {"handle": theirs["handle"]}))
     assert [i["text"] for i in payload(call(c, STATIC_KEY, "capy_wait", {"timeout_s": 0}))["items"]] == ["for capy"]
 

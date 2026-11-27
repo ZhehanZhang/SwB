@@ -1,13 +1,34 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from ...chat import ChatBlock
+from ...memory import GENERAL, MemoryError_
 
 if TYPE_CHECKING:
+    from ...auth import Principal
     from ...core import Switchboard
 
 Role = Literal["owner", "self", "grant", "route", "setup"]
+ReadRole = Literal["message", "conversation", "provider_ref", "memory", "memory_scope", "owner"]
+
+READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
+    "get_message": ("message", "message_id"),
+    "result": ("provider_ref", "conversation"),
+    "status": ("provider_ref", "conversation"),
+    "wait": ("conversation", "conversation"),
+    "inbox": ("conversation", "conversation"),
+    "capy_result": ("provider_ref", "thread_id"),
+    "capy_status": ("provider_ref", "thread_id"),
+    "capy_wait": ("conversation", "handle"),
+    "capy_inbox": ("conversation", "handle"),
+    "memory_read": ("memory", "id"),
+    "memory_search": ("memory_scope", None),
+    "memory_list": ("memory_scope", None),
+    "context_pack": ("memory_scope", None),
+    "capy_captain_digest": ("owner", None),
+}
+REFERENCE_ARGS = frozenset({"message_id", "conversation", "handle", "thread_id", "ref"})
 
 MUTATION_ROLES: dict[str, Role] = {
     "space_mode": "owner",
@@ -58,6 +79,9 @@ AUTH_REQUIRED = "Sign in to call tools."
 OWNER_REQUIRED = "Use the owner's sign-in to call this tool."
 ROUTE_REQUIRED = "Use a route for your own agent or sign in as the owner."
 CONVERSATION_REQUIRED = "Choose a conversation for your own agent."
+CONVERSATION_NOT_FOUND = "Conversation not found."
+MESSAGE_NOT_FOUND = "message not found"
+MEMORY_NOT_FOUND = "memory not found"
 SCOPE_REQUIRED = "Choose a project granted to this key."
 TARGET_REQUIRED = "Choose a target granted to this key."
 TOOL_REQUIRED = "Use a key granted this tool."
@@ -67,7 +91,69 @@ MODE_REQUIRED = "Use an action allowed by the conversation mode."
 REFUSAL_DETAILS = frozenset({
     AUTH_REQUIRED, OWNER_REQUIRED, ROUTE_REQUIRED, CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED,
     POLICY_REQUIRED, MODE_REQUIRED,
+    CONVERSATION_NOT_FOUND, MESSAGE_NOT_FOUND, MEMORY_NOT_FOUND,
 })
+
+
+def can_read_conversation(core: Switchboard, p: Principal, handle: dict[str, Any] | None) -> bool:
+    if handle is None:
+        return False
+    scope = f'project:{handle["project"]}' if handle["project"] else GENERAL
+    return p.is_unrestricted_owner or (p.allows(scope) and core.inbox.participant(handle, p.source))
+
+
+def read_refusal(core: Switchboard, p: Principal, name: str, arguments: dict[str, Any]) -> str | None:
+    role, parameter = READ_ROLES[name]
+    if role == "owner":
+        return None if p.is_unrestricted_owner else OWNER_REQUIRED
+    reference = arguments.get(parameter) if parameter else None
+    if role == "message" and isinstance(reference, str):
+        handle = core.inbox.message_handle(reference)
+        return None if p.kind in ("key", "oauth", "connect") and can_read_conversation(core, p, handle) else MESSAGE_NOT_FOUND
+    if role in ("conversation", "provider_ref") and isinstance(reference, str):
+        reference = reference.strip()
+        if role == "provider_ref" and not reference.startswith("h_"):
+            block = next((b for b in core.blocks.values() if b.owns_ref(reference)
+                          and (not name.startswith("capy_") or b.manifest.id == "capy")), None)
+            if block is not None:
+                if p.is_unrestricted_owner:
+                    return None
+                for row in core.store.q("SELECT handle FROM handles WHERE destination = ? AND ref = ? AND owner = ?",
+                                        (block.name, reference, p.source)):
+                    if can_read_conversation(core, p, core.inbox.handle(row["handle"])):
+                        return None
+            return CONVERSATION_NOT_FOUND
+        handle = core.inbox.handle(reference)
+        if name in ("capy_result", "capy_status") and handle is not None:
+            block = core.blocks.get(handle["destination"])
+            if block is None or block.manifest.id != "capy":
+                return CONVERSATION_NOT_FOUND
+        return None if can_read_conversation(core, p, handle) else CONVERSATION_NOT_FOUND
+
+    scope = arguments.get("scope")
+    if role == "memory":
+        if isinstance(scope, str) and scope and not p.allows(scope.strip().lower()):
+            return MEMORY_NOT_FOUND
+        namespace, key = arguments.get("namespace"), arguments.get("key")
+        ident = reference if isinstance(reference, str) else None
+        if ident or all(isinstance(value, str) and value for value in (scope, namespace, key)):
+            try:
+                scope = core.memory.scope_of(ident, scope=scope, namespace=namespace, key=key)
+            except MemoryError_:
+                return MEMORY_NOT_FOUND
+            if not p.allows(scope):
+                return MEMORY_NOT_FOUND
+    if role == "memory_scope":
+        project = arguments.get("project")
+        scopes = arguments.get("scopes")
+        effective_project = project.strip().lower().removeprefix("project:") if isinstance(project, str) and project else ""
+        if effective_project and not p.allows(GENERAL if effective_project == GENERAL else f"project:{effective_project}"):
+            return MEMORY_NOT_FOUND
+        if isinstance(scopes, list) and any(isinstance(s, str) and not p.allows(s.strip().lower()) for s in scopes):
+            return MEMORY_NOT_FOUND
+        if not effective_project and not scopes and not p.allows(GENERAL):
+            return MEMORY_NOT_FOUND
+    return None
 
 
 def mutation_roles(core: Switchboard) -> dict[str, Role]:
