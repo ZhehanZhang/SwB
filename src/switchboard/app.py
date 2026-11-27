@@ -106,7 +106,7 @@ class BearerGate:
                     self.limiter.hit("companion_bearer_fail", ip)
                     self.core.audit.record_refusal(origin="http", client=audit_client_ip(scope), destination="core", action="auth_failure",
                                                    detail="unknown or revoked companion key" if token else "missing companion key",
-                                                   target=path.rstrip("/"))
+                                                   target="/companion")
                     await reject(send, 401, "invalid_token", "Use a valid companion key.")
                     return
                 scope[PRINCIPAL_SCOPE] = principal
@@ -518,7 +518,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                 got = await core.inbox.wait(owner=agent, since=cursor, timeout=HEARTBEAT_S, reader=f"channel:{p.source}",
                                             advance=False, scopes=None if p.kind == "inbox_key" else p.scopes)
                 for item in got["items"]:
-                    if item["kind"] == "watch_digest":
+                    if item["kind"] in ("watch_digest", "context"):
                         continue
                     yield f"id: {item['cursor']}\nevent: item\ndata: {json.dumps(item)}\n\n".encode()
                 if got["timed_out"]:

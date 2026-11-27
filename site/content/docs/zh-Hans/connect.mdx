@@ -97,3 +97,5 @@ SwB 把每段设置提示词作为 MCP prompt 和 MCP resource 提供给智能�
 各项设备功能默认关闭。加上 `--cap notify` 允许发送通知。加上 `--cap drop` 允许访问设备上的 SwB Drop 文件夹。
 
 运行 `swb companion run` 重新连接。运行 `swb companion status` 查看设备编号。运行 `swb companion disconnect` 移除设备。
+
+加上 `--cap mcp` 允许智能体调用设备上的工具。每个服务器使用一个 `--mcp` 参数。本机地址示例为 `--mcp notes=http://127.0.0.1:8000/mcp`。如果填写命令，请使用引号，例如 `--mcp 'notes=uvx notes-mcp'`。调用 `companion_invoke` 查看服务器和工具，或执行工具。
