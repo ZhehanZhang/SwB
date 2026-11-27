@@ -34,6 +34,11 @@ WORDMARK_DOT = '<svg class="wordmark-dot" viewBox="278.44 90.58 12.63 10.31" ari
 
 CSP = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; form-action 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'"
 CLAIM_BRAND = '<img class="brand" src="/assets/claim-brand.svg" alt="SwB" width="56" height="56">'
+CLAIM_THEME_META = (
+    '<meta name="color-scheme" content="light dark">\n'
+    '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">\n'
+    '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b">'
+)
 CLAIM_CONNECTORS = {
     "slack": ("Slack", "Slack token"),
     "discord": ("Discord", "Discord bot token"),
@@ -199,7 +204,8 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
     title = LOGIN_TITLE if button else "Ask your agent for a sign-in link"
     return HTMLResponse(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark"><title>{LOGIN_TITLE}</title>
+{CLAIM_THEME_META}
+<title>{LOGIN_TITLE}</title>
 <script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/claim.css"></head>
 <body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}>{CLAIM_BRAND}<h1>{title}</h1>
 <p id="login-error" role="status">{messages.get(error, "")}</p>{button}
@@ -389,7 +395,7 @@ def _claim_document(title: str, body: str, status: int = 200, *, grouped: bool =
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="referrer" content="same-origin">
-<meta name="color-scheme" content="light dark">
+{CLAIM_THEME_META}
 <title>{html.escape(title)} | SwB</title>
 <script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/claim.css">

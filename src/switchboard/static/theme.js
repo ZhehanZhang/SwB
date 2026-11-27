@@ -2,6 +2,11 @@
   const key = "swb-theme"
   const root = document.documentElement
   const system = window.matchMedia("(prefers-color-scheme: dark)")
+  const colorScheme = document.querySelector('meta[name="color-scheme"]')
+  const colors = ["light", "dark"].map(scheme => {
+    const meta = document.querySelector(`meta[name="theme-color"][media="(prefers-color-scheme: ${scheme})"]`)
+    return { meta, color: meta?.content }
+  })
   const read = (name = key) => {
     try { return localStorage.getItem(name) } catch { return null }
   }
@@ -19,10 +24,17 @@
   let preference = mode(read() ?? legacy())
   const apply = () => {
     const dark = preference === "dark" || (preference === "system" && system.matches)
+    const scheme = dark ? "dark" : "light"
+    const background = colors[dark ? 1 : 0].color
     root.classList.toggle("dark", dark)
-    root.dataset.theme = dark ? "dark" : "light"
+    root.dataset.theme = scheme
     root.dataset.themeMode = preference
-    root.style.colorScheme = dark ? "dark" : "light"
+    root.style.colorScheme = scheme
+    if (background) root.style.backgroundColor = background
+    if (colorScheme) colorScheme.content = preference === "system" ? "light dark" : scheme
+    for (const { meta, color } of colors) {
+      if (meta) meta.content = preference === "system" ? color : background ?? color
+    }
   }
   const update = value => {
     preference = mode(value)

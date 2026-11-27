@@ -142,7 +142,7 @@ function TurnPause({ pause, conversation }: { pause: Pause; conversation?: Conve
     <NeedsRow
       name={displayReference(conversation?.title || pause.root)}
       kind={conversation?.destination_kind || conversation?.destination}
-      avatarUrl={conversation?.target_avatar_url}
+      avatarUrl={conversation?.target_avatar_url ?? null}
       title={<Link className="hover:underline" to={conversationLink(pause.root)}>Paused at turn cap</Link>}
       at={pause.paused_at}
       preview={`${pause.turns} ${pause.turns === 1 ? "turn" : "turns"}`}
@@ -180,7 +180,7 @@ function Conversations({ items }: { items: Conversation[] }) {
             <tr key={row.handle} role="row" className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
               <td role="cell" className="font-mono text-xs wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project}</td>
               <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} /></td>
-              <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url} /></td>
+              <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? null} /></td>
               <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-1 max-md:font-semibold md:py-2 md:pr-3">
                 <Link to={conversationLink(row.handle)} className="after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring">
                   {displayReference(row.title || row.handle)}
@@ -353,7 +353,7 @@ function InboxConversation({ handle }: { handle: string }) {
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <Person label={people.from} kind={people.fromKind} />
             <ArrowRight aria-label="to" className="size-4 text-muted-foreground" strokeWidth={1.5} />
-            <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url} />
+            <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url ?? null} />
           </div>
           <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-xs text-muted-foreground">
             {conversation.project && <div className="flex flex-wrap gap-1"><dt>Project</dt><dd className="font-mono wrap-anywhere">{conversation.project}</dd></div>}
