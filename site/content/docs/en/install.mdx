@@ -52,6 +52,14 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 The answer lists each block and its state. A block that needs a setting shows the name of the missing variable.
 
+## Server commands
+
+| Command | Use |
+| - | - |
+| `swb serve` | Run the SwB server with its configured host and port. |
+| `swb config migrate` | Print a version 1 config in the version 2 format. |
+| `swb targets` | List the addresses, short names and levels of destinations for `send`. |
+
 ## Versions
 
 Each release is on PyPI as `swb-one` and on GitHub Container Registry as `ghcr.io/zhehanzhang/swb`. Use a version tag such as `1.0.0` to stay on one release. The tag `latest` follows the newest release.

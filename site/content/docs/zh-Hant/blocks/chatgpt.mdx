@@ -33,3 +33,27 @@ In #agents, posts that @mention you from my SwB app (bot <BOT_ID>, app <APP_ID>)
 ```
 
 設定 `delivery: mailbox`，即可改用 MCP Events 傳送給 dot，取代 Slack。
+
+## 設定
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.dots` | 向 ChatGPT dot 傳送訊息的設定 |
+| `blocks.dots.use` | 模組類型，填 `dots` |
+| `blocks.dots.enabled` | 設為 `false` 可略過此模組 |
+| `blocks.dots.delivery` | 透過 Slack 傳送時填 `slack`，透過 MCP Events 傳送時填 `mailbox`。預設為 `slack` |
+| `blocks.dots.workspace` | 要掃描的 Slack 工作區，預設使用第一個工作區 |
+| `blocks.dots.channel` | 向 dot 轉送訊息的私人 Slack 頻道，預設為 `#agents` |
+| `blocks.dots.create` | 設為 `true` 後，SwB 會視需要以擁有者身分建立頻道。預設為 `true` |
+| `blocks.dots.app_ids` | 用於辨識 dot 的 Slack 應用程式 ID |
+| `blocks.dots.match` | 在 Slack 機器人名稱中搜尋的文字，預設為 `[dot]` |
+| `blocks.dots.rescan_minutes` | 掃描 Slack dot 的間隔分鐘數，預設為 `30` |
+| `blocks.dots.poll_seconds` | 檢查 Slack 私人訊息回覆的間隔秒數，預設為 `5` |
+| `blocks.dots.default` | 目標名稱 `dot` 指向的 dot。填入它的簡稱或 ID |
+| `blocks.dots.dots` | 為 `mailbox` 傳送定義 dot，或覆寫從 Slack 找到的 dot 設定 |
+| `blocks.dots.dots.*.name` | dot 的顯示名稱 |
+| `blocks.dots.dots.*.mailbox` | 在 `mailbox` 模式下接收訊息的收件匣，預設為 `chatgpt` |
+| `blocks.dots.group_dm` | 設為 `true` 後使用擁有者、SwB 與 dot 的 Slack 群組私人訊息 |
+| `blocks.dots.owner_dm` | 設為 `true` 後，以擁有者身分傳送的訊息會送到擁有者與 dot 的 Slack 私人訊息 |
+| `blocks.dots.agents_as_owner` | 設為 `true` 後，擁有者的代理在頻道或一對一私人訊息中使用擁有者的 Slack 帳號傳送 |
+| `blocks.dots.owner_posts_as` | 轉送擁有者的 Slack 訊息給 dot 時使用的帳號。預設為 `swb`，設為 `owner` 則使用擁有者帳號 |

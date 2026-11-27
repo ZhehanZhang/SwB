@@ -40,3 +40,18 @@ blocks:
 ```
 
 The environment variables `CLAUDE_ROUTINE_TOKEN` and `CLAUDE_ROUTINE_ID` turn the block on with one routine.
+
+| Key | Use |
+| - | - |
+| `blocks.claude-routine` | Settings for waking Claude Code routines |
+| `blocks.claude-routine.use` | Block type. Use `claude-routine` |
+| `blocks.claude-routine.enabled` | Set `false` to skip this block |
+| `blocks.claude-routine.routines` | Map from routine names to settings |
+| `blocks.claude-routine.routines.*.agent` | Agent that receives the message. Default `claude` |
+| `blocks.claude-routine.routines.*.kind` | Use `project` for a routine with a project. Use `general` for a general routine |
+| `blocks.claude-routine.routines.*.project` | SwB project name for a project routine |
+| `blocks.claude-routine.routines.*.name` | Display name for the routine |
+| `blocks.claude-routine.routines.*.primary` | Set `true` to choose this routine first for its agent and project |
+| `blocks.claude-routine.routines.*.routine_id` | Claude API trigger ID, such as `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | Extra short names you can send to |
+| `blocks.claude-routine.routines.*.token_env` | Name of the variable that holds the routine token |

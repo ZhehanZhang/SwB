@@ -26,8 +26,27 @@ description: 把工作交給 Capy Captain 與討論串，並取回答案。
 
 ## 傳送金鑰
 
-Capy 把每則訊息顯示為傳送它的金鑰所寫。傳送時，SwB 先使用代理自己的金鑰 `CAPY_API_KEY_AS_<AGENT>`。接著使用服務金鑰 `CAPY_API_KEY_SERVICE`。設定 `identity: personal` 可讓每則訊息都以你自己的身分，用 `CAPY_API_KEY` 傳送。`/healthz` 會顯示每個代理用哪把金鑰傳送。
+Capy 顯示傳送金鑰所屬的帳號。SwB 先嘗試代理金鑰 `CAPY_API_KEY_AS_<AGENT>`，再嘗試服務金鑰。在 `personal` 模式下，也可以最後使用 `CAPY_API_KEY`。開啟 `/healthz` 可查看各代理使用的金鑰。
 
 ## 專案自動連結
 
 代理建立 SwB 專案時，Capy 模組會尋找對應的 Capy 專案。程式碼庫相符優先於名稱相符。只有一個明確相符時，SwB 會連結兩個專案，並把 SwB 專案路由到那位 Captain。
+
+## 設定
+
+| 設定鍵 | 用途 |
+| - | - |
+| `blocks.capy` | Capy 訊息傳送與討論串追蹤設定 |
+| `blocks.capy.use` | 模組類型，填 `capy` |
+| `blocks.capy.enabled` | 設為 `false` 可略過此模組 |
+| `blocks.capy.api_base` | Capy API 的基礎位址，預設為 `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | `service` 使用代理金鑰或服務金鑰。`personal` 也允許最後改用 `CAPY_API_KEY` |
+| `blocks.capy.send_key_env` | 存放服務傳送金鑰的變數名稱，預設為 `CAPY_API_KEY_SERVICE` |
+| `blocks.capy.default_route` | 只在初次設定時寫入全域 Capy 路由。填入 Capy 目標，例如 `captain:<id>` |
+| `blocks.capy.captain_delivery` | 向忙碌的 Captain 或討論串投遞訊息的方式。可選 `queue`、`steer` 或 `interrupt`，預設為 `queue` |
+| `blocks.capy.daily_cap` | 每天委派給 Capy 的次數上限。設為 `null` 可關閉上限 |
+| `blocks.capy.duplicate_window_s` | 在這段秒數內向同一目標重複傳送相同任務時，回傳原對話 ID。預設為 `600` |
+| `blocks.capy.burst` | 本版本僅在設定規格中列出此欄位 |
+| `blocks.capy.max_file_bytes` | 每次傳送的附件總大小上限，以位元組計，預設為 `10485760` |
+| `blocks.capy.handle_ttl_days` | 啟動時，只恢復追蹤在指定天數內委派的任務。這項設定也決定 MCP 任務的有效期，預設為 `7` 天 |
+| `blocks.capy.avatars` | 允許 SwB 取得 Captain 頭像。設為 `false` 則顯示首字母 |

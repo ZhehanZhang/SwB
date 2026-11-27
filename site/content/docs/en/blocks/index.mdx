@@ -23,6 +23,25 @@ Trust comes from the platform's own ids. SwB marks the owner's messages as `owne
 
 Every target, channel and memory scope starts private. Only the owner reaches a private resource. Share a resource to let other people reach it.
 
+## Bundled avatars
+
+Use a file name to select a bundled picture for a persona.
+
+| File | Name |
+| - | - |
+| `capy.png` | Capy |
+| `chatgpt.png` | ChatGPT |
+| `claude-code.png` | Claude Code |
+| `claude.png` | Claude |
+| `codex.png` | Codex |
+| `default.png` | `default` |
+| `dots.png` | ChatGPT dots |
+| `gemini.png` | Gemini |
+| `grok-bot.png` | Grok Bot |
+| `grok.png` | Grok |
+| `muse.png` | Muse |
+| `swb.png` | SwB |
+
 ## Add your own block
 
 A block is a Python class with a manifest. The manifest names the verbs, targets and secrets of the block. Third-party blocks register in the `switchboard.blocks` entry-point group. `swb blocks list` shows the installed blocks.

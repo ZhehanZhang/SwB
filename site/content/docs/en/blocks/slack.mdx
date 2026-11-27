@@ -44,3 +44,83 @@ A post from the bot can carry a persona, which is a name and a picture for one m
 ## Projects per channel
 
 `workspace_projects` maps a workspace to a project. `channel_projects` maps one channel to a project. The mapping chooses the project memory and the main routine for `@swb claude`.
+
+## Block settings
+
+| Key | Use |
+| - | - |
+| `blocks.slack` | Settings for the Slack block and its workspaces |
+| `blocks.slack.use` | Loads the `slack` block |
+| `blocks.slack.enabled` | Set `true` to load the block or `false` to turn it off |
+| `blocks.slack.refresh_minutes` | Minutes between updates to the target list. The default is `30` |
+| `blocks.slack.target_aliases` | Maps extra target names to existing targets |
+| `blocks.slack.workspace_projects` | Sets the default SwB project for each workspace |
+| `blocks.slack.channel_projects` | Sets a SwB project by workspace and channel name or ID |
+| `blocks.slack.listen_channels` | Sets `assist` mode for channel names or IDs in each workspace. A channel mode can override it |
+| `blocks.slack.max_text_chars` | Maximum characters kept from each incoming message. The default is `4000` |
+| `blocks.slack.event_retention_days` | Days to keep Slack events. The default is `14` |
+
+## Workspaces and accounts
+
+| Key | Use |
+| - | - |
+| `blocks.slack.workspaces` | Maps workspace names used in SwB to their Slack settings |
+| `blocks.slack.workspaces.*.team_id` | Slack workspace ID |
+| `blocks.slack.workspaces.*.app_id` | Slack app ID. SwB uses it to skip messages from its own app |
+| `blocks.slack.workspaces.*.intake` | Choose `socket` for live events, `poll` to read channel history, or `none` to turn off message intake |
+| `blocks.slack.workspaces.*.app_token_env` | Name of the environment variable for the app token used by Socket Mode |
+| `blocks.slack.workspaces.*.identities` | Slack accounts that SwB can use in this workspace |
+| `blocks.slack.workspaces.*.identities.bot` | Settings for the bot account |
+| `blocks.slack.workspaces.*.identities.bot.token_env` | Name of the environment variable for the bot token |
+| `blocks.slack.workspaces.*.identities.bot.write` | Write policy for the bot account. The default is `free` |
+| `blocks.slack.workspaces.*.identities.user` | Settings for the Slack user account |
+| `blocks.slack.workspaces.*.identities.user.token_env` | Name of the environment variable for the user token |
+| `blocks.slack.workspaces.*.identities.user.write` | Write policy for the user account. The default is `approval` |
+| `blocks.slack.workspaces.*.user_only` | Set `true` to use only the user account. Set its write policy to `approval` or `never` |
+| `blocks.slack.workspaces.*.watched` | Sets `watch` mode for the listed channels. Use `*` for every channel the bot has joined |
+| `blocks.slack.workspaces.*.default_target` | Target for a new message addressed to SwB with the target name omitted |
+| `blocks.slack.workspaces.*.ack_reaction` | Slack emoji name for acknowledgments on mentions and direct messages. The bot default is `eyes` |
+| `blocks.slack.workspaces.*.owner_user_ids` | Slack user IDs treated as owners. The workspace approver is the default |
+| `blocks.slack.workspaces.*.known` | Maps trusted Slack user or bot IDs to display names |
+| `blocks.slack.workspaces.*.sender_rate` | Limits message intake for each sender other than the owner. Applies to `assist`, `triage` and messages used as context |
+| `blocks.slack.workspaces.*.sender_rate.count` | Maximum messages per sender in the time window. The default is `5` |
+| `blocks.slack.workspaces.*.sender_rate.window_s` | Length of the time window in seconds. The default is `600` |
+| `blocks.slack.workspaces.*.bot_thread_posts_per_hour` | Bot posts allowed per thread in an hour before more posts need approval. The default is `20` |
+
+## Agent access and approvals
+
+| Key | Use |
+| - | - |
+| `blocks.slack.agents` | Maps SwB agents to their Slack permissions |
+| `blocks.slack.agents.*.workspaces` | Sets the accounts the agent can use in each workspace |
+| `blocks.slack.agents.*.allow_persona_override` | Set `true` to let the agent choose a persona for a bot post |
+| `blocks.slack.agents.*.allowed_personas` | Persona IDs the agent can choose when it has permission to choose a persona |
+| `blocks.slack.approvals` | Default settings for requests to approve Slack posts |
+| `blocks.slack.approvals.approver_user_id` | Slack user ID that receives and can decide default approval requests |
+| `blocks.slack.approvals.notify_workspace` | Workspace whose bot sends approval requests for the default approver |
+| `blocks.slack.approvals.ttl_minutes` | Minutes before an approval request expires. The default is `60` |
+| `blocks.slack.workspaces.*.approver_user_id` | Slack user ID that receives and can decide requests from this workspace. It takes priority over the default |
+
+## Names and pictures
+
+| Key | Use |
+| - | - |
+| `blocks.slack.personas` | Defines the names and pictures that the bot can use in posts |
+| `blocks.slack.personas.*.name` | Display name for bot posts that use the persona |
+| `blocks.slack.personas.*.avatar` | Picture file name for the persona. Set `blocks.slack.public_base_url` so Slack can fetch it |
+| `blocks.slack.personas.*.emoji` | Fallback Slack emoji for the persona picture |
+| `blocks.slack.avatar_dirs` | Extra folders SwB searches for avatar files before its bundled pictures |
+| `blocks.slack.public_base_url` | Public HTTPS address Slack uses to fetch avatar files, such as `https://swb.example.com` |
+| `blocks.slack.workspaces.*.default_persona` | Default persona ID for bot posts in this workspace |
+
+## Event delivery
+
+| Key | Use |
+| - | - |
+| `blocks.slack.workspaces.*.sinks` | Sets up webhooks that send Slack events to other services |
+| `blocks.slack.workspaces.*.sinks.*.name` | Name that identifies the webhook in logs and status |
+| `blocks.slack.workspaces.*.sinks.*.url_env` | Name of the environment variable for the webhook URL |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | Name of the environment variable for the key that signs webhook requests |
+| `blocks.slack.workspaces.*.sinks.*.kinds` | Event types to send. Choose from `watched`, `mention` and `dm`. The default sends all three |
+| `blocks.slack.workspaces.*.sinks.*.targets` | Send only events for these target names |
+| `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | Seconds to collect events for one request. The default of `0` sends each event on its own |

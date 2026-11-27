@@ -41,3 +41,11 @@ Run `swb connect muse` again for a test message. Then use `send(to="muse", task=
 SwB holds messages while the device is offline. Each wake opens a new chat in Muse.
 
 To change the bridge token, run `swb connect muse --choose replace=true`. Then start the bridge with `--setup`.
+
+## Config
+
+| Key | Use |
+| - | - |
+| `blocks.muse` | Settings for the Muse device connection |
+| `blocks.muse.use` | Block type. Use `muse` |
+| `blocks.muse.enabled` | Set `true` or omit this field to load the block. Set `false` to skip it |

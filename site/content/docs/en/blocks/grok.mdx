@@ -19,13 +19,28 @@ SwB returns a routine prompt and two claim links. Make a Grok routine with a cus
 
 ## How a wake works
 
-A send to the routine posts a signed webhook to Grok. The webhook carries the text, the conversation, the project, the sender and the trust level. The routine answers on the conversation through its SwB connector.
+A send to the routine makes a webhook request to Grok. The request carries the text and identifies the conversation, the project and the sender. It also gives the sender's trust level. The routine answers through its SwB connector.
 
 ```yaml
 blocks:
   grok-routine:
     routines:
-      project-doorman: {project: example, url_env: GROK_WEBHOOK_URL, auth: signature, secret_env: GROK_WEBHOOK_SECRET}
+      project-doorman: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
 ```
 
 Send to a routine by its name, or to `grok:<slug>` for the main routine of a project.
+
+## Config
+
+| Key | Use |
+| - | - |
+| `blocks.grok-routine` | Settings for waking Grok Bot routines |
+| `blocks.grok-routine.use` | Block type. Use `grok-routine` |
+| `blocks.grok-routine.enabled` | Set `false` to skip this block |
+| `blocks.grok-routine.routines` | Map from routine names to settings |
+| `blocks.grok-routine.routines.*.project` | SwB project short name. Use `null` for a general routine |
+| `blocks.grok-routine.routines.*.primary` | Set `true` to choose this routine first for its project |
+| `blocks.grok-routine.routines.*.auth` | Use `key` to send a key or `signature` to sign the request. Default `key` |
+| `blocks.grok-routine.routines.*.header` | HTTP header for the key or signature. Defaults are `Authorization` for `key` and `Webhook-Signature` for `signature` |
+| `blocks.grok-routine.routines.*.url_env` | Name of the variable that holds the public HTTPS webhook address |
+| `blocks.grok-routine.routines.*.secret_env` | Name of the variable that holds the key or signing secret |
