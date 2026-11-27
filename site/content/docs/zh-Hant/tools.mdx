@@ -94,19 +94,26 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `connect_code` | 為新代理產生配對碼 |
 | `connect_list` | 列出代理金鑰 |
 | `connect_revoke` | 移除代理金鑰 |
-| `companion_code` | 以擁有者身分建立裝置配對碼 |
-| `companion_list` | 以擁有者身分查看已配對的裝置和裝置動作 |
-| `companion_invoke` | 以擁有者身分在已連線的裝置上執行動作 |
-| `companion_revoke` | 以擁有者身分移除已配對的裝置 |
 | `login_link` | 為擁有者產生一次性登入連結 |
 | `modes_status` | 查看你可以存取的頻道和程式碼庫的模式、目標及設定問題 |
 | `space_mode` | 以擁有者身分設定模式、專案與允許的動作。用 `inherit` 清除設定 |
 | `visibility_list` | 以擁有者身分查看預設存取規則和各項資源的存取規則 |
 | `visibility_set` | 以擁有者身分將資源設為私人或共用。工具一律為私人 |
 
+### 夥伴裝置工具
+
+請以擁有者身分使用這些工具。
+
+| 工具 | 名稱 | 用途 |
+| - | - | - |
+| `companion_code` | Pair a companion | 建立裝置配對碼 |
+| `companion_list` | List companions | 查看已配對的裝置、連線狀態與可用操作 |
+| `companion_invoke` | Run a companion action | 在已連線的裝置上執行操作 |
+| `companion_revoke` | Disconnect a companion | 撤銷裝置金鑰並結束連線 |
+
 ## 路由
 
-路由為 `send` 選擇目標。請使用支援路由的模組，例如 `capy`、`claude-routine` 或 `grok-routine`。若要直接傳到代理的收件匣，請呼叫 `send` 並指定 `to="agent:<name>"`。傳送訊息給 Muse 時，請指定 `to="agent:muse"`。
+路由為 `send` 選擇目標。請使用支援路由的模組，例如 `capy`、`claude-routine` 或 `grok-routine`。若要直接傳到代理的收件匣，請呼叫 `send` 並指定 `to="agent:<name>"`。傳送到 Muse 收件匣時，請指定 `to="agent:muse"`。[喚醒 Muse](/zh-Hant/docs/setup/muse#即時喚醒-muse)時，請指定 `to="muse:gadget:muse"`。
 
 | 工具 | 用途 |
 | - | - |

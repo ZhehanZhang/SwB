@@ -94,19 +94,26 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `connect_code` | 为新智能体生成配对码 |
 | `connect_list` | 列出智能体密钥 |
 | `connect_revoke` | 删除一个智能体密钥 |
-| `companion_code` | 以所有者身份创建设备配对码 |
-| `companion_list` | 以所有者身份查看已配对的设备和设备操作 |
-| `companion_invoke` | 以所有者身份在已连接的设备上执行操作 |
-| `companion_revoke` | 以所有者身份移除已配对的设备 |
 | `login_link` | 为所有者生成一次性登录链接 |
 | `modes_status` | 查看你有权访问的频道和仓库的模式、目标及配置问题 |
 | `space_mode` | 以所有者身份设置模式、项目和允许的操作。用 `inherit` 清除设置 |
 | `visibility_list` | 以所有者身份查看默认访问规则和各个资源的访问规则 |
 | `visibility_set` | 以所有者身份将资源设为私有或共享。工具始终为私有 |
 
+### 伴侣设备工具
+
+请以所有者身份使用这些工具。
+
+| 工具 | 名称 | 用途 |
+| - | - | - |
+| `companion_code` | Pair a companion | 创建设备配对码 |
+| `companion_list` | List companions | 查看已配对的设备、连接状态和可用操作 |
+| `companion_invoke` | Run a companion action | 在已连接的设备上执行操作 |
+| `companion_revoke` | Disconnect a companion | 撤销设备密钥并关闭连接 |
+
 ## 路由
 
-路由为 `send` 选择目标。请选择支持路由的模块，例如 `capy`、`claude-routine` 或 `grok-routine`。要直接发到智能体的收件箱，请调用 `send` 并指定 `to="agent:<name>"`。向 Muse 发送消息时，请指定 `to="agent:muse"`。
+路由为 `send` 选择目标。请选择支持路由的模块，例如 `capy`、`claude-routine` 或 `grok-routine`。要直接发到智能体的收件箱，请调用 `send` 并指定 `to="agent:<name>"`。发送到 Muse 收件箱时，请指定 `to="agent:muse"`。[唤醒 Muse](/zh-Hans/docs/setup/muse#实时唤醒-muse)时，请指定 `to="muse:gadget:muse"`。
 
 | 工具 | 用途 |
 | - | - |
