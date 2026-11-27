@@ -135,10 +135,10 @@ def test_key_scope_allowlist(make):
                        ("memory_delete", {"id": w["id"]}),
                        ("memory_search", {"query": "beacon", "project": "beacon"}),
                        ("context_pack", {"project": "beacon"}),
-                       ("routes_set", {"target": "captain:Captain"}),
-                       ("project_create", {"slug": "new", "name": "New"}),
                        ("capy_delegate", {"task": "x", "project": "beacon"})):
         assert "limited to project:orbit" in error_text(call(c, SECOND_KEY, tool, args)) or "may not read" in error_text(call(c, SECOND_KEY, tool, args)), tool
+    assert "your own agent" in error_text(call(c, SECOND_KEY, "routes_set", {"target": "captain:Captain"}))
+    assert "owner's sign-in" in error_text(call(c, SECOND_KEY, "project_create", {"slug": "new", "name": "New"}))
     items = payload(call(c, SECOND_KEY, "memory_search", {"query": "orbit", "project": "orbit"}))["items"]
     assert {i["scope"] for i in items} == {"project:orbit"}
     assert payload(call(c, SECOND_KEY, "switchboard_status", {}))["you"]["scopes"] == ["project:orbit"]

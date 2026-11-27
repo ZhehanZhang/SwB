@@ -7,7 +7,7 @@ import uvicorn
 from switchboard.app import create_app
 
 from switchboard.origins.mcp import WaitCaps
-from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, eventually, payload
+from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, base_config, eventually, payload
 
 
 async def test_capy_wait_returns_early_on_a_stream_event(amake, capy):
@@ -86,6 +86,18 @@ async def test_tasks_cancel(amake):
     assert (await arpc(c, STATIC_KEY, "tasks/cancel", {"taskId": tid}, modern=True)).json()["result"]["resultType"] == "complete"
     got = (await arpc(c, STATIC_KEY, "tasks/get", {"taskId": tid}, modern=True)).json()["result"]
     assert got["status"] == "cancelled"
+
+
+async def test_tasks_cancel_honors_the_tool_allowlist(amake):
+    cfg = base_config()
+    cfg["auth"]["key_tools"] = {"capy": ["capy_delegate"]}
+    core, c = await amake(config=cfg)
+    tid = (await acall(c, STATIC_KEY, "capy_delegate", {"task": "Test task policy"}, tasks=True))["taskId"]
+    response = (await arpc(c, STATIC_KEY, "tasks/cancel", {"taskId": tid}, modern=True)).json()
+    assert response["error"]["code"] == -32602
+    assert core.inbox.handle(tid)["open"]
+    [row] = core.audit.recent(action="tool_refused")
+    assert (row["target"], row["detail"]) == ("cancel", "Use a key granted this tool.")
 
 
 async def test_channel_key_reads_claude_codes_inbox_only(amake, capy):
