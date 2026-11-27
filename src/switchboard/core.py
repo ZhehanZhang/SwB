@@ -34,6 +34,7 @@ from .env import env_value
 from .inbox import Inbox
 from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath, MemoryRefused, frame_entry,
                      missing_path)
+from .memory_git import MemoryGit
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
 from .refusals import (CONVERSATION_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, OWNER_REQUIRED,
@@ -102,6 +103,7 @@ class Switchboard:
         if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None and any(migrated):
             log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
+        self.memory_git = MemoryGit(self)
         self.companions = Companions(self.store, self.audit, self)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
@@ -216,6 +218,7 @@ class Switchboard:
         for b in self.blocks.values():
             await b.start()
         self.spawn(self.modes.run(), name="watch-digests")
+        self.memory_git.start()
 
     async def aclose(self) -> None:
         for t in list(self._tasks):
@@ -229,6 +232,7 @@ class Switchboard:
         await self.auth.http.aclose()
         if self.memory.mirror_pending:
             self.memory.flush_mirror()
+        await asyncio.to_thread(self.memory_git.close)
         self.store.close()
 
     def status(self, principal: Principal | None = None, *, public: bool = False,

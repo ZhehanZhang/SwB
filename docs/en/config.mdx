@@ -167,6 +167,10 @@ See [Channel modes](/docs/channel-modes) to bind a project route and set triage 
 | `memory.mirror` | Controls the Markdown copy. Set `false` to stop updates |
 | `memory.mirror_dir` | Folder for the Markdown copy |
 | `memory.mirror_debounce_s` | Seconds to wait after a memory change before writing the copy. Default `2` |
+| `memory.sync` | Lets agents copy their own memory into SwB with `memory_sync`. Default `true`. The **Memory sync** switch in the console overrides it |
+| `memory.backup` | Settings for the Git backup of memory |
+| `memory.backup.debounce_s` | Seconds to wait after a memory change before a backup commit. Default `30` |
+| `memory.backup.max_delay_s` | Longest wait in seconds for a backup commit during many changes. Default `300` |
 | `modes` | Settings for how SwB acts on incoming events |
 | `modes.default` | Default mode. The default is `off` |
 | `modes.projects` | Default mode for spaces assigned to each project |

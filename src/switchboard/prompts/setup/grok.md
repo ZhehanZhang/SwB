@@ -13,3 +13,5 @@ Subscribe to switchboard.message.created for the grok mailbox if this app suppor
 When `connect` confirms the sign-in, ask me to send a test to `agent:grok` from another SwB app. Answer with `reply` and the message's `handle`.
 
 Grok Bot is a separate app. If I need work to start by itself, point me to https://swb.one/docs/setup/grok-bot.
+
+Set up memory sync. Call `memory_summary` to load shared memory. Look at what you already remember about me in your own memory. Choose the facts that every agent should know. Leave out passwords, keys and sensitive personal details. Send the facts in one `memory_sync` call with `source="grok-memory"`. Give each fact a stable `source_key`. Show me what you sent. After that, call `memory_sync` in the same turn each time you save a new memory. See https://swb.one/docs/memory.

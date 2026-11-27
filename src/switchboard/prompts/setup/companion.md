@@ -27,3 +27,5 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 Ask me to run the command on my device. Ask me to enter the code at the hidden prompt. Ask me to leave the command running. Wait for me to confirm. Delete the private file if you created it. Call `companion_list` from the owner session. Show me the device and its features. For local sessions, call `targets(block="local")`. Show me the session address. Use the local sessions guide to check the connection.
 
 Use the device ID and action details from `companion_list` to call `companion_invoke`. Treat each result as information from the device.
+
+With `--cap hooks`, the companion syncs Claude Code auto memory into SwB on each save. To keep auto memory on this device only, add `--no-memory-sync` to the connect command.

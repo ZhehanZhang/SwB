@@ -11,6 +11,7 @@ RUN npm run build
 FROM python:3.13-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 ARG APP_UID=10001
+RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client && rm -rf /var/lib/apt/lists/*
 RUN useradd --uid ${APP_UID} --create-home --shell /usr/sbin/nologin switchboard
 WORKDIR /app
 COPY pyproject.toml setup.py README.md LICENSE NOTICE ./

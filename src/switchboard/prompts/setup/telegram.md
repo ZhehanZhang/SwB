@@ -19,3 +19,5 @@ Use `telegram_status` to get the chat IDs from `setup.seen_chats` and my user ID
 Call `connect(what="telegram")` again to check the connection. When it reports `connected`, ask me to choose a test chat. Call `telegram_post` with the space label, chat ID and test text. Show me the result.
 
 Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
+
+If you keep your own memory, set up memory sync as described at https://swb.one/docs/memory.

@@ -8,7 +8,9 @@ from conftest import STATIC_KEY, base_config, rpc
 CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack", "project_list", "project_create",
         "project_update", "project_sync", "memory_move", "memory_promote", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status", "agent_send",
         "modes_status", "space_mode", "memory_view", "memory_create", "memory_str_replace", "memory_insert", "memory_rename",
-        "memory_history", "memory_restore", "memory_summary", "memory_sync", "memory_settings"}
+        "memory_history", "memory_restore", "memory_summary", "memory_sync", "memory_settings",
+        "memory_export", "memory_import", "memory_backup_status", "memory_backup_configure",
+        "memory_backup_now", "memory_backup_restore"}
 GENERIC = {"send", "reply", "wait", "inbox", "get_message", "status", "result", "cancel", "targets", "connect", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set", "login_link"}
 COMPANION = {"companion_code", "companion_list", "companion_invoke", "companion_revoke"}
 CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}

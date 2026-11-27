@@ -532,6 +532,9 @@ class MCPBlock(Block):
             if sync is None:
                 return core.memory_settings()
             return core.set_memory_setting(who(ctx), sync)
+        from .memory_backup_tools import register as register_memory_backup
+
+        register_memory_backup(mcp, core, who, sync)
 
         @mcp.tool(
             title="Session briefing",

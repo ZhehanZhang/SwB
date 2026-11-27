@@ -34,3 +34,5 @@ After the restart, call `connect(what="slack")` again. Ask me to save the requir
 When `connect` reports `connected`, check access with `slack_workspaces`. Ask me to choose a test channel. Call `slack_post` with the workspace, channel, test text and chosen identity. Show me whether SwB sent the message or queued it for approval.
 
 Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
+
+If you keep your own memory, set up memory sync as described at https://swb.one/docs/memory.

@@ -836,6 +836,14 @@ class Memory:
         return "\n".join(lines) + "\n"
 
     def _sync_mirror(self) -> None:
+        self._schedule_mirror()
+        for listener in tuple(self.listeners):
+            try:
+                listener()
+            except Exception as exc:
+                log.error("Memory change listener failed: %s", type(exc).__name__)
+
+    def _schedule_mirror(self) -> None:
         """Rewrite the mirror after a change. A burst collapses into one export, at most debounce x 10 after its first change."""
         if not self.mirror_dir:
             return
@@ -854,15 +862,7 @@ class Memory:
             self._mirror_timer.daemon = True
             self._mirror_timer.start()
 
-    def changed(self) -> None:
-        self._sync_mirror()
-        for listener in tuple(self.listeners):
-            try:
-                listener()
-            except Exception as exc:
-                log.error("Memory change listener failed: %s", type(exc).__name__)
-
-    schedule_mirror = changed
+    changed = schedule_mirror = _sync_mirror
 
     def flush_mirror(self) -> None:
         with self._mirror_lock:
