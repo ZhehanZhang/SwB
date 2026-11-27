@@ -737,7 +737,8 @@ class Switchboard:
                                       destination="mailbox", action="cancel", outcome="ok", ref=h["handle"])
                 return {"conversation": h["handle"], "status": "cancelled"}
             out = {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"]}
-            if h["owner"] == principal.source and h["status"] in ("delivered", "working"):
+            recipient = h["owner"]
+            if principal.source == recipient and h["status"] in ("delivered", "working"):
                 out["note"] = "Answer this message with reply."
             return out
         if block is None:
