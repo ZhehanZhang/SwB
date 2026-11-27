@@ -29,7 +29,7 @@ def mentions(row, text):
         name = name.rsplit(":", 1)[-1]
     elif kind in ("block", "provider", "avatar"):
         name = row["label"]
-    elif kind not in ("command", "tool"):
+    elif kind not in ("command", "prompt", "tool"):
         return False
     return re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text) is not None
 

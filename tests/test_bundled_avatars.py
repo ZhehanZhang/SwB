@@ -20,4 +20,3 @@ def test_bundled_avatars_match_manifest_and_public_routes(make):
         avatar = client.get(f"/avatars/{name}")
         assert avatar.status_code == 200 and avatar.headers["content-type"] == "image/png"
         assert avatar.content == data
-    assert client.get("/avatars/switchboard.png").content == (BUNDLED_AVATARS / "swb.png").read_bytes()

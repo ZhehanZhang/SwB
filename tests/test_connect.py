@@ -128,10 +128,10 @@ def test_block_status_and_token_setup(make):
 
 
 def test_slack_app_icon_is_a_manual_step_in_status(make):
-    _, client = make(config=base_config(version=2, blocks={"mcp": {}, "slack": {"app_icon": "switchboard.png"}}))
+    _, client = make(config=base_config(version=2, blocks={"mcp": {}, "slack": {"app_icon": "swb.png"}}))
     status = payload(call(client, STATIC_KEY, "switchboard_status"))
     assert status["destinations"]["slack"]["manual_steps"] == [
-        "Upload switchboard.png as the app icon at api.slack.com/apps, Basic Information, Display Information",
+        "Upload swb.png as the app icon at api.slack.com/apps, Basic Information, Display Information",
     ]
 
 
