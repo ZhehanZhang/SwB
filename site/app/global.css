@@ -113,9 +113,10 @@
 .swb-board {
   container-type: inline-size;
   position: relative;
-  aspect-ratio: 1100 / 460;
   width: 100%;
 }
+
+.swb-halo { fill: none; stroke: var(--accent); stroke-width: 3; }
 
 .swb-cord {
   fill: none;
@@ -139,12 +140,25 @@
 
 .swb-node {
   position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 1.2cqw;
-  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
   white-space: nowrap;
 }
+
+.swb-node .swb-node-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.swb-node-right .swb-node-label { left: calc(100% + 1.2cqw); }
+.swb-node-left .swb-node-label { right: calc(100% + 1.2cqw); }
+.swb-board-tall .swb-node-label { display: none; }
+.swb-board-tall .swb-mark-tile { width: 10cqw; height: 10cqw; }
+.swb-board-tall .swb-hub, .swb-board-tall .swb-hub-ring { width: 17cqw; height: 17cqw; }
+.swb-board-wide .swb-mark-tile { width: 4.4cqw; height: 4.4cqw; }
+.swb-board-wide .swb-hub, .swb-board-wide .swb-hub-ring { width: 8cqw; height: 8cqw; }
 
 .swb-node-label {
   font-family: var(--font-mono, ui-monospace), monospace;
@@ -212,8 +226,7 @@
 }
 
 .swb-board .swb-cord { stroke-dasharray: 1; stroke-dashoffset: 0; }
-.swb-board .swb-cord-in { animation: swb-draw 1.1s ease-out both; }
-.swb-board .swb-cord-out { animation: swb-draw 1.1s .5s ease-out both; }
+.swb-board .swb-cord { animation: swb-draw 1.1s ease-out both; }
 .swb-hub-ring {
   position: absolute;
   width: 6.4cqw;

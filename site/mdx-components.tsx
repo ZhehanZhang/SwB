@@ -4,7 +4,8 @@ import { Card, Cards } from 'fumadocs-ui/components/card';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import defaults from 'fumadocs-ui/mdx';
+import { SetupPrompt } from '@/components/setup-prompt';
 
 export function useMDXComponents(overrides?: MDXComponents): MDXComponents {
-  return { ...defaults, Tabs, Tab, Steps, Step, Callout, Cards, Card, ...overrides };
+  return { ...defaults, Tabs, Tab, Steps, Step, Callout, Cards, Card, SetupPrompt, ...overrides };
 }

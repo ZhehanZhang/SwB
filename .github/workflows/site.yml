@@ -4,10 +4,14 @@ on:
   pull_request:
     paths:
       - 'site/**'
+      - 'docs/prompts/**'
+      - 'docs/inventory.json'
       - '.github/workflows/site.yml'
   push:
     paths:
       - 'site/**'
+      - 'docs/prompts/**'
+      - 'docs/inventory.json'
       - '.github/workflows/site.yml'
 
 permissions:
