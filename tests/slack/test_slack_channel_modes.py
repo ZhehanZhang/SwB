@@ -1,7 +1,7 @@
 from functools import partial
 
 import pytest
-from conftest import CAPTAIN, call, error_text, payload
+from conftest import CAPTAIN, Clock, call, error_text, payload
 from slackfix import BOT_USER, KEY_FULL, OWNER_A, Hooks
 from test_listen import CHANNEL, EXTERNAL, THREAD, TS, handle_of, ingest, posted
 from test_listen import opened as listen_fixture
@@ -30,6 +30,68 @@ def test_slack_off_drops_guest_but_keeps_owner_mention(opened):
         client.portal.call(partial(core.verb, principal, "reply", handle, text="done"))
         (post,) = posted(client, world, 1)
         assert post["channel"] == CHANNEL and post["thread_ts"] == TS
+
+
+@pytest.mark.parametrize(("mode", "mention", "is_bot", "reason"), [
+    ("off", True, False, "channel mode off"),
+    ("assist", False, False, "assist needs a target"),
+    ("triage", False, False, "triage needs an agent"),
+    ("assist", False, True, "external bot message"),
+])
+def test_slack_mode_drops_are_counted_and_throttled(opened, monkeypatch, mode, mention, is_bot, reason):
+    with opened(channels=[], mapped="no-routine") as (core, client, _, fires):
+        clock = Clock()
+        monkeypatch.setattr(core, "clock", clock)
+        set_mode(core, client, mode)
+        attrs = {"type": "app_mention", "text": f"<@{BOT_USER}> private message body"} if mention else {"text": "Private message body"}
+        for ts in (TS, "1700000500.000003"):
+            assert ingest(core, client, ts=ts, is_bot=is_bot, **attrs) is None
+        [row] = core.audit.recent(action="chat_event", outcome="dropped")
+        assert (row["origin"], row["source"], row["target"], row["detail"], row["ref"], row["excerpt"]) == (
+            "slack", "slack", f"team/{CHANNEL}", reason, None, "",
+        )
+        status = core.blocks["slack"].status()
+        assert status["dropped"] == 2 and status["drop_reasons"] == {reason: 2}
+        clock.t += 600
+        assert ingest(core, client, ts="1700000500.000004", is_bot=is_bot, **attrs) is None
+        assert core.blocks["slack"].status()["drop_reasons"] == {reason: 3}
+        assert len(core.audit.recent(action="chat_event", outcome="dropped")) == 2
+        assert not fires
+
+
+def test_slack_ordinary_watch_chatter_has_no_drop_audit(opened):
+    with opened(channels=[]) as (core, client, _, _):
+        set_mode(core, client, "watch")
+        assert ingest(core, client)["trust"] == "external"
+        assert ingest(core, client, ts="1700000500.000003", is_bot=True) is None
+        assert not core.audit.recent(action="chat_event")
+        assert core.blocks["slack"].status()["drop_reasons"] == {}
+
+
+def test_slack_legacy_mention_without_a_destination_is_a_drop(opened):
+    with opened(channels=[], mapped=None, workspace_project=None) as (core, client, _, fires):
+        for ts in (TS, "1700000500.000003"):
+            ingest(core, client, ts=ts, type="app_mention", text=f"<@{BOT_USER}> Check this report", user=OWNER_A)
+        [row] = core.audit.recent(action="chat_event", outcome="dropped")
+        assert row["detail"] == "work needs a target"
+        assert core.blocks["slack"].status()["drop_reasons"] == {"work needs a target": 2}
+        assert not fires
+
+
+def test_slack_legacy_context_limit_counts_drops_without_delivering(opened):
+    with opened(channels=[], rate=1) as (core, client, world, fires):
+        pair = core.connections.mint(agent="alpha", project=None, client=None, by="owner")
+        core.connections.redeem(pair["code"])
+        client.portal.call(core.blocks["slack"].refresh)
+        core.visibility.set("target:alpha", "private", "test", core.clock())
+        attrs = {"type": "app_mention", "text": f"<@{BOT_USER}> alpha Check the report"}
+        for ts in (TS, "1700000500.000003", "1700000500.000004"):
+            ingest(core, client, ts=ts, **attrs)
+        assert core.blocks["slack"].status()["drop_reasons"] == {"target access restricted": 1, "sender rate limit": 2}
+        rows = core.audit.recent(action="chat_event", outcome="dropped")
+        assert [row["detail"] for row in rows] == ["sender rate limit", "target access restricted"]
+        assert [item["kind"] for item in core.inbox.read(owner="alpha")["items"]] == ["context"]
+        assert world.names().count("chat_postEphemeral") == 1 and not fires
 
 
 def test_slack_watch_deduplicates_and_never_fans_out(opened):

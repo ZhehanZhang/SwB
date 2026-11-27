@@ -87,6 +87,13 @@ test("dropped webhooks show the reason in the audit log", async ({ page }) => {
   await expect(row.getByRole("cell", { name: "channel mode off", exact: true })).toBeVisible()
 })
 
+test("dropped chat wakes show the reason in Messages", async ({ page }) => {
+  await page.goto("/audit")
+  await page.getByRole("tab", { name: "Messages" }).click()
+  const row = page.getByRole("row").filter({ hasText: "Dropped chat wake in engineering/2002" })
+  await expect(row.getByRole("cell", { name: "triage needs an agent", exact: true })).toBeVisible()
+})
+
 test("agent tiles and claim pages display bundled avatars", async ({ page }) => {
   await page.goto("/agents")
   for (const name of ["claude-code", "codex", "chatgpt", "gemini"]) {
