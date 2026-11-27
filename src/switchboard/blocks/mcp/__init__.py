@@ -204,6 +204,8 @@ class LimitedServer(MCPServer):
                 if candidate in ("label", "comment", "open_issue", "link_duplicate", "reply", "notify_owner"):
                     action = candidate
                     repo = arguments.get("repo") if isinstance(arguments.get("repo"), str) else None
+        if action == "notify_owner":
+            return
         try:
             self.modes.check(p, ref, action, repo)
         except PermissionError as e:

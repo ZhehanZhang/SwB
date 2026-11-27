@@ -572,17 +572,8 @@ class GitHubBlock(Block):
                                             ("PATCH", path, {"state": "closed", "state_reason": "not_planned"})))
 
     async def notify_owner(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
-        meta = self._check(call, handle, "notify_owner")
-        if not meta:
-            raise BlockError("Use the triage conversation handle to notify the owner")
-        text = self._text(text, 4000)
-        note = self.core.inbox.open_handle(owner="owner", destination="mailbox", ref=call.principal.source, project=meta["project"],
-                                           title="Triage note", meta={}, status="delivered")
-        self.core.inbox.update_handle(note, open=False)
-        await self.core.inbox.add(note, "triage_note", {"text": text, "permalink": meta["permalink"], "conversation": handle,
-                                                       "block": meta["block"], "space": meta["space"], "channel": meta["channel"]})
-        self.core.modes.audit_action(call.principal, meta, "notify_owner")
-        return {"ok": True, "handle": note}
+        out = await self.core.notify_mode_owner(call.principal, handle, text)
+        return {"ok": True, "handle": out["handle"]}
 
     async def reply(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
         meta = self._check(call, handle, "reply")

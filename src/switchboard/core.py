@@ -11,6 +11,7 @@ import contextlib
 import json
 import logging
 import secrets
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -30,7 +31,7 @@ from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_, MemoryRefused
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
-from .refusals import CONVERSATION_REQUIRED, MODE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal
+from .refusals import CONVERSATION_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal
 from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
@@ -273,7 +274,7 @@ class Switchboard:
     async def agent_send(self, principal: Principal, *, to: str, text: str, project: str | None = None, in_reply_to: str | None = None,
                          final: bool = True, allow_self: bool = False, handle: str | None = None,
                          handle_meta: dict[str, Any] | None = None, title: str | None = None,
-                         _reply: bool = False, _mode_notify: bool = False, dry_run: bool = False) -> dict[str, Any]:
+                         _reply: bool = False, dry_run: bool = False) -> dict[str, Any]:
         """Put a message in another agent's mailbox. The sender is the authenticated caller, never anything in the text.
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine)."""
@@ -286,7 +287,7 @@ class Switchboard:
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
             raise CoreRefused(MODE_REQUIRED, "listen conversations can only be answered with reply")
-        if to not in self.known_agents() and not (original is not None and original["ref"] == to) and not (_mode_notify and to == "owner"):
+        if to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
         if to == principal.source and not (allow_self or own):
@@ -714,6 +715,8 @@ class Switchboard:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref, read=verb in ("status", "result"))
         final = kw.pop("final", None)
+        if verb == "reply" and to_owner and h is not None and h["meta"].get("channel_mode"):
+            return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
         if verb == "cancel" and h is not None and h["destination"] == "mailbox" and h["ref"] != principal.source:
             raise CoreRefused(CONVERSATION_REQUIRED, "Choose a mailbox conversation you sent.")
         if verb == "reply" and h is not None and h["destination"] == "mailbox":
@@ -726,12 +729,10 @@ class Switchboard:
         channel_mode = None
         if verb in ("reply", "cancel"):
             try:
-                channel_mode = self.modes.check(principal, ref, "notify_owner" if verb == "reply" and to_owner else verb)
+                channel_mode = self.modes.check(principal, ref, verb)
             except PermissionError as exc:
                 raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
         if channel_mode:
-            if to_owner:
-                return await self.notify_mode_owner(principal, ref, kw.get("text") or "")
             if self.blocks[channel_mode["block"]].manifest.id == "github":
                 raise CoreError(f"GitHub conversations use {channel_mode['block']}_reply to post a reply")
             if channel_mode["mode"] == "assist":
@@ -792,28 +793,32 @@ class Switchboard:
         return out
 
     async def notify_mode_owner(self, principal: Principal, conversation: str, text: str, *, to: str | None = None) -> dict[str, Any]:
+        conversation = conversation.strip()
         try:
             meta = self.modes.check(principal, conversation, "notify_owner")
         except PermissionError as exc:
             raise CoreRefused(MODE_REQUIRED, str(exc)) from exc
-        if meta is None:
-            raise CoreRefused(MODE_REQUIRED, "notify_owner needs a triage conversation")
-        target = meta["notify_target"]
-        if to is not None and to.removeprefix("agent:").lower() not in ("owner", target):
-            self.modes.audit_action(principal, meta, "notify_owner", "refused")
-            raise CoreRefused(TARGET_REQUIRED, "notify_owner can only message the owner or space's default target")
-        if to is not None and to.removeprefix("agent:").lower() == "owner":
-            target = "owner"
+        if meta is None or meta["mode"] != "triage" or not (row := self.inbox.handle(conversation)) or row["status"] == "cancelled":
+            raise CoreRefused(MODE_REQUIRED, "Use an active triage conversation to send the owner a note.")
+        if to is not None and to.strip().lower().removeprefix("agent:") != "owner":
+            raise CoreRefused(TARGET_REQUIRED, "Choose the owner as the target.")
         if principal.targets is not None:
-            await self.check_target(principal, f"agent:{target}", meta["project"])
+            await self.check_target(principal, "agent:owner", meta["project"])
         text = text.strip()
-        if not text:
-            raise CoreError("text is empty")
-        link = f"\n{meta['permalink']}" if meta["permalink"] else ""
-        out = await self.agent_send(principal, to=target, text=f"Triage note for {meta['space']}:{link}\n\n{text}",
-                                    project=meta["project"], allow_self=True, _mode_notify=True)
+        if not 0 < len(text) <= 4000:
+            raise CoreError("Enter a note with up to 4000 characters.")
+        try:
+            note = self.inbox.deliver_triage_note(source=principal.source, project=meta["project"], data={
+                "text": text, "conversation": conversation, **{key: meta[key] for key in ("permalink", "block", "space", "channel")},
+            })
+        except sqlite3.Error as exc:
+            refusal = CoreRefused(OWNER_NOTE_REQUIRED)
+            self.modes.audit_action(principal, meta, "notify_owner", "refused", detail=refusal.reason)
+            refusal.audited = True
+            raise refusal from exc
         self.modes.audit_action(principal, meta, "notify_owner")
-        return out
+        return {"ok": True, "handle": note, "conversation": note, "to": "owner", "delivered": True, "mailbox": True,
+                "project": meta["project"]}
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
                      handle: str | None = None, handle_meta: dict[str, Any] | None = None, dry_run: bool = False) -> Any:
