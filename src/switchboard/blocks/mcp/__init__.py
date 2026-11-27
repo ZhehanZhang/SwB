@@ -216,8 +216,8 @@ class MCPBlock(Block):
 
     def build(self) -> MCPServer:
         core = self.core
-        senders = [b for b in core.blocks.values() if b.verb("send") is not None]
-        extensions = [self.events, TasksExtension(self)] if senders else [self.events]
+        task_destinations = {b.name for b in core.blocks.values() if b.manifest.id == "capy"}
+        extensions = [self.events, TasksExtension(self, task_destinations)] if task_destinations else [self.events]
         mcp = LimitedServer(name="swb", title="SwB", version=__version__, instructions=self.instructions(), extensions=extensions)
         mcp.modes = core.modes
         mcp.middleware.append(advertise_events)

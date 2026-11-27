@@ -21,10 +21,12 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
+from .__main__ import SERVER_COMMANDS, add_server_commands
 from .config import ConfigError, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
 
 CONFIG = Path("config/switchboard.yaml")
+CLAIM_ERRORS = {400: "claim_input", 403: "claim_owner_key", 410: "claim_unavailable"}
 
 
 class CliError(ValueError):
@@ -153,13 +155,24 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
     if not token.strip():
         raise CliError("No token entered.")
     try:
-        with httpx2.Client(headers={"Authorization": f"Bearer {key}"}, timeout=30,
+        with httpx2.Client(headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=30,
                            follow_redirects=False, trust_env=False) as client:
             response = client.post(url, data={"token": token})
     except (httpx2.HTTPError, ValueError):
         raise CliError("Check that SwB is running and verify --url.") from None
     if not response.is_success:
-        raise CliError(f"Token claim failed (HTTP {response.status_code}). Check the claim link and owner key.")
+        status = response.status_code
+        if status in CLAIM_ERRORS and response.headers.get("content-type", "").partition(";")[0] == "application/json":
+            try:
+                error = response.json() if len(response.content) <= 4096 else None
+            except ValueError:
+                error = None
+            if isinstance(error, dict) and error.get("error") == CLAIM_ERRORS[status]:
+                message = error.get("message")
+                if (isinstance(message, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .()'/+-]{0,159}", message)
+                        and not any(secret in message for secret in (token.strip(), key, url.rsplit("/", 1)[-1]))):
+                    raise CliError(message)
+        raise CliError(f"Check the claim link and owner key (HTTP {status}).")
     print("Routine saved." if routine else "Token saved. Run swb connect again to check the next step.")
 
 
@@ -236,8 +249,7 @@ def _display(tool: str, payload: dict[str, Any]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="swb", epilog="Server tools: serve, export, log, config, blocks, targets (each accepts --help).")
+    parser = argparse.ArgumentParser(prog="swb")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="create a minimal config and a local owner key")
@@ -263,12 +275,18 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
         command.add_argument("--url", help="server base URL or MCP endpoint (defaults to loopback and SWITCHBOARD_PORT, PORT, or 8870)")
+    add_server_commands(commands)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command in SERVER_COMMANDS:
+        from .__main__ import main as server
+
+        server(argv)
+        return
     try:
         if args.command == "muse-bridge":
             from .muse_gadget import run_gadget
