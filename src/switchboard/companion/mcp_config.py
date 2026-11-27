@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from dataclasses import dataclass, field
@@ -27,7 +28,7 @@ class LocalServer:
 def local_servers(specs: tuple[str, ...]) -> dict[str, LocalServer]:
     out = {}
     try:
-        if len(specs) > MAX_SERVERS or sum(len(spec.encode("utf-8")) for spec in specs) > MAX_SPECS_BYTES:
+        if len(specs) > MAX_SERVERS or len(json.dumps(specs, ensure_ascii=False).encode("utf-8")) > MAX_SPECS_BYTES:
             raise ValueError
         for spec in specs:
             name, _, target = spec.partition("=")

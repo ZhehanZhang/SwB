@@ -8,7 +8,7 @@ from pathlib import Path
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.shared.exceptions import MCPError
-from mcp.types import INTERNAL_ERROR, CallToolResult, ListToolsResult, TextContent, Tool
+from mcp.types import INTERNAL_ERROR, CallToolResult, ImageContent, ListToolsResult, TextContent, Tool
 
 SENTINEL = "companion-fixture-private-diagnostic"
 ECHO_SCHEMA = {
@@ -28,7 +28,7 @@ def make_server(transport: str, events: Path | None = None, *, large_catalogue: 
         if params is not None and params.cursor == "more":
             return ListToolsResult(tools=[
                 Tool(name=name, description="x" * (512 * 1024) if large_catalogue else "", input_schema={"type": "object"})
-                for name in ("report_error", "fail", "blob", "crash", "slow")
+                for name in ("report_error", "fail", "blob", "image", "crash", "slow")
             ])
         return ListToolsResult(
             tools=[Tool(name="echo", description="Echo text on this fixture.", input_schema=ECHO_SCHEMA)],
@@ -48,6 +48,8 @@ def make_server(transport: str, events: Path | None = None, *, large_catalogue: 
             return CallToolResult(content=[TextContent(type="text", text=SENTINEL)], is_error=True)
         if params.name == "blob":
             return CallToolResult(content=[TextContent(type="text", text=args.get("character", "x") * args["size"])])
+        if params.name == "image":
+            return CallToolResult(content=[ImageContent(type="image", data="YWJj", mime_type="image/png")])
         text = args["text"]
         return CallToolResult(
             content=[TextContent(type="text", text=text)],
@@ -62,8 +64,12 @@ async def main(events: Path, large_catalogue: bool) -> None:
         print("start", file=stream)
     print(SENTINEL, file=sys.stderr, flush=True)
     server = make_server("stdio", events, large_catalogue=large_catalogue)
-    async with stdio_server() as (reader, writer):
-        await server.run(reader, writer, server.create_initialization_options())
+    try:
+        async with stdio_server() as (reader, writer):
+            await server.run(reader, writer, server.create_initialization_options())
+    finally:
+        with events.open("a", encoding="utf-8") as stream:
+            print("stop", file=stream)
 
 
 if __name__ == "__main__":
