@@ -31,6 +31,7 @@ _MEMORY_FIELDS = ("id", "scope", "namespace", "key", "title", "tags", "source", 
 _PROMPTS = {"coordinator": "v4", "routine": "v1", "dispatcher": "v1"}
 _PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
 _SCOPE = rf"(?:general|project:{_PROJECT})"
+_CAPY_SENDERS = ("capy_thread", "capy", "captain")
 
 
 def _fields(row: Any, *names: str) -> dict[str, Any]:
@@ -298,7 +299,7 @@ def _sender(core: Any, sender: Any, destination: str, captains: dict[str, dict[s
     out = _scalars(sender, "kind", "name", "label", "agent", "auth", "origin", "trust", "workspace", "channel", "channel_name", "user", "user_name",
                    "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot")
     avatar = local_avatar_url(core, sender.get("avatar_url"))
-    if out.get("kind") in ("capy_thread", "capy", "captain"):
+    if out.get("kind") in _CAPY_SENDERS:
         upstream = sender.get("sender")
         ident = _reference(upstream.get("id") if isinstance(upstream, dict) else out.get("thread_id"))
         captain = captain_target(ident, destination, captains)
@@ -394,8 +395,9 @@ async def inbox(request: Request) -> JSONResponse:
     roots = core.inbox.handles(limit=100, roots_only=True)
     endpoints = core.inbox.first_endpoints([row["handle"] for row in roots])
     captains = await captain_targets(core, core.blocks if any(
-        isinstance(sender, dict) and sender.get("kind") in ("capy_thread", "capy", "captain")
-        for row in roots for sender in (row["meta"].get("from"), endpoints.get(row["handle"], (None, None))[0])
+        isinstance(sender, dict) and sender.get("kind") in _CAPY_SENDERS
+        for row in roots if row["destination"] == "mailbox"
+        for sender in (row["meta"].get("from"), endpoints.get(row["handle"], (None, None))[0])
     ) else (row["destination"] for row in roots))
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
                          "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"])} for row in pauses],
@@ -417,9 +419,11 @@ async def conversation(request: Request) -> JSONResponse:
     handle = row["handle"]
     out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False, include_replies=True)
     items = []
-    captains = await captain_targets(core, core.blocks if any(
-        isinstance(sender := item.get("from"), dict) and sender.get("kind") in ("capy_thread", "capy", "captain")
-        for item in out["items"]
+    endpoints = core.inbox.first_endpoints([handle])
+    first_sender = endpoints.get(handle, (None, None))[0]
+    captains = await captain_targets(core, core.blocks if row["destination"] == "mailbox" and any(
+        isinstance(sender, dict) and sender.get("kind") in _CAPY_SENDERS
+        for sender in (row["meta"].get("from"), first_sender, *(item.get("from") for item in out["items"]))
     ) else (row["destination"],))
     for item in out["items"]:
         projected = _scalars(item, "cursor", "handle", "kind", "at", "text", "status", "final", "in_reply_to", "trust", "project",
@@ -427,7 +431,6 @@ async def conversation(request: Request) -> JSONResponse:
         if sender := _sender(core, item.get("from"), row["destination"], captains):
             projected["from"] = sender
         items.append(projected)
-    endpoints = core.inbox.first_endpoints([handle])
     return JSONResponse({"conversation": _conversation(core, row, endpoints.get(handle, (None, None)), captains),
                          "items": items, "cursor": out["cursor"]})
 
