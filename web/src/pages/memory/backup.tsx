@@ -5,10 +5,48 @@ import { toast } from "sonner"
 import { DataState } from "@/components/data-state"
 import { Field, Input } from "@/components/field"
 import { Button } from "@/components/ui/button"
-import { backupNow, fetchBackup, restoreBackup, saveBackup, type BackupConfig, type BackupStatus } from "./api"
+import { backupNow, downloadMemory, fetchBackup, importMemory, restoreBackup, saveBackup, type BackupConfig, type BackupStatus } from "./api"
 
 const backupKey = ["memory", "backup"] as const
 const dateFormat = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" })
+
+function MemoryArchive({ csrf }: { csrf: string }) {
+  const client = useQueryClient()
+  const fileInput = useRef<HTMLInputElement>(null)
+  const download = useMutation({
+    mutationFn: downloadMemory,
+    onError: () => toast.error("Download failed."),
+  })
+  const upload = useMutation({
+    mutationFn: (file: File) => importMemory(file, csrf),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["memory"] }),
+  })
+  const result = upload.data
+
+  return (
+    <section aria-label="Memory archives">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" disabled={download.isPending} onClick={() => download.mutate()}>
+          {download.isPending ? "Downloading…" : "Download"}
+        </Button>
+        <Button variant="outline" disabled={upload.isPending} onClick={() => fileInput.current?.click()}>
+          {upload.isPending ? "Restoring…" : "Restore from file"}
+        </Button>
+        <input ref={fileInput} type="file" hidden accept=".zip,application/zip" aria-label="Memory archive"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0]
+            event.currentTarget.value = ""
+            if (file) upload.mutate(file)
+          }} />
+      </div>
+      {upload.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Restore from file failed.</p>}
+      {result && <p role="status" className="mt-2 text-body-sm text-muted-foreground">
+        {([["created", result.created], ["updated", result.updated], ["unchanged", result.unchanged], ["conflicts", result.conflict], ["skipped", result.skipped]] as const)
+          .filter(([, count]) => count > 0).map(([label, count]) => `${count} ${label}`).join(", ") || "Restored"}
+      </p>}
+    </section>
+  )
+}
 
 function BackupForm({ status, csrf }: { status: BackupStatus; csrf: string }) {
   const client = useQueryClient()
@@ -158,7 +196,7 @@ function BackupForm({ status, csrf }: { status: BackupStatus; csrf: string }) {
   )
 }
 
-export function GitBackup({ csrf }: { csrf: string }) {
+function GitBackup({ csrf }: { csrf: string }) {
   const backup = useQuery({
     queryKey: backupKey,
     queryFn: ({ signal }) => fetchBackup(signal),
@@ -166,13 +204,21 @@ export function GitBackup({ csrf }: { csrf: string }) {
   })
 
   return (
-    <section aria-labelledby="memory-backup-heading" className="min-w-0 border-t pt-4 md:col-start-2">
-      <h2 id="memory-backup-heading" className="text-heading-md">Git backup</h2>
-      <div className="max-w-[720px]">
-        {backup.data ? <BackupForm status={backup.data} csrf={csrf} />
-          : backup.isError ? <DataState kind="error" message="Backup settings unavailable." onRetry={() => void backup.refetch()} />
-            : <DataState kind="loading" />}
-      </div>
+    <section aria-labelledby="memory-git-backup-heading" className="border-t pt-4">
+      <h3 id="memory-git-backup-heading" className="text-heading-md">Git backup</h3>
+      {backup.data ? <BackupForm status={backup.data} csrf={csrf} />
+        : backup.isError ? <DataState kind="error" message="Backup settings unavailable." onRetry={() => void backup.refetch()} />
+          : <DataState kind="loading" />}
+    </section>
+  )
+}
+
+export function MemoryBackup({ csrf }: { csrf: string }) {
+  return (
+    <section aria-labelledby="memory-backup-heading" className="w-full min-w-0 max-w-[720px] space-y-4">
+      <h2 id="memory-backup-heading" className="text-heading-md">Backup</h2>
+      <MemoryArchive csrf={csrf} />
+      <GitBackup csrf={csrf} />
     </section>
   )
 }

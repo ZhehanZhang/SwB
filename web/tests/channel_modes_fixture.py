@@ -135,6 +135,8 @@ def run(path: Path) -> None:
                       title="Meeting notes", body="Review the schedule.", confirm_general=True)
     core.memory.write(source="codex", scope="general", namespace="notes", key="review-checklist",
                       title="Review checklist", body="Review the change.", tags=["release"], confirm_general=True)
+    core.memory.write(source="admin:owner@example.test", scope="agent:claude-code", namespace="notes",
+                      key="agent-notes", title="Agent notes", body="Review the worktree.", content_trust="owner")
     repository = path / "memory-backup.git"
     subprocess.run(["git", "init", "--bare", "--quiet", repository], check=True)
     owner = Principal("admin:owner@example.test", "owner", "owner_session")

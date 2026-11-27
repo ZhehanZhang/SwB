@@ -2,18 +2,24 @@ import { useEffect, useRef, useState } from "react"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Search, X } from "lucide-react"
 import { useSearchParams } from "react-router-dom"
+import { PageHeaderActions } from "@/app/page-header-actions"
 import { DataState, type DataStateProps } from "@/components/data-state"
 import { Input } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { sessionQuery } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { fetchMemoryList, type MemoryNote } from "./memory/api"
-import { GitBackup } from "./memory/backup"
+import { MemoryBackup } from "./memory/backup"
 import { Author, NoteTime, scopeName } from "./memory/display"
-import { MemoryHeader } from "./memory/header"
+import { MemorySync } from "./memory/header"
 import { NoteInspector } from "./memory/inspector"
 
 const pageSize = 50
+const scopeGroups = [
+  { label: "Shared", matches: (scope: string) => scope === "general" },
+  { label: "Projects", matches: (scope: string) => scope.startsWith("project:") },
+  { label: "Agents", matches: (scope: string) => scope.startsWith("agent:") },
+]
 
 function NotesTable({ scope, notes, state, onOpen }: {
   scope: string
@@ -94,9 +100,10 @@ export function MemoryPage() {
   const scopeCounts = scopes.data?.scopes
   const counts = Object.entries(scopeCounts ?? {}).map(([name, namespaces]) => ({
     name, count: Object.values(namespaces).reduce((total, value) => total + value, 0),
-  })).sort((a, b) => a.name === b.name ? 0 : a.name === "general" ? -1 : b.name === "general" ? 1 : a.name.localeCompare(b.name))
+  })).sort((a, b) => a.name.localeCompare(b.name))
+  const showBackup = !!csrf && params.get("view") === "backup"
   const scope = params.get("scope") ?? "general"
-  const active = counts.find(({ name }) => name === scope) ?? counts[0]
+  const active = counts.find(({ name }) => name === scope) ?? counts.find(({ name }) => name === "general")
   const activeScope = active?.name ?? "general"
   const scopeCount = active?.count ?? 0
   const notes = useInfiniteQuery({
@@ -109,7 +116,7 @@ export function MemoryPage() {
     }, signal),
     initialPageParam: 0,
     getNextPageParam: (page) => page.next_offset ?? undefined,
-    enabled: !!scopeCounts,
+    enabled: !!scopeCounts && !showBackup,
   })
   const rows = notes.data?.pages.flatMap((page) => page.items) ?? []
   const showMore = notes.hasNextPage && (!!query || rows.length < scopeCount)
@@ -122,15 +129,25 @@ export function MemoryPage() {
     : !rows.length ? { kind: "empty", message: query ? "0 results" : "0 notes" }
     : undefined
 
-  useEffect(() => { if (searchOpen) searchInput.current?.focus() }, [searchOpen])
+  useEffect(() => { if (searchOpen && !showBackup) searchInput.current?.focus() }, [searchOpen, showBackup])
 
   function selectScope(next: string, replace = false) {
     setParams((previous) => {
       const nextParams = new URLSearchParams(previous)
+      nextParams.delete("view")
       if (next === "general") nextParams.delete("scope")
       else nextParams.set("scope", next)
       return nextParams
     }, { replace, preventScrollReset: true })
+  }
+
+  function selectBackup() {
+    setSelected(null)
+    setParams((previous) => {
+      const nextParams = new URLSearchParams(previous)
+      nextParams.set("view", "backup")
+      return nextParams
+    })
   }
 
   function closeSearch() {
@@ -149,98 +166,113 @@ export function MemoryPage() {
   }
 
   return (
-    <div className="grid min-w-0 gap-y-4 md:grid-cols-[176px_minmax(0,1fr)] md:gap-x-6 lg:grid-cols-[208px_minmax(0,1fr)] lg:gap-x-8">
-      {csrf && <MemoryHeader csrf={csrf} />}
-      <aside aria-label="Memory scopes" className="border-b pb-3 md:row-span-2 md:border-r md:border-b-0 md:pr-4 md:pb-0 lg:-ml-2 lg:pt-2">
+    <div className="grid min-w-0 gap-y-4 md:grid-cols-[176px_minmax(0,1fr)] md:gap-x-6 lg:min-h-[calc(100dvh-var(--topbar-height)-3rem)] lg:grid-cols-[208px_minmax(0,1fr)] lg:gap-x-8">
+      {csrf && <PageHeaderActions><MemorySync csrf={csrf} /></PageHeaderActions>}
+      <nav aria-label="Memory scopes" className="space-y-3 border-b pb-3 md:border-r md:border-b-0 md:pr-4 md:pb-0 lg:-ml-2 lg:pt-2">
         {scopeCounts ? (
-          <ul className="grid gap-0.5">
-            {counts.map(({ name, count }) => (
-              <li key={name}>
-                <button
-                  type="button"
-                  aria-pressed={activeScope === name}
-                  className={cn(
-                    "flex min-h-8 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left font-mono text-mono-sm hover:bg-muted",
-                    activeScope === name && "bg-muted",
-                  )}
-                  title={scopeName(name)}
-                  onClick={() => { if (activeScope !== name) selectScope(name) }}
-                >
-                  <span className="truncate">{scopeName(name)}</span>
-                  <span className="text-muted-foreground">{count}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          scopeGroups.map(({ label, matches }) => {
+            const group = counts.filter(({ name }) => matches(name))
+            if (!group.length) return null
+            const heading = `memory-scope-${label.toLowerCase()}`
+            return (
+              <section key={label} aria-labelledby={heading}>
+                <h2 id={heading} className="px-2.5 text-caption font-medium text-muted-foreground">{label}</h2>
+                <ul className="mt-0.5 grid gap-0.5">
+                  {group.map(({ name, count }) => {
+                    const pressed = !showBackup && activeScope === name
+                    return (
+                      <li key={name}>
+                        <button type="button" aria-pressed={pressed}
+                          className={cn("flex min-h-8 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left font-mono text-mono-sm hover:bg-muted",
+                            pressed && "bg-muted")}
+                          title={scopeName(name)} onClick={() => { if (!pressed) selectScope(name) }}>
+                          <span className="truncate">{scopeName(name)}</span>
+                          <span className="text-muted-foreground">{count}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )
+          })
         ) : scopes.isPending ? (
           <DataState kind="loading" message="Loading scopes…" className="px-2.5 py-2" />
         ) : <DataState kind="error" message="Scopes unavailable." onRetry={() => void scopes.refetch()} className="py-2" />}
-      </aside>
-      <section aria-labelledby="memory-notes-heading" className="min-w-0 lg:pt-2">
-        <div className="mb-1 flex min-h-7 items-center justify-between gap-4">
-          <h2 id="memory-notes-heading" ref={notesHeading} tabIndex={-1} className="min-w-0 truncate text-heading-md">
-            {scopeName(activeScope)}
-          </h2>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              ref={searchButton}
-              variant="ghost"
-              size="icon"
-              className="size-7 text-muted-foreground"
-              aria-label="Search notes"
-              aria-expanded={searchOpen}
-              aria-controls={searchOpen ? "memory-search" : undefined}
-              title="Search notes"
-              onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}
+        {csrf && (
+          <div className="border-t pt-2">
+            <button type="button" aria-pressed={showBackup}
+              className={cn("flex min-h-8 w-full items-center rounded-md px-2.5 text-left text-label-sm hover:bg-muted", showBackup && "bg-muted")}
+              onClick={() => { if (!showBackup) selectBackup() }}>Backup</button>
+          </div>
+        )}
+      </nav>
+      {showBackup && csrf ? <MemoryBackup csrf={csrf} /> : (
+        <section aria-labelledby="memory-notes-heading" className="min-w-0 lg:pt-2">
+          <div className="mb-1 flex min-h-7 items-center justify-between gap-4">
+            <h2 id="memory-notes-heading" ref={notesHeading} tabIndex={-1} className="min-w-0 truncate text-heading-md">
+              {scopeName(activeScope)}
+            </h2>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                ref={searchButton}
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground"
+                aria-label="Search notes"
+                aria-expanded={searchOpen}
+                aria-controls={searchOpen ? "memory-search" : undefined}
+                title="Search notes"
+                onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}
+              >
+                <Search aria-hidden strokeWidth={1.5} />
+              </Button>
+              {scopeCounts && state?.kind !== "empty" && <p aria-live="polite" className="text-body-sm text-muted-foreground">{!query || !notes.isPending ? resultText : ""}</p>}
+            </div>
+          </div>
+          {searchOpen && (
+            <form
+              id="memory-search"
+              role="search"
+              aria-label="Memory"
+              className="mb-3 flex items-center gap-2"
+              onSubmit={(event) => { event.preventDefault(); setQuery(searchText.trim()) }}
+              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeSearch() } }}
             >
-              <Search aria-hidden strokeWidth={1.5} />
-            </Button>
-            {scopeCounts && state?.kind !== "empty" && <p aria-live="polite" className="text-body-sm text-muted-foreground">{!query || !notes.isPending ? resultText : ""}</p>}
-          </div>
-        </div>
-        {searchOpen && (
-          <form
-            id="memory-search"
-            role="search"
-            aria-label="Memory"
-            className="mb-3 flex items-center gap-2"
-            onSubmit={(event) => { event.preventDefault(); setQuery(searchText.trim()) }}
-            onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeSearch() } }}
-          >
-            <Input
-              ref={searchInput}
-              type="search"
-              value={searchText}
-              maxLength={500}
-              onChange={(event) => {
-                setSearchText(event.target.value)
-                if (!event.target.value.trim()) setQuery("")
-              }}
-              aria-label={`Search notes in ${scopeName(activeScope)}`}
-              placeholder="Search notes"
-              className="min-w-0 flex-1 sm:max-w-70"
-            />
-            <Button type="submit" size="sm" variant="outline">Search</Button>
-            <Button variant="ghost" size="icon" className="size-9" aria-label="Close search" onClick={closeSearch}>
-              <X aria-hidden strokeWidth={1.5} />
-            </Button>
-          </form>
-        )}
-        <NotesTable scope={activeScope} notes={rows} state={state} onOpen={(note, trigger) => {
-          openedFrom.current = trigger
-          setSelected(note)
-        }} />
-        {showMore && (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button variant="outline" size="sm" disabled={notes.isFetchingNextPage} onClick={() => void notes.fetchNextPage()}>
-              {notes.isFetchingNextPage ? "Loading…" : notes.isFetchNextPageError ? "Retry" : "Load more"}
-            </Button>
-            {notes.isFetchNextPageError && <span role="alert" className="text-sm text-muted-foreground">Loading more notes failed.</span>}
-          </div>
-        )}
-      </section>
-      {csrf && <GitBackup csrf={csrf} />}
-      {selected && (
+              <Input
+                ref={searchInput}
+                type="search"
+                value={searchText}
+                maxLength={500}
+                onChange={(event) => {
+                  setSearchText(event.target.value)
+                  if (!event.target.value.trim()) setQuery("")
+                }}
+                aria-label={`Search notes in ${scopeName(activeScope)}`}
+                placeholder="Search notes"
+                className="min-w-0 flex-1 sm:max-w-70"
+              />
+              <Button type="submit" size="sm" variant="outline">Search</Button>
+              <Button variant="ghost" size="icon" className="size-9" aria-label="Close search" onClick={closeSearch}>
+                <X aria-hidden strokeWidth={1.5} />
+              </Button>
+            </form>
+          )}
+          <NotesTable scope={activeScope} notes={rows} state={state} onOpen={(note, trigger) => {
+            openedFrom.current = trigger
+            setSelected(note)
+          }} />
+          {showMore && (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button variant="outline" size="sm" disabled={notes.isFetchingNextPage} onClick={() => void notes.fetchNextPage()}>
+                {notes.isFetchingNextPage ? "Loading…" : notes.isFetchNextPageError ? "Retry" : "Load more"}
+              </Button>
+              {notes.isFetchNextPageError && <span role="alert" className="text-sm text-muted-foreground">Loading more notes failed.</span>}
+            </div>
+          )}
+        </section>
+      )}
+      {!showBackup && selected && (
         <NoteInspector
           key={selected.id}
           note={selected}
