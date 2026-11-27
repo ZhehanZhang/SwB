@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+app=${1:?Usage: deploy/koyeb.sh APP [BRANCH] [REGION]}
+branch=${2:-main}
+region=${3:-was}
+case "$app" in
+    ""|-*|*[!a-z0-9-]*) printf '%s\n' 'Use lowercase letters, digits and hyphens for the app name.' >&2; exit 2 ;;
+esac
+case "$region" in
+    was|fra) ;;
+    *) printf '%s\n' 'Use was or fra for the volume region.' >&2; exit 2 ;;
+esac
+
+volume="swb-$app"
+koyeb volumes create "$volume" --size 1 --region "$region"
+koyeb apps init "$app" \
+    --git github.com/ZhehanZhang/SwB --git-branch "$branch" --git-builder docker \
+    --git-docker-dockerfile Dockerfile --git-docker-target paas --git-no-deploy-on-push \
+    --instance-type small --regions "$region" --scale 1 --volumes "$volume:/data" \
+    --ports 8000:http --routes /:8000 --checks 8000:http:/healthz --checks-grace-period 8000=15 \
+    --env PORT=8000 --env SWITCHBOARD_DEPLOY_PLATFORM=koyeb

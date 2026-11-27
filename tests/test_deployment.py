@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import hmac
+from urllib.parse import urlsplit
+
+import pytest
+from starlette.testclient import TestClient
+
+from conftest import STATIC_KEY, call, payload
+from switchboard import cli
+from switchboard.app import create_app
+from switchboard.config import ConfigError
+from switchboard.core import Switchboard
+from switchboard.deployment import OWNER_KEY, PLATFORM, serve_env, volume_owner_key
+
+
+@pytest.mark.parametrize(("platform", "name", "value", "url"), [
+    ("fly", "FLY_APP_NAME", "test-swb", "https://test-swb.fly.dev"),
+    ("koyeb", "KOYEB_PUBLIC_DOMAIN", "test-swb.example.test", "https://test-swb.example.test"),
+    ("railway", "RAILWAY_PUBLIC_DOMAIN", "test-swb.example.test", "https://test-swb.example.test"),
+    ("render", "RENDER_EXTERNAL_URL", "https://test-swb.example.test", "https://test-swb.example.test"),
+    ("compose", "SWITCHBOARD_PUBLIC_URL", "https://test-swb.example.test", "https://test-swb.example.test"),
+])
+def test_platform_sign_in(tmp_path, platform, name, value, url):
+    env = {PLATFORM: platform, name: value, "SWITCHBOARD_DATA": str(tmp_path)}
+    setup = serve_env(env)
+    key = setup[OWNER_KEY]
+    assert hmac.compare_digest(key, serve_env(env)[OWNER_KEY])
+    assert hmac.compare_digest(key, volume_owner_key(env))
+    assert (tmp_path / "owner-key").stat().st_mode & 0o777 == 0o600
+
+    with TestClient(create_app(Switchboard(env=setup)), base_url=url) as client:
+        home = client.get("/", follow_redirects=False)
+        assert home.status_code == 303
+        assert home.headers["Location"] == "/login?next=%2F"
+        assert client.get("/healthz").is_success
+        link = urlsplit(payload(call(client, key, "login_link"))["url"])
+        assert link._replace(fragment="").geturl() == f"{url}/login"
+        token = link.fragment.removeprefix("t=")
+        assert client.post("/auth/link", json={"token": token}, headers={"Origin": url}).status_code == 204
+        assert client.get("/auth/session").json()["signed_in"]
+        assert client.post("/auth/link", json={"token": token}, headers={"Origin": url}).status_code == 401
+
+
+def test_managed_values_allow_explicit_overrides(tmp_path):
+    url = "https://custom.example.test"
+    env = {PLATFORM: "render", "RENDER_EXTERNAL_URL": "https://test-swb.example.test",
+           "SWITCHBOARD_PUBLIC_URL": url, OWNER_KEY: STATIC_KEY, "SWITCHBOARD_DATA": str(tmp_path)}
+    setup = serve_env(env)
+    assert setup["SWITCHBOARD_PUBLIC_URL"] == url
+    assert hmac.compare_digest(setup[OWNER_KEY], STATIC_KEY)
+    assert not (tmp_path / "owner-key").exists()
+
+
+def test_managed_setup_is_opt_in_and_requires_a_public_url(tmp_path):
+    env = {"SWITCHBOARD_DATA": str(tmp_path), "FLY_APP_NAME": "test-swb"}
+    assert serve_env(env) is None
+    assert volume_owner_key(env) is None
+    with pytest.raises(ConfigError, match="requires a public URL"):
+        serve_env({**env, PLATFORM: "render"})
+    assert not (tmp_path / "owner-key").exists()
+
+
+def test_login_cli_reads_the_volume_key(tmp_path, monkeypatch, capsys):
+    env = {PLATFORM: "fly", "FLY_APP_NAME": "test-swb", "SWITCHBOARD_DATA": str(tmp_path), "PORT": "8000"}
+    key = serve_env(env)[OWNER_KEY]
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv(OWNER_KEY, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+
+    async def mock_call(url, actual_key, tool, arguments):
+        assert url == "http://127.0.0.1:8000/mcp"
+        assert hmac.compare_digest(actual_key, key)
+        assert tool == "login_link"
+        return {"url": "https://test-swb.fly.dev/login"}
+
+    monkeypatch.setattr(cli, "_call", mock_call)
+    cli.main(["login-link"])
+    assert capsys.readouterr().out.strip() == "https://test-swb.fly.dev/login"
+    with pytest.raises(SystemExit) as rejected:
+        cli.main(["login-link", "--url", "https://other.example.test"])
+    assert rejected.value.code == 1
+    assert "SWITCHBOARD_KEY_OWNER is missing" in capsys.readouterr().err

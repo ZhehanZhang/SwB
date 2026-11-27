@@ -12,7 +12,7 @@ services:
     envVars:
       - key: SWITCHBOARD_DATA
         value: /data
-      - key: SWITCHBOARD_PUBLIC_URL
-        sync: false
+      - key: SWITCHBOARD_DEPLOY_PLATFORM
+        value: render
       - key: SWITCHBOARD_KEY_OWNER
         generateValue: true

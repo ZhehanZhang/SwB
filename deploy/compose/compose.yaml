@@ -1,17 +1,24 @@
 name: switchboard-caddy
 services:
   switchboard:
-    image: ${SWITCHBOARD_IMAGE:?Set SWITCHBOARD_IMAGE in .env}
+    build:
+      context: ../..
+      target: paas
     environment:
+      PORT: "8000"
       SWITCHBOARD_DATA: /data
+      SWITCHBOARD_DEPLOY_PLATFORM: compose
       SWITCHBOARD_PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
-      SWITCHBOARD_KEY_OWNER: ${SWITCHBOARD_KEY_OWNER:?Set SWITCHBOARD_KEY_OWNER in .env}
+      SWITCHBOARD_KEY_OWNER: ${SWITCHBOARD_KEY_OWNER:-}
     volumes:
       - switchboard_data:/data
     restart: unless-stopped
 
   caddy:
     image: caddy:2
+    depends_on:
+      switchboard:
+        condition: service_healthy
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
     ports:
