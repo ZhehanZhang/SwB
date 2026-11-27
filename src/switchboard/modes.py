@@ -14,6 +14,7 @@ from .visibility import Who
 
 if TYPE_CHECKING:
     from .auth import Principal
+    from .blocks import Address
     from .core import Switchboard
 
 MODES = ("off", "watch", "assist", "triage", "work")
@@ -166,12 +167,16 @@ class ChannelModes:
             return Mode("watch")
         return None
 
-    def _default_target(self, block: str, space: str, project: str | None) -> str | None:
+    def project_route(self, block: str, project: str | None) -> Address | None:
+        principal = getattr(self.core.blocks.get(block), "principal", None)
+        return self.core.route_address(principal.source if principal else block, project) if project else None
+
+    def _default_target(self, block: str, space: str, project: str | None, *, include_route: bool = True) -> str | None:
         section = self._section(block, space)
         target = section.get("default_target") or section.get("target")
         if target:
             return str(target).lower()
-        route = self.core.route_address(None, project) if project else None
+        route = self.project_route(block, project) if include_route else None
         return str(route) if route else None
 
     def _triage_target(self, block: str, project: str | None) -> str | None:
@@ -190,7 +195,7 @@ class ChannelModes:
         return None
 
     def policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
-               name: str | None = None) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
+               name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
         section = self._section(block, space)
         provider = self.core.blocks.get(block)
         use = self.core.cfg.blocks.get(block, {}).get("use")
@@ -222,7 +227,7 @@ class ChannelModes:
         target = next((s.target for s in (*base, project_mode) if s is not None and s.target), None)
         if spec.mode == "triage" and not target:
             target = self._triage_target(block, project)
-        return spec.mode, source, actions, target or self._default_target(block, space, project), project
+        return spec.mode, source, actions, target or self._default_target(block, space, project, include_route=include_route), project
 
     def resolve(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                 name: str | None = None) -> tuple[str, str, tuple[str, ...], str | None]:
