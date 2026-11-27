@@ -5,10 +5,12 @@ import asyncio
 import logging
 import os
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 from . import client
 from .caps import CAPABILITIES, registry
+from .mcp_config import local_servers
 from .state import CompanionError, CompanionState, base_url, state_path
 
 
@@ -21,6 +23,7 @@ def add_commands(commands: argparse._SubParsersAction) -> None:
     connect.add_argument("--no-run", action="store_true", help="pair this device and exit")
     connect.add_argument("--cap", action="append", choices=CAPABILITIES, help="opt in to a capability (repeat as needed)")
     connect.add_argument("--drop-dir", type=Path, help="use this Drop folder")
+    connect.add_argument("--mcp", action="append", metavar="NAME=COMMAND", help="add a local MCP server command or HTTP URL")
     actions.add_parser("run", help="run the paired companion")
     actions.add_parser("status", help="show the local companion status")
     actions.add_parser("disconnect", help="disconnect this device from SwB")
@@ -45,8 +48,15 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
         if action == "connect":
             url = base_url(args.url)
             enabled = tuple(dict.fromkeys(args.cap or ()))
+            specs = tuple(args.mcp or ())
+            if ("mcp" in enabled) != bool(specs):
+                raise CompanionError("Use --cap mcp together with --mcp.")
+            try:
+                servers = local_servers(specs)
+            except ValueError as error:
+                raise CompanionError(str(error)) from None
             drop_dir = Path(os.path.abspath((args.drop_dir or (Path.home() / "SwB Drop")).expanduser()))
-            caps, unavailable = registry(enabled, drop_dir)
+            caps, unavailable = registry(enabled, drop_dir, servers)
             if enabled and not caps:
                 raise CompanionError(next(iter(unavailable.values())))
             for reason in unavailable.values():
@@ -55,6 +65,8 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
             if not (code := code.strip()):
                 raise CompanionError("Enter a pairing code.")
             state = asyncio.run(client.pair(url, code, caps, enabled, drop_dir))
+            if specs:
+                state = replace(state, mcp_servers=specs)
             state.save(path)
             print("This device is paired.", flush=True)
             if args.no_run:
@@ -63,13 +75,17 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
             asyncio.run(client.disconnect(state, path))
             return
         else:
-            caps, unavailable = registry(state.enabled_caps, Path(state.drop_dir))
+            servers = local_servers(state.mcp_servers)
+            drop_dir = Path(state.drop_dir)
+            caps, unavailable = registry(state.enabled_caps, drop_dir, servers)
             if action == "status":
                 print(f"This device is paired as {state.companion_id}.")
                 for cap in caps.values():
                     print(cap.title)
                 for reason in unavailable.values():
                     print(reason)
+                for name in servers:
+                    print(name)
                 return
         asyncio.run(client.run(state, path, caps))
     except KeyboardInterrupt:
