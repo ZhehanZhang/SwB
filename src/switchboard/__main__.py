@@ -84,7 +84,10 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         parser.error(str(error))
     except (OSError, UnicodeError) as error:
         parser.error(f"couldn't load the owner key on the volume ({type(error).__name__})")
-    core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env)
+    try:
+        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env)
+    except ConfigError as error:
+        parser.error(str(error))
     if args.cmd == "blocks":
         import yaml
 

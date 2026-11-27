@@ -22,14 +22,7 @@ The button uses the repository default branch. The [Blueprint](../render.yaml) c
 
 Use the [Railway template composer](https://docs.railway.com/templates/create) to publish the deploy button. Select the SwB release branch in `https://github.com/ZhehanZhang/SwB`. Use the root Dockerfile and one replica. Attach a 1 GB volume at `/data`. Set `/healthz` as the health check. Set `/data` as the required mount path. Enable public networking on port `8000`.
 
-Set these variables in the template.
-
-```dotenv
-PORT=8000
-SWITCHBOARD_DEPLOY_PLATFORM=railway
-SWITCHBOARD_KEY_OWNER=${{secret()}}
-SWB_SETUP_CODE=${{secret()}}
-```
+Copy the [template variables](../.railway/template.env.example) into the template.
 
 Open **Variables** in the service. Copy `SWB_SETUP_CODE`. After sign-in, seal or remove this variable.
 
@@ -62,9 +55,7 @@ Open `.env.swb-setup-koyeb-my-swb` in your checkout. Copy `SWB_SETUP_CODE`. Dele
 Use a server with Docker Compose. Point a domain name at your server. Open ports 80 and 443. Replace `swb.example.com` with your domain in the command.
 
 ```sh
-cd deploy/compose
-(umask 077; set -C; { printf 'DOMAIN=swb.example.com\nSWB_SETUP_CODE='; openssl rand -hex 32; } > .env) &&
-  docker compose up -d --build
+sh deploy/compose/start.sh swb.example.com
 ```
 
-Copy `SWB_SETUP_CODE` from the private `.env` file. Caddy manages HTTPS. This setup also works on a DigitalOcean Droplet.
+Copy `SWB_SETUP_CODE` from `deploy/compose/.env`. Caddy manages HTTPS. This setup also works on a DigitalOcean Droplet.

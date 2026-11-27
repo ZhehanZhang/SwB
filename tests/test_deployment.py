@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+import base64
 import hmac
+import logging
 from urllib.parse import urlsplit
 
 import pytest
 from starlette.testclient import TestClient
 
 from conftest import STATIC_KEY, call, payload
-from switchboard import cli, web
+from switchboard import __main__, cli, web
 from switchboard.app import create_app
-from switchboard.config import ConfigError
+from switchboard.config import ConfigError, load_config
 from switchboard.core import Switchboard
 from switchboard.deployment import OWNER_KEY, PLATFORM, serve_env, volume_owner_key
 
-SETUP_CODE = "synthetic-deployment-setup-code-for-tests"
+SETUP_CODE = bytes(range(32)).hex()
 SETUP_URL = "https://swb.example.test"
 
 
@@ -87,21 +89,22 @@ def test_login_cli_reads_the_volume_key(tmp_path, monkeypatch, capsys):
     assert "SWITCHBOARD_KEY_OWNER is missing" in capsys.readouterr().err
 
 
-def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, monkeypatch):
+@pytest.mark.parametrize("setup_code", [SETUP_CODE, base64.b64encode(bytes(range(32))).decode()], ids=["hex", "base64"])
+def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, monkeypatch, setup_code):
     monkeypatch.setattr(web, "APP_DIST", tmp_path / "no-spa")
-    env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE, "SWITCHBOARD_DATA": str(tmp_path)}
+    env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": setup_code, "SWITCHBOARD_DATA": str(tmp_path)}
     headers = {"Origin": SETUP_URL}
     with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
         home = client.get("/")
         assert 'id="owner-setup"' in home.text
-        assert SETUP_CODE not in home.text
+        assert setup_code not in home.text
         session = client.get("/auth/session").json()
         assert session["methods"]["setup"] and not session["signed_in"]
-        assert client.post("/auth/setup", json={"code": SETUP_CODE}).status_code == 403
+        assert client.post("/auth/setup", json={"code": setup_code}).status_code == 403
         bad_origin = {"Origin": "https://other.example.test"}
-        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=bad_origin).status_code == 403
+        assert client.post("/auth/setup", json={"code": setup_code}, headers=bad_origin).status_code == 403
         assert client.post("/auth/setup", json={"code": "x" * 32}, headers=headers).status_code == 401
-        response = client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers)
+        response = client.post("/auth/setup", json={"code": setup_code}, headers=headers)
         assert response.status_code == 204
         assert response.headers["Cache-Control"] == "no-store"
         assert "HttpOnly" in response.headers["Set-Cookie"] and "Secure" in response.headers["Set-Cookie"]
@@ -109,10 +112,32 @@ def test_setup_code_signs_in_once_and_stays_disabled_after_restart(tmp_path, mon
         assert session["signed_in"] and session["via"] == "setup" and "setup" not in session["methods"]
         headers["X-CSRF-Token"] = session["csrf"]
         assert client.post("/auth/logout", headers=headers).status_code == 204
-        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 404
+        assert client.post("/auth/setup", json={"code": setup_code}, headers=headers).status_code == 404
     with TestClient(create_app(Switchboard(env=env)), base_url=SETUP_URL) as client:
         assert "setup" not in client.get("/auth/session").json()["methods"]
-        assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 404
+        assert client.post("/auth/setup", json={"code": setup_code}, headers=headers).status_code == 404
+
+
+@pytest.mark.parametrize("code", ["", "synthetic-short-code", bytes(range(16)).hex(), base64.b64encode(bytes(range(16))).decode(),
+                                 "!" * 64, "A" * 42 + "B="])
+def test_short_or_invalid_setup_code_stops_startup_without_logging_it(tmp_path, monkeypatch, capsys, code):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv(PLATFORM, raising=False)
+    monkeypatch.setenv("SWB_SETUP_CODE", code)
+    with pytest.raises(SystemExit) as stopped:
+        __main__.main(["serve"])
+    assert stopped.value.code == 2
+    error = capsys.readouterr().err
+    assert "SWB_SETUP_CODE must encode 32 random bytes" in error
+    assert not code or code not in error
+    assert not (tmp_path / "data" / "switchboard.db").exists()
+
+
+def test_setup_code_is_removed_from_application_environment():
+    config = load_config(env={"SWB_SETUP_CODE": SETUP_CODE})
+    assert config.owner_setup_digest
+    assert "SWB_SETUP_CODE" not in config.env
+    assert load_config(env={}).owner_setup_digest is None
 
 
 def test_setup_code_rate_limits_failures_without_blocking_the_owner(tmp_path):
@@ -127,15 +152,22 @@ def test_setup_code_rate_limits_failures_without_blocking_the_owner(tmp_path):
         assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers={"Origin": SETUP_URL}).status_code == 204
 
 
-def test_setup_code_allows_owner_when_the_global_limit_is_full(tmp_path):
+def test_setup_code_counts_and_logs_throttled_failures_without_exposing_codes(tmp_path, caplog):
     env = {"SWITCHBOARD_PUBLIC_URL": SETUP_URL, "SWB_SETUP_CODE": SETUP_CODE, "SWITCHBOARD_DATA": str(tmp_path)}
     app = create_app(Switchboard(env=env))
-    for _ in range(app.limiter.limits["owner_setup_total"][0]):
+    cap = app.limiter.limits["owner_setup_total"][0]
+    for _ in range(cap):
         app.limiter.hit("owner_setup_total", "*")
     with TestClient(app, base_url=SETUP_URL) as client:
         headers = {"Origin": SETUP_URL}
         assert client.post("/auth/setup", json={"code": "x" * 2000}, headers=headers).status_code == 413
-        assert client.post("/auth/setup", json={"code": "x" * 32}, headers=headers).status_code == 429
+        caplog.set_level(logging.WARNING, logger="switchboard.owner_login")
+        wrong = "ed" * 32
+        for _ in range(2):
+            assert client.post("/auth/setup", json={"code": wrong}, headers=headers).status_code == 429
+        assert caplog.messages[-2:] == ["Owner setup attempt rate limited (1 total)", "Owner setup attempt rate limited (2 total)"]
+        assert SETUP_CODE not in caplog.text and wrong not in caplog.text
+        assert len(app.limiter.hits["owner_setup_total", "*"]) == cap
         assert client.post("/auth/setup", json={"code": SETUP_CODE}, headers=headers).status_code == 204
 
 
