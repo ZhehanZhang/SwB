@@ -52,6 +52,7 @@ def _label(value: Any, limit: int) -> str:
 
 
 class LocalBlock(Block):
+    cache_targets = False
     manifest = Manifest(id="local", title="Local sessions", kind="sink", level_out="L2",
                         verbs={"send": "wake"}, targets=(TargetKind("session", slug_from="name"),))
 
@@ -69,6 +70,10 @@ class LocalBlock(Block):
     def online(self) -> bool:
         self._expire()
         return bool(self.sessions)
+
+    @property
+    def hidden(self) -> bool:
+        return not self.online
 
     def _expire(self) -> None:
         now = self.core.clock()
@@ -127,7 +132,7 @@ class LocalBlock(Block):
                   else OFFLINE if offline else "Local session unavailable.")
         return live, agent, reason
 
-    def mailbox_for(self, addr: Address) -> Address | None:
+    def grant_target(self, addr: Address) -> Address | None:
         agent = self._find(addr.id)[1] if addr.kind == "session" else None
         return Address("agent", "agent", agent) if agent else None
 

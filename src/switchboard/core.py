@@ -22,9 +22,8 @@ from .audit import Audit, iso
 from . import targets as tgt
 from .agents import Agents
 from .auth import Auth, Principal
-from .blocks import BLOCKS, Action, Address, Block, BlockError, Call
+from .blocks import ON_DEMAND_BLOCKS, Action, Address, Block, BlockError, Call, on_demand_blocks
 from .blocks import load as load_block
-from .blocks.local import LocalBlock
 from .claims import Claims
 from .companions import Companions
 from .config import INSTANCE_DB, Config, Instance, load_config
@@ -118,14 +117,15 @@ class Switchboard:
         self.modes = ChannelModes(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
-        if "local" in BLOCKS and "local" not in self.cfg.block_env and not any(isinstance(b, LocalBlock) for b in self.blocks.values()):
-            LocalBlock(self, {})
+        for use, block_type in on_demand_blocks().items():
+            if use not in self.cfg.block_env and not any(issubclass(configured, block_type) for configured in types.values()):
+                block_type(self, {})
         for b in self.blocks.values():
             b.bind()
         self._seed_routes(self.cfg.routes)
 
     def visible_blocks(self) -> dict[str, Block]:
-        return {name: block for name, block in self.blocks.items() if not isinstance(block, LocalBlock) or block.online}
+        return {name: block for name, block in self.blocks.items() if not block.hidden}
 
     @property
     def origins(self) -> dict[str, Block]:
@@ -272,7 +272,7 @@ class Switchboard:
         return {name: {"enabled": name in self.blocks,
                        "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
                 for name, keys in self.cfg.block_env.items()
-                if (name != "local" and not isinstance(self.blocks.get(name), LocalBlock)) or name in blocks}
+                if name in blocks or (name not in self.blocks and name not in ON_DEMAND_BLOCKS)}
 
     # Routing an action to a destination -----------------------------------------------------
 
@@ -427,7 +427,7 @@ class Switchboard:
             if type(b).targets is Block.targets or (block and block != name):
                 continue
             at, got = self._targets.get(name, (0.0, []))
-            if refresh or now - at > TARGETS_TTL_S or not got or isinstance(b, LocalBlock):
+            if refresh or now - at > TARGETS_TTL_S or not got or not b.cache_targets:
                 try:
                     found = await b.targets()
                     got = list(await asyncio.gather(*(self._render_target(b, t) for t in found))) if type(b).render_avatar is not Block.render_avatar else found
@@ -651,9 +651,7 @@ class Switchboard:
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         block = self.blocks.get(addr.block)
         if block is not None:
-            addr = block.effective_target(addr, project)
-        if isinstance(block, LocalBlock):
-            addr = block.mailbox_for(addr)
+            addr = block.grant_target(block.effective_target(addr, project))
         if addr is None or str(addr) not in allowed:
             raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key may send only to {', '.join(principal.targets or ()) or 'nothing'}")
         if project and not principal.allows_routing_scope("project:" + project.strip().lower().removeprefix("project:")):
