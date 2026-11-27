@@ -78,3 +78,48 @@ test("claims and login share the console theme and follow the system by default"
     await fallback.close()
   }
 })
+
+test.describe("mobile connections", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test("each channel row keeps its mode separate from the full-width disclosure", async ({ page }) => {
+    for (const [platform, name, source] of [
+      ["discord", "deployments", "From channel"],
+      ["slack", "#planning", "From channel"],
+      ["telegram", "-1001000", "From space"],
+      ["github", "example-org/example-repo", "From space"],
+    ]) {
+      await page.goto(`/connections/${platform}`)
+      const mode = page.getByRole("combobox", { name: `Mode for ${name}`, exact: true })
+      const details = page.getByRole("button", { name: `Details for ${name}`, exact: true })
+      await expect(mode).toBeVisible()
+      const row = page.getByRole("row").filter({ has: mode })
+      const nameBox = await row.getByText(name, { exact: true }).filter({ visible: true }).boundingBox()
+      const modeBox = await mode.boundingBox()
+      const sourceBox = await row.getByText(source, { exact: true }).filter({ visible: true }).boundingBox()
+      const detailsBox = await details.boundingBox()
+      expect(nameBox && modeBox && sourceBox && detailsBox).toBeTruthy()
+      if (!nameBox || !modeBox || !sourceBox || !detailsBox) continue
+      expect(nameBox.x).toBeLessThan(modeBox.x)
+      expect(Math.abs(nameBox.y + nameBox.height / 2 - modeBox.y - modeBox.height / 2)).toBeLessThan(3)
+      expect(sourceBox.y).toBeGreaterThanOrEqual(modeBox.y + modeBox.height)
+      expect(detailsBox.width).toBeGreaterThan(320)
+      await details.scrollIntoViewIfNeeded()
+      const sourceAfterScroll = await row.getByText(source, { exact: true }).filter({ visible: true }).boundingBox()
+      if (!sourceAfterScroll) throw new Error("Mode source has no tap area")
+      await page.touchscreen.tap(sourceAfterScroll.x + 2, sourceAfterScroll.y + sourceAfterScroll.height / 2)
+      await expect(details).toHaveAttribute("aria-expanded", "true")
+      await expect(page.getByRole("group", { name: "Triage actions" })).toBeVisible()
+      await mode.selectOption("work")
+      await expect(mode).toHaveValue("work")
+      await expect(details).toHaveAttribute("aria-expanded", "true")
+      await mode.selectOption("inherit")
+      await expect(row.getByText(source, { exact: true }).filter({ visible: true })).toBeVisible()
+
+      if (platform === "discord" || platform === "telegram") {
+        await expect(page.getByRole("heading", { name: "Bot", exact: true })).toHaveCount(0)
+        await expect(page.getByText("Disconnected", { exact: true })).toBeVisible()
+      }
+    }
+  })
+})
