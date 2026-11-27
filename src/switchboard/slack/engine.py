@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from ..guard import RateLimiter
+from ..store import ensure_private_data_dir
 from ..subject import subject
 from ..trust import wrap
 from ..visibility import Visibility, Who
@@ -52,7 +53,7 @@ class SlackEngine:
     ):
         self.env = dict(os.environ) if env is None else dict(env)
         self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_data_dir(self.data_dir)
         self.clock = clock
         self.store = Store(self.data_dir / "slack.db", clock=clock)
         self.http = http or httpx.AsyncClient()

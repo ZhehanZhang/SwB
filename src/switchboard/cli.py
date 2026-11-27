@@ -21,10 +21,10 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
-from .config import ConfigError, LOOPBACK_HOSTS, client_endpoint
+from .config import INSTANCE_CONFIG, ConfigError, LOOPBACK_HOSTS, client_endpoint, instance_paths
 from .deployment import OWNER_KEY, volume_owner_key
 
-CONFIG = Path("config/switchboard.yaml")
+CONFIG = INSTANCE_CONFIG
 
 
 class CliError(ValueError):
@@ -260,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     muse.add_argument("--state-dir", type=Path, default=Path.home() / ".config" / "swb" / "muse")
     up.add_argument("--dir", type=Path, help="use this instance directory for config, data and .env")
     for command in (init, connect, status, claim, login_link):
-        command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
+        command.add_argument("--dir", type=Path, help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
         command.add_argument("--url", help="server base URL or MCP endpoint (defaults to loopback and SWITCHBOARD_PORT, PORT, or 8870)")
     return parser
@@ -296,7 +296,8 @@ def main(argv: list[str] | None = None) -> None:
         url = _url(args.url or local_url)
         key = env.get(OWNER_KEY)
         if not key and url == local_url:
-            key = volume_owner_key(os.environ)
+            _, data, _ = instance_paths(base, env, explicit=args.dir is not None)
+            key = volume_owner_key({**env, "SWITCHBOARD_DATA_DIR": str(data)})
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
         request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")

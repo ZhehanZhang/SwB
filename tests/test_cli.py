@@ -131,8 +131,8 @@ def test_up_uses_instance_paths_and_loads_dotenv(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(__main__, "main", lambda argv, *, data_dir, **_: calls.append(
         (argv, *(os.environ[k] for k in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_CONFIG")), data_dir)))
-    with patch.dict(os.environ, {"SWITCHBOARD_DATA": "/path/to/old-data", "SWITCHBOARD_CONFIG": "/path/to/old-config",
-                                 "PORT": "9876"}, clear=True):
+    with patch.dict(os.environ, {"SWITCHBOARD_CONFIG": "/path/to/old-config", "PORT": "9876",
+                                 "HOME": str(tmp_path / "home"), "USERPROFILE": str(tmp_path / "home")}, clear=True):
         cli.main(["up", "--dir", str(tmp_path)])
     assert calls == [(["serve"], "owner-test-key", "9876", str(tmp_path / cli.CONFIG), tmp_path / "data")]
 
