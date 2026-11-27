@@ -384,7 +384,7 @@ async def test_webhook_uses_project_mailbox_route(github, mode):
         if mode == "triage":
             assert "Triage uses the default agent." in status["spaces"][0]["problems"]
             assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["actions"] == ["reply"]
-        core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
+        await core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
         await send(client, delivery="off", sender={"id": 42}, action="opened")
         assert core.audit.recent(action="webhook", outcome="dropped")[0]["detail"] == "channel mode off"
 
@@ -545,7 +545,7 @@ async def test_github_visibility_and_runtime_off_do_not_wake_or_forward(github):
             assert (await send(client, sender={"id": 11})).status_code == 200
             assert core.inbox.read(owner="claude")["items"] == []
             owner = Principal("owner", "local", "key")
-            assert core.modes.set(owner, "github", "team", "off", "acme/app")["mode"] == "off"
+            assert (await core.modes.set(owner, "github", "team", "off", "acme/app"))["mode"] == "off"
             assert (await send(client, delivery="override", sender={"id": 42})).status_code == 200
             assert (await send(client, delivery="legacy-wildcard", repo="acme/another", sender={"id": 11})).status_code == 200
             await drained(core)

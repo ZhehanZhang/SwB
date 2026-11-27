@@ -186,7 +186,7 @@ async def modes(request: Request) -> JSONResponse:
     if body is None:
         return _error("invalid_request")
     try:
-        row = service.set(_owner(request), **body.model_dump())
+        row = await service.set(_owner(request), **body.model_dump())
     except ValueError:
         return _error("mode_not_saved")
     return JSONResponse({"space": row})

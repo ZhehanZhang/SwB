@@ -3448,7 +3448,7 @@
       "name": "slack_write_requests"
     },
     {
-      "description": "Owner only. Set a space or channel override. Use target to bind an address such as agent:beta. Use inherit to clear the override. The triage agent can reply by default.",
+      "description": "Owner only. Set a space or channel override. Choose a target listed by targets, such as agent:beta. Omit target to keep the binding. Pass an empty target to clear it. Use inherit to clear the override. The triage agent can reply by default.",
       "icon": null,
       "id": "tool:space_mode",
       "input_properties": [
