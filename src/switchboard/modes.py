@@ -267,6 +267,8 @@ class ChannelModes:
                                      "WHERE block = ? AND delivered_at IS NULL AND dm = 0", (block, block)):
             space, channel = row["space"], row["channel"]
             names.setdefault((space, channel), (channel or space, default_kind, None))
+        for space in {space for space, channel in names if channel}:
+            names.pop((space, ""), None)
         return names
 
     def row(self, block: str, space: str, channel: str, name: str | None = None, kind: str | None = None,
