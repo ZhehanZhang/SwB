@@ -104,7 +104,7 @@ The agent adds the repositories under `blocks.github.spaces` or `blocks.github.r
 
 The agent calls `connect(what="github")` again for any remaining App ID or private key links. To switch from an existing personal access token to an App, it selects `choose={"credential":"app"}`.
 
-After a restart, the agent calls `github_status`. This checks the installation and its permissions. Agents then use `github_label`, `github_comment`, `github_open_issue`, `github_link_duplicate`, `github_reply` and `github_notify_owner` as the channel mode allows.
+After a restart, the agent calls `github_status` to check the installation and its permissions. See [Channel modes](/docs/channel-modes) to bind the project route and enable triage actions. Triage allows `github_reply` by default.
 
 ## Credentials
 

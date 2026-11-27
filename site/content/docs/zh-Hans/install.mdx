@@ -57,7 +57,7 @@ SwB 先读取 YAML 配置或覆盖文件中的 `data_dir`，再依次检查 `SWI
 curl -fsS http://127.0.0.1:8870/healthz
 ```
 
-返回内容列出每个模块及其状态。需要某项设置的模块会显示所缺环境变量的名称。
+上面的请求只返回 `status` 和 `version` 两个字段。以所有者身份登录或使用所有者密钥，即可查看各模块及其状态。
 
 ## 服务器命令
 
@@ -74,7 +74,7 @@ curl -fsS http://127.0.0.1:8870/healthz
 | `swb muse-bridge` | 在 Linux 上配对并运行 Muse 设备。 |
 | `swb serve` | 按配置的主机地址和端口运行服务器。 |
 | `swb export DIR` | 将已保存的记忆导出为 Markdown 文件，存入输出目录 `DIR`。 |
-| `swb log` | 输出最近的审计记录，最多 50 条。 |
+| `swb log [--limit N]` | 输出最近的审计记录。默认上限为 `50` 条。 |
 | `swb config migrate` | 将第 1 版配置转换为第 2 版格式并输出。 |
 | `swb blocks list` | 列出已配置的模块。 |
 | `swb blocks show BLOCK` | 显示指定模块的设置。 |

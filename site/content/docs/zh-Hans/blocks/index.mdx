@@ -17,6 +17,8 @@ description: SwB 连接的每个平台。
 | [Telegram](/zh-Hans/docs/blocks/telegram) | 机器人令牌 | 话题串中的回复 |
 | [GitHub App](/zh-Hans/docs/blocks/github) | webhook 密钥 | 带签名的 webhook |
 
+启用 Capy 模块后，使用 MCP 2026-07-28 的客户端可通过 `server/discover` 发现 [MCP Tasks](/zh-Hans/docs/how-it-works#会话) 扩展。客户端在每次向 Capy 发送时选择启用。MCP 2025-11-25 客户端和发往收件箱的消息都使用普通会话。
+
 ## 所有模块的共同点
 
 信任等级来自平台自己的 id。SwB 把所有者的消息标记为 `owner`。它把你列出的人的消息标记为 `known`。所有其他消息标记为 `external`。SwB 把所有者以外任何人的文本包在一个低信任框架中，智能体因此把它当作信息来读。

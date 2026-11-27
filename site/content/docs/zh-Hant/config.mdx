@@ -26,11 +26,11 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 `swb muse-bridge` 需要 `--url`。用 `--state-dir` 指定存放橋接檔案的資料夾。
 
-在執行個體的資料夾內執行 `swb export`、`swb log`、`swb blocks` 和 `swb targets`。這些指令會讀取該資料夾內的 `.env`。它們會採用 `SWITCHBOARD_CONFIG` 指定的檔案或本機設定檔。
+所有伺服器指令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 從指定的資料夾讀取 `.env` 和設定。需要存取資料庫的指令也從該資料夾尋找執行個體的資料。
 
-`swb serve` 讀取終端機中的環境變數與設定檔。
+直接執行 `swb serve` 時，SwB 會讀取終端機環境和設定檔。其他伺服器指令預設採用目前的資料夾。
 
-用 `swb config migrate [file]` 印出第 2 版格式的設定。省略 `file` 時，指令會採用終端機中的 `SWITCHBOARD_CONFIG` 或預設設定檔。
+用 `swb config migrate [file]` 印出第 2 版格式的設定。可傳入 `file` 指定設定檔。省略時，SwB 依序查看 `--dir`、`SWITCHBOARD_CONFIG` 和預設路徑所指定的設定。
 
 ## 資料夾
 
@@ -150,6 +150,8 @@ routes:
 | `blocks.mcp.wait.agents.*.max_s` | 該代理最長等待的秒數 |
 
 ## 記憶與頻道模式
+
+請參閱[頻道模式](/zh-Hant/docs/channel-modes)，了解如何繫結專案路由並設定分流動作。
 
 | 設定鍵 | 用途 |
 | - | - |

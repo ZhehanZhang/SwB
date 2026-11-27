@@ -26,11 +26,11 @@ Use `swb up --dir ./my-swb` to read `.env` and `config/switchboard.yaml` from th
 
 `swb muse-bridge` requires `--url`. Use `--state-dir` to choose the folder for its files.
 
-Run `swb export`, `swb log`, `swb blocks` and `swb targets` from the instance folder. These commands read `.env` in that folder. They use `SWITCHBOARD_CONFIG` or the local config file.
+All server commands accept `--dir`. Use it with `swb serve`, `swb export`, `swb log`, `swb config migrate`, `swb blocks` and `swb targets`. SwB reads `.env` and the config from the selected folder. It also uses that folder to find the instance data for commands that use the database.
 
-`swb serve` reads settings from the shell and the config file.
+With plain `swb serve`, SwB reads the shell and the config file. The other server commands use the current folder by default.
 
-Use `swb config migrate [file]` to print a config in version 2 format. If you omit `file`, the command uses `SWITCHBOARD_CONFIG` from the shell or the default config file.
+Use `swb config migrate [file]` to print a config in version 2 format. Pass `file` to select a specific config. Otherwise, SwB uses the config from `--dir`, `SWITCHBOARD_CONFIG` or the default path.
 
 ## Data folder
 
@@ -150,6 +150,8 @@ Use `private` for the owner and their agents. Use `shared` to open access. List 
 | `blocks.mcp.wait.agents.*.max_s` | Maximum wait in seconds for this agent |
 
 ## Memory and channel modes
+
+See [Channel modes](/docs/channel-modes) to bind a project route and set triage actions.
 
 | Key | Use |
 | - | - |
