@@ -34,6 +34,11 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | `--cap notify` | 在裝置桌面顯示通知 |
 | `--cap drop` | 透過 `~/SwB Drop` 資料夾分享檔案，每個檔案上限為 10 MiB |
 | `--cap mcp --mcp NAME=COMMAND` | 讓代理使用裝置上 MCP 伺服器提供的工具 |
+| `--cap herdr` | 向 Herdr 窗格中的程式開發代理傳送訊息 |
+| `--cap codex` | 透過 Codex 應用程式伺服器向 Codex 傳送訊息 |
+| `--cap opencode` | 透過 OpenCode 伺服器向 OpenCode 傳送訊息 |
+| `--cap dsh` | 透過 SwB 橋接外掛向 DeepSeek Harness 傳送訊息 |
+| `--cap hooks` | 接收 Claude Code、Gemini CLI 與 Codex 的狀態 |
 | `--cap muse` | 在 Mac 或 Linux 電腦上透過藍牙與 Muse 配對。請使用 [Muse 指南](/zh-Hant/docs/setup/muse)中的指令 |
 
 在 Linux 上，通知功能使用 `notify-send`。
@@ -41,6 +46,14 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 每台 MCP 伺服器使用一個 `--mcp` 選項。填入啟動指令或本機 HTTP 位址，例如 `--mcp 'notes=uvx notes-mcp'` 或 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
 代理用 `companion_list` 查看已配對的裝置及其操作。它用 `companion_invoke` 執行操作。
+
+## 本機工作階段
+
+本機工作階段是指正在這台裝置上執行的程式開發代理。SwB 會在目標中列出工作階段及其狀態。
+
+SwB 先把傳給工作階段的訊息放進代理的信箱，再嘗試送到已開啟的工作階段。回覆會回到原本的 SwB 對話。
+
+如需指令與適用的代理，請參閱[本機工作階段](/zh-Hant/docs/blocks/local-sessions)。
 
 ## 保持執行
 
