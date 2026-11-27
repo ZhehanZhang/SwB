@@ -165,7 +165,8 @@ def register(mcp: MCPServer, kit: Kit) -> None:
         title="Connect to SwB",
         description=('When someone asks how to connect, set up or link something to SwB, call connect first. '
                      f'Supported kinds include {", ".join(kinds)}. Do steps marked "you" in order. '
-                     'Share "person" steps and links with the owner. Call connect again to check progress. '
+                     'Share "person" steps and links with the owner. Follow required steps in next until complete is true. '
+                     'The done field lists progress. '
                      'Use choose for details such as a Captain, project, agent name or dot name. '
                      'For Muse device pairing pass choose.gadget=true. Use private links for credentials. '
                      'Read the prompt or resource in guide for detailed setup instructions.'),
@@ -174,7 +175,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
     async def connect(ctx: Context, what: str, project: str | None = None, choose: dict[str, Any] | None = None) -> dict[str, Any]:
         p = kit.who(ctx)
         what = ALIASES.get(what := what.strip().lower(), what)
-        result: dict[str, Any] = {"what": what}
+        result: dict[str, Any] = {"what": what, "complete": False}
         if what in guides:
             result["guide"] = guides[what]
         if what == "cloudflare":
@@ -183,7 +184,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
         if what not in kinds:
             if what in guides:
                 return {**result, "done": [], "next": []}
-            return {"what": "unknown", "done": [], "next": [], "kinds": kinds, "guides": guide_names}
+            return {**result, "what": "unknown", "done": [], "next": [], "kinds": kinds, "guides": guide_names}
         block = owners.get(what)
         if what not in CLIENTS and not p.is_unrestricted_owner:
             modes = ({"modes": core.modes.summary(block.name, p, slugs=await core.modes.status_slugs(p))}
@@ -219,4 +220,5 @@ def register(mcp: MCPServer, kit: Kit) -> None:
                                   action=f"connect_{what}", outcome=outcome)
         if block is not None and block.manifest.id in PROVIDERS:
             out.setdefault("modes", core.modes.summary(block.name, p))
-        return {**result, **out, **({"state": "connected"} if all(step.get("optional") for step in out["next"]) else {})}
+        complete = all(step.get("optional") for step in out["next"])
+        return {**result, **out, "complete": complete, **({"state": "connected"} if complete else {})}

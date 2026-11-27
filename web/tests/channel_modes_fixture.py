@@ -119,11 +119,14 @@ def run(path: Path) -> None:
     }))
     transport = httpx.MockTransport(capy_fixture)
     core = Switchboard(config, path / "data",
-                       env={"CAPY_API_KEY": "example-capy-fixture", "EXAMPLE_SLACK_TOKEN": "example-slack-fixture"},
+                       env={"CAPY_API_KEY": "example-capy-fixture", "EXAMPLE_SLACK_TOKEN": "example-slack-fixture",
+                            "SWITCHBOARD_KEY_ALPHA": "example-alpha-fixture-key"},
                        access_verifier=verify_access, block_options={"capy": {"transport": transport}}, http_transport=transport,
                        slack_options={"connect": False, "client_factory": lambda _token: SlackFixture()})
     core.projects.create(slug="operations", name="Operations")
     core.projects.create(slug="community", name="Community")
+    core.store.x("INSERT INTO owner_passkeys(id, name, public_key, sign_count, created_at, last_used_at) VALUES (?,?,?,?,?,?)",
+                 ("Zml4dHVyZQ", "Fixture passkey", b"fixture", 0, 1767268800, 1767355200))
     core.memory.write(source="claude-code", scope="general", namespace="notes", key="release-plan",
                       title="Release plan", body="Prepare the release.", confirm_general=True)
     core.memory.write(source="claude-code", scope="general", namespace="notes",

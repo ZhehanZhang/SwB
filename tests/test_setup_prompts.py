@@ -45,6 +45,7 @@ def test_connect_returns_setup_guide(make, what, kind):
     out = payload(call(client, STATIC_KEY, "connect", {"what": what}))
     assert out["what"] == kind
     assert out["guide"] == {"prompt": f"setup-{kind}", "resource": f"swb://setup/{kind}"}
+    assert out["complete"] is False
 
 
 def test_connect_unknown_lists_setup_guides(make):
