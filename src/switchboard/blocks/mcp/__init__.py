@@ -17,7 +17,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, InputRequiredResult, ToolAnnotations
-from pydantic import BaseModel, Field, ValidationError, create_model
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model, model_validator
 from starlette.routing import BaseRoute, Mount
 
 from ... import __version__
@@ -25,7 +25,7 @@ from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
 from ...modes import ChannelModes
 from ...projects import ProjectError
-from ...refusals import PolicyRefusal
+from ...refusals import PROJECT_LINK_REQUIRED, ROUTE_TARGET_KIND, PolicyRefusal
 from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
@@ -75,6 +75,17 @@ class FileIn(BaseModel):
     text: str | None = Field(default=None, description="File content as text")
     base64: str | None = Field(default=None, description="File content as base64, for binary files")
     media_type: str | None = Field(default=None, description="MIME type, e.g. text/markdown")
+
+
+class ProjectLinks(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def supported_keys(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.keys() - cls.model_fields.keys():
+            raise PolicyRefusal(PROJECT_LINK_REQUIRED)
+        return data
 
 
 class RouteDefaults(BaseModel):
@@ -291,7 +302,8 @@ class MCPBlock(Block):
         mcp.middleware.append(advertise_events)
         global Links
         link_keys = tuple(dict.fromkeys(core.projects.link_keys))
-        Links = create_model("Links", repos=(list[str] | None, Field(default=None, description="owner/repo names that belong to the project")),
+        Links = create_model("Links", __base__=ProjectLinks,
+                             repos=(list[str] | None, Field(default=None, description="owner/repo names that belong to the project")),
                              **{k: (str | None, Field(default=None, description=f"The matching {k.removesuffix('_project').replace('_', ' ')} project (id or name)"))
                                 for k in link_keys})
 
@@ -523,11 +535,16 @@ class MCPBlock(Block):
             b = core.blocks.get(head)
             if b is not None:
                 route_destinations(b.name)
+                kind, kind_sep, _ = rest.partition(":")
+                if kind_sep and not any(k.kind == kind.strip().lower() for k in b.manifest.targets):
+                    raise PolicyRefusal(ROUTE_TARGET_KIND, f"Choose a supported route target kind for {text[:120]!r}.")
                 return b.name, b.parse_route_target(rest)
             owner = core._kind_owner(head) if head in LEGACY_KINDS else None
             if owner is not None:
                 b = core.blocks[owner]
                 return b.name, b.parse_route_target(text)
+            if sep:
+                raise PolicyRefusal(ROUTE_TARGET_KIND, f"Choose a supported route target kind for {text[:120]!r}.")
             name = core.route_destinations()[0]
             if name == "agent":
                 raise ToolError("Use agent:<name> for a mailbox or enable a block that takes routes.")
