@@ -33,6 +33,7 @@ from ..claims import CLAIM_TTL_S
 from ..modes import PROVIDERS
 from ..slack.config import AVATAR_RE
 from ..subject import subject, wake_text
+from ..targets import slugify
 from ..trust import wrap
 from ..visibility import Who
 from .claims import Claims
@@ -352,24 +353,31 @@ class ChatBlock(Block):
         project = space.channel_projects.get(msg.channel, space.channel_projects.get(f"#{msg.channel_name}", space.project))
         channel_mode = None
         work_target = None
-        if policy is not None and not (trust == "owner" and addressed):
-            mode, _, actions, selected, project = policy.policy(self.name, msg.space, channel, project, parent=msg.channel, name=msg.channel_name)
-            if msg.dm:
-                mode, _ = policy.dm(self.name)
-            if mode in ("off", "work") or (msg.is_bot and trust == "external"):
-                return None
-            if mode == "watch":
-                if policy.watch(self.name, msg.space, channel, msg.message, msg.user, name, msg.text or "", msg.link, selected,
-                                project=project, dm=msg.dm):
-                    self.record_message(msg)
-                return None
-            channel_mode = policy.meta(self.name, msg.space, channel, mode, actions, project, msg.link, selected)
-            channel_mode.update(parent=msg.channel, channel_name=msg.channel_name, dm=msg.dm)
-        elif policy is not None:
-            mode, _, _, selected, project = policy.policy(self.name, msg.space, channel, project, parent=msg.channel, name=msg.channel_name)
-            route = self.core.route_address(None, project) if project and not space.default_target else None
-            work_target = selected if mode == "work" else str(route) if route else None
-        elif policy is None and not addressed and not listened:
+        route = None
+        if policy is not None:
+            mode, _, actions, selected, project = policy.policy(self.name, msg.space, channel, project,
+                                                                parent=msg.channel, name=msg.channel_name, include_route=False)
+            owner_work = trust == "owner" and addressed
+            if owner_work and mode != "work":
+                selected = space.default_target
+            route = policy.project_route(self.name, project) if not selected else None
+            if route:
+                selected = str(route)
+            if owner_work:
+                work_target = selected
+            else:
+                if msg.dm:
+                    mode, _ = policy.dm(self.name)
+                if mode in ("off", "work") or (msg.is_bot and trust == "external"):
+                    return None
+                if mode == "watch":
+                    if policy.watch(self.name, msg.space, channel, msg.message, msg.user, name, msg.text or "", msg.link, selected,
+                                    project=project, dm=msg.dm):
+                        self.record_message(msg)
+                    return None
+                channel_mode = policy.meta(self.name, msg.space, channel, mode, actions, project, msg.link, selected)
+                channel_mode.update(parent=msg.channel, channel_name=msg.channel_name, dm=msg.dm)
+        elif not addressed and not listened:
             return None
         if not self.core.store.n("INSERT OR IGNORE INTO chat_events(block, space, channel, message, at) VALUES (?,?,?,?,?)",
                                  (self.name, msg.space, msg.channel, msg.message, self.core.clock())):
@@ -384,7 +392,10 @@ class ChatBlock(Block):
         sticky = self.core.store.one("SELECT target FROM chat_threads WHERE block = ? AND space = ? AND channel = ? AND root = ?",
                                      (self.name, msg.space, msg.channel, root))
         slug = channel_mode["target"] if channel_mode else slug or (sticky["target"] if sticky else None) or work_target or space.default_target
+        routed = route is not None and not explicit and slug == str(route)
         target = self.targets_by_slug.get(slug or "") or next((t for t in self.targets_by_slug.values() if t["address"] == slug), None)
+        if routed and target is None and route.block != "agent":
+            target = {"address": slug, "block": route.block, "kind": route.kind, "id": route.id}
         if target is None and slug and slug.startswith("agent:") and (agent := slug.removeprefix("agent:")) in self.core.known_agents():
             target = {"address": slug, "block": "agent", "kind": "agent", "id": agent}
         place = f"#{msg.channel_name}" if msg.channel_name else msg.channel
@@ -396,15 +407,16 @@ class ChatBlock(Block):
                  "subject": subject(name or msg.user, self.manifest.title, place, text, trust=trust),
                  "raw_text": text, "target": slug if target else None, "target_kind": target["kind"] if target else None, "trust": trust, "from": sender}
         who = self.who(space, msg.user, trust)
+        target_resources = self.target_resources(slug or "") + ([f"target:{slugify(route.id)}"] if routed else [])
         reaches = who.owner or (self.core.visibility.allows(who, *self.channel_resources(msg.space, msg.channel, msg.channel_name))
-                                and (target is None or self.core.visibility.allows(who, *self.target_resources(slug or ""))))
+                                and (target is None or self.core.visibility.allows(who, *target_resources)))
         if channel_mode:
             event.update({"mode": channel_mode["mode"], "actions": channel_mode["actions"], "note": policy.wake_note(channel_mode)})
             event.pop("raw_text", None)
             if not reaches or target is None:
                 await self.note_context(space, msg, event, target)
             elif self._admit_sender(msg, event):
-                await self.delegate(space, msg, event, target, root, channel_mode)
+                await self.delegate(space, msg, event, target, root, channel_mode, route_project=project if routed else None)
             return event
         if not reaches:
             await self.note_context(space, msg, event, target)
@@ -416,13 +428,16 @@ class ChatBlock(Block):
             with contextlib.suppress(Exception):
                 await self.ack(msg)
         agents = {a for a, labels in self.grants.items() if "*" in labels or msg.space in labels}
-        if target is not None and target["kind"] == "agent" and addressed and self._count_turn(self._thread_key(msg.space, msg.channel, root)):
-            agents.add(target["id"])
+        if target is not None and target["kind"] == "agent" and addressed:
+            if routed:
+                agents.discard(target["id"])
+            elif self._count_turn(self._thread_key(msg.space, msg.channel, root)):
+                agents.add(target["id"])
         for agent in sorted(agents):
             thread = (msg.channel, root) if addressed else None
             await self.core.inbox.add(self._handle(agent, msg.space, thread), f"{self.platform}_event", event)
-        if addressed and target is not None and target["kind"] != "agent":
-            await self.delegate(space, msg, event, target, root)
+        if addressed and target is not None and (routed or target["kind"] != "agent"):
+            await self.delegate(space, msg, event, target, root, route_project=project if routed else None)
         return event
 
     def _handle(self, agent: str, space: str, thread: tuple[str, str] | None = None) -> str:
@@ -492,7 +507,7 @@ class ChatBlock(Block):
         return f"{self.name}:{space}:{channel}:{root}"
 
     async def delegate(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any], root: str,
-                       mode: dict[str, Any] | None = None) -> None:
+                       mode: dict[str, Any] | None = None, *, route_project: str | None = None) -> None:
         if not self._count_turn(self._thread_key(msg.space, msg.channel, root)):
             return
         name = (self.persona_for(target) or Persona(target["id"], target.get("name") or target["id"])).name
@@ -501,6 +516,7 @@ class ChatBlock(Block):
         task = wake_text(title, event["text"], msg.link, tail)
         project = space.channel_projects.get(msg.channel, space.channel_projects.get(f"#{msg.channel_name}", space.project)) if msg.channel_name else \
             space.channel_projects.get(msg.channel, space.project)
+        project = route_project or project
         trust = event["trust"]
         kw: dict[str, Any] = {"task": task, "title": title,
                               "handle_meta": {"chat_trust": trust, **({"boundary": project} if project else {})}}
@@ -508,7 +524,9 @@ class ChatBlock(Block):
             kw["handle_meta"].update(channel_mode=mode)
             if mode["project"]:
                 kw["handle_meta"]["boundary"] = mode["project"]
-        if target["kind"] == "project":
+        if route_project:
+            kw["project"] = route_project
+        elif target["kind"] == "project":
             kw["project"] = target["id"]
         else:
             kw["to"] = target["address"]

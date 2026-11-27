@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import (
+    CAPTAIN,
     OWNER,
     PUBLIC,
     SECOND_KEY,
@@ -151,7 +152,7 @@ def test_watch_flushes_at_fifty_without_waiting_for_the_timer(make):
 @pytest.fixture(params=["discord", "telegram"])
 def intake(request, discord, telegram):
     @contextmanager
-    def build(mode, *, shared=True, dm_mode=None, topic_mode=None, mailbox=False):
+    def build(mode, *, shared=True, dm_mode=None, topic_mode=None, mailbox=False, capy=None):
         is_discord = request.param == "discord"
         channel, target = (DISCORD_CHANNEL, "build-check") if is_discord else (str(GROUP), "example-runner")
         topic, topic_channel = 42, "42" if is_discord else f"{GROUP}:42"
@@ -160,14 +161,14 @@ def intake(request, discord, telegram):
             channels[topic_channel] = topic_mode
         placement = {"guild_id": GUILD, "owner_ids": [DISCORD_OWNER]} if is_discord else {"chats": [GROUP], "owner_ids": [TELEGRAM_OWNER]}
         choices = {"mode": mode, "project": "example", "default_target": target, "channels": channels}
-        if mailbox:
+        if mailbox or capy:
             choices.pop("default_target")
             channels[channel].pop("target")
-            target = "alpha"
+            target = "alpha" if mailbox else f"capy:captain:{CAPTAIN}"
         settings = {"spaces": {"home": {**placement, **choices}}, "dm_space": "home"}
         if dm_mode is not None:
             settings["dm_mode"] = dm_mode
-        transport = discord(settings=settings) if is_discord else telegram(**settings)
+        transport = discord(settings=settings, capy=capy) if is_discord else telegram(capy=capy, **settings)
         with transport as (core, client, block, wire, *routine):
             core.projects.create(slug="example", name="Example")
             if mailbox:
@@ -175,6 +176,9 @@ def intake(request, discord, telegram):
                 core.connections.redeem(pair["code"])
                 core.routes.set(destination="agent", agent=None, project="example", target={"agent": target},
                                 defaults=None, allow_override=False, note="", by="owner")
+            if capy:
+                core.routes.set(destination="capy", agent=None, project="example", target={"captain": CAPTAIN},
+                                defaults={"delivery": "steer"}, allow_override=False, note="", by="owner")
             if shared:
                 core.visibility.set(f"channel:home/{channel}", "shared", "test", core.clock())
                 core.visibility.set(f"target:{target}", "shared", "test", core.clock())
@@ -272,6 +276,20 @@ def test_chat_modes_use_project_mailbox_route(intake, mode):
         assert status["target"] == "agent:alpha"
         [wake] = chat.core.inbox.read(owner="alpha")["items"]
         assert "Message for the project" in wake["text"] and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        assert not chat.wakes()
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+def test_chat_modes_dispatch_to_locked_capy_route(intake, capy, mode):
+    with intake(mode, capy=capy) as chat:
+        chat.send(10, "Message for the locked route", owner=mode == "work", mention=mode == "work")
+        assert space_row(chat.core.modes.status(), chat.block.name, "home", chat.channel)["target"] == f"capy:captain:{CAPTAIN}"
+        [sent] = [body for method, path, body in capy.requests if method == "POST" and path == f"/api/v1/threads/{CAPTAIN}/message"]
+        assert sent["delivery"] == "steer" and "Message for the locked route" in sent["text"]
+        [handle] = chat.core.inbox.handles(owner=chat.block.platform, destination="capy")
+        assert handle["meta"]["route"] == "project"
+        if mode != "work":
+            assert handle["meta"]["channel_mode"]["mode"] == mode
         assert not chat.wakes()
 
 

@@ -1,7 +1,7 @@
 from functools import partial
 
 import pytest
-from conftest import call, error_text, payload
+from conftest import CAPTAIN, call, error_text, payload
 from slackfix import BOT_USER, KEY_FULL, OWNER_A, Hooks
 from test_listen import CHANNEL, EXTERNAL, THREAD, TS, handle_of, ingest, posted
 from test_listen import opened as listen_fixture
@@ -69,6 +69,24 @@ def test_slack_modes_use_project_mailbox_route(opened, mode):
             ingest(core, client)
         [wake] = core.inbox.read(owner="alpha")["items"]
         assert wake["project"] == "docs" and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        assert not fires
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+def test_slack_modes_dispatch_to_locked_capy_route(opened, capy, mode):
+    with opened(channels=[], mapped="no-routine", capy=capy) as (core, client, _, fires):
+        core.routes.set(destination="capy", agent=None, project="no-routine", target={"captain": CAPTAIN},
+                        defaults={"delivery": "steer"}, allow_override=False, note="", by="owner")
+        assert set_mode(core, client, mode)["target"] == f"capy:captain:{CAPTAIN}"
+        if mode == "work":
+            push = ingest(core, client, type="app_mention", text=f"<@{BOT_USER}> Check the report", user=OWNER_A)
+        else:
+            push = ingest(core, client)
+        assert push["channel_mode"]["target"] == f"capy:captain:{CAPTAIN}"
+        [sent] = [body for method, path, body in capy.requests if method == "POST" and path == f"/api/v1/threads/{CAPTAIN}/message"]
+        assert sent["delivery"] == "steer" and ("Check the report" if mode == "work" else "Can we fix this?") in sent["text"]
+        [handle] = core.inbox.handles(owner="slack", destination="capy")
+        assert handle["meta"]["route"] == "project" and handle["meta"]["channel_mode"]["mode"] == mode
         assert not fires
 
 
