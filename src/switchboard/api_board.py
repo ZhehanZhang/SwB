@@ -299,5 +299,6 @@ async def project_board(request: Request) -> JSONResponse:
 
 BOARD_ROUTES = [
     Route("/board", board, methods=["GET"]),
+    Route("/projects/{slug}", project_board, methods=["GET"]),
     Route("/board/projects/{slug}", project_board, methods=["GET"]),
 ]
