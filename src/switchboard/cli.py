@@ -21,7 +21,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
-from .config import INSTANCE_CONFIG, ConfigError, LOOPBACK_HOSTS, client_endpoint, instance_paths
+from .config import INSTANCE_CONFIG, ConfigError, Instance, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
 from .store import ensure_private_data_dir
 
@@ -299,8 +299,7 @@ def main(argv: list[str] | None = None) -> None:
         url = _url(args.url or local_url)
         key = env.get(OWNER_KEY)
         if not key and url == local_url:
-            _, data, _ = instance_paths(base, env, explicit=args.dir is not None)
-            key = volume_owner_key({**env, "SWITCHBOARD_DATA_DIR": str(data)})
+            key = volume_owner_key(env, instance=Instance(base, explicit=args.dir is not None))
         if not key:
             raise CliError(f"{OWNER_KEY} is missing. Run swb init or use --dir to locate your instance.")
         request_log = logging.getLogger("httpx2" if args.command == "claim" else "mcp")

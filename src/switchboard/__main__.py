@@ -11,6 +11,8 @@ from socket import socket
 import uvicorn
 from uvicorn.main import STARTUP_FAILURE
 
+from .config import Instance
+
 SERVER_COMMANDS = ("serve", "export", "log", "config", "blocks", "targets")
 
 
@@ -61,7 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
-         data_dir: Path | None = None, announce: bool = False, on_start: Callable[[], None] | None = None) -> None:
+         instance: Instance | None = None, announce: bool = False,
+         on_home_fallback: Callable[[Path, Path], None] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -77,7 +80,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.error("no config file found")
         print(migrate_text(path.read_text()), end="")
         return
-    from .config import ConfigError, LOOPBACK_HOSTS, bind_address, instance_paths
+    from .config import ConfigError, LOOPBACK_HOSTS, bind_address
     from .deployment import serve_env
 
     serving = args.cmd in (None, "serve")
@@ -85,7 +88,7 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     host, origin = bind_address(os.environ, port, host=getattr(args, "host", None))
     loopback_origin = origin if host in LOOPBACK_HOSTS and port else None
     try:
-        env = serve_env(os.environ) if serving else None
+        env = serve_env(os.environ, instance=instance) if serving else None
     except ConfigError as error:
         parser.exit(2, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
@@ -98,12 +101,9 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             env = {**_read_env(base / ".env"), **os.environ}
         except (CliError, OSError, UnicodeError):
             parser.exit(2, "swb: Check the instance .env file.\n")
-        config, instance_data, _ = instance_paths(base, env, explicit=False)
-        if config is not None:
-            env["SWITCHBOARD_CONFIG"] = str(config)
-            data_dir = instance_data
+        instance = Instance(base, bare_home=False)
     try:
-        core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, loopback_origin=loopback_origin)
+        core = Switchboard(tunnel_url=tunnel_url, env=env, loopback_origin=loopback_origin, instance=instance)
     except ConfigError as error:
         parser.exit(2, f"swb: {error}\n")
     if args.cmd == "blocks":
@@ -153,8 +153,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,
     }
-    if on_start is not None:
-        on_start()
+    if on_home_fallback is not None and core.cfg.legacy_instance_data is not None:
+        on_home_fallback(core.data_dir, core.cfg.legacy_instance_data)
     if announce:
         print(f"MCP URL: {core.cfg.public_url or origin}/mcp", flush=True)
     if listener is None:

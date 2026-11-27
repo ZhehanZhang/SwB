@@ -12,12 +12,11 @@ import socket
 import subprocess
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
-from functools import partial
 from pathlib import Path
 from threading import Thread
 
 from .cli import CliError
-from .config import DEFAULT_PORT, bind_address, instance_paths
+from .config import DEFAULT_PORT, Instance, bind_address
 
 _TUNNELS = {
     "cloudflare": ("cloudflared", ("tunnel", "--no-autoupdate", "--url"), "trycloudflare.com"),
@@ -121,16 +120,12 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
     if not raw_port.isascii() or not raw_port.isdecimal() or len(raw_port) > 5 or not 1 <= (port := int(raw_port)) <= 65535:
         raise CliError("PORT must be a number from 1 to 65535.")
     host, origin = bind_address(env, port, host=host)
-    config, data, instance_data = instance_paths(base, env, explicit=instance)
     values = {
         **{k: value for k, value in dotenv.items() if k not in os.environ},
         "SWITCHBOARD_HOST": host,
         "PORT": str(port),
         "FORWARDED_ALLOW_IPS": "127.0.0.1,::1",
-        "SWITCHBOARD_DATA_DIR": str(data),
     }
-    if config is not None:
-        values["SWITCHBOARD_CONFIG"] = str(config)
     previous = {k: os.environ.get(k) for k in values}
     previous_sigterm = signal.signal(signal.SIGTERM, _interrupt)
     try:
@@ -146,8 +141,7 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
                 tunnel_url = stack.enter_context(_tunnel(tunnel, origin))
             os.environ.update(values)
             serve(["serve"], listener=listener, tunnel_url=tunnel_url,
-                  data_dir=data if config is not None else None, announce=True,
-                  on_start=partial(_notice_home_data, data, instance_data) if instance_data is not None else None)
+                  instance=Instance(base, explicit=instance), announce=True, on_home_fallback=_notice_home_data)
     except KeyboardInterrupt:
         pass
     finally:

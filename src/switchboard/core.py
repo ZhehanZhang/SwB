@@ -24,7 +24,7 @@ from .auth import Auth, Principal
 from .blocks import Action, Address, Block, BlockError, Call
 from .blocks import load as load_block
 from .claims import Claims
-from .config import INSTANCE_DB, Config, load_config
+from .config import INSTANCE_DB, Config, Instance, load_config
 from .connect import Connections
 from .inbox import Inbox
 from .memory import GENERAL, Memory, MemoryError_
@@ -63,8 +63,9 @@ class Switchboard:
         block_options: dict[str, dict[str, Any]] | None = None,
         tunnel_url: str | None = None,
         loopback_origin: str | None = None,
+        instance: Instance | None = None,
     ):
-        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url, loopback_origin=loopback_origin)
+        self.cfg: Config = load_config(config_path, env, tunnel_url=tunnel_url, loopback_origin=loopback_origin, instance=instance)
         self.data_dir = Path(data_dir) if data_dir is not None else self.cfg.data_dir
         ensure_private_data_dir(self.data_dir)
         self.clock = clock
