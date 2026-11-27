@@ -47,5 +47,5 @@ def local_servers(specs: tuple[str, ...]) -> dict[str, LocalServer]:
                     raise ValueError
                 out[name] = LocalServer(argv)
     except (ValueError, TypeError, httpx2.InvalidURL):
-        raise ValueError("Use --mcp NAME=COMMAND or an HTTP address on this device.") from None
+        raise ValueError("Use --mcp NAME=COMMAND or NAME=URL. HTTP servers must use loopback addresses.") from None
     return out

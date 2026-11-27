@@ -6,28 +6,48 @@ import os
 import re
 import secrets
 import stat
+from unicodedata import category
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from ...trust import neutralize
 from .base import ActionSpec, Capability, CapabilityError, JobContext
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
 MAX_ENCODED_SIZE = 4 * ((MAX_FILE_SIZE + 2) // 3)
+FILE_TOO_LARGE = "Use a file up to 10 MiB."
+FILENAME_PUNCTUATION = " _-.()+[]@,'&#!"
 _NAME = {"type": "string", "minLength": 1, "maxLength": 255}
 
 
-def _valid_name(value: object) -> bool:
+def valid_name(value: object) -> bool:
     return (
         isinstance(value, str)
         and 0 < len(value) <= 255
+        and all(category(char)[0] in "LMN" or char in FILENAME_PUNCTUATION for char in value)
+        and len(value.encode()) <= 255
+        and neutralize(value) == value
         and ".." not in value
         and not value.endswith((" ", "."))
-        and not re.search(r'[\x00-\x1f/\\:<>|?*"\ud800-\udfff]', value)
         and not re.fullmatch(r"CON|CONIN\$|CONOUT\$|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]",
                              value.split(".")[0].rstrip(), re.I)
         and not value.startswith(".swb-drop-")
     )
+
+
+def decode_file_content(encoded: object) -> bytes:
+    if not isinstance(encoded, str):
+        raise CapabilityError("Use base64 file content.")
+    if len(encoded) > MAX_ENCODED_SIZE:
+        raise CapabilityError(FILE_TOO_LARGE)
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except ValueError:
+        raise CapabilityError("Use base64 file content.") from None
+    if len(data) > MAX_FILE_SIZE:
+        raise CapabilityError(FILE_TOO_LARGE)
+    return data
 
 
 def _is_reparse(info: os.stat_result) -> bool:
@@ -61,7 +81,7 @@ class _Folder:
         self.check()
         files = []
         for name in sorted(os.listdir(self.fd if self.fd is not None else self.path)):
-            if not _valid_name(name):
+            if not valid_name(name):
                 continue
             try:
                 info = self.stat(name)
@@ -83,7 +103,7 @@ class _Folder:
             if not _is_file(opened) or not os.path.samestat(info, opened):
                 raise CapabilityError("Choose a regular file in the Drop folder.")
             if opened.st_size > MAX_FILE_SIZE or len(data := stream.read(MAX_FILE_SIZE + 1)) > MAX_FILE_SIZE:
-                raise CapabilityError("Use a file up to 10 MiB.")
+                raise CapabilityError(FILE_TOO_LARGE)
             return data
 
     def put(self, name: str, data: bytes) -> str:
@@ -179,20 +199,10 @@ class DropCapability(Capability):
         if set(args) != properties.keys():
             raise CapabilityError("Check the Drop action arguments.")
         name = args.get("name")
-        if action != "list" and not _valid_name(name):
+        if action != "list" and not valid_name(name):
             raise CapabilityError("Choose a file name in the Drop folder.")
         if action == "put":
-            encoded = args["content_b64"]
-            if not isinstance(encoded, str):
-                raise CapabilityError("Use base64 file content.")
-            if len(encoded) > MAX_ENCODED_SIZE:
-                raise CapabilityError("Use a file up to 10 MiB.")
-            try:
-                data = base64.b64decode(encoded, validate=True)
-            except ValueError:
-                raise CapabilityError("Use base64 file content.") from None
-            if len(data) > MAX_FILE_SIZE:
-                raise CapabilityError("Use a file up to 10 MiB.")
+            data = decode_file_content(args["content_b64"])
         try:
             with self._folder() as folder:
                 if action == "list":

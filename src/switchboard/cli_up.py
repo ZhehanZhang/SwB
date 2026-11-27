@@ -143,7 +143,6 @@ def run(base: Path, dotenv: dict[str, str], tunnel: str | None, *, host: str | N
         **{k: value for k, value in dotenv.items() if k not in os.environ},
         "SWB_HOST": host,
         "PORT": str(port),
-        "FORWARDED_ALLOW_IPS": "127.0.0.1,::1",
     }
     previous = {k: os.environ.get(k) for k in values}
     previous_sigterm = signal.signal(signal.SIGTERM, _interrupt)

@@ -345,6 +345,7 @@
         "--drop-dir",
         "--help",
         "--mcp",
+        "--name",
         "--no-run",
         "-h"
       ],
@@ -2095,6 +2096,13 @@
       "key": "timezone",
       "kind": "config_key",
       "label": "timezone"
+    },
+    {
+      "icon": null,
+      "id": "config_key:trusted_proxies",
+      "key": "trusted_proxies",
+      "kind": "config_key",
+      "label": "trusted_proxies"
     },
     {
       "icon": null,

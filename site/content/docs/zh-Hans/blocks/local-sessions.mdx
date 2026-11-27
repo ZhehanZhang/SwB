@@ -9,7 +9,7 @@ description: 向已配对设备上的编程智能体发送消息。
 
 按照[配对设备](/zh-Hans/docs/companion#配对设备)中的说明操作。使用下方对应智能体的命令。每启用一项功能，添加一个 `--cap` 选项。要更改已配对设备的功能，请先[断开连接](/zh-Hans/docs/companion#断开连接)。
 
-请以所有者身份登录的智能体调用 `targets(block="local")`，检查设置结果。复制会话地址。地址格式为 `local:session:<harness>:<id>`。其中 `harness` 指运行智能体的程序。
+请以所有者身份登录的智能体调用 `targets(block="local")`，检查设置结果。复制会话地址。地址格式为 `local:session:<companion>:<harness>:<session>`。其中 `harness` 指运行智能体的程序。
 
 ## 发送消息
 
@@ -61,7 +61,7 @@ gemini extensions install /path/to/SwB/integrations/gemini
 swb companion connect https://swb.example.com --cap herdr --cap hooks
 ```
 
-要接收窗格中的答复，请配置对应的[状态钩子](#状态钩子)。确认目标中出现 `local:session:herdr:<id>` 地址。向该地址发送一条简短的测试消息。确认消息出现在窗格中。如果配置了状态钩子，请用 `result` 查看答复。
+要接收窗格中的答复，请配置对应的[状态钩子](#状态钩子)。确认目标中出现 `local:session:<companion>:herdr:<session>` 地址。向该地址发送一条简短的测试消息。确认消息出现在窗格中。如果配置了状态钩子，请用 `result` 查看答复。
 
 ## Codex
 
@@ -83,7 +83,7 @@ codex --remote unix://
 swb companion connect https://swb.example.com --cap codex
 ```
 
-伴侣设备从应用服务器读取会话事件。确认目标中出现 `local:session:codex:<id>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
+伴侣设备从应用服务器读取会话事件。确认目标中出现 `local:session:<companion>:codex:<session>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
 
 ## OpenCode
 
@@ -99,7 +99,7 @@ opencode serve --hostname 127.0.0.1 --port 4096
 SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
 ```
 
-伴侣设备从 OpenCode 服务器读取会话事件。确认目标中出现 `local:session:opencode:<id>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
+伴侣设备从 OpenCode 服务器读取会话事件。确认目标中出现 `local:session:<companion>:opencode:<session>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
 
 ## DeepSeek Harness
 
@@ -117,4 +117,4 @@ dsh plugin --profile web add /path/to/SwB/integrations/dsh
 swb companion connect https://swb.example.com --cap dsh
 ```
 
-确认目标中出现 `local:session:dsh:<id>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
+确认目标中出现 `local:session:<companion>:dsh:<session>` 地址。向该地址发送一条简短的测试消息。用 `result` 查看答复。
