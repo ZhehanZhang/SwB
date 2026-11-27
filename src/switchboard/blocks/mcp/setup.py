@@ -21,7 +21,7 @@ from .kit import Kit
 
 CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "muse", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
-          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "dots": "dots"}
+          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "dots": "dots", "webhook": "webhook"}
 BLOCK_EXAMPLES = {
     "discord": {"spaces": {"home": {"guild_id": "100000000000000001", "owner_ids": ["100000000000000002"], "mode": "watch"}}},
     "telegram": {"spaces": {"home": {"chats": [-1001111111111], "owner_ids": [222222], "mode": "watch"}}},

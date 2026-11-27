@@ -97,7 +97,7 @@ def test_generated_config_keeps_discovering_env_blocks(clean_env, tmp_path, monk
         env.write("GITHUB_WEBHOOK_SECRET=fixture-github-discovery-key\n")
     __main__.cli_main(["up"])
 
-    assert configs == [{"mcp", "capy"}, {"mcp", "capy", "github"}]
+    assert configs == [{"mcp", "webhook", "capy"}, {"mcp", "webhook", "capy", "github"}]
     assert yaml.safe_load((tmp_path / cli.CONFIG).read_text()) == {"version": 2}
     capsys.readouterr()
 
@@ -130,7 +130,7 @@ def test_documented_github_block_and_generated_muse_block_keep_mcp(clean_env, tm
 
     with start() as client:
         status = payload(call(client, key, "switchboard_status"))
-        assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "github"}
+        assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "webhook", "github"}
         steps = payload(call(client, key, "connect", {"what": "muse", "choose": {"gadget": True}}))["next"]
         snippet = next(step["snippet"] for step in steps if "snippet" in step)
         assert yaml.safe_load(snippet) == {"muse": {"use": "muse", "enabled": True}}
@@ -138,7 +138,7 @@ def test_documented_github_block_and_generated_muse_block_keep_mcp(clean_env, tm
         file.write(f"{snippet}\n")
     with start() as client:
         status = payload(call(client, key, "switchboard_status"))
-        assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "github", "muse"}
+        assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "webhook", "github", "muse"}
 
 
 @pytest.mark.parametrize("port_name", ["PORT", "SWB_PORT"])
@@ -349,7 +349,7 @@ def test_implicit_commands_use_the_config_override_and_dir_forces_local(clean_en
     monkeypatch.setattr(__main__.uvicorn, "run", serve)
     __main__.cli_main(["up"])
     __main__.cli_main(["up", "--dir", str(tmp_path)])
-    assert used == [(selected_data, ["external-mcp"]), (tmp_path / "data", ["local-mcp"])]
+    assert used == [(selected_data, ["webhook", "external-mcp"]), (tmp_path / "data", ["webhook", "local-mcp"])]
     capsys.readouterr()
     __main__.cli_main(["blocks", "list"])
     blocks = capsys.readouterr().out
@@ -367,7 +367,7 @@ def test_missing_config_override_does_not_discover_the_local_file(clean_env, tmp
     def serve(app, **options):
         with TestClient(app):
             core = app.starlette.state.core
-            assert list(core.blocks) == ["mcp"]
+            assert list(core.blocks) == ["mcp", "webhook"]
             assert core.data_dir == Path.home() / ".local/share/switchboard"
 
     monkeypatch.setattr(__main__.uvicorn, "run", serve)

@@ -11,7 +11,7 @@ import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
 import { channelModesQuery, type ModeRow, type ModesStatus } from "@/lib/channel-modes"
-import { connectionQuery, type BotAvatar, type DiscordDetails, type StatusPlatform, type TelegramDetails } from "@/lib/connections"
+import { connectionQuery, type BotAvatar, type DiscordDetails, type StatusPlatform, type TelegramDetails, type Webhook } from "@/lib/connections"
 import { cn } from "@/lib/utils"
 
 const cell = "py-3 pe-3 align-top wrap-anywhere"
@@ -19,14 +19,15 @@ const identityRow = "grid min-h-[41px] grid-cols-[minmax(74px,25%)_minmax(0,1fr)
 const avatarLabels = { applied: "Applied", failed: "Update failed", pending: "Pending", not_configured: "" }
 const chatStates = { direct: "Direct messages", listening: "Listening", unlisted: "Unlisted" }
 const slackIntake = { socket: "Socket Mode", poll: "Polling", none: "" }
+const webhookEventTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
 
-function StatusTable({ label, headings, children, compact = false }: {
-  label: string; headings: string[]; children: ReactNode; compact?: boolean
+function StatusTable({ label, headings, children, compact = false, wide = false }: {
+  label: string; headings: string[]; children: ReactNode; compact?: boolean; wide?: boolean
 }) {
-  const widths = headings.length === 4 ? ["w-[30%]", "w-[25%]", "w-[20%]"]
+  const widths = wide ? [] : headings.length === 4 ? ["w-[30%]", "w-[25%]", "w-[20%]"]
     : [cn("w-[36%] md:w-2/5"), cn("w-[26%] md:w-auto")]
   return (
-    <table aria-label={label} className="mt-1 w-full table-fixed border-collapse text-left">
+    <table aria-label={label} className={cn("mt-1 w-full border-collapse text-left", wide ? "min-w-[820px]" : "table-fixed")}>
       <thead className={compact ? "hidden md:table-header-group" : undefined}>
         <tr className="border-b text-caption text-muted-foreground">
           {headings.map((heading, index) => (
@@ -123,6 +124,31 @@ function TelegramChats({ chats, rows, status }: { chats: TelegramDetails["chats"
   )
 }
 
+function WebhookTable({ webhooks }: { webhooks: Webhook[] }) {
+  if (webhooks.length === 0) return <DataState kind="empty" message="0 webhooks" />
+  return (
+    <div className="max-w-full overflow-x-auto" role="region" aria-label="Webhook table" tabIndex={0}>
+      <StatusTable label="Webhooks" headings={["Name", "Direction", "Verify", "Target", "Events", "Refused", "Last event", "Secret", "URL"]} wide>
+        {webhooks.map(webhook => (
+          <tr key={webhook.id} className="border-b">
+            <th scope="row" className={cn(cell, "min-w-28 font-medium")}>{webhook.name}</th>
+            <td className={cn(cell, "whitespace-nowrap")}>{webhook.direction === "in" ? "Inbound" : "Outbound"}</td>
+            <td className={cn(cell, "whitespace-nowrap")}>{webhook.verify}</td>
+            <td className={cn(cell, "min-w-40 font-mono text-mono-sm")}>{webhook.direction === "in" ? webhook.to : webhook.address}</td>
+            <td className={cn(cell, "tabular-nums")}>{webhook.events}</td>
+            <td className={cn(cell, "tabular-nums")}>{webhook.refused}</td>
+            <td className={cn(cell, "text-muted-foreground")}>
+              {webhook.last_event_at && <time dateTime={webhook.last_event_at}>{webhookEventTime.format(Date.parse(webhook.last_event_at))}</time>}
+            </td>
+            <td className={cn(cell, "whitespace-nowrap")}>{webhook.secret === "set" ? "Set" : "Waiting"}</td>
+            <td className={cn(cell, "font-mono text-mono-sm text-muted-foreground")}>{webhook.direction === "in" ? webhook.url : "Hidden"}</td>
+          </tr>
+        ))}
+      </StatusTable>
+    </div>
+  )
+}
+
 function BotMetadata({ name, ids, avatar, invite }: { name: string; ids: string[]; avatar: BotAvatar; invite?: string | null }) {
   const [imageUnavailable, setImageUnavailable] = useState(false)
   const avatarStatus = imageUnavailable ? "Preview unavailable" : avatarLabels[avatar.state]
@@ -173,7 +199,8 @@ function BotMetadata({ name, ids, avatar, invite }: { name: string; ids: string[
 
 function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
   const result = useQuery(connectionQuery(platform))
-  const modes = useQuery(channelModesQuery)
+  const showModes = platform !== "webhook"
+  const modes = useQuery({ ...channelModesQuery, enabled: showModes })
   const name = connectionNames[platform]
   const data = result.data
   const botName = data?.platform === "discord" || data?.platform === "telegram" ? data.details?.bot_name : null
@@ -224,8 +251,9 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
                   : <TelegramChats chats={data.details.chats} rows={rows} status={modes.data} />}
               </div>
             )}
-            {modes.isError && <DataState kind="error" message="Channel modes unavailable" onRetry={() => void modes.refetch()} />}
-            {modes.data && modeRows.length > 0 && (
+            {data.platform === "webhook" && data.details && <WebhookTable webhooks={data.details.webhooks} />}
+            {showModes && modes.isError && <DataState kind="error" message="Channel modes unavailable" onRetry={() => void modes.refetch()} />}
+            {showModes && modes.data && modeRows.length > 0 && (
               <section aria-labelledby="connection-modes">
                 <h2 id="connection-modes" className="text-heading-md">Channel modes</h2>
                 <ChannelModeTable label="Channel modes" rows={modeRows} status={modes.data} />

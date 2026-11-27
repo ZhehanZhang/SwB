@@ -151,7 +151,11 @@ def _secret_names(hook_id: str) -> tuple[str, str, str]:
 class WebhookBlock(Block):
     manifest = Manifest(id="webhook", title="Webhooks", kind="both", level_in="webhook", level_out="L1",
                         speaks=("event", "message"), verbs={"send": "send"}, targets=(TargetKind("out"),),
-                        tools=tuple(f"webhook_{name}" for name in ("create", "list", "rotate", "revoke", "test")))
+                        tools=tuple(f"webhook_{name}" for name in ("create", "list", "rotate", "revoke", "test")),
+                        config_schema={"type": "object", "properties": {
+                            "max_body_kb": {"type": "integer", "default": DEFAULT_BODY_KB, "minimum": 1, "maximum": MAX_BODY_KB},
+                        }})
+    connect_kinds = ("webhook",)
 
     def __init__(self, core: Switchboard, config: dict[str, Any]):
         super().__init__(core, config)
@@ -202,6 +206,10 @@ class WebhookBlock(Block):
             out["address"] = f"{self.name}:out:{row['name']}"
         return out
 
+    def hook_views(self, *, include_revoked: bool = False) -> list[dict[str, Any]]:
+        where = "" if include_revoked else "WHERE revoked_at IS NULL"
+        return [self._view(dict(row)) for row in self.core.store.q(f"SELECT * FROM webhooks {where} ORDER BY name, created_at")]
+
     def _count(self, hook_id: str, *, refused: str | None = None) -> None:
         if refused:
             self.core.store.x("UPDATE webhooks SET refused = refused + 1, last_refusal = ? WHERE id = ?", (refused, hook_id))
@@ -232,11 +240,13 @@ class WebhookBlock(Block):
             await self.http.aclose()
 
     def status(self) -> dict[str, Any]:
-        rows = [dict(r) for r in self.core.store.q("SELECT * FROM webhooks WHERE revoked_at IS NULL ORDER BY name")]
-        views = [self._view(r) for r in rows]
+        views = self.hook_views()
         return {"configured": True, "state": "connected", "inbound": sum(r["direction"] == "in" for r in views),
                 "outbound": sum(r["direction"] == "out" for r in views), "waiting": [r["name"] for r in views if r["secret"] == "waiting"],
                 "events": sum(r["events"] for r in views), "refused": sum(r["refused"] for r in views)}
+
+    def status_for(self, principal: Principal) -> dict[str, Any]:
+        return self.status() if principal.is_unrestricted_owner else {"configured": True, "state": "connected"}
 
     async def targets(self) -> list[dict[str, Any]]:
         return [{"kind": "out", "id": r["name"], "name": f"Webhook {r['name']}", "slugs": [f"webhook-{r['name']}"]}
@@ -254,6 +264,9 @@ class WebhookBlock(Block):
         from .mcp_tools import register
 
         register(self, mcp, kit)
+
+    async def connect_steps(self, kind: str, principal: Principal, project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
+        return {"done": [], "next": [{"by": "you", "do": f"Call {self.name}_create with the webhook settings."}]}
 
     # Owner tools --------------------------------------------------------------------------------
 
@@ -361,8 +374,7 @@ class WebhookBlock(Block):
 
     async def list_hooks(self, call: Call, *, include_revoked: bool = False) -> dict[str, Any]:
         self._owner(call)
-        where = "" if include_revoked else "WHERE revoked_at IS NULL"
-        return {"webhooks": [self._view(dict(r)) for r in self.core.store.q(f"SELECT * FROM webhooks {where} ORDER BY name, created_at")]}
+        return {"webhooks": self.hook_views(include_revoked=include_revoked)}
 
     async def rotate(self, call: Call, *, name: str, grace_s: int = 0) -> dict[str, Any]:
         self._owner(call)
@@ -392,9 +404,18 @@ class WebhookBlock(Block):
     async def revoke(self, call: Call, *, name: str) -> dict[str, Any]:
         self._owner(call)
         row = self._active(name)
-        self.core.store.x("UPDATE webhooks SET revoked_at = ? WHERE id = ?", (self.core.clock(), row["id"]))
-        for secret in _secret_names(row["id"]):
-            self.core.claims.save_secret(secret, None)
+        names = _secret_names(row["id"])
+
+        def revoke(db: Any) -> None:
+            db.execute("UPDATE webhooks SET revoked_at = ? WHERE id = ?", (self.core.clock(), row["id"]))
+            db.execute("DELETE FROM secrets WHERE name IN (?, ?, ?)", names)
+            db.execute("DELETE FROM claim_links WHERE name IN (?, ?, ?)", names)
+            db.execute("""DELETE FROM claim_groups WHERE EXISTS (
+                             SELECT 1 FROM json_each(claim_groups.fields) AS field
+                             WHERE json_extract(field.value, '$.name') IN (?, ?, ?)
+                          )""", names)
+
+        self.core.store.tx(revoke)
         call.note(target=row["name"], ref=row["id"])
         return {"ok": True, "name": row["name"], "revoked": True}
 

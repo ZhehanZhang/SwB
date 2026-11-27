@@ -382,7 +382,7 @@ def test_no_companion_deployment_parity(tmp_path, capy, monkeypatch):
         patch.delitem(BLOCKS, "local")
         baseline = new_core(baseline_dir, capy, config=CFG)
     local = new_core(local_dir, capy, config=CFG)
-    assert set(baseline.blocks) == set(local.blocks) == {"mcp"}
+    assert set(baseline.blocks) == set(local.blocks) == {"mcp", "webhook"}
     with TestClient(create_app(baseline), base_url=PUBLIC) as before, TestClient(create_app(local), base_url=PUBLIC) as after:
         for path, headers in (("/healthz", {}), ("/healthz", OWNER), ("/api/platforms", OWNER), ("/api/about", OWNER)):
             a, b = before.get(path, headers=headers), after.get(path, headers=headers)

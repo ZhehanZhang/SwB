@@ -119,7 +119,7 @@ def test_routes_set_matches_a_captain_by_code(make):
 
 
 def test_mailbox_routes_send_and_show_up_with_only_mcp_enabled(make):
-    core, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    core, client = make(config=base_config(version=2, blocks={"mcp": {}, "webhook": {"enabled": False}}))
     core.projects.create(slug="demo", name="Demo")
     args = {"project": "demo"}
     assert set(core.blocks) == {"mcp"}
