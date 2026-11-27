@@ -9,8 +9,11 @@ from .base import Capability
 from .drop import DropCapability
 from .notify import NotifyCapability
 
-CAPABILITIES = ("notify", "drop", "muse", "mcp", "hooks", "herdr", "codex", "opencode")
-HARNESSES = {"hooks": "HooksCapability", "herdr": "HerdrCapability", "codex": "CodexCapability", "opencode": "OpenCodeCapability"}
+CAPABILITIES = ("notify", "drop", "muse", "mcp", "hooks", "herdr", "codex", "opencode", "dsh")
+HARNESSES = {
+    "hooks": "HooksCapability", "herdr": "HerdrCapability", "codex": "CodexCapability", "opencode": "OpenCodeCapability",
+    "dsh": "DshCapability",
+}
 
 
 def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalServer] | None = None) -> tuple[dict[str, Capability], dict[str, str]]:

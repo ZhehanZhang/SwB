@@ -11,6 +11,7 @@ AGENT_AVATARS = {
     "claude-code": "claude-code.png", "claude": "claude.png", "anthropic": "claude.png",
     "chatgpt": "chatgpt.png", "openai": "chatgpt.png",
     "codex": "codex.png", "gemini": "gemini.png", "grok": "grok.png", "xai": "grok.png",
+    "dsh": "dsh.png",
     "muse": "muse.png", "swb": "swb.png", "switchboard": "swb.png",
 }
 

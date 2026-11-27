@@ -33,6 +33,7 @@ PRESETS: dict[str, AgentSpec] = {
         AgentSpec("codex", "Codex", cimd_patterns=(r"https://chatgpt\.com/oauth/codex/(?:[A-Za-z0-9_-]+/)?client\.json",)),
         AgentSpec("goose", "Goose", cimd_patterns=(r"https://goose-docs\.ai/oauth/client-metadata\.json",)),
         AgentSpec("opencode", "OpenCode", cimd_patterns=(r"https://opencode\.ai/oauth/opencode/client\.json",)),
+        AgentSpec("dsh", "DeepSeek Harness"),
     )
 }
 
