@@ -133,7 +133,7 @@ SwB 遵循 [Standard Webhooks 规范](https://www.standardwebhooks.com/)。接�
 
 ## 设置与限制
 
-在配置文件中将 `blocks.webhook.enabled` 设为 `true`，即可启用模块。用 `blocks.webhook.daily_cap` 限制每日发送次数。设为 `null` 可关闭每日发送上限。
+模块默认启用。在配置文件中将 `blocks.webhook.enabled` 设为 `false`，即可停用模块。用 `blocks.webhook.daily_cap` 限制每日发送次数。设为 `null` 可关闭每日发送上限。
 
 ```yaml
 blocks:
@@ -232,7 +232,7 @@ rest_command:
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | 你为此 Webhook 生成的随机密钥 |
 
-如果发送服务只能调用网址，请使用路径验证。生成由字母或数字组成的随机密钥。通过领取链接保存密钥。将网址末尾的 `<secret>` 换成已保存的密钥。请对完整网址保密。SwB 会在访问日志中遮盖路径密钥。
+如果发送服务只能调用网址，请使用路径验证。生成至少 16 位、由字母或数字组成的随机密钥。通过领取链接保存密钥。将网址末尾的 `<secret>` 换成已保存的密钥。请对完整网址保密。SwB 会在访问日志中遮盖路径密钥。
 
 在 IFTTT 中选择 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。将请求方式设为 `POST`。填入完整网址。
 

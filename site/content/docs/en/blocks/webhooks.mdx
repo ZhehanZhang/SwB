@@ -135,7 +135,7 @@ Call `webhook_test` with the outbound webhook name to send a `swb.test` message.
 
 ## Settings and limits
 
-Set `blocks.webhook.enabled` to `true` in the config file to turn on the block. Use `blocks.webhook.daily_cap` to limit outbound sends per day. Set it to `null` for unlimited daily sends.
+The block is on by default. Set `blocks.webhook.enabled` to `false` in the config file to turn it off. Use `blocks.webhook.daily_cap` to limit outbound sends per day. Set it to `null` for unlimited daily sends.
 
 ```yaml
 blocks:
@@ -236,7 +236,7 @@ In [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | A random secret you generate for this webhook |
 
-Use path verification for senders that can only call a URL. Choose a random secret made of letters or digits. Save it through the claim link. Replace `<secret>` at the end of the URL with the saved secret. Treat the whole URL as a secret. SwB keeps path secrets out of its access log.
+Use path verification for senders that can only call a URL. Choose a random secret of at least 16 letters or digits. Save it through the claim link. Replace `<secret>` at the end of the URL with the saved secret. Treat the whole URL as a secret. SwB keeps path secrets out of its access log.
 
 In IFTTT, choose [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request). Set the method to `POST`. Enter the full URL.
 

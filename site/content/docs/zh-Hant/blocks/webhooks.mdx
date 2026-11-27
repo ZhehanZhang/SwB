@@ -133,7 +133,7 @@ SwB 依 [Standard Webhooks 規格](https://www.standardwebhooks.com/) 為訊息�
 
 ## 設定與限制
 
-在設定檔將 `blocks.webhook.enabled` 設為 `true`，即可開啟模組。使用 `blocks.webhook.daily_cap` 設定每日傳送上限。設為 `null` 可關閉每日傳送上限。
+模組預設為開啟。在設定檔將 `blocks.webhook.enabled` 設為 `false`，即可關閉模組。使用 `blocks.webhook.daily_cap` 設定每日傳送上限。設為 `null` 可關閉每日傳送上限。
 
 ```yaml
 blocks:
@@ -232,7 +232,7 @@ rest_command:
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | 你為這個 Webhook 建立的隨機金鑰 |
 
-寄件服務只能呼叫網址時，請用路徑驗證。產生由英文字母或數字組成的隨機金鑰。透過領取連結儲存金鑰。以儲存的金鑰取代網址末端的 `<secret>`。請對完整網址保密。SwB 會在存取記錄中遮蔽路徑金鑰。
+寄件服務只能呼叫網址時，請用路徑驗證。產生至少 16 位、由英文字母或數字組成的隨機金鑰。透過領取連結儲存金鑰。以儲存的金鑰取代網址末端的 `<secret>`。請對完整網址保密。SwB 會在存取記錄中遮蔽路徑金鑰。
 
 在 IFTTT 選取 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。將請求方法設為 `POST`。輸入完整網址。
 
