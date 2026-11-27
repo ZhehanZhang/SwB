@@ -345,9 +345,9 @@ class DotsBlock(Block):
         step = problem or self.next_step()
         return {"done": [], "next": [{"by": "person", "do": step}] if step else []}
 
-    def next_step(self) -> str | None:
-        dots = self.dots()
+    def config_step(self) -> str | None:
         if self.delivery == "mailbox":
+            dots = self.dots()
             if not dots:
                 return "Declare a dot under dots in the dots block config."
             mailboxes = {d["mailbox"] for d in dots}
@@ -367,9 +367,16 @@ class DotsBlock(Block):
         engine = self.slack_engine
         if engine is None or self.workspace not in engine.config.workspaces:
             return SLACK_STEP
+        return None
+
+    def next_step(self) -> str | None:
+        step = self.config_step()
+        if step or self.delivery == "mailbox":
+            return step
         runtime = self.runtime(required=False)
         if runtime is None or not runtime.connected:
             return f"Connect Slack workspace {self.workspace}."
+        dots = self.dots()
         if not dots:
             return "Add a dot to the Slack workspace so SwB can find it."
         if not self.relay_channel():

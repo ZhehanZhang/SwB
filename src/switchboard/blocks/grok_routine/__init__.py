@@ -220,11 +220,16 @@ class GrokRoutineBlock(Block):
         return [f"routine {r['name']}: {problem}" for r in self.routines().values()
                 if (problem := self._credentials(r)[2])]
 
-    def next_step(self) -> str | None:
+    def config_step(self) -> str | None:
         routines = self.routines()
         if not routines or any(self._credentials(r)[2] for r in routines.values()):
             return "Call connect(what='grok-bot') to set up a Grok Bot routine."
-        if any(not self.is_tested(r) for r in routines.values()):
+        return None
+
+    def next_step(self) -> str | None:
+        if step := self.config_step():
+            return step
+        if any(not self.is_tested(r) for r in self.routines().values()):
             return "Call connect(what='grok-bot') to test the Grok Bot webhook."
         return None
 
