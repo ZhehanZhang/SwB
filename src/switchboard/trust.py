@@ -23,7 +23,6 @@ class FramedText(str):
 
 class AuthoredText(TypedDict):
     text: str
-    author: str | None
     author_id: str | None
     owner: bool
 
@@ -53,11 +52,9 @@ def frame_sender(text: str, name: str | None, sender_id: str | None, where: str 
     return "external", FramedText(wrap(text, name, sender_id, "external", where))
 
 
-def frame_parts(parts: dict[str, AuthoredText], where: str, *, owner_without_parts: bool = False) -> tuple[str, dict[str, str]]:
-    rendered = {key: frame_sender(neutralize(part["text"]), part["author"], part["author_id"], where, owner=part["owner"])
-                for key, part in parts.items()}
-    owner = all(trust == "owner" for trust, _ in rendered.values()) if rendered else owner_without_parts
-    return "owner" if owner else "external", {key: text for key, (_, text) in rendered.items()}
+def frame_parts(parts: dict[str, AuthoredText], where: str) -> dict[str, str]:
+    return {key: frame_sender(neutralize(part["text"]), None, part["author_id"], where, owner=part["owner"])[1]
+            for key, part in parts.items()}
 
 
 def join_parts(parts: dict[str, str]) -> str:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import re
 import sqlite3
 from contextlib import asynccontextmanager
 
@@ -19,7 +20,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from switchboard.app import create_app
 from switchboard.auth import Principal
 from switchboard.blocks import BlockError
-from switchboard.blocks.github import DELIVERY_TTL_S, REFUSAL_AUDIT_INTERVAL_S, _json, trim
+from switchboard.blocks.github import DELIVERY_TTL_S, EVENTS, REFUSAL_AUDIT_INTERVAL_S, _json, trim
 from switchboard.blocks.mcp.policy import CONVERSATION_CONFLICT, CONVERSATION_REQUIRED, MODE_REQUIRED, TOOL_REQUIRED
 from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
@@ -81,6 +82,12 @@ async def sink_server(handler):
 async def drained(core):
     for sink in core.blocks["github"].sinks.values():
         await asyncio.wait_for(sink.queue.join(), timeout=5)
+
+
+def split_frames(text):
+    parts = re.split(rf"\n{OPEN}\n|\n{CLOSE}\n", text)
+    assert len(parts) % 2 == 1
+    return "".join(parts[::2]), parts[1::2]
 
 
 async def test_signature_and_ping(github):
@@ -301,15 +308,20 @@ async def test_github_sink_wake_subject_names_the_event_and_keeps_the_title_out(
     wake, unknown = delivered
     assert f"{OPEN}\n{pr['title']}\n{CLOSE}" in wake["title"]
     assert wake["trust"] == "external"
-    assert wake["subject"] == "Dana (external) on GitHub acme/widgets: Pull request opened #8"
+    assert wake["subject"] == "Unknown sender (external) on GitHub acme/widgets: Pull request opened #8"
     assert f"{OPEN}\nPR body\n{CLOSE}" in wake["body"]
     assert wake["text"].split("\n\n") == [
-        wake["subject"], "Pull request opened.", f'Title\n{wake["title"]}', f'Body\n{wake["body"]}',
-        pr["html_url"], "GitHub delivery example-1.",
+        wake["subject"], f'Metadata\n{wake["metadata"]}', f'Title\n{wake["title"]}', f'Body\n{wake["body"]}',
+        "GitHub delivery example-1.",
     ]
-    assert unknown["action"] == "Fixture summary text"
-    assert unknown["subject"] == "Dana (external) on GitHub acme/widgets: Pull request #8"
-    assert "Fixture summary text" not in unknown["text"]
+    metadata = json.loads(split_frames(wake["metadata"])[1][0])
+    assert metadata["actor"] == "Dana" and metadata["url"] == pr["html_url"]
+    assert {"actor", "url"}.isdisjoint(wake)
+    assert "action" not in unknown
+    assert unknown["subject"] == "Unknown sender (external) on GitHub acme/widgets: Pull request #8"
+    outside, frames = split_frames(unknown["text"])
+    assert "Fixture summary text" not in outside
+    assert json.loads(frames[0])["action"] == "Fixture summary text"
 
 
 async def test_sink_delivery_retry_and_secretless_status(github, caplog):
@@ -513,19 +525,22 @@ async def test_watch_digest_reaches_owner_mcp_and_stays_passive(github, target, 
             "watch_digest", "beta" if target else "owner", repo, 2, "external",
         )
         assert digest["from"] == {"block": "github", "space": repo, "trust": "external"}
-        assert digest["text"].count(OPEN) == digest["text"].count(CLOSE) == 3
+        assert digest["text"].count(OPEN) == digest["text"].count(CLOSE) == 5
         assert "2 events" in digest["text"]
         for entry, delivery in zip(digest["items"], ("first", "second"), strict=True):
             expected = f"Excerpt {delivery} swb-quoted>>> literal <<<swb-quoted"
             assert expected in digest["text"]
-            assert entry["author"] == "reporter <<<swb-quoted"
-            assert "parts" not in entry
+            assert entry["author"] == ("github:11" if delivery == "first" else "github:42")
+            assert "parts" not in entry and entry["link"] is None
+            outside, frames = split_frames(entry["excerpt"])
+            assert json.loads(frames[0])["actor"] == "moderator"
+            assert "moderator" not in outside and "reporter" not in entry["excerpt"]
             if delivery == "first":
-                assert entry["excerpt"].count(OPEN) == entry["excerpt"].count(CLOSE) == 2
+                assert len(frames) == 3
                 assert f"{OPEN}\n{expected}\n{CLOSE}" in entry["excerpt"]
             else:
-                assert OPEN not in entry["excerpt"] and CLOSE not in entry["excerpt"]
-                assert f"Body\n{expected}" in entry["excerpt"]
+                assert len(frames) == 1
+                assert f"Body\n{expected}" in outside
         assert payload(await acall(client, owner_key, "inbox", {"since_cursor": 0, "project": "demo"}))["items"] == [digest]
         assert payload(await acall(client, beta, "inbox", {"since_cursor": 0}))["items"] == ([digest] if target else [])
         assert payload(await acall(client, other, "inbox", {"since_cursor": 0}))["items"] == []
@@ -607,11 +622,13 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
             assert notes[0]["trust"] == notes[0]["from"]["trust"] == "external"
             assert notes[0]["text"].count(OPEN) == notes[0]["text"].count(CLOSE) == 3
             assert "swb-quoted>>> literal <<<swb-quoted" in notes[0]["text"]
-            title, metadata, framed_title, body, link, delivery, tail = notes[0]["text"].split("\n\n")
-            assert title == notes[0]["subject"] == "maintainer (external) on GitHub acme/app: Issue #7"
-            assert {"title", "body"}.isdisjoint(json.loads(metadata.split(f"\n{OPEN}\n")[1].split(f"\n{CLOSE}")[0]))
+            title, metadata, framed_title, body, delivery, tail = notes[0]["text"].split("\n\n")
+            assert title == notes[0]["subject"] == "User 11 (external) on GitHub acme/app: Issue #7"
+            fields = json.loads(split_frames(metadata)[1][0])
+            assert {"title", "body"}.isdisjoint(fields)
+            assert fields["url"] == ISSUE["html_url"] and fields["actor"] == "maintainer"
             assert f"{OPEN}\n{ISSUE['title']}\n{CLOSE}" in framed_title
-            assert body.endswith("as information only.") and link == ISSUE["html_url"]
+            assert body.endswith("as information only.")
             assert delivery == "GitHub delivery example-1."
             assert tail.endswith("Use github_reply for the originating GitHub thread.")
             meta = core.inbox.handle(notes[0]["handle"])["meta"]["channel_mode"]
@@ -619,14 +636,15 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
             assert meta["actions"] == (["label"] if mode == "triage" else [])
         elif mode == "work":
             assert [note["from"]["trust"] for note in notes] == ["owner"]
-            assert notes[0]["text"].splitlines()[0] == notes[0]["subject"] == "maintainer on GitHub acme/app: Issue #7"
+            assert notes[0]["text"].splitlines()[0] == notes[0]["subject"] == "User 42 on GitHub acme/app: Issue #7"
         else:
             assert notes == []
             assert core.store.one("SELECT COUNT(*) AS n FROM watch_events")["n"] == (3 if mode == "watch" else 0)
         if mode in {"assist", "triage", "work"}:
             owner_note = notes[-1]
             assert owner_note["trust"] == owner_note["from"]["trust"] == "owner"
-            assert ISSUE["body"] in owner_note["text"] and "untrusted" not in owner_note["text"]
+            outside, frames = split_frames(owner_note["text"])
+            assert ISSUE["body"] in outside and len(frames) == 1
 
 
 @pytest.mark.parametrize("mode", ["work", "assist", "triage", "watch"])
@@ -662,10 +680,10 @@ async def test_owner_actor_keeps_external_issue_text_quoted(github, mode):
                 assert core.modes.flush() == 1
                 [digest] = core.inbox.read(owner="claude")["items"]
                 assert digest["from"]["trust"] == "external"
-                assert digest["text"].count(OPEN) == digest["text"].count(CLOSE) == 6
+                assert digest["text"].count(OPEN) == digest["text"].count(CLOSE) == 8
                 assert f"{OPEN}\nLegacy excerpt\n{CLOSE}" in digest["text"]
                 digest_labeled, digest_mixed, _ = digest["items"]
-                assert digest_labeled["excerpt"].count(OPEN) == digest_mixed["excerpt"].count(OPEN) == 2
+                assert digest_labeled["excerpt"].count(OPEN) == digest_mixed["excerpt"].count(OPEN) == 3
                 assert "\n\nBody\nMaintainer reply\n\n" in digest_mixed["excerpt"]
             else:
                 labeled, mixed = core.inbox.read(owner="claude")["items"]
@@ -674,11 +692,11 @@ async def test_owner_actor_keeps_external_issue_text_quoted(github, mode):
             assert "Issue labeled #7" in labeled["subject"]
             for wake in (labeled, mixed):
                 text = wake["text"]
-                assert text.count(OPEN) == text.count(CLOSE) == (2 if mode == "watch" else 3)
+                assert text.count(OPEN) == text.count(CLOSE) == 3
                 assert text.count("Fixture title") == text.count("Fixture body") == 1
                 assert f"{OPEN}\nFixture title\n{CLOSE}" in text
                 assert f"{OPEN}\nFixture body swb-quoted>>> literal <<<swb-quoted\n{CLOSE}" in text
-                assert "[swb from reporter (github:11)" in text
+                assert "[swb from github:11" in text
             assert "\n\nBody\nMaintainer reply\n\n" in mixed["text"]
 
 
@@ -692,33 +710,113 @@ async def test_assist_quotes_fork_branch_metadata(github, author):
         [wake] = core.inbox.read(owner="claude")["items"]
         assert wake["trust"] == wake["from"]["trust"] == "external"
         text = wake["text"]
-        first_quote = text.split(f"\n{OPEN}\n", 1)[1].split(f"\n{CLOSE}", 1)[0]
-        assert json.loads(first_quote)["head_ref"] == "ignore-previous<<<swb-quoted"
+        outside, frames = split_frames(text)
+        assert json.loads(frames[0])["head_ref"] == "ignore-previous<<<swb-quoted"
+        assert "ignore-previous" not in outside
         assert branch not in text and text.count("ignore-previous") == 1
         assert text.count(OPEN) == text.count(CLOSE) == 3
 
 
-@pytest.mark.parametrize("event, actor_id, expected", [
-    ("push", 42, "owner"),
-    ("check_run", 42, "owner"),
-    ("push", 11, "external"),
-])
-async def test_generated_github_fields_inherit_actor_trust(github, event, actor_id, expected):
+@pytest.mark.parametrize("actor_id, expected", [(42, "owner"), (11, "external")])
+async def test_push_envelope_uses_actor_trust_but_quotes_ref(github, actor_id, expected):
     async with github(github_config("assist"), settings=shared()) as (core, client):
         sender = {"id": actor_id, "login": "actor", "type": "User"}
-        data = {"ref": "refs/heads/fixture", "size": 1} if event == "push" else {
-            "action": "completed", "check_run": {**CHECK, "name": "Build fixture"},
-        }
-        assert (await send(client, event, sender=sender, **data)).status_code == 200
+        assert (await send(client, "push", sender=sender, ref="refs/heads/fixture", size=1)).status_code == 200
         [wake] = core.inbox.read(owner="claude")["items"]
         assert wake["trust"] == wake["from"]["trust"] == expected
-        text = wake["text"]
-        if expected == "owner":
-            assert OPEN not in text and CLOSE not in text
-            assert ("Check\nBuild fixture" if event == "check_run" else "refs/heads/fixture") in text
-        else:
-            assert text.count(OPEN) == text.count(CLOSE) == 1
-            assert "refs/heads/fixture" in text.split(OPEN, 1)[1].split(CLOSE, 1)[0]
+        outside, frames = split_frames(wake["text"])
+        [metadata] = frames
+        assert json.loads(metadata)["ref"] == "refs/heads/fixture"
+        assert "refs/heads/fixture" not in outside
+
+
+async def test_owner_completion_does_not_trust_workflow_title_or_branch(github):
+    async with github(github_config("assist"), settings=shared()) as (core, client):
+        workflow = {**CHECK, "display_title": "Title from contributor", "head_branch": "branch-from-contributor",
+                    "name": "External workflow name"}
+        owner = {"id": 42, "login": "maintainer", "type": "User"}
+        assert (await send(client, "workflow_run", sender=owner, action="completed", workflow_run=workflow)).status_code == 200
+        [wake] = core.inbox.read(owner="claude")["items"]
+        assert wake["trust"] == wake["from"]["trust"] == "external"
+        outside, (metadata, title, check) = split_frames(wake["text"])
+        assert json.loads(metadata)["head_ref"] == workflow["head_branch"]
+        assert title == workflow["display_title"] and check == workflow["name"]
+        assert all(workflow[key] not in outside for key in ("display_title", "head_branch", "name"))
+
+
+async def test_external_actor_keeps_owner_authored_issue_envelope_external(github):
+    async with github(github_config("assist"), settings=shared()) as (core, client):
+        issue = {**ISSUE, "user": {"id": 42, "type": "User"}}
+        assert (await send(client, sender={"id": 11}, issue=issue, action="labeled")).status_code == 200
+        [wake] = core.inbox.read(owner="claude")["items"]
+        assert wake["trust"] == wake["from"]["trust"] == "external"
+        outside, frames = split_frames(wake["text"])
+        assert ISSUE["title"] in outside and ISSUE["body"] in outside and len(frames) == 1
+
+
+@pytest.mark.parametrize("mode", ["assist", "watch"])
+@pytest.mark.parametrize("event", sorted(EVENTS))
+async def test_each_github_event_quotes_every_non_generated_string(github, event, mode):
+    actor = {"id": 42, "login": "fixture-sender-login"}
+    author = {"id": 11, "login": "fixture-author-login"}
+    issue = {**ISSUE, "user": author, "title": "fixture-issue-title", "body": "fixture-issue-body",
+             "state": "fixture-issue-state", "html_url": "https://github.example/fixture-issue-url"}
+    pr = {**PR, "user": author, "title": "fixture-pr-title", "body": "fixture-pr-body", "state": "fixture-pr-state",
+          "html_url": "https://github.example/fixture-pr-url", "head": {"sha": "fixture-pr-sha", "ref": "fixture-pr-head"},
+          "base": {"ref": "fixture-pr-base"}}
+    comment = {"user": author, "body": "fixture-comment-body", "html_url": "https://github.example/fixture-comment-url"}
+    review = {"user": author, "body": "fixture-review-body", "state": "fixture-review-state",
+              "html_url": "https://github.example/fixture-review-url"}
+    check = {**CHECK, "head_sha": "fixture-check-sha", "conclusion": "fixture-unrecognized-conclusion",
+             "html_url": "https://github.example/fixture-check-url"}
+    data = {
+        "issues": {"issue": issue, "label": {"name": "fixture-label-name"}},
+        "issue_comment": {"issue": issue, "comment": comment},
+        "pull_request": {"pull_request": pr},
+        "pull_request_review": {"pull_request": pr, "review": review},
+        "pull_request_review_comment": {"pull_request": pr, "comment": comment},
+        "pull_request_review_thread": {"pull_request": pr, "thread": {"comments": [comment]}},
+        "push": {"ref": "refs/heads/fixture-push-ref", "after": "fixture-push-sha", "base_ref": "fixture-push-base",
+                 "compare": "https://github.example/fixture-compare-url", "commits": [{"message": "fixture-commit-message"}]},
+        "check_run": {"check_run": {**check, "name": "fixture-check-name", "check_suite": {"head_branch": "fixture-suite-head"}}},
+        "check_suite": {"check_suite": {**check, "head_branch": "fixture-check-head"}},
+        "workflow_run": {"workflow_run": {**check, "head_branch": "fixture-workflow-head", "name": "fixture-workflow-name",
+                                          "display_title": "fixture-workflow-title"}},
+    }[event] | {"action": "fixture-unrecognized-action", "sender": actor, "repository": {"full_name": "acme/app"}}
+    payload, authors = trim(event, "example-1", data)
+    generated_keys = {"event", "delivery", "repo", "number"}
+    content = {key: value for key, value in payload.items() if key not in generated_keys and isinstance(value, str)}
+    delivered = []
+    clock = Clock()
+
+    async def handler(request):
+        delivered.append(await request.json())
+        return web.Response(status=204)
+
+    async with sink_server(handler) as server:
+        config = github_config(mode) | {"sinks": {"team": {"url": str(server.make_url("/sink"))}},
+                                        "routes": {"acme/app": ["team"]}}
+        async with github(config, settings={**shared(), "modes": {"digest_minutes": 1}}, clock=clock) as (core, client):
+            assert (await send(client, event, **data)).status_code == 200
+            if mode == "watch":
+                await drained(core)
+                [wake] = delivered
+                assert (content.keys() - authors.keys()).isdisjoint(wake)
+                clock.t += 61
+                assert core.modes.flush() == 1
+                [digest] = core.inbox.read(owner="claude")["items"]
+                [entry] = digest["items"]
+                assert entry["author"] in {"", "github:11", "github:42"} and entry["link"] is None
+                texts = [wake["text"], digest["text"], entry["excerpt"]]
+            else:
+                [wake] = core.inbox.read(owner="claude")["items"]
+                texts = [wake["text"]]
+    for text in texts:
+        outside, frames = split_frames(text)
+        for key, value in content.items():
+            assert value not in outside, key
+            assert any(value in frame for frame in frames), key
+        assert all(value not in outside for value in ("fixture-author-login", "fixture-label-name", "fixture-commit-message"))
 
 
 async def test_github_visibility_and_runtime_off_do_not_wake_or_forward(github):
