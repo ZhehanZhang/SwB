@@ -689,11 +689,19 @@ class ChatBlock(Block):
         return await self._post(call, space, channel, text, root)
 
     async def _spaces(self, call: Call) -> dict[str, Any]:
-        return {**self.status(), "modes": self.core.modes.status(call.principal, self.name),
+        return {**self.status_for(call.principal), "modes": self.core.modes.status(call.principal, self.name),
                 "you": {"agent": call.principal.source, "spaces": list(self.grants.get(call.principal.source, ()))}}
 
+    def status_for(self, principal: Principal) -> dict[str, Any]:
+        if principal.is_unrestricted_owner:
+            return self.status()
+        grants = self.grants.get(principal.source, ())
+        return {"platform": self.platform, "connected": self.connected(),
+                "spaces": {space.label: {"project": space.project} for space in self.spaces.values()
+                           if "*" in grants or space.label in grants}}
+
     async def _provision(self, call: Call) -> dict[str, Any]:
-        if call.principal.trust != "owner":
+        if not call.principal.is_unrestricted_owner:
             raise BlockError("provisioning is the owner's")
         claim = self.claim_link(call.principal.source)
         return {"missing": self.missing(), "setup": self.setup(), **claim}

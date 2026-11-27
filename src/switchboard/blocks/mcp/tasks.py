@@ -17,6 +17,7 @@ from mcp.shared.exceptions import MCPError
 from mcp_types import RequestParams
 
 from ...audit import iso
+from .policy import CONVERSATION_NOT_FOUND, can_read_conversation
 
 
 
@@ -90,11 +91,14 @@ class TasksExtension(Extension):
             raise MCPError(code=INVALID_PARAMS, message="unauthenticated")
         return p
 
-    def _handle(self, ctx: Any, task_id: str) -> dict[str, Any]:
+    def _handle(self, ctx: Any, task_id: str, *, read: bool = False) -> dict[str, Any]:
         p = self._principal(ctx)
         h = self.core.inbox.handle(task_id)
-        if h is None or h["owner"] != p.source or h["destination"] not in self.destinations:
-            raise MCPError(code=INVALID_PARAMS, message=f"unknown task {task_id!r}")
+        if read and (h is None or h["destination"] not in self.destinations or not can_read_conversation(self.core, p, h)):
+            self.origin.mcp._audit_refusal(p, "tasks/get", CONVERSATION_NOT_FOUND)
+            raise MCPError(code=INVALID_PARAMS, message=CONVERSATION_NOT_FOUND)
+        if h is None or h["destination"] not in self.destinations or (not read and h["owner"] != p.source):
+            raise MCPError(code=INVALID_PARAMS, message=CONVERSATION_NOT_FOUND)
         return h
 
     def _task(self, h: dict[str, Any], detailed: bool = True) -> dict[str, Any]:
@@ -134,7 +138,7 @@ class TasksExtension(Extension):
 
     def methods(self) -> list[MethodBinding]:
         async def get(ctx: Any, params: TaskParams) -> dict[str, Any]:
-            return {"resultType": "complete", **self._task(self._handle(ctx, params.taskId))}
+            return {"resultType": "complete", **self._task(self._handle(ctx, params.taskId, read=True))}
 
         async def update(ctx: Any, params: UpdateParams) -> dict[str, Any]:
             self._handle(ctx, params.taskId)

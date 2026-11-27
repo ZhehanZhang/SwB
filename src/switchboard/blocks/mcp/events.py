@@ -28,13 +28,12 @@ import httpx
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from mcp.server.extension import Extension, MethodBinding, ToolBinding
-from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 from mcp_types import RequestParams
 
 from ...auth import Principal
-from ...visibility import VisibilityError, Who
+from .policy import can_read_conversation
 
 if TYPE_CHECKING:
     from . import MCPBlock
@@ -249,38 +248,24 @@ class EventsExtension(Extension):
         if self.transport is not None:
             await self.transport.aclose()
 
-    def _visible(self, source: str, trust: str, mailbox: Any) -> bool:
-        if not isinstance(mailbox, str) or mailbox not in self.core.known_agents():
-            return False
-        if mailbox == source:
-            return True
-        if self._restricted(source):
-            return False
-        try:
-            return self.core.visibility.allows(Who(owner=trust == "owner", id=f"agent:{source}"), f"target:{mailbox}")
-        except VisibilityError:
-            return False
+    def _visible(self, p: Principal, mailbox: Any) -> bool:
+        return (isinstance(mailbox, str) and mailbox in self.core.known_agents()
+                and (mailbox == p.source or p.is_unrestricted_owner))
 
-    def _restricted(self, source: str) -> bool:
-        """A key limited to some memory scopes, tools or targets reaches only its own mailbox."""
-        cfg = self.core.auth.cfg
-        limits = [getattr(cfg, name, {}).get(source) for name in ("key_scopes", "key_tools", "key_targets")]
-        return any(limit is not None and "*" not in limit for limit in limits)
+    def _saved_principal(self, row: Row) -> Principal:
+        return Principal(row["source"], row["client_id"], row["kind"], trust=row["trust"],
+                         **self.core.auth._limits(row["source"]))
 
     def _can_access(self, p: Principal | None, mailbox: Any) -> bool:
-        return _eligible(p) and self._grant(p) and self._visible(p.source, p.trust, mailbox)
+        return _eligible(p) and self._grant(p) and self._visible(p, mailbox)
 
     def tools(self) -> list[ToolBinding]:
         from . import READ
 
-        async def get_message(ctx: Context, message_id: str) -> dict[str, Any]:
-            p = _principal(ctx.request_context)
-            if not _eligible(p):
-                raise ToolError("message not found")
-            if not re.fullmatch(r"msg_[1-9][0-9]{0,18}", message_id) or (item_id := int(message_id[4:])) > 2**63 - 1:
-                raise ToolError("message not found")
-            item = self.core.inbox.item(item_id)
-            if item is None or not self._can_access(p, item["owner"]):
+        async def get_message(message_id: str) -> dict[str, Any]:
+            cursor = self.core.inbox.message_cursor(message_id)
+            item = self.core.inbox.item(cursor) if cursor is not None else None
+            if item is None:
                 raise ToolError("message not found")
             return item
 
@@ -435,10 +420,14 @@ class EventsExtension(Extension):
         if isinstance(sender, dict) and sender.get("agent") == mailbox:
             return
         subs = self.store.q(
-            "SELECT id FROM mcp_event_subscriptions WHERE mailbox = ? AND name = ? AND active = 1 AND refresh_before > ?",
+            "SELECT id, source, client_id, kind, trust FROM mcp_event_subscriptions "
+            "WHERE mailbox = ? AND name = ? AND active = 1 AND refresh_before > ?",
             (mailbox, EVENT, at),
         )
+        handle = self.core.inbox.handle(conversation) if subs else None
         for sub in subs:
+            if not can_read_conversation(self.core, self._saved_principal(sub), handle):
+                continue
             sid = sub["id"]
             event_id = "swb_evt_" + hashlib.sha256(f"{sid}{item}".encode()).hexdigest()[:24]
             body = _json({"eventId": event_id, "name": EVENT, "timestamp": _iso(at), "cursor": None, "data": {
@@ -465,7 +454,7 @@ class EventsExtension(Extension):
 
     def _active(self, row: Row) -> bool:
         return (bool(row["active"]) and row["refresh_before"] > self.store.clock() and self._grant(row)
-                and self._visible(row["source"], row["trust"], row["mailbox"]))
+                and self._visible(self._saved_principal(row), row["mailbox"]))
 
     def _deactivate(self, row: Row, status: str, error: str | None = None) -> None:
         sid = row["id"]
@@ -493,6 +482,10 @@ class EventsExtension(Extension):
         if not self._active(row):
             self._deactivate(row, "inactive")
             return
+        conversation = json.loads(job["body"])["data"]["conversation"]
+        if not can_read_conversation(self.core, self._saved_principal(row), self.core.inbox.handle(conversation)):
+            self.store.x("DELETE FROM mcp_event_deliveries WHERE event_id = ?", (event_id,))
+            return
         attempts = job["attempts"] + 1
         delay = RETRY[attempts - 1] if attempts <= len(RETRY) else TIMEOUT
         if not self.store.n("UPDATE mcp_event_deliveries SET attempts = ?, next_at = ? WHERE event_id = ? AND attempts = ?",
@@ -510,6 +503,9 @@ class EventsExtension(Extension):
                 return False
             if not self._active(pending):
                 self._deactivate(pending, "inactive")
+                return False
+            if not can_read_conversation(self.core, self._saved_principal(pending), self.core.inbox.handle(conversation)):
+                self.store.x("DELETE FROM mcp_event_deliveries WHERE event_id = ?", (event_id,))
                 return False
             keys = (self._open(sid, pending["secret"]),)
             if pending["previous_secret"] and pending["previous_until"] > self.store.clock():
