@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, *, listener: socket | None = None, tunnel_url: str | None = None,
-         data_dir: Path | None = None) -> None:
+         data_dir: Path | None = None, announce_url: str | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -85,13 +85,13 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
     try:
         env = serve_env(os.environ) if serving else None
     except ConfigError as error:
-        parser.error(str(error))
+        parser.exit(2, f"swb: {error}\n")
     except (OSError, UnicodeError) as error:
-        parser.error(f"couldn't load the owner key on the volume ({type(error).__name__})")
+        parser.exit(2, f"swb: Check the owner key on the volume ({type(error).__name__}).\n")
     try:
         core = Switchboard(data_dir=data_dir, tunnel_url=tunnel_url, env=env, default_public_url=default_public_url)
     except ConfigError as error:
-        parser.error(str(error))
+        parser.exit(2, f"swb: {error}\n")
     if args.cmd == "blocks":
         import yaml
 
@@ -137,6 +137,8 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
         "forwarded_allow_ips": os.environ.get("FORWARDED_ALLOW_IPS", "*"),
         "timeout_graceful_shutdown": 5,
     }
+    if announce_url:
+        print(f"MCP URL: {announce_url}/mcp", flush=True)
     if listener is None:
         uvicorn.run(app, **options)
     else:

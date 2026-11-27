@@ -313,8 +313,10 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     memory = raw.get("memory") or {}
 
     configured_url = tunnel_url or raw.get("public_url", env.get("SWITCHBOARD_PUBLIC_URL") or env.get("PUBLIC_URL"))
-    public_url = (configured_url or "").strip().rstrip("/") or default_public_url
-    if public_url and not _web_url(public_url, local=True):
+    if isinstance(configured_url, str):
+        configured_url = configured_url.strip().rstrip("/") or None
+    public_url = default_public_url if configured_url is None else configured_url
+    if public_url is not None and (not isinstance(public_url, str) or not _web_url(public_url, local=True)):
         raise ConfigError("public_url must be an HTTPS URL or use a loopback address for HTTP")
     owner_emails = tuple(e.strip().lower() for e in as_tuple(auth.get("owner_emails", (env.get("SWITCHBOARD_OWNER_EMAILS") or "").split(","))) if e.strip())
     aliases = tuple(str(u).strip().rstrip("/") for u in as_tuple(raw.get("public_url_aliases")))
