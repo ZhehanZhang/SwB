@@ -453,6 +453,10 @@ class MCPBlock(Block):
         async def memory_promote(ctx: Context, id: str, to: Literal["general"] = "general") -> dict[str, Any]:
             return sync(core.move_memory, who(ctx), id, to, promote=True)
 
+        from .memory_backup_tools import register as register_memory_backup
+
+        register_memory_backup(mcp, core, who, sync)
+
         @mcp.tool(
             title="Session briefing",
             description="Read granted memory and your conversations in progress. Pass a project for its links or scopes to select memory. Paired keys default to their grants. The owner's sign-in includes the routed Captain's digest and crew activity.",

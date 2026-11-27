@@ -71,6 +71,7 @@ class Memory:
         self.projects = projects
         self.mirror_dir = Path(mirror_dir) if mirror_dir else None
         self.mirror_debounce_s = mirror_debounce_s
+        self.listeners: list[Callable[[], None]] = []
         self._mirror_lock = threading.Lock()
         self._mirror_timer: threading.Timer | None = None
         self._mirror_pending_since = 0.0
@@ -413,6 +414,11 @@ class Memory:
         return "\n".join(lines) + "\n"
 
     def _sync_mirror(self) -> None:
+        self._schedule_mirror()
+        for listener in self.listeners:
+            listener()
+
+    def _schedule_mirror(self) -> None:
         """Rewrite the mirror after a change. A burst collapses into one export, at most debounce x 10 after its first change."""
         if not self.mirror_dir:
             return

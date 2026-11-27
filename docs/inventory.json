@@ -1987,6 +1987,27 @@
     },
     {
       "icon": null,
+      "id": "config_key:memory.backup",
+      "key": "memory.backup",
+      "kind": "config_key",
+      "label": "memory.backup"
+    },
+    {
+      "icon": null,
+      "id": "config_key:memory.backup.debounce_s",
+      "key": "memory.backup.debounce_s",
+      "kind": "config_key",
+      "label": "memory.backup.debounce_s"
+    },
+    {
+      "icon": null,
+      "id": "config_key:memory.backup.max_delay_s",
+      "key": "memory.backup.max_delay_s",
+      "kind": "config_key",
+      "label": "memory.backup.max_delay_s"
+    },
+    {
+      "icon": null,
       "id": "config_key:memory.mirror",
       "key": "memory.mirror",
       "kind": "config_key",
@@ -3033,6 +3054,50 @@
       "name": "login_link"
     },
     {
+      "description": "Set the Git destination and get a link to save its credential.",
+      "icon": null,
+      "id": "tool:memory_backup_configure",
+      "input_properties": [
+        "author_email",
+        "author_name",
+        "branch",
+        "enabled",
+        "remote"
+      ],
+      "kind": "tool",
+      "label": "Configure memory backup",
+      "name": "memory_backup_configure"
+    },
+    {
+      "description": "Start a Git backup now and reset the retry delay.",
+      "icon": null,
+      "id": "tool:memory_backup_now",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Back up memory now",
+      "name": "memory_backup_now"
+    },
+    {
+      "description": "Import memory from the configured Git branch or a commit.",
+      "icon": null,
+      "id": "tool:memory_backup_restore",
+      "input_properties": [
+        "ref"
+      ],
+      "kind": "tool",
+      "label": "Restore memory from Git",
+      "name": "memory_backup_restore"
+    },
+    {
+      "description": "Check Git backup status, pending changes and retries.",
+      "icon": null,
+      "id": "tool:memory_backup_status",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Check memory backup",
+      "name": "memory_backup_status"
+    },
+    {
       "description": "Delete an entry you wrote within your grants. The owner can delete any entry. SwB keeps the history.",
       "icon": null,
       "id": "tool:memory_delete",
@@ -3042,6 +3107,26 @@
       "kind": "tool",
       "label": "Delete a memory",
       "name": "memory_delete"
+    },
+    {
+      "description": "Download active memory and its history as a zip file.",
+      "icon": null,
+      "id": "tool:memory_export",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Export memory",
+      "name": "memory_export"
+    },
+    {
+      "description": "Import a base64-encoded SwB memory zip file.",
+      "icon": null,
+      "id": "tool:memory_import",
+      "input_properties": [
+        "zip_base64"
+      ],
+      "kind": "tool",
+      "label": "Import memory",
+      "name": "memory_import"
     },
     {
       "description": "List memories newest first with per-namespace counts. project works as in memory_search.",

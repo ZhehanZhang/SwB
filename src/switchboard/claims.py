@@ -24,6 +24,7 @@ from .store import Store
 
 CLAIM_PATH = "/claim"
 CLAIM_TTL_S = 30 * 60
+MEMORY_BACKUP_CREDENTIAL = "memory.backup.credential"
 NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
 CODE_RE = re.compile(r"[A-Za-z0-9_-]{43}")
 UNUSABLE = "This link is invalid, expired, or already used. Ask for a new link."
@@ -237,7 +238,7 @@ class Claims:
         return value
 
     def mint(self, name: str, public_url: str | None, *, url: bool = False, kind: str = "token", label: str = "") -> str:
-        if not NAME_RE.fullmatch(name):
+        if name != MEMORY_BACKUP_CREDENTIAL and not NAME_RE.fullmatch(name):
             raise ClaimError("A claim needs an environment variable name.")
         if not public_url:
             raise ClaimError("A claim link needs public_url configured.")
@@ -362,7 +363,7 @@ class Claims:
         return list(sealed)
 
     def save_secret(self, name: str, value: str | None, *, replace: bool = True) -> None:
-        if not NAME_RE.fullmatch(name):
+        if name != MEMORY_BACKUP_CREDENTIAL and not NAME_RE.fullmatch(name):
             raise ClaimError("A secret needs an environment variable name.")
         if value is None:
             self.store.x("DELETE FROM secrets WHERE name = ?", (name,))

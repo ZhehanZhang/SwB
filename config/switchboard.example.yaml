@@ -271,3 +271,6 @@ memory:
   # mirror_dir: /mirror
   # mirror: true
   # mirror_debounce_s: 2
+  backup:
+    debounce_s: 30
+    max_delay_s: 300
