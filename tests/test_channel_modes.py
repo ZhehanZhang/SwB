@@ -1,5 +1,6 @@
 """Resolver, chat intake, watch batching and owner controls, without live providers."""
 
+import json
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -24,6 +25,7 @@ from test_discord import GUILD, GUILD_2, ready
 from test_discord import USER as DISCORD_OWNER
 from test_discord import discord as _discord_fixture
 from test_discord import message as discord_message
+from test_github import ISSUE, SECRET, signed
 from test_telegram import GROUP, FakeBotAPI, update
 from test_telegram import OWNER_ID as TELEGRAM_OWNER
 from test_telegram import STRANGER as TELEGRAM_STRANGER
@@ -94,6 +96,48 @@ def test_github_repo_space_has_one_row_after_override(make):
     payload(call(client, STATIC_KEY, "space_mode", {"block": "github", "space": repo, "mode": "off"}))
     [row] = payload(call(client, STATIC_KEY, "modes_status"))["spaces"]
     assert (row["space"], row["channel"], row["mode"], row["source"]) == (repo, repo, "off", "override")
+
+
+def test_listed_mailbox_visibility_applies_to_discord_and_github(make):
+    repo = "acme/app"
+    cfg = config()
+    cfg["blocks"]["discord"]["connect"] = False
+    cfg["blocks"]["github"] = {"spaces": {repo: {"mode": "watch"}}}
+    core, client = make(config=cfg, env={**default_env(), "GITHUB_WEBHOOK_SECRET": SECRET})
+    block = core.blocks["discord"]
+    client.portal.call(block.dispatch, "READY", ready())
+    channel = {"id": DISCORD_CHANNEL, "type": 0, "name": "deployments", "guild_id": GUILD}
+    client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "channels": [channel]})
+    pair = core.connections.mint(agent="beta", project=None, client=None, by="owner")
+    core.connections.redeem(pair["code"])
+    for provider, space, ref in (("discord", "home", DISCORD_CHANNEL), ("github", repo, repo)):
+        args = {"block": provider, "space": space, "channel": ref, "mode": "assist", "target": "agent:beta"}
+        assert payload(call(client, STATIC_KEY, "space_mode", args))["target"] == "agent:beta"
+    listed = payload(call(client, STATIC_KEY, "visibility_list"))["resources"]
+    beta_resources = [row["resource"] for row in listed if row["resource"].startswith("target:") and row["resource"].endswith("beta")]
+    assert beta_resources == ["target:beta"]
+
+    def set_visibility(resource, rule):
+        assert payload(call(client, STATIC_KEY, "visibility_set", {"resource": resource, "visibility": rule}))["visibility"] == rule
+
+    def outside_reports(ident):
+        frame = discord_message(id=str(ident), author={"id": "987", "username": "Reporter"}, member={},
+                                content="Discord report", guild_id=GUILD, channel_id=DISCORD_CHANNEL)
+        client.portal.call(block.dispatch, "MESSAGE_CREATE", frame)
+        body = json.dumps({"repository": {"full_name": repo}, "issue": ISSUE, "action": "opened",
+                           "sender": {"id": 321, "login": "reporter"}}).encode()
+        assert client.post("/github/webhook", content=body, headers=signed(body, "issues", f"example-{ident}")).status_code == 200
+
+    for resource in (f"channel:home/{DISCORD_CHANNEL}", f"channel:github/{repo}", *beta_resources):
+        set_visibility(resource, "shared")
+    outside_reports(10)
+    assert {item["from"]["origin"] for item in core.inbox.read(owner="beta")["items"]} == {"discord", "github"}
+    for resource in beta_resources:
+        set_visibility(resource, "private")
+    outside_reports(11)
+    assert core.inbox.read(owner="beta")["items"] == []
+    assert core.audit.recent(action="chat_event")[0]["detail"] == "target access restricted"
+    assert core.audit.recent(action="webhook")[0]["detail"] == "target access restricted"
 
 
 def test_owner_http_sets_and_clears_a_channel_target(make):
