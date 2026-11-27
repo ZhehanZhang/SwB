@@ -1,0 +1,75 @@
+---
+title: 配置
+description: 环境变量、配置文件和覆盖文件。
+---
+
+SwB 只靠环境变量即可运行。MCP 模块默认启用。其他每个模块在相应变量存在时启用。路由、授权和策略使用 YAML 配置文件。
+
+## 实例
+
+| 变量 | 用途 |
+| - | - |
+| `SWITCHBOARD_KEY_OWNER` | `swb` 命令使用的所有者密钥 |
+| `SWITCHBOARD_PUBLIC_URL` | 公网 HTTPS 地址，例如 `https://swb.example.com` |
+| `SWITCHBOARD_DATA_DIR` | 数据目录。`swb up` 的默认值是 `~/.local/share/switchboard`。镜像使用 `/data` |
+| `SWITCHBOARD_OWNER_EMAILS` | 用于 OIDC 和 Cloudflare Access 的所有者邮箱，用逗号分隔 |
+| `SWITCHBOARD_KEY_<NAME>` | 智能体 `<name>` 的 bearer 密钥 |
+| `SWITCHBOARD_CONFIG` | 基础 YAML 文件的路径 |
+| `SWITCHBOARD_OVERLAY` | 私有覆盖文件的路径 |
+| `PORT` | HTTP 端口 |
+
+## 模块
+
+| 模块 | 变量 |
+| - | - |
+| Capy | `CAPY_API_KEY`，发送另用 `CAPY_API_KEY_SERVICE` 或 `CAPY_API_KEY_AS_<AGENT>` |
+| Slack | `SLACK_BOT_TOKEN` 或 `SLACK_USER_TOKEN`、`SLACK_TEAM_ID`，以及用于 Socket Mode 的 `SLACK_APP_TOKEN` |
+| Discord | `DISCORD_BOT_TOKEN` |
+| Telegram | `TELEGRAM_BOT_TOKEN` |
+| GitHub | `GITHUB_WEBHOOK_SECRET` |
+| Claude 例程 | `CLAUDE_ROUTINE_TOKEN` 和 `CLAUDE_ROUTINE_ID` |
+| Grok 例程 | `GROK_ROUTINE_SECRET` 和 `GROK_ROUTINE_URL` |
+
+对已命名的 Slack 工作区，把名称放在 `SLACK_` 之后，例如 `SLACK_SUPPORT_BOT_TOKEN`。已命名的例程做法相同，例如 `CLAUDE_ROUTINE_TOKEN_DOCS`。
+
+## 配置文件
+
+```bash
+swb init
+```
+
+`swb init` 写出 `config/switchboard.yaml` 和一个所有者密钥。该文件是可选的。文件存在时，SwB 读取 `config/switchboard.yaml`。
+
+```yaml
+version: 2
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@example.com]
+blocks:
+  mcp: {use: mcp}
+  capy: {use: capy, identity: service}
+targets:
+  aliases: {}
+routes:
+  - {match: {}, to: capy:captain:<Captain id>}
+```
+
+文件中的 `blocks` 列表精确指定启用的模块。省略 `blocks`，则保留来自环境变量的模块。`routes` 列表设置新安装的首批路由。之后由智能体和 SwB 页面管理路由。
+
+## 覆盖文件
+
+覆盖文件是存放你自己的名称、id 和路径的私有 YAML 文件。把它放在 `config/local.yaml`，或用 `SWITCHBOARD_OVERLAY` 指定它。覆盖文件优先于基础文件，基础文件优先于环境变量。映射会合并。列表会被替换。
+
+## 品牌
+
+```yaml
+branding:
+  display_name: SwB
+  accent_color: "#64748b"
+```
+
+`branding.icon` 和 `branding.logo_assets_dir` 设置你自己的图标和标志。
+
+## 完整参考
+
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) 列出每个键，并附有注释。

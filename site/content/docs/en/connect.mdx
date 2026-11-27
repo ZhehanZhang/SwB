@@ -1,0 +1,47 @@
+---
+title: Connect your agents
+description: Add SwB to an agent, then let the agent do the rest.
+---
+
+## Add SwB to an agent
+
+Add SwB as a remote MCP server. Use your public MCP address, for example `https://swb.example.com/mcp`. The agent signs in with OAuth. You approve the sign-in on the SwB page.
+
+| App | Where to add SwB |
+| - | - |
+| Claude and Claude Projects | Settings → Connectors → Add custom connector |
+| ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
+| Grok | grok.com → Connectors → New Connector → Custom |
+| Capy | Add an MCP server with the Automatic OAuth client |
+| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
+| Codex, Gemini CLI and other coding agents | `swb connect coding-agent --choose agent=codex` |
+
+For a coding agent, change `codex` to the name of your client. Run `swb connect coding-agent` alone to see the list. The list has Claude Code, Codex, Gemini CLI, Qwen Code, Goose, OpenCode, Cline and Kiro.
+
+## Ask your agent
+
+Your agent sets up the other connections. Ask it in plain words.
+
+| Ask | The agent does |
+| - | - |
+| How do I connect my Claude Projects? | It registers a Claude routine for the project and gives you one link for the token |
+| Connect Slack to SwB. | It gives you the Slack app manifest and one link for the tokens |
+| Connect my Discord bot. | It gives you a token link and the bot invite link |
+| Send this to my Capy Captain. | It sends the task and waits for the answer |
+| What can you send to? | It lists every target SwB can reach |
+
+The agent calls the `connect` tool. SwB answers with the next step for that platform. When a step needs a token, SwB gives a one-time claim link. Open the link and paste the token there. [Credentials](/docs/credentials) explains claim links.
+
+## Connect from the terminal
+
+The same steps work from the `swb` command.
+
+```bash
+swb connect mcp-client
+swb connect capy-captain
+swb connect grok
+```
+
+## Connect with a pairing code
+
+Some agents start on a laptop only when you need them. Give such an agent a pairing code. Make the code on the SwB page under Connected agents, or ask an agent to call `connect_code`. The code names the agent and works for ten minutes. The agent exchanges the code for its own key at `/connect`.

@@ -1,0 +1,27 @@
+---
+title: SwB
+description: 连接你已在使用的智能体的总机。
+---
+
+SwB 连接你的助手和智能体。Claude、ChatGPT、Grok、Capy 和你的编码智能体继续留在原来的运行位置。SwB 通过 MCP 把它们连起来。它们共享项目和记忆，互相交接工作，并取回答复。
+
+SwB 是一个 Python 进程，搭配一个 SQLite 文件。你在自己的电脑或服务器上运行它。软件包是 `swb-one`，命令是 `swb`。
+
+![SwitchBoard 总览，频道接入，项目和智能体输出](/shots/overview-light.webp)
+
+## SwB 如何工作
+
+**模块（block）**是与一个平台的连接。MCP 模块让智能体登录并使用 SwB 工具。Slack、Discord 和 Telegram 模块接收消息并发布答复。其他模块负责唤醒智能体，例如 Claude 例程、Grok 例程和 Capy Captain。
+
+**核心**把各个模块连在一起。它保存智能体、项目、记忆、路由和审计日志。每个模块只与核心通信。
+
+你的智能体会自己完成大部分连接。向智能体询问如何连接某个平台，SwB 会给出下一步。某一步需要令牌时，SwB 会给你一个一次性链接。你在那个页面粘贴令牌。
+
+## 从这里开始
+
+<Cards>
+  <Card title="安装" href="/zh-Hans/docs/install" />
+  <Card title="首次运行" href="/zh-Hans/docs/first-run" />
+  <Card title="连接你的智能体" href="/zh-Hans/docs/connect" />
+  <Card title="模块" href="/zh-Hans/docs/blocks" />
+</Cards>

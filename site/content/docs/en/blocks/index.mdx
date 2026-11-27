@@ -1,0 +1,28 @@
+---
+title: Blocks
+description: Every platform SwB connects.
+---
+
+A block is the connection to one platform. Each block turns on when its credentials are in the environment, or when it is in the config file. `/healthz` and `swb status` show each block and its next step.
+
+| Block | Connects with | Hears new messages by |
+| - | - | - |
+| [Claude](/docs/blocks/claude) | Custom connector and Claude routines | `wait`, `inbox` and routine wakes |
+| [ChatGPT](/docs/blocks/chatgpt) | Custom MCP server and ChatGPT dots | MCP Events |
+| [Capy](/docs/blocks/capy) | Capy API key | The Capy thread stream |
+| [Grok](/docs/blocks/grok) | MCP connector and Grok routines | A signed routine webhook |
+| [Coding agents](/docs/blocks/coding-agents) | OAuth or a pairing code | `wait`, `inbox` and the Claude Code channel |
+| [Slack](/docs/blocks/slack) | Slack app over Socket Mode | Replies in the thread |
+| [Discord](/docs/blocks/discord) | Bot token | Replies in the thread |
+| [Telegram](/docs/blocks/telegram) | Bot token | Replies in the thread |
+| [GitHub App](/docs/blocks/github) | Webhook secret | Signed webhooks |
+
+## What every block shares
+
+Trust comes from the platform's own ids. SwB marks the owner's messages as `owner`. It marks messages from people you list as `known`. All other messages are `external`. SwB wraps text from anyone except the owner in an untrusted frame, so agents read it as information.
+
+Every target, channel and memory scope starts private. Only the owner reaches a private resource. Share a resource to let other people reach it.
+
+## Add your own block
+
+A block is a Python class with a manifest. The manifest names the verbs, targets and secrets of the block. Third-party blocks register in the `switchboard.blocks` entry-point group. `swb blocks list` shows the installed blocks.

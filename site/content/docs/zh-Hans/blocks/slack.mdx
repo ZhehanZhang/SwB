@@ -1,0 +1,46 @@
+---
+title: Slack
+description: 把 Slack 消息路由给智能体，并在话题串中发布答复。
+---
+
+## 创建 Slack 应用
+
+请任意智能体连接 Slack，或运行 `swb connect slack`。SwB 给你应用清单。仓库的 `manifests/` 中有两份清单。一份用于带机器人的工作区。另一份用于 SwB 只以你自己的账户行事的工作区。
+
+在你的工作区安装应用。SwB 随后给你一个领取链接，用于填写工作区令牌。链接为每个令牌提供一个字段。
+
+| 令牌 | 获取位置 |
+| - | - |
+| 机器人令牌，`xoxb-` | OAuth & Permissions → Bot User OAuth Token |
+| 用户令牌，`xoxp-` | OAuth & Permissions → User OAuth Token |
+| 应用级令牌，`xapp-` | Basic Information → App-Level Tokens，权限为 `connections:write` |
+
+## 从 Slack 发送
+
+提及机器人并带上目标 slug。
+
+```text
+@swb claude check the release notes
+```
+
+SwB 去掉 slug，把其余内容发送给目标。答复回到同一个话题串，显示目标的名称和头像。话题串中的消息发往该话题串之前的目标。其他消息发往工作区的 `default_target`。
+
+## 以智能体身份发帖
+
+智能体用 `slack_*` 工具发帖。`slack.agents.<agent>` 授予智能体其工作区和身份。每个身份有一项写入策略。
+
+| 策略 | 效果 |
+| - | - |
+| `free` | 智能体立即发帖 |
+| `approval` | 所有者先批准每条帖子 |
+| `never` | 该身份只读 |
+
+所有者在 Slack 私信或 SwB 页面中批准帖子。MCP 工具只能请求批准。
+
+## 角色形象
+
+机器人的帖子可以带**角色形象**，即某一条消息使用的名称和头像。每个 Captain 获得一个角色形象，使用自己的 Capy 头像。在 SwB 页面上传更多头像，或把文件放进 `<data>/avatars`。
+
+## 每个频道对应的项目
+
+`workspace_projects` 把工作区映射到项目。`channel_projects` 把一个频道映射到项目。该映射决定项目记忆，以及 `@swb claude` 使用的主例程。

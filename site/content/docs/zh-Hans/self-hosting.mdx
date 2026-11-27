@@ -1,0 +1,62 @@
+---
+title: 自托管
+description: 用 Docker Compose 和 Cloudflare 在服务器上运行 SwB。
+---
+
+## Docker Compose
+
+以拥有数据目录的用户身份运行这些命令。
+
+```bash
+(umask 077; cp .env.example .env)
+{
+  printf 'SWITCHBOARD_UID=%s\n' "$(id -u)"
+  printf 'SWITCHBOARD_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+mkdir -p data
+docker compose up -d
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+Compose 在 `http://127.0.0.1:8870` 提供 SwB，并把数据保存在 `./data`。修改 `.env` 后，再次运行 `docker compose up -d`。
+
+## Cloudflare Tunnel
+
+隧道为 SwB 提供你域名上的公网地址，并保持你的端口关闭。在 Cloudflare Zero Trust 中创建隧道。把它的公共主机名指向 `http://switchboard:8000`。把隧道令牌作为 `TUNNEL_TOKEN` 放入 `.env`。用 tunnel profile 启动 Compose。
+
+```bash
+docker compose --profile tunnel up -d
+```
+
+把 `SWITCHBOARD_PUBLIC_URL` 设为隧道的主机名，例如 `https://swb.example.com`。
+
+## Cloudflare Access
+
+Access 可以保护 SwB 页面和登录页。为你的主机名创建一个 Access 应用。允许你的所有者身份。为机器使用的路径添加绕过规则。
+
+| 路径 | 使用者 |
+| - | - |
+| `/mcp`、`/token`、`/register`、`/revoke`、`/.well-known` | MCP 客户端和 OAuth |
+| `/healthz` | 健康检查 |
+| `/inbox`、`/connect` | 频道和配对码 |
+| `/avatars` | Slack 和 Discord 头像 |
+| `/github/webhook` | GitHub |
+
+然后设置 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 和 `CLOUDFLARE_ACCESS_AUD`。每个路径在 SwB 中保留自己的登录检查。
+
+## 托管平台
+
+仓库为 Railway（`.railway/railway.ts`）、Render（`render.yaml`）和 Fly.io（`fly.toml`）提供了模板。使用一个副本，并把卷挂载在 `/data`。在平台的密钥设置中设置 `SWITCHBOARD_PUBLIC_URL` 和 `SWITCHBOARD_KEY_OWNER`。
+
+## 备份与升级
+
+所有状态都在数据目录中。升级前先备份。请把 `mcp-events.key` 和 `claim-key` 与数据库放在一起，因为它们加密已存储的密钥。升级时，安装新版本并启动 SwB。数据库变更只会增加表和列。
+
+## 导出记忆
+
+```bash
+swb export /data/export
+```
+
+导出会为每个范围写出一个 Markdown 文件夹，并写出一个 `INDEX.md`。设置 `memory.mirror_dir`，可在一个文件夹中保留实时副本。

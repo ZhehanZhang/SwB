@@ -1,0 +1,40 @@
+---
+title: 频道模式
+description: 选择 SwB 在每个频道中的行为。
+---
+
+**空间**是消息到达的地方。Slack 频道、Discord 频道或话题串、Telegram 群组和 GitHub 仓库都是空间。每个空间有一种模式。
+
+| 模式 | 其他人的消息 | 智能体的行为 | 答复的去向 |
+| - | - | - | - |
+| `off` | SwB 丢弃消息 | 保持休眠 | 只发给所有者 |
+| `watch` | SwB 存储消息并给你发送摘要 | 只读 | 只发给所有者 |
+| `assist` | 消息唤醒 assist 目标 | 用读取工具，根据上下文作答 | 在话题串中 |
+| `triage` | 消息唤醒 triage 目标 | 使用该空间的操作 | 在话题串中，并附一条给你的说明 |
+| `work` | 只处理所有者的消息 | 你能提出的任何事 | 在话题串中 |
+
+你自己的提及或私信在每种模式下都按 `work` 处理。模式只会缩小访问范围。可见性仍然决定谁能访问目标。
+
+## 设置模式
+
+请智能体设置，例如“把 #support 设为 triage。”智能体会调用模式工具。你也可以在 SwB 页面或配置文件中选择模式。
+
+```yaml
+modes:
+  default: watch
+blocks:
+  discord:
+    spaces:
+      home:
+        mode: watch
+        channels:
+          "100000000000000004": {mode: triage, project: app, actions: [reply, label, comment]}
+```
+
+SwB 采用第一个匹配项，顺序如下。先是在页面上或由智能体设置的模式，然后是频道，然后是空间，然后是 `modes.projects.<project>`，最后是 `modes.default`。`modes.default` 的默认值是 `off`。
+
+## Triage 操作
+
+空间的 `actions` 列表包含 triage 唤醒可以使用的操作。这些操作是 `reply`、`label`、`comment`、`open_issue`、`link_duplicate` 和 `notify_owner`。SwB 在服务器端强制执行该列表。GitHub 操作使用项目的 GitHub App。
+
+请为 triage 单独建一个连接器较少的例程，例如 `claude-<project>-triage`。SwB 为 triage 唤醒这个例程。每个 triage 操作都记入审计日志，并附指向该消息的链接。

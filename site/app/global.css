@@ -1,0 +1,111 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/inter-tight';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@import '@fumadocs/ai-chat/css/preset.css';
+@import './console-tokens.css';
+
+@theme inline {
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-display: 'Inter Tight Variable', 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', monospace;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+}
+
+@theme {
+  --shadow-*: initial;
+  --drop-shadow-*: initial;
+}
+
+:root,
+.dark,
+.dark #nd-sidebar {
+  --color-fd-background: var(--background);
+  --color-fd-foreground: var(--foreground);
+  --color-fd-muted: var(--surface-sunken);
+  --color-fd-muted-foreground: var(--muted-foreground);
+  --color-fd-popover: var(--surface);
+  --color-fd-popover-foreground: var(--foreground);
+  --color-fd-card: var(--surface);
+  --color-fd-card-foreground: var(--foreground);
+  --color-fd-border: var(--border);
+  --color-fd-primary: var(--accent);
+  --color-fd-primary-foreground: var(--primary-foreground);
+  --color-fd-secondary: var(--surface-sunken);
+  --color-fd-secondary-foreground: var(--foreground);
+  --color-fd-accent: var(--surface-sunken);
+  --color-fd-accent-foreground: var(--accent);
+  --color-fd-ring: var(--ring);
+  --color-fd-error: var(--destructive);
+  --color-fd-overlay: rgb(0 0 0 / 40%);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    @apply bg-fd-background text-fd-foreground antialiased;
+  }
+
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .text-display-xl {
+    @apply font-display font-extrabold;
+    font-size: 2rem;
+    line-height: 1.125;
+    letter-spacing: -.025em;
+  }
+
+  .swb-button {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium;
+  }
+
+  .swb-text-link {
+    @apply font-medium hover:text-fd-foreground hover:underline hover:underline-offset-4;
+  }
+
+  .dark .swb-mark {
+    filter: invert(1) contrast(1.35);
+  }
+
+  .dark .swb-connector[src$='/github.svg'],
+  .dark .swb-connector[src$='/grok-routine.svg'] {
+    filter: invert(1);
+  }
+
+  .dark .swb-connector[src$='/slack.svg'] {
+    filter: brightness(0) invert(.89);
+  }
+}
+
+.swb-hero-title {
+  font-size: clamp(2rem, 3.65vw, 3.25rem);
+  text-wrap: balance;
+}
+
+.swb-mdx [role='tabpanel'] > figure:has(pre) {
+  margin-inline: -1rem;
+  border: 0;
+  border-radius: 0;
+}

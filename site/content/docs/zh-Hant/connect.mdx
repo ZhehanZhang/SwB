@@ -1,0 +1,47 @@
+---
+title: 連接你的 AI 代理
+description: 把 SwB 加到一個代理，其餘交給代理完成。
+---
+
+## 把 SwB 加到代理
+
+把 SwB 加為遠端 MCP 伺服器。請使用你的公開 MCP 位址，例如 `https://swb.example.com/mcp`。代理以 OAuth 登入。你在 SwB 頁面核准這次登入。
+
+| 應用程式 | 加入 SwB 的位置 |
+| - | - |
+| Claude 與 Claude Projects | Settings → Connectors → Add custom connector |
+| ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
+| Grok | grok.com → Connectors → New Connector → Custom |
+| Capy | 以 Automatic OAuth 用戶端新增 MCP 伺服器 |
+| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
+| Codex、Gemini CLI 與其他程式開發代理 | `swb connect coding-agent --choose agent=codex` |
+
+對於程式開發代理，請把 `codex` 換成你的用戶端名稱。單獨執行 `swb connect coding-agent` 可以看到清單。清單包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 與 Kiro。
+
+## 詢問你的代理
+
+你的代理會設定其他連線。請用平常說話的方式詢問它。
+
+| 你說的話 | 代理的動作 |
+| - | - |
+| 我要怎麼連接我的 Claude Projects？ | 為專案註冊一個 Claude 例行程序，並給你一個權杖連結 |
+| 幫我把 Slack 連到 SwB。 | 給你 Slack 應用程式資訊清單與一個權杖連結 |
+| 幫我連接我的 Discord 機器人。 | 給你權杖連結與機器人邀請連結 |
+| 把這件事交給我的 Capy Captain。 | 傳送任務並等待答案 |
+| 你可以傳送給哪些對象？ | 列出 SwB 能連到的所有目標 |
+
+代理會呼叫 `connect` 工具。SwB 回覆該平台的下一步。當某個步驟需要權杖時，SwB 會給出一次性的領取連結（claim link）。請開啟連結並在那裡貼上權杖。[憑證](/zh-Hant/docs/credentials)說明領取連結。
+
+## 從終端機連接
+
+`swb` 指令也能完成同樣的步驟。
+
+```bash
+swb connect mcp-client
+swb connect capy-captain
+swb connect grok
+```
+
+## 用配對碼連接
+
+有些代理只在你需要時才在筆記型電腦上啟動。請給這類代理一組配對碼（pairing code）。你可以在 SwB 頁面的 Connected agents 產生配對碼，也可以請代理呼叫 `connect_code`。配對碼會指定代理名稱，有效時間是十分鐘。代理在 `/connect` 用配對碼換取自己的金鑰。

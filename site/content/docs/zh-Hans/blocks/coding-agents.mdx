@@ -1,0 +1,41 @@
+---
+title: 编码智能体
+description: 连接 Claude Code、Codex、Gemini CLI 和其他编码智能体。
+---
+
+## 获取设置
+
+```bash
+swb connect coding-agent --choose agent=codex
+```
+
+命令会打印该客户端的设置。每种设置都把 SwB 添加为远程 MCP 服务器，客户端支持 OAuth 时使用 OAuth。
+
+| 客户端 | 设置 |
+| - | - |
+| Claude Code | `claude mcp add` |
+| Codex | `config.toml` |
+| Gemini CLI 和 Qwen Code | `settings.json` |
+| Goose | `config.yaml` |
+| OpenCode | `opencode.json` |
+| Cline 和 Kiro | 它们的 MCP 设置 |
+| 其他客户端 | 使用配对码的 Streamable HTTP |
+
+## Claude Code 频道
+
+频道把 SwB 消息推送到已打开的 Claude Code 窗口。它是研究预览版。
+
+在服务器的 `.env` 中创建名为 `SWITCHBOARD_KEY_CHANNEL` 的密钥。该密钥只能读取 `claude-code` 收件箱。安装 [Bun](https://bun.sh)。然后在 Claude Code 中添加插件。
+
+```text
+/plugin marketplace add ZhehanZhang/SwB
+/plugin install switchboard@switchboard
+```
+
+插件询问时，输入 SwB 地址和频道密钥。用该频道启动 Claude Code。
+
+```bash
+claude --dangerously-load-development-channels plugin:switchboard@switchboard
+```
+
+频道在窗口打开期间工作。窗口关闭期间到达的消息，会在下次启动时出现。Claude 用 `reply` 工具回复。

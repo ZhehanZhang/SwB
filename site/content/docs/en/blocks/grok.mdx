@@ -1,0 +1,31 @@
+---
+title: Grok
+description: Connect Grok and wake it with Grok routines.
+---
+
+## Add the connector
+
+In grok.com, open Connectors → New Connector → Custom. Enter your public MCP address and sign in with OAuth.
+
+## Wake Grok with a routine
+
+Ask any agent to connect Grok, or run this command.
+
+```bash
+swb connect grok --choose name=project-doorman project=example auth=key
+```
+
+SwB returns a routine prompt and two claim links. Make a Grok routine with a custom webhook trigger and the prompt. Open the claim links and paste the webhook address and key there. Then run the test send that `connect` returns. A `pong` in your inbox confirms the round trip.
+
+## How a wake works
+
+A send to the routine posts a signed webhook to Grok. The webhook carries the text, the conversation, the project, the sender and the trust level. The routine answers on the conversation through its SwB connector.
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-doorman: {project: example, url_env: GROK_WEBHOOK_URL, auth: signature, secret_env: GROK_WEBHOOK_SECRET}
+```
+
+Send to a routine by its name, or to `grok:<slug>` for the main routine of a project.

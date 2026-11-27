@@ -1,0 +1,20 @@
+{
+  "title": "文档",
+  "pages": [
+    "index",
+    "install",
+    "first-run",
+    "connect",
+    "how-it-works",
+    "blocks",
+    "channel-modes",
+    "owner-login",
+    "credentials",
+    "config",
+    "self-hosting",
+    "security",
+    "tools",
+    "faq",
+    "about"
+  ]
+}

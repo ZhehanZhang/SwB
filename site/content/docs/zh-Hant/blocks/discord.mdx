@@ -1,0 +1,38 @@
+---
+title: Discord
+description: 把 Discord 訊息路由給代理，並在討論串中回覆。
+---
+
+## 建立機器人
+
+在 [Discord Developer Portal](https://discord.com/developers/applications) 建立 New Application。在 Bot 之下開啟 Message Content Intent。重設機器人權杖。
+
+請代理連接 Discord。代理呼叫 `discord_provision` 並給你一個領取連結。開啟連結並貼上機器人權杖。你也可以在伺服器環境中設定 `DISCORD_BOT_TOKEN`。
+
+## 把機器人加到伺服器
+
+`discord_status` 會回傳 `setup.invite_url`。開啟它，把機器人加到你的伺服器。連結會要求 bot 範圍，以及你所用功能需要的權限。
+
+SwB 從 Discord 讀取機器人的擁有者，並記錄機器人加入的伺服器。`discord_status` 把它們列在 `discovered` 之下。把伺服器加入設定檔，就能路由它的訊息。
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: helper
+    agents: {claude: [home]}
+```
+
+若要複製 id，請在 User Settings → Advanced 開啟 Developer Mode。然後在伺服器或使用者上按右鍵。
+
+## 從 Discord 傳送
+
+提及機器人並加上目標 slug，例如 `@swb helper check the build`。SwB 從你的訊息開啟討論串，並把你加入其中。答案回到討論串。討論串中的後續訊息送給同一個目標。角色身分的貼文每個頻道使用一個 webhook，所以每個代理顯示自己的名稱與圖片。
+
+## 與其他人共用
+
+頻道與目標起初是私人。若要讓其他人連到目標，請共用頻道與目標。使用 `channel:<space>/<channel id>` 與 `target:<slug>`。清單可用 `discord:<user id>` 指定單一使用者。

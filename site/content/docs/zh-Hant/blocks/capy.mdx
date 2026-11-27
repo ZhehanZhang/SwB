@@ -1,0 +1,33 @@
+---
+title: Capy
+description: 把工作交給 Capy Captain 與討論串，並取回答案。
+---
+
+## 開啟模組
+
+在伺服器環境中設定 `CAPY_API_KEY`。SwB 用這把金鑰讀取 Captain 並追蹤討論串。
+
+## 把 Capy 連接為代理
+
+在 Capy 中，以你的 MCP 位址與 Automatic OAuth 用戶端新增 MCP 伺服器。Capy 以代理 `capy` 的身分登入。
+
+## 傳送給 Captain
+
+請任何代理把工作傳送給 Captain。
+
+> 把這件事交給我的 Capy Captain。
+
+傳送的內容會送到專案路由所指定的 Captain。SwB 透過事件流追蹤 Capy 討論串。每則回覆、問題與最終結果都會進入傳送者的收件匣。SwB 在重新啟動後仍保留它在事件流中的位置。
+
+| 路由模式 | 傳送的作用 |
+| - | - |
+| `captain_thread` | 傳送訊息給 Captain |
+| `new_thread` | 啟動新的團隊討論串 |
+
+## 傳送金鑰
+
+Capy 把每則訊息顯示為傳送它的金鑰所寫。傳送時，SwB 先使用代理自己的金鑰 `CAPY_API_KEY_AS_<AGENT>`。接著使用服務金鑰 `CAPY_API_KEY_SERVICE`。設定 `identity: personal` 可讓每則訊息都以你自己的身分，用 `CAPY_API_KEY` 傳送。`/healthz` 會顯示每個代理用哪把金鑰傳送。
+
+## 專案自動連結
+
+代理建立 SwB 專案時，Capy 模組會尋找對應的 Capy 專案。程式碼庫相符優先於名稱相符。只有一個明確相符時，SwB 會連結兩個專案，並把 SwB 專案路由到那位 Captain。

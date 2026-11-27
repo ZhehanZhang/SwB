@@ -1,0 +1,75 @@
+---
+title: 設定
+description: 環境變數、設定檔與覆寫檔。
+---
+
+SwB 只靠環境變數就能執行。MCP 模組預設開啟。其他模組在對應變數存在時啟用。路由、授權與政策則使用 YAML 設定檔。
+
+## 執行個體
+
+| 變數 | 用途 |
+| - | - |
+| `SWITCHBOARD_KEY_OWNER` | `swb` 指令使用的擁有者金鑰 |
+| `SWITCHBOARD_PUBLIC_URL` | 公開的 HTTPS 位址，例如 `https://swb.example.com` |
+| `SWITCHBOARD_DATA_DIR` | 資料夾。`swb up` 的預設值是 `~/.local/share/switchboard`。映像檔使用 `/data` |
+| `SWITCHBOARD_OWNER_EMAILS` | OIDC 與 Cloudflare Access 的擁有者電子郵件，以逗號分隔 |
+| `SWITCHBOARD_KEY_<NAME>` | 代理 `<name>` 的 bearer 金鑰 |
+| `SWITCHBOARD_CONFIG` | 基礎 YAML 檔的路徑 |
+| `SWITCHBOARD_OVERLAY` | 私人覆寫檔的路徑 |
+| `PORT` | HTTP 連接埠 |
+
+## 模組
+
+| 模組 | 變數 |
+| - | - |
+| Capy | `CAPY_API_KEY`，傳送時另可使用 `CAPY_API_KEY_SERVICE` 或 `CAPY_API_KEY_AS_<AGENT>` |
+| Slack | `SLACK_BOT_TOKEN` 或 `SLACK_USER_TOKEN`、`SLACK_TEAM_ID`，以及 Socket Mode 使用的 `SLACK_APP_TOKEN` |
+| Discord | `DISCORD_BOT_TOKEN` |
+| Telegram | `TELEGRAM_BOT_TOKEN` |
+| GitHub | `GITHUB_WEBHOOK_SECRET` |
+| Claude 例行程序 | `CLAUDE_ROUTINE_TOKEN` 與 `CLAUDE_ROUTINE_ID` |
+| Grok 例行程序 | `GROK_ROUTINE_SECRET` 與 `GROK_ROUTINE_URL` |
+
+具名的 Slack 工作區，請把名稱放在 `SLACK_` 之後，例如 `SLACK_SUPPORT_BOT_TOKEN`。具名的例行程序用相同方式處理，例如 `CLAUDE_ROUTINE_TOKEN_DOCS`。
+
+## 設定檔
+
+```bash
+swb init
+```
+
+`swb init` 會寫入 `config/switchboard.yaml` 與一把擁有者金鑰。這個檔案是選用的。SwB 在 `config/switchboard.yaml` 存在時讀取它。
+
+```yaml
+version: 2
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@example.com]
+blocks:
+  mcp: {use: mcp}
+  capy: {use: capy, identity: service}
+targets:
+  aliases: {}
+routes:
+  - {match: {}, to: capy:captain:<Captain id>}
+```
+
+檔案中的 `blocks` 清單會精確指定要用的模組。省略 `blocks` 時，SwB 沿用環境變數所啟用的模組。`routes` 清單在新安裝時設定最初的路由。之後由代理與 SwB 頁面管理路由。
+
+## 覆寫檔
+
+覆寫檔是一個私人的 YAML 檔，用來放你自己的名稱、id 與路徑。請放在 `config/local.yaml`，或用 `SWITCHBOARD_OVERLAY` 指定。覆寫檔優先於基礎檔，基礎檔優先於環境變數。對應表會合併。清單會被取代。
+
+## 品牌
+
+```yaml
+branding:
+  display_name: SwB
+  accent_color: "#64748b"
+```
+
+`branding.icon` 與 `branding.logo_assets_dir` 可設定你自己的圖示與標誌。
+
+## 完整參考
+
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) 列出每個金鑰，並附上註解。

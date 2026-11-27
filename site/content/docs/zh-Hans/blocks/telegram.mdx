@@ -1,0 +1,35 @@
+---
+title: Telegram
+description: 把 Telegram 消息路由给智能体并发布答复。
+---
+
+Telegram 使用长轮询。机器人从你的服务器访问 Telegram，因此 SwB 可以留在私有地址上。
+
+## 创建机器人
+
+在 [@BotFather](https://t.me/BotFather) 中发送 `/newbot`。请智能体连接 Telegram。智能体调用 `telegram_provision` 并给你一个领取链接。打开链接并粘贴机器人令牌。你也可以在服务器的环境变量中设置 `TELEGRAM_BOT_TOKEN`。
+
+## 把机器人添加到群组
+
+把机器人添加到群组。在群组中发送 `/swb@<bot username>`。`telegram_status` 随后在 `setup.seen_chats` 中显示该群组的聊天 id。把该 id 填入空间的 `chats`。
+
+打开机器人的私聊并点击 Start。把你自己的聊天 id 填入 `owner_ids`。
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    token_env: TELEGRAM_BOT_TOKEN
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        default_target: claude
+```
+
+## 从 Telegram 发送
+
+给机器人发私信，提及机器人，或使用 `/swb <target> <message>`。回复机器人的消息发往同一个目标。答复在第一行用粗体显示目标的名称。
+
+要让机器人读取群组中的每条消息，请在 @BotFather 中用 `/setprivacy` 关闭隐私模式。然后把机器人移出群组，再重新添加。

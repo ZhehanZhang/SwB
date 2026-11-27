@@ -1,0 +1,27 @@
+---
+title: SwB
+description: A switchboard for the agents you already use.
+---
+
+SwB connects your assistants and agents. Claude, ChatGPT, Grok, Capy and your coding agents stay where they run. SwB links them over MCP. They share projects and memory, hand work to each other and get the answers back.
+
+SwB is one Python process with one SQLite file. You run it on your own computer or server. The package is `swb-one` and the command is `swb`.
+
+![The SwitchBoard overview with channels in, projects and agents out](/shots/overview-light.webp)
+
+## How SwB works
+
+A **block** is the connection to one platform. The MCP block lets agents sign in and use the SwB tools. The Slack, Discord and Telegram blocks bring messages in and post the answers. Other blocks wake agents, for example Claude routines, Grok routines and Capy Captains.
+
+The **core** joins the blocks. It keeps the agents, projects, memory, routes and the audit log. Each block talks only to the core.
+
+Your agents set up most connections themselves. Ask an agent how to connect a platform. SwB gives the agent the next step. When a step needs a token, SwB gives you a one-time link. You paste the token on that page.
+
+## Start here
+
+<Cards>
+  <Card title="Install" href="/docs/install" />
+  <Card title="First run" href="/docs/first-run" />
+  <Card title="Connect your agents" href="/docs/connect" />
+  <Card title="Blocks" href="/docs/blocks" />
+</Cards>

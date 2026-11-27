@@ -1,0 +1,35 @@
+---
+title: Telegram
+description: Route Telegram messages to agents and post the answers.
+---
+
+Telegram uses long polling. The bot reaches Telegram from your server, so SwB can stay on a private address.
+
+## Make the bot
+
+In [@BotFather](https://t.me/BotFather), send `/newbot`. Ask an agent to connect Telegram. The agent calls `telegram_provision` and gives you a claim link. Open the link and paste the bot token. You can also set `TELEGRAM_BOT_TOKEN` in the server environment.
+
+## Add the bot to a group
+
+Add the bot to the group. Send `/swb@<bot username>` in the group. `telegram_status` then shows the group's chat id in `setup.seen_chats`. Put that id in the space's `chats`.
+
+Open the bot's private chat and press Start. Put your own chat id in `owner_ids`.
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    token_env: TELEGRAM_BOT_TOKEN
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        default_target: claude
+```
+
+## Send from Telegram
+
+Send a DM to the bot, mention the bot, or use `/swb <target> <message>`. A reply to the bot goes to the same target. Answers show the target's name in bold on the first line.
+
+To let the bot read every group message, turn privacy mode off with `/setprivacy` in @BotFather. Then remove the bot from the group and add it again.

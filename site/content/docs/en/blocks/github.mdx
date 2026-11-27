@@ -1,0 +1,46 @@
+---
+title: GitHub App
+description: Send GitHub events to your agents and services.
+---
+
+## Make the app
+
+Make a GitHub App on your account. Set the webhook address to `https://<your host>/github/webhook`. Make a webhook secret.
+
+```bash
+openssl rand -hex 32
+```
+
+Ask an agent to connect GitHub. SwB gives you one claim link for the App ID, the private key file and the webhook secret. You can upload the `.pem` file on that page.
+
+## Permissions
+
+Give the app read access for the events you need.
+
+| Permission | Events |
+| - | - |
+| Issues | `issues`, `issue_comment` |
+| Pull requests | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| Contents | `push` |
+| Checks | `check_run`, `check_suite` |
+| Actions | `workflow_run` |
+
+Install the app on the repositories you want.
+
+## Route events
+
+```yaml
+blocks:
+  github:
+    use: github
+    secret_env: GITHUB_WEBHOOK_SECRET
+    sinks:
+      team: {url_env: TEAM_GITHUB_SINK_URL}
+    routes:
+      "acme/app": [team]
+      "acme/*": [team]
+```
+
+A **sink** is an address that gets a copy of each event. Each matching sink gets one compact JSON event. The event has the repository, the actor, the number, the title, the state and a short body. Each delivery has an `Idempotency-Key`. SwB retries network errors and server errors.
+
+If Cloudflare Access protects your host, let `/github/webhook` through. The GitHub signature protects that path.

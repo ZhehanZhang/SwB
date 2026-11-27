@@ -1,0 +1,38 @@
+---
+title: 首次运行
+description: 让 SwB 可被访问，登录并查看你的实例。
+---
+
+## 获取公网地址
+
+Claude、ChatGPT 和 Grok 在云端运行。它们需要一个公网 HTTPS 地址来访问 SwB。启动 SwB 时加上隧道，即可获得该地址。
+
+```bash
+swb up --tunnel cloudflare
+```
+
+SwB 会打开 Cloudflare Quick Tunnel，并打印公网 MCP 地址。使用 `--tunnel tailscale` 可改用 Tailscale Funnel。要在自己的域名上使用固定地址，请阅读[自托管](/zh-Hans/docs/self-hosting)。
+
+## 查看下一步
+
+```bash
+swb status
+```
+
+状态页列出每个模块，以及每个模块的下一步。你的智能体通过 `switchboard_status` 工具读取同样的状态。
+
+## 登录 SwB 页面
+
+SwB 页面显示你的项目、智能体、收件箱、记忆和审计日志。它也是粘贴令牌的安全位置。
+
+![SwB 登录页面](/shots/login-light.webp)
+
+```bash
+swb login-link
+```
+
+命令会打印一个登录链接。该链接五分钟内有效，且只能使用一次。在浏览器中打开它。首次登录时，添加一个通行密钥。之后的登录使用该通行密钥。[所有者登录](/zh-Hans/docs/owner-login)介绍其他方式。
+
+## 连接第一个智能体
+
+把 SwB 添加到一个智能体。[连接你的智能体](/zh-Hans/docs/connect)介绍每个应用的做法。然后请该智能体连接其余平台。

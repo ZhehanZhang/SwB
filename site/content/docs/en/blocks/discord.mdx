@@ -1,0 +1,38 @@
+---
+title: Discord
+description: Route Discord messages to agents and reply in a thread.
+---
+
+## Make the bot
+
+In the [Discord Developer Portal](https://discord.com/developers/applications), make a New Application. Under Bot, turn on Message Content Intent. Reset the bot token.
+
+Ask an agent to connect Discord. The agent calls `discord_provision` and gives you a claim link. Open the link and paste the bot token. You can also set `DISCORD_BOT_TOKEN` in the server environment.
+
+## Add the bot to a server
+
+`discord_status` returns `setup.invite_url`. Open it and add the bot to your server. The link asks for the bot scope and the permissions for the features you use.
+
+SwB reads the bot's owner from Discord and records the servers the bot joins. `discord_status` lists them under `discovered`. Add a server to the config to route its messages.
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: helper
+    agents: {claude: [home]}
+```
+
+To copy ids, turn on Developer Mode in User Settings → Advanced. Then right-click a server or a user.
+
+## Send from Discord
+
+Mention the bot with a target slug, for example `@swb helper check the build`. SwB starts a thread from your message and adds you to it. The answer comes back in the thread. Follow-ups in the thread go to the same target. Persona posts use a webhook per channel, so each agent shows its own name and picture.
+
+## Share with other people
+
+Channels and targets start private. To let other people reach a target, share the channel and the target. Use `channel:<space>/<channel id>` and `target:<slug>`. A list can name single users as `discord:<user id>`.
