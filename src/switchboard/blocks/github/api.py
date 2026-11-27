@@ -65,6 +65,8 @@ class GitHubAPI:
         self.tokens: dict[str, tuple[str, float, str, tuple[str, str, str, str]]] = {}
         self.pat_actor: str | None = None
         self._verified_pat = ""
+        self._key_source: str | None = None
+        self._key: RSAPrivateKey | None = None
 
     def credentials(self) -> tuple[str, str, str, str]:
         return (self.app_id or self.core.secret(self.app_id_env) or "",
@@ -73,11 +75,22 @@ class GitHubAPI:
 
     def auth_type(self) -> str | None:
         app_id, _, key, token = self.credentials()
-        if app_id and key:
+        if provider_id(app_id) and self.app_key(key) is not None:
             return "app"
         if token:
             return "pat"
         return None
+
+    def app_key(self, value: str) -> RSAPrivateKey | None:
+        if value != self._key_source:
+            self._key_source = value
+            self._key = None
+            if value:
+                try:
+                    self._key = private_key(value)
+                except ValueError:
+                    pass
+        return self._key
 
     async def _response(self, method: str, path: str, token: str, **kwargs: Any) -> httpx.Response:
         if self.http is None:
@@ -120,9 +133,11 @@ class GitHubAPI:
         app_id, installation_id, key, _ = self.credentials()
         if not provider_id(app_id) or not key or (installation_id and not provider_id(installation_id)):
             raise BlockError("Configure a valid GitHub App ID, private key, and optional installation ID")
+        if (parsed_key := self.app_key(key)) is None:
+            raise BlockError("The GitHub App private key is invalid")
         try:
             now = int(self.core.clock())
-            return jwt.encode({"iat": now - 60, "exp": now + 540, "iss": app_id}, private_key(key), algorithm="RS256")
+            return jwt.encode({"iat": now - 60, "exp": now + 540, "iss": app_id}, parsed_key, algorithm="RS256")
         except (binascii.Error, ValueError, TypeError, UnicodeError, jwt.PyJWTError):
             raise BlockError("The GitHub App private key is invalid") from None
 

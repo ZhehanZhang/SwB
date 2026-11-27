@@ -34,7 +34,6 @@ from .api import (
     PRIVATE_KEY_ENV,
     TOKEN_ENV,
     GitHubAPI,
-    private_key,
     provider_id,
     repo_name,
 )
@@ -418,25 +417,19 @@ class GitHubBlock(Block):
         elif step:
             steps.append({"by": "person", "do": step})
         credential = (choose or {}).get("credential")
-        app_id, _, key, pat_token = self.api.credentials()
+        auth = self.api.auth_type()
+        app_id, _, key, _ = self.api.credentials()
         valid_id = provider_id(app_id) is not None
-        valid_key = False
-        if key:
-            try:
-                private_key(key)
-            except ValueError:
-                pass
-            else:
-                valid_key = True
+        valid_key = self.api.app_key(key) is not None
         repair_app = (app_id and not valid_id) or (key and not valid_key)
-        if valid_id and valid_key:
+        if auth == "app":
             await self.refresh_installation()
             done.append("GitHub App credentials: present.")
             if self.installation_problem:
                 steps.append({"by": "person", "do": self.installation_problem})
             elif self.checked_at is not None and self.installation.get("issues") != "write":
                 steps.append({"by": "person", "do": "Grant Issues: write to the GitHub App installation for the triage repositories."})
-        elif pat_token and (credential == "pat" or (credential != "app" and not repair_app)):
+        elif auth == "pat" and (credential == "pat" or (credential != "app" and not repair_app)):
             await self.refresh_installation()
             pat = self.pat_capabilities
             if pat and pat["verified"]:
