@@ -191,11 +191,11 @@ class ChannelModes:
 
     def _override(self, block: str, space: str, *channels: str) -> Mode | None:
         for channel in dict.fromkeys(channels):
-            row = self.core.store.one("SELECT mode, actions, project FROM space_modes WHERE block = ? AND space = ? AND channel = ?",
+            row = self.core.store.one("SELECT mode, actions, project, target FROM space_modes WHERE block = ? AND space = ? AND channel = ?",
                                       (block, space, channel))
             if row is not None:
                 actions = json.loads(row["actions"])
-                return Mode(row["mode"], tuple(actions) if actions is not None else None, row["project"])
+                return Mode(row["mode"], tuple(actions) if actions is not None else None, row["project"], row["target"])
         return None
 
     def _legacy(self, block: str, space: str, channels: tuple[str, ...]) -> Mode | None:
@@ -243,6 +243,10 @@ class ChannelModes:
 
     def policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
+        return self._policy(block, space, channel, project, parent=parent, name=name, include_route=include_route)[:5]
+
+    def _policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
+                name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None, bool]:
         section = self._section(block, space)
         provider = self.core.blocks.get(block)
         use = self.core.cfg.blocks.get(block, {}).get("use")
@@ -274,7 +278,8 @@ class ChannelModes:
         target = next((s.target for s in (*base, project_mode) if s is not None and s.target), None)
         if spec.mode == "triage" and not target:
             target = self._triage_target(block, project)
-        return spec.mode, source, actions, target or self._default_target(block, space, project, include_route=include_route), project
+        fallback = not target and (not section.get("target") or bool(section.get("default_target")))
+        return spec.mode, source, actions, target or self._default_target(block, space, project, include_route=include_route), project, fallback
 
     def resolve(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                 name: str | None = None) -> tuple[str, str, tuple[str, ...], str | None]:
@@ -335,11 +340,31 @@ class ChannelModes:
             names.pop((space, ""), None)
         return names
 
+    def _channel_resources(self, block: str, space: str, channel: str, name: str | None) -> list[str]:
+        provider = self.core.blocks[block]
+        if provider.manifest.id == "github":
+            return provider.channel_resources(space, channel)
+        resources = [f"channel:{space}/{channel}"]
+        alias = (name or "").lstrip("#")
+        if alias and not any(c.isspace() for c in alias):
+            resources.append(f"channel:{space}/#{alias}")
+        return resources
+
+    def channel_resources(self) -> list[str]:
+        resources = []
+        for block, provider in self.core.blocks.items():
+            if provider.manifest.id not in PROVIDERS:
+                continue
+            for (space, channel), (name, _, _) in self._inventory(block).items():
+                if channel and (provider.manifest.id != "github" or provider.space_for(channel) is not None):
+                    resources.extend(self._channel_resources(block, space, channel, name))
+        return resources
+
     def row(self, block: str, space: str, channel: str, name: str | None = None, kind: str | None = None,
             parent: str | None = None) -> dict[str, Any]:
         provider = self.core.blocks[block]
         use = provider.manifest.id
-        mode, source, actions, target, project = self.policy(block, space, channel, parent=parent, name=name if channel else None)
+        mode, source, actions, target, project, fallback = self._policy(block, space, channel, parent=parent, name=name if channel else None)
         digest, problems = None, []
         if mode == "watch":
             pending = self.core.store.one("SELECT COUNT(*) AS n, MIN(at) AS first_at FROM watch_events "
@@ -351,7 +376,7 @@ class ChannelModes:
         if mode == "triage":
             if not target:
                 problems.append("Choose a triage agent.")
-            elif target == self._default_target(block, space, project) and not self._triage_target(block, project):
+            elif fallback:
                 problems.append(TRIAGE_FALLBACK)
         if use == "github" and not provider.has_write_credential():
             problems.append(GITHUB_CREDENTIAL_PROBLEM)
@@ -397,14 +422,13 @@ class ChannelModes:
                 return True
         if not row["channel"]:
             return False
-        channel = [f"channel:{space}/{row['channel']}"]
-        name = row["name"].lstrip("#")
-        if name and not any(c.isspace() for c in name):
-            channel.append(f"channel:{space}/#{name}")
-        if not self.core.visibility.allows(Who(False), *channel):
+        if not self.core.visibility.allows(Who(False), *self._channel_resources(block, space, row["channel"], row["name"])):
             return False
         target = row["target"]
-        return not target or self.core.visibility.allows(Who(False), f"target:{target}", f"target:{target.removeprefix('agent:')}")
+        if not target:
+            return True
+        resources = provider.target_resources(target) if provider.manifest.id == "github" else [f"target:{target}", f"target:{target.removeprefix('agent:')}"]
+        return bool(resources and self.core.visibility.allows(Who(False), *resources))
 
     def summary(self, block: str, principal: Principal | None = None) -> dict[str, Any]:
         payload = self.status(principal, block)
@@ -422,7 +446,7 @@ class ChannelModes:
                     await provider.refresh_installation()
 
     def set(self, principal: Principal, block: str, space: str, mode: str, channel: str = "",
-            actions: list[str] | None = None, project: str | None = None) -> dict[str, Any]:
+            actions: list[str] | None = None, project: str | None = None, target: str | None = None) -> dict[str, Any]:
         if not principal.is_unrestricted_owner and not (
             principal.kind == "owner_session" and principal.trust == "owner"
             and principal.scopes is None and principal.tools is None and principal.targets is None
@@ -440,13 +464,17 @@ class ChannelModes:
         choice(mode, "mode", (*MODES, "inherit"))
         actions = parse_actions(actions, "actions")
         project = project_slug(project, "project")
+        if target is not None:
+            if not isinstance(target, str) or not target.strip():
+                raise ValueError("Enter a target address or slug.")
+            target = target.strip()
         if mode == "inherit":
             self.core.store.x("DELETE FROM space_modes WHERE block = ? AND space = ? AND channel = ?", (block, space, channel))
         else:
-            self.core.store.x("INSERT INTO space_modes(block, space, channel, mode, actions, project, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,?) "
+            self.core.store.x("INSERT INTO space_modes(block, space, channel, mode, actions, project, target, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,?,?) "
                               "ON CONFLICT(block, space, channel) DO UPDATE SET mode=excluded.mode, actions=excluded.actions, project=excluded.project, "
-                              "updated_at=excluded.updated_at, updated_by=excluded.updated_by",
-                              (block, space, channel, mode, dumps(actions), project, self.core.clock(), principal.source))
+                              "target=excluded.target, updated_at=excluded.updated_at, updated_by=excluded.updated_by",
+                              (block, space, channel, mode, dumps(actions), project, target, self.core.clock(), principal.source))
         self.core.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=block, action="modes.set",
                                outcome="ok", target=f"{space}/{channel}", detail=mode)
         return self.row(block, space, channel, *inventory.get((space, channel), (None, None, None)))

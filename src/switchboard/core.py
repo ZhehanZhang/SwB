@@ -34,7 +34,7 @@ from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
 from .subject import subject
-from .visibility import Visibility
+from .visibility import RESOURCE_RE, Visibility, VisibilityError
 
 DestinationError = BlockError
 
@@ -439,6 +439,26 @@ class Switchboard:
 
     def slug_map(self, targets: list[dict[str, Any]], aliases: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
         return dict(tgt.by_slug(targets, self.cfg.targets.get("priority") or (), {**(self.cfg.targets.get("aliases") or {}), **(aliases or {})}))
+
+    async def visibility_resources(self) -> set[str]:
+        targets = await self.targets()
+        slugs = set(self.slug_map(targets))
+        for target in targets:
+            slugs.update((tgt.slugify(target["id"]), tgt.slugify(target["address"])))
+        slugs.update(self.known_agents())
+        resources = {f"target:{slug}" for slug in slugs if tgt.SLUG_RE.fullmatch(slug)}
+        resources.update(f"route:{route.id}" for route in self.routes.list())
+        resources.update((f"memory:{GENERAL}", *(f"memory:{p.scope}" for p in self.projects.list(include_archived=True))))
+        resources.update(resource.lower() for resource in self.modes.channel_resources() if RESOURCE_RE.fullmatch(resource))
+        return resources
+
+    async def set_visibility(self, resource: str, value: Any, actor: str) -> tuple[str, str | list[str]]:
+        resource = self.visibility.key(resource)
+        if resource.startswith("tool:"):
+            raise VisibilityError("Tools are always private.")
+        if resource not in self.visibility.config and resource not in await self.visibility_resources():
+            raise VisibilityError("Unknown visibility resource. Choose a resource from visibility_list.")
+        return resource, self.visibility.set(resource, value, actor, self.clock())
 
     def route_address(self, agent: str | None, project: str | None) -> Address | None:
         """Where a route sends this agent's work for this project."""

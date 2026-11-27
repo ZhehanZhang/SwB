@@ -49,6 +49,7 @@ class _ModeBody(_Body):
     mode: str
     actions: list[str] | None = None
     project: str | None = None
+    target: str | None = None
 
 
 class _SendBody(_Body):
@@ -115,8 +116,7 @@ async def visibility_set(request: Request) -> JSONResponse:
         return _error("invalid_request")
     owner = _owner(request)
     try:
-        resource = core.visibility.key(body.resource)
-        rule = core.visibility.set(resource, body.visibility, owner.source, core.clock())
+        resource, rule = await core.set_visibility(body.resource, body.visibility, owner.source)
     except VisibilityError:
         return _error("visibility_not_saved")
     core.audit.record(origin=owner.origin, source=owner.source, client=owner.client_id, destination="core", action="visibility_set",
