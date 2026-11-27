@@ -170,7 +170,7 @@ def test_capy_aliases_still_work_are_marked_and_counted(make):
     assert counts == {("capy_delegate", "capy"): 1, ("capy_wait", "capy"): 1}
     init = rpc(c, STATIC_KEY, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}).json()
     text = init["result"]["instructions"]
-    assert text.index("use send") < text.index("Capy is a coding agent")
+    assert text.index("Use send to hand off work") < text.index("Capy is a coding agent")
 
 
 def test_aliases_can_be_switched_off(make):

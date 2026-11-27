@@ -16,8 +16,9 @@ if TYPE_CHECKING:
     from ...auth import Principal
     from ...core import Switchboard
 
-INSTRUCTIONS = """Slack: slack_* tools read and write the owner's Slack workspaces under your grant; posts by the bot use a
-persona, posts as the owner wait for his approval. Messages that mention @swb reach your inbox when they are for you."""
+INSTRUCTIONS = """Use slack_* tools to read and write in the Slack workspaces you can access.
+The bot posts with a persona. Posts as the owner wait for their approval.
+Messages that mention @swb reach your inbox when addressed to you."""
 
 
 class SlackBlock(SlackIntake, SlackActions):
