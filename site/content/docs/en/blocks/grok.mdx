@@ -14,7 +14,7 @@ Ask an agent to connect Grok Bot. From a terminal, run `swb connect grok-bot` fo
 Create a Grok Bot routine with the prompt and a custom webhook trigger. Register the routine with SwB. Use your project name in place of `example`.
 
 ```bash
-swb connect grok-bot --choose name=project-doorman project=example auth=key
+swb connect grok-bot --choose name=project-triage project=example auth=key
 ```
 
 SwB gives you separate claim links for the webhook address and key. Paste each value in its claim link. Run the same command again to get the test send. A `pong` in your inbox confirms the routine works.
@@ -27,7 +27,7 @@ SwB sends a webhook request to start the routine. With `auth=key`, SwB sends the
 blocks:
   grok-routine:
     routines:
-      project-doorman: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
+      project-triage: {project: example, url_env: GROK_ROUTINE_URL, auth: key, secret_env: GROK_ROUTINE_SECRET}
 ```
 
 Send to a routine by its name, or to `grok:<slug>` for the main routine of a project.
