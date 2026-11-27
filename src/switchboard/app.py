@@ -352,7 +352,7 @@ def create_app(core: "Switchboard") -> Any:
             chats = [block for block in core.blocks.values() if isinstance(block, ChatBlock) and block.token_env == name]
             if any(not block.token_re.fullmatch(token.strip()) for block in chats):
                 raise ClaimError("That doesn't look like the right kind of token.")
-            name = core.claims.consume(code, token)
+            name = await core.claims.submit(code, token)
         except ClaimUnavailable:
             return pages.claim_message_page("Request a new link", 410)
         except ClaimError as e:

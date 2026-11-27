@@ -72,7 +72,7 @@ class SlackBlock(SlackIntake, SlackActions):
             label, name = missing
             return f"Save the Slack token for {name} in workspace {label}."
         if any(not self.engine.env.get(name) for names in self.token_names.values() for name in names):
-            return "Restart Switchboard to apply the saved Slack tokens."
+            return "Restart SwB to apply the saved Slack tokens."
         for label, ws in self.engine.config.workspaces.items():
             rt = self.engine.runtimes.get(label)
             if ws.intake == "socket" and (rt is None or not rt.connected):
@@ -80,17 +80,21 @@ class SlackBlock(SlackIntake, SlackActions):
         return None
 
     async def connect_steps(self, kind: str, principal: "Principal", project: str | None, choose: dict[str, Any] | None) -> dict[str, Any]:
-        done = [f"Slack workspace {label}: tokens {'present' if all(self.core.secret(name) for name in names) else 'missing'}."
+        done = [f"Tokens {'are present' if all(self.core.secret(name) for name in names) else 'are ready to save'} for Slack workspace {label}."
                 for label, names in self.token_names.items()]
-        step = self.next_step()
         if missing := self.missing_token():
             from ...credentials import slack_workspace
 
-            label = missing[0]
-            names = self.token_kinds.get(label, {})
-            if len(names) > 1:
-                return {"done": done, "next": [self.group_step(principal, slack_workspace(label, names), step or f"Save the Slack tokens for workspace {label}.")]}
-            return {"done": done, "next": [self.token_step(principal, missing[1], step)]}
+            label, name = missing
+            group = slack_workspace(label, self.token_kinds[label])
+            fields = group[2]
+            if len(fields) > 1:
+                names = [f"{field.label} ({field.name})" for field in fields]
+                instruction = f"Save {', '.join(names[:-1])} and {names[-1]} for Slack workspace {label}."
+                return {"done": done, "next": [self.group_step(principal, group, instruction)]}
+            field, = fields
+            return {"done": done, "next": [self.token_step(principal, name, self.next_step(), kind=field.kind, label=field.label)]}
+        step = self.next_step()
         return {"done": done, "next": [{"by": "person", "do": step}] if step else []}
 
     def problems(self) -> list[str]:
