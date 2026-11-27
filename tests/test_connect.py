@@ -28,8 +28,8 @@ def test_connect_schema_unknown_and_disabled_blocks(make):
     assert set(tool["inputSchema"]["properties"]) == {"what", "project", "choose"}
     out = connect(client, "unknown")
     assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "coding-agent", "discord", "github",
-                            "grok", "mcp-client", "muse", "slack", "telegram"]
-    for kind in ("capy-captain", "claude-project", "slack", "github", "grok", "muse"):
+                            "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
+    for kind in ("capy-captain", "claude-project", "slack", "github", "grok-bot", "muse"):
         [step] = connect(client, kind)["next"]
         assert step["by"] == "person" and "Enable" in step["do"] and "link" not in step
 
