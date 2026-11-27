@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import Counter, OrderedDict, defaultdict
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from .config import SLUG_RE, ConfigError
@@ -26,6 +28,33 @@ WATCH_RETENTION = 14 * 86400
 WAKE_WINDOW = 3600
 GITHUB_CREDENTIAL_PROBLEM = "no GitHub credential: GitHub triage actions unavailable"
 TRIAGE_FALLBACK = "Triage uses the default agent."
+CHAT_DROP_ACTION = "chat_event"
+CHAT_DROP_WINDOW = 600
+CHAT_DROP_KEYS = 4096
+
+
+class ChatDrop(StrEnum):
+    OFF = "channel mode off"
+    EXTERNAL_BOT = "external bot message"
+    OWNER_REQUIRED = "work mode requires an owner event"
+    ASSIST_TARGET = "assist needs a target"
+    TRIAGE_TARGET = "triage needs an agent"
+    WORK_TARGET = "work needs a target"
+    TARGET_UNAVAILABLE = "mode target unavailable"
+    PROJECT_UNAVAILABLE = "mode project unavailable"
+    PROJECT_MISMATCH = "mode target belongs to another project"
+    CHANNEL_RESTRICTED = "channel access restricted"
+    TARGET_RESTRICTED = "target access restricted"
+    SENDER_LIMIT = "sender rate limit"
+    PAUSED = "conversation paused"
+    ROUTE_CHANGED = "project route changed"
+    DELIVERY_FAILED = "route delivery failed"
+
+
+def chat_target_drop(mode: str, configured: bool) -> ChatDrop:
+    if configured:
+        return ChatDrop.TARGET_UNAVAILABLE
+    return {"assist": ChatDrop.ASSIST_TARGET, "triage": ChatDrop.TRIAGE_TARGET, "work": ChatDrop.WORK_TARGET}[mode]
 
 
 @dataclass(frozen=True)
@@ -133,6 +162,24 @@ class ChannelModes:
         self.cfg = core.cfg.modes or parse_config(None, core.cfg.blocks)
         self.assist_max_chars = self.cfg.assist_max_chars
         self.digest_s = self.cfg.digest_minutes * 60
+        self._chat_drops: dict[str, Counter[str]] = defaultdict(Counter)
+        self._chat_drop_at: OrderedDict[tuple[str, str, str, ChatDrop], float] = OrderedDict()
+
+    def chat_drop(self, block: str, space: str, channel: str, reason: ChatDrop, *, dm: bool = False) -> None:
+        self._chat_drops[block][reason.value] += 1
+        now = self.core.clock()
+        while self._chat_drop_at and next(iter(self._chat_drop_at.values())) <= now - CHAT_DROP_WINDOW:
+            self._chat_drop_at.popitem(last=False)
+        key = block, space, channel, reason
+        if key in self._chat_drop_at or len(self._chat_drop_at) >= CHAT_DROP_KEYS:
+            return
+        self._chat_drop_at[key] = now
+        self.core.audit.record(origin=block, source=self.core.blocks[block].manifest.id, client="", destination=block,
+                               action=CHAT_DROP_ACTION, outcome="dropped", target=f"{space}/{'direct' if dm else channel}", detail=reason.value)
+
+    def chat_drop_status(self, block: str) -> dict[str, Any]:
+        reasons = dict(self._chat_drops.get(block, {}))
+        return {"dropped": sum(reasons.values()), "drop_reasons": reasons}
 
     def dm(self, block: str) -> tuple[str, str]:
         return (self.cfg.dm[block], "space") if block in self.cfg.dm else ("watch", "default")

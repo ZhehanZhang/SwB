@@ -67,6 +67,7 @@ class SlackEngine:
         self.senders.limits = {}
         self.listeners: list[EventListener] = []
         self.context_listeners: list[EventListener] = []
+        self.context_limited: Callable[[dict[str, Any]], None] | None = None
         self.listen: Callable[[WorkspaceRuntime, dict[str, Any], dict[str, Any]], Awaitable[bool]] | None = None
         self.mode_intake: Callable[[WorkspaceRuntime, dict[str, Any]], Awaitable[tuple[bool, dict[str, Any] | None]]] | None = None
         self.mode_poll_channels: Callable[[WorkspaceRuntime], set[str]] | None = None
@@ -365,6 +366,8 @@ class SlackEngine:
         label, actor = rt.label, f"slack:{push['user'] or 'unknown'}"
         detail = {"message": push["id"], "target": push.get("target"), "trust": push["trust"]}
         if not self.sender_allowed(rt, push, "context"):
+            if push["addressed_to_us"] and self.context_limited is not None:
+                self.context_limited(push)
             return
         push["context"] = True
         self.store.audit(actor, "context_noted", label, **detail)
