@@ -34,18 +34,23 @@ test("connection and project controls use the owner mode API", async ({ page, co
   await expect(page.getByRole("checkbox", { name: "Notify owner" })).toBeChecked()
 
   await page.goto("/projects/operations")
-  await page.getByRole("button", { name: "Modes", exact: true }).click()
-  await expect(page.getByRole("table", { name: "Project modes" })).toBeVisible()
+  await page.getByRole("button", { name: "Channel modes", exact: true }).click()
+  await expect(page.getByRole("table", { name: "Channel modes", exact: true })).toBeVisible()
   await expect(mode).toHaveValue("triage")
   await expect(page.getByRole("combobox", { name: "Mode for community" })).toHaveCount(0)
   await mode.selectOption("inherit")
   await expect(row).toContainText("From channel")
   await expect(mode).toHaveValue("assist")
 
-  await page.goto("/connections/github")
-  await expect(page.getByRole("combobox", { name: "Mode for example-org/example-repo" })).toHaveValue("triage")
-  await page.goto("/connections/slack")
-  await expect(page.getByRole("combobox", { name: "Mode for #planning" })).toHaveValue("watch")
+  for (const [platform, channel, value] of [
+    ["github", "example-org/example-repo", "triage"],
+    ["slack", "#planning", "watch"],
+  ]) {
+    await page.goto(`/connections/${platform}`)
+    await expect(page.getByRole("heading", { name: "Channel modes", exact: true })).toBeVisible()
+    const table = page.getByRole("table", { name: "Channel modes", exact: true })
+    await expect(table.getByRole("combobox", { name: `Mode for ${channel}` })).toHaveValue(value)
+  }
   await page.goto("/connections/telegram")
   await expect(page.getByRole("combobox", { name: "Mode for -1001000" })).toHaveValue("watch")
 })

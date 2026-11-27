@@ -224,11 +224,11 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
                   : <TelegramChats chats={data.details.chats} rows={rows} status={modes.data} />}
               </div>
             )}
-            {modes.isError && <DataState kind="error" message="Modes unavailable" onRetry={() => void modes.refetch()} />}
+            {modes.isError && <DataState kind="error" message="Channel modes unavailable" onRetry={() => void modes.refetch()} />}
             {modes.data && modeRows.length > 0 && (
               <section aria-labelledby="connection-modes">
-                <h2 id="connection-modes" className="text-heading-md">Modes</h2>
-                <ChannelModeTable label="Connection modes" rows={modeRows} status={modes.data} />
+                <h2 id="connection-modes" className="text-heading-md">Channel modes</h2>
+                <ChannelModeTable label="Channel modes" rows={modeRows} status={modes.data} />
               </section>
             )}
           </>
@@ -252,8 +252,8 @@ function GitHubConnection() {
       {modes.isError && <DataState kind="error" message="GitHub status unavailable" onRetry={() => void modes.refetch()} />}
       {modes.data && (
         <section aria-labelledby="github-modes">
-          <h2 id="github-modes" className="text-heading-md">Modes</h2>
-          <ChannelModeTable label="GitHub modes" rows={modes.data.spaces.filter(row => row.kind === "repo")} status={modes.data} />
+          <h2 id="github-modes" className="text-heading-md">Channel modes</h2>
+          <ChannelModeTable label="Channel modes" rows={modes.data.spaces.filter(row => row.kind === "repo")} status={modes.data} />
         </section>
       )}
     </div>
