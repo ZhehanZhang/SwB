@@ -34,7 +34,7 @@ swb = "switchboard.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-switchboard = ["static/*", "slack/avatars/*"]
+switchboard = ["static/*", "slack/avatars/*", "marks/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
