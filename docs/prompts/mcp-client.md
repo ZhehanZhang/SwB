@@ -14,6 +14,8 @@ swb connect mcp-client --choose agent=notes-bot
 
 Use `uvx swb-one connect mcp-client --choose agent=notes-bot` if I run SwB with uvx. The result gives me a pairing code. It works once within 10 minutes.
 
+The key gets `agent:<name>` and any memory scopes I set for that agent. It also gets the scope of a project named in the pairing. Read general memory only if the key has a grant for `general`.
+
 Ask me to run this command in a private folder on the computer that runs the client. For a different server, give me the command with its base address. Ask me to enter the pairing code at the hidden prompt.
 
 ```bash

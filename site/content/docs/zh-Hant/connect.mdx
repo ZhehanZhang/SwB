@@ -49,9 +49,11 @@ swb connect grok
 
 你也可以在權杖頁面建立配對碼。SwB 透過 `POST /pairing/code` 送出表單。
 
-配對碼指定了專案時，`POST /connect` 會在 `project` 傳回該專案。將它設為用戶端的預設專案。呼叫工具需要指定專案時，將該值填入 `project`。
+配對金鑰可存取 `agent:<name>` 的記憶，以及 `auth.key_scopes` 中為該代理設定的範圍。配對碼指定專案時，金鑰也會取得該專案的記憶授權。
 
-配對金鑰只能讀取該代理送出或收到的訊息，且訊息須在擁有者授權的範圍內。請參閱[金鑰限制](/zh-Hant/docs/security#受限金鑰)。
+`POST /connect` 會在 `project` 傳回配對碼指定的專案。請將它設為用戶端的預設專案。呼叫工具需要指定專案時，將該值填入 `project`。
+
+配對金鑰可在[對話範圍](/zh-Hant/docs/security#受限金鑰)內讀取該代理收發的訊息。
 
 使用配對金鑰時，`tools/list` 會回傳已配對代理角色的工具。用 `auth.key_tools` 可縮小清單範圍。呼叫擁有者工具時，請以擁有者身分登入。詳情請參閱[配對金鑰](/zh-Hant/docs/tools#配對金鑰)。
 

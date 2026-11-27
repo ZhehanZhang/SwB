@@ -118,7 +118,9 @@ blocks:
 
 若要使用工作模式，代理會將 `mode.mode` 設為 `work`。接著把你的 GitHub 數字使用者 ID 填入空間的 `owner_ids`。查詢方式與範例請參閱[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
 
-GitHub 的信任等級為 `owner` 和 `external`。`known` 設定適用於 Slack、Discord 和 Telegram。存取規則使用 `github:4242` 這類寄件者 ID。
+SwB 逐一檢查每段文字的作者。只有 `owner_ids` 中的人寫的文字才算 `owner`。分支名稱、參照、工作流程標題及檢查名稱一律以 `external` 引用。
+
+即使由擁有者觸發，帶有檢查名稱的 `check_run` 仍標為 `external`。來自衍生儲存庫的 Pull request 可以變更檢查名稱。
 
 使用領取連結儲存同一組 webhook 金鑰。代理重新啟動 SwB 以載入金鑰並套用路由。
 
@@ -140,7 +142,9 @@ GitHub 的信任等級為 `owner` 和 `external`。`known` 設定適用於 Slack
 | App ID | 應用程式設定中的 **App ID** | 一串數字 | SwB 領取連結 |
 | 私密金鑰 | 點選 **Generate a private key** 後下載一次 | `.pem` 檔案 | SwB 領取連結 |
 
-SwB 會用私密金鑰自行產生安裝權杖。每個安裝權杖的效期是一小時。
+SwB 使用私密金鑰產生安裝權杖。每個安裝權杖的效期是一小時。
+
+請代理呼叫 `connect(what="github", choose={"replace":"secret"})` 更換 webhook 金鑰。`webhook_secret` 的效果相同。用 `all` 一併更換應用程式憑證或個人存取權杖。請依傳回的指示更新各項憑證。詳情請參閱[更換憑證](/zh-Hant/docs/credentials#更換憑證)。
 
 ## 檢查連線
 

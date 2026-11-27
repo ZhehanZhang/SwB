@@ -116,7 +116,9 @@ blocks:
 
 For Work mode, the agent sets `mode.mode` to `work`. It adds your numeric GitHub user ID to the space's `owner_ids`. See [Owner accounts](/docs/blocks/github#owner-accounts) for the ID lookup and example.
 
-GitHub uses `owner` and `external` trust. The `known` setting applies to Slack, Discord and Telegram. For access rules, use a sender ID such as `github:4242`.
+SwB checks who wrote each piece of text. Only text by a person listed in `owner_ids` counts as `owner`. SwB quotes branch names, refs, workflow titles and check names as `external`.
+
+A `check_run` with a check name appears as `external`, even when the owner starts it. A pull request from a fork can change the check name.
 
 Save the same webhook secret through its claim link. The agent restarts SwB to load the secret and apply the route changes.
 
@@ -138,7 +140,9 @@ Watch puts a digest in the target mailbox at the interval set by `modes.digest_m
 | App ID | App settings, **App ID** | A number | SwB claim link |
 | Private key | Downloaded once after **Generate a private key** | A `.pem` file | SwB claim link |
 
-SwB makes installation tokens from the private key by itself. Each installation token works for one hour.
+SwB makes installation tokens from the private key. Each installation token works for one hour.
+
+Ask your agent to call `connect(what="github", choose={"replace":"secret"})` to replace the webhook secret. Use `webhook_secret` for the same result. Use `all` to also replace the App credentials or personal access token. Follow the returned instructions for each value. See [Credentials](/docs/credentials#replace-a-credential).
 
 ## Check the connection
 

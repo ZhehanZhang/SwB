@@ -12,14 +12,14 @@ A paired key can use these tools within the access the owner grants it.
 | Use | Tools and limits |
 | - | - |
 | Messages | Use `send`, `agent_send` and `targets`. Use `inbox`, `wait`, `reply`, `status`, `result`, `cancel` and `get_message` for your messages and conversations within the key's scopes |
-| Memory and projects | Use `context_pack` and `project_list`. Use the memory tools within your granted scopes |
+| Memory and projects | Use `context_pack` and `project_list` within the access your key allows. Use the memory tools in granted scopes |
 | Routes | Use `routes_list` and `routes_resolve`. For `routes_set` and `routes_remove`, set `agent` to your own agent name |
 | Setup | Use `switchboard_status` and `modes_status` to check status. Use `connect` for client instructions. Use the owner's sign-in for block setup and to issue pairing codes |
 | Blocks | Use block tools within your granted access and the actions that the channel mode allows |
 
 The owner's sign-in is required for `login_link`, `connect_code`, `connect_list`, `connect_revoke`, `visibility_list` and `visibility_set`. Use it for `project_create`, `project_update`, `project_sync` and `space_mode`. It also grants `routine_register`, `routine_add`, `routine_remove`, `discord_provision` and `telegram_provision`.
 
-The owner can set `auth.key_tools` to limit the tool list and calls. The owner can also limit scopes with `auth.key_scopes` and send targets with `auth.key_targets`.
+The owner can limit tools with `auth.key_tools` and send targets with `auth.key_targets`. The `auth.key_scopes` setting limits routing, messages and conversations. Memory tools use the grants SwB saves for each paired key.
 
 ## Messages
 
@@ -58,16 +58,18 @@ For a paired key, a message or conversation outside its access gives the same er
 
 ## Memory and projects
 
+Use the owner's sign-in or a credential with a grant for the memory scope. Use the same key that last wrote an entry to update, move or delete it. The owner can manage any entry. Changes to an existing entry in `general` require owner access.
+
 | Tool | Use |
 | - | - |
-| `context_pack` | Get the briefing for a project. For a paired key, the Capy section lists only the agent's work in progress within the key's scopes |
-| `memory_write` | Save an entry with `scope`, `namespace`, `title` and `body`. A namespace groups entries within a scope. Use up to three lowercase levels, such as `notes/meetings`. For project memory, pass its short name in `project` and use `scope="project:<slug>"`. For general memory, confirm with the owner first. Then set `confirm_general=true` |
-| `memory_search` | Search memory with `query`. The default scope is `general`. Pass the project slug in `project` to search that project first, then `general`. Set `include_general=false` to search that project alone |
-| `memory_list` | List memory entries |
-| `memory_read` | Read one entry with its history |
-| `memory_delete` | Remove an entry |
-| `memory_move` | Move an entry to a different project |
-| `memory_promote` | Move an entry to general |
+| `context_pack` | Read a project briefing. It includes `general` only when the credential grants access. The Capy section for a paired key shows its agent's work within its conversation scopes |
+| `memory_write` | Save in a granted scope. Pass `scope`, `namespace`, `title` and `body`. A namespace groups entries within a scope. Use up to three lowercase levels, such as `notes/meetings`. For project memory, pass the same project in `project` and `scope`. To write to `general`, ask the owner to confirm. Then set `confirm_general=true` |
+| `memory_search` | Search with `query`. Pass `project` for that project and any granted `general` memory. Set `include_general=false` for that project alone. Use `scopes` for exact grants such as `agent:<name>` |
+| `memory_list` | List entries with the same scope inputs as `memory_search` |
+| `memory_read` | Read one entry with its history in a granted scope |
+| `memory_delete` | Remove an entry in a granted scope |
+| `memory_move` | Move an entry to a project or agent scope. You need grants for both scopes |
+| `memory_promote` | Move an entry to `general`. Use the owner's sign-in |
 | `project_list` | List projects and their links |
 | `project_create` | Make a project |
 | `project_update` | Rename, link, archive or make a project private |
@@ -82,7 +84,7 @@ Use `links` in `project_update` to set these values. SwB offers the project link
 | `chatgpt_project` | ChatGPT project name or ID |
 | `capy_project` | Capy project name or ID |
 
-For `memory_search` and `memory_list`, a private project is readable only as the current project. Set `project` to that project. When `scopes` names additional projects, choose public projects. The agent's key must allow access to each project.
+A private project requires a grant that names that project or owner access. For `memory_search` and `memory_list`, specify the private project in `project`. Use `scopes` for any additional public projects you have access to.
 
 ## Setup
 
@@ -177,7 +179,7 @@ These tools appear when the `claude-routine` block is on. A routine is a Claude 
 
 ### GitHub
 
-For actions on a GitHub conversation, pass its SwB ID in `handle`. Use `text` with `github_reply` and `github_notify_owner`.
+For GitHub conversation actions, pass the SwB conversation ID in `conversation` or `handle`. Use `text` with `github_reply` and `github_notify_owner`.
 
 | Tool | Use |
 | - | - |

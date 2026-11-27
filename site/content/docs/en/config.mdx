@@ -125,7 +125,7 @@ In a key, `*` stands for an entry name or a list item.
 | `auth.cloudflare_access.aud` | Audience tag from the Access application. You can use `CLOUDFLARE_ACCESS_AUD` |
 | `auth.redirect_uris` | Allowed OAuth return addresses. This list replaces the built-in set. Use `/*` to match a path and its subpaths |
 | `auth.source_names` | Map from part of an OAuth host or client name to the agent name used for sign-in |
-| `auth.key_scopes` | Map from key name to allowed scopes. Applies to memory access and conversation reads. Example `[project:example]` |
+| `auth.key_scopes` | Scope list by key name, such as `[project:example]`. Limits routing, messages and conversations. It also limits memory for configured keys and supplies extra memory grants at pairing. SwB saves paired memory grants by key |
 | `auth.key_tools` | Map from key name to allowed MCP tools, for example `[send]` |
 | `auth.key_targets` | Map from key name to allowed message targets, for example `[agent:claude]` |
 | `auth.inbox_keys` | Map from key name to the one agent whose inbox it can read. The built-in entry is `channel: claude-code` |

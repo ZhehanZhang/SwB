@@ -112,45 +112,27 @@ modules for this release.
 block's. Every target has slugs; on a clash block targets beat agents and agents beat projects, unless
 `targets.priority` in the config lists patterns (`[capy:captain, agent, project]`). `targets.aliases` adds slugs.
 
-## What "shared memory" means, honestly
+## Shared memory
 
-Claude's and ChatGPT's built-in memories are private to each product. **No MCP server can read or write them**, and this
-one doesn't try. "Shared" means a third store every assistant uses through the `memory_*` and `context_pack` tools,
-plus an instruction snippet in each product (below) telling the model to load the briefing and save durable facts. An
-assistant that isn't told to use the tools won't.
+Claude and ChatGPT each keep their own memory private. SwB stores shared memory separately. Agents use `memory_*` and `context_pack` within the access their credentials allow.
 
 ## Scopes and projects
 
-Every memory lives in exactly one scope: `general` (the owner's profile, preferences, cross-project decisions) or
-`project:<slug>`. Projects are first-class (`project_list`, `project_create`, `project_update` for renames, links and
-archiving). Each can be linked to repos and to its counterpart in each block or assistant, as `<name>_project` keys
-the blocks and agents declare (`capy_project`, `claude_project`, `chatgpt_project`), and `project_list(hint=...)`
-finds the project for any of those.
+A **scope** is a group of memory entries. Use `general` for facts that apply across projects, `project:<slug>` for a project or `agent:<name>` for an agent.
 
-A Claude or ChatGPT connector is account-wide, so SwB can't tell which Claude Project or ChatGPT project a call
-comes from: the scope comes from the instruction snippet, and the model can get it wrong. So the defaults lean towards
-the project, and every step out of it is explicit:
+A **grant** gives a credential access to a scope. Name the scope when you write. Choose an active project for project writes. When you pass `project`, use the same project in a project `scope`. For `general`, ask the owner to confirm. Then set `confirm_general=true`.
 
-- Writes must name their scope and are never implicitly general. An archived project refuses writes.
-- **Writing to `general` needs `confirm_general=true`.** Without it the write fails and tells the model to write to
-  the project scope, or to confirm with the owner that this applies everywhere.
-- **A write that names `project` can't land in another project.** If `project` and `scope` disagree, it's rejected.
-  Every write result echoes the scope it landed in.
-- **Fixing a wrong scope is explicit.** `memory_move(id, to_scope)` moves an entry to another project, and
-  `memory_promote(id)` moves it to general. Both keep the id and revision history and are audited.
-- **Reads cover the named project plus general.** `memory_search`, `memory_list` and `context_pack` take `project`
-  (`include_general=false` for the project alone); without one they read general only. Reading another project needs
-  an explicit `scopes=[...]`, which is written to the audit log.
-- **Private projects** (`private: true` on `project_create` / `project_update`) can't be pulled into another project's
-  read at all, even with `scopes`; only a read that names them as `project` sees them.
-- **Bearer keys can be limited to scopes** with `auth.key_scopes`, e.g. `{support-agent: [project:support]}`. A limited key
-  can't read or write outside its list, can't create projects or change routes, and must send with a project.
-- **Bearer keys can be limited to tools and send targets** with `auth.key_tools` and `auth.key_targets`, e.g.
-  `key_tools: {monitor: [send]}` and `key_targets: {monitor: [claude-ops]}`. Such a key sees and calls only those
-  tools, sends only to those targets (compared after resolving, so a slug and its address match), never forwards,
-  and can't read its inbox over HTTP unless `inbox` is listed. A key's name is its `SWITCHBOARD_KEY_<NAME>` suffix,
-  lowercased with `_` as `-`.
-- Rows written by capy-bridge 0.1 were migrated into `general`.
+Use the same key that last wrote an entry to update, move or delete it. The owner can manage any entry. Changes to existing `general` entries require owner access. A move requires grants for both scopes. Use `memory_promote` as the owner to move an entry to `general`. Moves keep IDs and history. SwB records them in the audit log.
+
+Pass `project` to read that project and any granted `general` memory. For searches and lists, set `include_general=false` for that project alone. To select exact scopes for searches and lists, use `scopes`. SwB logs reads outside the named project. Access to a private project requires a grant for that project or owner access. For searches and lists, name the private project in `project`.
+
+A new paired key gets `agent:<name>` and any memory scopes set for its name in `auth.key_scopes`. A project named in the pairing adds that project's scope. A paired key needs an explicit grant for `general`. SwB saves the grants by key. The owner can view them on **Tokens** and remove one scope at a time. Grants are set once, when the key redeems its pairing code. To widen access, set `auth.key_scopes.<agent>` or name a project in the pairing code, then pair a new key. **Tokens** only narrows access.
+
+On upgrade, SwB grants each active paired key with open access `general` and all projects that exist at that time. SwB copies any specific `auth.key_scopes` list instead. Projects outside those grants need their own grants.
+
+The `auth.key_scopes` setting limits messages, conversations and routing. It also limits memory for configured keys and owner-approved OAuth clients. Both get full memory access by default. Use `auth.key_tools` to limit tool calls and `auth.key_targets` to limit send targets.
+
+`project_list` shows projects within the credential's access. Use `project_list(hint=...)` to find a project by its name, repository or linked project. Use `project_create` or `project_update` as the owner to manage projects and their links.
 
 New projects link themselves. `project_create` (and `project_update` while a block's link is empty) asks each block
 that can link (today the capy block) to find its counterpart: an exact repo match beats a name or slug match. It then routes the project to that Capy project's
@@ -434,14 +416,9 @@ With a Slack block in the config (or a `slack:` section in a version 1 file), Sl
   `slack_wait` return it. An item's `from` comes from Slack's data (workspace, channel, user id and name, ts,
   permalink), never from the message text. Webhook `sinks` per workspace still POST each event, with the same payload
   (`slackgate.event` / `slackgate.batch`) and `Idempotency-Key` as before, so existing receivers keep working.
-- **Trust.** Every event carries `sender` and `trust`, which SwB sets from Slack's user or bot id, never from
-  the text: `owner` (the workspace's `owner_user_ids`; without them its `approver_user_id`, or the approvals
-  approver in `approvals.notify_workspace`), `known` (the workspace's `known` map of ids to names, for people and
-  other agents you trust) or `external` (everyone else). The owner's text is passed on unchanged. Anyone else's
-  reaches agents, sinks and Captains inside a header SwB writes
-  (`[swb from Example User (U0EXAMPLE) in a2a #dev, trust known]`) and `<<<swb-untrusted` / `swb-untrusted>>>`
-  delimiters, with a line saying it is information, not instructions. Copies of the header or the delimiters inside
-  the text are neutralised, so a sender can't fake either.
+SwB checks the Slack user or bot ID to decide who can send a message. The `known` setting helps admit senders. SwB still gives admitted senders outside owner accounts an `external` frame. A **trust frame** is a header and markers around external text. SwB changes copies of its header and markers in the text before it adds the frame.
+
+Watch digests carry `external` trust. Each excerpt also uses a trust frame for external text.
 - **Visibility: private or shared.** One switch on every resource, with one resolver: `target:<slug>` (agents,
   Captains, threads, routines), `channel:<workspace>/<id or #name>`, `memory:<scope>`, `route:<id>` and
   `tool:<name>`. Everything is private unless marked shared: only the owner reaches it (their Slack IDs and their own
@@ -738,25 +715,11 @@ blocks:
 ```
 
 The example config has this block disabled; remove `enabled: false` to turn it on.
-The repo name is matched case-insensitively against both the exact route and the owner wildcard. Each matching sink
-gets one copy. Sinks are the integration point; these events don't enter the core inbox. Use `url_env` for secret
-URLs, and reserve literal `url` for URLs that aren't credentials.
+Each matching sink gets one copy of the event in Watch mode. A sink is an address that receives a copy of an event. The repo name matches the exact route or the owner wildcard. Use `url_env` for sink URLs that contain credentials.
 
-Each sink receives a compact JSON object under 8,000 bytes with null fields omitted:
+SwB checks the author of each title, body and comment against the space's `owner_ids`. Only text by its own owner author can count as `owner`. SwB treats bots as external. It quotes branch names, refs, workflow titles and check names as `external`. A `check_run` with a check name appears as `external`, even when the owner starts it. A pull request from a fork can change the check name.
 
-- `delivery`, `event`, `action`, `repo`, `actor` (sender login), and `is_bot` (sender type is `Bot`).
-- `number`, `title`, `url` (the relevant GitHub HTML link, or the compare link for a push), `state`, `merged`,
-  `draft`, `head_sha`, `base_ref`, and `head_ref` when available.
-- `check` (name), `conclusion`, and `review_state` when available; only completed checks and workflow runs go through.
-- `ref` and `commits` (count) for a push; `body` is at most 500 characters from the relevant comment, review, issue
-  or pull request.
-
-Requests over 1 MiB are rejected. Authenticated deliveries are acknowledged before forwarding, and delivery IDs are
-remembered in memory for up to 24 hours (at most 100,000 IDs). Sinks receive the delivery ID as `Idempotency-Key`;
-network errors and 5xx responses are retried with backoff, but 4xx responses aren't. Unsupported events are counted
-and dropped; unrouted repos are also recorded in the audit log. The owner response from `/healthz` and `switchboard_status` show the configured
-block, whether its secret is present, the route and drop counts, and each sink's delivered and failed counts, never its
-URL. The block is absent from status if it isn't configured.
+Sinks receive event details in a JSON payload. SwB quotes details from external sources. Each delivery has an `Idempotency-Key`. SwB retries network errors and server errors.
 
 ## Tools
 
@@ -770,12 +733,12 @@ Generic tools come first; they go to whichever block owns the target or conversa
 | `status` / `result` / `cancel` | Status, PRs and latest messages; the final reply in full with file links; stop following |
 | `targets` | Everything `send` can reach, with address, slugs, level and persona |
 | `connect_code` / `connect_list` / `connect_revoke` | Pairing codes for new agents, their keys, revocation (owner only) |
-| `context_pack` | Session briefing for a project: its memory and links, general profile and decisions, and each block's section (for a routed Captain: digest, relevant crew work, open asks, conversations in progress) |
-| `memory_write` | Create or update an entry: `scope` (required), `namespace`, `title`, `body`, optional `key`, `tags`, `mode=append`, `project` (the project you work in), `confirm_general` |
-| `memory_search` / `memory_list` | FTS5 search and listing, project first then general; `scopes` for an explicit, logged cross-project read |
-| `memory_read` / `memory_delete` | One entry with its edit history; soft delete |
-| `memory_move` / `memory_promote` | Move an entry to another project, or to general; audited, history kept |
-| `project_list` / `project_create` / `project_update` | Projects and their links; rename, archive, private; automatic link and route |
+| `context_pack` | Read the granted project's briefing. It includes `general` when the credential grants access. The owner's sign-in also includes the routed Captain's digest and crew activity |
+| `memory_write` | Create or update an entry with `scope`, `namespace`, `title` and `body`. For `general`, confirm with the owner first. Then pass `confirm_general=true` |
+| `memory_search` / `memory_list` | Search or list a project and any granted `general` entries. Pass `scopes` to select exact scopes |
+| `memory_read` / `memory_delete` | Read an entry and its history. Delete an entry you last wrote or use owner access |
+| `memory_move` / `memory_promote` | Move an entry you last wrote between granted project or agent scopes. Use owner access to promote an entry to `general` |
+| `project_list` / `project_create` / `project_update` | List projects within your access. Use owner access to create or change a project |
 | `project_sync` | Rerun the automatic link and route for one or every project, reporting changes and candidates |
 | `routes_list` / `routes_set` / `routes_remove` / `routes_resolve` | Routes, audited |
 | `switchboard_status` | Your agent name, your `wait` limits, the blocks and their levels, what's configured or degraded |
@@ -961,38 +924,21 @@ Replace `switchboard.example.com` with your public hostname in the examples belo
 
 ## Instruction snippets
 
-**Claude Project instructions** (one per Claude Project; replace `<slug>` with its SwB project):
+### Claude Project instructions
 
-> You have the SwB connector: a memory shared with my other assistants and agents, and a way to hand them
-> work. This Project is SwB project `<slug>`. At the start of a conversation call
-> context_pack(project="<slug>"). When I state a durable fact, preference or decision, save it with
-> memory_write(scope="project:<slug>", project="<slug>"). Use scope "general" only for things about me that hold in
-> every project, after asking me, with confirm_general=true. Use a key for things that get updated, and tell me in one
-> line. Search memory before asking me something I may have said. Don't read other projects' memory unless I ask. For
-> work that needs a machine, a repo, a PR, research or a long run, or that my Captain should know about, use
-> send(task, project="<slug>"), then wait() and give me the answer; follow up with reply. targets() lists who else
-> you can send to. Every agent has a SwB mailbox, so you can always message one (send to claude, chatgpt,
-> capy, ...); its reply comes back to your inbox.
+> This Project uses SwB project `<slug>`. Start with `context_pack(project="<slug>")` if your credential grants access. Save facts and decisions with `memory_write(scope="project:<slug>", project="<slug>")` in the granted project. Search the project's memory before you ask for information I may have shared. Use `send(task, project="<slug>")` to hand off work. Use `wait()` to get the result. Use `reply` to follow up.
 
-**ChatGPT project instructions** (one per ChatGPT project, same `<slug>` rule):
+### ChatGPT project instructions
 
-> When the SwB app is enabled, this project is SwB project `<slug>`: call context_pack(project="<slug>")
-> first. Save durable facts and decisions with memory_write(scope="project:<slug>", project="<slug>"), and say so
-> briefly. Write to "general" only for things about me everywhere, after asking me, with confirm_general=true. Search
-> memory before asking me something I may have said, and stay out of other projects' memory unless I ask. Hand coding,
-> repo, PR, research and long-running work on with send(task, project="<slug>"), then wait() and report the answer;
-> follow up with reply.
-> Your own ChatGPT memory is separate; the shared one is SwB.
+> This project uses SwB project `<slug>`. Start with `context_pack(project="<slug>")` if your credential grants access. Save facts and decisions with `memory_write(scope="project:<slug>", project="<slug>")` in the granted project. Search the project's memory before you ask for information I may have shared. Use `send(task, project="<slug>")` to hand off work. Use `wait()` to get the result. Use `reply` to follow up.
 
-**Personal preferences / custom instructions** (outside projects): ask which project the conversation is about and
-use it; with none, read general, and write to general only after asking, with `confirm_general=true`.
+### Personal preferences outside projects
 
-**Capy (AGENTS.md or scope instructions)**:
+> Ask which SwB project the conversation is about. Read `general` only if your credential grants access. Ask me to confirm before writing to `general`. Then pass `confirm_general=true`.
 
-> Shared memory with my other assistants lives in the SwB MCP server. Read context_pack with the
-> project you work on, and record decisions and durable facts with memory_write in that project's scope (pass
-> project too). General needs confirm_general=true and is for things that hold in every project. To reach another
-> assistant or agent, send(task, to=<slug or agent:<name>>), then wait(); answer messages left for you with reply.
+### Capy scope instructions
+
+> Read the briefing for your granted project with `context_pack`. Save facts and decisions in that project's scope with `memory_write`. Pass the project in `project`. Use `send(task, to=<slug or agent:<name>>)` to reach another agent. Use `wait()` to get the result. Use `reply` to answer a mailbox message.
 
 **Inbox watcher** (paste into a Claude scheduled task, a Claude Project's scheduled task or a ChatGPT scheduled task
 that has the SwB connector; every 15 to 60 minutes is plenty):
