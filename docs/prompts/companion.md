@@ -4,9 +4,7 @@ Help me pair my device with SwB. A companion is a SwB process on my device. It c
 
 Ask me which features I want. Add one `--cap` option for each feature I choose. For MCP, add `--cap mcp`. Ask me which local MCP servers to use. Add `--mcp NAME=COMMAND` for each server. Use its start command or local HTTP address as shown in the guide.
 
-For local sessions, read the guide at https://swb.one/docs/blocks/local-sessions.
-
-Ask me which local agent I run. Use the guide to prepare the agent on my device. Use the companion command for that agent.
+For local sessions, read the coding agent prompt at https://swb.one/prompts/coding-agent.md. Use its local session options and status hooks. Read the local sessions guide at https://swb.one/docs/blocks/local-sessions.
 
 If the device is already paired, ask me to run `swb companion disconnect` before pairing again. Keep the options for the features I want to use again.
 

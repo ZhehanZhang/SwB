@@ -1,8 +1,32 @@
 Read the setup guide at https://swb.one/docs/setup/muse.
 
-Help me connect Muse to SwB. SwB carries messages between my agents and channels.
+Help me connect Muse to SwB. Use the Muse gadget for immediate wakes. The gadget needs a companion on my own device. Use the custom connector for SwB tool access.
 
-Check your tools first. If the SwB tools are missing, add SwB as a custom connector with your built-in connector feature. Use the settings below. Replace the example address with my SwB address.
+## Muse gadget
+
+Use a SwB agent with full owner access. If you need owner access, ask me to move this prompt to that agent.
+
+Call `connect(what="muse", choose={"gadget": true})`. Do each action marked `you`. Give me each action marked `person` separately. Direct me to the SwB claim link to save my Muse SDK token.
+
+A companion is a SwB program on my computer. It pairs with Muse over Bluetooth. Ask me to use a Mac or Linux computer near my phone. On macOS, ask me to use Terminal. Ask me to allow Bluetooth access when macOS asks. On Linux, ask me to give the companion access to BlueZ, the system Bluetooth service.
+
+Use the companion guide at https://swb.one/docs/companion to help me get a companion pairing code in private. The code works once and expires after 10 minutes. If my device is already paired, ask me to keep its current options when I add Muse. Ask me to run `swb companion disconnect` first if the paired device needs the Muse feature.
+
+Replace the example address with my SwB address. Ask me to run this command on my device.
+
+```sh
+uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
+```
+
+Ask me to enter the code at the hidden prompt. Ask me to leave the companion running until Muse pairs. Follow the pairing action from `connect` to start the gadget.
+
+Ask me to open **Settings** in the Muse app. Ask me to open **Devices**. Ask me to turn on **Developer mode**. Ask me to select **Add Device**. Give me the device name from `connect`. If the app asks for Wi-Fi, ask me to select **Use current connection**.
+
+Call `connect(what="muse", choose={"gadget": true})` to confirm pairing. Call `targets(block="muse")` to find the gadget address. Send a test message to that address. Check the reply in the test conversation.
+
+## Custom connector
+
+If I want tool access, check for SwB tools in Muse. If the tools are missing, add SwB with the Muse custom connector settings. Replace the example address with my SwB address.
 
 ```
 Name: SwB
@@ -12,12 +36,8 @@ Authentication: OAuth 2.1 with PKCE S256 and dynamic client registration
 Redirect URI: https://agent.meta.ai/api/hatch/oauth/callback
 ```
 
-For a new connector, start the OAuth sign-in. Give me the sign-in link. Ask me to sign in to SwB as the owner.
+Start OAuth sign-in for a new connector. Give me the sign-in link. Ask me to sign in to SwB as the owner.
 
-Call `connect(what="muse", choose={"connector":true})`. Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path and links. Wait for me to say done after each step. Call `connect` again with the same choices to check the sign-in.
+Call `connect(what="muse", choose={"connector":true})` to confirm sign-in. Ask another SwB agent to call `send(to="agent:muse", task="Reply with pong.")`. Read the message with `inbox`. Answer with `reply` in the same conversation.
 
-When `connect` confirms the sign-in, ask me to use another SwB app to run `send(to="agent:muse", task="Reply with pong.")`. Read the message with `inbox`. Answer with `reply` and the message's `handle`.
-
-To have SwB start work in Muse, pair a gadget through a companion device. Use a client with owner access. Call `connect(what="muse", choose={"gadget": true})`. Follow each step marked "you". Give me each pairing step marked "person" separately. Ask me to enter the Muse SDK token only through the SwB claim link. For the companion install before publication, follow https://swb.one/prompts/companion.md.
-
-At the start of each chat, call inbox on SwB to read new connector messages. For the gadget, use the gadget target from `targets(block="muse")` to send a test.
+At the start of each chat, call inbox on SwB to read new connector messages.

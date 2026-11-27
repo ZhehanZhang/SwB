@@ -19,3 +19,29 @@ If `connect` gives a pairing code, redeem that code as described at https://swb.
 A scope is a group of memory entries. A paired key gets its agent scope and any scope I grant. A project named in the pairing adds its scope. Read `general` if the key has access to it.
 
 In the new client, call `inbox` to check the connection. Ask me to send a test message from another SwB app. Answer with `reply` and the item's `handle`. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
+
+## Local sessions
+
+Ask if I want SwB to reach a session on my device. A local session is an open workspace for my coding agent. If I want this, guide me through pairing a companion on that device. A companion is a SwB program on the device.
+
+Read https://swb.one/docs/companion for pairing. Read https://swb.one/docs/blocks/local-sessions for the setup for my agent. Ask me to install the `swb` command with `pipx install swb-one`. Ask me to open a session in my coding agent.
+
+Use `swb companion connect https://swb.example.com` with the option for my session. Replace the example address with my SwB address. Keep the options for the features I use. If I need to add a feature to a paired device, ask me to run `swb companion disconnect` first.
+
+| Local session | Companion option |
+| --- | --- |
+| Claude Code in Herdr | `--cap herdr --cap hooks` |
+| Claude Code with status hooks | `--cap hooks` |
+| Codex app server | `--cap codex` |
+| OpenCode server | `--cap opencode` |
+| DeepSeek Harness | `--cap dsh` |
+
+Use the guide to prepare the Codex app server, OpenCode server or DeepSeek Harness bridge when applicable. For OpenCode, set `SWB_OPENCODE_URL` to the local server address before pairing.
+
+A status hook runs a command when an agent reports a change. On macOS or Linux, set up the Claude Code hook from `channel/hooks/hooks.json`. Use the existing hook if I have the SwB Claude Code plugin. The hook runs `swb hook claude-code`.
+
+For Codex status hooks, add `--cap hooks`. Set up `swb hook codex` from `integrations/codex/hooks.json`. Use the local sessions guide for the settings file for each hook. Make sure the agent can find the `swb` command. Open a new session after you set up a hook.
+
+Help me get a companion pairing code in private. The code works once and expires after 10 minutes. Ask me to enter it at the hidden prompt. Ask me to keep the companion running.
+
+From an owner session, call `targets(block="local")`. Check that my session appears. Send a test message to the session address. For a session with status hooks alone, check its mailbox for the message. For a direct delivery, check the reply with `result`.
