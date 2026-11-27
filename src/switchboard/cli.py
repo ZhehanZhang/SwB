@@ -21,11 +21,10 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from . import __version__
-from .config import ConfigError, LOOPBACK_HOSTS, bind_address
+from .config import ConfigError, LOOPBACK_HOSTS, client_endpoint
 from .deployment import OWNER_KEY, volume_owner_key
 
 CONFIG = Path("config/switchboard.yaml")
-DEFAULT_PORT = "8870"
 
 
 class CliError(ValueError):
@@ -263,7 +262,7 @@ def build_parser() -> argparse.ArgumentParser:
     for command in (init, connect, status, claim, login_link):
         command.add_argument("--dir", type=Path, default=Path("."), help="instance directory (default: current directory)")
     for command in (connect, status, claim, login_link):
-        command.add_argument("--url", help="server base URL or MCP endpoint (defaults to the local bind address and PORT)")
+        command.add_argument("--url", help="server base URL or MCP endpoint (defaults to loopback and SWITCHBOARD_PORT, PORT, or 8870)")
     return parser
 
 
@@ -293,8 +292,7 @@ def main(argv: list[str] | None = None) -> None:
             if choose := _choices(args.choose, kind=args.what):
                 arguments["choose"] = choose
         env = {**env, **os.environ}
-        _, origin = bind_address(env, env.get("PORT", DEFAULT_PORT))
-        local_url = f"{origin}/mcp"
+        local_url = client_endpoint(env)
         url = _url(args.url or local_url)
         key = env.get(OWNER_KEY)
         if not key and url == local_url:

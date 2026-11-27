@@ -192,11 +192,12 @@ def test_connect_rejects_invalid_choices_before_mcp(tmp_path, monkeypatch, capsy
 def test_status_lists_next_steps_and_redacts_owner_key(tmp_path, monkeypatch, capsys):
     key = "fixture-owner-key-not-a-secret"
     (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={key}\nPORT=1234\n")
-    monkeypatch.delenv("PORT", raising=False)
+    for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_PORT"):
+        monkeypatch.delenv(name, raising=False)
     call = AsyncMock(return_value={"status": "degraded", "next_steps": ["Configure OAuth.", f"Echoed {key}"]})
     monkeypatch.setattr(cli, "_call", call)
     cli.main(["status", "--dir", str(tmp_path)])
-    call.assert_awaited_once_with("http://127.0.0.1:1234/mcp", key, "switchboard_status", {})
+    call.assert_awaited_once_with("http://localhost:1234/mcp", key, "switchboard_status", {})
     out, err = capsys.readouterr()
     assert key not in out + err
     assert out == "Status: degraded\nNext steps:\n  - Configure OAuth.\n  - Echoed [redacted]\n"
@@ -222,19 +223,23 @@ def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch
     assert "--url must be HTTPS" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize(("dotenv_host", "env_host", "origin"), [
-    ("::1", None, "http://[::1]:1234"),
-    ("0.0.0.0", None, "http://127.0.0.1:1234"),
-    ("0.0.0.0", "::1", "http://[::1]:1234"),
-    ("::", None, "http://[::1]:1234"),
+@pytest.mark.parametrize(("bind_host", "target"), [
+    ("0.0.0.0", "localhost"),
+    ("::", "localhost"),
+    ("::1", "[::1]"),
+    ("127.0.0.1", "127.0.0.1"),
+    ("192.168.1.20", "localhost"),
+    ("localhost", "localhost"),
+    (None, "localhost"),
 ])
-def test_client_defaults_to_the_instance_bind_address(tmp_path, monkeypatch, dotenv_host, env_host, origin):
+@pytest.mark.parametrize("published_port", [None, "5678"])
+def test_client_defaults_to_a_loopback_target(tmp_path, monkeypatch, bind_host, target, published_port):
     key = "fixture-owner-key-not-a-secret"
-    (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={key}\nPORT=1234\nSWITCHBOARD_HOST={dotenv_host}\n")
-    for name in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_HOST"):
+    values = {cli.OWNER_KEY: key, "PORT": "1234", "SWITCHBOARD_HOST": bind_host, "SWITCHBOARD_PORT": published_port}
+    (tmp_path / ".env").write_text("".join(f"{name}={value}\n" for name, value in values.items() if value is not None))
+    for name in values:
         monkeypatch.delenv(name, raising=False)
-    if env_host:
-        monkeypatch.setenv("SWITCHBOARD_HOST", env_host)
+    origin = f"http://{target}:{published_port or '1234'}"
     call = AsyncMock(return_value={"url": "http://localhost:1234/login#t=fixture"})
     claim = Mock()
     monkeypatch.setattr(cli, "_call", call)
@@ -247,6 +252,38 @@ def test_client_defaults_to_the_instance_bind_address(tmp_path, monkeypatch, dot
     claim.assert_called_once_with(f"{origin}/claim/fixture-code", key, routine=False)
 
 
+@pytest.mark.parametrize(("dotenv_port", "env_port", "expected_port"), [
+    ("SWITCHBOARD_PORT=5678", ("SWITCHBOARD_PORT", "4321"), "4321"),
+    ("SWITCHBOARD_PORT=5678", ("PORT", "4321"), "5678"),
+    ("", ("PORT", "4321"), "4321"),
+])
+def test_client_merges_process_environment_and_instance_settings(tmp_path, monkeypatch, dotenv_port, env_port, expected_port):
+    key = "fixture-owner-key-not-a-secret"
+    (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={key}\nSWITCHBOARD_HOST=127.0.0.1\nPORT=1234\n{dotenv_port}\n")
+    for name in (cli.OWNER_KEY, "PORT", "SWITCHBOARD_PORT"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("SWITCHBOARD_HOST", "::1")
+    monkeypatch.setenv(*env_port)
+    call = AsyncMock(return_value={"status": "ok"})
+    monkeypatch.setattr(cli, "_call", call)
+
+    cli.main(["status", "--dir", str(tmp_path)])
+
+    call.assert_awaited_once_with(f"http://[::1]:{expected_port}/mcp", key, "switchboard_status", {})
+
+
+def test_explicit_url_overrides_both_local_port_settings_and_host(tmp_path, monkeypatch):
+    key = "fixture-owner-key-not-a-secret"
+    (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={key}\nSWITCHBOARD_HOST=::1\nSWITCHBOARD_PORT=5678\nPORT=1234\n")
+    monkeypatch.delenv(cli.OWNER_KEY, raising=False)
+    call = AsyncMock(return_value={"status": "ok"})
+    monkeypatch.setattr(cli, "_call", call)
+
+    cli.main(["status", "--dir", str(tmp_path), "--url", "https://swb.example"])
+
+    call.assert_awaited_once_with("https://swb.example/mcp", key, "switchboard_status", {})
+
+
 def test_status_uses_swb_branding_if_connection_fails(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv(cli.OWNER_KEY, "fixture-owner-key-not-a-secret")
     monkeypatch.setattr(cli, "streamable_http_client", Mock(side_effect=OSError))
@@ -257,7 +294,7 @@ def test_status_uses_swb_branding_if_connection_fails(tmp_path, monkeypatch, cap
 
 
 @pytest.mark.parametrize(("claim", "endpoint", "expected", "success"), [
-    ("fixture-code", None, "http://127.0.0.1:8870/claim/fixture-code", "Token saved."),
+    ("fixture-code", None, "http://localhost:8870/claim/fixture-code", "Token saved."),
     ("https://other.example.test/claim/fixture-code", "https://switchboard.example.test",
      "https://switchboard.example.test/claim/fixture-code", "Token saved."),
     ("https://other.example.test/prefix/routines/claim/fixture-code", "https://switchboard.example.test/prefix/mcp",
@@ -266,7 +303,8 @@ def test_status_uses_swb_branding_if_connection_fails(tmp_path, monkeypatch, cap
 def test_claim_prompts_and_posts_to_configured_origin(tmp_path, monkeypatch, capsys, claim, endpoint, expected, success):
     key, token = "fixture-owner-key-not-a-secret", "fixture-token-not-a-secret"
     (tmp_path / ".env").write_text(f"{cli.OWNER_KEY}={key}\n")
-    monkeypatch.delenv("PORT", raising=False)
+    for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_PORT"):
+        monkeypatch.delenv(name, raising=False)
     prompt = Mock(return_value=token)
     monkeypatch.setattr(cli.getpass, "getpass", prompt)
 
