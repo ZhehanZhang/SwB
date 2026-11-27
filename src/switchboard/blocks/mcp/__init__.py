@@ -194,12 +194,10 @@ class MCPBlock(Block):
     def routes(self) -> list[BaseRoute]:
         return [Mount("/", app=self.app)]
 
-    def next_step(self) -> str | None:
-        if not self.core.cfg.public_url:
-            return "Set public_url to let hosted MCP clients reach Switchboard."
-        if not self.core.cfg.owner_sign_in:
-            return "Configure owner sign-in to enable OAuth for MCP clients."
-        return None
+    def status(self) -> dict[str, Any]:
+        if not (self.core.cfg.public_url or "").startswith("https://"):
+            return {"manual_steps": ["Set public_url to let hosted MCP clients reach SwB."]}
+        return {}
 
     def lifespan(self) -> AbstractAsyncContextManager[None]:
         return self.app.router.lifespan_context(self.app)

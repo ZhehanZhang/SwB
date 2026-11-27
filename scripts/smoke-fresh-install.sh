@@ -30,7 +30,7 @@ clean "$venv/bin/python" -I -B "$root/scripts/smoke-wheel-web.py" "${wheels[0]}"
 : > empty.yaml
 status="$(clean SWITCHBOARD_CONFIG="$PWD/empty.yaml" SWITCHBOARD_DATA="$PWD/data" "$venv/bin/switchboard" blocks check)"
 printf '%s\n' "$status"
-if [[ "$status" != "mcp: ok" ]]; then
+if [[ "$status" != "mcp is ready." ]]; then
     echo "Expected only the default MCP block for an empty config." >&2
     exit 1
 fi

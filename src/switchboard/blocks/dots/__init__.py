@@ -26,6 +26,7 @@ from .. import Action, Block, BlockError, Call, Manifest, TargetKind
 from ...audit import iso
 
 if TYPE_CHECKING:
+    from ...auth import Principal
     from ...core import Switchboard
 
 log = logging.getLogger("switchboard.blocks.dots")
@@ -43,6 +44,7 @@ LABEL_RE = re.compile(r"\[\s*via\s+swb\b", re.IGNORECASE)
 OWNER_PERSONA = "dots-owner"
 DEFAULT_ALIAS = "dot"
 DEFAULT_MAILBOX = "chatgpt"
+RELAY_MEMBERS_TIMEOUT = 3
 SLACK_STEP = "Connect a Slack workspace for ChatGPT dots or select mailbox delivery."
 OWNER_KINDS = frozenset({"oauth", "key", "connect"})
 """Principals that are the owner's own agents: his OAuth sign-ins, his configured keys, his paired connections."""
@@ -108,6 +110,7 @@ class DotsBlock(Block):
         self.owner_posts_as = "owner" if config.get("owner_posts_as") == "owner" else "swb"
         self.delivery_notes: dict[str, str] = {}
         self.relay_members: set[str] = set()
+        self.relay_invite: str | None = None
         for sql in SCHEMA:
             core.store.x(sql)
         if "created_by" not in {r["name"] for r in core.store.q("PRAGMA table_info(dots)")}:
@@ -288,15 +291,33 @@ class DotsBlock(Block):
                           (self.workspace, channel))
         self.slack_engine.relays[(self.workspace, channel)] = self.on_relay_event
         self.slack_engine.owner_channels.add((self.workspace, channel))
+        if problem := await self.refresh_relay_members(rt, channel):
+            self.problems_.append(problem)
+        return channel
+
+    async def refresh_relay_members(self, rt: Any, channel: str) -> str | None:
+        members: set[str] = set()
+        cursor = None
         try:
-            got = await rt.client("user" if "user" in rt.clients else "bot").conversations_members(channel=channel, limit=200)
-            self.relay_members.update(got.get("members") or [])
+            reader = rt.client("user" if "user" in rt.clients else "bot")
+            async with asyncio.timeout(RELAY_MEMBERS_TIMEOUT):
+                while True:
+                    page = await reader.conversations_members(channel=channel, limit=200, **({"cursor": cursor} if cursor else {}))
+                    members.update(page.get("members") or [])
+                    cursor = (page.get("response_metadata") or {}).get("next_cursor")
+                    if not cursor:
+                        break
         except Exception as exc:
-            self.problems_.append(f"can't read the relay channel's members: {type(exc).__name__}")
+            log.debug("Slack relay membership check failed: %s", type(exc).__name__)
+            return "Check access to the Slack relay channel."
+        self.relay_members = members
+        self.update_relay_invite(rt)
+        return None
+
+    def update_relay_invite(self, rt: Any) -> None:
         missing = [f"<@{u}>" for u in [rt.bot_user_id, *(d["user_id"] for d in self.dots())]
                    if u and self.relay_members and u not in self.relay_members]
         self.relay_invite = f"/invite {' '.join(missing)}" if missing else None
-        return channel
 
     # Sending -----------------------------------------------------------------------------------
 
@@ -316,13 +337,23 @@ class DotsBlock(Block):
     def problems(self) -> list[str]:
         return list(self.problems_)
 
+    async def connect_steps(self, kind: str, principal: "Principal", project: str | None,
+                            choose: dict[str, Any] | None) -> dict[str, Any]:
+        problem = None
+        if self.delivery == "slack" and (rt := self.runtime(required=False)) and rt.connected and (channel := self.relay_channel()):
+            problem = await self.refresh_relay_members(rt, channel)
+        step = problem or self.next_step()
+        return {"done": [], "next": [{"by": "person", "do": step}] if step else []}
+
     def next_step(self) -> str | None:
         dots = self.dots()
         if self.delivery == "mailbox":
             if not dots:
                 return "Declare a dot under dots in the dots block config."
             mailboxes = {d["mailbox"] for d in dots}
-            if mailboxes.intersection(self.core.connections.agents()) or any(
+            cfg = self.core.cfg
+            static_agents = {cfg.inbox_keys.get(key.name, key.name) for key in cfg.static_keys}
+            if mailboxes.intersection(static_agents) or mailboxes.intersection(self.core.connections.agents()) or any(
                 self.core.store.one(
                     "SELECT 1 FROM oauth_tokens WHERE source = ? AND expires_at > ? AND revoked_at IS NULL "
                     "AND resource IN (SELECT value FROM json_each(?)) LIMIT 1",
@@ -552,6 +583,15 @@ class DotsBlock(Block):
 
     async def on_relay_event(self, rt: Any, event: dict[str, Any]) -> bool:
         """Consume events from known dots, delivering only eligible replies that match a conversation."""
+        kind = event.get("type")
+        if kind in ("member_joined_channel", "member_left_channel"):
+            if self.delivery == "slack" and event.get("channel") == self.relay_channel() and isinstance(user := event.get("user"), str):
+                if kind == "member_joined_channel":
+                    self.relay_members.add(user)
+                else:
+                    self.relay_members.discard(user)
+                self.update_relay_invite(rt)
+            return True
         dot = self.from_dot(event)
         if dot is None:
             return False
