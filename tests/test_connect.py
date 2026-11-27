@@ -84,6 +84,8 @@ def test_connect_offers_working_config_for_disabled_block(make, kind, block, env
         assert [(w["workspace"], list(w["identities"])) for w in workspaces] == [("a2a", ["bot"])]
     elif kind == "github":
         assert core.blocks[block].registered_repositories() == {"example-org/app"}
+        assert parsed[block]["spaces"]["example-org/app"]["mode"] == {"mode": "watch", "target": "agent:beta"}
+        assert "Replace agent:beta with an address from targets." in configure["do"]
 
 
 def test_connect_uses_chosen_dot_in_the_config_snippet(make):
