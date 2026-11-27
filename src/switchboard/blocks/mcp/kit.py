@@ -35,10 +35,10 @@ class FileIn(BaseModel):
 
 class Kit:
     def __init__(self, block: "MCPBlock", who: Callable[[Context], "Principal"], run: Callable[[Any], Any], need: Callable[["Principal", str], None],
-                 pscope: Callable[[str], str], unrestricted: Callable[["Principal", str], None]):
+                 pscope: Callable[[str], str]):
         self.block = block
         self.core = block.core
-        self.who, self.run, self.need, self.pscope, self.unrestricted = who, run, need, pscope, unrestricted
+        self.who, self.run, self.need, self.pscope = who, run, need, pscope
         self.wait_caps = block.wait_caps
         self.aliases = block.legacy_aliases
         self.FileIn = FileIn
@@ -128,7 +128,7 @@ class Kit:
         async def login_link(ctx: Context) -> dict[str, Any]:
             from ...sessions import LINK_TTL
 
-            p = self.owner(ctx, "mint a sign-in link")
+            p = self.who(ctx)
             if not (base := self.core.cfg.public_url):
                 raise ToolError("Set SWITCHBOARD_PUBLIC_URL to enable owner sign-in links.")
             token = self.core.auth.sessions.mint_link(p.client_id, p.source)
@@ -199,7 +199,7 @@ class Kit:
         async def result(ctx: Context, conversation: Conversation, tail: Annotated[int, Field(ge=0, le=30)] = 0) -> dict[str, Any]:
             return await kit.verb(ctx, "result", conversation, tail=tail)
 
-        @mcp.tool(title="Stop following a conversation", description="Stop reporting on a conversation (its handle). The work on the other side keeps running; use reply to stop it.", annotations=WRITE_IDEMPOTENT)
+        @mcp.tool(title="Stop following a conversation", description="Stop following a conversation you sent. The work on the other side continues.", annotations=WRITE_IDEMPOTENT)
         async def cancel(ctx: Context, conversation: Conversation) -> dict[str, Any]:
             return await kit.verb(ctx, "cancel", conversation)
 
@@ -212,7 +212,7 @@ class Kit:
         @mcp.tool(title="Connect a new agent", description="Mint a one-time pairing code (10 minutes) for an agent you are setting up, such as claude-code, codex or a laptop script. The client redeems it at POST /connect for its own bearer key; the owner can revoke it from the root page or connect_revoke. Only an unrestricted caller may mint codes.", annotations=WRITE)
         async def connect_code(ctx: Context, agent: Annotated[str, Field(description="Agent name it signs in as, lowercase-dashed, e.g. codex")], project: ProjectArg = None,
                                client: Annotated[str | None, Field(description="What it is, e.g. codex-cli on the laptop")] = None) -> dict[str, Any]:
-            p = kit.owner(ctx, "mint pairing codes")
+            p = kit.who(ctx)
             out = kit.mint_pairing(p, agent, project, client)
             base = core.cfg.public_url or ""
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
@@ -228,7 +228,7 @@ class Kit:
         async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list such as ['U0123', 'workspace:example']")]) -> dict[str, Any]:
             from ...visibility import VisibilityError
 
-            p = kit.owner(ctx, "change visibility")
+            p = kit.who(ctx)
             try:
                 rule = core.visibility.set(resource, visibility, f"{p.kind}:{p.source}", core.clock())
             except VisibilityError as e:
@@ -246,7 +246,7 @@ class Kit:
         async def connect_revoke(ctx: Context, key_id: str | None = None, agent: str | None = None) -> dict[str, Any]:
             from ...connect import ConnectError
 
-            p = kit.owner(ctx, "revoke connected agents")
+            p = kit.who(ctx)
             try:
                 n = core.connections.revoke(key_id=key_id, agent=agent)
             except ConnectError as e:

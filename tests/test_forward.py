@@ -40,6 +40,21 @@ async def test_final_bubbles_through_multiple_forwards(amake):
         assert result["status"] == "answered" and result["final"]["text"] == "Build passed"
 
 
+async def test_forwarded_final_stops_at_cancelled_mailbox(amake):
+    core, _ = await amake()
+    original = (await core.send(principal("capy"), to="agent:second", task="Check build"))["handle"]
+    forwarded = (await core.send(principal("second"), to="agent:claude", task="Handed off", forward=original))["handle"]
+    pending = asyncio.create_task(core.inbox.wait(owner="capy", handle=original, timeout=10))
+    await asyncio.sleep(0)
+    assert not pending.done()
+    await core.verb(principal("capy"), "cancel", original)
+    assert (await asyncio.wait_for(pending, timeout=1))["handle_status"] == "cancelled"
+    await core.verb(principal("claude"), "reply", forwarded, text="Build passed")
+    assert core.inbox.handle(original)["status"] == "cancelled"
+    assert core.inbox.handle(forwarded)["status"] == "answered"
+    assert core.inbox.read(owner="capy")["items"] == []
+
+
 async def test_forward_to_project_captain_copies_its_final_only(amake, capy):
     capy.threads[CAPTAIN]["status"] = "working"
     core, _ = await amake()

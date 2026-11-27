@@ -14,6 +14,7 @@ from .visibility import Who
 
 if TYPE_CHECKING:
     from .auth import Principal
+    from .blocks import Address
     from .core import Switchboard
 
 MODES = ("off", "watch", "assist", "triage", "work")
@@ -24,7 +25,7 @@ WATCH_BATCH = 50
 WATCH_RETENTION = 14 * 86400
 WAKE_WINDOW = 3600
 GITHUB_CREDENTIAL_PROBLEM = "no GitHub credential: GitHub triage actions unavailable"
-TRIAGE_FALLBACK = "triage target is the doorman"
+TRIAGE_FALLBACK = "Triage uses the default agent."
 
 
 @dataclass(frozen=True)
@@ -166,10 +167,17 @@ class ChannelModes:
             return Mode("watch")
         return None
 
-    def _default_target(self, block: str, space: str, project: str | None) -> str | None:
+    def project_route(self, block: str, project: str | None) -> Address | None:
+        principal = getattr(self.core.blocks.get(block), "principal", None)
+        return self.core.route_address(principal.source if principal else block, project) if project else None
+
+    def _default_target(self, block: str, space: str, project: str | None, *, include_route: bool = True) -> str | None:
         section = self._section(block, space)
         target = section.get("default_target") or section.get("target")
-        return str(target).lower() if target else project
+        if target:
+            return str(target).lower()
+        route = self.project_route(block, project) if include_route else None
+        return str(route) if route else None
 
     def _triage_target(self, block: str, project: str | None) -> str | None:
         if not project:
@@ -187,7 +195,7 @@ class ChannelModes:
         return None
 
     def policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
-               name: str | None = None) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
+               name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
         section = self._section(block, space)
         provider = self.core.blocks.get(block)
         use = self.core.cfg.blocks.get(block, {}).get("use")
@@ -215,11 +223,11 @@ class ChannelModes:
         actions = ()
         if spec.mode == "triage":
             action_sets = (*(s.actions for s in base if s is not None), section.get("actions"), project_mode.actions if project_mode else None)
-            actions = tuple(next((a for a in action_sets if a is not None), ACTIONS))
+            actions = tuple(next((a for a in action_sets if a is not None), ("reply",)))
         target = next((s.target for s in (*base, project_mode) if s is not None and s.target), None)
         if spec.mode == "triage" and not target:
             target = self._triage_target(block, project)
-        return spec.mode, source, actions, target or self._default_target(block, space, project), project
+        return spec.mode, source, actions, target or self._default_target(block, space, project, include_route=include_route), project
 
     def resolve(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                 name: str | None = None) -> tuple[str, str, tuple[str, ...], str | None]:
@@ -234,6 +242,7 @@ class ChannelModes:
         provider = self.core.blocks[block]
         use, cfg = provider.manifest.id, self.core.cfg.blocks.get(block, {})
         names: dict[tuple[str, str], tuple[str | None, str, str | None]] = {}
+        repo_spaces = set()
         if use == "discord":
             for channel, info in provider.channels.items():
                 if info.guild_id and (space := provider.space_for(info.guild_id)):
@@ -251,6 +260,8 @@ class ChannelModes:
             for repo in provider.registered_repositories():
                 if placement := provider.space_for(repo):
                     names[placement[0], repo] = (repo, "repo", None)
+                    if placement[0] == repo:
+                        repo_spaces.add(repo)
         default_kind = {"github": "repo", "telegram": "group"}.get(use, "channel")
         spaces = dict(cfg.get("spaces") or {})
         if use == "slack":
@@ -263,15 +274,17 @@ class ChannelModes:
                 names.setdefault((space, channel), (channel, "topic" if topic else default_kind, parent or None))
             if not any(s == space for s, _ in names):
                 names[space, ""] = (space, default_kind, None)
-        space_overrides = set()
+        overrides = set()
         for row in self.core.store.q("SELECT space, channel, 1 AS is_override FROM space_modes WHERE block = ? "
                                      "UNION ALL SELECT DISTINCT space, channel, 0 AS is_override FROM watch_events "
                                      "WHERE block = ? AND delivered_at IS NULL AND dm = 0", (block, block)):
             space, channel = row["space"], row["channel"]
             names.setdefault((space, channel), (channel or space, default_kind, None))
-            if row["is_override"] and not channel:
-                space_overrides.add(space)
-        for space in {space for space, channel in names if channel} - space_overrides:
+            if row["is_override"]:
+                overrides.add((space, channel))
+        for space in {space for space, channel in names if channel}:
+            if (space, "") in overrides and (space not in repo_spaces or (space, space) in overrides):
+                continue
             names.pop((space, ""), None)
         return names
 
@@ -288,8 +301,11 @@ class ChannelModes:
             digest = {"pending": pending["n"], "next_at": (pending["first_at"] if pending["n"] else self.core.clock()) + self.digest_s}
             if use == "telegram" and provider._privacy is True:
                 problems.append("Telegram privacy mode is on, so watch only sees mentions")
-        if mode == "triage" and target == self._default_target(block, space, project) and not self._triage_target(block, project):
-            problems.append(TRIAGE_FALLBACK)
+        if mode == "triage":
+            if not target:
+                problems.append("Choose a triage agent.")
+            elif target == self._default_target(block, space, project) and not self._triage_target(block, project):
+                problems.append(TRIAGE_FALLBACK)
         if use == "github" and not provider.has_write_credential():
             problems.append(GITHUB_CREDENTIAL_PROBLEM)
         elif use == "github" and channel in provider.missing_installations:
@@ -340,7 +356,8 @@ class ChannelModes:
             channel.append(f"channel:{space}/#{name}")
         if not self.core.visibility.allows(Who(False), *channel):
             return False
-        return not row["target"] or self.core.visibility.allows(Who(False), f"target:{row['target']}")
+        target = row["target"]
+        return not target or self.core.visibility.allows(Who(False), f"target:{target}", f"target:{target.removeprefix('agent:')}")
 
     def summary(self, block: str, principal: Principal | None = None) -> dict[str, Any]:
         payload = self.status(principal, block)
@@ -369,6 +386,7 @@ class ChannelModes:
         provider = self.core.blocks.get(block)
         if provider is None or provider.manifest.id not in PROVIDERS:
             raise ValueError(f"unknown channel modes block {block!r}")
+        provider.validate_mode_space(space)
         inventory = self._inventory(block)
         if not any(s == space for s, _ in inventory):
             raise ValueError(f"unknown space {space!r} in {block}")
@@ -463,6 +481,8 @@ class ChannelModes:
 
     def check(self, principal: Principal, handle: str | None, action: str, repo: str | None = None) -> dict[str, Any] | None:
         row = self.core.inbox.handle(handle) if handle and handle.startswith("h_") else None
+        if action == "cancel" and row and row["destination"] == "mailbox" and row["ref"] == principal.source:
+            return None
         meta = row["meta"].get("channel_mode") if row else None
         if meta:
             if row["owner"] != principal.source:

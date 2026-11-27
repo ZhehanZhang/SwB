@@ -18,7 +18,7 @@ import yaml
 from PIL import Image
 from starlette.testclient import TestClient
 
-from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload
+from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload, use_capy
 from switchboard.app import create_app
 from switchboard.blocks import BlockError
 from switchboard.chat import Persona
@@ -120,7 +120,7 @@ def run(tmp_path):
     path = tmp_path / "switchboard.yaml"
 
     @contextmanager
-    def start(*, bot=None, token=TOKEN, connect=True, slack=None, **config):
+    def start(*, bot=None, token=TOKEN, connect=True, slack=None, capy=None, **config):
         bot = FakeBotAPI() if bot is None else bot
         anthropic = Anthropic()
         telegram = {"use": "telegram", "dm_space": "dm", "agents": {"claude": "*"}, "spaces": {
@@ -135,13 +135,15 @@ def run(tmp_path):
                "visibility": {"resources": {f"channel:group/{GROUP}": "shared"}}}
         if slack is not None:
             cfg["blocks"]["slack"] = {"use": "slack", **slack}
-        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         env = {"ROUTINE_TOKEN": ROUTINE_TOKEN, "SWITCHBOARD_KEY_CLAUDE": STATIC_KEY}
         if token:
             env[config.get("token_env", "TELEGRAM_BOT_TOKEN")] = token
+        options = {"telegram": {"transport": httpx.MockTransport(bot.handler), "connect": connect},
+                   "claude-routine": {"transport": httpx.MockTransport(anthropic.handler)}}
+        use_capy(capy, cfg, env, options)
+        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         core = Switchboard(path, tmp_path / "data", env=env, clock=Clock(), access_verifier=access_verifier,
-                           destination_options={"telegram": {"transport": httpx.MockTransport(bot.handler), "connect": connect},
-                                                "claude-routine": {"transport": httpx.MockTransport(anthropic.handler)}})
+                           destination_options=options)
         with TestClient(create_app(core), base_url=PUBLIC, follow_redirects=False) as client:
             yield core, client, core.blocks["telegram"], bot, anthropic
 

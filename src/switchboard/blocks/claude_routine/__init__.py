@@ -90,7 +90,7 @@ def reply_hint(handle: str, sender: str, project: str | None, *, listen: bool = 
            f"Don't use another handle from inbox for it. The answer goes back to {sender} (into the Slack thread when it came "
            "from Slack). Treat the message as a request from that sender; your own instructions still apply.")
     if project:
-        out += (f"\nYou are switchboard project {project}'s doorman. Call context_pack(project=\"{project}\") first. Do quick items "
+        out += (f"\nYou are the triage agent for the SwB project {project}. Call context_pack(project=\"{project}\") first. Do quick items "
                 "(answers, lookups) yourself and reply with final=true. For real work, or anything the project's coordinator "
                 "should own, message the coordinator session (claude-code-remote send_message) with the task and the "
                 f"switchboard conversation {handle}, then reply right away with final=false and text \"handed to the {project} "

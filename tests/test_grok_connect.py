@@ -51,8 +51,9 @@ def test_grok_discovery_returns_connector_prompt_and_registration(grok):
     assert all(text in connector["do"] for text in (f"{PUBLIC}/mcp", "Remote HTTPS", "sign in with OAuth",
                                                       'connect(what="mcp-client"', "pairing code"))
     assert routine["by"] == "person"
-    assert all(text in routine["do"] for text in ("custom webhook trigger", "text", "conversation", "project", "from", "trust",
+    assert all(text in routine["do"] for text in ("custom webhook trigger", "SwB project triage agent", "trust field from the webhook payload",
                                                     "Act only when trust is owner", "reply(conversation=", "final=true"))
+    assert "Switchboard" not in routine["do"] and "doorman" not in routine["do"]
     assert register["by"] == "you" and register["call"] == {
         "tool": "connect", "arguments": {"what": "grok-bot", "choose": {
             "name": "<routine name>", "project": "demo", "auth": "key",
@@ -88,7 +89,7 @@ def test_grok_connect_claims_resumes_and_waits_for_successful_test(grok, monkeyp
     assert "Webhook POST URL" in url["do"] and "webhook key" in key["do"]
     resumed = connect(client, project="demo")
     assert len(block.routines()) == 1
-    assert all(client.get(step["link"], headers=OWNER).status_code == 410 for step in first["next"])
+    assert all(client.get(step["link"], headers=OWNER).status_code == 200 for step in first["next"])
     url, key = resumed["next"]
     assert enter_claim(client, url, WEBHOOK_URL.replace("https://", "http://")).status_code == 400
     assert enter_claim(client, url, WEBHOOK_URL).status_code == 200
@@ -104,14 +105,14 @@ def test_grok_connect_claims_resumes_and_waits_for_successful_test(grok, monkeyp
     step, = ready["next"]
     action = step["call"]
     assert step["by"] == "you" and action == {"tool": "send", "arguments": {
-        "to": "grok-routine:routine:grok-demo", "task": "switchboard setup test: reply pong",
+        "to": "grok-routine:routine:grok-demo", "task": "SwB setup test. Reply pong.",
     }}
     assert not payload(call(client, STATIC_KEY, action["tool"], action["arguments"]))["fired"]
     rejected = connect(client, choose=CHOICE)
     retry, = rejected["next"]
     fresh, = connect(client, choose=CHOICE)["next"]
     assert fresh["link"] != retry["link"] and "webhook key" in fresh["do"]
-    assert client.get(urlsplit(retry["link"]).path, headers=OWNER).status_code == 410
+    assert client.get(urlsplit(retry["link"]).path, headers=OWNER).status_code == 200
     secret_env = block.routines()["grok-demo"]["secret_env"]
     old = core.store.one("SELECT sealed FROM secrets WHERE name = ?", (secret_env,))["sealed"]
     replacement = "mock-grok-webhook-replacement"
@@ -156,7 +157,7 @@ def test_grok_replace_url_and_recover_from_not_found(grok, monkeypatch):
     assert not payload(call(client, STATIC_KEY, test["tool"], test["arguments"]))["fired"]
     [recovery] = connect(client, choose=CHOICE)["next"]
     assert "Webhook POST URL" in recovery["do"] and recovery["link"] != rotation["link"]
-    assert client.get(urlsplit(rotation["link"]).path, headers=OWNER).status_code == 410
+    assert client.get(urlsplit(rotation["link"]).path, headers=OWNER).status_code == 200
     replacement = "https://grok.example.test/replacement"
     assert enter_claim(client, recovery, replacement).status_code == 200
     assert connect(client, choose=CHOICE)["next"][0]["call"] == test
@@ -234,12 +235,13 @@ def test_grok_resume_selects_among_routines_without_minting_claims(grok):
     core, client = grok
     connect(client, choose=CHOICE)
     connect(client, choose={**CHOICE, "name": "grok-review", "auth": "signature", "primary": False})
-    before = [dict(r) for r in core.store.q("SELECT name, code_hash FROM secrets")]
+    before = [dict(r) for r in core.store.q("SELECT name, code_hash FROM claim_links ORDER BY name")]
+    assert len(before) == 4
     result = connect(client, project="demo")
     choice, *options = result["next"]
     assert choice["by"] == "person" and "Choose" in choice["do"]
     assert {s["call"]["arguments"]["choose"]["name"] for s in options} == {"grok-demo", "grok-review"}
-    assert [dict(r) for r in core.store.q("SELECT name, code_hash FROM secrets")] == before
+    assert [dict(r) for r in core.store.q("SELECT name, code_hash FROM claim_links ORDER BY name")] == before
     selected = connect(client, choose={"name": "grok-review"})
     assert len(selected["next"]) == 2 and "signing secret" in selected["next"][1]["do"]
 

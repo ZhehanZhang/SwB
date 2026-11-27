@@ -7,7 +7,7 @@ import uvicorn
 from switchboard.app import create_app
 
 from switchboard.origins.mcp import WaitCaps
-from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, eventually, payload
+from conftest import CAPTAIN, CHANNEL_KEY, SECOND_KEY, STATIC_KEY, acall, arpc, base_config, eventually, payload
 
 
 async def test_capy_wait_returns_early_on_a_stream_event(amake, capy):
@@ -88,6 +88,18 @@ async def test_tasks_cancel(amake):
     assert got["status"] == "cancelled"
 
 
+async def test_tasks_cancel_honors_the_tool_allowlist(amake):
+    cfg = base_config()
+    cfg["auth"]["key_tools"] = {"capy": ["capy_delegate"]}
+    core, c = await amake(config=cfg)
+    tid = (await acall(c, STATIC_KEY, "capy_delegate", {"task": "Test task policy"}, tasks=True))["taskId"]
+    response = (await arpc(c, STATIC_KEY, "tasks/cancel", {"taskId": tid}, modern=True)).json()
+    assert response["error"]["code"] == -32602
+    assert core.inbox.handle(tid)["open"]
+    [row] = core.audit.recent(action="tool_refused")
+    assert (row["target"], row["detail"]) == ("cancel", "Use a key granted this tool.")
+
+
 async def test_channel_key_reads_claude_codes_inbox_only(amake, capy):
     core, c = await amake()
     channel = {"Authorization": f"Bearer {CHANNEL_KEY}"}
@@ -136,6 +148,12 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
                         frames.append(json.loads(line[6:]))
                         break
             assert frames[0]["text"] == "pushed" and frames[0]["handle"] == out["handle"] and int(event_id) == frames[0]["cursor"]
+            pair = core.connections.mint(agent="claude-code", project=None, client=None, by="owner")
+            key = core.connections.redeem(pair["code"])["key"]
+            [item] = payload(await acall(c, key, "inbox"))["items"]
+            assert item["message_id"] == frames[0]["message_id"]
+            looked_up = payload(await acall(c, key, "get_message", {"message_id": item["message_id"]}))
+            assert looked_up == item
     finally:
         server.should_exit = True
         await task

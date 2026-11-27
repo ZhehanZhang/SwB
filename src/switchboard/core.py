@@ -233,8 +233,7 @@ class Switchboard:
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
             "blocks": {n: {**(block_status(b) if not b.has_out else {}), "use": b.manifest.id, "kind": b.manifest.kind, "level": {"out": b.manifest.level_out, "in": b.manifest.level_in},
                            "online": b.online, "next_step": next_steps[n]} for n, b in self.blocks.items()},
-            "block_setup": {n: {"enabled": n in self.blocks, "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
-                            for n, keys in self.cfg.block_env.items()},
+            "block_setup": self.block_setup(),
             "origins": sorted(self.origins),
             "destinations": {n: {"online": d.online, **block_status(d)} for n, d in self.destinations.items()},
             "static_keys": [k.name for k in self.cfg.static_keys],
@@ -244,6 +243,11 @@ class Switchboard:
         }
 
     health = status
+
+    def block_setup(self) -> dict[str, dict[str, Any]]:
+        return {name: {"enabled": name in self.blocks,
+                       "missing_env": [key for key in dict.fromkeys(keys) if not self.secret(key)]}
+                for name, keys in self.cfg.block_env.items()}
 
     # Routing an action to a destination -----------------------------------------------------
 
@@ -276,6 +280,8 @@ class Switchboard:
         own = original is not None and original["ref"] == to and original["owner"] == to
         if to == principal.source and not (allow_self or own):
             raise CoreError("that is you; agent_send goes to another agent")
+        if _reply and original is not None and original["status"] == "cancelled":
+            return {"to": to, "conversation": in_reply_to, "delivered": False, "mailbox": True, "status": "cancelled"}
         text = (text or "").strip()
         if not text:
             raise CoreError("text is empty")
@@ -295,7 +301,7 @@ class Switchboard:
         self.inbox.update_handle(handle, open=False)
         await self.inbox.add(handle, "message", {"subject": title, "text": text[:20_000], "project": p.slug if p else None, "from": sender,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
-        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="agent_send",
+        self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
                           outcome="ok", target=to, ref=handle, excerpt=text)
         return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
 
@@ -663,6 +669,15 @@ class Switchboard:
         """reply, status, result or cancel on a conversation, run by the block that owns it."""
         block, h = self._conversation(principal, ref)
         final = kw.pop("final", None)
+        if verb == "cancel" and h is not None and h["destination"] == "mailbox" and h["ref"] != principal.source:
+            raise CoreError("Choose a mailbox conversation you sent.")
+        if verb == "reply" and h is not None and h["destination"] == "mailbox":
+            if h["owner"] != principal.source:
+                raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
+            if h["status"] == "cancelled":
+                return {"conversation": h["handle"], "in_reply_to": h["handle"], "final": final is not False,
+                        "delivered": False, "status": "cancelled",
+                        **({"to_owner": True} if to_owner else {"to": f"agent:{h['ref']}", "mailbox": True})}
         channel_mode = None
         if verb in ("reply", "cancel"):
             try:
@@ -680,8 +695,6 @@ class Switchboard:
             raise CoreError("to_owner is only allowed when replying to a listen conversation")
         if h is not None and h["destination"] == "mailbox":
             if verb == "reply":
-                if h["owner"] != principal.source:
-                    raise CoreError("that conversation is one you sent; replies to it come from the other side (see result)")
                 if to_owner:
                     text = (kw.get("text") or "").strip()
                     if not text:
@@ -713,7 +726,11 @@ class Switchboard:
                 done = next((r for r in reversed(replies) if r.get("final", True)), None)
                 return {"conversation": h["handle"], "status": h["status"], "final": done, "replies": replies[-(kw.get("tail") or 10):]}
             if verb == "cancel":
-                return {"conversation": h["handle"], "status": h["status"]}
+                if h["status"] != "cancelled":
+                    await self.inbox.cancel_mailbox(h["handle"])
+                    self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id,
+                                      destination="mailbox", action="cancel", outcome="ok", ref=h["handle"])
+                return {"conversation": h["handle"], "status": "cancelled"}
             return {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"],
                     "note": "a mailbox message; answer it with reply"}
         if block is None:
@@ -865,9 +882,9 @@ class Switchboard:
         self.audit.record(origin=principal.origin, source="auto", client=principal.client_id, destination=destination,
                           action=action, outcome="ok", target=target, excerpt=excerpt, detail=f"automatic, during a call by {principal.source}")
 
-    def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "") -> None:
+    def audit_memory(self, principal: Principal, action: str, target: str, excerpt: str = "", *, detail: str | None = None) -> None:
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="memory",
-                          action=action, outcome="ok", target=target, excerpt=excerpt)
+                          action=action, outcome="ok", target=target, excerpt=excerpt, detail=detail)
 
     @staticmethod
     def check_memory_scope(principal: Principal, scope: str) -> None:
@@ -876,7 +893,7 @@ class Switchboard:
 
     def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
         out = self.memory.delete(source=principal.source, id=id, check_scope=lambda scope: self.check_memory_scope(principal, scope))
-        self.audit_memory(principal, "memory_delete", id)
+        self.audit_memory(principal, "memory_delete", id, detail="Deleted memory.")
         return out
 
     def move_memory(self, principal: Principal, id: str, to_scope: str, *, promote: bool = False) -> dict[str, Any]:

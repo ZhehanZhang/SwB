@@ -16,7 +16,7 @@ from pathlib import Path
 from starlette.responses import HTMLResponse, Response
 
 from . import pages
-from .claims import FILE_KINDS, MAX_FILE_BYTES, Field
+from .claims import FILE_KINDS, MAX_FILE_BYTES, Field, GroupFieldError
 from .slack.avatar_files import BUNDLED_AVATARS, agent_avatar
 
 MARKS = Path(__file__).parent / "marks"
@@ -55,12 +55,18 @@ def mark(provider: str) -> str:
     return f'<span class="requester-tile" data-connector="{p.key}" title="{html.escape(p.title)}">{body}</span>'
 
 
-def claim_field(f: Field) -> str:
+def claim_field(f: Field, *, error: GroupFieldError | None = None) -> str:
     fid = f"f-{f.name}"
     get = (f'<a class="get" href="{html.escape(f.link)}" target="_blank" rel="noreferrer">Provider settings'
            '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6m0-6-9 9m6-1v6H5V8h6"/></svg></a>') if f.link else ""
     label = html.escape(f.label) + (' <span class="optional">optional</span>' if f.optional else "")
     required = "" if f.optional else " required"
+    note = ""
+    if error is not None:
+        required += ' aria-invalid="true"'
+        if error.guidance:
+            required += f' aria-describedby="{fid}-error"'
+            note = f'<p id="{fid}-error" role="alert">{html.escape(error.guidance)}</p>'
     if f.kind in FILE_KINDS:
         accept = ".pem,.key,.txt" if f.kind == "pem" else ".json,.txt"
         placeholder = "-----BEGIN PRIVATE KEY-----" if f.kind == "pem" else "{ ... }"
@@ -72,23 +78,25 @@ def claim_field(f: Field) -> str:
     else:
         kind = ' inputmode="numeric" type="text"' if f.kind == "id" else ' type="password"'
         control = f'<input id="{fid}" name="{f.name}"{kind} autocomplete="off" autocapitalize="none" spellcheck="false"{required}>'
-    return f'<div class="field"><div class="field-head"><label for="{fid}">{label}</label>{get}</div>{control}</div>'
+    return f'<div class="field"><div class="field-head"><label for="{fid}">{label}</label>{get}</div>{control}{note}</div>'
 
 
-def page(group: dict, csrf: str, *, owner_key: bool = False, host: str = "", now: float | None = None) -> HTMLResponse:
+def page(group: dict, csrf: str, *, owner_key: bool = False, host: str = "", now: float | None = None,
+         error: GroupFieldError | None = None) -> HTMLResponse:
     fields = group["fields"]
     key = ('<div class="field"><label for="owner-key">SwB owner key</label><input id="owner-key" name="owner_key" type="password" required '
            'autocomplete="new-password" autocapitalize="none" spellcheck="false"></div>') if owner_key else ""
     expiry = f"Expires in {max(1, math.ceil((group['expires_at'] - now) / 60))} min" if now is not None else ""
     footer = f'<footer><span>{html.escape(host)}</span><span>{expiry}</span></footer>' if host or expiry else ""
-    body = f"""{mark(group["provider"])}<h1>Save credentials</h1>
+    title = str(error) if error else "Save credentials"
+    body = f"""{mark(group["provider"])}<h1>{html.escape(title)}</h1>
 <p class="scope">For {html.escape(group["title"])}.</p>
 <form method="post" autocomplete="off">
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
-{key}{"".join(claim_field(f) for f in fields)}
+{key}{"".join(claim_field(f, error=error if error and error.field == f else None) for f in fields)}
 <div class="actions"><button type="submit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Save</button></div>
 </form>{footer}"""
-    return pages._claim_document("Save credentials", body, field_assets=True)
+    return pages._claim_document(title, body, 400 if error else 200, field_assets=True)
 
 
 def _marks_css() -> str:

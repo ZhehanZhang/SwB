@@ -28,12 +28,12 @@ clean "$venv/bin/swb" --help >/dev/null
 echo "Installed swb CLI: ok"
 clean "$venv/bin/python" -I -B "$root/scripts/smoke-wheel-web.py" "${wheels[0]}"
 : > empty.yaml
-status="$(clean SWITCHBOARD_CONFIG="$PWD/empty.yaml" SWITCHBOARD_DATA="$PWD/data" "$venv/bin/switchboard" blocks check)"
-printf '%s\n' "$status"
-if [[ "$status" != "mcp: ok" ]]; then
+blocks="$(clean SWITCHBOARD_CONFIG="$PWD/empty.yaml" SWITCHBOARD_DATA="$PWD/data" "$venv/bin/switchboard" blocks list)"
+if [[ "$(awk '{print $1}' <<< "$blocks")" != "mcp" ]]; then
     echo "Expected only the default MCP block for an empty config." >&2
     exit 1
 fi
+clean SWITCHBOARD_CONFIG="$PWD/empty.yaml" SWITCHBOARD_DATA="$PWD/data" "$venv/bin/switchboard" blocks check
 
 clean "$venv/bin/python" -I -B -m pytest -q -p no:cacheprovider -o asyncio_default_fixture_loop_scope=function \
     --basetemp "$work/test-data" "$root/tests/test_fresh_install.py"

@@ -11,7 +11,7 @@ import pytest
 import yaml
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from conftest import Clock, acall, arpc, payload
+from conftest import CAPTAIN, CAPY_KEY, Clock, acall, arpc, payload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -23,6 +23,8 @@ from switchboard.core import Switchboard
 from switchboard.guard import BODY_LIMIT
 
 SECRET = "example-test-only-secret"
+OWNER_KEY = "fixture-long-owner-key-only"
+HEALTH_OWNER = {"Authorization": f"Bearer {OWNER_KEY}"}
 PATH = "/github/webhook"
 ISSUE = {"number": 7, "title": "An issue", "html_url": "https://github.example/acme/app/issues/7",
          "body": "Issue body", "state": "open"}
@@ -40,7 +42,8 @@ def github(tmp_path):
     async def open_app(config=None, env=None, *, settings=None, **options):
         path = tmp_path / "config.yaml"
         path.write_text(yaml.safe_dump({"version": 2, "blocks": {"github": config or {}}, **(settings or {})}))
-        core = Switchboard(path, tmp_path / "data", env={"GITHUB_WEBHOOK_SECRET": SECRET} if env is None else env, **options)
+        env = {"GITHUB_WEBHOOK_SECRET": SECRET} if env is None else env
+        core = Switchboard(path, tmp_path / "data", env={"SWITCHBOARD_KEY_OWNER": OWNER_KEY, **env}, **options)
         app = create_app(core)
         async with app.starlette.router.lifespan_context(app.starlette):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://example.test") as client:
@@ -102,7 +105,7 @@ async def test_invalid_signature(github, signature):
 async def test_no_secret(github):
     async with github(env={}) as (_, client):
         assert (await client.post(PATH, content=b"{}", headers=signed(b"{}"))).status_code == 503
-        block = (await client.get("/healthz")).json()["blocks"]["github"]
+        block = (await client.get("/healthz", headers=HEALTH_OWNER)).json()["blocks"]["github"]
         assert block["configured"] and not block["secret_present"] and not block["online"]
         assert block["credential_problem"] == "no GitHub credential: GitHub triage actions unavailable"
 
@@ -133,7 +136,7 @@ async def test_webhook_refusal_audit_is_bounded_by_reason_and_window(github):
 async def test_unconfigured(github):
     async with github({"enabled": False}) as (_, client):
         assert (await client.post(PATH)).status_code == 404
-        assert "github" not in (await client.get("/healthz")).json()["blocks"]
+        assert "github" not in (await client.get("/healthz", headers=HEALTH_OWNER)).json()["blocks"]
 
 
 @pytest.mark.parametrize("streaming", [False, True])
@@ -294,7 +297,7 @@ async def test_sink_delivery_retry_and_secretless_status(github, caplog):
                 assert (await send(client, delivery=key)).status_code == 200
             await drained(core)
             assert attempts == {"retry": 2, "reject": 1, "network": 2}
-            health = await client.get("/healthz")
+            health = await client.get("/healthz", headers=HEALTH_OWNER)
             status = health.json()["blocks"]["github"]
             assert {key: status[key] for key in ("use", "kind", "level", "online", "configured", "secret_present", "routes", "dropped", "next_step", "sinks")} == {
                 "use": "github", "kind": "source", "level": {"in": "webhook", "out": None}, "online": True,
@@ -350,6 +353,60 @@ async def test_assist_without_target_records_drop_and_reports_it_in_status(githu
         )
         assert core.inbox.head() == 0
         assert payload(await acall(client, token, "github_status"))["dropped"] == 1
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage", "work"])
+async def test_webhook_uses_project_mailbox_route(github, mode):
+    token = "example-owner-key-value-for-tests"
+    config = {"owner_ids": [42], "spaces": {"acme/app": {}}}
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "SWITCHBOARD_KEY_OWNER": token}
+    settings = {"blocks": {"mcp": {}, "github": config}, "visibility": {
+        "resources": {"channel:acme/app/acme/app": "shared", "target:alpha": "shared"},
+    }}
+    async with github(config, env, settings=settings) as (core, client):
+        core.projects.create(slug="example", name="Example")
+        pair = core.connections.mint(agent="alpha", project="example", client=None, by="owner")
+        core.connections.redeem(pair["code"])
+        payload(await acall(client, token, "routes_set", {"target": "agent:alpha", "project": "example"}))
+        payload(await acall(client, token, "space_mode", {"block": "github", "space": "acme/app",
+                                                        "mode": mode, "project": "example"}))
+        status = payload(await acall(client, token, "modes_status"))
+        assert status["spaces"] and all(row["target"] == "agent:alpha" for row in status["spaces"])
+        response = await send(client, sender={"id": 11, "type": "User"}, action="opened")
+        assert response.status_code == 200
+        if mode == "work":
+            [drop] = core.audit.recent(action="webhook", outcome="dropped")
+            assert drop["detail"] == "work mode requires an owner event"
+            assert core.inbox.read(owner="alpha")["items"] == []
+            await send(client, delivery="owner", sender={"id": 42, "type": "User"}, action="opened")
+        [wake] = core.inbox.read(owner="alpha")["items"]
+        assert wake["project"] == "example" and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
+        if mode == "triage":
+            assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["actions"] == ["reply"]
+        core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
+        await send(client, delivery="off", sender={"id": 42}, action="opened")
+        assert core.audit.recent(action="webhook", outcome="dropped")[0]["detail"] == "channel mode off"
+
+
+@pytest.mark.parametrize("agent", [None, "github"])
+async def test_assist_delivers_through_locked_capy_route(github, capy, agent):
+    config = {"spaces": {"team": {"repo": "acme/app", "mode": "assist", "project": "example"}}}
+    settings = {"blocks": {"capy": {"identity": "personal"}, "github": config}, "visibility": {
+        "resources": {"channel:team/acme/app": "shared", f"target:{CAPTAIN.lower().replace('_', '-')}": "shared"},
+    }}
+    env = {"GITHUB_WEBHOOK_SECRET": SECRET, "CAPY_API_KEY": CAPY_KEY}
+    async with github(config, env, settings=settings, block_options={"capy": {"transport": httpx.MockTransport(capy.handler)}}) as (core, client):
+        core.projects.create(slug="example", name="Example")
+        core.routes.set(destination="capy", agent=agent, project="example", target={"captain": CAPTAIN},
+                        defaults={"delivery": "steer"}, allow_override=False, note="", by="test")
+        [row] = core.modes.status(block="github")["spaces"]
+        assert row["target"] == f"capy:captain:{CAPTAIN}"
+        assert (await send(client, sender={"id": 11, "type": "User"}, action="opened")).status_code == 200
+        [sent] = [body for method, path, body in capy.requests if method == "POST" and path == f"/api/v1/threads/{CAPTAIN}/message"]
+        assert sent["delivery"] == "steer" and "Issue body" in sent["text"] and "Assist only" in sent["text"]
+        [handle] = core.inbox.handles(owner="github", destination="capy")
+        assert handle["meta"]["route"] == ("agent+project" if agent else "project")
+        assert handle["meta"]["channel_mode"]["target"] == row["target"]
 
 
 @pytest.mark.parametrize("mode", ["off", "watch", "assist", "triage", "work"])
