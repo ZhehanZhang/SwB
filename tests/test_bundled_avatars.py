@@ -11,7 +11,7 @@ def test_bundled_avatars_match_manifest_and_public_routes(make):
         )
     )
     assert set(checksums) == {
-        "chatgpt.png", "claude-code.png", "claude.png", "codex.png",
+        "chatgpt.png", "claude-code.png", "dots.png", "grok-bot.png", "claude.png", "codex.png",
         "gemini.png", "grok.png", "muse.png", "swb.png",
     }
     for name, digest in checksums.items():

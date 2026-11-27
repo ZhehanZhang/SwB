@@ -7,8 +7,9 @@ from .config import AVATAR_RE
 
 BUNDLED_AVATARS = Path(__file__).parent / "avatars"
 AGENT_AVATARS = {
+    "grok-bot": "grok-bot.png", "grok-routine": "grok-bot.png", "dots": "dots.png", "dot": "dots.png",
     "claude-code": "claude-code.png", "claude": "claude.png", "anthropic": "claude.png",
-    "chatgpt": "chatgpt.png", "openai": "chatgpt.png", "dots": "chatgpt.png", "dot": "chatgpt.png",
+    "chatgpt": "chatgpt.png", "openai": "chatgpt.png",
     "codex": "codex.png", "gemini": "gemini.png", "grok": "grok.png", "xai": "grok.png",
     "muse": "muse.png", "swb": "swb.png", "switchboard": "swb.png",
 }
