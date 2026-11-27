@@ -21,6 +21,7 @@ import httpx
 from ...audit import iso
 from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
 from ...block_env import CAPY_KEY, CAPY_SEND_KEY
+from ...subject import lead_with_subject, subject
 from .. import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
 from .api import CapyAPI, CapyError, pr_links, thread_summary
 from .stream import Backoff, Frame, StreamClosed, ThreadStream
@@ -455,6 +456,8 @@ class CapyBlock(Block):
         task = (task or "").strip()
         if not task:
             raise DestinationError("task is empty")
+        if title:
+            title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
         tgt, defaults, level = self.plan(call.principal, p, target)
         if level == "explicit":
@@ -481,7 +484,7 @@ class CapyBlock(Block):
             return {"to": str(address) if address else None, "project": p.slug if p else None, "route": level, "mode": mode}
 
         handle = call.handle or call.core.inbox.new_handle()
-        body = [task]
+        body = [lead_with_subject(title, task) if title and in_thread else task]
         if repos:
             body += ["", "Repos: " + ", ".join(repos)]
         if p and p.links.get("capy_project"):

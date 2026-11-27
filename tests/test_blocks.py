@@ -5,7 +5,7 @@ import sqlite3
 
 import yaml
 
-from conftest import CAPTAIN, OWNER, STATIC_KEY, base_config, call, error_text, payload, register, rpc, sign_in, beacon
+from conftest import CAPTAIN, OWNER, PROJECT, STATIC_KEY, base_config, beacon, call, error_text, payload, register, rpc, sign_in
 
 from switchboard.blocks import BLOCKS, Address, load
 from switchboard.config import load_config, migrate_text, translate_v1
@@ -98,6 +98,41 @@ def test_send_without_to_follows_the_route_and_verbs_reach_the_block(make, capy)
     explicit = payload(call(c, STATIC_KEY, "send", {"task": "to the captain by slug", "to": "bcn-1"}))
     assert explicit["thread_id"] == CAPTAIN
     assert "no target" in error_text(call(c, STATIC_KEY, "send", {"task": "x", "to": "nobody-here"}))
+
+
+def test_mailbox_send_records_the_ask_or_explicit_title(make):
+    core, client = make()
+    token = sign_in(client)["access_token"]
+    task = "Check the canary.\n\nReply with the result."
+    send = {"task": task, "to": "agent:claude"}
+    first = payload(call(client, STATIC_KEY, "send", send))
+    second = payload(call(client, STATIC_KEY, "send", {**send, "title": "**Canary review**"}))
+    items = payload(call(client, token, "wait", {"timeout_s": 0}))["items"]
+    first_item, second_item = items
+    assert first_item["subject"] == f"{core.agents.label('capy')} asks: Check the canary. Reply with the result."
+    assert second_item["subject"] == "Canary review"
+    for item, sent in zip(items, (first, second), strict=True):
+        assert item["subject"] == core.inbox.handle(sent["handle"])["title"]
+        assert item["text"] == task and item["text"].endswith("Reply with the result.")
+
+
+def test_capy_captain_wake_leads_with_the_title_once(make, capy):
+    core, client = make()
+    title = "Dana asks: check the canary"
+    tail = "Reply with the result."
+    first = payload(call(client, STATIC_KEY, "send", {"title": title, "task": f"Look at the build.\n\n{tail}"}))
+    ready = f"{title}\n\nLook at the deploy.\n\n{tail}"
+    second = payload(call(client, STATIC_KEY, "send", {"title": title, "task": ready}))
+    assert first["thread_id"] == second["thread_id"] == CAPTAIN
+    assert core.inbox.handle(first["handle"])["title"] == title
+    first_message, second_message = capy.messages[CAPTAIN][-2:]
+    assert first_message["text"] == f"{title}\n\nLook at the build.\n\n{tail}"
+    assert second_message["text"] == ready
+    core.projects.create(slug="widgets", name="Widgets")
+    core.routes.set(destination="capy", agent=None, project="widgets", target={"project": PROJECT},
+                    defaults={}, allow_override=False, note="", by="test")
+    new = payload(call(client, STATIC_KEY, "send", {"title": title, "task": "Check new results.", "project": "widgets"}))
+    assert new["thread_id"] != CAPTAIN and capy.threads[new["thread_id"]]["title"] == title
 
 
 def test_targets_list_blocks_agents_and_projects(make):
