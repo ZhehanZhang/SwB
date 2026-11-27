@@ -10,13 +10,17 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 | 變數 | 用途 |
 | - | - |
 | `SWITCHBOARD_KEY_OWNER` | `swb` 指令使用的擁有者金鑰 |
-| `SWITCHBOARD_PUBLIC_URL` | 公開的 HTTPS 位址，例如 `https://swb.example.com` |
+| `SWITCHBOARD_PUBLIC_URL` | 瀏覽器登入位址。本機執行時用 `http://localhost:8870`。遠端伺服器請用 HTTPS，例如 `https://swb.example.com`。 |
 | `SWITCHBOARD_DATA_DIR` | 資料夾。`swb up` 的預設值是 `~/.local/share/switchboard`。映像檔使用 `/data` |
 | `SWITCHBOARD_OWNER_EMAILS` | OIDC 與 Cloudflare Access 的擁有者電子郵件，以逗號分隔 |
 | `SWITCHBOARD_KEY_<NAME>` | 代理 `<name>` 的 bearer 金鑰 |
 | `SWITCHBOARD_CONFIG` | 基礎 YAML 檔的路徑 |
 | `SWITCHBOARD_OVERLAY` | 私人覆寫檔的路徑 |
-| `PORT` | HTTP 連接埠 |
+| `PORT` | HTTP 連接埠。 `swb up` 預設為 `8870`。 |
+
+在終端機或執行個體的 `.env` 檔案中設定 `PORT`。本機登入時，請把公開位址設為 `http://localhost:<port>`。同一份檔案也可設定 `SWITCHBOARD_PUBLIC_URL` 與 `SWITCHBOARD_DATA_DIR`。YAML 設定檔中的 `public_url` 優先於環境變數。
+
+執行 `swb up --dir ./my-swb` 時，SwB 會讀取該資料夾內的 `.env` 及 `config/switchboard.yaml`，並將資料存到其中的 `data` 子資料夾。執行 `swb init`、`swb status`、`swb login-link`、`swb connect` 和 `swb claim` 時，請指定同一個 `--dir`。後四個指令可用 `--url` 指定其他伺服器位址。
 
 ## 模組
 
@@ -38,13 +42,13 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 swb init
 ```
 
-`swb init` 會寫入 `config/switchboard.yaml` 與一把擁有者金鑰。這個檔案是選用的。SwB 在 `config/switchboard.yaml` 存在時讀取它。
+`swb init` 會將擁有者金鑰寫入私有的 `.env`。基本設定會存入 `config/switchboard.yaml`。SwB 也可只用環境變數啟動。
 
 ```yaml
 version: 2
 public_url: https://swb.example.com
 auth:
-  owner_emails: [owner@example.com]
+  owner_emails: [owner@swb.example.com]
 blocks:
   mcp: {use: mcp}
   capy: {use: capy, identity: service}
@@ -67,7 +71,7 @@ routes:
 | 設定鍵 | 用途 |
 | - | - |
 | `version` | YAML 設定格式版本。使用 `blocks` 時設為 `2` |
-| `public_url` | SwB 用於 MCP 與 OAuth 的公開 HTTPS 位址 |
+| `public_url` | SwB 用於 MCP 與 OAuth 的位址。請參閱 `SWITCHBOARD_PUBLIC_URL`。 |
 | `data_dir` | 資料目錄的路徑。可在此設定，也可用 `SWITCHBOARD_DATA_DIR` |
 | `timezone` | 每日計數與限額使用的時區，預設為 `UTC` |
 | `turn_cap` | 對話暫停前的輪數，預設為 `200`。設為 `null` 可關閉上限 |

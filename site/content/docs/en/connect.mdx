@@ -13,7 +13,7 @@ Add SwB as a remote MCP server. Use your public MCP address, for example `https:
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
 | Grok | grok.com → Connectors → New Connector → Custom |
 | Capy | Add an MCP server with the Automatic OAuth client |
-| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
+| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
 | Codex, Gemini CLI and other coding agents | `swb connect coding-agent --choose agent=codex` |
 
 For a coding agent, change `codex` to the name of your client. Run `swb connect coding-agent` alone to see the list. The list has Claude Code, Codex, Gemini CLI, Qwen Code, Goose, OpenCode, Cline and Kiro.

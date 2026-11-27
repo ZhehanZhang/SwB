@@ -11,12 +11,12 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 | - | - |
 | Claude 和 Claude Project | Settings → Connectors → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → 添加自定义 MCP 服务器 |
-| Grok | grok.com → Connectors → New Connector → Custom |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 添加 MCP 服务器，选择 Automatic OAuth 客户端 |
-| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
-| Codex、Gemini CLI 和其他编码智能体 | `swb connect coding-agent --choose agent=codex` |
+| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
+| Codex、Gemini CLI 和其他编程智能体 | `swb connect coding-agent --choose agent=codex` |
 
-对于编码智能体，把 `codex` 改成你的客户端的名称。单独运行 `swb connect coding-agent` 可查看列表。列表包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 和 Kiro。
+对于编程智能体，把 `codex` 改成你的客户端的名称。单独运行 `swb connect coding-agent` 可查看列表。列表包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 和 Kiro。
 
 ## 询问你的智能体
 
@@ -24,9 +24,9 @@ description: 把 SwB 添加到智能体，然后让智能体完成其余工作�
 
 | 询问 | 智能体的操作 |
 | - | - |
-| 如何连接我的 Claude Project？ | 它为该项目注册一个 Claude routine，并给你一个用于令牌的链接 |
+| 如何连接我的 Claude Project？ | 它为项目注册 Claude routine，并给你一个领取链接 |
 | 把 Slack 连接到 SwB。 | 它会指引你从仓库的 `manifests/` 目录获取应用清单，并在需要时提供领取链接 |
-| 连接我的 Discord 机器人。 | 它给你一个令牌链接和机器人邀请链接 |
+| 连接我的 Discord 机器人。 | 它给你一个领取链接和机器人邀请链接 |
 | 把这个发给我的 Capy Captain。 | 它发送任务并等待答复 |
 | 你能发送给哪些目标？ | 它列出 SwB 能访问的所有目标 |
 

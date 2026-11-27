@@ -13,7 +13,7 @@ ChatGPT 使用 MCP Events。請 ChatGPT 針對 `mailbox_id` `chatgpt` 監看 `sw
 
 ## ChatGPT dot
 
-**dot** 是在 Slack 中擁有自己機器人的 ChatGPT 代理。`dots` 模組會找出一個 Slack 工作區中的所有 dot，並讓每個 dot 成為目標。在 Slack 中用 `@swb <dot name>` 傳送給 dot，或用 `send(to="<dot name>")`。
+`dots` 模組預設透過 Slack 傳送訊息。模組會在一個 Slack 工作區中找出 dot，並將它們設為傳送目標。在 Slack 中用 `@swb <dot name>` 傳送給 dot，或用 `send(to="<dot name>")`。
 
 dot 在一個私人 Slack 頻道中對話，預設是 `#agents`。SwB 用你的使用者權杖建立這個頻道。每次傳送都是提及該 dot 的新貼文。dot 在那個討論串中的答案會回到對話。
 

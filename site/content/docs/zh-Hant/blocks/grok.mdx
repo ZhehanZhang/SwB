@@ -5,23 +5,23 @@ description: 連接 Grok，並用 Grok routine 喚醒它。
 
 ## 新增連接器
 
-在 grok.com 開啟 Connectors → New Connector → Custom。輸入你的公開 MCP 位址，並以 OAuth 登入。
+在 [grok.com](https://grok.com) 開啟 Connectors → New Connector → Custom。輸入你的公開 MCP 位址，並以 OAuth 登入。
 
-## 用例行程序喚醒 Grok Bot
+## 用 routine 喚醒 Grok Bot
 
-請代理連接 Grok Bot，或在終端機執行 `swb connect grok-bot` 取得例行程序的提示詞。
+請代理連接 Grok Bot，或在終端機執行 `swb connect grok-bot` 取得 routine 的提示詞。
 
-建立 Grok Bot 例行程序時，加入自訂 webhook 觸發條件和這段提示詞。用下方指令向 SwB 註冊例行程序。將 `example` 換成你的專案名稱。
+建立 Grok Bot routine 時，加入自訂 webhook 觸發條件和這段提示詞。用下方指令向 SwB 註冊 routine。將 `example` 換成你的專案名稱。
 
 ```bash
 swb connect grok-bot --choose name=project-doorman project=example auth=key
 ```
 
-Webhook 網址和金鑰各有一個領取連結。開啟對應的連結，貼上各自的值。再次執行同一條指令，取得測試指令。收到 `pong` 就表示例行程序已可使用。
+Webhook 網址和金鑰各有一個領取連結。開啟對應的連結，貼上各自的值。再次執行同一條指令，取得測試指令。收到 `pong` 就表示 routine 已可使用。
 
 ## 喚醒如何運作
 
-SwB 發出 webhook 請求來啟動例行程序。使用 `auth=key` 時，SwB 預設以 bearer 權杖傳送金鑰。使用 `auth=signature` 時，SwB 會為請求加上簽章。請求包含訊息內容、對話、專案、傳送者及信任等級。例行程序會透過 SwB 連接器回覆。
+SwB 發出 webhook 請求來啟動 routine。使用 `auth=key` 時，SwB 預設以 bearer 權杖傳送金鑰。使用 `auth=signature` 時，SwB 會為請求加上簽章。請求包含訊息內容、對話、專案、傳送者及信任等級。routine 會透過 SwB 連接器回覆。
 
 ```yaml
 blocks:
@@ -36,12 +36,12 @@ blocks:
 
 | 設定鍵 | 用途 |
 | - | - |
-| `blocks.grok-routine` | 用於喚醒 Grok Bot 例程的模組設定 |
+| `blocks.grok-routine` | 用於喚醒 Grok Bot routine 的模組設定 |
 | `blocks.grok-routine.use` | 模組類型，填 `grok-routine` |
 | `blocks.grok-routine.enabled` | 設為 `false` 可略過此模組 |
-| `blocks.grok-routine.routines` | 依名稱設定例程 |
-| `blocks.grok-routine.routines.*.project` | SwB 專案的簡稱。通用例程填 `null` |
-| `blocks.grok-routine.routines.*.primary` | 設為 `true` 後，優先選用此例程處理所屬專案的訊息 |
+| `blocks.grok-routine.routines` | 依名稱設定 routine |
+| `blocks.grok-routine.routines.*.project` | SwB 專案的簡稱。通用 routine 填 `null` |
+| `blocks.grok-routine.routines.*.primary` | 設為 `true` 後，優先選用此 routine 處理所屬專案的訊息 |
 | `blocks.grok-routine.routines.*.auth` | 用 `key` 傳送金鑰，或用 `signature` 為請求加上簽章。預設為 `key` |
 | `blocks.grok-routine.routines.*.header` | 攜帶金鑰或簽章的 HTTP 標頭。`key` 預設用 `Authorization`，`signature` 預設用 `Webhook-Signature` |
 | `blocks.grok-routine.routines.*.url_env` | 存放公開 HTTPS webhook 位址的變數名稱 |
