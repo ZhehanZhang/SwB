@@ -858,7 +858,7 @@ For a new Compose deployment, run these commands as the user who owns the data f
   openssl rand -hex 32
 } >> .env
 mkdir -p data
-docker compose up -d --build
+docker compose up -d --build --wait
 curl -fsS http://127.0.0.1:8870/healthz
 ```
 
