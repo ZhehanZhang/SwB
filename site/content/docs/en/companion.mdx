@@ -43,7 +43,7 @@ Add one `--cap` option for each feature you want to enable.
 
 On Linux, notifications use `notify-send`. On Debian and Ubuntu, install it with the `libnotify-bin` package.
 
-Use Python 3.13 for the Muse feature. Follow the [Muse pairing guide](/docs/setup/muse).
+Use Python 3.13 to pair the Muse gadget. Follow the [Muse pairing guide](/docs/setup/muse). After pairing, the SwB server keeps the connection to Muse open.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse

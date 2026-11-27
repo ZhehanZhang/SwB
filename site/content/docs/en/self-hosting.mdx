@@ -3,6 +3,12 @@ title: Self-hosting
 description: Run SwB on a server with Docker Compose and Cloudflare.
 ---
 
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
+## One-click deploy
+
+<DeployProviders lang="en" />
+
 ## Docker Compose
 
 Install Docker Compose 2.24 or later. Run these commands as a regular user who owns the data folder.
@@ -31,9 +37,27 @@ For a remote server, forward its port `8870` to local port `8870` before you ope
 
 A signed-out request to `/healthz` returns `status` and `version`. Use an owner session or the owner key for full health details.
 
-## Cloudflare Tunnel
+## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Follow the [Cloudflare Tunnel instructions](/docs/setup/cloudflare) to create a tunnel for your domain. Use `http://switchboard:8000` as its service address for Compose. Save the tunnel token in `.env` under the name in the [release Compose file](https://github.com/ZhehanZhang/SwB/blob/release/1.0/compose.yaml#L32-L37). Replace `SWB_PUBLIC_URL` in `.env` with the tunnel address. Start Compose with the tunnel profile.
+A Cloudflare Tunnel gives SwB a public HTTPS address. Cloudflare offers tunnels on its free plan.
+
+### Quick tunnel
+
+Use a quick tunnel to try SwB at a temporary address. Run this command on the host with `cloudflared`, the program that connects SwB to Cloudflare.
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+Set `SWB_PUBLIC_URL` to the HTTPS address in the terminal. If your config contains `public_url`, update that setting too. Restart SwB. The address changes each time you start the tunnel. OAuth sign-ins and passkeys use that address. Use a named tunnel for a lasting address.
+
+### Named tunnel
+
+Use a free Cloudflare account with your domain. Follow the [Cloudflare setup guide](/docs/setup/cloudflare) to create the tunnel and set up Access. Set `SWB_PUBLIC_URL` to your public address, such as `https://swb.example.com`. Update the address in `public_url` if your config contains it.
+
+For a tunnel on the SwB host, point its service address to `http://localhost:8870`. Set `SWB_TRUSTED_PROXIES` to the connector's address, such as `127.0.0.1/32` for an IPv4 loopback connection.
+
+For the Compose tunnel, point its service address to `http://switchboard:8000`. Put the tunnel token in `.env` as `TUNNEL_TOKEN`. Add the connector's address or dedicated network to `trusted_proxies`. Start Compose with the tunnel profile.
 
 ```bash
 docker compose --profile tunnel up -d
@@ -57,8 +81,11 @@ Use one SwB instance with a persistent disk mounted at `/data`. See the [deploym
 
 ## Railway [#railway]
 
-The [Railway template definition](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.railway/railway.ts) runs one SwB service and mounts a 1 GB volume at `/data`.
-Deploy from the Railway marketplace after the template is published.
+Deploy from the [SwB template on Railway](https://railway.com/deploy/swb). Keep one replica. The template mounts a volume at `/data`.
+
+Use the Hobby plan for an always-on SwB. Hobby costs $5 a month and includes $5 of usage.
+
+The [Free plan](https://docs.railway.com/reference/pricing/free-trial) includes $1 of usage a month. That amount covers about 100 MB of RAM around the clock. A test SwB instance used about 107 MiB while idle. Free plan services stop when the $1 runs out.
 
 ## Fly.io [#fly]
 
