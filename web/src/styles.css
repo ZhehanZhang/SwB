@@ -38,8 +38,8 @@
   --toast-shadow: 0 4px 16px rgb(0 0 0 / 8%);
   --rail-width: 88px;
   --topbar-height: 64px;
-  --mobile-tabbar-height: 108px;
-  --mobile-tabbar-fade-height: 30px;
+  --mobile-tabbar-height: 78px;
+  --mobile-tabbar-clearance: 108px;
 }
 
 .dark {
@@ -172,7 +172,27 @@
 }
 
 .console-mobile-nav {
-  background: linear-gradient(to bottom, var(--fade-0), var(--fade-92) calc(var(--mobile-tabbar-fade-height) * .32), var(--background) calc(var(--mobile-tabbar-fade-height) * .4));
+  background: var(--background);
+}
+
+.console-mobile-nav::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 100%;
+  height: 60px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--background) 3%, transparent),
+    color-mix(in srgb, var(--background) 10%, transparent),
+    color-mix(in srgb, var(--background) 22%, transparent),
+    color-mix(in srgb, var(--background) 38%, transparent),
+    color-mix(in srgb, var(--background) 56%, transparent),
+    color-mix(in srgb, var(--background) 74%, transparent),
+    color-mix(in srgb, var(--background) 88%, transparent),
+    color-mix(in srgb, var(--background) 96%, transparent),
+    var(--background)
+  );
 }
 
 .console-mobile-tab:is(:active, [aria-current="page"], [data-selected]) {
