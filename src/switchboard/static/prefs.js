@@ -1,7 +1,6 @@
 // The siteAppearance theme cookie, scoped to this host.
 (function () {
   var root = document.documentElement
-  var domain = ''
   var media = matchMedia('(prefers-color-scheme: dark)')
   function read(name) {
     var hit = document.cookie.split('; ').filter(function (c) { return c.indexOf(name + '=') === 0 })[0]
@@ -23,7 +22,9 @@
     root.style.backgroundColor = dark ? '#1c1917' : '#f5f5f4'
   }
   function set(theme) {
-    document.cookie = 'siteAppearance=' + encodeURIComponent(theme) + '; Path=/; Max-Age=31536000; SameSite=Lax' + (domain ? '; Domain=' + domain : '') + (location.protocol === 'https:' ? '; Secure' : '')
+    var parts = location.hostname.split('.')
+    for (var i = 0; i < parts.length - 1; i++) document.cookie = 'siteAppearance=; Path=/; Max-Age=0; Domain=' + parts.slice(i).join('.')
+    document.cookie = 'siteAppearance=' + encodeURIComponent(theme) + '; Path=/; Max-Age=31536000; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '')
     try { localStorage.setItem('theme', theme) } catch (e) {}
     apply(theme)
   }
