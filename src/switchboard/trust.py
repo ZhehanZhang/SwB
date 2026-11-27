@@ -53,11 +53,11 @@ def frame_sender(text: str, name: str | None, sender_id: str | None, where: str 
     return "external", FramedText(wrap(text, name, sender_id, "external", where))
 
 
-def frame_parts(parts: dict[str, AuthoredText], where: str) -> tuple[str, dict[str, str]]:
+def frame_parts(parts: dict[str, AuthoredText], where: str, *, owner_without_parts: bool = False) -> tuple[str, dict[str, str]]:
     rendered = {key: frame_sender(neutralize(part["text"]), part["author"], part["author_id"], where, owner=part["owner"])
                 for key, part in parts.items()}
-    trust = "owner" if rendered and all(trust == "owner" for trust, _ in rendered.values()) else "external"
-    return trust, {key: text for key, (_, text) in rendered.items()}
+    owner = all(trust == "owner" for trust, _ in rendered.values()) if rendered else owner_without_parts
+    return "owner" if owner else "external", {key: text for key, (_, text) in rendered.items()}
 
 
 def join_parts(parts: dict[str, str]) -> str:

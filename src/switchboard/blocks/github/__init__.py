@@ -24,7 +24,7 @@ from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
 from ...subject import subject, wake_text
-from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
+from ...trust import AuthoredText, FramedText, frame_parts, frame_sender, join_parts, neutralize
 from ...visibility import Who
 from .. import Action, Block, BlockError, BlockRefused, Call, Manifest
 from .api import (
@@ -46,6 +46,15 @@ if TYPE_CHECKING:
 CHECKS = {"check_run", "check_suite", "workflow_run"}
 EVENTS = CHECKS | {"issues", "issue_comment", "pull_request", "pull_request_review",
                    "pull_request_review_comment", "pull_request_review_thread", "push"}
+SUMMARY_ACTIONS = frozenset((
+    "assigned auto_merge_disabled auto_merge_enabled closed completed converted_to_draft created deleted demilestoned "
+    "dequeued dismissed edited enqueued in_progress labeled locked milestoned opened pinned ready_for_review reopened "
+    "requested requested_action rerequested resolved review_request_removed review_requested submitted synchronize "
+    "transferred typed unassigned unlabeled unlocked unpinned unresolved untyped"
+).split())
+SUMMARY_CONCLUSIONS = frozenset((
+    "action_required cancelled failure neutral skipped stale startup_failure success timed_out"
+).split())
 DELIVERY_TTL_S = 86400
 REFUSAL_AUDIT_INTERVAL_S = 600
 MAX_DELIVERIES = 100_000
@@ -70,8 +79,8 @@ def _excerpt(value: str, budget: int) -> str:
     return value
 
 
-def trim(event: str, delivery: str, data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]] | None:
-    """Bound the payload and retain the author object for each authored field."""
+def trim(event: str, delivery: str, data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, dict[str, Any] | None]] | None:
+    """Bound the payload and distinguish unknown authors from generated text."""
     if event not in EVENTS:
         return None
     check = _object(data.get(event)) if event in CHECKS else {}
@@ -105,8 +114,8 @@ def trim(event: str, delivery: str, data: dict[str, Any]) -> tuple[dict[str, Any
         "commits": data.get("size", len(commits) if isinstance(commits, list) else None) if push else None,
         "body": primary.get("body"),
     }
-    authors = {"title": _object(item.get("user")) if item.get("title") else {},
-               "body": _object(primary.get("user")), "check": {}}
+    authors = {"title": _object(item.get("user")) if item.get("title") else None,
+               "body": _object(primary.get("user")), "check": None}
     if primary is detail:
         context_field = "issue_body" if event == "issue_comment" else "pull_request_body"
         fields[context_field] = item.get("body")
@@ -744,23 +753,26 @@ class GitHubBlock(Block):
             text = payload.pop(key)
             if not text:
                 continue
-            author_id = provider_id(author.get("id"))
-            login = author.get("login")
+            author_or_actor = sender if author is None else author
+            author_id = provider_id(author_or_actor.get("id"))
+            login = author_or_actor.get("login")
             parts[key] = {"text": text,
                           "author": _excerpt(login, 240) if isinstance(login, str) else None,
                           "author_id": f"github:{author_id}" if author_id else None,
-                          "owner": author_id in owners and author.get("type") != "Bot"}
-        trust, rendered = frame_parts(parts, where)
+                          "owner": actor_is_owner if author is None else author_id in owners and author.get("type") != "Bot"}
+        trust, rendered = frame_parts(parts, where, owner_without_parts=actor_is_owner)
         link = neutralize(payload["url"]) if "url" in payload else None
         event_name = "Issue" if event == "issues" else event.replace("_", " ").capitalize()
-        summary = " ".join(part for part in (event_name, payload.get("action"), payload.get("conclusion")) if part)
+        action, conclusion = payload.get("action"), payload.get("conclusion")
+        summary = " ".join(part for part in (event_name, action if action in SUMMARY_ACTIONS else None,
+                                              conclusion if conclusion in SUMMARY_CONCLUSIONS else None) if part)
         number = provider_id(payload.get("number"))
         event_title = f"{summary} #{number}" if number else summary
         delivery_note = f"GitHub delivery {neutralize(delivery)}."
         if mode == "watch":
             if sinks := self.sink_names(repo):
                 title = subject(actor or user_id or "Unknown sender", "GitHub", repo, event_title, verb="", trust=trust)
-                details = "\n\n".join(filter(None, (neutralize(summary) + ".", join_parts(rendered))))
+                details = "\n\n".join(filter(None, (summary + ".", join_parts(rendered))))
                 text = wake_text(title, details, link, delivery_note)
                 body = _json({**{key: neutralize(value) if isinstance(value, str) else value for key, value in payload.items()},
                               **rendered, "subject": title, "text": text, "trust": trust})
@@ -768,7 +780,7 @@ class GitHubBlock(Block):
                     self.sinks[sink].put(delivery, body)
             primary = parts.get("body") or parts.get("title")
             self.core.modes.watch(self.name, space, repo, delivery, (primary["author_id"] if primary else sender_id) or "",
-                                  primary["author"] if primary else actor, neutralize(event_title), link, target, project=project,
+                                  primary["author"] if primary else actor, event_title, link, target, project=project,
                                   parts=parts)
             return
         if mode == "off":
@@ -810,7 +822,8 @@ class GitHubBlock(Block):
                 recent.append(now)
                 if len(self._senders) > MAX_DELIVERIES:
                     self._senders.popitem(last=False)
-            metadata = neutralize(json.dumps(payload, ensure_ascii=False))
+            _, metadata = frame_sender(neutralize(json.dumps(payload, ensure_ascii=False)), actor, sender_id, where,
+                                       owner=trust == "owner")
             text = "\n\n".join(filter(None, (metadata, join_parts(rendered))))
             if trust == "external":
                 text = FramedText(text)
