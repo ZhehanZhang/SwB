@@ -5,9 +5,10 @@ import logging
 import os
 import secrets
 import time
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any
 
 import httpx
 
@@ -30,6 +31,12 @@ APPROVE_ACTION = "switchboard_approve"
 REJECT_ACTION = "switchboard_reject"
 
 EventListener = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+def find_avatar(name: str, dirs: Iterable[Path] = (BUNDLED_AVATARS,)) -> Path | None:
+    if not AVATAR_RE.fullmatch(name):
+        return None
+    return next((path for directory in dirs if (path := directory / name).is_file()), None)
 
 
 class SlackEngine:
@@ -137,12 +144,7 @@ class SlackEngine:
         return [s.cfg.name for s in self.sinks.get(label, []) if s.accepts(push)]
 
     def find_avatar(self, name: str) -> Path | None:
-        if not AVATAR_RE.match(name):
-            return None
-        for d in self.avatar_dirs():
-            if (d / name).is_file():
-                return d / name
-        return None
+        return find_avatar(name, self.avatar_dirs())
 
     def avatar_url(self, name: str) -> str | None:
         """Public URL for an avatar file, versioned by mtime so Slack refetches a replaced picture."""

@@ -1,6 +1,7 @@
 """Discord dispatch, the Gateway session, REST posts and owner provisioning, all without a network."""
 
 import asyncio
+import base64
 import json
 from collections import deque
 from contextlib import asynccontextmanager, contextmanager
@@ -11,6 +12,7 @@ import aiohttp
 import httpx
 import pytest
 import yaml
+from PIL import Image
 from starlette.testclient import TestClient
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload
@@ -33,6 +35,8 @@ class DiscordAPI:
         self.webhooks = []
         self.channels = {CHANNEL: {"id": CHANNEL, "name": "builds", "type": 0, "guild_id": GUILD}, DM: {"id": DM, "type": 1}}
         self.responses = deque()
+        self.application = {"id": APP, "owner": {"id": USER}}
+        self.avatar_status = 200
 
     def handler(self, request):
         method, path = request.method, request.url.path.removeprefix("/api/v10")
@@ -42,6 +46,10 @@ class DiscordAPI:
         assert request.headers["User-Agent"].startswith("DiscordBot (")
         if path == "/gateway/bot":
             return httpx.Response(200, json={"url": "wss://gateway.discord.gg"})
+        if path == "/oauth2/applications/@me":
+            return httpx.Response(200, json=self.application)
+        if path == "/users/@me" and method == "PATCH":
+            return httpx.Response(self.avatar_status, json={"retry_after": 0} if self.avatar_status == 429 else {"id": BOT})
         if path == "/users/@me/channels":
             return httpx.Response(200, json=self.channels[DM])
         if "/reactions/" in path:
@@ -107,7 +115,7 @@ class Sockets:
 @pytest.fixture
 def discord(tmp_path):
     @contextmanager
-    def build(*, settings=None, sockets=None, token=True):
+    def build(*, settings=None, sockets=None, token=True, slack=None):
         api = DiscordAPI()
         cfg = {"version": 2, "public_url": PUBLIC,
                "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access.example.test", "aud": "test"}},
@@ -115,6 +123,8 @@ def discord(tmp_path):
                           "claude-routine": {"use": "claude-routine", "routines": {"build-check": {"routine_id": "trig_EXAMPLE", "token_env": "EXAMPLE_ROUTINE_TOKEN"}}},
                           "discord": {"use": "discord", "agents": {"claude": ["home"]}, "spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}},
                                       **(settings or {})}}}
+        if slack is not None:
+            cfg["blocks"]["slack"] = {"use": "slack", **slack}
         path = tmp_path / "config.yaml"
         path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         env = {"SWITCHBOARD_KEY_CLAUDE": STATIC_KEY, "EXAMPLE_ROUTINE_TOKEN": "mock-routine"}
@@ -274,6 +284,54 @@ def test_rest_retries_json_and_header_rate_limits_with_a_bound(discord):
         assert len(api.responses) == 1
 
 
+async def finish_ready(socket, block):
+    async with asyncio.timeout(3):
+        assert (await socket.outgoing.get())["op"] == 2
+        socket.feed(0, ready(), t="READY", s=1)
+        socket.feed(0, {"id": CHANNEL, "type": 0}, t="CHANNEL_CREATE", s=2)
+        while CHANNEL not in block.channels:
+            await asyncio.sleep(0)
+
+
+def test_gateway_applies_avatar_only_when_the_resolved_file_changes(discord, tmp_path):
+    uploaded = tmp_path / "data" / "avatars"
+    configured = tmp_path / "branding"
+    uploaded.mkdir(parents=True)
+    configured.mkdir()
+    name = "switchboard.png"
+    Image.new("RGBA", (8, 8), "red").save(uploaded / name)
+    Image.new("RGB", (8, 8), "blue").save(configured / name)
+    for image in (uploaded / name, None, configured / name):
+        socket = Socket()
+        with discord(settings={"avatar": name}, sockets=Sockets(socket), slack={"avatar_dirs": [str(configured)]}) as (_, client, block, api):
+            client.portal.call(finish_ready, socket, block)
+            status = payload(call(client, STATIC_KEY, "discord_status"))
+            assert status["connected"] and status["avatar"] == {"file": name, "applied": True, "error": None}
+            changes = [data["avatar"] for method, path, data in api.calls if (method, path) == ("PATCH", "/users/@me")]
+            assert len(changes) == (image is not None)
+            if image is not None:
+                assert changes == ["data:image/png;base64," + base64.b64encode(image.read_bytes()).decode("ascii")]
+        if image is None:
+            (uploaded / name).unlink()
+
+
+@pytest.mark.parametrize(("file", "patches", "error"), [
+    (None, 0, None),
+    ("missing-avatar.png", 0, "avatar file not found"),
+    ("switchboard.png", 1, "Discord REST returned HTTP 429"),
+])
+def test_gateway_avatar_failure_does_not_break_connection_or_retry(discord, caplog, file, patches, error):
+    socket = Socket()
+    with discord(settings={"avatar": file} if file else {}, sockets=Sockets(socket)) as (_, client, block, api):
+        api.avatar_status = 429
+        client.portal.call(finish_ready, socket, block)
+        status = payload(call(client, STATIC_KEY, "discord_status"))
+        assert status["connected"] and status["avatar"] == {"file": file, "applied": False, "error": error}
+        assert sum((method, path) == ("PATCH", "/users/@me") for method, path, _ in api.calls) == patches
+        if error:
+            assert caplog.text.count(error) == 1
+
+
 def test_gateway_identifies_heartbeats_resumes_and_reports_fatal_intents(discord):
     first, second = Socket(), Socket()
     sockets = Sockets(first, second)
@@ -365,8 +423,104 @@ def test_gateway_skips_optional_intent_and_reconnects_after_claim_rotation(disco
 
 @pytest.mark.parametrize(("settings", "key"), [({"spaces": {"home": {"guild_id": "bad"}}}, "spaces.home.guild_id"),
                                                ({"dm_space": "missing"}, "dm_space"), ({"application_id": -1}, "application_id"),
-                                               ({"personas": "true"}, "personas")])
+                                               ({"personas": "true"}, "personas"), ({"avatar": "../switchboard.png"}, "avatar")])
 def test_invalid_discord_config_names_the_path(discord, settings, key):
     with pytest.raises(BlockError, match=rf"blocks\.discord\.{key}"):
         with discord(settings=settings):
             pytest.fail("invalid Discord configuration was accepted")
+
+
+def test_a_space_without_guild_id_binds_the_owners_server_and_trusts_the_application_owner(discord):
+    spaces = {"spaces": {"home": {"project": None}}, "agents": {"claude": ["home"]}}
+    with discord(settings=spaces) as (core, client, block, api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}, {"id": GUILD_2}]))
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == {USER}
+        dispatch("GUILD_CREATE", {"id": GUILD, "name": "Home", "owner_id": USER, "channels": [api.channels[CHANNEL]], "threads": []})
+        dispatch("GUILD_CREATE", {"id": GUILD_2, "name": "Elsewhere", "owner_id": "999", "channels": [], "threads": []})
+        event = dispatch("MESSAGE_CREATE", message())
+        assert event["trust"] == "owner" and event["from"]["space"] == "home"
+        assert dispatch("MESSAGE_CREATE", message(guild_id=GUILD_2, channel_id="41", id="102")) is None
+        status = payload(call(client, STATIC_KEY, "discord_status"))
+        assert status["spaces"]["home"]["owners"] == 1
+        assert status["discovered"]["application_owner_ids"] == [USER]
+        assert [(g["id"], g["name"], g["space"]) for g in status["discovered"]["guilds"]] == [(GUILD, "Home", "home"), (GUILD_2, "Elsewhere", None)]
+        assert status["discovered"]["guilds"][0]["channels"] == [{"id": CHANNEL, "name": "builds", "type": 0}]
+        assert not any("owner_ids" in m for m in status["missing"])
+
+
+def test_the_auto_space_binds_nothing_when_two_owned_servers_are_joined(discord):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}, {"id": GUILD_2}]))
+        client.portal.call(block._load_owner)
+        for guild in (GUILD, GUILD_2):
+            dispatch("GUILD_CREATE", {"id": guild, "name": guild, "owner_id": USER, "channels": [], "threads": []})
+        assert block.space_for(GUILD) is None and block.space_for(GUILD_2) is None
+        assert dispatch("MESSAGE_CREATE", message()) is None
+
+
+def test_configured_owner_ids_win_and_a_team_owner_is_read(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": ["555"]}}, "agents": {}}) as (_, client, block, api):
+        api.application = {"id": APP, "owner": {"id": "1"}, "team": {"owner_user_id": USER}}
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == {USER}
+        assert block.owners(block.spaces["home"]) == {"555"}
+        assert block.trust_of(block.spaces["home"], USER) == "external"
+
+
+def test_dms_are_listed_as_candidates_but_never_trusted(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}}}) as (_, client, block, api):
+        api.application = {"id": APP, "owner": {}}
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block._load_owner)
+        client.portal.call(block.dispatch, "MESSAGE_CREATE", message(guild_id=None, channel_id=DM, id="103", author={"id": "777", "username": "someone"}))
+        discovered = payload(call(client, STATIC_KEY, "discord_status"))["discovered"]
+        assert discovered["dm_users"] == [{"id": "777", "name": "someone"}] and discovered["application_owner_ids"] == []
+        assert block.trust_of(block.spaces["home"], "777") == "external"
+
+
+def test_only_one_space_may_leave_out_guild_id(discord):
+    with pytest.raises(BlockError, match="only one space"):
+        with discord(settings={"spaces": {"a": {}, "b": {}}, "agents": {}}):
+            pass
+
+
+def test_connect_discord_hands_out_the_token_link_then_the_invite(discord):
+    with discord(token=False, settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        out = payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))
+        assert out["what"] == "discord" and "/claims/discord/" in out["next"][0]["link"]
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        client.portal.call(block.dispatch, "READY", ready(guilds=[]))
+        client.portal.call(block._load_owner)
+        block._gateway.ready = True
+        steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
+        assert any(s.startswith("Invite the bot to a server you own for space home: https://discord.com/oauth2/authorize?") for s in steps)
+
+
+def test_guild_ownership_transfer_unbinds_the_auto_space(discord):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        dispatch = lambda event, data: client.portal.call(block.dispatch, event, data)
+        dispatch("READY", ready(guilds=[{"id": GUILD}]))
+        client.portal.call(block._load_owner)
+        dispatch("GUILD_CREATE", {"id": GUILD, "name": "Home", "owner_id": USER, "channels": [], "threads": []})
+        assert block.space_for(GUILD) == "home"
+        dispatch("GUILD_UPDATE", {"id": GUILD, "name": "Home", "owner_id": "999"})
+        assert block.space_for(GUILD) is None
+
+
+def test_an_owner_lookup_for_a_replaced_token_is_discarded(discord, monkeypatch):
+    with discord(settings={"spaces": {"home": {}}, "agents": {}}) as (_, client, block, _api):
+        tokens = iter(["old", "old", "new"])
+        monkeypatch.setattr(block, "token", lambda: next(tokens))
+        client.portal.call(block._load_owner)
+        assert block.app_owner_ids == frozenset()
+
+
+def test_connect_discord_keeps_a_rejected_token_step(discord):
+    with discord(settings={"spaces": {"home": {"guild_id": GUILD, "owner_ids": [USER]}}, "agents": {}}) as (_, client, block, _api):
+        block._gateway.fatal_code = 4004
+        steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
+        assert any(s.startswith("Discord rejected the bot token.") for s in steps)

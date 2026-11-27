@@ -23,10 +23,10 @@ class BotAPI:
     async def aclose(self) -> None:
         await self._transport.aclose()
 
-    async def _request(self, token: str, method: str, params: dict[str, Any]) -> Any:
+    async def _request(self, token: str, method: str, **payload: Any) -> Any:
         timeout = httpx.Timeout(10, read=60 if method == "getUpdates" else 10)
-        request = httpx.Request("POST", f"https://api.telegram.org/bot{token}/{method}", json=params,
-                                extensions={"timeout": timeout.as_dict()})
+        request = httpx.Request("POST", f"https://api.telegram.org/bot{token}/{method}",
+                                extensions={"timeout": timeout.as_dict()}, **payload)
         try:
             response = await self._transport.handle_async_request(request)
             try:
@@ -58,10 +58,13 @@ class BotAPI:
 
     async def call(self, token: str, method: str, *, retry: bool = True, **params: Any) -> Any:
         try:
-            return await self._request(token, method, params)
+            return await self._request(token, method, json=params)
         except TelegramError as exc:
             if not retry or exc.code != 429:
                 raise
             delay = exc.retry_after
         await asyncio.sleep(delay if delay is not None else 1)
-        return await self._request(token, method, params)
+        return await self._request(token, method, json=params)
+
+    async def multipart(self, token: str, method: str, *, data: dict[str, str], files: dict[str, tuple[str, bytes, str]]) -> Any:
+        return await self._request(token, method, data=data, files=files)
