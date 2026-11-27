@@ -145,7 +145,10 @@ def test_connect_hosted_clients_require_https_even_with_local_oauth(make, kind):
     assert core.cfg.owner_sign_in
     out = connect(client, kind)
     [step] = out["next"]
-    assert step["by"] == "person" and "public HTTPS URL and owner sign-in" in step["do"]
+    assert step["by"] == "person"
+    assert "swb up --tunnel cloudflare" in step["do"]
+    assert "https://swb.one/docs/first-run#get-a-public-address" in step["do"]
+    assert "owner sign-in" not in step["do"]
     assert step == connect(client, "grok-bot")["next"][0]
     assert "localhost" not in json.dumps(out)
     assert "http://localhost:8000/mcp" in connect(client, "mcp-client")["done"][0]
@@ -275,7 +278,8 @@ def test_status_missing_oauth_and_missing_github_routes(make):
     out = connect(client, "claude")
     assert out["done"] == []
     [step] = out["next"]
-    assert "public HTTPS URL and owner sign-in" in step["do"]
+    assert "swb up --tunnel cloudflare" in step["do"]
+    assert "Set up owner sign-in for OAuth." in step["do"]
 
 
 async def test_saved_slack_and_github_tokens_loaded_on_restart(tmp_path):

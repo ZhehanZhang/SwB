@@ -13,7 +13,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from ...auth import Principal
 from ...block_env import GITHUB_SECRET, configured_env
 from ...config import Config
-from ...connect import PUBLIC_HTTPS_PREREQUISITE
+from ...connect import public_https_prerequisite
 from ...modes import PROVIDERS
 from ...muse_protocol import TOKEN_ENV as MUSE_TOKEN_ENV
 from .coding import coding_steps
@@ -98,7 +98,7 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
     resource = core.cfg.resource
     oauth = bool(resource and core.cfg.owner_sign_in)
     if kind in MENUS and (not oauth or not resource or urlsplit(resource).scheme != "https"):
-        return {"done": [], "next": [{"by": "person", "do": PUBLIC_HTTPS_PREREQUISITE}]}
+        return {"done": [], "next": [{"by": "person", "do": public_https_prerequisite(core.cfg.owner_sign_in)}]}
     url = resource if kind in MENUS else f"{base}/mcp"
     done = [f"MCP URL: {url}.", f"OAuth sign-in: {'available' if oauth else 'unavailable'}."]
     if kind in MENUS:
