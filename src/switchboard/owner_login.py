@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from starlette.requests import Request
@@ -144,8 +145,8 @@ class OwnerLogin:
             return limited
         token = (await json_body(request)).get("token")
         row, refused = (self.sessions.consume_link(token)
-                        if self.origin and isinstance(token, str) and len(token) == 43 and token.isascii()
-                        else (None, "link_expired"))
+                        if self.origin and isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9_-]{43}", token)
+                        else (None, "link_invalid"))
         if refused is not None:
             self.limiter.hit("login_link_fail", ip)
             return self.failed(request, refused)

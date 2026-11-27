@@ -24,7 +24,7 @@ from switchboard import web
 from switchboard.auth import b64url
 from switchboard.config import ConfigError
 from switchboard.oidc import COOKIE as OIDC_COOKIE
-from switchboard.sessions import CHALLENGE_COOKIE, SESSION_COOKIE, SESSION_IDLE, SESSION_LIFETIME, Sessions, safe_next
+from switchboard.sessions import CHALLENGE_COOKIE, LINK_HISTORY_TTL, SESSION_COOKIE, SESSION_IDLE, SESSION_LIFETIME, Sessions, safe_next
 from switchboard.store import Store
 
 SIGN_IN = "/auth/passkey/login"
@@ -191,7 +191,15 @@ def test_link_origin_single_use_expiry_and_audit(make, caplog):
                 assert value[:8] not in json.dumps(rows)
         assert client.post("/auth/link", json={"token": first}).json() == {"error": "link_expired"}
         token(client)
+        for old in (first, other):
+            assert client.post("/auth/link", json={"token": old}).json() == {"error": "link_expired"}
+        clock.t += LINK_HISTORY_TTL
+        token(client)
         assert core.store.one("SELECT 1 FROM owner_login_links_used") is None
+        assert core.store.one("SELECT 1 FROM owner_login_links WHERE expires_at <= ?",
+                              (clock.t - LINK_HISTORY_TTL,)) is None
+        for old in (first, other):
+            assert client.post("/auth/link", json={"token": old}).json() == {"error": "link_invalid"}
     assert all(value not in caplog.text for value in (first, other, client.cookies[SESSION_COOKIE]))
     assert all(value not in str(core.audit.recent()) for value in (first, other, client.cookies[SESSION_COOKIE]))
 
@@ -225,7 +233,18 @@ def test_restricted_keys_cannot_discover_or_call_login_link(make, restriction):
     assert core.store.one("SELECT 1 FROM owner_login_links") is None
 
 
-@pytest.mark.parametrize("path, failure", [("/auth/link", "link_expired"), (SIGN_IN + "/verify", "passkey_failed")])
+@pytest.mark.parametrize("body", [{}, {"token": None}, {"token": 1}, {"token": "nonsense"},
+                                 {"token": "!" * 43}, {"token": "a" * 43}])
+def test_invalid_link_never_starts_a_session(make, body):
+    core, client = make()
+    response = client.post("/auth/link", json=body)
+    assert response.status_code == 401 and response.json() == {"error": "link_invalid"}
+    assert "set-cookie" not in response.headers
+    assert core.store.one("SELECT 1 FROM owner_sessions") is None
+    assert not core.audit.recent(action="login_link_used")
+
+
+@pytest.mark.parametrize("path, failure", [("/auth/link", "link_invalid"), (SIGN_IN + "/verify", "passkey_failed")])
 def test_failed_login_attempts_are_rate_limited(make, path, failure):
     core, client = make()
     for _ in range(10):
@@ -551,8 +570,9 @@ def test_next_is_same_origin_only(make, bad, no_spa_build):
     security_headers(response)
 
 
-def test_authorize_returns_to_full_request_and_accepts_session(make, no_spa_build):
-    _, client = make(base_config(auth={}))
+@pytest.mark.parametrize(("emails", "owner_name"), [([], "owner"), ([OWNER_EMAIL], OWNER_EMAIL)])
+def test_authorize_returns_to_full_request_and_accepts_session(make, no_spa_build, emails, owner_name):
+    core, client = make(base_config(auth={"owner_emails": emails}))
     cid = register(client)["client_id"]
     state = "keep the full query /+&"
     redirect, _ = consent(client, cid, headers={}, state=state)
@@ -566,6 +586,9 @@ def test_authorize_returns_to_full_request_and_accepts_session(make, no_spa_buil
     assert sign_in(client).status_code == 204
     consent_page = client.get(next_path)
     assert consent_page.status_code == 200
+    assert f"Signed in as {owner_name}</p>" in consent_page.text
+    session = core.auth.sessions.owner(client.cookies[SESSION_COOKIE])
+    assert session.label not in consent_page.text and client.cookies[SESSION_COOKIE] not in consent_page.text
     req = re.search(r'name="req" value="([^"]+)"', consent_page.text).group(1)
     form = {"req": req, "decision": "approve", "csrf": consent_csrf(consent_page)}
     blocked = client.post("/authorize", data=form, headers={"Origin": "https://elsewhere.example.test"})
