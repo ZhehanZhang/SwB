@@ -52,6 +52,15 @@ function Window({ party, title, children }: { party: MarkKind; title: string; ch
   );
 }
 
+function From({ party, name, text }: { party: Party; name: string; text: string }) {
+  return (
+    <>
+      <span className="swb-from"><MarkTile kind={party as MarkKind} className="swb-from-mark" />{name}</span>
+      {text}
+    </>
+  );
+}
+
 function Bubble({ show, mine, children }: { show: boolean; mine?: boolean; children: React.ReactNode }) {
   return <p className={`swb-bubble ${mine ? 'swb-bubble-mine' : ''} ${show ? 'swb-bubble-in' : ''}`}>{children}</p>;
 }
@@ -87,14 +96,14 @@ export function AgentExchange({ lang }: { lang: Locale }) {
           <Window party={from} title={app[from]}>
             <Bubble show mine>{copy.ask(copy.names[target], task.ask)}</Bubble>
             <Bubble show={step >= 1}>{copy.sent(copy.names[target])}</Bubble>
-            <Bubble show={step >= 4}><b>{copy.names[target]}</b> {task.reply}</Bubble>
+            <Bubble show={step >= 4}><From party={target} name={copy.names[target]} text={task.reply} /></Bubble>
           </Window>
           <div className="swb-exchange-link" aria-hidden="true">
             <span className={`swb-exchange-pulse ${step >= 1 && step < 3 ? 'swb-go' : ''} ${step >= 3 && step < 4 ? 'swb-back' : ''}`} />
             <img src="/avatars/swb.png" alt="" className="swb-exchange-hub" />
           </div>
           <Window party={target} title={app[target]}>
-            <Bubble show={step >= 2}><b>{copy.names[from]}</b> {task.ask}</Bubble>
+            <Bubble show={step >= 2}><From party={from} name={copy.names[from]} text={lang === 'en' ? `${task.ask[0].toUpperCase()}${task.ask.slice(1)}.` : `${task.ask}。`} /></Bubble>
             <Bubble show={step >= 3} mine>{task.reply}</Bubble>
           </Window>
         </div>
