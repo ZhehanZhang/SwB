@@ -32,6 +32,7 @@ from ...slack.config import Grant, Persona
 from ...slack.routing import Target
 from ...slack.slack import CHANNEL_ID_RE, WorkspaceRuntime
 from ...slack.writes import WriteError
+from ...subject import wake_text
 from ...trust import neutralize
 
 SLACK_SENDER: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("slack_sender", default=None)
@@ -158,7 +159,8 @@ class SlackIntake(Block):
         sender = {"kind": "slack", "workspace": push["workspace"], "team": push["team"], "channel": push["channel"], "channel_name": push["channel_name"],
                   "user": push["user"], "user_name": push["user_name"], "is_bot": push["is_bot"], "trust": push.get("trust", "external"), "ts": push["ts"], "thread_ts": push["thread_ts"],
                   "permalink": push["permalink"]}
-        item = {"event_id": push["id"], "slack_kind": push["kind"], "addressed_to_us": push["addressed_to_us"], "text": push["text"],
+        item = {"event_id": push["id"], "slack_kind": push["kind"], "addressed_to_us": push["addressed_to_us"],
+                "subject": push["subject"], "text": push["text"],
                 "truncated": push["truncated"], "files": push["files"], "target": push.get("target"), "target_kind": push.get("target_kind"), "trust": push.get("trust", "external"), "from": sender}
         if "channel_mode" in push:
             item["channel_mode"] = push["channel_mode"]
@@ -358,9 +360,8 @@ class SlackIntake(Block):
     async def delegate(self, push: dict[str, Any], target: Target, *, listen_project: str | None = None) -> None:
         engine = self.engine
         assert engine is not None
-        where = f"#{push['channel_name']}" if push.get("channel_name") else push["channel"]
-        task = (f"Slack message from {push['user_name'] or push['user']} in {push['workspace']} {where} ({push['permalink'] or push['ts']}):\n\n"
-                f"{push['text']}\n\nYour final reply is posted back in that Slack thread as {target.name}.")
+        title = push["subject"]
+        tail = f"Your final reply is posted back in that Slack thread as {target.name}."
         channel_mode = push.get("channel_mode")
         scoped = bool(channel_mode and channel_mode["mode"] in ("assist", "triage"))
         project = channel_mode["project"] if channel_mode else listen_project or self.mapped_project(push)
@@ -372,16 +373,15 @@ class SlackIntake(Block):
         if listen_project or scoped:
             sender = " ".join(neutralize(push["sender"]["name"] or push["user"] or "unknown").split())[:120]
             if scoped:
-                task = f"Slack message from {sender} in {push['workspace']} {where} ({push['permalink'] or push['ts']}):\n\n{push['text']}\n\n{self.core.modes.wake_note(channel_mode)}"
+                tail = self.core.modes.wake_note(channel_mode)
             else:
-                task = (f"Slack listen-mode message from {sender}, trust {trust}, in {push['workspace']} {where}:\n\n"
-                        f"{push['text']}\n\nA reply is optional. If anything needs action, send only a short note to the owner.")
+                tail = "A reply is optional. If anything needs action, send only a short note to the owner."
                 handle_meta["listen"] = True
             handle_meta.update(permalink=push["permalink"], slack_sender=sender,
                                slack_thread={"workspace": push["workspace"], "channel": push["channel"], "target": target.slug,
                                              "channel_name": push["channel_name"], "thread_ts": push["thread_ts"] or push["ts"], "user": push["user"],
                                              "persona": target.persona or ("claude" if "claude" in engine.personas() else None)})
-        kw: dict[str, Any] = {"task": task, "title": f"Slack {push['workspace']} {where}", "handle_meta": handle_meta}
+        kw: dict[str, Any] = {"task": wake_text(title, push["text"], push["permalink"], tail), "title": title, "handle_meta": handle_meta}
         if target.kind == "project":
             kw["project"] = target.id
         else:
