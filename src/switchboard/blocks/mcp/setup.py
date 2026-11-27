@@ -15,14 +15,13 @@ from ...block_env import GITHUB_SECRET, configured_env
 from ...config import Config
 from ...connect import public_https_prerequisite
 from ...modes import PROVIDERS
-from ...muse_protocol import TOKEN_ENV as MUSE_TOKEN_ENV
 from ...targets import slugify
 from .coding import coding_steps
 from .kit import Kit
 
-CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "coding-agent")
+CLIENTS = ("mcp-client", "chatgpt", "claude", "grok", "muse", "coding-agent")
 BLOCKS = {"claude-project": "claude-routine", "capy-captain": "capy", "slack": "slack", "github": "github",
-          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "muse": "muse", "dots": "dots"}
+          "grok-bot": "grok-routine", "discord": "discord", "telegram": "telegram", "dots": "dots"}
 BLOCK_EXAMPLES = {
     "discord": {"spaces": {"home": {"guild_id": "100000000000000001", "owner_ids": ["100000000000000002"], "mode": "watch"}}},
     "telegram": {"spaces": {"home": {"chats": [-1001111111111], "owner_ids": [222222], "mode": "watch"}}},
@@ -40,9 +39,13 @@ ROUTINE_ENV_ONLY = {
 ALIASES = {"grok-routine": "grok-bot"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
 CLOUDFLARE_SETUP_URL = "https://swb.one/docs/setup/cloudflare"
-MENUS = {"chatgpt": f"{CHATGPT_PLUGINS_URL} in a web browser. Select + > Add custom MCP server",
-         "claude": "Customize > Connectors > Add > Custom > Web",
-         "grok": "grok.com > Connectors > New Connector > Custom"}
+HOSTED_CLIENT_INSTRUCTIONS = {
+    "chatgpt": f"Open {CHATGPT_PLUGINS_URL} in a web browser. Select + > Add custom MCP server. "
+               "Add {url} as a custom connector. Sign in with OAuth.",
+    "claude": "Open Customize > Connectors > Add > Custom > Web. Add {url} as a custom connector. Sign in with OAuth.",
+    "grok": "Open grok.com > Connectors > New Connector > Custom. Add {url} as a custom connector. Sign in with OAuth.",
+    "muse": "In a Muse chat, ask Muse to add {url} as a custom connector with OAuth. Open the sign-in link Muse sends.",
+}
 GUIDE_TITLE_WORDS = {"chatgpt": "ChatGPT", "github": "GitHub", "mcp": "MCP"}
 
 
@@ -71,7 +74,7 @@ def enable_steps(cfg: Config, name: str, choose: dict[str, Any]) -> list[dict[st
         instruction += " Replace guild_id and owner_ids with your Discord server and user IDs."
     elif name == "telegram":
         instruction += " Replace chats and owner_ids with your Telegram group and user IDs."
-    names = (MUSE_TOKEN_ENV,) if name == "muse" else configured_env(name, config)
+    names = configured_env(name, config)
     if names:
         instruction += f" Use {', '.join(names)} in .env or get private claim links after restart."
     elif routine_env:
@@ -102,7 +105,7 @@ def register_guides(mcp: MCPServer) -> dict[str, dict[str, str]]:
 
 
 def hosted_client_instruction(kind: str, connector: str | None) -> str:
-    return f"Open {MENUS[kind]}. Add {connector or '<public_url>/mcp'} as a custom connector. Sign in with OAuth."
+    return HOSTED_CLIENT_INSTRUCTIONS[kind].format(url=connector or "<public_url>/mcp")
 
 
 def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None, choose: dict[str, Any]) -> dict[str, Any]:
@@ -110,11 +113,12 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
     base = core.base_url
     resource = core.cfg.resource
     oauth = bool(resource and core.cfg.owner_sign_in)
-    if kind in MENUS and (not oauth or not resource or urlsplit(resource).scheme != "https"):
+    hosted = kind in HOSTED_CLIENT_INSTRUCTIONS
+    if hosted and (not oauth or not resource or urlsplit(resource).scheme != "https"):
         return {"done": [], "next": [{"by": "person", "do": public_https_prerequisite(core.cfg.owner_sign_in)}]}
-    url = resource if kind in MENUS else f"{base}/mcp"
+    url = resource if hosted else f"{base}/mcp"
     done = [f"MCP URL: {url}.", f"OAuth sign-in: {'available' if oauth else 'unavailable'}."]
-    if kind in MENUS:
+    if hosted:
         signed_in = principal.kind == "oauth" and principal.source == kind
         if not signed_in and principal.is_unrestricted_owner:
             signed_in = core.store.one(

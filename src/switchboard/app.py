@@ -22,7 +22,6 @@ from .config import REQUEST_BASE
 from .guard import Guard, RateLimiter, client_ip, reject
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
-from .muse_protocol import BRIDGE_PATH
 from .sessions import Owner, login_redirect
 from .web import web_routes
 
@@ -87,8 +86,7 @@ class BearerGate:
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         path = scope.get("path", "")
         inbox_feed = path.rstrip("/") in INBOX_FEEDS
-        muse_bridge = path == BRIDGE_PATH
-        if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed or muse_bridge):
+        if scope["type"] == "http" and (path.startswith("/mcp") or inbox_feed):
             scope.pop(PRINCIPAL_SCOPE, None)
             headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
             auth = headers.get("authorization", "")
@@ -99,12 +97,7 @@ class BearerGate:
             if wait is not None:
                 await reject(send, 429, "slow_down", "too many failed sign-ins from this address; try again later", wait)
                 return
-            if muse_bridge:
-                muse = self.core.blocks.get("muse")
-                principal = (muse.verify_bridge(token) if muse and muse.manifest.id == "muse"
-                             and auth.lower().startswith("bearer ") else None)
-            else:
-                principal = self.core.auth.verify_bearer(token)
+            principal = self.core.auth.verify_bearer(token)
             if principal is None and token:
                 self.limiter.hit("bearer_fail", ip)
                 self.core.audit.record(origin="http", source="-", client=ip, destination="core", action="auth_failure", outcome="refused",

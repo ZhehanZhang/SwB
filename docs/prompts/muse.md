@@ -1,27 +1,23 @@
 Read the setup guide at https://swb.one/docs/setup/muse.
 
-Help me connect Meta Muse to SwB, my self-hosted switchboard for agents and channels. You reach SwB as an MCP server.
+Help me connect Muse to SwB. SwB is my self-hosted switchboard. It is an MCP server that carries messages between my agents and channels.
 
-If the SwB tools are missing, ask me to add SwB as a custom MCP server. Ask me to enter my SwB MCP address. Use `https://swb.example.com/mcp` as the example.
-
-For Claude, give me the path `Customize > Connectors > Add > Custom > Web`. For ChatGPT, ask me to open `https://chatgpt.com/plugins`. Give me the path `+ > Add custom MCP server`. For Grok, give me the path `grok.com > Connectors > New Connector > Custom`. For other apps, ask me to open the MCP server settings. Wait for me to confirm.
-
-Call connect(what="muse"). Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path. Wait for me to say done after each step. Call connect(what="muse") again to check the connection.
-
-Ask me to make a bridge token of 64 random letters and digits in my password manager. Ask me to save it at the claim link. Ask me to open https://gadgets.muse.ai/settings/sdk-tokens. Ask me to use Log in. Ask me to click Generate token. Ask me to click Copy.
-
-Ask me to run the commands below on a Linux device with Bluetooth Low Energy. Use my SwB address in the last command you give me.
+Check your tools first. If the SwB tools are missing, add SwB as a custom connector with your built-in connector feature. Use the settings below. Replace the example address with my SwB address.
 
 ```
-/usr/bin/python3 -m venv --system-site-packages .venv-muse
-.venv-muse/bin/pip install swb-one 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git@a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe#subdirectory=linux'
-.venv-muse/bin/swb muse-bridge --url https://swb.example.com --setup
+Name: SwB
+MCP server URL: https://swb.example.com/mcp
+Transport: Streamable HTTP
+Authentication: OAuth 2.1 with PKCE S256 and dynamic client registration
+Redirect URI: https://agent.meta.ai/api/hatch/oauth/callback
 ```
 
-Ask me to enter both tokens at the hidden prompts. In the Muse app, ask me to turn on Developer mode at Settings > Devices > Developer mode. Ask me to tap Add Device. Ask me to pick the Bluetooth name SwB prints.
+Start the OAuth sign-in. Give me the sign-in link. Ask me to sign in to SwB as the owner.
 
-When the bridge is online, run `send(to="muse:gadget:muse", task="Reply with pong to test SwB.")`. Check the test with result.
+Call connect(what="muse"). Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact links. Wait for me to say done after each step. Call connect(what="muse") again to check the connection.
 
-Use the claim link only for the bridge token. Keep tokens out of this chat.
+Ask me to enter a token only through the SwB claim link that connect returns. Keep tokens out of this chat and tool arguments.
 
-When connect reports connected, send a test message. Show me the reply. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
+When connect reports that the client is signed in, send a test message with `send(to="agent:muse", task="SwB setup test: reply pong")`. Read the message with inbox. Show me the result.
+
+Create a recurring scheduled task that runs every 30 minutes. In each run, call wait on SwB to collect new messages for the muse mailbox. Read each message with get_message. Answer that message with reply(conversation=..., text=..., final=true). Also call inbox at the start of each chat.
