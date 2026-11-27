@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+from importlib.resources import files
 
 import pytest
 
@@ -8,7 +9,7 @@ from conftest import CAPTAIN, CAPTAIN2, CAPY_KEY, OWNER, PUBLIC, SERVICE_KEY, ST
 
 PRIVATE = "fixture-secret-not-owner-console-data"
 READ_PATHS = ("/health", "/routes", "/visibility", "/audit", "/agents", "/projects", "/inbox",
-              "/conversations/not-found", "/memory", "/prompts/routine", "/platforms")
+              "/conversations/not-found", "/memory", "/prompts/coordinator", "/platforms")
 
 
 def get(client, path, *, status=200, **params):
@@ -389,14 +390,30 @@ def test_memory_folders_search_and_read_use_owner_scope_and_safe_errors(make):
     assert get(client, "/memory", q="!?", status=400) == {"error": "query has no searchable words"}
 
 
-def test_prompts_are_versioned_and_only_use_allowlisted_templates(make):
+def test_console_prompts_match_every_packaged_setup_prompt(make):
     _, client = make()
-    title = 'Research "Q4"'
-    routine = get(client, "/prompts/routine", claude_project=title)
-    assert routine["name"] == "routine" and routine["version"] == "v1"
-    assert f"routine_pickup(claude_project={json.dumps(title)})" in routine["text"]
-    coord = get(client, "/prompts/coordinator", claude_project=title)
-    assert coord["version"] == "v4" and json.dumps(title) in coord["text"]
-    assert "routine_pickup()" in get(client, "/prompts/dispatcher")["text"]
-    assert get(client, "/prompts/routine", claude_project="bad\nname", status=400) == {"error": "invalid Claude Project name"}
-    assert get(client, f"/prompts/{PRIVATE}", status=404) == {"error": "prompt not found"}
+    sources = sorted((path for path in files("switchboard.prompts.setup").iterdir()
+                      if path.is_file() and path.name.endswith(".md")), key=lambda path: path.name)
+    assert sources
+    for path in sources:
+        name = path.name.removesuffix(".md")
+        response = client.get(f"/api/prompts/{name}", headers=OWNER)
+        assert response.status_code == 200, name
+        assert response.headers["content-type"] == "text/markdown; charset=utf-8"
+        assert response.content == path.read_bytes(), name
+
+
+@pytest.mark.parametrize("name", [PRIVATE, "universal-coordinator", "routine", "dispatcher"])
+def test_console_prompts_return_not_found_for_unpacked_names(make, name):
+    _, client = make()
+    assert get(client, f"/prompts/{name}", status=404) == {"error": "prompt not found"}
+
+
+@pytest.mark.parametrize("name", ["coordinator", "claude-project"])
+def test_console_prompt_selection_uses_the_path_name_only(make, name):
+    _, client = make()
+    path = f"/prompts/{name}"
+    response = client.get(f"/api{path}", headers=OWNER,
+                          params={"project": "demo", "client": "claude", "claude_project": 'Research "Q4"\n'})
+    assert response.status_code == 200, response.text
+    assert response.content == client.get(f"/api{path}", headers=OWNER).content
