@@ -6,15 +6,10 @@ import { CopyInstall, LandingLanguage, LandingTheme } from '@/components/landing
 import { isLocale, localize } from '@/lib/i18n';
 import { landingCopy } from '@/lib/landing-copy';
 import { pageMetadata } from '@/lib/metadata';
-import { MarkTile, type MarkKind } from '@/components/mark-tile';
 import { Conversation } from '@/components/conversation';
 import { StepFlow } from '@/components/step-flow';
 import { SwitchboardHero } from '@/components/switchboard-hero';
 import { repository } from '@/lib/source';
-
-const connectorKinds: MarkKind[] = [
-  'claude', 'chatgpt', 'gemini', 'claude-code', 'codex', 'capy', 'grok', 'muse', 'slack', 'discord', 'telegram', 'github',
-];
 
 export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
@@ -55,22 +50,6 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </div>
         </section>
         <SwitchboardHero label={copy.boardAlt} />
-        <figure className="swb-shot mt-16 overflow-hidden rounded-xl border sm:mt-24">
-          <img className="block h-auto w-full dark:hidden" width={2400} height={1500}
-            src="/shots/hero-light.webp" srcSet="/shots/hero-light-1200.webp 1200w, /shots/hero-light.webp 2400w"
-            sizes="(min-width: 1152px) 1088px, 100vw" alt={copy.shotAlt} fetchPriority="high" />
-          <img className="hidden h-auto w-full dark:block" width={2400} height={1500}
-            src="/shots/hero-dark.webp" srcSet="/shots/hero-dark-1200.webp 1200w, /shots/hero-dark.webp 2400w"
-            sizes="(min-width: 1152px) 1088px, 100vw" alt={copy.shotAlt} loading="lazy" />
-        </figure>
-        <div className="swb-connectors grid grid-cols-3 gap-y-6 py-12 min-[500px]:grid-cols-6 lg:grid-cols-12 lg:py-16">
-          {copy.connectors.map((name, index) => (
-            <figure key={name} className="flex flex-col items-center gap-2 text-center">
-              <MarkTile kind={connectorKinds[index]} />
-              <figcaption className="text-xs text-fd-muted-foreground">{name}</figcaption>
-            </figure>
-          ))}
-        </div>
         <Conversation title={copy.convoTitle} channel={copy.channel} you={copy.you} lines={copy.convo} />
         <StepFlow steps={copy.steps} />
       </main>

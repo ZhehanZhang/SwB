@@ -1,16 +1,18 @@
 import type { CSSProperties } from 'react';
 
 export type MarkKind =
-  | 'claude' | 'claude-code' | 'chatgpt' | 'codex' | 'gemini' | 'grok' | 'muse' | 'swb' | 'capy'
+  | 'claude' | 'claude-code' | 'chatgpt' | 'dots' | 'codex' | 'gemini' | 'grok' | 'grok-bot' | 'muse' | 'swb' | 'capy'
   | 'slack' | 'discord' | 'telegram' | 'github';
 
 const avatar: Partial<Record<MarkKind, string>> = {
   claude: '/avatars/claude.png',
   'claude-code': '/avatars/claude-code.png',
   chatgpt: '/avatars/chatgpt.png',
+  dots: '/avatars/dots.png',
   codex: '/avatars/codex.png',
   gemini: '/avatars/gemini.png',
   grok: '/avatars/grok.png',
+  'grok-bot': '/avatars/grok-bot.png',
   muse: '/avatars/muse.png',
   swb: '/avatars/swb.png',
   capy: '/marks/captain.webp',
