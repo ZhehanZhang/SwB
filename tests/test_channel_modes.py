@@ -96,6 +96,23 @@ def test_github_repo_space_has_one_row_after_override(make):
     assert (row["space"], row["channel"], row["mode"], row["source"]) == (repo, repo, "off", "override")
 
 
+def test_owner_http_sets_and_clears_a_channel_target(make):
+    repo = "example-org/app"
+    cfg = base_config(version=2, blocks={"mcp": {}, "github": {"spaces": {repo: {"mode": "watch"}}}})
+    _, client = make(cfg)
+    csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
+    headers = {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": csrf}
+    args = {"block": "github", "space": repo, "channel": repo, "mode": "triage", "target": "agent:claude"}
+    response = client.post("/api/modes", headers=headers, json=args)
+    assert response.status_code == 200 and response.json()["space"]["target"] == "agent:claude"
+    response = client.post("/api/modes", headers=headers, json={**args, "mode": "inherit", "target": None})
+    assert response.status_code == 200 and response.json()["space"]["target"] is None
+    response = client.post("/api/visibility", headers=headers, json={"resource": f"channel:{repo}", "visibility": "shared"})
+    assert response.status_code == 400
+    response = client.post("/api/visibility", headers=headers, json={"resource": f"channel:github/{repo}", "visibility": "shared"})
+    assert response.status_code == 200
+
+
 def test_slack_mode_requires_connected_workspace(make, monkeypatch):
     workspace = "example"
     cfg = base_config(version=2, blocks={"mcp": {}, "slack": {"workspaces": {workspace: {

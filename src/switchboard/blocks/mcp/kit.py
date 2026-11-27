@@ -231,24 +231,24 @@ class Kit:
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
                     "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
 
-        @mcp.tool(title="Who can reach what", description="Every resource's visibility: private (only the owner and his own agents) or shared (anyone in that workspace, or a narrowed list). Resources are target:<slug>, channel:<workspace>/<id or #name>, memory:<scope>, route:<id> and tool:<name>; defaults are per kind.", annotations=READ)
+        @mcp.tool(title="Who can reach what", description="List the resource names and visibility rules for targets, channels, memory and routes. Tools use private visibility. Use a listed resource with visibility_set.", annotations=READ)
         async def visibility_list(ctx: Context) -> dict[str, Any]:
             kit.owner(ctx, "read visibility")
-            slugs = [f"target:{s}" for t in await core.targets() for s in t.get("slugs") or [] if t.get("block") != "agent"][:500]
-            return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()}, "resources": core.visibility.rows(slugs)}
+            return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()},
+                    "resources": core.visibility.rows(await core.visibility_resources())}
 
-        @mcp.tool(title="Make a resource private or shared", description="Owner only. Set one resource (e.g. target:build-bot, channel:example/#dev) to private, shared, or a list of Slack user ids and workspace:<label> entries. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
-        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list such as ['U0123', 'workspace:example']")]) -> dict[str, Any]:
+        @mcp.tool(title="Make a resource private or shared", description="Owner only. Use a resource from visibility_list such as target:beta or channel:github/acme/app. Tools stay private. Audited.", annotations=WRITE_IDEMPOTENT)
+        async def visibility_set(ctx: Context, resource: str, visibility: Annotated[str | list[str], Field(description="private, shared, or a list of verified sender IDs or workspace labels, such as ['github:1234']")]) -> dict[str, Any]:
             from ...visibility import VisibilityError
 
             p = kit.who(ctx)
             try:
-                rule = core.visibility.set(resource, visibility, f"{p.kind}:{p.source}", core.clock())
+                resource, rule = await core.set_visibility(resource, visibility, f"{p.kind}:{p.source}")
             except VisibilityError as e:
                 raise ToolError(str(e)) from e
             core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="visibility_set", outcome="ok",
                               target=resource, detail=str(rule))
-            return {"resource": resource.lower(), "visibility": rule}
+            return {"resource": resource, "visibility": rule}
 
         @mcp.tool(title="Connected agents", description="Agents connected with a pairing code: their key ids, project, client, when they last called, and who minted the code. Keys themselves are never shown again.", annotations=READ)
         async def connect_list(ctx: Context, include_revoked: bool = False) -> dict[str, Any]:

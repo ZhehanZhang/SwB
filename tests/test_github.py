@@ -11,7 +11,7 @@ import pytest
 import yaml
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from conftest import CAPTAIN, CAPY_KEY, Clock, acall, arpc, payload
+from conftest import CAPTAIN, CAPY_KEY, Clock, acall, arpc, error_text, payload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -382,10 +382,50 @@ async def test_webhook_uses_project_mailbox_route(github, mode):
         [wake] = core.inbox.read(owner="alpha")["items"]
         assert wake["project"] == "example" and wake["from"]["trust"] == ("owner" if mode == "work" else "external")
         if mode == "triage":
+            assert "Triage uses the default agent." in status["spaces"][0]["problems"]
             assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["actions"] == ["reply"]
         core.modes.set(Principal("owner", "local", "key"), "github", "acme/app", "off")
         await send(client, delivery="off", sender={"id": 42}, action="opened")
         assert core.audit.recent(action="webhook", outcome="dropped")[0]["detail"] == "channel mode off"
+
+
+
+@pytest.mark.parametrize("mode", ["assist", "triage"])
+async def test_runtime_mode_target_and_visibility_for_outside_github_senders(github, mode):
+    repo = "acme/app"
+    config = {"spaces": {repo: {"mode": "watch"}}}
+    settings = {"blocks": {"mcp": {}, "github": config}}
+    async with github(config, settings=settings) as (core, client):
+        pair = core.connections.mint(agent="beta", project=None, client=None, by="owner")
+        core.connections.redeem(pair["code"])
+        args = {"block": "github", "space": repo, "mode": mode, "target": "agent:beta"}
+        assert payload(await acall(client, OWNER_KEY, "space_mode", args))["target"] == "agent:beta"
+        [row] = payload(await acall(client, OWNER_KEY, "modes_status"))["spaces"]
+        assert row["target"] == "agent:beta"
+        assert "Triage uses the default agent." not in row["problems"]
+
+        channel = f"channel:github/{repo}"
+        resources = {r["resource"] for r in payload(await acall(client, OWNER_KEY, "visibility_list"))["resources"]}
+        assert {channel, "target:beta"} <= resources
+        for invalid in (f"channel:{repo}", "target:agent:beta"):
+            assert invalid not in resources
+            failed = await acall(client, OWNER_KEY, "visibility_set", {"resource": invalid, "visibility": "shared"})
+            assert "Unknown visibility resource" in error_text(failed)
+            assert core.visibility.explicit(invalid) is None
+
+        sender = {"id": 11, "login": "reporter", "type": "User"}
+        assert (await send(client, sender=sender, delivery="private-channel")).status_code == 200
+        assert core.audit.recent(action="webhook")[0]["detail"] == "channel access restricted"
+        assert payload(await acall(client, OWNER_KEY, "visibility_set", {"resource": channel, "visibility": ["github:11"]}))["visibility"] == ["github:11"]
+        assert (await send(client, sender=sender, delivery="private-target")).status_code == 200
+        assert core.audit.recent(action="webhook")[0]["detail"] == "target access restricted"
+        payload(await acall(client, OWNER_KEY, "visibility_set", {"resource": "target:beta", "visibility": ["github:11"]}))
+        assert (await send(client, sender={**sender, "id": 12}, delivery="wrong-id")).status_code == 200
+        assert core.inbox.read(owner="beta")["items"] == []
+        assert (await send(client, sender=sender, delivery="allowed-id")).status_code == 200
+        [wake] = core.inbox.read(owner="beta")["items"]
+        assert wake["from"]["trust"] == "external"
+        assert core.inbox.handle(wake["handle"])["meta"]["channel_mode"]["mode"] == mode
 
 
 @pytest.mark.parametrize("agent", [None, "github"])
@@ -420,6 +460,7 @@ async def test_webhook_modes_route_only_the_right_events(github, mode):
         block = core.blocks["github"]
         modes = block.status()["modes"]
         assert [(row["space"], row["channel"], row["mode"]) for row in modes["spaces"]] == [("team", "acme/app", mode)]
+        assert "Triage uses the default agent." not in modes["spaces"][0]["problems"]
         notes = core.inbox.read(owner="claude")["items"]
         if mode in {"assist", "triage"}:
             assert len(notes) == 2

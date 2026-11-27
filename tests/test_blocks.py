@@ -233,13 +233,18 @@ def test_connected_agents_count_as_the_owner_but_cannot_change_access(make, capy
 
 
 def test_visibility_tools_flip_resources_and_keep_tools_private(make):
-    core, c = make()
-    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:HelperBot", "visibility": "shared"}))["visibility"] == "shared"
+    core, c = make(config=base_config(version=2, blocks={
+        "mcp": {},
+        "slack": {"workspaces": {"orbit": {"team_id": "TORBIT01", "intake": "none", "watched": ["#dev"],
+                                          "identities": {"bot": {"token_env": "ORBIT_BOT_TOKEN"}}}}},
+    }))
+    assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "target:Claude", "visibility": "shared"}))["visibility"] == "shared"
     assert payload(call(c, STATIC_KEY, "visibility_set", {"resource": "channel:orbit/#dev", "visibility": ["U0FRIEND0", "workspace:orbit"]}))["visibility"] == ["U0FRIEND0", "workspace:orbit"]
     assert "always private" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "tool:slack_post", "visibility": "shared"}))
     assert "not a resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "helperbot", "visibility": "shared"}))
+    assert "Unknown visibility resource" in error_text(call(c, STATIC_KEY, "visibility_set", {"resource": "target:helperbot", "visibility": "shared"}))
     rows = {r["resource"]: r for r in payload(call(c, STATIC_KEY, "visibility_list"))["resources"]}
-    assert rows["target:helperbot"]["visibility"] == "shared" and rows["target:helperbot"]["source"] == "override"
+    assert rows["target:claude"]["visibility"] == "shared" and rows["target:claude"]["source"] == "override"
     assert core.visibility.rule("target:other") == "private"
     assert any(a["action"] == "visibility_set" for a in core.audit.recent(limit=10))
 
