@@ -10,7 +10,7 @@ import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
-import { channelModesQuery, hasGitHubConnection, type ModeRow, type ModesStatus } from "@/lib/channel-modes"
+import { channelModesQuery, type ModeRow, type ModesStatus } from "@/lib/channel-modes"
 import { connectionQuery, type BotAvatar, type DiscordDetails, type StatusPlatform, type TelegramDetails } from "@/lib/connections"
 import { cn } from "@/lib/utils"
 
@@ -176,7 +176,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
   const modes = useQuery(channelModesQuery)
   const name = connectionNames[platform]
   const data = result.data
-  const botName = data?.platform !== "slack" ? data?.details?.bot_name : null
+  const botName = data?.platform === "discord" || data?.platform === "telegram" ? data.details?.bot_name : null
   const rows = modes.data?.spaces.filter(row => row.block === data?.block) ?? []
   const shownChannels = data?.platform === "discord" ? data.details?.guilds.flatMap(guild => guild.channels
     .filter(() => guild.space !== null).map(channel => [guild.space, channel.id]))
@@ -215,7 +215,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
                 )}
               </section>
             )}
-            {data.platform !== "slack" && data.details && (
+            {(data.platform === "discord" || data.platform === "telegram") && data.details && (
               <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-12">
                 <BotMetadata key={platform} name={name} ids={data.details.owner_ids} avatar={data.details.avatar}
                   invite={data.platform === "discord" ? data.details.invite_url : undefined} />
@@ -238,6 +238,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
 }
 
 function GitHubConnection() {
+  const result = useQuery(connectionQuery("github"))
   const modes = useQuery(channelModesQuery)
   return (
     <div className="w-full max-w-[1104px] space-y-6 text-body-sm md:space-y-8 md:pt-2">
@@ -246,10 +247,10 @@ function GitHubConnection() {
       </Link>
       <header className="flex items-center gap-3">
         <LogoTile kind="github" className="size-10" />
-        <ConnectionStatus state={modes.isPending ? "loading" : modes.isError ? "unavailable"
-          : hasGitHubConnection(modes.data) ? "connected" : "not_configured"} />
+        <ConnectionStatus state={result.data?.state ?? (result.isPending ? "loading" : "unavailable")} />
       </header>
-      {modes.isError && <DataState kind="error" message="GitHub status unavailable" onRetry={() => void modes.refetch()} />}
+      {result.isError && <DataState kind="error" message="GitHub status unavailable" onRetry={() => void result.refetch()} />}
+      {modes.isError && <DataState kind="error" message="Channel modes unavailable" onRetry={() => void modes.refetch()} />}
       {modes.data && (
         <section aria-labelledby="github-modes">
           <h2 id="github-modes" className="text-heading-md">Channel modes</h2>
