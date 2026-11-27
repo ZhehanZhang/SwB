@@ -86,7 +86,8 @@ while True:
     assert capsys.readouterr() == (f"MCP URL: {url}/mcp\n", "")
 
 
-def test_missing_cloudflared_prints_install_command(clean_env, tmp_path, monkeypatch, capsys):
+def test_missing_cloudflared_prints_install_command(clean_env, tmp_path, monkeypatch, capsys, unused_tcp_port):
+    monkeypatch.setenv("PORT", str(unused_tcp_port))
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setattr(cli_up.platform, "system", lambda: "Darwin")
     with pytest.raises(SystemExit) as exc:
@@ -112,7 +113,8 @@ def test_up_never_tunnels_an_existing_service(clean_env, monkeypatch, capsys):
     assert f"Could not bind http://127.0.0.1:{port}." in err
 
 
-def test_tunnel_failure_does_not_log_diagnostics(clean_env, tmp_path, monkeypatch, capsys):
+def test_tunnel_failure_does_not_log_diagnostics(clean_env, tmp_path, monkeypatch, capsys, unused_tcp_port):
+    monkeypatch.setenv("PORT", str(unused_tcp_port))
     monkeypatch.setenv("PATH", str(tmp_path))
     exe = tmp_path / "cloudflared"
     exe.write_text("#!/bin/sh\nprintf 'fixture-diagnostic\\n' >&2\nexit 1\n")
