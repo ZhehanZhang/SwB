@@ -7,13 +7,13 @@ description: 向已配對裝置上的程式開發代理傳送訊息。
 
 ## 配對裝置
 
-依照[配對裝置](/zh-Hant/docs/companion#配對裝置)的說明操作。使用下方對應代理的指令。每啟用一項功能，加入一個 `--cap` 選項。若要變更已配對裝置的功能，請先[中斷連線](/zh-Hant/docs/companion#中斷連線)。
+依照[配對裝置](/zh-Hant/docs/companion#配對裝置)的說明操作。使用下方對應代理的指令。把 `https://swb.example.com` 換成你的 SwB 位址。每啟用一項功能，加入一個 `--cap` 選項。若要變更已配對裝置的功能，請先[中斷連線](/zh-Hant/docs/companion#中斷連線)。
 
 請以擁有者身分登入的代理呼叫 `targets(block="local")`，確認設定結果。複製工作階段的位址。位址格式為 `local:session:<companion>:<harness>:<session>`。其中 `harness` 是執行代理的程式。
 
 ## 傳送訊息
 
-呼叫 `send`，將工作階段的位址填入 `to`。SwB 先把訊息放進代理的信箱。若可直接連線，SwB 也會嘗試將訊息傳到已開啟的工作階段。用 `result` 在原本的 SwB 對話中讀取回覆。
+使用 `send` 時，將工作階段位址填入 `to`。SwB 會嘗試把訊息送到已開啟的工作階段。寄件者有權使用代理信箱時，SwB 會將副本放進信箱。若工作階段缺少對應代理，擁有者傳送的訊息會留在自己的信箱。將傳回的對話 ID 傳給 `result`，讀取回覆。
 
 | 狀態 | 含義 |
 | --- | --- |
@@ -23,9 +23,9 @@ description: 向已配對裝置上的程式開發代理傳送訊息。
 | `done` | 代理已完成工作 |
 | `unknown` | 狀態待確認 |
 
-若工作階段正在等候處理，請在該工作階段回應要求。SwB 會將訊息留在信箱。
+若工作階段正在等候處理，請在該工作階段回應要求。寄件者有權使用信箱時，SwB 會將訊息留在信箱。
 
-SwB 會將工作階段的狀態回報給你部署的 SwB。它也能回報工作階段名稱和資料夾名稱。對於經 SwB 傳送的訊息，裝置可傳回一則回覆。其餘工作階段內容留在裝置上。
+夥伴裝置會向 SwB 伺服器回報工作階段的狀態，也可回報工作階段和資料夾的名稱。對於每則直接送達的訊息，夥伴裝置可傳回一則回覆。其餘內容留在裝置上。
 
 ## 狀態掛鉤
 
@@ -35,7 +35,7 @@ SwB 會將工作階段的狀態回報給你部署的 SwB。它也能回報工作
 swb companion connect https://swb.example.com --cap hooks
 ```
 
-用 [pipx](/zh-Hant/docs/install) 安裝 `swb` 指令。將它加入代理的指令搜尋路徑。若有設定 `SWB_COMPANION_HOME`，請讓代理與夥伴裝置使用相同的資料夾。
+用 [pipx](/zh-Hant/docs/install) 安裝 `swb` 指令。確認代理能找到 `swb` 指令。若有設定 `SWB_COMPANION_HOME`，請讓代理與夥伴裝置使用同一個資料夾。
 
 | 代理 | 事件指令 | 設定方式 |
 | --- | --- | --- |
@@ -43,7 +43,7 @@ swb companion connect https://swb.example.com --cap hooks
 | Gemini CLI | `swb hook gemini` | 用下方指令從本機副本安裝 SwB 擴充功能 |
 | Codex | `swb hook codex` | 將 `integrations/codex/hooks.json` 的 `hooks` 合併到 `~/.codex/hooks.json` |
 
-請使用 [SwB 發行分支的本機副本](/zh-Hant/docs/self-hosting#docker-compose)中的檔案。Claude Code 的 SwB 外掛也包含這些掛鉤。若有設定 `CODEX_HOME`，請使用該資料夾中的 `hooks.json`。
+請使用 [SwB 發行分支的本機副本](/zh-Hant/docs/self-hosting#docker-compose)中的檔案。Claude Code 的 SwB 外掛也包含這些掛鉤。若 Codex 使用自訂設定資料夾，請使用該資料夾中的 `hooks.json`。
 
 ```sh
 gemini extensions install /path/to/SwB/integrations/gemini
@@ -55,7 +55,7 @@ gemini extensions install /path/to/SwB/integrations/gemini
 
 在 Herdr 的窗格開啟程式開發代理。窗格是終端機中的一塊區域。夥伴裝置透過 Herdr 的通訊端接收工作階段事件。通訊端讓同一台裝置上的程式互相通訊。
 
-若使用具名的 Herdr 工作階段，請設定 `HERDR_SESSION`。若使用自訂通訊端路徑，請在執行夥伴裝置的終端機中設定 `HERDR_SOCKET_PATH`。
+若使用具名工作階段或自訂通訊端路徑，請參閱 [Herdr 夥伴裝置設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/herdr.py#L36-L48)。
 
 ```sh
 swb companion connect https://swb.example.com --cap herdr --cap hooks
@@ -77,7 +77,7 @@ codex app-server --listen unix://
 codex --remote unix://
 ```
 
-另開一個終端機來執行夥伴裝置。若應用程式伺服器有設定 `CODEX_HOME`，請在這裡使用相同的值。若使用自訂通訊端路徑，請設定 `SWB_CODEX_SOCKET`。
+另開一個終端機執行夥伴裝置。在所有終端機中使用同一個 Codex 設定資料夾。使用自訂通訊端時，請在上面兩個指令中都填入 `unix://<path>`。在執行夥伴裝置的終端機中，將 `SWB_CODEX_SOCKET` 設為該路徑。
 
 ```sh
 swb companion connect https://swb.example.com --cap codex
@@ -93,7 +93,7 @@ swb companion connect https://swb.example.com --cap codex
 opencode serve --hostname 127.0.0.1 --port 4096
 ```
 
-在該伺服器開啟工作階段。將 `SWB_OPENCODE_URL` 設為伺服器的本機位址。若伺服器設有密碼，請在執行夥伴裝置的終端機中設定 `OPENCODE_SERVER_PASSWORD`。
+在該伺服器開啟工作階段。將 `SWB_OPENCODE_URL` 設為伺服器的本機位址。若伺服器設有密碼，請參閱 [OpenCode 夥伴裝置設定](https://github.com/ZhehanZhang/SwB/blob/release/1.0/src/switchboard/companion/caps/opencode.py#L225-L228)。
 
 ```sh
 SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example.com --cap opencode
@@ -105,7 +105,7 @@ SWB_OPENCODE_URL=http://127.0.0.1:4096 swb companion connect https://swb.example
 
 使用 DeepSeek Harness `0.2.2-rc.5`。設定檔是一組應用程式設定。將 SwB 橋接外掛裝到 `web` 設定檔。外掛會將工作階段事件傳給夥伴裝置。
 
-這個版本請從本機副本安裝。橋接外掛位於 `release/1.0` 分支。將 `/path/to/SwB` 換成本機副本的絕對路徑。
+請使用 `release/1.0` 分支的本機副本。將 `/path/to/SwB` 換成副本的完整路徑。
 
 ```sh
 dsh plugin --profile web add /path/to/SwB/integrations/dsh

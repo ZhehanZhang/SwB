@@ -5,15 +5,15 @@ description: Route Discord messages to agents and reply in a thread.
 
 ## Make the bot
 
-In the [Discord Developer Portal](https://discord.com/developers/applications), make a New Application. Under Bot, turn on Message Content Intent. Reset the bot token.
+Follow [Discord setup](/docs/setup/discord) to create a bot. Enable Message Content Intent for text and follow-up messages.
 
-Ask an agent to connect Discord. The agent calls `discord_provision` and gives you a claim link. Open the link and paste the bot token. You can also set `DISCORD_BOT_TOKEN` in the server environment.
+Ask an agent to connect Discord. The agent calls `discord_provision` and gives you a claim link. Open the link and paste the bot token.
 
 ## Add the bot to a server
 
-`discord_status` returns `setup.invite_url`. Open it and add the bot to your server. The link asks for the bot scope and the permissions for the features you use.
+Call `discord_status` after the bot connects. Open the link in `setup.invite_url`. Add the bot to your server. The link requests the permissions for your enabled features.
 
-SwB reads the bot's owner from Discord and records the servers the bot joins. `discord_status` lists them under `discovered`. Add a server to the config to route its messages.
+Find the server ID in `discovered.guilds` in `discord_status`. Add the server ID to a space in your config. A space holds the settings for one Discord server.
 
 ```yaml
 blocks:
@@ -23,19 +23,19 @@ blocks:
       home:
         guild_id: "100000000000000001"
         owner_ids: ["100000000000000002"]
-        default_target: helper
+        default_target: claude
     agents: {claude: [home]}
 ```
 
-To copy ids, turn on Developer Mode in User Settings → Advanced. Then right-click a server or a user.
+To set the owner, send the bot a direct message. Find your user ID in `discovered.dm_users` in `discord_status`. Put that ID in `owner_ids`.
 
 ## Send from Discord
 
-Mention the bot with a target slug, for example `@swb helper check the build`. SwB starts a thread from your message and adds you to it. The answer comes back in the thread. Follow-ups in the thread go to the same target. Persona posts use a webhook per channel, so each agent shows its own name and picture.
+Mention the bot and give the target's short name, as in `@swb claude check the build`. With threads enabled, SwB can start a thread from your message and add you to it. SwB posts the answer there. Follow-up messages can reuse the thread's target. With personas enabled, eligible replies use the agent's name and picture.
 
 ## Share with other people
 
-Channels and targets start private. To let other people reach a target, share the channel and the target. Use `channel:<space>/<channel id>` and `target:<slug>`. A list can name single users as `discord:<user id>`.
+Channels and targets are private by default. To give others access, share both the channel and the target. Use `channel:<space>/<channel id>` and `target:<slug>`. To give access to a specific user, add `discord:<user id>` to the access list.
 
 ## Block settings
 
@@ -44,7 +44,7 @@ Channels and targets start private. To let other people reach a target, share th
 | `blocks.discord` | Settings for the Discord bot and its spaces |
 | `blocks.discord.use` | Loads the `discord` block |
 | `blocks.discord.enabled` | Set `true` to load the block or `false` to turn it off |
-| `blocks.discord.token_env` | Name of the environment variable for the bot token. The default is `DISCORD_BOT_TOKEN` |
+| `blocks.discord.token_env` | Name of the environment variable for the bot token |
 | `blocks.discord.application_id` | Discord application ID for the invite link. SwB can also read the ID from Discord |
 | `blocks.discord.connect` | Set `true` to receive live events from Discord. Set `false` to test API calls on their own |
 | `blocks.discord.message_content` | Set `true` to read message content, including follow-ups in threads. Turn on Message Content Intent in the Developer Portal |

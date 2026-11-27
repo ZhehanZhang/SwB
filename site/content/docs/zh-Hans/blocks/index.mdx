@@ -1,34 +1,34 @@
 ---
 title: 模块
-description: SwB 连接的每个平台。
+description: 查看 SwB 支持的连接和功能。
 ---
 
-模块是与一个平台的连接。每个模块在凭据出现在环境变量中，或出现在配置文件中时启用。`swb status` 显示各模块及其下一步。以所有者身份登录后，可在 `/healthz` 查看详情。
+模块为 SwB 提供连接或功能。在配置文件中设置模块。使用默认配置时，SwB 会根据环境变量加载部分模块。运行 `swb status` 查看模块状态和设置提示。以所有者身份登录后，在 `/healthz` 查看详情。
 
-| 模块 | 连接方式 | 接收新消息的方式 |
+| 连接 | 连接方式 | 消息传递方式 |
 | - | - | - |
 | [Claude](/zh-Hans/docs/blocks/claude) | 自定义连接器和 Claude routine | `wait`、`inbox` 和 routine 唤醒 |
 | [ChatGPT](/zh-Hans/docs/blocks/chatgpt) | 自定义 MCP 服务器和 ChatGPT dot | MCP Events |
 | [Capy](/zh-Hans/docs/blocks/capy) | Capy API 密钥 | Capy 话题串的事件流 |
-| [Grok](/zh-Hans/docs/blocks/grok) | MCP 连接器和 Grok routine | 带签名的 routine webhook |
+| [Grok](/zh-Hans/docs/blocks/grok) | MCP 连接器和 Grok Bot routine | `wait`、`inbox` 和 routine 唤醒 |
 | [编程智能体](/zh-Hans/docs/blocks/coding-agents) | OAuth 或配对码 | `wait`、`inbox` 和 Claude Code 频道 |
-| [本地会话](/zh-Hans/docs/blocks/local-sessions) | 已配对的设备 | 发给已打开会话的消息 |
+| [本地会话](/zh-Hans/docs/blocks/local-sessions) | 已配对的设备 | 邮箱或直接送达已打开的会话 |
 | [Slack](/zh-Hans/docs/blocks/slack) | 经 Socket Mode 的 Slack 应用 | 话题串中的回复 |
 | [Discord](/zh-Hans/docs/blocks/discord) | 机器人令牌 | 话题串中的回复 |
 | [Telegram](/zh-Hans/docs/blocks/telegram) | 机器人令牌 | 话题串中的回复 |
-| [GitHub App](/zh-Hans/docs/blocks/github) | webhook 密钥 | 带签名的 webhook |
+| [GitHub](/zh-Hans/docs/blocks/github) | Webhook 密钥 | 带签名的 Webhook |
+| [Muse](/zh-Hans/docs/setup/muse) | MCP 连接器和已配对的 Muse 装置 | 邮箱和装置唤醒 |
+| [其他 MCP 客户端](/zh-Hans/docs/setup/mcp-client) | OAuth 或配对码 | `wait` 和 `inbox` |
 
-启用 Capy 模块后，使用 MCP 2026-07-28 的客户端可通过 `server/discover` 发现 [MCP Tasks](/zh-Hans/docs/how-it-works#会话) 扩展。客户端在每次向 Capy 发送时选择启用。MCP 2025-11-25 客户端和发往收件箱的消息都使用普通会话。
-
-## 所有模块的共同点
+## 信任与访问
 
 SwB 根据平台的发送者 ID 标记消息的信任等级。在 Slack、Discord 和 Telegram 中，`known` 是接收设置。SwB 用它判断接收哪些发送者的消息。所有者之外的发送者即使通过 `known` 获准，消息的信任等级仍为 `external`。详见[信任](/zh-Hans/docs/security#信任等级)。
 
-每个目标、频道和记忆范围起初都是私有的。只有所有者能访问私有资源。共享资源后，其他人才能访问它。
+目标、频道和记忆范围默认为私有资源。共享资源后，其他人也能访问。
 
 ## 内置头像
 
-用文件名为发帖身份选择内置头像。
+用文件名为 [Slack 发帖形象](/zh-Hans/docs/blocks/slack#角色形象)选择内置头像。
 
 | 文件 | 名称 |
 | - | - |
@@ -43,8 +43,9 @@ SwB 根据平台的发送者 ID 标记消息的信任等级。在 Slack、Discor
 | `gemini.png` | Gemini |
 | `grok-bot.png` | Grok Bot |
 | `grok.png` | Grok |
+| `muse.png` | Muse |
 | `swb.png` | SwB |
 
 ## 添加你自己的模块
 
-模块是带清单的 Python 类。清单列出模块的动词、目标和密钥。第三方模块注册在 `switchboard.blocks` 入口点组中。`swb blocks list` 列出当前实例配置的模块。
+模块是带有清单的 Python 类。清单说明模块能执行的操作、消息目标和所需密钥。在 `switchboard.blocks` 入口点组中注册模块。运行 `swb blocks list` 查看服务器上已配置的模块。

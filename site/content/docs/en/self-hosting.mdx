@@ -11,7 +11,7 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## Docker Compose
 
-Run these commands as the user who owns the data folder.
+Install Docker Compose 2.24 or later. Run these commands as a regular user who owns the data folder.
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -29,13 +29,13 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Open the one-time sign-in link from the terminal within five minutes.
+Open the one-time sign-in link from the terminal within five minutes. Keep the link private.
 
 The browser uses `http://localhost:8870` for owner sign-in. The command inside the container uses port `8000`. Compose keeps the data in `./data`. After you change `.env`, run `docker compose up -d` again.
 
-Run `docker compose exec switchboard swb login-link` to get a sign-in link for `http://localhost:8870`.
+For a remote server, forward its port `8870` to local port `8870` before you open the link.
 
-Signed-out requests to `/healthz` return two fields, `status` and `version`. Use an owner session or the owner key for full health details.
+A signed-out request to `/healthz` returns `status` and `version`. Use an owner session or the owner key for full health details.
 
 ## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
@@ -65,7 +65,7 @@ docker compose --profile tunnel up -d
 
 ## Trusted proxies
 
-A reverse proxy passes requests to SwB. Add the proxy's address or dedicated network to `trusted_proxies` in `config/switchboard.yaml`. Specify a range in CIDR format, which combines an IP address and a prefix length.
+A reverse proxy passes requests to SwB. Add the proxy's address or dedicated network to `trusted_proxies` in `config/switchboard.yaml`. Write network ranges in CIDR format, such as `192.0.2.0/24`.
 
 You can also set `SWB_TRUSTED_PROXIES` in `.env`. Separate entries with commas. The YAML setting takes precedence.
 
@@ -73,17 +73,7 @@ For a Cloudflare Tunnel on the SwB host or Docker network, add the tunnel connec
 
 ## Cloudflare Access
 
-Open the [Cloudflare setup guide](/docs/setup/cloudflare) to set up the owner and bypass policies.
-
-| Path | Policy |
-| --- | --- |
-| `/mcp`, `/register`, `/token`, `/revoke`, `/.well-known/*` | Bypass |
-| `/healthz`, `/connect`, `/avatars/*` | Bypass |
-| `/inbox/poll`, `/inbox/events` | Bypass |
-| `/github/webhook` | Bypass for GitHub |
-| All other paths, including `/`, `/authorize`, `/inbox` and its conversation pages | Owner |
-
-Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD` from the owner application. SwB applies its own checks to requests on the bypass paths.
+Follow the [Cloudflare setup guide](/docs/setup/cloudflare) to configure SwB and set access rules for the owner and for client requests.
 
 ## Hosted platforms
 
@@ -99,26 +89,24 @@ The [Free plan](https://docs.railway.com/reference/pricing/free-trial) includes 
 
 ## Fly.io [#fly]
 
-Use the [SwB release checkout](#docker-compose). Install the [Fly.io command line tool](https://docs.fly.io/flyctl/) and sign in.
+Use the SwB release checkout from the [Docker Compose example](#docker-compose). Install the [Fly.io command line tool](https://docs.fly.io/flyctl/). Sign in to Fly.io.
 
 Run `sh deploy/fly.sh my-swb` from the SwB folder. Replace `my-swb` with a unique app name. The script uses `fly deploy --ha=false` to start one Machine.
 
-Open `.env.swb-setup-fly-my-swb` in your checkout. Use `SWB_SETUP_CODE` to sign in.
+Open your app's sign-in page. Copy `SWB_SETUP_CODE` from `.env.swb-setup-fly-my-swb` in your checkout. Enter it in **Setup code**. Delete the file after sign-in.
 
-Add a card to get $5 of usage each month on the [Fly.io Free plan](https://docs.fly.io/about/free-plan). Your account starts with $1 of credit for 7 days before you add a card.
-
-A `shared-cpu-1x` Machine with 512 MB of memory costs $3.69 per month in Ashburn (`iad`). A 1 GB volume costs $0.15 per month.
-
-When usage passes $5, Fly.io moves your organization to Pay As You Go. Fly.io bills the whole month at [standard rates](https://fly.io/docs/about/pricing/).
+See the [Fly.io Free plan](https://docs.fly.io/about/free-plan) and [current rates](https://fly.io/docs/about/pricing/) for billing details.
 
 ## Backups and upgrades
 
-All state is in the data folder. Back it up before an upgrade. Keep `mcp-events.key` and `claim-key` with the database, because they seal stored secrets. To upgrade, install the new version and start SwB. Database changes only add tables and columns.
+Stop SwB before you copy its data folder. Keep the whole folder together, with the database and its keys, including `mcp-events.key` and `claim-key`. Back up your config files and `.env` too. Keep the backup private. Install or build the new version. Start SwB with the same data folder.
 
 ## Export memory
 
+Run the export inside the Compose container.
+
 ```bash
-swb export /data/export
+docker compose exec -T switchboard swb export /data/export
 ```
 
-The export writes one Markdown folder per scope and an `INDEX.md`. Set `memory.mirror_dir` to keep a live copy in a folder.
+The export saves Markdown files by scope under `./data/export` on the host. It includes an `INDEX.md`. Set `memory.mirror_dir` to keep a current Markdown copy.

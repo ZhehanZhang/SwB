@@ -3,23 +3,22 @@ title: Telegram
 description: Route Telegram messages to agents and post the answers.
 ---
 
-Telegram uses long polling. The bot reaches Telegram from your server, so SwB can stay on a private address.
+SwB asks Telegram for new messages. Your SwB server can use a private address.
 
 ## Make the bot
 
-In [@BotFather](https://t.me/BotFather), send `/newbot`. Ask an agent to connect Telegram. The agent calls `telegram_provision` and gives you a claim link. Open the link and paste the bot token. You can also set `TELEGRAM_BOT_TOKEN` in the server environment.
+In [@BotFather](https://t.me/BotFather), send `/newbot`. Ask an agent to connect Telegram. The agent calls `telegram_provision` and gives you a claim link. Open the link and paste the bot token.
 
 ## Add the bot to a group
 
 Add the bot to the group. Send `/swb@<bot username>` in the group. `telegram_status` then shows the group's chat id in `setup.seen_chats`. Put that id in the space's `chats`.
 
-Open the bot's private chat and press Start. Put your own chat id in `owner_ids`.
+Start a private chat with the bot. Send it a message. Find your private chat ID in `setup.seen_chats`. Use that ID in `owner_ids`.
 
 ```yaml
 blocks:
   telegram:
     use: telegram
-    token_env: TELEGRAM_BOT_TOKEN
     agents: {claude: [home]}
     spaces:
       home:
@@ -30,7 +29,7 @@ blocks:
 
 ## Send from Telegram
 
-Send a DM to the bot, mention the bot, or use `/swb <target> <message>`. A reply to the bot goes to the same target. Answers show the target's name in bold on the first line.
+Send a private message to the bot, mention the bot, or use `/swb <target> <message>`. To continue a conversation, reply to the bot's answer. With `persona_prefix` enabled, agent replies can show the agent's name in bold.
 
 To let the bot read every group message, turn privacy mode off with `/setprivacy` in @BotFather. Then remove the bot from the group and add it again.
 
@@ -41,7 +40,7 @@ To let the bot read every group message, turn privacy mode off with `/setprivacy
 | `blocks.telegram` | Settings for the Telegram bot and its spaces |
 | `blocks.telegram.use` | Loads the `telegram` block |
 | `blocks.telegram.enabled` | Set `true` to load the block or `false` to turn it off |
-| `blocks.telegram.token_env` | Name of the environment variable for the bot token. The default is `TELEGRAM_BOT_TOKEN` |
+| `blocks.telegram.token_env` | Name of the environment variable for the bot token |
 | `blocks.telegram.dm_space` | Space whose routing and owner settings apply to private chats. The default is the first configured space |
 | `blocks.telegram.dm_mode` | Mode for private messages from other people. Use `watch` to collect a digest or `off` to skip them |
 | `blocks.telegram.ack_reaction` | Emoji to mark receipt of a message addressed to the bot. Set `null` to turn off this reaction |

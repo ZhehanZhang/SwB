@@ -3,11 +3,11 @@ title: MCP 客户端
 description: 使用本机所有者密钥或配对码连接 MCP 客户端。
 ---
 
-MCP 是应用使用外部工具的标准方式。本页介绍如何用专属密钥连接任何可以添加远程 MCP 服务器的应用。
+MCP 是应用调用外部工具的标准。你可以用专属密钥把应用与 SwB 配对。
 
 ## 开始之前
 
-你的应用需要支持基于 Streamable HTTP 的远程 MCP 服务器和自定义请求头。Streamable HTTP 是 MCP 的网络传输方式。你还需要一个以所有者身份登录 SwB 的智能体，或能在运行 SwB 的电脑上使用终端。
+请选择支持通过 Streamable HTTP 连接远程 MCP 的应用。这种方式可让应用通过网络调用工具。应用还需支持用自定义请求头发送密钥。请准备一个 SwB 所有者客户端，或在运行 SwB 的电脑上打开终端。
 
 如需在应用所在的电脑上启动 SwB，请在空目录中运行 `uvx swb-one up`。打开终端显示的一次性登录链接。其他方式见[安装指南](/zh-Hans/docs/install)。
 
@@ -15,11 +15,9 @@ Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth �
 
 ## 复制设置提示词
 
-提示词保留英文，供智能体使用。
-
 <SetupPrompt name="mcp-client" lang="zh-Hans" />
 
-把提示词粘贴到已经接入 SwB 的智能体中，或粘贴到你要连接的应用中。智能体会带你完成其余步骤。
+把提示词粘贴到 SwB 所有者客户端，或粘贴到要连接的应用。
 
 ## 本机所有者客户端
 
@@ -27,20 +25,14 @@ Claude、ChatGPT、Grok 和编程智能体各有专门的页面，使用 OAuth �
 
 ## 配对客户端
 
-如果智能体可以在本机编辑客户端设置，请让它添加配对密钥。它会把密钥写入客户端配置，并将文件权限设为 `0600`。如果你自行设置客户端，请按下文操作。
+如果智能体能在本机修改应用设置，请让它配置应用。把密钥存入应用的私密设置。设置文件的权限应为 `0600`。
 
-<Steps>
-<Step>
 ### 为应用命名
 
 告诉智能体一个简短的应用名称，例如 `notes-bot`。SwB 会在这个应用发出的消息上显示该名称。
-</Step>
-<Step>
 ### 获取配对码
 
 请以所有者身份登录的智能体获取配对码。智能体可以用应用名称调用 `connect_code`。你也可以在 SwB 实例目录中运行 `uvx swb-one connect mcp-client --choose agent=notes-bot`。将命令中的示例名称换成你的应用名称。
-</Step>
-<Step>
 ### 换取密钥
 
 在运行应用的电脑上，用终端打开一个私密目录。把 `https://swb.example.com` 换成你的 SwB 地址。保留末尾的 `/connect`。如果 SwB 在本机运行，请用 `http://localhost:8870/connect`，并按启动时显示的地址填写端口。请在 10 分钟内通过隐藏输入提示填写配对码。
@@ -56,23 +48,15 @@ bash -c '
       --data-binary @- > .swb-pairing.json
 '
 ```
-</Step>
-<Step>
 ### 妥善保管密钥
 
 用私密编辑器打开 `.swb-pairing.json`。命令以 `0600` 权限保存响应。将其中的 `key` 填入应用设置。SwB 只返回一次密钥。
-</Step>
-<Step>
 ### 把 SwB 添加到应用
 
-在应用的 MCP 设置中添加名为 `swb` 的服务器。填入文件里的 `mcp_url`。如果 SwB 在本机运行，请用启动时显示的 MCP 地址。传输方式选择 Streamable HTTP。
-</Step>
-<Step>
+在应用的 MCP 设置中添加名为 `swb` 的服务器。选择 Streamable HTTP。连接公网 SwB 时，请使用文件中的 `mcp_url`。连接本机 SwB 时，请使用启动时显示的 MCP 地址。
 ### 添加密钥
 
 在应用的私密设置中添加请求头 `Authorization: Bearer <key>`。保存密钥后删除 `.swb-pairing.json`。
-</Step>
-</Steps>
 
 ## 智能体的工作
 
@@ -89,7 +73,7 @@ SwB 为这个名称生成配对码，并返回 `POST /connect` 这一步。配�
 | 配对码 | `connect` 或 `connect_code` 的结果 | `XXXXX-XXXXX`，10 分钟内有效，只能使用一次 | `POST /connect` 请求 |
 | 智能体密钥 | `POST /connect` 的响应，只显示一次 | 以 `swb_` 开头 | 应用私密设置中的 `Authorization` 请求头 |
 
-请把密钥留在聊天和共享文件之外。SwB 只保存密钥的哈希值。
+把密钥保存在应用的私密设置中。SwB 保存的是密钥的哈希值。
 
 ## 检查连接
 
@@ -97,4 +81,4 @@ SwB 为这个名称生成配对码，并返回 `POST /connect` 这一步。配�
 
 ## 解决问题
 
-如果 `POST /connect` 失败，说明配对码已过期或已被使用。请智能体生成新的配对码。如果密钥泄露，请用 `connect_revoke` 撤销它。使用该密钥的下一次调用会立即停止。
+如果 `POST /connect` 失败，请检查 SwB 地址。配对码过期或用过后，请向所有者获取新配对码。密钥泄露时，请用 `connect_revoke` 撤销。SwB 随后会拒绝使用旧密钥的调用。

@@ -5,7 +5,9 @@ description: 讓其他應用程式連線到 SwB。登入後檢視你的執行個
 
 ## 在本機執行
 
-在空資料夾內執行 `uvx swb-one up`。請在五分鐘內開啟終端機顯示的一次性登入連結。SwB 預設使用 `http://localhost:8870`。若有設定 `SWB_PORT`，SwB 會在位址中使用該連接埠。其他啟動方式請參閱[安裝指南](/zh-Hant/docs/install)。
+{/* prepublication */}
+
+套件發布後，請在空資料夾內執行 `uvx swb-one up`。請在五分鐘內開啟終端機顯示的一次性登入連結。SwB 預設使用 `http://localhost:8870`。若有設定 `SWB_PORT`，SwB 會在位址中使用該連接埠。[安裝指南](/zh-Hant/docs/install)介紹其他啟動方式，包括從原始碼建置。
 
 ## 取得公開位址
 
@@ -19,7 +21,7 @@ uvx swb-one up --tunnel cloudflare
 
 SwB 會啟動 Cloudflare Quick Tunnel，並顯示公開的 MCP 位址。使用此選項重新啟動時，每次都會取得新的位址。請更新各應用程式中的位址。
 
-若要使用 Tailscale，請[安裝並登入 Tailscale](https://tailscale.com/download)。啟用 [Funnel](https://tailscale.com/docs/features/tailscale-funnel)。確認終端機可以執行 `tailscale version`。把上方指令的選項改為 `--tunnel tailscale`。
+若要使用 Tailscale，請先[安裝 Tailscale](https://tailscale.com/download)。接著登入 Tailscale。啟用 [Funnel](https://tailscale.com/docs/features/tailscale-funnel)。確認終端機可以執行 `tailscale version`。把上方指令的選項改為 `--tunnel tailscale`。
 
 若要在自己的網域上使用固定位址，請閱讀[自行代管](/zh-Hant/docs/self-hosting)。
 
@@ -29,9 +31,9 @@ SwB 會啟動 Cloudflare Quick Tunnel，並顯示公開的 MCP 位址。使用�
 swb status
 ```
 
-指令會顯示伺服器狀態，以及各模組的開關狀態。所有後續操作會集中列在 **Next steps** 下。`switchboard_status` 工具也會回傳各模組的下一步。
+指令會顯示伺服器狀態和已啟用的模組。請在 **Next steps** 查看後續設定。`switchboard_status` 工具也會顯示後續操作。
 
-若要查詢其他位址的伺服器，請加上 `--url`，例如 `swb status --url http://127.0.0.1:8871`。指令會用終端機或執行個體的 `.env` 中的 `SWB_PORT` 組成預設本機位址。若啟動時用了 `--dir`，查詢時也請指定同一資料夾。
+若要查詢其他位址的伺服器，請加上 `--url`。例如，執行 `swb status --url http://127.0.0.1:8871`。指令會用終端機或執行個體的 `.env` 中的 `SWB_PORT` 組成預設本機位址。若啟動時用了 `--dir`，查詢時也請指定同一資料夾。
 
 ## 登入網頁
 
@@ -45,7 +47,7 @@ swb status
 swb login-link
 ```
 
-指令會印出一次性登入連結。請在五分鐘內用瀏覽器開啟。這個指令也接受 `swb status` 使用的 `--url` 與 `--dir`。首次登入後，請新增通行金鑰。往後用通行金鑰登入。設定碼與其他方式請見[擁有者登入](/zh-Hant/docs/owner-login)。
+指令會印出一次性登入連結。請在五分鐘內用瀏覽器開啟。這個指令也接受 `swb status` 使用的 `--url` 與 `--dir`。首次登入後，請新增[通行金鑰](/zh-Hant/docs/owner-login#通行金鑰)。往後用通行金鑰登入。設定碼與其他方式請見[擁有者登入](/zh-Hant/docs/owner-login)。
 
 ## 網頁控制台
 
@@ -65,8 +67,8 @@ swb login-link
 
 ## 連接第一個代理
 
-若要讓第一個代理設定其他應用程式，請授予它擁有者權限。若應用程式由服務商代管，請在 SwB 頁面核准 OAuth 登入。OAuth 讓你在瀏覽器中核准應用程式存取。請選擇可存取所有範圍、工具和目標的應用程式。
+若要讓第一個代理設定其他應用程式，請授予它擁有者權限。請在瀏覽器中核准伺服器上應用程式的 [OAuth 登入](/zh-Hant/docs/owner-login#代理登入)。請使用可呼叫所有 SwB 工具的連線。
 
-你也可以在執行 SwB 的電腦上設定[本機擁有者用戶端](/zh-Hant/docs/setup/mcp-client#本機擁有者用戶端)。將執行個體資料夾中 `.env` 裡的 `SWB_KEY_OWNER` 用作該用戶端的 bearer 金鑰。請只把這組金鑰傳到本機的 `/mcp` 位址。
+你也可以在執行 SwB 的電腦上設定[本機擁有者用戶端](/zh-Hant/docs/setup/mcp-client#本機擁有者用戶端)。用執行個體資料夾中 `.env` 裡的 `SWB_KEY_OWNER` 登入用戶端。請只把這組金鑰傳到本機的 `/mcp` 位址。
 
-若第一個代理使用配對金鑰，請它為每個限擁有者執行的步驟提供對應的終端機指令。在 SwB 執行個體的資料夾內執行該指令。例如，執行 `swb connect slack`。其他應用程式的做法請參閱[連接你的 AI 代理](/zh-Hant/docs/connect)。
+若第一個代理使用配對金鑰，請它為每個限擁有者執行的步驟提供對應的終端機指令。在 SwB 執行個體的資料夾內執行該指令。例如，執行 `swb connect slack`。其他應用程式的做法請參閱[連接你的代理](/zh-Hant/docs/connect)。

@@ -5,80 +5,54 @@ description: 用機器人和你自己的 Slack 帳號，把 Slack 工作區連�
 
 SwB 透過一個 Slack 應用程式讀取和傳送 Slack 訊息。你用資訊清單建立這個應用程式。資訊清單是一個檔案，裡面寫好應用程式的全部設定。
 
-這個應用程式使用 Socket Mode。Socket Mode 是 SwB 主動連到 Slack 的連線，所以 SwB 伺服器可以留在私人位址。
+應用程式使用 Socket Mode。SwB 主動連線到 Slack，因此伺服器可以使用私人網路位址。
 
 ## 開始之前
 
-你需要目標工作區裡的 Slack 帳號，並有權在該工作區建立和安裝應用程式。在 Enterprise Grid 組織中，應用程式需要 Org Owner 或 Org Admin 核准。你也需要以擁有者身分登入 SwB 伺服器，例如 `https://swb.example.com`。
+請使用可在工作區建立和安裝應用程式的 Slack 帳號。你的組織可能要求核准應用程式。請以擁有者身分登入 SwB。
 
 ## 複製設定提示詞
 
-提示詞保留英文，供代理使用。
-
 <SetupPrompt name="slack" lang="zh-Hant" />
 
-把提示詞貼給你的代理。代理會帶你完成其餘步驟。
+把提示詞貼到 SwB 擁有者用戶端。
 
-## 你的步驟
+## 設定 Slack 應用程式
 
-<Steps>
-<Step>
 ### 開啟 Slack 應用程式設定
 
 開啟 [Slack 應用程式設定](https://api.slack.com/apps)。點選 **Create New App** → **From a manifest**。
-</Step>
-<Step>
 ### 選擇工作區
 
 選擇你的工作區。點選 **Next**。
-</Step>
-<Step>
 ### 貼上資訊清單
 
 選擇 **YAML**。複製下方其中一份應用程式資訊清單。貼上完整內容。
-</Step>
-<Step>
 ### 建立應用程式
 
 點選 **Next** → **Create**。
-</Step>
-<Step>
 ### 建立應用程式層級權杖
 
 點選 **Basic Information** → **App-Level Tokens** → **Generate Token and Scopes**。輸入權杖名稱。
-</Step>
-<Step>
 ### 加入權限範圍
 
 點選 **Add Scope** → `connections:write`。點選 **Generate**。
-</Step>
-<Step>
 ### 安裝應用程式
 
 點選 **Install App** → **Install to Workspace**。以 SwB 代表的 Slack 使用者身分點選 **Allow**。
-</Step>
-<Step>
 ### 在 Enterprise Grid 中取得核准
 
-如果 Slack 要求核准，請把應用程式交給 Org Owner。Org Owner 在 **Organization settings** → **Integrations** → **Manage Apps** → **Approve an app** 中核准它。
-</Step>
-{/* unverified */}
-<Step>
+如果 Slack 要求核准，請將應用程式交給工作區或組織管理員。
+
 ### 儲存權杖
 
-開啟代理給你的 SwB 領取連結。把每個 Slack 權杖貼到對應欄位。
-</Step>
-<Step>
+開啟該工作區的領取連結。把每個 Slack 權杖貼到對應欄位。
 ### 邀請機器人
 
-開啟每個要接上 SwB 的 Slack 頻道。在頻道中傳送 `/invite @<bot name>`。
-</Step>
-<Step>
+如果使用機器人，請在每個要接上 SwB 的頻道傳送 `/invite @<bot name>`。
 ### 找出工作區 ID
 
-在桌面瀏覽器中開啟 Slack。把網址中以 `T` 開頭的那一段交給代理。
-</Step>
-</Steps>
+在瀏覽器開啟 Slack。把網址中的工作區 ID 交給代理。ID 以 `T` 開頭。
 
 ## 應用程式資訊清單
 
@@ -184,9 +158,9 @@ settings:
 
 ## 代理的工作
 
-代理呼叫 `connect`，參數為 `what="slack"`。SwB 列出每個工作區還缺哪些權杖，並回傳一個領取連結，一次收齊這些權杖。
+代理呼叫 `connect(what="slack")`。SwB 會檢查缺少哪些權杖，再為對應的工作區傳回領取連結。
 
-代理在 `config/switchboard.yaml` 的 `blocks.slack.workspaces` 下填入工作區 ID 和權杖名稱。它在 `blocks.slack.agents` 下為自己的代理名稱加入授權，以便呼叫 `slack_workspaces`。如果需要你修改設定檔，代理會提供 YAML。
+代理在 `config/switchboard.yaml` 的 `blocks.slack.workspaces` 下新增工作區。代理填入工作區 ID 和權杖名稱，再在 `blocks.slack.agents` 授予存取權。
 
 這個範例用機器人和你的帳號連線到一個工作區。把 `T0DEMO0001` 換成你的工作區 ID。
 
@@ -198,21 +172,21 @@ blocks:
     workspaces:
       example:
         team_id: T0DEMO0001
-        app_token_env: SLACK_EXAMPLE_APP_TOKEN
+        app_token_env: SWB_SLACK_EXAMPLE_APP_TOKEN
         identities:
           bot:
-            token_env: SLACK_EXAMPLE_BOT_TOKEN
+            token_env: SWB_SLACK_EXAMPLE_BOT_TOKEN
           user:
-            token_env: SLACK_EXAMPLE_USER_TOKEN
+            token_env: SWB_SLACK_EXAMPLE_USER_TOKEN
     agents:
       claude:
         workspaces:
           example: [bot, user]
 ```
 
-授權寫明使用 Slack 的代理。使用 `switchboard_status` 顯示的名稱，例如 `claude` 或 `chatgpt`。每個代理加入一項授權。工作區設定和授權使用相同的工作區名稱。若只用你的帳號，在 `team_id` 同一層加入 `user_only: true`。移除 `identities` 下的 `bot` 項目。將授權中的身分設為 `[user]`。
+使用 `switchboard_status` 顯示的代理名稱。每個代理加入一項授權。工作區設定和授權使用相同的工作區名稱。若只用你的帳號，在 `team_id` 同一層加入 `user_only: true`。移除 `identities` 的 `bot`。將授權的身分設為 `[user]`。
 
-SwB 要求重新啟動時，代理會告訴你。重新啟動後，代理用 `slack_workspaces` 檢查每個身分。身分是指機器人或你自己的帳號。最後，代理用 `slack_post` 傳送一則測試訊息。
+`connect` 提示時，請重新啟動 SwB。代理可以用 `slack_workspaces` 檢查每個身分。身分指機器人或你的帳號。
 
 ## 憑證
 
@@ -222,13 +196,11 @@ SwB 要求重新啟動時，代理會告訴你。重新啟動後，代理用 `sl
 | 機器人權杖 | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | 以 `xoxb-` 開頭 | SwB 領取連結 |
 | 使用者權杖 | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | 以 `xoxp-` 開頭 | SwB 領取連結 |
 
-工作區 ID 和頻道 ID 只是 Slack 裡位置的名稱，可以放心寫進設定檔。
-
 ## 檢查連線
 
-請代理再次呼叫 `connect`。設定完成後，它會回報 `connected`。`slack_workspaces` 中每個身分顯示 `ready`，Socket Mode 顯示 `connected`。
+再次呼叫 `connect(what="slack")`，確認結果為 `connected`。呼叫 `slack_workspaces`。確認各身分的 `ready` 和工作區的 `connected` 都是 `true`。
 
-在頻道中提及機器人，並寫上目標名稱。代理用 `slack_events` 或 `slack_wait` 就能看到這則訊息。
+使用機器人時，在頻道提及機器人並寫上目標名稱。請代理用 `slack_events` 或 `slack_wait` 查看訊息。若要測試傳送，請讓有寫入權限的身分用 `slack_post` 傳送訊息。
 
 ## 排解問題
 

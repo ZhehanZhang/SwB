@@ -11,7 +11,7 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## Docker Compose
 
-以拥有数据目录的用户身份运行这些命令。
+安装 Docker Compose 2.24 或更高版本。用拥有数据目录的普通用户账号运行以下命令。
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -29,13 +29,13 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-请在五分钟内打开终端显示的一次性登录链接。
+在五分钟内打开终端显示的一次性登录链接。请保管好链接。
 
 所有者在浏览器中通过 `http://localhost:8870` 登录。容器内的命令使用 `8000` 端口。Compose 将数据保存在 `./data`。修改 `.env` 后，再次运行 `docker compose up -d`。
 
-运行 `docker compose exec switchboard swb login-link` 获取 `http://localhost:8870` 的登录链接。
+如果 SwB 在远程服务器上运行，请先将服务器的 `8870` 端口转发到本机的 `8870` 端口，再打开链接。
 
-退出登录后，`/healthz` 只返回 `status` 和 `version` 两个字段。以所有者身份登录或使用所有者密钥，即可查看完整的运行状态。
+直接请求 `/healthz` 会返回 `status` 和 `version`。以所有者身份登录或使用所有者密钥，可查看完整的运行状态。
 
 ## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
@@ -65,7 +65,7 @@ docker compose --profile tunnel up -d
 
 ## 受信任的代理
 
-反向代理把请求转发给 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 中添加代理的地址或专用网段。用 CIDR 格式填写地址范围。
+反向代理把请求转发给 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 中添加代理的地址或专用网段。用 CIDR 格式填写网段，例如 `192.0.2.0/24`。
 
 也可以在 `.env` 中设置 `SWB_TRUSTED_PROXIES`。用逗号分隔各项。SwB 优先使用 YAML 中的设置。
 
@@ -73,17 +73,7 @@ docker compose --profile tunnel up -d
 
 ## Cloudflare Access
 
-参照 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare) 配置所有者策略和放行策略。
-
-| 路径 | 策略 |
-| --- | --- |
-| `/mcp`、`/register`、`/token`、`/revoke`、`/.well-known/*` | 放行 |
-| `/healthz`、`/connect`、`/avatars/*` | 放行 |
-| `/inbox/poll`、`/inbox/events` | 放行 |
-| `/github/webhook` | 为 GitHub 放行 |
-| 其余路径，包括 `/`、`/authorize`、`/inbox` 和会话页面 | 所有者 |
-
-从所有者应用取得 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 和 `CLOUDFLARE_ACCESS_AUD`。SwB 会对放行路径上的请求执行相应检查。
+参照 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare)配置 SwB，并为所有者和客户端请求设置访问规则。
 
 ## 托管平台
 
@@ -99,26 +89,24 @@ docker compose --profile tunnel up -d
 
 ## Fly.io [#fly]
 
-使用 [SwB 发布分支的本地副本](#docker-compose)。安装 [Fly.io 命令行工具](https://docs.fly.io/flyctl/)并登录。
+使用 [Docker Compose 示例](#docker-compose)下载的 SwB 发布分支。安装 [Fly.io 命令行工具](https://docs.fly.io/flyctl/)。登录 Fly.io。
 
 在 SwB 文件夹中运行 `sh deploy/fly.sh my-swb`。将 `my-swb` 换成唯一的应用名。脚本用 `fly deploy --ha=false` 启动一台虚拟机。
 
-打开本地副本中的 `.env.swb-setup-fly-my-swb`。用 `SWB_SETUP_CODE` 登录。
+打开应用的登录页。从本地 `.env.swb-setup-fly-my-swb` 文件复制 `SWB_SETUP_CODE`。将它填入 **Setup code**。登录后删除该文件。
 
-在 [Fly.io 免费套餐](https://docs.fly.io/about/free-plan)中添加银行卡后，每月有 5 美元的用量额度。绑卡前，账户有 1 美元的初始额度，有效期为 7 天。
-
-在阿什本（`iad`），一台内存为 512 MB 的 `shared-cpu-1x` 虚拟机每月费用为 3.69 美元。1 GB 存储卷每月费用为 0.15 美元。
-
-用量费用超过 5 美元时，Fly.io 将组织切换到按量付费。Fly.io 按[标准费率](https://fly.io/docs/about/pricing/)收取当月的全部费用。
+计费详情请查看 [Fly.io 免费套餐](https://docs.fly.io/about/free-plan)和[当前费率](https://fly.io/docs/about/pricing/)。
 
 ## 备份与升级
 
-所有状态都在数据目录中。升级前先备份。请把 `mcp-events.key` 和 `claim-key` 与数据库放在一起，因为它们加密已存储的密钥。升级时，安装新版本并启动 SwB。数据库变更只会增加表和列。
+复制数据目录前，先停止 SwB。完整保留该目录、数据库和 `mcp-events.key`、`claim-key` 等密钥。也要备份配置文件和 `.env`。妥善保管备份。安装或构建新版本。使用原数据目录启动 SwB。
 
 ## 导出记忆
 
+在 Compose 容器中执行导出。
+
 ```bash
-swb export /data/export
+docker compose exec -T switchboard swb export /data/export
 ```
 
-导出会为每个范围写出一个 Markdown 文件夹，并写出一个 `INDEX.md`。设置 `memory.mirror_dir`，可在一个文件夹中保留实时副本。
+导出的 Markdown 文件按范围存放在主机上的 `./data/export` 中。目录中还有一个 `INDEX.md`。设置 `memory.mirror_dir` 可保留随记忆更新的 Markdown 副本。

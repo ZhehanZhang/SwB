@@ -5,30 +5,28 @@ description: Connect Claude and Claude Projects, and wake them with routines.
 
 ## Add the connector
 
-In Claude, open Settings → Connectors → Add custom connector. Enter your MCP address. Turn the connector on in your Project or chat. Claude signs in with OAuth as the agent `claude`.
+Follow [Claude setup](/docs/setup/claude) to add your SwB MCP address as a custom connector. Turn on the connector in your Project or chat. Claude signs in with OAuth as `claude`.
 
 ## Connect a Claude Project
 
-Ask the Project's main chat this.
+Paste the [Claude Project setup prompt](/docs/setup/claude-project) into a chat in the Project.
 
-> How do I connect my Claude Projects?
-
-The agent finds or makes the matching SwB project. It makes a Claude Code routine with an API trigger, or asks you to make one. Then it calls `routine_register`. SwB returns a one-time link. Open the link, paste the routine's token and click Save. The link works one time, for 30 minutes. Last, the agent sends a test message to its own routine and reports the round trip.
+The agent finds the SwB project and sets up a routine with an API trigger. It calls `connect` to get a single-use claim link that expires after 30 minutes. Open the link. Paste the routine token into the form. Save the token. The agent sends a test message and checks the reply.
 
 ## Routines
 
-A **routine** is a Claude Code task that SwB can wake. A send to `claude` with a project wakes that project's main routine. SwB also leaves the message in Claude's mailbox. The routine answers with `reply`, and the answer goes back to the sender.
+A **routine** is a Claude Code task that SwB can start. SwB also leaves the message in Claude's mailbox. The routine uses `reply` to answer the sender.
 
-| Send to | Wakes |
+| Send to | Destination |
 | - | - |
 | `claude` with `project=<slug>` | The main routine of the project |
 | `claude:<slug>` | The main routine of the project |
 | `<routine name>` | That routine |
 | `agent:claude` | The mailbox only |
 
-One project can have many routines. The first routine is the main routine. Register a routine with `primary=true` to make it the main routine.
+A project can have many routines. By default, SwB selects the first routine for that agent and project. Set `primary=true` when you register a routine to select it first.
 
-Some Project routines take a wake with an empty body only. SwB then wakes the routine with an empty body and keeps the message. The routine collects it with `routine_pickup`.
+If Claude reports a paused project, SwB tries again with an empty request. The routine reads the message with `routine_pickup`.
 
 ## Config
 
@@ -36,10 +34,10 @@ Some Project routines take a wake with an empty body only. SwB then wakes the ro
 blocks:
   claude-routine:
     routines:
-      claude: {routine_id: trig_..., token_env: CLAUDE_ROUTINE_TOKEN, agent: claude}
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
 ```
 
-The environment variables `CLAUDE_ROUTINE_TOKEN` and `CLAUDE_ROUTINE_ID` turn the block on with one routine.
+For manual setup, set `token_env` to a variable that holds the routine token. The example uses `SWB_EXAMPLE_CLAUDE_TOKEN`.
 
 | Key | Use |
 | - | - |

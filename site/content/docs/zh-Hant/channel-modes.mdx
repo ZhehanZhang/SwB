@@ -8,9 +8,9 @@ description: 設定 SwB 在各空間中處理訊息的方式。
 | 模式 | SwB 的行為 |
 | - | - |
 | `off` | 捨棄所有 GitHub 事件，包含擁有者的事件。在 Slack、Discord 和 Telegram 中捨棄其他人傳來的訊息 |
-| `watch` | 收集訊息並彙整成摘要 |
+| `watch` | 將近期訊息整理成摘要 |
 | `assist` | 喚醒代理，讓它參考上下文並在原討論串回覆 |
-| `triage` | 喚醒分流代理。預設動作是在原討論串回覆 |
+| `triage` | 喚醒分流代理。它會查看事件並選擇處理方式。預設動作是在原討論串回覆 |
 | `work` | 處理擁有者傳來的訊息 |
 
 在 Slack、Discord 和 Telegram 中，擁有者的提及和私訊一律依 `work` 處理。頻道與目標的存取範圍由可見性設定決定。
@@ -21,7 +21,7 @@ description: 設定 SwB 在各空間中處理訊息的方式。
 
 在連線或專案頁面的 **Channel modes** 設定模式。也可以在 YAML 設定。擁有者可以用 `space_mode` 指定模式、目標、專案和允許的動作。
 
-在 YAML 中為 `"off"` 加上引號，SwB 就會將它讀成文字。
+YAML 是 SwB 設定檔使用的文字格式。請在 YAML 裡將 `"off"` 加上引號。
 
 ```yaml
 blocks:
@@ -73,17 +73,17 @@ visibility_set(resource="target:beta", visibility="shared")
 
 擁有者可以在主控台的 **Inbox** 查看所有摘要，也可以呼叫 MCP 工具 `inbox` 或 `wait`。摘要列出事件總數、各事件的作者和摘錄，以及可用的連結。摘要的信任等級是 `external`。
 
-觀察模式讓代理保持休眠。摘要僅供收件匣查詢。已設定的 GitHub 接收端仍會收到各個事件的副本。
+觀察模式讓代理保持休眠。摘要僅供收件匣查詢。已設定的 [GitHub 事件接收方](/zh-Hant/docs/blocks/github)仍會收到各個事件的副本。
 
 ## 分流動作
 
-分流代理可以讀取上下文。預設是在原討論串執行 `reply`。在 GitHub 討論串中，請使用 `github_reply`。在 `handle` 填入對話 ID。在 `text` 填入回覆內容。
+分流代理可以讀取事件相關資訊。預設是在原討論串執行 `reply`。在 GitHub 討論串中，請使用 `github_reply`。在 `handle` 填入對話 ID。在 `text` 填入回覆內容。
 
 若要開放更多動作，請在 `space_mode` 或 YAML 中設定 `actions`。將 `reply` 加入清單即可保留回覆功能，例如 `actions=["reply", "notify_owner"]`。
 
 | 動作 | 用途 |
 | - | - |
-| `label` | 為 GitHub 議題或提取要求加上標籤 |
+| `label` | 為 GitHub 議題或提取請求加上標籤 |
 | `comment` | 在 GitHub 上新增留言 |
 | `open_issue` | 建立 GitHub 議題 |
 | `link_duplicate` | 連結並關閉重複的 GitHub 議題 |

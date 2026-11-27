@@ -1,9 +1,9 @@
 ---
 title: 伴侣设备
-description: 在自己的设备上运行 SwB，让已部署的 SwB 使用本地功能。
+description: 连接一台设备，让智能体使用它的本地功能。
 ---
 
-在自己的设备上运行 SwB，就能把它用作伴侣设备。智能体可以通过你部署的 SwB 使用这台设备上的功能。
+**伴侣设备**是连接到 SwB 服务器的设备。智能体可以使用这台设备上的功能。
 
 ## 复制设置提示词
 
@@ -11,9 +11,9 @@ description: 在自己的设备上运行 SwB，让已部署的 SwB 使用本地�
 
 ## 配对设备
 
-请以所有者身份登录的智能体调用 `companion_code`。请智能体将配对码存入权限为 `0600` 的私有文件。
+请以所有者身份登录的智能体调用 `companion_code`。请智能体把配对码存入权限为 `0600` 的文件。只有文件所有者可以访问它。
 
-若要在控制台获取配对码，请[用通行密钥登录](/zh-Hans/docs/owner-login)。打开 **Settings**。在 **Connections** 中选择 **Pair a device**。
+要在控制台获取配对码，请[用通行密钥登录](/zh-Hans/docs/owner-login#通行密钥)。打开 **Settings**。在 **Connections** 中选择 **Pair a device**。使用 Cloudflare Access 时，请改用 `companion_code` 工具。
 
 在设备上运行以下命令。将示例地址换成你的 SwB HTTPS 地址。如果 SwB 也在这台设备上运行，可以使用 `http://127.0.0.1:8870`。
 
@@ -49,7 +49,7 @@ Muse 功能请使用 Python 3.13。请参阅 [Muse 配对指南](/zh-Hans/docs/s
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-为每个 MCP 服务器添加一个 `--mcp` 选项。可以填写启动命令，例如 `--mcp 'notes=uvx notes-mcp'`。对于设备上的 HTTP 服务器，请填写本机地址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
+为每个 MCP 服务器添加一个 `--mcp` 选项。要启动程序，请用 `--mcp 'NAME=COMMAND'`。把 `NAME` 换成服务器名称。把 `COMMAND` 换成启动程序的命令。对于设备上的 HTTP 服务器，请填写本机地址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
 智能体用 `companion_list` 查看已配对的设备及其操作。它用 `companion_invoke` 执行操作。
 
@@ -57,11 +57,11 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 ## 本地会话
 
-本地会话是指正在这台设备上运行的编程智能体。SwB 会把会话及其状态列在目标中。
+**本地会话**是设备上的编程智能体正在进行的会话。SwB 会显示会话状态和 `local:session:<companion>:<harness>:<session>` 地址。
 
 配对前，请按表中的链接配置本地智能体。配对后，让伴侣设备保持运行。请以所有者身份登录的智能体调用 `targets(block="local")`。确认结果中列出了你的会话地址。
 
-SwB 先把发给会话的消息放入智能体的邮箱，再尝试送到已打开的会话。答复会回到原来的 SwB 会话。
+SwB 会尝试把消息送到已打开的会话。发送者有权使用智能体邮箱时，SwB 也会把消息放入邮箱。答复会回到原来的 SwB 会话。
 
 从 `targets` 获取会话地址。在 `visibility_list` 中查找该地址对应的资源。用 `visibility_set` 共享该资源。
 

@@ -3,25 +3,25 @@ title: 設定
 description: 環境變數、設定檔與覆寫檔。
 ---
 
-SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在設定對應變數後啟用。其他設定可寫入 YAML 檔。
+SwB 可以只靠環境變數執行。MCP 模組預設啟用。有些模組會在你設定對應的變數後啟用。其他設定可寫進 YAML 檔。YAML 是用純文字記錄設定的格式。
 
 ## 執行個體
 
 | 變數 | 用途 |
 | - | - |
-| `SWB_KEY_OWNER` | `swb` 指令使用的擁有者金鑰 |
+| `SWB_KEY_OWNER` | SwB 工具與指令使用的擁有者金鑰 |
 | `SWB_PUBLIC_URL` | 登入與 MCP 使用的公開位址。遠端伺服器請用 HTTPS，例如 `https://swb.example.com`。 |
 | `SWB_HOST` | 接收連線的位址，預設為 `127.0.0.1`。 |
 | `SWB_DATA_DIR` | 資料夾。映像檔使用 `/data`。 |
-| `SWB_OWNER_EMAILS` | OIDC 與 Cloudflare Access 的擁有者電子郵件，以逗號分隔 |
-| `SWB_KEY_<NAME>` | 代理 `<name>` 的 bearer 金鑰 |
+| `SWB_OWNER_EMAILS` | OpenID Connect（OIDC）與 Cloudflare Access 使用的擁有者電子郵件地址。用逗號隔開各地址 |
+| `SWB_KEY_<NAME>` | 代理 `<name>` 的金鑰。代理把它當作 bearer 金鑰放在 `Authorization` 要求標頭內 |
 | `SWB_CONFIG` | 基礎 YAML 檔的路徑 |
 | `SWB_OVERLAY` | 私人覆寫檔的路徑 |
 | `SWB_PORT` | HTTP 連接埠。`swb up` 預設為 `8870`。 |
 
-在終端機或執行個體的 `.env` 中設定 `SWB_PORT`。託管平台也可以設定 `PORT`。本機登入位址使用所選的連接埠。
+在終端機或執行個體的 `.env` 中設定 `SWB_PORT`。如果託管平台設定了其他連接埠，請用 `--url` 讓用戶端指令連到實際的伺服器位址。
 
-用 `swb up --public-url https://swb.example.com` 在指令中設定公開位址。這個選項優先於 YAML 的 `public_url`。YAML 設定優先於 `SWB_PUBLIC_URL`。
+用 `swb up --public-url https://swb.example.com` 指定公開位址。這次執行時，這個選項優先於 YAML 的 `public_url`。YAML 設定優先於 `SWB_PUBLIC_URL`。
 
 用 `--host` 覆寫 `SWB_HOST`。若要在 `0.0.0.0` 或區域網路位址接收連線，請先設定公開位址。
 
@@ -29,7 +29,7 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 `swb status`、`swb login-link`、`swb connect` 和 `swb claim` 用 `--dir` 尋找 `.env`。這四個指令用 `--url` 指定伺服器位址。
 
-所有伺服器指令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 從指定的資料夾讀取 `.env` 和設定。需要存取資料庫的指令也從該資料夾尋找執行個體的資料。
+伺服器指令都接受 `--dir`，包括 `swb serve`、`swb export`、`swb log`、`swb config migrate`、`swb blocks` 和 `swb targets`。SwB 從指定的資料夾讀取 `.env` 和設定。需要存取資料庫的指令也從該資料夾尋找執行個體的資料。
 
 直接執行 `swb serve` 時，SwB 會讀取終端機環境和設定檔。其他伺服器指令預設採用目前的資料夾。
 
@@ -41,27 +41,17 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 
 在設定檔或覆寫檔中設定 `data_dir`，即可更改路徑。這項設定優先。SwB 接著依序檢查 `SWB_DATA_DIR` 和 `SWB_DATA`。三項設定都是空值時，SwB 會採用預設路徑。
 
-直接執行 `swb up` 會保留現有設定檔。原本使用家目錄資料庫的執行個體會繼續使用該資料庫。若 SwB 因缺少 `data/` 資料夾而改用家目錄的資料庫，會在日誌中提示一次。
+直接執行 `swb up` 會保留現有設定檔。執行個體已有設定檔而 `data/` 資料夾缺少時，SwB 會到 `~/.local/share/switchboard` 找舊資料庫。如果用了舊資料庫，SwB 會在記錄中提示一次。
 
 在 Linux 與 macOS 上，SwB 將資料夾的權限設為 `0700`。資料庫檔案的權限設為 `0600`。
 
 ## 模組
 
-| 模組 | 變數 |
-| - | - |
-| Capy | `CAPY_API_KEY`，傳送時另可使用 `CAPY_API_KEY_SERVICE` 或 `CAPY_API_KEY_AS_<AGENT>` |
-| Slack | `SLACK_BOT_TOKEN` 或 `SLACK_USER_TOKEN`、`SLACK_TEAM_ID`，以及 Socket Mode 使用的 `SLACK_APP_TOKEN` |
-| Discord | `DISCORD_BOT_TOKEN` |
-| Telegram | `TELEGRAM_BOT_TOKEN` |
-| GitHub | `GITHUB_WEBHOOK_SECRET` |
-| Claude routine | `CLAUDE_ROUTINE_TOKEN` 與 `CLAUDE_ROUTINE_ID` |
-| Grok routine | `GROK_ROUTINE_SECRET` 與 `GROK_ROUTINE_URL` |
-
-具名的 Slack 工作區，請把名稱放在 `SLACK_` 之後，例如 `SLACK_SUPPORT_BOT_TOKEN`。具名的 routine 用相同方式處理，例如 `CLAUDE_ROUTINE_TOKEN_DOCS`。
+有些模組可以依環境中的憑證啟動。設定方式請參閱[模組](/zh-Hant/docs/blocks)。[發行版環境範例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)列出有名稱的工作區和 routine 所用的憑證名稱。
 
 ## 設定檔
 
-執行 `swb up` 會在目前的資料夾中建立新的執行個體。SwB 將擁有者金鑰寫入 `.env`，並將自訂的 `SWB_PORT` 存在同一個檔案。檔案權限為 `0600`。
+`swb up` 在執行個體的資料夾內完成初始設定。SwB 將擁有者金鑰和自訂的 `SWB_PORT` 存在 `.env`。檔案權限為 `0600`。
 
 若要在啟動 SwB 前建立檔案，請執行 `swb init`。
 
@@ -69,7 +59,7 @@ SwB 可以只用環境變數執行。MCP 模組預設啟用。部分模組會在
 swb init
 ```
 
-這兩個指令產生的 `config/switchboard.yaml` 預設只有 `version: 2`。用 `--public-url` 可將公開位址存入此檔案。建立執行個體時，`swb up` 也會儲存 `SWB_PUBLIC_URL` 中的位址。若要用 YAML 選取模組，請依下例加入 `blocks`。
+這兩個指令預設會將 `version: 2` 寫入 `config/switchboard.yaml`。用 `swb init --public-url` 可將位址存入此檔。首次執行 `swb up` 時，SwB 會儲存 `--public-url` 或 `SWB_PUBLIC_URL` 的位址。加入 `blocks` 即可指定要載入的模組。將 `CAPTAIN_ID` 換成你的 Capy Captain ID。
 
 ```yaml
 version: 2
@@ -82,14 +72,14 @@ blocks:
 targets:
   aliases: {}
 routes:
-  - {match: {}, to: capy:captain:<Capy Captain id>}
+  - {match: {}, to: capy:captain:CAPTAIN_ID}
 ```
 
-`blocks` 一節優先決定載入哪些模組。省略 `blocks` 時，SwB 依環境變數選擇模組。
+SwB 優先依 `blocks` 選擇模組。將 MCP 模組的 `enabled` 設為 `false` 即可關閉它。模組仍可從環境變數讀取憑證。
 
 ## 覆寫檔
 
-覆寫檔是一個私人的 YAML 檔，用來放你自己的名稱、id 與路徑。請放在 `config/local.yaml`，或用 `SWB_OVERLAY` 指定。覆寫檔優先於基礎檔，基礎檔優先於環境變數。對應表會合併。清單會被取代。
+覆寫檔是存放執行個體專用設定的 YAML 檔。把 `local.yaml` 放在基礎設定檔旁，或用 `SWB_OVERLAY` 指定路徑。覆寫檔優先於基礎檔。基礎檔優先於環境變數中的預設值。依名稱分組的設定會合併。覆寫檔中的清單會取代原有清單。
 
 鍵中的 `*` 代表一個名稱或清單項目。
 
@@ -98,7 +88,7 @@ routes:
 | 設定鍵 | 用途 |
 | - | - |
 | `version` | YAML 設定格式版本。使用 `blocks` 時設為 `2` |
-| `public_url` | SwB 用於 MCP 與 OAuth 的位址。請參閱 `SWB_PUBLIC_URL`。 |
+| `public_url` | MCP 和登入使用的公開位址。OAuth 讓應用程式在你核准後登入 |
 | `data_dir` | 資料目錄的路徑。可在此設定，也可用 `SWB_DATA_DIR` |
 | `timezone` | 每日計數與限額使用的時區，預設為 `UTC` |
 | `turn_cap` | 對話暫停前的輪數，預設為 `200`。設為 `null` 可關閉上限 |
@@ -109,7 +99,7 @@ routes:
 | `targets.aliases` | 將簡稱指向目標名稱或位址 |
 | `targets.priority` | 目標同名時的選擇順序，例如 `[capy:captain, agent, project]` |
 | `routes` | 初始路由。SwB 保留已設定的路由 |
-| `routes.*.match` | 要比對的代理或專案。全域路由使用 `{}` |
+| `routes.*.match` | 比對代理、專案，或同時比對兩者。全域路由使用 `{}` |
 | `routes.*.to` | 路由相符時的傳送位址 |
 
 ## 登入與金鑰
@@ -119,13 +109,13 @@ routes:
 | `auth` | 登入與金鑰設定 |
 | `auth.owner_emails` | 可透過 OIDC 或 Cloudflare Access 以擁有者身分登入的電子郵件位址 |
 | `auth.cloudflare_access` | Cloudflare Access 登入設定。填寫下方兩項並設定 `auth.owner_emails` |
-| `auth.cloudflare_access.team_domain` | Cloudflare Access 團隊網域，也可用 `CLOUDFLARE_ACCESS_TEAM_DOMAIN` 設定 |
-| `auth.cloudflare_access.aud` | Access 應用程式的對象標記，也可用 `CLOUDFLARE_ACCESS_AUD` 設定 |
+| `auth.cloudflare_access.team_domain` | Cloudflare Access 團隊網域 |
+| `auth.cloudflare_access.aud` | Access 應用程式的對象標記 |
 | `auth.redirect_uris` | 允許的 OAuth 回呼位址。這份清單會取代內建清單。用 `/*` 比對路徑及其子路徑 |
 | `auth.source_names` | 將 OAuth 主機名稱或用戶端名稱的片段對應到登入時使用的代理名稱 |
-| `auth.key_scopes` | 依金鑰名稱指定範圍，例如 `[project:example]`。限制路由、訊息和對話。它也限制設定金鑰的記憶存取，並在配對時提供額外的記憶授權。SwB 依配對金鑰單獨儲存這些授權 |
+| `auth.key_scopes` | 依金鑰或代理名稱設定存取範圍，例如 `[project:example]`。這些範圍限制路由、訊息與對話。用設定檔金鑰或 OAuth 用戶端存取記憶時，也適用這些限制。配對時，SwB 會把指定的記憶範圍加到授權中 |
 | `auth.key_tools` | 依金鑰名稱設定可呼叫的 MCP 工具，例如 `[send]` |
-| `auth.key_targets` | 依金鑰名稱設定可接收訊息的目標，例如 `[agent:claude]` |
+| `auth.key_targets` | 依金鑰名稱設定可傳送的目標，例如 `[agent:claude]`。使用有這項限制的金鑰時，須指定一個允許的目標 |
 | `auth.inbox_keys` | 為每把金鑰指定唯一可讀取的代理收件匣。內建項目為 `channel: claude-code` |
 
 ## 存取權限
@@ -140,7 +130,7 @@ routes:
 | `visibility.defaults.target` | 傳送目標的預設規則 |
 | `visibility.resources` | 針對指定資源設定規則，例如 `channel:home/#agents`。這些規則優先於該類型的預設規則 |
 
-在 Slack 中，`channel:home/#agents` 是一條頻道規則。在 GitHub 中，開放 `channel:github/acme/app` 和 `target:beta` 後，外部使用者就能存取 `agent:beta`。詳情請參閱[頻道可見度](/zh-Hant/docs/channel-modes#允許外部-github-使用者存取)。
+在 Slack 中，`channel:home/#agents` 是一條頻道規則。在 GitHub 中，同時共用 `channel:github/acme/app` 和 `target:beta`，外部寄件者才可聯絡 `agent:beta`。請參閱[頻道可見度](/zh-Hant/docs/channel-modes#允許外部-github-使用者存取)。
 
 用 `private` 將存取權限限於擁有者及其代理。用 `shared` 開放存取。填入使用者 ID 或 `workspace:home` 這類項目，即可指定共用對象。透過 `visibility_set` 所做的變更優先於此檔。
 
@@ -151,7 +141,7 @@ routes:
 | `blocks.github.owner_ids` | 預設視為擁有者的 GitHub 數字使用者 ID 清單 |
 | `blocks.github.spaces.*.owner_ids` | 取代此空間預設清單的 GitHub 數字使用者 ID 清單 |
 
-GitHub 的信任等級為 `owner` 和 `external`。在 Slack、Discord 和 Telegram 中，`known` 是接收設定。SwB 用它判斷接受哪些寄件者的訊息。擁有者以外的寄件者即使透過 `known` 獲准，訊息的信任等級仍是 `external`。若要設定工作模式，請參閱[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
+GitHub 的信任等級是 `owner` 和 `external`。在 Slack、Discord 和 Telegram，`known` 幫助 SwB 判斷要接受哪些寄件者的訊息。其他寄件者的訊息仍標為 `external`。工作模式的設定方式請參閱[擁有者帳號](/zh-Hant/docs/blocks/github#擁有者帳號)。
 
 ## MCP
 
@@ -202,4 +192,4 @@ branding:
 
 ## 完整參考
 
-[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) 提供附有註解的 YAML 範例。
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/release/1.0/config/switchboard.example.yaml) 提供附有註解的 YAML 範例。

@@ -1,9 +1,9 @@
 ---
 title: 夥伴裝置
-description: 在自己的裝置上執行 SwB，讓部署的 SwB 使用本機功能。
+description: 連接一台裝置，讓代理使用裝置的本機功能。
 ---
 
-在自己的裝置上執行 SwB，就能把它當作夥伴裝置。代理可以透過你部署的 SwB 使用這台裝置的功能。
+**夥伴裝置**是連到 SwB 伺服器的裝置。代理可以使用這台裝置上的功能。
 
 ## 複製設定提示詞
 
@@ -11,9 +11,9 @@ description: 在自己的裝置上執行 SwB，讓部署的 SwB 使用本機功�
 
 ## 配對裝置
 
-請以擁有者身分登入的代理呼叫 `companion_code`。請代理將配對碼存入權限為 `0600` 的私密檔案。
+請以擁有者身分登入的代理呼叫 `companion_code`。請代理將配對碼存入權限為 `0600` 的檔案。只有檔案擁有者可以存取。
 
-若要在主控台取得配對碼，請[使用通行金鑰登入](/zh-Hant/docs/owner-login)。開啟 **Settings**。在 **Connections** 中選取 **Pair a device**。
+若要在主控台取得配對碼，請[用通行金鑰登入](/zh-Hant/docs/owner-login#通行金鑰)。開啟 **Settings**。在 **Connections** 中選取 **Pair a device**。使用 Cloudflare Access 時，請改用 `companion_code` 工具。
 
 在裝置上執行下方指令。將範例位址換成你的 SwB HTTPS 位址。如果 SwB 也在這台裝置上執行，可以使用 `http://127.0.0.1:8870`。
 
@@ -49,7 +49,7 @@ Muse 功能請使用 Python 3.13。請參閱 [Muse 配對指南](/zh-Hant/docs/s
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-為每個 MCP 伺服器加入一個 `--mcp` 選項。可以填入啟動指令，例如 `--mcp 'notes=uvx notes-mcp'`。若使用裝置上的 HTTP 伺服器，請填入本機位址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
+為每個 MCP 伺服器加入一個 `--mcp` 選項。若要啟動程式，請用 `--mcp 'NAME=COMMAND'`。將 `NAME` 換成伺服器名稱。將 `COMMAND` 換成啟動程式的指令。若使用裝置上的 HTTP 伺服器，請填入本機位址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
 代理用 `companion_list` 檢視已配對的裝置及其操作。代理用 `companion_invoke` 執行操作。
 
@@ -57,11 +57,11 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 
 ## 本機工作階段
 
-本機工作階段是指正在這台裝置上執行的程式開發代理。SwB 會在目標中列出工作階段及其狀態。
+**本機工作階段**是裝置上的程式開發代理正在進行的對話。SwB 會顯示工作階段狀態和 `local:session:<companion>:<harness>:<session>` 位址。
 
 配對前，請依表格中的連結設定本機代理。配對後，讓夥伴裝置持續執行。請以擁有者身分登入的代理呼叫 `targets(block="local")`。確認結果中列出你的工作階段位址。
 
-SwB 先把傳給工作階段的訊息放進代理的信箱，再嘗試送到已開啟的工作階段。回覆會回到原本的 SwB 對話。
+SwB 會嘗試把訊息送到已開啟的工作階段。寄件者有權使用代理信箱時，SwB 也會把訊息放進信箱。回覆會回到原本的 SwB 對話。
 
 從 `targets` 取得工作階段的位址。在 `visibility_list` 中查找該位址對應的資源。用 `visibility_set` 分享該資源。
 

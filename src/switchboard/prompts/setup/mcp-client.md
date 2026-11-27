@@ -1,6 +1,6 @@
 Read the setup guide at https://swb.one/docs/setup/mcp-client.
 
-Help me connect a client that supports Streamable HTTP and custom request headers.
+Help me connect an MCP client that supports Streamable HTTP and custom request headers. Streamable HTTP is how the client sends tool requests to SwB.
 
 For a new local SwB server, follow **This computer** at https://swb.one/prompts/deploy.md.
 
@@ -8,7 +8,7 @@ Use `http://localhost:8870` if the client runs on the SwB computer. Use the port
 
 ## Owner client
 
-Use owner access for the first client if it will set up other apps. On the SwB computer, set up a private owner client. Load `SWB_KEY_OWNER` from the instance `.env` inside that client. Keep the key only in its local config with file mode `0600`. Send it as a bearer key only to the local SwB address. Keep the key out of commands, logs and chat. Check that the client can call `inbox`. Give the owner client https://swb.one/prompts/coordinator.md for the remaining connections.
+Use owner access for the first client if it will set up other apps. On the SwB computer, set up a private owner client. Use the local SwB address with `/mcp` at the end. Load `SWB_KEY_OWNER` from the instance `.env` inside that client. Keep the key in its local config with file mode `0600`. Send it in the `Authorization: Bearer <key>` header only to the local address. Keep the key out of commands, logs and chat. Check that the client can call `inbox`. Give the owner client https://swb.one/prompts/coordinator.md for the remaining connections.
 
 ## Paired client
 
@@ -20,7 +20,7 @@ swb connect mcp-client --choose agent=notes-bot
 
 Use `uvx swb-one connect mcp-client --choose agent=notes-bot` if I run SwB with uvx. The result gives me a pairing code. It works once within 10 minutes.
 
-The key gets `agent:<name>` and any memory scopes I set for that agent. It also gets the scope of a project named in the pairing. Read general memory only if the key has a grant for `general`.
+A scope is a group of memory entries. The key gets `agent:<name>` and any scope I grant to that agent. It also gets the scope of a project named in the pairing. Read `general` if the key has access to it.
 
 If you can edit the client settings on this computer, add an MCP server named `swb`. Use a hidden prompt if I have the pairing code. Send the code to `POST /connect` and read the response in memory. Use `mcp_url` for Streamable HTTP and `key` for the `Authorization: Bearer <key>` header. Write the key straight to the client config with file mode `0600`. Keep the code and key out of commands, logs and chat. For a local server, use the MCP address shown at startup.
 
@@ -46,9 +46,9 @@ Have the new app call `inbox`. A successful call confirms the connection, even w
 
 For a round trip, use an app with SwB owner access. On the SwB computer, you can use a private MCP session instead. Load `SWB_KEY_OWNER` from the instance `.env` inside the client. Send it only as a bearer token to the local SwB address. Keep the key out of commands, logs and chat.
 
-Call `send(to="agent:notes-bot", task="SwB setup test. Reply pong.")`. Replace `notes-bot` with my chosen name. Ask the new agent to read the message with `inbox`. Ask it to answer with `reply`. Call `result` from the same owner app or session. Show me the reply.
+Call `send(to="agent:notes-bot", task="SwB setup test. Reply pong.")`. Replace `notes-bot` with my chosen name. Ask the new agent to read the message with `inbox`. Ask it to answer with `reply` and the item's `handle`. From the owner session, call `wait` with the `conversation` returned by `send`. Show me the reply.
 
-For the first shared memory check, use `general` if the paired key has that grant. Otherwise use a project scope that both agents can read. Ask the new agent to call `memory_list` with the chosen scope in `scopes`.
+For the first shared memory check, use a scope both agents can read. Ask the new agent to call `memory_list` with the scope in `scopes`.
 
 Ask me to paste the coordinator prompt from https://swb.one/prompts/coordinator.md into the new app. The client can subscribe to `switchboard.message.created` if it supports MCP events. It can also use `wait` or `inbox` to read messages.
 
