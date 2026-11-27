@@ -1,9 +1,11 @@
 ---
 title: 部署
-description: 在雲端平台上執行 SwB，再讓代理完成設定。
+description: 在電腦或伺服器上執行 SwB。
 ---
 
-本頁適合透過代理工作的人。你在雲端平台上部署 SwB，登入一次，再把設定提示詞交給代理。
+## 在電腦上執行
+
+依照[安裝指南](/zh-Hant/docs/install)啟動 SwB。執行 `swb login-link` 以產生一次性的擁有者登入連結。在瀏覽器中開啟連結。部署提示詞也適用於本機。
 
 <DeployLive>
 
@@ -25,7 +27,7 @@ Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live*
 <Step>
 ### 複製位址
 
-複製頁面頂端的服務 URL，例如 `https://swb-example.onrender.com`。在這個 URL 結尾加上 `/mcp`，就是你的 MCP 位址。
+複製頁面頂端的服務 URL。在結尾加上 `/mcp`，就是 MCP 位址。
 </Step>
 </Steps>
 
@@ -55,19 +57,19 @@ Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live*
 
 ## 部署 SwB
 
-把這段提示詞貼給程式開發代理，例如 Claude Code 或 Codex。它會在 Fly.io、Koyeb 或裝有 Docker 的伺服器上部署 SwB，並告訴你設定碼存放在哪個私密檔案中。
+將提示詞貼給 Claude Code 或 Codex 等程式開發代理。代理可在你的電腦上執行 SwB，也可部署到 Fly.io、Koyeb 或裝有 Docker 的伺服器。
 
 <SetupPrompt name="deploy" lang="zh-Hant" />
 
 ## 登入
 
-開啟服務記錄中顯示的登入頁面位址。將私密檔案中的設定碼貼到 **Setup code**。新增通行金鑰，之後用它登入。設定碼只能使用一次。
+部署到伺服器後，開啟服務記錄中的登入位址。將私有檔案中的設定碼貼到 **Setup code**。設定碼僅供擁有者首次登入。新增通行金鑰供日後登入。
 
 </DeployHeld>
 
 ## 連接你的代理
 
-把這段提示詞貼給你正在用的代理。它會加入 SwB，接通你的其他應用程式，並開始與它們對話。
+先[將 SwB 連接到一個代理](/zh-Hant/docs/connect)。再將提示詞貼給它。請它連接其他應用程式。
 
 <SetupPrompt name="coordinator" lang="zh-Hant" />
 
@@ -75,7 +77,7 @@ Render 會在幾分鐘內建置 SwB。SwB 就緒後，服務頁面顯示 **Live*
 
 ## 使用其他平台
 
-Fly.io、Koyeb 與裝有 Docker 的伺服器需要程式開發代理，例如 Claude Code 或 Codex。把這段提示詞貼給程式開發代理。它會完成部署，並告訴你設定碼存放在哪個檔案中。
+將提示詞貼給 Claude Code 或 Codex 等程式開發代理。代理可以在你的電腦上執行 SwB。也可部署到 Fly.io、Koyeb 或裝有 Docker 的伺服器。
 
 <SetupPrompt name="deploy" lang="zh-Hant" />
 

@@ -2,14 +2,16 @@ Setup guide: https://swb.one/docs/setup/slack
 
 Help me connect Slack to SwB, my self-hosted switchboard for agents and channels. You reach SwB as an MCP server.
 
-If the SwB tools are missing in this app, first help me add SwB as a custom MCP server here, at my SwB address such as https://swb.example.com/mcp. In Claude, open Customize > Connectors > Add > Custom > Web. In ChatGPT, open https://chatgpt.com/plugins in a web browser, then + > Add custom MCP server. In Grok, open grok.com > Connectors > New Connector > Custom. In other apps, use the MCP server settings. Wait until I confirm.
+If the SwB tools are missing in this app, help me add SwB as a custom MCP server. Use my SwB address, such as https://swb.example.com/mcp. In Claude, use Customize > Connectors > Add > Custom > Web. In ChatGPT, open https://chatgpt.com/plugins in a browser. Use + > Add custom MCP server. In Grok, use grok.com > Connectors > New Connector > Custom. In other apps, use the MCP server settings. Wait for me to confirm.
 
-Call connect(what="slack"). Do each step marked "you" yourself. Give me each step marked "person" one at a time, with the exact click path, and wait for me to say done. Then call connect(what="slack") again to check it.
+Call connect(what="slack"). Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path. Wait for me to say done after each step. Call connect(what="slack") again to check the connection.
 
-My Slack steps, in order: open https://api.slack.com/apps > Create New App > From a manifest, pick the workspace > Next. Select YAML and paste manifests/workspace-a-agent.yaml from the SwB repo (bot plus my account) or manifests/workspace-b-user-only.yaml (my account only), then Next > Create. Open Basic Information > App-Level Tokens > Generate Token and Scopes, add connections:write, then Generate. Open Install App > Install to Workspace > Allow. The xapp- token is under Basic Information > App-Level Tokens. The xoxb- and xoxp- tokens are under OAuth & Permissions > OAuth Tokens. Then I send /invite @<bot> in each channel. The workspace ID is the T... part of app.slack.com/client/T.../ in a browser.
+I open https://api.slack.com/apps. I use Create New App > From a manifest. I pick the workspace. I click Next. I select YAML. For the bot and my account, I paste `manifests/workspace-a-agent.yaml` from the SwB repo. For my account only, I paste `manifests/workspace-b-user-only.yaml`. I click Next. I click Create.
 
-Add the workspace under blocks.slack.workspaces in config/switchboard.yaml, or give me the YAML. Tell me when SwB needs a restart. Check identities with slack_workspaces.
+I use Basic Information > App-Level Tokens > Generate Token and Scopes. I add `connections:write`. I click Generate. I use Install App > Install to Workspace. I click Allow. I find the `xapp-` token at Basic Information > App-Level Tokens. I find the `xoxb-` and `xoxp-` tokens at OAuth & Permissions > OAuth Tokens. I send `/invite @<bot>` in each channel. The workspace ID is the `T...` part of `app.slack.com/client/T.../` in a browser.
 
-Ask me for tokens only through the claim link that connect returns, and keep them out of chat.
+Add the workspace under `blocks.slack.workspaces` in `config/switchboard.yaml`. If I need to edit the file myself, give me the YAML. Tell me when SwB needs a restart. Check identities with slack_workspaces.
 
-When connect reports connected, send a test message with slack_post and show me the reply. Last, subscribe to SwB events: use switchboard.message.created if this app supports MCP events, else call wait or inbox to collect new messages.
+Ask me to enter tokens only through the claim link that connect returns. Keep tokens out of this chat.
+
+When connect reports connected, send a test message with slack_post. Show me the reply. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.

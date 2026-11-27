@@ -9,11 +9,11 @@ description: 把 SwB 加到一個代理，其餘交給代理完成。
 
 | 應用程式 | 加入 SwB 的位置 |
 | - | - |
-| Claude 與 Claude Projects | Settings → Connectors → Add custom connector |
+| Claude 與 Claude Project | Settings → Connectors → Add custom connector |
 | ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
-| Grok | grok.com → Connectors → New Connector → Custom |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
 | Capy | 以 Automatic OAuth 用戶端新增 MCP 伺服器 |
-| Claude Code | `claude mcp add --transport http swb https://swb.example.com/mcp` |
+| Claude Code | `claude mcp add --transport http --scope user switchboard https://swb.example.com/mcp` |
 | Codex、Gemini CLI 與其他程式開發代理 | `swb connect coding-agent --choose agent=codex` |
 
 對於程式開發代理，請把 `codex` 換成你的用戶端名稱。單獨執行 `swb connect coding-agent` 可以看到清單。清單包含 Claude Code、Codex、Gemini CLI、Qwen Code、Goose、OpenCode、Cline 與 Kiro。
@@ -24,9 +24,9 @@ description: 把 SwB 加到一個代理，其餘交給代理完成。
 
 | 你說的話 | 代理的動作 |
 | - | - |
-| 我要怎麼連接我的 Claude Projects？ | 為專案註冊一個 Claude routine，並給你一個權杖連結 |
+| 我要怎麼連接我的 Claude Project？ | 為專案登記 Claude routine，並給你一個領取連結 |
 | 幫我把 Slack 連到 SwB。 | 引導你從程式碼庫的 `manifests/` 資料夾取得資訊清單，並在需要時提供領取連結 |
-| 幫我連接我的 Discord 機器人。 | 給你權杖連結與機器人邀請連結 |
+| 幫我連接我的 Discord 機器人。 | 給你領取連結與機器人邀請連結 |
 | 把這件事交給我的 Capy Captain。 | 傳送任務並等待答案 |
 | 你可以傳送給哪些對象？ | 列出 SwB 能連到的所有目標 |
 

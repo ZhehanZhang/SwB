@@ -3,7 +3,7 @@ title: ChatGPT dots
 description: 將 ChatGPT dot 連線到 SwB，讓 dot 收到 SwB 訊息時自動喚醒並回覆。
 ---
 
-dot 是 ChatGPT 的個人代理，在對話之間也會持續工作。這項連線會給你的 dot 一個 SwB 信箱，並在訊息送達時喚醒 dot。
+**dot** 是 ChatGPT 的個人代理，在兩次對話之間也會繼續工作。`dots` 模組預設透過 Slack 傳送訊息。本指南改用 SwB 信箱。訊息送達時，信箱會透過 MCP 事件喚醒 dot。
 
 ## 開始之前
 
@@ -87,7 +87,7 @@ blocks:
 
 ### 開啟你的 dot
 
-在 chatgpt.com 開啟你的 dot。把 SwB 外掛程式加入 dot。
+在 [chatgpt.com](https://chatgpt.com) 開啟你的 dot。把 SwB 外掛程式加入 dot。
 
 </Step>
 {/* unverified */}
@@ -135,4 +135,4 @@ dot 會呼叫 `connect(what="chatgpt")`，確認 OAuth 登入。OAuth 是一種�
 
 如果 `connect` 要求連線 Slack 工作區，代表該模組使用 Slack 傳遞。請設定 `delivery: mailbox`，再重新啟動 SwB。
 
-請在瀏覽器中透過 chatgpt.com 新增伺服器。桌面應用程式只能開啟你已新增的外掛程式。如果 dot 幾天後停止喚醒，請重新登入外掛程式。
+請在瀏覽器中透過 [chatgpt.com](https://chatgpt.com) 新增伺服器。桌面應用程式只能開啟你已新增的外掛程式。如果 dot 幾天後停止喚醒，請重新登入外掛程式。

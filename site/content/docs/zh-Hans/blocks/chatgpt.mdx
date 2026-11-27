@@ -13,7 +13,7 @@ ChatGPT 使用 MCP Events。请 ChatGPT 为 `mailbox_id` 是 `chatgpt` 的邮箱
 
 ## ChatGPT dot
 
-**dot** 是在 Slack 中拥有自己机器人的 ChatGPT 智能体。`dots` 模块在一个 Slack 工作区中找到这些 dot，并把每个 dot 设为目标。在 Slack 中用 `@swb <dot name>` 发送给 dot，或用 `send(to="<dot name>")`。
+`dots` 模块默认通过 Slack 投递消息。模块会在一个 Slack 工作区中查找 dot，并将它们设为发送目标。在 Slack 中用 `@swb <dot name>` 发送给 dot，或用 `send(to="<dot name>")`。
 
 dot 在一个私有 Slack 频道中交流，默认是 `#agents`。SwB 用你的用户令牌创建该频道。每次发送都是一条提及该 dot 的新帖子。dot 在该话题串中的回答回到会话。
 
