@@ -106,7 +106,7 @@ class BearerGate:
                     self.limiter.hit("companion_bearer_fail", ip)
                     self.core.audit.record_refusal(origin="http", client=audit_client_ip(scope), destination="core", action="auth_failure",
                                                    detail="unknown or revoked companion key" if token else "missing companion key",
-                                                   target=path.rstrip("/"))
+                                                   target="/companion")
                     await reject(send, 401, "invalid_token", "Use a valid companion key.")
                     return
                 scope[PRINCIPAL_SCOPE] = principal

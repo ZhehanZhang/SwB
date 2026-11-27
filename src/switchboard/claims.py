@@ -361,6 +361,16 @@ class Claims:
         self.store.tx(save)
         return list(sealed)
 
+    def save_secret(self, name: str, value: str | None, *, replace: bool = True) -> None:
+        if not NAME_RE.fullmatch(name):
+            raise ClaimError("A secret needs an environment variable name.")
+        if value is None:
+            self.store.x("DELETE FROM secrets WHERE name = ?", (name,))
+            return
+        sealed = self._cipher.encrypt(value.encode())
+        conflict = "DO UPDATE SET sealed = excluded.sealed" if replace else "DO NOTHING"
+        self.store.x(f"INSERT INTO secrets(name, sealed) VALUES (?, ?) ON CONFLICT(name) {conflict}", (name, sealed))
+
     def secret(self, name: str) -> str | None:
         row = self.store.one("SELECT sealed FROM secrets WHERE name = ?", (name,))
         return self._cipher.decrypt(row["sealed"]).decode() if row is not None and row["sealed"] is not None else None
