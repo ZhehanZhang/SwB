@@ -40,8 +40,12 @@ def test_override_needs_permission(make, capy):
     core, c = make()
     beacon(core)
     core.routes.set(destination="capy", agent=None, project="beacon", target={"captain": CAPTAIN}, defaults={}, allow_override=False, note="", by="t")
-    err = error_text(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "beacon", "target": "captain:Orbit Captain"}))
+    task = "fixture-private-route-task"
+    err = error_text(call(c, STATIC_KEY, "capy_delegate", {"task": task, "project": "beacon", "target": "captain:Orbit Captain"}))
     assert "does not allow overriding" in err
+    [row] = core.audit.recent(action="tool_refused")
+    assert (row["target"], row["detail"]) == ("capy_delegate", "Choose a target granted to this key.")
+    assert task not in str(row) and STATIC_KEY[:12] not in str(row)
     core.routes.set(destination="capy", agent=None, project="beacon", target={"captain": CAPTAIN}, defaults={}, allow_override=True, note="", by="t")
     out = payload(call(c, STATIC_KEY, "capy_delegate", {"task": "x", "project": "beacon", "target": "captain:Orbit Captain"}))
     assert out["thread_id"] == CAPTAIN2 and out["route"] == "explicit"

@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from ...chat import ChatBlock
 from ...memory import GENERAL, MemoryError_
+from ...refusals import (CONFIRMATION_REQUIRED, CONVERSATION_REQUIRED, GRANT_REQUIRED, MODE_REQUIRED, OWNER_REQUIRED,
+                         SCOPE_REQUIRED, TARGET_REQUIRED)
 
 if TYPE_CHECKING:
     from ...auth import Principal
@@ -27,6 +29,8 @@ READ_ROLES: dict[str, tuple[ReadRole, str | None]] = {
     "memory_list": ("memory_scope", None),
     "context_pack": ("memory_scope", None),
     "capy_captain_digest": ("owner", None),
+    "visibility_list": ("owner", None),
+    "connect_list": ("owner", None),
 }
 REFERENCE_ARGS = frozenset({"message_id", "conversation", "handle", "thread_id", "ref"})
 
@@ -76,21 +80,16 @@ BLOCK_ROLES: dict[str, dict[str, Role]] = {
 }
 
 AUTH_REQUIRED = "Sign in to call tools."
-OWNER_REQUIRED = "Use the owner's sign-in to call this tool."
 ROUTE_REQUIRED = "Use a route for your own agent or sign in as the owner."
-CONVERSATION_REQUIRED = "Choose a conversation for your own agent."
 CONVERSATION_NOT_FOUND = "Conversation not found."
 MESSAGE_NOT_FOUND = "message not found"
 MEMORY_NOT_FOUND = "memory not found"
-SCOPE_REQUIRED = "Choose a project granted to this key."
-TARGET_REQUIRED = "Choose a target granted to this key."
 TOOL_REQUIRED = "Use a key granted this tool."
 POLICY_REQUIRED = "Use a tool with a SwB write policy."
-MODE_REQUIRED = "Use an action allowed by the conversation mode."
 
 REFUSAL_DETAILS = frozenset({
     AUTH_REQUIRED, OWNER_REQUIRED, ROUTE_REQUIRED, CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED, TOOL_REQUIRED,
-    POLICY_REQUIRED, MODE_REQUIRED,
+    POLICY_REQUIRED, MODE_REQUIRED, CONFIRMATION_REQUIRED, GRANT_REQUIRED,
     CONVERSATION_NOT_FOUND, MESSAGE_NOT_FOUND, MEMORY_NOT_FOUND,
 })
 

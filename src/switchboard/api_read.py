@@ -18,6 +18,7 @@ from .slack.avatar_files import agent_avatar_url
 from .audit import iso
 from .blocks import BLOCKS, load
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
+from .refusals import SIGN_IN_FAILURES
 from .routes import route_audit_name
 from .targets import SLUG_RE
 from .visibility import show
@@ -26,14 +27,14 @@ _SQLITE_MAX = 2**63 - 1
 _ROUTE_DEFAULTS = ("model", "mode", "delivery")
 _ROUTE_KINDS = ("captain", "project", "thread", "routine")
 _REPO = re.compile(r"[\w.-]+/[\w.-]+")
-_AUTH_PATHS = ("/mcp", "/inbox/poll", "/inbox/events", "/register", "/authorize", "/token", "/connect/redeem")
+_AUTH_PATHS = ("/mcp", "/inbox/poll", "/inbox/events", "/register", "/authorize", "/token", "/connect/redeem", *SIGN_IN_FAILURES)
 _MEMORY_FIELDS = ("id", "scope", "namespace", "key", "title", "tags", "source", "created_at", "updated_at")
 _PROMPTS = {"coordinator": "v4", "routine": "v1", "dispatcher": "v1"}
 _PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
 _SCOPE = rf"(?:general|project:{_PROJECT})"
 _CAPY_SENDERS = ("capy_thread", "capy", "captain")
 _WEBHOOK_DETAILS = frozenset({
-    "webhook secret unavailable", "invalid signature", "invalid JSON", "expected a JSON object", "invalid delivery id",
+    "webhook secret unavailable", "missing signature", "invalid signature", "invalid JSON", "expected a JSON object", "invalid delivery id",
     "unhandled event", "not completed", "unrouted repository", "channel mode ignored event", "channel mode off",
     "work mode requires an owner event", "sender ignored",
     "channel access restricted", "target access restricted", "sender rate limit", "assist target is missing",
@@ -149,6 +150,8 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
     detail = None
     recorded_detail = row["detail"]
     if action == "webhook" and recorded_detail in _WEBHOOK_DETAILS:
+        detail = recorded_detail
+    elif action == "auth_failure" and recorded_detail in SIGN_IN_FAILURES.get(target, ()):
         detail = recorded_detail
     elif action == "tool_refused" and fields["destination"] == "mcp":
         from .blocks.mcp.policy import REFUSAL_DETAILS

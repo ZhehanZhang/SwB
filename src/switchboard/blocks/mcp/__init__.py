@@ -25,6 +25,7 @@ from ...auth import Principal
 from ...memory import GENERAL, MemoryError_
 from ...modes import ChannelModes
 from ...projects import ProjectError
+from ...refusals import PolicyRefusal
 from ...routes import RouteError
 from ...targets import LEGACY_KINDS
 from .. import Block, Manifest
@@ -124,6 +125,12 @@ class LimitedServer(MCPServer):
         try:
             return await super().call_tool(name, arguments, context)
         except ToolError as exc:
+            cause: BaseException | None = exc
+            while cause is not None:
+                if isinstance(cause, PolicyRefusal):
+                    self._audit_refusal(p, name, cause.reason)
+                    raise ToolError(str(cause)) from cause
+                cause = cause.__cause__
             if isinstance(exc, UnexpectedToolError) or not isinstance(error := exc.__cause__, ValidationError):
                 raise
             properties = (self._tool_input_schema(name) or {}).get("properties", {})
@@ -320,7 +327,7 @@ class MCPBlock(Block):
                     need(p, s)
             ss = [s for s in ss if s != GENERAL or p.allows(GENERAL)]
             if not ss:
-                raise ToolError(f"the {p.source} key can't read general; pass the project you work in")
+                raise PolicyRefusal(SCOPE_REQUIRED, "Pass the project you work in.")
             cross = [s for s in ss if s != GENERAL and (not project or s != pscope(project))]
             if cross:
                 core.audit_memory(p, "cross_read", ",".join(cross), f"{what} while working in {project or 'general'}")

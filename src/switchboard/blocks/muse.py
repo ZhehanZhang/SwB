@@ -17,7 +17,8 @@ from ..audit import iso
 from ..auth import Principal
 from ..claims import ClaimInputError
 from ..muse_protocol import BRIDGE_PATH, CLAIM_ID, DELIVERY_TIMEOUT, MESSAGE_LIMIT, NO_REPLY, TOKEN, TOKEN_ENV, UNKNOWN
-from . import Action, Address, AgentSpec, Block, BlockError, Call, Manifest, TargetKind
+from ..refusals import OWNER_REQUIRED, SCOPE_REQUIRED
+from . import Action, Address, AgentSpec, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
 
 if TYPE_CHECKING:
     from ..core import Switchboard
@@ -154,7 +155,7 @@ class MuseBlock(Block):
         if target not in (None, MAILBOX, f"gadget:{MAILBOX}"):
             raise BlockError(f"The Muse target is {TARGET}.")
         if call.principal.kind == "connect" or call.principal.trust != "owner":
-            raise BlockError("Use the owner's sign-in to wake Muse.")
+            raise BlockRefused(OWNER_REQUIRED)
         if not self.credential():
             raise BlockError('Set up Muse with connect(what="muse").')
         task = task.strip()
@@ -163,7 +164,7 @@ class MuseBlock(Block):
         proj = self.core.project(project)
         slug = proj.slug if proj else None
         if not call.principal.allows(f"project:{slug}" if slug else "general"):
-            raise BlockError("Choose a Muse send scope allowed by this key.")
+            raise BlockRefused(SCOPE_REQUIRED, "Choose a Muse send scope allowed by this key.")
         if target is None and not self.core.routes.resolve(destination=self.name, agent=call.principal.source, project=slug)[0]:
             raise BlockError("Name Muse explicitly or configure a Muse route before sending.")
         digest = hashlib.sha256(task.encode()).hexdigest()
