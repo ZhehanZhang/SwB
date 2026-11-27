@@ -58,6 +58,21 @@ def test_server_tools_appear_in_top_level_help(capsys):
     assert all(command in usage for command in __main__.SERVER_COMMANDS)
 
 
+@pytest.mark.parametrize(("command", "action", "description", "argument"), [
+    ("config", "migrate", "Print a version 1 config rewritten as version 2.", "[file]"),
+    ("blocks", "list", "List configured blocks.", "[block]"),
+    ("blocks", "show", "Print block details.", "[block]"),
+    ("blocks", "check", "Check block setup.", "[block]"),
+])
+def test_server_subcommand_help_names_its_action(capsys, command, action, description, argument):
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main([command, action, "--help"])
+    assert exited.value.code == 0
+    out, err = capsys.readouterr()
+    assert not err and out.startswith(f"usage: swb {command} {action} ")
+    assert description in out and argument in out and "--dir" in out
+
+
 def test_serve_reads_instance_config_data_and_dotenv(cli_instance, monkeypatch):
     base, core = cli_instance
     calls = []
@@ -122,14 +137,16 @@ def test_export_uses_instance_data_and_separate_destination(cli_instance, tmp_pa
     assert not (base / "snapshot").exists()
 
 
-def test_config_and_blocks_use_instance_config(cli_instance, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("dir_before_action", [False, True])
+def test_config_and_blocks_use_instance_config(cli_instance, tmp_path, monkeypatch, capsys, dir_before_action):
     base, _ = cli_instance
     other = tmp_path / "other.yaml"
     other.write_text("version: 2\nblocks:\n  mcp: {}\n")
     monkeypatch.setenv("SWITCHBOARD_CONFIG", str(other))
-    __main__.cli_main(["config", "migrate", "--dir", base.name])
+    instance = ["--dir", base.name]
+    __main__.cli_main(["config", *(instance + ["migrate"] if dir_before_action else ["migrate"] + instance)])
     assert yaml.safe_load(capsys.readouterr().out)["blocks"] == {"custom-mcp": {"use": "mcp"}}
-    __main__.cli_main(["blocks", "list", "--dir", base.name])
+    __main__.cli_main(["blocks", *(instance + ["list"] if dir_before_action else ["list"] + instance)])
     assert capsys.readouterr().out.split()[0:2] == ["custom-mcp", "mcp"]
 
 
