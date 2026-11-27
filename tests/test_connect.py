@@ -27,11 +27,10 @@ def test_connect_schema_and_unknown_kinds(make):
     assert tool["title"] == "Connect to SwB"
     assert "call connect first" in tool["description"]
     assert set(tool["inputSchema"]["properties"]) == {"what", "project", "choose"}
-    for kind in ("unknown", "cloudflare"):
-        out = connect(client, kind)
-        assert out["what"] == "unknown"
-        assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "coding-agent", "discord", "dots",
-                                "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
+    out = connect(client, "unknown")
+    assert out["what"] == "unknown"
+    assert out["kinds"] == ["capy-captain", "chatgpt", "claude", "claude-project", "cloudflare", "coding-agent", "discord",
+                            "dots", "github", "grok", "grok-bot", "mcp-client", "muse", "slack", "telegram"]
 
 
 @pytest.mark.parametrize(("kind", "block", "env_names"), [
