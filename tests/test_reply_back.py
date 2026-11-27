@@ -185,3 +185,32 @@ async def test_inbox_events_streams_items_over_sse(tmp_path, capy):
     finally:
         server.should_exit = True
         await task
+
+
+async def test_inbox_events_skips_context_items(tmp_path, capy):
+    from conftest import new_core
+
+    core = new_core(tmp_path, capy)
+    server = uvicorn.Server(uvicorn.Config(create_app(core), host="127.0.0.1", port=0, log_level="warning", lifespan="on"))
+    task = asyncio.create_task(server.serve())
+    await eventually(lambda: server.started, timeout=10)
+    port = server.servers[0].sockets[0].getsockname()[1]
+    try:
+        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=20) as c:
+            async with c.stream("GET", "/inbox/events", headers={"Authorization": f"Bearer {CHANNEL_KEY}"}) as r:
+                lines = r.aiter_lines()
+                async for line in lines:
+                    if line.startswith("event: ready"):
+                        break
+                handle = core.inbox.open_handle(owner="claude-code", destination="github", ref="acme/app", project=None,
+                                                title="GitHub acme/app", meta={}, status="following")
+                await core.inbox.add(handle, "context", {"text": "context only"})
+                payload(await acall(c, STATIC_KEY, "agent_send", {"to": "claude-code", "text": "after context"}))
+                async for line in lines:
+                    if line == "event: item":
+                        data = json.loads((await anext(lines))[6:])
+                        break
+            assert data["text"] == "after context"
+    finally:
+        server.should_exit = True
+        await task
