@@ -270,10 +270,14 @@ def create_app(core: "Switchboard") -> Any:
 
         code = request.path_params["code"]
         if request.method != "POST":
-            form_csrf, refused = await claim_page_access(request)
-            if refused is not None:
-                return refused
-            return credentials.page(group, form_csrf, owner_key=not core.cfg.access_team_domain and bool(claim_key_actor),
+            owner_key = not core.cfg.access_team_domain and bool(claim_key_actor)
+            if owner_key:
+                form_csrf = csrf(f"claim:{code}")
+            else:
+                form_csrf, refused = await claim_page_access(request)
+                if refused is not None:
+                    return refused
+            return credentials.page(group, form_csrf, owner_key=owner_key,
                                     host=urlsplit(core.base_url or "").hostname or "", now=core.store.clock())
         actor, form, refused = await claim_submission(request)
         if refused is not None:
@@ -284,15 +288,14 @@ def create_app(core: "Switchboard") -> Any:
         except ClaimUnavailable as e:
             return pages.message_page("Link not usable", str(e), 410)
         except ClaimError as e:
-            return pages.message_page("Not saved", f"{e} Nothing was saved; go back and try again.", 400)
+            return pages.message_page("Not saved", f"{e} Go back and try again.", 400)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=",".join(names), excerpt=group["title"])
         for block in core.blocks.values():
             if saved := getattr(block, "secret_saved", None):
                 for name in names:
                     await saved(name)
-        return pages.message_page("Saved", f"{group['title']}: {len(names)} credential{'s' if len(names) != 1 else ''} saved. "
-                                  "Run connect again to see what's next.", 200)
+        return pages.message_page("Saved", f"{group['title']} saved.", 200)
 
     async def claim_asset(request: Request) -> Response:
         from . import credentials
