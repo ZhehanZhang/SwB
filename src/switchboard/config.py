@@ -20,12 +20,21 @@ if TYPE_CHECKING:
 KEY_ENV_PREFIX = "SWITCHBOARD_KEY_"
 MIN_KEY_LEN = 24
 CONFIG_PATHS = (Path("config/switchboard.yaml"), Path("/config/switchboard.yaml"))
+DEFAULT_HOST = "127.0.0.1"
+LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 # Keys that only read one agent's inbox (GET /inbox/poll and /inbox/events) and are refused on /mcp. The Claude Code
 # channel uses SWITCHBOARD_KEY_CHANNEL to push what Claude Code's own OAuth sign-in (agent claude-code) receives.
 DEFAULT_INBOX_KEYS = {"channel": "claude-code"}
 
 REQUEST_BASE: ContextVar[str | None] = ContextVar("switchboard_request_base", default=None)
+
+
+def bind_address(env: Mapping[str, str], port: int | str, *, host: str | None = None) -> tuple[str, str]:
+    host = host or env.get("SWITCHBOARD_HOST") or DEFAULT_HOST
+    origin_host = {"0.0.0.0": DEFAULT_HOST, "::": "::1"}.get(host, host)
+    netloc = f"[{origin_host}]" if ":" in origin_host else origin_host
+    return host, f"http://{netloc}:{port}"
 
 
 def _origin(url: str) -> str:
@@ -169,9 +178,9 @@ class Config:
     def problems(self) -> list[str]:
         out = []
         if not self.public_url:
-            out.append("public_url or PUBLIC_URL is not set: OAuth sign-in is disabled (static keys still work)")
+            out.append("Set SWITCHBOARD_PUBLIC_URL to enable OAuth sign-in")
         if not self.owner_sign_in:
-            out.append("Owner sign-in is not configured: set public_url or configure an upstream sign-in method (bearer keys still work)")
+            out.append("Set SWITCHBOARD_PUBLIC_URL or configure an upstream method for owner sign-in")
         return out
 
 
@@ -206,7 +215,7 @@ def _web_url(value: str, *, local: bool = False) -> bool:
     try:
         url = urlsplit(value)
         return bool(url.hostname and url.port != 0 and url.username is None and not re.search(r"[\s?#\\]", value)
-                    and (url.scheme == "https" or (local and url.scheme == "http" and url.hostname == "localhost")))
+                    and (url.scheme == "https" or (local and url.scheme == "http" and url.hostname in LOOPBACK_HOSTS)))
     except ValueError:
         return False
 
@@ -290,7 +299,7 @@ def _branding(raw: Any) -> Branding:
 
 
 def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = None, *,
-                tunnel_url: str | None = None) -> Config:
+                tunnel_url: str | None = None, loopback_origin: str | None = None) -> Config:
     from .modes import parse_config as parse_modes
 
     env = dict(os.environ if env is None else env)
@@ -312,15 +321,22 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         raise ConfigError("auth.cloudflare_access must be a mapping")
     memory = raw.get("memory") or {}
 
-    public_url = (tunnel_url or raw.get("public_url", env.get("SWITCHBOARD_PUBLIC_URL") or env.get("PUBLIC_URL")) or "").strip().rstrip("/") or None
-    if public_url and not _web_url(public_url, local=True):
-        raise ConfigError("public_url must be an HTTPS URL or use http://localhost")
+    configured_url = tunnel_url or raw.get("public_url", env.get("SWITCHBOARD_PUBLIC_URL") or env.get("PUBLIC_URL"))
+    if isinstance(configured_url, str):
+        configured_url = configured_url.strip().rstrip("/") or None
+    public_url = configured_url
+    if public_url is None and loopback_origin is not None:
+        public_url = f"http://localhost:{urlsplit(loopback_origin).port}"
+    if public_url is not None and (not isinstance(public_url, str) or not _web_url(public_url, local=True)):
+        raise ConfigError("public_url must be an HTTPS URL or use a loopback address for HTTP")
     owner_emails = tuple(e.strip().lower() for e in as_tuple(auth.get("owner_emails", (env.get("SWITCHBOARD_OWNER_EMAILS") or "").split(","))) if e.strip())
     aliases = tuple(str(u).strip().rstrip("/") for u in as_tuple(raw.get("public_url_aliases")))
+    if configured_url is None and loopback_origin and loopback_origin != public_url and loopback_origin not in aliases:
+        aliases = (*aliases, loopback_origin)
     if aliases and not public_url:
         raise ConfigError("public_url_aliases needs public_url")
     if not all(_web_url(u, local=True) and u != public_url for u in aliases):
-        raise ConfigError("public_url_aliases must be other HTTPS URLs (or http://localhost) for this same server")
+        raise ConfigError("public_url_aliases must be other HTTPS or HTTP loopback URLs for this server")
     rp_id = str(auth.get("passkey_rp_id") or "").strip().lower() or None
     if rp_id is not None:
         hosts = [urlsplit(u).hostname or "" for u in (public_url, *aliases) if u]

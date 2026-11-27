@@ -2,10 +2,14 @@ import logging
 import os
 import socket
 import sys
+from contextlib import nullcontext
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from starlette.testclient import TestClient
 
+from conftest import CLAUDE_CB, STATIC_KEY, call, error_text, payload, pkce, register
 from switchboard import __main__, cli, cli_up
 from switchboard.config import load_config
 
@@ -16,7 +20,8 @@ def clean_env(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     for name in ("PORT", "SWITCHBOARD_HOST", "SWITCHBOARD_CONFIG", "SWITCHBOARD_DATA", "SWITCHBOARD_DATA_DIR",
-                 "SWITCHBOARD_PUBLIC_URL"):
+                 "SWITCHBOARD_PUBLIC_URL", "PUBLIC_URL", "SWITCHBOARD_DEPLOY_PLATFORM", "CLOUDFLARE_ACCESS_TEAM_DOMAIN",
+                 "CLOUDFLARE_ACCESS_AUD", "SWITCHBOARD_OWNER_EMAILS", "SWB_SETUP_CODE"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -26,14 +31,120 @@ def test_up_defaults_to_loopback_and_uses_env_data_override(clean_env, tmp_path,
     if override:
         monkeypatch.setenv(override, str(data))
     calls = []
-    monkeypatch.setattr(__main__, "main", lambda argv, **_: calls.append(
-        (argv, load_config().data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"])))
+    monkeypatch.setattr(__main__, "main", lambda argv, *, announce, **_: calls.append(
+        (argv, load_config().data_dir, os.environ["SWITCHBOARD_HOST"], os.environ["PORT"], announce)))
 
     __main__.cli_main(["up"])
 
-    assert calls == [(["serve"], data, "127.0.0.1", "8870")]
-    assert capsys.readouterr().out == "MCP URL: http://127.0.0.1:8870/mcp\n"
+    assert calls == [(["serve"], data, "127.0.0.1", "8870", True)]
+    assert capsys.readouterr() == ("", "")
     assert "SWITCHBOARD_HOST" not in os.environ
+
+
+@pytest.mark.parametrize(("env_host", "flag", "expected", "origin"), [
+    (None, [], "localhost", "http://localhost:8870"),
+    ("0.0.0.0", [], "0.0.0.0", "http://127.0.0.1:8870"),
+    ("0.0.0.0", ["--host", "::1"], "::1", "http://localhost:8870"),
+])
+def test_up_host_precedence(clean_env, tmp_path, monkeypatch, capsys, env_host, flag, expected, origin):
+    (tmp_path / ".env").write_text("SWITCHBOARD_HOST=localhost\n")
+    if env_host:
+        monkeypatch.setenv("SWITCHBOARD_HOST", env_host)
+    calls = []
+    monkeypatch.setattr(__main__.uvicorn, "run", lambda app, **options: calls.append(options))
+
+    __main__.cli_main(["up", *flag])
+
+    assert calls[0]["host"] == expected
+    assert capsys.readouterr() == (f"MCP URL: {origin}/mcp\n", "")
+    assert os.environ.get("SWITCHBOARD_HOST") == env_host
+
+
+@pytest.mark.parametrize(("env_host", "flag", "expected"), [
+    (None, [], "127.0.0.1"),
+    ("0.0.0.0", [], "0.0.0.0"),
+    ("0.0.0.0", ["--host", "::1"], "::1"),
+])
+def test_serve_host_precedence(clean_env, monkeypatch, env_host, flag, expected):
+    if env_host:
+        monkeypatch.setenv("SWITCHBOARD_HOST", env_host)
+    calls = []
+    monkeypatch.setattr(__main__.uvicorn, "run", lambda app, **options: calls.append(options))
+
+    __main__.cli_main(["serve", *flag])
+
+    assert calls[0]["host"] == expected
+
+
+def test_up_enables_owner_sign_in_with_only_the_owner_key(clean_env, tmp_path, monkeypatch, capsys):
+    (tmp_path / ".env").write_text(f"SWITCHBOARD_KEY_OWNER={STATIC_KEY}\n")
+    monkeypatch.delenv("SWITCHBOARD_KEY_OWNER", raising=False)
+    monkeypatch.setenv("PORT", "18871")
+    base = "http://localhost:18871"
+
+    def serve(app, *, host, port, **options):
+        assert (host, port) == ("127.0.0.1", 18871)
+        with TestClient(app, base_url="http://127.0.0.1:18871") as client:
+            assert client.get("/healthz").json()["status"] == "ok"
+            link = payload(call(client, STATIC_KEY, "login_link"))["url"]
+            assert link.startswith(f"{base}/login#t=")
+            token = link.partition("#t=")[2]
+            assert client.post(f"{base}/auth/link", json={"token": token}, headers={"Origin": base}).status_code == 204
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up"])
+    assert capsys.readouterr() == ("MCP URL: http://localhost:18871/mcp\n", "")
+
+
+@pytest.mark.parametrize(("host", "bound_origin"), [
+    ("127.0.0.1", "http://127.0.0.1:18871"),
+    ("::1", "http://[::1]:18871"),
+])
+def test_up_authorize_accepts_the_printed_resource_and_bound_alias(clean_env, monkeypatch, capsys, host, bound_origin):
+    monkeypatch.setenv("PORT", "18871")
+    canonical = "http://localhost:18871"
+
+    def serve(app, **options):
+        printed = capsys.readouterr().out.removeprefix("MCP URL: ").strip()
+        assert printed == f"{canonical}/mcp"
+        with TestClient(app, base_url=canonical, follow_redirects=False) as client:
+            assert client.get(f"{bound_origin}/.well-known/oauth-protected-resource").json()["resource"] == f"{bound_origin}/mcp"
+            params = {"client_id": register(client)["client_id"], "redirect_uri": CLAUDE_CB, "response_type": "code",
+                      "code_challenge": pkce()[1], "code_challenge_method": "S256"}
+            for resource in (printed, f"{bound_origin}/mcp"):
+                response = client.get("/authorize", params={**params, "resource": resource})
+                assert response.status_code == 303 and urlsplit(response.headers["Location"]).path == "/login"
+            invalid = client.get("/authorize", params={**params, "resource": f"{bound_origin}/other"})
+            assert invalid.status_code == 302
+            assert parse_qs(urlsplit(invalid.headers["Location"]).query)["error"] == ["invalid_target"]
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["up", "--host", host])
+
+
+@pytest.mark.parametrize(("setting", "message"), [
+    ("SWB_SETUP_CODE=abc", "SWB_SETUP_CODE must encode 32 random bytes"),
+    ("SWITCHBOARD_PUBLIC_URL=http://swb.example.test", "public_url must be an HTTPS URL"),
+])
+def test_up_prints_only_the_startup_error(clean_env, tmp_path, capsys, setting, message):
+    (tmp_path / ".env").write_text(f"{setting}\n")
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["up"])
+    assert exited.value.code == 2
+    out, err = capsys.readouterr()
+    assert not out and err.startswith(f"swb: {message}") and len(err.splitlines()) == 1
+
+
+def test_wildcard_bind_requires_public_url_for_owner_link(clean_env, monkeypatch):
+    monkeypatch.setenv("SWITCHBOARD_HOST", "0.0.0.0")
+    monkeypatch.setenv("SWITCHBOARD_KEY_OWNER", STATIC_KEY)
+
+    def serve(app, **options):
+        with TestClient(app) as client:
+            assert "Set SWITCHBOARD_PUBLIC_URL" in error_text(call(client, STATIC_KEY, "login_link"))
+
+    monkeypatch.setattr(__main__.uvicorn, "run", serve)
+    __main__.cli_main(["serve"])
 
 
 @pytest.mark.parametrize(("provider", "binary", "url", "flags"), [
@@ -71,10 +182,11 @@ while True:
     (tmp_path / cli.CONFIG).write_text("public_url: https://base.example.test\n")
     (tmp_path / cli.CONFIG.with_name("local.yaml")).write_text("public_url: https://overlay.example.test\n")
 
-    def serve(argv, *, listener, tunnel_url, **_):
+    def serve(argv, *, listener, tunnel_url, announce, **_):
         assert argv == ["serve"]
         assert listener.getsockname() == ("127.0.0.1", port)
         assert load_config(tunnel_url=tunnel_url).public_url == url
+        assert announce
         assert not stopped.exists()
         raise KeyboardInterrupt
 
@@ -83,7 +195,7 @@ while True:
 
     assert stopped.exists()
     assert os.environ["SWITCHBOARD_PUBLIC_URL"] == "https://previous.example.test"
-    assert capsys.readouterr() == (f"MCP URL: {url}/mcp\n", "")
+    assert capsys.readouterr() == ("", "")
 
 
 def test_missing_cloudflared_prints_install_command(clean_env, tmp_path, monkeypatch, capsys, unused_tcp_port):
@@ -111,6 +223,30 @@ def test_up_never_tunnels_an_existing_service(clean_env, monkeypatch, capsys):
     out, err = capsys.readouterr()
     assert not out
     assert f"Could not bind http://127.0.0.1:{port}." in err
+
+
+def test_tunnel_uses_the_selected_ipv6_bind_host(clean_env, monkeypatch):
+    try:
+        with socket.socket(socket.AF_INET6) as bound:
+            bound.bind(("::1", 0))
+            port = bound.getsockname()[1]
+    except OSError:
+        pytest.skip("IPv6 loopback is unavailable")
+    monkeypatch.setenv("PORT", str(port))
+    tunnel = "https://sample.trycloudflare.com"
+
+    def open_tunnel(provider, origin):
+        assert provider == "cloudflare" and origin == f"http://[::1]:{port}"
+        return nullcontext(tunnel)
+
+    def serve(argv, *, listener, tunnel_url, **_):
+        assert listener.family == socket.AF_INET6
+        assert listener.getsockname()[:2] == ("::1", port)
+        assert tunnel_url == tunnel
+
+    monkeypatch.setattr(cli_up, "_tunnel", open_tunnel)
+    monkeypatch.setattr(__main__, "main", serve)
+    __main__.cli_main(["up", "--host", "::1", "--tunnel", "cloudflare"])
 
 
 def test_tunnel_failure_does_not_log_diagnostics(clean_env, tmp_path, monkeypatch, capsys, unused_tcp_port):

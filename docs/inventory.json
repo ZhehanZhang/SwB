@@ -426,6 +426,7 @@
       "command": "swb serve",
       "flags": [
         "--help",
+        "--host",
         "-h"
       ],
       "icon": null,
@@ -478,6 +479,7 @@
       "flags": [
         "--dir",
         "--help",
+        "--host",
         "--tunnel",
         "-h"
       ],
