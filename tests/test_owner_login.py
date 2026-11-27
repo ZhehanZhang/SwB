@@ -5,6 +5,7 @@ import logging
 import re
 import secrets
 import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import parse_qs, urlsplit
 
 import cbor2
@@ -23,7 +24,8 @@ from switchboard import web
 from switchboard.auth import b64url
 from switchboard.config import ConfigError
 from switchboard.oidc import COOKIE as OIDC_COOKIE
-from switchboard.sessions import CHALLENGE_COOKIE, SESSION_COOKIE, SESSION_IDLE, SESSION_LIFETIME, safe_next
+from switchboard.sessions import CHALLENGE_COOKIE, SESSION_COOKIE, SESSION_IDLE, SESSION_LIFETIME, Sessions, safe_next
+from switchboard.store import Store
 
 SIGN_IN = "/auth/passkey/login"
 ADD = "/auth/passkey/register"
@@ -167,13 +169,35 @@ def test_link_origin_single_use_expiry_and_audit(make, caplog):
             assert (audit["client"], audit["source"], audit["outcome"]) == ("key:capy", "capy", "ok")
             assert first not in str(audit)
         spent = client.post("/auth/link", json={"token": first})
-        assert spent.status_code == 401 and spent.json() == {"error": "link_expired"}
+        assert spent.status_code == 401 and spent.json() == {"error": "link_used"}
+        assert "set-cookie" not in spent.headers
+        assert dict(core.store.one("SELECT * FROM owner_login_links_used")) == {
+            "token_hash": hashlib.sha256(first.encode()).hexdigest(), "expires_at": clock.t + 300,
+        }
         other = token(client)
         clock.t += 300
         expired = client.post("/auth/link", json={"token": other})
         assert expired.status_code == 401 and expired.json() == {"error": "link_expired"}
+        assert "set-cookie" not in expired.headers
+        assert client.post("/auth/link", json={"token": first}).json() == {"error": "link_expired"}
+        token(client)
+        assert core.store.one("SELECT 1 FROM owner_login_links_used") is None
     assert all(value not in caplog.text for value in (first, other, client.cookies[SESSION_COOKIE]))
     assert all(value not in str(core.audit.recent()) for value in (first, other, client.cookies[SESSION_COOKIE]))
+
+
+def test_concurrent_login_link_redemption_has_one_winner(make):
+    core, client = make()
+    first = token(client)
+    other_store = Store(core.store.path, clock=core.clock)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            wins = list(workers.map(lambda sessions: sessions.consume_link(first), (core.auth.sessions, Sessions(other_store))))
+        successful, = [row for row, error in wins if error is None]
+        assert successful["client_id"] == "key:capy"
+        assert [error for row, error in wins if row is None] == ["link_used"]
+    finally:
+        other_store.close()
 
 
 @pytest.mark.parametrize("restriction", [{"key_scopes": {"capy": ["general"]}},

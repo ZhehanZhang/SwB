@@ -51,8 +51,9 @@ def test_grok_discovery_returns_connector_prompt_and_registration(grok):
     assert all(text in connector["do"] for text in (f"{PUBLIC}/mcp", "Remote HTTPS", "sign in with OAuth",
                                                       'connect(what="mcp-client"', "pairing code"))
     assert routine["by"] == "person"
-    assert all(text in routine["do"] for text in ("custom webhook trigger", "SwB project triage agent", "text", "conversation", "project", "from", "trust",
+    assert all(text in routine["do"] for text in ("custom webhook trigger", "SwB project triage agent", "trust field from the webhook payload",
                                                     "Act only when trust is owner", "reply(conversation=", "final=true"))
+    assert "Switchboard" not in routine["do"] and "doorman" not in routine["do"]
     assert register["by"] == "you" and register["call"] == {
         "tool": "connect", "arguments": {"what": "grok-bot", "choose": {
             "name": "<routine name>", "project": "demo", "auth": "key",
@@ -104,7 +105,7 @@ def test_grok_connect_claims_resumes_and_waits_for_successful_test(grok, monkeyp
     step, = ready["next"]
     action = step["call"]
     assert step["by"] == "you" and action == {"tool": "send", "arguments": {
-        "to": "grok-routine:routine:grok-demo", "task": "switchboard setup test: reply pong",
+        "to": "grok-routine:routine:grok-demo", "task": "SwB setup test. Reply pong.",
     }}
     assert not payload(call(client, STATIC_KEY, action["tool"], action["arguments"]))["fired"]
     rejected = connect(client, choose=CHOICE)

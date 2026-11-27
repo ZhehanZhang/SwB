@@ -242,6 +242,7 @@ class ChannelModes:
         provider = self.core.blocks[block]
         use, cfg = provider.manifest.id, self.core.cfg.blocks.get(block, {})
         names: dict[tuple[str, str], tuple[str | None, str, str | None]] = {}
+        repo_spaces = set()
         if use == "discord":
             for channel, info in provider.channels.items():
                 if info.guild_id and (space := provider.space_for(info.guild_id)):
@@ -259,6 +260,8 @@ class ChannelModes:
             for repo in provider.registered_repositories():
                 if placement := provider.space_for(repo):
                     names[placement[0], repo] = (repo, "repo", None)
+                    if placement[0] == repo:
+                        repo_spaces.add(repo)
         default_kind = {"github": "repo", "telegram": "group"}.get(use, "channel")
         spaces = dict(cfg.get("spaces") or {})
         if use == "slack":
@@ -271,15 +274,17 @@ class ChannelModes:
                 names.setdefault((space, channel), (channel, "topic" if topic else default_kind, parent or None))
             if not any(s == space for s, _ in names):
                 names[space, ""] = (space, default_kind, None)
-        space_overrides = set()
+        overrides = set()
         for row in self.core.store.q("SELECT space, channel, 1 AS is_override FROM space_modes WHERE block = ? "
                                      "UNION ALL SELECT DISTINCT space, channel, 0 AS is_override FROM watch_events "
                                      "WHERE block = ? AND delivered_at IS NULL AND dm = 0", (block, block)):
             space, channel = row["space"], row["channel"]
             names.setdefault((space, channel), (channel or space, default_kind, None))
-            if row["is_override"] and not channel:
-                space_overrides.add(space)
-        for space in {space for space, channel in names if channel} - space_overrides:
+            if row["is_override"]:
+                overrides.add((space, channel))
+        for space in {space for space, channel in names if channel}:
+            if (space, "") in overrides and (space not in repo_spaces or (space, space) in overrides):
+                continue
             names.pop((space, ""), None)
         return names
 
@@ -381,6 +386,7 @@ class ChannelModes:
         provider = self.core.blocks.get(block)
         if provider is None or provider.manifest.id not in PROVIDERS:
             raise ValueError(f"unknown channel modes block {block!r}")
+        provider.validate_mode_space(space)
         inventory = self._inventory(block)
         if not any(s == space for s, _ in inventory):
             raise ValueError(f"unknown space {space!r} in {block}")

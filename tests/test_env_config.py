@@ -48,7 +48,8 @@ def test_no_config_starts_only_mcp_and_reports_missing_env(tmp_path, monkeypatch
     monkeypatch.chdir(tmp_path)
     core = Switchboard(env={})
     with TestClient(create_app(core)) as client:
-        health = client.get("/healthz").json()
+        health = core.health()
+        assert client.get("/healthz").json()["status"] == health["status"]
     assert set(health["blocks"]) == {"mcp"}
     assert health["block_setup"]["mcp"] == {"enabled": True, "missing_env": []}
     assert health["block_setup"]["capy"] == {"enabled": False, "missing_env": ["CAPY_API_KEY", "CAPY_API_KEY_SERVICE"]}

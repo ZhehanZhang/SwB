@@ -72,7 +72,9 @@ def test_credential_claim_error_titles_use_positive_copy(make, monkeypatch):
     for name, kind, value, title in cases:
         path = urlsplit(core.claims.mint(name, PUBLIC, kind=kind)).path
         csrf = form_csrf(client.get(path, headers=OWNER))
-        assert_claim_error_title(client.post(path, headers=OWNER, data={"csrf": csrf, "token": value}), title)
+        response = client.post(path, headers=OWNER, data={"csrf": csrf, "token": value})
+        assert_claim_error_title(response, title)
+        assert '<form method="post" autocomplete="off">' in response.text and form_csrf(response) == csrf
 
     assert_claim_error_title(client.post(path, headers={"Authorization": "Bearer example"}), "Use the SwB owner key", 403)
     assert_claim_error_title(client.get("/claim/unknown", headers=OWNER), "Request a new link", 410)
@@ -97,7 +99,9 @@ def test_routine_and_chat_claim_error_titles_use_positive_copy(make):
     first, current = routine_path(), routine_path()
     assert_claim_error_title(client.get(first, headers=OWNER), "Use the latest link", 410)
     csrf = form_csrf(client.get(current, headers=OWNER))
-    assert_claim_error_title(client.post(current, headers=OWNER, data={"csrf": csrf, "token": "bad"}), "Use a Claude routine token")
+    rejected = client.post(current, headers=OWNER, data={"csrf": csrf, "token": "bad"})
+    assert_claim_error_title(rejected, "Use a Claude routine token")
+    assert form_csrf(rejected) == csrf and 'name="token"' in rejected.text
     assert client.post(current, headers=OWNER, data={"csrf": csrf, "token": ROUTINE_TOKEN}).status_code == 200
     assert_claim_error_title(client.get(current, headers=OWNER), "Link already used", 410)
     expired_routine = routine_path()
@@ -174,7 +178,11 @@ def test_owner_claim_stores_and_audits_without_echo(make, caplog):
     spent = client.get(path, headers=OWNER)
     assert spent.status_code == 410
     private_page(spent)
-    assert client.post(path, data={"csrf": csrf, "token": "replacement"}, headers=OWNER).status_code == 410
+    for data in ({"csrf": csrf}, {}, {"csrf": "stale"}):
+        reused = client.post(path, data={**data, "token": "replacement"}, headers=OWNER)
+        assert_claim_error_title(reused, "Request a new link", 410)
+    assert client.post(path, data={"token": VALUE}).status_code == 401
+    assert client.post(path, headers={**OWNER, "Origin": "https://elsewhere.example.test"}, data={"csrf": csrf}).status_code == 403
     assert core.secret(NAME) == VALUE
     [audit] = core.audit.recent(action="token_claim")
     assert audit["target"] == NAME and audit["source"] == "admin:owner@example.test" and audit["outcome"] == "ok"
@@ -224,7 +232,7 @@ def test_owner_key_redeems_cli_claim_without_csrf(make, routine, access):
     [audit] = core.audit.recent(action=action)
     assert audit["source"] == "key:owner"
     spent = client.post(path, headers=headers, data={"token": value})
-    assert spent.status_code == (400 if routine else 410)
+    assert spent.status_code == 410
     private_page(spent)
 
 
@@ -260,6 +268,21 @@ def test_designated_key_must_be_unrestricted_for_claim(make, restriction):
     assert page.status_code == 303 and page.headers["location"].startswith("/login?next=%2Fclaim%2F")
     assert client.post(path, headers={"Authorization": f"Bearer {OWNER_KEY}"}, data={"token": VALUE}).status_code == 403
     assert core.secret(NAME) is None
+
+
+def test_cli_claim_errors_return_only_safe_corrections(make):
+    core, client = make(env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
+    path = urlsplit(core.claims.mint("COPY_ID", PUBLIC, kind="id")).path
+    headers = {"Authorization": f"Bearer {OWNER_KEY}", "Accept": "application/json"}
+    invalid = client.post(path, headers=headers, data={"token": VALUE})
+    assert invalid.status_code == 400
+    assert invalid.json() == {"error": "claim_input", "message": "Enter a numeric ID"}
+    assert invalid.headers["cache-control"] == "no-store"
+    assert all(value not in invalid.text for value in (VALUE, OWNER_KEY))
+    assert client.post(path, headers=headers, data={"token": "42"}).status_code == 200
+    spent = client.post(path, headers=headers, data={"token": VALUE})
+    assert spent.status_code == 410
+    assert spent.json() == {"error": "claim_unavailable", "message": "Request a new link"}
 
 
 def test_each_claim_link_has_its_own_expiry(make):

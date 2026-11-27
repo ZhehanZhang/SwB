@@ -127,10 +127,12 @@ class OwnerLogin:
         if (limited := self.limited("login_link_fail", ip)) is not None:
             return limited
         token = (await json_body(request)).get("token")
-        row = self.sessions.consume_link(token) if self.origin and isinstance(token, str) and len(token) == 43 else None
-        if row is None or row["expires_at"] <= self.store.clock():
+        row, refused = (self.sessions.consume_link(token)
+                        if self.origin and isinstance(token, str) and len(token) == 43 and token.isascii()
+                        else (None, "link_expired"))
+        if refused is not None:
             self.limiter.hit("login_link_fail", ip)
-            return error("link_expired", 401)
+            return error(refused, 401)
         response = self.sessions.start(request, Response(status_code=204), "link", row["client_id"], row["source"])
         self.auth.audit.record(origin="http", source=row["source"], client=row["client_id"], destination="core",
                                action="login_link_used", outcome="ok")

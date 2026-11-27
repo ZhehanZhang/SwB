@@ -104,6 +104,7 @@ class Sessions:
 
         def mint(db):
             db.execute("DELETE FROM owner_login_links WHERE expires_at <= ?", (now,))
+            db.execute("DELETE FROM owner_login_links_used WHERE expires_at <= ?", (now,))
             db.execute("INSERT INTO owner_login_links(token_hash, client_id, source, expires_at) VALUES (?,?,?,?)",
                        (_hash(token), client_id, source, now + LINK_TTL))
 
@@ -111,9 +112,22 @@ class Sessions:
         return token
 
     def consume_link(self, token: str):
-        return self.store.tx(lambda db: db.execute(
-            "DELETE FROM owner_login_links WHERE token_hash = ? RETURNING client_id, source, expires_at", (_hash(token),)
-        ).fetchone())
+        key = _hash(token)
+
+        def consume(db):
+            now = self.store.clock()
+            row = db.execute(
+                "DELETE FROM owner_login_links WHERE token_hash = ? AND expires_at > ? RETURNING client_id, source, expires_at",
+                (key, now),
+            ).fetchone()
+            if row is not None:
+                db.execute("INSERT INTO owner_login_links_used(token_hash, expires_at) VALUES (?,?)", (key, row["expires_at"]))
+                return row, None
+            used = db.execute("SELECT 1 FROM owner_login_links_used WHERE token_hash = ? AND expires_at > ?",
+                              (key, now)).fetchone()
+            return None, "link_used" if used is not None else "link_expired"
+
+        return self.store.tx(consume)
 
     def challenge(self, kind: str, owner: Owner | None) -> tuple[str, bytes]:
         cookie, challenge, now = secrets.token_urlsafe(32), secrets.token_bytes(32), self.store.clock()

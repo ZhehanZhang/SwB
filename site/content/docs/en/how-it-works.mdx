@@ -46,7 +46,7 @@ A send returns a **conversation** at once. The conversation has a handle such as
 | Client | How the answer comes back |
 | - | - |
 | Claude, Claude Desktop and ChatGPT | The agent calls `send`, then `wait`, then answers you |
-| Clients with MCP Tasks | `send` returns a task, and the task completes with the final reply |
+| Clients with the MCP Tasks extension on protocol 2026-07-28 | A Capy `send` that requests a task returns one. The task completes with the final reply. |
 | Claude Code with the SwB channel | The reply appears in the open session |
 | Clients with MCP Events | SwB calls the client's webhook when a message arrives |
 

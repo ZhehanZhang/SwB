@@ -24,6 +24,7 @@ def csrf(client):
 
 @pytest.mark.parametrize(("method", "path"), [
     ("GET", "/api/agents/detail"),
+    ("GET", "/api/agents/claude-context"),
     ("GET", "/api/agents/setup"),
     ("POST", "/api/inbox/pauses/h_missing/resume"),
     ("POST", "/api/memory/mem_missing/move"),
@@ -88,10 +89,34 @@ def test_agent_detail_links_registered_entities_with_safe_activity(make):
     assert read(client, "/agents/detail", kind="dot", id="research")["agent"]["name"] == "Research"
     assert read(client, "/agents/detail", kind="key", id=key["key_id"])["agent"]["id"] == key["key_id"]
     assert client.get("/api/agents/detail", headers=OWNER, params={"kind": "key", "id": PRIVATE}).status_code == 404
-    output = json.dumps((inventory, detail, captain))
+    assert read(client, "/agents/claude-context") == read(client, "/agents/trig_CONTEXT") == detail
+    assert read(client, f"/agents/{CAPTAIN}") == read(client, "/agents/Captain") == captain
+    assert read(client, "/agents/research") == read(client, "/agents/Research")
+    key_detail = read(client, f"/agents/{key['key_id']}")
+    assert key_detail == read(client, "/agents/detail", kind="key", id=key["key_id"])
+    mailbox = read(client, "/agents/claude")
+    assert mailbox == read(client, "/agents/detail", kind="mailbox", id="claude")
+    assert mailbox["kind"] == "mailbox" and mailbox["agent"]["name"] == "claude"
+    assert {row["id"] for row in mailbox["keys"]} == {key["key_id"], other["key_id"]}
+    assert read(client, "/agents/second")["kind"] == "mailbox"
+    response = client.get(f"/api/agents/{PRIVATE}", headers=OWNER)
+    assert response.status_code == 404 and response.json() == {"error": "agent_not_found"}
+    assert response.headers["cache-control"] == "no-store"
+    output = json.dumps((inventory, detail, captain, key_detail, mailbox, response.json()))
     assert all(secret not in output for secret in (
         token, code, key["key"], pairing["code"], hashlib.sha256(code.encode()).hexdigest(), CAPY_KEY, STATIC_KEY, PRIVATE,
     ))
+
+
+def test_agent_path_detail_disambiguates_display_names(make):
+    dots = {"delivery": "mailbox", "dots": {"dot-one": {"name": "Research"}}}
+    config = base_config(version=2, blocks={"mcp": {}, "dots": dots, "team-dots": {"use": "dots", **dots}})
+    _, client = make(config)
+
+    ambiguous = client.get("/api/agents/Research", headers=OWNER)
+    assert ambiguous.status_code == 409 and ambiguous.json() == {"error": "ambiguous_agent"}
+    assert read(client, "/agents/Research", kind="dot", block="team-dots")["agent"]["block"] == "team-dots"
+    assert client.get("/api/agents/Research", headers=OWNER, params={"kind": "invalid"}).status_code == 400
 
 
 def test_console_claim_requires_owner_and_keeps_original_link_one_time(make):
@@ -113,6 +138,7 @@ def test_console_claim_requires_owner_and_keeps_original_link_one_time(make):
     response = client.post(path, data={"token": token, "csrf": csrf(client)["X-CSRF-Token"]}, headers=OWNER)
     assert response.status_code == 200 and token not in response.text
     assert client.get(path, headers=OWNER).status_code == client.get(original, headers=OWNER).status_code == 410
+    assert client.post(path, headers=OWNER).status_code == client.post(original, headers=OWNER).status_code == 410
     assert not read(client, "/agents")["pending_claims"]
     assert block.rows()[0]["name"] == "claude-context"
 

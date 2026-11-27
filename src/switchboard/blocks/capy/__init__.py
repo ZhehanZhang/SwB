@@ -275,14 +275,11 @@ class CapyBlock(Block):
         return {"identity": self.identity, "sends_as": (self.chain(None) or [None])[0], "sends_as_agents": {a: (self.chain(a) or [None])[0] for a in self.agents()},
                 "send_keys": {env: self.key_checks.get(env, {"status": "unchecked"}) for env in self.keys}, "following": sorted(self.followers), "open_handles": len(self.core.inbox.handles(destination=self.name, open_only=True, limit=500))}
 
-    def next_step(self) -> str | None:
+    def config_step(self) -> str | None:
         if self.api is None:
             if self.core.secret(CAPY_KEY):
                 return "Restart Switchboard to load the saved Capy API key."
             return "Create a key in Capy Settings → API and enter it through the private link from connect(what='capy-captain')."
-        status = self.key_checks.get(CAPY_KEY, {}).get("status")
-        if status == "rejected":
-            return "Replace the rejected Capy API key and restart Switchboard."
         if not self._routed()[0]:
             return "Call connect(what='capy-captain') to route a Capy Captain."
         if self.identity == "service" and self.send_key_env not in self.keys and not any(env.startswith(AS_PREFIX) for env in self.keys):
@@ -290,6 +287,11 @@ class CapyBlock(Block):
                 return "Restart Switchboard to load the saved Capy service key."
             return "Call connect(what='capy-captain') to save a Capy service user's key."
         return None
+
+    def next_step(self) -> str | None:
+        if self.api is not None and self.key_checks.get(CAPY_KEY, {}).get("status") == "rejected":
+            return "Replace the rejected Capy API key and restart Switchboard."
+        return self.config_step()
 
     async def connect_steps(self, kind: str, principal: Principal, project: str | None,
                             choose: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -386,7 +388,7 @@ class CapyBlock(Block):
 
     def need_api(self) -> CapyAPI:
         if self.api is None:
-            raise DestinationError("Capy is not configured on this server (CAPY_API_KEY missing). Memory, project and route tools still work.")
+            raise DestinationError("Capy is unreachable. Run swb connect capy-captain to add an API key.")
         return self.api
 
     # Actions ---------------------------------------------------------------------------
@@ -456,8 +458,8 @@ class CapyBlock(Block):
         if title:
             title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
-        tgt, defaults, level = self.plan(call.principal, p, target)
         api = self.need_api()
+        tgt, defaults, level = self.plan(call.principal, p, target)
         if level == "explicit":
             tgt, extra = await self.validate_route_target(tgt, {})
             defaults = {**defaults, **extra}

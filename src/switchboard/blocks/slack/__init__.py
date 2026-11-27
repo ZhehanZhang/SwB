@@ -78,12 +78,17 @@ class SlackBlock(SlackIntake, SlackActions):
     def missing_token(self) -> tuple[str, str] | None:
         return next(((label, name) for label, names in self.token_names.items() for name in names if not self.core.secret(name)), None)
 
-    def next_step(self) -> str | None:
+    def config_step(self) -> str | None:
         if self.engine is None or not self.token_names:
             return "Configure a Slack workspace and its token names in config/switchboard.yaml."
         if missing := self.missing_token():
             label, name = missing
             return f"Save the Slack token for {name} in workspace {label}."
+        return None
+
+    def next_step(self) -> str | None:
+        if step := self.config_step():
+            return step
         if any(not self.engine.env.get(name) for names in self.token_names.values() for name in names):
             return "Restart SwB to apply the saved Slack tokens."
         for label, ws in self.engine.config.workspaces.items():
