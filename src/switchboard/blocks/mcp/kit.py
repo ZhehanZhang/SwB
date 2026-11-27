@@ -228,6 +228,27 @@ class Kit:
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
                     "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
 
+        @mcp.tool(title="Pair a companion", description="Create a one-time pairing code valid for ten minutes. Enter it at the hidden prompt for swb companion connect <url>.", annotations=WRITE)
+        async def companion_code(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            if not (url := core.cfg.issuer):
+                raise ToolError("Set a public SwB address first.")
+            return core.companions.mint(url, origin=p.origin, source=p.source, client=p.client_id)
+
+        @mcp.tool(title="List companions", description="List paired devices, their connection status, and their available actions.", annotations=READ)
+        async def companion_list() -> dict[str, Any]:
+            return {"companions": core.companions.list(details=True)}
+
+        @mcp.tool(title="Run a companion action", description="Run an advertised capability action on a connected device. Use the device ID and action schema from companion_list.", annotations=SEND)
+        async def companion_invoke(ctx: Context, companion: str, capability: str, action: str, args: dict[str, Any] | None = None,
+                                   timeout_s: Annotated[float, Field(gt=0, le=120)] = 30) -> dict[str, Any]:
+            return await kit.run(core.companions.invoke(companion, capability, action, args or {}, timeout_s, principal=kit.who(ctx)))
+
+        @mcp.tool(title="Disconnect a companion", description="Revoke a paired device key and close its connection.", annotations=DELETE)
+        async def companion_revoke(ctx: Context, companion: str) -> dict[str, Any]:
+            p = kit.who(ctx)
+            return {"ok": core.companions.revoke(companion, origin="owner", source=p.source, client=p.client_id)}
+
         @mcp.tool(title="Who can reach what", description="List the resource names and visibility rules for targets, channels, memory and routes. Tools use private visibility. Use a listed resource with visibility_set.", annotations=READ)
         async def visibility_list() -> dict[str, Any]:
             return {"defaults": {k: v if isinstance(v, str) else list(v) for k, v in core.visibility.defaults.items()},

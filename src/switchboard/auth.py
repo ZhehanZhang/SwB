@@ -35,6 +35,7 @@ from .store import Store, dumps
 log = logging.getLogger("switchboard.auth")
 
 SCOPE = "switchboard"
+COMPANION_KEY_PREFIX = "swbd_"
 CODE_TTL = 300
 FORM_TTL = 900
 REFRESH_REUSE_GRACE = 60
@@ -216,7 +217,7 @@ class Auth:
         return hmac.digest(self.secret, key.encode(), "sha256").hex()
 
     def verify_bearer(self, token: str | None) -> Principal | None:
-        if not token:
+        if not token or token.startswith(COMPANION_KEY_PREFIX):
             return None
         for key in self.cfg.static_keys:
             if hmac.compare_digest(sha(token), sha(key.secret)):

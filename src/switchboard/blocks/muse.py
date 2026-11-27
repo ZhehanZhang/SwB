@@ -14,6 +14,7 @@ from uuid import uuid4
 from ..agents import PRESETS
 from ..auth import Principal
 from ..claims import ClaimInputError
+from ..companions import COMPANION_ID, DISCONNECTED, OFFLINE, CompanionError
 from ..connect import public_https_prerequisite
 from ..refusals import OWNER_REQUIRED, SCOPE_REQUIRED
 from ..trust import frame_sender
@@ -34,6 +35,9 @@ CREDENTIALS = ("access_token", "refresh_token", "username", "api_url", "api_url_
 PAIRING_WINDOW = 600
 DUPLICATE_WINDOW = 600
 MESSAGE_LIMIT = 20_000
+PAIRING_ERRORS = frozenset((OFFLINE, DISCONNECTED, "Bluetooth adapter unavailable", "Deployment refused the pairing",
+                            "Install swb-one[companion]", "Muse Bluetooth advertising is unavailable on this platform",
+                            "Muse pairing is already open", "Pairing window closed"))
 
 
 def validate_sdk_token(value: str) -> None:
@@ -61,12 +65,11 @@ class MuseBlock(Block):
         self._queued = asyncio.Event()
         self._pairing: tuple[str, Identity] | None = None
         self._verified_pairing = False
-        self._pair_window_closed = False
+        self._pair_error: str | None = None
         self._claim_lock = asyncio.Lock()
 
     def bind(self) -> None:
-        if companions := getattr(self.core, "companions", None):
-            companions.register_claim("muse_pairing", self._claim_pairing, capability="muse", action="pair")
+        self.core.companions.register_claim("muse_pairing", self._claim_pairing, capability="muse", action="pair")
 
     @property
     def online(self) -> bool:
@@ -105,7 +108,7 @@ class MuseBlock(Block):
         args = choose or {}
         companion_id = args.get("companion")
         if set(args) - {"companion", "gadget"} or (
-            "companion" in args and not (isinstance(companion_id, str) and re.fullmatch(r"cmp_[0-9a-f]{1,64}", companion_id))
+            "companion" in args and not (isinstance(companion_id, str) and COMPANION_ID.fullmatch(companion_id))
         ):
             raise BlockError("Choose a companion ID from companion_list.")
         base = self.core.cfg.public_url
@@ -117,23 +120,23 @@ class MuseBlock(Block):
                 self.token_step(principal, TOKEN_ENV, "Save the Muse SDK token.", label="Muse SDK token"),
             ]}
         done = ["Muse SDK token saved."]
-        if self._pairing is None and self._gadget is not None and companion_id is None and not self._pair_window_closed:
+        if self._pairing is None and self._gadget is not None and companion_id is None and self._pair_error is None:
             return {"done": [*done, "Muse gadget paired."], "next": [], "pairing": "paired"}
-        companions = getattr(self.core, "companions", None)
-        online = [row["id"] for row in companions.list() if row.get("online") and "muse" in row.get("capabilities", ())] if companions else []
+        online = [row["id"] for row in self.core.companions.list() if row["online"] and "muse" in row["capabilities"]]
         if self._pairing is None and companion_id is not None:
             if companion_id not in online:
                 raise BlockError("Choose an online companion with the Muse capability.")
             self._pairing = (companion_id, self._identity())
-            self._verified_pairing = self._pair_window_closed = False
-            self.core.spawn(self._pair(companions, self._pairing, sdk_token), name="muse-pair")
+            self._verified_pairing = False
+            self._pair_error = None
+            self.core.spawn(self._pair(self._pairing, sdk_token, principal), name="muse-pair")
         if self._pairing is not None:
             return {"done": done, "pairing": "in_progress", "next": [
                 {"by": "person", "do": f"Open the Muse app. Turn on Developer mode in Settings > Devices. "
                                       f"Select Add Device and choose {self._pairing[1].ble_name}. "
                                       "If the app asks for Wi-Fi, select Use current connection."},
             ]}
-        closed = {"pairing": "window_closed"} if self._pair_window_closed else {}
+        closed = {"pairing": "window_closed", "pairing_error": self._pair_error} if self._pair_error else {}
         if not online:
             return {"done": done, **closed, "next": [
                 {"by": "you", "do": "Create a companion pairing code.", "call": {"tool": "companion_code", "arguments": {}}},
@@ -145,16 +148,21 @@ class MuseBlock(Block):
             {"by": "you", "do": "Retry pairing on the chosen companion." if closed else "Start pairing on the chosen companion.", "call": step},
         ]}
 
-    async def _pair(self, companions: Any, pending: tuple[str, Identity], sdk_token: str) -> None:
+    async def _pair(self, pending: tuple[str, Identity], sdk_token: str, principal: Principal) -> None:
         companion, ident = pending
+        error = "Muse pairing did not finish."
         try:
-            await companions.invoke(companion, "muse", "pair", {"sdk_token": sdk_token, "identity": {"mac": ident.mac},
-                                                               "window_s": PAIRING_WINDOW}, timeout_s=660)
+            await self.core.companions.invoke(companion, "muse", "pair", {"sdk_token": sdk_token, "identity": {"mac": ident.mac},
+                                                                         "window_s": PAIRING_WINDOW}, timeout_s=660,
+                                              principal=principal)
+        except CompanionError as exc:
+            if str(exc) in PAIRING_ERRORS:
+                error = str(exc)
         except Exception:
             pass
         finally:
             self._pairing = None
-            self._pair_window_closed = not self._verified_pairing
+            self._pair_error = None if self._verified_pairing else error
 
     async def _claim_pairing(self, principal: Principal, payload: dict[str, Any]) -> dict[str, Any]:
         from ..vendor.musegadget import muse_api, server_hosts
@@ -182,9 +190,6 @@ class MuseBlock(Block):
                 return rejected
             if status != 200 or not vms or self._pairing is not pending:
                 return rejected
-            await self.aclose()
-            if self._pairing is not pending:
-                return rejected
             record.update(node_id=pending[1].setup_node_id, token_type="device", access_token_saved_at=int(self.core.clock()))
             self.core.claims.save_secret(PAIRING_SECRET, json.dumps(record))
             self._launch(pending[1], record)
@@ -211,6 +216,8 @@ class MuseBlock(Block):
                     self._tasks[1].cancel()
 
         gadget = MuseGadget(identity=ident, pairing=record, sdk_token=self._token(), save_pairing=save_pairing)
+        for task in self._tasks:
+            task.cancel()
         self._gadget = gadget
         self._queued.set()
         self._tasks = (self.core.spawn(gadget.run(), name="muse-link"), self.core.spawn(self._drain(gadget), name="muse-delivery"))
