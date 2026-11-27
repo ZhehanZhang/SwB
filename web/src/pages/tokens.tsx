@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
+import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
 import { isObject, requestJson, sessionQuery } from "@/lib/api"
@@ -90,16 +91,24 @@ export function TokensPage() {
     onSettled: () => client.invalidateQueries({ queryKey }),
   })
 
-  if (tokens.isPending) return <DataState kind="loading" message="Loading tokens…" />
-  if (!tokens.data) return <DataState kind="error" message="Couldn’t load tokens." onRetry={() => void tokens.refetch()} />
+  if (!tokens.isPending && !tokens.data) return <DataState kind="error" message="Couldn’t load tokens." onRetry={() => void tokens.refetch()} />
 
-  const { waiting, stored } = tokens.data
+  const { waiting = [], stored = [] } = tokens.data ?? {}
 
   return (
     <div className="space-y-8 pt-2">
       <section aria-labelledby="waiting-tokens">
         <h2 id="waiting-tokens" className="text-heading-md">Waiting for you</h2>
-        {waiting.length === 0
+        {tokens.isPending ? (
+          <div aria-hidden="true" className="mt-2 flex h-[67px] items-center gap-3 border-b">
+            <Skeleton className="size-7 rounded-md" />
+            <div className="min-w-0 space-y-1.5">
+              <Skeleton className="h-3 w-28 max-w-full" />
+              <Skeleton className="h-2.5 w-20 max-w-full" />
+            </div>
+            <Skeleton className="ml-auto h-2.5 w-16" />
+          </div>
+        ) : waiting.length === 0
           ? <DataState kind="empty" message="No token requests." />
           : <ul className="mt-2">
               {waiting.map((row) => {
@@ -131,7 +140,26 @@ export function TokensPage() {
       </section>
       <section aria-labelledby="stored-tokens">
         <h2 id="stored-tokens" className="text-heading-md">Stored</h2>
-        {stored.length === 0
+        {tokens.isPending ? (
+          <LoadingSkeleton message="Loading tokens…" className="mt-2">
+            <div className="hidden h-[27px] items-start gap-5 border-b md:flex">
+              {[0, 1, 2, 3, 4].map((column) => <Skeleton key={column} className="h-2.5 w-[12%]" />)}
+            </div>
+            {[0, 1].map((row) => (
+              <div key={row} className="flex h-[71px] flex-col justify-center gap-2 border-b md:h-[49px] md:flex-row md:items-center md:justify-start md:gap-4">
+                <div className="flex items-center gap-2 md:w-[18%]">
+                  <Skeleton className="size-6 rounded-md" />
+                  <Skeleton className="h-3 w-24 max-w-1/2" />
+                  <Skeleton className="ml-auto h-2.5 w-7 md:hidden" />
+                </div>
+                <Skeleton className="hidden h-2.5 w-[12%] md:block" />
+                <Skeleton className="h-3 w-24 md:w-[20%]" />
+                <Skeleton className="hidden h-3 w-[12%] md:block" />
+                <Skeleton className="hidden h-2.5 w-[8%] md:block" />
+              </div>
+            ))}
+          </LoadingSkeleton>
+        ) : stored.length === 0
           ? <DataState kind="empty" message="No stored credentials." />
           : <table className="mt-2 w-full text-left text-[13px] leading-[18px]" aria-labelledby="stored-tokens" role="table">
               <thead className="sr-only md:not-sr-only md:table-header-group" role="rowgroup">

@@ -1,15 +1,19 @@
+import { useLayoutEffect, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronRight, Copy } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { toast } from "sonner"
 import { PRODUCT_NAME } from "@/app/brand"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
+import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
 import { boardQuery, formatDay, quantity, type Board } from "@/pages/overview/data"
 
 type Project = Board["projects"][number]
+const desktopProjectGrid = "grid-cols-[minmax(0,19%)_minmax(36px,7.25%)_minmax(173px,220px)_minmax(36px,7.25%)_minmax(0,1fr)]"
+const compactProjectGrid = "grid-cols-[minmax(0,1fr)_clamp(24px,10.5vw,42px)_clamp(24px,10.5vw,42px)_minmax(0,1fr)]"
 
 function Fan({ count, side, compact = false }: { count: number; side: "left" | "right"; compact?: boolean }) {
   if (!count) return <div aria-hidden />
@@ -131,7 +135,7 @@ function AgentList({ project, compact = false }: { project: Project; compact?: b
 function ProjectRow({ project }: { project: Project }) {
   return (
     <li className="border-b border-border">
-      <div className="hidden grid-cols-[minmax(0,19%)_minmax(36px,7.25%)_minmax(173px,220px)_minmax(36px,7.25%)_minmax(0,1fr)] py-6 lg:grid">
+      <div className={`hidden py-6 lg:grid ${desktopProjectGrid}`}>
         <SourceList project={project} />
         <Fan count={project.sources.length} side="left" />
         <ProjectSummary project={project} />
@@ -141,7 +145,7 @@ function ProjectRow({ project }: { project: Project }) {
       <div className="space-y-2 py-4 lg:hidden">
         <Link
           to={`/projects/${encodeURIComponent(project.slug)}`}
-          className="flex min-h-8 min-w-0 items-center gap-2 rounded-sm"
+          className="console-pressable flex min-h-8 min-w-0 items-center gap-2 rounded-sm"
         >
           <h2 className="truncate text-heading-md">{project.name}</h2>
           <span className="truncate font-mono text-mono-sm text-subtle-foreground">{project.slug}</span>
@@ -149,7 +153,7 @@ function ProjectRow({ project }: { project: Project }) {
           <ChevronRight aria-hidden className="size-4 shrink-0 text-subtle-foreground" />
         </Link>
         {(project.sources.length > 0 || project.agents.length > 0) && (
-          <div className="relative grid grid-cols-[minmax(0,1fr)_clamp(24px,10.5vw,42px)_clamp(24px,10.5vw,42px)_minmax(0,1fr)]">
+          <div className={`relative grid ${compactProjectGrid}`}>
             <SourceList project={project} compact />
             <Fan count={project.sources.length} side="left" compact />
             <Fan count={project.agents.length} side="right" compact />
@@ -203,16 +207,69 @@ function Runtime({ runtime }: { runtime: Board["runtime"] }) {
   )
 }
 
+function OverviewSkeleton() {
+  return (
+    <LoadingSkeleton message={`Loading ${PRODUCT_NAME}…`}>
+      <div className="flex min-h-9 items-center gap-3.5">
+        <Skeleton className="size-2 rounded-full" />
+        <Skeleton className="h-3 w-36 max-w-1/2" />
+        <Skeleton className="ml-auto hidden h-3 w-32 lg:block" />
+      </div>
+      <div className="mt-3 border-b lg:mt-5">
+        <div className={`hidden items-center py-6 lg:grid ${desktopProjectGrid}`}>
+          <Skeleton className="mr-5 h-3 w-20 justify-self-end" />
+          <div className="col-start-3 flex min-h-[170px] flex-col gap-2 rounded-[10px] bg-surface-sunken px-4 py-3.5">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-14" />
+            <div className="mt-auto space-y-3">
+              {[0, 1, 2].map((row) => <Skeleton key={row} className="h-3 w-full" />)}
+            </div>
+          </div>
+          <Skeleton className="col-start-5 ml-5 h-3 w-24" />
+        </div>
+        <div className="space-y-2 py-4 lg:hidden">
+          <div className="flex h-8 items-center gap-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-12" />
+            <Skeleton className="ml-auto h-3 w-12" />
+          </div>
+          <div>
+            {[0, 1].map((row) => (
+              <div key={row} className={`grid h-8 items-center ${compactProjectGrid}`}>
+                <div className="flex items-center justify-end gap-2 pr-3">
+                  <Skeleton className="size-[18px] rounded-md" />
+                  <Skeleton className="h-3 w-12 max-w-1/2" />
+                </div>
+                <div className="col-start-4 flex items-center gap-1.5 pl-3">
+                  <Skeleton className="size-[18px] rounded-md" />
+                  <Skeleton className="h-3 w-12 max-w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </LoadingSkeleton>
+  )
+}
+
 export function OverviewPage() {
   const board = useQuery(boardQuery)
-  if (board.isPending) return <DataState kind="loading" message={`Loading ${PRODUCT_NAME}…`} />
+  const { hash, key } = useLocation()
+  const projectList = useRef<HTMLUListElement>(null)
+  const hasProjects = Boolean(board.data?.projects.length)
+  useLayoutEffect(() => {
+    if (hash === "#projects" && hasProjects) projectList.current?.scrollIntoView({ behavior: "instant" })
+  }, [hash, key, hasProjects])
+
+  if (board.isPending) return <OverviewSkeleton />
   if (board.isError) return <DataState kind="error" message={`Couldn’t load ${PRODUCT_NAME}.`} onRetry={() => void board.refetch()} />
 
   return (
     <div>
       <Runtime runtime={board.data.runtime} />
       {board.data.projects.length > 0 ? (
-        <ul className="mt-3 lg:mt-5" aria-label="Projects">
+        <ul ref={projectList} id="projects" className="mt-3 lg:mt-5" aria-label="Projects">
           {board.data.projects.map((project) => <ProjectRow key={project.slug} project={project} />)}
         </ul>
       ) : (

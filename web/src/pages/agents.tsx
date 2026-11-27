@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
 import { DataState, type DataStateProps } from "@/components/data-state"
+import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { Logo } from "@/components/logo"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/tabs"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,7 @@ const connections = [
   { id: "gemini-cli", label: "Gemini CLI", preview: "MCP config" },
   { id: "any", label: "Any agent", preview: "Setup prompt" },
 ]
+const setupGrid = "mt-4 grid gap-x-7 gap-y-4 md:flex md:flex-wrap"
 
 const detailPath = (id: string) => `/agents/${encodeURIComponent(id)}`
 const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
@@ -56,10 +58,28 @@ function ConnectionRow() {
   return (
     <section className="border-b pb-3" aria-labelledby="connect-agent">
       <h2 id="connect-agent" className="text-base leading-6 font-semibold tracking-[-0.01em]">Connect an agent</h2>
-      {query.isPending ? <DataState kind="loading" message="Loading setup snippets…" /> : query.isError ? (
+      {query.isPending ? (
+        <LoadingSkeleton message="Loading setup snippets…">
+          <div className={setupGrid}>
+            {connections.map(({ id }) => (
+              <div key={id} className="min-w-0">
+                <div className="flex h-6 items-center gap-2">
+                  <Skeleton className="size-6 rounded-md" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <div className="mt-0.5 flex h-6 items-center gap-1.5">
+                  <Skeleton className="h-2.5 w-24" />
+                  <Skeleton className="size-4" />
+                  {id === "chatgpt" && <Skeleton className="h-2.5 w-10" />}
+                </div>
+              </div>
+            ))}
+          </div>
+        </LoadingSkeleton>
+      ) : query.isError ? (
         <DataState kind="error" message="Couldn’t load setup snippets." onRetry={() => void query.refetch()} />
       ) : (
-        <div className="mt-4 grid gap-x-7 gap-y-4 md:flex md:flex-wrap">
+        <div className={setupGrid}>
           {connections.map(({ id, label, preview }) => {
             const coding = query.data.coding_agents.find((entry) => entry.id === id)
             const snippet = id === "chatgpt" ? query.data.chatgpt.connector_url : id === "any" ? query.data.any.prompt : coding?.snippet
@@ -104,14 +124,42 @@ function Claim({ agent }: { agent: Agent }) {
     : <span className="text-body-sm text-muted-foreground">Awaiting handoff</span>
 }
 
+function AgentListSkeleton() {
+  return (
+    <LoadingSkeleton message="Loading agents…">
+      <div className="hidden h-[33px] items-center gap-5 border-b md:flex">
+        <Skeleton className="h-2.5 w-[15%]" />
+        <Skeleton className="h-2.5 w-[10%]" />
+        <Skeleton className="h-2.5 w-[15%]" />
+      </div>
+      {[0, 1].map((row) => (
+        <div key={row} className="flex h-[61px] items-center gap-3 border-b md:h-[45px]">
+          <Skeleton className="size-6 rounded-md md:size-[22px]" />
+          <div className="space-y-1.5 md:w-[15%]">
+            <Skeleton className="h-3 w-24 max-w-full" />
+            <Skeleton className="h-2.5 w-16 md:hidden" />
+          </div>
+          <Skeleton className="hidden h-3 w-[10%] md:block" />
+          <Skeleton className="hidden h-3 w-[14%] md:block" />
+          <Skeleton className="hidden h-3 w-[18%] md:block" />
+          <Skeleton className="ml-auto h-2.5 w-8" />
+          <Skeleton className="size-2 rounded-full" />
+        </div>
+      ))}
+    </LoadingSkeleton>
+  )
+}
+
 function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps }) {
   return (
     <section aria-labelledby="registered-agents" className="mt-8">
       <div className="flex items-center justify-between gap-3">
         <h2 id="registered-agents" className="text-base leading-6 font-semibold tracking-[-0.01em]">Registered</h2>
-        {!state && <span className="text-body-sm text-muted-foreground">{agents.length} {agents.length === 1 ? "agent" : "agents"}</span>}
+        {state?.kind === "loading" ? <Skeleton className="h-3 w-12" /> : !state && (
+          <span className="text-body-sm text-muted-foreground">{agents.length} {agents.length === 1 ? "agent" : "agents"}</span>
+        )}
       </div>
-      {state ? <DataState {...state} /> : !agents.length ? <DataState kind="empty" message="No registered agents." /> : (
+      {state?.kind === "loading" ? <AgentListSkeleton /> : state ? <DataState {...state} /> : !agents.length ? <DataState kind="empty" message="No registered agents." /> : (
         <>
           <table className="hidden w-full table-fixed text-left text-[13px] leading-[18px] md:table">
             <thead className="border-b text-[11px] leading-4 font-medium text-muted-foreground">
@@ -232,6 +280,38 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
   )
 }
 
+function AgentBackLink() {
+  return (
+    <Link to="/agents" className="inline-flex items-center gap-1.5 rounded-sm text-[13px] text-muted-foreground hover:text-foreground">
+      <ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Registered agents
+    </Link>
+  )
+}
+
+function AgentDetailSkeleton({ loadingName = false }: { loadingName?: boolean }) {
+  return (
+    <LoadingSkeleton message="Loading agent…">
+      {loadingName && (
+        <div className="my-4 flex h-6 items-center gap-2">
+          <Skeleton className="size-6 rounded-md" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+      )}
+      <div className="flex h-9 items-center gap-3 border-b sm:gap-5">
+        {[0, 1, 2, 3].map((tab) => <Skeleton key={tab} className="h-3 w-10 first:ml-2" />)}
+      </div>
+      <div className="space-y-3 py-4">
+        {[0, 1, 2, 3].map((row) => (
+          <div key={row} className="flex h-[18px] items-center gap-5">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        ))}
+      </div>
+    </LoadingSkeleton>
+  )
+}
+
 function AgentInspector({ agent }: { agent: Agent }) {
   const navigate = useNavigate()
   const query = useQuery({
@@ -242,7 +322,7 @@ function AgentInspector({ agent }: { agent: Agent }) {
       return requestJson(`/api/agents/detail?${params}`, isAgentDetail, { signal })
     },
   })
-  const panel = query.isPending ? <DataState kind="loading" message="Loading agent…" /> : query.isError ? (
+  const panel = query.isPending ? <AgentDetailSkeleton /> : query.isError ? (
     <DataState kind="error" message="Couldn’t load agent." onRetry={() => void query.refetch()} />
   ) : <AgentPanel key={agent.id} agent={agent} detail={query.data} />
 
@@ -255,7 +335,7 @@ function AgentInspector({ agent }: { agent: Agent }) {
   }, [])
   return desktop ? <Sheet open title={agent.name} onOpenChange={(open) => { if (!open) void navigate("/agents", { replace: true }) }}>{panel}</Sheet> : (
     <section aria-label="Agent details">
-      <Link to="/agents" className="inline-flex items-center gap-1.5 rounded-sm text-[13px] text-muted-foreground hover:text-foreground"><ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Registered agents</Link>
+      <AgentBackLink />
       <h2 className="my-4 flex items-center gap-2 text-base font-semibold"><Logo kind={agent.logo} />{agent.name}</h2>
       {panel}
     </section>
@@ -266,15 +346,21 @@ export function AgentsPage() {
   const id = useParams()["*"]
   const query = useQuery({ queryKey: agentListKey, queryFn: ({ signal }) => listAgents(signal) })
   const agent = id ? query.data?.find((row) => row.id === id && row.type !== "pending") : undefined
-  const state: DataStateProps | undefined = query.isPending ? { kind: "loading", message: "Loading agents…" } : query.isError ? {
+  const state: DataStateProps | undefined = query.isPending ? { kind: "loading" } : query.isError ? {
     kind: "error", message: "Couldn’t load agents.", onRetry: () => void query.refetch(),
   } : undefined
   return (
     <>
-      <div className={agent ? "hidden pt-2 md:block" : "pt-2"}>
+      <div className={agent || (id && query.isPending) ? "hidden pt-2 md:block" : "pt-2"}>
         <ConnectionRow />
         <AgentList agents={query.data ?? []} state={state} />
       </div>
+      {id && query.isPending && (
+        <section aria-label="Agent details" className="md:hidden">
+          <AgentBackLink />
+          <AgentDetailSkeleton loadingName />
+        </section>
+      )}
       {agent && <AgentInspector agent={agent} />}
       {id && query.data && !agent && <DataState kind="empty" message="Agent not found." />}
     </>
