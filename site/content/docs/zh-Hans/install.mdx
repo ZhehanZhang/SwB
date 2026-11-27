@@ -1,0 +1,57 @@
+---
+title: 安装
+description: 用 uvx、pipx 或 Docker 安装 SwB。
+---
+
+SwB 可在 Linux、macOS 和 Windows 上运行。uvx 和 pipx 两种方式需要 Python 3.12 或更高版本。Docker 方式需要 Docker。
+
+## 创建所有者密钥
+
+所有者密钥是你的 SwB 实例的密码。`swb` 命令用它以你的身份登录。在一个空文件夹中创建它。下面的命令把密钥写入私有的 `.env` 文件，并隐藏输出内容。
+
+```bash
+(umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
+```
+
+## 安装并启动
+
+<Tabs items={['uvx', 'pipx', 'Docker']}>
+  <Tab value="uvx">
+    ```bash
+    uvx swb-one up
+    ```
+
+    uvx 会下载并运行 SwB。在本文档的每条 `swb` 命令前加上 `uvx swb-one`。
+  </Tab>
+  <Tab value="pipx">
+    ```bash
+    pipx install swb-one
+    swb up
+    ```
+
+    pipx 为你的用户安装 `swb` 命令。
+  </Tab>
+  <Tab value="Docker">
+    ```bash
+    docker run -d --name swb --env-file .env \
+      -p 127.0.0.1:8870:8000 -v swb-data:/data \
+      ghcr.io/zhehanzhang/swb:latest
+    ```
+
+    镜像把数据保存在 `/data`。在本文档的每条 `swb` 命令前加上 `docker exec swb swb`。
+  </Tab>
+</Tabs>
+
+SwB 在 `http://127.0.0.1:8870` 启动。你的 MCP 地址是 `http://127.0.0.1:8870/mcp`。
+
+## 检查服务器
+
+```bash
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+返回内容列出每个模块及其状态。需要某项设置的模块会显示所缺环境变量的名称。
+
+## 版本
+
+每个版本都发布在 PyPI（名为 `swb-one`）和 GitHub Container Registry（名为 `ghcr.io/zhehanzhang/swb`）。使用 `1.0.0` 这样的版本标签，可固定在某一个版本。标签 `latest` 跟随最新版本。

@@ -1,0 +1,31 @@
+---
+title: Muse
+description: 通过配对的设备唤醒 Meta Muse。
+---
+
+SwB 通过一台设备唤醒 [Meta Muse](https://muse.ai/)。你把这台设备与自己的 Muse 账户配对。SwB 在 Muse 应用中显示为 SwB。这是个人集成。请先阅读 [Meta 的 Gadget SDK Token Terms](https://gadgets.muse.ai/sdk-terms)。
+
+## 设置服务器
+
+在 `blocks` 下添加 `muse: {use: muse}`，然后重启 SwB。运行 `swb connect muse`。生成一个随机的桥接令牌，并保存在 SwB 返回的领取链接上。
+
+## 设置设备
+
+使用带蓝牙 LE 和 BlueZ 的 Linux 设备。在 Ubuntu 24.04 上，安装 `bluez`、`python3-dbus`、`python3-gi` 和 `python3-venv`。然后安装带 Muse SDK 的 SwB。
+
+```bash
+/usr/bin/python3 -m venv --system-site-packages .venv-muse
+.venv-muse/bin/pip install swb-one 'musegadget @ git+https://github.com/facebookincubator/muse-gadget-sdk.git#subdirectory=linux'
+```
+
+获取[个人 Gadget SDK 令牌](https://gadgets.muse.ai/settings/sdk-tokens)。启动桥接。
+
+```bash
+.venv-muse/bin/swb muse-bridge --url https://swb.example.com --setup
+```
+
+在隐藏提示处输入桥接令牌和 Meta 令牌。在 Muse 应用中，开启 Settings → Devices → Developer mode。点击 Add Device，选择 SwB 打印的名称。
+
+## 发送给 Muse
+
+再次运行 `swb connect muse`，发送一条测试消息。然后使用 `send(to="muse", task="...")`。文字答复回到发送者的收件箱。SwB 只把所有者的消息发送给 Muse。

@@ -1,0 +1,46 @@
+---
+title: Slack
+description: 把 Slack 訊息路由給代理，並在討論串中貼出答案。
+---
+
+## 建立 Slack 應用程式
+
+請任何代理連接 Slack，或執行 `swb connect slack`。SwB 會給你應用程式資訊清單。程式碼庫的 `manifests/` 中有兩份資訊清單。一份用於有機器人的工作區。另一份用於 SwB 只以你自己的帳號行動的工作區。
+
+在你的工作區安裝應用程式。接著 SwB 給你一個領取連結，用來填入工作區權杖。連結為每個權杖提供一個欄位。
+
+| 權杖 | 在哪裡找到 |
+| - | - |
+| Bot 權杖，`xoxb-` | OAuth & Permissions → Bot User OAuth Token |
+| 使用者權杖，`xoxp-` | OAuth & Permissions → User OAuth Token |
+| App 層級權杖，`xapp-` | Basic Information → App-Level Tokens，需要 `connections:write` |
+
+## 從 Slack 傳送
+
+提及機器人並加上目標 slug。
+
+```text
+@swb claude check the release notes
+```
+
+SwB 移除 slug，並把其餘內容傳送給目標。答案回到同一個討論串，並以目標的名稱與圖片顯示。討論串中的訊息會送給該討論串先前的目標。其他訊息送給工作區的 `default_target`。
+
+## 以代理身分貼文
+
+代理用 `slack_*` 工具貼文。`slack.agents.<agent>` 為代理授予工作區與身分。每個身分有一個寫入政策。
+
+| 政策 | 效果 |
+| - | - |
+| `free` | 代理立即貼文 |
+| `approval` | 擁有者先核准每篇貼文 |
+| `never` | 這個身分只能讀取 |
+
+擁有者在 Slack 私訊或 SwB 頁面核准貼文。MCP 工具只能請求核准。
+
+## 角色身分
+
+機器人的貼文可以帶有**角色身分**（persona），也就是單一訊息使用的名稱與圖片。每位 Captain 會得到一個角色身分，並使用自己的 Capy 圖片。你可以在 SwB 頁面上傳更多圖片，或把檔案放進 `<data>/avatars`。
+
+## 每個頻道一個專案
+
+`workspace_projects` 把工作區對應到專案。`channel_projects` 把一個頻道對應到專案。這個對應決定專案記憶，以及 `@swb claude` 使用的主例行程序。

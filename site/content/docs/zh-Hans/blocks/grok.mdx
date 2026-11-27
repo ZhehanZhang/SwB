@@ -1,0 +1,31 @@
+---
+title: Grok
+description: 连接 Grok，并用 Grok 例程唤醒它。
+---
+
+## 添加连接器
+
+在 grok.com 中打开 Connectors → New Connector → Custom。输入你的公网 MCP 地址，并用 OAuth 登录。
+
+## 用例程唤醒 Grok
+
+请任意智能体连接 Grok，或运行下面的命令。
+
+```bash
+swb connect grok --choose name=project-doorman project=example auth=key
+```
+
+SwB 返回一段例程提示词和两个领取链接。创建一个 Grok 例程，使用自定义 webhook 触发器和该提示词。打开领取链接，在那里粘贴 webhook 地址和密钥。然后运行 `connect` 返回的测试发送。收件箱中出现 `pong`，即确认往返成功。
+
+## 唤醒如何工作
+
+向例程发送，会向 Grok 发布一个带签名的 webhook。webhook 携带文本、会话、项目、发送者和信任等级。例程通过自己的 SwB 连接器在会话中回答。
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-doorman: {project: example, url_env: GROK_WEBHOOK_URL, auth: signature, secret_env: GROK_WEBHOOK_SECRET}
+```
+
+按名称发送给例程，或发送给 `grok:<slug>` 以唤醒项目的主例程。

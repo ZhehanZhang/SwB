@@ -1,0 +1,46 @@
+---
+title: GitHub App
+description: 把 GitHub 事件送給你的代理與服務。
+---
+
+## 建立應用程式
+
+在你的帳號下建立 GitHub App。把 webhook 位址設為 `https://<your host>/github/webhook`。產生 webhook 密鑰。
+
+```bash
+openssl rand -hex 32
+```
+
+請代理連接 GitHub。SwB 給你一個領取連結，用來填入 App ID、私密金鑰檔案與 webhook 密鑰。你可以在那個頁面上傳 `.pem` 檔案。
+
+## 權限
+
+為你需要的事件授予唯讀權限。
+
+| 權限 | 事件 |
+| - | - |
+| Issues | `issues`、`issue_comment` |
+| Pull requests | `pull_request`、`pull_request_review`、`pull_request_review_comment`、`pull_request_review_thread` |
+| Contents | `push` |
+| Checks | `check_run`、`check_suite` |
+| Actions | `workflow_run` |
+
+把應用程式安裝到你想要的程式碼庫。
+
+## 路由事件
+
+```yaml
+blocks:
+  github:
+    use: github
+    secret_env: GITHUB_WEBHOOK_SECRET
+    sinks:
+      team: {url_env: TEAM_GITHUB_SINK_URL}
+    routes:
+      "acme/app": [team]
+      "acme/*": [team]
+```
+
+**接收端**（sink）是取得每個事件副本的位址。每個相符的接收端取得一份精簡的 JSON 事件。事件包含程式碼庫、操作者、編號、標題、狀態與簡短本文。每次傳遞都帶有 `Idempotency-Key`。SwB 會重試網路錯誤與伺服器錯誤。
+
+若 Cloudflare Access 保護你的主機，請放行 `/github/webhook`。GitHub 簽章保護這個路徑。

@@ -1,0 +1,75 @@
+---
+title: Config
+description: Environment variables, the config file and overlays.
+---
+
+SwB runs with environment variables alone. The MCP block is on by default. Each other block turns on when its variables are present. Use a YAML config file for routing, grants and policies.
+
+## Instance
+
+| Variable | Use |
+| - | - |
+| `SWITCHBOARD_KEY_OWNER` | The owner key for the `swb` command |
+| `SWITCHBOARD_PUBLIC_URL` | The public HTTPS address, for example `https://swb.example.com` |
+| `SWITCHBOARD_DATA_DIR` | The data folder. The default for `swb up` is `~/.local/share/switchboard`. The image uses `/data` |
+| `SWITCHBOARD_OWNER_EMAILS` | Owner emails for OIDC and Cloudflare Access, separated by commas |
+| `SWITCHBOARD_KEY_<NAME>` | A bearer key for the agent `<name>` |
+| `SWITCHBOARD_CONFIG` | The path of the base YAML file |
+| `SWITCHBOARD_OVERLAY` | The path of a private overlay file |
+| `PORT` | The HTTP port |
+
+## Blocks
+
+| Block | Variables |
+| - | - |
+| Capy | `CAPY_API_KEY`, and `CAPY_API_KEY_SERVICE` or `CAPY_API_KEY_AS_<AGENT>` for sends |
+| Slack | `SLACK_BOT_TOKEN` or `SLACK_USER_TOKEN`, `SLACK_TEAM_ID`, and `SLACK_APP_TOKEN` for Socket Mode |
+| Discord | `DISCORD_BOT_TOKEN` |
+| Telegram | `TELEGRAM_BOT_TOKEN` |
+| GitHub | `GITHUB_WEBHOOK_SECRET` |
+| Claude routines | `CLAUDE_ROUTINE_TOKEN` and `CLAUDE_ROUTINE_ID` |
+| Grok routines | `GROK_ROUTINE_SECRET` and `GROK_ROUTINE_URL` |
+
+For a named Slack workspace, put the name after `SLACK_`, for example `SLACK_SUPPORT_BOT_TOKEN`. Named routines work the same way, for example `CLAUDE_ROUTINE_TOKEN_DOCS`.
+
+## The config file
+
+```bash
+swb init
+```
+
+`swb init` writes `config/switchboard.yaml` and an owner key. The file is optional. SwB reads `config/switchboard.yaml` when it exists.
+
+```yaml
+version: 2
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@example.com]
+blocks:
+  mcp: {use: mcp}
+  capy: {use: capy, identity: service}
+targets:
+  aliases: {}
+routes:
+  - {match: {}, to: capy:captain:<Captain id>}
+```
+
+A `blocks` list in the file chooses the blocks exactly. Leave `blocks` out to keep the blocks from the environment. The `routes` list sets the first routes on a new install. After that, agents and the SwB page manage the routes.
+
+## Overlays
+
+An overlay is a private YAML file for your own names, ids and paths. Put it in `config/local.yaml`, or name it with `SWITCHBOARD_OVERLAY`. The overlay wins over the base file, and the base file wins over the environment. Mappings merge. Lists replace.
+
+## Branding
+
+```yaml
+branding:
+  display_name: SwB
+  accent_color: "#64748b"
+```
+
+`branding.icon` and `branding.logo_assets_dir` set your own icon and logos.
+
+## Full reference
+
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/main/config/switchboard.example.yaml) has every key with a comment.

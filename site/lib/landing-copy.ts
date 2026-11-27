@@ -1,0 +1,68 @@
+import type { Locale } from './i18n';
+
+const en = {
+  brand: 'SwB',
+  docs: 'Docs',
+  github: 'GitHub',
+  about: 'About',
+  license: 'Apache-2.0',
+  headline: 'A switchboard for the agents you already use',
+  intro: 'Claude, ChatGPT, Grok, Capy and your coding agents share projects and memory, and hand each other work.',
+  install: 'uvx swb-one up',
+  copy: 'Copy',
+  copied: 'Copied',
+  copyError: 'Select the command to copy it',
+  shotAlt: 'The SwitchBoard overview with channels in, projects and agents out',
+  language: 'Language',
+  languages: { en: 'English', 'zh-Hans': '简体中文', 'zh-Hant': '繁體中文' },
+  theme: { light: 'Light theme', dark: 'Dark theme' },
+  connectors: [
+    'Claude', 'ChatGPT', 'Gemini', 'Claude Code', 'Codex', 'Capy',
+    'Grok', 'Slack', 'Discord', 'Telegram', 'GitHub',
+  ],
+  steps: [
+    { title: 'Start SwB', description: 'Run one command on your computer or server.' },
+    { title: 'Add it to one agent', description: 'Give the agent your SwB address.' },
+    { title: 'Let that agent connect the rest', description: 'Paste each token on its one-time page.' },
+  ],
+};
+
+export const landingCopy: Record<Locale, typeof en> = {
+  en,
+  'zh-Hans': {
+    ...en,
+    docs: '文档',
+    about: '关于',
+    headline: '一块交换台，接通你现有的智能体',
+    intro: 'Claude、ChatGPT、Grok、Capy 和编程智能体共享项目与记忆，并互相分派工作。',
+    copy: '复制',
+    copied: '已复制',
+    copyError: '请选中命令后复制',
+    shotAlt: 'SwitchBoard 总览，左侧是接入的频道，中间是项目，右侧是智能体',
+    language: '语言',
+    theme: { light: '浅色主题', dark: '深色主题' },
+    steps: [
+      { title: '启动 SwB', description: '在电脑或服务器上运行一条命令。' },
+      { title: '接入一个智能体', description: '把 SwB 地址交给这个智能体。' },
+      { title: '让它接通其余平台', description: '每个令牌都在一次性页面上粘贴。' },
+    ],
+  },
+  'zh-Hant': {
+    ...en,
+    docs: '文件',
+    about: '關於',
+    headline: '一座交換台，接通你現有的 AI 代理',
+    intro: 'Claude、ChatGPT、Grok、Capy 與程式開發代理共用專案與記憶，並彼此分派工作。',
+    copy: '複製',
+    copied: '已複製',
+    copyError: '請選取指令後複製',
+    shotAlt: 'SwitchBoard 總覽，左側是接入的頻道，中間是專案，右側是 AI 代理',
+    language: '語言',
+    theme: { light: '淺色主題', dark: '深色主題' },
+    steps: [
+      { title: '啟動 SwB', description: '在電腦或伺服器上執行一個指令。' },
+      { title: '接上一個代理', description: '把 SwB 位址交給這個代理。' },
+      { title: '讓它接通其餘平台', description: '每個權杖都貼在一次性頁面上。' },
+    ],
+  },
+};

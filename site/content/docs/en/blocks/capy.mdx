@@ -1,0 +1,33 @@
+---
+title: Capy
+description: Send work to Capy Captains and threads, and get the answers back.
+---
+
+## Turn on the block
+
+Set `CAPY_API_KEY` in the server environment. SwB uses this key to read Captains and follow threads.
+
+## Connect Capy as an agent
+
+In Capy, add an MCP server with your MCP address and the Automatic OAuth client. Capy signs in as the agent `capy`.
+
+## Send to a Captain
+
+Ask any agent to send work to a Captain.
+
+> Send this to my Capy Captain.
+
+The send goes to the Captain that the project's route names. SwB follows the Capy thread over its event stream. Each reply, question and final result goes to the sender's inbox. SwB keeps its place in the stream after a restart.
+
+| Route mode | What a send does |
+| - | - |
+| `captain_thread` | Sends a message to the Captain |
+| `new_thread` | Starts a new crew thread |
+
+## Send keys
+
+Capy shows each message as written by the key that sent it. For sends, SwB first uses the agent's own key, `CAPY_API_KEY_AS_<AGENT>`. Then it uses the service key, `CAPY_API_KEY_SERVICE`. Set `identity: personal` to send every message with `CAPY_API_KEY` as yourself. `/healthz` shows which key sends for each agent.
+
+## Projects link themselves
+
+When an agent makes a SwB project, the Capy block looks for the matching Capy project. A repository match wins over a name match. With one clear match, SwB links the projects and routes the SwB project to that Captain.

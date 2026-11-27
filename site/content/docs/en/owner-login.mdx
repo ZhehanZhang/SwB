@@ -1,0 +1,43 @@
+---
+title: Owner sign-in
+description: Sign in to the SwB page with a passkey, a one-time link or your identity provider.
+---
+
+SwB has one owner. The owner signs in to the SwB page to see the instance, approve agent sign-ins and paste tokens. SwB uses passkeys, one-time links and OIDC in place of passwords.
+
+## One-time link
+
+```bash
+swb login-link
+```
+
+The command prints a link such as `https://swb.example.com/login#t=...`. The link works one time, for five minutes. An agent that you signed in can also make a link with the `login_link` tool. The token is in the part of the link after `#`, so it stays out of server logs and link previews.
+
+## Passkey
+
+After your first sign-in, the page asks you to add a passkey. Name the passkey after your device, for example MacBook. Use the passkey for the next sign-ins. Add a passkey on each device you use. Settings shows your passkeys and lets you remove one.
+
+## OIDC
+
+Use your own identity provider, for example Google, Okta or Authentik. Add it to the config.
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: OIDC_CLIENT_SECRET
+```
+
+Set the redirect address in your provider to `https://swb.example.com/auth/oidc/callback`. The sign-in page then shows a button for your provider. SwB accepts an owner email with a verified address. You can also list provider subject ids in `owner_subjects`.
+
+## Cloudflare Access
+
+If Cloudflare Access protects your host, SwB reads the Access token and signs you in at once. Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN`, `CLOUDFLARE_ACCESS_AUD` and `SWITCHBOARD_OWNER_EMAILS`. SwB checks the token signature, audience, issuer and email itself.
+
+## Sessions
+
+A session is a secure cookie on the SwB host. Each change on the page carries a CSRF token. Sign out from Settings.

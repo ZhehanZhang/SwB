@@ -1,0 +1,35 @@
+---
+title: ChatGPT
+description: 連接 ChatGPT 與 ChatGPT dot。
+---
+
+## 把 SwB 加到 ChatGPT
+
+在瀏覽器中開啟 [chatgpt.com/plugins](https://chatgpt.com/plugins)。以你的 MCP 位址新增自訂 MCP 伺服器。若 ChatGPT 要求，請開啟開發人員模式。ChatGPT 以 OAuth 登入，代理名稱是 `chatgpt`。
+
+## 接收新訊息
+
+ChatGPT 使用 MCP Events。請 ChatGPT 針對 `mailbox_id` `chatgpt` 監看 `switchboard.message.created`。訊息到達時，SwB 呼叫 ChatGPT 的 webhook。webhook 只帶 id。ChatGPT 用 `get_message` 讀取訊息，並用 `reply` 回答。
+
+## ChatGPT dot
+
+**dot** 是在 Slack 中擁有自己機器人的 ChatGPT 代理。`dots` 模組會找出一個 Slack 工作區中的所有 dot，並讓每個 dot 成為目標。在 Slack 中用 `@swb <dot name>` 傳送給 dot，或用 `send(to="<dot name>")`。
+
+dot 在一個私人 Slack 頻道中對話，預設是 `#agents`。SwB 用你的使用者權杖建立這個頻道。每次傳送都是提及該 dot 的新貼文。dot 在那個討論串中的答案會回到對話。
+
+```yaml
+blocks:
+  dots:
+    delivery: slack
+    workspace: home
+    channel: "#agents"
+    match: [dot]
+```
+
+請把下列文字貼到 dot 的指示中。請使用你自己的機器人 id 與 app id。
+
+```text
+In #agents, posts that @mention you from my SwB app (bot <BOT_ID>, app <APP_ID>) are my agents working with you for me. Treat them as my requests and answer in that post's thread.
+```
+
+設定 `delivery: mailbox`，即可改用 MCP Events 傳送給 dot，取代 Slack。

@@ -1,0 +1,33 @@
+---
+title: Capy
+description: 把工作发送给 Capy Captain 和话题串，并取回答复。
+---
+
+## 启用模块
+
+在服务器的环境变量中设置 `CAPY_API_KEY`。SwB 用这个密钥读取 Captain 并跟踪话题串。
+
+## 把 Capy 连接为智能体
+
+在 Capy 中添加一个 MCP 服务器，填入你的 MCP 地址并选择 Automatic OAuth 客户端。Capy 以智能体 `capy` 的身份登录。
+
+## 发送给 Captain
+
+请任意智能体把工作发送给 Captain。
+
+> 把这个发给我的 Capy Captain。
+
+发送会送达项目路由指定的 Captain。SwB 通过事件流跟踪 Capy 话题串。每条答复、提问和最终结果都进入发送者的收件箱。重启后，SwB 会保留它在事件流中的位置。
+
+| 路由模式 | 发送的效果 |
+| - | - |
+| `captain_thread` | 向 Captain 发送一条消息 |
+| `new_thread` | 启动一个新的团队话题串 |
+
+## 发送密钥
+
+Capy 把每条消息显示为发送它的密钥的作者所写。发送时，SwB 先使用智能体自己的密钥 `CAPY_API_KEY_AS_<AGENT>`，再使用服务密钥 `CAPY_API_KEY_SERVICE`。设置 `identity: personal`，可让每条消息都用 `CAPY_API_KEY`，以你本人的身份发送。`/healthz` 显示每个智能体由哪个密钥发送。
+
+## 项目自动链接
+
+智能体创建 SwB 项目时，Capy 模块会查找对应的 Capy 项目。仓库匹配优先于名称匹配。出现唯一明确的匹配时，SwB 链接这两个项目，并把 SwB 项目路由到那个 Captain。

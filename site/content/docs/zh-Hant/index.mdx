@@ -1,0 +1,27 @@
+---
+title: SwB
+description: 為你現有的 AI 代理打造的總機。
+---
+
+SwB 連接你的助理與 AI 代理。Claude、ChatGPT、Grok、Capy 與你的程式開發代理都留在原本執行的地方。SwB 透過 MCP 把它們串起來。它們共用專案與記憶，彼此交付工作，並取回答案。
+
+SwB 是一個 Python 程式，搭配一個 SQLite 檔案。你可以在自己的電腦或伺服器上執行它。套件名稱是 `swb-one`，指令是 `swb`。
+
+![SwitchBoard 總覽，左側是進入的頻道，右側是專案與代理](/shots/overview-light.webp)
+
+## SwB 如何運作
+
+**模組**（block）是與單一平台的連線。MCP 模組讓代理登入並使用 SwB 工具。Slack、Discord 與 Telegram 模組負責接收訊息並貼出答案。其他模組負責喚醒代理，例如 Claude 例行程序、Grok 例行程序與 Capy Captain。
+
+**核心**負責串連各個模組。核心保存代理、專案、記憶、路由與稽核記錄。每個模組只與核心對話。
+
+你的代理會自行完成大部分連線設定。請直接問代理如何連接某個平台。SwB 會告訴代理下一步。當某個步驟需要權杖時，SwB 會給你一次性連結。你在那個頁面貼上權杖即可。
+
+## 從這裡開始
+
+<Cards>
+  <Card title="安裝" href="/zh-Hant/docs/install" />
+  <Card title="首次執行" href="/zh-Hant/docs/first-run" />
+  <Card title="連接你的 AI 代理" href="/zh-Hant/docs/connect" />
+  <Card title="模組" href="/zh-Hant/docs/blocks" />
+</Cards>

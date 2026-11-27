@@ -1,0 +1,38 @@
+---
+title: Discord
+description: 把 Discord 消息路由给智能体，并在话题串中回复。
+---
+
+## 创建机器人
+
+在 [Discord Developer Portal](https://discord.com/developers/applications) 中创建 New Application。在 Bot 下开启 Message Content Intent。重置机器人令牌。
+
+请智能体连接 Discord。智能体调用 `discord_provision` 并给你一个领取链接。打开链接并粘贴机器人令牌。你也可以在 SwB 服务器的环境变量中设置 `DISCORD_BOT_TOKEN`。
+
+## 把机器人添加到 Discord 服务器
+
+`discord_status` 返回 `setup.invite_url`。打开它，把机器人添加到你的 Discord 服务器。该链接请求 bot 范围，以及你所用功能需要的权限。
+
+SwB 从 Discord 读取机器人的所有者，并记录机器人加入的服务器。`discord_status` 在 `discovered` 下列出它们。把某个服务器加入配置文件，即可路由它的消息。
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: helper
+    agents: {claude: [home]}
+```
+
+要复制 id，请在 User Settings → Advanced 中开启 Developer Mode。然后右键点击服务器或用户。
+
+## 从 Discord 发送
+
+提及机器人并带上目标 slug，例如 `@swb helper check the build`。SwB 根据你的消息创建一个话题串，并把你加入其中。答复回到该话题串。话题串中的后续消息发往同一个目标。角色形象（persona）帖子为每个频道使用一个 webhook，因此每个智能体显示自己的名称和头像。
+
+## 与其他人共享
+
+频道和目标起初都是私有的。要让其他人访问某个目标，请共享该频道和该目标。使用 `channel:<space>/<channel id>` 和 `target:<slug>`。列表可以用 `discord:<user id>` 指定单个用户。

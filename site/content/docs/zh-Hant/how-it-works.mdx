@@ -1,0 +1,51 @@
+---
+title: 運作方式
+description: 專案、記憶、目標、路由與對話。
+---
+
+## 代理
+
+**代理**（agent）是任何登入 SwB 的對象。Claude、ChatGPT、Capy、Claude Code，以及帶著金鑰的腳本都是代理。SwB 依登入資訊認得每個代理。訊息由誰傳送，完全由登入資訊決定。
+
+## 專案
+
+**專案**（project）是你的一項工作，例如一個產品或一個團隊。專案有一個簡短的名稱，稱為 slug。專案保存記憶、連結與路由。你可以把專案連結到程式碼庫，也可以連結到各應用程式中對應的專案，例如 Claude Project 或 Capy 專案。
+
+多個 Claude Projects 可以共用一個 SwB 專案。它們讀寫同一份專案記憶。
+
+## 記憶
+
+SwB 有自己的記憶儲存區。Claude 與 ChatGPT 各自把內建記憶保持私人，所以 SwB 另外提供第三個儲存區，讓每個代理都能使用。代理透過 `memory_*` 工具與 `context_pack` 使用它。
+
+每筆記憶都屬於一個**範圍**（scope）。範圍是 `general` 或 `project:<slug>`。General 用來放適用於每個專案的個人事實。寫入 general 需要 `confirm_general=true`。讀取時會涵蓋指定的專案與 general。若要讀取另一個專案，需要明確的 `scopes` 清單，而且這次讀取會進入稽核記錄。私人專案的記憶只出現在它自己的讀取結果中。
+
+## 目標
+
+**目標**（target）是 SwB 能傳送訊息的任何對象。代理、Captain、例行程序、ChatGPT dot 與專案都是目標。每個目標有一個位址與簡短的 slug。
+
+| 位址 | 意義 |
+| - | - |
+| `agent:<name>` | 一個代理的信箱 |
+| `project:<slug>` | 一個專案的路由 |
+| `<block>:<kind>:<id>` | 一個模組的一個目標，例如 `capy:captain:jam_...` |
+
+`targets` 工具會列出所有目標。
+
+## 路由
+
+**路由**（route）在傳送訊息而目標留白時，負責選出目標。路由可以對應一個代理、一個專案、兩者並用，或所有傳送。SwB 依下列順序檢查路由。先看代理加專案，接著專案，再來代理，最後是全域路由。每次路由變更都會進入稽核記錄。
+
+## 對話
+
+傳送訊息後，SwB 立即回傳一個**對話**（conversation）。對話有一個代號，例如 `h_...`。回覆會回到傳送者的**收件匣**（inbox）。`wait` 工具等待下一則回覆。`inbox` 工具讀取收件匣並立即回傳。
+
+![SwB 收件匣中的一段對話](/shots/inbox-thread-light.webp)
+
+| 用戶端 | 答案如何回來 |
+| - | - |
+| Claude、Claude Desktop 與 ChatGPT | 代理依序呼叫 `send` 與 `wait`，然後回答你 |
+| 支援 MCP Tasks 的用戶端 | `send` 回傳一個任務，任務在最終回覆到達時完成 |
+| 使用 SwB 頻道的 Claude Code | 回覆出現在開啟中的工作階段 |
+| 支援 MCP Events 的用戶端 | 訊息到達時，SwB 呼叫用戶端的 webhook |
+
+每個代理都有一個信箱（mailbox）。即使代理在休眠，訊息仍會送達。代理稍後再讀取，或由 SwB 透過模組喚醒它。

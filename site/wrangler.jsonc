@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "swb-site",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "keep_names": false,
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "vars": {
+    "NEXT_PUBLIC_ASK_AI": "1"
+  },
+  "env": {
+    "local": {
+      "vars": {
+        "NEXT_PUBLIC_ASK_AI": "1"
+      }
+    }
+  }
+}

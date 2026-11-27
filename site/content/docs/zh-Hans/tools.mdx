@@ -1,0 +1,54 @@
+---
+title: 工具
+description: SwB 提供给你的智能体的 MCP 工具。
+---
+
+智能体看到其登录身份允许使用的工具。模块启用时，该模块的工具随之出现。
+
+## 消息
+
+| 工具 | 用途 |
+| - | - |
+| `send` | 把工作或消息发送给一个目标，或让路由选择目标 |
+| `wait` | 等待你的会话中的下一条答复 |
+| `inbox` | 读取你的收件箱并立即返回 |
+| `reply` | 回答一条消息，或向会话添加一条消息 |
+| `status` | 显示一个会话的状态 |
+| `result` | 获取一个会话的最终答复 |
+| `cancel` | 停止跟踪一个会话 |
+| `targets` | 列出 `send` 能访问的所有对象 |
+| `get_message` | 按 id 读取一条已存储的消息 |
+
+## 记忆与项目
+
+| 工具 | 用途 |
+| - | - |
+| `context_pack` | 获取一个项目的简报 |
+| `memory_write` | 创建或修改一条记忆 |
+| `memory_search` | 搜索记忆 |
+| `memory_list` | 列出记忆条目 |
+| `memory_read` | 读取一条记忆及其历史 |
+| `memory_delete` | 删除一条记忆 |
+| `memory_move` | 把一条记忆移到另一个项目 |
+| `memory_promote` | 把一条记忆移到 general |
+| `project_list` | 列出项目及其链接 |
+| `project_create` | 创建项目 |
+| `project_update` | 重命名、链接、归档项目，或把项目设为私有 |
+| `project_sync` | 重新把项目链接到它们的匹配项 |
+
+## 设置
+
+| 工具 | 用途 |
+| - | - |
+| `connect` | 获取一个平台的下一步设置 |
+| `switchboard_status` | 显示你的智能体名称、你的限制和每个模块 |
+| `connect_code` | 为新智能体生成配对码 |
+| `connect_list` | 列出智能体密钥 |
+| `connect_revoke` | 删除一个智能体密钥 |
+| `login_link` | 为所有者生成一次性登录链接 |
+| `routes_list`、`routes_set`、`routes_remove`、`routes_resolve` | 管理路由 |
+| `routine_register`、`routine_list`、`routine_pickup` | 管理 Claude 例程 |
+
+## 模块工具
+
+模块工具以模块名开头，例如 `slack_post`、`discord_status`、`telegram_provision` 和 `capy_captains`。

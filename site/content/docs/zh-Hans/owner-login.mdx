@@ -1,0 +1,43 @@
+---
+title: 所有者登录
+description: 用通行密钥、一次性链接或你的身份提供方登录 SwB 页面。
+---
+
+SwB 只有一位所有者。所有者登录 SwB 页面，查看实例、批准智能体登录并粘贴令牌。SwB 用通行密钥、一次性链接和 OIDC 取代密码。
+
+## 一次性链接
+
+```bash
+swb login-link
+```
+
+命令会打印形如 `https://swb.example.com/login#t=...` 的链接。该链接五分钟内有效，且只能使用一次。你已登录的智能体也可以用 `login_link` 工具生成链接。令牌位于链接中 `#` 之后的部分，因此服务器日志和链接预览会隐藏它。
+
+## 通行密钥
+
+首次登录后，页面会请你添加通行密钥。按设备为通行密钥命名，例如 MacBook。之后的登录使用该通行密钥。在你使用的每台设备上各添加一个通行密钥。Settings 显示你的通行密钥，并允许你删除其中任何一个。
+
+## OIDC
+
+使用你自己的身份提供方，例如 Google、Okta 或 Authentik。把它加入配置文件。
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: OIDC_CLIENT_SECRET
+```
+
+在你的提供方中，把重定向地址设为 `https://swb.example.com/auth/oidc/callback`。登录页随后会显示你的提供方的按钮。SwB 接受地址已验证的所有者邮箱。你也可以在 `owner_subjects` 中列出提供方的 subject id。
+
+## Cloudflare Access
+
+如果 Cloudflare Access 保护你的主机，SwB 会读取 Access 令牌并立即让你登录。设置 `CLOUDFLARE_ACCESS_TEAM_DOMAIN`、`CLOUDFLARE_ACCESS_AUD` 和 `SWITCHBOARD_OWNER_EMAILS`。SwB 自己检查令牌的签名、受众、签发者和邮箱。
+
+## 登录状态
+
+登录状态保存在 SwB 主机的安全 cookie 中。页面上的每次变更都带有 CSRF 令牌。在 Settings 中退出登录。
