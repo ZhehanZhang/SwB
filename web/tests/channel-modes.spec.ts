@@ -79,6 +79,22 @@ test("claims and login share the console theme and follow the system by default"
   }
 })
 
+test("agent tiles and claim pages display bundled avatars", async ({ page }) => {
+  await page.goto("/agents")
+  for (const name of ["claude-code", "codex", "chatgpt", "gemini"]) {
+    const avatar = page.locator(`img[src="/avatars/${name}.png"]`).first()
+    await expect(avatar).toBeVisible()
+    await expect.poll(() => avatar.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+  }
+
+  for (const path of ["/tokens", "/fixture/muse"]) {
+    await page.goto(path)
+    const muse = page.locator('img[src="/avatars/muse.png"]')
+    await expect(muse).toBeVisible()
+    await expect.poll(() => muse.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(512)
+  }
+})
+
 test.describe("mobile connections", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 

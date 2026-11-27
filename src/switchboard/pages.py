@@ -16,6 +16,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
 
+from .slack.avatar_files import agent_avatar_url
+
 _STATIC = resources.files("switchboard") / "static"
 _BRAND = json.loads((_STATIC / "brand.json").read_text())
 _ASSETS = {
@@ -403,11 +405,13 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
     connector = requester.lower().replace("_", "-").partition(":")[0].partition("-")[0]
     if connector in {"openai", "dot"}:
         connector = "chatgpt"
-    mark_kind = connector if connector in CLAIM_CONNECTORS else "agent"
+    avatar = agent_avatar_url(requester)
+    mark_kind = avatar.removeprefix("/avatars/").removesuffix(".png") if avatar else connector if connector in CLAIM_CONNECTORS else "agent"
+    mark = (f'<img class="persona-mark" src="{avatar}" alt="">' if avatar else
+            f'<svg viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/claim-connectors.svg#{mark_kind}"/></svg>')
     name = html.escape(requester)
     tile = (f'<div class="requester"><span class="requester-tile" data-connector="{mark_kind}" role="img" '
-            f'aria-label="{name}" title="{name}"><svg viewBox="0 0 24 24" aria-hidden="true">'
-            f'<use href="/assets/claim-connectors.svg#{mark_kind}"/></svg></span></div>') if requester else ""
+            f'aria-label="{name}" title="{name}">{mark}</span></div>') if requester else ""
     context = f'<p class="scope">{html.escape(scope)}</p>' if scope else ""
     help_link = ('<a class="guide" href="https://claude.ai/code" rel="noreferrer">Open Claude Code'
                  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6m0-6-9 9m6-1v6H5V8h6"/></svg></a>') if guide else ""

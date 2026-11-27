@@ -17,6 +17,7 @@ from starlette.responses import HTMLResponse, Response
 
 from . import pages
 from .claims import FILE_KINDS, MAX_FILE_BYTES, Field
+from .slack.avatar_files import BUNDLED_AVATARS, agent_avatar
 
 MARKS = Path(__file__).parent / "marks"
 
@@ -65,11 +66,15 @@ def slack_workspace(label: str, names: dict[str, str]) -> tuple[str, str, list[F
 
 def mark(provider: str) -> str:
     p = PROVIDERS.get(provider)
-    path = MARKS / f"{p.mark}.svg" if p else None
-    if path is None or not path.exists():
+    if p is None:
         return ""
-    svg = path.read_text().strip().replace("<svg ", f'<svg class="mark mark-{p.key}" aria-hidden="true" ', 1)
-    return f'<span class="requester-tile" data-connector="{p.key}" title="{html.escape(p.title)}">{svg}</span>'
+    if avatar := agent_avatar(p.key):
+        body = f'<img class="persona-mark" src="/avatars/{avatar}" alt="">'
+    elif (path := MARKS / f"{p.mark}.svg").is_file():
+        body = path.read_text().strip().replace("<svg ", f'<svg class="mark mark-{p.key}" aria-hidden="true" ', 1)
+    else:
+        return ""
+    return f'<span class="requester-tile" data-connector="{p.key}" title="{html.escape(p.title)}">{body}</span>'
 
 
 def _field(f: Field) -> str:
@@ -164,6 +169,9 @@ def asset(name: str) -> Response:
         return Response(JS, media_type="text/javascript; charset=utf-8", headers={"Cache-Control": "public, max-age=3600"})
     if name == "swb.svg":
         return Response((MARKS / "swb.svg").read_bytes(), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
-    if (p := PROVIDERS.get(name.removesuffix(".svg"))) and (MARKS / f"{p.mark}.svg").exists():
-        return Response((MARKS / f"{p.mark}.svg").read_bytes(), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
+    if p := PROVIDERS.get(name.removesuffix(".svg")):
+        if avatar := agent_avatar(p.key):
+            return Response((BUNDLED_AVATARS / avatar).read_bytes(), media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+        if (path := MARKS / f"{p.mark}.svg").is_file():
+            return Response(path.read_bytes(), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
     return Response(status_code=404)
