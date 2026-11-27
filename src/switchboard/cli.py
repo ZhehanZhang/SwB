@@ -168,6 +168,14 @@ def _claim_url(endpoint: str, link: str) -> tuple[str, bool]:
     return target._replace(path=prefix + path).geturl(), path.startswith("/routines/")
 
 
+def _rate_limit(response: httpx2.Response) -> CliError:
+    delay = response.headers.get("Retry-After", "").strip()
+    if re.fullmatch(r"[0-9]{1,9}", delay):
+        seconds = int(delay)
+        return CliError(f"Slow down. Try again in {seconds} {'second' if seconds == 1 else 'seconds'}.")
+    return CliError("Slow down. Try again shortly.")
+
+
 def _claim(url: str, key: str, *, routine: bool) -> None:
     token = _hidden_input("Token: ")
     if not token.strip():
@@ -178,6 +186,8 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
             response = client.post(url, data={"token": token})
     except (httpx2.HTTPError, ValueError):
         raise CliError("Check that SwB is running and verify --url.") from None
+    if response.status_code == 429:
+        raise _rate_limit(response)
     if not response.is_success:
         status = response.status_code
         if status in CLAIM_ERRORS and response.headers.get("content-type", "").partition(";")[0] == "application/json":
@@ -204,15 +214,25 @@ def _hidden_input(prompt: str) -> str:
 
 
 async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    rate_limit = None
+
+    async def inspect_response(response: httpx2.Response) -> None:
+        nonlocal rate_limit
+        if response.status_code == 429 and response.request.method == "POST":
+            rate_limit = _rate_limit(response)
+
     try:
         async with (
-            httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False) as client,
+            httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False,
+                               event_hooks={"response": [inspect_response]}) as client,
             streamable_http_client(url, http_client=client) as streams,
             ClientSession(*streams, read_timeout_seconds=30) as session,
         ):
             await session.initialize()
             result = await session.call_tool(tool, arguments)
     except Exception:
+        if rate_limit is not None:
+            raise rate_limit from None
         if tool == "login_link":
             raise CliError(f"Check that SwB is running at {url.replace(key, '[redacted]')}. Verify the owner key.") from None
         raise CliError("Check that SwB is running. Verify --url and the owner key.") from None
