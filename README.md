@@ -17,6 +17,7 @@ Give your agents access to the projects they work on. A project keeps related me
 Ask an agent to run `connect` to set up a connection. Enter a token on the page the agent opens for you.
 
 Use the web console to see where a message came from and where it went.
+Use [channel modes](docs/guide.md#channel-modes) to choose how SwB handles channel messages.
 
 ## See it work
 
