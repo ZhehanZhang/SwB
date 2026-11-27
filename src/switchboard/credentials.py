@@ -42,28 +42,6 @@ PROVIDERS = {p.key: p for p in (
 )}
 
 
-def github_app(webhook_secret_env: str | None = None, *, webhook_secret_saved: bool = False) -> tuple[str, str, list[Field]]:
-    """The GitHub App fields: its numeric ID and private key, plus the webhook secret while none is saved."""
-    settings = "https://github.com/settings/apps"
-    fields = [Field("GITHUB_APP_ID", "App ID", "id", "The number at the top of the app's General settings.", link=settings),
-              Field("GITHUB_APP_PRIVATE_KEY", "Private key", "pem",
-                    "Under Private keys, Generate a private key, then upload the .pem file it downloads.", link=settings)]
-    if webhook_secret_env and not webhook_secret_saved:
-        fields.append(Field(webhook_secret_env, "Webhook secret", "webhook_secret", "The secret set under Webhook, if the app sends events.",
-                            optional=True, link=settings))
-    return "GitHub App", "github", fields
-
-
-def slack_workspace(label: str, names: dict[str, str]) -> tuple[str, str, list[Field]]:
-    """A Slack workspace's tokens, keyed bot, user and app as in its identities and app_token_env."""
-    apps = "https://api.slack.com/apps"
-    text = {"bot": ("Bot token", "OAuth & Permissions, Bot User OAuth Token (xoxb-)."),
-            "user": ("User token", "OAuth & Permissions, User OAuth Token (xoxp-)."),
-            "app": ("App-level token", "Basic Information, App-Level Tokens, with connections:write (xapp-).")}
-    fields = [Field(env, text[kind][0], f"slack_{kind}", text[kind][1], link=apps) for kind, env in names.items() if kind in text]
-    return f"Slack workspace {label}", "slack", fields
-
-
 def mark(provider: str) -> str:
     p = PROVIDERS.get(provider)
     if p is None:

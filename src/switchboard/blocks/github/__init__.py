@@ -34,8 +34,10 @@ from .api import (
     PRIVATE_KEY_ENV,
     TOKEN_ENV,
     GitHubAPI,
+    load_rsa_private_key,
     provider_id,
     repo_name,
+    validate_app_id,
 )
 
 if TYPE_CHECKING:
@@ -285,6 +287,8 @@ class GitHubBlock(Block):
     def bind(self) -> None:
         if sum(block.manifest.id == self.manifest.id for block in self.core.blocks.values()) > 1:
             raise ConfigError("only one github block can serve /github/webhook")
+        self.core.claims.register_name(self.api.app_id_env, validate_app_id)
+        self.core.claims.register_name(self.api.private_key_env, load_rsa_private_key)
 
     def routes(self) -> list[Route]:
         return [Route("/github/webhook", self.webhook, methods=["POST"])]

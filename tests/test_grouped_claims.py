@@ -10,7 +10,9 @@ from test_claims import OWNER_KEY, form_csrf, private_page
 
 from switchboard import credentials
 from switchboard.auth import Principal
-from switchboard.claims import ClaimError, Field, check_slack_auth, normalize, normalize_pem
+from switchboard.blocks.github.api import github_app
+from switchboard.blocks.slack.credentials import check_slack_auth, slack_workspace
+from switchboard.claims import ClaimError, Claims, Field, normalize, normalize_pem
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 PKCS1 = KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()
@@ -24,7 +26,7 @@ def test_single_github_claims_validate_before_saving(make):
     paths = {core.claims.inspect(urlsplit(step["link"]).path.rsplit("/", 1)[1]): urlsplit(step["link"]).path
              for step in connect["next"] if "link" in step}
     examples = {
-        "GITHUB_APP_ID": ("abc", "001", "12345", "Enter a numeric App ID"),
+        "GITHUB_APP_ID": ("abc", "001", "12345", "Enter a numeric ID"),
         "GITHUB_WEBHOOK_SECRET": ("short", "x" * 15, "x" * 16, "Use a webhook secret with at least 16 characters"),
         "GITHUB_APP_PRIVATE_KEY": ("not a pem", "-----BEGIN PRIVATE KEY-----YWJj-----END PRIVATE KEY-----",
                                    PKCS8, "Paste the full private key or upload the .pem file"),
@@ -92,8 +94,9 @@ def test_github_connect_reissues_claim_for_unloadable_stored_private_key(make, l
     config = base_config(version=2, blocks={"mcp": {}, "github": {"app_id": 12345, "private_key_env": "CUSTOM_APP_KEY"}})
     core, client = make(config=config)
     block = core.blocks["github"]
-    old_claim = core.claims.mint("CUSTOM_APP_KEY", PUBLIC).rsplit("/", 1)[1]
-    core.claims.consume(old_claim, legacy)
+    legacy_claims = Claims(core.store)
+    old_claim = legacy_claims.mint("CUSTOM_APP_KEY", PUBLIC).rsplit("/", 1)[1]
+    legacy_claims.consume(old_claim, legacy)
     assert core.claims.secret("CUSTOM_APP_KEY") == legacy
 
     def steps():
@@ -114,11 +117,12 @@ def test_github_connect_reissues_claim_for_unloadable_stored_private_key(make, l
     assert all("link" not in step or core.claims.inspect(step["link"].rsplit("/", 1)[1]) != "CUSTOM_APP_KEY" for step in steps())
 
 
-def test_slack_group_checks_prefixes_and_retries_invalid_auth_atomically(make, monkeypatch):
-    core, client = make()
+@pytest.mark.parametrize("rotation", ["", "xoxe."])
+def test_slack_group_checks_prefixes_and_retries_invalid_auth_atomically(make, monkeypatch, rotation):
+    core, client = make(config=base_config(version=2, blocks={"slack": {"engine": False}}))
     env = {"bot": "CUSTOM_BOT", "user": "CUSTOM_USER", "app": "CUSTOM_APP"}
-    values = {"CUSTOM_BOT": "xoxb-example", "CUSTOM_USER": "xoxp-example", "CUSTOM_APP": "xapp-example"}
-    title, provider, fields = credentials.slack_workspace("Example", env)
+    values = {"CUSTOM_BOT": rotation + "xoxb-example", "CUSTOM_USER": rotation + "xoxp-example", "CUSTOM_APP": "xapp-example"}
+    title, provider, fields = slack_workspace("Example", env)
     path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
     csrf = form_csrf(client.get(path, headers=OWNER))
     checks = []
@@ -128,7 +132,7 @@ def test_slack_group_checks_prefixes_and_retries_invalid_auth_atomically(make, m
         checks.append((kind, token))
         return accepted if kind == "slack_user" else None
 
-    monkeypatch.setattr(core.claims, "slack_auth_check", verify)
+    monkeypatch.setattr(core.blocks["slack"], "claim_auth_check", verify)
     for name, bad in zip(values, ("abc", "def", "ghi")):
         response = client.post(path, headers=OWNER, data={"csrf": csrf, **values, name: bad})
         assert response.status_code == 400 and bad not in response.text
@@ -185,7 +189,7 @@ def test_each_kind_is_checked(kind, value):
 
 def test_group_saves_every_field_together_or_nothing(make, caplog):
     core, client = make()
-    title, provider, fields = credentials.github_app("GITHUB_WEBHOOK_SECRET")
+    title, provider, fields = github_app("GITHUB_WEBHOOK_SECRET")
     path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
     page = client.get(path, headers=OWNER)
     assert page.status_code == 200 and 'data-connector="github"' in page.text and "For GitHub App." in page.text
@@ -252,7 +256,7 @@ def test_owner_key_installs_get_the_grouped_form(make):
     config = base_config(auth={})
     config.pop("public_url")
     core, client = make(config=config, env={**default_env(), "SWITCHBOARD_KEY_OWNER": OWNER_KEY})
-    title, provider, fields = credentials.github_app()
+    title, provider, fields = github_app()
     path = urlsplit(core.claims.mint_group(title, fields, PUBLIC, provider=provider)).path
     page = client.get(path)
     assert page.status_code == 200 and 'name="owner_key"' in page.text

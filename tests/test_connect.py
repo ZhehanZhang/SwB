@@ -216,7 +216,7 @@ def test_block_status_and_token_setup(make, monkeypatch):
         assert kind == "slack_bot" and token.startswith("xoxb-")
         return None
 
-    monkeypatch.setattr(core.claims, "slack_auth_check", offline)
+    monkeypatch.setattr(core.blocks["slack"], "claim_auth_check", offline)
     status = core.status()
     assert status["blocks"]["mcp"]["next_step"] is None
     for name, hint in {"capy": "key", "claude-routine": "routine", "slack": "SLACK_EXAMPLE_BOT_TOKEN",

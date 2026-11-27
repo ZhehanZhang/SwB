@@ -8,9 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import jwt
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
-from ...claims import load_rsa_private_key
+from ...claims import ClaimInputError, Field
 from .. import BlockError
 
 if TYPE_CHECKING:
@@ -26,6 +28,17 @@ REPO_RE = re.compile(r"[A-Za-z0-9-]{1,100}/[A-Za-z0-9_.-]{1,100}")
 PEM_RE = re.compile(r"-----BEGIN ((?:RSA )?PRIVATE KEY)-----\s*(.*?)\s*-----END \1-----", re.DOTALL)
 
 
+def github_app(webhook_secret_env: str | None = None, *, webhook_secret_saved: bool = False) -> tuple[str, str, list[Field]]:
+    settings = "https://github.com/settings/apps"
+    fields = [Field(APP_ID_ENV, "App ID", "id", "The number at the top of the app's General settings.", link=settings),
+              Field(PRIVATE_KEY_ENV, "Private key", "pem",
+                    "Under Private keys, Generate a private key, then upload the .pem file it downloads.", link=settings)]
+    if webhook_secret_env and not webhook_secret_saved:
+        fields.append(Field(webhook_secret_env, "Webhook secret", "webhook_secret", "The secret set under Webhook, if the app sends events.",
+                            optional=True, link=settings))
+    return "GitHub App", "github", fields
+
+
 def repo_name(value: Any) -> str | None:
     if isinstance(value, str) and REPO_RE.fullmatch(value) and value.rsplit("/", 1)[1] not in {".", ".."}:
         return value.lower()
@@ -38,6 +51,21 @@ def provider_id(value: Any) -> str | None:
         if ID_RE.fullmatch(value):
             return value
     return None
+
+
+def validate_app_id(value: str) -> None:
+    if provider_id(value) is None:
+        raise ClaimInputError("Enter a numeric App ID")
+
+
+def load_rsa_private_key(pem: str) -> RSAPrivateKey:
+    try:
+        key = load_pem_private_key(pem.encode(), password=None)
+        if isinstance(key, RSAPrivateKey):
+            return key
+    except (ValueError, TypeError, UnsupportedAlgorithm):
+        pass
+    raise ClaimInputError("Use the .pem file that GitHub downloads.")
 
 
 def private_key(value: str) -> RSAPrivateKey:
