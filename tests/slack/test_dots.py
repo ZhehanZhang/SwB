@@ -190,7 +190,9 @@ def test_dots_use_configured_mailboxes_without_slack(tmp_path):
     core = Switchboard(path, tmp_path / "data", env={"SWITCHBOARD_KEY_FULL": KEY_FULL}, access_verifier=access)
     with TestClient(create_app(core), base_url=PUBLIC) as client:
         assert core.slack is None
-        assert 'connect(what="chatgpt")' in core.blocks["dots"].next_step()
+        step = core.blocks["dots"].next_step()
+        assert step == ("Add SwB at https://chatgpt.com/plugins in your browser. Install the plugin and sign in to SwB. "
+                        "Add the plugin to your dot.")
         targets = tool(client, "targets", {"kind": "dot"})["targets"]
         assert {t["address"]: t["slugs"] for t in targets} == {
             "dots:dot:research-dot": ["research", "dot"], "dots:dot:planning-dot": ["planning-dot"],
@@ -235,7 +237,7 @@ def test_switching_to_mailbox_preserves_slack_conversations(tmp_path, group):
         assert world.calls == before
         assert not scans and not calls(world, "conversations_create")
         assert block.on_directory not in core.slack.directory_listeners
-        assert 'connect(what="chatgpt")' in block.next_step()
+        assert "Install the plugin and sign in to SwB." in block.next_step()
 
         ts = "1700000700.1"
         if group:

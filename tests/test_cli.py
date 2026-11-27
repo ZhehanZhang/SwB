@@ -271,10 +271,27 @@ def test_connect_passes_choices_and_renders_mcp_actions(tmp_path, monkeypatch, c
                                                                    "create_new": True, "primary": False}})
     out, err = capsys.readouterr()
     assert key not in out + err
-    for text in ("Done:", "The MCP server is running.", "Next steps:", "you: Choose another client.",
+    assert "Done" not in out.splitlines()
+    for text in ("Progress", "The MCP server is running.", "Next steps:", "you: Choose another client.",
                  'Call: {"tool": "connect"', "person: Open the link.", "https://switchboard.example.test/claim/example",
                  "    [mcp_servers.switchboard]\n    url = 'https://switchboard.example.test/mcp'"):
         assert text in out
+
+
+def test_connect_cli_prints_done_only_after_setup():
+    out = cli._display("connect", {
+        "what": "mcp-client", "state": "connected", "done": ["The agent has a pairing key."], "next": [],
+    })
+    assert "Done" in out.splitlines() and "Progress" not in out.splitlines()
+
+
+def test_blocks_show_unconfigured_block_prints_guidance(cli_instance, capsys):
+    base, _ = cli_instance
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["blocks", "show", "slack", "--dir", base.name])
+    assert exited.value.code == 1
+    out, err = capsys.readouterr()
+    assert not out and err.strip() == "Configure the slack block or choose a block from swb blocks list."
 
 
 @pytest.mark.parametrize(("kind", "create_token"), [

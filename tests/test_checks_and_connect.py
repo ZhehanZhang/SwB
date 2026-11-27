@@ -20,14 +20,14 @@ def test_dots_connect_requires_a_live_mailbox_credential(make, tmp_path, monkeyp
         return result, capsys.readouterr().out
 
     result, out = check()
-    assert "state" not in result and 'connect(what="chatgpt")' in out
+    assert "state" not in result and "sign in to SwB" in out
     core.auth._issue("fixture-client", core.cfg.resource, "chatgpt")
     result, out = check()
     assert result["state"] == "connected" and result["next"] == []
     assert "connected" in out
     core.store.x("UPDATE oauth_tokens SET revoked_at = ? WHERE source = 'chatgpt'", (core.clock(),))
     result, out = check()
-    assert "state" not in result and 'connect(what="chatgpt")' in out
+    assert "state" not in result and "sign in to SwB" in out
 
 
 def test_dots_connect_accepts_a_static_mailbox_key(make):

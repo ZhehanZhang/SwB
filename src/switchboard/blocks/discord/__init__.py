@@ -136,7 +136,7 @@ class DiscordBlock(ChatBlock):
         return space.owner_ids or self.app_owner_ids
 
     def owner_hint(self) -> str:
-        return "SwB couldn't read the application owner, so DM the bot once and copy your id from discord_status into owner_ids."
+        return "Send the bot a direct message. Copy your ID from discord_status into owner_ids."
 
     def space_for(self, guild: str) -> str | None:
         """The space a guild belongs to: the one that names it, else the space without a guild_id when exactly one joined,
@@ -195,7 +195,7 @@ class DiscordBlock(ChatBlock):
         if code == 4004:
             step = f"Open a new token link from {tool} and save a new Discord bot token."
             if self.core.cfg.env.get(self.token_env):
-                step = f"Replace {self.token_env} and restart switchboard, or unset it and restart to use a claim link. {step}"
+                step = f"Replace {self.token_env} and restart SwB, or unset it and restart to use a claim link. {step}"
             out.append(f"Discord rejected the bot token. {step}")
         elif code in FATAL_STEPS:
             out.append(FATAL_STEPS[code])

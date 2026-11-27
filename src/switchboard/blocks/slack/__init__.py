@@ -70,6 +70,9 @@ class SlackBlock(SlackIntake, SlackActions):
         for kind in TOKEN_PREFIXES:
             self.core.claims.register_kind(kind, partial(validate_token, kind), check_online=partial(self._check_claim_auth, kind))
 
+    def send_unavailable(self) -> str:
+        return "Post with slack_post. Request approval with slack_request_write. Check requests with slack_write_requests."
+
     async def _check_claim_auth(self, kind: str, token: str) -> str | None:
         if await self.claim_auth_check(kind, token) is False:
             return "Use a token accepted by Slack"
