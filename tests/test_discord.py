@@ -37,6 +37,7 @@ class DiscordAPI:
         self.responses = deque()
         self.application = {"id": APP, "owner": {"id": USER}}
         self.avatar_status = 200
+        self.denied_webhooks = set()
 
     def handler(self, request):
         method, path = request.method, request.url.path.removeprefix("/api/v10")
@@ -55,12 +56,16 @@ class DiscordAPI:
         if "/reactions/" in path:
             self.reactions.append(request.url.raw_path)
             return httpx.Response(204)
+        if "/thread-members/" in path:
+            return httpx.Response(204)
         if path.endswith("/threads"):
             thread = self.channels[ROOT] = {"id": ROOT, "type": 11, "parent_id": CHANNEL, "name": data["name"]}
             return httpx.Response(201, json=thread)
         if path == f"/channels/{CHANNEL}/messages/{ROOT}":
             return httpx.Response(200, json={"content": f"<@!{BOT}> build-check check the build\nSecond line"})
         if path == f"/channels/{CHANNEL}/webhooks":
+            if method in self.denied_webhooks:
+                return httpx.Response(403)
             if method == "GET":
                 return httpx.Response(200, json=self.webhooks)
             webhook = {"id": HOOK, "application_id": APP, "token": MOCK_WEBHOOK}
@@ -153,8 +158,8 @@ def message(**kw):
             "member": {"nick": "Tester"}, "content": f"<@!{BOT}> build-check check the build", "mentions": [], **kw}
 
 
-@pytest.mark.parametrize(("settings", "permissions"), [({}, "309237713984"), ({"personas": True}, "309774584896"),
-                                                       ({"threads": False, "ack_reaction": None}, "274877975552")])
+@pytest.mark.parametrize(("settings", "permissions"), [({}, "309774584896"), ({"personas": False}, "309237713984"),
+                                                       ({"threads": False, "ack_reaction": None}, "275414846464")])
 def test_invite_uses_only_configured_bot_permissions(discord, settings, permissions):
     with discord(settings={"application_id": APP, **settings}) as (_, client, block, _):
         setup = payload(call(client, STATIC_KEY, "discord_status"))["setup"]
@@ -178,8 +183,10 @@ def test_dispatch_routes_owner_and_the_native_thread_keeps_the_target(discord):
         assert api.reactions == [f"/api/v10/channels/{CHANNEL}/messages/{ROOT}/reactions/%F0%9F%91%80/@me".encode()]
         handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
         client.portal.call(block.relay, {"kind": "final", "handle": handle, "text": "all green @everyone"})
-        assert ("POST", f"/channels/{CHANNEL}/messages/{ROOT}/threads", {"name": message()["content"]}) in api.calls
-        assert api.posts == [(f"/channels/{ROOT}/messages", {"allowed_mentions": {"parse": []}, "content": "all green @everyone"}, {})]
+        assert ("POST", f"/channels/{CHANNEL}/messages/{ROOT}/threads", {"name": "build-check check the build"}) in api.calls
+        [(path, data, params)] = api.posts
+        assert path.startswith(f"/webhooks/{HOOK}/") and params == {"wait": "true", "thread_id": ROOT}
+        assert data == {"allowed_mentions": {"parse": []}, "content": "all green @everyone", "username": "build-check (Claude routine)"}
         follow = dispatch("MESSAGE_CREATE", message(channel_id=ROOT, id="101", content="and staging?"))
         assert follow["target"] == "build-check" and follow["chat_kind"] == "reply"
         assert follow["from"]["root"] == ROOT and follow["from"]["channel"] == CHANNEL and follow["from"]["channel_name"] == "builds"
@@ -235,6 +242,52 @@ def test_persona_webhooks_are_reused_per_parent_and_do_not_leak_secrets(discord,
         assert "avatar_url" not in api.posts[1][1]
         assert len([c for c in api.calls if c[1] == f"/channels/{CHANNEL}/webhooks"]) == (1 if existing else 2)
         assert MOCK_WEBHOOK not in caplog.text and MOCK_TOKEN not in caplog.text
+
+
+def test_persona_webhooks_send_versioned_file_avatar_without_slack(discord):
+    with discord(settings={"personas": True}) as (core, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        core.avatar_cache.mkdir()
+        image = core.avatar_cache / "captain-example.png"
+        Image.new("RGB", (16, 16), "purple").save(image)
+        client.portal.call(lambda: block.post("home", CHANNEL, "hi", root=ROOT, persona=Persona("captain", "Captain", avatar=image.name)))
+        url = api.posts[0][1]["avatar_url"]
+        assert url == f"{PUBLIC}/avatars/{image.name}?v={image.stat().st_mtime_ns}"
+        response = client.get(url)
+        assert response.status_code == 200 and response.content == image.read_bytes()
+
+
+@pytest.mark.parametrize("persona", ["claude", "codex"])
+def test_provider_personas_use_bundled_marks(discord, persona):
+    with discord() as (core, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(lambda: block.post("home", CHANNEL, "hello", persona=Persona(persona, persona)))
+        assert api.posts[0][1]["avatar_url"] == core.avatar_url(f"{persona}.png")
+        assert client.get(api.posts[0][1]["avatar_url"]).status_code == 200
+
+
+@pytest.mark.parametrize("failure", ["GET", "POST", "execute"])
+@pytest.mark.parametrize("root", [None, ROOT])
+def test_webhook_403_falls_back_in_place_and_connect_offers_reinvite(discord, failure, root):
+    with discord() as (_, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        if failure == "execute":
+            api.responses.append(httpx.Response(403))
+        else:
+            api.denied_webhooks.add(failure)
+        client.portal.call(lambda: block.post("home", CHANNEL, "hello", root=root, persona=Persona("claude", "Claude")))
+        assert api.posts == [(f"/channels/{root or CHANNEL}/messages", {"allowed_mentions": {"parse": []}, "content": "hello"}, {})]
+        status = payload(call(client, STATIC_KEY, "discord_status"))
+        assert status["personas"] == "missing Manage Webhooks"
+        connection = payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))
+        assert [s["do"] for s in connection["next"] if "Manage Webhooks" in s["do"]] == [
+            f"Re-open the invite URL to grant Manage Webhooks: {status['setup']['invite_url']}"
+        ]
+        api.denied_webhooks.clear()
+        client.portal.call(lambda: block.post("home", CHANNEL, "again", root=root, persona=Persona("claude", "Claude")))
+        assert api.posts[-1][0].startswith(f"/webhooks/{HOOK}/")
+        assert api.posts[-1][2] == {"wait": "true", **({"thread_id": root} if root else {})}
+        assert "personas" not in payload(call(client, STATIC_KEY, "discord_status"))
 
 
 def test_in_place_references_dm_open_and_message_split(discord):
@@ -524,3 +577,26 @@ def test_connect_discord_keeps_a_rejected_token_step(discord):
         block._gateway.fatal_code = 4004
         steps = [s["do"] for s in payload(call(client, STATIC_KEY, "connect", {"what": "discord"}))["next"]]
         assert any(s.startswith("Discord rejected the bot token.") for s in steps)
+
+
+@pytest.mark.parametrize(("content", "mentions", "name"), [
+    (f"<@{BOT}> ping", [], "ping"),
+    (f"<@!{BOT}>  ask <@{USER}> about <#{CHANNEL}> and <@&9>\nmore", [{"id": USER, "global_name": "Ana"}], "ask @Ana about #builds and"),
+    (f"<@{BOT}>", [], "Reply to Owner"),
+])
+def test_thread_names_drop_raw_mentions_and_the_author_joins_the_thread(discord, content, mentions, name):
+    with discord() as (_, client, block, api):
+        client.portal.call(block.dispatch, "READY", ready())
+        client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "channels": [api.channels[CHANNEL]], "threads": []})
+        original = {"content": content, "mentions": mentions, "author": {"id": USER, "username": "Owner"}}
+        block_request = block.request
+
+        async def request(method, path, **kw):
+            if method == "GET" and path == f"/channels/{CHANNEL}/messages/{ROOT}":
+                return original
+            return await block_request(method, path, **kw)
+
+        block.request = request
+        thread = client.portal.call(block._thread, CHANNEL, ROOT, True)
+        assert thread == ROOT and api.channels[ROOT]["name"] == name
+        assert ("PUT", f"/channels/{ROOT}/thread-members/{USER}", None) in api.calls

@@ -11,6 +11,7 @@ from slackfix import BOT_USER, ENV, OWNER_A, base_config
 from slackfix import clock, hooks, make_core, world  # noqa: F401  (fixtures)
 from switchboard.slack.capy_avatars import render_captain
 from switchboard.slack.config import Persona, parse_config
+from switchboard.slack.engine import BUNDLED_AVATARS
 from switchboard.slack.routing import build_targets, near, split_slug
 
 CAPTAINS = [{"id": "jam_P", "name": "TeamCaptain"}, {"id": "jam_C", "name": "Captain"}, {"id": "jam_X", "name": "Claude"},
@@ -124,3 +125,11 @@ async def test_captain_avatar_preset_composited_and_monogram_fallback(tmp_path):
         assert other != name and Image.open(tmp_path / other).getpixel((256, 40))[:3] == (0x44, 0x71, 0xD0)
         off = await render_captain(http, tmp_path, "TeamCaptain", {"kind": "preset", "value": "capy-avatar-1", "background": "#4471D0"}, False)
         assert off not in (name, other) and len(seen) == 2
+
+
+async def test_captains_without_avatar_specs_use_the_bundled_capy_mark(tmp_path):
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: pytest.fail("unexpected asset fetch"))) as http:
+        first = await render_captain(http, tmp_path, "Captain", None, True, captain_id="jam_first")
+        second = await render_captain(http, tmp_path, "Captain", {}, True, captain_id="jam_second")
+    assert first != second
+    assert (tmp_path / first).read_bytes() == (tmp_path / second).read_bytes() == (BUNDLED_AVATARS / "capy.png").read_bytes()

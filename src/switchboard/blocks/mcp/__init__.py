@@ -65,7 +65,7 @@ DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHin
 Scope = Annotated[str, Field(description="Required: 'general' for the owner's cross-project memory, or 'project:<slug>'")]
 ProjectArg = Annotated[str | None, Field(description="Project slug (project_list). Reads cover that project first, then general")]
 Namespace = Annotated[str, Field(description="Inside the scope: profile, decisions, notes, or e.g. notes/meetings; lowercase, up to 3 levels")]
-ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:acme', 'general']. Logged")]
+ScopesArg = Annotated[list[str] | None, Field(description="Only to read other projects on purpose: exact scopes, e.g. ['project:example', 'general']. Logged")]
 
 
 class FileIn(BaseModel):
