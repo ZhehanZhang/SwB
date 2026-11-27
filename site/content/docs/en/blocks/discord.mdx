@@ -1,0 +1,78 @@
+---
+title: Discord
+description: Route Discord messages to agents and reply in a thread.
+---
+
+## Make the bot
+
+In the [Discord Developer Portal](https://discord.com/developers/applications), make a New Application. Under Bot, turn on Message Content Intent. Reset the bot token.
+
+Ask an agent to connect Discord. The agent calls `discord_provision` and gives you a claim link. Open the link and paste the bot token. You can also set `DISCORD_BOT_TOKEN` in the server environment.
+
+## Add the bot to a server
+
+`discord_status` returns `setup.invite_url`. Open it and add the bot to your server. The link asks for the bot scope and the permissions for the features you use.
+
+SwB reads the bot's owner from Discord and records the servers the bot joins. `discord_status` lists them under `discovered`. Add a server to the config to route its messages.
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: helper
+    agents: {claude: [home]}
+```
+
+To copy ids, turn on Developer Mode in User Settings → Advanced. Then right-click a server or a user.
+
+## Send from Discord
+
+Mention the bot with a target slug, for example `@swb helper check the build`. SwB starts a thread from your message and adds you to it. The answer comes back in the thread. Follow-ups in the thread go to the same target. Persona posts use a webhook per channel, so each agent shows its own name and picture.
+
+## Share with other people
+
+Channels and targets start private. To let other people reach a target, share the channel and the target. Use `channel:<space>/<channel id>` and `target:<slug>`. A list can name single users as `discord:<user id>`.
+
+## Block settings
+
+| Key | Use |
+| - | - |
+| `blocks.discord` | Settings for the Discord bot and its spaces |
+| `blocks.discord.use` | Loads the `discord` block |
+| `blocks.discord.enabled` | Set `true` to load the block or `false` to turn it off |
+| `blocks.discord.token_env` | Name of the environment variable for the bot token. The default is `DISCORD_BOT_TOKEN` |
+| `blocks.discord.application_id` | Discord application ID for the invite link. SwB can also read the ID from Discord |
+| `blocks.discord.connect` | Set `true` to receive live events from Discord. Set `false` to test API calls on their own |
+| `blocks.discord.message_content` | Set `true` to read message content, including follow-ups in threads. Turn on Message Content Intent in the Developer Portal |
+| `blocks.discord.threads` | Set `true` to start a public thread for a reply in a server text channel |
+| `blocks.discord.personas` | Set `true` to use agent names and pictures on server posts sent through webhooks. Grant the bot Manage Webhooks |
+| `blocks.discord.avatar` | Picture file name for the bot profile |
+| `blocks.discord.ack_reaction` | Emoji to mark receipt of a message addressed to the bot. Set `null` to turn off this reaction |
+| `blocks.discord.dm_space` | Space whose routing and owner settings apply to direct messages. The default is the first configured space |
+| `blocks.discord.dm_mode` | Mode for direct messages from other people. Use `watch` to collect a digest or `off` to skip them |
+| `blocks.discord.daily_cap` | Daily limit for each action that posts or replies through a tool. Set `null` to remove the limit |
+| `blocks.discord.refresh_minutes` | Minutes between updates to the target list. The default is `30` |
+| `blocks.discord.target_aliases` | Maps extra target names to existing targets |
+| `blocks.discord.agents` | Spaces where each agent can post and receive events. Use `*` for all spaces |
+
+## Spaces and channels
+
+| Key | Use |
+| - | - |
+| `blocks.discord.spaces` | Maps names used in SwB to settings for Discord servers |
+| `blocks.discord.spaces.*.guild_id` | Discord server ID. Omit it in one space for automatic matching. SwB needs exactly one available server owned by a space owner |
+| `blocks.discord.spaces.*.owner_ids` | Discord user IDs treated as owners. The Discord app owner is the default |
+| `blocks.discord.spaces.*.known` | Maps known Discord user IDs to display names |
+| `blocks.discord.spaces.*.default_target` | Target for a new message addressed to SwB with the target name omitted |
+| `blocks.discord.spaces.*.project` | Default SwB project for this space |
+| `blocks.discord.spaces.*.channel_projects` | Sets the SwB project by channel ID or by a name that starts with `#` |
+| `blocks.discord.spaces.*.mode` | Mode for the space. A channel or thread mode can override it |
+| `blocks.discord.spaces.*.channels` | Sets a mode or more detailed settings by channel or thread ID |
+| `blocks.discord.spaces.*.channels.*.mode` | Mode for one channel or thread |
+| `blocks.discord.spaces.*.channels.*.actions` | Actions allowed in `triage` mode, such as `reply` and `notify_owner` |
+| `blocks.discord.spaces.*.listen` | Older setting for channel or thread IDs that use `assist` mode |
+| `blocks.discord.spaces.*.bot_posts_per_hour` | Maximum bot posts per thread in one hour. The default is `20` |

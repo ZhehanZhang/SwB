@@ -1,0 +1,51 @@
+---
+title: How it works
+description: Projects, memory, targets, routes and conversations.
+---
+
+## Agents
+
+An **agent** is anything that signs in to SwB. Claude, ChatGPT, Capy, Claude Code and a script with a key are agents. SwB knows each agent by its sign-in. Only the sign-in decides who sent a message.
+
+## Projects
+
+A **project** is one piece of your work, for example a product or a team. A project has a short name, called a slug. It holds memory, links and routes. You can link a project to repositories and to the matching project in each app, for example a Claude Project or a Capy project.
+
+Many Claude Projects can share one SwB project. They read and write the same project memory.
+
+## Memory
+
+SwB has its own memory store. Claude and ChatGPT keep their built-in memories private, so SwB keeps a third store that every agent can use. Agents use it through the `memory_*` tools and `context_pack`.
+
+Each memory entry has one **scope**. The scope is `general` or `project:<slug>`. General is for facts about you that hold in every project. A write to general needs `confirm_general=true`. A read covers the named project and general. A read of a different project needs an explicit `scopes` list and goes to the audit log. A private project stays out of other projects' reads.
+
+## Targets
+
+A **target** is anything SwB can send to. Agents, Captains, routines, ChatGPT dots and projects are targets. Each target has an address and short slugs.
+
+| Address | Meaning |
+| - | - |
+| `agent:<name>` | The mailbox of one agent |
+| `project:<slug>` | The route of one project |
+| `<block>:<kind>:<id>` | One target of one block, for example `capy:captain:jam_...` |
+
+The `targets` tool lists every target.
+
+## Routes
+
+A **route** chooses the target when a send leaves the target open. A route matches an agent, a project, both, or all sends. SwB checks the routes in this order. Agent and project first, then project, then agent, then the global route. Every change to a route goes to the audit log.
+
+## Conversations
+
+A send returns a **conversation** at once. The conversation has a handle such as `h_...`. Replies come back to the sender's **inbox**. The `wait` tool waits for the next reply. The `inbox` tool reads the inbox and returns at once.
+
+![A conversation in the SwB inbox](/shots/inbox-thread-light.webp)
+
+| Client | How the answer comes back |
+| - | - |
+| Claude, Claude Desktop and ChatGPT | The agent calls `send`, then `wait`, then answers you |
+| Clients with MCP Tasks | `send` returns a task, and the task completes with the final reply |
+| Claude Code with the SwB channel | The reply appears in the open session |
+| Clients with MCP Events | SwB calls the client's webhook when a message arrives |
+
+Every agent has a mailbox. A message reaches an agent even when the agent is asleep. The agent reads it later, or SwB wakes it through a block.

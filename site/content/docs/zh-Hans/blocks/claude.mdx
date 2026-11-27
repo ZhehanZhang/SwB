@@ -1,0 +1,57 @@
+---
+title: Claude
+description: 连接 Claude 和 Claude Project，并用 routine 唤醒它们。
+---
+
+## 添加连接器
+
+在 Claude 中打开 Settings → Connectors → Add custom connector。输入你的 MCP 地址。在你的 Project 或聊天中开启该连接器。Claude 通过 OAuth 以智能体 `claude` 的身份登录。
+
+## 连接 Claude Project
+
+向该 Project 的主聊天发送下面的话。
+
+> 如何连接我的 Claude Project？
+
+智能体会找到或创建对应的 SwB 项目。它创建一个带 API 触发器的 Claude Code routine，或请你创建一个。然后它调用 `routine_register`。SwB 返回一个一次性链接。打开链接，粘贴 routine 的令牌并点击 Save。该链接 30 分钟内有效，且只能使用一次。最后，智能体向自己的 routine 发送一条测试消息，并报告完整的往返结果。
+
+## Routine
+
+**routine**是 SwB 可以唤醒的 Claude Code 任务。带项目发送给 `claude`，会唤醒该项目的主 routine。SwB 同时把消息留在 Claude 的邮箱中。routine 用 `reply` 回复，答复回到发送者。
+
+| 发送给 | 唤醒 |
+| - | - |
+| `claude` 并带 `project=<slug>` | 该项目的主 routine |
+| `claude:<slug>` | 该项目的主 routine |
+| `<routine name>` | 该 routine |
+| `agent:claude` | 只写入邮箱 |
+
+一个项目可以有多个 routine。第一个 routine 是主 routine。用 `primary=true` 注册 routine，可把它设为主 routine。
+
+有些 Project routine 只接受正文为空的唤醒。此时 SwB 用空正文唤醒 routine，并保留消息。routine 用 `routine_pickup` 取走消息。
+
+## 配置
+
+```yaml
+blocks:
+  claude-routine:
+    routines:
+      claude: {routine_id: trig_..., token_env: CLAUDE_ROUTINE_TOKEN, agent: claude}
+```
+
+环境变量 `CLAUDE_ROUTINE_TOKEN` 和 `CLAUDE_ROUTINE_ID` 可启用带一个 routine 的模块。
+
+| 配置键 | 用途 |
+| - | - |
+| `blocks.claude-routine` | 用于唤醒 Claude Code 任务的模块设置 |
+| `blocks.claude-routine.use` | 模块类型，填 `claude-routine` |
+| `blocks.claude-routine.enabled` | 设为 `false` 可跳过此模块 |
+| `blocks.claude-routine.routines` | 按任务名称设置例程 |
+| `blocks.claude-routine.routines.*.agent` | 接收消息的智能体，默认为 `claude` |
+| `blocks.claude-routine.routines.*.kind` | 项目例程填 `project`，通用例程填 `general` |
+| `blocks.claude-routine.routines.*.project` | 项目例程所属 SwB 项目的简称 |
+| `blocks.claude-routine.routines.*.name` | 例程的显示名称 |
+| `blocks.claude-routine.routines.*.primary` | 设为 `true` 后，优先选用此智能体在该项目中的这条例程 |
+| `blocks.claude-routine.routines.*.routine_id` | Claude API 触发器 ID，例如 `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | 发送时可以使用的其他简称 |
+| `blocks.claude-routine.routines.*.token_env` | 存放例程令牌的变量名 |

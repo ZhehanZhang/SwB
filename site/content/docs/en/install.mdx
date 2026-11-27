@@ -1,0 +1,65 @@
+---
+title: Install
+description: Install SwB with uvx, pipx or Docker.
+---
+
+SwB runs on Linux, macOS and Windows. The uvx and pipx installs need Python 3.12 or later. The Docker install needs Docker.
+
+## Make an owner key
+
+The owner key is the password of your SwB instance. The `swb` command uses it to sign in as you. Make it in an empty folder. This command writes it to a private `.env` file and keeps it off the screen.
+
+```bash
+(umask 077; set -C; printf 'SWITCHBOARD_KEY_OWNER=%s\n' "$(openssl rand -hex 32)" > .env)
+```
+
+## Install and start
+
+<Tabs items={['uvx', 'pipx', 'Docker']}>
+  <Tab value="uvx">
+    ```bash
+    uvx swb-one up
+    ```
+
+    uvx downloads SwB and runs it. Replace the leading `swb` in each example with `uvx swb-one`.
+  </Tab>
+  <Tab value="pipx">
+    ```bash
+    pipx install swb-one
+    swb up
+    ```
+
+    pipx installs the `swb` command for your user.
+  </Tab>
+  <Tab value="Docker">
+    ```bash
+    docker run -d --name swb --env-file .env \
+      -e PORT=8870 -p 127.0.0.1:8870:8870 -v swb-data:/data \
+      ghcr.io/zhehanzhang/swb:latest
+    ```
+
+    The image keeps its data in `/data`. Replace the leading `swb` in each example with `docker exec swb swb`.
+  </Tab>
+</Tabs>
+
+SwB starts on `http://127.0.0.1:8870`. Your MCP address is `http://127.0.0.1:8870/mcp`.
+
+## Check the server
+
+```bash
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+The answer lists each block and its state. A block that needs a setting shows the name of the missing variable.
+
+## Server commands
+
+| Command | Use |
+| - | - |
+| `swb serve` | Run the SwB server with its configured host and port. |
+| `swb config migrate` | Print a version 1 config in the version 2 format. |
+| `swb targets` | List the addresses, short names and levels of destinations for `send`. |
+
+## Versions
+
+After publication, use the `swb-one` package from PyPI or the `ghcr.io/zhehanzhang/swb` image from GitHub Container Registry. Use a version such as `1.0.0` to select one release. The image tag `latest` follows the newest stable release.

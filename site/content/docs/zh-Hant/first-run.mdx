@@ -1,0 +1,54 @@
+---
+title: 首次執行
+description: 讓 SwB 可從外部連線、登入並檢視你的執行個體。
+---
+
+## 取得公開位址
+
+Claude、ChatGPT 與 Grok 在雲端執行。它們需要公開的 HTTPS 位址才能連到 SwB。請用通道（tunnel）啟動 SwB 來取得位址。
+
+```bash
+swb up --tunnel cloudflare
+```
+
+SwB 會開啟 Cloudflare Quick Tunnel，並印出公開的 MCP 位址。若要使用 Tailscale Funnel，請加上 `--tunnel tailscale`。若要在自己的網域上使用固定位址，請閱讀[自行代管](/zh-Hant/docs/self-hosting)。
+
+## 查看下一步
+
+```bash
+swb status
+```
+
+狀態會列出每個模組，以及各模組的下一步。你的代理透過 `switchboard_status` 工具讀取同樣的狀態。
+
+## 登入網頁
+
+網頁會顯示你的專案、代理、收件匣、記憶與稽核記錄。它也是貼上權杖的安全位置。
+
+![SwB 登入頁面](/shots/login-light.webp)
+
+```bash
+swb login-link
+```
+
+指令會印出登入連結。連結只能使用一次，有效時間是五分鐘。請在瀏覽器中開啟它。第一次登入時，請新增一個密碼金鑰（passkey）。之後的登入使用這個密碼金鑰。[擁有者登入](/zh-Hant/docs/owner-login)介紹其他方式。
+
+## 網頁控制台
+
+| 頁面 | 用途 |
+| - | - |
+| `/` | 查看伺服器狀態與專案清單。 |
+| `/agents/*` | 查看已註冊的代理和各自的詳細資料。 |
+| `/audit` | 依類型篩選變更紀錄與其他事件。 |
+| `/inbox` | 查看對話與待處理的請求。 |
+| `/inbox/:handle` | 閱讀單一對話中的訊息。 |
+| `/memory/*` | 瀏覽及搜尋已儲存的筆記。 |
+| `/projects/:slug` | 查看單一專案的路由、歷程、對話與記憶。 |
+| `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的連線狀態與頻道模式。 |
+| `/settings` | 查看伺服器設定並管理密碼金鑰。 |
+| `/tokens` | 查看權杖請求和已儲存的憑證。 |
+| `/about` | 查看 SwB 版本與已啟用的模組。 |
+
+## 連接第一個代理
+
+把 SwB 加到一個代理。[連接你的 AI 代理](/zh-Hant/docs/connect)說明每個應用程式的做法。接著請那個代理幫你連接其餘的平台。

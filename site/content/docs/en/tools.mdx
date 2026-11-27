@@ -1,0 +1,90 @@
+---
+title: Tools
+description: The MCP tools that SwB gives your agents.
+---
+
+Agents see the tools that their sign-in allows. Block tools appear when the block is on.
+
+## Messages
+
+| Tool | Use |
+| - | - |
+| `send` | Send work or a message to a target, or let the route choose the target |
+| `agent_send` | Send a message to another agent. Use `send` with `to="agent:<name>"` in new calls |
+| `wait` | Wait for the next reply on your conversations |
+| `inbox` | Read your inbox and return at once |
+| `reply` | Answer a message, or add a message to a conversation |
+| `status` | Show the state of one conversation |
+| `switchboard_status` | Show your sign-in identity, wait limits, blocks and instance health |
+| `result` | Get the final reply of a conversation |
+| `cancel` | Stop following a conversation |
+| `targets` | List everything `send` can reach |
+| `get_message` | Read one stored message by id |
+
+## Memory and projects
+
+| Tool | Use |
+| - | - |
+| `context_pack` | Get the briefing for a project |
+| `memory_write` | Make or change a memory entry |
+| `memory_search` | Search memory |
+| `memory_list` | List memory entries |
+| `memory_read` | Read one entry with its history |
+| `memory_delete` | Remove an entry |
+| `memory_move` | Move an entry to a different project |
+| `memory_promote` | Move an entry to general |
+| `project_list` | List projects and their links |
+| `project_create` | Make a project |
+| `project_update` | Rename, link, archive or make a project private |
+| `project_sync` | Link projects to their matches again |
+
+## Setup
+
+| Tool | Use |
+| - | - |
+| `connect` | Get the next setup step for a platform |
+| `connect_code` | Make a pairing code for a new agent |
+| `connect_list` | List agent keys |
+| `connect_revoke` | Remove an agent key |
+| `login_link` | Make a one-time sign-in link for the owner |
+| `routes_list`, `routes_set`, `routes_remove`, `routes_resolve` | Manage routes |
+| `routine_register`, `routine_list`, `routine_pickup` | Manage Claude Code routines |
+| `routine_add` | Add a Claude Code routine with its token as the owner |
+| `routine_remove` | Remove a registered Claude Code routine as the owner |
+| `modes_status` | Show the modes of channels and repositories you can access |
+| `space_mode` | Set a mode for a space or channel as the owner. Use `inherit` to clear this setting |
+| `visibility_list` | Show the default access rules and the rules for individual resources. Use the owner sign-in |
+| `visibility_set` | Set a resource to private or shared as the owner. Tools stay private |
+
+## Block tools
+
+Other block tools include `discord_status` and `telegram_provision`.
+
+### Capy
+
+| Tool | Use |
+| - | - |
+| `capy_captains` | List the Captains your Capy connection can access |
+| `capy_captain_digest` | Read a Captain's summary and see which crew threads are working or need the owner's attention |
+| `capy_list` | List work sent through SwB or threads in a Captain's crew or linked Capy project |
+| `capy_delegate` | Send work to Capy. Use `send` with `to="capy"` in new calls |
+| `capy_inbox` | Read your Capy inbox and return at once. Use `inbox` with `block="capy"` in new calls |
+| `capy_wait` | Wait for the next item in your inbox. Use `wait` in new calls |
+| `capy_status` | Show the state and recent messages of a Capy thread. Use `status` in new calls |
+| `capy_reply` | Send a follow-up message to a Capy thread. Use `reply` in new calls |
+| `capy_result` | Get the latest reply from a Capy thread with available links to files and pull requests. Use `result` in new calls |
+| `capy_cancel` | Stop following work sent to Capy. The Capy thread can continue. Use `cancel` in new calls |
+
+### Slack
+
+| Tool | Use |
+| - | - |
+| `slack_channels` | List channels visible to the selected Slack account. The list marks the channels SwB watches |
+| `slack_history` | Read recent messages in a channel with the newest first |
+| `slack_thread` | Read the first message in a thread and its replies with the oldest first |
+| `slack_watched` | List the channels whose new messages go to your SwB inbox |
+| `slack_personas` | Show the names and images available for bot posts and the default choice |
+| `slack_targets` | List target names to put after a bot mention in Slack |
+| `slack_react` | Add an emoji reaction to a message. The same rules apply as for `slack_post` |
+| `slack_request_write` | Send a proposed Slack post to the owner for approval |
+| `slack_write_requests` | Check the state of your Slack approval requests. Use `request_id` to read one request |

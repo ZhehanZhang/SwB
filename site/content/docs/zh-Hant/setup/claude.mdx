@@ -1,0 +1,115 @@
+---
+title: Claude
+description: 把 SwB 當作自訂連接器加到你的 Claude 帳號。
+---
+
+連接器讓 Claude 使用外部服務的工具。加入 SwB 連接器後，Claude 可以讀取你的專案、把工作交給其他代理，並回覆訊息。
+
+## 開始之前
+
+你需要一個 Claude 帳號。Free、Pro、Max、Ultra、Team 與 Enterprise 方案都適用。Free 方案有一個自訂連接器名額。在 Team 與 Enterprise 中，由 Owner 或 Primary Owner 為組織加入連接器。
+
+你的 SwB 伺服器需要公開的 HTTPS 位址與擁有者登入。Claude 從網際網路連到 `https://swb.example.com/mcp`，所以本機位址或 VPN 位址會連線失敗。
+
+## 複製設定提示詞
+
+<SetupPrompt name="claude" lang="zh-Hant" />
+
+把提示詞貼到 Claude 對話中。代理會帶你完成其餘步驟。
+
+## 你的步驟
+
+<Tabs items={['個人方案', 'Team 或 Enterprise']}>
+<Tab value="個人方案">
+<Steps>
+<Step>
+### 開啟 Connectors
+
+在 Claude 中開啟 [Customize → Connectors](https://claude.ai/customize/connectors)。有些版面的路徑是 **Settings** → **Connectors**。 {/* unverified */}
+</Step>
+<Step>
+### 加入自訂連接器
+
+按一下 **Add**，再按一下 **Add custom connector**。如果選單顯示 **Custom**，請選擇 **Custom** → **Web**。
+</Step>
+<Step>
+### 輸入位址
+
+名稱輸入 `SwB`。位址輸入你的 SwB MCP 位址，例如 `https://swb.example.com/mcp`。
+</Step>
+<Step>
+### 保留預設登入方式
+
+在 **OAuth client** 下保留 **Use Claude’s published identity (Recommended)**。用戶端 ID、用戶端密鑰與 **Request headers** 保持空白。
+</Step>
+<Step>
+### 加入並連線
+
+按一下 **Add**。如果清單中的 SwB 顯示 **Connect**，請按一下 **Connect**。
+</Step>
+<Step>
+### 在 SwB 核准
+
+在 **Sign in to SwB** 頁面登入。在 **Connect to SwB** 頁面核對名稱，再按一下 **Approve**。
+</Step>
+</Steps>
+</Tab>
+<Tab value="Team 或 Enterprise">
+<Steps>
+<Step>
+### 開啟管理頁面
+
+以 Claude 管理員身分開啟 [Organization settings → Connectors](https://claude.ai/admin-settings/connectors)。
+</Step>
+<Step>
+### 加入網頁連接器
+
+按一下 **Add**。把滑鼠移到 **Custom** 上，再按一下 **Web**。
+</Step>
+<Step>
+### 輸入位址
+
+名稱輸入 `SwB`，並輸入你的 SwB MCP 位址。按一下 **Continue**，再按一下 **Add**。
+</Step>
+<Step>
+### 連接你的席位
+
+開啟 **Customize** → **Connectors**。找到 `SwB`，按一下 **Connect**。
+</Step>
+<Step>
+### 在 SwB 核准
+
+在 **Sign in to SwB** 頁面登入。在 **Connect to SwB** 頁面按一下 **Approve**。
+</Step>
+</Steps>
+</Tab>
+</Tabs>
+
+<Steps>
+<Step>
+### 在對話中開啟 SwB
+
+在輸入框中按一下 **+** → **Connectors**，開啟 `SwB`。在 Claude Project 中，請在協調者對話使用同一個選單。 {/* unverified */}
+</Step>
+</Steps>
+
+## 代理的工作
+
+代理呼叫 `connect(what="claude")`。SwB 會傳回 MCP 位址，並告訴代理 OAuth 登入的狀態。OAuth 是一種登入方式，由你在瀏覽器中核准存取。
+
+代理會提供點選路徑與位址。你核准後，代理會再次呼叫 `connect`。SwB 會回報用戶端已登入。
+
+## 憑證
+
+| 項目 | 顯示位置 | 格式 | 去處 |
+| - | - | - | - |
+| MCP 位址 | SwB 設定與 `connect` 的結果 | `https://swb.example.com/mcp` | Claude 連接器的 URL 欄位 |
+| SwB 存取權杖 | 你按一下 **Approve** 後由 Claude 保存 | 隨機文字 | Claude 自動保存 |
+
+## 檢查連線
+
+開啟 **Customize** → **Connectors**，確認 `SwB` 顯示為已連線。請 Claude 呼叫 `project_list`。看到你的 SwB 專案清單，就表示連線成功。
+
+## 解決問題
+
+如果 Claude 連到 SwB 失敗，請確認位址以 `/mcp` 結尾，並能從公開網路開啟。`/mcp` 前方的瀏覽器驗證頁面會擋住 Claude。變更 SwB 位址後，請移除連接器再重新加入。舊對話會在你傳送下一則訊息後開始使用連接器。

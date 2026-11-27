@@ -1,0 +1,16 @@
+{
+  "title": "模組",
+  "pages": [
+    "index",
+    "claude",
+    "chatgpt",
+    "capy",
+    "grok",
+    "coding-agents",
+    "slack",
+    "discord",
+    "telegram",
+    "github",
+    "muse"
+  ]
+}
