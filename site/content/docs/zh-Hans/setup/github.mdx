@@ -102,7 +102,7 @@ GitHub 必须能访问你服务器上的 `https://swb.example.com/github/webhook
 
 智能体调用 `connect`，参数为 `what="github"`。SwB 显示 webhook 地址、webhook 密钥的状态和仓库路由数量。路由把一个仓库的事件发送给一个目标。
 
-智能体将仓库添加到 `config/switchboard.yaml` 中的 `blocks.github.spaces` 或 `blocks.github.routes`。通过空间为仓库设置默认模式和项目。此示例将 `acme/app` 归入 SwB 项目 `demo`，并设为 `watch` 模式。
+智能体将仓库添加到 `config/switchboard.yaml` 中的 `blocks.github.spaces`。空间为仓库指定模式、项目和目标。此示例将项目 `demo` 中仓库 `acme/app` 的观察摘要送到 `agent:beta`。
 
 ```yaml
 blocks:
@@ -110,7 +110,9 @@ blocks:
     use: github
     spaces:
       acme/app:
-        mode: watch
+        mode:
+          mode: watch
+          target: agent:beta
         project: demo
 ```
 
@@ -118,7 +120,13 @@ blocks:
 
 智能体再次调用 `connect(what="github")`，获取仍需填写的 App ID 或私钥链接。若要把已有的个人访问令牌改为 GitHub App 凭据，选用 `choose={"credential":"app"}`。
 
-重启后，智能体调用 `github_status` 检查安装及其权限。请参阅[频道模式](/zh-Hans/docs/channel-modes)，了解如何绑定项目路由和启用分流操作。分流模式默认允许 `github_reply`。
+重启后，智能体调用 `github_status` 检查安装及其权限。
+
+智能体调用 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`，绑定分流目标。使用 `mode="assist"` 可切换到协助模式。请从 `targets` 返回的列表中选择目标。关联项目的路由是备用选项。分流模式默认允许 `github_reply`。
+
+要接收外部用户的事件，请开放 `channel:github/acme/app` 和 `target:beta`。详情见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-用户访问)。
+
+观察模式按 `modes.digest_minutes` 的间隔将摘要送入目标邮箱。累积到 50 个事件时，SwB 提前发送摘要。所有者可在控制台的 **Inbox** 中查看所有摘要，也可调用 MCP 工具 `inbox` 或 `wait`。
 
 ## 凭据
 

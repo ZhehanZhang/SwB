@@ -58,6 +58,10 @@ Capy and Muse can return the earlier conversation for a repeat send. Capy's `dup
 
 ## Audit log
 
+SwB records tool calls that its access rules reject. It records failed browser sign-ins for setup codes, used, expired or invalid links, passkeys, CSRF checks and OIDC.
+
+SwB records missing or invalid GitHub webhook signatures. It limits repeated rows for some browser failures and for webhook refusals. Failure rows give the reason and keep codes, tokens and signatures private.
+
 The SwB page shows records under **Audit**. Run `swb log` to print the recent records. Mailbox sends have the action `send`. See [Channel modes](/docs/channel-modes#check-a-delivery) for records of dropped deliveries.
 
 ## Report a problem

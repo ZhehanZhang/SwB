@@ -17,7 +17,7 @@ description: 设置 SwB 在各频道中的行为。
 
 ## 设置模式
 
-可在 SwB 页面或 YAML 中设置模式。所有者也可调用 `space_mode`，指定模式、项目和允许的操作。
+可在 SwB 页面或 YAML 中设置模式。所有者也可调用 `space_mode`，指定模式、目标、项目和允许的操作。
 
 SwB 先查找已保存的设置，再查找频道和空间设置。接着查找模块的旧版设置、项目模式和 `modes.default`。默认模式为 `off`。
 
@@ -27,19 +27,40 @@ SwB 先查找已保存的设置，再查找频道和空间设置。接着查找�
 
 | 顺序 | 目标 |
 | - | - |
-| 首先 | YAML 中的 `target`。依次查看频道、空间和项目的模式设置 |
+| 首先 | 通过 `space_mode` 保存的设置中的目标。频道设置会整体替代空间设置 |
+| 其次 | YAML 中的 `target`。依次查看频道、空间和项目的模式设置 |
 | 其次 | 在 `triage` 模式下，选用名为 `claude-<project>-triage` 的可用目标，例如 Claude routine |
 | 再次 | 空间设置中的 `default_target` 或 `target` |
 | 最后 | 项目路由 |
 
-调用 `routes_set` 时指定项目简称和目标地址。在模式设置中将 `project` 设为同一项目。以下示例使用已有的 GitHub 空间、项目和已配对的智能体。
+从 `targets` 返回的列表中选择目标。以下示例将智能体邮箱绑定到已有的 GitHub 空间。
 
 ```python
-routes_set(project="app", target="agent:alpha")
-space_mode(block="github", space="example-org/app", mode="triage", project="app")
+space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")
 ```
 
-若要启用协助模式，请改用 `mode="assist"`。若要使用锁定的 Capy 路由，请指定 `capy:captain:<name>` 这样的目标，并保留 `allow_override=false`。共享空间和目标，即可让其他人访问该智能体。
+使用 `mode="assist"` 可切换到协助模式。省略 `target` 可保留绑定。设为 `target=""` 可清除绑定。
+
+调用 `routes_set` 为关联项目指定备用目标地址。若要锁定 Capy 路由，请使用 `capy:captain:<name>` 这样的目标，并保留 `allow_override=false`。
+
+## 允许外部 GitHub 用户访问
+
+调用 `visibility_list` 查看准确的资源名称。`visibility_set` 只接受列表中的名称。`agent:beta` 是邮箱地址。`target:beta` 控制谁能访问该邮箱。
+
+```python
+visibility_set(resource="channel:github/acme/app", visibility="shared")
+visibility_set(resource="target:beta", visibility="shared")
+```
+
+如果只允许一位发送者访问，请为两项资源填写同一个已验证的用户 ID，例如 `visibility=["github:1234"]`。
+
+## 查看观察摘要
+
+用 `modes.digest_minutes` 设置间隔。默认间隔为 60 分钟。间隔结束或累积到 50 个事件时，SwB 将摘要送入目标邮箱。所有者邮箱是备用收件处。
+
+所有者可以在控制台的 **Inbox** 中查看所有摘要，也可以调用 MCP 工具 `inbox` 或 `wait`。摘要列出事件总数、各事件的作者和节选，以及可用的链接。摘要的信任等级为 `external`。
+
+观察模式让智能体保持休眠。摘要仅供收件箱查询。已配置的 GitHub 接收端仍会收到各个事件的副本。
 
 ## 分流操作
 
@@ -59,7 +80,7 @@ space_mode(block="github", space="example-org/app", mode="triage", project="app"
 
 ## 检查消息投递
 
-调用 `modes_status` 查看模式、目标、操作和配置问题。分流需要指定目标时，`space_mode` 和 `modes_status` 都会提示选择分流智能体。
+调用 `modes_status` 查看模式、已绑定的目标、操作和配置问题。控制台的模式一栏显示已绑定的智能体。分流模式启用备用目标时才会提示使用默认智能体。分流需要指定目标时，`space_mode` 和 `modes_status` 都会提示选择分流智能体。
 
 SwB 会在审计日志中记录 Slack、Discord 和 Telegram 事件被丢弃的原因。同一模块、空间、频道和原因的组合每 10 分钟最多记一条。
 

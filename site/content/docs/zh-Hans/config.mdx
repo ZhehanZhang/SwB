@@ -142,6 +142,8 @@ routes:
 | `visibility.defaults.target` | 发送目标的默认规则 |
 | `visibility.resources` | 设置单项资源的规则，例如 `channel:home/#agents`。单项规则优先于该类型的默认规则 |
 
+在 Slack 中，`channel:home/#agents` 是一条频道规则。在 GitHub 中，为 `channel:github/acme/app` 和 `target:beta` 授权后，外部用户就能访问 `agent:beta`。详情见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-用户访问)。
+
 用 `private` 将访问权限限定为所有者及其智能体。用 `shared` 开放访问。填写用户 ID 或 `workspace:home` 这样的条目，即可指定共享对象。通过 `visibility_set` 所作的更改优先于此文件。
 
 ## MCP
