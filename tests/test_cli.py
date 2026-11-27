@@ -3,6 +3,7 @@ import os
 import stat
 import warnings
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import parse_qs
 
@@ -12,6 +13,13 @@ import yaml
 from mcp.types import CallToolResult, TextContent
 
 from switchboard import __main__, cli
+
+
+def test_cli_version_matches_installed_distribution(capsys):
+    with pytest.raises(SystemExit) as exited:
+        __main__.cli_main(["--version"])
+    assert exited.value.code == 0
+    assert capsys.readouterr().out == f"swb {version('swb-one')}\n"
 
 
 @pytest.fixture(autouse=True)

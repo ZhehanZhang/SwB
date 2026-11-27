@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swb-one"
-version = "0.2.0"
+version = "1.0.0"
 description = "SwB is a self-hosted MCP server for routing work and sharing scoped memory across AI assistants"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE"]
+license-files = ["LICENSE", "NOTICE", "web/licenses/lobe-icons.txt"]
 requires-python = ">=3.12"
 keywords = ["mcp", "model-context-protocol", "agents", "self-hosted", "shared-memory", "routing"]
 classifiers = [
@@ -60,7 +60,7 @@ dev = ["ruff>=0.11,<1"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-switchboard = ["static/**/*", "prompts/*.txt", "slack/avatars/*", "marks/*"]
+switchboard = ["static/**/*", "prompts/*.txt", "slack/avatars/*", "marks/*.svg", "marks/*.css"]
 
 [tool.ruff.lint]
 select = ["F", "E9", "E401", "E711", "E722"]
