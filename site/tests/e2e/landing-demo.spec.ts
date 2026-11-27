@@ -17,6 +17,7 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
       windows: section.querySelectorAll('.swb-win').length,
       title: section.querySelector('.swb-win-bar')?.textContent,
       messages: messages.length,
+      transcript: [...messages].map((message) => message.querySelector('p:last-child')?.textContent),
       bottomGap: win.getBoundingClientRect().bottom - messages[messages.length - 1].getBoundingClientRect().bottom,
       botMarks: section.querySelectorAll('.swb-win-bot').length,
     };
@@ -27,7 +28,7 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
   const messagesByTitle = new Map<string | undefined, Set<number>>();
   const deadline = Date.now() + 45_000;
   do {
-    const { windows, size, title, messages, botMarks, bottomGap } = await sample();
+    const { windows, size, title, messages, transcript, botMarks, bottomGap } = await sample();
     expect(windows).toBe(1);
     expect(size).toEqual(baseline);
     expect(bottomGap).toBeGreaterThanOrEqual(0);
@@ -37,6 +38,13 @@ test('one demo window keeps its size through a full cycle', async ({ page }) => 
     counts.add(messages);
     messagesByTitle.set(title, counts);
     if (title === 'Slack #launch') expect(botMarks).toBe(messages - 1);
+    if (title === 'Muse') {
+      expect(transcript).toEqual([
+        'Check my SwB inbox.',
+        'Grok Bot replied. It found a Slack example for your talk.',
+        'I used send to ask Grok Bot for a second example.',
+      ].slice(0, messages));
+    }
     if (titles.length === 5) break;
     await page.waitForTimeout(150);
   } while (Date.now() < deadline);

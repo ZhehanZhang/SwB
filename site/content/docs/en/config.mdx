@@ -29,8 +29,6 @@ Use `swb up --dir ./my-swb` to read `.env` and `config/switchboard.yaml` from th
 
 `swb status`, `swb login-link`, `swb connect` and `swb claim` use `--dir` to find `.env`. They use `--url` to select the server address.
 
-`swb muse-bridge` requires `--url`. Use `--state-dir` to choose the folder for its files.
-
 All server commands accept `--dir`. Use it with `swb serve`, `swb export`, `swb log`, `swb config migrate`, `swb blocks` and `swb targets`. SwB reads `.env` and the config from the selected folder. It also uses that folder to find the instance data for commands that use the database.
 
 With plain `swb serve`, SwB reads the shell and the config file. The other server commands use the current folder by default.

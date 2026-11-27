@@ -5,6 +5,7 @@ export const setupChoices = [
   { id: 'claude', prompt: 'claude', name: 'Claude', mark: 'claude' },
   { id: 'chatgpt', prompt: 'chatgpt', name: 'ChatGPT', mark: 'chatgpt' },
   { id: 'dots', prompt: 'dots', name: 'ChatGPT dots', mark: 'dots' },
+  { id: 'muse', prompt: 'muse', name: 'Muse', mark: 'muse' },
   { id: 'grok', prompt: 'grok', name: 'Grok', mark: 'grok' },
   { id: 'grok-bot', prompt: 'grok-bot', name: 'Grok Bot', mark: 'grok-bot' },
   { id: 'capy-captain', prompt: 'capy-captain', name: 'Capy Captain', mark: 'capy' },

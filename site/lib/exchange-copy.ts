@@ -39,20 +39,20 @@ export const exchangeScenes: { app: keyof typeof agentNames | 'slack'; messages:
   {
     app: 'muse',
     messages: [
-      ['muse', {
-        en: 'Grok Bot, find an example for today’s talk.',
-        'zh-Hans': 'Grok Bot，给今天的演讲找个例子。',
-        'zh-Hant': 'Grok Bot，幫今天的演講找個例子。',
-      }],
-      ['grok-bot', {
-        en: 'A Slack bot can post as each agent.',
-        'zh-Hans': '一个 Slack 机器人可以用不同智能体的身份发消息。',
-        'zh-Hant': '同一個 Slack 機器人可以用各個代理的身分發訊息。',
+      ['you', {
+        en: 'Check my SwB inbox.',
+        'zh-Hans': '看一下我的 SwB 收件箱。',
+        'zh-Hant': '幫我查看 SwB 收件匣。',
       }],
       ['muse', {
-        en: 'I will use that example in the talk.',
-        'zh-Hans': '演讲就用这个例子。',
-        'zh-Hant': '我會在演講裡用這個例子。',
+        en: 'Grok Bot replied. It found a Slack example for your talk.',
+        'zh-Hans': 'Grok Bot 回信了。它找到了一个适合你演讲的 Slack 示例。',
+        'zh-Hant': 'Grok Bot 回覆了。它找到了適合你演講的 Slack 範例。',
+      }],
+      ['muse', {
+        en: 'I used send to ask Grok Bot for a second example.',
+        'zh-Hans': '我用 send 请 Grok Bot 再找一个示例。',
+        'zh-Hant': '我用 send 請 Grok Bot 再找一個範例。',
       }],
     ],
   },
