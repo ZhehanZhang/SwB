@@ -64,7 +64,7 @@ test('switches run locations and copies the release install commands', async ({ 
     .toHaveAttribute('href', `${selfHosting}#cloudflare-tunnel`);
   await expect(run('server').locator('image[href="/marks/cloudflare-on-light.svg"]')).toBeVisible();
   await run('server').getByRole('button', { name: 'Copy command', exact: true }).click();
-  const selfHostingSource = readFileSync(resolve(__dirname, '../../content/docs/en/self-hosting.mdx'), 'utf8');
+  const selfHostingSource = readFileSync(resolve(__dirname, '../../../docs/en/self-hosting.mdx'), 'utf8');
   expect(await read()).toBe(selfHostingSource.split('```bash\n')[1].split('\n```')[0]);
   await expect(page).toHaveURL(/run=server$/);
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { locales } from '../lib/i18n.ts';
 
-const root = new URL('../content/docs/', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../../docs/', import.meta.url));
 const words = (list) => new RegExp(`(?<!\\p{L})(${list})(?!\\p{L})`, 'iu');
 const negation = {
   en: /\b(no|not|never|without|none|nothing|nobody|cannot|can't|don't|doesn't|isn't|aren't|won't|wasn't|shouldn't)\b/i,
@@ -33,7 +35,7 @@ function files(dir) {
 }
 
 let problems = 0;
-for (const file of files(root)) {
+for (const file of locales.flatMap((locale) => files(join(root, locale)))) {
   const lang = relative(root, file).split('/')[0];
   const zh = lang.startsWith('zh');
   const rule = zh ? negation.zh : negation[lang] ?? negation.en;

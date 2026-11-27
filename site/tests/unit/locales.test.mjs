@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 import GithubSlugger from 'github-slugger';
 
 const site = new URL('../../', import.meta.url).pathname;
-const docs = join(site, 'content/docs');
+const docs = join(site, '..', 'docs');
 const locales = [...readFileSync(join(site, 'lib/i18n.ts'), 'utf8').match(/locales = \[([^\]]*)\]/)[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
 
 function files(dir) {
@@ -38,7 +38,7 @@ function target(lang, path) {
 
 test('every locale has every English docs file', () => {
   for (const lang of locales) {
-    assert.ok(existsSync(join(docs, lang)), `content/docs/${lang} exists`);
+    assert.ok(existsSync(join(docs, lang)), `docs/${lang} exists`);
     assert.deepEqual(files(join(docs, lang)).sort(), english, `${lang} has the English file set`);
   }
 });
