@@ -425,7 +425,8 @@ class Switchboard:
             return target
         return {**target, "persona": {**persona, "avatar_file": avatar}} if avatar else target
 
-    async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> list[dict[str, Any]]:
+    async def targets(self, *, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False,
+                      principal: Principal | None = None) -> list[dict[str, Any]]:
         """Every block's targets, plus an agent:<name> mailbox per known agent and a project:<slug> route per project.
         A block that fails keeps its last good list, and the error shows in target_errors."""
         out: list[dict[str, Any]] = []
@@ -442,6 +443,8 @@ class Switchboard:
                     self.target_errors.pop(name, None)
                 except Exception as exc:
                     self.target_errors[name] = f"{type(exc).__name__}: {exc}"[:300]
+            if principal is not None:
+                got = b.filter_targets(principal, got)
             for t in got:
                 out.append({**t, "address": str(Address(name, t["kind"], t["id"])), "block": name, "level": b.manifest.level_out,
                             "slugs": [s for s in t.get("slugs") or [] if s]})

@@ -33,8 +33,13 @@ def test_failed_bearer_keys_are_audited_and_locked_out(make):
     ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "198.51.100.1, unknown"}, "198.51.100.1"),
     ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "198.51.100.1, junk, 192.0.2.2, fe80::1%eth0"}, "198.51.100.1"),
     ("192.0.2.0/24", "192.0.2.1", [(b"x-forwarded-for", b"198.51.100.4"), (b"x-forwarded-for", b"unknown, ")], "198.51.100.4"),
-    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "unknown, junk, 192.0.2.2"}, "192.0.2.1"),
-    ("192.0.2.0/24", "192.0.2.1", [(b"cf-connecting-ip", b"\xff")], "192.0.2.1"),
+    ("192.0.2.0/24", "192.0.2.1", {}, "192.0.2.1"),
+    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "unknown, junk, 192.0.2.2"}, "invalid-forwarded"),
+    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "192.0.2.2"}, "invalid-forwarded"),
+    ("192.0.2.0/24", "192.0.2.1", {"X-Forwarded-For": "", "CF-Connecting-IP": "198.51.100.1"}, "invalid-forwarded"),
+    ("192.0.2.0/24", "192.0.2.1", [(b"cf-connecting-ip", b"\xff")], "invalid-forwarded"),
+    ("192.0.2.0/24", "192.0.2.1", [(b"cf-connecting-ip", b"198.51.100.1"), (b"cf-connecting-ip", b"198.51.100.2")],
+     "invalid-forwarded"),
 ])
 def test_rate_limits_and_audit_share_the_resolved_proxy_address(tmp_path, proxies, peer, headers, expected):
     core = Switchboard(data_dir=tmp_path, env={"SWB_TRUSTED_PROXIES": proxies})
@@ -46,6 +51,22 @@ def test_rate_limits_and_audit_share_the_resolved_proxy_address(tmp_path, proxie
         assert response.status_code == 401
         assert core.audit.recent(action="auth_failure")[0]["client"] == expected
         assert list(app.limiter.hits["bearer_fail"]) == [expected]
+
+
+def test_invalid_forwarded_headers_share_a_bucket_without_locking_the_proxy_peer(tmp_path):
+    core = Switchboard(data_dir=tmp_path, env={"SWB_KEY_CAPY": STATIC_KEY, "SWB_TRUSTED_PROXIES": "192.0.2.0/24"})
+    app = create_app(core)
+    app.limiter.limits = {**LIMITS, "bearer_fail": (2, 600.0)}
+    with TestClient(app, client=("192.0.2.1", 10000)) as client:
+        headers = {**HEADERS, "Authorization": "Bearer fixture-wrong-key"}
+        body = rpc_body("tools/list", None)
+        assert client.post("/mcp", headers={**headers, "X-Forwarded-For": "unknown"}, content=body).status_code == 401
+        assert client.post("/mcp", headers={**headers, "CF-Connecting-IP": "junk"}, content=body).status_code == 401
+        assert client.post("/mcp", headers={**headers, "X-Forwarded-For": "unresolved"}, content=body).status_code == 429
+        assert list(app.limiter.hits["bearer_fail"]) == ["invalid-forwarded"]
+        assert rpc(client, STATIC_KEY, "tools/list").status_code == 200
+        assert client.post("/mcp", headers={**HEADERS, "Authorization": f"Bearer {STATIC_KEY}",
+                                            "X-Forwarded-For": "198.51.100.1"}, content=body).status_code == 200
 
 
 @pytest.mark.parametrize(("path", "bucket", "action", "body"), [

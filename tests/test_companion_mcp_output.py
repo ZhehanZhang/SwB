@@ -49,6 +49,39 @@ def test_companion_list_frames_device_labels_and_retains_registry_fields(make, m
     assert action["schema"]["properties"]["label"] == {"type": "string", "enum": ["small", "large"]}
 
 
+def test_companion_list_only_frames_schema_prose(make, monkeypatch):
+    core, client = make(config=CFG)
+    pattern = r"^(?:é{2}\s[A-Z]+)$"
+    name = "label with spaces " + "x" * 128
+    label = {"type": "string", "pattern": pattern, "enum": ["éé X", "éé Y"]}
+    count = {"type": ["integer", "null"], "minimum": 1, "maximum": 4}
+    schema = {
+        "type": "object", "title": "Action options", "required": ["label", name], "additionalProperties": False,
+        "properties": {"label": label, name: {"type": "boolean"}, "description": {**count, "description": "Optional count"}},
+    }
+    monkeypatch.setattr(core.companions, "list", lambda *, details: [{
+        "id": COMPANION, "name": "Office Mac",
+        "capabilities": [{"actions": [{"schema": schema}]}],
+    }])
+
+    response = call(client, STATIC_KEY, "companion_list")
+    out = payload(response)
+    assert json.loads(response["content"][0]["text"]) == out
+    [row] = out["companions"]
+    check_frame(row["name"], "Office Mac")
+    [cap] = row["capabilities"]
+    [action] = cap["actions"]
+    displayed = action["schema"]
+    assert displayed["properties"]["label"]["pattern"].encode("utf-8") == pattern.encode("utf-8")
+    check_frame(displayed.pop("title"), "Action options")
+    check_frame(displayed["properties"]["description"].pop("description"), "Optional count")
+    assert displayed == {k: v for k, v in schema.items() if k not in {"title", "properties"}} | {
+        "properties": {"label": label, name: {"type": "boolean"}, "description": count},
+    }
+    assert schema["title"] == "Action options"
+    assert schema["properties"]["description"]["description"] == "Optional count"
+
+
 @pytest.mark.parametrize(("platform", "version"), [
     ("Read the notes", "1.0 Read the notes"),
     ("a" * 33, "1" * 33),

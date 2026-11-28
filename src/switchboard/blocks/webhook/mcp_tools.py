@@ -3,13 +3,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
-from pydantic import Field
+from pydantic import Field, StrictBool
 
 if TYPE_CHECKING:
     from . import WebhookBlock
 
 Name = Annotated[str, Field(description="Webhook name with 1 to 40 lowercase letters, digits or hyphens.")]
 Scheme = Literal["stripe", "linear", "sentry", "standard", "svix", "hmac-sha256", "hmac-sha1", "bearer", "path"]
+AllowPrivate = Annotated[StrictBool | None, Field(description="Permit private HTTPS receivers and alternate ports.")]
+Senders = Annotated[list[str] | None, Field(description="Grant outbound access to agent addresses such as agent:claude.")]
 
 
 def register(block: WebhookBlock, mcp: MCPServer, kit: Any) -> None:
@@ -30,11 +32,13 @@ def register(block: WebhookBlock, mcp: MCPServer, kit: Any) -> None:
         fields: Annotated[list[str] | None, Field(description="Dotted paths to include in the inbound message.")] = None,
         template: Annotated[str | None, Field(description="One-line summary with placeholders such as {data.object.id}.")] = None,
         event_field: Annotated[str | None, Field(description="Dotted path to the inbound event type.")] = None,
+        allow_private: AllowPrivate = None,
+        senders: Senders = None,
     ) -> dict[str, Any]:
         """Create a webhook and get a private credential link."""
         return await kit.invoke(ctx, bname, "create", name=name, direction=direction, verify=verify, to=to, project=project,
                                 header=header, prefix=prefix, encoding=encoding, tolerance_s=tolerance_s, fields=fields,
-                                template=template, event_field=event_field)
+                                template=template, event_field=event_field, allow_private=allow_private, senders=senders)
 
     @mcp.tool(name=f"{bname}_list", title="List webhooks", annotations=kit.READ)
     async def webhook_list(ctx: Context, include_revoked: Annotated[bool, Field(description="Include revoked webhooks.")] = False) -> dict[str, Any]:
@@ -43,9 +47,10 @@ def register(block: WebhookBlock, mcp: MCPServer, kit: Any) -> None:
 
     @mcp.tool(name=f"{bname}_rotate", title="Rotate a webhook secret", annotations=kit.WRITE)
     async def webhook_rotate(ctx: Context, name: Name,
-                             grace_s: Annotated[int, Field(description="Seconds to keep accepting the old secret, up to seven days.")] = 0) -> dict[str, Any]:
+                             grace_s: Annotated[int, Field(description="Seconds to keep accepting the old secret, up to seven days.")] = 0,
+                             allow_private: AllowPrivate = None, senders: Senders = None) -> dict[str, Any]:
         """Get a private link to replace a webhook secret."""
-        return await kit.invoke(ctx, bname, "rotate", name=name, grace_s=grace_s)
+        return await kit.invoke(ctx, bname, "rotate", name=name, grace_s=grace_s, allow_private=allow_private, senders=senders)
 
     @mcp.tool(name=f"{bname}_revoke", title="Revoke a webhook", annotations=kit.DELETE)
     async def webhook_revoke(ctx: Context, name: Name) -> dict[str, Any]:

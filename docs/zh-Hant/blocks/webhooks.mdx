@@ -26,6 +26,8 @@ Webhook 由擁有者管理。呼叫 `webhook_create`，提供名稱，在 `verif
 
 認領連結會開啟擁有者儲存密鑰的頁面。先以擁有者身分登入 SwB，再開啟認領連結，在那裡儲存密鑰。SwB 會將儲存的密鑰保密。
 
+使用 `bearer` 或 `path` 驗證時，產生至少 32 個字元的隨機密鑰。密鑰至少要包含 10 個相異的字元。
+
 如果你的 SwB 網址使用 Cloudflare Access，把 `/hooks/*` 的 [Cloudflare Access 原則](/zh-Hant/docs/setup/cloudflare#保護主控台)設為 **Bypass**。
 
 ### 授予 Webhook 存取權
@@ -80,6 +82,8 @@ Webhook payments delivery evt_example.
 
 設定 `grace_s` 後，舊密鑰在你儲存新密鑰後仍然有效。寬限期從工具呼叫時開始，最長 7 天。如果是傳出 Webhook，SwB 在變更後的寬限期內會同時用兩組密鑰簽署。如果接收端更換了 URL，用同一個認領連結儲存新 URL。
 
+更換傳出 Webhook 的密鑰時，用 `allow_private` 和 `senders` 更新設定。省略的欄位會保留原值。
+
 呼叫 `webhook_revoke` 並提供 Webhook 名稱，停止這個 Webhook 並刪除它儲存的密鑰。傳入 URL 撤銷後，送往它的請求會收到 `410`。
 
 ## 傳送訊息
@@ -93,7 +97,11 @@ Webhook payments delivery evt_example.
 }
 ```
 
-先以擁有者身分登入 SwB，再開啟認領連結，儲存接收端的公開 HTTPS URL 和簽署密鑰。經由私密的管道，把同一組 `whsec_` 簽署密鑰交給接收端。
+預設使用公開 HTTPS URL 和 443 連接埠。接收端位於私有網路或使用其他連接埠時，把 `allow_private` 設為 `true`。
+
+預設只有擁有者可以傳送。在 `senders` 填入 `agent:claude` 這類代理位址，即可授予傳送權限。
+
+先以擁有者身分登入 SwB，再開啟認領連結，儲存接收端的 HTTPS URL 和簽署密鑰。經由私密的管道，把同一組 `whsec_` 簽署密鑰交給接收端。
 
 使用 `send`，並把 `to` 設為 `webhook:out:alerts`。SwB 會在 `POST` 請求中傳送下面的 JSON 主體。
 
@@ -154,6 +162,7 @@ SwB 用收到的原始主體核對簽章。重放是指重複送出一個有效�
 | 請求主體 | 預設為 256 KiB。把 `blocks.webhook.max_body_kb` 設為 1 到 1024 的整數 |
 | 每個 Webhook 通過驗證的新事件，所有位址合計 | 每 10 分鐘 600 個 |
 | 每個 Webhook 每個用戶端 IP 位址的驗證失敗次數 | 每 10 分鐘 20 次 |
+| 每個 Webhook 的驗證失敗次數，所有位址合計 | 每 10 分鐘 100 次 |
 | 每個用戶端 IP 位址送往錯誤網址的請求 | 每 10 分鐘 20 個 |
 | Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放時間窗 | 30 天 |
 | Stripe 和 Standard Webhooks 的時間戳記容許誤差 | 預設為 300 秒 |
@@ -162,7 +171,9 @@ SwB 用收到的原始主體核對簽章。重放是指重複送出一個有效�
 | Sentry 和 HMAC 的重放檢查 | SwB 只檢查重複的主體 |
 | bearer 和 path 的重放檢查 | SwB 只檢查密鑰 |
 
-SwB 在驗證之後才檢查失敗上限。同一個 Webhook 和用戶端 IP 位址在 10 分鐘內驗證失敗滿 20 次，接下來驗證失敗的請求就會收到 `429`。每次計入的失敗在 10 分鐘後過期。失敗上限生效期間，通過驗證的請求仍會照常處理。600 個事件的上限是另一項限制，Webhook 一達到這個上限，送往這個 Webhook 的所有請求都會收到 `429`。
+SwB 在驗證後檢查單一位址的失敗次數。同一個 Webhook 和用戶端 IP 位址在 10 分鐘內驗證失敗滿 20 次，接下來驗證失敗的請求就會收到 `429`。每次計入的失敗在 10 分鐘後過期。單一位址達到上限時，通過驗證的請求仍會照常處理。
+
+同一個 Webhook 在 10 分鐘內，所有位址合計驗證失敗滿 100 次後，SwB 會在驗證前回傳 `429`。達到 600 個事件的上限後，送往該 Webhook 的所有請求也會收到 `429`。
 
 受信任的伺服器轉送請求時，SwB 用 `trusted_proxies` 找出用戶端 IP 位址。
 
@@ -245,7 +256,7 @@ rest_command:
 傳送者只能呼叫 URL 時，使用路徑驗證。用 OpenSSL 產生一組隨機的路徑密鑰。
 
 ```sh
-openssl rand -hex 16
+openssl rand -hex 32
 ```
 
 用認領連結儲存這組密鑰。把 URL 結尾的 `<secret>` 換成儲存的密鑰。把整個 URL 當作密鑰保管。SwB 的存取記錄會略去路徑密鑰。
