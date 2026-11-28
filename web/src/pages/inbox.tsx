@@ -380,6 +380,7 @@ function InboxConversation({ handle, search, onBack }: { handle: string; search:
       return requestJson(`/api/conversations/${encodeURIComponent(handle)}?${params}`, isConversationPage, { signal })
     },
     getNextPageParam: (page, _pages, cursor) => page.items.length === itemLimit && page.cursor > cursor ? page.cursor : undefined,
+    refetchInterval: (query) => query.state.data?.pages[0]?.conversation.status === "stored" ? 30_000 : false,
   })
   const conversation = thread.data?.pages[0]?.conversation
   const messages = thread.data?.pages.flatMap((page) => page.items) ?? []
