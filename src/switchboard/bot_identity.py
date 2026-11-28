@@ -43,6 +43,8 @@ def normalize_icon(raw: str) -> bytes:
 class BotIdentity:
     name: str
     icon: str
+    post_every_agent: bool = False
+    webhook_avatar: bool = False
 
 
 class BotIdentities:
@@ -51,18 +53,23 @@ class BotIdentities:
         self.directory = data_dir / "bot-identities"
         self.write_lock = asyncio.Lock()
         store.x("CREATE TABLE IF NOT EXISTS bot_identities ("
-                "block TEXT NOT NULL, space TEXT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL, PRIMARY KEY (block, space))")
+                "block TEXT NOT NULL, space TEXT NOT NULL, name TEXT NOT NULL, icon TEXT NOT NULL, "
+                "post_every_agent INTEGER NOT NULL DEFAULT 0, webhook_avatar INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (block, space))")
+        columns = {row["name"] for row in store.q("PRAGMA table_info(bot_identities)")}
+        for column in ("post_every_agent", "webhook_avatar"):
+            if column not in columns:
+                store.x(f"ALTER TABLE bot_identities ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
 
     def get(self, block: str, space: str = "") -> BotIdentity | None:
-        row = self.store.one("SELECT name, icon FROM bot_identities WHERE block = ? AND space = ?", (block, space))
-        return BotIdentity(row["name"], row["icon"]) if row else None
+        row = self.store.one("SELECT name, icon, post_every_agent, webhook_avatar FROM bot_identities WHERE block = ? AND space = ?", (block, space))
+        return BotIdentity(row["name"], row["icon"], bool(row["post_every_agent"]), bool(row["webhook_avatar"])) if row else None
 
     def set(self, block: str, space: str, identity: BotIdentity | None) -> None:
         if identity is None:
             self.store.x("DELETE FROM bot_identities WHERE block = ? AND space = ?", (block, space))
         else:
-            self.store.x("INSERT OR REPLACE INTO bot_identities (block, space, name, icon) VALUES (?, ?, ?, ?)",
-                         (block, space, identity.name, identity.icon))
+            self.store.x("INSERT OR REPLACE INTO bot_identities (block, space, name, icon, post_every_agent, webhook_avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                         (block, space, identity.name, identity.icon, identity.post_every_agent, identity.webhook_avatar))
 
     def save_icon(self, data: bytes) -> str:
         name = f"bot-{sha256(data).hexdigest()[:48]}.png"

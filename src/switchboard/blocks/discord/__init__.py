@@ -293,8 +293,14 @@ class DiscordBlock(ChatBlock):
             (guild for guild in self.guild_info if self.space_for(guild) == space), None
         )
 
+    def identity_public_url(self) -> str | None:
+        base = self.core.cfg.public_url
+        if base and (url := urlsplit(base)).scheme == "https" and url.hostname:
+            return base.rstrip("/")
+        return None
+
     async def update_bot_identity(self, name: str | None, icon: bytes | None, *,
-                                  space: str | None = None, reset: bool = False) -> None:
+                                  space: str | None = None, reset: bool = False, allow_webhook_fallback: bool = False) -> bool:
         guild = self.bot_identity_guild(space) if space is not None else None
         if space is not None and guild is None:
             raise BlockError("Connect a Discord server to this space.")
@@ -310,11 +316,28 @@ class DiscordBlock(ChatBlock):
                     image.convert("RGBA").save(out, "PNG")
                     icon = out.getvalue()
             payload["avatar"] = "data:image/png;base64," + base64.b64encode(icon).decode("ascii")
-        if payload:
-            path = f"/guilds/{guild}/members/@me" if guild else "/users/@me"
+        if not payload:
+            return False
+        path = f"/guilds/{guild}/members/@me" if guild else "/users/@me"
+        try:
             result = await self.request("PATCH", path, json=payload, retry=False)
-            if guild is None and name is not None:
-                self.bot_name = (result.get("global_name") or result.get("username") or name) if isinstance(result, dict) else name
+        except rest.DiscordHTTPError as exc:
+            if not exc.guild_avatar_rejected or space is None:
+                raise
+            previous = self.core.bot_identities.get(self.name, space)
+            if reset and previous and previous.webhook_avatar:
+                await self.request("PATCH", path, json={"nick": None}, retry=False)
+                return False
+            if reset or not (allow_webhook_fallback and self.personas and self.identity_public_url()):
+                raise
+            nick = name or (previous.name if previous else None)
+            if not nick:
+                raise
+            await self.request("PATCH", path, json={"nick": nick}, retry=False)
+            return True
+        if guild is None and name is not None:
+            self.bot_name = (result.get("global_name") or result.get("username") or name) if isinstance(result, dict) else name
+        return False
 
     def _cache_channel(self, data: dict[str, Any], guild_id: str | None = None) -> Channel:
         ident = data["id"]
@@ -477,6 +500,11 @@ class DiscordBlock(ChatBlock):
         guild_id = place.guild_id or ((await self._channel(parent)).guild_id if thread else None)
         if guild_id and self.space_for(guild_id) != space:
             raise BlockError("The Discord channel does not belong to this space")
+        if guild_id and (identity := self.core.bot_identities.get(self.name, space)):
+            if identity.post_every_agent:
+                persona = None
+            if persona is None and identity.webhook_avatar and self.core.find_avatar(identity.icon) and (base := self.identity_public_url()):
+                persona = Persona(id=self.name, name=identity.name, icon_url=f"{base}/avatars/{identity.icon}")
         if root and not dm and thread is None:
             thread = await self._thread(channel, root, self.threads and place.type in THREAD_PARENT_TYPES)
         reference = (reply_to or (root if thread is None else None)) if dm or not self.threads or thread is None else None

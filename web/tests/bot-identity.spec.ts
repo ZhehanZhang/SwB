@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { expect, test, type Page } from "@playwright/test"
-import type { BotIdentity, IdentityPlatform } from "../src/lib/bot-identities"
+import type { BotIdentity, IdentityChange, IdentityPlatform } from "../src/lib/bot-identities"
 
 const icon = "/avatars/swb.png"
 const customIcon = `/avatars/bot-${"a".repeat(48)}.png`
 const upload = fileURLToPath(new URL("../../src/switchboard/slack/avatars/dots.png", import.meta.url))
 const bundled = fileURLToPath(new URL("../../src/switchboard/slack/avatars/swb.png", import.meta.url))
 const permission = "https://api.slack.com/apps"
+const postingLabel = "Post every agent as this bot"
 const avatar = { file: null, state: "not_configured", url: null }
 const identity = (name = "SwB", extra: Partial<BotIdentity> = {}): BotIdentity => ({
   name, icon_url: icon, can_edit: true, permissions_url: null, overridden: false, ...extra,
@@ -29,7 +30,9 @@ const connections = {
     ] },
   },
 }
-const space = (id: string, name: string, identity: BotIdentity) => ({ id, name, identity })
+const space = (id: string, name: string, identity: BotIdentity) => ({
+  id, name, identity: { post_every_agent: false, ...identity },
+})
 
 async function fixture(page: Page, platform: IdentityPlatform) {
   const connection = connections[platform]
@@ -40,12 +43,14 @@ async function fixture(page: Page, platform: IdentityPlatform) {
     identity: platform === "slack" ? identity("SwB", blocked) : identity(),
     spaces: platform === "discord" ? [
       space("engineering", "Engineering", identity()),
-      space("field-operations", "Field Operations", identity("Field relay", { icon_url: customIcon, overridden: true })),
+      space("field-operations", "Field Operations", identity("Field relay", {
+        icon_url: customIcon, overridden: true, post_every_agent: true,
+      })),
     ] : platform === "slack" ? [
       space("studio", "Studio", identity("SwB", blocked)),
     ] : [space("dispatch", "Dispatch", identity("SwB", { can_edit: false }))],
   }
-  const posts: { space?: string; name?: string; icon?: string; reset?: boolean }[] = []
+  const posts: IdentityChange[] = []
   await page.route("**/auth/session", route => route.fulfill({
     json: { signed_in: true, via: "access", csrf: "fixture-csrf", methods: { passkeys: 1, oidc: null, access: true } },
   }))
@@ -58,19 +63,21 @@ async function fixture(page: Page, platform: IdentityPlatform) {
     if (pathname !== `/api/bot-identities/${connection.block}`) return route.fulfill({ status: 404, json: { error: "not_found" } })
     if (route.request().method() === "POST") {
       expect(route.request().headers()["x-csrf-token"]).toBe("fixture-csrf")
-      const change = route.request().postDataJSON() as typeof posts[number]
+      const change = route.request().postDataJSON() as IdentityChange
       posts.push(change)
-      if (change.name === "Rejected relay") return route.fulfill({ status: 422, json: { error: "identity_not_saved" } })
+      if ("name" in change && change.name === "Rejected relay") return route.fulfill({ status: 422, json: { error: "identity_not_saved" } })
       const selected = snapshot.spaces.find(entry => entry.id === change.space)
       if (selected) {
-        selected.identity = change.reset ? { ...snapshot.identity, overridden: false } : {
+        selected.identity = "reset" in change ? { ...snapshot.identity, post_every_agent: false, overridden: false } : {
           ...selected.identity,
           name: change.name ?? selected.identity.name,
           icon_url: change.icon ? customIcon : selected.identity.icon_url,
+          post_every_agent: change.post_every_agent ?? selected.identity.post_every_agent,
           overridden: true,
         }
       } else {
-        snapshot.identity = change.reset ? identity() : {
+        expect(change).not.toHaveProperty("post_every_agent")
+        snapshot.identity = "reset" in change ? identity() : {
           ...snapshot.identity,
           name: change.name ?? snapshot.identity.name,
           icon_url: change.icon ? customIcon : snapshot.identity.icon_url,
@@ -116,20 +123,60 @@ test("bot identity changes stage locally and save or reset the selected scope", 
   await expect(field.getByRole("textbox", { name: "Name" })).toHaveValue("Field relay")
 
   const name = engineering.getByRole("textbox", { name: "Name" })
+  const posting = engineering.getByRole("switch", { name: postingLabel, exact: true })
+  await posting.press("Space")
   await name.fill("Rejected relay")
   await name.press("Enter")
   await expect(engineering.getByRole("alert")).toHaveText("Save failed.")
   await expect(name).toHaveValue("Rejected relay")
+  await expect(posting).toBeChecked()
   await name.fill("R")
   await name.press("Enter")
   await expect(engineering.getByRole("button", { name: "Reset" })).toBeEnabled()
-  expect(posts.at(-1)).toEqual({ space: "engineering", name: "R" })
+  expect(posts.at(-1)).toEqual({ space: "engineering", name: "R", post_every_agent: true })
   await engineering.getByRole("button", { name: "Reset" }).click()
   await expect(name).toHaveValue("Release relay")
+  await expect(posting).not.toBeChecked()
   expect(posts.at(-1)).toEqual({ space: "engineering", reset: true })
   await block.getByRole("button", { name: "Reset" }).click()
   await expect(name).toHaveValue("SwB")
   expect(posts.at(-1)).toEqual({ reset: true })
+})
+
+test("posting as the bot is staged and saved independently for each space", async ({ page }) => {
+  const posts = await fixture(page, "discord")
+  const block = page.getByRole("form", { name: "Bot identity" })
+  const engineering = page.getByRole("form", { name: "Engineering" })
+  const field = page.getByRole("form", { name: "Field Operations" })
+  const posting = engineering.getByRole("switch", { name: postingLabel, exact: true })
+  const savedField = field.getByRole("switch", { name: postingLabel, exact: true })
+  const save = engineering.getByRole("button", { name: "Save" })
+  await expect(block.getByRole("switch")).toHaveCount(0)
+  await expect(posting).not.toBeChecked()
+  await expect(savedField).toBeChecked()
+
+  await posting.press("Space")
+  await expect(save).toBeEnabled()
+  expect(posts).toHaveLength(0)
+  await posting.press("Space")
+  await expect(save).toBeDisabled()
+  await posting.press("Space")
+  await save.click()
+  await expect(save).toBeDisabled()
+  expect(posts.at(-1)).toEqual({ space: "engineering", post_every_agent: true })
+  await page.reload()
+  await expect(posting).toBeChecked()
+
+  await posting.press("Space")
+  await save.click()
+  await expect(save).toBeDisabled()
+  expect(posts.at(-1)).toEqual({ space: "engineering", post_every_agent: false })
+  await page.reload()
+  await expect(posting).not.toBeChecked()
+  await expect(savedField).toBeChecked()
+  await field.getByRole("button", { name: "Reset" }).click()
+  await expect(savedField).not.toBeChecked()
+  expect(posts.at(-1)).toEqual({ space: "field-operations", reset: true })
 })
 
 test("the picker rejects unsupported, oversized and unreadable images", async ({ page }) => {
@@ -159,12 +206,16 @@ for (const theme of ["light", "dark"] as const) {
         await expect(block.getByRole("link", { name: "Slack permissions" })).toHaveAttribute("href", permission)
         await expect(block.getByRole("button", { name: "Choose image" })).toBeDisabled()
         await expect(block.getByRole("button", { name: "Save" })).toBeDisabled()
+        await expect(page.getByRole("form", { name: "Studio" }).getByRole("switch", { name: postingLabel, exact: true })).toBeDisabled()
       }
       if (platform === "telegram") {
         const dispatch = page.getByRole("form", { name: "Dispatch" })
         await expect(block.getByRole("button", { name: "Choose image" })).toBeEnabled()
         await expect(dispatch.getByRole("button", { name: "Choose image" })).toBeDisabled()
         await expect(dispatch.getByRole("textbox", { name: "Name" })).toBeDisabled()
+        const posting = dispatch.getByRole("switch", { name: postingLabel, exact: true })
+        await expect(posting).toBeDisabled()
+        await expect(posting).not.toBeChecked()
       }
       await expect(page.locator("html")).toHaveCSS("background-color", theme === "dark" ? "rgb(9, 9, 11)" : "rgb(255, 255, 255)")
       await page.screenshot({ path: testInfo.outputPath(`edit-bot-identity-${platform}-${theme}.png`), animations: "disabled" })

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ApiError, sessionQuery } from "@/lib/api"
 import { botIdentitiesQuery, saveBotIdentity, type BotIdentity, type IdentityChange, type IdentityPlatform } from "@/lib/bot-identities"
 import { connectionQuery } from "@/lib/connections"
+import { cn } from "@/lib/utils"
 
 const imageTypes = ["image/png", "image/jpeg", "image/webp"]
 const imageLimit = 2 * 1024 * 1024
@@ -34,14 +35,18 @@ function IdentityForm({ platform, identity, csrf, pending, submit, space }: {
   const picker = useRef<HTMLInputElement>(null)
   const problemId = useId()
   const [draftName, setDraftName] = useState<string | null>(null)
+  const [draftPosting, setDraftPosting] = useState<boolean | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [loadFailure, setLoadFailure] = useState<string | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [reading, setReading] = useState(false)
   const [action, setAction] = useState<"save" | "reset" | null>(null)
   const name = draftName ?? identity.name
+  const storedPosting = identity.post_every_agent ?? false
+  const posting = draftPosting ?? storedPosting
+  const postingChanged = Boolean(space) && platform !== "telegram" && posting !== storedPosting
   const source = preview ?? identity.icon_url
-  const dirty = name.trim() !== identity.name || preview !== null
+  const dirty = name.trim() !== identity.name || preview !== null || postingChanged
   const disabled = !csrf || !identity.can_edit || pending || action !== null || reading
   const imageDisabled = disabled || identity.can_edit_icon === false
   const nameMin = platform === "discord" && !space ? 2 : 1
@@ -97,8 +102,10 @@ function IdentityForm({ platform, identity, csrf, pending, submit, space }: {
         ...placement,
         ...(nextName !== identity.name ? { name: nextName } : {}),
         ...(preview ? { icon: preview.slice(preview.indexOf(",") + 1) } : {}),
+        ...(postingChanged ? { post_every_agent: posting } : {}),
       })
       setDraftName(null)
+      setDraftPosting(null)
       setPreview(null)
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined
@@ -151,7 +158,7 @@ function IdentityForm({ platform, identity, csrf, pending, submit, space }: {
             <ImagePlus aria-hidden /> Choose image
           </Button>
         </div>
-        <Field label="Name" className="min-w-0 md:pb-1.5">
+        <Field label="Name" className={cn("min-w-0 md:pb-1.5", space && "md:col-span-2")}>
           <Input value={name} disabled={disabled} autoComplete="off" className="h-9 py-0 disabled:text-muted-foreground"
             aria-invalid={problem?.field === "name" || undefined}
             aria-describedby={problem?.field === "name" ? problemId : undefined}
@@ -160,7 +167,16 @@ function IdentityForm({ platform, identity, csrf, pending, submit, space }: {
               if (problem?.field === "name") setProblem(null)
             }} />
         </Field>
-        <div className="flex justify-end gap-2 md:pb-1.5">
+        {space && (
+          <label className="flex min-h-9 w-fit max-w-full cursor-pointer items-center gap-2 text-label-sm has-disabled:cursor-default has-disabled:text-muted-foreground md:col-span-2">
+            <input role="switch" type="checkbox" className="peer sr-only" checked={posting}
+              disabled={disabled || platform === "telegram"}
+              onChange={event => setDraftPosting(event.currentTarget.checked)} />
+            <span aria-hidden className="relative h-[18px] w-8 shrink-0 rounded-full border border-border-strong bg-muted before:absolute before:top-0.5 before:left-0.5 before:size-3 before:rounded-full before:bg-muted-foreground peer-checked:bg-foreground peer-checked:before:translate-x-3.5 peer-checked:before:bg-background peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-disabled:opacity-45" />
+            Post every agent as this bot
+          </label>
+        )}
+        <div className={cn("flex justify-end gap-2", space ? "md:col-start-3 md:row-start-2" : "md:pb-1.5")}>
           <Button variant="ghost" disabled={disabled || !identity.overridden} onClick={() => void save(true)}
             title={space ? "Reset to block identity" : "Reset to SwB default"} className="min-h-9">
             {action === "reset" ? "Resetting…" : "Reset"}

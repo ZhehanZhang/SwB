@@ -96,3 +96,28 @@ def test_slack_name_is_customizable_without_public_icon_host(setup_slack):
         assert [args for _, method, args in world.calls if method == "chat_postMessage"] == [
             {**MESSAGE, "username": "Release", "icon_emoji": ":electric_plug:"}
         ]
+
+
+def test_slack_forces_display_identity_only_in_opted_in_space_and_keeps_audit_actor(setup_slack):
+    core, world = setup_slack()
+    with TestClient(create_app(core)) as client:
+        post = partial(core.slack.gate.submit, core.slack.config.grant("full"), "a2a", "bot", "post_message", MESSAGE)
+        set_identity = core.bot_identities.set
+        client.portal.call(set_identity, "slack", "", BotIdentity("Release", "swb.png", post_every_agent=True))
+        client.portal.call(post)
+        client.portal.call(set_identity, "slack", "a2a", BotIdentity("", "", post_every_agent=True))
+        client.portal.call(post)
+        client.portal.call(set_identity, "slack", "", None)
+        client.portal.call(post)
+        client.portal.call(core.slack.runtimes["a2a"].execute, "user", "post_message", MESSAGE, None)
+        client.portal.call(set_identity, "slack", "a2a", BotIdentity("Product", "swb.png"))
+        client.portal.call(post)
+        assert [args for _, method, args in world.calls if method == "chat_postMessage"] == [
+            {**MESSAGE, "username": "Capy", "icon_url": "https://img.example/capy.png"},
+            {**MESSAGE, "username": "Release", "icon_url": f"{PUBLIC}/avatars/swb.png"},
+            {**MESSAGE, "username": "SwB", "icon_url": f"{PUBLIC}/avatars/swb.png"},
+            MESSAGE,
+            {**MESSAGE, "username": "Capy", "icon_url": "https://img.example/capy.png"},
+        ]
+        sent = [row for row in core.slack.store.recent_audit() if row["action"] == "write_sent"]
+        assert len(sent) == 4 and all(row["actor"] == "agent:full" and row["detail"]["persona"]["name"] == "Capy" for row in sent)

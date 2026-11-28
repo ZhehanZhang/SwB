@@ -23,6 +23,7 @@ class _IdentityBody(_Body):
     name: str | None = None
     icon: str | None = None
     reset: bool = False
+    post_every_agent: bool | None = None
 
 
 def _spaces(block: Chat) -> dict[str, str]:
@@ -70,7 +71,8 @@ def _snapshot(block: Chat, spaces: dict[str, str]) -> dict[str, Any]:
             icon_url = f"/api/connections/{block.manifest.id}/avatar"
         allowed, url = _capabilities(block, space)
         return {"name": effective.name, "icon_url": icon_url, "can_edit_icon": allowed and _icon_allowed(block),
-                "can_edit": allowed, "permissions_url": url, "overridden": own is not None if space else effective != default}
+                "can_edit": allowed, "permissions_url": url, "overridden": own is not None if space else effective != default,
+                **({"post_every_agent": bool(own and own.post_every_agent)} if space else {})}
 
     return {"block": block.name, "platform": block.manifest.id, "identity": identity(""),
             "spaces": [{"id": space, "name": label, "identity": identity(space)}
@@ -100,9 +102,10 @@ async def bot_identity(request: Request) -> JSONResponse:
     if request.method in ("GET", "HEAD"):
         return JSONResponse(_snapshot(block, spaces))
     body = await _input(request)
-    if body is None or (body.space is not None and body.space not in spaces) or (
-        body.reset and (body.name is not None or body.icon is not None)
-    ) or (not body.reset and body.name is None and body.icon is None):
+    if body is None or (body.space is not None and body.space not in spaces):
+        return _error("invalid_identity")
+    changes = any(value is not None for value in (body.name, body.icon, body.post_every_agent))
+    if body.reset == changes or (body.post_every_agent is not None and body.space is None):
         return _error("invalid_identity")
     space = body.space or ""
     if not _capabilities(block, space)[0] or (body.icon is not None and not _icon_allowed(block)):
@@ -120,23 +123,34 @@ async def bot_identity(request: Request) -> JSONResponse:
     registry = core.bot_identities
     async with registry.write_lock:
         prior = registry.get(block.name, space)
+        if prior is None and body.post_every_agent is False and name is None and avatar is None:
+            return JSONResponse(_snapshot(block, spaces))
         base = registry.get(block.name) or _current(block)
         current = prior or (BotIdentity("", "") if isinstance(block, SlackBlock) and space else base)
+        post_every_agent = body.post_every_agent if body.post_every_agent is not None else current.post_every_agent
+        fallback = current.webhook_avatar
         next_name = DEFAULT_NAME if body.reset else name or current.name
         try:
             icon = registry.save_icon(avatar) if avatar is not None else DEFAULT_ICON if body.reset else current.icon
             if not isinstance(block, SlackBlock):
-                if body.reset and space:
-                    await block.update_bot_identity(None, None, space=space, reset=True)
+                initializing = bool(space and prior is None and (name is not None or avatar is not None or post_every_agent))
+                changed_name = next_name if not (body.reset and space) and (body.reset or name is not None or initializing) else None
+                if avatar is None and (body.reset and not space or initializing):
+                    file = core.find_avatar(icon)
+                    if file is None:
+                        return _error("invalid_icon")
+                    avatar = file.read_bytes()
+                if isinstance(block, DiscordBlock):
+                    used_webhook = await block.update_bot_identity(
+                        changed_name, avatar, space=space or None, reset=body.reset,
+                        allow_webhook_fallback=bool(space and (post_every_agent or fallback)),
+                    )
+                    if avatar is not None:
+                        fallback = used_webhook
                 else:
-                    if avatar is None and (body.reset or (space and prior is None)):
-                        file = core.find_avatar(icon)
-                        if file is None:
-                            return _error("invalid_icon")
-                        avatar = file.read_bytes()
-                    changed_name = next_name if body.reset or name is not None or (space and prior is None) else None
-                    await block.update_bot_identity(changed_name, avatar, space=space or None, reset=body.reset)
-            registry.set(block.name, space, None if body.reset and space else BotIdentity(next_name, icon))
+                    await block.update_bot_identity(changed_name, avatar, reset=body.reset)
+            no_override = space and (body.reset or not any((next_name, icon, post_every_agent)))
+            registry.set(block.name, space, None if no_override else BotIdentity(next_name, icon, post_every_agent, fallback))
         except (BlockError, OSError):
             return _error("identity_not_saved", 502)
         principal = _owner(request)

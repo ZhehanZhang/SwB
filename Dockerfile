@@ -6,6 +6,9 @@ COPY web ./
 COPY src/switchboard/brand.json /app/src/switchboard/brand.json
 COPY src/switchboard/static/theme.js /app/src/switchboard/static/theme.js
 COPY src/switchboard/slack/avatars/ /app/src/switchboard/slack/avatars/
+COPY src/switchboard/prompts/setup/ /app/src/switchboard/prompts/setup/
+COPY site/lib/setup-picker.ts site/lib/urls.ts /app/site/lib/
+COPY site/public/marks/captain.webp /app/site/public/marks/captain.webp
 RUN npm run build
 
 FROM python:3.13-slim AS base

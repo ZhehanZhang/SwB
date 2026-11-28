@@ -8,8 +8,10 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from .. import Manifest, TargetKind
+from ...bot_identity import DEFAULT_ICON, DEFAULT_NAME
 from ...slack.config import parse_config
 from ...slack.engine import SlackEngine
+from ...slack.slack import BotPostIdentity
 from .actions import SlackActions
 from .credentials import TOKEN_PREFIXES, check_slack_auth, slack_workspace, validate_token
 from .intake import SlackIntake
@@ -63,12 +65,18 @@ class SlackBlock(SlackIntake, SlackActions):
             self.engine = SlackEngine(parsed, core.data_dir, env=env, bot_identity=self._bot_identity, **core.slack_options)
         super().__init__(core, config)
 
-    def _bot_identity(self, space: str) -> dict[str, str]:
+    def _bot_identity(self, space: str) -> BotPostIdentity:
         identities = self.core.bot_identities
         local, default = identities.get(self.name, space), identities.get(self.name)
         name = (local.name if local else None) or (default.name if default else None)
         icon = (local.icon if local else None) or (default.icon if default else None)
-        args = {"name": name} if name else {}
+        args: BotPostIdentity = {}
+        if local and local.post_every_agent:
+            args["post_every_agent"] = True
+            name = name or DEFAULT_NAME
+            icon = icon or DEFAULT_ICON
+        if name:
+            args["username"] = name
         if icon and (base := self.identity_public_url()):
             args["icon_url"] = f"{base}/avatars/{icon}"
         return args

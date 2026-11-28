@@ -9,10 +9,11 @@ export type BotIdentity = {
   can_edit_icon?: boolean
   permissions_url: string | null
   overridden: boolean
+  post_every_agent?: boolean
 }
 type SpaceIdentity = { id: string; name: string; identity: BotIdentity }
 type BotIdentities = { block: string; platform: IdentityPlatform; identity: BotIdentity; spaces: SpaceIdentity[] }
-export type IdentityChange = { space?: string } & ({ name?: string; icon?: string } | { reset: true })
+export type IdentityChange = { space?: string } & ({ name?: string; icon?: string; post_every_agent?: boolean } | { reset: true })
 
 const pathFor = (block: string) => `/api/bot-identities/${encodeURIComponent(block)}`
 const botIcon = /^\/avatars\/(?:swb|bot-[0-9a-f]{48})\.png$/
@@ -34,6 +35,7 @@ function isIdentity(value: unknown, platform: IdentityPlatform): value is BotIde
     && (botIcon.test(value.icon_url) || value.icon_url === `/api/connections/${platform}/avatar`)
     && typeof value.can_edit === "boolean" && typeof value.overridden === "boolean"
     && (value.can_edit_icon === undefined || typeof value.can_edit_icon === "boolean")
+    && (value.post_every_agent === undefined || typeof value.post_every_agent === "boolean")
     && isPermissionsUrl(value.permissions_url)
 }
 

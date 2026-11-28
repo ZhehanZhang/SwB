@@ -20,7 +20,7 @@ from .config import Config, Persona
 from .events import build_event, classify, event_id
 from .push import WebhookSink
 from .routing import Target, near, split_slug
-from .slack import CHANNEL_ID_RE, WorkspaceRuntime, make_client, slack_error
+from .slack import CHANNEL_ID_RE, BotPostIdentity, WorkspaceRuntime, make_client, slack_error
 from .store import Store
 from .writes import Actor, WriteError, WriteGate
 
@@ -49,7 +49,7 @@ class SlackEngine:
         clock: Callable[[], float] = time.time,
         own_post_grace: float = 3.0,
         config_error: str | None = None,
-        bot_identity: Callable[[str], Mapping[str, str]] | None = None,
+        bot_identity: Callable[[str], BotPostIdentity] | None = None,
     ):
         self.env = dict(os.environ) if env is None else dict(env)
         self.data_dir = Path(data_dir)
