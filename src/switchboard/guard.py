@@ -22,6 +22,7 @@ MCP_BODY_LIMIT = 16 * 1024 * 1024
 COMPANION_EMIT_LIMIT = 16 * 1024
 SETUP_BODY_LIMIT = 1024
 INVALID_FORWARDED = "invalid-forwarded"
+TRUSTED_ONLY_FORWARDED = "trusted-only-forwarded"
 LIMITS = {
     "register": (20, 3600.0),
     "token": (120, 600.0),
@@ -55,24 +56,27 @@ def _resolved_ip(scope: dict[str, Any], trusted_proxies: tuple[IPv4Network | IPv
     peer = _peer_ip(scope)
     if peer is None:
         return "-"
-    if any(peer in network for network in trusted_proxies):
-        headers = Headers(scope=scope)
-        forwarded = headers.getlist("x-forwarded-for")
-        for field in reversed(forwarded):
-            for value in reversed(field.split(",")):
-                address = _ip(value)
-                if address is None:
-                    continue
-                if not any(address in network for network in trusted_proxies):
-                    return str(address)
-        if forwarded:
-            return INVALID_FORWARDED
+    if not any(peer in network for network in trusted_proxies):
+        return str(peer)
+    headers = Headers(scope=scope)
+    forwarded = headers.getlist("x-forwarded-for")
+    if forwarded:
+        values = (value for field in reversed(forwarded) for value in reversed(field.split(",")))
+    else:
         cf = headers.getlist("cf-connecting-ip")
-        if cf:
-            if len(cf) == 1 and (address := _ip(cf[0])) is not None:
-                return str(address)
+        if not cf:
+            return str(peer)
+        if len(cf) != 1:
             return INVALID_FORWARDED
-    return str(peer)
+        values = iter(cf)
+    junk = False
+    for value in values:
+        address = _ip(value)
+        if address is None:
+            junk = True
+        elif not any(address in network for network in trusted_proxies):
+            return str(address)
+    return INVALID_FORWARDED if junk else TRUSTED_ONLY_FORWARDED
 
 
 def client_ip(scope: dict[str, Any]) -> str:
