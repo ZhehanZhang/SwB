@@ -6,11 +6,13 @@ import { LanguageSelect } from 'fumadocs-ui/layouts/shared/slots/language-select
 import { FullSearchTrigger, SearchTrigger } from 'fumadocs-ui/layouts/shared/slots/search-trigger';
 import { Languages, Menu } from 'lucide-react';
 import Link from 'next/link';
+import { isAddressDocsPath } from '@/lib/address';
 import { localize, type Locale } from '@/lib/i18n';
 import { headerLinks, navLabels } from '@/lib/layout.shared';
 import { Brand } from './brand';
 import { GitHubMark } from './github-mark';
 import { SiteContainer } from './site-container';
+import { SwbAddressControl } from './swb-address-control';
 
 const iconButton = 'grid size-9 shrink-0 place-items-center rounded-md text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground';
 const tab = 'rounded-md px-2.5 py-2 text-sm font-medium whitespace-nowrap text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground aria-[current]:text-fd-foreground';
@@ -32,6 +34,7 @@ export function SiteHeader({ lang, repository }: { lang: Locale; repository: str
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={iconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex" />
+          <SwbAddressControl lang={lang} show={isAddressDocsPath(path)} />
           <LanguageSelect data-header-item="language" className={iconButton}><Languages aria-hidden="true" className="size-4.5" /></LanguageSelect>
           <a data-header-item="github" className={`swb-button swb-button-icon ${iconButton}`} aria-label="GitHub" href={repository} target="_blank" rel="noreferrer">
             <GitHubMark />

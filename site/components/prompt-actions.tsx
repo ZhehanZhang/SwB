@@ -3,12 +3,14 @@
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { openUrl, type Target } from '@/lib/setup';
+import { personalizeSwb } from '@/lib/urls';
+import { useSwbAddress } from './swb-address-provider';
 
 const targetNames: Record<Target, string> = { claude: 'Claude', chatgpt: 'ChatGPT', grok: 'Grok' };
 type CopyLabels = { copy: string; copied: string };
 type Labels = CopyLabels & { open: string };
 
-export function CopyTextButton({ text, labels, className }: { text: string; labels: CopyLabels; className: string }) {
+export function CopyTextButton({ text, labels, className }: { text: string | (() => string | Promise<string>); labels: CopyLabels; className: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -16,7 +18,13 @@ export function CopyTextButton({ text, labels, className }: { text: string; labe
   return (
     <>
       <button type="button" className={className} onClick={async () => {
-        await navigator.clipboard.writeText(text);
+        const content = typeof text === 'string' ? text : text();
+        try {
+          if (typeof content === 'string') await navigator.clipboard.writeText(content);
+          else await navigator.clipboard.write([new ClipboardItem({ 'text/plain': content })]);
+        } catch {
+          return;
+        }
         setCopied(true);
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => setCopied(false), 1800);
@@ -40,5 +48,16 @@ export function PromptActions({ text, labels, targets }: { text: string; labels:
         </a>
       ))}
     </div>
+  );
+}
+
+export function SetupPromptContent({ text, labels, targets }: { text: string; labels: Labels; targets: readonly Target[] }) {
+  const { address } = useSwbAddress();
+  const prompt = personalizeSwb(text, address);
+  return (
+    <>
+      <PromptActions text={prompt} labels={labels} targets={targets} />
+      <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap wrap-anywhere border-t px-4 py-3.5 font-mono text-[13px] leading-relaxed">{prompt}</pre>
+    </>
   );
 }

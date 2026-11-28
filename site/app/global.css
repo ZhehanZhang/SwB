@@ -149,6 +149,20 @@
   border-radius: 0;
 }
 
+.swb-inline-address {
+  display: inline-flex;
+  max-inline-size: 100%;
+  vertical-align: bottom;
+}
+
+.swb-inline-address > span {
+  display: block;
+  min-inline-size: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
 .swb-docs {
   --fd-header-height: var(--swb-header-height);
   --fd-layout-width: 100%;
