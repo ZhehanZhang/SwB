@@ -126,7 +126,7 @@ function IdentityForm({ platform, identity, csrf, pending, submit, space }: {
   return (
     <form aria-label={space?.name ?? "Bot identity"} onSubmit={onSubmit} className="border-b py-3">
       {space && <h3 className="mb-2 wrap-anywhere text-label-sm">{space.name}</h3>}
-      <div className="grid items-end gap-x-4 gap-y-3 md:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div className="grid items-end gap-x-4 gap-y-3 md:grid-cols-auto-fill-auto">
         <div className="flex min-w-0 items-center gap-2">
           <div className="relative shrink-0">
             <span className="grid size-12 place-items-center overflow-hidden rounded-md border border-border bg-surface">
@@ -172,7 +172,7 @@ function IdentityForm({ platform, identity, csrf, pending, submit, space }: {
             <input role="switch" type="checkbox" className="peer sr-only" checked={posting}
               disabled={disabled || platform === "telegram"}
               onChange={event => setDraftPosting(event.currentTarget.checked)} />
-            <span aria-hidden className="relative h-[18px] w-8 shrink-0 rounded-full border border-border-strong bg-muted before:absolute before:top-0.5 before:left-0.5 before:size-3 before:rounded-full before:bg-muted-foreground peer-checked:bg-foreground peer-checked:before:translate-x-3.5 peer-checked:before:bg-background peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-disabled:opacity-45" />
+            <span aria-hidden className="relative h-4.5 w-8 shrink-0 rounded-full border border-border-strong bg-muted before:absolute before:top-0.5 before:left-0.5 before:size-3 before:rounded-full before:bg-muted-foreground peer-checked:bg-foreground peer-checked:before:translate-x-3.5 peer-checked:before:bg-background peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-disabled:opacity-45" />
             Post every agent as this bot
           </label>
         )}
@@ -224,7 +224,7 @@ export function BotIdentityEditors({ block, platform }: { block: string; platfor
   })
 
   return (
-    <div className="max-w-[720px] space-y-6 md:space-y-8">
+    <div className="max-w-180 space-y-6 md:space-y-8">
       <section aria-labelledby={heading}>
         <h2 id={heading} className="text-heading-md">Bot identity</h2>
         {result.isPending ? <DataState kind="loading" />

@@ -35,7 +35,7 @@ function isAbout(value: unknown): value is About {
       && typeof block.id === "string" && (block.version === null || typeof block.version === "string"))
 }
 
-const row = "grid min-h-[39px] grid-cols-[35%_minmax(0,1fr)_auto] items-center border-b py-2 md:min-h-[41px] md:grid-cols-[33%_minmax(0,1fr)_auto]"
+const row = "grid min-h-row grid-cols-about items-center border-b py-2 md:min-h-row md:grid-cols-about-wide"
 const label = "pe-3 wrap-anywhere text-muted-foreground"
 const value = "wrap-anywhere font-mono text-mono-sm"
 const link = `${row} group`
@@ -68,7 +68,7 @@ export function AboutPage() {
   const hasCommit = !!commit && /^[a-f0-9]{7,64}$/.test(commit)
 
   return (
-    <div className="w-full max-w-[1104px] space-y-6 text-body-sm md:space-y-8 md:pt-2">
+    <div className="w-full max-w-276 space-y-6 text-body-sm md:space-y-8 md:pt-2">
       <header className="flex items-start gap-3 md:gap-4">
         <SwbIcon className="size-10 shrink-0 md:size-12" />
         <div className="space-y-1">

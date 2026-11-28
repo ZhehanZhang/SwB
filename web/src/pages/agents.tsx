@@ -4,6 +4,8 @@ import { ArrowLeft } from "lucide-react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import { ConfirmAction } from "@/components/console/confirm-action"
+import { AvatarTile } from "@/components/avatar-tile"
+import { Time } from "@/components/time"
 import { Lamp } from "@/components/console/lamp"
 import { DataState, type DataStateProps } from "@/components/data-state"
 import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
@@ -18,29 +20,16 @@ import { auditText } from "./audit/events"
 import { agentDetailKey, agentListKey, getAgentDetail, listAgents, type Agent, type AgentDetail } from "./agents/data"
 
 const detailPath = (id: string) => `/agents/${encodeURIComponent(id)}`
-const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
-const shortDate = (value: string | null) => value ? date.format(new Date(value)) : null
-
-function elapsed(value: string | null) {
-  const timestamp = value ? Date.parse(value) : NaN
-  if (!Number.isFinite(timestamp)) return null
-  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000))
-  if (minutes < 1) return "Now"
-  if (minutes < 60) return `${minutes} min`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)} h`
-  return `${Math.floor(minutes / 1440)} d`
-}
-
 function AgentLamp({ state }: { state: Agent["state"] }) {
   return <Lamp state={state} label={state === "on" ? "Active" : state === "fault" ? "Needs attention" : "Inactive"} />
 }
 
 function Registration({ agent }: { agent: Agent }) {
   const at = agent.registered_at && Number.isFinite(Date.parse(agent.registered_at)) ? agent.registered_at : null
-  if (!agent.registered_by) return at ? <time className="text-muted-foreground" dateTime={at}>{shortDate(at)}</time> : null
+  if (!agent.registered_by) return <Time value={at} />
   return <span className="flex min-w-0 items-center gap-2">
     {agent.registered_by !== "you" && <Logo kind={agent.registered_by} className="size-5" />}
-    <span className="truncate">{principalLabel(agent.registered_by)}{at && <>, <time dateTime={at}>{shortDate(at)}</time></>}</span>
+    <span className="truncate">{principalLabel(agent.registered_by)}{at && <>, <Time value={at} /></>}</span>
   </span>
 }
 
@@ -53,21 +42,21 @@ function Claim({ agent }: { agent: Agent }) {
 function AgentListSkeleton() {
   return (
     <LoadingSkeleton message="Loading agents…">
-      <div className="hidden h-[33px] items-center gap-5 border-b md:flex">
-        <Skeleton className="h-2.5 w-[15%]" />
-        <Skeleton className="h-2.5 w-[10%]" />
-        <Skeleton className="h-2.5 w-[15%]" />
+      <div className="hidden h-row items-center gap-5 border-b md:flex">
+        <Skeleton className="h-2.5 w-3/20" />
+        <Skeleton className="h-2.5 w-1/10" />
+        <Skeleton className="h-2.5 w-3/20" />
       </div>
       {[0, 1].map((row) => (
-        <div key={row} className="flex h-[61px] items-center gap-3 border-b md:h-[45px]">
-          <Skeleton className="size-6 rounded-md md:size-[22px]" />
-          <div className="space-y-1.5 md:w-[15%]">
+        <div key={row} className="flex h-16 items-center gap-3 border-b md:h-row">
+          <Skeleton className="size-6 rounded-md md:size-5" />
+          <div className="space-y-1.5 md:w-3/20">
             <Skeleton className="h-3 w-24 max-w-full" />
             <Skeleton className="h-2.5 w-16 md:hidden" />
           </div>
-          <Skeleton className="hidden h-3 w-[10%] md:block" />
-          <Skeleton className="hidden h-3 w-[14%] md:block" />
-          <Skeleton className="hidden h-3 w-[18%] md:block" />
+          <Skeleton className="hidden h-3 w-1/10 md:block" />
+          <Skeleton className="hidden h-3 w-7/50 md:block" />
+          <Skeleton className="hidden h-3 w-9/50 md:block" />
           <Skeleton className="ml-auto h-2.5 w-8" />
           <Skeleton className="size-2 rounded-full" />
         </div>
@@ -80,37 +69,37 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
   return (
     <section aria-labelledby="registered-agents" className="mt-8">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="registered-agents" className="text-base leading-6 font-semibold tracking-[-0.01em]">Registered</h2>
+        <h2 id="registered-agents" className="text-heading-md leading-6 font-semibold">Registered</h2>
         {state?.kind === "loading" ? <Skeleton className="h-3 w-12" /> : !state && agents.length > 0 && (
           <span className="text-body-sm text-muted-foreground">{agents.length} {agents.length === 1 ? "agent" : "agents"}</span>
         )}
       </div>
       {state?.kind === "loading" ? <AgentListSkeleton /> : state ? <DataState {...state} /> : !agents.length ? <DataState kind="empty" message="0 agents" /> : (
         <>
-          <table className="hidden w-full table-fixed text-left text-[13px] leading-[18px] md:table">
-            <thead className="border-b text-[11px] leading-4 font-medium text-muted-foreground">
+          <table className="hidden w-full table-fixed text-left text-body-sm md:table">
+            <thead className="border-b text-body-sm font-medium text-muted-foreground">
               <tr>
-                <th scope="col" className="w-[18.3%] py-2 font-medium">Agent</th>
-                <th scope="col" className="w-[11.3%] py-2 font-medium">Kind</th>
-                <th scope="col" className="w-[16.7%] py-2 font-medium">Projects</th>
+                <th scope="col" className="w-183/1000 py-2 font-medium">Agent</th>
+                <th scope="col" className="w-113/1000 py-2 font-medium">Kind</th>
+                <th scope="col" className="w-167/1000 py-2 font-medium">Projects</th>
                 <th scope="col" className="py-2 font-medium">Registered by</th>
-                <th scope="col" className="w-[10%] py-2 font-medium">Last seen</th>
+                <th scope="col" className="w-1/10 py-2 font-medium">Last seen</th>
                 <th scope="col" className="w-8"><span className="sr-only">Status</span></th>
               </tr>
             </thead>
             <tbody>
               {agents.map((agent) => (
-                <tr key={agent.id} className="relative h-[45px] border-b hover:bg-muted/50 focus-within:bg-muted/50">
+                <tr key={agent.id} className="relative h-row border-b hover:bg-muted/50 focus-within:bg-muted/50">
                   <td className="pr-2">
-                    {agent.type === "pending" ? <span className="flex items-center gap-2 font-semibold"><Logo kind={agent.logo} />{agent.name}</span> : <Link to={detailPath(agent.id)} className="flex items-center gap-2 rounded-sm font-semibold before:absolute before:inset-0">
-                      <Logo kind={agent.logo} avatarUrl={agent.avatar_url} className="size-[22px]" /><span className="truncate">{agent.name}</span>
+                    {agent.type === "pending" ? <span className="flex items-center gap-2 font-semibold"><AvatarTile kind={agent.logo} />{agent.name}</span> : <Link to={detailPath(agent.id)} className="flex items-center gap-2 rounded-sm font-semibold before:absolute before:inset-0">
+                      <AvatarTile kind={agent.logo} avatarUrl={agent.avatar_url} /><span className="truncate">{agent.name}</span>
                     </Link>}
                   </td>
                   <td className="pr-2 text-muted-foreground">{agent.kind}</td>
-                  <td className="truncate pr-2 font-mono text-xs" title={agent.projects.join(", ") || undefined}>{agent.projects.join(", ")}</td>
+                  <td className="truncate pr-2 text-body-sm" title={agent.projects.join(", ") || undefined}>{agent.projects.join(", ")}</td>
                   <td className="truncate pr-2"><Registration agent={agent} /></td>
                   <td className="relative">{agent.type === "pending" ? <Claim agent={agent} />
-                    : <span className="font-mono text-xs text-muted-foreground">{elapsed(agent.last_seen)}</span>}</td>
+                    : <Time value={agent.last_seen} />}</td>
                   <td className="text-right"><AgentLamp state={agent.state} /></td>
                 </tr>
               ))}
@@ -118,17 +107,17 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
           </table>
           <ul className="md:hidden">
             {agents.map((agent) => {
-              const heading = <><Logo kind={agent.logo} avatarUrl={agent.avatar_url} /><span className="min-w-0">
-                <span className="block truncate text-[13px] font-semibold">{agent.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">{agent.kind}{agent.projects.length ? ` / ${agent.projects.join(", ")}` : ""}</span>
+              const heading = <><AvatarTile kind={agent.logo} avatarUrl={agent.avatar_url} /><span className="min-w-0">
+                <span className="block truncate text-body-sm font-semibold">{agent.name}</span>
+                <span className="block truncate text-label-sm text-muted-foreground">{agent.kind}{agent.projects.length ? ` / ${agent.projects.join(", ")}` : ""}</span>
               </span></>
               return (
                 <li key={agent.id} className="relative flex items-center justify-between gap-3 border-b py-3">
                   {agent.type === "pending" ? <span className="flex min-w-0 items-center gap-3">{heading}</span>
                     : <Link to={detailPath(agent.id)} className="flex min-w-0 items-center gap-3 rounded-sm before:absolute before:inset-0">{heading}</Link>}
-                  <span className="flex shrink-0 items-center gap-2 text-xs">
+                  <span className="flex shrink-0 items-center gap-2 text-label-sm">
                     {agent.type === "pending" ? <span className="relative"><Claim agent={agent} /></span> : <>
-                      {agent.last_seen && <span className="font-mono text-muted-foreground">{elapsed(agent.last_seen)}</span>}
+                      <Time value={agent.last_seen} />
                       <AgentLamp state={agent.state} />
                     </>}
                   </span>
@@ -144,11 +133,11 @@ function AgentList({ agents, state }: { agents: Agent[]; state?: DataStateProps 
 
 function Overview({ agent }: { agent: Agent }) {
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-3 py-4 text-[13px] leading-[18px]">
+    <dl className="grid grid-cols-auto-main gap-x-5 gap-y-3 py-4 text-body-sm">
       <dt className="text-muted-foreground">Kind</dt><dd>{agent.kind}</dd>
-      <dt className="text-muted-foreground">Projects</dt><dd className="font-mono text-xs">{agent.projects.join(", ")}</dd>
+      <dt className="text-muted-foreground">Projects</dt><dd>{agent.projects.join(", ")}</dd>
       <dt className="text-muted-foreground">Registered by</dt><dd><Registration agent={agent} /></dd>
-      <dt className="text-muted-foreground">Last seen</dt><dd className="flex items-center gap-2 font-mono text-xs"><AgentLamp state={agent.state} />{elapsed(agent.last_seen)}</dd>
+      <dt className="text-muted-foreground">Last seen</dt><dd className="flex items-center gap-2"><AgentLamp state={agent.state} /><Time value={agent.last_seen} /></dd>
     </dl>
   )
 }
@@ -193,7 +182,7 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
       </TabsList>
       <TabsContent value="Overview"><Overview agent={agent} /></TabsContent>
       <TabsContent value="Routines">
-        {detail.routines.length ? <ul className="text-[13px]">
+        {detail.routines.length ? <ul className="text-body-sm">
           {detail.routines.map((routine) => <li key={`${routine.block}:${routine.name}`} className="flex flex-wrap items-center gap-2 border-b py-3">
             <span className="me-auto font-medium">{routine.name}</span>
             <span className="text-muted-foreground">{routine.project}{routine.primary && (routine.project ? ", primary" : "Primary")}</span>
@@ -207,11 +196,11 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
         </ul> : <DataState kind="empty" message="0 routines" />}
         {removeRoutine.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Try removing the routine again.</p>}
       </TabsContent>
-      <TabsContent value="Tokens">{detail.keys.length ? <ul className="text-[13px]">
+      <TabsContent value="Tokens">{detail.keys.length ? <ul className="text-body-sm">
         {detail.keys.map((key) => <li key={key.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-3">
           <div>
-            <p className="font-mono text-xs">{key.id}</p>
-            <p className="text-muted-foreground">{key.project || "All projects"}{key.created_at ? `, added ${shortDate(key.created_at)}` : ""}</p>
+            <p className="font-mono text-mono-sm">{key.id}</p>
+            <p className="text-muted-foreground">{key.project || "All projects"}{key.created_at && <>, added <Time value={key.created_at} /></>}</p>
           </div>
           {confirmKey === key.id ? <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => setConfirmKey(undefined)} disabled={revoke.isPending}>Cancel</Button>
@@ -219,10 +208,10 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
           </div> : <Button size="sm" variant="outline" onClick={() => setConfirmKey(key.id)} disabled={revoke.isPending}>Revoke</Button>}
         </li>)}
       </ul> : <DataState kind="empty" message="0 tokens to revoke" />}</TabsContent>
-      <TabsContent value="Activity">{detail.audit.length ? <ul className="text-[13px]">
+      <TabsContent value="Activity">{detail.audit.length ? <ul className="text-body-sm">
         {detail.audit.map((entry) => <li key={entry.id} className="flex items-center justify-between gap-3 border-b py-3">
           <span>{auditText(entry)}</span>
-          <span className="shrink-0 font-mono text-xs text-muted-foreground">{shortDate(entry.at)}</span>
+          <Time value={entry.at} className="shrink-0" />
         </li>)}
       </ul> : <DataState kind="empty" message="0 events" />}</TabsContent>
     </Tabs>
@@ -231,7 +220,7 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
 
 function AgentBackLink() {
   return (
-    <Link to="/agents" className="inline-flex items-center gap-1.5 rounded-sm text-[13px] text-muted-foreground hover:text-foreground">
+    <Link to="/agents" className="inline-flex items-center gap-1.5 rounded-sm text-body-sm text-muted-foreground hover:text-foreground">
       <ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Registered agents
     </Link>
   )
@@ -251,7 +240,7 @@ function AgentDetailSkeleton({ loadingName = false }: { loadingName?: boolean })
       </div>
       <div className="space-y-3 py-4">
         {[0, 1, 2, 3].map((row) => (
-          <div key={row} className="flex h-[18px] items-center gap-5">
+          <div key={row} className="flex h-4.5 items-center gap-5">
             <Skeleton className="h-3 w-20" />
             <Skeleton className="h-3 w-24" />
           </div>
@@ -266,9 +255,9 @@ function AgentInspector({ detail }: { detail: AgentDetail }) {
   const navigate = useNavigate()
   const panel = <AgentPanel key={agent.id} agent={agent} detail={detail} />
 
-  const [desktop, setDesktop] = useState(() => matchMedia("(min-width: 768px)").matches)
+  const [desktop, setDesktop] = useState(() => matchMedia("(min-width: 48rem)").matches)
   useEffect(() => {
-    const media = matchMedia("(min-width: 768px)")
+    const media = matchMedia("(min-width: 48rem)")
     function update() { setDesktop(media.matches) }
     media.addEventListener("change", update)
     return () => media.removeEventListener("change", update)
@@ -276,7 +265,7 @@ function AgentInspector({ detail }: { detail: AgentDetail }) {
   return desktop ? <Sheet open title={agent.name} onOpenChange={(open) => { if (!open) void navigate("/agents", { replace: true }) }}>{panel}</Sheet> : (
     <section aria-label="Agent details">
       <AgentBackLink />
-      <h2 className="my-4 flex items-center gap-2 text-base font-semibold"><Logo kind={agent.logo} avatarUrl={agent.avatar_url} />{agent.name}</h2>
+      <h2 className="my-4 flex items-center gap-2 text-heading-md font-semibold"><AvatarTile kind={agent.logo} avatarUrl={agent.avatar_url} />{agent.name}</h2>
       {panel}
     </section>
   )

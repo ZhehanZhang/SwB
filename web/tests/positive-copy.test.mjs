@@ -136,7 +136,7 @@ test("authored React copy is positive", () => check([...authored.values()].flatM
 
 test("the console setup code input offers one-time code autofill", () => {
   const login = readFileSync(join(src, "pages/login.tsx"), "utf8")
-  const input = login.match(/<input\b[^>]*\bname="code"[^>]*>/)
+  const input = login.match(/<(?:input|Input)\b[^>]*\bname="code"[^>]*>/)
   assert.ok(input, "The setup form needs a code input")
   assert.match(input[0], /\bautoComplete="one-time-code"/)
 })

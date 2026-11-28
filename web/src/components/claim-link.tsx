@@ -44,9 +44,9 @@ export function ClaimLink({ url, expiresAt, label = "Enter token", primary = fal
     <div className="flex flex-col items-start gap-2 border-b py-3">
       {seconds > 0 ? (
         <>
-          <code className="max-w-full font-mono text-xs [overflow-wrap:anywhere]">{href}</code>
+          <code className="max-w-full font-mono text-mono-sm wrap-anywhere">{href}</code>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className="font-mono text-xs text-muted-foreground" role="timer">Expires in {duration(seconds)}</span>
+            <span className="text-body-sm tabular-nums text-muted-foreground" role="timer">Expires in {duration(seconds)}</span>
             <Button asChild variant={primary ? "default" : "outline"}>
               <a href={href} target="_blank" rel="noopener noreferrer">
                 <ExternalLink aria-hidden /> {label}<span className="sr-only"> (opens in a new tab)</span>
@@ -54,7 +54,7 @@ export function ClaimLink({ url, expiresAt, label = "Enter token", primary = fal
             </Button>
           </div>
         </>
-      ) : <span role="status" className="text-sm text-muted-foreground">Claim link expired.</span>}
+      ) : <span role="status" className="text-body-sm text-muted-foreground">Claim link expired.</span>}
     </div>
   )
 }

@@ -4,11 +4,13 @@ import { X } from "lucide-react"
 import { Dialog } from "radix-ui"
 import { toast } from "sonner"
 import { DataState } from "@/components/data-state"
+import { Disclosure } from "@/components/disclosure"
 import { Field, Input } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { sessionQuery } from "@/lib/api"
 import { applyMemoryAction, fetchMemoryDetail, fetchMoveScopes, type MemoryAction, type MemoryNote } from "./api"
-import { Author, NoteTime, scopeName } from "./display"
+import { Time } from "@/components/time"
+import { Author, scopeName } from "./display"
 
 export function NoteInspector({ note, onClose, onRelocate }: {
   note: MemoryNote
@@ -103,7 +105,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-overlay/50" />
         <Dialog.Content aria-describedby={undefined} onCloseAutoFocus={(event) => event.preventDefault()}
-          className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-1/2 flex-col rounded-lg border bg-card text-card-foreground shadow-lg">
+          className="fixed top-1/2 left-1/2 z-50 flex max-h-inset-dialog w-inset-dialog max-w-lg -translate-1/2 flex-col rounded-lg border bg-card text-card-foreground shadow-lg">
           <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
             <Dialog.Title className="text-heading-md wrap-anywhere">{entry?.title ?? note.title}</Dialog.Title>
             <Dialog.Close asChild>
@@ -118,7 +120,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                 <DataState kind="error" message="Note unavailable." onRetry={() => void detail.refetch()} />
               ) : entry && (
                 <>
-                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2 border-b pb-4 text-xs">
+                  <dl className="grid grid-cols-auto-fill items-baseline gap-x-3 gap-y-2 border-b pb-4 text-label-sm">
                     {entry.key && <>
                       <dt className="text-muted-foreground">Key</dt>
                       <dd className="font-mono break-all">{entry.key}</dd>
@@ -138,7 +140,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                       <dd className="wrap-anywhere">{entry.sync_source}</dd>
                     </>}
                     <dt className="text-muted-foreground">Updated</dt>
-                    <dd><NoteTime date={entry.updated_at} /></dd>
+                    <dd><Time value={entry.updated_at} /></dd>
                     {!!entry.tags.length && <>
                       <dt className="text-muted-foreground">Tags</dt>
                       <dd className="break-words">{entry.tags.join(", ")}</dd>
@@ -164,7 +166,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                           maxLength={20_000} value={draft.body} disabled={mutation.isPending}
                           onChange={(event) => setDraft({ ...draft, body: event.target.value })} />
                       </Field>
-                      {mutation.isError && <p role="alert" className="text-sm text-destructive">Try saving the note again.</p>}
+                      {mutation.isError && <p role="alert" className="text-body-sm text-destructive">Try saving the note again.</p>}
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" type="submit" disabled={!draft.title.trim() || mutation.isPending}>
                           {mutation.isPending ? "Saving…" : "Save"}
@@ -172,18 +174,17 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                         <Button size="sm" variant="ghost" disabled={mutation.isPending} onClick={() => startAction(null)}>Cancel</Button>
                       </div>
                     </form>
-                  ) : entry.body && <div className="py-4 text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">
+                  ) : entry.body && <div className="py-4 text-body-sm leading-6 whitespace-pre-wrap wrap-anywhere">
                     {entry.body}
                   </div>}
                   {action !== "edit" && !!entry.history.length && (
-                    <details className="border-t py-3">
-                      <summary className="cursor-pointer rounded-sm text-sm font-medium" onClick={(event) => {
+                    <Disclosure summary="History" className="border-t py-3" summaryProps={{ onClick: (event) => {
                         if (action === "restore") {
                           event.preventDefault()
                           if (!mutation.isPending) startAction(null)
                         }
-                      }}>History</summary>
-                      <ul className="mt-2 divide-y text-xs">
+                      } }}>
+                      <ul className="mt-2 divide-y text-label-sm">
                         {entry.history.map((revision) => (
                           <li key={revision.rev} className="py-2">
                             <div className="flex items-center justify-between gap-3">
@@ -191,7 +192,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                                 <p className="capitalize wrap-anywhere">{revision.action}</p>
                                 <div className="flex flex-wrap gap-x-2 text-muted-foreground">
                                   <Author source={revision.source} compact />
-                                  <NoteTime date={revision.at} />
+                                  <Time value={revision.at} />
                                 </div>
                               </div>
                               {csrf && <Button size="sm" variant="outline" disabled={!!action} onClick={(event) => {
@@ -205,8 +206,8 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                                   event.preventDefault()
                                   if (!mutation.isPending) mutation.mutate({ kind: "restore", rev: revision.rev })
                                 }}>
-                                <p className="text-sm">Restore revision?</p>
-                                {mutation.isError && <p role="alert" className="text-sm text-destructive">Try restoring the revision again.</p>}
+                                <p className="text-body-sm">Restore revision?</p>
+                                {mutation.isError && <p role="alert" className="text-body-sm text-destructive">Try restoring the revision again.</p>}
                                 <div className="flex flex-wrap gap-2">
                                   <Button type="submit" size="sm" disabled={mutation.isPending}>
                                     {mutation.isPending ? "Restoring…" : "Restore revision"}
@@ -218,7 +219,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                           </li>
                         ))}
                       </ul>
-                    </details>
+                    </Disclosure>
                   )}
                   {csrf && action !== "edit" && action !== "restore" && (
                     <section aria-label="Note actions" className="border-t pt-4">
@@ -265,7 +266,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                             </Field>
                           )}
                           {mutation.isError && (
-                            <p role="alert" className="text-sm text-destructive">
+                            <p role="alert" className="text-body-sm text-destructive">
                               {action === "rename" ? "Check the path and try again."
                                 : action === "delete" ? "Try deleting the note again." : action === "promote" ? "Try promoting the note again." : "Try moving the note again."}
                             </p>

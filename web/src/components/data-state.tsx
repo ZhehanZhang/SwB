@@ -13,13 +13,13 @@ const messages = { loading: "Loading…", error: "Data unavailable.", empty: "0 
 export function DataState(props: DataStateProps) {
   const { kind, className, message = messages[kind] } = props
   return (
-    <div className={cn("flex flex-wrap items-center gap-2 py-5 text-sm text-muted-foreground", className)}>
+    <div className={cn("flex flex-wrap items-center gap-2 py-5 text-body-sm text-muted-foreground", className)}>
       <span className="flex items-center gap-2" role={kind === "error" ? "alert" : "status"}>
         {kind === "loading" && <LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />}
         {message}
       </span>
       {props.kind === "error" && props.onRetry && (
-        <Button size="sm" variant="outline" onClick={props.onRetry}>Retry</Button>
+        <Button variant="outline" onClick={props.onRetry}>Retry</Button>
       )}
     </div>
   )

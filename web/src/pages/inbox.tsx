@@ -65,14 +65,14 @@ function NeedsRow({ name, kind, title, at, preview, actions, avatarUrl }: {
   actions: ReactNode
 }) {
   return (
-    <li className="grid grid-cols-1 gap-3 border-b py-3.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:py-[15px]">
-      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 text-sm leading-[18px] md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-y-0.5 md:text-[13px]">
-        <Logo kind={kind || name} avatarUrl={avatarUrl} className="col-start-1 row-start-1 size-[22px] md:row-span-2 md:size-7" />
-        <span className="col-start-2 row-start-1 max-w-[14rem] min-w-0 font-semibold wrap-anywhere">{name}</span>
-        <span className="col-start-3 row-start-1 font-mono text-xs leading-[18px] text-muted-foreground md:hidden"><RelativeTime value={at} /></span>
+    <li className="grid grid-cols-1 gap-3 border-b py-3.5 md:grid-cols-fill-auto md:items-center md:py-4">
+      <div className="grid min-w-0 grid-cols-auto-fill-auto items-center gap-x-2 gap-y-2.5 text-body-sm md:grid-cols-auto-auto-main md:gap-y-0.5 md:text-body-sm">
+        <Logo kind={kind || name} avatarUrl={avatarUrl} className="col-start-1 row-start-1 size-5 md:row-span-2 md:size-7" />
+        <span className="col-start-2 row-start-1 max-w-56 min-w-0 font-semibold wrap-anywhere">{name}</span>
+        <span className="col-start-3 row-start-1 text-mono-sm text-muted-foreground md:hidden"><RelativeTime value={at} /></span>
         <div className="col-span-3 row-start-2 min-w-0 wrap-anywhere md:col-span-1 md:col-start-3 md:row-start-1">
           {title}
-          <span className="ml-2 hidden text-[12px] text-muted-foreground md:inline"><RelativeTime value={at} /></span>
+          <span className="ml-2 hidden text-body-sm text-muted-foreground md:inline"><RelativeTime value={at} /></span>
         </div>
         {preview && <div className="col-span-3 row-start-3 -mt-1.5 max-h-40 overflow-y-auto wrap-anywhere whitespace-pre-wrap text-muted-foreground md:col-span-2 md:col-start-2 md:row-start-2 md:mt-0">{preview}</div>}
       </div>
@@ -112,13 +112,13 @@ function SlackApproval({ item }: { item: PendingWrite }) {
       actions={(
         <>
           <Button
-            size="sm" variant="ghost" className="min-h-9 border border-border-strong md:min-h-[26px] md:border-transparent"
+            size="sm" variant="ghost" className="min-h-9 border border-border-strong md:min-h-control-sm md:border-transparent"
             disabled={disabled} onClick={() => decide.mutate("reject")}
           >
             <X aria-hidden className="max-md:hidden" />{decide.isPending && decide.variables === "reject" ? "Denying…" : "Deny"}
           </Button>
           <Button
-            size="sm" className="min-h-9 md:min-h-[26px]" disabled={disabled} onClick={() => decide.mutate("approve")}
+            size="sm" className="min-h-9 md:min-h-control-sm" disabled={disabled} onClick={() => decide.mutate("approve")}
           >
             <Check aria-hidden />{decide.isPending && decide.variables === "approve" ? "Approving…" : "Approve"}
           </Button>
@@ -154,7 +154,7 @@ function TurnPause({ pause, search }: { pause: Pause; search: string }) {
       preview={`${pause.turns} ${pause.turns === 1 ? "turn" : "turns"}`}
       actions={(
         <Button
-          size="sm" className="min-h-9 md:min-h-[26px]" disabled={!session?.csrf || resume.isPending || resume.isSuccess}
+          size="sm" className="min-h-9 md:min-h-control-sm" disabled={!session?.csrf || resume.isPending || resume.isSuccess}
           onClick={() => resume.mutate()}
         >
           <Play aria-hidden />{resume.isPending ? "Resuming…" : "Resume"}
@@ -169,12 +169,12 @@ function Conversations({ items, search }: { items: Conversation[]; search: strin
     <table role="table" className="mt-1 w-full text-left max-md:block md:table-fixed">
       <caption className="sr-only">Conversations</caption>
       <thead role="rowgroup" className="sr-only md:not-sr-only">
-        <tr role="row" className="border-b text-[11px] leading-4 text-muted-foreground">
-          <th role="columnheader" className="w-[9.75%] py-2 pr-3 font-medium" scope="col">Project</th>
-          <th role="columnheader" className="w-[16%] py-2 pr-3 font-medium" scope="col">From</th>
-          <th role="columnheader" className="w-[16%] py-2 pr-3 font-medium" scope="col">To</th>
+        <tr role="row" className="border-b text-body-sm text-muted-foreground">
+          <th role="columnheader" className="w-39/400 py-2 pr-3 font-medium" scope="col">Project</th>
+          <th role="columnheader" className="w-4/25 py-2 pr-3 font-medium" scope="col">From</th>
+          <th role="columnheader" className="w-4/25 py-2 pr-3 font-medium" scope="col">To</th>
           <th role="columnheader" className="py-2 pr-3 font-medium" scope="col">Subject</th>
-          <th role="columnheader" className="w-[9.25%] py-2 pr-3 font-medium" scope="col">Updated</th>
+          <th role="columnheader" className="w-37/400 py-2 pr-3 font-medium" scope="col">Updated</th>
           <th role="columnheader" className="w-4" scope="col"><span className="sr-only">Open</span></th>
         </tr>
       </thead>
@@ -182,8 +182,8 @@ function Conversations({ items, search }: { items: Conversation[]; search: strin
         {items.map((row) => {
           const { from, to, fromKind, toKind } = participants(row)
           return (
-            <tr key={row.handle} role="row" className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
-              <td role="cell" className="font-mono text-xs wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project}</td>
+            <tr key={row.handle} role="row" className="console-pressable relative border-b text-body-sm focus-within:bg-muted/40 max-md:grid max-md:grid-cols-fill-fill-auto max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-row">
+              <td role="cell" className="text-mono-sm wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project}</td>
               <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} avatarUrl={row.first_sender?.avatar_url} /></td>
               <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? null} /></td>
               <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-1 max-md:font-semibold md:py-2 md:pr-3">
@@ -227,11 +227,11 @@ function InboxList() {
   const status = notice === "decide-refused" ? "Request closed" : notice === "send-failed" ? "Slack delivery failed"
     : notice === "approved" ? "Approved Slack request" : notice === "rejected" ? "Denied Slack request" : null
   return (
-    <div className="space-y-8 pt-2 md:space-y-[34px]">
+    <div className="space-y-8 pt-2 md:space-y-8.5">
       <section aria-labelledby="needs-you">
-        <h2 id="needs-you" className="text-heading-md font-semibold tracking-[-0.01em]">Needs you</h2>
-        {status && <p role="status" className="mt-2 text-sm">{status}</p>}
-        {inbox.isPending && <div className="flex h-[60px] items-center"><Skeleton className="h-3 w-28" /></div>}
+        <h2 id="needs-you" className="text-heading-md font-semibold">Needs you</h2>
+        {status && <p role="status" className="mt-2 text-body-sm">{status}</p>}
+        {inbox.isPending && <div className="flex h-15 items-center"><Skeleton className="h-3 w-28" /></div>}
         {inbox.isError && !data && <DataState kind="error" message="Inbox unavailable." onRetry={() => void inbox.refetch()} />}
         {data && (data.pending_writes.length || data.pauses.length ? (
           <ul className="mt-2">
@@ -242,7 +242,7 @@ function InboxList() {
       </section>
       {(inbox.isPending || data) && (
         <section aria-labelledby="conversations">
-          <h2 id="conversations" className="text-heading-md font-semibold tracking-[-0.01em]">Conversations</h2>
+          <h2 id="conversations" className="text-heading-md font-semibold">Conversations</h2>
           {inbox.isPending ? <ConversationsSkeleton /> : conversations.length
             ? <Conversations items={conversations} search={search} />
             : <DataState kind="empty" message="0 conversations" />}
@@ -260,12 +260,12 @@ function InboxList() {
 function ConversationsSkeleton() {
   return (
     <LoadingSkeleton message="Loading inbox…" className="mt-1">
-      <div className="hidden h-[33px] items-center gap-4 border-b md:flex">
-        {[0, 1, 2, 3].map((column) => <Skeleton key={column} className="h-2.5 w-[12%] first:w-[8%]" />)}
+      <div className="hidden h-row items-center gap-4 border-b md:flex">
+        {[0, 1, 2, 3].map((column) => <Skeleton key={column} className="h-2.5 w-3/25 first:w-2/25" />)}
       </div>
       {[0, 1].map((row) => (
-        <div key={row} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] grid-rows-[18px_20px_16px] items-center gap-x-2 gap-y-1 border-b py-3.5 md:h-[43px] md:grid-cols-[9.75%_16%_16%_minmax(0,1fr)_9.25%_16px] md:grid-rows-1 md:gap-x-0 md:py-0">
-          <Skeleton className="h-2.5 w-12 max-w-[85%] max-md:col-span-2 max-md:row-start-3" />
+        <div key={row} className="grid grid-cols-fill-fill-auto grid-rows-conversation-skeleton items-center gap-x-2 gap-y-1 border-b py-3.5 md:h-row md:grid-cols-conversation-skeleton md:grid-rows-1 md:gap-x-0 md:py-0">
+          <Skeleton className="h-2.5 w-12 max-w-17/20 max-md:col-span-2 max-md:row-start-3" />
           {[1, 2].map((person) => (
             <div key={person} className="flex min-w-0 items-center gap-2 max-md:row-start-2 md:pr-3">
               <Skeleton className="size-5 rounded-md" />
@@ -302,7 +302,7 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
           <span className="font-mono text-mono-sm text-muted-foreground"><RelativeTime value={item.at} /></span>
         </div>
         {(provenance.length > 0 || item.in_reply_to || (author && kind !== "message") || item.status) && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs wrap-anywhere text-muted-foreground">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-label-sm wrap-anywhere text-muted-foreground">
             {author && kind !== "message" && <span className="capitalize">{kind}</span>}
             {item.status && <span>Status {item.status.replace(/_/g, " ")}</span>}
             {provenance.map((part, index) => <span key={index}>{part}</span>)}
@@ -339,7 +339,7 @@ function InboxConversation({ handle }: { handle: string }) {
   }
   return (
     <div className="pt-2">
-      <Link to={`/inbox${projectSearch(params.get("project"))}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+      <Link to={`/inbox${projectSearch(params.get("project"))}`} className="inline-flex items-center gap-2 text-body-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Conversations
       </Link>
       {thread.isPending && (
@@ -353,7 +353,7 @@ function InboxConversation({ handle }: { handle: string }) {
               </div>
             ))}
           </div>
-          <div className="mt-3 flex h-[33px] gap-5 border-b pt-0.5">
+          <div className="mt-3 flex h-row gap-5 border-b pt-0.5">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-16" />
           </div>
@@ -374,12 +374,12 @@ function InboxConversation({ handle }: { handle: string }) {
       {conversation && people && (
         <section aria-labelledby="conversation-title" className="mt-4">
           <h2 id="conversation-title" className="text-page-title wrap-anywhere">{displayReference(conversation.title || conversation.handle)}</h2>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-body-sm">
             <Person label={people.from} kind={people.fromKind} avatarUrl={conversation.first_sender?.avatar_url} />
             <ArrowRight aria-label="to" className="size-4 text-muted-foreground" strokeWidth={1.5} />
             <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url ?? null} />
           </div>
-          <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-xs text-muted-foreground">
+          <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-label-sm text-muted-foreground">
             {conversation.project && <div className="flex flex-wrap gap-1"><dt>Project</dt><dd className="font-mono wrap-anywhere">{conversation.project}</dd></div>}
             <div className="flex flex-wrap gap-1"><dt>Channel</dt><dd className="font-mono wrap-anywhere">{conversation.destination}</dd></div>
             <div className="flex flex-wrap gap-1"><dt>Status</dt><dd>{conversation.status?.replace(/_/g, " ") || (conversation.open ? "Open" : "Closed")}</dd></div>

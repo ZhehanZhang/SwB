@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button"
 import { boardQuery, formatDay, quantity, type Board } from "@/pages/overview/data"
 
 type Project = Board["projects"][number]
-const desktopProjectGrid = "grid-cols-[minmax(0,19%)_minmax(36px,7.25%)_minmax(173px,220px)_minmax(36px,7.25%)_minmax(0,1fr)]"
-const compactProjectGrid = "grid-cols-[minmax(0,1fr)_clamp(24px,10.5vw,42px)_clamp(24px,10.5vw,42px)_minmax(0,1fr)]"
+const desktopProjectGrid = "grid-cols-overview"
+const compactProjectGrid = "grid-cols-overview-compact"
 
 function Fan({ count, side, compact = false }: { count: number; side: "left" | "right"; compact?: boolean }) {
   if (!count) return <div aria-hidden />
@@ -59,12 +59,12 @@ function ProjectSummary({ project }: { project: Project }) {
   return (
     <Link
       to={`/projects/${encodeURIComponent(project.slug)}`}
-      className="group flex min-h-[170px] min-w-0 flex-col self-center rounded-[10px] bg-surface-sunken px-4 py-3.5 hover:bg-border"
+      className="group flex min-h-42 min-w-0 flex-col self-center rounded-lg bg-surface-sunken px-4 py-3.5 hover:bg-border"
     >
       <div className="mb-3.5 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h2 className="truncate text-heading-md">{project.name}</h2>
-          <span className="block truncate font-mono text-mono-sm text-subtle-foreground">{project.slug}</span>
+          <span className="block truncate text-body-sm text-muted-foreground">{project.slug}</span>
         </div>
         <ChevronRight aria-hidden className="size-4 shrink-0 text-subtle-foreground group-hover:text-foreground" />
       </div>
@@ -94,7 +94,7 @@ function SourceList({ project, compact = false }: { project: Project; compact?: 
           className={`flex min-w-0 items-center justify-end gap-2 font-mono text-mono-md ${compact ? "h-8 pr-3" : "h-10 pr-5"}`}
           title={item.detail ?? undefined}
         >
-          <LogoTile kind={item.kind} className={compact ? "size-[18px]" : undefined} />
+          <LogoTile kind={item.kind} className={compact ? "size-5" : undefined} />
           <span className="truncate">{compact ? item.short_label ?? item.label : item.label}</span>
         </li>
       ))}
@@ -108,7 +108,7 @@ function AgentList({ project, compact = false }: { project: Project; compact?: b
     <ul className="min-w-0 self-center">
       {project.agents.map((agent) => (
         <li key={agent.id} className={`flex min-w-0 items-center ${compact ? "h-8 gap-1.5 pl-3" : "h-10 gap-2.5 pl-5"}`}>
-          <LogoTile kind={agent.kind} avatarUrl={agent.avatar_url ?? null} className={compact ? "size-[18px]" : undefined} />
+          <LogoTile kind={agent.kind} avatarUrl={agent.avatar_url ?? null} className={compact ? "size-5" : undefined} />
           <span className="truncate text-label-sm" title={agent.label}>{agent.label}</span>
           {!compact && (
             <>
@@ -148,7 +148,7 @@ function ProjectRow({ project }: { project: Project }) {
           className="console-pressable flex min-h-8 min-w-0 items-center gap-2 rounded-sm"
         >
           <h2 className="truncate text-heading-md">{project.name}</h2>
-          <span className="truncate font-mono text-mono-sm text-subtle-foreground">{project.slug}</span>
+          <span className="truncate text-body-sm text-muted-foreground">{project.slug}</span>
           <span className="ml-auto shrink-0 text-body-sm text-muted-foreground">{project.open_count} open</span>
           <ChevronRight aria-hidden className="size-4 shrink-0 text-subtle-foreground" />
         </Link>
@@ -198,9 +198,9 @@ function Runtime({ runtime }: { runtime: Board["runtime"] }) {
           </Button>
         )}
       </div>
-      <div className="hidden min-w-0 items-center gap-3 font-mono text-mono-sm text-subtle-foreground lg:flex">
-        {runtime.version && <span>{PRODUCT_NAME} {runtime.version}</span>}
-        <span className="truncate" title={runtime.host}>{runtime.host}</span>
+      <div className="hidden min-w-0 items-center gap-3 text-body-sm text-muted-foreground lg:flex">
+        {runtime.version && <span>{PRODUCT_NAME} <span className="font-mono text-mono-sm">{runtime.version}</span></span>}
+        <span className="truncate font-mono text-mono-sm" title={runtime.host}>{runtime.host}</span>
         <span>up {uptime}</span>
       </div>
     </div>
@@ -218,7 +218,7 @@ function OverviewSkeleton() {
       <div className="mt-3 border-b lg:mt-5">
         <div className={`hidden items-center py-6 lg:grid ${desktopProjectGrid}`}>
           <Skeleton className="mr-5 h-3 w-20 justify-self-end" />
-          <div className="col-start-3 flex min-h-[170px] flex-col gap-2 rounded-[10px] bg-surface-sunken px-4 py-3.5">
+          <div className="col-start-3 flex min-h-42 flex-col gap-2 rounded-lg bg-surface-sunken px-4 py-3.5">
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-3 w-14" />
             <div className="mt-auto space-y-3">
@@ -237,11 +237,11 @@ function OverviewSkeleton() {
             {[0, 1].map((row) => (
               <div key={row} className={`grid h-8 items-center ${compactProjectGrid}`}>
                 <div className="flex items-center justify-end gap-2 pr-3">
-                  <Skeleton className="size-[18px] rounded-md" />
+                  <Skeleton className="size-5 rounded-md" />
                   <Skeleton className="h-3 w-12 max-w-1/2" />
                 </div>
                 <div className="col-start-4 flex items-center gap-1.5 pl-3">
-                  <Skeleton className="size-[18px] rounded-md" />
+                  <Skeleton className="size-5 rounded-md" />
                   <Skeleton className="h-3 w-12 max-w-1/2" />
                 </div>
               </div>
@@ -281,7 +281,7 @@ export function OverviewPage() {
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {board.data.unassigned.map((item) => (
               <li key={item.id} className="flex items-center gap-2" title={item.detail ?? undefined}>
-                <LogoTile kind={item.kind} avatarUrl={item.avatar_url ?? null} className="size-[22px]" />
+                <LogoTile kind={item.kind} avatarUrl={item.avatar_url ?? null} className="size-5" />
                 <span>{item.short_label ?? item.label}</span>
               </li>
             ))}

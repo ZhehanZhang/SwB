@@ -1,15 +1,7 @@
 import { Logo } from "@/components/logo"
 
-const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
-const fullDate = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" })
-
 export function scopeName(scope: string) {
   return scope.replace(/^(?:project|agent):/, "")
-}
-
-export function NoteTime({ date, short = false }: { date: string | null; short?: boolean }) {
-  if (!date) return null
-  return <time dateTime={date} title={fullDate.format(new Date(date))}>{(short ? shortDate : fullDate).format(new Date(date))}</time>
 }
 
 export function Author({ source, compact = false }: { source: string; compact?: boolean }) {
