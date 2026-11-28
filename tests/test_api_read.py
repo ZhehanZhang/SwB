@@ -66,6 +66,29 @@ def test_health_platforms_routes_and_visibility_expose_only_their_display_fields
     assert all(secret not in output for secret in (CAPY_KEY, SERVICE_KEY, STATIC_KEY, PRIVATE))
 
 
+def test_owner_health_reports_pending_routing_without_showing_the_message(make):
+    core, client = make()
+    handle, recipient = core.inbox.store_owner_item(source="fixture", project=None, title=PRIVATE, meta={},
+                                                   kind="message", data={"text": PRIVATE})
+    assert recipient is None
+    health = get(client, "/health")
+    assert health["status"] == "degraded" and health["problems"] == ["owner_delivery_pending"]
+    assert health["owner_delivery"] == {"pending": 1}
+    assert PRIVATE not in json.dumps(health)
+    assert "owner_delivery" not in client.get("/healthz").json()
+    assert not get(client, "/inbox")["conversations"]
+    assert get(client, f"/conversations/{handle}", status=404) == {"error": "conversation not found"}
+
+
+def test_owner_trusted_http_inbox_poll_counts_as_agent_activity(make):
+    core, client = make()
+    headers = {"Authorization": f"Bearer {STATIC_KEY}"}
+    assert client.get("/inbox/poll?agent=other&timeout=0", headers=headers).status_code == 403
+    assert core.owner_delivery.resolve(None) is None
+    assert client.get("/inbox/poll?timeout=0", headers=headers).status_code == 200
+    assert core.owner_delivery.resolve(None) == ("capy", "active")
+
+
 def test_audit_filters_and_pages_at_equal_timestamps_without_exposing_raw_diagnostics(make):
     core, client = make()
     for action, origin, outcome in (("route_set", "mcp", "ok"), ("route_remove", "mcp", "ok"), ("connect_code", "mcp", "ok"),

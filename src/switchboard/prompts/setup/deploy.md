@@ -2,6 +2,8 @@ Read the setup guide at https://swb.one/docs/deploy.
 
 Help me run SwB. Use your terminal for commands you can run. Ask me to make choices and to take actions that need my account.
 
+Send a `User-Agent` header that names your app in each HTTP request to SwB.
+
 Ask me to choose where to run SwB. Offer this computer, Render, Railway, Fly.io, Koyeb or my server with Docker.
 
 ## This computer

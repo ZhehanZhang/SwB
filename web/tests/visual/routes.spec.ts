@@ -86,7 +86,10 @@ const scenarios: Scenario[] = [
   { name: "agents", path: "/agents", seeds: all },
   { name: "tokens", path: "/tokens", seeds: all },
   { name: "inbox", path: "/inbox", seeds: all, ready: pendingApprovals },
-  { name: "inbox-thread", path: "/inbox/h_seed_0003", seeds: ["busy", "error"] },
+  {
+    name: "inbox-thread", path: "/inbox/h_seed_0003", seeds: ["busy", "error"],
+    prepare: (page) => page.route("**/api/inbox/actions", route => route.fulfill({ json: { updated: [] } })),
+  },
   { name: "inbox-project", path: "/inbox?project=apac-edge-failover", seeds: ["busy", "error"], ready: pendingApprovals },
   { name: "memory", path: "/memory", seeds: all },
   { name: "memory-project", path: "/memory?scope=project%3Aoperations" },
@@ -162,7 +165,9 @@ const scenarios: Scenario[] = [
   },
   {
     name: "popover-channel-mode", path: "/connections/discord", interact: async (page) => {
-      await button(page, "Mode for deployments").click()
+      const trigger = button(page, "Mode for deployments")
+      await trigger.evaluate(element => element.scrollIntoView({ block: "center" }))
+      await trigger.click()
       await expect(page.getByRole("menu")).toBeVisible()
     },
   },
@@ -335,6 +340,17 @@ for (const scenario of scenarios) {
       await scenario.interact?.(page)
       if (interaction) await settle(page)
       if (scenario.selectedTab) await expectActiveTab(page, scenario.selectedTab)
+      if (width === 1920 && seed === "busy" && scenario.name === "inbox-thread") {
+        const list = page.getByRole("table", { name: "Conversations", exact: true })
+        const conversation = page.locator("#conversation-title")
+        await expect(list).toBeVisible()
+        await expect(conversation).toBeVisible()
+        const [listBox, conversationBox] = await Promise.all([list.boundingBox(), conversation.boundingBox()])
+        expect(listBox!.x + listBox!.width).toBeLessThan(conversationBox!.x)
+        const selected = list.getByRole("link", { name: "Triage issue 4127", exact: true })
+        await selected.scrollIntoViewIfNeeded()
+        await expect(selected).toBeInViewport()
+      }
       const metrics = await page.evaluate(() => ({ documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth }))
       await info.attach("layout-metrics", {
         body: JSON.stringify({ seed, name, route, cls: shifts?.sum, sources: shifts?.sources, ...metrics, budget }),

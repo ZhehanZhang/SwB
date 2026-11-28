@@ -28,8 +28,9 @@ MAX_TITLE = 200
 MAX_VIEW = 16_000
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,79}$")
 GENERAL = "general"
-SYNC_SOURCES = frozenset(("claude-memory", "chatgpt-memory", "grok-memory", "gemini-memory", "claude-code-auto-memory",
+SYNC_SOURCES = frozenset(("claude-memory", "chatgpt-memory", "grok-memory", "gemini-memory", "muse-memory", "claude-code-auto-memory",
                           "claude-md", "agents-md", "codex-memory", "capy-drive", "other"))
+SYNC_SOURCE_LABELS = ", ".join(sorted(SYNC_SOURCES))
 log = logging.getLogger("switchboard.memory")
 CONFIRM_GENERAL = ("Save project facts in project:<slug>. For facts that apply to every project, "
                    "confirm the write with the owner and pass confirm_general=true.")

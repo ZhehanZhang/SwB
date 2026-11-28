@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from conftest import STATIC_KEY, base_config, call, error_text, rpc
+from conftest import STATIC_KEY, base_config, call, error_text, rpc, sign_in
 from switchboard.auth import Principal
 from switchboard.memory import MemoryRefused
 from switchboard.refusals import OWNER_REQUIRED
@@ -111,7 +111,23 @@ def test_sync_switch_config_owner_only_catalog_cap_and_live_instructions(make):
     assert "Memory sync is on." in rpc(client, key, "initialize", init).json()["result"]["instructions"]
     assert sync(client, key, item)["counts"] == {"created": 1}
     assert error_text(call(client, key, "memory_sync", {**arguments, "items": [item] * 51})) == "Sync at most 50 items per call."
-    assert error_text(call(client, key, "memory_sync", {**arguments, "source": "this-is-not-allowed"})) == "Choose a supported memory source."
+    sources = ("agents-md, capy-drive, chatgpt-memory, claude-code-auto-memory, claude-md, claude-memory, codex-memory, "
+               "gemini-memory, grok-memory, muse-memory, other")
+    message = f"Use one of these memory sources {sources}."
+    assert error_text(call(client, key, "memory_sync", {**arguments, "source": "this-is-not-allowed"})) == message
+    tool = next(tool for tool in rpc(client, key, "tools/list").json()["result"]["tools"] if tool["name"] == "memory_sync")
+    assert tool["description"].endswith(message)
+
+
+def test_muse_sync_uses_its_own_source_label(make):
+    core, client = make(base_config(version=2, blocks={"mcp": {}}))
+    key = sign_in(client, redirect="https://agent.meta.ai/api/hatch/oauth/callback")["access_token"]
+    item = {"source_key": "memo", "body": "A memory from Muse"}
+    result = mcp(client, "memory_sync", key, source="muse-memory", items=[item], scope="agent:muse")
+    assert result["counts"] == {"created": 1}
+    [created] = result["items"]
+    assert created["path"] == "/memories/agents/muse/synced/muse-memory/memo.md"
+    assert core.memory.read(id=created["id"])["sync_source"] == "muse/muse-memory"
 
 
 def test_scoped_companion_keeps_its_writer_identity_and_respects_the_sync_switch(workspace):

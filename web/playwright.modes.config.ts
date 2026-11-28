@@ -4,7 +4,7 @@ const baseURL = `http://localhost:${process.env.SWB_PLAYWRIGHT_PORT ?? "4178"}`
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["channel-modes.spec.ts", "inbox-senders.spec.ts", "owner-flows.spec.ts"],
+  testMatch: ["channel-modes.spec.ts", "inbox-senders.spec.ts", "inbox-navigation.spec.ts", "owner-flows.spec.ts"],
   use: {
     baseURL,
     browserName: "chromium",

@@ -14,7 +14,7 @@ version: 2
 # trusted_proxies: []
 # data_dir: ./data                              # usually set SWB_DATA_DIR instead
 # timezone: UTC
-# One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
+# A conversation pauses after this many turns.
 # A new send starts at zero. null switches it off.
 turn_cap: 200
 

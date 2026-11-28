@@ -39,6 +39,8 @@
   --spacing-control: 2.25rem;
   --spacing-control-sm: 1.75rem;
   --spacing-row: 2.75rem;
+  --container-inbox-table: 38rem;
+  --container-inbox-split: 64rem;
   --radius-sm: 4px;
   --radius-md: var(--swb-radius-md);
   --radius-lg: 8px;
@@ -186,7 +188,7 @@
 }
 
 @utility grid-cols-conversation-skeleton {
-  grid-template-columns: 9.75% 16% 16% minmax(0,1fr) 9.25% 1rem;
+  grid-template-columns: 10% 16% 16% minmax(0,1fr) 11% 9.25% 1rem;
 }
 
 @utility grid-cols-auto-main {
@@ -335,4 +337,24 @@
 
 @utility max-w-channel-menu {
   max-width: min(18rem, calc(100vw - 2rem));
+}
+
+@utility grid-cols-inbox-split {
+  grid-template-columns: minmax(0,3fr) minmax(0,2fr);
+}
+
+@utility max-h-inbox-pane {
+  max-height: calc(100dvh - var(--topbar-height) - 3rem);
+}
+
+@utility max-h-inbox-filters {
+  max-height: 65dvh;
+}
+
+@utility w-inbox-filters {
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+@utility content-unassigned {
+  content: "—";
 }

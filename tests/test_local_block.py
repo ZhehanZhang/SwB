@@ -89,6 +89,7 @@ async def test_send_mailbox_first_and_fallbacks(amake, monkeypatch):
         attempts.append((companion, capability, action, args, principal))
         item = core.inbox.handle(args["conversation"])
         assert item["owner"] == "claude-code" and item["destination"] == "mailbox"
+        assert item["title"] == "Please review."
         assert core.inbox.read(owner="claude-code", advance=False)["items"][-1]["text"] == "Please review."
         if failure:
             raise failure
@@ -119,7 +120,14 @@ async def test_send_mailbox_first_and_fallbacks(amake, monkeypatch):
         assert not core.inbox.read(owner="codex")["items"]
         await emit(core, linked, "herdr.session", {**REPORT, "state": "idle", "agent": "not-registered"})
         out = await core.send(sender, task="Please review.", to=TARGET)
-        assert out["agent"] == "owner" and not out["woke"] and core.inbox.handle(out["handle"])["owner"] == "owner"
+        assert not out["woke"] and not out["delivered"] and out["status"] == "pending_owner_route"
+        assert "Owner delivery is pending." in out["note"]
+        assert not core.inbox.read(owner="owner")["items"]
+        core.routes.set(destination="agent", agent="owner", project=None, target={"agent": "claude"}, defaults=None,
+                        allow_override=True, note="", by="owner")
+        core.modes.flush()
+        [routed] = core.inbox.read(owner="claude")["items"]
+        assert routed["handle"] == out["handle"] and routed["for_owner"] is True and routed["resolved_by"] == "global"
         await emit(core, linked, "herdr.session", REPORT)
     with pytest.raises(BlockError, match=r"Local session is offline\."):
         await core.send(sender, task="Please review.", to=TARGET)

@@ -2,6 +2,8 @@ Read the setup guide at https://swb.one/docs/setup/coding-agent.
 
 Help me connect my coding agent to SwB. SwB carries messages and stores shared memory.
 
+Send a `User-Agent` header that names your app in each HTTP request to SwB.
+
 Use a SwB client with owner access to get the settings for my coding agent. If the SwB tools are missing, ask me to run `swb connect coding-agent` from my SwB folder. If I run SwB with uvx, use `uvx swb-one` in place of `swb`. Ask me to keep its output in my private terminal.
 
 Call connect(what="coding-agent"). Ask me to name the agent I use. Call `connect` again with `choose={"agent":"<name>"}`. In my terminal, use `swb connect coding-agent --choose agent=<name>` instead. Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path and links. Wait for me to say done after each step.

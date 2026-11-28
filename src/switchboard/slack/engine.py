@@ -13,6 +13,7 @@ import httpx
 
 from ..guard import RateLimiter
 from ..subject import subject
+from ..targets import CAPTAIN_SLUG
 from ..trust import frame_sender
 from ..visibility import Visibility, Who
 from .avatar_files import BUNDLED_AVATARS, AvatarFiles, find_avatar
@@ -78,6 +79,7 @@ class SlackEngine:
         self.directory_listeners: list[Callable[[str, dict[str, Any]], Awaitable[None]]] = []
         self.visibility = Visibility(dict(config.visibility))
         self.targets: dict[str, Target] = {}
+        self.captain_error: str | None = None
         self.dynamic_personas: dict[str, Persona] = {}
         self.target_agents: Callable[[Target], set[str]] = lambda t: set()
         self.connect = True
@@ -92,8 +94,10 @@ class SlackEngine:
         """Configured personas, plus one per Captain target found automatically; the config wins on the same id."""
         return {**self.dynamic_personas, **self.config.personas}
 
-    def set_targets(self, targets: dict[str, Target], personas: dict[str, Persona] | None = None) -> None:
+    def set_targets(self, targets: dict[str, Target], personas: dict[str, Persona] | None = None,
+                    *, captain_error: str | None = None) -> None:
         self.targets = targets
+        self.captain_error = captain_error
         if personas is not None:
             self.dynamic_personas = personas
 
@@ -115,6 +119,9 @@ class SlackEngine:
         explicit = False
         if push["addressed_to_us"]:
             word, rest = split_slug(push["text"], rt.bot_user_id)
+            if word == CAPTAIN_SLUG and not self.targets.get(word):
+                push["captain_target_error"] = True
+                return [], True
             if word and word in self.targets:
                 target, explicit = self.targets[word], True
                 push["text"] = rest
@@ -122,6 +129,9 @@ class SlackEngine:
                 hint = near(word, self.targets)
         sticky = self.store.thread_target(push["workspace"], push["channel"], root) if push["thread_ts"] else None
         slug = target.slug if target else (sticky or default_target or rt.cfg.default_target)
+        if (slug or "").casefold() == CAPTAIN_SLUG and CAPTAIN_SLUG not in self.targets:
+            push["captain_target_error"] = True
+            return [], explicit
         if target is None and slug:
             target = self.targets.get(slug)
         push["target"] = slug
@@ -255,6 +265,10 @@ class SlackEngine:
         candidate = {**push, "is_bot": bool(push["is_bot"] or event.get("is_bot") or event.get("subtype") == "bot_message")}
         if candidate["is_bot"] and event.get("bot_id") in rt.cfg.known and rt.cfg.trust_of(candidate["user"]) == "external":
             candidate["user"] = event["bot_id"]
+        if push["addressed_to_us"] and CAPTAIN_SLUG not in self.targets and split_slug(push["text"], rt.bot_user_id)[0] == CAPTAIN_SLUG:
+            if self.store.claim_event(push):
+                await self.tell_captain_choice(rt, push)
+            return None
         if self.mode_intake is not None:
             handled, routed = await self.mode_intake(rt, candidate)
             if handled:
@@ -270,6 +284,10 @@ class SlackEngine:
         if listen_only:
             return None
         hint, _ = self.route(rt, push)
+        if push.get("captain_target_error"):
+            if self.store.claim_event(push):
+                await self.tell_captain_choice(rt, push)
+            return None
         self.stamp(rt, push)
         if not self.store.add_event(push):
             return None
@@ -383,6 +401,10 @@ class SlackEngine:
         except Exception as exc:
             log.info("note to sender on %s failed: %s", push["id"], slack_error(exc))
 
+    async def tell_captain_choice(self, rt: WorkspaceRuntime, push: dict[str, Any]) -> None:
+        if rt.cfg.trust_of(push["user"]) == "owner":
+            await self.tell_sender(push, self.captain_error or "Choose a Captain by alias or full address.")
+
     async def fan_out(self, label: str, push: dict[str, Any], *, skip_delegate: bool = False, skip_agent: str | None = None) -> None:
         for sink in self.sinks.get(label, []):
             if sink.accepts(push):
@@ -456,9 +478,9 @@ class SlackEngine:
         target = await self._approval_target()
         if target is None:
             return False
-        rt, approver = target
+        rt, user = target
         try:
-            dm = await rt.clients["bot"].conversations_open(users=approver)
+            dm = await rt.clients["bot"].conversations_open(users=user)
             await rt.clients["bot"].chat_postMessage(channel=dm["channel"]["id"], text=text, **rt.bot_identity_overrides())
         except Exception as e:
             log.warning("owner DM failed: %s", type(e).__name__)

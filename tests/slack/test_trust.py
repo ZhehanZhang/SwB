@@ -18,7 +18,7 @@ STRANGER, OTHER = "UHUMAN001", "UHUMAN002"
 
 def cfg(resources=None, **ws):
     c = copy.deepcopy(base_config())
-    c["workspaces"]["a2a"].update({"default_target": "captain", **ws})
+    c["workspaces"]["a2a"].update({"default_target": "ops-captain", **ws})
     c["visibility"] = {"resources": resources or {}}
     return c
 
@@ -32,7 +32,7 @@ def mention(ts, text, user=STRANGER, thread_ts=None):
 
 async def core_with(make_core, resources=None, **ws):
     core = await make_core(cfg(resources, **ws))
-    core.set_targets(build_targets([{"id": "jam_C", "name": "Captain"}, {"id": "jam_P", "name": "HelperBot"}], ["chatgpt"], [], {}))
+    core.set_targets(build_targets([{"id": "jam_C", "name": "Captain", "code": "ops-captain"}, {"id": "jam_P", "name": "HelperBot"}], ["chatgpt"], [], {}))
     got, ctx = [], []
 
     async def listener(push):
@@ -82,7 +82,7 @@ async def test_non_owner_to_a_private_target_becomes_context(make_core, world, h
     await drain(core)
     assert got == [] and hooks.bodies() == []
     (item,) = ctx
-    assert item["context"] and item["target"] == "captain" and item["trust"] == "external" and OPEN in item["text"]
+    assert item["context"] and item["target"] == "ops-captain" and item["trust"] == "external" and OPEN in item["text"]
     assert [t["text"] for t in tells(world)] == ["Noted."] and tells(world)[0]["user"] == STRANGER
     assert not [n for t, n, kw in world.calls if n == "chat_postMessage"]
     assert "context_noted" in audit(core)
@@ -97,14 +97,14 @@ async def test_a_shared_target_in_a_private_channel_is_still_context(make_core, 
 async def test_shared_target_in_a_shared_channel_takes_anyone_wrapped(make_core, world, hooks):
     core, got, ctx = await core_with(make_core, SHARED, known={STRANGER: "Casey"})
     await core.ingest("a2a", mention("1700000300.000004", "helperbot can you check the logs?"))
-    await core.ingest("a2a", mention("1700000300.000005", "captain can you check the logs?"))
+    await core.ingest("a2a", mention("1700000300.000005", "ops-captain can you check the logs?"))
     await drain(core)
     (push,) = got
     assert push["target"] == "helperbot" and push["trust"] == "external" and push["text"].startswith(f"[swb from Casey ({STRANGER}) in a2a")
     assert f"{OPEN}\ncan you check the logs?\n{CLOSE}" in push["text"]
     body = hooks.bodies()[0]
     assert body["trust"] == body["sender"]["trust"] == "external" and body["sender"]["id"] == STRANGER and OPEN in body["text"]
-    assert [c["target"] for c in ctx] == ["captain"]
+    assert [c["target"] for c in ctx] == ["ops-captain"]
 
 
 async def test_shared_can_be_narrowed_to_people(make_core, world):

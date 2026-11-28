@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git openssh-cli
 RUN useradd --uid ${APP_UID} --create-home --shell /usr/sbin/nologin switchboard
 WORKDIR /app
 COPY pyproject.toml setup.py MANIFEST.in README.md LICENSE NOTICE ./
-COPY web/licenses/lobe-icons.txt ./web/licenses/lobe-icons.txt
+COPY web/licenses/ ./web/licenses/
 COPY src ./src
 COPY --from=web /app/src/switchboard/static/app ./src/switchboard/static/app
 RUN pip install --no-cache-dir .
@@ -42,7 +42,7 @@ USER switchboard
 ENV PORT=8000 SWB_DEFAULT_HOST=0.0.0.0 SWB_DEFAULT_DATA_DIR=/data GIT_COMMIT=${GIT_COMMIT} BUILD_DATE=${BUILD_DATE}
 VOLUME ["/data"]
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/healthz', timeout=4)"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD python -c "import os, urllib.request; from switchboard import USER_AGENT; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/healthz', headers={'User-Agent': USER_AGENT}), timeout=4)"
 CMD ["swb", "serve"]
 
 FROM runtime AS paas

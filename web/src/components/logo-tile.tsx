@@ -14,11 +14,14 @@ import muse from "../../../src/switchboard/slack/avatars/muse.png?no-inline"
 import swb from "../../../src/switchboard/slack/avatars/swb.png?no-inline"
 import discord from "@/assets/discord.svg?no-inline"
 import github from "@/assets/github.svg?no-inline"
+import goose from "@/assets/goose.svg?no-inline"
+import opencode from "@/assets/opencode.svg?no-inline"
+import opencodeDark from "@/assets/opencode-dark.svg?no-inline"
 import telegram from "@/assets/telegram.svg?no-inline"
 import { connectorKind } from "@/lib/connector-kind"
 import { cn } from "@/lib/utils"
 
-const images: Record<string, string> = { discord, github, telegram }
+const images: Record<string, string> = { discord, github, goose, telegram }
 const avatars: Record<string, string> = { capy, chatgpt, "claude-code": claudeCode, claude, codex, dots, gemini, grok, "grok-bot": grokBot, muse, swb }
 const aliases = [
   ["grok-bot", "grok-bot"], ["grok-routine", "grok-bot"],
@@ -26,6 +29,7 @@ const aliases = [
   ["openai", "chatgpt"], ["chatgpt", "chatgpt"], ["dots", "dots"], ["dot", "dots"], ["capy", "capy"], ["captain", "captain"],
   ["github", "github"], ["slack", "slack"], ["discord", "discord"], ["telegram", "telegram"],
   ["gemini", "gemini"], ["codex", "codex"], ["muse", "muse"], ["swb", "swb"], ["switchboard", "swb"], ["mcp", "mcp"],
+  ["goose", "goose"], ["opencode", "opencode"],
 ] as const
 
 const avatarPath = /^\/avatars\/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\.(png|jpe?g|gif)(?:\?v=[0-9]{1,20})?$/
@@ -37,7 +41,7 @@ function AvatarImage({ src, fallback, captain }: { src?: string; fallback?: stri
     className={cn("size-full", captain ? "object-cover" : "object-contain")} />
 }
 
-export function LogoTile({ kind, className, avatarUrl }: { kind: string; className?: string; avatarUrl?: string | null }) {
+export function LogoTile({ kind, className, avatarUrl, fallbackLetter }: { kind: string; className?: string; avatarUrl?: string | null; fallbackLetter?: string }) {
   const id = kind.toLowerCase().replaceAll(/[_ ]/g, "-")
   const mark = connectorKind(id) ?? aliases.find(([prefix]) => id === prefix || id.startsWith(`${prefix}-`) || id.startsWith(`${prefix}:`))?.[1]
   const captain = mark === "captain" || mark === "capy" && avatarUrl !== undefined
@@ -51,7 +55,13 @@ export function LogoTile({ kind, className, avatarUrl }: { kind: string; classNa
       captain && "border-logo-capy bg-logo-capy text-logo-capy-foreground [.dark_&]:bg-logo-capy", className)}>
       {captain || avatar ? <AvatarImage key={avatar} src={avatar} captain={captain}
           fallback={bundled ?? defaultAvatar} />
-        : image && mark === "github" ? <span className="size-3/4 bg-foreground mask-contain mask-center mask-no-repeat" style={{ maskImage: `url("${image}")` }} />
+        : image && (mark === "github" || mark === "goose") ? <span className="size-3/4 bg-foreground mask-contain mask-center mask-no-repeat" style={{ maskImage: `url("${image}")` }} />
+        : mark === "opencode" ? (
+          <>
+            <img alt="" src={opencode} className="size-3/4 object-contain dark:hidden" />
+            <img alt="" src={opencodeDark} className="hidden size-3/4 object-contain dark:block" />
+          </>
+        )
         : image ? <img alt="" src={image} className="size-3/4 object-contain" />
         : mark === "slack" ? (
           <svg className="size-3/4" viewBox="0 0 24 24" fill="var(--logo-slack)">
@@ -59,7 +69,9 @@ export function LogoTile({ kind, className, avatarUrl }: { kind: string; classNa
           </svg>
         ) : id === "owner" ? <UserRound className="size-3/4" />
           : mark === "mcp" ? <Terminal className="size-3/4 stroke-logo" />
-          : mark === "webhook" ? <Webhook className="size-3/4" /> : <Bot className="size-3/4 stroke-logo" />}
+          : mark === "webhook" ? <Webhook className="size-3/4" />
+          : fallbackLetter && !mark ? <span className="text-caption font-semibold uppercase">{fallbackLetter}</span>
+          : <Bot className="size-3/4 stroke-logo" />}
     </span>
   )
 }

@@ -49,6 +49,18 @@ On Linux and macOS, SwB sets the data folder to private mode `0700`. It sets dat
 
 Some blocks can start from credentials in the environment. See [Blocks](/docs/blocks) for setup. The [release environment example](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example) shows the credential names for named workspaces and routines.
 
+## Owner messages
+
+SwB first tries the agent with the most recent activity under an owner sign-in in the last 30 minutes. It then tries the project's main agent, set by the project route or `default_target`. The global owner route is the last choice.
+
+The selected agent receives the message in its inbox. SwB reports pending delivery in status if all three choices fail.
+
+Set the global owner route to an agent address.
+
+```python
+routes_set(agent="owner", target="agent:claude")
+```
+
 ## The config file
 
 `swb up` sets up a new instance in its folder. It stores the owner key in `.env` and saves a custom `SWB_PORT` there. It sets the file mode to `0600`.

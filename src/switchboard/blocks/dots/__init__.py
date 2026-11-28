@@ -26,6 +26,7 @@ import yaml
 
 from .. import Action, Block, BlockError, Call, Manifest, TargetKind
 from ...audit import iso
+from ...subject import display_subject
 from ...targets import slugify
 
 if TYPE_CHECKING:
@@ -530,12 +531,9 @@ class DotsBlock(Block):
             channel, mode = self.relay_channel(), "relay"
         if channel is None:
             raise BlockError(f"Slack won't open a DM with {dot['slug']} and the dots relay channel isn't set up; see switchboard_status")
-        handle = self.core.inbox.open_handle(handle=call.handle, owner=p.source, destination="dots", ref=dot["user_id"],
-                                             project=project, title=title or f"dot {dot['slug']}",
-                                             meta={"dot": dot["slug"], "workspace": self.workspace, "channel": channel, "mode": mode, **call.handle_meta},
-                                             status="sent", target=f"{self.name}:dot:{dot['user_id']}")
         label = (sender.get("user_name") or sender.get("user")) if sender else self.core.agents.label(p.source)
         mention = "" if mode == "dm" else f"<@{dot['user_id']}> "
+        body = task
         if owner_slack:
             body = re.sub(rf"^\s*(<@[A-Z0-9]+>\s*)*{re.escape(dot['slug'])}\b[\s:,]*", "", sender.get("text") or "", flags=re.I).strip() or task
             text = f"{mention}{unlabel(body)}"
@@ -545,6 +543,12 @@ class DotsBlock(Block):
             text = f"{mention}{unlabel(task)}"
         else:
             text = f"{mention}{task}\n\n_from {label} via switchboard_"
+        meta = {"dot": dot["slug"], "workspace": self.workspace, "channel": channel, "mode": mode, **call.handle_meta}
+        display_title = (meta.pop("display_subject") if "display_subject" in meta else
+                         display_subject(title, body, "", route_labels=(f"dot {dot['slug']}",))) or None
+        handle = self.core.inbox.open_handle(handle=call.handle, owner=p.source, destination="dots", ref=dot["user_id"],
+                                             project=project, title=display_title, meta=meta, status="sent",
+                                             target=f"{self.name}:dot:{dot['user_id']}")
         if as_him:
             key = Grant(id=OWNER_RELAY, persona=None, allow_persona_override=False, allowed_personas=None, scopes={self.workspace: ("user",)})
             identity = "user"
@@ -571,7 +575,7 @@ class DotsBlock(Block):
         self.core.store.x("INSERT OR REPLACE INTO dot_threads(workspace, channel, thread_ts, handle, dot, mode, last_ts, created_at) VALUES (?,?,?,?,?,?,?,?)",
                           (self.workspace, channel, out["ts"], handle, dot["user_id"], mode, out["ts"], self.core.clock()))
         self.core.inbox.update_handle(handle, state={"thread_ts": out["ts"], "permalink": out.get("permalink"), "mode": mode})
-        call.note(target=f"dot:{dot['slug']}", ref=handle, excerpt=task)
+        call.note(target=f"dot:{dot['slug']}", ref=handle, title=display_title, excerpt=task)
         return {"handle": handle, "conversation": handle, "dot": dot["slug"], "posted": True, "as": "owner" if as_him else "swb", "mode": mode,
                 "channel": channel, "ts": out["ts"], "permalink": out.get("permalink"), "note": "the dot's reply comes back on this conversation"}
 

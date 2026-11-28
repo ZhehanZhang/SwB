@@ -9,3 +9,4 @@ def installed_version() -> str | None:
 
 
 __version__ = installed_version() or "unknown"
+USER_AGENT = f"SwB/{__version__}"

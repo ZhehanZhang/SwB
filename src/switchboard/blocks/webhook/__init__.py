@@ -44,7 +44,7 @@ from ...inbox import CONTEXT_NOTE
 from ...projects import ProjectError
 from ...refusals import OWNER_REQUIRED
 from ...store import dumps
-from ...subject import subject, wake_text
+from ...subject import display_subject, subject, wake_text
 from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
 from ...visibility import Who
 from .. import Action, Address, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
@@ -668,9 +668,11 @@ class WebhookBlock(Block):
         name, target, project = row["name"], row["target"], row["project"]
         event = self._event(row, opts, data, headers)
         generated = {"webhook": name, "event": event, "delivery": neutralize(delivery)}
-        rendered = frame_parts(self._parts(name, opts, data), f"in webhook {name}")
+        parts = self._parts(name, opts, data)
+        rendered = frame_parts(parts, f"in webhook {name}")
         details = FramedText(join_parts(rendered))
         title = subject(f"Webhook {name}", "", None, event or "Event", verb="", trust="external")
+        display_title = display_subject(event, parts.get("summary", {}).get("text"), "Webhook event")
         tail = f"Webhook {name} delivery {generated['delivery']}."
         text = wake_text(title, details, None, tail)
         who = Who(owner=False, workspace=f"{self.name}-{name}")
@@ -687,7 +689,7 @@ class WebhookBlock(Block):
                 found = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? AND project IS ?",
                                             (agent, self.name, name, project))
                 handle = found["handle"] if found else self.core.inbox.open_handle(
-                    owner=agent, destination=self.name, ref=name, project=project, title=f"Webhook {name}", meta={}, status="following")
+                    owner=agent, destination=self.name, ref=name, project=project, title=display_title, meta={}, status="following")
                 await self.core.inbox.add(handle, "context", item)
             audit("context_noted", "ok", reason)
             return {"outcome": "context", "reason": reason, "delivery": delivery}
@@ -711,7 +713,7 @@ class WebhookBlock(Block):
                 return await note_context(addr, "target access restricted")
             principal = Principal(self.name, ip, self.name, origin=self.name, trust="external", visibility_who=who)
             out = await self.core.send(principal, to=target, task=text, project=project, title=title,
-                                       handle_meta={"boundary": project} if project else None)
+                                       handle_meta={"display_subject": display_title, **({"boundary": project} if project else {})})
         except (BlockError, CoreError, ValueError) as exc:
             log.warning("webhook %s wake failed: %s", name, type(exc).__name__)
             audit("webhook", "error", type(exc).__name__)

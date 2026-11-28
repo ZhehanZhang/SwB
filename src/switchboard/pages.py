@@ -14,6 +14,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
 
+from . import USER_AGENT
 from .slack.avatar_files import agent_avatar_url
 
 _STATIC = resources.files("switchboard") / "static"
@@ -251,7 +252,7 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
 
 
 def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
-    cmd = f"curl -s -X POST {public_url}/connect -H 'content-type: application/json' -d '{{\"code\": \"{code['code']}\"}}'"
+    cmd = f"curl -s -A '{USER_AGENT}' -X POST {public_url}/connect -H 'content-type: application/json' -d '{{\"code\": \"{code['code']}\"}}'"
     project = f'<dt>Project</dt><dd>{html.escape(code["project"])}</dd>' if code.get("project") else ""
     body = f"""<dl class="pairing-details">
 <dt>Agent</dt><dd>{html.escape(code["agent"])}</dd>{project}

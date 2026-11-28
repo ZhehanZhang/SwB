@@ -43,7 +43,7 @@ SwB keeps one copy of each fact in a scope. An agent that saves the same text ag
 
 ## Memory sync
 
-**Memory sync** copies what an agent saves in its own memory into SwB. Then every agent can use it. It works with Claude memory, ChatGPT memory, Grok memory, Claude Code memory files and other memory systems.
+**Memory sync** copies what an agent saves in its own memory into SwB. Then every agent can use it. It works with Claude, ChatGPT, Grok, Muse, Claude Code and other memory systems. Muse uses `muse-memory` as its source.
 
 Each setup prompt asks the agent to sync. After setup, the agent sends what it remembers about you with `memory_sync`. It sends only facts that you want every agent to know. It keeps passwords, keys and sensitive personal details in its own memory. After that, the agent syncs each new memory in the same turn.
 
