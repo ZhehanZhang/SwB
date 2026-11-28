@@ -44,6 +44,10 @@ export const docs = defineDocs({
 
 export default defineConfig({
   mdxOptions: {
+    rehypeCodeOptions: {
+      langs: ['shellscript', 'json', 'python', 'toml', 'yaml'],
+      lazy: false,
+    },
     remarkPlugins: (plugins) => [remarkDocSource, remarkCjkFriendly, ...plugins],
   },
 });
