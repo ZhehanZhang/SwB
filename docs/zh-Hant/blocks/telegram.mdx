@@ -1,19 +1,19 @@
 ---
 title: Telegram
-description: 把 Telegram 訊息路由給代理，並貼出答案。
+description: 把 Telegram 訊息路由給代理，並張貼回覆。
 ---
 
-SwB 主動向 Telegram 取得新訊息。SwB 伺服器可以使用私人位址。
+SwB 主動向 Telegram 索取新訊息，所以你的 SwB 伺服器可以使用私有網址。
 
 ## 建立機器人
 
-在 [@BotFather](https://t.me/BotFather) 傳送 `/newbot`。請代理連接 Telegram。代理呼叫 `telegram_provision` 並給你一個領取連結。開啟連結並貼上機器人權杖。
+在 [@BotFather](https://t.me/BotFather) 中傳送 `/newbot`。請代理連接 Telegram。代理會呼叫 `telegram_provision`，並給你一個認領連結。開啟連結，貼上 Bot 權杖。
 
-## 把機器人加到群組
+## 把機器人加入群組
 
-把機器人加到群組。在群組中傳送 `/swb@<bot username>`。接著 `telegram_status` 會在 `setup.seen_chats` 中顯示群組的聊天 id。把這個 id 放進空間的 `chats`。
+把機器人加入群組，再到群組中傳送 `/swb@<bot username>`。之後 `telegram_status` 會在 `setup.seen_chats` 中顯示群組的聊天 ID。把這個 ID 填入空間的 `chats`。
 
-開啟與機器人的私人對話。傳送一則訊息給它。在 `setup.seen_chats` 找出你的私人對話 ID。將該 ID 填入 `owner_ids`。
+與機器人開始私人聊天，並傳送一則訊息。在 `setup.seen_chats` 中找出你的私人聊天 ID，把它填入 `owner_ids`。
 
 ```yaml
 blocks:
@@ -29,42 +29,42 @@ blocks:
 
 ## 從 Telegram 傳送
 
-私訊機器人、提及機器人，或使用 `/swb <target> <message>`。若要繼續對話，請直接回覆機器人的回答。啟用 `persona_prefix` 後，代理的回覆可以用粗體顯示其名稱。
+傳送私人訊息給機器人、提及機器人，或使用 `/swb <target> <message>`。如果要延續對話，回覆機器人的那則回覆。啟用 `persona_prefix` 後，代理的回覆可以用粗體顯示代理的名稱。
 
-若要讓機器人讀取群組中的每則訊息，請在 @BotFather 用 `/setprivacy` 關閉隱私模式。然後把機器人移出群組，再重新加入。
+如果要讓機器人讀取群組中的每則訊息，在 @BotFather 中用 `/setprivacy` 關閉隱私模式，再把機器人從群組移除後重新加入。
 
 ## 模組設定
 
-| 設定鍵 | 用途 |
+| 鍵 | 用途 |
 | - | - |
-| `blocks.telegram` | 設定 Telegram 機器人及其空間 |
+| `blocks.telegram` | Telegram 機器人及其空間的設定 |
 | `blocks.telegram.use` | 載入 `telegram` 模組 |
-| `blocks.telegram.enabled` | 設為 `true` 啟用模組，設為 `false` 關閉模組 |
-| `blocks.telegram.token_env` | 存放機器人權杖的環境變數名稱 |
-| `blocks.telegram.dm_space` | 指定私聊所用的路由與擁有者設定來自哪個空間。預設使用設定中的第一個空間 |
-| `blocks.telegram.dm_mode` | 其他人傳來私訊時的處理模式。設為 `watch` 收集訊息以製作摘要，設為 `off` 略過訊息 |
-| `blocks.telegram.ack_reaction` | 收到傳給機器人的訊息時用來確認的表情符號。設為 `null` 可關閉這項反應 |
-| `blocks.telegram.persona_prefix` | 設為 `true` 後，在第一行以粗體顯示代理使用的名稱 |
-| `blocks.telegram.refresh_minutes` | 目標清單的更新間隔，單位為分鐘。預設值為 `30` |
-| `blocks.telegram.target_aliases` | 替現有目標加上其他可用的名稱 |
-| `blocks.telegram.agents` | 各代理可貼文與接收事件的空間。用 `*` 選取所有空間 |
+| `blocks.telegram.enabled` | 設為 `true` 載入模組，設為 `false` 則關閉 |
+| `blocks.telegram.token_env` | 存放 Bot 權杖的環境變數名稱 |
+| `blocks.telegram.dm_space` | 私人聊天套用這個空間的路由和擁有者設定。預設為第一個已設定的空間 |
+| `blocks.telegram.dm_mode` | 其他人私人訊息的模式。`watch` 收集成摘要，`off` 略過私人訊息 |
+| `blocks.telegram.ack_reaction` | 表情符號，用來標示已收到寫給機器人的訊息。設為 `null` 可關閉這個回應 |
+| `blocks.telegram.persona_prefix` | 設為 `true` 時，在第一行用粗體顯示代理使用的名稱 |
+| `blocks.telegram.refresh_minutes` | 更新目標清單的間隔，單位為分鐘。預設為 `30` |
+| `blocks.telegram.target_aliases` | 把額外的目標名稱對應到現有目標 |
+| `blocks.telegram.agents` | 每個代理可以發文並接收事件的空間。`*` 代表所有空間 |
 
-使用[頻道模式](/zh-Hant/docs/channel-modes)，可透過專案路由喚醒代理。
+用[頻道模式](/zh-Hant/docs/channel-modes)經由專案路由喚醒代理。
 
 ## 空間與群組
 
-| 設定鍵 | 用途 |
+| 鍵 | 用途 |
 | - | - |
-| `blocks.telegram.spaces` | 替 SwB 中的各個空間設定一組 Telegram 群組 |
-| `blocks.telegram.spaces.*.chats` | 這個空間中的群組聊天 ID。請使用負整數。每個群組歸入一個空間 |
+| `blocks.telegram.spaces` | 把 SwB 中使用的名稱對應到各組 Telegram 群組的設定 |
+| `blocks.telegram.spaces.*.chats` | 這個空間中的群組聊天 ID，使用負整數。每個群組只放在一個空間中 |
 | `blocks.telegram.spaces.*.owner_ids` | 視為擁有者的 Telegram 使用者 ID |
-| `blocks.telegram.spaces.*.known` | 替已登記的 Telegram 使用者 ID 設定顯示名稱 |
-| `blocks.telegram.spaces.*.default_target` | 傳給 SwB 的新訊息省略目標名稱時使用的目標 |
+| `blocks.telegram.spaces.*.known` | 把已知的 Telegram 使用者 ID 對應到顯示名稱 |
+| `blocks.telegram.spaces.*.default_target` | 新訊息寫給 SwB 且省略目標名稱時使用的目標 |
 | `blocks.telegram.spaces.*.project` | 這個空間的預設 SwB 專案 |
 | `blocks.telegram.spaces.*.channel_projects` | 依群組聊天 ID 設定 SwB 專案 |
-| `blocks.telegram.spaces.*.mode` | 空間的處理模式。群組的模式可以覆寫這項設定 |
-| `blocks.telegram.spaces.*.channels` | 依群組聊天 ID 設定處理模式，也可以填寫詳細設定 |
-| `blocks.telegram.spaces.*.channels.*.mode` | 單一群組的處理模式 |
-| `blocks.telegram.spaces.*.channels.*.project` | 單一群組使用的 SwB 專案。這項設定優先於空間的專案 |
-| `blocks.telegram.spaces.*.listen` | 舊版設定。讓指定 ID 的群組聊天使用 `assist` 模式 |
-| `blocks.telegram.spaces.*.bot_posts_per_hour` | 機器人每小時可在同一對話串貼文的次數上限。預設值為 `20` |
+| `blocks.telegram.spaces.*.mode` | 空間的模式。群組的模式可以覆寫它 |
+| `blocks.telegram.spaces.*.channels` | 依群組聊天 ID 設定模式或更詳細的設定 |
+| `blocks.telegram.spaces.*.channels.*.mode` | 單一群組的模式 |
+| `blocks.telegram.spaces.*.channels.*.project` | 單一群組的 SwB 專案。優先於空間的專案 |
+| `blocks.telegram.spaces.*.listen` | 舊版設定，列出使用 `assist` 模式的群組聊天 ID |
+| `blocks.telegram.spaces.*.bot_posts_per_hour` | 每個主題 1 小時內的機器人貼文數上限。預設為 `20` |

@@ -1,46 +1,46 @@
 ---
 title: Muse
-description: 配對 Muse 裝置以即時喚醒 Muse，或新增連接器以使用 SwB 工具。
+description: 配對 Muse gadget 來即時喚醒，或新增連接器來使用工具。
 ---
 
 ## 即時喚醒 Muse
 
-要在收到訊息時啟動 Muse，建議使用 Muse 裝置。這類裝置可以和 Muse App 配對。
+如果要在訊息送達時立刻開始工作，SwB 建議使用 Muse gadget。gadget 是一種與 Muse 應用程式配對的裝置。
 
-[夥伴裝置](/zh-Hant/docs/companion)是在電腦上執行的 SwB 程式。配對時，它會透過藍牙充當 Muse 裝置。配對完成後，由 SwB 伺服器維持與 Muse 的連線。這時可以停止夥伴裝置上的程式。
+[Companion](/zh-Hant/docs/companion) 是在你自己的裝置上執行的 SwB 程式。配對期間，它用藍牙扮演 gadget。配對完成後，SwB 伺服器會維持與 Muse 的連線，這時就可以停止 Companion。
 
-為 SwB 設定公開的 HTTPS 位址。將這段設定提示詞貼給具備完整擁有者權限的 SwB 代理。
+為 SwB 設定公開 HTTPS 網址。把下面的提示詞貼給具備完整擁有者存取權的 SwB 代理。
 
 <SetupPrompt name="muse" lang="zh-Hant" />
 
-請代理呼叫 `connect(what="muse", choose={"gadget": true})`。依照傳回的說明操作。
+請代理呼叫 `connect(what="muse", choose={"gadget": true})`，再依照回傳的指示操作。
 
-在 [Muse SDK 權杖頁面](https://gadgets.muse.ai/settings/sdk-tokens)建立個人權杖。透過代理提供的 SwB 一次性領取連結儲存權杖。
+在 [Muse SDK tokens 頁面](https://gadgets.muse.ai/settings/sdk-tokens)建立個人權杖，再用代理提供的一次性 SwB 認領連結儲存。
 
-準備一台支援藍牙的 Mac 或 Linux 電腦。將電腦放在手機附近。在 macOS 上使用「終端機」。系統顯示提示時，允許「終端機」取用藍牙。在 Linux 上，允許夥伴裝置存取系統藍牙服務 BlueZ。
+使用具備藍牙的 Mac 或 Linux 電腦，並放在手機附近。在 macOS 上使用「終端機」，並在 macOS 詢問時允許藍牙存取。在 Linux 上，讓 Companion 程式能存取 BlueZ，也就是系統的藍牙服務。
 
-若要在已配對的夥伴裝置上加入 Muse 功能，請先執行 `swb companion disconnect`。取得[夥伴裝置配對碼](/zh-Hant/docs/companion)。配對碼限用一次，有效期限為 10 分鐘。
+如果要在已配對的 Companion 上加入 Muse，先執行 `swb companion disconnect`，再取得 [Companion 配對碼](/zh-Hant/docs/companion#配對裝置)。配對碼只能使用一次，10 分鐘後過期。
 
-將範例位址換成你的 SwB 位址。在電腦上執行下列指令。
+把範例網址換成你的 SwB 網址，在電腦上執行下面的指令。
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-依提示輸入配對碼。輸入的內容會隱藏。配對 Muse 時，讓夥伴裝置上的程式繼續執行。請代理啟動 Muse 配對。
+看到提示後輸入配對碼，輸入的內容會隱藏。配對 Muse 期間，讓 Companion 程式保持執行。接著請代理開始 Muse 配對。
 
-在 Muse App 開啟 **Settings**。進入 **Devices**。開啟 **Developer mode**。點選 **Add Device**。選取代理提供的裝置名稱。如果 App 詢問 Wi-Fi，請選取 **Use current connection**。
+在 Muse 應用程式中開啟 **Settings**，再開啟 **Devices**。啟用 **Developer mode**，選取 **Add Device**，再選取代理提供的裝置名稱。如果應用程式詢問 Wi-Fi，選取 **Use current connection**。
 
-## 新增連接器以使用工具
+## 新增連接器來使用工具
 
-連接器透過模型上下文協定（MCP）讓 Muse 使用 SwB 工具。使用 OAuth 時，你會在瀏覽器核准存取。
+連接器讓 Muse 透過 Model Context Protocol（MCP）使用 SwB 工具。使用 OAuth 時，由你在瀏覽器中核准這項存取。
 
-在 SwB 啟用擁有者登入。請 Muse 將結尾為 `/mcp` 的公開 HTTPS 位址新增為自訂連接器，並選用 OAuth。將 `https://agent.meta.ai/api/hatch/oauth/callback` 設為重新導向 URI，用來接收登入結果。
+在 SwB 上啟用擁有者登入。請 Muse 以 OAuth 新增自訂連接器，網址填入以 `/mcp` 結尾的公開 HTTPS 網址。重新導向 URI 使用 `https://agent.meta.ai/api/hatch/oauth/callback`，也就是接收登入結果的網址。
 
-開啟 Muse 提供的登入連結。以擁有者身分登入 SwB。Muse 會以 `muse` 身分連線到 SwB。
+開啟 Muse 提供的登入連結，以擁有者身分登入 SwB。Muse 會以 `muse` 的身分連接 SwB。
 
 ## 檢查連線
 
-要檢查裝置，請具備擁有者權限的代理呼叫 `send(to="muse:gadget:muse", task="Reply with pong.")`。在測試對話中查看回覆。
+如果是 gadget，請具備擁有者存取權的代理呼叫 `send(to="muse:gadget:muse", task="Reply with pong.")`，再到測試對話中確認回覆。
 
-要檢查連接器，請另一個 SwB 代理呼叫 `send(to="agent:muse", task="Reply with pong.")`。請 Muse 用 `inbox` 讀取訊息。請 Muse 用 `reply` 在同一段對話中回覆。
+如果是連接器，請另一個 SwB 代理呼叫 `send(to="agent:muse", task="Reply with pong.")`。請 Muse 用 `inbox` 讀取訊息，再用 `reply` 在同一個對話中回覆。

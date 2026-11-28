@@ -1,15 +1,15 @@
 ---
-title: Webhook
-description: 通过 Webhook 接收外部事件或向其他服务发送消息。
+title: Webhooks
+description: 用 Webhook 接收其他服务的事件，并向外发送消息。
 ---
 
-支付完成等变化称为事件。Webhook 在事件发生时自动向指定网址发送数据。Webhook 模块可以接收 Stripe 等服务的事件，也可以向你指定的网址发送消息。
+事件是一次变化，例如一笔付款完成。事件发生时，Webhook 把数据发送到一个地址。Webhooks 模块可以接收 Stripe 等提供方的事件，也可以把消息发送到你指定的地址。
 
-在 MCP 客户端使用 `setup-webhook` 提示词可获取设置帮助。
+需要设置方面的帮助时，在 MCP 客户端中使用 `setup-webhook` 提示词。
 
 ## 接收事件
 
-请以所有者身份调用 `webhook_create`。指定名称和验证方式 `verify`。在 `to` 中填写接收事件的目标。目标可以是智能体、路由或会话。
+Webhook 由所有者管理。调用 `webhook_create`，传入名称，在 `verify` 中指定验证方法，在 `to` 中指定目标。目标是接收事件的智能体、路由或会话。
 
 ```json
 {
@@ -22,27 +22,25 @@ description: 通过 Webhook 接收外部事件或向其他服务发送消息。
 }
 ```
 
-将 SwB 返回的网址粘贴到服务的 Webhook 设置中。签名密钥是服务与 SwB 共享的密钥，用于核验事件来源。
+把返回的 URL 粘贴到提供方的 Webhook 设置中。在这个示例中，签名密钥从 Stripe 获取。签名密钥是双方共享的密钥，SwB 用它确认事件来自提供方。
 
-领取链接指向所有者保存密钥的页面。先以所有者身份登录 SwB。再打开领取链接。在页面上保存服务提供的签名密钥。SwB 对保存的密钥保密。
+认领链接会打开所有者保存密钥的页面。先以所有者身份登录 SwB，再打开认领链接。在那里保存密钥。SwB 会对保存的密钥保密。
 
-使用 `bearer` 或 `path` 时，请生成至少 32 位的随机密钥。请使用至少 10 种字符。
+使用 `bearer` 或 `path` 验证时，生成至少 32 位的随机密钥。密钥至少要包含 10 种字符。
 
-如果 SwB 网址由 [Cloudflare Access](/zh-Hans/docs/setup/cloudflare#保护控制台) 保护，请将 `/hooks/*` 的访问策略设为 **Bypass**。
+如果你的 SwB 地址使用 Cloudflare Access，把 `/hooks/*` 的 [Cloudflare Access 策略](/zh-Hans/docs/setup/cloudflare#保护控制台)设为 **Bypass**。
 
-### 授予访问权限
+### 为 Webhook 授予访问权限
 
-Webhook 名为 `payments` 时，频道为 `channel:webhook/payments`。频道已有规则时，SwB 沿用该规则。其余情况下，SwB 在创建 Webhook 时共享频道。
+SwB 创建 Webhook 时会共享 Webhook 频道 `channel:webhook/payments`。如果频道已有规则，SwB 保留原有规则。目标还需要允许 `workspace:webhook-payments` 访问。目标的访问规则用这个工作区名称识别 Webhook。
 
-在目标的访问规则中加入 `workspace:webhook-payments`。这个工作区名称代表 Webhook。如果 `webhook_create` 返回了 `visibility_set` 调用，请执行该调用。
+如果 `webhook_create` 的响应中带有 `visibility_set` 调用，运行这个调用。目标授予访问权限之前，已接受的事件作为 `context` 进入邮箱，也就是一条仅供查阅的备注。有了访问权限，事件就能唤醒目标，由它采取行动。
 
-目标授权前，SwB 会把已接收的事件作为 `context` 存入邮箱，供目标查阅。授权后，新事件可以唤醒目标，让目标开始处理事件。
+调用 `webhook_test` 并传入 Webhook 名称，让 SwB 发送一个示例事件。结果为 `woke`，说明事件已送达目标。
 
-用 Webhook 名称调用 `webhook_test`，让 SwB 发出示例事件。结果为 `woke` 时，表示 SwB 已唤醒目标。
+### 阅读事件
 
-### 查看事件
-
-SwB 将外部送来的内容标为 `external`。这段内容有明确的起止标记。主题显示 Webhook 名称和事件类型。末行显示标识本次投递的 ID。
+SwB 把内容标记为 `external`，表示它来自 SwB 外部。框架标出这段内容的起止位置。标题显示 Webhook 名称和事件类型。最后一行显示投递 ID，它用来标识这次投递。
 
 ```text
 Webhook payments (external): payment_intent.succeeded
@@ -59,9 +57,9 @@ Webhook payments delivery evt_example.
 
 ### 选择目标能看到的内容
 
-用 `fields` 指定目标需要的字段。字段逐层嵌套时，用点号连接各层名称。用 `template` 写一句摘要。用花括号括住要填入摘要的字段路径。
+设置 `fields`，只保留事件中目标需要的部分。用点号分隔逐级的字段名。设置 `template`，可以生成一段简短的摘要。把每个字段路径放在花括号中。
 
-此示例使用 [Stripe 快照事件](https://docs.stripe.com/api/events/object)。快照记录事件发生时的数据状态。
+这个示例使用 [Stripe 快照事件](https://docs.stripe.com/api/events/object)。快照包含对象在事件发生时的状态。
 
 ```json
 {
@@ -71,26 +69,26 @@ Webhook payments delivery evt_example.
     "verify": "stripe",
     "to": "agent:claude",
     "fields": ["data.object.id", "data.object.amount"],
-    "template": "付款 {data.object.id} 的金额为 {data.object.amount} 个最小货币单位"
+    "template": "Payment {data.object.id} for {data.object.amount} in the smallest currency unit"
   }
 }
 ```
 
 ## 管理 Webhook
 
-调用 `webhook_list` 查看地址、计数和密钥状态。将 `include_revoked` 设为 `true`，即可一并查看已撤销的 Webhook。
+调用 `webhook_list` 查看地址、计数和密钥状态。把 `include_revoked` 设为 `true`，可以列出已撤销的 Webhook。
 
-用 Webhook 名称调用 `webhook_rotate`。先以所有者身份登录 SwB。再打开返回的领取链接。在页面上保存新密钥。在发送服务或接收端换用新密钥。使用路径密钥时，请更新发送服务中的网址。
+调用 `webhook_rotate` 并传入 Webhook 名称，获取用来保存新密钥的认领链接。先以所有者身份登录 SwB，再打开认领链接。在那里保存新密钥，然后把新密钥更新到提供方或接收端。如果是路径密钥，更新提供方那边的 URL。
 
-用 `grace_s` 为旧密钥保留一段有效期，方便切换到新密钥。这段时间从调用工具时算起，最长七天。切换期间，SwB 用新旧两个密钥为出站消息签名。接收端网址有变时，可通过同一个领取链接保存新网址。
+设置 `grace_s`，可以让旧密钥在你保存新密钥后继续有效。宽限期从调用工具时开始，最长 7 天。出站 Webhook 在轮换密钥后的宽限期内，由 SwB 同时用两个密钥签名。如果接收端更换了 URL，用同一个认领链接保存新 URL。
 
-更换出站 Webhook 的密钥时，可用 `allow_private` 和 `senders` 更新设置。省略这两个字段可保留原值。
+轮换出站 Webhook 时，用 `allow_private` 和 `senders` 修改设置。省略的字段保留原值。
 
-用 Webhook 名称调用 `webhook_revoke`，即可停用 Webhook 并删除已保存的密钥。向已停用的入站网址发送请求会收到 `410`。
+调用 `webhook_revoke` 并传入 Webhook 名称，可以停用这个 Webhook 并删除它保存的密钥。发往已撤销的入站 URL 的请求会收到 `410`。
 
 ## 发送消息
 
-调用 `webhook_create`。填写名称并将 `direction` 设为 `out`。
+调用 `webhook_create`，把 `direction` 设为 `out`，并传入名称。
 
 ```json
 {
@@ -99,21 +97,21 @@ Webhook payments delivery evt_example.
 }
 ```
 
-默认使用公开的 HTTPS 网址和 443 端口。将 `allow_private` 设为 `true`，即可使用私有网络中的 HTTPS 接收端或 443 以外的端口。
+默认使用公网 HTTPS URL 和 443 端口。接收端位于内网或使用其他端口时，把 `allow_private` 设为 `true`。
 
-在 `senders` 中填写 `agent:claude` 这样的智能体地址，即可授予发送权限。默认只有所有者本人可以发送。
+默认只有所有者可以发送。在 `senders` 中填入 `agent:claude` 这样的智能体地址，即可授予发送权限。
 
-先以所有者身份登录 SwB。再打开领取链接。在页面上保存接收端的 HTTPS 网址和签名密钥。通过私下渠道将同一个 `whsec_` 签名密钥交给接收方。
+先以所有者身份登录 SwB，再打开认领链接。保存接收端的 HTTPS URL 和签名密钥。通过私密渠道把同一个 `whsec_` 签名密钥交给接收端。
 
-调用 `send` 时，将 `to` 设为 `webhook:out:alerts`。SwB 通过 `POST` 请求发送以下 JSON 正文。
+调用 `send`，把 `to` 设为 `webhook:out:alerts`。SwB 在 `POST` 请求中发送下面的 JSON 请求体。
 
 ```json
 {
   "id": "msg_example",
   "type": "swb.message",
   "data": {
-    "subject": "收到付款",
-    "text": "付款已完成。",
+    "subject": "Payment received",
+    "text": "The payment cleared.",
     "from": "claude",
     "trust": "owner",
     "project": null,
@@ -123,27 +121,29 @@ Webhook payments delivery evt_example.
 }
 ```
 
-SwB 遵循 [Standard Webhooks 规范](https://www.standardwebhooks.com/)。接收方可用支持该规范的库核验原始正文。核验时传入 `webhook-id`、`webhook-timestamp` 和 `webhook-signature` 请求头。其中包含投递 ID、发送时间和签名。签名是用签名密钥算出的值，用来核验数据。
+[Standard Webhooks 规范](https://www.standardwebhooks.com/)定义了 SwB 为这些消息签名时采用的格式。签名是 SwB 用签名密钥计算出的值，用来保护数据。请求头是随请求体一同发送的附加信息。
 
-用出站 Webhook 的名称调用 `webhook_test`，可发送一条 `swb.test` 消息。
+用 Standard Webhooks 库校验原始请求体。传入 `webhook-id`、`webhook-timestamp` 和 `webhook-signature` 请求头。它们分别提供投递 ID、发送时间和签名。
+
+调用 `webhook_test` 并传入出站 Webhook 的名称，可以发送一条 `swb.test` 消息。
 
 ## 入站响应
 
 | HTTP 状态码 | 含义 |
 | - | - |
-| `200` | SwB 已接收事件，接下来会检查访问权限 |
-| `200` 且正文含 `"duplicate": true` | SwB 已接收过本次投递 |
-| `400` | 请求正文格式有误 |
-| `401` | 请求验证失败 |
-| `404` | Webhook 地址或路径密钥有误 |
-| `410` | 所有者已撤销该 Webhook |
-| `413` | 请求正文超出大小上限 |
-| `429` | 请求次数达到上限。`Retry-After` 给出等待秒数 |
-| `503` | Webhook 正在等待保存密钥，或已保存的密钥格式有误 |
+| `200` | SwB 已接受事件，接下来会检查访问权限 |
+| `200`，带 `"duplicate": true` | SwB 此前已接受这次投递 |
+| `400` | 请求体的格式无效 |
+| `401` | 验证失败 |
+| `404` | Webhook 地址或路径密钥无效 |
+| `410` | 所有者已撤销这个 Webhook |
+| `413` | 请求体超出大小上限 |
+| `429` | 触发了请求限制。等待的秒数见 `Retry-After` |
+| `503` | Webhook 正在等待密钥，或保存的密钥格式有误 |
 
-## 设置与限制
+## 设置和限制
 
-模块默认启用。在配置文件中将 `blocks.webhook.enabled` 设为 `false`，即可停用模块。用 `blocks.webhook.daily_cap` 限制每日发送次数。设为 `null` 可关闭每日发送上限。
+这个模块默认启用。在配置文件中把 `blocks.webhook.enabled` 设为 `false` 可以关闭它。用 `blocks.webhook.daily_cap` 限制每天的出站发送次数。设为 `null` 可取消每日上限。
 
 ```yaml
 blocks:
@@ -153,37 +153,41 @@ blocks:
     daily_cap: null
 ```
 
-SwB 用收到的原始正文核验签名。重放指再次发送同一条有效请求。对于支持重放检查的方式，SwB 会保存投递记录。时间偏差指经签名的发送时间与 SwB 时钟的最大允许差值。
+SwB 按收到的原始请求体校验签名。重放指重复发送一个有效的请求。使用表中检查重放的验证方法时，SwB 会记录每次投递。
 
-| 项目 | 限制 |
+在检查时间戳的验证方法中，容差指已签名发送时间与 SwB 时钟之间允许的最大差值。
+
+| 设置 | 限制 |
 | - | - |
-| 请求正文大小 | 默认为 256 KiB。可将 `blocks.webhook.max_body_kb` 设为 1 至 1024 |
-| 同一个 Webhook 通过验证的新事件总数 | 每 10 分钟 600 次 |
-| 同一个 Webhook 中每个客户端 IP 地址的验证失败次数 | 每 10 分钟 20 次 |
-| 同一个 Webhook 的验证失败总次数 | 每 10 分钟 100 次 |
-| 每个客户端 IP 地址访问错误地址的次数 | 每 10 分钟 20 次 |
-| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放检查期限 | 30 天 |
-| Stripe 和 Standard Webhooks 的时间偏差 | 默认 300 秒 |
-| Linear 的时间偏差 | 默认 60 秒 |
-| Stripe、Linear 和 Standard Webhooks 的自定义时间偏差 | 将 `tolerance_s` 设为 1 至 3600 秒 |
-| Sentry 和 HMAC 的重放检查 | 仅检查正文是否重复 |
-| Bearer 和路径验证 | 仅检查密钥 |
+| 请求体 | 默认为 256 KiB。把 `blocks.webhook.max_body_kb` 设为 1 到 1024 之间的整数 |
+| 每个 Webhook 在所有地址上新增的已验证事件 | 每 10 分钟 600 个 |
+| 每个 Webhook 来自每个客户端 IP 地址的验证失败 | 每 10 分钟 20 次 |
+| 每个 Webhook 的验证失败总数 | 每 10 分钟 100 次 |
+| 每个客户端 IP 地址发往错误地址的请求 | 每 10 分钟 20 次 |
+| Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放窗口 | 30 天 |
+| Stripe 和 Standard Webhooks 的时间戳容差 | 默认为 300 秒 |
+| Linear 的时间戳容差 | 默认为 60 秒 |
+| Stripe、Linear 和 Standard Webhooks 的自定义时间戳容差 | 把 `tolerance_s` 设为 1 到 3600 秒 |
+| Sentry 和 HMAC 的重放检查 | SwB 只检查重复的请求体 |
+| bearer 和 path 的重放检查 | SwB 只检查密钥 |
 
-SwB 先验证请求，再检查该地址的失败次数。同一个 Webhook 的同一客户端 IP 地址在 10 分钟内累计失败 20 次后，后续验证失败的请求会收到 `429`。计入的每次失败只保留 10 分钟。达到单个地址的失败上限后，通过验证的请求仍可继续处理。失败总次数达到 100 次后，SwB 会在验证前返回 `429`。达到 600 条新事件的上限后，SwB 会对该 Webhook 的所有请求返回 `429`。
+SwB 在验证后检查单个地址的失败次数。同一个 Webhook 和客户端 IP 地址在 10 分钟内失败 20 次后，后续的失败请求会收到 `429`。每次计入的失败在 10 分钟后过期。单个地址达到上限时，通过验证的请求仍会照常处理。
 
-请求经由受信的服务器转发时，SwB 根据 `trusted_proxies` 获取客户端 IP 地址。
+同一个 Webhook 在 10 分钟内累计失败 100 次后，SwB 会在验证前返回 `429`。达到 600 个事件的上限后，发往该 Webhook 的所有请求也会收到 `429`。
 
-## 服务设置
+请求由受信任的服务器转发时，SwB 用 `trusted_proxies` 确定客户端 IP 地址。
+
+## 提供方设置
 
 ### Stripe
 
 | `verify` | 请求头 | 密钥来源 |
 | - | - | - |
-| `stripe` | `Stripe-Signature` | [Stripe 控制台](https://docs.stripe.com/webhooks#register-webhook)中该接收地址专用的 `whsec_` 签名密钥 |
+| `stripe` | `Stripe-Signature` | [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) 中这个端点的 `whsec_` 签名密钥 |
 
-十六进制用数字 `0` 至 `9` 和字母 `a` 至 `f` 表示数值。Stripe 的十六进制签名必须使用小写字母。
+十六进制使用数字 `0` 到 `9` 和字母 `a` 到 `f`。SwB 要求 Stripe 签名中的十六进制字母为小写。
 
-SwB 默认允许经签名的发送时间与时钟相差 300 秒。
+SwB 把已签名的时间与自己的时钟比对，默认容差为 300 秒。
 
 ### Linear
 
@@ -191,7 +195,7 @@ SwB 默认允许经签名的发送时间与时钟相差 300 秒。
 | - | - | - |
 | `linear` | `Linear-Signature` | [Linear Webhook 设置](https://linear.app/developers/webhooks)中的签名密钥 |
 
-Linear 的十六进制签名可以使用大写或小写字母。SwB 检查签名正文中的 `webhookTimestamp`。默认允许 60 秒的时间偏差。
+SwB 接受 Linear 签名中大写和小写的十六进制字母。SwB 检查已签名请求体中的 `webhookTimestamp`，默认容差为 60 秒。
 
 ### Sentry
 
@@ -199,30 +203,30 @@ Linear 的十六进制签名可以使用大写或小写字母。SwB 检查签名
 | - | - | - |
 | `sentry` | `Sentry-Hook-Signature` | [Sentry 内部集成](https://docs.sentry.io/integrations/integration-platform/internal-integration/)的客户端密钥 |
 
-Sentry 的十六进制签名可以使用大写或小写字母。
+SwB 接受 Sentry 签名中大写和小写的十六进制字母。
 
 ### Svix 和 Standard Webhooks
 
 | `verify` | 请求头 | 密钥来源 |
 | - | - | - |
-| `standard` | `webhook-id`、`webhook-timestamp` 和 `webhook-signature` | 发送服务为此地址提供的 `whsec_` 签名密钥 |
-| `standard` 或 `svix` | `svix-id`、`svix-timestamp` 和 `svix-signature` | [Svix 应用门户](https://docs.svix.com/receiving/verifying-payloads/how)中此地址专用的 `whsec_` 签名密钥 |
+| `standard` | `webhook-id`、`webhook-timestamp` 和 `webhook-signature` | 发送方提供的这个端点的 `whsec_` 签名密钥 |
+| `standard` 或 `svix` | `svix-id`、`svix-timestamp` 和 `svix-signature` | [Svix 应用门户](https://docs.svix.com/receiving/verifying-payloads/how)中这个端点的 `whsec_` 签名密钥 |
 
 ### Vercel
 
 | `verify` | 请求头 | 密钥来源 |
 | - | - | - |
-| `hmac-sha1` | `x-vercel-signature` | [创建 Webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks)时显示的密钥，或集成控制台中的客户端密钥 |
+| `hmac-sha1` | `x-vercel-signature` | [创建 Webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) 时得到的密钥，或 Integration Console 中的客户端密钥 |
 
-将 `header` 设为 `x-vercel-signature`。将 `encoding` 设为 `hex`。将 `prefix` 设为空字符串，以接收纯十六进制签名。Vercel 的十六进制签名可以使用大写或小写字母。
+把 `header` 设为 `x-vercel-signature`。设置 `"encoding": "hex"`。签名是纯十六进制时，设置 `"prefix": ""`。SwB 接受 Vercel 签名中大写和小写的十六进制字母。
 
 ### Home Assistant
 
 | `verify` | 请求头 | 密钥来源 |
 | - | - | - |
-| `bearer` | `Authorization: Bearer <secret>` | 你为此 Webhook 生成的随机密钥 |
+| `bearer` | `Authorization: Bearer <secret>` | 你为这个 Webhook 生成的随机密钥 |
 
-在 `configuration.yaml` 中添加 [RESTful 命令](https://www.home-assistant.io/integrations/rest_command/)。将网址换成 SwB 返回的网址。在 [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/) 的 `swb_webhook_auth` 中保存完整的 `Bearer <secret>`。通过 SwB 的领取链接仅保存密钥本身。
+在 `configuration.yaml` 中添加一条 [RESTful 命令](https://www.home-assistant.io/integrations/rest_command/)。把 URL 设为 SwB 给出的地址。把完整的请求头值 `Bearer <secret>` 保存到 [`secrets.yaml`](https://www.home-assistant.io/docs/configuration/secrets/) 的 `swb_webhook_auth` 下。在 SwB 认领链接中只保存密钥本身。
 
 ```yaml
 rest_command:
@@ -239,41 +243,41 @@ rest_command:
 
 | `verify` | 请求头 | 密钥来源 |
 | - | - | - |
-| `bearer` | `Authorization: Bearer <secret>` | 你为此 Webhook 生成的随机密钥 |
+| `bearer` | `Authorization: Bearer <secret>` | 你为这个 Webhook 生成的随机密钥 |
 
-在 [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-Send-webhooks-in-Zap-workflows) 中选择 **Custom Request**。将请求方式设为 `POST`。在 **Headers** 中添加 `Authorization` 请求头。
+在 [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-Send-webhooks-in-Zap-workflows) 中选择 **Custom Request**。把方法设为 `POST`。在 **Headers** 下添加 `Authorization` 请求头。
 
 ### IFTTT
 
 | `verify` | 密钥位置 | 密钥来源 |
 | - | - | - |
-| `path` | `/hooks/<id>/<secret>` | 你为此 Webhook 生成的随机密钥 |
+| `path` | `/hooks/<id>/<secret>` | 你为这个 Webhook 生成的随机密钥 |
 
-如果发送服务只能调用网址，请使用路径验证。用 OpenSSL 生成随机路径密钥。
+发送方只能调用 URL 时，使用路径验证。用 OpenSSL 生成一个随机的路径密钥。
 
 ```sh
 openssl rand -hex 32
 ```
 
-通过领取链接保存密钥。将网址末尾的 `<secret>` 换成已保存的密钥。请对完整网址保密。SwB 会在访问日志中遮盖路径密钥。
+用认领链接保存它。把 URL 末尾的 `<secret>` 换成保存的密钥。把整个 URL 当作密钥对待。SwB 的访问日志会隐去路径密钥。
 
-在 IFTTT 中选择 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。将请求方式设为 `POST`。填入完整网址。
+在 IFTTT 中选择 [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request)。把方法设为 `POST`。填写完整的 URL。
 
 ### 自定义脚本
 
 | `verify` | 请求头 | 密钥来源 |
 | - | - | - |
-| `hmac-sha256` | `X-Signature-256` | 你为此 Webhook 生成的随机密钥 |
+| `hmac-sha256` | `X-Signature-256` | 你为这个 Webhook 生成的随机密钥 |
 
-HMAC 用共享密钥为正文计算签名。将 `header` 设为 `X-Signature-256`。将 `encoding` 设为 `hex`。将 `prefix` 设为 `sha256=`。两种 HMAC 方式都接受使用大写或小写字母的十六进制签名。
+HMAC 用共享密钥根据请求体生成签名。把 `header` 设为 `X-Signature-256`，`encoding` 设为 `hex`，`prefix` 设为 `sha256=`。两种 HMAC 方法都接受十六进制签名中的大写和小写字母。
 
-用 [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/) 生成密钥并写入私有文件。通过领取链接保存其中的密钥。
+用 [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/) 在一个仅自己可读的文件中生成密钥，再用认领链接保存它的值。
 
 ```sh
 (umask 077; set -C; openssl rand -hex 32 | tr -d '\n' > swb-webhook.key)
 ```
 
-将 `SWB_WEBHOOK_URL` 设为 SwB 返回的网址。用 [OpenSSL 4](https://docs.openssl.org/4.0/man1/openssl-mac/) 为含有当前时间的正文签名。SwB 根据完整的签名正文判断是否为重复请求。如需核验签名中的时间，请使用 `standard`。
+把 `SWB_WEBHOOK_URL` 设为 SwB 返回的 URL。用 [OpenSSL 4](https://docs.openssl.org/4.0/man1/openssl-mac/) 为带有当前时间的请求体签名。SwB 用整个已签名的请求体查找重复请求。如果需要校验已签名的时间，使用 `standard`。
 
 ```sh
 body=$(printf '{"type":"script.event","timestamp":%s}' "$(date +%s)")

@@ -1,9 +1,9 @@
 ---
-title: 伴侣设备
+title: Companion
 description: 连接一台设备，让智能体使用它的本地功能。
 ---
 
-**伴侣设备**是连接到 SwB 服务器的设备。智能体可以使用这台设备上的功能。
+**Companion** 是运行在你自己设备上的 SwB 程序，它会连接到你的 SwB 服务器。连接后，智能体就能使用这台设备上的功能。
 
 ## 复制设置提示词
 
@@ -11,72 +11,72 @@ description: 连接一台设备，让智能体使用它的本地功能。
 
 ## 配对设备
 
-请以所有者身份登录的智能体调用 `companion_code`。请智能体把配对码存入权限为 `0600` 的文件。只有文件所有者可以访问它。
+让一个以所有者身份登录的智能体调用 `companion_code`，并让它把配对码保存到权限为 `0600` 的文件中。在这种权限下，只有文件的属主可以访问它。
 
-要在控制台获取配对码，请[用通行密钥登录](/zh-Hans/docs/owner-login#通行密钥)。打开 **Settings**。在 **Connections** 中选择 **Pair a device**。使用 Cloudflare Access 时，请改用 `companion_code` 工具。
+要在控制台中获取配对码，先[用通行密钥登录](/zh-Hans/docs/owner-login#通行密钥)，然后打开 **Settings**，在 **Connections** 中选择 **Pair a device**。如果使用 Cloudflare Access，改用 `companion_code` 工具。
 
-在设备上运行以下命令。将示例地址换成你的 SwB HTTPS 地址。如果 SwB 也在这台设备上运行，可以使用 `http://127.0.0.1:8870`。
+在设备上运行下面的命令，把示例地址换成你的 SwB HTTPS 地址。如果 SwB 就运行在这台设备上，可以使用 `http://127.0.0.1:8870`。
 
 ```sh
 uvx swb-one companion connect https://swb.example.com --cap notify
 ```
 
-按提示输入配对码。输入内容会隐藏。配对码限用一次，有效期为 10 分钟。审计日志会记录配对码的创建者。
+出现提示后输入配对码，输入的内容会隐藏。配对码只能使用一次，10 分钟后过期。审计日志会记录是谁生成了它。
 
-设备会把自己的密钥保存在私有文件中。
+设备把自己的密钥保存在一个私有文件中。
 
 ## 选择功能
 
-每启用一项功能，添加一个 `--cap` 选项。
+每启用一项功能，就添加一个 `--cap` 选项。
 
 | 选项 | 功能 |
 | --- | --- |
-| `--cap notify` | 在设备桌面上显示通知 |
-| `--cap drop` | 通过 `~/SwB Drop` 文件夹共享文件，每个文件上限为 10 MiB |
-| `--cap mcp --mcp NAME=COMMAND` | 让智能体使用设备上 MCP 服务器提供的工具 |
+| `--cap notify` | 在设备上显示桌面通知 |
+| `--cap drop` | 通过 `~/SwB Drop` 文件夹共享文件，每个文件最大 10 MiB |
+| `--cap mcp --mcp NAME=COMMAND` | 让你的智能体使用设备上某个 MCP 服务器提供的工具 |
 | `--cap herdr` | [Herdr](/zh-Hans/docs/blocks/local-sessions#herdr) |
 | `--cap codex` | [Codex 应用服务器](/zh-Hans/docs/blocks/local-sessions#codex) |
 | `--cap opencode` | [OpenCode 服务器](/zh-Hans/docs/blocks/local-sessions#opencode) |
 | `--cap dsh` | [DeepSeek Harness](/zh-Hans/docs/blocks/local-sessions#deepseek-harness) |
 | `--cap hooks` | [状态钩子](/zh-Hans/docs/blocks/local-sessions#状态钩子) |
-| `--cap muse` | 在 Mac 或 Linux 电脑上通过蓝牙与 Muse 配对 |
+| `--cap muse` | 在 Mac 或 Linux 电脑上通过蓝牙配对 Muse |
 
-Linux 上的通知功能使用 `notify-send`。在 Debian 和 Ubuntu 上，请安装 `libnotify-bin` 软件包。
+在 Linux 上，通知功能使用 `notify-send`。在 Debian 和 Ubuntu 上，安装 `libnotify-bin` 软件包即可获得它。
 
-请使用 Python 3.13 配对 Muse 装置。参阅 [Muse 配对指南](/zh-Hans/docs/setup/muse)。配对完成后，由 SwB 服务器保持与 Muse 的连接。
+配对 Muse gadget 要使用 Python 3.13。按 [Muse 配对指南](/zh-Hans/docs/setup/muse)操作。配对后，由 SwB 服务器保持与 Muse 的连接。
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-为每个 MCP 服务器添加一个 `--mcp` 选项。要启动程序，请用 `--mcp 'NAME=COMMAND'`。把 `NAME` 换成服务器名称。把 `COMMAND` 换成启动程序的命令。对于设备上的 HTTP 服务器，请填写本机地址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
+每个 MCP 服务器对应一个 `--mcp` 选项。如果服务器是一个程序，使用 `--mcp 'NAME=COMMAND'`，把 `NAME` 换成你为服务器起的名称，把 `COMMAND` 换成这个程序的启动命令。如果是设备上的 HTTP 服务器，使用它的本地地址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
-智能体用 `companion_list` 查看已配对的设备及其操作。它用 `companion_invoke` 执行操作。
+智能体用 `companion_list` 查看每台已配对的设备及其操作，用 `companion_invoke` 执行某项操作。
 
-伴侣设备返回的文本上限为 1 MiB。请从 `structuredContent.result.content_b64` 读取 Drop 文件数据。
+Companion 返回的文本结果上限为 1 MiB。Drop 文件的数据从 `structuredContent.result.content_b64` 读取。
 
 ## 本地会话
 
-**本地会话**是设备上的编程智能体正在进行的会话。SwB 会显示会话状态和 `local:session:<companion>:<harness>:<session>` 地址。
+**本地会话**是编程智能体在设备上保持打开的会话。SwB 会列出它的状态，并附上它的 `local:session:<companion>:<harness>:<session>` 地址。
 
-配对前，请按表中的链接配置本地智能体。配对后，让伴侣设备保持运行。请以所有者身份登录的智能体调用 `targets(block="local")`。确认结果中列出了你的会话地址。
+在功能表中打开你的编程智能体对应的链接。配对之前，先设置好这个智能体。配对之后，让 Companion 保持运行。让一个以所有者身份登录的智能体调用 `targets(block="local")`，确认结果中有你的会话地址。
 
-SwB 会尝试把消息送到已打开的会话。发送者有权使用智能体邮箱时，SwB 也会把消息放入邮箱。答复会回到原来的 SwB 会话。
+SwB 会尝试把每条消息送达打开的会话。发送方可以使用该智能体的邮箱时，SwB 会把消息放入这个邮箱。回复在同一个对话中返回。
 
-从 `targets` 获取会话地址。在 `visibility_list` 中查找该地址对应的资源。用 `visibility_set` 共享该资源。
+使用 `targets` 返回的会话地址。在 `visibility_list` 中找到这个地址对应的资源，再用 `visibility_set` 共享这个资源。
 
-有关命令和适用的智能体，请参阅[本地会话](/zh-Hans/docs/blocks/local-sessions)。
+命令和支持的智能体见[本地会话](/zh-Hans/docs/blocks/local-sessions)。
 
 ## 保持运行
 
-配对后，伴侣设备会开始运行。运行 `swb companion run` 可重新启动。运行 `swb companion status` 可查看本机设备编号和功能。
+配对会启动 Companion。要再次启动它，运行 `swb companion run`。运行 `swb companion status` 可以查看本地设备 ID 和功能。
 
-通过 `uvx` 运行时，把命令中的 `swb` 换成 `uvx swb-one`。配对 Muse 时，请保留 [Muse 指南](/zh-Hans/docs/setup/muse)中的软件包和 Python 选项。
+要用 `uvx` 运行这些命令，把 `swb` 换成 `uvx swb-one`。如果是 Muse，保留 [Muse 指南](/zh-Hans/docs/setup/muse)中的软件包选项和 Python 选项。
 
-每次连接都由设备发起。
+与 SwB 的每个连接都由设备发起。
 
 ## 断开连接
 
-在设备上运行 `swb companion disconnect`，以移除设备密钥。也可以在控制台的 **Settings** 中打开 **Connections**。在该设备旁选择 **Disconnect**，以撤销密钥。
+在设备上运行 `swb companion disconnect`，移除它的密钥。要在控制台中撤销密钥，打开 **Settings** 中的 **Connections**，选择这台设备旁的 **Disconnect**。
 
-运行中的伴侣设备发现密钥已撤销时，会删除本机密钥。如果设备上还留有密钥，请先运行 `swb companion disconnect`，再重新配对。
+运行中的 Companion 检测到密钥已撤销后，会移除本地密钥。如果设备上仍留有密钥，先运行 `swb companion disconnect`，再重新配对。

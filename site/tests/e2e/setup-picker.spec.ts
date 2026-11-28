@@ -91,7 +91,7 @@ test('the hero CTA and all hub apps link to localized Get started routes', async
     Telegram: 'telegram', 'Grok Bot': 'grok-bot', Muse: 'muse',
   };
   for (const [prefix, title] of [
-    ['', 'Set up with agent'], ['/zh-Hans', '用智能体设置'], ['/zh-Hant', '用代理設定'],
+    ['', 'Set up with agent'], ['/zh-Hans', '让智能体设置'], ['/zh-Hant', '讓代理設定'],
   ]) {
     await page.goto(`${prefix}/`);
     const path = `${prefix}/docs/get-started`;
@@ -109,8 +109,8 @@ test('the hero CTA and all hub apps link to localized Get started routes', async
 
 for (const [locale, path, heading, label] of [
   ['en', '/docs/setup', 'Set up your apps', 'Setup prompt'],
-  ['zh-Hans', '/zh-Hans/docs/setup', '设置你的应用', '设置提示词'],
-  ['zh-Hant', '/zh-Hant/docs/setup', '設定你的應用程式', '設定提示詞'],
+  ['zh-Hans', '/zh-Hans/docs/setup', '设置应用', '设置提示词'],
+  ['zh-Hant', '/zh-Hant/docs/setup', '設定應用程式', '設定提示詞'],
 ]) {
   test(`${locale} coding agent guides show the SwB server and channel names`, async ({ page }) => {
     const docs = path.replace(/\/setup$/, '');

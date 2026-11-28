@@ -1,29 +1,29 @@
 ---
 title: 首次运行
-description: 让其他应用访问 SwB。登录后查看你的实例。
+description: 让外部能访问 SwB，然后登录并查看你的实例。
 ---
 
-## 在本机运行
+## 在这台电脑上运行
 
 {/* prepublication */}
 
-软件包发布后，请在空目录中运行 `uvx swb-one up`。请在五分钟内打开终端显示的一次性登录链接。SwB 默认使用 `http://localhost:8870`。如果设置了 `SWB_PORT`，SwB 会在地址中使用该端口。[安装指南](/zh-Hans/docs/install)介绍其他启动方式，包括从源代码构建。
+软件包发布后，在一个空文件夹中运行 `uvx swb-one up`。在 5 分钟内打开终端里的一次性登录链接。SwB 默认使用 `http://localhost:8870`。如果设置了 `SWB_PORT`，地址中的端口会换成这个值。其他启动方式（包括从源码构建）见[安装](/zh-Hans/docs/install)。
 
 ## 获取公网地址
 
-Claude、ChatGPT 和 Grok 在云端运行。它们需要公网 HTTPS 地址来访问 SwB。隧道为本机的 SwB 提供公网地址。
+Claude、ChatGPT 和 Grok 运行在云端，需要一个公网 HTTPS 地址才能访问 SwB。隧道可以为本地的 SwB 服务器提供公网地址。
 
-安装 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)。确认终端可以运行 `cloudflared --version`。如果 SwB 正在运行，请先停止。在 SwB 实例目录中运行以下命令。
+安装 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)，并确认终端可以运行 `cloudflared --version`。如果 SwB 正在运行，先停止它。然后在 SwB 实例文件夹中运行下面的命令。
 
 ```bash
 uvx swb-one up --tunnel cloudflare
 ```
 
-SwB 会启动 Cloudflare Quick Tunnel，并显示公网 MCP 地址。使用此选项重新启动时，地址每次都会变更。请更新各应用中的地址。
+SwB 会开启一条 Cloudflare Quick Tunnel，并输出公网 MCP 地址。每次带这个选项重启，都会得到一个新地址。在各个应用中更新这个地址。
 
-如需使用 Tailscale，请先[安装 Tailscale](https://tailscale.com/download)。然后登录 Tailscale。启用 [Funnel](https://tailscale.com/docs/features/tailscale-funnel)。确认终端可以运行 `tailscale version`。将上方命令的选项改为 `--tunnel tailscale`。
+如果使用 Tailscale，先[安装 Tailscale](https://tailscale.com/download) 并登录，再启用 [Funnel](https://tailscale.com/docs/features/tailscale-funnel)。确认终端可以运行 `tailscale version`，然后在上面的命令中改用 `--tunnel tailscale`。
 
-要在自己的域名上使用固定地址，请阅读[自托管](/zh-Hans/docs/self-hosting)。
+要在自己的域名上使用固定地址，参阅[自托管](/zh-Hans/docs/self-hosting)。
 
 ## 查看下一步
 
@@ -31,44 +31,44 @@ SwB 会启动 Cloudflare Quick Tunnel，并显示公网 MCP 地址。使用此�
 swb status
 ```
 
-命令会显示服务器状态和已启用的模块。请在 **Next steps** 中查看后续设置。`switchboard_status` 工具也会给出下一步。
+这条命令显示服务器状态和已启用的模块。尚待完成的设置列在 **Next steps** 中。`switchboard_status` 工具也会报告后续步骤。
 
-要查询其他地址上的服务器，请加上 `--url`。例如，运行 `swb status --url http://127.0.0.1:8871`。命令用终端或实例 `.env` 中的 `SWB_PORT` 组成默认本机地址。若启动时用了 `--dir`，查询时也请指定同一实例目录。
+要检查其他地址上的服务器，设置 `--url`，例如运行 `swb status --url http://127.0.0.1:8871`。CLI 的默认本地地址取自 shell 或实例 `.env` 中的 `SWB_PORT`。如果运行 `swb up` 时用了 `--dir`，这里也传入同一个实例文件夹。
 
-## 登录 SwB 页面
+## 登录网页
 
-SwB 页面显示你的项目、智能体、收件箱、记忆和审计日志。它也是粘贴令牌的安全位置。
+网页上可以查看你的项目、智能体、收件箱、记忆和审计日志。这里也是粘贴令牌的安全位置。
 
 ![SwB 登录页面](/shots/login-light.webp)
 
-如需获取新链接，请另开一个终端，在同一实例目录中运行以下命令。
+需要新链接时，打开第二个终端，在同一实例文件夹中运行下面的命令。
 
 ```bash
 swb login-link
 ```
 
-命令会打印一次性登录链接。请在五分钟内用浏览器打开。和 `swb status` 一样，这条命令也接受 `--url` 和 `--dir`。首次登录后请添加[通行密钥](/zh-Hans/docs/owner-login#通行密钥)。之后用通行密钥登录。设置码及其他方式见[所有者登录](/zh-Hans/docs/owner-login)。
+这条命令会输出一个一次性登录链接。在 5 分钟内用浏览器打开它。`--url` 和 `--dir` 的用法与 `swb status` 相同。首次登录后，添加一个[通行密钥](/zh-Hans/docs/owner-login#通行密钥)，以后就用它登录。设置码和其他登录方式见[所有者登录](/zh-Hans/docs/owner-login)。
 
 ## 网页控制台
 
 | 页面 | 用途 |
 | - | - |
 | `/` | 查看服务器状态和项目列表。 |
-| `/agents/*` | 查看已注册的智能体和各自的详情。 |
-| `/audit` | 按类型筛选变更记录和其他事件。 |
-| `/inbox` | 查看会话和待处理的请求。 |
-| `/inbox/:handle` | 阅读单个会话中的消息。 |
+| `/agents/*` | 查看已注册的智能体，并打开每个智能体的详情。 |
+| `/audit` | 筛选审计日志，其中记录了各项变更和其他事件。 |
+| `/inbox` | 查看需要你处理的对话和请求。 |
+| `/inbox/:handle` | 阅读某个对话中的消息。 |
 | `/memory/*` | 浏览和搜索已保存的笔记。 |
-| `/projects/:slug` | 查看单个项目的路由、历史、会话和记忆。 |
+| `/projects/:slug` | 查看某个项目的路由、历史、对话和记忆。 |
 | `/connections/:platform` | 查看 Slack、Discord、Telegram 或 GitHub 的连接状态和 [**Channel modes**](/zh-Hans/docs/channel-modes)。 |
-| `/settings` | 查看服务器设置并管理通行密钥。 |
+| `/settings` | 查看服务器设置，管理通行密钥。 |
 | `/tokens` | 查看令牌请求和已保存的凭据。 |
-| `/about` | 查看 SwB 版本和已启用的模块。 |
+| `/about` | 查看 SwB 版本和已启用模块的列表。 |
 
 ## 连接第一个智能体
 
-如果要让第一个智能体设置其他应用，请给它所有者权限。对运行在服务器上的应用，请在浏览器中批准 [OAuth 登录](/zh-Hans/docs/owner-login#智能体登录)。请使用可调用所有 SwB 工具的连接。
+如果第一个智能体要负责设置其他应用，就授予它所有者权限。如果应用运行在服务器上，在浏览器中批准它的 [OAuth 登录](/zh-Hans/docs/owner-login#智能体登录)。选用一个可以访问全部 SwB 工具的连接。
 
-也可以在运行 SwB 的电脑上设置[本机所有者客户端](/zh-Hans/docs/setup/mcp-client#本机所有者客户端)。使用实例目录中 `.env` 里的 `SWB_KEY_OWNER` 登录客户端。请只把密钥发送到本机的 `/mcp` 地址。
+在运行 SwB 的电脑上，设置一个[本地所有者客户端](/zh-Hans/docs/setup/mcp-client#本地所有者客户端)。客户端登录时使用实例 `.env` 中的 `SWB_KEY_OWNER`。这个密钥只能发送到本地的 `/mcp` 地址。
 
-如果第一个智能体用的是配对密钥，请让它为每个仅限所有者的步骤提供对应的终端命令。在 SwB 实例目录中运行该命令。例如，运行 `swb connect slack`。[连接你的智能体](/zh-Hans/docs/connect)介绍其他应用的连接方法。
+如果第一个智能体使用配对密钥，遇到仅限所有者执行的步骤时，让它给出对应的终端命令，然后在 SwB 实例文件夹中运行这条命令，例如 `swb connect slack`。其他应用的连接方法见[连接你的智能体](/zh-Hans/docs/connect)。
