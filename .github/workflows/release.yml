@@ -188,7 +188,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/swb-one/
+      url: https://pypi.org/project/swb.one/
     permissions:
       id-token: write
     steps:
@@ -213,7 +213,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/swb-one/
+      url: https://test.pypi.org/project/swb.one/
     permissions:
       id-token: write
     steps:
