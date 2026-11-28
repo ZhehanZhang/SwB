@@ -3,8 +3,10 @@
 import { useChat } from '@ai-sdk/react';
 import { AIChatPanel, AIChatProvider, AIChatSearch, AIChatTrigger, useAIChat, type AIChatClientData } from '@fumadocs/ai-chat';
 import { DefaultChatTransport, type UIMessage } from 'ai';
+import { usePathname } from 'fumadocs-core/framework';
 import { DocsLayout, type DocsLayoutProps } from 'fumadocs-ui/layouts/notebook';
 import { useMemo } from 'react';
+import { docsVersionAtPath, latestDocsVersion } from '@/lib/docs-version';
 import type { Locale } from '@/lib/i18n';
 
 type Message = UIMessage<unknown, { client: AIChatClientData }, {
@@ -28,12 +30,13 @@ function renderPart(part: Message['parts'][number], live: boolean) {
   return part.type === 'tool-search' ? <AIChatSearch part={part} live={live} /> : null;
 }
 
-function EnabledChat({ lang, ...props }: DocsLayoutProps & { lang: Locale }) {
+function EnabledChat({ lang, version, ...props }: DocsLayoutProps & { lang: Locale; version: string }) {
   const transport = useMemo(() => new DefaultChatTransport<Message>({
     api: '/api/chat',
     prepareSendMessagesRequest: ({ messages }) => ({
       body: {
         lang,
+        version,
         messages: messages.map(({ role, parts }) => ({
           role,
           text: parts.filter((part) => part.type === 'text').map((part) => part.text).join('\n').slice(0, 1000),
@@ -41,7 +44,7 @@ function EnabledChat({ lang, ...props }: DocsLayoutProps & { lang: Locale }) {
         })).filter(({ text }) => text.trim()).slice(-8),
       },
     }),
-  }), [lang]);
+  }), [lang, version]);
   const chat = useChat({ transport });
 
   return (
@@ -58,13 +61,16 @@ function EnabledChat({ lang, ...props }: DocsLayoutProps & { lang: Locale }) {
   );
 }
 
-export function DocsShell({ lang, askAI, ...props }: Pick<DocsLayoutProps, 'tree' | 'children'> & { lang: Locale; askAI: boolean }) {
+export function DocsShell({ lang, askAI, trees, children }: Pick<DocsLayoutProps, 'children'> &
+  { lang: Locale; askAI: boolean; trees: Record<string, DocsLayoutProps['tree']> }) {
+  const version = docsVersionAtPath(usePathname());
   const layoutProps: DocsLayoutProps = {
-    ...props,
+    children,
+    tree: trees[version] ?? trees[latestDocsVersion],
     nav: { enabled: false, mode: 'top' },
     themeSwitch: { enabled: false },
     i18n: false,
     containerProps: { className: `swb-container swb-docs${askAI ? ' swb-docs-with-chat' : ''}` },
   };
-  return askAI ? <EnabledChat key={lang} lang={lang} {...layoutProps} /> : <DocsLayout {...layoutProps} />;
+  return askAI ? <EnabledChat key={version} lang={lang} version={version} {...layoutProps} /> : <DocsLayout {...layoutProps} />;
 }

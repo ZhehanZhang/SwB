@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { docsVersionAtPath, latestDocsVersion } from '@/lib/docs-version';
 import { isLocale, localeCookie, locales, localize } from '@/lib/i18n';
 import { SwbAddressProvider } from './swb-address-provider';
 
@@ -17,6 +18,7 @@ function useCanonicalPathname() {
 }
 
 export function Providers({ i18n, children }: { i18n: I18nProviderProps; children: ReactNode }) {
+  const docsVersion = docsVersionAtPath(useCanonicalPathname());
   const onLocaleChange = (next: string) => {
     if (!isLocale(next)) return;
     document.cookie = `${localeCookie}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
@@ -27,7 +29,10 @@ export function Providers({ i18n, children }: { i18n: I18nProviderProps; childre
   return (
     <FrameworkProvider Image={Image as Framework['Image']} Link={Link as Framework['Link']}
       useParams={useParams} usePathname={useCanonicalPathname} useRouter={useRouter}>
-      <RootProvider i18n={{ ...i18n, onLocaleChange }}><SwbAddressProvider>{children}</SwbAddressProvider></RootProvider>
+      <RootProvider i18n={{ ...i18n, onLocaleChange }}
+        search={docsVersion === latestDocsVersion ? undefined : { options: { api: `/api/search?version=${docsVersion}` } }}>
+        <SwbAddressProvider>{children}</SwbAddressProvider>
+      </RootProvider>
     </FrameworkProvider>
   );
 }

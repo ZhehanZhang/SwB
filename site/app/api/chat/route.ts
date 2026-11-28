@@ -4,10 +4,12 @@ import { z } from 'zod';
 import { locales, type Locale } from '@/lib/i18n';
 import { askContext } from '@/lib/ask-context';
 import { readDocsAsset, type AskPage } from '@/lib/docs-assets';
+import { docsAssetName, isDocsVersion, latestDocsVersion } from '@/lib/docs-version';
 import { siteUrl } from '@/lib/urls';
 
 const bodySchema = z.object({
   lang: z.enum(locales),
+  version: z.string().refine(isDocsVersion).optional(),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     text: z.string().trim().min(1).max(1000),
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
     return new Response('Invalid question', { status: 400 });
   }
 
-  const { lang, messages } = parsed.data;
+  const { lang, version = latestDocsVersion, messages } = parsed.data;
   try {
     const { env } = getCloudflareContext();
     if (!env.AI) return new Response(unavailable[lang], { status: 503 });
@@ -66,7 +68,8 @@ export async function POST(request: Request) {
     }
 
     const location = messages.at(-1)?.location?.location;
-    const pages = await readDocsAsset<AskPage[]>(`${lang}.json`);
+    const pages = await readDocsAsset<AskPage[]>(docsAssetName(version, lang));
+    if (!pages) return new Response(null, { status: 404 });
     const docs = askContext(pages, messages.at(-1)!.text, location, 40_000);
     const system = [
       'You are the SwB docs assistant. Answer questions about SwB using only the SwB documentation below.',

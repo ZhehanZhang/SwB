@@ -1,6 +1,7 @@
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { replaceSource } from 'fumadocs-core/mdx-plugins/stringifier';
 import remarkCjkFriendly from 'remark-cjk-friendly';
+import { isDocsVersion } from './lib/docs-version';
 import { locales } from './lib/i18n';
 import { readPromptFile } from './lib/prompt-source';
 import { promptUrl } from './lib/urls';
@@ -42,12 +43,57 @@ export const docs = defineDocs({
   },
 });
 
+const versionedFolders = [
+  'docs/versions',
+  ...(process.env.SWB_TEST_DOCS_VERSION === '1' ? ['site/tests/fixtures/docs-versions'] : []),
+];
+const versionedLocales = versionedFolders.flatMap((folder) => locales.map((locale) => `${folder}/*/${locale}`));
+
+export const versions = defineDocs({
+  dir: '..',
+  meta: { files: versionedLocales.map((path) => `${path}/**/{*.{json,yaml},meta{,.*}.{js,ts}}`) },
+  docs: {
+    postprocess: docs.docs.postprocess,
+    files: versionedLocales.map((path) => `${path}/**/*.{md,mdx}`),
+  },
+});
+
+const docsLink = new RegExp(`^(/(?:${locales.join('|')}))?/(docs|about)(?=/|[?#]|$)(.*)$`);
+
+function remarkVersionLinks() {
+  return (node: Node, file: File) => {
+    const version = /\/(?:docs\/versions|tests\/fixtures\/docs-versions)\/([^/]+)\//.exec(file.path)?.[1];
+    if (!version || !isDocsVersion(version)) return;
+
+    function versionHref(href: string) {
+      const match = docsLink.exec(href);
+      if (!match || /\.mdx?(?:[?#]|$)/.test(href)) return href;
+      const [, prefix = '', section, suffix] = match;
+      if (section === 'docs' && /^\/v\d/.test(suffix)) return href;
+      return `${prefix}/docs/v${version}${section === 'about' ? '/about' : ''}${suffix}`;
+    }
+
+    function walk(child: Node) {
+      if (child.type === 'link') child.url = versionHref(child.url);
+      if (child.type === 'mdxJsxFlowElement' || child.type === 'mdxJsxTextElement') {
+        for (const attr of child.attributes) {
+          if (attr.type === 'mdxJsxAttribute' && attr.name === 'href' && typeof attr.value === 'string') {
+            attr.value = versionHref(attr.value);
+          }
+        }
+      }
+      if ('children' in child) child.children.forEach(walk);
+    }
+    walk(node);
+  };
+}
+
 export default defineConfig({
   mdxOptions: {
     rehypeCodeOptions: {
       langs: ['shellscript', 'json', 'python', 'toml', 'yaml'],
       lazy: false,
     },
-    remarkPlugins: (plugins) => [remarkDocSource, remarkCjkFriendly, ...plugins],
+    remarkPlugins: (plugins) => [remarkDocSource, remarkVersionLinks, remarkCjkFriendly, ...plugins],
   },
 });

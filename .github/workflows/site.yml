@@ -67,6 +67,11 @@ jobs:
       - run: pnpm test:e2e --shard=${{ matrix.shard }}/3 --reporter=line
         env:
           CI: 'true'
+      - if: matrix.shard == 1
+        run: pnpm test:e2e docs-versioning.spec.ts --reporter=line
+        env:
+          CI: 'true'
+          SWB_TEST_DOCS_VERSION: '1'
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

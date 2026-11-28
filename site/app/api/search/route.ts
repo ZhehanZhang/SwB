@@ -1,3 +1,1 @@
-import { search } from '@/lib/search';
-
-export const { GET } = search;
+export { search as GET } from '@/lib/search';

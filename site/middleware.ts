@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { isDocsVersion } from './lib/docs-version';
 import { isLocale, localeCookie, localize, type Locale } from './lib/i18n';
 
 const languageRange = /^((?:en|zh|es|fr|de|ko|ja)(?:-[a-z0-9]{1,8})*)(?:\s*;\s*q\s*=\s*(0(?:\.\d{0,3})?|1(?:\.0{0,3})?))?$/;
@@ -24,7 +25,9 @@ function preferredLocale(header: string | null): Locale {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if ((request.method !== 'GET' && request.method !== 'HEAD') || /\.[^/]+\/?$/.test(pathname)) {
+  const versionRoot = pathname.match(/^\/docs\/v([^/]+)\/?$/)?.[1];
+  if ((request.method !== 'GET' && request.method !== 'HEAD')
+    || (/\.[^/]+\/?$/.test(pathname) && (!versionRoot || !isDocsVersion(versionRoot)))) {
     return NextResponse.next();
   }
 

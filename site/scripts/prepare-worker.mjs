@@ -1,6 +1,5 @@
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { docsAssetPath, prerenderedDocsRoutes } from '../lib/docs-asset-path.ts';
-import { locales } from '../lib/i18n.ts';
 
 const { routes, dynamicRoutes } = JSON.parse(readFileSync('.next/prerender-manifest.json', 'utf8'));
 
@@ -14,7 +13,6 @@ for (const [name, path] of Object.entries(prerenderedDocsRoutes)) {
 }
 
 mkdirSync(`.open-next/assets${docsAssetPath}`, { recursive: true });
-for (const name of [...locales, 'search']) {
-  const path = `${docsAssetPath}/${name}.json`;
-  copyFileSync(`.next/server/app${path}.body`, `.open-next/assets${path}`);
+for (const [path, { srcRoute }] of Object.entries(routes)) {
+  if (srcRoute === `${docsAssetPath}/[asset]`) copyFileSync(`.next/server/app${path}.body`, `.open-next/assets${path}`);
 }

@@ -44,6 +44,30 @@ pnpm check:style
 pnpm test:unit
 ```
 
+## Cut a docs version
+
+From the repository root, copy the current locale folders to the version folder.
+Use the version in `site/lib/docs-version.ts` as the folder name.
+
+```bash
+version=1.0
+mkdir -p docs/versions
+mkdir "docs/versions/$version" &&
+  cp -R docs/{en,zh-Hans,zh-Hant,es,fr,de,ko,ja} "docs/versions/$version/"
+```
+
+Set `latestDocsVersion` in `site/lib/docs-version.ts` to the new version.
+Edit the live pages in the original locale folders.
+Keep the files in the version folder fixed.
+Keep shared setup prompts in `docs/prompts/`.
+Build the site and check the version switcher.
+
+```bash
+cd site
+pnpm build
+pnpm test:e2e
+```
+
 ## Add a block
 
 Every integration is a block. Keep provider-specific code in its block: the core doesn't name

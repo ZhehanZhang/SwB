@@ -7,9 +7,11 @@ import { FullSearchTrigger, SearchTrigger } from 'fumadocs-ui/layouts/shared/slo
 import { Languages, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { isAddressDocsPath } from '@/lib/address';
+import { docsRoot, docsVersionAtPath } from '@/lib/docs-version';
 import { localize, type Locale } from '@/lib/i18n';
 import { headerLinks, navLabels } from '@/lib/layout.shared';
 import { Brand } from './brand';
+import { DocsVersionControl } from './docs-version-control';
 import { GitHubMark } from './github-mark';
 import { HeaderControl, headerIconButton } from './header-controls';
 import { SiteContainer } from './site-container';
@@ -17,10 +19,26 @@ import { SwbAddressControl } from './swb-address-control';
 
 const tab = 'rounded-md px-2.5 py-2 text-sm font-medium whitespace-nowrap text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground aria-[current]:text-fd-foreground';
 
-export function SiteHeader({ lang, repository }: { lang: Locale; repository: string }) {
+export function SiteHeader({ lang, repository, versions = [] }: {
+  lang: Locale;
+  repository: string;
+  versions?: { version: string; pages: Record<string, string> }[];
+}) {
   const path = usePathname();
-  const links = headerLinks(lang);
+  const version = docsVersionAtPath(path);
+  const root = localize(lang, docsRoot(version));
+  const docs = path === root || path.startsWith(`${root}/`);
+  const current = versions.find((entry) => entry.version === version);
+  const links = headerLinks(lang).map((link) => ({
+    ...link,
+    href: link.id === 'docs' ? root : link.id === 'setup' ? current?.pages.setup ?? link.href : link.href,
+  }));
   const active = links.findLast(({ href }) => path === href || path.startsWith(`${href}/`));
+  const slug = docs ? path.slice(root.length + 1) : '';
+  const options = versions.map(({ version, pages }) => ({
+    version,
+    href: Object.hasOwn(pages, slug) ? pages[slug] : localize(lang, docsRoot(version)),
+  }));
 
   return (
     <header id="nd-nav" className="sticky top-0 z-30 h-(--swb-header-height) border-b bg-fd-background/95 backdrop-blur-sm">
@@ -32,13 +50,14 @@ export function SiteHeader({ lang, repository }: { lang: Locale; repository: str
           ))}
         </div>
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <SwbAddressControl lang={lang} show={isAddressDocsPath(path)} />
+          {docs && current && <DocsVersionControl lang={lang} version={version} options={options} />}
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={headerIconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:w-6 [&_kbd:first-child]:w-12 [&_kbd:first-child]:text-start [&_kbd:last-child]:text-center" />
           <LanguageSelect data-header-item="language" className={headerIconButton}><Languages aria-hidden="true" className="size-4.5" /></LanguageSelect>
           <a data-header-item="github" className={`swb-button swb-button-icon ${headerIconButton}`} aria-label="GitHub" href={repository} target="_blank" rel="noreferrer">
             <GitHubMark />
           </a>
-          <SwbAddressControl lang={lang} show={isAddressDocsPath(path)} />
           <Popover>
             <HeaderControl data-header-item="menu" className="sm:hidden" aria-label={navLabels[lang].menu}>
               <Menu aria-hidden="true" className="size-5" />

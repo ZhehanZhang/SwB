@@ -1,15 +1,25 @@
 import { notFound } from 'next/navigation';
 import { DocsShell } from '@/components/docs-shell';
+import { SiteHeader } from '@/components/site-header';
 import { isLocale } from '@/lib/i18n';
-import { source } from '@/lib/source';
+import { docsLoaders, repository } from '@/lib/source';
 
 export default async function Layout({ params, children }: LayoutProps<'/[lang]'>) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
 
+  const available = [...docsLoaders].filter(([, source]) => source.getPage([], lang));
+  const trees = Object.fromEntries(available.map(([version, source]) => [version, source.getPageTree(lang)]));
+  const versions = available.map(([version, source]) => ({
+    version,
+    pages: Object.fromEntries(source.getPages(lang).map((page) => [page.slugs.join('/'), page.url])),
+  }));
   return (
-    <DocsShell lang={lang} askAI={process.env.NEXT_PUBLIC_ASK_AI === '1'} tree={source.getPageTree(lang)}>
-      {children}
-    </DocsShell>
+    <>
+      <SiteHeader lang={lang} repository={repository} versions={versions} />
+      <DocsShell lang={lang} askAI={process.env.NEXT_PUBLIC_ASK_AI === '1'} trees={trees}>
+        {children}
+      </DocsShell>
+    </>
   );
 }

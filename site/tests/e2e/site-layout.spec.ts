@@ -32,7 +32,8 @@ test('header and all items stay within 0.5px across home and docs without a them
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
       await expect(page.locator('#nd-nav [data-theme-toggle]')).toHaveCount(0);
-      const docs = await headerGeometry(page);
+      const { version, ...docs } = await headerGeometry(page);
+      expect(version.height).toBe(home.language.height);
       expect(Object.keys(docs)).toEqual(Object.keys(home));
       for (const item of Object.keys(home)) {
         for (const edge of ['x', 'y', 'width', 'height'] as const) {
