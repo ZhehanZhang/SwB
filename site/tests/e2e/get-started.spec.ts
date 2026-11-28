@@ -8,7 +8,7 @@ const renderBlueprint = 'https://render.com/deploy?repo=https://github.com/Zheha
 const railwayTemplate = 'https://railway.com/deploy/swb';
 const fallbackAgents = [
   'Claude Project', 'Claude', 'ChatGPT', 'ChatGPT dots', 'Muse', 'Grok', 'Grok Bot', 'Capy Captain',
-  'Claude Code', 'Codex', 'Gemini CLI', 'Slack', 'Discord', 'Telegram', 'GitHub',
+  'Claude Code', 'Codex', 'Gemini CLI', 'Slack', 'Discord', 'Telegram', 'GitHub', 'Webhooks',
 ];
 
 const setup = (page: Page) => page.locator('[data-get-started]');
@@ -192,7 +192,8 @@ test('personalizes preview, open link and copy while the source prompt stays unc
   await address.blur();
   await expect(address).toHaveAttribute('aria-invalid', 'true');
   expect(new URL(page.url()).searchParams.has('url')).toBe(false);
-  expect(await agent(page, 'Claude').locator('pre').textContent()).toBe(sourcePrompt('claude'));
+  expect(await agent(page, 'Claude').locator('pre').textContent())
+    .toBe(sourcePrompt('claude').replaceAll('https://swb.example.com', origin));
 
   await page.goto(`${start}?agents=claude&url=${encodeURIComponent(origin)}`);
   await expect(address).toHaveValue(origin);

@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 這個請求免登入，會顯示 `status` 和 `version`。執行 `swb status`，或帶著擁有者金鑰呼叫 `/healthz`，可列出各個模組、模組的狀態和缺少的變數。
 
+檢查公開的 SwB 服務時，使用它的 HTTPS 位址。
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## 伺服器指令
 
 執行 `swb --help` 查看指令群組。在指令後加上 `--help`，可查看該指令的選項。

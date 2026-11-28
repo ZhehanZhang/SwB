@@ -19,23 +19,6 @@ export const getStartedAgents = setupChoices.map((choice) => {
 export type GetStartedAgent = (typeof getStartedAgents)[number]['id'];
 export const getStartedAgentIds = getStartedAgents.map(({ id }) => id);
 export const getStartedStyleId = 'swb-get-started-initial';
-export const getStartedStorageKey = 'swb-get-started-address';
-
-export function validSwbOrigin(value: string | null) {
-  if (!value) return null;
-  try {
-    const address = new URL(value.trim());
-    return (address.protocol === 'http:' || address.protocol === 'https:') && !address.username && !address.password
-      ? address.origin
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-export function personalizePrompt(prompt: string, address: string | null) {
-  return address ? prompt.replace(/(?:https:\/\/)?swb\.example\.com/g, () => address) : prompt;
-}
 
 function parseSelection<Id extends string>(
   search: string, ids: readonly Id[], replacements: Readonly<Record<string, string | undefined>>,

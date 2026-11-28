@@ -3,16 +3,19 @@
 import { Check } from 'lucide-react';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import {
-  computerCommand, getStartedAgentIds, getStartedAgents, getStartedStorageKey, getStartedStyleId, museCompanionCommand,
-  personalizePrompt, pipxCommand, readGetStartedSelection, runLocations, serverCommand, validSwbOrigin,
+  computerCommand, getStartedAgentIds, getStartedAgents, getStartedStyleId, museCompanionCommand,
+  pipxCommand, readGetStartedSelection, runLocations, serverCommand,
   type GetStartedAgent, type RunLocation,
 } from '@/lib/get-started';
 import { getStartedCopy } from '@/lib/get-started-copy';
 import { getStartedExplanation } from '@/lib/get-started-explanation';
 import { localize, type Locale } from '@/lib/i18n';
+import { personalizeSwb } from '@/lib/urls';
 import { ProviderMark } from './deploy-providers';
 import { MarkTile } from './mark-tile';
 import { CopyTextButton, PromptActions } from './prompt-actions';
+import { SwbAddressField } from './swb-address-field';
+import { useSwbAddress } from './swb-address-provider';
 import styles from './get-started.module.css';
 
 type View = {
@@ -27,27 +30,6 @@ const initialView: View = {
   run: 'local', agents: getStartedAgentIds, order: getStartedAgentIds, ready: false, animate: false,
 };
 const agentsById = new Map(getStartedAgents.map((agent) => [agent.id, agent]));
-
-function writeAddress(address: string | null) {
-  try {
-    if (address) localStorage.setItem(getStartedStorageKey, address);
-    else localStorage.removeItem(getStartedStorageKey);
-  } catch {}
-}
-
-function readAddress() {
-  const url = new URLSearchParams(location.search);
-  if (url.has('url')) {
-    const address = validSwbOrigin(url.get('url'));
-    if (address) writeAddress(address);
-    return address ?? '';
-  }
-  try {
-    return validSwbOrigin(localStorage.getItem(getStartedStorageKey)) ?? '';
-  } catch {
-    return '';
-  }
-}
 
 function replaceLocation({ run, agents }: View, address: string | null) {
   const url = new URL(location.href);
@@ -73,21 +55,17 @@ function Command({ text, labels }: { text: string; labels: { copyCommand: string
 
 export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Record<string, string>; cloud: ReactNode }) {
   const [view, setView] = useState(initialView);
-  const [address, setAddress] = useState('');
-  const [checkAddress, setCheckAddress] = useState(false);
+  const { address } = useSwbAddress();
   const labels = getStartedCopy[lang];
   const explanations = getStartedExplanation[lang];
   const runLabels = { local: labels.runLocal, server: labels.runServer, cloud: labels.runCloud };
-  const origin = validSwbOrigin(address);
   const selfHosting = localize(lang, '/docs/self-hosting');
-  const showAddressError = Boolean(checkAddress && address.trim() && !origin);
 
   useLayoutEffect(() => {
     function restore() {
       const { run, agents } = readGetStartedSelection(location.search);
       const order = [...agents, ...getStartedAgentIds.filter((id) => !agents.includes(id))];
       setView({ run, agents, order, ready: true, animate: false });
-      setAddress(readAddress());
       return agents[0];
     }
 
@@ -117,7 +95,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
     if (view.run === run) return;
     const next = { ...view, run, animate: true };
     setView(next);
-    replaceLocation(next, origin);
+    replaceLocation(next, new URLSearchParams(location.search).has('url') ? address : null);
   }
 
   function toggleAgent(id: GetStartedAgent) {
@@ -126,7 +104,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
     const order = picked ? view.order : [...agents, ...view.order.filter((agent) => !agents.includes(agent))];
     const next = { ...view, agents, order, animate: true };
     setView(next);
-    replaceLocation(next, origin);
+    replaceLocation(next, new URLSearchParams(location.search).has('url') ? address : null);
   }
 
   const tunnelLink = (
@@ -180,21 +158,8 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
         <div className={styles.address}>
           <label htmlFor="start-address">{labels.address}</label>
           <p className={styles.addressHelp} id="start-address-help">{labels.addressHelp}</p>
-          <input id="start-address" type="url" value={address} placeholder="https://swb.example.com" autoComplete="url"
-            spellCheck={false} aria-describedby="start-address-help" aria-invalid={showAddressError || undefined}
-            aria-description={showAddressError ? labels.addressError : undefined}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              const valid = validSwbOrigin(value);
-              setAddress(value);
-              writeAddress(valid);
-              replaceLocation(view, valid);
-            }}
-            onBlur={() => {
-              setCheckAddress(true);
-              if (origin) setAddress(origin);
-            }}
-          />
+          <SwbAddressField id="start-address" label={labels.address} error={labels.addressError}
+            describedBy="start-address-help" onEdit={(next) => replaceLocation(view, next)} />
         </div>
       </section>
       <section aria-labelledby="start-agents">
@@ -213,7 +178,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
           {view.order.map((id) => {
             const { name, mark, prompt, open, docs } = agentsById.get(id)!;
             const active = view.agents.includes(id);
-            const text = personalizePrompt(prompts[prompt], origin);
+            const text = personalizeSwb(prompts[prompt], address);
             const companionHelp = id === 'muse' ? labels.museCompanionHelp
               : id === 'claude-code' || id === 'codex' ? labels.companionHelp : '';
             return (
@@ -227,7 +192,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
                     <>
                       <h4 className={styles.agentSubtitle}>{labels.muse.wake}</h4>
                       <p className={styles.procedure}>{labels.muse.beforeCommand}</p>
-                      <Command text={museCompanionCommand} labels={labels} />
+                      <Command text={personalizeSwb(museCompanionCommand, address)} labels={labels} />
                       <p className={styles.procedure}>{labels.muse.afterCommand}</p>
                       <h4 className={styles.agentSubtitle}>{labels.muse.tools}</h4>
                     </>

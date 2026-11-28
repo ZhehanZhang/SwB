@@ -1,5 +1,5 @@
 import { readPrompt } from '@/lib/prompts';
-import { PromptActions } from './prompt-actions';
+import { SetupPromptContent } from './prompt-actions';
 
 const labels = {
   en: { copy: 'Copy prompt', copied: 'Copied', open: 'Open in {app}' },
@@ -16,8 +16,7 @@ export function SetupPrompt({ name, lang = 'en' }: { name: string; lang?: keyof 
   const text = readPrompt(name);
   return (
     <figure className="swb-prompt not-prose my-6 overflow-hidden rounded-lg border bg-fd-card">
-      <PromptActions text={text} labels={labels[lang]} targets={name === 'muse' ? [] : ['claude', 'chatgpt']} />
-      <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap border-t px-4 py-3.5 font-mono text-[13px] leading-relaxed">{text}</pre>
+      <SetupPromptContent text={text} labels={labels[lang]} targets={name === 'muse' ? [] : ['claude', 'chatgpt']} />
     </figure>
   );
 }

@@ -4,7 +4,9 @@ import { Check, Copy } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { combineSetupPrompts, setupChoices, type SetupChoice, type SetupSources } from '@/lib/setup-picker';
 import type { setupPickerCopy } from '@/lib/setup-picker-copy';
+import { personalizeSwb } from '@/lib/urls';
 import { MarkTile } from './mark-tile';
+import { useSwbAddress } from './swb-address-provider';
 
 type Props = {
   labels: (typeof setupPickerCopy)[keyof typeof setupPickerCopy];
@@ -15,7 +17,8 @@ export function SetupPickerControls({ labels, sources }: Props) {
   const preview = useRef<HTMLTextAreaElement>(null);
   const [selection, setSelection] = useState<SetupChoice[]>([]);
   const [status, setStatus] = useState<'idle' | 'copied' | 'error'>('idle');
-  const prompt = combineSetupPrompts(sources, selection);
+  const { address } = useSwbAddress();
+  const prompt = personalizeSwb(combineSetupPrompts(sources, selection), address);
 
   return (
     <div data-setup-picker className="not-prose min-w-0">

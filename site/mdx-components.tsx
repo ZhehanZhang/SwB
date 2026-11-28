@@ -6,11 +6,12 @@ import { Tab as FumadocsTab, Tabs, type TabProps } from 'fumadocs-ui/components/
 import defaults from 'fumadocs-ui/mdx';
 import { SetupPicker } from '@/components/setup-picker';
 import { SetupPrompt } from '@/components/setup-prompt';
+import { MdxCode, MdxPre } from '@/lib/mdx-address';
 
 function Tab(props: TabProps) {
   return <FumadocsTab {...props} forceMount />;
 }
 
 export function useMDXComponents(overrides?: MDXComponents): MDXComponents {
-  return { ...defaults, Tabs, Tab, Steps, Step, Callout, Cards, Card, SetupPicker, SetupPrompt, ...overrides };
+  return { ...defaults, code: MdxCode, pre: MdxPre, Tabs, Tab, Steps, Step, Callout, Cards, Card, SetupPicker, SetupPrompt, ...overrides };
 }

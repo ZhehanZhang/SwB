@@ -53,7 +53,13 @@ cloudflared tunnel --url http://localhost:8870
 
 ### 命名隧道
 
-准备一个免费的 Cloudflare 账号和你自己的域名。按 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare)创建隧道并设置 Access。把 `SWB_PUBLIC_URL` 设为你的公网地址，例如 `https://swb.example.com`。如果配置中有 `public_url`，也更新其中的地址。
+准备一个免费的 Cloudflare 账号和你自己的域名。按 [Cloudflare 设置指南](/zh-Hans/docs/setup/cloudflare)创建隧道并设置 Access。把 `SWB_PUBLIC_URL` 设为你的公网地址。
+
+```dotenv
+SWB_PUBLIC_URL=https://swb-your-team.example.net
+```
+
+如果配置中有 `public_url`，也更新其中的地址。启动 SwB 后，[检查公网地址](https://swb-your-team.example.net/healthz)。
 
 如果隧道运行在 SwB 所在的主机上，把它的服务地址指向 `http://localhost:8870`，并把 `SWB_TRUSTED_PROXIES` 设为连接器的地址，例如 IPv4 回环连接使用 `127.0.0.1/32`。
 
