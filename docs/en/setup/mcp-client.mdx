@@ -9,7 +9,7 @@ MCP is the standard way an app uses outside tools. This guide pairs an app with 
 
 Use an app that supports remote MCP over Streamable HTTP. This method lets apps call tools over the web. The app must also support custom request headers for the key. You need a SwB owner client or a terminal on the SwB computer.
 
-To start SwB on the same computer as the app, run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from your terminal. See [Install](/docs/install) for more options.
+To start SwB on the same computer as the app, run `uvx swb.one up` in an empty folder. Open the one-time sign-in link from your terminal. See [Install](/docs/install) for more options.
 
 Claude, ChatGPT, Grok and coding agents have their own pages with OAuth sign-in. Use those pages for those apps.
 
@@ -32,7 +32,7 @@ Let your agent configure the app if it can edit settings locally. Store the key 
 Tell the agent a short name for the app, for example `notes-bot`. SwB shows this name on messages from the app.
 ### Get the pairing code
 
-Ask a SwB owner agent to call `connect_code` with the app name. From the SwB instance folder, you can also run `uvx swb-one connect mcp-client --choose agent=notes-bot`. Replace `notes-bot` with your app’s name.
+Ask a SwB owner agent to call `connect_code` with the app name. From the SwB instance folder, you can also run `uvx swb.one connect mcp-client --choose agent=notes-bot`. Replace `notes-bot` with your app’s name.
 ### Get the key
 
 On the computer that runs the app, open a private folder in your terminal. Replace `https://swb.example.com` with your SwB address. Keep `/connect` at the end. For local SwB, use `http://localhost:8870/connect` with the port shown at startup. Enter the pairing code at the hidden prompt within 10 minutes.

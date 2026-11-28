@@ -75,7 +75,7 @@ test('landing pipx commands open below their row without moving the aligned rows
   const row = (await toggle.boundingBox())!;
   await toggle.press('Enter');
   await expect(commands).toBeVisible();
-  expect(await commands.locator('code').textContent()).toBe('pipx install swb-one\nswb up');
+  expect(await commands.locator('code').textContent()).toBe('pipx install swb.one\nswb up');
   const expanded = (await commands.boundingBox())!;
   expect(expanded.y - row.y - row.height).toBe(8);
   const after = await following.evaluate((node) => node.getBoundingClientRect().top + scrollY);

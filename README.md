@@ -31,7 +31,7 @@ Set a Slack route to send messages to ChatGPT. If ChatGPT subscribes to MCP even
 Build SwB from source with [Docker Compose](https://github.com/ZhehanZhang/SwB/blob/release/1.0/deploy/README.md#docker-compose) before the PyPI release. After the release, [install uv](https://docs.astral.sh/uv/getting-started/installation/). Run this command in an empty folder.
 
 ~~~bash
-uvx swb-one up
+uvx swb.one up
 ~~~
 
 Open the one-time sign-in link from your terminal within five minutes.

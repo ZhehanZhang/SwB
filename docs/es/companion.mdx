@@ -18,7 +18,7 @@ Para obtener un código en la consola, [inicia sesión con una llave de acceso](
 Ejecuta este comando en el dispositivo. Cambia la dirección de ejemplo por tu dirección HTTPS de SwB. Para un SwB en este mismo dispositivo, puedes usar `http://127.0.0.1:8870`.
 
 ```sh
-uvx swb-one companion connect https://swb.example.com --cap notify
+uvx swb.one companion connect https://swb.example.com --cap notify
 ```
 
 Escribe el código de emparejamiento cuando el comando lo pida. Lo que escribes queda oculto. El código funciona una sola vez y caduca a los 10 minutos. El registro de auditoría anota quién lo creó.
@@ -64,13 +64,13 @@ Para los comandos y los agentes compatibles, consulta [Sesiones locales](/es/doc
 
 El emparejamiento inicia el companion. Usa `swb companion run` para iniciarlo de nuevo. Usa `swb companion status` para ver el ID local del dispositivo y sus funciones.
 
-Si emparejaste el dispositivo con `uvx`, usa `uvx swb-one` en lugar de `swb`. En primer plano, el companion se ejecuta directamente en Python.
+Si emparejaste el dispositivo con `uvx`, usa `uvx swb.one` en lugar de `swb`. En primer plano, el companion se ejecuta directamente en Python.
 
 El dispositivo inicia cada conexión con SwB.
 
 ## Ejecutar en segundo plano
 
-Instala un servicio en segundo plano para que el companion se inicie de forma automática. Instala SwB con `uv tool install swb-one`.
+Instala un servicio en segundo plano para que el companion se inicie de forma automática. Instala SwB con `uv tool install swb.one`.
 
 Para un nuevo emparejamiento, añade `--no-run` a tus opciones de emparejamiento. Ejecuta `swb companion connect` con esas opciones. El comando termina tras el emparejamiento. Si el companion está activo en el terminal, detenlo antes de instalar el servicio. Usa el comando `swb` instalado para gestionar el servicio.
 

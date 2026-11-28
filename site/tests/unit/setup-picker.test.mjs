@@ -77,7 +77,7 @@ test('omits Companion from the choices and preserves its standalone prompt', () 
   assert.ok(!prompt.includes('### Companion'));
   const standalone = readFileSync(new URL('../../../docs/prompts/companion.md', import.meta.url), 'utf8');
   assert.ok(standalone.includes('https://swb.one/docs/companion'));
-  assert.ok(standalone.includes('uvx swb-one companion connect https://swb.example.com'));
+  assert.ok(standalone.includes('uvx swb.one companion connect https://swb.example.com'));
   assert.ok(standalone.includes('swb companion service install'));
   assert.ok(standalone.includes('Call `companion_list`'));
 });

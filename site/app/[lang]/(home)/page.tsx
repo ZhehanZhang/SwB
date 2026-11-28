@@ -116,7 +116,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                       <ChevronDown aria-hidden="true" className="text-fd-muted-foreground group-open/pipx:rotate-180" />
                     </summary>
                     <div className="mt-2 min-[900px]:absolute min-[900px]:inset-x-0 min-[900px]:top-full min-[900px]:z-10">
-                      <DeployCommand labels={copyLabels}>{'pipx install swb-one\nswb up'}</DeployCommand>
+                      <DeployCommand labels={copyLabels}>{'pipx install swb.one\nswb up'}</DeployCommand>
                     </div>
                   </details>
                 }>

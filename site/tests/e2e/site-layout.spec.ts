@@ -391,13 +391,13 @@ test('the inline install command copies without moving the hero controls', async
   await page.evaluate(() => document.fonts.ready);
   const chip = page.locator('[data-install-chip]');
   const copy = chip.getByRole('button', { name: 'Copy', exact: true });
-  await expect(chip.locator('code')).toHaveText('$ uvx swb-one up');
+  await expect(chip.locator('code')).toHaveText('$ uvx swb.one up');
   await expect(copy.locator('svg.lucide-copy')).toHaveCount(1);
   const before = await chip.boundingBox();
   await copy.click();
   await expect(copy.locator('svg.lucide-check')).toHaveCount(1);
   await expect(chip.getByRole('status')).toHaveText('Copied');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('uvx swb-one up');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('uvx swb.one up');
   expect(await chip.boundingBox()).toEqual(before);
 });
 
@@ -501,8 +501,8 @@ test('landing shows supported deployment links and six usage examples in each lo
     await page.goto(prefix || '/');
     const deploy = page.locator('#landing-deploy').locator('..');
     const commands = deploy.locator('code');
-    await expect(commands.first()).toHaveText('uvx swb-one up');
-    await expect(commands.nth(1)).toHaveText('pipx install swb-one\nswb up');
+    await expect(commands.first()).toHaveText('uvx swb.one up');
+    await expect(commands.nth(1)).toHaveText('pipx install swb.one\nswb up');
     await expect(commands.last()).toContainText('git clone -b release/1.0');
     expect(await commands.last().textContent()).toContain('\\\n');
     await expect(commands.last()).toContainText('docker compose up');

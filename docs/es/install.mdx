@@ -5,7 +5,7 @@ description: Instala SwB con uvx, pipx o Docker.
 
 {/* prepublication */}
 
-SwB funciona en Linux, macOS y Windows. Para compilar SwB desde el código fuente, sigue [Docker Compose](/es/docs/deploy#docker-compose). Usa los métodos siguientes cuando se publiquen el paquete o la imagen.
+SwB funciona en Linux, macOS y Windows. Para compilar SwB desde el código fuente, sigue [Docker Compose](/es/docs/deploy#docker-compose).
 
 ## Instalar e iniciar
 
@@ -16,22 +16,22 @@ Usa una carpeta vacía para tus archivos de SwB. La clave de propietario permite
     [Instala uv](https://docs.astral.sh/uv/getting-started/installation/). SwB necesita Python 3.12 o una versión posterior.
 
     ```bash
-    uvx swb-one up
+    uvx swb.one up
     ```
 
-    uvx descarga e inicia SwB. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal en un plazo de cinco minutos. En los demás ejemplos, cambia el `swb` inicial por `uvx swb-one`.
+    uvx descarga e inicia SwB. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal en un plazo de cinco minutos. En los demás ejemplos, cambia el `swb` inicial por `uvx swb.one`.
   </Tab>
   <Tab value="pipx">
     [Instala pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB necesita Python 3.12 o una versión posterior.
 
     ```bash
-    pipx install swb-one
+    pipx install swb.one
     swb up
     ```
 
     pipx instala el comando `swb` para tu cuenta de usuario. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal en un plazo de cinco minutos.
 
-    Si pipx usa una versión anterior de Python, usa `pipx install --python 3.12 swb-one`.
+    Si pipx usa una versión anterior de Python, usa `pipx install --python 3.12 swb.one`.
   </Tab>
   <Tab value="Docker">
     [Instala Docker](https://docs.docker.com/get-started/get-docker/).
@@ -90,4 +90,4 @@ Ejecuta `swb --help` para ver los grupos de comandos. Añade `--help` a un coman
 
 {/* prepublication */}
 
-Tras la publicación, PyPI aloja el paquete `swb-one`. GitHub Container Registry aloja la imagen `ghcr.io/zhehanzhang/swb`. Para elegir una versión concreta, usa un número como `1.0.0`. La etiqueta de imagen `latest` apunta siempre a la versión estable más reciente.
+PyPI aloja el paquete `swb.one`. GitHub Container Registry aloja la imagen `ghcr.io/zhehanzhang/swb`. Para elegir una versión concreta, usa un número como `1.0.0`. La etiqueta de imagen `latest` apunta siempre a la versión estable más reciente.
