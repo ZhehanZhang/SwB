@@ -275,6 +275,23 @@ test('the inline install command copies without moving the hero controls', async
   expect(await chip.boundingBox()).toEqual(before);
 });
 
+test('commands, keycaps and docs previews share one preloaded mono stack', async ({ page }) => {
+  const stacks: string[] = [];
+  for (const [path, selectors] of [
+    ['/', ['[data-install-chip] code', '[data-deploy-option] pre', '[data-search-full] kbd']],
+    ['/docs/get-started', ['[data-start-run="local"] pre']],
+    ['/docs/setup/claude', ['.swb-prompt pre', 'figure.shiki pre']],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.locator('link[rel="preload"][as="font"][href*="jetbrains_mono"]')).toHaveCount(1);
+    for (const selector of selectors) {
+      stacks.push(await page.locator(selector).first().evaluate((node) => getComputedStyle(node).fontFamily));
+    }
+  }
+  expect(new Set(stacks).size).toBe(1);
+  expect(stacks[0]).toMatch(/jetbrainsMono.+ui-monospace.+monospace/i);
+});
+
 test('every shared action has a leading 16px icon', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const path of ['/', '/docs', '/docs/install', '/docs/self-hosting', '/docs/setup', '/docs/setup/claude']) {

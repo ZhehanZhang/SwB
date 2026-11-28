@@ -37,6 +37,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<'/[
     <html lang={lang} className={`${swbInter.variable} ${interTight.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <meta name="darkreader-lock" />
+        <script dangerouslySetInnerHTML={{ __html: 'document.documentElement.dataset.platform=/Mac|iPhone|iPad|iPod/i.test(navigator.userAgent)?"mac":"other"' }} />
       </head>
       <body>
         <Providers i18n={i18nProvider(translations, lang)}>
