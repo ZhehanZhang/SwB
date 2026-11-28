@@ -10,14 +10,17 @@ const targetNames: Record<Target, string> = { claude: 'Claude', chatgpt: 'ChatGP
 type CopyLabels = { copy: string; copied: string };
 type Labels = CopyLabels & { open: string };
 
-export function CopyTextButton({ text, labels, className, iconOnly = false, disabled }: { text: string | (() => string | Promise<string>); labels: CopyLabels; className: string; iconOnly?: boolean; disabled?: boolean }) {
+export function CopyTextButton({ text, labels, className, iconOnly = false, disabled }: {
+  text: string | (() => string | Promise<string>); labels: CopyLabels; className: string; iconOnly?: boolean; disabled?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   return (
     <>
-      <button type="button" className={className} disabled={disabled} aria-label={iconOnly ? labels.copy : undefined} title={iconOnly ? labels.copy : undefined} onClick={async () => {
+      <button type="button" className={className} disabled={disabled} aria-label={iconOnly ? labels.copy : undefined}
+        title={iconOnly ? labels.copy : undefined} onClick={async () => {
         const content = typeof text === 'string' ? text : text();
         try {
           if (typeof content === 'string') await navigator.clipboard.writeText(content);
