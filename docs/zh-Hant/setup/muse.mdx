@@ -17,22 +17,11 @@ description: 配對 Muse gadget 來即時喚醒，或新增連接器來使用工
 
 在 [Muse SDK tokens 頁面](https://gadgets.muse.ai/settings/sdk-tokens)建立個人權杖，再用代理提供的一次性 SwB 認領連結儲存。
 
-使用支援藍牙的 Mac 或 Linux 電腦。把電腦放在手機附近。
+使用具備藍牙的 Mac 或 Linux 電腦，並放在手機附近。在 macOS 上使用「終端機」，並在 macOS 詢問時允許藍牙存取。在 Linux 上，讓 Companion 程式能存取 BlueZ，也就是系統的藍牙服務。
 
 如果要在已配對的 Companion 上加入 Muse，先執行 `swb companion disconnect`，再取得 [Companion 配對碼](/zh-Hant/docs/companion#配對裝置)。配對碼只能使用一次，10 分鐘後過期。
 
-把範例網址換成你的 SwB 網址。
-
-在 macOS 上，請先登入桌面，再執行下面的指令。
-
-```sh
-uv tool install swb-one
-swb companion connect https://swb.example.com --cap muse
-```
-
-SwB 會視需要把已簽署的 **SwB Companion** 應用程式安裝到 `~/Applications`。macOS 第一次詢問時，請允許 **SwB Companion** 使用藍牙。
-
-在 Linux 上，請確認 Companion 可以存取系統藍牙服務 BlueZ。執行下面的指令。
+把範例網址換成你的 SwB 網址，在電腦上執行下面的指令。
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
@@ -41,8 +30,6 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 看到提示後輸入配對碼，輸入的內容會隱藏。配對 Muse 期間，讓 Companion 程式保持執行。接著請代理開始 Muse 配對。
 
 在 Muse 應用程式中開啟 **Settings**，再開啟 **Devices**。啟用 **Developer mode**，選取 **Add Device**，再選取代理提供的裝置名稱。如果應用程式詢問 Wi-Fi，選取 **Use current connection**。
-
-SwB 只在配對 Muse 時使用藍牙。如果 SwB 提示某個應用程式占用了藍牙訊號的空間，請先暫停該應用程式。重新開啟 **Add Device**。配對結束後，再開啟該應用程式。
 
 ## 新增連接器來使用工具
 

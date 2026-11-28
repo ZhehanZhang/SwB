@@ -60,7 +60,7 @@ Make the repository public before you publish the release.
 
 Select `v1.0.0` in the GitHub Release draft and publish the release.
 
-The release starts the PyPI and container workflows. The PyPI workflow signs the macOS app and attaches it to the release. It checks the public download before it uploads the Python packages.
+The release starts the PyPI and container workflows. The PyPI workflow signs and notarizes the SwB Companion app for macOS. The app starts the companion when you sign in. The workflow attaches the app to the release and checks the public download before it uploads the Python packages.
 
 For retries, select **Re-run failed jobs**. This keeps the original signed archive after the asset upload. A full rerun creates an archive with a new signing timestamp.
 

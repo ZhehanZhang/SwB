@@ -22,7 +22,7 @@
     <string>11.0</string>
     <key>LSUIElement</key>
     <true/>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>SwB Companion uses Bluetooth to pair with Muse.</string>
+    <key>SwBCompanionServiceVersion</key>
+    <string>1</string>
 </dict>
 </plist>

@@ -46,17 +46,16 @@ def _lease(path: Path, *, create: bool) -> Iterator[bool]:
 
 
 class Runtime:
-    def __init__(self, path: Path, companion_id: str, bluetooth: str) -> None:
+    def __init__(self, path: Path, companion_id: str) -> None:
         self.path = path.with_suffix(".runtime")
         self.companion_id = companion_id
-        self.bluetooth = bluetooth
 
     def connection(self, connection: str) -> None:
         with suppress(OSError):
             with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.path.parent, delete=False) as stream:
                 temporary = Path(stream.name)
                 try:
-                    json.dump({"id": self.companion_id, "connection": connection, "bluetooth": self.bluetooth}, stream)
+                    json.dump({"id": self.companion_id, "connection": connection}, stream)
                     stream.close()
                     temporary.replace(self.path)
                 finally:
@@ -64,11 +63,11 @@ class Runtime:
 
 
 @contextmanager
-def running(path: Path, companion_id: str, muse: bool) -> Iterator[Runtime]:
+def running(path: Path, companion_id: str) -> Iterator[Runtime]:
     with _lease(path, create=True) as acquired:
         if not acquired:
             raise AlreadyRunning("This companion is already running.")
-        runtime = Runtime(path, companion_id, "Unknown" if muse else "Disabled")
+        runtime = Runtime(path, companion_id)
         try:
             runtime.connection("Connecting")
             yield runtime
@@ -77,20 +76,19 @@ def running(path: Path, companion_id: str, muse: bool) -> Iterator[Runtime]:
                 runtime.path.unlink(missing_ok=True)
 
 
-def status(path: Path, companion_id: str) -> tuple[bool, str, str | None]:
+def status(path: Path, companion_id: str) -> tuple[bool, str]:
     try:
         with _lease(path, create=False) as acquired:
             if acquired:
-                return False, "Offline", None
+                return False, "Offline"
         try:
             with path.with_suffix(".runtime").open(encoding="utf-8") as stream:
                 data = json.loads(stream.read(4096))
             if (isinstance(data, dict) and data.get("id") == companion_id
-                    and data.get("connection") in ("Connecting", "Connected", "Reconnecting")
-                    and isinstance(data.get("bluetooth"), str)):
-                return True, data["connection"], data["bluetooth"]
+                    and data.get("connection") in ("Connecting", "Connected", "Reconnecting")):
+                return True, data["connection"]
         except (OSError, ValueError, RecursionError):
             pass
     except FileNotFoundError:
-        return False, "Offline", None
-    return True, "Starting", None
+        return False, "Offline"
+    return True, "Starting"

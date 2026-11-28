@@ -1,196 +1,160 @@
 from __future__ import annotations
 
-import asyncio
-import base64
 import hashlib
-import hmac
 import json
 import os
 import plistlib
+import select
+import signal
 import stat
+import subprocess
 import sys
-import tempfile
+import venv
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
-from switchboard.companion import bluetooth, macos_app, macos_transport
-from switchboard.companion.caps.base import CapabilityError
+from switchboard.companion import macos_app
 from switchboard.companion.state import CompanionError
-from switchboard.vendor.musegadget.ble_framing import ChunkAssembler
-from switchboard.vendor.musegadget.ble_setup import SetupController
-from switchboard.vendor.musegadget.identity import Identity
-from switchboard.vendor.musegadget.pairing import PairingSession
 
 
-def app_frame(key, **data):
-    raw = json.dumps(data, separators=(",", ":")).encode()
-    return hmac.new(key, b"app:" + raw, hashlib.sha256).hexdigest().encode() + b" " + raw + b"\n"
+@pytest.fixture
+def native_app():
+    app = os.environ.get("SWB_TEST_MAC_HELPER")
+    if not app:
+        pytest.skip("needs the built Mac app")
+    return Path(app)
 
 
-async def test_channel_authenticates_direction_and_sequence():
-    key = b"A" * 32
-    reader = asyncio.StreamReader(limit=8192)
-    writer = Mock(drain=AsyncMock())
-    channel = macos_transport.Channel(reader, writer, key)
-    await channel.send("status")
-    data = b'{"seq":1,"type":"status"}'
-    signature = hmac.new(key, b"py:" + data, hashlib.sha256).hexdigest().encode()
-    assert writer.write.call_args.args == (signature + b" " + data + b"\n",)
-
-    ready = app_frame(key, seq=1, type="ready")
-    reader.feed_data(ready + app_frame(key, seq=2, type="status", permission="Allowed") + ready)
-    assert (await channel.receive())["type"] == "ready"
-    assert (await channel.receive())["permission"] == "Allowed"
-    with pytest.raises(CapabilityError, match="authentication"):
-        await channel.receive()
+def test_native_bundle_metadata():
+    source = Path(__file__).resolve().parents[1] / "native" / "companion-macos" / "Info.plist"
+    info = plistlib.loads(source.read_bytes())
+    assert info["CFBundleIdentifier"] == macos_app.BUNDLE_ID
+    assert info["CFBundleExecutable"] == "SwBCompanion"
+    assert info["SwBCompanionServiceVersion"] == "1"
+    assert not any(key.startswith("NSBluetooth") for key in info)
 
 
-@pytest.mark.parametrize("frame", [b" " * 9000 + b"\n", b"0" * 64 + b' {"seq":1,"type":"ready"}\n'])
-async def test_channel_rejects_oversized_or_unsigned_frames(frame):
-    reader = asyncio.StreamReader(limit=8192)
-    reader.feed_data(frame)
-    channel = macos_transport.Channel(reader, Mock(), b"A" * 32)
-    with pytest.raises(CapabilityError, match="authentication"):
-        await channel.receive()
+@pytest.mark.skipif(sys.platform != "darwin", reason="needs macOS linkage tools")
+def test_native_launcher_links_only_libsystem(native_app):
+    info = plistlib.loads((native_app / "Contents" / "Info.plist").read_bytes())
+    assert not any(key.startswith("NSBluetooth") for key in info)
+    executable = native_app / "Contents" / "MacOS" / info["CFBundleExecutable"]
+    output = subprocess.check_output(["/usr/bin/otool", "-arch", "all", "-L", executable], text=True, timeout=10)
+    assert {line.split()[0] for line in output.splitlines() if line.startswith("\t")} == {"/usr/lib/libSystem.B.dylib"}
 
 
-async def test_mac_negotiated_framing_precedes_the_first_write_and_resets(monkeypatch):
-    key = b"A" * 32
-    reader = asyncio.StreamReader(limit=8192)
-    writer = Mock(drain=AsyncMock())
-    transport = macos_transport.MacTransport("MuseGadget000001")
-    transport.channel = macos_transport.Channel(reader, writer, key)
-    identity = Identity("02:00:00:00:00:01")
-    controller = SetupController(
-        pairing=PairingSession(node_id=identity.setup_node_id, device_id=identity.device_id,
-                               mac=identity.mac, firmware_version="1.0.0", sdk_token="mgst_" + "z" * 42 + "A"),
-        identity=identity, version="1.0.0", transport=transport, network=Mock(is_online=lambda: True),
-        provision=AsyncMock(),
+def test_native_launcher_execs_fixed_module(native_app, tmp_path):
+    launcher = native_app / "Contents" / "MacOS" / "SwBCompanion"
+    settings = tmp_path / "settings & logs"
+    settings.mkdir(mode=0o700)
+    environment = tmp_path / "python env"
+    venv.EnvBuilder(symlinks=True).create(environment)
+    python = environment / "bin" / "python"
+    env = {**os.environ, "PYTHONHOME": "/invalid", "PYTHONPATH": str(tmp_path), "PYTHONUNBUFFERED": "0"}
+    env.pop("__PYVENV_LAUNCHER__", None)
+    package = subprocess.check_output(
+        [python, "-E", "-P", "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+        text=True, env=env, timeout=10,
     )
-    transport.controller = Mock()
-    transport.controller.on_write.side_effect = lambda _: assert_mtu(163)
-    transport.controller.on_disconnect.side_effect = lambda: assert_mtu(23)
-    monkeypatch.setattr(macos_transport, "CHUNK_STAGGER_S", 0)
+    module = Path(package.strip()) / "switchboard" / "companion" / "service.py"
+    module.parent.mkdir(parents=True)
+    module.write_text(
+        """import json, os, signal, sys
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(37))
+print("service stderr", file=sys.stderr)
+print(json.dumps([os.getpid(), sys.argv[1:], sys.flags.ignore_environment, sys.flags.safe_path]))
+signal.pause()
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "switchboard").mkdir()
+    (tmp_path / "switchboard" / "__init__.py").write_text("raise RuntimeError('unexpected import')", encoding="utf-8")
+    with subprocess.Popen(
+        [launcher, python, settings], cwd=tmp_path, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    ) as process:
+        try:
+            assert select.select([process.stdout], [], [], 10)[0], "service did not log before exit"
+            assert json.loads(process.stdout.readline()) == [process.pid, [str(settings)], 1, True]
+            process.send_signal(signal.SIGTERM)
+            assert process.communicate(timeout=10) == ("", "service stderr\n")
+            assert process.returncode == 37
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=10)
 
-    def assert_mtu(expected):
-        assert transport.mtu() == expected
-
-    def notifications():
-        return [base64.b64decode(json.loads(call.args[0][65:])["packet"]) for call in writer.write.call_args_list]
-
-    request = b'{"action":"get_device_info"}'
-    await controller.handle_message(request)
-    legacy = notifications()
-    assert max(map(len, legacy)) == 20 and len(legacy) >= 16
-    writer.write.reset_mock()
-
-    reader.feed_data(app_frame(key, seq=1, type="mtu", mtu="163"))
-    reader.feed_data(app_frame(key, seq=2, type="packet", packet=base64.b64encode(request).decode()))
-    task = asyncio.create_task(transport._events())
-    try:
-        await asyncio.sleep(0)
-        transport.controller.on_write.assert_called_once_with(request)
-        await controller.handle_message(request)
-        negotiated = notifications()
-        assert negotiated == [
-            b'\xfe\x00\x02{"type":"device_info","node_id":"homelink-000001","version":"1.0.0",'
-            b'"device_id":"hatch-link:02:00:00:00:00:01","mac":"02:00:00:00:00:01","model":"hatch_link"',
-            b'\xfe\x01\x02,"pairing_protocol":5,"pairing_auth":"none","pairing_auth_epoch":0,'
-            b'"pairing_policy":"confirm_app","build_sha":"","network_ready":true}',
-        ]
-        for packets in (legacy, negotiated):
-            assembler = ChunkAssembler()
-            for packet in packets[:-1]:
-                assert assembler.feed(packet) is None
-            assert json.loads(assembler.feed(packets[-1])) == controller.device_info()
-
-        reader.feed_data(app_frame(key, seq=3, type="disconnect"))
-        await asyncio.sleep(0)
-        transport.controller.on_disconnect.assert_called_once_with()
-    finally:
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        controller.close()
+    settings.chmod(0o755)
+    for argv in ([python, settings], [python, "settings"], ["python", settings], [python, settings, "extra"]):
+        result = subprocess.run([launcher, *argv], cwd=tmp_path, timeout=10, capture_output=True)
+        assert result.returncode == 2 and not result.stdout and result.stderr
 
 
-@pytest.mark.parametrize("value", [None, 163, "22", "164", "0163", "+23", "2٣", "23\n", "9" * 100])
-async def test_mac_rejects_invalid_authenticated_notification_size(value):
-    key = b"A" * 32
-    reader = asyncio.StreamReader(limit=8192)
-    reader.feed_data(app_frame(key, seq=1, type="mtu", mtu=value))
-    transport = macos_transport.MacTransport("MuseGadget000001")
-    transport.channel = macos_transport.Channel(reader, Mock(), key)
-    with pytest.raises(CapabilityError, match="invalid notification size"):
-        await transport._events()
-    assert transport.mtu() == 23
+def test_missing_manifest_skips_app_install(tmp_path, monkeypatch):
+    monkeypatch.setattr(macos_app, "__file__", str(tmp_path / "macos_app.py"))
+    monkeypatch.setattr(macos_app, "app_path", Mock(side_effect=AssertionError))
+    assert macos_app.install_app() is None
 
 
-@pytest.mark.skipif(os.name != "posix", reason="needs a Unix socket")
-async def test_helper_context_closes_connected_peer_before_waiting_for_server(monkeypatch):
-    spawn = asyncio.create_subprocess_exec
-    child = """
-import hashlib, hmac, json, socket, sys
-from pathlib import Path
-file = Path(sys.argv[1])
-data = json.loads(file.read_bytes())
-file.unlink()
-key = bytes.fromhex(data["token"])
-body = b'{"seq":1,"type":"ready"}'
-frame = hmac.new(key, b"app:" + body, hashlib.sha256).hexdigest().encode() + b" " + body + b"\\n"
-with socket.socket(socket.AF_UNIX) as conn:
-    conn.connect(data["socket"])
-    conn.sendall(frame)
-    assert conn.recv(1) == b""
-"""
-
-    async def direct(*args, **kwargs):
-        return await spawn(sys.executable, "-c", child, args[-1], **kwargs)
-
-    with tempfile.TemporaryDirectory(prefix="swb-ipc-", dir="/tmp") as directory:
-        home = Path(directory)
-        monkeypatch.setattr(Path, "home", lambda: home)
-        monkeypatch.setattr(asyncio, "create_subprocess_exec", direct)
-        monkeypatch.setattr(macos_transport, "_same_user", lambda _: True)
-        async with asyncio.timeout(7):
-            async with macos_transport.helper(home):
-                pass
-        assert not list(home.rglob("bootstrap")) and not list(home.rglob("s"))
+@pytest.mark.parametrize("raw", [b"{", b"{}", b"null", b" " * 1025, b'{"sha256":"bad","team_id":"ABCDEFGHIJ"}'])
+def test_corrupt_manifest_does_not_fall_back(tmp_path, monkeypatch, raw):
+    monkeypatch.setattr(macos_app, "__file__", str(tmp_path / "macos_app.py"))
+    (tmp_path / "macos-helper.json").write_bytes(raw)
+    monkeypatch.setattr(macos_app, "app_path", Mock(side_effect=AssertionError))
+    with pytest.raises(CompanionError, match="release manifest is invalid"):
+        macos_app.install_app()
 
 
-@pytest.mark.skipif(sys.platform != "darwin" or not os.environ.get("SWB_TEST_MAC_HELPER"), reason="needs the built Mac app")
-async def test_native_helper_authenticates_commands_without_requesting_bluetooth(monkeypatch):
-    app = Path(os.environ["SWB_TEST_MAC_HELPER"])
-    executable = app / "Contents" / "MacOS" / "SwBCompanion"
-    spawn = asyncio.create_subprocess_exec
+@pytest.mark.parametrize("installed", ["absent", "previous", "current"])
+def test_install_app_uses_the_verified_launcher(tmp_path, monkeypatch, installed):
+    app = tmp_path / "Applications" / macos_app.APP_NAME
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(macos_app, "__file__", str(tmp_path / "macos_app.py"))
+    digest, team = "a" * 64, "ABCDEFGHIJ"
+    (tmp_path / "macos-helper.json").write_text(
+        json.dumps({"sha256": digest, "team_id": team}), encoding="utf-8",
+    )
 
-    async def direct(*args, **kwargs):
-        bootstrap = Path(args[-1])
-        data = json.loads(bootstrap.read_bytes())
-        assert bootstrap.stat().st_mode & 0o777 == 0o600
-        assert bootstrap.parent.stat().st_mode & 0o777 == 0o700
-        assert Path(data["socket"]).stat().st_mode & 0o777 == 0o600
-        return await spawn(str(executable), str(bootstrap), **kwargs)
+    def make_bundle(path, *, launcher=True):
+        plist = path / "Contents" / "Info.plist"
+        plist.parent.mkdir(parents=True)
+        info = {
+            "CFBundleIdentifier": macos_app.BUNDLE_ID,
+            "CFBundleExecutable": "SwBCompanion",
+            "CFBundleShortVersionString": macos_app.__version__,
+        }
+        if launcher:
+            info["SwBCompanionServiceVersion"] = "1"
+        plist.write_bytes(plistlib.dumps(info))
+        return path
 
-    with tempfile.TemporaryDirectory(prefix="swb-ble-", dir="/tmp") as directory:
-        home = Path(directory)
-        monkeypatch.setattr(Path, "home", lambda: home)
-        monkeypatch.setattr(asyncio, "create_subprocess_exec", direct)
-        async with macos_transport.helper(app) as channel:
-            await channel.send("status")
-            response = await asyncio.wait_for(channel.receive(), 5)
-            assert response["type"] == "status"
-            assert response["permission"] in ("Approval required", "Allowed", "Denied", "Restricted", "Unavailable")
-            assert not list(home.rglob("bootstrap"))
-            channel.sent = 0
-            await channel.send("status")
-            with pytest.raises(CapabilityError, match="authentication"):
-                await asyncio.wait_for(channel.receive(), 5)
-        assert not list(home.rglob("s"))
+    if installed != "absent":
+        make_bundle(app, launcher=installed == "current")
+    system, download = Mock(), Mock()
+    monkeypatch.setattr(macos_app, "_system", system)
+    monkeypatch.setattr(macos_app, "_download", download)
+    monkeypatch.setattr(macos_app, "_extract", lambda _, directory: make_bundle(directory / macos_app.APP_NAME))
+
+    def swap(src, dst, flags):
+        assert flags == macos_app._RENAME_SWAP
+        candidate = Path(os.fsdecode(src))
+        assert system.call_args.args == ("/usr/sbin/spctl", "--assess", "--type", "execute", str(candidate))
+        app.rename(candidate.with_suffix(".old"))
+        candidate.rename(Path(os.fsdecode(dst)))
+        return 0
+
+    monkeypatch.setattr(macos_app.ctypes, "CDLL", Mock(return_value=Mock(renamex_np=swap)))
+    assert macos_app.install_app() == (app / "Contents/MacOS/SwBCompanion", installed != "current")
+    assert macos_app._bundle_info(app)["SwBCompanionServiceVersion"] == "1"
+    assert system.call_count == (4 if installed == "previous" else 2)
+    if installed == "current":
+        download.assert_not_called()
+    else:
+        assert download.call_args.args[1] == digest
 
 
 def test_download_uses_pinned_version_and_hash(tmp_path, monkeypatch):
@@ -239,6 +203,7 @@ def test_verify_pins_developer_id_and_uses_both_macos_checks(tmp_path, monkeypat
         "CFBundleIdentifier": macos_app.BUNDLE_ID,
         "CFBundleExecutable": "SwBCompanion",
         "CFBundleShortVersionString": macos_app.__version__,
+        "SwBCompanionServiceVersion": "1",
     }))
     system = Mock()
     monkeypatch.setattr(macos_app, "_system", system)
@@ -249,23 +214,3 @@ def test_verify_pins_developer_id_and_uses_both_macos_checks(tmp_path, monkeypat
     assert 'certificate leaf[subject.OU] = "ABCDEFGHIJ"' in verify[5]
     assert macos_app.BUNDLE_ID in verify[5]
     assert assess[:4] == ("/usr/sbin/spctl", "--assess", "--type", "execute")
-
-
-@pytest.mark.parametrize("result", ["Allowed", "Denied", "Approval required"])
-def test_bluetooth_prepare_only_prompts_when_needed(tmp_path, monkeypatch, capsys, result):
-    path = tmp_path / "companion.json"
-    install = Mock()
-    permission = AsyncMock(side_effect=[result, "Allowed"])
-    monkeypatch.setattr(macos_app, "install_app", install)
-    monkeypatch.setattr(macos_transport, "permission", permission)
-    if result == "Denied":
-        with pytest.raises(CompanionError, match="SwB Companion"):
-            bluetooth.prepare(path)
-    else:
-        bluetooth.prepare(path)
-    install.assert_called_once_with()
-    assert permission.await_count == (2 if result == "Approval required" else 1)
-    if result == "Approval required":
-        permission.assert_awaited_with(authorize=True)
-        assert "SwB Companion" in capsys.readouterr().out
-    assert bluetooth.last_check(path) == f"{'Denied' if result == 'Denied' else 'Allowed'} (last check)"

@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import stat
-import sys
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
@@ -161,7 +160,7 @@ def test_connect_requires_opt_in_to_advertise_capabilities(settings, monkeypatch
     cli.main(["companion", "status"])
     assert capsys.readouterr().out.splitlines() == [
         "Companion stopped", f"This device is paired as {COMPANION_ID}.", f"Deployment {URL}",
-        "Connection offline", "Bluetooth Disabled",
+        "Connection offline",
     ]
 
 
@@ -278,13 +277,12 @@ def test_connect_reports_linux_notification_package(settings, monkeypatch, capsy
         assert error.value.code == 1 and "Install libnotify-bin for desktop notifications." in capsys.readouterr().err
 
 
-def test_connect_reports_explicitly_enabled_unavailable_capability(settings, monkeypatch, capsys):
-    monkeypatch.setitem(sys.modules, "switchboard.companion.caps.muse", None)
+def test_connect_rejects_removed_muse_capability(settings, monkeypatch, capsys):
     pair = AsyncMock()
     monkeypatch.setattr(client, "pair", pair)
     with pytest.raises(SystemExit) as error:
         cli.main(["companion", "connect", URL, "--no-run", "--code", CODE, "--cap", "muse"])
-    assert error.value.code == 1 and "Install swb-one[companion] to use Muse." in capsys.readouterr().err
+    assert error.value.code == 2 and "invalid choice: 'muse'" in capsys.readouterr().err
     pair.assert_not_awaited()
     assert not settings.exists()
 
@@ -325,6 +323,32 @@ def test_connect_rejects_insecure_urls_without_echo(settings, monkeypatch, capsy
     assert url not in capsys.readouterr().err
     client.pair.assert_not_awaited()
     assert not settings.exists()
+
+
+@pytest.mark.parametrize(("legacy", "retained"), [
+    (("muse", "drop", "muse"), ("drop",)),
+    (("muse",), ()),
+])
+def test_legacy_muse_state_reuses_pairing_without_muse(settings, tmp_path, monkeypatch, legacy, retained):
+    state = CompanionState(URL, COMPANION_ID, KEY, legacy, str(tmp_path / "drop"),
+                           name="Desk companion", memory_sync=False)
+    state.save(settings)
+    run = AsyncMock()
+    monkeypatch.setattr(client, "run", run)
+
+    cli.main(["companion", "run"])
+
+    run.assert_awaited_once()
+    loaded, path, caps = run.await_args.args
+    assert loaded == replace(state, enabled_caps=retained)
+    assert path == settings and tuple(caps) == retained
+
+
+def test_state_preserves_other_capability_ids(settings, tmp_path):
+    state = CompanionState(URL, COMPANION_ID, KEY, ("muse", "future-cap", "Muse"), str(tmp_path / "drop"))
+    state.save(settings)
+
+    assert CompanionState.load(settings) == replace(state, enabled_caps=("future-cap", "Muse"))
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX file modes only")

@@ -4,15 +4,13 @@ import os
 import plistlib
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
 
 from switchboard import cli
-from switchboard.companion import runtime, service
-from switchboard.companion.bluetooth import last_check
+from switchboard.companion import macos_app, runtime, service
 from switchboard.companion.state import CompanionError, CompanionState, state_path
 
 COMPANION_ID = "cmp_" + "1" * 24
@@ -60,8 +58,8 @@ def test_service_definitions():
     assert task.findtext("Actions/Exec/Arguments", namespaces=ns) == subprocess.list2cmdline(argv[1:])
 
 
-@pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
-def test_install_start_stop_uninstall_are_idempotent(paired, monkeypatch, tmp_path, platform, capsys):
+@pytest.mark.parametrize("platform,signed", [("linux", False), ("darwin", False), ("darwin", True), ("win32", False)])
+def test_install_start_stop_uninstall_are_idempotent(paired, monkeypatch, tmp_path, platform, signed, capsys):
     path, state = paired
     calls = []
     manager = {"loaded": False, "running": False}
@@ -71,6 +69,14 @@ def test_install_start_stop_uninstall_are_idempotent(paired, monkeypatch, tmp_pa
     executable.with_name("pythonw.exe").touch()
     monkeypatch.setattr(sys, "platform", platform)
     monkeypatch.setattr(sys, "executable", str(executable))
+    helper = macos_app.app_path() / "Contents/MacOS/SwBCompanion"
+    app_installs = []
+
+    def install_app():
+        app_installs.append(helper)
+        return (helper, len(app_installs) in (1, 3)) if signed else None
+
+    monkeypatch.setattr(macos_app, "install_app", install_app)
 
     def run(*args):
         calls.append(args)
@@ -117,6 +123,19 @@ def test_install_start_stop_uninstall_are_idempotent(paired, monkeypatch, tmp_pa
     assert svc.file.stat().st_mtime_ns == installed.st_mtime_ns
     assert sum("bootstrap" in call or "/create" in call or "daemon-reload" in call for call in calls) == 1
     assert DEVICE_KEY.encode() not in svc.file.read_bytes()
+    if platform == "darwin":
+        arguments = plistlib.loads(svc.file.read_bytes())["ProgramArguments"]
+        if signed:
+            assert arguments == [str(helper), str(executable), str(path.parent)]
+            svc.install(state)
+            assert svc.file.stat().st_mtime_ns == installed.st_mtime_ns
+            assert [call[1] for call in calls if call[1] in ("bootout", "bootstrap")] == [
+                "bootstrap", "bootout", "bootstrap",
+            ]
+        else:
+            assert arguments == [str(executable), "-E", "-P", "-u", "-m", "switchboard.companion.service", str(path.parent)]
+    installs = len(app_installs)
+    assert installs == (3 if signed else 2 if platform == "darwin" else 0)
     svc.status()
     assert capsys.readouterr().out.endswith("Service installed\nService running\n")
     svc.stop()
@@ -124,6 +143,7 @@ def test_install_start_stop_uninstall_are_idempotent(paired, monkeypatch, tmp_pa
     assert not manager["running"]
     svc.start(state)
     assert manager["running"]
+    assert len(app_installs) == installs
     svc.uninstall()
     svc.uninstall()
     svc.status()
@@ -136,17 +156,17 @@ def test_install_start_stop_uninstall_are_idempotent(paired, monkeypatch, tmp_pa
 
 def test_runtime_status_and_single_runner(paired):
     path, state = paired
-    assert runtime.status(path, state.companion_id) == (False, "Offline", None)
+    assert runtime.status(path, state.companion_id) == (False, "Offline")
     assert not path.with_suffix(".lock").exists()
-    with runtime.running(path, state.companion_id, False) as active:
-        assert runtime.status(path, state.companion_id) == (True, "Connecting", "Disabled")
+    with runtime.running(path, state.companion_id) as active:
+        assert runtime.status(path, state.companion_id) == (True, "Connecting")
         active.connection("Connected")
-        assert runtime.status(path, state.companion_id) == (True, "Connected", "Disabled")
-        with pytest.raises(CompanionError, match="already running"), runtime.running(path, state.companion_id, False):
+        assert runtime.status(path, state.companion_id) == (True, "Connected")
+        with pytest.raises(CompanionError, match="already running"), runtime.running(path, state.companion_id):
             pytest.fail("A second companion acquired the same lease")
-    assert runtime.status(path, state.companion_id) == (False, "Offline", None)
+    assert runtime.status(path, state.companion_id) == (False, "Offline")
     active.connection("Connected")
-    assert runtime.status(path, state.companion_id) == (False, "Offline", None)
+    assert runtime.status(path, state.companion_id) == (False, "Offline")
 
 
 def test_runtime_write_failure_does_not_stop_the_runner(paired, monkeypatch):
@@ -156,13 +176,13 @@ def test_runtime_write_failure_does_not_stop_the_runner(paired, monkeypatch):
         raise PermissionError
 
     monkeypatch.setattr(Path, "replace", sharing_violation)
-    with runtime.running(path, state.companion_id, False) as active:
+    with runtime.running(path, state.companion_id) as active:
         active.connection("Connected")
-        assert runtime.status(path, state.companion_id) == (True, "Starting", None)
-    assert runtime.status(path, state.companion_id) == (False, "Offline", None)
+        assert runtime.status(path, state.companion_id) == (True, "Starting")
+    assert runtime.status(path, state.companion_id) == (False, "Offline")
 
 
-def test_bluetooth_denial_does_not_install_the_service(paired, monkeypatch):
+def test_invalid_release_manifest_does_not_install_the_service(paired, monkeypatch, tmp_path):
     path, state = paired
     monkeypatch.setattr(sys, "platform", "darwin")
     calls = []
@@ -171,19 +191,14 @@ def test_bluetooth_denial_does_not_install_the_service(paired, monkeypatch):
         calls.append(args)
         return subprocess.CompletedProcess(args, 0, "", "")
 
-    def prepare(config):
-        assert config == path
-        Path(config).with_suffix(".bluetooth").write_text("Denied", encoding="utf-8")
-        raise CompanionError("Bluetooth denied")
-
+    monkeypatch.setattr(macos_app, "__file__", str(tmp_path / "macos_app.py"))
+    (tmp_path / "macos-helper.json").write_text("invalid", encoding="utf-8")
     monkeypatch.setattr(service, "_run", run)
-    monkeypatch.setattr(service, "prepare", prepare)
     svc = service.Service(path)
-    with pytest.raises(CompanionError, match="Bluetooth denied"):
-        svc.install(replace(state, enabled_caps=("muse",)))
+    with pytest.raises(CompanionError, match="release manifest is invalid"):
+        svc.install(state)
     assert not svc.file.exists()
     assert calls == [("/bin/launchctl", "print", svc.domain)]
-    assert last_check(path) == "Denied (last check)"
 
 
 def test_service_install_requires_pairing_but_cleanup_does_not(paired, monkeypatch, capsys):

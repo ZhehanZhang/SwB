@@ -71,10 +71,11 @@ jobs:
           VERSION: ${{ needs.release-version.outputs.version }}
         run: |
           app="$RUNNER_TEMP/$APP_NAME"
-          SWB_BLE_SMOKE_TEST=0 bash native/companion-macos/build.sh "$app" "$VERSION"
+          bash native/companion-macos/build.sh "$app" "$VERSION"
           for key in CFBundleShortVersionString CFBundleVersion; do
             test "$(/usr/bin/plutil -extract "$key" raw "$app/Contents/Info.plist")" = "$VERSION"
           done
+          test "$(/usr/bin/plutil -extract SwBCompanionServiceVersion raw "$app/Contents/Info.plist")" = 1
       - name: Sign the app with Developer ID
         env:
           SWB_MACOS_CERTIFICATE_P12: ${{ secrets.SWB_MACOS_CERTIFICATE_P12 }}

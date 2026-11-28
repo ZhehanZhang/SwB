@@ -9,7 +9,7 @@ from .base import Capability
 from .drop import DropCapability
 from .notify import NotifyCapability
 
-CAPABILITIES = ("notify", "drop", "muse", "mcp", "hooks", "herdr", "codex", "opencode", "dsh")
+CAPABILITIES = ("notify", "drop", "mcp", "hooks", "herdr", "codex", "opencode", "dsh")
 HARNESSES = {
     "hooks": "HooksCapability", "herdr": "HerdrCapability", "codex": "CodexCapability", "opencode": "OpenCodeCapability",
     "dsh": "DshCapability",
@@ -29,13 +29,6 @@ def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalS
             from .mcp import MCPCapability
 
             cap = MCPCapability(servers or {})
-        elif cap_id == "muse":
-            try:
-                from .muse import MuseCapability
-            except ImportError:
-                unavailable[cap_id] = "Install swb-one[companion] to use Muse."
-                continue
-            cap = MuseCapability()
         elif cap_id in HARNESSES:
             module = import_module(f".{cap_id}", __name__)
             cap = module.HooksCapability(memory_sync=memory_sync) if cap_id == "hooks" else getattr(module, HARNESSES[cap_id])()

@@ -43,10 +43,6 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
-companion = [
-  "bless==0.2.6; python_version < '3.14' and sys_platform == 'linux'",
-  "bleak>=0.22.3,<1; python_version < '3.14' and sys_platform == 'linux'",
-]
 
 [project.urls]
 Homepage = "https://swb.one"

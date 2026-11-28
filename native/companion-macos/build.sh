@@ -21,10 +21,6 @@ fi
 
 read -r -a architectures <<< "${SWB_COMPANION_ARCHS:-arm64 x86_64}"
 built=()
-swift_flags=(-swift-version 5 -O)
-if [[ "${SWB_BLE_SMOKE_TEST:-0}" == 1 ]]; then
-    swift_flags+=(-D SWB_BLE_SMOKE_TEST)
-fi
 if [[ "${#architectures[@]}" == 0 ]]; then
     echo "Choose at least one architecture." >&2
     exit 2
@@ -53,8 +49,8 @@ for arch in "${architectures[@]}"; do
         *) echo "Unsupported architecture: $arch" >&2; exit 2 ;;
     esac
     binary="$stage/SwBCompanion-$arch"
-    xcrun --sdk macosx swiftc "${swift_flags[@]}" -sdk "$sdk" -target "$arch-apple-macos11.0" \
-        -o "$binary" "$here"/*.swift
+    xcrun --sdk macosx clang -O2 -Wall -Wextra -Werror -isysroot "$sdk" -target "$arch-apple-macos11.0" \
+        -o "$binary" "$here/main.c"
     built+=("$binary")
 done
 executable="$bundle/Contents/MacOS/SwBCompanion"

@@ -20,6 +20,8 @@ from .state import CompanionError
 
 APP_NAME = "SwB Companion.app"
 BUNDLE_ID = "one.swb.companion"
+_EXECUTABLE = "SwBCompanion"
+_SERVICE_VERSION = "1"
 _ASSET = "swb-companion-macos.zip"
 _RELEASE = "https://github.com/ZhehanZhang/SwB/releases/download/"
 _DOWNLOAD_HOSTS = {"github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"}
@@ -32,15 +34,26 @@ def app_path() -> Path:
     return Path.home() / "Applications" / APP_NAME
 
 
-def _manifest() -> tuple[str, str]:
+def _manifest() -> tuple[str, str] | None:
+    path = Path(__file__).with_name("macos-helper.json")
     try:
-        data = json.loads(Path(__file__).with_name("macos-helper.json").read_bytes())
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            return None
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError
+        with path.open("rb") as stream:
+            raw = stream.read(1025)
+        if len(raw) > 1024:
+            raise ValueError
+        data = json.loads(raw)
         digest, team = data["sha256"], data["team_id"]
         if re.fullmatch(r"[a-f0-9]{64}", digest) and re.fullmatch(r"[A-Z0-9]{10}", team):
             return digest, team
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
         pass
-    raise CompanionError("Install the official SwB release to use the Mac Bluetooth helper.")
+    raise CompanionError("The SwB Companion release manifest is invalid. Reinstall the official SwB release.")
 
 
 def _system(*argv: str) -> None:
@@ -59,16 +72,21 @@ def _bundle_info(app: Path) -> dict:
             raise ValueError
         with (app / "Contents" / "Info.plist").open("rb") as stream:
             info = plistlib.loads(stream.read(65_536))
-        if info["CFBundleIdentifier"] == BUNDLE_ID and info["CFBundleExecutable"] == "SwBCompanion":
+        if info["CFBundleIdentifier"] == BUNDLE_ID and info["CFBundleExecutable"] == _EXECUTABLE:
             return info
     except (OSError, ValueError, KeyError, TypeError, ExpatError, plistlib.InvalidFileException):
         pass
     raise CompanionError("Choose a valid SwB Companion app.")
 
 
+def _is_current(info: dict) -> bool:
+    return (info.get("CFBundleShortVersionString") == __version__
+            and info.get("SwBCompanionServiceVersion") == _SERVICE_VERSION)
+
+
 def verify_app(app: Path, team: str, *, current: bool = True, gatekeeper: bool = False) -> None:
     info = _bundle_info(app)
-    if current and info.get("CFBundleShortVersionString") != __version__:
+    if current and not _is_current(info):
         raise CompanionError("Install the SwB Companion app for this version of SwB.")
     if not re.fullmatch(r"[A-Z0-9]{10}", team):
         raise CompanionError("Check the SwB Companion signing identity.")
@@ -104,7 +122,7 @@ def _download(archive: Path, digest: str) -> None:
                 hasher.update(chunk)
                 target.write(chunk)
     except (OSError, ValueError):
-        raise CompanionError("SwB could not download the Mac Bluetooth helper.") from None
+        raise CompanionError("SwB could not download the Mac Companion app.") from None
     if hasher.hexdigest() != digest:
         raise CompanionError("The SwB Companion download did not match this SwB release.")
 
@@ -131,23 +149,18 @@ def _extract(archive: Path, directory: Path) -> Path:
     return directory / APP_NAME
 
 
-def installed_app() -> Path:
-    _, team = _manifest()
+def install_app() -> tuple[Path, bool] | None:
+    manifest = _manifest()
+    if manifest is None:
+        return None
+    digest, team = manifest
     app = app_path()
-    if not app.exists():
-        raise CompanionError("Set up SwB Companion before using Mac Bluetooth.")
-    verify_app(app, team)
-    return app
-
-
-def install_app() -> None:
-    digest, team = _manifest()
-    app = app_path()
+    executable = app / "Contents" / "MacOS" / _EXECUTABLE
     old = app.exists() or app.is_symlink()
     if old:
         verify_app(app, team, current=False, gatekeeper=True)
-        if _bundle_info(app).get("CFBundleShortVersionString") == __version__:
-            return
+        if _is_current(_bundle_info(app)):
+            return executable, False
     app.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".swb-companion-", dir=app.parent) as work:
         directory = Path(work)
@@ -158,6 +171,7 @@ def install_app() -> None:
         if old:
             rename = ctypes.CDLL(None).renamex_np
             if rename(os.fsencode(candidate), os.fsencode(app), _RENAME_SWAP):
-                raise CompanionError("SwB could not replace the installed Bluetooth helper.")
+                raise CompanionError("SwB could not replace the installed Companion app.")
         else:
             candidate.rename(app)
+    return executable, True

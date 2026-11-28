@@ -39,25 +39,8 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | `--cap opencode` | [OpenCode 伺服器](/zh-Hant/docs/blocks/local-sessions#opencode) |
 | `--cap dsh` | [DeepSeek Harness](/zh-Hant/docs/blocks/local-sessions#deepseek-harness) |
 | `--cap hooks` | [狀態掛鉤](/zh-Hant/docs/blocks/local-sessions#狀態掛鉤) |
-| `--cap muse` | 在 Mac 或 Linux 電腦上透過藍牙配對 Muse |
 
 在 Linux 上，通知使用 `notify-send`。在 Debian 和 Ubuntu 上，安裝 `libnotify-bin` 套件即可取得。
-
-請依照 [Muse 配對指南](/zh-Hant/docs/setup/muse)操作。配對完成後，SwB 伺服器會維持與 Muse 的連線。
-
-在 macOS 上，用 `uv tool install swb-one` 安裝 SwB。用已安裝的 `swb` 配對裝置。
-
-```sh
-swb companion connect https://swb.example.com --cap muse
-```
-
-這個指令與 `swb companion run` 會視需要把已簽署的 **SwB Companion** 應用程式安裝到 `~/Applications`。macOS 第一次詢問時，請允許 **SwB Companion** 使用藍牙。
-
-在 Linux 上，請用 Python 3.13 和 `companion` 套件選項。請用有權存取 BlueZ 的本機帳號。BlueZ 是 Linux 的藍牙服務。
-
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
 
 每個 MCP 伺服器各加一個 `--mcp` 選項。如果是程式，使用 `--mcp 'NAME=COMMAND'`，把 `NAME` 換成伺服器的名稱，把 `COMMAND` 換成程式的啟動指令。如果是裝置上的 HTTP 伺服器，使用它的本機網址，例如 `--mcp notes=http://127.0.0.1:8000/mcp`。
 
@@ -81,13 +64,13 @@ SwB 會嘗試把每則訊息送到開啟中的工作階段。傳送者可以使�
 
 配對時會啟動 Companion 程式。要再次啟動，執行 `swb companion run`。執行 `swb companion status` 可查看本機的裝置 ID 和功能。
 
-在 macOS 上使用 Muse 時，請用已安裝的 `swb`。在 Linux 上透過 `uvx` 使用 Muse 時，保留配對指令中的套件和 Python 選項。透過 `uvx` 使用其他功能時，把指令中的 `swb` 換成 `uvx swb-one`。
+如果配對時使用 `uvx`，請把指令中的 `swb` 換成 `uvx swb-one`。在前景執行時，Python 會直接啟動 Companion。
 
 每一條通往 SwB 的連線都由裝置發起。
 
 ## 在背景執行
 
-安裝背景服務後，Companion 可以自動啟動。用 `uv tool install swb-one` 安裝 SwB。在 Linux 上使用 Muse 時，請改用 `uv tool install --python 3.13 'swb-one[companion]'`。
+安裝背景服務後，Companion 可以自動啟動。用 `uv tool install swb-one` 安裝 SwB。
 
 需要配對時，把 `--no-run` 加到配對選項中，再執行 `swb companion connect`。配對完成後，指令就會結束。如果 Companion 正在終端機執行，請先停止它，再安裝服務。用已安裝的 `swb` 管理服務。
 
@@ -95,17 +78,17 @@ SwB 會嘗試把每則訊息送到開啟中的工作階段。傳送者可以使�
 swb companion service install
 ```
 
-在 Linux 上，`systemd --user` 會以你的帳號執行服務。若要在開機時啟動服務並在登出後繼續執行，請執行 `loginctl enable-linger "$USER"`。使用 Muse 時，請用有權存取 BlueZ 的本機帳號。
+在 Linux 上，`systemd --user` 會以你的帳號執行服務。執行 `loginctl enable-linger "$USER"`，讓服務在開機時啟動，並在登出後繼續執行。
 
-在 macOS 上，請登入桌面後安裝服務。使用 Muse 時，這個指令也會視需要安裝已簽署的 **SwB Companion** 應用程式。macOS 第一次詢問時，請允許 **SwB Companion** 使用藍牙。
+在 macOS 上，請登入桌面後安裝服務。SwB 正式版會自動將已簽署的 **SwB Companion** 應用程式安裝到 `~/Applications`，並驗證程式。`launchd` 透過此應用程式啟動服務。
 
-在 Windows 上，工作排程器會在你登入時啟動服務。請在 Linux 或 macOS 上使用 Muse。
+在 Windows 上，工作排程器會在你登入時啟動服務。
 
 請在服務管理員中設定本機工具需要的變數。
 
 用 `swb companion service start` 啟動服務。用 `swb companion service status` 查看服務狀態。用 `swb companion service logs` 查看記錄。
 
-用 `swb companion status` 查看執行狀態、連線狀態和 SwB 位址。使用 Muse 時，這個指令也會顯示藍牙狀態。
+用 `swb companion status` 查看執行狀態、連線狀態和 SwB 位址。
 
 用 `swb companion service stop` 立即停止服務。用 `swb companion service uninstall` 移除自動啟動設定。裝置會保留金鑰。
 

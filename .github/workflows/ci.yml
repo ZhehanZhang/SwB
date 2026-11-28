@@ -84,15 +84,9 @@ jobs:
           executable=$(/usr/bin/plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")
           slices="$(xcrun lipo -archs "$app/Contents/MacOS/$executable")"
           [[ " $slices " == *" arm64 "* && " $slices " == *" x86_64 "* ]]
-      - name: Test the Mac advertisement and GATT profile
-        run: |
-          cd native/companion-macos
-          xcrun swiftc -o "$RUNNER_TEMP/advertisement-test" \
-            Bootstrap.swift Peripheral.swift Protocol.swift SocketChannel.swift tests/Advertisement.swift
-          "$RUNNER_TEMP/advertisement-test"
-      - name: Test the Python and Swift socket protocol
+      - name: Test the Mac launchd entrypoint
         env:
           SWB_TEST_MAC_HELPER: ${{ runner.temp }}/SwB Companion.app
         run: |
           uv sync --locked --extra test
-          uv run --no-sync pytest -v -o faulthandler_timeout=30 tests/test_companion_macos.py
+          uv run --no-sync pytest -v -o faulthandler_timeout=30 tests/test_companion_macos.py tests/test_companion_service.py

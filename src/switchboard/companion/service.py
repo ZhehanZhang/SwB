@@ -14,8 +14,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from . import runtime
-from .bluetooth import prepare
+from . import macos_app, runtime
 from .state import CompanionError, CompanionState, state_path
 
 
@@ -174,7 +173,7 @@ class Service:
         else:
             raise CompanionError("Companion services support macOS, Linux and Windows.")
 
-    def _argv(self) -> list[str]:
+    def _python(self) -> Path:
         executable = Path(sys.executable)
         prefix = Path(sys.prefix)
         if (not executable.is_absolute() or "archive-v0" in prefix.parts
@@ -184,11 +183,14 @@ class Service:
             executable = executable.with_name("pythonw.exe")
         if not executable.is_file():
             raise CompanionError("Install a persistent Python environment for the companion.")
-        return [str(executable), "-E", "-P", "-u", "-m", "switchboard.companion.service", str(self.config.parent)]
+        return executable
 
-    def _definition(self) -> bytes:
-        argv = self._argv()
+    def _definition(self, executable: Path, helper: Path | None) -> bytes:
+        config = str(self.config.parent)
+        argv = [str(executable), "-E", "-P", "-u", "-m", "switchboard.companion.service", config]
         if self.platform == "darwin":
+            if helper is not None:
+                argv = [str(helper), str(executable), config]
             return launch_agent(self.name, argv, _path(), self.log, self.home)
         if self.platform == "linux":
             return systemd_unit(argv, _path())
@@ -231,21 +233,24 @@ class Service:
 
     def install(self, state: CompanionState) -> None:
         self._require_available(state)
-        definition = self._definition()
+        executable = self._python()
+        helper = None
+        app_changed = False
         if self.platform == "linux":
             self._linux_ready()
         elif self.platform == "darwin":
             _check(_run("/bin/launchctl", "print", self.domain), "Sign in to macOS to install the companion service.")
             self.log.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             os.close(_private_log(self.log))
-            if "muse" in state.enabled_caps:
-                prepare(self.config)
+            if installed := macos_app.install_app():
+                helper, app_changed = installed
 
+        definition = self._definition(executable, helper)
         previous = self.file.read_bytes() if self.file.is_file() else None
         changed = previous != definition
+        if previous is not None and (changed or app_changed):
+            self.stop()
         if changed:
-            if previous is not None:
-                self.stop()
             _write(self.file, definition)
         if self.platform == "linux":
             if changed:

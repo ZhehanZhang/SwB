@@ -5,13 +5,11 @@ import asyncio
 import logging
 import os
 import signal
-import sys
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
 from . import client, runtime, service
-from .bluetooth import current, last_check, prepare
 from .caps import CAPABILITIES, Capability, registry
 from .mcp_config import local_servers
 from .state import CompanionError, CompanionState, base_url, device_name, state_path
@@ -58,7 +56,7 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
         return
     if state is None and action in ("status", "disconnect"):
         if action == "status":
-            print("Companion stopped\nConnection offline\nBluetooth Disabled")
+            print("Companion stopped\nConnection offline")
         print("Pair this device with swb companion connect.")
         return
     if state is None and action == "run":
@@ -106,14 +104,11 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
             drop_dir = Path(state.drop_dir)
             caps, unavailable = registry(state.enabled_caps, drop_dir, servers, memory_sync=state.memory_sync)
             if action == "status":
-                active, connection, bluetooth = runtime.status(path, state.companion_id)
-                if sys.platform == "darwin" and "muse" in state.enabled_caps:
-                    bluetooth = asyncio.run(current(path))
+                active, connection = runtime.status(path, state.companion_id)
                 print("Companion running" if active else "Companion stopped")
                 print(f"This device is paired as {state.companion_id}.")
                 print(f"Deployment {state.url}")
                 print(f"Connection {connection.lower()}")
-                print(f"Bluetooth {bluetooth or (last_check(path) if 'muse' in state.enabled_caps else 'Disabled')}")
                 for cap in caps.values():
                     print(cap.title)
                 for reason in unavailable.values():
@@ -126,10 +121,6 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
         if background:
             asyncio.run(_background(state, path, caps))
         else:
-            if sys.platform == "darwin" and "muse" in state.enabled_caps:
-                if runtime.status(path, state.companion_id)[0]:
-                    raise runtime.AlreadyRunning("This companion is already running.")
-                prepare(path)
             asyncio.run(client.run(state, path, caps))
     except (client.PairAgain, runtime.AlreadyRunning) as error:
         if not background:

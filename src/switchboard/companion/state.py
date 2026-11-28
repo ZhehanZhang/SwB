@@ -87,7 +87,8 @@ class CompanionState:
 
             if ("mcp" in caps) != bool(local_servers(specs)):
                 raise ValueError
-            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs, name, memory_sync)
+            return cls(base_url(url), companion_id, key, tuple(cap for cap in caps if cap != "muse"), drop_dir,
+                       specs, name, memory_sync)
         except (TypeError, ValueError, KeyError):
             raise CompanionError("Check the companion settings file.") from None
 

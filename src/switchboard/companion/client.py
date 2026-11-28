@@ -14,7 +14,6 @@ import httpx
 
 from .. import __version__
 from . import REPAIR_CAPABILITIES
-from .bluetooth import current
 from .caps.base import Capability, CapabilityError, CompanionContext, JobContext
 from .harness import harness
 from .memory import MEMORY_SYNC_EVENT
@@ -193,11 +192,7 @@ async def _run_capability(client: httpx.AsyncClient, companion_id: str, cap: Cap
 
 
 async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) -> None:
-    muse = "muse" in state.enabled_caps
-    with running(path, state.companion_id, muse) as runtime:
-        if muse:
-            runtime.bluetooth = await current(path)
-            runtime.connection("Connecting")
+    with running(path, state.companion_id) as runtime:
         await _run(state, path, caps, runtime)
 
 
