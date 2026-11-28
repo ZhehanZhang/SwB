@@ -26,6 +26,7 @@ API_URL = "https://api.github.com"
 ID_RE = re.compile(r"[1-9][0-9]{0,18}")
 MAX_ID = (1 << 63) - 1
 REPO_RE = re.compile(r"[A-Za-z0-9-]{1,100}/[A-Za-z0-9_.-]{1,100}")
+INSTALLATION_URL_RE = re.compile(r"https://github\.com/(?:organizations/[A-Za-z0-9-]{1,100}/)?settings/installations/(?P<id>[0-9]+)")
 PEM_RE = re.compile(r"-----BEGIN ((?:RSA )?PRIVATE KEY)-----\s*(.*?)\s*-----END \1-----", re.DOTALL)
 
 
@@ -170,7 +171,7 @@ class GitHubAPI:
         except (binascii.Error, ValueError, TypeError, UnicodeError, jwt.PyJWTError):
             raise BlockError("The GitHub App private key is invalid") from None
 
-    async def installation(self, repo: str | None, app_jwt: str, *, installation_id: str | None = None) -> tuple[str, dict[str, str]]:
+    async def installation(self, repo: str | None, app_jwt: str, *, installation_id: str | None = None) -> tuple[str, dict[str, str], str | None]:
         _, pinned_id, _, _ = self.credentials()
         expected_id = installation_id or pinned_id
         path = f"/repos/{repo}/installation" if repo else f"/app/installations/{expected_id}"
@@ -180,7 +181,9 @@ class GitHubAPI:
             raise BlockError("GitHub App installation is not authorized for this repository")
         raw = data.get("permissions")
         permissions = {key: value for key, value in raw.items() if value in ("read", "write")} if isinstance(raw, dict) else {}
-        return ident, permissions
+        url = data.get("html_url")
+        match = INSTALLATION_URL_RE.fullmatch(url) if isinstance(url, str) else None
+        return ident, permissions, url if match and match["id"] == ident else None
 
     async def write(self, repo: str, path: str, data: dict[str, Any], required: tuple[str, ...], *, method: str = "POST") -> dict[str, Any]:
         credentials = self.credentials()
@@ -190,7 +193,7 @@ class GitHubAPI:
                 token = cached[0]
             else:
                 app_jwt = self.app_jwt()
-                ident, permissions = await self.installation(repo, app_jwt)
+                ident, permissions, _ = await self.installation(repo, app_jwt)
                 permission = next((key for key in required if permissions.get(key) == "write"), None)
                 if not permission:
                     raise BlockError(f"The GitHub App needs {' or '.join(key + ': write' for key in required)} for this repository")

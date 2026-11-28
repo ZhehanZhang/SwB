@@ -1,4 +1,16 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
+
+const modeButton = (page: Page, channel: string) => page.getByRole("button", { name: `Mode for ${channel}`, exact: true })
+const targetButton = (page: Page, channel: string) => page.getByRole("button", { name: `Target for ${channel}`, exact: true })
+async function choose(page: Page, label: string, option: string) {
+  await page.getByRole("button", { name: label, exact: true }).click()
+  await page.getByRole("menuitemradio", { name: option, exact: true }).click()
+}
+async function save(page: Page) {
+  const editing = page.getByRole("group", { name: "Channel mode editing" })
+  await editing.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(editing.getByRole("button", { name: "Saving…" })).toHaveCount(0)
+}
 
 test("settings shows the saved passkey and its last used date", async ({ page }, testInfo) => {
   await page.goto("/settings")
@@ -30,48 +42,49 @@ test("connection and project controls use the owner mode API", async ({ page, co
   await expect(github).toBeVisible()
   await expect(github).toContainText("Disconnected")
   await page.getByRole("link", { name: /Discord/ }).click()
-  const mode = page.getByRole("combobox", { name: "Mode for deployments" })
-  await expect(mode).toHaveValue("assist")
+  const mode = modeButton(page, "deployments")
+  await expect(mode).toHaveText("Assist")
   const row = page.getByRole("row").filter({ has: mode })
   await expect(row).toContainText("From channel")
-  const community = page.getByRole("row").filter({ has: page.getByRole("combobox", { name: "Mode for community" }) })
-  await expect(community.getByRole("cell").nth(1)).toHaveText("community")
-  await mode.selectOption("watch")
+  const community = page.getByRole("row").filter({ has: modeButton(page, "community") })
+  await expect(community.getByText("community", { exact: true })).toBeVisible()
+  await choose(page, "Mode for deployments", "Watch")
+  await save(page)
   await expect(row).toContainText("Override")
   await page.getByRole("button", { name: "Details for deployments" }).click()
   await expect(page.getByText("Pending messages")).toBeVisible()
   await expect(page.getByText("Next report")).toBeVisible()
   await expect(page.getByRole("cell").getByRole("link", { name: "Inbox" })).toHaveAttribute("href", "/inbox")
-  await mode.selectOption("triage")
-  await expect(page.getByText("Choose a triage agent.")).toBeVisible()
-  await expect(page.getByRole("checkbox", { name: "Reply", exact: true })).toBeChecked()
-  await expect(page.getByRole("checkbox", { name: "Label", exact: true })).toBeDisabled()
-  await expect(page.getByRole("checkbox", { name: "Notify owner" })).toBeEnabled()
-  await expect(page.getByRole("group", { name: "Triage actions" }).getByText("Issue actions require GitHub write access.")).toBeVisible()
-  await page.getByRole("checkbox", { name: "Notify owner" }).click()
-  await expect(page.getByRole("checkbox", { name: "Notify owner" })).toBeChecked()
+  await choose(page, "Mode for deployments", "Triage")
+  await expect(page.getByRole("switch", { name: "Reply", exact: true })).toBeChecked()
+  await expect(page.getByRole("switch", { name: "Label", exact: true })).toBeDisabled()
+  await expect(page.getByRole("switch", { name: "Notify owner" })).toBeEnabled()
+  await page.getByText("Notify owner", { exact: true }).filter({ visible: true }).click()
+  await expect(page.getByRole("switch", { name: "Notify owner" })).toBeChecked()
+  await save(page)
 
   await page.goto("/projects/operations")
   await page.getByRole("button", { name: "Channel modes", exact: true }).click()
   await expect(page.getByRole("table", { name: "Channel modes", exact: true })).toBeVisible()
-  await expect(mode).toHaveValue("triage")
-  await expect(page.getByRole("combobox", { name: "Mode for community" })).toHaveCount(0)
-  await mode.selectOption("inherit")
+  await expect(mode).toHaveText("Triage")
+  await expect(modeButton(page, "community")).toHaveCount(0)
+  await choose(page, "Mode for deployments", "Reset to inherit")
+  await save(page)
   await expect(row).toContainText("From channel")
-  await expect(mode).toHaveValue("assist")
+  await expect(mode).toHaveText("Assist")
 
   for (const [platform, channel, value] of [
-    ["github", "example-org/example-repo", "triage"],
-    ["slack", "#planning", "watch"],
+    ["github", "example-org/example-repo", "Triage"],
+    ["slack", "#planning", "Watch"],
   ]) {
     await page.goto(`/connections/${platform}`)
     if (platform === "github") await expect(page.getByText("Disconnected", { exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Channel modes", exact: true })).toBeVisible()
     const table = page.getByRole("table", { name: "Channel modes", exact: true })
-    await expect(table.getByRole("combobox", { name: `Mode for ${channel}` })).toHaveValue(value)
+    await expect(table.getByRole("button", { name: `Mode for ${channel}` })).toHaveText(value)
   }
   await page.goto("/connections/telegram")
-  await expect(page.getByRole("combobox", { name: "Mode for -1001000" })).toHaveValue("watch")
+  await expect(modeButton(page, "-1001000")).toHaveText("Watch")
 })
 
 test("console mode and action edits keep the bound agent visible", async ({ page, request }) => {
@@ -81,38 +94,98 @@ test("console mode and action edits keep the bound agent visible", async ({ page
   const repo = "example-org/example-repo"
   const placement = { block: "repo-events", space: "release", channel: repo }
   const address = "capy:captain:jam_EXAMPLEATLAS"
-  const target = "agent:claude-code"
   const bound = await request.post("/api/modes", { headers, data: { ...placement, mode: "triage", target: address } })
   expect(bound.ok()).toBeTruthy()
   try {
     await page.goto("/connections/github")
-    const mode = page.getByRole("combobox", { name: "Mode for " + repo })
+    const mode = modeButton(page, repo)
     const row = page.getByRole("row").filter({ has: mode })
-    await expect(row.getByText(address, { exact: true }).filter({ visible: true })).toHaveClass(/font-mono/)
-    expect((await request.post("/api/modes", { headers, data: { ...placement, mode: "triage", target } })).ok()).toBeTruthy()
-    await page.reload()
-    const agent = row.getByText("Claude Code", { exact: true }).filter({ visible: true })
-    const avatar = row.locator('img[src="/avatars/claude-code.png"]').filter({ visible: true })
+    await expect(targetButton(page, repo)).toHaveText("Atlas")
+    await expect(targetButton(page, repo)).toHaveAttribute("title", address)
+    await expect(row.getByText(address, { exact: true })).toHaveCount(0)
+    await choose(page, `Target for ${repo}`, "Claude Code")
+    await save(page)
+    const agent = row.getByText("Claude Code", { exact: true })
+    const avatar = targetButton(page, repo).locator("img")
     await expect(agent).toBeVisible()
     await expect(avatar).toBeVisible()
-    await expect(row).not.toContainText(target)
-    await mode.selectOption("assist")
-    await expect(mode).toHaveValue("assist")
+    await expect(row).not.toContainText("agent:claude-code")
+    await choose(page, `Mode for ${repo}`, "Assist")
+    await save(page)
+    await expect(mode).toHaveText("Assist")
     await expect(agent).toBeVisible()
-    await mode.selectOption("triage")
+    await choose(page, `Mode for ${repo}`, "Triage")
     await page.getByRole("button", { name: "Details for " + repo }).click()
-    const notify = page.getByRole("checkbox", { name: "Notify owner" })
-    await notify.click()
+    const notify = page.getByRole("switch", { name: "Notify owner" })
+    await page.getByText("Notify owner", { exact: true }).filter({ visible: true }).click()
     await expect(notify).toBeChecked()
+    await save(page)
     await expect(agent).toBeVisible()
     await page.reload()
-    await expect(mode).toHaveValue("triage")
+    await expect(mode).toHaveText("Triage")
     await expect(agent).toBeVisible()
     await expect(avatar).toBeVisible()
   } finally {
     const cleared = await request.post("/api/modes", { headers, data: { ...placement, mode: "inherit" } })
     expect(cleared.ok()).toBeTruthy()
   }
+})
+
+test("bulk edits stage mode and target, save, and reset to inherit", async ({ page, request }) => {
+  await page.goto("/projects/operations?tab=modes")
+  const repo = "example-org/example-repo"
+  await expect(modeButton(page, "deployments")).toHaveText("Assist")
+  await page.getByRole("checkbox", { name: "Select all channels" }).check()
+  await expect(page.getByText("2 selected", { exact: true })).toBeVisible()
+  await choose(page, "Mode for selected channels", "Watch")
+  await choose(page, "Target for selected channels", "Atlas")
+  await expect(modeButton(page, repo)).toHaveText("Watch")
+  await expect(targetButton(page, "deployments")).toHaveText("Atlas")
+  const before = await (await request.get("/api/modes")).json()
+  expect(before.spaces.find((row: { name: string }) => row.name === "deployments").mode).toBe("assist")
+  await page.getByRole("button", { name: "Cancel" }).click()
+  await expect(modeButton(page, repo)).toHaveText("Triage")
+  await choose(page, "Mode for selected channels", "Watch")
+  await choose(page, "Target for selected channels", "Atlas")
+  await save(page)
+  await page.reload()
+  await expect(modeButton(page, repo)).toHaveText("Watch")
+  await expect(targetButton(page, "deployments")).toHaveText("Atlas")
+  await page.getByRole("checkbox", { name: "Select all channels" }).check()
+  await choose(page, "Mode for selected channels", "Reset to inherit")
+  await save(page)
+  await expect(modeButton(page, "deployments")).toHaveText("Assist")
+  await expect(modeButton(page, repo)).toHaveText("Triage")
+})
+
+test("a failed save keeps its draft and offers a plain inline error", async ({ page }) => {
+  await page.goto("/projects/operations?tab=modes")
+  const route = "**/api/modes"
+  await page.route(route, request => request.request().method() === "POST"
+    ? request.fulfill({ status: 400, json: { error: "mode_not_saved" } }) : request.continue())
+  await choose(page, "Mode for deployments", "Off")
+  await save(page)
+  const message = page.getByRole("alert").filter({ hasText: "Check this channel’s mode and target, then try again." })
+  await expect(message).toBeVisible()
+  await expect(modeButton(page, "deployments")).toHaveText("Off")
+  await page.getByRole("button", { name: "Cancel" }).click()
+  await expect(message).toHaveCount(0)
+  await expect(modeButton(page, "deployments")).toHaveText("Assist")
+})
+
+test("triage switches link to the affected GitHub App installation", async ({ page }) => {
+  const url = "https://github.com/organizations/example-org/settings/installations/123"
+  await page.route("**/api/modes", async route => {
+    const response = await route.fetch()
+    const body = await response.json()
+    body.github.installations = [{ permissions: { issues: "read" }, repositories: ["example-org/example-repo"], permissions_url: url }]
+    await route.fulfill({ response, json: body })
+  })
+  await page.goto("/projects/operations?tab=modes")
+  await page.getByRole("button", { name: "Details for example-org/example-repo" }).click()
+  await expect(page.getByRole("switch", { name: "Label", exact: true })).toBeDisabled()
+  await expect(page.getByRole("switch", { name: "Notify owner" })).toBeEnabled()
+  await expect(page.getByRole("link", { name: "Review permissions" })).toHaveAttribute("href", url)
 })
 
 test("claims and login share the console theme and follow the system by default", async ({ page, browser }) => {
@@ -178,7 +251,7 @@ test("agent tiles and claim pages display bundled avatars", async ({ page }) => 
 test.describe("mobile connections", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 
-  test("each channel row keeps its mode separate from the full-width disclosure", async ({ page }) => {
+  test("each mobile channel row keeps its mode separate from its labelled disclosure", async ({ page }) => {
     for (const [platform, name, source] of [
       ["discord", "deployments", "From channel"],
       ["slack", "#planning", "From channel"],
@@ -186,30 +259,27 @@ test.describe("mobile connections", () => {
       ["github", "example-org/example-repo", "From space"],
     ]) {
       await page.goto(`/connections/${platform}`)
-      const mode = page.getByRole("combobox", { name: `Mode for ${name}`, exact: true })
+      const mode = modeButton(page, name)
       const details = page.getByRole("button", { name: `Details for ${name}`, exact: true })
       await expect(mode).toBeVisible()
       const row = page.getByRole("row").filter({ has: mode })
       const nameBox = await row.getByText(name, { exact: true }).filter({ visible: true }).boundingBox()
       const modeBox = await mode.boundingBox()
-      const sourceBox = await row.getByText(source, { exact: true }).filter({ visible: true }).boundingBox()
       const detailsBox = await details.boundingBox()
-      expect(nameBox && modeBox && sourceBox && detailsBox).toBeTruthy()
-      if (!nameBox || !modeBox || !sourceBox || !detailsBox) continue
+      expect(nameBox && modeBox && detailsBox).toBeTruthy()
+      if (!nameBox || !modeBox || !detailsBox) continue
       expect(nameBox.x).toBeLessThan(modeBox.x)
-      expect(Math.abs(nameBox.y + nameBox.height / 2 - modeBox.y - modeBox.height / 2)).toBeLessThan(3)
-      expect(sourceBox.y).toBeGreaterThanOrEqual(modeBox.y + modeBox.height)
-      expect(detailsBox.width).toBeGreaterThan(320)
-      await details.scrollIntoViewIfNeeded()
-      const sourceAfterScroll = await row.getByText(source, { exact: true }).filter({ visible: true }).boundingBox()
-      if (!sourceAfterScroll) throw new Error("Mode source has no tap area")
-      await page.touchscreen.tap(sourceAfterScroll.x + 2, sourceAfterScroll.y + sourceAfterScroll.height / 2)
+      expect(detailsBox.x + detailsBox.width).toBeLessThan(390)
+      await expect(details).toHaveText("Details")
+      await details.tap()
       await expect(details).toHaveAttribute("aria-expanded", "true")
       await expect(page.getByRole("group", { name: "Triage actions" })).toBeVisible()
-      await mode.selectOption("work")
-      await expect(mode).toHaveValue("work")
+      await choose(page, `Mode for ${name}`, "Work")
+      await save(page)
+      await expect(mode).toHaveText("Work")
       await expect(details).toHaveAttribute("aria-expanded", "true")
-      await mode.selectOption("inherit")
+      await choose(page, `Mode for ${name}`, "Reset to inherit")
+      await save(page)
       await expect(row.getByText(source, { exact: true }).filter({ visible: true })).toBeVisible()
 
       if (platform === "discord" || platform === "telegram") {

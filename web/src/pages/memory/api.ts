@@ -37,7 +37,8 @@ export type MemoryAction =
   | { kind: "move"; toScope: string }
   | { kind: "promote" }
   | { kind: "delete" }
-  | { kind: "edit"; title: string; body: string }
+  | { kind: "edit"; title: string; body: string; tags: string[] }
+  | { kind: "rename"; path: string }
   | { kind: "restore"; rev: number }
 
 export type BackupConfig = {
@@ -169,9 +170,14 @@ export async function applyMemoryAction(id: string, action: MemoryAction, csrf: 
     return
   }
   if (action.kind === "edit") {
-    const { title, body } = action
+    const { title, body, tags } = action
     await requestJson(`${path}/edit`, (value): value is { id: string } => isObject(value) && value.id === id,
-      jsonPost(csrf, { title, body }))
+      jsonPost(csrf, { title, body, tags }))
+    return
+  }
+  if (action.kind === "rename") {
+    await requestJson(`${path}/rename`, (value): value is { renamed: string } => isObject(value) && value.renamed === id,
+      jsonPost(csrf, { path: action.path }))
     return
   }
   if (action.kind === "restore") {

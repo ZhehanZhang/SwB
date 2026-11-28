@@ -478,8 +478,7 @@ Watch digests carry `external` trust. Each excerpt also uses a trust frame for e
   path; see `blocks/capy/avatars.py`). User-identity posts never carry
   a persona: they always show as the account owner, behind the identity's write policy.
 - **Avatars.** A persona's picture is the file named in `avatar:`, or `<persona id>.png` when the persona sets no
-  `icon_url`. Files are looked up in `<data>/avatars` (uploads from the root page's Personas list), then each
-  `slack.avatar_dirs` folder, then pictures blocks rendered, then the neutral monograms bundled for `swb`,
+  `icon_url`. SwB looks in each `slack.avatar_dirs` folder, then the pictures blocks render, then the marks bundled for `swb`,
   `claude`, `chatgpt`, `gemini`, `codex`, `claude-code` and `capy`. Dropping a new file in replaces the picture with no
   restart; the URL carries the file's mtime so Slack fetches the new one. `scripts/monogram.py` draws more.
   `/avatars/<file>` is served without Access, because Slack fetches it. The limit: the picture shows on each message,

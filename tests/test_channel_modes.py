@@ -221,6 +221,12 @@ def test_owner_http_sets_and_clears_a_channel_target(make):
     response = client.post("/api/modes", headers=headers, json=edited)
     assert response.status_code == 200 and response.json()["space"]["target"] == "agent:claude"
     assert response.json()["space"]["actions"] == ["reply", "notify_owner"]
+    response = client.post("/api/modes", headers=headers, json={**args, "mode": "watch", "project": "example"})
+    assert response.status_code == 200
+    response = client.post("/api/modes", headers=headers, json=args)
+    assert response.json()["space"]["actions"] == ["reply", "notify_owner"]
+    assert response.json()["space"]["project"] == "example"
+    assert response.json()["space"]["override_channel"] == repo
     response = client.post("/api/modes", headers=headers, json={**args, "target": "   "})
     assert response.status_code == 400
     response = client.post("/api/modes", headers=headers, json={**args, "target": ""})
@@ -229,6 +235,7 @@ def test_owner_http_sets_and_clears_a_channel_target(make):
     assert response.status_code == 200
     response = client.post("/api/modes", headers=headers, json={**args, "mode": "inherit"})
     assert response.status_code == 200 and response.json()["space"]["target"] is None
+    assert response.json()["space"]["override_channel"] is None
     response = client.post("/api/visibility", headers=headers, json={"resource": f"channel:{repo}", "visibility": "shared"})
     assert response.status_code == 400
     response = client.post("/api/visibility", headers=headers, json={"resource": f"channel:github/{repo}", "visibility": "shared"})

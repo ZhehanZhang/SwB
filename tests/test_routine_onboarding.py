@@ -185,6 +185,8 @@ def test_expired_claim_no_longer_reserves_a_pending_project(tmp_path):
         args = {"fire_url": "trig_01GARDEN", "claude_project": "Garden Planner", "project": "garden"}
         first = payload(call(c, STATIC_KEY, "routine_register", args))
         core.clock.t += 1801
+        expired = c.get(first["link"].split("example.test", 1)[1])
+        assert expired.status_code == 410 and "<h1>Link expired</h1>" in expired.text
         assert payload(call(c, STATIC_KEY, "project_list"))["pending_projects"] == []
         fresh = payload(call(c, STATIC_KEY, "routine_register", {**args, "project_name": "New Garden"}))
         assert fresh["name"] == first["name"] and "superseded" not in fresh

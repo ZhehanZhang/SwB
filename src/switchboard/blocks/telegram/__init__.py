@@ -214,7 +214,9 @@ class TelegramBlock(ChatBlock):
                         raise TelegramError("getMe", "invalid bot username")
                     self._bot = {"id": me["id"], "username": username, "name": me.get("first_name")}
                     self._privacy = not me.get("can_read_all_group_messages", False)
-                    await self.apply_avatar(me["id"], partial(self._set_avatar, token))
+                    identity = self.core.bot_identities.get(self.name)
+                    if not identity or not identity.icon:
+                        await self.apply_avatar(me["id"], partial(self._set_avatar, token))
                     next_check = 0
                 if clock() >= next_check:
                     for chat in self._groups:
@@ -252,6 +254,21 @@ class TelegramBlock(ChatBlock):
             image.convert("RGB").save(out, "JPEG", quality=92)
         await self._api.multipart(token, "setMyProfilePhoto", data={"photo": json.dumps({"type": "static", "photo": "attach://p"})},
                                   files={"p": ("avatar.jpg", out.getvalue(), "image/jpeg")})
+
+    async def update_bot_identity(self, name: str | None, icon: bytes | None, *,
+                                  space: str | None = None, reset: bool = False) -> None:
+        if space is not None:
+            raise BlockError("Telegram bot identity applies to every chat.")
+        async with self._connection_lock:
+            token = self.token()
+            if not token:
+                raise BlockError("Connect a Telegram bot token.")
+            if name is not None:
+                await self._api.call(token, "setMyName", retry=False, name=name)
+                if self._bot is not None:
+                    self._bot["name"] = name
+            if icon is not None:
+                await self._set_avatar(token, icon)
 
     async def _poll(self, token: str, bot_id: int, username: str) -> int:
         row = self.core.store.one("SELECT next_id FROM telegram_offsets WHERE block = ? AND bot = ? AND at > ?",

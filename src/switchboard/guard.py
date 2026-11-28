@@ -14,6 +14,7 @@ from typing import Any, Callable
 from starlette.exceptions import HTTPException
 from starlette.datastructures import Headers, MutableHeaders
 
+from .bot_identity import MAX_IDENTITY_BODY
 from .companion.memory import MEMORY_FRAME_LIMIT, MEMORY_SYNC_EVENT
 from .memory_archive import MAX_ARCHIVE_BYTES
 
@@ -184,6 +185,8 @@ class Guard:
             limit = SETUP_BODY_LIMIT
         elif path == "/api/memory/import" and scope.get("method") == "POST":
             limit = MAX_ARCHIVE_BYTES + 64 * 1024
+        elif path.startswith("/api/bot-identities/") and scope.get("method") == "POST":
+            limit = MAX_IDENTITY_BODY
         for k, v in scope.get("headers", []):
             if k == b"content-length":
                 try:

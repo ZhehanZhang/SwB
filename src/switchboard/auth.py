@@ -11,7 +11,6 @@ import asyncio
 import base64
 import hashlib
 import hmac
-import html
 import json
 import logging
 import re
@@ -667,14 +666,17 @@ class Auth:
                 params = self.unsign(str(form.get("req") or ""))
             except OAuthError as e:
                 self.failed(request, "/authorize", e)
-                return pages.message_page("Sign-in failed", e.description, 400)
+                return pages.page("Start the connection again", status=400)
         else:
             params = dict(request.query_params)
         try:
             c, params = await self.validate_authorize(params)
         except OAuthError as e:
             self.failed(request, "/authorize", e, params.get("client_id"))
-            return pages.message_page("Sign-in failed", e.description, e.status if e.status != 401 else 400)
+            status = e.status if e.status != 401 else 400
+            if e.error == "invalid_request":
+                return pages.message_page("Check the redirect address", params.get("redirect_uri", ""), status)
+            return pages.page("Check the client registration", status=status)
         state = params.get("state")
         try:
             self.check_request(params)
@@ -696,22 +698,16 @@ class Auth:
                 return RedirectResponse(_append(params["redirect_uri"], q), status_code=302)
 
         source = source_for(params["redirect_uri"], c, self.cfg.source_names, self.agents)
-        who = html.escape((c.name or "").strip() or self.agents.label(source, "") or "OAuth client")
-        address = f'<span class="item-line">Mailbox address <code>agent:{html.escape(source)}</code></span>' if source not in self.agents else ""
-        dest = html.escape(urlparse(params["redirect_uri"]).netloc)
+        name = (c.name or "").strip() or self.agents.label(source, "") or "OAuth client"
+        host = urlparse(params["redirect_uri"]).hostname or ""
+        agent = self.agents.match(host, c.client_id if c.kind == "cimd" else "") or ""
         owner_name = owner.label if owner.via == "access" else (
             self.cfg.owner_emails[0] if len(self.cfg.owner_emails) == 1 else "owner"
         )
-        signed = f'<p class="item-line">Signed in as {html.escape(owner_name)}</p>'
-        body = pages.hero("Connect to SwB", "This connection can read and write shared memory and route work.") + f"""
-<form method="post" class="fade-in">
-<input type="hidden" name="req" value="{html.escape(self.sign(params))}">
-<input type="hidden" name="csrf" value="{self.csrf(owner.csrf_key)}">
-<div class="card"><div class="item"><div class="item-main"><span class="card-title">{who}</span>{address}<span class="item-line">Returns to <code>{dest}</code></span>{signed}</div></div></div>
-<div class="actions"><button class="pill-button primary" name="decision" value="approve">Approve</button>
-<button class="text-button" name="decision" value="deny" formnovalidate>Deny</button></div>
-</form>"""
-        return pages.page(pages.AUTHORIZE_TITLE, body, 200)
+        scopes = tuple(dict.fromkeys(params.get("scope", SCOPE).split()))
+        return pages.authorize_page(name, host, owner_name, agent, self.sign(params), self.csrf(owner.csrf_key),
+                                    scopes if scopes != (SCOPE,) else (),
+                                    f"agent:{source}" if source not in self.agents else "")
 
     async def h_token(self, request: Request) -> Response:
         if (d := self._disabled()) is not None:
