@@ -24,8 +24,10 @@ import re
 import secrets
 import sqlite3
 from datetime import datetime, timezone
+from ipaddress import IPv6Address, ip_address
+from socket import SOCK_STREAM, getaddrinfo
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl
 
 import httpx
 from starlette.background import BackgroundTask
@@ -36,10 +38,11 @@ from starlette.routing import Route
 from ...auth import Principal
 from ...claims import ClaimInputError, Field, valid_webhook_url
 from ...config import ConfigError
+from ...connect import AGENT_RE
 from ...guard import RateLimiter, client_ip
 from ...inbox import CONTEXT_NOTE
 from ...projects import ProjectError
-from ...refusals import OWNER_REQUIRED
+from ...refusals import OWNER_REQUIRED, TARGET_REQUIRED
 from ...store import dumps
 from ...subject import subject, wake_text
 from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
@@ -93,19 +96,21 @@ RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
 LIMITS = {
     "webhook_unknown": (20, 600.0),
     "webhook_fail": (20, 600.0),
+    "webhook_fail_total": (100, 600.0),
     "webhook_hook": (600, 600.0),
 }
+DESTINATION_REFUSED = "Choose an approved webhook receiver."
 PRESET_EVENT = {"stripe": ("type",), "standard": ("type",)}
 GENERIC_EVENT = ("type", "event", "event_type", "action")
 log = logging.getLogger("switchboard.webhook")
-SECRET_PATH_RE = re.compile(r"(/hooks/wh_[0-9a-f]{32})/[^?\s]*")
+SECRET_PATH_RE = re.compile(r"(/hooks/wh_[0-9a-f]{32})/[^?\s]*", re.IGNORECASE)
 
 
 class _RedactHookSecrets(logging.Filter):
     """Keep path secrets out of the HTTP access log."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if isinstance(record.args, tuple) and any(isinstance(a, str) and "/hooks/" in a for a in record.args):
+        if isinstance(record.args, tuple):
             record.args = tuple(SECRET_PATH_RE.sub(r"\1/<secret>", a) if isinstance(a, str) else a for a in record.args)
         return True
 
@@ -151,6 +156,23 @@ def _standard_secret(value: str) -> None:
         raise ClaimInputError("Enter the whsec_ secret exactly as the sender shows it") from None
 
 
+def _strong_secret(value: str) -> None:
+    if len(value) < 32 or len(set(value)) < 10:
+        raise ClaimInputError("Use a random secret with at least 32 characters and 10 distinct characters.")
+
+
+def _public_ip(address: str) -> bool:
+    ip = ip_address(address)
+    if isinstance(ip, IPv6Address):
+        if ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        elif ip.is_site_local:
+            return False
+    return ip.is_global and not (
+        ip.is_loopback or ip.is_link_local or ip.is_unspecified or ip.is_multicast or ip.is_reserved
+    )
+
+
 def _secret_names(hook_id: str) -> tuple[str, str, str]:
     base = "WEBHOOK_" + hook_id.removeprefix("wh_").upper()
     return f"{base}_SECRET", f"{base}_PREVIOUS", f"{base}_URL"
@@ -164,6 +186,7 @@ class WebhookBlock(Block):
                             "max_body_kb": {"type": "integer", "default": DEFAULT_BODY_KB, "minimum": 1, "maximum": MAX_BODY_KB},
                         }})
     connect_kinds = ("webhook",)
+    cache_targets = False
 
     def __init__(self, core: Switchboard, config: dict[str, Any]):
         super().__init__(core, config)
@@ -179,9 +202,10 @@ class WebhookBlock(Block):
             self._check_secret(dict(row))
 
     def _check_secret(self, row: dict[str, Any]) -> None:
-        """Refuse a Standard Webhooks secret that can't decode on the claim page, before it can break deliveries."""
         if row["direction"] == "out" or row["verify"] == "standard":
             self.core.claims.register_name(_secret_names(row["id"])[0], _standard_secret)
+        elif row["verify"] in ("bearer", "path"):
+            self.core.claims.register_name(_secret_names(row["id"])[0], _strong_secret)
 
     # Storage ------------------------------------------------------------------------------------
 
@@ -218,7 +242,8 @@ class WebhookBlock(Block):
             out.update(url=self._url(row), to=row["target"], project=row["project"],
                        **{key: opts[key] for key in ("header", "prefix", "encoding", "tolerance_s", "fields", "template", "event_field") if key in opts})
         else:
-            out["address"] = f"{self.name}:out:{row['name']}"
+            out.update(address=f"{self.name}:out:{row['name']}", allow_private=opts.get("allow_private", False),
+                       senders=opts.get("senders", []))
         return out
 
     def hook_views(self, *, include_revoked: bool = False) -> list[dict[str, Any]]:
@@ -247,7 +272,8 @@ class WebhookBlock(Block):
                 Route(f"{HOOK_PATH}/{{hook}}/{{secret}}", self.receive, methods=["POST"])]
 
     async def start(self) -> None:
-        self.http = httpx.AsyncClient(timeout=10, transport=self.core.http_transport, follow_redirects=False,
+        self.http = httpx.AsyncClient(timeout=10, transport=self.core.http_transport, follow_redirects=False, trust_env=False,
+                                      limits=httpx.Limits(max_connections=100, max_keepalive_connections=0),
                                       headers={"User-Agent": "SwB-Webhook"})
 
     async def aclose(self) -> None:
@@ -261,11 +287,18 @@ class WebhookBlock(Block):
                 "events": sum(r["events"] for r in views), "refused": sum(r["refused"] for r in views)}
 
     def status_for(self, principal: Principal) -> dict[str, Any]:
-        return self.status() if principal.is_unrestricted_owner else {"configured": True, "state": "connected"}
+        return self.status() if self._is_owner(principal) else {"configured": True, "state": "connected"}
 
     async def targets(self) -> list[dict[str, Any]]:
         return [{"kind": "out", "id": r["name"], "name": f"Webhook {r['name']}", "slugs": [f"webhook-{r['name']}"]}
                 for r in self.core.store.q("SELECT name FROM webhooks WHERE direction = 'out' AND revoked_at IS NULL ORDER BY name")]
+
+    def filter_targets(self, principal: Principal, targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if self._is_owner(principal):
+            return targets
+        allowed = {r["name"] for r in self.core.store.q("SELECT name, settings FROM webhooks WHERE direction = 'out' AND revoked_at IS NULL")
+                   if self._can_send(principal, r["settings"])}
+        return [target for target in targets if target["id"] in allowed]
 
     def actions(self) -> list[Action]:
         return [Action("create", "Create a webhook", "Create a named inbound or outbound webhook.", self.create),
@@ -286,14 +319,42 @@ class WebhookBlock(Block):
     # Owner tools --------------------------------------------------------------------------------
 
     @staticmethod
-    def _owner(call: Call) -> None:
-        if not call.principal.is_unrestricted_owner:
+    def _is_owner(principal: Principal) -> bool:
+        return principal.is_unrestricted_owner or (principal.kind == "owner_session" and principal.trust == "owner")
+
+    def _owner(self, call: Call) -> None:
+        if not self._is_owner(call.principal):
             raise BlockRefused(OWNER_REQUIRED, OWNER_REQUIRED)
+
+    def _can_send(self, principal: Principal, settings: str) -> bool:
+        return self._is_owner(principal) or (
+            principal.kind in ("key", "oauth", "connect") and f"agent:{principal.source}" in json.loads(settings).get("senders", [])
+        )
+
+    @staticmethod
+    def _outbound_settings(direction: str, opts: dict[str, Any], allow_private: bool | None,
+                           senders: list[str] | None) -> dict[str, Any]:
+        if allow_private is None and senders is None:
+            return opts
+        if direction != "out":
+            raise BlockError("Set receiver access on an outbound webhook.")
+        if allow_private is not None:
+            if type(allow_private) is not bool:
+                raise BlockError("Set allow_private to a Boolean.")
+            opts["allow_private"] = allow_private
+        if senders is not None:
+            if not isinstance(senders, list) or any(
+                not isinstance(s, str) or not s.startswith("agent:") or not AGENT_RE.fullmatch(s.removeprefix("agent:"))
+                for s in senders
+            ):
+                raise BlockError("Use an agent address for each sender.")
+            opts["senders"] = list(dict.fromkeys(senders))
+        return opts
 
     async def create(self, call: Call, *, name: str, direction: str = "in", verify: str | None = None, to: str | None = None,
                      project: str | None = None, header: str | None = None, prefix: str | None = None, encoding: str | None = None,
                      tolerance_s: int | None = None, fields: list[str] | None = None, template: str | None = None,
-                     event_field: str | None = None) -> dict[str, Any]:
+                     event_field: str | None = None, allow_private: bool | None = None, senders: list[str] | None = None) -> dict[str, Any]:
         self._owner(call)
         name = str(name or "").strip().lower()
         if not NAME_RE.fullmatch(name):
@@ -306,13 +367,15 @@ class WebhookBlock(Block):
         current, _, url_name = _secret_names(hook_id)
         now = self.core.clock()
         actor = f"{call.principal.kind}:{call.principal.source}"
+        opts = self._outbound_settings(direction, {}, allow_private, senders)
         if direction == "out":
             if any(value is not None for value in (verify, to, project, header, prefix, encoding, tolerance_s, fields, template, event_field)):
-                raise BlockError("an outbound webhook takes only a name; its URL and signing secret go in through the link")
-            self._insert("INSERT INTO webhooks(id, name, direction, verify, created_at, created_by) VALUES (?, ?, 'out', 'standard', ?, ?)",
-                         (hook_id, name, now, actor), name)
+                raise BlockError("Use the outbound webhook settings. Save the URL and signing secret through the link.")
+            self._insert("INSERT INTO webhooks(id, name, direction, verify, settings, created_at, created_by) VALUES (?, ?, 'out', 'standard', ?, ?, ?)",
+                         (hook_id, name, dumps(opts), now, actor), name)
             self._check_secret({"id": hook_id, "direction": "out", "verify": "standard"})
-            link = self.core.claims.mint_group(f"Webhook {name}", [Field(url_name, "Webhook URL", "url"),
+            url_kind = "webhook_private_url" if opts.get("allow_private") else "url"
+            link = self.core.claims.mint_group(f"Webhook {name}", [Field(url_name, "Webhook URL", url_kind),
                                                                     Field(current, "Signing secret", "webhook_secret")],
                                                self.core.base_url)
             call.note(target=name, ref=hook_id)
@@ -407,11 +470,13 @@ class WebhookBlock(Block):
         self._owner(call)
         return {"webhooks": self.hook_views(include_revoked=include_revoked)}
 
-    async def rotate(self, call: Call, *, name: str, grace_s: int = 0) -> dict[str, Any]:
+    async def rotate(self, call: Call, *, name: str, grace_s: int = 0, allow_private: bool | None = None,
+                     senders: list[str] | None = None) -> dict[str, Any]:
         self._owner(call)
         if type(grace_s) is not int or not 0 <= grace_s <= MAX_GRACE_S:
             raise BlockError(f"grace_s must be a whole number of seconds from 0 to {MAX_GRACE_S}")
         row = self._active(name)
+        opts = self._outbound_settings(row["direction"], json.loads(row["settings"]), allow_private, senders)
         current, previous, url_name = _secret_names(row["id"])
         now = self.core.clock()
         old = self.core.secret(current)
@@ -419,15 +484,16 @@ class WebhookBlock(Block):
             self.core.claims.save_secret(previous, old)
         else:
             self.core.claims.save_secret(previous, None)
-        self.core.store.x("UPDATE webhooks SET rotated_at = ?, previous_until = ? WHERE id = ?",
-                          (now, now + grace_s if grace_s and old else None, row["id"]))
+        self.core.store.x("UPDATE webhooks SET rotated_at = ?, previous_until = ?, settings = ? WHERE id = ?",
+                          (now, now + grace_s if grace_s and old else None, dumps(opts), row["id"]))
         call.note(target=row["name"], ref=row["id"])
         self.core.store.tx(lambda db: self._close_links(db, (current, url_name)))
         if row["direction"] == "in":
             link = self.core.claims.mint(current, self.core.base_url, kind="webhook_secret", label=f"Webhook secret for {row['name']}")
             step = "Save the new secret here, then set it in the sender."
         else:
-            link = self.core.claims.mint_group(f"Webhook {row['name']}", [Field(url_name, "Webhook URL", "url", optional=True),
+            url_kind = "webhook_private_url" if opts.get("allow_private") else "url"
+            link = self.core.claims.mint_group(f"Webhook {row['name']}", [Field(url_name, "Webhook URL", url_kind, optional=True),
                                                                            Field(current, "Signing secret", "webhook_secret")],
                                                self.core.base_url)
             step = "Save the new signing secret here, and a new URL if it changed. Then set the secret in the receiver."
@@ -458,7 +524,8 @@ class WebhookBlock(Block):
         self._owner(call)
         row = self._active(name)
         if row["direction"] == "out":
-            return await self._deliver(row, {"type": "swb.test", "data": {"text": "SwB test message", "webhook": row["name"]}})
+            call.note(target=f"{self.name}:out:{row['name']}")
+            return await self._deliver(row, {"type": "swb.test", "data": {"text": "SwB test message", "webhook": row["name"]}}, call=call)
         now = int(self.core.clock())
         found = self._secrets(row)
         if not found:
@@ -511,15 +578,20 @@ class WebhookBlock(Block):
             return self._refuse(None, ip, "unknown webhook", 404)
         if (wait := self.limiter.blocked("webhook_hook", row["id"])) is not None:
             return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
+        if (wait := self.limiter.blocked("webhook_fail_total", row["id"])) is not None:
+            return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
         chunks, size = [], 0
         async for chunk in request.stream():
             size += len(chunk)
             if size > self.max_body:
                 return self._refuse(row, ip, "body too large", 413)
             chunks.append(chunk)
+        if (wait := self.limiter.blocked("webhook_fail_total", row["id"])) is not None:
+            return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
         headers = {k.lower(): val for k, val in request.headers.items()}
         status, response, work = self._ingest(row, headers, b"".join(chunks), ip, path_secret)
         if status in (401, 404):
+            self.limiter.hit("webhook_fail_total", row["id"])
             key = f"{row['id']}:{ip}"
             if (wait := self.limiter.blocked("webhook_fail", key)) is not None:
                 return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
@@ -666,23 +738,39 @@ class WebhookBlock(Block):
             raise BlockError(f"send to {self.name}:out:<name>; see webhook_list")
         row = self._active(ident, "out")
         principal = call.principal
-        who = principal.visibility_who or Who(owner=principal.trust == "owner")
-        if not who.owner and not self.core.visibility.allows(who, f"target:{self.name}-{row['name']}"):
-            raise BlockRefused(OWNER_REQUIRED, f"webhook {row['name']} is private to the owner")
-        call.note(target=f"{self.name}:out:{row['name']}", title=title, excerpt=task)
+        call.note(target=f"{self.name}:out:{row['name']}")
+        if not self._can_send(principal, row["settings"]):
+            raise BlockError(TARGET_REQUIRED)
+        call.note(title=title, excerpt=task)
         return await self._deliver(row, {"type": "swb.message", "data": {
             "subject": title, "text": task, "from": principal.source, "trust": principal.trust, "project": project,
             "conversation": call.handle}}, call=call)
 
-    async def _deliver(self, row: dict[str, Any], message: dict[str, Any], *, call: Call | None = None) -> dict[str, Any]:
+    async def _deliver(self, row: dict[str, Any], message: dict[str, Any], *, call: Call) -> dict[str, Any]:
         current, previous, url_name = _secret_names(row["id"])
         url, secret = self.core.secret(url_name), self.core.secret(current)
         if not url or not secret:
             raise BlockError(f"webhook {row['name']!r} waits for its URL and signing secret; open the link from webhook_create")
-        if not valid_webhook_url(url):
-            raise BlockError(f"webhook {row['name']!r} has an invalid URL; save a public HTTPS URL through webhook_rotate")
-        if urlsplit(url).netloc.lower() == urlsplit(self.core.base_url).netloc.lower():
-            raise BlockError(f"webhook {row['name']!r} points at this SwB; choose another receiver through webhook_rotate")
+        allow_private = json.loads(row["settings"]).get("allow_private") is True
+        try:
+            if not valid_webhook_url(url, allow_private=allow_private):
+                raise ValueError
+            receiver = httpx.URL(url)
+            host = receiver.raw_host.decode("ascii").rstrip(".")
+            port = receiver.port or 443
+            own_url = httpx.URL(self.core.base_url)
+            if (host == own_url.host.rstrip(".") and port == (own_url.port or 443)) or (port != 443 and not allow_private):
+                raise ValueError
+            resolved = await asyncio.wait_for(
+                asyncio.to_thread(getaddrinfo, host, port, type=SOCK_STREAM), timeout=10,
+            )
+            addresses = [str(ip_address(result[4][0])) for result in resolved]
+            if not addresses or (not allow_private and not all(_public_ip(ip) for ip in addresses)):
+                raise ValueError
+            pinned = receiver.copy_with(host=addresses[0])
+        except (httpx.InvalidURL, OSError, ValueError, TimeoutError):
+            self._count(row["id"], refused=DESTINATION_REFUSED)
+            raise BlockError(DESTINATION_REFUSED) from None
         keys = [secret] + ([old] if row["previous_until"] and row["previous_until"] > self.core.clock()
                            and (old := self.core.secret(previous)) and old != secret else [])
         msg_id = "msg_" + secrets.token_hex(12)
@@ -699,9 +787,9 @@ class WebhookBlock(Block):
             except v.VerifyError:
                 raise BlockError(f"webhook {row['name']!r} has an unusable signing secret; rotate it") from None
             headers = {"content-type": "application/json", "webhook-id": msg_id, "webhook-timestamp": str(stamp),
-                       "webhook-signature": signature}
+                       "webhook-signature": signature, "host": receiver.netloc.decode("ascii")}
             try:
-                response = await self.http.post(url, content=body, headers=headers)
+                response = await self.http.post(pinned, content=body, headers=headers, extensions={"sni_hostname": host})
             except (httpx.TransportError, httpx.TimeoutException):
                 continue
             status = response.status_code
@@ -712,6 +800,5 @@ class WebhookBlock(Block):
             self._count(row["id"])
         else:
             self._count(row["id"], refused=f"receiver status {status}" if status else "receiver unreachable")
-        if call is not None:
-            call.note(ref=msg_id, outcome="ok" if delivered else "error", detail=None if delivered else f"status {status}")
+        call.note(ref=msg_id, outcome="ok" if delivered else "error", detail=None if delivered else f"status {status}")
         return {"ok": delivered, "delivered": delivered, "status": status, "webhook": row["name"], "id": msg_id}

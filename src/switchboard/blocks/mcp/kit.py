@@ -39,7 +39,13 @@ DEPRECATED = "Deprecated alias of {new}, kept for this release only; use {new}. 
 
 DEVICE_VALUES = frozenset({"type", "mimeType", "uri", "size"})
 DEVICE_SCHEMAS = frozenset({"inputSchema", "outputSchema"})
-SCHEMA_TEXT = frozenset({"title", "description", "$comment", "examples"})
+SCHEMA_PROSE = frozenset({"title", "description", "$comment"})
+SCHEMA_TEXT = SCHEMA_PROSE | {"examples"}
+SCHEMA_MAPS = frozenset({"properties", "patternProperties", "dependentSchemas", "dependencies", "$defs", "definitions"})
+SCHEMA_SUBSCHEMAS = frozenset({
+    "additionalItems", "additionalProperties", "allOf", "anyOf", "contains", "contentSchema", "else", "if", "items",
+    "not", "oneOf", "prefixItems", "propertyNames", "then", "unevaluatedItems", "unevaluatedProperties",
+})
 DEVICE_TOKEN = re.compile(r"[A-Za-z0-9_.+/:#@=-]{1,256}")
 DEVICE_VERSION = re.compile(r"unknown|[0-9][A-Za-z0-9_.+-]{0,31}")
 DEVICE_BASE64 = re.compile(r"[A-Za-z0-9+/_-]*={0,2}")
@@ -89,8 +95,11 @@ def frame_device(value: Any, where: str, *, sender: str | None = None,
                 display = neutralize(str(name))[:128]
                 charge(len(to_json(display)) + 1 + bool(out))
                 next_path = (*path, name)
-                out[display] = frame(child, next_path, "text" if name == "data" and not binary else name,
-                                     schema or name in DEVICE_SCHEMAS or next_path == schema_path)
+                if next_path == schema_path:
+                    out[display] = frame_schema(child, next_path, "node")
+                else:
+                    out[display] = frame(child, next_path, "text" if name == "data" and not binary else name,
+                                         schema or name in DEVICE_SCHEMAS)
             return out
         if isinstance(item, list):
             charge(2 + max(0, len(item) - 1))
@@ -104,6 +113,33 @@ def frame_device(value: Any, where: str, *, sender: str | None = None,
             if not ((check and check(item)) or (machine and DEVICE_TOKEN.fullmatch(item))
                     or (binary and DEVICE_BASE64.fullmatch(item))):
                 item = wrap(item, "companion" if sender else None, sender, "external", where)
+        charge(len(to_json(item)))
+        return item
+
+    def frame_schema(item: Any, path: tuple[str | None, ...], mode: Literal["node", "map", "literal"]) -> Any:
+        if len(path) > 64:
+            raise ToolError("Companion output contains too many nested fields.")
+        if isinstance(item, dict):
+            charge(2)
+            out = {}
+            for name, child in item.items():
+                charge(len(to_json(name)) + 1 + bool(out))
+                next_path = (*path, name)
+                if mode == "node" and name in SCHEMA_PROSE and isinstance(child, str):
+                    out[name] = frame(child, next_path)
+                    continue
+                if mode == "map" or (mode == "node" and name in SCHEMA_SUBSCHEMAS):
+                    out[name] = frame_schema(child, next_path, "node")
+                elif mode == "node" and name in SCHEMA_MAPS:
+                    out[name] = frame_schema(child, next_path, "map")
+                else:
+                    out[name] = frame_schema(child, next_path, "literal")
+            return out
+        if isinstance(item, list):
+            charge(2 + max(0, len(item) - 1))
+            return [frame_schema(child, (*path, None), mode) for child in item]
+        if isinstance(item, str) and len(item) > remaining:
+            raise ToolError(DEVICE_OUTPUT_ERROR)
         charge(len(to_json(item)))
         return item
 
@@ -312,8 +348,8 @@ class Kit:
 
         @mcp.tool(title="List targets", description="Everything send can reach: each block's targets (Captains, channels, ...), an agent:<name> mailbox per agent, and project routes, with address, slugs, level and persona. A slug clash goes to the higher priority. block, kind and query narrow it; refresh re-reads the blocks now.", annotations=READ_REMOTE)
         async def targets(ctx: Context, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> dict[str, Any]:
-            kit.who(ctx)
-            got = await core.targets(block=block, kind=kind, query=query, refresh=refresh)
+            p = kit.who(ctx)
+            got = await core.targets(block=block, kind=kind, query=query, refresh=refresh, principal=p)
             return {"targets": got, "errors": dict(core.target_errors), "usage": "send(task, to=<slug or address>); without to, your route decides."}
 
         @mcp.tool(title="Connect a new agent", description="Mint a one-time pairing code (10 minutes) for an agent you are setting up, such as claude-code, codex or a laptop script. The client redeems it at POST /connect for its own bearer key; the owner can revoke it from the root page or connect_revoke. Only an unrestricted caller may mint codes.", annotations=WRITE)

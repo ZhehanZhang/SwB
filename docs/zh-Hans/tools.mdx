@@ -212,3 +212,5 @@ description: SwB 提供给你的智能体的 MCP 工具。
 | `webhook_rotate` | 获取用于保存新密钥的领取链接，可为旧密钥保留一段有效期 |
 | `webhook_revoke` | 停用 Webhook 并删除已保存的密钥 |
 | `webhook_test` | 发送入站示例事件或出站示例消息 |
+
+管理出站 Webhook 时，`webhook_create` 和 `webhook_rotate` 支持 `allow_private` 和 `senders`。将 `allow_private` 设为 `true`，即可使用私有网络中的 HTTPS 接收端或 443 以外的端口。在 `senders` 中列出可发送消息的已连接智能体。默认只有所有者本人可以发送。调用 `webhook_rotate` 时，省略这两个字段可保留原值。

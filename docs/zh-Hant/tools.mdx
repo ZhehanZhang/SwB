@@ -212,3 +212,5 @@ description: SwB 提供給你的代理的 MCP 工具。
 | `webhook_rotate` | 取得儲存新金鑰的領取連結，可保留舊金鑰的有效期 |
 | `webhook_revoke` | 停用 Webhook 並刪除已儲存的金鑰 |
 | `webhook_test` | 傳送範例事件或範例訊息 |
+
+管理傳出 Webhook 時，`webhook_create` 和 `webhook_rotate` 可使用 `allow_private` 和 `senders`。將 `allow_private` 設為 `true`，即可使用私有網路中的 HTTPS 接收端或 443 以外的連接埠。在 `senders` 中列出可傳送訊息的已連線代理。預設只有擁有者本人可以傳送。呼叫 `webhook_rotate` 時，省略這兩個欄位可保留原值。
