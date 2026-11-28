@@ -1,4 +1,4 @@
 {
-  "title": "设置应用",
+  "title": "接入应用",
   "pages": ["index", "claude-project", "claude", "dots", "chatgpt", "muse", "grok", "grok-bot", "capy-captain", "coding-agent", "mcp-client", "slack", "discord", "telegram", "github"]
 }

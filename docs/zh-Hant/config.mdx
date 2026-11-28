@@ -51,9 +51,9 @@ SwB 只靠環境變數就能執行。MCP 模組預設會啟動，有些模組則
 
 ## 傳給擁有者的訊息
 
-SwB 優先選擇過去 30 分鐘內最近一次以擁有者身分活動的代理。接著嘗試專案路由或 `default_target` 指定的主要代理。最後使用擁有者的全域路由。
+SwB 先嘗試過去 30 分鐘內以擁有者身分登入、且最近有活動的代理。接著嘗試專案路由或 `default_target` 指定的主要代理。最後使用擁有者的全域路由。
 
-訊息會進入所選代理的收件匣。若三種方式均失敗，SwB 會在狀態中回報有訊息等待傳送。
+訊息會進入所選代理的收件匣。如果三種方式都失敗，SwB 會在狀態資訊中回報傳遞待處理。
 
 將擁有者的全域路由設為代理位址。
 
@@ -181,7 +181,7 @@ GitHub 使用 `owner` 和 `external` 兩種信任等級。在 Slack、Discord �
 | `memory.mirror` | 控制 Markdown 副本。設為 `false` 可停止更新 |
 | `memory.mirror_dir` | 存放 Markdown 副本的資料夾 |
 | `memory.mirror_debounce_s` | 記憶變更後，寫入副本前等待的秒數。預設為 `2` |
-| `memory.sync` | 允許代理用 `memory_sync` 把自身記憶複製到 SwB。預設為 `true`。主控台中的 **Memory sync** 開關優先 |
+| `memory.sync` | 允許代理用 `memory_sync` 把自身記憶複製到 SwB。預設為 `true`。主控台中的 **Memory sync** 開關會覆寫這項設定 |
 | `memory.backup` | 記憶 Git 備份的設定 |
 | `memory.backup.debounce_s` | 記憶變更後，提交備份前等待的秒數。預設為 `30` |
 | `memory.backup.max_delay_s` | 連續變更時，提交備份前最長的等待秒數。預設為 `300` |

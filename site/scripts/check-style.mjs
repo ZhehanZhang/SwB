@@ -25,6 +25,10 @@ const allowedNegation = [
   ['ko/config.mdx', '가 없으면'],
   ['ko/tools.mdx', '존재하지 않는 ID'],
   ['zh-Hans/tools.mdx', 'ID 不存在'],
+  ['zh-Hans/tools.mdx', '目标不存在'],
+  ['zh-Hans/blocks/webhooks.mdx', '目标不存在'],
+  ['zh-Hant/tools.mdx', '目標不存在'],
+  ['zh-Hant/blocks/webhooks.mdx', '目標不存在'],
 ];
 
 function files(dir) {
@@ -54,7 +58,7 @@ for (const file of locales.flatMap((locale) => files(join(root, locale)))) {
     const found = [];
     if (listLine.test(raw) || listElement.test(raw)) found.push('list');
     if (punct.test(line)) found.push('punctuation');
-    const prose = zh ? line.replace(/(分別|分别|識別|识别|類別|类别|特別|特别|別名|别名|區別|区别|個別|个别|不同|不斷|不断|不久|不過|不过|非常|未來|未来|無論|无论)/g, '') : line;
+    const prose = zh ? line.replace(/(分別|分别|識別|识别|類別|类别|特別|特别|別名|别名|區別|区别|個別|个别|不同|不斷|不断|不久|不過|不过|非常|未來|未来|未读|未讀|無論|无论)/g, '') : line;
     const allowed = allowedNegation.filter(([path]) => relative(root, file) === path).reduce((text, [, phrase]) => text.replaceAll(phrase, ''), prose);
     if (rule.test(allowed)) found.push('negation');
     if (found.length) {

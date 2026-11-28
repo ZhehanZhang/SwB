@@ -1,53 +1,57 @@
 ---
 title: Cloudflare
-description: 用 Cloudflare Tunnel 取得 SwB 的公開網址，用 Cloudflare Access 處理擁有者登入。
+description: 用 Cloudflare Tunnel 為 SwB 提供公開的 HTTPS 網址。
 ---
 
-Cloudflare Tunnel 為 SwB 提供固定的公開 HTTPS 網址。**通道**把你的伺服器連接到 Cloudflare。Cloudflare Access 則限定只有你的帳號能使用 SwB 主控台。
+Cloudflare Tunnel 為 SwB 提供公開的 HTTPS 網址。**通道**把你的伺服器連接到 Cloudflare。Cloudflare 免費方案即可使用通道。
+
+依照 [Docker Compose](/zh-Hant/docs/deploy#docker-compose) 啟動 SwB。
 
 <span id="快速通道" />
 
 ## 快速通道 [#quick-tunnel]
 
-快速通道適合用臨時網址試用 SwB。在主機上執行下面的指令。指令使用 `cloudflared`，也就是把 SwB 連接到 Cloudflare 的程式。
+快速通道提供一個臨時網址。在 SwB 伺服器上安裝 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)。這個程式負責把 SwB 連接到 Cloudflare。在伺服器上執行下面的指令。
 
-```bash
+```sh
 cloudflared tunnel --url http://localhost:8870
 ```
 
-把 `SWB_PUBLIC_URL` 設為終端機顯示的 HTTPS 網址。如果設定檔中有 `public_url`，也一併更新，然後重新啟動 SwB。每次啟動通道，網址都會改變，而 OAuth 登入和密碼金鑰都使用這個網址。需要長期固定的網址時，使用具名通道。
+把 `.env` 中的 `SWB_PUBLIC_URL` 設為終端機顯示的 HTTPS 網址。如果設定檔中有 `public_url`，也改成同一個網址。把連接器加入[受信任的代理伺服器](#trusted-proxies)。執行 `docker compose up -d` 套用設定。
+
+每次啟動通道，網址都會改變。OAuth 登入和密碼金鑰都使用這個網址。需要固定網址時，改用具名通道。
 
 <span id="具名通道" />
 
 ## 具名通道 [#named-tunnel]
 
-準備一個免費的 Cloudflare 帳號和你自己的網域。
+具名通道在你的網域上提供固定網址。
 
 ### 開始之前
 
-依照 [Docker Compose](/zh-Hant/docs/deploy#docker-compose) 啟動 SwB。準備一個 Cloudflare 帳號，它要能為你的網域管理通道和 Access 應用程式。允許伺服器經由 7844 連接埠連到 Cloudflare。
+使用的 Cloudflare 帳號需要具備管理該網域通道和 Access 應用程式的權限。允許伺服器透過 7844 連接埠連線到 Cloudflare。
 
 ### 建立通道
 
-依照[建立通道](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)操作。從安裝指令中複製通道權杖，填入 SwB `.env` 中由 [Compose 檔案](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39)指定的項目。權杖要保密。
+依照[建立通道](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)操作。從安裝指令中複製通道權杖。妥善保管權杖。
 
-如果使用 Compose 的通道，把它的服務網址指向 `http://switchboard:8000`，把通道權杖以 `TUNNEL_TOKEN` 的名稱寫進 `.env`，再把連接器的位址或專用網路加進 `trusted_proxies`。
-
-在 SwB 伺服器上啟動通道連接器。
+要用 Compose 執行連接器，把權杖以 `TUNNEL_TOKEN` 的名稱寫進 `.env`，再啟動連接器。
 
 ```sh
 docker compose --profile tunnel up -d
 ```
 
-如果通道就在 SwB 主機上，把它的服務網址指向 `http://localhost:8870`，並把 `SWB_TRUSTED_PROXIES` 設為連接器的位址，例如 IPv4 本機迴路（loopback）連線使用 `127.0.0.1/32`。
+要直接在主機上執行連接器，依照 Cloudflare 為你的系統提供的安裝指令操作。
 
 連接器出現在 Cloudflare 後，選取 **Continue**。
 
 <span id="保護主控台" />
 
+<span id="protect-the-console" />
+
 ### 保護主控台 [#cloudflare-access]
 
-為你的 SwB 主機名稱[建立 Access 應用程式](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)。把原則動作設為 **Allow**。在 **Include** → **Emails** 下輸入你的電子郵件地址。
+Cloudflare Access 讓 SwB 主控台僅限你的帳號存取。為你的 SwB 主機名稱[建立 Access 應用程式](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)。把原則動作設為 **Allow**。在 **Include** 下選取 **Emails**，輸入你的電子郵件地址。
 
 在同一個主機名稱上再建立一個 Access 應用程式，涵蓋標示為 **Bypass** 的路徑。把它的原則動作設為 **Bypass**，並在 **Include** 下選取 **Everyone**。
 
@@ -57,19 +61,44 @@ docker compose --profile tunnel up -d
 | `/healthz`、`/connect`、`/avatars/*` | Bypass |
 | `/inbox/poll`、`/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
-| `/github/webhook` | 對 GitHub 設為 Bypass |
-| `/hooks/*` | 對 Webhooks 設為 Bypass |
+| `/github/webhook` | Bypass（供 GitHub 使用） |
+| `/hooks/*` | Bypass（供 Webhooks 和 Muse 掛鉤使用） |
 | 其他所有路徑，包括 `/pairing/companion`、`/authorize` 和 `/inbox` | 擁有者 |
 
-SwB 在 `/companion/pair` 檢查配對碼，並在其他 Companion 請求上檢查裝置金鑰。如果使用 Access，請具備擁有者存取權的代理呼叫 `companion_code`。
+SwB 在 `/companion/pair` 檢查配對碼，其他 Companion 請求則檢查裝置金鑰。如果使用 Access，請具備擁有者存取權的代理呼叫 `companion_code`。
+
+### 允許代理發出的 HTTP 請求
+
+瀏覽器完整性檢查（Browser Integrity Check）可能會攔截代理發出的請求。在你的 Cloudflare 區域中，為下面這些 SwB 路徑新增一條[設定規則（Configuration Rule）](https://developers.cloudflare.com/rules/configuration-rules/)。
+
+把 `swb.example.com` 換成你的 SwB 主機名稱，再使用下面的規則運算式。
+
+```text
+(http.host eq "swb.example.com" and (
+  starts_with(http.request.uri.path, "/mcp") or
+  starts_with(http.request.uri.path, "/hooks/") or
+  starts_with(http.request.uri.path, "/.well-known/") or
+  http.request.uri.path in {"/register" "/token" "/revoke" "/connect"} or
+  starts_with(http.request.uri.path, "/inbox/") or
+  starts_with(http.request.uri.path, "/companion/")
+))
+```
+
+在規則中設定 `Browser Integrity Check: Off`。SwB 仍會套用自己的存取規則。
 
 ### 設定 SwB 網址
 
-把 `.env` 中的 `SWB_PUBLIC_URL` 設為你的公開網址，例如 `https://swb.example.com`。把團隊網域和擁有者應用程式的 Audience 標籤加入 `config/switchboard.yaml`。這個標籤告訴 SwB 權杖是由哪個應用程式核發的。
+把 `.env` 中的 `SWB_PUBLIC_URL` 設為你的公開網址。
 
-如果設定檔中有 `public_url`，也更新其中的網址。
+```dotenv
+SWB_PUBLIC_URL=https://swb.example.com
+```
 
-| 值 | 在哪裡找到 | 設定鍵 |
+如果設定檔中有 `public_url`，也改成同一個網址。
+
+把團隊網域和擁有者應用程式的 Audience 標籤加入 `config/switchboard.yaml`。這個標籤告訴 SwB 權杖是由哪個應用程式核發的。
+
+| 值 | 取得位置 | 設定鍵 |
 | --- | --- | --- |
 | 團隊網域 | **Zero Trust** → **Settings** | `auth.cloudflare_access.team_domain` |
 | Application Audience (AUD) Tag | 擁有者應用程式 → **Additional settings** | `auth.cloudflare_access.aud` |
@@ -83,30 +112,32 @@ auth:
     aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
-以 Cloudflare Access 登入時，SwB 使用 `Cf-Access-Jwt-Assertion` 標頭中的權杖。如果請求中缺少這個標頭，或標頭是空的，SwB 會改從 `CF_Authorization` Cookie 讀取權杖。Cookie 是瀏覽器隨請求一起送出的值。SwB 用 `team_domain` 提供的公開金鑰檢查 RS256 簽章。權杖的核發者必須與 `team_domain` 的 HTTPS 網址相符。權杖的對象（audience）必須包含 `aud`。權杖如果帶有核發時間、生效時間和到期時間，SwB 會逐一檢查。SwB 把電子郵件地址轉成小寫，再與 `owner_emails` 比對。
-
-再次執行 `docker compose --profile tunnel up -d` 來套用設定。
+SwB 優先從 `Cf-Access-Jwt-Assertion` 標頭讀取權杖，其次讀取 `CF_Authorization` Cookie。Cookie 是瀏覽器隨請求一起送出的值。SwB 用 `team_domain` 提供的公開金鑰檢查 RS256 簽章。權杖的核發者必須與 `team_domain` 的 HTTPS 網址相符，權杖的對象（audience）必須包含 `aud`。權杖帶有核發時間、生效時間或到期時間時，SwB 會檢查對應的時間。SwB 把電子郵件地址轉成小寫，再與 `owner_emails` 比對。
 
 <span id="受信任的代理伺服器" />
 
 ### 受信任的代理伺服器 [#trusted-proxies]
 
-反向代理伺服器會把請求轉給 SwB。把代理伺服器的位址或專用網路加進 `config/switchboard.yaml` 的 `trusted_proxies`。網段以 CIDR 格式表示，例如 `192.0.2.0/24`。
+反向代理伺服器會把請求轉送給 SwB。把它的位址或專用網路加進 `config/switchboard.yaml` 的 `trusted_proxies`。網段以 CIDR 格式表示，例如 `192.0.2.0/24`。
 
-也可以在 `.env` 中設定 `SWB_TRUSTED_PROXIES`，多個項目以逗號分隔。YAML 中的設定優先。
+也可以在 `.env` 中設定 `SWB_TRUSTED_PROXIES`，多個項目以逗號分隔。YAML 中的設定優先採用。
 
-如果 Cloudflare Tunnel 位於 SwB 主機或 Docker 網路上，加入通道連接器的位址或專用網路。連接器會直接連到 SwB。如果連線直接來自 Cloudflare 邊緣伺服器，使用 `cloudflare` 項目。
+使用 Cloudflare Tunnel 時，加入連接器的位址或專用網路。IPv4 回送連線使用 `127.0.0.1/32`。如果連線直接來自 Cloudflare 邊緣伺服器，使用 `cloudflare` 項目。
+
+如果使用 Compose 的連接器，執行 `docker compose --profile tunnel up -d` 套用設定。如果連接器在主機上執行，執行 `docker compose up -d`。
 
 ### 發布主機名稱
 
-開啟通道的 **Routes** 分頁，選取 **Add route**，再選擇 **Published application**。輸入你的公開主機名稱，把 **Service URL** 設為 `http://switchboard:8000`，最後選取 **Add route** 儲存。
+開啟通道的 **Routes** 分頁，選取 **Add route**，再選擇 **Published application**。輸入你的公開主機名稱。
+
+使用 Compose 的連接器時，把 **Service URL** 設為 `http://switchboard:8000`。連接器在主機上執行時，使用 `http://localhost:8870`。選取 **Add route** 儲存。
 
 ### 檢查連線
 
-在瀏覽器中開啟 `https://swb.example.com`，登入 Cloudflare Access。開啟 `https://swb.example.com/healthz`，確認 SwB 有回應。
+在瀏覽器中開啟你的公開網址，登入 Cloudflare Access。開啟[公開網址的健康檢查](https://swb.example.com/healthz)，確認 SwB 正常回應。
 
 在私密瀏覽視窗中開啟 `https://swb.example.com/mcp`。SwB 會回傳 `401`，並附上 `WWW-Authenticate` 標頭。如果 Cloudflare 顯示自己的登入頁面，檢查 Bypass 原則。
 
 ## 設定應用程式
 
-主機名稱可以使用後，依照[連接你的代理](/zh-Hant/docs/connect)設定應用程式。使用公開 MCP 網址，例如 `https://swb.example.com/mcp`。請代理呼叫 `switchboard_status`，確認它的 SwB 身分。
+主機名稱能正常運作後，依照[連接你的代理](/zh-Hant/docs/connect)設定應用程式。使用公開 MCP 網址，例如 `https://swb.example.com/mcp`。請代理呼叫 `switchboard_status`，確認它的 SwB 身分。
