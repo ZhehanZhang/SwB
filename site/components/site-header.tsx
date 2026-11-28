@@ -28,6 +28,10 @@ export function SiteHeader({ lang, repository, versions = [] }: {
   const root = localize(lang, docsRoot(version));
   const docs = path === root || path.startsWith(`${root}/`);
   const current = versions.find((entry) => entry.version === version);
+  const showVersion = docs && current;
+  const controlsGrid = showVersion
+    ? 'grid-cols-[2.25rem_4rem_repeat(4,2.25rem)] sm:grid-cols-[2.25rem_4rem_repeat(3,2.25rem)] lg:grid-cols-[2.25rem_4rem_12rem_repeat(2,2.25rem)]'
+    : 'grid-cols-[repeat(5,2.25rem)] sm:grid-cols-[repeat(4,2.25rem)] lg:grid-cols-[2.25rem_12rem_repeat(2,2.25rem)]';
   const links = headerLinks(lang).map((link) => ({
     ...link,
     href: link.id === 'docs' ? root : link.id === 'setup' ? current?.pages.setup ?? link.href : link.href,
@@ -48,9 +52,9 @@ export function SiteHeader({ lang, repository, versions = [] }: {
             <Link key={id} data-header-item={id} href={href} className={tab} aria-current={href === active?.href ? 'location' : undefined}>{text}</Link>
           ))}
         </div>
-        <div className="ml-auto grid auto-cols-max grid-flow-col items-center gap-1 sm:gap-2">
+        <div className={`ml-auto grid items-center gap-1 sm:gap-2 ${controlsGrid}`}>
           <SwbAddressControl lang={lang} show={isDocsPath(path)} />
-          {docs && current && <DocsVersionControl lang={lang} version={version} options={options} />}
+          {showVersion && <DocsVersionControl lang={lang} version={version} options={options} />}
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={headerIconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:text-center" />
           <LanguageSelect data-header-item="language" className={headerIconButton}><Languages aria-hidden="true" className="size-4.5" /></LanguageSelect>
