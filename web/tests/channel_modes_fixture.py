@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shlex
 import subprocess
 from io import BytesIO
 from pathlib import Path
@@ -139,8 +140,19 @@ def run(path: Path) -> None:
                       key="agent-notes", title="Agent notes", body="Review the worktree.", content_trust="owner")
     repository = path / "memory-backup.git"
     subprocess.run(["git", "init", "--bare", "--quiet", repository], check=True)
+    ssh = path / "ssh"
+    destination = shlex.quote(str(repository))
+    ssh.write_text(
+        '#!/bin/sh\nfor arg do command="$arg"; done\n'
+        'case "$command" in\n'
+        f'  "git-upload-pack \'/memory-backup.git\'") exec git upload-pack {destination} ;;\n'
+        f'  "git-receive-pack \'/memory-backup.git\'") exec git receive-pack {destination} ;;\n'
+        '  *) exit 92 ;;\nesac\n'
+    )
+    ssh.chmod(0o700)
+    os.environ["PATH"] = f"{path}{os.pathsep}{os.environ['PATH']}"
     owner = Principal("admin:owner@example.test", "owner", "owner_session")
-    core.memory_git.configure(owner, remote=repository.as_uri(), author_name="Fixture Owner",
+    core.memory_git.configure(owner, remote="git@example.test:/memory-backup.git", author_name="Fixture Owner",
                               author_email="owner@example.test", enabled=True)
     assert core.memory_git.run_once()["last_commit"]
     discord = core.blocks["team-chat"]
