@@ -14,6 +14,7 @@ from ...auth import Principal
 from ...block_env import GITHUB_SECRET, configured_env
 from ...config import Config
 from ...connect import public_https_prerequisite
+from ...doc_links import doc_link, rewrite_doc_links
 from ...modes import PROVIDERS
 from ...targets import slugify
 from .coding import coding_steps
@@ -38,7 +39,6 @@ ROUTINE_ENV_ONLY = {
 }
 ALIASES = {"grok-routine": "grok-bot"}
 CHATGPT_PLUGINS_URL = "https://chatgpt.com/plugins"
-CLOUDFLARE_SETUP_URL = "https://swb.one/docs/setup/cloudflare"
 HOSTED_CLIENT_INSTRUCTIONS = {
     "chatgpt": f"Open {CHATGPT_PLUGINS_URL} in a web browser. Select + > Add custom MCP server. "
                "Add {url} as a custom connector. Sign in with OAuth.",
@@ -85,12 +85,12 @@ def enable_steps(cfg: Config, name: str, choose: dict[str, Any]) -> list[dict[st
     return [{"by": "you", "do": instruction, "snippet": snippet}, restart]
 
 
-def register_guides(mcp: MCPServer) -> dict[str, dict[str, str]]:
+def register_guides(mcp: MCPServer, cfg: Config) -> dict[str, dict[str, str]]:
     def register_guide(name: str, uri: str, title: str, text: str) -> None:
         @mcp.prompt(name=name, title=title)
         @mcp.resource(uri, name=name, title=title, mime_type="text/markdown")
         def read_guide() -> str:
-            return text
+            return rewrite_doc_links(text, cfg.public_url)
 
     guides = {}
     for path in sorted(files("switchboard.prompts.setup").iterdir(), key=lambda path: path.name):
@@ -158,7 +158,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
     core = kit.core
     owners = {kind: block for block in core.blocks.values() for kind in block.connect_kinds}
     kinds = sorted(set(CLIENTS) | BLOCKS.keys() | owners.keys() | {"cloudflare"})
-    guides = register_guides(mcp)
+    guides = register_guides(mcp, core.cfg)
     guide_names = sorted(guide["prompt"] for guide in guides.values())
 
     @mcp.tool(
@@ -180,7 +180,8 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             result["guide"] = guides[what]
         if what == "cloudflare":
             return {**result, "done": [], "next": [
-                {"by": "person", "do": "Follow the Cloudflare setup guide.", "link": CLOUDFLARE_SETUP_URL}]}
+                {"by": "person", "do": "Follow the Cloudflare setup guide.",
+                 "link": doc_link("setup/cloudflare", core.cfg.public_url)}]}
         if what not in kinds:
             if what in guides:
                 return {**result, "done": [], "next": []}

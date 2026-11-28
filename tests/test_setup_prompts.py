@@ -14,7 +14,7 @@ SYNC = Path("scripts/sync_prompts.py")
 
 
 def test_setup_prompts_and_resources_match_docs(make):
-    _, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    _, client = make(config=base_config(version=2, blocks={"mcp": {}}, public_url=None))
     prompts = {
         row["name"]: row for row in rpc(client, STATIC_KEY, "prompts/list").json()["result"]["prompts"]
         if row["name"].startswith("setup-")
@@ -37,6 +37,19 @@ def test_setup_prompts_and_resources_match_docs(make):
         assert resources[uri]["mimeType"] == "text/markdown"
         result = rpc(client, STATIC_KEY, "resources/read", {"uri": uri}).json()["result"]
         assert result["contents"] == [{"uri": uri, "mimeType": "text/markdown", "text": text}]
+
+
+def test_setup_prompt_and_resource_links_carry_the_public_url(make):
+    _, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+    name, uri = "setup-deploy", "swb://setup/deploy"
+    text = (ROOT / SOURCE / "deploy.md").read_bytes().decode("utf-8")
+    for path in ("deploy", "setup/coding-agent"):
+        link = f"https://swb.one/docs/{path}"
+        text = text.replace(f"{link}.", f"{link}#swb=https%3A%2F%2Fswitchboard.example.test.")
+    prompt = rpc(client, STATIC_KEY, "prompts/get", {"name": name}).json()["result"]
+    assert prompt["messages"] == [{"role": "user", "content": {"type": "text", "text": text}}]
+    resource = rpc(client, STATIC_KEY, "resources/read", {"uri": uri}).json()["result"]
+    assert resource["contents"] == [{"uri": uri, "mimeType": "text/markdown", "text": text}]
 
 
 @pytest.mark.parametrize(("what", "kind"), [("grok-bot", "grok-bot"), ("grok-routine", "grok-bot"), ("deploy", "deploy"), ("webhook", "webhook")])
