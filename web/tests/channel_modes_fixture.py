@@ -117,6 +117,7 @@ def run(path: Path) -> None:
             }}},
             "repo-events": {"use": "github", "spaces": {"release": {
                 "repo": "example-org/example-repo", "project": "operations", "mode": "triage",
+                "default_target": f"capy:captain:{CAPTAIN}",
             }}},
         },
     }))

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, Copy, ExternalLink } from "lucide-react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { ArrowLeft } from "lucide-react"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
+import { ConfirmAction } from "@/components/console/confirm-action"
 import { Lamp } from "@/components/console/lamp"
 import { DataState, type DataStateProps } from "@/components/data-state"
 import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
@@ -12,17 +13,9 @@ import { Button } from "@/components/ui/button"
 import { Sheet } from "@/components/ui/sheet"
 import { principalLabel } from "@/lib/agent-identity"
 import { isObject, requestJson, sessionQuery } from "@/lib/api"
+import { AgentSetup } from "./agents/setup"
 import { auditText } from "./audit/events"
-import { agentDetailKey, agentListKey, getAgentDetail, isAgentSetup, listAgents, type Agent, type AgentDetail } from "./agents/data"
-
-const connections = [
-  { id: "claude-code", label: "Claude Code", preview: "claude mcp add …" },
-  { id: "codex", label: "Codex", preview: "MCP config" },
-  { id: "chatgpt", label: "ChatGPT", preview: "MCP URL" },
-  { id: "gemini-cli", label: "Gemini CLI", preview: "MCP config" },
-  { id: "any", label: "Any agent", preview: "Connection prompt" },
-]
-const setupGrid = "mt-4 grid gap-x-7 gap-y-4 md:flex md:flex-wrap"
+import { agentDetailKey, agentListKey, getAgentDetail, listAgents, type Agent, type AgentDetail } from "./agents/data"
 
 const detailPath = (id: string) => `/agents/${encodeURIComponent(id)}`
 const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
@@ -40,73 +33,6 @@ function elapsed(value: string | null) {
 
 function AgentLamp({ state }: { state: Agent["state"] }) {
   return <Lamp state={state} label={state === "on" ? "Active" : state === "fault" ? "Needs attention" : "Inactive"} />
-}
-
-function ConnectionRow() {
-  const query = useQuery({
-    queryKey: ["agent-connection-snippets"],
-    queryFn: ({ signal }) => requestJson("/api/agents/setup", isAgentSetup, { signal }),
-  })
-  async function copy(snippet: string) {
-    try {
-      await navigator.clipboard.writeText(snippet)
-      toast.success("Copied")
-    } catch {
-      toast.error("Copy failed")
-    }
-  }
-
-  return (
-    <section className="border-b pb-3" aria-labelledby="connect-agent">
-      <h2 id="connect-agent" className="text-base leading-6 font-semibold tracking-[-0.01em]">Connect an agent</h2>
-      {query.isPending ? (
-        <LoadingSkeleton message="Loading connection details…">
-          <div className={setupGrid}>
-            {connections.map(({ id }) => (
-              <div key={id} className="min-w-0">
-                <div className="flex h-6 items-center gap-2">
-                  <Skeleton className="size-6 rounded-md" />
-                  <Skeleton className="h-3 w-20" />
-                </div>
-                <div className="mt-0.5 flex h-6 items-center gap-1.5">
-                  <Skeleton className="h-2.5 w-24" />
-                  <Skeleton className="size-4" />
-                  {id === "chatgpt" && <Skeleton className="h-2.5 w-10" />}
-                </div>
-              </div>
-            ))}
-          </div>
-        </LoadingSkeleton>
-      ) : query.isError ? (
-        <DataState kind="error" message="Connection details unavailable." onRetry={() => void query.refetch()} />
-      ) : (
-        <div className={setupGrid}>
-          {connections.map(({ id, label, preview }) => {
-            const coding = query.data.coding_agents.find((entry) => entry.id === id)
-            const snippet = id === "chatgpt" ? query.data.chatgpt.connector_url : id === "any" ? query.data.any.prompt : coding?.snippet
-            const firstLine = snippet?.split("\n", 1)[0]
-            const monospace = coding ? (firstLine === "{" ? coding.where : firstLine) ?? preview : preview
-            return (
-              <div key={id} className="min-w-0">
-                <div className="flex items-center gap-2 text-sm font-medium"><Logo kind={id} />{label}</div>
-                <div className="mt-0.5 flex items-center gap-1.5">
-                  <code title={monospace} className="max-w-36 truncate font-mono text-xs leading-4 text-muted-foreground">{monospace}</code>
-                  <Button aria-label={`Copy ${label} connection details`} title="Copy" variant="ghost" size="icon" className="size-6" disabled={!snippet} onClick={() => snippet && void copy(snippet)}>
-                    <Copy aria-hidden strokeWidth={1.5} />
-                  </Button>
-                  {id === "chatgpt" && (
-                    <a href={query.data.chatgpt.plugins_url} target="_blank" rel="noreferrer" aria-label="ChatGPT Plugins" className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground hover:underline">
-                      Plugins <ExternalLink aria-hidden className="size-3" strokeWidth={1.5} />
-                    </a>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </section>
-  )
 }
 
 function Registration({ agent }: { agent: Agent }) {
@@ -245,6 +171,20 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
     },
     onError: () => toast.error("Token revocation failed"),
   })
+  const removeRoutine = useMutation({
+    mutationFn: ({ name, block }: { name: string; block: string }) =>
+      requestJson(`/api/routines/${encodeURIComponent(name)}/remove?${new URLSearchParams({ block })}`,
+        (value): value is { removed: true } => isObject(value) && value.removed === true,
+        { method: "POST", csrf: session.data?.csrf }),
+    onSuccess: (_, routine) => {
+      if (agent.type === "routine" && agent.reference === routine.name && agent.block === routine.block) {
+        void navigate("/agents", { replace: true })
+      }
+      void client.invalidateQueries({ queryKey: agentListKey })
+      void client.invalidateQueries({ queryKey: agentDetailKey })
+      void client.invalidateQueries({ queryKey: ["tokens"] })
+    },
+  })
 
   return (
     <Tabs defaultValue="Overview">
@@ -252,12 +192,21 @@ function AgentPanel({ agent, detail }: { agent: Agent; detail: AgentDetail }) {
         {tabs.map((name) => <TabsTrigger key={name} value={name}>{name}</TabsTrigger>)}
       </TabsList>
       <TabsContent value="Overview"><Overview agent={agent} /></TabsContent>
-      <TabsContent value="Routines">{detail.routines.length ? <ul className="text-[13px]">
-        {detail.routines.map((routine) => <li key={`${routine.block}:${routine.name}`} className="flex items-center justify-between gap-2 border-b py-3">
-          <span className="font-medium">{routine.name}</span>
-          <span className="text-muted-foreground">{routine.project}{routine.primary && (routine.project ? ", primary" : "Primary")}</span>
-        </li>)}
-      </ul> : <DataState kind="empty" message="0 routines" />}</TabsContent>
+      <TabsContent value="Routines">
+        {detail.routines.length ? <ul className="text-[13px]">
+          {detail.routines.map((routine) => <li key={`${routine.block}:${routine.name}`} className="flex flex-wrap items-center gap-2 border-b py-3">
+            <span className="me-auto font-medium">{routine.name}</span>
+            <span className="text-muted-foreground">{routine.project}{routine.primary && (routine.project ? ", primary" : "Primary")}</span>
+            {routine.source === "stored" && routine.agent !== "grok" && (
+              <ConfirmAction title={`Remove ${routine.name}?`} action="Remove" onConfirm={() => removeRoutine.mutate(routine)}>
+                <Button variant="ghost" size="sm" aria-label={`Remove routine ${routine.name}`}
+                  disabled={!session.data?.csrf || removeRoutine.isPending}>Remove</Button>
+              </ConfirmAction>
+            )}
+          </li>)}
+        </ul> : <DataState kind="empty" message="0 routines" />}
+        {removeRoutine.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Try removing the routine again.</p>}
+      </TabsContent>
       <TabsContent value="Tokens">{detail.keys.length ? <ul className="text-[13px]">
         {detail.keys.map((key) => <li key={key.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-3">
           <div>
@@ -333,40 +282,6 @@ function AgentInspector({ detail }: { detail: AgentDetail }) {
   )
 }
 
-function PersonaAvatars() {
-  const [params] = useSearchParams()
-  const { data: session } = useQuery(sessionQuery)
-  const avatars = useQuery({
-    queryKey: ["persona-avatars"],
-    queryFn: ({ signal }) => requestJson("/api/agents/avatars",
-      (value): value is { personas: { id: string; name: string; accept: string }[] } =>
-        isObject(value) && Array.isArray(value.personas) && value.personas.every(
-          (persona) => isObject(persona) && typeof persona.id === "string" && typeof persona.name === "string"
-            && typeof persona.accept === "string",
-        ), { signal }),
-  })
-  const notice = params.get("notice")
-  const status = notice === "avatar-saved" ? "Avatar saved" : notice === "avatar-refused" ? "Choose a matching image up to 2 MB" : null
-  if (!status && !avatars.data?.personas.length) return null
-  return (
-    <section aria-labelledby="persona-avatars" className="mt-8">
-      <h2 id="persona-avatars" className="text-heading-md">Slack avatars</h2>
-      {status && <p role="status" className="mt-2 text-sm">{status}</p>}
-      {avatars.data?.personas.map(({ id, name, accept }) => (
-        <form key={id} action={`/slack/personas/${encodeURIComponent(id)}/avatar`} method="post" encType="multipart/form-data"
-          className="flex flex-wrap items-center justify-between gap-2 border-b py-3 text-sm">
-          <input type="hidden" name="csrf" value={session?.csrf ?? ""} />
-          <label className="flex min-w-0 flex-wrap items-center gap-3">
-            <span className="font-medium">{name}</span>
-            <input type="file" name="file" accept={accept} required className="max-w-full" />
-          </label>
-          <Button type="submit" variant="outline" disabled={!session?.csrf}>Save avatar</Button>
-        </form>
-      ))}
-    </section>
-  )
-}
-
 export function AgentsPage() {
   const id = useParams()["*"] ?? ""
   const query = useQuery({ queryKey: agentListKey, queryFn: ({ signal }) => listAgents(signal) })
@@ -383,9 +298,8 @@ export function AgentsPage() {
   return (
     <>
       <div className={detail.data || (id && detail.isPending) ? "hidden pt-2 md:block" : "pt-2"}>
-        <ConnectionRow />
+        <AgentSetup agents={query.data ?? []} />
         <AgentList agents={query.data ?? []} state={state} />
-        <PersonaAvatars />
       </div>
       {id && detail.isPending && (
         <section aria-label="Agent details">

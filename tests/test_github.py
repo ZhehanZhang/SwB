@@ -1020,7 +1020,8 @@ async def test_app_claim_accepts_pasted_pem_and_checks_each_installation(github,
             return httpx.Response(404, json={"message": "not found"})
         ident = 70 if request.url.path in ("/repos/acme/app/installation", "/app/installations/70") else 71
         permissions = {"issues": "write" if ident == 70 else "read", "metadata": "read"} if request.url.path.startswith("/app/") else {}
-        return httpx.Response(200, json={"id": ident, "permissions": permissions})
+        url = "https://github.com/organizations/acme/settings/installations/70" if ident == 70 else "https://example.test/settings/installations/71"
+        return httpx.Response(200, json={"id": ident, "permissions": permissions, "html_url": url})
 
     config = github_config("triage") | {"routes": {"acme/missing": [], "acme/other": []}, "app_id_env": "ALTERNATE_APP_ID",
                                        "private_key_env": "ALTERNATE_PRIVATE_KEY"}
@@ -1040,7 +1041,9 @@ async def test_app_claim_accepts_pasted_pem_and_checks_each_installation(github,
                                     "/repos/acme/missing/installation", "/repos/acme/other/installation"]
         assert block.installation == {"issues": "read", "metadata": "read"}
         assert block.installations["70"]["permissions"]["issues"] == "write"
+        assert block.installations["70"]["permissions_url"] == "https://github.com/organizations/acme/settings/installations/70"
         assert block.installations["71"]["repositories"] == ["acme/other"]
+        assert "permissions_url" not in block.installations["71"]
         assert "acme/missing" in block.missing_installations
         assert block.checked_at is not None
         assert pem.splitlines()[1] not in json.dumps(block.status())

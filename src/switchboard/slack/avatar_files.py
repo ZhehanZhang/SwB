@@ -33,9 +33,8 @@ def find_avatar(name: str, dirs: Iterable[Path] = (BUNDLED_AVATARS,)) -> Path | 
 
 class AvatarFiles:
     def __init__(self, data_dir: Path, public_base_url: str | None, dirs: Iterable[str] = ()):
-        self.uploads = data_dir / "avatars"
         self.rendered = data_dir / "avatar-cache"
-        self.dirs = (self.uploads, *(Path(d) for d in dirs), self.rendered, BUNDLED_AVATARS)
+        self.dirs = (*(Path(d) for d in dirs), self.rendered, BUNDLED_AVATARS)
         self.public_base_url = public_base_url
 
     def find_avatar(self, name: str) -> Path | None:

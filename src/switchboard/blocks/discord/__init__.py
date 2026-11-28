@@ -130,7 +130,7 @@ class DiscordBlock(ChatBlock):
 
     @property
     def permissions(self) -> int:
-        return ((1 << 10) | (1 << 11) | (1 << 16) | (1 << 38) | ((1 << 35) if self.threads else 0)
+        return ((1 << 10) | (1 << 11) | (1 << 16) | (1 << 26) | (1 << 38) | ((1 << 35) if self.threads else 0)
                 | ((1 << 6) if self.ack_reaction else 0) | ((1 << 29) if self.personas else 0))
 
     def owners(self, space: Any) -> frozenset[str]:
@@ -288,14 +288,33 @@ class DiscordBlock(ChatBlock):
             raise BlockError(f"No Discord bot token: open the link from {self.name}_provision or set {self.token_env}.")
         return await rest.request(self._transport, method, path, token, json=json, params=params, retry=retry)
 
-    async def _set_avatar(self, data: bytes) -> None:
-        with Image.open(BytesIO(data)) as image:
-            if image.format != "PNG":
-                out = BytesIO()
-                image.convert("RGBA").save(out, "PNG")
-                data = out.getvalue()
-        avatar = base64.b64encode(data).decode("ascii")
-        await self.request("PATCH", "/users/@me", json={"avatar": f"data:image/png;base64,{avatar}"}, retry=False)
+    def bot_identity_guild(self, space: str) -> str | None:
+        return next((guild for guild, label in self.guild_spaces.items() if label == space), None) or next(
+            (guild for guild in self.guild_info if self.space_for(guild) == space), None
+        )
+
+    async def update_bot_identity(self, name: str | None, icon: bytes | None, *,
+                                  space: str | None = None, reset: bool = False) -> None:
+        guild = self.bot_identity_guild(space) if space is not None else None
+        if space is not None and guild is None:
+            raise BlockError("Connect a Discord server to this space.")
+        payload: dict[str, str | None] = {}
+        if guild and reset:
+            payload = {"nick": None, "avatar": None}
+        if name is not None:
+            payload["nick" if guild else "username"] = name
+        if icon is not None:
+            with Image.open(BytesIO(icon)) as image:
+                if image.format != "PNG":
+                    out = BytesIO()
+                    image.convert("RGBA").save(out, "PNG")
+                    icon = out.getvalue()
+            payload["avatar"] = "data:image/png;base64," + base64.b64encode(icon).decode("ascii")
+        if payload:
+            path = f"/guilds/{guild}/members/@me" if guild else "/users/@me"
+            result = await self.request("PATCH", path, json=payload, retry=False)
+            if guild is None and name is not None:
+                self.bot_name = (result.get("global_name") or result.get("username") or name) if isinstance(result, dict) else name
 
     def _cache_channel(self, data: dict[str, Any], guild_id: str | None = None) -> Channel:
         ident = data["id"]
@@ -323,7 +342,9 @@ class DiscordBlock(ChatBlock):
                 self._owner_task.cancel()
             self._owner_task = asyncio.ensure_future(self._load_owner())
             self._owner_task.add_done_callback(lambda t: t.cancelled() or t.exception())
-            await self.apply_avatar(user["id"], self._set_avatar)
+            identity = self.core.bot_identities.get(self.name)
+            if not identity or not identity.icon:
+                await self.apply_avatar(user["id"], lambda image: self.update_bot_identity(None, image))
         elif event == "GUILD_CREATE":
             self.guilds.add(data["id"])
             self.guild_info[data["id"]] = {"name": data.get("name"), "owner_id": data.get("owner_id")}

@@ -49,6 +49,7 @@ class SlackEngine:
         clock: Callable[[], float] = time.time,
         own_post_grace: float = 3.0,
         config_error: str | None = None,
+        bot_identity: Callable[[str], Mapping[str, str]] | None = None,
     ):
         self.env = dict(os.environ) if env is None else dict(env)
         self.data_dir = Path(data_dir)
@@ -60,6 +61,7 @@ class SlackEngine:
         self.own_post_grace = own_post_grace
         self.config = config
         self.config_error = config_error
+        self.bot_identity = bot_identity
         self.runtimes: dict[str, WorkspaceRuntime] = {}
         self.sinks: dict[str, list[WebhookSink]] = {}
         self.gate = WriteGate(self)
@@ -80,11 +82,6 @@ class SlackEngine:
         self.target_agents: Callable[[Target], set[str]] = lambda t: set()
         self.connect = True
         self._tasks: list[asyncio.Task] = []
-
-    @property
-    def avatar_dir(self) -> Path:
-        """Uploads from the root page land here and win over avatar_dirs and the bundled monograms."""
-        return self.avatars.uploads
 
     @property
     def avatar_cache(self) -> Path:
@@ -462,7 +459,7 @@ class SlackEngine:
         rt, approver = target
         try:
             dm = await rt.clients["bot"].conversations_open(users=approver)
-            await rt.clients["bot"].chat_postMessage(channel=dm["channel"]["id"], text=text)
+            await rt.clients["bot"].chat_postMessage(channel=dm["channel"]["id"], text=text, **rt.bot_identity_overrides())
         except Exception as e:
             log.warning("owner DM failed: %s", type(e).__name__)
             return False
@@ -490,7 +487,8 @@ class SlackEngine:
             }
         )
         blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"Expires <!date^{int(req['expires_at'])}^{{date_short_pretty}} {{time}}|soon>"}]})
-        resp = await bot.chat_postMessage(channel=dm_channel, text=f"Write request {req['id']} needs your approval", blocks=blocks)
+        resp = await bot.chat_postMessage(channel=dm_channel, text=f"Write request {req['id']} needs your approval",
+                                          blocks=blocks, **rt.bot_identity_overrides())
         self.store.set_request_notice(req["id"], {"workspace": rt.label, "channel": resp["channel"], "ts": resp["ts"]})
 
     async def close_notice(self, req: dict[str, Any]) -> None:
@@ -519,7 +517,7 @@ class SlackEngine:
     def persona_rows(self) -> list[dict[str, Any]]:
         """Each persona with its picture's URL, the folder it comes from, and the agents that post as it by default."""
         cfg = self.config
-        sources = {self.avatar_dir: "uploaded", BUNDLED_AVATARS: "bundled mark", self.avatar_cache: "rendered by a block"}
+        sources = {BUNDLED_AVATARS: "bundled mark", self.avatar_cache: "rendered by a block"}
         rows = []
         for pid, p in self.personas().items():
             path = self.find_avatar(p.avatar) if p.avatar else None

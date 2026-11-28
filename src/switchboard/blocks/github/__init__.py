@@ -395,7 +395,7 @@ class GitHubBlock(Block):
                 else:
                     limit = asyncio.Semaphore(8)
 
-                    async def lookup(repo: str | None, installation_id: str | None = None) -> tuple[str, dict[str, str]] | str:
+                    async def lookup(repo: str | None, installation_id: str | None = None) -> tuple[str, dict[str, str], str | None] | str:
                         async with limit:
                             try:
                                 return await self.api.installation(repo, token, installation_id=installation_id)
@@ -410,8 +410,10 @@ class GitHubBlock(Block):
                             else:
                                 missing[repo] = result
                             continue
-                        ident, permissions = result
+                        ident, permissions, permissions_url = result
                         found = installations.setdefault(ident, {"permissions": permissions, "repositories": []})
+                        if permissions_url:
+                            found["permissions_url"] = permissions_url
                         if repo is not None:
                             found["repositories"].append(repo)
                     if repos:
@@ -422,6 +424,8 @@ class GitHubBlock(Block):
                                 installations[ident]["permissions"] = {}
                             else:
                                 installations[ident]["permissions"] = result[1]
+                                if result[2]:
+                                    installations[ident]["permissions_url"] = result[2]
             permissions = [row["permissions"] for row in installations.values()]
             self.installation = {key: "write" if all(p[key] == "write" for p in permissions) else "read"
                                  for key in permissions[0] if all(key in p for p in permissions)} if permissions else {}

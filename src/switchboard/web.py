@@ -13,6 +13,7 @@ from starlette.types import Message, Receive, Scope, Send
 from . import pages
 from .api_about import ABOUT_ROUTES
 from .api_board import BOARD_ROUTES
+from .api_bot_identity import BOT_IDENTITY_ROUTES
 from .api_connections import CONNECTION_ROUTES
 from .api_memory_backup import MEMORY_BACKUP_ROUTES
 from .api_pages import PAGE_ROUTES
@@ -83,7 +84,7 @@ def web_routes() -> list[Route | Mount]:
         return spa_index() or pages.message_page("Web UI build required", "Run npm run build --prefix web", 503)
 
     api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES, *BOARD_ROUTES, *SETTINGS_ROUTES, *TOKEN_ROUTES, *MEMORY_BACKUP_ROUTES,
-                         *PAGE_ROUTES, *ABOUT_ROUTES, *CONNECTION_ROUTES],
+                         *PAGE_ROUTES, *ABOUT_ROUTES, *CONNECTION_ROUTES, *BOT_IDENTITY_ROUTES],
                  redirect_slashes=False)
 
     async def owner_api(scope: Scope, receive: Receive, send: Send) -> None:

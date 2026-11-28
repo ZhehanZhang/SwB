@@ -129,7 +129,7 @@ async def tokens(request: Request) -> JSONResponse:
                 project = _label(row["project"])
                 stored.append({"id": f"routine:{label}", "name": "Claude routine token", "label": label, "kind": "claude",
                                "used_by": [project] if project else [], "added_by": _actor(row["created_by"]),
-                               "added_at": iso(row["created_at"]), "revoke_id": None})
+                               "added_at": iso(row["created_at"]), "revoke_id": None, "routine_block": routine.name})
 
     for key in core.connections.list():
         project = _label(key["project"])

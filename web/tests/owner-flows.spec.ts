@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test"
 import { readFile } from "node:fs/promises"
-import { fileURLToPath } from "node:url"
 
 test("Sign-in explains an invalid link", async ({ page }) => {
   await page.setExtraHTTPHeaders({ "cf-access-jwt-assertion": "invalid" })
@@ -67,21 +66,24 @@ test("Tokens shows and removes a paired key memory scope", async ({ page, reques
   await table.screenshot({ path, animations: "disabled" })
   await testInfo.attach("Memory access", { path, contentType: "image/png" })
   await project.click()
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove", exact: true }).click()
   await expect(project).toHaveCount(0)
   await expect(agent).toBeVisible()
 })
 
-test("Agents saves a Slack persona avatar", async ({ page }) => {
-  await page.goto("/classic?notice=avatar-refused")
-  await expect(page).toHaveURL("/agents?notice=avatar-refused")
-  const file = page.getByLabel("Review bot")
-  await expect(file).toHaveAttribute("accept", "image/png")
-  await file.setInputFiles(
-    fileURLToPath(new URL("../../src/switchboard/slack/avatars/swb.png", import.meta.url)),
-  )
-  await page.getByRole("button", { name: "Save avatar" }).click()
-  await expect(page).toHaveURL("/agents?notice=avatar-saved")
-  await expect(page.getByRole("status").filter({ hasText: "Avatar saved" })).toBeVisible()
+test("Agents offers one setup prompt per app and no avatar uploads", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async (value: string) => { document.documentElement.dataset.testClipboard = value } },
+    })
+  })
+  await page.goto("/agents")
+  await expect(page.getByRole("heading", { name: "Slack avatars" })).toHaveCount(0)
+  await expect(page.locator('input[type="file"]')).toHaveCount(0)
+  await page.getByRole("button", { name: "Copy Slack setup prompt" }).click()
+  await expect(page.locator("html")).toHaveAttribute("data-test-clipboard", /Slack/)
+  const guide = page.getByRole("link", { name: "Slack setup guide" })
+  await expect(guide).toHaveAttribute("href", /\/docs\/setup\/slack#swb=/)
 })
 
 test("Settings shows the SwB commands", async ({ page }) => {
@@ -89,6 +91,26 @@ test("Settings shows the SwB commands", async ({ page }) => {
   const commands = page.getByRole("region", { name: "Commands", exact: true })
   await expect(commands.locator("code")).toHaveText(["swb up", "swb status", "swb log"])
   await expect(commands.getByRole("button", { name: "Copy swb log" })).toBeVisible()
+})
+
+test("Memory edits tags and renames the note path", async ({ page }) => {
+  await page.goto("/memory")
+  await page.getByRole("button", { name: "release-plan", exact: true }).click()
+  const note = page.getByRole("dialog", { name: "Release plan" })
+  await note.getByRole("button", { name: "Edit", exact: true }).click()
+  await note.getByRole("textbox", { name: "Tags" }).fill("planning, release")
+  await note.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(note.getByText("planning, release", { exact: true })).toBeVisible()
+  await note.getByRole("button", { name: "Rename path" }).click()
+  const path = note.getByRole("textbox", { name: "Path" })
+  await expect(path).toBeFocused()
+  await path.fill("/memories/general/notes/release-schedule.md")
+  await note.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(note.getByText("/memories/general/notes/release-schedule.md", { exact: true })).toBeVisible()
+  await note.getByRole("button", { name: "Rename path" }).click()
+  await path.fill("/memories/general/notes/release-plan.md")
+  await note.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(note.getByText("/memories/general/notes/release-plan.md", { exact: true })).toBeVisible()
 })
 
 test("Project copies the packaged coordinator prompt", async ({ page }, testInfo) => {

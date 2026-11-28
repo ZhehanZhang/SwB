@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { X } from "lucide-react"
-import { AlertDialog } from "radix-ui"
 import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
+import { ConfirmAction } from "@/components/console/confirm-action"
 import { DataState } from "@/components/data-state"
 import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { LogoTile } from "@/components/logo-tile"
@@ -29,6 +29,7 @@ type Stored = Credential & {
   added_by: string | null
   added_at: string | null
   revoke_id: string | null
+  routine_block?: string
   memory_scopes?: string[]
 }
 
@@ -54,6 +55,7 @@ function isTokens(value: unknown): value is Tokens {
       && timestamp(row.requested_at) && timestamp(row.expires_at))
     && value.stored.every((row) => isCredential(row) && nullableText(row.added_by)
       && timestamp(row.added_at) && (row.revoke_id === null || typeof row.revoke_id === "string")
+      && (row.routine_block === undefined || typeof row.routine_block === "string")
       && (row.memory_scopes === undefined || (Array.isArray(row.memory_scopes) && row.memory_scopes.every((scope) => typeof scope === "string"))))
 }
 
@@ -90,24 +92,11 @@ function RevokeKey({ label, disabled, pending, onRevoke }: {
   onRevoke: () => void
 }) {
   return (
-    <AlertDialog.Root>
-      <AlertDialog.Trigger asChild>
+    <ConfirmAction title="Revoke access key?" subject={label} action="Revoke" onConfirm={onRevoke}>
         <Button size="sm" variant="ghost" className="max-md:min-h-8 max-md:pr-0" disabled={disabled} aria-label={`Revoke access key for ${label}`}>
           {pending ? "Revoking…" : "Revoke"}
         </Button>
-      </AlertDialog.Trigger>
-      <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-40 bg-overlay/50" />
-        <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-1/2 rounded-lg border bg-card p-5 text-card-foreground shadow-lg">
-          <AlertDialog.Title className="text-heading-md">Revoke access key?</AlertDialog.Title>
-          <AlertDialog.Description className="mt-1 wrap-anywhere text-sm text-muted-foreground">{label}</AlertDialog.Description>
-          <div className="mt-5 flex justify-end gap-2">
-            <AlertDialog.Cancel asChild><Button variant="outline">Cancel</Button></AlertDialog.Cancel>
-            <AlertDialog.Action asChild><Button variant="destructive" onClick={onRevoke}>Revoke</Button></AlertDialog.Action>
-          </div>
-        </AlertDialog.Content>
-      </AlertDialog.Portal>
-    </AlertDialog.Root>
+    </ConfirmAction>
   )
 }
 
@@ -137,6 +126,17 @@ export function TokensPage() {
     ),
     onSuccess: () => client.invalidateQueries({ queryKey }),
     onError: () => toast.error("Try removing the scope again."),
+  })
+  const removeRoutine = useMutation({
+    mutationFn: ({ label, routine_block }: Stored) => requestJson(
+      `/api/routines/${encodeURIComponent(label)}/remove?${new URLSearchParams({ block: routine_block ?? "" })}`,
+      (data): data is { removed: true } => isObject(data) && data.removed === true,
+      { method: "POST", csrf: session?.csrf },
+    ),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey })
+      void client.invalidateQueries({ queryKey: ["registered-agents"] })
+    },
   })
 
   if (!tokens.isPending && !tokens.data) return <DataState kind="error" message="Tokens unavailable." onRetry={() => void tokens.refetch()} />
@@ -243,11 +243,12 @@ export function TokensPage() {
                               return (
                                 <div key={scope} className="inline-flex max-w-full items-center gap-1">
                                   <span className="min-w-0 wrap-anywhere">{label}</span>
-                                  {id && <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0"
-                                    aria-label={`Remove ${label} from ${row.label}`} title="Remove scope"
-                                    disabled={!session?.csrf || removeScope.isPending} onClick={() => removeScope.mutate({ id, scope })}>
-                                    <X aria-hidden strokeWidth={1.5} />
-                                  </Button>}
+                                  {id && <ConfirmAction title={`Remove ${label} access?`} subject={row.label} action="Remove"
+                                    onConfirm={() => removeScope.mutate({ id, scope })}>
+                                    <Button size="icon" variant="ghost" className="size-8 shrink-0"
+                                      aria-label={`Remove ${label} from ${row.label}`} title="Remove scope"
+                                      disabled={!session?.csrf || removeScope.isPending}><X aria-hidden strokeWidth={1.5} /></Button>
+                                  </ConfirmAction>}
                                 </div>
                               )
                             })}
@@ -260,19 +261,26 @@ export function TokensPage() {
                       <td className={cn("font-mono text-xs text-muted-foreground max-md:pl-8 md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
                         {row.added_at && <time dateTime={row.added_at}>{date.format(new Date(row.added_at))}</time>}
                       </td>
-                      <td className={cn("col-start-2 justify-self-end text-right", !row.revoke_id && "max-md:hidden")} role="cell">
+                      <td className={cn("col-start-2 justify-self-end text-right", !row.revoke_id && !row.routine_block && "max-md:hidden")} role="cell">
                         {id && <RevokeKey
                           label={row.label}
                           disabled={!session?.csrf || revoke.isPending}
                           pending={revoke.isPending && revoke.variables === id}
                           onRevoke={() => revoke.mutate(id)}
                         />}
+                        {row.routine_block && (
+                          <ConfirmAction title="Remove routine?" subject={row.label} action="Remove" onConfirm={() => removeRoutine.mutate(row)}>
+                            <Button size="sm" variant="ghost" disabled={!session?.csrf || removeRoutine.isPending}
+                              aria-label={`Remove routine ${row.label}`}>Remove</Button>
+                          </ConfirmAction>
+                        )}
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>}
+        {removeRoutine.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Try removing the routine again.</p>}
       </section>
       {session?.csrf && (
         <details className="space-y-3">
