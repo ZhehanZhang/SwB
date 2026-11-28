@@ -52,7 +52,3 @@ export function linkWithSwbAddress(href: string, address: string) {
 export function isGetStartedAddressPath(path: string) {
   return /\/docs\/get-started\/?$/.test(path);
 }
-
-export function isAddressDocsPath(path: string) {
-  return /^\/(?:en\/|zh-Hans\/|zh-Hant\/)?docs(?:\/|$)/.test(path);
-}

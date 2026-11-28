@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { locales, localize } from '../../lib/i18n';
 
 const origin = 'https://my-swb.example.net:9443';
 const example = 'https://swb.example.com';
@@ -185,6 +186,28 @@ test('accepts fragment and query prefill and preserves anchors and picker state'
   await page.evaluate((value) => { location.hash = `swb=${encodeURIComponent(value)}&claude`; }, origin);
   await expect(page).toHaveURL(`${start}?agents=claude&run=server#claude`);
   await expect(address(page)).toHaveValue(origin);
+});
+
+test('prefills and fits the address panel in all eight locales', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const locale of locales) {
+    await page.goto(`${localize(locale, install)}?swb=${encodeURIComponent(origin)}`);
+    const trigger = page.locator('[data-header-item="address"]');
+    await expect(trigger).toHaveAttribute('title', new URL(origin).host);
+    await expect(page).toHaveURL(localize(locale, install));
+    await trigger.click();
+    const panel = page.getByRole('dialog');
+    await expect(panel.getByRole('textbox')).toHaveValue(origin);
+    const overflow = await panel.evaluate((element) => {
+      const { left, right } = element.getBoundingClientRect();
+      return Math.max(20 - left, right - innerWidth + 20, ...[...element.querySelectorAll('button')].map((button) => {
+        const rect = button.getBoundingClientRect();
+        return Math.max(left - rect.left, rect.right - right);
+      }));
+    });
+    expect(overflow, locale).toBeLessThanOrEqual(1);
+    await expect(panel.getByRole('button')).toHaveCount(3);
+  }
 });
 
 test('rejects hostile field, fragment and query input without changing the saved address', async ({ page }) => {

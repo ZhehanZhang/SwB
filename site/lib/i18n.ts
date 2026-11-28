@@ -28,6 +28,11 @@ export function isLocale(lang: string): lang is Locale {
   return locales.some((locale) => locale === lang);
 }
 
+export function isDocsPath(path: string) {
+  const [root, first, second] = path.split('/', 3);
+  return root === '' && (first === 'docs' || (second === 'docs' && isLocale(first)));
+}
+
 export function localize(lang: Locale, path: string) {
   return lang === 'en' ? path : `/${lang}${path === '/' ? '' : path}`;
 }
