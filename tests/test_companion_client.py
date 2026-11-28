@@ -15,6 +15,7 @@ from switchboard import cli
 from switchboard.app import create_app
 from switchboard.companion import client
 from switchboard.companion.caps.base import ActionSpec, Capability
+from switchboard.companion.hook import supported
 from switchboard.companion.state import CompanionError, CompanionState, state_path
 
 
@@ -124,6 +125,27 @@ def test_connect_runs_and_restart_reuses_enabled_caps(settings, tmp_path, monkey
         state, path, caps = call.args
         assert state.enabled_caps == ("drop",) and path == settings
         assert list(caps) == ["drop"] and caps["drop"].path == tmp_path / "my drop folder"
+
+
+@pytest.mark.skipif(not supported(), reason="Unix hook socket requires Linux or macOS")
+def test_connect_persists_memory_sync_opt_out(settings, monkeypatch, capsys):
+    run = AsyncMock()
+    monkeypatch.setattr(client, "run", run)
+
+    async def handler(request):
+        return httpx.Response(201, json={"companion_id": COMPANION_ID, "device_key": KEY})
+
+    mock_client(monkeypatch, handler)
+    with pytest.raises(SystemExit) as help_exit:
+        cli.main(["companion", "connect", "--help"])
+    assert help_exit.value.code == 0 and "--no-memory-sync" in capsys.readouterr().out
+    cli.main(["companion", "connect", URL, "--code", CODE, "--cap", "hooks", "--no-memory-sync"])
+    cli.main(["companion", "run"])
+    assert CompanionState.load(settings).memory_sync is False
+    assert run.await_count == 2
+    for call in run.await_args_list:
+        state, _, caps = call.args
+        assert not state.memory_sync and not caps["hooks"].memory_sync
 
 
 def test_connect_requires_opt_in_to_advertise_capabilities(settings, monkeypatch, capsys):
@@ -348,6 +370,22 @@ class Work(Capability):
         self.invoke = invoke
         if run is not None:
             self.run = run
+
+
+async def test_companion_requests_extra_body_room_only_for_memory_events():
+    received = []
+
+    async def run(ctx):
+        for kind in ("memory.sync", "hooks.session"):
+            await ctx.emit(kind, {})
+
+    async def handler(request):
+        received.append((request.url.query, json.loads(request.content)["kind"]))
+        return httpx.Response(200, json={"ok": True})
+
+    async with httpx.AsyncClient(base_url=URL + "/companion/", transport=httpx.MockTransport(handler)) as http:
+        await client._run_capability(http, COMPANION_ID, Work(None, run))
+    assert received == [(b"kind=memory.sync", "memory.sync"), (b"", "hooks.session")]
 
 
 async def test_run_sends_hello_progress_claim_and_result(settings, paired, monkeypatch, capsys):

@@ -167,6 +167,10 @@ Wie Sie eine Projektroute binden und Triage-Aktionen festlegen, beschreibt [Kana
 | `memory.mirror` | Steuert die Markdown-Kopie. `false` stoppt die Aktualisierungen |
 | `memory.mirror_dir` | Ordner für die Markdown-Kopie |
 | `memory.mirror_debounce_s` | Sekunden, die SwB nach einer Gedächtnisänderung wartet, bevor es die Kopie schreibt. Standard `2` |
+| `memory.sync` | Erlaubt Agenten, ihr eigenes Gedächtnis mit `memory_sync` in SwB zu kopieren. Standard `true`. Der Schalter **Memory sync** in der Konsole hat Vorrang |
+| `memory.backup` | Einstellungen für die Git-Sicherung des Gedächtnisses |
+| `memory.backup.debounce_s` | Sekunden, die SwB nach einer Gedächtnisänderung bis zu einem Sicherungs-Commit wartet. Standard `30` |
+| `memory.backup.max_delay_s` | Längste Wartezeit in Sekunden für einen Sicherungs-Commit bei vielen Änderungen. Standard `300` |
 | `modes` | Einstellungen dafür, wie SwB auf eingehende Ereignisse reagiert |
 | `modes.default` | Standardmodus. Standard ist `off` |
 | `modes.projects` | Standardmodus für die Räume, die jedem Projekt zugeordnet sind |

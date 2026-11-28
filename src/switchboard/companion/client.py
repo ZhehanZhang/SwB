@@ -16,6 +16,7 @@ from .. import __version__
 from . import REPAIR_CAPABILITIES
 from .caps.base import Capability, CapabilityError, CompanionContext, JobContext
 from .harness import harness
+from .memory import MEMORY_SYNC_EVENT
 from .state import CompanionError, CompanionState, valid_pair
 
 DISCONNECTED = "This device was disconnected."
@@ -173,7 +174,8 @@ async def _execute(
 
 async def _run_capability(client: httpx.AsyncClient, companion_id: str, cap: Capability) -> None:
     async def emit(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return await _post_json(client, "emit", {"capability": cap.id, "kind": kind, "payload": payload},
+        endpoint = f"emit?kind={MEMORY_SYNC_EVENT}" if kind == MEMORY_SYNC_EVENT else "emit"
+        return await _post_json(client, endpoint, {"capability": cap.id, "kind": kind, "payload": payload},
                                 "SwB could not accept the device event.")
 
     try:

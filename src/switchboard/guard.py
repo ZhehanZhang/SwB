@@ -14,6 +14,9 @@ from typing import Any, Callable
 from starlette.exceptions import HTTPException
 from starlette.datastructures import Headers, MutableHeaders
 
+from .companion.memory import MEMORY_FRAME_LIMIT, MEMORY_SYNC_EVENT
+from .memory_archive import MAX_ARCHIVE_BYTES
+
 BODY_LIMIT = 1 * 1024 * 1024
 MCP_BODY_LIMIT = 16 * 1024 * 1024
 COMPANION_EMIT_LIMIT = 16 * 1024
@@ -171,9 +174,12 @@ class Guard:
 
         limit = MCP_BODY_LIMIT if path == "/mcp" or path.startswith("/mcp/") or path.rstrip("/") == "/companion/results" else BODY_LIMIT
         if path.rstrip("/") == "/companion/emit":
-            limit = COMPANION_EMIT_LIMIT + 256
+            event_limit = MEMORY_FRAME_LIMIT if scope.get("query_string") == f"kind={MEMORY_SYNC_EVENT}".encode() else COMPANION_EMIT_LIMIT
+            limit = event_limit + 256
         elif path == "/auth/setup":
             limit = SETUP_BODY_LIMIT
+        elif path == "/api/memory/import" and scope.get("method") == "POST":
+            limit = MAX_ARCHIVE_BYTES + 64 * 1024
         for k, v in scope.get("headers", []):
             if k == b"content-length":
                 try:

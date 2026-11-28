@@ -16,7 +16,8 @@ HARNESSES = {
 }
 
 
-def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalServer] | None = None) -> tuple[dict[str, Capability], dict[str, str]]:
+def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalServer] | None = None,
+             *, memory_sync: bool = True) -> tuple[dict[str, Capability], dict[str, str]]:
     available = {}
     unavailable = {}
     for cap_id in dict.fromkeys(enabled):
@@ -37,7 +38,7 @@ def registry(enabled: tuple[str, ...], drop_dir: Path, servers: dict[str, LocalS
             cap = MuseCapability()
         elif cap_id in HARNESSES:
             module = import_module(f".{cap_id}", __name__)
-            cap = getattr(module, HARNESSES[cap_id])()
+            cap = module.HooksCapability(memory_sync=memory_sync) if cap_id == "hooks" else getattr(module, HARNESSES[cap_id])()
         else:
             raise CompanionError(f"Choose a capability from {', '.join(CAPABILITIES)}.")
         if reason := cap.available():

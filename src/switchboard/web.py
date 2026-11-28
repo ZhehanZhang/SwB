@@ -14,6 +14,7 @@ from . import pages
 from .api_about import ABOUT_ROUTES
 from .api_board import BOARD_ROUTES
 from .api_connections import CONNECTION_ROUTES
+from .api_memory_backup import MEMORY_BACKUP_ROUTES
 from .api_pages import PAGE_ROUTES
 from .api_read import READ_ROUTES
 from .api_settings import SETTINGS_ROUTES
@@ -81,7 +82,8 @@ def web_routes() -> list[Route | Mount]:
             return login_redirect(request)
         return spa_index() or pages.message_page("Web UI build required", "Run npm run build --prefix web", 503)
 
-    api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES, *BOARD_ROUTES, *SETTINGS_ROUTES, *TOKEN_ROUTES, *PAGE_ROUTES, *ABOUT_ROUTES, *CONNECTION_ROUTES],
+    api = Router(routes=[*READ_ROUTES, *WRITE_ROUTES, *BOARD_ROUTES, *SETTINGS_ROUTES, *TOKEN_ROUTES, *MEMORY_BACKUP_ROUTES,
+                         *PAGE_ROUTES, *ABOUT_ROUTES, *CONNECTION_ROUTES],
                  redirect_slashes=False)
 
     async def owner_api(scope: Scope, receive: Receive, send: Send) -> None:

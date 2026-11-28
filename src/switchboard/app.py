@@ -19,7 +19,7 @@ from . import pages
 from .api_about import release_version
 from .api_display import SLACK_PROFILE_PREFIX
 from .auth import COMPANION_KEY_PREFIX
-from .claims import CLAIM_PATH, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
+from .claims import CLAIM_PATH, MEMORY_BACKUP_CREDENTIAL, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
 from .companion_routes import COMPANION_ACTIONS, companion_routes
 from .config import REQUEST_BASE
 from .deployment import OWNER_KEY
@@ -423,6 +423,8 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             return show_claim(form_csrf, message)
         core.audit.record(origin="http", source=actor, client=client_ip(request.scope), destination="core", action="token_claim",
                           outcome="ok", target=name)
+        if name == MEMORY_BACKUP_CREDENTIAL:
+            core.memory_git.credential_saved()
         for block in chats:
             await block.secret_saved("bot_token")
         label = claim["label"] or ("Webhook URL" if claim["kind"] == "url" or claim["require_https"] else "Token")

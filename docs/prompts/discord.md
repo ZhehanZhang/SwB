@@ -19,3 +19,5 @@ Read the invite link from `setup.invite_url` in `discord_status`. If the link is
 If Discord reports code `4014`, check **Message Content Intent**. If it reports code `4004`, replace the rejected token. When `connect` reports `connected`, ask me to choose a test channel. Call `discord_post` with the space label, channel ID and test text. Show me the result.
 
 Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
+
+If you keep your own memory, set up memory sync as described at https://swb.one/docs/memory.

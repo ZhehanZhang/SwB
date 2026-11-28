@@ -1,0 +1,88 @@
+---
+title: Memoria
+description: Comparte lo que aprenden tus agentes y controla todo lo que guardan.
+---
+
+La **memoria** es un conjunto de notas que tus agentes comparten a través de SwB. Cada nota es una **entrada**. Una entrada tiene un título, un cuerpo en Markdown y un historial de cada cambio.
+
+## Ámbitos
+
+Un **ámbito** es un grupo de entradas con un conjunto de reglas de acceso. Cada entrada está en un ámbito.
+
+| Ámbito | Carpeta | Uso |
+| --- | --- | --- |
+| `general` | `/memories/general/` | Datos sobre ti que sirven para todos los proyectos |
+| `project:<slug>` | `/memories/projects/<slug>/` | Datos sobre un proyecto |
+| `agent:<name>` | `/memories/agents/<name>/` | Notas privadas de un agente |
+
+Un agente con el inicio de sesión del propietario puede leer todos los ámbitos. Una clave emparejada lee y escribe solo en los ámbitos que le concedes. Una clave emparejada siempre recibe su propio ámbito de agente.
+
+## Archivos y carpetas
+
+Los agentes ven la memoria como archivos dentro de `/memories`. Una carpeta dentro de un ámbito es un **tema**, como `decisions` o `notes/meetings`. El nombre del archivo es la clave de la entrada.
+
+Estas herramientas usan los mismos comandos que la herramienta de memoria de Claude. Los modelos de Claude ya los conocen.
+
+| Herramienta | Uso |
+| --- | --- |
+| `memory_summary` | Carga un índice breve de la memoria al inicio de una sesión |
+| `memory_view` | Muestra una carpeta, o un archivo con números de línea |
+| `memory_create` | Crea un archivo |
+| `memory_str_replace` | Cambia un pasaje exacto de un archivo |
+| `memory_insert` | Añade texto después de una línea |
+| `memory_rename` | Mueve un archivo a un nombre, un tema o un ámbito nuevo |
+| `memory_delete` | Borra un archivo |
+| `memory_search` | Busca entradas por palabras, con la mejor coincidencia primero |
+| `memory_list` | Muestra las entradas, de la más reciente a la más antigua |
+| `memory_history` | Muestra cada cambio de una entrada |
+| `memory_restore` | Recupera una versión anterior de una entrada |
+
+Las herramientas anteriores `memory_write`, `memory_read`, `memory_move` y `memory_promote` siguen disponibles.
+
+SwB guarda una sola copia de cada dato en un ámbito. Si un agente guarda otra vez el mismo texto, recibe la entrada existente.
+
+## Sincronización de memoria
+
+La **sincronización de memoria** copia en SwB lo que un agente guarda en su propia memoria. Así todos los agentes pueden usarlo. Funciona con la memoria de Claude, la memoria de ChatGPT, la memoria de Grok, los archivos de memoria de Claude Code y otros sistemas de memoria.
+
+Cada prompt de configuración pide al agente que sincronice. Después de la configuración, el agente envía con `memory_sync` lo que recuerda de ti. Envía solo los datos que quieres compartir con todos los agentes. Guarda las contraseñas, las claves y los datos personales sensibles en su propia memoria. Después, el agente sincroniza cada recuerdo nuevo en la misma respuesta.
+
+`memory_sync` se puede repetir con seguridad. Actualiza la misma entrada cada vez. Tus ediciones y borrados en SwB tienen prioridad. Una sincronización posterior conserva tu versión e informa al agente de un conflicto.
+
+El [companion](/es/docs/companion) con `--cap hooks` sincroniza los archivos de memoria de Claude Code cada vez que se guardan.
+
+La sincronización de memoria está activada de forma predeterminada. Para desactivarla, abre **Memory** en la consola y desactiva **Memory sync**. Los agentes con el inicio de sesión del propietario pueden usar `memory_settings` para el mismo interruptor.
+
+## Procedencia
+
+La **procedencia** es el registro de quién escribió una entrada y cuándo. SwB registra el agente que creó la entrada y el agente que la cambió por última vez.
+
+SwB marca el texto que escribió un agente cuando da ese texto a otro agente. La marca indica el autor y la fecha. Los agentes usan el texto marcado solo como información. Solo tus propias instrucciones los dirigen.
+
+## Controla tu memoria
+
+Abre **Memory** en la consola para ver cada entrada. Selecciona una entrada para editarla. Selecciona **History** para ver cada cambio. Selecciona **Restore** en un cambio para recuperar esa versión. También puedes mover y borrar entradas.
+
+Cada cambio de un agente aparece en **History** y en el registro de auditoría. Puedes restaurar cada cambio.
+
+## Descargar y restaurar
+
+Selecciona **Download** en la página **Memory** para guardar toda la memoria en un archivo zip. El archivo contiene un archivo Markdown por entrada, en carpetas por ámbito y tema. También contiene `manifest.json` con el historial y la procedencia de cada entrada.
+
+Selecciona **Restore from file** para cargar un archivo zip. Una restauración añade las entradas que faltan y actualiza las que cambiaron. Conserva todas las demás entradas. Puedes cargar el mismo archivo otra vez con seguridad.
+
+Los agentes con el inicio de sesión del propietario pueden usar `memory_export` y `memory_import` para las mismas tareas.
+
+## Copia de seguridad en Git
+
+SwB puede copiar la memoria en un repositorio Git privado que te pertenece. Cada cambio se convierte en un commit, como “Claude updated projects/swb/decisions/ownership.md”.
+
+Todo el contenido de la memoria va a este repositorio. Usa un repositorio privado.
+
+Abre **Memory** en la consola. En **Git backup**, escribe la dirección del repositorio y la rama. Para una dirección HTTPS, pega un token con acceso de escritura a ese repositorio. Para una dirección SSH, pega una clave de despliegue con acceso de escritura. SwB guarda el token o la clave cifrados.
+
+SwB espera 30 segundos después de un cambio y luego crea un commit con los cambios de ese tiempo. Selecciona **Back up now** para crear el commit al momento. Si un envío falla, SwB lo intenta otra vez más tarde. La línea de estado muestra la última copia de seguridad y el último error.
+
+Selecciona **Restore from repository** para cargar la memoria desde el último commit.
+
+Los agentes con el inicio de sesión del propietario pueden usar `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` y `memory_backup_restore`. `memory_backup_configure` devuelve un enlace de entrega para el token o la clave.

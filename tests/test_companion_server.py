@@ -21,9 +21,11 @@ from switchboard.app import create_app
 from switchboard.auth import sha
 from switchboard.blocks import BlockError
 from switchboard.blocks.mcp.policy import COMPANION_ROUTES
+from switchboard.companion.memory import MEMORY_CONTENT_LIMIT, MEMORY_SYNC_SOURCE
 from switchboard.companion.state import CompanionState
 from switchboard.connect import normalize_code
 from switchboard.guard import COMPANION_EMIT_LIMIT, LIMITS
+from switchboard.memory import MemoryRefused
 from switchboard.refusals import OWNER_REQUIRED
 from switchboard.sessions import SESSION_COOKIE
 
@@ -452,6 +454,70 @@ async def test_unsolicited_event_requires_declared_capability_and_limits_payload
     assert (await client.post("/companion/emit", headers=auth, json=event)).status_code == 403
     assert (await client.post("/companion/revoke", headers=auth)).status_code == 200
     assert (await client.post("/companion/emit", headers=auth, json=event)).status_code == 401
+
+
+async def test_memory_sync_event_maps_project_and_binds_writer(amake, monkeypatch):
+    core, client = await amake(config=CFG)
+    core.projects.create(slug="context", name="Context", links={"repos": ["Example/SwB"]})
+    core.projects.create(slug="private", name="Private", private=True)
+    for slug in ("first", "second"):
+        core.projects.create(slug=slug, name=slug, links={"repos": [f"{slug}/ambiguous"]})
+    hooks = [{"id": "hooks", "version": "1", "title": "Local agent hooks", "actions": []}]
+    calls = []
+
+    async def pair(caps):
+        code = payload(await acall(client, STATIC_KEY, "companion_code"))["code"]
+        paired = (await client.post("/companion/pair", json={"code": code, **HELLO, "capabilities": caps})).json()
+        return paired["companion_id"], bearer(paired["device_key"])
+
+    def sync(writer, source, items, project=None, scope=None):
+        assert scope is None and source == MEMORY_SYNC_SOURCE
+        calls.append((writer, project))
+        allowed = core.allows_memory(writer, f"project:{project}" if project else "agent:claude-code")
+        return {"items": [{"source_key": items[0]["source_key"], "action": "created" if allowed else "skipped"}]}
+
+    monkeypatch.setattr(core, "sync_memory", sync, raising=False)
+    first_id, first = await pair(hooks)
+    second_id, second = await pair(hooks)
+    _, no_hooks = await pair(CAPS)
+    item = {"source_key": "-local-swb/fact.md", "title": "Fact", "body": "😀" * MEMORY_CONTENT_LIMIT, "tags": []}
+    event = {"capability": "hooks", "kind": "memory.sync",
+             "payload": {"source": MEMORY_SYNC_SOURCE, "items": [item], "dir": "SwB"}}
+    path = "/companion/emit?kind=memory.sync"
+    assert (await client.post(path, json=event)).status_code == 401
+    assert (await client.post(path, headers=no_hooks, json=event)).status_code == 403
+    assert (await client.post("/companion/emit", headers=first, json=event)).status_code == 413
+    assert (await client.post(path, headers=first, json=event)).json() == {
+        "items": [{"source_key": item["source_key"], "action": "created"}],
+    }
+    for headers, hint in ((first, "context"), (second, "SwB"), (first, "unmatched"), (first, "ambiguous"), (first, "private")):
+        result = await client.post(path, headers=headers, json={**event, "payload": {**event["payload"], "dir": hint}})
+        assert result.status_code == 200
+        assert result.json()["items"][0]["action"] == ("skipped" if hint == "private" else "created")
+
+    assert [project for _, project in calls] == ["context", "context", "context", None, None, "private"]
+    first_writer, same_writer, second_writer = (writer for writer, _ in calls[:3])
+    assert (first_writer.source, first_writer.kind, first_writer.client_id) == ("claude-code", "companion", f"companion:{first_id}")
+    assert second_writer.client_id == f"companion:{second_id}"
+    assert first_writer.memory_writer == same_writer.memory_writer
+    assert first_writer.memory_writer and first_writer.memory_writer != second_writer.memory_writer
+    assert not first_writer.is_memory_owner and not first_writer.allows("general") and not first_writer.allows("agent:other")
+    core.check_memory_writer(same_writer, "project:context", first_writer.memory_writer)
+    with pytest.raises(MemoryRefused):
+        core.check_memory_writer(second_writer, "project:context", first_writer.memory_writer)
+
+    for data in ({"items": [{**item, "scope": "general"}]}, {"source": "other"},
+                 {"items": [{**item, "body": "x" * (MEMORY_CONTENT_LIMIT + 1)}]}):
+        assert (await client.post(path, headers=first, json={**event, "payload": {**event["payload"], **data}})).status_code == 400
+    assert len(calls) == 6
+
+    def sync_disabled(*args, **kwargs):
+        raise MemoryRefused("The owner turned memory sync off.")
+
+    monkeypatch.setattr(core, "sync_memory", sync_disabled)
+    refused = await client.post(path, headers=first, json=event)
+    assert refused.status_code == 403
+    assert refused.json() == {"error": "The owner turned memory sync off."}
 
 
 async def test_real_companion_round_trip_and_secret_hygiene(tmp_path, capy, caplog):

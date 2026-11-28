@@ -41,3 +41,5 @@ Start OAuth sign-in for a new connector. Give me the sign-in link. Ask me to sig
 Call `connect(what="muse", choose={"connector":true})` to confirm sign-in. Ask another SwB agent to call `send(to="agent:muse", task="Reply with pong.")`. Read the message with `inbox`. Answer with `reply` in the same conversation.
 
 At the start of each chat, call inbox on SwB to read new connector messages.
+
+If you keep your own memory, set up memory sync as described at https://swb.one/docs/memory.

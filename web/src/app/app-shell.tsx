@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { PRODUCT_NAME } from "@/app/brand"
 import { CommandMenu } from "@/app/header-controls"
 import { MobileMore } from "@/app/mobile-more"
+import { PageHeaderActionsTarget } from "@/app/page-header-actions"
 import { PageTitle } from "@/app/page-title"
 import { connectionNames, isConnectionPlatform, isSection, primarySections, sections, utilitySections } from "@/app/navigation"
 import { preloadOnIdle, preloadOnTouch } from "@/app/route-pages"
@@ -113,6 +114,7 @@ export function AppShell() {
   const home = pathname === "/" || project
   const [title, setTitle] = useState<string>()
   const [moreOpen, setMoreOpen] = useState(false)
+  const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(null)
   const heading = connection ? connectionNames[platform] : title ?? (home ? PRODUCT_NAME : sections.find(({ to }) => isSection(pathname, to))?.name ?? PRODUCT_NAME)
   useEffect(() => { document.title = heading === PRODUCT_NAME ? heading : `${heading} | ${PRODUCT_NAME}` }, [heading])
   useEffect(() => {
@@ -142,12 +144,17 @@ export function AppShell() {
             {connection && <Link to="/settings" aria-label="Back to Settings" className="console-pressable grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
             <h1 className="truncate text-page-title">{heading}</h1>
           </div>
-          <CommandMenu />
+          <div className="flex shrink-0 items-center gap-2 md:gap-4">
+            <div ref={setHeaderActions} className="flex items-center empty:hidden" />
+            <CommandMenu />
+          </div>
         </header>
         <main id="main-content" tabIndex={-1} className="min-w-0">
           <Suspense fallback={<div className="min-h-72" aria-busy="true" />}>
             <ViewTransition key={pathname} name="console-route" default="none" share="console-route-fade">
-              <div className="min-w-0"><Outlet /></div>
+              <div className="min-w-0">
+                <PageHeaderActionsTarget.Provider value={headerActions}><Outlet /></PageHeaderActionsTarget.Provider>
+              </div>
             </ViewTransition>
           </Suspense>
         </main>

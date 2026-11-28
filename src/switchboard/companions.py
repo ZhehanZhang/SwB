@@ -10,17 +10,23 @@ import re
 import secrets
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass, field, replace
+from functools import partial
+from typing import TYPE_CHECKING, Any
 
 from .audit import Audit, iso
 from .auth import COMPANION_KEY_PREFIX, Principal, sha
 from .blocks import BlockError
 from .companion import COMPANION_ID, REPAIR_CAPABILITIES
+from .companion.memory import MEMORY_CONTENT_LIMIT, MEMORY_FRAME_LIMIT, MEMORY_SYNC_EVENT, MEMORY_SYNC_SOURCE, memory_source_key
 from .connect import CODE_TTL_S, new_code, normalize_code
 from .guard import COMPANION_EMIT_LIMIT
+from .memory import MemoryRefused
 from .store import Store, dumps
 from .trust import wrap
+
+if TYPE_CHECKING:
+    from .core import Switchboard
 
 SLUG = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 OFFLINE = "Companion offline."
@@ -81,6 +87,35 @@ class DeviceActionError(CompanionError):
     def __init__(self, message: str, companion_id: str):
         super().__init__(message)
         self.display = wrap(message, "companion", companion_id, "external")
+
+
+async def _sync_memory(core: Switchboard, principal: Principal, payload: dict[str, Any]) -> dict[str, Any]:
+    dir_, items = payload.get("dir"), payload.get("items")
+    if (payload.get("source") != MEMORY_SYNC_SOURCE or not isinstance(dir_, str) or len(dir_) > 64
+            or (dir_ and not dir_.isprintable()) or any(char in dir_ for char in "/\\")
+            or not isinstance(items, list) or len(items) != 1 or not isinstance(item := items[0], dict)
+            or item.keys() != {"source_key", "title", "body", "tags"} or not memory_source_key(item["source_key"])
+            or not isinstance(title := item["title"], str) or not title.strip() or len(title) > 200
+            or not isinstance(text := item["body"], str) or len(text) > MEMORY_CONTENT_LIMIT
+            or not isinstance(tags := item["tags"], list) or len(tags) > 1
+            or any(not isinstance(tag, str) or not tag.isprintable() for tag in tags)):
+        raise CompanionError("Send one Claude Code auto memory file.")
+    hint = dir_.lower()
+    project = None
+    if hint:
+        projects = core.projects.list()
+        project = next((p for p in projects if p.slug == hint), None)
+        if project is None:
+            matches = [p for p in projects if any(repo.rsplit("/", 1)[-1] == hint for repo in p.links.get("repos", []))]
+            project = matches[0] if len(matches) == 1 else None
+    scopes = ("agent:claude-code",)
+    if project is not None and not project.private:
+        scopes += (project.scope,)
+    writer = replace(principal, source="claude-code", scopes=scopes, credential=principal.client_id)
+    try:
+        return core.sync_memory(writer, MEMORY_SYNC_SOURCE, items, project=project.slug if project else None, scope=None)
+    except MemoryRefused as exc:
+        raise CompanionError(str(exc), 403) from None
 
 
 def _label(value: object, max_length: int, *, optional: bool = False) -> str:
@@ -150,12 +185,13 @@ class Job:
 
 
 class Companions:
-    def __init__(self, store: Store, audit: Audit):
+    def __init__(self, store: Store, audit: Audit, core: Switchboard):
         self.store, self.audit = store, audit
         self._streams: dict[str, Stream] = {}
         self._jobs: dict[str, Job] = {}
         self._claims: dict[str, tuple[Claim, str | None, str | None]] = {}
         self._events: dict[str, tuple[str, Event]] = {}
+        self.register_event(MEMORY_SYNC_EVENT, partial(_sync_memory, core), capability="hooks")
         self.on_disconnect: list[Callable[[str], None]] = []
         with store._lock:
             store.db.executescript(SCHEMA)
@@ -466,7 +502,9 @@ class Companions:
             size = len(json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8"))
         except (ValueError, RecursionError):
             raise CompanionError("Invalid companion event.") from None
-        if size > COMPANION_EMIT_LIMIT:
+        if kind == MEMORY_SYNC_EVENT and size > MEMORY_FRAME_LIMIT:
+            raise CompanionError("Send up to 128 KiB per memory sync event.", 413)
+        if kind != MEMORY_SYNC_EVENT and size > COMPANION_EMIT_LIMIT:
             raise CompanionError("Companion event payloads are limited to 16 KiB.", 413)
         try:
             out = await registration[1](principal, payload)

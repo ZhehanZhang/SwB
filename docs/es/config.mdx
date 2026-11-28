@@ -167,6 +167,10 @@ Consulta [Modos de canal](/es/docs/channel-modes) para vincular la ruta de un pr
 | `memory.mirror` | Controla la copia en Markdown. Usa `false` para detener las actualizaciones |
 | `memory.mirror_dir` | Carpeta de la copia en Markdown |
 | `memory.mirror_debounce_s` | Segundos de espera tras un cambio en la memoria antes de escribir la copia. Valor predeterminado `2` |
+| `memory.sync` | Permite que los agentes copien su propia memoria en SwB con `memory_sync`. Valor predeterminado `true`. El interruptor **Memory sync** de la consola tiene prioridad |
+| `memory.backup` | Ajustes de la copia de seguridad de la memoria en Git |
+| `memory.backup.debounce_s` | Segundos de espera tras un cambio en la memoria antes de un commit de copia de seguridad. Valor predeterminado `30` |
+| `memory.backup.max_delay_s` | Espera máxima en segundos para un commit de copia de seguridad durante muchos cambios. Valor predeterminado `300` |
 | `modes` | Ajustes sobre cómo actúa SwB ante los eventos entrantes |
 | `modes.default` | Modo predeterminado. El valor predeterminado es `off` |
 | `modes.projects` | Modo predeterminado para los espacios asignados a cada proyecto |

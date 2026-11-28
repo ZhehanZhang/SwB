@@ -74,3 +74,5 @@ Ask me where the app runs. To let the first agent set up other apps, give it own
 For a hosted app, have me approve its OAuth sign-in to give it owner access. Use a public HTTPS address. If SwB is local, offer a [public address](https://swb.one/docs/first-run#get-a-public-address) or a hosted deployment. For Claude, use https://swb.one/prompts/claude.md. For ChatGPT, use https://swb.one/prompts/chatgpt.md. For Grok, use https://swb.one/prompts/grok.md.
 
 Once the first app connects, ask me to paste https://swb.one/prompts/coordinator.md into that app. If it uses a paired key, have it give me the matching `swb connect` command for each owner-only connection.
+
+If you keep your own memory, set up memory sync as described at https://swb.one/docs/memory.
