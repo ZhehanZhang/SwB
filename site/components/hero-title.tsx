@@ -38,8 +38,6 @@ export function HeroTitle({ stem, endingPrefix, endings, between }: Props) {
     const slots = row.querySelectorAll<HTMLElement>('.swb-slot');
     const chips = [...slots].map((slot) => slot.querySelector('.swb-chip-on')!);
     const resize = () => {
-      const sameRow = slots[0].parentElement!.getBoundingClientRect().top === slots[1].parentElement!.getBoundingClientRect().top;
-      row.toggleAttribute('data-shared-row', sameRow);
       slots.forEach((slot, index) => {
         const style = getComputedStyle(slot);
         const border = parseFloat(style.borderInlineStartWidth) + parseFloat(style.borderInlineEndWidth);
@@ -93,14 +91,14 @@ export function HeroTitle({ stem, endingPrefix, endings, between }: Props) {
       <p className="swb-between mt-3 text-base" data-hero-pair={pair.n}>
         {between[0] && <span className="swb-between-text">{between[0]}</span>}
         <span ref={subtitle} className="swb-pair">
-          <span className="swb-pair-lead">
-            <Slot first={initial.a} current={pair.a} />
-            <span className="swb-between-text">{between[1]}</span>
+          <span className="swb-pair-row">
+            <span className="swb-pair-lead">
+              <Slot first={initial.a} current={pair.a} />
+              <span className="swb-between-text">{between[1]}</span>
+            </span>
+            <span className="swb-pair-tail"><Slot first={initial.b} current={pair.b} /></span>
           </span>
-          <span className="swb-pair-tail">
-            <Slot first={initial.b} current={pair.b} />
-            {between[2] && <span className="swb-between-text">{between[2]}</span>}
-          </span>
+          {between[2] && <span className="swb-pair-suffix">{between[2]}</span>}
         </span>
       </p>
     </>

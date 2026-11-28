@@ -10,23 +10,11 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
   test(`${locale} tweens pill widths and keeps text gaps through a full cycle`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await seedHero(page);
+    await pauseHeroClock(page);
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready.then(() => null));
     const line = page.locator('[data-hero-pair]');
-    await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
-
-    const result = await line.evaluate((root, { deadlineMs, nextRound }) => new Promise<{
-      seen: string[];
-      settled: string[];
-      widthRanges: number[];
-      crossfades: boolean[];
-      frameStep: number;
-      verticalDrift: number;
-      prefixDrift: number;
-      gap: number;
-      leadGapError: number;
-      overflow: number;
-    }>((resolve) => {
+    const measureTransition = () => line.evaluate((root) => {
       const pair = root.querySelector('.swb-pair')!;
       const slots = [...root.querySelectorAll('.swb-slot')];
       const textRange = (element: Element | null) => {
@@ -41,26 +29,16 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       const prefix = textRange(root.querySelector(':scope > .swb-between-text:first-child'));
       const conjunctionElement = pair.querySelector('.swb-between-text')!;
       const conjunction = textRange(conjunctionElement)!;
-      const suffix = textRange(pair.querySelector('.swb-pair-tail .swb-between-text'));
-      const seen: string[] = [];
-      const settled = new Set<string>();
-      const crossfades = slots.map(() => false);
-      const minWidths = slots.map(() => Infinity);
-      const maxWidths = slots.map(() => -Infinity);
-      const deadline = performance.now() + deadlineMs;
-      let frameStep = 0;
-      let verticalDrift = 0;
-      let prefixDrift = 0;
-      let gap = Infinity;
-      let leadGapError = 0;
-      let overflow = 0;
-      let previousX: number[] | undefined;
-      let baselineY: number[] | undefined;
-      let baselinePrefix: number | undefined;
+      const suffix = textRange(pair.querySelector('.swb-pair-suffix'));
+      const transitions = pair.getAnimations({ subtree: true });
+      const endTimes = transitions.map((transition) => transition.effect?.getComputedTiming().endTime);
+      const duration = Math.max(0, ...endTimes.filter((value): value is number => typeof value === 'number'));
+      const frameTime = 1000 / 60;
+      transitions.forEach((transition) => transition.pause());
 
-      function sample(now: number) {
-        const index = root.getAttribute('data-hero-pair')!;
-        if (seen.at(-1) !== index) seen.push(index);
+      const samples = [];
+      for (let step = 0; step <= Math.ceil(duration / frameTime); step++) {
+        for (const transition of transitions) transition.currentTime = Math.min(step * frameTime, duration);
         const lineRect = root.getBoundingClientRect();
         const pillRects = slots.map((slot) => slot.getBoundingClientRect());
         const prefixRect = prefix?.getBoundingClientRect();
@@ -69,53 +47,52 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         const rects = [...pillRects, prefixRect, andRect, suffixRect].filter((rect) => rect !== undefined);
         const x = rects.flatMap(({ left, right }) => [left, right]);
         const y = [lineRect, ...rects, root.nextElementSibling!.getBoundingClientRect()].flatMap(({ top, bottom }) => [top, bottom]);
-        baselineY ??= y;
-        baselinePrefix ??= prefixRect?.left;
-        if (previousX) frameStep = Math.max(frameStep, ...x.map((value, i) => Math.abs(value - previousX![i])));
-        previousX = x;
-        verticalDrift = Math.max(verticalDrift, ...y.map((value, i) => Math.abs(value - baselineY![i])));
-        if (prefixRect) prefixDrift = Math.max(prefixDrift, Math.abs(prefixRect.left - baselinePrefix!));
-        gap = Math.min(gap, andRect.left - pillRects[0].right);
+        let gap = andRect.left - pillRects[0].right;
         if (pillRects[1].top < andRect.bottom) gap = Math.min(gap, pillRects[1].left - andRect.right);
-        leadGapError = Math.max(leadGapError, Math.abs(conjunctionElement.getBoundingClientRect().left - pillRects[0].right - 8));
         if (prefixRect && prefixRect.bottom > pillRects[0].top) gap = Math.min(gap, pillRects[0].left - prefixRect.right);
-        if (suffixRect) gap = Math.min(gap, suffixRect.left - pillRects[1].right);
-        overflow = Math.max(overflow, ...rects.flatMap(({ left, right }) => [lineRect.left - left, right - lineRect.right]));
+        if (suffixRect && suffixRect.top < pillRects[1].bottom) gap = Math.min(gap, suffixRect.left - pillRects[1].right);
 
-        const atTarget = slots.map((slot, i) => {
-          const { width } = pillRects[i];
+        const crossfades = slots.map((slot) => [...slot.children].filter((chip) => {
+          const opacity = Number(getComputedStyle(chip).opacity);
+          return opacity > 0 && opacity < 1;
+        }).length > 1);
+        const settled = slots.every((slot, i) => {
           const active = slot.querySelector('.swb-chip-on')!;
-          const opacities = [...slot.children].map((chip) => Number(getComputedStyle(chip).opacity));
-          if (opacities.filter((opacity) => opacity > 0 && opacity < 1).length > 1) crossfades[i] = true;
-          minWidths[i] = Math.min(minWidths[i], width);
-          maxWidths[i] = Math.max(maxWidths[i], width);
           const { borderLeftWidth, borderRightWidth } = getComputedStyle(slot);
           const target = active.getBoundingClientRect().width + parseFloat(borderLeftWidth) + parseFloat(borderRightWidth);
-          return Math.abs(width - target) < 0.1 && Number(getComputedStyle(active).opacity) === 1;
-        }).every(Boolean);
-        if (atTarget) settled.add(index);
-
-        if (index === nextRound || now >= deadline) {
-          resolve({ seen, settled: [...settled], widthRanges: maxWidths.map((width, i) => width - minWidths[i]),
-            crossfades, frameStep, verticalDrift, prefixDrift, gap, leadGapError, overflow });
-          return;
-        }
-        requestAnimationFrame(sample);
+          return Math.abs(pillRects[i].width - target) < 0.1 && Number(getComputedStyle(active).opacity) === 1;
+        });
+        samples.push({
+          x, y, gap, crossfades, settled, prefix: prefixRect?.left ?? 0, widths: pillRects.map(({ width }) => width),
+          leadGapError: Math.abs(conjunctionElement.getBoundingClientRect().left - pillRects[0].right - 8),
+          overflow: Math.max(0, ...rects.flatMap(({ left, right }) => [lineRect.left - left, right - lineRect.right])),
+        });
       }
+      transitions.forEach((transition) => transition.finish());
+      return samples;
+    });
+    const frames: Awaited<ReturnType<typeof measureTransition>> = [];
+    for (const index of [...pairs, nextRound]) {
+      await expect(line).toHaveAttribute('data-hero-pair', index);
+      const samples = await measureTransition();
+      expect(samples.at(-1)?.settled, `${locale} pair ${index} settles`).toBe(true);
+      frames.push(...samples);
+      if (index !== nextRound) await advanceHeroPair(page);
+    }
 
-      requestAnimationFrame(sample);
-    }), { deadlineMs: roundDuration + 3000, nextRound });
-
-    expect(result.seen).toEqual([...pairs, nextRound]);
-    expect(result.settled).toEqual(pairs);
-    for (const range of result.widthRanges) expect(range).toBeGreaterThan(10);
-    expect(result.crossfades).toEqual([true, true]);
-    expect(result.frameStep).toBeLessThanOrEqual(2);
-    expect(result.verticalDrift).toBeLessThanOrEqual(0.5);
-    expect(result.prefixDrift).toBeLessThanOrEqual(0.5);
-    expect(result.gap).toBeGreaterThanOrEqual(6);
-    expect(result.leadGapError).toBeLessThanOrEqual(1);
-    expect(result.overflow).toBeLessThanOrEqual(0.5);
+    const [baseline] = frames;
+    for (const slot of [0, 1]) {
+      const widths = frames.map((frame) => frame.widths[slot]);
+      expect(Math.max(...widths) - Math.min(...widths)).toBeGreaterThan(10);
+      expect(frames.some((frame) => frame.crossfades[slot])).toBe(true);
+    }
+    expect(Math.max(...frames.slice(1).map((frame, i) =>
+      Math.max(...frame.x.map((x, j) => Math.abs(x - frames[i].x[j])))))).toBeLessThanOrEqual(2);
+    expect(Math.max(...frames.map((frame) => Math.max(...frame.y.map((y, i) => Math.abs(y - baseline.y[i])))))).toBeLessThanOrEqual(0.5);
+    expect(Math.max(...frames.map((frame) => Math.abs(frame.prefix - baseline.prefix)))).toBeLessThanOrEqual(0.5);
+    expect(Math.min(...frames.map((frame) => frame.gap))).toBeGreaterThanOrEqual(6);
+    expect(Math.max(...frames.map((frame) => frame.leadGapError))).toBeLessThanOrEqual(1);
+    expect(Math.max(...frames.map((frame) => frame.overflow))).toBeLessThanOrEqual(0.5);
   });
 
   test(`${locale} pills fit their text, icon and padding at each target width`, async ({ page }) => {
@@ -139,12 +116,14 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       for (const extra of extraWidths) expect(extra, `${locale} at ${width}px`).toBeLessThanOrEqual(2);
     }
   });
+}
 
+for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', '/zh-Hant'], ['de', '/de'], ['ja', '/ja']]) {
   test(`${locale} keeps the hero subtitle in intact groups for every mobile pair`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await seedHero(page);
     await pauseHeroClock(page);
-    for (const width of [360, 390, 430]) {
+    for (const width of [320, 340, 360, 380, 390, 400, 420, 430]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
@@ -166,27 +145,26 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
             }
             return rects;
           };
-          const lead = root.querySelector('.swb-pair-lead')!;
-          const tail = root.querySelector('.swb-pair-tail')!;
-          const tops = (container: Element) => [
-            ...line(container.querySelector('.swb-chip-on')!),
-            ...Array.from(container.querySelectorAll('.swb-between-text'), line).flat(),
-          ];
+          const parts = [...root.querySelectorAll('.swb-pair-row .swb-chip-on, .swb-pair-lead .swb-between-text')];
+          const suffix = root.querySelector('.swb-pair-suffix');
+          const row = root.querySelector('.swb-pair-row')!.getBoundingClientRect();
           const { left, right } = root.getBoundingClientRect();
-          return { leading: tops(lead), trailing: tops(tail), left, right };
+          return { pair: parts.flatMap(line), suffix: suffix ? line(suffix) : [], rowBottom: row.bottom, left, right };
         });
         const at = `${locale} at ${width}px with pair ${pair}`;
-        expect(group.leading, at).toHaveLength(2);
-        expect(group.trailing, at).toHaveLength(locale === 'en' ? 1 : 2);
-        for (const rects of [group.leading, group.trailing]) {
-          const tops = rects.map(({ top }) => top);
-          expect(Math.max(...tops) - Math.min(...tops), at).toBeLessThanOrEqual(4);
-          for (const rect of rects) {
-            expect(rect.left, at).toBeGreaterThanOrEqual(group.left - 1);
-            expect(rect.right, at).toBeLessThanOrEqual(group.right + 1);
-          }
+        expect(group.pair, at).toHaveLength(3);
+        expect(group.suffix, at).toHaveLength(locale === 'en' || locale === 'de' ? 0 : 1);
+        const tops = group.pair.map(({ top }) => top);
+        expect(Math.max(...tops) - Math.min(...tops), at).toBeLessThanOrEqual(4);
+        for (const rect of [...group.pair, ...group.suffix]) {
+          expect(rect.left, at).toBeGreaterThanOrEqual(group.left - 1);
+          expect(rect.right, at).toBeLessThanOrEqual(group.right + 1);
         }
-        if (locale === 'en') expect(Math.abs(group.leading[0].top - group.trailing[0].top), at).toBeLessThanOrEqual(4);
+        if (group.suffix.length) {
+          const [suffix] = group.suffix;
+          const followsPair = Math.abs(suffix.top - tops[2]) <= 4 && suffix.left > group.pair[2].right;
+          expect(followsPair || suffix.top >= group.rowBottom, at).toBe(true);
+        }
         await advanceHeroPair(page);
       }
       expect([...seen]).toEqual(pairs);
