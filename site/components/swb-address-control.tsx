@@ -14,6 +14,11 @@ const labels = {
   en: { clear: 'Clear', copy: 'Copy link with your address' },
   'zh-Hans': { clear: '清除', copy: '复制已填好地址的链接' },
   'zh-Hant': { clear: '清除', copy: '複製已填好網址的連結' },
+  es: { clear: 'Borrar', copy: 'Copiar enlace con tu dirección' },
+  fr: { clear: 'Effacer', copy: 'Copier le lien avec votre adresse' },
+  de: { clear: 'Leeren', copy: 'Link mit Ihrer Adresse kopieren' },
+  ko: { clear: '지우기', copy: '내 주소가 포함된 링크 복사' },
+  ja: { clear: 'クリア', copy: 'アドレス入りのリンクをコピー' },
 };
 
 function removeLegacyAddress() {
