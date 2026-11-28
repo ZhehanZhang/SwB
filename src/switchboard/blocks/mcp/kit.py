@@ -13,6 +13,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 from pydantic_core import to_json
 
+from ... import USER_AGENT
 from ...audit import iso
 from ...companion.caps.base import CapabilityError
 from ...companion.caps.drop import decode_file_content, valid_name
@@ -399,7 +400,8 @@ class Kit:
             out = kit.mint_pairing(p, agent, project, client)
             base = core.cfg.public_url or ""
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
-                    "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
+                    "curl": (f"curl -s -A '{USER_AGENT}' -X POST {base}/connect -H 'content-type: application/json'"
+                             f" -d '{{\"code\": \"{out['code']}\"}}'")}
 
         @mcp.tool(title="Pair a companion", description="Create a one-time pairing code valid for ten minutes. Enter it at the hidden prompt for swb companion connect <url>.", annotations=WRITE)
         async def companion_code(ctx: Context) -> dict[str, Any]:

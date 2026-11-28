@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from .. import __version__
+from .. import USER_AGENT, __version__
 from . import REPAIR_CAPABILITIES
 from .caps.base import Capability, CapabilityError, CompanionContext, JobContext
 from .harness import harness
@@ -27,9 +27,12 @@ class Disconnected(Exception):
 
 
 def _client(url: str, key: str | None = None) -> httpx.AsyncClient:
+    headers = {"User-Agent": USER_AGENT}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
     return httpx.AsyncClient(
         base_url=url + "/companion/",
-        headers={"Authorization": f"Bearer {key}"} if key else {},
+        headers=headers,
         timeout=15,
         trust_env=False,
         follow_redirects=False,

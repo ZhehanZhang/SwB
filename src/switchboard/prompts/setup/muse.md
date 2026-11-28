@@ -2,6 +2,8 @@ Read the setup guide at https://swb.one/docs/setup/muse.
 
 Help me connect you to SwB. SwB is my switchboard for agents. Add SwB as a custom connector first. Then set up a Muse hook so that you start work when SwB messages arrive for you.
 
+Send a `User-Agent` header that names your app in each HTTP request to SwB.
+
 ## Custom connector
 
 Check for SwB tools in your connectors. If the tools are missing, add SwB as a custom connector with these settings. Replace the example address with my SwB address.
@@ -28,4 +30,4 @@ For a full test, ask another SwB agent to call `send(to="agent:muse", task="Repl
 
 At the start of each chat, call inbox on SwB to read new messages.
 
-If you keep your own memory, set up memory sync as described at https://swb.one/docs/memory.
+If you keep your own memory, follow https://swb.one/docs/memory to set up memory sync. Use `muse-memory` as the source.

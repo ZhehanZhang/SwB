@@ -5,6 +5,8 @@ import sqlite3
 from dataclasses import replace
 from datetime import datetime, timezone
 from functools import partial
+from html import unescape
+from importlib.metadata import version
 
 import pytest
 import yaml
@@ -237,6 +239,7 @@ def test_pairing_code_connects_an_agent_once_and_revokes(make):
     core, c = make(clock=clock)
     code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "codex", "client": "codex-cli"}))
     assert len(code["code"]) == 11 and code["agent"] == "codex" and code["code"] in code["curl"]
+    assert f"-A 'SwB/{version('swb-one')}'" in code["curl"]
     bad = c.post("/connect", json={"code": "WRONG-CODE0"})
     assert bad.status_code == 400
     got = c.post("/connect", json={"code": code["code"].lower()})
@@ -347,6 +350,7 @@ def test_pairing_form_mints_a_code_and_tokens_api_revokes_the_key(make):
     assert c.post("/pairing/code", data={"agent": "codex", "csrf": "nope"}, headers=OWNER).status_code == 403
     shown = c.post("/pairing/code", data={"agent": "codex", "csrf": csrf}, headers=OWNER)
     assert shown.status_code == 200 and "https://switchboard.example.test/connect" in shown.text
+    assert f"-A 'SwB/{version('swb-one')}'" in unescape(shown.text)
     code = shown.text.split("&quot;code&quot;: &quot;")[1][:11]
     got = c.post("/connect", json={"code": code})
     assert got.status_code == 200, (code, got.text)

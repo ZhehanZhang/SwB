@@ -6,10 +6,12 @@ import socket
 import subprocess
 import threading
 import time
+from importlib.metadata import version
 
 import httpx
 import pytest
 import uvicorn
+from starlette.datastructures import Headers
 
 from conftest import OWNER, PUBLIC, STATIC_KEY, base_config, call, default_env, error_text, new_core, payload, sign_in
 from switchboard.__main__ import _NoQuery
@@ -48,6 +50,7 @@ def test_setup_returns_hook_and_script_with_a_hashed_capability(hooked):
     assert out["hook"] == {"id": HOOK_ID, "script_path": f"~/hooks/scripts/{HOOK_ID}.sh", "prompt": WORKER_PROMPT,
                            "poll_interval_secs": POLL_DEFAULT_S, "script_timeout_secs": SCRIPT_TIMEOUT_S, "delivery": "main"}
     assert out["script"].count(token) == 1 and "--max-time 4" in out["script"]
+    assert len(out["next"]) == 4 and out["next"][0].startswith("Write script to ")
     rows = [dict(r) for r in core.store.q("SELECT * FROM hook_wakes")]
     assert len(rows) == 1 and rows[0]["agent"] == "muse" and token not in json.dumps(rows)
     dump = "\n".join(core.store.db.iterdump())
@@ -256,8 +259,17 @@ def test_access_logs_redact_the_capability():
 
 RUNTIME = r'''
 log() { printf '%s\n' "$*" >&2; }
-hook_state_get() { [ -f "$HATCH_HOOK_STATE_DIR/$1" ] && cat "$HATCH_HOOK_STATE_DIR/$1"; return 0; }
-hook_state_set() { [ "$HATCH_HOOK_DRY_RUN" = 1 ] && return 0; printf '%s' "$2" > "$HATCH_HOOK_STATE_DIR/$1.tmp" && mv "$HATCH_HOOK_STATE_DIR/$1.tmp" "$HATCH_HOOK_STATE_DIR/$1"; }
+hook_state_get() {
+  [ "$#" -eq 0 ] || { log "hook_state_get takes zero arguments"; exit 2; }
+  if [ -f "$HATCH_HOOK_STATE_DIR/state" ]; then cat "$HATCH_HOOK_STATE_DIR/state"; fi
+}
+hook_state_set() {
+  [ "$#" -eq 1 ] || { log "hook_state_set takes one argument"; exit 2; }
+  [ "$HATCH_HOOK_DRY_RUN" = 1 ] && return 0
+  local tmp
+  tmp=$(mktemp "$HATCH_HOOK_STATE_DIR/.state.XXXXXX") || return 1
+  printf '%s' "$1" > "$tmp" && mv "$tmp" "$HATCH_HOOK_STATE_DIR/state"
+}
 disable_after_run() { touch "$HATCH_HOOK_STATE_DIR/.disabled"; }
 _result() { jq -cn --arg action "$1" --arg reason "$2" --argjson payload "$3" '{action: $action, reason: $reason, payload: $payload}' | sed 's/^/HATCH_HOOK_RESULT:/'; }
 silent() { _result silent "$1" "$2"; }
@@ -277,7 +289,15 @@ def live(tmp_path, capy):
         pytest.skip("bash, curl and jq run the hook script")
     core = new_core(tmp_path, capy, config=config(), env=env())
     port = free_port()
-    server = uvicorn.Server(uvicorn.Config(create_app(core), host="127.0.0.1", port=port, log_level="warning", lifespan="on"))
+    app = create_app(core)
+    user_agents = []
+
+    async def capture(scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/hooks/muse/"):
+            user_agents.append(Headers(scope=scope).get("user-agent"))
+        await app(scope, receive, send)
+
+    server = uvicorn.Server(uvicorn.Config(capture, host="127.0.0.1", port=port, log_level="warning", lifespan="on"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{port}"
@@ -303,17 +323,18 @@ def live(tmp_path, capy):
         result = subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=SCRIPT_TIMEOUT_S,
                                 env={**os.environ, "HOME": str(home), "HATCH_HOOK_ID": HOOK_ID, "HATCH_HOOK_STATE_DIR": str(state),
                                      "HATCH_HOOK_INVOCATION_ID": "test", "HATCH_HOOK_DRY_RUN": "1" if dry else "0"})
-        lines = [line for line in result.stdout.splitlines() if line.startswith("HATCH_HOOK_RESULT:")]
-        assert result.returncode == 0 and len(lines) == 1, (result.stdout, result.stderr)
+        lines = result.stdout.splitlines()
+        assert result.returncode == 0 and len(lines) == 1 and lines[0].startswith("HATCH_HOOK_RESULT:"), (result.stdout, result.stderr)
         return json.loads(lines[0].removeprefix("HATCH_HOOK_RESULT:"))
 
     def saved() -> dict:
-        return json.loads((state / "swb").read_text())
+        return json.loads((state / "state").read_text())
 
     def edit(**values) -> None:
-        (state / "swb").write_text(json.dumps({**saved(), **values}))
+        (state / "state").write_text(json.dumps({**saved(), **values}))
 
-    yield {"core": core, "client": client, "run": run, "saved": saved, "edit": edit, "state": state, "server": server}
+    yield {"core": core, "client": client, "run": run, "saved": saved, "edit": edit, "state": state, "server": server,
+           "user_agents": user_agents}
     client.close()
     server.should_exit = True
     thread.join(timeout=10)
@@ -322,7 +343,8 @@ def live(tmp_path, capy):
 def test_script_dry_run_reports_and_keeps_no_state(live):
     result = live["run"](dry=True)
     assert result["action"] == "silent" and result["payload"]["event"] == "idle" and result["payload"]["http"] == 200
-    assert not (live["state"] / "swb").exists()
+    assert list(live["state"].iterdir()) == []
+    assert live["user_agents"] == [f"SwB/{version('swb-one')} (muse-hook)"]
 
 
 def test_script_wakes_once_per_batch_and_rewakes_when_unacked(live):
