@@ -78,7 +78,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <HeroMotion initial={createHeroSequence()()}>
             <section className="swb-hero-grid" aria-labelledby="landing-heading">
               <div className="swb-hero-copy">
-                <div className="swb-hero-content">
+                <div className="swb-hero-content" data-hero-prefix={copy.hero.between[0] ? '' : undefined}>
                   <HeroTitle {...copy.hero} />
                   <div className="swb-hero-controls">
                     <div className="flex items-stretch gap-2" data-hero-actions>

@@ -171,7 +171,7 @@ def run(path: Path) -> None:
     base = f"http://localhost:{PORT}"
     fixtures = {
         "/fixture/token": urlsplit(core.claims.mint("DISCORD_BOT_TOKEN", base)).path,
-        "/fixture/muse": urlsplit(core.claims.mint("MUSE_EXAMPLE_TOKEN", base)).path,
+        "/fixture/gemini": urlsplit(core.claims.mint("GEMINI_EXAMPLE_TOKEN", base)).path,
         "/fixture/credentials": urlsplit(core.claims.mint_group(
             "GitHub App", [Field("EXAMPLE_APP_ID", "App ID", "id"), Field("EXAMPLE_PRIVATE_KEY", "Private key", "pem")],
             base, provider="github",

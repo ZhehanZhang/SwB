@@ -47,13 +47,13 @@ To run SwB on this computer, follow https://swb.one/docs/self-hosting#docker-com
 
 ## Render and Railway
 
-Read the deployment guide at https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy. Guide me through the Render Blueprint or Railway service setup. Use `release/1.0` as the source branch. Use one instance with a volume at `/data`. On Railway, set the variables from the guide, including a private `SWB_SETUP_CODE`. Ask me to copy `SWB_SETUP_CODE` from the service settings. Keep the code out of chat and logs.
+Read the deployment guide at https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy. Guide me through the Render Blueprint or Railway service setup. Use `release/1.0` as the source branch. Use one instance with one 1 GB volume at `/data`. On Render, use a Hobby workspace and the 512 MB service. On Railway, use the Hobby plan and set the variables from the guide, including a private `SWB_SETUP_CODE`. Ask me to copy `SWB_SETUP_CODE` from the service settings. Keep the code out of chat and logs.
 
 ## Fly.io, Koyeb and Docker
 
 Run these commands in the `release/1.0` checkout.
 
-For Fly.io, ask for an app name. Check the Fly CLI. Run `fly auth whoami`. If needed, run `fly auth login` and wait for me to sign in. Run `sh deploy/fly.sh my-swb` with my app name.
+For Fly.io, ask for an app name. Check the Fly CLI and Python 3.11 or later, or uv. Run `fly auth whoami`. If needed, run `fly auth login` and wait for me to sign in. Use my personal organization for the Fly.io Free plan. Run `sh deploy/fly.sh my-swb` with my app name. Stop if the script reports a resource outside the supported setup.
 
 For Koyeb, ask for an app name. Check the Koyeb CLI and my sign-in. Run `sh deploy/koyeb.sh my-swb release/1.0` with my app name.
 

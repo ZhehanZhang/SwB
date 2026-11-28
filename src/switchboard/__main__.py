@@ -20,13 +20,13 @@ SERVER_COMMANDS = ("serve", "export", "log", "config", "blocks", "targets")
 
 
 class _NoQuery(logging.Filter):
-    """Access logs never carry OAuth query strings or claim codes."""
+    """Access logs never carry OAuth query strings, claim codes or hook wake links."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.args, tuple) and len(record.args) >= 3 and isinstance(record.args[2], str):
             args = list(record.args)
             path = args[2].split("?", 1)[0]
-            for prefix in ("/claim/", "/routines/claim/", "/claims/"):
+            for prefix in ("/claim/", "/routines/claim/", "/claims/", "/hooks/muse/"):
                 if path.startswith(prefix):
                     path = f"{prefix}[redacted]"
                     break
@@ -173,6 +173,11 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.exit(1, f"Configure the {args.block} block or choose a block from swb blocks list.\n")
         names = [args.block] if args.block else list(core.blocks)
         setup = core.block_setup() if args.action == "check" else {}
+        if args.action == "check" and not args.block:
+            from .config import RETIRED_BLOCKS
+
+            for use in core.cfg.retired_blocks:
+                print(RETIRED_BLOCKS[use])
         for name in names:
             b = core.blocks[name]
             if args.action == "list":

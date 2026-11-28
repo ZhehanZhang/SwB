@@ -1,0 +1,41 @@
+.console-overview-mark {
+  --mark-x: calc(10dvw + 1rem);
+  --mark-y: calc(100dvh - var(--mobile-tabbar-height) - env(safe-area-inset-bottom) + 1.1875rem);
+  --mark-scale: .5;
+  --swb-disc: var(--muted-foreground);
+  --swb-wordmark: var(--background);
+  z-index: 46;
+  transform: translate(var(--mark-x), var(--mark-y)) translate(-50%, -50%) scale(var(--mark-scale));
+}
+
+@media (width >= 48rem) {
+  .console-overview-mark {
+    --mark-x: 3rem;
+    --mark-y: 2.6875rem;
+    --mark-scale: calc(7 / 12);
+    --swb-disc: color-mix(in srgb, var(--accent) 85%, var(--background));
+    --swb-wordmark: color-mix(in srgb, var(--primary-foreground) 85%, var(--background));
+    z-index: 21;
+  }
+
+  .console-overview-mark[data-home] {
+    --mark-y: 3.25rem;
+    --mark-scale: 1;
+    --swb-disc: var(--accent);
+    --swb-wordmark: var(--primary-foreground);
+  }
+}
+
+.console-rail-overview[aria-current="page"] .console-rail-overview-label {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .console-overview-mark {
+    transition: transform 200ms ease-out;
+  }
+
+  .console-rail-overview-label {
+    transition: opacity 200ms ease-out;
+  }
+}

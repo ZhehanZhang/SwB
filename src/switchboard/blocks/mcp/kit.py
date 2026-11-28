@@ -243,10 +243,11 @@ class Kit:
             got["next"] = ("Tell the owner the work is still in progress. " if owner_facing else "") + "Check again with wait or inbox."
         return got
 
-    def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None) -> dict[str, Any]:
+    def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None,
+              peek: bool = False) -> dict[str, Any]:
         handle = handle.strip() if handle else None
         owner, reader = self.inbox_reader(p, self.core.inbox.handle(handle) if handle else None)
-        out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit,
+        out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit, advance=not peek,
                                    project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         senders = [block] if block else [n for n, b in self.core.blocks.items() if b.verb("send") is not None]
         open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True,
@@ -329,10 +330,48 @@ class Kit:
                        owner_facing: Annotated[bool, Field(description="Set true while you are speaking with the owner.")] = False) -> dict[str, Any]:
             return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block, owner_facing=owner_facing)
 
-        @mcp.tool(title="Your inbox", description="Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
+        @mcp.tool(title="Your inbox", description="Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Set peek to true to read without moving your position, then call inbox_ack. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
         async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=50)] = 50,
-                        project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
-            return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)
+                        project: ProjectArg = None, block: str | None = None,
+                        peek: Annotated[bool, Field(description="true reads without moving your position")] = False) -> dict[str, Any]:
+            return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block, peek=peek)
+
+        @mcp.tool(title="Mark inbox items read", description="Move your inbox position to cursor after you handle the items that inbox returned with peek set to true. Items up to cursor count as read.", annotations=WRITE_IDEMPOTENT)
+        async def inbox_ack(ctx: Context, cursor: Annotated[int, Field(ge=1, description="The highest item cursor you handled")]) -> dict[str, Any]:
+            p = kit.who(ctx)
+            return {"cursor": core.inbox.ack(p.source, cursor)}
+
+        @mcp.tool(title="Set up the Muse hook", description="Make a private wake link for your SwB mailbox and return a Muse hook script and hook settings that use it. The script checks the link on each hook poll and wakes a worker when messages wait. Each call replaces your previous link.", annotations=WRITE)
+        async def muse_hook_setup(ctx: Context, poll_interval_secs: Annotated[int, Field(ge=5, le=30, description="Seconds between hook polls")] = 5) -> dict[str, Any]:
+            p = kit.who(ctx)
+            try:
+                out = core.hook_wake.setup(p.source, by=f"{p.kind}:{p.source}", poll_interval_secs=poll_interval_secs)
+            except ValueError as e:
+                raise ToolError(str(e)) from e
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="muse_hook_setup", outcome="ok",
+                              target=p.source)
+            return out
+
+        @mcp.tool(title="Test the Muse hook", description="Leave a test message in your own SwB mailbox. The Muse hook wakes a worker for it at its next poll.", annotations=WRITE)
+        async def muse_hook_test(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            if not core.hook_wake.status(p.source)["configured"]:
+                raise ToolError("Call muse_hook_setup first.")
+            out = await kit.run(core.agent_send(p, to=p.source, title="Muse hook test", allow_self=True,
+                                                text="SwB hook test. Tell the owner in chat that the Muse hook works. Then call inbox_ack."))
+            return {"sent": True, "conversation": out["conversation"]}
+
+        @mcp.tool(title="Muse hook status", description="Show whether your Muse hook link exists, when the hook last checked it, and your unread count.", annotations=READ)
+        async def muse_hook_status(ctx: Context) -> dict[str, Any]:
+            return core.hook_wake.status(kit.who(ctx).source)
+
+        @mcp.tool(title="Revoke the Muse hook link", description="Stop your Muse hook link. The hook turns itself off after its next checks. Call muse_hook_setup to make a new link.", annotations=DELETE)
+        async def muse_hook_revoke(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            revoked = core.hook_wake.revoke(p.source)
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="muse_hook_revoke",
+                              outcome="ok" if revoked else "refused", target=p.source)
+            return {"revoked": revoked}
 
         @mcp.tool(title="Conversation status", description="Status of a conversation (handle or the block's id): working, waiting, idle or failed, whether it needs the owner, its PRs and latest messages, as the block that owns it reports them.", annotations=READ_REMOTE)
         async def status(ctx: Context, conversation: Conversation, messages: Annotated[int, Field(ge=1, le=20)] = 5, include_tools: bool = False) -> dict[str, Any]:

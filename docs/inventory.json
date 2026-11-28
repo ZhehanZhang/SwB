@@ -225,21 +225,6 @@
       "use": "mcp"
     },
     {
-      "block_kind": "sink",
-      "connect_target": "muse",
-      "credentials": [
-        {
-          "claim_label": "Token",
-          "env": "MUSE_SDK_TOKEN"
-        }
-      ],
-      "icon": "src/switchboard/slack/avatars/muse.png",
-      "id": "block:muse",
-      "kind": "block",
-      "label": "Muse",
-      "use": "muse"
-    },
-    {
       "block_kind": "both",
       "connect_target": "slack",
       "credentials": [
@@ -2862,7 +2847,7 @@
       "name": "companion_revoke"
     },
     {
-      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram, webhook. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. For Muse device pairing pass choose.gadget=true. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
+      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram, webhook. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [
@@ -3063,19 +3048,31 @@
       "name": "github_status"
     },
     {
-      "description": "Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
+      "description": "Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Set peek to true to read without moving your position, then call inbox_ack. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
       "icon": null,
       "id": "tool:inbox",
       "input_properties": [
         "block",
         "conversation",
         "limit",
+        "peek",
         "project",
         "since_cursor"
       ],
       "kind": "tool",
       "label": "Your inbox",
       "name": "inbox"
+    },
+    {
+      "description": "Move your inbox position to cursor after you handle the items that inbox returned with peek set to true. Items up to cursor count as read.",
+      "icon": null,
+      "id": "tool:inbox_ack",
+      "input_properties": [
+        "cursor"
+      ],
+      "kind": "tool",
+      "label": "Mark inbox items read",
+      "name": "inbox_ack"
     },
     {
       "description": "Mint a one-time web sign-in link that expires in five minutes. Show it directly to the owner and never paste it anywhere else.",
@@ -3395,6 +3392,44 @@
       "kind": "tool",
       "label": "Channel modes",
       "name": "modes_status"
+    },
+    {
+      "description": "Stop your Muse hook link. The hook turns itself off after its next checks. Call muse_hook_setup to make a new link.",
+      "icon": null,
+      "id": "tool:muse_hook_revoke",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Revoke the Muse hook link",
+      "name": "muse_hook_revoke"
+    },
+    {
+      "description": "Make a private wake link for your SwB mailbox and return a Muse hook script and hook settings that use it. The script checks the link on each hook poll and wakes a worker when messages wait. Each call replaces your previous link.",
+      "icon": null,
+      "id": "tool:muse_hook_setup",
+      "input_properties": [
+        "poll_interval_secs"
+      ],
+      "kind": "tool",
+      "label": "Set up the Muse hook",
+      "name": "muse_hook_setup"
+    },
+    {
+      "description": "Show whether your Muse hook link exists, when the hook last checked it, and your unread count.",
+      "icon": null,
+      "id": "tool:muse_hook_status",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Muse hook status",
+      "name": "muse_hook_status"
+    },
+    {
+      "description": "Leave a test message in your own SwB mailbox. The Muse hook wakes a worker for it at its next poll.",
+      "icon": null,
+      "id": "tool:muse_hook_test",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Test the Muse hook",
+      "name": "muse_hook_test"
     },
     {
       "description": "Create a project, a memory scope 'project:<slug>'. Do this only when the owner starts a genuinely new project. Pass its repos: switchboard then links it to its counterpart in each block (a Capy project, say) and routes it (result.auto); ambiguous matches come back as candidates to ask the owner about.",

@@ -4,8 +4,10 @@ import { expect, test } from '@playwright/test';
 
 const streamed = [
   ['caption streams', '<figcaption', ['.swb-hero', '.swb-board:visible'], '.swb-hero figcaption', undefined],
+  ['hero subtitle streams', '<p class="swb-between', ['.swb-hero-copy'], '.swb-between', undefined],
   ['hero actions stream', '<div class="swb-hero-controls"', ['.swb-hero-copy'], '[data-hero-actions]', undefined],
   ['hero actions stream at 1024px', '<div class="swb-hero-controls"', ['.swb-hero-copy'], '[data-hero-actions]', 1024],
+  ['hero buttons stream', 'Set up with agent</a>', ['[data-hero-actions]'], '[data-hero-actions] a + a', undefined],
   ['demo label streams', '<span>Set this up</span>', ['.swb-win-setup'], '.swb-win-setup > span', undefined],
 ] as const;
 
@@ -42,12 +44,16 @@ for (const [part, marker, stable, arriving, width] of streamed) test(`landing la
     const pending = page.locator(arriving);
     for (const item of layout) await expect(item).toBeVisible();
     await expect(pending).toHaveCount(0);
-    const initial = await Promise.all(layout.map((item) => item.boundingBox()));
+    const measure = async () => {
+      const boxes = await Promise.all(layout.map((item) => item.boundingBox()));
+      return part === 'hero buttons stream' ? boxes.map((box) => box && { x: box.x, y: box.y }) : boxes;
+    };
+    const initial = await measure();
     documentResponse!.end(html.slice(split));
     await expect(pending.first()).toBeVisible();
     await page.waitForLoadState();
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-    expect(await Promise.all(layout.map((item) => item.boundingBox()))).toEqual(initial);
+    expect(await measure()).toEqual(initial);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

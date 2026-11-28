@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import {
-  computerCommand, getStartedAgentIds, getStartedAgents, getStartedStyleId, museCompanionCommand,
+  computerCommand, getStartedAgentIds, getStartedAgents, getStartedStyleId,
   pipxCommand, readGetStartedSelection, runLocations, serverCommand,
   type GetStartedAgent, type RunLocation,
 } from '@/lib/get-started';
@@ -175,8 +175,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
             const { name, mark, prompt, open, docs } = agentsById.get(id)!;
             const active = view.agents.includes(id);
             const text = personalizeSwb(prompts[prompt], address);
-            const companionHelp = id === 'muse' ? labels.museCompanionHelp
-              : id === 'claude-code' || id === 'codex' ? labels.companionHelp : '';
+            const companionHelp = id === 'claude-code' || id === 'codex';
             return (
               <div key={id} className={styles.agent} data-start-agent={id} data-active={active} inert={!active}>
                 <section id={id} className={styles.agentBody} aria-labelledby={`${id}-heading`}>
@@ -191,18 +190,9 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
                       {name}
                     </h3>
                   </BlockHeader>
-                  {id === 'muse' && (
-                    <>
-                      <h4 className={styles.agentSubtitle}>{labels.muse.wake}</h4>
-                      <p className={styles.procedure}>{labels.muse.beforeCommand}</p>
-                      <Command text={personalizeSwb(museCompanionCommand, address)} labels={labels} />
-                      <p className={styles.procedure}>{labels.muse.afterCommand}</p>
-                      <h4 className={styles.agentSubtitle}>{labels.muse.tools}</h4>
-                    </>
-                  )}
                   <p className={styles.procedure} data-agent-before>
                     {explanations.before[id]}
-                    {companionHelp && <> {companionHelp}</>}
+                    {companionHelp && <> {labels.companionHelp}</>}
                   </p>
                   <div className={styles.prompt}>
                     <PromptActions text={text} labels={labels} targets={open} />

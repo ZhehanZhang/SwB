@@ -52,7 +52,6 @@ export function initialGetStartedScript() {
 
 export const computerCommand = 'uvx swb-one up';
 export const pipxCommand = 'pipx install swb-one\nswb up';
-export const museCompanionCommand = "uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse";
 export const serverCommand = String.raw`git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
 cd SwB
 (umask 077; cp .env.example .env)

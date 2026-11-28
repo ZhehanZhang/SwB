@@ -26,6 +26,8 @@ def test_settings_is_owner_only_and_reports_runtime_facts_without_secrets(make, 
     assert payload == {
         "version": version("swb-one"),
         "mcp_url": f"{PUBLIC}/mcp",
+        "deploy_platform": None,
+        "public_url": PUBLIC,
         "data_dir": str(core.data_dir.resolve()),
         "owner_key_masked": "••••••••",
         "host": "settings-test-host",
@@ -33,6 +35,14 @@ def test_settings_is_owner_only_and_reports_runtime_facts_without_secrets(make, 
     }
     assert payload["uptime_seconds"] >= 120
     assert owner_key not in response.text
+
+
+@pytest.mark.parametrize("platform", ["fly", "render", "railway", "compose", "local", "fixture-unrecognized"])
+def test_settings_reports_only_known_deploy_platforms(make, platform):
+    _, client = make(env={**default_env(), "SWB_DEPLOY_PLATFORM": platform})
+    response = client.get("/api/settings", headers=OWNER)
+    assert response.status_code == 200
+    assert response.json()["deploy_platform"] == (None if platform == "fixture-unrecognized" else platform)
 
 
 @pytest.mark.parametrize("base,endpoint", [
@@ -51,6 +61,7 @@ def test_settings_omits_unavailable_or_unsafe_values(make, monkeypatch, base, en
     assert response.status_code == 200
     assert response.json()["owner_key_masked"] is None
     assert response.json()["mcp_url"] == endpoint
+    assert response.json()["public_url"] is None
     assert "fixture-password" not in response.text
 
 
@@ -59,3 +70,4 @@ def test_settings_does_not_invent_an_mcp_endpoint_for_disabled_mcp(make):
     response = client.get("/api/settings", headers=OWNER)
     assert response.status_code == 200
     assert response.json()["mcp_url"] is None
+    assert response.json()["public_url"] == PUBLIC

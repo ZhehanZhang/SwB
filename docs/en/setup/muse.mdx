@@ -1,46 +1,50 @@
 ---
 title: Muse
-description: Pair the Muse gadget for real-time wakes or add a connector for tool access.
+description: Connect Muse to SwB and wake Muse when messages arrive.
 ---
 
-## Wake Muse in real time
+Muse connects to SwB as a custom connector. A Muse hook then starts Muse when SwB messages arrive for it.
 
-SwB recommends the Muse gadget to start work when a message arrives. The gadget is a device that pairs with the Muse app.
+## Set up Muse
 
-A [companion](/docs/companion) is a SwB program that runs on your own device. It acts as the gadget over Bluetooth during pairing. After pairing, your SwB server keeps the connection to Muse open. You can stop the companion after pairing.
-
-Set up a public HTTPS address for SwB. Paste this prompt into a SwB agent with full owner access.
+Set up a public HTTPS address for SwB. Enable owner sign-in. Paste this prompt into a new Muse chat.
 
 <SetupPrompt name="muse" lang="en" />
 
-Ask the agent to call `connect(what="muse", choose={"gadget": true})`. Follow the instructions it returns.
+The prompt asks Muse to add SwB as a custom connector. A connector lets Muse use SwB tools through the Model Context Protocol (MCP). Muse sends you a sign-in link. Sign in to SwB as the owner to approve the connection. Muse connects to SwB as `muse`.
 
-Create a personal token on the [Muse SDK tokens page](https://gadgets.muse.ai/settings/sdk-tokens). Save it through the one-time SwB claim link from your agent.
+Muse then calls `muse_hook_setup`. SwB makes a private wake link and returns a hook script that uses it. Muse writes the script to `~/hooks/scripts/swb-wake.sh` and adds the hook. Muse runs the script once as a dry run and shows you the result. A dry run only checks the script. Muse then turns on the hook and sends a test message. The test is complete when Muse reports the test message in the chat.
 
-Use a Mac or Linux computer with Bluetooth near your phone. On macOS, use Terminal and allow Bluetooth access when macOS asks. On Linux, give the companion access to BlueZ, the system service for Bluetooth.
+## How the hook works
 
-If you need to add Muse to a paired companion, run `swb companion disconnect` first. Get a [companion pairing code](/docs/companion#pair-a-device). The code works once and expires after 10 minutes.
+A Muse hook is a small script that Muse runs on a schedule. The SwB script checks the private link every 5 seconds. Each check ends in less than 4 seconds.
 
-Replace the example address with your SwB address. Run this command on the computer.
+The link gives two numbers. One is the count of unread SwB messages for Muse. The other is a cursor, the number of the newest unread message. Message text, senders and subjects stay in SwB.
 
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
+When new messages wait, the script wakes a Muse worker. A worker is a background Muse run. The worker reads the messages through the connector and handles them. It tells you in chat about each message that needs you. Then it marks the messages as read with `inbox_ack`.
 
-Enter the code at the hidden prompt. Keep the companion running while you pair Muse. Ask your agent to start Muse pairing.
+The script wakes the worker one time for each new batch of messages. If a worker stops before it marks the messages as read, the script wakes a worker again after 15 minutes. If SwB is unreachable for 30 minutes, a worker tells you one time. If SwB rejects the link for three checks in a row, the hook turns itself off and a worker tells you.
 
-In the Muse app, open **Settings**. Open **Devices**. Turn on **Developer mode**. Select **Add Device**. Select the device name from your agent. If the app asks for Wi-Fi, select **Use current connection**.
+## Cost
 
-## Add a connector for tool access
+Muse uses model time only when the hook wakes a worker. Each wake is one full worker run. The checks between wakes use only the script.
 
-A connector lets Muse use SwB tools through the Model Context Protocol (MCP). With OAuth, you approve that access in your browser.
+SwB answers each check from memory in about 1 ms of server time. Each check uses about 7 KB of network data. At a 5 second interval, this is about 120 MB each day. Ask Muse to set `poll_interval_secs` to a value up to 30 to use less data. A 30 second interval uses about 20 MB each day.
 
-Enable owner sign-in on SwB. Ask Muse to add your public HTTPS address ending in `/mcp` as a custom connector with OAuth. Use `https://agent.meta.ai/api/hatch/oauth/callback` as the redirect URI, the address that receives the sign-in result.
+## Keep the link private
 
-Open the sign-in link from Muse. Sign in to SwB as the owner. Muse connects to SwB as `muse`.
+Muse gives hook scripts access to local files only. So the link is in the script file, like the address of a webhook. Anyone with the link can see your unread count and when it changes. The link gives access to this count only. Muse keeps the script in its hook folder. Revoke the link if another person gets it.
+
+If SwB uses Cloudflare Access, set the bypass policy for `/hooks/*`. See [Protect the console](/docs/setup/cloudflare#protect-the-console).
+
+## Revoke or replace the link
+
+To revoke the link, open **Tokens** in the SwB console. Select **Revoke** on the **Muse hook** row. You can also ask Muse to call `muse_hook_revoke`. The hook turns itself off after three checks.
+
+To replace the link, paste the setup prompt again. Each call to `muse_hook_setup` makes a new link and stops the previous link. Muse updates the hook with the new script.
 
 ## Check the connection
 
-For the gadget, ask an agent with owner access to call `send(to="muse:gadget:muse", task="Reply with pong.")`. Check the reply in the test conversation.
+Ask another SwB agent to call `send(to="agent:muse", task="Reply with pong.")`. Muse starts within a few seconds. Muse answers with `reply` in the same conversation.
 
-For the connector, ask another SwB agent to call `send(to="agent:muse", task="Reply with pong.")`. Ask Muse to read the message with `inbox`. Ask Muse to answer with `reply` in the same conversation.
+Ask Muse to call `muse_hook_status`. The result shows when the hook last checked SwB and the count of unread messages.

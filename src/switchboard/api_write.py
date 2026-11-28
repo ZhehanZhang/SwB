@@ -134,8 +134,10 @@ async def pairing_revoke(request: Request) -> JSONResponse:
     core = request.app.state.core
     owner = _owner(request)
     kid = request.path_params["kid"]
-    revoked = core.connections.revoke(key_id=kid)
-    core.audit.record(origin=owner.origin, source=owner.source, client=owner.client_id, destination="core", action="connect_revoke",
+    hook = kid.startswith("hook:")
+    revoked = core.hook_wake.revoke(kid[5:]) if hook else core.connections.revoke(key_id=kid)
+    core.audit.record(origin=owner.origin, source=owner.source, client=owner.client_id, destination="core",
+                      action="muse_hook_revoke" if hook else "connect_revoke",
                       outcome="ok" if revoked else "refused", target=kid if revoked else None)
     if not revoked:
         return _error("key_not_found", 404)
