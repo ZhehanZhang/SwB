@@ -8,7 +8,7 @@ Use a SwB agent with full owner access. If you need owner access, ask me to move
 
 Call `connect(what="muse", choose={"gadget": true})`. Do each action marked `you`. Give me each action marked `person` separately. Direct me to the SwB claim link to save my Muse SDK token.
 
-A companion is a SwB program on my computer. It pairs with Muse over Bluetooth. Ask me to use a Mac or Linux computer near my phone. On macOS, ask me to use Terminal. Ask me to allow Bluetooth access when macOS asks. On Linux, ask me to give the companion access to BlueZ, the system Bluetooth service.
+A companion is a SwB program that runs on my own device. It pairs with Muse over Bluetooth. Ask me to use a Mac or Linux computer near my phone. On macOS, ask me to use Terminal. Ask me to allow Bluetooth access when macOS asks. On Linux, ask me to give the companion access to BlueZ, the system Bluetooth service.
 
 Use the companion guide at https://swb.one/docs/companion to help me get a companion pairing code in private. The code works once and expires after 10 minutes. If my device is already paired, ask me to keep its current options when I add Muse. Ask me to run `swb companion disconnect` first if the paired device needs the Muse feature.
 
