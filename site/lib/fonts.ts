@@ -1,10 +1,11 @@
 import localFont from 'next/font/local';
 
-export const inter = localFont({
+export const swbInter = localFont({
   src: '../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2',
   weight: '100 900',
   variable: '--font-inter',
   adjustFontFallback: 'Arial',
+  display: 'optional',
 });
 
 export const interTight = localFont({
@@ -19,5 +20,6 @@ export const jetbrainsMono = localFont({
   weight: '100 800',
   variable: '--font-jetbrains',
   adjustFontFallback: false,
+  display: 'optional',
   preload: false,
 });

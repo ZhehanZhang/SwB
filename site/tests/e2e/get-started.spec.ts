@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 
 const start = '/docs/get-started';
 const selfHosting = '/docs/self-hosting';
@@ -99,15 +100,10 @@ test('browser Back leaves the flow and Forward restores the replaced URL', async
 });
 
 test('query preselect has zero CLS even with delayed hydration', async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.assign(window, { shifts: [] });
-    const shifts = (window as Window & { shifts?: number[] }).shifts!;
-    new PerformanceObserver((entries) => {
-      for (const item of entries.getEntries()) {
-        const shift = item as PerformanceEntry & { hadRecentInput: boolean; value: number };
-        if (!shift.hadRecentInput) shifts.push(shift.value);
-      }
-    }).observe({ type: 'layout-shift', buffered: true });
+  await page.addInitScript(observeLayoutShifts);
+  await page.route('**/_next/static/media/inter_latin*.woff2', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    await route.continue();
   });
   await page.route('**/_next/static/chunks/*.js', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -119,8 +115,8 @@ test('query preselect has zero CLS even with delayed hydration', async ({ page }
     await document.fonts.ready;
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   });
-  const shifts = await page.evaluate(() => (window as Window & { shifts?: number[] }).shifts);
-  expect(shifts?.reduce((total, shift) => total + shift, 0)).toBe(0);
+  const shifts = await page.evaluate(readLayoutShifts);
+  expect(shifts.reduce((total, shift) => total + shift.value, 0), JSON.stringify(shifts, null, 2)).toBe(0);
 });
 
 test('copies exact source prompt bytes for Claude and Codex', async ({ page, context }) => {
