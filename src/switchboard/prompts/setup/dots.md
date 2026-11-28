@@ -9,3 +9,5 @@ Call `connect(what="chatgpt")` to check the sign-in. Ask me for my dot's name. F
 When `connect` reports that the dot is ready, find its address with `targets(block="dots")`. Ask me to send a test to that address from another SwB app.
 
 The default mailbox is `chatgpt`. If your app supports MCP events, subscribe to switchboard.message.created for your SwB mailbox. Otherwise, call wait or inbox at the start of each task. SwB checks your callback address before it sends events. Use the event's `message_id` with `get_message`. Answer with `reply` and the message's `handle`. Tell me how you received the test.
+
+If you keep your own memory, set up memory sync as described at https://swb.one/docs/memory.

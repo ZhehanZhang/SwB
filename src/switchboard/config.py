@@ -163,6 +163,9 @@ class Config:
     turn_cap: int | None = 200
     mirror_dir: str | None = None
     mirror_debounce_s: float = 2.0
+    memory_sync: bool = True
+    backup_debounce_s: float = 30.0
+    backup_max_delay_s: float = 300.0
     blocks: dict[str, dict[str, Any]] = field(default_factory=default_blocks)
     blocks_from_file: bool = False
     block_env: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -423,6 +426,13 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     if not isinstance(access, dict):
         raise ConfigError("auth.cloudflare_access must be a mapping")
     memory = raw.get("memory") or {}
+    backup = memory.get("backup") or {}
+    if not isinstance(backup, dict):
+        raise ConfigError("memory.backup must be a mapping")
+    debounce = backup.get("debounce_s", 30)
+    max_delay = backup.get("max_delay_s", 300)
+    if any(type(delay) not in (float, int) or not 0 <= delay <= 86400 for delay in (debounce, max_delay)):
+        raise ConfigError("Set memory.backup delays to seconds between 0 and 86400.")
     proxies = raw["trusted_proxies"] if "trusted_proxies" in raw else [
         entry for entry in (env_value(env, "SWB_TRUSTED_PROXIES") or "").split(",") if entry.strip()
     ]
@@ -513,6 +523,9 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         turn_cap=int(raw.get("turn_cap", 200)) if raw.get("turn_cap", 200) else None,
         mirror_dir=(memory.get("mirror_dir") or None) if memory.get("mirror", True) else None,
         mirror_debounce_s=float(memory.get("mirror_debounce_s", 2.0)),
+        memory_sync=bool(memory.get("sync", True)),
+        backup_debounce_s=float(debounce),
+        backup_max_delay_s=float(max_delay),
         blocks=blocks,
         blocks_from_file=blocks_from_file,
         modes=parse_modes(v2.get("modes"), blocks),

@@ -43,7 +43,7 @@ def test_setup_prompt_and_resource_links_carry_the_public_url(make):
     _, client = make(config=base_config(version=2, blocks={"mcp": {}}))
     name, uri = "setup-deploy", "swb://setup/deploy"
     text = (ROOT / SOURCE / "deploy.md").read_bytes().decode("utf-8")
-    for path in ("deploy", "setup/coding-agent"):
+    for path in ("deploy", "setup/coding-agent", "memory"):
         link = f"https://swb.one/docs/{path}"
         text = text.replace(f"{link}.", f"{link}#swb=https%3A%2F%2Fswitchboard.example.test.")
     prompt = rpc(client, STATIC_KEY, "prompts/get", {"name": name}).json()["result"]

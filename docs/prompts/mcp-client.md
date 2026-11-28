@@ -53,3 +53,5 @@ For the first shared memory check, use a scope both agents can read. Ask the new
 Ask me to paste the coordinator prompt from https://swb.one/prompts/coordinator.md into the new app. The client can subscribe to `switchboard.message.created` if it supports MCP events. It can also use `wait` or `inbox` to read messages.
 
 For each owner-only connection, give me its matching `swb connect` command. For example, give me `swb connect slack`.
+
+Set up memory sync. Call `memory_summary` to load shared memory. Look at what you already remember about me in your own memory. Choose the facts that every agent should know. Leave out passwords, keys and sensitive personal details. Send the facts in one `memory_sync` call. Set `source` to your memory system, such as `gemini-memory` or `codex-memory`. Use `other` for any other system. Give each fact a stable `source_key`. Show me what you sent. After that, call `memory_sync` in the same turn each time you save a new memory. See https://swb.one/docs/memory.

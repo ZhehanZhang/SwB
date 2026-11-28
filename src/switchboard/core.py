@@ -10,9 +10,11 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import secrets
 import sqlite3
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -27,10 +29,12 @@ from .blocks import load as load_block
 from .claims import Claims
 from .companions import Companions
 from .config import INSTANCE_DB, Config, Instance, load_config
-from .connect import Connections
+from .connect import AGENT_RE, Connections
 from .env import env_value
 from .inbox import Inbox
-from .memory import GENERAL, Memory, MemoryError_, MemoryRefused
+from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath, MemoryRefused, frame_entry,
+                     missing_path)
+from .memory_git import MemoryGit
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
 from .refusals import (CONVERSATION_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, OWNER_REQUIRED,
@@ -39,7 +43,7 @@ from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
 from .subject import subject
-from .trust import FramedText, frame_sender
+from .trust import FramedText, frame_sender, memory_label, unframe_memory
 from .visibility import LOCAL_SESSION_RESOURCE, RESOURCE_RE, Visibility, VisibilityError
 
 DestinationError = BlockError
@@ -99,7 +103,8 @@ class Switchboard:
         if (migrated := self.connections.migrate_memory_grants(self.audit.tz)) is not None and any(migrated):
             log.info("Paired memory grants migration: %d keys, %d grants", *migrated)
         self.claims = Claims(self.store)
-        self.companions = Companions(self.store, self.audit)
+        self.memory_git = MemoryGit(self)
+        self.companions = Companions(self.store, self.audit, self)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,
@@ -213,6 +218,7 @@ class Switchboard:
         for b in self.blocks.values():
             await b.start()
         self.spawn(self.modes.run(), name="watch-digests")
+        self.memory_git.start()
 
     async def aclose(self) -> None:
         for t in list(self._tasks):
@@ -226,6 +232,7 @@ class Switchboard:
         await self.auth.http.aclose()
         if self.memory.mirror_pending:
             self.memory.flush_mirror()
+        await asyncio.to_thread(self.memory_git.close)
         self.store.close()
 
     def status(self, principal: Principal | None = None, *, public: bool = False,
@@ -1021,20 +1028,175 @@ class Switchboard:
         if writer is None or writer != principal.memory_writer:
             raise MemoryRefused(MEMORY_WRITER_REQUIRED)
 
+    def memory_actor(self, principal: Principal) -> dict[str, Any]:
+        return {"source": principal.source, "writer": principal.memory_writer,
+                "trust": "owner" if principal.kind == "owner_session" else "agent",
+                "check_writer": lambda scope, writer: self.check_memory_writer(principal, scope, writer)}
+
+    def memory_path(self, principal: Principal, path: str) -> MemoryPath:
+        parsed = MemoryPath.parse(path)
+        if parsed.scope is not None and not self.allows_memory(principal, parsed.scope):
+            raise MemoryRefused("memory not found", missing_path(parsed.path))
+        return parsed
+
+    def memory_directory_scopes(self, principal: Principal) -> list[str]:
+        scopes = [GENERAL, *(p.scope for p in self.projects.list(include_archived=True))]
+        scopes.extend(r["scope"] for r in self.store.q("SELECT DISTINCT scope FROM memories WHERE scope LIKE 'agent:%' AND deleted_at IS NULL"))
+        scopes.extend(s for s in (principal.memory_grants if principal.kind == "connect" else principal.scopes or ())
+                      if s.startswith("agent:"))
+        if AGENT_RE.fullmatch(principal.source):
+            scopes.append(f"agent:{principal.source}")
+        return [s for s in dict.fromkeys(scopes) if self.allows_memory(principal, s)]
+
     def write_memory(self, principal: Principal, *, scope: str, **fields: Any) -> dict[str, Any]:
         scope = scope.strip().lower()
         if not self.allows_memory(principal, scope):
             raise MemoryRefused(SCOPE_REQUIRED, f"{scope} is outside this key's grants.")
         out = self.memory.write(source=principal.source, scope=scope, writer_credential=principal.memory_writer,
+                                content_trust="owner" if principal.kind == "owner_session" else "agent",
                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer), **fields)
-        self.audit_memory(principal, "memory_write", out["scope"], detail=out["title"])
+        if out["action"] != "duplicate":
+            self.audit_memory(principal, "memory_write", out["scope"], detail=memory_label(out["title"]))
         return out
 
-    def delete_memory(self, principal: Principal, id: str) -> dict[str, Any]:
-        out = self.memory.delete(source=principal.source, id=id,
-                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
-        self.audit_memory(principal, "memory_delete", id, detail="Deleted memory.")
+    def read_memory(self, principal: Principal, *, path: str | None = None, **fields: Any) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        out = self.memory.read(path=parsed, **fields)
+        self.check_memory_scope(principal, out["scope"])
+        out["title"] = memory_label(out["title"])
+        out["body"] = frame_entry(out, out["body"])
+        out["history"] = [{k: rev[k] for k in ("rev", "at", "source", "action")} for rev in out["history"]]
         return out
+
+    def view_memory(self, principal: Principal, path: str, view_range: list[int] | None) -> str:
+        parsed = self.memory_path(principal, path)
+        scopes = self.memory_directory_scopes(principal) if parsed.key is None else []
+        return self.memory.view(parsed, scopes, view_range)
+
+    def create_memory(self, principal: Principal, path: str, file_text: str, tags: list[str] | None,
+                      confirm_general: bool, overwrite: bool) -> str | dict[str, Any]:
+        parsed = self.memory_path(principal, path)
+        if parsed.key is None:
+            raise MemoryError_("Error: Use a file ending in .md or .txt.")
+        body = unframe_memory(file_text)
+        lines = [line.strip() for line in body.splitlines() if line.strip()]
+        heading = next((h[1] for line in lines if (h := re.fullmatch(r"#{1,6}\s+(.+?)(?:\s+#+)?", line))), "")
+        title = (heading or (lines[0] if lines else parsed.key))[:MAX_TITLE]
+        out = self.write_memory(principal, scope=parsed.scope, namespace=parsed.namespace, key=parsed.key, title=title, body=file_text,
+                                tags=tags, confirm_general=confirm_general, path=parsed, overwrite=overwrite)
+        return out if out["action"] == "duplicate" else f"File created successfully at: {out['path']}"
+
+    def delete_memory(self, principal: Principal, id: str | None = None, *, path: str | None = None) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        if parsed and parsed.key is None:
+            self.memory.view(parsed, self.memory_directory_scopes(principal))
+            raise MemoryError_(f"Error: Delete files one at a time: {parsed.normalized} is a folder.")
+        out = self.memory.delete(source=principal.source, id=id, path=parsed,
+                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer))
+        self.audit_memory(principal, "memory_delete", out["deleted"], detail="Deleted memory.")
+        return out
+
+    def replace_memory_text(self, principal: Principal, path: str, old_str: str, new_str: str) -> str:
+        out = self.memory.replace_text(self.memory_path(principal, path), old_str, new_str, **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_edit", path)
+        return out
+
+    def insert_memory_text(self, principal: Principal, path: str, insert_line: int, insert_text: str) -> str:
+        out = self.memory.insert(self.memory_path(principal, path), insert_line, insert_text, **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_edit", path)
+        return out
+
+    def edit_memory(self, principal: Principal, id: str, title: str, body: str, tags: list[str] | None = None) -> dict[str, Any]:
+        out = self.memory.edit_entry(id, title, body, tags, **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_edit", id)
+        return out
+
+    def rename_memory(self, principal: Principal, new_path: str, *, old_path: str | None = None, id: str | None = None) -> str:
+        old = self.memory_path(principal, old_path) if old_path is not None else None
+
+        def check_target(source: str, target: str) -> None:
+            if target == GENERAL and source != GENERAL and not principal.is_memory_owner:
+                raise MemoryRefused(OWNER_REQUIRED)
+            self.check_memory_scope(principal, target)
+
+        out = self.memory.rename(source=principal.source, id=id, old=old, new=self.memory_path(principal, new_path),
+                                 check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer),
+                                 check_target=check_target)
+        self.audit_memory(principal, "memory_rename", id or old.normalized, detail="Renamed memory.")
+        return out
+
+    def memory_history(self, principal: Principal, *, id: str | None, path: str | None, limit: int) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        row = self.memory.locate(self.store, id, parsed, deleted=True)
+        if not self.allows_memory(principal, row["scope"]):
+            raise MemoryNotFound("memory not found")
+        entry = self.memory.read(id=row["id"], deleted=True, history_limit=limit)
+        self.check_memory_scope(principal, entry["scope"])
+        for rev in entry["history"]:
+            rev["title"] = memory_label(rev["title"])
+            rev["excerpt"] = frame_entry(entry, rev["excerpt"], by=rev["source"], at=rev["at"], trust=rev["trust"] or "agent")
+        return {"id": entry["id"], "path": entry["path"], "history": entry["history"]}
+
+    def restore_memory(self, principal: Principal, rev: int, *, id: str | None = None, path: str | None = None) -> dict[str, Any]:
+        parsed = self.memory_path(principal, path) if path is not None else None
+        out = self.memory.edit(id=id, path=parsed, rev=rev, action=f"restore {rev}", **self.memory_actor(principal))
+        self.audit_memory(principal, "memory_restore", out["id"], detail=f"Restored revision {rev}.")
+        return {"id": out["id"], "path": out["path"], "restored": rev}
+
+    def memory_settings(self) -> dict[str, bool]:
+        row = self.store.one("SELECT value FROM settings WHERE key = 'memory.sync'")
+        return {"sync": row["value"] == "true" if row is not None else self.cfg.memory_sync}
+
+    def set_memory_setting(self, principal: Principal, sync: bool) -> dict[str, bool]:
+        if not principal.is_memory_owner:
+            raise MemoryRefused(OWNER_REQUIRED)
+        self.store.x("INSERT INTO settings(key, value, updated_at, updated_by) VALUES ('memory.sync', ?, ?, ?)"
+                     " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
+                     ("true" if sync else "false", self.clock(), principal.source))
+        self.audit_memory(principal, "memory_settings", "memory.sync", detail=self.memory_sync_status())
+        return {"sync": sync}
+
+    def memory_sync_status(self) -> str:
+        return "Memory sync is on." if self.memory_settings()["sync"] else "Memory sync is off."
+
+    def memory_summary(self, principal: Principal, project: str | None, scopes: list[str] | None, limit_chars: int) -> str:
+        slug = (project or "").strip().lower().removeprefix("project:")
+        if scopes is not None:
+            requested = [s.strip().lower() for s in scopes]
+        elif slug:
+            requested = [f"project:{slug}", GENERAL] if slug != GENERAL else [GENERAL]
+        else:
+            requested = [s for s in principal.memory_grants if not s.startswith("agent:")] if principal.kind == "connect" else [GENERAL]
+        if AGENT_RE.fullmatch(principal.source):
+            requested.append(f"agent:{principal.source}")
+        granted = [s for s in dict.fromkeys(requested) if self.allows_memory(principal, s)]
+        return self.memory.metadata_summary(granted, limit_chars, self.memory_sync_status())
+
+    def sync_memory(self, principal: Principal, source: str, items: list[dict[str, Any]], project: str | None = None,
+                    scope: str | None = None) -> dict[str, Any]:
+        if source not in SYNC_SOURCES:
+            raise MemoryError_("Choose a supported memory source.")
+        if not AGENT_RE.fullmatch(principal.source):
+            raise MemoryError_("Use a credential with an agent name.")
+        if len(items) > 50:
+            raise MemoryError_("Sync at most 50 items per call.")
+        identity = f"{principal.source}/{source}"
+        if not self.memory_settings()["sync"]:
+            self.audit_memory(principal, "memory_sync", identity, detail=json.dumps({"skipped": len(items)}))
+            raise MemoryRefused("The owner turned memory sync off.")
+        fallback = GENERAL if self.allows_memory(principal, GENERAL) else f"agent:{principal.source}"
+        default = scope or (f"project:{project.strip().lower().removeprefix('project:')}" if project else fallback)
+        result = []
+        for item in items:
+            target = (item.get("scope") or default).strip().lower()
+            namespace = (item.get("namespace") or f"synced/{source}").strip().strip("/").lower()
+            result.append(self.memory.sync_item(source=principal.source, sync_source=identity, scope=target, namespace=namespace,
+                                                item=item, writer=principal.memory_writer,
+                                                check_scope=lambda scope: self.allows_memory(principal, scope),
+                                                check_writer=lambda scope, writer: self.check_memory_writer(principal, scope, writer)))
+        counts = dict(Counter(row["action"] for row in result))
+        self.audit_memory(principal, "memory_sync", identity, detail=json.dumps(counts, sort_keys=True))
+        return {"items": result, "counts": counts}
 
     def move_memory(self, principal: Principal, id: str, to_scope: str, *, promote: bool = False) -> dict[str, Any]:
         to_scope = to_scope.strip().lower()
@@ -1062,7 +1224,8 @@ class Switchboard:
         def section(title: str, entries: list[dict[str, Any]]) -> None:
             if entries:
                 out.append(f"\n## {title}")
-                out.extend(f"- **{e['title']}** ({e['scope']}/{e['namespace']}, {e['source']}, {e['updated_at'][:10]}, id {e['id']}): {e['body'].strip()}" for e in entries)
+                out.extend(f"- **{memory_label(e['title'])}** ({e['scope']}/{e['namespace']}, {memory_label(e['source'])}, id {e['id']}):\n"
+                           f"{frame_entry(e, e['body'].strip())}" for e in entries)
 
         if p:
             out.append(f"\n## Project {p.name} ({p.scope})" + (f"\n{p.description}" if p.description else "") + (f"\nLinks: {p.links}" if p.links else ""))
@@ -1078,7 +1241,7 @@ class Switchboard:
         other = self.memory.recent(scopes=[GENERAL], since=now - 7 * 86400, exclude_namespaces=("profile", "decisions"), limit=10, body_limit=0) if general else []
         if other:
             out.append("\n## General: other changes this week")
-            out.extend(f"- {e['title']} ({e['namespace']}, {e['source']}, id {e['id']})" for e in other)
+            out.extend(f"- {memory_label(e['title'])} ({e['namespace']}, {memory_label(e['source'])}, id {e['id']})" for e in other)
         for name, d in self.destinations.items():
             try:
                 text = await d.context_section(principal, p)
@@ -1086,5 +1249,13 @@ class Switchboard:
                 text = f"## {d.title or name}\nCould not read: {e}"
             if text:
                 out.append("\n" + text)
-        text = "\n".join(out)
-        return text[:PACK_LIMIT] + ("\n…(truncated)" if len(text) > PACK_LIMIT else "")
+        parts, used = [], 0
+        for part in out:
+            if used + len(part) > PACK_LIMIT:
+                if "\n[swb memory " not in part:
+                    parts.append(part[:PACK_LIMIT - used])
+                parts.append("…(truncated)")
+                break
+            parts.append(part)
+            used += len(part) + 1
+        return "\n".join(parts)

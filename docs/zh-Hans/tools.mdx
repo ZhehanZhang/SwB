@@ -70,6 +70,22 @@ description: SwB 为智能体提供的 MCP 工具。
 | `memory_delete` | 删除已授权范围内的一个条目 |
 | `memory_move` | 把一个条目移动到项目范围或智能体范围。两个范围的授权都要具备 |
 | `memory_promote` | 把一个条目移动到 `general`。使用所有者的登录身份 |
+| `memory_summary` | 在会话开始时载入已授权记忆的简短索引 |
+| `memory_view` | 显示 `/memories` 下的文件夹或文件。参阅[记忆](/zh-Hans/docs/memory) |
+| `memory_create` | 在主题文件夹中创建文件 |
+| `memory_str_replace` | 替换文件中一段完全匹配的文本 |
+| `memory_insert` | 在某一行后添加文本 |
+| `memory_rename` | 把文件或主题文件夹移动到新路径 |
+| `memory_history` | 显示条目的每次修改 |
+| `memory_restore` | 恢复条目的早期版本 |
+| `memory_sync` | 把智能体自身记忆中的内容复制到 SwB |
+| `memory_settings` | 开启或关闭记忆同步。使用所有者的登录身份 |
+| `memory_export` | 把全部记忆下载为 zip 文件。使用所有者的登录身份 |
+| `memory_import` | 从 zip 文件载入记忆。使用所有者的登录身份 |
+| `memory_backup_configure` | 设置 Git 备份仓库。使用所有者的登录身份 |
+| `memory_backup_status` | 显示 Git 备份状态。使用所有者的登录身份 |
+| `memory_backup_now` | 立即开始 Git 备份。使用所有者的登录身份 |
+| `memory_backup_restore` | 从 Git 备份载入记忆。使用所有者的登录身份 |
 | `project_list` | 列出项目及其关联 |
 | `project_create` | 创建项目 |
 | `project_update` | 重命名、关联或归档项目，或把项目设为私有 |

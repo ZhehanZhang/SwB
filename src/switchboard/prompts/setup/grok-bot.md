@@ -13,3 +13,5 @@ Ask me to open the routine's webhook settings. Ask me to enter the POST URL and 
 Run the `send` call that `connect` returns. Call `connect` again to check that Grok accepted the webhook. Use `wait` or `inbox` to collect the reply. Show me the reply if it arrives.
 
 For a message sent to the routine, use the saved routine prompt. Answer with `reply` on the conversation from the webhook payload. Use `wait` or `inbox` to read other messages in this chat.
+
+Set up memory sync. Call `memory_summary` to load shared memory. Look at what you already remember about me in your own memory. Choose the facts that every agent should know. Leave out passwords, keys and sensitive personal details. Send the facts in one `memory_sync` call with `source="grok-memory"`. Give each fact a stable `source_key`. Show me what you sent. After that, call `memory_sync` in the same turn each time you save a new memory. See https://swb.one/docs/memory.

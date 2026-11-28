@@ -1,5 +1,6 @@
 import asyncio
 import os
+import subprocess
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +13,7 @@ from PIL import Image, ImageDraw
 
 from switchboard import pages
 from switchboard.app import create_app
+from switchboard.auth import Principal
 from switchboard.blocks.discord import Channel
 from switchboard.claims import Field
 from switchboard.core import Switchboard
@@ -131,6 +133,16 @@ def run(path: Path) -> None:
                       title="Release plan", body="Prepare the release.", confirm_general=True)
     core.memory.write(source="claude-code", scope="general", namespace="notes",
                       title="Meeting notes", body="Review the schedule.", confirm_general=True)
+    core.memory.write(source="codex", scope="general", namespace="notes", key="review-checklist",
+                      title="Review checklist", body="Review the change.", tags=["release"], confirm_general=True)
+    core.memory.write(source="admin:owner@example.test", scope="agent:claude-code", namespace="notes",
+                      key="agent-notes", title="Agent notes", body="Review the worktree.", content_trust="owner")
+    repository = path / "memory-backup.git"
+    subprocess.run(["git", "init", "--bare", "--quiet", repository], check=True)
+    owner = Principal("admin:owner@example.test", "owner", "owner_session")
+    core.memory_git.configure(owner, remote=repository.as_uri(), author_name="Fixture Owner",
+                              author_email="owner@example.test", enabled=True)
+    assert core.memory_git.run_once()["last_commit"]
     discord = core.blocks["team-chat"]
     discord.guilds.add("1000")
     discord.guild_info["1000"] = {"name": "Engineering", "owner_id": "1001"}

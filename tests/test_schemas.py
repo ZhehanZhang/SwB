@@ -7,7 +7,10 @@ from conftest import STATIC_KEY, base_config, rpc
 
 CORE = {"memory_write", "memory_search", "memory_read", "memory_list", "memory_delete", "context_pack", "project_list", "project_create",
         "project_update", "project_sync", "memory_move", "memory_promote", "routes_list", "routes_set", "routes_remove", "routes_resolve", "switchboard_status", "agent_send",
-        "modes_status", "space_mode"}
+        "modes_status", "space_mode", "memory_view", "memory_create", "memory_str_replace", "memory_insert", "memory_rename",
+        "memory_history", "memory_restore", "memory_summary", "memory_sync", "memory_settings",
+        "memory_export", "memory_import", "memory_backup_status", "memory_backup_configure",
+        "memory_backup_now", "memory_backup_restore"}
 GENERIC = {"send", "reply", "wait", "inbox", "get_message", "status", "result", "cancel", "targets", "connect", "connect_code", "connect_list", "connect_revoke", "visibility_list", "visibility_set", "login_link"}
 COMPANION = {"companion_code", "companion_list", "companion_invoke", "companion_revoke"}
 CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}
@@ -44,11 +47,15 @@ def test_annotations_mark_reads_and_writes(make):
     _, c = make()
     t = tools(c)
     for name in ("memory_search", "memory_read", "memory_list", "capy_status", "capy_result", "capy_list", "capy_captain_digest", "context_pack",
-                 "switchboard_status", "routes_list", "routes_resolve", "capy_wait", "capy_inbox", "get_message", "modes_status"):
+                 "switchboard_status", "routes_list", "routes_resolve", "capy_wait", "capy_inbox", "get_message", "modes_status",
+                 "memory_view", "memory_history", "memory_summary"):
         assert t[name]["annotations"]["readOnlyHint"] is True, name
-    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply", "routes_set", "routes_remove", "connect", "space_mode"):
+    for name in ("memory_write", "memory_delete", "capy_delegate", "capy_reply", "routes_set", "routes_remove", "connect", "space_mode",
+                 "memory_create", "memory_str_replace", "memory_insert", "memory_rename", "memory_restore", "memory_sync", "memory_settings"):
         assert t[name]["annotations"]["readOnlyHint"] is False, name
     assert t["memory_delete"]["annotations"]["destructiveHint"] is True
+    for name in ("memory_rename", "memory_restore"):
+        assert t[name]["annotations"]["idempotentHint"] is True, name
 
 
 def test_webhook_schema_declares_provider_schemes_and_annotations(make):

@@ -1,0 +1,88 @@
+---
+title: 記憶
+description: 讓代理共用學到的內容，並由你完整掌控。
+---
+
+**記憶**是代理透過 SwB 共用的筆記。每則筆記是一個**項目**。項目有標題、Markdown 內文，以及每次修改的歷史記錄。
+
+## 範圍
+
+**範圍**是一組共用同一套存取規則的項目。每個項目屬於一個範圍。
+
+| 範圍 | 資料夾 | 用途 |
+| --- | --- | --- |
+| `general` | `/memories/general/` | 適用於所有專案的個人資訊 |
+| `project:<slug>` | `/memories/projects/<slug>/` | 單一專案的資訊 |
+| `agent:<name>` | `/memories/agents/<name>/` | 單一代理的私人筆記 |
+
+以擁有者身分登入的代理可以讀取所有範圍。配對金鑰只能讀寫你授權的範圍。每把配對金鑰都有自己的代理範圍。
+
+## 檔案與資料夾
+
+代理把記憶看成 `/memories` 底下的檔案。範圍裡的資料夾是一個**主題**，例如 `decisions` 或 `notes/meetings`。檔名就是項目的鍵。
+
+下表工具的指令和 Claude 記憶工具相同，Claude 模型原本就熟悉這些指令。
+
+| 工具 | 用途 |
+| --- | --- |
+| `memory_summary` | 在工作階段開始時載入簡短的記憶索引 |
+| `memory_view` | 顯示資料夾，或顯示附行號的檔案 |
+| `memory_create` | 建立檔案 |
+| `memory_str_replace` | 取代檔案中一段完全相符的文字 |
+| `memory_insert` | 在某一行後加入文字 |
+| `memory_rename` | 變更檔案的名稱、主題或範圍 |
+| `memory_delete` | 刪除檔案 |
+| `memory_search` | 依關鍵字尋找項目，最相關的排在前面 |
+| `memory_list` | 列出項目，最新的排在前面 |
+| `memory_history` | 顯示項目的每次修改 |
+| `memory_restore` | 還原項目的較早版本 |
+
+原有的 `memory_write`、`memory_read`、`memory_move` 和 `memory_promote` 仍可使用。
+
+同一範圍內，相同的內容只保存一份。代理再次儲存同樣的文字時，會取得既有的項目。
+
+## 記憶同步
+
+**記憶同步**會把代理在自身記憶中儲存的內容複製到 SwB，讓每個代理都能使用。它適用於 Claude 記憶、ChatGPT 記憶、Grok 記憶、Claude Code 記憶檔案和其他記憶系統。
+
+每份設定提示詞都會要求代理同步記憶。設定完成後，代理用 `memory_sync` 傳送它記得的、與你有關的資訊，而且只傳送你希望所有代理知道的內容。密碼、金鑰和敏感個人資料留在它自己的記憶裡。之後，代理每儲存一則新記憶，就在同一輪中同步。
+
+`memory_sync` 可以放心重複呼叫，每次都會更新同一個項目。你在 SwB 中的修改和刪除優先，之後的同步會保留你的版本，並向代理回報衝突。
+
+使用 `--cap hooks` 的 [Companion](/zh-Hant/docs/companion) 會在每次儲存時同步 Claude Code 記憶檔案。
+
+記憶同步預設開啟。要關閉記憶同步，在主控台開啟 **Memory**，再關閉 **Memory sync**。以擁有者身分登入的代理也可以用 `memory_settings` 切換這個開關。
+
+## 來源紀錄
+
+**來源紀錄**說明項目由誰在何時寫入。SwB 會記錄建立項目的代理，以及最後修改它的代理。
+
+一個代理寫的文字交給另一個代理時，SwB 會加上標記。標記寫明作者和日期。代理只把帶標記的文字當作參考資訊。只有你本人的指示才能指揮它們。
+
+## 管理記憶
+
+在主控台開啟 **Memory**，可以查看每個項目。選取項目即可編輯。選取 **History** 查看每次修改。在某次修改上選取 **Restore**，即可還原那個版本。你也可以移動和刪除項目。
+
+代理的每次修改都會顯示在 **History** 和稽核記錄中。每次修改都能還原。
+
+## 下載與還原
+
+在 **Memory** 頁面選取 **Download**，即可把全部記憶存成 zip 檔。檔案中每個項目對應一個 Markdown 檔，依範圍和主題分資料夾存放。檔案也包含 `manifest.json`，其中有每個項目的歷史記錄和來源紀錄。
+
+選取 **Restore from file** 載入 zip 檔。還原會加入缺少的項目，並更新有變動的項目。其他項目維持原樣。同一個檔案可以放心重複載入。
+
+以擁有者身分登入的代理可以用 `memory_export` 和 `memory_import` 完成同樣的操作。
+
+## 備份到 Git
+
+SwB 可以把記憶複製到你自己的私人 Git 存放庫。每次修改都會成為一次提交，例如「Claude updated projects/swb/decisions/ownership.md」。
+
+記憶中的所有內容都會進入這個存放庫。使用私人存放庫。
+
+在主控台開啟 **Memory**。在 **Git backup** 中填入存放庫網址和分支。如果是 HTTPS 網址，貼上一個對該存放庫有寫入權限的權杖。如果是 SSH 網址，貼上一把有寫入權限的部署金鑰。SwB 會加密保存權杖或金鑰。
+
+修改發生 30 秒後，SwB 會把這段時間內的修改合併成一次提交。選取 **Back up now** 可以立即提交。推送失敗時，SwB 會稍後重試。狀態列顯示最近一次備份和最近一次錯誤。
+
+選取 **Restore from repository**，即可從最新的提交載入記憶。
+
+以擁有者身分登入的代理可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。`memory_backup_configure` 會回傳一個認領連結，用來儲存權杖或金鑰。

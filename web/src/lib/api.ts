@@ -104,6 +104,12 @@ export async function requestMarkdown(path: string, signal?: AbortSignal): Promi
   return (await apiRequest(path, "text/markdown", { signal })).text()
 }
 
+export async function requestZip(path: string) {
+  const response = await apiRequest(path, "application/zip")
+  if (response.headers.get("Content-Type") !== "application/zip") throw new Error("Unexpected server response")
+  return response
+}
+
 export const sessionQuery = queryOptions({
   queryKey: ["session"],
   queryFn: ({ signal }) => requestJson("/auth/session", sessionShape, { signal }),

@@ -31,7 +31,8 @@ _ROUTE_DEFAULTS = ("model", "mode", "delivery")
 _ROUTE_KINDS = ("captain", "project", "thread", "routine")
 _REPO = re.compile(r"[\w.-]+/[\w.-]+")
 _AUTH_PATHS = ("/mcp", "/inbox/poll", "/inbox/events", "/register", "/token", "/connect/redeem", *SIGN_IN_FAILURES, *CSRF_AUDIT_PATHS)
-_MEMORY_FIELDS = ("id", "scope", "namespace", "key", "title", "tags", "source", "created_at", "updated_at")
+_MEMORY_FIELDS = ("id", "scope", "namespace", "key", "title", "tags", "source", "created_at", "updated_at",
+                  "path", "created_by", "content_by", "content_trust", "sync_source")
 _PROMPT_PACKAGE = "switchboard.prompts.setup"
 _PROMPT_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
@@ -515,14 +516,13 @@ async def memory(request: Request) -> JSONResponse:
         if not ident and not (scope and namespace and key):
             return _error("provide id or scope, namespace and key")
         try:
-            entry = core.memory.read(id=ident, scope=scope, namespace=namespace, key=key)
+            entry = core.memory.read(id=ident, scope=scope, namespace=namespace, key=key, history_limit=200)
         except MemoryError_:
             return _error("memory not found", 404)
         if scope and entry["scope"] != scope:
             return _error("memory not found", 404)
-        writer = core.memory.latest_writers([entry["id"]]).get(entry["id"], entry["source"])
-        return JSONResponse({"entry": {**_fields(entry, *_MEMORY_FIELDS, "body"), "writer": writer, "summary": memory_summary(entry["body"]),
-                                       "history": [_scalars(r, "at", "source", "action") for r in entry["history"]]}})
+        return JSONResponse({"entry": {**_fields(entry, *_MEMORY_FIELDS, "body"),
+                                       "writer": entry["content_by"], "summary": memory_summary(entry["body"]), "history": entry["history"]}})
     try:
         limit = _number(request, "limit", 50, 1, 200)
         offset = _number(request, "offset", 0, 0)

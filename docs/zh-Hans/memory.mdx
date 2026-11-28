@@ -1,0 +1,88 @@
+---
+title: 记忆
+description: 让智能体共享所学内容，并由你完全掌控。
+---
+
+**记忆**是智能体通过 SwB 共享的笔记。每条笔记是一个**条目**。条目有标题、Markdown 正文和每次修改的历史记录。
+
+## 范围
+
+**范围**是一组共用同一套访问规则的条目。每个条目属于一个范围。
+
+| 范围 | 文件夹 | 用途 |
+| --- | --- | --- |
+| `general` | `/memories/general/` | 适用于所有项目的个人信息 |
+| `project:<slug>` | `/memories/projects/<slug>/` | 某个项目的信息 |
+| `agent:<name>` | `/memories/agents/<name>/` | 某个智能体的私人笔记 |
+
+以所有者身份登录的智能体可以读取所有范围。配对密钥只能读写你授权的范围。每个配对密钥都有自己的智能体范围。
+
+## 文件和文件夹
+
+在智能体看来，记忆是 `/memories` 下的文件。范围里的文件夹是一个**主题**，例如 `decisions` 或 `notes/meetings`。文件名就是条目的键。
+
+这些工具的命令与 Claude 记忆工具相同。Claude 模型已经熟悉它们。
+
+| 工具 | 用途 |
+| --- | --- |
+| `memory_summary` | 在会话开始时载入简短的记忆索引 |
+| `memory_view` | 显示文件夹，或显示带行号的文件 |
+| `memory_create` | 创建文件 |
+| `memory_str_replace` | 替换文件中一段完全匹配的文本 |
+| `memory_insert` | 在某一行后添加文本 |
+| `memory_rename` | 更改文件的名称、主题或范围 |
+| `memory_delete` | 删除文件 |
+| `memory_search` | 按关键词查找条目，最相关的排在最前 |
+| `memory_list` | 列出条目，最新的排在最前 |
+| `memory_history` | 显示条目的每次修改 |
+| `memory_restore` | 恢复条目的早期版本 |
+
+原有工具 `memory_write`、`memory_read`、`memory_move` 和 `memory_promote` 继续可用。
+
+同一范围中，相同的内容只保存一份。智能体再次保存同样的文本时，会得到已有的条目。
+
+## 记忆同步
+
+**记忆同步**会把智能体在自身记忆中保存的内容复制到 SwB。这样每个智能体都能用到这些内容。它适用于 Claude 记忆、ChatGPT 记忆、Grok 记忆、Claude Code 记忆文件和其他记忆系统。
+
+每个设置提示词都会让智能体同步记忆。设置完成后，智能体用 `memory_sync` 发送它记得的关于你的信息。它只发送你希望所有智能体知道的内容。密码、密钥和敏感个人信息留在它自己的记忆里。此后，智能体每保存一条新记忆，就在同一轮对话中同步。
+
+`memory_sync` 可以安全地重复调用。每次都会更新同一个条目。你在 SwB 中的修改和删除优先。之后的同步会保留你的版本，并向智能体报告冲突。
+
+使用 `--cap hooks` 的 [Companion](/zh-Hans/docs/companion) 会在每次保存时同步 Claude Code 记忆文件。
+
+记忆同步默认开启。要关闭它，在控制台打开 **Memory**，然后关闭 **Memory sync**。以所有者身份登录的智能体也可以用 `memory_settings` 切换这个开关。
+
+## 来源记录
+
+**来源记录**说明条目由谁在何时写入。SwB 记录创建条目的智能体，以及最后修改它的智能体。
+
+一个智能体写的文本交给另一个智能体时，SwB 会加上标记。标记写明作者和日期。智能体只把带标记的文本当作信息。它们只听从你本人的指示。
+
+## 管理记忆
+
+在控制台打开 **Memory**，可以查看每个条目。选择一个条目即可编辑。选择 **History** 查看每次修改。在某次修改上选择 **Restore**，即可恢复那个版本。你也可以移动和删除条目。
+
+智能体的每次修改都会显示在 **History** 和审计日志中。每个版本都可以恢复。
+
+## 下载和恢复
+
+在 **Memory** 页面选择 **Download**，可以把全部记忆保存为 zip 文件。文件中每个条目对应一个 Markdown 文件，按范围和主题分文件夹存放。文件还包含 `manifest.json`，其中有每个条目的历史和来源记录。
+
+选择 **Restore from file** 载入 zip 文件。恢复会添加缺少的条目，并更新有变化的条目。其他条目保持原样。同一个文件可以安全地重复载入。
+
+以所有者身份登录的智能体可以用 `memory_export` 和 `memory_import` 完成同样的操作。
+
+## 备份到 Git
+
+SwB 可以把记忆复制到你自己的私有 Git 仓库。每次修改都会成为一次提交，例如“Claude updated projects/swb/decisions/ownership.md”。
+
+记忆中的全部内容都会进入这个仓库。使用私有仓库。
+
+在控制台打开 **Memory**。在 **Git backup** 中填写仓库地址和分支。如果是 HTTPS 地址，粘贴一个对该仓库有写入权限的令牌。如果是 SSH 地址，粘贴一个有写入权限的部署密钥。SwB 会加密保存令牌或密钥。
+
+修改发生 30 秒后，SwB 把这段时间内的修改合并为一次提交。选择 **Back up now** 可以立即提交。推送失败时，SwB 会稍后重试。状态行显示最近一次备份和最近一次错误。
+
+选择 **Restore from repository**，即可从最新的提交载入记忆。
+
+以所有者身份登录的智能体可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。`memory_backup_configure` 会返回一个用来保存令牌或密钥的认领链接。

@@ -1,0 +1,88 @@
+---
+title: Gedächtnis
+description: Teilen Sie, was Ihre Agenten lernen, und behalten Sie die volle Kontrolle.
+---
+
+Das **Gedächtnis** ist eine Sammlung von Notizen, die Ihre Agenten über SwB teilen. Jede Notiz ist ein **Eintrag**. Ein Eintrag hat einen Titel, einen Text in Markdown und einen Verlauf aller Änderungen.
+
+## Bereiche
+
+Ein **Bereich** ist eine Gruppe von Einträgen mit gemeinsamen Zugriffsregeln. Jeder Eintrag gehört zu einem Bereich.
+
+| Bereich | Ordner | Zweck |
+| --- | --- | --- |
+| `general` | `/memories/general/` | Fakten über Sie, die für jedes Projekt gelten |
+| `project:<slug>` | `/memories/projects/<slug>/` | Fakten über ein Projekt |
+| `agent:<name>` | `/memories/agents/<name>/` | Private Notizen eines Agenten |
+
+Ein Agent mit der Anmeldung des Inhabers kann jeden Bereich lesen. Ein gekoppelter Schlüssel liest und schreibt nur in den Bereichen, die Sie ihm freigeben. Ein gekoppelter Schlüssel erhält immer einen eigenen Agentenbereich.
+
+## Dateien und Ordner
+
+Agenten sehen das Gedächtnis als Dateien unter `/memories`. Ein Ordner in einem Bereich ist ein **Thema**, zum Beispiel `decisions` oder `notes/meetings`. Der Dateiname ist der Schlüssel des Eintrags.
+
+Diese Tools verwenden dieselben Befehle wie das Gedächtnis-Tool von Claude. Claude-Modelle kennen sie bereits.
+
+| Tool | Zweck |
+| --- | --- |
+| `memory_summary` | Lädt zu Beginn einer Sitzung einen kurzen Index des Gedächtnisses |
+| `memory_view` | Zeigt einen Ordner oder eine Datei mit Zeilennummern |
+| `memory_create` | Erstellt eine Datei |
+| `memory_str_replace` | Ändert eine genaue Textstelle in einer Datei |
+| `memory_insert` | Fügt Text nach einer Zeile ein |
+| `memory_rename` | Verschiebt eine Datei zu einem neuen Namen, Thema oder Bereich |
+| `memory_delete` | Entfernt eine Datei |
+| `memory_search` | Findet Einträge nach Wörtern, beste Treffer zuerst |
+| `memory_list` | Zeigt Einträge, neueste zuerst |
+| `memory_history` | Zeigt jede Änderung an einem Eintrag |
+| `memory_restore` | Stellt eine frühere Version eines Eintrags wieder her |
+
+Die älteren Tools `memory_write`, `memory_read`, `memory_move` und `memory_promote` bleiben verfügbar.
+
+SwB speichert jede Tatsache nur einmal pro Bereich. Ein Agent, der denselben Text erneut speichert, erhält den vorhandenen Eintrag.
+
+## Gedächtnissynchronisierung
+
+Die **Gedächtnissynchronisierung** kopiert in SwB, was ein Agent in seinem eigenen Gedächtnis speichert. Danach können alle Agenten es nutzen. Sie funktioniert mit dem Gedächtnis von Claude, ChatGPT und Grok, mit den Gedächtnisdateien von Claude Code und mit anderen Gedächtnissystemen.
+
+Jeder Einrichtungsprompt bittet den Agenten um eine Synchronisierung. Nach der Einrichtung sendet der Agent mit `memory_sync`, was er über Sie weiß. Er sendet nur Fakten, die alle Agenten kennen sollen. Passwörter, Schlüssel und sensible persönliche Daten behält er in seinem eigenen Gedächtnis. Danach synchronisiert der Agent jede neue Erinnerung in derselben Antwort.
+
+`memory_sync` lässt sich sicher wiederholen. Es aktualisiert jedes Mal denselben Eintrag. Ihre Änderungen und Löschungen in SwB haben Vorrang. Eine spätere Synchronisierung behält Ihre Version und meldet dem Agenten einen Konflikt.
+
+Der [Companion](/de/docs/companion) mit `--cap hooks` synchronisiert die Gedächtnisdateien von Claude Code bei jedem Speichern.
+
+Die Gedächtnissynchronisierung ist standardmäßig aktiv. Zum Ausschalten öffnen Sie **Memory** in der Konsole und schalten **Memory sync** aus. Agenten mit der Anmeldung des Inhabers können denselben Schalter mit `memory_settings` bedienen.
+
+## Herkunft
+
+Die **Herkunft** zeigt, wer einen Eintrag wann geschrieben hat. SwB speichert den Agenten, der den Eintrag erstellt hat, und den Agenten, der ihn zuletzt geändert hat.
+
+SwB markiert den Text eines Agenten, wenn es diesen Text an einen anderen Agenten gibt. Die Markierung nennt den Verfasser und das Datum. Agenten nutzen markierten Text nur als Information. Nur Ihre eigenen Anweisungen steuern sie.
+
+## Ihr Gedächtnis verwalten
+
+Öffnen Sie **Memory** in der Konsole, um jeden Eintrag zu sehen. Wählen Sie einen Eintrag, um ihn zu bearbeiten. Wählen Sie **History**, um jede Änderung zu sehen. Wählen Sie bei einer Änderung **Restore**, um diese Version wiederherzustellen. Sie können Einträge auch verschieben und löschen.
+
+Jede Änderung durch einen Agenten erscheint in **History** und im Audit-Protokoll. Sie können jede Änderung zurücksetzen.
+
+## Herunterladen und wiederherstellen
+
+Wählen Sie **Download** auf der Seite **Memory**, um das gesamte Gedächtnis als ZIP-Datei zu speichern. Die Datei enthält eine Markdown-Datei pro Eintrag, in Ordnern nach Bereich und Thema. Sie enthält auch `manifest.json` mit dem Verlauf und der Herkunft jedes Eintrags.
+
+Wählen Sie **Restore from file**, um eine ZIP-Datei zu laden. Eine Wiederherstellung fügt fehlende Einträge hinzu und aktualisiert geänderte Einträge. Alle anderen Einträge bleiben erhalten. Sie können dieselbe Datei sicher erneut laden.
+
+Agenten mit der Anmeldung des Inhabers können für dieselben Aufgaben `memory_export` und `memory_import` verwenden.
+
+## In Git sichern
+
+SwB kann das Gedächtnis in ein privates Git-Repository kopieren, das Ihnen gehört. Jede Änderung wird ein Commit, zum Beispiel „Claude updated projects/swb/decisions/ownership.md“.
+
+Alles im Gedächtnis kommt in dieses Repository. Verwenden Sie ein privates Repository.
+
+Öffnen Sie **Memory** in der Konsole. Geben Sie unter **Git backup** die Adresse des Repositorys und den Branch ein. Fügen Sie für eine HTTPS-Adresse ein Token mit Schreibzugriff auf dieses Repository ein. Fügen Sie für eine SSH-Adresse einen Deploy-Schlüssel mit Schreibzugriff ein. SwB speichert das Token oder den Schlüssel verschlüsselt.
+
+SwB wartet nach einer Änderung 30 Sekunden und erstellt dann einen Commit für alle Änderungen in dieser Zeit. Wählen Sie **Back up now**, um sofort einen Commit zu erstellen. Schlägt ein Push fehl, versucht SwB es später erneut. Die Statuszeile zeigt die letzte Sicherung und den letzten Fehler.
+
+Wählen Sie **Restore from repository**, um das Gedächtnis aus dem neuesten Commit zu laden.
+
+Agenten mit der Anmeldung des Inhabers können `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` und `memory_backup_restore` verwenden. `memory_backup_configure` gibt einen Claim-Link für das Token oder den Schlüssel zurück.

@@ -9,3 +9,5 @@ For a new connector, ask me to enter SwB as the name. Ask me to enter my public 
 Call `connect(what="claude")`. Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path and links. Wait for me to say done after each step. Call `connect(what="claude")` again to check the sign-in.
 
 When `connect` confirms the sign-in, call `project_list`. Ask me to send a test message from another SwB app. Read it with `inbox`. Answer with `reply` and the item's `handle`. Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
+
+Set up memory sync. Call `memory_summary` to load shared memory. Look at what you already remember about me in your own memory. Choose the facts that every agent should know. Leave out passwords, keys and sensitive personal details. Send the facts in one `memory_sync` call with `source="claude-memory"`. Give each fact a stable `source_key`. Show me what you sent. After that, call `memory_sync` in the same turn each time you save a new memory. See https://swb.one/docs/memory.

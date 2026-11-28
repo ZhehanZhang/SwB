@@ -167,6 +167,10 @@ Pour lier une route de projet et définir les actions de tri, consultez [Modes d
 | `memory.mirror` | Contrôle la copie Markdown. Indiquez `false` pour arrêter les mises à jour |
 | `memory.mirror_dir` | Dossier de la copie Markdown |
 | `memory.mirror_debounce_s` | Secondes d'attente après un changement de mémoire avant l'écriture de la copie. Valeur par défaut `2` |
+| `memory.sync` | Permet aux agents de copier leur propre mémoire dans SwB avec `memory_sync`. Valeur par défaut `true`. Le réglage **Memory sync** de la console a la priorité |
+| `memory.backup` | Paramètres de la sauvegarde Git de la mémoire |
+| `memory.backup.debounce_s` | Secondes d'attente après un changement de mémoire avant un commit de sauvegarde. Valeur par défaut `30` |
+| `memory.backup.max_delay_s` | Attente maximale en secondes avant un commit de sauvegarde pendant de nombreux changements. Valeur par défaut `300` |
 | `modes` | Paramètres du traitement des événements entrants par SwB |
 | `modes.default` | Mode par défaut. La valeur par défaut est `off` |
 | `modes.projects` | Mode par défaut des espaces rattachés à chaque projet |
