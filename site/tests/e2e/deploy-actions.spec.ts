@@ -63,34 +63,28 @@ test('the landing Deploy guide row links to the current page in every locale', a
   }
 });
 
-test('landing pipx commands open below their row without moving the aligned rows', async ({ page }) => {
-  await page.goto('/');
-  const grid = page.locator('[data-deploy-grid]');
-  const toggle = grid.locator('summary').filter({ hasText: 'Use pipx' });
-  const commands = grid.locator('details pre');
-  const following = grid.locator('[data-deploy-option]').nth(1).locator('[data-block-header]');
-  await expect(commands).toBeHidden();
-  await toggle.scrollIntoViewIfNeeded();
-  const before = await following.evaluate((node) => node.getBoundingClientRect().top + scrollY);
-  const row = (await toggle.boundingBox())!;
-  await toggle.press('Enter');
-  await expect(commands).toBeVisible();
-  expect(await commands.locator('code').textContent()).toBe('pipx install swb.one\nswb up');
-  const expanded = (await commands.boundingBox())!;
-  expect(expanded.y - row.y - row.height).toBe(8);
-  const after = await following.evaluate((node) => node.getBoundingClientRect().top + scrollY);
-  expect(after).toBe(before + (page.viewportSize()!.width < 900 ? expanded.height + 8 : 0));
-  await toggle.press('Space');
-  await expect(commands).toBeHidden();
-  expect(await following.evaluate((node) => node.getBoundingClientRect().top + scrollY)).toBe(before);
+test('landing shows uvx and pipx together with every deploy column the same height', async ({ page }) => {
+  for (const locale of ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const) {
+    await page.goto(localize(locale, '/'));
+    await page.evaluate(() => document.fonts.ready);
+    const grid = page.locator('[data-deploy-grid]');
+    await expect(grid.locator('summary, details, [role="tab"]')).toHaveCount(0);
+    await expect(grid.locator('[data-deploy-local] code')).toHaveText(['uvx swb.one up', 'pipx install swb.one\nswb up']);
+    await expect(grid.locator('[data-deploy-local]').getByRole('button', { name: /./ })).toHaveCount(2);
+    if (page.viewportSize()!.width < 900) continue;
+    const layout = await grid.evaluate((node) => ({
+      options: [...node.querySelectorAll('[data-deploy-option]')].map((option) => option.getBoundingClientRect().height),
+      primary: [...node.querySelectorAll('[data-deploy-primary] > *')].map((option) => option.getBoundingClientRect().height),
+    }));
+    expect(new Set(layout.options).size, locale).toBe(1);
+    expect(new Set(layout.primary).size, locale).toBe(1);
+  }
 });
 
 test('landing commands use matching copy controls and copy the exact text', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
   const grid = page.locator('[data-deploy-grid]');
-  await expect(grid.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(2);
-  await grid.locator('summary').filter({ hasText: 'Use pipx' }).click();
   const commands = grid.locator('[data-deploy-command]');
   await expect(grid.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(3);
   for (const command of await commands.all()) {

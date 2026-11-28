@@ -1,6 +1,6 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import { ArrowRight, BookOpen, ChevronDown, Package, Plug } from 'lucide-react';
+import { ArrowRight, BookOpen, Plug } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps<'/[lang]'>) {
 }
 
 function DeployOption({ heading, intro, children, guide, secondary }: {
-  heading: string; intro: string; children: ReactNode; guide?: ReactNode; secondary: ReactNode;
+  heading: string; intro: string; children: ReactNode; guide?: ReactNode; secondary: ReactNode | null;
 }) {
   return (
     <div className="grid min-w-0 gap-2 min-[900px]:row-span-4 min-[900px]:grid-rows-subgrid" data-deploy-option>
@@ -50,12 +50,12 @@ function DeployOption({ heading, intro, children, guide, secondary }: {
   );
 }
 
-function DeployCommand({ children, labels, centered = false }: {
-  children: string; labels: { copy: string; copied: string }; centered?: boolean;
+function DeployCommand({ children, labels }: {
+  children: string; labels: { copy: string; copied: string };
 }) {
   return (
     <div className="relative grid min-w-0" data-deploy-command>
-      <pre className={`overflow-x-auto whitespace-pre rounded-lg border bg-fd-muted px-3 py-2 font-mono text-[13px] leading-[18px] ${centered ? 'content-center' : ''}`}><code>{children}</code></pre>
+      <pre className={`overflow-x-auto whitespace-pre rounded-lg border bg-fd-muted px-3 py-2 font-mono text-[13px] leading-[18px] content-center`}><code>{children}</code></pre>
       <CopyTextButton text={children} labels={labels} iconOnly
         className="swb-button swb-button-icon absolute top-1 right-1 size-6 text-fd-muted-foreground hover:bg-fd-background hover:text-fd-foreground" />
     </div>
@@ -108,19 +108,11 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <div className="mt-6 grid gap-6 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)_minmax(0,1fr)] min-[900px]:gap-x-4 min-[900px]:gap-y-2 lg:gap-x-6" data-deploy-grid>
               <DeployOption heading={deploy.local} intro={deploy.localIntro}
                 guide={<GuideLink href={localize(lang, '/docs/install')}>{deploy.localGuide}</GuideLink>}
-                secondary={
-                  <details className="group/pipx relative">
-                    <summary className={`${deployRowClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>
-                      <Package aria-hidden="true" />
-                      <strong className="font-semibold">{deploy.pipxAction}</strong>
-                      <ChevronDown aria-hidden="true" className="text-fd-muted-foreground group-open/pipx:rotate-180" />
-                    </summary>
-                    <div className="mt-2 min-[900px]:absolute min-[900px]:inset-x-0 min-[900px]:top-full min-[900px]:z-10">
-                      <DeployCommand labels={copyLabels}>{'pipx install swb.one\nswb up'}</DeployCommand>
-                    </div>
-                  </details>
-                }>
-                <DeployCommand labels={copyLabels} centered>{copy.install}</DeployCommand>
+                secondary={null}>
+                <div className="grid grid-rows-[36fr_54fr] gap-2" data-deploy-local>
+                  <DeployCommand labels={copyLabels}>{copy.install}</DeployCommand>
+                  <DeployCommand labels={copyLabels}>{'pipx install swb.one\nswb up'}</DeployCommand>
+                </div>
               </DeployOption>
               <DeployOption heading={deploy.server} intro={deploy.serverIntro}
                 guide={<GuideLink href={`${deployGuide}#docker-compose`}>{deploy.serverGuide}</GuideLink>}

@@ -17,7 +17,7 @@ async function headerGeometry(page: Page) {
   });
 }
 
-test('the shared header keeps its geometry across home and docs except for the search offset', async ({ page }) => {
+test('the shared header keeps its geometry across home and docs', async ({ page }) => {
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
@@ -44,8 +44,7 @@ test('the shared header keeps its geometry across home and docs except for the s
       ]);
       for (const item of Object.keys(home)) {
         for (const edge of ['x', 'y', 'width', 'height'] as const) {
-          const offset = item === search && edge === 'x' ? version.width + (width < 640 ? 4 : 8) : 0;
-          expect(Math.abs(docs[item][edge] - home[item][edge] + offset), `${width}px ${path} ${item} ${edge}`).toBeLessThanOrEqual(0.5);
+          expect(Math.abs(docs[item][edge] - home[item][edge]), `${width}px ${path} ${item} ${edge}`).toBeLessThanOrEqual(0.5);
         }
       }
     }
@@ -63,12 +62,13 @@ test('landing, About and docs render matching header control gaps before hydrati
     await expect(cluster.locator('[data-header-item="address"]')).toBeVisible();
     const docs = path.startsWith('/docs/');
     await expect(cluster.locator('[data-header-item="version"]')).toHaveCount(docs ? 1 : 0);
+    await expect(cluster.locator('[data-header-slot="version"]')).toHaveCount(docs ? 0 : 1);
     const layout = await cluster.evaluate((element) => {
-      const items = [...element.querySelectorAll<HTMLElement>('[data-header-item]')]
+      const items = [...element.querySelectorAll<HTMLElement>('[data-header-item], [data-header-slot]')]
         .filter((control) => control.getClientRects().length);
       const controls = items.map((control) => control.getBoundingClientRect());
       return {
-        order: items.map((control) => control.dataset.headerItem),
+        order: items.map((control) => control.dataset.headerItem ?? control.dataset.headerSlot),
         columns: getComputedStyle(element).gridTemplateColumns.split(' ').length,
         gaps: controls.slice(1).map((control, index) => control.left - controls[index].right),
         right: element.getBoundingClientRect().right,
@@ -76,9 +76,9 @@ test('landing, About and docs render matching header control gaps before hydrati
       };
     });
     expect(layout.order, path).toEqual([
-      width < 1024 ? 'search-icon' : 'search', ...(docs ? ['version'] : []), 'address', 'language', 'github', ...(width < 640 ? ['menu'] : []),
+      width < 1024 ? 'search-icon' : 'search', 'version', 'address', 'language', 'github', ...(width < 640 ? ['menu'] : []),
     ]);
-    expect(layout.gaps).toHaveLength((gap === 4 ? 4 : 3) + Number(docs));
+    expect(layout.gaps).toHaveLength((gap === 4 ? 4 : 3) + 1);
     expect(layout.columns).toBe(layout.gaps.length + 1);
     for (const measured of layout.gaps) expect(Math.abs(measured - gap), path).toBeLessThanOrEqual(1);
     expect(Math.abs(layout.last - layout.right), path).toBeLessThanOrEqual(1);
@@ -567,7 +567,8 @@ test('deploy columns stack below 900px and align each row on wider screens', asy
           const { top, bottom } = element.getBoundingClientRect();
           return { top, bottom };
         };
-        const [uvx, compose] = [...node.querySelectorAll('[data-deploy-primary] pre')];
+        const uvx = node.querySelector('[data-deploy-primary] pre')!;
+        const compose = blocks[1].querySelector('[data-deploy-primary] pre')!;
         const composeStyle = getComputedStyle(compose);
         const composeChrome = [composeStyle.paddingBlockStart, composeStyle.paddingBlockEnd,
           composeStyle.borderBlockStartWidth, composeStyle.borderBlockEndWidth]
@@ -581,7 +582,7 @@ test('deploy columns stack below 900px and align each row on wider screens', asy
           options: blocks.map(edges),
           intro: blocks.map((block) => edges(block.querySelector('p')!)),
           primary: blocks.map((block) => edges(block.querySelector('[data-deploy-primary] > *')!)),
-          secondary: blocks.map((block) => edges(block.querySelector('[data-deploy-secondary] :is(summary,a)')!)),
+          secondary: blocks.flatMap((block) => [...block.querySelectorAll('[data-deploy-secondary] a')].slice(0, 1).map(edges)),
           internalGaps: blocks.map((block) => [...block.children]
             .map(edges).slice(1).map(({ top }, index) => top - edges(block.children[index]).bottom)),
           composeHeight: compose.getBoundingClientRect().height,
@@ -616,7 +617,7 @@ test('provider and secondary rows fit one line in English and Chinese', async ({
     await page.evaluate(() => document.fonts.ready);
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      const rows = await page.locator('[data-deploy-providers] a, [data-deploy-secondary] :is(summary,a)').evaluateAll((links) => links.map((link) => {
+      const rows = await page.locator('[data-deploy-providers] a, [data-deploy-secondary] a').evaluateAll((links) => links.map((link) => {
         const { width, height, right } = link.getBoundingClientRect();
         const style = getComputedStyle(link);
         return {
@@ -627,7 +628,7 @@ test('provider and secondary rows fit one line in English and Chinese', async ({
           isProvider: link.closest('[data-deploy-providers]') !== null,
         };
       }));
-      expect(rows).toHaveLength(6);
+      expect(rows).toHaveLength(5);
       const cloud = rows.filter((row) => row.isProvider);
       expect(new Set(cloud.map(({ width }) => width)).size).toBe(1);
       for (const row of rows) {
