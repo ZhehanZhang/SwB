@@ -20,9 +20,7 @@ Use [the English release notes](docs/release-notes/1.0.0.md) for the GitHub Rele
 | --- | --- |
 | GitHub Environments | Create `pypi`. Allow release tags that match `v*`. |
 | GitHub Environments | Create `testpypi`. Allow the branch that runs the test upload. |
-| GitHub Environments | Create `macos-signing`. Allow release tags that match `v*`. |
 | GitHub Rulesets | Restrict creation, updates, and deletion of `v*` tags to release managers. |
-| GitHub Settings | Keep releases editable so the workflow can attach the signed macOS app. |
 | [PyPI Trusted Publishing](https://pypi.org/manage/account/publishing/) | Add a publisher for `swb-one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `pypi`. Use a pending publisher for the first upload. |
 | [TestPyPI Trusted Publishing](https://test.pypi.org/manage/account/publishing/) | Add a publisher for `swb-one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `testpypi`. Use a pending publisher for the first upload. |
 | GitHub Actions | Run the PyPI workflow by hand to upload to TestPyPI. |
@@ -32,15 +30,35 @@ Use [the English release notes](docs/release-notes/1.0.0.md) for the GitHub Rele
 | GitHub Packages | Change `ghcr.io/zhehanzhang/swb` visibility to public when approved. |
 | GitHub Settings | Change the repository visibility to public after the privacy review and approval. |
 
-Store these five secrets in the `macos-signing` environment.
+## Prepare the Mac app
 
-| Secret | Value |
-| --- | --- |
-| `SWB_MACOS_CERTIFICATE_P12` | Base64 text from the Developer ID Application certificate and private key file |
-| `SWB_MACOS_CERTIFICATE_PASSWORD` | Password for the certificate file |
-| `SWB_ASC_KEY_ID` | App Store Connect key ID |
-| `SWB_ASC_ISSUER_ID` | App Store Connect issuer ID |
-| `SWB_ASC_PRIVATE_KEY` | App Store Connect private key file contents |
+Build the app from the release source on a Mac. Use a Developer ID Application identity for team `Q64ZL36CJN`. Store the notarization credentials in a local Keychain profile. Enter your Apple Account and an app-specific password at the prompts.
+
+```sh
+xcrun notarytool store-credentials swb-notary-1.0 --team-id Q64ZL36CJN
+```
+
+Set `SIGNING_IDENTITY` to the Developer ID Application identity. Run the commands from the release checkout.
+
+```sh
+work="$(mktemp -d)"
+app="$work/SwB Companion.app"
+bash native/companion-macos/build.sh "$app"
+codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp "$app"
+codesign --verify --deep --strict "$app"
+ditto -c -k --sequesterRsrc --keepParent "$app" "$work/submission.zip"
+xcrun notarytool submit "$work/submission.zip" --keychain-profile swb-notary-1.0 --wait
+```
+
+Check that Apple reports **Accepted**. Save the submission ID with the release records.
+
+```sh
+xcrun stapler staple "$app"
+xcrun stapler validate "$app"
+spctl --assess --type execute -a -vv "$app"
+ditto -c -k --sequesterRsrc --keepParent "$app" "$work/swb-companion-macos.zip"
+(cd "$work" && shasum -a 256 swb-companion-macos.zip > swb-companion-macos.zip.sha256)
+```
 
 ## Tag the merge commit
 
@@ -58,11 +76,11 @@ The tag selects the commit for the release.
 
 Make the repository public before you publish the release.
 
-Select `v1.0.0` in the GitHub Release draft and publish the release.
+Select `v1.0.0` in the GitHub Release draft. Attach the locally notarized `swb-companion-macos.zip`. Publish the release.
 
-The release starts the PyPI and container workflows. The PyPI workflow signs and notarizes the SwB Companion app for macOS. The app starts the companion when you sign in. The workflow attaches the app to the release and checks the public download before it uploads the Python packages.
+The release starts the PyPI and container workflows. The PyPI workflow checks the app's signature and notarization. It pins the attached archive in the Python packages and checks the public download before it uploads them.
 
-For retries, select **Re-run failed jobs**. This keeps the original signed archive after the asset upload. A full rerun creates an archive with a new signing timestamp.
+For retries, keep the same archive attached and select **Re-run failed jobs**.
 
 Keep the signed app asset attached to its release. Each Python package checks for those exact bytes.
 
