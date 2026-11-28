@@ -124,10 +124,18 @@ test.describe('archived docs fixture', () => {
     expect(await snapshot.json()).toContainEqual(expect.objectContaining({ type: 'page', url: `${archive}/install` }));
 
     await page.goto(`${archive}/install`);
+    const searchDialog = page.getByRole('dialog', { name: 'Search' });
     await page.locator('[data-search-full]:visible, [data-search]:visible').click();
-    await page.getByRole('dialog', { name: 'Search' }).getByRole('combobox').fill(query);
+    await searchDialog.getByRole('combobox').fill(query);
     await expect(page.getByRole('option', { name: /Archived install/ })).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(searchDialog).toBeHidden();
+    for (const shortcut of ['Control+k', 'Meta+k']) {
+      await page.keyboard.press(shortcut);
+      await expect(searchDialog.getByRole('combobox')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(searchDialog).toBeHidden();
+    }
 
     await page.route('**/api/chat', (route) => route.fulfill({ status: 503, body: 'Test response' }));
     for (const [path, version] of [[`${archive}/install`, fixture], ['/docs/install', latestDocsVersion]]) {
