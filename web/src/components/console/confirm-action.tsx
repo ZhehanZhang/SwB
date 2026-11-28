@@ -10,7 +10,7 @@ export function ConfirmAction({ title, action, subject, onConfirm, children }: {
       <AlertDialog.Trigger asChild>{children}</AlertDialog.Trigger>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-40 bg-overlay/50" />
-        <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-1/2 rounded-lg border bg-card p-5 text-card-foreground shadow-lg">
+        <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-inset-dialog max-w-sm -translate-1/2 rounded-lg border bg-card p-5 text-card-foreground shadow-lg">
           <AlertDialog.Title className="text-heading-md wrap-anywhere">{title}</AlertDialog.Title>
           <AlertDialog.Description className={subject ? "mt-1 wrap-anywhere text-body-sm text-muted-foreground" : "sr-only"}>
             {subject ?? title}

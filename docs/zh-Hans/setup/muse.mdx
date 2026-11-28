@@ -1,46 +1,52 @@
 ---
 title: Muse
-description: 配对 Muse gadget 以实时唤醒，或添加连接器以使用工具。
+description: 把 Muse 连接到 SwB，并在消息到达时唤醒 Muse。
 ---
 
-## 实时唤醒 Muse
+Muse 以自定义连接器的方式连接 SwB。之后，SwB 收到发给 Muse 的消息时，Muse 钩子（hook）会启动 Muse。
 
-要让 Muse 在消息到达时立即开始工作，推荐使用 Muse gadget。gadget 是与 Muse 应用配对的设备。
+## 设置 Muse
 
-[Companion](/zh-Hans/docs/companion) 是运行在你自己设备上的 SwB 程序。配对期间，它通过蓝牙充当 gadget。配对完成后，由 SwB 服务器保持与 Muse 的连接。这时可以停止 Companion。
-
-为 SwB 设置公网 HTTPS 地址。把下面的提示词粘贴到一个以所有者身份登录、拥有完整权限的 SwB 智能体中。
+为 SwB 设置一个公网 HTTPS 地址，并启用所有者登录。把下面的提示词粘贴到一个新的 Muse 聊天中。
 
 <SetupPrompt name="muse" lang="zh-Hans" />
 
-让智能体调用 `connect(what="muse", choose={"gadget": true})`，然后按它返回的说明操作。
+提示词会让 Muse 把 SwB 添加为自定义连接器。连接器让 Muse 通过模型上下文协议（MCP）使用 SwB 的工具。Muse 会发给你一个登录链接。以所有者身份登录 SwB，批准这个连接。Muse 以 `muse` 的身份连接 SwB。
 
-在 [Muse SDK tokens 页面](https://gadgets.muse.ai/settings/sdk-tokens)创建一个个人令牌，再用智能体给出的一次性 SwB 认领链接保存它。
+然后 Muse 调用 `muse_hook_setup`。SwB 生成一个私有唤醒链接，并返回使用这个链接的钩子脚本。Muse 把脚本写入 `~/hooks/scripts/swb-wake.sh`，并添加钩子。Muse 先试运行一次脚本，并把结果展示给你。试运行只检查脚本。然后 Muse 启用钩子，并发送一条测试消息。Muse 在聊天中报告收到这条测试消息后，测试即完成。
 
-使用一台带蓝牙的 Mac 或 Linux 电脑，并把它放在手机附近。在 macOS 上使用“终端”，系统询问时允许蓝牙访问。在 Linux 上，让 Companion 能访问 BlueZ，也就是系统的蓝牙服务。
+## 钩子的工作方式
 
-如果要把 Muse 添加到已配对的 Companion，先运行 `swb companion disconnect`。然后获取一个 [Companion 配对码](/zh-Hans/docs/companion#配对设备)。配对码只能使用一次，10 分钟后过期。
+Muse 钩子是 Muse 定时运行的小脚本。SwB 的脚本每 5 秒检查一次私有链接，每次检查在 4 秒内结束。
 
-把示例地址换成你的 SwB 地址，然后在这台电脑上运行下面的命令。
+链接返回两个数字。一个是发给 Muse 的 SwB 未读消息数。另一个是读取位置（cursor），即最新一条未读消息的编号。消息正文、发送者和标题都保留在 SwB 中。
 
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
+有新消息时，脚本会唤醒一个 Muse worker。worker 是 Muse 在后台的一次运行。worker 通过连接器读取并处理这些消息。遇到需要你处理的消息，它会在聊天中逐条告诉你。最后，它用 `inbox_ack` 把这些消息标记为已读。
 
-出现提示后输入配对码，输入的内容会隐藏。配对 Muse 期间，保持 Companion 运行。让智能体开始 Muse 配对。
+每批新消息，脚本只唤醒一次 worker。如果 worker 在把消息标记为已读之前停止，脚本会在 15 分钟后再次唤醒 worker。如果连接 SwB 连续失败 30 分钟，worker 会通知你一次。如果 SwB 连续 3 次拒绝这个链接，钩子会自行关闭，并由 worker 通知你。
 
-在 Muse 应用中打开 **Settings**，再打开 **Devices**。开启 **Developer mode**。选择 **Add Device**，然后选择智能体给出的设备名称。如果应用询问 Wi-Fi，选择 **Use current connection**。
+## 费用
 
-## 添加连接器以使用工具
+只有钩子唤醒 worker 时，Muse 才消耗模型时间。每次唤醒都是一次完整的 worker 运行。两次唤醒之间的检查只运行脚本。
 
-连接器让 Muse 可以通过模型上下文协议（MCP）使用 SwB 工具。使用 OAuth 时，你在浏览器中批准这项访问。
+SwB 从内存中响应每次检查，约占用 1 ms 的服务器时间。每次检查约使用 7 KB 的网络流量。按 5 秒的间隔计算，每天约 120 MB。要减少流量，让 Muse 把 `poll_interval_secs` 设为 30 以内的值。间隔为 30 秒时，每天约 20 MB。
 
-在 SwB 上启用所有者登录。让 Muse 把你的公网 HTTPS 地址添加为自定义连接器，并使用 OAuth。这个地址以 `/mcp` 结尾。重定向 URI 填 `https://agent.meta.ai/api/hatch/oauth/callback`，它是接收登录结果的地址。
+在一次实测中，Muse 的单次检查约耗时 430 ms。测试消息的回复约 30 秒后到达，这段时间包含 worker 的运行。
 
-打开 Muse 给出的登录链接，以所有者身份登录 SwB。Muse 以 `muse` 的身份连接 SwB。
+## 保护链接
+
+Muse 只允许钩子脚本访问本地文件，所以链接写在脚本文件中，就像 Webhook 的地址一样。拿到链接的人都能看到你的未读消息数及其变化时间。这个链接只能访问这个数字。Muse 把脚本保存在它的钩子文件夹中。如果其他人拿到了这个链接，就把它撤销。
+
+如果 SwB 使用 Cloudflare Access，为 `/hooks/*` 设置 Bypass 策略。参阅[保护控制台](/zh-Hans/docs/cloudflare#cloudflare-access)。
+
+## 撤销或更换链接
+
+要撤销链接，在 SwB 控制台打开 **Tokens**，在 **Muse hook** 一行选择 **Revoke**。也可以让 Muse 调用 `muse_hook_revoke`。3 次检查后，钩子会自行关闭。
+
+要更换链接，再次粘贴设置提示词。每次调用 `muse_hook_setup` 都会生成新链接，并使之前的链接失效。Muse 会用新脚本更新钩子。
 
 ## 检查连接
 
-测试 gadget 时，让一个以所有者身份登录的智能体调用 `send(to="muse:gadget:muse", task="Reply with pong.")`，然后在测试对话中查看回复。
+让另一个 SwB 智能体调用 `send(to="agent:muse", task="Reply with pong.")`。Muse 会在几秒内启动，并在同一个对话中用 `reply` 回复。
 
-测试连接器时，让另一个 SwB 智能体调用 `send(to="agent:muse", task="Reply with pong.")`。让 Muse 用 `inbox` 读取消息，再用 `reply` 在同一个对话中回复。
+让 Muse 调用 `muse_hook_status`。结果显示钩子上次检查 SwB 的时间和未读消息数。

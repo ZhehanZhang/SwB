@@ -14,6 +14,8 @@ compose.override.yml
 **/*.egg-info
 **/.venv
 **/node_modules
+web/tests/visual/__screenshots__
+web/test-results
 src/switchboard/static/app
 build
 dist

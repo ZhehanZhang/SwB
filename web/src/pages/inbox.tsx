@@ -63,7 +63,7 @@ function Person({ label, kind, className, avatarUrl }: { label: string; kind?: s
 }
 
 function ProjectName({ project }: { project: string | null }) {
-  return project || <span role="img" aria-label="Unassigned" className="before:content-['—']" />
+  return project || <span role="img" aria-label="Unassigned" className="before:content-unassigned" />
 }
 
 function NeedsRow({ name, kind, title, at, preview, actions, avatarUrl }: {
@@ -76,14 +76,14 @@ function NeedsRow({ name, kind, title, at, preview, actions, avatarUrl }: {
   actions: ReactNode
 }) {
   return (
-    <li className="grid grid-cols-1 gap-3 border-b py-3.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:py-[15px]">
-      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 text-sm leading-[18px] md:grid-cols-[auto_auto_minmax(0,1fr)] md:gap-y-0.5 md:text-[13px]">
-        <Logo kind={kind || name} avatarUrl={avatarUrl} className="col-start-1 row-start-1 size-[22px] md:row-span-2 md:size-7" />
-        <span className="col-start-2 row-start-1 max-w-[14rem] min-w-0 font-semibold wrap-anywhere">{name}</span>
-        <span className="col-start-3 row-start-1 font-mono text-xs leading-[18px] text-muted-foreground md:hidden"><RelativeTime value={at} /></span>
+    <li className="grid grid-cols-1 gap-3 border-b py-3.5 md:grid-cols-fill-auto md:items-center md:py-3.75">
+      <div className="grid min-w-0 grid-cols-auto-fill-auto items-center gap-x-2 gap-y-2.5 text-body-sm md:grid-cols-auto-auto-main md:gap-y-0.5">
+        <Logo kind={kind || name} avatarUrl={avatarUrl} className="col-start-1 row-start-1 size-5 md:row-span-2 md:size-7" />
+        <span className="col-start-2 row-start-1 max-w-56 min-w-0 font-semibold wrap-anywhere">{name}</span>
+        <span className="col-start-3 row-start-1 font-mono text-mono-sm text-muted-foreground md:hidden"><RelativeTime value={at} /></span>
         <div className="col-span-3 row-start-2 min-w-0 wrap-anywhere md:col-span-1 md:col-start-3 md:row-start-1">
           {title}
-          <span className="ml-2 hidden text-[12px] text-muted-foreground md:inline"><RelativeTime value={at} /></span>
+          <span className="ml-2 hidden text-nav-label text-muted-foreground md:inline"><RelativeTime value={at} /></span>
         </div>
         {preview && <div className="col-span-3 row-start-3 -mt-1.5 max-h-40 overflow-y-auto wrap-anywhere whitespace-pre-wrap text-muted-foreground md:col-span-2 md:col-start-2 md:row-start-2 md:mt-0">{preview}</div>}
       </div>
@@ -123,13 +123,13 @@ function SlackApproval({ item }: { item: PendingWrite }) {
       actions={(
         <>
           <Button
-            size="sm" variant="ghost" className="min-h-9 border border-border-strong md:min-h-[26px] md:border-transparent"
+            size="sm" variant="ghost" className="min-h-9 border border-border-strong md:min-h-control-sm md:border-transparent"
             disabled={disabled} onClick={() => decide.mutate("reject")}
           >
             <X aria-hidden className="max-md:hidden" />{decide.isPending && decide.variables === "reject" ? "Denying…" : "Deny"}
           </Button>
           <Button
-            size="sm" className="min-h-9 md:min-h-[26px]" disabled={disabled} onClick={() => decide.mutate("approve")}
+            size="sm" className="min-h-9 md:min-h-control-sm" disabled={disabled} onClick={() => decide.mutate("approve")}
           >
             <Check aria-hidden />{decide.isPending && decide.variables === "approve" ? "Approving…" : "Approve"}
           </Button>
@@ -165,7 +165,7 @@ function TurnPause({ pause, search, fromList, onOpen }: { pause: Pause; search: 
       preview={`${pause.turns} ${pause.turns === 1 ? "turn" : "turns"}`}
       actions={(
         <Button
-          size="sm" className="min-h-9 md:min-h-[26px]" disabled={!session?.csrf || resume.isPending || resume.isSuccess}
+          size="sm" className="min-h-9 md:min-h-control-sm" disabled={!session?.csrf || resume.isPending || resume.isSuccess}
           onClick={() => resume.mutate()}
         >
           <Play aria-hidden />{resume.isPending ? "Resuming…" : "Resume"}
@@ -180,49 +180,49 @@ function Conversations({ items, search, active, onOpen, actions, selected, onSel
   selected?: ReadonlySet<string>; onSelect: (handle: string) => void;
 }) {
   return (
-    <table role="table" className="mt-1 w-full text-left @max-[38rem]/list:block @min-[38rem]/list:table-fixed">
+    <table role="table" className="mt-1 w-full text-left @max-inbox-table/list:block @min-inbox-table/list:table-fixed">
       <caption className="sr-only">Conversations</caption>
-      <thead role="rowgroup" className="sr-only @min-[38rem]/list:not-sr-only">
-        <tr role="row" className="border-b text-[11px] leading-4 text-muted-foreground">
+      <thead role="rowgroup" className="sr-only @min-inbox-table/list:not-sr-only">
+        <tr role="row" className="border-b text-caption text-muted-foreground">
           {selected && <th role="columnheader" scope="col" className="w-7"><span className="sr-only">Select</span></th>}
-          <th role="columnheader" className="w-[10%] py-2 pr-2 font-medium" scope="col">Project</th>
-          <th role="columnheader" className="w-[16%] py-2 pr-2 font-medium" scope="col">From</th>
-          <th role="columnheader" className="w-[16%] py-2 pr-2 font-medium" scope="col">To</th>
+          <th role="columnheader" className="w-1/10 py-2 pr-2 font-medium" scope="col">Project</th>
+          <th role="columnheader" className="w-4/25 py-2 pr-2 font-medium" scope="col">From</th>
+          <th role="columnheader" className="w-4/25 py-2 pr-2 font-medium" scope="col">To</th>
           <th role="columnheader" className="py-2 pr-3 font-medium" scope="col">Subject</th>
-          <th role="columnheader" className="w-[11%] py-2 pr-2 font-medium" scope="col">Status</th>
-          <th role="columnheader" className="w-[9.25%] py-2 pr-3 font-medium" scope="col">Updated</th>
+          <th role="columnheader" className="w-11/100 py-2 pr-2 font-medium" scope="col">Status</th>
+          <th role="columnheader" className="w-37/400 py-2 pr-3 font-medium" scope="col">Updated</th>
           <th role="columnheader" className="w-7" scope="col"><span className="sr-only">Actions</span></th>
         </tr>
       </thead>
-      <tbody role="rowgroup" className="@max-[38rem]/list:block">
+      <tbody role="rowgroup" className="@max-inbox-table/list:block">
         {items.map((row) => {
           const { from, to, fromKind, toKind } = participants(row)
           return (
-            <tr key={row.handle} role="row" data-selected={active === row.handle || selected?.has(row.handle) || undefined} className="relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 hover:bg-muted/40 data-selected:bg-muted @max-[38rem]/list:grid @max-[38rem]/list:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] @max-[38rem]/list:gap-x-2 @max-[38rem]/list:gap-y-1 @max-[38rem]/list:py-3.5 @min-[38rem]/list:h-[43px]">
+            <tr key={row.handle} role="row" data-selected={active === row.handle || selected?.has(row.handle) || undefined} className="relative border-b text-body-sm focus-within:bg-muted/40 hover:bg-muted/40 data-selected:bg-muted @max-inbox-table/list:grid @max-inbox-table/list:grid-cols-fill-fill-auto @max-inbox-table/list:gap-x-2 @max-inbox-table/list:gap-y-1 @max-inbox-table/list:py-3.5 @min-inbox-table/list:h-row">
               {selected && (
-                <td role="cell" className="@max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-3 @max-[38rem]/list:justify-self-end">
+                <td role="cell" className="@max-inbox-table/list:col-start-3 @max-inbox-table/list:row-start-3 @max-inbox-table/list:justify-self-end">
                   <input type="checkbox" aria-label={`Select ${row.title || "message"}`} checked={selected.has(row.handle)}
                     disabled={!row.unread || (!selected.has(row.handle) && selected.size >= 50)}
                     className="relative z-10 size-4 cursor-pointer align-middle accent-primary"
                     onChange={() => onSelect(row.handle)} />
                 </td>
               )}
-              <td role="cell" className="font-mono text-xs wrap-anywhere @max-[38rem]/list:col-start-1 @max-[38rem]/list:row-start-3 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2"><ProjectName project={row.project} /></td>
-              <td role="cell" className="@max-[38rem]/list:col-start-1 @max-[38rem]/list:row-start-2 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2"><Person label={from} kind={fromKind} avatarUrl={row.first_sender?.avatar_url} /></td>
-              <td role="cell" className="@max-[38rem]/list:col-start-2 @max-[38rem]/list:row-start-2 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? undefined} /></td>
-              <td role="cell" className="wrap-anywhere @max-[38rem]/list:col-span-2 @max-[38rem]/list:row-start-1 @max-[38rem]/list:font-semibold @min-[38rem]/list:py-2 @min-[38rem]/list:pr-3">
+              <td role="cell" className="font-mono text-mono-sm wrap-anywhere @max-inbox-table/list:col-start-1 @max-inbox-table/list:row-start-3 @min-inbox-table/list:py-2 @min-inbox-table/list:pr-2"><ProjectName project={row.project} /></td>
+              <td role="cell" className="@max-inbox-table/list:col-start-1 @max-inbox-table/list:row-start-2 @min-inbox-table/list:py-2 @min-inbox-table/list:pr-2"><Person label={from} kind={fromKind} avatarUrl={row.first_sender?.avatar_url} /></td>
+              <td role="cell" className="@max-inbox-table/list:col-start-2 @max-inbox-table/list:row-start-2 @min-inbox-table/list:py-2 @min-inbox-table/list:pr-2"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? undefined} /></td>
+              <td role="cell" className="wrap-anywhere @max-inbox-table/list:col-span-2 @max-inbox-table/list:row-start-1 @max-inbox-table/list:font-semibold @min-inbox-table/list:py-2 @min-inbox-table/list:pr-3">
                 <Link to={conversationLink(row.handle, search)} state={{ fromList: !active }} onClick={onOpen} title={row.handle}
                   aria-current={active === row.handle ? "page" : undefined}
                   className={cn(!selected && "after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring", row.unread && "font-medium")}>
                   {displayReference(row.title || "Message")}
                 </Link>
-                {row.for_owner && <span className="ml-2 text-xs font-normal text-muted-foreground">For owner</span>}
+                {row.for_owner && <span className="ml-2 text-label-sm font-normal text-muted-foreground">For owner</span>}
               </td>
-              <td role="cell" className="text-xs capitalize text-muted-foreground @max-[38rem]/list:col-start-2 @max-[38rem]/list:row-start-3 @max-[38rem]/list:text-right @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2">{row.status?.replaceAll("_", " ")}</td>
-              <td role="cell" className="font-mono text-mono-sm text-muted-foreground @max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-1 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2">
+              <td role="cell" className="text-label-sm capitalize text-muted-foreground @max-inbox-table/list:col-start-2 @max-inbox-table/list:row-start-3 @max-inbox-table/list:text-right @min-inbox-table/list:py-2 @min-inbox-table/list:pr-2">{row.status?.replaceAll("_", " ")}</td>
+              <td role="cell" className="font-mono text-mono-sm text-muted-foreground @max-inbox-table/list:col-start-3 @max-inbox-table/list:row-start-1 @min-inbox-table/list:py-2 @min-inbox-table/list:pr-2">
                 <RelativeTime value={row.updated_at ?? row.created_at} />
               </td>
-              <td role="cell" className="min-h-7 text-right @max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-2">
+              <td role="cell" className="min-h-control-sm text-right @max-inbox-table/list:col-start-3 @max-inbox-table/list:row-start-2">
                 <RowActions row={row} actions={actions} />
               </td>
             </tr>
@@ -261,11 +261,11 @@ function InboxList({ active, onOpen }: { active?: string; onOpen: OpenConversati
   const status = notice === "decide-refused" ? "Request closed" : notice === "send-failed" ? "Slack delivery failed"
     : notice === "approved" ? "Approved Slack request" : notice === "rejected" ? "Denied Slack request" : null
   return (
-    <div className="space-y-8 pt-2 md:space-y-[34px]">
+    <div className="space-y-8 pt-2 md:space-y-8.5">
       <section aria-labelledby="needs-you">
-        <h2 id="needs-you" className="text-heading-md font-semibold tracking-[-0.01em]">Needs you</h2>
-        {status && <p role="status" className="mt-2 text-sm">{status}</p>}
-        {inbox.isPending && <div className="flex h-[60px] items-center"><Skeleton className="h-3 w-28" /></div>}
+        <h2 id="needs-you" className="text-heading-md font-semibold">Needs you</h2>
+        {status && <p role="status" className="mt-2 text-body-sm">{status}</p>}
+        {inbox.isPending && <div className="flex h-15 items-center"><Skeleton className="h-3 w-28" /></div>}
         {inbox.isError && !data && <DataState kind="error" message="Inbox unavailable." onRetry={() => void inbox.refetch()} />}
         {data && (data.pending_writes.length || data.pauses.length ? (
           <ul className="mt-2">
@@ -277,7 +277,7 @@ function InboxList({ active, onOpen }: { active?: string; onOpen: OpenConversati
       {(inbox.isPending || data) && (
         <section aria-labelledby="conversations">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 id="conversations" className="text-heading-md font-semibold tracking-[-0.01em]">Conversations</h2>
+            <h2 id="conversations" className="text-heading-md font-semibold">Conversations</h2>
             {conversations.length > 0 && <Button variant="ghost" size="sm" aria-pressed={Boolean(selected)}
               onClick={() => select(selected ? null : { query: filterQuery, handles: new Set() })}>{selected ? "Done" : "Select"}</Button>}
           </div>
@@ -309,22 +309,22 @@ function InboxList({ active, onOpen }: { active?: string; onOpen: OpenConversati
 function ConversationsSkeleton() {
   return (
     <LoadingSkeleton message="Loading inbox…" className="mt-1">
-      <div className="hidden h-[33px] items-center gap-4 border-b @min-[38rem]/list:flex">
-        {[0, 1, 2, 3].map((column) => <Skeleton key={column} className="h-2.5 w-[12%] first:w-[8%]" />)}
+      <div className="hidden h-8.25 items-center gap-4 border-b @min-inbox-table/list:flex">
+        {[0, 1, 2, 3].map((column) => <Skeleton key={column} className="h-2.5 w-3/25 first:w-2/25" />)}
       </div>
       {[0, 1].map((row) => (
-        <div key={row} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] grid-rows-[18px_20px_16px] items-center gap-x-2 gap-y-1 border-b py-3.5 @min-[38rem]/list:h-[43px] @min-[38rem]/list:grid-cols-[10%_16%_16%_minmax(0,1fr)_11%_9.25%_16px] @min-[38rem]/list:grid-rows-1 @min-[38rem]/list:gap-x-0 @min-[38rem]/list:py-0">
-          <Skeleton className="h-2.5 w-12 max-w-[85%] @max-[38rem]/list:col-span-2 @max-[38rem]/list:row-start-3" />
+        <div key={row} className="grid grid-cols-fill-fill-auto grid-rows-conversation-skeleton items-center gap-x-2 gap-y-1 border-b py-3.5 @min-inbox-table/list:h-row @min-inbox-table/list:grid-cols-conversation-skeleton @min-inbox-table/list:grid-rows-1 @min-inbox-table/list:gap-x-0 @min-inbox-table/list:py-0">
+          <Skeleton className="h-2.5 w-12 max-w-17/20 @max-inbox-table/list:col-span-2 @max-inbox-table/list:row-start-3" />
           {[1, 2].map((person) => (
-            <div key={person} className="flex min-w-0 items-center gap-2 @max-[38rem]/list:row-start-2 @min-[38rem]/list:pr-3">
+            <div key={person} className="flex min-w-0 items-center gap-2 @max-inbox-table/list:row-start-2 @min-inbox-table/list:pr-3">
               <Skeleton className="size-5 rounded-md" />
               <Skeleton className="h-3 min-w-0 max-w-1/2 flex-1" />
             </div>
           ))}
-          <Skeleton className="h-3 w-36 max-w-full @max-[38rem]/list:col-span-2 @max-[38rem]/list:row-start-1" />
-          <Skeleton className="hidden h-2.5 w-10 max-w-full @min-[38rem]/list:block" />
-          <Skeleton className="h-2.5 w-7 max-w-full @max-[38rem]/list:row-start-1" />
-          <Skeleton className="size-2 justify-self-end rounded-full @max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-2" />
+          <Skeleton className="h-3 w-36 max-w-full @max-inbox-table/list:col-span-2 @max-inbox-table/list:row-start-1" />
+          <Skeleton className="hidden h-2.5 w-10 max-w-full @min-inbox-table/list:block" />
+          <Skeleton className="h-2.5 w-7 max-w-full @max-inbox-table/list:row-start-1" />
+          <Skeleton className="size-2 justify-self-end rounded-full @max-inbox-table/list:col-start-3 @max-inbox-table/list:row-start-2" />
         </div>
       ))}
     </LoadingSkeleton>
@@ -352,7 +352,7 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
           <span className="font-mono text-mono-sm text-muted-foreground"><RelativeTime value={item.at} /></span>
         </div>
         {(provenance.length > 0 || item.in_reply_to || (author && kind !== "message") || item.status) && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs wrap-anywhere text-muted-foreground">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-label-sm wrap-anywhere text-muted-foreground">
             {author && kind !== "message" && <span className="capitalize">{kind}</span>}
             {item.status && <span>Status {item.status.replace(/_/g, " ")}</span>}
             {provenance.map((part, index) => <span key={index}>{part}</span>)}
@@ -401,7 +401,7 @@ function InboxConversation({ handle, search, onBack }: { handle: string; search:
   }
   return (
     <div className="pt-2">
-      <Link to={`/inbox${search}`} onClick={onBack} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+      <Link to={`/inbox${search}`} onClick={onBack} className="inline-flex items-center gap-2 text-body-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Conversations
       </Link>
       {thread.isPending && (
@@ -415,7 +415,7 @@ function InboxConversation({ handle, search, onBack }: { handle: string; search:
               </div>
             ))}
           </div>
-          <div className="mt-3 flex h-[33px] gap-5 border-b pt-0.5">
+          <div className="mt-3 flex h-8.25 gap-5 border-b pt-0.5">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-16" />
           </div>
@@ -439,12 +439,12 @@ function InboxConversation({ handle, search, onBack }: { handle: string; search:
             <h2 id="conversation-title" className="text-page-title wrap-anywhere">{displayReference(conversation.title || "Message")}</h2>
             <RowActions row={conversation} actions={actions} />
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-body-sm">
             <Person label={people.from} kind={people.fromKind} avatarUrl={conversation.first_sender?.avatar_url} />
             <ArrowRight aria-label="to" className="size-4 text-muted-foreground" strokeWidth={1.5} />
             <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url ?? undefined} />
           </div>
-          <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-xs text-muted-foreground">
+          <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-label-sm text-muted-foreground">
             <div className="flex flex-wrap gap-1"><dt>Project</dt><dd className="font-mono wrap-anywhere"><ProjectName project={conversation.project} /></dd></div>
             <div className="flex flex-wrap gap-1"><dt>Address</dt><dd className="font-mono wrap-anywhere">{conversation.target || conversation.destination}</dd></div>
             <div className="flex flex-wrap gap-1"><dt>Status</dt><dd className="capitalize">{conversation.status?.replaceAll("_", " ") || (conversation.open ? "Open" : "Closed")}</dd></div>
@@ -508,12 +508,12 @@ export function InboxPage() {
 
   return (
     <div className="@container">
-      <div className="min-w-0 @min-[64rem]:grid @min-[64rem]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div ref={list} className={cn("min-w-0 @container/list @min-[64rem]:block @min-[64rem]:max-h-[calc(100dvh-var(--topbar-height)-3rem)] @min-[64rem]:overflow-y-auto @min-[64rem]:pr-5",
+      <div className="min-w-0 @min-inbox-split:grid @min-inbox-split:grid-cols-inbox-split">
+        <div ref={list} className={cn("min-w-0 @container/list @min-inbox-split:block @min-inbox-split:max-h-inbox-pane @min-inbox-split:overflow-y-auto @min-inbox-split:pr-5",
           handle && "hidden")}>
           <InboxList active={handle} onOpen={open} />
         </div>
-        <div className={cn("min-w-0 @min-[64rem]:block @min-[64rem]:max-h-[calc(100dvh-var(--topbar-height)-3rem)] @min-[64rem]:overflow-y-auto @min-[64rem]:border-l @min-[64rem]:pl-5",
+        <div className={cn("min-w-0 @min-inbox-split:block @min-inbox-split:max-h-inbox-pane @min-inbox-split:overflow-y-auto @min-inbox-split:border-l @min-inbox-split:pl-5",
           !handle && "hidden")}>
           {handle && <InboxConversation key={handle} handle={handle} search={search} onBack={back} />}
         </div>

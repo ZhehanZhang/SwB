@@ -118,9 +118,9 @@ export function ChannelModeTable({ label, rows, status }: { label: string; rows:
               <span className="ms-2 md:sr-only">Select all</span>
             </th>
             <th scope="col" className="py-2 font-normal max-md:hidden">Channel</th>
-            <th scope="col" className="w-[23%] py-2 font-normal max-md:hidden">Mode</th>
-            <th scope="col" className="w-[25%] py-2 font-normal max-md:hidden">Target</th>
-            <th scope="col" className="w-[96px] py-2 text-right font-normal max-md:hidden"><span className="sr-only">Details</span></th>
+            <th scope="col" className="w-23/100 py-2 font-normal max-md:hidden">Mode</th>
+            <th scope="col" className="w-1/4 py-2 font-normal max-md:hidden">Target</th>
+            <th scope="col" className="w-24 py-2 text-right font-normal max-md:hidden"><span className="sr-only">Details</span></th>
           </tr>
         </thead>
         <tbody className="max-md:block">

@@ -87,7 +87,8 @@ class CompanionState:
 
             if ("mcp" in caps) != bool(local_servers(specs)):
                 raise ValueError
-            return cls(base_url(url), companion_id, key, tuple(caps), drop_dir, specs, name, memory_sync)
+            return cls(base_url(url), companion_id, key, tuple(cap for cap in caps if cap != "muse"), drop_dir,
+                       specs, name, memory_sync)
         except (TypeError, ValueError, KeyError):
             raise CompanionError("Check the companion settings file.") from None
 
@@ -141,8 +142,8 @@ def _is_reparse(info: os.stat_result) -> bool:
     return bool(getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
-def state_path() -> Path:
-    if override := os.environ.get("SWB_COMPANION_HOME"):
+def state_path(*, use_override: bool = True) -> Path:
+    if (override := os.environ.get("SWB_COMPANION_HOME")) and use_override:
         home = Path(override).expanduser()
     elif os.name == "nt":
         home = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming")) / "swb"

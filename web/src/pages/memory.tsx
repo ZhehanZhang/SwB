@@ -5,12 +5,14 @@ import { useSearchParams } from "react-router-dom"
 import { PageHeaderActions } from "@/app/page-header-actions"
 import { DataState, type DataStateProps } from "@/components/data-state"
 import { Input } from "@/components/field"
+import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { Button } from "@/components/ui/button"
 import { sessionQuery } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { fetchMemoryList, type MemoryNote } from "./memory/api"
 import { MemoryBackup } from "./memory/backup"
-import { Author, NoteTime, scopeName } from "./memory/display"
+import { Time } from "@/components/time"
+import { Author, scopeName } from "./memory/display"
 import { MemorySync } from "./memory/header"
 import { NoteInspector } from "./memory/inspector"
 
@@ -31,13 +33,13 @@ function NotesTable({ scope, notes, state, onOpen }: {
     <table role="table" className="block w-full text-left lg:table lg:table-fixed">
       <caption className="sr-only">Notes in {scopeName(scope)}</caption>
       <colgroup className="hidden lg:table-column-group">
-        <col className="w-[22.5%]" />
-        <col className="w-[48.25%]" />
-        <col className="w-[20.5%]" />
-        <col className="w-[8.75%]" />
+        <col className="w-9/40" />
+        <col className="w-193/400" />
+        <col className="w-41/200" />
+        <col className="w-7/80" />
       </colgroup>
       <thead role="rowgroup" className="sr-only lg:not-sr-only lg:table-header-group">
-        <tr role="row" className="border-b text-[11px]/4 font-medium text-muted-foreground">
+        <tr role="row" className="border-b text-label-sm font-medium text-muted-foreground">
           {["Key", "Summary", "Written by", "Updated"].map((label) => (
             <th role="columnheader" key={label} scope="col" className="pb-2 font-medium">{label}</th>
           ))}
@@ -46,10 +48,14 @@ function NotesTable({ scope, notes, state, onOpen }: {
       <tbody role="rowgroup" className="block lg:table-row-group">
         {state ? (
           <tr role="row" className="block lg:table-row">
-            <td role="cell" colSpan={4} className="block lg:table-cell"><DataState {...state} /></td>
+            <td role="cell" colSpan={4} className="block lg:table-cell">
+              {state.kind === "loading"
+                ? <LoadingSkeleton message={state.message ?? "Loading…"}>{[0, 1, 2, 3].map(row => <div key={row} className="flex h-row items-center border-b"><Skeleton className="h-3 w-2/3" /></div>)}</LoadingSkeleton>
+                : <DataState {...state} />}
+            </td>
           </tr>
         ) : notes.map((note) => (
-          <tr key={note.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 border-b py-2.5 lg:table-row lg:h-[43px] lg:py-0">
+          <tr key={note.id} role="row" className="grid grid-cols-fill-auto gap-x-3 gap-y-1 border-b py-2.5 lg:table-row lg:h-row lg:py-0">
             <td role="cell" className="col-span-2 min-w-0 lg:pr-4">
               {note.key && <button
                 className="block w-full truncate rounded-sm py-1 text-left font-mono text-mono-sm hover:underline focus-visible:outline-offset-1 lg:py-2"
@@ -73,7 +79,7 @@ function NotesTable({ scope, notes, state, onOpen }: {
               )}
             </td>
             <td role="cell" className="min-w-0 text-body-sm lg:pr-4 lg:text-body-md"><Author source={note.writer} /></td>
-            <td role="cell" className="self-center whitespace-nowrap font-mono text-mono-sm text-muted-foreground"><NoteTime date={note.updated_at} short /></td>
+            <td role="cell" className="self-center whitespace-nowrap text-body-sm text-muted-foreground"><Time value={note.updated_at} /></td>
           </tr>
         ))}
       </tbody>
@@ -166,7 +172,7 @@ export function MemoryPage() {
   }
 
   return (
-    <div className="grid min-w-0 gap-y-4 md:grid-cols-[176px_minmax(0,1fr)] md:gap-x-6 lg:min-h-[calc(100dvh-var(--topbar-height)-3rem)] lg:grid-cols-[208px_minmax(0,1fr)] lg:gap-x-8">
+    <div className="grid min-w-0 gap-y-4 md:grid-cols-memory md:gap-x-6 lg:min-h-memory lg:grid-cols-memory-wide lg:gap-x-8">
       {csrf && <PageHeaderActions><MemorySync csrf={csrf} /></PageHeaderActions>}
       <nav aria-label="Memory scopes" className="space-y-3 border-b pb-3 md:border-r md:border-b-0 md:pr-4 md:pb-0 lg:-ml-2 lg:pt-2">
         {scopeCounts ? (
@@ -183,7 +189,7 @@ export function MemoryPage() {
                     return (
                       <li key={name}>
                         <button type="button" aria-pressed={pressed}
-                          className={cn("flex min-h-8 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left font-mono text-mono-sm hover:bg-muted",
+                          className={cn("flex min-h-8 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left text-body-sm hover:bg-muted",
                             pressed && "bg-muted")}
                           title={scopeName(name)} onClick={() => { if (!pressed) selectScope(name) }}>
                           <span className="truncate">{scopeName(name)}</span>
@@ -267,7 +273,7 @@ export function MemoryPage() {
               <Button variant="outline" size="sm" disabled={notes.isFetchingNextPage} onClick={() => void notes.fetchNextPage()}>
                 {notes.isFetchingNextPage ? "Loading…" : notes.isFetchNextPageError ? "Retry" : "Load more"}
               </Button>
-              {notes.isFetchNextPageError && <span role="alert" className="text-sm text-muted-foreground">Loading more notes failed.</span>}
+              {notes.isFetchNextPageError && <span role="alert" className="text-body-sm text-muted-foreground">Loading more notes failed.</span>}
             </div>
           )}
         </section>

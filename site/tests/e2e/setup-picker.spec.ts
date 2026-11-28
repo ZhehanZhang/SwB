@@ -109,7 +109,7 @@ test('the hero CTA and all hub apps link to localized Get started routes', async
 
 for (const [locale, path, heading, label] of [
   ['en', '/docs/setup', 'Set up your apps', 'Setup prompt'],
-  ['zh-Hans', '/zh-Hans/docs/setup', '设置应用', '设置提示词'],
+  ['zh-Hans', '/zh-Hans/docs/setup', '接入应用', '设置提示词'],
   ['zh-Hant', '/zh-Hant/docs/setup', '設定應用程式', '設定提示詞'],
 ]) {
   test(`${locale} coding agent guides show the SwB server and channel names`, async ({ page }) => {

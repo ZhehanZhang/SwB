@@ -1,6 +1,15 @@
 name: CI
 
-on: [pull_request, push]
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+    inputs:
+      update_visual_snapshots:
+        description: Regenerate visual baselines on the selected branch
+        type: boolean
+        default: false
+
 
 permissions:
   contents: read
@@ -50,6 +59,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web
       - run: npm run typecheck --prefix web
+      - run: npm run lint --prefix web
       - run: npm run build --prefix web
       - run: bash web/tests/run-display-tests.sh
       - run: bash web/tests/run-owner-auth-tests.sh
@@ -60,9 +70,113 @@ jobs:
       - run: npm run test:mobile --prefix web
       - run: npm run test:theme --prefix web
       - run: npm run test:modes --prefix web
+      - run: npm run test:server-pages --prefix web
 
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - run: docker build --target paas -t switchboard:ci .
+
+  macos-helper:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - name: Compile the unsigned macOS helper
+        run: |
+          app="$RUNNER_TEMP/SwB Companion.app"
+          bash native/companion-macos/build.sh "$app"
+          executable=$(/usr/bin/plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")
+          slices="$(xcrun lipo -archs "$app/Contents/MacOS/$executable")"
+          [[ " $slices " == *" arm64 "* && " $slices " == *" x86_64 "* ]]
+      - name: Test the Mac launchd entrypoint
+        env:
+          SWB_TEST_MAC_HELPER: ${{ runner.temp }}/SwB Companion.app
+        run: |
+          uv sync --locked --extra test
+          uv run --no-sync pytest -v -o faulthandler_timeout=30 tests/test_companion_macos.py tests/test_companion_service.py
+
+  visual-changes:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      touched: ${{ steps.paths.outputs.touched }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: paths
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$BASE_SHA"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base="$(git hash-object -t tree -w --stdin </dev/null)"
+          elif ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo 'touched=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          paths="$(git diff --name-only "$base" HEAD -- web/ src/switchboard/pages.py src/switchboard/static/ src/switchboard/templates/ static/ templates/ pyproject.toml uv.lock .github/workflows/ci.yml)"
+          if [[ -n "$paths" ]]; then
+            echo 'touched=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'touched=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  visual:
+    needs: visual-changes
+    if: needs.visual-changes.outputs.touched == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - run: bash web/tests/visual/run.sh --shard=${{ matrix.shard }}/4
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: visual-shard-${{ matrix.shard }}
+          path: web/test-results/visual/
+
+  visual-update:
+    if: github.event_name == 'workflow_dispatch' && inputs.update_visual_snapshots && github.ref_type == 'branch' && startsWith(github.ref_name, 'dev/') && github.ref_name != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Regenerate all baseline PNGs
+        run: |
+          mkdir -p web/tests/visual/__screenshots__
+          find web/tests/visual/__screenshots__ -type f -name '*.png' -delete
+          bash web/tests/visual/run.sh --update-snapshots=all
+          SWB_VISUAL_REUSE_IMAGE=1 bash web/tests/visual/run.sh --compact-baselines
+      - run: SWB_VISUAL_REUSE_IMAGE=1 bash web/tests/visual/run.sh
+      - name: Commit snapshots to the selected branch
+        shell: bash
+        run: |
+          git add -- web/tests/visual/__screenshots__
+          if git diff --cached --quiet; then exit 0; fi
+          git config --local user.name 'github-actions[bot]'
+          git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Update visual snapshots'
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: visual-update
+          path: web/test-results/visual/

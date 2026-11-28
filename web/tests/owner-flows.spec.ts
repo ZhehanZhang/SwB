@@ -156,7 +156,7 @@ test("Memory groups scopes and gives Backup a separate view", async ({ page }) =
   const backup = scopes.getByRole("button", { name: "Backup", exact: true })
   await expect(shared).toHaveAttribute("aria-pressed", "true")
   await expect(scopes.getByRole("region", { name: "Projects" }).getByRole("button")).toHaveText([/^community\s*0$/, /^operations\s*0$/])
-  await expect(agent).toHaveClass(/\bfont-mono\b/)
+  await expect(agent).toHaveCSS("font-family", /Inter Variable/)
   await expect(agent).toHaveText(/^claude-code/)
   await expect(page.getByRole("button", { name: "Download", exact: true })).toHaveCount(0)
   const header = page.getByRole("banner")
@@ -295,7 +295,7 @@ test("Memory configures a new repository through a credential claim", async ({ p
   await expect(backup.getByRole("link", { name: /Enter key/ })).toBeVisible()
   await expect(backup.getByLabel("Repository address")).toHaveValue("example.test:another-backup.git")
   await backup.getByLabel("Repository address").fill("https://example.test/memory.git")
-  await expect(backup.getByLabel("Author name")).toBeDisabled()
+  await expect(backup.getByLabel("Author name")).toHaveCount(0)
   await expect(backup.locator("input[type=password], input[type=file]")).toHaveCount(0)
   const created = page.waitForResponse((response) => response.request().method() === "POST"
     && new URL(response.url()).pathname === "/api/memory/backup")

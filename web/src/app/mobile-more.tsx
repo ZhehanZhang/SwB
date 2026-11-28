@@ -8,7 +8,7 @@ import { preloadOnTouch } from "@/app/route-pages"
 import { boardQuery } from "@/pages/overview/data"
 
 const projectsPath = "/#projects"
-const rowClass = "console-mobile-tab console-pressable flex min-h-[52px] w-full touch-manipulation items-center gap-3 rounded-md px-3 text-caption text-muted-foreground"
+const rowClass = "console-mobile-tab console-pressable flex min-h-13 w-full touch-manipulation items-center gap-3 rounded-md px-3 text-caption text-muted-foreground"
 const entries = sections.slice(3)
 
 export function MobileMore({ open, onOpenChange, tabClass, iconClass, tabVisual }: {
@@ -35,7 +35,7 @@ export function MobileMore({ open, onOpenChange, tabClass, iconClass, tabVisual 
       <Dialog.Portal>
         <div aria-hidden data-more-scrim data-state={open ? "open" : "closed"} className="console-more-scrim fixed inset-0 z-30 touch-none bg-overlay/50 md:hidden"
           onClick={() => onOpenChange(false)} />
-        <Dialog.Content aria-describedby={undefined} inert={!open} className="console-more-sheet fixed inset-x-0 z-40 flex max-h-[75dvh] flex-col overflow-hidden rounded-t-xl border-t bg-surface px-5 pb-2 text-foreground md:hidden"
+        <Dialog.Content aria-describedby={undefined} inert={!open} className="console-more-sheet fixed inset-x-0 z-40 flex max-h-mobile-more flex-col overflow-hidden rounded-t-xl border-t bg-surface px-5 pb-2 text-foreground md:hidden"
           onInteractOutside={event => event.preventDefault()}
           onTouchStart={event => {
             const touch = event.touches[0]

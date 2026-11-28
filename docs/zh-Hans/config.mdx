@@ -53,9 +53,9 @@ SwB 只靠环境变量就能运行。MCP 模块默认启动，另一些模块在
 
 SwB 优先选择过去 30 分钟内最近一次以所有者身份活动的智能体。其次尝试项目路由或 `default_target` 指定的主智能体。最后使用所有者的全局路由。
 
-消息进入所选智能体的收件箱。若三种方式均失败，SwB 会在状态中报告消息待投递。
+消息进入所选智能体的收件箱。如果三种方式都失败，SwB 会在状态中报告消息待投递。
 
-将所有者的全局路由设为智能体地址。
+把所有者的全局路由设为一个智能体地址。
 
 ```python
 routes_set(agent="owner", target="agent:claude")
@@ -181,7 +181,7 @@ GitHub 使用 `owner` 和 `external` 两种信任等级。在 Slack、Discord �
 | `memory.mirror` | 控制 Markdown 副本。设为 `false` 可以停止更新 |
 | `memory.mirror_dir` | 存放 Markdown 副本的文件夹 |
 | `memory.mirror_debounce_s` | 从记忆变更到写入副本的等待时间，单位为秒。默认为 `2` |
-| `memory.sync` | 允许智能体用 `memory_sync` 把自身记忆复制到 SwB。默认为 `true`。控制台中的 **Memory sync** 开关优先 |
+| `memory.sync` | 允许智能体用 `memory_sync` 把自身记忆复制到 SwB。默认为 `true`。控制台中的 **Memory sync** 开关会覆盖这个设置 |
 | `memory.backup` | 记忆 Git 备份的设置 |
 | `memory.backup.debounce_s` | 从记忆变更到提交备份的等待时间，单位为秒。默认为 `30` |
 | `memory.backup.max_delay_s` | 记忆连续变更时，提交备份前的最长等待时间，单位为秒。默认为 `300` |

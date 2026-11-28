@@ -20,8 +20,8 @@ export function PromptRow({ title, version, prompt }: PromptRowProps) {
   }
 
   return (
-    <Collapsible.Root className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b py-4">
-      <Collapsible.Trigger className="group flex min-h-[34px] min-w-0 flex-wrap items-center gap-2 rounded-sm text-left">
+    <Collapsible.Root className="grid grid-cols-fill-auto items-center gap-x-3 border-b py-4">
+      <Collapsible.Trigger className="group flex min-h-control min-w-0 flex-wrap items-center gap-2 rounded-sm text-left">
         <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none group-data-[state=open]:rotate-90" />
         <span className="min-w-0 text-heading-md wrap-anywhere">{title}</span>
         {version && <span className="font-mono text-mono-sm text-muted-foreground">{version}</span>}

@@ -11,7 +11,9 @@ import { ConfirmAction } from "@/components/console/confirm-action"
 import { Lamp } from "@/components/console/lamp"
 import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
+import { Field, Input } from "@/components/field"
 import { LogoTile } from "@/components/logo-tile"
+import { StatusDot } from "@/components/status-dot"
 import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
 import { ApiError, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
@@ -26,7 +28,7 @@ const passkeysQuery = queryOptions({
 })
 
 const commands = ["swb up", "swb status", "swb log"] as const
-const rowClass = "grid min-h-[41px] grid-cols-[minmax(88px,24%)_1fr_auto] items-center gap-x-3 border-b text-body-sm"
+const rowClass = "grid min-h-row grid-cols-settings items-center gap-x-3 border-b text-body-sm"
 const headingClass = "text-heading-md"
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
 const connectionPlatforms = Object.keys(connectionNames) as ConnectionPlatform[]
@@ -124,10 +126,10 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="w-full max-w-[720px] space-y-8 pt-2 text-sm">
+    <div className="w-full max-w-180 space-y-8 pt-2 text-body-sm">
       <section aria-labelledby="settings-appearance">
         <h2 id="settings-appearance" className={headingClass}>Appearance</h2>
-        <div className="mt-2 flex min-h-[50px] flex-wrap items-center justify-between gap-2 border-b py-2 sm:grid sm:grid-cols-[minmax(88px,24%)_1fr] sm:justify-items-start sm:gap-x-0">
+        <div className="mt-2 flex min-h-12 flex-wrap items-center justify-between gap-2 border-b py-2 sm:grid sm:grid-cols-settings-detail sm:justify-items-start sm:gap-x-0">
           <span className="text-body-sm text-muted-foreground">Theme</span>
           <ThemePicker />
         </div>
@@ -137,7 +139,7 @@ export function SettingsPage() {
         <h2 id="settings-run" className={headingClass}>Commands</h2>
         <ul className="mt-5 rounded-lg bg-surface-sunken px-4 py-3">
           {commands.map(command => (
-            <li key={command} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+            <li key={command} className="grid grid-cols-fill-auto items-center gap-x-2">
               <code className="min-w-0 wrap-break-word text-mono-md">{command}</code>
               <CopyButton text={command} label={`Copy ${command}`} />
             </li>
@@ -163,21 +165,21 @@ export function SettingsPage() {
               <dl className="mt-2">
                 <div className={rowClass}>
                   <dt className="text-muted-foreground">MCP endpoint</dt>
-                  <dd className="min-w-0 wrap-anywhere font-mono text-xs">{endpoint}</dd>
+                  <dd className="min-w-0 wrap-anywhere font-mono text-mono-sm">{endpoint}</dd>
                   {endpoint && <CopyButton text={endpoint} label="Copy MCP endpoint" />}
                 </div>
                 <div className={rowClass}>
                   <dt className="text-muted-foreground">Version</dt>
-                  <dd className="font-mono text-xs">{settings.data.version ?? "Unknown"}</dd>
+                  <dd className="font-mono text-mono-sm">{settings.data.version ?? "Unknown"}</dd>
                 </div>
                 <div className={rowClass}>
                   <dt className="text-muted-foreground">Data</dt>
-                  <dd className="min-w-0 wrap-anywhere font-mono text-xs">sqlite, {settings.data.data_dir}</dd>
+                  <dd className="min-w-0 wrap-anywhere font-mono text-mono-sm">sqlite, {settings.data.data_dir}</dd>
                 </div>
                 {settings.data.owner_key_masked && (
                   <div className={rowClass}>
                     <dt className="text-muted-foreground">Owner key</dt>
-                    <dd className="font-mono text-xs" aria-label="Owner key configured">{settings.data.owner_key_masked}</dd>
+                    <dd className="font-mono text-mono-sm" aria-label="Owner key configured">{settings.data.owner_key_masked}</dd>
                   </div>
                 )}
               </dl>
@@ -207,7 +209,7 @@ export function SettingsPage() {
             return (
               <li key={platform}>
                 <Link to={`/connections/${platform}`} {...preloadOnTouch(`/connections/${platform}`)}
-                  className="console-pressable group grid min-h-[41px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-sm border-b py-2 text-body-sm">
+                  className="console-pressable group grid min-h-row grid-cols-fill-auto-auto items-center gap-3 rounded-sm border-b py-2 text-body-sm">
                   <span className="flex items-center gap-2.5">
                     <LogoTile kind={platform} />
                     <span className="group-hover:underline">{connectionNames[platform]}</span>
@@ -220,13 +222,13 @@ export function SettingsPage() {
           })}
           {companions.data?.companions.map(companion => (
             <li key={companion.id}
-              className="grid min-h-[41px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b py-2 text-body-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              className="grid min-h-row grid-cols-fill-auto items-center gap-x-3 border-b py-2 text-body-sm sm:grid-cols-fill-fill-auto">
               <span className="flex min-w-0 items-center gap-2.5">
                 <DeviceIcon platform={companion.platform} />
                 <span className="min-w-0 wrap-anywhere">{companion.name}</span>
                 <Lamp state={companion.online ? "on" : "off"} label={companion.online ? "Online" : "Offline"} />
               </span>
-              <span className="order-last col-span-2 wrap-anywhere ps-[34px] text-muted-foreground sm:order-none sm:col-span-1 sm:ps-0">
+              <span className="order-last col-span-2 wrap-anywhere ps-8.5 text-muted-foreground sm:order-none sm:col-span-1 sm:ps-0">
                 {companion.capabilities.join(", ")}
               </span>
               <ConfirmAction title={`Disconnect ${companion.name}?`} action="Disconnect" onConfirm={() => disconnect.mutate(companion.id)}>
@@ -246,20 +248,20 @@ export function SettingsPage() {
       {settings.data && (
         <section aria-labelledby="settings-hosts">
           <h2 id="settings-hosts" className={headingClass}>Hosts</h2>
-          <table className="mt-1 w-full table-fixed border-collapse text-left text-[13px]">
+          <table className="mt-1 w-full table-fixed border-collapse text-left text-body-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th scope="col" className="w-[78%] py-2 font-normal">Host</th>
+              <tr className="border-b text-label-sm text-muted-foreground">
+                <th scope="col" className="w-39/50 py-2 font-normal">Host</th>
                 <th scope="col" className="py-2 font-normal">Uptime</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b">
-                <td className="py-3 pe-2 wrap-anywhere font-mono text-xs">{settings.data.host}</td>
-                <td className="py-3 font-mono text-xs">
+                <td className="py-3 pe-2 wrap-anywhere font-mono text-mono-sm">{settings.data.host}</td>
+                <td className="py-3 tabular-nums">
                   <div className="flex items-center justify-between gap-1">
                     {uptime(settings.data.uptime_seconds)}
-                    <span className="size-2 shrink-0 rounded-full bg-primary" role="img" aria-label="Online" />
+                    <StatusDot state="on" label="Online" />
                   </div>
                 </td>
               </tr>
@@ -287,10 +289,10 @@ export function SettingsPage() {
                 : (
                   <ul className="mt-2">
                     {passkeys.data.map((passkey) => (
-                      <li key={passkey.id} className="flex min-h-[41px] flex-wrap items-center justify-between gap-2 border-b">
+                      <li key={passkey.id} className="flex min-h-row flex-wrap items-center justify-between gap-2 border-b">
                         <div className="min-w-0">
                           <div className="wrap-anywhere font-medium">{passkey.name}</div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-label-sm text-muted-foreground">
                             {passkey.last_used_at ? `Last used ${date(passkey.last_used_at)}` : `Added ${date(passkey.created_at)}`}
                           </div>
                         </div>
@@ -305,7 +307,7 @@ export function SettingsPage() {
                   </ul>
                 )}
         {remove.isError && (
-          <p role="alert" className="mt-3 text-sm text-destructive">
+          <p role="alert" className="mt-3 text-body-sm text-destructive">
             {remove.error instanceof ApiError && remove.error.code === "last_method"
               ? "Add a sign-in method first."
               : "Passkey removal failed"}
@@ -313,16 +315,12 @@ export function SettingsPage() {
         )}
         {adding && (
           <form onSubmit={registerPasskey} className="mt-3 flex flex-wrap items-end gap-2">
-            <label className="block w-full text-label-sm sm:w-60">
-              Passkey name
-              <input
-                value={name} onChange={(event) => setName(event.currentTarget.value)} placeholder="Passkey"
-                className="mt-1 block h-9 w-full rounded-md border border-input px-3 text-sm"
-              />
-            </label>
-            <Button variant="ghost" size="sm" disabled={pending} onClick={() => setAdding(false)}>Cancel</Button>
-            <Button type="submit" size="sm" disabled={pending || !csrf}>{register.isPending ? "Adding…" : "Add passkey"}</Button>
-            {register.isError && <p role="alert" className="w-full text-sm text-destructive">Passkey setup failed</p>}
+            <Field label="Passkey name" className="w-full sm:w-60">
+              <Input value={name} onChange={(event) => setName(event.currentTarget.value)} placeholder="Passkey" />
+            </Field>
+            <Button variant="ghost" disabled={pending} onClick={() => setAdding(false)}>Cancel</Button>
+            <Button type="submit" disabled={pending || !csrf}>{register.isPending ? "Adding…" : "Add passkey"}</Button>
+            {register.isError && <p role="alert" className="w-full text-body-sm text-destructive">Passkey setup failed</p>}
           </form>
         )}
         {session?.via === "access" ? (
@@ -338,7 +336,7 @@ export function SettingsPage() {
 
       <section aria-labelledby="settings-about">
         <h2 id="settings-about" className={headingClass}>About</h2>
-        <Link className="mt-2 flex min-h-[41px] items-center justify-between gap-3 border-b py-2 text-body-sm hover:underline" to="/about">
+        <Link className="mt-2 flex min-h-row items-center justify-between gap-3 border-b py-2 text-body-sm hover:underline" to="/about">
           About {PRODUCT_NAME}
           <ChevronRight aria-hidden className="size-3.5 shrink-0" />
         </Link>

@@ -1,46 +1,52 @@
 ---
 title: Muse
-description: 配對 Muse gadget 來即時喚醒，或新增連接器來使用工具。
+description: 把 Muse 連接到 SwB，並在訊息送達時喚醒 Muse。
 ---
 
-## 即時喚醒 Muse
+Muse 以自訂連接器的方式連接 SwB。之後，SwB 收到發給 Muse 的訊息時，Muse 掛鉤（hook）會啟動 Muse。
 
-如果要在訊息送達時立刻開始工作，SwB 建議使用 Muse gadget。gadget 是一種與 Muse 應用程式配對的裝置。
+## 設定 Muse
 
-[Companion](/zh-Hant/docs/companion) 是在你自己的裝置上執行的 SwB 程式。配對期間，它用藍牙扮演 gadget。配對完成後，SwB 伺服器會維持與 Muse 的連線，這時就可以停止 Companion。
-
-為 SwB 設定公開 HTTPS 網址。把下面的提示詞貼給具備完整擁有者存取權的 SwB 代理。
+為 SwB 設定公開的 HTTPS 網址，並啟用擁有者登入。把下面的提示詞貼到新的 Muse 聊天中。
 
 <SetupPrompt name="muse" lang="zh-Hant" />
 
-請代理呼叫 `connect(what="muse", choose={"gadget": true})`，再依照回傳的指示操作。
+提示詞會請 Muse 把 SwB 新增為自訂連接器。連接器讓 Muse 透過 Model Context Protocol（MCP）使用 SwB 的工具。Muse 會傳給你一個登入連結。以擁有者身分登入 SwB，核准這個連線。Muse 會以 `muse` 的身分連接 SwB。
 
-在 [Muse SDK tokens 頁面](https://gadgets.muse.ai/settings/sdk-tokens)建立個人權杖，再用代理提供的一次性 SwB 認領連結儲存。
+接著 Muse 呼叫 `muse_hook_setup`。SwB 會產生一個私有喚醒連結，並回傳使用這個連結的掛鉤指令碼。Muse 把指令碼寫入 `~/hooks/scripts/swb-wake.sh`，再新增掛鉤。Muse 會先試執行一次指令碼，並把結果顯示給你。試執行只會檢查指令碼。然後 Muse 啟用掛鉤，並傳送一則測試訊息。Muse 在聊天中回報收到這則測試訊息後，測試就完成了。
 
-使用具備藍牙的 Mac 或 Linux 電腦，並放在手機附近。在 macOS 上使用「終端機」，並在 macOS 詢問時允許藍牙存取。在 Linux 上，讓 Companion 程式能存取 BlueZ，也就是系統的藍牙服務。
+## 掛鉤的運作方式
 
-如果要在已配對的 Companion 上加入 Muse，先執行 `swb companion disconnect`，再取得 [Companion 配對碼](/zh-Hant/docs/companion#配對裝置)。配對碼只能使用一次，10 分鐘後過期。
+Muse 掛鉤是 Muse 依排程執行的一支小型指令碼。SwB 的指令碼每 5 秒檢查一次私有連結，每次檢查都在 4 秒內結束。
 
-把範例網址換成你的 SwB 網址，在電腦上執行下面的指令。
+連結會回傳兩個數字。一個是 Muse 的 SwB 未讀訊息數。另一個是讀取位置（cursor），也就是最新一則未讀訊息的編號。訊息內容、傳送者和主旨都留在 SwB 中。
 
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
+有新訊息時，指令碼會喚醒一個 Muse worker。worker 是在背景執行一次的 Muse。worker 透過連接器讀取並處理這些訊息。每則需要你處理的訊息，worker 都會在聊天中告訴你。最後，worker 用 `inbox_ack` 把這些訊息標為已讀。
 
-看到提示後輸入配對碼，輸入的內容會隱藏。配對 Muse 期間，讓 Companion 程式保持執行。接著請代理開始 Muse 配對。
+每批新訊息，指令碼只喚醒一次 worker。如果 worker 在把訊息標為已讀之前停止，指令碼會在 15 分鐘後再次喚醒 worker。如果連續 30 分鐘都連線到 SwB 失敗，worker 會通知你一次。如果 SwB 連續 3 次拒絕這個連結，掛鉤會自行關閉，並由 worker 通知你。
 
-在 Muse 應用程式中開啟 **Settings**，再開啟 **Devices**。啟用 **Developer mode**，選取 **Add Device**，再選取代理提供的裝置名稱。如果應用程式詢問 Wi-Fi，選取 **Use current connection**。
+## 費用
 
-## 新增連接器來使用工具
+只有掛鉤喚醒 worker 時，Muse 才會使用模型時間。每次喚醒都是一次完整的 worker 執行。兩次喚醒之間的檢查只會執行指令碼。
 
-連接器讓 Muse 透過 Model Context Protocol（MCP）使用 SwB 工具。使用 OAuth 時，由你在瀏覽器中核准這項存取。
+SwB 從記憶體回應每次檢查，約使用 1 ms 的伺服器時間。每次檢查約使用 7 KB 的網路流量。以 5 秒的間隔計算，每天約 120 MB。要減少流量，請 Muse 把 `poll_interval_secs` 設為 30 以內的值。間隔為 30 秒時，每天約 20 MB。
 
-在 SwB 上啟用擁有者登入。請 Muse 以 OAuth 新增自訂連接器，網址填入以 `/mcp` 結尾的公開 HTTPS 網址。重新導向 URI 使用 `https://agent.meta.ai/api/hatch/oauth/callback`，也就是接收登入結果的網址。
+在一次實際測試中，Muse 的單次檢查約需 430 ms。測試訊息的回覆約在 30 秒後送達，這段時間包含 worker 的執行。
 
-開啟 Muse 提供的登入連結，以擁有者身分登入 SwB。Muse 會以 `muse` 的身分連接 SwB。
+## 保護連結
+
+Muse 只允許掛鉤指令碼存取本機檔案，所以連結寫在指令碼檔案中，就像 Webhook 的網址一樣。取得連結的人都能看到你的未讀訊息數及其變化時間。這個連結只能存取這個數字。Muse 把指令碼存放在它的掛鉤資料夾中。其他人取得這個連結時，撤銷這個連結。
+
+如果 SwB 使用 Cloudflare Access，為 `/hooks/*` 設定 Bypass 原則。參閱[保護主控台](/zh-Hant/docs/cloudflare#cloudflare-access)。
+
+## 撤銷或更換連結
+
+要撤銷連結，在 SwB 主控台開啟 **Tokens**，在 **Muse hook** 這一列選取 **Revoke**。也可以請 Muse 呼叫 `muse_hook_revoke`。3 次檢查後，掛鉤會自行關閉。
+
+要更換連結，再貼一次設定提示詞。每次呼叫 `muse_hook_setup` 都會產生新連結，並停用先前的連結。Muse 會用新的指令碼更新掛鉤。
 
 ## 檢查連線
 
-如果是 gadget，請具備擁有者存取權的代理呼叫 `send(to="muse:gadget:muse", task="Reply with pong.")`，再到測試對話中確認回覆。
+請另一個 SwB 代理呼叫 `send(to="agent:muse", task="Reply with pong.")`。Muse 會在幾秒內啟動，並在同一個對話中用 `reply` 回覆。
 
-如果是連接器，請另一個 SwB 代理呼叫 `send(to="agent:muse", task="Reply with pong.")`。請 Muse 用 `inbox` 讀取訊息，再用 `reply` 在同一個對話中回覆。
+請 Muse 呼叫 `muse_hook_status`。結果會顯示掛鉤上次檢查 SwB 的時間和未讀訊息數。

@@ -77,9 +77,9 @@ Bearer 密钥的限制同样适用于来自同一地址的有效密钥。限制�
 
 SwB 默认按连接地址执行限制并写入审计记录。把你的代理添加到 `trusted_proxies` 或 `SWB_TRUSTED_PROXIES` 后，SwB 改用代理传来的客户端地址。配置代理时，让它根据自己验证过的来源设置客户端地址请求头。
 
-客户端地址解析失败时，SwB 按转发请求头分开限流。含有无效地址的请求头使用 `invalid-forwarded`。只含受信任代理地址的请求头使用 `trusted-only-forwarded`。
+客户端地址解析失败时，SwB 按转发请求头分开限流。含有无效地址的请求头共用 `invalid-forwarded` 限额。只含受信任代理地址的请求头共用 `trusted-only-forwarded` 限额。
 
-要添加 Cloudflare Tunnel 连接器或 Docker 网络中的反向代理，参阅[Cloudflare 设置指南](/zh-Hans/docs/cloudflare#trusted-proxies)。
+要添加 Cloudflare Tunnel 连接器或 Docker 网络中的反向代理，参阅[受信任的代理指南](/zh-Hans/docs/cloudflare#trusted-proxies)。
 
 ## 审计日志
 
@@ -87,7 +87,7 @@ SwB 默认按连接地址执行限制并写入审计记录。把你的代理添�
 
 GitHub Webhook 签名缺失或无效时，SwB 也会记录。某些浏览器登录失败和 Webhook 拒收反复出现时，SwB 会限制记录的行数。失败记录给出原因，其中的一次性码、令牌和签名一律隐去。
 
-SwB 拒绝 Cloudflare Access 凭据时，每 10 分钟为每个客户端地址记录一次。
+SwB 拒绝 Cloudflare Access 令牌时，同一个客户端地址每 10 分钟只记录一次。
 
 SwB 页面在 **Audit** 下显示这些记录。运行 `swb log` 可以输出最近的记录。发送到邮箱的操作名为 `send`。SwB 丢弃投递时留下的记录见[频道模式](/zh-Hans/docs/channel-modes#检查投递)。
 

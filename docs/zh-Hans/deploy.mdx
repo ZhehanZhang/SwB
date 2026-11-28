@@ -1,6 +1,6 @@
 ---
 title: 部署
-description: 在自己的电脑或服务器上运行 SwB。
+description: 在自己的电脑、服务器或云平台上运行 SwB。
 ---
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
@@ -9,11 +9,11 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## 在自己的电脑上运行 [#run-on-your-computer]
 
-按[安装](/zh-Hans/docs/install)中的步骤操作。打开 SwB 首次在本地启动时输出的一次性登录链接。需要新链接时，运行 `swb login-link`。部署提示词同样涵盖本地设置。
+按[安装](/zh-Hans/docs/install)中的步骤操作。
 
 ## 部署 SwB
 
-把下面的提示词粘贴给 Claude Code 或 Codex 这样的编程智能体。它会引导你完成本地或托管环境的设置。
+把下面的提示词粘贴到 Claude Code、Codex 等编程智能体中。它会帮你完成 SwB 的设置。
 
 <SetupPrompt name="deploy" lang="zh-Hans" />
 
@@ -21,7 +21,7 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ### Docker Compose [#docker-compose]
 
-安装 Docker Compose 2.24 或更高版本。以拥有数据目录的普通用户身份运行下面的命令。
+安装 Docker Compose 2.24 或更高版本，用它在容器中运行 SwB。以数据目录所属的用户身份运行下面的命令。
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -39,23 +39,19 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-在 5 分钟内打开终端里的一次性登录链接。这个链接要保密。
+如果是远程服务器，把它的 `8870` 端口转发到你电脑上的 `8870` 端口。在 5 分钟内打开这个一次性登录链接。妥善保管这个链接。
 
-浏览器经 `http://localhost:8870` 完成所有者登录。容器内的命令使用 `8000` 端口。Compose 把数据保存在 `./data` 中。更改 `.env` 后，再运行一次 `docker compose up -d`。
+浏览器通过 `http://localhost:8870` 登录，容器内的命令使用 `8000` 端口。Compose 把数据保存在 `./data` 中。修改 `.env` 后，运行 `docker compose up -d`。
 
-如果是远程服务器，先把它的 `8870` 端口转发到本地的 `8870` 端口，再打开链接。
-
-匿名请求 `/healthz` 会返回 `status` 和 `version`。要获取完整的健康状况详情，使用所有者会话或所有者密钥。
+匿名请求 `/healthz` 会返回 `status` 和 `version`。要查看完整的健康检查信息，使用所有者会话或所有者密钥。
 
 ### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Cloudflare Tunnel 为 SwB 提供一个公网 HTTPS 地址。Cloudflare 的免费套餐就包含隧道。
+隧道把你的服务器连接到 Cloudflare，并为 SwB 提供公网 HTTPS 地址。按 [Cloudflare](/zh-Hans/docs/cloudflare) 中的步骤设置隧道。
 
-按 [Cloudflare 设置指南](/zh-Hans/docs/cloudflare)配置 SwB，并为所有者和客户端请求设置访问规则。
+## 在云端运行
 
-## 托管平台
-
-只运行一个 SwB 实例，并把持久化磁盘挂载到 `/data`。Railway、Render 和 Fly.io 的模板以及 Koyeb 脚本见[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)。
+只运行一个 SwB 实例，并在 `/data` 挂载一块磁盘。实例重启后，数据仍保存在这块磁盘上。各平台的模板和脚本见[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)。
 
 <span id="一键部署" />
 
@@ -65,32 +61,34 @@ Cloudflare Tunnel 为 SwB 提供一个公网 HTTPS 地址。Cloudflare 的免费
 
 ### Fly.io [#fly]
 
-使用按 [Docker Compose 示例](#docker-compose)克隆的 SwB 发布版的本地副本。安装 [Fly.io 命令行工具](https://docs.fly.io/flyctl/)，并登录 Fly.io。
+使用 [Docker Compose 示例](#docker-compose)中的 SwB 文件。安装 Python 3.11 或更高版本，或者安装 [uv](https://docs.astral.sh/uv/)。安装 [Fly.io 命令行工具](https://docs.fly.io/flyctl/)，然后登录 Fly.io。
 
-在 SwB 文件夹中运行 `sh deploy/fly.sh my-swb`，把 `my-swb` 换成一个唯一的应用名称。脚本用 `fly deploy --ha=false` 启动一台 Machine。
+绑定一张支付卡后，[Fly.io 免费套餐](https://docs.fly.io/about/free-plan)每月提供 5 美元的用量。在你的个人组织（personal organization）下使用这个套餐。5 美元用满后，Fly 按标准价格收取整月的费用。这套配置在 Ashburn 运行 30 天约需 3.84 美元，数据传输费用另计。
 
-打开应用的登录页面。从本地副本中的 `.env.swb-setup-fly-my-swb` 复制 `SWB_SETUP_CODE`，输入到 **Setup code**。登录后删除这个文件。
+在 SwB 文件夹中运行 `sh deploy/fly.sh my-swb`，把 `my-swb` 换成一个唯一的应用名称。脚本用 `fly deploy --ha=false` 启动一台 Machine，再检查 Machine、卷和 IP 地址。
 
-计费详情见 [Fly.io 免费套餐](https://docs.fly.io/about/free-plan)和[当前价格](https://fly.io/docs/about/pricing/)。
+打开应用的登录页面。从 SwB 文件夹中的 `.env.swb-setup-fly-my-swb` 复制 `SWB_SETUP_CODE`，填入 **Setup code**。登录后删除这个文件。
+
+计费详情见[当前价格](https://fly.io/docs/about/pricing/)。
 
 ### Render [#render]
 
-[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
+打开 [Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)。Blueprint 会创建一个付费 Web 服务和一块 1 GB 的磁盘。在服务中打开 **Environment**，复制 `SWB_SETUP_CODE`。
 
 ### Railway [#railway]
 
-用 [Railway 上的 SwB 模板](https://railway.com/deploy/swb)部署。副本数保持为 1。模板会在 `/data` 挂载一个卷。
+用 [Railway 上的 SwB 模板](https://railway.com/deploy/swb)部署。副本数保持为 1。在 `/data` 挂载一个 1 GB 的卷。
 
-要让 SwB 始终在线，选用 Hobby 套餐。Hobby 每月 5 美元，包含 5 美元的用量。
+要让 SwB 始终运行，选用 Hobby 套餐。它每月 5 美元，包含 5 美元的用量。
 
-[免费套餐](https://docs.railway.com/reference/pricing/free-trial)每月包含 1 美元的用量，大约够 100 MB 内存全天候运行。一个测试用的 SwB 实例在空闲时占用约 107 MiB。1 美元用完后，免费套餐下的服务会停止。
+[免费套餐](https://docs.railway.com/pricing/free-plan)支持 0.5 GB 的卷，服务空闲时会休眠。这个套餐每月包含 1 美元的用量，大约够 SwB 持续占用 100 MB 内存。在一次测试中，空闲的 SwB 占用约 107 MiB 内存。
 
 ## 登录
 
-在服务日志中找到登录地址并打开。从服务设置中复制 `SWB_SETUP_CODE`，也可以从部署命令指明的私有文件中复制。把它粘贴到 **Setup code**，然后选择 **Sign in**。再添加一个[通行密钥](/zh-Hans/docs/owner-login#通行密钥)，供以后登录使用。
+在服务日志中找到登录地址并打开。从服务设置或部署命令指明的私有文件中复制 `SWB_SETUP_CODE`，粘贴到 **Setup code**。选择 **Sign in**。再添加一个[通行密钥](/zh-Hans/docs/owner-login#通行密钥)，供以后登录使用。
 
 ## 连接你的智能体
 
-先[把 SwB 连接到一个智能体](/zh-Hans/docs/connect)，再把下面的提示词粘贴给它，让它连接你的其他应用。
+先[把 SwB 连接到一个智能体](/zh-Hans/docs/connect)。再把下面的提示词粘贴到这个智能体中，让它连接你的其他应用。
 
 <SetupPrompt name="coordinator" lang="zh-Hans" />

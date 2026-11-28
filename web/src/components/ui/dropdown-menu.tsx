@@ -14,7 +14,7 @@ export function DropdownMenuContent({ className, sideOffset = 8, ...props }: Com
     <Menu.Portal>
       <Menu.Content
         className={cn(
-          "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-40 overflow-y-auto rounded-md border bg-popover p-1 text-sm text-popover-foreground",
+          "z-50 max-h-dropdown min-w-40 overflow-y-auto rounded-md border bg-popover p-1 text-body-sm text-popover-foreground",
           className,
         )}
         sideOffset={sideOffset}

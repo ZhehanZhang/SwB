@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Command } from "cmdk"
-import { FolderKanban, Search } from "lucide-react"
+import { Command as CommandIcon, FolderKanban, Search } from "lucide-react"
 import { Dialog } from "radix-ui"
 import { useNavigate } from "react-router-dom"
 import { PRODUCT_NAME } from "@/app/brand"
@@ -19,8 +19,8 @@ function isProjectList(value: unknown): value is { projects: Project[] } {
 }
 
 const itemClass = "flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-body-sm select-none data-[selected=true]:bg-muted"
-const shortcutModifier = navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl"
-const keycapClass = "rounded-md border bg-background px-1.5 font-mono"
+const isMac = navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints < 2
+const keycapClass = "grid h-5 min-w-5 place-items-center rounded-sm border bg-background px-1 font-sans text-label-sm font-medium text-muted-foreground"
 
 export function CommandMenu() {
   const [open, setOpen] = useState(false)
@@ -56,29 +56,29 @@ export function CommandMenu() {
           size="icon"
           aria-label="Search"
           aria-keyshortcuts="Meta+K Control+K"
-          className="size-9 border-0 text-sm text-muted-foreground md:w-[280px] md:justify-start md:border md:px-3 [&_svg]:size-5 md:[&_svg]:size-4"
+          className="border-0 text-body-sm text-muted-foreground md:w-70 md:justify-start md:border md:px-3 [&>svg]:size-5 md:[&>svg]:size-4"
         >
           <Search aria-hidden />
           <span className="hidden md:inline">Search</span>
           <span aria-hidden className="ml-auto hidden items-center gap-0.5 md:inline-flex">
-            <kbd className={keycapClass}>{shortcutModifier}</kbd>
+            <kbd className={keycapClass}>{isMac ? <CommandIcon aria-label="Command" className="size-3 stroke-2" strokeWidth={2} /> : "Ctrl"}</kbd>
             <kbd className={keycapClass}>K</kbd>
           </span>
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/25" />
-        <Dialog.Content aria-describedby={undefined} className="fixed inset-x-5 top-[min(16dvh,8rem)] z-50 mx-auto max-w-lg overflow-hidden rounded-lg border bg-surface">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-overlay/50" />
+        <Dialog.Content aria-describedby={undefined} className="fixed inset-x-5 top-command-menu z-50 mx-auto max-w-lg overflow-hidden rounded-lg border bg-surface">
           <Dialog.Title className="sr-only">Search</Dialog.Title>
           <Command label="Search">
             <div className="flex items-center gap-2 border-b px-4">
               <Search aria-hidden className="size-4 text-muted-foreground" />
               <Command.Input placeholder="Search" autoFocus className="min-h-12 w-full bg-transparent text-body-md outline-none focus-visible:outline-none" />
             </div>
-            <Command.List className="max-h-[min(24rem,55dvh)] overflow-y-auto p-2">
+            <Command.List className="max-h-command-list overflow-y-auto p-2">
               <Command.Empty className="px-2"><DataState kind="empty" /></Command.Empty>
               <Command.Item value={`${PRODUCT_NAME} Overview Home`} onSelect={() => jump("/")} className={itemClass}>
-                <SwbIcon className="size-5" /> {PRODUCT_NAME}
+                <SwbIcon className="size-5" /> Overview
               </Command.Item>
               {sections.map(({ name, to, icon: Icon }) => (
                 <Command.Item key={to} value={name} onSelect={() => jump(to)} className={itemClass}>
