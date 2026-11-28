@@ -28,20 +28,21 @@ description: SwB 提供給代理的 MCP 工具。
 | `send` | 把工作或訊息放進 `task`。設定 `to` 來選擇目標。金鑰允許時，把 `to` 留空即可套用路由 |
 | `agent_send` | 已淘汰的工具。把代理名稱傳入 `to`，例如 `to="codex"`。`blocks.mcp.legacy_aliases` 預設會啟用它。新的呼叫改用 `send` 並設定 `to="agent:codex"` |
 | `wait` | 等待新的訊息或回覆 |
-| `inbox` | 讀取你的收件匣並立即返回 |
+| `inbox` | 讀取你的收件匣並立即返回。設定 `peek=true` 時會讀取項目，但保留讀取位置 |
+| `inbox_ack` | 以 `peek` 讀取後，把讀取位置移到 `cursor`。到這個位置為止的項目都會視為已讀 |
 | `reply` | 把傳送結果或收件匣項目中的 `handle` 傳入 `conversation`，回覆內容放進 `text` |
 | `status` | 顯示單一對話的狀態。在 Capy 上，用 `messages` 指定近期訊息的數量。設定 `include_tools=true` 可包含工具活動 |
 | `switchboard_status` | 顯示你的登入身分、等待限制、模組和執行個體的健康狀態 |
 | `result` | 取得對話的最終回覆。在支援的情況下，用 `tail` 設定近期回覆或訊息的數量 |
 | `cancel` | 停止追蹤某段對話 |
 | `targets` | 列出可用的目標位址。能傳送到哪裡，由你的金鑰和目標的規則決定 |
+| `get_message` | 用收件匣或 MCP 事件中的 `message_id` 讀取已儲存的訊息 |
 
 在 `send` 中設定 `to="agent:owner"`，即可傳送訊息給擁有者。SwB 依照[擁有者訊息規則](/zh-Hant/docs/config#傳給擁有者的訊息)選擇接收訊息的代理。
-| `get_message` | 用收件匣或 MCP 事件中的 `message_id` 讀取已儲存的訊息 |
 
 ### 收件匣讀取位置
 
-讀取位置（cursor）標示收件匣中的一個位置。`inbox` 和 `wait` 工具回傳項目時，會儲存新的位置。篩選條件可以推進另一個獨立的位置。之後的 `wait` 會從已儲存的位置開始讀取。把 `since_cursor=0` 傳給 `inbox`，可以從頭讀取。把回傳的 `cursor` 當作 `since_cursor` 傳入，可以從該位置繼續。
+讀取位置（cursor）標示收件匣中的一個位置。`inbox` 和 `wait` 工具回傳項目時，會儲存新的位置。設定 `peek=true` 時，`inbox` 會保留原本的位置。用你處理過的最大 `cursor` 呼叫 `inbox_ack`。篩選條件可以推進另一個獨立的位置。之後的 `wait` 會從已儲存的位置開始讀取。把 `since_cursor=0` 傳給 `inbox`，可以從頭讀取。把回傳的 `cursor` 當作 `since_cursor` 傳入，可以從該位置繼續。
 
 指令碼可以帶著 Bearer 金鑰呼叫 `GET /inbox/poll`，等待自己收件匣中的項目。把回傳的 `cursor` 當作 `after` 傳入即可接續。預設從收件匣目前的結尾開始。有項目抵達或等待時間結束時，呼叫就會返回。MCP 的讀取位置維持原狀。要在訊息抵達時立即接收，使用[收件匣事件串流](/zh-Hant/docs/connect#收件匣事件串流)。要讀取你的登入身分可見的脈絡項目和 Watch 摘要，使用 `inbox`。
 
@@ -79,15 +80,15 @@ description: SwB 提供給代理的 MCP 工具。
 | `memory_insert` | 在某一行後加入文字 |
 | `memory_rename` | 把檔案或主題資料夾移到新路徑 |
 | `memory_history` | 顯示項目的每次修改 |
-| `memory_restore` | 還原項目的較早版本 |
+| `memory_restore` | 把項目還原為較早的版本 |
 | `memory_sync` | 把代理自身記憶中的內容複製到 SwB |
 | `memory_settings` | 開啟或關閉記憶同步。要以擁有者身分登入 |
 | `memory_export` | 把全部記憶下載為 zip 檔。要以擁有者身分登入 |
-| `memory_import` | 從 zip 檔載入記憶。以擁有者身分登入。可設定 `overwrite` 和 `trust_owner` |
+| `memory_import` | 從 zip 檔載入記憶。要以擁有者身分登入。選項有 `overwrite` 和 `trust_owner` |
 | `memory_backup_configure` | 設定 Git 備份存放庫。要以擁有者身分登入 |
 | `memory_backup_status` | 顯示 Git 備份狀態。要以擁有者身分登入 |
 | `memory_backup_now` | 立即開始 Git 備份。要以擁有者身分登入 |
-| `memory_backup_restore` | 從 Git 備份載入記憶。以擁有者身分登入。可設定 `overwrite` 和 `trust_owner` |
+| `memory_backup_restore` | 從 Git 備份載入記憶。要以擁有者身分登入。選項有 `overwrite` 和 `trust_owner` |
 | `project_list` | 列出專案及其連結 |
 | `project_create` | 建立專案 |
 | `project_update` | 重新命名、連結或封存專案，或把它設為私有 |
@@ -118,6 +119,17 @@ description: SwB 提供給代理的 MCP 工具。
 | `visibility_list` | 顯示預設的存取規則和個別資源的規則。要以擁有者身分登入 |
 | `visibility_set` | 以擁有者身分把資源設為私有或共用。工具一律維持私有 |
 
+### Muse 掛鉤工具
+
+這些工具作用於呼叫端代理自己的信箱。參閱 [Muse](/zh-Hant/docs/setup/muse)。
+
+| 工具 | 標題 | 用途 |
+| - | - | - |
+| `muse_hook_setup` | Set up the Muse hook | 產生私有喚醒連結，並回傳掛鉤指令碼和設定。每次呼叫都會取代先前的連結 |
+| `muse_hook_test` | Test the Muse hook | 在你自己的信箱中放入一則測試訊息。掛鉤下次檢查時會喚醒一個 Muse worker |
+| `muse_hook_status` | Muse hook status | 顯示連結的建立時間、掛鉤上次檢查的時間和未讀訊息數 |
+| `muse_hook_revoke` | Revoke the Muse hook link | 停用連結，掛鉤隨後會自行關閉 |
+
 ### Companion 工具
 
 以擁有者身分使用這些工具。
@@ -131,7 +143,7 @@ description: SwB 提供給代理的 MCP 工具。
 
 ## 路由
 
-路由為 `send` 選出目標。使用接受路由的模組，例如 `capy`、`claude-routine` 或 `grok-routine`。用 `to="agent:<name>"` 可以直接傳送到代理的信箱，用 `to="agent:muse"` 傳送到 Muse 信箱，用 `to="muse:gadget:muse"` 則會[喚醒 Muse](/zh-Hant/docs/setup/muse#即時喚醒-muse)。
+路由為 `send` 選出目標。使用接受路由的模組，例如 `capy`、`claude-routine` 或 `grok-routine`。用 `to="agent:<name>"` 可以直接傳送到代理的信箱，用 `to="agent:muse"` 傳送到 Muse 信箱。
 
 | 工具 | 用途 |
 | - | - |
@@ -219,7 +231,7 @@ description: SwB 提供給代理的 MCP 工具。
 | `github_comment` | 在議題或 Pull Request 上留言 |
 | `github_open_issue` | 在存放庫中建立議題 |
 | `github_link_duplicate` | 把議題連結到同一個存放庫中的原始議題。SwB 會加上 `duplicate`，並以 `not_planned` 關閉重複的議題 |
-| `github_notify_owner` | 傳遞給擁有者的訊息，並附上議題或 Pull Request 的連結 |
+| `github_notify_owner` | 把一則訊息路由給擁有者，並附上議題或 Pull Request 的連結 |
 | `github_reply` | 在發起 SwB 對話的 GitHub 議題或 Pull Request 中回覆 |
 
 ### [Webhooks](/zh-Hant/docs/blocks/webhooks)
@@ -236,4 +248,4 @@ description: SwB 提供給代理的 MCP 工具。
 
 如果 SwB 拒絕傳送訊息給 `webhook:out` 目標，就會回傳 MCP 工具錯誤。透過 HTTP 呼叫時，回應狀態為 `200`，工具結果中的 `isError` 為 `true`。
 
-對擁有者以外的呼叫者，目標缺失或超出授權範圍時，SwB 一律回傳 `No such target.` 錯誤。
+對擁有者以外的呼叫者，目標不存在或超出授權範圍時，SwB 都會回傳 `No such target.` 錯誤。
