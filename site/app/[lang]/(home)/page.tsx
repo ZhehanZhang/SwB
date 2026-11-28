@@ -11,6 +11,7 @@ import { GitHubMark } from '@/components/github-mark';
 import { HeroTitle } from '@/components/hero-title';
 import { CopyInstall } from '@/components/landing-controls';
 import { MarkTile } from '@/components/mark-tile';
+import { CopyTextButton } from '@/components/prompt-actions';
 import { SiteContainer } from '@/components/site-container';
 import { SwitchboardHero } from '@/components/switchboard-hero';
 import { isLocale, localize } from '@/lib/i18n';
@@ -47,8 +48,16 @@ function DeployOption({ heading, intro, children, guide, secondary }: {
   );
 }
 
-function DeployCommand({ children }: { children: string }) {
-  return <pre className="overflow-x-auto whitespace-pre rounded-lg border bg-fd-muted px-3 py-2 font-mono text-[13px] leading-[18px]"><code>{children}</code></pre>;
+function DeployCommand({ children, labels, centered = false }: {
+  children: string; labels: { copy: string; copied: string }; centered?: boolean;
+}) {
+  return (
+    <div className="relative grid min-w-0" data-deploy-command>
+      <pre className={`overflow-x-auto whitespace-pre rounded-lg border bg-fd-muted px-3 py-2 font-mono text-[13px] leading-[18px] ${centered ? 'content-center' : ''}`}><code>{children}</code></pre>
+      <CopyTextButton text={children} labels={labels} iconOnly
+        className="swb-button swb-button-icon absolute top-1 right-1 size-6 text-fd-muted-foreground hover:bg-fd-background hover:text-fd-foreground" />
+    </div>
+  );
 }
 
 export default async function Landing({ params }: PageProps<'/[lang]'>) {
@@ -56,6 +65,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   if (!isLocale(lang)) notFound();
   const copy = landingCopy[lang];
   const deploy = copy.deployment;
+  const copyLabels = { copy: copy.copy, copied: copy.copied };
   const license = `${repository}/blob/${releaseBranch}/LICENSE`;
   const selfHosting = localize(lang, '/docs/self-hosting');
 
@@ -101,11 +111,11 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                       <ChevronDown aria-hidden="true" className="text-fd-muted-foreground group-open/pipx:rotate-180" />
                     </summary>
                     <div className="mt-2 min-[900px]:absolute min-[900px]:inset-x-0 min-[900px]:top-full min-[900px]:z-10">
-                      <DeployCommand>{'pipx install swb-one\nswb up'}</DeployCommand>
+                      <DeployCommand labels={copyLabels}>{'pipx install swb-one\nswb up'}</DeployCommand>
                     </div>
                   </details>
                 }>
-                <DeployCommand>{copy.install}</DeployCommand>
+                <DeployCommand labels={copyLabels} centered>{copy.install}</DeployCommand>
               </DeployOption>
               <DeployOption heading={deploy.server} intro={deploy.serverIntro}
                 guide={<GuideLink href={`${selfHosting}#docker-compose`}>{deploy.serverGuide}</GuideLink>}
@@ -113,7 +123,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                   <DeployTile href={`${selfHosting}#cloudflare-tunnel`} mark="cloudflare"
                     name="Cloudflare Tunnel" plan={deploy.freePlan} tunnel />
                 }>
-                <DeployCommand>{compose}</DeployCommand>
+                <DeployCommand labels={copyLabels}>{compose}</DeployCommand>
               </DeployOption>
               <DeployOption heading={deploy.cloud} intro={deploy.cloudIntro}
                 secondary={

@@ -24,7 +24,7 @@ export function DeployTile({ href, mark, name, plan, tunnel = false, grouped = f
   const Arrow = href.startsWith('/') ? ArrowRight : ArrowUpRight;
   return (
     <Link href={href} data-provider-tile={mark} data-deploy-tunnel={tunnel || undefined}
-      className={grouped ? `${deployRowClass} rounded-none border-0 not-last:border-b focus-visible:-outline-offset-2` : deployRowClass}>
+      className={grouped ? `${deployRowClass} rounded-none border-0 not-last:border-b focus-visible:-outline-offset-2 min-[900px]:min-h-0 min-[900px]:py-0` : deployRowClass}>
       {tunnel ? (
         <svg aria-hidden="true" viewBox="0 0 16 16"><image href="/marks/cloudflare.svg" width="16" height="16" /></svg>
       ) : <ProviderMark name={mark} />}
@@ -40,7 +40,7 @@ export function DeployTile({ href, mark, name, plan, tunnel = false, grouped = f
 export function DeployProviders({ lang, landing = false }: { lang: Locale; landing?: boolean }) {
   return (
     <div className={landing
-      ? 'grid auto-rows-fr overflow-hidden rounded-md border border-(--border-strong)'
+      ? 'grid auto-rows-fr overflow-hidden rounded-md border border-(--border-strong) min-[900px]:[contain:size]'
       : 'not-prose grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-stretch gap-3'}
       data-deploy-providers>
       {Object.values(deployProviders).map((provider) => {

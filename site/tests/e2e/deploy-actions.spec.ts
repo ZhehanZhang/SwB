@@ -73,6 +73,30 @@ test('landing pipx commands open below their row without moving the aligned rows
   expect(await following.evaluate((node) => node.getBoundingClientRect().top + scrollY)).toBe(before);
 });
 
+test('landing commands use matching copy controls and copy the exact text', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  const grid = page.locator('[data-deploy-grid]');
+  await expect(grid.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(2);
+  await grid.locator('summary').filter({ hasText: 'Use pipx' }).click();
+  const commands = grid.locator('[data-deploy-command]');
+  await expect(grid.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(3);
+  for (const command of await commands.all()) {
+    const copy = command.getByRole('button', { name: 'Copy', exact: true });
+    const measure = () => command.evaluate((node) => {
+      const { top, right } = node.querySelector('pre')!.getBoundingClientRect();
+      const button = node.querySelector('button')!.getBoundingClientRect();
+      return { top: button.top - top, right: right - button.right, width: button.width, height: button.height };
+    });
+    const position = { top: 4, right: 4, width: 24, height: 24 };
+    expect(await measure()).toEqual(position);
+    await copy.click();
+    await expect(command.getByRole('status')).toHaveText('Copied');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await command.locator('code').textContent());
+    expect(await measure()).toEqual(position);
+  }
+});
+
 test('Get started uses one width and aligned actions for every run location', async ({ page }) => {
   await page.goto('/docs/get-started');
   const run = page.getByRole('region', { name: 'Where SwB runs' });
@@ -127,7 +151,10 @@ test('provider tiles share one design and visible deploy affordances on landing 
     const style = await tile.evaluate((item) => {
       const css = getComputedStyle(item);
       const icon = getComputedStyle(item.querySelector('svg')!);
-      return { padding: css.padding, font: css.fontSize, line: css.lineHeight, icon: icon.width };
+      return {
+        paddingInline: [css.paddingInlineStart, css.paddingInlineEnd],
+        font: css.fontSize, line: css.lineHeight, icon: icon.width,
+      };
     });
     chrome ??= style;
     expect(style).toEqual(chrome);

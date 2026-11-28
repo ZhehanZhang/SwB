@@ -508,6 +508,15 @@ test('deploy columns stack below 900px and align each row on wider screens', asy
           const { top, bottom } = element.getBoundingClientRect();
           return { top, bottom };
         };
+        const [uvx, compose] = [...node.querySelectorAll('[data-deploy-primary] pre')];
+        const composeStyle = getComputedStyle(compose);
+        const composeChrome = [composeStyle.paddingBlockStart, composeStyle.paddingBlockEnd,
+          composeStyle.borderBlockStartWidth, composeStyle.borderBlockEndWidth]
+          .reduce((sum, length) => sum + parseFloat(length), 0);
+        const center = (element: Element) => {
+          const { top, bottom } = edges(element);
+          return (top + bottom) / 2;
+        };
         return {
           columns: getComputedStyle(node).gridTemplateColumns.split(' '),
           options: blocks.map(edges),
@@ -516,16 +525,21 @@ test('deploy columns stack below 900px and align each row on wider screens', asy
           secondary: blocks.map((block) => edges(block.querySelector('[data-deploy-secondary] :is(summary,a)')!)),
           internalGaps: blocks.map((block) => [...block.children]
             .map(edges).slice(1).map(({ top }, index) => top - edges(block.children[index]).bottom)),
+          composeHeight: compose.getBoundingClientRect().height,
+          composeNaturalHeight: composeChrome + parseFloat(composeStyle.lineHeight) * compose.textContent!.split('\n').length,
+          uvxCenterDelta: Math.abs(center(uvx.querySelector('code')!) - center(uvx)),
         };
       });
       expect(layout.columns).toHaveLength(width < 900 ? 1 : 3);
       expect(layout.options).toHaveLength(3);
       for (const { top, bottom } of layout.intro) expect(bottom - top, `${path} at ${width}px intro`).toBe(20);
+      expect(layout.composeHeight, `${path} at ${width}px compose height`).toBe(layout.composeNaturalHeight);
+      expect(layout.uvxCenterDelta, `${path} at ${width}px uvx center`).toBeLessThanOrEqual(1);
       if (width >= 900) {
         for (const row of ['options', 'intro', 'primary', 'secondary'] as const) {
           for (const edge of ['top', 'bottom'] as const) {
             const values = layout[row].map((box) => box[edge]);
-            expect(Math.max(...values) - Math.min(...values), `${path} at ${width}px ${row} ${edge}`).toBeLessThanOrEqual(1);
+            expect(Math.max(...values) - Math.min(...values), `${path} at ${width}px ${row} ${edge}`).toBe(0);
           }
         }
       } else {
@@ -557,11 +571,10 @@ test('provider and secondary rows fit one line in English and Chinese', async ({
       expect(rows).toHaveLength(6);
       const cloud = rows.filter((row) => row.isProvider);
       expect(new Set(cloud.map(({ width }) => width)).size).toBe(1);
-      expect(new Set(rows.map(({ height }) => height)).size).toBe(1);
       for (const row of rows) {
         expect(row.whiteSpace).toBe('nowrap');
         expect(row.contained).toBe(true);
-        expect(row.height, `${path} provider height at ${width}px`).toBe(44);
+        expect(row.height, `${path} action height at ${width}px`).toBeCloseTo(row.isProvider && width >= 900 ? (108 - 2) / 3 : 44, 1);
         expect(row.labelHeight).toBe(20);
       }
     }
