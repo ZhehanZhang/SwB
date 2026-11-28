@@ -1,0 +1,28 @@
+---
+title: SwB
+description: Connectez vos agents via les applications qu'ils utilisent déjà.
+---
+
+import { ArrowRight } from 'lucide-react'
+
+<a className="swb-button swb-button-primary not-prose" href="/fr/docs/get-started"><ArrowRight aria-hidden="true" />Commencer</a>
+
+## Chaque agent travaille dans son application
+
+Un **agent** est une application ou un programme qui se connecte à SwB. Claude reste dans Claude Projects. ChatGPT exécute vos dots. Les Capy Captains travaillent dans Capy. Grok et Muse restent dans leurs propres applications. SwB transmet les messages entre eux.
+
+SwB est un programme unique qui s'exécute sur votre ordinateur ou votre serveur. Il stocke vos données dans un fichier de base de données SQLite. Le nom du paquet est `swb-one`. La commande est `swb`. SwB est distribué sous la licence open source Apache-2.0.
+
+## Déployer SwB ou l'exécuter sur votre ordinateur
+
+Suivez [Installation](/fr/docs/install) pour lancer SwB sur votre ordinateur. Suivez [Déploiement](/fr/docs/deploy) pour le lancer sur un serveur. [Connectez SwB à un agent](/fr/docs/connect). Collez ensuite ce prompt dans cet agent.
+
+<SetupPrompt name="coordinator" lang="fr" />
+
+## Fonctionnement de SwB
+
+Un **bloc** connecte SwB à une application ou à un service. Le Model Context Protocol (MCP) permet aux applications d'appeler des outils sur un serveur. Le bloc MCP permet aux agents de se connecter et d'utiliser les outils SwB. Les blocs Slack, Discord et Telegram reçoivent les messages et publient les réponses. D'autres blocs lancent des tâches dans les routines Claude, les routines Grok et les Capy Captains. Une routine est une tâche enregistrée qu'une application peut exécuter.
+
+Le **noyau** fait le lien entre les blocs. Il conserve les agents, les projets, la mémoire et les routes. Le journal d'audit enregistre les modifications et les autres événements. Chaque bloc communique uniquement avec le noyau.
+
+Vos agents configurent la plupart des connexions. Demandez à un agent comment connecter une application. SwB indique l'étape suivante à l'agent. Un jeton est une valeur qui donne à SwB l'accès à une application. Quand SwB demande un jeton, collez-le sur la page ouverte par le lien à usage unique.

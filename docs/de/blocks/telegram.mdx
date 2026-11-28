@@ -1,0 +1,70 @@
+---
+title: Telegram
+description: Leiten Sie Telegram-Nachrichten an Agenten weiter und posten Sie die Antworten.
+---
+
+SwB fragt neue Nachrichten bei Telegram ab. Ihr SwB-Server kann daher eine private Adresse haben.
+
+## Bot erstellen
+
+Senden Sie in [@BotFather](https://t.me/BotFather) den Befehl `/newbot`. Bitten Sie einen Agenten, Telegram zu verbinden. Der Agent ruft `telegram_provision` auf und gibt Ihnen einen Claim-Link. Öffnen Sie den Link und fügen Sie das Bot-Token ein.
+
+## Bot zu einer Gruppe hinzufügen
+
+Fügen Sie den Bot zur Gruppe hinzu. Senden Sie `/swb@<bot username>` in der Gruppe. Danach zeigt `telegram_status` die Chat-ID der Gruppe in `setup.seen_chats`. Tragen Sie diese ID in `chats` des Raums ein.
+
+Starten Sie einen privaten Chat mit dem Bot. Senden Sie ihm eine Nachricht. Die ID Ihres privaten Chats finden Sie in `setup.seen_chats`. Tragen Sie diese ID in `owner_ids` ein.
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        default_target: claude
+```
+
+## Aus Telegram senden
+
+Senden Sie dem Bot eine private Nachricht, erwähnen Sie den Bot oder verwenden Sie `/swb <target> <message>`. Um eine Unterhaltung fortzusetzen, antworten Sie auf die Antwort des Bots. Mit aktivem `persona_prefix` zeigen Antworten von Agenten den Namen des Agenten in Fettschrift.
+
+Damit der Bot jede Gruppennachricht lesen kann, schalten Sie in @BotFather mit `/setprivacy` den Privatsphäremodus ab. Entfernen Sie danach den Bot aus der Gruppe und fügen Sie ihn erneut hinzu.
+
+## Blockeinstellungen
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.telegram` | Einstellungen für den Telegram-Bot und seine Räume |
+| `blocks.telegram.use` | Lädt den Block `telegram` |
+| `blocks.telegram.enabled` | `true` lädt den Block, `false` schaltet ihn ab |
+| `blocks.telegram.token_env` | Name der Umgebungsvariablen für das Bot-Token |
+| `blocks.telegram.dm_space` | Raum, dessen Routing- und Inhabereinstellungen für private Chats gelten. Standard ist der erste konfigurierte Raum |
+| `blocks.telegram.dm_mode` | Modus für private Nachrichten anderer Personen. `watch` sammelt eine Zusammenfassung, `off` überspringt sie |
+| `blocks.telegram.ack_reaction` | Emoji, mit dem SwB den Empfang einer Nachricht an den Bot bestätigt. `null` schaltet diese Reaktion ab |
+| `blocks.telegram.persona_prefix` | Mit `true` setzt SwB den Namen des Agenten fett in die erste Zeile |
+| `blocks.telegram.refresh_minutes` | Minuten zwischen Aktualisierungen der Zielliste. Standard ist `30` |
+| `blocks.telegram.target_aliases` | Ordnet zusätzliche Zielnamen vorhandenen Zielen zu |
+| `blocks.telegram.agents` | Räume, in denen jeder Agent posten und Ereignisse empfangen darf. `*` steht für alle Räume |
+
+Mit [Kanalmodi](/de/docs/channel-modes) wecken Sie einen Agenten über eine Projektroute.
+
+## Räume und Gruppen
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.telegram.spaces` | Ordnet die in SwB verwendeten Namen den Einstellungen für Gruppen von Telegram-Chats zu |
+| `blocks.telegram.spaces.*.chats` | Gruppen-Chat-IDs in diesem Raum. Verwenden Sie negative Ganzzahlen. Ordnen Sie jede Gruppe genau einem Raum zu |
+| `blocks.telegram.spaces.*.owner_ids` | Telegram-Benutzer-IDs, die als Inhaber gelten |
+| `blocks.telegram.spaces.*.known` | Ordnet bekannte Telegram-Benutzer-IDs Anzeigenamen zu |
+| `blocks.telegram.spaces.*.default_target` | Ziel für eine neue Nachricht an SwB, wenn der Zielname fehlt |
+| `blocks.telegram.spaces.*.project` | Standardprojekt in SwB für diesen Raum |
+| `blocks.telegram.spaces.*.channel_projects` | Legt das SwB-Projekt nach Gruppen-Chat-ID fest |
+| `blocks.telegram.spaces.*.mode` | Modus für den Raum. Ein Gruppenmodus kann ihn überschreiben |
+| `blocks.telegram.spaces.*.channels` | Legt einen Modus oder genauere Einstellungen nach Gruppen-Chat-ID fest |
+| `blocks.telegram.spaces.*.channels.*.mode` | Modus für eine Gruppe |
+| `blocks.telegram.spaces.*.channels.*.project` | SwB-Projekt für eine Gruppe. Hat Vorrang vor dem Projekt des Raums |
+| `blocks.telegram.spaces.*.listen` | Ältere Einstellung für Gruppen-Chat-IDs mit dem Modus `assist` |
+| `blocks.telegram.spaces.*.bot_posts_per_hour` | Höchstzahl an Bot-Beiträgen pro Unterhaltungs-Thread und Stunde. Standard ist `20` |

@@ -13,6 +13,11 @@ const deepDocTitles = {
   en: 'MCP client',
   'zh-Hans': 'MCP 客户端',
   'zh-Hant': 'MCP 用戶端',
+  es: 'Cliente MCP',
+  fr: 'Client MCP',
+  de: 'MCP-Client',
+  ko: 'MCP 클라이언트',
+  ja: 'MCP クライアント',
 };
 
 const checks = [

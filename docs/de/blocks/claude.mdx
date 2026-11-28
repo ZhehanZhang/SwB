@@ -1,0 +1,55 @@
+---
+title: Claude
+description: Verbinden Sie Claude und Claude Projects und wecken Sie sie mit Routinen.
+---
+
+## Connector hinzufügen
+
+Folgen Sie der [Claude-Einrichtung](/de/docs/setup/claude), um Ihre MCP-Adresse von SwB als Custom Connector hinzuzufügen. Aktivieren Sie den Connector in Ihrem Project oder Chat. Claude meldet sich per OAuth als `claude` an.
+
+## Claude Project verbinden
+
+Fügen Sie den [Einrichtungsprompt für Claude Projects](/de/docs/setup/claude-project) in einen Chat im Project ein.
+
+Der Agent findet das SwB-Projekt und richtet eine Routine mit API-Trigger ein. Er ruft `connect` auf und erhält einen Einmal-Claim-Link, der nach 30 Minuten abläuft. Öffnen Sie den Link. Fügen Sie das Token der Routine in das Formular ein. Speichern Sie das Token. Der Agent sendet eine Testnachricht und prüft die Antwort.
+
+## Routinen
+
+Eine **Routine** ist eine Aufgabe in Claude Code, die SwB starten kann. SwB legt die Nachricht zusätzlich im Postfach von Claude ab. Die Routine antwortet dem Absender mit `reply`.
+
+| Senden an | Ziel |
+| - | - |
+| `claude` mit `project=<slug>` | Die Hauptroutine des Projekts |
+| `claude:<slug>` | Die Hauptroutine des Projekts |
+| `<routine name>` | Diese Routine |
+| `agent:claude` | Nur das Postfach |
+
+Ein Projekt kann mehrere Routinen haben. Standardmäßig wählt SwB die erste Routine für diesen Agenten und dieses Projekt. Setzen Sie bei der Registrierung `primary=true`, damit SwB diese Routine zuerst wählt.
+
+Wenn Claude ein pausiertes Projekt meldet, versucht SwB es mit einer leeren Anfrage erneut. Die Routine liest die Nachricht mit `routine_pickup`.
+
+## Konfiguration
+
+```yaml
+blocks:
+  claude-routine:
+    routines:
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
+```
+
+Für die manuelle Einrichtung setzen Sie `token_env` auf eine Variable, die das Token der Routine enthält. Das Beispiel verwendet `SWB_EXAMPLE_CLAUDE_TOKEN`.
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.claude-routine` | Einstellungen zum Wecken von Claude-Code-Routinen |
+| `blocks.claude-routine.use` | Blocktyp. Verwenden Sie `claude-routine` |
+| `blocks.claude-routine.enabled` | Mit `false` überspringt SwB diesen Block |
+| `blocks.claude-routine.routines` | Zuordnung von Routinennamen zu Einstellungen |
+| `blocks.claude-routine.routines.*.agent` | Agent, der die Nachricht empfängt. Standard `claude` |
+| `blocks.claude-routine.routines.*.kind` | `project` für eine Routine mit Projekt. `general` für eine allgemeine Routine |
+| `blocks.claude-routine.routines.*.project` | SwB-Projektname für eine Projektroutine |
+| `blocks.claude-routine.routines.*.name` | Anzeigename der Routine |
+| `blocks.claude-routine.routines.*.primary` | Mit `true` wählt SwB diese Routine zuerst für ihren Agenten und ihr Projekt |
+| `blocks.claude-routine.routines.*.routine_id` | ID des Claude-API-Triggers, zum Beispiel `trig_...` |
+| `blocks.claude-routine.routines.*.slugs` | Zusätzliche Kurznamen als Sendeziel |
+| `blocks.claude-routine.routines.*.token_env` | Name der Variablen, die das Token der Routine enthält |

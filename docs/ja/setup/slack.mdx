@@ -1,0 +1,211 @@
+---
+title: Slack
+description: ボットと自分の Slack アカウントで、Slack のワークスペースを SwB に接続します。
+---
+
+SwB は、マニフェストから作成した Slack アプリを通じて、Slack を読み、投稿します。マニフェストとは、アプリのすべての設定を入れたファイルです。
+
+このアプリは Socket Mode を使います。この接続は SwB から Slack に向けて開くので、サーバーは非公開のアドレスでも使えます。
+
+## 始める前に
+
+ワークスペースでアプリを作成してインストールできる Slack アカウントを使ってください。組織によっては、アプリの承認が必要です。オーナーとして SwB にサインインしてください。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="slack" lang="ja" />
+
+このプロンプトを、SwB のオーナー用クライアントに貼り付けてください。
+
+## Slack アプリを設定する
+
+### Slack アプリの設定を開く
+
+[Slack アプリの設定](https://api.slack.com/apps)を開いてください。**Create New App** → **From a manifest** をクリックしてください。
+### ワークスペースを選ぶ
+
+ワークスペースを選んでください。**Next** をクリックしてください。
+### マニフェストを貼り付ける
+
+**YAML** を選択してください。下にあるアプリマニフェストのどちらかをコピーしてください。全体をそのまま貼り付けてください。
+### アプリを作成する
+
+**Next** → **Create** をクリックしてください。
+### アプリレベルトークンを作成する
+
+**Basic Information** → **App-Level Tokens** → **Generate Token and Scopes** をクリックしてください。トークンの名前を入力してください。
+### スコープを追加する
+
+**Add Scope** → `connections:write` をクリックしてください。**Generate** をクリックしてください。
+### アプリをインストールする
+
+**Install App** → **Install to Workspace** をクリックしてください。SwB が代わりに操作する Slack ユーザーとして、**Allow** をクリックしてください。
+### Enterprise Grid で承認を得る
+
+Slack に承認を求められたら、ワークスペースか組織の管理者にアプリを送って承認を依頼してください。
+
+### トークンを保存する
+
+ワークスペース用の受け取りリンクを開いてください。各 Slack トークンを、それぞれの欄に貼り付けてください。
+### ボットを招待する
+
+ボットを使う場合は、SwB で使う各 Slack チャンネルで `/invite @<bot name>` を送ってください。
+### ワークスペース ID を確認する
+
+ブラウザーで Slack を開いてください。アドレスにあるワークスペース ID をエージェントに伝えてください。ID は `T` で始まります。
+
+## アプリマニフェスト
+
+### ボットと自分のアカウント
+
+```yaml
+# Example Slack app for an agent-to-agent workspace: a bot user and the owner's user token.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
+# The bot's @handle and member-list profile come from features.bot_user.display_name and the
+# app icon; they do not change per message. Per-message name/avatar = personas (chat:write.customize).
+display_information:
+  name: SwB
+  description: Agent switchboard for the owner's assistants
+  background_color: "#1d2733"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: swb
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read      # @mentions -> push kind "mention"
+      - channels:history       # watched public channels the bot is in
+      - channels:read
+      - groups:history         # watched private channels the bot is in
+      - groups:read
+      - im:history             # DMs to the bot -> push kind "dm"
+      - im:read
+      - im:write               # approval DMs to the owner
+      - chat:write
+      - chat:write.customize   # personas: per-message username + icon
+      - reactions:write        # ack reaction on mentions/DMs
+      - users:read             # names in pushed events
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # posts as the owner (policy-gated)
+      - reactions:write
+      - search:read            # search_messages
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  interactivity:
+    is_enabled: true           # Approve/Reject buttons, delivered over Socket Mode
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+```
+
+### 自分のアカウントだけ
+
+```yaml
+# Example Slack app for a user-only workspace. No bot user, bot scopes, bot events, or interactivity.
+# It never joins or invites; every post appears as the owner.
+# Create at https://api.slack.com/apps -> Create New App -> From a manifest -> select your workspace.
+display_information:
+  name: SwB (personal)
+  description: Lets the owner's agents read on their behalf; writes need approval
+  background_color: "#333333"
+oauth_config:
+  scopes:
+    user:
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - chat:write             # only ever used after the owner approves a request
+      - reactions:write        # same
+      - search:read
+      - users:read
+settings:
+  event_subscriptions:
+    user_events:
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+```
+
+## エージェントの動作
+
+エージェントは `connect(what="slack")` を呼び出します。SwB は、不足しているトークンを確認します。そして、トークンが必要なワークスペース用の受け取りリンクを返します。
+
+エージェントは、`config/switchboard.yaml` の `blocks.slack.workspaces` にワークスペースを追加します。ワークスペース ID とトークンの名前を設定します。`blocks.slack.agents` でアクセスを与えます。
+
+この例では、ボットと自分のアカウントで 1 つのワークスペースを接続します。`T0DEMO0001` を、実際のワークスペース ID に置き換えてください。
+
+```yaml
+blocks:
+  slack:
+    use: slack
+    enabled: true
+    workspaces:
+      example:
+        team_id: T0DEMO0001
+        app_token_env: SWB_SLACK_EXAMPLE_APP_TOKEN
+        identities:
+          bot:
+            token_env: SWB_SLACK_EXAMPLE_BOT_TOKEN
+          user:
+            token_env: SWB_SLACK_EXAMPLE_USER_TOKEN
+    agents:
+      claude:
+        workspaces:
+          example: [bot, user]
+```
+
+`switchboard_status` に表示されるエージェント名を使ってください。エージェントごとにグラントを 1 つずつ追加してください。ワークスペースの項目とグラントには、同じワークスペースのラベルを使ってください。自分のアカウントだけのマニフェストを使う場合は、`team_id` の隣に `user_only: true` を追加してください。`identities` から `bot` を削除してください。グラントを `[user]` にしてください。
+
+`connect` に求められたら、SwB を再起動してください。エージェントは `slack_workspaces` で、Slack の各アカウントを確認できます。ここでのアカウントとは、ボットか自分の Slack アカウントのことです。
+
+## 認証情報
+
+| トークン | Slack で表示される場所 | 形式 | 入力する場所 |
+| --- | --- | --- | --- |
+| アプリレベルトークン | **Basic Information** → **App-Level Tokens** | `xapp-` で始まります | SwB の受け取りリンク |
+| ボットトークン | **OAuth & Permissions** → **OAuth Tokens** → **Bot User OAuth Token** | `xoxb-` で始まります | SwB の受け取りリンク |
+| ユーザートークン | **OAuth & Permissions** → **OAuth Tokens** → **User OAuth Token** | `xoxp-` で始まります | SwB の受け取りリンク |
+
+## 接続を確認する
+
+もう一度 `connect(what="slack")` を実行し、`connected` と表示されることを確認してください。`slack_workspaces` を呼び出してください。各アカウントで `ready` が `true`、ワークスペースで `connected` が `true` になっていることを確認してください。
+
+ボットを設定した場合は、チャンネルでボットをメンションし、送信先の名前を書き加えてください。`slack_events` か `slack_wait` を確認するよう、エージェントに頼んでください。投稿をテストするときは、書き込み権限のあるアカウントで `slack_post` を使ってください。
+
+## 問題を解決する
+
+SwB が Socket Mode の問題を報告したら、アプリの設定で **Socket Mode** を開いてください。**Enable Socket Mode** を有効にしてください。
+
+アプリのスコープを変更したら、アプリをもう一度インストールしてください。そのあと、新しい受け取りリンクで新しいトークンを保存してください。
+
+`slack_search` での検索には、自分のアカウントを使います。スコープ `search:read` を持つユーザートークンが必要です。

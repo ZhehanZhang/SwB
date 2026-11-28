@@ -1,0 +1,75 @@
+---
+title: Telegram
+description: Connectez des discussions et des groupes Telegram à SwB avec un bot.
+---
+
+SwB communique avec Telegram grâce à un bot que vous créez dans BotFather. SwB demande lui-même les nouveaux messages à Telegram. Votre serveur SwB peut donc garder une adresse privée.
+
+## Avant de commencer
+
+Utilisez un compte Telegram. Pour connecter un groupe, utilisez un compte autorisé à ajouter des membres. Connectez-vous à SwB en tant que propriétaire.
+
+## Copier le prompt de configuration
+
+<SetupPrompt name="telegram" lang="fr" />
+
+Collez le prompt dans votre client propriétaire SwB.
+
+## Configurer le bot Telegram
+
+### Ouvrir BotFather
+
+Ouvrez https://t.me/BotFather dans Telegram. S'il s'agit de votre première discussion avec BotFather, touchez **Start**.
+### Créer le bot
+
+Envoyez `/newbot`. Répondez avec un nom d'affichage.
+
+### Choisir le nom d'utilisateur
+
+Répondez avec un nom d'utilisateur qui se termine par `bot`. BotFather vous répond avec le jeton.
+### Enregistrer le jeton
+
+Ouvrez le lien de saisie SwB fourni par votre agent. Collez le jeton dans le champ.
+### Démarrer une discussion privée
+
+Touchez **Start** dans la discussion privée avec votre bot. Envoyez un message pour que SwB trouve votre ID utilisateur.
+### Ajouter le bot à un groupe
+
+Ouvrez le lien de groupe fourni par votre agent. Sélectionnez le groupe.
+
+### Envoyer la commande de configuration
+
+Envoyez `/swb@<bot username>` dans le groupe. SwB connaît alors l'ID du groupe.
+### Lire tous les messages du groupe
+
+Pour les groupes où le bot doit recevoir chaque message, envoyez `/setprivacy` à BotFather. Choisissez votre bot. Sélectionnez **Disable**.
+
+### Ajouter de nouveau le bot
+
+Retirez le bot de chaque groupe. Ajoutez-le ensuite de nouveau au groupe.
+
+## Ce que fait l'agent
+
+L'agent appelle `connect(what="telegram")`. Au besoin, il active le bloc `telegram`. Une fois le bloc activé, `connect` ou `telegram_provision` renvoie un lien de saisie pour le jeton du bot.
+
+Une fois le jeton enregistré, l'agent appelle `telegram_status`. Cet appel vérifie le bot et le mode de confidentialité. Le lien d'invitation au groupe se trouve dans `setup.add_to_group_url`. Les ID des discussions récentes se trouvent dans `setup.seen_chats`.
+
+L'agent configure un espace sous `blocks.telegram.spaces` dans `config/switchboard.yaml`. Un espace associe un ensemble de discussions à un projet SwB. Indiquez les ID de groupe dans `chats`. Indiquez votre ID utilisateur dans `owner_ids`. Redémarrez SwB après avoir modifié le fichier.
+
+## Identifiants
+
+| Jeton | Où Telegram l'affiche | Format | Destination |
+| --- | --- | --- | --- |
+| Jeton du bot | Réponse de BotFather après `/newbot` ou `/token` | Des chiffres, un deux-points, puis des lettres et des chiffres | Lien de saisie SwB |
+
+## Vérifier la connexion
+
+Demandez à l'agent d'appeler de nouveau `connect`. Il indique `connected` quand la configuration est terminée.
+
+Utilisez le compte Telegram indiqué dans `owner_ids`. Envoyez `/swb <target> hello` au bot dans une discussion privée. Remplacez `<target>` par un nom de cible issu de `targets`. Vérifiez que le bot vous répond.
+
+## Résoudre les problèmes
+
+Si le bot lit uniquement les commandes dans un groupe, désactivez le mode de confidentialité dans BotFather. Retirez ensuite le bot et ajoutez-le de nouveau.
+
+Un webhook est une adresse web à laquelle Telegram envoie les messages. Demandez au propriétaire du bot de supprimer tout ancien webhook avec la méthode `deleteWebhook` de Telegram.

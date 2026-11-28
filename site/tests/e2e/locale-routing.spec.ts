@@ -33,14 +33,19 @@ for (const [acceptLanguage, destination] of [
   ['en-US;q=0.4, zh-CN;q=0.8', '/zh-Hans'],
   ['zh-TW;q=0, zh-CN;q=0.5', '/zh-Hans'],
   ['zh-TW;q=1.5, zh-CN;q=0.5', '/zh-Hans'],
-  ['fr-CA, zh-HK;q=0.8', '/zh-Hant'],
+  ['fr-CA, zh-HK;q=0.8', '/fr'],
   ['zh-TW;q=0.8, zh-CN;q=0.8', '/zh-Hant'],
   ['zh-TW-X-demo;q=0.9, en;q=0.7', '/zh-Hant'],
   ['zh-CN-x-tw', '/zh-Hans'],
   ['zh-CN;q=0.8, en-GB', undefined],
   ['zh-CN;q=0, en;q=0', undefined],
-  ['zh-HK;q=invalid, fr-FR', undefined],
-  ['zho, fr-FR, *', undefined],
+  ['zh-HK;q=invalid, fr-FR', '/fr'],
+  ['zho, fr-FR, *', '/fr'],
+  ['es-419', '/es'],
+  ['de-CH;q=0.9, en;q=0.8', '/de'],
+  ['ko-KR', '/ko'],
+  ['ja-JP, en;q=0.5', '/ja'],
+  ['pt-BR, it', undefined],
   [undefined, undefined],
 ] as const) {
   test(`negotiates ${acceptLanguage ?? 'an absent language header'}`, async ({ request }) => {
@@ -136,10 +141,11 @@ for (const [path, destination] of [
 
 for (const path of ['/', '/docs', '/docs/install', '/about']) {
   const suffix = path === '/' ? '' : path;
-  const alternates = {
+  const alternates: Record<string, string> = {
     en: `${site}${path}`,
     'zh-Hans': `${site}/zh-Hans${suffix}`,
     'zh-Hant': `${site}/zh-Hant${suffix}`,
+    ...Object.fromEntries(['es', 'fr', 'de', 'ko', 'ja'].map((lang) => [lang, `${site}/${lang}${suffix}`])),
     'x-default': `${site}${path}`,
   };
 
@@ -148,6 +154,7 @@ for (const path of ['/', '/docs', '/docs/install', '/about']) {
     ['en', `/en${suffix}`],
     ['zh-Hans', `/zh-Hans${suffix}`],
     ['zh-Hant', `/zh-Hant${suffix}`],
+    ['ja', `/ja${suffix}`],
   ] as const) {
     test(`serves ${route} with canonical and hreflang URLs`, async ({ request }) => {
       const headers = route === path || lang !== 'en'

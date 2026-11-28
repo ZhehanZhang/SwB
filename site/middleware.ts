@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { isLocale, localeCookie, localize, type Locale } from './lib/i18n';
 
-const languageRange = /^((?:en|zh)(?:-[a-z0-9]{1,8})*)(?:\s*;\s*q\s*=\s*(0(?:\.\d{0,3})?|1(?:\.0{0,3})?))?$/;
+const languageRange = /^((?:en|zh|es|fr|de|ko|ja)(?:-[a-z0-9]{1,8})*)(?:\s*;\s*q\s*=\s*(0(?:\.\d{0,3})?|1(?:\.0{0,3})?))?$/;
 const automatedUserAgent = /bot|crawler|spider|python-urllib|\bcurl\b/i;
 
 function preferredLocale(header: string | null): Locale {
@@ -13,10 +13,10 @@ function preferredLocale(header: string | null): Locale {
     const [, tag, quality] = match;
     const candidateWeight = quality === undefined ? 1 : Number(quality);
     if (candidateWeight <= weight) continue;
-    const [, first, second] = tag.split('-');
+    const [base, first, second] = tag.split('-');
     const region = first?.length === 4 ? second : first;
     const traditional = first === 'hant' || (first !== 'hans' && /^(tw|hk|mo)$/.test(region ?? ''));
-    locale = tag.startsWith('en') ? 'en' : traditional ? 'zh-Hant' : 'zh-Hans';
+    locale = base === 'zh' ? traditional ? 'zh-Hant' : 'zh-Hans' : base as Locale;
     weight = candidateWeight;
   }
   return locale;

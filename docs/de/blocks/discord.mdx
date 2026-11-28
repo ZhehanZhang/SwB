@@ -1,0 +1,80 @@
+---
+title: Discord
+description: Leiten Sie Discord-Nachrichten an Agenten weiter und antworten Sie in einem Thread.
+---
+
+## Bot erstellen
+
+Folgen Sie der [Discord-Einrichtung](/de/docs/setup/discord), um einen Bot zu erstellen. Aktivieren Sie Message Content Intent für Text und Folgenachrichten.
+
+Bitten Sie einen Agenten, Discord zu verbinden. Der Agent ruft `discord_provision` auf und gibt Ihnen einen Claim-Link. Öffnen Sie den Link und fügen Sie das Bot-Token ein.
+
+## Bot zu einem Server hinzufügen
+
+Rufen Sie `discord_status` auf, sobald der Bot verbunden ist. Öffnen Sie den Link in `setup.invite_url`. Fügen Sie den Bot zu Ihrem Server hinzu. Der Link fordert die Berechtigungen für Ihre aktiven Funktionen an.
+
+Die Server-ID finden Sie in `discovered.guilds` in `discord_status`. Tragen Sie die Server-ID in einen Raum in Ihrer Konfiguration ein. Ein Raum enthält die Einstellungen für einen Discord-Server.
+
+```yaml
+blocks:
+  discord:
+    use: discord
+    spaces:
+      home:
+        guild_id: "100000000000000001"
+        owner_ids: ["100000000000000002"]
+        default_target: claude
+    agents: {claude: [home]}
+```
+
+Um den Inhaber festzulegen, senden Sie dem Bot eine Direktnachricht. Ihre Benutzer-ID finden Sie in `discovered.dm_users` in `discord_status`. Tragen Sie diese ID in `owner_ids` ein.
+
+## Aus Discord senden
+
+Erwähnen Sie den Bot und nennen Sie den Kurznamen des Ziels, zum Beispiel `@swb claude check the build`. Bei aktiven Threads kann SwB aus Ihrer Nachricht einen Thread starten und Sie hinzufügen. SwB postet die Antwort dort. Folgenachrichten können das Ziel des Threads erneut verwenden. Bei aktiven Personas tragen passende Antworten den Namen und das Bild des Agenten.
+
+## Mit anderen Personen teilen
+
+Kanäle und Ziele sind standardmäßig privat. Um anderen Zugriff zu geben, geben Sie sowohl den Kanal als auch das Ziel frei. Verwenden Sie `channel:<space>/<channel id>` und `target:<slug>`. Für eine bestimmte Person fügen Sie `discord:<user id>` zur Zugriffsliste hinzu.
+
+## Blockeinstellungen
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.discord` | Einstellungen für den Discord-Bot und seine Räume |
+| `blocks.discord.use` | Lädt den Block `discord` |
+| `blocks.discord.enabled` | `true` lädt den Block, `false` schaltet ihn ab |
+| `blocks.discord.token_env` | Name der Umgebungsvariablen für das Bot-Token |
+| `blocks.discord.application_id` | Discord-Application-ID für den Einladungslink. SwB kann die ID auch bei Discord abfragen |
+| `blocks.discord.connect` | `true` empfängt Live-Ereignisse von Discord. `false` testet nur API-Aufrufe |
+| `blocks.discord.message_content` | `true` liest Nachrichteninhalte, auch Folgenachrichten in Threads. Aktivieren Sie Message Content Intent im Developer Portal |
+| `blocks.discord.threads` | `true` startet für eine Antwort in einem Server-Textkanal einen öffentlichen Thread |
+| `blocks.discord.personas` | `true` verwendet Agentennamen und Bilder für Serverbeiträge über Webhooks. Geben Sie dem Bot die Berechtigung Manage Webhooks |
+| `blocks.discord.avatar` | Dateiname des Bildes für das Bot-Profil |
+| `blocks.discord.ack_reaction` | Emoji, mit dem SwB den Empfang einer Nachricht an den Bot bestätigt. `null` schaltet diese Reaktion ab |
+| `blocks.discord.dm_space` | Raum, dessen Routing- und Inhabereinstellungen für Direktnachrichten gelten. Standard ist der erste konfigurierte Raum |
+| `blocks.discord.dm_mode` | Modus für Direktnachrichten anderer Personen. `watch` sammelt eine Zusammenfassung, `off` überspringt sie |
+| `blocks.discord.daily_cap` | Tageslimit für jede Aktion, die über ein Tool postet oder antwortet. `null` hebt das Limit auf |
+| `blocks.discord.refresh_minutes` | Minuten zwischen Aktualisierungen der Zielliste. Standard ist `30` |
+| `blocks.discord.target_aliases` | Ordnet zusätzliche Zielnamen vorhandenen Zielen zu |
+| `blocks.discord.agents` | Räume, in denen jeder Agent posten und Ereignisse empfangen darf. `*` steht für alle Räume |
+
+Mit [Kanalmodi](/de/docs/channel-modes) wecken Sie einen Agenten über eine Projektroute.
+
+## Räume und Kanäle
+
+| Schlüssel | Zweck |
+| - | - |
+| `blocks.discord.spaces` | Ordnet die in SwB verwendeten Namen den Einstellungen für Discord-Server zu |
+| `blocks.discord.spaces.*.guild_id` | ID des Discord-Servers. Lassen Sie sie in einem Raum weg, damit SwB den Server automatisch zuordnet. Dafür braucht SwB genau einen verfügbaren Server, der einem Inhaber des Raums gehört |
+| `blocks.discord.spaces.*.owner_ids` | Discord-Benutzer-IDs, die als Inhaber gelten. Standard ist der Inhaber der Discord-App |
+| `blocks.discord.spaces.*.known` | Ordnet bekannte Discord-Benutzer-IDs Anzeigenamen zu |
+| `blocks.discord.spaces.*.default_target` | Ziel für eine neue Nachricht an SwB, wenn der Zielname fehlt |
+| `blocks.discord.spaces.*.project` | Standardprojekt in SwB für diesen Raum |
+| `blocks.discord.spaces.*.channel_projects` | Legt das SwB-Projekt nach Kanal-ID oder nach einem Namen mit `#` am Anfang fest |
+| `blocks.discord.spaces.*.mode` | Modus für den Raum. Ein Kanal- oder Thread-Modus kann ihn überschreiben |
+| `blocks.discord.spaces.*.channels` | Legt einen Modus oder genauere Einstellungen nach Kanal- oder Thread-ID fest |
+| `blocks.discord.spaces.*.channels.*.mode` | Modus für einen Kanal oder Thread |
+| `blocks.discord.spaces.*.channels.*.actions` | Erlaubte Aktionen im Modus `triage`, zum Beispiel `reply` und `notify_owner` |
+| `blocks.discord.spaces.*.listen` | Ältere Einstellung für Kanal- oder Thread-IDs mit dem Modus `assist` |
+| `blocks.discord.spaces.*.bot_posts_per_hour` | Höchstzahl an Bot-Beiträgen pro Thread und Stunde. Standard ist `20` |

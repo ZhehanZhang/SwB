@@ -1,0 +1,195 @@
+---
+title: Configuración
+description: Variables de entorno, el archivo de configuración y las superposiciones.
+---
+
+SwB puede funcionar solo con variables de entorno. El bloque MCP se inicia de forma predeterminada. Algunos bloques se inician cuando defines sus variables. Usa un archivo YAML para más ajustes. YAML es un formato de texto para ajustes.
+
+## Instancia
+
+| Variable | Uso |
+| - | - |
+| `SWB_KEY_OWNER` | Clave de propietario para las herramientas y los comandos de SwB |
+| `SWB_PUBLIC_URL` | Dirección pública para el inicio de sesión y MCP. Usa HTTPS para un servidor remoto, por ejemplo `https://swb.example.com`. |
+| `SWB_HOST` | Dirección para las conexiones entrantes. El valor predeterminado es `127.0.0.1`. |
+| `SWB_DATA_DIR` | La carpeta de datos. La imagen usa `/data`. |
+| `SWB_OWNER_EMAILS` | Direcciones de correo del propietario para OpenID Connect (OIDC) y Cloudflare Access. Separa las direcciones con comas |
+| `SWB_KEY_<NAME>` | Clave del agente `<name>`. El agente la envía como clave bearer en la cabecera `Authorization` |
+| `SWB_CONFIG` | La ruta del archivo YAML base |
+| `SWB_OVERLAY` | La ruta de un archivo de superposición privado |
+| `SWB_PORT` | Puerto HTTP. El valor predeterminado de `swb up` es `8870`. |
+
+Define `SWB_PORT` en la shell o en el archivo `.env` de la instancia. Si tu plataforma de alojamiento define otro puerto, usa `--url` para elegir el servidor en marcha en los comandos de cliente.
+
+Usa `swb up --public-url https://swb.example.com` para definir la URL pública en la línea de comandos. En esa ejecución, la opción tiene prioridad sobre `public_url` de YAML. YAML tiene prioridad sobre `SWB_PUBLIC_URL`.
+
+Usa `--host` para sustituir `SWB_HOST`. Define una URL pública antes de usar `--host 0.0.0.0` o una dirección de tu red local.
+
+Usa `swb up --dir ./my-swb` para leer `.env` y `config/switchboard.yaml` de esa carpeta. Usa el mismo `--dir` con `swb init`. Con `swb up` a secas, usa `SWB_CONFIG` para elegir otro archivo de configuración.
+
+`swb status`, `swb login-link`, `swb connect` y `swb claim` usan `--dir` para encontrar `.env`. Usan `--url` para elegir la dirección del servidor.
+
+Los comandos del servidor aceptan `--dir`. Son `swb serve`, `swb export`, `swb log`, `swb config migrate`, `swb blocks` y `swb targets`. SwB lee `.env` y la configuración de la carpeta elegida. También usa esa carpeta para encontrar los datos de la instancia en los comandos que usan la base de datos.
+
+Con `swb serve` a secas, SwB lee la shell y el archivo de configuración. Los demás comandos del servidor usan la carpeta actual de forma predeterminada.
+
+Usa `swb config migrate [file]` para mostrar una configuración en el formato de la versión 2. Pasa `file` para elegir una configuración concreta. Si omites `file`, SwB usa la configuración de `--dir`, de `SWB_CONFIG` o de la ruta predeterminada.
+
+## Carpeta de datos
+
+`swb up` y `swb init` crean una carpeta `data/` para una instancia nueva. SwB usa esa carpeta de forma predeterminada. Usa `swb up --dir` para elegir otra carpeta de instancia.
+
+Define `data_dir` en la configuración o en la superposición para cambiar la ruta. Ese ajuste tiene prioridad. Después SwB comprueba `SWB_DATA_DIR` y `SWB_DATA`, en ese orden. El valor predeterminado se aplica cuando los tres ajustes están vacíos.
+
+`swb up` a secas conserva los archivos de configuración existentes. Si la instancia tiene un archivo de configuración y falta `data/`, SwB busca la base de datos antigua en `~/.local/share/switchboard`. SwB registra un aviso una sola vez si usa esa base de datos.
+
+En Linux y macOS, SwB asigna a la carpeta de datos el modo privado `0700`. Asigna a los archivos de la base de datos el modo privado `0600`.
+
+## Bloques
+
+Algunos bloques pueden iniciarse con credenciales del entorno. Consulta [Bloques](/es/docs/blocks) para la configuración. El [ejemplo de entorno de la versión](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example) muestra los nombres de las credenciales para espacios de trabajo y rutinas con nombre.
+
+## El archivo de configuración
+
+`swb up` prepara una instancia nueva en su carpeta. Guarda en `.env` la clave de propietario y un `SWB_PORT` personalizado. Asigna al archivo el modo `0600`.
+
+Ejecuta `swb init` para crear los archivos antes de iniciar SwB.
+
+```bash
+swb init
+```
+
+Los dos comandos escriben `version: 2` en `config/switchboard.yaml` de forma predeterminada. Pasa una dirección a `swb init --public-url` para guardarla allí. En su primera ejecución, `swb up` guarda la dirección de `--public-url` o de `SWB_PUBLIC_URL`. Añade `blocks` para elegir qué bloques cargar. Cambia `CAPTAIN_ID` por el ID de tu Capy Captain.
+
+```yaml
+version: 2
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+blocks:
+  mcp: {use: mcp}
+  capy: {use: capy, identity: service}
+targets:
+  aliases: {}
+routes:
+  - {match: {}, to: capy:captain:CAPTAIN_ID}
+```
+
+SwB usa la sección `blocks` en lugar de la selección automática de bloques. Define `enabled: false` en el bloque MCP para desactivarlo. Los ajustes de bloque pueden seguir leyendo credenciales del entorno.
+
+## Superposiciones
+
+Una superposición es un archivo YAML con ajustes propios de tu instancia. Guárdala como `local.yaml` junto al archivo de configuración base, o define su ruta con `SWB_OVERLAY`. La superposición tiene prioridad sobre el archivo base. El archivo base tiene prioridad sobre los valores predeterminados del entorno. Los ajustes agrupados por nombre se combinan. La superposición sustituye las listas.
+
+En una clave, `*` representa el nombre de una entrada o un elemento de una lista.
+
+## Núcleo
+
+| Clave | Uso |
+| - | - |
+| `version` | Versión del formato YAML. Usa `2` para `blocks` |
+| `public_url` | Dirección pública para MCP y el inicio de sesión. OAuth permite que una app inicie sesión con tu aprobación |
+| `data_dir` | Ruta de la carpeta de datos. Defínela aquí o con `SWB_DATA_DIR` |
+| `timezone` | Zona horaria para los recuentos y límites diarios. Valor predeterminado `UTC` |
+| `turn_cap` | Turnos antes de que SwB pause una conversación. Valor predeterminado `200`. Usa `null` para quitar el límite |
+| `blocks` | Bloques que se cargan, por tipo o por una etiqueta propia |
+| `agents` | Definiciones de agentes por nombre |
+| `agents.*.label` | Nombre visible de un agente |
+| `targets` | Nombres de destinos y su prioridad |
+| `targets.aliases` | Asigna un nombre corto a un nombre o una dirección de destino |
+| `targets.priority` | Orden que se usa cuando varios destinos comparten nombre. Por ejemplo, `[capy:captain, agent, project]` |
+| `routes` | Rutas iniciales. SwB conserva las rutas ya definidas |
+| `routes.*.match` | Coincide con un agente, un proyecto o ambos. Usa `{}` para la ruta global |
+| `routes.*.to` | Dirección de envío cuando la ruta coincide |
+
+## Inicio de sesión y claves
+
+| Clave | Uso |
+| - | - |
+| `auth` | Ajustes de inicio de sesión y de claves |
+| `auth.owner_emails` | Direcciones de correo que pueden iniciar sesión como propietario con OIDC o Cloudflare Access |
+| `auth.cloudflare_access` | Ajustes de inicio de sesión de Cloudflare Access. Rellena los dos campos y define `auth.owner_emails` |
+| `auth.cloudflare_access.team_domain` | El dominio de tu equipo en Cloudflare Access |
+| `auth.cloudflare_access.aud` | Etiqueta de audiencia que identifica la aplicación de Access |
+| `auth.redirect_uris` | Direcciones de retorno OAuth permitidas. Esta lista sustituye la lista integrada. Usa `/*` para incluir una ruta y sus subrutas |
+| `auth.source_names` | Asigna una parte de un host o de un nombre de cliente OAuth al nombre de agente que se usa al iniciar sesión |
+| `auth.key_scopes` | Ámbitos de acceso por clave o nombre de agente, como `[project:example]`. Estos ámbitos limitan las rutas, los mensajes y las conversaciones. También limitan las claves configuradas y los clientes OAuth cuando usan la memoria. Para las claves emparejadas, SwB añade los ámbitos de memoria nombrados a las concesiones al emparejar |
+| `auth.key_tools` | Asigna a cada nombre de clave las herramientas MCP permitidas, por ejemplo `[send]` |
+| `auth.key_targets` | Destinos de mensajes permitidos por nombre de clave, por ejemplo `[agent:claude]`. Una clave con este límite debe indicar un destino permitido |
+| `auth.inbox_keys` | Asigna a cada nombre de clave el único agente cuya bandeja de entrada puede leer. La entrada integrada es `channel: claude-code` |
+
+## Visibilidad
+
+| Clave | Uso |
+| - | - |
+| `visibility` | Reglas sobre quién puede acceder a un recurso. Las herramientas siguen siendo privadas |
+| `visibility.defaults` | Reglas predeterminadas por tipo de recurso. Todos los tipos empiezan como `private` |
+| `visibility.defaults.channel` | Regla predeterminada para los canales |
+| `visibility.defaults.memory` | Regla predeterminada para los ámbitos de memoria |
+| `visibility.defaults.route` | Regla predeterminada para las rutas |
+| `visibility.defaults.target` | Regla predeterminada para los destinos de envío |
+| `visibility.resources` | Reglas para recursos concretos como `channel:home/#agents`. Cada regla tiene prioridad sobre la regla predeterminada de su tipo |
+
+En Slack, `channel:home/#agents` es una regla de canal. En GitHub, comparte `channel:github/acme/app` y también `target:beta` para que los remitentes externos lleguen a `agent:beta`. Consulta la [visibilidad de canales](/es/docs/channel-modes#permitir-remitentes-externos-de-github).
+
+Usa `private` para el propietario y sus agentes. Usa `shared` para abrir el acceso. Lista IDs de usuario o entradas como `workspace:home` para compartir con personas concretas. Los cambios hechos con `visibility_set` tienen prioridad sobre este archivo.
+
+## Confianza en remitentes de GitHub
+
+| Clave | Uso |
+| - | - |
+| `blocks.github.owner_ids` | Lista predeterminada de IDs numéricos de usuarios de GitHub que se tratan como propietarios de confianza |
+| `blocks.github.spaces.*.owner_ids` | Lista de IDs numéricos de usuarios de GitHub que sustituye la lista predeterminada en este espacio |
+
+GitHub usa los niveles de confianza `owner` y `external`. En Slack, Discord y Telegram, `known` ayuda a SwB a elegir de quién acepta mensajes. Los mensajes de los demás remitentes conservan el nivel de confianza `external`. Consulta [Cuentas de propietario](/es/docs/blocks/github#cuentas-de-propietario) para configurar el modo Work.
+
+## MCP
+
+| Clave | Uso |
+| - | - |
+| `blocks.mcp` | Ajustes del bloque que atiende a los clientes MCP |
+| `blocks.mcp.use` | Tipo de bloque. Usa `mcp` |
+| `blocks.mcp.legacy_aliases` | Mantiene disponibles nombres antiguos de herramientas MCP como `agent_send`, `capy_delegate`, `capy_wait` y `capy_reply`. Valor predeterminado `true` |
+| `blocks.mcp.wait` | Límites para las llamadas a herramientas que esperan una respuesta |
+| `blocks.mcp.wait.default_s` | Tiempo de espera en segundos cuando quien llama deja el campo vacío. Valor predeterminado `60` |
+| `blocks.mcp.wait.max_s` | Espera máxima en segundos. Valor predeterminado `200` |
+| `blocks.mcp.wait.agents` | Límites de espera por agente. Claude Code usa `45` segundos de forma predeterminada y `55` segundos como máximo |
+| `blocks.mcp.wait.agents.*.default_s` | Espera predeterminada en segundos para este agente |
+| `blocks.mcp.wait.agents.*.max_s` | Espera máxima en segundos para este agente |
+
+## Memoria y modos de canal
+
+Consulta [Modos de canal](/es/docs/channel-modes) para vincular la ruta de un proyecto y definir las acciones de triage.
+
+| Clave | Uso |
+| - | - |
+| `memory` | Ajustes de la copia en Markdown de la memoria |
+| `memory.mirror` | Controla la copia en Markdown. Usa `false` para detener las actualizaciones |
+| `memory.mirror_dir` | Carpeta de la copia en Markdown |
+| `memory.mirror_debounce_s` | Segundos de espera tras un cambio en la memoria antes de escribir la copia. Valor predeterminado `2` |
+| `modes` | Ajustes sobre cómo actúa SwB ante los eventos entrantes |
+| `modes.default` | Modo predeterminado. El valor predeterminado es `off` |
+| `modes.projects` | Modo predeterminado para los espacios asignados a cada proyecto |
+| `modes.assist_max_chars` | Límite de caracteres que SwB da a los agentes para una respuesta `assist`. Valor predeterminado `1500` |
+| `modes.digest_minutes` | Minutos durante los que se reúnen eventos `watch` antes de un resumen. Valor predeterminado `60`. SwB también envía un resumen al llegar a `50` eventos |
+
+## Personalización de marca
+
+```yaml
+branding:
+  display_name: SwB
+  accent_color: "#64748b"
+```
+
+| Clave | Uso |
+| - | - |
+| `branding` | Ajustes del nombre, el icono y los colores que muestra SwB |
+| `branding.display_name` | Nombre visible. Valor predeterminado `SwB` |
+| `branding.accent_color` | Color de acento en formato `#RRGGBB` |
+| `branding.icon` | Icono personalizado |
+| `branding.logo_assets_dir` | Carpeta de los archivos de logotipo personalizados |
+| `branding.public_identity` | Campo interno fijado en `swb` en esta versión |
+
+## Referencia completa
+
+[config/switchboard.example.yaml](https://github.com/ZhehanZhang/SwB/blob/release/1.0/config/switchboard.example.yaml) contiene un ejemplo de YAML con notas.

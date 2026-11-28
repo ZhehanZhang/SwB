@@ -1,0 +1,96 @@
+---
+title: Conectar tus agentes
+description: Añade SwB a tus agentes y configura sus conexiones.
+---
+
+## Añadir SwB a un agente
+
+Para una app en el ordenador de SwB, elige [acceso de propietario o emparejamiento](/es/docs/setup/mcp-client). Para una app que funciona en un servidor, añade SwB como servidor MCP remoto. Usa tu dirección MCP pública, por ejemplo `https://swb.example.com/mcp`. Aprueba el [inicio de sesión OAuth](/es/docs/owner-login#inicio-de-sesión-de-agentes) de la app en la página de SwB.
+
+| App | Dónde añadir SwB |
+| - | - |
+| [Cliente MCP local](/es/docs/setup/mcp-client) | Usa una clave de propietario o empareja con un código. Usa `http://localhost:8870/mcp` en el ordenador de SwB. |
+| Claude y Claude Projects | Customize → Connectors → Add → Add custom connector |
+| ChatGPT | [chatgpt.com/plugins](https://chatgpt.com/plugins) → Add a custom MCP server |
+| Grok | [grok.com](https://grok.com) → Connectors → New Connector → Custom |
+| Capy | Settings → MCP & plugins → Add a custom MCP server |
+| Claude Code | `claude mcp add --transport http --scope user swb https://swb.example.com/mcp` |
+| Codex, Gemini CLI y otros agentes de programación | `swb connect coding-agent --choose agent=codex` |
+
+Para un agente de programación, ejecuta `swb connect coding-agent` para ver los nombres compatibles. Cambia `codex` por el nombre de esa lista.
+
+## Pedírselo a tu agente
+
+Un agente con acceso de propietario puede configurar las demás conexiones. Con una clave emparejada, el agente te da un comando de terminal para cada paso reservado al propietario.
+
+El acceso de propietario necesita un inicio de sesión OAuth aprobado por el propietario o una clave de `SWB_KEY_<NAME>`. Usa una credencial con acceso completo a ámbitos, herramientas y destinos. Los ajustes `auth.key_scopes`, `auth.key_tools` y `auth.key_targets` limitan este acceso.
+
+| Lo que pides | Lo que hace el agente |
+| - | - |
+| ¿Cómo conecto mis Claude Projects? | Registra una rutina de Claude para el proyecto y te da un enlace para el token |
+| Conecta Slack a SwB. | Te remite al manifiesto YAML de [Configuración de Slack](/es/docs/setup/slack#manifiestos-de-la-app) y obtiene un enlace de entrega cuando hace falta |
+| Conecta mi bot de Discord. | Te da un enlace para el token y el enlace de invitación del bot |
+| Envía esto a mi Capy Captain. | Envía la tarea y espera la respuesta |
+| ¿A quién puedes enviar mensajes? | Lista los destinos a los que puede enviar el agente |
+
+El agente llama a la herramienta `connect`. SwB responde con el siguiente paso para esa plataforma. Cuando un paso necesita un token, SwB da un enlace de entrega de un solo uso. Abre el enlace y pega allí el token. [Credenciales](/es/docs/credentials) explica los enlaces de entrega.
+
+## Conectar desde la terminal
+
+Ejecuta `swb connect PLATFORM` en la carpeta de la instancia de SwB. Cambia `PLATFORM` por el nombre de la plataforma, como `slack`. El comando usa la clave de propietario de `.env`. Usa la dirección local de SwB de forma predeterminada. Usa `--dir` para elegir una carpeta de instancia. Usa `--url` para indicar la dirección de SwB. Ejecuta `swb login-link` para obtener un enlace de inicio de sesión de propietario de un solo uso.
+
+```bash
+swb connect mcp-client
+swb connect capy-captain
+swb connect grok
+```
+
+## Conectar con un código de emparejamiento
+
+El emparejamiento da a un agente nuevo su propia clave. Pide a un agente conectado como propietario que llame a `connect_code`. Dale el nombre del agente nuevo. El código es de un solo uso y caduca a los diez minutos. El agente nuevo usa `POST /connect` para canjear el código por su propia clave. Consulta [Cliente MCP](/es/docs/setup/mcp-client) para el procedimiento completo.
+
+Para crear un código en la consola, abre **Tokens**. Abre **Pairing code**. Escribe el nombre del agente. Selecciona **Create code**. SwB envía el formulario a `POST /pairing/code`.
+
+El emparejamiento da acceso a la memoria de `agent:<name>` y a los ámbitos definidos para el agente en `auth.key_scopes`. Un código de emparejamiento que nombra un proyecto también da acceso al ámbito de memoria de ese proyecto.
+
+`POST /connect` devuelve el proyecto nombrado en `project`. Úsalo como proyecto predeterminado del cliente. Pásalo en `project` cuando una herramienta necesite el proyecto.
+
+La clave puede leer los mensajes que su agente envía o recibe dentro de sus [ámbitos de conversación](/es/docs/security#claves-con-límites).
+
+Con una clave emparejada, `tools/list` muestra las herramientas del rol de agente emparejado. El ajuste `auth.key_tools` puede acotar la lista. Usa el inicio de sesión del propietario para las herramientas de propietario. Consulta [Claves emparejadas](/es/docs/tools#claves-emparejadas).
+
+## Flujo de eventos de la bandeja de entrada
+
+`POST /connect` devuelve `inbox_events_url`, la URL de `GET /inbox/events`. Abre esa URL con `Authorization: Bearer <key>` y la clave del agente emparejado. SwB envía los mensajes de la bandeja de entrada de ese agente dentro del acceso de la clave. Estos eventos enviados por el servidor (SSE) llegan mientras la conexión sigue abierta. Para los resúmenes de Watch y los elementos de contexto, usa `inbox`.
+
+El flujo empieza con un evento `ready`. Cada evento `item` tiene datos JSON con un `cursor`, un `handle` de conversación y los datos del mensaje. El ID del evento es el cursor, que marca una posición en el flujo.
+
+El flujo empieza en la posición más reciente de forma predeterminada. Para continuar desde un punto, envía el último ID de evento en la cabecera `Last-Event-ID` o en el parámetro de consulta `after`. Consulta [Mensajes](/es/docs/tools#mensajes) para las entradas de `reply` y `get_message`.
+
+## Prompts de configuración
+
+Los agentes pueden leer el texto de configuración como prompt o como recurso MCP. Un prompt es un texto que se da al agente. Un recurso es un texto que el agente puede leer en una dirección. La herramienta `connect` da ambos nombres en `guide` cuando una plataforma tiene un prompt de configuración.
+
+| Prompt | Recurso | Guía |
+| - | - | - |
+| `setup-capy-captain` | `swb://setup/capy-captain` | [/es/docs/setup/capy-captain](/es/docs/setup/capy-captain) |
+| `setup-chatgpt` | `swb://setup/chatgpt` | [/es/docs/setup/chatgpt](/es/docs/setup/chatgpt) |
+| `setup-claude` | `swb://setup/claude` | [/es/docs/setup/claude](/es/docs/setup/claude) |
+| `setup-claude-project` | `swb://setup/claude-project` | [/es/docs/setup/claude-project](/es/docs/setup/claude-project) |
+| `setup-coding-agent` | `swb://setup/coding-agent` | [/es/docs/setup/coding-agent](/es/docs/setup/coding-agent) |
+| `setup-companion` | `swb://setup/companion` | [/es/docs/companion](/es/docs/companion) |
+| `setup-coordinator` | `swb://setup/coordinator` | [/es/docs/connect](/es/docs/connect) |
+| `setup-deploy` | `swb://setup/deploy` | [/es/docs/deploy](/es/docs/deploy) |
+| `setup-discord` | `swb://setup/discord` | [/es/docs/setup/discord](/es/docs/setup/discord) |
+| `setup-dots` | `swb://setup/dots` | [/es/docs/setup/dots](/es/docs/setup/dots) |
+| `setup-github` | `swb://setup/github` | [/es/docs/setup/github](/es/docs/setup/github) |
+| `setup-grok` | `swb://setup/grok` | [/es/docs/setup/grok](/es/docs/setup/grok) |
+| `setup-grok-bot` | `swb://setup/grok-bot` | [/es/docs/setup/grok-bot](/es/docs/setup/grok-bot) |
+| `setup-mcp-client` | `swb://setup/mcp-client` | [/es/docs/setup/mcp-client](/es/docs/setup/mcp-client) |
+| `setup-muse` | `swb://setup/muse` | [/es/docs/setup/muse](/es/docs/setup/muse) |
+| `setup-slack` | `swb://setup/slack` | [/es/docs/setup/slack](/es/docs/setup/slack) |
+| `setup-telegram` | `swb://setup/telegram` | [/es/docs/setup/telegram](/es/docs/setup/telegram) |
+
+## Companion
+
+Usa la [guía de Companion](/es/docs/companion) para emparejar un dispositivo y elegir las funciones que pueden usar tus agentes.

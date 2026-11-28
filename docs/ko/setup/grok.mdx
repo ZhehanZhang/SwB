@@ -1,0 +1,58 @@
+---
+title: Grok
+description: grok.com의 Grok을 사용자 지정 커넥터로 SwB에 연결합니다.
+---
+
+[grok.com](https://grok.com)의 Grok에 SwB을 추가하세요. 커넥터는 Grok이 외부 도구를 쓰게 해 줍니다. Grok은 `grok`으로 SwB에 로그인합니다.
+
+## 시작하기 전에
+
+팀 계정이라면 조직의 커넥터 설정을 확인하세요.
+
+SwB에 공개 HTTPS 주소와 소유자 로그인을 설정하세요. OAuth를 쓰면 브라우저에서 접근을 승인합니다.
+
+Grok Bot은 설정이 따로 있는 별도의 앱입니다. [Grok Bot](/ko/docs/setup/grok-bot)을 참고하세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="grok" lang="ko" />
+
+SwB을 추가한 뒤 이 프롬프트를 Grok 채팅에 붙여 넣으세요.
+
+## Grok에 SwB 추가
+
+### Connectors 열기
+
+브라우저에서 [grok.com/connectors](https://grok.com/connectors)를 여세요.
+
+### 사용자 지정 커넥터 추가
+
+**New Connector**를 선택하세요. 그다음 **Custom**을 선택하세요.
+
+### 주소 입력
+
+서버 URL에 `https://swb.example.com/mcp`를 입력하세요. 커넥터를 저장하세요.
+
+### 로그인
+
+소유자로 SwB에 로그인하세요. SwB 페이지에서 접근을 승인하세요.
+
+## 에이전트가 하는 일
+
+Grok이 `connect(what="grok")`를 호출합니다. SwB은 MCP 주소와 OAuth 상태를 돌려줍니다. 로그인한 뒤에는 `connect`가 클라이언트의 로그인 완료를 알립니다.
+
+Grok은 `send`로 테스트 메시지를 보내고 `inbox`로 읽을 수 있습니다. 우편함은 에이전트 하나의 메시지를 보관합니다. Grok 앱이 MCP Events를 지원하면 `switchboard.message.created`를 구독하세요. 필요할 때 읽으려면 열린 채팅에서 Grok에게 `wait`나 `inbox` 호출을 요청하세요.
+
+## 자격 증명
+
+| 토큰 | 표시되는 곳 | 형식 | 입력할 곳 |
+| - | - | - | - |
+| SwB 로그인 토큰 | 로그인할 때 Grok이 받습니다 | 임의 텍스트 | Grok이 대신 보관합니다 |
+
+## 연결 확인
+
+로그인을 확인하려면 Grok에게 `connect(what="grok")` 호출을 요청하세요. 다른 SwB 에이전트에서 `agent:grok`으로 테스트 메시지를 보내세요. Grok에게 `inbox`로 메시지를 읽어 달라고 요청하세요.
+
+## 문제 해결
+
+스스로 시작되는 작업에는 [Grok Bot](/ko/docs/setup/grok-bot)을 사용하세요. SwB은 웹훅으로 Grok Bot 루틴을 깨웁니다.

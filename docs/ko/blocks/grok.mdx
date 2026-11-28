@@ -1,0 +1,50 @@
+---
+title: Grok
+description: 브라우저에서 Grok을 연결하거나 루틴으로 Grok Bot을 깨웁니다.
+---
+
+## 커넥터 추가
+
+브라우저에서 Grok을 연결하려면 [Grok 설정](/ko/docs/setup/grok)을 따르세요. 별도의 데스크톱 앱은 [Grok Bot 설정](/ko/docs/setup/grok-bot)을 따르세요.
+
+## 루틴으로 Grok Bot 깨우기
+
+에이전트에게 Grok Bot 연결을 요청하세요. 터미널에서는 `swb connect grok-bot`을 실행하세요. 설정 안내를 따라 루틴 프롬프트를 받으세요.
+
+이 프롬프트로 웹훅 트리거가 있는 Grok Bot 루틴을 만드세요. 웹훅은 SwB이 루틴의 URL로 요청을 보내면 루틴을 시작합니다. `example`을 활성 SwB 프로젝트의 짧은 이름으로 바꾸세요. 명령을 실행해 루틴을 등록하세요.
+
+```bash
+swb connect grok-bot --choose name=project-triage project=example auth=key
+```
+
+SwB은 웹훅 주소용과 키용 등록 링크를 따로 줍니다. 링크마다 해당 값을 저장하세요. 테스트 호출을 하려면 같은 명령을 다시 실행하세요. 에이전트에게 호출을 실행하고 `pong` 답장을 확인해 달라고 요청하세요.
+
+## 깨우기의 작동 방식
+
+`auth=key`이면 SwB은 기본적으로 `Authorization` 헤더에 키를 담아 보냅니다. `auth=signature`이면 SwB이 요청에 서명합니다. 요청에는 텍스트, 대화 ID, 발신자, 신뢰 수준이 들어 있습니다. 프로젝트가 있으면 프로젝트도 들어 있습니다. 루틴은 `owner` 신뢰 수준의 요청에 `reply`를 호출합니다.
+
+직접 설정하려면 `url_env`와 `secret_env`에 적은 이름의 변수를 서버 환경에 설정하세요.
+
+```yaml
+blocks:
+  grok-routine:
+    routines:
+      project-triage: {project: example, url_env: SWB_EXAMPLE_GROK_URL, auth: key, secret_env: SWB_EXAMPLE_GROK_SECRET}
+```
+
+루틴 이름으로 보내거나, 프로젝트의 기본 루틴이면 `grok:<slug>`로 보내세요.
+
+## 설정
+
+| 키 | 용도 |
+| - | - |
+| `blocks.grok-routine` | Grok Bot 루틴을 깨우는 설정 |
+| `blocks.grok-routine.use` | 블록 유형. `grok-routine`을 사용합니다 |
+| `blocks.grok-routine.enabled` | 이 블록을 건너뛰려면 `false`로 설정합니다 |
+| `blocks.grok-routine.routines` | 루틴 이름별 설정 |
+| `blocks.grok-routine.routines.*.project` | SwB 프로젝트의 짧은 이름. 일반 루틴에는 `null`을 사용합니다 |
+| `blocks.grok-routine.routines.*.primary` | 프로젝트에서 이 루틴을 먼저 고르려면 `true`로 설정합니다 |
+| `blocks.grok-routine.routines.*.auth` | 키를 보내려면 `key`를, 요청에 서명하려면 `signature`를 사용합니다. 기본값 `key` |
+| `blocks.grok-routine.routines.*.header` | 키나 서명을 담을 HTTP 헤더. 기본값은 `key`이면 `Authorization`, `signature`이면 `Webhook-Signature`입니다 |
+| `blocks.grok-routine.routines.*.url_env` | 공개 HTTPS 웹훅 주소를 담은 변수의 이름 |
+| `blocks.grok-routine.routines.*.secret_env` | 키나 서명 시크릿을 담은 변수의 이름 |

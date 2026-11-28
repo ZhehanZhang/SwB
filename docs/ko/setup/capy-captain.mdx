@@ -1,0 +1,91 @@
+---
+title: Capy Captain
+description: SwB 작업을 Capy Captain에게 보내고 답장을 받아 옵니다.
+---
+
+Capy Captain은 스레드 묶음을 지휘하는 Capy 에이전트입니다. SwB은 Captain에게 작업을 보내고 각 답장을 발신자에게 돌려줍니다.
+
+## 시작하기 전에
+
+같은 조직에 Capy 계정, 프로젝트, Captain이 있어야 합니다. 서비스 사용자는 소프트웨어용 Capy 계정입니다.
+
+`capy` 블록을 켜세요. Capy의 **Settings** → **MCP & plugins**에서 SwB을 추가하세요. 소유자 권한을 모두 가진 SwB 클라이언트를 사용하세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="capy-captain" lang="ko" />
+
+이 프롬프트를 SwB 소유자 클라이언트에 붙여 넣으세요.
+
+## Captain 라우트 설정
+
+### API 설정 열기
+
+Capy에서 **Settings** → **API**를 여세요. 올바른 조직이 열려 있는지 확인하세요.
+
+### 읽기 키 만들기
+
+Captain에 접근할 수 있는 개인 API 키를 만드세요. Capy가 키를 보여 주는 동안 복사하세요.
+
+### 읽기 키 저장
+
+에이전트가 준 등록 링크를 여세요. **Token**에 키를 붙여 넣으세요. **Save token**을 선택하세요.
+
+### SwB 다시 시작
+
+에이전트가 요청하면 SwB을 다시 시작하세요. 그러면 SwB이 키를 불러옵니다.
+
+### Capy Captain 만들기
+
+Capy Captain이 필요하면 만드세요. 프로젝트와 Captain이 실행될 머신을 고르세요.
+
+### Capy Captain 고르기
+
+작업을 받을 Capy Captain을 에이전트에게 알려 주세요.
+
+### 전송 키 만들기
+
+**Settings** → **API**에서 역할이 `read_write`인 서비스 사용자를 만드세요. 그 사용자에게 프로젝트 접근 권한을 주세요. 서비스 사용자용 키를 만드세요.
+
+### Capy Captain 공유
+
+Capy Captain 메뉴를 여세요. **Share**를 선택하세요. 서비스 사용자에게 접근 권한을 주세요. 페어링된 기기에서 실행되는 Captain이면 서비스 사용자에게 그 기기 접근 권한도 주세요. {/* unverified */}
+
+### 전송 키 저장
+
+두 번째 등록 링크를 여세요. **Token**에 키를 붙여 넣으세요. **Save token**을 선택하세요.
+
+### SwB 한 번 더 다시 시작
+
+SwB을 다시 시작하세요. 그다음 에이전트에게 끝났다고 알려 주세요.
+
+## 에이전트가 하는 일
+
+소유자 권한을 모두 가진 클라이언트에서 `connect(what="capy-captain")`를 호출합니다. SwB에 읽기 키가 필요하면 등록 링크를 돌려줍니다. 등록 링크는 자격 증명을 입력하는 비공개 페이지입니다.
+
+다시 시작한 뒤에는 `connect`가 사용할 수 있는 Captain을 나열합니다. 작업을 받을 Captain을 확인하세요. `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`를 호출합니다. 프로젝트 라우트를 쓰려면 `choose`에 `"project":"<project>"`를 추가합니다. 라우트는 작업을 보낼 곳을 SwB에 알려 줍니다.
+
+에이전트가 작업을 보내는 데 서비스 키가 필요하면 SwB이 키를 요청합니다. 라우트를 확인하려면 `capy_captains`, `routes_list`, `routes_resolve`를 사용합니다.
+
+앱이 MCP Events를 지원하면 `switchboard.message.created`를 구독하세요. 필요할 때 읽으려면 `wait`나 `inbox`를 호출하세요.
+
+## 자격 증명
+
+| 토큰 | 표시되는 곳 | 형식 | 입력할 곳 |
+| - | - | - | - |
+| 읽기 키 | **Settings** → **API**, 한 번만 표시 | `capy_`와 임의 문자 43자 | 해당 SwB 등록 링크의 **Token** |
+| 전송 키 | **Settings** → **API**, 한 번만 표시 | `capy_`와 임의 문자 43자 | 해당 SwB 등록 링크의 **Token** |
+
+## 연결 확인
+
+에이전트에게 `connect(what="capy-captain")`를 다시 호출하도록 요청하세요. `connected`가 나오는지 확인하세요. 라우트로 짧은 테스트 작업을 보내세요. Captain 스레드에 작업이 들어왔는지 확인하세요. `result`나 `inbox`로 답장을 읽으세요. 설정된 전송 키의 이름과 상태는 소유자로 로그인해 `/healthz`에서 확인하세요.
+
+## 문제 해결
+
+Capy 키는 해당 계정의 권한을 그대로 씁니다. `connect`가 새 읽기 키를 요청하면 Captain에 접근할 수 있는 키를 새로 만드세요.
+
+전송이 접근 오류로 실패하면 서비스 사용자가 프로젝트, Captain, 페어링된 기기에 접근할 수 있는지 확인하세요.
+
+서버 환경에 있는 값이 등록한 값보다 우선합니다. 서버 환경에서 값을 바꾸고 SwB을 다시 시작하세요.
+
+키를 잃어버렸다면 **Settings** → **API**에서 그 키를 폐기하세요. 새 키를 만드세요. 등록 링크는 한 번만 쓸 수 있고 30분 뒤에 만료됩니다.
