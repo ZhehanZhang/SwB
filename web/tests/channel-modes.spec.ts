@@ -167,7 +167,7 @@ test("agent tiles and claim pages display bundled avatars", async ({ page }) => 
     await expect.poll(() => avatar.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
   }
 
-  for (const [path, name] of [["/tokens", "capy"], ["/fixture/muse", "muse"]]) {
+  for (const [path, name] of [["/tokens", "capy"], ["/fixture/gemini", "gemini"]]) {
     await page.goto(path)
     const avatar = page.locator(`img[src="/avatars/${name}.png"]`).first()
     await expect(avatar).toBeVisible()

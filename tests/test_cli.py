@@ -152,6 +152,29 @@ def test_config_and_blocks_use_instance_config(cli_instance, tmp_path, monkeypat
     assert [line.split()[:2] for line in capsys.readouterr().out.splitlines()] == [["webhook", "webhook"], ["custom-mcp", "mcp"]]
 
 
+def test_retired_muse_block_is_skipped_with_one_warning(cli_instance, monkeypatch, capsys, caplog):
+    from switchboard.config import RETIRED_BLOCKS
+
+    base, _ = cli_instance
+    (base / cli.CONFIG).write_text("version: 2\nblocks:\n  mcp: {}\n  muse:\n    enabled: true\n  wake:\n    use: muse\n")
+    with caplog.at_level(logging.WARNING, logger="switchboard"):
+        core = Switchboard(config_path=base / cli.CONFIG, data_dir=base / "data2", env={})
+    assert "muse" not in core.blocks and "wake" not in core.blocks and core.cfg.retired_blocks == ("muse",)
+    assert [r.getMessage() for r in caplog.records if "Muse gadget" in r.getMessage()] == [RETIRED_BLOCKS["muse"]]
+    assert "https://swb.one/docs/setup/muse" in RETIRED_BLOCKS["muse"]
+    assert core.status()["status"] == "degraded" and RETIRED_BLOCKS["muse"] in core.status()["problems"]
+    __main__.cli_main(["blocks", "check", "--dir", base.name])
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == RETIRED_BLOCKS["muse"] and "mcp is ready." in out
+
+
+def test_unknown_block_types_still_fail(cli_instance):
+    base, _ = cli_instance
+    (base / cli.CONFIG).write_text("version: 2\nblocks:\n  gizmo: {}\n")
+    with pytest.raises(ValueError, match="unknown block type 'gizmo'"):
+        Switchboard(config_path=base / cli.CONFIG, data_dir=base / "data3", env={})
+
+
 def test_targets_use_instance_config(cli_instance, capsys):
     base, _ = cli_instance
     (base / cli.CONFIG).write_text("version: 2\nblocks:\n  dots:\n    delivery: mailbox\n    dots:\n      alpha:\n        name: Alpha\n")
@@ -424,22 +447,14 @@ def test_status_lists_next_steps_and_redacts_owner_key(tmp_path, monkeypatch, ca
     assert out == "Status: degraded\nNext steps:\n  - Configure OAuth.\n  - Echoed [redacted]\n"
 
 
-@pytest.mark.parametrize(("kind", "value"), [("muse", "true"), ("grok", "url")])
-def test_connect_passes_replacement_as_a_string(tmp_path, monkeypatch, kind, value):
+@pytest.mark.parametrize("value", ["true", "url"])
+def test_connect_passes_replacement_as_a_string(tmp_path, monkeypatch, value):
     key = "fixture-owner-key-not-a-secret"
     monkeypatch.setenv(cli.OWNER_KEY, key)
-    call = AsyncMock(return_value={"what": kind, "next": []})
+    call = AsyncMock(return_value={"what": "grok", "next": []})
     monkeypatch.setattr(cli, "_call", call)
-    cli.main(["connect", kind, "--choose", f"replace={value}", "--dir", str(tmp_path), "--url", "https://swb.example"])
-    call.assert_awaited_once_with("https://swb.example/mcp", key, "connect", {"what": kind, "choose": {"replace": value}})
-
-
-def test_cli_rejects_removed_muse_command(capsys):
-    command = "-".join(("muse", "bridge"))
-    with pytest.raises(SystemExit) as error:
-        cli.main([command])
-    assert error.value.code == 2
-    assert f"invalid choice: {command!r}" in capsys.readouterr().err
+    cli.main(["connect", "grok", "--choose", f"replace={value}", "--dir", str(tmp_path), "--url", "https://swb.example"])
+    call.assert_awaited_once_with("https://swb.example/mcp", key, "connect", {"what": "grok", "choose": {"replace": value}})
 
 
 def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch, capsys):
