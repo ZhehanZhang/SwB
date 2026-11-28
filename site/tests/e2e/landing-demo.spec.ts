@@ -1,16 +1,10 @@
 import { expect, test } from '@playwright/test';
+import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 import { exchangeScenes } from '../../lib/exchange-copy';
 
 test('six demo windows keep the section and every window fixed over ten seconds', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.addInitScript(() => {
-    const metrics = Object.assign(window, { swbLayoutShift: 0 });
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as (PerformanceEntry & { hadRecentInput: boolean; value: number })[]) {
-        if (!entry.hadRecentInput) metrics.swbLayoutShift += entry.value;
-      }
-    }).observe({ type: 'layout-shift', buffered: true });
-  });
+  await page.addInitScript(observeLayoutShifts);
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready);
   const demo = page.locator('#landing-demos').locator('..');
@@ -41,7 +35,8 @@ test('six demo windows keep the section and every window fixed over ten seconds'
     const current = await sample();
     expect(current).toEqual(baseline);
   } while (Date.now() < deadline);
-  expect(await page.evaluate(() => (window as Window & { swbLayoutShift?: number }).swbLayoutShift)).toBe(0);
+  const shifts = await page.evaluate(readLayoutShifts);
+  expect(shifts.reduce((total, shift) => total + shift.value, 0), JSON.stringify(shifts, null, 2)).toBe(0);
 });
 
 test('demo transcripts never disappear across two loops at 50ms intervals', async ({ page }) => {
