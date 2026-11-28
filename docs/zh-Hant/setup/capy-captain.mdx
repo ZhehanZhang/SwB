@@ -1,43 +1,43 @@
 ---
 title: Capy Captain
-description: 將 SwB 的工作交給 Capy Captain，並把回覆帶回來。
+description: 把 SwB 的工作路由給 Capy Captain，再把回覆帶回來。
 ---
 
-Capy Captain 是負責協調一組執行緒的 Capy 代理。SwB 把工作交給 Captain，再將回覆交給傳送者。
+Capy Captain 是負責指揮一組討論串的 Capy 代理。SwB 把任務傳送給 Captain，再把每則回覆送回傳送者。
 
 ## 開始之前
 
-請在同一個 Capy 組織準備帳號、專案和 Captain。服務使用者是供軟體使用的 Capy 帳號。
+需要同一個組織中的 Capy 帳號、專案和 Captain。服務使用者是供軟體使用的 Capy 帳號。
 
-啟用 `capy` 模組。在 Capy 的 **Settings** → **MCP & plugins** 加入 SwB。請使用具備完整擁有者權限的 SwB 用戶端。
+啟用 `capy` 模組。在 Capy 的 **Settings** → **MCP & plugins** 中加入 SwB。使用具備完整擁有者存取權的 SwB 用戶端。
 
 ## 複製設定提示詞
 
 <SetupPrompt name="capy-captain" lang="zh-Hant" />
 
-把提示詞貼到 SwB 擁有者用戶端。
+把提示詞貼到你的 SwB 擁有者用戶端。
 
 ## 設定 Captain 路由
 
 ### 開啟 API 設定
 
-在 Capy 開啟 **Settings** → **API**。確認目前是正確的組織。
+在 Capy 中開啟 **Settings** → **API**，確認開啟的是正確的組織。
 
 ### 建立讀取金鑰
 
-建立一把可存取 Captain 的個人 API 金鑰。趁 Capy 顯示金鑰時複製。
+建立一把能存取你的 Captain 的個人 API 金鑰，趁 Capy 還顯示金鑰時複製下來。
 
 ### 儲存讀取金鑰
 
-開啟代理給你的領取連結。把金鑰貼到 **Token**。再選擇 **Save token**。
+開啟代理提供的認領連結，把金鑰貼到 **Token**，再選取 **Save token**。
 
 ### 重新啟動 SwB
 
-代理提示時，重新啟動 SwB。SwB 接著會載入金鑰。
+代理要求時，重新啟動 SwB，SwB 隨後會載入金鑰。
 
 ### 建立 Capy Captain
 
-視需要建立 Capy Captain。選擇專案和 Captain 執行時使用的裝置。
+如有需要，建立一個 Capy Captain。選擇專案，以及要執行 Captain 的機器。
 
 ### 選擇 Capy Captain
 
@@ -45,47 +45,47 @@ Capy Captain 是負責協調一組執行緒的 Capy 代理。SwB 把工作交給
 
 ### 建立傳送金鑰
 
-在 **Settings** → **API** 建立角色為 `read_write` 的服務使用者。授予它專案存取權。為它建立金鑰。
+在 **Settings** → **API** 中建立一個角色為 `read_write` 的服務使用者，授予它專案的存取權，再為這個服務使用者建立一把金鑰。
 
 ### 分享 Capy Captain
 
-開啟 Capy Captain 選單。選取 **Share**。授予服務使用者存取權。如果 Captain 使用已配對的裝置，也授予服務使用者該裝置的存取權。 {/* unverified */}
+開啟 Capy Captain 的選單，選取 **Share**，把存取權授予服務使用者。如果 Captain 在已配對裝置上執行，也把該裝置的存取權授予服務使用者。 {/* unverified */}
 
 ### 儲存傳送金鑰
 
-開啟第二個領取連結。把金鑰貼到 **Token**。再選擇 **Save token**。
+開啟第二個認領連結，把金鑰貼到 **Token**，再選取 **Save token**。
 
 ### 再次重新啟動 SwB
 
-重新啟動 SwB。接著告訴代理已完成。
+重新啟動 SwB，然後告訴代理你已完成。
 
-## 代理的工作
+## 代理會做什麼
 
-在具備完整擁有者權限的用戶端呼叫 `connect(what="capy-captain")`。如果需要讀取金鑰，SwB 會傳回領取連結。領取連結是提交憑證的私人頁面。
+從具備完整擁有者存取權的用戶端呼叫 `connect(what="capy-captain")`。如果 SwB 需要讀取金鑰，會回傳一個認領連結。認領連結是用來輸入憑證的私有頁面。
 
-重新啟動後，`connect` 會列出可用的 Captain。確認哪個 Captain 要接收工作。呼叫 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。若要設定專案路由，在 `choose` 加入 `"project":"<project>"`。路由會指定工作送往何處。
+重新啟動後，`connect` 會列出可用的 Captain。確認由哪個 Captain 接收工作，再呼叫 `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`。如果要建立專案路由，在 `choose` 中加入 `"project":"<project>"`。路由告訴 SwB 要把工作送到哪裡。
 
-代理若需要服務金鑰才能傳送，SwB 會要求提供金鑰。用 `capy_captains`、`routes_list` 和 `routes_resolve` 檢查路由。
+如果代理需要服務金鑰才能傳送，SwB 會要求提供。用 `capy_captains`、`routes_list` 和 `routes_resolve` 檢查路由。
 
-若應用程式支援 MCP 事件，請訂閱 `switchboard.message.created`。若要主動讀取訊息，請呼叫 `wait` 或 `inbox`。
+如果你的應用程式支援 MCP Events，訂閱 `switchboard.message.created`。如果只在需要時讀取，呼叫 `wait` 或 `inbox`。
 
 ## 憑證
 
-| 權杖 | 顯示位置 | 格式 | 存放位置 |
+| 權杖 | 顯示位置 | 格式 | 去處 |
 | - | - | - | - |
-| 讀取金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
-| 傳送金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加 43 個隨機字元 | 對應 SwB 領取連結的 **Token** |
+| 讀取金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加上 43 個隨機字元 | 對應 SwB 認領連結頁面上的 **Token** |
+| 傳送金鑰 | **Settings** → **API**，只顯示一次 | `capy_` 加上 43 個隨機字元 | 對應 SwB 認領連結頁面上的 **Token** |
 
 ## 檢查連線
 
-請代理再次呼叫 `connect(what="capy-captain")`。確認結果為 `connected`。向路由傳送一項簡短的測試工作。在 Captain 執行緒查看工作。用 `result` 或 `inbox` 讀取回覆。以擁有者身分開啟 `/healthz`，查看傳送金鑰的名稱和狀態。
+請代理再次呼叫 `connect(what="capy-captain")`，確認結果為 `connected`。傳送一項簡短的測試任務到這條路由，確認任務出現在 Captain 討論串中，再用 `result` 或 `inbox` 讀取回覆。以擁有者身分開啟 `/healthz`，檢查已設定的傳送金鑰名稱和狀態。
 
-## 排除問題
+## 疑難排解
 
-Capy 金鑰使用對應帳號的權限。如果 `connect` 要求新的讀取金鑰，請建立一把可存取 Captain 的金鑰。
+Capy 金鑰沿用所屬帳號的權限。如果 `connect` 要求新的讀取金鑰，建立一把能存取 Captain 的金鑰。
 
-傳送時若出現存取錯誤，請檢查服務使用者是否可存取專案、Captain 和已配對的裝置。
+如果傳送失敗並出現存取錯誤，檢查服務使用者對專案、Captain 和已配對裝置的存取權。
 
-伺服器環境中的值優先於領取連結儲存的值。請在伺服器環境中修改該值，再重新啟動 SwB。
+伺服器環境中的值優先於用認領連結儲存的值。到伺服器環境中修改，再重新啟動 SwB。
 
-若要更換遺失的金鑰，請在 **Settings** → **API** 撤銷舊金鑰。接著建立一把新金鑰。每個領取連結可用一次，30 分鐘後失效。
+如果要更換遺失的金鑰，在 **Settings** → **API** 中撤銷它，再建立新金鑰。每個認領連結只能使用一次，30 分鐘後過期。

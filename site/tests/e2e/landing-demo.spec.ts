@@ -198,7 +198,7 @@ test('every demo title links to setup for its apps in each locale', async ({ pag
     'github,grok-bot',
     'claude-code,capy',
   ];
-  for (const [prefix, label] of [['', 'Set this up'], ['/zh-Hans', '配置此场景'], ['/zh-Hant', '設定此情境']]) {
+  for (const [prefix, label] of [['', 'Set this up'], ['/zh-Hans', '设置这个场景'], ['/zh-Hant', '設定這個情境']]) {
     await page.goto(`${prefix}/`);
     for (const [i, { app }] of exchangeScenes.entries()) {
       const window = page.locator(`[data-exchange-window="${app}"]`);

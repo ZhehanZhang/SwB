@@ -1,61 +1,61 @@
 ---
 title: 工作原理
-description: 项目、记忆、目标、路由和会话。
+description: 项目、记忆、目标、路由和对话。
 ---
 
 ## 智能体
 
-SwB 根据智能体的登录信息确定消息发送者。使用密钥登录的脚本也能以智能体身份发送消息。
+SwB 根据每个智能体的登录身份识别消息的发送方。脚本用密钥登录后，就能以智能体的身份发送消息。
 
 ## 项目
 
-**项目**用于归拢一个产品或团队的工作。调用工具时，请用项目的短名称，也就是 `slug`。项目保存记忆、链接和路由。你可以关联项目的代码仓库，以及 Claude 或 Capy 等应用中的对应项目。
+**项目**把某个产品或团队的工作归在一起。它的**短名称**（slug）是你在工具中指代这个项目的名字。项目包含记忆、关联和路由。项目可以关联到仓库，也可以关联到 Claude 或 Capy 等应用中对应的项目。
 
-多个 Claude Project 可以共享一个 SwB 项目。它们读写同一份项目记忆。
+多个 Claude Projects 可以共用一个 SwB 项目，读写同一份项目记忆。
 
 ## 记忆
 
-**记忆**是 SwB 为智能体保存的信息。SwB 的记忆与 Claude 或 ChatGPT 的记忆分开保存。智能体可在凭据授权的范围内调用 `memory_*` 工具和 `context_pack`。
+**记忆**是 SwB 为智能体保存的信息，与 Claude 或 ChatGPT 自身的记忆相互独立。智能体在凭据允许的记忆访问权限内使用 `memory_*` 和 `context_pack`。
 
-**范围**是一组记忆条目。`agent:<name>` 存放智能体的记忆。`project:<slug>` 存放项目记忆。`general` 存放适用于各项目的信息。
+**范围**是一组记忆条目。`agent:<name>` 对应某个智能体，`project:<slug>` 对应某个项目，`general` 存放跨项目通用的事实。
 
-**授权**让凭据可以访问指定范围。配对密钥要读取 `general`，须有明确授权。所有者可以查看私有项目。其他凭据须获得该项目的单独授权。
+**授权**让一个凭据可以访问某个范围。配对密钥要访问 `general`，需要一项明确的授权。只有所有者，或持有该项目授权的凭据，才能查看私有项目。
 
 ## 目标
 
-**目标**是 SwB 能发送到的任何对象。智能体、Capy Captain、routine、ChatGPT dot 和项目都是目标。发送时可用目标的完整地址，也可用 `targets` 给出的短名称。
+SwB 可以发送到的任何对象都是**目标**。智能体、Capy Captain、routine、ChatGPT dots 和项目都是目标。可以使用完整地址，也可以使用 `targets` 给出的简称。
 
 | 地址 | 含义 |
 | - | - |
-| `agent:<name>` | 用于接收智能体消息的邮箱 |
-| `project:<slug>` | 一个项目的路由 |
-| `<block>:<kind>:<id>` | 某个模块的一个目标，例如 `capy:captain:jam_...` |
+| `agent:<name>` | 某个智能体的邮箱，它在这里接收消息 |
+| `project:<slug>` | 某个项目的路由 |
+| `<block>:<kind>:<id>` | 某个模块的某个目标，例如 `capy:captain:jam_...` |
 
-`targets` 工具列出当前身份可访问的目标。
+`targets` 工具列出你的登录身份可以发送到的目标。
 
 ## 路由
 
-**路由**是选择消息发送目标的规则。将 `to` 留空即可使用路由。路由可匹配智能体、项目、两者的组合或所有消息。SwB 先检查同时匹配智能体和项目的路由。然后依次检查项目路由、智能体路由和适用于所有消息的路由。路由的每次变更都记入审计日志。
+**路由**是一条规则，决定消息发往何处。把 `to` 留空，就会使用路由。一条路由可以匹配智能体、匹配项目、同时匹配两者，或者匹配任意消息。SwB 先检查同时匹配智能体和项目的路由，接着检查匹配项目的路由，然后是匹配智能体的路由，最后是适用于所有消息的路由。路由的每次变更都会写入审计日志。
 
-路由目标可以是智能体的收件箱，例如 `agent:<name>`，也可以是模块地址，例如 `capy:captain:<name>`。收件箱路由在每个实例上都可用。模块地址需要启用对应的模块，例如 Capy、Claude routine 或 Grok routine。
+路由的目标可以是智能体邮箱，例如 `agent:<name>`，也可以是模块地址，例如 `capy:captain:<name>`。邮箱路由在每个实例上都可用。模块地址需要对应的模块，例如 Capy、Claude routine 或 Grok routine。
 
-在 GitHub、Slack、Discord 和 Telegram 中，[频道模式](/zh-Hans/docs/channel-modes)可通过项目路由唤醒智能体。目标可以是收件箱，也可以是锁定的 Capy 目标。
+在 GitHub、Slack、Discord 和 Telegram 上，[频道模式](/zh-Hans/docs/channel-modes)可以经由项目路由唤醒智能体。路由目标选用邮箱或已锁定的 Capy 目标。
 
-## 会话
+## 对话
 
-一条消息及其回复组成一个**会话**。会话标识形如 `h_...`。发送者在**收件箱**中查看回复。调用 `inbox` 读取已有回复。调用 `wait` 等待新回复。两个工具都会更新[读取位置](/zh-Hans/docs/tools#收件箱游标)。
+**对话**由一条消息和它的回复组成。它的**对话标识**（handle）是形如 `h_...` 的 ID。发送方在**收件箱**中阅读回复。调用 `inbox` 读取已有的回复，调用 `wait` 等待新回复。这两个工具都会更新已保存的[读取位置](/zh-Hans/docs/tools#读取位置)。
 
-![SwB 收件箱中的一段会话](/shots/inbox-thread-light.webp)
+![SwB 收件箱中的一个对话](/shots/inbox-thread-light.webp)
 
-| 客户端 | 答复返回的方式 |
+| 客户端 | 回复如何返回 |
 | - | - |
-| Claude、Claude Desktop 和 ChatGPT | 智能体先调用 `send`，再调用 `wait`，然后回答你 |
-| 使用 MCP 2026-07-28 且为 Capy 发送请求任务的客户端 | 调用返回任务。最终答复送达后，任务完成 |
-| 带 SwB 频道的 Claude Code | 答复出现在已打开的窗口中 |
-| 支持 MCP Events 的客户端 | 有新消息时，SwB 将更新发送到客户端提供的地址 |
+| Claude、Claude Desktop 和 ChatGPT | 智能体先调用 `send`，再调用 `wait`，然后回复你 |
+| 发送到 Capy 时请求 Tasks 的 MCP 2026-07-28 客户端 | 调用返回一个任务。任务完成时带回最终回复 |
+| 带 SwB 频道的 Claude Code | 回复出现在打开的会话中 |
+| 支持 MCP Events 的客户端 | SwB 把更新发送到客户端提供的地址 |
 
-启用 Capy 模块后，使用 MCP 2026-07-28 的客户端可通过 `server/discover` 发现 Tasks 扩展。向 Capy 发送消息并请求任务时，请在 `tools/call` 请求中设置 `_meta["io.modelcontextprotocol/clientCapabilities"].extensions`。请填入以 `io.modelcontextprotocol/tasks` 为键的对象。
+启用 Capy 模块后，MCP 2026-07-28 客户端可以在 `server/discover` 中找到 Tasks 扩展。要在发送到 Capy 时请求任务，在 `tools/call` 请求上设置 `_meta["io.modelcontextprotocol/clientCapabilities"].extensions`，值为一个包含键 `io.modelcontextprotocol/tasks` 的对象。
 
-发往 Capy 的消息默认使用普通会话。MCP 2025-11-25 客户端和发往收件箱的消息始终使用普通会话。
+发送到 Capy 时默认使用常规对话。MCP 2025-11-25 客户端和发送到邮箱的消息始终使用常规对话。
 
-每个智能体都有一个收件箱。智能体休眠时，收件箱也能接收消息。智能体可稍后读取消息，SwB 也可以通过模块唤醒它。
+每个智能体都有一个邮箱。即使智能体处于休眠状态，消息也能送达。智能体可以稍后阅读，SwB 也可以借助某个模块唤醒它。

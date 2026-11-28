@@ -1,35 +1,35 @@
 ---
 title: 模块
-description: 查看 SwB 支持的连接和功能。
+description: 查看 SwB 提供的连接和功能。
 ---
 
-模块为 SwB 提供连接或功能。在配置文件中设置模块。使用默认配置时，SwB 会根据环境变量加载部分模块。运行 `swb status` 查看模块状态和设置提示。以所有者身份登录后，在 `/healthz` 查看详情。
+模块为 SwB 添加一项连接或功能。在配置文件中设置模块。使用默认配置时，SwB 会根据环境变量检测出部分模块。运行 `swb status` 查看模块状态和设置指引。以所有者身份登录后，可在 `/healthz` 查看详细信息。
 
-| 连接 | 连接方式 | 消息传递方式 |
+| 连接 | 接入方式 | SwB 如何传递消息 |
 | - | - | - |
 | [Claude](/zh-Hans/docs/blocks/claude) | 自定义连接器和 Claude routine | `wait`、`inbox` 和 routine 唤醒 |
-| [ChatGPT](/zh-Hans/docs/blocks/chatgpt) | 自定义 MCP 服务器和 ChatGPT dot | MCP Events |
-| [Capy](/zh-Hans/docs/blocks/capy) | Capy API 密钥 | Capy 话题串的事件流 |
+| [ChatGPT](/zh-Hans/docs/blocks/chatgpt) | 自定义 MCP 服务器和 ChatGPT dots | MCP Events |
+| [Capy](/zh-Hans/docs/blocks/capy) | Capy API 密钥 | Capy 线程流 |
 | [Grok](/zh-Hans/docs/blocks/grok) | MCP 连接器和 Grok Bot routine | `wait`、`inbox` 和 routine 唤醒 |
 | [编程智能体](/zh-Hans/docs/blocks/coding-agents) | OAuth 或配对码 | `wait`、`inbox` 和 Claude Code 频道 |
-| [本地会话](/zh-Hans/docs/blocks/local-sessions) | 已配对的设备 | 邮箱或直接送达已打开的会话 |
-| [Slack](/zh-Hans/docs/blocks/slack) | 经 Socket Mode 的 Slack 应用 | 话题串中的回复 |
-| [Discord](/zh-Hans/docs/blocks/discord) | 机器人令牌 | 话题串中的回复 |
-| [Telegram](/zh-Hans/docs/blocks/telegram) | 机器人令牌 | 话题串中的回复 |
+| [本地会话](/zh-Hans/docs/blocks/local-sessions) | 已配对的设备 | 邮箱，或直接投递到打开的会话 |
+| [Slack](/zh-Hans/docs/blocks/slack) | 使用 Socket Mode 的 Slack 应用 | 在消息列中回复 |
+| [Discord](/zh-Hans/docs/blocks/discord) | Bot 令牌 | 在子区中回复 |
+| [Telegram](/zh-Hans/docs/blocks/telegram) | Bot 令牌 | 在原消息下回复 |
 | [GitHub](/zh-Hans/docs/blocks/github) | Webhook 密钥 | 带签名的 Webhook |
-| [Webhook](/zh-Hans/docs/blocks/webhooks) | 签名密钥或共享密钥 | 接收事件并发送带签名的消息 |
-| [Muse](/zh-Hans/docs/setup/muse) | 已配对的 Muse 装置和 MCP 连接器 | 实时唤醒和邮箱消息 |
+| [Webhooks](/zh-Hans/docs/blocks/webhooks) | 签名密钥或共享密钥 | 接收事件，发出带签名的消息 |
+| [Muse](/zh-Hans/docs/setup/muse) | 已配对的 Muse gadget 和 MCP 连接器 | 实时唤醒和邮箱消息 |
 | [其他 MCP 客户端](/zh-Hans/docs/setup/mcp-client) | OAuth 或配对码 | `wait` 和 `inbox` |
 
 ## 信任与访问
 
-SwB 根据平台的发送者 ID 标记消息的信任等级。在 Slack、Discord 和 Telegram 中，`known` 是接收设置。SwB 用它判断接收哪些发送者的消息。所有者之外的发送者即使通过 `known` 获准，消息的信任等级仍为 `external`。详见[信任](/zh-Hans/docs/security#信任等级)。
+SwB 根据平台 ID 确定消息的信任等级。在 Slack、Discord 和 Telegram 中，用 `known` 帮助 SwB 判断接受哪些人的消息。所有者以外的人发来的消息，信任等级为 `external`。参阅[信任等级](/zh-Hans/docs/security#信任等级)。
 
-目标、频道和记忆范围默认为私有资源。共享资源后，其他人也能访问。
+目标、频道和记忆范围默认私有。共享一项资源，其他人就能访问它。
 
 ## 内置头像
 
-用文件名为 [Slack 发帖形象](/zh-Hans/docs/blocks/slack#角色形象)选择内置头像。
+为 [Slack 形象（persona）](/zh-Hans/docs/blocks/slack#形象)选择内置头像时，填头像的文件名。
 
 | 文件 | 名称 |
 | - | - |
@@ -47,6 +47,6 @@ SwB 根据平台的发送者 ID 标记消息的信任等级。在 Slack、Discor
 | `muse.png` | Muse |
 | `swb.png` | SwB |
 
-## 添加你自己的模块
+## 添加自己的模块
 
-模块是带有清单的 Python 类。清单说明模块能执行的操作、消息目标和所需密钥。在 `switchboard.blocks` 入口点组中注册模块。运行 `swb blocks list` 查看服务器上已配置的模块。
+模块是一个带清单的 Python 类。清单描述模块能做什么、可以向哪里发送消息，以及使用哪些密钥。在 `switchboard.blocks` 入口点组中注册你的模块。运行 `swb blocks list` 查看服务器上已配置的模块。

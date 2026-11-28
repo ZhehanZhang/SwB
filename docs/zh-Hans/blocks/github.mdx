@@ -3,19 +3,19 @@ title: GitHub App
 description: 把 GitHub 事件发送给你的智能体和服务。
 ---
 
-## 创建应用
+## 创建 App
 
-在你的账号下创建 GitHub App。将 SwB 公网地址加上 `/github/webhook` 作为 webhook 地址，例如 `https://swb.example.com/github/webhook`。将 webhook 密钥生成到私有文件中。SwB 接受至少 16 个字符的密钥。
+在你的账号下创建一个 GitHub App。把 Webhook 地址设为你的公网 SwB 地址加 `/github/webhook`，例如 `https://swb.example.com/github/webhook`。在一个仅自己可读的文件中生成 Webhook 密钥。SwB 接受至少 16 个字符的密钥。
 
 ```bash
 (umask 077; set -C; openssl rand -hex 32 > ~/.swb-github-secret)
 ```
 
-将密钥填入 **Webhook secret**。请智能体连接 GitHub。通过领取链接保存同一个 webhook 密钥。保存密钥后删除私有文件。重启 SwB 以载入密钥。请智能体再次调用 `connect`，获取仍需填写的 App ID 或私钥链接。填写私钥时，请粘贴 `.pem` 文件的完整内容。
+把密钥填入 **Webhook secret**，再让智能体连接 GitHub，并用对应的认领链接保存同一个密钥。然后删除这个私有文件，重启 SwB 以加载密钥。让智能体再次调用 `connect`，获取其余的 App ID 或私钥链接。把 `.pem` 文件的全部内容粘贴到私钥字段中。
 
 ## 权限
 
-在 **Repository permissions** 中，按下表设置权限。
+在 **Repository permissions** 下，按表中的访问权限设置。
 
 | 仓库资源 | 访问权限 | 事件 |
 | - | - | - |
@@ -26,7 +26,7 @@ description: 把 GitHub 事件发送给你的智能体和服务。
 | **Actions** | **Read-only** | `workflow_run` |
 | **Metadata** | 自动设为 **Read-only** | |
 
-在你选择的仓库上安装该应用。
+把 App 安装到需要的仓库上。
 
 ## 路由事件
 
@@ -41,17 +41,17 @@ blocks:
       "acme/*": [team]
 ```
 
-在服务器环境中，将 `SWB_EXAMPLE_GITHUB_SINK_URL` 设为接收端地址。
+在服务器环境中，把 `SWB_EXAMPLE_GITHUB_SINK_URL` 设为接收端的地址。
 
-**接收端**是接收事件副本的网址。在 `watch` 模式下，SwB 会向每个匹配的接收端发送一份精简的 JSON 事件。设置了接收端路由的仓库默认采用 `watch` 模式。频道或空间的模式设置优先。SwB 将补充信息作为引文写入 `metadata`。每次请求都用事件的投递 ID 作为 `Idempotency-Key`。连接失败、超时或收到 HTTP 5xx 响应时，SwB 会重试。
+**sink** 是接收事件副本的 URL。在 `watch` 模式下，SwB 向每个匹配的 sink 发送一个精简的 JSON 事件。带 sink 路由的仓库默认使用 `watch` 模式。频道模式和空间模式优先。SwB 把其他细节作为引用内容放在 `metadata` 中。每个请求用事件的投递 ID 作为 `Idempotency-Key`。遇到连接失败、超时和 HTTP 5xx 响应时，SwB 会重试。
 
-如果 Cloudflare Access 保护你的主机，请放行 `/github/webhook`。该路径由 GitHub 签名保护。
+如果你的主机由 Cloudflare Access 保护，放行 `/github/webhook`。这个路径由 GitHub 签名保护。
 
 ## 所有者账号
 
-在 `off` 模式下，SwB 丢弃该空间的所有 GitHub 事件，包括所有者账号的事件。
+在 `off` 模式下，SwB 丢弃空间的全部 GitHub 事件，包括所有者账号的事件。
 
-用 `work` 模式处理已登记的所有者账号发出的事件。将 `https://api.github.com/users/USERNAME` 中的 `USERNAME` 换成你的 GitHub 用户名。打开该地址。将数字 `id` 填入空间的 `owner_ids` 列表。重启 SwB 以应用设置。
+使用 `work` 模式，可以只接受已配置的所有者账号的事件。把 `https://api.github.com/users/USERNAME` 中的 `USERNAME` 换成你的 GitHub 用户名，然后打开这个 URL。把数字 `id` 复制到空间的 `owner_ids` 列表中。重启 SwB，让设置生效。
 
 ```yaml
 blocks:
@@ -65,38 +65,38 @@ blocks:
           target: agent:beta
 ```
 
-用 `blocks.github.owner_ids` 设置默认的所有者 ID。空间的 `owner_ids` 列表会覆盖默认列表。将空间的列表设为空即可清除默认值。
+用 `blocks.github.owner_ids` 设置默认的所有者 ID。空间的 `owner_ids` 列表会取代这个默认值。把空间的列表设为空，就会清除这个默认值。
 
-SwB 逐一检查标题、正文和评论的作者。只有 `owner_ids` 中的人写的文字才算 `owner`。分支名、引用、工作流标题和检查名称一律按 `external` 引用。
+SwB 会核对每个标题、正文或评论的作者。只有文本自己的作者在 `owner_ids` 中并且是真人时，文本才算作 `owner`。SwB 把分支名、ref、工作流标题和检查名称作为 `external` 内容引用。
 
-带检查名称的 `check_run` 事件标为 `external`，即使事件由所有者触发。来自派生仓库的拉取请求可以设置检查名称。在访问规则中使用 `github:4242` 这类 ID。访问权限和信任等级各自判定。
+带检查名称的 `check_run`，信任等级为 `external`，由所有者触发时也是如此。来自 fork 的 Pull Request 可以设置检查名称。在访问规则中使用 `github:4242` 这样的 ID。这些规则授予访问权限，与信任等级相互独立。
 
-执行 GitHub 会话操作时，将 SwB 会话 ID 填入 `conversation` 或 `handle`。
+执行 GitHub 对话操作时，在 `conversation` 或 `handle` 中传入 SwB 对话标识。
 
 ## 配置
 
-| 配置键 | 用途 |
+| 键 | 用途 |
 | - | - |
-| `blocks.github` | GitHub 事件和操作设置 |
-| `blocks.github.use` | 模块类型，填 `github` |
-| `blocks.github.enabled` | 设为 `false` 可跳过此模块 |
-| `blocks.github.app_id_env` | 存放应用 ID 的变量名 |
-| `blocks.github.private_key_env` | 存放应用私钥的变量名 |
-| `blocks.github.token_env` | 存放细粒度令牌的变量名。此令牌可替代应用凭据 |
-| `blocks.github.secret_env` | 存放 webhook 密钥的变量名 |
-| `blocks.github.sinks` | 按接收端名称配置事件接收端 |
-| `blocks.github.sinks.*.url_env` | 存放接收端地址的变量名 |
-| `blocks.github.routes` | 为仓库名称或 `owner/*` 指定接收端列表 |
-| `blocks.github.owner_ids` | 默认认定为所有者的 GitHub 数字用户 ID 列表 |
-| `blocks.github.spaces` | 共用设置的仓库组。用 `acme/app` 这样的名称可选中该仓库 |
-| `blocks.github.spaces.*.repo` | `owner/repo` 格式的仓库名称 |
-| `blocks.github.spaces.*.owner_ids` | 覆盖此空间默认列表的 GitHub 数字用户 ID 列表 |
-| `blocks.github.spaces.*.mode` | 这个空间内各仓库的默认[频道模式](/zh-Hans/docs/channel-modes) |
-| `blocks.github.spaces.*.mode.target` | 模式设置中的目标，填写 `agent:beta` 这样的地址 |
-| `blocks.github.spaces.*.project` | 此空间的事件默认归入的 SwB 项目 |
+| `blocks.github` | GitHub 事件和操作的设置 |
+| `blocks.github.use` | 模块类型。填 `github` |
+| `blocks.github.enabled` | 设为 `false` 可跳过这个模块 |
+| `blocks.github.app_id_env` | 保存 App ID 的变量名 |
+| `blocks.github.private_key_env` | 保存 App 私钥的变量名 |
+| `blocks.github.token_env` | 保存细粒度令牌的变量名，这个令牌可以替代 App 凭据 |
+| `blocks.github.secret_env` | 保存 Webhook 密钥的变量名 |
+| `blocks.github.sinks` | 按事件接收端名称组织的设置 |
+| `blocks.github.sinks.*.url_env` | 保存接收端地址的变量名 |
+| `blocks.github.routes` | 仓库名称或 `owner/*` 到事件接收端列表的映射 |
+| `blocks.github.owner_ids` | 视为所有者的 GitHub 数字用户 ID 的默认列表 |
+| `blocks.github.spaces` | 共用一套设置的具名仓库集合。`acme/app` 这样的名称会选中对应的仓库 |
+| `blocks.github.spaces.*.repo` | 仓库名称，格式为 `owner/repo` |
+| `blocks.github.spaces.*.owner_ids` | GitHub 数字用户 ID 列表，在这个空间中取代默认值 |
+| `blocks.github.spaces.*.mode` | 这个空间中各仓库的默认[频道模式](/zh-Hans/docs/channel-modes) |
+| `blocks.github.spaces.*.mode.target` | 模式设置中的目标。填 `agent:beta` 这样的地址 |
+| `blocks.github.spaces.*.project` | 这个空间的事件所用的默认 SwB 项目 |
 
-调用 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`，将智能体绑定到仓库。使用 `mode="assist"` 可切换到协助模式。请从 `targets` 返回的列表中选择目标。关联项目的路由是备用选项。
+用 `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")` 把智能体绑定到仓库。要使用 assist 模式，传入 `mode="assist"`。从 `targets` 中选择目标。关联的项目路由作为后备。
 
-要接收外部用户的事件，请开放 `channel:github/acme/app` 和 `target:beta`。详情见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-用户访问)。
+要允许外部发送方，同时授予 `channel:github/acme/app` 和 `target:beta` 的访问权限。访问规则见[频道可见性](/zh-Hans/docs/channel-modes#允许外部-github-发送方)。
 
-在 `watch` 模式下，SwB 将摘要发送到目标邮箱。等待时间由 `modes.digest_minutes` 设置。同一空间和邮箱积累 50 个事件时，SwB 会提前发送。参阅[观察摘要](/zh-Hans/docs/channel-modes#查看观察摘要)。
+在 `watch` 模式下，经过 `modes.digest_minutes` 分钟后，或同一个邮箱和空间累计满 50 个事件时，SwB 向目标邮箱发送一份摘要。参阅 [Watch 摘要](/zh-Hans/docs/channel-modes#阅读-watch-摘要)。

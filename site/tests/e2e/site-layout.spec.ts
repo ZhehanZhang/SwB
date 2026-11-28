@@ -186,8 +186,8 @@ test('the mobile Ask AI icon never overlaps docs text while scrolling', async ({
 test('the open-source statement is visible in all landing heroes', async ({ page }) => {
   for (const [path, text] of [
     ['/', 'Free and open source under Apache-2.0'],
-    ['/zh-Hans', '免费开源，采用 Apache-2.0 许可'],
-    ['/zh-Hant', '免費開源，採用 Apache-2.0 授權'],
+    ['/zh-Hans', '采用 Apache-2.0 许可证，免费开源'],
+    ['/zh-Hant', '採用 Apache-2.0 授權，免費開源'],
   ]) {
     await page.goto(path);
     const license = page.locator('.swb-hero-copy').getByRole('link', { name: text });
@@ -223,7 +223,7 @@ test('landing header, hero, sections and footer share both grid edges', async ({
 
 test('hero actions share a baseline and keep mobile actions, license and command in order', async ({ page }) => {
   for (const [path, label] of [
-    ['/', 'Set up with agent'], ['/zh-Hans', '用智能体设置'], ['/zh-Hant', '用代理設定'],
+    ['/', 'Set up with agent'], ['/zh-Hans', '让智能体设置'], ['/zh-Hant', '讓代理設定'],
   ]) {
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready);
@@ -372,8 +372,8 @@ test('docs GitHub option opens the release source file', async ({ page }) => {
 test('landing shows supported deployment links and six usage examples in each locale', async ({ page }) => {
   for (const [prefix, selfHosting, allowance, paid, hobby] of [
     ['', 'Self-hosting guide', 'Free with monthly allowance', 'Paid plan', 'Hobby plan'],
-    ['/zh-Hans', '自托管指南', '月度额度内免费', '付费套餐', 'Hobby 方案'],
-    ['/zh-Hant', '自行代管指南', '每月免費額度內免費', '付費方案', 'Hobby 方案'],
+    ['/zh-Hans', '自托管指南', '每月额度内免费', '付费套餐', 'Hobby 套餐'],
+    ['/zh-Hant', '自行託管指南', '每月額度內免費', '付費方案', 'Hobby 方案'],
   ]) {
     await page.goto(prefix || '/');
     const deploy = page.locator('#landing-deploy').locator('..');
