@@ -12,7 +12,13 @@ struct Profile {
     let tx: CBUUID
 
     var advertisement: [String: Any] {
-        [CBAdvertisementDataLocalNameKey: name]
+        #if SWB_BLE_SMOKE_TEST
+        if name == "SwB BLE Test" { return [CBAdvertisementDataLocalNameKey: name] }
+        #endif
+        return [
+            CBAdvertisementDataLocalNameKey: name,
+            CBAdvertisementDataServiceUUIDsKey: [service],
+        ]
     }
 
     func makeService() -> (service: CBMutableService, tx: CBMutableCharacteristic) {
