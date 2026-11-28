@@ -13,20 +13,8 @@ type Props = {
 };
 
 function Slot({ options, current, names }: { options: MarkKind[]; current: MarkKind; names: Props['names'] }) {
-  const slot = useRef<HTMLSpanElement>(null);
-  const [widths, setWidths] = useState<Partial<Record<MarkKind, number>>>({});
-
-  useLayoutEffect(() => {
-    const chips = Array.from(slot.current!.children);
-    const measure = () => setWidths(Object.fromEntries(options.map((kind, i) => [kind, chips[i].getBoundingClientRect().width])));
-    measure();
-    const observer = new ResizeObserver(measure);
-    chips.forEach((chip) => observer.observe(chip, { box: 'border-box' }));
-    return () => observer.disconnect();
-  }, [options]);
-
   return (
-    <span ref={slot} className="swb-slot" style={{ inlineSize: widths[current] }}>
+    <span className="swb-slot">
       {options.map((kind) => (
         <span key={kind} className={`swb-chip ${kind === current ? 'swb-chip-on' : ''}`} aria-hidden={kind !== current}>
           <MarkTile kind={kind} className="swb-chip-mark" />
@@ -43,6 +31,34 @@ const ends = [...new Set(agentPairs.map(({ b }) => b))];
 export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props) {
   const [word, setWord] = useState(0);
   const [step, setStep] = useState(0);
+  const subtitle = useRef<HTMLSpanElement>(null);
+  const pair = agentPair(step);
+
+  useLayoutEffect(() => {
+    const slots = subtitle.current!.querySelectorAll<HTMLElement>('.swb-slot');
+    const words = subtitle.current!.querySelectorAll<HTMLElement>('.swb-between-text');
+    const chips = [...slots].map((slot) => slot.querySelector('.swb-chip-on')!);
+    const resize = () => {
+      const sameRow = slots[0].parentElement!.getBoundingClientRect().top === slots[1].parentElement!.getBoundingClientRect().top;
+      let offset = 0;
+      slots.forEach((slot, index) => {
+        if (index && !sameRow) offset = 0;
+        const style = getComputedStyle(slot);
+        const border = parseFloat(style.borderInlineStartWidth) + parseFloat(style.borderInlineEndWidth);
+        const base = parseFloat(style.width) + border;
+        const active = parseFloat(getComputedStyle(chips[index]).width) + border;
+        slot.style.setProperty('--swb-pill-offset', `${offset}px`);
+        slot.style.setProperty('--swb-pill-scale', String(base ? active / base : 1));
+        offset += active - base;
+        words[index]?.style.setProperty('--swb-pill-offset', `${offset}px`);
+      });
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    [subtitle.current!, ...slots, ...chips].forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [pair.n]);
+
   useEffect(() => {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let timer: number | undefined;
@@ -66,7 +82,6 @@ export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props
       motion.removeEventListener('change', onMotionChange);
     };
   }, [endings.length]);
-  const pair = agentPair(step);
   return (
     <>
       <h1 id="landing-heading" className="text-display-xl swb-hero-title">
@@ -82,7 +97,7 @@ export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props
       </h1>
       <p className="swb-between mt-3 text-base" data-hero-pair={pair.n}>
         {between[0] && <span className="swb-between-text">{between[0]}</span>}
-        <span className="swb-pair" data-with-suffix={between[2] ? '' : undefined}>
+        <span ref={subtitle} className="swb-pair" data-with-suffix={between[2] ? '' : undefined}>
           <span className="swb-pair-lead">
             <Slot options={starts} current={pair.a} names={names} />
             <span className="swb-between-text">{between[1]}</span>

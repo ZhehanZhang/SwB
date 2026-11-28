@@ -384,13 +384,21 @@
   }
 }
 .swb-hero-copy { container-type: inline-size; }
+@media (min-width: 1024px) {
+  .swb-hero-copy { display: grid; grid-template-rows: auto auto minmax(5.75rem, auto); }
+}
 .swb-hero-title { font-size: clamp(1.75rem, 8.4cqw, 3.625rem); line-height: 1.07; }
 .swb-hero-title:is(:lang(de), :lang(fr), :lang(es)) { font-size: clamp(1.5rem, 7.4cqw, 3.625rem); }
 .swb-hero-title:lang(zh) { font-size: clamp(1.5rem, 7.8cqw, 3.625rem); font-feature-settings: "halt"; }
 .swb-hero-title:lang(zh-Hans) { font-family: var(--font-inter-tight), "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
 .swb-hero-title:lang(zh-Hant) { font-family: var(--font-inter-tight), "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
 .swb-hero-comma:lang(zh-Hant) { font-feature-settings: normal; margin-inline-start: -.25em; }
-.swb-hero { width: min(100%, 39rem); justify-self: center; }
+.swb-hero {
+  display: grid;
+  grid-template-rows: auto minmax(1.25rem, auto);
+  width: min(100%, 39rem);
+  justify-self: center;
+}
 
 .swb-node { cursor: pointer; border-radius: 9999px; background: none; padding: 0; animation: swb-drift var(--drift-duration) var(--drift-delay) ease-in-out infinite alternate; }
 .swb-node .swb-mark-tile { transition: transform .2s ease, box-shadow .2s ease; }
@@ -459,7 +467,14 @@
   box-shadow: var(--toast-shadow);
 }
 .swb-win-bar { background: var(--surface-sunken); }
-.swb-win-setup { color: var(--muted-foreground); }
+.swb-win-setup {
+  display: inline-grid;
+  grid-template-columns: .875rem auto;
+  color: var(--muted-foreground);
+}
+.swb-win-setup > svg { grid-area: 1 / 1; }
+.swb-win-setup > span, .swb-win-setup::before { grid-area: 1 / 2; }
+.swb-win-setup::before { content: attr(data-setup-label); visibility: hidden; }
 .swb-win-setup:is(:hover, :focus-visible) { color: var(--foreground); }
 .swb-win-body, .swb-win-history {
   display: flex;
@@ -502,17 +517,42 @@
 @container (width < 34rem) {
   .swb-between > .swb-between-text:first-child { flex-basis: 100%; }
 }
+@container (width < 21.25rem) {
+  .swb-pair:lang(zh) { flex-direction: column; align-items: flex-start; }
+}
+@container (width < 23rem) {
+  .swb-pair:lang(ko) { flex-direction: column; align-items: flex-start; }
+}
+@container (width < 27rem) {
+  .swb-pair:lang(ja) { flex-direction: column; align-items: flex-start; }
+}
+@property --swb-pill-scale {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+@property --swb-pill-offset {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+.swb-slot, .swb-pair .swb-between-text {
+  translate: var(--swb-pill-offset) 0;
+  transition: --swb-pill-offset 1.2s cubic-bezier(.3, .2, .7, .8);
+}
 .swb-slot {
   display: inline-grid;
   position: relative;
   grid-template-columns: minmax(0, 1fr);
-  place-items: center;
+  place-items: center start;
   box-sizing: content-box;
   overflow: clip;
   border: 1px solid var(--border);
   border-radius: 9999px;
   background: var(--surface);
-  transition: inline-size 1.2s cubic-bezier(.3, .2, .7, .8);
+  scale: var(--swb-pill-scale) 1;
+  transform-origin: left center;
+  transition-property: --swb-pill-offset, --swb-pill-scale;
 }
 .swb-chip {
   grid-area: 1 / 1;
@@ -528,14 +568,16 @@
   line-height: 1.5;
   white-space: nowrap;
   opacity: 0;
+  scale: calc(1 / var(--swb-pill-scale)) 1;
+  transform-origin: left center;
   transition: opacity .6s ease;
 }
-.swb-chip:not(.swb-chip-on) { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; pointer-events: none; }
+.swb-chip:not(:first-child) { position: absolute; pointer-events: none; }
 .swb-chip-on { opacity: 1; transition-delay: .2s; }
 .swb-chip-mark.swb-mark-tile { width: 1.4em; height: 1.4em; min-width: 0; min-height: 0; }
 .swb-picker-mark.swb-mark-tile { width: 1.5rem; height: 1.5rem; min-width: 0; min-height: 0; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .swb-rotate-item, .swb-slot, .swb-chip { transition: none; }
+  .swb-rotate-item, .swb-slot, .swb-chip, .swb-pair .swb-between-text { transition: none; }
 }
 
 
