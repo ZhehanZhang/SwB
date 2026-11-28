@@ -27,14 +27,14 @@ def register(mcp, core, who, sync) -> None:
         ])
 
     @mcp.tool(title="Import memory", description="Import a base64-encoded SwB memory zip file.", annotations=WRITE)
-    async def memory_import(ctx: Context, zip_base64: str) -> dict[str, Any]:
+    async def memory_import(ctx: Context, zip_base64: str, trust_owner: bool = False, overwrite: bool = False) -> dict[str, Any]:
         if len(zip_base64) > (MAX_ARCHIVE_BYTES + 2) // 3 * 4:
             raise ToolError("Use a memory archive up to 50 MB.")
         try:
             data = base64.b64decode(zip_base64, validate=True)
         except (ValueError, binascii.Error):
             raise ToolError("Use a base64-encoded memory zip file.") from None
-        return await asyncio.to_thread(sync, import_zip, core, who(ctx), data)
+        return await asyncio.to_thread(sync, import_zip, core, who(ctx), data, trust_owner=trust_owner, overwrite=overwrite)
 
     @mcp.tool(title="Check memory backup", description="Check Git backup status, pending changes and retries.", annotations=READ)
     async def memory_backup_status(ctx: Context) -> dict[str, Any]:
@@ -53,5 +53,7 @@ def register(mcp, core, who, sync) -> None:
         return sync(core.memory_git.now, who(ctx))
 
     @mcp.tool(title="Restore memory from Git", description="Import memory from the configured Git branch or a commit.", annotations=WRITE)
-    async def memory_backup_restore(ctx: Context, ref: str | None = None) -> dict[str, Any]:
-        return await asyncio.to_thread(sync, core.memory_git.restore, who(ctx), ref)
+    async def memory_backup_restore(
+        ctx: Context, ref: str | None = None, trust_owner: bool = False, overwrite: bool = False,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(sync, core.memory_git.restore, who(ctx), ref, trust_owner=trust_owner, overwrite=overwrite)

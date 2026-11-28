@@ -19,6 +19,7 @@ from .connect import AGENT_RE
 from .memory import GENERAL, KEY_RE, Memory, MemoryError_
 from .refusals import OWNER_REQUIRED, PolicyRefusal
 from .store import memory_hash
+from .trust import MEMORY_IMPORT_PREFIX, MEMORY_TRUST
 
 if TYPE_CHECKING:
     from .auth import Principal
@@ -31,7 +32,6 @@ MIME = "application/zip"
 FIELDS = ("scope", "namespace", "key", "title", "body", "tags", "created_at", "updated_at",
           "created_by", "content_by", "content_trust", "content_hash", "sync_source", "sync_key")
 REV_FIELDS = ("at", "source", "action", "title", "body", "scope", "namespace", "key", "tags", "trust")
-TRUST = ("agent", "owner")
 
 
 def require_owner(principal: Principal) -> None:
@@ -127,7 +127,8 @@ def _read_manifest(data: bytes | dict[str, Any]) -> dict[str, Any]:
     return manifest
 
 
-def import_zip(core: Switchboard, principal: Principal, data: bytes) -> dict[str, Any]:
+def import_zip(core: Switchboard, principal: Principal, data: bytes, *, trust_owner: bool = False,
+               overwrite: bool = False) -> dict[str, Any]:
     require_owner(principal)
     if len(data) > MAX_ARCHIVE_BYTES:
         raise MemoryError_("Use a memory archive up to 50 MB.")
@@ -150,7 +151,7 @@ def import_zip(core: Switchboard, principal: Principal, data: bytes) -> dict[str
         raise
     except (OSError, RuntimeError, ValueError, EOFError, zipfile.BadZipFile, zlib.error):
         raise MemoryError_("Use a valid memory zip file.") from None
-    return import_manifest(core, principal, manifest)
+    return import_manifest(core, principal, manifest, trust_owner=trust_owner, overwrite=overwrite)
 
 
 def _text(value: Any) -> bool:
@@ -187,7 +188,7 @@ def _entry(memory: Memory, raw: Any) -> dict[str, Any]:
     memory.validate(raw["namespace"], raw.get("key"), raw["title"], raw["body"])
     if not all(_timestamp(raw.get(k)) for k in ("created_at", "updated_at")):
         raise MemoryError_("Use valid memory timestamps.")
-    if raw.get("content_trust") not in TRUST or any(
+    if raw.get("content_trust") not in MEMORY_TRUST or any(
         raw.get(k) is not None and not _text(raw[k]) for k in ("created_by", "content_by", "sync_source", "sync_key")
     ) or (raw.get("sync_source") is None) != (raw.get("sync_key") is None):
         raise MemoryError_("Use valid memory provenance.")
@@ -205,7 +206,7 @@ def _entry(memory: Memory, raw: Any) -> dict[str, Any]:
         if (not isinstance(r, dict) or type(rev := r.get("rev")) is not int or not 0 < rev < 2**53 or rev in seen
                 or not _timestamp(r.get("at")) or not all(_text(r.get(k)) for k in ("source", "action", "title", "body"))
                 or any(r.get(k) is not None and not _text(r[k]) for k in ("scope", "namespace", "key"))
-                or r.get("trust") not in (None, *TRUST)):
+                or r.get("trust") not in (None, *MEMORY_TRUST)):
             raise MemoryError_("Use valid memory revisions.")
         seen.add(rev)
         revisions.append({"rev": rev, **{k: r.get(k) for k in REV_FIELDS},
@@ -221,7 +222,9 @@ def _revision(db: sqlite3.Connection, mid: str, revision: dict[str, Any], rev: i
     ).lastrowid
 
 
-def import_manifest(core: Switchboard, principal: Principal, data: bytes | dict[str, Any]) -> dict[str, Any]:
+def import_manifest(core: Switchboard, principal: Principal, data: bytes | dict[str, Any], *,
+                    trust_owner: bool = False, overwrite: bool = False, origin: str = "file",
+                    external: bool = False) -> dict[str, Any]:
     require_owner(principal)
     manifest = _read_manifest(data)
     now = core.clock()
@@ -229,6 +232,8 @@ def import_manifest(core: Switchboard, principal: Principal, data: bytes | dict[
     problems = []
     entries = []
     seen = set()
+    action = f"imported from {origin}"
+    importer = f"{MEMORY_IMPORT_PREFIX}{principal.source}"
 
     def problem(action: str, mid: str | None, reason: str) -> None:
         counts[action] += 1
@@ -246,19 +251,37 @@ def import_manifest(core: Switchboard, principal: Principal, data: bytes | dict[
             problem("conflict", mid, "Use each memory ID once.")
             continue
         seen.add(mid)
+        other_agent = entry["scope"].startswith("agent:") and entry["scope"] != f"agent:{principal.source}"
+        ceiling = "external" if external else "owner" if trust_owner and not other_agent else "agent"
+        entry.update(created_by=principal.source, content_by=importer,
+                     content_trust=min(entry["content_trust"], ceiling, key=MEMORY_TRUST.index),
+                     sync_source=None, sync_key=None)
+        for revision in entry["history"]:
+            revision.update(source=importer, action=action,
+                            trust=min(revision["trust"] or "agent", ceiling, key=MEMORY_TRUST.index))
         entries.append(entry)
 
     def write(db: sqlite3.Connection) -> None:
         restored_history = []
-        updates = []
+        changes = []
         for entry in entries:
             mid, scope = entry["id"], entry["scope"]
-            if scope.startswith("project:") and not db.execute("SELECT 1 FROM projects WHERE slug = ?", (scope[8:],)).fetchone():
-                problem("skipped", mid, f"Create project {scope[8:]} first.")
-                continue
             old = db.execute("SELECT * FROM memories WHERE id = ?", (mid,)).fetchone()
+            try:
+                core.memory.write_scope(scope)
+                core.check_memory_scope(principal, scope)
+                if old:
+                    if old["scope"] != scope:
+                        core.memory.write_scope(old["scope"])
+                    core.check_memory_writer(principal, old["scope"], old["writer_credential"])
+            except MemoryError_ as e:
+                problem("skipped", mid, str(e))
+                continue
             if old and memory_hash(old["body"]) == entry["content_hash"]:
                 counts["unchanged"] += 1
+                continue
+            if old and not overwrite:
+                problem("conflict", mid, "Use overwrite to replace an existing memory")
                 continue
             if db.execute(
                 "SELECT 1 FROM memories WHERE id != ? AND scope = ? AND namespace = ? AND COALESCE(key, id) = ? AND deleted_at IS NULL",
@@ -266,36 +289,28 @@ def import_manifest(core: Switchboard, principal: Principal, data: bytes | dict[
             ).fetchone():
                 problem("conflict", mid, "The memory path already exists.")
                 continue
-            if entry["sync_key"] is not None and db.execute(
-                "SELECT 1 FROM memories WHERE id != ? AND sync_source = ? AND sync_key = ?",
-                (mid, entry["sync_source"], entry["sync_key"])
-            ).fetchone():
-                problem("conflict", mid, "The sync identity already exists.")
-                continue
-
             if old:
                 revision = db.execute("SELECT * FROM memory_revisions WHERE memory_id = ? ORDER BY rowid DESC LIMIT 1", (mid,)).fetchone()
                 if revision is None or old["content_trust"] != revision["trust"] or any(
                     old[k] != revision[k] for k in ("title", "body", "tags", "scope", "namespace", "key")
                 ):
-                    updates.append((mid, {**dict(old), "at": old["updated_at"], "action": "import snapshot", "trust": old["content_trust"]}))
+                    changes.append((mid, {**dict(old), "at": old["updated_at"], "source": old["content_by"] or old["source"],
+                                          "action": "import snapshot", "trust": old["content_trust"]}))
                 entry["updated_at"] = now
-                updates.append((mid, {**entry, "at": now, "source": principal.source, "action": "import", "trust": entry["content_trust"]}))
                 db.execute(
                     "UPDATE memories SET " + ", ".join(f"{k} = ?" for k in FIELDS if k not in ("created_at", "created_by"))
-                    + ", source = ?, deleted_at = NULL, deleted_by = NULL WHERE id = ?",
+                    + ", source = ?, writer_credential = NULL, deleted_at = NULL, deleted_by = NULL WHERE id = ?",
                     (*(entry[k] for k in FIELDS if k not in ("created_at", "created_by")), principal.source, mid)
                 )
                 counts["updated"] += 1
-                continue
-            history = entry["history"]
-            source = history[-1]["source"] if history else entry["content_by"] or entry["created_by"] or principal.source
-            db.execute(
-                "INSERT INTO memories(id, source, " + ", ".join(FIELDS) + ") VALUES (" + ", ".join("?" for _ in range(len(FIELDS) + 2)) + ")",
-                (mid, source, *(entry[k] for k in FIELDS))
-            )
-            restored_history.append((mid, history))
-            counts["created"] += 1
+            else:
+                db.execute(
+                    "INSERT INTO memories(id, source, " + ", ".join(FIELDS) + ") VALUES (" + ", ".join("?" for _ in range(len(FIELDS) + 2)) + ")",
+                    (mid, principal.source, *(entry[k] for k in FIELDS))
+                )
+                restored_history.append((mid, entry["history"]))
+                counts["created"] += 1
+            changes.append((mid, {**entry, "at": now, "source": importer, "action": action, "trust": entry["content_trust"]}))
 
         last_rev = db.execute("SELECT COALESCE(MAX(rowid), 0) FROM memory_revisions").fetchone()[0]
         imported = sorted(
@@ -304,7 +319,7 @@ def import_manifest(core: Switchboard, principal: Principal, data: bytes | dict[
         for rev, mid, revision in imported:
             _revision(db, mid, revision, rev if rev > last_rev else None)
             last_rev = max(rev, last_rev + 1)
-        for mid, revision in updates:
+        for mid, revision in changes:
             _revision(db, mid, revision)
 
     core.store.tx(write)

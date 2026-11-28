@@ -22,7 +22,12 @@ class _BackupBody(_Body):
     credential: str | None = None
 
 
-class _RestoreBody(_Body):
+class _ImportOptions(_Body):
+    trust_owner: bool = False
+    overwrite: bool = False
+
+
+class _RestoreBody(_ImportOptions):
     ref: str | None = None
 
 
@@ -32,6 +37,13 @@ async def download(request: Request) -> Response:
 
 
 async def upload(request: Request) -> Response:
+    options = {}
+    for name in _ImportOptions.model_fields:
+        values = request.query_params.getlist(name)
+        if values:
+            if len(values) != 1 or values[0] not in ("true", "false"):
+                return _error("invalid_request")
+            options[name] = values[0] == "true"
     media_type = request.headers.get("content-type", "").partition(";")[0].strip().lower()
     if media_type == "multipart/form-data":
         async with request.form(max_files=1, max_fields=0) as form:
@@ -46,7 +58,7 @@ async def upload(request: Request) -> Response:
     if len(data) > MAX_ARCHIVE_BYTES:
         return _error("request_too_large", 413)
     try:
-        return JSONResponse(await run_in_threadpool(import_zip, request.app.state.core, _owner(request), data))
+        return JSONResponse(await run_in_threadpool(import_zip, request.app.state.core, _owner(request), data, **options))
     except MemoryError_ as e:
         return _error(str(e))
 
@@ -76,7 +88,7 @@ async def backup_restore(request: Request) -> Response:
     if body is None:
         return _error("invalid_request")
     try:
-        return JSONResponse(await run_in_threadpool(request.app.state.core.memory_git.restore, _owner(request), body.ref))
+        return JSONResponse(await run_in_threadpool(request.app.state.core.memory_git.restore, _owner(request), **body.model_dump()))
     except MemoryError_ as e:
         return _error(str(e))
 
