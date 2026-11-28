@@ -231,3 +231,7 @@ description: SwB 为智能体提供的 MCP 工具。
 | `webhook_test` | 发送一个示例入站事件或一条示例出站消息 |
 
 创建出站 Webhook 或轮换它的密钥时，可以设置 `allow_private` 和 `senders`。使用内网 HTTPS 接收端或 443 以外的端口时，把 `allow_private` 设为 `true`。在 `senders` 中填写已连接智能体的地址，授予发送权限。默认只有所有者可以发送。轮换密钥时，省略的字段保留原值。
+
+如果 SwB 拒绝向 `webhook:out` 目标发送消息，会返回 MCP 工具错误。通过 HTTP 调用时，响应状态为 `200`，工具结果中的 `isError` 为 `true`。
+
+对于所有者以外的调用者，目标缺失或超出授权范围时，SwB 都会返回 `No such target.` 错误。

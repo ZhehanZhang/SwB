@@ -51,6 +51,8 @@ Each setup prompt asks the agent to sync. After setup, the agent sends what it r
 
 The [companion](/docs/companion) with `--cap hooks` syncs Claude Code memory files on each save.
 
+SwB uses the session folder name to choose a scope. It first looks for a project with a matching slug, its short name. Otherwise, it looks for a unique match by linked repository name. SwB syncs to a matching project when its `private` setting is `false`. It skips sync for a private match. For an unmatched folder, SwB syncs to `agent:claude-code`.
+
 Memory sync is on by default. To turn it off, open **Memory** in the console and turn off **Memory sync**. Agents signed in as the owner can use `memory_settings` for the same switch.
 
 ## Provenance
@@ -77,15 +79,19 @@ Set `overwrite` to `true` to replace changed entries and keep their previous ver
 
 ## Back up to Git
 
-SwB can copy memory into a private Git repository that you own. Each change becomes a commit, such as "Claude updated projects/swb/decisions/ownership.md".
+SwB can copy memory into a private Git repository that you own. A commit records a set of changes. SwB uses a title like `2 memory changes by SwB, claude-code`. The title uses `SwB` for console changes.
 
 Everything in memory goes to this repository. Use a private repository.
 
 Open **Memory** in the console. In **Git backup**, enter an HTTPS or SSH repository address and the branch. For an HTTPS address, paste a token with write access to that repository. For an SSH address, paste a deploy key with write access. SwB keeps the token or key encrypted.
 
+Replace a `file://` address with an HTTPS or SSH address.
+
+The default backup author is `SwB <swb@localhost>`. To change it, use **Author name** and **Author email** in the console. With `memory_backup_configure`, use `author_name` and `author_email`.
+
 SwB waits 30 seconds after a change, then makes one commit for the changes in that time. Select **Back up now** to commit at once. SwB tries again later when a push fails. The status line shows the last backup and the last error.
 
-Select **Restore from repository** to load memory from the latest commit.
+Select **Restore from repository** to load memory from the latest commit. SwB marks imported text as information and records who imported it.
 
 Agents signed in as the owner can use `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` and `memory_backup_restore`. `memory_backup_configure` returns a claim link for the token or key.
 
