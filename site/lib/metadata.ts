@@ -20,7 +20,7 @@ export function pageMetadata(
   page?: { url: string; hrefFor: (lang: Locale) => string | undefined; defaultHref?: string; markdown?: boolean },
 ): Metadata {
   const url = page?.url ?? localize(lang, path);
-  const image = `/og/hero-${lang.toLowerCase()}.png`;
+  const image = '/og/swb-board.png';
 
   return {
     title,
