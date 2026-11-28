@@ -57,13 +57,15 @@ Use one SwB instance with a disk mounted at `/data`. The disk keeps your data wh
 
 ### Fly.io [#fly]
 
-Use the SwB files from the [Docker Compose example](#docker-compose). Install the [Fly.io command line tool](https://docs.fly.io/flyctl/). Sign in to Fly.io.
+Use the SwB files from the [Docker Compose example](#docker-compose). Install Python 3.11 or later, or install [uv](https://docs.astral.sh/uv/). Install the [Fly.io command line tool](https://docs.fly.io/flyctl/). Sign in to Fly.io.
 
-Run `sh deploy/fly.sh my-swb` from the SwB folder. Replace `my-swb` with a unique app name. The script starts one Machine with `fly deploy --ha=false`.
+Add a payment card to get $5 of usage each month on the [Fly.io Free plan](https://docs.fly.io/about/free-plan). Use your personal organization for this plan. If you use the full $5, Fly bills the full month at standard rates. This setup costs about $3.84 for 30 days in Ashburn before data transfer.
+
+Run `sh deploy/fly.sh my-swb` from the SwB folder. Replace `my-swb` with a unique app name. The script uses `fly deploy --ha=false` to start one Machine. The script checks the Machine, volume and addresses.
 
 Open your app's sign-in page. Copy `SWB_SETUP_CODE` from `.env.swb-setup-fly-my-swb` in the SwB folder. Enter it in **Setup code**. Delete the file after sign-in.
 
-See the [Fly.io Free plan](https://docs.fly.io/about/free-plan) and [current rates](https://fly.io/docs/about/pricing/) for costs.
+See the [current rates](https://fly.io/docs/about/pricing/) for billing details.
 
 ### Render
 
@@ -71,11 +73,11 @@ Open the [Render Blueprint](https://render.com/deploy?repo=https://github.com/Zh
 
 ### Railway [#railway]
 
-Deploy from the [SwB template on Railway](https://railway.com/deploy/swb). Keep one replica. The template mounts a volume at `/data`.
+Deploy from the [SwB template on Railway](https://railway.com/deploy/swb). Keep one replica. Mount one 1 GB volume at `/data`.
 
 Use the Hobby plan to keep SwB running at all times. It costs $5 a month and includes $5 of usage.
 
-The [Free plan](https://docs.railway.com/reference/pricing/free-trial) includes $1 of usage a month. That amount covers about 100 MB of RAM at all times. A SwB test used about 107 MiB of RAM while idle. Railway stops Free plan services when they reach the $1 limit.
+The [Free plan](https://docs.railway.com/pricing/free-plan) supports a 0.5 GB volume. Free services sleep when idle. The plan includes $1 of usage a month. That amount covers about 100 MB of RAM at all times. A SwB test used about 107 MiB of RAM while idle.
 
 ## Sign in
 
