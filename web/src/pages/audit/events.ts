@@ -38,7 +38,7 @@ export const auditGroups = {
   Routes: ["route_set", "route_remove", "auto_link", "auto_route", "visibility_set"],
   Tokens: ["token_claim", "routine_claim", "connect_code", "connect_redeem", "connect_revoke", "register", "routine_register", "routine_add", "routine_remove", "add", "remove"],
   Memory: ["memory_write", "memory_delete", "memory_move", "memory_promote", "cross_read"],
-  Messages: ["agent_send", "send", "delegate", "fire", "reply", "post", "react", "request_write", "listen_note", "turn_cap", "conversation_resume", "cancel", "webhook", "chat_event", "send_refused", "send_key_fallback"],
+  Messages: ["agent_send", "send", "delegate", "fire", "reply", "post", "react", "request_write", "listen_note", "turn_cap", "conversation_resume", "cancel", "webhook", "chat_event", "send_refused", "send_key_fallback", "owner_delivery"],
 } as const
 
 export type AuditGroup = keyof typeof auditGroups

@@ -331,6 +331,7 @@ def test_login_link_prints_the_rate_limit_wait(tmp_path, monkeypatch, capsys, re
 
     def post(request):
         assert request.method == "POST"
+        assert request.headers["User-Agent"] == f"SwB/{version('swb-one')}"
         headers = {"Retry-After": retry_after} if retry_after is not None else {}
         return httpx2.Response(429, headers=headers, json={"error": "slow_down", "detail": STATIC_KEY})
 
@@ -555,6 +556,7 @@ def test_claim_prompts_and_posts_to_configured_origin(tmp_path, monkeypatch, cap
     def post(request):
         assert request.method == "POST" and str(request.url) == expected
         assert request.headers["Authorization"] == f"Bearer {key}"
+        assert request.headers["User-Agent"] == f"SwB/{version('swb-one')}"
         assert parse_qs(request.content.decode()) == {"token": [token]}
         return httpx2.Response(200, text=token)
 

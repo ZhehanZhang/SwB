@@ -20,7 +20,7 @@ import yaml
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from . import __version__
+from . import USER_AGENT, __version__
 from .__main__ import SERVER_COMMANDS, add_server_commands
 from .companion import commands as companion_commands
 from .companion.state import CompanionError
@@ -184,7 +184,7 @@ def _claim(url: str, key: str, *, routine: bool) -> None:
     if not token.strip():
         raise CliError("No token entered.")
     try:
-        with httpx2.Client(headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, timeout=30,
+        with httpx2.Client(headers={"Authorization": f"Bearer {key}", "Accept": "application/json", "User-Agent": USER_AGENT}, timeout=30,
                            follow_redirects=False, trust_env=False) as client:
             response = client.post(url, data={"token": token})
     except (httpx2.HTTPError, ValueError):
@@ -229,7 +229,7 @@ async def _call(url: str, key: str, tool: str, arguments: dict[str, Any]) -> dic
                 mcp_missing = True
 
     try:
-        async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=30, trust_env=False,
+        async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}", "User-Agent": USER_AGENT}, timeout=30, trust_env=False,
                                       event_hooks={"response": [inspect_response]}) as client:
             try:
                 async with (

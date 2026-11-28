@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 from . import targets as tgt
 from .config import SLUG_RE, ConfigError
-from .inbox import Inbox
 from .refusals import MODE_REQUIRED, PolicyRefusal
 from .store import dumps
 from .visibility import Who
@@ -48,6 +47,7 @@ class ChatDrop(StrEnum):
     TRIAGE_TARGET = "triage needs an agent"
     WORK_TARGET = "work needs a target"
     TARGET_UNAVAILABLE = "mode target unavailable"
+    CAPTAIN_TARGET = "choose a Captain by alias or full address"
     PROJECT_UNAVAILABLE = "mode project unavailable"
     PROJECT_MISMATCH = "mode target belongs to another project"
     CHANNEL_RESTRICTED = "channel access restricted"
@@ -199,12 +199,16 @@ class ChannelModes:
         return {**(slack or {}), **((cfg.get("spaces") or {}).get(space) or {})}
 
     def _override(self, block: str, space: str, *channels: str) -> Mode | None:
+        entry = self._override_entry(block, space, *channels)
+        return entry[1] if entry is not None else None
+
+    def _override_entry(self, block: str, space: str, *channels: str) -> tuple[str, Mode] | None:
         for channel in dict.fromkeys(channels):
             row = self.core.store.one("SELECT mode, actions, project, target FROM space_modes WHERE block = ? AND space = ? AND channel = ?",
                                       (block, space, channel))
             if row is not None:
                 actions = json.loads(row["actions"])
-                return Mode(row["mode"], tuple(actions) if actions is not None else None, row["project"], row["target"])
+                return channel, Mode(row["mode"], tuple(actions) if actions is not None else None, row["project"], row["target"])
         return None
 
     def _legacy(self, block: str, space: str, channels: tuple[str, ...]) -> Mode | None:
@@ -252,7 +256,8 @@ class ChannelModes:
 
     def policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
-        return self._policy(block, space, channel, project, parent=parent, name=name, include_route=include_route)[:5]
+        mode, source, actions, target, project, _ = self._policy(block, space, channel, project, parent=parent, name=name, include_route=include_route)
+        return mode, source, actions if mode == "triage" else (), target, project
 
     def _policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                 name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None, bool]:
@@ -280,10 +285,8 @@ class ChannelModes:
         project_mode = self.cfg.projects.get(project or "")
         candidates = (*zip(base, ("override", "channel", "space")), (legacy, "legacy"), (project_mode, "project"), (self.cfg.default, "default"))
         spec, source = next((s, src) for s, src in candidates if s is not None)
-        actions = ()
-        if spec.mode == "triage":
-            action_sets = (*(s.actions for s in base if s is not None), section.get("actions"), project_mode.actions if project_mode else None)
-            actions = tuple(next((a for a in action_sets if a is not None), ("reply",)))
+        action_sets = (*(s.actions for s in base if s is not None), section.get("actions"), project_mode.actions if project_mode else None)
+        actions = tuple(next((a for a in action_sets if a is not None), ("reply",)))
         target = next((s.target for s in (*base, project_mode) if s is not None and s.target), None)
         if spec.mode == "triage" and not target:
             target = self._triage_target(block, project)
@@ -396,9 +399,22 @@ class ChannelModes:
         elif use == "github" and channel in provider.missing_installations:
             problems.append(provider.missing_installations[channel])
         label = f"{space} default" if not channel and source == "override" else name or channel or space
+        override = None
+        if source == "override":
+            candidates = tuple(c for c in (channel, parent, name if channel else None, f"#{name}" if channel and name else None) if c)
+            override = self._override_entry(block, space, *candidates, "")
+            if channel and override and override[0] != channel:
+                if override[0] == parent or (
+                    not override[0] and (use != "github" or sum(
+                        placement[0] == space for repo in provider.registered_repositories() if (placement := provider.space_for(repo))
+                    ) != 1)
+                ):
+                    override = None
         return {"block": block, "space": space, "channel": channel, "name": label,
                 "kind": kind or {"telegram": "group", "github": "repo"}.get(use, "channel"), "mode": mode, "source": source,
-                "project": project, "target": target, "actions": list(actions), "digest": digest, "problems": problems}
+                "project": project, "target": target, "actions": list(actions) if mode == "triage" else [],
+                "triage_actions": list(actions), "digest": digest, "problems": problems,
+                "override_channel": override[0] if override else None}
 
     async def status_slugs(self, principal: Principal) -> dict[str, dict[str, Any]]:
         return {} if principal.is_unrestricted_owner else self.core.slug_map(await self.core.targets())
@@ -407,7 +423,7 @@ class ChannelModes:
                slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         spaces, dm = [], []
         owner = principal is None or principal.is_unrestricted_owner
-        github = {"installation": {}, "checked_at": None}
+        github = {"installation": {}, "checked_at": None, "installations": []}
         for name, provider in self.core.blocks.items():
             use = provider.manifest.id
             if use not in PROVIDERS or (block is not None and block != name):
@@ -421,7 +437,8 @@ class ChannelModes:
                 mode, source = self.dm(name)
                 dm.append({"block": name, "mode": mode, "source": source})
             if use == "github" and owner:
-                github = {"installation": provider.installation, "checked_at": provider.checked_at}
+                github.update(installation=provider.installation, checked_at=provider.checked_at)
+                github["installations"].extend({"block": name, **row} for row in provider.installations.values())
         return {"schema": {"modes": list(MODES), "dm_modes": list(DM_MODES), "actions": list(ACTIONS), "default": self.cfg.default.mode},
                 "spaces": spaces, "dm": dm, "github": github}
 
@@ -465,7 +482,8 @@ class ChannelModes:
                     await provider.refresh_installation()
 
     async def set(self, principal: Principal, block: str, space: str, mode: str, channel: str = "",
-                  actions: list[str] | None = None, project: str | None = None, target: str | None = None) -> dict[str, Any]:
+                  actions: list[str] | None = None, project: str | None = None, target: str | None = None, *,
+                  preserve_actions: bool = False, preserve_project: bool = False) -> dict[str, Any]:
         if not principal.is_unrestricted_owner and not (
             principal.kind == "owner_session" and principal.trust == "owner"
             and principal.scopes is None and principal.tools is None and principal.targets is None
@@ -497,7 +515,10 @@ class ChannelModes:
                     target = str(addr)
                 else:
                     known = await self.core.targets()
-                    if target.casefold() in self.core.slug_map(known):
+                    slugs = self.core.slug_map(known)
+                    if target.casefold() == tgt.CAPTAIN_SLUG and tgt.CAPTAIN_SLUG not in slugs:
+                        raise tgt.CaptainTargetError(tgt.captain_selection_error(known, slugs))
+                    if target.casefold() in slugs:
                         target = target.casefold()
                     elif not any(row["address"] == target for row in known):
                         raise ValueError("Choose a target from the targets list.")
@@ -508,9 +529,12 @@ class ChannelModes:
             self.core.store.x("DELETE FROM space_modes WHERE block = ? AND space = ? AND channel = ?", (block, space, channel))
         else:
             self.core.store.x("INSERT INTO space_modes(block, space, channel, mode, actions, project, target, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,?,?) "
-                              "ON CONFLICT(block, space, channel) DO UPDATE SET mode=excluded.mode, actions=excluded.actions, project=excluded.project, "
+                              "ON CONFLICT(block, space, channel) DO UPDATE SET mode=excluded.mode, "
+                              "actions=CASE WHEN ? THEN space_modes.actions ELSE excluded.actions END, "
+                              "project=CASE WHEN ? THEN space_modes.project ELSE excluded.project END, "
                               "target=COALESCE(excluded.target, space_modes.target), updated_at=excluded.updated_at, updated_by=excluded.updated_by",
-                              (block, space, channel, mode, dumps(actions), project, target, self.core.clock(), principal.source))
+                              (block, space, channel, mode, dumps(actions), project, target, self.core.clock(), principal.source,
+                               preserve_actions, preserve_project))
         self.core.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=block, action="modes.set",
                                outcome="ok", target=f"{space}/{channel}", detail=mode)
         return self.row(block, space, response_channel, *inventory.get((space, response_channel), (None, None, None)))
@@ -518,6 +542,8 @@ class ChannelModes:
     def _mailbox(self, target: str | None, project: str | None = None) -> str:
         if target:
             agent = target.removeprefix("agent:")
+            if agent == "owner":
+                return "owner"
             if agent in self.core.known_agents():
                 return agent
             for b in self.core.blocks.values():
@@ -534,7 +560,7 @@ class ChannelModes:
               parts: dict[str, AuthoredText] | None = None) -> bool:
         added = self.core.store.n("INSERT OR IGNORE INTO watch_events(block, space, channel, message, author_id, author, excerpt, link, at, "
                                   "target, project, dm, parts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                  (block, space, channel, message, author_id, author or author_id, excerpt[:500], link,
+                                  (block, space, channel, message, author_id, author or author_id or "unknown", excerpt[:500], link,
                                    self.core.clock(), "owner" if dm else self._mailbox(target, project), project, int(dm),
                                    dumps(parts) if parts is not None else None))
         if added:
@@ -542,32 +568,29 @@ class ChannelModes:
         return bool(added)
 
     def flush(self, block: str | None = None, space: str | None = None) -> int:
+        self.core.inbox.flush_owner_delivery()
         now = self.core.clock()
 
         def write(db: Any) -> int:
-            groups = db.execute("SELECT block, space, dm, target FROM watch_events WHERE delivered_at IS NULL "
-                                "AND (? IS NULL OR block = ?) AND (? IS NULL OR space = ?) GROUP BY block, space, dm, target "
+            groups = db.execute("SELECT block, space, dm, target, project FROM watch_events WHERE delivered_at IS NULL "
+                                "AND (? IS NULL OR block = ?) AND (? IS NULL OR space = ?) GROUP BY block, space, dm, target, project "
                                 "HAVING COUNT(*) >= ? OR MIN(at) <= ?", (block, block, space, space, WATCH_BATCH, now - self.digest_s)).fetchall()
             for group in groups:
-                b, s, dm, target = group
-                rows = db.execute("SELECT channel, author, excerpt, link, at, project, parts FROM watch_events "
-                                  "WHERE block=? AND space=? AND dm=? AND target=? AND delivered_at IS NULL ORDER BY at, rowid",
-                                  (b, s, dm, target)).fetchall()
-                projects = {r["project"] for r in rows}
-                project = next(iter(projects)) if len(projects) == 1 else None
+                b, s, dm, target, project = group
+                rows = db.execute("SELECT channel, author, author_id, excerpt, link, at, parts FROM watch_events "
+                                  "WHERE block=? AND space=? AND dm=? AND target=? AND project IS ? AND delivered_at IS NULL ORDER BY at, rowid",
+                                  (b, s, dm, target, project)).fetchall()
                 channels = {r["channel"] for r in rows}
-                items = [{**{key: r[key] for key in ("author", "excerpt", "link", "at")},
+                items = [{**{key: r[key] for key in ("excerpt", "link", "at")}, "author": r["author"] or r["author_id"] or "unknown",
                           **({"parts": json.loads(r["parts"])} if r["parts"] is not None else {})} for r in rows]
-                summary = {"block": b, "space": s, "channel": next(iter(channels)) if len(channels) == 1 else "",
+                summary = {"block": b, "space": s, "channel": next(iter(channels)) if len(channels) == 1 else "", "dm": bool(dm),
                            "count": len(rows), "items": items}
-                handle = Inbox.new_handle()
-                db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status) "
-                           "VALUES (?, ?, 'mailbox', '', ?, ?, '{}', ?, 0, 'delivered')",
-                           (handle, target, project, f"Watch digest for {s}", now))
-                db.execute("INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?, ?, 'mailbox', 'watch_digest', ?, ?)",
-                           (target, handle, dumps(summary), now))
-                db.execute("UPDATE watch_events SET delivered_at=? WHERE block=? AND space=? AND dm=? AND target=? AND delivered_at IS NULL",
-                           (now, b, s, dm, target))
+                provider = self.core.blocks.get(b)
+                kind = provider.manifest.id if provider else b
+                sender = {"kind": "watch", "block": kind, "space": (summary["channel"] or s) if kind == "github" else s}
+                self.core.inbox.store_watch_digest(db, target=target, project=project, sender=sender, data=summary)
+                db.execute("UPDATE watch_events SET delivered_at=? WHERE block=? AND space=? AND dm=? AND target=? "
+                           "AND project IS ? AND delivered_at IS NULL", (now, b, s, dm, target, project))
             return len(groups)
 
         count = self.core.store.tx(write)

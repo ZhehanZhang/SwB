@@ -646,8 +646,9 @@ async def test_watch_digest_reaches_owner_mcp_and_stays_passive(github, target, 
         assert core.modes.flush() == 1 and core.modes.flush() == 0
         [digest] = payload(await asyncio.wait_for(waiting, timeout=2))["items"]
         assert (digest["kind"], digest["owner"], digest["space"], digest["count"], digest["trust"]) == (
-            "watch_digest", "beta" if target else "owner", repo, 2, "external",
+            "watch_digest", "beta" if target else "coordinator", repo, 2, "external",
         )
+        assert digest.get("for_owner", False) is (target is None)
         assert digest["from"] == {"block": "github", "space": repo, "trust": "external"}
         assert digest["text"].count(OPEN) == digest["text"].count(CLOSE) == 5
         assert "2 events" in digest["text"]
@@ -1020,7 +1021,8 @@ async def test_app_claim_accepts_pasted_pem_and_checks_each_installation(github,
             return httpx.Response(404, json={"message": "not found"})
         ident = 70 if request.url.path in ("/repos/acme/app/installation", "/app/installations/70") else 71
         permissions = {"issues": "write" if ident == 70 else "read", "metadata": "read"} if request.url.path.startswith("/app/") else {}
-        return httpx.Response(200, json={"id": ident, "permissions": permissions})
+        url = "https://github.com/organizations/acme/settings/installations/70" if ident == 70 else "https://example.test/settings/installations/71"
+        return httpx.Response(200, json={"id": ident, "permissions": permissions, "html_url": url})
 
     config = github_config("triage") | {"routes": {"acme/missing": [], "acme/other": []}, "app_id_env": "ALTERNATE_APP_ID",
                                        "private_key_env": "ALTERNATE_PRIVATE_KEY"}
@@ -1040,7 +1042,9 @@ async def test_app_claim_accepts_pasted_pem_and_checks_each_installation(github,
                                     "/repos/acme/missing/installation", "/repos/acme/other/installation"]
         assert block.installation == {"issues": "read", "metadata": "read"}
         assert block.installations["70"]["permissions"]["issues"] == "write"
+        assert block.installations["70"]["permissions_url"] == "https://github.com/organizations/acme/settings/installations/70"
         assert block.installations["71"]["repositories"] == ["acme/other"]
+        assert "permissions_url" not in block.installations["71"]
         assert "acme/missing" in block.missing_installations
         assert block.checked_at is not None
         assert pem.splitlines()[1] not in json.dumps(block.status())
@@ -1083,6 +1087,8 @@ async def test_github_triage_tools_validate_handle_action_and_project_before_wri
         await invoke("reply", handle=handle, text="Can you add the version?")
         await invoke("link_duplicate", handle=handle, repo="acme/app", number=7, duplicate_of=3)
         await invoke("open_issue", handle=handle, repo="acme/app", title="Follow-up", body="Details", labels=["triaged"])
+        core.routes.set(destination="agent", agent="owner", project=None, target={"agent": "chatgpt"},
+                        defaults=None, allow_override=False, note="", by="owner")
         await invoke("notify_owner", handle=handle, text="Need the version before triaging")
         assert writes == [("POST", "/repos/acme/app/issues/7/labels", {"labels": ["triaged"]}),
                           ("POST", "/repos/acme/app/issues/7/comments", {"body": "Can you add the version?"}),
@@ -1090,7 +1096,8 @@ async def test_github_triage_tools_validate_handle_action_and_project_before_wri
                           ("POST", "/repos/acme/app/issues/7/labels", {"labels": ["duplicate"]}),
                           ("PATCH", "/repos/acme/app/issues/7", {"state": "closed", "state_reason": "not_planned"}),
                           ("POST", "/repos/acme/app/issues", {"title": "Follow-up", "body": "Details", "labels": ["triaged"]})]
-        [owner_note] = core.inbox.read(owner="owner")["items"]
+        [owner_note] = core.inbox.read(owner="chatgpt")["items"]
+        assert owner_note["for_owner"] is True and owner_note["resolved_by"] == "global"
         assert owner_note["permalink"] == ISSUE["html_url"] and owner_note["kind"] == "triage_note"
         assert core.audit.recent(action="triage.reply")[0]["ref"] == ISSUE["html_url"]
 
@@ -1168,7 +1175,8 @@ async def test_github_mcp_write_tools_use_the_guarded_conversation(github, field
             "/repos/acme/app/issues/7/comments", "/repos/acme/app/issues/7/labels", "/repos/acme/app/issues/7",
             "/repos/acme/app/issues/7/comments",
         ]
-        [note] = core.inbox.read(owner="owner")["items"]
+        [note] = core.inbox.read(owner="claude")["items"]
+        assert note["for_owner"] is True and note["resolved_by"] == "active"
         assert note["conversation"] == item["handle"] and note["permalink"] == ISSUE["html_url"]
 
 
@@ -1224,6 +1232,8 @@ async def test_github_triage_owner_note_matches_delivery_and_audit(github, monke
         [item] = core.inbox.read(owner="claude")["items"]
         code = core.connections.mint(agent="claude", project=None, client=None, by="fixture")["code"]
         key = core.connections.redeem(code)["key"]
+        core.routes.set(destination="agent", agent="owner", project=None, target={"agent": "chatgpt"},
+                        defaults=None, allow_override=False, note="", by="owner")
         text = "Fixture triage note for the owner"
         args = {"text": text, **({"conversation": item["handle"], "to_owner": True} if name == "reply" else {"handle": item["handle"]})}
 
@@ -1241,7 +1251,8 @@ async def test_github_triage_owner_note_matches_delivery_and_audit(github, monke
 
         out = payload(await acall(client, key, name, args))
         assert out["ok"]
-        [note] = core.inbox.read(owner="owner", since=0)["items"]
+        [note] = core.inbox.read(owner="chatgpt", since=0)["items"]
+        assert note["for_owner"] is True and note["resolved_by"] == "global"
         assert note["trust"] == note["from"]["trust"] == "owner" and note["from"]["agent"] == "claude"
         assert (note["handle"], note["kind"], note["conversation"], note["text"], note["permalink"]) == (
             out["handle"], "triage_note", item["handle"], text, ISSUE["html_url"],

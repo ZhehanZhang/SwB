@@ -7,3 +7,9 @@ Licensed under the Apache License, Version 2.0. See LICENSE for the full text.
 This product includes portions of the Muse Gadget SDK.
 Copyright (c) Meta Platforms, Inc. and affiliates.
 Licensed under the Apache License, Version 2.0.
+
+This product includes the goose mark from https://github.com/aaif-goose/goose.
+Licensed under the Apache License, Version 2.0.
+
+This product includes OpenCode marks from https://github.com/anomalyco/opencode.
+Copyright (c) 2025 opencode. See web/licenses/opencode.txt.

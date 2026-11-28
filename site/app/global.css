@@ -202,6 +202,10 @@
 }
 .swb-docs #nd-toc { padding-block-start: calc(var(--swb-docs-top) + var(--swb-docs-breadcrumb-offset, 0px)); }
 
+@media (min-width: 768px) {
+  .swb-docs { --fd-sidebar-width: 268px; }
+}
+
 @media (width < 768px) {
   .swb-docs { --swb-docs-top: 1.5rem; }
   .swb-docs #nd-page, .swb-docs [data-toc-popover-trigger] { padding-inline: 0; }

@@ -25,7 +25,7 @@ from ...inbox import CONTEXT_NOTE
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
-from ...subject import subject, wake_text
+from ...subject import display_subject, subject, wake_text
 from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
 from ...visibility import Who
 from .. import Action, Block, BlockError, BlockRefused, Call, Manifest
@@ -395,7 +395,7 @@ class GitHubBlock(Block):
                 else:
                     limit = asyncio.Semaphore(8)
 
-                    async def lookup(repo: str | None, installation_id: str | None = None) -> tuple[str, dict[str, str]] | str:
+                    async def lookup(repo: str | None, installation_id: str | None = None) -> tuple[str, dict[str, str], str | None] | str:
                         async with limit:
                             try:
                                 return await self.api.installation(repo, token, installation_id=installation_id)
@@ -410,8 +410,10 @@ class GitHubBlock(Block):
                             else:
                                 missing[repo] = result
                             continue
-                        ident, permissions = result
+                        ident, permissions, permissions_url = result
                         found = installations.setdefault(ident, {"permissions": permissions, "repositories": []})
+                        if permissions_url:
+                            found["permissions_url"] = permissions_url
                         if repo is not None:
                             found["repositories"].append(repo)
                     if repos:
@@ -422,6 +424,8 @@ class GitHubBlock(Block):
                                 installations[ident]["permissions"] = {}
                             else:
                                 installations[ident]["permissions"] = result[1]
+                                if result[2]:
+                                    installations[ident]["permissions_url"] = result[2]
             permissions = [row["permissions"] for row in installations.values()]
             self.installation = {key: "write" if all(p[key] == "write" for p in permissions) else "read"
                                  for key in permissions[0] if all(key in p for p in permissions)} if permissions else {}
@@ -568,7 +572,7 @@ class GitHubBlock(Block):
                 Action("open_issue", "Open an issue", "Open a new issue on this project's GitHub repository.", self.open_issue),
                 Action("link_duplicate", "Resolve a duplicate", "Comment with the canonical issue, add the duplicate label, and close as not planned.",
                        self.link_duplicate, destructive=True),
-                Action("notify_owner", "Notify the owner", "Put a triage note and its permalink in the owner's inbox.", self.notify_owner),
+                Action("notify_owner", "Notify the owner", "Send a triage note and its link to the agent that serves the owner.", self.notify_owner),
                 Action("reply", "Reply in a GitHub thread", "Post in the issue or pull request thread that woke this conversation.", self.reply)]
 
     def mcp_tools(self, mcp: Any, kit: Any) -> None:
@@ -658,8 +662,7 @@ class GitHubBlock(Block):
                                             ("PATCH", path, {"state": "closed", "state_reason": "not_planned"})))
 
     async def notify_owner(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
-        out = await self.core.notify_mode_owner(call.principal, handle, text)
-        return {"ok": True, "handle": out["handle"]}
+        return await self.core.notify_mode_owner(call.principal, handle, text)
 
     async def reply(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
         meta = self._check(call, handle, "reply")
@@ -774,6 +777,7 @@ class GitHubBlock(Block):
         number = provider_id(generated.get("number"))
         event_title = f"{summary} #{number}" if number else summary
         title = subject(title_sender, "GitHub", repo, event_title, verb="", trust="owner" if mixed_authors else trust)
+        display_title = display_subject(parts.get("title", {}).get("text"), parts.get("body", {}).get("text"), event_title)
         delivery_note = f'GitHub delivery {generated["delivery"]}.'
         if mode == "watch":
             if sinks := self.sink_names(repo):
@@ -782,7 +786,7 @@ class GitHubBlock(Block):
                 for sink in sinks:
                     self.sinks[sink].put(delivery, body)
             primary = parts.get("body") or parts.get("title")
-            self.core.modes.watch(self.name, space, repo, delivery, (primary["author_id"] if primary else sender_id) or "",
+            self.core.modes.watch(self.name, space, repo, delivery, (primary["author_id"] if primary else None) or sender_id or "",
                                   None, event_title, None, target, project=project, parts=parts)
             return
         if mode == "off":
@@ -818,7 +822,7 @@ class GitHubBlock(Block):
                 row = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? AND project IS ?",
                                           (agent, self.name, repo, project))
                 handle = row["handle"] if row else self.core.inbox.open_handle(
-                    owner=agent, destination=self.name, ref=repo, project=project, title=f"GitHub {repo}", meta={}, status="following")
+                    owner=agent, destination=self.name, ref=repo, project=project, title=display_title, meta={}, status="following")
                 await self.core.inbox.add(handle, "context", item)
             self.core.audit.record(origin=self.name, source=sender_id, client=ip, destination=self.name,
                                    action="context_noted", outcome="ok", ref=delivery, target=target)
@@ -862,7 +866,7 @@ class GitHubBlock(Block):
                 tail += f"\n\n{self.core.modes.wake_note(meta, owner=trust == 'owner')} Use github_reply for the originating GitHub thread."
             await self.core.send(principal, to=to, task=wake_text(title, text, None, tail),
                                  project=project, title=title,
-                                 handle_meta={**({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
+                                 handle_meta={"display_subject": display_title, **({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
                                               **({"boundary": project} if project and mode != "work" else {})})
         except (BlockError, CoreError, ValueError) as exc:
             await note_context(addr)

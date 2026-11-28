@@ -11,7 +11,6 @@ from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_confi
 from switchboard.agents import Agents
 from switchboard.app import create_app
 from switchboard.audit import REFUSAL_AUDIT_INTERVAL_S
-from switchboard.brand import TAGLINE
 from switchboard.config import ConfigError
 
 
@@ -386,8 +385,8 @@ def test_capy_signs_in_with_oauth_as_agent_capy(make):
     cb = "https://capy.ai/web/callbacks/mcp"
     cid = register(c, redirect=cb, client_name="Capy MCP client")["client_id"]
     page, _ = consent(c, cid, redirect=cb)
-    assert page.status_code == 200 and page.text.count("Capy MCP client") == 1
-    assert TAGLINE["en"] in page.text and "Returns to <code>capy.ai</code>" in page.text
+    assert page.status_code == 200 and "<h1>Connect Capy MCP client to SwB</h1>" in page.text
+    assert "/avatars/capy.png" in page.text and "Returns to <code>capy.ai</code>" in page.text
     tok = sign_in(c, redirect=cb)
     me = payload(call(c, tok["access_token"], "switchboard_status"))["you"]
     assert me["agent"] == "capy" and me["auth"] == "oauth"
@@ -399,10 +398,10 @@ def test_unmapped_oauth_agent_is_addressable_after_token_exchange(make):
     redirect = "http://localhost:8765/callback"
     cid = register(c, redirect=redirect, client_name="R3C OAuth <test>")["client_id"]
     page, _ = consent(c, cid, redirect=redirect)
-    assert page.status_code == 200 and page.text.count("R3C OAuth &lt;test&gt;") == 1
+    assert page.status_code == 200 and "<h1>Connect R3C OAuth &lt;test&gt; to SwB</h1>" in page.text
     assert "R3C OAuth <test>" not in page.text
     slug = "r3c-oauth-test"
-    assert f"Mailbox address <code>agent:{slug}</code>" in page.text
+    assert "/assets/claim-connectors.svg#agent" in page.text and f">agent:{slug}</code>" in page.text
     task = {"task": "review this", "to": f"agent:{slug}"}
     assert "no agent" in error_text(call(c, STATIC_KEY, "send", task))
 

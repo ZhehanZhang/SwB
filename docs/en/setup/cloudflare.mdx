@@ -39,6 +39,25 @@ Create another Access application on the same hostname for the paths marked **By
 
 SwB checks pairing codes at `/companion/pair`. It checks the device key on other companion requests. If you use Access, ask an agent with owner access to call `companion_code`.
 
+## Allow HTTP requests from agents
+
+Browser Integrity Check can block requests from agents. Add a [Configuration Rule](https://developers.cloudflare.com/rules/configuration-rules/) in your Cloudflare zone for these SwB paths.
+
+Replace `swb.example.com` with your SwB hostname. Use this rule expression.
+
+```text
+(http.host eq "swb.example.com" and (
+  starts_with(http.request.uri.path, "/mcp") or
+  starts_with(http.request.uri.path, "/hooks/") or
+  starts_with(http.request.uri.path, "/.well-known/") or
+  http.request.uri.path in {"/register" "/token" "/revoke" "/connect"} or
+  starts_with(http.request.uri.path, "/inbox/") or
+  starts_with(http.request.uri.path, "/companion/")
+))
+```
+
+Set `Browser Integrity Check: Off` in the rule. SwB keeps its own access rules.
+
 ## Set the SwB address
 
 Set `SWB_PUBLIC_URL` in `.env` to your public address. For example, use `https://swb.example.com`. Add your team's domain and the owner application's audience tag to `config/switchboard.yaml`. The tag tells SwB which application issued the token.
