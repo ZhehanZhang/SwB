@@ -48,11 +48,11 @@ export function SiteHeader({ lang, repository, versions = [] }: {
             <Link key={id} data-header-item={id} href={href} className={tab} aria-current={href === active?.href ? 'location' : undefined}>{text}</Link>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+        <div className="ml-auto grid auto-cols-max grid-flow-col items-center gap-1 sm:gap-2">
           <SwbAddressControl lang={lang} show={isDocsPath(path)} />
           {docs && current && <DocsVersionControl lang={lang} version={version} options={options} />}
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={headerIconButton} /></div>
-          <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:w-6 [&_kbd:first-child]:w-12 [&_kbd:first-child]:text-start [&_kbd:last-child]:text-center" />
+          <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:text-center" />
           <LanguageSelect data-header-item="language" className={headerIconButton}><Languages aria-hidden="true" className="size-4.5" /></LanguageSelect>
           <a data-header-item="github" className={`swb-button swb-button-icon ${headerIconButton}`} aria-label="GitHub" href={repository} target="_blank" rel="noreferrer">
             <GitHubMark />

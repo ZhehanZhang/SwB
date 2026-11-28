@@ -21,5 +21,4 @@ export const jetbrainsMono = localFont({
   variable: '--font-jetbrains',
   adjustFontFallback: false,
   display: 'optional',
-  preload: false,
 });

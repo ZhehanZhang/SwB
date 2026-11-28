@@ -1,3 +1,5 @@
+import { once } from 'node:events';
+import { createServer, get, type ServerResponse } from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
 
 async function headerGeometry(page: Page) {
@@ -41,6 +43,72 @@ test('header and all items stay within 0.5px across home and docs without a them
         }
       }
     }
+  }
+});
+
+test('the brand slot keeps the docs navigation fixed while its font loads', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let finishFont!: () => void;
+  const fontResponse = new Promise<void>((resolve) => { finishFont = resolve; });
+  await page.route('**/_next/static/media/inter_tight*.woff2', async (route) => {
+    await fontResponse;
+    await route.continue();
+  });
+  try {
+    await page.goto('/docs', { waitUntil: 'commit' });
+    await page.waitForFunction(() => performance.getEntriesByName('first-contentful-paint').length > 0);
+    const before = await headerGeometry(page);
+    finishFont();
+    await page.evaluate(() => document.fonts.ready);
+    expect(await headerGeometry(page)).toEqual(before);
+  } finally {
+    finishFont();
+  }
+});
+
+test('a streamed header keeps the search control in its final position', async ({ page, request, baseURL }) => {
+  const response = await request.get('/docs');
+  expect(response.ok()).toBe(true);
+  const html = await response.text();
+  const item = page.viewportSize()!.width >= 1024 ? 'search' : 'search-icon';
+  const marker = item === 'search' ? 'data-search-full=""' : 'data-search=""';
+  const search = html.indexOf(marker);
+  expect(search).toBeGreaterThan(0);
+  const closingTag = item === 'search' ? '</button>' : '</button></div>';
+  const split = html.indexOf(closingTag, search) + closingTag.length;
+  expect(split).toBeGreaterThan(search);
+  const upstream = new URL(baseURL!).origin;
+  let documentResponse: ServerResponse | undefined;
+  const server = createServer((incoming, outgoing) => {
+    if (incoming.url === '/docs') {
+      documentResponse = outgoing;
+      outgoing.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      outgoing.write(html.slice(0, split));
+      return;
+    }
+    get(upstream + incoming.url, (asset) => {
+      outgoing.writeHead(asset.statusCode!, asset.headers);
+      asset.pipe(outgoing);
+    }).on('error', () => outgoing.destroy());
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Expected a TCP address');
+    await page.goto(`http://127.0.0.1:${address.port}/docs`, { waitUntil: 'commit' });
+    await page.waitForFunction(() => performance.getEntriesByName('first-contentful-paint').length > 0);
+    const control = page.locator(`#nd-nav [data-header-item="${item}"]`);
+    await expect(control).toBeVisible();
+    await expect(page.locator('#nd-nav [data-header-item="github"]')).toHaveCount(0);
+    const before = await control.boundingBox();
+    documentResponse!.end(html.slice(split));
+    await expect(page.locator('#nd-nav [data-header-item="github"]')).toBeVisible();
+    await page.waitForLoadState();
+    expect(await control.boundingBox()).toEqual(before);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
 
@@ -274,6 +342,23 @@ test('the inline install command copies without moving the hero controls', async
   await expect(chip.getByRole('status')).toHaveText('Copied');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('uvx swb-one up');
   expect(await chip.boundingBox()).toEqual(before);
+});
+
+test('commands, keycaps and docs previews share one preloaded mono stack', async ({ page }) => {
+  const stacks: string[] = [];
+  for (const [path, selectors] of [
+    ['/', ['[data-install-chip] code', '[data-deploy-option] pre', '[data-search-full] kbd']],
+    ['/docs/get-started', ['[data-start-run="local"] pre']],
+    ['/docs/setup/claude', ['.swb-prompt pre', 'figure.shiki pre']],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.locator('link[rel="preload"][as="font"][href*="jetbrains_mono"]')).toHaveCount(1);
+    for (const selector of selectors) {
+      stacks.push(await page.locator(selector).first().evaluate((node) => getComputedStyle(node).fontFamily));
+    }
+  }
+  expect(new Set(stacks).size).toBe(1);
+  expect(stacks[0]).toMatch(/jetbrainsMono.+ui-monospace.+monospace/i);
 });
 
 test('every shared action has a leading 16px icon', async ({ page }) => {

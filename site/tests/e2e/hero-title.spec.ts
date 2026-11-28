@@ -22,6 +22,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       verticalDrift: number;
       prefixDrift: number;
       gap: number;
+      leadGapError: number;
       overflow: number;
     }>((resolve) => {
       const pair = root.querySelector('.swb-pair')!;
@@ -36,7 +37,8 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         return range;
       };
       const prefix = textRange(root.querySelector(':scope > .swb-between-text:first-child'));
-      const conjunction = textRange(pair.querySelector('.swb-between-text'))!;
+      const conjunctionElement = pair.querySelector('.swb-between-text')!;
+      const conjunction = textRange(conjunctionElement)!;
       const suffix = textRange(pair.querySelector('.swb-pair-tail .swb-between-text'));
       const seen: string[] = [];
       const settled = new Set<string>();
@@ -48,6 +50,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       let verticalDrift = 0;
       let prefixDrift = 0;
       let gap = Infinity;
+      let leadGapError = 0;
       let overflow = 0;
       let previousX: number[] | undefined;
       let baselineY: number[] | undefined;
@@ -57,12 +60,11 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         const index = root.getAttribute('data-hero-pair')!;
         if (seen.at(-1) !== index) seen.push(index);
         const lineRect = root.getBoundingClientRect();
-        const pairRect = pair.getBoundingClientRect();
         const pillRects = slots.map((slot) => slot.getBoundingClientRect());
         const prefixRect = prefix?.getBoundingClientRect();
         const andRect = conjunction.getBoundingClientRect();
         const suffixRect = suffix?.getBoundingClientRect();
-        const rects = [pairRect, ...pillRects, prefixRect, andRect, suffixRect].filter((rect) => rect !== undefined);
+        const rects = [...pillRects, prefixRect, andRect, suffixRect].filter((rect) => rect !== undefined);
         const x = rects.flatMap(({ left, right }) => [left, right]);
         const y = [lineRect, ...rects, root.nextElementSibling!.getBoundingClientRect()].flatMap(({ top, bottom }) => [top, bottom]);
         baselineY ??= y;
@@ -72,7 +74,8 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         verticalDrift = Math.max(verticalDrift, ...y.map((value, i) => Math.abs(value - baselineY![i])));
         if (prefixRect) prefixDrift = Math.max(prefixDrift, Math.abs(prefixRect.left - baselinePrefix!));
         gap = Math.min(gap, andRect.left - pillRects[0].right, pillRects[1].left - andRect.right);
-        if (prefixRect && prefixRect.bottom > pairRect.top) gap = Math.min(gap, pairRect.left - prefixRect.right);
+        leadGapError = Math.max(leadGapError, Math.abs(conjunctionElement.getBoundingClientRect().left - pillRects[0].right - 8));
+        if (prefixRect && prefixRect.bottom > pillRects[0].top) gap = Math.min(gap, pillRects[0].left - prefixRect.right);
         if (suffixRect) gap = Math.min(gap, suffixRect.left - pillRects[1].right);
         overflow = Math.max(overflow, ...rects.flatMap(({ left, right }) => [lineRect.left - left, right - lineRect.right]));
 
@@ -91,7 +94,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
 
         if ((seen.length > 1 && index === seen[0] && atTarget) || now >= deadline) {
           resolve({ seen, settled: [...settled], widthRanges: maxWidths.map((width, i) => width - minWidths[i]),
-            crossfades, frameStep, verticalDrift, prefixDrift, gap, overflow });
+            crossfades, frameStep, verticalDrift, prefixDrift, gap, leadGapError, overflow });
           return;
         }
         requestAnimationFrame(sample);
@@ -108,6 +111,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
     expect(result.verticalDrift).toBeLessThanOrEqual(0.5);
     expect(result.prefixDrift).toBeLessThanOrEqual(0.5);
     expect(result.gap).toBeGreaterThanOrEqual(6);
+    expect(result.leadGapError).toBeLessThanOrEqual(1);
     expect(result.overflow).toBeLessThanOrEqual(0.5);
   });
 
@@ -140,7 +144,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       await page.setViewportSize({ width, height: 900 });
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
-      await page.addStyleTag({ content: '.swb-slot { transition: none; }' });
+      await page.addStyleTag({ content: '.swb-slot, .swb-pair .swb-between-text { transition: none; }' });
       const subtitle = page.locator('[data-hero-pair]');
       const seen = new Set<string>();
       for (let step = 0; step < trips.length; step++) {
