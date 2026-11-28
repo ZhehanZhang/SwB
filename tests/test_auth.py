@@ -1,11 +1,18 @@
+import time
 from urllib.parse import parse_qs, urlparse, urlsplit
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.algorithms import RSAAlgorithm
+from starlette.testclient import TestClient
 
-from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, consent_csrf, error_text, payload, pkce, register, rpc, sign_in, Clock
+from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, consent_csrf, error_text, new_core, payload, pkce, register, rpc, sign_in, Clock
 from switchboard.agents import Agents
+from switchboard.app import create_app
 from switchboard.brand import TAGLINE
 from switchboard.config import ConfigError
+from switchboard.guard import LIMITS
 
 
 def test_metadata_advertises_what_claude_and_chatgpt_need(make):
@@ -316,6 +323,44 @@ def test_cloudflare_access_gate(make):
     r = c.post("/authorize", data={"req": req, "decision": "approve", "csrf": consent_csrf(page)}, headers=OWNER)
     assert r.status_code == 302 and "code=" in r.headers["location"]
 
+
+def test_access_assertions_require_an_unexpired_exp_claim(make, monkeypatch):
+    core, c = make(access=None)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    jwk = RSAAlgorithm.to_jwk(key.public_key(), as_dict=True)
+    monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", lambda _: {"keys": [{**jwk, "kid": "test-key"}]})
+    claims = {"email": "owner@example.test", "aud": core.cfg.access_aud, "iss": f"https://{core.cfg.access_team_domain}"}
+    now = int(time.time())
+    for extra, expected in (({}, False), ({"exp": now - 60}, False), ({"exp": now + 60}, True)):
+        assertion = jwt.encode({**claims, **extra}, key, algorithm="RS256", headers={"kid": "test-key"})
+        session = c.get("/auth/session", headers={"cf-access-jwt-assertion": assertion}).json()
+        assert session["signed_in"] is expected
+    [row] = core.audit.recent(action="auth_failure")
+    assert row["detail"] == "access_assertion_rejected"
+
+
+def test_access_refusal_audit_is_fixed_detail_and_globally_bounded(tmp_path, capy):
+    clock = Clock()
+    cfg = base_config(trusted_proxies=["192.0.2.0/24"])
+    core = new_core(tmp_path, capy, config=cfg, clock=clock)
+    with TestClient(create_app(core), base_url=PUBLIC, client=("192.0.2.1", 10000)) as c:
+        assert c.get("/api/audit").status_code == 401
+        assert core.audit.recent(action="auth_failure") == []
+        for attempt in range(4):
+            invalid = f"fixture-private-assertion-{attempt}"
+            assertion = {"cf-access-jwt-assertion": invalid} if attempt % 2 == 0 else {"Cookie": f"CF_Authorization={invalid}"}
+            response = c.get("/api/audit", params={"fixture": "fixture-private-query"},
+                             headers={**assertion, "X-Forwarded-For": f"198.51.100.{attempt + 1}"})
+            assert response.status_code == 401
+        [row] = core.audit.recent(action="auth_failure")
+        assert (row["client"], row["target"], row["detail"], row["outcome"]) == (
+            "198.51.100.1", None, "access_assertion_rejected", "refused",
+        )
+        assert "fixture-private" not in str(row)
+        clock.t += LIMITS["sign_in_refusal_audit"][1]
+        assert c.get("/api/audit", headers={"cf-access-jwt-assertion": "other"}).status_code == 401
+        assert c.get("/api/audit", headers=OWNER).status_code == 200
+        assert len(core.audit.recent(action="auth_failure")) == 2
 
 
 def test_access_cookie_signs_the_owner_in_on_paths_access_bypasses(make):

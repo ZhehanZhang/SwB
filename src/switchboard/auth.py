@@ -29,7 +29,7 @@ from starlette.routing import Route
 from . import pages
 from .agents import PRESETS, Agents, host_allowed
 from .config import Config, LOOPBACK_HOSTS
-from .guard import audit_client_ip
+from .guard import RateLimiter, audit_client_ip
 from .refusals import CSRF_AUDIT_PATHS
 from .sessions import Owner, Sessions, SESSION_COOKIE, login_redirect
 from .store import Store, dumps
@@ -201,6 +201,7 @@ class Auth:
         self.secret = secret or secrets.token_bytes(32)
         self.sessions = Sessions(store)
         self._access_verifier = access_verifier
+        self._access_refusals = RateLimiter(clock=store.clock)
         self._jwks: Any = None
         self._cimd_cache: dict[str, tuple[float, Client]] = {}
         self.audit: Any = None
@@ -443,7 +444,10 @@ class Auth:
             email = await self._access_verifier(assertion)
         else:
             email = await asyncio.to_thread(self._verify_access_jwt, assertion)
-        return email.lower() if email else None
+        if isinstance(email, str) and email:
+            return email.lower()
+        self._audit_access_refusal(request)
+        return None
 
     def _verify_access_jwt(self, assertion: str) -> str | None:
         import jwt
@@ -453,16 +457,25 @@ class Auth:
             self._jwks = jwt.PyJWKClient(f"https://{team}/cdn-cgi/access/certs", cache_keys=True, lifespan=3600)
         try:
             key = self._jwks.get_signing_key_from_jwt(assertion)
-            claims = jwt.decode(assertion, key.key, algorithms=["RS256"], audience=self.cfg.access_aud, issuer=f"https://{team}")
-        except Exception as e:
-            log.warning("cloudflare access assertion rejected: %s", type(e).__name__)
+            claims = jwt.decode(assertion, key.key, algorithms=["RS256"], audience=self.cfg.access_aud, issuer=f"https://{team}",
+                                options={"require": ["exp"]})
+        except Exception:
             return None
         return claims.get("email")
 
+    def _audit_access_refusal(self, request: Request) -> None:
+        if self.audit is None or self._access_refusals.blocked("sign_in_refusal_audit", "access") is not None:
+            return
+        self._access_refusals.hit("sign_in_refusal_audit", "access")
+        self.audit.record_refusal(origin="http", client=audit_client_ip(request.scope), destination="core",
+                                  action="auth_failure", detail="access_assertion_rejected")
+
     async def owner(self, request: Request) -> Owner | None:
         email = await self.access_email(request)
-        if email and any(hmac.compare_digest(email.encode(), e.encode()) for e in self.cfg.owner_emails):
-            return Owner(email, "access")
+        if email:
+            if any(hmac.compare_digest(email.encode(), e.encode()) for e in self.cfg.owner_emails):
+                return Owner(email, "access")
+            self._audit_access_refusal(request)
         return self.sessions.owner(request.cookies.get(SESSION_COOKIE))
 
     def origin_ok(self, request: Request) -> bool:

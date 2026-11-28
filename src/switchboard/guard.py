@@ -21,6 +21,7 @@ BODY_LIMIT = 1 * 1024 * 1024
 MCP_BODY_LIMIT = 16 * 1024 * 1024
 COMPANION_EMIT_LIMIT = 16 * 1024
 SETUP_BODY_LIMIT = 1024
+INVALID_FORWARDED = "invalid-forwarded"
 LIMITS = {
     "register": (20, 3600.0),
     "token": (120, 600.0),
@@ -64,10 +65,13 @@ def _resolved_ip(scope: dict[str, Any], trusted_proxies: tuple[IPv4Network | IPv
                     continue
                 if not any(address in network for network in trusted_proxies):
                     return str(address)
-        if not forwarded:
-            cf = headers.getlist("cf-connecting-ip")
+        if forwarded:
+            return INVALID_FORWARDED
+        cf = headers.getlist("cf-connecting-ip")
+        if cf:
             if len(cf) == 1 and (address := _ip(cf[0])) is not None:
                 return str(address)
+            return INVALID_FORWARDED
     return str(peer)
 
 

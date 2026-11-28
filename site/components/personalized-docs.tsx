@@ -55,6 +55,11 @@ const markdownLabels = {
   en: { copy: 'Copy Markdown', copied: 'Copied Markdown' },
   'zh-Hans': { copy: '复制 Markdown', copied: '已复制 Markdown' },
   'zh-Hant': { copy: '複製 Markdown', copied: '已複製 Markdown' },
+  es: { copy: 'Copiar Markdown', copied: 'Markdown copiado' },
+  fr: { copy: 'Copier le Markdown', copied: 'Markdown copié' },
+  de: { copy: 'Markdown kopieren', copied: 'Markdown kopiert' },
+  ko: { copy: 'Markdown 복사', copied: 'Markdown을 복사했습니다' },
+  ja: { copy: 'Markdown をコピー', copied: 'Markdown をコピーしました' },
 };
 
 export function PersonalizedMarkdownCopy({ lang, markdownUrl }: { lang: Locale; markdownUrl: string }) {

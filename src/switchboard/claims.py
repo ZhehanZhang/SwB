@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS claim_groups (
   expires_at REAL NOT NULL
 )
 """
-KINDS = ("token", "id", "url", "pem", "json", "webhook_secret", "webhook_key")
+KINDS = ("token", "id", "url", "pem", "json", "webhook_secret", "webhook_key", "webhook_private_url")
 FILE_KINDS = ("pem", "json")
 MAX_FILE_BYTES = 64 * 1024
 PEM_RE = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
@@ -137,6 +137,8 @@ def normalize(kind: str, value: str, *, check: ClaimCheck | None = None) -> str:
         raise ClaimInputError(f"Use a {kind.replace('_', ' ')} with at least 16 characters")
     if kind == "url" and not valid_webhook_url(value):
         raise ClaimInputError("Enter a public HTTPS webhook URL")
+    if kind == "webhook_private_url" and not valid_webhook_url(value, allow_private=True):
+        raise ClaimInputError("Enter an HTTPS webhook URL.")
     if check is not None:
         check(value)
     return value
@@ -169,7 +171,7 @@ def _digest(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 
-def valid_webhook_url(value: str) -> bool:
+def valid_webhook_url(value: str, *, allow_private: bool = False) -> bool:
     if any(c.isspace() or ord(c) < 32 or c in "\\#" for c in value):
         return False
     try:
@@ -178,14 +180,16 @@ def valid_webhook_url(value: str) -> bool:
     except ValueError:
         return False
     host = (url.hostname or "").rstrip(".")
-    if url.scheme != "https" or url.username is not None or port == 0 or not host:
+    if url.scheme != "https" or url.username is not None or port == 0 or not host or "%" in host:
         return False
     try:
         ip = ipaddress.ip_address(host)
-        return ip.is_global and not ip.is_multicast
+        return allow_private or (ip.is_global and not ip.is_multicast)
     except ValueError:
-        return (bool(re.fullmatch(r"[a-z0-9.-]+", host)) and "." in host and not host.rsplit(".", 1)[-1].isdigit()
-                and not host.endswith((".localhost", ".local", ".internal", ".home.arpa")))
+        return bool(re.fullmatch(r"[a-z0-9.-]+", host)) and (
+            allow_private or ("." in host and not host.rsplit(".", 1)[-1].isdigit()
+                              and not host.endswith((".localhost", ".local", ".internal", ".home.arpa")))
+        )
 
 
 class Claims:

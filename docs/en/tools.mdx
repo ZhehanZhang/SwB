@@ -228,3 +228,5 @@ For GitHub conversation actions, pass the SwB conversation ID in `conversation` 
 | `webhook_rotate` | Get a claim link for a new secret and set an optional grace period |
 | `webhook_revoke` | Stop a webhook and delete its saved secrets |
 | `webhook_test` | Send a sample inbound event or outbound message |
+
+For outbound webhooks, `webhook_create` and `webhook_rotate` accept `allow_private` and `senders`. Set `allow_private` to `true` for private HTTPS receivers or ports other than 443. List connected agents in `senders` to let them send. By default, only the owner can send. Omit both fields in `webhook_rotate` to keep their current values.

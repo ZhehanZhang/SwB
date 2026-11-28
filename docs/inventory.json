@@ -3928,6 +3928,7 @@
       "icon": null,
       "id": "tool:webhook_create",
       "input_properties": [
+        "allow_private",
         "direction",
         "encoding",
         "event_field",
@@ -3936,6 +3937,7 @@
         "name",
         "prefix",
         "project",
+        "senders",
         "template",
         "to",
         "tolerance_s",
@@ -3972,8 +3974,10 @@
       "icon": null,
       "id": "tool:webhook_rotate",
       "input_properties": [
+        "allow_private",
         "grace_s",
-        "name"
+        "name",
+        "senders"
       ],
       "kind": "tool",
       "label": "Rotate a webhook secret",

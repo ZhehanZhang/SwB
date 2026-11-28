@@ -279,6 +279,9 @@ class Block:
         """Targets this block offers: {kind, id, name, slugs, persona?}. The core adds the address and the block."""
         return []
 
+    def filter_targets(self, principal: Principal, targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return targets
+
     async def render_avatar(self, persona: dict[str, Any], http: Any, out_dir: Any, remote: bool = False) -> str | None:
         """Draw a dynamic persona's picture into out_dir and return its file name, or None."""
         return None
