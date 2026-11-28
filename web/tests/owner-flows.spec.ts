@@ -165,7 +165,7 @@ test("Memory runs and restores Git backups on mobile", async ({ page }) => {
   await page.goto("/memory")
   await page.getByRole("button", { name: "Backup", exact: true }).click()
   const backup = page.getByRole("region", { name: "Git backup" })
-  await expect(backup.getByLabel("Repository")).toHaveValue("example.test:/memory-backup.git")
+  await expect(backup.getByLabel("Repository")).toHaveValue("example.test:memory-backup.git")
   await expect(backup.getByLabel("Branch")).toHaveValue("main")
   await expect(backup.getByLabel("Author name")).toHaveValue("Fixture Owner")
   await expect(backup.getByLabel("Author email")).toHaveValue("owner@example.test")
