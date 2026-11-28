@@ -47,6 +47,7 @@ class ChatDrop(StrEnum):
     TRIAGE_TARGET = "triage needs an agent"
     WORK_TARGET = "work needs a target"
     TARGET_UNAVAILABLE = "mode target unavailable"
+    CAPTAIN_TARGET = "choose a Captain by alias or full address"
     PROJECT_UNAVAILABLE = "mode project unavailable"
     PROJECT_MISMATCH = "mode target belongs to another project"
     CHANNEL_RESTRICTED = "channel access restricted"
@@ -514,7 +515,10 @@ class ChannelModes:
                     target = str(addr)
                 else:
                     known = await self.core.targets()
-                    if target.casefold() in self.core.slug_map(known):
+                    slugs = self.core.slug_map(known)
+                    if target.casefold() == tgt.CAPTAIN_SLUG and tgt.CAPTAIN_SLUG not in slugs:
+                        raise tgt.CaptainTargetError(tgt.captain_selection_error(known, slugs))
+                    if target.casefold() in slugs:
                         target = target.casefold()
                     elif not any(row["address"] == target for row in known):
                         raise ValueError("Choose a target from the targets list.")
@@ -538,6 +542,8 @@ class ChannelModes:
     def _mailbox(self, target: str | None, project: str | None = None) -> str:
         if target:
             agent = target.removeprefix("agent:")
+            if agent == "owner":
+                return "owner"
             if agent in self.core.known_agents():
                 return agent
             for b in self.core.blocks.values():
@@ -562,6 +568,7 @@ class ChannelModes:
         return bool(added)
 
     def flush(self, block: str | None = None, space: str | None = None) -> int:
+        self.core.inbox.flush_owner_delivery()
         now = self.core.clock()
 
         def write(db: Any) -> int:

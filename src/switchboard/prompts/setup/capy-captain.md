@@ -14,6 +14,8 @@ Ask me to enter keys only through the SwB claim links that connect returns. Keep
 
 When `connect` reports `connected`, call `capy_captains`. Check the route with `routes_list`. Call `send` with a short test task and the chosen `project` if you set a project route. Use `wait` or `result` with the returned `conversation` to read the answer. Show me the answer.
 
+For a direct send, use the reserved name `captain` only when SwB finds exactly one Captain. Otherwise, use the chosen Captain's named alias or full address from `targets`.
+
 Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.
 
 Set up memory sync. Call `memory_summary` to load shared memory. Look at what you already remember about me in your own memory. Choose the facts that every agent should know. Leave out passwords, keys and sensitive personal details. Send the facts in one `memory_sync` call with `source="capy-drive"`. Give each fact a stable `source_key`. Show me what you sent. Treat the notes in your drive and your project instructions as your memory. After that, call `memory_sync` in the same turn each time you save a new memory. See https://swb.one/docs/memory.

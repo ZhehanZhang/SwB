@@ -49,19 +49,17 @@ SwB 只靠環境變數就能執行。MCP 模組預設會啟動，有些模組則
 
 有些模組只要環境中有憑證就能啟動，設定方式見[模組](/zh-Hant/docs/blocks)。[發行版本的環境範例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)列出了具名工作空間和 routine 的憑證名稱。
 
-## 擁有者通知
+## 傳給擁有者的訊息
 
-發給擁有者的訊息會存入 **Inbox**。使用 `owner_notify` 指定通知位址。SwB 會將簡短通知傳到清單中第一個已設定擁有者帳號的聊天空間。
+SwB 優先選擇過去 30 分鐘內最近一次以擁有者身分活動的代理。接著嘗試專案路由或 `default_target` 指定的主要代理。最後使用擁有者的全域路由。
 
-```yaml
-owner_notify: ["telegram:home", "discord:home", "slack:team"]
+訊息會進入所選代理的收件匣。若三種方式均失敗，SwB 會在狀態中回報有訊息等待傳送。
+
+將擁有者的全域路由設為代理位址。
+
+```python
+routes_set(agent="owner", target="agent:claude")
 ```
-
-每個位址包含模組名稱和空間名稱。Telegram 和 Discord 使用 `owner_ids`。Slack 工作空間需要機器人。請設定 `owner_user_ids` 或核准帳號。
-
-SwB 預設依序查找 Telegram、Discord 和 Slack。設為 `owner_notify: []` 時，訊息只存入收件匣。
-
-每個聊天空間在 `modes.digest_minutes` 設定的間隔內最多收到一則通知。設定 `public_url` 後，通知會附上收件匣連結。
 
 ## 設定檔
 

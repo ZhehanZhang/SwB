@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 import shlex
 import subprocess
@@ -94,8 +93,8 @@ async def seed_inbox(core: Switchboard) -> None:
 
 async def seed_message_examples(core: Switchboard) -> None:
     examples = (
-        ("watch", "owner", "mailbox", "example-org/example-repo", "community", "Watch digest: example-org/example-repo",
-         "agent:owner", "notified", {"owner_notify": {"surface": "telegram:dispatch", "notified_at": core.clock()}},
+        ("watch", "claude", "mailbox", "example-org/example-repo", "community", "Watch digest: example-org/example-repo",
+         "agent:claude", "delivered", {"for_owner": True, "resolved_by": "project"},
          "watch_digest", {"block": "repo-events", "space": "example-org/example-repo", "count": 14, "items": []}),
         ("telegram", "chatgpt", "telegram", "dispatch:-1001000:5", None, "Telegram dispatch",
          "dispatch:-1001000:5", "sent", {}, "message", {"text": "Schedule confirmed for Thursday."}),
@@ -116,12 +115,7 @@ async def seed_message_examples(core: Switchboard) -> None:
             handle=f"h_example_{name}", owner=owner, destination=destination, ref=ref, project=project,
             title=title, target=target, status=status, meta=meta,
         )
-        if owner == "owner":
-            core.store.x("INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?, ?, ?, ?, ?, ?)",
-                         (owner, handle, destination, kind, json.dumps(data), core.clock()))
-            core.inbox.update_handle(handle, status=status)
-        else:
-            await core.inbox.add(handle, kind, data)
+        await core.inbox.add(handle, kind, data)
 
 
 def run(path: Path) -> None:

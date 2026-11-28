@@ -256,7 +256,6 @@
   "config_key:modes.default": "docs/en/config.mdx",
   "config_key:modes.digest_minutes": "docs/en/config.mdx",
   "config_key:modes.projects": "docs/en/config.mdx",
-  "config_key:owner_notify": "docs/en/config.mdx",
   "config_key:public_url": "docs/en/config.mdx",
   "config_key:routes": "docs/en/config.mdx",
   "config_key:routes.*.match": "docs/en/config.mdx",

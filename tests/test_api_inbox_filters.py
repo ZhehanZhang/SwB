@@ -9,8 +9,8 @@ def _seed(core):
     for handle, owner, destination, title, target, project, status, kind, meta, data in (
         ("h_alpha", "claude-code", "slack", "Developers", "agent:chatgpt", "team", "sent", "message",
          {"from": {"kind": "slack", "user_name": "Jordan", "channel_name": "dev"}}, {"text": "Review the quarterly roadmap."}),
-        ("h_beta", "owner", "mailbox", "Watch digest: team/repo", "agent:owner", "team", "delivered", "watch_digest",
-         {}, {"count": 2, "block": "github", "space": "team/repo", "items": []}),
+        ("h_beta", "claude", "mailbox", "Watch digest: team/repo", "agent:claude", "team", "delivered", "watch_digest",
+         {"for_owner": True, "resolved_by": "project"}, {"count": 2, "block": "github", "space": "team/repo", "items": []}),
         ("h_charlie", "grok", "mailbox", "News", "agent:claude", None, "answered", "message", {}, {"text": "April update."}),
     ):
         core.inbox.open_handle(handle=handle, owner=owner, destination=destination, ref=target, project=project,
@@ -33,7 +33,7 @@ def _query(client, expect_status=200, **params):
     ({"channel": "#dev"}, ["h_alpha"]),
     ({"block": "github"}, ["h_beta"]),
     ({"kind": "watch_digest"}, ["h_beta"]),
-    ({"status": "stored"}, ["h_beta"]),
+    ({"status": "delivered"}, ["h_beta"]),
     ({"q": "quarterly roadmap"}, ["h_alpha"]),
     ({"q": "quarterly roadmap", "project": "other"}, []),
     ({"recipient": "%"}, []),
@@ -88,16 +88,3 @@ def test_owner_read_receipt_is_csrf_protected_and_matches_digest_version(make):
     assert _query(client, unread="1")["conversations"] == []
     item = core.store.one("SELECT data FROM inbox WHERE id = ?", (cursor,))
     assert json.loads(item["data"])["count"] == 3
-
-
-def test_redelivery_uses_the_owner_mailbox_notifier(make):
-    core, client = make(clock=Clock())
-    _seed(core)
-    session = client.get("/auth/session", headers=OWNER).json()
-    headers = {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": session["csrf"]}
-    body = {"action": "redeliver", "handles": ["h_beta", "h_alpha"]}
-    assert client.post("/api/inbox/actions", json=body, headers={**OWNER, "Origin": PUBLIC}).status_code == 403
-    response = client.post("/api/inbox/actions", json=body, headers=headers)
-    assert response.status_code == 200 and response.json() == {"updated": ["h_beta"]}
-    assert core.inbox.handle("h_beta")["status"] == "no_owner_surface"
-    assert core.inbox.handle("h_alpha")["status"] == "sent"

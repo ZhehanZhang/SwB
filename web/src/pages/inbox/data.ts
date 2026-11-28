@@ -38,20 +38,7 @@ export type Conversation = {
   target_kind?: string | null
   target_avatar_url?: string | null
   unread?: boolean
-  owner_notify?: { surface?: string | null; notified_at?: string | null; reason?: string | null } | null
-}
-
-export const deliveryStatuses = {
-  stored: "Stored",
-  notified: "Notified",
-  notify_failed: "Notification failed",
-  no_owner_surface: "Owner surface needed",
-}
-
-export function ownerDelivery(row: Conversation) {
-  if (row.owner !== "owner" || row.destination !== "mailbox") return null
-  if (row.status && Object.hasOwn(deliveryStatuses, row.status)) return deliveryStatuses[row.status as keyof typeof deliveryStatuses]
-  return row.status === "delivered" ? "Stored" : null
+  for_owner?: boolean
 }
 
 export type Sender = {
@@ -139,7 +126,7 @@ function isConversation(value: unknown): value is Conversation {
     && optionalStrings(value, ["first_target", "destination_kind", "source_kind", "target_kind", "target_avatar_url"])
     && (value.first_sender == null || isSender(value.first_sender))
     && (value.unread === undefined || typeof value.unread === "boolean")
-    && (value.owner_notify == null || (isRecord(value.owner_notify) && optionalStrings(value.owner_notify, ["surface", "notified_at", "reason"])))
+    && (value.for_owner === undefined || typeof value.for_owner === "boolean")
 }
 
 function isSender(value: unknown): value is Sender {

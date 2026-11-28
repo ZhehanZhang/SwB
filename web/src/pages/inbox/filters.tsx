@@ -3,7 +3,6 @@ import { Search, SlidersHorizontal } from "lucide-react"
 import { Popover } from "radix-ui"
 import { useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { deliveryStatuses } from "./data"
 
 const textFilters = [["sender", "Sender"], ["recipient", "Recipient"], ["block", "Block"], ["channel", "Channel"], ["project", "Project"]] as const
 const valueFilters = [
@@ -11,8 +10,8 @@ const valueFilters = [
     message: "Message", reply: "Reply", final: "Result", watch_digest: "Watch digest", triage_note: "Triage note",
     slack_event: "Slack event", telegram_event: "Telegram event", discord_event: "Discord event", context: "Context", conversation: "Conversation",
   }],
-  ["status", "Delivery", {
-    ...deliveryStatuses, sent: "Sent", delivered: "Delivered", answered: "Answered", completed: "Completed", cancelled: "Cancelled",
+  ["status", "Status", {
+    sent: "Sent", delivered: "Delivered", answered: "Answered", completed: "Completed", cancelled: "Cancelled",
   }],
   ["unread", "Read state", { 1: "Unread", 0: "Read" }],
 ] as const

@@ -14,6 +14,7 @@ import httpx
 
 from .routes import route_audit_name
 from .slack.config import AVATAR_RE
+from .targets import CAPTAIN_SLUG
 
 if TYPE_CHECKING:
     from .core import Switchboard
@@ -55,6 +56,8 @@ def conversation_captain(value: str | None, destination: str, kind: str | None,
         return target
     if not value:
         return None
+    if kind == CAPTAIN_SLUG and value.casefold() == CAPTAIN_SLUG:
+        return next(iter(targets.values())) if len(targets) == 1 else None
     if match := _ADDRESS.fullmatch(value) or _DESCRIPTION.fullmatch(value):
         parts = match.groupdict()
         if parts.get("block") or (parts.get("kind") or "").casefold() == "thread":

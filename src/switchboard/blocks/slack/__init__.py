@@ -172,14 +172,6 @@ class SlackBlock(SlackIntake, SlackActions):
         if self.engine is not None:
             await self.engine.start(connect=self.core.slack_connect)
 
-    def owner_notify_spaces(self) -> tuple[str, ...]:
-        if self.engine is None:
-            return ()
-        return tuple(label for label in self.engine.config.workspaces if self.engine.owner_notify_user(label))
-
-    async def dm_owner(self, text: str, *, space: str) -> bool:
-        return self.engine is not None and await self.engine.dm_owner(text, workspace=space)
-
     async def aclose(self) -> None:
         if self.engine is not None:
             await self.engine.stop()

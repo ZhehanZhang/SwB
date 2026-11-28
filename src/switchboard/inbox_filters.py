@@ -28,8 +28,6 @@ _PROJECT = """CASE WHEN """ + _MODE_PROJECT + """ = 'null' THEN NULL ELSE
     COALESCE(json_extract(h.meta, '$.channel_mode.project'), (
         SELECT json_extract(i.data, '$.channel_mode.project') FROM inbox i WHERE i.handle = h.handle ORDER BY i.id LIMIT 1
     ), h.project) END"""
-_STATUS = """CASE WHEN h.owner = 'owner' AND h.destination = 'mailbox' AND h.status = 'delivered'
-                  THEN 'stored' ELSE h.status END"""
 _UNREAD = """EXISTS (SELECT 1 FROM inbox i WHERE i.handle = h.handle AND i.id > COALESCE((
                 SELECT MAX(cursor) FROM inbox_cursors c WHERE c.owner = 'owner'
                 AND (c.handle = h.handle OR (i.owner = 'owner' AND c.handle = '*'))
@@ -93,7 +91,7 @@ class InboxFilters:
             elif key == "kind":
                 clauses.append((f"COALESCE({_KIND}, 'conversation') = ?", [value]))
             elif key == "status":
-                clauses.append((f"{_STATUS} = ?", [value]))
+                clauses.append(("h.status = ?", [value]))
             elif key == "unread":
                 clauses.append((_UNREAD if value == "1" else f"NOT {_UNREAD}", []))
             elif key == "q":

@@ -49,19 +49,17 @@ On Linux and macOS, SwB sets the data folder to private mode `0700`. It sets dat
 
 Some blocks can start from credentials in the environment. See [Blocks](/docs/blocks) for setup. The [release environment example](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example) shows the credential names for named workspaces and routines.
 
-## Owner notifications
+## Owner messages
 
-SwB stores owner messages in **Inbox**. Set `owner_notify` to send a short notice to the first listed chat with an owner account.
+SwB first tries the agent with the most recent activity under an owner sign-in in the last 30 minutes. It then tries the project's main agent, set by the project route or `default_target`. The global owner route is the last choice.
 
-```yaml
-owner_notify: ["telegram:home", "discord:home", "slack:team"]
+The selected agent receives the message in its inbox. SwB reports pending delivery in status if all three choices fail.
+
+Set the global owner route to an agent address.
+
+```python
+routes_set(agent="owner", target="agent:claude")
 ```
-
-Each address names a block and a space. Use `owner_ids` for Telegram and Discord. For Slack, use a bot and set `owner_user_ids` or an approval account.
-
-SwB checks Telegram, Discord, then Slack by default. Set `owner_notify: []` for inbox delivery only.
-
-SwB sends at most one notice per chat space during each `modes.digest_minutes` interval. Set `public_url` to include an Inbox link.
 
 ## The config file
 

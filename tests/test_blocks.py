@@ -176,17 +176,19 @@ def test_targets_list_blocks_agents_and_projects(make):
     addresses = {t["address"] for t in got}
     assert {f"capy:captain:{CAPTAIN}", "agent:claude", "project:beacon"} <= addresses
     cap = next(t for t in got if t["address"] == f"capy:captain:{CAPTAIN}")
-    assert cap["level"] == "L4" and cap["slugs"] == ["captain", "bcn-1"] and cap["persona"]["id"] == "captain"
+    assert cap["level"] == "L4" and cap["slugs"] == ["bcn-1"] and cap["persona"]["id"] == "captain"
     assert next(t for t in got if t["address"] == "project:beacon")["routed_to"] == f"capy:captain:{CAPTAIN}"
     assert [t["address"] for t in payload(call(c, STATIC_KEY, "targets", {"block": "agent", "query": "claude"}))["targets"]] == ["agent:claude", "agent:claude-code"]
 
 
 def test_slug_priority_and_aliases():
-    ts = [{"address": "agent:captain", "block": "agent", "kind": "agent", "id": "captain", "slugs": ["captain"]},
-          {"address": "capy:captain:jam_1", "block": "capy", "kind": "captain", "id": "jam_1", "slugs": ["captain"]},
-          {"address": "project:captain", "block": "project", "kind": "project", "id": "captain", "slugs": ["captain"]}]
+    ts = [{"address": "agent:review", "block": "agent", "kind": "agent", "id": "review", "slugs": ["review"]},
+          {"address": "capy:captain:jam_1", "block": "capy", "kind": "captain", "id": "jam_1", "slugs": ["review"]},
+          {"address": "project:review", "block": "project", "kind": "project", "id": "review", "slugs": ["review"]}]
     assert by_slug(ts)["captain"]["block"] == "capy"
-    assert by_slug(ts, ["project"])["captain"]["block"] == "project"
+    assert by_slug(ts, ["project"])["captain"]["block"] == "capy"
+    assert by_slug(ts)["review"]["block"] == "capy"
+    assert by_slug(ts, ["project"])["review"]["block"] == "project"
     assert by_slug(ts, aliases={"boss": "capy:captain:jam_1"})["boss"]["id"] == "jam_1"
     assert parse("capy:captain:jam_1", ["capy"]) == Address("capy", "captain", "jam_1") and parse("hello", ["capy"]) is None
 
@@ -328,13 +330,14 @@ def test_owner_api_shows_and_flips_target_visibility(make):
     core, c = make()
     csrf = c.get("/auth/session", headers=OWNER).json()["csrf"]
     path = "/api/visibility"
-    body = {"resource": "target:captain", "visibility": "shared"}
+    resource = f"target:capy:captain:{CAPTAIN}".lower()
+    body = {"resource": resource, "visibility": "shared"}
     assert c.post(path, json=body, headers={**OWNER, "X-CSRF-Token": "nope"}).status_code == 403
     headers = {**OWNER, "X-CSRF-Token": csrf}
     assert c.post(path, json=body, headers=headers).status_code == 200
-    assert core.visibility.rule("target:captain") == "shared"
+    assert core.visibility.rule(resource) == "shared"
     rows = {row["resource"]: row for row in c.get(path, headers=OWNER).json()["resources"]}
-    assert rows["target:captain"]["visibility"] == "shared"
+    assert rows[resource]["visibility"] == "shared"
     assert c.post(path, json={**body, "resource": "tool:deploy"}, headers=headers).status_code == 400
 
 

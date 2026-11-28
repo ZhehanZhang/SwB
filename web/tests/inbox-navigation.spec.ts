@@ -92,9 +92,9 @@ test("Wide inbox keeps the list beside details and restores URL filters", async 
 
   await filters.click()
   const fields = page.getByRole("dialog", { name: "Inbox filters" })
-  const delivery = fields.getByLabel("Delivery")
+  const delivery = fields.getByLabel("Status")
   for (const status of ["stored", "notified", "notify_failed", "no_owner_surface"]) {
-    await expect(delivery.locator(`option[value="${status}"]`)).toHaveCount(1)
+    await expect(delivery.locator(`option[value="${status}"]`)).toHaveCount(0)
   }
   const readState = fields.getByLabel("Read state")
   await expect(readState.getByRole("option", { name: "Unread", exact: true })).toHaveAttribute("value", "1")
@@ -133,7 +133,7 @@ test("Wide inbox keeps the list beside details and restores URL filters", async 
   await expect(fields.getByLabel("Project")).toHaveValue("community")
   await expect(fields.getByLabel("Channel")).toHaveValue("#planning")
   await expect(delivery).toHaveValue("sent")
-  await delivery.selectOption("notified")
+  await delivery.selectOption("delivered")
   await fields.getByRole("button", { name: "Apply", exact: true }).click()
   await expect(list.getByText("0 conversations", { exact: true })).toBeVisible()
 })

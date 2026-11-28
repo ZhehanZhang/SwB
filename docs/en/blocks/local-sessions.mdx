@@ -13,7 +13,7 @@ From an owner agent, call `targets(block="local")` to check each setup. Copy the
 
 ## Send a message
 
-Pass the session address as `to` in `send`. SwB tries to deliver the message to the open session. For a session with a matching agent, mailbox delivery requires access to that agent's mailbox. In other sessions, a message from the owner goes to the owner's mailbox. Use the returned conversation ID with `result` to read the reply.
+Pass the session address as `to` in `send`. SwB tries to deliver the message to the open session. For a session with a matching agent, mailbox delivery requires access to that agent's mailbox. Use the returned conversation ID with `result` to read the reply.
 
 | Status | Meaning |
 | --- | --- |

@@ -35,6 +35,8 @@ description: SwB 为智能体提供的 MCP 工具。
 | `result` | 获取某个对话的最终回复。在支持的情况下，用 `tail` 设置最近回复或消息的条数 |
 | `cancel` | 停止跟踪某个对话 |
 | `targets` | 列出可用的目标地址。你可以发送到哪里，由你的密钥和目标的规则共同决定 |
+
+在 `send` 中设置 `to="agent:owner"`，即可发消息给所有者。SwB 按[所有者消息规则](/zh-Hans/docs/config#发给所有者的消息)选择接收消息的智能体。
 | `get_message` | 凭收件箱或 MCP Events 中的 `message_id` 读取一条已保存的消息 |
 
 ### 读取位置
@@ -217,7 +219,7 @@ description: SwB 为智能体提供的 MCP 工具。
 | `github_comment` | 在议题或 Pull Request 下发表评论 |
 | `github_open_issue` | 在仓库中创建议题 |
 | `github_link_duplicate` | 把一个议题关联到同一仓库中的原议题。SwB 会添加 `duplicate`，并以 `not_planned` 关闭重复的议题 |
-| `github_notify_owner` | 向所有者的收件箱发送一条通知，附上发起该对话的议题或 Pull Request 的链接 |
+| `github_notify_owner` | 投递发给所有者的消息，并附上议题或 Pull Request 的链接 |
 | `github_reply` | 在发起该 SwB 对话的 GitHub 议题或 Pull Request 下回复 |
 
 ### [Webhooks](/zh-Hans/docs/blocks/webhooks)

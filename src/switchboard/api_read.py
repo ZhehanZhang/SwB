@@ -26,6 +26,7 @@ from .env import env_value
 from .inbox_filters import InboxFilters, unread_handles
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
 from .modes import CHAT_DROP_ACTION, ChatDrop
+from .owner_delivery import OWNER_DELIVERY_PROBLEM
 from .projects import ProjectError
 from .refusals import CSRF_AUDIT_PATHS, OWNER_NOTE_REQUIRED, SIGN_IN_FAILURES
 from .routes import route_audit_name
@@ -91,11 +92,13 @@ async def health(request: Request) -> JSONResponse:
     core = request.app.state.core
     report = core.health()
     problems = core.cfg.problems()
+    if OWNER_DELIVERY_PROBLEM in report["problems"]:
+        problems.append(OWNER_DELIVERY_PROBLEM)
     # Provider diagnostics can include upstream errors and URLs. Show which block needs attention, not its raw error.
     problems += [f"{name}: check block status" for name, block in core.blocks.items() if block.problems()]
     revision = env_value(core.cfg.env, "SWB_REVISION") or ""
     return JSONResponse({
-        **_fields(report, "status", "mirror", "static_keys", "turn_cap", "mcp_enabled"),
+        **_fields(report, "status", "mirror", "static_keys", "turn_cap", "mcp_enabled", "owner_delivery"),
         **({"commit": revision.lower()} if re.fullmatch(r"[0-9a-fA-F]{40}", revision) else {}),
         "blocks": {name: _fields(row, "use", "kind", "level", "online") for name, row in report["blocks"].items()},
         "problems": problems,
@@ -171,7 +174,7 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
         detail = recorded_detail
     elif action == "triage.notify_owner" and fields["outcome"] == "refused" and recorded_detail == OWNER_NOTE_REQUIRED:
         detail = recorded_detail
-    elif action == "owner_notify" and recorded_detail in ("send_failed", "disabled", "no_configured_surface"):
+    elif action == "owner_delivery" and recorded_detail in ("active", "project", "global", "owner_delivery_pending"):
         detail = recorded_detail
     elif action == "tool_refused" and fields["destination"] == "mcp":
         from .blocks.mcp.policy import REFUSAL_DETAILS
@@ -653,19 +656,22 @@ def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | No
         block = core.blocks.get(destination)
         if block and (space := block.spaces.get(row["ref"].partition(":")[0])):
             project = space.project
-    status = "stored" if destination == "mailbox" and row["owner"] == "owner" and row["status"] == "delivered" else row["status"]
-    notice = _object(meta.get("owner_notify"))
-    owner_notify = {key: value for key in ("surface", "notified_at", "reason") if (value := _reference(notice.get(key)))}
-    if type(stamp := notice.get("notified_at")) in (int, float) and math.isfinite(stamp) and 0 < stamp < 253402300800:
-        owner_notify["notified_at"] = iso(stamp)
-    return {**_fields(row, "handle", "owner", "destination", "ref", "target", "open"),
-            **location, "status": status, "project": project, "kind": item_kind or None,
+    return {**_fields(row, "handle", "owner", "destination", "ref", "target", "open", "status"),
+            **location, "project": project, "kind": item_kind or None,
             "title": _conversation_subject(row, payload, location, item_kind, sender_name),
             "created_at": iso(row["created_at"]), "updated_at": iso(row["updated_at"]),
             "first_sender": first_sender, "first_target": first_target, "target_kind": target_kind,
             **({"target_avatar_url": avatar_url} if avatar_url else {}),
             "destination_kind": _provider(core, destination) or destination,
-            **({"owner_notify": owner_notify} if owner_notify else {})}
+            **({"for_owner": True, "resolved_by": meta["resolved_by"]} if meta.get("for_owner") is True
+               and meta.get("resolved_by") in ("active", "project", "global") else {})}
+
+
+def _owner_mailbox_hidden(row: dict[str, Any]) -> bool:
+    return row["destination"] == "mailbox" and (
+        row["owner"] == "owner" or (not row["owner"] and row["meta"].get("for_owner") is True)
+        or row["meta"].get("owner_archived") is True
+    )
 
 
 async def _conversations(core: Any, rows: dict[str, dict[str, Any]], detail_senders: tuple[Any, ...] = ()) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
@@ -755,8 +761,8 @@ async def inbox(request: Request) -> JSONResponse:
             pending = await asyncio.gather(*(_pending_write(core, row, agents) for row in rows))
     if before is None:
         pauses = core.store.q("SELECT root, turns, paused_at FROM conversation_turns WHERE paused_at IS NOT NULL ORDER BY paused_at DESC")
-    roots = core.inbox.handles(limit=limit + 1, roots_only=True, before=before,
-                               older_first=filters.older_first, predicates=filters.clauses(core, project))
+    predicates = [("NOT (h.owner = 'owner' AND h.destination = 'mailbox')", []), *filters.clauses(core, project)]
+    roots = core.inbox.handles(limit=limit + 1, roots_only=True, before=before, older_first=filters.older_first, predicates=predicates)
     next_cursor = None
     if len(roots) > limit:
         roots.pop()
@@ -764,8 +770,11 @@ async def inbox(request: Request) -> JSONResponse:
         stamp = last["updated_at"] if last["updated_at"] is not None else last["created_at"]
         next_cursor = f"{stamp}:{last['handle']}"
     by_handle = {row["handle"]: row for row in roots}
+    visible_pauses = []
     for pause in pauses:
-        if pause["root"] not in by_handle and (row := core.inbox.handle(pause["root"])) is not None:
+        row = by_handle.get(pause["root"]) or core.inbox.handle(pause["root"])
+        if row is not None and not _owner_mailbox_hidden(row):
+            visible_pauses.append(pause)
             by_handle[pause["root"]] = row
     conversations, _ = await _conversations(core, by_handle)
     unread = unread_handles(core, list(by_handle))
@@ -773,7 +782,7 @@ async def inbox(request: Request) -> JSONResponse:
         result["unread"] = handle in unread
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
                          "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"]),
-                                     "conversation": conversations.get(row["root"])} for row in pauses],
+                                     "conversation": conversations.get(row["root"])} for row in visible_pauses],
                          "conversations": [conversations[row["handle"]] for row in roots], "next_cursor": next_cursor})
 
 
@@ -786,9 +795,11 @@ async def conversation(request: Request) -> JSONResponse:
     core = request.app.state.core
     handle = request.path_params["handle"]
     row = core.inbox.handle(handle)
-    if row is None:
+    if row is None or _owner_mailbox_hidden(row):
         return _error("conversation not found", 404)
     row = core.inbox.thread_root(row)
+    if _owner_mailbox_hidden(row):
+        return _error("conversation not found", 404)
     handle = row["handle"]
     out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False)
     items = []

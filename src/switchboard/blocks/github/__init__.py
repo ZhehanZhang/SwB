@@ -572,7 +572,7 @@ class GitHubBlock(Block):
                 Action("open_issue", "Open an issue", "Open a new issue on this project's GitHub repository.", self.open_issue),
                 Action("link_duplicate", "Resolve a duplicate", "Comment with the canonical issue, add the duplicate label, and close as not planned.",
                        self.link_duplicate, destructive=True),
-                Action("notify_owner", "Notify the owner", "Put a triage note and its permalink in the owner's inbox.", self.notify_owner),
+                Action("notify_owner", "Notify the owner", "Send a triage note and its link to the agent that serves the owner.", self.notify_owner),
                 Action("reply", "Reply in a GitHub thread", "Post in the issue or pull request thread that woke this conversation.", self.reply)]
 
     def mcp_tools(self, mcp: Any, kit: Any) -> None:
@@ -662,8 +662,7 @@ class GitHubBlock(Block):
                                             ("PATCH", path, {"state": "closed", "state_reason": "not_planned"})))
 
     async def notify_owner(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
-        out = await self.core.notify_mode_owner(call.principal, handle, text)
-        return {"ok": True, "handle": out["handle"]}
+        return await self.core.notify_mode_owner(call.principal, handle, text)
 
     async def reply(self, call: Call, *, handle: str, text: str) -> dict[str, Any]:
         meta = self._check(call, handle, "reply")

@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button"
 import { requestJson, sessionQuery } from "@/lib/api"
 import { displayReference } from "@/lib/display-reference"
 import { cn } from "@/lib/utils"
-import { BulkActions, canRun, markInboxCacheRead, RowActions, useInboxActions, writeInboxAction, type InboxActions } from "./inbox/actions"
+import { BulkActions, markInboxCacheRead, markInboxRead, RowActions, useInboxActions, type InboxActions } from "./inbox/actions"
 import {
-  approvalTitle, channelLabel, isConversationPage, isInbox, isResumed, isWriteDecision, ownerDelivery, participants, principalLabel, senderLabel, senderLogoKind,
+  approvalTitle, channelLabel, isConversationPage, isInbox, isResumed, isWriteDecision, participants, principalLabel, senderLabel, senderLogoKind,
   type Conversation, type ConversationItem, type Pause, type PendingWrite,
 } from "./inbox/data"
 import { InboxFilters, inboxQuery } from "./inbox/filters"
@@ -189,7 +189,7 @@ function Conversations({ items, search, active, onOpen, actions, selected, onSel
           <th role="columnheader" className="w-[16%] py-2 pr-2 font-medium" scope="col">From</th>
           <th role="columnheader" className="w-[16%] py-2 pr-2 font-medium" scope="col">To</th>
           <th role="columnheader" className="py-2 pr-3 font-medium" scope="col">Subject</th>
-          <th role="columnheader" className="w-[14%] py-2 pr-2 font-medium" scope="col">Delivery</th>
+          <th role="columnheader" className="w-[11%] py-2 pr-2 font-medium" scope="col">Status</th>
           <th role="columnheader" className="w-[9.25%] py-2 pr-3 font-medium" scope="col">Updated</th>
           <th role="columnheader" className="w-7" scope="col"><span className="sr-only">Actions</span></th>
         </tr>
@@ -202,7 +202,7 @@ function Conversations({ items, search, active, onOpen, actions, selected, onSel
               {selected && (
                 <td role="cell" className="@max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-3 @max-[38rem]/list:justify-self-end">
                   <input type="checkbox" aria-label={`Select ${row.title || "message"}`} checked={selected.has(row.handle)}
-                    disabled={(!canRun("read", row) && !canRun("redeliver", row)) || (!selected.has(row.handle) && selected.size >= 50)}
+                    disabled={!row.unread || (!selected.has(row.handle) && selected.size >= 50)}
                     className="relative z-10 size-4 cursor-pointer align-middle accent-primary"
                     onChange={() => onSelect(row.handle)} />
                 </td>
@@ -216,8 +216,9 @@ function Conversations({ items, search, active, onOpen, actions, selected, onSel
                   className={cn(!selected && "after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring", row.unread && "font-medium")}>
                   {displayReference(row.title || "Message")}
                 </Link>
+                {row.for_owner && <span className="ml-2 text-xs font-normal text-muted-foreground">For owner</span>}
               </td>
-              <td role="cell" className="text-xs text-muted-foreground @max-[38rem]/list:col-start-2 @max-[38rem]/list:row-start-3 @max-[38rem]/list:text-right @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2">{ownerDelivery(row)}</td>
+              <td role="cell" className="text-xs capitalize text-muted-foreground @max-[38rem]/list:col-start-2 @max-[38rem]/list:row-start-3 @max-[38rem]/list:text-right @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2">{row.status?.replaceAll("_", " ")}</td>
               <td role="cell" className="font-mono text-mono-sm text-muted-foreground @max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-1 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2">
                 <RelativeTime value={row.updated_at ?? row.created_at} />
               </td>
@@ -254,8 +255,7 @@ function InboxList({ active, onOpen }: { active?: string; onOpen: OpenConversati
   })
   const data = inbox.data?.pages[0]
   const conversations = (inbox.data?.pages.flatMap((page) => page.conversations) ?? []).map((row) => {
-    const action = actions.pending.get(row.handle)
-    return action === "read" ? { ...row, unread: false } : action === "redeliver" ? { ...row, status: "stored" } : row
+    return actions.pending.has(row.handle) ? { ...row, unread: false } : row
   }).filter((row) => params.get("unread") !== "1" || row.unread)
   const notice = params.get("notice")
   const status = notice === "decide-refused" ? "Request closed" : notice === "send-failed" ? "Slack delivery failed"
@@ -313,7 +313,7 @@ function ConversationsSkeleton() {
         {[0, 1, 2, 3].map((column) => <Skeleton key={column} className="h-2.5 w-[12%] first:w-[8%]" />)}
       </div>
       {[0, 1].map((row) => (
-        <div key={row} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] grid-rows-[18px_20px_16px] items-center gap-x-2 gap-y-1 border-b py-3.5 @min-[38rem]/list:h-[43px] @min-[38rem]/list:grid-cols-[10%_16%_16%_minmax(0,1fr)_14%_9.25%_16px] @min-[38rem]/list:grid-rows-1 @min-[38rem]/list:gap-x-0 @min-[38rem]/list:py-0">
+        <div key={row} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] grid-rows-[18px_20px_16px] items-center gap-x-2 gap-y-1 border-b py-3.5 @min-[38rem]/list:h-[43px] @min-[38rem]/list:grid-cols-[10%_16%_16%_minmax(0,1fr)_11%_9.25%_16px] @min-[38rem]/list:grid-rows-1 @min-[38rem]/list:gap-x-0 @min-[38rem]/list:py-0">
           <Skeleton className="h-2.5 w-12 max-w-[85%] @max-[38rem]/list:col-span-2 @max-[38rem]/list:row-start-3" />
           {[1, 2].map((person) => (
             <div key={person} className="flex min-w-0 items-center gap-2 @max-[38rem]/list:row-start-2 @min-[38rem]/list:pr-3">
@@ -380,12 +380,10 @@ function InboxConversation({ handle, search, onBack }: { handle: string; search:
       return requestJson(`/api/conversations/${encodeURIComponent(handle)}?${params}`, isConversationPage, { signal })
     },
     getNextPageParam: (page, _pages, cursor) => page.items.length === itemLimit && page.cursor > cursor ? page.cursor : undefined,
-    refetchInterval: (query) => query.state.data?.pages[0]?.conversation.status === "stored" ? 30_000 : false,
   })
   const conversation = thread.data?.pages[0]?.conversation
   const messages = thread.data?.pages.flatMap((page) => page.items) ?? []
   const people = conversation && participants(conversation)
-  const delivery = conversation && ownerDelivery(conversation)
   const lastItem = messages.reduce<ConversationItem | undefined>((last, item) => item.handle === conversation?.handle ? item : last, undefined)
   const receiptCursor = lastItem?.cursor
   const receiptCount = lastItem?.kind === "watch_digest" ? lastItem.count : undefined
@@ -393,7 +391,7 @@ function InboxConversation({ handle, search, onBack }: { handle: string; search:
   const csrf = session?.csrf
   useEffect(() => {
     if (!root || !receiptCursor || !csrf) return
-    void writeInboxAction(csrf, "read", [root], { cursor: receiptCursor, count: receiptCount })
+    void markInboxRead(csrf, [root], { cursor: receiptCursor, count: receiptCount })
       .then(({ updated }) => markInboxCacheRead(client, updated), () => undefined)
   }, [client, csrf, receiptCount, receiptCursor, root])
   const updatedAt = conversation?.updated_at ?? conversation?.created_at
@@ -449,10 +447,8 @@ function InboxConversation({ handle, search, onBack }: { handle: string; search:
           <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-xs text-muted-foreground">
             <div className="flex flex-wrap gap-1"><dt>Project</dt><dd className="font-mono wrap-anywhere"><ProjectName project={conversation.project} /></dd></div>
             <div className="flex flex-wrap gap-1"><dt>Address</dt><dd className="font-mono wrap-anywhere">{conversation.target || conversation.destination}</dd></div>
-            <div className="flex flex-wrap gap-1"><dt>Status</dt><dd>{delivery || conversation.status?.replace(/_/g, " ") || (conversation.open ? "Open" : "Closed")}</dd></div>
-            {conversation.owner_notify?.surface && <div className="flex flex-wrap gap-1"><dt>Surface</dt><dd>{conversation.owner_notify.surface}</dd></div>}
-            {conversation.owner_notify?.notified_at && <div className="flex flex-wrap gap-1"><dt>Notified</dt><dd><RelativeTime value={conversation.owner_notify.notified_at} /></dd></div>}
-            {conversation.owner_notify?.reason && <div className="flex flex-wrap gap-1"><dt>Reason</dt><dd>{conversation.owner_notify.reason}</dd></div>}
+            <div className="flex flex-wrap gap-1"><dt>Status</dt><dd className="capitalize">{conversation.status?.replaceAll("_", " ") || (conversation.open ? "Open" : "Closed")}</dd></div>
+            {conversation.for_owner && <div><dt className="sr-only">Routing</dt><dd>For owner</dd></div>}
             <div className="flex flex-wrap gap-1"><dt>Conversation ID</dt><dd className="font-mono wrap-anywhere">{conversation.handle}</dd></div>
             {updatedAt && <div className="flex flex-wrap gap-1"><dt>Updated</dt><dd><RelativeTime value={updatedAt} /></dd></div>}
           </dl>

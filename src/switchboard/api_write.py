@@ -18,6 +18,7 @@ from .core import CoreError
 from .guard import client_ip
 from .routes import RouteError
 from .slack.writes import Actor, WriteError
+from .targets import CaptainTargetError
 from .visibility import VisibilityError
 
 
@@ -67,7 +68,7 @@ class _SendBody(_Body):
 
 
 class _InboxActionBody(_Body):
-    action: Literal["read", "redeliver"]
+    action: Literal["read"]
     handles: list[str] = Field(min_length=1, max_length=50)
     cursor: int | None = Field(default=None, ge=1, le=2**63 - 1)
     count: int | None = Field(default=None, ge=0, le=2**63 - 1)
@@ -104,6 +105,8 @@ async def route_set(request: Request) -> JSONResponse:
             defaults=body.defaults.model_dump(exclude_none=True) if body.defaults else None,
             allow_override=body.allow_override, note=body.note,
         )
+    except CaptainTargetError as exc:
+        return JSONResponse({"error": "captain_target", "detail": str(exc)}, status_code=400)
     except (CoreError, BlockError, RouteError):
         return _error("route_not_saved")
     return JSONResponse({"id": out["id"]})
@@ -207,6 +210,8 @@ async def send(request: Request) -> JSONResponse:
         return _error("invalid_request")
     try:
         out = await request.app.state.core.send(_owner(request), **body.model_dump())
+    except CaptainTargetError as exc:
+        return JSONResponse({"error": "captain_target", "detail": str(exc)}, status_code=400)
     except (CoreError, BlockError):
         return _error("send_refused")
     fields = ("dry_run", "to", "block", "project", "route", "mode", "status", "handle", "conversation",
@@ -226,6 +231,8 @@ async def modes(request: Request) -> JSONResponse:
         row = await service.set(_owner(request), **body.model_dump(),
                                 preserve_actions="actions" not in body.model_fields_set,
                                 preserve_project="project" not in body.model_fields_set)
+    except CaptainTargetError as exc:
+        return JSONResponse({"error": "captain_target", "detail": str(exc)}, status_code=400)
     except ValueError:
         return _error("mode_not_saved")
     return JSONResponse({"space": row})
@@ -239,13 +246,7 @@ async def inbox_action(request: Request) -> JSONResponse:
         return _error("invalid_request")
     core = request.app.state.core
     handles = list(dict.fromkeys(body.handles))
-    if body.action == "redeliver":
-        if body.cursor is not None:
-            return _error("invalid_request")
-        updated = [handle for handle in handles if core.inbox.redeliver_owner(handle)]
-        if updated:
-            await core.owner_notify.flush()
-    elif body.cursor is not None:
+    if body.cursor is not None:
         updated = handles if core.inbox.mark_owner_read(handles[0], body.cursor, body.count) else []
     else:
         marks = ", ".join("?" for _ in handles)

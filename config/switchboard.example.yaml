@@ -14,12 +14,9 @@ version: 2
 # trusted_proxies: []
 # data_dir: ./data                              # usually set SWB_DATA_DIR instead
 # timezone: UTC
-# One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
+# A conversation pauses after this many turns.
 # A new send starts at zero. null switches it off.
 turn_cap: 200
-
-# Use the first configured owner chat in this list. Set [] to keep messages in the inbox.
-# owner_notify: ["telegram:home", "discord:home", "slack:team"]
 
 modes:
   default: watch                             # without this setting, the default is off

@@ -148,7 +148,6 @@ class Config:
     public_url_aliases: tuple[str, ...] = ()
     passkey_rp_id: str | None = None
     owner_emails: tuple[str, ...] = ()
-    owner_notify: tuple[str, ...] | None = None
     access_team_domain: str | None = None
     access_aud: str | None = None
     trusted_proxies: tuple[IPv4Network | IPv6Network, ...] = ()
@@ -506,11 +505,6 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
     for name in retired:
         blocks.pop(name)
         block_env.pop(name, None)
-    owner_notify = raw.get("owner_notify")
-    if "owner_notify" in raw and (not isinstance(owner_notify, list) or not all(
-        isinstance(value, str) and re.fullmatch(r"[^:\s]+:[^:\s]+", value) for value in owner_notify
-    )):
-        raise ConfigError("owner_notify must be a list of <block>:<space> addresses")
     cfg = Config(
         visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
@@ -520,7 +514,6 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         public_url_aliases=aliases,
         passkey_rp_id=rp_id,
         owner_emails=owner_emails,
-        owner_notify=tuple(dict.fromkeys(owner_notify)) if owner_notify is not None else None,
         access_team_domain=access.get("team_domain", access_env.get("CLOUDFLARE_ACCESS_TEAM_DOMAIN")) or None,
         access_aud=access.get("aud", access_env.get("CLOUDFLARE_ACCESS_AUD")) or None,
         trusted_proxies=_trusted_proxies(proxies),

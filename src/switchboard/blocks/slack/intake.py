@@ -34,6 +34,7 @@ from ...slack.routing import Target
 from ...slack.slack import CHANNEL_ID_RE, WorkspaceRuntime
 from ...slack.writes import WriteError
 from ...subject import display_subject, wake_text
+from ...targets import CAPTAIN_SLUG, captain_selection_error
 from ...trust import CLOSE, OPEN, neutralize
 
 SLACK_SENDER: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("slack_sender", default=None)
@@ -135,13 +136,16 @@ class SlackIntake(Block):
                 avatar = p.get("avatar_file")
                 personas[p["id"]] = Persona(id=p["id"], name=p.get("name") or p["id"], avatar=avatar, icon_url=None if avatar else p.get("icon_url"))
             targets: dict[str, Target] = {}
-            for slug, t in self.core.slug_map(found, dict(engine.config.target_aliases)).items():
+            slugs = self.core.slug_map(found, dict(engine.config.target_aliases))
+            for slug, t in slugs.items():
                 persona = (t.get("persona") or {}).get("id")
                 if t["kind"] == "project":
                     routed = self.core.route_address(AGENT, t["id"])
                     persona = ((by_address.get(str(routed)) or {}).get("persona") or {}).get("id") if routed else None
                 targets[slug] = Target(slug, t["kind"], t["id"], t.get("name") or t["id"], persona=persona, address=t["address"], project=t.get("project"))
-            engine.set_targets(targets, personas)
+            engine.set_targets(targets, personas, captain_error=(
+                captain_selection_error(found, slugs) if CAPTAIN_SLUG not in slugs else None
+            ))
             self.refreshed_at = self.core.clock()
             return self.describe()
 
@@ -279,6 +283,11 @@ class SlackIntake(Block):
                 self._drop(push, ChatDrop.EXTERNAL_BOT)
             return True, None
         link = push["permalink"]
+        if (target_ref or "").casefold() == CAPTAIN_SLUG and CAPTAIN_SLUG not in engine.targets:
+            if engine.store.claim_event(push):
+                self._drop(push, ChatDrop.CAPTAIN_TARGET)
+                await engine.tell_captain_choice(rt, push)
+            return True, None
         route = modes.project_route(self.name, project) if not target_ref else None
         if mode == "watch":
             if not legacy and not engine.store.claim_event(push):
@@ -293,6 +302,10 @@ class SlackIntake(Block):
                 return True, None
             target = await self.mode_target(target_ref, project, route=route)
             _, explicit = engine.route(rt, push, default_target=target.slug if target else None)
+            if push.get("captain_target_error"):
+                self._drop(push, ChatDrop.CAPTAIN_TARGET)
+                await engine.tell_captain_choice(rt, push)
+                return True, None
             routed = route is not None and target is not None and target.slug == push["target"] and not explicit
             if target is not None and target.slug == push["target"] and (routed or target.slug not in engine.targets):
                 push["target_kind"] = target.kind
@@ -395,6 +408,9 @@ class SlackIntake(Block):
                 self._drop(push, ChatDrop.CHANNEL_RESTRICTED)
             return False
         engine.route(rt, original)
+        if original.get("captain_target_error"):
+            self._drop(push, ChatDrop.CAPTAIN_TARGET)
+            return True
         engine.stamp(rt, original)
         if not engine.store.add_event(original):
             return True
