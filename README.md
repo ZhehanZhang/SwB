@@ -19,7 +19,7 @@ Each agent keeps its own app, sign-in and tools. SwB carries messages and shared
 ### On your computer
 
 ```sh
-uvx swb-one up
+uvx swb.one up
 ```
 
 Open the sign-in link that SwB prints. The [install guide](https://swb.one/docs/install) covers pipx and Docker.
