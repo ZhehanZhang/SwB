@@ -42,7 +42,7 @@ test('persists one address for Get started, docs, copy and Open in actions', asy
   });
 
   await openGetStarted(page);
-  await expect(indicator(page)).toHaveCount(0);
+  await expect(indicator(page)).toHaveAccessibleName(label);
   await address(page).fill(`${origin}/mcp`);
   await address(page).press('Enter');
   expect(await stored(page)).toBe(origin);
@@ -98,7 +98,7 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await indicator(page).click();
   const popover = page.getByRole('dialog');
   await expect(popover.getByRole('textbox', { name: label })).toHaveValue(origin);
-  await popover.getByRole('button', { name: 'Copy link with your address' }).click();
+  await popover.getByRole('button', { name: 'Copy link' }).click();
   const share = new URL(await clipboard(page));
   expect(share.search).toBe('?tab=remote');
   expect(share.hash).toBe(`#named-tunnel&swb=${encodeURIComponent(origin)}`);
@@ -107,8 +107,14 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await popover.getByRole('textbox', { name: label }).fill(update);
   await popover.getByRole('textbox', { name: label }).press('Enter');
   await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', `${update}/healthz`);
-  await popover.getByRole('button', { name: 'Clear' }).click();
-  await expect(indicator(page)).toHaveCount(0);
+  const clear = popover.getByRole('button', { name: 'Clear address' });
+  await clear.click();
+  await expect(indicator(page)).toHaveAccessibleName(label);
+  await expect(popover.getByRole('textbox', { name: label })).toBeFocused();
+  await expect(popover.getByRole('textbox', { name: label })).toHaveValue('');
+  await expect(clear).toHaveCount(0);
+  await expect(popover.getByRole('button', { name: 'Copy link' })).toBeDisabled();
+  await page.keyboard.press('Escape');
   await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', 'https://swb-your-team.example.net/healthz');
   await copyBlock(page, 'SWB_PUBLIC_URL=https://swb-your-team.example.net');
   expect(await stored(page)).toBeNull();
@@ -117,58 +123,103 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await expect(docs(page).getByRole('region', { name: 'Claude', exact: true }).locator('pre')).toContainText(example);
 });
 
-test('address trigger matches the language control and its aligned popover saves explicitly', async ({ page }) => {
-  await page.goto(`${install}?swb=${encodeURIComponent(origin)}`);
-  const trigger = indicator(page);
-  await expect(trigger).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
-  const dimensions = await page.locator('[data-header-item="address"], [data-header-item="language"]').evaluateAll((buttons) => buttons.map((button) => {
-    const style = getComputedStyle(button);
-    const svg = button.querySelector('svg')!;
-    return {
-      height: style.height, width: style.width, radius: style.borderRadius, padding: style.padding,
-      icon: svg.getBoundingClientRect().width, stroke: getComputedStyle(svg).strokeWidth,
-    };
-  }));
-  expect(dimensions).toHaveLength(2);
-  expect(dimensions[0]).toEqual(dimensions[1]);
-  await trigger.click();
+for (const variant of ['inline', 'joined'] as const) {
+  test(`address trigger matches the language control and its aligned ${variant} panel saves explicitly`, async ({ page }) => {
+    const query = variant === 'joined' ? '&address-popover=v2' : '';
+    await page.goto(`${install}?swb=${encodeURIComponent(origin)}${query}`);
+    const trigger = indicator(page);
+    await expect(trigger).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
+    const dimensions = await page.locator('[data-header-item="address"], [data-header-item="language"]').evaluateAll((buttons) => buttons.map((button) => {
+      const style = getComputedStyle(button);
+      const svg = button.querySelector('svg')!;
+      return {
+        height: style.height, width: style.width, radius: style.borderRadius, padding: style.padding,
+        icon: svg.getBoundingClientRect().width, stroke: getComputedStyle(svg).strokeWidth,
+      };
+    }));
+    expect(dimensions).toHaveLength(2);
+    expect(dimensions[0]).toEqual(dimensions[1]);
+    await trigger.click();
 
-  const popover = page.getByRole('dialog', { name: label });
-  const input = popover.getByRole('textbox', { name: label });
-  const save = popover.getByRole('button', { name: 'Save' });
-  const clear = popover.getByRole('button', { name: 'Clear' });
-  const copy = popover.getByRole('button', { name: 'Copy link with your address' });
-  await expect(popover).toBeFocused();
-  await expect(input).toHaveValue(origin);
-  await popover.evaluate((panel) => Promise.all(panel.getAnimations().map((animation) => animation.finished)));
-  const [buttonBox, panelBox, inputBox, clearBox, copyBox, saveBox] = await Promise.all(
-    [trigger, popover, input, clear, copy, save].map((item) => item.boundingBox()),
-  );
-  const width = page.viewportSize()!.width;
-  const panelRight = panelBox!.x + panelBox!.width;
-  if (width === 390) {
-    expect(Math.abs(panelBox!.x - 20)).toBeLessThanOrEqual(1);
-    expect(Math.abs(panelRight - width + 20)).toBeLessThanOrEqual(1);
-  } else {
-    expect(Math.abs(panelRight - buttonBox!.x - buttonBox!.width)).toBeLessThanOrEqual(1);
-  }
-  expect(Math.abs(clearBox!.x - inputBox!.x)).toBeLessThanOrEqual(1);
-  expect(Math.abs(saveBox!.x + saveBox!.width - inputBox!.x - inputBox!.width)).toBeLessThanOrEqual(1);
-  expect(Math.max(clearBox!.y, copyBox!.y, saveBox!.y) - Math.min(clearBox!.y, copyBox!.y, saveBox!.y)).toBeLessThanOrEqual(1);
+    const popover = page.getByRole('dialog', { name: label });
+    const input = popover.getByRole('textbox', { name: label });
+    const save = popover.getByRole('button', { name: 'Save' });
+    const clear = popover.getByRole('button', { name: 'Clear address' });
+    const copy = popover.getByRole('button', { name: 'Copy link' });
+    const field = popover.locator('[data-address-field]');
+    const saved = field.locator('[data-address-saved]');
+    await expect(popover.locator('form')).toHaveAttribute('data-address-variant', variant);
+    await expect(copy).toHaveAttribute('title', 'Copy link');
+    await expect(popover).toBeFocused();
+    await expect(input).toHaveValue(origin);
+    await popover.evaluate((panel) => Promise.all(panel.getAnimations().map((animation) => animation.finished)));
+    const [buttonBox, panelBox, fieldBox, inputBox, clearBox, copyBox, saveBox] = await Promise.all(
+      [trigger, popover, field, input, clear, copy, save].map((item) => item.boundingBox()),
+    );
+    const width = page.viewportSize()!.width;
+    const panelRight = panelBox!.x + panelBox!.width;
+    if (width === 390) {
+      expect(Math.abs(panelBox!.x - 20)).toBeLessThanOrEqual(1);
+      expect(Math.abs(panelRight - width + 20)).toBeLessThanOrEqual(1);
+    } else {
+      expect(panelBox!.width).toBe(320);
+      expect(Math.abs(panelRight - buttonBox!.x - buttonBox!.width)).toBeLessThanOrEqual(1);
+    }
+    expect(copyBox!.y + copyBox!.height).toBeLessThanOrEqual(fieldBox!.y);
+    expect(inputBox!.x + inputBox!.width).toBeLessThanOrEqual(clearBox!.x);
+    expect(clearBox!.x + clearBox!.width).toBeLessThanOrEqual(saveBox!.x);
+    expect(saveBox!.x + saveBox!.width).toBeLessThan(fieldBox!.x + fieldBox!.width);
+    await expect(save).toHaveCSS('border-inline-start-width', variant === 'joined' ? '1px' : '0px');
+    if (variant === 'joined') expect(saveBox!.height).toBe(inputBox!.height);
 
-  await page.keyboard.press('Tab');
-  await expect(input).toBeFocused();
-  await input.fill('example');
-  await save.click();
-  await expect(input).toHaveAttribute('aria-invalid', 'true');
-  expect(await stored(page)).toBe(origin);
-  const update = 'https://new-swb.example.org';
-  await input.fill(`${update}/mcp`);
-  await input.press('Tab');
-  expect(await stored(page)).toBe(origin);
-  await save.click();
-  await expect(input).toHaveValue(update);
-  expect(await stored(page)).toBe(update);
+    await page.keyboard.press('Tab');
+    await expect(input).toBeFocused();
+    await input.fill('example');
+    await save.click();
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(await stored(page)).toBe(origin);
+    const update = 'https://new-swb.example.org';
+    await input.fill(`${update}/mcp`);
+    await input.press('Tab');
+    expect(await stored(page)).toBe(origin);
+    await save.click();
+    await expect(input).toHaveValue(update);
+    expect(await stored(page)).toBe(update);
+    await expect(saved).toBeVisible();
+    await expect(saved).toBeHidden({ timeout: 2500 });
+    await input.fill(origin);
+    await input.press('Enter');
+    await expect(saved).toBeVisible();
+    await expect(popover.getByText('Address saved', { exact: true })).toHaveAttribute('role', 'status');
+    expect(await stored(page)).toBe(origin);
+    await input.fill(update);
+    await expect(saved).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(popover).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+}
+
+test('sets an address from the landing page and imports links on About', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/?address-popover=v2');
+  await indicator(page).click();
+  const panel = page.getByRole('dialog', { name: label });
+  const input = panel.getByRole('textbox', { name: label });
+  await expect(input).toHaveValue('');
+  await expect(panel.getByRole('button', { name: 'Clear address' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Copy link' })).toBeDisabled();
+  await input.fill(example);
+  await input.press('Enter');
+  await panel.getByRole('button', { name: 'Copy link' }).click();
+  const shared = new URL(await clipboard(page));
+  expect(shared.search).toBe('');
+  expect(shared.hash).toBe(`#swb=${encodeURIComponent(example)}`);
+  await page.goto(`/about${shared.hash.replace(encodeURIComponent(example), encodeURIComponent(origin))}`);
+  await expect(page).toHaveURL('/about');
+  await expect(indicator(page)).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
+  await openGetStarted(page);
+  await expect(address(page)).toHaveValue(origin);
 });
 
 test('accepts fragment and query prefill and preserves anchors and picker state', async ({ page }) => {
@@ -189,27 +240,31 @@ test('accepts fragment and query prefill and preserves anchors and picker state'
   await expect(address(page)).toHaveValue(origin);
 });
 
-test('prefills and fits the address panel in all eight locales', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const locale of locales) {
-    await page.goto(`${localize(locale, install)}?swb=${encodeURIComponent(origin)}`);
-    const trigger = page.locator('[data-header-item="address"]');
-    await expect(trigger).toHaveAttribute('title', new URL(origin).host);
-    await expect(page).toHaveURL(localize(locale, install));
-    await trigger.click();
-    const panel = page.getByRole('dialog');
-    await expect(panel.getByRole('textbox')).toHaveValue(origin);
-    const overflow = await panel.evaluate((element) => {
-      const { left, right } = element.getBoundingClientRect();
-      return Math.max(20 - left, right - innerWidth + 20, ...[...element.querySelectorAll('button')].map((button) => {
-        const rect = button.getBoundingClientRect();
-        return Math.max(left - rect.left, rect.right - right);
-      }));
-    });
-    expect(overflow, locale).toBeLessThanOrEqual(1);
-    await expect(panel.getByRole('button')).toHaveCount(3);
-  }
-});
+for (const preview of ['', 'address-popover=v2'] as const) {
+  test(`prefills and fits the ${preview ? 'joined' : 'inline'} address panel in all eight locales`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const locale of locales) {
+      const path = localize(locale, install);
+      const query = preview ? `?${preview}` : '';
+      await page.goto(`${path}${query}#swb=${encodeURIComponent(origin)}`);
+      const trigger = page.locator('[data-header-item="address"]');
+      await expect(trigger).toHaveAttribute('title', new URL(origin).host);
+      await expect(page).toHaveURL(`${path}${query}`);
+      await trigger.click();
+      const panel = page.getByRole('dialog');
+      await expect(panel.getByRole('textbox')).toHaveValue(origin);
+      const overflow = await panel.evaluate((element) => {
+        const { left, right } = element.getBoundingClientRect();
+        return Math.max(20 - left, right - innerWidth + 20, ...[...element.querySelectorAll('label, button')].map((control) => {
+          const rect = control.getBoundingClientRect();
+          return Math.max(left - rect.left, rect.right - right, control.scrollWidth - control.clientWidth);
+        }));
+      });
+      expect(overflow, locale).toBeLessThanOrEqual(1);
+      await expect(panel.getByRole('button')).toHaveCount(3);
+    }
+  });
+}
 
 test('rejects hostile field, fragment and query input without changing the saved address', async ({ page }) => {
   const dialogs: string[] = [];

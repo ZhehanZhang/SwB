@@ -27,7 +27,7 @@ test('header and all items stay within 0.5px across home and docs without a them
     const tabs = width === 390 ? [] : ['docs', 'setup', 'about'];
     const rest = width === 390 ? ['menu'] : [];
     expect(Object.keys(home)).toEqual([
-      'header', 'brand', ...tabs, width < 1024 ? 'search-icon' : 'search', 'language', 'github', ...rest,
+      'header', 'brand', ...tabs, width < 1024 ? 'search-icon' : 'search', 'address', 'language', 'github', ...rest,
     ]);
 
     for (const path of ['/docs', '/docs/install']) {
@@ -42,6 +42,34 @@ test('header and all items stay within 0.5px across home and docs without a them
         }
       }
     }
+  }
+});
+
+test('landing, About and docs render matching header control gaps before hydration', async ({ page }) => {
+  await page.route('**/_next/static/**/*.js', (route) => route.abort());
+  const gap = page.viewportSize()!.width === 390 ? 4 : 8;
+  let right: number | undefined;
+  for (const path of ['/', '/about', '/docs/install']) {
+    await page.goto(path);
+    const cluster = page.locator('[data-header-controls]');
+    await expect(cluster.locator('[data-header-item="address"]')).toBeVisible();
+    const layout = await cluster.evaluate((element) => {
+      const controls = [...element.querySelectorAll('[data-header-item]')]
+        .filter((control) => control.getClientRects().length)
+        .map((control) => control.getBoundingClientRect());
+      return {
+        columns: getComputedStyle(element).gridTemplateColumns.split(' ').length,
+        gaps: controls.slice(1).map((control, index) => control.left - controls[index].right),
+        right: element.getBoundingClientRect().right,
+        last: controls.at(-1)!.right,
+      };
+    });
+    expect(layout.gaps).toHaveLength(gap === 4 ? 4 : 3);
+    expect(layout.columns).toBe(layout.gaps.length + 1);
+    for (const measured of layout.gaps) expect(Math.abs(measured - gap), path).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.last - layout.right), path).toBeLessThanOrEqual(1);
+    right ??= layout.right;
+    expect(Math.abs(layout.right - right), path).toBeLessThanOrEqual(1);
   }
 });
 
