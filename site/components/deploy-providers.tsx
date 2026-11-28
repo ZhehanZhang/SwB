@@ -5,7 +5,7 @@ import { localize, type Locale } from '@/lib/i18n';
 
 type Mark = 'fly' | 'render' | 'railway' | 'cloudflare';
 
-export const deployRowClass = 'swb-button swb-button-outline grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] justify-start px-3 py-[3px] text-start leading-5 whitespace-nowrap transition-colors active:bg-fd-border motion-reduce:transition-none';
+export const deployRowClass = 'swb-button swb-button-outline grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-start px-3 py-[3px] text-start leading-5 whitespace-nowrap transition-colors active:bg-fd-border motion-reduce:transition-none';
 
 export function ProviderMark({ name }: { name: Mark }) {
   const size = name === 'render' ? 32 : 16;
@@ -28,9 +28,9 @@ export function DeployTile({ href, mark, name, plan, tunnel = false, grouped = f
       {tunnel ? (
         <svg aria-hidden="true" viewBox="0 0 16 16"><image href="/marks/cloudflare.svg" width="16" height="16" /></svg>
       ) : <ProviderMark name={mark} />}
-      <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2">
+      <span className="grid min-w-0 grid-cols-[auto_auto] items-baseline justify-start gap-x-2" data-provider-text>
         <strong className="whitespace-nowrap font-semibold">{name}</strong>{' '}
-        <span className="wrap-anywhere text-xs leading-4 font-normal whitespace-normal text-fd-muted-foreground">{plan}</span>
+        <span className="text-xs leading-4 font-normal whitespace-nowrap text-fd-muted-foreground" data-provider-plan>{plan}</span>
       </span>
       <Arrow aria-hidden="true" className="text-fd-muted-foreground" data-provider-arrow />
     </Link>
@@ -41,7 +41,7 @@ export function DeployProviders({ lang, landing = false }: { lang: Locale; landi
   return (
     <div className={landing
       ? 'grid auto-rows-fr overflow-hidden rounded-md border border-(--border-strong) min-[900px]:[contain:size]'
-      : 'not-prose grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-stretch gap-3'}
+      : 'not-prose grid gap-3'}
       data-deploy-providers>
       {Object.values(deployProviders).map((provider) => {
         const { mark, name, label, enabled } = provider;

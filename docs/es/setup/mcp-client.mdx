@@ -9,7 +9,7 @@ MCP es la forma estándar en que una app usa herramientas externas. Esta guía e
 
 Usa una app compatible con MCP remoto sobre Streamable HTTP. Este método permite a las apps llamar a herramientas por la web. La app también debe admitir cabeceras de petición personalizadas para la clave. Necesitas un cliente de propietario de SwB o una terminal en el ordenador de SwB.
 
-Para iniciar SwB en el mismo ordenador que la app, ejecuta `uvx swb-one up` en una carpeta vacía. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal. Consulta [Instalación](/es/docs/install) para ver más opciones.
+Para iniciar SwB en el mismo ordenador que la app, ejecuta `uvx swb.one up` en una carpeta vacía. Abre el enlace de inicio de sesión de un solo uso que aparece en tu terminal. Consulta [Instalación](/es/docs/install) para ver más opciones.
 
 Claude, ChatGPT, Grok y los agentes de programación tienen sus propias páginas con inicio de sesión OAuth. Usa esas páginas para esas apps.
 
@@ -32,7 +32,7 @@ Deja que tu agente configure la app si puede editar sus ajustes en local. Guarda
 Dile al agente un nombre corto para la app, por ejemplo `notes-bot`. SwB muestra este nombre en los mensajes de la app.
 ### Obtener el código de emparejamiento
 
-Pide a un agente propietario de SwB que llame a `connect_code` con el nombre de la app. También puedes ejecutar `uvx swb-one connect mcp-client --choose agent=notes-bot` desde la carpeta de la instancia de SwB. Cambia `notes-bot` por el nombre de tu app.
+Pide a un agente propietario de SwB que llame a `connect_code` con el nombre de la app. También puedes ejecutar `uvx swb.one connect mcp-client --choose agent=notes-bot` desde la carpeta de la instancia de SwB. Cambia `notes-bot` por el nombre de tu app.
 ### Obtener la clave
 
 En el ordenador donde se ejecuta la app, abre una carpeta privada en tu terminal. Cambia `https://swb.example.com` por tu dirección de SwB. Mantén `/connect` al final. Para un SwB local, usa `http://localhost:8870/connect` con el puerto que aparece al arrancar. Escribe el código de emparejamiento cuando el comando lo pida, en un plazo de 10 minutos. Lo que escribes queda oculto.

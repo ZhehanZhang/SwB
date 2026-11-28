@@ -18,7 +18,7 @@ Um einen Code in der Konsole zu erhalten, [melden Sie sich mit einem Passkey an]
 Führen Sie diesen Befehl auf dem Gerät aus. Ersetzen Sie die Beispieladresse durch Ihre HTTPS-Adresse von SwB. Für SwB auf diesem Gerät verwenden Sie `http://127.0.0.1:8870`.
 
 ```sh
-uvx swb-one companion connect https://swb.example.com --cap notify
+uvx swb.one companion connect https://swb.example.com --cap notify
 ```
 
 Geben Sie den Kopplungscode an der verdeckten Eingabeaufforderung ein. Der Code gilt einmalig und läuft nach 10 Minuten ab. Das Audit-Protokoll vermerkt, wer ihn erstellt hat.
@@ -64,13 +64,13 @@ Befehle und unterstützte Agenten beschreibt [Lokale Sitzungen](/de/docs/blocks/
 
 Die Kopplung startet den Companion. Mit `swb companion run` starten Sie ihn erneut. Mit `swb companion status` sehen Sie die lokale Geräte-ID und die Funktionen.
 
-Wenn Sie das Gerät mit `uvx` gekoppelt haben, ersetzen Sie `swb` durch `uvx swb-one`. Im Vordergrund läuft der Companion direkt in Python.
+Wenn Sie das Gerät mit `uvx` gekoppelt haben, ersetzen Sie `swb` durch `uvx swb.one`. Im Vordergrund läuft der Companion direkt in Python.
 
 Das Gerät baut jede Verbindung zu SwB selbst auf.
 
 ## Im Hintergrund ausführen
 
-Ein Hintergrunddienst startet den Companion automatisch. Installieren Sie SwB mit `uv tool install swb-one`.
+Ein Hintergrunddienst startet den Companion automatisch. Installieren Sie SwB mit `uv tool install swb.one`.
 
 Fügen Sie für eine neue Kopplung `--no-run` zu Ihren Kopplungsoptionen hinzu. Führen Sie `swb companion connect` mit diesen Optionen aus. Der Befehl endet nach der Kopplung. Beenden Sie einen laufenden Companion im Terminal, bevor Sie den Dienst installieren. Verwenden Sie für die Dienstbefehle das installierte `swb`.
 

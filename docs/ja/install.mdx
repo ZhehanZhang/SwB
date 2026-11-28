@@ -5,7 +5,7 @@ description: uvx、pipx、Docker のいずれかで SwB をインストールし
 
 {/* prepublication */}
 
-SwB は Linux、macOS、Windows で動きます。ソースから SwB をビルドするときは [Docker Compose](/ja/docs/deploy#docker-compose) の手順に従ってください。以下の方法は、パッケージとイメージの公開後に使えます。
+SwB は Linux、macOS、Windows で動きます。ソースから SwB をビルドするときは [Docker Compose](/ja/docs/deploy#docker-compose) の手順に従ってください。
 
 ## インストールして起動する
 
@@ -16,22 +16,22 @@ SwB のファイル用に空のフォルダーを用意してください。`swb
     [uv をインストール](https://docs.astral.sh/uv/getting-started/installation/)してください。SwB には Python 3.12 以降が必要です。
 
     ```bash
-    uvx swb-one up
+    uvx swb.one up
     ```
 
-    uvx が SwB をダウンロードして起動します。ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。ほかの例では、先頭の `swb` を `uvx swb-one` に置き換えてください。
+    uvx が SwB をダウンロードして起動します。ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。ほかの例では、先頭の `swb` を `uvx swb.one` に置き換えてください。
   </Tab>
   <Tab value="pipx">
     [pipx をインストール](https://pipx.pypa.io/stable/how-to/install-pipx.html)してください。SwB には Python 3.12 以降が必要です。
 
     ```bash
-    pipx install swb-one
+    pipx install swb.one
     swb up
     ```
 
     pipx は、現在のユーザーアカウントに `swb` コマンドをインストールします。ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。
 
-    pipx が古い Python を使う場合は、`pipx install --python 3.12 swb-one` を使ってください。
+    pipx が古い Python を使う場合は、`pipx install --python 3.12 swb.one` を使ってください。
   </Tab>
   <Tab value="Docker">
     [Docker をインストール](https://docs.docker.com/get-started/get-docker/)してください。
@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 このリクエストはサインイン前でも使えて、`status` と `version` を返します。`swb status` を実行するか、オーナーキーを付けて `/healthz` を呼び出すと、ブロックとその状態、不足している変数を一覧できます。
 
+公開の SwB サーバーでは、その HTTPS アドレスを使ってください。
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## サーバーコマンド
 
 コマンドのグループは `swb --help` で確認できます。各コマンドのオプションは、そのコマンドに `--help` を付けて確認してください。
@@ -90,4 +96,4 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 {/* prepublication */}
 
-公開後は、PyPI が `swb-one` パッケージを配布します。GitHub Container Registry が `ghcr.io/zhehanzhang/swb` イメージを配布します。特定のリリースを選ぶときは、`1.0.0` のようにバージョンを指定してください。イメージタグ `latest` は最新の安定版リリースを指します。
+PyPI が `swb.one` パッケージを配布します。GitHub Container Registry が `ghcr.io/zhehanzhang/swb` イメージを配布します。特定のリリースを選ぶときは、`1.0.0` のようにバージョンを指定してください。イメージタグ `latest` は最新の安定版リリースを指します。

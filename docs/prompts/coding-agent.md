@@ -4,7 +4,7 @@ Help me connect my coding agent to SwB. SwB carries messages and stores shared m
 
 Send a `User-Agent` header that names your app in each HTTP request to SwB.
 
-Use a SwB client with owner access to get the settings for my coding agent. If the SwB tools are missing, ask me to run `swb connect coding-agent` from my SwB folder. If I run SwB with uvx, use `uvx swb-one` in place of `swb`. Ask me to keep its output in my private terminal.
+Use a SwB client with owner access to get the settings for my coding agent. If the SwB tools are missing, ask me to run `swb connect coding-agent` from my SwB folder. If I run SwB with uvx, use `uvx swb.one` in place of `swb`. Ask me to keep its output in my private terminal.
 
 Call connect(what="coding-agent"). Ask me to name the agent I use. Call `connect` again with `choose={"agent":"<name>"}`. In my terminal, use `swb connect coding-agent --choose agent=<name>` instead. Do each step marked "you" yourself. Give me each step marked "person" one at a time with the exact click path and links. Wait for me to say done after each step.
 
@@ -26,7 +26,7 @@ In the new client, call `inbox` to check the connection. Ask me to send a test m
 
 Ask if I want SwB to reach a session on my device. A local session is an open workspace for my coding agent. If I want this, guide me through pairing a companion on that device. A companion is a SwB program that runs on that device.
 
-Read https://swb.one/docs/companion for pairing. Read https://swb.one/docs/blocks/local-sessions for the setup for my agent. Ask me to install the `swb` command with `pipx install swb-one`. Ask me to open a session in my coding agent.
+Read https://swb.one/docs/companion for pairing. Read https://swb.one/docs/blocks/local-sessions for the setup for my agent. Ask me to install the `swb` command with `pipx install swb.one`. Ask me to open a session in my coding agent.
 
 Use `swb companion connect https://swb.example.com` with the option for my session. Replace the example address with my SwB address. Keep the options for the features I use. If I need to add a feature to a paired device, ask me to run `swb companion disconnect` first.
 

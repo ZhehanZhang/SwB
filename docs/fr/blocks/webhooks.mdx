@@ -24,7 +24,9 @@ Le propriétaire gère les webhooks. Appelez `webhook_create` avec un nom, une m
 
 Collez l'URL renvoyée dans les paramètres de webhook du fournisseur. Pour cet exemple, récupérez le secret de signature dans Stripe. Un secret de signature est une clé partagée qui permet à SwB de vérifier que l'événement vient bien du fournisseur.
 
-Ouvrez le lien de saisie, qui mène à la page où le propriétaire enregistre le secret. Enregistrez-y le secret. SwB garde privé le secret enregistré.
+Un lien de saisie ouvre la page où le propriétaire enregistre le secret. Connectez-vous à SwB en tant que propriétaire. Ouvrez ensuite le lien de saisie. Enregistrez-y le secret. SwB garde privé le secret enregistré.
+
+Pour `bearer`, `path`, `hmac-sha256` et `hmac-sha1`, utilisez un secret aléatoire d'au moins 32 caractères. Utilisez au moins 10 caractères distincts.
 
 Si votre adresse SwB utilise Cloudflare Access, définissez la [stratégie Cloudflare Access](/fr/docs/cloudflare#cloudflare-access) de `/hooks/*` sur **Bypass**.
 
@@ -80,6 +82,8 @@ Appelez `webhook_rotate` avec le nom du webhook pour obtenir un lien de saisie p
 
 Définissez `grace_s` pour garder l'ancien secret valide après l'enregistrement de son remplaçant. La période de grâce commence à l'appel de l'outil et dure jusqu'à sept jours. Pour les webhooks sortants, SwB signe avec les deux secrets après le changement et pendant cette période. Si le destinataire change d'URL, enregistrez la nouvelle URL par le même lien de saisie.
 
+Pour un webhook sortant, utilisez `allow_private` et `senders` pour changer ses paramètres. Omettez les deux champs pour garder leurs valeurs actuelles.
+
 Appelez `webhook_revoke` avec le nom du webhook pour arrêter le webhook et supprimer ses secrets enregistrés. Les requêtes vers une URL entrante révoquée reçoivent le code `410`.
 
 ## Envoyer des messages
@@ -93,7 +97,17 @@ Appelez `webhook_create` avec un nom et `direction` défini sur `out`.
 }
 ```
 
-Ouvrez le lien de saisie pour enregistrer l'URL HTTPS publique du destinataire et le secret de signature. Transmettez le même secret de signature `whsec_` au destinataire par un canal privé.
+Par défaut, SwB exige un destinataire HTTPS public sur le port 443. Il bloque les adresses privées, de bouclage et de liaison locale, y compris celles qui donnent accès aux données des instances cloud. Les adresses de bouclage mènent à l'hôte SwB. Les adresses de liaison locale mènent uniquement au réseau local.
+
+Le propriétaire peut définir `allow_private` sur `true` pour ce webhook afin d'autoriser ces adresses ou d'autres ports HTTPS.
+
+SwB résout les adresses IP du destinataire une fois par livraison. Il lie la connexion à la première adresse obtenue.
+
+Par défaut, seul le propriétaire peut envoyer. Un agent appairé a besoin d'une autorisation `senders` pour utiliser une cible `webhook:out`. Ajoutez une adresse d'agent comme `agent:claude` à `senders` pour lui donner accès à ce webhook.
+
+Pour un appelant autre que le propriétaire, SwB renvoie `No such target.` pour une cible inexistante ou hors de ses autorisations. Demandez au propriétaire de vérifier le nom de la cible et votre accès.
+
+Connectez-vous à SwB en tant que propriétaire. Ouvrez ensuite le lien de saisie. Enregistrez l'URL HTTPS du destinataire et le secret de signature. Transmettez le même secret de signature `whsec_` au destinataire par un canal privé.
 
 Utilisez `send` avec `to` défini sur `webhook:out:alerts`. SwB envoie ce corps JSON dans une requête `POST`.
 
@@ -152,8 +166,7 @@ Pour les méthodes qui vérifient l'horodatage, la tolérance est l'écart maxim
 | Paramètre | Limite |
 | - | - |
 | Corps de la requête | 256 Kio par défaut. Définissez `blocks.webhook.max_body_kb` sur un nombre entier de 1 à 1024 |
-| Nouveaux événements vérifiés par webhook, toutes adresses confondues | 600 par période de 10 minutes |
-| Échecs de vérification par webhook et par adresse IP cliente | 20 par période de 10 minutes. Une requête vérifiée est toujours acceptée |
+| Échecs de vérification par webhook et par adresse IP cliente | 20 par période de 10 minutes |
 | Requêtes vers des adresses erronées par adresse IP cliente | 20 par période de 10 minutes |
 | Fenêtre de détection des rejeux pour Stripe, Linear, Sentry, Standard Webhooks et HMAC | 30 jours |
 | Tolérance d'horodatage pour Stripe et Standard Webhooks | 300 secondes par défaut |
@@ -161,6 +174,8 @@ Pour les méthodes qui vérifient l'horodatage, la tolérance est l'écart maxim
 | Tolérance d'horodatage personnalisée pour Stripe, Linear et Standard Webhooks | Définissez `tolerance_s` entre 1 et 3600 secondes |
 | Détection des rejeux pour Sentry et HMAC | SwB détecte uniquement les corps répétés |
 | Détection des rejeux pour bearer et path | SwB vérifie uniquement le secret |
+
+SwB vérifie la signature ou le secret avant d'appliquer la limite d'échecs. Après 20 échecs pour le même webhook et la même adresse IP cliente en 10 minutes, les échecs suivants reçoivent `429`. Chaque échec compté expire après 10 minutes. Les requêtes vérifiées restent acceptées.
 
 SwB utilise `trusted_proxies` pour trouver l'adresse IP cliente quand un serveur de confiance transmet les requêtes.
 
@@ -172,6 +187,8 @@ SwB utilise `trusted_proxies` pour trouver l'adresse IP cliente quand un serveur
 | - | - | - |
 | `stripe` | `Stripe-Signature` | Le secret de signature `whsec_` du point de terminaison dans le [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) |
 
+L'hexadécimal utilise les chiffres de `0` à `9` et les lettres de `a` à `f`. Dans les signatures Stripe, SwB exige des lettres hexadécimales minuscules.
+
 SwB compare l'heure signée à son horloge, avec une tolérance par défaut de 300 secondes.
 
 ### Linear
@@ -180,13 +197,15 @@ SwB compare l'heure signée à son horloge, avec une tolérance par défaut de 3
 | - | - | - |
 | `linear` | `Linear-Signature` | Le secret de signature dans les [paramètres de webhook de Linear](https://linear.app/developers/webhooks) |
 
-SwB vérifie `webhookTimestamp` dans le corps signé, avec une tolérance par défaut de 60 secondes.
+Dans les signatures Linear, SwB accepte les lettres hexadécimales majuscules et minuscules. SwB vérifie `webhookTimestamp` dans le corps signé, avec une tolérance par défaut de 60 secondes.
 
 ### Sentry
 
 | `verify` | En-tête | Origine du secret |
 | - | - | - |
 | `sentry` | `Sentry-Hook-Signature` | Le secret client d'une [intégration interne Sentry](https://docs.sentry.io/integrations/integration-platform/internal-integration/) |
+
+Dans les signatures Sentry, SwB accepte les lettres hexadécimales majuscules et minuscules.
 
 ### Svix et Standard Webhooks
 
@@ -201,7 +220,7 @@ SwB vérifie `webhookTimestamp` dans le corps signé, avec une tolérance par d�
 | - | - | - |
 | `hmac-sha1` | `x-vercel-signature` | Le secret obtenu à la [création du webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) ou le secret client de l'Integration Console |
 
-Définissez `header` sur `x-vercel-signature`. Utilisez `"encoding": "hex"` et `"prefix": ""` pour une signature hexadécimale brute. L'hexadécimal utilise les chiffres de `0` à `9` et les lettres de `a` à `f`.
+Définissez `header` sur `x-vercel-signature`. Définissez `"encoding": "hex"`. Définissez `"prefix": ""` pour une signature hexadécimale brute. Dans les signatures Vercel, SwB accepte les lettres hexadécimales majuscules et minuscules.
 
 ### Home Assistant
 
@@ -236,7 +255,13 @@ Dans [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/849632644698
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | Un secret aléatoire que vous générez pour ce webhook |
 
-Utilisez la vérification par chemin pour les expéditeurs qui savent uniquement appeler une URL. Choisissez un secret aléatoire d'au moins 16 lettres ou chiffres. Enregistrez-le par le lien de saisie. À la fin de l'URL, remplacez `<secret>` par le secret enregistré. Traitez l'URL entière comme un secret. SwB exclut les secrets de chemin de son journal d'accès.
+Utilisez la vérification par chemin pour les expéditeurs qui se limitent à appeler une URL. Générez un secret de chemin aléatoire avec OpenSSL.
+
+```sh
+openssl rand -hex 32
+```
+
+Enregistrez-le par le lien de saisie. À la fin de l'URL, remplacez `<secret>` par le secret enregistré. Traitez l'URL entière comme un secret. SwB exclut les secrets de chemin de son journal d'accès.
 
 Dans IFTTT, choisissez [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request). Définissez la méthode sur `POST`. Saisissez l'URL complète.
 
@@ -246,7 +271,7 @@ Dans IFTTT, choisissez [**Make a web request**](https://ifttt.com/maker_webhooks
 | - | - | - |
 | `hmac-sha256` | `X-Signature-256` | Un secret aléatoire que vous générez pour ce webhook |
 
-HMAC calcule une signature à partir du corps avec un secret partagé. Définissez `header` sur `X-Signature-256`, `encoding` sur `hex` et `prefix` sur `sha256=`.
+HMAC calcule une signature à partir du corps avec un secret partagé. Définissez `header` sur `X-Signature-256`. Définissez `encoding` sur `hex`. Définissez `prefix` sur `sha256=`. Les deux méthodes HMAC acceptent les lettres majuscules et minuscules dans les signatures hexadécimales.
 
 Générez un secret dans un fichier privé avec [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/). Enregistrez sa valeur par le lien de saisie.
 

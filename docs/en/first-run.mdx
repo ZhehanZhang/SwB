@@ -7,7 +7,7 @@ description: Make SwB reachable, sign in and see your instance.
 
 {/* prepublication */}
 
-After package publication, run `uvx swb-one up` in an empty folder. Open the one-time sign-in link from your terminal within five minutes. SwB uses `http://localhost:8870` by default. If you set `SWB_PORT`, SwB uses that port in the address. For other ways to start, including a source build, see [Install](/docs/install).
+Run `uvx swb.one up` in an empty folder. Open the one-time sign-in link from your terminal within five minutes. SwB uses `http://localhost:8870` by default. If you set `SWB_PORT`, SwB uses that port in the address. For other ways to start, including a source build, see [Install](/docs/install).
 
 ## Get a public address
 
@@ -16,7 +16,7 @@ Claude, ChatGPT and Grok run in the cloud. They need a public HTTPS address to r
 Install [cloudflared](https://developers.cloudflare.com/tunnel/downloads/). Make sure your terminal can run `cloudflared --version`. If SwB is running, stop it first. Run this command in your SwB instance folder.
 
 ```bash
-uvx swb-one up --tunnel cloudflare
+uvx swb.one up --tunnel cloudflare
 ```
 
 SwB opens a Cloudflare Quick Tunnel and prints the public MCP address. Each restart with this option gives you a new address. Update the address in your apps.

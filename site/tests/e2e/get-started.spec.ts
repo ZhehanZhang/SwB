@@ -52,12 +52,12 @@ test('switches run locations and copies the release install commands', async ({ 
   const run = (kind: string) => setup(page).locator(`[data-start-run="${kind}"]`);
   const read = () => page.evaluate(() => navigator.clipboard.readText());
   await expect(tile(page, 'On your computer')).toHaveAttribute('aria-pressed', 'true');
-  await expect(run('local').getByText('uvx swb-one up', { exact: true })).toBeVisible();
+  await expect(run('local').getByText('uvx swb.one up', { exact: true })).toBeVisible();
   await run('local').getByRole('button', { name: 'Copy command', exact: true }).click();
-  expect(await read()).toBe('uvx swb-one up');
+  expect(await read()).toBe('uvx swb.one up');
   await run('local').getByText('Use pipx', { exact: true }).click();
   await run('local').getByRole('button', { name: 'Copy command', exact: true }).last().click();
-  expect(await read()).toBe('pipx install swb-one\nswb up');
+  expect(await read()).toBe('pipx install swb.one\nswb up');
 
   await tile(page, 'On your server').click();
   await expect(run('local')).toBeHidden();
@@ -202,7 +202,7 @@ test.describe('server fallback', () => {
   test('shows local setup and every agent in the server HTML', async ({ page }) => {
     await page.goto(`${start}?agents=codex&run=cloud`);
     await expect(tile(page, 'On your computer')).toHaveAttribute('aria-pressed', 'true');
-    await expect(setup(page).getByText('uvx swb-one up', { exact: true })).toBeVisible();
+    await expect(setup(page).getByText('uvx swb.one up', { exact: true })).toBeVisible();
     await expect(setup(page).getByRole('heading', { level: 3 })).toHaveText(fallbackAgents);
     await expect(agent(page, 'Codex').locator('pre')).toContainText('codex mcp login swb');
   });

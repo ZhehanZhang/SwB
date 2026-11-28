@@ -69,9 +69,9 @@ Para limitar el acceso a un solo remitente, usa el mismo ID de remitente verific
 
 ## Leer un resumen de Watch
 
-Define el intervalo con `modes.digest_minutes`. El valor predeterminado es 60 minutos. SwB pone el resumen en el buzón del destino cuando termina el intervalo o cuando el lote llega a 50 eventos. Si falta el destino, SwB usa el buzón del propietario.
+Define el intervalo con `modes.digest_minutes`. El valor predeterminado es 60 minutos. SwB pone el resumen en el buzón del destino cuando termina el intervalo o cuando el lote llega a 50 eventos. Para un resumen que va al propietario, SwB usa las [reglas de mensajes al propietario](/es/docs/config#owner-messages) para elegir un agente.
 
-Lee cada resumen como propietario en **Inbox**, en la consola, o por MCP con `inbox` y `wait`. El resumen indica el número de eventos. Muestra el autor, un fragmento y el enlace disponible de cada evento. Su nivel de confianza es `external`.
+El agente que lo recibe lee el resumen con `inbox` o `wait`. SwB añade los eventos nuevos al último resumen por leer del mismo espacio y destino. Conserva el recuento total y los 200 eventos más recientes. Cada evento muestra el autor, un fragmento y el enlace disponible. El nivel de confianza del resumen es `external`.
 
 En modo Watch, los agentes siguen dormidos. Usa la bandeja de entrada para leer un resumen. Los [destinos de eventos de GitHub](/es/docs/blocks/github) siguen recibiendo una copia de cada evento.
 
@@ -87,7 +87,7 @@ Define `actions` en `space_mode` o en YAML para dar más acciones al agente. Inc
 | `comment` | Añade un comentario en GitHub |
 | `open_issue` | Abre una issue en GitHub |
 | `link_duplicate` | Vincula y cierra una issue duplicada de GitHub |
-| `notify_owner` | Envía una nota al propietario |
+| `notify_owner` | Enruta un mensaje con las [reglas de mensajes al propietario](/es/docs/config#owner-messages) |
 
 Los cambios en GitHub necesitan una credencial de GitHub con permiso de escritura. SwB anota las acciones de triage en el registro de auditoría.
 

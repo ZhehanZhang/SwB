@@ -7,7 +7,7 @@ description: Rendez SwB accessible, connectez-vous et découvrez votre instance.
 
 {/* prepublication */}
 
-Après la publication du paquet, exécutez `uvx swb-one up` dans un dossier vide. Dans les cinq minutes, ouvrez le lien de connexion à usage unique affiché dans votre terminal. Par défaut, SwB utilise `http://localhost:8870`. Si vous définissez `SWB_PORT`, SwB utilise ce port dans l'adresse. Pour les autres façons de démarrer, dont la compilation depuis le code source, consultez [Installation](/fr/docs/install).
+Exécutez `uvx swb.one up` dans un dossier vide. Dans les cinq minutes, ouvrez le lien de connexion à usage unique affiché dans votre terminal. Par défaut, SwB utilise `http://localhost:8870`. Si vous définissez `SWB_PORT`, SwB utilise ce port dans l'adresse. Pour les autres façons de démarrer, dont la compilation depuis le code source, consultez [Installation](/fr/docs/install).
 
 ## Obtenir une adresse publique
 
@@ -16,7 +16,7 @@ Claude, ChatGPT et Grok fonctionnent dans le cloud. Ils ont besoin d'une adresse
 Installez [cloudflared](https://developers.cloudflare.com/tunnel/downloads/). Vérifiez que la commande `cloudflared --version` fonctionne dans votre terminal. Si SwB est en cours d'exécution, arrêtez-le d'abord. Exécutez cette commande dans le dossier de votre instance SwB.
 
 ```bash
-uvx swb-one up --tunnel cloudflare
+uvx swb.one up --tunnel cloudflare
 ```
 
 SwB ouvre un Cloudflare Quick Tunnel et affiche l'adresse MCP publique. Chaque redémarrage avec cette option donne une nouvelle adresse. Mettez à jour l'adresse dans vos applications.

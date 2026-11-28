@@ -178,7 +178,7 @@ class Service:
         prefix = Path(sys.prefix)
         if (not executable.is_absolute() or "archive-v0" in prefix.parts
                 or (".cache" in prefix.parts and "pipx" in prefix.parts)):
-            raise CompanionError("Install a persistent swb command with uv tool install swb-one first.")
+            raise CompanionError("Install a persistent swb command with uv tool install swb.one first.")
         if self.platform == "win32":
             executable = executable.with_name("pythonw.exe")
         if not executable.is_file():

@@ -25,9 +25,7 @@ export function SiteHeader({ lang, repository, docsOnlyControl, links = headerLi
 }) {
   const path = usePathname();
   const active = links.findLast(({ href }) => path === href || path.startsWith(`${href}/`));
-  const controlsGrid = docsOnlyControl
-    ? 'grid-cols-[2.25rem_4rem_repeat(4,2.25rem)] sm:grid-cols-[2.25rem_4rem_repeat(3,2.25rem)] lg:grid-cols-[12rem_4rem_repeat(3,2.25rem)]'
-    : 'grid-cols-[repeat(5,2.25rem)] sm:grid-cols-[repeat(4,2.25rem)] lg:grid-cols-[12rem_repeat(3,2.25rem)]';
+  const controlsGrid = 'grid-cols-[2.25rem_4rem_repeat(4,2.25rem)] sm:grid-cols-[2.25rem_4rem_repeat(3,2.25rem)] lg:grid-cols-[12rem_4rem_repeat(3,2.25rem)]';
 
   return (
     <header id="nd-nav" className="sticky top-0 z-30 h-(--swb-header-height) border-b bg-fd-background/95 backdrop-blur-sm">
@@ -41,7 +39,7 @@ export function SiteHeader({ lang, repository, docsOnlyControl, links = headerLi
         <div data-header-controls className={`ml-auto grid items-center gap-1 sm:gap-2 ${controlsGrid}`}>
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={headerIconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:text-center" />
-          {docsOnlyControl}
+          {docsOnlyControl ?? <span data-header-slot="version" aria-hidden="true" className="w-16" />}
           <SwbAddressControl lang={lang} />
           <LanguageSelect data-header-item="language" className={headerIconButton}><Languages aria-hidden="true" className="size-4.5" /></LanguageSelect>
           <a data-header-item="github" className={`swb-button swb-button-icon ${headerIconButton}`} aria-label="GitHub" href={repository} target="_blank" rel="noreferrer">

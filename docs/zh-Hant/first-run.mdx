@@ -7,7 +7,7 @@ description: 讓 SwB 可從外部連線，登入並查看你的執行個體。
 
 {/* prepublication */}
 
-套件發布後，在空資料夾中執行 `uvx swb-one up`，並在 5 分鐘內開啟終端機顯示的一次性登入連結。SwB 預設使用 `http://localhost:8870`。如果設定了 `SWB_PORT`，網址會改用該連接埠。其他啟動方式（包括從原始碼建置）見[安裝](/zh-Hant/docs/install)。
+在空資料夾中執行 `uvx swb.one up`，並在 5 分鐘內開啟終端機顯示的一次性登入連結。SwB 預設使用 `http://localhost:8870`。如果設定了 `SWB_PORT`，網址會改用該連接埠。其他啟動方式（包括從原始碼建置）見[安裝](/zh-Hant/docs/install)。
 
 ## 取得公開網址
 
@@ -16,7 +16,7 @@ Claude、ChatGPT 和 Grok 都在雲端執行，需要一個公開的 HTTPS 網�
 安裝 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)，並確認終端機可以執行 `cloudflared --version`。如果 SwB 正在執行，先停止它。然後在 SwB 執行個體資料夾中執行下面的指令。
 
 ```bash
-uvx swb-one up --tunnel cloudflare
+uvx swb.one up --tunnel cloudflare
 ```
 
 SwB 會開啟一條 Cloudflare Quick Tunnel，並印出公開的 MCP 網址。每次加上這個選項重新啟動，都會得到新的網址，這時要更新各個應用程式中的網址。

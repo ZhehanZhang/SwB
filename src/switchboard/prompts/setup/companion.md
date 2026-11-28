@@ -12,15 +12,15 @@ For a new pairing, get a pairing code. If you can create a private file on my de
 
 Otherwise, ask me to sign in to the console with a passkey. Ask me to select **Pair a device** under **Settings** and **Connections**. The pairing code works once within ten minutes.
 
-For SwB on this device, use its local address, such as `http://127.0.0.1:8870`. After release, use this command for a new foreground pairing. Include my SwB address and selected options. Before release, use `swb companion connect` from a source install.
+For SwB on this device, use its local address, such as `http://127.0.0.1:8870`. Use this command for a new foreground pairing. Include my SwB address and selected options. Before release, use `swb companion connect` from a source install.
 
 ```sh
-uvx swb-one companion connect https://swb.example.com
+uvx swb.one companion connect https://swb.example.com
 ```
 
 For a new foreground pairing, ask me to run the pairing command on my device. Ask me to enter the code at the hidden prompt. Ask me to leave the command running. The foreground uses Python directly. For an existing foreground pairing, ask me to start the companion with `swb companion run` if needed. Use the same way of running `swb` as for pairing.
 
-If I choose the background service, install SwB with `uv tool install swb-one` after release. Before release, use the installed source build. Follow the background section of the guide for my operating system. On macOS, the SwB release automatically installs and verifies the signed SwB Companion app when setting up the service. `launchd` uses that app to start the service.
+If I choose the background service, install SwB with `uv tool install swb.one` For a source build, use the installed source build. Follow the background section of the guide for my operating system. On macOS, the SwB release automatically installs and verifies the signed SwB Companion app when setting up the service. `launchd` uses that app to start the service.
 
 For a new pairing with the service, use `swb companion connect https://swb.example.com --no-run` with my SwB address and selected options. Ask me to enter the code at the hidden prompt. For an existing pairing, reuse the device key. Ask me to stop any foreground run. Ask me to run `swb companion service install` with the installed `swb`. Check the connection with `swb companion status`.
 

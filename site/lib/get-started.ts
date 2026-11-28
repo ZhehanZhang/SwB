@@ -50,8 +50,8 @@ export function initialGetStartedScript() {
   })();`;
 }
 
-export const computerCommand = 'uvx swb-one up';
-export const pipxCommand = 'pipx install swb-one\nswb up';
+export const computerCommand = 'uvx swb.one up';
+export const pipxCommand = 'pipx install swb.one\nswb up';
 export const serverCommand = String.raw`git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
 cd SwB
 (umask 077; cp .env.example .env)

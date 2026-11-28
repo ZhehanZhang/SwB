@@ -5,7 +5,7 @@ description: Installieren Sie SwB mit uvx, pipx oder Docker.
 
 {/* prepublication */}
 
-SwB läuft unter Linux, macOS und Windows. Um SwB aus dem Quellcode zu bauen, folgen Sie [Docker Compose](/de/docs/deploy#docker-compose). Die folgenden Methoden funktionieren, sobald das Paket oder Image veröffentlicht ist.
+SwB läuft unter Linux, macOS und Windows. Um SwB aus dem Quellcode zu bauen, folgen Sie [Docker Compose](/de/docs/deploy#docker-compose).
 
 ## Installieren und starten
 
@@ -16,22 +16,22 @@ Verwenden Sie einen leeren Ordner für Ihre SwB-Dateien. Mit dem Inhaberschlüss
     [Installieren Sie uv](https://docs.astral.sh/uv/getting-started/installation/). SwB benötigt Python 3.12 oder neuer.
 
     ```bash
-    uvx swb-one up
+    uvx swb.one up
     ```
 
-    uvx lädt SwB herunter und startet es. Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus Ihrem Terminal. Ersetzen Sie in den anderen Beispielen das führende `swb` durch `uvx swb-one`.
+    uvx lädt SwB herunter und startet es. Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus Ihrem Terminal. Ersetzen Sie in den anderen Beispielen das führende `swb` durch `uvx swb.one`.
   </Tab>
   <Tab value="pipx">
     [Installieren Sie pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB benötigt Python 3.12 oder neuer.
 
     ```bash
-    pipx install swb-one
+    pipx install swb.one
     swb up
     ```
 
     pipx installiert den Befehl `swb` für Ihr Benutzerkonto. Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus Ihrem Terminal.
 
-    Wenn pipx eine ältere Python-Version verwendet, nutzen Sie `pipx install --python 3.12 swb-one`.
+    Wenn pipx eine ältere Python-Version verwendet, nutzen Sie `pipx install --python 3.12 swb.one`.
   </Tab>
   <Tab value="Docker">
     [Installieren Sie Docker](https://docs.docker.com/get-started/get-docker/).
@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 Diese Anfrage ohne Anmeldung zeigt `status` und `version`. Führen Sie `swb status` aus oder rufen Sie `/healthz` mit dem Inhaberschlüssel auf. So sehen Sie die Blöcke, ihren Zustand und fehlende Variablen.
 
+Für einen öffentlichen SwB-Server verwenden Sie seine HTTPS-Adresse.
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## Serverbefehle
 
 Führen Sie `swb --help` aus, um die Befehlsgruppen zu sehen. Hängen Sie `--help` an einen Befehl an, um seine Optionen zu sehen.
@@ -90,4 +96,4 @@ Führen Sie `swb --help` aus, um die Befehlsgruppen zu sehen. Hängen Sie `--hel
 
 {/* prepublication */}
 
-Nach der Veröffentlichung stellt PyPI das Paket `swb-one` bereit. Die GitHub Container Registry stellt das Image `ghcr.io/zhehanzhang/swb` bereit. Für ein bestimmtes Release verwenden Sie eine Version wie `1.0.0`. Das Image-Tag `latest` verweist immer auf das neueste stabile Release.
+PyPI stellt das Paket `swb.one` bereit. Die GitHub Container Registry stellt das Image `ghcr.io/zhehanzhang/swb` bereit. Für ein bestimmtes Release verwenden Sie eine Version wie `1.0.0`. Das Image-Tag `latest` verweist immer auf das neueste stabile Release.

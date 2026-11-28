@@ -18,7 +18,7 @@ description: 기기를 연결해 에이전트가 그 기기의 로컬 기능을 
 기기에서 이 명령을 실행하세요. 예시 주소를 내 SwB HTTPS 주소로 바꾸세요. 이 기기에서 SwB을 실행 중이면 `http://127.0.0.1:8870`을 사용해도 됩니다.
 
 ```sh
-uvx swb-one companion connect https://swb.example.com --cap notify
+uvx swb.one companion connect https://swb.example.com --cap notify
 ```
 
 입력 내용이 가려지는 프롬프트에 페어링 코드를 입력하세요. 코드는 한 번만 쓸 수 있고 10분 뒤에 만료됩니다. 누가 코드를 만들었는지는 감사 로그에 기록됩니다.
@@ -64,13 +64,13 @@ SwB은 각 메시지를 열린 세션에 전달하려고 시도합니다. 발신
 
 페어링하면 컴패니언이 시작됩니다. 다시 시작하려면 `swb companion run`을 사용하세요. 로컬 기기 ID와 기능을 보려면 `swb companion status`를 사용하세요.
 
-`uvx`로 페어링했다면 `swb` 대신 `uvx swb-one`을 쓰세요. 터미널에서 실행할 때는 Python이 컴패니언을 직접 실행합니다.
+`uvx`로 페어링했다면 `swb` 대신 `uvx swb.one`을 쓰세요. 터미널에서 실행할 때는 Python이 컴패니언을 직접 실행합니다.
 
 SwB과의 연결은 항상 기기 쪽에서 시작합니다.
 
 ## 백그라운드에서 실행하기
 
-컴패니언을 자동으로 시작하려면 백그라운드 서비스를 설치하세요. `uv tool install swb-one`으로 SwB를 설치하세요.
+컴패니언을 자동으로 시작하려면 백그라운드 서비스를 설치하세요. `uv tool install swb.one`으로 SwB를 설치하세요.
 
 새로 페어링하려면 페어링 옵션에 `--no-run`을 추가하세요. 이 옵션을 포함해 `swb companion connect`를 실행하세요. 명령은 페어링을 마치면 종료됩니다. 터미널에서 컴패니언을 실행 중이면 서비스를 설치하기 전에 컴패니언을 중지하세요. 서비스 명령에는 설치한 `swb`를 사용하세요.
 

@@ -13,7 +13,7 @@ Depuis un agent propriétaire, appelez `targets(block="local")` pour vérifier c
 
 ## Envoyer un message
 
-Passez l'adresse de la session dans le paramètre `to` de `send`. SwB essaie de livrer le message à la session ouverte. Pour une session liée à un agent, la livraison en boîte aux lettres nécessite l'accès à la boîte aux lettres de cet agent. Dans les autres sessions, un message du propriétaire arrive dans sa propre boîte aux lettres. Passez l'ID de conversation renvoyé à `result` pour lire la réponse.
+Passez l'adresse de la session dans le paramètre `to` de `send`. SwB essaie de livrer le message à la session ouverte. Pour une session liée à un agent, la livraison en boîte aux lettres nécessite l'accès à la boîte aux lettres de cet agent. Passez l'ID de conversation renvoyé à `result` pour lire la réponse.
 
 | État | Signification |
 | --- | --- |
@@ -43,7 +43,7 @@ Installez la commande `swb` avec [pipx](/fr/docs/install). Placez `swb` dans le 
 | Gemini CLI | `swb hook gemini` | Installez l'extension SwB depuis le clone local, comme indiqué ci-dessous |
 | Codex | `swb hook codex` | Fusionnez les `hooks` de `integrations/codex/hooks.json` dans `~/.codex/hooks.json` |
 
-Utilisez les fichiers de la [clone local de la version publiée de SwB](/fr/docs/deploy#docker-compose). Le plugin SwB pour Claude Code inclut aussi ces hooks. Pour un dossier de paramètres Codex personnalisé, utilisez le `hooks.json` de ce dossier.
+Utilisez les fichiers du [clone local de la version publiée de SwB](/fr/docs/deploy#docker-compose). Le plugin SwB pour Claude Code inclut aussi ces hooks. Pour un dossier de paramètres Codex personnalisé, utilisez le `hooks.json` de ce dossier.
 
 ```sh
 gemini extensions install /path/to/SwB/integrations/gemini

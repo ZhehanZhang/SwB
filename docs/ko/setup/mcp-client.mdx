@@ -9,7 +9,7 @@ MCP는 앱이 외부 도구를 쓰는 표준 방식입니다. 이 가이드에�
 
 Streamable HTTP로 원격 MCP를 지원하는 앱을 사용하세요. 이 방식으로 앱이 웹을 통해 도구를 호출합니다. 키를 보내려면 앱이 사용자 지정 요청 헤더도 지원해야 합니다. SwB 소유자 클라이언트나 SwB 컴퓨터의 터미널이 필요합니다.
 
-앱과 같은 컴퓨터에서 SwB을 시작하려면 빈 폴더에서 `uvx swb-one up`을 실행하세요. 터미널에 나온 일회용 로그인 링크를 여세요. 다른 방법은 [설치](/ko/docs/install)를 참고하세요.
+앱과 같은 컴퓨터에서 SwB을 시작하려면 빈 폴더에서 `uvx swb.one up`을 실행하세요. 터미널에 나온 일회용 로그인 링크를 여세요. 다른 방법은 [설치](/ko/docs/install)를 참고하세요.
 
 Claude, ChatGPT, Grok, 코딩 에이전트는 OAuth 로그인을 다루는 별도 페이지가 있습니다. 이 앱들은 해당 페이지를 따르세요.
 
@@ -32,7 +32,7 @@ Claude, ChatGPT, Grok, 코딩 에이전트는 OAuth 로그인을 다루는 별�
 `notes-bot`처럼 앱의 짧은 이름을 에이전트에게 알려 주세요. SwB은 앱이 보낸 메시지에 이 이름을 표시합니다.
 ### 페어링 코드 받기
 
-SwB 소유자 에이전트에게 앱 이름으로 `connect_code`를 호출하도록 요청하세요. SwB 인스턴스 폴더에서 `uvx swb-one connect mcp-client --choose agent=notes-bot`을 실행해도 됩니다. `notes-bot`을 내 앱 이름으로 바꾸세요.
+SwB 소유자 에이전트에게 앱 이름으로 `connect_code`를 호출하도록 요청하세요. SwB 인스턴스 폴더에서 `uvx swb.one connect mcp-client --choose agent=notes-bot`을 실행해도 됩니다. `notes-bot`을 내 앱 이름으로 바꾸세요.
 ### 키 받기
 
 앱을 실행하는 컴퓨터의 터미널에서 비공개 폴더를 여세요. `https://swb.example.com`을 내 SwB 주소로 바꾸세요. 끝의 `/connect`는 그대로 두세요. 로컬 SwB이면 시작할 때 표시된 포트로 `http://localhost:8870/connect`를 사용하세요. 입력 내용이 가려지는 프롬프트에 페어링 코드를 10분 안에 입력하세요.

@@ -7,7 +7,7 @@ description: Machen Sie SwB erreichbar, melden Sie sich an und rufen Sie Ihre In
 
 {/* prepublication */}
 
-Führen Sie nach der Veröffentlichung des Pakets `uvx swb-one up` in einem leeren Ordner aus. Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus Ihrem Terminal. SwB verwendet standardmäßig `http://localhost:8870`. Wenn Sie `SWB_PORT` setzen, verwendet SwB diesen Port in der Adresse. Weitere Startmethoden, auch einen Build aus dem Quellcode, beschreibt [Installation](/de/docs/install).
+Führen Sie `uvx swb.one up` in einem leeren Ordner aus. Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus Ihrem Terminal. SwB verwendet standardmäßig `http://localhost:8870`. Wenn Sie `SWB_PORT` setzen, verwendet SwB diesen Port in der Adresse. Weitere Startmethoden, auch einen Build aus dem Quellcode, beschreibt [Installation](/de/docs/install).
 
 ## Öffentliche Adresse erhalten
 
@@ -16,7 +16,7 @@ Claude, ChatGPT und Grok laufen in der Cloud. Sie brauchen eine öffentliche HTT
 Installieren Sie [cloudflared](https://developers.cloudflare.com/tunnel/downloads/). Stellen Sie sicher, dass Ihr Terminal `cloudflared --version` ausführen kann. Wenn SwB läuft, beenden Sie es zuerst. Führen Sie diesen Befehl in Ihrem SwB-Instanzordner aus.
 
 ```bash
-uvx swb-one up --tunnel cloudflare
+uvx swb.one up --tunnel cloudflare
 ```
 
 SwB öffnet einen Cloudflare Quick Tunnel und gibt die öffentliche MCP-Adresse aus. Jeder Neustart mit dieser Option erzeugt eine neue Adresse. Aktualisieren Sie die Adresse in Ihren Apps.

@@ -20,7 +20,7 @@ Ask me to pick a short name for the app, such as `notes-bot`. From an app with S
 swb connect mcp-client --choose agent=notes-bot
 ```
 
-Use `uvx swb-one connect mcp-client --choose agent=notes-bot` if I run SwB with uvx. The result gives me a pairing code. It works once within 10 minutes.
+Use `uvx swb.one connect mcp-client --choose agent=notes-bot` if I run SwB with uvx. The result gives me a pairing code. It works once within 10 minutes.
 
 A scope is a group of memory entries. The key gets `agent:<name>` and any scope I grant to that agent. It also gets the scope of a project named in the pairing. Read `general` if the key has access to it.
 

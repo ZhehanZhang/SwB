@@ -7,7 +7,7 @@ description: SwB에 접속할 수 있게 하고 로그인한 뒤 인스턴스를
 
 {/* prepublication */}
 
-패키지가 공개되면 빈 폴더에서 `uvx swb-one up`을 실행하세요. 터미널에 나온 일회용 로그인 링크를 5분 안에 여세요. SwB은 기본적으로 `http://localhost:8870`을 사용합니다. `SWB_PORT`를 설정하면 주소에 그 포트를 사용합니다. 소스 빌드를 포함한 다른 시작 방법은 [설치](/ko/docs/install)를 참고하세요.
+빈 폴더에서 `uvx swb.one up`을 실행하세요. 터미널에 나온 일회용 로그인 링크를 5분 안에 여세요. SwB은 기본적으로 `http://localhost:8870`을 사용합니다. `SWB_PORT`를 설정하면 주소에 그 포트를 사용합니다. 소스 빌드를 포함한 다른 시작 방법은 [설치](/ko/docs/install)를 참고하세요.
 
 ## 공개 주소 받기
 
@@ -16,7 +16,7 @@ Claude, ChatGPT, Grok은 클라우드에서 실행됩니다. 이 앱들이 SwB�
 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)를 설치하세요. 터미널에서 `cloudflared --version`이 실행되는지 확인하세요. SwB이 실행 중이면 먼저 멈추세요. SwB 인스턴스 폴더에서 이 명령을 실행하세요.
 
 ```bash
-uvx swb-one up --tunnel cloudflare
+uvx swb.one up --tunnel cloudflare
 ```
 
 SwB이 Cloudflare Quick Tunnel을 열고 공개 MCP 주소를 출력합니다. 이 옵션으로 다시 시작할 때마다 새 주소를 받습니다. 앱에 등록한 주소도 새 주소로 바꾸세요.

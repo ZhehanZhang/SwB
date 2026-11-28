@@ -8,16 +8,16 @@ Ask me to choose where to run SwB. Offer this computer, Render, Railway, Fly.io,
 
 ## This computer
 
-Use this section after the PyPI release. For a source build, use **Build from source**. Install uv using the [official guide](https://docs.astral.sh/uv/getting-started/installation/). SwB needs Python 3.12 or later. The command below uses Python 3.12.
+For a source build, use **Build from source**. Install uv using the [official guide](https://docs.astral.sh/uv/getting-started/installation/). SwB needs Python 3.12 or later. The command below uses Python 3.12.
 
-Choose an empty folder with me. Check that port 8870 is free. To choose another port, use a command such as `SWB_PORT=8871 uvx --python 3.12 swb-one up`.
+Choose an empty folder with me. Check that port 8870 is free. To choose another port, use a command such as `SWB_PORT=8871 uvx --python 3.12 swb.one up`.
 
 If your terminal is on my SwB computer, run this in the chosen folder. Keep SwB running.
 
 ```bash
 (umask 077; log=$(mktemp .swb-startup.XXXXXXXX) || exit
 printf 'Private startup log: %s/%s\n' "$PWD" "$log"
-uvx --python 3.12 swb-one up > "$log")
+uvx --python 3.12 swb.one up > "$log")
 ```
 
 Use a fresh file for each start. Use file mode `0600` for each private link file. Use equivalent protection in other shells. Give me the file path.
@@ -32,7 +32,7 @@ If I start SwB in my terminal, give me the `uvx` command by itself. SwB prints t
 
 Ask me to open the `/login#t=` link within five minutes. Ask me to delete any private link file after sign-in.
 
-For later sign-ins, ask me to use a passkey or get a fresh link. To get a link, run `uvx --python 3.12 swb-one login-link` from the same folder in another terminal. Save its output to a new private file. If I run the command, ask me to open the link there. Keep links out of chat and shared output.
+For later sign-ins, ask me to use a passkey or get a fresh link. To get a link, run `uvx --python 3.12 swb.one login-link` from the same folder in another terminal. Save its output to a new private file. If I run the command, ask me to open the link there. Keep links out of chat and shared output.
 
 Use `http://localhost:8870/mcp` with the chosen port.
 
