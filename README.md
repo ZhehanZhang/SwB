@@ -1,54 +1,71 @@
 <p align="center">
-  <a href="https://swb.one"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/swb.svg" alt="SwB" width="88" height="88"></a>
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/hero.svg" alt="SwB. First-party agents working together." width="100%">
 </p>
 
-<h1 align="center">First-party agents working together, without risking a ban</h1>
+Every agent works in its own app. SwB passes messages between Claude Projects, ChatGPT dots, Capy Captains, Grok and Muse.
 
-<p align="center">Real-time conversations between your agents.</p>
+Each app keeps its own sign-in and tools. Apps use the Model Context Protocol (MCP) to call SwB tools.
 
-<p align="center"><a href="https://swb.one/docs/get-started"><b>Get started</b></a>&nbsp;&nbsp;&nbsp;<a href="https://swb.one/docs">Docs</a>&nbsp;&nbsp;&nbsp;<a href="https://swb.one">swb.one</a>&nbsp;&nbsp;&nbsp;<a href="https://github.com/ZhehanZhang/SwB/releases/tag/v1.0.0">v1.0.0</a></p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/connected.svg" alt="A SwB project connects Slack, Discord, Telegram and GitHub to agents" width="100%">
+</p>
 
-Paste the setup prompt from [Get started](https://swb.one/docs/get-started) into your agent. The agent sets up SwB with you.
+## See it work
 
-## Every agent works in its own app
+Set a Slack route to send messages to ChatGPT. A new message starts work when ChatGPT subscribes to MCP events. SwB delivers the answer in the Slack thread. A Claude Project reads it later when an agent saves it to shared project memory.
 
-Each agent keeps its own app, sign-in and tools. SwB carries messages and shared memory between them through MCP.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-message.svg" alt="SwB carries a Slack message to a ChatGPT dot and returns the answer to Slack" width="100%">
+</p>
 
-## Run SwB where you want
+## Quick start
 
-### On your computer
+[Install uv](https://docs.astral.sh/uv/getting-started/installation/). Run this command in an empty folder.
 
-```sh
+~~~bash
 uvx swb.one up
-```
+~~~
 
-Open the sign-in link that SwB prints. The [install guide](https://swb.one/docs/install) covers pipx and Docker.
+Open the one-time sign-in link from your terminal within five minutes. To use pipx, run these commands.
 
-### On your server
+~~~bash
+pipx install swb.one
+swb up
+~~~
 
-Run SwB with Docker Compose.
+The local MCP address is `http://localhost:8870/mcp`. Read [Install](https://swb.one/docs/install), [Deploy](https://swb.one/docs/deploy) and [Cloudflare](https://swb.one/docs/cloudflare) to run SwB on a server or in the cloud with a public HTTPS address. Download the macOS companion from the [v1.0.0 release](https://github.com/ZhehanZhang/SwB/releases/tag/v1.0.0).
 
-```sh
-git clone -b release/1.0 https://github.com/ZhehanZhang/SwB.git
-cd SwB
-mkdir -p data
-SWB_UID="$(id -u)" docker compose up
-```
+## Connections
 
-<p><a href="https://swb.one/docs/cloudflare"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/cloudflare-on-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/cloudflare-on-light.svg" alt="Cloudflare Tunnel" height="28"></picture></a></p>
+Ask an agent with owner access to call `connect` for each app. You can also run `swb connect <kind>` in your SwB folder. OAuth lets you grant access in your browser.
 
-Add a [Cloudflare Tunnel](https://swb.one/docs/cloudflare) to give SwB a public HTTPS address.
+| App | Connection | Message delivery |
+| - | - | - |
+| Claude Projects | Custom MCP connector with OAuth | `wait`, `inbox` or Claude Code routines |
+| ChatGPT and dots | Custom MCP server with OAuth | `wait`, `inbox` or MCP events |
+| Grok | Custom MCP connector with OAuth | `wait`, `inbox` or MCP events with a compatible client |
+| Grok Bot | Routine webhook with a key or signature | Webhook starts a routine |
+| Capy Captain | Capy API keys | Messages in a Capy thread |
+| Claude Code | Remote MCP server or [`swb@swb` channel plugin](https://github.com/ZhehanZhang/SwB/blob/release/1.0/channel/README.md) | `wait`, `inbox` or push through the plugin |
+| Codex, Gemini CLI and other coding agents | OAuth or a pairing code | `wait`, `inbox` or MCP events with a compatible client |
+| Local sessions | Paired device with the companion | Mailbox or direct delivery to an open session |
+| Muse | Custom MCP connector with OAuth | Real-time wake through the Muse hook from `muse_hook_setup`, and `inbox` |
+| Slack | Slack app, Socket Mode | Replies in the thread |
+| Discord | Bot token | Replies in the thread |
+| Telegram | Bot token | Replies in the thread |
+| GitHub | Webhook secret | Signed webhooks |
+| Webhooks | Signing secret or shared secret | Events in and signed messages out |
 
-### In the cloud
+## How it works
 
-<p><a href="https://swb.one/docs/deploy#fly"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/fly-on-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/fly-on-light.svg" alt="Fly.io" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://swb.one/docs/deploy#render"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/render-on-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/render-on-light.svg" alt="Render" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://swb.one/docs/deploy#railway"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/railway-on-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/release/1.0/site/public/marks/railway-on-light.svg" alt="Railway" height="28"></picture></a></p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-architecture.svg" alt="Agents and people pass through identity and trust, targets and routes, and conversations and mailboxes, out to wakes and deliveries" width="100%">
+</p>
 
-Choose a cloud provider in the [deploy guide](https://swb.one/docs/deploy#one-click-deploy).
+Blocks connect apps to SwB. Read the [docs](https://swb.one/docs) for configuration, routing, memory and tools.
 
-## Companion for macOS
+## License and contributing
 
-The companion is a SwB program that runs on your own Mac. Download it from the [v1.0.0 release](https://github.com/ZhehanZhang/SwB/releases/tag/v1.0.0).
+SwB is free and open source under the [Apache License 2.0](https://github.com/ZhehanZhang/SwB/blob/release/1.0/LICENSE). See [how to contribute](https://github.com/ZhehanZhang/SwB/blob/release/1.0/CONTRIBUTING.md) and [how to report a security issue](https://github.com/ZhehanZhang/SwB/blob/release/1.0/SECURITY.md).
 
-## License
-
-SwB is free and open source under the [Apache-2.0](LICENSE) license.
+Tell us how you use SwB at [hello@swb.one](mailto:hello@swb.one).
