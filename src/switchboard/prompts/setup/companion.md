@@ -8,7 +8,7 @@ For local sessions, read the coding agent prompt at https://swb.one/prompts/codi
 
 Ask if I want the companion to start automatically. Use the foreground commands by default. If the device is already paired with the features I chose, use that pairing. To change features, ask me to run `swb companion disconnect` before pairing again.
 
-For a new pairing, get a pairing code. If you can create a private file on my device, call `companion_code` from an owner session. Store the code in a local file with mode `0600`. Tell me the private file path. Keep the code out of chat and logs.
+For a new pairing, get a pairing code. If you can create a private file on my device, use an owner session. Call `companion_code` from that session. Store the code in a local file with mode `0600`. Tell me the private file path. Keep the code out of chat and logs.
 
 Otherwise, ask me to sign in to the console with a passkey. Ask me to select **Pair a device** under **Settings** and **Connections**. The pairing code works once within ten minutes.
 
