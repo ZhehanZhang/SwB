@@ -620,6 +620,9 @@ def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | No
     if item_kind == "watch_digest":
         sender = _watch_sender(payload, sender)
     location = _conversation_location(core, row, sender, payload)
+    address = _channel_target(core, destination, _reference(row.get("target") or target), location)
+    if address and not sender and row["owner"].lower() in core.agents:
+        sender = {"kind": "agent", "agent": row["owner"]}
     if sender.get("kind") != "watch" and location.get("source_kind") in _CHAT_SENDERS and (
         not sender.get("kind") or (sender.get("kind") == "agent" and sender.get("agent") == location["source_kind"])
     ):
@@ -634,11 +637,14 @@ def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | No
                    or display_name(first_sender.get("user")) or display_name(first_sender.get("label"))
                    or ("Captain" if first_sender.get("kind") == "captain" else "Capy thread" if first_sender.get("kind") in _CAPY_SENDERS else None)
                    or _SOURCE_NAMES.get(location.get("source_kind", "")) or _agent_name(core, row["owner"]))
+    if not sender_name:
+        block = core.blocks.get(destination)
+        sender_name = block.manifest.title if block else "Unknown sender"
     first_sender["name"] = sender_name
     if first_sender.get("kind") in _CAPY_SENDERS:
         first_sender.setdefault("avatar_url", CAPY_AVATAR_URL)
     first_target, target_kind, avatar_url = _conversation_target(core, row, target, _reference(payload.get("target_kind")), captains)
-    if address := _channel_target(core, destination, _reference(row.get("target") or target), location):
+    if address:
         first_target, target_kind = address
         avatar_url = None
     mode = _object(meta.get("channel_mode")) or _object(payload.get("channel_mode"))

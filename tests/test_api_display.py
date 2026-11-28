@@ -257,6 +257,8 @@ def test_channel_addresses_render_labels_and_telegram_uses_stored_topic_and_rout
         row = get(client, f"/conversations/{handle}")["conversation"]
         assert row["first_target"] == label and row["target"] == address
         assert row["project"] == ("team" if block == "telegram" else None)
+        if block == "telegram":
+            assert row["first_sender"]["name"] == "ChatGPT"
     assert len(get(client, "/inbox", project="team")["conversations"]) == 2
 
 

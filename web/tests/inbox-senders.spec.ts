@@ -30,6 +30,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(watch).toContainText("Notified")
     const telegram = page.getByRole("row").filter({ hasText: "Schedule confirmed for Thursday." })
     await expect(telegram).toContainText("dispatch › Release coordination")
+    await expect(telegram).toContainText("ChatGPT")
     await expect(telegram.getByRole("img", { name: "Unassigned" })).toBeVisible()
     await expect(telegram).not.toContainText("dispatch:-1001000:5")
     const slack = page.getByRole("row").filter({ hasText: "Draft the agenda for our planning meeting." })
