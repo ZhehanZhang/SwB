@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 Diese Anfrage ohne Anmeldung zeigt `status` und `version`. Führen Sie `swb status` aus oder rufen Sie `/healthz` mit dem Inhaberschlüssel auf. So sehen Sie die Blöcke, ihren Zustand und fehlende Variablen.
 
+Für einen öffentlichen SwB-Server verwenden Sie seine HTTPS-Adresse.
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## Serverbefehle
 
 Führen Sie `swb --help` aus, um die Befehlsgruppen zu sehen. Hängen Sie `--help` an einen Befehl an, um seine Optionen zu sehen.

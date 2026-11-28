@@ -1,13 +1,15 @@
 ---
 title: Exploiter SwB
-description: Sauvegardez ou mettez à jour SwB. Exportez la mémoire.
+description: Sauvegardez et mettez à jour SwB, ou exportez sa mémoire.
 ---
 
 <span id="sauvegardes-et-mises-à-jour" />
 
 ## Sauvegardes et mises à jour [#backups-and-upgrades]
 
-Arrêtez SwB avant de copier son dossier de données. Conservez le dossier complet, avec la base de données et ses clés, dont `mcp-events.key` et `claim-key`. Sauvegardez aussi vos fichiers de configuration et `.env`. Gardez la sauvegarde privée. Installez ou compilez la nouvelle version. Démarrez SwB avec le même dossier de données.
+Arrêtez SwB. Copiez le dossier de données complet. Ainsi, la base de données et ses clés restent ensemble. Les clés comprennent `mcp-events.key` et `claim-key`. Copiez vos fichiers de configuration et `.env`. Gardez la sauvegarde privée.
+
+Installez ou compilez la nouvelle version. Démarrez SwB avec le même dossier de données.
 
 <span id="exporter-la-mémoire" />
 
@@ -19,4 +21,4 @@ Exécutez l'export dans le conteneur Compose.
 docker compose exec -T switchboard swb export /data/export
 ```
 
-L'export enregistre des fichiers Markdown classés par portée dans `./data/export` sur l'hôte. Il comprend un fichier `INDEX.md`. Définissez `memory.mirror_dir` pour garder une copie Markdown à jour.
+L'export enregistre des fichiers Markdown classés par portée dans `./data/export` sur l'hôte. Ouvrez `INDEX.md` pour trouver les fichiers. Définissez `memory.mirror_dir` pour garder une copie Markdown à jour.

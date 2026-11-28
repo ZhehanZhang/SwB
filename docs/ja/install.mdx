@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 このリクエストはサインイン前でも使えて、`status` と `version` を返します。`swb status` を実行するか、オーナーキーを付けて `/healthz` を呼び出すと、ブロックとその状態、不足している変数を一覧できます。
 
+公開の SwB サーバーでは、その HTTPS アドレスを使ってください。
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## サーバーコマンド
 
 コマンドのグループは `swb --help` で確認できます。各コマンドのオプションは、そのコマンドに `--help` を付けて確認してください。

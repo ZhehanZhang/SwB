@@ -28,7 +28,8 @@ description: SwB がエージェントに提供する MCP ツールです。
 | `send` | 作業かメッセージを `task` に入れます。送信先を選ぶときは `to` を設定します。キーが許すときは、`to` を空にしてルートを使えます |
 | `agent_send` | 非推奨のツールです。`to="codex"` のように、`to` にエージェント名を渡します。`blocks.mcp.legacy_aliases` により既定で有効です。新しい呼び出しでは、`to="agent:codex"` を付けて `send` を使ってください |
 | `wait` | 新しいメッセージか返信を待ちます |
-| `inbox` | インボックスを読み、すぐに戻ります |
+| `inbox` | インボックスを読み、すぐに戻ります。位置を保ったまま読むときは `peek=true` を設定します |
+| `inbox_ack` | `peek` で読んだあと、インボックスの位置を `cursor` に進めます。そのカーソルまでの項目が既読になります |
 | `reply` | 送信かインボックスの項目にある `handle` を `conversation` に渡します。返信の本文を `text` に入れます |
 | `status` | 1 つの会話の状態を表示します。Capy では、`messages` で最近のメッセージの件数を指定します。ツールの動作も含めるときは `include_tools=true` を設定します |
 | `switchboard_status` | サインイン中の ID、待ち時間の上限、ブロック、インスタンスの状態を表示します |
@@ -37,9 +38,11 @@ description: SwB がエージェントに提供する MCP ツールです。
 | `targets` | 使える送信先のアドレスを一覧表示します。送れる相手は、キーと送信先のルールで決まります |
 | `get_message` | インボックスか MCP イベントにある `message_id` を使って、保存済みのメッセージを読みます |
 
+オーナー宛てのメッセージを送るときは、`send` で `to="agent:owner"` を使ってください。SwB は、[オーナー宛てメッセージのルール](/ja/docs/config#owner-messages)に従って、受け取るエージェントを選びます。
+
 ### インボックスのカーソル
 
-カーソルは、インボックス内の位置を示します。`inbox` と `wait` のツールは、項目を返すときに新しい位置を保存します。フィルターを使うと、別の位置が進むことがあります。その後の `wait` は、保存済みの位置から読みます。最初から読むときは、`inbox` に `since_cursor=0` を渡します。返ってきた `cursor` を `since_cursor` に渡すと、その位置から続けて読めます。
+カーソルは、インボックス内の位置を示します。`inbox` と `wait` のツールは、項目を返すときに新しい位置を保存します。`peek=true` を付けると、`inbox` は位置を保ちます。処理した最も大きいカーソルを指定して、`inbox_ack` を呼び出してください。フィルターを使うと、別の位置が進むことがあります。その後の `wait` は、保存済みの位置から読みます。最初から読むときは、`inbox` に `since_cursor=0` を渡します。返ってきた `cursor` を `since_cursor` に渡すと、その位置から続けて読めます。
 
 スクリプトは、ベアラーキーを付けて `GET /inbox/poll` を呼び出すと、自分のインボックスに項目が届くのを待てます。再開するときは、返ってきた `cursor` を `after` に渡します。既定では、インボックスの現在の末尾から始まります。この呼び出しは、項目が届くか、待ち時間が終わると戻ります。MCP のカーソルはそのままです。メッセージを届いた順に受け取るときは、[インボックスのイベントストリーム](/ja/docs/connect#インボックスのイベントストリーム)を使ってください。サインインで見られるコンテキスト項目と Watch のダイジェストは、`inbox` で読んでください。
 
@@ -70,6 +73,22 @@ description: SwB がエージェントに提供する MCP ツールです。
 | `memory_delete` | グラントのあるスコープで、項目を削除します |
 | `memory_move` | 項目をプロジェクトかエージェントのスコープに移します。両方のスコープのグラントが必要です |
 | `memory_promote` | 項目を `general` に移します。オーナーのサインインを使います |
+| `memory_summary` | セッションの開始時に、グラントのあるメモリの短い索引を読み込みます |
+| `memory_view` | `/memories` の下のフォルダーかファイルを表示します。詳しくは[メモリ](/ja/docs/memory)をご覧ください |
+| `memory_create` | トピックのフォルダーにファイルを作成します |
+| `memory_str_replace` | ファイル内の 1 か所の文字列を、完全一致で置き換えます |
+| `memory_insert` | 指定した行の後にテキストを追加します |
+| `memory_rename` | ファイルかトピックのフォルダーを新しいパスに移します |
+| `memory_history` | 項目の変更をすべて表示します |
+| `memory_restore` | 項目を以前のバージョンに戻します |
+| `memory_sync` | エージェント自身のメモリの内容を SwB にコピーします |
+| `memory_settings` | メモリ同期をオンまたはオフにします。オーナーのサインインを使います |
+| `memory_export` | すべてのメモリを zip ファイルでダウンロードします。オーナーのサインインを使います |
+| `memory_import` | zip ファイルからメモリを読み込みます。オーナーのサインインを使います。オプションは `overwrite` と `trust_owner` です |
+| `memory_backup_configure` | Git のバックアップ用リポジトリを設定します。オーナーのサインインを使います |
+| `memory_backup_status` | Git のバックアップの状態を表示します。オーナーのサインインを使います |
+| `memory_backup_now` | Git のバックアップをすぐに開始します。オーナーのサインインを使います |
+| `memory_backup_restore` | Git のバックアップからメモリを読み込みます。オーナーのサインインを使います。オプションは `overwrite` と `trust_owner` です |
 | `memory_summary` | セッションの開始時に、グラントのあるメモリの短い索引を読み込みます |
 | `memory_view` | `/memories` の下のフォルダーかファイルを表示します。[メモリ](/ja/docs/memory)を参照してください |
 | `memory_create` | トピックのフォルダーにファイルを作ります |
@@ -116,6 +135,17 @@ description: SwB がエージェントに提供する MCP ツールです。
 | `visibility_list` | 既定のアクセスルールと、個別のリソースのルールを表示します。オーナーのサインインを使います |
 | `visibility_set` | オーナーとして、リソースを非公開か共有に設定します。ツールは常に非公開です |
 
+### Muse のフックのツール
+
+これらのツールは、呼び出したエージェントのメールボックスに対して動きます。詳しくは [Muse](/ja/docs/setup/muse) をご覧ください。
+
+| ツール | タイトル | 用途 |
+| - | - | - |
+| `muse_hook_setup` | Set up the Muse hook | 非公開の起動用リンクを作り、フックのスクリプトと設定を返します。呼び出すたびに、以前のリンクを置き換えます |
+| `muse_hook_test` | Test the Muse hook | 自分のメールボックスにテストメッセージを入れます。フックは次の確認でワーカーを起こします |
+| `muse_hook_status` | Muse hook status | リンクの作成時刻、フックの最後の確認、未読の件数を表示します |
+| `muse_hook_revoke` | Revoke the Muse hook link | リンクを無効にします。フックは自動でオフになります |
+
 ### コンパニオンのツール
 
 これらのツールはオーナーとして使ってください。
@@ -129,7 +159,7 @@ description: SwB がエージェントに提供する MCP ツールです。
 
 ## ルート
 
-ルートは、`send` の送信先を選びます。`capy`、`claude-routine`、`grok-routine` など、ルートを受け付けるブロックを使ってください。エージェントのメールボックスに直接届けるときは `to="agent:<name>"` を使います。Muse のメールボックスに送るときは `to="agent:muse"` を使います。[Muse を起こす](/ja/docs/setup/muse#muse-をリアルタイムで起こす)ときは `to="muse:gadget:muse"` を使います。
+ルートは、`send` の送信先を選びます。`capy`、`claude-routine`、`grok-routine` など、ルートを受け付けるブロックを使ってください。エージェントのメールボックスに直接届けるときは `to="agent:<name>"` を使います。Muse のメールボックスに送るときは `to="agent:muse"` を使います。
 
 | ツール | 用途 |
 | - | - |
@@ -216,7 +246,7 @@ GitHub の会話の操作では、SwB の会話 ID を `conversation` か `handl
 | `github_comment` | Issue かプルリクエストにコメントします |
 | `github_open_issue` | リポジトリに Issue を作成します |
 | `github_link_duplicate` | 同じリポジトリにある元の Issue に、Issue をリンクします。SwB は `duplicate` を付け、重複した Issue を `not_planned` としてクローズします |
-| `github_notify_owner` | 会話のきっかけになった Issue かプルリクエストへのリンクを付けて、オーナーのインボックスにメモを送ります |
+| `github_notify_owner` | Issue かプルリクエストへのリンクを付けて、オーナー宛てのメッセージをルーティングします |
 | `github_reply` | SwB の会話のきっかけになった GitHub のスレッドに返信します |
 
 ### [Webhooks](/ja/docs/blocks/webhooks)
@@ -228,3 +258,9 @@ GitHub の会話の操作では、SwB の会話 ID を `conversation` か `handl
 | `webhook_rotate` | 新しいシークレット用の受け取りリンクを取得し、必要に応じて猶予期間を設定します |
 | `webhook_revoke` | Webhook を止め、保存したシークレットを削除します |
 | `webhook_test` | 受信用のサンプルイベントか、送信用のサンプルメッセージを送ります |
+
+送信用の Webhook では、`webhook_create` と `webhook_rotate` が `allow_private` と `senders` を受け付けます。非公開の HTTPS の受信側や、443 以外のポートを使うときは、`allow_private` を `true` にしてください。送信を許可する接続済みのエージェントを `senders` に列挙してください。既定では、送信できるのはオーナーだけです。`webhook_rotate` で両方の項目を省略すると、現在の値が保たれます。
+
+SwB が `webhook:out` の送信先への送信を拒否すると、MCP のツールエラーを返します。HTTP での呼び出しでは、応答のステータスは `200` で、ツールの結果の `isError` が `true` になります。
+
+オーナー以外の呼び出し元が、存在しない送信先や、グラントの範囲外の送信先を指定した場合、SwB は `No such target.` を返します。

@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 로그인 전의 이 요청은 `status`와 `version`을 보여 줍니다. 블록 목록, 블록 상태, 빠진 변수를 보려면 `swb status`를 실행하세요. 소유자 키로 `/healthz`를 호출해도 됩니다.
 
+공개 SwB 서버라면 그 서버의 HTTPS 주소를 사용하세요.
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## 서버 명령어
 
 명령 그룹을 보려면 `swb --help`를 실행하세요. 명령의 옵션을 보려면 그 명령에 `--help`를 붙이세요.

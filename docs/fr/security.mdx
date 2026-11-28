@@ -77,13 +77,17 @@ Le bloc Capy peut renvoyer la conversation précédente pour la même tâche et 
 
 Par défaut, SwB utilise l'adresse de la connexion pour les limites et le journal d'audit. Ajoutez votre proxy à `trusted_proxies` ou à `SWB_TRUSTED_PROXIES`. SwB utilise alors l'adresse du client que le proxy transmet. Configurez le proxy pour qu'il remplisse les en-têtes d'adresse client à partir d'une source qu'il vérifie.
 
-Suivez le [guide de configuration de Cloudflare](/fr/docs/cloudflare#trusted-proxies) pour ajouter un connecteur Cloudflare Tunnel ou un proxy inverse sur votre réseau Docker.
+Si la résolution de l'adresse du client échoue, SwB regroupe les requêtes selon leurs en-têtes de transfert. Les en-têtes qui contiennent des adresses invalides partagent la limite `invalid-forwarded`. Les en-têtes qui contiennent uniquement des adresses de proxys de confiance partagent la limite `trusted-only-forwarded`.
+
+Suivez le [guide des proxys de confiance](/fr/docs/cloudflare#trusted-proxies) pour ajouter un connecteur Cloudflare Tunnel ou un proxy inverse sur votre réseau Docker.
 
 ## Journal d'audit
 
 SwB enregistre les appels d'outils que ses règles d'accès refusent. Il enregistre les échecs de connexion dans le navigateur pour les codes de configuration, les liens utilisés, expirés ou invalides, les clés d'accès, les contrôles CSRF et OIDC.
 
 SwB enregistre les signatures de webhook GitHub manquantes ou invalides. Il limite les lignes répétées pour certains échecs du navigateur et pour les refus de webhook. Les lignes d'échec donnent la raison et gardent privés les codes, les jetons et les signatures.
+
+SwB enregistre les assertions Cloudflare Access refusées une fois par adresse client toutes les 10 minutes.
 
 La page SwB affiche le journal sous **Audit**. Lancez `swb log` pour afficher les entrées récentes. Les envois vers une boîte aux lettres ont l'action `send`. Pour les livraisons ignorées, consultez [Modes de canal](/fr/docs/channel-modes#vérifier-une-livraison).
 

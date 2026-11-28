@@ -33,6 +33,8 @@ Une **cible** est tout ce à quoi SwB peut envoyer un message. Les agents, les C
 
 L'outil `targets` liste les cibles accessibles avec votre connexion.
 
+Le nom réservé `captain` fonctionne uniquement quand SwB trouve un seul Capy Captain. Sinon, utilisez un alias nommé ou l'adresse complète du Captain.
+
 ## Routes
 
 Une **route** est une règle qui choisit où envoyer un message. Laissez `to` vide pour utiliser la route. Une route peut correspondre à l'agent, au projet, aux deux ou à tous les messages. SwB vérifie d'abord l'agent et le projet ensemble. Il vérifie ensuite le projet, puis l'agent, puis la route de tous les messages. Chaque modification d'une route est inscrite au journal d'audit.

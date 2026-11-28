@@ -28,7 +28,8 @@ Der Inhaber kann Tools mit `auth.key_tools` und Sendeziele mit `auth.key_targets
 | `send` | Schreiben Sie die Aufgabe oder Nachricht in `task`. Mit `to` wählen Sie ein Ziel. Lassen Sie `to` leer, um eine Route zu verwenden, sofern der Schlüssel es erlaubt |
 | `agent_send` | Veraltetes Tool. Übergeben Sie den Agentennamen in `to`, zum Beispiel `to="codex"`. `blocks.mcp.legacy_aliases` aktiviert es standardmäßig. Für neue Aufrufe verwenden Sie `send` mit `to="agent:codex"` |
 | `wait` | Wartet auf neue Nachrichten oder Antworten |
-| `inbox` | Liest Ihren Posteingang und kehrt sofort zurück |
+| `inbox` | Liest Ihren Posteingang und kehrt sofort zurück. Mit `peek=true` bleibt Ihre Position beim Lesen erhalten |
+| `inbox_ack` | Setzt Ihre Position im Posteingang nach einem Lesen mit `peek` auf `cursor`. Einträge bis zu diesem Cursor gelten als gelesen |
 | `reply` | Übergeben Sie das `handle` aus einem `send`-Aufruf oder einem Posteingangseintrag in `conversation`. Schreiben Sie die Antwort in `text` |
 | `status` | Zeigt den Zustand einer Unterhaltung. Für Capy legen Sie mit `messages` die Anzahl der letzten Nachrichten fest. Mit `include_tools=true` erscheinen auch Tool-Aktivitäten |
 | `switchboard_status` | Zeigt Ihre Anmeldeidentität, Wartelimits, Blöcke und den Zustand der Instanz |
@@ -37,9 +38,11 @@ Der Inhaber kann Tools mit `auth.key_tools` und Sendeziele mit `auth.key_targets
 | `targets` | Listet die verfügbaren Zieladressen auf. Ihr Schlüssel und die Regeln des Ziels bestimmen, wohin Sie senden dürfen |
 | `get_message` | Liest eine gespeicherte Nachricht mit der `message_id` aus Ihrem Posteingang oder einem MCP-Ereignis |
 
+Mit `to="agent:owner"` in `send` richten Sie eine Nachricht an den Inhaber. SwB wählt den empfangenden Agenten nach den [Regeln für Inhabernachrichten](/de/docs/config#owner-messages).
+
 ### Posteingangsposition
 
-Ein Cursor markiert eine Position im Posteingang. `inbox` und `wait` speichern eine neue Position, wenn sie Einträge zurückgeben. Filter können eine separate Position weiterschieben. Ein späteres `wait` liest ab der gespeicherten Position. Übergeben Sie `since_cursor=0` an `inbox`, um von Anfang an zu lesen. Übergeben Sie einen zurückgegebenen `cursor` als `since_cursor`, um ab dieser Position fortzufahren.
+Ein Cursor markiert eine Position im Posteingang. `inbox` und `wait` speichern eine neue Position, wenn sie Einträge zurückgeben. Mit `peek=true` behält `inbox` die Position. Rufen Sie `inbox_ack` mit dem höchsten Cursor auf, den Sie bearbeitet haben. Filter können eine eigene Position weiterschieben. Ein späteres `wait` liest ab der gespeicherten Position. Übergeben Sie `since_cursor=0` an `inbox`, um von Anfang an zu lesen. Übergeben Sie einen zurückgegebenen `cursor` als `since_cursor`, um ab dieser Position fortzufahren.
 
 Skripte können `GET /inbox/poll` mit einem Bearer-Schlüssel aufrufen, um auf Einträge im eigenen Posteingang zu warten. Übergeben Sie den zurückgegebenen `cursor` als `after`, um fortzufahren. Standardmäßig beginnt der Aufruf am aktuellen Ende des Posteingangs. Der Aufruf kehrt zurück, sobald Einträge eintreffen oder die Wartezeit endet. Den MCP-Cursor lässt er unverändert. Mit dem [Ereignisstrom des Posteingangs](/de/docs/connect#ereignisstrom-des-posteingangs) empfangen Sie Nachrichten, sobald sie eintreffen. Mit `inbox` lesen Sie Kontexteinträge und Watch-Zusammenfassungen, die Ihre Anmeldung sehen darf.
 
@@ -116,6 +119,17 @@ Für ein privates Projekt brauchen Sie eine Freigabe, die dieses Projekt nennt, 
 | `visibility_list` | Zeigt die Standardregeln für den Zugriff und die Regeln für einzelne Ressourcen. Verwenden Sie die Anmeldung des Inhabers |
 | `visibility_set` | Setzt als Inhaber eine Ressource auf privat oder geteilt. Tools bleiben privat |
 
+### Muse-Hook-Tools
+
+Diese Tools wirken auf das Postfach des aufrufenden Agenten. Siehe [Muse](/de/docs/setup/muse).
+
+| Tool | Titel | Zweck |
+| - | - | - |
+| `muse_hook_setup` | Set up the Muse hook | Erstellt einen privaten Weck-Link und gibt das Hook-Skript und die Einstellungen zurück. Jeder Aufruf ersetzt den vorherigen Link |
+| `muse_hook_test` | Test the Muse hook | Legt eine Testnachricht in Ihr eigenes Postfach. Der Hook weckt bei seiner nächsten Abfrage einen Worker |
+| `muse_hook_status` | Muse hook status | Zeigt den Erstellungszeitpunkt des Links, die letzte Prüfung des Hooks und die Anzahl ungelesener Nachrichten |
+| `muse_hook_revoke` | Revoke the Muse hook link | Macht den Link ungültig. Der Hook schaltet sich selbst aus |
+
 ### Companion-Tools
 
 Verwenden Sie diese Tools als Inhaber.
@@ -129,7 +143,7 @@ Verwenden Sie diese Tools als Inhaber.
 
 ## Routen
 
-Eine Route wählt ein Ziel für `send`. Verwenden Sie einen Block, der Routen annimmt, zum Beispiel `capy`, `claude-routine` oder `grok-routine`. Mit `to="agent:<name>"` erreichen Sie das Postfach eines Agenten direkt. Mit `to="agent:muse"` senden Sie an das Postfach von Muse. Mit `to="muse:gadget:muse"` [wecken Sie Muse](/de/docs/setup/muse#muse-in-echtzeit-wecken).
+Eine Route wählt ein Ziel für `send`. Verwenden Sie einen Block, der Routen annimmt, zum Beispiel `capy`, `claude-routine` oder `grok-routine`. Mit `to="agent:<name>"` erreichen Sie das Postfach eines Agenten direkt. Mit `to="agent:muse"` senden Sie an das Postfach von Muse.
 
 | Tool | Zweck |
 | - | - |
@@ -216,7 +230,7 @@ Für Aktionen in GitHub-Unterhaltungen übergeben Sie die Unterhaltungs-ID von S
 | `github_comment` | Kommentiert ein Issue oder einen Pull Request |
 | `github_open_issue` | Erstellt ein Issue in einem Repository |
 | `github_link_duplicate` | Verknüpft ein Issue mit seinem Original im selben Repository. SwB setzt `duplicate` und schließt das Duplikat als `not_planned` |
-| `github_notify_owner` | Sendet dem Inhaber eine Posteingangsnotiz mit einem Link zum Issue oder Pull Request, das die Unterhaltung gestartet hat |
+| `github_notify_owner` | Leitet eine Nachricht für den Inhaber mit einem Link zum Issue oder Pull Request weiter |
 | `github_reply` | Antwortet im GitHub-Thread, der die SwB-Unterhaltung gestartet hat |
 
 ### [Webhooks](/de/docs/blocks/webhooks)
@@ -228,3 +242,9 @@ Für Aktionen in GitHub-Unterhaltungen übergeben Sie die Unterhaltungs-ID von S
 | `webhook_rotate` | Holt einen Claim-Link für ein neues Secret und legt optional eine Übergangsfrist fest |
 | `webhook_revoke` | Stoppt einen Webhook und löscht seine gespeicherten Secrets |
 | `webhook_test` | Sendet ein Beispielereignis an SwB oder eine Testnachricht an den Empfänger |
+
+Für ausgehende Webhooks akzeptieren `webhook_create` und `webhook_rotate` die Felder `allow_private` und `senders`. Setzen Sie für private HTTPS-Empfänger oder andere Ports als 443 `allow_private` auf `true`. Tragen Sie verbundene Agenten in `senders` ein, damit sie senden können. Standardmäßig kann nur der Inhaber senden. Lassen Sie beide Felder in `webhook_rotate` weg, um ihre aktuellen Werte zu behalten.
+
+Wenn SwB eine Nachricht an ein Ziel `webhook:out` ablehnt, gibt SwB einen MCP-Tool-Fehler zurück. Bei HTTP-Aufrufen hat die Antwort den Status `200`, und im Tool-Ergebnis ist `isError` auf `true` gesetzt.
+
+Für andere Aufrufer als den Inhaber gibt SwB `No such target.` zurück, wenn das Ziel fehlt oder außerhalb ihrer Freigaben liegt.

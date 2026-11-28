@@ -1,6 +1,6 @@
 ---
 title: Despliegue
-description: Ejecuta SwB en tu ordenador o en un servidor.
+description: Ejecuta SwB en tu ordenador, en tu servidor o en la nube.
 ---
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
@@ -9,11 +9,11 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## Ejecutar en tu ordenador [#run-on-your-computer]
 
-Sigue [Instalación](/es/docs/install). Abre el enlace de inicio de sesión de un solo uso que SwB muestra en el primer arranque local. Para obtener un enlace nuevo, ejecuta `swb login-link`. El prompt de despliegue también sirve para la configuración local.
+Sigue la guía de [Instalación](/es/docs/install).
 
 ## Desplegar SwB
 
-Pega este prompt en un agente de programación como Claude Code o Codex. El agente te guía en la configuración local o alojada.
+Pega este prompt en un agente de programación como Claude Code o Codex. El agente te ayuda a configurar SwB.
 
 <SetupPrompt name="deploy" lang="es" />
 
@@ -21,7 +21,7 @@ Pega este prompt en un agente de programación como Claude Code o Codex. El agen
 
 ### Docker Compose [#docker-compose]
 
-Instala Docker Compose 2.24 o una versión posterior. Ejecuta estos comandos como un usuario normal que sea propietario de la carpeta de datos.
+Instala Docker Compose 2.24 o una versión posterior. Docker Compose ejecuta SwB en un contenedor. Ejecuta estos comandos con el usuario propietario de la carpeta de datos.
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -39,23 +39,19 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Abre en un plazo de cinco minutos el enlace de inicio de sesión de un solo uso que aparece en la terminal. Mantén el enlace en privado.
+Para un servidor remoto, reenvía su puerto `8870` al puerto `8870` de tu ordenador. Abre el enlace de inicio de sesión de un solo uso en un plazo de cinco minutos. Mantén el enlace en privado.
 
-El navegador usa `http://localhost:8870` para el inicio de sesión del propietario. El comando dentro del contenedor usa el puerto `8000`. Compose guarda los datos en `./data`. Después de cambiar `.env`, ejecuta `docker compose up -d` de nuevo.
-
-Para un servidor remoto, reenvía su puerto `8870` al puerto local `8870` antes de abrir el enlace.
+Tu navegador usa `http://localhost:8870` para iniciar sesión. El comando dentro del contenedor usa el puerto `8000`. Compose guarda los datos en `./data`. Ejecuta `docker compose up -d` después de cambiar `.env`.
 
 Una petición anónima a `/healthz` devuelve `status` y `version`. Usa una sesión de propietario o la clave de propietario para ver todos los detalles de estado.
 
 ### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Un Cloudflare Tunnel da a SwB una dirección HTTPS pública. Los túneles están incluidos en el plan gratuito de Cloudflare.
+Un túnel conecta tu servidor con Cloudflare y da a SwB una dirección HTTPS pública. Sigue la guía de [Cloudflare](/es/docs/cloudflare) para configurar un túnel.
 
-Sigue la [guía de configuración de Cloudflare](/es/docs/cloudflare) para configurar SwB y definir las reglas de acceso del propietario y de las peticiones de clientes.
+## En la nube
 
-## Plataformas de alojamiento
-
-Usa una sola instancia de SwB con un disco persistente montado en `/data`. Consulta la [guía de despliegue](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy) para las plantillas de Railway, Render y Fly.io y el script de Koyeb.
+Usa una sola instancia de SwB con un disco montado en `/data`. El disco conserva tus datos cuando la instancia se reinicia. Encontrarás plantillas y scripts para cada plataforma en la [guía de despliegue](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
 
 <span id="despliegue-con-un-clic" />
 
@@ -65,25 +61,27 @@ Usa una sola instancia de SwB con un disco persistente montado en `/data`. Consu
 
 ### Fly.io [#fly]
 
-Usa la copia local de SwB que clonaste en el [ejemplo de Docker Compose](#docker-compose). Instala la [herramienta de línea de comandos de Fly.io](https://docs.fly.io/flyctl/). Inicia sesión en Fly.io.
+Usa los archivos de SwB del [ejemplo de Docker Compose](#docker-compose). Instala Python 3.11 o una versión posterior, o instala [uv](https://docs.astral.sh/uv/). Instala la [herramienta de línea de comandos de Fly.io](https://docs.fly.io/flyctl/). Inicia sesión en Fly.io.
 
-Ejecuta `sh deploy/fly.sh my-swb` desde la carpeta de SwB. Cambia `my-swb` por un nombre de app único. El script usa `fly deploy --ha=false` para iniciar una Machine.
+Añade una tarjeta de pago para recibir 5 USD de uso al mes con el [plan Free de Fly.io](https://docs.fly.io/about/free-plan). Usa tu organización personal para este plan. Si gastas los 5 USD completos, Fly factura el mes entero con las tarifas estándar. Esta configuración cuesta unos 3,84 USD por 30 días en Ashburn, más la transferencia de datos.
 
-Abre la página de inicio de sesión de tu app. Copia `SWB_SETUP_CODE` de `.env.swb-setup-fly-my-swb` en tu copia local. Escríbelo en **Setup code**. Borra el archivo después de iniciar sesión.
+Ejecuta `sh deploy/fly.sh my-swb` desde la carpeta de SwB. Cambia `my-swb` por un nombre de app único. El script usa `fly deploy --ha=false` para iniciar una Machine. El script comprueba la Machine, el volumen y las direcciones.
 
-Consulta el [plan Free de Fly.io](https://docs.fly.io/about/free-plan) y las [tarifas actuales](https://fly.io/docs/about/pricing/) para los detalles de facturación.
+Abre la página de inicio de sesión de tu app. Copia `SWB_SETUP_CODE` de `.env.swb-setup-fly-my-swb` en la carpeta de SwB. Escríbelo en **Setup code**. Borra el archivo después de iniciar sesión.
+
+Consulta las [tarifas actuales](https://fly.io/docs/about/pricing/) para ver los detalles de facturación.
 
 ### Render [#render]
 
-[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
+Abre el [Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0). El Blueprint crea un servicio web de pago y un disco de 1 GB. Abre **Environment** en el servicio. Copia `SWB_SETUP_CODE`.
 
 ### Railway [#railway]
 
-Despliega desde la [plantilla de SwB en Railway](https://railway.com/deploy/swb). Mantén una sola réplica. La plantilla monta un volumen en `/data`.
+Despliega desde la [plantilla de SwB en Railway](https://railway.com/deploy/swb). Mantén una sola réplica. Monta un volumen de 1 GB en `/data`.
 
-Usa el plan Hobby para tener SwB siempre en marcha. Hobby cuesta 5 USD al mes e incluye 5 USD de uso.
+Usa el plan Hobby para tener SwB siempre en marcha. Cuesta 5 USD al mes e incluye 5 USD de uso.
 
-El [plan Free](https://docs.railway.com/reference/pricing/free-trial) incluye 1 USD de uso al mes. Esa cantidad cubre unos 100 MB de RAM las 24 horas. Una instancia de prueba de SwB usó unos 107 MiB en reposo. Los servicios del plan Free se detienen cuando se agota ese dólar.
+El [plan Free](https://docs.railway.com/pricing/free-plan) admite un volumen de 0,5 GB. Los servicios gratuitos entran en reposo cuando están inactivos. El plan incluye 1 USD de uso al mes. Esa cantidad cubre unos 100 MB de RAM de forma continua. Una prueba de SwB usó unos 107 MiB de RAM en reposo.
 
 ## Iniciar sesión
 

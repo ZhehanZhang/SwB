@@ -33,6 +33,8 @@ Un **destino** es cualquier cosa a la que SwB puede enviar mensajes. Los agentes
 
 La herramienta `targets` lista los destinos a los que puedes enviar con tu inicio de sesión.
 
+El nombre reservado `captain` funciona solo cuando SwB encuentra exactamente un Capy Captain. En los demás casos, usa un alias con nombre o la dirección completa del Captain.
+
 ## Rutas
 
 Una **ruta** es una regla que elige adónde enviar un mensaje. Deja `to` vacío para usar la ruta. Una ruta puede coincidir con el agente, con el proyecto, con ambos o con cualquier mensaje. SwB comprueba primero el agente y el proyecto juntos. Después comprueba el proyecto, luego el agente y al final la ruta para todos los mensajes. Cada cambio en una ruta queda en el registro de auditoría.

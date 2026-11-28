@@ -1,13 +1,15 @@
 ---
 title: SwB 운영
-description: SwB을 백업하거나 업그레이드합니다. 메모리를 내보냅니다.
+description: SwB을 백업하고 업그레이드하거나 메모리를 내보냅니다.
 ---
 
 <span id="백업과-업그레이드" />
 
 ## 백업과 업그레이드 [#backups-and-upgrades]
 
-데이터 폴더를 복사하기 전에 SwB을 멈추세요. 데이터베이스와 키를 포함해 폴더 전체를 함께 보관하세요. 키에는 `mcp-events.key`와 `claim-key`도 포함됩니다. 설정 파일과 `.env`도 백업하세요. 백업은 비공개로 보관하세요. 새 버전을 설치하거나 빌드하세요. 같은 데이터 폴더로 SwB을 시작하세요.
+SwB을 멈추세요. 데이터 폴더 전체를 복사하세요. 그러면 데이터베이스와 키가 함께 보관됩니다. 키에는 `mcp-events.key`와 `claim-key`가 포함됩니다. 설정 파일과 `.env`도 복사하세요. 백업은 비공개로 보관하세요.
+
+새 버전을 설치하거나 빌드하세요. 같은 데이터 폴더로 SwB을 시작하세요.
 
 <span id="메모리-내보내기" />
 
@@ -19,4 +21,4 @@ Compose 컨테이너 안에서 내보내기를 실행하세요.
 docker compose exec -T switchboard swb export /data/export
 ```
 
-내보내기는 호스트의 `./data/export` 아래에 범위별 Markdown 파일을 저장합니다. `INDEX.md`도 함께 만듭니다. 최신 Markdown 사본을 계속 유지하려면 `memory.mirror_dir`를 설정하세요.
+내보내기는 호스트의 `./data/export` 아래에 범위별 Markdown 파일을 저장합니다. 파일을 찾으려면 `INDEX.md`를 여세요. 최신 Markdown 사본을 계속 유지하려면 `memory.mirror_dir`를 설정하세요.

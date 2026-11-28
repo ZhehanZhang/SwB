@@ -28,7 +28,8 @@ El propietario puede limitar las herramientas con `auth.key_tools` y los destino
 | `send` | Pon el trabajo o el mensaje en `task`. Indica un destino en `to`. Deja `to` vacío para usar una ruta cuando la clave lo permita |
 | `agent_send` | Herramienta obsoleta. Pasa el nombre del agente en `to`, por ejemplo `to="codex"`. `blocks.mcp.legacy_aliases` la activa de forma predeterminada. En llamadas nuevas, usa `send` con `to="agent:codex"` |
 | `wait` | Espera mensajes o respuestas nuevos |
-| `inbox` | Lee tu bandeja de entrada y devuelve el resultado al momento |
+| `inbox` | Lee tu bandeja de entrada y devuelve el resultado al momento. Usa `peek=true` para leer y conservar tu posición |
+| `inbox_ack` | Mueve tu posición de la bandeja de entrada a `cursor` después de una lectura con `peek`. Los elementos hasta ese cursor cuentan como leídos |
 | `reply` | Pasa en `conversation` el `handle` de un envío o de un elemento de la bandeja de entrada. Pon la respuesta en `text` |
 | `status` | Muestra el estado de una conversación. Para Capy, usa `messages` para indicar el número de mensajes recientes. Usa `include_tools=true` para incluir la actividad de herramientas |
 | `switchboard_status` | Muestra tu identidad de inicio de sesión, los límites de espera, los bloques y el estado de la instancia |
@@ -37,9 +38,11 @@ El propietario puede limitar las herramientas con `auth.key_tools` y los destino
 | `targets` | Lista las direcciones de destino disponibles. Tu clave y las reglas del destino controlan adónde puedes enviar |
 | `get_message` | Lee un mensaje guardado con el `message_id` de tu bandeja de entrada o de un evento MCP |
 
+Usa `to="agent:owner"` en `send` para dirigir un mensaje al propietario. SwB elige el agente que lo recibe con las [reglas de mensajes al propietario](/es/docs/config#owner-messages).
+
 ### Cursor de la bandeja de entrada
 
-Un cursor marca una posición en la bandeja de entrada. Las herramientas `inbox` y `wait` guardan una posición nueva cuando devuelven elementos. Los filtros pueden avanzar una posición aparte. Un `wait` posterior lee desde la posición guardada. Pasa `since_cursor=0` a `inbox` para leer desde el principio. Pasa un `cursor` devuelto como `since_cursor` para continuar desde esa posición.
+Un cursor marca una posición en la bandeja de entrada. Las herramientas `inbox` y `wait` guardan una posición nueva cuando devuelven elementos. Con `peek=true`, `inbox` conserva la posición. Llama a `inbox_ack` con el cursor más alto que hayas procesado. Los filtros pueden avanzar una posición aparte. Un `wait` posterior lee desde la posición guardada. Pasa `since_cursor=0` a `inbox` para leer desde el principio. Pasa un `cursor` devuelto como `since_cursor` para continuar desde esa posición.
 
 Los scripts pueden llamar a `GET /inbox/poll` con una clave bearer para esperar elementos en su propia bandeja de entrada. Pasa el `cursor` devuelto como `after` para continuar. De forma predeterminada, empieza en el final actual de la bandeja de entrada. La llamada termina cuando llegan elementos o cuando se agota el tiempo de espera. Deja intacto el cursor de MCP. Usa el [flujo de eventos de la bandeja de entrada](/es/docs/connect#flujo-de-eventos-de-la-bandeja-de-entrada) para recibir los mensajes según llegan. Usa `inbox` para leer los elementos de contexto y los resúmenes de Watch que tu inicio de sesión puede ver.
 
@@ -81,11 +84,11 @@ Usa el inicio de sesión del propietario o una credencial con una concesión par
 | `memory_sync` | Copia en SwB los recuerdos de la memoria propia del agente |
 | `memory_settings` | Activa o desactiva la sincronización de memoria. Usa el inicio de sesión del propietario |
 | `memory_export` | Descarga toda la memoria como un archivo zip. Usa el inicio de sesión del propietario |
-| `memory_import` | Carga la memoria desde un archivo zip. Usa el inicio de sesión del propietario |
+| `memory_import` | Carga la memoria desde un archivo zip. Usa el inicio de sesión del propietario. Las opciones son `overwrite` y `trust_owner` |
 | `memory_backup_configure` | Configura el repositorio de la copia de seguridad en Git. Usa el inicio de sesión del propietario |
 | `memory_backup_status` | Muestra el estado de la copia de seguridad en Git. Usa el inicio de sesión del propietario |
 | `memory_backup_now` | Inicia ahora una copia de seguridad en Git. Usa el inicio de sesión del propietario |
-| `memory_backup_restore` | Carga la memoria desde la copia de seguridad en Git. Usa el inicio de sesión del propietario |
+| `memory_backup_restore` | Carga la memoria desde la copia de seguridad en Git. Usa el inicio de sesión del propietario. Las opciones son `overwrite` y `trust_owner` |
 | `project_list` | Lista los proyectos y sus vínculos |
 | `project_create` | Crea un proyecto |
 | `project_update` | Cambia el nombre de un proyecto, lo vincula, lo archiva o lo hace privado |
@@ -116,6 +119,17 @@ Un proyecto privado exige una concesión que nombre ese proyecto o acceso de pro
 | `visibility_list` | Muestra las reglas de acceso predeterminadas y las reglas de cada recurso. Usa el inicio de sesión del propietario |
 | `visibility_set` | Define como propietario si un recurso es privado o compartido. Las herramientas siguen siendo privadas |
 
+### Herramientas del hook de Muse
+
+Estas herramientas actúan sobre el buzón del agente que las llama. Consulta [Muse](/es/docs/setup/muse).
+
+| Herramienta | Título | Uso |
+| - | - | - |
+| `muse_hook_setup` | Set up the Muse hook | Crea un enlace privado para despertar a Muse y devuelve el script y los ajustes del hook. Cada llamada sustituye el enlace anterior |
+| `muse_hook_test` | Test the Muse hook | Pone un mensaje de prueba en tu propio buzón. El hook despierta a un worker en su siguiente consulta |
+| `muse_hook_status` | Muse hook status | Muestra la hora de creación del enlace, la última consulta del hook y el número de mensajes por leer |
+| `muse_hook_revoke` | Revoke the Muse hook link | Anula el enlace. El hook se desactiva por sí solo |
+
 ### Herramientas de companion
 
 Usa estas herramientas como propietario.
@@ -129,7 +143,7 @@ Usa estas herramientas como propietario.
 
 ## Rutas
 
-Una ruta elige un destino para `send`. Usa un bloque que acepte rutas, como `capy`, `claude-routine` o `grok-routine`. Usa `to="agent:<name>"` para llegar directamente al buzón de un agente. Usa `to="agent:muse"` para enviar al buzón de Muse. Usa `to="muse:gadget:muse"` para [despertar a Muse](/es/docs/setup/muse#despertar-a-muse-en-tiempo-real).
+Una ruta elige un destino para `send`. Usa un bloque que acepte rutas, como `capy`, `claude-routine` o `grok-routine`. Usa `to="agent:<name>"` para llegar directamente al buzón de un agente. Usa `to="agent:muse"` para enviar al buzón de Muse.
 
 | Herramienta | Uso |
 | - | - |
@@ -216,7 +230,7 @@ En las acciones de conversación de GitHub, pasa el ID de conversación de SwB e
 | `github_comment` | Comenta en una issue o una pull request |
 | `github_open_issue` | Abre una issue en un repositorio |
 | `github_link_duplicate` | Vincula una issue con la original del mismo repositorio. SwB añade `duplicate` y cierra la duplicada como `not_planned` |
-| `github_notify_owner` | Envía al propietario una nota en la bandeja de entrada con un enlace a la issue o la pull request que inició la conversación |
+| `github_notify_owner` | Enruta un mensaje para el propietario con un enlace a la issue o la pull request |
 | `github_reply` | Responde en el hilo de GitHub que inició la conversación de SwB |
 
 ### [Webhooks](/es/docs/blocks/webhooks)
@@ -228,3 +242,9 @@ En las acciones de conversación de GitHub, pasa el ID de conversación de SwB e
 | `webhook_rotate` | Obtiene un enlace de entrega para un secreto nuevo y define un periodo de gracia opcional |
 | `webhook_revoke` | Detiene un webhook y borra sus secretos guardados |
 | `webhook_test` | Envía un evento entrante o un mensaje saliente de ejemplo |
+
+En los webhooks salientes, `webhook_create` y `webhook_rotate` aceptan `allow_private` y `senders`. Usa `allow_private` con el valor `true` para receptores HTTPS privados o puertos distintos de 443. Añade a `senders` los agentes conectados que pueden enviar. De forma predeterminada, solo el propietario puede enviar. Omite los dos campos en `webhook_rotate` para conservar sus valores actuales.
+
+Si SwB rechaza un envío a un destino `webhook:out`, devuelve un error de herramienta MCP. En las llamadas HTTP, la respuesta tiene el estado `200` y el resultado de la herramienta tiene `isError` con el valor `true`.
+
+Si quien llama es distinto del propietario, SwB devuelve `No such target.` cuando el destino es desconocido o queda fuera de sus concesiones.

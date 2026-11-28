@@ -49,6 +49,18 @@ Linux と macOS では、SwB はデータフォルダーの権限を `0700` に�
 
 一部のブロックは、環境にある認証情報から起動できます。セットアップについては[ブロック](/ja/docs/blocks)をご覧ください。名前付きのワークスペースとルーティンで使う認証情報の名前は、[リリースの環境変数の例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)にあります。
 
+## オーナー宛てのメッセージ [#owner-messages]
+
+SwB はまず、直近 30 分以内にオーナーのサインインで最も新しく動いたエージェントを試します。次に、プロジェクトのメインのエージェントを試します。メインのエージェントは、プロジェクトのルートか `default_target` で決まります。最後の候補は、全体のオーナー用ルートです。
+
+選ばれたエージェントは、インボックスでメッセージを受け取ります。3 つの候補すべてで失敗した場合、SwB は配信待ちであることを状態に表示します。
+
+全体のオーナー用ルートには、エージェントのアドレスを設定してください。
+
+```python
+routes_set(agent="owner", target="agent:claude")
+```
+
 ## 設定ファイル
 
 `swb up` は、新しいインスタンスをそのフォルダーに用意します。オーナーキーを `.env` に保存し、独自の `SWB_PORT` もそこに保存します。ファイルの権限は `0600` に設定します。
@@ -167,6 +179,10 @@ GitHub は `owner` と `external` の信頼レベルを使います。Slack、Di
 | `memory.mirror` | Markdown コピーを管理します。更新を止めるときは `false` を設定します |
 | `memory.mirror_dir` | Markdown コピーのフォルダー |
 | `memory.mirror_debounce_s` | メモリの変更からコピーを書き込むまでの待ち時間（秒）。既定値は `2` |
+| `memory.sync` | エージェントが `memory_sync` で自分のメモリを SwB にコピーできるようにします。既定値は `true`。コンソールの **Memory sync** のスイッチが優先されます |
+| `memory.backup` | メモリの Git バックアップの設定 |
+| `memory.backup.debounce_s` | メモリの変更からバックアップのコミットまでの待ち時間（秒）。既定値は `30` |
+| `memory.backup.max_delay_s` | 変更が続くときに、バックアップのコミットを待つ最長の時間（秒）。既定値は `300` |
 | `memory.sync` | エージェントが `memory_sync` で自分のメモリを SwB にコピーできるようにします。既定値は `true`。コンソールの **Memory sync** スイッチがこの値より優先されます |
 | `memory.backup` | メモリの Git バックアップの設定 |
 | `memory.backup.debounce_s` | メモリの変更からバックアップのコミットまでの待ち時間（秒）。既定値は `30` |
