@@ -77,6 +77,8 @@ The Capy block can return the earlier conversation for the same task and target.
 
 SwB uses the connection address for limits and audit records by default. Add your proxy to `trusted_proxies` or `SWB_TRUSTED_PROXIES`. SwB then uses the client address the proxy sends. Configure the proxy to set client address headers from a source it verifies.
 
+If client address resolution fails, SwB groups requests by their forwarded headers. Headers with invalid addresses share the `invalid-forwarded` limit. Headers with only trusted proxy addresses share the `trusted-only-forwarded` limit.
+
 Use the [self-hosting guide](/docs/self-hosting#trusted-proxies) to add a Cloudflare Tunnel connector or a reverse proxy on your Docker network.
 
 ## Audit log
@@ -84,6 +86,8 @@ Use the [self-hosting guide](/docs/self-hosting#trusted-proxies) to add a Cloudf
 SwB records tool calls that its access rules reject. It records failed browser sign-ins for setup codes, used, expired or invalid links, passkeys, CSRF checks and OIDC.
 
 SwB records missing or invalid GitHub webhook signatures. It limits repeated rows for some browser failures and for webhook refusals. Failure rows give the reason and keep codes, tokens and signatures private.
+
+SwB records rejected Cloudflare Access assertions once per client address every 10 minutes.
 
 The SwB page shows records under **Audit**. Run `swb log` to print the recent records. Mailbox sends have the action `send`. See [Channel modes](/docs/channel-modes#check-a-delivery) for records of dropped deliveries.
 

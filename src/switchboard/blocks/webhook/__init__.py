@@ -3,8 +3,8 @@
 Inbound. The owner creates a named hook with webhook_create. SwB gives it an unguessable URL (/hooks/wh_<32 hex>) and a
 claim link where the owner saves the secret: the provider's signing secret for a preset (Stripe, Linear, Sentry,
 Standard Webhooks and Svix), or a secret he chose for HMAC, a bearer token or a secret in the path. Every request is
-rate limited by hook and by client address (as trusted_proxies resolves it), capped in size, verified on the raw body
-and checked for replay before anything parses it. Each refusal returns 4xx with an audit row. An accepted event passes
+capped in size and verified on the raw body. Verification failures are limited per hook and client address
+(as trusted_proxies resolves it). Refusals are audited. An accepted event passes
 the same two visibility gates as a GitHub event: the hook's channel, then the target. A target that admits the hook gets
 a wake framed as external content. A target that refuses it gets a passive context item, never a work item (E-41, E-52).
 
@@ -42,7 +42,7 @@ from ...connect import AGENT_RE
 from ...guard import RateLimiter, client_ip
 from ...inbox import CONTEXT_NOTE
 from ...projects import ProjectError
-from ...refusals import OWNER_REQUIRED, TARGET_REQUIRED
+from ...refusals import OWNER_REQUIRED
 from ...store import dumps
 from ...subject import subject, wake_text
 from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
@@ -96,10 +96,9 @@ RETRY_DELAYS = (0.0, 0.5, 1.0, 2.0)
 LIMITS = {
     "webhook_unknown": (20, 600.0),
     "webhook_fail": (20, 600.0),
-    "webhook_fail_total": (100, 600.0),
-    "webhook_hook": (600, 600.0),
 }
 DESTINATION_REFUSED = "Choose an approved webhook receiver."
+TARGET_NOT_FOUND = "No such target."
 PRESET_EVENT = {"stripe": ("type",), "standard": ("type",)}
 GENERIC_EVENT = ("type", "event", "event_type", "action")
 log = logging.getLogger("switchboard.webhook")
@@ -204,7 +203,7 @@ class WebhookBlock(Block):
     def _check_secret(self, row: dict[str, Any]) -> None:
         if row["direction"] == "out" or row["verify"] == "standard":
             self.core.claims.register_name(_secret_names(row["id"])[0], _standard_secret)
-        elif row["verify"] in ("bearer", "path"):
+        elif row["verify"] in ("bearer", "path", "hmac-sha256", "hmac-sha1"):
             self.core.claims.register_name(_secret_names(row["id"])[0], _strong_secret)
 
     # Storage ------------------------------------------------------------------------------------
@@ -576,28 +575,19 @@ class WebhookBlock(Block):
             if row is not None and row["revoked_at"]:
                 return self._refuse(row, ip, "revoked webhook", 410)
             return self._refuse(None, ip, "unknown webhook", 404)
-        if (wait := self.limiter.blocked("webhook_hook", row["id"])) is not None:
-            return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
-        if (wait := self.limiter.blocked("webhook_fail_total", row["id"])) is not None:
-            return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
         chunks, size = [], 0
         async for chunk in request.stream():
             size += len(chunk)
             if size > self.max_body:
                 return self._refuse(row, ip, "body too large", 413)
             chunks.append(chunk)
-        if (wait := self.limiter.blocked("webhook_fail_total", row["id"])) is not None:
-            return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
         headers = {k.lower(): val for k, val in request.headers.items()}
         status, response, work = self._ingest(row, headers, b"".join(chunks), ip, path_secret)
         if status in (401, 404):
-            self.limiter.hit("webhook_fail_total", row["id"])
             key = f"{row['id']}:{ip}"
             if (wait := self.limiter.blocked("webhook_fail", key)) is not None:
                 return self._refuse(row, ip, "rate limit", 429, retry_after=wait)
             self.limiter.hit("webhook_fail", key)
-        elif work is not None:
-            self.limiter.hit("webhook_hook", row["id"])
         return JSONResponse(response, status, background=BackgroundTask(self._dispatch, *work) if work else None)
 
     def _ingest(self, row: dict[str, Any], headers: dict[str, str], body: bytes, ip: str,
@@ -736,11 +726,17 @@ class WebhookBlock(Block):
         kind, _, ident = (target or "").partition(":")
         if kind != "out" or not ident:
             raise BlockError(f"send to {self.name}:out:<name>; see webhook_list")
-        row = self._active(ident, "out")
         principal = call.principal
-        call.note(target=f"{self.name}:out:{row['name']}")
+        name = ident.strip().lower()
+        call.note(target=f"{self.name}:out:{name}")
+        try:
+            row = self._active(name, "out")
+        except BlockError:
+            if self._is_owner(principal):
+                raise
+            raise BlockError(TARGET_NOT_FOUND) from None
         if not self._can_send(principal, row["settings"]):
-            raise BlockError(TARGET_REQUIRED)
+            raise BlockError(TARGET_NOT_FOUND)
         call.note(title=title, excerpt=task)
         return await self._deliver(row, {"type": "swb.message", "data": {
             "subject": title, "text": task, "from": principal.source, "trust": principal.trust, "project": project,
