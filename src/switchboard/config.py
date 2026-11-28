@@ -28,6 +28,10 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = "8870"
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
 MCP_OFF = "MCP is off."
+RETIRED_BLOCKS = {
+    "muse": "Remove blocks.muse from the config. The Muse gadget is retired, and SwB skips it. "
+            "Muse wakes through the Muse hook at https://swb.one/docs/setup/muse.",
+}
 
 # https://www.cloudflare.com/ips-v4 and https://www.cloudflare.com/ips-v6 (2026-11-27)
 CLOUDFLARE_NETWORKS = (
@@ -169,6 +173,7 @@ class Config:
     blocks: dict[str, dict[str, Any]] = field(default_factory=default_blocks)
     blocks_from_file: bool = False
     block_env: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    retired_blocks: tuple[str, ...] = ()
     agents: dict[str, Any] | None = None
     targets: dict[str, Any] = field(default_factory=dict)
     routes: list[dict[str, Any]] = field(default_factory=list)
@@ -237,6 +242,7 @@ class Config:
             out.append("Set SWB_PUBLIC_URL or configure an upstream method for owner sign-in")
         if not self.mcp_enabled:
             out.append(MCP_OFF)
+        out += [RETIRED_BLOCKS[use] for use in self.retired_blocks]
         return out
 
 
@@ -495,6 +501,10 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
             block_env[name] = configured_env(name, blocks[name]) if name in blocks else block_env.get(name, ())
     else:
         blocks = discovered
+    retired = {name: sec["use"] for name, sec in blocks.items() if sec.get("use") in RETIRED_BLOCKS}
+    for name in retired:
+        blocks.pop(name)
+        block_env.pop(name, None)
     cfg = Config(
         visibility=dict(raw.get("visibility") or v2.get("visibility") or {}),
         public_url=public_url,
@@ -530,6 +540,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] | None = 
         blocks_from_file=blocks_from_file,
         modes=parse_modes(v2.get("modes"), blocks),
         block_env=block_env,
+        retired_blocks=tuple(sorted(set(retired.values()))),
         agents=dict(v2["agents"]) if isinstance(v2.get("agents"), dict) else None,
         targets=dict(v2.get("targets") or {}),
         routes=[dict(r) for r in v2.get("routes") or [] if isinstance(r, dict)],
