@@ -333,22 +333,19 @@ test('hero actions share a baseline and keep mobile actions, license and command
       expect(fits).toBe(true);
       expect(github.right).toBeLessThanOrEqual(copy.right + 1);
       expect(chip.height).toBeLessThanOrEqual(28);
-      if (width === 390) {
+      if (chip.top >= github.bottom) {
         expect(inDomOrder).toBe(true);
         expect(license.top).toBeGreaterThan(github.bottom);
         expect(chip.top).toBeGreaterThan(license.bottom);
         expect(Math.abs(setup.left - chip.left)).toBeLessThanOrEqual(1);
         expect(license.top - github.bottom).toBeCloseTo(chip.top - license.bottom, 0);
-      } else if (chip.top >= github.bottom) {
-        expect(width).not.toBe(1440);
-        expect(Math.abs(setup.left - chip.left)).toBeLessThanOrEqual(1);
-        expect(chip.top - github.bottom).toBeLessThanOrEqual(8);
       } else {
+        expect(width).not.toBe(390);
         expect(chip.left).toBeGreaterThan(github.right);
+        expect(license.top).toBeGreaterThan(Math.max(chip.bottom, github.bottom));
         expect(Math.abs((chip.top + chip.bottom) / 2 - (github.top + github.bottom) / 2)).toBeLessThanOrEqual(1);
       }
       expect(Math.abs(setup.left - license.left)).toBeLessThanOrEqual(1);
-      if (width >= 1024) expect(license.top).toBeGreaterThan(Math.max(chip.bottom, github.bottom));
       if (width >= 1024) expect(Math.abs((copy.top + copy.bottom) / 2 - (hub.top + hub.bottom) / 2)).toBeLessThanOrEqual(1);
     }
   }
