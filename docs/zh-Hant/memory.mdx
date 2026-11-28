@@ -69,9 +69,11 @@ description: 讓代理共用學到的內容，並由你完整掌控。
 
 在 **Memory** 頁面選取 **Download**，即可把全部記憶存成 zip 檔。檔案中每個項目對應一個 Markdown 檔，依範圍和主題分資料夾存放。檔案也包含 `manifest.json`，其中有每個項目的歷史記錄和來源紀錄。
 
-選取 **Restore from file** 載入 zip 檔。還原會加入缺少的項目，並更新有變動的項目。其他項目維持原樣。同一個檔案可以放心重複載入。
+選取 **Restore from file** 載入 zip 檔。還原會加入缺少的項目，並保留現有項目。SwB 將匯入的文字標示為參考資訊，並記錄匯入者。
 
 以擁有者身分登入的代理可以用 `memory_export` 和 `memory_import` 完成同樣的操作。
+
+將 `overwrite` 設為 `true`，即可取代有變更的項目，並在歷史記錄保留舊版本。將 `trust_owner` 設為 `true`，即可為符合條件的項目保留擁有者信任等級。其他代理範圍內的項目仍標示為參考資訊。兩個選項的預設值都是 `false`。呼叫主控台的 `POST /api/memory/import` 上傳端點時，以查詢參數傳入這兩個選項。
 
 ## 備份到 Git
 
@@ -79,10 +81,12 @@ SwB 可以把記憶複製到你自己的私人 Git 存放庫。每次修改都�
 
 記憶中的所有內容都會進入這個存放庫。使用私人存放庫。
 
-在主控台開啟 **Memory**。在 **Git backup** 中填入存放庫網址和分支。如果是 HTTPS 網址，貼上一個對該存放庫有寫入權限的權杖。如果是 SSH 網址，貼上一把有寫入權限的部署金鑰。SwB 會加密保存權杖或金鑰。
+在主控台開啟 **Memory**。在 **Git backup** 中填入 HTTPS 或 SSH 存放庫網址和分支。如果是 HTTPS 網址，貼上一個對該存放庫有寫入權限的權杖。如果是 SSH 網址，貼上一把有寫入權限的部署金鑰。SwB 會加密保存權杖或金鑰。
 
 修改發生 30 秒後，SwB 會把這段時間內的修改合併成一次提交。選取 **Back up now** 可以立即提交。推送失敗時，SwB 會稍後重試。狀態列顯示最近一次備份和最近一次錯誤。
 
 選取 **Restore from repository**，即可從最新的提交載入記憶。
 
 以擁有者身分登入的代理可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。`memory_backup_configure` 會回傳一個認領連結，用來儲存權杖或金鑰。
+
+從 Git 還原時，可以使用相同的 `overwrite` 和 `trust_owner` 選項。呼叫主控台的 `POST /api/memory/backup/restore` 端點時，以 JSON 欄位傳入這兩個選項。其他作者提交的內容會標示為外部參考資訊。

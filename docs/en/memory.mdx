@@ -69,9 +69,11 @@ Each change by an agent shows in **History** and in the audit log. You can resto
 
 Select **Download** on the **Memory** page to save all memory as a zip file. The file holds one Markdown file per entry, in folders by scope and topic. It also holds `manifest.json` with the history and provenance of each entry.
 
-Select **Restore from file** to load a zip file. A restore adds missing entries and updates changed ones. It keeps all other entries. You can load the same file again safely.
+Select **Restore from file** to load a zip file. A restore adds missing entries and keeps existing entries. SwB marks imported text as information and records who imported it.
 
 Agents signed in as the owner can use `memory_export` and `memory_import` for the same tasks.
+
+Set `overwrite` to `true` to replace changed entries and keep their previous versions in history. Set `trust_owner` to `true` to keep owner trust for eligible entries. Entries in another agent’s scope stay framed as information. Both options default to `false`. Pass them as query parameters to the console upload at `POST /api/memory/import`.
 
 ## Back up to Git
 
@@ -79,10 +81,12 @@ SwB can copy memory into a private Git repository that you own. Each change beco
 
 Everything in memory goes to this repository. Use a private repository.
 
-Open **Memory** in the console. In **Git backup**, enter the repository address and the branch. For an HTTPS address, paste a token with write access to that repository. For an SSH address, paste a deploy key with write access. SwB keeps the token or key encrypted.
+Open **Memory** in the console. In **Git backup**, enter an HTTPS or SSH repository address and the branch. For an HTTPS address, paste a token with write access to that repository. For an SSH address, paste a deploy key with write access. SwB keeps the token or key encrypted.
 
 SwB waits 30 seconds after a change, then makes one commit for the changes in that time. Select **Back up now** to commit at once. SwB tries again later when a push fails. The status line shows the last backup and the last error.
 
 Select **Restore from repository** to load memory from the latest commit.
 
 Agents signed in as the owner can use `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` and `memory_backup_restore`. `memory_backup_configure` returns a claim link for the token or key.
+
+Git restores use the same `overwrite` and `trust_owner` options. Pass them as JSON fields to the console endpoint at `POST /api/memory/backup/restore`. SwB frames content from commits by other authors as external information.

@@ -69,9 +69,11 @@ description: 让智能体共享所学内容，并由你完全掌控。
 
 在 **Memory** 页面选择 **Download**，可以把全部记忆保存为 zip 文件。文件中每个条目对应一个 Markdown 文件，按范围和主题分文件夹存放。文件还包含 `manifest.json`，其中有每个条目的历史和来源记录。
 
-选择 **Restore from file** 载入 zip 文件。恢复会添加缺少的条目，并更新有变化的条目。其他条目保持原样。同一个文件可以安全地重复载入。
+选择 **Restore from file** 载入 zip 文件。恢复会添加缺少的条目，并保留已有条目。SwB 将导入的文本标为参考信息，并记录导入者。
 
 以所有者身份登录的智能体可以用 `memory_export` 和 `memory_import` 完成同样的操作。
+
+将 `overwrite` 设为 `true`，可替换有变化的条目，并在历史记录中保留旧版本。将 `trust_owner` 设为 `true`，可为符合条件的条目保留所有者信任等级。其他智能体范围内的条目仍标为参考信息。这两个选项默认为 `false`。调用控制台的 `POST /api/memory/import` 上传接口时，可通过查询参数传入这两个选项。
 
 ## 备份到 Git
 
@@ -79,10 +81,12 @@ SwB 可以把记忆复制到你自己的私有 Git 仓库。每次修改都会�
 
 记忆中的全部内容都会进入这个仓库。使用私有仓库。
 
-在控制台打开 **Memory**。在 **Git backup** 中填写仓库地址和分支。如果是 HTTPS 地址，粘贴一个对该仓库有写入权限的令牌。如果是 SSH 地址，粘贴一个有写入权限的部署密钥。SwB 会加密保存令牌或密钥。
+在控制台打开 **Memory**。在 **Git backup** 中填写 HTTPS 或 SSH 仓库地址和分支。如果是 HTTPS 地址，粘贴一个对该仓库有写入权限的令牌。如果是 SSH 地址，粘贴一个有写入权限的部署密钥。SwB 会加密保存令牌或密钥。
 
 修改发生 30 秒后，SwB 把这段时间内的修改合并为一次提交。选择 **Back up now** 可以立即提交。推送失败时，SwB 会稍后重试。状态行显示最近一次备份和最近一次错误。
 
 选择 **Restore from repository**，即可从最新的提交载入记忆。
 
 以所有者身份登录的智能体可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。`memory_backup_configure` 会返回一个用来保存令牌或密钥的认领链接。
+
+从 Git 恢复时，可以使用相同的 `overwrite` 和 `trust_owner` 选项。调用控制台的 `POST /api/memory/backup/restore` 接口时，通过 JSON 字段传入这两个选项。其他作者提交的内容会标为外部参考信息。
