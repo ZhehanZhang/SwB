@@ -26,7 +26,7 @@ export function SiteHeader({ lang, repository, docsOnlyControl, links = headerLi
   const path = usePathname();
   const active = links.findLast(({ href }) => path === href || path.startsWith(`${href}/`));
   const controlsGrid = docsOnlyControl
-    ? 'grid-cols-[4rem_repeat(5,2.25rem)] sm:grid-cols-[4rem_repeat(4,2.25rem)] lg:grid-cols-[4rem_12rem_repeat(3,2.25rem)]'
+    ? 'grid-cols-[2.25rem_4rem_repeat(4,2.25rem)] sm:grid-cols-[2.25rem_4rem_repeat(3,2.25rem)] lg:grid-cols-[12rem_4rem_repeat(3,2.25rem)]'
     : 'grid-cols-[repeat(5,2.25rem)] sm:grid-cols-[repeat(4,2.25rem)] lg:grid-cols-[12rem_repeat(3,2.25rem)]';
 
   return (
@@ -39,9 +39,9 @@ export function SiteHeader({ lang, repository, docsOnlyControl, links = headerLi
           ))}
         </div>
         <div data-header-controls className={`ml-auto grid items-center gap-1 sm:gap-2 ${controlsGrid}`}>
-          {docsOnlyControl}
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={headerIconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:text-center" />
+          {docsOnlyControl}
           <SwbAddressControl lang={lang} />
           <LanguageSelect data-header-item="language" className={headerIconButton}><Languages aria-hidden="true" className="size-4.5" /></LanguageSelect>
           <a data-header-item="github" className={`swb-button swb-button-icon ${headerIconButton}`} aria-label="GitHub" href={repository} target="_blank" rel="noreferrer">

@@ -24,13 +24,17 @@ test('latest docs show a compact version control with a working current entry', 
     const text = node.querySelector('span > span')!.getBoundingClientRect();
     const icon = node.querySelector('svg')!.getBoundingClientRect();
     const glyphOffset = Math.abs(text.top + text.height / 2 - icon.top - icon.height / 2);
-    return { left, right, height, addressHeight: address.height, gap: search.left - right, glyphOffset, viewport: window.innerWidth };
+    return {
+      left, right, height, addressHeight: address.height,
+      searchGap: left - search.right, addressGap: address.left - right,
+      glyphOffset, viewport: window.innerWidth,
+    };
   });
   expect(dimension.left).toBeGreaterThanOrEqual(20);
   expect(dimension.right).toBeLessThanOrEqual(dimension.viewport - 20);
   expect(dimension.height).toBe(dimension.addressHeight);
-  expect(dimension.gap).toBeGreaterThan(0);
-  expect(dimension.gap).toBeLessThanOrEqual(8);
+  expect(dimension.searchGap).toBe(dimension.viewport < 640 ? 4 : 8);
+  expect(dimension.addressGap).toBe(dimension.searchGap);
   expect(dimension.glyphOffset).toBeLessThanOrEqual(1);
   await button.click();
   const panel = versions(page);
