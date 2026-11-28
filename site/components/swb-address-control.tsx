@@ -27,6 +27,7 @@ export function SwbAddressControl({ lang, show }: { lang: Locale; show: boolean 
   const { address, saveAddress } = useSwbAddress();
   const fieldId = useId();
   const copy = getStartedCopy[lang];
+  const text = labels[lang as keyof typeof labels] ?? labels.en;
   const host = address ? new URL(address).host : '';
 
   return (
@@ -48,9 +49,9 @@ export function SwbAddressControl({ lang, show }: { lang: Locale; show: boolean 
               <button type="button" onClick={() => {
                 removeLegacyAddress();
                 saveAddress(null);
-              }} className="swb-button swb-button-compact hover:bg-fd-muted">{labels[lang].clear}</button>
+              }} className="swb-button swb-button-compact hover:bg-fd-muted">{text.clear}</button>
               <CopyTextButton text={() => linkWithSwbAddress(location.href, address)}
-                labels={{ copy: labels[lang].copy, copied: copy.copied }} className="swb-button swb-button-compact hover:bg-fd-muted" />
+                labels={{ copy: text.copy, copied: copy.copied }} className="swb-button swb-button-compact hover:bg-fd-muted" />
             </div>
           </PopoverContent>
         </Popover>

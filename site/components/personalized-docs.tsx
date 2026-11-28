@@ -59,7 +59,7 @@ const markdownLabels = {
 
 export function PersonalizedMarkdownCopy({ lang, markdownUrl }: { lang: Locale; markdownUrl: string }) {
   const { address } = useSwbAddress();
-  return <CopyTextButton labels={markdownLabels[lang]} className="swb-button swb-button-compact swb-doc-copy bg-fd-secondary hover:bg-fd-accent"
+  return <CopyTextButton labels={markdownLabels[lang as keyof typeof markdownLabels] ?? markdownLabels.en} className="swb-button swb-button-compact swb-doc-copy bg-fd-secondary hover:bg-fd-accent"
     text={async () => {
       const response = await fetch(markdownUrl);
       if (!response.ok) throw new Error(`Failed to fetch ${markdownUrl}`);
