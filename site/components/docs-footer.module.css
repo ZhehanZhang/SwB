@@ -1,0 +1,35 @@
+.footer {
+  margin-block-start: 1.5rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid var(--border);
+}
+
+.pagination {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.pagination > a {
+  grid-column: 1;
+  min-inline-size: 0;
+}
+
+.pagination > a:has(> div > :global(.lucide-chevron-right)) {
+  grid-column: 2;
+}
+
+.pagination > a > div > p {
+  overflow-wrap: anywhere;
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-start: 1rem;
+}
+
+@media (width < 768px) {
+  .pagination > a {
+    padding: .75rem;
+  }
+}

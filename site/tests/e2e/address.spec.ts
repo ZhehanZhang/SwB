@@ -3,6 +3,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createServer, get, type ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { locales, localize } from '../../lib/i18n';
+import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 
 const origin = 'https://my-swb.example.net:9443';
 const example = 'https://swb.example.com';
@@ -42,7 +44,7 @@ test('persists one address for Get started, docs, copy and Open in actions', asy
   });
 
   await openGetStarted(page);
-  await expect(indicator(page)).toHaveCount(0);
+  await expect(indicator(page)).toHaveAccessibleName(label);
   await address(page).fill(`${origin}/mcp`);
   await address(page).press('Enter');
   expect(await stored(page)).toBe(origin);
@@ -98,7 +100,7 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await indicator(page).click();
   const popover = page.getByRole('dialog');
   await expect(popover.getByRole('textbox', { name: label })).toHaveValue(origin);
-  await popover.getByRole('button', { name: 'Copy link with your address' }).click();
+  await popover.getByRole('button', { name: 'Copy link' }).click();
   const share = new URL(await clipboard(page));
   expect(share.search).toBe('?tab=remote');
   expect(share.hash).toBe(`#named-tunnel&swb=${encodeURIComponent(origin)}`);
@@ -107,14 +109,115 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await popover.getByRole('textbox', { name: label }).fill(update);
   await popover.getByRole('textbox', { name: label }).press('Enter');
   await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', `${update}/healthz`);
-  await popover.getByRole('button', { name: 'Clear' }).click();
-  await expect(indicator(page)).toHaveCount(0);
+  const clear = popover.getByRole('button', { name: 'Clear address' });
+  await clear.click();
+  await expect(indicator(page)).toHaveAccessibleName(label);
+  await expect(popover.getByRole('textbox', { name: label })).toBeFocused();
+  await expect(popover.getByRole('textbox', { name: label })).toHaveValue('');
+  await expect(clear).toHaveCount(0);
+  await expect(popover.getByRole('button', { name: 'Copy link' })).toBeDisabled();
+  await page.keyboard.press('Escape');
   await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', 'https://swb-your-team.example.net/healthz');
   await copyBlock(page, 'SWB_PUBLIC_URL=https://swb-your-team.example.net');
   expect(await stored(page)).toBeNull();
   await openGetStarted(page);
   await expect(address(page)).toHaveValue('');
   await expect(docs(page).getByRole('region', { name: 'Claude', exact: true }).locator('pre')).toContainText(example);
+});
+
+test('address trigger matches the language control and its aligned joined panel saves explicitly', async ({ page }) => {
+  await page.goto(`${install}?swb=${encodeURIComponent(origin)}`);
+  const trigger = indicator(page);
+  await expect(trigger).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
+  const dimensions = await page.locator('[data-header-item="address"], [data-header-item="language"]').evaluateAll((buttons) => buttons.map((button) => {
+    const style = getComputedStyle(button);
+    const svg = button.querySelector('svg')!;
+    return {
+      height: style.height, width: style.width, radius: style.borderRadius, padding: style.padding,
+      icon: svg.getBoundingClientRect().width, stroke: getComputedStyle(svg).strokeWidth,
+    };
+  }));
+  expect(dimensions).toHaveLength(2);
+  expect(dimensions[0]).toEqual(dimensions[1]);
+  await trigger.click();
+
+  const popover = page.getByRole('dialog', { name: label });
+  const input = popover.getByRole('textbox', { name: label });
+  const save = popover.getByRole('button', { name: 'Save' });
+  const clear = popover.getByRole('button', { name: 'Clear address' });
+  const copy = popover.getByRole('button', { name: 'Copy link' });
+  const field = popover.locator('[data-address-field]');
+  const saved = field.locator('[data-address-saved]');
+  await expect(copy).toHaveAttribute('title', 'Copy link');
+  await expect(popover).toBeFocused();
+  await expect(input).toHaveValue(origin);
+  await popover.evaluate((panel) => Promise.all(panel.getAnimations().map((animation) => animation.finished)));
+  const [buttonBox, panelBox, fieldBox, inputBox, clearBox, copyBox, saveBox] = await Promise.all(
+    [trigger, popover, field, input, clear, copy, save].map((item) => item.boundingBox()),
+  );
+  const width = page.viewportSize()!.width;
+  const panelRight = panelBox!.x + panelBox!.width;
+  if (width === 390) {
+    expect(Math.abs(panelBox!.x - 20)).toBeLessThanOrEqual(1);
+    expect(Math.abs(panelRight - width + 20)).toBeLessThanOrEqual(1);
+  } else {
+    expect(panelBox!.width).toBe(320);
+    expect(Math.abs(panelRight - buttonBox!.x - buttonBox!.width)).toBeLessThanOrEqual(1);
+  }
+  expect(copyBox!.y + copyBox!.height).toBeLessThanOrEqual(fieldBox!.y);
+  expect(inputBox!.x + inputBox!.width).toBeLessThanOrEqual(clearBox!.x);
+  expect(clearBox!.x + clearBox!.width).toBeLessThanOrEqual(saveBox!.x);
+  expect(saveBox!.x + saveBox!.width).toBeLessThan(fieldBox!.x + fieldBox!.width);
+  await expect(save).toHaveCSS('border-inline-start-width', '1px');
+  expect(saveBox!.height).toBe(inputBox!.height);
+
+  await page.keyboard.press('Tab');
+  await expect(input).toBeFocused();
+  await input.fill('example');
+  await save.click();
+  await expect(input).toHaveAttribute('aria-invalid', 'true');
+  expect(await stored(page)).toBe(origin);
+  const update = 'https://new-swb.example.org';
+  await input.fill(`${update}/mcp`);
+  await input.press('Tab');
+  expect(await stored(page)).toBe(origin);
+  await save.click();
+  await expect(input).toHaveValue(update);
+  expect(await stored(page)).toBe(update);
+  await expect(saved).toBeVisible();
+  await expect(saved).toBeHidden({ timeout: 2500 });
+  await input.fill(origin);
+  await input.press('Enter');
+  await expect(saved).toBeVisible();
+  await expect(popover.getByText('Address saved', { exact: true })).toHaveAttribute('role', 'status');
+  expect(await stored(page)).toBe(origin);
+  await input.fill(update);
+  await expect(saved).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(popover).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test('sets an address from the landing page and imports links on About', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await indicator(page).click();
+  const panel = page.getByRole('dialog', { name: label });
+  const input = panel.getByRole('textbox', { name: label });
+  await expect(input).toHaveValue('');
+  await expect(panel.getByRole('button', { name: 'Clear address' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Copy link' })).toBeDisabled();
+  await input.fill(example);
+  await input.press('Enter');
+  await panel.getByRole('button', { name: 'Copy link' }).click();
+  const shared = new URL(await clipboard(page));
+  expect(shared.search).toBe('');
+  expect(shared.hash).toBe(`#swb=${encodeURIComponent(example)}`);
+  await page.goto(`/about${shared.hash.replace(encodeURIComponent(example), encodeURIComponent(origin))}`);
+  await expect(page).toHaveURL('/about');
+  await expect(indicator(page)).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
+  await openGetStarted(page);
+  await expect(address(page)).toHaveValue(origin);
 });
 
 test('accepts fragment and query prefill and preserves anchors and picker state', async ({ page }) => {
@@ -133,6 +236,29 @@ test('accepts fragment and query prefill and preserves anchors and picker state'
   await page.evaluate((value) => { location.hash = `swb=${encodeURIComponent(value)}&claude`; }, origin);
   await expect(page).toHaveURL(`${start}?agents=claude&run=server#claude`);
   await expect(address(page)).toHaveValue(origin);
+});
+
+test('prefills and fits the joined address panel in all eight locales', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const locale of locales) {
+    const path = localize(locale, install);
+    await page.goto(`${path}#swb=${encodeURIComponent(origin)}`);
+    const trigger = page.locator('[data-header-item="address"]');
+    await expect(trigger).toHaveAttribute('title', new URL(origin).host);
+    await expect(page).toHaveURL(path);
+    await trigger.click();
+    const panel = page.getByRole('dialog');
+    await expect(panel.getByRole('textbox')).toHaveValue(origin);
+    const overflow = await panel.evaluate((element) => {
+      const { left, right } = element.getBoundingClientRect();
+      return Math.max(20 - left, right - innerWidth + 20, ...[...element.querySelectorAll('label, button')].map((control) => {
+        const rect = control.getBoundingClientRect();
+        return Math.max(left - rect.left, rect.right - right, control.scrollWidth - control.clientWidth);
+      }));
+    });
+    expect(overflow, locale).toBeLessThanOrEqual(1);
+    await expect(panel.getByRole('button')).toHaveCount(3);
+  }
 });
 
 test('rejects hostile field, fragment and query input without changing the saved address', async ({ page }) => {
@@ -189,28 +315,20 @@ test('keeps server HTML, RSC, Markdown, llms text and all 18 prompt files canoni
 
 test('long saved addresses leave docs CLS below 0.01', async ({ page }) => {
   const long = `https://${'a'.repeat(50)}.${'b'.repeat(50)}.${'c'.repeat(50)}.example.org:9443`;
-  await page.addInitScript(({ key, address }) => {
-    localStorage.setItem(key, address);
-    const shifts: number[] = [];
-    Object.assign(window, { swbLayoutShifts: shifts });
-    new PerformanceObserver((entries) => {
-      for (const item of entries.getEntries()) {
-        const shift = item as PerformanceEntry & { hadRecentInput: boolean; value: number };
-        if (!shift.hadRecentInput) shifts.push(shift.value);
-      }
-    }).observe({ type: 'layout-shift', buffered: true });
-  }, { key: addressKey, address: long });
+  await page.addInitScript(observeLayoutShifts);
+  await page.addInitScript(({ key, address }) => localStorage.setItem(key, address), { key: addressKey, address: long });
   for (const path of [claude, selfHosting, connect]) {
     await page.goto(path);
     await expect(indicator(page)).toHaveAttribute('title', new URL(long).host);
     await expect(docs(page).getByText(new RegExp(long.replaceAll('.', '\\.'))).first()).toBeVisible();
-    const total = await page.evaluate(async () => {
+    await page.evaluate(async () => {
       await document.fonts.ready;
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      return (Reflect.get(window, 'swbLayoutShifts') as number[]).reduce((sum, value) => sum + value, 0);
     });
+    const shifts = await page.evaluate(readLayoutShifts);
+    const total = shifts.reduce((sum, { value }) => sum + value, 0);
     console.info(`${path} CLS ${total}`);
-    expect(total, path).toBeLessThan(0.01);
+    expect(total, `${path}\n${JSON.stringify(shifts)}`).toBeLessThan(0.01);
   }
 });
 

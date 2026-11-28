@@ -1,6 +1,5 @@
 'use client';
 
-import { Check } from 'lucide-react';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import {
   computerCommand, getStartedAgentIds, getStartedAgents, getStartedStyleId,
@@ -11,6 +10,8 @@ import { getStartedCopy } from '@/lib/get-started-copy';
 import { getStartedExplanation } from '@/lib/get-started-explanation';
 import { localize, type Locale } from '@/lib/i18n';
 import { personalizeSwb } from '@/lib/urls';
+import { AppPicker } from './app-picker';
+import { BlockHeader, GuideLink } from './block-actions';
 import { ProviderMark } from './deploy-providers';
 import { MarkTile } from './mark-tile';
 import { CopyTextButton, PromptActions } from './prompt-actions';
@@ -30,6 +31,7 @@ const initialView: View = {
   run: 'local', agents: getStartedAgentIds, order: getStartedAgentIds, ready: false, animate: false,
 };
 const agentsById = new Map(getStartedAgents.map((agent) => [agent.id, agent]));
+const action = 'swb-button swb-button-compact px-2 text-[13px] hover:bg-fd-muted max-[420px]:px-1.5 max-[420px]:text-xs';
 
 function replaceLocation({ run, agents }: View, address: string | null) {
   const url = new URL(location.href);
@@ -41,12 +43,13 @@ function replaceLocation({ run, agents }: View, address: string | null) {
   history.replaceState(history.state, '', url);
 }
 
-function Command({ text, labels }: { text: string; labels: { copyCommand: string; copied: string } }) {
+function Command({ text, labels, secondary }: { text: string; labels: { copyCommand: string; copied: string }; secondary?: ReactNode }) {
   return (
-    <div className={styles.command} data-stacked={text.includes('\n') || text.length > 80}>
-      <div className={styles.commandAction}>
+    <div className={styles.command}>
+      <div className="swb-action-row px-2 py-1.5" data-command-actions>
         <CopyTextButton text={text} labels={{ copy: labels.copyCommand, copied: labels.copied }}
-          className="swb-button swb-button-compact hover:bg-fd-muted" />
+          className={action} />
+        {secondary}
       </div>
       <pre tabIndex={0}><code>{text}</code></pre>
     </div>
@@ -108,15 +111,26 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
   }
 
   const tunnelLink = (
-    <a className={styles.supportLink} href={`${selfHosting}#cloudflare-tunnel`}>
+    <a className={action} href={`${selfHosting}#cloudflare-tunnel`}>
       <ProviderMark name="cloudflare" />{labels.reachAnywhere}
     </a>
   );
 
   return (
     <div className={`not-prose ${styles.page}`} data-get-started data-ready={view.ready} data-animate={view.animate}>
-      <section aria-labelledby="start-run">
-        <h2 className={styles.title} id="start-run">{labels.runTitle}</h2>
+      <section className={styles.runSection} aria-labelledby="start-run">
+        <BlockHeader guides={
+          <>
+            <span className={styles.runGuide} data-start-guide="local" data-active={view.run === 'local'}>
+              <GuideLink href={localize(lang, '/docs/install')}>{labels.installGuide}</GuideLink>
+            </span>
+            <span className={styles.runGuide} data-start-guide="hosted" data-active={view.run !== 'local'}>
+              <GuideLink href={selfHosting}>{labels.selfHostingGuide}</GuideLink>
+            </span>
+          </>
+        }>
+          <h2 className={styles.title} id="start-run">{labels.runTitle}</h2>
+        </BlockHeader>
         <p className={styles.runHelp} id="start-run-help">{labels.runHelp}</p>
         <div className={styles.segments} role="group" aria-labelledby="start-run" aria-describedby="start-run-help">
           {runLocations.map((run) => (
@@ -128,52 +142,34 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
         <div className={styles.runPanels}>
           <div className={styles.runPanel} data-start-run="local" data-active={view.run === 'local'} inert={view.run !== 'local'}>
             <div className={styles.runContent}>
-              <Command text={computerCommand} labels={labels} />
+              <Command text={computerCommand} labels={labels} secondary={tunnelLink} />
               <details className={styles.alternative}>
                 <summary>{labels.pipx}</summary>
                 <Command text={pipxCommand} labels={labels} />
               </details>
-              <div className={styles.supportLinks}>
-                {tunnelLink}
-                <a className={styles.supportLink} href={localize(lang, '/docs/install')}>{labels.installGuide}</a>
-              </div>
             </div>
           </div>
           <div className={styles.runPanel} data-start-run="server" data-active={view.run === 'server'} inert={view.run !== 'server'}>
             <div className={styles.runContent}>
-              <Command text={serverCommand} labels={labels} />
-              <div className={styles.supportLinks}>
-                {tunnelLink}
-                <a className={styles.supportLink} href={selfHosting}>{labels.selfHostingGuide}</a>
-              </div>
+              <Command text={serverCommand} labels={labels} secondary={tunnelLink} />
             </div>
           </div>
           <div className={styles.runPanel} data-start-run="cloud" data-active={view.run === 'cloud'} inert={view.run !== 'cloud'}>
             <div className={styles.runContent}>
               {cloud}
-              <a className={styles.supportLink} href={selfHosting}>{labels.selfHostingGuide}</a>
             </div>
           </div>
         </div>
         <div className={styles.address}>
           <label htmlFor="start-address">{labels.address}</label>
-          <p className={styles.addressHelp} id="start-address-help">{labels.addressHelp}</p>
           <SwbAddressField id="start-address" label={labels.address} error={labels.addressError}
-            describedBy="start-address-help" onEdit={(next) => replaceLocation(view, next)} />
+            onEdit={(next) => replaceLocation(view, next)} />
         </div>
       </section>
       <section aria-labelledby="start-agents">
         <h2 className={styles.title} id="start-agents">{labels.agentsTitle}</h2>
-        <div className={styles.tiles} role="group" aria-labelledby="start-agents">
-          {getStartedAgents.map(({ id, name, mark }) => (
-            <button key={id} type="button" className={styles.tile} aria-pressed={view.ready && view.agents.includes(id)}
-              aria-controls={id} onClick={() => toggleAgent(id)}>
-              <MarkTile kind={mark} className={styles.mark} />
-              <span>{name}</span>
-              <Check className={styles.selectedMark} size={15} aria-hidden="true" />
-            </button>
-          ))}
-        </div>
+        <AppPicker mode="toggle" labelledBy="start-agents" apps={getStartedAgents}
+          selected={view.ready ? view.agents : []} onChange={toggleAgent} />
         <div className={styles.agents}>
           {view.order.map((id) => {
             const { name, mark, prompt, open, docs } = agentsById.get(id)!;
@@ -183,17 +179,20 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
             return (
               <div key={id} className={styles.agent} data-start-agent={id} data-active={active} inert={!active}>
                 <section id={id} className={styles.agentBody} aria-labelledby={`${id}-heading`}>
-                  <h3 className={styles.agentTitle} id={`${id}-heading`}>
-                    <MarkTile kind={mark} className={styles.mark} />
-                    {name}
-                  </h3>
+                  <BlockHeader guides={
+                    <>
+                      {companionHelp && <GuideLink href={localize(lang, '/docs/companion')}>{labels.companionGuide}</GuideLink>}
+                      <GuideLink href={localize(lang, docs)}>{labels.guide}</GuideLink>
+                    </>
+                  }>
+                    <h3 className={styles.agentTitle} id={`${id}-heading`}>
+                      <MarkTile kind={mark} className={styles.mark} />
+                      {name}
+                    </h3>
+                  </BlockHeader>
                   <p className={styles.procedure} data-agent-before>
                     {explanations.before[id]}
-                    {companionHelp && (
-                      <> {labels.companionHelp} <a className={styles.supportLink} href={localize(lang, '/docs/companion')}>
-                        {labels.companionGuide}
-                      </a></>
-                    )}
+                    {companionHelp && <> {labels.companionHelp}</>}
                   </p>
                   <div className={styles.prompt}>
                     <PromptActions text={text} labels={labels} targets={open} />
@@ -201,7 +200,6 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
                   </div>
                   <p className={styles.procedure} data-agent-after>{explanations.after[id]}</p>
                   <p className={styles.procedure}>{labels.procedure[id]}</p>
-                  <a className={styles.supportLink} href={localize(lang, docs)}>{labels.guide}</a>
                 </section>
               </div>
             );

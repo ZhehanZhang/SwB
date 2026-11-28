@@ -1,4 +1,5 @@
 import { expect, test, type APIResponse } from '@playwright/test';
+import { locales } from '../../lib/i18n';
 
 const site = 'https://swb.one';
 const noRedirects = { maxRedirects: 0 };
@@ -138,6 +139,22 @@ for (const [path, destination] of [
     expect(location(response)).toBe(new URL(destination, response.url()).href);
   });
 }
+
+test('permanently redirects the retired policy in all locales and formats', async ({ request }) => {
+  const retired = '/docs/trademarks';
+  for (const prefix of ['', ...locales.map((lang) => `/${lang}`)]) {
+    const routes = [
+      [`${prefix}${retired}`, `${prefix}/about`],
+      [`${prefix}${retired}.mdx`, `${prefix}/about.mdx`],
+    ];
+    if (prefix !== '/en') routes.push([`/llms.mdx${prefix}${retired}`, `/llms.mdx${prefix}/about`]);
+    for (const [path, destination] of routes) {
+      const response = await request.get(`${path}?ref=old`, { ...noRedirects, headers: chinesePreference });
+      expect(response.status(), path).toBe(308);
+      expect(location(response), path).toBe(new URL(`${destination}?ref=old`, response.url()).href);
+    }
+  }
+});
 
 for (const path of ['/', '/docs', '/docs/install', '/about']) {
   const suffix = path === '/' ? '' : path;

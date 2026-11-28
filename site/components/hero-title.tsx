@@ -1,78 +1,71 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { MarkTile, type MarkKind } from './mark-tile';
-import { STEP, agentPair, agentPairs, clock, trips } from '@/lib/live';
+import { heroApps, type HeroApp } from '@/lib/live';
+import { useHeroMotion } from './hero-motion';
+import { MarkTile } from './mark-tile';
 
 type Props = {
   stem: string;
   endingPrefix?: string;
   endings: string[];
   between: [string, string, string];
-  names: Partial<Record<MarkKind, string>>;
 };
 
-function Slot({ options, current, names }: { options: MarkKind[]; current: MarkKind; names: Props['names'] }) {
+const names = Object.fromEntries(heroApps.map(({ kind, label }) => [kind, kind === 'dots' ? 'ChatGPT dots' : label]));
+const kinds = heroApps.map(({ kind }) => kind);
+
+function Slot({ first, current }: { first: HeroApp; current: HeroApp }) {
   return (
     <span className="swb-slot">
-      {options.map((kind) => (
-        <span key={kind} className={`swb-chip ${kind === current ? 'swb-chip-on' : ''}`} aria-hidden={kind !== current}>
+      {[first, ...kinds.filter((kind) => kind !== first)].map((kind) => (
+        <span key={kind} className={`swb-chip ${kind === current ? 'swb-chip-on' : ''}`} data-hero-app={kind} aria-hidden={kind !== current}>
           <MarkTile kind={kind} className="swb-chip-mark" />
-          {names[kind] ?? kind}
+          {names[kind]}
         </span>
       ))}
     </span>
   );
 }
 
-const starts = [...new Set(agentPairs.map(({ a }) => a))];
-const ends = [...new Set(agentPairs.map(({ b }) => b))];
-
-export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props) {
+export function HeroTitle({ stem, endingPrefix, endings, between }: Props) {
   const [word, setWord] = useState(0);
-  const [step, setStep] = useState(0);
   const subtitle = useRef<HTMLSpanElement>(null);
-  const pair = agentPair(step);
+  const { pair, initial } = useHeroMotion();
 
   useLayoutEffect(() => {
-    const slots = subtitle.current!.querySelectorAll<HTMLElement>('.swb-slot');
-    const words = subtitle.current!.querySelectorAll<HTMLElement>('.swb-between-text');
+    const row = subtitle.current!;
+    const slots = row.querySelectorAll<HTMLElement>('.swb-slot');
     const chips = [...slots].map((slot) => slot.querySelector('.swb-chip-on')!);
     const resize = () => {
-      const sameRow = slots[0].parentElement!.getBoundingClientRect().top === slots[1].parentElement!.getBoundingClientRect().top;
-      let offset = 0;
       slots.forEach((slot, index) => {
-        if (index && !sameRow) offset = 0;
         const style = getComputedStyle(slot);
         const border = parseFloat(style.borderInlineStartWidth) + parseFloat(style.borderInlineEndWidth);
         const base = parseFloat(style.width) + border;
         const active = parseFloat(getComputedStyle(chips[index]).width) + border;
-        slot.style.setProperty('--swb-pill-offset', `${offset}px`);
-        slot.style.setProperty('--swb-pill-scale', String(base ? active / base : 1));
-        offset += active - base;
-        words[index]?.style.setProperty('--swb-pill-offset', `${offset}px`);
+        const part = index === 0 ? 'lead' : 'tail';
+        row.style.setProperty(`--swb-${part}-width`, `${base}px`);
+        row.style.setProperty(`--swb-${part}-scale`, String(base ? active / base : 1));
       });
     };
     resize();
     const observer = new ResizeObserver(resize);
-    [subtitle.current!, ...slots, ...chips].forEach((node) => observer.observe(node));
+    [row, ...slots, ...chips].forEach((node) => observer.observe(node));
     return () => observer.disconnect();
   }, [pair.n]);
 
   useEffect(() => {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const epoch = performance.now();
     let timer: number | undefined;
     function onMotionChange() {
       window.clearInterval(timer);
       if (motion.matches) {
         setWord(0);
-        setStep(0);
         return;
       }
       timer = window.setInterval(() => {
-        const now = clock();
-        setWord(Math.floor(now / 2.4) % endings.length);
-        setStep(Math.floor(now / STEP) % trips.length);
+        setWord(Math.floor((performance.now() - epoch) / 2400) % endings.length);
       }, 100);
     }
     onMotionChange();
@@ -97,15 +90,15 @@ export function HeroTitle({ stem, endingPrefix, endings, between, names }: Props
       </h1>
       <p className="swb-between mt-3 text-base" data-hero-pair={pair.n}>
         {between[0] && <span className="swb-between-text">{between[0]}</span>}
-        <span ref={subtitle} className="swb-pair" data-with-suffix={between[2] ? '' : undefined}>
-          <span className="swb-pair-lead">
-            <Slot options={starts} current={pair.a} names={names} />
-            <span className="swb-between-text">{between[1]}</span>
+        <span ref={subtitle} className="swb-pair">
+          <span className="swb-pair-row">
+            <span className="swb-pair-lead">
+              <Slot first={initial.a} current={pair.a} />
+              <span className="swb-between-text">{between[1]}</span>
+            </span>
+            <span className="swb-pair-tail"><Slot first={initial.b} current={pair.b} /></span>
           </span>
-          <span className="swb-pair-tail">
-            <Slot options={ends} current={pair.b} names={names} />
-            {between[2] && <span className="swb-between-text">{between[2]}</span>}
-          </span>
+          {between[2] && <span className="swb-pair-suffix">{between[2]}</span>}
         </span>
       </p>
     </>

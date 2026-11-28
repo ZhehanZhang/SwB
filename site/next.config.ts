@@ -36,9 +36,17 @@ const config: NextConfig = {
     };
   },
   async redirects() {
+    const localized = `/:lang(${i18n.languages.join('|')})`;
+    const nonEnglish = `/:lang(${locales})`;
     return [
       { source: '/docs/about', destination: '/about', permanent: true },
-      { source: `/:lang(${i18n.languages.join('|')})/docs/about`, destination: '/:lang/about', permanent: true },
+      { source: `${localized}/docs/about`, destination: '/:lang/about', permanent: true },
+      { source: '/docs/trademarks', destination: '/about', permanent: true },
+      { source: `${localized}/docs/trademarks`, destination: '/:lang/about', permanent: true },
+      { source: '/docs/trademarks.mdx', destination: '/about.mdx', permanent: true },
+      { source: `${localized}/docs/trademarks.mdx`, destination: '/:lang/about.mdx', permanent: true },
+      { source: '/llms.mdx/docs/trademarks', destination: '/llms.mdx/about', permanent: true },
+      { source: `/llms.mdx${nonEnglish}/docs/trademarks`, destination: '/llms.mdx/:lang/about', permanent: true },
     ];
   },
 };

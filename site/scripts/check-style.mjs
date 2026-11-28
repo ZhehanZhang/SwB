@@ -18,7 +18,6 @@ const negation = {
 const punct = /[:;—–·：；]/;
 const listLine = /^\s*([-*+]\s|\d+[.)]\s)/;
 const listElement = /^\s*<(Steps?|[ou]l|li)\b/;
-const legalQuote = /^\s*> (\[Section 6 of the Apache License 2\.0\]|This project is separate from SwB\.|\[Apache 许可证 2\.0 第 6 条\]|本项目独立于 SwB。|\[Apache 2\.0 授權條款第 6 條\]|本專案獨立於 SwB。)/;
 
 const allowedNegation = [
   ['de/install.mdx', 'ohne Anmeldung'],
@@ -40,7 +39,6 @@ for (const file of locales.flatMap((locale) => files(join(root, locale)))) {
   const lang = relative(root, file).split('/')[0];
   const zh = lang.startsWith('zh');
   const rule = zh ? negation.zh : negation[lang] ?? negation.en;
-  const trademarks = file.endsWith('/trademarks.mdx');
   let fence = false;
   let front = 0;
   readFileSync(file, 'utf8').split('\n').forEach((raw, index) => {
@@ -58,7 +56,7 @@ for (const file of locales.flatMap((locale) => files(join(root, locale)))) {
     if (punct.test(line)) found.push('punctuation');
     const prose = zh ? line.replace(/(分別|分别|識別|识别|類別|类别|特別|特别|別名|别名|區別|区别|個別|个别|不同|不斷|不断|不久|不過|不过|非常|未來|未来|無論|无论)/g, '') : line;
     const allowed = allowedNegation.filter(([path]) => relative(root, file) === path).reduce((text, [, phrase]) => text.replaceAll(phrase, ''), prose);
-    if (rule.test(allowed) && !(trademarks && legalQuote.test(raw))) found.push('negation');
+    if (rule.test(allowed)) found.push('negation');
     if (found.length) {
       problems += 1;
       console.log(`${relative(root, file)}:${index + 1} ${found.join(', ')}  ${raw.trim().slice(0, 120)}`);

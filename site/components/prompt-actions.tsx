@@ -10,14 +10,17 @@ const targetNames: Record<Target, string> = { claude: 'Claude', chatgpt: 'ChatGP
 type CopyLabels = { copy: string; copied: string };
 type Labels = CopyLabels & { open: string };
 
-export function CopyTextButton({ text, labels, className }: { text: string | (() => string | Promise<string>); labels: CopyLabels; className: string }) {
+export function CopyTextButton({ text, labels, className, iconOnly = false, disabled }: {
+  text: string | (() => string | Promise<string>); labels: CopyLabels; className: string; iconOnly?: boolean; disabled?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   return (
     <>
-      <button type="button" className={className} onClick={async () => {
+      <button type="button" className={className} disabled={disabled} aria-label={iconOnly ? labels.copy : undefined}
+        title={iconOnly ? labels.copy : undefined} onClick={async () => {
         const content = typeof text === 'string' ? text : text();
         try {
           if (typeof content === 'string') await navigator.clipboard.writeText(content);
@@ -30,7 +33,7 @@ export function CopyTextButton({ text, labels, className }: { text: string | (()
         timer.current = setTimeout(() => setCopied(false), 1800);
       }}>
         {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        {labels.copy}
+        {!iconOnly && labels.copy}
       </button>
       <span className="sr-only" role="status">{copied ? labels.copied : ''}</span>
     </>
@@ -40,7 +43,7 @@ export function CopyTextButton({ text, labels, className }: { text: string | (()
 export function PromptActions({ text, labels, targets }: { text: string; labels: Labels; targets: readonly Target[] }) {
   const link = 'swb-button swb-button-compact hover:bg-fd-muted';
   return (
-    <div className="flex flex-wrap items-center gap-1 px-2 py-1.5">
+    <div className="swb-action-row px-2 py-1.5" data-prompt-actions>
       <CopyTextButton text={text} labels={labels} className={link} />
       {targets.map((target) => (
         <a key={target} className={link} href={openUrl[target](text)} target="_blank" rel="noreferrer">

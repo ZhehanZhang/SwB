@@ -45,6 +45,8 @@ export function initialGetStartedScript() {
     agents.forEach((id, index) => sheet.insertRule('[data-get-started] [data-start-agent="' + id + '"] { display: grid; order: ' + index + '; }', sheet.cssRules.length));
     sheet.insertRule('[data-get-started] [data-start-run] { visibility: hidden; grid-template-rows: 0fr; }', sheet.cssRules.length);
     sheet.insertRule('[data-get-started] [data-start-run="' + run + '"] { visibility: visible; grid-template-rows: 1fr; }', sheet.cssRules.length);
+    sheet.insertRule('[data-get-started] [data-start-guide] { display: none; }', sheet.cssRules.length);
+    sheet.insertRule('[data-get-started] [data-start-guide="' + (run === 'local' ? 'local' : 'hosted') + '"] { display: block; }', sheet.cssRules.length);
   })();`;
 }
 

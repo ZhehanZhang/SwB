@@ -1,38 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type CSSProperties, type RefObject } from 'react';
 import type { Locale } from '@/lib/i18n';
-import { CYCLE, LEG, STEP, agentPair, clock, trips as livePairs } from '@/lib/live';
-import { getStartedHref, type SetupMark } from '@/lib/setup';
-import { MarkTile, type MarkKind } from './mark-tile';
-
-type Node = { kind: SetupMark; label: string };
-
-const nodes: Node[] = [
-  { kind: 'slack', label: 'Slack' },
-  { kind: 'claude', label: 'Claude' },
-  { kind: 'capy', label: 'Capy Captain' },
-  { kind: 'dots', label: 'Dots' },
-  { kind: 'discord', label: 'Discord' },
-  { kind: 'chatgpt', label: 'ChatGPT' },
-  { kind: 'codex', label: 'Codex' },
-  { kind: 'github', label: 'GitHub' },
-  { kind: 'gemini', label: 'Gemini' },
-  { kind: 'claude-code', label: 'Claude Code' },
-  { kind: 'grok', label: 'Grok' },
-  { kind: 'telegram', label: 'Telegram' },
-  { kind: 'grok-bot', label: 'Grok Bot' },
-  { kind: 'muse', label: 'Muse' },
-];
-
-const index = (kind: MarkKind) => nodes.findIndex((node) => node.kind === kind);
-const trips = livePairs.map(([from, to]) => [index(from), index(to)] as const);
-const firstPair = agentPair(0);
+import { heroApps as nodes, PAIR_LEG_MS } from '@/lib/live';
+import { getStartedHref } from '@/lib/setup';
+import { useHeroMotion } from './hero-motion';
+import { MarkTile } from './mark-tile';
 
 const BEND = 0.14;
-const RETURN_START = 2 * LEG + 0.1;
-
 const layouts = {
   wide: { W: 1000, H: 820, r: 282, pulse: 5.5 },
   tall: { W: 1000, H: 1000, r: 338, pulse: 4.5 },
@@ -63,66 +39,57 @@ function side(i: number) {
 
 const pct = (value: number, total: number) => `${(value / total) * 100}%`;
 
-function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout) {
+function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout, motion: ReturnType<typeof useHeroMotion>) {
+  const snapshot = useRef(motion);
+  const sync = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    snapshot.current = motion;
+    sync.current?.();
+  }, [motion]);
+
   useEffect(() => {
     const element = overlay.current;
     if (!element) return;
-    const spec = layouts[layout];
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const cx = spec.W / 2;
-    const cy = spec.H / 2;
+    const { W, H, pulse: radius } = layouts[layout];
     const curves = nodes.map((_, i) => cord(layout, i));
     const spokes = element.querySelectorAll<SVGPathElement>('.swb-transit');
-    const pulses = element.querySelectorAll<SVGCircleElement>('.swb-hub-pulse');
-    const flowing = new Set<number>();
-    let activeStep = 0;
+    const pulse = element.querySelector<SVGCircleElement>('.swb-hub-pulse')!;
+    let flowing = -1;
+    let visible = false;
     const resize = () => {
       const { width } = element.getBoundingClientRect();
-      if (!width) return;
-      pulses.forEach((pulse) => pulse.setAttribute('r', String(spec.pulse * spec.W / width)));
+      if (width) pulse.setAttribute('r', String(radius * W / width));
     };
 
     const redraw = () => {
-      const still = motion.matches;
-      const time = still ? 0 : clock();
-      const step = Math.floor(time / STEP) % trips.length;
-      if (step !== activeStep) {
-        activeStep = step;
-        const { a, b } = agentPair(step);
-        spokes.forEach((path, i) => path.toggleAttribute('data-active', nodes[i].kind === a || nodes[i].kind === b));
+      const { pair, startedAt } = snapshot.current;
+      const progress = visible && startedAt !== null ? (performance.now() - startedAt - 220) / PAIR_LEG_MS : 2;
+      const moving = progress >= 0 && progress < 2;
+      const entering = progress < 1;
+      const spoke = moving ? nodes.findIndex(({ kind }) => kind === (entering ? pair.a : pair.b)) : -1;
+      if (spoke !== flowing) {
+        spokes[flowing]?.removeAttribute('data-flow');
+        spokes[spoke]?.setAttribute('data-flow', '');
+        flowing = spoke;
       }
-      flowing.clear();
-      trips.forEach(([from, to], i) => {
-        const local = (time + CYCLE - i * STEP) % CYCLE;
-        const returning = local >= RETURN_START;
-        const progress = (returning ? local - RETURN_START : local) / LEG;
-        const pulse = pulses[i];
-        const moving = !still && progress < 2;
-        pulse.toggleAttribute('data-flow', moving);
-        if (!moving) return;
-
-        const entering = progress < 1;
-        const spoke = entering !== returning ? from : to;
+      pulse.toggleAttribute('data-flow', moving);
+      if (moving) {
         const t = entering ? 1 - progress : progress - 1;
         const u = 1 - t;
         const { x, y, qx, qy } = curves[spoke];
-        flowing.add(spoke);
-        pulse.setAttribute('cx', String(u * u * cx + 2 * u * t * qx + t * t * x));
-        pulse.setAttribute('cy', String(u * u * cy + 2 * u * t * qy + t * t * y));
-      });
-      spokes.forEach((path, i) => path.toggleAttribute('data-flow', flowing.has(i)));
+        pulse.setAttribute('cx', String(u * u * W / 2 + 2 * u * t * qx + t * t * x));
+        pulse.setAttribute('cy', String(u * u * H / 2 + 2 * u * t * qy + t * t * y));
+      }
+      return progress < 2;
     };
 
     let frame = 0;
-    let visible = false;
     const tick = () => {
-      redraw();
-      frame = requestAnimationFrame(tick);
+      if (redraw()) frame = requestAnimationFrame(tick);
     };
     const update = () => {
       cancelAnimationFrame(frame);
-      redraw();
-      if (visible && !motion.matches) frame = requestAnimationFrame(tick);
+      tick();
     };
     const viewWatch = new IntersectionObserver(([entry]) => {
       visible = entry.isIntersecting;
@@ -130,14 +97,14 @@ function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout) {
     });
     const sizeWatch = new ResizeObserver(resize);
     resize();
+    sync.current = update;
     viewWatch.observe(element);
     sizeWatch.observe(element);
-    motion.addEventListener('change', update);
     return () => {
+      sync.current = null;
       cancelAnimationFrame(frame);
       sizeWatch.disconnect();
       viewWatch.disconnect();
-      motion.removeEventListener('change', update);
     };
   }, [overlay, layout]);
 }
@@ -145,19 +112,18 @@ function useCords(overlay: RefObject<SVGSVGElement | null>, layout: Layout) {
 function Board({ layout, className, lang }: { layout: Layout; className: string; lang: Locale }) {
   const { W, H } = layouts[layout];
   const overlay = useRef<SVGSVGElement>(null);
-  useCords(overlay, layout);
+  const motion = useHeroMotion();
+  useCords(overlay, layout, motion);
   return (
     <div className={`swb-board swb-board-${layout} ${className}`} style={{ aspectRatio: `${W} / ${H}` }}>
       <svg ref={overlay} viewBox={`0 0 ${W} ${H}`} className="pointer-events-none absolute inset-0 size-full" aria-hidden="true">
         {nodes.map(({ kind }, i) => {
           const { x, y, qx, qy } = cord(layout, i);
           return <path key={kind} className="swb-transit" data-app={kind}
-            data-active={kind === firstPair.a || kind === firstPair.b ? '' : undefined}
+            data-active={motion.active && (kind === motion.pair.a || kind === motion.pair.b) ? '' : undefined}
             d={`M ${W / 2} ${H / 2} Q ${qx} ${qy} ${x} ${y}`} vectorEffect="non-scaling-stroke" />;
         })}
-        {livePairs.map(([from, to]) => (
-          <circle key={`${from}-${to}`} className="swb-hub-pulse" vectorEffect="non-scaling-stroke" />
-        ))}
+        <circle className="swb-hub-pulse" vectorEffect="non-scaling-stroke" />
       </svg>
       <img className="swb-hub" src="/avatars/swb.png" alt="" />
       {nodes.map((node, i) => {

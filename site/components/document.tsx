@@ -6,7 +6,9 @@ import { releaseBranch } from '@/lib/urls';
 import { MdxLink } from '@/lib/mdx-address';
 import type { Locale } from '@/lib/i18n';
 import { useMDXComponents } from '@/mdx-components';
+import footerStyles from './docs-footer.module.css';
 import { DocsNavigation } from './docs-navigation';
+import styles from './page-actions.module.css';
 import { PersonalizedMarkdownCopy } from './personalized-docs';
 import { TranslationNote } from './translation-note';
 
@@ -22,17 +24,17 @@ export function Document({ page }: { page: DocumentPage }) {
       breadcrumb={{ className: 'swb-docs-breadcrumb' }} tableOfContent={{ enabled: hasToc }}
       tableOfContentPopover={{ enabled: hasToc }}
       footer={{ component: (
-        <footer data-docs-footer>
-          <PageFooter items={startNext ? {
+        <footer className={footerStyles.footer} data-docs-footer>
+          <PageFooter className={footerStyles.pagination} data-docs-pagination items={startNext ? {
             next: { name: startNext.data.title, description: startNext.data.description, url: startNext.url },
           } : undefined} />
-          <div className="mt-4 flex justify-end"><ThemeSwitch className="swb-theme-toggle" /></div>
+          <div className={footerStyles.controls}><ThemeSwitch className="swb-theme-toggle" /></div>
         </footer>
       ) }}>
       <DocsTitle className="font-display font-extrabold tracking-tight">{title}</DocsTitle>
-      <div className="mt-2 flex flex-wrap items-center gap-2 border-b pb-5">
+      <div className={styles.row} data-docs-actions>
         <PersonalizedMarkdownCopy lang={page.locale as Locale} markdownUrl={markdown} />
-        <ViewOptionsPopover className="swb-button swb-button-compact flex-row-reverse" markdownUrl={markdown} githubUrl={githubUrl} pageUrl={new URL(markdown, siteUrl).href} />
+        <ViewOptionsPopover className={styles.button} markdownUrl={markdown} githubUrl={githubUrl} pageUrl={new URL(markdown, siteUrl).href} />
         <DocsNavigation askAI={process.env.NEXT_PUBLIC_ASK_AI === '1'} />
       </div>
       <TranslationNote lang={page.locale ?? 'en'} url={page.url} />

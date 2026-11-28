@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 
 test('the shared search modal opens centered with a dim backdrop', async ({ page }) => {
   for (const [path, colorScheme, alpha] of [
@@ -42,38 +43,48 @@ test('the shared search modal opens centered with a dim backdrop', async ({ page
   }
 });
 
-test.describe('Linux search shortcut', () => {
-  test.use({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36' });
+for (const [platform, token, label, shortcutKey] of [
+  ['Linux', 'X11; Linux x86_64', 'Ctrl', 'Control+k'],
+  ['macOS', 'Macintosh; Intel Mac OS X 10_15_7', '⌘', 'Meta+k'],
+] as const) {
+  test.describe(`${platform} search shortcut`, () => {
+    test.use({ userAgent: `Mozilla/5.0 (${token}) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36` });
 
-  test('keeps its place when the platform label hydrates', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    let hydrate!: () => void;
-    const beforeHydration = new Promise<void>((resolve) => { hydrate = resolve; });
-    await page.route('**/_next/static/chunks/*.js', async (route) => {
-      await beforeHydration;
-      await route.continue();
-    });
+    test('keeps its first-paint label and natural keycap geometry through hydration', async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.addInitScript(observeLayoutShifts);
+      let hydrate!: () => void;
+      const beforeHydration = new Promise<void>((resolve) => { hydrate = resolve; });
+      await page.route('**/_next/static/chunks/*.js', async (route) => {
+        await beforeHydration;
+        await route.continue();
+      });
 
-    const key = page.locator('[data-search-full] kbd').first();
-    const shortcut = key.locator('..');
-    const keyTextX = () => key.evaluate((node) => {
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      return range.getBoundingClientRect().left;
+      const keycaps = page.locator('[data-search-full] kbd');
+      const geometry = () => keycaps.evaluateAll((nodes) => nodes.map((node) => {
+        const { x, width } = node.getBoundingClientRect();
+        const text = [...node.children].find((child) => child.getClientRects().length) ?? node;
+        return { x, width, textX: text.getBoundingClientRect().left };
+      }));
+      try {
+        await page.goto('/docs', { waitUntil: 'commit' });
+        await expect(keycaps.first().locator('span:visible')).toHaveText(label);
+        await expect(keycaps.first().locator('span')).toHaveText(['⌘', 'Ctrl']);
+        await page.evaluate(() => document.fonts.ready);
+        const before = await geometry();
+        expect(before).toHaveLength(2);
+        if (platform === 'macOS') expect(before[0].width).toBeLessThanOrEqual(before[1].width + 2);
+        hydrate();
+        await page.waitForLoadState('load');
+        await expect(keycaps.first().locator('span:visible')).toHaveText(label);
+        expect(await geometry()).toEqual(before);
+        const shifts = await page.evaluate(readLayoutShifts);
+        expect(shifts.reduce((total, shift) => total + shift.value, 0), JSON.stringify(shifts)).toBe(0);
+        await page.keyboard.press(shortcutKey);
+        await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toBeVisible();
+      } finally {
+        hydrate();
+      }
     });
-    try {
-      await page.goto('/', { waitUntil: 'commit' });
-      await expect(key).toHaveText('⌘');
-      await page.evaluate(() => document.fonts.ready);
-      const before = await shortcut.boundingBox();
-      expect(before).not.toBeNull();
-      const beforeTextX = await keyTextX();
-      hydrate();
-      await expect(key).toHaveText('Ctrl');
-      expect(await shortcut.boundingBox()).toEqual(before);
-      expect(await keyTextX()).toBe(beforeTextX);
-    } finally {
-      hydrate();
-    }
   });
-});
+}

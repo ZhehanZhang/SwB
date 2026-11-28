@@ -3,15 +3,16 @@ import { createServer, get, type ServerResponse } from 'node:http';
 import { expect, test } from '@playwright/test';
 
 const streamed = [
-  ['caption streams', '<figcaption', ['.swb-hero', '.swb-board:visible'], '.swb-hero figcaption'],
-  ['hero subtitle streams', '<p class="swb-between', ['.swb-hero-copy'], '.swb-between'],
-  ['hero actions stream', '<div class="mt-6 grid', ['.swb-hero-copy'], '[data-hero-actions]'],
-  ['hero buttons stream', 'Set up with agent</a>', ['[data-hero-actions]'], '[data-hero-actions] a + a'],
-  ['demo label streams', '<span>Set this up</span>', ['.swb-win-setup'], '.swb-win-setup > span'],
+  ['caption streams', '<figcaption', ['.swb-hero', '.swb-board:visible'], '.swb-hero figcaption', undefined],
+  ['hero subtitle streams', '<p class="swb-between', ['.swb-hero-copy'], '.swb-between', undefined],
+  ['hero actions stream', '<div class="swb-hero-controls"', ['.swb-hero-copy'], '[data-hero-actions]', undefined],
+  ['hero actions stream at 1024px', '<div class="swb-hero-controls"', ['.swb-hero-copy'], '[data-hero-actions]', 1024],
+  ['hero buttons stream', 'Set up with agent</a>', ['[data-hero-actions]'], '[data-hero-actions] a + a', undefined],
+  ['demo label streams', '<span>Set this up</span>', ['.swb-win-setup'], '.swb-win-setup > span', undefined],
 ] as const;
 
-for (const [part, marker, stable, arriving] of streamed) test(`landing layout stays fixed when the ${part} after first paint`, async ({ page, request, baseURL }, info) => {
-  test.skip(part.startsWith('hero') && info.project.name === '390', 'The mobile layout does not vertically center the copy.');
+for (const [part, marker, stable, arriving, width] of streamed) test(`landing layout stays fixed when the ${part} after first paint`, async ({ page, request, baseURL }) => {
+  if (width) await page.setViewportSize({ width, height: 900 });
   const response = await request.get('/');
   expect(response.ok()).toBe(true);
   const html = await response.text();

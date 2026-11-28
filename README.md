@@ -71,7 +71,7 @@ Blocks connect apps to SwB. See the [guide](https://swb.one/docs) for configurat
 
 ## License and contributing
 
-SwB is free and open source under the [Apache License 2.0](https://github.com/ZhehanZhang/SwB/blob/release/1.0/LICENSE). See [how to contribute](https://github.com/ZhehanZhang/SwB/blob/release/1.0/CONTRIBUTING.md) and [how to report a security issue](https://github.com/ZhehanZhang/SwB/blob/release/1.0/SECURITY.md). See the [trademark policy](https://github.com/ZhehanZhang/SwB/blob/release/1.0/TRADEMARKS.md).
+SwB is free and open source under the [Apache License 2.0](https://github.com/ZhehanZhang/SwB/blob/release/1.0/LICENSE). See [how to contribute](https://github.com/ZhehanZhang/SwB/blob/release/1.0/CONTRIBUTING.md) and [how to report a security issue](https://github.com/ZhehanZhang/SwB/blob/release/1.0/SECURITY.md).
 
 Read the docs at [swb.one](https://swb.one/docs).
 

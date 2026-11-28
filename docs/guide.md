@@ -82,8 +82,7 @@ blocks:
 
 The default display name is **SwB**, with a neutral accent (`#64748b`) and no deployment-specific logo. Change
 `branding.display_name`, `branding.icon`, `branding.accent_color` or `branding.logo_assets_dir` in a private
-overlay if desired. Use `#RRGGBB` for the accent. The public CLI identity stays `swb`. Third-party logos belong to their respective owners;
-their use identifies integrations and does not imply affiliation or endorsement.
+overlay if desired. Use `#RRGGBB` for the accent. The public CLI identity stays `swb`.
 
 Legacy files using `origins`, `destinations` or top-level `slack` are translated at load time.
 `swb config migrate [file]` prints the version 2 form. The database migration is
@@ -569,8 +568,7 @@ Nothing about a bot's look is hard-coded; every install reads it from Slack at r
 - Dots and other discovered agent bots keep their own identity: their answers, relayed into another thread, post under
   the dot's own name and profile picture, re-read on every rescan.
 - To brand an install, upload an app icon under Basic Information, then Display Information, in the Slack app's
-  settings. The API can't set it. Third-party logos belong to their respective owners; showing one identifies an
-  integration and doesn't imply affiliation or endorsement.
+  settings. The API can't set it.
 
 ## Discord
 
