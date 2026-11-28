@@ -25,7 +25,7 @@ from ...inbox import CONTEXT_NOTE
 from ...modes import GITHUB_CREDENTIAL_PROBLEM
 from ...refusals import CONVERSATION_REQUIRED, MODE_REQUIRED
 from ...signing import HEADER_NAME_RE, STRIPE_SIGNATURE_HEADER, stripe_signature
-from ...subject import subject, wake_text
+from ...subject import display_subject, subject, wake_text
 from ...trust import AuthoredText, FramedText, frame_parts, join_parts, neutralize
 from ...visibility import Who
 from .. import Action, Block, BlockError, BlockRefused, Call, Manifest
@@ -778,6 +778,7 @@ class GitHubBlock(Block):
         number = provider_id(generated.get("number"))
         event_title = f"{summary} #{number}" if number else summary
         title = subject(title_sender, "GitHub", repo, event_title, verb="", trust="owner" if mixed_authors else trust)
+        display_title = display_subject(parts.get("title", {}).get("text"), parts.get("body", {}).get("text"), event_title)
         delivery_note = f'GitHub delivery {generated["delivery"]}.'
         if mode == "watch":
             if sinks := self.sink_names(repo):
@@ -786,7 +787,7 @@ class GitHubBlock(Block):
                 for sink in sinks:
                     self.sinks[sink].put(delivery, body)
             primary = parts.get("body") or parts.get("title")
-            self.core.modes.watch(self.name, space, repo, delivery, (primary["author_id"] if primary else sender_id) or "",
+            self.core.modes.watch(self.name, space, repo, delivery, (primary["author_id"] if primary else None) or sender_id or "",
                                   None, event_title, None, target, project=project, parts=parts)
             return
         if mode == "off":
@@ -822,7 +823,7 @@ class GitHubBlock(Block):
                 row = self.core.store.one("SELECT handle FROM handles WHERE owner = ? AND destination = ? AND ref = ? AND project IS ?",
                                           (agent, self.name, repo, project))
                 handle = row["handle"] if row else self.core.inbox.open_handle(
-                    owner=agent, destination=self.name, ref=repo, project=project, title=f"GitHub {repo}", meta={}, status="following")
+                    owner=agent, destination=self.name, ref=repo, project=project, title=display_title, meta={}, status="following")
                 await self.core.inbox.add(handle, "context", item)
             self.core.audit.record(origin=self.name, source=sender_id, client=ip, destination=self.name,
                                    action="context_noted", outcome="ok", ref=delivery, target=target)
@@ -866,7 +867,7 @@ class GitHubBlock(Block):
                 tail += f"\n\n{self.core.modes.wake_note(meta, owner=trust == 'owner')} Use github_reply for the originating GitHub thread."
             await self.core.send(principal, to=to, task=wake_text(title, text, None, tail),
                                  project=project, title=title,
-                                 handle_meta={**({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
+                                 handle_meta={"display_subject": display_title, **({"channel_mode": meta} if mode in {"assist", "triage"} else {}),
                                               **({"boundary": project} if project and mode != "work" else {})})
         except (BlockError, CoreError, ValueError) as exc:
             await note_context(addr)

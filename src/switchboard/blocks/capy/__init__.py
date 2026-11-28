@@ -23,7 +23,7 @@ from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
 from ...block_env import CAPY_KEY, CAPY_SEND_KEY
 from ...claims import ClaimInputError
 from ...refusals import CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED
-from ...subject import lead_with_subject, subject
+from ...subject import display_subject, lead_with_subject, subject
 from .. import Action, Address, AgentSpec, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
 from .api import CapyAPI, CapyError, pr_links, thread_summary
 from .stream import Backoff, Frame, StreamClosed, ThreadStream
@@ -473,6 +473,8 @@ class CapyBlock(Block):
         task = (task or "").strip()
         if not task:
             raise DestinationError("task is empty")
+        display_title = (call.handle_meta.get("display_subject") if "display_subject" in call.handle_meta
+                         else display_subject(title, task, "")) or None
         if title:
             title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
@@ -481,7 +483,7 @@ class CapyBlock(Block):
         if level == "explicit":
             tgt, extra = await self.validate_route_target(tgt, {})
             defaults = {**defaults, **extra}
-        call.note(target=describe(tgt), title=title, excerpt=task)
+        call.note(target=describe(tgt), title=display_title, excerpt=task)
         repos = sorted({r.strip().lower() for r in [*(repos or []), *(defaults.get("repos") or [])] if r.strip()})
         allowed = self._allowed_repos(p, defaults)
         bad = [r for r in repos if r not in allowed]
@@ -539,9 +541,10 @@ class CapyBlock(Block):
         except CapyError as e:
             raise DestinationError(f"Capy API refused the delegation: {e}") from e
         meta |= {"target": tgt, "route": level, "task": task[:300], "same": same, **call.handle_meta}
+        meta.pop("display_subject", None)
         kind = next((k for k in TARGET_KINDS if tgt.get(k)), "thread")
         call.core.inbox.open_handle(handle=handle, owner=call.principal.source, destination=self.name, ref=thread_id,
-                                    project=p.slug if p else None, title=title, meta=meta, status=status, stream_cursor=cursor,
+                                    project=p.slug if p else None, title=display_title, meta=meta, status=status, stream_cursor=cursor,
                                     target=str(Address(self.name, kind, str(tgt[kind]) if tgt.get(kind) else thread_id)))
         call.note(ref=thread_id)
         self.follow(thread_id)

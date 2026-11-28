@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from html import unescape
 
-from .trust import FramedText, neutralize
+from .trust import CLOSE, OPEN, FramedText, neutralize
+
+_HANDLE = re.compile(r"h_[a-z0-9_-]+", re.IGNORECASE)
+_EMBEDDED_HANDLE = re.compile(r"\bh_[0-9a-f]{16}\b", re.IGNORECASE)
+_FRAME_HEADER = re.compile(r"\[swb from .+, trust (?:external|known)\]")
 
 
 def _plain(text: str) -> str:
@@ -31,6 +36,21 @@ def _cut(text: str, limit: int) -> str:
     return head.rstrip() + "..."
 
 
+def display_subject(authored: str | None, body: str | None, fallback: str = "Message", *, route_labels: Iterable[str] = ()) -> str:
+    """Prefer the authored title, then a safe body line, then the message kind."""
+    labels = {_plain(label).casefold() for label in route_labels}
+    title = _plain(_EMBEDDED_HANDLE.sub("", authored or ""))
+    if title and not _HANDLE.fullmatch(title) and title.casefold() not in labels:
+        return _cut(title, 80)
+    lines = (body or "").splitlines()
+    if len(lines) > 2 and _FRAME_HEADER.fullmatch(lines[0]) and lines[1] == OPEN and CLOSE in lines[2:]:
+        lines = lines[2:lines.index(CLOSE, 2)]
+    for line in lines:
+        if (text := _plain(_EMBEDDED_HANDLE.sub("", line))) and not _HANDLE.fullmatch(text) and text.casefold() not in labels:
+            return _cut(text, 80)
+    return _cut(_plain(fallback), 80)
+
+
 def subject(sender: str, platform: str, where: str | None, text: str, *, verb: str = "asks", trust: str = "owner") -> str:
     """Name the sender and the ask, without letting message formatting shape the subject."""
     sender, platform, place, text, verb = (_plain(value) for value in (sender, platform, where or "", text, verb))
@@ -45,6 +65,12 @@ def subject(sender: str, platform: str, where: str | None, text: str, *, verb: s
     lead = " ".join(part for part in (prefix, verb) if part)
     lead = _cut(lead, 145) + ": " if lead else ""
     return lead + _cut(text, min(90, 159 - len(lead)))
+
+
+def mailbox_subject(authored: str | None, sender: str, body: str, *, trust: str, reply: bool = False) -> str:
+    return subject("", "", None, authored or "", verb="") or subject(
+        sender, "", None, body, verb="replies" if reply else "asks",
+        trust="owner" if trust == "owner" and not isinstance(body, FramedText) else "external")
 
 
 def wake_text(subject: str, body: str, link: str | None, tail: str | None) -> str:

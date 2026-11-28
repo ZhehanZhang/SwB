@@ -35,7 +35,7 @@ from ..env import env_value
 from ..inbox import CONTEXT_NOTE
 from ..modes import PROVIDERS, ChatDrop, chat_target_drop
 from ..slack.config import AVATAR_RE
-from ..subject import subject, wake_text
+from ..subject import display_subject, subject, wake_text
 from ..trust import frame_sender
 from ..visibility import Who
 from .claims import Claims
@@ -407,6 +407,7 @@ class ChatBlock(Block):
         trust, framed = frame_sender(text, name, f"{self.platform}:{msg.user}", f"in {self.platform} {msg.space} {place}",
                                     owner=sender_class == "owner")
         sender = {"kind": self.platform, "space": msg.space, "channel": msg.channel, "channel_name": msg.channel_name, "user": msg.user, "user_name": name,
+                  **({"thread": msg.thread} if msg.thread else {}),
                   "is_bot": msg.is_bot, "trust": trust, "message": msg.message, "root": root, "link": msg.link}
         event = {"event_id": f"{msg.space}:{msg.channel}:{msg.message}", "chat_kind": "dm" if msg.dm else "mention" if msg.mention else "reply" if ours else "listen",
                  "addressed_to_us": addressed, "text": framed,
@@ -473,7 +474,7 @@ class ChatBlock(Block):
             return row["handle"]
         meta = {"space": space, **({"channel": thread[0], "root": thread[1]} if thread else {})}
         return self.core.inbox.open_handle(owner=agent, destination=self.name, ref=ref, project=self.spaces[space].project,
-                                           title=f"{self.manifest.title} {space}", meta=meta, status="following")
+                                           title=None, meta=meta, status="following")
 
     async def note_context(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any] | None) -> None:
         """A non-owner's message to something private: a context item for the agents behind its target. It wakes
@@ -515,14 +516,21 @@ class ChatBlock(Block):
                 task.add_done_callback(lambda t: t.exception())
             return False
 
-    async def dm_owner(self, text: str) -> None:
-        for space in self.spaces.values():
-            for owner in sorted(self.owners(space)):
+    def owner_notify_spaces(self) -> tuple[str, ...]:
+        return tuple(space.label for space in self.spaces.values() if space.owner_ids)
+
+    async def dm_owner(self, text: str, *, space: str | None = None) -> bool:
+        for destination in self.spaces.values():
+            if space is not None and destination.label != space:
+                continue
+            owners = sorted(destination.owner_ids if space is not None else self.owners(destination))
+            for owner in owners[:1] if space is not None else owners:
                 with contextlib.suppress(Exception):
-                    channel = await self.open_dm(space.label, owner)
+                    channel = await self.open_dm(destination.label, owner)
                     if channel:
-                        await self.post(space.label, channel, text)
-                        return
+                        await self.post(destination.label, channel, text)
+                        return True
+        return False
 
     def _thread_key(self, space: str, channel: str, root: str) -> str:
         return f"{self.name}:{space}:{channel}:{root}"
@@ -541,7 +549,8 @@ class ChatBlock(Block):
         project = route_project or project
         trust = event["trust"]
         kw: dict[str, Any] = {"task": task, "title": title,
-                              "handle_meta": {"chat_trust": trust, **({"boundary": project} if project else {})}}
+                              "handle_meta": {"chat_trust": trust, "display_subject": display_subject(None, event["text"], ""),
+                                              "display_from": event["from"], **({"boundary": project} if project else {})}}
         if mode:
             kw["handle_meta"].update(channel_mode=mode)
             if mode["project"]:

@@ -2,9 +2,11 @@ import json
 
 import httpx
 
-from conftest import CAPTAIN2, CAPTAIN2_NAME, OWNER, base_config, default_env
+from conftest import CAPTAIN, CAPTAIN2, CAPTAIN2_NAME, OWNER, base_config, default_env
+from switchboard.blocks.discord import Channel
 from switchboard import api_read
 from switchboard.slack.avatar_files import BUNDLED_AVATARS
+from switchboard.trust import frame_sender
 from test_api_read import get
 
 
@@ -162,3 +164,117 @@ def test_capy_targets_use_the_same_display_labels_across_board_and_inbox(make, c
         detail = get(client, f"/conversations/{row['handle']}")["conversation"]
         assert detail["target"] == row["target"] and detail["ref"] == row["ref"]
         assert detail["first_target"] == expected[row["target"]]
+
+
+def test_watch_sender_and_owner_delivery_metadata_are_projected_without_a_read_receipt(make):
+    core, client = make()
+    repo = "example-org/example-repo"
+    legacy = core.inbox.open_handle(owner="owner", destination="mailbox", ref="", project="example",
+                                    title=f"Watch digest for {repo}", meta={}, status="delivered")
+    cursor = client.portal.call(core.inbox.add, legacy, "watch_digest", {
+        "block": "github", "space": repo, "channel": repo, "count": 1,
+        "items": [{"author": "Example user", "excerpt": "Example event", "link": None, "at": 1}],
+    })
+    sent = core.inbox.open_handle(owner="owner", destination="mailbox", ref="unknown-key", project=None, title=None,
+                                  meta={"owner_notify": {
+                                      "surface": "telegram:home", "notified_at": "2026-01-01T00:00:00Z",
+                                      "credential": "private-fixture",
+                                  }}, target="agent:owner", status="notified")
+    by_handle = {row["handle"]: row for row in get(client, "/inbox")["conversations"]}
+    watch = by_handle[legacy]
+    assert watch["status"] == "stored"
+    assert watch["target"] is None and watch["first_target"] == "Owner"
+    assert watch["first_sender"]["name"] == "GitHub watch" and watch["first_sender"]["kind"] == "watch"
+    assert (watch["source_kind"], watch["channel_label"], watch["project"]) == ("github", repo, "example")
+    detail = get(client, f"/conversations/{legacy}")
+    assert detail["conversation"] == watch and detail["cursor"] == cursor
+    assert detail["items"][0]["from"]["name"] == "GitHub watch"
+    assert not core.store.q("SELECT 1 FROM inbox_cursors")
+    assert by_handle[sent]["first_sender"]["name"] == "unknown-key"
+    assert by_handle[sent]["owner_notify"] == {"surface": "telegram:home", "notified_at": "2026-01-01T00:00:00Z"}
+
+
+def test_slack_provenance_and_dot_identity_win_over_transport_identity(make):
+    core, client = make()
+    handle = core.inbox.open_handle(owner="slack", destination="dots", ref="UDEST", project=None,
+                                    title="dot example-dot", target="dots:dot:UDEST", meta={
+                                        "dot": "example-dot", "from": {"kind": "agent", "agent": "slack"},
+                                        "display_from": {"kind": "slack", "workspace": "team", "channel": "CDEV",
+                                                         "channel_name": "dev", "user_name": "Alex Rivera"},
+                                        "channel_mode": {"block": "slack", "space": "team", "channel": "CDEV", "project": "example"},
+                                    })
+    trust, text = frame_sender("# **Fix the build**\nSecond line", "Alex Rivera", "slack:user")
+    client.portal.call(core.inbox.add, handle, "message", {"text": text, "trust": trust})
+    row = get(client, f"/conversations/{handle}")["conversation"]
+    assert row["first_sender"]["name"] == "Alex Rivera" and row["first_sender"]["kind"] == "slack"
+    assert row["project"] == "example" and row["channel_label"] == "#dev"
+    assert row["target"] == "dots:dot:UDEST" and row["first_target"] == "example-dot"
+    assert row["target_kind"] == "dot" and row["target_avatar_url"] == "/avatars/dots.png"
+    assert row["title"] == "Fix the build"
+
+
+def test_legacy_channel_titles_use_first_item_even_on_later_detail_pages(make):
+    core, client = make()
+    handle = core.inbox.open_handle(owner="codex", destination="telegram", ref="home:100:20", project=None,
+                                    title="Telegram home", meta={"space": "home"})
+    cursor = client.portal.call(core.inbox.add, handle, "telegram_event", {
+        "text": "**Fix the release**\nThis is not the title", "subject": "Telegram home",
+        "from": {"kind": "telegram", "space": "home", "channel": "100", "topic": 7, "channel_name": "Home"},
+    })
+    client.portal.call(core.inbox.add, handle, "telegram_event", {"subject": "A later message"})
+    row = get(client, f"/conversations/{handle}", cursor=cursor)["conversation"]
+    assert (row["title"], row["first_target"], row["target_avatar_url"]) == ("Fix the release", "Codex", "/avatars/codex.png")
+    assert row["channel"] == "100:7" and row["channel_label"] == "Home › Topic 7"
+
+
+def test_channel_addresses_render_labels_and_telegram_uses_stored_topic_and_route(make):
+    config = base_config(version=2, blocks={
+        "mcp": {}, "telegram": {"connect": False, "spaces": {"home": {"chats": [-1001], "project": "team"}}},
+        "discord": {"connect": False, "spaces": {"work": {"guild_id": "3000"}}}, "github": {}, "slack": {},
+    })
+    core, client = make(config=config)
+    telegram = core.blocks["telegram"]
+    chat = {"id": -1001, "title": "Team Dispatch", "type": "supergroup"}
+    client.portal.call(telegram._receive, {"chat": chat, "message_id": 5, "forum_topic_created": {"name": "Design"}}, 2, "fixture_bot")
+    client.portal.call(telegram._receive, {
+        "chat": chat, "message_id": 8, "message_thread_id": 5, "forum_topic_edited": {"name": "Design Review"},
+    }, 2, "fixture_bot")
+    core.blocks["discord"].channels.update({
+        "2001": Channel(None, "development", 0, "3000"),
+        "2002": Channel("2001", "releases", 11, "3000"),
+    })
+    examples = (
+        ("telegram", "home:-1001:5", {}, "home › Design Review"),
+        ("telegram", "home:-1001:9", {}, "home › Topic 9"),
+        ("discord", "work:2001:2002", {}, "#development › releases"),
+        ("slack", "studio:CEXAMPLE", {"from": {"kind": "slack", "workspace": "studio", "channel": "CEXAMPLE",
+                                               "channel_name": "announcements"}}, "#announcements"),
+        ("github", "github:issue:example/repo:42", {}, "example/repo#42"),
+    )
+    for block, address, meta, label in examples:
+        handle = core.inbox.open_handle(owner="ChatGPT", destination=block, ref=address, project=None, title="",
+                                        meta=meta, target=address)
+        row = get(client, f"/conversations/{handle}")["conversation"]
+        assert row["first_target"] == label and row["target"] == address
+        assert row["project"] == ("team" if block == "telegram" else None)
+    assert len(get(client, "/inbox", project="team")["conversations"]) == 2
+
+
+def test_bare_captain_slug_collision_is_not_a_canonical_recipient(make, capy):
+    capy.captains.append({"id": "jam_ZZEXAMPLE", "name": "Captain", "code": "EXAMPLE-2"})
+    core, client = make()
+    targets = client.portal.call(core.targets)
+    slugs = core.slug_map(targets)
+    assert {target["id"] for target in targets if "captain" in target["slugs"]} == {CAPTAIN, "jam_ZZEXAMPLE"}
+    assert slugs["captain"]["id"] == CAPTAIN
+    assert client.portal.call(core.resolve_to, "captain").id == CAPTAIN
+    assert core.slug_map(targets, {"captain": "example-2"})["captain"]["id"] == "jam_ZZEXAMPLE"
+
+    legacy = core.inbox.open_handle(owner="capy", destination="slack", ref="team", project=None, title=None, meta={})
+    client.portal.call(core.inbox.add, legacy, "slack_event", {"target": "captain", "target_kind": "captain"})
+    picked = core.inbox.open_handle(owner="slack", destination="capy", ref="jam_THREAD", project=None, title=None, meta={},
+                                    target=f"capy:captain:{CAPTAIN2}")
+    generic = get(client, f"/conversations/{legacy}")["conversation"]
+    resolved = get(client, f"/conversations/{picked}")["conversation"]
+    assert (generic["first_target"], generic["target_kind"], generic["target_avatar_url"]) == ("Captain", "captain", "/avatars/capy.png")
+    assert resolved["first_target"] == CAPTAIN2_NAME and resolved["target"] == f"capy:captain:{CAPTAIN2}"

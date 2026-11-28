@@ -14,15 +14,22 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from .api_display import captain_avatar_url, captain_target, captain_targets, capy_label, local_avatar_url, slack_profile_avatar
+from .agents import PRESETS
+from .api_display import (
+    CAPY_AVATAR_URL, captain_avatar_url, captain_target, captain_targets, capy_label, conversation_captain, display_name,
+    local_avatar_url, slack_profile_avatar,
+)
 from .slack.avatar_files import agent_avatar_url
 from .audit import iso
 from .blocks import BLOCKS, ON_DEMAND_BLOCKS, load
 from .env import env_value
+from .inbox_filters import InboxFilters, unread_handles
 from .memory import GENERAL, NAMESPACE_RE, MemoryError_, summary as memory_summary
 from .modes import CHAT_DROP_ACTION, ChatDrop
+from .projects import ProjectError
 from .refusals import CSRF_AUDIT_PATHS, OWNER_NOTE_REQUIRED, SIGN_IN_FAILURES
 from .routes import route_audit_name
+from .subject import display_subject
 from .targets import SLUG_RE
 from .visibility import show
 
@@ -38,6 +45,9 @@ _PROMPT_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _PROJECT = r"[a-z0-9][a-z0-9-]{0,47}"
 _SCOPE = rf"(?:general|project:{_PROJECT})"
 _CAPY_SENDERS = ("capy_thread", "capy", "captain")
+_CHAT_SENDERS = ("slack", "discord", "telegram")
+_SOURCE_NAMES = {"github": "GitHub", "slack": "Slack", "discord": "Discord", "telegram": "Telegram", "webhook": "Webhook"}
+_AGENT_NAMES = {"grok-bot": "Grok Bot", "grok-routine": "Grok Bot", "dots": "ChatGPT dots", "dot": "ChatGPT dots"}
 _WEBHOOK_DETAILS = frozenset({
     "webhook secret unavailable", "missing signature", "invalid signature", "invalid JSON", "expected a JSON object", "invalid delivery id",
     "unhandled event", "not completed", "unrouted repository", "channel mode ignored event", "channel mode off",
@@ -54,6 +64,10 @@ def _fields(row: Any, *names: str) -> dict[str, Any]:
 
 def _scalars(row: dict[str, Any], *names: str) -> dict[str, Any]:
     return {k: v for k, v in _fields(row, *names).items() if v is None or isinstance(v, (str, int, float))}
+
+
+def _object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _reference(value: Any) -> str | None:
@@ -156,6 +170,8 @@ def _audit_item(core: Any, row: Any, captains: dict[str, dict[str, Any]]) -> dic
     elif action == CHAT_DROP_ACTION and fields["outcome"] == "dropped" and recorded_detail in ChatDrop:
         detail = recorded_detail
     elif action == "triage.notify_owner" and fields["outcome"] == "refused" and recorded_detail == OWNER_NOTE_REQUIRED:
+        detail = recorded_detail
+    elif action == "owner_notify" and recorded_detail in ("send_failed", "disabled", "no_configured_surface"):
         detail = recorded_detail
     elif action == "tool_refused" and fields["destination"] == "mcp":
         from .blocks.mcp.policy import REFUSAL_DETAILS
@@ -331,56 +347,344 @@ def _sender(core: Any, sender: Any, destination: str, captains: dict[str, dict[s
     if not isinstance(sender, dict):
         return None
     out = _scalars(sender, "kind", "name", "label", "agent", "auth", "origin", "trust", "workspace", "channel", "channel_name", "user", "user_name",
-                   "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot")
+                   "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot", "block", "space", "repo", "topic", "topic_name",
+                   "root", "message")
     avatar = local_avatar_url(core, sender.get("avatar_url"))
-    if out.get("kind") in _CAPY_SENDERS:
+    if out.get("kind") == "watch":
+        provider = _provider(core, out.get("block"))
+        out["name"] = f"{_SOURCE_NAMES[provider]} watch" if provider in _SOURCE_NAMES else "Watch digest"
+    elif out.get("kind") in _CAPY_SENDERS:
         upstream = sender.get("sender")
         ident = _reference(upstream.get("id") if isinstance(upstream, dict) else out.get("thread_id"))
-        captain = captain_target(ident, destination, captains)
-        if captain is None and ident:
-            matches = [target for address, target in captains.items() if address.endswith(f":captain:{ident}")]
-            captain = matches[0] if len(matches) == 1 else None
+        captain = conversation_captain(ident, destination, None, captains)
         if captain:
-            avatar = avatar or captain_avatar_url(core, captain)
-            if name := _reference(captain["name"]):
-                out["author"] = name
-    if not avatar:
-        avatar = agent_avatar_url(_reference(out.get("agent")) or _reference(out.get("kind")) or "")
+            avatar = captain_avatar_url(core, captain) or CAPY_AVATAR_URL
+            if name := display_name(captain.get("name")):
+                out["author"] = out["name"] = name
+    elif agent := _reference(out.get("agent")):
+        out["name"] = _agent_name(core, agent, out.get("label"))
+        avatar = avatar or _agent_avatar(agent, out["name"])
+    elif name := display_name(out.get("user_name")) or display_name(out.get("author")):
+        out["name"] = name
+    if not avatar and out.get("kind") not in _CAPY_SENDERS:
+        avatar = agent_avatar_url(_reference(out.get("kind")) or "")
     if avatar:
         out["avatar_url"] = avatar
     return out or None
 
 
-def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | None], captains: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    sender, target = endpoints
+def _agent_name(core: Any, agent: str, label: Any = None) -> str:
+    agent = agent.lower()
+    if agent == "owner" or agent.startswith("admin:"):
+        return "Owner"
+    default = _SOURCE_NAMES.get(agent) or _AGENT_NAMES.get(agent) or (PRESETS[agent].label if agent in PRESETS else None) or display_name(label)
+    return display_name(core.agents.label(agent, default)) or agent
+
+
+def _agent_avatar(agent: str, label: str = "") -> str | None:
+    return CAPY_AVATAR_URL if agent.lower() == "capy" else agent_avatar_url(agent.lower()) or agent_avatar_url(label)
+
+
+def _provider(core: Any, name: Any) -> str | None:
+    if not isinstance(name, str):
+        return None
+    block = core.blocks.get(name)
+    return block.manifest.id if block else (name if name in _SOURCE_NAMES else None)
+
+
+def _inbox_first_items(core: Any, handles: list[str]) -> dict[str, tuple[str, dict[str, Any]]]:
+    if not handles:
+        return {}
+    rows = core.store.q(
+        "SELECT i.handle, i.kind, i.data FROM handles h JOIN inbox i ON i.id = "
+        "(SELECT id FROM inbox WHERE handle = h.handle ORDER BY id LIMIT 1) "
+        "WHERE h.handle IN (" + ",".join("?" for _ in handles) + ")",
+        handles,
+    )
+    return {r["handle"]: (r["kind"], json.loads(r["data"])) for r in rows}
+
+
+def _conversation_target(core: Any, row: dict[str, Any], target: str | None, kind: str | None,
+                         captains: dict[str, dict[str, Any]]) -> tuple[str, str | None, str | None]:
+    destination = row["destination"]
+    meta, destination_kind = row["meta"], _provider(core, destination)
+    raw = _reference(row.get("target")) or _reference(target)
+    label = raw
+    provider = destination_kind
+    if raw:
+        block, sep, ident = raw.partition(":")
+        if sep and block == "agent":
+            if ident == "grok" and _object(row["state"].get("routine")).get("fired") is True:
+                return "Grok Bot", "routine", agent_avatar_url("grok-bot")
+            label = _agent_name(core, ident)
+            return label, "agent", _agent_avatar(ident, label)
+        if sep and block == "project":
+            try:
+                label = route_audit_name(core.projects.get(ident).name) or ident
+            except ProjectError:
+                label = ident
+            return label, "project", None
+        if sep and ":" in ident:
+            kind, ident = ident.split(":", 1)
+            provider = _provider(core, block) or provider
+            if isinstance(info := meta.get("target"), dict) and info.get(kind) == ident:
+                label = route_audit_name(info.get("name")) or label
+            if kind == "dot" and isinstance(dot := meta.get("dot"), str) and SLUG_RE.fullmatch(dot):
+                label = dot
+        if kind == "agent" or not sep and (raw in core.agents or raw == row["owner"]):
+            label = _agent_name(core, ident if sep else raw)
+            return label, "agent", _agent_avatar(ident if sep else raw, label)
+    elif destination_kind == "capy":
+        raw = _reference(row["ref"])
+    captain = conversation_captain(raw, destination, kind or ("captain" if raw == "captain" else None), captains)
+    if captain or kind == "captain" or raw == "captain":
+        label = capy_label(raw, destination, captains, name=label)
+        if captain:
+            label = capy_label(captain["address"], destination, captains)
+        return label or "Captain", "captain", (captain_avatar_url(core, captain) if captain else None) or CAPY_AVATAR_URL
+    label = capy_label(raw, destination, captains, name=label) or label
+    agent = row["owner"]
+    if not label:
+        label = _agent_name(core, agent)
+        return label, "agent", _agent_avatar(agent, label)
+    return label, kind or ("thread" if provider == "capy" else None), agent_avatar_url(kind or "") or agent_avatar_url(provider or "")
+
+
+def _watch_sender(payload: dict[str, Any], sender: dict[str, Any]) -> dict[str, Any]:
+    return {**_fields(payload, "block", "space", "channel", "repo"), **sender, "kind": "watch"}
+
+
+def _telegram_label(block: Any, space: str | None, chat: str | None, topic: Any, name: str | None = None,
+                    topic_name: Any = None) -> str:
+    if block and chat and re.fullmatch(r"-?[0-9]{1,20}", chat):
+        name = name or route_audit_name(block._group_names.get(int(chat)) or block._seen.get(int(chat), {}).get("title"))
+    label = name or space or "Telegram"
+    if re.fullmatch(r"[1-9][0-9]{0,17}", str(topic)) and int(topic) > 1:
+        known = route_audit_name(block.topic_name(chat, int(topic))) if block and chat else None
+        label += " › " + (known or route_audit_name(topic_name) or f"Topic {topic}")
+    return label
+
+
+def _discord_label(block: Any, channel: str | None, thread: str | None, name: str | None = None) -> str:
+    channels = block.channels if block else {}
+    info = channels.get(channel)
+    if not thread and info and info.type in (10, 11, 12) and info.parent_id:
+        thread = channel
+        info = channels.get(info.parent_id)
+    channel_name = name or route_audit_name(info.name if info else None)
+    label = "#" + channel_name.lstrip("#") if channel_name else "Channel"
+    if thread:
+        info = channels.get(thread)
+        label += " › " + (route_audit_name(info.name if info else None) or "Thread")
+    return label
+
+
+def _channel_target(core: Any, destination: str, raw: str | None, location: dict[str, str]) -> tuple[str, str] | None:
+    if not raw:
+        return None
+    block = destination
+    prefix, _, rest = raw.partition(":")
+    typed, _, ident = rest.partition(":")
+    if ident and _provider(core, prefix) in _SOURCE_NAMES and typed in ("chat", "channel", "thread", "issue", "repo"):
+        block, raw = prefix, ident
+    provider = _provider(core, block)
+    if provider in ("discord", "telegram"):
+        match = re.fullmatch(r"(?:(?P<space>[^:]*[a-zA-Z][^:]*):)?(?P<chat>-?[0-9]{1,20})(?::(?P<thread>[0-9]{1,20}))?", raw)
+        if match:
+            space, chat, thread = match.groups()
+            engine = core.blocks.get(block)
+            label = (_telegram_label(engine, space or location.get("space"), chat, thread) if provider == "telegram"
+                     else _discord_label(engine, chat, thread))
+            return label, provider
+    if provider == "slack":
+        match = re.fullmatch(r"(?:(?P<space>[^:]+):)?(?P<channel>[CGD][A-Z0-9]+|#[\w.-]+)", raw)
+        if match:
+            space, channel = match.groups()
+            runtime = core.slack.runtimes.get(space or location.get("space")) if core.slack else None
+            name = route_audit_name(runtime.channel_names.get(channel)) if runtime else None
+            if not name and location.get("channel") == channel:
+                name = location.get("channel_label")
+            return ("#" + (name or channel).lstrip("#") if name or channel.startswith("#") else
+                    "Direct message" if channel.startswith("D") else "Channel"), provider
+    if provider == "github" and (match := re.fullmatch(r"([\w.-]+/[\w.-]+)[#:](\d+)", raw)):
+        return f"{match[1]}#{match[2]}", provider
+    return None
+
+
+def _conversation_location(core: Any, row: dict[str, Any], sender: dict[str, Any], payload: dict[str, Any]) -> dict[str, str]:
     meta = row["meta"]
-    first_sender = _sender(core, meta.get("from"), row["destination"], captains)
-    if first_sender is None:
-        first_sender = _sender(core, sender if row["destination"] in ("slack", "mailbox") else
-                               {"kind": "agent", "agent": row["owner"]}, row["destination"], captains)
-    first_target = row.get("target") or target
-    if row.get("target"):
-        parts = row["target"].split(":", 2)
-        if len(parts) == 3 and isinstance(info := meta.get("target"), dict) and info.get(parts[1]) == parts[2]:
-            first_target = _reference(info.get("name")) or first_target
-        if len(parts) == 3 and parts[1] == "dot" and isinstance(dot := meta.get("dot"), str) and SLUG_RE.fullmatch(dot):
-            first_target = dot
-    reference = row.get("target") or first_target or row["ref"]
-    first_target = capy_label(reference, row["destination"], captains, name=first_target) or first_target
-    captain = captain_target(reference, row["destination"], captains)
-    avatar_url = captain_avatar_url(core, captain) if captain else None
-    block = core.blocks.get(row["destination"])
-    destination_kind = block.manifest.id if block else None
-    if not avatar_url:
-        if row["target"] and row["target"].startswith("agent:"):
-            avatar_url = agent_avatar_url(row["target"].removeprefix("agent:"))
-        elif destination_kind:
-            avatar_url = agent_avatar_url(destination_kind)
-    return {**_fields(row, "handle", "owner", "destination", "ref", "project", "title", "target", "status", "open"),
+    mode = _object(meta.get("channel_mode")) or _object(payload.get("channel_mode"))
+    origin = _reference(sender.get("block") or sender.get("origin") or sender.get("kind") or sender.get("agent"))
+    block = _reference(mode.get("block")) or (origin if _provider(core, origin) in _SOURCE_NAMES else row["destination"])
+    relay: dict[str, Any] = {}
+    slack = core.slack
+    if block == "slack" or row["owner"] == "slack" or row["ref"] == "slack":
+        relay = _object(meta.get("slack_thread")) or (slack.store.relay(row["handle"]) if slack else None) or {}
+        block = "slack"
+    elif _provider(core, block) in ("discord", "telegram") or row["owner"] in ("discord", "telegram"):
+        if any(b.manifest.id in ("discord", "telegram") for b in core.blocks.values()):
+            stored = core.store.one("SELECT block, space, channel, reply_to, root FROM chat_relays WHERE handle = ?", (row["handle"],))
+            if stored is not None:
+                relay = dict(stored)
+                block = relay["block"]
+    provider = _provider(core, block)
+    if provider not in _SOURCE_NAMES:
+        return {}
+    direct = block == row["destination"]
+    space = _reference(sender.get("workspace") or sender.get("space") or relay.get("workspace") or relay.get("space")
+                       or mode.get("space") or (meta.get("workspace") or meta.get("space") if direct else None))
+    channel = _reference(mode.get("channel") or sender.get("channel") or relay.get("channel") or (meta.get("channel") if direct else None))
+    name = route_audit_name(sender.get("channel_name") or relay.get("channel_name"))
+    if direct and provider in ("discord", "telegram"):
+        ref_space, sep, ref_channel = row["ref"].partition(":")
+        if sep and ref_space and re.fullmatch(r"-?[0-9]+(?::[0-9]+)?", ref_channel):
+            space = space or ref_space
+            if row.get("target") == row["ref"]:
+                channel = channel or ref_channel
+    if provider == "github":
+        repo = next((s for s in (sender.get("repo"), mode.get("repo"), payload.get("repo"), channel, space,
+                                 row["ref"] if direct else None) if isinstance(s, str) and _REPO.fullmatch(s)), None)
+        issue = next((str(n) for n in (sender.get("number"), mode.get("number"), payload.get("number"))
+                      if re.fullmatch(r"[1-9][0-9]{0,18}", str(n))), None)
+        name = f"{repo}#{issue}" if repo and issue else repo or channel
+        channel = repo or channel
+    elif provider == "slack":
+        if slack and space and channel and (rt := slack.runtimes.get(space)):
+            name = name or route_audit_name(rt.channel_names.get(channel))
+        if channel and channel.startswith("D") and (not name or name == channel):
+            name = "Direct message"
+        elif name and name != channel:
+            name = "#" + name.lstrip("#")
+        elif channel:
+            name = "Channel" if re.fullmatch(r"[CG][A-Z0-9]+", channel) else "#" + channel.lstrip("#")
+    elif provider == "discord":
+        parent = _reference(mode.get("parent") or sender.get("channel") or relay.get("channel")) or channel
+        discord = core.blocks.get(block)
+        root = _reference(relay.get("root"))
+        thread = _reference(sender.get("thread")) or (root if discord and root in discord.channels else None)
+        if parent != channel:
+            thread = thread or channel
+        if parent or name:
+            name = _discord_label(discord, parent, thread, name)
+    elif provider == "telegram":
+        chat, _, raw_topic = (channel or "").partition(":")
+        telegram = core.blocks.get(block)
+        topic = sender.get("topic") or raw_topic
+        if telegram and chat:
+            if not topic and (message := _reference(sender.get("message") or relay.get("reply_to") or sender.get("root") or relay.get("root"))):
+                stored = core.store.one("SELECT topic FROM telegram_topics WHERE block = ? AND chat = ? AND message = ?", (block, chat, message))
+                topic = stored["topic"] if stored else None
+        if re.fullmatch(r"[1-9][0-9]{0,19}", str(topic)) and str(topic) != "1":
+            channel = f"{chat}:{topic}" if chat else channel
+        name = _telegram_label(telegram, space, chat, topic, name, sender.get("topic_name"))
+    label = name or (space if provider == "telegram" else channel) or channel or space
+    return {"source_block": block, "source_kind": provider, **({"space": space} if space else {}),
+            **({"channel": channel} if channel else {}), **({"channel_label": label} if label else {})}
+
+
+def _conversation_subject(row: dict[str, Any], payload: dict[str, Any], location: dict[str, str], item_kind: str,
+                          sender_name: str) -> str:
+    meta = row["meta"]
+    place = location.get("space") or ""
+    channel = location.get("channel_label") or ""
+    provider = _SOURCE_NAMES.get(location.get("source_kind", ""), "")
+    routes = {row["destination"], provider, place, channel}
+    if provider:
+        routes.update(f"{provider} {label}" for label in (place, channel, f"{place} {channel}") if label.strip())
+    if dot := _reference(meta.get("dot")):
+        routes.update((dot, f"dot {dot}"))
+    if item_kind == "watch_digest":
+        fallback = f"Watch digest: {channel}" if channel else "Watch digest"
+    elif row["destination"] in ("claude-routine", "grok-routine") or meta.get("routine"):
+        fallback = f"Wake: {row['destination']}"
+    elif provider:
+        fallback = f"{provider} message"
+    elif row["destination"] == "mailbox":
+        fallback = f"Handoff from {sender_name}"
+    else:
+        fallback = "Message"
+    authored = next((title for value in (meta.get("display_subject"), row["title"], payload.get("subject"))
+                     if isinstance(value, str) and (title := display_subject(value, None, "", route_labels=routes))), None)
+    body = payload.get("text")
+    return authored or display_subject(None, body if isinstance(body, str) else None, fallback, route_labels=routes)
+
+
+def _conversation(core: Any, row: dict[str, Any], endpoints: tuple[Any, str | None], first: tuple[str, dict[str, Any]],
+                  captains: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    endpoint_sender, target = endpoints
+    item_kind, payload = first
+    meta, destination = row["meta"], row["destination"]
+    sender = _object(meta.get("display_from")) or _object(meta.get("from")) or _object(meta.get("source"))
+    if not sender and (destination == "mailbox" or _provider(core, destination) in _SOURCE_NAMES):
+        sender = _object(endpoint_sender)
+    if item_kind == "watch_digest":
+        sender = _watch_sender(payload, sender)
+    location = _conversation_location(core, row, sender, payload)
+    if sender.get("kind") != "watch" and location.get("source_kind") in _CHAT_SENDERS and (
+        not sender.get("kind") or (sender.get("kind") == "agent" and sender.get("agent") == location["source_kind"])
+    ):
+        sender = {**sender, "kind": location["source_kind"]}
+        sender.pop("agent", None)
+    if not sender:
+        agent = row["ref"] if destination == "mailbox" and _reference(row["ref"]) else row["owner"]
+        sender = {"kind": "agent", "agent": agent}
+    first_sender = _sender(core, sender, destination, captains) or {}
+    sender_name = (display_name(first_sender.get("name")) or display_name(first_sender.get("user_name"))
+                   or display_name(first_sender.get("author")) or location.get("channel_label")
+                   or display_name(first_sender.get("user")) or display_name(first_sender.get("label"))
+                   or ("Captain" if first_sender.get("kind") == "captain" else "Capy thread" if first_sender.get("kind") in _CAPY_SENDERS else None)
+                   or _SOURCE_NAMES.get(location.get("source_kind", "")) or _agent_name(core, row["owner"]))
+    first_sender["name"] = sender_name
+    if first_sender.get("kind") in _CAPY_SENDERS:
+        first_sender.setdefault("avatar_url", CAPY_AVATAR_URL)
+    first_target, target_kind, avatar_url = _conversation_target(core, row, target, _reference(payload.get("target_kind")), captains)
+    if address := _channel_target(core, destination, _reference(row.get("target") or target), location):
+        first_target, target_kind = address
+        avatar_url = None
+    mode = _object(meta.get("channel_mode")) or _object(payload.get("channel_mode"))
+    project = mode["project"] if "project" in mode and (mode["project"] is None or isinstance(mode["project"], str)) else row["project"]
+    if project is None and "project" not in mode and _provider(core, destination) in ("telegram", "discord"):
+        block = core.blocks.get(destination)
+        if block and (space := block.spaces.get(row["ref"].partition(":")[0])):
+            project = space.project
+    status = "stored" if destination == "mailbox" and row["owner"] == "owner" and row["status"] == "delivered" else row["status"]
+    notice = _object(meta.get("owner_notify"))
+    owner_notify = {key: value for key in ("surface", "notified_at", "reason") if (value := _reference(notice.get(key)))}
+    if type(stamp := notice.get("notified_at")) in (int, float) and math.isfinite(stamp) and 0 < stamp < 253402300800:
+        owner_notify["notified_at"] = iso(stamp)
+    return {**_fields(row, "handle", "owner", "destination", "ref", "target", "open"),
+            **location, "status": status, "project": project, "kind": item_kind or None,
+            "title": _conversation_subject(row, payload, location, item_kind, sender_name),
             "created_at": iso(row["created_at"]), "updated_at": iso(row["updated_at"]),
-            "first_sender": first_sender, "first_target": first_target,
+            "first_sender": first_sender, "first_target": first_target, "target_kind": target_kind,
             **({"target_avatar_url": avatar_url} if avatar_url else {}),
-            "destination_kind": destination_kind}
+            "destination_kind": _provider(core, destination) or destination,
+            **({"owner_notify": owner_notify} if owner_notify else {})}
+
+
+async def _conversations(core: Any, rows: dict[str, dict[str, Any]], detail_senders: tuple[Any, ...] = ()) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    handles = list(rows)
+    endpoints = core.inbox.first_endpoints(handles)
+    first = _inbox_first_items(core, handles)
+    destinations = {row["destination"] for row in rows.values()}
+    for handle, row in rows.items():
+        sender, target = endpoints.get(handle, (None, None))
+        _, payload = first.get(handle, ("", {}))
+        address = _reference(row.get("target") or target)
+        if address and ":captain:" in address:
+            destinations.add(address.split(":", 1)[0])
+        if (address == "captain" or payload.get("target_kind") == "captain"
+                or _provider(core, row["destination"]) != "capy" and any(
+                    _object(value).get("kind") in _CAPY_SENDERS
+                    for value in (row["meta"].get("display_from"), row["meta"].get("from"), sender, *detail_senders)
+                )):
+            destinations.update(core.blocks)
+    captains = await captain_targets(core, destinations)
+    return (
+        {handle: _conversation(core, row, endpoints.get(handle, (None, None)), first.get(handle, ("", {})), captains)
+         for handle, row in rows.items()},
+        captains,
+    )
 
 
 async def _pending_write(core: Any, row: dict[str, Any], agents: dict[str, str]) -> dict[str, Any]:
@@ -423,6 +727,7 @@ async def inbox(request: Request) -> JSONResponse:
     before = None
     try:
         limit = _number(request, "limit", 20, 1, 100)
+        filters = InboxFilters.parse(params)
     except ValueError as exc:
         return _error(str(exc))
     if "cursor" in params:
@@ -444,7 +749,8 @@ async def inbox(request: Request) -> JSONResponse:
             pending = await asyncio.gather(*(_pending_write(core, row, agents) for row in rows))
     if before is None:
         pauses = core.store.q("SELECT root, turns, paused_at FROM conversation_turns WHERE paused_at IS NOT NULL ORDER BY paused_at DESC")
-    roots = core.inbox.handles(limit=limit + 1, roots_only=True, project=project, before=before)
+    roots = core.inbox.handles(limit=limit + 1, roots_only=True, before=before,
+                               older_first=filters.older_first, predicates=filters.clauses(core, project))
     next_cursor = None
     if len(roots) > limit:
         roots.pop()
@@ -455,13 +761,10 @@ async def inbox(request: Request) -> JSONResponse:
     for pause in pauses:
         if pause["root"] not in by_handle and (row := core.inbox.handle(pause["root"])) is not None:
             by_handle[pause["root"]] = row
-    endpoints = core.inbox.first_endpoints(list(by_handle))
-    captains = await captain_targets(core, core.blocks if any(
-        isinstance(sender, dict) and sender.get("kind") in _CAPY_SENDERS
-        for row in by_handle.values() if row["destination"] == "mailbox"
-        for sender in (row["meta"].get("from"), endpoints.get(row["handle"], (None, None))[0])
-    ) else (row["destination"] for row in by_handle.values()))
-    conversations = {handle: _conversation(core, row, endpoints.get(handle, (None, None)), captains) for handle, row in by_handle.items()}
+    conversations, _ = await _conversations(core, by_handle)
+    unread = unread_handles(core, list(by_handle))
+    for handle, result in conversations.items():
+        result["unread"] = handle in unread
     return JSONResponse({"pending_writes": pending, "turn_cap": core.cfg.turn_cap,
                          "pauses": [{**_fields(row, "root", "turns"), "paused_at": iso(row["paused_at"]),
                                      "conversation": conversations.get(row["root"])} for row in pauses],
@@ -483,19 +786,18 @@ async def conversation(request: Request) -> JSONResponse:
     handle = row["handle"]
     out = core.inbox.read(owner=None, handle=handle, since=cursor, limit=limit, advance=False)
     items = []
-    endpoints = core.inbox.first_endpoints([handle])
-    first_sender = endpoints.get(handle, (None, None))[0]
-    captains = await captain_targets(core, core.blocks if row["destination"] == "mailbox" and any(
-        isinstance(sender, dict) and sender.get("kind") in _CAPY_SENDERS
-        for sender in (row["meta"].get("from"), first_sender, *(item.get("from") for item in out["items"]))
-    ) else (row["destination"],))
+    conversations, captains = await _conversations(core, {handle: row}, tuple(item.get("from") for item in out["items"]))
+    conversations[handle]["unread"] = bool(unread_handles(core, [handle]))
     for item in out["items"]:
         projected = _scalars(item, "cursor", "handle", "kind", "at", "text", "status", "final", "in_reply_to", "trust", "project",
                              "target", "target_kind", "event_id", "slack_kind", "count")
-        if sender := _sender(core, item.get("from"), row["destination"], captains):
-            projected["from"] = sender
+        sender = item.get("from")
+        if item["kind"] == "watch_digest":
+            sender = _watch_sender(item, _object(sender))
+        if display_sender := _sender(core, sender, row["destination"], captains):
+            projected["from"] = display_sender
         items.append(projected)
-    return JSONResponse({"conversation": _conversation(core, row, endpoints.get(handle, (None, None)), captains),
+    return JSONResponse({"conversation": conversations[handle],
                          "items": items, "cursor": out["cursor"]})
 
 

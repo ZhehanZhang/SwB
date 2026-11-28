@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -64,6 +64,13 @@ class _SendBody(_Body):
     project: str | None = None
     title: str | None = None
     dry_run: bool = False
+
+
+class _InboxActionBody(_Body):
+    action: Literal["read", "redeliver"]
+    handles: list[str] = Field(min_length=1, max_length=50)
+    cursor: int | None = Field(default=None, ge=1, le=2**63 - 1)
+    count: int | None = Field(default=None, ge=0, le=2**63 - 1)
 
 
 _Model = TypeVar("_Model", bound=_Body)
@@ -224,6 +231,33 @@ async def modes(request: Request) -> JSONResponse:
     return JSONResponse({"space": row})
 
 
+async def inbox_action(request: Request) -> JSONResponse:
+    body = await _body(request, _InboxActionBody)
+    if body is None or any(not handle or len(handle) > 256 for handle in body.handles):
+        return _error("invalid_request")
+    if (body.cursor is not None and len(body.handles) != 1) or (body.count is not None and body.cursor is None):
+        return _error("invalid_request")
+    core = request.app.state.core
+    handles = list(dict.fromkeys(body.handles))
+    if body.action == "redeliver":
+        if body.cursor is not None:
+            return _error("invalid_request")
+        updated = [handle for handle in handles if core.inbox.redeliver_owner(handle)]
+        if updated:
+            await core.owner_notify.flush()
+    elif body.cursor is not None:
+        updated = handles if core.inbox.mark_owner_read(handles[0], body.cursor, body.count) else []
+    else:
+        marks = ", ".join("?" for _ in handles)
+        latest = core.store.q(
+            "SELECT i.handle, i.id, json_extract(i.data, '$.count') AS count FROM handles h "
+            "JOIN inbox i ON i.id = (SELECT id FROM inbox WHERE handle = h.handle ORDER BY id DESC LIMIT 1) "
+            f"WHERE h.handle IN ({marks})", handles,
+        )
+        updated = [row["handle"] for row in latest if core.inbox.mark_owner_read(row["handle"], row["id"], row["count"])]
+    return JSONResponse({"updated": updated})
+
+
 WRITE_ROUTES = [
     Route("/routes", route_set, methods=["POST"]),
     Route("/routes/{id}", route_remove, methods=["DELETE"]),
@@ -233,5 +267,6 @@ WRITE_ROUTES = [
     Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
     Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
     Route("/send", send, methods=["POST"]),
+    Route("/inbox/actions", inbox_action, methods=["POST"]),
     Route("/modes", modes, methods=["GET", "POST"]),
 ]

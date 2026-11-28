@@ -2074,6 +2074,13 @@
     },
     {
       "icon": null,
+      "id": "config_key:owner_notify",
+      "key": "owner_notify",
+      "kind": "config_key",
+      "label": "owner_notify"
+    },
+    {
+      "icon": null,
       "id": "config_key:public_url",
       "key": "public_url",
       "kind": "config_key",

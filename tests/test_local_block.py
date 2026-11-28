@@ -89,6 +89,7 @@ async def test_send_mailbox_first_and_fallbacks(amake, monkeypatch):
         attempts.append((companion, capability, action, args, principal))
         item = core.inbox.handle(args["conversation"])
         assert item["owner"] == "claude-code" and item["destination"] == "mailbox"
+        assert item["title"] == "Please review."
         assert core.inbox.read(owner="claude-code", advance=False)["items"][-1]["text"] == "Please review."
         if failure:
             raise failure

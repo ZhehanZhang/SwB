@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import shlex
 import subprocess
@@ -77,6 +78,7 @@ async def seed_inbox(core: Switchboard) -> None:
             "channel": "planning", "text": "The release checklist is ready for review.",
         }, persona=None, key_id=key["key_id"], ttl_seconds=3600,
     )
+    await seed_message_examples(core)
     handle = core.inbox.open_handle(
         handle="h_example_release", owner="claude-code", destination="capy", ref=CAPTAIN, project="operations",
         title="Release preparation", meta={}, target=f"capy:captain:{CAPTAIN}",
@@ -88,6 +90,38 @@ async def seed_inbox(core: Switchboard) -> None:
         "text": "The checklist is ready to share.", "from": core.blocks["capy"]._from(CAPTAIN, {"source": "assistant"}),
     })
     core.inbox.update_handle(handle, status="completed", open=False)
+
+
+async def seed_message_examples(core: Switchboard) -> None:
+    examples = (
+        ("watch", "owner", "mailbox", "example-org/example-repo", "community", "Watch digest: example-org/example-repo",
+         "agent:owner", "notified", {"owner_notify": {"surface": "telegram:dispatch", "notified_at": core.clock()}},
+         "watch_digest", {"block": "repo-events", "space": "example-org/example-repo", "count": 14, "items": []}),
+        ("telegram", "chatgpt", "telegram", "dispatch:-1001000:5", None, "Telegram dispatch",
+         "dispatch:-1001000:5", "sent", {}, "message", {"text": "Schedule confirmed for Thursday."}),
+        ("slack", "slack", "slack", "C000EXAMPLE", "community", "Slack studio #planning",
+         "agent:grok-bot", "sent", {"from": {"kind": "slack", "workspace": "studio", "channel": "C000EXAMPLE",
+                                             "channel_name": "planning", "user_name": "Jamie"}},
+         "message", {"text": "Draft the agenda for our planning meeting."}),
+        ("dots", "slack", "dots", "team-dot", "community", "dot team-dot",
+         "dots:dot:team-dot", "sent", {"dot": "team-dot", "from": {"kind": "slack", "workspace": "studio", "channel_name": "planning"}},
+         "message", {"text": "Summarize the open review items."}),
+        ("handoff", "claude", "mailbox", "claude", "community", "h_example_handoff",
+         "agent:codex", "delivered", {}, "message", {"text": "Add the release date to the changelog."}),
+        ("coding", "goose", "mailbox", "OpenCode", "community", "Review the build output",
+         "agent:goose", "delivered", {}, "message", {"text": "Review the build output."}),
+    )
+    for name, owner, destination, ref, project, title, target, status, meta, kind, data in examples:
+        handle = core.inbox.open_handle(
+            handle=f"h_example_{name}", owner=owner, destination=destination, ref=ref, project=project,
+            title=title, target=target, status=status, meta=meta,
+        )
+        if owner == "owner":
+            core.store.x("INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?, ?, ?, ?, ?, ?)",
+                         (owner, handle, destination, kind, json.dumps(data), core.clock()))
+            core.inbox.update_handle(handle, status=status)
+        else:
+            await core.inbox.add(handle, kind, data)
 
 
 def run(path: Path) -> None:
@@ -161,7 +195,12 @@ def run(path: Path) -> None:
     discord.guild_info["1000"] = {"name": "Engineering", "owner_id": "1001"}
     discord.channels["2001"] = Channel(None, "deployments", 0, "1000")
     discord.channels["2002"] = Channel(None, "community", 0, "1000")
-    core.blocks["telegram"]._seen[-1001000] = {"id": -1001000, "title": None, "type": "supergroup"}
+    telegram = core.blocks["telegram"]
+    telegram._seen[-1001000] = {"id": -1001000, "title": None, "type": "supergroup"}
+    asyncio.run(telegram._receive({
+        "chat": {"id": -1001000, "title": "Dispatch", "type": "supergroup"},
+        "from": {"id": 1001}, "message_id": 5, "forum_topic_created": {"name": "Release coordination"},
+    }, 1002, "example_bot"))
     core.modes.watch("team-chat", "engineering", "2001", "msg-example", "1001", "Alex",
                      "Release ready", None, None, project="operations")
     core.audit.record(action="webhook", origin="repo-events", outcome="dropped", destination="repo-events", source="github",

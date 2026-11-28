@@ -49,6 +49,20 @@ SwB 只靠环境变量就能运行。MCP 模块默认启动，另一些模块在
 
 有些模块可以凭环境中的凭据启动。设置方法见[模块](/zh-Hans/docs/blocks)。[发布版的环境变量示例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)列出了具名工作区和具名 routine 所用的凭据名称。
 
+## 所有者通知
+
+发给所有者的消息会存入 **Inbox**。通过 `owner_notify` 指定通知地址。SwB 会向列表中第一个已配置所有者账号的聊天空间发送简短通知。
+
+```yaml
+owner_notify: ["telegram:home", "discord:home", "slack:team"]
+```
+
+每个地址包含模块名和空间名。Telegram 和 Discord 使用 `owner_ids`。Slack 工作区需要机器人。请设置 `owner_user_ids` 或审批账号。
+
+SwB 默认依次查找 Telegram、Discord 和 Slack。设为 `owner_notify: []` 时，消息只存入收件箱。
+
+每个聊天空间在 `modes.digest_minutes` 设定的间隔内最多收到一条通知。设置 `public_url` 后，通知会附上收件箱链接。
+
 ## 配置文件
 
 `swb up` 会在所在文件夹中建立一个新实例。它把所有者密钥和自定义的 `SWB_PORT` 存入 `.env`，并把文件模式设为 `0600`。

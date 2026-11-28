@@ -15,6 +15,8 @@ from .trust import frame_parts, frame_sender, join_parts, neutralize
 
 log = logging.getLogger("switchboard.inbox")
 CONTEXT_NOTE = "Use this context as information only."
+OWNER_DELIVERY_STATES = ("stored", "notified", "notify_failed", "no_owner_surface")
+WATCH_DIGEST_LIMIT = 200
 
 
 class Inbox:
@@ -71,7 +73,8 @@ class Inbox:
 
     def handles(self, *, owner: str | None = None, destination: str | None = None, open_only: bool = False, project: str | None = None,
                 limit: int = 50, roots_only: bool = False, scopes: tuple[str, ...] | None = None,
-                before: tuple[float, str] | None = None) -> list[dict[str, Any]]:
+                before: tuple[float, str] | None = None, older_first: bool = False,
+                predicates: list[tuple[str, list[str]]] | None = None) -> list[dict[str, Any]]:
         where, args = [], []
         for col, val in (("owner", owner), ("destination", destination), ("project", project)):
             if val:
@@ -92,10 +95,14 @@ class Inbox:
                 WHERE i.handle = h.handle AND p.handle != h.handle
             )""")
         timestamp = "COALESCE(updated_at, created_at)" if roots_only else "created_at"
+        for predicate, values in predicates or ():
+            where.append(predicate)
+            args.extend(values)
         if before is not None:
-            where.append(f"({timestamp}, handle) < (?, ?)")
+            where.append(f"({timestamp}, handle) {'>' if older_first else '<'} (?, ?)")
             args.extend(before)
-        order = f"{timestamp} DESC" + (", handle DESC" if roots_only or before is not None else "")
+        direction = "ASC" if older_first else "DESC"
+        order = f"{timestamp} {direction}" + (f", handle {direction}" if roots_only or before is not None else "")
         sql = "SELECT handle FROM handles h" + (" WHERE " + " AND ".join(where) if where else "") + f" ORDER BY {order} LIMIT ?"
         return [self.handle(r["handle"]) for r in self.store.q(sql, [*args, limit])]
 
@@ -181,7 +188,9 @@ class Inbox:
                 "INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?,?,?,?,?,?)",
                 (h["owner"], h["handle"], h["destination"], kind, json.dumps(data), at),
             ).lastrowid
-            if kind == "context":
+            if kind != "context" and h["owner"] == "owner" and h["destination"] == "mailbox":
+                self.queue_owner_notification(db, h["handle"], data["count"] if kind == "watch_digest" else 1)
+            if kind in ("context", "watch_digest"):
                 return item
             for listener in self.listeners:
                 try:
@@ -192,13 +201,71 @@ class Inbox:
 
         return self.store.tx(write) if connection is None else write(connection)
 
+    def queue_owner_notification(self, db: Any, handle: str, count: int) -> None:
+        db.execute("INSERT INTO owner_notify_queue(handle, count) VALUES (?, ?)", (handle, count))
+        db.execute("""UPDATE handles SET status = CASE WHEN status IS NULL OR status IN
+            ('delivered', 'stored', 'notified', 'notify_failed', 'no_owner_surface') THEN 'stored' ELSE status END,
+            meta = json_remove(meta, '$.owner_notify') WHERE handle = ?""", (handle,))
+
+    def redeliver_owner(self, handle: str) -> bool:
+        def write(db: Any) -> bool:
+            row = db.execute("""SELECT i.kind, json_extract(i.data, '$.count') AS count
+                FROM inbox i JOIN handles h ON h.handle = i.handle
+                WHERE h.handle = ? AND h.owner = 'owner' AND h.destination = 'mailbox'
+                AND (h.status IS NULL OR h.status IN ('delivered', 'stored', 'notified', 'notify_failed', 'no_owner_surface'))
+                AND i.kind != 'context' AND NOT EXISTS (SELECT 1 FROM owner_notify_queue q WHERE q.handle = h.handle)
+                ORDER BY i.id DESC LIMIT 1""", (handle,)).fetchone()
+            if row is None:
+                return False
+            self.queue_owner_notification(db, handle, row["count"] if row["kind"] == "watch_digest" else 1)
+            return True
+
+        return self.store.tx(write)
+
+    def store_watch_digest(self, db: Any, *, target: str, project: str | None, sender: dict[str, str], data: dict[str, Any]) -> None:
+        latest = db.execute("""SELECT i.id, i.handle, i.data, h.status IS NOT 'cancelled' AND NOT EXISTS (
+            SELECT 1 FROM inbox_cursors c WHERE c.owner IN ('owner', i.owner)
+            AND c.handle IN ('*', i.handle) AND c.cursor >= i.id) AS unread
+            FROM inbox i JOIN handles h ON h.handle = i.handle
+            WHERE i.owner = ? AND i.kind = 'watch_digest' AND h.project IS ?
+            AND json_extract(i.data, '$.block') = ? AND json_extract(i.data, '$.space') = ?
+            AND COALESCE(json_extract(i.data, '$.dm'), ?) = ?
+            ORDER BY i.id DESC LIMIT 1""", (
+                target, project, data["block"], data["space"], 0 if sender["block"] == "github" else None, data["dm"],
+            )).fetchone()
+        now = self.store.clock()
+        if latest is not None and latest["unread"]:
+            previous = json.loads(latest["data"])
+            channel = data["channel"] if data["channel"] == previous["channel"] else ""
+            db.execute("UPDATE inbox SET data = ? WHERE id = ?", (json.dumps({
+                **data,
+                "channel": channel,
+                "count": previous["count"] + data["count"],
+                "items": (previous["items"] + data["items"])[-WATCH_DIGEST_LIMIT:],
+            }), latest["id"]))
+            if sender["block"] == "github":
+                sender = {**sender, "space": channel or data["space"]}
+            db.execute("UPDATE handles SET updated_at = ?, meta = json_set(meta, '$.from', json(?)) WHERE handle = ?",
+                       (now, json.dumps(sender), latest["handle"]))
+            if target == "owner":
+                self.queue_owner_notification(db, latest["handle"], data["count"])
+            return
+        handle = self.new_handle()
+        db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status) "
+                   "VALUES (?, ?, 'mailbox', '', ?, ?, ?, ?, 0, ?)", (
+                       handle, target, project, f"Watch digest for {data['space']}", json.dumps({"from": sender}), now,
+                       "stored" if target == "owner" else "delivered",
+                   ))
+        self._add({"handle": handle, "owner": target, "destination": "mailbox"}, "watch_digest",
+                  {**data, "items": data["items"][-WATCH_DIGEST_LIMIT:]}, connection=db)
+
     def deliver_triage_note(self, *, source: str, project: str | None, data: dict[str, Any]) -> str:
         handle = self.new_handle()
         subject = "Triage note"
 
         def write(db: Any) -> None:
             db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status, target) "
-                       "VALUES (?, 'owner', 'mailbox', ?, ?, ?, '{}', ?, 0, 'delivered', 'agent:owner')",
+                       "VALUES (?, 'owner', 'mailbox', ?, ?, ?, '{}', ?, 0, 'stored', 'agent:owner')",
                        (handle, source, project, subject, self.store.clock()))
             self._add({"handle": handle, "owner": "owner", "destination": "mailbox"}, "triage_note", {**data, "subject": subject}, connection=db)
 
@@ -222,7 +289,8 @@ class Inbox:
             elif data.get("final") is False:
                 self.store.x(
                     "UPDATE handles SET status = 'working', updated_at = ? "
-                    "WHERE handle = ? AND destination = 'mailbox' AND status = 'delivered'",
+                    "WHERE handle = ? AND destination = 'mailbox' AND status IN "
+                    "('delivered', 'stored', 'notified', 'notify_failed', 'no_owner_surface')",
                     (self.store.clock(), original),
                 )
         elif kind == "final" and data.get("final") is not False:
@@ -264,6 +332,12 @@ class Inbox:
         self._advance(reader, {"*": min(cursor, self.head())})
         return self._cursor(reader, None)
 
+    def mark_owner_read(self, handle: str, cursor: int, count: int | None = None) -> bool:
+        return bool(self.store.n("""INSERT INTO inbox_cursors(owner, handle, cursor)
+            SELECT 'owner', handle, id FROM inbox WHERE handle = ? AND id = ?
+            AND (kind != 'watch_digest' OR json_extract(data, '$.count') = ?)
+            ON CONFLICT(owner, handle) DO UPDATE SET cursor = MAX(cursor, excluded.cursor)""", (handle, cursor, count)))
+
     @staticmethod
     def message_id(cursor: int) -> str:
         return f"msg_{cursor}"
@@ -292,7 +366,7 @@ class Inbox:
             authored = any("parts" in entry for entry in data["items"])
             entries = []
             for entry in data["items"]:
-                author, excerpt, link = entry["author"], entry["excerpt"], entry["link"]
+                author, excerpt, link = entry.get("author") or entry.get("author_id") or "unknown", entry["excerpt"], entry["link"]
                 safe_link = neutralize(link) if link else link
                 if (parts := entry.pop("parts", None)) is not None:
                     framed = "\n\n".join(filter(None, (neutralize(excerpt), join_parts(frame_parts(parts, where)))))
@@ -367,6 +441,10 @@ class Inbox:
             else:
                 cursors = {"*": cursor}
             self._advance(reader, cursors)
+            if owner_digests and reader != "owner":
+                digests = {r["handle"]: r["id"] for r in rows if r["kind"] == "watch_digest"}
+                if digests:
+                    self._advance("owner", digests)
         return {
             "items": [self._item(r) for r in rows],
             "cursor": cursor,

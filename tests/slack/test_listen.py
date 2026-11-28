@@ -122,7 +122,7 @@ def test_listen_wake_keeps_the_original_wrapper_and_the_optional_reply_tail(open
         (_, text), = fires
         title = f"Dana (external) in Slack #{NAME} asks: Can we check the canary?"
         handle = core.inbox.handle(handle_of(text))
-        assert handle["title"] == title and text.startswith(title + "\n\n")
+        assert handle["title"] == "Can we check the canary?" and text.startswith(title + "\n\n")
         task, tail = text.split("\n\n---\n", 1)
         assert task == (
             f"{title}\n\n{push['text']}\n\n{push['permalink']}\n\n"

@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS telegram_offsets (block TEXT NOT NULL, bot INTEGER NO
   at REAL NOT NULL, PRIMARY KEY (block, bot));
 CREATE TABLE IF NOT EXISTS telegram_topics (block TEXT NOT NULL, chat TEXT NOT NULL, message TEXT NOT NULL,
   topic INTEGER NOT NULL, at REAL NOT NULL, PRIMARY KEY (block, chat, message));
+CREATE TABLE IF NOT EXISTS telegram_topic_names (block TEXT NOT NULL, chat TEXT NOT NULL, topic INTEGER NOT NULL,
+  name TEXT NOT NULL, PRIMARY KEY (block, chat, topic));
 """
 
 
@@ -301,6 +303,14 @@ class TelegramBlock(ChatBlock):
             self._seen[channel] = {"id": channel, "title": chat.get("title"), "type": kind}
             if len(self._seen) > 20:
                 self._seen.pop(next(iter(self._seen)))
+        if space and not dm:
+            created, edited = raw.get("forum_topic_created"), raw.get("forum_topic_edited")
+            topic_info = created or edited
+            topic = raw.get("message_thread_id", mid if created else None)
+            if isinstance(topic_info, dict) and isinstance(name := topic_info.get("name"), str) and name.strip() and type(topic) is int and topic > 0:
+                self.core.store.x("INSERT INTO telegram_topic_names(block, chat, topic, name) VALUES (?,?,?,?) "
+                                  "ON CONFLICT(block, chat, topic) DO UPDATE SET name = excluded.name",
+                                  (self.name, str(channel), topic, name.strip()[:128]))
         text = raw.get("text") or raw.get("caption")
         if space is None or type(user) is not int or not text:
             return
@@ -324,6 +334,11 @@ class TelegramBlock(ChatBlock):
     def _save_topic(self, channel: str, message: str, topic: int) -> None:
         self.core.store.x("INSERT OR REPLACE INTO telegram_topics(block, chat, message, topic, at) VALUES (?,?,?,?,?)",
                           (self.name, channel, message, topic, self.core.clock()))
+
+    def topic_name(self, chat: str, topic: int) -> str | None:
+        row = self.core.store.one("SELECT name FROM telegram_topic_names WHERE block = ? AND chat = ? AND topic = ?",
+                                  (self.name, chat, topic))
+        return row["name"] if row else None
 
     async def post(self, space: str, channel: str, text: str, *, root: str | None = None, reply_to: str | None = None,
                    persona: Persona | None = None, require_reply: bool = False) -> str | list[str]:

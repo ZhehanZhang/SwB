@@ -71,7 +71,7 @@ visibility_set(resource="target:beta", visibility="shared")
 
 用 `modes.digest_minutes` 設定間隔，預設為 60 分鐘。間隔結束或單批累積到 50 個事件時，SwB 會把摘要放進目標信箱。擁有者信箱是備用目標。
 
-擁有者可以在主控台的 **Inbox** 中讀取每一份摘要，也可以透過 MCP 的 `inbox` 和 `wait` 讀取。摘要會列出事件數量，以及每個事件的作者、摘錄和可用的連結。摘要的信任等級為 `external`。
+擁有者可以在主控台的 **Inbox** 中讀取所有摘要，也可以使用 MCP 的 `inbox` 和 `wait`。同一空間和目標的新事件會加入最新的未讀摘要。摘要保留事件總數和最近的 200 個事件。每個事件列出作者、摘錄和可用的連結。摘要的信任等級為 `external`。
 
 Watch 模式讓代理維持休眠，摘要要到收件匣中讀取。[GitHub 事件目的地](/zh-Hant/docs/blocks/github)仍會收到個別事件的副本。
 

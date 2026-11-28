@@ -1,9 +1,9 @@
-import type { ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react"
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, ArrowRight, Check, Play, X } from "lucide-react"
-import { Link, useParams, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { Lamp } from "@/components/console/lamp"
+import captainMark from "../../../site/public/marks/captain.webp?no-inline"
 import { DataState } from "@/components/data-state"
 import { ListRow } from "@/components/list-row"
 import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
@@ -12,20 +12,24 @@ import { Button } from "@/components/ui/button"
 import { requestJson, sessionQuery } from "@/lib/api"
 import { displayReference } from "@/lib/display-reference"
 import { cn } from "@/lib/utils"
+import { BulkActions, canRun, markInboxCacheRead, RowActions, useInboxActions, writeInboxAction, type InboxActions } from "./inbox/actions"
 import {
-  approvalTitle, channelLabel, isConversationPage, isInbox, isResumed, isWriteDecision, participants, principalLabel, senderLabel, senderLogoKind,
+  approvalTitle, channelLabel, isConversationPage, isInbox, isResumed, isWriteDecision, ownerDelivery, participants, principalLabel, senderLabel, senderLogoKind,
   type Conversation, type ConversationItem, type Pause, type PendingWrite,
 } from "./inbox/data"
+import { InboxFilters, inboxQuery } from "./inbox/filters"
 
 const inboxKey = ["inbox"] as const
 const itemLimit = 100
 
-function projectSearch(project: string | null) {
-  return project ? `?${new URLSearchParams({ project })}` : ""
-}
-
 function conversationLink(handle: string, search: string) {
   return `/inbox/${encodeURIComponent(handle)}${search}`
+}
+
+type OpenConversation = (event: MouseEvent<HTMLAnchorElement>) => void
+
+function primaryClick(event: MouseEvent<HTMLAnchorElement>) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.defaultPrevented
 }
 
 function relativeTime(value: string | null) {
@@ -47,12 +51,19 @@ function RelativeTime({ value }: { value: string | null }) {
 }
 
 function Person({ label, kind, className, avatarUrl }: { label: string; kind?: string | null; className?: string; avatarUrl?: string | null }) {
+  const isCaptain = kind === "captain" || kind === "capy" || kind === "capy_thread"
   return (
     <span className={cn("flex min-w-0 items-center gap-2", className)}>
-      <Logo kind={kind || label} avatarUrl={avatarUrl} className="size-5" />
+      {isCaptain
+        ? <img alt="" src={captainMark} className="size-5 shrink-0 rounded-md border border-border object-contain" />
+        : <Logo kind={kind || label} avatarUrl={avatarUrl} className="size-5" fallbackLetter={label[0]} />}
       <span className="min-w-0 wrap-anywhere">{label}</span>
     </span>
   )
+}
+
+function ProjectName({ project }: { project: string | null }) {
+  return project || <span role="img" aria-label="Unassigned" className="before:content-['—']" />
 }
 
 function NeedsRow({ name, kind, title, at, preview, actions, avatarUrl }: {
@@ -128,7 +139,7 @@ function SlackApproval({ item }: { item: PendingWrite }) {
   )
 }
 
-function TurnPause({ pause, search }: { pause: Pause; search: string }) {
+function TurnPause({ pause, search, fromList, onOpen }: { pause: Pause; search: string; fromList: boolean; onOpen: OpenConversation }) {
   const { data: session } = useQuery(sessionQuery)
   const client = useQueryClient()
   const resume = useMutation({
@@ -146,10 +157,10 @@ function TurnPause({ pause, search }: { pause: Pause; search: string }) {
   const { conversation } = pause
   return (
     <NeedsRow
-      name={displayReference(conversation?.title || pause.root)}
+      name={displayReference(conversation?.title || "Conversation")}
       kind={conversation?.destination_kind || conversation?.destination}
       avatarUrl={conversation?.target_avatar_url ?? null}
-      title={<Link className="hover:underline" to={conversationLink(pause.root, search)}>Paused at turn cap</Link>}
+      title={<Link className="hover:underline" to={conversationLink(pause.root, search)} state={{ fromList }} onClick={onOpen}>Paused at turn cap</Link>}
       at={pause.paused_at}
       preview={`${pause.turns} ${pause.turns === 1 ? "turn" : "turns"}`}
       actions={(
@@ -164,38 +175,54 @@ function TurnPause({ pause, search }: { pause: Pause; search: string }) {
   )
 }
 
-function Conversations({ items, search }: { items: Conversation[]; search: string }) {
+function Conversations({ items, search, active, onOpen, actions, selected, onSelect }: {
+  items: Conversation[]; search: string; active?: string; onOpen: OpenConversation; actions: InboxActions;
+  selected?: ReadonlySet<string>; onSelect: (handle: string) => void;
+}) {
   return (
-    <table role="table" className="mt-1 w-full text-left max-md:block md:table-fixed">
+    <table role="table" className="mt-1 w-full text-left @max-[38rem]/list:block @min-[38rem]/list:table-fixed">
       <caption className="sr-only">Conversations</caption>
-      <thead role="rowgroup" className="sr-only md:not-sr-only">
+      <thead role="rowgroup" className="sr-only @min-[38rem]/list:not-sr-only">
         <tr role="row" className="border-b text-[11px] leading-4 text-muted-foreground">
-          <th role="columnheader" className="w-[9.75%] py-2 pr-3 font-medium" scope="col">Project</th>
-          <th role="columnheader" className="w-[16%] py-2 pr-3 font-medium" scope="col">From</th>
-          <th role="columnheader" className="w-[16%] py-2 pr-3 font-medium" scope="col">To</th>
+          {selected && <th role="columnheader" scope="col" className="w-7"><span className="sr-only">Select</span></th>}
+          <th role="columnheader" className="w-[10%] py-2 pr-2 font-medium" scope="col">Project</th>
+          <th role="columnheader" className="w-[16%] py-2 pr-2 font-medium" scope="col">From</th>
+          <th role="columnheader" className="w-[16%] py-2 pr-2 font-medium" scope="col">To</th>
           <th role="columnheader" className="py-2 pr-3 font-medium" scope="col">Subject</th>
+          <th role="columnheader" className="w-[14%] py-2 pr-2 font-medium" scope="col">Delivery</th>
           <th role="columnheader" className="w-[9.25%] py-2 pr-3 font-medium" scope="col">Updated</th>
-          <th role="columnheader" className="w-4" scope="col"><span className="sr-only">Open</span></th>
+          <th role="columnheader" className="w-7" scope="col"><span className="sr-only">Actions</span></th>
         </tr>
       </thead>
-      <tbody role="rowgroup" className="max-md:block">
+      <tbody role="rowgroup" className="@max-[38rem]/list:block">
         {items.map((row) => {
           const { from, to, fromKind, toKind } = participants(row)
           return (
-            <tr key={row.handle} role="row" className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 max-md:grid max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-1 max-md:py-3.5 md:h-[43px]">
-              <td role="cell" className="font-mono text-xs wrap-anywhere max-md:col-span-2 max-md:row-start-3 md:py-2 md:pr-3">{row.project}</td>
-              <td role="cell" className="max-md:col-start-1 max-md:row-start-2 md:py-2 md:pr-3"><Person label={from} kind={fromKind} avatarUrl={row.first_sender?.avatar_url} /></td>
-              <td role="cell" className="max-md:col-start-2 max-md:row-start-2 md:py-2 md:pr-3"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? null} /></td>
-              <td role="cell" className="wrap-anywhere max-md:col-span-2 max-md:row-start-1 max-md:font-semibold md:py-2 md:pr-3">
-                <Link to={conversationLink(row.handle, search)} className="after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring">
-                  {displayReference(row.title || row.handle)}
+            <tr key={row.handle} role="row" data-selected={active === row.handle || selected?.has(row.handle) || undefined} className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 data-selected:bg-muted @max-[38rem]/list:grid @max-[38rem]/list:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] @max-[38rem]/list:gap-x-2 @max-[38rem]/list:gap-y-1 @max-[38rem]/list:py-3.5 @min-[38rem]/list:h-[43px]">
+              {selected && (
+                <td role="cell" className="@max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-3 @max-[38rem]/list:justify-self-end">
+                  <input type="checkbox" aria-label={`Select ${row.title || "message"}`} checked={selected.has(row.handle)}
+                    disabled={(!canRun("read", row) && !canRun("redeliver", row)) || (!selected.has(row.handle) && selected.size >= 50)}
+                    className="relative z-10 size-4 cursor-pointer align-middle accent-primary"
+                    onChange={() => onSelect(row.handle)} />
+                </td>
+              )}
+              <td role="cell" className="font-mono text-xs wrap-anywhere @max-[38rem]/list:col-start-1 @max-[38rem]/list:row-start-3 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2"><ProjectName project={row.project} /></td>
+              <td role="cell" className="@max-[38rem]/list:col-start-1 @max-[38rem]/list:row-start-2 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2"><Person label={from} kind={fromKind} avatarUrl={row.first_sender?.avatar_url} /></td>
+              <td role="cell" className="@max-[38rem]/list:col-start-2 @max-[38rem]/list:row-start-2 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2"><Person label={to} kind={toKind} avatarUrl={row.target_avatar_url ?? undefined} /></td>
+              <td role="cell" className="wrap-anywhere @max-[38rem]/list:col-span-2 @max-[38rem]/list:row-start-1 @max-[38rem]/list:font-semibold @min-[38rem]/list:py-2 @min-[38rem]/list:pr-3">
+                <Link to={conversationLink(row.handle, search)} state={{ fromList: !active }} onClick={onOpen} title={row.handle}
+                  aria-current={active === row.handle ? "page" : undefined}
+                  className={cn(!selected && "after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-ring", row.unread && "font-medium")}>
+                  {displayReference(row.title || "Message")}
                 </Link>
               </td>
-              <td role="cell" className="font-mono text-mono-sm text-muted-foreground max-md:col-start-3 max-md:row-start-1 md:py-2 md:pr-2">
+              <td role="cell" className="text-xs text-muted-foreground @max-[38rem]/list:col-start-2 @max-[38rem]/list:row-start-3 @max-[38rem]/list:text-right @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2">{ownerDelivery(row)}</td>
+              <td role="cell" className="font-mono text-mono-sm text-muted-foreground @max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-1 @min-[38rem]/list:py-2 @min-[38rem]/list:pr-2">
                 <RelativeTime value={row.updated_at ?? row.created_at} />
               </td>
-              <td role="cell" className="text-right max-md:col-start-3 max-md:row-start-2">
-                <Lamp state={row.open ? "on" : "off"} label={row.open ? "Open" : "Closed"} />
+              <td role="cell" className="min-h-7 text-right @max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-2">
+                <RowActions row={row} actions={actions} />
               </td>
             </tr>
           )
@@ -205,24 +232,31 @@ function Conversations({ items, search }: { items: Conversation[]; search: strin
   )
 }
 
-function InboxList() {
+function InboxList({ active, onOpen }: { active?: string; onOpen: OpenConversation }) {
+  const { search } = useLocation()
   const [params] = useSearchParams()
-  const project = params.get("project")
-  const search = projectSearch(project)
+  const filterQuery = inboxQuery(params).toString()
+  const actions = useInboxActions()
+  const [selection, select] = useState<{ query: string; handles: Set<string> } | null>(null)
+  const selected = selection?.query === filterQuery ? selection.handles : undefined
   const inbox = useInfiniteQuery({
-    queryKey: [...inboxKey, project],
+    queryKey: [...inboxKey, filterQuery],
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) => {
-      const query = new URLSearchParams(search)
+      const query = new URLSearchParams(filterQuery)
       if (pageParam) query.set("cursor", pageParam)
       const suffix = query.size ? `?${query}` : ""
       return requestJson(`/api/inbox${suffix}`, isInbox, { signal })
     },
     getNextPageParam: (page) => page.next_cursor,
-    refetchInterval: 30_000,
+    refetchOnMount: false,
+    refetchInterval: active ? false : 30_000,
   })
   const data = inbox.data?.pages[0]
-  const conversations = inbox.data?.pages.flatMap((page) => page.conversations) ?? []
+  const conversations = (inbox.data?.pages.flatMap((page) => page.conversations) ?? []).map((row) => {
+    const action = actions.pending.get(row.handle)
+    return action === "read" ? { ...row, unread: false } : action === "redeliver" ? { ...row, status: "stored" } : row
+  }).filter((row) => params.get("unread") !== "1" || row.unread)
   const notice = params.get("notice")
   const status = notice === "decide-refused" ? "Request closed" : notice === "send-failed" ? "Slack delivery failed"
     : notice === "approved" ? "Approved Slack request" : notice === "rejected" ? "Denied Slack request" : null
@@ -236,15 +270,30 @@ function InboxList() {
         {data && (data.pending_writes.length || data.pauses.length ? (
           <ul className="mt-2">
             {data.pending_writes.map((item) => <SlackApproval key={item.id} item={item} />)}
-            {data.pauses.map((pause) => <TurnPause key={pause.root} pause={pause} search={search} />)}
+            {data.pauses.map((pause) => <TurnPause key={pause.root} pause={pause} search={search} onOpen={onOpen} fromList={!active} />)}
           </ul>
         ) : <DataState kind="empty" message="All clear" />)}
       </section>
       {(inbox.isPending || data) && (
         <section aria-labelledby="conversations">
-          <h2 id="conversations" className="text-heading-md font-semibold tracking-[-0.01em]">Conversations</h2>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 id="conversations" className="text-heading-md font-semibold tracking-[-0.01em]">Conversations</h2>
+            {conversations.length > 0 && <Button variant="ghost" size="sm" aria-pressed={Boolean(selected)}
+              onClick={() => select(selected ? null : { query: filterQuery, handles: new Set() })}>{selected ? "Done" : "Select"}</Button>}
+          </div>
+          <InboxFilters />
+          {selected && <div className="mt-2 flex flex-wrap justify-between gap-2">
+            <BulkActions rows={conversations.filter((row) => selected.has(row.handle))} actions={actions} />
+            <Button variant="ghost" size="sm" disabled={!selected.size} onClick={() => select({ query: filterQuery, handles: new Set() })}>Clear selection</Button>
+          </div>}
           {inbox.isPending ? <ConversationsSkeleton /> : conversations.length
-            ? <Conversations items={conversations} search={search} />
+            ? <Conversations items={conversations} search={search} active={active} onOpen={onOpen} actions={actions} selected={selected} onSelect={(handle) => {
+              if (!selected) return
+              const next = new Set(selected)
+              if (next.has(handle)) next.delete(handle)
+              else next.add(handle)
+              select({ query: filterQuery, handles: next })
+            }} />
             : <DataState kind="empty" message="0 conversations" />}
           {inbox.hasNextPage && (
             <Button className="mt-4" variant="outline" size="sm" disabled={inbox.isFetching} onClick={() => void inbox.fetchNextPage()}>
@@ -260,21 +309,22 @@ function InboxList() {
 function ConversationsSkeleton() {
   return (
     <LoadingSkeleton message="Loading inbox…" className="mt-1">
-      <div className="hidden h-[33px] items-center gap-4 border-b md:flex">
+      <div className="hidden h-[33px] items-center gap-4 border-b @min-[38rem]/list:flex">
         {[0, 1, 2, 3].map((column) => <Skeleton key={column} className="h-2.5 w-[12%] first:w-[8%]" />)}
       </div>
       {[0, 1].map((row) => (
-        <div key={row} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] grid-rows-[18px_20px_16px] items-center gap-x-2 gap-y-1 border-b py-3.5 md:h-[43px] md:grid-cols-[9.75%_16%_16%_minmax(0,1fr)_9.25%_16px] md:grid-rows-1 md:gap-x-0 md:py-0">
-          <Skeleton className="h-2.5 w-12 max-w-[85%] max-md:col-span-2 max-md:row-start-3" />
+        <div key={row} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] grid-rows-[18px_20px_16px] items-center gap-x-2 gap-y-1 border-b py-3.5 @min-[38rem]/list:h-[43px] @min-[38rem]/list:grid-cols-[10%_16%_16%_minmax(0,1fr)_14%_9.25%_16px] @min-[38rem]/list:grid-rows-1 @min-[38rem]/list:gap-x-0 @min-[38rem]/list:py-0">
+          <Skeleton className="h-2.5 w-12 max-w-[85%] @max-[38rem]/list:col-span-2 @max-[38rem]/list:row-start-3" />
           {[1, 2].map((person) => (
-            <div key={person} className="flex min-w-0 items-center gap-2 max-md:row-start-2 md:pr-3">
+            <div key={person} className="flex min-w-0 items-center gap-2 @max-[38rem]/list:row-start-2 @min-[38rem]/list:pr-3">
               <Skeleton className="size-5 rounded-md" />
               <Skeleton className="h-3 min-w-0 max-w-1/2 flex-1" />
             </div>
           ))}
-          <Skeleton className="h-3 w-36 max-w-full max-md:col-span-2 max-md:row-start-1" />
-          <Skeleton className="h-2.5 w-7 max-w-full max-md:row-start-1" />
-          <Skeleton className="size-2 justify-self-end rounded-full max-md:col-start-3 max-md:row-start-2" />
+          <Skeleton className="h-3 w-36 max-w-full @max-[38rem]/list:col-span-2 @max-[38rem]/list:row-start-1" />
+          <Skeleton className="hidden h-2.5 w-10 max-w-full @min-[38rem]/list:block" />
+          <Skeleton className="h-2.5 w-7 max-w-full @max-[38rem]/list:row-start-1" />
+          <Skeleton className="size-2 justify-self-end rounded-full @max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-2" />
         </div>
       ))}
     </LoadingSkeleton>
@@ -317,8 +367,10 @@ function ThreadMessage({ item, replyCursor }: { item: ConversationItem; replyCur
   )
 }
 
-function InboxConversation({ handle }: { handle: string }) {
-  const [params] = useSearchParams()
+function InboxConversation({ handle, search, onBack }: { handle: string; search: string; onBack: OpenConversation }) {
+  const { data: session } = useQuery(sessionQuery)
+  const client = useQueryClient()
+  const actions = useInboxActions()
   const thread = useInfiniteQuery({
     queryKey: ["conversation", handle],
     initialPageParam: 0,
@@ -332,6 +384,17 @@ function InboxConversation({ handle }: { handle: string }) {
   const conversation = thread.data?.pages[0]?.conversation
   const messages = thread.data?.pages.flatMap((page) => page.items) ?? []
   const people = conversation && participants(conversation)
+  const delivery = conversation && ownerDelivery(conversation)
+  const lastItem = messages.reduce<ConversationItem | undefined>((last, item) => item.handle === conversation?.handle ? item : last, undefined)
+  const receiptCursor = lastItem?.cursor
+  const receiptCount = lastItem?.kind === "watch_digest" ? lastItem.count : undefined
+  const root = conversation?.handle
+  const csrf = session?.csrf
+  useEffect(() => {
+    if (!root || !receiptCursor || !csrf) return
+    void writeInboxAction(csrf, "read", [root], { cursor: receiptCursor, count: receiptCount })
+      .then(({ updated }) => markInboxCacheRead(client, updated), () => undefined)
+  }, [client, csrf, receiptCount, receiptCursor, root])
   const updatedAt = conversation?.updated_at ?? conversation?.created_at
   const firstMessage = new Map<string, number>()
   for (const item of messages) {
@@ -339,7 +402,7 @@ function InboxConversation({ handle }: { handle: string }) {
   }
   return (
     <div className="pt-2">
-      <Link to={`/inbox${projectSearch(params.get("project"))}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+      <Link to={`/inbox${search}`} onClick={onBack} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft aria-hidden className="size-4" strokeWidth={1.5} /> Conversations
       </Link>
       {thread.isPending && (
@@ -373,16 +436,22 @@ function InboxConversation({ handle }: { handle: string }) {
       )}
       {conversation && people && (
         <section aria-labelledby="conversation-title" className="mt-4">
-          <h2 id="conversation-title" className="text-page-title wrap-anywhere">{displayReference(conversation.title || conversation.handle)}</h2>
+          <div className="flex items-start justify-between gap-2">
+            <h2 id="conversation-title" className="text-page-title wrap-anywhere">{displayReference(conversation.title || "Message")}</h2>
+            <RowActions row={conversation} actions={actions} />
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             <Person label={people.from} kind={people.fromKind} avatarUrl={conversation.first_sender?.avatar_url} />
             <ArrowRight aria-label="to" className="size-4 text-muted-foreground" strokeWidth={1.5} />
-            <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url ?? null} />
+            <Person label={people.to} kind={people.toKind} avatarUrl={conversation.target_avatar_url ?? undefined} />
           </div>
           <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-b pb-4 text-xs text-muted-foreground">
-            {conversation.project && <div className="flex flex-wrap gap-1"><dt>Project</dt><dd className="font-mono wrap-anywhere">{conversation.project}</dd></div>}
-            <div className="flex flex-wrap gap-1"><dt>Channel</dt><dd className="font-mono wrap-anywhere">{conversation.destination}</dd></div>
-            <div className="flex flex-wrap gap-1"><dt>Status</dt><dd>{conversation.status?.replace(/_/g, " ") || (conversation.open ? "Open" : "Closed")}</dd></div>
+            <div className="flex flex-wrap gap-1"><dt>Project</dt><dd className="font-mono wrap-anywhere"><ProjectName project={conversation.project} /></dd></div>
+            <div className="flex flex-wrap gap-1"><dt>Address</dt><dd className="font-mono wrap-anywhere">{conversation.target || conversation.destination}</dd></div>
+            <div className="flex flex-wrap gap-1"><dt>Status</dt><dd>{delivery || conversation.status?.replace(/_/g, " ") || (conversation.open ? "Open" : "Closed")}</dd></div>
+            {conversation.owner_notify?.surface && <div className="flex flex-wrap gap-1"><dt>Surface</dt><dd>{conversation.owner_notify.surface}</dd></div>}
+            {conversation.owner_notify?.notified_at && <div className="flex flex-wrap gap-1"><dt>Notified</dt><dd><RelativeTime value={conversation.owner_notify.notified_at} /></dd></div>}
+            {conversation.owner_notify?.reason && <div className="flex flex-wrap gap-1"><dt>Reason</dt><dd>{conversation.owner_notify.reason}</dd></div>}
             <div className="flex flex-wrap gap-1"><dt>Conversation ID</dt><dd className="font-mono wrap-anywhere">{conversation.handle}</dd></div>
             {updatedAt && <div className="flex flex-wrap gap-1"><dt>Updated</dt><dd><RelativeTime value={updatedAt} /></dd></div>}
           </dl>
@@ -409,5 +478,49 @@ function InboxConversation({ handle }: { handle: string }) {
 
 export function InboxPage() {
   const { handle } = useParams()
-  return handle ? <InboxConversation key={handle} handle={handle} /> : <InboxList />
+  const { search, state } = useLocation()
+  const navigate = useNavigate()
+  const list = useRef<HTMLDivElement>(null)
+  const position = useRef<{ search: string; top: number }>(null)
+  const previousHandle = useRef<string | undefined>(undefined)
+
+  useLayoutEffect(() => {
+    const mode = history.scrollRestoration
+    history.scrollRestoration = "manual"
+    return () => { history.scrollRestoration = mode }
+  }, [])
+
+  useLayoutEffect(() => {
+    const previous = previousHandle.current
+    previousHandle.current = handle
+    if (handle === previous || !list.current || getComputedStyle(list.current).overflowY === "auto") return
+    if (handle) window.scrollTo(0, 0)
+    else if (position.current?.search === search) window.scrollTo(0, position.current.top)
+  }, [handle, search])
+
+  function open(event: MouseEvent<HTMLAnchorElement>) {
+    if (!handle && primaryClick(event)) position.current = { search, top: window.scrollY }
+  }
+
+  function back(event: MouseEvent<HTMLAnchorElement>) {
+    if (state?.fromList && primaryClick(event)) {
+      event.preventDefault()
+      void navigate(-1)
+    }
+  }
+
+  return (
+    <div className="@container">
+      <div className="min-w-0 @min-[64rem]:grid @min-[64rem]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div ref={list} className={cn("min-w-0 @container/list @min-[64rem]:block @min-[64rem]:max-h-[calc(100dvh-var(--topbar-height)-3rem)] @min-[64rem]:overflow-y-auto @min-[64rem]:pr-5",
+          handle && "hidden")}>
+          <InboxList active={handle} onOpen={open} />
+        </div>
+        <div className={cn("min-w-0 @min-[64rem]:block @min-[64rem]:max-h-[calc(100dvh-var(--topbar-height)-3rem)] @min-[64rem]:overflow-y-auto @min-[64rem]:border-l @min-[64rem]:pl-5",
+          !handle && "hidden")}>
+          {handle && <InboxConversation key={handle} handle={handle} search={search} onBack={back} />}
+        </div>
+      </div>
+    </div>
+  )
 }

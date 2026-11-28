@@ -49,6 +49,20 @@ On Linux and macOS, SwB sets the data folder to private mode `0700`. It sets dat
 
 Some blocks can start from credentials in the environment. See [Blocks](/docs/blocks) for setup. The [release environment example](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example) shows the credential names for named workspaces and routines.
 
+## Owner notifications
+
+SwB stores owner messages in **Inbox**. Set `owner_notify` to send a short notice to the first listed chat with an owner account.
+
+```yaml
+owner_notify: ["telegram:home", "discord:home", "slack:team"]
+```
+
+Each address names a block and a space. Use `owner_ids` for Telegram and Discord. For Slack, use a bot and set `owner_user_ids` or an approval account.
+
+SwB checks Telegram, Discord, then Slack by default. Set `owner_notify: []` for inbox delivery only.
+
+SwB sends at most one notice per chat space during each `modes.digest_minutes` interval. Set `public_url` to include an Inbox link.
+
 ## The config file
 
 `swb up` sets up a new instance in its folder. It stores the owner key in `.env` and saves a custom `SWB_PORT` there. It sets the file mode to `0600`.

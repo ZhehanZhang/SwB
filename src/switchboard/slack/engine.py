@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
@@ -451,15 +452,31 @@ class SlackEngine:
             lines.append(f"Reaction :{p['name']}: on message {p['ts']}")
         return "\n".join(lines)
 
-    async def dm_owner(self, text: str) -> bool:
+    def owner_notify_user(self, workspace: str) -> str | None:
+        cfg = self.config.workspaces.get(workspace)
+        if cfg is None or not cfg.has_bot:
+            return None
+        return min((user for user in cfg.owner_user_ids if re.fullmatch(r"[UW][A-Z0-9]{2,}", user)), default=None)
+
+    async def dm_owner(self, text: str, *, workspace: str | None = None) -> bool:
         """A plain DM to the owner (the approver), for switchboard notices such as a paused conversation."""
-        target = await self._approval_target()
-        if target is None:
-            return False
-        rt, approver = target
+        if workspace is None:
+            target = await self._approval_target()
+            if target is None:
+                return False
+            rt, user = target
+        else:
+            rt, user = self.runtimes.get(workspace), self.owner_notify_user(workspace)
+            if rt is None or "bot" not in rt.clients or user is None:
+                return False
         try:
-            dm = await rt.clients["bot"].conversations_open(users=approver)
-            await rt.clients["bot"].chat_postMessage(channel=dm["channel"]["id"], text=text, **rt.bot_identity_overrides())
+            dm = await rt.clients["bot"].conversations_open(users=user)
+            if workspace is None:
+                await rt.clients["bot"].chat_postMessage(channel=dm["channel"]["id"], text=text, **rt.bot_identity_overrides())
+            else:
+                await rt.clients["bot"].chat_postMessage(channel=dm["channel"]["id"], text=text, mrkdwn=False,
+                                                         link_names=False, unfurl_links=False, unfurl_media=False,
+                                                         **rt.bot_identity_overrides())
         except Exception as e:
             log.warning("owner DM failed: %s", type(e).__name__)
             return False

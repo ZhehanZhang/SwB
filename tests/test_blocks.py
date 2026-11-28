@@ -136,8 +136,9 @@ def test_mailbox_send_records_the_ask_or_explicit_title(make):
     first_item, second_item = items
     assert first_item["subject"] == f"{core.agents.label('capy')} asks: Check the canary. Reply with the result."
     assert second_item["subject"] == "Canary review"
-    for item, sent in zip(items, (first, second), strict=True):
-        assert item["subject"] == core.inbox.handle(sent["handle"])["title"]
+    assert core.inbox.handle(first["handle"])["title"] == "Check the canary."
+    assert core.inbox.handle(second["handle"])["title"] == "Canary review"
+    for item in items:
         assert item["text"] == task and item["text"].endswith("Reply with the result.")
 
 
@@ -158,6 +159,14 @@ def test_capy_captain_wake_leads_with_the_title_once(make, capy):
                     defaults={}, allow_override=False, note="", by="test")
     new = payload(call(client, STATIC_KEY, "send", {"title": title, "task": "Check new results.", "project": "widgets"}))
     assert new["thread_id"] != CAPTAIN and capy.threads[new["thread_id"]]["title"] == title
+
+
+def test_capy_untitled_handoff_persists_a_body_preview(make, capy):
+    core, client = make()
+    task = "**Check the canary.**\n\nReply with the result."
+    sent = payload(call(client, STATIC_KEY, "send", {"task": task}))
+    assert core.inbox.handle(sent["handle"])["title"] == "Check the canary."
+    assert capy.messages[CAPTAIN][-1]["text"] == task
 
 
 def test_targets_list_blocks_agents_and_projects(make):

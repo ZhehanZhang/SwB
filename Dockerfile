@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git openssh-cli
 RUN useradd --uid ${APP_UID} --create-home --shell /usr/sbin/nologin switchboard
 WORKDIR /app
 COPY pyproject.toml setup.py README.md LICENSE NOTICE ./
-COPY web/licenses/lobe-icons.txt ./web/licenses/lobe-icons.txt
+COPY web/licenses/ ./web/licenses/
 COPY src ./src
 COPY --from=web /app/src/switchboard/static/app ./src/switchboard/static/app
 RUN pip install --no-cache-dir .

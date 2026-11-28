@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 from . import targets as tgt
 from .config import SLUG_RE, ConfigError
-from .inbox import Inbox
 from .refusals import MODE_REQUIRED, PolicyRefusal
 from .store import dumps
 from .visibility import Who
@@ -555,7 +554,7 @@ class ChannelModes:
               parts: dict[str, AuthoredText] | None = None) -> bool:
         added = self.core.store.n("INSERT OR IGNORE INTO watch_events(block, space, channel, message, author_id, author, excerpt, link, at, "
                                   "target, project, dm, parts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                  (block, space, channel, message, author_id, author or author_id, excerpt[:500], link,
+                                  (block, space, channel, message, author_id, author or author_id or "unknown", excerpt[:500], link,
                                    self.core.clock(), "owner" if dm else self._mailbox(target, project), project, int(dm),
                                    dumps(parts) if parts is not None else None))
         if added:
@@ -566,29 +565,25 @@ class ChannelModes:
         now = self.core.clock()
 
         def write(db: Any) -> int:
-            groups = db.execute("SELECT block, space, dm, target FROM watch_events WHERE delivered_at IS NULL "
-                                "AND (? IS NULL OR block = ?) AND (? IS NULL OR space = ?) GROUP BY block, space, dm, target "
+            groups = db.execute("SELECT block, space, dm, target, project FROM watch_events WHERE delivered_at IS NULL "
+                                "AND (? IS NULL OR block = ?) AND (? IS NULL OR space = ?) GROUP BY block, space, dm, target, project "
                                 "HAVING COUNT(*) >= ? OR MIN(at) <= ?", (block, block, space, space, WATCH_BATCH, now - self.digest_s)).fetchall()
             for group in groups:
-                b, s, dm, target = group
-                rows = db.execute("SELECT channel, author, excerpt, link, at, project, parts FROM watch_events "
-                                  "WHERE block=? AND space=? AND dm=? AND target=? AND delivered_at IS NULL ORDER BY at, rowid",
-                                  (b, s, dm, target)).fetchall()
-                projects = {r["project"] for r in rows}
-                project = next(iter(projects)) if len(projects) == 1 else None
+                b, s, dm, target, project = group
+                rows = db.execute("SELECT channel, author, author_id, excerpt, link, at, parts FROM watch_events "
+                                  "WHERE block=? AND space=? AND dm=? AND target=? AND project IS ? AND delivered_at IS NULL ORDER BY at, rowid",
+                                  (b, s, dm, target, project)).fetchall()
                 channels = {r["channel"] for r in rows}
-                items = [{**{key: r[key] for key in ("author", "excerpt", "link", "at")},
+                items = [{**{key: r[key] for key in ("excerpt", "link", "at")}, "author": r["author"] or r["author_id"] or "unknown",
                           **({"parts": json.loads(r["parts"])} if r["parts"] is not None else {})} for r in rows]
-                summary = {"block": b, "space": s, "channel": next(iter(channels)) if len(channels) == 1 else "",
+                summary = {"block": b, "space": s, "channel": next(iter(channels)) if len(channels) == 1 else "", "dm": bool(dm),
                            "count": len(rows), "items": items}
-                handle = Inbox.new_handle()
-                db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status) "
-                           "VALUES (?, ?, 'mailbox', '', ?, ?, '{}', ?, 0, 'delivered')",
-                           (handle, target, project, f"Watch digest for {s}", now))
-                db.execute("INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?, ?, 'mailbox', 'watch_digest', ?, ?)",
-                           (target, handle, dumps(summary), now))
-                db.execute("UPDATE watch_events SET delivered_at=? WHERE block=? AND space=? AND dm=? AND target=? AND delivered_at IS NULL",
-                           (now, b, s, dm, target))
+                provider = self.core.blocks.get(b)
+                kind = provider.manifest.id if provider else b
+                sender = {"kind": "watch", "block": kind, "space": (summary["channel"] or s) if kind == "github" else s}
+                self.core.inbox.store_watch_digest(db, target=target, project=project, sender=sender, data=summary)
+                db.execute("UPDATE watch_events SET delivered_at=? WHERE block=? AND space=? AND dm=? AND target=? "
+                           "AND project IS ? AND delivered_at IS NULL", (now, b, s, dm, target, project))
             return len(groups)
 
         count = self.core.store.tx(write)

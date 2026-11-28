@@ -18,6 +18,9 @@ version: 2
 # A new send starts at zero. null switches it off.
 turn_cap: 200
 
+# Use the first configured owner chat in this list. Set [] to keep messages in the inbox.
+# owner_notify: ["telegram:home", "discord:home", "slack:team"]
+
 modes:
   default: watch                             # without this setting, the default is off
   digest_minutes: 60                         # watch also sends a digest after 50 messages

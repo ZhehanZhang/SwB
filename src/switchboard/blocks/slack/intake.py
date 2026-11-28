@@ -33,7 +33,7 @@ from ...slack.config import Grant, Persona
 from ...slack.routing import Target
 from ...slack.slack import CHANNEL_ID_RE, WorkspaceRuntime
 from ...slack.writes import WriteError
-from ...subject import wake_text
+from ...subject import display_subject, wake_text
 from ...trust import CLOSE, OPEN, neutralize
 
 SLACK_SENDER: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("slack_sender", default=None)
@@ -160,7 +160,7 @@ class SlackIntake(Block):
             if h["ref"] == workspace:
                 return h["handle"]
         return self.core.inbox.open_handle(owner=agent, destination="slack", ref=workspace, project=self.projects.get(workspace),
-                                           title=f"Slack {workspace}", meta={"workspace": workspace}, status="following")
+                                           title=None, meta={"workspace": workspace}, status="following")
 
     async def deliver(self, push: dict[str, Any], *, private: bool = False) -> None:
         engine = self.engine
@@ -430,7 +430,12 @@ class SlackIntake(Block):
             return
         trust = push.get("trust", "external")
         mapped = target.kind == "routine" and not target.project and project and trust == "owner"
-        handle_meta = {"slack_trust": trust, **({"boundary": project} if project else {})}
+        handle_meta = {
+            "slack_trust": trust, "display_subject": display_subject(None, push["text"], ""),
+            "display_from": {"kind": "slack", **{key: push[key] for key in ("workspace", "channel", "channel_name", "user", "user_name")},
+                             "trust": trust},
+            **({"boundary": project} if project else {}),
+        }
         if channel_mode:
             handle_meta["channel_mode"] = channel_mode
         if listen_project or scoped:

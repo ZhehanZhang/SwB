@@ -24,6 +24,7 @@ export type Conversation = {
   owner: string
   destination: string
   destination_kind?: string | null
+  source_kind?: string | null
   ref: string
   project: string | null
   title: string | null
@@ -34,7 +35,23 @@ export type Conversation = {
   updated_at: string | null
   first_sender?: Sender | null
   first_target?: string | null
+  target_kind?: string | null
   target_avatar_url?: string | null
+  unread?: boolean
+  owner_notify?: { surface?: string | null; notified_at?: string | null; reason?: string | null } | null
+}
+
+export const deliveryStatuses = {
+  stored: "Stored",
+  notified: "Notified",
+  notify_failed: "Notification failed",
+  no_owner_surface: "Owner surface needed",
+}
+
+export function ownerDelivery(row: Conversation) {
+  if (row.owner !== "owner" || row.destination !== "mailbox") return null
+  if (row.status && Object.hasOwn(deliveryStatuses, row.status)) return deliveryStatuses[row.status as keyof typeof deliveryStatuses]
+  return row.status === "delivered" ? "Stored" : null
 }
 
 export type Sender = {
@@ -56,6 +73,7 @@ export type Sender = {
   author?: string | null
   title?: string | null
   dot?: string | null
+  block?: string | null
 }
 
 export type ConversationItem = {
@@ -73,10 +91,11 @@ export type ConversationItem = {
   target_kind?: string | null
   event_id?: string | null
   slack_kind?: string | null
+  count?: number | null
   from?: Sender
 }
 
-type InboxData = {
+export type InboxData = {
   pending_writes: PendingWrite[]
   turn_cap: number | null
   pauses: Pause[]
@@ -117,14 +136,16 @@ function isPause(value: unknown): value is Pause {
 function isConversation(value: unknown): value is Conversation {
   return isRecord(value) && strings(value, ["handle", "owner", "destination", "ref"])
     && nullableStrings(value, ["project", "title", "target", "status", "created_at", "updated_at"]) && typeof value.open === "boolean"
-    && optionalStrings(value, ["first_target", "destination_kind", "target_avatar_url"])
+    && optionalStrings(value, ["first_target", "destination_kind", "source_kind", "target_kind", "target_avatar_url"])
     && (value.first_sender == null || isSender(value.first_sender))
+    && (value.unread === undefined || typeof value.unread === "boolean")
+    && (value.owner_notify == null || (isRecord(value.owner_notify) && optionalStrings(value.owner_notify, ["surface", "notified_at", "reason"])))
 }
 
 function isSender(value: unknown): value is Sender {
   return isRecord(value) && optionalStrings(value, [
     "kind", "avatar_url", "name", "label", "agent", "trust", "workspace", "channel", "channel_name", "user", "user_name",
-    "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot",
+    "thread_id", "thread_ts", "ts", "message_id", "author", "title", "dot", "block",
   ])
 }
 
@@ -133,6 +154,7 @@ function isItem(value: unknown): value is ConversationItem {
     && (value.handle === undefined || typeof value.handle === "string")
     && optionalStrings(value, ["text", "status", "in_reply_to", "trust", "project", "target", "target_kind", "event_id", "slack_kind"])
     && (value.final == null || typeof value.final === "boolean")
+    && (value.count == null || Number.isSafeInteger(value.count))
     && (value.from === undefined || isSender(value.from))
 }
 
@@ -168,32 +190,37 @@ export function participants(row: Conversation): { from: string; to: string; fro
   const target = row.first_target || row.target
   const channel = sender?.channel_name || sender?.channel
   const destination = row.destination_kind || row.destination
+  const targetAgent = row.target?.match(/^agent:(.+)$/)?.[1]
+  const targetKind = row.target_kind === "agent" ? targetAgent || target : row.target_kind || targetAgent
+  const fromKind = sender?.kind === "watch" ? row.source_kind || senderLogoKind(sender) : senderLogoKind(sender)
   if (row.destination === "mailbox") {
     return {
-      from: principalLabel(sender?.kind === "slack" && channel ? channelLabel(channel) : senderLabel(sender) || row.ref),
+      from: principalLabel(senderLabel(sender) || (sender?.kind === "slack" && channel ? channelLabel(channel) : row.ref)),
       to: principalLabel(target || row.owner),
-      fromKind: senderLogoKind(sender) ?? row.ref,
-      toKind: row.target?.match(/^agent:(.+)$/)?.[1],
+      fromKind: fromKind ?? row.ref,
+      toKind: targetKind ?? undefined,
     }
   }
   if (destination === "slack") {
-    return { from: channel ? channelLabel(channel) : principalLabel(senderLabel(sender) || row.ref), to: principalLabel(target || row.owner), fromKind: "slack" }
+    return { from: principalLabel(senderLabel(sender) || (channel ? channelLabel(channel) : row.ref)),
+      to: principalLabel(target || row.owner), fromKind: "slack", toKind: targetKind || undefined }
   }
   return {
     from: principalLabel(senderLabel(sender) || row.owner),
     to: principalLabel(target || row.ref || row.destination),
-    fromKind: senderLogoKind(sender) ?? row.owner,
-    toKind: destination,
+    fromKind: fromKind ?? row.owner,
+    toKind: targetKind || destination,
   }
 }
 
 export function senderLogoKind(sender?: Sender) {
+  if (sender?.kind === "watch") return sender.block === "slack" || sender.block === "discord" || sender.block === "telegram" ? sender.block : "github"
   return (sender?.kind === "agent" ? sender.agent : sender?.kind) || undefined
 }
 
 export function senderLabel(sender?: Sender) {
   if (sender?.agent?.startsWith("admin:")) return "you"
-  return sender?.user_name || sender?.author || sender?.name || sender?.label || sender?.agent || sender?.title || sender?.user || sender?.dot || null
+  return sender?.name || sender?.user_name || sender?.author || sender?.label || sender?.agent || sender?.title || sender?.user || sender?.dot || null
 }
 
 export function channelLabel(channel: string) {

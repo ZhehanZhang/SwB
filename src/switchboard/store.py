@@ -224,6 +224,18 @@ CREATE TABLE IF NOT EXISTS inbox (
 CREATE INDEX IF NOT EXISTS inbox_owner ON inbox(owner, id);
 CREATE INDEX IF NOT EXISTS inbox_handle ON inbox(handle, id);
 CREATE INDEX IF NOT EXISTS inbox_reply_to ON inbox(json_extract(data, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS inbox_watch_group ON inbox(owner, json_extract(data, '$.block'),
+    json_extract(data, '$.space'), json_extract(data, '$.dm'), id) WHERE kind = 'watch_digest';
+CREATE TABLE IF NOT EXISTS owner_notify_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  handle TEXT NOT NULL,
+  count INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS owner_notify_handle ON owner_notify_queue(handle);
+CREATE TABLE IF NOT EXISTS owner_notify_surfaces (
+  surface TEXT PRIMARY KEY,
+  attempted_at REAL NOT NULL
+);
 CREATE INDEX IF NOT EXISTS handles_root ON handles(json_extract(meta, '$.root'));
 CREATE INDEX IF NOT EXISTS handles_reply_to ON handles(json_extract(meta, '$.in_reply_to'));
 CREATE INDEX IF NOT EXISTS handles_forward_of ON handles(json_extract(meta, '$.forward_of'));

@@ -33,18 +33,19 @@ from .config import INSTANCE_DB, RETIRED_BLOCKS, Config, Instance, load_config
 from .connect import AGENT_RE, Connections
 from .env import env_value
 from .hook_wake import HookWake
-from .inbox import Inbox
+from .inbox import Inbox, OWNER_DELIVERY_STATES
 from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath, MemoryRefused, frame_entry,
                      missing_path)
 from .memory_git import MemoryGit
 from .modes import ChannelModes
+from .owner_notify import OwnerNotify
 from .projects import Project, ProjectError, Projects
 from .refusals import (CONVERSATION_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, OWNER_REQUIRED,
                        SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal)
 from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
-from .subject import subject
+from .subject import display_subject, mailbox_subject
 from .trust import FramedText, frame_sender, memory_label, unframe_memory
 from .visibility import LOCAL_SESSION_RESOURCE, RESOURCE_RE, Visibility, VisibilityError
 
@@ -128,6 +129,7 @@ class Switchboard:
         self.blocks: dict[str, Block] = {}
         self._on_demand: dict[str, Block] = {}
         self.modes = ChannelModes(self)
+        self.owner_notify = OwnerNotify(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
         for use, block_type in on_demand_blocks().items():
@@ -224,6 +226,7 @@ class Switchboard:
         for b in self.blocks.values():
             await b.start()
         self.spawn(self.modes.run(), name="watch-digests")
+        self.spawn(self.owner_notify.run(), name="owner-notify")
         self.memory_git.start()
 
     async def aclose(self) -> None:
@@ -345,15 +348,15 @@ class Switchboard:
         sender = {"kind": "agent", "agent": principal.source, "label": label,
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
                   "trust": trust}
-        title = subject("", "", None, title or "", verb="") or subject(
-            label, "", None, text, verb="replies" if in_reply_to else "asks", trust=trust)
+        delivery_subject = mailbox_subject(title, label, text, trust=trust, reply=bool(in_reply_to))
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
+        title = (meta.pop("display_subject") if "display_subject" in meta else display_subject(title, text, "")) or None
         handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=title,
                                         meta=meta, status="delivered", target=_session_target or f"agent:{to}")
         self.inbox.update_handle(handle, open=False)
         if _session_target is not None:
             return {"to": to, "handle": handle, "conversation": handle, "mailbox": False, "project": p.slug if p else None}
-        await self.inbox.add(handle, "message", {"subject": title, "text": display, "project": p.slug if p else None, "from": sender, "trust": trust,
+        await self.inbox.add(handle, "message", {"subject": delivery_subject, "text": display, "project": p.slug if p else None, "from": sender, "trust": trust,
                                                  **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
                           outcome="ok", target=to, ref=handle, excerpt="" if principal.kind == "companion" else text)
@@ -840,7 +843,7 @@ class Switchboard:
                 return {"conversation": h["handle"], "status": "cancelled"}
             out = {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"]}
             recipient = h["owner"]
-            if principal.source == recipient and h["status"] in ("delivered", "working"):
+            if principal.source == recipient and h["ref"] and h["status"] in ("delivered", "working", *OWNER_DELIVERY_STATES):
                 out["note"] = "Answer this message with reply."
             return out
         if block is None:
