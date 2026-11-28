@@ -49,6 +49,18 @@ SwB 只靠環境變數就能執行。MCP 模組預設會啟動，有些模組則
 
 有些模組只要環境中有憑證就能啟動，設定方式見[模組](/zh-Hant/docs/blocks)。[發行版本的環境範例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)列出了具名工作空間和 routine 的憑證名稱。
 
+## 傳給擁有者的訊息
+
+SwB 優先選擇過去 30 分鐘內最近一次以擁有者身分活動的代理。接著嘗試專案路由或 `default_target` 指定的主要代理。最後使用擁有者的全域路由。
+
+訊息會進入所選代理的收件匣。若三種方式均失敗，SwB 會在狀態中回報有訊息等待傳送。
+
+將擁有者的全域路由設為代理位址。
+
+```python
+routes_set(agent="owner", target="agent:claude")
+```
+
 ## 設定檔
 
 `swb up` 會在執行個體資料夾中設定好新的執行個體。它把擁有者金鑰和自訂的 `SWB_PORT` 存進 `.env`，並把檔案模式設為 `0600`。

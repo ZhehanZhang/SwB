@@ -33,18 +33,19 @@ from .config import INSTANCE_DB, RETIRED_BLOCKS, Config, Instance, load_config
 from .connect import AGENT_RE, Connections
 from .env import env_value
 from .hook_wake import HookWake
-from .inbox import Inbox
+from .inbox import PENDING_OWNER_ROUTE, Inbox
 from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCE_LABELS, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath,
                      MemoryRefused, frame_entry, missing_path)
 from .memory_git import MemoryGit
 from .modes import ChannelModes
+from .owner_delivery import OWNER_DELIVERY_PROBLEM, OwnerDelivery
 from .projects import Project, ProjectError, Projects
 from .refusals import (CONVERSATION_REQUIRED, MEMORY_WRITER_REQUIRED, MODE_REQUIRED, OWNER_NOTE_REQUIRED, OWNER_REQUIRED,
                        SCOPE_REQUIRED, TARGET_REQUIRED, PolicyRefusal)
 from .routes import Route, RouteError, Routes
 from .slack.avatar_files import AvatarFiles, agent_avatar
 from .store import Store, ensure_private_data_dir
-from .subject import subject
+from .subject import display_subject, mailbox_subject
 from .trust import FramedText, frame_sender, memory_label, unframe_memory
 from .visibility import LOCAL_SESSION_RESOURCE, RESOURCE_RE, Visibility, VisibilityError
 
@@ -128,6 +129,7 @@ class Switchboard:
         self.blocks: dict[str, Block] = {}
         self._on_demand: dict[str, Block] = {}
         self.modes = ChannelModes(self)
+        self.owner_delivery = self.inbox.owner_delivery = OwnerDelivery(self)
         for name, sec in self.cfg.blocks.items():
             self.blocks[name] = types[name](self, {**sec, "_name": name, **opts.get(name, {})})
         for use, block_type in on_demand_blocks().items():
@@ -244,6 +246,11 @@ class Switchboard:
     def status(self, principal: Principal | None = None, *, public: bool = False,
                mode_slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         problems = list(self.cfg.problems())
+        pending = self.inbox.pending_owner_count() if not public and (
+            principal is None or principal.is_unrestricted_owner or principal.kind == "owner_session"
+        ) else None
+        if pending:
+            problems.append(OWNER_DELIVERY_PROBLEM)
         next_steps = {}
         blocks = self.visible_blocks()
         for name, block in blocks.items():
@@ -266,6 +273,7 @@ class Switchboard:
         return {
             "status": "degraded" if problems else "ok",
             "problems": problems,
+            **({"owner_delivery": {"pending": pending}} if pending is not None else {}),
             "next_steps": [step for step in next_steps.values() if step],
             "mcp_enabled": self.cfg.mcp_enabled,
             "oauth": bool(self.cfg.issuer and self.cfg.owner_sign_in),
@@ -314,7 +322,8 @@ class Switchboard:
         A reply (in_reply_to) goes back to whoever sent the original, which may be a block's own agent such as slack.
         allow_self opens a conversation with another session of the same agent (a Claude Project testing its own routine).
         A session target opens a reply handle without publishing a mailbox item."""
-        to = (to or "").strip().lower()
+        to = (to or "").strip().lower().removeprefix("agent:")
+        for_owner = to == "owner" and _session_target is None
         original = self.inbox.handle(in_reply_to) if in_reply_to else None
         if original is not None and original["meta"].get("channel_mode") and not _reply:
             raise CoreRefused(MODE_REQUIRED, "channel-mode conversations can only be answered with reply")
@@ -323,10 +332,10 @@ class Switchboard:
             _reply and original["meta"].get("listen") and original["owner"] == principal.source and original["ref"] == to
         ):
             raise CoreRefused(MODE_REQUIRED, "listen conversations can only be answered with reply")
-        if not _allow_unregistered and to not in self.known_agents() and not (original is not None and original["ref"] == to):
+        if not for_owner and not _allow_unregistered and to not in self.known_agents() and not (original is not None and original["ref"] == to):
             raise CoreError(f"no agent {to!r}; known agents: {', '.join(self.known_agents())}")
         own = original is not None and original["ref"] == to and original["owner"] == to
-        if to == principal.source and not (allow_self or own):
+        if not for_owner and to == principal.source and not (allow_self or own):
             raise CoreError("that is you; agent_send goes to another agent")
         if _reply and original is not None and original["status"] == "cancelled":
             return {"to": to, "conversation": in_reply_to, "delivered": False, "mailbox": True, "status": "cancelled"}
@@ -336,8 +345,13 @@ class Switchboard:
         if not text:
             raise CoreError("text is empty")
         p = self.project(project)
+        project_slug = p.slug if p else None
         if dry_run:
-            return {"to": f"agent:{to}", "mailbox": _session_target is None, "project": p.slug if p else None}
+            if for_owner:
+                resolution = self.owner_delivery.resolve(project_slug)
+                return {"to": f"agent:{resolution[0]}" if resolution else "agent:owner", "mailbox": True, "project": project_slug,
+                        **({"status": PENDING_OWNER_ROUTE} if resolution is None else {"resolved_by": resolution[1]})}
+            return {"to": f"agent:{to}", "mailbox": _session_target is None, "project": project_slug}
         if root is not None:
             self.turn(root, principal)
         label = self.agents.label(principal.source)
@@ -345,19 +359,29 @@ class Switchboard:
         sender = {"kind": "agent", "agent": principal.source, "label": label,
                   "auth": principal.kind, "client_id": principal.client_id, "origin": principal.origin,
                   "trust": trust}
-        title = subject("", "", None, title or "", verb="") or subject(
-            label, "", None, text, verb="replies" if in_reply_to else "asks", trust=trust)
+        delivery_subject = mailbox_subject(title, label, text, trust=trust, reply=bool(in_reply_to))
         meta = {**(handle_meta or {}), "from": sender, **({"in_reply_to": in_reply_to, "final": final, "root": root} if in_reply_to else {})}
-        handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=p.slug if p else None, title=title,
-                                        meta=meta, status="delivered", target=_session_target or f"agent:{to}")
-        self.inbox.update_handle(handle, open=False)
-        if _session_target is not None:
-            return {"to": to, "handle": handle, "conversation": handle, "mailbox": False, "project": p.slug if p else None}
-        await self.inbox.add(handle, "message", {"subject": title, "text": display, "project": p.slug if p else None, "from": sender, "trust": trust,
-                                                 **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})})
+        title = (meta.pop("display_subject") if "display_subject" in meta else display_subject(title, text, "")) or None
+        data = {"subject": delivery_subject, "text": display, "project": project_slug, "from": sender, "trust": trust,
+                **({"in_reply_to": in_reply_to, "final": final} if in_reply_to else {})}
+        if for_owner:
+            handle, recipient = self.inbox.store_owner_item(handle=handle, source=principal.source, project=project_slug, title=title,
+                                                            meta=meta, kind="message", data=data)
+            if recipient:
+                self.inbox.record_reply(handle, "message", data)
+        else:
+            recipient = to
+            handle = self.inbox.open_handle(handle=handle, owner=to, destination="mailbox", ref=principal.source, project=project_slug, title=title,
+                                            meta=meta, status="delivered", target=_session_target or f"agent:{to}")
+            self.inbox.update_handle(handle, open=False)
+            if _session_target is not None:
+                return {"to": to, "handle": handle, "conversation": handle, "mailbox": False, "project": project_slug}
+            await self.inbox.add(handle, "message", data)
         self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="mailbox", action="send",
-                          outcome="ok", target=to, ref=handle, excerpt="" if principal.kind == "companion" else text)
-        return {"to": to, "handle": handle, "conversation": handle, "delivered": True, "mailbox": True, "project": p.slug if p else None}
+                          outcome="ok" if recipient else "pending", target=recipient, ref=handle,
+                          excerpt="" if for_owner or principal.kind == "companion" else text)
+        return {"to": recipient or to, "handle": handle, "conversation": handle, "delivered": recipient is not None, "mailbox": True,
+                "project": project_slug, **({"status": PENDING_OWNER_ROUTE} if recipient is None else {})}
 
     def turn(self, root: str, principal: Principal) -> None:
         """Count one more turn on a mailbox conversation: a send's handle plus every forward and reply (a new send starts
@@ -447,6 +471,8 @@ class Switchboard:
         for name, b in self.blocks.items():
             if type(b).targets is Block.targets or (block and block != name):
                 continue
+            if kind == tgt.CAPTAIN_SLUG and all(t.kind != kind for t in b.manifest.targets):
+                continue
             at, got = self._targets.get(name, (0.0, []))
             if refresh or now - at > TARGETS_TTL_S or not got or not b.cache_targets:
                 try:
@@ -472,6 +498,9 @@ class Switchboard:
                             "level": None, "routed_to": (str(a) if (a := self.route_address(None, p.slug)) else None)})
         if kind:
             out = [t for t in out if t["kind"] == kind]
+        for t in out:
+            if tgt.CAPTAIN_SLUG in t["slugs"]:
+                t["slugs"].remove(tgt.CAPTAIN_SLUG)
         if query:
             q = query.strip().lower()
             out = [t for t in out if q in t["address"].lower() or q in str(t.get("name") or "").lower() or any(q in s for s in t["slugs"])]
@@ -557,9 +586,20 @@ class Switchboard:
         block = self.blocks.get(route.destination)
         return block.canonical_target(addr) if block and (addr := block.route_address(route.target)) else None
 
-    async def resolve_to(self, to: str) -> Address:
+    async def resolve_to(self, to: str, *, reveal_captains: bool = True) -> Address:
         """A send's to: an address, a legacy captain:/project:/thread: target, an agent name, a block name or a slug."""
         text = (to or "").strip()
+        if text.lower() == "owner":
+            return Address("agent", "agent", "owner")
+        if text.casefold() == tgt.CAPTAIN_SLUG:
+            candidates = await self.targets(kind=tgt.CAPTAIN_SLUG, refresh=True)
+            if any(name in self.target_errors and any(t.kind == tgt.CAPTAIN_SLUG for t in block.manifest.targets)
+                   for name, block in self.blocks.items()):
+                raise tgt.CaptainTargetError("Refresh the Captain list or use a full Captain address.")
+            slugs = self.slug_map(candidates)
+            if captain := slugs.get(tgt.CAPTAIN_SLUG):
+                return Address(captain["block"], captain["kind"], captain["id"])
+            raise tgt.CaptainTargetError(tgt.captain_selection_error(candidates, slugs, reveal=reveal_captains))
         addr = tgt.parse(text, self.blocks.keys() | self._on_demand.keys())
         if addr is not None:
             if addr.block == "project" and not self._is_project(addr.id):
@@ -675,12 +715,12 @@ class Switchboard:
             raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key must send to one of: {', '.join(principal.targets or ()) or 'nothing'}")
         allowed = set()
         for t in principal.targets or ():
-            with contextlib.suppress(CoreError):
-                allowed.add(str(await self.resolve_to(t)))
-        addr = await self.resolve_to(to)
+            with contextlib.suppress(CoreError, tgt.CaptainTargetError):
+                allowed.add(str(await self.resolve_to(t, reveal_captains=False)))
+        addr = await self.resolve_to(to, reveal_captains=False)
         if not addr.id:
             raise CoreRefused(TARGET_REQUIRED, f"the {principal.source} key must name one target, not a whole block; it may send to {', '.join(principal.targets or ())}")
-        if addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
+        if addr.block == "agent" and addr.id != "owner" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         block = self.blocks.get(addr.block)
         if block is not None:
@@ -693,8 +733,8 @@ class Switchboard:
     async def _send(self, principal: Principal, *, task: str, to: str | None, project: str | None, title: str | None,
                     files: list[dict[str, Any]] | None, repos: list[str] | None, new_conversation: bool | None,
                     handle: str | None, handle_meta: dict[str, Any] | None, dry_run: bool) -> dict[str, Any]:
-        addr = await self.resolve_to(to) if to else None
-        if addr is not None and addr.block == "agent" and project and not to.strip().lower().startswith("agent:"):
+        addr = await self.resolve_to(to, reveal_captains=principal.is_memory_owner) if to else None
+        if addr is not None and addr.block == "agent" and addr.id != "owner" and project and not to.strip().lower().startswith("agent:"):
             addr = next((a for b in self.blocks.values() if b.wakes_agents and (a := b.wake_target(addr.id, project))), addr)
         if addr is not None and addr.block == "project":
             project, addr = addr.id, None
@@ -709,8 +749,11 @@ class Switchboard:
         else:
             destination = addr.block
         if addr is not None and addr.block == "agent":
-            return {**await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta,
-                                            title=title, dry_run=dry_run), "to": str(addr)}
+            out = await self.agent_send(principal, to=addr.id, text=task, project=project, handle=handle, handle_meta=handle_meta,
+                                        title=title, dry_run=dry_run)
+            if not dry_run:
+                out["to"] = f"agent:{out['to']}"
+            return out
         block = self.destination(destination)
         action = block.verb("send")
         if action is None:
@@ -753,7 +796,9 @@ class Switchboard:
     def mailbox_replies(self, handle: str, sender: str) -> list[dict[str, Any]]:
         """Replies the other side sent on a mailbox conversation, oldest first: interim (final false) and the answer."""
         out = []
-        for row in self.store.q("SELECT data, at FROM inbox WHERE owner = ? AND kind = 'message' ORDER BY id", (sender,)):
+        for row in self.store.q("""SELECT i.data, i.at FROM inbox i JOIN handles h ON h.handle = i.handle
+                WHERE i.owner = ? AND i.kind = 'message' AND json_extract(h.meta, '$.owner_archived') IS NOT 1
+                ORDER BY i.id""", (sender,)):
             d = json.loads(row["data"])
             if d.get("in_reply_to") == handle:
                 out.append({"text": d.get("text"), "final": d.get("final", True), "from": d.get("from"), "at": iso(row["at"])})
@@ -806,28 +851,33 @@ class Switchboard:
                     text = (kw.get("text") or "").strip()
                     if not text:
                         raise CoreError("text is empty")
-                    engine, meta = self.slack, h["meta"]
-                    if engine is None:
-                        raise CoreError("Slack is not configured")
+                    meta = h["meta"]
                     self.turn(meta.get("root") or h["handle"], principal)
                     thread = meta["slack_thread"]
                     channel = thread["channel_name"] or thread["channel"]
                     note = f"Note from {meta['boundary']} about {meta['slack_sender']} in #{channel}: {text[:500]}"
                     if meta.get("permalink"):
                         note += f"\n{meta['permalink']}"
-                    if not await engine.dm_owner(note):
-                        raise CoreError("could not DM the owner")
-                    if final is not False:
-                        self.inbox.update_handle(h["handle"], status="answered")
+                    label = self.agents.label(principal.source)
+                    trust, display = frame_sender(note, label, principal.source, "in Slack")
+                    sender = {"kind": "agent", "agent": principal.source, "label": label, "auth": principal.kind,
+                              "client_id": principal.client_id, "origin": principal.origin, "trust": trust}
+                    data = {"text": display, "from": sender, "trust": trust, "in_reply_to": h["handle"], "final": final is not False}
+                    handle, recipient = self.inbox.store_owner_item(source=principal.source, project=h["project"], title="Listen note",
+                                                                   meta={"from": sender, "in_reply_to": h["handle"]}, kind="message", data=data)
+                    if recipient:
+                        self.inbox.record_reply(handle, "message", data)
                     self.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination="slack",
-                                      action="listen_note", outcome="ok", ref=h["handle"], target="owner")
-                    return {"conversation": h["handle"], "in_reply_to": h["handle"], "to_owner": True, "delivered": True, "final": final is not False}
+                                      action="listen_note", outcome="ok" if recipient else "pending", ref=h["handle"], target=recipient)
+                    return {"conversation": h["handle"], "in_reply_to": h["handle"], "to_owner": True,
+                            "delivered": recipient is not None, "final": final is not False,
+                            **({"status": PENDING_OWNER_ROUTE} if recipient is None else {})}
                 out = await self.agent_send(principal, to=h["ref"], text=kw.get("text") or "", project=h["project"], in_reply_to=h["handle"],
                                             final=final is not False, _reply=True)
                 if channel_mode:
                     self.modes.audit_action(principal, channel_mode, "reply")
                 return {**out,
-                        "to": f"agent:{h['ref']}", "in_reply_to": h["handle"], "final": final is not False}
+                        "to": f"agent:{out['to']}", "in_reply_to": h["handle"], "final": final is not False}
             if verb == "result":
                 replies = self.mailbox_replies(h["handle"], h["ref"])
                 done = next((r for r in reversed(replies) if r.get("final", True)), None)
@@ -840,7 +890,7 @@ class Switchboard:
                 return {"conversation": h["handle"], "status": "cancelled"}
             out = {"conversation": h["handle"], "from": h["meta"].get("from"), "status": h["status"], "project": h["project"]}
             recipient = h["owner"]
-            if principal.source == recipient and h["status"] in ("delivered", "working"):
+            if principal.source == recipient and h["ref"] and h["status"] in ("delivered", "working"):
                 out["note"] = "Answer this message with reply."
             return out
         if block is None:
@@ -870,11 +920,12 @@ class Switchboard:
             raise CoreError("Enter a note with up to 4000 characters.")
         label = self.agents.label(principal.source)
         trust, display = frame_sender(text, label, principal.source, owner=principal.trust == "owner")
+        sender = {"kind": "agent", "agent": principal.source, "label": label, "auth": principal.kind,
+                  "client_id": principal.client_id, "origin": principal.origin, "trust": trust}
         try:
-            note = self.inbox.deliver_triage_note(source=principal.source, project=meta["project"], data={
-                "text": display, "trust": trust, "conversation": conversation,
-                "from": {"kind": "agent", "agent": principal.source, "label": label, "auth": principal.kind,
-                         "client_id": principal.client_id, "origin": principal.origin, "trust": trust},
+            note, recipient = self.inbox.store_owner_item(source=principal.source, project=meta["project"], title="Triage note",
+                                                         meta={"from": sender}, kind="triage_note", data={
+                "text": display, "trust": trust, "conversation": conversation, "subject": "Triage note", "from": sender,
                 **{key: meta[key] for key in ("permalink", "block", "space", "channel")},
             })
         except sqlite3.Error as exc:
@@ -883,8 +934,9 @@ class Switchboard:
             refusal.audited = True
             raise refusal from exc
         self.modes.audit_action(principal, meta, "notify_owner")
-        return {"ok": True, "handle": note, "conversation": note, "to": "owner", "delivered": True, "mailbox": True,
-                "project": meta["project"]}
+        return {"ok": True, "handle": note, "conversation": note, "to": recipient or "owner",
+                "delivered": recipient is not None, "mailbox": True, "project": meta["project"],
+                **({"status": PENDING_OWNER_ROUTE} if recipient is None else {})}
 
     async def invoke(self, principal: Principal, destination: str, action: Action, kwargs: dict[str, Any], *,
                      handle: str | None = None, handle_meta: dict[str, Any] | None = None, dry_run: bool = False) -> Any:

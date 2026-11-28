@@ -218,6 +218,7 @@ def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
         assert f"https://t.me/c/{str(GROUP)[4:]}/11" in anthropic.fired[0][1]
         assert bot.calls["setMessageReaction"] == [{"chat_id": GROUP, "message_id": 11, "reaction": [{"type": "emoji", "emoji": "👀"}]}]
         handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
+        assert core.inbox.handle(handle)["title"] == "can you check?"
         answer = 'Result: <ok> & "ready"'
         result = payload(call(c, STATIC_KEY, "reply", {"conversation": handle, "text": answer}))
         assert result["delivered"]

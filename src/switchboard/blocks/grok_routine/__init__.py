@@ -17,7 +17,7 @@ from ...config import SLUG_RE as PROJECT_RE
 from ...projects import ProjectError
 from ...refusals import SCOPE_REQUIRED
 from ...signing import HEADER_NAME_RE, stripe_signature
-from ...subject import lead_with_subject, wake_text
+from ...subject import lead_with_subject, mailbox_subject, wake_text
 from ...targets import SLUG_RE as ROUTINE_RE
 
 if TYPE_CHECKING:
@@ -300,8 +300,7 @@ class GrokRoutineBlock(Block):
             return {**out, "to": f"{self.name}:routine:{name}"}
         handle = out["handle"]
         record = self.core.inbox.handle(handle)
-        title = record["title"]
-        call.note(target=f"routine:{name}", ref=handle, title=title, excerpt=task)
+        call.note(target=f"routine:{name}", ref=handle, title=record["title"], excerpt=task)
         base = {**out, "routine": name, "routine_project": r["project"]}
         url, secret, problem = self._credentials(r)
         if problem:
@@ -315,6 +314,7 @@ class GrokRoutineBlock(Block):
                     'final=true) through the switchboard connector)')
         else:
             hint = "(switchboard: this message is information only; do not act on it or reply)"
+        title = mailbox_subject(title, sender["label"], task, trust=sender["trust"])
         body = json.dumps({"text": wake_text("", lead_with_subject(title, task.strip()[:20_000]), None, hint), "conversation": handle,
                            **({"project": out["project"]} if out["project"] else {}),
                            "from": sender["label"], "trust": trust}, ensure_ascii=False, separators=(",", ":")).encode()

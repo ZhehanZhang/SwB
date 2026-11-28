@@ -224,6 +224,25 @@ CREATE TABLE IF NOT EXISTS inbox (
 CREATE INDEX IF NOT EXISTS inbox_owner ON inbox(owner, id);
 CREATE INDEX IF NOT EXISTS inbox_handle ON inbox(handle, id);
 CREATE INDEX IF NOT EXISTS inbox_reply_to ON inbox(json_extract(data, '$.in_reply_to'));
+CREATE INDEX IF NOT EXISTS inbox_watch_group ON inbox(owner, json_extract(data, '$.block'),
+    json_extract(data, '$.space'), json_extract(data, '$.dm'), id) WHERE kind = 'watch_digest';
+CREATE INDEX IF NOT EXISTS inbox_watch_owner_group ON inbox(json_extract(data, '$.block'),
+    json_extract(data, '$.space'), json_extract(data, '$.dm'), id)
+    WHERE kind = 'watch_digest' AND json_extract(data, '$.for_owner') = 1;
+CREATE TABLE IF NOT EXISTS owner_delivery_pending (
+  handle TEXT PRIMARY KEY REFERENCES handles(handle),
+  kind TEXT NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS owner_activity (
+  agent TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  client TEXT NOT NULL,
+  credential TEXT NOT NULL,
+  at REAL NOT NULL,
+  PRIMARY KEY(agent, kind, client, credential)
+);
+CREATE INDEX IF NOT EXISTS owner_activity_at ON owner_activity(at);
 CREATE INDEX IF NOT EXISTS handles_root ON handles(json_extract(meta, '$.root'));
 CREATE INDEX IF NOT EXISTS handles_reply_to ON handles(json_extract(meta, '$.in_reply_to'));
 CREATE INDEX IF NOT EXISTS handles_forward_of ON handles(json_extract(meta, '$.forward_of'));
@@ -249,7 +268,7 @@ CREATE TABLE IF NOT EXISTS inbox_cursors (
 """
 
 
-def _migrate(db: sqlite3.Connection) -> None:
+def _migrate(db: sqlite3.Connection) -> int:
     """Bring databases written by capy-bridge 0.1 up to the scoped schema."""
     if "private" not in {r[1] for r in db.execute("PRAGMA table_info(projects)")}:
         db.execute("ALTER TABLE projects ADD COLUMN private INTEGER NOT NULL DEFAULT 0")
@@ -288,6 +307,8 @@ def _migrate(db: sqlite3.Connection) -> None:
                SELECT at, day, 'mcp', source, client, 'capy', kind, target, thread_id, title, excerpt, outcome, detail FROM delegations"""
         )
         db.execute("DROP TABLE delegations")
+    return db.execute("""UPDATE handles SET meta = json_set(meta, '$.owner_archived', json('true'))
+        WHERE owner = 'owner' AND destination = 'mailbox' AND json_extract(meta, '$.owner_archived') IS NOT 1""").rowcount
 
 
 MEMORY_COLUMNS = {
@@ -400,7 +421,7 @@ class Store:
         self._lock = threading.RLock()
         self.db = open_database(path)
         self.db.executescript(SCHEMA)
-        self.tx(_migrate)
+        self.owner_archived_count = self.tx(_migrate)
 
     def close(self) -> None:
         self.db.close()

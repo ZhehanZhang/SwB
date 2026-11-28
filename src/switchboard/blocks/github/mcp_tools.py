@@ -45,10 +45,10 @@ def register(block: GitHubBlock, mcp: MCPServer, kit: Any) -> None:
         """Link a duplicate to its canonical issue in the same repository, label it duplicate, and close as not planned."""
         return await kit.invoke(ctx, name, "link_duplicate", repo=repo, number=number, duplicate_of=duplicate_of, handle=handle)
 
-    @mcp.tool(name=f"{name}_notify_owner", title="Notify the owner about triage", annotations=kit.WRITE)
+    @mcp.tool(name=f"{name}_notify_owner", title="Route a triage message for the owner", annotations=kit.WRITE)
     async def github_notify_owner(ctx: Context, text: str, handle: str | None = None,
                                   conversation: Conversation = None) -> dict[str, Any]:
-        """Put a triage note with the triggering permalink in the owner's inbox. Pass conversation or handle."""
+        """Route a triage message for the owner with a link to the issue or pull request. Pass conversation or handle."""
         if handle is None:
             raise PolicyRefusal(CONVERSATION_REQUIRED, "Provide conversation or handle.")
         return await kit.invoke(ctx, name, "notify_owner", handle=handle, text=text)

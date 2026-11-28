@@ -108,6 +108,7 @@ function MobileNavigation({ home, moreOpen, setMoreOpen }: { home: boolean; more
 
 export function AppShell() {
   const { pathname } = useLocation()
+  const routeKey = isSection(pathname, "/inbox") ? "/inbox" : pathname
   const project = isSection(pathname, "/projects")
   const platform = isSection(pathname, "/connections") ? pathname.split("/")[2] : undefined
   const connection = isConnectionPlatform(platform)
@@ -151,7 +152,7 @@ export function AppShell() {
         </header>
         <main id="main-content" tabIndex={-1} className="min-w-0">
           <Suspense fallback={<div className="min-h-72" aria-busy="true" />}>
-            <ViewTransition key={pathname} name="console-route" default="none" share="console-route-fade">
+            <ViewTransition key={routeKey} name="console-route" default="none" share="console-route-fade">
               <div className="min-w-0">
                 <PageHeaderActionsTarget.Provider value={headerActions}><Outlet /></PageHeaderActionsTarget.Provider>
               </div>

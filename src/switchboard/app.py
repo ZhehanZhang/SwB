@@ -562,6 +562,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         except ValueError:
             timeout = 25.0
         since = _cursor(request)
+        core.owner_delivery.record_activity(p)
         out = await core.inbox.wait(owner=p.source, since=since if since is not None else core.inbox.head(),
                                     timeout=timeout, reader=f"channel:{p.source}", advance=False,
                                     scopes=None if p.kind == "inbox_key" else p.scopes)
@@ -576,6 +577,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         agent = p.source
         start = _cursor(request)
+        core.owner_delivery.record_activity(p)
 
         async def frames() -> AsyncIterator[bytes]:
             cursor = start if start is not None else core.inbox.head()
