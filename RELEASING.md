@@ -32,7 +32,9 @@ Use [the English release notes](docs/release-notes/1.0.0.md) for the GitHub Rele
 
 ## Prepare the Mac app
 
-Build the app from the release source on a Mac. Use a Developer ID Application identity for team `Q64ZL36CJN`. Store the notarization credentials in a local Keychain profile. Enter your Apple Account and an app-specific password at the prompts.
+Build the app from the release source on a Mac. Use a Developer ID Application identity for team `Q64ZL36CJN`. If you have an Xcode archive, [upload it with your Xcode account](https://help.apple.com/xcode/mac/current/en.lproj/dev88332a81e.html) and export the notarized app.
+
+To use `notarytool`, store the credentials in a local Keychain profile. Enter your Apple Account and an app-specific password at the prompts.
 
 ```sh
 xcrun notarytool store-credentials swb-notary-1.0 --team-id Q64ZL36CJN
