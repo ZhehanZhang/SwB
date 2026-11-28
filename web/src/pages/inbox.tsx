@@ -198,7 +198,7 @@ function Conversations({ items, search, active, onOpen, actions, selected, onSel
         {items.map((row) => {
           const { from, to, fromKind, toKind } = participants(row)
           return (
-            <tr key={row.handle} role="row" data-selected={active === row.handle || selected?.has(row.handle) || undefined} className="console-pressable relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 data-selected:bg-muted @max-[38rem]/list:grid @max-[38rem]/list:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] @max-[38rem]/list:gap-x-2 @max-[38rem]/list:gap-y-1 @max-[38rem]/list:py-3.5 @min-[38rem]/list:h-[43px]">
+            <tr key={row.handle} role="row" data-selected={active === row.handle || selected?.has(row.handle) || undefined} className="relative border-b text-[13px] leading-[18px] focus-within:bg-muted/40 hover:bg-muted/40 data-selected:bg-muted @max-[38rem]/list:grid @max-[38rem]/list:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] @max-[38rem]/list:gap-x-2 @max-[38rem]/list:gap-y-1 @max-[38rem]/list:py-3.5 @min-[38rem]/list:h-[43px]">
               {selected && (
                 <td role="cell" className="@max-[38rem]/list:col-start-3 @max-[38rem]/list:row-start-3 @max-[38rem]/list:justify-self-end">
                   <input type="checkbox" aria-label={`Select ${row.title || "message"}`} checked={selected.has(row.handle)}
