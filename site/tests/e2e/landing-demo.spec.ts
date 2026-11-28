@@ -327,7 +327,7 @@ test('reduced motion keeps the diagram still', async ({ page }) => {
     return { d: path.getAttribute('d'), fill: style.fill, stroke: style.stroke, active: path.hasAttribute('data-active') };
   }));
   const cords = await stillSpokes();
-  expect(cords.every(({ d, fill, stroke }) => d?.endsWith(' Z') && fill !== 'none' && stroke === 'none')).toBe(true);
+  expect(cords.every(({ d, fill, stroke }) => d?.includes(' Q ') && fill === 'none' && stroke !== 'none')).toBe(true);
   expect(cords.filter(({ active }) => active)).toHaveLength(2);
   await expect(pulse).toHaveCount(0);
   await page.waitForTimeout(1500);

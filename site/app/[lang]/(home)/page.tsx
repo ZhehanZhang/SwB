@@ -8,6 +8,7 @@ import { AgentExchange } from '@/components/agent-exchange';
 import { BlockHeader, GuideLink } from '@/components/block-actions';
 import { deployRowClass, DeployProviders, DeployTile } from '@/components/deploy-providers';
 import { GitHubMark } from '@/components/github-mark';
+import { HeroMotion } from '@/components/hero-motion';
 import { HeroTitle } from '@/components/hero-title';
 import { CopyInstall } from '@/components/landing-controls';
 import { MarkTile } from '@/components/mark-tile';
@@ -16,6 +17,7 @@ import { SiteContainer } from '@/components/site-container';
 import { SwitchboardHero } from '@/components/switchboard-hero';
 import { isLocale, localize } from '@/lib/i18n';
 import { landingCopy, usageMarks } from '@/lib/landing-copy';
+import { createHeroSequence } from '@/lib/live';
 import { pageMetadata } from '@/lib/metadata';
 import { getStartedHref } from '@/lib/setup';
 import { tagline } from '@/lib/tagline';
@@ -73,27 +75,30 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
     <>
       <HomeLayout nav={{ enabled: false }}>
         <SiteContainer>
-          <section className="swb-hero-grid" aria-labelledby="landing-heading">
-            <div className="swb-hero-copy">
-              <HeroTitle {...copy.hero}
-                names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy Captain', dots: 'ChatGPT dots' }} />
-              <div className="mt-6 grid justify-items-start gap-4 lg:flex lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2">
-                <div className="flex items-center gap-2" data-hero-actions>
-                  <Link className="swb-button swb-button-primary whitespace-nowrap" href={getStartedHref(lang)} prefetch={false}>
-                    <Plug aria-hidden="true" />{copy.setupWithAgent}
-                  </Link>
-                  <a className="swb-button swb-button-outline" href={repository}>
-                    <GitHubMark />GitHub
-                  </a>
+          <HeroMotion initial={createHeroSequence()()}>
+            <section className="swb-hero-grid" aria-labelledby="landing-heading">
+              <div className="swb-hero-copy">
+                <div className="swb-hero-content">
+                  <HeroTitle {...copy.hero} />
+                  <div className="swb-hero-controls">
+                    <div className="flex items-stretch gap-2" data-hero-actions>
+                      <Link className="swb-button swb-button-primary" href={getStartedHref(lang)} prefetch={false}>
+                        <Plug aria-hidden="true" />{copy.setupWithAgent}
+                      </Link>
+                      <a className="swb-button swb-button-outline" href={repository}>
+                        <GitHubMark />GitHub
+                      </a>
+                    </div>
+                    <p className="text-xs text-fd-muted-foreground" data-hero-license>
+                      <a className="hover:text-fd-foreground hover:underline hover:underline-offset-4" href={license}>{copy.openSource}</a>
+                    </p>
+                    <CopyInstall lang={lang} />
+                  </div>
                 </div>
-                <p className="text-xs text-fd-muted-foreground lg:order-last lg:basis-full lg:pt-1">
-                  <a className="hover:text-fd-foreground hover:underline hover:underline-offset-4" href={license}>{copy.openSource}</a>
-                </p>
-                <CopyInstall lang={lang} />
               </div>
-            </div>
-            <SwitchboardHero label={copy.boardAlt} hint={copy.boardHint} lang={lang} />
-          </section>
+              <SwitchboardHero label={copy.boardAlt} hint={copy.boardHint} lang={lang} />
+            </section>
+          </HeroMotion>
           <section className="py-12 sm:py-16" data-landing-section aria-labelledby="landing-demos">
             <h2 id="landing-demos" className={sectionTitle}>{copy.positioning.title}</h2>
             <AgentExchange lang={lang} />

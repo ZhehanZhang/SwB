@@ -1,19 +1,21 @@
 import { expect, test } from '@playwright/test';
-import { agentPair, CYCLE, STEP, trips } from '../../lib/live';
+import { PAIR_ACTIVE_MS, PAIR_RELEASE_MS, PAIRS_PER_ROUND } from '../../lib/live';
+import { advanceHeroPair, pauseHeroClock, seedHero } from './hero-seed';
 
-const pairs = trips.flatMap(([a, b], n) =>
-  [a, b].some((name) => name === 'github' || name === 'slack') ? [] : [String(n)],
-);
+const pairs = Array.from({ length: PAIRS_PER_ROUND }, (_, i) => String(i + 1));
+const nextRound = String(PAIRS_PER_ROUND + 1);
+const roundDuration = (PAIR_ACTIVE_MS + PAIR_RELEASE_MS) * PAIRS_PER_ROUND;
 
 for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', '/zh-Hant']]) {
   test(`${locale} tweens pill widths and keeps text gaps through a full cycle`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await seedHero(page);
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready.then(() => null));
     const line = page.locator('[data-hero-pair]');
     await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
 
-    const result = await line.evaluate((root, deadlineMs) => new Promise<{
+    const result = await line.evaluate((root, { deadlineMs, nextRound }) => new Promise<{
       seen: string[];
       settled: string[];
       widthRanges: number[];
@@ -73,7 +75,8 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         previousX = x;
         verticalDrift = Math.max(verticalDrift, ...y.map((value, i) => Math.abs(value - baselineY![i])));
         if (prefixRect) prefixDrift = Math.max(prefixDrift, Math.abs(prefixRect.left - baselinePrefix!));
-        gap = Math.min(gap, andRect.left - pillRects[0].right, pillRects[1].left - andRect.right);
+        gap = Math.min(gap, andRect.left - pillRects[0].right);
+        if (pillRects[1].top < andRect.bottom) gap = Math.min(gap, pillRects[1].left - andRect.right);
         leadGapError = Math.max(leadGapError, Math.abs(conjunctionElement.getBoundingClientRect().left - pillRects[0].right - 8));
         if (prefixRect && prefixRect.bottom > pillRects[0].top) gap = Math.min(gap, pillRects[0].left - prefixRect.right);
         if (suffixRect) gap = Math.min(gap, suffixRect.left - pillRects[1].right);
@@ -92,7 +95,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
         }).every(Boolean);
         if (atTarget) settled.add(index);
 
-        if ((seen.length > 1 && index === seen[0] && atTarget) || now >= deadline) {
+        if (index === nextRound || now >= deadline) {
           resolve({ seen, settled: [...settled], widthRanges: maxWidths.map((width, i) => width - minWidths[i]),
             crossfades, frameStep, verticalDrift, prefixDrift, gap, leadGapError, overflow });
           return;
@@ -101,9 +104,9 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
       }
 
       requestAnimationFrame(sample);
-    }), CYCLE * 1000 + 3000);
+    }), { deadlineMs: roundDuration + 3000, nextRound });
 
-    expect(result.seen).toEqual([...pairs, pairs[0]]);
+    expect(result.seen).toEqual([...pairs, nextRound]);
     expect(result.settled).toEqual(pairs);
     for (const range of result.widthRanges) expect(range).toBeGreaterThan(10);
     expect(result.crossfades).toEqual([true, true]);
@@ -139,16 +142,16 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
 
   test(`${locale} keeps the hero subtitle in intact groups for every mobile pair`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.clock.install();
+    await seedHero(page);
+    await pauseHeroClock(page);
     for (const width of [360, 390, 430]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
-      await page.addStyleTag({ content: '.swb-slot, .swb-pair .swb-between-text { transition: none; }' });
+      await page.addStyleTag({ content: '.swb-pair, .swb-chip { transition: none; }' });
       const subtitle = page.locator('[data-hero-pair]');
       const seen = new Set<string>();
-      for (let step = 0; step < trips.length; step++) {
-        const pair = String(agentPair(step).n);
+      for (const pair of pairs) {
         await expect(subtitle).toHaveAttribute('data-hero-pair', pair);
         seen.add(pair);
         const group = await subtitle.evaluate((root) => {
@@ -184,7 +187,7 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
           }
         }
         if (locale === 'en') expect(Math.abs(group.leading[0].top - group.trailing[0].top), at).toBeLessThanOrEqual(4);
-        await page.clock.fastForward(STEP * 1000);
+        await advanceHeroPair(page);
       }
       expect([...seen]).toEqual(pairs);
     }
@@ -197,7 +200,7 @@ test('reduced motion holds the first hero pair', async ({ page }) => {
   await page.goto('/');
   const line = page.locator('[data-hero-pair]');
   await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
-  await expect(line.locator('.swb-slot').first()).toHaveCSS('transition-duration', '0s');
-  await page.clock.fastForward(STEP * 6000);
+  await expect(line.locator('.swb-chip-on').first()).toHaveCSS('transition-duration', '0s');
+  await page.clock.fastForward(roundDuration);
   await expect(line).toHaveAttribute('data-hero-pair', pairs[0]);
 });
