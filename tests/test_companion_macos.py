@@ -96,7 +96,12 @@ async def test_mac_negotiated_framing_precedes_the_first_write_and_resets(monkey
         transport.controller.on_write.assert_called_once_with(request)
         await controller.handle_message(request)
         negotiated = notifications()
-        assert len(negotiated) == 2 and len(negotiated[0]) == 160
+        assert negotiated == [
+            b'\xfe\x00\x02{"type":"device_info","node_id":"homelink-000001","version":"1.0.0",'
+            b'"device_id":"hatch-link:02:00:00:00:00:01","mac":"02:00:00:00:00:01","model":"hatch_link"',
+            b'\xfe\x01\x02,"pairing_protocol":5,"pairing_auth":"none","pairing_auth_epoch":0,'
+            b'"pairing_policy":"confirm_app","build_sha":"","network_ready":true}',
+        ]
         for packets in (legacy, negotiated):
             assembler = ChunkAssembler()
             for packet in packets[:-1]:
