@@ -41,3 +41,39 @@ test('the shared search modal opens centered with a dim backdrop', async ({ page
     await expect(dialog).toBeHidden();
   }
 });
+
+test.describe('Linux search shortcut', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36' });
+
+  test('keeps its place when the platform label hydrates', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    let hydrate!: () => void;
+    const beforeHydration = new Promise<void>((resolve) => { hydrate = resolve; });
+    await page.route('**/_next/static/chunks/*.js', async (route) => {
+      await beforeHydration;
+      await route.continue();
+    });
+
+    const key = page.locator('[data-search-full] kbd').first();
+    const shortcut = key.locator('..');
+    const keyTextX = () => key.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return range.getBoundingClientRect().left;
+    });
+    try {
+      await page.goto('/', { waitUntil: 'commit' });
+      await expect(key).toHaveText('⌘');
+      await page.evaluate(() => document.fonts.ready);
+      const before = await shortcut.boundingBox();
+      expect(before).not.toBeNull();
+      const beforeTextX = await keyTextX();
+      hydrate();
+      await expect(key).toHaveText('Ctrl');
+      expect(await shortcut.boundingBox()).toEqual(before);
+      expect(await keyTextX()).toBe(beforeTextX);
+    } finally {
+      hydrate();
+    }
+  });
+});
