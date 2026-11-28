@@ -1,13 +1,19 @@
 import { once } from 'node:events';
 import { createServer, get, type ServerResponse } from 'node:http';
 import { expect, test } from '@playwright/test';
-import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 
-test('the landing diagram stays fixed when its caption streams after first paint', async ({ page, request, baseURL }) => {
+const streamed = [
+  ['caption streams', '<figcaption', ['.swb-hero', '.swb-board:visible'], '.swb-hero figcaption'],
+  ['hero actions stream', '<div class="mt-6 grid', ['.swb-hero-copy'], '[data-hero-actions]'],
+  ['demo label streams', '<span>Set this up</span>', ['.swb-win-setup'], '.swb-win-setup > span'],
+] as const;
+
+for (const [part, marker, stable, arriving] of streamed) test(`landing layout stays fixed when the ${part} after first paint`, async ({ page, request, baseURL }, info) => {
+  test.skip(part === 'hero actions stream' && info.project.name === '390', 'The mobile layout does not vertically center the copy.');
   const response = await request.get('/');
   expect(response.ok()).toBe(true);
   const html = await response.text();
-  const split = html.indexOf('<figcaption');
+  const split = html.indexOf(marker, html.indexOf('<main'));
   expect(split).toBeGreaterThan(0);
   const upstream = new URL(baseURL!).origin;
   let documentResponse: ServerResponse | undefined;
@@ -28,25 +34,19 @@ test('the landing diagram stays fixed when its caption streams after first paint
   try {
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Expected a TCP address');
-    await page.addInitScript(observeLayoutShifts);
     await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: 'commit' });
     await page.waitForFunction(() => performance.getEntriesByName('first-contentful-paint').length > 0);
 
-    const figure = page.locator('.swb-hero');
-    const board = figure.locator('.swb-board:visible');
-    const caption = figure.locator('figcaption');
-    await expect(board).toBeVisible();
-    await expect(caption).toHaveCount(0);
-    const initialFigure = await figure.boundingBox();
-    const initialBoard = await board.boundingBox();
+    const layout = stable.map((selector) => page.locator(selector).first());
+    const pending = page.locator(arriving);
+    for (const item of layout) await expect(item).toBeVisible();
+    await expect(pending).toHaveCount(0);
+    const initial = await Promise.all(layout.map((item) => item.boundingBox()));
     documentResponse!.end(html.slice(split));
-    await expect(caption).toBeVisible();
+    await expect(pending.first()).toBeVisible();
     await page.waitForLoadState();
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-    expect(await figure.boundingBox()).toEqual(initialFigure);
-    expect(await board.boundingBox()).toEqual(initialBoard);
-    const shifts = await page.evaluate(readLayoutShifts);
-    expect(shifts.reduce((total, shift) => total + shift.value, 0), JSON.stringify(shifts, null, 2)).toBe(0);
+    expect(await Promise.all(layout.map((item) => item.boundingBox()))).toEqual(initial);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -26,13 +26,18 @@ function Slot({ options, current, names }: { options: MarkKind[]; current: MarkK
   }, [options]);
 
   return (
-    <span ref={slot} className="swb-slot" style={{ inlineSize: widths[current] }}>
+    <span className="swb-slot-frame">
       {options.map((kind) => (
-        <span key={kind} className={`swb-chip ${kind === current ? 'swb-chip-on' : ''}`} aria-hidden={kind !== current}>
-          <MarkTile kind={kind} className="swb-chip-mark" />
-          {names[kind] ?? kind}
-        </span>
+        <span key={kind} className="swb-chip swb-slot-reserve" aria-hidden="true">{names[kind] ?? kind}</span>
       ))}
+      <span ref={slot} className="swb-slot" style={{ inlineSize: widths[current] }}>
+        {options.map((kind) => (
+          <span key={kind} className={`swb-chip ${kind === current ? 'swb-chip-on' : ''}`} aria-hidden={kind !== current}>
+            <MarkTile kind={kind} className="swb-chip-mark" />
+            {names[kind] ?? kind}
+          </span>
+        ))}
+      </span>
     </span>
   );
 }

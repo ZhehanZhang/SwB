@@ -384,6 +384,9 @@
   }
 }
 .swb-hero-copy { container-type: inline-size; }
+@media (min-width: 1024px) {
+  .swb-hero-copy { display: grid; grid-template-rows: auto auto minmax(5.75rem, auto); }
+}
 .swb-hero-title { font-size: clamp(1.75rem, 8.4cqw, 3.625rem); line-height: 1.07; }
 .swb-hero-title:is(:lang(de), :lang(fr), :lang(es)) { font-size: clamp(1.5rem, 7.4cqw, 3.625rem); }
 .swb-hero-title:lang(zh) { font-size: clamp(1.5rem, 7.8cqw, 3.625rem); font-feature-settings: "halt"; }
@@ -464,7 +467,14 @@
   box-shadow: var(--toast-shadow);
 }
 .swb-win-bar { background: var(--surface-sunken); }
-.swb-win-setup { color: var(--muted-foreground); }
+.swb-win-setup {
+  display: inline-grid;
+  grid-template-columns: .875rem auto;
+  color: var(--muted-foreground);
+}
+.swb-win-setup > svg { grid-area: 1 / 1; }
+.swb-win-setup > span, .swb-win-setup::before { grid-area: 1 / 2; }
+.swb-win-setup::before { content: attr(data-setup-label); visibility: hidden; }
 .swb-win-setup:is(:hover, :focus-visible) { color: var(--foreground); }
 .swb-win-body, .swb-win-history {
   display: flex;
@@ -507,6 +517,9 @@
 @container (width < 34rem) {
   .swb-between > .swb-between-text:first-child { flex-basis: 100%; }
 }
+.swb-slot-frame { display: contents; }
+.swb-pair:not([data-with-suffix]) .swb-slot-frame { display: inline-grid; justify-items: start; }
+.swb-slot-frame > * { grid-area: 1 / 1; }
 .swb-slot {
   display: inline-grid;
   position: relative;
@@ -535,7 +548,12 @@
   opacity: 0;
   transition: opacity .6s ease;
 }
-.swb-chip:not(.swb-chip-on) { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; pointer-events: none; }
+.swb-slot > .swb-chip:not(.swb-chip-on) { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; pointer-events: none; }
+.swb-slot-reserve { display: none; visibility: hidden; border: 1px solid transparent; }
+.swb-pair:not([data-with-suffix]) .swb-slot { justify-items: start; }
+.swb-pair:not([data-with-suffix]) .swb-slot > .swb-chip:not(.swb-chip-on) { inset: auto; translate: none; }
+.swb-pair:not([data-with-suffix]) .swb-slot-reserve { display: inline-flex; }
+.swb-slot-reserve::before { content: ""; inline-size: 1.4em; flex: none; }
 .swb-chip-on { opacity: 1; transition-delay: .2s; }
 .swb-chip-mark.swb-mark-tile { width: 1.4em; height: 1.4em; min-width: 0; min-height: 0; }
 .swb-picker-mark.swb-mark-tile { width: 1.5rem; height: 1.5rem; min-width: 0; min-height: 0; flex-shrink: 0; }
