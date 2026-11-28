@@ -1,26 +1,24 @@
 ---
 title: 部署
-description: 在電腦或伺服器上執行 SwB。
+description: 在自己的電腦或伺服器上執行 SwB。
 ---
 
-## 在電腦上執行
+## 在自己的電腦上執行
 
-依照[安裝指南](/zh-Hant/docs/install)啟動 SwB。開啟首次在本機啟動時顯示的一次性登入連結。若要取得新連結，請執行 `swb login-link`。部署提示詞也適用於本機。
+依照[安裝](/zh-Hant/docs/install)的說明操作。SwB 第一次在本機啟動時會印出一次性登入連結，用瀏覽器開啟它。需要新連結時，執行 `swb login-link`。部署提示詞也涵蓋本機設定。
 
 ## 部署 SwB
 
-將提示詞貼到 Claude Code 或 Codex 等程式開發代理。請代理引導你在本機或託管平台部署 SwB。
+把下面的提示詞貼給 Claude Code 或 Codex 這類程式開發代理。代理會引導你完成本機或託管環境的設定。
 
 <SetupPrompt name="deploy" lang="zh-Hant" />
 
 ## 登入
 
-開啟服務記錄中的登入位址。從服務設定或部署指令指定的私密檔案複製 `SWB_SETUP_CODE`。將它貼到 **Setup code**。選取 **Sign in**。新增[通行金鑰](/zh-Hant/docs/owner-login#通行金鑰)供日後登入。
+開啟服務記錄中的登入網址。`SWB_SETUP_CODE` 存放在服務設定中，或部署指令指明的私有檔案中。複製它，貼到 **Setup code**，再選取 **Sign in**。然後新增一組[密碼金鑰](/zh-Hant/docs/owner-login#密碼金鑰)，供日後登入使用。
 
 ## 連接你的代理
 
-先[將 SwB 連接到一個代理](/zh-Hant/docs/connect)。再將提示詞貼給它。請它連接其他應用程式。
-
-提示詞保留英文，供代理使用。
+[把 SwB 連接到一個代理](/zh-Hant/docs/connect)，再把下面的提示詞貼給它，請它連接你的其他應用程式。
 
 <SetupPrompt name="coordinator" lang="zh-Hant" />

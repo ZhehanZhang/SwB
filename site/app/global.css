@@ -523,3 +523,64 @@
 @media (prefers-reduced-motion: reduce) {
   .swb-rotate-item, .swb-slot, .swb-chip { transition: none; }
 }
+
+
+/* Chinese typography, scoped to zh-Hans and zh-Hant so en is untouched. */
+@font-face {
+  font-family: 'SwB CJK Punctuation SC';
+  src: local('PingFang SC'), local('PingFangSC-Regular'), local('Hiragino Sans GB'), local('Noto Sans CJK SC'), local('NotoSansCJKsc-Regular'), local('Source Han Sans SC'), local('Microsoft YaHei');
+  unicode-range: U+2018-2019, U+201C-201D, U+2026, U+00B7, U+2014;
+}
+@font-face {
+  font-family: 'SwB CJK Punctuation TC';
+  src: local('PingFang TC'), local('PingFangTC-Regular'), local('Noto Sans CJK TC'), local('NotoSansCJKtc-Regular'), local('Source Han Sans TC'), local('Microsoft JhengHei');
+  unicode-range: U+2018-2019, U+201C-201D, U+2026, U+00B7, U+2014;
+}
+html:lang(zh-Hans) {
+  --swb-cjk-punct: 'SwB CJK Punctuation SC';
+  --swb-cjk: 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+}
+html:lang(zh-Hant) {
+  --swb-cjk-punct: 'SwB CJK Punctuation TC';
+  --swb-cjk: 'PingFang TC', 'Noto Sans TC', 'Noto Sans CJK TC', 'Source Han Sans TC', 'Microsoft JhengHei', sans-serif;
+}
+html:lang(zh) body,
+html:lang(zh) .font-sans {
+  font-family: var(--swb-cjk-punct), var(--font-inter), var(--swb-cjk);
+}
+html:lang(zh) .font-display {
+  font-family: var(--swb-cjk-punct), var(--font-inter-tight), var(--font-inter), var(--swb-cjk);
+}
+html:lang(zh) body {
+  text-autospace: normal;
+  line-break: strict;
+  overflow-wrap: break-word;
+}
+html:lang(zh) :is(h1, h2, h3, h4, .tracking-tight, .text-display-xl) {
+  letter-spacing: 0;
+}
+html:lang(zh) :is(em, i, cite) {
+  font-style: normal;
+}
+html:lang(zh) h1 {
+  line-height: 1.4;
+}
+html:lang(zh) .prose {
+  line-height: 1.8;
+}
+html:lang(zh) .prose :is(p, li, blockquote, td) {
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+html:lang(zh) .prose > p {
+  max-inline-size: 44em;
+}
+html:lang(zh) .prose :is(h2, h3, h4) {
+  line-height: 1.4;
+}
+html:lang(zh) .prose :is(td, th) {
+  line-height: 1.7;
+}
+html:lang(zh) .prose :is(code, kbd) {
+  overflow-wrap: anywhere;
+}

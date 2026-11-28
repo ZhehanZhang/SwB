@@ -1,26 +1,24 @@
 ---
 title: 部署
-description: 在电脑或服务器上运行 SwB。
+description: 在自己的电脑或服务器上运行 SwB。
 ---
 
-## 在电脑上运行
+## 在自己的电脑上运行
 
-按[安装指南](/zh-Hans/docs/install)启动 SwB。打开首次在本机启动时显示的一次性登录链接。如需获取新链接，请运行 `swb login-link`。部署提示词也适用于本机。
+按[安装](/zh-Hans/docs/install)中的步骤操作。打开 SwB 首次在本地启动时输出的一次性登录链接。需要新链接时，运行 `swb login-link`。部署提示词同样涵盖本地设置。
 
 ## 部署 SwB
 
-把提示词粘贴到 Claude Code 或 Codex 等编程智能体。请它引导你在本机或托管平台上部署 SwB。
+把下面的提示词粘贴给 Claude Code 或 Codex 这样的编程智能体。它会引导你完成本地或托管环境的设置。
 
 <SetupPrompt name="deploy" lang="zh-Hans" />
 
 ## 登录
 
-打开服务日志中的登录地址。从服务设置或部署命令指定的私有文件中复制 `SWB_SETUP_CODE`。将它粘贴到 **Setup code**。选择 **Sign in**。添加[通行密钥](/zh-Hans/docs/owner-login#通行密钥)供以后登录。
+在服务日志中找到登录地址并打开。从服务设置中复制 `SWB_SETUP_CODE`，也可以从部署命令指明的私有文件中复制。把它粘贴到 **Setup code**，然后选择 **Sign in**。再添加一个[通行密钥](/zh-Hans/docs/owner-login#通行密钥)，供以后登录使用。
 
 ## 连接你的智能体
 
-先[把 SwB 连接到一个智能体](/zh-Hans/docs/connect)。再把提示词粘贴给它。请它连接其他应用。
-
-提示词保留英文，供智能体使用。
+先[把 SwB 连接到一个智能体](/zh-Hans/docs/connect)，再把下面的提示词粘贴给它，让它连接你的其他应用。
 
 <SetupPrompt name="coordinator" lang="zh-Hans" />

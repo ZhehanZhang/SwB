@@ -1,6 +1,6 @@
 ---
-title: 自行代管
-description: 用 Docker Compose 與 Cloudflare 在伺服器上執行 SwB。
+title: 自行託管
+description: 使用 Docker Compose 和 Cloudflare 在伺服器上執行 SwB。
 ---
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
@@ -11,7 +11,7 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## Docker Compose
 
-安裝 Docker Compose 2.24 或更新版本。用擁有資料夾的一般使用者帳號執行以下指令。
+安裝 Docker Compose 2.24 或更新版本。以一般使用者身分執行下面的指令，資料目錄要歸這個使用者所有。
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -29,84 +29,84 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-在五分鐘內開啟終端機顯示的一次性登入連結。請妥善保管連結。
+在 5 分鐘內開啟終端機顯示的一次性登入連結。連結要保密。
 
-擁有者在瀏覽器中透過 `http://localhost:8870` 登入。容器內的指令使用 `8000` 連接埠。Compose 將資料存放在 `./data`。修改 `.env` 後，請再次執行 `docker compose up -d`。
+擁有者登入時，瀏覽器使用 `http://localhost:8870`，容器內的指令則使用 `8000` 連接埠。Compose 把資料存放在 `./data`。變更 `.env` 後，再執行一次 `docker compose up -d`。
 
-如果 SwB 在遠端伺服器上執行，先將伺服器的 `8870` 連接埠轉送至本機的 `8870` 連接埠，再開啟連結。
+如果是遠端伺服器，開啟連結前，先把它的 `8870` 連接埠轉送到本機的 `8870` 連接埠。
 
-直接存取 `/healthz` 會傳回 `status` 和 `version`。以擁有者身分登入或使用擁有者金鑰，可查看完整的運作狀態。
+免登入的 `/healthz` 請求會回傳 `status` 和 `version`。要取得完整的健康狀態資訊，使用擁有者工作階段或擁有者金鑰。
 
 ## <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Cloudflare 通道讓 SwB 有公開的 HTTPS 位址。Cloudflare 的免費方案包含通道服務。
+Cloudflare Tunnel 為 SwB 提供公開的 HTTPS 網址。Cloudflare 的免費方案就提供通道。
 
-### 暫時通道
+### 快速通道
 
-用快速通道提供的暫時位址試用 SwB。`cloudflared` 是將 SwB 接上 Cloudflare 的程式。在 SwB 主機上執行此指令。
+快速通道適合用臨時網址試用 SwB。在主機上執行下面的指令。指令使用 `cloudflared`，也就是把 SwB 連接到 Cloudflare 的程式。
 
 ```bash
 cloudflared tunnel --url http://localhost:8870
 ```
 
-將 `SWB_PUBLIC_URL` 設為終端機顯示的 HTTPS 位址。若設定檔含有 `public_url`，也更新這個設定項目。重新啟動 SwB。每次啟動通道時，位址都會變更。OAuth 登入和通行金鑰都會綁定這個位址。使用具名通道可保留固定位址。
+把 `SWB_PUBLIC_URL` 設為終端機顯示的 HTTPS 網址。如果設定檔中有 `public_url`，也一併更新，然後重新啟動 SwB。每次啟動通道，網址都會改變，而 OAuth 登入和密碼金鑰都使用這個網址。需要長期固定的網址時，使用具名通道。
 
 ### 具名通道
 
-使用免費的 Cloudflare 帳號和自己的網域。依照 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare) 建立通道並設定 Access。將 `SWB_PUBLIC_URL` 設為公開位址，例如 `https://swb.example.com`。若設定檔含有 `public_url`，也更新這個設定項目。
+準備一個免費的 Cloudflare 帳號和你自己的網域。依照 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare)建立通道並設定 Access。把 `SWB_PUBLIC_URL` 設為你的公開網址，例如 `https://swb.example.com`。如果設定檔中有 `public_url`，也更新其中的網址。
 
-如果通道在 SwB 主機上執行，將服務位址設為 `http://localhost:8870`。將 `SWB_TRUSTED_PROXIES` 設為連接器的位址。IPv4 本機迴路可用 `127.0.0.1/32`。
+如果通道就在 SwB 主機上，把它的服務網址指向 `http://localhost:8870`，並把 `SWB_TRUSTED_PROXIES` 設為連接器的位址，例如 IPv4 本機迴路（loopback）連線使用 `127.0.0.1/32`。
 
-如果使用 Compose 通道，將服務位址設為 `http://switchboard:8000`。將通道權杖以 `TUNNEL_TOKEN` 為名稱寫入 `.env`。將連接器的位址或專用網路加入 `trusted_proxies`。用通道設定啟動 Compose。
+如果使用 Compose 的通道，把它的服務網址指向 `http://switchboard:8000`，把通道權杖以 `TUNNEL_TOKEN` 的名稱寫進 `.env`，再把連接器的位址或專用網路加進 `trusted_proxies`。然後啟用 tunnel profile 來啟動 Compose。
 
 ```bash
 docker compose --profile tunnel up -d
 ```
 
-## 信任的代理
+## 受信任的代理伺服器
 
-反向代理會將要求轉送給 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 加入代理的位址或專用網段。以 CIDR 格式填寫網段，例如 `192.0.2.0/24`。
+反向代理伺服器會把請求轉給 SwB。把代理伺服器的位址或專用網路加進 `config/switchboard.yaml` 的 `trusted_proxies`。網段以 CIDR 格式表示，例如 `192.0.2.0/24`。
 
-也可以在 `.env` 設定 `SWB_TRUSTED_PROXIES`。請用逗號分隔各項。SwB 優先採用 YAML 內的設定。
+也可以在 `.env` 中設定 `SWB_TRUSTED_PROXIES`，多個項目以逗號分隔。YAML 中的設定優先。
 
-如果 Cloudflare 通道與 SwB 共用主機或 Docker 網路，請加入通道連接器的位址或專用網段。連接器會直接連到 SwB。如果 Cloudflare 邊緣伺服器直接連到 SwB，請加入 `cloudflare`。
+如果 Cloudflare Tunnel 位於 SwB 主機或 Docker 網路上，加入通道連接器的位址或專用網路。連接器會直接連到 SwB。如果連線直接來自 Cloudflare 邊緣伺服器，使用 `cloudflare` 項目。
 
 ## Cloudflare Access
 
-依照 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare)設定 SwB，並為擁有者和用戶端要求設定存取規則。
+依照 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare)設定 SwB，並為擁有者和用戶端請求設定存取規則。
 
 ## 託管平台
 
-執行一個 SwB 執行個體。將持久磁碟掛載到 `/data`。[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)說明 Railway、Render 和 Fly.io 的範本及 Koyeb 指令稿。
+使用單一 SwB 執行個體，並把永久磁碟掛載到 `/data`。Railway、Render 和 Fly.io 的範本以及 Koyeb 的指令碼，見[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)。
 
 ## Railway [#railway]
 
-使用 [Railway 上的 SwB 範本](https://railway.com/deploy/swb)部署。保留一個執行個體。範本會把儲存磁碟區掛載到 `/data`。
+從 [Railway 上的 SwB 範本](https://railway.com/deploy/swb)部署，並維持單一複本。範本會把磁碟區掛載到 `/data`。
 
-使用 Hobby 方案讓 SwB 持續上線。Hobby 方案每月 5 美元，內含 5 美元的用量額度。
+要讓 SwB 全天候運作，使用 Hobby 方案。Hobby 方案每月 5 美元，內含 5 美元的用量額度。
 
-[免費方案](https://docs.railway.com/reference/pricing/free-trial)每月提供 1 美元的用量額度。這筆額度約可全天使用 100 MB 記憶體。測試中的 SwB 執行個體在閒置時約使用 107 MiB 記憶體。用完額度後，免費方案的服務會停止。
+[免費方案](https://docs.railway.com/reference/pricing/free-trial)每月內含 1 美元的用量額度，大約可支應 100 MB 記憶體全天候運作。一個測試用的 SwB 執行個體在閒置時約使用 107 MiB。1 美元的額度用完後，免費方案的服務就會停止。
 
 ## Fly.io [#fly]
 
-使用 [Docker Compose 範例](#docker-compose)下載的 SwB 發行分支。安裝 [Fly.io 命令列工具](https://docs.fly.io/flyctl/)。登入 Fly.io。
+使用 SwB 發行版的本機副本，也就是 [Docker Compose 範例](#docker-compose)中複製的那一份。安裝 [Fly.io 命令列工具](https://docs.fly.io/flyctl/)，並登入 Fly.io。
 
-在 SwB 資料夾中執行 `sh deploy/fly.sh my-swb`。將 `my-swb` 換成唯一的應用程式名稱。指令稿以 `fly deploy --ha=false` 啟動一部虛擬機器。
+在 SwB 資料夾中執行 `sh deploy/fly.sh my-swb`，並把 `my-swb` 換成一個唯一的應用程式名稱。這支指令碼會用 `fly deploy --ha=false` 啟動一台 Machine。
 
-開啟應用程式的登入頁。從本機的 `.env.swb-setup-fly-my-swb` 檔案複製 `SWB_SETUP_CODE`。將設定碼填入 **Setup code**。登入後刪除此檔。
+開啟應用程式的登入頁面。從本機副本中的 `.env.swb-setup-fly-my-swb` 複製 `SWB_SETUP_CODE`，輸入到 **Setup code**。登入後刪除這個檔案。
 
-計費詳情請參閱 [Fly.io 免費方案](https://docs.fly.io/about/free-plan)和[目前費率](https://fly.io/docs/about/pricing/)。
+計費細節見 [Fly.io 免費方案](https://docs.fly.io/about/free-plan)和[目前的費率](https://fly.io/docs/about/pricing/)。
 
 ## 備份與升級
 
-複製資料夾前，先停止 SwB。完整保留資料夾、資料庫和 `mcp-events.key`、`claim-key` 等金鑰。也要備份設定檔和 `.env`。妥善保管備份。安裝或建置新版本。使用原本的資料夾啟動 SwB。
+複製資料目錄之前，先停止 SwB。整個目錄要完整保留，包括資料庫和它的金鑰，例如 `mcp-events.key` 和 `claim-key`。設定檔和 `.env` 也要備份。備份要保密。安裝或建置新版本，再用同一個資料目錄啟動 SwB。
 
 ## 匯出記憶
 
-在 Compose 容器中執行匯出。
+在 Compose 容器內執行匯出。
 
 ```bash
 docker compose exec -T switchboard swb export /data/export
 ```
 
-匯出的 Markdown 檔會依範圍存放在主機的 `./data/export` 裡。目錄內還有一份 `INDEX.md`。設定 `memory.mirror_dir` 即可保留隨記憶更新的 Markdown 副本。
+匯出時會依範圍把 Markdown 檔案存到主機的 `./data/export` 下，其中包含一份 `INDEX.md`。設定 `memory.mirror_dir` 可以讓 Markdown 副本保持最新。

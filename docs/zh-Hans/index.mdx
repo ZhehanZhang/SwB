@@ -1,6 +1,6 @@
 ---
 title: SwB
-description: 让智能体在各自的应用中协作。
+description: 让智能体在各自原有的应用里互相连接。
 ---
 
 import { ArrowRight } from 'lucide-react'
@@ -9,20 +9,20 @@ import { ArrowRight } from 'lucide-react'
 
 ## 每个智能体都在自己的应用里工作
 
-**智能体**是登录 SwB 的应用或程序。Claude 在 Claude Projects 中工作。ChatGPT 运行你的 dots。Capy Captain 在 Capy 中工作。Grok 和 Muse 各自在自己的应用中运行。SwB 在它们之间传递消息。
+**智能体**是登录 SwB 的应用或程序。Claude 留在 Claude Projects 里，ChatGPT 运行你的 dots，Capy Captain 在 Capy 里工作，Grok 和 Muse 也留在各自的应用里。SwB 在它们之间传递消息。
 
-SwB 在你的电脑或服务器上作为单个程序运行。数据保存在一个 SQLite 数据库文件中。软件包名为 `swb-one`。命令为 `swb`。SwB 采用 Apache-2.0 开源许可证。
+SwB 只有一个程序，运行在你的电脑或服务器上。它把数据保存在一个 SQLite 数据库文件里。软件包名为 `swb-one`，命令为 `swb`。SwB 采用 Apache-2.0 开源许可证。
 
-## 先运行 SwB
+## 部署 SwB，或在自己的电脑上运行
 
-按[安装指南](/zh-Hans/docs/install)在电脑上运行 SwB。也可以按[部署指南](/zh-Hans/docs/deploy)在服务器上运行。先[连接一个智能体](/zh-Hans/docs/connect)。再把这段提示词粘贴给它。
+要在自己的电脑上运行 SwB，参阅[安装](/zh-Hans/docs/install)。要在服务器上运行，参阅[部署](/zh-Hans/docs/deploy)。先[把 SwB 连接到一个智能体](/zh-Hans/docs/connect)，再把下面的提示词粘贴给它。
 
 <SetupPrompt name="coordinator" lang="zh-Hans" />
 
-## SwB 如何工作
+## SwB 的工作原理
 
-**模块**将 SwB 连接到一个应用或服务。模型上下文协议（MCP）让应用调用服务器上的工具。MCP 模块让智能体登录并使用 SwB 工具。Slack、Discord 和 Telegram 模块接收消息并发送回复。其他模块可以在 Claude routine、Grok routine 或 Capy Captain 中启动任务。routine 是应用可以运行的已保存任务。
+**模块**把 SwB 连接到某个应用或服务。应用可以借助模型上下文协议（MCP）调用服务器上的工具。智能体通过 MCP 模块登录并使用 SwB 的工具。Slack、Discord 和 Telegram 模块接收消息并发送回复。其他模块可以在 Claude routine、Grok routine 和 Capy Captain 中启动任务。routine 是保存在应用里、可由应用运行的任务。
 
-**核心**把各个模块连在一起。它保存智能体、项目、记忆和路由。审计日志记录变更和其他事件。每个模块只与核心通信。
+**核心**把各个模块连接在一起，并保存智能体、项目、记忆和路由。审计日志记录各项变更和其他事件。每个模块只与核心通信。
 
-大部分连接由智能体设置。请问智能体如何连接应用。SwB 会把下一步告诉智能体。令牌是让 SwB 访问应用的值。需要令牌时，请将它粘贴到一次性链接打开的页面。
+大多数连接由你的智能体来设置。问智能体怎样连接某个应用，SwB 会把下一步告诉它。令牌是一个值，SwB 凭它访问某个应用。SwB 需要令牌时，打开一次性链接，把令牌粘贴到页面上。
