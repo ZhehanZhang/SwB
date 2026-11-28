@@ -66,4 +66,19 @@ await crawl(textPaths, async (path) => {
   const [before, after] = await Promise.all([read(release, path, type), read(candidate, path, type)]);
   assert.equal(after, before, path);
 });
-console.log(`Matched ${original.length} canonical docs URLs, ${paths.length - original.length} English aliases and ${textPaths.length} text URLs.`);
+
+const redirectPaths = ['/docs/about', '/docs/trademarks'].flatMap((path) =>
+  [`/en${path}`, ...locales.map((lang) => localize(lang, path))]);
+await crawl(redirectPaths, async (path) => {
+  async function redirect(origin) {
+    const url = new URL(path, origin);
+    const response = await fetch(url, { headers, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+    const location = response.headers.get('location');
+    const target = location && new URL(location, url);
+    await response.body?.cancel();
+    return { status: response.status, path: target && `${target.pathname}${target.search}${target.hash}` };
+  }
+  const [before, after] = await Promise.all([redirect(release), redirect(candidate)]);
+  assert.deepEqual(after, before, path);
+});
+console.log(`Matched ${original.length} canonical docs URLs, ${paths.length - original.length} English aliases, ${textPaths.length} text URLs and ${redirectPaths.length} redirect or compatibility paths.`);
