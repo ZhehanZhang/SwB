@@ -5,7 +5,9 @@ description: Utilisez Cloudflare Tunnel pour obtenir une adresse publique SwB et
 
 Cloudflare Tunnel donne à SwB une adresse publique HTTPS fixe. Un **tunnel** connecte votre serveur à Cloudflare. Cloudflare Access réserve la console SwB à votre compte.
 
-## Tunnel rapide
+<span id="tunnel-rapide" />
+
+## Tunnel rapide [#quick-tunnel]
 
 Utilisez un tunnel rapide pour essayer SwB à une adresse temporaire. Exécutez cette commande sur l'hôte avec `cloudflared`, le programme qui connecte SwB à Cloudflare.
 
@@ -15,7 +17,9 @@ cloudflared tunnel --url http://localhost:8870
 
 Définissez `SWB_PUBLIC_URL` sur l'adresse HTTPS affichée dans le terminal. Si votre configuration contient `public_url`, mettez aussi ce paramètre à jour. Redémarrez SwB. L'adresse change à chaque démarrage du tunnel. Les connexions OAuth et les clés d'accès utilisent cette adresse. Pour une adresse durable, utilisez un tunnel nommé.
 
-## Tunnel nommé
+<span id="tunnel-nommé" />
+
+## Tunnel nommé [#named-tunnel]
 
 Utilisez un compte Cloudflare gratuit avec votre domaine.
 
@@ -39,9 +43,9 @@ Pour un tunnel sur l'hôte SwB, faites pointer son adresse de service vers `http
 
 Quand le connecteur apparaît dans Cloudflare, sélectionnez **Continue**.
 
-<span id="cloudflare-access" />
+<span id="protéger-la-console" />
 
-### Protéger la console
+### Protéger la console [#cloudflare-access]
 
 [Créez une application Access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) pour le nom d'hôte de SwB. Définissez l'action de la stratégie sur **Allow**. Sous **Include** → **Emails**, saisissez votre adresse e-mail.
 
@@ -81,7 +85,9 @@ auth:
 
 Exécutez de nouveau `docker compose --profile tunnel up -d` pour appliquer les paramètres.
 
-### Proxys de confiance
+<span id="proxys-de-confiance" />
+
+### Proxys de confiance [#trusted-proxies]
 
 Un proxy inverse transmet les requêtes à SwB. Ajoutez l'adresse du proxy ou son réseau dédié à `trusted_proxies` dans `config/switchboard.yaml`. Écrivez les plages réseau au format CIDR, par exemple `192.0.2.0/24`.
 

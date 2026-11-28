@@ -21,6 +21,11 @@ def test_doc_link_accepts_valid_origins(address, fragment):
     assert doc_link("get-started", address) == f"{GUIDE}#swb={fragment}"
 
 
+@pytest.mark.parametrize(("address", "suffix"), [(ADDRESS, f"&{SUFFIX[1:]}"), (None, ""), ("http://example.com", "")])
+def test_doc_link_preserves_the_heading_anchor(address, suffix):
+    assert doc_link("deploy#fly", address) == f"https://swb.one/docs/deploy#fly{suffix}"
+
+
 @pytest.mark.parametrize("address", [
     None,
     "",

@@ -5,7 +5,9 @@ description: Führen Sie SwB auf Ihrem Computer oder auf einem Server aus.
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
-## Auf dem eigenen Computer ausführen
+<span id="auf-dem-eigenen-computer-ausführen" />
+
+## Auf dem eigenen Computer ausführen [#run-on-your-computer]
 
 Folgen Sie der Anleitung unter [Installation](/de/docs/install). Öffnen Sie den Einmal-Anmeldelink, den SwB beim ersten lokalen Start ausgibt. Für einen neuen Link führen Sie `swb login-link` aus. Der Bereitstellungsprompt deckt auch die lokale Einrichtung ab.
 
@@ -55,7 +57,9 @@ Folgen Sie der [Anleitung zur Cloudflare-Einrichtung](/de/docs/cloudflare), um S
 
 Verwenden Sie eine einzelne SwB-Instanz mit einem persistenten Datenträger unter `/data`. Die Vorlagen für Railway, Render und Fly.io sowie das Skript für Koyeb finden Sie in der [Bereitstellungsanleitung](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
 
-### Bereitstellung mit einem Klick
+<span id="bereitstellung-mit-einem-klick" />
+
+### Bereitstellung mit einem Klick [#one-click-deploy]
 
 <DeployProviders lang="de" />
 
@@ -68,6 +72,10 @@ Führen Sie `sh deploy/fly.sh my-swb` im SwB-Ordner aus. Ersetzen Sie `my-swb` d
 Öffnen Sie die Anmeldeseite Ihrer App. Kopieren Sie `SWB_SETUP_CODE` aus `.env.swb-setup-fly-my-swb` in Ihrem Checkout. Geben Sie den Code in **Setup code** ein. Löschen Sie die Datei nach der Anmeldung.
 
 Details zur Abrechnung finden Sie im [Free-Plan von Fly.io](https://docs.fly.io/about/free-plan) und in den [aktuellen Preisen](https://fly.io/docs/about/pricing/).
+
+### Render [#render]
+
+[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
 
 ### Railway [#railway]
 

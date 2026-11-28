@@ -7,7 +7,7 @@ Cloudflare Tunnel gives SwB a public HTTPS address. A **tunnel** connects your s
 
 Follow [Docker Compose](/docs/deploy#docker-compose) to start SwB.
 
-## Quick tunnel
+## Quick tunnel [#quick-tunnel]
 
 Use a quick tunnel for a temporary address. Install [cloudflared](https://developers.cloudflare.com/tunnel/downloads/) on the SwB server. This program connects SwB to Cloudflare. Run this command on the server.
 
@@ -19,7 +19,7 @@ Set `SWB_PUBLIC_URL` in `.env` to the HTTPS address in the terminal. If your con
 
 The address changes each time you start the tunnel. OAuth sign-ins and passkeys use this address. Use a named tunnel for a fixed address.
 
-## Named tunnel
+## Named tunnel [#named-tunnel]
 
 Use a named tunnel for a fixed address on your domain.
 
@@ -41,7 +41,9 @@ To run the connector directly on the host, follow the Cloudflare install command
 
 Select **Continue** when the connector appears in Cloudflare.
 
-### Protect the console
+<span id="protect-the-console" />
+
+### Protect the console [#cloudflare-access]
 
 Cloudflare Access restricts the SwB console to your account. [Create an Access application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) for your SwB hostname. Set the policy action to **Allow**. Select **Emails** under **Include**. Enter your email address.
 
@@ -87,7 +89,7 @@ auth:
 
 SwB reads the token from the `Cf-Access-Jwt-Assertion` header first. It uses the `CF_Authorization` cookie as a second source. A cookie is a value the browser sends with a request. SwB checks the RS256 signature with public keys from `team_domain`. The token issuer must match the HTTPS address of `team_domain`. The token must name `aud` as an audience. SwB checks the issue, start and expiration times when the token supplies them. SwB compares the email in lower case with `owner_emails`.
 
-### Trusted proxies
+### Trusted proxies [#trusted-proxies]
 
 A reverse proxy passes requests to SwB. Add its address or dedicated network to `trusted_proxies` in `config/switchboard.yaml`. Use CIDR notation for network ranges, such as `192.0.2.0/24`.
 

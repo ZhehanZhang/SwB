@@ -5,7 +5,9 @@ description: SwB をパソコンまたはサーバーで実行します。
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
-## パソコンで実行する
+<span id="パソコンで実行する" />
+
+## パソコンで実行する [#run-on-your-computer]
 
 [インストール](/ja/docs/install)の手順に従ってください。初めてローカルで起動すると、SwB がワンタイムのサインインリンクを表示します。そのリンクを開いてください。新しいリンクは `swb login-link` で取得できます。デプロイ用プロンプトは、ローカルでのセットアップにも対応しています。
 
@@ -55,7 +57,9 @@ Cloudflare Tunnel を使うと、SwB に公開 HTTPS アドレスを用意でき
 
 `/data` に永続ディスクをマウントした SwB のインスタンスを 1 つ使ってください。Railway、Render、Fly.io のテンプレートと Koyeb のスクリプトについては、[デプロイガイド](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)をご覧ください。
 
-### ワンクリックでデプロイする
+<span id="ワンクリックでデプロイする" />
+
+### ワンクリックでデプロイする [#one-click-deploy]
 
 <DeployProviders lang="ja" />
 
@@ -68,6 +72,10 @@ SwB のフォルダーで `sh deploy/fly.sh my-swb` を実行してください�
 アプリのサインインページを開いてください。SwB のフォルダーにある `.env.swb-setup-fly-my-swb` から `SWB_SETUP_CODE` をコピーしてください。その値を **Setup code** に入力してください。サインインしたら、このファイルを削除してください。
 
 料金の詳細は、[Fly.io の Free プラン](https://docs.fly.io/about/free-plan)と[現在の料金](https://fly.io/docs/about/pricing/)をご覧ください。
+
+### Render [#render]
+
+[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
 
 ### Railway [#railway]
 

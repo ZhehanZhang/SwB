@@ -120,6 +120,17 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await expect(docs(page).getByRole('region', { name: 'Claude', exact: true }).locator('pre')).toContainText(example);
 });
 
+test('a shared Deploy section link stores the address and scrolls to the heading', async ({ page }) => {
+  await page.goto(`${deploy}#fly&swb=${encodeURIComponent(origin)}`);
+  await expect(page).toHaveURL(`${deploy}#fly`);
+  await expect.poll(() => stored(page)).toBe(origin);
+  const heading = docs(page).locator('#fly');
+  await expect(heading).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => heading.evaluate((node) =>
+    Math.abs(node.getBoundingClientRect().top - parseFloat(getComputedStyle(node).scrollMarginTop))
+  )).toBeLessThanOrEqual(1);
+});
+
 test('address trigger matches the language control and its aligned popover saves explicitly', async ({ page }) => {
   await page.goto(`${install}?swb=${encodeURIComponent(origin)}`);
   const trigger = indicator(page);

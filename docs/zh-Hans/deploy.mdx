@@ -5,7 +5,9 @@ description: 在自己的电脑或服务器上运行 SwB。
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
-## 在自己的电脑上运行
+<span id="在自己的电脑上运行" />
+
+## 在自己的电脑上运行 [#run-on-your-computer]
 
 按[安装](/zh-Hans/docs/install)中的步骤操作。打开 SwB 首次在本地启动时输出的一次性登录链接。需要新链接时，运行 `swb login-link`。部署提示词同样涵盖本地设置。
 
@@ -55,7 +57,9 @@ Cloudflare Tunnel 为 SwB 提供一个公网 HTTPS 地址。Cloudflare 的免费
 
 只运行一个 SwB 实例，并把持久化磁盘挂载到 `/data`。Railway、Render 和 Fly.io 的模板以及 Koyeb 脚本见[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)。
 
-### 一键部署
+<span id="一键部署" />
+
+### 一键部署 [#one-click-deploy]
 
 <DeployProviders lang="zh-Hans" />
 
@@ -68,6 +72,10 @@ Cloudflare Tunnel 为 SwB 提供一个公网 HTTPS 地址。Cloudflare 的免费
 打开应用的登录页面。从本地副本中的 `.env.swb-setup-fly-my-swb` 复制 `SWB_SETUP_CODE`，输入到 **Setup code**。登录后删除这个文件。
 
 计费详情见 [Fly.io 免费套餐](https://docs.fly.io/about/free-plan)和[当前价格](https://fly.io/docs/about/pricing/)。
+
+### Render [#render]
+
+[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
 
 ### Railway [#railway]
 

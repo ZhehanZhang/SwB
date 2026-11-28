@@ -5,7 +5,9 @@ description: 用 Cloudflare Tunnel 提供公网 SwB 地址，用 Cloudflare Acce
 
 Cloudflare Tunnel 为 SwB 提供固定的公网 HTTPS 地址。**隧道**把你的服务器连接到 Cloudflare。Cloudflare Access 只允许你的账号访问 SwB 控制台。
 
-## 快速隧道
+<span id="快速隧道" />
+
+## 快速隧道 [#quick-tunnel]
 
 快速隧道提供一个临时地址，适合试用 SwB。`cloudflared` 是把 SwB 连接到 Cloudflare 的程序。在装有它的主机上运行下面的命令。
 
@@ -15,7 +17,9 @@ cloudflared tunnel --url http://localhost:8870
 
 把 `SWB_PUBLIC_URL` 设为终端中显示的 HTTPS 地址。如果配置中有 `public_url`，也一并更新。然后重启 SwB。每次启动隧道，地址都会变化。OAuth 登录和通行密钥都使用这个地址。要长期使用同一个地址，改用命名隧道。
 
-## 命名隧道
+<span id="命名隧道" />
+
+## 命名隧道 [#named-tunnel]
 
 准备一个免费的 Cloudflare 账号和你自己的域名。
 
@@ -39,9 +43,9 @@ docker compose --profile tunnel up -d
 
 连接器出现在 Cloudflare 中后，选择 **Continue**。
 
-<span id="cloudflare-access" />
+<span id="保护控制台" />
 
-### 保护控制台
+### 保护控制台 [#cloudflare-access]
 
 为你的 SwB 主机名[创建一个 Access 应用](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)。把策略操作设为 **Allow**。在 **Include** → **Emails** 下填你的电子邮件地址。
 
@@ -83,7 +87,9 @@ auth:
 
 再次运行 `docker compose --profile tunnel up -d`，让设置生效。
 
-### 受信任的代理
+<span id="受信任的代理" />
+
+### 受信任的代理 [#trusted-proxies]
 
 反向代理把请求转发给 SwB。在 `config/switchboard.yaml` 的 `trusted_proxies` 中添加代理的地址或专用网络。网段用 CIDR 格式书写，例如 `192.0.2.0/24`。
 

@@ -5,7 +5,9 @@ description: Ejecuta SwB en tu ordenador o en un servidor.
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
-## Ejecutar en tu ordenador
+<span id="ejecutar-en-tu-ordenador" />
+
+## Ejecutar en tu ordenador [#run-on-your-computer]
 
 Sigue [Instalación](/es/docs/install). Abre el enlace de inicio de sesión de un solo uso que SwB muestra en el primer arranque local. Para obtener un enlace nuevo, ejecuta `swb login-link`. El prompt de despliegue también sirve para la configuración local.
 
@@ -55,7 +57,9 @@ Sigue la [guía de configuración de Cloudflare](/es/docs/cloudflare) para confi
 
 Usa una sola instancia de SwB con un disco persistente montado en `/data`. Consulta la [guía de despliegue](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy) para las plantillas de Railway, Render y Fly.io y el script de Koyeb.
 
-### Despliegue con un clic
+<span id="despliegue-con-un-clic" />
+
+### Despliegue con un clic [#one-click-deploy]
 
 <DeployProviders lang="es" />
 
@@ -68,6 +72,10 @@ Ejecuta `sh deploy/fly.sh my-swb` desde la carpeta de SwB. Cambia `my-swb` por u
 Abre la página de inicio de sesión de tu app. Copia `SWB_SETUP_CODE` de `.env.swb-setup-fly-my-swb` en tu copia local. Escríbelo en **Setup code**. Borra el archivo después de iniciar sesión.
 
 Consulta el [plan Free de Fly.io](https://docs.fly.io/about/free-plan) y las [tarifas actuales](https://fly.io/docs/about/pricing/) para los detalles de facturación.
+
+### Render [#render]
+
+[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
 
 ### Railway [#railway]
 

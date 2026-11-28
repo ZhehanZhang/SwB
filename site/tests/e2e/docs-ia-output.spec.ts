@@ -2,7 +2,12 @@ import { expect, test } from '@playwright/test';
 import { locales, localize } from '../../lib/i18n';
 
 const site = 'https://swb.one';
-const movedPaths = ['/docs/deploy', '/docs/cloudflare', '/docs/operate'];
+const bookmarks = {
+  '/docs/deploy': ['run-on-your-computer', 'docker-compose', 'cloudflare-tunnel', 'one-click-deploy', 'fly', 'render', 'railway'],
+  '/docs/cloudflare': ['quick-tunnel', 'named-tunnel', 'trusted-proxies', 'cloudflare-access'],
+  '/docs/operate': ['backups-and-upgrades', 'export-memory'],
+};
+const movedPaths = Object.keys(bookmarks);
 const retiredPath = /\/docs\/(?:self-hosting|setup\/cloudflare)(?=[#?)\s<]|\.mdx?\b|$)/;
 
 test('the sitemap and llms index advertise the new routes in every locale', async ({ request }) => {
@@ -22,6 +27,16 @@ test('the sitemap and llms index advertise the new routes in every locale', asyn
 });
 
 for (const locale of locales) {
+  test(`docs headings expose stable bookmarks in ${locale}`, async ({ page }) => {
+    for (const [path, ids] of Object.entries(bookmarks)) {
+      const url = localize(locale, path);
+      await page.goto(url);
+      for (const id of ids) {
+        await expect(page.locator(`[id="${id}"]`), `${url}#${id}`).toHaveRole('heading');
+      }
+    }
+  });
+
   test(`Markdown and llms-full serve the new routes in ${locale}`, async ({ request }) => {
     const response = await request.get(localize(locale, '/llms-full.txt'));
     expect(response.ok()).toBe(true);
@@ -38,3 +53,10 @@ for (const locale of locales) {
     }
   });
 }
+
+test('the previous Cloudflare console bookmarks still resolve', async ({ page }) => {
+  await page.goto('/docs/cloudflare#protect-the-console');
+  await expect(page.locator('span[id="protect-the-console"]')).toHaveCount(1);
+  await page.goto('/es/docs/cloudflare#proteger-la-consola');
+  await expect(page.locator('span[id="proteger-la-consola"]')).toHaveCount(1);
+});

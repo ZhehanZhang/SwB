@@ -5,7 +5,7 @@ description: Nutzen Sie Cloudflare Tunnel für eine öffentliche SwB-Adresse und
 
 Cloudflare Tunnel gibt SwB eine feste öffentliche HTTPS-Adresse. Ein **Tunnel** verbindet Ihren Server mit Cloudflare. Cloudflare Access beschränkt die Konsole von SwB auf Ihr Konto.
 
-## Quick Tunnel
+## Quick Tunnel [#quick-tunnel]
 
 Mit einem Quick Tunnel testen Sie SwB unter einer temporären Adresse. Führen Sie diesen Befehl auf dem Host mit `cloudflared` aus, dem Programm, das SwB mit Cloudflare verbindet.
 
@@ -15,7 +15,9 @@ cloudflared tunnel --url http://localhost:8870
 
 Setzen Sie `SWB_PUBLIC_URL` auf die HTTPS-Adresse aus dem Terminal. Wenn Ihre Konfiguration `public_url` enthält, aktualisieren Sie diese Einstellung ebenfalls. Starten Sie SwB neu. Die Adresse ändert sich bei jedem Start des Tunnels. OAuth-Anmeldungen und Passkeys sind an diese Adresse gebunden. Für eine dauerhafte Adresse verwenden Sie einen benannten Tunnel.
 
-## Benannter Tunnel
+<span id="benannter-tunnel" />
+
+## Benannter Tunnel [#named-tunnel]
 
 Verwenden Sie ein kostenloses Cloudflare-Konto mit Ihrer Domain.
 
@@ -39,9 +41,9 @@ Für einen Tunnel auf dem SwB-Host setzen Sie seine Dienstadresse auf `http://lo
 
 Wählen Sie **Continue** aus, sobald der Connector in Cloudflare erscheint.
 
-<span id="cloudflare-access" />
+<span id="konsole-schützen" />
 
-### Konsole schützen
+### Konsole schützen [#cloudflare-access]
 
 [Erstellen Sie eine Access-Anwendung](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) für Ihren SwB-Hostnamen. Setzen Sie die Aktion der Richtlinie auf **Allow**. Geben Sie unter **Include** → **Emails** Ihre E-Mail-Adresse ein.
 
@@ -81,7 +83,9 @@ auth:
 
 Führen Sie `docker compose --profile tunnel up -d` erneut aus, um die Einstellungen zu übernehmen.
 
-### Vertrauenswürdige Proxys
+<span id="vertrauenswürdige-proxys" />
+
+### Vertrauenswürdige Proxys [#trusted-proxies]
 
 Ein Reverse Proxy leitet Anfragen an SwB weiter. Tragen Sie die Adresse oder das dedizierte Netzwerk des Proxys in `trusted_proxies` in `config/switchboard.yaml` ein. Schreiben Sie Netzbereiche in CIDR-Notation, zum Beispiel `192.0.2.0/24`.
 

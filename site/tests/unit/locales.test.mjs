@@ -57,11 +57,19 @@ test('locale sidebars keep the English pages and section breaks in order', () =>
   }
 });
 
-test('all Deploy pages keep the bookmark anchors', () => {
+test('Deploy, Operate, and Cloudflare pages pin their bookmark anchors', () => {
+  const bookmarks = {
+    deploy: ['run-on-your-computer', 'docker-compose', 'cloudflare-tunnel', 'one-click-deploy', 'fly', 'render', 'railway'],
+    operate: ['backups-and-upgrades', 'export-memory'],
+    cloudflare: ['quick-tunnel', 'named-tunnel', 'trusted-proxies', 'cloudflare-access'],
+  };
   for (const lang of locales) {
-    const deploy = anchors(read(lang, 'deploy.mdx'));
-    for (const anchor of ['docker-compose', 'cloudflare-tunnel', 'railway', 'fly']) {
-      assert.ok(deploy.has(anchor), `${lang}/deploy.mdx is missing #${anchor}`);
+    for (const [name, ids] of Object.entries(bookmarks)) {
+      const file = `${name}.mdx`;
+      const pinned = [...prose(read(lang, file)).matchAll(/^#{1,6}\s+.+ \[#([^\]]+)\]$/gm)].map(([, id]) => id);
+      for (const id of ids) {
+        assert.equal(pinned.filter((anchor) => anchor === id).length, 1, `${lang}/${file} must pin #${id} once`);
+      }
     }
   }
 });

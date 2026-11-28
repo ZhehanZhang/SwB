@@ -43,6 +43,14 @@ export function SwbAddressProvider({ children }: { children: ReactNode }) {
       if (start && url.searchParams.has('url')) url.searchParams.delete('url');
       history.replaceState(history.state, '', url);
       saveAddress(shared);
+      if (url.hash) {
+        requestAnimationFrame(() => {
+          if (location.href !== url.href) return;
+          let id = url.hash.slice(1);
+          try { id = decodeURIComponent(id); } catch {}
+          document.getElementById(id)?.scrollIntoView({ behavior: 'instant', block: 'start' });
+        });
+      }
       return;
     }
     if (start && !url.searchParams.has('swb') && !/(?:^#|&)swb=/.test(url.hash)) {

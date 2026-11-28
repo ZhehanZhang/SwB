@@ -32,7 +32,8 @@ def doc_link(path: str, public_url: str | None) -> str:
     except ValueError:
         return link
     origin = f"{url.scheme}://{url.netloc}"
-    return f'{link}#swb={quote(origin, safe="")}'
+    separator = "&" if "#" in link else "#"
+    return f'{link}{separator}swb={quote(origin, safe="")}'
 
 
 def rewrite_doc_links(text: str, public_url: str | None) -> str:

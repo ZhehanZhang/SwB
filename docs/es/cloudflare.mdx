@@ -5,7 +5,9 @@ description: Usa Cloudflare Tunnel para tener una dirección pública de SwB y C
 
 Cloudflare Tunnel da a SwB una dirección HTTPS pública fija. Un **túnel** conecta tu servidor con Cloudflare. Cloudflare Access limita la consola de SwB a tu cuenta.
 
-## Túnel rápido
+<span id="túnel-rápido" />
+
+## Túnel rápido [#quick-tunnel]
 
 Usa un túnel rápido para probar SwB en una dirección temporal. Ejecuta este comando en el host con `cloudflared`, el programa que conecta SwB con Cloudflare.
 
@@ -15,7 +17,9 @@ cloudflared tunnel --url http://localhost:8870
 
 Asigna a `SWB_PUBLIC_URL` la dirección HTTPS que aparece en la terminal. Si tu configuración contiene `public_url`, actualiza también ese ajuste. Reinicia SwB. La dirección cambia cada vez que inicias el túnel. Los inicios de sesión OAuth y las llaves de acceso usan esa dirección. Usa un túnel con nombre para tener una dirección permanente.
 
-## Túnel con nombre
+<span id="túnel-con-nombre" />
+
+## Túnel con nombre [#named-tunnel]
 
 Usa una cuenta gratuita de Cloudflare con tu dominio.
 
@@ -39,9 +43,9 @@ Para un túnel en el host de SwB, apunta su dirección de servicio a `http://loc
 
 Selecciona **Continue** cuando el conector aparezca en Cloudflare.
 
-<span id="cloudflare-access" />
+<span id="proteger-la-consola" />
 
-### Proteger la consola
+### Proteger la consola [#cloudflare-access]
 
 [Crea una aplicación de Access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/) para el nombre de host de SwB. Elige **Allow** como acción de la política. En **Include** → **Emails**, escribe tu dirección de correo.
 
@@ -81,7 +85,9 @@ auth:
 
 Ejecuta `docker compose --profile tunnel up -d` otra vez para aplicar los ajustes.
 
-### Proxies de confianza
+<span id="proxies-de-confianza" />
+
+### Proxies de confianza [#trusted-proxies]
 
 Un proxy inverso reenvía las peticiones a SwB. Añade la dirección del proxy o su red dedicada a `trusted_proxies` en `config/switchboard.yaml`. Escribe los rangos de red en formato CIDR, como `192.0.2.0/24`.
 

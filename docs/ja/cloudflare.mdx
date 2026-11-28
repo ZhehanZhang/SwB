@@ -5,7 +5,9 @@ description: Cloudflare Tunnel で SwB の公開アドレスを用意し、Cloud
 
 Cloudflare Tunnel は、SwB に固定の公開 HTTPS アドレスを与えます。**トンネル**は、サーバーを Cloudflare につなぎます。Cloudflare Access は、SwB のコンソールへのアクセスを自分のアカウントだけに制限します。
 
-## クイックトンネル
+<span id="クイックトンネル" />
+
+## クイックトンネル [#quick-tunnel]
 
 一時的なアドレスで SwB を試すときは、クイックトンネルを使ってください。`cloudflared` があるホストで、このコマンドを実行してください。`cloudflared` は、SwB を Cloudflare につなぐプログラムです。
 
@@ -15,7 +17,9 @@ cloudflared tunnel --url http://localhost:8870
 
 ターミナルに表示される HTTPS アドレスを `SWB_PUBLIC_URL` に設定してください。設定ファイルに `public_url` がある場合は、その設定も更新してください。SwB を再起動してください。アドレスは、トンネルを起動するたびに変わります。OAuth のサインインとパスキーは、そのアドレスに結び付きます。固定のアドレスには、名前付きトンネルを使ってください。
 
-## 名前付きトンネル
+<span id="名前付きトンネル" />
+
+## 名前付きトンネル [#named-tunnel]
 
 自分のドメインを登録した無料の Cloudflare アカウントを使ってください。
 
@@ -39,9 +43,9 @@ SwB のホスト上のトンネルでは、サービスのアドレスを `http:
 
 Cloudflare にコネクターが表示されたら、**Continue** を選択してください。
 
-<span id="cloudflare-access" />
+<span id="コンソールを保護する" />
 
-### コンソールを保護する
+### コンソールを保護する [#cloudflare-access]
 
 SwB のホスト名に対して [Access アプリケーションを作成](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)してください。ポリシーのアクションを **Allow** にしてください。**Include** → **Emails** に、自分のメールアドレスを入力してください。
 
@@ -81,7 +85,9 @@ auth:
 
 設定を反映するために、もう一度 `docker compose --profile tunnel up -d` を実行してください。
 
-### 信頼済みプロキシ
+<span id="信頼済みプロキシ" />
+
+### 信頼済みプロキシ [#trusted-proxies]
 
 リバースプロキシは、リクエストを SwB に渡すサーバーです。`config/switchboard.yaml` の `trusted_proxies` に、プロキシのアドレスか専用のネットワークを追加してください。ネットワークの範囲は、`192.0.2.0/24` のような CIDR 形式で書いてください。
 
