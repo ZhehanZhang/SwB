@@ -64,7 +64,7 @@ test('uses the Muse OAuth connector and reads its mailbox in chat', () => {
   assert.ok(prompt.includes('https://agent.meta.ai/api/hatch/oauth/callback'));
   assert.ok(prompt.includes('send(to="agent:muse"'));
   assert.ok(prompt.includes('At the start of each chat, call inbox'));
-  assert.ok(prompt.includes('connect(what="muse", choose={"gadget": true})'));
+  assert.ok(prompt.includes('connect(what="muse")'));
   assert.ok(!prompt.includes('switchboard.message.created'));
 });
 

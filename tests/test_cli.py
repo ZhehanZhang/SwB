@@ -424,22 +424,14 @@ def test_status_lists_next_steps_and_redacts_owner_key(tmp_path, monkeypatch, ca
     assert out == "Status: degraded\nNext steps:\n  - Configure OAuth.\n  - Echoed [redacted]\n"
 
 
-@pytest.mark.parametrize(("kind", "value"), [("muse", "true"), ("grok", "url")])
-def test_connect_passes_replacement_as_a_string(tmp_path, monkeypatch, kind, value):
+@pytest.mark.parametrize("value", ["true", "url"])
+def test_connect_passes_replacement_as_a_string(tmp_path, monkeypatch, value):
     key = "fixture-owner-key-not-a-secret"
     monkeypatch.setenv(cli.OWNER_KEY, key)
-    call = AsyncMock(return_value={"what": kind, "next": []})
+    call = AsyncMock(return_value={"what": "grok", "next": []})
     monkeypatch.setattr(cli, "_call", call)
-    cli.main(["connect", kind, "--choose", f"replace={value}", "--dir", str(tmp_path), "--url", "https://swb.example"])
-    call.assert_awaited_once_with("https://swb.example/mcp", key, "connect", {"what": kind, "choose": {"replace": value}})
-
-
-def test_cli_rejects_removed_muse_command(capsys):
-    command = "-".join(("muse", "bridge"))
-    with pytest.raises(SystemExit) as error:
-        cli.main([command])
-    assert error.value.code == 2
-    assert f"invalid choice: {command!r}" in capsys.readouterr().err
+    cli.main(["connect", "grok", "--choose", f"replace={value}", "--dir", str(tmp_path), "--url", "https://swb.example"])
+    call.assert_awaited_once_with("https://swb.example/mcp", key, "connect", {"what": "grok", "choose": {"replace": value}})
 
 
 def test_remote_http_is_rejected_without_sending_owner_key(tmp_path, monkeypatch, capsys):

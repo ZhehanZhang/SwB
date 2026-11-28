@@ -20,7 +20,6 @@
   "block:grok-routine": "docs/en/blocks/grok.mdx",
   "block:local": "docs/en/blocks/local-sessions.mdx",
   "block:mcp": "docs/en/connect.mdx",
-  "block:muse": "docs/en/setup/muse.mdx",
   "block:slack": "docs/en/blocks/slack.mdx",
   "block:telegram": "docs/en/blocks/telegram.mdx",
   "block:webhook": "docs/en/blocks/webhooks.mdx",

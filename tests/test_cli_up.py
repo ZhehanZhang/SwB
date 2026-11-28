@@ -102,7 +102,7 @@ def test_generated_config_keeps_discovering_env_blocks(clean_env, tmp_path, monk
     capsys.readouterr()
 
 
-def test_documented_github_block_and_generated_muse_block_keep_mcp(clean_env, tmp_path, capsys):
+def test_documented_github_block_keeps_mcp(clean_env, tmp_path, capsys):
     __main__.cli_main(["init"])
     capsys.readouterr()
     config = tmp_path / cli.CONFIG
@@ -124,21 +124,11 @@ def test_documented_github_block_and_generated_muse_block_keep_mcp(clean_env, tm
     from switchboard.app import create_app
     from switchboard.core import Switchboard
 
-    def start():
-        return TestClient(create_app(Switchboard(config, data_dir=tmp_path / "data", env=env,
-                                                 loopback_origin="http://127.0.0.1:8870")))
-
-    with start() as client:
+    core = Switchboard(config, data_dir=tmp_path / "data", env=env,
+                       loopback_origin="http://127.0.0.1:8870")
+    with TestClient(create_app(core)) as client:
         status = payload(call(client, key, "switchboard_status"))
         assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "webhook", "github"}
-        steps = payload(call(client, key, "connect", {"what": "muse", "choose": {"gadget": True}}))["next"]
-        snippet = next(step["snippet"] for step in steps if "snippet" in step)
-        assert yaml.safe_load(snippet) == {"muse": {"use": "muse", "enabled": True}}
-    with config.open("a") as file:
-        file.write(f"{snippet}\n")
-    with start() as client:
-        status = payload(call(client, key, "switchboard_status"))
-        assert status["mcp_enabled"] and set(status["blocks"]) == {"mcp", "webhook", "github", "muse"}
 
 
 @pytest.mark.parametrize("port_name", ["PORT", "SWB_PORT"])
