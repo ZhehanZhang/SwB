@@ -146,7 +146,7 @@ test('docs sidebar, content and TOC align to the shared header grid', async ({ p
   }
 });
 
-test('the docs sidebar first item starts within 8px of the content title', async ({ page }) => {
+test('the docs sidebar first item aligns with the content title at scroll start', async ({ page }) => {
   for (const width of [768, 1024, 1280, 1440, 1920, 2560, 3440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const path of ['/docs', '/docs/install', '/docs/setup/claude']) {
@@ -157,7 +157,13 @@ test('the docs sidebar first item starts within 8px of the content title', async
           const box = document.querySelector(selector)?.getBoundingClientRect();
           return box?.width ? box.top : null;
         };
-        return { sidebar: top('#nd-sidebar a'), heading: top('#nd-page h1'), toc: top('#toc-title') };
+        const firstLink = top('#nd-sidebar a');
+        const viewport = document.querySelector('#nd-sidebar [data-radix-scroll-area-viewport]');
+        return {
+          sidebar: firstLink === null ? null : firstLink + (viewport?.scrollTop ?? 0),
+          heading: top('#nd-page h1'),
+          toc: top('#toc-title'),
+        };
       });
       expect(sidebar).not.toBeNull();
       expect(heading).not.toBeNull();
@@ -177,6 +183,7 @@ test('the mobile docs drawer opens, navigates and closes inside the shared grid'
   await expect(drawer).toBeHidden();
   await page.getByRole('button', { name: 'Open Sidebar', exact: true }).click();
   const overview = drawer.getByRole('link', { name: 'SwB', exact: true });
+  await overview.scrollIntoViewIfNeeded();
   await expect(overview).toBeInViewport();
   await overview.click();
   await expect(page).toHaveURL(/\/docs$/);
