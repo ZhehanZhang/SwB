@@ -502,7 +502,7 @@ test('landing shows supported deployment links and six usage examples in each lo
     const deploy = page.locator('#landing-deploy').locator('..');
     const commands = deploy.locator('code');
     await expect(commands.first()).toHaveText('uvx swb.one up');
-    await expect(commands.nth(1)).toHaveText('pipx install swb.one\nswb up');
+    await expect(commands.nth(1)).toHaveText('pipx install swb.one && swb up');
     await expect(commands.last()).toContainText('git clone -b release/1.0');
     expect(await commands.last().textContent()).toContain('\\\n');
     await expect(commands.last()).toContainText('docker compose up');
@@ -567,7 +567,7 @@ test('deploy columns stack below 900px and align each row on wider screens', asy
           const { top, bottom } = element.getBoundingClientRect();
           return { top, bottom };
         };
-        const uvx = node.querySelector('[data-deploy-primary] pre')!;
+        const uvx = blocks[0].querySelector('[data-deploy-primary] pre')!;
         const compose = blocks[1].querySelector('[data-deploy-primary] pre')!;
         const composeStyle = getComputedStyle(compose);
         const composeChrome = [composeStyle.paddingBlockStart, composeStyle.paddingBlockEnd,
@@ -582,7 +582,7 @@ test('deploy columns stack below 900px and align each row on wider screens', asy
           options: blocks.map(edges),
           intro: blocks.map((block) => edges(block.querySelector('p')!)),
           primary: blocks.map((block) => edges(block.querySelector('[data-deploy-primary] > *')!)),
-          secondary: blocks.flatMap((block) => [...block.querySelectorAll('[data-deploy-secondary] a')].slice(0, 1).map(edges)),
+          secondary: blocks.map((block) => edges(block.querySelector('[data-deploy-secondary] > *')!)),
           internalGaps: blocks.map((block) => [...block.children]
             .map(edges).slice(1).map(({ top }, index) => top - edges(block.children[index]).bottom)),
           composeHeight: compose.getBoundingClientRect().height,

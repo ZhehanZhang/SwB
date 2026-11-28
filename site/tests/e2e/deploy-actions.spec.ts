@@ -64,20 +64,24 @@ test('the landing Deploy guide row links to the current page in every locale', a
 });
 
 test('landing shows uvx and pipx together with every deploy column the same height', async ({ page }) => {
-  for (const locale of ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const) {
+  for (const width of [1440, 1024]) for (const locale of ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const) {
+    if (page.viewportSize()!.width >= 900) await page.setViewportSize({ width, height: 900 });
     await page.goto(localize(locale, '/'));
     await page.evaluate(() => document.fonts.ready);
     const grid = page.locator('[data-deploy-grid]');
     await expect(grid.locator('summary, details, [role="tab"]')).toHaveCount(0);
-    await expect(grid.locator('[data-deploy-local] code')).toHaveText(['uvx swb.one up', 'pipx install swb.one\nswb up']);
-    await expect(grid.locator('[data-deploy-local]').getByRole('button', { name: /./ })).toHaveCount(2);
+    const local = grid.locator('[data-deploy-option]').first();
+    await expect(local.locator('code')).toHaveText(['uvx swb.one up', 'pipx install swb.one && swb up']);
+    await expect(local.getByRole('button', { name: /./ })).toHaveCount(2);
     if (page.viewportSize()!.width < 900) continue;
     const layout = await grid.evaluate((node) => ({
       options: [...node.querySelectorAll('[data-deploy-option]')].map((option) => option.getBoundingClientRect().height),
-      primary: [...node.querySelectorAll('[data-deploy-primary] > *')].map((option) => option.getBoundingClientRect().height),
+      primary: [...node.querySelectorAll('[data-deploy-primary] > *')].map((option) => { const { top, bottom } = option.getBoundingClientRect(); return `${top} ${bottom}`; }),
+      secondary: [...node.querySelectorAll('[data-deploy-secondary] > *')].map((option) => { const { top, bottom } = option.getBoundingClientRect(); return `${top} ${bottom}`; }),
     }));
     expect(new Set(layout.options).size, locale).toBe(1);
     expect(new Set(layout.primary).size, locale).toBe(1);
+    expect(new Set(layout.secondary).size, locale).toBe(1);
   }
 });
 
