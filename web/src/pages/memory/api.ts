@@ -50,11 +50,15 @@ export type BackupConfig = {
 
 export type BackupStatus = BackupConfig & {
   credential_saved: boolean
+  credential_claimed_at?: number | null
+  last_attempt_at?: string | null
   last_success_at: string | null
   last_commit: string | null
   last_error: string | null
   git_available: boolean
 }
+
+type BackupClaim = BackupStatus & { link: string; link_expires_at: string }
 
 const archiveCounts = ["created", "updated", "unchanged", "conflict", "skipped"] as const
 export type ArchiveResult = Record<typeof archiveCounts[number], number>
@@ -115,6 +119,8 @@ function isBackupStatus(value: unknown): value is BackupStatus {
     && typeof value.author_email === "string"
     && typeof value.enabled === "boolean"
     && typeof value.credential_saved === "boolean"
+    && (value.credential_claimed_at == null || (typeof value.credential_claimed_at === "number" && Number.isFinite(value.credential_claimed_at)))
+    && (value.last_attempt_at === undefined || isDate(value.last_attempt_at))
     && isDate(value.last_success_at)
     && isNullableText(value.last_commit)
     && isNullableText(value.last_error)
@@ -217,8 +223,14 @@ export function fetchBackup(signal: AbortSignal) {
   return requestJson("/api/memory/backup", isBackupStatus, { signal })
 }
 
-export function saveBackup(config: BackupConfig, csrf: string, credential?: string) {
-  return requestJson("/api/memory/backup", isBackupStatus, jsonPost(csrf, { ...config, credential }))
+export function saveBackup(config: BackupConfig, csrf: string) {
+  return requestJson("/api/memory/backup", isBackupStatus, jsonPost(csrf, config))
+}
+
+export function claimBackupCredential(config: Pick<BackupConfig, "remote"> & Partial<Pick<BackupConfig, "branch" | "enabled">>, csrf: string) {
+  return requestJson("/api/memory/backup", (value): value is BackupClaim => isObject(value)
+    && typeof value.link === "string" && typeof value.link_expires_at === "string"
+    && isDate(value.link_expires_at) && isBackupStatus(value), jsonPost(csrf, { ...config, claim: true }))
 }
 
 export function backupNow(csrf: string) {

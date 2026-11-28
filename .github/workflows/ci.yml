@@ -53,7 +53,7 @@ jobs:
       - run: npm run build --prefix web
       - run: bash web/tests/run-display-tests.sh
       - run: bash web/tests/run-owner-auth-tests.sh
-      - run: node --test tests/positive-copy.test.mjs tests/theme.test.mjs
+      - run: node --test tests/positive-copy.test.mjs tests/theme.test.mjs tests/settings-docs.test.mjs
         working-directory: web
       - run: npx playwright install --with-deps chromium webkit
         working-directory: web
