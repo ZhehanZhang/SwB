@@ -5,6 +5,10 @@ import { exchangeScenes } from '../../lib/exchange-copy';
 test('six demo windows keep the section and every window fixed over ten seconds', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(observeLayoutShifts);
+  await page.route('**/_next/static/media/jetbrains_mono*.woff2', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    await route.continue();
+  });
   await page.goto('/');
   await page.evaluate(() => document.fonts.ready);
   const demo = page.locator('#landing-demos').locator('..');

@@ -101,6 +101,10 @@ test('browser Back leaves the flow and Forward restores the replaced URL', async
 
 test('query preselect has zero CLS even with delayed hydration', async ({ page }) => {
   await page.addInitScript(observeLayoutShifts);
+  await page.route('**/_next/static/media/inter_latin*.woff2', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    await route.continue();
+  });
   await page.route('**/_next/static/chunks/*.js', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 250));
     await route.continue();
