@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -62,6 +63,7 @@ async def test_git_backup_restore_and_no_empty_commit(make, repo, tmp_path, capy
     branch = "refs/heads/backup/memory"
     assert git(repo, "for-each-ref", "--format=%(refname)") == branch
     assert status["last_error"] is None and status["last_success_at"]
+    assert status["last_attempt_at"] == status["last_success_at"]
     commit = git(repo, "rev-parse", branch)
     assert status["last_commit"] == commit and status["pending_changes"] == 0
     assert git(repo, "show", "-s", "--format=%an <%ae> %cn <%ce>", branch) == (
@@ -112,6 +114,7 @@ async def test_push_failure_retries_and_now_resets_backoff(make, repo):
     write(core, body="Next")
     failed = worker.run_once()
     assert failed["last_error"] and failed["next_retry_at"] and failed["pending_changes"] == 1
+    assert failed["last_attempt_at"] and failed["last_success_at"]
     assert worker._settings()["next_retry_at"] == core.clock() + 60
     assert worker.run_once()["last_error"]
     assert worker._settings()["next_retry_at"] == core.clock() + 300
@@ -209,6 +212,28 @@ def test_backup_console_routes_use_owner_csrf_and_never_return_creds(make):
     assert core.claims.secret(MEMORY_BACKUP_CREDENTIAL) == token
     assert client.get("/api/memory/backup", headers=OWNER).json() == configured.json()
     assert client.post("/api/memory/backup/now", headers=headers).json() == {"error": "Enable Git backup first."}
+
+
+def test_backup_console_claim_uses_existing_one_time_credential_page(make):
+    core, client = make()
+    csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
+    headers = {**OWNER, "Origin": PUBLIC, "X-CSRF-Token": csrf}
+    response = client.post("/api/memory/backup", headers=headers,
+                           json={"remote": "https://example.test/repo", "claim": True})
+    assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
+    claim = response.json()
+    assert claim["link_expires_at"] and not claim["credential_saved"] and not claim["enabled"]
+    assert "link" not in client.get("/api/memory/backup", headers=OWNER).json()
+    path = urlsplit(claim["link"]).path
+    assert client.get(path, headers=OWNER).status_code == 200
+    token = "fixture-claim-credential"
+    saved = client.post(path, headers=headers, data={"csrf": csrf, "token": token})
+    assert saved.status_code == 200 and token not in saved.text
+    assert client.get(path, headers=OWNER).status_code == 410
+    status = client.get("/api/memory/backup", headers=OWNER)
+    assert status.json()["credential_saved"] and status.json()["credential_claimed_at"]
+    assert token not in status.text and not status.json()["enabled"]
+    assert core.claims.secret(MEMORY_BACKUP_CREDENTIAL) == token
 
 
 @pytest.mark.parametrize("remote", ["file:///tmp/backup.git", "git@example.test:-u"])

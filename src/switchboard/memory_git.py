@@ -147,7 +147,8 @@ class MemoryGit:
         self.core = core
         self.root = core.data_dir.resolve() / "memory-git"
         self.defaults = {"remote": "", "branch": "main", "author_name": "SwB", "author_email": "swb@localhost", "enabled": False,
-                         "last_success_at": None, "last_commit": None, "last_error": None, "next_retry_at": None,
+                         "last_attempt_at": None, "last_success_at": None, "last_commit": None, "last_error": None,
+                         "credential_claimed_at": None, "next_retry_at": None,
                          "failures": 0, "last_rev": 0, "local_rev": 0}
         self._wake = threading.Condition()
         self._run_lock = threading.Lock()
@@ -221,14 +222,15 @@ class MemoryGit:
                 self.core.store.x("DELETE FROM claim_links WHERE name = ?", (MEMORY_BACKUP_CREDENTIAL,))
                 self.core.claims.save_secret(MEMORY_BACKUP_CREDENTIAL, credential)
             if remote != before["remote"] or branch != before["branch"]:
-                state.update(last_rev=0, local_rev=0, last_success_at=None, last_commit=None)
-            state.update(last_error=None, next_retry_at=None, failures=0)
+                state.update(last_rev=0, local_rev=0, last_attempt_at=None, last_success_at=None, last_commit=None, last_error=None)
+            state.update(next_retry_at=None, failures=0)
             self._save(principal.source, **state)
             out = self.status()
             if claim and kind in ("https", "ssh"):
                 out["link"] = self.core.claims.mint(MEMORY_BACKUP_CREDENTIAL, self.core.base_url,
                                                     kind="pem" if kind == "ssh" else "token",
                                                     label="Git SSH private key" if kind == "ssh" else "Git access token")
+                out["link_expires_at"] = iso(self.core.claims.inspect_details(out["link"].rsplit("/", 1)[-1])["expires_at"])
         self.changed()
         self.core.audit_memory(principal, "memory_backup_configure", "git")
         return out
@@ -241,9 +243,10 @@ class MemoryGit:
                                                (MEMORY_BACKUP_CREDENTIAL,)) is not None
         return {"enabled": opts["enabled"], "remote": _public_remote(opts["remote"]), "branch": opts["branch"],
                 "author_name": opts["author_name"], "author_email": opts["author_email"], "last_success_at": iso(opts["last_success_at"]),
-                "last_commit": opts["last_commit"], "last_error": (opts["last_error"] if available else "Install git to use backup."),
+                "last_attempt_at": iso(opts["last_attempt_at"]), "last_commit": opts["last_commit"],
+                "last_error": (opts["last_error"] if available else "Install git to use backup."),
                 "pending_changes": pending, "next_retry_at": iso(opts["next_retry_at"]), "git_available": available,
-                "credential_saved": credential_saved}
+                "credential_saved": credential_saved, "credential_claimed_at": opts["credential_claimed_at"]}
 
     def changed(self) -> None:
         with self._wake:
@@ -256,14 +259,17 @@ class MemoryGit:
         require_owner(principal)
         if not self._settings()["enabled"]:
             raise BackupError("Enable Git backup first.")
-        self.credential_saved(principal.source)
+        self._schedule_now(principal.source)
         self.core.audit_memory(principal, "memory_backup_now", "git")
         return self.status()
 
-    def credential_saved(self, actor: str = "memory-git") -> None:
+    def credential_saved(self) -> None:
+        self._schedule_now("memory-git", credential_claimed_at=self.core.clock())
+
+    def _schedule_now(self, actor: str, **fields: Any) -> None:
         with self._wake:
             self._immediate = True
-            self._save(actor, next_retry_at=None, failures=0)
+            self._save(actor, next_retry_at=None, failures=0, **fields)
             self._wake.notify()
 
     def start(self) -> None:
@@ -390,7 +396,8 @@ class MemoryGit:
         head = git.run(self.root, "rev-parse", "HEAD", read=True).stdout.decode().strip()
         self._save("memory-git", local_rev=snap.last_rev)
         git.run(self.root, "push", "--", opts["remote"], f"HEAD:{branch}")
-        self._save("memory-git", last_rev=snap.last_rev, last_commit=head, last_success_at=self.core.clock(),
+        completed_at = self.core.clock()
+        self._save("memory-git", last_rev=snap.last_rev, last_commit=head, last_attempt_at=completed_at, last_success_at=completed_at,
                    last_error=None, failures=0, next_retry_at=None)
 
     def run_once(self) -> dict[str, Any]:
@@ -408,8 +415,9 @@ class MemoryGit:
                 if isinstance(e, InvalidToken):
                     error = "Save the Git backup credential again."
                 failures = opts["failures"] + 1
-                self._save("memory-git", last_error=error, failures=failures,
-                           next_retry_at=self.core.clock() + RETRY_S[min(failures - 1, len(RETRY_S) - 1)])
+                failed_at = self.core.clock()
+                self._save("memory-git", last_attempt_at=failed_at, last_error=error, failures=failures,
+                           next_retry_at=failed_at + RETRY_S[min(failures - 1, len(RETRY_S) - 1)])
                 self.core.audit.record(origin="system", source="memory-git", client="-", destination="memory", target="git",
                                        action="memory_backup_failed", outcome="error", detail=error)
             return self.status()

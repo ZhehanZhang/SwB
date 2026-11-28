@@ -20,6 +20,7 @@ class _BackupBody(_Body):
     author_email: str | None = None
     enabled: bool | None = None
     credential: str | None = None
+    claim: bool = False
 
 
 class _ImportOptions(_Body):
