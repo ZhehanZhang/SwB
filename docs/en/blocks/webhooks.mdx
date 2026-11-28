@@ -26,7 +26,7 @@ Paste the returned URL in the provider’s webhook settings. For this example, g
 
 A claim link opens the page where the owner saves the secret. Sign in to SwB as the owner. Then open the claim link. Save the secret there. SwB keeps the saved secret private.
 
-For `bearer`, `path`, `hmac-sha256` and `hmac-sha1`, use a random secret with at least 32 characters and 10 distinct characters.
+For `bearer`, `path`, `hmac-sha256` and `hmac-sha1`, use a random secret with at least 32 characters. Use at least 10 distinct characters.
 
 Set the [Cloudflare Access policy](/docs/setup/cloudflare#protect-the-console) for `/hooks/*` to **Bypass** if your SwB address uses Cloudflare Access.
 
@@ -97,11 +97,15 @@ Call `webhook_create` with `direction` set to `out` and a name.
 }
 ```
 
-Use a public HTTPS URL on port 443 by default. Set `allow_private` to `true` for HTTPS receivers on private networks or on ports other than 443.
+SwB requires a public HTTPS receiver on port 443 by default. It blocks private, loopback and link-local addresses, including link-local addresses for cloud instance data. Loopback addresses reach the SwB host. Link-local addresses reach only the local network.
 
-Use agent addresses like `agent:claude` in `senders` to grant access. By default, only the owner can send.
+The owner can set `allow_private` to `true` on that webhook to allow those addresses or other HTTPS ports.
 
-If a send returns a target error, ask the owner to check the target name and your access.
+SwB looks up the receiver's IP addresses once per delivery. It pins the connection to the first address from that lookup.
+
+By default, only the owner can send. A paired agent needs a `senders` grant to use a `webhook:out` target. Add an agent address such as `agent:claude` to `senders` to grant access to that webhook.
+
+For a caller other than the owner, SwB returns `No such target.` for a missing target or a target outside their grants. Ask the owner to check the target name and your access.
 
 Sign in to SwB as the owner. Then open the claim link. Save the receiver’s HTTPS URL and the signing secret. Share the same `whsec_` signing secret with the receiver through a private channel.
 
