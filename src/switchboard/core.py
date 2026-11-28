@@ -31,6 +31,7 @@ from .companions import Companions
 from .config import INSTANCE_DB, RETIRED_BLOCKS, Config, Instance, load_config
 from .connect import AGENT_RE, Connections
 from .env import env_value
+from .hook_wake import HookWake
 from .inbox import Inbox
 from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath, MemoryRefused, frame_entry,
                      missing_path)
@@ -107,6 +108,7 @@ class Switchboard:
         self.claims = Claims(self.store)
         self.memory_git = MemoryGit(self)
         self.companions = Companions(self.store, self.audit, self)
+        self.hook_wake = HookWake(self)
         self.store.x("CREATE TABLE IF NOT EXISTS conversation_turns (root TEXT PRIMARY KEY, turns INTEGER NOT NULL, paused_at REAL)")
         self.visibility = Visibility(self.cfg.visibility, self.store)
         self.auth = Auth(self.cfg, self.store, http=oauth_http, access_verifier=access_verifier, secret=self._secret(), agents=self.agents,

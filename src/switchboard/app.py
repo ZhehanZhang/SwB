@@ -25,6 +25,7 @@ from .config import REQUEST_BASE
 from .deployment import OWNER_KEY
 from .env import env_value
 from .guard import Guard, RateLimiter, audit_client_ip, client_ip, reject
+from .hook_wake import routes as hook_wake_routes
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
 from .sessions import Owner, login_redirect
@@ -592,6 +593,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),
             *companion_routes(core, limiter, HEARTBEAT_S),
+            *hook_wake_routes(core, limiter),
             pages.PageRoute("/pairing/code", connect_code, pages.PAIRING_TITLE, methods=["POST"]),
             pages.PageRoute("/routines/claim/{code}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
             pages.PageRoute("/routines/claim/owner/{registration}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),

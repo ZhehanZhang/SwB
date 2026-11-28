@@ -22,6 +22,7 @@ class Inbox:
         self.store = store
         self._cond: asyncio.Condition | None = None
         self.listeners: list[Callable[[str, int, str, str, dict[str, Any], float], None]] = []
+        self.cursor_listeners: list[Callable[[str], None]] = []
 
     def _condition(self) -> asyncio.Condition:
         if self._cond is None:
@@ -255,6 +256,13 @@ class Inbox:
             "INSERT INTO inbox_cursors(owner, handle, cursor) VALUES (?,?,?) ON CONFLICT(owner, handle) DO UPDATE SET cursor = MAX(cursor, excluded.cursor)",
             ((reader, handle, cursor) for handle, cursor in cursors.items()),
         ))
+        for listener in self.cursor_listeners:
+            listener(reader)
+
+    def ack(self, reader: str, cursor: int) -> int:
+        """Mark every item up to cursor as read for reader, capped at the newest item, and return the reader's position."""
+        self._advance(reader, {"*": min(cursor, self.head())})
+        return self._cursor(reader, None)
 
     @staticmethod
     def message_id(cursor: int) -> str:

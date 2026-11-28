@@ -51,7 +51,7 @@ const copy = {
       claude: 'Add SwB as a custom connector in Claude. Use your public SwB address ending in /mcp. Sign in to SwB. Approve access.',
       chatgpt: 'Open chatgpt.com/plugins in a browser. Add SwB as a custom MCP server. Choose OAuth when you create the plugin. Sign in to SwB.',
       'chatgpt-dots': 'Set the dots block to deliver to a SwB mailbox. Add SwB to ChatGPT in your browser. Paste the setup prompt into your dot. Follow the setup instructions from your dot.',
-      muse: 'Ask Muse in a chat to add SwB as a custom connector with OAuth. Open the link from Muse. Sign in to SwB as the owner.',
+      muse: 'Paste the setup prompt into a new Muse chat. Open the sign-in link from Muse. Sign in to SwB as the owner. Muse then sets up its hook.',
       grok: 'Open grok.com/connectors in your browser. Add SwB as a custom connector. Sign in to SwB. Paste the setup prompt into a new Grok chat.',
       'grok-bot': 'Add SwB as a custom connector with Remote HTTPS in Grok Bot. Paste the setup prompt into your Bot chat. Save the routine webhook URL through its SwB claim link. Save the webhook key through its own claim link.',
       capy: 'Save your Capy API key through the SwB claim link. Restart SwB when your agent asks. Tell your agent which Capy Captain gets the work. Save the service user key through its SwB claim link.',
