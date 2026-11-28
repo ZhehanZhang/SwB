@@ -1,46 +1,52 @@
 ---
 title: Muse
-description: 실시간 깨우기에는 Muse 가젯을 페어링하고, 도구를 쓰려면 커넥터를 추가합니다.
+description: Muse를 SwB에 연결하고 메시지가 오면 Muse를 깨웁니다.
 ---
 
-## Muse를 실시간으로 깨우기
+Muse는 사용자 지정 커넥터로 SwB에 연결합니다. 그다음 SwB 메시지가 도착하면 Muse 훅이 Muse를 시작합니다.
 
-SwB은 Muse 가젯 사용을 권장합니다. 가젯이 있으면 메시지가 도착할 때 Muse가 작업을 시작합니다. 가젯은 Muse 앱과 페어링하는 기기입니다.
+## Muse 설정
 
-[컴패니언](/ko/docs/companion)은 내 컴퓨터에서 실행하는 SwB 프로그램입니다. 페어링하는 동안 컴패니언이 Bluetooth로 가젯 역할을 합니다. 페어링한 뒤에는 SwB 서버가 Muse와의 연결을 계속 유지합니다. 페어링이 끝나면 컴패니언을 멈춰도 됩니다.
-
-SwB에 공개 HTTPS 주소를 설정하세요. 소유자 권한을 모두 가진 SwB 에이전트에 이 프롬프트를 붙여 넣으세요.
+SwB에 공개 HTTPS 주소를 설정하세요. 소유자 로그인을 켜세요. 새 Muse 채팅에 이 프롬프트를 붙여 넣으세요.
 
 <SetupPrompt name="muse" lang="ko" />
 
-에이전트에게 `connect(what="muse", choose={"gadget": true})` 호출을 요청하세요. 돌려받은 안내를 따르세요.
+프롬프트는 Muse에게 SwB을 사용자 지정 커넥터로 추가하라고 요청합니다. 커넥터를 추가하면 Muse가 MCP(Model Context Protocol)로 SwB 도구를 쓸 수 있습니다. Muse가 로그인 링크를 보냅니다. 연결을 승인하려면 소유자로 SwB에 로그인하세요. Muse는 `muse`라는 이름으로 SwB에 연결됩니다.
 
-[Muse SDK tokens 페이지](https://gadgets.muse.ai/settings/sdk-tokens)에서 개인 토큰을 만드세요. 에이전트가 준 일회용 SwB 등록 링크로 토큰을 저장하세요.
+그다음 Muse가 `muse_hook_setup`을 호출합니다. SwB은 비공개 깨우기 링크를 만들고 그 링크를 쓰는 훅 스크립트를 돌려줍니다. Muse는 스크립트를 `~/hooks/scripts/swb-wake.sh`에 저장하고 훅을 추가합니다. Muse는 스크립트를 한 번 시험 실행하고 결과를 보여 줍니다. 시험 실행은 스크립트만 확인합니다. 그다음 Muse가 훅을 켜고 테스트 메시지를 보냅니다. Muse가 채팅에서 테스트 메시지를 알려 주면 테스트가 끝납니다.
 
-휴대폰 가까이에 있는 Bluetooth 지원 Mac이나 Linux 컴퓨터를 사용하세요. macOS에서는 터미널을 사용하고, macOS가 요청하면 Bluetooth 접근을 허용하세요. Linux에서는 컴패니언에 BlueZ 접근 권한을 주세요. BlueZ는 Bluetooth를 담당하는 시스템 서비스입니다.
+## 훅의 동작
 
-이미 페어링된 컴패니언에 Muse를 추가하려면 먼저 `swb companion disconnect`를 실행하세요. [컴패니언 페어링 코드](/ko/docs/companion#기기-페어링)를 받으세요. 코드는 한 번만 쓸 수 있고 10분 뒤에 만료됩니다.
+Muse 훅은 Muse가 일정에 따라 실행하는 작은 스크립트입니다. SwB 스크립트는 5초마다 비공개 링크를 확인합니다. 확인은 매번 4초 안에 끝납니다.
 
-예시 주소를 내 SwB 주소로 바꾸세요. 컴퓨터에서 이 명령을 실행하세요.
+링크는 숫자 두 개를 줍니다. 하나는 Muse가 읽지 않은 SwB 메시지 수입니다. 다른 하나는 커서입니다. 커서는 읽지 않은 메시지 중 가장 최신 메시지의 번호입니다. 메시지 본문, 보낸 사람, 제목은 SwB에 남습니다.
 
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
+새 메시지가 기다리고 있으면 스크립트가 Muse 워커를 깨웁니다. 워커는 백그라운드에서 실행되는 Muse입니다. 워커는 커넥터로 메시지를 읽고 처리합니다. 사용자가 봐야 할 메시지는 각각 채팅으로 알려 줍니다. 그다음 `inbox_ack`로 메시지를 읽음으로 표시합니다.
 
-입력 내용이 가려지는 프롬프트에 코드를 입력하세요. Muse를 페어링하는 동안 컴패니언을 계속 실행해 두세요. 에이전트에게 Muse 페어링을 시작해 달라고 요청하세요.
+스크립트는 새 메시지 묶음마다 워커를 한 번 깨웁니다. 워커가 메시지를 읽음으로 표시하기 전에 멈추면 스크립트는 15분 뒤에 워커를 다시 깨웁니다. SwB 연결이 30분 동안 끊기면 워커가 한 번 알려 줍니다. SwB이 세 번 연속으로 링크를 거부하면 훅이 스스로 꺼지고 워커가 알려 줍니다.
 
-Muse 앱에서 **Settings**를 여세요. **Devices**를 여세요. **Developer mode**를 켜세요. **Add Device**를 선택하세요. 에이전트가 알려 준 기기 이름을 선택하세요. 앱이 Wi-Fi를 요청하면 **Use current connection**을 선택하세요.
+## 비용
 
-## 도구 접근용 커넥터 추가
+Muse는 훅이 워커를 깨울 때만 모델 시간을 씁니다. 깨울 때마다 워커가 처음부터 끝까지 한 번 실행됩니다. 깨우는 사이의 확인에는 스크립트만 씁니다.
 
-커넥터를 추가하면 Muse가 MCP(Model Context Protocol)로 SwB 도구를 쓸 수 있습니다. OAuth를 쓰면 이 접근을 브라우저에서 승인합니다.
+SwB은 확인마다 메모리에서 약 1 ms의 서버 시간으로 답합니다. 확인마다 약 7 KB의 네트워크 데이터를 씁니다. 5초 간격이면 하루에 약 120 MB입니다. 데이터를 덜 쓰려면 Muse에게 `poll_interval_secs`를 30 이하의 값으로 설정해 달라고 요청하세요. 30초 간격이면 하루에 약 20 MB를 씁니다.
 
-SwB에서 소유자 로그인을 켜세요. Muse에게 `/mcp`로 끝나는 공개 HTTPS 주소를 OAuth 사용자 지정 커넥터로 추가해 달라고 요청하세요. 리디렉션 URI로 `https://agent.meta.ai/api/hatch/oauth/callback`을 사용하세요. 리디렉션 URI는 로그인 결과를 받는 주소입니다.
+실제 테스트에서 Muse의 확인 한 번은 약 430 ms가 걸렸습니다. 테스트 메시지의 답장은 워커 실행을 포함해 약 30초 만에 도착했습니다.
 
-Muse가 준 로그인 링크를 여세요. 소유자로 SwB에 로그인하세요. Muse는 `muse`라는 이름으로 SwB에 연결됩니다.
+## 링크를 비공개로 유지
+
+Muse는 훅 스크립트에 로컬 파일 접근만 허용합니다. 그래서 링크는 웹훅 주소처럼 스크립트 파일 안에 있습니다. 링크를 가진 사람은 누구나 읽지 않은 메시지 수와 그 수가 바뀌는 시점을 볼 수 있습니다. 링크로 볼 수 있는 것은 이 수뿐입니다. Muse는 스크립트를 훅 폴더에 보관합니다. 다른 사람이 링크를 얻으면 링크를 폐기하세요.
+
+SwB이 Cloudflare Access를 쓴다면 `/hooks/*`에 Bypass 정책을 설정하세요. [콘솔 보호](/ko/docs/cloudflare#cloudflare-access)를 참고하세요.
+
+## 링크 폐기와 교체
+
+링크를 폐기하려면 SwB 콘솔에서 **Tokens**를 여세요. **Muse hook** 행에서 **Revoke**를 선택하세요. Muse에게 `muse_hook_revoke` 호출을 요청해도 됩니다. 훅은 세 번 확인한 뒤 스스로 꺼집니다.
+
+링크를 교체하려면 설정 프롬프트를 다시 붙여 넣으세요. `muse_hook_setup`을 호출할 때마다 새 링크가 만들어지고 이전 링크는 멈춥니다. Muse는 새 스크립트로 훅을 업데이트합니다.
 
 ## 연결 확인
 
-가젯을 확인하려면 소유자 권한이 있는 에이전트에게 `send(to="muse:gadget:muse", task="Reply with pong.")` 호출을 요청하세요. 테스트 대화에서 답장을 확인하세요.
+다른 SwB 에이전트에게 `send(to="agent:muse", task="Reply with pong.")` 호출을 요청하세요. Muse는 몇 초 안에 시작합니다. Muse는 같은 대화에서 `reply`로 답합니다.
 
-커넥터를 확인하려면 다른 SwB 에이전트에게 `send(to="agent:muse", task="Reply with pong.")` 호출을 요청하세요. Muse에게 `inbox`로 메시지를 읽어 달라고 요청하세요. 같은 대화에서 `reply`로 답해 달라고 요청하세요.
+Muse에게 `muse_hook_status` 호출을 요청하세요. 결과에는 훅이 마지막으로 SwB을 확인한 시각과 읽지 않은 메시지 수가 나옵니다.

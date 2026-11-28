@@ -1,6 +1,6 @@
 ---
 title: Bereitstellung
-description: Führen Sie SwB auf Ihrem Computer oder auf einem Server aus.
+description: Führen Sie SwB auf Ihrem Computer, auf Ihrem Server oder in der Cloud aus.
 ---
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
@@ -9,11 +9,11 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## Auf dem eigenen Computer ausführen [#run-on-your-computer]
 
-Folgen Sie der Anleitung unter [Installation](/de/docs/install). Öffnen Sie den Einmal-Anmeldelink, den SwB beim ersten lokalen Start ausgibt. Für einen neuen Link führen Sie `swb login-link` aus. Der Bereitstellungsprompt deckt auch die lokale Einrichtung ab.
+Folgen Sie der Anleitung unter [Installation](/de/docs/install).
 
 ## SwB bereitstellen
 
-Fügen Sie diesen Prompt in einen Coding-Agenten wie Claude Code oder Codex ein. Der Agent führt Sie durch die lokale oder gehostete Einrichtung.
+Fügen Sie diesen Prompt in einen Coding-Agenten wie Claude Code oder Codex ein. Der Agent hilft Ihnen, SwB einzurichten.
 
 <SetupPrompt name="deploy" lang="de" />
 
@@ -21,7 +21,7 @@ Fügen Sie diesen Prompt in einen Coding-Agenten wie Claude Code oder Codex ein.
 
 ### Docker Compose [#docker-compose]
 
-Installieren Sie Docker Compose 2.24 oder neuer. Führen Sie diese Befehle als normaler Benutzer aus, dem der Datenordner gehört.
+Installieren Sie Docker Compose 2.24 oder neuer. Docker Compose führt SwB in einem Container aus. Führen Sie diese Befehle als der Benutzer aus, dem der Datenordner gehört.
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -39,23 +39,19 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus dem Terminal. Behandeln Sie den Link vertraulich.
+Bei einem entfernten Server leiten Sie dessen Port `8870` auf Port `8870` Ihres Computers weiter. Öffnen Sie den Einmal-Anmeldelink innerhalb von fünf Minuten. Behandeln Sie den Link vertraulich.
 
-Der Browser verwendet `http://localhost:8870` für die Anmeldung des Inhabers. Der Befehl im Container verwendet Port `8000`. Compose speichert die Daten in `./data`. Nachdem Sie `.env` geändert haben, führen Sie `docker compose up -d` erneut aus.
-
-Bei einem entfernten Server leiten Sie dessen Port `8870` auf den lokalen Port `8870` weiter, bevor Sie den Link öffnen.
+Ihr Browser verwendet `http://localhost:8870` für die Anmeldung. Der Befehl im Container verwendet Port `8000`. Compose speichert die Daten in `./data`. Führen Sie `docker compose up -d` aus, nachdem Sie `.env` geändert haben.
 
 Eine Anfrage ohne Anmeldung an `/healthz` gibt `status` und `version` zurück. Für vollständige Statusdetails verwenden Sie eine Inhabersitzung oder den Inhaberschlüssel.
 
 ### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Ein Cloudflare Tunnel gibt SwB eine öffentliche HTTPS-Adresse. Cloudflare bietet Tunnel im kostenlosen Plan an.
+Ein Tunnel verbindet Ihren Server mit Cloudflare und gibt SwB eine öffentliche HTTPS-Adresse. Folgen Sie der Anleitung unter [Cloudflare](/de/docs/cloudflare), um einen Tunnel einzurichten.
 
-Folgen Sie der [Anleitung zur Cloudflare-Einrichtung](/de/docs/cloudflare), um SwB zu konfigurieren und Zugriffsregeln für den Inhaber und für Client-Anfragen festzulegen.
+## In der Cloud
 
-## Gehostete Plattformen
-
-Verwenden Sie eine einzelne SwB-Instanz mit einem persistenten Datenträger unter `/data`. Die Vorlagen für Railway, Render und Fly.io sowie das Skript für Koyeb finden Sie in der [Bereitstellungsanleitung](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
+Verwenden Sie eine einzelne SwB-Instanz mit einem Datenträger unter `/data`. Der Datenträger bewahrt Ihre Daten, wenn die Instanz neu startet. Vorlagen und Skripte für die Plattformen finden Sie in der [Bereitstellungsanleitung](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
 
 <span id="bereitstellung-mit-einem-klick" />
 
@@ -65,25 +61,27 @@ Verwenden Sie eine einzelne SwB-Instanz mit einem persistenten Datenträger unte
 
 ### Fly.io [#fly]
 
-Verwenden Sie den Release-Checkout von SwB aus dem [Docker-Compose-Beispiel](#docker-compose). Installieren Sie das [Kommandozeilenwerkzeug von Fly.io](https://docs.fly.io/flyctl/). Melden Sie sich bei Fly.io an.
+Verwenden Sie die SwB-Dateien aus dem [Docker-Compose-Beispiel](#docker-compose). Installieren Sie Python 3.11 oder neuer oder installieren Sie [uv](https://docs.astral.sh/uv/). Installieren Sie das [Kommandozeilenwerkzeug von Fly.io](https://docs.fly.io/flyctl/). Melden Sie sich bei Fly.io an.
 
-Führen Sie `sh deploy/fly.sh my-swb` im SwB-Ordner aus. Ersetzen Sie `my-swb` durch einen eindeutigen App-Namen. Das Skript startet mit `fly deploy --ha=false` eine einzelne Machine.
+Hinterlegen Sie eine Zahlungskarte, um im [Free-Plan von Fly.io](https://docs.fly.io/about/free-plan) jeden Monat Nutzung im Wert von 5 $ zu erhalten. Verwenden Sie für diesen Plan Ihre persönliche Organisation. Wenn Sie die vollen 5 $ verbrauchen, rechnet Fly den ganzen Monat zu Standardpreisen ab. Diese Einrichtung kostet in Ashburn etwa 3,84 $ für 30 Tage, zuzüglich Datenübertragung.
 
-Öffnen Sie die Anmeldeseite Ihrer App. Kopieren Sie `SWB_SETUP_CODE` aus `.env.swb-setup-fly-my-swb` in Ihrem Checkout. Geben Sie den Code in **Setup code** ein. Löschen Sie die Datei nach der Anmeldung.
+Führen Sie `sh deploy/fly.sh my-swb` im SwB-Ordner aus. Ersetzen Sie `my-swb` durch einen eindeutigen App-Namen. Das Skript startet mit `fly deploy --ha=false` eine einzelne Machine. Das Skript prüft die Machine, das Volume und die Adressen.
 
-Details zur Abrechnung finden Sie im [Free-Plan von Fly.io](https://docs.fly.io/about/free-plan) und in den [aktuellen Preisen](https://fly.io/docs/about/pricing/).
+Öffnen Sie die Anmeldeseite Ihrer App. Kopieren Sie `SWB_SETUP_CODE` aus `.env.swb-setup-fly-my-swb` im SwB-Ordner. Geben Sie den Code in **Setup code** ein. Löschen Sie die Datei nach der Anmeldung.
+
+Details zur Abrechnung finden Sie in den [aktuellen Preisen](https://fly.io/docs/about/pricing/).
 
 ### Render [#render]
 
-[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
+Öffnen Sie das [Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0). Das Blueprint erstellt einen kostenpflichtigen Webdienst und einen Datenträger mit 1 GB. Öffnen Sie im Dienst **Environment**. Kopieren Sie `SWB_SETUP_CODE`.
 
 ### Railway [#railway]
 
-Stellen Sie SwB über die [SwB-Vorlage auf Railway](https://railway.com/deploy/swb) bereit. Verwenden Sie genau ein Replikat. Die Vorlage hängt ein Volume unter `/data` ein.
+Stellen Sie SwB über die [SwB-Vorlage auf Railway](https://railway.com/deploy/swb) bereit. Verwenden Sie genau ein Replikat. Hängen Sie ein Volume mit 1 GB unter `/data` ein.
 
-Für ein dauerhaft laufendes SwB verwenden Sie den Hobby-Plan. Er kostet 5 $ im Monat und enthält Nutzung im Wert von 5 $.
+Mit dem Hobby-Plan läuft SwB dauerhaft. Er kostet 5 $ im Monat und enthält Nutzung im Wert von 5 $.
 
-Der [Free-Plan](https://docs.railway.com/reference/pricing/free-trial) enthält Nutzung im Wert von 1 $ pro Monat. Das reicht für etwa 100 MB RAM rund um die Uhr. Eine SwB-Testinstanz belegte im Leerlauf etwa 107 MiB. Dienste im Free-Plan stoppen, sobald das Guthaben von 1 $ aufgebraucht ist.
+Der [Free-Plan](https://docs.railway.com/pricing/free-plan) unterstützt ein Volume mit 0,5 GB. Dienste im Free-Plan schlafen im Leerlauf. Der Plan enthält Nutzung im Wert von 1 $ pro Monat. Das reicht für etwa 100 MB RAM rund um die Uhr. Ein SwB-Test belegte im Leerlauf etwa 107 MiB RAM.
 
 ## Anmelden
 
@@ -92,7 +90,5 @@ Der [Free-Plan](https://docs.railway.com/reference/pricing/free-trial) enthält 
 ## Agenten verbinden
 
 [Verbinden Sie SwB mit einem Agenten](/de/docs/connect). Fügen Sie danach den folgenden Prompt in diesen Agenten ein. Bitten Sie ihn, Ihre anderen Apps zu verbinden.
-
-Der Prompt bleibt auf Englisch, damit der Agent ihn direkt verwendet.
 
 <SetupPrompt name="coordinator" lang="de" />

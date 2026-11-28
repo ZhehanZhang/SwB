@@ -24,7 +24,9 @@ El propietario gestiona los webhooks. Llama a `webhook_create` con un nombre, un
 
 Pega la URL devuelta en los ajustes de webhooks del proveedor. En este ejemplo, obtén el secreto de firma en Stripe. Un secreto de firma es una clave compartida que permite a SwB comprobar que el evento viene del proveedor.
 
-Abre el enlace de entrega, un enlace a la página donde el propietario guarda el secreto. Guarda allí el secreto. SwB mantiene en privado el secreto guardado.
+Un enlace de entrega abre la página donde el propietario guarda el secreto. Inicia sesión en SwB como propietario. Después abre el enlace de entrega. Guarda allí el secreto. SwB mantiene en privado el secreto guardado.
+
+Para `bearer`, `path`, `hmac-sha256` y `hmac-sha1`, usa un secreto aleatorio de 32 caracteres como mínimo. Usa al menos 10 caracteres distintos.
 
 Si tu dirección de SwB usa Cloudflare Access, configura como **Bypass** la [política de Cloudflare Access](/es/docs/cloudflare#cloudflare-access) de `/hooks/*`.
 
@@ -76,9 +78,11 @@ Este ejemplo usa un [evento snapshot de Stripe](https://docs.stripe.com/api/even
 
 Llama a `webhook_list` para ver la dirección, los recuentos y el estado del secreto. Usa `include_revoked` con el valor `true` para incluir los webhooks revocados.
 
-Llama a `webhook_rotate` con el nombre del webhook para obtener el enlace de entrega de un secreto nuevo. Guarda el secreto nuevo con ese enlace. Actualiza el secreto en el proveedor o en el receptor. Para un secreto de ruta, actualiza la URL en el proveedor.
+Llama a `webhook_rotate` con el nombre del webhook para obtener el enlace de entrega de un secreto nuevo. Inicia sesión en SwB como propietario. Después abre el enlace de entrega. Guarda allí el secreto nuevo. Actualiza el secreto en el proveedor o en el receptor. Para un secreto de ruta, actualiza la URL en el proveedor.
 
 Usa `grace_s` para que el secreto anterior siga siendo válido después de guardar el nuevo. El periodo de gracia empieza con la llamada a la herramienta y dura hasta siete días. En los webhooks salientes, SwB firma con los dos secretos tras el cambio y durante ese periodo. Si el receptor cambia su URL, guarda la URL nueva con el mismo enlace de entrega.
+
+En un webhook saliente, usa `allow_private` y `senders` para cambiar sus ajustes. Omite los dos campos para conservar sus valores actuales.
 
 Llama a `webhook_revoke` con el nombre del webhook para detenerlo y borrar sus secretos guardados. Las peticiones a una URL entrante revocada reciben el código `410`.
 
@@ -93,7 +97,17 @@ Llama a `webhook_create` con un nombre y el valor `out` en `direction`.
 }
 ```
 
-Abre el enlace de entrega para guardar la URL HTTPS pública del receptor y el secreto de firma. Comparte el mismo secreto de firma `whsec_` con el receptor por un canal privado.
+SwB exige de forma predeterminada un receptor HTTPS público en el puerto 443. Bloquea las direcciones privadas, de loopback y de enlace local, incluidas las direcciones de enlace local de los datos de instancias en la nube. Las direcciones de loopback llegan al host de SwB. Las direcciones de enlace local llegan solo a la red local.
+
+El propietario puede usar `allow_private` con el valor `true` en ese webhook para permitir esas direcciones u otros puertos HTTPS.
+
+SwB consulta las direcciones IP del receptor una vez por entrega. Fija la conexión a la primera dirección de esa consulta.
+
+De forma predeterminada, solo el propietario puede enviar. Un agente emparejado necesita una concesión en `senders` para usar un destino `webhook:out`. Añade a `senders` una dirección de agente como `agent:claude` para darle acceso a ese webhook.
+
+Si quien llama es distinto del propietario, SwB devuelve `No such target.` cuando el destino falta o queda fuera de sus concesiones. Pide al propietario que revise el nombre del destino y tu acceso.
+
+Inicia sesión en SwB como propietario. Después abre el enlace de entrega. Guarda la URL HTTPS del receptor y el secreto de firma. Comparte el mismo secreto de firma `whsec_` con el receptor por un canal privado.
 
 Usa `send` con `webhook:out:alerts` en `to`. SwB envía este cuerpo JSON en una petición `POST`.
 
@@ -152,8 +166,7 @@ En los métodos que comprueban la marca de tiempo, la tolerancia es la diferenci
 | Ajuste | Límite |
 | - | - |
 | Cuerpo de la petición | 256 KiB de forma predeterminada. Asigna a `blocks.webhook.max_body_kb` un número entero de 1 a 1024 |
-| Eventos verificados nuevos por webhook, en todas las direcciones | 600 cada 10 minutos |
-| Fallos de verificación por webhook y por dirección IP de cliente | 20 cada 10 minutos. Una petición verificada pasa siempre |
+| Fallos de verificación por webhook y por dirección IP de cliente | 20 cada 10 minutos |
 | Peticiones a direcciones incorrectas por dirección IP de cliente | 20 cada 10 minutos |
 | Ventana de detección de repeticiones para Stripe, Linear, Sentry, Standard Webhooks y HMAC | 30 días |
 | Tolerancia de la marca de tiempo para Stripe y Standard Webhooks | 300 segundos de forma predeterminada |
@@ -161,6 +174,8 @@ En los métodos que comprueban la marca de tiempo, la tolerancia es la diferenci
 | Tolerancia personalizada de la marca de tiempo para Stripe, Linear y Standard Webhooks | Usa `tolerance_s` con un valor de 1 a 3600 segundos |
 | Comprobación de repeticiones para Sentry y HMAC | SwB comprueba solo los cuerpos repetidos |
 | Comprobación de repeticiones para bearer y path | SwB comprueba solo el secreto |
+
+SwB comprueba la firma o el secreto antes de aplicar el límite de fallos. Tras 20 fallos para el mismo webhook y la misma dirección IP de cliente en 10 minutos, los fallos siguientes reciben `429`. Cada fallo contado caduca a los 10 minutos. Las peticiones verificadas siguen pasando.
 
 SwB usa `trusted_proxies` para encontrar la dirección IP del cliente cuando un servidor de confianza reenvía las peticiones.
 
@@ -172,6 +187,8 @@ SwB usa `trusted_proxies` para encontrar la dirección IP del cliente cuando un 
 | - | - | - |
 | `stripe` | `Stripe-Signature` | El secreto de firma `whsec_` del endpoint en el [Stripe Dashboard](https://docs.stripe.com/webhooks#register-webhook) |
 
+El sistema hexadecimal usa las cifras del `0` al `9` y las letras de la `a` a la `f`. SwB exige letras hexadecimales en minúscula en las firmas de Stripe.
+
 SwB compara la hora firmada con su reloj, con una tolerancia predeterminada de 300 segundos.
 
 ### Linear
@@ -180,13 +197,15 @@ SwB compara la hora firmada con su reloj, con una tolerancia predeterminada de 3
 | - | - | - |
 | `linear` | `Linear-Signature` | El secreto de firma de los [ajustes de webhooks de Linear](https://linear.app/developers/webhooks) |
 
-SwB comprueba `webhookTimestamp` en el cuerpo firmado, con una tolerancia predeterminada de 60 segundos.
+SwB acepta letras hexadecimales en mayúscula y en minúscula en las firmas de Linear. SwB comprueba `webhookTimestamp` en el cuerpo firmado, con una tolerancia predeterminada de 60 segundos.
 
 ### Sentry
 
 | `verify` | Cabecera | Origen del secreto |
 | - | - | - |
 | `sentry` | `Sentry-Hook-Signature` | El secreto de cliente de una [integración interna de Sentry](https://docs.sentry.io/integrations/integration-platform/internal-integration/) |
+
+SwB acepta letras hexadecimales en mayúscula y en minúscula en las firmas de Sentry.
 
 ### Svix y Standard Webhooks
 
@@ -201,7 +220,7 @@ SwB comprueba `webhookTimestamp` en el cuerpo firmado, con una tolerancia predet
 | - | - | - |
 | `hmac-sha1` | `x-vercel-signature` | El secreto que obtienes al [crear el webhook](https://vercel.com/docs/webhooks/webhooks-api#securing-webhooks) o el secreto de cliente de la Integration Console |
 
-Usa `x-vercel-signature` en `header`. Usa `"encoding": "hex"` y `"prefix": ""` para la firma hexadecimal simple. El sistema hexadecimal usa las cifras del `0` al `9` y las letras de la `a` a la `f`.
+Usa `x-vercel-signature` en `header`. Usa `"encoding": "hex"`. Usa `"prefix": ""` para la firma hexadecimal simple. SwB acepta letras hexadecimales en mayúscula y en minúscula en las firmas de Vercel.
 
 ### Home Assistant
 
@@ -236,7 +255,13 @@ En [Webhooks by Zapier](https://help.zapier.com/hc/en-us/articles/8496326446989-
 | - | - | - |
 | `path` | `/hooks/<id>/<secret>` | Un secreto aleatorio que generas para este webhook |
 
-Usa la verificación por ruta con remitentes que solo pueden llamar a una URL. Elige un secreto aleatorio de 16 letras o cifras como mínimo. Guárdalo con el enlace de entrega. Cambia `<secret>` al final de la URL por el secreto guardado. Trata toda la URL como un secreto. SwB omite los secretos de ruta en su registro de accesos.
+Usa la verificación por ruta con remitentes que solo pueden llamar a una URL. Genera un secreto de ruta aleatorio con OpenSSL.
+
+```sh
+openssl rand -hex 32
+```
+
+Guárdalo con el enlace de entrega. Cambia `<secret>` al final de la URL por el secreto guardado. Trata toda la URL como un secreto. SwB omite los secretos de ruta en su registro de accesos.
 
 En IFTTT, elige [**Make a web request**](https://ifttt.com/maker_webhooks/actions/make_web_request). Elige el método `POST`. Escribe la URL completa.
 

@@ -77,13 +77,17 @@ Der Capy-Block kann für dieselbe Aufgabe und dasselbe Ziel die frühere Unterha
 
 SwB verwendet standardmäßig die Verbindungsadresse für Limits und Audit-Einträge. Tragen Sie Ihren Proxy in `trusted_proxies` oder `SWB_TRUSTED_PROXIES` ein. SwB verwendet danach die Client-Adresse, die der Proxy sendet. Konfigurieren Sie den Proxy so, dass er die Header für Client-Adressen aus einer geprüften Quelle setzt.
 
-Mit der [Anleitung zur Cloudflare-Einrichtung](/de/docs/cloudflare#trusted-proxies) fügen Sie einen Cloudflare-Tunnel-Connector oder einen Reverse Proxy in Ihrem Docker-Netzwerk hinzu.
+Wenn die Ermittlung der Client-Adresse fehlschlägt, gruppiert SwB Anfragen nach ihren Weiterleitungs-Headern. Header mit ungültigen Adressen teilen sich das Limit `invalid-forwarded`. Header mit ausschließlich vertrauenswürdigen Proxy-Adressen teilen sich das Limit `trusted-only-forwarded`.
+
+Mit der [Anleitung zu vertrauenswürdigen Proxys](/de/docs/cloudflare#trusted-proxies) fügen Sie einen Cloudflare-Tunnel-Connector oder einen Reverse Proxy in Ihrem Docker-Netzwerk hinzu.
 
 ## Audit-Protokoll
 
 SwB vermerkt Tool-Aufrufe, die seine Zugriffsregeln ablehnen. SwB vermerkt fehlgeschlagene Browser-Anmeldungen bei Einrichtungscodes, benutzten, abgelaufenen oder ungültigen Links, Passkeys, CSRF-Prüfungen und OIDC.
 
 SwB vermerkt fehlende oder ungültige Signaturen von GitHub-Webhooks. Für einige Browserfehler und abgelehnte Webhooks begrenzt SwB wiederholte Zeilen. Fehlerzeilen nennen den Grund und verbergen Codes, Tokens und Signaturen.
+
+Abgelehnte Assertions von Cloudflare Access vermerkt SwB einmal pro Client-Adresse alle 10 Minuten.
 
 Die Seite von SwB zeigt die Einträge unter **Audit**. Führen Sie `swb log` aus, um die letzten Einträge auszugeben. Nachrichten an Postfächer haben die Aktion `send`. Einträge zu verworfenen Zustellungen beschreibt [Kanalmodi](/de/docs/channel-modes#zustellung-prüfen).
 

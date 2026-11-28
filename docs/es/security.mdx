@@ -77,13 +77,17 @@ El bloque de Capy puede devolver la conversación anterior para la misma tarea y
 
 SwB usa la dirección de la conexión para los límites y los registros de auditoría de forma predeterminada. Añade tu proxy a `trusted_proxies` o a `SWB_TRUSTED_PROXIES`. Así SwB usa la dirección de cliente que envía el proxy. Configura el proxy para que defina las cabeceras de dirección de cliente a partir de una fuente que verifique.
 
-Usa la [guía de configuración de Cloudflare](/es/docs/cloudflare#trusted-proxies) para añadir un conector de Cloudflare Tunnel o un proxy inverso en tu red de Docker.
+Si SwB es incapaz de resolver la dirección del cliente, agrupa las peticiones por sus cabeceras de reenvío. Las cabeceras con direcciones inválidas comparten el límite `invalid-forwarded`. Las cabeceras que solo tienen direcciones de proxies de confianza comparten el límite `trusted-only-forwarded`.
+
+Usa la [guía de proxies de confianza](/es/docs/cloudflare#trusted-proxies) para añadir un conector de Cloudflare Tunnel o un proxy inverso en tu red de Docker.
 
 ## Registro de auditoría
 
 SwB anota las llamadas a herramientas que rechazan sus reglas de acceso. Anota los inicios de sesión fallidos en el navegador con códigos de configuración, enlaces usados, caducados o inválidos, llaves de acceso, comprobaciones CSRF y OIDC.
 
 SwB anota las firmas de webhooks de GitHub ausentes o inválidas. Limita las filas repetidas de algunos fallos del navegador y de los webhooks rechazados. Las filas de fallos dan el motivo y mantienen privados los códigos, los tokens y las firmas.
+
+SwB anota las aserciones de Cloudflare Access rechazadas una vez por dirección de cliente cada 10 minutos.
 
 La página de SwB muestra los registros en **Audit**. Ejecuta `swb log` para mostrar los registros recientes. Los envíos a buzones tienen la acción `send`. Consulta [Modos de canal](/es/docs/channel-modes#comprobar-una-entrega) para los registros de entregas descartadas.
 

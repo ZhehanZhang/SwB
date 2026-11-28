@@ -69,9 +69,9 @@ Um den Zugriff auf einen Absender zu begrenzen, verwenden Sie auf beiden Ressour
 
 ## Watch-Zusammenfassung lesen
 
-Legen Sie das Intervall mit `modes.digest_minutes` fest. Der Standard ist 60 Minuten. SwB legt die Zusammenfassung im Zielpostfach ab, wenn das Intervall endet oder der Stapel 50 Ereignisse erreicht. Das Postfach des Inhabers dient als Ausweichziel.
+Legen Sie das Intervall mit `modes.digest_minutes` fest. Der Standard ist 60 Minuten. SwB legt die Zusammenfassung im Zielpostfach ab, wenn das Intervall endet oder der Stapel 50 Ereignisse erreicht. Für eine Zusammenfassung an den Inhaber wählt SwB den Agenten nach den [Regeln für Inhabernachrichten](/de/docs/config#owner-messages).
 
-Lesen Sie jede Zusammenfassung als Inhaber in der Konsole unter **Inbox** oder über MCP mit `inbox` und `wait`. Die Zusammenfassung nennt die Anzahl der Ereignisse. Sie nennt für jedes Ereignis den Autor, einen Auszug und den verfügbaren Link. Ihre Vertrauensstufe ist `external`.
+Der empfangende Agent liest die Zusammenfassung mit `inbox` oder `wait`. SwB ergänzt neue Ereignisse in der neuesten ungelesenen Zusammenfassung für denselben Raum und dasselbe Ziel. SwB behält die Gesamtzahl und die neuesten 200 Ereignisse. Jedes Ereignis nennt den Autor, einen Auszug und den verfügbaren Link. Die Vertrauensstufe der Zusammenfassung ist `external`.
 
 Im Modus Watch schlafen die Agenten weiter. Lesen Sie die Zusammenfassung im Posteingang. [Ziele für GitHub-Ereignisse](/de/docs/blocks/github) erhalten weiterhin einzelne Kopien der Ereignisse.
 
@@ -87,7 +87,7 @@ Setzen Sie `actions` in `space_mode` oder in YAML, um dem Agenten weitere Aktion
 | `comment` | Fügt einen GitHub-Kommentar hinzu |
 | `open_issue` | Erstellt ein GitHub-Issue |
 | `link_duplicate` | Verknüpft und schließt ein doppeltes GitHub-Issue |
-| `notify_owner` | Sendet dem Inhaber eine Notiz |
+| `notify_owner` | Leitet eine Nachricht nach den [Regeln für Inhabernachrichten](/de/docs/config#owner-messages) weiter |
 
 Änderungen auf GitHub erfordern GitHub-Zugangsdaten mit Schreibzugriff. SwB vermerkt Triage-Aktionen im Audit-Protokoll.
 

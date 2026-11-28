@@ -69,7 +69,7 @@ visibility_set(resource="target:beta", visibility="shared")
 
 ## Watch 요약본 읽기
 
-`modes.digest_minutes`로 간격을 설정하세요. 기본값은 60분입니다. 간격이 끝나거나 모인 이벤트가 50개가 되면 SwB이 요약본을 대상 우편함에 넣습니다. 대체 대상은 소유자 우편함입니다.
+`modes.digest_minutes`로 간격을 설정하세요. 기본값은 60분입니다. 간격이 끝나거나 모인 이벤트가 50개가 되면 SwB이 요약본을 대상 우편함에 넣습니다. 소유자에게 가는 요약본이면 SwB은 [소유자 메시지 규칙](/ko/docs/config#owner-messages)에 따라 에이전트를 고릅니다.
 
 모든 요약본은 소유자로 로그인해 콘솔의 **Inbox**에서 읽거나 MCP `inbox`와 `wait`로 읽으세요. 요약본에는 이벤트 수가 나옵니다. 이벤트마다 작성자, 발췌문, 링크가 있으면 링크도 나옵니다. 요약본의 신뢰 수준은 `external`입니다.
 
@@ -87,7 +87,7 @@ triage 에이전트는 이벤트 정보를 읽을 수 있습니다. 기본적으
 | `comment` | GitHub 댓글을 답니다 |
 | `open_issue` | GitHub 이슈를 엽니다 |
 | `link_duplicate` | 중복된 GitHub 이슈를 연결하고 닫습니다 |
-| `notify_owner` | 소유자에게 알림을 보냅니다 |
+| `notify_owner` | [소유자 메시지 규칙](/ko/docs/config#owner-messages)에 따라 메시지를 보냅니다 |
 
 GitHub를 변경하려면 쓰기 권한이 있는 GitHub 자격 증명이 필요합니다. SwB은 triage 동작을 감사 로그에 기록합니다.
 

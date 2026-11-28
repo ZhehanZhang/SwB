@@ -43,13 +43,15 @@ SwB garde une seule copie de chaque fait dans une portée. Un agent qui enregist
 
 ## Synchronisation de la mémoire
 
-La **synchronisation de la mémoire** copie dans SwB ce qu'un agent enregistre dans sa propre mémoire. Tous les agents peuvent alors l'utiliser. Elle fonctionne avec la mémoire de Claude, la mémoire de ChatGPT, la mémoire de Grok, les fichiers de mémoire de Claude Code et d'autres systèmes de mémoire.
+La **synchronisation de la mémoire** copie dans SwB ce qu'un agent enregistre dans sa propre mémoire. Tous les agents peuvent alors l'utiliser. Elle fonctionne avec Claude, ChatGPT, Grok, Muse, Claude Code et d'autres systèmes de mémoire. Muse utilise `muse-memory` comme source.
 
 Chaque prompt de configuration demande à l'agent de synchroniser. Après la configuration, l'agent envoie avec `memory_sync` ce qu'il sait de vous. Il envoie uniquement les faits que vous voulez partager avec tous les agents. Il garde les mots de passe, les clés et les données personnelles sensibles dans sa propre mémoire. Ensuite, l'agent synchronise chaque nouveau souvenir dans la même réponse.
 
 `memory_sync` peut être répété en toute sécurité. Il met à jour la même entrée à chaque fois. Vos modifications et suppressions dans SwB ont la priorité. Une synchronisation ultérieure garde votre version et signale un conflit à l'agent.
 
 Le [compagnon](/fr/docs/companion) avec `--cap hooks` synchronise les fichiers de mémoire de Claude Code à chaque enregistrement.
+
+SwB utilise le nom du dossier de la session pour choisir une portée. Il cherche d'abord un projet dont le nom court correspond. Sinon, il cherche une correspondance unique par nom de dépôt lié. SwB synchronise vers le projet correspondant uniquement si son paramètre `private` vaut `false`. Si un projet privé correspond, SwB passe la synchronisation. Pour tout autre dossier, SwB synchronise vers `agent:claude-code`.
 
 La synchronisation de la mémoire est activée par défaut. Pour la désactiver, ouvrez **Memory** dans la console et désactivez **Memory sync**. Les agents qui utilisent la connexion du propriétaire peuvent utiliser `memory_settings` pour le même réglage.
 
@@ -69,20 +71,30 @@ Chaque modification faite par un agent apparaît dans **History** et dans le jou
 
 Sélectionnez **Download** sur la page **Memory** pour enregistrer toute la mémoire dans un fichier zip. Le fichier contient un fichier Markdown par entrée, dans des dossiers par portée et par sujet. Il contient aussi `manifest.json` avec l'historique et la provenance de chaque entrée.
 
-Sélectionnez **Restore from file** pour charger un fichier zip. Une restauration ajoute les entrées manquantes et met à jour celles qui ont changé. Elle garde toutes les autres entrées. Vous pouvez charger le même fichier à nouveau en toute sécurité.
+Sélectionnez **Restore from file** pour charger un fichier zip. Une restauration ajoute les entrées manquantes et garde les entrées existantes. SwB marque le texte importé comme information et enregistre l'auteur de l'import.
 
 Les agents qui utilisent la connexion du propriétaire peuvent utiliser `memory_export` et `memory_import` pour les mêmes tâches.
 
+Définissez `overwrite` sur `true` pour remplacer les entrées modifiées et garder leurs versions précédentes dans l'historique. Définissez `trust_owner` sur `true` pour garder la confiance propriétaire des entrées admissibles. Les entrées de la portée d'un autre agent restent encadrées comme information. Les deux options valent `false` par défaut. Pour l'envoi depuis la console, passez-les comme paramètres de requête à `POST /api/memory/import`.
+
 ## Sauvegarder dans Git
 
-SwB peut copier la mémoire dans un dépôt Git privé qui vous appartient. Chaque modification devient un commit, comme « Claude updated projects/swb/decisions/ownership.md ».
+SwB peut copier la mémoire dans un dépôt Git privé qui vous appartient. Un commit enregistre un ensemble de modifications. SwB utilise un titre comme `2 memory changes by SwB, claude-code`. Le titre indique `SwB` pour les modifications faites dans la console.
 
 Tout le contenu de la mémoire va dans ce dépôt. Utilisez un dépôt privé.
 
-Ouvrez **Memory** dans la console. Dans **Git backup**, saisissez l'adresse du dépôt et la branche. Pour une adresse HTTPS, collez un jeton avec un accès en écriture à ce dépôt. Pour une adresse SSH, collez une clé de déploiement avec un accès en écriture. SwB garde le jeton ou la clé chiffrés.
+Donnez l'accès en écriture au dépôt de sauvegarde uniquement à des personnes de confiance. Toute personne qui peut y pousser des commits peut définir leur auteur, et SwB s'appuie sur cet auteur pour choisir le niveau de confiance.
+
+Ouvrez **Memory** dans la console. Dans **Git backup**, saisissez l'adresse HTTPS ou SSH du dépôt et la branche. Pour une adresse HTTPS, collez un jeton avec un accès en écriture à ce dépôt. Pour une adresse SSH, collez une clé de déploiement avec un accès en écriture. SwB garde le jeton ou la clé chiffrés.
+
+Remplacez une adresse `file://` par une adresse HTTPS ou SSH.
+
+L'auteur de sauvegarde par défaut est `SwB <swb@localhost>`. Pour le changer, utilisez **Author name** et **Author email** dans la console. Avec `memory_backup_configure`, utilisez `author_name` et `author_email`.
 
 SwB attend 30 secondes après une modification, puis crée un commit pour les modifications de cette période. Sélectionnez **Back up now** pour créer le commit tout de suite. SwB réessaie plus tard quand un envoi échoue. La ligne d'état affiche la dernière sauvegarde et la dernière erreur.
 
-Sélectionnez **Restore from repository** pour charger la mémoire depuis le dernier commit.
+Sélectionnez **Restore from repository** pour charger la mémoire depuis le dernier commit. SwB marque le texte importé comme information et enregistre l'auteur de l'import.
 
 Les agents qui utilisent la connexion du propriétaire peuvent utiliser `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` et `memory_backup_restore`. `memory_backup_configure` renvoie un lien de saisie pour le jeton ou la clé.
+
+Les restaurations depuis Git utilisent les mêmes options `overwrite` et `trust_owner`. Passez-les comme champs JSON au point de terminaison de la console `POST /api/memory/backup/restore`. SwB encadre le contenu des commits d'autres auteurs comme information externe.

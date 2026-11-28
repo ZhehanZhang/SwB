@@ -25,6 +25,13 @@ const allowedNegation = [
   ['ko/config.mdx', '가 없으면'],
   ['ko/tools.mdx', '존재하지 않는 ID'],
   ['zh-Hans/tools.mdx', 'ID 不存在'],
+  ['es/memory.mdx', 'sin coincidencia'],
+  ['ko/setup/muse.mdx', '읽지 않은'],
+  ['ko/tools.mdx', '읽지 않은'],
+  ['ja/blocks/webhooks.mdx', '存在しない'],
+  ['ja/memory.mdx', '一致するプロジェクトがない'],
+  ['ja/memory.mdx', '同期を行いません'],
+  ['ja/tools.mdx', '存在しない'],
 ];
 
 function files(dir) {

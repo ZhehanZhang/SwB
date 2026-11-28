@@ -1,46 +1,52 @@
 ---
 title: Muse
-description: Empareja el gadget de Muse para que SwB despierte a Muse en tiempo real o añade un conector para usar las herramientas.
+description: Conecta Muse a SwB y despierta a Muse cuando llegan mensajes.
 ---
 
-## Despertar a Muse en tiempo real
+Muse se conecta a SwB como conector personalizado. Después, un hook de Muse inicia Muse cuando le llegan mensajes de SwB.
 
-SwB recomienda el gadget de Muse para iniciar el trabajo cuando llega un mensaje. El gadget es un dispositivo que se empareja con la app de Muse.
+## Configurar Muse
 
-Un [companion](/es/docs/companion) es un programa de SwB en tu ordenador. Durante el emparejamiento, actúa como el gadget por Bluetooth. Tras el emparejamiento, tu servidor SwB mantiene abierta la conexión con Muse. Después puedes detener el companion.
-
-Configura una dirección HTTPS pública para SwB. Pega este prompt en un agente de SwB con acceso completo de propietario.
+Configura una dirección HTTPS pública para SwB. Activa el inicio de sesión del propietario. Pega este prompt en un chat nuevo de Muse.
 
 <SetupPrompt name="muse" lang="es" />
 
-Pide al agente que llame a `connect(what="muse", choose={"gadget": true})`. Sigue las instrucciones que devuelve.
+El prompt pide a Muse que añada SwB como conector personalizado. Un conector permite a Muse usar las herramientas de SwB a través del Model Context Protocol (MCP). Muse te envía un enlace de inicio de sesión. Inicia sesión en SwB como propietario para aprobar la conexión. Muse se conecta a SwB como `muse`.
 
-Crea un token personal en la [página SDK tokens de Muse](https://gadgets.muse.ai/settings/sdk-tokens). Guárdalo con el enlace de entrega de un solo uso que te da tu agente.
+Después, Muse llama a `muse_hook_setup`. SwB crea un enlace privado para despertar a Muse y devuelve un script de hook que lo usa. Muse escribe el script en `~/hooks/scripts/swb-wake.sh` y añade el hook. Muse ejecuta el script una vez en modo de prueba y te muestra el resultado. El modo de prueba solo comprueba el script. Luego Muse activa el hook y envía un mensaje de prueba. La prueba termina cuando Muse informa en el chat del mensaje de prueba.
 
-Usa un Mac o un ordenador con Linux que tenga Bluetooth y esté cerca de tu teléfono. En macOS, usa Terminal y permite el acceso a Bluetooth cuando macOS lo pida. En Linux, da al companion acceso a BlueZ, el servicio del sistema para Bluetooth.
+## Cómo funciona el hook
 
-Para añadir Muse a un companion ya emparejado, ejecuta antes `swb companion disconnect`. Obtén un [código de emparejamiento del companion](/es/docs/companion#emparejar-un-dispositivo). El código funciona una sola vez y caduca a los 10 minutos.
+Un hook de Muse es un script pequeño que Muse ejecuta de forma periódica. El script de SwB consulta el enlace privado cada 5 segundos. Cada consulta termina en menos de 4 segundos.
 
-Cambia la dirección de ejemplo por tu dirección de SwB. Ejecuta este comando en el ordenador.
+El enlace devuelve dos números. Uno es el número de mensajes de SwB por leer para Muse. El otro es un cursor, el número del mensaje por leer más reciente. El texto, los remitentes y los asuntos de los mensajes se quedan en SwB.
 
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
+Cuando hay mensajes nuevos esperando, el script despierta a un worker de Muse. Un worker es una ejecución de Muse en segundo plano. El worker lee los mensajes a través del conector y los gestiona. Te avisa en el chat de cada mensaje que necesita tu atención. Después marca los mensajes como leídos con `inbox_ack`.
 
-Escribe el código cuando el comando lo pida. Lo que escribes queda oculto. Mantén el companion en marcha mientras emparejas Muse. Pide a tu agente que inicie el emparejamiento de Muse.
+El script despierta al worker una vez por cada lote nuevo de mensajes. Si un worker se detiene antes de marcar los mensajes como leídos, el script despierta otra vez a un worker a los 15 minutos. Si SwB sigue inaccesible durante 30 minutos, un worker te avisa una vez. Si SwB rechaza el enlace en tres consultas seguidas, el hook se desactiva solo y un worker te avisa.
 
-En la app de Muse, abre **Settings**. Abre **Devices**. Activa **Developer mode**. Selecciona **Add Device**. Selecciona el nombre de dispositivo que te da tu agente. Si la app pide Wi-Fi, selecciona **Use current connection**.
+## Coste
 
-## Añadir un conector para usar las herramientas
+Muse usa tiempo de modelo solo cuando el hook despierta a un worker. Cada vez que lo despierta, el worker hace una ejecución completa. Las consultas entre una y otra usan solo el script.
 
-Un conector permite a Muse usar las herramientas de SwB a través del Model Context Protocol (MCP). Con OAuth, apruebas ese acceso en tu navegador.
+SwB responde a cada consulta desde la memoria en aproximadamente 1 ms de tiempo de servidor. Cada consulta usa unos 7 KB de datos de red. Con un intervalo de 5 segundos, son unos 120 MB al día. Pide a Muse que ponga `poll_interval_secs` en un valor de hasta 30 para usar menos datos. Un intervalo de 30 segundos usa unos 20 MB al día.
 
-Activa el inicio de sesión del propietario en SwB. Pide a Muse que añada como conector personalizado con OAuth tu dirección HTTPS pública terminada en `/mcp`. Usa `https://agent.meta.ai/api/hatch/oauth/callback` como URI de redirección, la dirección que recibe el resultado del inicio de sesión.
+En una prueba real, una consulta de Muse tardó unos 430 ms. La respuesta a un mensaje de prueba llegó en unos 30 segundos, incluida la ejecución del worker.
 
-Abre el enlace de inicio de sesión que te da Muse. Inicia sesión en SwB como propietario. Muse se conecta a SwB como `muse`.
+## Mantener el enlace en privado
+
+Muse da a los scripts de hook acceso solo a los archivos locales. Por eso el enlace está en el archivo del script, igual que la dirección de un webhook. Cualquiera que tenga el enlace puede ver tu número de mensajes por leer y cuándo cambia. El enlace da acceso solo a ese número. Muse guarda el script en su carpeta de hooks. Revoca el enlace si otra persona lo obtiene.
+
+Si SwB usa Cloudflare Access, configura la política de bypass para `/hooks/*`. Consulta [Proteger la consola](/es/docs/cloudflare#cloudflare-access).
+
+## Revocar o sustituir el enlace
+
+Para revocar el enlace, abre **Tokens** en la consola de SwB. Selecciona **Revoke** en la fila **Muse hook**. También puedes pedir a Muse que llame a `muse_hook_revoke`. El hook se desactiva solo después de tres consultas.
+
+Para sustituir el enlace, pega otra vez el prompt de configuración. Cada llamada a `muse_hook_setup` crea un enlace nuevo y anula el anterior. Muse actualiza el hook con el script nuevo.
 
 ## Comprobar la conexión
 
-Para el gadget, pide a un agente con acceso de propietario que llame a `send(to="muse:gadget:muse", task="Reply with pong.")`. Comprueba la respuesta en la conversación de prueba.
+Pide a otro agente de SwB que llame a `send(to="agent:muse", task="Reply with pong.")`. Muse se inicia en pocos segundos. Muse responde con `reply` en la misma conversación.
 
-Para el conector, pide a otro agente de SwB que llame a `send(to="agent:muse", task="Reply with pong.")`. Pide a Muse que lea el mensaje con `inbox`. Pide a Muse que responda con `reply` en la misma conversación.
+Pide a Muse que llame a `muse_hook_status`. El resultado muestra cuándo consultó SwB el hook por última vez y el número de mensajes por leer.

@@ -49,6 +49,18 @@ En Linux y macOS, SwB asigna a la carpeta de datos el modo privado `0700`. Asign
 
 Algunos bloques pueden iniciarse con credenciales del entorno. Consulta [Bloques](/es/docs/blocks) para la configuración. El [ejemplo de entorno de la versión](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example) muestra los nombres de las credenciales para espacios de trabajo y rutinas con nombre.
 
+## Mensajes al propietario [#owner-messages]
+
+SwB prueba primero el agente con la actividad más reciente bajo un inicio de sesión del propietario en los últimos 30 minutos. Después prueba el agente principal del proyecto, definido por la ruta del proyecto o por `default_target`. La ruta global del propietario es la última opción.
+
+El agente elegido recibe el mensaje en su bandeja de entrada. Si fallan las tres opciones, SwB indica la entrega pendiente en el estado.
+
+Asigna a la ruta global del propietario una dirección de agente.
+
+```python
+routes_set(agent="owner", target="agent:claude")
+```
+
 ## El archivo de configuración
 
 `swb up` prepara una instancia nueva en su carpeta. Guarda en `.env` la clave de propietario y un `SWB_PORT` personalizado. Asigna al archivo el modo `0600`.
@@ -117,6 +129,8 @@ En una clave, `*` representa el nombre de una entrada o un elemento de una lista
 | `auth.key_tools` | Asigna a cada nombre de clave las herramientas MCP permitidas, por ejemplo `[send]` |
 | `auth.key_targets` | Destinos de mensajes permitidos por nombre de clave, por ejemplo `[agent:claude]`. Una clave con este límite debe indicar un destino permitido |
 | `auth.inbox_keys` | Asigna a cada nombre de clave el único agente cuya bandeja de entrada puede leer. La entrada integrada es `channel: claude-code` |
+
+Para el inicio de sesión con Cloudflare Access, SwB usa el token de la cabecera `Cf-Access-Jwt-Assertion`. Si la cabecera está vacía o ausente, SwB lee el token de la cookie `CF_Authorization`. Una cookie es un valor que el navegador envía con una petición. SwB comprueba la firma RS256 con las claves públicas de `team_domain`. El emisor del token debe coincidir con la dirección HTTPS de `team_domain`. El token debe indicar `aud` como audiencia. SwB comprueba las horas de emisión, de inicio y de caducidad cuando el token las incluye. SwB compara el correo en minúsculas con `owner_emails`.
 
 ## Visibilidad
 

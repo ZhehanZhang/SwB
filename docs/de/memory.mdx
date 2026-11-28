@@ -43,13 +43,15 @@ SwB speichert jede Tatsache nur einmal pro Bereich. Ein Agent, der denselben Tex
 
 ## Gedächtnissynchronisierung
 
-Die **Gedächtnissynchronisierung** kopiert in SwB, was ein Agent in seinem eigenen Gedächtnis speichert. Danach können alle Agenten es nutzen. Sie funktioniert mit dem Gedächtnis von Claude, ChatGPT und Grok, mit den Gedächtnisdateien von Claude Code und mit anderen Gedächtnissystemen.
+Die **Gedächtnissynchronisierung** kopiert in SwB, was ein Agent in seinem eigenen Gedächtnis speichert. Danach können alle Agenten es nutzen. Sie funktioniert mit Claude, ChatGPT, Grok, Muse, Claude Code und anderen Gedächtnissystemen. Muse verwendet `muse-memory` als Quelle.
 
 Jeder Einrichtungsprompt bittet den Agenten um eine Synchronisierung. Nach der Einrichtung sendet der Agent mit `memory_sync`, was er über Sie weiß. Er sendet nur Fakten, die alle Agenten kennen sollen. Passwörter, Schlüssel und sensible persönliche Daten behält er in seinem eigenen Gedächtnis. Danach synchronisiert der Agent jede neue Erinnerung in derselben Antwort.
 
 `memory_sync` lässt sich sicher wiederholen. Es aktualisiert jedes Mal denselben Eintrag. Ihre Änderungen und Löschungen in SwB haben Vorrang. Eine spätere Synchronisierung behält Ihre Version und meldet dem Agenten einen Konflikt.
 
 Der [Companion](/de/docs/companion) mit `--cap hooks` synchronisiert die Gedächtnisdateien von Claude Code bei jedem Speichern.
+
+SwB wählt den Bereich anhand des Namens des Sitzungsordners. Zuerst sucht SwB ein Projekt mit passendem Slug, also seinem Kurznamen. Danach sucht SwB einen eindeutigen Treffer über den Namen eines verknüpften Repositorys. SwB synchronisiert in ein passendes Projekt, wenn dessen Einstellung `private` den Wert `false` hat. Bei einem privaten Treffer überspringt SwB die Synchronisierung. Für alle anderen Ordner synchronisiert SwB in `agent:claude-code`.
 
 Die Gedächtnissynchronisierung ist standardmäßig aktiv. Zum Ausschalten öffnen Sie **Memory** in der Konsole und schalten **Memory sync** aus. Agenten mit der Anmeldung des Inhabers können denselben Schalter mit `memory_settings` bedienen.
 
@@ -69,20 +71,30 @@ Jede Änderung durch einen Agenten erscheint in **History** und im Audit-Protoko
 
 Wählen Sie **Download** auf der Seite **Memory**, um das gesamte Gedächtnis als ZIP-Datei zu speichern. Die Datei enthält eine Markdown-Datei pro Eintrag, in Ordnern nach Bereich und Thema. Sie enthält auch `manifest.json` mit dem Verlauf und der Herkunft jedes Eintrags.
 
-Wählen Sie **Restore from file**, um eine ZIP-Datei zu laden. Eine Wiederherstellung fügt fehlende Einträge hinzu und aktualisiert geänderte Einträge. Alle anderen Einträge bleiben erhalten. Sie können dieselbe Datei sicher erneut laden.
+Wählen Sie **Restore from file**, um eine ZIP-Datei zu laden. Eine Wiederherstellung fügt fehlende Einträge hinzu und behält vorhandene Einträge. SwB markiert importierten Text als Information und speichert, wer ihn importiert hat.
 
 Agenten mit der Anmeldung des Inhabers können für dieselben Aufgaben `memory_export` und `memory_import` verwenden.
 
+Setzen Sie `overwrite` auf `true`, um geänderte Einträge zu ersetzen und ihre vorherigen Versionen im Verlauf zu behalten. Setzen Sie `trust_owner` auf `true`, um das Inhabervertrauen für geeignete Einträge zu behalten. Einträge im Bereich eines anderen Agenten bleiben als Information gekennzeichnet. Beide Optionen haben den Standardwert `false`. Übergeben Sie sie als Query-Parameter an den Konsolen-Upload unter `POST /api/memory/import`.
+
 ## In Git sichern
 
-SwB kann das Gedächtnis in ein privates Git-Repository kopieren, das Ihnen gehört. Jede Änderung wird ein Commit, zum Beispiel „Claude updated projects/swb/decisions/ownership.md“.
+SwB kann das Gedächtnis in ein privates Git-Repository kopieren, das Ihnen gehört. Ein Commit speichert eine Gruppe von Änderungen. SwB verwendet einen Titel wie `2 memory changes by SwB, claude-code`. Für Änderungen in der Konsole nennt der Titel `SwB`.
 
 Alles im Gedächtnis kommt in dieses Repository. Verwenden Sie ein privates Repository.
 
-Öffnen Sie **Memory** in der Konsole. Geben Sie unter **Git backup** die Adresse des Repositorys und den Branch ein. Fügen Sie für eine HTTPS-Adresse ein Token mit Schreibzugriff auf dieses Repository ein. Fügen Sie für eine SSH-Adresse einen Deploy-Schlüssel mit Schreibzugriff ein. SwB speichert das Token oder den Schlüssel verschlüsselt.
+Geben Sie Push-Zugriff auf das Sicherungs-Repository nur Personen, denen Sie vertrauen. Jede Person mit Push-Zugriff kann den Commit-Autor festlegen, anhand dessen SwB die Vertrauensstufe wählt.
+
+Öffnen Sie **Memory** in der Konsole. Geben Sie unter **Git backup** eine HTTPS- oder SSH-Adresse des Repositorys und den Branch ein. Fügen Sie für eine HTTPS-Adresse ein Token mit Schreibzugriff auf dieses Repository ein. Fügen Sie für eine SSH-Adresse einen Deploy-Schlüssel mit Schreibzugriff ein. SwB speichert das Token oder den Schlüssel verschlüsselt.
+
+Ersetzen Sie eine `file://`-Adresse durch eine HTTPS- oder SSH-Adresse.
+
+Der Standardautor der Sicherung ist `SwB <swb@localhost>`. Zum Ändern verwenden Sie **Author name** und **Author email** in der Konsole. Mit `memory_backup_configure` verwenden Sie `author_name` und `author_email`.
 
 SwB wartet nach einer Änderung 30 Sekunden und erstellt dann einen Commit für alle Änderungen in dieser Zeit. Wählen Sie **Back up now**, um sofort einen Commit zu erstellen. Schlägt ein Push fehl, versucht SwB es später erneut. Die Statuszeile zeigt die letzte Sicherung und den letzten Fehler.
 
-Wählen Sie **Restore from repository**, um das Gedächtnis aus dem neuesten Commit zu laden.
+Wählen Sie **Restore from repository**, um das Gedächtnis aus dem neuesten Commit zu laden. SwB markiert importierten Text als Information und speichert, wer ihn importiert hat.
 
 Agenten mit der Anmeldung des Inhabers können `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` und `memory_backup_restore` verwenden. `memory_backup_configure` gibt einen Claim-Link für das Token oder den Schlüssel zurück.
+
+Wiederherstellungen aus Git verwenden dieselben Optionen `overwrite` und `trust_owner`. Übergeben Sie sie als JSON-Felder an den Konsolen-Endpunkt unter `POST /api/memory/backup/restore`. SwB kennzeichnet Inhalte aus Commits anderer Autoren als externe Information.
