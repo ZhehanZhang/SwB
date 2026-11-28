@@ -5,9 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
-import json
 import math
-from datetime import datetime, timezone
 from importlib import resources
 from typing import Any
 from urllib.parse import urlencode
@@ -16,26 +14,25 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
 
-from .brand import TAGLINE
 from .slack.avatar_files import agent_avatar_url
 
 _STATIC = resources.files("switchboard") / "static"
-_BRAND = json.loads((_STATIC / "brand.json").read_text())
 _ASSETS = {
-    "bridge.css": ("text/css; charset=utf-8", (_STATIC / "bridge.css").read_bytes()),
-    "prefs.js": ("text/javascript; charset=utf-8", (_STATIC / "prefs.js").read_bytes()),
     "claim.css": ("text/css; charset=utf-8", (_STATIC / "claim.css").read_bytes()),
+    "console-tokens.css": ("text/css; charset=utf-8", (_STATIC / "console-tokens.css").read_bytes()),
     "theme.js": ("text/javascript; charset=utf-8", (_STATIC / "theme.js").read_bytes()),
     "claim-brand.svg": ("image/svg+xml", (_STATIC / "claim-brand.svg").read_bytes()),
     "claim-connectors.svg": ("image/svg+xml", (_STATIC / "claim-connectors.svg").read_bytes()),
+    **{name: ("font/woff2", (_STATIC / "fonts" / name).read_bytes())
+       for name in ("inter.woff2", "inter-tight.woff2", "jetbrains-mono.woff2")},
 }
 
-ARC = '<div class="site-arc" aria-hidden="true"><svg viewBox="0 300 940 580" focusable="false"><path fill="currentColor" d="M922.2,588.9A1041.1,270.9 0 1 1 -1159.9,588.9A1041.1,270.9 0 1 1 922.2,588.9ZM734.2,478.4A620,151.5 -14.18 1 0 -468.0,782.2A620,151.5 -14.18 1 0 734.2,478.4Z"/></svg></div>'
-WORDMARK_DOT = '<svg class="wordmark-dot" viewBox="278.44 90.58 12.63 10.31" aria-hidden="true" focusable="false"><path fill="currentColor" d="M291.07,98.49c-.15.38-.29.76-.46,1.12-.48,1.08-1.29,1.52-2.44,1.14-.56-.19-1.14-.39-1.62-.71-2.92-1.95-5.47-4.29-7.47-7.18-.37-.53-.43-1.26-.64-1.9.15-.13.31-.25.46-.38,1.05.65,2.11,1.29,3.14,1.97.65.43,1.23.94,1.86,1.39,1.14.81,2.14.86,3.15-.33.83-.97,1.9-.61,2.67.11.58.53.91,1.33,1.35,2.02v2.75Z"/></svg>'
-
-CSP = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; form-action 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'"
+CSP = "default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'; img-src 'self' data:; form-action 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'"
+CLAIM_CSP = CSP.replace("img-src 'self' data:", "img-src 'self'").replace(
+    "form-action 'self' https: http://localhost:* http://127.0.0.1:*", "form-action 'self'",
+)
 CLAIM_BRAND = '<img class="brand" src="/assets/claim-brand.svg" alt="SwB" width="56" height="56">'
-CLAIM_THEME_META = (
+THEME_META = (
     '<meta name="color-scheme" content="light dark">\n'
     '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">\n'
     '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b">'
@@ -64,53 +61,70 @@ class PageRoute(Route):
         self.title = title
 
 
-def icon(name: str, cls: str = "", mode: str | None = None) -> str:
-    extra = f' data-mode="{mode}"' if mode else ""
-    return f'<svg viewBox="0 -960 960 960" class="icon {cls}" data-icon="{name}"{extra} aria-hidden="true"><path d="{_BRAND["icons"][name]}"/></svg>'
-
-
-def page(title: str, body: str, status: int = 200) -> HTMLResponse:
-    year = datetime.now(timezone.utc).year
+def page(title: str, body: str = "", status: int = 200, *, secondary: str = "", mark: str = "",
+         main_attrs: str = "", script: str = "", field_assets: bool = False, csp: str = CSP) -> HTMLResponse:
+    form_assets = ('<link rel="stylesheet" href="/claim-assets/claim.css">'
+                   '<script src="/claim-assets/claim.js" defer></script>') if field_assets else ""
+    context = f'<p class="scope">{secondary}</p>' if secondary else ""
+    inline_script = f"<script>{script}</script>" if script else ""
+    tab_title = title if title.endswith(" SwB") else f"{title} | SwB"
     doc = f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f5f5f4" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="referrer" content="same-origin">
-<title>{html.escape(title)} | SwB</title>
-<script src="/assets/theme.js"></script><script src="/assets/prefs.js" defer></script>
-<link rel="stylesheet" href="/assets/bridge.css">
-</head><body><div class="shell">
-<div class="site-veil" aria-hidden="true"></div>{ARC}
-<header class="site-header"><div class="site-head col">
-<a href="/" class="brand-link"><span class="brand-name">SwB{WORDMARK_DOT}</span></a>
-</div></header>
-<main class="service-main col">{body}</main>
-<footer class="col fade-in"><div class="foot-row">
-<div class="foot-copy">&copy; {year} SwB</div>
-<div class="footer-icons">
-<button type="button" class="foot-btn" aria-label="Theme" title="Theme" data-theme-cycle><span class="theme-cycle">{icon("foot_lightMode", mode="light")}{icon("foot_darkMode", mode="dark")}{icon("foot_desktopWindows", mode="system")}</span></button>
-</div></div>
-<div class="foot-line"><span>{html.escape(TAGLINE["en"])}</span></div>
-</footer></div></body></html>"""
-    return HTMLResponse(doc, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Content-Security-Policy": CSP, "Referrer-Policy": "same-origin"})
-
-
-def hero(title: str, line: str = "") -> str:
-    return f'<section class="hero fade-in"><h1>{html.escape(title)}</h1>{f"<p>{line}</p>" if line else ""}</section>'
+{THEME_META}
+<title>{html.escape(tab_title)}</title>
+<script src="/assets/theme.js"></script>
+<link rel="stylesheet" href="/assets/console-tokens.css">
+<link rel="stylesheet" href="/assets/claim.css">
+{form_assets}
+</head><body><main{main_attrs}>
+<header><div class="marks">{CLAIM_BRAND}{mark}</div><h1>{html.escape(title)}</h1>{context}</header>
+{body}</main>{inline_script}</body></html>"""
+    return HTMLResponse(doc, status_code=status, headers={
+        "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin",
+        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": csp,
+    })
 
 
 def message_page(title: str, text: str, status: int) -> HTMLResponse:
-    return page(title, hero(title, html.escape(text)), status)
+    return page(title, status=status, secondary=html.escape(text))
+
+
+def requester_mark(kind: str) -> str:
+    avatar = agent_avatar_url(kind) or ("/avatars/capy.png" if kind == "capy" else None)
+    connector = kind.lower().replace("_", "-").partition(":")[0].partition("-")[0]
+    mark = (f'<img class="persona-mark" src="{avatar}" alt="" width="56" height="56">' if avatar else
+            f'<svg viewBox="0 0 24 24"><use href="/assets/claim-connectors.svg#{connector if connector in CLAIM_CONNECTORS else "agent"}"/></svg>')
+    return f'<span class="requester-tile" data-connector="{connector if connector in CLAIM_CONNECTORS else ""}" aria-hidden="true">{mark}</span>'
+
+
+def authorize_page(name: str, host: str, account: str, agent: str, req: str, csrf: str,
+                   scopes: tuple[str, ...], address: str = "") -> HTMLResponse:
+    secondary = f'<span>Returns to <code>{html.escape(host)}</code></span> <span>Signed in as {html.escape(account)}</span>'
+    if address:
+        secondary += f' <span class="mailbox">Mailbox <code>{html.escape(address)}</code></span>'
+    scope_icon = ('<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/>'
+                  '<path d="m11 12 8-8m-3 3 3 3"/></svg>')
+    rows = "".join(f"<li>{scope_icon}<code>{html.escape(scope)}</code></li>" for scope in scopes)
+    body = f"""<form method="post">
+<input type="hidden" name="req" value="{html.escape(req)}">
+<input type="hidden" name="csrf" value="{html.escape(csrf)}">
+{f'<ul class="scopes" aria-label="Requested scopes">{rows}</ul>' if rows else ""}
+<div class="actions consent-actions">
+<button type="submit" class="button primary" name="decision" value="approve" autofocus>Approve</button>
+<button type="submit" class="button secondary" name="decision" value="deny" formnovalidate>Deny</button>
+</div>
+</form>"""
+    return page(f"Connect {name} to SwB", body, secondary=secondary, mark=requester_mark(agent))
 
 
 PASSKEY_JS = """
-async function post(path, body, csrf) {
+async function post(path, body, csrf, signal) {
   const headers = {"Content-Type": "application/json"};
   if (csrf) headers["X-CSRF-Token"] = csrf;
-  const response = await fetch(path, {method: "POST", headers, body: JSON.stringify(body)});
+  const response = await fetch(path, {method: "POST", headers, body: JSON.stringify(body), signal});
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.error || "Request refused");
@@ -125,7 +139,7 @@ function encode(value) {
 }
 async function passkey(action, csrf) {
   const path = "/auth/passkey/" + action;
-  const {publicKey} = await post(path + "/options", {}, csrf);
+  const {publicKey} = await post(path + "/options", {}, csrf, AbortSignal.timeout(15000));
   const register = action === "register";
   const parser = register ? "parseCreationOptionsFromJSON" : "parseRequestOptionsFromJSON";
   let options = publicKey;
@@ -144,7 +158,7 @@ async function passkey(action, csrf) {
     id: credential.id, rawId: encode(credential.rawId), type: credential.type,
     response: Object.fromEntries(["clientDataJSON", ...fields].map(field => [field, response[field] ? encode(response[field]) : null]))
   };
-  await post(path + "/verify", {credential: result, ...(register ? {name: "Passkey"} : {})}, csrf);
+  await post(path + "/verify", {credential: result, ...(register ? {name: "Passkey"} : {})}, csrf, AbortSignal.timeout(15000));
 }
 """
 
@@ -179,8 +193,8 @@ if (fragment.has("t")) {
   post("/auth/link", {token: fragment.get("t")}).then(next).catch((error) => {
     const reasons = {
       link_invalid: "Check your sign-in link.",
-      link_used: "This link was used. Ask your agent for a new link.",
-      link_expired: "This link expired. Ask your agent for a new link."
+      link_used: "Ask your agent for a new link.",
+      link_expired: "Ask your agent for a new link."
     };
     message.textContent = reasons[error.message] || "Try signing in again.";
     screen.hidden = false;
@@ -198,72 +212,46 @@ def script_policy(script: str) -> str:
 
 def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, signed_in: bool = False) -> HTMLResponse:
     messages = {"link_invalid": "Check your sign-in link.",
-                "link_expired": "This link expired. Ask your agent for a new link.",
-                "link_used": "This link was used. Ask your agent for a new link.",
+                "link_expired": "Ask your agent for a new link.",
+                "link_used": "Ask your agent for a new link.",
                 "passkey_failed": "Try your passkey again.",
                 "oidc_failed": "Try signing in again."}
-    button = '<button type="button" id="passkey-login">Sign in with a passkey</button>' if methods["passkeys"] else ""
+    buttons = []
+    if methods["passkeys"]:
+        buttons.append('<button type="button" id="passkey-login" class="button primary">Sign in with a passkey</button>')
     oidc = methods["oidc"]
     if oidc:
         href = "/auth/oidc/start?" + urlencode({"next": next_path})
-        button += f'<p><a href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a></p>'
+        style = "secondary" if buttons else "primary"
+        buttons.append(f'<a class="button {style}" href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a>')
+    actions = f'<div class="actions login-actions">{"".join(buttons)}</div>' if buttons else ""
     if methods.get("setup"):
-        button += ('<form id="owner-setup" method="post" action="/auth/setup">'
-                   '<label>Setup code <input name="code" type="password" autocomplete="one-time-code" '
-                   'minlength="44" maxlength="64" required></label><button type="submit">Sign in</button></form>')
-    title = LOGIN_TITLE if button else "Ask your agent for a sign-in link"
-    return HTMLResponse(f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-{CLAIM_THEME_META}
-<title>{LOGIN_TITLE}</title>
-<script src="/assets/theme.js"></script><link rel="stylesheet" href="/assets/claim.css"></head>
-<body><main data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}>{CLAIM_BRAND}<h1>{title}</h1>
-<p id="login-error" role="status">{messages.get(error, "")}</p>{button}
-</main><script>{LOGIN_JS}</script></body></html>""", headers={"Content-Security-Policy": script_policy(LOGIN_JS)})
-
-
-def _row(label: str, hint: str, value: str) -> str:
-    return (f'<div class="setting"><div class="setting-label"><span>{html.escape(label)}</span><span class="setting-hint">{html.escape(hint)}</span></div>'
-            f'<div class="setting-value"><span>{html.escape(value)}</span></div></div>')
+        actions += ('<form id="owner-setup" method="post" action="/auth/setup">'
+                    '<label for="setup-code">Setup code</label>'
+                    '<input id="setup-code" name="code" type="password" autocomplete="one-time-code" '
+                    'minlength="44" maxlength="64" required>'
+                    '<div class="actions"><button type="submit" class="button primary">Sign in</button></div></form>')
+    title = LOGIN_TITLE if actions else "Ask your agent for a sign-in link"
+    return page(title, f'<p id="login-error" role="status">{messages.get(error, "")}</p>{actions}',
+                main_attrs=f' data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}',
+                script=LOGIN_JS, csp=script_policy(LOGIN_JS))
 
 
 def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
     cmd = f"curl -s -X POST {public_url}/connect -H 'content-type: application/json' -d '{{\"code\": \"{code['code']}\"}}'"
-    body = (hero(PAIRING_TITLE, "")
-            + f'<div class="card fade-in">{_row("Agent", "", code["agent"])}'
-            + (_row("Project", "", code["project"]) if code.get("project") else "")
-            + _row("Code", "Expires in 10 min", code["code"])
-            + _row("Redeem", "", cmd) + "</div>"
-            + '<p class="section-gap"><a href="/tokens" class="text-button">Back</a></p>')
-    return page(PAIRING_TITLE, body, 200)
-
-
-def _claim_document(title: str, body: str, status: int = 200, *, field_assets: bool = False) -> HTMLResponse:
-    form_assets = ('<link rel="stylesheet" href="/claim-assets/claim.css">'
-                   '<script src="/claim-assets/claim.js" defer></script>') if field_assets else ""
-    doc = f"""<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-<meta name="referrer" content="same-origin">
-{CLAIM_THEME_META}
-<title>{html.escape(title)} | SwB</title>
-<script src="/assets/theme.js"></script>
-<link rel="stylesheet" href="/assets/claim.css">
-{form_assets}
-</head><body><main>
-{CLAIM_BRAND}
-{body}
-</main></body></html>"""
-    return HTMLResponse(doc, status_code=status, headers={
-        "Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin",
-        "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
-    })
+    project = f'<dt>Project</dt><dd>{html.escape(code["project"])}</dd>' if code.get("project") else ""
+    body = f"""<dl class="pairing-details">
+<dt>Agent</dt><dd>{html.escape(code["agent"])}</dd>{project}
+<dt>Code</dt><dd><code>{html.escape(code["code"])}</code></dd>
+<dt>Expires in</dt><dd>10 min</dd>
+<dt>Redeem</dt><dd><code>{html.escape(cmd)}</code></dd>
+</dl>
+<div class="actions"><a href="/tokens" class="button secondary">Back</a></div>"""
+    return page(PAIRING_TITLE, body)
 
 
 def claim_message_page(title: str, status: int) -> HTMLResponse:
-    return _claim_document(title, f'<h1>{html.escape(title)}</h1>', status)
+    return page(title, status=status, csp=CLAIM_CSP)
 
 
 def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, requester: str = "",
@@ -283,17 +271,7 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
     key_field = ('<label for="owner-key">SwB owner key</label>'
                  '<input id="owner-key" name="owner_key" type="password" required autocomplete="new-password" '
                  'autocapitalize="none" spellcheck="false">') if owner_key else ""
-    connector = requester.lower().replace("_", "-").partition(":")[0].partition("-")[0]
-    if connector in {"openai", "dot"}:
-        connector = "chatgpt"
-    avatar = agent_avatar_url(requester)
-    mark_kind = avatar.removeprefix("/avatars/").removesuffix(".png") if avatar else connector if connector in CLAIM_CONNECTORS else "agent"
-    mark = (f'<img class="persona-mark" src="{avatar}" alt="" width="22" height="22">' if avatar else
-            f'<svg viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/claim-connectors.svg#{mark_kind}"/></svg>')
-    name = html.escape(requester)
-    tile = (f'<div class="requester"><span class="requester-tile" data-connector="{mark_kind}" role="img" '
-            f'aria-label="{name}" title="{name}">{mark}</span></div>') if requester else ""
-    context = f'<p class="scope">{html.escape(scope)}</p>' if scope else ""
+    mark = requester_mark(requester) if requester else ""
     help_link = ('<a class="guide" href="https://claude.ai/code" rel="noreferrer">Open Claude Code'
                  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h6v6m0-6-9 9m6-1v6H5V8h6"/></svg></a>') if guide else ""
     expiry = (f"Expires in {max(1, math.ceil((expires_at - now) / 60))} min"
@@ -301,16 +279,17 @@ def claim_page(title: str, scope: str, csrf: str, *, owner_key: bool = False, re
     footer = (f'<footer><span>{html.escape(host)}</span><span>{expiry}</span></footer>'
               if host or expiry else "")
     heading = error or title
-    return _claim_document(heading, f"""{tile}<h1>{html.escape(heading)}</h1>{context}
-<form method="post" autocomplete="off">
+    body = f"""<form method="post" autocomplete="off">
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
 {key_field}
 {field}
 {help_link}
 <div class="actions">
-<button type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>{save}</button>
+<button type="submit" class="button primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>{save}</button>
 </div>
-</form>{footer}""", 400 if error else 200, field_assets=field_assets)
+</form>{footer}"""
+    return page(heading, body, 400 if error else 200, secondary=html.escape(scope), mark=mark,
+                field_assets=field_assets, csp=CLAIM_CSP)
 
 
 def token_claim_page(name: str, csrf: str, *, kind: str = "token", label: str = "", require_https: bool = False,
