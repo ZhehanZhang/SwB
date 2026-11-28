@@ -26,7 +26,7 @@ Webhook 由所有者管理。调用 `webhook_create`，传入名称，在 `verif
 
 认领链接会打开所有者保存密钥的页面。先以所有者身份登录 SwB，再打开认领链接。在那里保存密钥。SwB 会对保存的密钥保密。
 
-使用 `bearer` 或 `path` 验证时，生成至少 32 个字符的随机密钥。密钥至少要包含 10 种字符。
+使用 `bearer`、`path`、`hmac-sha256` 或 `hmac-sha1` 时，生成至少 32 个字符的随机密钥。密钥至少要包含 10 个不同的字符。
 
 如果你的 SwB 地址使用 Cloudflare Access，把 `/hooks/*` 的 [Cloudflare Access 策略](/zh-Hans/docs/setup/cloudflare#保护控制台)设为 **Bypass**。
 
@@ -105,6 +105,8 @@ SwB 默认要求接收端使用公网 HTTPS 和 443 端口。SwB 会阻止私有
 
 默认只有所有者可以发送。配对智能体需要获得 `senders` 授权，才能向 `webhook:out` 目标发送消息。要授予该 Webhook 的发送权限，在 `senders` 中填入 `agent:claude` 这样的智能体地址。
 
+对于所有者以外的调用者，目标缺失或超出授权范围时，SwB 都会返回 `No such target.` 错误。请让所有者核对目标名称和你的发送权限。
+
 先以所有者身份登录 SwB，再打开认领链接。保存接收端的 HTTPS URL 和签名密钥。通过私密渠道把同一个 `whsec_` 签名密钥交给接收端。
 
 调用 `send`，把 `to` 设为 `webhook:out:alerts`。SwB 在 `POST` 请求中发送下面的 JSON 请求体。
@@ -164,9 +166,7 @@ SwB 按收到的原始请求体校验签名。重放指重复发送一个有效�
 | 设置 | 限制 |
 | - | - |
 | 请求体 | 默认为 256 KiB。把 `blocks.webhook.max_body_kb` 设为 1 到 1024 之间的整数 |
-| 每个 Webhook 在所有地址上新增的已验证事件 | 每 10 分钟 600 个 |
 | 每个 Webhook 来自每个客户端 IP 地址的验证失败 | 每 10 分钟 20 次 |
-| 每个 Webhook 的验证失败总数 | 每 10 分钟 100 次 |
 | 每个客户端 IP 地址发往错误地址的请求 | 每 10 分钟 20 次 |
 | Stripe、Linear、Sentry、Standard Webhooks 和 HMAC 的重放窗口 | 30 天 |
 | Stripe 和 Standard Webhooks 的时间戳容差 | 默认为 300 秒 |
@@ -175,9 +175,7 @@ SwB 按收到的原始请求体校验签名。重放指重复发送一个有效�
 | Sentry 和 HMAC 的重放检查 | SwB 只检查重复的请求体 |
 | bearer 和 path 的重放检查 | SwB 只检查密钥 |
 
-SwB 在验证后检查单个地址的失败次数。同一个 Webhook 和客户端 IP 地址在 10 分钟内失败 20 次后，后续的失败请求会收到 `429`。每次计入的失败在 10 分钟后过期。单个地址达到上限时，通过验证的请求仍会照常处理。
-
-同一个 Webhook 来自所有地址的失败在 10 分钟内累计 100 次后，SwB 会在验证前返回 `429`。达到 600 个事件的上限后，发往该 Webhook 的所有请求也会收到 `429`。
+SwB 先验证签名或密钥，再检查失败次数。同一个 Webhook 和客户端 IP 地址在 10 分钟内失败 20 次后，后续的失败请求会收到 `429`。每次计入的失败在 10 分钟后过期。通过验证的请求仍会照常处理。
 
 请求由受信任的服务器转发时，SwB 用 `trusted_proxies` 确定客户端 IP 地址。
 
