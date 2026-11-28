@@ -4,12 +4,13 @@ import { expect, test } from '@playwright/test';
 
 const streamed = [
   ['caption streams', '<figcaption', ['.swb-hero', '.swb-board:visible'], '.swb-hero figcaption'],
+  ['hero subtitle streams', '<p class="swb-between', ['.swb-hero-copy'], '.swb-between'],
   ['hero actions stream', '<div class="mt-6 grid', ['.swb-hero-copy'], '[data-hero-actions]'],
   ['demo label streams', '<span>Set this up</span>', ['.swb-win-setup'], '.swb-win-setup > span'],
 ] as const;
 
 for (const [part, marker, stable, arriving] of streamed) test(`landing layout stays fixed when the ${part} after first paint`, async ({ page, request, baseURL }, info) => {
-  test.skip(part === 'hero actions stream' && info.project.name === '390', 'The mobile layout does not vertically center the copy.');
+  test.skip(part.startsWith('hero') && info.project.name === '390', 'The mobile layout does not vertically center the copy.');
   const response = await request.get('/');
   expect(response.ok()).toBe(true);
   const html = await response.text();

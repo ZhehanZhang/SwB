@@ -386,7 +386,11 @@
 }
 .swb-hero-copy { container-type: inline-size; }
 @media (min-width: 1024px) {
-  .swb-hero-copy { display: grid; grid-template-rows: auto auto minmax(5.75rem, auto); }
+  .swb-hero-copy {
+    display: grid;
+    grid-template-rows: auto minmax(calc(2.325rem + 2px + var(--swb-hero-prefix-height, 0px)), auto) minmax(5.75rem, auto);
+  }
+  .swb-hero-copy[data-hero-prefix] { --swb-hero-prefix-height: 1.95rem; }
 }
 .swb-hero-title { font-size: clamp(1.75rem, 8.4cqw, 3.625rem); line-height: 1.07; }
 .swb-hero-title:is(:lang(de), :lang(fr), :lang(es)) { font-size: clamp(1.5rem, 7.4cqw, 3.625rem); }
