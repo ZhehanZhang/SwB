@@ -83,13 +83,6 @@ const copy = {
     reachAnywhere: '从任何地方访问',
     companionGuide: 'Companion 指南',
     companionHelp: '要接入本地的 Claude Code、Codex、OpenCode 或 dsh 会话，智能体会引导你在自己的设备上安装并配对 Companion。',
-    museCompanionHelp: '要用 gadget 唤醒 Muse，智能体会引导你在自己的设备上安装并配对 Companion。',
-    muse: {
-      wake: '用 gadget 唤醒 Muse',
-      beforeCommand: '准备一台带蓝牙的 Mac 或 Linux 电脑，放在手机旁边。向拥有 SwB 所有者权限的智能体索取配对码。把示例地址换成你的 SwB 地址。',
-      afterCommand: '在 10 分钟内输入这个一次性配对码。电脑请求蓝牙权限时，选择允许。让智能体开始 Muse 配对。在 Muse 应用中选择 Add Device。',
-      tools: '让 Muse 使用 SwB 工具',
-    },
     procedure: {
       'claude-project': '把设置提示词粘贴到项目的协调者聊天中。为 routine 添加 API 触发器。把它的 Fire URL 交给智能体。用 SwB 认领链接保存 routine 令牌。',
       claude: '在 Claude 中把 SwB 添加为自定义连接器。地址填写以 /mcp 结尾的 SwB 公网地址。登录 SwB 并批准访问。',
@@ -129,13 +122,6 @@ const copy = {
     reachAnywhere: '從任何地方存取',
     companionGuide: 'Companion 指南',
     companionHelp: '要連接本機的 Claude Code、Codex、OpenCode 或 dsh 工作階段，代理會引導你在自己的裝置上安裝並配對 Companion。',
-    museCompanionHelp: '要用 gadget 喚醒 Muse，代理會引導你在自己的裝置上安裝並配對 Companion。',
-    muse: {
-      wake: '用 gadget 喚醒 Muse',
-      beforeCommand: '準備一台有藍牙的 Mac 或 Linux 電腦，放在手機旁邊。向具備 SwB 擁有者存取權的代理索取配對碼。把範例網址換成你的 SwB 網址。',
-      afterCommand: '在 10 分鐘內輸入這組一次性配對碼。電腦要求藍牙權限時，選擇允許。請代理開始 Muse 配對。在 Muse 應用程式中選取 Add Device。',
-      tools: '讓 Muse 使用 SwB 工具',
-    },
     procedure: {
       'claude-project': '把設定提示詞貼到專案的協調者聊天中。為 routine 新增 API 觸發條件。把它的 Fire URL 交給代理。用 SwB 認領連結儲存 routine 權杖。',
       claude: '在 Claude 中將 SwB 新增為自訂連接器。網址填入以 /mcp 結尾的 SwB 公開網址。登入 SwB 並核准存取。',
@@ -175,13 +161,6 @@ const copy = {
     "reachAnywhere": "Accede desde cualquier lugar",
     "companionGuide": "Guía de Companion",
     "companionHelp": "Para las sesiones locales de Claude Code, Codex, OpenCode o dsh, tu agente te guía para instalar y emparejar un companion en tu dispositivo.",
-    "museCompanionHelp": "Para que SwB despierte a Muse con el gadget, tu agente te guía para instalar y emparejar un companion en tu dispositivo.",
-    "muse": {
-      "wake": "Despertar a Muse con un gadget",
-      "beforeCommand": "Usa un Mac o un ordenador con Linux que tenga Bluetooth y esté cerca de tu teléfono. Pide un código de emparejamiento a un agente con acceso de propietario de SwB. Cambia la dirección de ejemplo por tu dirección de SwB.",
-      "afterCommand": "Escribe el código de un solo uso en un plazo de diez minutos. Permite el acceso a Bluetooth cuando tu ordenador lo pida. Pide a tu agente que inicie el emparejamiento de Muse. Selecciona Add Device en la app de Muse.",
-      "tools": "Conectar Muse a las herramientas de SwB"
-    },
     "procedure": {
       "claude-project": "Pega el prompt de configuración en el chat coordinador de tu proyecto. Añade un disparador de API a la rutina. Dale su Fire URL a tu agente. Guarda el token de la rutina con el enlace de entrega de SwB.",
       "claude": "Añade SwB como conector personalizado en Claude. Usa tu dirección pública de SwB terminada en /mcp. Inicia sesión en SwB. Aprueba el acceso.",
@@ -220,13 +199,6 @@ const copy = {
     "reachAnywhere": "Accessible de partout",
     "companionGuide": "Guide du compagnon",
     "companionHelp": "Pour les sessions locales de Claude Code, Codex, OpenCode ou dsh, votre agent vous guide pour installer et appairer un compagnon sur votre appareil.",
-    "museCompanionHelp": "Pour les réveils par le gadget, votre agent vous guide pour installer et appairer un compagnon sur votre appareil.",
-    "muse": {
-      "wake": "Réveiller Muse avec un gadget",
-      "beforeCommand": "Utilisez un Mac ou un ordinateur Linux équipé du Bluetooth, près de votre téléphone. Demandez un code d'appairage à un agent doté de l'accès propriétaire SwB. Remplacez l'adresse d'exemple par votre adresse SwB.",
-      "afterCommand": "Saisissez le code à usage unique dans les dix minutes. Autorisez le Bluetooth quand votre ordinateur le demande. Demandez à votre agent de lancer l'appairage Muse. Sélectionnez Add Device dans l'application Muse.",
-      "tools": "Connecter Muse aux outils SwB"
-    },
     "procedure": {
       "claude-project": "Collez le prompt de configuration dans la discussion du coordinateur de votre projet. Ajoutez un déclencheur API à la routine. Donnez sa Fire URL à votre agent. Enregistrez le jeton de la routine par le lien de saisie SwB.",
       "claude": "Ajoutez SwB comme connecteur personnalisé dans Claude. Utilisez votre adresse SwB publique qui se termine par /mcp. Connectez-vous à SwB. Approuvez l'accès.",
@@ -265,13 +237,6 @@ const copy = {
     "reachAnywhere": "Von überall erreichbar",
     "companionGuide": "Companion-Anleitung",
     "companionHelp": "Für lokale Sitzungen mit Claude Code, Codex, OpenCode oder dsh führt Ihr Agent Sie durch Installation und Kopplung des Companions auf Ihrem Gerät.",
-    "museCompanionHelp": "Für das Wecken über das Gadget führt Ihr Agent Sie durch Installation und Kopplung eines Companions auf Ihrem Gerät.",
-    "muse": {
-      "wake": "Muse mit einem Gadget wecken",
-      "beforeCommand": "Verwenden Sie einen Mac oder einen Linux-Computer mit Bluetooth in der Nähe Ihres Telefons. Bitten Sie einen Agenten mit SwB-Inhaberzugriff um einen Kopplungscode. Ersetzen Sie die Beispieladresse durch Ihre SwB-Adresse.",
-      "afterCommand": "Geben Sie den einmaligen Code innerhalb von zehn Minuten ein. Erlauben Sie Bluetooth, wenn Ihr Computer danach fragt. Bitten Sie Ihren Agenten, die Kopplung mit Muse zu starten. Wählen Sie in der Muse-App Add Device aus.",
-      "tools": "Muse mit den Tools von SwB verbinden"
-    },
     "procedure": {
       "claude-project": "Fügen Sie den Einrichtungsprompt in den Koordinator-Chat Ihres Projekts ein. Fügen Sie der Routine einen API-Trigger hinzu. Geben Sie die Fire URL an Ihren Agenten weiter. Speichern Sie das Token der Routine über den Claim-Link von SwB.",
       "claude": "Fügen Sie SwB in Claude als Custom Connector hinzu. Verwenden Sie Ihre öffentliche SwB-Adresse mit der Endung /mcp. Melden Sie sich bei SwB an. Geben Sie den Zugriff frei.",
@@ -310,13 +275,6 @@ const copy = {
     "reachAnywhere": "어디서나 접속하기",
     "companionGuide": "컴패니언 가이드",
     "companionHelp": "로컬 Claude Code, Codex, OpenCode, dsh 세션을 쓸 때는 에이전트가 내 기기에 컴패니언을 설치하고 페어링하는 과정을 안내합니다.",
-    "museCompanionHelp": "가젯으로 Muse를 깨울 때는 에이전트가 내 기기에 컴패니언을 설치하고 페어링하는 과정을 안내합니다.",
-    "muse": {
-      "wake": "가젯으로 Muse 깨우기",
-      "beforeCommand": "휴대폰 가까이에 있는 Bluetooth 지원 Mac이나 Linux 컴퓨터를 사용하세요. SwB 소유자 권한이 있는 에이전트에게 페어링 코드를 요청하세요. 예시 주소를 내 SwB 주소로 바꾸세요.",
-      "afterCommand": "일회용 코드를 10분 안에 입력하세요. 컴퓨터가 요청하면 Bluetooth를 허용하세요. 에이전트에게 Muse 페어링을 시작해 달라고 요청하세요. Muse 앱에서 Add Device를 선택하세요.",
-      "tools": "Muse를 SwB 도구에 연결하기"
-    },
     "procedure": {
       "claude-project": "프로젝트 코디네이터 채팅에 설정 프롬프트를 붙여 넣으세요. 루틴에 API 트리거를 추가하세요. Fire URL을 에이전트에게 알려 주세요. SwB 등록 링크로 루틴 토큰을 저장하세요.",
       "claude": "Claude에서 SwB을 사용자 지정 커넥터로 추가하세요. /mcp로 끝나는 공개 SwB 주소를 사용하세요. SwB에 로그인하세요. 접근을 승인하세요.",
@@ -355,13 +313,6 @@ const copy = {
     "reachAnywhere": "どこからでもアクセスする",
     "companionGuide": "コンパニオンのガイド",
     "companionHelp": "Claude Code、Codex、OpenCode、dsh のローカルセッションを使う場合は、コンパニオンをデバイスにインストールしてペアリングする手順をエージェントが案内します。",
-    "museCompanionHelp": "ガジェットで Muse を起こす場合は、コンパニオンをデバイスにインストールしてペアリングする手順をエージェントが案内します。",
-    "muse": {
-      "wake": "ガジェットで Muse を起こす",
-      "beforeCommand": "Bluetooth 付きの Mac か Linux のパソコンを、スマートフォンの近くで使ってください。SwB のオーナー権限を持つエージェントに、ペアリングコードを頼んでください。例のアドレスを、実際の SwB のアドレスに置き換えてください。",
-      "afterCommand": "1 回限りのコードを 10 分以内に入力してください。パソコンに求められたら、Bluetooth を許可してください。Muse のペアリングを始めるよう、エージェントに頼んでください。Muse のアプリで Add Device を選択してください。",
-      "tools": "Muse を SwB のツールに接続する"
-    },
     "procedure": {
       "claude-project": "プロジェクトのコーディネーターのチャットに、セットアップ用プロンプトを貼り付けてください。ルーティンに API トリガーを追加してください。その Fire URL をエージェントに渡してください。SwB の受け取りリンクで、ルーティンのトークンを保存してください。",
       "claude": "Claude で、SwB をカスタムコネクターとして追加してください。/mcp で終わる SwB の公開アドレスを使ってください。SwB にサインインしてください。アクセスを承認してください。",
