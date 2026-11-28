@@ -71,6 +71,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
       discord: 'Create an app in the Discord Developer Portal. Get its bot token. Save the token through the SwB claim link. Add the bot to your server with the invite link from your agent.',
       telegram: 'Create a bot with BotFather. Save its token through the SwB claim link. Send a private message to your bot. To connect a group, use the group link from your agent.',
       github: 'Create a GitHub App with the webhook address from your agent. Set the permissions in the guide. Save the webhook secret and app credentials through the SwB claim links. Install the app on the repositories you want to connect.',
+      webhook: 'Choose the sending service and the event target. Save the signing secret through the SwB claim link. Test the connection.',
     },
   },
   'zh-Hans': {
@@ -117,6 +118,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
       discord: '在 Discord 开发者门户创建应用。获取该应用的机器人令牌。通过 SwB 领取链接保存令牌。用智能体给出的邀请链接将机器人添加到服务器。',
       telegram: '通过 BotFather 创建机器人。通过 SwB 领取链接保存机器人的令牌。给机器人发一条私信。要连接群组，请使用智能体给出的群组链接。',
       github: '用智能体给出的 Webhook 地址创建 GitHub App。按指南设置权限。通过 SwB 领取链接保存 Webhook 密钥和应用凭据。把应用安装到要连接的仓库。',
+      webhook: '选择发送服务和事件目标。通过 SwB 领取链接保存签名密钥。测试连接。',
     },
   },
   'zh-Hant': {
@@ -163,6 +165,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
       discord: '在 Discord 開發者入口網站建立應用程式。取得這個應用程式的機器人權杖。透過 SwB 領取連結儲存權杖。用代理提供的邀請連結將機器人加入伺服器。',
       telegram: '用 BotFather 建立機器人。透過 SwB 領取連結儲存機器人的權杖。傳一則私人訊息給機器人。若要連線到群組，請使用代理給你的群組連結。',
       github: '用代理提供的 Webhook 網址建立 GitHub App。依照指南設定權限。透過 SwB 領取連結儲存 Webhook 金鑰與應用程式憑證。將應用程式安裝到要連線的程式碼庫。',
+      webhook: '選擇傳送服務和事件目標。透過 SwB 領取連結儲存簽署金鑰。測試連線。',
     },
   },
 };

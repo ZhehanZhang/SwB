@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 这条命令在登录前即可使用，显示 `status` 和 `version`。运行 `swb status`，或用所有者密钥访问 `/healthz`，即可查看模块、运行状态和缺少的变量。
 
+检查公网 SwB 服务时，使用它的 HTTPS 地址。
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## 服务器命令
 
 运行 `swb --help` 查看各类命令。在任一命令后加上 `--help`，即可查看该命令的选项。

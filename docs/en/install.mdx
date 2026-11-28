@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 This signed-out request shows `status` and `version`. Run `swb status` or call `/healthz` with the owner key to list blocks, their states and any missing variables.
 
+For a public SwB server, use its HTTPS address.
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## Server commands
 
 Run `swb --help` to see the command groups. Add `--help` to a command to see its options.

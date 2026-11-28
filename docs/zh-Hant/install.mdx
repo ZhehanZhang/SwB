@@ -63,6 +63,12 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 這條指令會以登出狀態查詢，顯示 `status` 和 `version`。執行 `swb status`，或用擁有者金鑰存取 `/healthz`，即可查看模組、運作狀態和缺少的變數。
 
+檢查公開的 SwB 服務時，使用它的 HTTPS 位址。
+
+```bash
+curl -fsS https://swb.example.com/healthz
+```
+
 ## 伺服器指令
 
 執行 `swb --help` 可查看各類指令。在任一指令後加上 `--help` 即可查看該指令的選項。

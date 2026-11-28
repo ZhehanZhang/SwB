@@ -1,8 +1,9 @@
 import type { CSSProperties } from 'react';
+import { Webhook } from 'lucide-react';
 
 export type MarkKind =
   | 'claude' | 'claude-code' | 'chatgpt' | 'dots' | 'codex' | 'gemini' | 'grok' | 'grok-bot' | 'muse' | 'swb' | 'capy'
-  | 'slack' | 'discord' | 'telegram' | 'github';
+  | 'slack' | 'discord' | 'telegram' | 'github' | 'webhook';
 
 const avatar: Partial<Record<MarkKind, string>> = {
   claude: '/avatars/claude.png',
@@ -36,7 +37,7 @@ export function MarkTile({ kind, className = '', style }: { kind: MarkKind; clas
     <span className={`swb-mark-tile ${className}`} style={style} aria-hidden="true">
       {masked
         ? <span className="swb-mark-glyph" style={{ backgroundColor: masked[1], maskImage: `url("${masked[0]}")`, WebkitMaskImage: `url("${masked[0]}")` }} />
-        : <img className="swb-mark-glyph" src={platformColor[kind]} alt="" />}
+        : kind === 'webhook' ? <Webhook className="swb-mark-glyph" /> : <img className="swb-mark-glyph" src={platformColor[kind]} alt="" />}
     </span>
   );
 }

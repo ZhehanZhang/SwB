@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { isLocale, localeCookie, locales, localize } from '@/lib/i18n';
+import { SwbAddressProvider } from './swb-address-provider';
 
 const localePrefix = new RegExp(`^/(${locales.join('|')})(?=/|$)`);
 
@@ -26,7 +27,7 @@ export function Providers({ i18n, children }: { i18n: I18nProviderProps; childre
   return (
     <FrameworkProvider Image={Image as Framework['Image']} Link={Link as Framework['Link']}
       useParams={useParams} usePathname={useCanonicalPathname} useRouter={useRouter}>
-      <RootProvider i18n={{ ...i18n, onLocaleChange }}>{children}</RootProvider>
+      <RootProvider i18n={{ ...i18n, onLocaleChange }}><SwbAddressProvider>{children}</SwbAddressProvider></RootProvider>
     </FrameworkProvider>
   );
 }

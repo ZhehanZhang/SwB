@@ -25,6 +25,7 @@ export const setup: Record<SetupMark, { open: Target[]; docs: string }> = {
   discord: { open: ['claude', 'chatgpt'], docs: '/docs/setup/discord' },
   telegram: { open: ['claude', 'chatgpt'], docs: '/docs/setup/telegram' },
   github: { open: ['claude', 'chatgpt'], docs: '/docs/setup/github' },
+  webhook: { open: ['claude', 'chatgpt'], docs: '/docs/blocks/webhooks' },
 };
 
 export function getStartedHref(lang: Locale, marks: readonly SetupMark[] = []) {

@@ -18,6 +18,7 @@ export const getStartedExplanation: Record<Locale, { before: Record<string, stri
       discord: 'Use an app with SwB owner access to save your Discord bot token through a SwB claim link.',
       telegram: 'Use an app with SwB owner access to save your BotFather token through a SwB claim link.',
       github: 'Use an app with SwB owner access to save GitHub App credentials through SwB claim links.',
+      webhook: 'Use an app with SwB owner access to set up event delivery.',
     },
     after: {
       'claude-project': 'SwB can start a routine inside your Claude Project.',
@@ -35,6 +36,7 @@ export const getStartedExplanation: Record<Locale, { before: Record<string, stri
       discord: 'SwB can post an agent’s answer in a Discord thread.',
       telegram: 'You can send work to an agent from a private chat with the Telegram bot.',
       github: 'SwB can collect GitHub issue updates into a digest.',
+      webhook: 'SwB can send and receive events over HTTPS.',
     },
   },
   'zh-Hans': {
@@ -54,6 +56,7 @@ export const getStartedExplanation: Record<Locale, { before: Record<string, stri
       discord: '通过具有 SwB 所有者权限的应用获取领取链接，用它保存 Discord 机器人令牌。',
       telegram: '通过具有 SwB 所有者权限的应用获取领取链接，用它保存 BotFather 发的令牌。',
       github: '通过具有 SwB 所有者权限的应用获取领取链接，用它保存 GitHub App 的凭据。',
+      webhook: '用具有 SwB 所有者权限的应用设置事件传送。',
     },
     after: {
       'claude-project': 'SwB 可以启动 Claude Project 中的 routine。',
@@ -71,6 +74,7 @@ export const getStartedExplanation: Record<Locale, { before: Record<string, stri
       discord: 'SwB 可以把智能体的答复发到 Discord 话题中。',
       telegram: '你可以私聊 Telegram 机器人，把任务交给智能体。',
       github: 'SwB 可以把 GitHub 议题的更新汇总成摘要。',
+      webhook: 'SwB 可以通过 HTTPS 发送和接收事件。',
     },
   },
   'zh-Hant': {
@@ -90,6 +94,7 @@ export const getStartedExplanation: Record<Locale, { before: Record<string, stri
       discord: '從具備 SwB 擁有者權限的應用程式取得領取連結，用來儲存 Discord 機器人權杖。',
       telegram: '從具備 SwB 擁有者權限的應用程式取得領取連結，用來儲存 BotFather 提供的權杖。',
       github: '從具備 SwB 擁有者權限的應用程式取得領取連結，用來儲存 GitHub App 的憑證。',
+      webhook: '用具備 SwB 擁有者權限的應用程式設定事件傳送。',
     },
     after: {
       'claude-project': 'SwB 可以啟動 Claude Project 裡的 routine。',
@@ -107,6 +112,7 @@ export const getStartedExplanation: Record<Locale, { before: Record<string, stri
       discord: 'SwB 可以把代理的回覆貼到 Discord 討論串。',
       telegram: '你可以私訊 Telegram 機器人，把工作交給代理。',
       github: 'SwB 可以把 GitHub 議題的更新彙整成摘要。',
+      webhook: 'SwB 可以透過 HTTPS 傳送和接收事件。',
     },
   },
 };

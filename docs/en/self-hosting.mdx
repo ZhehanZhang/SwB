@@ -53,7 +53,13 @@ Set `SWB_PUBLIC_URL` to the HTTPS address in the terminal. If your config contai
 
 ### Named tunnel
 
-Use a free Cloudflare account with your domain. Follow the [Cloudflare setup guide](/docs/setup/cloudflare) to create the tunnel and set up Access. Set `SWB_PUBLIC_URL` to your public address, such as `https://swb.example.com`. Update the address in `public_url` if your config contains it.
+Use a free Cloudflare account with your domain. Follow the [Cloudflare setup guide](/docs/setup/cloudflare) to create the tunnel and set up Access. Set `SWB_PUBLIC_URL` in `.env` to your public address.
+
+```dotenv
+SWB_PUBLIC_URL=https://swb-your-team.example.net
+```
+
+Update the address in `public_url` if your config contains it. After you start SwB, [check the public address](https://swb-your-team.example.net/healthz).
 
 For a tunnel on the SwB host, point its service address to `http://localhost:8870`. Set `SWB_TRUSTED_PROXIES` to the connector's address, such as `127.0.0.1/32` for an IPv4 loopback connection.
 

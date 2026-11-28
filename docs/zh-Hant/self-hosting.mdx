@@ -53,7 +53,13 @@ cloudflared tunnel --url http://localhost:8870
 
 ### 具名通道
 
-使用免費的 Cloudflare 帳號和自己的網域。依照 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare) 建立通道並設定 Access。將 `SWB_PUBLIC_URL` 設為公開位址，例如 `https://swb.example.com`。若設定檔含有 `public_url`，也更新這個設定項目。
+使用免費的 Cloudflare 帳號和自己的網域。依照 [Cloudflare 設定指南](/zh-Hant/docs/setup/cloudflare) 建立通道並設定 Access。在 `.env` 中將 `SWB_PUBLIC_URL` 設為公開位址。
+
+```dotenv
+SWB_PUBLIC_URL=https://swb-your-team.example.net
+```
+
+若設定檔含有 `public_url`，也更新這個設定項目。啟動 SwB 後，[檢查公開位址](https://swb-your-team.example.net/healthz)。
 
 如果通道在 SwB 主機上執行，將服務位址設為 `http://localhost:8870`。將 `SWB_TRUSTED_PROXIES` 設為連接器的位址。IPv4 本機迴路可用 `127.0.0.1/32`。
 

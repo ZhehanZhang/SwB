@@ -16,6 +16,7 @@ export const setupChoices = [
   { id: 'discord', prompt: 'discord', name: 'Discord', mark: 'discord' },
   { id: 'telegram', prompt: 'telegram', name: 'Telegram', mark: 'telegram' },
   { id: 'github', prompt: 'github', name: 'GitHub', mark: 'github' },
+  { id: 'webhook', prompt: 'webhook', name: 'Webhooks', mark: 'webhook' },
 ] as const satisfies readonly { id: string; prompt: string; name: string; mark: MarkKind }[];
 
 type Choice = (typeof setupChoices)[number];

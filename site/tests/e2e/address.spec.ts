@@ -1,0 +1,223 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { expect, test, type Page } from '@playwright/test';
+
+const origin = 'https://my-swb.example.net:9443';
+const example = 'https://swb.example.com';
+const start = '/docs/get-started';
+const claude = '/docs/setup/claude';
+const install = '/docs/install';
+const selfHosting = '/docs/self-hosting';
+const connect = '/docs/connect';
+const addressKey = 'swb-address';
+const label = 'Your SwB address';
+const promptDirectory = resolve(__dirname, '../../../docs/prompts');
+
+const docs = (page: Page) => page.locator('.swb-mdx');
+const address = (page: Page) => page.locator('[data-get-started]').getByRole('textbox', { name: label });
+const indicator = (page: Page) => page.locator('#nd-nav').getByRole('button', { name: label });
+const clipboard = (page: Page) => page.evaluate(() => navigator.clipboard.readText());
+const stored = (page: Page) => page.evaluate((key) => localStorage.getItem(key), addressKey);
+
+async function openGetStarted(page: Page) {
+  await page.goto(`${start}?agents=claude`);
+  await expect(page.locator('[data-get-started]')).toHaveAttribute('data-ready', 'true');
+}
+
+async function copyBlock(page: Page, value: string) {
+  const code = docs(page).locator('figure.shiki').filter({ hasText: value });
+  await expect(code.locator('pre')).toContainText(value);
+  await code.getByRole('button', { name: 'Copy Text' }).click();
+  expect(await clipboard(page)).toBe(value);
+}
+
+test('persists one address for Get started, docs, copy and Open in actions', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+
+  await openGetStarted(page);
+  await expect(indicator(page)).toHaveCount(0);
+  await address(page).fill(`${origin}/mcp`);
+  await address(page).press('Enter');
+  expect(await stored(page)).toBe(origin);
+  await page.reload();
+  await expect(address(page)).toHaveValue(origin);
+  const prompt = readFileSync(resolve(promptDirectory, 'claude.md'), 'utf8').replaceAll(example, origin);
+  const getStarted = page.getByRole('region', { name: 'Claude', exact: true });
+  await expect(getStarted.locator('pre')).toHaveText(prompt);
+  await getStarted.getByRole('button', { name: 'Copy prompt' }).click();
+  expect(await clipboard(page)).toBe(prompt);
+  const open = await getStarted.getByRole('link', { name: 'Open in Claude' }).getAttribute('href');
+  expect(new URL(open!).searchParams.get('q')).toBe(prompt);
+
+  await page.goto(claude);
+  const setup = docs(page).locator('figure.swb-prompt');
+  await expect(setup.locator('pre')).toContainText(`${origin}/mcp`);
+  for (const app of ['Claude', 'ChatGPT']) {
+    const url = await setup.getByRole('link', { name: `Open in ${app}` }).getAttribute('href');
+    expect(new URL(url!).searchParams.get('q')).toBe(await setup.locator('pre').textContent());
+  }
+  await setup.getByRole('button', { name: 'Copy prompt' }).click();
+  expect(await clipboard(page)).toBe(await setup.locator('pre').textContent());
+  await copyBlock(page, `${origin}/mcp`);
+  await docs(page).getByRole('tab', { name: 'Team or Enterprise' }).click();
+  await docs(page).getByRole('tab', { name: 'Personal plan' }).click();
+  await expect(docs(page).locator('figure.shiki code')).toHaveText(`${origin}/mcp`);
+
+  await page.goto(install);
+  await copyBlock(page, `curl -fsS ${origin}/healthz`);
+  await expect(docs(page).locator('pre').filter({ hasText: 'http://127.0.0.1:8870/healthz' })).toBeVisible();
+  await page.evaluate(() => Object.assign(window, { swbSoftNavigation: true }));
+  await docs(page).getByRole('link', { name: 'Docker Compose' }).click();
+  await expect(page).toHaveURL(`${selfHosting}#docker-compose`);
+  expect(await page.evaluate(() => Reflect.get(window, 'swbSoftNavigation'))).toBe(true);
+  await copyBlock(page, `SWB_PUBLIC_URL=${origin}`);
+  await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', `${origin}/healthz`);
+
+  await page.goto(connect);
+  await expect(docs(page).getByText(`${origin}/mcp`, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Copy Markdown' }).click();
+  await expect.poll(() => clipboard(page)).toContain(`claude mcp add --transport http --scope user swb ${origin}/mcp`);
+
+  await page.goto('/docs/setup/coding-agent');
+  await docs(page).getByRole('tab', { name: 'Codex' }).click();
+  await copyBlock(page, `[mcp_servers.swb]\nurl = "${origin}/mcp"`);
+  expect(errors).toEqual([]);
+});
+
+test('copies a fragment link, edits from the popover and clears the address everywhere', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(`${selfHosting}?tab=remote#named-tunnel&swb=${encodeURIComponent(origin)}`);
+  await expect(page).toHaveURL(`${selfHosting}?tab=remote#named-tunnel`);
+  await indicator(page).click();
+  const popover = page.getByRole('dialog');
+  await expect(popover.getByRole('textbox', { name: label })).toHaveValue(origin);
+  await popover.getByRole('button', { name: 'Copy link with your address' }).click();
+  const share = new URL(await clipboard(page));
+  expect(share.search).toBe('?tab=remote');
+  expect(share.hash).toBe(`#named-tunnel&swb=${encodeURIComponent(origin)}`);
+
+  const update = 'https://other-swb.example.org';
+  await popover.getByRole('textbox', { name: label }).fill(update);
+  await popover.getByRole('textbox', { name: label }).press('Enter');
+  await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', `${update}/healthz`);
+  await popover.getByRole('button', { name: 'Clear' }).click();
+  await expect(indicator(page)).toHaveCount(0);
+  await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', 'https://swb-your-team.example.net/healthz');
+  await copyBlock(page, 'SWB_PUBLIC_URL=https://swb-your-team.example.net');
+  expect(await stored(page)).toBeNull();
+  await openGetStarted(page);
+  await expect(address(page)).toHaveValue('');
+  await expect(docs(page).getByRole('region', { name: 'Claude', exact: true }).locator('pre')).toContainText(example);
+});
+
+test('accepts fragment and query prefill and preserves anchors and picker state', async ({ page }) => {
+  await page.goto(`${claude}?swb=${encodeURIComponent(`${origin}/mcp`)}#copy-the-setup-prompt`);
+  await expect(page).toHaveURL(`${claude}#copy-the-setup-prompt`);
+  await expect(indicator(page)).toHaveAttribute('title', 'my-swb.example.net:9443');
+  expect(await stored(page)).toBe(origin);
+
+  const second = 'https://next-swb.example.org';
+  await page.goto(`${start}?agents=claude&run=server#swb=${encodeURIComponent(second)}&claude`);
+  await expect(page).toHaveURL(`${start}?agents=claude&run=server#claude`);
+  await expect(address(page)).toHaveValue(second);
+  await expect(docs(page).getByRole('button', { name: 'On your server' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(docs(page).getByRole('button', { name: 'Claude', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+  await page.evaluate((value) => { location.hash = `swb=${encodeURIComponent(value)}&claude`; }, origin);
+  await expect(page).toHaveURL(`${start}?agents=claude&run=server#claude`);
+  await expect(address(page)).toHaveValue(origin);
+});
+
+test('rejects hostile field, fragment and query input without changing the saved address', async ({ page }) => {
+  const dialogs: string[] = [];
+  page.on('dialog', async (dialog) => { dialogs.push(dialog.message()); await dialog.dismiss(); });
+  await page.goto(`${start}?agents=claude#swb=${encodeURIComponent(origin)}`);
+  await expect(address(page)).toHaveValue(origin);
+  for (const value of ['javascript:alert(1)', 'https://user:pw@x.com', 'https://x.com"><script>alert(1)</script>', 'https://swb。example.net', 'http://example.com']) {
+    await address(page).fill(value);
+    await address(page).press('Enter');
+    await expect(address(page)).toHaveAttribute('aria-invalid', 'true');
+    expect(await stored(page)).toBe(origin);
+    for (const location of [`${claude}#swb=${encodeURIComponent(value)}`, `${claude}?swb=${encodeURIComponent(value)}`]) {
+      await page.goto(location);
+      await expect(indicator(page)).toHaveAttribute('title', 'my-swb.example.net:9443');
+      await expect(page).toHaveURL(location);
+      expect(await stored(page)).toBe(origin);
+    }
+    await openGetStarted(page);
+  }
+  await address(page).fill('');
+  await address(page).press('Enter');
+  expect(await stored(page)).toBe(origin);
+  expect(dialogs).toEqual([]);
+});
+
+test('keeps server HTML, RSC, Markdown, llms text and all 18 prompt files canonical', async ({ request }) => {
+  const html = await request.get(`${claude}?swb=${encodeURIComponent(origin)}`);
+  expect(html.ok()).toBe(true);
+  expect(await html.text()).toContain(`${example}/mcp`);
+  expect(await html.text()).not.toContain(origin);
+  const rsc = await request.get(`${claude}?swb=${encodeURIComponent(origin)}`, { headers: { RSC: '1' } });
+  expect(rsc.headers()['content-type']).toContain('text/x-component');
+  expect(await rsc.text()).toContain(`${example}/mcp`);
+  expect(await rsc.text()).not.toContain(origin);
+  for (const path of [`${claude}.mdx`, '/llms-full.txt']) {
+    const response = await request.get(`${path}?swb=${encodeURIComponent(origin)}`);
+    expect(response.ok()).toBe(true);
+    expect(await response.text()).toContain(`${example}/mcp`);
+    expect(await response.text()).not.toContain(origin);
+  }
+  const index = await request.get('/llms.txt');
+  const sharedIndex = await request.get(`/llms.txt?swb=${encodeURIComponent(origin)}`);
+  expect(await sharedIndex.text()).toBe(await index.text());
+  expect(await index.text()).toContain('/prompts/claude.md');
+  const files = readdirSync(promptDirectory).filter((file) => file.endsWith('.md'));
+  expect(files).toHaveLength(18);
+  for (const file of files) {
+    const response = await request.get(`/prompts/${file}?swb=${encodeURIComponent(origin)}`);
+    expect(response.ok()).toBe(true);
+    expect((await response.body()).equals(readFileSync(resolve(promptDirectory, file))), file).toBe(true);
+  }
+});
+
+test('long saved addresses leave docs CLS below 0.01', async ({ page }) => {
+  const long = `https://${'a'.repeat(50)}.${'b'.repeat(50)}.${'c'.repeat(50)}.example.org:9443`;
+  await page.addInitScript(({ key, address }) => {
+    localStorage.setItem(key, address);
+    const shifts: number[] = [];
+    Object.assign(window, { swbLayoutShifts: shifts });
+    new PerformanceObserver((entries) => {
+      for (const item of entries.getEntries()) {
+        const shift = item as PerformanceEntry & { hadRecentInput: boolean; value: number };
+        if (!shift.hadRecentInput) shifts.push(shift.value);
+      }
+    }).observe({ type: 'layout-shift', buffered: true });
+  }, { key: addressKey, address: long });
+  for (const path of [claude, selfHosting, connect]) {
+    await page.goto(path);
+    await expect(indicator(page)).toHaveAttribute('title', new URL(long).host);
+    await expect(docs(page).getByText(new RegExp(long.replaceAll('.', '\\.'))).first()).toBeVisible();
+    const total = await page.evaluate(async () => {
+      await document.fonts.ready;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      return (Reflect.get(window, 'swbLayoutShifts') as number[]).reduce((sum, value) => sum + value, 0);
+    });
+    console.info(`${path} CLS ${total}`);
+    expect(total, path).toBeLessThan(0.01);
+  }
+});
+
+test('adds the existing Webhooks prompt and guide to the picker', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(`${start}?agents=webhook`);
+  await expect(docs(page).getByRole('button', { name: 'Webhooks' })).toHaveAttribute('aria-pressed', 'true');
+  const section = docs(page).getByRole('region', { name: 'Webhooks' });
+  await expect(section.getByRole('link', { name: 'Full guide' })).toHaveAttribute('href', '/docs/blocks/webhooks');
+  await section.getByRole('button', { name: 'Copy prompt' }).click();
+  expect(await clipboard(page)).toBe(readFileSync(resolve(promptDirectory, 'webhook.md'), 'utf8'));
+});
