@@ -1,9 +1,9 @@
 ---
 title: 記憶
-description: 讓代理共享學到的內容，並由你完整掌控。
+description: 讓代理共用學到的內容，並由你完整掌控。
 ---
 
-**記憶**是代理透過 SwB 共享的筆記。每則筆記是一個**項目**。項目有標題、Markdown 內文，以及每次修改的歷史紀錄。
+**記憶**是代理透過 SwB 共用的筆記。每則筆記是一個**項目**。項目有標題、Markdown 內文，以及每次修改的歷史記錄。
 
 ## 範圍
 
@@ -21,7 +21,7 @@ description: 讓代理共享學到的內容，並由你完整掌控。
 
 代理把記憶看成 `/memories` 底下的檔案。範圍裡的資料夾是一個**主題**，例如 `decisions` 或 `notes/meetings`。檔名就是項目的鍵。
 
-這些工具的指令和 Claude 記憶工具相同。Claude 模型已經熟悉它們。
+下表工具的指令和 Claude 記憶工具相同，Claude 模型原本就熟悉這些指令。
 
 | 工具 | 用途 |
 | --- | --- |
@@ -43,15 +43,15 @@ description: 讓代理共享學到的內容，並由你完整掌控。
 
 ## 記憶同步
 
-**記憶同步**會把代理在自身記憶中儲存的內容複製到 SwB。這樣每個代理都能使用。它適用於 Claude 記憶、ChatGPT 記憶、Grok 記憶、Claude Code 記憶檔案和其他記憶系統。
+**記憶同步**會把代理在自身記憶中儲存的內容複製到 SwB，讓每個代理都能使用。它適用於 Claude 記憶、ChatGPT 記憶、Grok 記憶、Claude Code 記憶檔案和其他記憶系統。
 
-每份設定提示詞都會請代理開啟同步。設定完成後，代理用 `memory_sync` 傳送它記得的關於你的資訊。它只傳送你希望所有代理知道的內容。密碼、金鑰和敏感個人資料留在它自己的記憶裡。之後，代理每儲存一則新記憶，就在同一輪對話中同步。
+每份設定提示詞都會要求代理同步記憶。設定完成後，代理用 `memory_sync` 傳送它記得的、與你有關的資訊，而且只傳送你希望所有代理知道的內容。密碼、金鑰和敏感個人資料留在它自己的記憶裡。之後，代理每儲存一則新記憶，就在同一輪中同步。
 
-`memory_sync` 可以安全地重複呼叫。每次都會更新同一個項目。你在 SwB 中的修改和刪除優先。之後的同步會保留你的版本，並向代理回報衝突。
+`memory_sync` 可以放心重複呼叫，每次都會更新同一個項目。你在 SwB 中的修改和刪除優先，之後的同步會保留你的版本，並向代理回報衝突。
 
-使用 `--cap hooks` 的[Companion](/zh-Hant/docs/companion)會在每次儲存時同步 Claude Code 記憶檔案。
+使用 `--cap hooks` 的 [Companion](/zh-Hant/docs/companion) 會在每次儲存時同步 Claude Code 記憶檔案。
 
-記憶同步預設開啟。若要關閉，請在主控台開啟 **Memory**，再關閉 **Memory sync**。以擁有者身分登入的代理也可以用 `memory_settings` 切換這個開關。
+記憶同步預設開啟。要關閉記憶同步，在主控台開啟 **Memory**，再關閉 **Memory sync**。以擁有者身分登入的代理也可以用 `memory_settings` 切換這個開關。
 
 ## 來源紀錄
 
@@ -67,22 +67,22 @@ description: 讓代理共享學到的內容，並由你完整掌控。
 
 ## 下載與還原
 
-在 **Memory** 頁面選取 **Download**，即可把全部記憶存成 zip 檔。檔案中每個項目對應一個 Markdown 檔，依範圍和主題分資料夾存放。檔案也包含 `manifest.json`，其中有每個項目的歷史和來源紀錄。
+在 **Memory** 頁面選取 **Download**，即可把全部記憶存成 zip 檔。檔案中每個項目對應一個 Markdown 檔，依範圍和主題分資料夾存放。檔案也包含 `manifest.json`，其中有每個項目的歷史記錄和來源紀錄。
 
-選取 **Restore from file** 載入 zip 檔。還原會加入缺少的項目，並更新有變動的項目。其他項目維持原樣。同一個檔案可以安全地重複載入。
+選取 **Restore from file** 載入 zip 檔。還原會加入缺少的項目，並更新有變動的項目。其他項目維持原樣。同一個檔案可以放心重複載入。
 
 以擁有者身分登入的代理可以用 `memory_export` 和 `memory_import` 完成同樣的操作。
 
 ## 備份到 Git
 
-SwB 可以把記憶複製到你自己的私人 Git 存放庫。每次修改都會成為一次提交，例如 "Claude updated projects/swb/decisions/ownership.md"。
+SwB 可以把記憶複製到你自己的私人 Git 存放庫。每次修改都會成為一次提交，例如「Claude updated projects/swb/decisions/ownership.md」。
 
-記憶中的所有內容都會進入這個存放庫。請使用私人存放庫。
+記憶中的所有內容都會進入這個存放庫。使用私人存放庫。
 
-在主控台開啟 **Memory**。在 **Git backup** 中填入存放庫位址和分支。HTTPS 位址需要貼上一個對該存放庫有寫入權限的權杖。SSH 位址需要貼上一把有寫入權限的部署金鑰。SwB 會加密保存權杖或金鑰。
+在主控台開啟 **Memory**。在 **Git backup** 中填入存放庫網址和分支。如果是 HTTPS 網址，貼上一個對該存放庫有寫入權限的權杖。如果是 SSH 網址，貼上一把有寫入權限的部署金鑰。SwB 會加密保存權杖或金鑰。
 
 修改發生 30 秒後，SwB 會把這段時間內的修改合併成一次提交。選取 **Back up now** 可以立即提交。推送失敗時，SwB 會稍後重試。狀態列顯示最近一次備份和最近一次錯誤。
 
 選取 **Restore from repository**，即可從最新的提交載入記憶。
 
-以擁有者身分登入的代理可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。`memory_backup_configure` 會回傳一個用來提交權杖或金鑰的認領連結。
+以擁有者身分登入的代理可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。`memory_backup_configure` 會回傳一個認領連結，用來儲存權杖或金鑰。

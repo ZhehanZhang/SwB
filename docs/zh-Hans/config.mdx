@@ -167,10 +167,10 @@ GitHub 的信任等级为 `owner` 和 `external`。Slack、Discord 和 Telegram 
 | `memory.mirror` | 控制 Markdown 副本。设为 `false` 可停止更新 |
 | `memory.mirror_dir` | 存放 Markdown 副本的目录 |
 | `memory.mirror_debounce_s` | 记忆更新后，写入副本前等待的秒数，默认为 `2` |
-| `memory.sync` | 允许智能体用 `memory_sync` 把自身记忆复制到 SwB。默认 `true`。控制台中的 **Memory sync** 开关优先 |
+| `memory.sync` | 允许智能体用 `memory_sync` 把自身记忆复制到 SwB。默认为 `true`。控制台中的 **Memory sync** 开关优先 |
 | `memory.backup` | 记忆 Git 备份的设置 |
-| `memory.backup.debounce_s` | 记忆修改后等待多少秒再提交备份。默认 `30` |
-| `memory.backup.max_delay_s` | 连续修改时提交备份的最长等待秒数。默认 `300` |
+| `memory.backup.debounce_s` | 从记忆变更到提交备份的等待时间，单位为秒。默认为 `30` |
+| `memory.backup.max_delay_s` | 记忆连续变更时，提交备份前的最长等待时间，单位为秒。默认为 `300` |
 | `modes` | 设置 SwB 如何处理传入事件 |
 | `modes.default` | 默认模式，初始值为 `off` |
 | `modes.projects` | 各项目下空间的默认模式 |
