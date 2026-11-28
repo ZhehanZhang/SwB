@@ -73,9 +73,10 @@ async def test_bot_posts_use_the_agent_persona_and_avatar_file(make_core, world,
     assert posts[0]["username"] == "Claude" and re.fullmatch(PUBLIC + r"/avatars/claude\.png\?v=\d+", posts[0]["icon_url"])
     assert posts[1]["username"] == "HelperBot" and re.fullmatch(PUBLIC + r"/avatars/swb\.png\?v=\d+", posts[1]["icon_url"])
     assert posts[2]["username"] == "Switchboard"
-    (core.avatar_dir).mkdir(parents=True, exist_ok=True)
-    (core.avatar_dir / "claude.png").write_bytes(PNG + b"new")
-    assert core.find_avatar("claude.png") == core.avatar_dir / "claude.png"
+    uploads = core.data_dir / "avatars"
+    uploads.mkdir(parents=True)
+    (uploads / "claude.png").write_bytes(PNG + b"old")
+    assert core.find_avatar("claude.png") == overlay / "claude.png"
     assert core.find_avatar("../x.png") is None
 
 

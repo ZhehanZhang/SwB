@@ -597,7 +597,7 @@ def test_authorize_returns_to_full_request_and_accepts_session(make, no_spa_buil
     assert sign_in(client).status_code == 204
     consent_page = client.get(next_path)
     assert consent_page.status_code == 200
-    assert f"Signed in as {owner_name}</p>" in consent_page.text
+    assert f"Signed in as {owner_name}</span>" in consent_page.text
     session = core.auth.sessions.owner(client.cookies[SESSION_COOKIE])
     assert session.label not in consent_page.text and client.cookies[SESSION_COOKIE] not in consent_page.text
     req = re.search(r'name="req" value="([^"]+)"', consent_page.text).group(1)

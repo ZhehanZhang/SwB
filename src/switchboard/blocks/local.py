@@ -229,6 +229,7 @@ class LocalBlock(Block):
         out = await self.core.agent_send(principal, to=mailbox, text=task, project=project, allow_self=True,
                                          handle=call.handle, handle_meta=call.handle_meta, title=title, dry_run=call.dry_run,
                                          _allow_unregistered=agent is None, _session_target=None if publish else to)
+        mailbox = out["to"].removeprefix("agent:")
         base = {**out, "to": to, "agent": mailbox}
         if call.dry_run:
             return base
@@ -250,6 +251,9 @@ class LocalBlock(Block):
             if not publish:
                 self.core.inbox.update_handle(conversation, status="cancelled")
                 raise BlockError(reason)
+            if not out["delivered"]:
+                call.note(outcome="pending")
+                return {**base, "woke": False, "note": f"{reason} Owner delivery is pending."}
             call.note(outcome="mailbox")
             return {**base, "woke": False, "note": f"{reason} Message left in the {mailbox} mailbox."}
         sender = self.core.agents.label(principal.source)

@@ -20,12 +20,14 @@ export function NoteInspector({ note, onClose, onRelocate }: {
   const csrf = session?.signed_in ? session.csrf : null
   const [action, setAction] = useState<MemoryAction["kind"] | null>(null)
   const [toScope, setToScope] = useState("")
-  const [draft, setDraft] = useState({ title: "", body: "" })
+  const [draft, setDraft] = useState({ title: "", body: "", tags: "" })
+  const [path, setPath] = useState("")
   const [restoreRev, setRestoreRev] = useState<number | null>(null)
   const actionButtons = useRef<HTMLDivElement>(null)
   const confirmation = useRef<HTMLFormElement>(null)
   const trigger = useRef<{ button: HTMLButtonElement; kind: MemoryAction["kind"] }>(null)
   const titleInput = useRef<HTMLInputElement>(null)
+  const pathInput = useRef<HTMLInputElement>(null)
   const detail = useQuery({
     queryKey: ["memory", "detail", note.id],
     queryFn: ({ signal }) => fetchMemoryDetail(note.id, signal),
@@ -58,6 +60,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
         setRestoreRev(null)
         toast.success({
           edit: "Note saved.",
+          rename: "Path saved.",
           restore: "Revision restored.",
           promote: "Note promoted to general.",
           move: "Note moved.",
@@ -69,9 +72,12 @@ export function NoteInspector({ note, onClose, onRelocate }: {
   const scope = entry?.scope ?? note.scope
   const destinations = projects.data?.filter((destination) => destination !== scope) ?? []
   const validDestination = destinations.includes(toScope)
+  const scopePath = scope === "general" ? "general" : scope.replace(/^project:/, "projects/").replace(/^agent:/, "agents/")
+  const validPath = path.trim().startsWith(`/memories/${scopePath}/`) && path.trim() !== entry?.path
 
   useEffect(() => {
     if (action === "edit") titleInput.current?.focus()
+    else if (action === "rename") pathInput.current?.focus()
     else if (action) confirmation.current?.focus()
     else if (trigger.current) {
       const { button, kind } = trigger.current
@@ -88,7 +94,8 @@ export function NoteInspector({ note, onClose, onRelocate }: {
     setAction(next)
     setToScope("")
     if (next !== "restore") setRestoreRev(null)
-    if (next === "edit" && entry) setDraft({ title: entry.title, body: entry.body })
+    if (next === "edit" && entry) setDraft({ title: entry.title, body: entry.body, tags: entry.tags.join(", ") })
+    if (next === "rename" && entry) setPath(entry.path)
   }
 
   return (
@@ -140,11 +147,17 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                   {action === "edit" ? (
                     <form className="space-y-3 pt-4" aria-label="Edit note" onSubmit={(event) => {
                       event.preventDefault()
-                      if (draft.title.trim() && !mutation.isPending) mutation.mutate({ kind: "edit", ...draft })
+                      if (draft.title.trim() && !mutation.isPending) {
+                        mutation.mutate({ kind: "edit", ...draft, tags: draft.tags.split(",").map(tag => tag.trim()).filter(Boolean) })
+                      }
                     }}>
                       <Field label="Title">
                         <Input ref={titleInput} required maxLength={200} value={draft.title} disabled={mutation.isPending}
                           onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+                      </Field>
+                      <Field label="Tags">
+                        <Input value={draft.tags} disabled={mutation.isPending}
+                          onChange={event => setDraft({ ...draft, tags: event.target.value })} />
                       </Field>
                       <Field label="Body">
                         <textarea className="min-h-32 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-body-md"
@@ -212,6 +225,7 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                       {!action ? (
                         <div ref={actionButtons} className="flex flex-wrap items-center gap-2">
                           <Button size="sm" variant="outline" data-action="edit" onClick={(event) => startAction("edit", event.currentTarget)}>Edit</Button>
+                          <Button size="sm" variant="outline" data-action="rename" onClick={event => startAction("rename", event.currentTarget)}>Rename path</Button>
                           {scope !== "general" && <Button size="sm" variant="outline" data-action="promote" onClick={(event) => startAction("promote", event.currentTarget)}>Promote</Button>}
                           <Button size="sm" variant="outline" data-action="move" onClick={(event) => startAction("move", event.currentTarget)}>Move</Button>
                           <Button size="sm" variant="ghost" data-action="delete" className="text-destructive" onClick={(event) => startAction("delete", event.currentTarget)}>Delete</Button>
@@ -222,6 +236,8 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                           if (mutation.isPending) return
                           if (action === "move") {
                             if (validDestination) mutation.mutate({ kind: "move", toScope })
+                          } else if (action === "rename") {
+                            if (validPath) mutation.mutate({ kind: "rename", path: path.trim() })
                           } else mutation.mutate({ kind: action })
                         }}>
                           {action === "move" ? (
@@ -242,9 +258,16 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                                 </Field>
                               ) : <DataState kind="empty" message="0 other projects" className="py-0" />
                           ) : null}
+                          {action === "rename" && (
+                            <Field label="Path">
+                              <Input ref={pathInput} required maxLength={250} value={path} disabled={mutation.isPending}
+                                onChange={event => { setPath(event.target.value); mutation.reset() }} />
+                            </Field>
+                          )}
                           {mutation.isError && (
                             <p role="alert" className="text-sm text-destructive">
-                              {action === "delete" ? "Try deleting the note again." : action === "promote" ? "Try promoting the note again." : "Try moving the note again."}
+                              {action === "rename" ? "Check the path and try again."
+                                : action === "delete" ? "Try deleting the note again." : action === "promote" ? "Try promoting the note again." : "Try moving the note again."}
                             </p>
                           )}
                           <div className="flex flex-wrap gap-2">
@@ -252,9 +275,11 @@ export function NoteInspector({ note, onClose, onRelocate }: {
                               type="submit"
                               size="sm"
                               variant={action === "delete" ? "destructive" : "default"}
-                              disabled={mutation.isPending || (action === "move" && !validDestination)}
+                              disabled={mutation.isPending || (action === "move" && !validDestination)
+                                || (action === "rename" && !validPath)}
                             >
-                              {mutation.isPending ? "Saving…" : action === "delete" ? "Delete note" : action === "promote" ? "Promote to general" : "Move note"}
+                              {mutation.isPending ? "Saving…" : action === "rename" ? "Save"
+                                : action === "delete" ? "Delete note" : action === "promote" ? "Promote to general" : "Move note"}
                             </Button>
                             <Button size="sm" variant="ghost" disabled={mutation.isPending} onClick={() => startAction(null)}>Cancel</Button>
                           </div>

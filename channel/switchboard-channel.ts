@@ -8,11 +8,13 @@ import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
+import { version } from "./package.json"
 
 const log = (msg: string) => process.stderr.write(`[switchboard-channel] ${msg}\n`)
+const userAgent = `SwB/${version} (channel)`
 
 const mcp = new Server(
-  { name: "swb", title: "SwB", version: "0.2.0" },
+  { name: "swb", title: "SwB", version },
   {
     capabilities: { experimental: { "claude/channel": {} } },
     instructions:
@@ -96,7 +98,9 @@ async function follow(url: string, key: string, agent: string, stateDir: string)
       const q = new URLSearchParams()
       if (agent) q.set("agent", agent)
       if (cursor) q.set("after", cursor)
-      const res = await fetch(`${url}/inbox/events?${q}`, { headers: { Authorization: `Bearer ${key}`, Accept: "text/event-stream" } })
+      const res = await fetch(`${url}/inbox/events?${q}`, {
+        headers: { Authorization: `Bearer ${key}`, Accept: "text/event-stream", "User-Agent": userAgent },
+      })
       if (res.status === 401) throw new Error("SwB rejected the channel key (401)")
       if (!res.ok || !res.body) throw new Error(`SwB answered ${res.status}`)
       log("Connected to SwB")

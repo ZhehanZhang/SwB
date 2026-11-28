@@ -19,6 +19,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
 
+from . import USER_AGENT
 from .guard import RateLimiter, client_ip
 
 if TYPE_CHECKING:
@@ -71,8 +72,8 @@ URL='__URL__'
 REWAKE_S=__REWAKE__
 STALE_S=__STALE__
 
-state_get() { hook_state_get "$1" 2>/dev/null || true; }
-state_set() { hook_state_set "$1" "$2" >/dev/null 2>&1 || true; }
+state_get() { hook_state_get 2>/dev/null || true; }
+state_set() { hook_state_set "$2" >/dev/null 2>&1 || true; }
 int() { case "$1" in ''|*[!0-9]*) printf '%s' "${2:-0}" ;; *) printf '%s' "$1" ;; esac; }
 
 now=$(date +%s)
@@ -98,7 +99,7 @@ save() {
 
 body=$(mktemp) && head=$(mktemp) || { silent "Temporary files are unavailable" '{"event":"error"}'; exit 0; }
 trap 'rm -f "$body" "$head"' EXIT
-args=(-sS --max-time 4 -o "$body" -D "$head" -w '%{http_code} %{time_total}')
+args=(-sS -A "__USER_AGENT__ (muse-hook)" --max-time 4 -o "$body" -D "$head" -w '%{http_code} %{time_total}')
 [ -n "$etag" ] && args+=(-H "If-None-Match: $etag")
 read -r code took < <(curl "${args[@]}" "$URL" 2>/dev/null || true)
 code=$(int "$code" 0)
@@ -269,15 +270,13 @@ class HookWake:
     def setup(self, agent: str, *, by: str, poll_interval_secs: int) -> dict[str, Any]:
         self.url(TOKEN_PREFIX + "x" * 43)
         token = self.mint(agent, by=by)
-        script = (SCRIPT.replace("__URL__", self.url(token)).replace("__REWAKE__", str(REWAKE_S))
+        script = (SCRIPT.replace("__USER_AGENT__", USER_AGENT).replace("__URL__", self.url(token)).replace("__REWAKE__", str(REWAKE_S))
                   .replace("__STALE__", str(STALE_S)))
         return {
             "hook": {"id": HOOK_ID, "script_path": SCRIPT_PATH, "prompt": WORKER_PROMPT, "poll_interval_secs": poll_interval_secs,
                      "script_timeout_secs": SCRIPT_TIMEOUT_S, "delivery": "main"},
             "script": script,
             "next": [
-                "Read ~/hooks/runtime/hatch_hook_runtime.sh. Check how hook_state_get and hook_state_set take their arguments. "
-                "If they differ from 'hook_state_get KEY' and 'hook_state_set KEY VALUE', change state_get and state_set in the script to match.",
                 f"Write script to {SCRIPT_PATH} with mode 700. Keep it only in that file.",
                 f"If a hook with the ID {HOOK_ID} exists, call hooks.update with the fields in hook. Else call hooks.add with them.",
                 f"Call hooks.dry_run for {HOOK_ID}. Expect silent with http 200 or 304. Show the owner the result line.",

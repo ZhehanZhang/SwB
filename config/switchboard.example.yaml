@@ -14,7 +14,7 @@ version: 2
 # trusted_proxies: []
 # data_dir: ./data                              # usually set SWB_DATA_DIR instead
 # timezone: UTC
-# One conversation (a send plus the replies hanging off it) pauses after this many turns, and the owner gets a DM.
+# A conversation pauses after this many turns.
 # A new send starts at zero. null switches it off.
 turn_cap: 200
 
@@ -184,13 +184,13 @@ blocks:
     workspace_projects: {}                      # e.g. {a2a: example}: the switchboard project a workspace's events belong to
     channel_projects: {}
     listen_channels: {}
-    # Needed only for persona avatars stored under <data>/avatars, which Slack fetches from <public_base_url>/avatars/<file>
+    # Slack fetches local bot and persona images from <public_base_url>/avatars/<file>
     # (keep /avatars outside Access).
     public_base_url: https://switchboard.example.com
     max_text_chars: 4000
     event_retention_days: 14
     # Display name + avatar for bot posts (chat:write.customize). Never applies to user-token posts. A persona with no
-    # icon_url uses <id>.png (or avatar:) from <data>/avatars, avatar_dirs, or the bundled marks; emoji is the fallback.
+    # icon_url uses <id>.png (or avatar:) from avatar_dirs or the bundled marks; emoji is the fallback.
     personas:
       switchboard: {name: SwB, emoji: ":robot_face:"}
       claude: {name: Claude}

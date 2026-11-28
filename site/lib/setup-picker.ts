@@ -1,5 +1,3 @@
-import type { MarkKind } from '@/components/mark-tile';
-
 export const setupChoices = [
   { id: 'claude-project', prompt: 'claude-project', name: 'Claude Project', mark: 'claude' },
   { id: 'claude', prompt: 'claude', name: 'Claude', mark: 'claude' },
@@ -17,7 +15,7 @@ export const setupChoices = [
   { id: 'telegram', prompt: 'telegram', name: 'Telegram', mark: 'telegram' },
   { id: 'github', prompt: 'github', name: 'GitHub', mark: 'github' },
   { id: 'webhook', prompt: 'webhook', name: 'Webhooks', mark: 'webhook' },
-] as const satisfies readonly { id: string; prompt: string; name: string; mark: MarkKind }[];
+] as const;
 
 type Choice = (typeof setupChoices)[number];
 export type SetupChoice = Choice['id'];
@@ -33,6 +31,16 @@ const personStep = /Give me each step marked "person" (?:one at a time with the 
 const genericEvents = 'Subscribe to switchboard.message.created if this app supports MCP events. Otherwise, call wait or inbox to collect new messages.';
 const mailboxEvents = /Subscribe to switchboard\.message\.created for the (\w+) mailbox if this app supports MCP events\. Otherwise, call wait or inbox at the start of each chat to collect new messages\./g;
 const dotEvents = 'If your app supports MCP events, subscribe to switchboard.message.created for your SwB mailbox. Otherwise, call wait or inbox at the start of each task.';
+
+export function selectCodingAgents(text: string, selection: Iterable<SetupChoice>) {
+  const selected = new Set(selection);
+  const names = setupChoices.filter(({ id, prompt }) => selected.has(id) && prompt === 'coding-agent').map(({ name }) => name);
+  return text.split('\n\n').filter((paragraph) => !setupChoices.some(({ id, name, prompt }) =>
+    prompt === 'coding-agent' && !selected.has(id) && paragraph.startsWith(`For ${name}, run `),
+  )).join('\n\n')
+    .replace('my coding agent', names.join(', '))
+    .replace('Ask me to name the agent I use.', 'Use the name of each selected coding agent in turn.');
+}
 
 export function combineSetupPrompts(sources: SetupSources, selection: Iterable<SetupChoice>) {
   const selected = new Set(selection);
@@ -72,13 +80,7 @@ export function combineSetupPrompts(sources: SetupSources, selection: Iterable<S
     }
 
     const names = prompt === 'coding-agent' ? coding.map(({ name }) => name).join(', ') : choice.name;
-    if (prompt === 'coding-agent') {
-      section = section.split('\n\n').filter((paragraph) => !setupChoices.some(({ id, name, prompt }) =>
-        prompt === 'coding-agent' && !selected.has(id) && paragraph.startsWith(`For ${name}, run `),
-      )).join('\n\n')
-        .replace('my coding agent', names)
-        .replace('Ask me to name the agent I use.', 'Use the name of each selected coding agent in turn.');
-    }
+    if (prompt === 'coding-agent') section = selectCodingAgents(section, selected);
     sections.push(`### ${names}\n\n${section.replace(/\n{3,}/g, '\n\n').trim()}`);
   }
 

@@ -52,7 +52,7 @@ def mark(provider: str) -> str:
         body = path.read_text().strip().replace("<svg ", f'<svg class="mark mark-{p.key}" aria-hidden="true" ', 1)
     else:
         return ""
-    return f'<span class="requester-tile" data-connector="{p.key}" title="{html.escape(p.title)}">{body}</span>'
+    return f'<span class="requester-tile" data-connector="{p.key}" aria-hidden="true">{body}</span>'
 
 
 def claim_field(f: Field, *, error: GroupFieldError | None = None) -> str:
@@ -89,39 +89,37 @@ def page(group: dict, csrf: str, *, owner_key: bool = False, host: str = "", now
     expiry = f"Expires in {max(1, math.ceil((group['expires_at'] - now) / 60))} min" if now is not None else ""
     footer = f'<footer><span>{html.escape(host)}</span><span>{expiry}</span></footer>' if host or expiry else ""
     title = str(error) if error else "Save credentials"
-    body = f"""{mark(group["provider"])}<h1>{html.escape(title)}</h1>
-<p class="scope">For {html.escape(group["title"])}.</p>
-<form method="post" autocomplete="off">
+    body = f"""<form method="post" autocomplete="off">
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
 {key}{"".join(claim_field(f, error=error if error and error.field == f else None) for f in fields)}
-<div class="actions"><button type="submit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Save</button></div>
+<div class="actions"><button type="submit" class="button primary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Save</button></div>
 </form>{footer}"""
-    return pages._claim_document(title, body, 400 if error else 200, field_assets=True)
+    return pages.page(title, body, 400 if error else 200, secondary=f'For {html.escape(group["title"])}.',
+                      mark=mark(group["provider"]), field_assets=True, csp=pages.CLAIM_CSP)
 
 
 def _marks_css() -> str:
     return "\n".join(f".mark-{p.key} {{ color: light-dark({p.light}, {p.dark}); }}" for p in PROVIDERS.values())
 
 
-CSS = """.requester-tile { margin-bottom: 8px; }
-.mark { fill: currentColor; stroke: none; }
+CSS = """.mark { fill: currentColor; stroke: none; }
 .field { margin-bottom: 20px; }
 .field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
 .field-head label { margin: 0; }
-.optional { color: var(--muted); font-weight: 400; }
-.get { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; font-size: 12px; }
+.optional { color: var(--muted-foreground); font-weight: 400; }
+.get { display: inline-flex; align-items: center; gap: 4px; color: var(--muted-foreground); text-decoration: none; font-size: 12px; }
 .get:hover { color: var(--foreground); text-decoration: underline; }
 input[type="text"], textarea { display: block; width: 100%; min-height: 36px; margin: 0; padding: 8px 12px;
-  border: 1px solid var(--border-strong); border-radius: 6px; color: inherit; background: var(--background); font: 13px ui-monospace, monospace; }
+  border: 1px solid var(--border-strong); border-radius: var(--swb-radius-md); color: inherit; background: var(--background); font: 13px var(--swb-font-mono); }
 textarea { resize: vertical; min-height: 84px; }
 textarea.loaded { display: none; }
 .upload { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; }
-.file { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 6px; cursor: pointer; font-weight: 500; }
-.file:hover { border-color: var(--muted); }
+.file { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: var(--swb-radius-md); cursor: pointer; font-weight: 500; }
+.file:hover { border-color: var(--muted-foreground); }
 .file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.file:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.file-name { color: var(--muted); font-size: 12px; }
-.file-name.error { color: light-dark(#c8372d, #e5675c); }
+.file:focus-within { outline: 2px solid var(--ring); outline-offset: 3px; }
+.file-name { color: var(--muted-foreground); font-size: 12px; }
+.file-name.error { color: var(--destructive); }
 .get .icon { width: 13px; height: 13px; }
 @media (max-width: 560px) { input[type="text"], textarea { font-size: 16px; } }
 """ + _marks_css()

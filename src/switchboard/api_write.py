@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -18,6 +18,7 @@ from .core import CoreError
 from .guard import client_ip
 from .routes import RouteError
 from .slack.writes import Actor, WriteError
+from .targets import CaptainTargetError
 from .visibility import VisibilityError
 
 
@@ -66,6 +67,13 @@ class _SendBody(_Body):
     dry_run: bool = False
 
 
+class _InboxActionBody(_Body):
+    action: Literal["read"]
+    handles: list[str] = Field(min_length=1, max_length=50)
+    cursor: int | None = Field(default=None, ge=1, le=2**63 - 1)
+    count: int | None = Field(default=None, ge=0, le=2**63 - 1)
+
+
 _Model = TypeVar("_Model", bound=_Body)
 
 
@@ -97,6 +105,8 @@ async def route_set(request: Request) -> JSONResponse:
             defaults=body.defaults.model_dump(exclude_none=True) if body.defaults else None,
             allow_override=body.allow_override, note=body.note,
         )
+    except CaptainTargetError as exc:
+        return JSONResponse({"error": "captain_target", "detail": str(exc)}, status_code=400)
     except (CoreError, BlockError, RouteError):
         return _error("route_not_saved")
     return JSONResponse({"id": out["id"]})
@@ -167,7 +177,9 @@ async def pairing_memory_remove(request: Request) -> JSONResponse:
 async def routine_remove(request: Request) -> JSONResponse:
     core = request.app.state.core
     name = request.path_params["name"]
-    block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
+    selected = request.query_params.get("block")
+    block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"
+                  and (selected is None or b.name == selected)), None)
     try:
         removed = block.remove(name) if block else False
     except BlockError:
@@ -198,6 +210,8 @@ async def send(request: Request) -> JSONResponse:
         return _error("invalid_request")
     try:
         out = await request.app.state.core.send(_owner(request), **body.model_dump())
+    except CaptainTargetError as exc:
+        return JSONResponse({"error": "captain_target", "detail": str(exc)}, status_code=400)
     except (CoreError, BlockError):
         return _error("send_refused")
     fields = ("dry_run", "to", "block", "project", "route", "mode", "status", "handle", "conversation",
@@ -214,10 +228,35 @@ async def modes(request: Request) -> JSONResponse:
     if body is None:
         return _error("invalid_request")
     try:
-        row = await service.set(_owner(request), **body.model_dump())
+        row = await service.set(_owner(request), **body.model_dump(),
+                                preserve_actions="actions" not in body.model_fields_set,
+                                preserve_project="project" not in body.model_fields_set)
+    except CaptainTargetError as exc:
+        return JSONResponse({"error": "captain_target", "detail": str(exc)}, status_code=400)
     except ValueError:
         return _error("mode_not_saved")
     return JSONResponse({"space": row})
+
+
+async def inbox_action(request: Request) -> JSONResponse:
+    body = await _body(request, _InboxActionBody)
+    if body is None or any(not handle or len(handle) > 256 for handle in body.handles):
+        return _error("invalid_request")
+    if (body.cursor is not None and len(body.handles) != 1) or (body.count is not None and body.cursor is None):
+        return _error("invalid_request")
+    core = request.app.state.core
+    handles = list(dict.fromkeys(body.handles))
+    if body.cursor is not None:
+        updated = handles if core.inbox.mark_owner_read(handles[0], body.cursor, body.count) else []
+    else:
+        marks = ", ".join("?" for _ in handles)
+        latest = core.store.q(
+            "SELECT i.handle, i.id, json_extract(i.data, '$.count') AS count FROM handles h "
+            "JOIN inbox i ON i.id = (SELECT id FROM inbox WHERE handle = h.handle ORDER BY id DESC LIMIT 1) "
+            f"WHERE h.handle IN ({marks})", handles,
+        )
+        updated = [row["handle"] for row in latest if core.inbox.mark_owner_read(row["handle"], row["id"], row["count"])]
+    return JSONResponse({"updated": updated})
 
 
 WRITE_ROUTES = [
@@ -229,5 +268,6 @@ WRITE_ROUTES = [
     Route("/routines/{name}/remove", routine_remove, methods=["POST"]),
     Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
     Route("/send", send, methods=["POST"]),
+    Route("/inbox/actions", inbox_action, methods=["POST"]),
     Route("/modes", modes, methods=["GET", "POST"]),
 ]

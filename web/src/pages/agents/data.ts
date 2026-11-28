@@ -20,6 +20,7 @@ type Routine = {
   project: string | null
   primary: boolean
   status: string
+  source?: string
   created_by: string | null
   created_at: string | null
   last_seen_at: string | null
@@ -58,11 +59,6 @@ export type Agent = {
   claim_url?: string | null
 }
 
-export type AgentSetup = {
-  chatgpt: { connector_url: string | null; plugins_url: string; instruction: string }
-  any: { prompt: string }
-  coding_agents: { id: string; snippet: string; where: string }[]
-}
 export type AgentDetail = { agent: Agent; keys: Key[]; routines: Routine[]; audit: AuditEvent[] }
 type AgentDetailResponse = Omit<AgentDetail, "agent"> & (
   | { kind: "routine"; agent: Routine }
@@ -86,7 +82,7 @@ function isKey(row: unknown): row is Key {
 
 function isRoutine(row: unknown): row is Routine {
   return isRecord(row) && typeof row.primary === "boolean"
-    && fields(row, ["name", "agent", "block", "status"], ["project", "created_by", "created_at", "last_seen_at"])
+    && fields(row, ["name", "agent", "block", "status"], ["project", "source", "created_by", "created_at", "last_seen_at"])
 }
 
 function isTarget(row: unknown): row is Target {
@@ -100,13 +96,6 @@ function isInventory(value: unknown): value is Inventory {
     && Array.isArray(value.captains) && value.captains.every(isTarget) && Array.isArray(value.dots) && value.dots.every(isTarget)
     && Array.isArray(value.pending_claims) && value.pending_claims.every((row: unknown) =>
       isRecord(row) && fields(row, ["name", "project", "created_by", "created_at"], ["claim_url"]))
-}
-
-export function isAgentSetup(value: unknown): value is AgentSetup {
-  return isRecord(value) && isRecord(value.chatgpt) && (value.chatgpt.connector_url === null || typeof value.chatgpt.connector_url === "string")
-    && value.chatgpt.plugins_url === "https://chatgpt.com/plugins" && typeof value.chatgpt.instruction === "string"
-    && isRecord(value.any) && typeof value.any.prompt === "string" && Array.isArray(value.coding_agents)
-    && value.coding_agents.every((row: unknown) => isRecord(row) && typeof row.id === "string" && typeof row.snippet === "string" && typeof row.where === "string")
 }
 
 function isAgentDetail(value: unknown): value is AgentDetailResponse {

@@ -269,6 +269,16 @@ class Claims:
             raise ClaimUnavailable(UNUSABLE)
         return dict(row)
 
+    def expired(self, code: str) -> bool:
+        if not CODE_RE.fullmatch(code):
+            return False
+        digest, now = _digest(code), self.store.clock()
+        return self.store.one(
+            "SELECT 1 FROM claim_links WHERE code_hash = ? AND expires_at <= ? "
+            "UNION ALL SELECT 1 FROM claim_groups WHERE code_hash = ? AND expires_at <= ? LIMIT 1",
+            (digest, now, digest, now),
+        ) is not None
+
     def pending(self, name: str) -> bool:
         return self.store.one("SELECT 1 FROM claim_links WHERE name = ? AND expires_at > ? AND resolved = 0 LIMIT 1",
                               (name, self.store.clock())) is not None

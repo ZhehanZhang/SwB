@@ -13,10 +13,9 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable, Mapping
 
-from ..targets import slugify
+from ..targets import by_slug, slugify
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
-KIND_ORDER = ("captain", "agent", "project")
 LEAD_MENTION = re.compile(r"^\s*(?:<@[A-Z0-9]+(?:\|[^>]*)?>[\s,:]*)+")
 NOT_TARGETS = frozenset({"slack", "local"})
 
@@ -52,29 +51,18 @@ def split_slug(text: str, bot_user_id: str | None) -> tuple[str, str]:
 
 def build_targets(captains: Iterable[Mapping[str, Any]], agents: Iterable[str], projects: Iterable[Mapping[str, Any]],
                   aliases: Mapping[str, str] | None = None) -> dict[str, Target]:
-    found: dict[str, list[Target]] = {}
-
-    def add(t: Target) -> None:
-        if SLUG_RE.match(t.slug):
-            found.setdefault(t.slug, []).append(t)
-
-    for c in captains:
-        if c.get("archived"):
-            continue
-        t = Target(slugify(c.get("name") or ""), "captain", c["id"], c.get("name") or c["id"], persona=slugify(c.get("name") or ""))
-        add(t)
-        if c.get("code"):
-            add(Target(str(c["code"]).lower(), "captain", c["id"], t.name, persona=t.persona))
-    for a in agents:
-        if a not in NOT_TARGETS:
-            add(Target(a, "agent", a, a, persona=a))
-    for p in projects:
-        add(Target(p["slug"], "project", p["slug"], p.get("name") or p["slug"]))
-    out = {slug: min(ts, key=lambda t: KIND_ORDER.index(t.kind)) for slug, ts in found.items()}
-    for alias, slug in (aliases or {}).items():
-        if slug in out:
-            out[alias] = Target(alias, out[slug].kind, out[slug].id, out[slug].name, out[slug].persona)
-    return out
+    rows = [
+        {"address": f"capy:captain:{c['id']}", "block": "capy", "kind": "captain", "id": c["id"],
+         "name": c.get("name") or c["id"], "persona": slugify(c.get("name") or ""),
+         "slugs": (slugify(c.get("name") or ""), str(c.get("code") or "").lower())}
+        for c in captains if not c.get("archived")
+    ]
+    rows += [{"address": f"agent:{a}", "block": "agent", "kind": "agent", "id": a, "name": a, "persona": a, "slugs": (a,)}
+             for a in agents if a not in NOT_TARGETS]
+    rows += [{"address": f"project:{p['slug']}", "block": "project", "kind": "project", "id": p["slug"],
+              "name": p.get("name") or p["slug"], "slugs": (p["slug"],)} for p in projects]
+    return {slug: Target(slug, row["kind"], row["id"], row["name"], row.get("persona"))
+            for slug, row in by_slug(rows, aliases=aliases).items()}
 
 
 def near(word: str, slugs: Iterable[str]) -> list[str]:
