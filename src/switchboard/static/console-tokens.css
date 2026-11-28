@@ -1,13 +1,12 @@
 :root {
   color-scheme: light dark;
   --swb-font-sans: "Inter Variable", system-ui, sans-serif;
-  --swb-font-display: "Inter Tight Variable", var(--swb-font-sans);
   --swb-font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
   --swb-radius-md: 6px;
-  --swb-display-lg: 1.375rem;
-  --swb-display-lg-height: 1.75rem;
-  --swb-display-lg-weight: 800;
-  --swb-display-lg-spacing: -.02em;
+  --swb-page-title: 1.25rem;
+  --swb-page-title-height: 1.75rem;
+  --swb-page-title-weight: 600;
+  --swb-page-title-spacing: -.01em;
   --swb-body-md: .875rem;
   --swb-body-md-height: 1.25rem;
   --swb-label-sm: .8125rem;

@@ -3,7 +3,7 @@
 
 @theme inline {
   --font-sans: var(--swb-font-sans);
-  --font-display: var(--swb-font-display);
+  --font-display: "Inter Tight Variable", var(--swb-font-sans);
   --font-mono: var(--swb-font-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -44,14 +44,14 @@
   --text-display-xl--line-height: 2.25rem;
   --text-display-xl--font-weight: 800;
   --text-display-xl--letter-spacing: -.025em;
-  --text-display-lg: var(--swb-display-lg);
-  --text-display-lg--line-height: var(--swb-display-lg-height);
-  --text-display-lg--font-weight: var(--swb-display-lg-weight);
-  --text-display-lg--letter-spacing: var(--swb-display-lg-spacing);
-  --text-page-title: 1.25rem;
-  --text-page-title--line-height: 1.75rem;
-  --text-page-title--font-weight: 600;
-  --text-page-title--letter-spacing: -.01em;
+  --text-display-lg: 1.375rem;
+  --text-display-lg--line-height: 1.75rem;
+  --text-display-lg--font-weight: 800;
+  --text-display-lg--letter-spacing: -.02em;
+  --text-page-title: var(--swb-page-title);
+  --text-page-title--line-height: var(--swb-page-title-height);
+  --text-page-title--font-weight: var(--swb-page-title-weight);
+  --text-page-title--letter-spacing: var(--swb-page-title-spacing);
   --text-heading-md: 1rem;
   --text-heading-md--line-height: 1.5rem;
   --text-heading-md--font-weight: 600;

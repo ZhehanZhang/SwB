@@ -24,7 +24,7 @@ _ASSETS = {
     "claim-brand.svg": ("image/svg+xml", (_STATIC / "claim-brand.svg").read_bytes()),
     "claim-connectors.svg": ("image/svg+xml", (_STATIC / "claim-connectors.svg").read_bytes()),
     **{name: ("font/woff2", (_STATIC / "fonts" / name).read_bytes())
-       for name in ("inter.woff2", "inter-tight.woff2", "jetbrains-mono.woff2")},
+       for name in ("inter.woff2", "jetbrains-mono.woff2")},
 }
 
 CSP = "default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'; img-src 'self' data:; form-action 'self' https: http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'"
@@ -100,6 +100,17 @@ def requester_mark(kind: str) -> str:
     return f'<span class="requester-tile" data-connector="{connector if connector in CLAIM_CONNECTORS else ""}" aria-hidden="true">{mark}</span>'
 
 
+CONSENT_JS = """
+const approve = document.querySelector('button[name="decision"][value="approve"]');
+document.addEventListener("keydown", event => {
+  if (event.target !== document.body || event.key !== "Enter" || event.defaultPrevented ||
+      event.isComposing || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault();
+  approve.form.requestSubmit(approve);
+});
+"""
+
+
 def authorize_page(name: str, host: str, account: str, agent: str, req: str, csrf: str,
                    scopes: tuple[str, ...], address: str = "") -> HTMLResponse:
     secondary = f'<span>Returns to <code>{html.escape(host)}</code></span> <span>Signed in as {html.escape(account)}</span>'
@@ -113,11 +124,12 @@ def authorize_page(name: str, host: str, account: str, agent: str, req: str, csr
 <input type="hidden" name="csrf" value="{html.escape(csrf)}">
 {f'<ul class="scopes" aria-label="Requested scopes">{rows}</ul>' if rows else ""}
 <div class="actions consent-actions">
-<button type="submit" class="button primary" name="decision" value="approve" autofocus>Approve</button>
+<button type="submit" class="button primary" name="decision" value="approve">Approve</button>
 <button type="submit" class="button secondary" name="decision" value="deny" formnovalidate>Deny</button>
 </div>
 </form>"""
-    return page(f"Connect {name} to SwB", body, secondary=secondary, mark=requester_mark(agent))
+    return page(f"Connect {name} to SwB", body, secondary=secondary, mark=requester_mark(agent),
+                script=CONSENT_JS, csp=script_policy(CONSENT_JS))
 
 
 PASSKEY_JS = """
@@ -205,9 +217,10 @@ if (fragment.has("t")) {
 }
 """
 
-def script_policy(script: str) -> str:
+def script_policy(script: str, *, connect: bool = False) -> str:
     digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
-    return CSP.replace("script-src 'self'", f"script-src 'self' 'sha256-{digest}'; connect-src 'self'")
+    policy = CSP.replace("script-src 'self'", f"script-src 'self' 'sha256-{digest}'")
+    return policy + "; connect-src 'self'" if connect else policy
 
 
 def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, signed_in: bool = False) -> HTMLResponse:
@@ -224,7 +237,7 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
         href = "/auth/oidc/start?" + urlencode({"next": next_path})
         style = "secondary" if buttons else "primary"
         buttons.append(f'<a class="button {style}" href="{html.escape(href)}">Continue with {html.escape(oidc["name"])}</a>')
-    actions = f'<div class="actions login-actions">{"".join(buttons)}</div>' if buttons else ""
+    actions = f'<div class="actions">{"".join(buttons)}</div>' if buttons else ""
     if methods.get("setup"):
         actions += ('<form id="owner-setup" method="post" action="/auth/setup">'
                     '<label for="setup-code">Setup code</label>'
@@ -234,7 +247,7 @@ def login_page(methods: dict[str, Any], next_path: str, error: str | None, *, si
     title = LOGIN_TITLE if actions else "Ask your agent for a sign-in link"
     return page(title, f'<p id="login-error" role="status">{messages.get(error, "")}</p>{actions}',
                 main_attrs=f' data-next="{html.escape(next_path)}"{" hidden" if signed_in else ""}',
-                script=LOGIN_JS, csp=script_policy(LOGIN_JS))
+                script=LOGIN_JS, csp=script_policy(LOGIN_JS, connect=True))
 
 
 def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:

@@ -41,7 +41,16 @@ for (const width of widths) {
           expect(response?.status()).toBe(fixture.status ?? 200)
           await expect(page.locator("body")).toBeVisible()
           if (!before) {
-            await expect(page.locator("main h1")).toBeVisible()
+            const heading = page.locator("main h1")
+            await expect(heading).toBeVisible()
+            await expect(heading).toHaveCSS("font-family", /Inter Variable/)
+            await expect(heading).toHaveCSS("font-size", "20px")
+            await expect(heading).toHaveCSS("font-weight", "600")
+            const action = page.locator(".actions > .button").first()
+            if (await action.count()) {
+              await expect(action).toBeVisible()
+              expect((await action.boundingBox())?.x).toBe((await heading.boundingBox())?.x)
+            }
             await expect(page.locator("html")).toHaveAttribute("data-theme", theme)
             await expect(page.locator("html")).toHaveCSS("background-color",
               theme === "dark" ? "rgb(9, 9, 11)" : "rgb(255, 255, 255)")
@@ -60,7 +69,7 @@ for (const width of widths) {
 }
 
 test("OAuth consent supports both keyboard decisions", async ({ page }) => {
-  test.skip(before, "Baseline markup has no autofocus")
+  test.skip(before, "Capture baseline screenshots only")
   const callbacks: string[] = []
   await page.route(url => url.pathname === "/authorize", async route => {
     if (route.request().method() !== "POST") return route.continue()
@@ -72,16 +81,20 @@ test("OAuth consent supports both keyboard decisions", async ({ page }) => {
   await page.goto("/fixture/consent")
   const approve = page.getByRole("button", { name: "Approve" })
   const deny = page.getByRole("button", { name: "Deny" })
-  await expect(approve).toBeFocused()
-  await expect(approve).toHaveCSS("outline-style", "solid")
+  await expect(approve).not.toBeFocused()
+  await expect(approve).toHaveCSS("outline-style", "none")
   await expect(approve).toHaveCSS("width", (await deny.boundingBox())?.width + "px")
+  await page.getByRole("heading").click()
+  await expect(approve).toHaveCSS("outline-style", "none")
   await page.keyboard.press("Enter")
   await expect.poll(() => callbacks.length).toBeGreaterThan(0)
   expect(new URL(callbacks[0]).searchParams.get("code")).toBeTruthy()
   expect(new URL(callbacks[0]).searchParams.get("state")).toBe("fixture-state")
 
   await page.goto("/fixture/consent")
+  await page.keyboard.press("Tab")
   await expect(approve).toBeFocused()
+  await expect(approve).toHaveCSS("outline-style", "solid")
   await page.keyboard.press("Tab")
   await expect(deny).toBeFocused()
   await expect(deny).toHaveCSS("outline-style", "solid")

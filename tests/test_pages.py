@@ -15,7 +15,7 @@ def test_consent_uses_shared_assets_and_strict_csp(make):
     assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp and "style=" not in page.text
     css = c.get("/assets/console-tokens.css")
     assert css.status_code == 200 and "#ffffff" in css.text and "#09090b" in css.text
-    assert c.get("/assets/inter-tight.woff2").headers["content-type"] == "font/woff2"
+    assert c.get("/assets/inter.woff2").headers["content-type"] == "font/woff2"
     assert c.get("/assets/nope.js").status_code == 404
 
 
@@ -28,7 +28,7 @@ def test_consent_names_the_client_and_preserves_both_submit_buttons(make):
     assert "Returns to <code>agent.meta.ai</code>" in page.text
     assert "Signed in as owner@example.test" in page.text
     assert "/avatars/muse.png" in page.text
-    assert '<button type="submit" class="button primary" name="decision" value="approve" autofocus>Approve</button>' in page.text
+    assert '<button type="submit" class="button primary" name="decision" value="approve">Approve</button>' in page.text
     assert '<button type="submit" class="button secondary" name="decision" value="deny" formnovalidate>Deny</button>' in page.text
     assert req and consent_csrf(page)
     assert "Requested scopes" not in page.text
