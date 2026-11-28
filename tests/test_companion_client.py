@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import stat
-import sys
 from dataclasses import replace
 from importlib.metadata import version
 from unittest.mock import AsyncMock
@@ -107,7 +106,8 @@ def test_connect_pairs_with_hidden_code_and_persists_options(settings, tmp_path,
     cli.main(["companion", "status"])
     out, err = capsys.readouterr()
     assert f"This device is paired as {COMPANION_ID}." in out and "Drop folder" in out
-    assert not err and KEY not in out and CODE not in out and URL not in out
+    assert f"Deployment {URL}" in out and "Connection offline" in out
+    assert not err and KEY not in out and CODE not in out
 
 
 def test_connect_runs_and_restart_reuses_enabled_caps(settings, tmp_path, monkeypatch):
@@ -160,7 +160,10 @@ def test_connect_requires_opt_in_to_advertise_capabilities(settings, monkeypatch
     assert capsys.readouterr().out == "This device is paired.\n"
     assert CompanionState.load(settings).enabled_caps == ()
     cli.main(["companion", "status"])
-    assert capsys.readouterr().out == f"This device is paired as {COMPANION_ID}.\n"
+    assert capsys.readouterr().out.splitlines() == [
+        "Companion stopped", f"This device is paired as {COMPANION_ID}.", f"Deployment {URL}",
+        "Connection offline",
+    ]
 
 
 def test_connect_persists_device_name_for_hello(settings, monkeypatch):
@@ -276,13 +279,12 @@ def test_connect_reports_linux_notification_package(settings, monkeypatch, capsy
         assert error.value.code == 1 and "Install libnotify-bin for desktop notifications." in capsys.readouterr().err
 
 
-def test_connect_reports_explicitly_enabled_unavailable_capability(settings, monkeypatch, capsys):
-    monkeypatch.setitem(sys.modules, "switchboard.companion.caps.muse", None)
+def test_connect_rejects_removed_muse_capability(settings, monkeypatch, capsys):
     pair = AsyncMock()
     monkeypatch.setattr(client, "pair", pair)
     with pytest.raises(SystemExit) as error:
         cli.main(["companion", "connect", URL, "--no-run", "--code", CODE, "--cap", "muse"])
-    assert error.value.code == 1 and "Install swb-one[companion] to use Muse." in capsys.readouterr().err
+    assert error.value.code == 2 and "invalid choice: 'muse'" in capsys.readouterr().err
     pair.assert_not_awaited()
     assert not settings.exists()
 
@@ -323,6 +325,32 @@ def test_connect_rejects_insecure_urls_without_echo(settings, monkeypatch, capsy
     assert url not in capsys.readouterr().err
     client.pair.assert_not_awaited()
     assert not settings.exists()
+
+
+@pytest.mark.parametrize(("legacy", "retained"), [
+    (("muse", "drop", "muse"), ("drop",)),
+    (("muse",), ()),
+])
+def test_legacy_muse_state_reuses_pairing_without_muse(settings, tmp_path, monkeypatch, legacy, retained):
+    state = CompanionState(URL, COMPANION_ID, KEY, legacy, str(tmp_path / "drop"),
+                           name="Desk companion", memory_sync=False)
+    state.save(settings)
+    run = AsyncMock()
+    monkeypatch.setattr(client, "run", run)
+
+    cli.main(["companion", "run"])
+
+    run.assert_awaited_once()
+    loaded, path, caps = run.await_args.args
+    assert loaded == replace(state, enabled_caps=retained)
+    assert path == settings and tuple(caps) == retained
+
+
+def test_state_preserves_other_capability_ids(settings, tmp_path):
+    state = CompanionState(URL, COMPANION_ID, KEY, ("muse", "future-cap", "Muse"), str(tmp_path / "drop"))
+    state.save(settings)
+
+    assert CompanionState.load(settings) == replace(state, enabled_caps=("future-cap", "Muse"))
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX file modes only")
@@ -538,6 +566,29 @@ async def test_run_reconnects_with_bounded_backoff(settings, paired, monkeypatch
     await asyncio.wait_for(client.run(paired, settings, {"test": Work(invoke, hook)}), 2)
     assert calls == ["hello", "events", "hello", "events"]
     assert not settings.exists()
+
+
+async def test_short_lived_streams_back_off_even_with_initial_ping(settings, paired, monkeypatch, capsys):
+    delays = []
+
+    async def handler(request):
+        if request.url.path.endswith("/hello"):
+            return httpx.Response(204)
+        if len(delays) == 8:
+            return event_stream(b"event: revoked\ndata: {}\n\n")
+        return event_stream(b"event: ping\ndata: {}\n\n")
+
+    async def sleep(delay):
+        cli.main(["companion", "status"])
+        status = capsys.readouterr().out
+        assert "Companion running" in status and "Connection reconnecting" in status
+        delays.append(delay)
+
+    mock_client(monkeypatch, handler)
+    monkeypatch.setattr(client.random, "uniform", lambda *_: 1)
+    monkeypatch.setattr(client.asyncio, "sleep", sleep)
+    await client.run(paired, settings, {})
+    assert delays == [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 60.0, 60.0]
 
 
 async def test_capability_hook_can_emit_and_fail_without_ending_stream(settings, paired, monkeypatch):

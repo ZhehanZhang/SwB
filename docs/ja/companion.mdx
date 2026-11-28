@@ -39,15 +39,8 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | `--cap opencode` | [OpenCode server](/ja/docs/blocks/local-sessions#opencode) |
 | `--cap dsh` | [DeepSeek Harness](/ja/docs/blocks/local-sessions#deepseek-harness) |
 | `--cap hooks` | [ステータスフック](/ja/docs/blocks/local-sessions#ステータスフック) |
-| `--cap muse` | Mac または Linux のパソコンで、Bluetooth を使って Muse とペアリングします |
 
 Linux では、通知に `notify-send` を使います。Debian と Ubuntu では、`libnotify-bin` パッケージでインストールしてください。
-
-Muse ガジェットのペアリングには Python 3.13 を使ってください。[Muse のペアリングガイド](/ja/docs/setup/muse)に従ってください。ペアリングのあとは、SwB サーバーが Muse との接続を保ちます。
-
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
 
 MCP サーバーごとに `--mcp` オプションを 1 つずつ追加してください。プログラムの場合は `--mcp 'NAME=COMMAND'` を使います。`NAME` をサーバーの名前に置き換えてください。`COMMAND` をプログラムの起動コマンドに置き換えてください。デバイス上の HTTP サーバーの場合は、`--mcp notes=http://127.0.0.1:8000/mcp` のようにローカルアドレスを使ってください。
 
@@ -71,9 +64,33 @@ SwB は、各メッセージを開いているセッションに届けようと�
 
 ペアリングするとコンパニオンが起動します。もう一度起動するときは `swb companion run` を使います。ローカルのデバイス ID と機能は `swb companion status` で確認できます。
 
-`uvx` でこれらのコマンドを実行するときは、`swb` の代わりに `uvx swb-one` を使ってください。Muse の場合は、[Muse のガイド](/ja/docs/setup/muse)にあるパッケージと Python のオプションをそのまま使ってください。
+`uvx` でペアリングした場合は、`swb` の代わりに `uvx swb-one` を使ってください。フォアグラウンドでは、Python がコンパニオンを直接実行します。
 
 SwB への接続は、毎回デバイスの側から始めます。
+
+## バックグラウンドで実行する
+
+コンパニオンを自動で起動するには、バックグラウンドサービスをインストールしてください。`uv tool install swb-one` で SwB をインストールしてください。
+
+新たにペアリングするときは、ペアリング用のオプションに `--no-run` を追加してください。そのオプションを指定して `swb companion connect` を実行してください。コマンドはペアリングを終えると終了します。ターミナルでコンパニオンが動作中の場合は、サービスをインストールする前に停止してください。サービスを操作するときは、インストールした `swb` を使ってください。
+
+```sh
+swb companion service install
+```
+
+Linux では、`systemd --user` がユーザーのアカウントでサービスを実行します。起動時にサービスを開始し、ログアウト後も実行を続けるには、`loginctl enable-linger "$USER"` を実行してください。
+
+macOS では、デスクトップにログインしてからサービスをインストールしてください。SwB の正式版では、署名済みの **SwB Companion** アプリが `~/Applications` に自動でインストールされます。インストール時に署名も検証されます。`launchd` はこのアプリを使ってサービスを起動します。
+
+Windows では、サインイン時にタスク スケジューラがサービスを起動します。
+
+ローカルのツールに必要な変数は、サービスの管理ツールで設定してください。
+
+`swb companion service start` でサービスを開始してください。`swb companion service status` でサービスの状態を確認してください。`swb companion service logs` でログを確認してください。
+
+`swb companion status` でコンパニオンの実行状態、接続状態、SwB のアドレスを確認してください。
+
+すぐにサービスを停止するには、`swb companion service stop` を使ってください。自動起動の設定を削除するには、`swb companion service uninstall` を使ってください。デバイスのキーは保持されます。
 
 ## 接続を解除する
 
