@@ -1,4 +1,4 @@
 {
-  "title": "設定",
-  "pages": ["index", "claude-project", "claude", "dots", "chatgpt", "muse", "grok", "grok-bot", "capy-captain", "coding-agent", "mcp-client", "slack", "discord", "telegram", "github", "cloudflare"]
+  "title": "設定應用程式",
+  "pages": ["index", "claude-project", "claude", "dots", "chatgpt", "muse", "grok", "grok-bot", "capy-captain", "coding-agent", "mcp-client", "slack", "discord", "telegram", "github"]
 }

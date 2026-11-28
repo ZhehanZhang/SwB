@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
+import { localize, type Locale } from '../../lib/i18n';
 
 test.use({ reducedMotion: 'reduce' });
 
@@ -46,9 +47,20 @@ test('landing deploy guides align with their block titles', async ({ page }) => 
   const headers = deploy.locator('[data-block-header]').filter({ has: page.locator('a') });
   await expect(headers).toHaveCount(2);
   for (const header of await headers.all()) await expectGuideInHeader(header);
-  await expect(deploy.getByRole('link', { name: 'Compose' })).toHaveAttribute('href', '/docs/self-hosting#docker-compose');
-  await expect(deploy.locator('[data-deploy-secondary]').getByRole('link', { name: 'Self-hosting guide' })).toHaveAttribute('href', '/docs/self-hosting');
+  await expect(deploy.getByRole('link', { name: 'Compose' })).toHaveAttribute('href', '/docs/deploy#docker-compose');
   await expect(deploy.locator('[data-deploy-tunnel] [data-provider-arrow]')).toBeVisible();
+});
+
+test('the landing Deploy guide row links to the current page in every locale', async ({ page }) => {
+  const labels = [
+    ['en', 'Deploy guide'], ['zh-Hans', '部署指南'], ['zh-Hant', '部署指南'], ['es', 'Guía de despliegue'],
+    ['fr', 'Guide de déploiement'], ['de', 'Anleitung zur Bereitstellung'], ['ko', '배포 가이드'], ['ja', 'デプロイガイド'],
+  ] as const satisfies ReadonlyArray<readonly [Locale, string]>;
+  for (const [locale, label] of labels) {
+    await page.goto(localize(locale, '/'));
+    const row = page.locator('#landing-deploy + [data-deploy-grid] [data-deploy-secondary]');
+    await expect(row.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', localize(locale, '/docs/deploy'));
+  }
 });
 
 test('landing pipx commands open below their row without moving the aligned rows', async ({ page }) => {
@@ -104,8 +116,8 @@ test('Get started uses one width and aligned actions for every run location', as
   const switcher = run.getByRole('group', { name: 'Where SwB runs' });
   for (const [kind, label, guide] of [
     ['local', 'On your computer', 'Install guide'],
-    ['server', 'On your server', 'Self-hosting guide'],
-    ['cloud', 'In the cloud', 'Self-hosting guide'],
+    ['server', 'On your server', 'Deploy guide'],
+    ['cloud', 'In the cloud', 'Deploy guide'],
   ]) {
     await switcher.getByRole('button', { name: label }).click();
     const panel = run.locator(`[data-start-run="${kind}"]`);
@@ -124,7 +136,7 @@ test('Get started uses one width and aligned actions for every run location', as
 
 test('provider tiles share one design and visible deploy affordances on landing and docs', async ({ page }) => {
   let chrome: unknown;
-  for (const [path, selector] of [['/', 'section[aria-labelledby="landing-deploy"]'], ['/docs/get-started?run=cloud', '[data-start-run="cloud"]'], ['/docs/self-hosting', '.swb-mdx']]) {
+  for (const [path, selector] of [['/', 'section[aria-labelledby="landing-deploy"]'], ['/docs/get-started?run=cloud', '[data-start-run="cloud"]'], ['/docs/deploy', '.swb-mdx']]) {
     await page.goto(path);
     const grid = page.locator(selector).locator('[data-deploy-providers]');
     const tiles = grid.getByRole('link');

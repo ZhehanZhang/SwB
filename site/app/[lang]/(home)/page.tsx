@@ -69,7 +69,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const deploy = copy.deployment;
   const copyLabels = { copy: copy.copy, copied: copy.copied };
   const license = `${repository}/blob/${releaseBranch}/LICENSE`;
-  const selfHosting = localize(lang, '/docs/self-hosting');
+  const deployGuide = localize(lang, '/docs/deploy');
 
   return (
     <>
@@ -123,16 +123,16 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 <DeployCommand labels={copyLabels} centered>{copy.install}</DeployCommand>
               </DeployOption>
               <DeployOption heading={deploy.server} intro={deploy.serverIntro}
-                guide={<GuideLink href={`${selfHosting}#docker-compose`}>{deploy.serverGuide}</GuideLink>}
+                guide={<GuideLink href={`${deployGuide}#docker-compose`}>{deploy.serverGuide}</GuideLink>}
                 secondary={
-                  <DeployTile href={`${selfHosting}#cloudflare-tunnel`} mark="cloudflare"
+                  <DeployTile href={`${deployGuide}#cloudflare-tunnel`} mark="cloudflare"
                     name="Cloudflare Tunnel" plan={deploy.freePlan} tunnel />
                 }>
                 <DeployCommand labels={copyLabels}>{compose}</DeployCommand>
               </DeployOption>
               <DeployOption heading={deploy.cloud} intro={deploy.cloudIntro}
                 secondary={
-                  <Link href={selfHosting} className={deployRowClass}>
+                  <Link href={deployGuide} className={deployRowClass}>
                     <BookOpen aria-hidden="true" />
                     <strong className="font-semibold">{deploy.cloudGuide}</strong>
                     <ArrowRight aria-hidden="true" className="text-fd-muted-foreground" />

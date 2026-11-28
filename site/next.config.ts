@@ -47,6 +47,20 @@ const config: NextConfig = {
       { source: `${localized}/docs/trademarks.mdx`, destination: '/:lang/about.mdx', permanent: true },
       { source: '/llms.mdx/docs/trademarks', destination: '/llms.mdx/about', permanent: true },
       { source: `/llms.mdx${nonEnglish}/docs/trademarks`, destination: '/llms.mdx/:lang/about', permanent: true },
+      ...[
+        ['/docs/self-hosting', '/docs/deploy'],
+        ['/docs/setup/cloudflare', '/docs/cloudflare'],
+      ].flatMap(([from, to]) => [
+        { source: from, destination: to, permanent: true },
+        { source: `${localized}${from}`, destination: `/:lang${to}`, permanent: true },
+        ...['.md', '.mdx'].flatMap((extension) => [
+          { source: `${from}${extension}`, destination: `${to}.mdx`, permanent: true },
+          { source: `${localized}${from}${extension}`, destination: `/:lang${to}.mdx`, permanent: true },
+        ]),
+        { source: `/llms.mdx${from}`, destination: `/llms.mdx${to}`, permanent: true },
+        { source: `/llms.mdx/en${from}`, destination: `/llms.mdx${to}`, permanent: true },
+        { source: `/llms.mdx${nonEnglish}${from}`, destination: `/llms.mdx/:lang${to}`, permanent: true },
+      ]),
     ];
   },
 };

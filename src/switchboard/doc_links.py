@@ -36,7 +36,8 @@ def public_origin(public_url: str | None) -> str | None:
 def doc_link(path: str, public_url: str | None) -> str:
     link = _DOCS + path
     origin = public_origin(public_url)
-    return f'{link}#swb={quote(origin, safe="")}' if origin else link
+    separator = "&" if "#" in path else "#"
+    return f'{link}{separator}swb={quote(origin, safe="")}' if origin else link
 
 
 def rewrite_doc_links(text: str, public_url: str | None) -> str:

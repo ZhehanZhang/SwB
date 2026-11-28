@@ -1,5 +1,5 @@
 {
-  "title": "Einrichtung",
+  "title": "Apps einrichten",
   "pages": [
     "index",
     "claude-project",
@@ -15,7 +15,6 @@
     "slack",
     "discord",
     "telegram",
-    "github",
-    "cloudflare"
+    "github"
   ]
 }

@@ -57,7 +57,7 @@ test('the sidebar scrolls independently to its last link at the end of a docs pa
   }
   const sidebar = page.locator(mobile ? '#nd-sidebar-mobile' : '#nd-sidebar');
   const viewport = sidebar.locator('[data-radix-scroll-area-viewport]');
-  const setup = sidebar.getByRole('button', { name: 'Setup', exact: true });
+  const setup = sidebar.getByRole('button', { name: 'Set up your apps', exact: true });
   if (await setup.getAttribute('data-state') === 'closed') await setup.click();
   const last = viewport.getByRole('link').last();
   await expect(last).toHaveText('About');

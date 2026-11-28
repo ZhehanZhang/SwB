@@ -21,7 +21,7 @@ const listElement = /^\s*<(Steps?|[ou]l|li)\b/;
 
 const allowedNegation = [
   ['de/install.mdx', 'ohne Anmeldung'],
-  ['de/self-hosting.mdx', 'ohne Anmeldung'],
+  ['de/deploy.mdx', 'ohne Anmeldung'],
   ['ko/config.mdx', '가 없으면'],
   ['ko/tools.mdx', '존재하지 않는 ID'],
   ['zh-Hans/tools.mdx', 'ID 不存在'],

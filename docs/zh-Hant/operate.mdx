@@ -1,0 +1,22 @@
+---
+title: 維護 SwB
+description: 備份與升級 SwB，或匯出記憶。
+---
+
+<span id="備份與升級" />
+
+## 備份與升級 [#backups-and-upgrades]
+
+複製資料目錄之前，先停止 SwB。整個目錄要完整保留，包括資料庫和它的金鑰，例如 `mcp-events.key` 和 `claim-key`。設定檔和 `.env` 也要備份。備份要保密。安裝或建置新版本，再用同一個資料目錄啟動 SwB。
+
+<span id="匯出記憶" />
+
+## 匯出記憶 [#export-memory]
+
+在 Compose 容器內執行匯出。
+
+```bash
+docker compose exec -T switchboard swb export /data/export
+```
+
+匯出時會依範圍把 Markdown 檔案存到主機的 `./data/export` 下，其中包含一份 `INDEX.md`。設定 `memory.mirror_dir` 可以讓 Markdown 副本保持最新。

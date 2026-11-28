@@ -39,7 +39,7 @@ def test_cloudflare_connect_returns_manual_setup(make, monkeypatch, paired, publ
 
     result = payload(call(client, key, "connect", {"what": " Cloudflare "}))
 
-    link = "https://swb.one/docs/setup/cloudflare"
+    link = "https://swb.one/docs/cloudflare"
     if public_url:
         link += "#swb=https%3A%2F%2Fswb.example.com"
     assert result == {"what": "cloudflare", "complete": False, "done": [], "next": [{

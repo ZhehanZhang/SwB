@@ -5,13 +5,33 @@ description: Cloudflare Tunnel로 SwB 공개 주소를 만들고 Cloudflare Acce
 
 Cloudflare Tunnel은 SwB에 고정된 공개 HTTPS 주소를 줍니다. **터널**은 서버를 Cloudflare에 연결합니다. Cloudflare Access는 SwB 콘솔 접근을 내 계정으로 한정합니다.
 
-## 시작하기 전에
+<span id="임시-터널" />
 
-[Docker Compose](/ko/docs/self-hosting#docker-compose)를 따라 SwB을 시작하세요. 내 도메인의 터널과 Access 애플리케이션을 관리할 수 있는 Cloudflare 계정을 사용하세요. 서버가 7844번 포트로 Cloudflare에 연결할 수 있게 허용하세요.
+## 임시 터널 [#quick-tunnel]
 
-## 터널 만들기
+임시 주소에서 SwB을 사용해 보려면 임시 터널을 사용하세요. `cloudflared`가 있는 호스트에서 이 명령을 실행하세요. `cloudflared`는 SwB을 Cloudflare에 연결하는 프로그램입니다.
+
+```bash
+cloudflared tunnel --url http://localhost:8870
+```
+
+터미널에 나온 HTTPS 주소로 `SWB_PUBLIC_URL`을 설정하세요. 설정 파일에 `public_url`이 있으면 그 설정도 업데이트하세요. SwB을 다시 시작하세요. 터널을 시작할 때마다 주소가 바뀝니다. OAuth 로그인과 패스키는 그 주소를 사용합니다. 계속 쓸 주소가 필요하면 이름 있는 터널을 사용하세요.
+
+<span id="이름-있는-터널" />
+
+## 이름 있는 터널 [#named-tunnel]
+
+내 도메인이 연결된 무료 Cloudflare 계정을 사용하세요.
+
+### 시작하기 전에
+
+[Docker Compose](/ko/docs/deploy#docker-compose)를 따라 SwB을 시작하세요. 내 도메인의 터널과 Access 애플리케이션을 관리할 수 있는 Cloudflare 계정을 사용하세요. 서버가 7844번 포트로 Cloudflare에 연결할 수 있게 허용하세요.
+
+### 터널 만들기
 
 [Create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)을 따르세요. 설치 명령에서 터널 토큰을 복사하세요. [Compose 파일](https://github.com/ZhehanZhang/SwB/blob/273e0a9f2cb35ed929404ef23d7aca9d25ade44d/compose.yaml#L32-L39)에 나온 이름으로 SwB `.env` 항목에 넣으세요. 토큰은 비공개로 보관하세요.
+
+Compose 터널은 서비스 주소를 `http://switchboard:8000`으로 지정하세요. 터널 토큰을 `.env`에 `TUNNEL_TOKEN`으로 넣으세요. 커넥터의 주소나 전용 네트워크를 `trusted_proxies`에 추가하세요.
 
 SwB 서버에서 터널 커넥터를 시작하세요.
 
@@ -19,9 +39,13 @@ SwB 서버에서 터널 커넥터를 시작하세요.
 docker compose --profile tunnel up -d
 ```
 
+SwB 호스트에서 실행하는 터널은 서비스 주소를 `http://localhost:8870`으로 지정하세요. `SWB_TRUSTED_PROXIES`를 커넥터의 주소로 설정하세요. IPv4 루프백 연결이면 `127.0.0.1/32`를 사용합니다.
+
 Cloudflare에 커넥터가 나타나면 **Continue**를 선택하세요.
 
-## 콘솔 보호
+<span id="콘솔-보호" />
+
+### 콘솔 보호 [#cloudflare-access]
 
 SwB 호스트 이름용 [Access 애플리케이션을 만드세요](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/). 정책 동작을 **Allow**로 설정하세요. **Include** → **Emails**에 내 이메일 주소를 입력하세요.
 
@@ -39,9 +63,11 @@ SwB 호스트 이름용 [Access 애플리케이션을 만드세요](https://deve
 
 SwB은 `/companion/pair`에서 페어링 코드를 확인합니다. 그 밖의 컴패니언 요청에서는 기기 키를 확인합니다. Access를 쓴다면 소유자 권한이 있는 에이전트에게 `companion_code` 호출을 요청하세요.
 
-## SwB 주소 설정
+### SwB 주소 설정
 
 `.env`의 `SWB_PUBLIC_URL`을 공개 주소로 설정하세요. 예를 들면 `https://swb.example.com`을 사용하세요. 팀 도메인과 소유자 애플리케이션의 Audience 태그를 `config/switchboard.yaml`에 추가하세요. 이 태그는 어느 애플리케이션이 토큰을 발급했는지 SwB에 알려 줍니다.
+
+설정 파일에 `public_url`이 있으면 그 주소도 업데이트하세요.
 
 | 값 | 찾는 곳 | 설정 키 |
 | --- | --- | --- |
@@ -59,11 +85,21 @@ auth:
 
 설정을 적용하려면 `docker compose --profile tunnel up -d`를 다시 실행하세요.
 
-## 호스트 이름 게시
+<span id="신뢰할-수-있는-프록시" />
+
+### 신뢰할 수 있는 프록시 [#trusted-proxies]
+
+리버스 프록시는 요청을 SwB으로 넘겨줍니다. `config/switchboard.yaml`의 `trusted_proxies`에 프록시 주소나 전용 네트워크를 추가하세요. 네트워크 범위는 `192.0.2.0/24` 같은 CIDR 형식으로 쓰세요.
+
+`.env`에 `SWB_TRUSTED_PROXIES`를 설정해도 됩니다. 항목은 쉼표로 구분하세요. YAML 설정이 우선합니다.
+
+Cloudflare Tunnel이 SwB 호스트나 Docker 네트워크에 있으면 터널 커넥터의 주소나 전용 네트워크를 추가하세요. 커넥터는 SwB에 직접 연결합니다. Cloudflare 엣지 서버에서 직접 들어오는 연결에는 `cloudflare` 항목을 사용하세요.
+
+### 호스트 이름 게시
 
 터널의 **Routes** 탭을 여세요. **Add route**를 선택하세요. **Published application**을 고르세요. 공개 호스트 이름을 입력하세요. **Service URL**을 `http://switchboard:8000`으로 설정하세요. **Add route**를 선택해 저장하세요.
 
-## 연결 확인
+### 연결 확인
 
 브라우저에서 `https://swb.example.com`을 여세요. Cloudflare Access에 로그인하세요. SwB이 응답하는지 확인하려면 `https://swb.example.com/healthz`를 여세요.
 

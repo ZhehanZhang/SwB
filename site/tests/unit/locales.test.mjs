@@ -43,10 +43,33 @@ test('every locale has every English docs file', () => {
   }
 });
 
-test('locale sidebars list the English pages in order', () => {
+test('locale sidebars keep the English pages and section breaks in order', () => {
+  const structure = (pages) => pages.map((entry) => {
+    const label = /^---(.*)---$/.exec(entry)?.[1];
+    if (label === undefined) return entry;
+    assert.ok(label.trim(), 'named sidebar separators have a label');
+    return '------';
+  });
   for (const lang of locales) {
     for (const file of english.filter((name) => name.endsWith('meta.json'))) {
-      assert.deepEqual(JSON.parse(read(lang, file)).pages, JSON.parse(read('en', file)).pages, `${lang}/${file}`);
+      assert.deepEqual(structure(JSON.parse(read(lang, file)).pages), structure(JSON.parse(read('en', file)).pages), `${lang}/${file}`);
+    }
+  }
+});
+
+test('Deploy, Operate, and Cloudflare pages pin their bookmark anchors', () => {
+  const bookmarks = {
+    deploy: ['run-on-your-computer', 'docker-compose', 'cloudflare-tunnel', 'one-click-deploy', 'fly', 'render', 'railway'],
+    operate: ['backups-and-upgrades', 'export-memory'],
+    cloudflare: ['quick-tunnel', 'named-tunnel', 'trusted-proxies', 'cloudflare-access'],
+  };
+  for (const lang of locales) {
+    for (const [name, ids] of Object.entries(bookmarks)) {
+      const file = `${name}.mdx`;
+      const pinned = [...prose(read(lang, file)).matchAll(/^#{1,6}\s+.+ \[#([^\]]+)\]$/gm)].map(([, id]) => id);
+      for (const id of ids) {
+        assert.equal(pinned.filter((anchor) => anchor === id).length, 1, `${lang}/${file} must pin #${id} once`);
+      }
     }
   }
 });

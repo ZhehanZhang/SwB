@@ -183,7 +183,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
         if what == "cloudflare":
             return {**result, "done": [], "next": [
                 {"by": "person", "do": "Follow the Cloudflare setup guide.",
-                 "link": doc_link("setup/cloudflare", core.cfg.public_url)}]}
+                 "link": doc_link("cloudflare", core.cfg.public_url)}]}
         if what not in kinds:
             if what in guides:
                 return {**result, "done": [], "next": []}

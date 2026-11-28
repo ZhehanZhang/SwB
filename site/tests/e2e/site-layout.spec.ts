@@ -199,7 +199,7 @@ test('docs sidebar, content and TOC align to the shared header grid', async ({ p
   }
 });
 
-test('the docs sidebar first item starts within 8px of the content title', async ({ page }) => {
+test('the docs sidebar first item aligns with the content title at scroll start', async ({ page }) => {
   for (const width of [768, 1024, 1280, 1440, 1920, 2560, 3440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const path of ['/docs', '/docs/install', '/docs/setup/claude']) {
@@ -210,7 +210,13 @@ test('the docs sidebar first item starts within 8px of the content title', async
           const box = document.querySelector(selector)?.getBoundingClientRect();
           return box?.width ? box.top : null;
         };
-        return { sidebar: top('#nd-sidebar a'), heading: top('#nd-page h1'), toc: top('#toc-title') };
+        const firstLink = top('#nd-sidebar a');
+        const viewport = document.querySelector('#nd-sidebar [data-radix-scroll-area-viewport]');
+        return {
+          sidebar: firstLink === null ? null : firstLink + (viewport?.scrollTop ?? 0),
+          heading: top('#nd-page h1'),
+          toc: top('#toc-title'),
+        };
       });
       expect(sidebar).not.toBeNull();
       expect(heading).not.toBeNull();
@@ -230,6 +236,7 @@ test('the mobile docs drawer opens, navigates and closes inside the shared grid'
   await expect(drawer).toBeHidden();
   await page.getByRole('button', { name: 'Open Sidebar', exact: true }).click();
   const overview = drawer.getByRole('link', { name: 'SwB', exact: true });
+  await overview.scrollIntoViewIfNeeded();
   await expect(overview).toBeInViewport();
   await overview.click();
   await expect(page).toHaveURL(/\/docs$/);
@@ -251,7 +258,7 @@ test('the desktop Ask AI icon opens the chat from the docs actions', async ({ pa
 test('the mobile Ask AI icon never overlaps docs text while scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const prefix of ['', '/zh-Hans', '/zh-Hant']) {
-    for (const slug of ['about', 'install', 'self-hosting']) {
+    for (const slug of ['about', 'install', 'deploy']) {
       const path = `${prefix}/docs/${slug}`;
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
@@ -259,7 +266,7 @@ test('the mobile Ask AI icon never overlaps docs text while scrolling', async ({
       await expect(ask).toBeInViewport();
       await expect(ask).toHaveCSS('position', 'static');
       const collision = await ask.evaluate(async (control) => {
-        const elements = Array.from(document.querySelectorAll('.swb-docs :is(p, li, pre, table, h1, h2, h3)'));
+        const elements = Array.from(document.querySelectorAll('#nd-page :is(p, li, pre, table, h1, h2, h3)'));
         const end = document.documentElement.scrollHeight - window.innerHeight;
         const step = Math.round(window.innerHeight / 4);
         for (let y = 0; y <= end + step; y += step) {
@@ -413,7 +420,7 @@ test('commands, keycaps and docs previews share one preloaded mono stack', async
 
 test('every shared action has a leading 16px icon', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const path of ['/', '/docs', '/docs/install', '/docs/self-hosting', '/docs/setup', '/docs/setup/claude']) {
+  for (const path of ['/', '/docs', '/docs/install', '/docs/deploy', '/docs/setup', '/docs/setup/claude']) {
     await page.goto(path);
     const actions = page.locator('.swb-button:visible');
     const assertIcons = async () => {
@@ -486,10 +493,10 @@ test('docs GitHub option opens the release source file', async ({ page }) => {
 });
 
 test('landing shows supported deployment links and six usage examples in each locale', async ({ page }) => {
-  for (const [prefix, selfHosting, allowance, paid, hobby] of [
-    ['', 'Self-hosting guide', 'Free with monthly allowance', 'Paid plan', 'Hobby plan'],
-    ['/zh-Hans', '自托管指南', '每月额度内免费', '付费套餐', 'Hobby 套餐'],
-    ['/zh-Hant', '自行託管指南', '每月額度內免費', '付費方案', 'Hobby 方案'],
+  for (const [prefix, deployGuide, allowance, paid, hobby] of [
+    ['', 'Deploy guide', 'Free with monthly allowance', 'Paid plan', 'Hobby plan'],
+    ['/zh-Hans', '部署指南', '每月额度内免费', '付费套餐', 'Hobby 套餐'],
+    ['/zh-Hant', '部署指南', '每月額度內免費', '付費方案', 'Hobby 方案'],
   ]) {
     await page.goto(prefix || '/');
     const deploy = page.locator('#landing-deploy').locator('..');
@@ -507,21 +514,22 @@ test('landing shows supported deployment links and six usage examples in each lo
     await expect(railway).toHaveText(`Railway ${hobby}`);
     await expect(railway).toHaveAttribute('href', 'https://railway.com/deploy/swb');
     await expect(fly).toHaveText(`Fly.io ${allowance}`);
-    await expect(fly).toHaveAttribute('href', `${prefix}/docs/self-hosting#fly`);
+    await expect(fly).toHaveAttribute('href', `${prefix}/docs/deploy#fly`);
     await expect(fly).toHaveClass((await render.getAttribute('class'))!);
     const tunnel = deploy.locator('[data-deploy-tunnel]');
-    await expect(tunnel).toHaveAttribute('href', `${prefix}/docs/self-hosting#cloudflare-tunnel`);
+    await expect(tunnel).toHaveAttribute('href', `${prefix}/docs/deploy#cloudflare-tunnel`);
     await expect(tunnel).toHaveCSS('border-radius', '6px');
     await expect(deploy.locator(`a[href="${prefix}/docs/install"] > .lucide-book-open`)).toHaveCount(1);
-    await expect(deploy.locator(`a[href="${prefix}/docs/self-hosting#docker-compose"] > .lucide-book-open`)).toHaveCount(1);
+    await expect(deploy.locator(`a[href="${prefix}/docs/deploy#docker-compose"] > .lucide-book-open`)).toHaveCount(1);
     const usage = page.locator('#landing-usage').locator('..');
     await expect(usage.locator('p')).toHaveCount(6);
-    await expect(deploy.getByRole('link', { name: selfHosting })).toHaveAttribute('href', `${prefix}/docs/self-hosting`);
+    await expect(deploy.getByRole('link', { name: deployGuide })).toHaveAttribute('href', `${prefix}/docs/deploy`);
     await fly.click();
-    await expect(page).toHaveURL(`${prefix}/docs/self-hosting#fly`);
-    await expect(page.locator('h2#docker-compose')).toContainText('Docker Compose');
-    await expect(page.locator('h2#fly')).toContainText('Fly.io');
-    await expect(page.locator('h2#railway')).toContainText('Railway');
+    await expect(page).toHaveURL(`${prefix}/docs/deploy#fly`);
+    const headings = page.locator('.swb-mdx').getByRole('heading');
+    await expect(headings.and(page.locator('#docker-compose'))).toContainText('Docker Compose');
+    await expect(headings.and(page.locator('#fly'))).toContainText('Fly.io');
+    await expect(headings.and(page.locator('#railway'))).toContainText('Railway');
     await expect(page.getByText('fly deploy --ha=false', { exact: true })).toBeVisible();
     await expect(page.locator('a[href="https://fly.io/docs/about/pricing/"]')).toBeVisible();
   }

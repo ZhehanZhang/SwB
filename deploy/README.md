@@ -1,6 +1,8 @@
 # Deploy SwB
 
-Use one instance with a volume at `/data`. A volume keeps your data when the instance restarts. Back up the volume before an update.
+See [Deploy](https://swb.one/docs/deploy) to choose where to run SwB.
+
+Use one instance with a volume at `/data`. A volume keeps your data when the instance restarts. [Back up the volume](https://swb.one/docs/operate#backups-and-upgrades) before an update.
 
 These deployments build the repository Dockerfile. After the container release opens to the public, use `ghcr.io/zhehanzhang/swb:1.0.0` with a volume UID 10001 can write to.
 
@@ -61,3 +63,5 @@ sh deploy/compose/start.sh swb.example.com
 ```
 
 Copy `SWB_SETUP_CODE` from `deploy/compose/.env`. Caddy manages HTTPS. This setup also works on a DigitalOcean Droplet.
+
+For a public address through Cloudflare, see [Named tunnel](https://swb.one/docs/cloudflare#named-tunnel).

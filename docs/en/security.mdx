@@ -79,7 +79,7 @@ SwB uses the connection address for limits and audit records by default. Add you
 
 If client address resolution fails, SwB groups requests by their forwarded headers. Headers with invalid addresses share the `invalid-forwarded` limit. Headers with only trusted proxy addresses share the `trusted-only-forwarded` limit.
 
-Use the [self-hosting guide](/docs/self-hosting#trusted-proxies) to add a Cloudflare Tunnel connector or a reverse proxy on your Docker network.
+Use the [trusted proxies guide](/docs/cloudflare#trusted-proxies) to add a Cloudflare Tunnel connector or a reverse proxy on your Docker network.
 
 ## Audit log
 

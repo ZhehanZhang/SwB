@@ -84,8 +84,9 @@ test.describe('archived docs fixture', () => {
     const negotiated = await request.get(archive, { maxRedirects: 0, headers: { 'Accept-Language': 'zh-TW', 'User-Agent': 'Mozilla/5.0' } });
     expect(negotiated.status()).toBe(307);
     expect(new URL(negotiated.headers().location, negotiated.url()).pathname).toBe(`/zh-Hant${archive}`);
-    for (const path of [`${archive}/missing`, `/docs/v${latestDocsVersion}`, `${archive}/install.mdx`, '/docs/v8.6.4']) {
-      expect((await request.get(path)).status(), path).toBe(404);
+    for (const path of [`${archive}/missing`, `/docs/v${latestDocsVersion}`, `${archive}/install.mdx`, '/docs/v8.6.4',
+      `${archive}/self-hosting`, `${archive}/setup/cloudflare`]) {
+      expect((await request.get(path, { maxRedirects: 0 })).status(), path).toBe(404);
     }
     expect(await (await request.get('/llms.txt')).text()).not.toContain(archive);
   });
