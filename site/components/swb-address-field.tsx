@@ -12,7 +12,6 @@ export function SwbAddressField({ id, label, error, onEdit, popover }: {
   error: string;
   onEdit?: (address: string | null) => void;
   popover?: {
-    variant: 'inline' | 'joined';
     labels: { save: string; saved: string; clear: string };
     clear: () => void;
     copy: ReactNode;
@@ -68,7 +67,7 @@ export function SwbAddressField({ id, label, error, onEdit, popover }: {
   if (!popover) return input;
 
   return (
-    <form data-address-variant={popover.variant} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1" onSubmit={(event) => {
+    <form className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1" onSubmit={(event) => {
       event.preventDefault();
       commit();
     }}>
@@ -86,7 +85,7 @@ export function SwbAddressField({ id, label, error, onEdit, popover }: {
           className="my-0.5 ms-0.5 grid w-6 shrink-0 place-items-center rounded-sm text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground focus-visible:-outline-offset-2 sm:me-0.5 sm:w-7">
           <X aria-hidden="true" className="size-3.5" />
         </button>}
-        <button type="submit" disabled={!value} className={`shrink-0 px-2 text-[13px] font-medium text-fd-muted-foreground enabled:hover:bg-fd-muted enabled:hover:text-fd-foreground focus-visible:-outline-offset-2 disabled:text-fd-muted-foreground/60 sm:px-2.5 sm:text-sm ${popover.variant === 'joined' ? 'rounded-r-[5px] border-s bg-fd-muted/55' : 'my-0.5 me-0.5 rounded-sm'}`}>
+        <button type="submit" disabled={!value} className="shrink-0 rounded-r-[5px] border-s bg-fd-muted/55 px-2 text-[13px] font-medium text-fd-muted-foreground enabled:hover:bg-fd-muted enabled:hover:text-fd-foreground focus-visible:-outline-offset-2 disabled:text-fd-muted-foreground/60 sm:px-2.5 sm:text-sm">
           {popover.labels.save}
         </button>
       </div>

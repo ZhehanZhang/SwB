@@ -22,8 +22,6 @@ const labels = {
   ja: { save: '保存', saved: 'アドレスを保存しました', clear: 'アドレスを消去', copy: 'リンクをコピー' },
 };
 
-const previewParam = 'address-popover';
-
 function removeLegacyAddress() {
   const url = new URL(location.href);
   if (!isGetStartedAddressPath(url.pathname) || !url.searchParams.has('url')) return;
@@ -37,7 +35,6 @@ export function SwbAddressControl({ lang }: { lang: Locale }) {
   const copy = getStartedCopy[lang];
   const text = labels[lang];
   const host = address ? new URL(address).host : '';
-  const joined = typeof window !== 'undefined' && new URLSearchParams(location.search).get(previewParam) === 'v2';
 
   return (
     <Popover>
@@ -53,18 +50,13 @@ export function SwbAddressControl({ lang }: { lang: Locale }) {
         <SwbAddressField label={copy.address} error={copy.addressError} onEdit={(next) => {
           if (next) removeLegacyAddress();
         }} popover={{
-          variant: joined ? 'joined' : 'inline',
           labels: text,
           clear: () => {
             removeLegacyAddress();
             saveAddress(null);
           },
-          copy: <CopyTextButton text={() => {
-            if (!address) return '';
-            const url = new URL(location.href);
-            url.searchParams.delete(previewParam);
-            return linkWithSwbAddress(url.href, address);
-          }} labels={{ copy: text.copy, copied: copy.copied }} iconOnly disabled={!address}
+          copy: <CopyTextButton text={() => address ? linkWithSwbAddress(location.href, address) : ''}
+            labels={{ copy: text.copy, copied: copy.copied }} iconOnly disabled={!address}
             className="grid size-7 place-items-center rounded-md text-fd-muted-foreground enabled:hover:bg-fd-muted enabled:hover:text-fd-foreground disabled:opacity-45 [&_svg]:size-3.5" />,
         }} />
       </HeaderPopover>
