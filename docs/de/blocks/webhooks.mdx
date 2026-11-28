@@ -97,7 +97,7 @@ Rufen Sie `webhook_create` mit einem Namen auf und setzen Sie `direction` auf `o
 }
 ```
 
-SwB verlangt standardmäßig einen öffentlichen HTTPS-Empfänger auf Port 443. SwB blockiert private, Loopback- und Link-Local-Adressen, auch Link-Local-Adressen für Daten von Cloud-Instanzen. Loopback-Adressen erreichen den SwB-Host. Link-Local-Adressen erreichen nur das lokale Netzwerk.
+SwB verlangt standardmäßig einen öffentlichen HTTPS-Empfänger auf Port 443. SwB blockiert private, Loopback- und Link-Local-Adressen, auch Link-Local-Adressen für Metadaten von Cloud-Instanzen. Loopback-Adressen erreichen den SwB-Host. Link-Local-Adressen erreichen nur das lokale Netzwerk.
 
 Der Inhaber kann bei diesem Webhook `allow_private` auf `true` setzen, um diese Adressen oder andere HTTPS-Ports zu erlauben.
 
@@ -175,7 +175,7 @@ Bei Methoden, die den Zeitstempel prüfen, ist die Toleranz die größte erlaubt
 | Replay-Prüfung für Sentry und HMAC | SwB erkennt nur wiederholte Bodys |
 | Replay-Prüfung für bearer und path | SwB prüft nur das Secret |
 
-SwB prüft die Signatur oder das Secret, bevor das Limit für Fehlschläge greift. Nach 20 Fehlschlägen für denselben Webhook und dieselbe Client-IP-Adresse innerhalb von 10 Minuten erhalten weitere Fehlschläge `429`. Jeder gezählte Fehlschlag verfällt nach 10 Minuten. Erfolgreich geprüfte Anfragen werden weiter angenommen.
+SwB prüft die Signatur oder das Secret, bevor das Limit für Fehlschläge greift. Nach 20 Fehlschlägen für denselben Webhook und dieselbe Client-IP-Adresse innerhalb von 10 Minuten erhalten weitere fehlgeschlagene Anfragen `429`. Jeder gezählte Fehlschlag verfällt nach 10 Minuten. Erfolgreich geprüfte Anfragen werden weiter angenommen.
 
 Wenn ein vertrauenswürdiger Server Anfragen weiterleitet, ermittelt SwB die Client-IP-Adresse über `trusted_proxies`.
 

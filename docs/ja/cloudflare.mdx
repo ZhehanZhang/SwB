@@ -3,7 +3,7 @@ title: Cloudflare
 description: Cloudflare Tunnel を使って、SwB に公開 HTTPS アドレスを用意します。
 ---
 
-Cloudflare Tunnel は、SwB に公開 HTTPS アドレスを与えます。**トンネル**は、サーバーを Cloudflare につなぎます。トンネルは Cloudflare の無料プランで使えます。
+Cloudflare Tunnel を使うと、SwB に公開 HTTPS アドレスを用意できます。**トンネル**とは、サーバーを Cloudflare につなぐ経路です。トンネルは Cloudflare の無料プランで使えます。
 
 [Docker Compose](/ja/docs/deploy#docker-compose) の手順に従って SwB を起動してください。
 
@@ -51,7 +51,7 @@ Cloudflare にコネクターが表示されたら、**Continue** を選択し�
 
 Cloudflare Access は、SwB のコンソールへのアクセスを自分のアカウントだけに制限します。SwB のホスト名に対して [Access アプリケーションを作成](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)してください。ポリシーのアクションを **Allow** にしてください。**Include** で **Emails** を選択してください。自分のメールアドレスを入力してください。
 
-同じホスト名に、**Bypass** の印があるパス用の Access アプリケーションをもう 1 つ作成してください。そのポリシーのアクションを **Bypass** にしてください。**Include** で **Everyone** を選択してください。
+同じホスト名に、下の表で **Bypass** としているパス用の Access アプリケーションをもう 1 つ作成してください。そのポリシーのアクションを **Bypass** にしてください。**Include** で **Everyone** を選択してください。
 
 | パス | Access ポリシー |
 | --- | --- |
@@ -126,7 +126,7 @@ Compose のコネクターで設定を反映するときは、`docker compose --
 
 ### ホスト名を公開する
 
-トンネルの **Routes** タブを開いてください。**Add route** を選択してください。**Published application** を選んでください。公開するホスト名を入力してください。
+トンネルの **Routes** タブを開いてください。**Add route** を選択してください。**Published application** を選択してください。公開するホスト名を入力してください。
 
 Compose のコネクターでは、**Service URL** を `http://switchboard:8000` に設定してください。ホスト上のコネクターでは、`http://localhost:8870` を使ってください。**Add route** を選択して保存してください。
 

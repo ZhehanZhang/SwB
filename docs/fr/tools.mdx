@@ -247,4 +247,4 @@ Pour les webhooks sortants, `webhook_create` et `webhook_rotate` acceptent `allo
 
 Si SwB refuse un envoi vers une cible `webhook:out`, il renvoie une erreur d'outil MCP. Pour les appels HTTP, la réponse a le statut `200` et le résultat de l'outil a `isError` défini sur `true`.
 
-Pour un appelant autre que le propriétaire, SwB renvoie `No such target.` pour une cible manquante ou hors de ses autorisations.
+Pour un appelant autre que le propriétaire, SwB renvoie `No such target.` pour une cible inexistante ou hors de ses autorisations.

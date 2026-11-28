@@ -51,7 +51,7 @@ Cada prompt de configuración pide al agente que sincronice. Después de la conf
 
 El [companion](/es/docs/companion) con `--cap hooks` sincroniza los archivos de memoria de Claude Code cada vez que se guardan.
 
-SwB usa el nombre de la carpeta de la sesión para elegir un ámbito. Primero busca un proyecto cuyo slug, su nombre corto, coincida. Si esa búsqueda falla, busca una única coincidencia por el nombre del repositorio vinculado. SwB sincroniza con el proyecto coincidente cuando su ajuste `private` es `false`. Si el proyecto coincidente es privado, SwB omite la sincronización. Para una carpeta sin coincidencia, SwB sincroniza con `agent:claude-code`.
+SwB usa el nombre de la carpeta de la sesión para elegir un ámbito. Primero busca un proyecto cuyo slug coincida. El slug es el nombre corto del proyecto. Si esa búsqueda falla, busca una única coincidencia por el nombre del repositorio vinculado. SwB sincroniza con el proyecto coincidente cuando su ajuste `private` es `false`. Si el proyecto coincidente es privado, SwB omite la sincronización. Para cualquier otra carpeta, SwB sincroniza con `agent:claude-code`.
 
 La sincronización de memoria está activada de forma predeterminada. Para desactivarla, abre **Memory** en la consola y desactiva **Memory sync**. Los agentes con el inicio de sesión del propietario pueden usar `memory_settings` para el mismo interruptor.
 
@@ -75,7 +75,7 @@ Selecciona **Restore from file** para cargar un archivo zip. Una restauración a
 
 Los agentes con el inicio de sesión del propietario pueden usar `memory_export` y `memory_import` para las mismas tareas.
 
-Usa `overwrite` con el valor `true` para sustituir las entradas que cambiaron y conservar sus versiones anteriores en el historial. Usa `trust_owner` con el valor `true` para mantener la confianza de propietario en las entradas que cumplan los requisitos. Las entradas del ámbito de otro agente siguen marcadas como información. Las dos opciones valen `false` de forma predeterminada. Pásalas como parámetros de consulta a la subida de la consola en `POST /api/memory/import`.
+Usa `overwrite` con el valor `true` para sustituir las entradas que cambiaron y conservar sus versiones anteriores en el historial. Usa `trust_owner` con el valor `true` para mantener la confianza de propietario en las entradas que cumplan los requisitos. Las entradas del ámbito de otro agente siguen marcadas como información. Las dos opciones valen `false` de forma predeterminada. Pásalas como parámetros de consulta en la subida desde la consola a `POST /api/memory/import`.
 
 ## Copia de seguridad en Git
 
@@ -83,7 +83,7 @@ SwB puede copiar la memoria en un repositorio Git privado que te pertenece. Un c
 
 Todo el contenido de la memoria va a este repositorio. Usa un repositorio privado.
 
-Da permiso de push en el repositorio de copia de seguridad solo a personas de confianza. Quien tenga ese permiso puede definir el autor del commit, y SwB usa ese autor para elegir el nivel de confianza.
+Da permiso de push en el repositorio de copia de seguridad solo a personas de confianza. Quien tenga ese permiso puede definir el autor del commit. SwB usa ese autor para elegir el nivel de confianza.
 
 Abre **Memory** en la consola. En **Git backup**, escribe la dirección HTTPS o SSH del repositorio y la rama. Para una dirección HTTPS, pega un token con acceso de escritura a ese repositorio. Para una dirección SSH, pega una clave de despliegue con acceso de escritura. SwB guarda el token o la clave cifrados.
 

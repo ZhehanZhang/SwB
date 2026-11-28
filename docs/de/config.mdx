@@ -51,7 +51,7 @@ Einige Blöcke können mit Zugangsdaten aus der Umgebung starten. Die Einrichtun
 
 ## Inhabernachrichten [#owner-messages]
 
-SwB versucht zuerst den Agenten mit der jüngsten Aktivität unter einer Inhaberanmeldung in den letzten 30 Minuten. Danach versucht SwB den Hauptagenten des Projekts, den die Projektroute oder `default_target` festlegt. Die globale Inhaberroute ist die letzte Wahl.
+SwB versucht es zuerst bei dem Agenten, der in den letzten 30 Minuten zuletzt unter einer Inhaberanmeldung aktiv war. Danach versucht SwB es beim Hauptagenten des Projekts, den die Projektroute oder `default_target` festlegt. Die globale Inhaberroute ist die letzte Wahl.
 
 Der ausgewählte Agent erhält die Nachricht in seinem Posteingang. Wenn alle drei Möglichkeiten fehlschlagen, meldet SwB im Status eine ausstehende Zustellung.
 
@@ -129,6 +129,8 @@ In einem Schlüssel steht `*` für einen Eintragsnamen oder ein Listenelement.
 | `auth.key_tools` | Zuordnung von Schlüsselnamen zu erlaubten MCP-Tools, zum Beispiel `[send]` |
 | `auth.key_targets` | Erlaubte Nachrichtenziele nach Schlüsselname, zum Beispiel `[agent:claude]`. Ein Schlüssel mit diesem Limit muss ein erlaubtes Ziel nennen |
 | `auth.inbox_keys` | Zuordnung von Schlüsselnamen zu dem einen Agenten, dessen Posteingang der Schlüssel lesen darf. Der eingebaute Eintrag ist `channel: claude-code` |
+
+Für die Anmeldung über Cloudflare Access verwendet SwB das Token aus dem Header `Cf-Access-Jwt-Assertion`. Wenn der Header leer ist oder fehlt, liest SwB das Token aus dem Cookie `CF_Authorization`. Ein Cookie ist ein Wert, den der Browser mit einer Anfrage sendet. SwB prüft die RS256-Signatur mit öffentlichen Schlüsseln von `team_domain`. Der Aussteller des Tokens muss der HTTPS-Adresse von `team_domain` entsprechen. Das Token muss `aud` als Audience nennen. SwB prüft Ausstellungs-, Start- und Ablaufzeit, wenn das Token sie enthält. SwB vergleicht die E-Mail-Adresse in Kleinbuchstaben mit `owner_emails`.
 
 ## Sichtbarkeit
 

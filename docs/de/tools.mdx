@@ -28,7 +28,7 @@ Der Inhaber kann Tools mit `auth.key_tools` und Sendeziele mit `auth.key_targets
 | `send` | Schreiben Sie die Aufgabe oder Nachricht in `task`. Mit `to` wählen Sie ein Ziel. Lassen Sie `to` leer, um eine Route zu verwenden, sofern der Schlüssel es erlaubt |
 | `agent_send` | Veraltetes Tool. Übergeben Sie den Agentennamen in `to`, zum Beispiel `to="codex"`. `blocks.mcp.legacy_aliases` aktiviert es standardmäßig. Für neue Aufrufe verwenden Sie `send` mit `to="agent:codex"` |
 | `wait` | Wartet auf neue Nachrichten oder Antworten |
-| `inbox` | Liest Ihren Posteingang und kehrt sofort zurück. Mit `peek=true` lesen Sie und behalten Ihre Position |
+| `inbox` | Liest Ihren Posteingang und kehrt sofort zurück. Mit `peek=true` bleibt Ihre Position beim Lesen erhalten |
 | `inbox_ack` | Setzt Ihre Position im Posteingang nach einem Lesen mit `peek` auf `cursor`. Einträge bis zu diesem Cursor gelten als gelesen |
 | `reply` | Übergeben Sie das `handle` aus einem `send`-Aufruf oder einem Posteingangseintrag in `conversation`. Schreiben Sie die Antwort in `text` |
 | `status` | Zeigt den Zustand einer Unterhaltung. Für Capy legen Sie mit `messages` die Anzahl der letzten Nachrichten fest. Mit `include_tools=true` erscheinen auch Tool-Aktivitäten |
@@ -42,7 +42,7 @@ Mit `to="agent:owner"` in `send` richten Sie eine Nachricht an den Inhaber. SwB 
 
 ### Posteingangsposition
 
-Ein Cursor markiert eine Position im Posteingang. `inbox` und `wait` speichern eine neue Position, wenn sie Einträge zurückgeben. Mit `peek=true` behält `inbox` die Position. Rufen Sie `inbox_ack` mit dem höchsten Cursor auf, den Sie bearbeitet haben. Filter können eine separate Position weiterschieben. Ein späteres `wait` liest ab der gespeicherten Position. Übergeben Sie `since_cursor=0` an `inbox`, um von Anfang an zu lesen. Übergeben Sie einen zurückgegebenen `cursor` als `since_cursor`, um ab dieser Position fortzufahren.
+Ein Cursor markiert eine Position im Posteingang. `inbox` und `wait` speichern eine neue Position, wenn sie Einträge zurückgeben. Mit `peek=true` behält `inbox` die Position. Rufen Sie `inbox_ack` mit dem höchsten Cursor auf, den Sie bearbeitet haben. Filter können eine eigene Position weiterschieben. Ein späteres `wait` liest ab der gespeicherten Position. Übergeben Sie `since_cursor=0` an `inbox`, um von Anfang an zu lesen. Übergeben Sie einen zurückgegebenen `cursor` als `since_cursor`, um ab dieser Position fortzufahren.
 
 Skripte können `GET /inbox/poll` mit einem Bearer-Schlüssel aufrufen, um auf Einträge im eigenen Posteingang zu warten. Übergeben Sie den zurückgegebenen `cursor` als `after`, um fortzufahren. Standardmäßig beginnt der Aufruf am aktuellen Ende des Posteingangs. Der Aufruf kehrt zurück, sobald Einträge eintreffen oder die Wartezeit endet. Den MCP-Cursor lässt er unverändert. Mit dem [Ereignisstrom des Posteingangs](/de/docs/connect#ereignisstrom-des-posteingangs) empfangen Sie Nachrichten, sobald sie eintreffen. Mit `inbox` lesen Sie Kontexteinträge und Watch-Zusammenfassungen, die Ihre Anmeldung sehen darf.
 
@@ -128,7 +128,7 @@ Diese Tools wirken auf das Postfach des aufrufenden Agenten. Siehe [Muse](/de/do
 | `muse_hook_setup` | Set up the Muse hook | Erstellt einen privaten Weck-Link und gibt das Hook-Skript und die Einstellungen zurück. Jeder Aufruf ersetzt den vorherigen Link |
 | `muse_hook_test` | Test the Muse hook | Legt eine Testnachricht in Ihr eigenes Postfach. Der Hook weckt bei seiner nächsten Abfrage einen Worker |
 | `muse_hook_status` | Muse hook status | Zeigt den Erstellungszeitpunkt des Links, die letzte Prüfung des Hooks und die Anzahl ungelesener Nachrichten |
-| `muse_hook_revoke` | Revoke the Muse hook link | Beendet den Link. Der Hook schaltet sich selbst aus |
+| `muse_hook_revoke` | Revoke the Muse hook link | Macht den Link ungültig. Der Hook schaltet sich selbst aus |
 
 ### Companion-Tools
 
@@ -243,7 +243,7 @@ Für Aktionen in GitHub-Unterhaltungen übergeben Sie die Unterhaltungs-ID von S
 | `webhook_revoke` | Stoppt einen Webhook und löscht seine gespeicherten Secrets |
 | `webhook_test` | Sendet ein Beispielereignis an SwB oder eine Testnachricht an den Empfänger |
 
-Für ausgehende Webhooks akzeptieren `webhook_create` und `webhook_rotate` die Felder `allow_private` und `senders`. Setzen Sie `allow_private` auf `true` für private HTTPS-Empfänger oder andere Ports als 443. Tragen Sie verbundene Agenten in `senders` ein, damit sie senden können. Standardmäßig kann nur der Inhaber senden. Lassen Sie beide Felder in `webhook_rotate` weg, um ihre aktuellen Werte zu behalten.
+Für ausgehende Webhooks akzeptieren `webhook_create` und `webhook_rotate` die Felder `allow_private` und `senders`. Setzen Sie für private HTTPS-Empfänger oder andere Ports als 443 `allow_private` auf `true`. Tragen Sie verbundene Agenten in `senders` ein, damit sie senden können. Standardmäßig kann nur der Inhaber senden. Lassen Sie beide Felder in `webhook_rotate` weg, um ihre aktuellen Werte zu behalten.
 
 Wenn SwB eine Nachricht an ein Ziel `webhook:out` ablehnt, gibt SwB einen MCP-Tool-Fehler zurück. Bei HTTP-Aufrufen hat die Antwort den Status `200`, und im Tool-Ergebnis ist `isError` auf `true` gesetzt.
 

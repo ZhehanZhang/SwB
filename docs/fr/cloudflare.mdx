@@ -41,9 +41,11 @@ Pour exécuter le connecteur avec Compose, placez le jeton dans `.env` sous le n
 docker compose --profile tunnel up -d
 ```
 
-Pour exécuter le connecteur directement sur l'hôte, suivez la commande d'installation Cloudflare de votre système.
+Pour exécuter le connecteur directement sur l'hôte, exécutez la commande d'installation que Cloudflare fournit pour votre système.
 
 Quand le connecteur apparaît dans Cloudflare, sélectionnez **Continue**.
+
+<span id="protect-the-console" />
 
 <span id="protéger-la-console" />
 
@@ -67,7 +69,7 @@ SwB vérifie les codes d'appairage sur `/companion/pair`. Il vérifie la clé de
 
 ### Autoriser les requêtes HTTP des agents
 
-Browser Integrity Check peut bloquer les requêtes des agents. Ajoutez une [Configuration Rule](https://developers.cloudflare.com/rules/configuration-rules/) dans votre zone Cloudflare pour ces chemins SwB.
+La fonction Browser Integrity Check peut bloquer les requêtes des agents. Ajoutez une [Configuration Rule](https://developers.cloudflare.com/rules/configuration-rules/) dans votre zone Cloudflare pour ces chemins SwB.
 
 Remplacez `swb.example.com` par le nom d'hôte de votre SwB. Utilisez cette expression de règle.
 
@@ -82,7 +84,7 @@ Remplacez `swb.example.com` par le nom d'hôte de votre SwB. Utilisez cette expr
 ))
 ```
 
-Dans la règle, définissez `Browser Integrity Check: Off`. SwB conserve ses propres règles d'accès.
+Dans la règle, définissez `Browser Integrity Check: Off`. SwB continue d'appliquer ses propres règles d'accès.
 
 ### Définir l'adresse SwB
 
@@ -110,7 +112,7 @@ auth:
     aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
-SwB lit d'abord le jeton dans l'en-tête `Cf-Access-Jwt-Assertion`. Il utilise le cookie `CF_Authorization` comme seconde source. Un cookie est une valeur que le navigateur envoie avec une requête. SwB vérifie la signature RS256 avec les clés publiques de `team_domain`. L'émetteur du jeton doit correspondre à l'adresse HTTPS de `team_domain`. Le jeton doit indiquer `aud` comme audience. SwB vérifie les dates d'émission, de début et d'expiration quand le jeton les fournit. SwB compare l'adresse e-mail en minuscules avec `owner_emails`.
+SwB lit d'abord le jeton dans l'en-tête `Cf-Access-Jwt-Assertion`. Il utilise le cookie `CF_Authorization` comme seconde source. Un cookie est une valeur que le navigateur envoie avec une requête. SwB vérifie la signature RS256 avec les clés publiques de `team_domain`. L'émetteur du jeton doit correspondre à l'adresse HTTPS de `team_domain`. Le jeton doit indiquer `aud` comme audience. SwB vérifie les dates d'émission, de début de validité et d'expiration quand le jeton les fournit. SwB compare l'adresse e-mail en minuscules avec `owner_emails`.
 
 <span id="proxys-de-confiance" />
 
@@ -120,7 +122,7 @@ Un proxy inverse transmet les requêtes à SwB. Ajoutez son adresse ou son rése
 
 Vous pouvez aussi définir `SWB_TRUSTED_PROXIES` dans `.env`. Séparez les entrées par des virgules. Le paramètre YAML a la priorité.
 
-Pour un Cloudflare Tunnel, ajoutez l'adresse du connecteur ou son réseau dédié. Pour une connexion en boucle locale IPv4, utilisez `127.0.0.1/32`. Utilisez l'entrée `cloudflare` pour les connexions directes depuis les serveurs en périphérie de Cloudflare.
+Pour un Cloudflare Tunnel, ajoutez l'adresse du connecteur ou son réseau dédié. Pour une connexion de bouclage IPv4, utilisez `127.0.0.1/32`. Utilisez l'entrée `cloudflare` pour les connexions directes depuis les serveurs en périphérie de Cloudflare.
 
 Exécutez `docker compose --profile tunnel up -d` pour appliquer les paramètres avec le connecteur Compose. Pour un connecteur sur l'hôte, exécutez `docker compose up -d`.
 
@@ -132,7 +134,7 @@ Pour le connecteur Compose, définissez **Service URL** sur `http://switchboard:
 
 ### Vérifier la connexion
 
-Ouvrez votre adresse publique dans un navigateur. Connectez-vous à Cloudflare Access. [Vérifiez l'adresse publique](https://swb.example.com/healthz) pour voir si SwB répond.
+Ouvrez votre adresse publique dans un navigateur. Connectez-vous à Cloudflare Access. [Vérifiez l'adresse publique](https://swb.example.com/healthz) pour vérifier que SwB répond.
 
 Ouvrez `https://swb.example.com/mcp` dans une fenêtre de navigation privée. SwB renvoie `401` avec un en-tête `WWW-Authenticate`. Si Cloudflare affiche sa page de connexion, vérifiez la stratégie Bypass.
 

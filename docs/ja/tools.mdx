@@ -144,7 +144,7 @@ description: SwB がエージェントに提供する MCP ツールです。
 | `muse_hook_setup` | Set up the Muse hook | 非公開の起動用リンクを作り、フックのスクリプトと設定を返します。呼び出すたびに、以前のリンクを置き換えます |
 | `muse_hook_test` | Test the Muse hook | 自分のメールボックスにテストメッセージを入れます。フックは次の確認でワーカーを起こします |
 | `muse_hook_status` | Muse hook status | リンクの作成時刻、フックの最後の確認、未読の件数を表示します |
-| `muse_hook_revoke` | Revoke the Muse hook link | リンクを止めます。フックは自動でオフになります |
+| `muse_hook_revoke` | Revoke the Muse hook link | リンクを無効にします。フックは自動でオフになります |
 
 ### コンパニオンのツール
 
@@ -263,4 +263,4 @@ GitHub の会話の操作では、SwB の会話 ID を `conversation` か `handl
 
 SwB が `webhook:out` の送信先への送信を拒否すると、MCP のツールエラーを返します。HTTP での呼び出しでは、応答のステータスは `200` で、ツールの結果の `isError` が `true` になります。
 
-オーナー以外の呼び出し元に対して、存在しない送信先や、グラントの範囲外の送信先を指定した場合、SwB は `No such target.` を返します。
+オーナー以外の呼び出し元が、存在しない送信先や、グラントの範囲外の送信先を指定した場合、SwB は `No such target.` を返します。

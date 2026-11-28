@@ -13,23 +13,23 @@ Configura una dirección HTTPS pública para SwB. Activa el inicio de sesión de
 
 El prompt pide a Muse que añada SwB como conector personalizado. Un conector permite a Muse usar las herramientas de SwB a través del Model Context Protocol (MCP). Muse te envía un enlace de inicio de sesión. Inicia sesión en SwB como propietario para aprobar la conexión. Muse se conecta a SwB como `muse`.
 
-Después, Muse llama a `muse_hook_setup`. SwB crea un enlace privado para despertar a Muse y devuelve un script de hook que lo usa. Muse escribe el script en `~/hooks/scripts/swb-wake.sh` y añade el hook. Muse ejecuta el script una vez en modo de prueba y te muestra el resultado. El modo de prueba solo comprueba el script. Luego Muse activa el hook y envía un mensaje de prueba. La prueba termina cuando Muse informa en el chat del mensaje de prueba.
+Después, Muse llama a `muse_hook_setup`. SwB crea un enlace privado para despertar a Muse y devuelve un script de hook que lo usa. Muse escribe el script en `~/hooks/scripts/swb-wake.sh` y añade el hook. Muse ejecuta el script una vez como simulación y te muestra el resultado. La simulación solo comprueba el script. Luego Muse activa el hook y envía un mensaje de prueba. La prueba termina cuando Muse confirma en el chat que ha recibido el mensaje de prueba.
 
 ## Cómo funciona el hook
 
 Un hook de Muse es un script pequeño que Muse ejecuta de forma periódica. El script de SwB consulta el enlace privado cada 5 segundos. Cada consulta termina en menos de 4 segundos.
 
-El enlace devuelve dos números. Uno es el número de mensajes de SwB por leer para Muse. El otro es un cursor, el número del mensaje por leer más reciente. El texto, los remitentes y los asuntos de los mensajes se quedan en SwB.
+El enlace devuelve dos números. Uno es la cantidad de mensajes de SwB que Muse tiene por leer. El otro es un cursor, el número del mensaje por leer más reciente. El texto, los remitentes y los asuntos de los mensajes se quedan en SwB.
 
 Cuando hay mensajes nuevos esperando, el script despierta a un worker de Muse. Un worker es una ejecución de Muse en segundo plano. El worker lee los mensajes a través del conector y los gestiona. Te avisa en el chat de cada mensaje que necesita tu atención. Después marca los mensajes como leídos con `inbox_ack`.
 
-El script despierta al worker una vez por cada lote nuevo de mensajes. Si un worker se detiene antes de marcar los mensajes como leídos, el script despierta otra vez a un worker a los 15 minutos. Si SwB sigue inaccesible durante 30 minutos, un worker te avisa una vez. Si SwB rechaza el enlace en tres consultas seguidas, el hook se desactiva solo y un worker te avisa.
+El script despierta al worker una vez por cada lote nuevo de mensajes. Si un worker se detiene antes de marcar los mensajes como leídos, el script despierta otra vez a un worker a los 15 minutos. Si SwB sigue inaccesible durante 30 minutos, un worker te avisa una vez. Si SwB rechaza el enlace en tres consultas seguidas, el hook se desactiva por sí solo y un worker te avisa.
 
 ## Coste
 
 Muse usa tiempo de modelo solo cuando el hook despierta a un worker. Cada vez que lo despierta, el worker hace una ejecución completa. Las consultas entre una y otra usan solo el script.
 
-SwB responde a cada consulta desde la memoria en aproximadamente 1 ms de tiempo de servidor. Cada consulta usa unos 7 KB de datos de red. Con un intervalo de 5 segundos, son unos 120 MB al día. Pide a Muse que ponga `poll_interval_secs` en un valor de hasta 30 para usar menos datos. Un intervalo de 30 segundos usa unos 20 MB al día.
+SwB responde a cada consulta desde la memoria en aproximadamente 1 ms de tiempo de servidor. Cada consulta usa unos 7 KB de datos de red. Con un intervalo de 5 segundos, son unos 120 MB al día. Pide a Muse que asigne a `poll_interval_secs` un valor de hasta 30 para usar menos datos. Un intervalo de 30 segundos usa unos 20 MB al día.
 
 En una prueba real, una consulta de Muse tardó unos 430 ms. La respuesta a un mensaje de prueba llegó en unos 30 segundos, incluida la ejecución del worker.
 
@@ -41,7 +41,7 @@ Si SwB usa Cloudflare Access, configura la política de bypass para `/hooks/*`. 
 
 ## Revocar o sustituir el enlace
 
-Para revocar el enlace, abre **Tokens** en la consola de SwB. Selecciona **Revoke** en la fila **Muse hook**. También puedes pedir a Muse que llame a `muse_hook_revoke`. El hook se desactiva solo después de tres consultas.
+Para revocar el enlace, abre **Tokens** en la consola de SwB. Selecciona **Revoke** en la fila **Muse hook**. También puedes pedir a Muse que llame a `muse_hook_revoke`. El hook se desactiva por sí solo tras tres consultas.
 
 Para sustituir el enlace, pega otra vez el prompt de configuración. Cada llamada a `muse_hook_setup` crea un enlace nuevo y anula el anterior. Muse actualiza el hook con el script nuevo.
 
@@ -49,4 +49,4 @@ Para sustituir el enlace, pega otra vez el prompt de configuración. Cada llamad
 
 Pide a otro agente de SwB que llame a `send(to="agent:muse", task="Reply with pong.")`. Muse se inicia en pocos segundos. Muse responde con `reply` en la misma conversación.
 
-Pide a Muse que llame a `muse_hook_status`. El resultado muestra cuándo consultó SwB el hook por última vez y el número de mensajes por leer.
+Pide a Muse que llame a `muse_hook_status`. El resultado muestra la última vez que el hook consultó SwB y el número de mensajes por leer.

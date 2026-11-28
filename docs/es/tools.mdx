@@ -128,7 +128,7 @@ Estas herramientas actúan sobre el buzón del agente que las llama. Consulta [M
 | `muse_hook_setup` | Set up the Muse hook | Crea un enlace privado para despertar a Muse y devuelve el script y los ajustes del hook. Cada llamada sustituye el enlace anterior |
 | `muse_hook_test` | Test the Muse hook | Pone un mensaje de prueba en tu propio buzón. El hook despierta a un worker en su siguiente consulta |
 | `muse_hook_status` | Muse hook status | Muestra la hora de creación del enlace, la última consulta del hook y el número de mensajes por leer |
-| `muse_hook_revoke` | Revoke the Muse hook link | Anula el enlace. El hook se desactiva solo |
+| `muse_hook_revoke` | Revoke the Muse hook link | Anula el enlace. El hook se desactiva por sí solo |
 
 ### Herramientas de companion
 
@@ -243,8 +243,8 @@ En las acciones de conversación de GitHub, pasa el ID de conversación de SwB e
 | `webhook_revoke` | Detiene un webhook y borra sus secretos guardados |
 | `webhook_test` | Envía un evento entrante o un mensaje saliente de ejemplo |
 
-En los webhooks salientes, `webhook_create` y `webhook_rotate` aceptan `allow_private` y `senders`. Usa `allow_private` con el valor `true` para receptores HTTPS privados o puertos distintos de 443. Lista en `senders` los agentes conectados que pueden enviar. De forma predeterminada, solo el propietario puede enviar. Omite los dos campos en `webhook_rotate` para conservar sus valores actuales.
+En los webhooks salientes, `webhook_create` y `webhook_rotate` aceptan `allow_private` y `senders`. Usa `allow_private` con el valor `true` para receptores HTTPS privados o puertos distintos de 443. Añade a `senders` los agentes conectados que pueden enviar. De forma predeterminada, solo el propietario puede enviar. Omite los dos campos en `webhook_rotate` para conservar sus valores actuales.
 
-Si SwB rechaza un envío a un destino `webhook:out`, devuelve un error de herramienta MCP. En las llamadas HTTP, la respuesta tiene el estado `200` y el resultado de la herramienta tiene `isError` establecido en `true`.
+Si SwB rechaza un envío a un destino `webhook:out`, devuelve un error de herramienta MCP. En las llamadas HTTP, la respuesta tiene el estado `200` y el resultado de la herramienta tiene `isError` con el valor `true`.
 
-Si quien llama es distinto del propietario, SwB devuelve `No such target.` cuando el destino falta o queda fuera de sus concesiones.
+Si quien llama es distinto del propietario, SwB devuelve `No such target.` cuando el destino es desconocido o queda fuera de sus concesiones.

@@ -21,9 +21,9 @@ Ein Muse-Hook ist ein kleines Skript, das Muse nach Zeitplan ausführt. Das SwB-
 
 Der Link liefert zwei Zahlen. Die erste ist die Anzahl ungelesener SwB-Nachrichten für Muse. Die zweite ist ein Cursor, also die Nummer der neuesten ungelesenen Nachricht. Nachrichtentext, Absender und Betreff bleiben in SwB.
 
-Wenn neue Nachrichten warten, weckt das Skript einen Muse-Worker. Ein Worker ist ein Muse-Lauf im Hintergrund. Der Worker liest die Nachrichten über den Connector und bearbeitet sie. Er informiert Sie im Chat über jede Nachricht, die Sie betrifft. Danach markiert er die Nachrichten mit `inbox_ack` als gelesen.
+Wenn neue Nachrichten warten, weckt das Skript einen Muse-Worker. Ein Worker ist ein Muse-Lauf im Hintergrund. Der Worker liest die Nachrichten über den Connector und bearbeitet sie. Er informiert Sie im Chat über jede Nachricht, die Ihre Aufmerksamkeit braucht. Danach markiert er die Nachrichten mit `inbox_ack` als gelesen.
 
-Das Skript weckt den Worker einmal für jede neue Gruppe von Nachrichten. Wenn ein Worker stoppt, bevor er die Nachrichten als gelesen markiert, weckt das Skript nach 15 Minuten erneut einen Worker. Wenn SwB 30 Minuten lang unerreichbar ist, informiert Sie ein Worker einmal. Wenn SwB den Link bei drei Prüfungen in Folge ablehnt, schaltet sich der Hook selbst aus und ein Worker informiert Sie.
+Das Skript weckt den Worker einmal für jede neue Gruppe von Nachrichten. Wenn ein Worker abbricht, bevor er die Nachrichten als gelesen markiert, weckt das Skript nach 15 Minuten erneut einen Worker. Wenn SwB 30 Minuten lang unerreichbar ist, informiert Sie ein Worker einmal. Wenn SwB den Link bei drei Prüfungen in Folge ablehnt, schaltet sich der Hook selbst aus und ein Worker informiert Sie.
 
 ## Kosten
 
@@ -35,7 +35,7 @@ In einem Live-Test dauerte eine Prüfung von Muse etwa 430 ms. Eine Antwort auf 
 
 ## Link vertraulich halten
 
-Muse gibt Hook-Skripten nur Zugriff auf lokale Dateien. Deshalb steht der Link in der Skriptdatei, wie die Adresse eines Webhooks. Jede Person mit dem Link kann Ihre Anzahl ungelesener Nachrichten sehen und wann sie sich ändert. Der Link gibt nur Zugriff auf diese Anzahl. Muse bewahrt das Skript in seinem Hook-Ordner auf. Widerrufen Sie den Link, wenn eine andere Person ihn erhält.
+Muse gibt Hook-Skripten nur Zugriff auf lokale Dateien. Deshalb steht der Link in der Skriptdatei, wie die Adresse eines Webhooks. Jede Person mit dem Link kann sehen, wie viele ungelesene Nachrichten Sie haben und wann sich diese Zahl ändert. Der Link gibt nur Zugriff auf diese Anzahl. Muse bewahrt das Skript in seinem Hook-Ordner auf. Widerrufen Sie den Link, wenn eine andere Person ihn erhält.
 
 Wenn SwB Cloudflare Access verwendet, setzen Sie die Bypass-Richtlinie für `/hooks/*`. Siehe [Konsole schützen](/de/docs/cloudflare#cloudflare-access).
 
@@ -43,7 +43,7 @@ Wenn SwB Cloudflare Access verwendet, setzen Sie die Bypass-Richtlinie für `/ho
 
 Um den Link zu widerrufen, öffnen Sie **Tokens** in der SwB-Konsole. Wählen Sie in der Zeile **Muse hook** die Option **Revoke** aus. Sie können Muse auch bitten, `muse_hook_revoke` aufzurufen. Der Hook schaltet sich nach drei Prüfungen selbst aus.
 
-Um den Link zu ersetzen, fügen Sie den Einrichtungsprompt erneut ein. Jeder Aufruf von `muse_hook_setup` erstellt einen neuen Link und beendet den vorherigen Link. Muse aktualisiert den Hook mit dem neuen Skript.
+Um den Link zu ersetzen, fügen Sie den Einrichtungsprompt erneut ein. Jeder Aufruf von `muse_hook_setup` erstellt einen neuen Link und macht den vorherigen Link ungültig. Muse aktualisiert den Hook mit dem neuen Skript.
 
 ## Verbindung prüfen
 

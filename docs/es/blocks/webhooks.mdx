@@ -97,15 +97,15 @@ Llama a `webhook_create` con un nombre y el valor `out` en `direction`.
 }
 ```
 
-SwB exige de forma predeterminada un receptor HTTPS público en el puerto 443. Bloquea las direcciones privadas, de loopback y de enlace local, incluidas las direcciones de enlace local de los datos de instancias en la nube. Las direcciones de loopback llegan al host de SwB. Las direcciones de enlace local llegan solo a la red local.
+SwB exige de forma predeterminada un receptor HTTPS público en el puerto 443. Bloquea las direcciones privadas, de loopback y de enlace local, incluidas las de los metadatos de instancias en la nube. Las direcciones de loopback llegan al host de SwB. Las direcciones de enlace local llegan solo a la red local.
 
 El propietario puede usar `allow_private` con el valor `true` en ese webhook para permitir esas direcciones u otros puertos HTTPS.
 
-SwB consulta las direcciones IP del receptor una vez por entrega. Fija la conexión a la primera dirección de esa consulta.
+SwB resuelve las direcciones IP del receptor una vez por entrega. Fija la conexión a la primera dirección obtenida.
 
 De forma predeterminada, solo el propietario puede enviar. Un agente emparejado necesita una concesión en `senders` para usar un destino `webhook:out`. Añade a `senders` una dirección de agente como `agent:claude` para darle acceso a ese webhook.
 
-Si quien llama es distinto del propietario, SwB devuelve `No such target.` cuando el destino falta o queda fuera de sus concesiones. Pide al propietario que revise el nombre del destino y tu acceso.
+Si quien llama es distinto del propietario, SwB devuelve `No such target.` cuando el destino es desconocido o queda fuera de sus concesiones. Pide al propietario que revise el nombre del destino y tu acceso.
 
 Inicia sesión en SwB como propietario. Después abre el enlace de entrega. Guarda la URL HTTPS del receptor y el secreto de firma. Comparte el mismo secreto de firma `whsec_` con el receptor por un canal privado.
 
@@ -271,7 +271,7 @@ En IFTTT, elige [**Make a web request**](https://ifttt.com/maker_webhooks/action
 | - | - | - |
 | `hmac-sha256` | `X-Signature-256` | Un secreto aleatorio que generas para este webhook |
 
-HMAC usa un secreto compartido para calcular una firma a partir del cuerpo. Usa `X-Signature-256` en `header`, `hex` en `encoding` y `sha256=` en `prefix`.
+HMAC usa un secreto compartido para calcular una firma a partir del cuerpo. Usa `X-Signature-256` en `header`. Usa `hex` en `encoding`. Usa `sha256=` en `prefix`. Los dos métodos HMAC aceptan letras hexadecimales en mayúscula y en minúscula en las firmas.
 
 Genera un secreto en un archivo privado con [OpenSSL](https://docs.openssl.org/4.0/man1/openssl-rand/). Guarda su valor con el enlace de entrega.
 

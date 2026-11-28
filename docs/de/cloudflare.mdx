@@ -15,7 +15,7 @@ Für eine temporäre Adresse verwenden Sie einen Quick Tunnel. Installieren Sie 
 cloudflared tunnel --url http://localhost:8870
 ```
 
-Setzen Sie `SWB_PUBLIC_URL` in `.env` auf die HTTPS-Adresse aus dem Terminal. Wenn Ihre Konfiguration `public_url` enthält, passen Sie diesen Wert an. Tragen Sie den Connector unter [Vertrauenswürdige Proxys](#trusted-proxies) ein. Führen Sie `docker compose up -d` aus, um die Einstellungen zu übernehmen.
+Setzen Sie `SWB_PUBLIC_URL` in `.env` auf die HTTPS-Adresse aus dem Terminal. Wenn Ihre Konfiguration `public_url` enthält, passen Sie diesen Wert an. Tragen Sie den Connector bei den [vertrauenswürdigen Proxys](#trusted-proxies) ein. Führen Sie `docker compose up -d` aus, um die Einstellungen zu übernehmen.
 
 Die Adresse ändert sich bei jedem Start des Tunnels. OAuth-Anmeldungen und Passkeys verwenden diese Adresse. Für eine feste Adresse verwenden Sie einen benannten Tunnel.
 
@@ -80,7 +80,7 @@ Ersetzen Sie `swb.example.com` durch Ihren SwB-Hostnamen. Verwenden Sie diesen R
 ))
 ```
 
-Setzen Sie in der Regel `Browser Integrity Check: Off`. Die eigenen Zugriffsregeln von SwB bleiben bestehen.
+Setzen Sie in dieser Regel `Browser Integrity Check: Off`. Die eigenen Zugriffsregeln von SwB bleiben bestehen.
 
 ### SwB-Adresse festlegen
 
@@ -114,13 +114,13 @@ SwB liest das Token zuerst aus dem Header `Cf-Access-Jwt-Assertion`. Als zweite 
 
 ### Vertrauenswürdige Proxys [#trusted-proxies]
 
-Ein Reverse Proxy leitet Anfragen an SwB weiter. Tragen Sie seine Adresse oder sein dediziertes Netzwerk in `trusted_proxies` in `config/switchboard.yaml` ein. Schreiben Sie Netzbereiche in CIDR-Notation, zum Beispiel `192.0.2.0/24`.
+Ein Reverse Proxy leitet Anfragen an SwB weiter. Tragen Sie seine Adresse oder sein dediziertes Netzwerk in `trusted_proxies` in `config/switchboard.yaml` ein. Geben Sie Netzbereiche in CIDR-Notation an, zum Beispiel `192.0.2.0/24`.
 
 Sie können auch `SWB_TRUSTED_PROXIES` in `.env` setzen. Trennen Sie die Einträge durch Kommas. Die YAML-Einstellung hat Vorrang.
 
 Für einen Cloudflare Tunnel tragen Sie die Adresse oder das dedizierte Netzwerk des Connectors ein. Für eine IPv4-Loopback-Verbindung verwenden Sie `127.0.0.1/32`. Für direkte Verbindungen von Cloudflare-Edge-Servern verwenden Sie den Eintrag `cloudflare`.
 
-Mit dem Compose-Connector übernehmen Sie die Einstellungen mit `docker compose --profile tunnel up -d`. Bei einem Connector auf dem Host führen Sie `docker compose up -d` aus.
+Führen Sie für den Compose-Connector `docker compose --profile tunnel up -d` aus, um die Einstellungen zu übernehmen. Bei einem Connector auf dem Host führen Sie `docker compose up -d` aus.
 
 ### Hostnamen veröffentlichen
 

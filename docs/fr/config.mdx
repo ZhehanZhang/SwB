@@ -53,7 +53,7 @@ Certains blocs peuvent démarrer avec les identifiants présents dans l'environn
 
 SwB essaie d'abord l'agent le plus récemment actif sous une connexion propriétaire au cours des 30 dernières minutes. Il essaie ensuite l'agent principal du projet, défini par la route du projet ou par `default_target`. La route globale du propriétaire est le dernier choix.
 
-L'agent choisi reçoit le message dans sa boîte de réception. Si les trois choix échouent, SwB signale la livraison en attente dans l'état.
+L'agent choisi reçoit le message dans sa boîte de réception. Si les trois choix échouent, SwB signale la livraison en attente dans le rapport d'état.
 
 Définissez la route globale du propriétaire sur une adresse d'agent.
 
@@ -130,7 +130,7 @@ Dans une clé, `*` représente un nom d'entrée ou un élément de liste.
 | `auth.key_targets` | Cibles de message autorisées par nom de clé, par exemple `[agent:claude]`. Une clé soumise à cette limite doit nommer une cible autorisée |
 | `auth.inbox_keys` | Associe un nom de clé au seul agent dont elle peut lire la boîte de réception. L'entrée intégrée est `channel: claude-code` |
 
-Pour la connexion par Cloudflare Access, SwB utilise le jeton de l'en-tête `Cf-Access-Jwt-Assertion`. Si l'en-tête est vide ou absent, SwB lit le jeton dans le cookie `CF_Authorization`. Un cookie est une valeur que le navigateur envoie avec une requête. SwB vérifie la signature RS256 avec les clés publiques de `team_domain`. L'émetteur du jeton doit correspondre à l'adresse HTTPS de `team_domain`. Le jeton doit indiquer `aud` comme audience. SwB vérifie les dates d'émission, de début et d'expiration quand le jeton les fournit. SwB compare l'adresse e-mail en minuscules avec `owner_emails`.
+Pour la connexion par Cloudflare Access, SwB utilise le jeton de l'en-tête `Cf-Access-Jwt-Assertion`. Si l'en-tête est vide ou absent, SwB lit le jeton dans le cookie `CF_Authorization`. Un cookie est une valeur que le navigateur envoie avec une requête. SwB vérifie la signature RS256 avec les clés publiques de `team_domain`. L'émetteur du jeton doit correspondre à l'adresse HTTPS de `team_domain`. Le jeton doit indiquer `aud` comme audience. SwB vérifie les dates d'émission, de début de validité et d'expiration quand le jeton les fournit. SwB compare l'adresse e-mail en minuscules avec `owner_emails`.
 
 ## Visibilité
 

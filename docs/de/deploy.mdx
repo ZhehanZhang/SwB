@@ -43,7 +43,7 @@ Bei einem entfernten Server leiten Sie dessen Port `8870` auf Port `8870` Ihres 
 
 Ihr Browser verwendet `http://localhost:8870` für die Anmeldung. Der Befehl im Container verwendet Port `8000`. Compose speichert die Daten in `./data`. Führen Sie `docker compose up -d` aus, nachdem Sie `.env` geändert haben.
 
-Eine Anfrage ohne Anmeldung an `/healthz` gibt `status` und `version` zurück. Für vollständige Statusdetails verwenden Sie eine Inhabersitzung oder den Inhaberschlüssel.
+Eine anonyme Anfrage an `/healthz` gibt `status` und `version` zurück. Für vollständige Statusdetails verwenden Sie eine Inhabersitzung oder den Inhaberschlüssel.
 
 ### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
@@ -51,7 +51,7 @@ Ein Tunnel verbindet Ihren Server mit Cloudflare und gibt SwB eine öffentliche 
 
 ## In der Cloud
 
-Verwenden Sie eine einzelne SwB-Instanz mit einem Datenträger unter `/data`. Der Datenträger bewahrt Ihre Daten, wenn die Instanz neu startet. Vorlagen und Skripte für die Plattformen finden Sie in der [Bereitstellungsanleitung](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
+Verwenden Sie eine einzelne SwB-Instanz mit einem Datenträger unter `/data`. Auf dem Datenträger bleiben Ihre Daten bei einem Neustart der Instanz erhalten. Vorlagen und Skripte für die Plattformen finden Sie in der [Bereitstellungsanleitung](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
 
 <span id="bereitstellung-mit-einem-klick" />
 

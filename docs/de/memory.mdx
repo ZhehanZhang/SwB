@@ -51,7 +51,7 @@ Jeder Einrichtungsprompt bittet den Agenten um eine Synchronisierung. Nach der E
 
 Der [Companion](/de/docs/companion) mit `--cap hooks` synchronisiert die Gedächtnisdateien von Claude Code bei jedem Speichern.
 
-SwB wählt den Bereich anhand des Namens des Sitzungsordners. Zuerst sucht SwB ein Projekt mit passendem Slug, also seinem Kurznamen. Danach sucht SwB einen eindeutigen Treffer über den Namen eines verknüpften Repositorys. SwB synchronisiert in ein passendes Projekt, wenn dessen Einstellung `private` den Wert `false` hat. Bei einem privaten Treffer überspringt SwB die Synchronisierung. Für alle anderen Ordner synchronisiert SwB in `agent:claude-code`.
+SwB wählt den Bereich anhand des Namens des Sitzungsordners. Zuerst sucht SwB ein Projekt mit passendem Slug, also seinem Kurznamen. Sonst sucht SwB einen eindeutigen Treffer über den Namen eines verknüpften Repositorys. SwB synchronisiert in ein passendes Projekt, wenn dessen Einstellung `private` den Wert `false` hat. Bei einem privaten Treffer überspringt SwB die Synchronisierung. Für alle anderen Ordner synchronisiert SwB in `agent:claude-code`.
 
 Die Gedächtnissynchronisierung ist standardmäßig aktiv. Zum Ausschalten öffnen Sie **Memory** in der Konsole und schalten **Memory sync** aus. Agenten mit der Anmeldung des Inhabers können denselben Schalter mit `memory_settings` bedienen.
 
@@ -71,7 +71,7 @@ Jede Änderung durch einen Agenten erscheint in **History** und im Audit-Protoko
 
 Wählen Sie **Download** auf der Seite **Memory**, um das gesamte Gedächtnis als ZIP-Datei zu speichern. Die Datei enthält eine Markdown-Datei pro Eintrag, in Ordnern nach Bereich und Thema. Sie enthält auch `manifest.json` mit dem Verlauf und der Herkunft jedes Eintrags.
 
-Wählen Sie **Restore from file**, um eine ZIP-Datei zu laden. Eine Wiederherstellung fügt fehlende Einträge hinzu und behält vorhandene Einträge. SwB markiert importierten Text als Information und speichert, wer ihn importiert hat.
+Wählen Sie **Restore from file** aus, um eine ZIP-Datei zu laden. Eine Wiederherstellung fügt fehlende Einträge hinzu und behält vorhandene Einträge. SwB markiert importierten Text als Information und speichert, wer ihn importiert hat.
 
 Agenten mit der Anmeldung des Inhabers können für dieselben Aufgaben `memory_export` und `memory_import` verwenden.
 
@@ -93,7 +93,7 @@ Der Standardautor der Sicherung ist `SwB <swb@localhost>`. Zum Ändern verwenden
 
 SwB wartet nach einer Änderung 30 Sekunden und erstellt dann einen Commit für alle Änderungen in dieser Zeit. Wählen Sie **Back up now**, um sofort einen Commit zu erstellen. Schlägt ein Push fehl, versucht SwB es später erneut. Die Statuszeile zeigt die letzte Sicherung und den letzten Fehler.
 
-Wählen Sie **Restore from repository**, um das Gedächtnis aus dem neuesten Commit zu laden. SwB markiert importierten Text als Information und speichert, wer ihn importiert hat.
+Wählen Sie **Restore from repository** aus, um das Gedächtnis aus dem neuesten Commit zu laden. SwB markiert importierten Text als Information und speichert, wer ihn importiert hat.
 
 Agenten mit der Anmeldung des Inhabers können `memory_backup_configure`, `memory_backup_status`, `memory_backup_now` und `memory_backup_restore` verwenden. `memory_backup_configure` gibt einen Claim-Link für das Token oder den Schlüssel zurück.
 

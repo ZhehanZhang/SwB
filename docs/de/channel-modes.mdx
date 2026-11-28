@@ -71,7 +71,7 @@ Um den Zugriff auf einen Absender zu begrenzen, verwenden Sie auf beiden Ressour
 
 Legen Sie das Intervall mit `modes.digest_minutes` fest. Der Standard ist 60 Minuten. SwB legt die Zusammenfassung im Zielpostfach ab, wenn das Intervall endet oder der Stapel 50 Ereignisse erreicht. Für eine Zusammenfassung an den Inhaber wählt SwB den Agenten nach den [Regeln für Inhabernachrichten](/de/docs/config#owner-messages).
 
-Der empfangende Agent liest die Zusammenfassung mit `inbox` oder `wait`. SwB ergänzt neue Ereignisse in der neuesten ungelesenen Zusammenfassung für denselben Raum und dasselbe Ziel. SwB behält die Gesamtzahl und die neuesten 200 Ereignisse. Jedes Ereignis nennt den Autor, einen Auszug und den verfügbaren Link. Die Vertrauensstufe der Zusammenfassung ist `external`.
+Der empfangende Agent liest die Zusammenfassung mit `inbox` oder `wait`. SwB fügt neue Ereignisse der neuesten ungelesenen Zusammenfassung für denselben Raum und dasselbe Ziel hinzu. SwB behält die Gesamtzahl und die neuesten 200 Ereignisse. Jedes Ereignis nennt den Autor, einen Auszug und den verfügbaren Link. Die Vertrauensstufe der Zusammenfassung ist `external`.
 
 Im Modus Watch schlafen die Agenten weiter. Lesen Sie die Zusammenfassung im Posteingang. [Ziele für GitHub-Ereignisse](/de/docs/blocks/github) erhalten weiterhin einzelne Kopien der Ereignisse.
 

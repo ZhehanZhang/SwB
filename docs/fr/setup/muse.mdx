@@ -19,7 +19,7 @@ Muse appelle ensuite `muse_hook_setup`. SwB crée un lien de réveil privé et r
 
 Un hook Muse est un petit script que Muse exécute à intervalles réguliers. Le script SwB vérifie le lien privé toutes les 5 secondes. Chaque vérification dure moins de 4 secondes.
 
-Le lien fournit deux nombres. Le premier est le nombre de messages SwB non lus pour Muse. Le second est une position de lecture, le numéro du message non lu le plus récent. Le texte des messages, les expéditeurs et les sujets restent dans SwB.
+Le lien fournit deux nombres. Le premier est le nombre de messages SwB non lus pour Muse. Le second est une position de lecture, le numéro du message non lu le plus récent. Le texte des messages, les expéditeurs et les objets restent dans SwB.
 
 Quand de nouveaux messages attendent, le script réveille un worker Muse. Un worker est une exécution de Muse en arrière-plan. Le worker lit les messages par le connecteur et les traite. Il vous signale dans la discussion chaque message qui demande votre attention. Il marque ensuite les messages comme lus avec `inbox_ack`.
 
@@ -35,7 +35,7 @@ Lors d'un test réel, une vérification depuis Muse a pris environ 430 ms. La r�
 
 ## Garder le lien privé
 
-Muse donne aux scripts de hook un accès aux fichiers locaux uniquement. Le lien se trouve donc dans le fichier du script, comme l'adresse d'un webhook. Toute personne qui a le lien peut voir votre nombre de messages non lus et ses changements. Le lien donne accès à ce nombre uniquement. Muse garde le script dans son dossier de hooks. Révoquez le lien si une autre personne l'obtient.
+Muse donne aux scripts de hook un accès aux fichiers locaux uniquement. Le lien se trouve donc dans le fichier du script, comme l'adresse d'un webhook. Toute personne qui a le lien peut voir votre nombre de messages non lus et savoir quand il change. Le lien donne accès à ce nombre uniquement. Muse garde le script dans son dossier de hooks. Révoquez le lien si une autre personne l'obtient.
 
 Si SwB utilise Cloudflare Access, définissez la stratégie Bypass pour `/hooks/*`. Consultez [Protéger la console](/fr/docs/cloudflare#cloudflare-access).
 

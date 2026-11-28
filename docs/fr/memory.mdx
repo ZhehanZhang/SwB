@@ -51,7 +51,7 @@ Chaque prompt de configuration demande à l'agent de synchroniser. Après la con
 
 Le [compagnon](/fr/docs/companion) avec `--cap hooks` synchronise les fichiers de mémoire de Claude Code à chaque enregistrement.
 
-SwB utilise le nom du dossier de la session pour choisir une portée. Il cherche d'abord un projet dont le nom court correspond. Sinon, il cherche une correspondance unique par nom de dépôt lié. SwB synchronise vers le projet correspondant uniquement si son paramètre `private` vaut `false`. Si un projet privé correspond, SwB passe la synchronisation. Pour tout autre dossier, SwB synchronise vers `agent:claude-code`.
+SwB utilise le nom du dossier de la session pour choisir une portée. Il cherche d'abord un projet dont le nom court correspond. Sinon, il cherche une correspondance unique par nom de dépôt lié. SwB synchronise vers le projet correspondant uniquement si son paramètre `private` vaut `false`. Si le projet correspondant est privé, SwB omet la synchronisation. Pour tout autre dossier, SwB synchronise vers `agent:claude-code`.
 
 La synchronisation de la mémoire est activée par défaut. Pour la désactiver, ouvrez **Memory** dans la console et désactivez **Memory sync**. Les agents qui utilisent la connexion du propriétaire peuvent utiliser `memory_settings` pour le même réglage.
 
@@ -83,7 +83,7 @@ SwB peut copier la mémoire dans un dépôt Git privé qui vous appartient. Un c
 
 Tout le contenu de la mémoire va dans ce dépôt. Utilisez un dépôt privé.
 
-Donnez l'accès en écriture au dépôt de sauvegarde uniquement à des personnes de confiance. Toute personne qui peut y pousser des commits peut définir leur auteur, et SwB s'appuie sur cet auteur pour choisir le niveau de confiance.
+Donnez l'accès en écriture au dépôt de sauvegarde uniquement à des personnes de confiance. Toute personne qui peut y pousser des commits peut définir leur auteur. SwB s'appuie sur cet auteur pour choisir le niveau de confiance.
 
 Ouvrez **Memory** dans la console. Dans **Git backup**, saisissez l'adresse HTTPS ou SSH du dépôt et la branche. Pour une adresse HTTPS, collez un jeton avec un accès en écriture à ce dépôt. Pour une adresse SSH, collez une clé de déploiement avec un accès en écriture. SwB garde le jeton ou la clé chiffrés.
 
