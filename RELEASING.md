@@ -20,8 +20,8 @@ Use [the English release notes](docs/release-notes/1.0.0.md) for the GitHub Rele
 | --- | --- |
 | GitHub Environments | Create `pypi`. Allow release tags that match `v*`. |
 | GitHub Environments | Create `testpypi`. Allow the branch that runs the test upload. |
-| [PyPI Trusted Publishing](https://pypi.org/manage/account/publishing/) | Add a publisher for `swb-one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `pypi`. Use a pending publisher for the first upload. |
-| [TestPyPI Trusted Publishing](https://test.pypi.org/manage/account/publishing/) | Add a publisher for `swb-one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `testpypi`. Use a pending publisher for the first upload. |
+| [PyPI Trusted Publishing](https://pypi.org/manage/account/publishing/) | Add a publisher for `swb.one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `pypi`. Use a pending publisher for the first upload. |
+| [TestPyPI Trusted Publishing](https://test.pypi.org/manage/account/publishing/) | Add a publisher for `swb.one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `testpypi`. Use a pending publisher for the first upload. |
 | GitHub Actions | Run the PyPI workflow by hand to upload to TestPyPI. |
 | GitHub Settings | Enable private vulnerability reporting in Advanced Security after the repository goes public. |
 | Code of Conduct | Set a public contact address in `CODE_OF_CONDUCT.md`. |
