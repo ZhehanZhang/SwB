@@ -324,10 +324,10 @@ test('reduced motion keeps the diagram still', async ({ page }) => {
   await expect(spokes).toHaveCount(14);
   const stillSpokes = () => spokes.evaluateAll((paths) => paths.map((path) => {
     const style = getComputedStyle(path);
-    return { d: path.getAttribute('d'), stroke: style.stroke, width: style.strokeWidth, active: path.hasAttribute('data-active') };
+    return { d: path.getAttribute('d'), fill: style.fill, stroke: style.stroke, active: path.hasAttribute('data-active') };
   }));
   const cords = await stillSpokes();
-  expect(cords.every(({ width, stroke }) => parseFloat(width) >= 1.75 && stroke !== 'none')).toBe(true);
+  expect(cords.every(({ d, fill, stroke }) => d?.endsWith(' Z') && fill !== 'none' && stroke === 'none')).toBe(true);
   expect(cords.filter(({ active }) => active)).toHaveLength(2);
   await expect(pulse).toHaveCount(0);
   await page.waitForTimeout(1500);

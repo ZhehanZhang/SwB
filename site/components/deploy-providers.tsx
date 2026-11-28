@@ -22,7 +22,7 @@ export function DeployTile({ href, mark, name, plan, tunnel = false }: {
   const Arrow = href.startsWith('/') ? ArrowRight : ArrowUpRight;
   return (
     <Link href={href} data-provider-tile={mark} data-deploy-tunnel={tunnel || undefined}
-      className="swb-button swb-button-outline grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] justify-start gap-2.5 px-3 py-[11px] text-start leading-5 whitespace-nowrap transition-colors active:bg-fd-border motion-reduce:transition-none">
+      className="swb-button swb-button-outline grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] justify-start px-3 py-[11px] text-start leading-5 whitespace-nowrap transition-colors active:bg-fd-border motion-reduce:transition-none">
       {tunnel ? (
         <svg aria-hidden="true" viewBox="0 0 16 16"><image href="/marks/cloudflare.svg" width="16" height="16" /></svg>
       ) : <ProviderMark name={mark} />}
