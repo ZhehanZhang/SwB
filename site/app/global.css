@@ -166,6 +166,14 @@
   white-space: nowrap;
 }
 
+.swb-mdx > span[id]:empty {
+  @apply absolute scroll-m-28;
+}
+
+.swb-mdx > span[id]:empty:first-child + :is(h2, h3) {
+  margin-block-start: 0;
+}
+
 .swb-mdx table:has(td code) td:not(:has(code)) {
   min-inline-size: 10rem;
 }

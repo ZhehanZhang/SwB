@@ -55,8 +55,9 @@ for (const locale of locales) {
 }
 
 test('the previous Cloudflare console bookmarks still resolve', async ({ page }) => {
-  await page.goto('/docs/cloudflare#protect-the-console');
-  await expect(page.locator('span[id="protect-the-console"]')).toHaveCount(1);
-  await page.goto('/es/docs/cloudflare#proteger-la-consola');
-  await expect(page.locator('span[id="proteger-la-consola"]')).toHaveCount(1);
+  for (const [path, id] of [['/docs/cloudflare', 'protect-the-console'], ['/es/docs/cloudflare', 'proteger-la-consola']]) {
+    await page.goto(`${path}#${id}`);
+    await expect(page.locator(`span[id="${id}"]`)).toHaveCount(1);
+    await expect(page.locator('#cloudflare-access')).toBeInViewport({ ratio: 1 });
+  }
 });
