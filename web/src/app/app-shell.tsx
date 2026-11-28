@@ -13,17 +13,17 @@ import "./console-navigation.css"
 import "./mobile-navigation.css"
 
 const tabClass = "console-pressable flex min-w-0 flex-col items-center justify-center rounded-md text-muted-foreground"
-const railTabClass = `${tabClass} w-16 gap-0.5 text-xs`
+const railTabClass = `${tabClass} w-16 gap-0.5 text-nav-label`
 const mobileTabClass = `console-mobile-hit console-mobile-tab ${tabClass} h-14 gap-1 text-caption touch-manipulation`
 const mobileTabVisual = "flex flex-col items-center gap-1"
-const mobileIconClass = "size-6 shrink-0"
+const mobileIconClass = "size-5 shrink-0"
 
 function HomeNav({ active }: { active: boolean }) {
   return (
     <Link to="/" aria-label={`${PRODUCT_NAME} overview`} aria-current={active ? "page" : undefined}
-      className={`${railTabClass} console-rail-overview relative h-[72px]`}
+      className={`${railTabClass} console-rail-overview relative h-18`}
     >
-      <span className="console-rail-overview-label absolute inset-x-0 bottom-[13px] text-center whitespace-nowrap">Overview</span>
+      <span className="console-rail-overview-label absolute inset-x-0 bottom-3.25 text-center whitespace-nowrap">Overview</span>
     </Link>
   )
 }
@@ -86,7 +86,7 @@ function MobileNavigation({ home, moreOpen, setMoreOpen }: { home: boolean; more
 
   return (
     <nav aria-label="Navigation" data-more-open={moreOpen || undefined}
-      className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-[45] h-[calc(var(--mobile-tabbar-height)+env(safe-area-inset-bottom))] px-5 md:hidden"
+      className="console-mobile-nav pointer-events-none fixed inset-x-0 bottom-0 z-45 h-mobile-tabbar px-5 md:hidden"
       onPointerDownCapture={startTouch} onPointerMoveCapture={trackTouch} onPointerUpCapture={finishTouch}
       onPointerCancelCapture={() => { press.current = null }} onClickCapture={suppressDuplicateClick}>
       <div className="pointer-events-auto grid grid-cols-5">
@@ -132,14 +132,14 @@ export function AppShell() {
   return (
     <PageTitle.Provider value={setTitle}>
       <a className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2" href="#main-content">Skip to content</a>
-      <nav aria-label="Navigation" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--rail-width)] flex-col gap-0.5 px-2 pt-4 pb-4 pl-4 md:flex">
+      <nav aria-label="Navigation" className="fixed inset-y-0 left-0 z-20 hidden w-rail flex-col gap-0.5 px-2 pt-4 pb-4 pl-4 md:flex">
         <HomeNav active={home} />
         {primarySections.map(section => <SectionNav key={section.to} section={section} />)}
         <div className="flex-1" />
         {utilitySections.map(section => <SectionNav key={section.to} section={section} selected={connection || isSection(pathname, "/about")} />)}
       </nav>
-      <div inert={moreOpen} className="min-h-dvh px-5 pt-[max(28px,env(safe-area-inset-top))] pb-[calc(var(--mobile-tabbar-clearance)+env(safe-area-inset-bottom))] md:ml-[var(--rail-width)] md:px-8 md:pt-4 md:pb-8">
-        <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
+      <div inert={moreOpen} className="min-h-dvh px-5 pt-console-safe pb-mobile-tabbar md:ml-rail md:px-8 md:pt-4 md:pb-8">
+        <header className="flex h-topbar min-w-0 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2">
             {project && <Link to="/" aria-label={`Back to ${PRODUCT_NAME}`} className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
             {connection && <Link to="/settings" aria-label="Back to Settings" className="console-pressable console-press-scale grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}

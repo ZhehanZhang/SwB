@@ -4,6 +4,7 @@ import { KeyRound } from "lucide-react"
 import { Navigate, useLocation } from "react-router-dom"
 import { PRODUCT_NAME } from "@/app/brand"
 import { DataState } from "@/components/data-state"
+import { Field, Input } from "@/components/field"
 import { SwbIcon } from "@/components/swb-icon"
 import { Button } from "@/components/ui/button"
 import { ApiError, sessionQuery } from "@/lib/api"
@@ -107,8 +108,8 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-dvh justify-items-center px-5 pt-[max(54px,env(safe-area-inset-top))] pb-10 md:place-items-center md:py-10">
-      <div className="w-full max-w-[440px]">
+    <main className="grid min-h-dvh justify-items-center px-5 pt-login-safe pb-10 md:place-items-center md:py-10">
+      <div className="w-full max-w-110">
         <SwbIcon className="mb-6 size-14" />
         {loading ? (
           <DataState kind="loading" message={linkPending ? "Opening sign-in link…" : "Checking session…"} className="py-0" />
@@ -118,18 +119,12 @@ export function LoginPage() {
             {enroll ? (
               <form onSubmit={enrollPasskey} className="mt-6 space-y-4">
                 {passkeysSupported && (
-                  <label className="block text-label-sm">
-                    Passkey name
-                    <input
-                      value={name}
-                      onChange={(event) => setName(event.currentTarget.value)}
-                      placeholder="Passkey"
-                      className="mt-1 block h-9 w-full rounded-md border border-input px-3 text-sm"
-                    />
-                  </label>
+                  <Field label="Passkey name">
+                    <Input value={name} onChange={(event) => setName(event.currentTarget.value)} placeholder="Passkey" />
+                  </Field>
                 )}
-                {!passkeysSupported && <p className="text-sm text-muted-foreground">Passkeys require a compatible browser.</p>}
-                {register.isError && <p role="alert" className="text-sm text-destructive">Try adding the passkey again.</p>}
+                {!passkeysSupported && <p className="text-body-sm text-muted-foreground">Passkeys require a compatible browser.</p>}
+                {register.isError && <p role="alert" className="text-body-sm text-destructive">Try adding the passkey again.</p>}
                 <div className="flex flex-wrap justify-end gap-3">
                   <Button variant="ghost" disabled={register.isPending} onClick={() => setEnrollmentDone(true)}>Skip for now</Button>
                   <Button type="submit" disabled={register.isPending || !passkeysSupported || !session.data?.csrf}>
@@ -140,23 +135,21 @@ export function LoginPage() {
               </form>
             ) : (
               <div className="mt-4 space-y-4">
-                {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+                {error && <p role="alert" className="text-body-sm text-destructive">{error}</p>}
                 {session.isError ? (
                   <DataState kind="error" message="Session unavailable." onRetry={() => void session.refetch()} className="py-0" />
                 ) : (
                   <>
                     {canSetUp && (
                       <form method="post" action="/auth/setup" onSubmit={enterSetupCode} className="space-y-4">
-                        <label className="block text-label-sm">
-                          Setup code
-                          <input name="code" type="password" autoComplete="one-time-code" minLength={44} maxLength={64} required
-                            className="mt-1 block h-9 w-full rounded-md border border-input px-3 text-sm" />
-                        </label>
-                        {setupError && <p role="alert" className="text-sm text-destructive">{setupError}</p>}
+                        <Field label="Setup code">
+                          <Input name="code" type="password" autoComplete="one-time-code" minLength={44} maxLength={64} required />
+                        </Field>
+                        {setupError && <p role="alert" className="text-body-sm text-destructive">{setupError}</p>}
                         <Button type="submit" disabled={setupPending}>{setupPending ? "Signing in…" : "Sign in"}</Button>
                       </form>
                     )}
-                    {hasPasskey && !passkeysSupported && <p className="text-sm text-muted-foreground">Passkeys require a compatible browser.</p>}
+                    {hasPasskey && !passkeysSupported && <p className="text-body-sm text-muted-foreground">Passkeys require a compatible browser.</p>}
                     {(hasPasskey && passkeysSupported || oidc) && (
                       <div className="flex flex-wrap items-center gap-2">
                         {hasPasskey && passkeysSupported && (
@@ -173,7 +166,7 @@ export function LoginPage() {
                       </div>
                     )}
                     {!canSetUp && !linkError && (error || (!oidc && (!hasPasskey || !passkeysSupported))) && (
-                      <p className="text-sm text-muted-foreground">Ask your agent for a sign-in link.</p>
+                      <p className="text-body-sm text-muted-foreground">Ask your agent for a sign-in link.</p>
                     )}
                   </>
                 )}
@@ -181,7 +174,7 @@ export function LoginPage() {
             )}
           </>
         )}
-        <div className="mt-6 border-t pt-4 font-mono text-xs text-muted-foreground">{location.host}</div>
+        <div className="mt-6 border-t pt-4 font-mono text-mono-sm text-muted-foreground">{location.host}</div>
       </div>
     </main>
   )

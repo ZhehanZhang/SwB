@@ -44,7 +44,7 @@ export function DataTable<T>({ caption, columns, rows = emptyRows, getRowId, sta
       aria-label={caption}
       tabIndex={0}
     >
-      <table className="w-full text-left text-sm">
+      <table className="w-full text-left text-body-sm">
         <caption className="sr-only">{caption}</caption>
         <thead className="border-b text-muted-foreground">
           {table.getHeaderGroups().map((group) => (

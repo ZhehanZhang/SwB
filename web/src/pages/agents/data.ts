@@ -40,7 +40,15 @@ type Target = {
 }
 type Pending = { name: string; project: string; created_by: string; created_at: string; claim_url?: string | null }
 type Inventory = { keys: Key[]; routines: Routine[]; captains: Target[]; dots: Target[]; pending_claims: Pending[] }
-type AgentKind = "routine" | "captain" | "dot" | "key" | "mailbox" | "pending"
+const KIND_LABEL = {
+  routine: "Routine",
+  captain: "Captain",
+  dot: "Dot",
+  key: "MCP client",
+  mailbox: "Mailbox",
+  pending: "Routine",
+} as const
+type AgentKind = keyof typeof KIND_LABEL
 
 export type Agent = {
   id: string
@@ -121,7 +129,7 @@ export const agentListKey = ["registered-agents"]
 
 function routineAgent(row: Routine): Agent {
   return {
-    id: `routine:${row.block}:${row.name}`, reference: row.name, block: row.block, type: "routine", name: row.name, kind: "routine",
+    id: `routine:${row.block}:${row.name}`, reference: row.name, block: row.block, type: "routine", name: row.name, kind: KIND_LABEL.routine,
     logo: row.agent === "grok" ? "grok-routine" : row.agent, projects: row.project ? [row.project] : [],
     registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
     last_seen: row.last_seen_at ?? null, state: row.status.startsWith("tested") ? "on" : row.status === "untested" ? "off" : "fault",
@@ -131,7 +139,7 @@ function routineAgent(row: Routine): Agent {
 function targetAgent(kind: "captain" | "dot", row: Target): Agent {
   return {
     id: `${kind}:${row.block}:${row.id}`, reference: row.id, block: row.block, type: kind,
-    name: kind === "captain" ? displayReference(row.name, "Capy Captain") : row.name, kind,
+    name: kind === "captain" ? displayReference(row.name, "Capy Captain") : row.name, kind: KIND_LABEL[kind],
     logo: kind, projects: row.projects ?? (row.project ? [row.project] : []),
     avatar_url: row.avatar_url,
     registered_by: principal(row.created_by), registered_at: row.created_at ?? null,
@@ -141,7 +149,7 @@ function targetAgent(kind: "captain" | "dot", row: Target): Agent {
 
 function clientAgent(kind: "key" | "mailbox", row: Key): Agent {
   return {
-    id: `${kind}:${row.id}`, reference: row.id, type: kind, name: principalLabel(row.agent), kind: kind === "key" ? "MCP client" : "Mailbox",
+    id: `${kind}:${row.id}`, reference: row.id, type: kind, name: principalLabel(row.agent), kind: KIND_LABEL[kind],
     logo: agentLogo(row.agent),
     projects: row.project ? [row.project] : [],
     registered_by: principal(row.created_by), registered_at: row.created_at ?? null, last_seen: row.last_used_at ?? null,
@@ -181,7 +189,7 @@ export async function listAgents(signal: AbortSignal): Promise<Agent[]> {
     ...dots.map((row) => targetAgent("dot", row)),
     ...keys.map((row) => clientAgent("key", row)),
     ...pending.map((row): Agent => ({
-      id: `pending:${row.name}`, reference: row.name, type: "pending", name: row.name, kind: "routine", logo: "claude",
+      id: `pending:${row.name}`, reference: row.name, type: "pending", name: row.name, kind: KIND_LABEL.pending, logo: "claude",
       projects: [row.project], registered_by: principal(row.created_by), registered_at: row.created_at,
       last_seen: null, state: "off", claim_url: row.claim_url,
     })),

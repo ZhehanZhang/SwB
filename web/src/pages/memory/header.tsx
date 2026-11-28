@@ -18,7 +18,7 @@ export function MemorySync({ csrf }: { csrf: string }) {
   })
   return (
     <>
-      <label className="flex min-h-[34px] items-center gap-2 text-label-sm"
+      <label className="flex min-h-control items-center gap-2 text-label-sm"
         title={settings.isError ? "Memory sync unavailable." : undefined}>
         Memory sync
         <Switch.Root checked={settings.data?.sync ?? false} disabled={!settings.data || sync.isPending}

@@ -54,9 +54,9 @@ function TargetIdentity({ target }: { target: ModeTarget }) {
   return (
     <>
       {target.kind === "captain"
-        ? <LogoTile kind="captain" avatarUrl={target.console_avatar_url} className="size-[18px]" />
+        ? <LogoTile kind="captain" avatarUrl={target.console_avatar_url} className="size-4.5" />
         : <LogoTile kind={target.kind === "agent" ? agentLogo(target.id) : target.kind}
-          avatarUrl={target.console_avatar_url} className="size-[18px]" />}
+          avatarUrl={target.console_avatar_url} className="size-4.5" />}
       <span className="min-w-0 truncate">{target.name}</span>
     </>
   )
@@ -77,7 +77,7 @@ export function TargetMenu({ label, address, targets, unavailable, busy, bulk, d
           <ChevronDown aria-hidden />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-w-[min(288px,calc(100vw-2rem))]">
+      <DropdownMenuContent align="start" className="max-w-channel-menu">
         <DropdownMenuRadioGroup value={active?.address ?? (address === "" ? "" : undefined)}
           onValueChange={onChange}>
           <DropdownMenuRadioItem value="">Inherit target</DropdownMenuRadioItem>
@@ -128,7 +128,7 @@ export function ChannelModeRow({ row, status, targets, targetsUnavailable, targe
   const rowCell = cn("self-center py-1 md:py-2 md:pr-3")
   return (
     <>
-      <tr className="border-b max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:py-2">
+      <tr className="border-b max-md:grid max-md:grid-cols-auto-fill-auto max-md:gap-x-2 max-md:py-2">
         <td className={rowCell}>
           <input type="checkbox" aria-label={`Select ${name}`} checked={selected} onChange={onSelect} disabled={busy}
             className="size-4 align-middle accent-primary" />
@@ -173,7 +173,7 @@ export function ChannelModeRow({ row, status, targets, targetsUnavailable, targe
           {status.schema.actions.length > 0 && row.kind !== "dm" && (
             <fieldset>
               <legend className="text-label-sm">Triage actions</legend>
-              <div className="mt-1 grid max-w-[680px] gap-x-6 gap-y-0.5 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-1 grid max-w-170 gap-x-6 gap-y-0.5 sm:grid-cols-2 xl:grid-cols-3">
                 {status.schema.actions.map(action => (
                   <label key={action} className="flex min-h-9 items-center justify-between gap-2 border-b py-1.5 has-disabled:text-muted-foreground">
                     <span>{actionLabel[action]}</span>
@@ -181,7 +181,7 @@ export function ChannelModeRow({ row, status, targets, targetsUnavailable, targe
                       disabled={busy || mode !== "triage" || (issueActions.has(action) && !issue.canWrite)}
                       onChange={event => onChange({ actions: event.currentTarget.checked
                         ? [...actions, action] : actions.filter(value => value !== action) })} />
-                    <span aria-hidden className="relative h-[18px] w-8 shrink-0 rounded-full border border-border-strong bg-muted before:absolute before:top-0.5 before:left-0.5 before:size-3 before:rounded-full before:bg-muted-foreground peer-checked:bg-foreground peer-checked:before:translate-x-3.5 peer-checked:before:bg-background peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-disabled:opacity-45" />
+                    <span aria-hidden className="relative h-4.5 w-8 shrink-0 rounded-full border border-border-strong bg-muted before:absolute before:top-0.5 before:left-0.5 before:size-3 before:rounded-full before:bg-muted-foreground peer-checked:bg-foreground peer-checked:before:translate-x-3.5 peer-checked:before:bg-background peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-disabled:opacity-45" />
                   </label>
                 ))}
               </div>

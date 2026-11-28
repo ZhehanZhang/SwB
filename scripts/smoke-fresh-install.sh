@@ -7,6 +7,7 @@ trap 'rm -rf "$work"' EXIT
 
 cd "$root"
 uv build --quiet --out-dir "$work/dist"
+python3 "$root/scripts/verify-dist.py" "$work/dist"
 wheels=("$work"/dist/*.whl)
 if [[ ${#wheels[@]} -ne 1 || ! -f "${wheels[0]}" ]]; then
     echo "Expected exactly one built wheel." >&2

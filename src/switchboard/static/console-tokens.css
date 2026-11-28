@@ -26,7 +26,7 @@
   --surface-sunken: #f4f4f5;
   --foreground: #18181b;
   --muted-foreground: #52525b;
-  --subtle-foreground: #a1a1aa;
+  --subtle-foreground: #6b6b74;
   --border: #e4e4e7;
   --border-strong: #d4d4d8;
   --socket: #18181b;
@@ -72,7 +72,7 @@
   --surface-sunken: var(--swb-dark-sunken);
   --foreground: var(--swb-dark-foreground);
   --muted-foreground: var(--swb-dark-muted);
-  --subtle-foreground: #71717a;
+  --subtle-foreground: #8a8a93;
   --border: var(--swb-dark-border);
   --border-strong: var(--swb-dark-border-strong);
   --socket: #3f3f46;

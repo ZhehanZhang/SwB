@@ -4,12 +4,13 @@ import argparse
 import asyncio
 import logging
 import os
+import signal
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
-from . import client
-from .caps import CAPABILITIES, registry
+from . import client, runtime, service
+from .caps import CAPABILITIES, Capability, registry
 from .mcp_config import local_servers
 from .state import CompanionError, CompanionState, base_url, device_name, state_path
 
@@ -29,16 +30,38 @@ def add_commands(commands: argparse._SubParsersAction) -> None:
     actions.add_parser("run", help="run the paired companion")
     actions.add_parser("status", help="show the local companion status")
     actions.add_parser("disconnect", help="disconnect this device from SwB")
+    services = actions.add_parser("service", help="manage the background companion")
+    service_actions = services.add_subparsers(dest="service_action", required=True)
+    for name, help_text in (
+        ("install", "start the companion now and at sign-in"),
+        ("uninstall", "remove the background service"),
+        ("start", "start the background service"),
+        ("stop", "stop the background service"),
+        ("status", "show the background service status"),
+        ("logs", "show recent background service logs"),
+    ):
+        service_actions.add_parser(name, help=help_text)
 
 
 def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
     action = args.companion_action
+    background = getattr(args, "background", False)
     path = state_path()
+    if action == "service" and args.service_action not in ("install", "start"):
+        service.command(args.service_action, path, None)
+        return
     state = CompanionState.load(path)
+    if action == "service":
+        service.command(args.service_action, path, state)
+        return
     if state is None and action in ("status", "disconnect"):
+        if action == "status":
+            print("Companion stopped\nConnection offline")
         print("Pair this device with swb companion connect.")
         return
     if state is None and action == "run":
+        if background:
+            return
         raise CompanionError("Pair this device with swb companion connect.")
     loggers = [logging.getLogger(name) for name in ("httpx", "httpcore")]
     levels = [logger.level for logger in loggers]
@@ -81,7 +104,11 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
             drop_dir = Path(state.drop_dir)
             caps, unavailable = registry(state.enabled_caps, drop_dir, servers, memory_sync=state.memory_sync)
             if action == "status":
+                active, connection = runtime.status(path, state.companion_id)
+                print("Companion running" if active else "Companion stopped")
                 print(f"This device is paired as {state.companion_id}.")
+                print(f"Deployment {state.url}")
+                print(f"Connection {connection.lower()}")
                 for cap in caps.values():
                     print(cap.title)
                 for reason in unavailable.values():
@@ -91,7 +118,14 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
                 return
             for reason in unavailable.values():
                 print(reason, flush=True)
-        asyncio.run(client.run(state, path, caps))
+        if background:
+            asyncio.run(_background(state, path, caps))
+        else:
+            asyncio.run(client.run(state, path, caps))
+    except (client.PairAgain, runtime.AlreadyRunning) as error:
+        if not background:
+            raise
+        print(error, flush=True)
     except KeyboardInterrupt:
         pass
     except (OSError, UnicodeError):
@@ -99,3 +133,18 @@ def run(args: argparse.Namespace, hidden_input: Callable[[str], str]) -> None:
     finally:
         for logger, level in zip(loggers, levels):
             logger.setLevel(level)
+
+
+async def _background(state: CompanionState, path: Path, caps: dict[str, Capability]) -> None:
+    if os.name == "nt":
+        await client.run(state, path, caps)
+        return
+    loop = asyncio.get_running_loop()
+    task = asyncio.current_task()
+    loop.add_signal_handler(signal.SIGTERM, task.cancel)
+    try:
+        await client.run(state, path, caps)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        loop.remove_signal_handler(signal.SIGTERM)

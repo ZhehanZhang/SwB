@@ -39,15 +39,8 @@ Añade una opción `--cap` por cada función que quieras activar.
 | `--cap opencode` | [Servidor OpenCode](/es/docs/blocks/local-sessions#opencode) |
 | `--cap dsh` | [DeepSeek Harness](/es/docs/blocks/local-sessions#deepseek-harness) |
 | `--cap hooks` | [Hooks de estado](/es/docs/blocks/local-sessions#hooks-de-estado) |
-| `--cap muse` | Empareja Muse por Bluetooth en un Mac o en un ordenador con Linux |
 
 En Linux, las notificaciones usan `notify-send`. En Debian y Ubuntu, instálalo con el paquete `libnotify-bin`.
-
-Usa Python 3.13 para emparejar el gadget de Muse. Sigue la [guía de emparejamiento de Muse](/es/docs/setup/muse). Tras el emparejamiento, el servidor SwB mantiene abierta la conexión con Muse.
-
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
 
 Añade una opción `--mcp` por cada servidor MCP. Para un programa, usa `--mcp 'NAME=COMMAND'`. Cambia `NAME` por un nombre para tu servidor. Cambia `COMMAND` por el comando que inicia el programa. Para un servidor HTTP en el dispositivo, usa su dirección local, como `--mcp notes=http://127.0.0.1:8000/mcp`.
 
@@ -71,9 +64,33 @@ Para los comandos y los agentes compatibles, consulta [Sesiones locales](/es/doc
 
 El emparejamiento inicia el companion. Usa `swb companion run` para iniciarlo de nuevo. Usa `swb companion status` para ver el ID local del dispositivo y sus funciones.
 
-Usa `uvx swb-one` en lugar de `swb` para ejecutar estos comandos con `uvx`. Para Muse, conserva las opciones de paquete y de Python de la [guía de Muse](/es/docs/setup/muse).
+Si emparejaste el dispositivo con `uvx`, usa `uvx swb-one` en lugar de `swb`. En primer plano, el companion se ejecuta directamente en Python.
 
 El dispositivo inicia cada conexión con SwB.
+
+## Ejecutar en segundo plano
+
+Instala un servicio en segundo plano para que el companion se inicie de forma automática. Instala SwB con `uv tool install swb-one`.
+
+Para un nuevo emparejamiento, añade `--no-run` a tus opciones de emparejamiento. Ejecuta `swb companion connect` con esas opciones. El comando termina tras el emparejamiento. Si el companion está activo en el terminal, detenlo antes de instalar el servicio. Usa el comando `swb` instalado para gestionar el servicio.
+
+```sh
+swb companion service install
+```
+
+En Linux, `systemd --user` ejecuta el servicio con tu cuenta. Usa `loginctl enable-linger "$USER"` para iniciarlo al arrancar y mantenerlo activo al cerrar sesión.
+
+En macOS, instala el servicio desde tu sesión de escritorio. La versión oficial de SwB instala y verifica automáticamente la aplicación firmada **SwB Companion** en `~/Applications`. `launchd` inicia el servicio mediante la aplicación.
+
+En Windows, el Programador de tareas inicia el servicio cuando entras en tu cuenta.
+
+Configura en el gestor de servicios las variables que usan tus herramientas locales.
+
+Inicia el servicio con `swb companion service start`. Consulta su estado con `swb companion service status`. Lee sus registros con `swb companion service logs`.
+
+Usa `swb companion status` para consultar el estado del companion, su conexión y la dirección de SwB.
+
+Detén el servicio de inmediato con `swb companion service stop`. Quita el inicio automático con `swb companion service uninstall`. El dispositivo conserva su clave.
 
 ## Desconectar
 

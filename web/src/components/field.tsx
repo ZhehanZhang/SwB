@@ -6,5 +6,5 @@ export function Field({ label, children, className }: { label: ReactNode; childr
 }
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
-  return <input className={cn("min-h-9 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-body-md placeholder:text-subtle-foreground", className)} {...props} />
+  return <input className={cn("h-control w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-body-md placeholder:text-muted-foreground", className)} {...props} />
 }

@@ -4,8 +4,10 @@ import { toast } from "sonner"
 import { Lamp } from "@/components/console/lamp"
 import { ConfirmAction } from "@/components/console/confirm-action"
 import { DataState } from "@/components/data-state"
+import { Disclosure } from "@/components/disclosure"
 import { LoadingSkeleton, Skeleton } from "@/components/loading-skeleton"
 import { LogoTile } from "@/components/logo-tile"
+import { Time } from "@/components/time"
 import { Button } from "@/components/ui/button"
 import { isObject, requestJson, sessionQuery } from "@/lib/api"
 import { connectorKind } from "@/lib/connector-kind"
@@ -60,20 +62,11 @@ function isTokens(value: unknown): value is Tokens {
 }
 
 const queryKey = ["tokens"] as const
-const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
 
 function memoryScopeLabel(scope: string) {
   if (scope === "general") return "General"
   if (scope.startsWith("agent:")) return `Agent ${scope.slice(6)}`
   return scope.replace(/^project:/, "")
-}
-
-function relative(at: string | null) {
-  if (!at) return null
-  const minutes = Math.floor((Date.now() - Date.parse(at)) / 60_000)
-  if (!Number.isFinite(minutes)) return null
-  if (minutes < 1) return "Just now"
-  return minutes < 60 ? `${minutes} min ago` : `${Math.floor(minutes / 60)} h ago`
 }
 
 function Identity({ row }: { row: Stored }) {
@@ -148,7 +141,7 @@ export function TokensPage() {
       <section aria-labelledby="waiting-tokens">
         <h2 id="waiting-tokens" className="text-heading-md">Token requests</h2>
         {tokens.isPending ? (
-          <div aria-hidden="true" className="mt-2 flex h-[67px] items-center gap-3 border-b">
+          <div aria-hidden="true" className="mt-2 flex h-16 items-center gap-3 border-b">
             <Skeleton className="size-7 rounded-md" />
             <div className="min-w-0 space-y-1.5">
               <Skeleton className="h-3 w-28 max-w-full" />
@@ -164,19 +157,18 @@ export function TokensPage() {
                   row.asked_by && `Asked by ${row.asked_by}`,
                   row.used_by.length > 0 && `${row.asked_by ? "for" : "For"} ${row.used_by.join(", ")}`,
                 ].filter(Boolean).join(" ")
-                const age = relative(row.requested_at)
                 return (
-                  <li key={row.id} className="grid min-h-[67px] gap-x-4 gap-y-1.5 border-b py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                  <li key={row.id} className="grid min-h-16 gap-x-4 gap-y-1.5 border-b py-3 md:grid-cols-fill-auto md:items-center">
                     <div className="flex min-w-0 items-center gap-2">
                       <LogoTile kind={row.kind} className="size-7" />
                       <div className="min-w-0">
-                        <p className="text-[13px] leading-[18px] font-semibold wrap-anywhere">{row.name}, {row.label}</p>
-                        {(detail || age) && <p className="text-[13px] leading-5 text-muted-foreground wrap-anywhere">
-                          {detail || age}{detail && age ? `, ${age.toLowerCase()}` : ""}
+                        <p className="text-body-sm font-semibold wrap-anywhere">{row.name}, {row.label}</p>
+                        {(detail || row.requested_at) && <p className="text-body-sm leading-5 text-muted-foreground wrap-anywhere">
+                          {detail}{detail && row.requested_at ? ", " : ""}<Time value={row.requested_at} />
                         </p>}
                       </div>
                     </div>
-                    <span className="ml-9 flex items-center gap-2 text-xs text-muted-foreground md:ml-0" title={row.expires_at
+                    <span className="ml-9 flex items-center gap-2 text-label-sm text-muted-foreground md:ml-0" title={row.expires_at
                       ? `Expires ${new Date(row.expires_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
                       : undefined}>
                       <Lamp state="off" /> Open the request link
@@ -190,34 +182,34 @@ export function TokensPage() {
         <h2 id="stored-tokens" className="text-heading-md">Stored</h2>
         {tokens.isPending ? (
           <LoadingSkeleton message="Loading tokens…" className="mt-2">
-            <div className="hidden h-[27px] items-start gap-5 border-b md:flex">
-              {[0, 1, 2, 3, 4, 5].map((column) => <Skeleton key={column} className="h-2.5 w-[12%]" />)}
+            <div className="hidden h-7 items-start gap-5 border-b md:flex">
+              {[0, 1, 2, 3, 4, 5].map((column) => <Skeleton key={column} className="h-2.5 w-3/25" />)}
             </div>
             {[0, 1].map((row) => (
-              <div key={row} className="flex h-[71px] flex-col justify-center gap-2 border-b md:h-[49px] md:flex-row md:items-center md:justify-start md:gap-4">
-                <div className="flex items-center gap-2 md:w-[18%]">
+              <div key={row} className="flex h-18 flex-col justify-center gap-2 border-b md:h-12 md:flex-row md:items-center md:justify-start md:gap-4">
+                <div className="flex items-center gap-2 md:w-9/50">
                   <Skeleton className="size-6 rounded-md" />
                   <Skeleton className="h-3 w-24 max-w-1/2" />
                   <Skeleton className="ml-auto h-2.5 w-7 md:hidden" />
                 </div>
-                <Skeleton className="hidden h-2.5 w-[12%] md:block" />
-                <Skeleton className="h-3 w-24 md:w-[20%]" />
-                <Skeleton className="hidden h-3 w-[12%] md:block" />
-                <Skeleton className="hidden h-2.5 w-[8%] md:block" />
+                <Skeleton className="hidden h-2.5 w-3/25 md:block" />
+                <Skeleton className="h-3 w-24 md:w-1/5" />
+                <Skeleton className="hidden h-3 w-3/25 md:block" />
+                <Skeleton className="hidden h-2.5 w-2/25 md:block" />
               </div>
             ))}
           </LoadingSkeleton>
         ) : stored.length === 0
           ? <DataState kind="empty" message="0 stored tokens" />
-          : <table className="mt-2 w-full text-left text-[13px] leading-[18px] md:table-fixed" aria-labelledby="stored-tokens" role="table">
+          : <table className="mt-2 w-full text-left text-body-sm md:table-fixed" aria-labelledby="stored-tokens" role="table">
               <thead className="sr-only md:not-sr-only md:table-header-group" role="rowgroup">
-                <tr className="border-b text-[11px] text-muted-foreground" role="row">
-                  <th scope="col" className="w-[28%] pb-2 font-medium">Name</th>
+                <tr className="border-b text-body-sm text-muted-foreground" role="row">
+                  <th scope="col" className="w-7/25 pb-2 font-medium">Name</th>
                   <th scope="col" className="w-14 pb-2 font-medium">Value</th>
                   <th scope="col" className="pb-2 font-medium">Used by</th>
-                  <th scope="col" className="w-[22%] pb-2 font-medium">Memory access</th>
-                  <th scope="col" className="w-[12%] pb-2 font-medium">Added by</th>
-                  <th scope="col" className="w-[10%] pb-2 font-medium">Added</th>
+                  <th scope="col" className="w-11/50 pb-2 font-medium">Memory access</th>
+                  <th scope="col" className="w-3/25 pb-2 font-medium">Added by</th>
+                  <th scope="col" className="w-1/10 pb-2 font-medium">Added</th>
                   <th scope="col" className="w-20"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -225,9 +217,9 @@ export function TokensPage() {
                 {stored.map((row) => {
                   const id = row.revoke_id
                   return (
-                    <tr key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 border-b py-3 md:table-row md:h-[49px]" role="row">
+                    <tr key={row.id} className="grid grid-cols-fill-auto items-center gap-x-4 gap-y-1 border-b py-3 md:table-row md:h-12" role="row">
                       <th scope="row" className="min-w-0 font-normal md:py-2 md:pr-4"><Identity row={row} /></th>
-                      <td className="justify-self-end font-mono text-xs text-muted-foreground md:pr-4" role="cell">
+                      <td className="justify-self-end text-mono-sm text-muted-foreground md:pr-4" role="cell">
                         <span aria-hidden>••••</span><span className="sr-only">Hidden</span>
                       </td>
                       <td className={cn("col-span-2 wrap-anywhere text-muted-foreground max-md:pl-8 md:pr-4 md:text-foreground", !row.used_by.length && "max-md:hidden")} role="cell">
@@ -258,8 +250,8 @@ export function TokensPage() {
                       <td className={cn("col-span-2 wrap-anywhere text-muted-foreground max-md:pl-8 md:pr-4 md:text-foreground", !row.added_by && "max-md:hidden")} role="cell">
                         {row.added_by && <><span className="md:sr-only">Added by </span>{row.added_by}</>}
                       </td>
-                      <td className={cn("font-mono text-xs text-muted-foreground max-md:pl-8 md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
-                        {row.added_at && <time dateTime={row.added_at}>{date.format(new Date(row.added_at))}</time>}
+                      <td className={cn("text-body-sm text-muted-foreground max-md:pl-8 md:pr-2", !row.added_at && "max-md:hidden")} role="cell">
+                        <Time value={row.added_at} />
                       </td>
                       <td className={cn("col-start-2 justify-self-end text-right", !row.revoke_id && !row.routine_block && "max-md:hidden")} role="cell">
                         {id && <RevokeKey
@@ -283,19 +275,18 @@ export function TokensPage() {
         {removeRoutine.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Try removing the routine again.</p>}
       </section>
       {session?.csrf && (
-        <details className="space-y-3">
-          <summary className="w-fit cursor-pointer text-sm font-medium">Pairing code</summary>
+        <Disclosure summary="Pairing code" className="space-y-3">
           <form method="post" action="/pairing/code" className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="csrf" value={session.csrf} />
-            <label className="grid gap-1 text-sm">Agent name
+            <label className="grid gap-1 text-body-sm">Agent name
               <input name="agent" required pattern="[a-z0-9][a-z0-9\-]{0,39}" className="rounded-md border bg-surface px-2 py-1" />
             </label>
-            <label className="grid gap-1 text-sm">Project
+            <label className="grid gap-1 text-body-sm">Project
               <input name="project" className="rounded-md border bg-surface px-2 py-1" />
             </label>
             <Button type="submit">Create code</Button>
           </form>
-        </details>
+        </Disclosure>
       )}
     </div>
   )

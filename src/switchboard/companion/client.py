@@ -17,12 +17,17 @@ from . import REPAIR_CAPABILITIES
 from .caps.base import Capability, CapabilityError, CompanionContext, JobContext
 from .harness import harness
 from .memory import MEMORY_SYNC_EVENT
+from .runtime import Runtime, running
 from .state import CompanionError, CompanionState, valid_pair
 
 DISCONNECTED = "This device was disconnected."
 
 
 class Disconnected(Exception):
+    pass
+
+
+class PairAgain(CompanionError):
     pass
 
 
@@ -190,6 +195,11 @@ async def _run_capability(client: httpx.AsyncClient, companion_id: str, cap: Cap
 
 
 async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) -> None:
+    with running(path, state.companion_id) as runtime:
+        await _run(state, path, caps, runtime)
+
+
+async def _run(state: CompanionState, path: Path, caps: dict[str, Capability], runtime: Runtime) -> None:
     delay = 1.0
     slots = asyncio.Semaphore(4)
     disconnected = False
@@ -223,14 +233,18 @@ async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) ->
                             response.raise_for_status()
                             if response.headers.get("content-type", "").partition(";")[0] != "text/event-stream":
                                 raise httpx.StreamError("Unexpected event stream.")
+                            runtime.connection("Connected")
                             harness().reset_reports()
                             hooks = [tasks.create_task(_run_capability(client, state.companion_id, cap))
                                      for cap in caps.values()]
+                            first_ping = True
                             async for event, data in _events(response):
                                 if event == "revoked":
                                     raise Disconnected
-                                if event in ("job", "ping"):
+                                if event == "job" or (event == "ping" and not first_ping):
                                     delay = 1.0
+                                if event == "ping":
+                                    first_ping = False
                                 if event == "job" and (job := _job(data)) and job[0] not in active:
                                     active[job[0]] = tasks.create_task(execute(*job))
                     except (httpx.HTTPError, httpx.StreamError):
@@ -238,12 +252,13 @@ async def run(state: CompanionState, path: Path, caps: dict[str, Capability]) ->
                     finally:
                         for task in (*hooks, *active.values()):
                             task.cancel()
+                runtime.connection("Reconnecting")
                 await asyncio.sleep(max(1, min(60, random.uniform(0.8, 1.2) * delay)))
                 delay = min(delay * 2, 60.0)
         except* Disconnected:
             disconnected = True
     if pair_again:
-        raise CompanionError(REPAIR_CAPABILITIES)
+        raise PairAgain(REPAIR_CAPABILITIES)
     if disconnected:
         state.clear(path)
         print(DISCONNECTED, flush=True)

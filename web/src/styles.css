@@ -36,6 +36,11 @@
   --color-overlay: var(--overlay);
   --color-logo-capy: var(--logo-capy);
   --color-logo-capy-foreground: var(--logo-capy-foreground);
+  --spacing-control: 2.25rem;
+  --spacing-control-sm: 1.75rem;
+  --spacing-row: 2.75rem;
+  --container-inbox-table: 38rem;
+  --container-inbox-split: 64rem;
   --radius-sm: 4px;
   --radius-md: var(--swb-radius-md);
   --radius-lg: 8px;
@@ -61,6 +66,8 @@
   --text-label-sm--font-weight: var(--swb-label-sm-weight);
   --text-body-md: var(--swb-body-md);
   --text-body-md--line-height: var(--swb-body-md-height);
+  --text-nav-label: .75rem;
+  --text-nav-label--line-height: 1rem;
   --text-body-sm: .8125rem;
   --text-body-sm--line-height: 1.125rem;
   --text-caption: .6875rem;
@@ -162,4 +169,192 @@
   --normal-border: var(--border);
   --normal-text: var(--foreground);
   box-shadow: var(--toast-shadow);
+}
+
+@utility grid-cols-memory {
+  grid-template-columns: 11rem minmax(0,1fr);
+}
+
+@utility grid-cols-memory-wide {
+  grid-template-columns: 13rem minmax(0,1fr);
+}
+
+@utility grid-cols-about-wide {
+  grid-template-columns: 33% minmax(0,1fr) auto;
+}
+
+@utility grid-cols-about {
+  grid-template-columns: 35% minmax(0,1fr) auto;
+}
+
+@utility grid-cols-conversation-skeleton {
+  grid-template-columns: 10% 16% 16% minmax(0,1fr) 11% 9.25% 1rem;
+}
+
+@utility grid-cols-auto-main {
+  grid-template-columns: auto 1fr;
+}
+
+@utility grid-cols-auto-auto-main {
+  grid-template-columns: auto auto minmax(0,1fr);
+}
+
+@utility grid-cols-auto-fill {
+  grid-template-columns: auto minmax(0,1fr);
+}
+
+@utility grid-cols-auto-fill-auto {
+  grid-template-columns: auto minmax(0,1fr) auto;
+}
+
+@utility grid-cols-overview {
+  grid-template-columns: minmax(0,19%) minmax(2.25rem,7.25%) minmax(10.8125rem,13.75rem) minmax(2.25rem,7.25%) minmax(0,1fr);
+}
+
+@utility grid-cols-fill-auto {
+  grid-template-columns: minmax(0,1fr) auto;
+}
+
+@utility grid-cols-fill-auto-auto {
+  grid-template-columns: minmax(0,1fr) auto auto;
+}
+
+@utility grid-cols-overview-compact {
+  grid-template-columns: minmax(0,1fr) repeat(2, clamp(1.5rem,10.5vw,2.625rem)) minmax(0,1fr);
+}
+
+@utility grid-cols-fill-fill-auto {
+  grid-template-columns: repeat(2, minmax(0,1fr)) auto;
+}
+
+@utility grid-cols-overview-split {
+  grid-template-columns: minmax(0,2.44fr) minmax(0,1fr);
+}
+
+@utility grid-cols-two-one {
+  grid-template-columns: minmax(0,2fr) minmax(0,1fr);
+}
+
+@utility grid-cols-connection {
+  grid-template-columns: minmax(4.625rem,25%) minmax(0,1fr);
+}
+
+@utility grid-cols-settings-detail {
+  grid-template-columns: minmax(5.5rem,24%) 1fr;
+}
+
+@utility grid-cols-settings {
+  grid-template-columns: minmax(5.5rem,24%) 1fr auto;
+}
+
+@utility grid-cols-backup-status {
+  grid-template-columns: minmax(6rem,32%) 1fr;
+}
+
+@utility grid-rows-conversation-skeleton {
+  grid-template-rows: 1.125rem 1.25rem 1rem;
+}
+
+@utility h-mobile-tabbar {
+  height: calc(var(--mobile-tabbar-height) + env(safe-area-inset-bottom));
+}
+
+@utility h-topbar {
+  height: var(--topbar-height);
+}
+
+@utility max-h-mobile-more {
+  max-height: 75dvh;
+}
+
+@utility max-h-sheet {
+  max-height: 90dvh;
+}
+
+@utility max-h-inset-dialog {
+  max-height: calc(100dvh - 2rem);
+}
+
+@utility max-h-command-list {
+  max-height: min(24rem,55dvh);
+}
+
+@utility max-h-dropdown {
+  max-height: var(--radix-dropdown-menu-content-available-height);
+}
+
+@utility min-h-memory {
+  min-height: calc(100dvh - var(--topbar-height) - 3rem);
+}
+
+@utility ml-rail {
+  margin-left: var(--rail-width);
+}
+
+@utility pb-mobile-tabbar {
+  padding-bottom: calc(var(--mobile-tabbar-clearance) + env(safe-area-inset-bottom));
+}
+
+@utility pb-sheet-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@utility pt-console-safe {
+  padding-top: max(1.75rem, env(safe-area-inset-top));
+}
+
+@utility pt-login-safe {
+  padding-top: max(3.375rem, env(safe-area-inset-top));
+}
+
+@utility stroke-logo {
+  stroke-width: 2.5;
+}
+
+@utility top-command-menu {
+  top: min(16dvh,8rem);
+}
+
+@utility w-inset-dialog {
+  width: calc(100% - 2rem);
+}
+
+@utility w-rail {
+  width: var(--rail-width);
+}
+
+@utility press-primary {
+  --console-pressable-bg: color-mix(in srgb, var(--primary) 85%, transparent);
+}
+
+@utility press-destructive {
+  --console-pressable-bg: color-mix(in srgb, var(--destructive) 85%, transparent);
+}
+
+@utility press-secondary {
+  --console-pressable-bg: var(--border);
+}
+
+@utility max-w-channel-menu {
+  max-width: min(18rem, calc(100vw - 2rem));
+}
+
+@utility grid-cols-inbox-split {
+  grid-template-columns: minmax(0,3fr) minmax(0,2fr);
+}
+
+@utility max-h-inbox-pane {
+  max-height: calc(100dvh - var(--topbar-height) - 3rem);
+}
+
+@utility max-h-inbox-filters {
+  max-height: 65dvh;
+}
+
+@utility w-inbox-filters {
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+@utility content-unassigned {
+  content: "—";
 }

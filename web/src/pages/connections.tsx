@@ -15,7 +15,7 @@ import { connectionQuery, type DiscordDetails, type StatusPlatform, type Telegra
 import { cn } from "@/lib/utils"
 
 const cell = "py-3 pe-3 align-top wrap-anywhere"
-const identityRow = "grid min-h-[41px] grid-cols-[minmax(74px,25%)_minmax(0,1fr)] items-center gap-3 border-b py-2.5"
+const identityRow = "grid min-h-row grid-cols-connection items-center gap-3 border-b py-2.5"
 const chatStates = { direct: "Direct messages", listening: "Listening", unlisted: "Unlisted" }
 const slackIntake = { socket: "Socket Mode", poll: "Polling", none: "" }
 const webhookEventTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
@@ -23,10 +23,10 @@ const webhookEventTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium
 function StatusTable({ label, headings, children, compact = false, wide = false }: {
   label: string; headings: string[]; children: ReactNode; compact?: boolean; wide?: boolean
 }) {
-  const widths = wide ? [] : headings.length === 4 ? ["w-[30%]", "w-[25%]", "w-[20%]"]
-    : [cn("w-[36%] md:w-2/5"), cn("w-[26%] md:w-auto")]
+  const widths = wide ? [] : headings.length === 4 ? ["w-3/10", "w-1/4", "w-1/5"]
+    : [cn("w-9/25 md:w-2/5"), cn("w-13/50 md:w-auto")]
   return (
-    <table aria-label={label} className={cn("mt-1 w-full border-collapse text-left", wide ? "min-w-[820px]" : "table-fixed")}>
+    <table aria-label={label} className={cn("mt-1 w-full border-collapse text-left", wide ? "min-w-205" : "table-fixed")}>
       <thead className={compact ? "hidden md:table-header-group" : undefined}>
         <tr className="border-b text-caption text-muted-foreground">
           {headings.map((heading, index) => (
@@ -196,7 +196,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
   const modeRows = rows.filter(row => !shownChannels?.some(([space, id]) => row.space === space && row.channel === id))
 
   return (
-    <div className="w-full max-w-[1104px] space-y-6 text-body-sm md:space-y-8 md:pt-2">
+    <div className="w-full max-w-276 space-y-6 text-body-sm md:space-y-8 md:pt-2">
       <Link to="/settings" className="hidden w-fit items-center gap-1 text-muted-foreground hover:text-foreground md:flex">
         <ChevronLeft aria-hidden className="size-4" /> Settings
       </Link>
@@ -215,7 +215,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
               <BotIdentityEditors key={data.block} block={data.block} platform={data.platform} />
             )}
             {data.platform === "slack" && data.details && (
-              <section aria-labelledby="slack-workspaces" className="max-w-[720px]">
+              <section aria-labelledby="slack-workspaces" className="max-w-180">
                 <h2 id="slack-workspaces" className="text-heading-md">Workspaces</h2>
                 {data.details.workspaces.length > 0 && (
                   <StatusTable label="Slack workspaces" headings={["Workspace", "Intake", "Connection"]}>
@@ -231,7 +231,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
               </section>
             )}
             {(data.platform === "discord" || data.platform === "telegram") && data.details && (
-              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-12">
+              <div className="grid items-start gap-6 lg:grid-cols-two-one lg:gap-12">
                 <BotMetadata ids={data.details.owner_ids}
                   invite={data.platform === "discord" ? data.details.invite_url : undefined} />
                 {data.platform === "discord"
@@ -257,7 +257,7 @@ function GitHubConnection() {
   const result = useQuery(connectionQuery("github"))
   const modes = useQuery(channelModesQuery)
   return (
-    <div className="w-full max-w-[1104px] space-y-6 text-body-sm md:space-y-8 md:pt-2">
+    <div className="w-full max-w-276 space-y-6 text-body-sm md:space-y-8 md:pt-2">
       <Link to="/settings" className="hidden w-fit items-center gap-1 text-muted-foreground hover:text-foreground md:flex">
         <ChevronLeft aria-hidden className="size-4" /> Settings
       </Link>
