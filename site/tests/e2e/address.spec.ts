@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { locales, localize } from '../../lib/i18n';
+import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 
 const origin = 'https://my-swb.example.net:9443';
 const example = 'https://swb.example.com';
@@ -264,28 +265,20 @@ test('keeps server HTML, RSC, Markdown, llms text and all 18 prompt files canoni
 
 test('long saved addresses leave docs CLS below 0.01', async ({ page }) => {
   const long = `https://${'a'.repeat(50)}.${'b'.repeat(50)}.${'c'.repeat(50)}.example.org:9443`;
-  await page.addInitScript(({ key, address }) => {
-    localStorage.setItem(key, address);
-    const shifts: number[] = [];
-    Object.assign(window, { swbLayoutShifts: shifts });
-    new PerformanceObserver((entries) => {
-      for (const item of entries.getEntries()) {
-        const shift = item as PerformanceEntry & { hadRecentInput: boolean; value: number };
-        if (!shift.hadRecentInput) shifts.push(shift.value);
-      }
-    }).observe({ type: 'layout-shift', buffered: true });
-  }, { key: addressKey, address: long });
+  await page.addInitScript(observeLayoutShifts);
+  await page.addInitScript(({ key, address }) => localStorage.setItem(key, address), { key: addressKey, address: long });
   for (const path of [claude, selfHosting, connect]) {
     await page.goto(path);
     await expect(indicator(page)).toHaveAttribute('title', new URL(long).host);
     await expect(docs(page).getByText(new RegExp(long.replaceAll('.', '\\.'))).first()).toBeVisible();
-    const total = await page.evaluate(async () => {
+    await page.evaluate(async () => {
       await document.fonts.ready;
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      return (Reflect.get(window, 'swbLayoutShifts') as number[]).reduce((sum, value) => sum + value, 0);
     });
+    const shifts = await page.evaluate(readLayoutShifts);
+    const total = shifts.reduce((sum, { value }) => sum + value, 0);
     console.info(`${path} CLS ${total}`);
-    expect(total, path).toBeLessThan(0.01);
+    expect(total, `${path}\n${JSON.stringify(shifts)}`).toBeLessThan(0.01);
   }
 });
 
