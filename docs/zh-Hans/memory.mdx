@@ -71,26 +71,30 @@ SwB 根据会话文件夹的名称选择记忆范围。它先匹配项目的短�
 
 在 **Memory** 页面选择 **Download**，可以把全部记忆保存为 zip 文件。文件中每个条目对应一个 Markdown 文件，按范围和主题分文件夹存放。文件还包含 `manifest.json`，其中有每个条目的历史和来源记录。
 
-选择 **Restore from file** 载入 zip 文件。恢复会添加缺少的条目，并更新有变化的条目。其他条目保持原样。同一个文件可以安全地重复载入。
-
-SwB 将恢复的内容作为记忆数据读取。
+选择 **Restore from file** 载入 zip 文件。恢复会添加缺少的条目，并保留已有条目。SwB 将导入的文本标为参考信息，并记录导入者。
 
 以所有者身份登录的智能体可以用 `memory_export` 和 `memory_import` 完成同样的操作。
 
+将 `overwrite` 设为 `true`，可替换有变化的条目，并在历史记录中保留旧版本。将 `trust_owner` 设为 `true`，可为符合条件的条目保留所有者信任等级。其他智能体范围内的条目仍标为参考信息。这两个选项默认为 `false`。调用控制台的 `POST /api/memory/import` 上传接口时，可通过查询参数传入这两个选项。
+
 ## 备份到 Git
 
-SwB 可以把记忆复制到你自己的私有 Git 仓库。一次提交可以记录多项修改。多项修改的提交标题形如 `2 memory changes by admin:owner@swb.example.com, claude-code`。如果修改来自控制台，标题可能包含所有者的登录名。
+SwB 可以把记忆复制到你自己的私有 Git 仓库。一次提交可以记录多项修改。提交标题形如 `2 memory changes by SwB, claude-code`。来自控制台的修改在标题中记为 `SwB`。
 
 记忆中的全部内容都会进入这个仓库。使用私有仓库。
 
-在控制台打开 **Memory**。在 **Git backup** 中填写仓库地址和分支。如果是 HTTPS 地址，粘贴一个对该仓库有写入权限的令牌。如果是 SSH 地址，粘贴一个有写入权限的部署密钥。SwB 会加密保存令牌或密钥。
+只给你信任的人授予备份仓库的推送权限。拥有推送权限的人都能设置提交作者，SwB 会根据提交作者判断信任等级。
 
-对于 SwB 所用文件系统中的仓库，使用 `file://` 地址。填写完整路径，例如 `file:///srv/swb/memory.git`。SwB 根据文件权限访问仓库。
+在控制台打开 **Memory**。在 **Git backup** 中填写 HTTPS 或 SSH 仓库地址和分支。如果是 HTTPS 地址，粘贴一个对该仓库有写入权限的令牌。如果是 SSH 地址，粘贴一个有写入权限的部署密钥。SwB 会加密保存令牌或密钥。
+
+将 `file://` 地址换成 HTTPS 或 SSH 地址。
 
 默认备份作者为 `SwB <swb@localhost>`。在控制台的 **Author name** 和 **Author email** 中修改作者信息。调用 `memory_backup_configure` 时，使用 `author_name` 和 `author_email`。
 
 修改发生 30 秒后，SwB 把这段时间内的修改合并为一次提交。选择 **Back up now** 可以立即提交。推送失败时，SwB 会稍后重试。状态行显示最近一次备份和最近一次错误。
 
-选择 **Restore from repository**，即可从最新的提交载入记忆。SwB 将恢复的内容作为记忆数据读取。
+选择 **Restore from repository**，即可从最新的提交载入记忆。SwB 将导入的文本标为参考信息，并记录导入者。
 
-以所有者身份登录的智能体可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。对于 HTTPS 和 SSH 地址，`memory_backup_configure` 会返回用来保存令牌或密钥的认领链接。
+以所有者身份登录的智能体可以使用 `memory_backup_configure`、`memory_backup_status`、`memory_backup_now` 和 `memory_backup_restore`。`memory_backup_configure` 会返回一个用来保存令牌或密钥的认领链接。
+
+从 Git 恢复时，可以使用相同的 `overwrite` 和 `trust_owner` 选项。调用控制台的 `POST /api/memory/backup/restore` 接口时，通过 JSON 字段传入这两个选项。其他作者提交的内容会标为外部参考信息。

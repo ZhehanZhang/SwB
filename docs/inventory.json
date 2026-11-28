@@ -3115,7 +3115,9 @@
       "icon": null,
       "id": "tool:memory_backup_restore",
       "input_properties": [
-        "ref"
+        "overwrite",
+        "ref",
+        "trust_owner"
       ],
       "kind": "tool",
       "label": "Restore memory from Git",
@@ -3184,6 +3186,8 @@
       "icon": null,
       "id": "tool:memory_import",
       "input_properties": [
+        "overwrite",
+        "trust_owner",
         "zip_base64"
       ],
       "kind": "tool",

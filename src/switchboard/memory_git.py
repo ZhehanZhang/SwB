@@ -23,6 +23,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key, l
 
 from .audit import iso
 from .claims import MEMORY_BACKUP_CREDENTIAL, ClaimInputError, normalize
+from .connect import AGENT_RE
 from .memory import Memory, MemoryError_
 from .memory_archive import MAX_ARCHIVE_BYTES, import_manifest, require_owner, snapshot
 
@@ -33,7 +34,7 @@ if TYPE_CHECKING:
 PREFIX = "memory.backup."
 RETRY_S = (60, 300, 900, 3600)
 TIMEOUT_S = 30
-SSH_REMOTE = re.compile(r"git@[A-Za-z0-9][A-Za-z0-9.-]*:[A-Za-z0-9_./~+-]+")
+SSH_REMOTE = re.compile(r"git@[A-Za-z0-9][A-Za-z0-9.-]*:[A-Za-z0-9_./~+][A-Za-z0-9_./~+-]*")
 URL_USERINFO = re.compile(r"(\b[a-z][a-z0-9+.-]*://)[^\s/]*@", re.I)
 SCP_USERINFO = re.compile(r"(?<![\w@.])[^\s/@:]+@(?=[A-Za-z0-9.-]+:)")
 REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,199}")
@@ -51,18 +52,15 @@ def _public_remote(remote: str) -> str:
 def _remote_kind(remote: str) -> str:
     if SSH_REMOTE.fullmatch(remote):
         return "ssh"
-    if any(c.isspace() or ord(c) < 32 for c in remote) or "\\" in remote:
-        raise BackupError("Use an HTTPS, SSH or file Git remote without credentials.")
-    try:
-        url = urlsplit(remote)
-        if not (url.query or url.fragment or url.username is not None or url.password is not None):
-            if url.scheme == "https" and url.hostname and url.path and url.port != 0:
+    if not (any(c.isspace() or ord(c) < 32 for c in remote) or "\\" in remote):
+        try:
+            url = urlsplit(remote)
+            if (url.scheme == "https" and url.hostname and url.path and url.port != 0
+                    and not (url.query or url.fragment or url.username is not None or url.password is not None)):
                 return "https"
-            if url.scheme == "file" and not url.netloc and url.path.startswith("/"):
-                return "file"
-    except ValueError:
-        pass
-    raise BackupError("Use an HTTPS, SSH or file Git remote without credentials.")
+        except ValueError:
+            pass
+    raise BackupError("Use an HTTPS or SSH Git remote without credentials.")
 
 
 def _check_ssh_key(value: str) -> None:
@@ -108,13 +106,17 @@ class _Git:
         return result
 
 
+def _backup_actor(source: str) -> str:
+    return source if AGENT_RE.fullmatch(source) else "SwB"
+
+
 def _change_line(row: Any) -> str:
     mid, action = row["memory_id"], row["action"]
     scope = row["scope"] or row["current_scope"]
     namespace = row["namespace"] or row["current_namespace"]
     key = row["key"] if row["scope"] else row["current_key"]
     path = "/memories/" + Memory.rel_path(scope, namespace, key, mid).as_posix()
-    actor = row["source"]
+    actor = _backup_actor(row["source"])
     if action.startswith(("move ", "rename")):
         legacy_from, separator, legacy_to = action.removeprefix("move ").partition(" -> ")
         if action.startswith("move ") and separator and not row["scope"]:
@@ -136,7 +138,7 @@ def _commit_message(changes: list[Any]) -> str:
         return "Back up memory"
     if len(lines) == 1:
         return lines[0]
-    names = ", ".join(dict.fromkeys(row["source"] for row in changes))
+    names = ", ".join(dict.fromkeys(_backup_actor(row["source"]) for row in changes))
     return f"{len(lines)} memory changes by {names}\n\n" + "\n".join(lines)
 
 
@@ -159,7 +161,9 @@ class MemoryGit:
 
     def _settings(self) -> dict[str, Any]:
         rows = self.core.store.q("SELECT key, value FROM settings WHERE key GLOB ?", (PREFIX + "*",))
-        return {**self.defaults, **{row["key"].removeprefix(PREFIX): json.loads(row["value"]) for row in rows}}
+        opts = {**self.defaults, **{row["key"].removeprefix(PREFIX): json.loads(row["value"]) for row in rows}}
+        opts["branch"] = opts["branch"].removeprefix("refs/heads/")
+        return opts
 
     def _save(self, actor: str, **values: Any) -> None:
         now = self.core.clock()
@@ -188,7 +192,7 @@ class MemoryGit:
         with self._run_lock:
             before = self._settings()
             remote = before["remote"] if remote is None or remote == _public_remote(before["remote"]) else remote.strip()
-            branch = before["branch"] if branch is None else branch.strip() or "main"
+            branch = before["branch"] if branch is None else (branch.strip() or "main").removeprefix("refs/heads/")
             author_name = before["author_name"] if author_name is None else author_name.strip() or "SwB"
             author_email = before["author_email"] if author_email is None else author_email.strip() or "swb@localhost"
             enabled = before["enabled"] if enabled is None else enabled
@@ -304,7 +308,7 @@ class MemoryGit:
             env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")
                    and key not in ("SSH_ASKPASS", "SWB_MEMORY_GIT_TOKEN")}
             env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0",
-                       GIT_ALLOW_PROTOCOL="file:https:ssh", LC_ALL="C", GIT_AUTHOR_NAME=opts["author_name"],
+                       GIT_ALLOW_PROTOCOL="https:ssh", LC_ALL="C", GIT_AUTHOR_NAME=opts["author_name"],
                        GIT_AUTHOR_EMAIL=opts["author_email"], GIT_COMMITTER_NAME=opts["author_name"],
                        GIT_COMMITTER_EMAIL=opts["author_email"])
             if kind == "https" and credential:
@@ -410,7 +414,8 @@ class MemoryGit:
                                        action="memory_backup_failed", outcome="error", detail=error)
             return self.status()
 
-    def restore(self, principal: Principal, ref: str | None = None) -> dict[str, Any]:
+    def restore(self, principal: Principal, ref: str | None = None, *, trust_owner: bool = False,
+                overwrite: bool = False) -> dict[str, Any]:
         require_owner(principal)
         if ref is not None and not REF.fullmatch(ref):
             raise BackupError("Use a Git commit or branch name.")
@@ -424,7 +429,11 @@ class MemoryGit:
                     root = Path(temp)
                     git.run(root, "init", "-q", "--template=")
                     git.run(root, "fetch", "--no-tags", "--", opts["remote"], "refs/heads/" + opts["branch"])
-                    commit = "FETCH_HEAD" if ref in (None, "HEAD", opts["branch"]) else ref
+                    branch_ref = "refs/heads/" + opts["branch"]
+                    commit = "FETCH_HEAD" if ref in (None, "HEAD", opts["branch"], branch_ref) else ref
+                    commit = git.run(root, "rev-parse", "--verify", "--end-of-options", f"{commit}^{{commit}}", read=True).stdout.decode().strip()
+                    author = git.run(root, "show", "-s", "--format=%an%x00%ae", commit, read=True).stdout.rstrip(b"\n")
+                    expected_author = f"{opts['author_name']}\0{opts['author_email']}".encode()
                     obj = f"{commit}:manifest.json"
                     size = int(git.run(root, "cat-file", "-s", obj, read=True).stdout)
                     if size > MAX_ARCHIVE_BYTES:
@@ -434,6 +443,7 @@ class MemoryGit:
                 raise BackupError("Could not read the Git backup.") from None
             except InvalidToken:
                 raise BackupError("Save the Git backup credential again.") from None
-        out = import_manifest(self.core, principal, data)
+        out = import_manifest(self.core, principal, data, trust_owner=trust_owner, overwrite=overwrite,
+                              origin=f"git {_public_remote(opts['remote'])}@{commit}", external=author != expected_author)
         self.core.audit_memory(principal, "memory_backup_restore", "git")
         return out
