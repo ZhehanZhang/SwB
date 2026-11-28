@@ -15,6 +15,7 @@ import { TranslationNote } from './translation-note';
 
 export function Document({ page, version = latestDocsVersion }: { page: DocumentPage; version?: string }) {
   const { body: MDX, title, toc, full } = page.data;
+  const hasToc = Boolean(toc?.length);
   const versionLoader = docsLoaders.get(version)!;
   const latest = version === latestDocsVersion;
   const markdown = latest ? markdownUrl(page) : undefined;
@@ -23,8 +24,9 @@ export function Document({ page, version = latestDocsVersion }: { page: Document
   const startNext = page.slugs.join('/') === 'get-started' ? versionLoader.getPage([], page.locale) : undefined;
 
   return (
-    <DocsPage toc={toc} full={full} breadcrumb={{ className: 'swb-docs-breadcrumb' }} tableOfContent={{ enabled: Boolean(toc?.length) }}
-      tableOfContentPopover={{ enabled: Boolean(toc?.length) }}
+    <DocsPage toc={toc} full={full} data-swb-toc={hasToc || undefined}
+      breadcrumb={{ className: 'swb-docs-breadcrumb' }} tableOfContent={{ enabled: hasToc }}
+      tableOfContentPopover={{ enabled: hasToc }}
       footer={{ component: (
         <footer className={footerStyles.footer} data-docs-footer>
           <PageFooter className={footerStyles.pagination} data-docs-pagination items={startNext ? {
