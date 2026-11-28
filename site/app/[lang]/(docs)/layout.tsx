@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { DocsShell } from '@/components/docs-shell';
-import { SiteHeader } from '@/components/site-header';
+import { DocsSiteHeader } from '@/components/docs-version-control';
 import { isLocale } from '@/lib/i18n';
 import { docsLoaders, repository } from '@/lib/source';
 
@@ -16,7 +16,7 @@ export default async function Layout({ params, children }: LayoutProps<'/[lang]'
   }));
   return (
     <>
-      <SiteHeader lang={lang} repository={repository} versions={versions} />
+      <DocsSiteHeader lang={lang} repository={repository} versions={versions} />
       <DocsShell lang={lang} askAI={process.env.NEXT_PUBLIC_ASK_AI === '1'} trees={trees}>
         {children}
       </DocsShell>

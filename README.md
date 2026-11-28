@@ -59,7 +59,7 @@ You can also run `swb connect <kind>` in your SwB folder. OAuth lets you grant a
 | Discord | Bot token | Replies in the thread |
 | Telegram | Bot token | Replies in the thread |
 | GitHub | Webhook secret | Signed webhooks |
-| Muse | Custom MCP connector with OAuth or a paired gadget | `inbox` or push through the gadget |
+| Muse | Custom MCP connector with OAuth | `inbox` |
 
 ## How it works
 

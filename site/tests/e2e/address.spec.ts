@@ -43,7 +43,7 @@ test('persists one address for Get started, docs, copy and Open in actions', asy
   });
 
   await openGetStarted(page);
-  await expect(indicator(page)).toHaveCount(0);
+  await expect(indicator(page)).toHaveAccessibleName(label);
   await address(page).fill(`${origin}/mcp`);
   await address(page).press('Enter');
   expect(await stored(page)).toBe(origin);
@@ -101,7 +101,7 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await indicator(page).click();
   const popover = page.getByRole('dialog');
   await expect(popover.getByRole('textbox', { name: label })).toHaveValue(origin);
-  await popover.getByRole('button', { name: 'Copy link with your address' }).click();
+  await popover.getByRole('button', { name: 'Copy link' }).click();
   const share = new URL(await clipboard(page));
   expect(share.search).toBe('?tab=remote');
   expect(share.hash).toBe(`#named-tunnel&swb=${encodeURIComponent(origin)}`);
@@ -110,8 +110,14 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await popover.getByRole('textbox', { name: label }).fill(update);
   await popover.getByRole('textbox', { name: label }).press('Enter');
   await expect(docs(page).getByRole('link', { name: /^check the public address$/i })).toHaveAttribute('href', `${update}/healthz`);
-  await popover.getByRole('button', { name: 'Clear' }).click();
-  await expect(indicator(page)).toHaveCount(0);
+  const clear = popover.getByRole('button', { name: 'Clear address' });
+  await clear.click();
+  await expect(indicator(page)).toHaveAccessibleName(label);
+  await expect(popover.getByRole('textbox', { name: label })).toBeFocused();
+  await expect(popover.getByRole('textbox', { name: label })).toHaveValue('');
+  await expect(clear).toHaveCount(0);
+  await expect(popover.getByRole('button', { name: 'Copy link' })).toBeDisabled();
+  await page.keyboard.press('Escape');
   await expect(docs(page).getByRole('link', { name: /^check the public address$/i })).toHaveAttribute('href', `${example}/healthz`);
   await copyBlock(page, `SWB_PUBLIC_URL=${example}`);
   expect(await stored(page)).toBeNull();
@@ -131,7 +137,7 @@ test('a shared Deploy section link stores the address and scrolls to the heading
   )).toBeLessThanOrEqual(1);
 });
 
-test('address trigger matches the language control and its aligned popover saves explicitly', async ({ page }) => {
+test('address trigger matches the language control and its aligned joined panel saves explicitly', async ({ page }) => {
   await page.goto(`${install}?swb=${encodeURIComponent(origin)}`);
   const trigger = indicator(page);
   await expect(trigger).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
@@ -150,13 +156,16 @@ test('address trigger matches the language control and its aligned popover saves
   const popover = page.getByRole('dialog', { name: label });
   const input = popover.getByRole('textbox', { name: label });
   const save = popover.getByRole('button', { name: 'Save' });
-  const clear = popover.getByRole('button', { name: 'Clear' });
-  const copy = popover.getByRole('button', { name: 'Copy link with your address' });
+  const clear = popover.getByRole('button', { name: 'Clear address' });
+  const copy = popover.getByRole('button', { name: 'Copy link' });
+  const field = popover.locator('[data-address-field]');
+  const saved = field.locator('[data-address-saved]');
+  await expect(copy).toHaveAttribute('title', 'Copy link');
   await expect(popover).toBeFocused();
   await expect(input).toHaveValue(origin);
   await popover.evaluate((panel) => Promise.all(panel.getAnimations().map((animation) => animation.finished)));
-  const [buttonBox, panelBox, inputBox, clearBox, copyBox, saveBox] = await Promise.all(
-    [trigger, popover, input, clear, copy, save].map((item) => item.boundingBox()),
+  const [buttonBox, panelBox, fieldBox, inputBox, clearBox, copyBox, saveBox] = await Promise.all(
+    [trigger, popover, field, input, clear, copy, save].map((item) => item.boundingBox()),
   );
   const width = page.viewportSize()!.width;
   const panelRight = panelBox!.x + panelBox!.width;
@@ -164,11 +173,15 @@ test('address trigger matches the language control and its aligned popover saves
     expect(Math.abs(panelBox!.x - 20)).toBeLessThanOrEqual(1);
     expect(Math.abs(panelRight - width + 20)).toBeLessThanOrEqual(1);
   } else {
+    expect(panelBox!.width).toBe(320);
     expect(Math.abs(panelRight - buttonBox!.x - buttonBox!.width)).toBeLessThanOrEqual(1);
   }
-  expect(Math.abs(clearBox!.x - inputBox!.x)).toBeLessThanOrEqual(1);
-  expect(Math.abs(saveBox!.x + saveBox!.width - inputBox!.x - inputBox!.width)).toBeLessThanOrEqual(1);
-  expect(Math.max(clearBox!.y, copyBox!.y, saveBox!.y) - Math.min(clearBox!.y, copyBox!.y, saveBox!.y)).toBeLessThanOrEqual(1);
+  expect(copyBox!.y + copyBox!.height).toBeLessThanOrEqual(fieldBox!.y);
+  expect(inputBox!.x + inputBox!.width).toBeLessThanOrEqual(clearBox!.x);
+  expect(clearBox!.x + clearBox!.width).toBeLessThanOrEqual(saveBox!.x);
+  expect(saveBox!.x + saveBox!.width).toBeLessThan(fieldBox!.x + fieldBox!.width);
+  await expect(save).toHaveCSS('border-inline-start-width', '1px');
+  expect(saveBox!.height).toBe(inputBox!.height);
 
   await page.keyboard.press('Tab');
   await expect(input).toBeFocused();
@@ -183,6 +196,40 @@ test('address trigger matches the language control and its aligned popover saves
   await save.click();
   await expect(input).toHaveValue(update);
   expect(await stored(page)).toBe(update);
+  await expect(saved).toBeVisible();
+  await expect(saved).toBeHidden({ timeout: 2500 });
+  await input.fill(origin);
+  await input.press('Enter');
+  await expect(saved).toBeVisible();
+  await expect(popover.getByText('Address saved', { exact: true })).toHaveAttribute('role', 'status');
+  expect(await stored(page)).toBe(origin);
+  await input.fill(update);
+  await expect(saved).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(popover).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test('sets an address from the landing page and imports links on About', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await indicator(page).click();
+  const panel = page.getByRole('dialog', { name: label });
+  const input = panel.getByRole('textbox', { name: label });
+  await expect(input).toHaveValue('');
+  await expect(panel.getByRole('button', { name: 'Clear address' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Copy link' })).toBeDisabled();
+  await input.fill(example);
+  await input.press('Enter');
+  await panel.getByRole('button', { name: 'Copy link' }).click();
+  const shared = new URL(await clipboard(page));
+  expect(shared.search).toBe('');
+  expect(shared.hash).toBe(`#swb=${encodeURIComponent(example)}`);
+  await page.goto(`/about${shared.hash.replace(encodeURIComponent(example), encodeURIComponent(origin))}`);
+  await expect(page).toHaveURL('/about');
+  await expect(indicator(page)).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
+  await openGetStarted(page);
+  await expect(address(page)).toHaveValue(origin);
 });
 
 test('accepts fragment and query prefill and preserves anchors and picker state', async ({ page }) => {
@@ -203,21 +250,22 @@ test('accepts fragment and query prefill and preserves anchors and picker state'
   await expect(address(page)).toHaveValue(origin);
 });
 
-test('prefills and fits the address panel in all eight locales', async ({ page }) => {
+test('prefills and fits the joined address panel in all eight locales', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const locale of locales) {
-    await page.goto(`${localize(locale, install)}?swb=${encodeURIComponent(origin)}`);
+    const path = localize(locale, install);
+    await page.goto(`${path}#swb=${encodeURIComponent(origin)}`);
     const trigger = page.locator('[data-header-item="address"]');
     await expect(trigger).toHaveAttribute('title', new URL(origin).host);
-    await expect(page).toHaveURL(localize(locale, install));
+    await expect(page).toHaveURL(path);
     await trigger.click();
     const panel = page.getByRole('dialog');
     await expect(panel.getByRole('textbox')).toHaveValue(origin);
     const overflow = await panel.evaluate((element) => {
       const { left, right } = element.getBoundingClientRect();
-      return Math.max(20 - left, right - innerWidth + 20, ...[...element.querySelectorAll('button')].map((button) => {
-        const rect = button.getBoundingClientRect();
-        return Math.max(left - rect.left, rect.right - right);
+      return Math.max(20 - left, right - innerWidth + 20, ...[...element.querySelectorAll('label, button')].map((control) => {
+        const rect = control.getBoundingClientRect();
+        return Math.max(left - rect.left, rect.right - right, control.scrollWidth - control.clientWidth);
       }));
     });
     expect(overflow, locale).toBeLessThanOrEqual(1);

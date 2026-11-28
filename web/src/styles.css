@@ -178,7 +178,11 @@
   -webkit-tap-highlight-color: transparent;
 
   @media (prefers-reduced-motion: no-preference) {
-    transition: background-color 170ms ease-out, opacity 170ms ease-out, transform 170ms ease-out;
+    transition: background-color 170ms ease-out;
+
+    &.console-press-scale {
+      transition-property: background-color, opacity, transform;
+    }
   }
 }
 
@@ -190,11 +194,14 @@
 
 .console-pressable:active:where(:not(:disabled, [aria-disabled="true"], [data-disabled])) {
   background-color: var(--console-pressable-bg, var(--surface-sunken));
-  opacity: .92;
 
-  @media (prefers-reduced-motion: no-preference) {
-    transform: scale(.97);
-    transition-duration: 0s;
+  &.console-press-scale {
+    opacity: .92;
+
+    @media (prefers-reduced-motion: no-preference) {
+      transform: scale(.97);
+      transition-duration: 0s;
+    }
   }
 }
 
@@ -225,7 +232,6 @@
 
 .console-mobile-tab:is(:active, [aria-current="page"], [data-selected]) {
   background-color: var(--surface-sunken);
-  color: var(--foreground);
 }
 
 [data-sonner-toaster] [data-sonner-toast] {

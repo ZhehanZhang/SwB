@@ -56,7 +56,7 @@ Create another Access application on the same hostname for the paths marked **By
 | `/inbox/poll`, `/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | Bypass for GitHub |
-| `/hooks/*` | Bypass for Webhooks |
+| `/hooks/*` | Bypass for Webhooks and the Muse hook |
 | All other paths, including `/pairing/companion`, `/authorize` and `/inbox` | Owner |
 
 SwB checks pairing codes at `/companion/pair`. It checks the device key on other companion requests. If you use Access, ask an agent with owner access to call `companion_code`.

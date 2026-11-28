@@ -3,7 +3,6 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createContext, Suspense, use, useCallback, useLayoutEffect, useState, type ReactNode } from 'react';
 import { isGetStartedAddressPath, readSharedAddress, swbAddressKey, validSwbOrigin } from '@/lib/address';
-import { isDocsPath } from '@/lib/i18n';
 
 const oldAddressKey = 'swb-get-started-address';
 const AddressContext = createContext<{ address: string | null; saveAddress: (address: string | null) => void }>({
@@ -36,7 +35,6 @@ export function SwbAddressProvider({ children }: { children: ReactNode }) {
 
   const restore = useCallback(() => {
     const url = new URL(location.href);
-    if (!isDocsPath(url.pathname)) return;
     const start = isGetStartedAddressPath(url.pathname);
     const shared = readSharedAddress(url);
     if (shared) {

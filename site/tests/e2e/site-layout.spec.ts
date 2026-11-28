@@ -17,7 +17,7 @@ async function headerGeometry(page: Page) {
   });
 }
 
-test('header and all items stay within 0.5px across home and docs without a theme toggle', async ({ page }) => {
+test('the shared header keeps its geometry across home and docs except for the search offset', async ({ page }) => {
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
@@ -26,23 +26,64 @@ test('header and all items stay within 0.5px across home and docs without a them
     const home = await headerGeometry(page);
     const tabs = width === 390 ? [] : ['docs', 'setup', 'about'];
     const rest = width === 390 ? ['menu'] : [];
+    const search = width < 1024 ? 'search-icon' : 'search';
     expect(Object.keys(home)).toEqual([
-      'header', 'brand', ...tabs, width < 1024 ? 'search-icon' : 'search', 'language', 'github', ...rest,
+      'header', 'brand', ...tabs, search, 'address', 'language', 'github', ...rest,
     ]);
 
     for (const path of ['/docs', '/docs/install']) {
       await page.goto(path);
       await page.evaluate(() => document.fonts.ready);
       await expect(page.locator('#nd-nav [data-theme-toggle]')).toHaveCount(0);
-      const { version, ...docs } = await headerGeometry(page);
+      const docs = await headerGeometry(page);
+      const { version } = docs;
       expect(version.height).toBe(home.language.height);
-      expect(Object.keys(docs)).toEqual(Object.keys(home));
+      expect(version.width).toBe(64);
+      expect(Object.keys(docs)).toEqual([
+        'header', 'brand', ...tabs, search, 'version', 'address', 'language', 'github', ...rest,
+      ]);
       for (const item of Object.keys(home)) {
         for (const edge of ['x', 'y', 'width', 'height'] as const) {
-          expect(Math.abs(docs[item][edge] - home[item][edge]), `${width}px ${path} ${item} ${edge}`).toBeLessThanOrEqual(0.5);
+          const offset = item === search && edge === 'x' ? version.width + (width < 640 ? 4 : 8) : 0;
+          expect(Math.abs(docs[item][edge] - home[item][edge] + offset), `${width}px ${path} ${item} ${edge}`).toBeLessThanOrEqual(0.5);
         }
       }
     }
+  }
+});
+
+test('landing, About and docs render matching header control gaps before hydration', async ({ page }) => {
+  await page.route('**/_next/static/**/*.js', (route) => route.abort());
+  const width = page.viewportSize()!.width;
+  const gap = width < 640 ? 4 : 8;
+  let right: number | undefined;
+  for (const path of ['/', '/about', '/docs/install']) {
+    await page.goto(path);
+    const cluster = page.locator('[data-header-controls]');
+    await expect(cluster.locator('[data-header-item="address"]')).toBeVisible();
+    const docs = path.startsWith('/docs/');
+    await expect(cluster.locator('[data-header-item="version"]')).toHaveCount(docs ? 1 : 0);
+    const layout = await cluster.evaluate((element) => {
+      const items = [...element.querySelectorAll<HTMLElement>('[data-header-item]')]
+        .filter((control) => control.getClientRects().length);
+      const controls = items.map((control) => control.getBoundingClientRect());
+      return {
+        order: items.map((control) => control.dataset.headerItem),
+        columns: getComputedStyle(element).gridTemplateColumns.split(' ').length,
+        gaps: controls.slice(1).map((control, index) => control.left - controls[index].right),
+        right: element.getBoundingClientRect().right,
+        last: controls.at(-1)!.right,
+      };
+    });
+    expect(layout.order, path).toEqual([
+      width < 1024 ? 'search-icon' : 'search', ...(docs ? ['version'] : []), 'address', 'language', 'github', ...(width < 640 ? ['menu'] : []),
+    ]);
+    expect(layout.gaps).toHaveLength((gap === 4 ? 4 : 3) + Number(docs));
+    expect(layout.columns).toBe(layout.gaps.length + 1);
+    for (const measured of layout.gaps) expect(Math.abs(measured - gap), path).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.last - layout.right), path).toBeLessThanOrEqual(1);
+    right ??= layout.right;
+    expect(Math.abs(layout.right - right), path).toBeLessThanOrEqual(1);
   }
 });
 
@@ -77,6 +118,14 @@ test('a streamed header keeps the search control in its final position', async (
   const closingTag = item === 'search' ? '</button>' : '</button></div>';
   const split = html.indexOf(closingTag, search) + closingTag.length;
   expect(split).toBeGreaterThan(search);
+  await page.addInitScript(() => {
+    new PerformanceObserver((entries) => {
+      const moved = entries.getEntries().some((entry) =>
+        (entry as PerformanceEntry & { sources: { node?: Node }[] }).sources.some(({ node }) =>
+          document.querySelector('#nd-nav')?.contains(node ?? null)));
+      if (moved) document.documentElement.dataset.headerShift = 'true';
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
   const upstream = new URL(baseURL!).origin;
   let documentResponse: ServerResponse | undefined;
   const server = createServer((incoming, outgoing) => {
@@ -100,12 +149,16 @@ test('a streamed header keeps the search control in its final position', async (
     await page.waitForFunction(() => performance.getEntriesByName('first-contentful-paint').length > 0);
     const control = page.locator(`#nd-nav [data-header-item="${item}"]`);
     await expect(control).toBeVisible();
+    await expect(page.locator('#nd-nav [data-header-item="version"]')).toHaveCount(0);
     await expect(page.locator('#nd-nav [data-header-item="github"]')).toHaveCount(0);
     const before = await control.boundingBox();
     documentResponse!.end(html.slice(split));
+    await expect(page.locator('#nd-nav [data-header-item="version"]')).toBeVisible();
     await expect(page.locator('#nd-nav [data-header-item="github"]')).toBeVisible();
     await page.waitForLoadState();
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     expect(await control.boundingBox()).toEqual(before);
+    await expect(page.locator('html[data-header-shift]')).toHaveCount(0);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -313,22 +366,19 @@ test('hero actions share a baseline and keep mobile actions, license and command
       expect(fits).toBe(true);
       expect(github.right).toBeLessThanOrEqual(copy.right + 1);
       expect(chip.height).toBeLessThanOrEqual(28);
-      if (width === 390) {
+      if (chip.top >= github.bottom) {
         expect(inDomOrder).toBe(true);
         expect(license.top).toBeGreaterThan(github.bottom);
         expect(chip.top).toBeGreaterThan(license.bottom);
         expect(Math.abs(setup.left - chip.left)).toBeLessThanOrEqual(1);
         expect(license.top - github.bottom).toBeCloseTo(chip.top - license.bottom, 0);
-      } else if (chip.top >= github.bottom) {
-        expect(width).not.toBe(1440);
-        expect(Math.abs(setup.left - chip.left)).toBeLessThanOrEqual(1);
-        expect(chip.top - github.bottom).toBeLessThanOrEqual(8);
       } else {
+        expect(width).not.toBe(390);
         expect(chip.left).toBeGreaterThan(github.right);
+        expect(license.top).toBeGreaterThan(Math.max(chip.bottom, github.bottom));
         expect(Math.abs((chip.top + chip.bottom) / 2 - (github.top + github.bottom) / 2)).toBeLessThanOrEqual(1);
       }
       expect(Math.abs(setup.left - license.left)).toBeLessThanOrEqual(1);
-      if (width >= 1024) expect(license.top).toBeGreaterThan(Math.max(chip.bottom, github.bottom));
       if (width >= 1024) expect(Math.abs((copy.top + copy.bottom) / 2 - (hub.top + hub.bottom) / 2)).toBeLessThanOrEqual(1);
     }
   }
@@ -468,7 +518,7 @@ test('landing shows supported deployment links and six usage examples in each lo
     await expect(fly).toHaveClass((await render.getAttribute('class'))!);
     const tunnel = deploy.locator('[data-deploy-tunnel]');
     await expect(tunnel).toHaveAttribute('href', `${prefix}/docs/deploy#cloudflare-tunnel`);
-    await expect(tunnel).toHaveClass((await render.getAttribute('class'))!);
+    await expect(tunnel).toHaveCSS('border-radius', '6px');
     await expect(deploy.locator(`a[href="${prefix}/docs/install"] > .lucide-book-open`)).toHaveCount(1);
     await expect(deploy.locator(`a[href="${prefix}/docs/deploy#docker-compose"] > .lucide-book-open`)).toHaveCount(1);
     const usage = page.locator('#landing-usage').locator('..');
@@ -504,66 +554,87 @@ test('deploy rows show the official service marks in light and dark', async ({ p
   }
 });
 
-test('deploy columns stack below 900px, align at the top and hug their content', async ({ page }) => {
-  await page.goto('/');
-  await page.evaluate(() => document.fonts.ready);
-  const grid = page.locator('[data-deploy-grid]');
-  for (const [width, columns] of [[390, 1], [899, 1], [900, 3], [1024, 3], [1440, 3]]) {
-    await page.setViewportSize({ width, height: 900 });
-    const layout = await grid.evaluate((node) => {
-      const blocks = [...node.children];
-      const boxes = blocks.map((block) => block.getBoundingClientRect());
-      return {
-        columns: getComputedStyle(node).gridTemplateColumns.split(' '),
-        tops: boxes.map(({ top }) => top),
-        heights: boxes.map(({ height }) => height),
-        bodyTops: blocks.map((block) => block.children[2].getBoundingClientRect().top),
-        codeBlocks: [...node.querySelectorAll('pre')].map((code) => {
-          const style = getComputedStyle(code);
-          const chrome = [style.paddingBlockStart, style.paddingBlockEnd, style.borderBlockStartWidth, style.borderBlockEndWidth]
-            .reduce((sum, value) => sum + parseFloat(value), 0);
-          return { measured: code.getBoundingClientRect().height, natural: chrome + parseFloat(style.lineHeight) * code.textContent!.split('\n').length };
-        }),
-      };
-    });
-    expect(layout.columns).toHaveLength(columns);
-    expect(layout.tops).toHaveLength(3);
-    if (columns === 3) {
-      expect(Math.max(...layout.tops) - Math.min(...layout.tops), `${width}px column tops`).toBeLessThanOrEqual(1);
-      expect(Math.max(...layout.bodyTops) - Math.min(...layout.bodyTops), `${width}px body tops`).toBeLessThanOrEqual(1);
-      if (width >= 1024) expect(Math.max(...layout.heights) - Math.min(...layout.heights), `${width}px column heights`).toBeLessThanOrEqual(24);
+test('deploy columns stack below 900px and align each row on wider screens', async ({ page }) => {
+  for (const path of ['/', '/zh-Hans', '/zh-Hant', '/es', '/fr', '/de', '/ko', '/ja']) {
+    await page.goto(path);
+    await page.evaluate(() => document.fonts.ready);
+    const grid = page.locator('[data-deploy-grid]');
+    for (const width of [390, 899, 900, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const layout = await grid.evaluate((node) => {
+        const blocks = [...node.children];
+        const edges = (element: Element) => {
+          const { top, bottom } = element.getBoundingClientRect();
+          return { top, bottom };
+        };
+        const [uvx, compose] = [...node.querySelectorAll('[data-deploy-primary] pre')];
+        const composeStyle = getComputedStyle(compose);
+        const composeChrome = [composeStyle.paddingBlockStart, composeStyle.paddingBlockEnd,
+          composeStyle.borderBlockStartWidth, composeStyle.borderBlockEndWidth]
+          .reduce((sum, length) => sum + parseFloat(length), 0);
+        const center = (element: Element) => {
+          const { top, bottom } = edges(element);
+          return (top + bottom) / 2;
+        };
+        return {
+          columns: getComputedStyle(node).gridTemplateColumns.split(' '),
+          options: blocks.map(edges),
+          intro: blocks.map((block) => edges(block.querySelector('p')!)),
+          primary: blocks.map((block) => edges(block.querySelector('[data-deploy-primary] > *')!)),
+          secondary: blocks.map((block) => edges(block.querySelector('[data-deploy-secondary] :is(summary,a)')!)),
+          internalGaps: blocks.map((block) => [...block.children]
+            .map(edges).slice(1).map(({ top }, index) => top - edges(block.children[index]).bottom)),
+          composeHeight: compose.getBoundingClientRect().height,
+          composeNaturalHeight: composeChrome + parseFloat(composeStyle.lineHeight) * compose.textContent!.split('\n').length,
+          uvxCenterDelta: Math.abs(center(uvx.querySelector('code')!) - center(uvx)),
+        };
+      });
+      expect(layout.columns).toHaveLength(width < 900 ? 1 : 3);
+      expect(layout.options).toHaveLength(3);
+      for (const { top, bottom } of layout.intro) expect(bottom - top, `${path} at ${width}px intro`).toBe(20);
+      expect(layout.composeHeight, `${path} at ${width}px compose height`).toBe(layout.composeNaturalHeight);
+      expect(layout.uvxCenterDelta, `${path} at ${width}px uvx center`).toBeLessThanOrEqual(1);
+      if (width >= 900) {
+        for (const row of ['options', 'intro', 'primary', 'secondary'] as const) {
+          for (const edge of ['top', 'bottom'] as const) {
+            const values = layout[row].map((box) => box[edge]);
+            expect(Math.max(...values) - Math.min(...values), `${path} at ${width}px ${row} ${edge}`).toBe(0);
+          }
+        }
+      } else {
+        expect(layout.options[1].top - layout.options[0].bottom).toBe(24);
+        expect(layout.options[2].top - layout.options[1].bottom).toBe(24);
+      }
+      for (const gap of layout.internalGaps.flat()) expect(gap).toBe(8);
     }
-    expect(layout.codeBlocks).toHaveLength(3);
-    for (const { measured, natural } of layout.codeBlocks) expect(measured).toBeCloseTo(natural, 0);
   }
 });
 
-test('provider and tunnel rows fit a single line in all three locales', async ({ page }) => {
+test('provider and secondary rows fit one line in English and Chinese', async ({ page }) => {
   for (const path of ['/', '/zh-Hans', '/zh-Hant']) {
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready);
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      const rows = await page.locator('[data-deploy-providers] a, [data-deploy-tunnel]').evaluateAll((links) => links.map((link) => {
+      const rows = await page.locator('[data-deploy-providers] a, [data-deploy-secondary] :is(summary,a)').evaluateAll((links) => links.map((link) => {
         const { width, height, right } = link.getBoundingClientRect();
         const style = getComputedStyle(link);
-        const singleLine = [style.lineHeight, style.paddingBlockStart, style.paddingBlockEnd, style.borderBlockStartWidth, style.borderBlockEndWidth]
-          .reduce((sum, value) => sum + parseFloat(value), 0);
         return {
-          width, height, singleLine,
+          width, height,
           contained: link.lastElementChild!.getBoundingClientRect().right <= right - parseFloat(style.paddingInlineEnd) + 1,
+          labelHeight: link.children[1].getBoundingClientRect().height,
           whiteSpace: style.whiteSpace,
-          isTunnel: link.hasAttribute('data-deploy-tunnel'),
+          isProvider: link.closest('[data-deploy-providers]') !== null,
         };
       }));
-      expect(rows).toHaveLength(4);
-      const cloud = rows.filter((row) => !row.isTunnel);
+      expect(rows).toHaveLength(6);
+      const cloud = rows.filter((row) => row.isProvider);
       expect(new Set(cloud.map(({ width }) => width)).size).toBe(1);
-      expect(new Set(rows.map(({ height }) => height)).size).toBe(1);
       for (const row of rows) {
         expect(row.whiteSpace).toBe('nowrap');
         expect(row.contained).toBe(true);
-        expect(Math.abs(row.height - row.singleLine), `${path} provider height at ${width}px`).toBeLessThanOrEqual(2);
+        expect(row.height, `${path} action height at ${width}px`).toBeCloseTo(row.isProvider && width >= 900 ? (108 - 2) / 3 : 44, 1);
+        expect(row.labelHeight).toBe(20);
       }
     }
   }

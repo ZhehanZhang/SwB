@@ -132,18 +132,14 @@ test('copies exact source prompt bytes for Claude and Codex', async ({ page, con
   }
 });
 
-test('recommends Muse gadget pairing before the connector and copies its command', async ({ page, context }) => {
+test('shows the Muse connector and copies its setup prompt', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto(`${start}?agents=muse`);
   const section = agent(page, 'Muse');
-  await expect(section.getByRole('heading', { level: 4 })).toHaveText([
-    'Wake Muse with a gadget', 'Connect Muse to SwB tools',
-  ]);
-  await expect(section.getByText(/single-use code within ten minutes/)).toContainText('Add Device');
-  await expect(section.getByText(/single-use code within ten minutes/)).toContainText('Allow Bluetooth');
-  await section.getByRole('button', { name: 'Copy command' }).click();
-  expect(await page.evaluate(() => navigator.clipboard.readText()))
-    .toBe("uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse");
+  await expect(section.locator('[data-agent-before]')).toContainText('custom MCP connector');
+  await expect(section.getByRole('button', { name: 'Copy command' })).toHaveCount(0);
+  await section.getByRole('button', { name: 'Copy prompt' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sourcePrompt('muse'));
   await expect(section.getByRole('link', { name: 'Full guide' })).toHaveAttribute('href', '/docs/setup/muse');
 });
 
@@ -154,13 +150,14 @@ test('explains the prompts and links companion setup without offering it as an a
   await expect(setup(page).getByText('The prompts below use your SwB address.')).toHaveCount(0);
   await expect(setup(page).getByText(/Choose where SwB runs to see/)).toBeVisible();
   await expect(tile(page, 'Companion')).toHaveCount(0);
-  for (const name of ['Claude Code', 'Codex', 'Muse']) {
+  for (const name of ['Claude Code', 'Codex']) {
     const section = agent(page, name);
     await expect(section.locator('[data-agent-before]')).toContainText(/pairing|pair a companion/);
     await expect(section.locator('[data-agent-after]')).toHaveText(/\S/);
     await expect(section.locator('[data-block-header]').getByRole('link', { name: 'Companion guide' }))
       .toHaveAttribute('href', '/docs/companion');
   }
+  await expect(agent(page, 'Muse').getByRole('link', { name: 'Companion guide' })).toHaveCount(0);
 });
 
 test('personalizes preview, open link and copy while the source prompt stays unchanged', async ({ page, context }) => {

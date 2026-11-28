@@ -62,6 +62,113 @@ test("About and page metadata use the shared tagline", async ({ page }) => {
   await expect(page.locator('meta[property="og:description"]')).toHaveAttribute("content", TAGLINE.en)
 })
 
+test("desktop rail uses smaller one-line labels within unchanged hit targets", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto("/settings")
+  const rail = navigation(page)
+  const links = rail.getByRole("link")
+  await expect(links).toHaveCount(7)
+  await page.evaluate(() => document.fonts.ready)
+  const items = await links.evaluateAll(anchors => anchors.map(anchor => {
+    const label = anchor.querySelector("span")!
+    const box = anchor.getBoundingClientRect()
+    const text = label.getBoundingClientRect()
+    const style = getComputedStyle(label)
+    return {
+      width: box.width, height: box.height, font: style.fontSize,
+      lines: text.height / parseFloat(style.lineHeight), overflow: label.scrollWidth > label.clientWidth,
+      y: box.y, left: text.left - box.left, right: box.right - text.right,
+    }
+  }))
+  for (const [i, item] of items.entries()) {
+    expect(item).toMatchObject({ width: 64, height: i === 0 ? 72 : 56, font: "12px", lines: 1, overflow: false })
+    expect(item.left).toBeCloseTo(item.right, 0)
+  }
+  expect(items[1].y - items[0].y - items[0].height).toBe(2)
+  await expect(rail.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page")
+})
+
+test("one SwB mark animates between desktop routes and the mobile tab", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto("/")
+  const mark = page.locator(".console-overview-mark")
+  const node = await mark.elementHandle()
+  expect(await mark.boundingBox()).toMatchObject({ width: 48, height: 48 })
+  await mark.evaluate(el => el.addEventListener("transitionend", event => {
+    if (event.propertyName === "transform") el.setAttribute("data-transition-count", String(Number(el.getAttribute("data-transition-count")) + 1))
+  }))
+
+  await navigation(page).getByRole("link", { name: "Agents" }).click()
+  await expect(mark).toHaveAttribute("data-transition-count", "1")
+  expect(await mark.boundingBox()).toMatchObject({ width: 28, height: 28 })
+
+  await page.setViewportSize({ width: 700, height: 768 })
+  await expect(mark).toHaveAttribute("data-transition-count", "2")
+  expect(await mark.boundingBox()).toMatchObject({ width: 24, height: 24 })
+  expect(await mark.evaluate((el, original) => el === original, node)).toBe(true)
+  const tab = await navigation(page).getByRole("link", { name: "Overview", exact: true }).boundingBox()
+  const box = await mark.boundingBox()
+  expect(box!.x + box!.width / 2).toBeCloseTo(tab!.x + tab!.width / 2, 0)
+})
+
+test("reduced motion swaps the SwB mark immediately", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto("/")
+  const mark = page.locator(".console-overview-mark")
+  await navigation(page).getByRole("link", { name: "Agents" }).click()
+  await expect(mark).not.toHaveAttribute("data-home", "true")
+  await expect(mark).toHaveCSS("transition-duration", "0s")
+  expect(await mark.boundingBox()).toMatchObject({ width: 28, height: 28 })
+  await page.setViewportSize({ width: 700, height: 768 })
+  expect(await mark.boundingBox()).toMatchObject({ width: 24, height: 24 })
+})
+
+test("pressing a rail link or inbox row preserves its geometry", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto("/inbox")
+  const tab = navigation(page).getByRole("link", { name: "Agents", exact: true })
+  const row = page.getByRole("row").filter({ hasText: "Fixture task 1", has: page.getByRole("link", { name: "Fixture task 1", exact: true }) })
+  for (const target of [tab, row]) {
+    await expect(target).toBeVisible()
+    const box = (await target.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    expect(await target.evaluate(el => el.matches(":active"))).toBe(true)
+    await expect(target).toHaveCSS("transform", "none")
+    expect(await target.boundingBox()).toEqual(box)
+    await page.mouse.move(1000, 755)
+    await page.mouse.up()
+  }
+})
+
+for (const [os, userAgent, modifier, key] of [
+  ["macOS", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "⌘", "Meta"],
+  ["Linux", "Mozilla/5.0 (X11; Linux x86_64)", "Ctrl", "Control"],
+]) {
+  test.describe(os, () => {
+    test.use({ userAgent, hasTouch: false, isMobile: false })
+
+    test("search shows two platform keycaps and opens using the shortcut", async ({ page }) => {
+      await page.setViewportSize({ width: 1024, height: 768 })
+      await page.goto("/")
+      const search = page.getByRole("button", { name: "Search", exact: true })
+      const caps = search.locator("kbd")
+      await expect(caps).toHaveText([modifier, "K"])
+      await expect(search).toHaveCSS("height", "36px")
+      await expect(search).toHaveCSS("border-radius", "6px")
+      await expect(search).toHaveCSS("border-top-width", "1px")
+      const label = await search.getByText("Search", { exact: true }).boundingBox()
+      for (const cap of await caps.all()) {
+        const box = await cap.boundingBox()
+        expect(box!.y + box!.height / 2).toBeCloseTo(label!.y + label!.height / 2, 0)
+      }
+      await page.keyboard.press(`${key}+k`)
+      await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible()
+    })
+  })
+}
+
 test("Audit shows a webhook refusal reason as plain text", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1200, height: 800 })
   await page.route("**/api/audit?**", route => route.fulfill({ json: { next_cursor: null, items: [{

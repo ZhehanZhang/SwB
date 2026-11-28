@@ -2,6 +2,23 @@ import { expect, test } from '@playwright/test';
 import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 import { exchangeScenes } from '../../lib/exchange-copy';
 
+function firstMessageGaps(windows: Element[]) {
+  return windows.map((window) => window.querySelector('.swb-win-live .swb-win-message')!.getBoundingClientRect().top -
+    window.querySelector('.swb-win-bar')!.getBoundingClientRect().bottom);
+}
+
+test.describe('server-rendered demo', () => {
+  test.use({ javaScriptEnabled: false, reducedMotion: 'no-preference' });
+
+  test('starts each transcript 10px below the header', async ({ page }) => {
+    await page.goto('/');
+    const windows = page.locator('.swb-win');
+    await expect(windows).toHaveCount(exchangeScenes.length);
+    await expect(windows.first().locator('.swb-win-live .swb-win-message')).toBeVisible();
+    expect(await windows.evaluateAll(firstMessageGaps)).toEqual(Array(exchangeScenes.length).fill(10));
+  });
+});
+
 test('six demo windows keep the section and every window fixed over ten seconds', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(observeLayoutShifts);
@@ -15,7 +32,7 @@ test('six demo windows keep the section and every window fixed over ten seconds'
   const windows = demo.locator('.swb-win');
   await expect(windows).toHaveCount(6);
   await expect(demo.locator('button, [role="tablist"]')).toHaveCount(0);
-  await expect(windows.first().locator('.swb-win-live > .swb-win-message')).toBeVisible();
+  await expect(windows.first().locator('.swb-win-live .swb-win-message').first()).toBeVisible();
 
   const sample = () => demo.evaluate((section) => {
     const rect = (node: Element) => {
@@ -43,6 +60,40 @@ test('six demo windows keep the section and every window fixed over ten seconds'
   expect(shifts.reduce((total, shift) => total + shift.value, 0), JSON.stringify(shifts, null, 2)).toBe(0);
 });
 
+test('Simplified Chinese dark landing at 1024px has zero page-wide CLS at load and during playback', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 1000 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'no-preference' });
+  await page.addInitScript(observeLayoutShifts);
+  await page.route('**/_next/static/media/jetbrains_mono*.woff2', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    await route.continue();
+  });
+  await page.goto('/zh-Hans');
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  const demo = page.locator('.swb-exchange');
+  const windows = demo.locator('.swb-win');
+  await expect(windows).toHaveCount(exchangeScenes.length);
+  expect(await windows.evaluateAll(firstMessageGaps)).toEqual(Array(exchangeScenes.length).fill(10));
+  await page.evaluate(() => document.fonts.ready);
+
+  const expectZeroCLS = async () => {
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const shifts = await page.evaluate(readLayoutShifts);
+    expect(shifts.reduce((total, shift) => total + shift.value, 0), JSON.stringify(shifts, null, 2)).toBe(0);
+  };
+  await expectZeroCLS();
+
+  await demo.evaluate((node) => node.scrollIntoView());
+  const transcript = windows.first().locator('.swb-win-live');
+  const messages = transcript.locator('.swb-win-message');
+  await expect(messages).toHaveCount(5, { timeout: 12_000 });
+  await expect(messages.last().locator('p:last-child')).toHaveText(exchangeScenes[0].messages[0][1]['zh-Hans']);
+  await expect.poll(() => transcript.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  await expect(messages).toHaveCount(8, { timeout: 12_000 });
+  await expect(messages.first().locator('p:last-child')).toHaveText(exchangeScenes[0].messages[1][1]['zh-Hans']);
+  await expectZeroCLS();
+});
+
 test('demo transcripts never disappear across two loops at 50ms intervals', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
@@ -64,14 +115,12 @@ test('demo transcripts never disappear across two loops at 50ms intervals', asyn
         windows: bodies.map((body) => {
           const { top, bottom } = body.getBoundingClientRect();
           const entries = [...body.querySelectorAll('.swb-win-message')];
-          const history = body.querySelector('.swb-win-history');
-          const historyOpacity = history ? Number(getComputedStyle(history).opacity) : 1;
           return {
             opacity: Number(getComputedStyle(body).opacity),
             visible: entries.filter((entry) => {
               const style = getComputedStyle(entry);
               const rect = entry.getBoundingClientRect();
-              const opacity = Number(style.opacity) * (entry.parentElement === history ? historyOpacity : 1);
+              const opacity = Number(style.opacity);
               return style.visibility === 'visible' && opacity > 0 &&
                 rect.height > 0 && rect.bottom > top && rect.top < bottom;
             }).length,
@@ -137,34 +186,48 @@ test('demo windows advance at staggered times and show their own conversations',
     [...node.querySelectorAll('.swb-win-message')].map((entry) => entry.querySelector('p:last-child')!.textContent)));
   await page.clock.runFor(250);
   expect(await visible()).toEqual(exchangeScenes.map(({ messages }) => [messages[0][1].en]));
+  expect(await page.locator('.swb-win').evaluateAll(firstMessageGaps)).toEqual(Array(exchangeScenes.length).fill(10));
   await page.clock.runFor(1600);
   const active = await visible();
   expect(active.map((messages) => messages.length)).toEqual([2, 2, 2, 1, 1, 1]);
   for (const [index, messages] of active.entries()) {
     expect(messages).toEqual(exchangeScenes[index].messages.slice(0, messages.length).map(([, copy]) => copy.en));
   }
+  expect(await page.locator('.swb-win').evaluateAll(firstMessageGaps)).toEqual(Array(exchangeScenes.length).fill(10));
 });
 
-test('new messages fade and rise 8px while the earlier messages glide up', async ({ page }) => {
+test('new messages fade and rise 8px, and earlier messages glide up only on overflow', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.clock.install();
   await page.clock.pauseAt(new Date(Date.now() + 1000));
   await page.goto('/');
-  await page.clock.runFor(1260);
   const body = page.locator('.swb-win-live').first();
-  const animations = await body.evaluate((transcript) => Object.fromEntries(transcript.getAnimations({ subtree: true }).map(({ effect }) => {
-    const track = effect as KeyframeEffect;
-    const [start, end] = track.getKeyframes();
-    const name = track.target?.classList.contains('swb-win-history') ? 'history' : 'entry';
-    return [name, { start, end, duration: track.getTiming().duration, easing: track.getTiming().easing }];
-  })));
-  const { history, entry } = animations;
-  expect(history).toMatchObject({ duration: 250, easing: 'ease-out', end: { transform: 'none' } });
-  expect(parseFloat(String(history.start.transform).match(/translateY\((.*)px\)/)![1])).toBeGreaterThan(8);
+  await page.clock.runFor(1260);
+  const messages = body.locator('.swb-win-message');
+  await expect(messages).toHaveCount(2);
+  const entry = await messages.last().evaluate((message) => {
+    const track = message.getAnimations()[0].effect as KeyframeEffect;
+    return { start: track.getKeyframes()[0], duration: track.getTiming().duration };
+  });
   expect(entry).toMatchObject({ duration: 250, start: { opacity: '0', transform: 'translateY(8px)', easing: 'ease-out' } });
+
+  await page.clock.runFor(2750);
+  await expect(messages).toHaveCount(4);
+  expect(await body.evaluate((node) => node.scrollTop)).toBe(0);
+  const positions = body.evaluate((node) => new Promise<number[]>((resolve) => {
+    const samples: number[] = [];
+    node.addEventListener('scroll', () => samples.push(node.scrollTop));
+    node.addEventListener('scrollend', () => resolve(samples), { once: true });
+  }));
+  await page.clock.runFor(3200);
+  await expect(messages).toHaveCount(5);
+  const samples = await positions;
+  const bottom = samples.at(-1)!;
+  expect(bottom).toBeGreaterThan(0);
+  expect(samples.some((position) => position > 0 && position < bottom)).toBe(true);
 });
 
-test('each demo keeps its last message within 24px of the bottom during playback', async ({ page }) => {
+test('each overflowing demo keeps its last message within 24px of the bottom during playback', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.clock.install();
   await page.clock.pauseAt(new Date(Date.now() + 1000));
@@ -172,18 +235,14 @@ test('each demo keeps its last message within 24px of the bottom during playback
   await page.evaluate(() => document.fonts.ready);
   const windows = page.locator('.swb-win-live');
   await expect(windows).toHaveCount(6);
-  await page.clock.runFor(4400);
+  await page.clock.runFor(10_500);
   for (const width of [390, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    const gaps = await windows.evaluateAll((bodies) => bodies.map((body) => {
+    await expect.poll(() => windows.evaluateAll((bodies) => bodies.map((body) => {
       const messages = body.querySelectorAll('.swb-win-message');
-      return { gap: body.getBoundingClientRect().bottom - messages[messages.length - 1].getBoundingClientRect().bottom, count: messages.length };
-    }));
-    for (const { gap, count } of gaps) {
-      expect(count).toBeGreaterThan(1);
-      expect(gap, `${width}px bottom gap`).toBeGreaterThanOrEqual(0);
-      expect(gap, `${width}px bottom gap`).toBeLessThanOrEqual(24);
-    }
+      const gap = body.getBoundingClientRect().bottom - messages[messages.length - 1].getBoundingClientRect().bottom;
+      return body.scrollTop > 0 && gap >= 0 && gap <= 24;
+    })), `${width}px overflowing transcripts and bottom gaps`).toEqual(Array(exchangeScenes.length).fill(true));
   }
 });
 
@@ -327,7 +386,7 @@ test('reduced motion keeps the diagram still', async ({ page }) => {
     return { d: path.getAttribute('d'), fill: style.fill, stroke: style.stroke, active: path.hasAttribute('data-active') };
   }));
   const cords = await stillSpokes();
-  expect(cords.every(({ d, fill, stroke }) => d?.endsWith(' Z') && fill !== 'none' && stroke === 'none')).toBe(true);
+  expect(cords.every(({ d, fill, stroke }) => d?.includes(' Q ') && fill === 'none' && stroke !== 'none')).toBe(true);
   expect(cords.filter(({ active }) => active)).toHaveLength(2);
   await expect(pulse).toHaveCount(0);
   await page.waitForTimeout(1500);
@@ -376,7 +435,7 @@ test('reduced motion shows every final transcript in a fitted row', async ({ pag
       for (const [index, { top, height, fits, topGap, lines }] of frames.entries()) {
         const label = `${lang} ${width}px ${exchangeScenes[index].app}`;
         expect(fits, `${label} complete transcript`).toBe(true);
-        expect(topGap, `${label} top gap`).toBeLessThanOrEqual(48);
+        expect(topGap, `${label} top gap`).toBe(10);
         if (width === 1440) expect(Math.max(...lines), `${label} lines per message`).toBeLessThanOrEqual(2);
         if (rowHeights.has(top)) expect(height, `${label} row height`).toBe(rowHeights.get(top));
         rowHeights.set(top, height);

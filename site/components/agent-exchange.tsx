@@ -13,14 +13,24 @@ const HOLD_DELAY = 3300;
 const START_STAGGER = 260;
 const HOLD_STAGGER = 240;
 
+function transcriptOverflow(viewport: HTMLDivElement, transcript: HTMLDivElement) {
+  const padding = parseFloat(getComputedStyle(viewport).paddingBottom);
+  return Math.max(0, transcript.offsetHeight + padding - viewport.clientHeight);
+}
+
 function ExchangeWindow({ scene: { app, messages }, lang, index }: { scene: ExchangeScene; lang: Locale; index: number }) {
   const [shown, setShown] = useState(1);
+  const viewport = useRef<HTMLDivElement>(null);
   const history = useRef<HTMLDivElement>(null);
+  const lastMessageTop = useRef(0);
   useEffect(() => {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let timer: ReturnType<typeof setTimeout>;
     let count = 1;
     const play = () => {
+      if (count >= messages.length * 2) {
+        lastMessageTop.current = (history.current?.lastElementChild as HTMLElement | null)?.offsetTop ?? 0;
+      }
       setShown(++count);
       timer = setTimeout(play, count % messages.length === 0 ? HOLD_DELAY + index * HOLD_STAGGER : MESSAGE_DELAY);
     };
@@ -39,16 +49,27 @@ function ExchangeWindow({ scene: { app, messages }, lang, index }: { scene: Exch
   }, [index, messages.length]);
 
   useLayoutEffect(() => {
-    const previous = history.current;
-    const latest = previous?.nextElementSibling;
-    if (!previous || !latest) return;
-    const distance = latest.getBoundingClientRect().height + parseFloat(getComputedStyle(previous).rowGap);
-    const animation = previous.animate(
-      [{ transform: `translateY(${distance}px)` }, { transform: 'none' }],
-      { duration: 250, easing: 'ease-out' },
-    );
-    return () => animation.cancel();
-  }, [shown]);
+    const body = viewport.current;
+    const transcript = history.current;
+    if (!body || !transcript) return;
+    const observer = new ResizeObserver(() => {
+      body.scrollTop = transcriptOverflow(body, transcript);
+    });
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const body = viewport.current;
+    const transcript = history.current;
+    if (!body || !transcript || shown === 1) return;
+    if (shown > messages.length * 2) {
+      const previous = transcript.lastElementChild?.previousElementSibling as HTMLElement | null;
+      if (previous) body.scrollTop += previous.offsetTop - lastMessageTop.current;
+    }
+    const bottom = transcriptOverflow(body, transcript);
+    if (bottom > body.scrollTop) body.scrollTo({ top: bottom, behavior: 'smooth' });
+  }, [shown, messages.length]);
 
   const name = (speaker: typeof messages[number][0]) => speaker === 'you' ? exchangeCopy[lang].you : agentNames[speaker];
   const renderMessage = ([speaker, text]: typeof messages[number], key: number, enter = false) => (
@@ -86,13 +107,13 @@ function ExchangeWindow({ scene: { app, messages }, lang, index }: { scene: Exch
         <div className="swb-win-body swb-win-final" aria-hidden="true">
           {messages.map((message, i) => renderMessage(message, i))}
         </div>
-        <div className="swb-win-body swb-win-live" aria-hidden="true">
-          {shown > 1 && (
-            <div className="swb-win-history" ref={history}>
-              {Array.from({ length: shown - start - 1 }, (_, i) => renderMessage(messages[(start + i) % messages.length], start + i))}
-            </div>
-          )}
-          {renderMessage(messages[(shown - 1) % messages.length], shown - 1, shown > 1)}
+        <div className="swb-win-body swb-win-live" ref={viewport} aria-hidden="true">
+          <div className="swb-win-history" ref={history}>
+            {Array.from({ length: shown - start }, (_, i) => {
+              const entry = start + i;
+              return renderMessage(messages[entry % messages.length], entry, shown > 1 && entry === shown - 1);
+            })}
+          </div>
         </div>
       </div>
       <div className="sr-only">

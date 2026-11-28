@@ -10,30 +10,34 @@ _URL = re.compile(
 )
 
 
-def doc_link(path: str, public_url: str | None) -> str:
-    link = _DOCS + path
+def public_origin(public_url: str | None) -> str | None:
     if not public_url or re.search(r"[\s\x00-\x1f\x7f-\x9f?#%\\]", public_url):
-        return link
+        return None
     try:
         url = urlsplit(public_url)
         host = url.hostname
         if not host or url.username is not None or url.path not in ("", "/"):
-            return link
+            return None
         if url.scheme != "https" and not (url.scheme == "http" and host in ("localhost", "127.0.0.1", "::1")):
-            return link
+            return None
         if not re.fullmatch(r"(?:\[[^\]]+\]|[^:\[\]]+)(?::[0-9]+)?", url.netloc) or url.port == 0:
-            return link
+            return None
         if url.netloc.startswith("["):
             IPv6Address(host)
         else:
             domain = host.encode("idna").decode("ascii").removesuffix(".")
             if len(domain) > 253 or not all(_HOST_LABEL.fullmatch(label) for label in domain.split(".")):
-                return link
+                return None
     except ValueError:
-        return link
-    origin = f"{url.scheme}://{url.netloc}"
-    separator = "&" if "#" in link else "#"
-    return f'{link}{separator}swb={quote(origin, safe="")}'
+        return None
+    return f"{url.scheme}://{url.netloc}"
+
+
+def doc_link(path: str, public_url: str | None) -> str:
+    link = _DOCS + path
+    origin = public_origin(public_url)
+    separator = "&" if "#" in path else "#"
+    return f'{link}{separator}swb={quote(origin, safe="")}' if origin else link
 
 
 def rewrite_doc_links(text: str, public_url: str | None) -> str:

@@ -129,15 +129,15 @@ def test_credential_claim_error_titles_use_positive_copy(make, monkeypatch):
         assert_claim_error_title(client.post(path, headers=OWNER, data={"csrf": csrf}), f"Check {label}")
 
 
-def test_muse_has_no_dedicated_claim_kind_or_token_title(make):
+def test_generic_claim_gets_connector_avatar_and_default_title(make):
     core, client = make()
-    name = "MUSE_EXAMPLE_TOKEN"
+    name = "GEMINI_EXAMPLE_TOKEN"
     with pytest.raises(ClaimError, match="Choose a credential kind"):
-        core.claims.mint(name, PUBLIC, kind="muse")
+        core.claims.mint(name, PUBLIC, kind="gemini")
     path = urlsplit(core.claims.mint(name, PUBLIC)).path
     page = client.get(path, headers=OWNER)
     assert_claim_error_title(page, "Save a token", 200)
-    assert 'data-connector="muse"' in page.text and 'src="/avatars/muse.png"' in page.text
+    assert 'data-connector="gemini"' in page.text and 'src="/avatars/gemini.png"' in page.text
     [claim] = client.get("/api/tokens", headers=OWNER).json()["waiting"]
     assert (claim["label"], claim["kind"]) == (name, "generic")
     assert_claim_error_title(client.get("/routines/claim/unknown", headers=OWNER), "Claude routine setup required")

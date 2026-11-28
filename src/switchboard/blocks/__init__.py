@@ -40,7 +40,6 @@ BLOCKS = {
     "grok-routine": "switchboard.blocks.grok_routine:GrokRoutineBlock",
     "dots": "switchboard.blocks.dots:DotsBlock",
     "local": "switchboard.blocks.local:LocalBlock",
-    "muse": "switchboard.blocks.muse:MuseBlock",
     "webhook": "switchboard.blocks.webhook:WebhookBlock",
 }
 ON_DEMAND_BLOCKS = frozenset({"local"})

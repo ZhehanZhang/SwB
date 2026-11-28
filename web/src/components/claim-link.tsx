@@ -22,9 +22,9 @@ function duration(seconds: number) {
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`
 }
 
-type ClaimLinkProps = { url: string; expiresAt: string }
+type ClaimLinkProps = { url: string; expiresAt: string; label?: string; primary?: boolean }
 
-export function ClaimLink({ url, expiresAt }: ClaimLinkProps) {
+export function ClaimLink({ url, expiresAt, label = "Enter token", primary = false }: ClaimLinkProps) {
   const expiry = Date.parse(expiresAt)
   const href = validClaimUrl(url)
   const [now, setNow] = useState(Date.now)
@@ -47,9 +47,9 @@ export function ClaimLink({ url, expiresAt }: ClaimLinkProps) {
           <code className="max-w-full font-mono text-xs [overflow-wrap:anywhere]">{href}</code>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <span className="font-mono text-xs text-muted-foreground" role="timer">Expires in {duration(seconds)}</span>
-            <Button asChild variant="outline">
+            <Button asChild variant={primary ? "default" : "outline"}>
               <a href={href} target="_blank" rel="noopener noreferrer">
-                <ExternalLink aria-hidden /> Enter token<span className="sr-only"> (opens in a new tab)</span>
+                <ExternalLink aria-hidden /> {label}<span className="sr-only"> (opens in a new tab)</span>
               </a>
             </Button>
           </div>
