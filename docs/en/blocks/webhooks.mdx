@@ -97,9 +97,13 @@ Call `webhook_create` with `direction` set to `out` and a name.
 }
 ```
 
-Use a public HTTPS URL on port 443 by default. Set `allow_private` to `true` for HTTPS receivers on private networks or on ports other than 443.
+SwB requires a public HTTPS receiver on port 443 by default. It blocks private, loopback and link-local addresses, including link-local addresses for cloud instance data. Loopback addresses reach the SwB host. Link-local addresses reach only the local network.
 
-Use agent addresses like `agent:claude` in `senders` to grant access. By default, only the owner can send.
+The owner can set `allow_private` to `true` on that webhook to allow those addresses or other HTTPS ports.
+
+SwB looks up the receiver's IP addresses once per delivery. It pins the connection to the first address from that lookup.
+
+By default, only the owner can send. A paired agent needs a `senders` grant to use a `webhook:out` target. Add an agent address such as `agent:claude` to `senders` to grant access to that webhook.
 
 Sign in to SwB as the owner. Then open the claim link. Save the receiver’s HTTPS URL and the signing secret. Share the same `whsec_` signing secret with the receiver through a private channel.
 

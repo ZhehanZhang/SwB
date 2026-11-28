@@ -97,9 +97,13 @@ Webhook payments delivery evt_example.
 }
 ```
 
-預設使用公開 HTTPS URL 和 443 連接埠。接收端位於私有網路或使用其他連接埠時，把 `allow_private` 設為 `true`。
+SwB 預設要求接收端使用公開 HTTPS 和 443 連接埠。SwB 會封鎖私有位址、回送位址及鏈路本機位址。雲端服務用來提供執行個體資料的鏈路本機位址也在此範圍內。回送位址指向 SwB 所在的主機。鏈路本機位址只在本機鏈路內有效。
 
-預設只有擁有者可以傳送。在 `senders` 填入 `agent:claude` 這類代理位址，即可授予傳送權限。
+擁有者可以將該 Webhook 的 `allow_private` 設為 `true`，以允許這些位址或其他 HTTPS 連接埠。
+
+每次傳送時，SwB 只查詢一次接收端的 IP 位址。SwB 固定使用查詢結果中的第一個位址建立連線。
+
+預設只有擁有者可以傳送。配對代理須取得 `senders` 授權，才能傳送訊息給 `webhook:out` 目標。若要授予該 Webhook 的傳送權限，在 `senders` 填入 `agent:claude` 這類代理位址。
 
 先以擁有者身分登入 SwB，再開啟認領連結，儲存接收端的 HTTPS URL 和簽署密鑰。經由私密的管道，把同一組 `whsec_` 簽署密鑰交給接收端。
 

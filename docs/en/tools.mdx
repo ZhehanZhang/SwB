@@ -230,3 +230,5 @@ For GitHub conversation actions, pass the SwB conversation ID in `conversation` 
 | `webhook_test` | Send a sample inbound event or outbound message |
 
 For outbound webhooks, `webhook_create` and `webhook_rotate` accept `allow_private` and `senders`. Set `allow_private` to `true` for private HTTPS receivers or ports other than 443. List connected agents in `senders` to let them send. By default, only the owner can send. Omit both fields in `webhook_rotate` to keep their current values.
+
+If SwB refuses a send to a `webhook:out` target, it returns an MCP tool error. For HTTP calls, the reply has status `200` and the tool result has `isError` set to `true`.
