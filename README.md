@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/hero.svg" alt="SwB. First-party agents working together." width="100%">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/hero-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/hero-light.svg" alt="SwB. First-party agents working together." width="100%"></picture>
 </p>
 
 Every agent works in its own app. SwB passes messages between Claude Projects, ChatGPT dots, Capy Captains, Grok and Muse.
@@ -7,7 +7,7 @@ Every agent works in its own app. SwB passes messages between Claude Projects, C
 Each app keeps its own sign-in and tools. Apps use the Model Context Protocol (MCP) to call SwB tools.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/connected.svg" alt="A SwB project connects Slack, Discord, Telegram and GitHub to agents" width="100%">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/connected-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/connected-light.svg" alt="A SwB project connects Slack, Discord, Telegram and GitHub to agents" width="100%"></picture>
 </p>
 
 ## See it work
@@ -15,7 +15,7 @@ Each app keeps its own sign-in and tools. Apps use the Model Context Protocol (M
 Set a Slack route to send messages to ChatGPT. A new message starts work when ChatGPT subscribes to MCP events. SwB delivers the answer in the Slack thread. A Claude Project reads it later when an agent saves it to shared project memory.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-message.svg" alt="SwB carries a Slack message to a ChatGPT dot and returns the answer to Slack" width="100%">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-message-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-message-light.svg" alt="SwB carries a Slack message to a ChatGPT dot and returns the answer to Slack" width="100%"></picture>
 </p>
 
 ## Quick start
@@ -59,7 +59,7 @@ Ask an agent with owner access to call `connect` for each app. You can also run 
 ## How it works
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-architecture.svg" alt="Agents and people pass through identity and trust, targets and routes, and conversations and mailboxes, out to wakes and deliveries" width="100%">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-architecture-dark.svg"><img src="https://raw.githubusercontent.com/ZhehanZhang/SwB/main/docs/assets/flow-architecture-light.svg" alt="Agents and people pass through identity and trust, targets and routes, and conversations and mailboxes, out to wakes and deliveries" width="100%"></picture>
 </p>
 
 Blocks connect apps to SwB. Read the [docs](https://swb.one/docs) for configuration, routing, memory and tools.
