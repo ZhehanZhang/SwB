@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from starlette.applications import Starlette
 from starlette.datastructures import Headers
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
+from starlette.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 
 from . import pages
@@ -34,6 +34,7 @@ from .web import web_routes
 if TYPE_CHECKING:
     from .core import Switchboard
 
+HOME_ACTION = '<div class="actions"><a class="button secondary" href="/">Home</a></div>'
 INBOX_FEEDS = ("/inbox/poll", "/inbox/events")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
@@ -202,6 +203,57 @@ def _cursor(request: Request) -> int | None:
         return None
 
 
+def _machine_path(path: str) -> bool:
+    return path.removeprefix("/").partition("/")[0] in {"api", "mcp"}
+
+
+def _wants_html(scope: Any) -> bool:
+    if _machine_path(scope["path"]):
+        return False
+    for media_range in Headers(scope=scope).get("accept", "").split(","):
+        media_type, *parameters = media_range.split(";")
+        if media_type.strip().lower() != "text/html":
+            continue
+        quality = next((param.strip()[2:] for param in parameters if param.strip().startswith("q=")), "1")
+        try:
+            return float(quality) > 0
+        except ValueError:
+            continue
+    return False
+
+
+async def page_failed(request: Request, error: Exception) -> Response:
+    if _machine_path(request.scope["path"]):
+        return JSONResponse({"error": "internal_server_error"}, 500)
+    response = (pages.page("Try again shortly", HOME_ACTION, 500) if _wants_html(request.scope)
+                else PlainTextResponse("Internal Server Error", 500))
+    response.headers.add_vary_header("Accept")
+    return response
+
+
+class BrowserNotFound:
+    """Gives browsers the shared page for a 404 from any mounted app, and leaves other clients the plain response."""
+
+    def __init__(self, app: Any):
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http" or not _wants_html(scope):
+            return await self.app(scope, receive, send)
+        replaced = False
+
+        async def intercept(message: Any) -> None:
+            nonlocal replaced
+            if message["type"] == "http.response.start" and message["status"] == 404:
+                if Headers(raw=message["headers"]).get("content-type", "").startswith("text/plain"):
+                    replaced = True
+                    return await pages.page("Page unavailable", HOME_ACTION, 404)(scope, receive, send)
+            if not replaced:
+                await send(message)
+
+        await self.app(scope, receive, intercept)
+
+
 def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = None) -> Any:
     claim_owner_key = env_value(core.cfg.env, OWNER_KEY)
     claim_principal = core.auth.verify_bearer(claim_owner_key)
@@ -232,7 +284,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         if refused is not None:
             return refused
         if core.slack is None:
-            return pages.message_page("Not available", "Slack approvals need Slack configured.", 403)
+            return pages.page("Set up Slack approvals", status=403)
         verb = request.path_params["verb"]
         if verb not in ("approve", "reject"):
             return Response(status_code=404)
@@ -389,6 +441,8 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                                           now=core.clock(), error=error)
 
         if request.method != "POST":
+            if group is None and claim is None and not owner_key:
+                return pages.claim_message_page("Link expired" if core.claims.expired(code) else "Request a new link", 410)
             form_csrf, refused = await claim_page_access(request)
             if refused is not None and not owner_key:
                 return refused
@@ -467,6 +521,8 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                 unavailable = ROUTINE_CLAIM_MESSAGES.get(str(e), "Request a new link")
         if request.method == "POST":
             actor, form, form_csrf, refused = await claim_submission(request, unavailable=unavailable, browser_only=registration is not None)
+        elif unavailable and block is not None and (core.cfg.owner_sign_in or not claim_key_actor):
+            return claim_error(request, 410, "claim_unavailable", unavailable)
         elif registration is not None:
             owner, refused = await owner_page(request)
             if refused is None:
@@ -606,6 +662,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             *origin_routes,
         ],
         lifespan=lifespan,
+        exception_handlers={500: page_failed},
     )
     app.state.core = core
     for origin in core.origins.values():
@@ -631,7 +688,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                 core.audit.record_refusal(origin="companion", client=audit_client_ip(scope), destination="core",
                                           action=f"companion_{action}", target=companion_id, detail=detail)
 
-    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused,
+    gate = Guard(RequestBase(BearerGate(BrowserNotFound(app), core, limiter), core), limiter, on_refusal=refused,
                  on_large_body=large_body, trusted_proxies=core.cfg.trusted_proxies)
     gate.starlette = app
     return gate
