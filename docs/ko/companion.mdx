@@ -39,15 +39,8 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 | `--cap opencode` | [OpenCode 서버](/ko/docs/blocks/local-sessions#opencode) |
 | `--cap dsh` | [DeepSeek Harness](/ko/docs/blocks/local-sessions#deepseek-harness) |
 | `--cap hooks` | [상태 훅](/ko/docs/blocks/local-sessions#상태-훅) |
-| `--cap muse` | Mac이나 Linux 컴퓨터에서 Bluetooth로 Muse를 페어링합니다 |
 
 Linux에서는 알림에 `notify-send`를 사용합니다. Debian과 Ubuntu에서는 `libnotify-bin` 패키지로 설치하세요.
-
-Muse 가젯을 페어링할 때는 Python 3.13을 사용하세요. [Muse 페어링 가이드](/ko/docs/setup/muse)를 따르세요. 페어링한 뒤에는 SwB 서버가 Muse와의 연결을 계속 유지합니다.
-
-```sh
-uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
-```
 
 MCP 서버마다 `--mcp` 옵션을 하나씩 추가하세요. 프로그램은 `--mcp 'NAME=COMMAND'`를 사용하세요. `NAME`은 서버에 붙일 이름으로 바꾸세요. `COMMAND`는 프로그램의 시작 명령으로 바꾸세요. 기기의 HTTP 서버는 `--mcp notes=http://127.0.0.1:8000/mcp`처럼 로컬 주소를 사용하세요.
 
@@ -71,9 +64,33 @@ SwB은 각 메시지를 열린 세션에 전달하려고 시도합니다. 발신
 
 페어링하면 컴패니언이 시작됩니다. 다시 시작하려면 `swb companion run`을 사용하세요. 로컬 기기 ID와 기능을 보려면 `swb companion status`를 사용하세요.
 
-이 명령을 `uvx`로 실행하려면 `swb` 자리에 `uvx swb-one`을 쓰세요. Muse는 [Muse 가이드](/ko/docs/setup/muse)의 패키지 옵션과 Python 옵션을 그대로 유지하세요.
+`uvx`로 페어링했다면 `swb` 대신 `uvx swb-one`을 쓰세요. 터미널에서 실행할 때는 Python이 컴패니언을 직접 실행합니다.
 
 SwB과의 연결은 항상 기기 쪽에서 시작합니다.
+
+## 백그라운드에서 실행하기
+
+컴패니언을 자동으로 시작하려면 백그라운드 서비스를 설치하세요. `uv tool install swb-one`으로 SwB를 설치하세요.
+
+새로 페어링하려면 페어링 옵션에 `--no-run`을 추가하세요. 이 옵션을 포함해 `swb companion connect`를 실행하세요. 명령은 페어링을 마치면 종료됩니다. 터미널에서 컴패니언을 실행 중이면 서비스를 설치하기 전에 컴패니언을 중지하세요. 서비스 명령에는 설치한 `swb`를 사용하세요.
+
+```sh
+swb companion service install
+```
+
+Linux에서는 `systemd --user`가 사용자 계정으로 서비스를 실행합니다. 부팅할 때 서비스를 시작하고 로그아웃 후에도 계속 실행하려면 `loginctl enable-linger "$USER"`를 실행하세요.
+
+macOS에서는 데스크톱에 로그인한 상태에서 서비스를 설치하세요. SwB 정식 버전은 서명된 **SwB Companion** 앱을 `~/Applications`에 자동으로 설치하고 검증합니다. `launchd`는 이 앱을 통해 서비스를 시작합니다.
+
+Windows에서는 로그인할 때 작업 스케줄러가 서비스를 시작합니다.
+
+서비스 관리 도구에서 로컬 도구에 필요한 변수를 설정하세요.
+
+`swb companion service start`로 서비스를 시작하세요. `swb companion service status`로 서비스 상태를 확인하세요. `swb companion service logs`로 서비스 로그를 확인하세요.
+
+`swb companion status`로 컴패니언의 실행 상태, 연결 상태, SwB 주소를 확인하세요.
+
+`swb companion service stop`으로 서비스를 즉시 중지하세요. `swb companion service uninstall`로 자동 시작을 해제하세요. 기기 키는 그대로 유지됩니다.
 
 ## 연결 해제
 
