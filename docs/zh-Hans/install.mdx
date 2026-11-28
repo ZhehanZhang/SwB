@@ -5,7 +5,7 @@ description: 用 uvx、pipx 或 Docker 安装 SwB。
 
 {/* prepublication */}
 
-SwB 可以在 Linux、macOS 和 Windows 上运行。要从源码构建 SwB，参阅 [Docker Compose](/zh-Hans/docs/deploy#docker-compose)。软件包或镜像发布后，使用下面的方法。
+SwB 可以在 Linux、macOS 和 Windows 上运行。要从源码构建 SwB，参阅 [Docker Compose](/zh-Hans/docs/deploy#docker-compose)。
 
 ## 安装并启动
 
@@ -16,22 +16,22 @@ SwB 可以在 Linux、macOS 和 Windows 上运行。要从源码构建 SwB，参
     先[安装 uv](https://docs.astral.sh/uv/getting-started/installation/)。SwB 需要 Python 3.12 或更高版本。
 
     ```bash
-    uvx swb-one up
+    uvx swb.one up
     ```
 
-    uvx 会下载并启动 SwB。在 5 分钟内打开终端里的一次性登录链接。在其他示例中，把开头的 `swb` 换成 `uvx swb-one`。
+    uvx 会下载并启动 SwB。在 5 分钟内打开终端里的一次性登录链接。在其他示例中，把开头的 `swb` 换成 `uvx swb.one`。
   </Tab>
   <Tab value="pipx">
     先[安装 pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html)。SwB 需要 Python 3.12 或更高版本。
 
     ```bash
-    pipx install swb-one
+    pipx install swb.one
     swb up
     ```
 
     pipx 会为你的用户账号安装 `swb` 命令。在 5 分钟内打开终端里的一次性登录链接。
 
-    如果 pipx 使用的 Python 版本较旧，改用 `pipx install --python 3.12 swb-one`。
+    如果 pipx 使用的 Python 版本较旧，改用 `pipx install --python 3.12 swb.one`。
   </Tab>
   <Tab value="Docker">
     先[安装 Docker](https://docs.docker.com/get-started/get-docker/)。
@@ -96,4 +96,4 @@ curl -fsS https://swb.example.com/healthz
 
 {/* prepublication */}
 
-发布后，`swb-one` 软件包托管在 PyPI 上，`ghcr.io/zhehanzhang/swb` 镜像托管在 GitHub Container Registry 上。要选用某个发布版本，指定 `1.0.0` 这样的版本号。镜像标签 `latest` 始终指向最新的稳定版。
+`swb.one` 软件包托管在 PyPI 上，`ghcr.io/zhehanzhang/swb` 镜像托管在 GitHub Container Registry 上。要选用某个发布版本，指定 `1.0.0` 这样的版本号。镜像标签 `latest` 始终指向最新的稳定版。

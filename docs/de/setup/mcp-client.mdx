@@ -9,7 +9,7 @@ MCP ist der Standard, über den eine App externe Tools nutzt. Diese Anleitung ko
 
 Verwenden Sie eine App, die Remote-MCP über Streamable HTTP unterstützt. Mit diesem Verfahren rufen Apps Tools über das Web auf. Die App muss außerdem eigene Anfrage-Header für den Schlüssel unterstützen. Sie brauchen einen Inhaber-Client von SwB oder ein Terminal auf dem SwB-Computer.
 
-Um SwB auf demselben Computer wie die App zu starten, führen Sie `uvx swb-one up` in einem leeren Ordner aus. Öffnen Sie den Einmal-Anmeldelink aus Ihrem Terminal. Weitere Möglichkeiten beschreibt [Installation](/de/docs/install).
+Um SwB auf demselben Computer wie die App zu starten, führen Sie `uvx swb.one up` in einem leeren Ordner aus. Öffnen Sie den Einmal-Anmeldelink aus Ihrem Terminal. Weitere Möglichkeiten beschreibt [Installation](/de/docs/install).
 
 Claude, ChatGPT, Grok und Coding-Agenten haben eigene Seiten mit OAuth-Anmeldung. Verwenden Sie für diese Apps die jeweilige Seite.
 
@@ -32,7 +32,7 @@ Lassen Sie Ihren Agenten die App konfigurieren, wenn er die Einstellungen lokal 
 Nennen Sie dem Agenten einen kurzen Namen für die App, zum Beispiel `notes-bot`. SwB zeigt diesen Namen bei Nachrichten der App.
 ### Kopplungscode abrufen
 
-Bitten Sie einen Inhaber-Agenten von SwB, `connect_code` mit dem App-Namen aufzurufen. Alternativ führen Sie im SwB-Instanzordner `uvx swb-one connect mcp-client --choose agent=notes-bot` aus. Ersetzen Sie `notes-bot` durch den Namen Ihrer App.
+Bitten Sie einen Inhaber-Agenten von SwB, `connect_code` mit dem App-Namen aufzurufen. Alternativ führen Sie im SwB-Instanzordner `uvx swb.one connect mcp-client --choose agent=notes-bot` aus. Ersetzen Sie `notes-bot` durch den Namen Ihrer App.
 ### Schlüssel abrufen
 
 Öffnen Sie auf dem Computer, auf dem die App läuft, einen privaten Ordner im Terminal. Ersetzen Sie `https://swb.example.com` durch Ihre SwB-Adresse. Behalten Sie `/connect` am Ende bei. Für ein lokales SwB verwenden Sie `http://localhost:8870/connect` mit dem Port, der beim Start erscheint. Geben Sie den Kopplungscode innerhalb von 10 Minuten an der verdeckten Eingabeaufforderung ein.

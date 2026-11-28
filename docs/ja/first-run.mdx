@@ -7,7 +7,7 @@ description: SwB にアクセスできるようにして、サインインし、
 
 {/* prepublication */}
 
-パッケージの公開後、空のフォルダーで `uvx swb-one up` を実行してください。ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。SwB は既定で `http://localhost:8870` を使います。`SWB_PORT` を設定すると、SwB はそのポートをアドレスに使います。ソースからのビルドなど、ほかの起動方法は[インストール](/ja/docs/install)をご覧ください。
+空のフォルダーで `uvx swb.one up` を実行してください。ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。SwB は既定で `http://localhost:8870` を使います。`SWB_PORT` を設定すると、SwB はそのポートをアドレスに使います。ソースからのビルドなど、ほかの起動方法は[インストール](/ja/docs/install)をご覧ください。
 
 ## 公開アドレスを取得する
 
@@ -16,7 +16,7 @@ Claude、ChatGPT、Grok はクラウドで動きます。SwB にアクセスす�
 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/) をインストールしてください。ターミナルで `cloudflared --version` を実行できることを確認してください。SwB が動いている場合は、先に停止してください。SwB のインスタンスフォルダーで、このコマンドを実行してください。
 
 ```bash
-uvx swb-one up --tunnel cloudflare
+uvx swb.one up --tunnel cloudflare
 ```
 
 SwB が Cloudflare Quick Tunnel を開き、公開 MCP アドレスを表示します。このオプションで再起動するたびに、新しいアドレスになります。アプリに登録したアドレスを更新してください。

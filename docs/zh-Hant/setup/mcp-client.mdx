@@ -9,7 +9,7 @@ MCP 是應用程式使用外部工具的標準方式。這份指南用金鑰把�
 
 應用程式要支援以 Streamable HTTP 連接遠端 MCP。這種方式讓應用程式經由網路呼叫工具。應用程式還需要支援自訂請求標頭，用來帶入金鑰。你需要一個 SwB 擁有者用戶端，或 SwB 所在電腦上的終端機。
 
-如果要在應用程式所在的同一台電腦上啟動 SwB，在空資料夾中執行 `uvx swb-one up`，再開啟終端機顯示的一次性登入連結。更多選項見[安裝](/zh-Hant/docs/install)。
+如果要在應用程式所在的同一台電腦上啟動 SwB，在空資料夾中執行 `uvx swb.one up`，再開啟終端機顯示的一次性登入連結。更多選項見[安裝](/zh-Hant/docs/install)。
 
 Claude、ChatGPT、Grok 和程式開發代理各有專屬頁面，採用 OAuth 登入。這些應用程式依照各自的頁面設定。
 
@@ -32,7 +32,7 @@ Claude、ChatGPT、Grok 和程式開發代理各有專屬頁面，採用 OAuth �
 告訴代理一個簡短的應用程式名稱，例如 `notes-bot`。SwB 會在這個應用程式送出的訊息上顯示這個名稱。
 ### 取得配對碼
 
-請以擁有者身分登入的代理呼叫 `connect_code`，並提供應用程式名稱。也可以在 SwB 執行個體資料夾中執行 `uvx swb-one connect mcp-client --choose agent=notes-bot`，並把 `notes-bot` 換成你的應用程式名稱。
+請以擁有者身分登入的代理呼叫 `connect_code`，並提供應用程式名稱。也可以在 SwB 執行個體資料夾中執行 `uvx swb.one connect mcp-client --choose agent=notes-bot`，並把 `notes-bot` 換成你的應用程式名稱。
 ### 取得金鑰
 
 在執行應用程式的電腦上，用終端機開啟一個私有資料夾。把 `https://swb.example.com` 換成你的 SwB 網址，並保留結尾的 `/connect`。如果是本機 SwB，使用 `http://localhost:8870/connect`，連接埠換成啟動時顯示的值。看到提示後，在 10 分鐘內輸入配對碼，輸入的內容會隱藏。

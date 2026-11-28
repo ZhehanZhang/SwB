@@ -9,7 +9,7 @@ MCP est la méthode standard qui permet à une application d'utiliser des outils
 
 Utilisez une application compatible avec le MCP distant en Streamable HTTP. Cette méthode permet aux applications d'appeler des outils sur le web. L'application doit aussi accepter des en-têtes de requête personnalisés pour la clé. Il vous faut un client propriétaire SwB ou un terminal sur l'ordinateur de SwB.
 
-Pour lancer SwB sur le même ordinateur que l'application, exécutez `uvx swb-one up` dans un dossier vide. Ouvrez le lien de connexion à usage unique affiché dans votre terminal. La page [Installer](/fr/docs/install) présente d'autres options.
+Pour lancer SwB sur le même ordinateur que l'application, exécutez `uvx swb.one up` dans un dossier vide. Ouvrez le lien de connexion à usage unique affiché dans votre terminal. La page [Installer](/fr/docs/install) présente d'autres options.
 
 Claude, ChatGPT, Grok et les agents de code ont leurs propres pages avec une connexion OAuth. Utilisez ces pages pour ces applications.
 
@@ -32,7 +32,7 @@ Laissez votre agent configurer l'application s'il peut modifier ses paramètres 
 Donnez à l'agent un nom court pour l'application, par exemple `notes-bot`. SwB affiche ce nom sur les messages de l'application.
 ### Obtenir le code d'appairage
 
-Demandez à un agent propriétaire SwB d'appeler `connect_code` avec le nom de l'application. Depuis le dossier de l'instance SwB, vous pouvez aussi exécuter `uvx swb-one connect mcp-client --choose agent=notes-bot`. Remplacez `notes-bot` par le nom de votre application.
+Demandez à un agent propriétaire SwB d'appeler `connect_code` avec le nom de l'application. Depuis le dossier de l'instance SwB, vous pouvez aussi exécuter `uvx swb.one connect mcp-client --choose agent=notes-bot`. Remplacez `notes-bot` par le nom de votre application.
 ### Obtenir la clé
 
 Sur l'ordinateur qui exécute l'application, ouvrez un dossier privé dans votre terminal. Remplacez `https://swb.example.com` par votre adresse SwB. Gardez `/connect` à la fin. Pour un SwB local, utilisez `http://localhost:8870/connect` avec le port affiché au démarrage. Saisissez le code d'appairage à l'invite masquée dans les 10 minutes.

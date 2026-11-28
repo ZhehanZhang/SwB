@@ -18,7 +18,7 @@ To get a code in the console, [sign in with a passkey](/docs/owner-login#passkey
 Run this command on the device. Replace the example address with your SwB HTTPS address. For SwB on this device, you can use `http://127.0.0.1:8870`.
 
 ```sh
-uvx swb-one companion connect https://swb.example.com --cap notify
+uvx swb.one companion connect https://swb.example.com --cap notify
 ```
 
 Enter the pairing code at the hidden prompt. The code works once and expires after 10 minutes. The audit log records who made it.
@@ -64,13 +64,13 @@ For commands and supported agents, see [Local sessions](/docs/blocks/local-sessi
 
 Pairing starts the companion. Use `swb companion run` to start it again. Use `swb companion status` to see the local device ID and features.
 
-If you paired with `uvx`, use `uvx swb-one` in place of `swb`. In the foreground, the companion runs directly in Python.
+If you paired with `uvx`, use `uvx swb.one` in place of `swb`. In the foreground, the companion runs directly in Python.
 
 The device starts each connection to SwB.
 
 ## Run in the background
 
-Install a background service to start the companion automatically. Install SwB with `uv tool install swb-one`.
+Install a background service to start the companion automatically. Install SwB with `uv tool install swb.one`.
 
 For a new pairing, run `swb companion connect` with your pairing options and add `--no-run`. This pairs the device and exits. If the companion is running in your terminal, stop it before you install the service. Use the installed `swb` for the service commands.
 

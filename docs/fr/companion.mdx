@@ -3,7 +3,7 @@ title: Compagnon
 description: Connectez un appareil pour que vos agents puissent utiliser ses fonctions locales.
 ---
 
-Un **compagnon** est un appareil connecté à votre serveur SwB. Vos agents peuvent alors utiliser les fonctions de cet appareil.
+Un **compagnon** est un programme SwB qui s'exécute sur votre propre appareil. Il se connecte à votre serveur SwB. Vos agents peuvent alors utiliser les fonctions de cet appareil.
 
 ## Copier le prompt de configuration
 
@@ -18,7 +18,7 @@ Pour obtenir un code dans la console, [connectez-vous avec une clé d'accès](/f
 Exécutez cette commande sur l'appareil. Remplacez l'adresse d'exemple par l'adresse HTTPS de votre SwB. Pour un SwB installé sur cet appareil, vous pouvez utiliser `http://127.0.0.1:8870`.
 
 ```sh
-uvx swb-one companion connect https://swb.example.com --cap notify
+uvx swb.one companion connect https://swb.example.com --cap notify
 ```
 
 Saisissez le code d'appairage à l'invite masquée. Le code fonctionne une seule fois et expire après 10 minutes. Le journal d'audit enregistre son auteur.
@@ -64,13 +64,13 @@ Pour les commandes et les agents pris en charge, consultez [Sessions locales](/f
 
 L'appairage démarre le compagnon. Utilisez `swb companion run` pour le redémarrer. Utilisez `swb companion status` pour voir l'ID local de l'appareil et ses fonctions.
 
-Si vous avez appairé l’appareil avec `uvx`, remplacez `swb` par `uvx swb-one`. Au premier plan, le compagnon s’exécute directement dans Python.
+Si vous avez appairé l’appareil avec `uvx`, remplacez `swb` par `uvx swb.one`. Au premier plan, le compagnon s’exécute directement dans Python.
 
 L'appareil ouvre lui-même chaque connexion vers SwB.
 
 ## Exécuter en arrière-plan
 
-Installez un service en arrière-plan pour démarrer le compagnon automatiquement. Installez SwB avec `uv tool install swb-one`.
+Installez un service en arrière-plan pour démarrer le compagnon automatiquement. Installez SwB avec `uv tool install swb.one`.
 
 Pour un nouvel appairage, ajoutez `--no-run` à vos options d'appairage. Exécutez `swb companion connect` avec ces options. La commande se termine après l'appairage. Si le compagnon est actif dans votre terminal, arrêtez-le avant d'installer le service. Utilisez la commande `swb` installée pour gérer le service.
 

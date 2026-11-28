@@ -5,7 +5,7 @@ description: Install SwB with uvx, pipx or Docker.
 
 {/* prepublication */}
 
-SwB runs on Linux, macOS and Windows. To build SwB from source, follow [Docker Compose](/docs/deploy#docker-compose). Use the methods below after package or image publication.
+SwB runs on Linux, macOS and Windows. To build SwB from source, follow [Docker Compose](/docs/deploy#docker-compose).
 
 ## Install and start
 
@@ -16,22 +16,22 @@ Use an empty folder for your SwB files. The owner key lets the `swb` command sig
     [Install uv](https://docs.astral.sh/uv/getting-started/installation/). SwB needs Python 3.12 or later.
 
     ```bash
-    uvx swb-one up
+    uvx swb.one up
     ```
 
-    uvx downloads and starts SwB. Open the one-time sign-in link from your terminal within five minutes. In the other examples, replace the leading `swb` with `uvx swb-one`.
+    uvx downloads and starts SwB. Open the one-time sign-in link from your terminal within five minutes. In the other examples, replace the leading `swb` with `uvx swb.one`.
   </Tab>
   <Tab value="pipx">
     [Install pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB needs Python 3.12 or later.
 
     ```bash
-    pipx install swb-one
+    pipx install swb.one
     swb up
     ```
 
     pipx installs the `swb` command for your user account. Open the one-time sign-in link from your terminal within five minutes.
 
-    If pipx uses an older Python, use `pipx install --python 3.12 swb-one`.
+    If pipx uses an older Python, use `pipx install --python 3.12 swb.one`.
   </Tab>
   <Tab value="Docker">
     [Install Docker](https://docs.docker.com/get-started/get-docker/).
@@ -96,4 +96,4 @@ Run `swb --help` to see the command groups. Add `--help` to a command to see its
 
 {/* prepublication */}
 
-After publication, PyPI hosts the `swb-one` package. GitHub Container Registry hosts the `ghcr.io/zhehanzhang/swb` image. To select one release, use a version such as `1.0.0`. The image tag `latest` follows the newest stable release.
+PyPI hosts the `swb.one` package. GitHub Container Registry hosts the `ghcr.io/zhehanzhang/swb` image. To select one release, use a version such as `1.0.0`. The image tag `latest` follows the newest stable release.

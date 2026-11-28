@@ -63,34 +63,32 @@ test('the landing Deploy guide row links to the current page in every locale', a
   }
 });
 
-test('landing pipx commands open below their row without moving the aligned rows', async ({ page }) => {
-  await page.goto('/');
-  const grid = page.locator('[data-deploy-grid]');
-  const toggle = grid.locator('summary').filter({ hasText: 'Use pipx' });
-  const commands = grid.locator('details pre');
-  const following = grid.locator('[data-deploy-option]').nth(1).locator('[data-block-header]');
-  await expect(commands).toBeHidden();
-  await toggle.scrollIntoViewIfNeeded();
-  const before = await following.evaluate((node) => node.getBoundingClientRect().top + scrollY);
-  const row = (await toggle.boundingBox())!;
-  await toggle.press('Enter');
-  await expect(commands).toBeVisible();
-  expect(await commands.locator('code').textContent()).toBe('pipx install swb-one\nswb up');
-  const expanded = (await commands.boundingBox())!;
-  expect(expanded.y - row.y - row.height).toBe(8);
-  const after = await following.evaluate((node) => node.getBoundingClientRect().top + scrollY);
-  expect(after).toBe(before + (page.viewportSize()!.width < 900 ? expanded.height + 8 : 0));
-  await toggle.press('Space');
-  await expect(commands).toBeHidden();
-  expect(await following.evaluate((node) => node.getBoundingClientRect().top + scrollY)).toBe(before);
+test('landing shows uvx and pipx together with every deploy column the same height', async ({ page }) => {
+  for (const width of [1440, 1024]) for (const locale of ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const) {
+    if (page.viewportSize()!.width >= 900) await page.setViewportSize({ width, height: 900 });
+    await page.goto(localize(locale, '/'));
+    await page.evaluate(() => document.fonts.ready);
+    const grid = page.locator('[data-deploy-grid]');
+    await expect(grid.locator('summary, details, [role="tab"]')).toHaveCount(0);
+    const local = grid.locator('[data-deploy-option]').first();
+    await expect(local.locator('code')).toHaveText(['uvx swb.one up', 'pipx install swb.one && swb up']);
+    await expect(local.getByRole('button', { name: /./ })).toHaveCount(2);
+    if (page.viewportSize()!.width < 900) continue;
+    const layout = await grid.evaluate((node) => ({
+      options: [...node.querySelectorAll('[data-deploy-option]')].map((option) => option.getBoundingClientRect().height),
+      primary: [...node.querySelectorAll('[data-deploy-primary] > *')].map((option) => { const { top, bottom } = option.getBoundingClientRect(); return `${top} ${bottom}`; }),
+      secondary: [...node.querySelectorAll('[data-deploy-secondary] > *')].map((option) => { const { top, bottom } = option.getBoundingClientRect(); return `${top} ${bottom}`; }),
+    }));
+    expect(new Set(layout.options).size, locale).toBe(1);
+    expect(new Set(layout.primary).size, locale).toBe(1);
+    expect(new Set(layout.secondary).size, locale).toBe(1);
+  }
 });
 
 test('landing commands use matching copy controls and copy the exact text', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
   const grid = page.locator('[data-deploy-grid]');
-  await expect(grid.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(2);
-  await grid.locator('summary').filter({ hasText: 'Use pipx' }).click();
   const commands = grid.locator('[data-deploy-command]');
   await expect(grid.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(3);
   for (const command of await commands.all()) {
@@ -150,12 +148,10 @@ test('provider tiles share one design and visible deploy affordances on landing 
       await expect(grid).toHaveCSS('gap', '12px');
     }
     const layout = await grid.evaluate((node) => {
-      const columns = getComputedStyle(node).gridTemplateColumns.split(' ').filter((width) => width !== '0px');
       const boxes = [...node.querySelectorAll('a')].map((item) => item.getBoundingClientRect());
-      return { columns: columns.length, widthDelta: Math.max(...boxes.map(({ width }) => width)) - Math.min(...boxes.map(({ width }) => width)) };
+      return { columns: boxes.filter(({ top }) => Math.abs(top - boxes[0].top) < 1).length, widthDelta: Math.max(...boxes.map(({ width }) => width)) - Math.min(...boxes.map(({ width }) => width)) };
     });
-    const desktop = page.viewportSize()!.width === 1440;
-    expect(layout.columns).toBe(desktop && path !== '/' ? 3 : 1);
+    expect(layout.columns).toBe(1);
     expect(layout.widthDelta).toBeLessThanOrEqual(1);
     const tile = tiles.first();
     await expect(tile.locator('image:visible')).toBeVisible();
@@ -183,4 +179,40 @@ test('prompt toolbar keeps Copy and Open buttons on the same action baseline', a
   await page.goto('/docs/setup/claude');
   const toolbar = page.locator('.swb-prompt [data-prompt-actions]').first();
   await expectActionRow(toolbar);
+});
+
+test('docs one-click tiles keep each plan label on one line in every locale', async ({ page }) => {
+  for (const locale of ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const) {
+    for (const width of [1440, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(localize(locale, '/docs/deploy'));
+      await page.evaluate(() => document.fonts.ready);
+      const tiles = await page.locator('.swb-mdx [data-deploy-providers] a').evaluateAll((links) => links.map((link) => {
+        const box = link.getBoundingClientRect();
+        const icon = link.querySelector('svg')!.getBoundingClientRect();
+        const name = link.querySelector('[data-provider-text] strong')!;
+        const plan = link.querySelector('[data-provider-plan]')!;
+        const container = link.parentElement!.getBoundingClientRect();
+        return {
+          height: box.height,
+          lines: plan.getClientRects().length,
+          planHeight: plan.getBoundingClientRect().height,
+          baseline: getComputedStyle(name.parentElement!).alignItems,
+          iconOffset: Math.abs(icon.top + icon.height / 2 - (box.top + box.height / 2)),
+          inside: box.right <= container.right + 1 && link.scrollWidth <= link.clientWidth + 1,
+          detail: [box.right, container.right, link.scrollWidth, link.clientWidth],
+        };
+      }));
+      const where = `${locale} at ${width}px`;
+      expect(tiles.length, where).toBeGreaterThan(0);
+      expect(new Set(tiles.map(({ height }) => height)).size, where).toBe(1);
+      for (const tile of tiles) {
+        expect(tile.lines, where).toBe(1);
+        expect(tile.planHeight, where).toBe(16);
+        expect(tile.baseline, where).toBe('baseline');
+        expect(tile.iconOffset, where).toBeLessThanOrEqual(1);
+        expect(tile.inside, `${where} ${tile.detail}`).toBe(true);
+      }
+    }
+  }
 });

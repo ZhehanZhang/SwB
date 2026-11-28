@@ -18,7 +18,7 @@ description: 連接一台裝置，讓代理使用裝置上的本機功能。
 在裝置上執行下面的指令，並把範例網址換成你的 SwB HTTPS 網址。如果 SwB 就在這台裝置上，可以使用 `http://127.0.0.1:8870`。
 
 ```sh
-uvx swb-one companion connect https://swb.example.com --cap notify
+uvx swb.one companion connect https://swb.example.com --cap notify
 ```
 
 看到提示後輸入配對碼，輸入的內容會隱藏。配對碼只能使用一次，10 分鐘後過期。稽核記錄會記下配對碼由誰產生。
@@ -64,13 +64,13 @@ SwB 會嘗試把每則訊息送到開啟中的工作階段。傳送者可以使�
 
 配對時會啟動 Companion 程式。要再次啟動，執行 `swb companion run`。執行 `swb companion status` 可查看本機的裝置 ID 和功能。
 
-如果配對時使用 `uvx`，請把指令中的 `swb` 換成 `uvx swb-one`。在前景執行時，Python 會直接啟動 Companion。
+如果配對時使用 `uvx`，請把指令中的 `swb` 換成 `uvx swb.one`。在前景執行時，Python 會直接啟動 Companion。
 
 每一條通往 SwB 的連線都由裝置發起。
 
 ## 在背景執行
 
-安裝背景服務後，Companion 可以自動啟動。用 `uv tool install swb-one` 安裝 SwB。
+安裝背景服務後，Companion 可以自動啟動。用 `uv tool install swb.one` 安裝 SwB。
 
 需要配對時，把 `--no-run` 加到配對選項中，再執行 `swb companion connect`。配對完成後，指令就會結束。如果 Companion 正在終端機執行，請先停止它，再安裝服務。用已安裝的 `swb` 管理服務。
 

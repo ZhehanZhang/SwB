@@ -69,9 +69,9 @@ Pour limiter l'accès à un seul expéditeur, utilisez le même ID d'expéditeur
 
 ## Lire un résumé Watch
 
-Définissez l'intervalle avec `modes.digest_minutes`. La valeur par défaut est de 60 minutes. SwB dépose le résumé dans la boîte aux lettres de la cible à la fin de l'intervalle, ou quand le lot atteint 50 événements. La boîte aux lettres du propriétaire sert de repli.
+Définissez l'intervalle avec `modes.digest_minutes`. La valeur par défaut est de 60 minutes. SwB dépose le résumé dans la boîte aux lettres de la cible à la fin de l'intervalle, ou quand le lot atteint 50 événements. Pour un résumé destiné au propriétaire, SwB choisit un agent selon les [règles des messages au propriétaire](/fr/docs/config#messages-au-propriétaire).
 
-En tant que propriétaire, lisez chaque résumé dans la page **Inbox** de la console, ou par MCP avec `inbox` et `wait`. Le résumé indique le nombre d'événements. Il indique l'auteur, un extrait et le lien disponible de chaque événement. Son niveau de confiance est `external`.
+L'agent destinataire lit le résumé avec `inbox` ou `wait`. SwB ajoute les nouveaux événements au dernier résumé non lu pour le même espace et la même cible. Il garde le nombre total et les 200 événements les plus récents. Chaque événement indique l'auteur, un extrait et le lien disponible. Le niveau de confiance du résumé est `external`.
 
 Le mode Watch laisse les agents en veille. Utilisez la boîte de réception pour lire un résumé. Les [destinations d'événements GitHub](/fr/docs/blocks/github) reçoivent quand même une copie de chaque événement.
 
@@ -87,7 +87,7 @@ Pour donner plus d'actions à l'agent, définissez `actions` dans `space_mode` o
 | `comment` | Ajoute un commentaire GitHub |
 | `open_issue` | Ouvre un ticket GitHub |
 | `link_duplicate` | Lie et ferme un ticket GitHub en double |
-| `notify_owner` | Envoie une note au propriétaire |
+| `notify_owner` | Achemine un message selon les [règles des messages au propriétaire](/fr/docs/config#messages-au-propriétaire) |
 
 Les modifications sur GitHub nécessitent un identifiant GitHub avec un accès en écriture. SwB enregistre les actions de tri dans le journal d'audit.
 

@@ -83,13 +83,6 @@ const copy = {
     reachAnywhere: '从任何地方访问',
     companionGuide: 'Companion 指南',
     companionHelp: '要接入本地的 Claude Code、Codex、OpenCode 或 dsh 会话，智能体会引导你在自己的设备上安装并配对 Companion。',
-    museCompanionHelp: '要用 gadget 唤醒 Muse，智能体会引导你在自己的设备上安装并配对 Companion。',
-    muse: {
-      wake: '用 gadget 唤醒 Muse',
-      beforeCommand: '准备一台带蓝牙的 Mac 或 Linux 电脑，放在手机旁边。向拥有 SwB 所有者权限的智能体索取配对码。把示例地址换成你的 SwB 地址。',
-      afterCommand: '在 10 分钟内输入这个一次性配对码。电脑请求蓝牙权限时，选择允许。让智能体开始 Muse 配对。在 Muse 应用中选择 Add Device。',
-      tools: '让 Muse 使用 SwB 工具',
-    },
     procedure: {
       'claude-project': '把设置提示词粘贴到项目的协调者聊天中。为 routine 添加 API 触发器。把它的 Fire URL 交给智能体。用 SwB 认领链接保存 routine 令牌。',
       claude: '在 Claude 中把 SwB 添加为自定义连接器。地址填写以 /mcp 结尾的 SwB 公网地址。登录 SwB 并批准访问。',
@@ -129,13 +122,6 @@ const copy = {
     reachAnywhere: '從任何地方存取',
     companionGuide: 'Companion 指南',
     companionHelp: '要連接本機的 Claude Code、Codex、OpenCode 或 dsh 工作階段，代理會引導你在自己的裝置上安裝並配對 Companion。',
-    museCompanionHelp: '要用 gadget 喚醒 Muse，代理會引導你在自己的裝置上安裝並配對 Companion。',
-    muse: {
-      wake: '用 gadget 喚醒 Muse',
-      beforeCommand: '準備一台有藍牙的 Mac 或 Linux 電腦，放在手機旁邊。向具備 SwB 擁有者存取權的代理索取配對碼。把範例網址換成你的 SwB 網址。',
-      afterCommand: '在 10 分鐘內輸入這組一次性配對碼。電腦要求藍牙權限時，選擇允許。請代理開始 Muse 配對。在 Muse 應用程式中選取 Add Device。',
-      tools: '讓 Muse 使用 SwB 工具',
-    },
     procedure: {
       'claude-project': '把設定提示詞貼到專案的協調者聊天中。為 routine 新增 API 觸發條件。把它的 Fire URL 交給代理。用 SwB 認領連結儲存 routine 權杖。',
       claude: '在 Claude 中將 SwB 新增為自訂連接器。網址填入以 /mcp 結尾的 SwB 公開網址。登入 SwB 並核准存取。',
@@ -175,19 +161,12 @@ const copy = {
     "reachAnywhere": "Accede desde cualquier lugar",
     "companionGuide": "Guía de Companion",
     "companionHelp": "Para las sesiones locales de Claude Code, Codex, OpenCode o dsh, tu agente te guía para instalar y emparejar un companion en tu dispositivo.",
-    "museCompanionHelp": "Para que SwB despierte a Muse con el gadget, tu agente te guía para instalar y emparejar un companion en tu dispositivo.",
-    "muse": {
-      "wake": "Despertar a Muse con un gadget",
-      "beforeCommand": "Usa un Mac o un ordenador con Linux que tenga Bluetooth y esté cerca de tu teléfono. Pide un código de emparejamiento a un agente con acceso de propietario de SwB. Cambia la dirección de ejemplo por tu dirección de SwB.",
-      "afterCommand": "Escribe el código de un solo uso en un plazo de diez minutos. Permite el acceso a Bluetooth cuando tu ordenador lo pida. Pide a tu agente que inicie el emparejamiento de Muse. Selecciona Add Device en la app de Muse.",
-      "tools": "Conectar Muse a las herramientas de SwB"
-    },
     "procedure": {
       "claude-project": "Pega el prompt de configuración en el chat coordinador de tu proyecto. Añade un disparador de API a la rutina. Dale su Fire URL a tu agente. Guarda el token de la rutina con el enlace de entrega de SwB.",
       "claude": "Añade SwB como conector personalizado en Claude. Usa tu dirección pública de SwB terminada en /mcp. Inicia sesión en SwB. Aprueba el acceso.",
       "chatgpt": "Abre chatgpt.com/plugins en un navegador. Añade SwB como servidor MCP personalizado. Elige OAuth al crear el plugin. Inicia sesión en SwB.",
       "chatgpt-dots": "Configura el bloque dots para que entregue los mensajes a un buzón de SwB. Añade SwB a ChatGPT en tu navegador. Pega el prompt de configuración en tu dot. Sigue las instrucciones de configuración que te da tu dot.",
-      "muse": "En un chat, pide a Muse que añada SwB como conector personalizado con OAuth. Abre el enlace que te da Muse. Inicia sesión en SwB como propietario.",
+      "muse": "Pega el prompt de configuración en un chat nuevo de Muse. Abre el enlace de inicio de sesión que te da Muse. Inicia sesión en SwB como propietario. Después, Muse configura su hook.",
       "grok": "Abre grok.com/connectors en tu navegador. Añade SwB como conector personalizado. Inicia sesión en SwB. Pega el prompt de configuración en un chat nuevo de Grok.",
       "grok-bot": "En Grok Bot, añade SwB como conector personalizado de tipo Remote HTTPS. Pega el prompt de configuración en el chat de tu Bot. Guarda la URL del webhook de la rutina con su enlace de entrega de SwB. Guarda la clave del webhook con su propio enlace de entrega.",
       "capy": "Guarda tu clave de API de Capy con el enlace de entrega de SwB. Reinicia SwB cuando te lo pida tu agente. Dile a tu agente qué Capy Captain recibe el trabajo. Guarda la clave del usuario de servicio con su enlace de entrega de SwB.",
@@ -220,19 +199,12 @@ const copy = {
     "reachAnywhere": "Accessible de partout",
     "companionGuide": "Guide du compagnon",
     "companionHelp": "Pour les sessions locales de Claude Code, Codex, OpenCode ou dsh, votre agent vous guide pour installer et appairer un compagnon sur votre appareil.",
-    "museCompanionHelp": "Pour les réveils par le gadget, votre agent vous guide pour installer et appairer un compagnon sur votre appareil.",
-    "muse": {
-      "wake": "Réveiller Muse avec un gadget",
-      "beforeCommand": "Utilisez un Mac ou un ordinateur Linux équipé du Bluetooth, près de votre téléphone. Demandez un code d'appairage à un agent doté de l'accès propriétaire SwB. Remplacez l'adresse d'exemple par votre adresse SwB.",
-      "afterCommand": "Saisissez le code à usage unique dans les dix minutes. Autorisez le Bluetooth quand votre ordinateur le demande. Demandez à votre agent de lancer l'appairage Muse. Sélectionnez Add Device dans l'application Muse.",
-      "tools": "Connecter Muse aux outils SwB"
-    },
     "procedure": {
       "claude-project": "Collez le prompt de configuration dans la discussion du coordinateur de votre projet. Ajoutez un déclencheur API à la routine. Donnez sa Fire URL à votre agent. Enregistrez le jeton de la routine par le lien de saisie SwB.",
       "claude": "Ajoutez SwB comme connecteur personnalisé dans Claude. Utilisez votre adresse SwB publique qui se termine par /mcp. Connectez-vous à SwB. Approuvez l'accès.",
       "chatgpt": "Ouvrez chatgpt.com/plugins dans un navigateur. Ajoutez SwB comme serveur MCP personnalisé. Choisissez OAuth quand vous créez le plugin. Connectez-vous à SwB.",
       "chatgpt-dots": "Configurez le bloc dots pour livrer les messages dans une boîte aux lettres SwB. Ajoutez SwB à ChatGPT dans votre navigateur. Collez le prompt de configuration dans votre dot. Suivez les instructions de configuration de votre dot.",
-      "muse": "Dans une discussion, demandez à Muse d'ajouter SwB comme connecteur personnalisé avec OAuth. Ouvrez le lien fourni par Muse. Connectez-vous à SwB en tant que propriétaire.",
+      "muse": "Collez le prompt de configuration dans une nouvelle discussion Muse. Ouvrez le lien de connexion fourni par Muse. Connectez-vous à SwB en tant que propriétaire. Muse configure ensuite son hook.",
       "grok": "Ouvrez grok.com/connectors dans votre navigateur. Ajoutez SwB comme connecteur personnalisé. Connectez-vous à SwB. Collez le prompt de configuration dans une nouvelle discussion Grok.",
       "grok-bot": "Dans Grok Bot, ajoutez SwB comme connecteur personnalisé avec Remote HTTPS. Collez le prompt de configuration dans une discussion avec votre Bot. Enregistrez l'URL du webhook de la routine par son lien de saisie SwB. Enregistrez la clé du webhook par son propre lien de saisie.",
       "capy": "Enregistrez votre clé d'API Capy par le lien de saisie SwB. Redémarrez SwB quand votre agent le demande. Indiquez à votre agent quel Capy Captain reçoit les tâches. Enregistrez la clé de l'utilisateur de service par son lien de saisie SwB.",
@@ -265,19 +237,12 @@ const copy = {
     "reachAnywhere": "Von überall erreichbar",
     "companionGuide": "Companion-Anleitung",
     "companionHelp": "Für lokale Sitzungen mit Claude Code, Codex, OpenCode oder dsh führt Ihr Agent Sie durch Installation und Kopplung des Companions auf Ihrem Gerät.",
-    "museCompanionHelp": "Für das Wecken über das Gadget führt Ihr Agent Sie durch Installation und Kopplung eines Companions auf Ihrem Gerät.",
-    "muse": {
-      "wake": "Muse mit einem Gadget wecken",
-      "beforeCommand": "Verwenden Sie einen Mac oder einen Linux-Computer mit Bluetooth in der Nähe Ihres Telefons. Bitten Sie einen Agenten mit SwB-Inhaberzugriff um einen Kopplungscode. Ersetzen Sie die Beispieladresse durch Ihre SwB-Adresse.",
-      "afterCommand": "Geben Sie den einmaligen Code innerhalb von zehn Minuten ein. Erlauben Sie Bluetooth, wenn Ihr Computer danach fragt. Bitten Sie Ihren Agenten, die Kopplung mit Muse zu starten. Wählen Sie in der Muse-App Add Device aus.",
-      "tools": "Muse mit den Tools von SwB verbinden"
-    },
     "procedure": {
       "claude-project": "Fügen Sie den Einrichtungsprompt in den Koordinator-Chat Ihres Projekts ein. Fügen Sie der Routine einen API-Trigger hinzu. Geben Sie die Fire URL an Ihren Agenten weiter. Speichern Sie das Token der Routine über den Claim-Link von SwB.",
       "claude": "Fügen Sie SwB in Claude als Custom Connector hinzu. Verwenden Sie Ihre öffentliche SwB-Adresse mit der Endung /mcp. Melden Sie sich bei SwB an. Geben Sie den Zugriff frei.",
       "chatgpt": "Öffnen Sie chatgpt.com/plugins im Browser. Fügen Sie SwB als eigenen MCP-Server hinzu. Wählen Sie beim Erstellen des Plugins OAuth aus. Melden Sie sich bei SwB an.",
       "chatgpt-dots": "Stellen Sie den Block dots so ein, dass er in ein SwB-Postfach zustellt. Fügen Sie SwB im Browser zu ChatGPT hinzu. Fügen Sie den Einrichtungsprompt in Ihren Dot ein. Folgen Sie den Einrichtungshinweisen Ihres Dots.",
-      "muse": "Bitten Sie Muse in einem Chat, SwB als Custom Connector mit OAuth hinzuzufügen. Öffnen Sie den Link aus Muse. Melden Sie sich als Inhaber bei SwB an.",
+      "muse": "Fügen Sie den Einrichtungsprompt in einen neuen Muse-Chat ein. Öffnen Sie den Anmeldelink aus Muse. Melden Sie sich als Inhaber bei SwB an. Danach richtet Muse seinen Hook ein.",
       "grok": "Öffnen Sie grok.com/connectors im Browser. Fügen Sie SwB als Custom Connector hinzu. Melden Sie sich bei SwB an. Fügen Sie den Einrichtungsprompt in einen neuen Grok-Chat ein.",
       "grok-bot": "Fügen Sie SwB in Grok Bot als Custom Connector mit Remote HTTPS hinzu. Fügen Sie den Einrichtungsprompt in Ihren Bot-Chat ein. Speichern Sie die Webhook-URL der Routine über ihren Claim-Link von SwB. Speichern Sie den Webhook-Schlüssel über seinen eigenen Claim-Link.",
       "capy": "Speichern Sie Ihren Capy-API-Schlüssel über den Claim-Link von SwB. Starten Sie SwB neu, wenn Ihr Agent Sie darum bittet. Sagen Sie Ihrem Agenten, welcher Capy Captain die Aufgaben erhält. Speichern Sie den Schlüssel des Service User über seinen Claim-Link von SwB.",
@@ -310,19 +275,12 @@ const copy = {
     "reachAnywhere": "어디서나 접속하기",
     "companionGuide": "컴패니언 가이드",
     "companionHelp": "로컬 Claude Code, Codex, OpenCode, dsh 세션을 쓸 때는 에이전트가 내 기기에 컴패니언을 설치하고 페어링하는 과정을 안내합니다.",
-    "museCompanionHelp": "가젯으로 Muse를 깨울 때는 에이전트가 내 기기에 컴패니언을 설치하고 페어링하는 과정을 안내합니다.",
-    "muse": {
-      "wake": "가젯으로 Muse 깨우기",
-      "beforeCommand": "휴대폰 가까이에 있는 Bluetooth 지원 Mac이나 Linux 컴퓨터를 사용하세요. SwB 소유자 권한이 있는 에이전트에게 페어링 코드를 요청하세요. 예시 주소를 내 SwB 주소로 바꾸세요.",
-      "afterCommand": "일회용 코드를 10분 안에 입력하세요. 컴퓨터가 요청하면 Bluetooth를 허용하세요. 에이전트에게 Muse 페어링을 시작해 달라고 요청하세요. Muse 앱에서 Add Device를 선택하세요.",
-      "tools": "Muse를 SwB 도구에 연결하기"
-    },
     "procedure": {
       "claude-project": "프로젝트 코디네이터 채팅에 설정 프롬프트를 붙여 넣으세요. 루틴에 API 트리거를 추가하세요. Fire URL을 에이전트에게 알려 주세요. SwB 등록 링크로 루틴 토큰을 저장하세요.",
       "claude": "Claude에서 SwB을 사용자 지정 커넥터로 추가하세요. /mcp로 끝나는 공개 SwB 주소를 사용하세요. SwB에 로그인하세요. 접근을 승인하세요.",
       "chatgpt": "브라우저에서 chatgpt.com/plugins를 여세요. SwB을 사용자 지정 MCP 서버로 추가하세요. 플러그인을 만들 때 OAuth를 고르세요. SwB에 로그인하세요.",
       "chatgpt-dots": "dots 블록이 SwB 우편함으로 전달하도록 설정하세요. 브라우저에서 ChatGPT에 SwB을 추가하세요. dot에 설정 프롬프트를 붙여 넣으세요. dot이 알려 주는 설정 안내를 따르세요.",
-      "muse": "Muse 채팅에서 SwB을 OAuth 사용자 지정 커넥터로 추가해 달라고 요청하세요. Muse가 준 링크를 여세요. 소유자로 SwB에 로그인하세요.",
+      "muse": "새 Muse 채팅에 설정 프롬프트를 붙여 넣으세요. Muse가 준 로그인 링크를 여세요. 소유자로 SwB에 로그인하세요. 그다음 Muse가 훅을 설정합니다.",
       "grok": "브라우저에서 grok.com/connectors를 여세요. SwB을 사용자 지정 커넥터로 추가하세요. SwB에 로그인하세요. 새 Grok 채팅에 설정 프롬프트를 붙여 넣으세요.",
       "grok-bot": "Grok Bot에서 Remote HTTPS 방식으로 SwB을 사용자 지정 커넥터로 추가하세요. Grok Bot 채팅에 설정 프롬프트를 붙여 넣으세요. 루틴 웹훅 URL을 해당 SwB 등록 링크로 저장하세요. 웹훅 키는 별도의 등록 링크로 저장하세요.",
       "capy": "SwB 등록 링크로 Capy API 키를 저장하세요. 에이전트가 요청하면 SwB을 다시 시작하세요. 작업을 받을 Capy Captain을 에이전트에게 알려 주세요. 서비스 사용자 키를 해당 SwB 등록 링크로 저장하세요.",
@@ -355,19 +313,12 @@ const copy = {
     "reachAnywhere": "どこからでもアクセスする",
     "companionGuide": "コンパニオンのガイド",
     "companionHelp": "Claude Code、Codex、OpenCode、dsh のローカルセッションを使う場合は、コンパニオンをデバイスにインストールしてペアリングする手順をエージェントが案内します。",
-    "museCompanionHelp": "ガジェットで Muse を起こす場合は、コンパニオンをデバイスにインストールしてペアリングする手順をエージェントが案内します。",
-    "muse": {
-      "wake": "ガジェットで Muse を起こす",
-      "beforeCommand": "Bluetooth 付きの Mac か Linux のパソコンを、スマートフォンの近くで使ってください。SwB のオーナー権限を持つエージェントに、ペアリングコードを頼んでください。例のアドレスを、実際の SwB のアドレスに置き換えてください。",
-      "afterCommand": "1 回限りのコードを 10 分以内に入力してください。パソコンに求められたら、Bluetooth を許可してください。Muse のペアリングを始めるよう、エージェントに頼んでください。Muse のアプリで Add Device を選択してください。",
-      "tools": "Muse を SwB のツールに接続する"
-    },
     "procedure": {
       "claude-project": "プロジェクトのコーディネーターのチャットに、セットアップ用プロンプトを貼り付けてください。ルーティンに API トリガーを追加してください。その Fire URL をエージェントに渡してください。SwB の受け取りリンクで、ルーティンのトークンを保存してください。",
       "claude": "Claude で、SwB をカスタムコネクターとして追加してください。/mcp で終わる SwB の公開アドレスを使ってください。SwB にサインインしてください。アクセスを承認してください。",
       "chatgpt": "ブラウザーで chatgpt.com/plugins を開いてください。SwB をカスタム MCP サーバーとして追加してください。プラグインを作成するときに OAuth を選んでください。SwB にサインインしてください。",
       "chatgpt-dots": "dots ブロックを、SwB のメールボックスに配信する設定にしてください。ブラウザーで ChatGPT に SwB を追加してください。dot にセットアップ用プロンプトを貼り付けてください。dot が示すセットアップの手順に従ってください。",
-      "muse": "チャットで、SwB を OAuth 付きのカスタムコネクターとして追加するよう Muse に頼んでください。Muse から届いたリンクを開いてください。オーナーとして SwB にサインインしてください。",
+      "muse": "新しい Muse のチャットに、セットアップ用プロンプトを貼り付けてください。Muse から届いたサインインリンクを開いてください。オーナーとして SwB にサインインしてください。そのあと、Muse がフックをセットアップします。",
       "grok": "ブラウザーで grok.com/connectors を開いてください。SwB をカスタムコネクターとして追加してください。SwB にサインインしてください。新しい Grok のチャットに、セットアップ用プロンプトを貼り付けてください。",
       "grok-bot": "Grok Bot で、Remote HTTPS を使って SwB をカスタムコネクターとして追加してください。Bot のチャットに、セットアップ用プロンプトを貼り付けてください。ルーティンの Webhook の URL を、URL 用の SwB の受け取りリンクで保存してください。Webhook のキーは、キー用の受け取りリンクで保存してください。",
       "capy": "SwB の受け取りリンクで、Capy の API キーを保存してください。エージェントに頼まれたら、SwB を再起動してください。作業を受け取る Capy Captain をエージェントに伝えてください。サービスユーザーのキーは、キー用の SwB の受け取りリンクで保存してください。",

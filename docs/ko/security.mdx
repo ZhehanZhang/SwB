@@ -77,13 +77,17 @@ Capy 블록은 같은 작업과 대상에 대해 이전 대화를 돌려줄 수 
 
 SwB은 기본적으로 연결 주소로 한도를 적용하고 감사 기록을 남깁니다. `trusted_proxies`나 `SWB_TRUSTED_PROXIES`에 프록시를 추가하세요. 그러면 SwB은 프록시가 보내는 클라이언트 주소를 사용합니다. 프록시가 검증한 출처의 값으로 클라이언트 주소 헤더를 설정하도록 프록시를 구성하세요.
 
-Docker 네트워크에 Cloudflare Tunnel 커넥터나 리버스 프록시를 추가하려면 [Cloudflare 설정 가이드](/ko/docs/cloudflare#trusted-proxies)를 따르세요.
+클라이언트 주소 확인에 실패하면 SwB은 전달 헤더별로 요청을 묶습니다. 잘못된 주소가 담긴 헤더는 `invalid-forwarded` 한도를 함께 씁니다. 신뢰할 수 있는 프록시 주소만 담긴 헤더는 `trusted-only-forwarded` 한도를 함께 씁니다.
+
+Docker 네트워크에 Cloudflare Tunnel 커넥터나 리버스 프록시를 추가하려면 [신뢰할 수 있는 프록시 가이드](/ko/docs/cloudflare#trusted-proxies)를 따르세요.
 
 ## 감사 로그
 
 SwB은 접근 규칙이 거부한 도구 호출을 기록합니다. 설정 코드, 이미 쓴 링크, 만료된 링크, 잘못된 링크, 패스키, CSRF 확인, OIDC에서 실패한 브라우저 로그인도 기록합니다.
 
 SwB은 GitHub 웹훅 서명이 빠졌거나 잘못된 경우를 기록합니다. 일부 브라우저 실패와 웹훅 거부는 반복 기록 수가 제한됩니다. 실패 기록에는 이유가 나오고 코드, 토큰, 서명은 비공개로 유지됩니다.
+
+SwB은 거부된 Cloudflare Access 어설션을 클라이언트 주소마다 10분에 한 번 기록합니다.
 
 SwB 페이지의 **Audit**에서 기록을 볼 수 있습니다. 최근 기록을 출력하려면 `swb log`를 실행하세요. 우편함 전송의 동작 이름은 `send`입니다. 버려진 전달 기록은 [채널 모드](/ko/docs/channel-modes#전달-확인)를 참고하세요.
 

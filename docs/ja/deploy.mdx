@@ -1,6 +1,6 @@
 ---
 title: デプロイ
-description: SwB をパソコンまたはサーバーで実行します。
+description: SwB を自分のパソコン、自分のサーバー、またはクラウドで実行します。
 ---
 
 import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
@@ -9,11 +9,11 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## パソコンで実行する [#run-on-your-computer]
 
-[インストール](/ja/docs/install)の手順に従ってください。初めてローカルで起動すると、SwB がワンタイムのサインインリンクを表示します。そのリンクを開いてください。新しいリンクは `swb login-link` で取得できます。デプロイ用プロンプトは、ローカルでのセットアップにも対応しています。
+[インストール](/ja/docs/install)の手順に従ってください。
 
 ## SwB をデプロイする
 
-このプロンプトを Claude Code や Codex などのコーディングエージェントに貼り付けてください。エージェントが、ローカルまたはホスティングでのセットアップを案内します。
+このプロンプトを Claude Code や Codex などのコーディングエージェントに貼り付けてください。エージェントが SwB のセットアップを手伝います。
 
 <SetupPrompt name="deploy" lang="ja" />
 
@@ -21,7 +21,7 @@ import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ### Docker Compose [#docker-compose]
 
-Docker Compose 2.24 以降をインストールしてください。これらのコマンドは、データフォルダーを所有する一般ユーザーとして実行してください。
+Docker Compose 2.24 以降をインストールしてください。Docker Compose は、SwB をコンテナーで実行します。これらのコマンドは、データフォルダーを所有するユーザーとして実行してください。
 
 ```bash
 git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
@@ -39,23 +39,19 @@ curl -fsS http://127.0.0.1:8870/healthz
 docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
 ```
 
-ターミナルに表示されるワンタイムのサインインリンクを 5 分以内に開いてください。リンクは自分だけで使ってください。
+リモートのサーバーでは、サーバーのポート `8870` を、手元のパソコンのポート `8870` に転送してください。ワンタイムのサインインリンクを 5 分以内に開いてください。リンクは自分だけで使ってください。
 
-オーナーのサインインには、ブラウザーで `http://localhost:8870` を使います。コンテナー内のコマンドはポート `8000` を使います。Compose はデータを `./data` に保存します。`.env` を変更したら、もう一度 `docker compose up -d` を実行してください。
-
-リモートのサーバーでは、リンクを開く前に、サーバーのポート `8870` をローカルのポート `8870` に転送してください。
+サインインには、ブラウザーで `http://localhost:8870` を使います。コンテナー内のコマンドはポート `8000` を使います。Compose はデータを `./data` に保存します。`.env` を変更したら、`docker compose up -d` を実行してください。
 
 `/healthz` へのリクエストは、サインイン前でも `status` と `version` を返します。ヘルスチェックの詳細をすべて見るときは、オーナーのセッションかオーナーキーを使ってください。
 
 ### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
 
-Cloudflare Tunnel を使うと、SwB に公開 HTTPS アドレスを用意できます。トンネルは Cloudflare の無料プランで使えます。
+トンネルは、サーバーを Cloudflare につなぎ、SwB に公開 HTTPS アドレスを用意します。トンネルの設定は、[Cloudflare](/ja/docs/cloudflare) の手順に従ってください。
 
-[Cloudflare のセットアップガイド](/ja/docs/cloudflare)に従って SwB を設定し、オーナーとクライアントのリクエストに対するアクセスルールを設定してください。
+## クラウドで実行する
 
-## ホスティングプラットフォーム
-
-`/data` に永続ディスクをマウントした SwB のインスタンスを 1 つ使ってください。Railway、Render、Fly.io のテンプレートと Koyeb のスクリプトについては、[デプロイガイド](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)をご覧ください。
+`/data` にディスクをマウントした SwB のインスタンスを 1 つ使ってください。インスタンスが再起動しても、ディスクにデータが残ります。プラットフォームごとのテンプレートとスクリプトは、[デプロイガイド](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)にあります。
 
 <span id="ワンクリックでデプロイする" />
 
@@ -65,25 +61,27 @@ Cloudflare Tunnel を使うと、SwB に公開 HTTPS アドレスを用意でき
 
 ### Fly.io [#fly]
 
-[Docker Compose の例](#docker-compose)で取得した、SwB のリリース版のコードを使ってください。[Fly.io のコマンドラインツール](https://docs.fly.io/flyctl/)をインストールしてください。Fly.io にサインインしてください。
+[Docker Compose の例](#docker-compose)で取得した SwB のファイルを使ってください。Python 3.11 以降か [uv](https://docs.astral.sh/uv/) をインストールしてください。[Fly.io のコマンドラインツール](https://docs.fly.io/flyctl/)をインストールしてください。Fly.io にサインインしてください。
 
-SwB のフォルダーで `sh deploy/fly.sh my-swb` を実行してください。`my-swb` を、固有のアプリ名に置き換えてください。スクリプトは `fly deploy --ha=false` を使って、Machine を 1 つ起動します。
+支払い用のカードを登録すると、[Fly.io の Free プラン](https://docs.fly.io/about/free-plan)で毎月 $5 分の利用枠を使えます。このプランには個人用の組織を使ってください。$5 を使い切ると、Fly はその月全体を通常料金で請求します。この構成の費用は、Ashburn で 30 日間に約 $3.84 です。データ転送の料金は別です。
+
+SwB のフォルダーで `sh deploy/fly.sh my-swb` を実行してください。`my-swb` を、固有のアプリ名に置き換えてください。スクリプトは `fly deploy --ha=false` を使って、Machine を 1 つ起動します。スクリプトは、Machine、ボリューム、アドレスを確認します。
 
 アプリのサインインページを開いてください。SwB のフォルダーにある `.env.swb-setup-fly-my-swb` から `SWB_SETUP_CODE` をコピーしてください。その値を **Setup code** に入力してください。サインインしたら、このファイルを削除してください。
 
-料金の詳細は、[Fly.io の Free プラン](https://docs.fly.io/about/free-plan)と[現在の料金](https://fly.io/docs/about/pricing/)をご覧ください。
+料金の詳細は、[現在の料金](https://fly.io/docs/about/pricing/)をご覧ください。
 
 ### Render [#render]
 
-[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0)
+[Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0) を開いてください。Blueprint は、有料の Web サービスと 1 GB のディスクを作成します。サービスの **Environment** を開いてください。`SWB_SETUP_CODE` をコピーしてください。
 
 ### Railway [#railway]
 
-[Railway の SwB テンプレート](https://railway.com/deploy/swb)からデプロイしてください。レプリカは 1 つのままにしてください。テンプレートは `/data` にボリュームをマウントします。
+[Railway の SwB テンプレート](https://railway.com/deploy/swb)からデプロイしてください。レプリカは 1 つのままにしてください。1 GB のボリュームを 1 つ `/data` にマウントしてください。
 
 SwB を常時稼働させるときは、Hobby プランを使ってください。Hobby プランは月額 $5 で、$5 分の利用枠が含まれます。
 
-[Free プラン](https://docs.railway.com/reference/pricing/free-trial)には、月 $1 分の利用枠が含まれます。この額で、約 100 MB の RAM を常時使えます。テストした SwB のインスタンスは、待機中に約 107 MiB を使いました。$1 を使い切ると、Free プランのサービスは停止します。
+[Free プラン](https://docs.railway.com/pricing/free-plan)では、0.5 GB のボリュームを使えます。Free プランのサービスは、アイドル状態のときにスリープします。このプランには、月 $1 分の利用枠が含まれます。この額で、約 100 MB の RAM を常時使えます。SwB のテストでは、待機中に約 107 MiB の RAM を使いました。
 
 ## サインインする
 

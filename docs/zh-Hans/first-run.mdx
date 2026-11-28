@@ -7,7 +7,7 @@ description: 让外部能访问 SwB，然后登录并查看你的实例。
 
 {/* prepublication */}
 
-软件包发布后，在一个空文件夹中运行 `uvx swb-one up`。在 5 分钟内打开终端里的一次性登录链接。SwB 默认使用 `http://localhost:8870`。如果设置了 `SWB_PORT`，地址中的端口会换成这个值。其他启动方式（包括从源码构建）见[安装](/zh-Hans/docs/install)。
+在一个空文件夹中运行 `uvx swb.one up`。在 5 分钟内打开终端里的一次性登录链接。SwB 默认使用 `http://localhost:8870`。如果设置了 `SWB_PORT`，地址中的端口会换成这个值。其他启动方式（包括从源码构建）见[安装](/zh-Hans/docs/install)。
 
 ## 获取公网地址
 
@@ -16,7 +16,7 @@ Claude、ChatGPT 和 Grok 运行在云端，需要一个公网 HTTPS 地址才�
 安装 [cloudflared](https://developers.cloudflare.com/tunnel/downloads/)，并确认终端可以运行 `cloudflared --version`。如果 SwB 正在运行，先停止它。然后在 SwB 实例文件夹中运行下面的命令。
 
 ```bash
-uvx swb-one up --tunnel cloudflare
+uvx swb.one up --tunnel cloudflare
 ```
 
 SwB 会开启一条 Cloudflare Quick Tunnel，并输出公网 MCP 地址。每次带这个选项重启，都会得到一个新地址。在各个应用中更新这个地址。
