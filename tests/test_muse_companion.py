@@ -159,6 +159,7 @@ class _Mobile:
         ready = await self.response()
         assert ready["type"] == "pairing_ready"
         assert ready["session_id"] == _SESSION_ID
+        assert ready["firmware_version"] == "1.0.0"
         self.seal({"action": "pairing_client_finished"})
         assert await self.opened() == {
             "type": "status", "status": "pairing_confirmed", "sdk_token": _SDK_TOKEN,
@@ -312,38 +313,10 @@ def test_muse_identity_and_availability(monkeypatch):
     assert cap.available() == "Bluetooth adapter unavailable"
 
 
-async def test_corebluetooth_constructor_has_event_loop():
-    server = object()
-    loop = asyncio.get_running_loop()
-
-    def create(**params):
-        assert asyncio.get_event_loop() is params["loop"] is loop
-        return server
-
-    transport = muse._BlessTransport(SimpleNamespace(BlessServer=create), _BLE_NAME)
-    assert await transport._create_corebluetooth({"loop": loop}) is server
-
-
-async def test_corebluetooth_keeps_muse_name_in_advertisement_and_service_in_gatt(fake_ble, monkeypatch):
+def test_macos_muse_does_not_load_bless(monkeypatch):
     monkeypatch.setattr(muse, "sys", SimpleNamespace(platform="darwin"))
-    server = _FakeGatt(name=_BLE_NAME, loop=asyncio.get_running_loop(), adapter="hci0")
-    transport = muse._BlessTransport(muse._load_bless(), _BLE_NAME)
-
-    async def create(_params):
-        return server
-
-    async def start(*, prioritize_local_name):
-        assert server.scope == muse.SERVICE_UUID
-        assert set(server.characteristics) == {muse.RX_UUID, muse.TX_UUID}
-        name_size = 2 + len(_BLE_NAME.encode("ascii"))
-        assert 3 + name_size + 18 > 31
-        assert 3 + name_size <= 31
-        assert prioritize_local_name is True
-        return True
-
-    monkeypatch.setattr(transport, "_create_corebluetooth", create)
-    monkeypatch.setattr(server, "start", start, raising=False)
-    await transport.start(None)
+    monkeypatch.setattr(muse, "_load_bless", lambda: pytest.fail("macOS Bluetooth must stay in the signed app"))
+    assert muse.MuseCapability().available() is None
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="BlueZ advertisement")

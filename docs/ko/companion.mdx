@@ -43,7 +43,17 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 
 Linux에서는 알림에 `notify-send`를 사용합니다. Debian과 Ubuntu에서는 `libnotify-bin` 패키지로 설치하세요.
 
-Muse 가젯을 페어링할 때는 Python 3.13을 사용하세요. [Muse 페어링 가이드](/ko/docs/setup/muse)를 따르세요. 페어링한 뒤에는 SwB 서버가 Muse와의 연결을 계속 유지합니다.
+[Muse 페어링 가이드](/ko/docs/setup/muse)를 따르세요. 페어링한 뒤에는 SwB 서버가 Muse와의 연결을 계속 유지합니다.
+
+macOS에서는 `uv tool install swb-one`으로 SwB을 설치하세요. 설치한 `swb`로 기기를 페어링하세요.
+
+```sh
+swb companion connect https://swb.example.com --cap muse
+```
+
+이 명령과 `swb companion run`은 필요할 때 서명된 **SwB Companion** 앱을 `~/Applications`에 설치합니다. macOS가 처음 권한을 요청하면 **SwB Companion**의 Bluetooth 접근을 허용하세요.
+
+Linux에서는 Python 3.13과 패키지 옵션 `companion`을 사용하세요. Linux의 Bluetooth 서비스인 BlueZ에 접근할 수 있는 로컬 계정을 사용하세요.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
@@ -71,9 +81,33 @@ SwB은 각 메시지를 열린 세션에 전달하려고 시도합니다. 발신
 
 페어링하면 컴패니언이 시작됩니다. 다시 시작하려면 `swb companion run`을 사용하세요. 로컬 기기 ID와 기능을 보려면 `swb companion status`를 사용하세요.
 
-이 명령을 `uvx`로 실행하려면 `swb` 자리에 `uvx swb-one`을 쓰세요. Muse는 [Muse 가이드](/ko/docs/setup/muse)의 패키지 옵션과 Python 옵션을 그대로 유지하세요.
+macOS에서 Muse를 쓸 때는 설치한 `swb`를 사용하세요. Linux에서 `uvx`로 Muse를 쓸 때는 페어링 명령의 패키지 옵션과 Python 옵션을 유지하세요. 다른 기능을 `uvx`로 쓸 때는 `swb` 자리에 `uvx swb-one`을 쓰세요.
 
 SwB과의 연결은 항상 기기 쪽에서 시작합니다.
+
+## 백그라운드에서 실행하기
+
+컴패니언이 자동으로 시작되도록 백그라운드 서비스를 설치하세요. `uv tool install swb-one`으로 SwB을 설치하세요. Linux에서 Muse를 쓸 때는 대신 `uv tool install --python 3.13 'swb-one[companion]'`을 사용하세요.
+
+새로 페어링하려면 페어링 옵션에 `--no-run`을 추가하세요. 이 옵션을 포함해 `swb companion connect`를 실행하세요. 명령은 페어링을 마치면 종료됩니다. 터미널에서 컴패니언을 실행 중이면 서비스를 설치하기 전에 컴패니언을 중지하세요. 서비스 명령에는 설치한 `swb`를 사용하세요.
+
+```sh
+swb companion service install
+```
+
+Linux에서는 `systemd --user`가 사용자 계정으로 서비스를 실행합니다. 부팅할 때 서비스를 시작하고 로그아웃 후에도 계속 실행하려면 `loginctl enable-linger "$USER"`를 실행하세요. Muse를 쓸 때는 BlueZ에 접근할 수 있는 로컬 계정을 사용하세요.
+
+macOS에서는 데스크톱에 로그인한 상태에서 서비스를 설치하세요. Muse를 쓸 때는 SwB이 필요에 따라 서명된 **SwB Companion** 앱도 설치합니다. macOS가 처음 권한을 요청하면 **SwB Companion**의 Bluetooth 접근을 허용하세요.
+
+Windows에서는 로그인할 때 작업 스케줄러가 서비스를 시작합니다. Muse는 Linux 또는 macOS에서 사용하세요.
+
+서비스 관리 도구에서 로컬 도구에 필요한 변수를 설정하세요.
+
+`swb companion service start`로 서비스를 시작하세요. `swb companion service status`로 서비스 상태를 확인하세요. `swb companion service logs`로 서비스 로그를 확인하세요.
+
+`swb companion status`로 컴패니언 실행 상태와 연결 상태를 확인하세요. 이 명령은 SwB 주소를 표시합니다. Muse를 쓸 때는 Bluetooth 상태도 표시합니다.
+
+`swb companion service stop`으로 서비스를 즉시 중지하세요. `swb companion service uninstall`로 자동 시작을 해제하세요. 기기 키는 그대로 유지됩니다.
 
 ## 연결 해제
 

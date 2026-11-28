@@ -339,13 +339,25 @@
             "connect",
             "run",
             "status",
-            "disconnect"
+            "disconnect",
+            "service"
           ],
           "name": "companion_action"
         },
         {
           "choices": [],
           "name": "url"
+        },
+        {
+          "choices": [
+            "install",
+            "uninstall",
+            "start",
+            "stop",
+            "status",
+            "logs"
+          ],
+          "name": "service_action"
         }
       ],
       "command": "swb companion",

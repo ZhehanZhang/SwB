@@ -105,7 +105,8 @@ def test_connect_pairs_with_hidden_code_and_persists_options(settings, tmp_path,
     cli.main(["companion", "status"])
     out, err = capsys.readouterr()
     assert f"This device is paired as {COMPANION_ID}." in out and "Drop folder" in out
-    assert not err and KEY not in out and CODE not in out and URL not in out
+    assert f"Deployment {URL}" in out and "Connection offline" in out
+    assert not err and KEY not in out and CODE not in out
 
 
 def test_connect_runs_and_restart_reuses_enabled_caps(settings, tmp_path, monkeypatch):
@@ -158,7 +159,10 @@ def test_connect_requires_opt_in_to_advertise_capabilities(settings, monkeypatch
     assert capsys.readouterr().out == "This device is paired.\n"
     assert CompanionState.load(settings).enabled_caps == ()
     cli.main(["companion", "status"])
-    assert capsys.readouterr().out == f"This device is paired as {COMPANION_ID}.\n"
+    assert capsys.readouterr().out.splitlines() == [
+        "Companion stopped", f"This device is paired as {COMPANION_ID}.", f"Deployment {URL}",
+        "Connection offline", "Bluetooth Disabled",
+    ]
 
 
 def test_connect_persists_device_name_for_hello(settings, monkeypatch):
@@ -535,6 +539,29 @@ async def test_run_reconnects_with_bounded_backoff(settings, paired, monkeypatch
     await asyncio.wait_for(client.run(paired, settings, {"test": Work(invoke, hook)}), 2)
     assert calls == ["hello", "events", "hello", "events"]
     assert not settings.exists()
+
+
+async def test_short_lived_streams_back_off_even_with_initial_ping(settings, paired, monkeypatch, capsys):
+    delays = []
+
+    async def handler(request):
+        if request.url.path.endswith("/hello"):
+            return httpx.Response(204)
+        if len(delays) == 8:
+            return event_stream(b"event: revoked\ndata: {}\n\n")
+        return event_stream(b"event: ping\ndata: {}\n\n")
+
+    async def sleep(delay):
+        cli.main(["companion", "status"])
+        status = capsys.readouterr().out
+        assert "Companion running" in status and "Connection reconnecting" in status
+        delays.append(delay)
+
+    mock_client(monkeypatch, handler)
+    monkeypatch.setattr(client.random, "uniform", lambda *_: 1)
+    monkeypatch.setattr(client.asyncio, "sleep", sleep)
+    await client.run(paired, settings, {})
+    assert delays == [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 60.0, 60.0]
 
 
 async def test_capability_hook_can_emit_and_fail_without_ending_stream(settings, paired, monkeypatch):

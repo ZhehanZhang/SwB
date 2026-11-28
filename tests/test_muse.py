@@ -58,6 +58,7 @@ class FakeCompanions:
         self.online = True
         self.invokes = []
         self.before_claim = None
+        self.progress = None
 
     def register_claim(self, kind, handler, *, capability, action):
         assert (kind, capability, action) == ("muse_pairing", "muse", "pair")
@@ -66,13 +67,14 @@ class FakeCompanions:
     def list(self):
         return [{"id": COMPANION, "online": self.online, "capabilities": ["muse"]}]
 
-    async def invoke(self, companion_id, capability, action, args, timeout_s, *, principal):
+    async def invoke(self, companion_id, capability, action, args, timeout_s, *, principal, on_progress=None):
         assert companion_id == COMPANION and (capability, action, timeout_s) == ("muse", "pair", 660)
         assert principal.is_unrestricted_owner
         assert args["sdk_token"] == SDK_TOKEN and args["window_s"] == 600
         assert set(args) == {"sdk_token", "identity", "window_s"}
         identity = Identity(args["identity"]["mac"])
         self.invokes.append(identity)
+        self.progress = on_progress
         p = Principal("test-device", f"companion:{COMPANION}", "companion", trust="external")
         data = {"node_id": identity.setup_node_id, "credentials": {"access_token": ACCESS, "refresh_token": REFRESH}}
         if self.before_claim:
@@ -156,13 +158,47 @@ def test_configured_gadget_preserves_muse_oauth_connector(make):
     assert queued["to"] == "agent:muse" and queued["mailbox"]
 
 
-async def test_muse_companion_setup_uses_python_313(muse_app):
+async def test_muse_companion_setup_uses_mac_app_and_linux_python_313(muse_app):
     core, client, companions, _ = muse_app
     core.claims.save_secret(muse.TOKEN_ENV, SDK_TOKEN)
     companions.online = False
     _, person = (await connect(client))["next"]
     assert person["by"] == "person"
-    assert person["do"].startswith(f"Run uvx --python 3.13 --from 'swb-one[companion]' swb companion connect {PUBLIC} --cap muse.")
+    assert f"On macOS, install SwB with uv tool install swb-one. Run swb companion connect {PUBLIC} --cap muse." in person["do"]
+    assert "Allow Bluetooth for SwB Companion" in person["do"]
+    assert (f"On Linux, run uvx --python 3.13 --from 'swb-one[companion]' "
+            f"swb companion connect {PUBLIC} --cap muse.") in person["do"]
+
+
+async def test_advertising_conflict_guides_the_person_and_clears_without_restarting(muse_app):
+    core, client, companions, _ = muse_app
+    core.claims.save_secret(muse.TOKEN_ENV, SDK_TOKEN)
+    started, finish = asyncio.Event(), asyncio.Event()
+
+    async def waiting(_, __):
+        started.set()
+        await finish.wait()
+
+    companions.before_claim = waiting
+    await connect(client, companion=COMPANION)
+    try:
+        await asyncio.wait_for(started.wait(), 3)
+        companions.progress({"advertising_conflict": "Outrider Helper"})
+        blocked = await connect(client)
+        assert blocked["bluetooth"] == "advertising_conflict"
+        [person] = blocked["next"]
+        assert person["by"] == "person" and "Pause the app" in person["do"]
+        assert "Outrider Helper" in person["application"] and "<<<swb-untrusted" in person["application"]
+        companions.progress({"advertising_conflict": ""})
+        assert "other apps" in (await connect(client))["next"][0]["do"]
+        companions.progress({"advertising_conflict": None})
+        recovered = await connect(client)
+        assert recovered["pairing"] == "in_progress" and "bluetooth" not in recovered
+        assert "Add Device" in recovered["next"][0]["do"]
+        assert len(companions.invokes) == 1
+    finally:
+        finish.set()
+        await eventually(lambda: core.blocks["muse"]._pairing is None)
 
 
 async def test_pairing_verifies_and_seals_credentials(muse_app, caplog):

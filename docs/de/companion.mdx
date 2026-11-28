@@ -43,7 +43,17 @@ Fügen Sie für jede Funktion, die Sie aktivieren möchten, eine Option `--cap` 
 
 Unter Linux nutzen Benachrichtigungen `notify-send`. Unter Debian und Ubuntu installieren Sie es mit dem Paket `libnotify-bin`.
 
-Verwenden Sie Python 3.13, um das Muse-Gadget zu koppeln. Folgen Sie der [Anleitung zur Muse-Kopplung](/de/docs/setup/muse). Nach der Kopplung hält der SwB-Server die Verbindung zu Muse offen.
+Folgen Sie der [Anleitung zur Muse-Kopplung](/de/docs/setup/muse). Nach der Kopplung hält der SwB-Server die Verbindung zu Muse offen.
+
+Installieren Sie SwB unter macOS mit `uv tool install swb-one`. Koppeln Sie das Gerät mit dem installierten `swb`.
+
+```sh
+swb companion connect https://swb.example.com --cap muse
+```
+
+Dieser Befehl und `swb companion run` installieren bei Bedarf die signierte App **SwB Companion** in `~/Applications`. Erlauben Sie **SwB Companion** den Bluetooth-Zugriff, wenn macOS zum ersten Mal danach fragt.
+
+Verwenden Sie unter Linux Python 3.13 mit der Paketoption `companion`. Verwenden Sie ein lokales Konto mit Zugriff auf BlueZ, den Bluetooth-Dienst von Linux.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
@@ -71,9 +81,33 @@ Befehle und unterstützte Agenten beschreibt [Lokale Sitzungen](/de/docs/blocks/
 
 Die Kopplung startet den Companion. Mit `swb companion run` starten Sie ihn erneut. Mit `swb companion status` sehen Sie die lokale Geräte-ID und die Funktionen.
 
-Ersetzen Sie `swb` durch `uvx swb-one`, um diese Befehle mit `uvx` auszuführen. Für Muse behalten Sie die Paket- und Python-Optionen aus der [Muse-Anleitung](/de/docs/setup/muse) bei.
+Verwenden Sie für Muse unter macOS das installierte `swb`. Wenn Sie Muse unter Linux mit `uvx` nutzen, behalten Sie die Paket- und Python-Optionen aus dem Kopplungsbefehl bei. Für andere Funktionen ersetzen Sie `swb` bei Bedarf durch `uvx swb-one`.
 
 Das Gerät baut jede Verbindung zu SwB selbst auf.
+
+## Im Hintergrund ausführen
+
+Ein Hintergrunddienst startet den Companion automatisch. Installieren Sie SwB mit `uv tool install swb-one`. Verwenden Sie für Muse unter Linux stattdessen `uv tool install --python 3.13 'swb-one[companion]'`.
+
+Fügen Sie für eine neue Kopplung `--no-run` zu Ihren Kopplungsoptionen hinzu. Führen Sie `swb companion connect` mit diesen Optionen aus. Der Befehl endet nach der Kopplung. Beenden Sie einen laufenden Companion im Terminal, bevor Sie den Dienst installieren. Verwenden Sie für die Dienstbefehle das installierte `swb`.
+
+```sh
+swb companion service install
+```
+
+Unter Linux führt `systemd --user` den Dienst mit Ihrem Konto aus. Mit `loginctl enable-linger "$USER"` startet der Dienst beim Hochfahren und läuft nach der Abmeldung weiter. Verwenden Sie für Muse ein lokales Konto mit Zugriff auf BlueZ.
+
+Installieren Sie den Dienst unter macOS in Ihrer Desktop-Sitzung. Für Muse installiert SwB bei Bedarf auch die signierte App **SwB Companion**. Erlauben Sie **SwB Companion** den Bluetooth-Zugriff, wenn macOS zum ersten Mal danach fragt.
+
+Unter Windows startet die Aufgabenplanung den Dienst bei der Anmeldung. Verwenden Sie Muse unter Linux oder macOS.
+
+Legen Sie im Dienstmanager die Variablen fest, die Ihre lokalen Tools benötigen.
+
+Starten Sie den Dienst mit `swb companion service start`. Prüfen Sie seinen Status mit `swb companion service status`. Lesen Sie seine Protokolle mit `swb companion service logs`.
+
+Prüfen Sie mit `swb companion status`, ob der Companion läuft und verbunden ist. Der Befehl zeigt auch die SwB-Adresse und für Muse den Bluetooth-Status an.
+
+Stoppen Sie den Dienst sofort mit `swb companion service stop`. Entfernen Sie den automatischen Start mit `swb companion service uninstall`. Der Geräteschlüssel bleibt erhalten.
 
 ## Trennen
 

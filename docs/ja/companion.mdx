@@ -43,7 +43,17 @@ uvx swb-one companion connect https://swb.example.com --cap notify
 
 Linux では、通知に `notify-send` を使います。Debian と Ubuntu では、`libnotify-bin` パッケージでインストールしてください。
 
-Muse ガジェットのペアリングには Python 3.13 を使ってください。[Muse のペアリングガイド](/ja/docs/setup/muse)に従ってください。ペアリングのあとは、SwB サーバーが Muse との接続を保ちます。
+[Muse のペアリングガイド](/ja/docs/setup/muse)に従ってください。ペアリングのあとは、SwB サーバーが Muse との接続を保ちます。
+
+macOS では、`uv tool install swb-one` で SwB をインストールしてください。インストールした `swb` でデバイスをペアリングしてください。
+
+```sh
+swb companion connect https://swb.example.com --cap muse
+```
+
+このコマンドと `swb companion run` は、必要に応じて署名済みの **SwB Companion** アプリを `~/Applications` にインストールします。macOS の初回の確認画面で、**SwB Companion** に Bluetooth へのアクセスを許可してください。
+
+Linux では、Python 3.13 とパッケージオプション `companion` を使ってください。Linux の Bluetooth サービスである BlueZ にアクセスできるローカルアカウントを使ってください。
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
@@ -71,9 +81,33 @@ SwB は、各メッセージを開いているセッションに届けようと�
 
 ペアリングするとコンパニオンが起動します。もう一度起動するときは `swb companion run` を使います。ローカルのデバイス ID と機能は `swb companion status` で確認できます。
 
-`uvx` でこれらのコマンドを実行するときは、`swb` の代わりに `uvx swb-one` を使ってください。Muse の場合は、[Muse のガイド](/ja/docs/setup/muse)にあるパッケージと Python のオプションをそのまま使ってください。
+macOS で Muse を使うときは、インストールした `swb` を使ってください。Linux で Muse を `uvx` から使うときは、ペアリングコマンドのパッケージと Python のオプションをそのまま使ってください。他の機能を `uvx` から使うときは、`swb` の代わりに `uvx swb-one` を使ってください。
 
 SwB への接続は、毎回デバイスの側から始めます。
+
+## バックグラウンドで実行する
+
+コンパニオンを自動で起動するには、バックグラウンドサービスをインストールしてください。`uv tool install swb-one` で SwB をインストールしてください。Linux で Muse を使うときは、代わりに `uv tool install --python 3.13 'swb-one[companion]'` を使ってください。
+
+新たにペアリングするときは、ペアリング用のオプションに `--no-run` を追加してください。そのオプションを指定して `swb companion connect` を実行してください。コマンドはペアリングを終えると終了します。ターミナルでコンパニオンが動作中の場合は、サービスをインストールする前に停止してください。サービスを操作するときは、インストールした `swb` を使ってください。
+
+```sh
+swb companion service install
+```
+
+Linux では、`systemd --user` がユーザーのアカウントでサービスを実行します。PC の起動時にサービスを開始し、ログアウト後も動かすには、`loginctl enable-linger "$USER"` を実行してください。Muse には、BlueZ にアクセスできるローカルアカウントを使ってください。
+
+macOS では、デスクトップにログインしてからサービスをインストールしてください。Muse を使う場合は、SwB が必要に応じて署名済みの **SwB Companion** アプリもインストールします。macOS の初回の確認画面で、**SwB Companion** に Bluetooth へのアクセスを許可してください。
+
+Windows では、サインイン時にタスク スケジューラがサービスを起動します。Muse は Linux または macOS で使ってください。
+
+ローカルのツールに必要な変数は、サービスの管理ツールで設定してください。
+
+`swb companion service start` でサービスを開始してください。`swb companion service status` でサービスの状態を確認してください。`swb companion service logs` でログを確認してください。
+
+`swb companion status` でコンパニオンの実行と接続の状態を確認してください。SwB のアドレスも表示されます。Muse を使う場合は、Bluetooth の状態も表示されます。
+
+すぐにサービスを停止するには、`swb companion service stop` を使ってください。自動起動の設定を削除するには、`swb companion service uninstall` を使ってください。デバイスのキーは保持されます。
 
 ## 接続を解除する
 

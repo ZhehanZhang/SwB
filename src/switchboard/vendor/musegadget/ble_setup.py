@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Protocol
 
@@ -44,6 +45,7 @@ PLAINTEXT_STATUSES = frozenset({
     "error_pairing_decrypt",
 })
 DISCONNECT_AFTER_ERROR_S = 0.3
+_LOG = logging.getLogger(__name__)
 
 
 class Transport(Protocol):
@@ -145,6 +147,9 @@ class SetupController:
             return
         action = command.get("action")
         action = action if isinstance(action, str) else ""
+        if action in {"get_device_info", "pairing_client_hello", "pairing_encrypted",
+                      "pairing_client_finished", "wifi_scan", "provision_v2"}:
+            _LOG.debug("Muse BLE received %s (%d bytes)", action, len(raw))
         if not decrypted and action == "pairing_client_hello":
             await self._handle_hello(command)
         elif not decrypted and action == "pairing_encrypted":
@@ -267,6 +272,8 @@ class SetupController:
         self._completed = True
 
     async def send_status(self, status: str, generation: int = 0) -> None:
+        if status in PLAINTEXT_STATUSES or status in {"pairing_confirmed", "auth_ok", "auth_failed"}:
+            _LOG.debug("Muse BLE status %s", status)
         envelope = self._pairing.encrypt_status(status, generation)
         if envelope is not None:
             await self.send_json(envelope)
@@ -276,7 +283,12 @@ class SetupController:
             await self._transport.send_packets([payload] if len(payload) <= mtu - 3 else encode_chunks(payload, mtu))
 
     async def send_json(self, obj: dict) -> None:
-        await self._transport.send_packets(encode_chunks(_compact(obj).encode(), self._transport.mtu()))
+        payload = _compact(obj).encode()
+        packets = encode_chunks(payload, self._transport.mtu())
+        kind = obj.get("type")
+        if kind in ("device_info", "pairing_ready", "pairing_encrypted"):
+            _LOG.debug("Muse BLE sending %s (%d bytes, %d notifications)", kind, len(payload), len(packets))
+        await self._transport.send_packets(packets)
 
     async def send_encrypted_json(self, obj: dict, generation: int = 0) -> None:
         envelope = self._pairing.encrypt_json(_compact(obj), generation)

@@ -44,8 +44,8 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
 companion = [
-  "bless==0.2.6; python_version < '3.14' and (sys_platform == 'linux' or sys_platform == 'darwin')",
-  "bleak>=0.22.3,<1; python_version < '3.14' and (sys_platform == 'linux' or sys_platform == 'darwin')",
+  "bless==0.2.6; python_version < '3.14' and sys_platform == 'linux'",
+  "bleak>=0.22.3,<1; python_version < '3.14' and sys_platform == 'linux'",
 ]
 
 [project.urls]
@@ -66,7 +66,7 @@ dev = ["ruff>=0.11,<1"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-switchboard = ["brand.json", "static/**/*", "prompts/setup/*.md", "slack/avatars/*", "marks/*.svg", "marks/*.css", "vendor/musegadget/README.md"]
+switchboard = ["brand.json", "companion/macos-helper.json", "static/**/*", "prompts/setup/*.md", "slack/avatars/*", "marks/*.svg", "marks/*.css", "vendor/musegadget/README.md"]
 
 [tool.ruff.lint]
 select = ["F", "E9", "E401", "E711", "E722"]

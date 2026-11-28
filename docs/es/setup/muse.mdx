@@ -17,11 +17,22 @@ Pide al agente que llame a `connect(what="muse", choose={"gadget": true})`. Sigu
 
 Crea un token personal en la [página SDK tokens de Muse](https://gadgets.muse.ai/settings/sdk-tokens). Guárdalo con el enlace de entrega de un solo uso que te da tu agente.
 
-Usa un Mac o un ordenador con Linux que tenga Bluetooth y esté cerca de tu teléfono. En macOS, usa Terminal y permite el acceso a Bluetooth cuando macOS lo pida. En Linux, da al companion acceso a BlueZ, el servicio del sistema para Bluetooth.
+Usa un Mac o un ordenador con Linux que tenga Bluetooth. Coloca el ordenador cerca de tu teléfono.
 
 Para añadir Muse a un companion ya emparejado, ejecuta antes `swb companion disconnect`. Obtén un [código de emparejamiento del companion](/es/docs/companion#emparejar-un-dispositivo). El código funciona una sola vez y caduca a los 10 minutos.
 
-Cambia la dirección de ejemplo por tu dirección de SwB. Ejecuta este comando en el ordenador.
+Cambia la dirección de ejemplo por tu dirección de SwB.
+
+En macOS, inicia sesión en el escritorio. Ejecuta estos comandos.
+
+```sh
+uv tool install swb-one
+swb companion connect https://swb.example.com --cap muse
+```
+
+SwB instala la aplicación firmada **SwB Companion** en `~/Applications` cuando hace falta. Permite que **SwB Companion** use Bluetooth la primera vez que macOS te lo pida.
+
+En Linux, da al companion acceso a BlueZ, el servicio del sistema para Bluetooth. Ejecuta este comando.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
@@ -30,6 +41,8 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 Escribe el código cuando el comando lo pida. Lo que escribes queda oculto. Mantén el companion en marcha mientras emparejas Muse. Pide a tu agente que inicie el emparejamiento de Muse.
 
 En la app de Muse, abre **Settings**. Abre **Devices**. Activa **Developer mode**. Selecciona **Add Device**. Selecciona el nombre de dispositivo que te da tu agente. Si la app pide Wi-Fi, selecciona **Use current connection**.
+
+SwB usa Bluetooth solo para emparejar Muse. Si SwB indica qué aplicación ocupa espacio en la señal Bluetooth, pausa esa aplicación. Vuelve a abrir **Add Device**. Al terminar el emparejamiento, vuelve a abrir la otra aplicación.
 
 ## Añadir un conector para usar las herramientas
 

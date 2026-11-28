@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import re
-import subprocess
 import sys
-import threading
 from dataclasses import asdict
 from pathlib import Path
 
-from ...vendor.musegadget import __version__
+from ... import __version__
 from ...vendor.musegadget.ble_framing import (
     CHUNK_STAGGER_S,
     DEFAULT_ATT_MTU,
@@ -45,21 +42,6 @@ def _linux_adapter() -> str | None:
     return next((path.name for path in sorted(Path("/sys/class/bluetooth").glob("hci[0-9]*"))), None)
 
 
-def _mac_adapter_available() -> bool:
-    try:
-        info = subprocess.run(
-            ["/usr/sbin/system_profiler", "SPBluetoothDataType", "-json"],
-            capture_output=True, check=True, timeout=3,
-        )
-        entries = json.loads(info.stdout)["SPBluetoothDataType"]
-        return any(
-            entry.get("controller_properties", {}).get("controller_state") == "attrib_on"
-            for entry in entries
-        )
-    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
-        return False
-
-
 class _CurrentConnection:
     """The pairing job arrived over the companion's authenticated connection."""
 
@@ -85,12 +67,7 @@ class _BlessTransport:
 
     async def start(self, controller: SetupController) -> None:
         self._controller = controller
-        params = {"name": self._name, "loop": self._loop}
-        if sys.platform == "linux":
-            params["adapter"] = _linux_adapter()
-            self._server = self._bless.BlessServer(**params)
-        else:
-            self._server = await self._create_corebluetooth(params)
+        self._server = self._bless.BlessServer(name=self._name, loop=self._loop, adapter=_linux_adapter())
         server = self._server
 
         def receive(packet: bytes) -> None:
@@ -121,35 +98,7 @@ class _BlessTransport:
             None, permissions.readable,
         )
         self._tx = server.get_characteristic(TX_UUID)
-        if sys.platform == "linux":
-            await self._start_bluez(unsubscribe)
-        elif await server.start(prioritize_local_name=True) is False:
-            raise CapabilityError(_NO_ADAPTER)
-
-    async def _create_corebluetooth(self, params: dict):
-        """Bless can wait synchronously for the Bluetooth power-on callback."""
-        ready = self._loop.create_future()
-
-        def finish(server) -> None:
-            if not ready.done():
-                ready.set_result(server)
-
-        def create() -> None:
-            asyncio.set_event_loop(self._loop)
-            try:
-                server = self._bless.BlessServer(**params)
-            except Exception:
-                server = None
-            finally:
-                asyncio.set_event_loop(None)
-            with contextlib.suppress(RuntimeError):
-                self._loop.call_soon_threadsafe(finish, server)
-
-        threading.Thread(target=create, name="swb-muse-bluetooth", daemon=True).start()
-        server = await asyncio.wait_for(ready, timeout=10)
-        if server is None:
-            raise CapabilityError(_NO_ADAPTER)
-        return server
+        await self._start_bluez(unsubscribe)
 
     async def _start_bluez(self, unsubscribe) -> None:
         """Register the SDK advertisement without changing the adapter's name."""
@@ -202,17 +151,10 @@ class _BlessTransport:
         server = self._server
         if server is None:
             return
-        if sys.platform == "linux":
-            bus = getattr(server, "bus", None)
-            if bus is not None:
-                with contextlib.suppress(Exception):
-                    bus.disconnect()
-        else:
+        bus = getattr(server, "bus", None)
+        if bus is not None:
             with contextlib.suppress(Exception):
-                await asyncio.wait_for(server.stop(), timeout=3)
-                delegate = getattr(server, "peripheral_manager_delegate", None)
-                if delegate is not None:
-                    delegate.peripheral_manager.removeAllServices()
+                bus.disconnect()
 
 
 class MuseCapability(Capability):
@@ -241,17 +183,15 @@ class MuseCapability(Capability):
         self._busy = False
 
     def available(self) -> str | None:
-        if sys.platform not in {"linux", "darwin"}:
+        if sys.platform == "darwin":
+            return None
+        if sys.platform != "linux":
             return "Muse Bluetooth advertising is unavailable on this platform"
         try:
             _load_bless()
         except CapabilityError as exc:
             return str(exc)
-        if sys.platform == "linux" and _linux_adapter() is None:
-            return _NO_ADAPTER
-        if sys.platform == "darwin" and not _mac_adapter_available():
-            return _NO_ADAPTER
-        return None
+        return None if _linux_adapter() else _NO_ADAPTER
 
     async def invoke(self, action: str, args: dict, ctx: JobContext) -> dict:
         if action != "pair":
@@ -287,7 +227,14 @@ class MuseCapability(Capability):
             if not commit(lambda: True):
                 raise ProvisionFailed("error_storage")
 
-        transport = _BlessTransport(_load_bless(), identity.ble_name)
+        if sys.platform == "darwin":
+            from ..macos_transport import MacTransport
+
+            transport = MacTransport(identity.ble_name)
+            mac = True
+        else:
+            transport = _BlessTransport(_load_bless(), identity.ble_name)
+            mac = False
         controller = SetupController(
             pairing=PairingSession(
                 node_id=identity.setup_node_id, device_id=identity.device_id, mac=identity.mac,
@@ -300,14 +247,27 @@ class MuseCapability(Capability):
             provision=provision,
         )
         self._busy = True
+        observer = None
         try:
             async with asyncio.timeout(window_s):
+                if mac:
+                    from ..macos_advertising import watch
+
+                    async def report(app: str | None) -> None:
+                        await ctx.progress({"advertising_conflict": app})
+
+                    observer = asyncio.create_task(watch(identity.ble_name, report))
                 try:
                     await transport.start(controller)
+                except CapabilityError:
+                    raise
                 except Exception:
                     raise CapabilityError(_NO_ADAPTER) from None
                 await ctx.progress({"ble_name": identity.ble_name, "window_s": window_s})
-                await controller.run()
+                if mac:
+                    await transport.run()
+                else:
+                    await controller.run()
             await asyncio.sleep(BLE_SHUTDOWN_DELAY_S)
             return {"paired": True, "node_id": identity.setup_node_id}
         except ProvisionFailed:
@@ -321,6 +281,10 @@ class MuseCapability(Capability):
         finally:
             controller.close()
             try:
+                if observer is not None:
+                    observer.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await observer
                 await transport.stop()
             finally:
                 self._busy = False

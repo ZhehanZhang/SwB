@@ -20,6 +20,9 @@ Use [the English release notes](docs/release-notes/1.0.0.md) for the GitHub Rele
 | --- | --- |
 | GitHub Environments | Create `pypi`. Allow release tags that match `v*`. |
 | GitHub Environments | Create `testpypi`. Allow the branch that runs the test upload. |
+| GitHub Environments | Create `macos-signing`. Allow release tags that match `v*`. |
+| GitHub Rulesets | Restrict creation, updates, and deletion of `v*` tags to release managers. |
+| GitHub Settings | Keep releases editable so the workflow can attach the signed macOS app. |
 | [PyPI Trusted Publishing](https://pypi.org/manage/account/publishing/) | Add a publisher for `swb-one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `pypi`. Use a pending publisher for the first upload. |
 | [TestPyPI Trusted Publishing](https://test.pypi.org/manage/account/publishing/) | Add a publisher for `swb-one`. Set owner `ZhehanZhang`, repository `SwB`, workflow `release.yml`, and environment `testpypi`. Use a pending publisher for the first upload. |
 | GitHub Actions | Run the PyPI workflow by hand to upload to TestPyPI. |
@@ -28,6 +31,16 @@ Use [the English release notes](docs/release-notes/1.0.0.md) for the GitHub Rele
 | GitHub pull request | Merge the approved release changes into `main`. |
 | GitHub Packages | Change `ghcr.io/zhehanzhang/swb` visibility to public when approved. |
 | GitHub Settings | Change the repository visibility to public after the privacy review and approval. |
+
+Store these five secrets in the `macos-signing` environment.
+
+| Secret | Value |
+| --- | --- |
+| `SWB_MACOS_CERTIFICATE_P12` | Base64 text from the Developer ID Application certificate and private key file |
+| `SWB_MACOS_CERTIFICATE_PASSWORD` | Password for the certificate file |
+| `SWB_ASC_KEY_ID` | App Store Connect key ID |
+| `SWB_ASC_ISSUER_ID` | App Store Connect issuer ID |
+| `SWB_ASC_PRIVATE_KEY` | App Store Connect private key file contents |
 
 ## Tag the merge commit
 
@@ -39,12 +52,20 @@ git tag -a v1.0.0 <main-merge-commit> -m "SwB 1.0.0"
 git push origin refs/tags/v1.0.0
 ```
 
-The tag starts the PyPI workflow.
+The tag selects the commit for the release.
 
 ## Publish the GitHub Release
 
+Make the repository public before you publish the release.
+
 Select `v1.0.0` in the GitHub Release draft and publish the release.
 
-The release starts the PyPI and container workflows. PyPI keeps the files uploaded by the tag run. The container workflow publishes `1.0.0`, `1.0`, and `latest` for AMD64 and ARM64.
+The release starts the PyPI and container workflows. The PyPI workflow signs the macOS app and attaches it to the release. It checks the public download before it uploads the Python packages.
+
+For retries, select **Re-run failed jobs**. This keeps the original signed archive after the asset upload. A full rerun creates an archive with a new signing timestamp.
+
+Keep the signed app asset attached to its release. Each Python package checks for those exact bytes.
+
+The container workflow publishes `1.0.0`, `1.0`, and `latest` for AMD64 and ARM64.
 
 Run the container workflow by hand on the private repository to publish a private candidate. Verify package visibility in GitHub Packages.

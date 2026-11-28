@@ -3,35 +3,207 @@ name: Publish to PyPI
 on:
   release:
     types: [published]
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: pypi-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build:
+  release-version:
+    if: github.event_name == 'release' && github.repository == 'ZhehanZhang/SwB'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.verify.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify the published release and package version
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -e '.release.draft == false and .release.immutable != true and .repository.private == false' "$GITHUB_EVENT_PATH" >/dev/null || {
+            echo "Expected a public, published release that accepts asset uploads." >&2
+            exit 1
+          }
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "$GITHUB_REF" != "refs/tags/v$version" ]]; then
+            echo "Expected a numeric package version and a matching release tag." >&2
+            exit 1
+          fi
+          status=$(gh api --method GET "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...main" -f per_page=1 --jq .status)
+          if [[ "$status" != identical && "$status" != ahead ]]; then
+            echo "The release commit must be on main." >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+  sign-helper:
+    needs: release-version
+    runs-on: macos-15
+    timeout-minutes: 45
+    environment: macos-signing
+    permissions:
+      contents: read
+    outputs:
+      sha256: ${{ steps.archive.outputs.sha256 }}
+      team_id: ${{ steps.archive.outputs.team_id }}
+    env:
+      APP_NAME: SwB Companion.app
+      ARCHIVE_NAME: swb-companion-macos.zip
+      APPLE_TEAM_ID: Q64ZL36CJN
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build the helper for the release version
+        env:
+          VERSION: ${{ needs.release-version.outputs.version }}
+        run: |
+          app="$RUNNER_TEMP/$APP_NAME"
+          SWB_BLE_SMOKE_TEST=0 bash native/companion-macos/build.sh "$app" "$VERSION"
+          for key in CFBundleShortVersionString CFBundleVersion; do
+            test "$(/usr/bin/plutil -extract "$key" raw "$app/Contents/Info.plist")" = "$VERSION"
+          done
+      - name: Sign the app with Developer ID
+        env:
+          SWB_MACOS_CERTIFICATE_P12: ${{ secrets.SWB_MACOS_CERTIFICATE_P12 }}
+          SWB_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.SWB_MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          : "${SWB_MACOS_CERTIFICATE_P12:?Configure the signing certificate}"
+          : "${SWB_MACOS_CERTIFICATE_PASSWORD:?Configure the signing certificate password}"
+          umask 077
+          work=$(mktemp -d "$RUNNER_TEMP/signing.XXXXXX")
+          keychain="$work/signing.keychain-db"
+          trap 'security delete-keychain "$keychain" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
+          password=$(openssl rand -hex 32)
+          printf '%s' "$SWB_MACOS_CERTIFICATE_P12" | /usr/bin/base64 --decode > "$work/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security import "$work/certificate.p12" -P "$SWB_MACOS_CERTIFICATE_PASSWORD" -f pkcs12 -T /usr/bin/codesign -k "$keychain" >/dev/null
+          rm "$work/certificate.p12"
+          unset SWB_MACOS_CERTIFICATE_P12 SWB_MACOS_CERTIFICATE_PASSWORD
+          for name in DeveloperIDCA DeveloperIDG2CA; do
+            curl -fsS --retry 3 --max-time 30 "https://www.apple.com/certificateauthority/$name.cer" -o "$work/$name.cer"
+            security import "$work/$name.cer" -k "$keychain" >/dev/null
+          done
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk '/"Developer ID Application: / {print $2}')
+          if [[ ! "$identity" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+            echo "Expected exactly one valid Developer ID Application signing identity." >&2
+            exit 1
+          fi
+          codesign --force --sign "$identity" --keychain "$keychain" --options runtime --timestamp "$RUNNER_TEMP/$APP_NAME"
+          codesign --verify --strict --deep "$RUNNER_TEMP/$APP_NAME"
+      - name: Notarize and staple the app
+        env:
+          SWB_ASC_KEY_ID: ${{ secrets.SWB_ASC_KEY_ID }}
+          SWB_ASC_ISSUER_ID: ${{ secrets.SWB_ASC_ISSUER_ID }}
+          SWB_ASC_PRIVATE_KEY: ${{ secrets.SWB_ASC_PRIVATE_KEY }}
+        run: |
+          : "${SWB_ASC_KEY_ID:?Configure the notarization key ID}"
+          : "${SWB_ASC_ISSUER_ID:?Configure the notarization issuer ID}"
+          : "${SWB_ASC_PRIVATE_KEY:?Configure the notarization private key}"
+          umask 077
+          work=$(mktemp -d "$RUNNER_TEMP/notary.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          app="$RUNNER_TEMP/$APP_NAME"
+          printf '%s\n' "$SWB_ASC_PRIVATE_KEY" > "$work/key.p8"
+          unset SWB_ASC_PRIVATE_KEY
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$work/submission.zip"
+          xcrun notarytool submit "$work/submission.zip" --wait --timeout 30m --output-format json \
+            --key "$work/key.p8" --key-id "$SWB_ASC_KEY_ID" --issuer "$SWB_ASC_ISSUER_ID" > "$work/result.json"
+          if ! jq -e '.status == "Accepted"' "$work/result.json" >/dev/null; then
+            jq '{id, status, message}' "$work/result.json" >&2
+            exit 1
+          fi
+          xcrun stapler staple "$app"
+      - name: Archive and verify the stapled app
+        id: archive
+        run: |
+          archive="$RUNNER_TEMP/$ARCHIVE_NAME"
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/$APP_NAME" "$archive"
+          work=$(mktemp -d "$RUNNER_TEMP/verified.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          PYTHONPATH=src python3 - "$archive" "$work" "$APPLE_TEAM_ID" <<'PY'
+          import sys
+          from pathlib import Path
+
+          from switchboard.companion.macos_app import _MAX_ARCHIVE, _extract, verify_app
+
+          archive, destination = map(Path, sys.argv[1:3])
+          if archive.stat().st_size > _MAX_ARCHIVE:
+              raise SystemExit("The helper archive exceeds the installer download limit")
+          app = _extract(archive, destination)
+          verify_app(app, sys.argv[3], current=False, gatekeeper=True)
+          PY
+          xcrun stapler validate "$work/$APP_NAME"
+          sha256=$(shasum -a 256 "$archive" | cut -d' ' -f1)
+          printf 'sha256=%s\nteam_id=%s\n' "$sha256" "$APPLE_TEAM_ID" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-helper
+          path: ${{ runner.temp }}/swb-companion-macos.zip
+          compression-level: 0
+          if-no-files-found: error
+
+  upload-helper:
+    needs: sign-helper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-helper
+      - name: Attach the signed archive to the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          SHA256: ${{ needs.sign-helper.outputs.sha256 }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          archive=swb-companion-macos.zip
+          printf '%s  %s\n' "$SHA256" "$archive" | sha256sum --check
+          release=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID")
+          jq -e --arg tag "$GITHUB_REF_NAME" '.tag_name == $tag and .draft == false and .immutable != true' <<< "$release" >/dev/null
+          if jq -e --arg name "$archive" 'any(.assets[]; .name == $name)' <<< "$release" >/dev/null; then
+            jq -e --arg name "$archive" --arg digest "sha256:$SHA256" \
+              'any(.assets[]; .name == $name and .digest == $digest and .state == "uploaded")' <<< "$release" >/dev/null || {
+                echo "An asset with this name already exists and differs from this signed archive." >&2
+                exit 1
+              }
+            exit 0
+          fi
+          curl -fsS --max-time 120 -o /dev/null \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/zip' \
+            --data-binary "@$archive" "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$archive"
+
+  build:
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.upload-helper.result == 'success') }}
+    needs: [release-version, sign-helper, upload-helper]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
-      - name: Verify the release tag matches the package version
-        if: github.event_name != 'workflow_dispatch'
-        run: |
-          uv run --no-project python - <<'PY'
-          import os, tomllib
-          with open("pyproject.toml", "rb") as file:
-              version = tomllib.load(file)["project"]["version"]
-          if os.environ["GITHUB_REF_NAME"] != f"v{version}":
-              raise SystemExit(f"Release tag must match the package version: v{version}")
-          PY
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -39,7 +211,44 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web
       - run: npm run build --prefix web
+      - name: Pin the signed helper in the package
+        if: github.event_name == 'release'
+        env:
+          SHA256: ${{ needs.sign-helper.outputs.sha256 }}
+          TEAM_ID: ${{ needs.sign-helper.outputs.team_id }}
+        run: |
+          uv run --no-project python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          sha256 = os.environ["SHA256"]
+          team_id = os.environ["TEAM_ID"]
+          if not re.fullmatch("[0-9a-f]{64}", sha256) or not re.fullmatch("[A-Z0-9]{10}", team_id):
+              raise SystemExit("Missing or invalid signed helper metadata")
+          manifest = Path("src/switchboard/companion/macos-helper.json")
+          manifest.write_text(json.dumps({"sha256": sha256, "team_id": team_id}) + "\n", encoding="utf-8")
+          PY
       - run: uv build
+      - name: Check that both distributions pin the signed helper
+        if: github.event_name == 'release'
+        env:
+          VERSION: ${{ needs.release-version.outputs.version }}
+        run: |
+          uv run --no-project python - <<'PY'
+          import os, tarfile, zipfile
+          from pathlib import Path
+
+          base = f"swb_one-{os.environ['VERSION']}"
+          member = "switchboard/companion/macos-helper.json"
+          manifest = Path("src", member).read_bytes()
+          wheel, = Path("dist").glob(f"{base}-*.whl")
+          with zipfile.ZipFile(wheel) as archive:
+              if archive.read(member) != manifest:
+                  raise SystemExit("Wheel helper manifest differs from the pinned manifest")
+          with tarfile.open(Path("dist", f"{base}.tar.gz")) as archive:
+              if archive.extractfile(f"{base}/src/{member}").read() != manifest:
+                  raise SystemExit("Source helper manifest differs from the pinned manifest")
+          PY
       - run: uvx twine check dist/*
       - uses: actions/upload-artifact@v4
         with:
@@ -48,8 +257,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.event_name != 'workflow_dispatch'
-    needs: build
+    if: github.event_name == 'release'
+    needs: [sign-helper, build]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -61,9 +270,16 @@ jobs:
         with:
           name: distributions
           path: dist/
+      - name: Verify the public helper download before publishing
+        env:
+          SHA256: ${{ needs.sign-helper.outputs.sha256 }}
+        run: |
+          archive=$(mktemp)
+          trap 'rm -f "$archive"' EXIT
+          curl -fsSL --proto '=https' --proto-redir '=https' --retry 3 --retry-all-errors --retry-max-time 60 --max-time 30 \
+            "https://github.com/ZhehanZhang/SwB/releases/download/$GITHUB_REF_NAME/swb-companion-macos.zip" -o "$archive"
+          printf '%s  %s\n' "$SHA256" "$archive" | sha256sum --check
       - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          skip-existing: true
 
   publish-test:
     if: github.event_name == 'workflow_dispatch'

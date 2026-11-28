@@ -38,7 +38,9 @@ DUPLICATE_WINDOW = 600
 MESSAGE_LIMIT = 20_000
 PAIRING_ERRORS = frozenset((OFFLINE, DISCONNECTED, "Bluetooth adapter unavailable", "Deployment refused the pairing",
                             "Install swb-one[companion]", "Muse Bluetooth advertising is unavailable on this platform",
-                            "Muse pairing is already open", "Pairing window closed"))
+                            "Muse pairing is already open", "Pairing window closed",
+                            "Update the SwB Companion app with swb companion service install or swb companion run.",
+                            "SwB Companion could not start Bluetooth advertising."))
 
 
 def validate_sdk_token(value: str) -> None:
@@ -65,6 +67,7 @@ class MuseBlock(Block):
         self._tasks: tuple[asyncio.Task[Any], ...] = ()
         self._queued = asyncio.Event()
         self._pairing: tuple[str, Identity] | None = None
+        self._advertising_conflict: str | None = None
         self._verified_pairing = False
         self._pair_error: str | None = None
         self._claim_lock = asyncio.Lock()
@@ -128,10 +131,19 @@ class MuseBlock(Block):
             if companion_id not in online:
                 raise BlockError("Choose an online companion with the Muse capability.")
             self._pairing = (companion_id, self._identity())
+            self._advertising_conflict = None
             self._verified_pairing = False
             self._pair_error = None
             self.core.spawn(self._pair(self._pairing, sdk_token, principal), name="muse-pair")
         if self._pairing is not None:
+            conflict = self._advertising_conflict
+            if conflict is not None:
+                step = {"by": "person", "do": "Pause the app named below while Muse pairs. Then reopen Add Device."}
+                if conflict:
+                    step["application"] = frame_sender(conflict, "companion", self._pairing[0], "Bluetooth")[1]
+                else:
+                    step["do"] = "Pause other apps that share devices over Bluetooth. Then reopen Add Device."
+                return {"done": done, "pairing": "in_progress", "bluetooth": "advertising_conflict", "next": [step]}
             return {"done": done, "pairing": "in_progress", "next": [
                 {"by": "person", "do": f"Open the Muse app. Turn on Developer mode in Settings > Devices. "
                                       f"Select Add Device and choose {self._pairing[1].ble_name}. "
@@ -141,8 +153,12 @@ class MuseBlock(Block):
         if not online:
             return {"done": done, **closed, "next": [
                 {"by": "you", "do": "Create a companion pairing code.", "call": {"tool": "companion_code", "arguments": {}}},
-                {"by": "person", "do": f"Run uvx --python 3.13 --from 'swb-one[companion]' swb companion connect {quote(base)} --cap muse. "
-                                      "Enter the pairing code at the prompt."},
+                {"by": "person", "do": "On macOS, install SwB with uv tool install swb-one. "
+                                      f"Run swb companion connect {quote(base)} --cap muse. "
+                                      "Allow Bluetooth for SwB Companion when macOS asks. "
+                                      "On Linux, run uvx --python 3.13 --from 'swb-one[companion]' "
+                                      f"swb companion connect {quote(base)} --cap muse. "
+                                      "Enter the pairing code at the hidden prompt."},
             ]}
         step = {"tool": "connect", "arguments": {"what": "muse", "choose": {"companion": online[0]}}}
         return {"done": done, **closed, "companions": online, "next": [
@@ -152,10 +168,18 @@ class MuseBlock(Block):
     async def _pair(self, pending: tuple[str, Identity], sdk_token: str, principal: Principal) -> None:
         companion, ident = pending
         error = "Muse pairing did not finish."
+
+        def progress(data: dict[str, Any]) -> None:
+            if self._pairing is not pending or "advertising_conflict" not in data:
+                return
+            app = data["advertising_conflict"]
+            if app is None or (isinstance(app, str) and len(app) <= 80 and (not app or app.isprintable())):
+                self._advertising_conflict = app
+
         try:
             await self.core.companions.invoke(companion, "muse", "pair", {"sdk_token": sdk_token, "identity": {"mac": ident.mac},
                                                                          "window_s": PAIRING_WINDOW}, timeout_s=660,
-                                              principal=principal)
+                                              on_progress=progress, principal=principal)
         except CompanionError as exc:
             if str(exc) in PAIRING_ERRORS:
                 error = str(exc)
@@ -163,6 +187,7 @@ class MuseBlock(Block):
             pass
         finally:
             self._pairing = None
+            self._advertising_conflict = None
             self._pair_error = None if self._verified_pairing else error
 
     async def _claim_pairing(self, principal: Principal, payload: dict[str, Any]) -> dict[str, Any]:

@@ -141,8 +141,8 @@ def _is_reparse(info: os.stat_result) -> bool:
     return bool(getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
-def state_path() -> Path:
-    if override := os.environ.get("SWB_COMPANION_HOME"):
+def state_path(*, use_override: bool = True) -> Path:
+    if (override := os.environ.get("SWB_COMPANION_HOME")) and use_override:
         home = Path(override).expanduser()
     elif os.name == "nt":
         home = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming")) / "swb"

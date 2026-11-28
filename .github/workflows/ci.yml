@@ -66,3 +66,33 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: docker build --target paas -t switchboard:ci .
+
+  macos-helper:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - name: Compile the unsigned macOS helper
+        run: |
+          app="$RUNNER_TEMP/SwB Companion.app"
+          bash native/companion-macos/build.sh "$app"
+          executable=$(/usr/bin/plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")
+          slices="$(xcrun lipo -archs "$app/Contents/MacOS/$executable")"
+          [[ " $slices " == *" arm64 "* && " $slices " == *" x86_64 "* ]]
+      - name: Test the Mac advertisement and GATT profile
+        run: |
+          cd native/companion-macos
+          xcrun swiftc -o "$RUNNER_TEMP/advertisement-test" \
+            Bootstrap.swift Peripheral.swift Protocol.swift SocketChannel.swift tests/Advertisement.swift
+          "$RUNNER_TEMP/advertisement-test"
+      - name: Test the Python and Swift socket protocol
+        env:
+          SWB_TEST_MAC_HELPER: ${{ runner.temp }}/SwB Companion.app
+        run: |
+          uv sync --locked --extra test
+          uv run --no-sync pytest -v -o faulthandler_timeout=30 tests/test_companion_macos.py

@@ -17,11 +17,22 @@ Bitten Sie den Agenten, `connect(what="muse", choose={"gadget": true})` aufzuruf
 
 Erstellen Sie auf der [Seite Muse SDK tokens](https://gadgets.muse.ai/settings/sdk-tokens) ein persönliches Token. Speichern Sie es über den einmaligen Claim-Link von SwB, den Ihnen Ihr Agent gibt.
 
-Verwenden Sie einen Mac oder einen Linux-Computer mit Bluetooth in der Nähe Ihres Telefons. Verwenden Sie unter macOS das Terminal und erlauben Sie den Bluetooth-Zugriff, wenn macOS danach fragt. Geben Sie dem Companion unter Linux Zugriff auf BlueZ, den Systemdienst für Bluetooth.
+Verwenden Sie einen Mac oder einen Linux-Computer mit Bluetooth. Stellen Sie den Computer in die Nähe Ihres Telefons.
 
 Wenn Sie Muse zu einem bereits gekoppelten Companion hinzufügen möchten, führen Sie zuerst `swb companion disconnect` aus. Holen Sie einen [Kopplungscode für den Companion](/de/docs/companion#gerät-koppeln). Der Code gilt einmalig und läuft nach 10 Minuten ab.
 
-Ersetzen Sie die Beispieladresse durch Ihre SwB-Adresse. Führen Sie diesen Befehl auf dem Computer aus.
+Ersetzen Sie die Beispieladresse durch Ihre SwB-Adresse.
+
+Melden Sie sich unter macOS am Desktop an. Führen Sie diese Befehle aus.
+
+```sh
+uv tool install swb-one
+swb companion connect https://swb.example.com --cap muse
+```
+
+SwB installiert bei Bedarf die signierte App **SwB Companion** in `~/Applications`. Erlauben Sie **SwB Companion** den Bluetooth-Zugriff, wenn macOS zum ersten Mal danach fragt.
+
+Geben Sie dem Companion unter Linux Zugriff auf BlueZ, den Systemdienst für Bluetooth. Führen Sie diesen Befehl aus.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
@@ -30,6 +41,8 @@ uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.
 Geben Sie den Code an der verdeckten Eingabeaufforderung ein. Lassen Sie den Companion laufen, während Sie Muse koppeln. Bitten Sie Ihren Agenten, die Kopplung mit Muse zu starten.
 
 Öffnen Sie in der Muse-App **Settings**. Öffnen Sie **Devices**. Aktivieren Sie **Developer mode**. Wählen Sie **Add Device** aus. Wählen Sie den Gerätenamen aus, den Ihr Agent Ihnen nennt. Wenn die App nach WLAN fragt, wählen Sie **Use current connection** aus.
+
+SwB nutzt Bluetooth nur für die Muse-Kopplung. Wenn SwB meldet, dass eine andere App Platz im Bluetooth-Signal belegt, halten Sie die genannte App vorübergehend an. Öffnen Sie **Add Device** erneut. Öffnen Sie die andere App nach der Kopplung wieder.
 
 ## Connector für den Zugriff auf Tools hinzufügen
 

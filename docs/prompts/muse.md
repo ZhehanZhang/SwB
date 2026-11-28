@@ -8,17 +8,31 @@ Use a SwB agent with full owner access. If you need owner access, ask me to move
 
 Call `connect(what="muse", choose={"gadget": true})`. Do each action marked `you`. Give me each action marked `person` separately. Direct me to the SwB claim link to save my Muse SDK token.
 
-A companion is a SwB program that runs on my own device. It pairs with Muse over Bluetooth. Ask me to use a Mac or Linux computer near my phone. On macOS, ask me to use Terminal. Ask me to allow Bluetooth access when macOS asks. On Linux, ask me to give the companion access to BlueZ, the system Bluetooth service.
+A companion is a SwB program that runs on my own device. It pairs with Muse over Bluetooth. Ask me to use a Mac or Linux computer near my phone. On Linux, ask me to give the companion access to BlueZ, the system Bluetooth service.
 
-Use the companion guide at https://swb.one/docs/companion to help me get a companion pairing code in private. The code works once and expires after 10 minutes. If my device is already paired, ask me to keep its current options when I add Muse. Ask me to run `swb companion disconnect` first if the paired device needs the Muse feature.
+If my device is already paired with Muse, use that pairing. If the paired device needs the Muse feature, keep its current options and ask me to run `swb companion disconnect` first. For a new pairing, use the companion guide at https://swb.one/docs/companion to get a pairing code in private. The code works once and expires after 10 minutes.
 
-Replace the example address with my SwB address. Ask me to run this command on my device.
+Ask if I want the companion to start at sign-in. Use the foreground option by default. For a new pairing, give me the command for my computer in place of the pairing command from `connect`. Replace the example address with my SwB address.
+
+On macOS, use the installed `swb` in a desktop session. After publication, ask me to install it with `uv tool install swb-one`. Use this command for a new foreground pairing.
+
+```sh
+swb companion connect https://swb.example.com --cap muse
+```
+
+The foreground commands and `swb companion service install` install the signed SwB Companion app in `~/Applications` as needed. Ask me to approve Bluetooth access for SwB Companion when macOS first asks.
+
+On Linux, use Python 3.13 and the `companion` package extra. Use this command for a new foreground pairing after publication.
 
 ```sh
 uvx --python 3.13 --from 'swb-one[companion]' swb companion connect https://swb.example.com --cap muse
 ```
 
-Ask me to enter the code at the hidden prompt. Ask me to leave the companion running until Muse pairs. Follow the pairing action from `connect` to start the gadget.
+For a new foreground pairing, ask me to run the command on my device. Ask me to enter the code at the hidden prompt. Ask me to keep the companion running until Muse pairs. If a paired companion needs to start, use `swb companion run` with the same settings as for pairing.
+
+If I choose the background option, follow the background section at https://swb.one/docs/companion. On macOS, use the installed `swb` as above. On Linux after publication, ask me to install SwB with `uv tool install --python 3.13 'swb-one[companion]'`. Before publication, use the installed source build. For a new pairing, use `swb companion connect https://swb.example.com --cap muse --no-run` with my address and pairing options. Ask me to enter the code at the hidden prompt. Ask me to stop any foreground run. Ask me to run `swb companion service install`. Check the connection and Bluetooth with `swb companion status`.
+
+Follow the pairing action from `connect` to start the gadget when the companion is online.
 
 Ask me to open **Settings** in the Muse app. Ask me to open **Devices**. Ask me to turn on **Developer mode**. Ask me to select **Add Device**. Give me the device name from `connect`. If the app asks for Wi-Fi, ask me to select **Use current connection**.
 
