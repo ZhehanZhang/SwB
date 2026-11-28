@@ -36,7 +36,7 @@ Agents translate the swb.one docs and landing page from English into Spanish, Fr
 
 To report a problem, open an issue with the [translation label](https://github.com/ZhehanZhang/SwB/issues/new?labels=translation). Name the page URL, quote the sentence, and suggest better wording.
 
-To fix it yourself, edit the page in `docs/<locale>/`. The locale codes are `es`, `fr`, `de`, `ko` and `ja`. Each file mirrors the English file with the same path in `docs/en/`. Landing page strings live in the copy modules in `site/lib/`. Keep commands, code, config keys and URLs exactly as they are in English. Keep link paths in your locale, such as `/fr/docs/install`. Run these checks in `site/` and open a pull request against `release/1.0`.
+To fix it yourself, edit the page in `docs/<locale>/`. The locale codes are `es`, `fr`, `de`, `ko` and `ja`. Each file mirrors the English file with the same path in `docs/en/`. Landing page and interface strings live in the copy modules in `site/lib/`, in `site/lib/ui/<locale>.json`, and in a few components under `site/components/` and `site/app/`. Search the English text to find each one. Keep commands, code, config keys and URLs exactly as they are in English. Keep link paths in your locale, such as `/fr/docs/install`. Run these checks in `site/` and open a pull request against `release/1.0`.
 
 ```bash
 pnpm install

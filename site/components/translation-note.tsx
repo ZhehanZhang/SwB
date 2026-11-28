@@ -1,5 +1,5 @@
 import type { Locale } from '@/lib/i18n';
-import { releaseBranch, repository } from '@/lib/urls';
+import { releaseBranch, repository, siteUrl } from '@/lib/urls';
 
 const notes: Partial<Record<Locale, { text: string; guide: string; issues: string }>> = {
   es: {
@@ -29,14 +29,14 @@ const notes: Partial<Record<Locale, { text: string; guide: string; issues: strin
   },
 };
 
-export function TranslationNote({ lang }: { lang: string }) {
+export function TranslationNote({ lang, url }: { lang: string; url: string }) {
   const note = notes[lang as Locale];
   if (!note) return null;
   return (
     <p data-translation-note className="mt-5 text-sm text-fd-muted-foreground">
       {note.text}{' '}
       <a className="whitespace-nowrap underline underline-offset-4 hover:text-fd-foreground" href={`${repository}/blob/${releaseBranch}/CONTRIBUTING.md#proofread-translations`}>{note.guide}</a>{' '}
-      <a className="whitespace-nowrap underline underline-offset-4 hover:text-fd-foreground" href={`${repository}/issues/new?labels=translation&title=${encodeURIComponent(`[${lang}] `)}`}>{note.issues}</a>
+      <a className="whitespace-nowrap underline underline-offset-4 hover:text-fd-foreground" href={`${repository}/issues/new?labels=translation&title=${encodeURIComponent(`[${lang}] `)}&body=${encodeURIComponent(`${siteUrl}${url}\n\n`)}`}>{note.issues}</a>
     </p>
   );
 }

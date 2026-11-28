@@ -56,7 +56,8 @@ for (const file of locales.flatMap((locale) => files(join(root, locale)))) {
     if (listLine.test(raw) || listElement.test(raw)) found.push('list');
     if (punct.test(line)) found.push('punctuation');
     const prose = zh ? line.replace(/(分別|分别|識別|识别|類別|类别|特別|特别|別名|别名)/g, '') : line;
-    if (rule.test(prose) && !(trademarks && legalQuote.test(raw)) && !allowedNegation.some(([path, phrase]) => relative(root, file) === path && raw.includes(phrase))) found.push('negation');
+    const allowed = allowedNegation.filter(([path]) => relative(root, file) === path).reduce((text, [, phrase]) => text.replaceAll(phrase, ''), prose);
+    if (rule.test(allowed) && !(trademarks && legalQuote.test(raw))) found.push('negation');
     if (found.length) {
       problems += 1;
       console.log(`${relative(root, file)}:${index + 1} ${found.join(', ')}  ${raw.trim().slice(0, 120)}`);

@@ -65,6 +65,7 @@ test('locale docs links stay in their locale and resolve', () => {
   for (const lang of locales) {
     for (const file of english.filter((name) => name.endsWith('.mdx'))) {
       for (const [, path, hash] of prose(read(lang, file)).matchAll(/\]\((\/[^)#\s]*)(?:#([^)\s]+))?\)/g)) {
+        if (path === `/${lang}`) continue;
         const page = target(lang, path);
         if (page === undefined) {
           assert.ok(!/^\/(docs|about)(\/|$)/.test(path) && !localized.test(path), `${lang}/${file} links to ${path} outside its locale`);

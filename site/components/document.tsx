@@ -30,7 +30,7 @@ export function Document({ page }: { page: DocumentPage }) {
         <ViewOptionsPopover className="swb-button swb-button-compact flex-row-reverse" markdownUrl={markdown} githubUrl={githubUrl} pageUrl={new URL(markdown, siteUrl).href} />
         <DocsNavigation askAI={process.env.NEXT_PUBLIC_ASK_AI === '1'} />
       </div>
-      <TranslationNote lang={page.locale ?? 'en'} />
+      <TranslationNote lang={page.locale ?? 'en'} url={page.url} />
       <DocsBody className="swb-mdx">
         <MDX components={useMDXComponents({
           a: createRelativeLink(source, { ...page, path: page.path.split('/').slice(1).join('/') }),
