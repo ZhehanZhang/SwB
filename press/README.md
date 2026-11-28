@@ -71,10 +71,6 @@ The full set is in [tokens.json](brand/tokens.json).
 
 All four fonts use the SIL Open Font License.
 
-## Other logos
-
-The screenshots and cards show the logos of the products that SwB connects. These logos belong to their owners. They show which integrations SwB supports.
-
 ## Licence
 
 SwB is open source under the Apache License 2.0. You can use the files in this folder to write about SwB. For questions, open an issue at [github.com/ZhehanZhang/SwB](https://github.com/ZhehanZhang/SwB/issues).

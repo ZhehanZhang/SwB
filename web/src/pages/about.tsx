@@ -143,10 +143,6 @@ export function AboutPage() {
               </li>
             </ul>
           </section>
-
-          <p className="mt-3 text-muted-foreground md:mt-8">
-            SwB is an independent open source project. Slack, Discord, Telegram, Anthropic, OpenAI, xAI, GitHub and Capy names and logos belong to their owners.
-          </p>
         </div>
       </div>
     </div>

@@ -19,7 +19,6 @@ branding:
   # icon: https://switchboard.example.com/icon.svg
   # accent_color: "#64748b"
   # logo_assets_dir: /config/branding
-  # Third-party logos are their owners' trademarks. They identify integrations, not affiliation or endorsement.
 
 # blocks:
 #   mcp: {use: mcp}

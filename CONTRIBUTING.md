@@ -4,7 +4,7 @@ Use [SwB's issue tracker](https://github.com/ZhehanZhang/SwB/issues) for bugs an
 Report security issues privately as described in [SECURITY.md](SECURITY.md). Please follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
-We welcome contributions to SwB. See the [trademark policy](TRADEMARKS.md).
+We welcome contributions to SwB.
 
 ## Develop locally
 
