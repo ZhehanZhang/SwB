@@ -67,7 +67,7 @@ for (const [platform, token, label, shortcutKey] of [
         return { x, width, textX: text.getBoundingClientRect().left };
       }));
       try {
-        await page.goto('/', { waitUntil: 'commit' });
+        await page.goto('/docs', { waitUntil: 'commit' });
         await expect(keycaps.first().locator('span:visible')).toHaveText(label);
         await expect(keycaps.first().locator('span')).toHaveText(['⌘', 'Ctrl']);
         await page.evaluate(() => document.fonts.ready);

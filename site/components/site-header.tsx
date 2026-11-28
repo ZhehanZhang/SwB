@@ -30,7 +30,7 @@ export function SiteHeader({ lang, repository }: { lang: Locale; repository: str
             <Link key={id} data-header-item={id} href={href} className={tab} aria-current={href === active?.href ? 'location' : undefined}>{text}</Link>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+        <div className="ml-auto grid grid-cols-[repeat(5,2.25rem)] items-center gap-1 sm:grid-cols-[repeat(4,2.25rem)] sm:gap-2 lg:grid-cols-[12rem_repeat(3,2.25rem)]">
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={headerIconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex [&_kbd]:text-center" />
           <SwbAddressControl lang={lang} show={isDocsPath(path)} />
