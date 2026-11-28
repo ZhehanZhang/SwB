@@ -1,6 +1,7 @@
 import CoreBluetooth
 import Dispatch
 import Foundation
+import os
 
 private let maxNotificationBytes = 160
 
@@ -12,6 +13,16 @@ struct Profile {
 
     var advertisement: [String: Any] {
         [CBAdvertisementDataLocalNameKey: name]
+    }
+
+    func makeService() -> (service: CBMutableService, tx: CBMutableCharacteristic) {
+        let rx = CBMutableCharacteristic(type: self.rx, properties: [.write, .writeWithoutResponse],
+                                         value: nil, permissions: .writeable)
+        let tx = CBMutableCharacteristic(type: self.tx, properties: [.read, .notify],
+                                         value: nil, permissions: .readable)
+        let service = CBMutableService(type: self.service, primary: true)
+        service.characteristics = [rx, tx]
+        return (service, tx)
     }
 
     init?(name: String) {
@@ -34,6 +45,22 @@ struct Profile {
     }
 }
 
+struct TXValue {
+    private var packet = Data()
+    private var recipient: UUID?
+
+    mutating func sent(_ packet: Data, to central: UUID) {
+        self.packet = packet
+        recipient = central
+    }
+
+    func read(offset: Int, from central: UUID) -> Data? {
+        let value = recipient == central ? packet : Data()
+        guard (0...value.count).contains(offset) else { return nil }
+        return value.dropFirst(offset)
+    }
+}
+
 final class Peripheral: NSObject, CBPeripheralManagerDelegate {
     private enum Phase {
         case idle, waiting, addingService, advertising, running
@@ -46,6 +73,9 @@ final class Peripheral: NSObject, CBPeripheralManagerDelegate {
     private var authorizationDeadline: DispatchTime?
     private var profile: Profile?
     private var tx: CBMutableCharacteristic?
+    private var txValue = TXValue()
+    private var loggedTXRead = false
+    private let log = Logger(subsystem: "one.swb.companion", category: "Pairing")
     private var central: CBCentral?
     private var subscriptionDeadline: DispatchWorkItem?
     private var subscribed = false
@@ -118,6 +148,8 @@ final class Peripheral: NSObject, CBPeripheralManagerDelegate {
         subscriptionDeadline = nil
         central = nil
         subscribed = false
+        txValue = TXValue()
+        loggedTXRead = false
         pendingWrites.removeAll()
         pendingNotifications.removeAll()
     }
@@ -162,12 +194,7 @@ final class Peripheral: NSObject, CBPeripheralManagerDelegate {
         switch manager.state {
         case .unknown, .resetting: return
         case .poweredOn:
-            let rx = CBMutableCharacteristic(type: profile.rx, properties: [.write, .writeWithoutResponse],
-                                             value: nil, permissions: .writeable)
-            let tx = CBMutableCharacteristic(type: profile.tx, properties: [.read, .notify],
-                                             value: nil, permissions: .readable)
-            let service = CBMutableService(type: profile.service, primary: true)
-            service.characteristics = [rx, tx]
+            let (service, tx) = profile.makeService()
             self.tx = tx
             phase = .addingService
             manager.add(service)
@@ -187,6 +214,7 @@ final class Peripheral: NSObject, CBPeripheralManagerDelegate {
         while let packet = pendingNotifications.first {
             guard packet.count <= central.maximumUpdateValueLength else { fail(); return }
             guard manager.updateValue(packet, for: tx, onSubscribedCentrals: [central]) else { return }
+            txValue.sent(packet, to: central.identifier)
             pendingNotifications.removeFirst()
         }
     }
@@ -248,8 +276,13 @@ final class Peripheral: NSObject, CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
         guard peripheral === manager, phase == .running, request.characteristic.uuid == tx?.uuid
         else { peripheral.respond(to: request, withResult: .readNotPermitted); return }
-        guard request.offset == 0 else { peripheral.respond(to: request, withResult: .invalidOffset); return }
-        request.value = Data()
+        guard let value = txValue.read(offset: request.offset, from: request.central.identifier)
+        else { peripheral.respond(to: request, withResult: .invalidOffset); return }
+        if !loggedTXRead {
+            log.info("Muse BLE TX read (offset: \(request.offset, privacy: .public), bytes: \(value.count, privacy: .public))")
+            loggedTXRead = true
+        }
+        request.value = value
         peripheral.respond(to: request, withResult: .success)
     }
 
