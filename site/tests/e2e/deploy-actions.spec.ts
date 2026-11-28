@@ -144,12 +144,10 @@ test('provider tiles share one design and visible deploy affordances on landing 
       await expect(grid).toHaveCSS('gap', '12px');
     }
     const layout = await grid.evaluate((node) => {
-      const columns = getComputedStyle(node).gridTemplateColumns.split(' ').filter((width) => width !== '0px');
       const boxes = [...node.querySelectorAll('a')].map((item) => item.getBoundingClientRect());
-      return { columns: columns.length, widthDelta: Math.max(...boxes.map(({ width }) => width)) - Math.min(...boxes.map(({ width }) => width)) };
+      return { columns: boxes.filter(({ top }) => Math.abs(top - boxes[0].top) < 1).length, widthDelta: Math.max(...boxes.map(({ width }) => width)) - Math.min(...boxes.map(({ width }) => width)) };
     });
-    const desktop = page.viewportSize()!.width === 1440;
-    expect(layout.columns).toBe(desktop && path !== '/' ? 3 : 1);
+    expect(layout.columns).toBe(1);
     expect(layout.widthDelta).toBeLessThanOrEqual(1);
     const tile = tiles.first();
     await expect(tile.locator('image:visible')).toBeVisible();
@@ -177,4 +175,40 @@ test('prompt toolbar keeps Copy and Open buttons on the same action baseline', a
   await page.goto('/docs/setup/claude');
   const toolbar = page.locator('.swb-prompt [data-prompt-actions]').first();
   await expectActionRow(toolbar);
+});
+
+test('docs one-click tiles keep each plan label on one line in every locale', async ({ page }) => {
+  for (const locale of ['en', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'ko', 'ja'] as const) {
+    for (const width of [1440, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(localize(locale, '/docs/deploy'));
+      await page.evaluate(() => document.fonts.ready);
+      const tiles = await page.locator('.swb-mdx [data-deploy-providers] a').evaluateAll((links) => links.map((link) => {
+        const box = link.getBoundingClientRect();
+        const icon = link.querySelector('svg')!.getBoundingClientRect();
+        const name = link.querySelector('[data-provider-text] strong')!;
+        const plan = link.querySelector('[data-provider-plan]')!;
+        const container = link.parentElement!.getBoundingClientRect();
+        return {
+          height: box.height,
+          lines: plan.getClientRects().length,
+          planHeight: plan.getBoundingClientRect().height,
+          baseline: getComputedStyle(name.parentElement!).alignItems,
+          iconOffset: Math.abs(icon.top + icon.height / 2 - (box.top + box.height / 2)),
+          inside: box.right <= container.right + 1 && link.scrollWidth <= link.clientWidth + 1,
+          detail: [box.right, container.right, link.scrollWidth, link.clientWidth],
+        };
+      }));
+      const where = `${locale} at ${width}px`;
+      expect(tiles.length, where).toBeGreaterThan(0);
+      expect(new Set(tiles.map(({ height }) => height)).size, where).toBe(1);
+      for (const tile of tiles) {
+        expect(tile.lines, where).toBe(1);
+        expect(tile.planHeight, where).toBe(16);
+        expect(tile.baseline, where).toBe('baseline');
+        expect(tile.iconOffset, where).toBeLessThanOrEqual(1);
+        expect(tile.inside, `${where} ${tile.detail}`).toBe(true);
+      }
+    }
+  }
 });
