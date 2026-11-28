@@ -167,6 +167,10 @@ GitHub は `owner` と `external` の信頼レベルを使います。Slack、Di
 | `memory.mirror` | Markdown コピーを管理します。更新を止めるときは `false` を設定します |
 | `memory.mirror_dir` | Markdown コピーのフォルダー |
 | `memory.mirror_debounce_s` | メモリの変更からコピーを書き込むまでの待ち時間（秒）。既定値は `2` |
+| `memory.sync` | エージェントが `memory_sync` で自分のメモリを SwB にコピーできるようにします。既定値は `true`。コンソールの **Memory sync** スイッチがこの値より優先されます |
+| `memory.backup` | メモリの Git バックアップの設定 |
+| `memory.backup.debounce_s` | メモリの変更からバックアップのコミットまでの待ち時間（秒）。既定値は `30` |
+| `memory.backup.max_delay_s` | 変更が多いときの、バックアップのコミットまでの最長の待ち時間（秒）。既定値は `300` |
 | `modes` | 届いたイベントへの SwB の対応の設定 |
 | `modes.default` | 既定のモード。既定値は `off` です |
 | `modes.projects` | 各プロジェクトに割り当てたスペースの既定のモード |

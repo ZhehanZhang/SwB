@@ -70,6 +70,22 @@ description: SwB がエージェントに提供する MCP ツールです。
 | `memory_delete` | グラントのあるスコープで、項目を削除します |
 | `memory_move` | 項目をプロジェクトかエージェントのスコープに移します。両方のスコープのグラントが必要です |
 | `memory_promote` | 項目を `general` に移します。オーナーのサインインを使います |
+| `memory_summary` | セッションの開始時に、グラントのあるメモリの短い索引を読み込みます |
+| `memory_view` | `/memories` の下のフォルダーかファイルを表示します。[メモリ](/ja/docs/memory)を参照してください |
+| `memory_create` | トピックのフォルダーにファイルを作ります |
+| `memory_str_replace` | ファイル内の 1 つの文字列を正確に置き換えます |
+| `memory_insert` | 行の後にテキストを追加します |
+| `memory_rename` | ファイルかトピックのフォルダーを新しいパスに移します |
+| `memory_history` | 項目の変更をすべて表示します |
+| `memory_restore` | 項目を以前のバージョンに戻します |
+| `memory_sync` | エージェント自身のメモリにある記憶を SwB にコピーします |
+| `memory_settings` | メモリ同期をオンまたはオフにします。オーナーのサインインを使います |
+| `memory_export` | すべてのメモリを zip ファイルでダウンロードします。オーナーのサインインを使います |
+| `memory_import` | zip ファイルからメモリを読み込みます。オーナーのサインインを使います |
+| `memory_backup_configure` | Git バックアップのリポジトリを設定します。オーナーのサインインを使います |
+| `memory_backup_status` | Git バックアップの状態を表示します。オーナーのサインインを使います |
+| `memory_backup_now` | 今すぐ Git バックアップを開始します。オーナーのサインインを使います |
+| `memory_backup_restore` | Git バックアップからメモリを読み込みます。オーナーのサインインを使います |
 | `project_list` | プロジェクトとそのリンクを一覧表示します |
 | `project_create` | プロジェクトを作成します |
 | `project_update` | プロジェクトの名前の変更、リンク、アーカイブ、非公開化を行います |
