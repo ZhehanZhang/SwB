@@ -5,11 +5,10 @@ import { validSwbOrigin } from '@/lib/address';
 import { exampleSwbOrigins } from '@/lib/urls';
 import { useSwbAddress } from './swb-address-provider';
 
-export function SwbAddressField({ id, label, error, describedBy, saveLabel, onEdit, children }: {
+export function SwbAddressField({ id, label, error, saveLabel, onEdit, children }: {
   id?: string;
   label: string;
   error: string;
-  describedBy?: string;
   saveLabel?: string;
   onEdit?: (address: string | null) => void;
   children?: ReactNode;
@@ -33,7 +32,7 @@ export function SwbAddressField({ id, label, error, describedBy, saveLabel, onEd
   }
 
   const input = (
-    <input id={fieldId} aria-label={label} aria-describedby={describedBy}
+    <input id={fieldId} aria-label={label}
       className="min-h-10 w-full min-w-0 rounded-lg border bg-fd-background px-3 text-base font-normal aria-invalid:border-(--destructive)"
       type="text" inputMode="url" value={value} placeholder={exampleSwbOrigins[0]} autoComplete="url"
       spellCheck={false} aria-invalid={invalid || undefined} aria-description={invalid ? error : undefined}

@@ -8,7 +8,6 @@ type GetStartedCopy = {
   runCloud: string;
   agentsTitle: string;
   address: string;
-  addressHelp: string;
   addressError: string;
   pipx: string;
   copyCommand: string;
@@ -35,7 +34,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     runCloud: 'In the cloud',
     agentsTitle: 'Pick your agents',
     address: 'Your SwB address',
-    addressHelp: 'The prompts below use your SwB address.',
     addressError: 'Enter a valid HTTP or HTTPS URL.',
     pipx: 'Use pipx',
     copyCommand: 'Copy command',
@@ -82,7 +80,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     runCloud: '在云端运行',
     agentsTitle: '选择智能体',
     address: '你的 SwB 地址',
-    addressHelp: '下方的提示词会使用这个地址。',
     addressError: '请输入有效的 HTTP 或 HTTPS 地址。',
     pipx: '用 pipx 安装',
     copyCommand: '复制命令',
@@ -129,7 +126,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     runCloud: '在雲端執行',
     agentsTitle: '選擇代理',
     address: '你的 SwB 網址',
-    addressHelp: '下方的提示詞會使用這個網址。',
     addressError: '請輸入有效的 HTTP 或 HTTPS 網址。',
     pipx: '用 pipx 安裝',
     copyCommand: '複製指令',
@@ -176,7 +172,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "runCloud": "En la nube",
     "agentsTitle": "Elige tus agentes",
     "address": "Tu dirección de SwB",
-    "addressHelp": "Los prompts de abajo usan tu dirección de SwB.",
     "addressError": "Escribe una URL HTTP o HTTPS válida.",
     "pipx": "Usar pipx",
     "copyCommand": "Copiar comando",
@@ -222,7 +217,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "runCloud": "Dans le cloud",
     "agentsTitle": "Choisissez vos agents",
     "address": "Votre adresse SwB",
-    "addressHelp": "Les prompts ci-dessous utilisent votre adresse SwB.",
     "addressError": "Saisissez une URL HTTP ou HTTPS valide.",
     "pipx": "Utiliser pipx",
     "copyCommand": "Copier la commande",
@@ -268,7 +262,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "runCloud": "In der Cloud",
     "agentsTitle": "Agenten auswählen",
     "address": "Ihre SwB-Adresse",
-    "addressHelp": "Die Prompts unten verwenden Ihre SwB-Adresse.",
     "addressError": "Geben Sie eine gültige HTTP- oder HTTPS-URL ein.",
     "pipx": "pipx verwenden",
     "copyCommand": "Befehl kopieren",
@@ -314,7 +307,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "runCloud": "클라우드",
     "agentsTitle": "에이전트 고르기",
     "address": "내 SwB 주소",
-    "addressHelp": "아래 프롬프트에 이 SwB 주소가 들어갑니다.",
     "addressError": "올바른 HTTP 또는 HTTPS URL을 입력하세요.",
     "pipx": "pipx 사용",
     "copyCommand": "명령 복사",
@@ -360,7 +352,6 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "runCloud": "クラウド",
     "agentsTitle": "エージェントを選ぶ",
     "address": "SwB のアドレス",
-    "addressHelp": "下のプロンプトには、この SwB のアドレスが入ります。",
     "addressError": "有効な HTTP か HTTPS の URL を入力してください。",
     "pipx": "pipx を使う",
     "copyCommand": "コマンドをコピー",

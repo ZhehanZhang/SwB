@@ -111,6 +111,10 @@
     @apply font-medium hover:text-fd-foreground hover:underline hover:underline-offset-4;
   }
 
+  .swb-action-row {
+    @apply flex flex-wrap items-baseline gap-3;
+  }
+
   .dark .swb-mark {
     filter: invert(1) contrast(1.35);
   }
@@ -149,6 +153,14 @@
   border-radius: 0;
 }
 
+.swb-mdx :is(td, th) code {
+  white-space: nowrap;
+}
+
+.swb-mdx table:has(td code) td:not(:has(code)) {
+  min-inline-size: 10rem;
+}
+
 .swb-inline-address {
   display: inline-flex;
   max-inline-size: 100%;
@@ -167,7 +179,7 @@
   --fd-header-height: var(--swb-header-height);
   --fd-layout-width: 100%;
   --swb-docs-top: 2rem;
-  min-block-size: calc(100dvh - var(--swb-header-height));
+  min-block-size: calc(var(--fd-docs-height) - var(--fd-header-height));
 }
 
 .swb-docs:has(.swb-docs-breadcrumb) { --swb-docs-breadcrumb-offset: 2.25rem; }
@@ -175,6 +187,9 @@
 .swb-docs #nd-sidebar [data-radix-scroll-area-viewport] {
   padding-inline-start: 0;
   padding-block-start: calc(var(--swb-docs-top) + var(--fd-toc-popover-height) + var(--swb-docs-breadcrumb-offset, 0px));
+}
+:is(.swb-docs #nd-sidebar, #nd-sidebar-mobile) [data-radix-scroll-area-viewport] {
+  mask-image: none;
 }
 .swb-docs #nd-toc { padding-block-start: calc(var(--swb-docs-top) + var(--swb-docs-breadcrumb-offset, 0px)); }
 
@@ -187,33 +202,7 @@
   .swb-docs { --swb-docs-top: 3.5rem; }
 }
 
-.swb-ask-mobile {
-  position: static;
-  gap: 0;
-  padding: 0;
-  font-size: 0;
-  translate: none;
-}
-
-.swb-doc-copy { min-width: 8rem; }
-.swb-doc-copy:lang(en) { min-width: 10rem; }
-
-@media (min-width: 768px) {
-  .swb-docs-with-chat {
-    --swb-ask-height: 2.5rem;
-    --swb-ask-inset: calc(1rem + env(safe-area-inset-bottom, 0px));
-    padding-block-end: calc(var(--swb-ask-height) + var(--swb-ask-inset));
-  }
-  .swb-ask-trigger {
-    bottom: var(--swb-ask-inset);
-    height: var(--swb-ask-height);
-    min-height: var(--swb-ask-height);
-    padding: 0 .75rem;
-  }
-}
-
 .swb-board {
-  --swb-spoke: #a1a1aa;
   --swb-spoke-active: #52525b;
   --swb-spoke-flow: #27272a;
   container-type: inline-size;
@@ -222,21 +211,16 @@
 }
 
 .dark .swb-board {
-  --swb-spoke: #606069;
   --swb-spoke-active: #a1a1aa;
   --swb-spoke-flow: #d4d4d8;
 }
 
 .swb-transit {
-  fill: none;
-  stroke: var(--swb-spoke);
-  stroke-width: 2.8px;
-  stroke-linecap: round;
+  fill: var(--swb-spoke-active);
   opacity: 0;
 }
 
 .swb-transit[data-active] {
-  stroke: var(--swb-spoke-active);
   opacity: 1;
 }
 
@@ -248,8 +232,8 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .swb-transit { transition: opacity .3s ease-in-out, stroke .3s ease-in-out, stroke-width .3s ease-in-out; }
-  .swb-transit[data-flow] { stroke: var(--swb-spoke-flow); stroke-width: 3.2px; opacity: 1; }
+  .swb-transit { transition: opacity .3s ease-in-out, fill .3s ease-in-out; }
+  .swb-transit[data-flow] { fill: var(--swb-spoke-flow); opacity: 1; }
   .swb-hub-pulse[data-flow] { display: inline; }
 }
 
@@ -397,6 +381,11 @@
 .swb-node:is(:hover, :focus-visible) { z-index: 1; animation-play-state: paused; }
 .swb-node:is(:hover, :focus-visible) .swb-mark-tile { transform: translateY(-3px); box-shadow: var(--toast-shadow); }
 .swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { animation: swb-invite 8s 1.2s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .swb-board .swb-node,
+  .swb-board .swb-node.swb-node-invite:not(:hover, :focus-visible) .swb-mark-tile { animation: none; }
+  .swb-board .swb-node .swb-mark-tile { transition: none; }
+}
 @keyframes swb-drift {
   0% { translate: -2px -2px; }
   50% { translate: 0 2px; }
@@ -533,7 +522,6 @@
 .swb-chip:not(.swb-chip-on) { position: absolute; inset: 50% auto auto 50%; translate: -50% -50%; pointer-events: none; }
 .swb-chip-on { opacity: 1; transition-delay: .2s; }
 .swb-chip-mark.swb-mark-tile { width: 1.4em; height: 1.4em; min-width: 0; min-height: 0; }
-.swb-picker-mark.swb-mark-tile { width: 1.5rem; height: 1.5rem; min-width: 0; min-height: 0; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   .swb-rotate-item, .swb-slot, .swb-chip { transition: none; }
 }

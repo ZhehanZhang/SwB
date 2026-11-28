@@ -40,7 +40,7 @@ export function CopyTextButton({ text, labels, className, showIcon = true }: { t
 export function PromptActions({ text, labels, targets }: { text: string; labels: Labels; targets: readonly Target[] }) {
   const link = 'swb-button swb-button-compact hover:bg-fd-muted';
   return (
-    <div className="flex flex-wrap items-center gap-1 px-2 py-1.5">
+    <div className="swb-action-row px-2 py-1.5" data-prompt-actions>
       <CopyTextButton text={text} labels={labels} className={link} />
       {targets.map((target) => (
         <a key={target} className={link} href={openUrl[target](text)} target="_blank" rel="noreferrer">

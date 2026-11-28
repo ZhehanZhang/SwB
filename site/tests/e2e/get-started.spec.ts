@@ -74,7 +74,7 @@ test('switches run locations and copies the release install commands', async ({ 
     .toHaveAttribute('href', `${selfHosting}#fly`);
   await expect(run('cloud').getByRole('link', { name: 'Render Paid plan' })).toHaveAttribute('href', renderBlueprint);
   await expect(run('cloud').getByRole('link', { name: 'Railway Hobby plan' })).toHaveAttribute('href', railwayTemplate);
-  await expect(run('cloud').getByRole('link', { name: 'Self-hosting guide', exact: true })).toHaveAttribute('href', selfHosting);
+  await expect(setup(page).getByRole('link', { name: 'Self-hosting guide', exact: true })).toHaveAttribute('href', selfHosting);
   for (const provider of ['fly', 'render', 'railway']) {
     await expect(run('cloud').locator(`image[href="/marks/${provider}-on-light.svg"]`)).toBeVisible();
   }
@@ -152,14 +152,15 @@ test('recommends Muse gadget pairing before the connector and copies its command
 test('explains the prompts and links companion setup without offering it as an agent', async ({ page }) => {
   await page.goto(`${start}?agents=claude-code,codex,muse`);
   await expect(page.getByText(/MCP, an open standard/)).toBeVisible();
-  await expect(setup(page).getByText('The prompts below use your SwB address.')).toBeVisible();
+  await expect(setup(page).getByRole('textbox', { name: 'Your SwB address' })).toBeVisible();
+  await expect(setup(page).getByText('The prompts below use your SwB address.')).toHaveCount(0);
   await expect(setup(page).getByText(/Choose where SwB runs to see/)).toBeVisible();
   await expect(tile(page, 'Companion')).toHaveCount(0);
   for (const name of ['Claude Code', 'Codex', 'Muse']) {
     const section = agent(page, name);
     await expect(section.locator('[data-agent-before]')).toContainText(/pairing|pair a companion/);
     await expect(section.locator('[data-agent-after]')).toHaveText(/\S/);
-    await expect(section.locator('[data-agent-before]').getByRole('link', { name: 'Companion guide' }))
+    await expect(section.locator('[data-block-header]').getByRole('link', { name: 'Companion guide' }))
       .toHaveAttribute('href', '/docs/companion');
   }
 });
