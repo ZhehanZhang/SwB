@@ -40,6 +40,7 @@ jobs:
       - run: npm ci --prefix web
       - run: npm run build --prefix web
       - run: uv build
+      - run: python3 scripts/verify-dist.py dist
       - run: uvx twine check dist/*
       - uses: actions/upload-artifact@v4
         with:
