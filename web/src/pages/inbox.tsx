@@ -222,7 +222,7 @@ function Conversations({ items, search, active, onOpen, actions, selected, onSel
               <td role="cell" className="font-mono text-mono-sm text-muted-foreground @max-inbox-table/list:col-start-3 @max-inbox-table/list:row-start-1 @min-inbox-table/list:py-2 @min-inbox-table/list:pr-2">
                 <RelativeTime value={row.updated_at ?? row.created_at} />
               </td>
-              <td role="cell" className="min-h-7 text-right @max-inbox-table/list:col-start-3 @max-inbox-table/list:row-start-2">
+              <td role="cell" className="min-h-control-sm text-right @max-inbox-table/list:col-start-3 @max-inbox-table/list:row-start-2">
                 <RowActions row={row} actions={actions} />
               </td>
             </tr>

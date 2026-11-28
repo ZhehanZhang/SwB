@@ -74,7 +74,7 @@ export function RowActions({ row, actions: service }: { row: Conversation; actio
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>
-        <Button size="icon" variant="ghost" className="relative z-10 size-7" disabled={!service.enabled || service.pending.has(row.handle)}
+        <Button size="icon-sm" variant="ghost" className="relative z-10 align-top" disabled={!service.enabled || service.pending.has(row.handle)}
           aria-label={`Actions for ${row.title || "message"}`}>
           <Ellipsis aria-hidden />
         </Button>
