@@ -168,6 +168,7 @@ async def test_accepts_provider_signatures_and_credentials(webhook, scheme):
         [message] = items(core)
         assert (message["owner"], message["kind"], message["trust"]) == (AGENT, "message", "external")
         assert message["subject"] == f"Webhook payments (external): {event}"
+        assert core.inbox.handle(message["handle"])["title"] == event
         expected = delivery or f"d_{hashlib.sha256(body).hexdigest()[:16]}"
         assert message["text"].endswith(f"Webhook payments delivery {expected}.")
         [row] = core.audit.recent(action="webhook")

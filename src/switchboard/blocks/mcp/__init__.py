@@ -29,7 +29,7 @@ from ...modes import ChannelModes
 from ...projects import Project, ProjectError
 from ...refusals import PROJECT_LINK_REQUIRED, ROUTE_TARGET_KIND, PolicyRefusal
 from ...routes import RouteError
-from ...targets import LEGACY_KINDS
+from ...targets import CAPTAIN_SLUG, LEGACY_KINDS
 from ...trust import memory_label
 from .. import Block, Manifest
 from .events import EventsExtension, advertise_events
@@ -168,6 +168,8 @@ class LimitedServer(MCPServer):
             raise ToolError(str(refusal)) from refusal
         if role and p is not None and name not in ("wait", "inbox", "capy_wait", "capy_inbox", "slack_wait"):
             self._check_mode(p, name, arguments)
+        if p is not None and tool is not None:
+            self.modes.core.owner_delivery.record_activity(p)
         try:
             return await super().call_tool(name, arguments, context)
         except ToolError as exc:
@@ -630,12 +632,15 @@ class MCPBlock(Block):
         async def routes_set(ctx: Context, target: str, project: str | None = None, agent: str | None = None, defaults: RouteDefaults | None = None,
                              allow_override: bool = False, note: str = "") -> dict[str, Any]:
             p = who(ctx)
-            name, parsed = route_target(target)
+            name, parsed = await route_target(target)
             return await run(core.set_route(p, destination=name, agent=agent, project=project, target=parsed,
                                             defaults=defaults.model_dump(exclude_none=True) if defaults else {}, allow_override=allow_override, note=note))
 
-        def route_target(text: str) -> tuple[str, dict[str, Any]]:
+        async def route_target(text: str) -> tuple[str, dict[str, Any]]:
             text = text.strip()
+            if text.casefold() == CAPTAIN_SLUG:
+                address = await run(core.resolve_to(text))
+                return address.block, {CAPTAIN_SLUG: address.id}
             prefix, sep, rest = text.partition(":")
             head = prefix.lower()
             if head == "agent" and sep:

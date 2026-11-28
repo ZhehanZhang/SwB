@@ -216,6 +216,8 @@ def test_discord_event_and_delegate_share_the_ask_as_subject(discord):
         chat = next(item for item in entries if item["kind"] == "discord_event")
         task = next(item for item in entries if item["kind"] == "message")
         assert event["subject"] == chat["subject"] == task["subject"] == title
+        assert core.inbox.handle(chat["handle"])["title"] is None
+        assert core.inbox.handle(task["handle"])["title"] == "check the canary"
         assert task["text"].split("\n\n") == [
             title, "**check** the canary", event["from"]["link"],
             "Your final reply is posted back in that Discord thread as build-check (Claude routine).",

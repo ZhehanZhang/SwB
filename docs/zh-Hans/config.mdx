@@ -49,6 +49,18 @@ SwB 只靠环境变量就能运行。MCP 模块默认启动，另一些模块在
 
 有些模块可以凭环境中的凭据启动。设置方法见[模块](/zh-Hans/docs/blocks)。[发布版的环境变量示例](https://github.com/ZhehanZhang/SwB/blob/release/1.0/.env.example)列出了具名工作区和具名 routine 所用的凭据名称。
 
+## 发给所有者的消息
+
+SwB 优先选择过去 30 分钟内最近一次以所有者身份活动的智能体。其次尝试项目路由或 `default_target` 指定的主智能体。最后使用所有者的全局路由。
+
+消息进入所选智能体的收件箱。若三种方式均失败，SwB 会在状态中报告消息待投递。
+
+将所有者的全局路由设为智能体地址。
+
+```python
+routes_set(agent="owner", target="agent:claude")
+```
+
 ## 配置文件
 
 `swb up` 会在所在文件夹中建立一个新实例。它把所有者密钥和自定义的 `SWB_PORT` 存入 `.env`，并把文件模式设为 `0600`。

@@ -122,7 +122,7 @@ def test_listen_wake_keeps_the_original_wrapper_and_the_optional_reply_tail(open
         (_, text), = fires
         title = f"Dana (external) in Slack #{NAME} asks: Can we check the canary?"
         handle = core.inbox.handle(handle_of(text))
-        assert handle["title"] == title and text.startswith(title + "\n\n")
+        assert handle["title"] == "Can we check the canary?" and text.startswith(title + "\n\n")
         task, tail = text.split("\n\n---\n", 1)
         assert task == (
             f"{title}\n\n{push['text']}\n\n{push['permalink']}\n\n"
@@ -267,8 +267,11 @@ def test_listen_can_note_owner_without_posting_to_thread(opened):
         handle = handle_of(fires[0][1])
         reply = payload(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "x" * 700, "to_owner": True}))
         assert reply["delivered"] and reply["to_owner"] and reply["conversation"] == handle
-        (post,) = posted(client, world, 1)
-        assert post == {"channel": "DAPPROVER", "text": f"Note from docs about name-ustranger in #{NAME}: " + "x" * 500 + f"\n{push['permalink']}"}
+        [note] = [item for item in core.inbox.read(owner="claude", since=0)["items"] if item.get("for_owner")]
+        assert (f"<<<swb-untrusted\nNote from docs about name-ustranger in #{NAME}: " + "x" * 500
+                + f"\n{push['permalink']}\nswb-untrusted>>>") in note["text"]
+        assert note["resolved_by"] == "active" and note["trust"] == "external"
+        assert not {"conversations_open", "chat_postMessage"}.intersection(world.names())
         assert core.inbox.handle(handle)["status"] == "answered"
 
 
@@ -287,19 +290,19 @@ def test_cancelled_listen_conversation_cannot_note_owner(opened):
         assert not core.audit.recent(action="listen_note")
 
 
-def test_owner_note_in_flight_cannot_reopen_cancelled_listen_conversation(opened, monkeypatch):
+def test_pending_owner_note_cannot_reopen_cancelled_listen_conversation(opened, monkeypatch):
     with opened() as (core, client, _, fires):
         ingest(core, client)
         handle = handle_of(fires[0][1])
         sender = core.blocks["slack"].principal
 
-        async def cancel_during_dm(_text):
-            assert (await core.verb(sender, "cancel", handle))["status"] == "cancelled"
-            return True
-
-        monkeypatch.setattr(core.slack, "dm_owner", cancel_during_dm)
-        reply = payload(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "Check the report", "to_owner": True}))
-        assert reply["delivered"]
+        with monkeypatch.context() as patch:
+            patch.setattr(core.owner_delivery, "resolve", lambda *_: None)
+            reply = payload(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "Check the report", "to_owner": True}))
+            assert not reply["delivered"] and reply["status"] == "pending_owner_route"
+        assert client.portal.call(core.verb, sender, "cancel", handle)["status"] == "cancelled"
+        client.portal.call(core.modes.flush)
+        assert core.inbox.pending_owner_count() == 0
         assert core.inbox.handle(handle)["status"] == "cancelled"
 
 
@@ -340,7 +343,7 @@ def test_listen_thread_reply_and_owner_note_share_turn_cap(opened):
         assert [(row["root"], row["turns"]) for row in rows] == [(handle, 3)]
         error = error_text(call(client, KEY_FULL, "reply", {"conversation": handle, "text": "never delivered"}))
         assert f"{handle} is paused" in error
-        posts = posted(client, world, 3)
+        posts = posted(client, world, 2)
         assert all(p["text"] != "never delivered" for p in posts)
         assert any(p["text"].startswith(f"SwB paused conversation {handle} after 3 turns") for p in posts)
 

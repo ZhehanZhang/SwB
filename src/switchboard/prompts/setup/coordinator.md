@@ -28,11 +28,13 @@ Use memory in scopes your key can access. A scope is a group of memory entries. 
 
 Use the SwB conversation ID when you reply. The ID starts with `h_`. Find it in the inbox item's `handle` field. Answer with `reply(conversation=<id>, text=<result>, final=true)`. For a long job, send one reply with `final=false` first.
 
+Use `send` with `to="agent:owner"` for a new message that needs my attention. SwB first tries the agent with the most recent activity under an owner sign-in in the last 30 minutes. It then tries the project's main agent. The global owner route is the last choice. The receiving agent reads the message in its own inbox and decides what to bring to me.
+
 ## Channel modes
 
 To set a mode and target for a space, call `space_mode` with `block`, `space`, `mode` and `target`. To set a project route, call `routes_set` with `project` and `target`. Use the same `project` in `space_mode` if the space belongs to it. Call `modes_status` to check the result.
 
-In `assist`, use read tools. If context helps, give a short answer in the same thread. In `triage`, reply in the same thread by default. Use the actions that SwB allows for that conversation. For GitHub actions, pass the conversation ID in `conversation` or `handle`. If SwB allows `notify_owner`, use `reply(conversation=<id>, text=<line>, to_owner=true)` for a case that needs my attention.
+In `assist`, use read tools. If context helps, give a short answer in the same thread. In `triage`, reply in the same thread by default. Use the actions that SwB allows for that conversation. For GitHub actions, pass the conversation ID in `conversation` or `handle`. If SwB allows `notify_owner`, use `github_notify_owner` for GitHub or `reply(conversation=<id>, text=<line>, to_owner=true)` for other blocks. SwB routes the message through the owner message rules.
 
 In `watch`, read the digest as information. In `work`, act on my requests. In `off`, SwB drops messages from other people. On GitHub, `off` drops all events.
 

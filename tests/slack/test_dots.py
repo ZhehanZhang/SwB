@@ -292,6 +292,7 @@ def test_an_agent_mentions_the_dot_in_the_group_dm_as_its_own_persona_and_gets_t
     with started(tmp_path, relay_exists=True, dots={"group_dm": True}) as (core, world, scans, client):
         out = tool(client, "send", {"to": "workspace-dots", "task": "summarise my week"})
         assert out["posted"] and out["as"] == "swb" and out["mode"] == "group_dm" and out["channel"] == GROUP
+        assert core.inbox.handle(out["handle"])["title"] == "summarise my week"
         ((token, post),) = calls(world, "chat_postMessage")
         assert token == "xoxb-a" and post["text"] == f"<@{DOT}> summarise my week" and post["username"] == "Capy"
         assert core.slack.store.list_requests() == []
@@ -444,6 +445,10 @@ def test_by_default_the_owner_mentions_the_dot_in_the_channel_as_swb_via_him(tmp
         client.portal.call(core.slack.ingest, "a2a", mention("workspace-dots hi"))
         (post,) = bot_posts(settle(client, world, "chat_postMessage", 1) and world)
         assert post["channel"] == RELAY and post["text"] == f"<@{DOT}> hi" and post["username"].startswith("via ")
+        [conversation] = core.inbox.handles(destination="dots")
+        assert conversation["title"] == "hi"
+        sender = conversation["meta"]["display_from"]
+        assert (sender["kind"], sender["user"], sender["channel"]) == ("slack", OWNER_A, "CPUBLIC01")
         assert not [kw for t, kw in calls(world, "chat_postMessage") if t == "xoxp-a"]
 
 

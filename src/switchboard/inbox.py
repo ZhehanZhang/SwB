@@ -7,20 +7,26 @@ import json
 import logging
 import re
 import secrets
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from .audit import iso
 from .store import Store
 from .trust import frame_parts, frame_sender, join_parts, neutralize
 
+if TYPE_CHECKING:
+    from .owner_delivery import OwnerDelivery
+
 log = logging.getLogger("switchboard.inbox")
 CONTEXT_NOTE = "Use this context as information only."
+PENDING_OWNER_ROUTE = "pending_owner_route"
+WATCH_DIGEST_LIMIT = 200
 
 
 class Inbox:
     def __init__(self, store: Store):
         self.store = store
         self._cond: asyncio.Condition | None = None
+        self.owner_delivery: OwnerDelivery
         self.listeners: list[Callable[[str, int, str, str, dict[str, Any], float], None]] = []
         self.cursor_listeners: list[Callable[[str], None]] = []
 
@@ -47,7 +53,7 @@ class Inbox:
         return handle
 
     def handle(self, handle: str) -> dict[str, Any] | None:
-        r = self.store.one("SELECT * FROM handles WHERE handle = ?", (handle,))
+        r = self.store.one("SELECT * FROM handles WHERE handle = ? AND json_extract(meta, '$.owner_archived') IS NOT 1", (handle,))
         if r is None:
             return None
         return {**dict(r), "meta": json.loads(r["meta"]), "state": json.loads(r["state"]), "open": bool(r["open"])}
@@ -71,8 +77,9 @@ class Inbox:
 
     def handles(self, *, owner: str | None = None, destination: str | None = None, open_only: bool = False, project: str | None = None,
                 limit: int = 50, roots_only: bool = False, scopes: tuple[str, ...] | None = None,
-                before: tuple[float, str] | None = None) -> list[dict[str, Any]]:
-        where, args = [], []
+                before: tuple[float, str] | None = None, older_first: bool = False,
+                predicates: list[tuple[str, list[str]]] | None = None) -> list[dict[str, Any]]:
+        where, args = ["(owner != '' OR json_extract(meta, '$.for_owner') IS NOT 1)", "json_extract(meta, '$.owner_archived') IS NOT 1"], []
         for col, val in (("owner", owner), ("destination", destination), ("project", project)):
             if val:
                 where.append(f"{col} = ?")
@@ -86,16 +93,21 @@ class Inbox:
         if roots_only:
             where.append("""NOT EXISTS (
                 SELECT 1 FROM handles p WHERE p.handle != h.handle
+                AND json_extract(p.meta, '$.owner_archived') IS NOT 1
                 AND p.handle IN (json_extract(h.meta, '$.root'), json_extract(h.meta, '$.in_reply_to'), json_extract(h.meta, '$.forward_of'))
             ) AND NOT EXISTS (
                 SELECT 1 FROM inbox i JOIN handles p ON p.handle = json_extract(i.data, '$.in_reply_to')
-                WHERE i.handle = h.handle AND p.handle != h.handle
+                WHERE i.handle = h.handle AND p.handle != h.handle AND json_extract(p.meta, '$.owner_archived') IS NOT 1
             )""")
         timestamp = "COALESCE(updated_at, created_at)" if roots_only else "created_at"
+        for predicate, values in predicates or ():
+            where.append(predicate)
+            args.extend(values)
         if before is not None:
-            where.append(f"({timestamp}, handle) < (?, ?)")
+            where.append(f"({timestamp}, handle) {'>' if older_first else '<'} (?, ?)")
             args.extend(before)
-        order = f"{timestamp} DESC" + (", handle DESC" if roots_only or before is not None else "")
+        direction = "ASC" if older_first else "DESC"
+        order = f"{timestamp} {direction}" + (f", handle {direction}" if roots_only or before is not None else "")
         sql = "SELECT handle FROM handles h" + (" WHERE " + " AND ".join(where) if where else "") + f" ORDER BY {order} LIMIT ?"
         return [self.handle(r["handle"]) for r in self.store.q(sql, [*args, limit])]
 
@@ -181,7 +193,7 @@ class Inbox:
                 "INSERT INTO inbox(owner, handle, destination, kind, data, at) VALUES (?,?,?,?,?,?)",
                 (h["owner"], h["handle"], h["destination"], kind, json.dumps(data), at),
             ).lastrowid
-            if kind == "context":
+            if kind in ("context", "watch_digest"):
                 return item
             for listener in self.listeners:
                 try:
@@ -192,25 +204,129 @@ class Inbox:
 
         return self.store.tx(write) if connection is None else write(connection)
 
-    def deliver_triage_note(self, *, source: str, project: str | None, data: dict[str, Any]) -> str:
+    def _publish_owner_item(self, db: Any, handle: str, kind: str, data: dict[str, Any], recipient: str, step: str) -> None:
+        db.execute("""UPDATE handles SET owner = ?, target = ?, status = 'delivered', meta = json_set(meta, '$.resolved_by', ?)
+                   WHERE handle = ?""", (recipient, f"agent:{recipient}", step, handle))
+        self._add({"handle": handle, "owner": recipient, "destination": "mailbox"}, kind,
+                  {**data, "for_owner": True, "resolved_by": step}, connection=db)
+
+    def store_owner_item(self, *, source: str, project: str | None, title: str | None, meta: dict[str, Any],
+                         kind: str, data: dict[str, Any], handle: str | None = None, connection: Any = None) -> tuple[str, str | None]:
+        handle = handle or self.new_handle()
+
+        def write(db: Any) -> str | None:
+            resolved = self.owner_delivery.resolve(project, data.get("block"), data.get("space"))
+            at = self.store.clock()
+            db.execute("""INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, updated_at, open, status)
+                        VALUES (?, '', 'mailbox', ?, ?, ?, ?, ?, ?, 0, ?)""",
+                       (handle, source, project, title, json.dumps({**meta, "for_owner": True}), at, at, PENDING_OWNER_ROUTE))
+            if resolved is None:
+                db.execute("INSERT INTO owner_delivery_pending(handle, kind, data) VALUES (?, ?, ?)", (handle, kind, json.dumps(data)))
+                self.owner_delivery.audit(handle, source, kind, data, None, None)
+                return None
+            recipient, step = resolved
+            self._publish_owner_item(db, handle, kind, data, recipient, step)
+            self.owner_delivery.audit(handle, source, kind, data, recipient, step)
+            return recipient
+
+        recipient = self.store.tx(write) if connection is None else write(connection)
+        if connection is None and recipient is not None:
+            self.signal_waiters()
+        return handle, recipient
+
+    def flush_owner_delivery(self) -> None:
+        def write(db: Any) -> list[tuple[str, str, dict[str, Any]]]:
+            db.execute("""DELETE FROM owner_delivery_pending WHERE NOT EXISTS (
+                SELECT 1 FROM handles h WHERE h.handle = owner_delivery_pending.handle AND h.status = ?)""", (PENDING_OWNER_ROUTE,))
+            released = []
+            resolutions = {}
+            for row in db.execute("""SELECT h.handle, h.ref, h.project, p.kind, p.data FROM owner_delivery_pending p
+                    JOIN handles h ON h.handle = p.handle ORDER BY p.rowid""").fetchall():
+                data = json.loads(row["data"])
+                group = row["project"], data.get("block"), data.get("space")
+                if group not in resolutions:
+                    resolutions[group] = self.owner_delivery.resolve(*group)
+                if (resolved := resolutions[group]) is None:
+                    continue
+                handle, kind = row["handle"], row["kind"]
+                recipient, step = resolved
+                self._publish_owner_item(db, handle, kind, data, recipient, step)
+                self.owner_delivery.audit(handle, row["ref"], kind, data, recipient, step)
+                db.execute("DELETE FROM owner_delivery_pending WHERE handle = ?", (handle,))
+                released.append((handle, kind, data))
+            return released
+
+        if self.store.one("SELECT 1 FROM owner_delivery_pending LIMIT 1") is None:
+            return
+        released = self.store.tx(write)
+        for handle, kind, data in released:
+            if kind == "message":
+                self.record_reply(handle, kind, data)
+        if released:
+            self.signal_waiters()
+
+    def pending_owner_count(self) -> int:
+        return self.store.one("""SELECT COUNT(*) AS n FROM owner_delivery_pending p
+            JOIN handles h ON h.handle = p.handle WHERE h.status = ?""", (PENDING_OWNER_ROUTE,))["n"]
+
+    def store_watch_digest(self, db: Any, *, target: str, project: str | None, sender: dict[str, str], data: dict[str, Any]) -> None:
+        group = """h.project IS ? AND json_extract(i.data, '$.block') = ? AND json_extract(i.data, '$.space') = ?
+            AND COALESCE(json_extract(i.data, '$.dm'), ?) = ?"""
+        args = (project, data["block"], data["space"], 0 if sender["block"] == "github" else None, data["dm"])
+        owner = target == "owner"
+        pending = db.execute(f"""SELECT h.handle, i.data FROM owner_delivery_pending i
+            JOIN handles h ON h.handle = i.handle WHERE i.kind = 'watch_digest'
+            AND h.status = ? AND {group} ORDER BY i.rowid DESC LIMIT 1""", (PENDING_OWNER_ROUTE, *args)).fetchone() if owner else None
+        recipient = "json_extract(i.data, '$.for_owner') = 1" if owner else "i.owner = ? AND json_extract(i.data, '$.for_owner') IS NOT 1"
+        reader = "c.owner = i.owner" if owner else "c.owner IN ('owner', i.owner)"
+        latest = pending if pending is not None else db.execute(f"""SELECT i.id, i.handle, i.data,
+            h.status IS NOT 'cancelled' AND NOT EXISTS (
+            SELECT 1 FROM inbox_cursors c WHERE {reader}
+            AND c.handle IN ('*', i.handle) AND c.cursor >= i.id) AS unread
+            FROM inbox i JOIN handles h ON h.handle = i.handle
+            WHERE {recipient} AND i.kind = 'watch_digest' AND {group}
+            AND json_extract(h.meta, '$.owner_archived') IS NOT 1
+            ORDER BY i.id DESC LIMIT 1""", args if owner else (target, *args)).fetchone()
+        now = self.store.clock()
+        if latest is not None and (pending is not None or latest["unread"]):
+            previous = json.loads(latest["data"])
+            channel = data["channel"] if data["channel"] == previous["channel"] else ""
+            merged = json.dumps({
+                **previous, **data,
+                "channel": channel,
+                "count": previous["count"] + data["count"],
+                "items": (previous["items"] + data["items"])[-WATCH_DIGEST_LIMIT:],
+            })
+            if pending is not None:
+                db.execute("UPDATE owner_delivery_pending SET data = ? WHERE handle = ?", (merged, latest["handle"]))
+            else:
+                db.execute("UPDATE inbox SET data = ? WHERE id = ?", (merged, latest["id"]))
+            if sender["block"] == "github":
+                sender = {**sender, "space": channel or data["space"]}
+            db.execute("UPDATE handles SET updated_at = ?, meta = json_set(meta, '$.from', json(?)) WHERE handle = ?",
+                       (now, json.dumps(sender), latest["handle"]))
+            return
+        title = f"Watch digest for {data['space']}"
+        meta = {"from": sender}
+        data = {**data, "items": data["items"][-WATCH_DIGEST_LIMIT:]}
+        if owner:
+            self.store_owner_item(source="", project=project, title=title, meta=meta, kind="watch_digest", data=data, connection=db)
+            return
         handle = self.new_handle()
-        subject = "Triage note"
-
-        def write(db: Any) -> None:
-            db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status, target) "
-                       "VALUES (?, 'owner', 'mailbox', ?, ?, ?, '{}', ?, 0, 'delivered', 'agent:owner')",
-                       (handle, source, project, subject, self.store.clock()))
-            self._add({"handle": handle, "owner": "owner", "destination": "mailbox"}, "triage_note", {**data, "subject": subject}, connection=db)
-
-        self.store.tx(write)
-        self.signal_waiters()
-        return handle
+        db.execute("INSERT INTO handles(handle, owner, destination, ref, project, title, meta, created_at, open, status) "
+                   "VALUES (?, ?, 'mailbox', '', ?, ?, ?, ?, 0, 'delivered')", (handle, target, project, title, json.dumps(meta), now))
+        self._add({"handle": handle, "owner": target, "destination": "mailbox"}, "watch_digest", data, connection=db)
 
     async def add(self, handle: str, kind: str, data: dict[str, Any]) -> int:
         h = self.handle(handle)
         if h is None:
             raise KeyError(handle)
         item = self._add(h, kind, data)
+        self.record_reply(handle, kind, data)
+        await self._notify_waiters()
+        return item
+
+    def record_reply(self, handle: str, kind: str, data: dict[str, Any]) -> None:
         replied = None
         if kind == "message" and (original := data.get("in_reply_to")):
             if data.get("final"):
@@ -226,21 +342,23 @@ class Inbox:
                     (self.store.clock(), original),
                 )
         elif kind == "final" and data.get("final") is not False:
-            replied = h
+            replied = self.handle(handle)
         while replied is not None and (original := replied["meta"].get("forward_of")):
             parent = self.handle(original)
             if parent is None or parent["status"] == "cancelled" or parent["meta"].get("forwarded_to") != replied["handle"]:
                 break
             replied = parent
-            meta = {"in_reply_to": original, "final": True, "from": data.get("from")}
-            copy = self.open_handle(owner=replied["ref"], destination="mailbox", ref=replied["owner"], project=replied["project"],
-                                    title=None, meta={**meta, "root": replied["meta"].get("root") or original}, status="delivered",
-                                    target=f"agent:{replied['ref']}")
-            self.update_handle(copy, open=False)
-            self._add(self.handle(copy), "message", {**data, **meta, "project": replied["project"]})
+            item_meta = {"in_reply_to": original, "final": True, "from": data.get("from")}
+            meta = {**item_meta, "root": replied["meta"].get("root") or original}
+            item = {**data, **item_meta, "project": replied["project"]}
+            if replied["ref"] == "owner":
+                self.store_owner_item(source=replied["owner"], project=replied["project"], title=None, meta=meta, kind="message", data=item)
+            else:
+                copy = self.open_handle(owner=replied["ref"], destination="mailbox", ref=replied["owner"], project=replied["project"],
+                                        title=None, meta=meta, status="delivered", target=f"agent:{replied['ref']}")
+                self.update_handle(copy, open=False)
+                self._add(self.handle(copy), "message", item)
             self.update_handle(original, status="answered")
-        await self._notify_waiters()
-        return item
 
     def head(self) -> int:
         """The newest item's cursor: a reader that starts here sees only what arrives next."""
@@ -263,6 +381,12 @@ class Inbox:
         """Mark every item up to cursor as read for reader, capped at the newest item, and return the reader's position."""
         self._advance(reader, {"*": min(cursor, self.head())})
         return self._cursor(reader, None)
+
+    def mark_owner_read(self, handle: str, cursor: int, count: int | None = None) -> bool:
+        return bool(self.store.n("""INSERT INTO inbox_cursors(owner, handle, cursor)
+            SELECT 'owner', handle, id FROM inbox WHERE handle = ? AND id = ?
+            AND (kind != 'watch_digest' OR json_extract(data, '$.count') = ?)
+            ON CONFLICT(owner, handle) DO UPDATE SET cursor = MAX(cursor, excluded.cursor)""", (handle, cursor, count)))
 
     @staticmethod
     def message_id(cursor: int) -> str:
@@ -292,7 +416,7 @@ class Inbox:
             authored = any("parts" in entry for entry in data["items"])
             entries = []
             for entry in data["items"]:
-                author, excerpt, link = entry["author"], entry["excerpt"], entry["link"]
+                author, excerpt, link = entry.get("author") or entry.get("author_id") or "unknown", entry["excerpt"], entry["link"]
                 safe_link = neutralize(link) if link else link
                 if (parts := entry.pop("parts", None)) is not None:
                     framed = "\n\n".join(filter(None, (neutralize(excerpt), join_parts(frame_parts(parts, where)))))
@@ -309,7 +433,8 @@ class Inbox:
                 "at": iso(r["at"]), **data, "message_id": Inbox.message_id(r["id"])}
 
     def item(self, item_id: int) -> dict[str, Any] | None:
-        row = self.store.one("SELECT * FROM inbox WHERE id = ?", (item_id,))
+        row = self.store.one("""SELECT i.* FROM inbox i JOIN handles h ON h.handle = i.handle
+            WHERE i.id = ? AND json_extract(h.meta, '$.owner_archived') IS NOT 1""", (item_id,))
         return {**self._item(row), "owner": row["owner"]} if row is not None else None
 
     def read(self, *, owner: str | None, handle: str | None = None, since: int | None = None, destination: str | None = None,
@@ -324,15 +449,19 @@ class Inbox:
         start = self._cursor(reader, None) if since is None else since
         position = f"conversation:{handle}" if handle else None
         idle_cursor = max(start, self._cursor(reader, position)) if position and since is None else start
-        if handle and owner is not None and self.store.one(
-            "SELECT 1 FROM handles WHERE handle = ? AND destination = 'mailbox' AND status = 'cancelled' "
-            "AND (owner = ? OR ref = ?)", (handle, owner, owner),
-        ):
-            return {"items": [], "cursor": idle_cursor, "handle_status": "cancelled"}
+        if handle:
+            row = self.store.one("""SELECT owner, ref, status, json_extract(meta, '$.owner_archived') AS archived
+                FROM handles WHERE handle = ? AND destination = 'mailbox'""", (handle,))
+            if row and row["archived"]:
+                return {"items": [], "cursor": idle_cursor}
+            if row and row["status"] == "cancelled" and owner in (row["owner"], row["ref"]):
+                return {"items": [], "cursor": idle_cursor, "handle_status": "cancelled"}
         with_clause = ""
-        where, args = ["id > ?"], [start]
+        where, args = ["id > ?", """NOT EXISTS (SELECT 1 FROM handles h WHERE h.handle = inbox.handle
+            AND json_extract(h.meta, '$.owner_archived') = 1)"""], [start]
         if owner:
-            where.append("(owner = ? OR kind = 'watch_digest')" if owner_digests else "owner = ?")
+            where.append("(owner = ? OR (kind = 'watch_digest' AND json_extract(data, '$.for_owner') IS NOT 1))"
+                         if owner_digests else "owner = ?")
             args.append(owner)
         if since is None:
             where.append("id > COALESCE((SELECT c.cursor FROM inbox_cursors c WHERE c.owner = ? AND c.handle = inbox.handle), 0)")
@@ -367,6 +496,10 @@ class Inbox:
             else:
                 cursors = {"*": cursor}
             self._advance(reader, cursors)
+            if owner_digests and reader != "owner":
+                digests = {r["handle"]: r["id"] for r in rows if r["kind"] == "watch_digest" and r["owner"] != owner}
+                if digests:
+                    self._advance("owner", digests)
         return {
             "items": [self._item(r) for r in rows],
             "cursor": cursor,

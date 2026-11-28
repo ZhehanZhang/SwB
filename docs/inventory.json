@@ -2997,7 +2997,7 @@
       "name": "github_link_duplicate"
     },
     {
-      "description": "Put a triage note with the triggering permalink in the owner's inbox. Pass conversation or handle.",
+      "description": "Route a triage message for the owner with a link to the issue or pull request. Pass conversation or handle.",
       "icon": null,
       "id": "tool:github_notify_owner",
       "input_properties": [
@@ -3006,7 +3006,7 @@
         "text"
       ],
       "kind": "tool",
-      "label": "Notify the owner about triage",
+      "label": "Route a triage message for the owner",
       "name": "github_notify_owner"
     },
     {
@@ -3048,7 +3048,7 @@
       "name": "github_status"
     },
     {
-      "description": "Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Set peek to true to read without moving your position, then call inbox_ack. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
+      "description": "Read SwB messages, Watch digests and open conversations for your agent. Omit since_cursor to read from your last position. Set peek to true to read without moving your position, then call inbox_ack. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
       "icon": null,
       "id": "tool:inbox",
       "input_properties": [
@@ -3634,7 +3634,7 @@
       "name": "routine_remove"
     },
     {
-      "description": "Hand work to someone or leave a message; cheap, so send freely. Every agent (claude, claude-code, chatgpt, gemini, capy, ...) has a switchboard mailbox, so a message always goes through even when it isn't running: it reads on its own schedule, in a live chat, or when switchboard wakes it. Its reply reaches your inbox with in_reply_to set to the conversation this returns. Without to, the owner's route decides. to: a slug from targets, agent:<name>, or <block>:<kind>:<id>. Make the task self-contained (goal, context, repos, done). Then wait() and answer with the reply. Use forward to hand off a conversation you received and route the final answer back to its sender.",
+      "description": "Send work or leave a message in an agent's mailbox. Leave to empty to use a route, or choose a slug or address from targets. Use captain when exactly one Captain exists. For other cases, use its alias or full address. For agent:owner, SwB tries the most recent agent with owner-trusted activity in the last 30 minutes, then the project's main agent, then the global owner route. Give the goal, context, repos and completion criteria. Use wait with the returned conversation to read the reply. Use forward to hand off a conversation and route the final answer to its sender.",
       "icon": null,
       "id": "tool:send",
       "input_properties": [
@@ -3880,7 +3880,7 @@
       "name": "switchboard_status"
     },
     {
-      "description": "Everything send can reach: each block's targets (Captains, channels, ...), an agent:<name> mailbox per agent, and project routes, with address, slugs, level and persona. A slug clash goes to the higher priority. block, kind and query narrow it; refresh re-reads the blocks now.",
+      "description": "List addresses and names for block targets, agent mailboxes and project routes. The reserved name captain works only when SwB finds exactly one Captain. Otherwise, use a named alias or the full Captain address. A clash between other names goes to the higher priority. Filter with block, kind or query. Set refresh to read the blocks again.",
       "icon": null,
       "id": "tool:targets",
       "input_properties": [

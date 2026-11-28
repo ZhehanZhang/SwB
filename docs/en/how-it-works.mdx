@@ -33,6 +33,8 @@ A **target** is anything SwB can send to. Agents, Capy Captains, routines, ChatG
 
 The `targets` tool lists the targets your sign-in can reach.
 
+The reserved name `captain` works only when SwB finds exactly one Capy Captain. Otherwise, use a named alias or the full Captain address.
+
 ## Routes
 
 A **route** is a rule that selects where to send a message. Leave `to` empty to use the route. A route can match the agent, the project, both or any message. SwB checks the agent and project together first. It next checks the project, then the agent and then the route for all messages. Every change to a route goes to the audit log.
