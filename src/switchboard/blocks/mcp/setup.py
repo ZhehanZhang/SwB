@@ -168,7 +168,7 @@ def register(mcp: MCPServer, kit: Kit) -> None:
                      'Share "person" steps and links with the owner. Follow required steps in next until complete is true. '
                      'The done field lists progress. '
                      'Use choose for details such as a Captain, project, agent name or dot name. '
-                     'For Muse device pairing pass choose.gadget=true. Use private links for credentials. '
+                     'Use private links for credentials. '
                      'Read the prompt or resource in guide for detailed setup instructions.'),
         annotations=kit.SEND,
     )
@@ -193,19 +193,13 @@ def register(mcp: MCPServer, kit: Kit) -> None:
             return {**result, "done": [], "next": [
                 {"by": "person", "do": f"Run connect for {what} from the owner's sign-in."}], **modes}
         choose = (choose or {}) if p.is_unrestricted_owner or what == "coding-agent" else {}
-        muse_gadget = what == "muse" and p.is_unrestricted_owner and choose.get("connector") is not True and (
-            choose.get("gadget") is True or "companion" in choose or (block is not None and (p.source, p.kind) != ("muse", "oauth")))
-        if muse_gadget:
-            result.pop("guide", None)
-        if muse_gadget and block is None:
-            return {**result, "done": [], "next": enable_steps(core.cfg, "muse", choose)}
         if what in BLOCKS and block is None:
             return {**result, "done": [], "next": enable_steps(core.cfg, BLOCKS[what], choose)}
         outcome = "ok"
         try:
             if what == "coding-agent":
                 out = coding_steps(kit, p, project, choose)
-            elif what in CLIENTS and not muse_gadget:
+            elif what in CLIENTS:
                 out = client_steps(kit, what, p, project, choose)
             else:
                 out = await kit.run(block.connect_steps(what, p, project, choose))

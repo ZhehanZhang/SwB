@@ -1,6 +1,6 @@
 """Connecting an agent in one step: the owner mints a one-time pairing code, the client redeems it for its own key.
 
-A code names the agent (claude-code, codex, muse-code, ...) and optionally its project, lives ten minutes and works
+A code names the agent (such as claude-code or codex) and optionally its project, lives ten minutes and works
 once. Redeeming it (POST /connect) registers the agent and returns a bearer key for it alone; only its hash is stored.
 Keys are revocable from the root page or the connect_revoke tool. A later swb connect CLI wraps this: it redeems the
 code and writes the client's MCP config.
