@@ -12,8 +12,8 @@ import { useSwbAddress } from './swb-address-provider';
 
 const labels = {
   en: { clear: 'Clear', copy: 'Copy link with your address' },
-  'zh-Hans': { clear: '清除', copy: '复制含地址的链接' },
-  'zh-Hant': { clear: '清除', copy: '複製含位址的連結' },
+  'zh-Hans': { clear: '清除', copy: '复制已填好地址的链接' },
+  'zh-Hant': { clear: '清除', copy: '複製已填好網址的連結' },
 };
 
 function removeLegacyAddress() {

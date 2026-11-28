@@ -63,7 +63,7 @@ curl -fsS http://127.0.0.1:8870/healthz
 
 这个匿名请求返回 `status` 和 `version`。运行 `swb status`，或带上所有者密钥调用 `/healthz`，可以列出各个模块、模块状态和缺少的变量。
 
-检查公网 SwB 服务时，使用它的 HTTPS 地址。
+如果 SwB 服务器在公网上，使用它的 HTTPS 地址。
 
 ```bash
 curl -fsS https://swb.example.com/healthz

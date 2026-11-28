@@ -118,7 +118,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
       discord: '在 Discord Developer Portal 中创建应用。获取它的 Bot 令牌。用 SwB 认领链接保存令牌。用智能体给出的邀请链接把机器人添加到你的服务器。',
       telegram: '用 BotFather 创建机器人。用 SwB 认领链接保存它的令牌。给机器人发一条私聊消息。要连接群组，使用智能体给出的群组链接。',
       github: '用智能体给出的 Webhook 地址创建 GitHub App。按指南设置权限。用 SwB 认领链接保存 Webhook 密钥和 App 凭据。把 App 安装到要连接的仓库。',
-      webhook: '选择发送服务和事件目标。通过 SwB 认领链接保存签名密钥。测试连接。',
+      webhook: '选择发送服务和事件目标。用 SwB 认领链接保存签名密钥。测试连接。',
     },
   },
   'zh-Hant': {
@@ -165,7 +165,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
       discord: '在 Discord Developer Portal 建立應用程式。取得它的 Bot 權杖。用 SwB 認領連結儲存權杖。用代理提供的邀請連結把機器人加入你的伺服器。',
       telegram: '用 BotFather 建立機器人。用 SwB 認領連結儲存它的權杖。傳一則私人訊息給機器人。要連接群組，使用代理提供的群組連結。',
       github: '用代理提供的 Webhook 網址建立 GitHub App。依照指南設定權限。用 SwB 認領連結儲存 Webhook 密鑰和應用程式憑證。把應用程式安裝到要連接的存放庫。',
-      webhook: '選擇傳送服務和事件目標。透過 SwB 認領連結儲存簽署金鑰。測試連線。',
+      webhook: '選擇傳送服務和事件目標。用 SwB 認領連結儲存簽署密鑰。測試連線。',
     },
   },
   es: {
