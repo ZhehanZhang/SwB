@@ -20,12 +20,10 @@ type GetStartedCopy = {
   reachAnywhere: string;
   companionGuide: string;
   companionHelp: string;
-  museCompanionHelp: string;
-  muse: { wake: string; beforeCommand: string; afterCommand: string; tools: string };
   procedure: Record<string, string>;
 };
 
-export const getStartedCopy: Record<Locale, GetStartedCopy> = {
+const copy = {
   en: {
     runTitle: 'Where SwB runs',
     runHelp: 'Choose where SwB runs to see the install instructions for that location.',
@@ -46,19 +44,12 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     reachAnywhere: 'Reach it from anywhere',
     companionGuide: 'Companion guide',
     companionHelp: 'For local Claude Code, Codex, OpenCode or dsh sessions, your agent guides companion installation and pairing on your device.',
-    museCompanionHelp: 'For gadget wakes, your agent guides you to install and pair a companion on your device.',
-    muse: {
-      wake: 'Wake Muse with a gadget',
-      beforeCommand: 'Use a Mac or Linux computer with Bluetooth near your phone. Ask an agent with SwB owner access for a pairing code. Replace the example address with your SwB address.',
-      afterCommand: 'Enter the single-use code within ten minutes. Allow Bluetooth when your computer asks. Ask your agent to start Muse pairing. Select Add Device in the Muse app.',
-      tools: 'Connect Muse to SwB tools',
-    },
     procedure: {
       'claude-project': 'Paste the setup prompt into your project coordinator chat. Add an API trigger to the routine. Give its Fire URL to your agent. Save the routine token through the SwB claim link.',
       claude: 'Add SwB as a custom connector in Claude. Use your public SwB address ending in /mcp. Sign in to SwB. Approve access.',
       chatgpt: 'Open chatgpt.com/plugins in a browser. Add SwB as a custom MCP server. Choose OAuth when you create the plugin. Sign in to SwB.',
       'chatgpt-dots': 'Set the dots block to deliver to a SwB mailbox. Add SwB to ChatGPT in your browser. Paste the setup prompt into your dot. Follow the setup instructions from your dot.',
-      muse: 'Ask Muse in a chat to add SwB as a custom connector with OAuth. Open the link from Muse. Sign in to SwB as the owner.',
+      muse: 'Paste the setup prompt into a new Muse chat. Open the sign-in link from Muse. Sign in to SwB as the owner. Muse then sets up its hook.',
       grok: 'Open grok.com/connectors in your browser. Add SwB as a custom connector. Sign in to SwB. Paste the setup prompt into a new Grok chat.',
       'grok-bot': 'Add SwB as a custom connector with Remote HTTPS in Grok Bot. Paste the setup prompt into your Bot chat. Save the routine webhook URL through its SwB claim link. Save the webhook key through its own claim link.',
       capy: 'Save your Capy API key through the SwB claim link. Restart SwB when your agent asks. Tell your agent which Capy Captain gets the work. Save the service user key through its SwB claim link.',
@@ -390,3 +381,5 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     }
   },
 };
+
+export const getStartedCopy: Record<Locale, GetStartedCopy> = copy;

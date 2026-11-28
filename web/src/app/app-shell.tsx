@@ -9,21 +9,21 @@ import { PageTitle } from "@/app/page-title"
 import { connectionNames, isConnectionPlatform, isSection, primarySections, sections, utilitySections } from "@/app/navigation"
 import { preloadOnIdle, preloadOnTouch } from "@/app/route-pages"
 import { SwbIcon } from "@/components/swb-icon"
-import { cn } from "@/lib/utils"
+import "./console-navigation.css"
 import "./mobile-navigation.css"
 
-const tabClass = "console-pressable flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-caption text-muted-foreground"
-const mobileTabClass = `console-mobile-hit console-mobile-tab ${tabClass} h-14 touch-manipulation`
-const mobileTabVisual = "console-tab-visual flex flex-col items-center gap-1"
+const tabClass = "console-pressable flex min-w-0 flex-col items-center justify-center rounded-md text-muted-foreground"
+const railTabClass = `${tabClass} w-16 gap-0.5 text-xs`
+const mobileTabClass = `console-mobile-hit console-mobile-tab ${tabClass} h-14 gap-1 text-caption touch-manipulation`
+const mobileTabVisual = "flex flex-col items-center gap-1"
 const mobileIconClass = "size-6 shrink-0"
 
 function HomeNav({ active }: { active: boolean }) {
   return (
     <Link to="/" aria-label={`${PRODUCT_NAME} overview`} aria-current={active ? "page" : undefined}
-      className={cn(tabClass, "h-[72px] w-16")}
+      className={`${railTabClass} console-rail-overview relative h-[72px]`}
     >
-      <SwbIcon muted={!active} className={active ? "size-12" : "size-7"} />
-      {!active && <span>Overview</span>}
+      <span className="console-rail-overview-label absolute inset-x-0 bottom-[13px] text-center whitespace-nowrap">Overview</span>
     </Link>
   )
 }
@@ -31,8 +31,8 @@ function HomeNav({ active }: { active: boolean }) {
 function SectionNav({ section, selected = false }: { section: typeof sections[number]; selected?: boolean }) {
   const { name, to, icon: Icon } = section
   return (
-    <NavLink to={to} data-selected={selected || undefined} className={cn(tabClass, "console-mobile-tab h-14 w-16")}>
-      <Icon aria-hidden className="size-5" /> {name}
+    <NavLink to={to} data-selected={selected || undefined} className={`${railTabClass} console-mobile-tab h-14`}>
+      <Icon aria-hidden className="size-5 shrink-0" /><span className="whitespace-nowrap">{name}</span>
     </NavLink>
   )
 }
@@ -92,7 +92,7 @@ function MobileNavigation({ home, moreOpen, setMoreOpen }: { home: boolean; more
       <div className="pointer-events-auto grid grid-cols-5">
         <Link to="/" aria-current={home ? "page" : undefined} className={mobileTabClass}
           onClick={() => setMoreOpen(false)} {...preloadOnTouch("/")}>
-          <span className={mobileTabVisual}><SwbIcon tab className={mobileIconClass} /><span>Overview</span></span>
+          <span className={mobileTabVisual}><span aria-hidden className={mobileIconClass} /><span>Overview</span></span>
         </Link>
         {sections.slice(0, 3).map(({ name, to, icon: Icon }) => (
           <NavLink key={to} to={to} className={mobileTabClass}
@@ -131,7 +131,7 @@ export function AppShell() {
   return (
     <PageTitle.Provider value={setTitle}>
       <a className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2" href="#main-content">Skip to content</a>
-      <nav aria-label="Navigation" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--rail-width)] flex-col gap-1 px-2 pt-4 pb-4 pl-4 md:flex">
+      <nav aria-label="Navigation" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--rail-width)] flex-col gap-0.5 px-2 pt-4 pb-4 pl-4 md:flex">
         <HomeNav active={home} />
         {primarySections.map(section => <SectionNav key={section.to} section={section} />)}
         <div className="flex-1" />
@@ -141,7 +141,7 @@ export function AppShell() {
         <header className="flex h-[var(--topbar-height)] min-w-0 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2">
             {project && <Link to="/" aria-label={`Back to ${PRODUCT_NAME}`} className="grid size-5 shrink-0 place-items-center text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
-            {connection && <Link to="/settings" aria-label="Back to Settings" className="console-pressable grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
+            {connection && <Link to="/settings" aria-label="Back to Settings" className="console-pressable console-press-scale grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground md:hidden"><ChevronLeft aria-hidden className="size-5" /></Link>}
             <h1 className="truncate text-page-title">{heading}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-2 md:gap-4">
@@ -160,6 +160,9 @@ export function AppShell() {
         </main>
       </div>
       <MobileNavigation home={home} moreOpen={moreOpen} setMoreOpen={setMoreOpen} />
+      <div aria-hidden data-home={home || undefined} className="console-overview-mark pointer-events-none fixed top-0 left-0">
+        <SwbIcon className="block" />
+      </div>
     </PageTitle.Provider>
   )
 }

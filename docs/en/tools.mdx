@@ -28,7 +28,8 @@ The owner can limit tools with `auth.key_tools` and send targets with `auth.key_
 | `send` | Put the work or message in `task`. Set `to` to choose a target. Leave `to` empty to use a route when the key allows it |
 | `agent_send` | Deprecated tool. Pass the agent name in `to`, for example `to="codex"`. `blocks.mcp.legacy_aliases` enables it by default. For new calls, use `send` with `to="agent:codex"` |
 | `wait` | Wait for new messages or replies |
-| `inbox` | Read your inbox and return at once |
+| `inbox` | Read your inbox and return at once. Set `peek=true` to read and keep your position |
+| `inbox_ack` | Move your inbox position to `cursor` after a `peek` read. Items up to that cursor count as read |
 | `reply` | Pass the `handle` from a send or inbox item in `conversation`. Put the reply in `text` |
 | `status` | Show the state of one conversation. For Capy, use `messages` for the number of recent messages. Set `include_tools=true` to include tool activity |
 | `switchboard_status` | Show your sign-in identity, wait limits, blocks and instance health |
@@ -39,7 +40,7 @@ The owner can limit tools with `auth.key_tools` and send targets with `auth.key_
 
 ### Inbox cursor
 
-A cursor marks a position in the inbox. The `inbox` and `wait` tools save a new position when they return items. Filters can advance a separate position. A later `wait` reads from the saved position. Pass `since_cursor=0` to `inbox` to read from the start. Pass a returned `cursor` as `since_cursor` to continue from that position.
+A cursor marks a position in the inbox. The `inbox` and `wait` tools save a new position when they return items. With `peek=true`, `inbox` keeps the position. Call `inbox_ack` with the highest cursor you handled. Filters can advance a separate position. A later `wait` reads from the saved position. Pass `since_cursor=0` to `inbox` to read from the start. Pass a returned `cursor` as `since_cursor` to continue from that position.
 
 Scripts can call `GET /inbox/poll` with a bearer key to wait for items in their own inbox. Pass the returned `cursor` as `after` to resume. The default starts at the current end of the inbox. The call returns when items arrive or the wait time ends. It leaves the MCP cursor unchanged. Use the [inbox event stream](/docs/connect#inbox-event-stream) to receive messages as they arrive. Use `inbox` to read context items and Watch digests your sign-in can see.
 
@@ -116,6 +117,17 @@ A private project requires a grant that names that project or owner access. For 
 | `visibility_list` | Show the default access rules and the rules for individual resources. Use the owner sign-in |
 | `visibility_set` | Set a resource to private or shared as the owner. Tools stay private |
 
+### Muse hook tools
+
+These tools act on the mailbox of the agent that calls them. See [Muse](/docs/setup/muse).
+
+| Tool | Title | Use |
+| - | - | - |
+| `muse_hook_setup` | Set up the Muse hook | Make a private wake link and return the hook script and settings. Each call replaces the previous link |
+| `muse_hook_test` | Test the Muse hook | Put a test message in your own mailbox. The hook wakes a worker at its next poll |
+| `muse_hook_status` | Muse hook status | Show the link creation time, the last hook check and the unread count |
+| `muse_hook_revoke` | Revoke the Muse hook link | Stop the link. The hook turns itself off |
+
 ### Companion tools
 
 Use these tools as the owner.
@@ -129,7 +141,7 @@ Use these tools as the owner.
 
 ## Routes
 
-A route picks a target for `send`. Use a block that accepts routes, such as `capy`, `claude-routine` or `grok-routine`. Use `to="agent:<name>"` to reach an agent's mailbox directly. Use `to="agent:muse"` to send to the Muse mailbox. Use `to="muse:gadget:muse"` to [wake Muse](/docs/setup/muse#wake-muse-in-real-time).
+A route picks a target for `send`. Use a block that accepts routes, such as `capy`, `claude-routine` or `grok-routine`. Use `to="agent:<name>"` to reach an agent's mailbox directly. Use `to="agent:muse"` to send to the Muse mailbox.
 
 | Tool | Use |
 | - | - |

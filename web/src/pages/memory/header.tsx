@@ -23,7 +23,7 @@ export function MemorySync({ csrf }: { csrf: string }) {
         Memory sync
         <Switch.Root checked={settings.data?.sync ?? false} disabled={!settings.data || sync.isPending}
           onCheckedChange={(checked) => sync.mutate(checked)}
-          className="console-pressable flex h-5 w-9 shrink-0 items-center rounded-full border border-border-strong bg-muted p-0.5 data-[state=checked]:border-primary data-[state=checked]:bg-primary disabled:opacity-50">
+          className="console-pressable console-press-scale flex h-5 w-9 shrink-0 items-center rounded-full border border-border-strong bg-muted p-0.5 data-[state=checked]:border-primary data-[state=checked]:bg-primary disabled:opacity-50">
           <Switch.Thumb className="block size-3.5 rounded-full border border-border-strong bg-surface transition-transform data-[state=checked]:translate-x-4 data-[state=checked]:border-transparent motion-reduce:transition-none" />
         </Switch.Root>
       </label>
