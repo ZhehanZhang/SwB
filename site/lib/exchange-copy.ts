@@ -110,8 +110,8 @@ export const exchangeScenes: ExchangeScene[] = [
       }],
       ['you', {
         en: 'Ask for one more example.',
-        'zh-Hans': '已经转告 Grok Bot 了。',
-        'zh-Hant': '已經轉告 Grok Bot 了。',
+        'zh-Hans': '再要一个示例。',
+        'zh-Hant': '再要一個範例。',
         es: "Pídele otro ejemplo.",
         fr: "Demandez un autre exemple.",
         de: "Frag nach einem weiteren Beispiel.",
@@ -225,8 +225,8 @@ export const exchangeScenes: ExchangeScene[] = [
     messages: [
       ['you', {
         en: 'Please add a Docker example.',
-        'zh-Hans': '我附上了 Docker 指南的链接。',
-        'zh-Hant': '我附上了 Docker 指南的連結。',
+        'zh-Hans': '请加一个 Docker 示例。',
+        'zh-Hant': '請加一個 Docker 範例。',
         es: "Añade un ejemplo con Docker, por favor.",
         fr: "Ajoutez un exemple Docker, s'il vous plaît.",
         de: "Bitte ergänze ein Docker-Beispiel.",
@@ -235,8 +235,8 @@ export const exchangeScenes: ExchangeScene[] = [
       }],
       ['grok-bot', {
         en: 'I added the documentation label.',
-        'zh-Hans': '我附上了 Docker 指南的链接。',
-        'zh-Hant': '我附上了 Docker 指南的連結。',
+        'zh-Hans': '我加上了 documentation 标签。',
+        'zh-Hant': '我加上了 documentation 標籤。',
         es: "He añadido la etiqueta de documentación.",
         fr: "J'ai ajouté l'étiquette documentation.",
         de: "Ich habe das Label documentation gesetzt.",
