@@ -3339,7 +3339,7 @@
       "name": "memory_summary"
     },
     {
-      "description": "Copy up to 50 native memories. Keep each source key stable.",
+      "description": "Copy up to 50 native memories. Keep each source key stable. Use one of these memory sources agents-md, capy-drive, chatgpt-memory, claude-code-auto-memory, claude-md, claude-memory, codex-memory, gemini-memory, grok-memory, muse-memory, other.",
       "icon": null,
       "id": "tool:memory_sync",
       "input_properties": [

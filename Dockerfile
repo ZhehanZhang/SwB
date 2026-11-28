@@ -39,7 +39,7 @@ USER switchboard
 ENV PORT=8000 SWB_DEFAULT_HOST=0.0.0.0 SWB_DEFAULT_DATA_DIR=/data GIT_COMMIT=${GIT_COMMIT} BUILD_DATE=${BUILD_DATE}
 VOLUME ["/data"]
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/healthz', timeout=4)"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD python -c "import os, urllib.request; from switchboard import USER_AGENT; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/healthz', headers={'User-Agent': USER_AGENT}), timeout=4)"
 CMD ["swb", "serve"]
 
 FROM runtime AS paas

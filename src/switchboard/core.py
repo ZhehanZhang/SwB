@@ -33,8 +33,8 @@ from .connect import AGENT_RE, Connections
 from .env import env_value
 from .hook_wake import HookWake
 from .inbox import Inbox
-from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath, MemoryRefused, frame_entry,
-                     missing_path)
+from .memory import (GENERAL, MAX_TITLE, SYNC_SOURCE_LABELS, SYNC_SOURCES, Memory, MemoryError_, MemoryNotFound, MemoryPath,
+                     MemoryRefused, frame_entry, missing_path)
 from .memory_git import MemoryGit
 from .modes import ChannelModes
 from .projects import Project, ProjectError, Projects
@@ -1179,7 +1179,7 @@ class Switchboard:
     def sync_memory(self, principal: Principal, source: str, items: list[dict[str, Any]], project: str | None = None,
                     scope: str | None = None) -> dict[str, Any]:
         if source not in SYNC_SOURCES:
-            raise MemoryError_("Choose a supported memory source.")
+            raise MemoryError_(f"Use one of these memory sources {SYNC_SOURCE_LABELS}.")
         if not AGENT_RE.fullmatch(principal.source):
             raise MemoryError_("Use a credential with an agent name.")
         if len(items) > 50:

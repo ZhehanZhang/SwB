@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
 
+from . import USER_AGENT
 from .brand import TAGLINE
 from .slack.avatar_files import agent_avatar_url
 
@@ -228,7 +229,8 @@ def _row(label: str, hint: str, value: str) -> str:
 
 
 def connect_code_page(code: dict[str, Any], public_url: str) -> HTMLResponse:
-    cmd = f"curl -s -X POST {public_url}/connect -H 'content-type: application/json' -d '{{\"code\": \"{code['code']}\"}}'"
+    cmd = (f"curl -s -A '{USER_AGENT}' -X POST {public_url}/connect -H 'content-type: application/json'"
+           f" -d '{{\"code\": \"{code['code']}\"}}'")
     body = (hero(PAIRING_TITLE, "")
             + f'<div class="card fade-in">{_row("Agent", "", code["agent"])}'
             + (_row("Project", "", code["project"]) if code.get("project") else "")
