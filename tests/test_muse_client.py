@@ -86,7 +86,9 @@ def test_connect_muse_guides_the_person_until_muse_signs_in(make):
     tokens = sign_in(client, redirect=MUSE_CALLBACK)
     for caller in (STATIC_KEY, tokens["access_token"]):
         assert payload(call(client, caller, "connect", args)) == {
-            **out, "done": [*out["done"], "The client is signed in."], "next": [], "state": "connected", "complete": True,
+            **out, "done": [*out["done"], "The client is signed in."], "state": "connected", "complete": True,
+            "next": [{"by": "you", "do": "Set up the Muse hook to wake Muse when SwB messages arrive.",
+                      "call": {"tool": "muse_hook_setup", "arguments": {}}, "optional": True}],
         }
 
 

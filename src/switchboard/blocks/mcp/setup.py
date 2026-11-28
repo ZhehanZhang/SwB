@@ -126,7 +126,9 @@ def client_steps(kit: Kit, kind: str, principal: Principal, project: str | None,
                 (kind, json.dumps(core.cfg.resources), core.clock()),
             ) is not None
         if signed_in:
-            return {"done": [*done, "The client is signed in."], "next": []}
+            hook = [{"by": "you", "do": "Set up the Muse hook to wake Muse when SwB messages arrive.",
+                     "call": {"tool": "muse_hook_setup", "arguments": {}}, "optional": True}] if kind == "muse" else []
+            return {"done": [*done, "The client is signed in."], "next": hook}
         return {"done": done, "next": [{"by": "person", "do": hosted_client_instruction(kind, resource)}]}
     if not principal.is_unrestricted_owner:
         return {"done": done, "next": [{"by": "person", "do": "Ask the owner to mint a pairing code from their own sign-in."}]}
