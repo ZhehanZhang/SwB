@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { locales, localize, type Locale } from './i18n';
-import { markdownUrl, siteUrl, source, type DocsPage } from './source';
+import { siteUrl } from './urls';
 
-export function languageAlternates(path: string, page?: DocsPage) {
+export function languageAlternates(hrefFor: (lang: Locale) => string | undefined) {
   const alternates: Record<string, string> = {};
   for (const lang of locales) {
-    const href = page ? source.getPage(page.slugs, lang)?.url : localize(lang, path);
+    const href = hrefFor(lang);
     if (href) alternates[lang] = new URL(href, siteUrl).href;
   }
   if (alternates.en) alternates['x-default'] = alternates.en;
@@ -17,7 +17,7 @@ export function pageMetadata(
   path: string,
   title: string,
   description?: string,
-  page?: DocsPage,
+  page?: { url: string; hrefFor: (lang: Locale) => string | undefined },
 ): Metadata {
   const url = page?.url ?? localize(lang, path);
 
@@ -26,8 +26,8 @@ export function pageMetadata(
     description,
     alternates: {
       canonical: url,
-      languages: languageAlternates(path, page),
-      types: page ? { 'text/markdown': markdownUrl(page) } : undefined,
+      languages: languageAlternates(page?.hrefFor ?? ((lang) => localize(lang, path))),
+      types: page ? { 'text/markdown': `${page.url}.mdx` } : undefined,
     },
     openGraph: {
       title,

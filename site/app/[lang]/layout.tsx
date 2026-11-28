@@ -4,7 +4,7 @@ import { i18nProvider } from 'fumadocs-ui/i18n';
 import { Providers } from '@/components/providers';
 import { SiteHeader } from '@/components/site-header';
 import { isLocale, locales } from '@/lib/i18n';
-import { repository, siteUrl } from '@/lib/source';
+import { repository, siteUrl } from '@/lib/urls';
 import { translations } from '@/lib/translations';
 import { inter, interTight, jetbrainsMono } from '@/lib/fonts';
 import '../global.css';
