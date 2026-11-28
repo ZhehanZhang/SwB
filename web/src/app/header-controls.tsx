@@ -8,6 +8,7 @@ import { PRODUCT_NAME } from "@/app/brand"
 import { sections } from "@/app/navigation"
 import { DataState } from "@/components/data-state"
 import { SwbIcon } from "@/components/swb-icon"
+import { Button } from "@/components/ui/button"
 import { requestJson } from "@/lib/api"
 
 type Project = { slug: string; name: string }
@@ -18,6 +19,8 @@ function isProjectList(value: unknown): value is { projects: Project[] } {
 }
 
 const itemClass = "flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-body-sm select-none data-[selected=true]:bg-muted"
+const shortcutModifier = navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints < 2 ? "⌘" : "Ctrl"
+const keycapClass = "rounded-md border bg-background px-1.5 font-mono"
 
 export function CommandMenu() {
   const [open, setOpen] = useState(false)
@@ -48,16 +51,20 @@ export function CommandMenu() {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="icon"
           aria-label="Search"
           aria-keyshortcuts="Meta+K Control+K"
-          className="flex size-9 shrink-0 items-center justify-center gap-2 rounded-md text-body-sm text-muted-foreground hover:bg-muted md:w-[280px] md:justify-start md:border md:border-border-strong md:px-3"
+          className="size-9 border-0 text-sm text-muted-foreground md:w-[280px] md:justify-start md:border md:px-3 [&_svg]:size-5 md:[&_svg]:size-4"
         >
-          <Search aria-hidden className="size-5 md:size-4" />
+          <Search aria-hidden />
           <span className="hidden md:inline">Search</span>
-          <kbd aria-hidden className="ml-auto hidden font-mono text-mono-sm text-subtle-foreground md:inline">⌘K</kbd>
-        </button>
+          <span aria-hidden className="ml-auto hidden items-center gap-0.5 md:inline-flex">
+            <kbd className={keycapClass}>{shortcutModifier}</kbd>
+            <kbd className={keycapClass}>K</kbd>
+          </span>
+        </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/25" />
