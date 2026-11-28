@@ -6,6 +6,8 @@ import { source } from '@/lib/source';
 
 type Props = PageProps<'/[lang]/about'>;
 
+export const dynamicParams = false;
+
 async function getAbout(params: Props['params']) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
@@ -16,7 +18,10 @@ async function getAbout(params: Props['params']) {
 
 export async function generateMetadata({ params }: Props) {
   const { lang, page } = await getAbout(params);
-  return pageMetadata(lang, '/about', page.data.title, page.data.description, page);
+  return pageMetadata(lang, '/about', page.data.title, page.data.description, {
+    url: page.url,
+    hrefFor: (locale) => source.getPage(page.slugs, locale)?.url,
+  });
 }
 
 export default async function About({ params }: Props) {

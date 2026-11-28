@@ -6,6 +6,8 @@ import { source } from '@/lib/source';
 
 type Props = PageProps<'/[lang]/docs/[[...slug]]'>;
 
+export const dynamicParams = false;
+
 async function getPage(params: Props['params']) {
   const { lang, slug } = await params;
   if (!isLocale(lang)) notFound();
@@ -20,7 +22,10 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props) {
   const { lang, page } = await getPage(params);
-  return pageMetadata(lang, page.url, page.data.title, page.data.description, page);
+  return pageMetadata(lang, page.url, page.data.title, page.data.description, {
+    url: page.url,
+    hrefFor: (locale) => source.getPage(page.slugs, locale)?.url,
+  });
 }
 
 export default async function Page({ params }: Props) {

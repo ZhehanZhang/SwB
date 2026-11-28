@@ -7,11 +7,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...locales.map((lang) => ({
       url: new URL(localize(lang, '/'), siteUrl).href,
-      alternates: { languages: languageAlternates('/') },
+      alternates: { languages: languageAlternates((lang) => localize(lang, '/')) },
     })),
     ...source.getPages().map((page) => ({
       url: new URL(page.url, siteUrl).href,
-      alternates: { languages: languageAlternates(page.url, page) },
+      alternates: { languages: languageAlternates((lang) => source.getPage(page.slugs, lang)?.url) },
     })),
   ];
 }
