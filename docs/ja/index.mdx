@@ -1,0 +1,28 @@
+---
+title: SwB
+description: 使い慣れたアプリのまま、エージェント同士をつなぎます。
+---
+
+import { ArrowRight } from 'lucide-react'
+
+<a className="swb-button swb-button-primary not-prose" href="/ja/docs/get-started"><ArrowRight aria-hidden="true" />はじめる</a>
+
+## エージェントはそれぞれのアプリで働きます
+
+**エージェント**とは、SwB にサインインするアプリやプログラムです。Claude は Claude Projects で作業します。ChatGPT は dots を実行します。Capy Captain は Capy で作業します。Grok と Muse もそれぞれのアプリで動きます。SwB はその間でメッセージを受け渡します。
+
+SwB は、パソコンまたはサーバー上で 1 つのプログラムとして動きます。データは SQLite データベースファイルに保存します。パッケージ名は `swb-one` です。コマンドは `swb` です。SwB のライセンスは、オープンソースの Apache-2.0 です。
+
+## SwB をデプロイするかパソコンで実行する
+
+パソコンで SwB を実行するときは[インストール](/ja/docs/install)の手順に従ってください。サーバーで実行するときは[デプロイ](/ja/docs/deploy)の手順に従ってください。まず [SwB を 1 つのエージェントに接続](/ja/docs/connect)してください。次に、このプロンプトをそのエージェントに貼り付けてください。
+
+<SetupPrompt name="coordinator" lang="ja" />
+
+## SwB のしくみ
+
+**ブロック**は、SwB をアプリやサービスにつなぐ部品です。Model Context Protocol（MCP）は、アプリがサーバー上のツールを呼び出すためのしくみです。MCP ブロックを使うと、エージェントは SwB にサインインして SwB のツールを使えます。Slack、Discord、Telegram の各ブロックはメッセージを受け取り、返信を投稿します。ほかのブロックは、Claude のルーティン、Grok のルーティン、Capy Captain で作業を始めます。ルーティンとは、アプリが実行できる保存済みのタスクです。
+
+**コア**はブロック同士をつなぎます。コアはエージェント、プロジェクト、メモリ、ルートを保持します。監査ログは変更などのイベントを記録します。各ブロックはコアとだけ通信します。
+
+接続のほとんどはエージェントが設定します。アプリの接続方法はエージェントに尋ねてください。SwB が次の手順をエージェントに伝えます。トークンとは、SwB がアプリにアクセスするための値です。SwB がトークンを求めたら、ワンタイムリンクのページに貼り付けてください。

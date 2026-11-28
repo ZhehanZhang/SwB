@@ -1,0 +1,110 @@
+---
+title: Inicio de sesión del propietario
+description: Inicia sesión con una llave de acceso, un enlace de un solo uso, un código de configuración o tu proveedor de identidad.
+---
+
+El propietario inicia sesión para gestionar SwB. Con este acceso, el propietario aprueba los inicios de sesión de los agentes y guarda tokens.
+
+| Página | Uso |
+| - | - |
+| `/login` | Iniciar sesión como propietario. |
+| `/authorize` | Revisar la solicitud de conexión de un agente. |
+
+## Enlace de un solo uso
+
+```bash
+swb login-link
+```
+
+El comando muestra un enlace como `https://swb.example.com/login#t=...`. Ábrelo en tu navegador en un plazo de cinco minutos. El enlace funciona una sola vez. Un agente conectado como propietario también puede crear un enlace con la herramienta `login_link`. El token va en la parte del enlace que sigue a `#`.
+
+En el primer arranque local, `swb up` muestra un enlace de un solo uso. La dirección local predeterminada es `http://localhost:8870`. Si defines `SWB_PORT`, SwB usa ese puerto en la dirección. Con `swb login-link`, usa `--url` para elegir otro servidor. Usa `--dir` para leer la clave de propietario de otra carpeta de instancia.
+
+Si el inicio de sesión con el enlace falla, ejecuta `swb login-link` de nuevo. Abre el enlace nuevo en tu navegador.
+
+## Código de configuración
+
+Un código de configuración funciona una sola vez, en el primer inicio de sesión del propietario. Úsalo cuando SwB gestione el inicio de sesión directamente. La [guía de despliegue](/es/docs/deploy) indica dónde obtener el código para un servidor alojado.
+
+Para definir tu propio código, genera 32 bytes aleatorios. Codifícalos como 64 caracteres hexadecimales en minúscula o en Base64 estándar. Este comando añade un código hexadecimal al archivo privado `.env`. Ejecútalo en la carpeta de la instancia después de `swb init`.
+
+```bash
+(umask 077; printf 'SWB_SETUP_CODE=%s\n' "$(openssl rand -hex 32)" >> .env)
+```
+
+Inicia SwB con `SWB_SETUP_CODE` definido. Abre `/login` en tu navegador. Pega el código en **Setup code**. Selecciona **Sign in**.
+
+## Llave de acceso
+
+Una **llave de acceso** usa tu dispositivo para confirmar tu inicio de sesión. Después de tu primer inicio de sesión, escribe el nombre de tu dispositivo en **Passkey name**. Selecciona **Add a passkey**.
+
+Para otro dispositivo, abre **Settings**. En **Sign-in**, selecciona **Add a passkey**. Escribe un nombre. Selecciona **Add passkey** para guardarla. Usa tu llave de acceso para los próximos inicios de sesión.
+
+## OIDC
+
+OpenID Connect (OIDC) permite que un servicio de inicio de sesión como Google confirme tu identidad. Añade tu servicio al archivo de configuración. Define `SWB_OIDC_CLIENT_SECRET` con el secreto de ese servicio.
+
+```yaml
+public_url: https://swb.example.com
+auth:
+  owner_emails: [owner@swb.example.com]
+  oidc:
+    name: Google
+    issuer: https://accounts.google.com
+    client_id: 1234.apps.googleusercontent.com
+    client_secret_env: SWB_OIDC_CLIENT_SECRET
+```
+
+En tu proveedor, define la dirección de redirección como `https://swb.example.com/auth/oidc/callback`. La página de inicio de sesión muestra un botón para tu servicio. SwB acepta un correo verificado que figure en `auth.owner_emails`. También puedes listar IDs de cuenta de tu servicio en `auth.oidc.owner_subjects`.
+
+## Cloudflare Access
+
+Sigue la [configuración de Cloudflare](/es/docs/setup/cloudflare) para proteger la consola con Cloudflare Access. SwB comprueba el token de Access y compara el correo con `auth.owner_emails` o `SWB_OWNER_EMAILS`.
+
+## Inicio de sesión de agentes
+
+OAuth permite que una app se conecte a SwB con tu aprobación. Aprueba la conexión en `/authorize`. La app recibe el ámbito OAuth `switchboard`, el nombre del acceso que pide. La app usa `/token` para obtener o renovar sus tokens.
+
+Consulta `error_description` para ver los detalles cuando la app reciba un error de OAuth.
+
+| Error | Significado |
+| - | - |
+| `access_denied` | El propietario rechazó la conexión. |
+| `invalid_client` | SwB rechazó la identidad o las credenciales de la app. |
+| `invalid_client_metadata` | SwB rechazó los ajustes de registro de la app. |
+| `invalid_redirect_uri` | SwB exige una dirección de retorno permitida en el registro. |
+| `invalid_request` | El formato de la petición o un valor obligatorio es incorrecto. |
+| `invalid_grant` | SwB rechazó el código de autorización o el token de renovación. |
+| `invalid_target` | La petición indica una dirección MCP incorrecta. |
+| `unsupported_response_type` | Usa `response_type=code`. |
+| `unsupported_grant_type` | Usa `grant_type=authorization_code` o `grant_type=refresh_token`. |
+| `temporarily_unavailable` | Define `public_url` o revisa el límite de registro de clientes. |
+
+`/connect` también devuelve `invalid_grant` cuando SwB rechaza un [código de emparejamiento](/es/docs/connect#conectar-con-un-código-de-emparejamiento).
+
+## Sesiones
+
+Una **cookie** es un valor que tu navegador guarda para mantener tu sesión. SwB activa el atributo `Secure` de esta cookie. Usa HTTPS para una dirección pública.
+
+Cuando cambias un ajuste, el navegador envía un token que SwB usa para comprobar la petición. Cierra la sesión desde **Settings**.
+
+El navegador lee el estado actual de tu sesión en `/auth/session`.
+
+## Errores de inicio de sesión
+
+SwB anota en **Audit** los fallos de inicio de sesión del navegador. Cada fila muestra el motivo y mantiene privados los códigos y los tokens. SwB limita las filas repetidas de algunos fallos.
+
+| Error | Significado |
+| - | - |
+| `link_used` | Alguien usó el enlace para iniciar sesión antes de que caducara. |
+| `link_expired` | El enlace caducó. |
+| `link_invalid` | SwB rechazó el enlace. |
+| `setup_failed` | El código de configuración tiene un formato incorrecto o es distinto de `SWB_SETUP_CODE`. |
+| `setup_closed` | El inicio de sesión con código de configuración está cerrado. Usa otro método. |
+| `passkey_failed` | Falló la creación o la verificación de la llave de acceso. |
+| `last_method` | SwB conserva la última llave de acceso cuando OIDC y Cloudflare Access están inactivos. |
+| `not_found` | El ID de la llave de acceso es incorrecto o la llave se borró. |
+| `oidc_failed` | Falló el inicio de sesión a través del proveedor de identidad. |
+| `signed_out` | La petición necesita una sesión de propietario. |
+| `csrf` | SwB rechazó la dirección de la página o el token de seguridad. |
+| `slow_down` | Los intentos de inicio de sesión llegaron a un límite. Espera el tiempo que indica `Retry-After`. |

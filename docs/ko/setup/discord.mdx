@@ -1,0 +1,71 @@
+---
+title: Discord
+description: 봇으로 Discord 서버를 SwB에 연결합니다.
+---
+
+SwB은 봇으로 Discord에 로그인합니다. 새 메시지는 Discord Gateway로 받습니다. Gateway는 SwB이 Discord와 여는 연결입니다.
+
+## 시작하기 전에
+
+연결할 서버에서 **Manage Server** 권한이 있는 Discord 계정을 사용하세요. 소유자로 SwB에 로그인하세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="discord" lang="ko" />
+
+이 프롬프트를 SwB 소유자 클라이언트에 붙여 넣으세요.
+
+## Discord 봇 설정
+
+### 애플리케이션 만들기
+
+[https://discord.com/developers/applications](https://discord.com/developers/applications)를 여세요. **New Application**을 클릭하세요.
+### 애플리케이션 이름 정하기
+
+이름을 입력하세요. **Create**를 클릭하세요.
+### 봇 토큰 재설정
+
+**Bot** → **Reset Token**을 클릭하세요. 재설정을 확인하세요.
+
+### 봇 토큰 복사
+
+Discord가 토큰을 보여 주는 동안 **Copy**를 클릭하세요. Discord는 토큰을 한 번만 보여 줍니다.
+### Message Content Intent 켜기
+
+**Bot** 페이지의 **Privileged Gateway Intents**에서 **Message Content Intent**를 켜세요. **Save Changes**를 클릭하세요.
+
+### 토큰 저장
+
+에이전트가 준 SwB 등록 링크를 여세요. 필드에 토큰을 붙여 넣으세요.
+### 봇 초대
+
+에이전트가 준 초대 링크를 여세요. Discord가 물어보면 서버를 고르세요. **Authorize**를 클릭하세요.
+
+## 에이전트가 하는 일
+
+에이전트가 `connect(what="discord")`를 호출합니다. 필요하면 `discord` 블록을 켭니다. 블록이 켜지면 `connect`나 `discord_provision`이 봇 토큰용 등록 링크를 돌려줍니다.
+
+토큰을 저장하면 에이전트가 `discord_status`를 호출합니다. 에이전트는 봇, Gateway 연결, 서버를 확인합니다. 그리고 `setup.invite_url`의 초대 링크를 줍니다.
+
+에이전트는 `config/switchboard.yaml`의 `blocks.discord.spaces` 아래에 서버를 설정합니다. 공간은 서버를 SwB 프로젝트에 연결합니다. 에이전트는 `guild_id`와 `owner_ids`를 설정합니다. 에이전트가 `discord_post`를 호출하게 하려면 `blocks.discord.agents` 아래에서 접근 권한을 주세요. 파일을 수정한 뒤 SwB을 다시 시작하세요.
+
+## 자격 증명
+
+| 토큰 | Discord에서 표시되는 곳 | 형식 | 입력할 곳 |
+| --- | --- | --- | --- |
+| 봇 토큰 | **Bot** → **Reset Token**, 한 번만 표시 | 점으로 구분된 세 부분 | SwB 등록 링크 |
+| 애플리케이션 ID | **General Information** → **Application ID** | 숫자 | `blocks.discord.application_id`, 또는 SwB이 자동으로 찾습니다 |
+
+## 연결 확인
+
+에이전트에게 `connect`를 다시 호출하도록 요청하세요. 설정이 끝나면 `connected`가 나옵니다. `discord_status`에는 Gateway가 준비되었고 봇이 서버에 있다고 나옵니다.
+
+`owner_ids`에 등록한 Discord 계정을 사용하세요. 채널에서 봇을 멘션하세요. `targets`의 대상 이름과 테스트 메시지를 덧붙이세요. 같은 채널에 답장이 오는지 확인하세요.
+
+## 문제 해결
+
+Gateway 코드 `4014`가 나오면 **Message Content Intent**를 켜세요. 멘션을 트리거로 쓰려면 `message_content: false`로 설정하고 메시지마다 봇을 멘션하세요.
+
+Gateway 코드 `4004`가 나오면 Discord 봇 토큰을 재설정하세요. 토큰을 서버 환경에서 가져온다면 그곳에서 바꾸고 SwB을 다시 시작하세요. 그 밖의 경우에는 새 등록 링크를 사용하세요.
+
+봇이 서버에는 있는데 채널에서 조용하다면 그 채널의 권한을 확인하세요.

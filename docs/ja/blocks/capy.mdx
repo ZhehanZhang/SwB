@@ -1,0 +1,55 @@
+---
+title: Capy
+description: Capy Captain とスレッドに作業を送り、回答を受け取ります。
+---
+
+## ブロックを有効にする
+
+[Capy Captain のセットアップ](/ja/docs/setup/capy-captain)に従ってください。SwB は Capy のアカウントキーを使って、Capy Captain を見つけ、そのスレッドを追跡します。
+
+## Capy をエージェントとして接続する
+
+Capy で、SwB をカスタム MCP サーバーとして追加してください。OAuth を使い、`capy` として SwB にサインインしてください。
+
+## Capy Captain に送る
+
+どのエージェントにも、Capy Captain への作業の送信を頼めます。
+
+> これを Capy Captain に送って。
+
+作業の送り先は、プロジェクトのルートで決まります。SwB は Capy のスレッドの更新を追跡し、送信者のメールボックスに送ります。再起動後、SwB は最後に保存した位置から、最近の作業の追跡を再開します。
+
+| ルートのモード | 送信の動作 |
+| - | - |
+| `captain_thread` | Capy Captain にメッセージを送ります |
+| `new_thread` | クルーの新しいスレッドを始めます |
+
+## MCP Tasks
+
+Capy ブロックは、MCP 2026-07-28 のクライアント向けに [MCP Tasks](/ja/docs/how-it-works#会話) を有効にします。クライアントは `server/discover` でこの機能を見つけ、Capy への `send` ごとに利用を選びます。ほかの送信は通常の会話を使います。
+
+## 送信キー
+
+Capy には、送信キーを所有するアカウントが表示されます。SwB はまずエージェントのキーを試し、次にサービスキーを試します。`personal` モードでは、Capy のアカウントキーを最後に使います。各エージェントで最初に選ばれるキーと、キーの確認結果を `/healthz` で見るときは、オーナーとしてサインインしてください。
+
+## プロジェクトの自動リンク
+
+エージェントが SwB のプロジェクトを作成すると、Capy ブロックは対応する Capy のプロジェクトを探します。名前の一致より、リポジトリの一致を優先します。一致するプロジェクトが 1 つだけ見つかると、SwB はそのプロジェクトをリンクします。リンクしたプロジェクトに有効な Capy Captain がちょうど 1 人いる場合、SwB はその Captain を自動のルートに使います。
+
+## 設定
+
+| キー | 用途 |
+| - | - |
+| `blocks.capy` | Capy への送信とスレッドの追跡の設定 |
+| `blocks.capy.use` | ブロックの種類。`capy` を使います |
+| `blocks.capy.enabled` | このブロックを無効にするときは `false` を設定します |
+| `blocks.capy.api_base` | Capy API のベースアドレス。既定値は `https://api.capy.ai/api/v1` |
+| `blocks.capy.identity` | エージェントとサービスのキーには `service` を使います。最後の手段として Capy のアカウントキーも使うときは `personal` を使います |
+| `blocks.capy.send_key_env` | サービスの送信キーを入れた変数の名前 |
+| `blocks.capy.default_route` | Capy の全体の初期ルートを 1 回だけ設定します。`captain:<id>` のような Capy の送信先を使います |
+| `blocks.capy.captain_delivery` | 作業中の Capy Captain やスレッドに、Capy がメッセージを届ける方法。値は `queue`、`steer`、`interrupt` です。既定値は `queue` |
+| `blocks.capy.daily_cap` | Capy への依頼の 1 日あたりの上限。無制限にするときは `null` を使います |
+| `blocks.capy.duplicate_window_s` | 同じ送信者、送信先、タイトル、タスクに同じ会話 ID を使い回す時間（秒）。既定値は `600` |
+| `blocks.capy.max_file_bytes` | 1 回の送信の添付ファイルの合計サイズの上限（バイト）。既定値は `10485760` |
+| `blocks.capy.handle_ttl_days` | 起動時にスレッドの追跡を再開する対象の期間（日）。MCP のタスクの有効期間にも使います。既定値は `7` |
+| `blocks.capy.avatars` | SwB が Capy Captain のアバターを取得できるようにします。`false` にすると、代わりにイニシャルを使います |

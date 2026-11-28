@@ -1,0 +1,43 @@
+---
+title: 코딩 에이전트
+description: Claude Code, Codex, Gemini CLI와 그 밖의 코딩 에이전트를 연결합니다.
+---
+
+## 설정 받기
+
+```bash
+swb connect coding-agent --choose agent=codex
+```
+
+이 명령은 SwB을 원격 MCP 서버로 추가하는 방법을 보여 줍니다. SwB과 클라이언트가 모두 OAuth를 지원하면 OAuth를 사용하세요. 명령이 페어링 안내를 보여 주면 그 안내를 따르세요.
+
+| 클라이언트 | 설정 |
+| - | - |
+| Claude Code | `claude mcp add` |
+| Codex | `config.toml` |
+| Gemini CLI와 Qwen Code | `settings.json` |
+| Goose | `config.yaml` |
+| OpenCode | `opencode.json` |
+| Cline과 Kiro | 각자의 MCP 설정 |
+| 그 밖의 클라이언트 | 페어링 코드와 Streamable HTTP |
+
+Capy와 함께 MCP Tasks를 쓰려면 [MCP Tasks](/ko/docs/blocks/capy#mcp-tasks)를 참고하세요.
+
+## Claude Code 채널
+
+이 채널은 `claude-code` 우편함의 메시지를 열린 Claude Code 세션으로 보냅니다. Claude Code 채널은 연구 프리뷰 기능입니다.
+
+24자 이상의 임의 키를 만드세요. 서버의 비공개 `.env` 파일에 `SWB_KEY_CHANNEL`로 저장하세요. 키를 불러오려면 SwB을 다시 시작하세요. 이 키로 `claude-code` 우편함을 읽을 수 있습니다. [Bun](https://bun.sh)을 설치하세요. Claude Code에서 플러그인을 추가하세요.
+
+```text
+/plugin marketplace add ZhehanZhang/SwB
+/plugin install swb@swb
+```
+
+**SwB URL**에 SwB 기본 URL을 입력하세요. **Channel key**에 `SWB_KEY_CHANNEL` 값을 입력하세요. 채널을 켜고 Claude Code를 시작하세요.
+
+```bash
+claude --dangerously-load-development-channels plugin:swb@swb
+```
+
+채널은 처음 실행할 때 새 메시지부터 시작합니다. 그 뒤에는 저장한 위치부터 이어 갑니다. SwB으로 답하려면 별도의 MCP 연결에서 `reply`를 사용하세요.

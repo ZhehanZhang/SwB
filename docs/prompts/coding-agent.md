@@ -22,7 +22,7 @@ In the new client, call `inbox` to check the connection. Ask me to send a test m
 
 ## Local sessions
 
-Ask if I want SwB to reach a session on my device. A local session is an open workspace for my coding agent. If I want this, guide me through pairing a companion on that device. A companion is a SwB program on the device.
+Ask if I want SwB to reach a session on my device. A local session is an open workspace for my coding agent. If I want this, guide me through pairing a companion on that device. A companion is a SwB program that runs on that device.
 
 Read https://swb.one/docs/companion for pairing. Read https://swb.one/docs/blocks/local-sessions for the setup for my agent. Ask me to install the `swb` command with `pipx install swb-one`. Ask me to open a session in my coding agent.
 

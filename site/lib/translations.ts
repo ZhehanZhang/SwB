@@ -3,6 +3,11 @@ import { zhCN } from '@fumadocs/language/zh-cn';
 import { zhTW } from '@fumadocs/language/zh-tw';
 import { uiTranslations } from 'fumadocs-ui/i18n';
 import { i18n, localeNames } from './i18n';
+import es from './ui/es.json';
+import fr from './ui/fr.json';
+import de from './ui/de.json';
+import ko from './ui/ko.json';
+import ja from './ui/ja.json';
 
 export const translations = i18n.translations()
   .extend(uiTranslations())
@@ -37,4 +42,9 @@ export const translations = i18n.translations()
       'Ask a follow-up(AI chat)': '追問',
       'What do you want to know?(AI chat)': '',
     },
+    es: { ...es, displayName: localeNames.es },
+    fr: { ...fr, displayName: localeNames.fr },
+    de: { ...de, displayName: localeNames.de },
+    ko: { ...ko, displayName: localeNames.ko },
+    ja: { ...ja, displayName: localeNames.ja },
   });

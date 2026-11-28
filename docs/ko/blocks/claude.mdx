@@ -1,0 +1,55 @@
+---
+title: Claude
+description: Claude와 Claude Projects를 연결하고 루틴으로 깨웁니다.
+---
+
+## 커넥터 추가
+
+[Claude 설정](/ko/docs/setup/claude)을 따라 SwB MCP 주소를 사용자 지정 커넥터로 추가하세요. Claude Project나 채팅에서 커넥터를 켜세요. Claude는 OAuth를 사용해 `claude`로 로그인합니다.
+
+## Claude Project 연결
+
+[Claude Project 설정 프롬프트](/ko/docs/setup/claude-project)를 Claude Project 안의 채팅에 붙여 넣으세요.
+
+에이전트가 SwB 프로젝트를 찾고 API 트리거가 있는 루틴을 설정합니다. 에이전트는 `connect`를 호출해 30분 뒤 만료되는 일회용 등록 링크를 받습니다. 링크를 여세요. 양식에 루틴 토큰을 붙여 넣으세요. 토큰을 저장하세요. 에이전트가 테스트 메시지를 보내고 답장을 확인합니다.
+
+## 루틴
+
+**루틴**은 SwB이 시작할 수 있는 Claude Code 작업입니다. SwB은 메시지를 Claude의 우편함에도 남깁니다. 루틴은 `reply`로 발신자에게 답합니다.
+
+| 보낼 곳 | 수신처 |
+| - | - |
+| `claude`와 `project=<slug>` | 프로젝트의 기본 루틴 |
+| `claude:<slug>` | 프로젝트의 기본 루틴 |
+| `<routine name>` | 해당 루틴 |
+| `agent:claude` | 우편함에만 전달 |
+
+프로젝트 하나에 루틴이 여러 개 있을 수 있습니다. 기본적으로 SwB은 그 에이전트와 프로젝트의 첫 번째 루틴을 고릅니다. 특정 루틴이 먼저 선택되게 하려면 등록할 때 `primary=true`를 설정하세요.
+
+Claude가 프로젝트 일시 중지를 알리면 SwB은 빈 요청으로 다시 시도합니다. 루틴은 `routine_pickup`으로 메시지를 읽습니다.
+
+## 설정
+
+```yaml
+blocks:
+  claude-routine:
+    routines:
+      claude: {routine_id: trig_..., token_env: SWB_EXAMPLE_CLAUDE_TOKEN, agent: claude}
+```
+
+직접 설정하려면 `token_env`에 루틴 토큰을 담은 변수 이름을 지정하세요. 예제에서는 `SWB_EXAMPLE_CLAUDE_TOKEN`을 사용합니다.
+
+| 키 | 용도 |
+| - | - |
+| `blocks.claude-routine` | Claude Code 루틴을 깨우는 설정 |
+| `blocks.claude-routine.use` | 블록 유형. `claude-routine`을 사용합니다 |
+| `blocks.claude-routine.enabled` | 이 블록을 건너뛰려면 `false`로 설정합니다 |
+| `blocks.claude-routine.routines` | 루틴 이름별 설정 |
+| `blocks.claude-routine.routines.*.agent` | 메시지를 받는 에이전트. 기본값 `claude` |
+| `blocks.claude-routine.routines.*.kind` | 프로젝트가 있는 루틴에는 `project`를, 일반 루틴에는 `general`을 사용합니다 |
+| `blocks.claude-routine.routines.*.project` | 프로젝트 루틴의 SwB 프로젝트 이름 |
+| `blocks.claude-routine.routines.*.name` | 루틴의 표시 이름 |
+| `blocks.claude-routine.routines.*.primary` | 에이전트와 프로젝트에서 이 루틴을 먼저 고르려면 `true`로 설정합니다 |
+| `blocks.claude-routine.routines.*.routine_id` | `trig_...` 같은 Claude API 트리거 ID |
+| `blocks.claude-routine.routines.*.slugs` | 보낼 때 쓸 수 있는 추가 짧은 이름 |
+| `blocks.claude-routine.routines.*.token_env` | 루틴 토큰을 담은 변수의 이름 |

@@ -57,6 +57,8 @@ auth:
     aud: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
+For Cloudflare Access sign-in, SwB uses the token from the `Cf-Access-Jwt-Assertion` header. If the header is empty or absent, SwB reads the token from the `CF_Authorization` cookie. A cookie is a value the browser sends with a request. SwB checks the RS256 signature with public keys from `team_domain`. The token issuer must match the HTTPS address of `team_domain`. The token must name `aud` as an audience. SwB checks the issue, start and expiration times when the token supplies them. SwB compares the email in lower case with `owner_emails`.
+
 Run `docker compose --profile tunnel up -d` again to apply the settings.
 
 ## Publish the hostname

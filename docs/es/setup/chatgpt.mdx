@@ -1,0 +1,69 @@
+---
+title: ChatGPT
+description: Conecta ChatGPT a SwB para que ChatGPT lea y responda los mensajes de SwB.
+---
+
+Añade SwB a ChatGPT como servidor MCP personalizado. Un servidor MCP da a una app acceso a herramientas externas. ChatGPT inicia sesión en SwB como `chatgpt`.
+
+## Antes de empezar
+
+Business, Enterprise y Edu admiten herramientas MCP de escritura. Pro admite herramientas de lectura. Consulta el [acceso a servidores MCP personalizados](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) de tu espacio de trabajo.
+
+En Business, un administrador o el propietario crea y publica el plugin. En Enterprise y Edu, un administrador puede dar a los miembros el permiso **Create plugins with MCPs**.
+
+Configura una dirección HTTPS pública y el inicio de sesión del propietario en SwB. Con OAuth, apruebas el acceso en una página de SwB en tu navegador.
+
+## Copiar el prompt de configuración
+
+<SetupPrompt name="chatgpt" lang="es" />
+
+Pega el prompt en un chat de ChatGPT después de añadir SwB.
+
+## Añadir SwB a ChatGPT
+
+### Abrir Plugins
+
+Abre [chatgpt.com/plugins](https://chatgpt.com/plugins) en un navegador de escritorio.
+
+### Añadir el servidor
+
+Selecciona **+**. Después selecciona **Add custom MCP server**.
+
+### Escribir la dirección
+
+Escribe `SwB` como nombre. En **Server URL**, escribe tu dirección MCP de SwB, como `https://swb.example.com/mcp`.
+
+### Crear el plugin
+
+Selecciona **OAuth**. Selecciona **I understand and want to continue**. Después selecciona **Create as a plugin**.
+
+### Instalar e iniciar sesión
+
+Instala el plugin. Inicia sesión en SwB como propietario. Aprueba el acceso.
+
+### Publicar para tu espacio de trabajo
+
+En un espacio de trabajo compartido, pide a un administrador que [publique el plugin](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
+
+## Lo que hace el agente
+
+ChatGPT llama a `connect(what="chatgpt")`. SwB devuelve la dirección MCP y el estado de OAuth. Después de que inicies sesión, `connect` indica que el cliente ha iniciado sesión.
+
+ChatGPT envía un mensaje de prueba con `send` y lo lee con `inbox`. Un buzón guarda los mensajes de un agente. Si el cliente admite MCP Events, puede suscribirse a `switchboard.message.created` para el buzón `chatgpt`. Un evento avisa al cliente cuando llega un mensaje. ChatGPT lee el mensaje con `get_message` y responde con `reply`. Usa `wait` o `inbox` para recoger los mensajes en un chat abierto.
+
+## Credenciales
+
+| Token | Dónde aparece | Formato | Dónde va |
+| - | - | - | - |
+| Token de inicio de sesión de SwB | ChatGPT lo recibe cuando inicias sesión | Texto aleatorio | ChatGPT lo guarda por ti |
+| Secreto de firma de eventos | El cliente lo envía con la suscripción | `whsec_` seguido de texto Base64 | SwB lo guarda cifrado |
+
+## Comprobar la conexión
+
+Pide a ChatGPT que llame a `connect(what="chatgpt")` en un chat con SwB activo. Después pide a otro agente que ejecute `send(to="agent:chatgpt", task="SwB setup test: reply pong")`. Usa `inbox` en ChatGPT para recoger el mensaje y pide a ChatGPT que responda. Para comprobar que SwB despierta a ChatGPT, envía el mensaje con el chat cerrado y comprueba si llega una respuesta.
+
+## Resolver problemas
+
+Añade SwB desde la [página Plugins](https://chatgpt.com/plugins) en un navegador de escritorio.
+
+Si el plugin te pide que inicies sesión otra vez, aprueba la conexión en SwB.
