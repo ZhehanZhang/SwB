@@ -173,6 +173,11 @@ def main(argv: list[str] | None = None, *, listener: socket | None = None, tunne
             parser.exit(1, f"Configure the {args.block} block or choose a block from swb blocks list.\n")
         names = [args.block] if args.block else list(core.blocks)
         setup = core.block_setup() if args.action == "check" else {}
+        if args.action == "check" and not args.block:
+            from .config import RETIRED_BLOCKS
+
+            for use in core.cfg.retired_blocks:
+                print(RETIRED_BLOCKS[use])
         for name in names:
             b = core.blocks[name]
             if args.action == "list":

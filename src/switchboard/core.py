@@ -28,7 +28,7 @@ from .blocks import ON_DEMAND_BLOCKS, Action, Address, Block, BlockError, Call, 
 from .blocks import load as load_block
 from .claims import Claims
 from .companions import Companions
-from .config import INSTANCE_DB, Config, Instance, load_config
+from .config import INSTANCE_DB, RETIRED_BLOCKS, Config, Instance, load_config
 from .connect import AGENT_RE, Connections
 from .env import env_value
 from .hook_wake import HookWake
@@ -97,6 +97,8 @@ class Switchboard:
         self.memory = Memory(self.store, self.projects, self.cfg.mirror_dir, self.cfg.mirror_debounce_s)
         self.routes = Routes(self.store)
         self.inbox = Inbox(self.store)
+        for use in self.cfg.retired_blocks:
+            log.warning(RETIRED_BLOCKS[use])
         types = {name: load_block(str(sec.get("use") or name)) for name, sec in self.cfg.blocks.items()}
         self.agents = Agents.build(self.cfg.agents, [a for t in types.values() for a in t.manifest.agents])
         self.projects.link_keys = tuple(dict.fromkeys([*self.agents.link_keys(), *(k for t in types.values() for k in t.manifest.link_keys)]))
