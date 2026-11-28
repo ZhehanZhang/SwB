@@ -2,19 +2,11 @@ import { useState } from "react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { DataState } from "@/components/data-state"
 import { Logo } from "@/components/logo"
+import { Time } from "@/components/time"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/tabs"
 import { Button } from "@/components/ui/button"
 import { requestJson } from "@/lib/api"
 import { auditActor, auditActorKind, auditGroups, auditProject, auditText, isAuditGroup, isAuditPage, type AuditGroup } from "./audit/events"
-
-const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
-const clock = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" })
-
-function EventTime({ value }: { value: string | null }) {
-  const at = value ? new Date(value) : null
-  if (!at || !Number.isFinite(at.getTime())) return null
-  return <time dateTime={at.toISOString()} title={at.toLocaleString()}>{date.format(at)} {clock.format(at)}</time>
-}
 
 export function AuditPage() {
   const [group, setGroup] = useState<AuditGroup>("All")
@@ -45,22 +37,22 @@ export function AuditPage() {
         <table role="table" className="w-full text-left max-md:block md:table-fixed">
           <caption className="sr-only">Audit events</caption>
           <thead role="rowgroup" className="sr-only md:not-sr-only">
-            <tr role="row" className="border-b text-[11px] leading-4 text-muted-foreground">
-              <th role="columnheader" scope="col" className="w-[11.5%] py-2 pr-3 font-medium">When</th>
-              <th role="columnheader" scope="col" className="w-[9%] py-2 pr-3 font-medium">Project</th>
-              <th role="columnheader" scope="col" className="w-[16%] py-2 pr-3 font-medium">Who</th>
+            <tr role="row" className="border-b text-body-sm text-muted-foreground">
+              <th role="columnheader" scope="col" className="w-23/200 py-2 pr-3 font-medium">When</th>
+              <th role="columnheader" scope="col" className="w-9/100 py-2 pr-3 font-medium">Project</th>
+              <th role="columnheader" scope="col" className="w-4/25 py-2 pr-3 font-medium">Who</th>
               <th role="columnheader" scope="col" className="py-2 pr-3 font-medium">What</th>
-              <th role="columnheader" scope="col" className="w-[24%] py-2 pr-3 font-medium">Detail</th>
-              <th role="columnheader" scope="col" className="w-[8.5%] py-2 font-medium">Via</th>
+              <th role="columnheader" scope="col" className="w-6/25 py-2 pr-3 font-medium">Detail</th>
+              <th role="columnheader" scope="col" className="w-17/200 py-2 font-medium">Via</th>
             </tr>
           </thead>
           <tbody role="rowgroup" className="max-md:block">
             {items.map((item) => {
               const who = auditActor(item)
               return (
-                <tr key={item.id} role="row" className="border-b text-body-sm max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-x-3 max-md:gap-y-1 max-md:py-3 md:h-[43px]">
-                  <td role="cell" className="font-mono text-mono-sm text-muted-foreground md:py-2 md:pr-3"><EventTime value={item.at} /></td>
-                  <td role="cell" className="font-mono text-mono-sm wrap-anywhere max-md:text-right md:py-2 md:pr-3">{auditProject(item)}</td>
+                <tr key={item.id} role="row" className="border-b text-body-sm max-md:grid max-md:grid-cols-fill-auto max-md:gap-x-3 max-md:gap-y-1 max-md:py-3 md:h-row">
+                  <td role="cell" className="text-body-sm text-muted-foreground md:py-2 md:pr-3"><Time value={item.at} /></td>
+                  <td role="cell" className="text-body-sm wrap-anywhere max-md:text-right md:py-2 md:pr-3">{auditProject(item)}</td>
                   <td role="cell" className="wrap-anywhere md:py-2 md:pr-3">
                     <span className="flex min-w-0 items-center gap-2">
                       {who && who !== "you" && <Logo kind={auditActorKind(item)} className="size-5" />}
@@ -76,7 +68,7 @@ export function AuditPage() {
                   <td role="cell" className="wrap-anywhere text-muted-foreground empty:max-md:hidden max-md:col-span-2 max-md:row-start-4 md:py-2 md:pr-3">
                     {item.detail}
                   </td>
-                  <td role="cell" className="font-mono text-mono-sm text-muted-foreground max-md:text-right md:py-2">
+                  <td role="cell" className="text-body-sm text-muted-foreground max-md:text-right md:py-2">
                     {item.origin === "http" && who === "you" ? "web" : item.origin}
                   </td>
                 </tr>

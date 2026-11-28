@@ -82,7 +82,7 @@ export function RowActions({ row, actions: service }: { row: Conversation; actio
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="end" sideOffset={3} className="z-50 min-w-28 rounded-md border border-border-strong bg-surface p-1 shadow-md">
           <DropdownMenu.Item onSelect={() => service.run([row])}
-            className="cursor-default rounded-sm px-2 py-1.5 text-sm outline-none data-highlighted:bg-muted">
+            className="cursor-default rounded-sm px-2 py-1.5 text-body-sm outline-none data-highlighted:bg-muted">
             Mark read
           </DropdownMenu.Item>
         </DropdownMenu.Content>

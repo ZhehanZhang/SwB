@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { PRODUCT_NAME } from "@/app/brand"
 import { usePageTitle } from "@/app/page-title"
 import { ChannelModeTable } from "@/components/console/channel-mode-table"
+import { Time } from "@/components/time"
 import { Lamp } from "@/components/console/lamp"
 import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { channelModesQuery } from "@/lib/channel-modes"
 import { displayReference } from "@/lib/display-reference"
 import {
-  coordinatorQuery, formatAge, formatDay, formatTime, projectBoardQuery, quantity,
+  coordinatorQuery, formatDay, formatTime, projectBoardQuery, quantity,
   type Endpoint, type ProjectBoard, type ProjectRoute,
 } from "@/pages/overview/data"
 
@@ -77,7 +78,7 @@ function RoutePoint({ endpoint, mode, short = false }: {
   return (
     <span className="flex min-w-0 items-center gap-2" title={endpoint.detail ?? endpoint.label}>
       <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${color}`} />
-      <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url ?? null} className="size-[21px]" />
+      <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url ?? null} className="size-5" />
       <span className={`truncate ${mode !== "route" && "font-mono text-mono-sm"}`}>
         {short ? endpoint.short_label ?? endpoint.label : endpoint.label}
       </span>
@@ -89,7 +90,7 @@ function Actor({ actor }: { actor: Endpoint | null }) {
   if (!actor) return null
   return (
     <span className="inline-flex min-w-0 items-center gap-2">
-      {actor.kind !== "owner" && actor.kind !== "config" && <LogoTile kind={actor.kind} className="size-[21px]" />}
+      {actor.kind !== "owner" && actor.kind !== "config" && <LogoTile kind={actor.kind} className="size-5" />}
       <span className="truncate" title={actor.label}>{actor.label}</span>
     </span>
   )
@@ -104,15 +105,15 @@ function ProjectRoutes({ routes }: { routes: ProjectRoute[] }) {
           <table className="mt-1 hidden w-full table-fixed text-left text-body-sm lg:table">
             <thead className="text-muted-foreground">
               <tr className="border-b border-border">
-                <th scope="col" className="w-[23.5%] py-2 pr-3 font-normal">From</th>
-                <th scope="col" className="w-[38%] py-2 pr-3 font-normal">To</th>
+                <th scope="col" className="w-47/200 py-2 pr-3 font-normal">From</th>
+                <th scope="col" className="w-19/50 py-2 pr-3 font-normal">To</th>
                 <th scope="col" className="py-2 pr-3 font-normal">Set by</th>
                 <th scope="col" className="w-4"><span className="sr-only">Status</span></th>
               </tr>
             </thead>
             <tbody>
               {routes.map((route) => (
-                <tr key={route.id} className="h-[43px] border-b border-border">
+                <tr key={route.id} className="h-row border-b border-border">
                   <td className="py-2 pr-3"><RoutePoint endpoint={route.from} mode={route.direction === "reply" ? "route" : "intake"} /></td>
                   <td className="py-2 pr-3" title={route.delivery ?? undefined}>
                     <div className="flex items-center gap-2">
@@ -182,14 +183,14 @@ function ProjectHistory({ data }: { data: ProjectBoard }) {
           <table className="mt-1 hidden w-full table-fixed text-left text-body-sm lg:table">
             <thead className="text-muted-foreground">
               <tr className="border-b border-border">
-                <th scope="col" className="w-[15.5%] py-2 pr-3 font-normal">When</th>
-                <th scope="col" className="w-[23.5%] py-2 pr-3 font-normal">Who</th>
+                <th scope="col" className="w-31/200 py-2 pr-3 font-normal">When</th>
+                <th scope="col" className="w-47/200 py-2 pr-3 font-normal">Who</th>
                 <th scope="col" className="py-2 font-normal">What</th>
               </tr>
             </thead>
             <tbody>
               {data.history.map((row) => (
-                <tr key={row.id} className="h-[43px] border-b border-border">
+                <tr key={row.id} className="h-row border-b border-border">
                   <td className="py-2 pr-3 font-mono text-mono-sm text-muted-foreground">{row.at && <time dateTime={row.at}>{formatTime(row.at)}</time>}</td>
                   <td className="py-2 pr-3"><Actor actor={row.by} /></td>
                   <td className="py-2 wrap-anywhere">{summarize(row)}</td>
@@ -201,7 +202,7 @@ function ProjectHistory({ data }: { data: ProjectBoard }) {
             {data.history.map((row) => (
               <li key={row.id} className="space-y-1 border-b border-border py-2.5">
                 <p className="wrap-anywhere">{summarize(row)}</p>
-                <p className="flex flex-wrap gap-x-3 font-mono text-mono-sm text-subtle-foreground">
+                <p className="flex flex-wrap gap-x-3 text-body-sm text-muted-foreground">
                   {row.at && <time dateTime={row.at}>{formatTime(row.at)}</time>}
                   {row.by && <span>{row.by.label}</span>}
                 </p>
@@ -226,9 +227,9 @@ function ProjectActivity({ data }: { data: ProjectBoard }) {
               <li key={handle} className="border-b border-border">
                 <Link to={`/inbox/${encodeURIComponent(handle)}`} className="block py-2.5 hover:bg-muted">
                   <div className="flex min-w-0 items-center gap-2">
-                    <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url ?? null} className="size-[18px]" />
+                    <LogoTile kind={endpoint.kind} avatarUrl={endpoint.avatar_url ?? null} className="size-5" />
                     <span className="truncate text-label-sm">{endpoint.label}</span>
-                    {at && <time title={formatTime(at)} dateTime={at} className="ml-auto shrink-0 font-mono text-mono-sm text-subtle-foreground">{formatAge(at)}</time>}
+                    <Time value={at} className="ml-auto shrink-0" />
                   </div>
                   <div className="mt-0.5 truncate text-body-sm text-muted-foreground">{displayReference(title || handle)}</div>
                 </Link>
@@ -302,7 +303,7 @@ export function ProjectPage() {
             })}>{label}</button>
         })}
       </nav>
-      {showModes ? <ProjectModes slug={data.project.slug} /> : <div className="mt-7 grid min-w-0 gap-x-12 gap-y-8 lg:mt-10 lg:grid-cols-[minmax(0,2.44fr)_minmax(0,1fr)]">
+      {showModes ? <ProjectModes slug={data.project.slug} /> : <div className="mt-7 grid min-w-0 gap-x-12 gap-y-8 lg:mt-10 lg:grid-cols-overview-split">
         <div className="min-w-0 space-y-8 lg:space-y-9">
           <ProjectRoutes routes={data.routes} />
           <ProjectHistory data={data} />

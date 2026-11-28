@@ -36,7 +36,7 @@ const avatarPath = /^\/avatars\/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\.(png|jpe?g|gif)
 
 function AvatarImage({ src, fallback, captain }: { src?: string; fallback?: string; captain: boolean }) {
   const [failed, setFailed] = useState(false)
-  if (captain && (!src || failed)) return <span className="text-[length:clamp(14px,72cqi,24px)] leading-none font-bold">C</span>
+  if (captain && (!src || failed)) return <span className="text-heading-md leading-none font-bold">C</span>
   return <img alt="" src={failed ? fallback : src} onError={() => setFailed(true)}
     className={cn("size-full", captain ? "object-cover" : "object-contain")} />
 }
@@ -52,7 +52,7 @@ export function LogoTile({ kind, className, avatarUrl, fallbackLetter }: { kind:
   const image = mark && images[mark]
   return (
     <span aria-hidden className={cn("inline-grid size-6 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-surface text-foreground [.dark_&]:border-border-strong [.dark_&]:bg-surface-sunken",
-      captain && "border-logo-capy bg-logo-capy text-logo-capy-foreground [container-type:inline-size] [.dark_&]:bg-logo-capy", className)}>
+      captain && "border-logo-capy bg-logo-capy text-logo-capy-foreground [.dark_&]:bg-logo-capy", className)}>
       {captain || avatar ? <AvatarImage key={avatar} src={avatar} captain={captain}
           fallback={bundled ?? defaultAvatar} />
         : image && (mark === "github" || mark === "goose") ? <span className="size-3/4 bg-foreground mask-contain mask-center mask-no-repeat" style={{ maskImage: `url("${image}")` }} />
@@ -68,10 +68,10 @@ export function LogoTile({ kind, className, avatarUrl, fallbackLetter }: { kind:
             <path d="M5 15a2.5 2.5 0 1 1-2.5-2.5H5V15Zm1.25 0a2.5 2.5 0 0 1 5 0v6.25a2.5 2.5 0 1 1-5 0V15ZM9 5a2.5 2.5 0 1 1 2.5-2.5V5H9Zm0 1.25a2.5 2.5 0 0 1 0 5H2.75a2.5 2.5 0 1 1 0-5H9ZM19 9a2.5 2.5 0 1 1 2.5 2.5H19V9Zm-1.25 0a2.5 2.5 0 1 1-5 0V2.75a2.5 2.5 0 1 1 5 0V9ZM15 19a2.5 2.5 0 1 1-2.5 2.5V19H15Zm0-1.25a2.5 2.5 0 1 1 0-5h6.25a2.5 2.5 0 1 1 0 5H15Z" />
           </svg>
         ) : id === "owner" ? <UserRound className="size-3/4" />
-          : mark === "mcp" ? <Terminal className="size-3/4 stroke-[2.5]" />
+          : mark === "mcp" ? <Terminal className="size-3/4 stroke-logo" />
           : mark === "webhook" ? <Webhook className="size-3/4" />
-          : fallbackLetter && !mark ? <span className="text-[10px] font-semibold uppercase">{fallbackLetter}</span>
-          : <Bot className="size-3/4 stroke-[2.5]" />}
+          : fallbackLetter && !mark ? <span className="text-caption font-semibold uppercase">{fallbackLetter}</span>
+          : <Bot className="size-3/4 stroke-logo" />}
     </span>
   )
 }

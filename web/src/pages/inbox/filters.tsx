@@ -17,7 +17,7 @@ const valueFilters = [
 ] as const
 const fields = [...textFilters, ...valueFilters].map(([key]) => key)
 const queryFields = ["q", "sort", ...fields]
-const control = "min-h-9 min-w-0 rounded-md border border-border-strong bg-surface px-2.5 text-sm"
+const control = "min-h-9 min-w-0 rounded-md border border-border-strong bg-surface px-2.5 text-body-sm"
 
 export function inboxQuery(params: URLSearchParams) {
   const query = new URLSearchParams()
@@ -69,19 +69,19 @@ export function InboxFilters() {
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content align="end" sideOffset={6} aria-label="Inbox filters"
-            className="z-50 max-h-[65dvh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-md border border-border-strong bg-surface p-3 shadow-md">
+            className="z-50 max-h-inbox-filters w-inbox-filters overflow-y-auto rounded-md border border-border-strong bg-surface p-3 shadow-md">
             <form key={params.toString()} className="grid grid-cols-2 gap-2" onSubmit={(event) => {
               submit(event, fields)
               setOpen(false)
             }}>
               {textFilters.map(([key, label]) => (
-                <label key={key} className="grid min-w-0 gap-1 text-xs">
+                <label key={key} className="grid min-w-0 gap-1 text-label-sm">
                   {label}
                   <input name={key} className={control} defaultValue={params.get(key) || ""} maxLength={key === "project" ? 48 : 200} />
                 </label>
               ))}
               {valueFilters.map(([key, label, choices]) => (
-                <label key={key} className="grid min-w-0 gap-1 text-xs">
+                <label key={key} className="grid min-w-0 gap-1 text-label-sm">
                   {label}
                   <select name={key} className={control} defaultValue={params.get(key) || ""}>
                     <option value="">Any</option>

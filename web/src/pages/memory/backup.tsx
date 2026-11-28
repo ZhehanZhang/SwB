@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ExternalLink } from "lucide-react"
 import { AlertDialog } from "radix-ui"
@@ -6,19 +6,19 @@ import { toast } from "sonner"
 import { ClaimLink } from "@/components/claim-link"
 import { DataState } from "@/components/data-state"
 import { Field, Input } from "@/components/field"
+import { FileButton } from "@/components/file-button"
+import { Time } from "@/components/time"
 import { Button } from "@/components/ui/button"
 import { consoleDocs } from "@/lib/console-docs"
 import { settingsQuery } from "@/lib/console-settings"
 import { backupNow, claimBackupCredential, downloadMemory, fetchBackup, importMemory, restoreBackup, saveBackup, type BackupConfig, type BackupStatus } from "./api"
 
 const backupKey = ["memory", "backup"] as const
-const dateFormat = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" })
-const statusRow = "grid min-h-10 grid-cols-[minmax(96px,32%)_1fr] items-center gap-x-3 border-b py-2"
+const statusRow = "grid min-h-10 grid-cols-backup-status items-center gap-x-3 border-b py-2"
 const credentialError = /authentication|credential|access denied|permission denied|\b401\b|\b403\b/i
 
 function MemoryArchive({ csrf }: { csrf: string }) {
   const client = useQueryClient()
-  const fileInput = useRef<HTMLInputElement>(null)
   const download = useMutation({
     mutationFn: downloadMemory,
     onError: () => toast.error("Download failed."),
@@ -35,15 +35,9 @@ function MemoryArchive({ csrf }: { csrf: string }) {
         <Button variant="outline" disabled={download.isPending} onClick={() => download.mutate()}>
           {download.isPending ? "Downloading…" : "Download"}
         </Button>
-        <Button variant="outline" disabled={upload.isPending} onClick={() => fileInput.current?.click()}>
+        <FileButton accept=".zip,application/zip" label="Memory archive" onSelect={(file) => upload.mutate(file)} disabled={upload.isPending}>
           {upload.isPending ? "Restoring…" : "Restore from file"}
-        </Button>
-        <input ref={fileInput} type="file" hidden accept=".zip,application/zip" aria-label="Memory archive"
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0]
-            event.currentTarget.value = ""
-            if (file) upload.mutate(file)
-          }} />
+        </FileButton>
       </div>
       {upload.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Restore from file failed.</p>}
       {result && <p role="status" className="mt-2 text-body-sm text-muted-foreground">
@@ -126,12 +120,11 @@ function BackupControls({ status, csrf }: { status: BackupStatus; csrf: string }
       claim.mutate({ remote: draft.remote.trim(), ...(sameRemote ? {} : { branch: draft.branch, enabled: false }) })
     }
     return (
-      <form className="mt-4 space-y-4" autoComplete="off" onSubmit={(event) => {
+      <form className="mt-4 space-y-6" autoComplete="off" onSubmit={(event) => {
         event.preventDefault()
         if (credentialReady && !busy) save.mutate(draft)
       }}>
-        <fieldset className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" disabled={busy}>
-          <legend className="mb-2 text-body-sm font-medium">Repository</legend>
+        <fieldset className="grid min-w-0 gap-3 sm:grid-cols-two-one" disabled={busy}>
           <Field label="Repository address">
             <Input value={draft.remote} autoCapitalize="none" spellCheck={false} onChange={(event) => {
               claim.reset()
@@ -143,28 +136,23 @@ function BackupControls({ status, csrf }: { status: BackupStatus; csrf: string }
               onChange={(event) => setDraft({ ...draft, branch: event.target.value })} />
           </Field>
         </fieldset>
-        <fieldset className="min-w-0 border-t border-border pt-2" disabled={busy}>
-          <legend className="pe-2 text-body-sm font-medium">Credential</legend>
+        {(link || credentialReady) && <div role="group" aria-labelledby="backup-credential" className="space-y-1">
+          <p id="backup-credential" className="text-label-sm">Credential</p>
           {link ? (
             <>
               <ClaimLink url={link.link} expiresAt={link.expiry} label={ssh ? "Enter key" : "Enter token"} primary />
-              <Button type="button" variant="ghost" size="sm" className="mt-1" onClick={createClaim}>New claim link</Button>
+              <Button variant="ghost" disabled={busy} onClick={createClaim}>New claim link</Button>
             </>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               {sameRemote && status.credential_saved && <span role="status" className="text-body-sm text-muted-foreground">Saved</span>}
-              <Button type="button" size="sm" variant={credentialReady ? "outline" : "default"}
-                disabled={!draft.remote.trim() || busy} onClick={createClaim}>
-                {claim.isPending ? "Creating link…" : credentialReady
-                  ? status.credential_saved ? "Replace credential" : "Add credential"
-                  : !sameRemote ? "Save repository and create claim link" : "Create claim link"}
+              <Button variant="outline" disabled={busy} onClick={createClaim}>
+                {status.credential_saved ? "Replace credential" : "Add credential"}
               </Button>
             </div>
           )}
-          {claim.isError && <p role="alert" className="mt-2 text-body-sm text-destructive">Check the repository address and branch.</p>}
-        </fieldset>
-        <fieldset className="grid min-w-0 gap-3 border-t border-border pt-2 disabled:opacity-50 sm:grid-cols-2" disabled={!credentialReady || busy}>
-          <legend className="pe-2 text-body-sm font-medium">Author</legend>
+        </div>}
+        {credentialReady && <fieldset className="grid min-w-0 gap-3 sm:grid-cols-2" disabled={busy}>
           <Field label="Author name">
             <Input value={draft.author_name} maxLength={200}
               onChange={(event) => setDraft({ ...draft, author_name: event.target.value })} />
@@ -178,13 +166,17 @@ function BackupControls({ status, csrf }: { status: BackupStatus; csrf: string }
               onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />
             Automatic backup
           </label>
-        </fieldset>
+        </fieldset>}
         <div className="flex flex-wrap gap-2">
-          {credentialReady && <Button type="submit" disabled={busy}>{save.isPending ? "Saving…" : "Save"}</Button>}
+          {credentialReady ? <Button type="submit" disabled={busy}>{save.isPending ? "Saving…" : "Save"}</Button>
+            : !link && <Button disabled={!draft.remote.trim() || busy} onClick={createClaim}>
+              {claim.isPending ? "Creating link…" : sameRemote ? "Create claim link" : "Save repository and create claim link"}
+            </Button>}
           <Button type="button" variant="outline" disabled={busy} onClick={() => { setDraft(null); claim.reset() }}>
             {repositorySaved ? "Close" : "Cancel"}
           </Button>
         </div>
+        {claim.isError && <p role="alert" className="text-body-sm text-destructive">Check the repository address and branch.</p>}
         {save.isError && <p role="alert" className="text-body-sm text-destructive">Check the backup settings and try again.</p>}
       </form>
     )
@@ -214,12 +206,12 @@ function BackupControls({ status, csrf }: { status: BackupStatus; csrf: string }
           <dt className="text-muted-foreground">Last backup</dt>
           <dd className="flex flex-wrap gap-x-2">
             <span>{failed ? "Failed" : attemptedAt ? "Complete" : "Awaiting first backup"}</span>
-            {attemptedAt && <time dateTime={attemptedAt}>{dateFormat.format(new Date(attemptedAt))}</time>}
+            <Time value={attemptedAt} />
           </dd>
         </div>
         {failed && savedBackup && <div className={statusRow}>
           <dt className="text-muted-foreground">Last successful backup</dt>
-          <dd><time dateTime={savedBackup}>{dateFormat.format(new Date(savedBackup))}</time></dd>
+          <dd><Time value={savedBackup} /></dd>
         </div>}
       </dl>
       {error && <p role="alert" className="text-body-sm text-destructive">{error}</p>}
@@ -242,7 +234,7 @@ function BackupControls({ status, csrf }: { status: BackupStatus; csrf: string }
           <AlertDialog.Portal>
             <AlertDialog.Overlay className="fixed inset-0 z-40 bg-overlay/50" />
             <AlertDialog.Content aria-describedby={undefined}
-              className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-1/2 rounded-lg border bg-card p-5 text-card-foreground shadow-lg">
+              className="fixed top-1/2 left-1/2 z-50 w-inset-dialog max-w-sm -translate-1/2 rounded-lg border bg-card p-5 text-card-foreground shadow-lg">
               <AlertDialog.Title className="text-heading-md">Restore from repository?</AlertDialog.Title>
               <div className="mt-5 flex justify-end gap-2">
                 <AlertDialog.Cancel asChild><Button variant="outline">Cancel</Button></AlertDialog.Cancel>
@@ -259,8 +251,6 @@ function BackupControls({ status, csrf }: { status: BackupStatus; csrf: string }
 }
 
 function GitBackup({ csrf }: { csrf: string }) {
-  const { data: settings } = useQuery(settingsQuery)
-  const { memoryBackup } = consoleDocs({ publicUrl: settings?.public_url })
   const backup = useQuery({
     queryKey: backupKey,
     queryFn: ({ signal }) => fetchBackup(signal),
@@ -268,14 +258,7 @@ function GitBackup({ csrf }: { csrf: string }) {
   })
 
   return (
-    <section aria-labelledby="memory-git-backup-heading" className="border-t pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id="memory-git-backup-heading" className="text-heading-md">Git backup</h3>
-        <a className="inline-flex items-center gap-1.5 text-body-sm text-muted-foreground hover:text-foreground hover:underline"
-          href={memoryBackup} target="_blank" rel="noreferrer">
-          Docs<ExternalLink aria-hidden className="size-3" />
-        </a>
-      </div>
+    <section aria-label="Git backup">
       {backup.data ? <BackupControls status={backup.data} csrf={csrf} />
         : backup.isError ? <DataState kind="error" message="Backup settings unavailable." onRetry={() => void backup.refetch()} />
           : <DataState kind="loading" />}
@@ -284,9 +267,17 @@ function GitBackup({ csrf }: { csrf: string }) {
 }
 
 export function MemoryBackup({ csrf }: { csrf: string }) {
+  const { data: settings } = useQuery(settingsQuery)
+  const { memoryBackup } = consoleDocs({ publicUrl: settings?.public_url })
   return (
-    <section aria-labelledby="memory-backup-heading" className="w-full min-w-0 max-w-[720px] space-y-4">
-      <h2 id="memory-backup-heading" className="text-heading-md">Backup</h2>
+    <section aria-labelledby="memory-backup-heading" className="w-full min-w-0 max-w-180 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="memory-backup-heading" className="text-heading-md">Backup</h2>
+        <a className="inline-flex items-center gap-1.5 text-body-sm text-muted-foreground hover:text-foreground hover:underline"
+          href={memoryBackup} target="_blank" rel="noreferrer">
+          Docs<ExternalLink aria-hidden className="size-3" />
+        </a>
+      </div>
       <GitBackup csrf={csrf} />
       <MemoryArchive csrf={csrf} />
     </section>

@@ -14,7 +14,7 @@ export function ListRow({ title, meta, identifier, logo, end, selected, children
   return (
     <div
       data-selected={selected || undefined}
-      className={cn("relative flex min-h-14 items-center gap-3 border-b pr-3 pl-4 text-body-sm", selected && "bg-muted before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-accent", className)}
+      className={cn("relative flex min-h-row items-center gap-3 border-b pr-3 pl-4 text-body-sm", selected && "bg-muted before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-accent", className)}
       {...props}
     >
       {logo}

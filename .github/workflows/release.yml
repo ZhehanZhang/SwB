@@ -174,6 +174,7 @@ jobs:
               if archive.extractfile(f"{base}/src/{member}").read() != manifest:
                   raise SystemExit("Source helper manifest differs from the pinned manifest")
           PY
+      - run: python3 scripts/verify-dist.py dist
       - run: uvx twine check dist/*
       - uses: actions/upload-artifact@v4
         with:

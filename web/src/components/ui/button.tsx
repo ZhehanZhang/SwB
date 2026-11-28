@@ -4,20 +4,20 @@ import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "console-pressable console-press-scale inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-label-sm whitespace-nowrap disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "console-pressable console-press-scale inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-label-sm whitespace-nowrap disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [--console-pressable-bg:color-mix(in_srgb,var(--primary)_85%,transparent)]",
-        secondary: "bg-muted [--console-pressable-bg:var(--border)]",
+        default: "bg-primary text-primary-foreground press-primary",
+        secondary: "bg-muted press-secondary",
         outline: "border border-border-strong bg-surface",
         ghost: "",
-        destructive: "bg-destructive text-destructive-foreground [--console-pressable-bg:color-mix(in_srgb,var(--destructive)_85%,transparent)]",
+        destructive: "bg-destructive text-destructive-foreground press-destructive",
       },
       size: {
-        default: "min-h-[34px] px-4",
-        sm: "min-h-[26px] px-3",
-        icon: "size-[34px]",
+        default: "h-control px-4",
+        sm: "h-control-sm px-3",
+        icon: "size-control",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
