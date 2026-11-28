@@ -76,7 +76,8 @@ function ExchangeWindow({ scene: { app, messages }, lang, index }: { scene: Exch
           <MarkTile kind={app} className="swb-win-avatar shrink-0" />
           <span className="truncate">{agentNames[app]}</span>
         </h3>
-        <Link className="swb-win-setup swb-text-link inline-flex shrink-0 items-center gap-1.5 self-stretch whitespace-nowrap text-xs" href={href} prefetch={false}>
+        <Link className="swb-win-setup swb-text-link shrink-0 items-center gap-1.5 self-stretch whitespace-nowrap text-xs"
+          data-setup-label={exchangeCopy[lang].setup} href={href} prefetch={false}>
           <Settings2 aria-hidden="true" className="size-3.5 shrink-0" />
           <span>{exchangeCopy[lang].setup}</span>
         </Link>

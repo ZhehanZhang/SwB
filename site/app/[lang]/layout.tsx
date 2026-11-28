@@ -6,7 +6,7 @@ import { SiteHeader } from '@/components/site-header';
 import { isLocale, locales } from '@/lib/i18n';
 import { repository, siteUrl } from '@/lib/urls';
 import { translations } from '@/lib/translations';
-import { inter, interTight, jetbrainsMono } from '@/lib/fonts';
+import { interTight, jetbrainsMono, swbInter } from '@/lib/fonts';
 import '../global.css';
 
 export const metadata: Metadata = {
@@ -34,7 +34,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<'/[
   if (!isLocale(lang)) notFound();
 
   return (
-    <html lang={lang} className={`${inter.variable} ${interTight.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang={lang} className={`${swbInter.variable} ${interTight.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <meta name="darkreader-lock" />
       </head>
