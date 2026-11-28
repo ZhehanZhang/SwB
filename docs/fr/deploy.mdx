@@ -3,6 +3,8 @@ title: Déploiement
 description: Lancez SwB sur votre ordinateur ou sur un serveur.
 ---
 
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
 ## Lancer SwB sur votre ordinateur
 
 Suivez [Installation](/fr/docs/install). Ouvrez le lien de connexion à usage unique que SwB affiche au premier démarrage local. Pour obtenir un nouveau lien, exécutez `swb login-link`. Le prompt de déploiement couvre aussi l'installation locale.
@@ -12,6 +14,68 @@ Suivez [Installation](/fr/docs/install). Ouvrez le lien de connexion à usage un
 Collez ce prompt dans un agent de code comme Claude Code ou Codex. L'agent vous guide pour une installation locale ou hébergée.
 
 <SetupPrompt name="deploy" lang="fr" />
+
+## Sur votre serveur
+
+### Docker Compose [#docker-compose]
+
+Installez Docker Compose 2.24 ou une version ultérieure. Exécutez ces commandes avec un utilisateur ordinaire, propriétaire du dossier de données.
+
+```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
+(umask 077; cp .env.example .env)
+{
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
+mkdir -p data
+docker compose up -d --build --wait
+curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
+```
+
+Dans les cinq minutes, ouvrez le lien de connexion à usage unique affiché dans le terminal. Gardez ce lien privé.
+
+Le navigateur utilise `http://localhost:8870` pour la connexion du propriétaire. La commande dans le conteneur utilise le port `8000`. Compose garde les données dans `./data`. Après une modification de `.env`, exécutez de nouveau `docker compose up -d`.
+
+Pour un serveur distant, redirigez son port `8870` vers le port local `8870` avant d'ouvrir le lien.
+
+Une requête anonyme vers `/healthz` renvoie `status` et `version`. Utilisez une session propriétaire ou la clé propriétaire pour obtenir l'état de santé détaillé.
+
+### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
+
+Un Cloudflare Tunnel donne à SwB une adresse HTTPS publique. Cloudflare propose les tunnels dans son offre gratuite.
+
+Suivez le [guide de configuration de Cloudflare](/fr/docs/cloudflare). Il explique comment configurer SwB et définir les règles d'accès du propriétaire et des requêtes des clients.
+
+## Plateformes d'hébergement
+
+Utilisez une seule instance SwB avec un disque persistant monté sur `/data`. Consultez le [guide de déploiement](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy) pour les modèles Railway, Render et Fly.io et pour le script Koyeb.
+
+### Déploiement en un clic
+
+<DeployProviders lang="fr" />
+
+### Fly.io [#fly]
+
+Utilisez le clone de la version SwB créé dans l'[exemple Docker Compose](#docker-compose). Installez l'[outil en ligne de commande Fly.io](https://docs.fly.io/flyctl/). Connectez-vous à Fly.io.
+
+Exécutez `sh deploy/fly.sh my-swb` depuis le dossier SwB. Remplacez `my-swb` par un nom d'application unique. Le script utilise `fly deploy --ha=false` pour démarrer une seule Machine.
+
+Ouvrez la page de connexion de votre application. Copiez `SWB_SETUP_CODE` depuis le fichier `.env.swb-setup-fly-my-swb` de votre clone. Saisissez-le dans **Setup code**. Supprimez le fichier après la connexion.
+
+Consultez le [forfait gratuit de Fly.io](https://docs.fly.io/about/free-plan) et les [tarifs actuels](https://fly.io/docs/about/pricing/) pour la facturation.
+
+### Railway [#railway]
+
+Déployez depuis le [modèle SwB sur Railway](https://railway.com/deploy/swb). Gardez une seule réplique. Le modèle monte un volume sur `/data`.
+
+Pour un SwB toujours actif, choisissez l'offre Hobby. Elle coûte 5 $ par mois et inclut 5 $ d'utilisation.
+
+L'[offre gratuite](https://docs.railway.com/reference/pricing/free-trial) inclut 1 $ d'utilisation par mois. Ce montant couvre environ 100 Mo de RAM en continu. Une instance SwB de test utilisait environ 107 Mio au repos. Les services de l'offre gratuite s'arrêtent quand le dollar est épuisé.
 
 ## Se connecter
 

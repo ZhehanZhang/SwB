@@ -46,7 +46,7 @@ test('landing deploy guides align with their block titles', async ({ page }) => 
   const headers = deploy.locator('[data-block-header]');
   await expect(headers).toHaveCount(3);
   for (const header of await headers.all()) await expectGuideInHeader(header);
-  await expect(deploy.getByRole('link', { name: 'Compose' })).toHaveAttribute('href', '/docs/self-hosting#docker-compose');
+  await expect(deploy.getByRole('link', { name: 'Compose' })).toHaveAttribute('href', '/docs/deploy#docker-compose');
   await expect(deploy.locator('[data-deploy-tunnel] [data-provider-arrow]')).toBeVisible();
 });
 
@@ -57,8 +57,8 @@ test('Get started uses one width and aligned actions for every run location', as
   const switcher = run.getByRole('group', { name: 'Where SwB runs' });
   for (const [kind, label, guide] of [
     ['local', 'On your computer', 'Install guide'],
-    ['server', 'On your server', 'Self-hosting guide'],
-    ['cloud', 'In the cloud', 'Self-hosting guide'],
+    ['server', 'On your server', 'Deploy guide'],
+    ['cloud', 'In the cloud', 'Deploy guide'],
   ]) {
     await switcher.getByRole('button', { name: label }).click();
     const panel = run.locator(`[data-start-run="${kind}"]`);
@@ -77,7 +77,7 @@ test('Get started uses one width and aligned actions for every run location', as
 
 test('provider tiles share one design and visible deploy affordances on landing and docs', async ({ page }) => {
   let chrome: unknown;
-  for (const [path, selector] of [['/', 'section[aria-labelledby="landing-deploy"]'], ['/docs/get-started?run=cloud', '[data-start-run="cloud"]'], ['/docs/self-hosting', '.swb-mdx']]) {
+  for (const [path, selector] of [['/', 'section[aria-labelledby="landing-deploy"]'], ['/docs/get-started?run=cloud', '[data-start-run="cloud"]'], ['/docs/deploy', '.swb-mdx']]) {
     await page.goto(path);
     const grid = page.locator(selector).locator('[data-deploy-providers]');
     const tiles = grid.getByRole('link');

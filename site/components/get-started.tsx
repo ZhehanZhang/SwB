@@ -62,7 +62,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
   const labels = getStartedCopy[lang];
   const explanations = getStartedExplanation[lang];
   const runLabels = { local: labels.runLocal, server: labels.runServer, cloud: labels.runCloud };
-  const selfHosting = localize(lang, '/docs/self-hosting');
+  const deployGuide = localize(lang, '/docs/deploy');
 
   useLayoutEffect(() => {
     function restore() {
@@ -111,7 +111,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
   }
 
   const tunnelLink = (
-    <a className={action} href={`${selfHosting}#cloudflare-tunnel`}>
+    <a className={action} href={`${deployGuide}#cloudflare-tunnel`}>
       <ProviderMark name="cloudflare" />{labels.reachAnywhere}
     </a>
   );
@@ -125,7 +125,7 @@ export function GetStarted({ lang, prompts, cloud }: { lang: Locale; prompts: Re
               <GuideLink href={localize(lang, '/docs/install')}>{labels.installGuide}</GuideLink>
             </span>
             <span className={styles.runGuide} data-start-guide="hosted" data-active={view.run !== 'local'}>
-              <GuideLink href={selfHosting}>{labels.selfHostingGuide}</GuideLink>
+              <GuideLink href={deployGuide}>{labels.deployGuide}</GuideLink>
             </span>
           </>
         }>

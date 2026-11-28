@@ -1,0 +1,18 @@
+---
+title: SwB betreiben
+description: Sichern und aktualisieren Sie SwB oder exportieren Sie das Gedächtnis.
+---
+
+## Sicherungen und Upgrades
+
+Beenden Sie SwB, bevor Sie den Datenordner kopieren. Kopieren Sie den Ordner vollständig, mit der Datenbank und ihren Schlüsseln einschließlich `mcp-events.key` und `claim-key`. Sichern Sie auch Ihre Konfigurationsdateien und `.env`. Bewahren Sie die Sicherung vertraulich auf. Installieren oder bauen Sie die neue Version. Starten Sie SwB mit demselben Datenordner.
+
+## Gedächtnis exportieren
+
+Führen Sie den Export im Compose-Container aus.
+
+```bash
+docker compose exec -T switchboard swb export /data/export
+```
+
+Der Export speichert Markdown-Dateien nach Bereich unter `./data/export` auf dem Host. Er enthält eine Datei `INDEX.md`. Setzen Sie `memory.mirror_dir`, um eine stets aktuelle Markdown-Kopie zu behalten.

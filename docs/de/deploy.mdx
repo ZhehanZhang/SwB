@@ -3,6 +3,8 @@ title: Bereitstellung
 description: Führen Sie SwB auf Ihrem Computer oder auf einem Server aus.
 ---
 
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
 ## Auf dem eigenen Computer ausführen
 
 Folgen Sie der Anleitung unter [Installation](/de/docs/install). Öffnen Sie den Einmal-Anmeldelink, den SwB beim ersten lokalen Start ausgibt. Für einen neuen Link führen Sie `swb login-link` aus. Der Bereitstellungsprompt deckt auch die lokale Einrichtung ab.
@@ -12,6 +14,68 @@ Folgen Sie der Anleitung unter [Installation](/de/docs/install). Öffnen Sie den
 Fügen Sie diesen Prompt in einen Coding-Agenten wie Claude Code oder Codex ein. Der Agent führt Sie durch die lokale oder gehostete Einrichtung.
 
 <SetupPrompt name="deploy" lang="de" />
+
+## Auf dem eigenen Server
+
+### Docker Compose [#docker-compose]
+
+Installieren Sie Docker Compose 2.24 oder neuer. Führen Sie diese Befehle als normaler Benutzer aus, dem der Datenordner gehört.
+
+```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
+(umask 077; cp .env.example .env)
+{
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
+mkdir -p data
+docker compose up -d --build --wait
+curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
+```
+
+Öffnen Sie innerhalb von fünf Minuten den Einmal-Anmeldelink aus dem Terminal. Behandeln Sie den Link vertraulich.
+
+Der Browser verwendet `http://localhost:8870` für die Anmeldung des Inhabers. Der Befehl im Container verwendet Port `8000`. Compose speichert die Daten in `./data`. Nachdem Sie `.env` geändert haben, führen Sie `docker compose up -d` erneut aus.
+
+Bei einem entfernten Server leiten Sie dessen Port `8870` auf den lokalen Port `8870` weiter, bevor Sie den Link öffnen.
+
+Eine Anfrage ohne Anmeldung an `/healthz` gibt `status` und `version` zurück. Für vollständige Statusdetails verwenden Sie eine Inhabersitzung oder den Inhaberschlüssel.
+
+### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
+
+Ein Cloudflare Tunnel gibt SwB eine öffentliche HTTPS-Adresse. Cloudflare bietet Tunnel im kostenlosen Plan an.
+
+Folgen Sie der [Anleitung zur Cloudflare-Einrichtung](/de/docs/cloudflare), um SwB zu konfigurieren und Zugriffsregeln für den Inhaber und für Client-Anfragen festzulegen.
+
+## Gehostete Plattformen
+
+Verwenden Sie eine einzelne SwB-Instanz mit einem persistenten Datenträger unter `/data`. Die Vorlagen für Railway, Render und Fly.io sowie das Skript für Koyeb finden Sie in der [Bereitstellungsanleitung](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
+
+### Bereitstellung mit einem Klick
+
+<DeployProviders lang="de" />
+
+### Fly.io [#fly]
+
+Verwenden Sie den Release-Checkout von SwB aus dem [Docker-Compose-Beispiel](#docker-compose). Installieren Sie das [Kommandozeilenwerkzeug von Fly.io](https://docs.fly.io/flyctl/). Melden Sie sich bei Fly.io an.
+
+Führen Sie `sh deploy/fly.sh my-swb` im SwB-Ordner aus. Ersetzen Sie `my-swb` durch einen eindeutigen App-Namen. Das Skript startet mit `fly deploy --ha=false` eine einzelne Machine.
+
+Öffnen Sie die Anmeldeseite Ihrer App. Kopieren Sie `SWB_SETUP_CODE` aus `.env.swb-setup-fly-my-swb` in Ihrem Checkout. Geben Sie den Code in **Setup code** ein. Löschen Sie die Datei nach der Anmeldung.
+
+Details zur Abrechnung finden Sie im [Free-Plan von Fly.io](https://docs.fly.io/about/free-plan) und in den [aktuellen Preisen](https://fly.io/docs/about/pricing/).
+
+### Railway [#railway]
+
+Stellen Sie SwB über die [SwB-Vorlage auf Railway](https://railway.com/deploy/swb) bereit. Verwenden Sie genau ein Replikat. Die Vorlage hängt ein Volume unter `/data` ein.
+
+Für ein dauerhaft laufendes SwB verwenden Sie den Hobby-Plan. Er kostet 5 $ im Monat und enthält Nutzung im Wert von 5 $.
+
+Der [Free-Plan](https://docs.railway.com/reference/pricing/free-trial) enthält Nutzung im Wert von 1 $ pro Monat. Das reicht für etwa 100 MB RAM rund um die Uhr. Eine SwB-Testinstanz belegte im Leerlauf etwa 107 MiB. Dienste im Free-Plan stoppen, sobald das Guthaben von 1 $ aufgebraucht ist.
 
 ## Anmelden
 

@@ -20,7 +20,7 @@ export const deployProviders = {
   fly: {
     mark: 'fly',
     name: 'Fly.io',
-    href: '/docs/self-hosting#fly',
+    href: '/docs/deploy#fly',
     enabled: true,
     label: {
       en: 'Free with monthly allowance',
@@ -46,7 +46,7 @@ export const deployProviders = {
   railway: {
     mark: 'railway',
     name: 'Railway',
-    href: '/docs/self-hosting#railway',
+    href: '/docs/deploy#railway',
     oneClickHref: RAILWAY_DEPLOY_LIVE ? 'https://railway.com/deploy/swb' : undefined,
     enabled: true,
     label: {

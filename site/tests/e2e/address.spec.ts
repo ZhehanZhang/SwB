@@ -9,7 +9,8 @@ const example = 'https://swb.example.com';
 const start = '/docs/get-started';
 const claude = '/docs/setup/claude';
 const install = '/docs/install';
-const selfHosting = '/docs/self-hosting';
+const deploy = '/docs/deploy';
+const cloudflare = '/docs/cloudflare';
 const connect = '/docs/connect';
 const addressKey = 'swb-address';
 const label = 'Your SwB address';
@@ -75,10 +76,12 @@ test('persists one address for Get started, docs, copy and Open in actions', asy
   await expect(docs(page).locator('pre').filter({ hasText: 'http://127.0.0.1:8870/healthz' })).toBeVisible();
   await page.evaluate(() => Object.assign(window, { swbSoftNavigation: true }));
   await docs(page).getByRole('link', { name: 'Docker Compose' }).click();
-  await expect(page).toHaveURL(`${selfHosting}#docker-compose`);
+  await expect(page).toHaveURL(`${deploy}#docker-compose`);
   expect(await page.evaluate(() => Reflect.get(window, 'swbSoftNavigation'))).toBe(true);
+  await docs(page).getByRole('link', { name: 'Cloudflare', exact: true }).click();
+  await expect(page).toHaveURL(cloudflare);
   await copyBlock(page, `SWB_PUBLIC_URL=${origin}`);
-  await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', `${origin}/healthz`);
+  await expect(docs(page).getByRole('link', { name: /^check the public address$/i })).toHaveAttribute('href', `${origin}/healthz`);
 
   await page.goto(connect);
   await expect(docs(page).getByText(`${origin}/mcp`, { exact: true })).toBeVisible();
@@ -93,8 +96,8 @@ test('persists one address for Get started, docs, copy and Open in actions', asy
 
 test('copies a fragment link, edits from the popover and clears the address everywhere', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto(`${selfHosting}?tab=remote#named-tunnel&swb=${encodeURIComponent(origin)}`);
-  await expect(page).toHaveURL(`${selfHosting}?tab=remote#named-tunnel`);
+  await page.goto(`${cloudflare}?tab=remote#named-tunnel&swb=${encodeURIComponent(origin)}`);
+  await expect(page).toHaveURL(`${cloudflare}?tab=remote#named-tunnel`);
   await indicator(page).click();
   const popover = page.getByRole('dialog');
   await expect(popover.getByRole('textbox', { name: label })).toHaveValue(origin);
@@ -106,11 +109,11 @@ test('copies a fragment link, edits from the popover and clears the address ever
   const update = 'https://other-swb.example.org';
   await popover.getByRole('textbox', { name: label }).fill(update);
   await popover.getByRole('textbox', { name: label }).press('Enter');
-  await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', `${update}/healthz`);
+  await expect(docs(page).getByRole('link', { name: /^check the public address$/i })).toHaveAttribute('href', `${update}/healthz`);
   await popover.getByRole('button', { name: 'Clear' }).click();
   await expect(indicator(page)).toHaveCount(0);
-  await expect(docs(page).getByRole('link', { name: 'check the public address' })).toHaveAttribute('href', 'https://swb-your-team.example.net/healthz');
-  await copyBlock(page, 'SWB_PUBLIC_URL=https://swb-your-team.example.net');
+  await expect(docs(page).getByRole('link', { name: /^check the public address$/i })).toHaveAttribute('href', `${example}/healthz`);
+  await copyBlock(page, `SWB_PUBLIC_URL=${example}`);
   expect(await stored(page)).toBeNull();
   await openGetStarted(page);
   await expect(address(page)).toHaveValue('');
@@ -267,10 +270,12 @@ test('long saved addresses leave docs CLS below 0.01', async ({ page }) => {
   const long = `https://${'a'.repeat(50)}.${'b'.repeat(50)}.${'c'.repeat(50)}.example.org:9443`;
   await page.addInitScript(observeLayoutShifts);
   await page.addInitScript(({ key, address }) => localStorage.setItem(key, address), { key: addressKey, address: long });
-  for (const path of [claude, selfHosting, connect]) {
+  for (const path of [claude, deploy, cloudflare, connect]) {
     await page.goto(path);
     await expect(indicator(page)).toHaveAttribute('title', new URL(long).host);
-    await expect(docs(page).getByText(new RegExp(long.replaceAll('.', '\\.'))).first()).toBeVisible();
+    if (path !== deploy) {
+      await expect(docs(page).getByText(new RegExp(long.replaceAll('.', '\\.'))).first()).toBeVisible();
+    }
     await page.evaluate(async () => {
       await document.fonts.ready;
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));

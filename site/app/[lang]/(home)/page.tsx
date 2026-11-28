@@ -56,7 +56,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const copy = landingCopy[lang];
   const deploy = copy.deployment;
   const license = `${repository}/blob/${releaseBranch}/LICENSE`;
-  const selfHosting = localize(lang, '/docs/self-hosting');
+  const deployGuide = localize(lang, '/docs/deploy');
 
   return (
     <>
@@ -97,13 +97,13 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 <DeployCommand>{'pipx install swb-one\nswb up'}</DeployCommand>
               </DeployOption>
               <DeployOption heading={deploy.server} intro={deploy.serverIntro}
-                guide={<GuideLink href={`${selfHosting}#docker-compose`}>{deploy.serverGuide}</GuideLink>}>
+                guide={<GuideLink href={`${deployGuide}#docker-compose`}>{deploy.serverGuide}</GuideLink>}>
                 <DeployCommand>{compose}</DeployCommand>
-                <DeployTile href={`${selfHosting}#cloudflare-tunnel`} mark="cloudflare"
+                <DeployTile href={`${deployGuide}#cloudflare-tunnel`} mark="cloudflare"
                   name="Cloudflare Tunnel" plan={deploy.freePlan} tunnel />
               </DeployOption>
               <DeployOption heading={deploy.cloud} intro={deploy.cloudIntro}
-                guide={<GuideLink href={selfHosting}>{deploy.cloudGuide}</GuideLink>}>
+                guide={<GuideLink href={deployGuide}>{deploy.cloudGuide}</GuideLink>}>
                 <DeployProviders lang={lang} landing />
               </DeployOption>
             </div>

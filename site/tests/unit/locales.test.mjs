@@ -43,10 +43,25 @@ test('every locale has every English docs file', () => {
   }
 });
 
-test('locale sidebars list the English pages in order', () => {
+test('locale sidebars keep the English pages and section breaks in order', () => {
+  const structure = (pages) => pages.map((entry) => {
+    const label = /^---(.*)---$/.exec(entry)?.[1];
+    if (label === undefined) return entry;
+    assert.ok(label.trim(), 'named sidebar separators have a label');
+    return '------';
+  });
   for (const lang of locales) {
     for (const file of english.filter((name) => name.endsWith('meta.json'))) {
-      assert.deepEqual(JSON.parse(read(lang, file)).pages, JSON.parse(read('en', file)).pages, `${lang}/${file}`);
+      assert.deepEqual(structure(JSON.parse(read(lang, file)).pages), structure(JSON.parse(read('en', file)).pages), `${lang}/${file}`);
+    }
+  }
+});
+
+test('all Deploy pages keep the bookmark anchors', () => {
+  for (const lang of locales) {
+    const deploy = anchors(read(lang, 'deploy.mdx'));
+    for (const anchor of ['docker-compose', 'cloudflare-tunnel', 'railway', 'fly']) {
+      assert.ok(deploy.has(anchor), `${lang}/deploy.mdx is missing #${anchor}`);
     }
   }
 });

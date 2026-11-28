@@ -1,17 +1,81 @@
 ---
 title: Deploy
-description: Run SwB on your computer or a server.
+description: Run SwB on your computer, on your server or in the cloud.
 ---
+
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
 
 ## Run on your computer
 
-Follow [Install](/docs/install). Open the one-time sign-in link that SwB prints on the first local start. To get a new link, run `swb login-link`. The deploy prompt also covers local setup.
+Follow [Install](/docs/install).
 
 ## Deploy SwB
 
-Paste this prompt into a coding agent such as Claude Code or Codex. The agent guides you through local or hosted setup.
+Paste this prompt into a coding agent such as Claude Code or Codex. The agent helps you set up SwB.
 
 <SetupPrompt name="deploy" lang="en" />
+
+## On your server
+
+### Docker Compose [#docker-compose]
+
+Install Docker Compose 2.24 or later. It runs SwB in a container. Run these commands as the user who owns the data folder.
+
+```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
+(umask 077; cp .env.example .env)
+{
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
+mkdir -p data
+docker compose up -d --build --wait
+curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
+```
+
+For a remote server, forward its port `8870` to port `8870` on your computer. Open the one-time sign-in link within five minutes. Keep the link private.
+
+Your browser uses `http://localhost:8870` for sign-in. The command inside the container uses port `8000`. Compose stores the data in `./data`. Run `docker compose up -d` after you change `.env`.
+
+A signed-out request to `/healthz` returns `status` and `version`. Use an owner session or the owner key for full health details.
+
+### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
+
+A tunnel connects your server to Cloudflare and gives SwB a public HTTPS address. Follow [Cloudflare](/docs/cloudflare) to set up a tunnel.
+
+## In the cloud
+
+Use one SwB instance with a disk mounted at `/data`. The disk keeps your data when the instance restarts. Find platform templates and scripts in the [deployment guide](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy).
+
+### One-click deploy
+
+<DeployProviders lang="en" />
+
+### Fly.io [#fly]
+
+Use the SwB files from the [Docker Compose example](#docker-compose). Install the [Fly.io command line tool](https://docs.fly.io/flyctl/). Sign in to Fly.io.
+
+Run `sh deploy/fly.sh my-swb` from the SwB folder. Replace `my-swb` with a unique app name. The script starts one Machine with `fly deploy --ha=false`.
+
+Open your app's sign-in page. Copy `SWB_SETUP_CODE` from `.env.swb-setup-fly-my-swb` in the SwB folder. Enter it in **Setup code**. Delete the file after sign-in.
+
+See the [Fly.io Free plan](https://docs.fly.io/about/free-plan) and [current rates](https://fly.io/docs/about/pricing/) for costs.
+
+### Render
+
+Open the [Render Blueprint](https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0). The Blueprint creates a paid web service and a 1 GB disk. Open **Environment** in the service. Copy `SWB_SETUP_CODE`.
+
+### Railway [#railway]
+
+Deploy from the [SwB template on Railway](https://railway.com/deploy/swb). Keep one replica. The template mounts a volume at `/data`.
+
+Use the Hobby plan to keep SwB running at all times. It costs $5 a month and includes $5 of usage.
+
+The [Free plan](https://docs.railway.com/reference/pricing/free-trial) includes $1 of usage a month. That amount covers about 100 MB of RAM at all times. A SwB test used about 107 MiB of RAM while idle. Railway stops Free plan services when they reach the $1 limit.
 
 ## Sign in
 

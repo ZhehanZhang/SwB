@@ -156,6 +156,45 @@ test('permanently redirects the retired policy in all locales and formats', asyn
   }
 });
 
+for (const [retired, current] of [
+  ['/docs/self-hosting', '/docs/deploy'],
+  ['/docs/setup/cloudflare', '/docs/cloudflare'],
+]) {
+  test(`permanently redirects ${retired} in all locales and formats`, async ({ request }) => {
+    for (const prefix of ['', ...locales.map((lang) => `/${lang}`)]) {
+      const routes = [
+        [`${prefix}${retired}`, `${prefix}${current}`],
+        [`${prefix}${retired}.md`, `${prefix}${current}.mdx`],
+        [`${prefix}${retired}.mdx`, `${prefix}${current}.mdx`],
+        [`/llms.mdx${prefix}${retired}`, `/llms.mdx${prefix === '/en' ? '' : prefix}${current}`],
+      ];
+      for (const [path, destination] of routes) {
+        const response = await request.get(`${path}?ref=old`, { ...noRedirects, headers: chinesePreference });
+        expect(response.status(), path).toBe(308);
+        expect(location(response), path).toBe(new URL(`${destination}?ref=old`, response.url()).href);
+      }
+      for (const destination of new Set(routes.map(([, target]) => target))) {
+        const response = await request.get(`${destination}?ref=old`, {
+          ...noRedirects,
+          headers: { 'Accept-Language': 'en' },
+        });
+        expect(response.status(), destination).toBe(200);
+        const markdown = destination.endsWith('.mdx') || destination.startsWith('/llms.mdx/');
+        expect(response.headers()['content-type'], destination).toContain(markdown ? 'text/markdown' : 'text/html');
+      }
+    }
+  });
+}
+
+for (const prefix of ['', ...locales.map((lang) => `/${lang}`)]) {
+  test(`keeps the Railway bookmark through the 308 for ${prefix || 'bare English'}`, async ({ page }) => {
+    const response = await page.goto(`${prefix}/docs/self-hosting?ref=old#railway`);
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveURL(`${prefix}/docs/deploy?ref=old#railway`);
+    await expect(page.locator('.swb-mdx').getByRole('heading').and(page.locator('#railway'))).toBeInViewport();
+  });
+}
+
 for (const path of ['/', '/docs', '/docs/install', '/about']) {
   const suffix = path === '/' ? '' : path;
   const alternates: Record<string, string> = {

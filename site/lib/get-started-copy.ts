@@ -16,7 +16,7 @@ type GetStartedCopy = {
   open: string;
   guide: string;
   installGuide: string;
-  selfHostingGuide: string;
+  deployGuide: string;
   reachAnywhere: string;
   companionGuide: string;
   companionHelp: string;
@@ -42,7 +42,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     open: 'Open in {app}',
     guide: 'Full guide',
     installGuide: 'Install guide',
-    selfHostingGuide: 'Self-hosting guide',
+    deployGuide: 'Deploy guide',
     reachAnywhere: 'Reach it from anywhere',
     companionGuide: 'Companion guide',
     companionHelp: 'For local Claude Code, Codex, OpenCode or dsh sessions, your agent guides companion installation and pairing on your device.',
@@ -88,7 +88,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     open: '在 {app} 中打开',
     guide: '完整指南',
     installGuide: '安装指南',
-    selfHostingGuide: '自托管指南',
+    deployGuide: '部署指南',
     reachAnywhere: '从任何地方访问',
     companionGuide: 'Companion 指南',
     companionHelp: '要接入本地的 Claude Code、Codex、OpenCode 或 dsh 会话，智能体会引导你在自己的设备上安装并配对 Companion。',
@@ -134,7 +134,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     open: '在 {app} 中開啟',
     guide: '完整指南',
     installGuide: '安裝指南',
-    selfHostingGuide: '自行託管指南',
+    deployGuide: '部署指南',
     reachAnywhere: '從任何地方存取',
     companionGuide: 'Companion 指南',
     companionHelp: '要連接本機的 Claude Code、Codex、OpenCode 或 dsh 工作階段，代理會引導你在自己的裝置上安裝並配對 Companion。',
@@ -180,7 +180,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "open": "Abrir en {app}",
     "guide": "Guía completa",
     "installGuide": "Guía de instalación",
-    "selfHostingGuide": "Guía de autoalojamiento",
+    "deployGuide": "Guía de despliegue",
     "reachAnywhere": "Accede desde cualquier lugar",
     "companionGuide": "Guía de Companion",
     "companionHelp": "Para las sesiones locales de Claude Code, Codex, OpenCode o dsh, tu agente te guía para instalar y emparejar un companion en tu dispositivo.",
@@ -225,7 +225,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "open": "Ouvrir dans {app}",
     "guide": "Guide complet",
     "installGuide": "Guide d'installation",
-    "selfHostingGuide": "Guide d'auto-hébergement",
+    "deployGuide": "Guide de déploiement",
     "reachAnywhere": "Accessible de partout",
     "companionGuide": "Guide du compagnon",
     "companionHelp": "Pour les sessions locales de Claude Code, Codex, OpenCode ou dsh, votre agent vous guide pour installer et appairer un compagnon sur votre appareil.",
@@ -270,7 +270,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "open": "In {app} öffnen",
     "guide": "Vollständige Anleitung",
     "installGuide": "Installationsanleitung",
-    "selfHostingGuide": "Anleitung zum Selbsthosten",
+    "deployGuide": "Anleitung zur Bereitstellung",
     "reachAnywhere": "Von überall erreichbar",
     "companionGuide": "Companion-Anleitung",
     "companionHelp": "Für lokale Sitzungen mit Claude Code, Codex, OpenCode oder dsh führt Ihr Agent Sie durch Installation und Kopplung des Companions auf Ihrem Gerät.",
@@ -315,7 +315,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "open": "{app}에서 열기",
     "guide": "전체 가이드",
     "installGuide": "설치 가이드",
-    "selfHostingGuide": "자체 호스팅 가이드",
+    "deployGuide": "배포 가이드",
     "reachAnywhere": "어디서나 접속하기",
     "companionGuide": "컴패니언 가이드",
     "companionHelp": "로컬 Claude Code, Codex, OpenCode, dsh 세션을 쓸 때는 에이전트가 내 기기에 컴패니언을 설치하고 페어링하는 과정을 안내합니다.",
@@ -360,7 +360,7 @@ export const getStartedCopy: Record<Locale, GetStartedCopy> = {
     "open": "{app} で開く",
     "guide": "詳しいガイド",
     "installGuide": "インストールガイド",
-    "selfHostingGuide": "セルフホスティングガイド",
+    "deployGuide": "デプロイガイド",
     "reachAnywhere": "どこからでもアクセスする",
     "companionGuide": "コンパニオンのガイド",
     "companionHelp": "Claude Code、Codex、OpenCode、dsh のローカルセッションを使う場合は、コンパニオンをデバイスにインストールしてペアリングする手順をエージェントが案内します。",

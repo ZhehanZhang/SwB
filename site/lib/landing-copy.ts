@@ -67,7 +67,7 @@ export const landingCopy: Record<Locale, Copy> = {
       serverGuide: 'Compose',
       cloud: 'In the cloud',
       cloudIntro: 'Choose a cloud provider.',
-      cloudGuide: 'Self-hosting guide',
+      cloudGuide: 'Deploy guide',
       freePlan: 'Free',
     },
     usage: {
@@ -115,7 +115,7 @@ export const landingCopy: Record<Locale, Copy> = {
       serverGuide: 'Compose 指南',
       cloud: '在云端运行',
       cloudIntro: '选择一家云服务商。',
-      cloudGuide: '自托管指南',
+      cloudGuide: '部署指南',
       freePlan: '免费',
     },
     usage: {
@@ -163,7 +163,7 @@ export const landingCopy: Record<Locale, Copy> = {
       serverGuide: 'Compose 指南',
       cloud: '在雲端執行',
       cloudIntro: '選擇一家雲端服務供應商。',
-      cloudGuide: '自行託管指南',
+      cloudGuide: '部署指南',
       freePlan: '免費',
     },
     usage: {
@@ -222,7 +222,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "serverGuide": "Compose",
       "cloud": "En la nube",
       "cloudIntro": "Elige un proveedor de nube.",
-      "cloudGuide": "Guía de autoalojamiento",
+      "cloudGuide": "Guía de despliegue",
       "freePlan": "Gratis"
     },
     "usage": {
@@ -281,7 +281,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "serverGuide": "Compose",
       "cloud": "Dans le cloud",
       "cloudIntro": "Choisissez un fournisseur cloud.",
-      "cloudGuide": "Guide d'auto-hébergement",
+      "cloudGuide": "Guide de déploiement",
       "freePlan": "Gratuit"
     },
     "usage": {
@@ -340,7 +340,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "serverGuide": "Compose",
       "cloud": "In der Cloud",
       "cloudIntro": "Wählen Sie einen Cloud-Anbieter aus.",
-      "cloudGuide": "Anleitung zum Selbsthosten",
+      "cloudGuide": "Anleitung zur Bereitstellung",
       "freePlan": "Kostenlos"
     },
     "usage": {
@@ -398,7 +398,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "serverGuide": "Compose",
       "cloud": "클라우드",
       "cloudIntro": "클라우드 제공업체를 고르세요.",
-      "cloudGuide": "자체 호스팅 가이드",
+      "cloudGuide": "배포 가이드",
       "freePlan": "무료"
     },
     "usage": {
@@ -456,7 +456,7 @@ export const landingCopy: Record<Locale, Copy> = {
       "serverGuide": "Compose",
       "cloud": "クラウド",
       "cloudIntro": "クラウドプロバイダーを選んでください。",
-      "cloudGuide": "セルフホスティングガイド",
+      "cloudGuide": "デプロイガイド",
       "freePlan": "無料"
     },
     "usage": {

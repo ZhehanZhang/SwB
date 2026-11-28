@@ -43,7 +43,7 @@ git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
 cd SwB
 ```
 
-To run SwB on this computer, follow https://swb.one/docs/self-hosting#docker-compose. Start with the command that copies `.env.example`.
+To run SwB on this computer, follow https://swb.one/docs/deploy#docker-compose. Start with the command that copies `.env.example`.
 
 ## Render and Railway
 

@@ -3,6 +3,8 @@ title: 部署
 description: 在自己的電腦或伺服器上執行 SwB。
 ---
 
+import { DeployProviders, ProviderMark } from '@/components/deploy-providers'
+
 ## 在自己的電腦上執行
 
 依照[安裝](/zh-Hant/docs/install)的說明操作。SwB 第一次在本機啟動時會印出一次性登入連結，用瀏覽器開啟它。需要新連結時，執行 `swb login-link`。部署提示詞也涵蓋本機設定。
@@ -12,6 +14,68 @@ description: 在自己的電腦或伺服器上執行 SwB。
 把下面的提示詞貼給 Claude Code 或 Codex 這類程式開發代理。代理會引導你完成本機或託管環境的設定。
 
 <SetupPrompt name="deploy" lang="zh-Hant" />
+
+## 在自己的伺服器上執行
+
+### Docker Compose [#docker-compose]
+
+安裝 Docker Compose 2.24 或更新版本。以一般使用者身分執行下面的指令，資料目錄要歸這個使用者所有。
+
+```bash
+git clone --branch release/1.0 https://github.com/ZhehanZhang/SwB.git
+cd SwB
+(umask 077; cp .env.example .env)
+{
+  printf 'SWB_UID=%s\n' "$(id -u)"
+  printf 'SWB_KEY_OWNER='
+  openssl rand -hex 32
+} >> .env
+printf 'SWB_PUBLIC_URL=http://localhost:8870\n' >> .env
+mkdir -p data
+docker compose up -d --build --wait
+curl -fsS http://127.0.0.1:8870/healthz
+docker compose exec -T switchboard swb login-link --url http://127.0.0.1:8000
+```
+
+在 5 分鐘內開啟終端機顯示的一次性登入連結。連結要保密。
+
+擁有者登入時，瀏覽器使用 `http://localhost:8870`，容器內的指令則使用 `8000` 連接埠。Compose 把資料存放在 `./data`。變更 `.env` 後，再執行一次 `docker compose up -d`。
+
+如果是遠端伺服器，開啟連結前，先把它的 `8870` 連接埠轉送到本機的 `8870` 連接埠。
+
+免登入的 `/healthz` 請求會回傳 `status` 和 `version`。要取得完整的健康狀態資訊，使用擁有者工作階段或擁有者金鑰。
+
+### <ProviderMark name="cloudflare" /> Cloudflare Tunnel [#cloudflare-tunnel]
+
+Cloudflare Tunnel 為 SwB 提供公開的 HTTPS 網址。Cloudflare 的免費方案就提供通道。
+
+依照 [Cloudflare 設定指南](/zh-Hant/docs/cloudflare)設定 SwB，並為擁有者和用戶端請求設定存取規則。
+
+## 託管平台
+
+使用單一 SwB 執行個體，並把永久磁碟掛載到 `/data`。Railway、Render 和 Fly.io 的範本以及 Koyeb 的指令碼，見[部署指南](https://github.com/ZhehanZhang/SwB/tree/release/1.0/deploy)。
+
+### 一鍵部署
+
+<DeployProviders lang="zh-Hant" />
+
+### Fly.io [#fly]
+
+使用 SwB 發行版的本機副本，也就是 [Docker Compose 範例](#docker-compose)中複製的那一份。安裝 [Fly.io 命令列工具](https://docs.fly.io/flyctl/)，並登入 Fly.io。
+
+在 SwB 資料夾中執行 `sh deploy/fly.sh my-swb`，並把 `my-swb` 換成一個唯一的應用程式名稱。這支指令碼會用 `fly deploy --ha=false` 啟動一台 Machine。
+
+開啟應用程式的登入頁面。從本機副本中的 `.env.swb-setup-fly-my-swb` 複製 `SWB_SETUP_CODE`，輸入到 **Setup code**。登入後刪除這個檔案。
+
+計費細節見 [Fly.io 免費方案](https://docs.fly.io/about/free-plan)和[目前的費率](https://fly.io/docs/about/pricing/)。
+
+### Railway [#railway]
+
+從 [Railway 上的 SwB 範本](https://railway.com/deploy/swb)部署，並維持單一複本。範本會把磁碟區掛載到 `/data`。
+
+要讓 SwB 全天候運作，使用 Hobby 方案。Hobby 方案每月 5 美元，內含 5 美元的用量額度。
+
+[免費方案](https://docs.railway.com/reference/pricing/free-trial)每月內含 1 美元的用量額度，大約可支應 100 MB 記憶體全天候運作。一個測試用的 SwB 執行個體在閒置時約使用 107 MiB。1 美元的額度用完後，免費方案的服務就會停止。
 
 ## 登入
 

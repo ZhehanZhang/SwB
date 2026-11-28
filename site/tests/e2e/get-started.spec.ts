@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { observeLayoutShifts, readLayoutShifts } from './layout-shifts';
 
 const start = '/docs/get-started';
-const selfHosting = '/docs/self-hosting';
+const deploy = '/docs/deploy';
 const renderBlueprint = 'https://render.com/deploy?repo=https://github.com/ZhehanZhang/SwB/tree/release/1.0';
 const railwayTemplate = 'https://railway.com/deploy/swb';
 const fallbackAgents = [
@@ -62,20 +62,22 @@ test('switches run locations and copies the release install commands', async ({ 
   await tile(page, 'On your server').click();
   await expect(run('local')).toBeHidden();
   await expect(run('server').getByRole('link', { name: 'Reach it from anywhere' }))
-    .toHaveAttribute('href', `${selfHosting}#cloudflare-tunnel`);
+    .toHaveAttribute('href', `${deploy}#cloudflare-tunnel`);
   await expect(run('server').locator('image[href="/marks/cloudflare-on-light.svg"]')).toBeVisible();
   await run('server').getByRole('button', { name: 'Copy command', exact: true }).click();
-  const selfHostingSource = readFileSync(resolve(__dirname, '../../../docs/en/self-hosting.mdx'), 'utf8');
-  expect(await read()).toBe(selfHostingSource.split('```bash\n')[1].split('\n```')[0]);
+  const deploySource = readFileSync(resolve(__dirname, '../../../docs/en/deploy.mdx'), 'utf8');
+  const compose = deploySource.match(/^#{2,3} .*\[#docker-compose\]\n[^#]*?```bash\n([\s\S]*?)\n```/m)?.[1];
+  expect(compose).toBeDefined();
+  expect(await read()).toBe(compose);
   await expect(page).toHaveURL(/run=server$/);
 
   await tile(page, 'In the cloud').click();
   await expect(run('server')).toBeHidden();
   await expect(run('cloud').getByRole('link', { name: 'Fly.io Free with monthly allowance' }))
-    .toHaveAttribute('href', `${selfHosting}#fly`);
+    .toHaveAttribute('href', `${deploy}#fly`);
   await expect(run('cloud').getByRole('link', { name: 'Render Paid plan' })).toHaveAttribute('href', renderBlueprint);
   await expect(run('cloud').getByRole('link', { name: 'Railway Hobby plan' })).toHaveAttribute('href', railwayTemplate);
-  await expect(setup(page).getByRole('link', { name: 'Self-hosting guide', exact: true })).toHaveAttribute('href', selfHosting);
+  await expect(setup(page).getByRole('link', { name: 'Deploy guide', exact: true })).toHaveAttribute('href', deploy);
   for (const provider of ['fly', 'render', 'railway']) {
     await expect(run('cloud').locator(`image[href="/marks/${provider}-on-light.svg"]`)).toBeVisible();
   }
@@ -222,7 +224,7 @@ for (const [prefix, title, cloud, pick, guide] of [
     await expect(agent(page, 'Claude').getByRole('link', { name: guide, exact: true }))
       .toHaveAttribute('href', `${prefix}/docs/setup/claude`);
     await expect(setup(page).getByRole('link', { name: /^Fly\.io / }))
-      .toHaveAttribute('href', `${prefix}${selfHosting}#fly`);
+      .toHaveAttribute('href', `${prefix}${deploy}#fly`);
     await expect(agent(page, 'Claude').locator('[data-agent-before]')).toHaveText(/\S/);
     await expect(agent(page, 'Claude').locator('[data-agent-after]')).toHaveText(/\S/);
 
@@ -263,15 +265,19 @@ for (const [prefix, title, cloud, pick, guide] of [
   });
 }
 
-test('Self-hosting keeps one-click command copy and deployment links', async ({ page, context }) => {
+test('Deploy keeps one-click command copy and deployment links', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto(selfHosting);
-  await expect(page.getByRole('link', { name: 'Render Paid plan' })).toHaveAttribute('href', renderBlueprint);
-  await expect(page.getByRole('link', { name: 'Railway Hobby plan' })).toHaveAttribute('href', railwayTemplate);
-  const tunnelHeading = page.getByRole('heading', { name: 'Cloudflare Tunnel' });
+  await page.goto(deploy);
+  const article = page.locator('.swb-mdx');
+  await expect(article.getByRole('link', { name: 'Render Paid plan' })).toHaveAttribute('href', renderBlueprint);
+  await expect(article.getByRole('link', { name: 'Railway Hobby plan' })).toHaveAttribute('href', railwayTemplate);
+  const tunnelHeading = article.getByRole('heading', { name: 'Cloudflare Tunnel' });
   await expect(tunnelHeading).toHaveAttribute('id', 'cloudflare-tunnel');
   await expect(tunnelHeading.locator('image[href="/marks/cloudflare-on-light.svg"]')).toBeVisible();
-  for (const block of await page.locator('figure.shiki').all()) {
+  await expect(article.getByRole('link', { name: 'Cloudflare', exact: true })).toHaveAttribute('href', '/docs/cloudflare');
+  const blocks = article.locator('figure.shiki');
+  expect(await blocks.count()).toBeGreaterThan(0);
+  for (const block of await blocks.all()) {
     const copy = block.getByRole('button', { name: 'Copy Text' });
     await expect(copy).toBeVisible();
     await copy.click();
