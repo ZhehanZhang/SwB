@@ -21,6 +21,7 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 from .audit import Audit, iso
+from .bot_identity import BotIdentities
 from . import targets as tgt
 from .agents import Agents
 from .auth import Auth, Principal
@@ -92,6 +93,7 @@ class Switchboard:
                 if Path(str(legacy) + suffix).exists():
                     Path(str(legacy) + suffix).rename(str(db) + suffix)
         self.store = Store(db, clock=clock)
+        self.bot_identities = BotIdentities(self.store, self.data_dir)
         self.audit = Audit(self.store, self.cfg.timezone)
         self.projects = Projects(self.store)
         self.memory = Memory(self.store, self.projects, self.cfg.mirror_dir, self.cfg.mirror_debounce_s)
@@ -177,7 +179,7 @@ class Switchboard:
         return self.avatars.rendered
 
     def find_avatar(self, name: str) -> Path | None:
-        return self.avatars.find_avatar(name)
+        return self.bot_identities.icon_path(name) or self.avatars.find_avatar(name)
 
     def avatar_url(self, name: str) -> str | None:
         return self.avatars.avatar_url(name)

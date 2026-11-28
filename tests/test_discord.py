@@ -6,6 +6,7 @@ import json
 import sys
 from collections import deque
 from contextlib import asynccontextmanager, contextmanager
+from functools import partial
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
@@ -20,6 +21,7 @@ from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, pa
 from switchboard.app import create_app
 from switchboard.blocks import BlockError
 from switchboard.blocks.discord import gateway
+from switchboard.bot_identity import BotIdentity
 from switchboard.chat import Persona
 from switchboard.core import Switchboard
 
@@ -38,6 +40,7 @@ class DiscordAPI:
         self.responses = deque()
         self.application = {"id": APP, "owner": {"id": USER}}
         self.avatar_status = 200
+        self.guild_avatar_error = None
         self.denied_webhooks = set()
 
     def handler(self, request):
@@ -51,7 +54,12 @@ class DiscordAPI:
         if path == "/oauth2/applications/@me":
             return httpx.Response(200, json=self.application)
         if path == "/users/@me" and method == "PATCH":
-            return httpx.Response(self.avatar_status, json={"retry_after": 0} if self.avatar_status == 429 else {"id": BOT})
+            return httpx.Response(self.avatar_status, json={"retry_after": 0} if self.avatar_status == 429 else {"id": BOT, **data})
+        if path in (f"/guilds/{GUILD}/members/@me", f"/guilds/{GUILD_2}/members/@me") and method == "PATCH":
+            if self.guild_avatar_error is not None and "avatar" in data:
+                status, error = self.guild_avatar_error
+                return httpx.Response(status, json=error)
+            return httpx.Response(self.avatar_status, json={**data})
         if path == "/users/@me/channels":
             return httpx.Response(200, json=self.channels[DM])
         if "/reactions/" in path:
@@ -64,7 +72,7 @@ class DiscordAPI:
             return httpx.Response(201, json=thread)
         if path == f"/channels/{CHANNEL}/messages/{ROOT}":
             return httpx.Response(200, json={"content": f"<@!{BOT}> build-check check the build\nSecond line"})
-        if path == f"/channels/{CHANNEL}/webhooks":
+        if path.endswith("/webhooks") and path.split("/")[2] in self.channels:
             if method in self.denied_webhooks:
                 return httpx.Response(403)
             if method == "GET":
@@ -121,9 +129,9 @@ class Sockets:
 @pytest.fixture
 def discord(tmp_path):
     @contextmanager
-    def build(*, settings=None, sockets=None, token=True, slack=None, capy=None):
+    def build(*, settings=None, sockets=None, token=True, slack=None, capy=None, public_url=PUBLIC):
         api = DiscordAPI()
-        cfg = {"version": 2, "public_url": PUBLIC,
+        cfg = {"version": 2, "public_url": public_url,
                "auth": {"owner_emails": ["owner@example.test"], "cloudflare_access": {"team_domain": "access.example.test", "aud": "test"}},
                "blocks": {"mcp": {"use": "mcp"},
                           "claude-routine": {"use": "claude-routine", "routines": {"build-check": {"routine_id": "trig_EXAMPLE", "token_env": "EXAMPLE_ROUTINE_TOKEN"}}},
@@ -168,7 +176,7 @@ def test_invite_uses_only_configured_bot_permissions(discord, settings, permissi
         setup = payload(call(client, STATIC_KEY, "discord_status"))["setup"]
         invite = urlsplit(setup["invite_url"])
         assert (invite.scheme, invite.netloc, invite.path) == ("https", "discord.com", "/oauth2/authorize")
-        assert parse_qs(invite.query) == {"client_id": [APP], "scope": ["bot"], "permissions": [permissions], "guild_id": [GUILD],
+        assert parse_qs(invite.query) == {"client_id": [APP], "scope": ["bot"], "permissions": [str(int(permissions) | (1 << 26))], "guild_id": [GUILD],
                                          "disable_guild_select": ["true"]}
         assert setup["token_source"] == "env"
 
@@ -375,18 +383,143 @@ def test_gateway_applies_avatar_only_when_the_resolved_file_changes(discord, tmp
     name = "swb.png"
     Image.new("RGBA", (8, 8), "red").save(uploaded / name)
     Image.new("RGB", (8, 8), "blue").save(configured / name)
-    for image in (uploaded / name, None, configured / name):
+    for color, expected in (("blue", 1), ("blue", 0), ("green", 1)):
+        image = configured / name
+        Image.new("RGB", (8, 8), color).save(image)
         socket = Socket()
         with discord(settings={"avatar": name}, sockets=Sockets(socket), slack={"avatar_dirs": [str(configured)]}) as (_, client, block, api):
             client.portal.call(finish_ready, socket, block)
             status = payload(call(client, STATIC_KEY, "discord_status"))
             assert status["connected"] and status["avatar"] == {"file": name, "applied": True, "error": None}
             changes = [data["avatar"] for method, path, data in api.calls if (method, path) == ("PATCH", "/users/@me")]
-            assert len(changes) == (image is not None)
-            if image is not None:
+            assert len(changes) == expected
+            if expected:
                 assert changes == ["data:image/png;base64," + base64.b64encode(image.read_bytes()).decode("ascii")]
-        if image is None:
-            (uploaded / name).unlink()
+
+
+def test_profile_identity_uses_global_and_guild_endpoints_and_can_reset(discord):
+    with discord() as (core, client, block, api):
+        icon = core.find_avatar("swb.png").read_bytes()
+        avatar = "data:image/png;base64," + base64.b64encode(icon).decode("ascii")
+        client.portal.call(block.update_bot_identity, "Release Bot", icon)
+        assert block.bot_name == "Release Bot"
+        client.portal.call(partial(block.update_bot_identity, "Builds", None, space="home"))
+        client.portal.call(partial(block.update_bot_identity, None, icon, space="home"))
+        core.bot_identities.set(block.name, "home", BotIdentity("Builds", "swb.png"))
+        client.portal.call(block.post, "home", CHANNEL, "Build finished")
+        assert api.posts == [(f"/channels/{CHANNEL}/messages", {"allowed_mentions": {"parse": []}, "content": "Build finished"}, {})]
+        assert not any(path.endswith("/webhooks") for _, path, _ in api.calls)
+        client.portal.call(partial(block.post, "home", CHANNEL, "Agent update", root=ROOT,
+                                   persona=Persona("helper", "Helper", icon_url="https://assets.example.test/icon.png")))
+        webhook, post, _ = api.posts[-1]
+        assert webhook.startswith(f"/webhooks/{HOOK}/")
+        assert post["username"] == "Helper" and post["avatar_url"] == "https://assets.example.test/icon.png"
+        client.portal.call(partial(block.update_bot_identity, None, None, space="home", reset=True))
+        client.portal.call(partial(block.update_bot_identity, "SwB", icon, reset=True))
+        assert [call for call in api.calls if call[0] == "PATCH"] == [
+            ("PATCH", "/users/@me", {"username": "Release Bot", "avatar": avatar}),
+            ("PATCH", f"/guilds/{GUILD}/members/@me", {"nick": "Builds"}),
+            ("PATCH", f"/guilds/{GUILD}/members/@me", {"avatar": avatar}),
+            ("PATCH", f"/guilds/{GUILD}/members/@me", {"nick": None, "avatar": None}),
+            ("PATCH", "/users/@me", {"username": "SwB", "avatar": avatar}),
+        ]
+
+
+def test_discord_profile_identity_resolves_one_owned_auto_guild_or_refuses(discord):
+    with discord(settings={"spaces": {"home": {"owner_ids": [USER]}}}) as (_, client, block, api):
+        edit = partial(block.update_bot_identity, "Builds", None, space="home")
+        with pytest.raises(BlockError, match="Connect a Discord server"):
+            client.portal.call(edit)
+        client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD, "owner_id": USER})
+        client.portal.call(edit)
+        client.portal.call(block.dispatch, "GUILD_CREATE", {"id": GUILD_2, "owner_id": USER})
+        with pytest.raises(BlockError, match="Connect a Discord server"):
+            client.portal.call(edit)
+        assert [call for call in api.calls if call[0] == "PATCH"] == [("PATCH", f"/guilds/{GUILD}/members/@me", {"nick": "Builds"})]
+
+
+def test_discord_saved_icon_prevents_startup_yaml_from_replacing_it(discord):
+    socket = Socket()
+    with discord(settings={"avatar": "swb.png"}, sockets=Sockets(socket)) as (core, client, block, api):
+        client.portal.call(core.bot_identities.set, "discord", "", BotIdentity("Release Bot", "bot-" + "a" * 48 + ".png"))
+        client.portal.call(finish_ready, socket, block)
+        assert not [call for call in api.calls if call[0] == "PATCH"]
+
+
+def test_discord_uses_native_sender_only_in_opted_in_guild(discord):
+    spaces = {"home": {"guild_id": GUILD, "owner_ids": [USER]}, "staging": {"guild_id": GUILD_2, "owner_ids": [USER]}}
+    with discord(settings={"spaces": spaces, "agents": {"claude": "*"}, "application_id": APP}) as (core, client, _, api):
+        api.channels["41"] = {"id": "41", "type": 0, "guild_id": GUILD_2}
+        client.portal.call(core.bot_identities.set, "discord", "home", BotIdentity("Product", "swb.png", post_every_agent=True))
+        for space, channel, text in (("home", CHANNEL, "Home"), ("staging", "41", "Staging"), ("home", DM, "DM")):
+            assert payload(call(client, STATIC_KEY, "discord_post", {"space": space, "channel": channel, "text": text}))["message"]
+        assert [p for p, _, _ in api.posts] == [f"/channels/{CHANNEL}/messages", f"/webhooks/{HOOK}/{MOCK_WEBHOOK}", f"/channels/{DM}/messages"]
+        assert [p.get("username") for _, p, _ in api.posts] == [None, "claude", None]
+        audit = client.get("/api/audit?action=post", headers=OWNER)
+        assert audit.status_code == 200
+        assert [(row["source"], row["destination"], row["target"], row["outcome"]) for row in audit.json()["items"]] == [
+            ("claude", "discord", f"home/{DM}", "ok"),
+            ("claude", "discord", "staging/41", "ok"),
+            ("claude", "discord", f"home/{CHANNEL}", "ok"),
+        ]
+
+
+@pytest.mark.parametrize(("status", "error"), [(403, {"code": 50101}), (400, {"code": 50035, "errors": {"avatar": {"_errors": []}}})])
+def test_discord_guild_avatar_rejection_falls_back_to_webhook_and_reset_clears_nick(discord, status, error):
+    with discord(settings={"application_id": APP}) as (core, client, block, api):
+        api.guild_avatar_error = status, error
+        icon = core.find_avatar("swb.png").read_bytes()
+        file = client.portal.call(core.bot_identities.save_icon, icon)
+        update = partial(block.update_bot_identity, "Product", icon, space="home", allow_webhook_fallback=True)
+        assert client.portal.call(update) is True
+        client.portal.call(core.bot_identities.set, "discord", "home",
+                           BotIdentity("Product", file, post_every_agent=True, webhook_avatar=True))
+        assert payload(call(client, STATIC_KEY, "discord_post", {"space": "home", "channel": CHANNEL, "text": "Product reply"}))["message"]
+        assert api.posts[0] == (f"/webhooks/{HOOK}/{MOCK_WEBHOOK}",
+                                {"allowed_mentions": {"parse": []}, "content": "Product reply", "username": "Product",
+                                 "avatar_url": f"{PUBLIC}/avatars/{file}"}, {"wait": "true"})
+        api.responses.append(httpx.Response(403))
+        assert payload(call(client, STATIC_KEY, "discord_post", {"space": "home", "channel": CHANNEL, "text": "Native reply"}))["message"]
+        assert api.posts[1] == (f"/channels/{CHANNEL}/messages",
+                                {"allowed_mentions": {"parse": []}, "content": "Native reply"}, {})
+        audit = client.get("/api/audit?action=post", headers=OWNER)
+        assert audit.status_code == 200
+        assert [(row["source"], row["target"]) for row in audit.json()["items"]] == [("claude", f"home/{CHANNEL}")] * 2
+        assert client.portal.call(partial(block.update_bot_identity, None, None, space="home", reset=True)) is False
+        patches = [(path, body) for method, path, body in api.calls if method == "PATCH"]
+        avatar = "data:image/png;base64," + base64.b64encode(icon).decode("ascii")
+        assert patches == [(f"/guilds/{GUILD}/members/@me", body) for body in (
+            {"nick": "Product", "avatar": avatar}, {"nick": "Product"}, {"nick": None, "avatar": None}, {"nick": None}
+        )]
+
+
+def test_discord_guild_webhook_avatar_stays_for_bot_voice_when_switch_is_off(discord):
+    with discord(settings={"application_id": APP}) as (core, client, block, api):
+        client.portal.call(core.bot_identities.set, "discord", "home", BotIdentity("Product", "swb.png", webhook_avatar=True))
+        assert payload(call(client, STATIC_KEY, "discord_post", {"space": "home", "channel": CHANNEL, "text": "Agent"}))["message"]
+        client.portal.call(block.post, "home", CHANNEL, "Bot voice")
+        client.portal.call(partial(block.post, "home", CHANNEL, "Referenced bot voice", reply_to=ROOT))
+        assert [path for path, _, _ in api.posts] == [f"/webhooks/{HOOK}/{MOCK_WEBHOOK}"] * 2 + [f"/channels/{CHANNEL}/messages"]
+        assert [body.get("username") for _, body, _ in api.posts] == ["claude", "Product", None]
+        assert api.posts[1][1]["avatar_url"] == f"{PUBLIC}/avatars/swb.png"
+        assert api.posts[2][1]["message_reference"] == {"message_id": ROOT}
+
+
+@pytest.mark.parametrize(("settings", "public_url", "opt_in", "failure"), [
+    ({}, PUBLIC, True, (403, {"code": 50013})),
+    ({}, PUBLIC, True, (400, {"code": 50035, "errors": {"nick": {"_errors": []}}})),
+    ({}, PUBLIC, True, (429, {"retry_after": 0})),
+    ({}, PUBLIC, False, (403, {"code": 50101})),
+    ({"personas": False}, PUBLIC, True, (403, {"code": 50101})),
+    ({}, "http://localhost:8000", True, (403, {"code": 50101})),
+])
+def test_discord_does_not_retry_unrelated_errors_or_when_webhook_fallback_is_disabled(discord, settings, public_url, opt_in, failure):
+    with discord(settings=settings, public_url=public_url) as (core, client, block, api):
+        api.guild_avatar_error = failure
+        icon = core.find_avatar("swb.png").read_bytes()
+        with pytest.raises(BlockError, match=f"Discord REST returned HTTP {failure[0]}"):
+            client.portal.call(partial(block.update_bot_identity, "Product", icon, space="home", allow_webhook_fallback=opt_in))
+        assert len([call for call in api.calls if call[0] == "PATCH"]) == 1
 
 
 @pytest.mark.parametrize(("file", "patches", "error"), [

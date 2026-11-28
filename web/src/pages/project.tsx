@@ -273,8 +273,8 @@ function ProjectModes({ slug }: { slug: string }) {
   if (result.isPending) return <DataState kind="loading" />
   if (result.isError) return <DataState kind="error" message="Channel modes unavailable" onRetry={() => void result.refetch()} />
   const rows = result.data?.spaces.filter(row => row.project === slug) ?? []
-  if (!result.data || rows.length === 0) return <DataState kind="empty" message="Channels appear here when assigned to this project." />
-  return <ChannelModeTable label="Channel modes" rows={rows} status={result.data} />
+  if (!result.data || rows.length === 0) return <DataState kind="empty" message="Channels 0" />
+  return <ChannelModeTable key={slug} label="Channel modes" rows={rows} status={result.data} />
 }
 
 export function ProjectPage() {

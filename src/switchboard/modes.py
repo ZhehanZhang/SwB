@@ -199,12 +199,16 @@ class ChannelModes:
         return {**(slack or {}), **((cfg.get("spaces") or {}).get(space) or {})}
 
     def _override(self, block: str, space: str, *channels: str) -> Mode | None:
+        entry = self._override_entry(block, space, *channels)
+        return entry[1] if entry is not None else None
+
+    def _override_entry(self, block: str, space: str, *channels: str) -> tuple[str, Mode] | None:
         for channel in dict.fromkeys(channels):
             row = self.core.store.one("SELECT mode, actions, project, target FROM space_modes WHERE block = ? AND space = ? AND channel = ?",
                                       (block, space, channel))
             if row is not None:
                 actions = json.loads(row["actions"])
-                return Mode(row["mode"], tuple(actions) if actions is not None else None, row["project"], row["target"])
+                return channel, Mode(row["mode"], tuple(actions) if actions is not None else None, row["project"], row["target"])
         return None
 
     def _legacy(self, block: str, space: str, channels: tuple[str, ...]) -> Mode | None:
@@ -252,7 +256,8 @@ class ChannelModes:
 
     def policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
-        return self._policy(block, space, channel, project, parent=parent, name=name, include_route=include_route)[:5]
+        mode, source, actions, target, project, _ = self._policy(block, space, channel, project, parent=parent, name=name, include_route=include_route)
+        return mode, source, actions if mode == "triage" else (), target, project
 
     def _policy(self, block: str, space: str, channel: str, project: str | None = None, *, parent: str | None = None,
                 name: str | None = None, include_route: bool = True) -> tuple[str, str, tuple[str, ...], str | None, str | None, bool]:
@@ -280,10 +285,8 @@ class ChannelModes:
         project_mode = self.cfg.projects.get(project or "")
         candidates = (*zip(base, ("override", "channel", "space")), (legacy, "legacy"), (project_mode, "project"), (self.cfg.default, "default"))
         spec, source = next((s, src) for s, src in candidates if s is not None)
-        actions = ()
-        if spec.mode == "triage":
-            action_sets = (*(s.actions for s in base if s is not None), section.get("actions"), project_mode.actions if project_mode else None)
-            actions = tuple(next((a for a in action_sets if a is not None), ("reply",)))
+        action_sets = (*(s.actions for s in base if s is not None), section.get("actions"), project_mode.actions if project_mode else None)
+        actions = tuple(next((a for a in action_sets if a is not None), ("reply",)))
         target = next((s.target for s in (*base, project_mode) if s is not None and s.target), None)
         if spec.mode == "triage" and not target:
             target = self._triage_target(block, project)
@@ -396,9 +399,22 @@ class ChannelModes:
         elif use == "github" and channel in provider.missing_installations:
             problems.append(provider.missing_installations[channel])
         label = f"{space} default" if not channel and source == "override" else name or channel or space
+        override = None
+        if source == "override":
+            candidates = tuple(c for c in (channel, parent, name if channel else None, f"#{name}" if channel and name else None) if c)
+            override = self._override_entry(block, space, *candidates, "")
+            if channel and override and override[0] != channel:
+                if override[0] == parent or (
+                    not override[0] and (use != "github" or sum(
+                        placement[0] == space for repo in provider.registered_repositories() if (placement := provider.space_for(repo))
+                    ) != 1)
+                ):
+                    override = None
         return {"block": block, "space": space, "channel": channel, "name": label,
                 "kind": kind or {"telegram": "group", "github": "repo"}.get(use, "channel"), "mode": mode, "source": source,
-                "project": project, "target": target, "actions": list(actions), "digest": digest, "problems": problems}
+                "project": project, "target": target, "actions": list(actions) if mode == "triage" else [],
+                "triage_actions": list(actions), "digest": digest, "problems": problems,
+                "override_channel": override[0] if override else None}
 
     async def status_slugs(self, principal: Principal) -> dict[str, dict[str, Any]]:
         return {} if principal.is_unrestricted_owner else self.core.slug_map(await self.core.targets())
@@ -407,7 +423,7 @@ class ChannelModes:
                slugs: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         spaces, dm = [], []
         owner = principal is None or principal.is_unrestricted_owner
-        github = {"installation": {}, "checked_at": None}
+        github = {"installation": {}, "checked_at": None, "installations": []}
         for name, provider in self.core.blocks.items():
             use = provider.manifest.id
             if use not in PROVIDERS or (block is not None and block != name):
@@ -421,7 +437,8 @@ class ChannelModes:
                 mode, source = self.dm(name)
                 dm.append({"block": name, "mode": mode, "source": source})
             if use == "github" and owner:
-                github = {"installation": provider.installation, "checked_at": provider.checked_at}
+                github.update(installation=provider.installation, checked_at=provider.checked_at)
+                github["installations"].extend({"block": name, **row} for row in provider.installations.values())
         return {"schema": {"modes": list(MODES), "dm_modes": list(DM_MODES), "actions": list(ACTIONS), "default": self.cfg.default.mode},
                 "spaces": spaces, "dm": dm, "github": github}
 
@@ -465,7 +482,8 @@ class ChannelModes:
                     await provider.refresh_installation()
 
     async def set(self, principal: Principal, block: str, space: str, mode: str, channel: str = "",
-                  actions: list[str] | None = None, project: str | None = None, target: str | None = None) -> dict[str, Any]:
+                  actions: list[str] | None = None, project: str | None = None, target: str | None = None, *,
+                  preserve_actions: bool = False, preserve_project: bool = False) -> dict[str, Any]:
         if not principal.is_unrestricted_owner and not (
             principal.kind == "owner_session" and principal.trust == "owner"
             and principal.scopes is None and principal.tools is None and principal.targets is None
@@ -508,9 +526,12 @@ class ChannelModes:
             self.core.store.x("DELETE FROM space_modes WHERE block = ? AND space = ? AND channel = ?", (block, space, channel))
         else:
             self.core.store.x("INSERT INTO space_modes(block, space, channel, mode, actions, project, target, updated_at, updated_by) VALUES (?,?,?,?,?,?,?,?,?) "
-                              "ON CONFLICT(block, space, channel) DO UPDATE SET mode=excluded.mode, actions=excluded.actions, project=excluded.project, "
+                              "ON CONFLICT(block, space, channel) DO UPDATE SET mode=excluded.mode, "
+                              "actions=CASE WHEN ? THEN space_modes.actions ELSE excluded.actions END, "
+                              "project=CASE WHEN ? THEN space_modes.project ELSE excluded.project END, "
                               "target=COALESCE(excluded.target, space_modes.target), updated_at=excluded.updated_at, updated_by=excluded.updated_by",
-                              (block, space, channel, mode, dumps(actions), project, target, self.core.clock(), principal.source))
+                              (block, space, channel, mode, dumps(actions), project, target, self.core.clock(), principal.source,
+                               preserve_actions, preserve_project))
         self.core.audit.record(origin=principal.origin, source=principal.source, client=principal.client_id, destination=block, action="modes.set",
                                outcome="ok", target=f"{space}/{channel}", detail=mode)
         return self.row(block, space, response_channel, *inventory.get((space, response_channel), (None, None, None)))

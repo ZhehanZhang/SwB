@@ -167,7 +167,9 @@ async def pairing_memory_remove(request: Request) -> JSONResponse:
 async def routine_remove(request: Request) -> JSONResponse:
     core = request.app.state.core
     name = request.path_params["name"]
-    block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"), None)
+    selected = request.query_params.get("block")
+    block = next((b for b in core.blocks.values() if b.manifest.id == "claude-routine"
+                  and (selected is None or b.name == selected)), None)
     try:
         removed = block.remove(name) if block else False
     except BlockError:
@@ -214,7 +216,9 @@ async def modes(request: Request) -> JSONResponse:
     if body is None:
         return _error("invalid_request")
     try:
-        row = await service.set(_owner(request), **body.model_dump())
+        row = await service.set(_owner(request), **body.model_dump(),
+                                preserve_actions="actions" not in body.model_fields_set,
+                                preserve_project="project" not in body.model_fields_set)
     except ValueError:
         return _error("mode_not_saved")
     return JSONResponse({"space": row})

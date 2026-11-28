@@ -245,6 +245,7 @@ test("Connections shows companion devices and supports pairing and disconnecting
   await expect(pairingCode).toHaveCount(0)
 
   await mac.getByRole("button", { name: "Disconnect Studio Mac" }).click()
+  await page.getByRole("alertdialog", { name: "Disconnect Studio Mac?" }).getByRole("button", { name: "Disconnect", exact: true }).click()
   await expect(mac).toHaveCount(0)
   await expect(laptop).toBeVisible()
 })
