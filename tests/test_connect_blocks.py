@@ -21,8 +21,12 @@ def connect(client, what, *, project=None, choose=None):
 
 
 @pytest.mark.parametrize("paired", [False, True], ids=["owner", "paired"])
-def test_cloudflare_connect_returns_manual_setup(make, monkeypatch, paired):
-    core, client = make(config=base_config(version=2, blocks={"mcp": {}}))
+@pytest.mark.parametrize("public_url", [None, "https://swb.example.com"])
+def test_cloudflare_connect_returns_manual_setup(make, monkeypatch, paired, public_url):
+    cfg = base_config(version=2, blocks={"mcp": {}}, public_url=public_url)
+    if public_url:
+        cfg["public_url_aliases"] = ["https://alias.example.com"]
+    core, client = make(config=cfg)
     key = STATIC_KEY
     if paired:
         pairing = core.connections.mint(agent="fixture-agent", project=None, client=None, by="owner")
@@ -35,8 +39,11 @@ def test_cloudflare_connect_returns_manual_setup(make, monkeypatch, paired):
 
     result = payload(call(client, key, "connect", {"what": " Cloudflare "}))
 
+    link = "https://swb.one/docs/setup/cloudflare"
+    if public_url:
+        link += "#swb=https%3A%2F%2Fswb.example.com"
     assert result == {"what": "cloudflare", "complete": False, "done": [], "next": [{
-        "by": "person", "do": "Follow the Cloudflare setup guide.", "link": "https://swb.one/docs/setup/cloudflare",
+        "by": "person", "do": "Follow the Cloudflare setup guide.", "link": link,
     }]}
     assert not core.routes.list()
     assert not core.store.q("SELECT * FROM secrets")

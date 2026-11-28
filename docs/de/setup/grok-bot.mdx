@@ -1,0 +1,84 @@
+---
+title: Grok Bot
+description: Verbinden Sie Grok Bot mit SwB über einen Custom Connector und eine Routine, die SwB weckt.
+---
+
+Grok Bot ist die Desktop-Agenten-App von xAI. Eine Routine ist eine gespeicherte Aufgabe. Diese Verbindung nutzt einen Webhook, eine Webadresse, die SwB aufruft, um die Routine zu starten.
+
+## Voraussetzungen
+
+Installieren Sie [Grok Bot](https://x.ai/bot) auf einem unterstützten Computer. Melden Sie sich mit einem Plan an, der Grok Bot enthält.
+
+Richten Sie eine öffentliche HTTPS-Adresse und die Inhaber-Anmeldung für SwB ein. Aktivieren Sie den Block `grok-routine`. Wählen Sie ein SwB-Projekt aus. Mit OAuth geben Sie den Zugriff in Ihrem Browser frei.
+
+## Einrichtungsprompt kopieren
+
+<SetupPrompt name="grok-bot" lang="de" />
+
+Fügen Sie den Prompt in Ihren Bot-Chat ein, nachdem Sie SwB hinzugefügt haben.
+
+## Grok Bot verbinden
+
+### Bot erstellen
+
+Verwenden Sie den Bot aus dem Onboarding oder wählen Sie in der Seitenleiste über **+** die Option **New Bot**. Geben Sie einen Namen ein. Wählen Sie **Create** aus.
+
+### Connect apps öffnen
+
+Öffnen Sie in der Seitenleiste **Connect apps**. Wählen Sie **Add a custom connector** aus.
+
+### Adresse eingeben
+
+Geben Sie `SwB` in **Name** ein. Wählen Sie unter **Type** die Option **Remote HTTPS** aus. Geben Sie `https://swb.example.com/mcp` in **Server URL** ein. Wählen Sie **Add plugin** aus.
+
+### Anmelden
+
+Lassen Sie die optionalen Felder für den OAuth-Client leer. Wenn Grok Bot die Anmeldung bei SwB öffnet, melden Sie sich als Inhaber an. Geben Sie den Zugriff frei. {/* unverified */}
+
+### Routine öffnen
+
+Öffnen Sie die Routine unter **Details** in Ihrem Bot-Chat. Prüfen Sie den Trigger **Webhook**.
+
+### Webhook-URL speichern
+
+Öffnen Sie den Claim-Link für die Webhook-Adresse. Kopieren Sie **POST to** aus der Routine. Fügen Sie den Wert in **Webhook URL** ein. Wählen Sie **Save webhook url** aus.
+
+### Schlüssel speichern
+
+Öffnen Sie den Claim-Link für den Webhook-Schlüssel. Kopieren Sie **key** aus der Routine. Fügen Sie den Wert in **Token** ein. Wählen Sie **Save token** aus.
+
+### Grok Bot Bescheid geben
+
+Schreiben Sie im Bot-Chat, dass Sie fertig sind. Grok Bot testet danach die Routine.
+
+## Das macht der Agent
+
+Lassen Sie einen Agenten mit Inhaberzugriff `connect(what="grok-bot")` aufrufen. SwB gibt die MCP-Adresse, den OAuth-Status und einen Prompt für die Routine zurück. Über das Webhook-Feld `trust` sagt der Prompt der Routine, auf welche Anfragen sie reagieren darf. Die Routine antwortet mit `reply`.
+
+Bitten Sie Grok Bot, die Routine mit dem Prompt zu erstellen. Registrieren Sie sie in Ihrem Inhaber-Client mit `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB erstellt getrennte Claim-Links für die Adresse und den Schlüssel. Wenn Sie beide gespeichert haben, führen Sie den Aufruf `send` aus, den `connect` zurückgibt.
+
+Wenn Sie an die Routine senden, ruft SwB ihren Webhook auf und startet sie.
+
+## Zugangsdaten
+
+| Token | Wo es angezeigt wird | Format | Wohin es gehört |
+| - | - | - | - |
+| Webhook-URL | **POST to** unter **Webhook** in den **Details** der Routine | HTTPS-Adresse | **Webhook URL** auf ihrem Claim-Link von SwB |
+| Webhook-Schlüssel | **key** unter **Webhook** in den **Details** der Routine | Zufälliger Text | **Token** auf seinem Claim-Link von SwB |
+| Anmeldetoken für SwB | Grok Bot erhält es bei der Anmeldung | Zufälliger Text | Grok Bot speichert es für Sie |
+
+Ein Claim-Link ist eine private Einmal-Seite von SwB für ein Token. Fügen Sie jeden Wert nur dort ein.
+
+## Verbindung prüfen
+
+Öffnen Sie die **Details** der Routine. Prüfen Sie den Trigger **Webhook**. Rufen Sie `connect(what="grok-bot")` erneut in Ihrem Inhaber-Client auf. Die Statuszeile nennt die Routine. Prüfen Sie `inbox` im sendenden Client auf die Testantwort.
+
+## Probleme beheben
+
+Wenn die OAuth-Anmeldung fehlschlägt, registrieren Sie die Routine mit einem anderen Inhaber-Client von SwB. Wenn der Connector einen Bearer-Schlüssel akzeptiert, verwenden Sie [einen gekoppelten Schlüssel](/de/docs/setup/mcp-client#client-koppeln).
+
+Kopieren Sie den Wert **key**. Mit dem Standard-Header ergänzt SwB `Authorization: Bearer`.
+
+Mit `grok-routine:routine:<routine>` starten Sie die Routine. Mit `agent:grok` senden Sie an das Postfach von Grok.
+
+Claim-Links gelten einmalig und laufen nach 30 Minuten ab. Für einen neuen Link rufen Sie `connect` erneut auf. Um einen gespeicherten Wert zu ändern, rufen Sie `connect` auf und setzen `choose.replace` auf `url` oder `secret`.

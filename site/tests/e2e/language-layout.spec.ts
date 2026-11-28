@@ -7,7 +7,7 @@ test('the language dropdown shows native names and saves the selection', async (
   await expect(trigger.locator('svg.lucide-languages')).toHaveCount(1);
   await trigger.click();
   const menu = page.getByRole('dialog');
-  for (const name of ['English', '简体中文', '繁體中文']) {
+  for (const name of ['English', '简体中文', '繁體中文', 'Español', 'Français', 'Deutsch', '한국어', '日本語']) {
     await expect(menu.getByRole('button', { name, exact: true })).toBeVisible();
   }
   await menu.getByRole('button', { name: '繁體中文', exact: true }).click();
@@ -29,7 +29,7 @@ test('the language dropdown shows native names and saves the selection', async (
 });
 
 test('localized shared navigation fits at 390px, 1024px and 1440px', async ({ page }) => {
-  for (const path of ['/', '/zh-Hans', '/zh-Hant']) {
+  for (const path of ['/', '/zh-Hans', '/zh-Hant', '/es', '/fr', '/de', '/ko', '/ja']) {
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(path);
@@ -41,7 +41,7 @@ test('localized shared navigation fits at 390px, 1024px and 1440px', async ({ pa
       expect(entries.every(Boolean), `${path} at ${width}px`).toBe(true);
       await page.locator('[data-header-item="language"]').click();
       const options = page.getByRole('dialog').getByRole('button');
-      await expect(options).toHaveCount(3);
+      await expect(options).toHaveCount(8);
       for (const option of await options.all()) {
         expect(await option.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
       }

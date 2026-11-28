@@ -371,6 +371,7 @@
 }
 .swb-hero-copy { container-type: inline-size; }
 .swb-hero-title { font-size: clamp(1.75rem, 8.4cqw, 3.625rem); line-height: 1.07; }
+.swb-hero-title:is(:lang(de), :lang(fr), :lang(es)) { font-size: clamp(1.5rem, 7.4cqw, 3.625rem); }
 .swb-hero-title:lang(zh) { font-size: clamp(1.5rem, 7.8cqw, 3.625rem); font-feature-settings: "halt"; }
 .swb-hero-title:lang(zh-Hans) { font-family: var(--font-inter-tight), "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
 .swb-hero-title:lang(zh-Hant) { font-family: var(--font-inter-tight), "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }

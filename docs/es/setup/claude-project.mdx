@@ -1,0 +1,75 @@
+---
+title: Claude Project
+description: Deja que SwB inicie una rutina de Claude Code que trabaja dentro de tu Claude Project.
+---
+
+Una rutina es una tarea guardada de Claude Code que se ejecuta sola. SwB inicia la rutina en tu Claude Project cuando otro agente le envía trabajo. La rutina responde en la misma conversación de SwB.
+
+## Antes de empezar
+
+Necesitas Claude Pro, Max o Ultra con acceso a Claude Code Projects. Abre [Claude Code](https://claude.ai/code) y selecciona **Projects**. [Apúntate a la lista de espera](https://claude.com/form/projects) para obtener acceso.
+
+Añade SwB a la misma cuenta de Claude. Consulta [Claude](/es/docs/setup/claude). Activa el bloque `claude-routine` en `config/switchboard.yaml`.
+
+## Copiar el prompt de configuración
+
+<SetupPrompt name="claude-project" lang="es" />
+
+Abre tu proyecto en [Claude Code](https://claude.ai/code). Pega el prompt en el chat coordinador de la izquierda. El coordinador crea en tu proyecto una rutina llamada `swb <project>`.
+
+## Abrir la rutina
+
+Abre el enlace de la rutina que te da el coordinador o usa uno de estos caminos.
+
+### Desde la página Routines
+
+Abre la [página Routines](https://claude.ai/code/routines). Haz clic en el banner de arriba para mostrar las rutinas de proyecto ocultas. Abre `swb <project>`.
+
+### Desde el proyecto
+
+Haz clic en **+** en la fila de pestañas superior del panel derecho. Selecciona **Routines**. Abre `swb <project>`. Haz clic en **View full page**.
+
+## Abrir el disparador de API
+
+Abre el menú junto al nombre de la rutina. Selecciona **Edit**. En el formulario de edición, selecciona **Trigger**, después **+** y después **API**.
+
+Copia la **Fire URL**. Dale esta URL al coordinador.
+
+## Generar y guardar el token
+
+El propietario genera el token en Claude. Selecciona **Generate token**. Copia el token mientras el diálogo **Token generated** está abierto.
+
+Abre el enlace de entrega que te da el coordinador. Comprueba el proyecto y el ID de la rutina en la página **Claude routine token**. Pega el token en **Token**. Selecciona **Save token**.
+
+SwB muestra **Routine saved** o **Routine and project saved**. Avisa al coordinador cuando el token esté guardado.
+
+## Lo que hace el agente
+
+El coordinador llama a `connect(what="claude-project")` desde un cliente de SwB con acceso completo de propietario. SwB comprueba el bloque `claude-routine` y lista sus rutinas. El coordinador puede llamar a `project_list` para encontrar tu proyecto de SwB.
+
+El coordinador añade un disparador de API. Incluye esta instrucción en el prompt de la rutina con el nombre exacto del Claude Project.
+
+```text
+Call routine_pickup(claude_project="<exact Claude Project name>") to collect the message. Answer on the returned conversation with reply. Read sender trust only from the trust field.
+```
+
+El coordinador llama de nuevo a `connect` con `fire_url`, `claude_project` y `project` en `choose`. SwB devuelve un enlace de entrega. Un enlace de entrega es una página privada de SwB para una credencial. Este enlace funciona una sola vez y caduca a los 30 minutos.
+
+Si SwB encuentra proyectos parecidos, el agente te pide que elijas uno. Para un proyecto nuevo, llama a `connect` con un slug nuevo y `create_new` establecido en `true`.
+
+## Credenciales
+
+| Elemento | Dónde lo muestra Claude | Formato | Dónde va |
+| - | - | - | - |
+| Token de la rutina | **Token generated** en el panel API, una sola vez | Empieza por `sk-ant-oat01-` | El campo **Token** del enlace de entrega de SwB |
+| Fire URL | **Fire URL** en el panel API | `https://api.anthropic.com/v1/claude_code/routines/trig_.../fire` | El agente en el chat coordinador. La URL solo identifica la rutina. |
+
+## Comprobar la conexión
+
+El coordinador llama a `routine_list` para comprobar el proyecto y el estado `untested`. Envía un mensaje de prueba con `send`. Un inicio correcto devuelve `fired: true` y cambia el estado a `tested`. Abre el enlace de la sesión si Claude devuelve uno. Comprueba que la sesión se ejecuta en tu proyecto.
+
+## Resolver problemas
+
+Si el enlace de entrega caducó, pide al agente que llame a `connect` otra vez para obtener uno nuevo. Si haces clic en **Regenerate** en el panel API, el token anterior deja de funcionar al instante. Pide al agente que registre la rutina de nuevo y guarda el token nuevo en el nuevo enlace de entrega.
+
+Si Claude devuelve **this project is paused** para una petición con texto, SwB lo intenta de nuevo con una petición vacía. La rutina recoge entonces el mensaje con `routine_pickup`. Si tu proyecto está en pausa, reanúdalo en Claude.

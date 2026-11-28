@@ -1,0 +1,84 @@
+---
+title: Grok Bot
+description: Conecta Grok Bot a SwB con un conector personalizado y una rutina que SwB despierta.
+---
+
+Grok Bot es la app de agente de escritorio de xAI. Una rutina es una tarea guardada. Esta conexión usa un webhook, una dirección web a la que SwB llama para iniciar la rutina.
+
+## Antes de empezar
+
+Instala [Grok Bot](https://x.ai/bot) en un ordenador compatible. Inicia sesión con un plan que incluya Grok Bot.
+
+Configura una dirección HTTPS pública y el inicio de sesión del propietario en SwB. Activa el bloque `grok-routine`. Elige un proyecto de SwB. Con OAuth, apruebas el acceso en tu navegador.
+
+## Copiar el prompt de configuración
+
+<SetupPrompt name="grok-bot" lang="es" />
+
+Pega el prompt en el chat de tu Bot después de añadir SwB.
+
+## Conectar Grok Bot
+
+### Crear un Bot
+
+Usa el Bot de la configuración inicial, o selecciona **New Bot** con **+** en la barra lateral. Escribe un nombre. Selecciona **Create**.
+
+### Abrir Connect apps
+
+En la barra lateral, abre **Connect apps**. Selecciona **Add a custom connector**.
+
+### Escribir la dirección
+
+Escribe `SwB` en **Name**. Selecciona **Remote HTTPS** en **Type**. Escribe `https://swb.example.com/mcp` en **Server URL**. Selecciona **Add plugin**.
+
+### Iniciar sesión
+
+Deja vacíos los campos opcionales del cliente OAuth. Si Grok Bot abre el inicio de sesión de SwB, inicia sesión como propietario. Aprueba el acceso. {/* unverified */}
+
+### Abrir la rutina
+
+Abre la rutina en **Details** dentro del chat de tu Bot. Comprueba el disparador **Webhook**.
+
+### Guardar la URL del webhook
+
+Abre el enlace de entrega de la dirección del webhook. Copia **POST to** de la rutina. Pégalo en **Webhook URL**. Selecciona **Save webhook url**.
+
+### Guardar la clave
+
+Abre el enlace de entrega de la clave del webhook. Copia **key** de la rutina. Pégala en **Token**. Selecciona **Save token**.
+
+### Avisar a Grok Bot
+
+Escribe que has terminado en el chat del Bot. Grok Bot prueba entonces la rutina.
+
+## Lo que hace el agente
+
+Usa un agente con acceso de propietario para llamar a `connect(what="grok-bot")`. SwB devuelve la dirección MCP, el estado de OAuth y un prompt para la rutina. El prompt usa el campo `trust` del webhook para indicar a la rutina en qué peticiones puede actuar. La rutina responde con `reply`.
+
+Pide a Grok Bot que cree la rutina con el prompt. En tu cliente de propietario, regístrala con `connect(what="grok-bot", choose={"name":"<routine>","project":"<project>","auth":"key"})`. SwB crea enlaces de entrega distintos para la dirección y para la clave. Cuando guardes los dos, ejecuta la llamada `send` que devuelve `connect`.
+
+Cuando envías un mensaje a la rutina, SwB llama a su webhook para iniciarla.
+
+## Credenciales
+
+| Token | Dónde aparece | Formato | Dónde va |
+| - | - | - | - |
+| URL del webhook | **POST to** en **Webhook**, dentro de **Details** de la rutina | Dirección HTTPS | **Webhook URL** en su enlace de entrega de SwB |
+| Clave del webhook | **key** en **Webhook**, dentro de **Details** de la rutina | Texto aleatorio | **Token** en su enlace de entrega de SwB |
+| Token de inicio de sesión de SwB | Grok Bot lo recibe cuando inicias sesión | Texto aleatorio | Grok Bot lo guarda por ti |
+
+Un enlace de entrega es una página privada de SwB, de un solo uso, para un token. Pega cada valor solo allí.
+
+## Comprobar la conexión
+
+Abre **Details** de la rutina. Comprueba el disparador **Webhook**. Llama de nuevo a `connect(what="grok-bot")` desde tu cliente de propietario. La línea de estado muestra el nombre de la rutina. Comprueba `inbox` en el cliente que envía para ver la respuesta de prueba.
+
+## Resolver problemas
+
+Si falla el inicio de sesión OAuth, usa otro cliente de propietario de SwB para registrar la rutina. Si el conector acepta una clave bearer, usa [una clave emparejada](/es/docs/setup/mcp-client#emparejar-un-cliente).
+
+Copia el valor de **key**. Con la cabecera predeterminada, SwB añade `Authorization: Bearer`.
+
+Usa `grok-routine:routine:<routine>` para iniciar la rutina. Usa `agent:grok` para enviar al buzón de Grok.
+
+Los enlaces de entrega funcionan una sola vez y caducan a los 30 minutos. Para obtener un enlace nuevo, llama a `connect` otra vez. Para cambiar un valor guardado, llama a `connect` con `choose.replace` establecido en `url` o `secret`.

@@ -1,0 +1,93 @@
+---
+title: 설치
+description: uvx, pipx 또는 Docker로 SwB을 설치합니다.
+---
+
+{/* prepublication */}
+
+SwB은 Linux, macOS, Windows에서 실행됩니다. 소스에서 SwB을 빌드하려면 [Docker Compose](/ko/docs/self-hosting#docker-compose)를 따르세요. 아래 방법은 패키지나 이미지가 공개된 뒤에 사용하세요.
+
+## 설치와 시작
+
+SwB 파일을 둘 빈 폴더를 준비하세요. 소유자 키를 쓰면 `swb` 명령이 나 대신 로그인합니다.
+
+<Tabs items={['uvx', 'pipx', 'Docker']}>
+  <Tab value="uvx">
+    [uv를 설치하세요](https://docs.astral.sh/uv/getting-started/installation/). SwB에는 Python 3.12 이상이 필요합니다.
+
+    ```bash
+    uvx swb-one up
+    ```
+
+    uvx가 SwB을 내려받아 시작합니다. 터미널에 나온 일회용 로그인 링크를 5분 안에 여세요. 다른 예제에서는 맨 앞의 `swb`를 `uvx swb-one`으로 바꾸세요.
+  </Tab>
+  <Tab value="pipx">
+    [pipx를 설치하세요](https://pipx.pypa.io/stable/how-to/install-pipx.html). SwB에는 Python 3.12 이상이 필요합니다.
+
+    ```bash
+    pipx install swb-one
+    swb up
+    ```
+
+    pipx가 사용자 계정에 `swb` 명령을 설치합니다. 터미널에 나온 일회용 로그인 링크를 5분 안에 여세요.
+
+    pipx가 이전 버전의 Python을 쓰면 `pipx install --python 3.12 swb-one`을 사용하세요.
+  </Tab>
+  <Tab value="Docker">
+    [Docker를 설치하세요](https://docs.docker.com/get-started/get-docker/).
+
+    ```bash
+    (umask 077; set -C; printf 'SWB_KEY_OWNER=%s\nSWB_PUBLIC_URL=http://localhost:8870\n' "$(openssl rand -hex 32)" > .env)
+    docker run -d --name swb --env-file .env \
+      -p 127.0.0.1:8870:8000 -v swb-data:/data \
+      ghcr.io/zhehanzhang/swb:latest
+    ```
+
+    이 명령은 비공개 `.env` 파일을 만들고 컨테이너를 시작합니다. 이미지는 데이터를 `/data`에 보관합니다. 로그인 링크를 받으려면 `docker exec swb swb login-link`를 실행하세요. 컨테이너 안에서 다른 SwB 명령을 실행하려면 명령 앞에 `docker exec -it swb swb`를 붙이세요.
+  </Tab>
+</Tabs>
+
+로컬에서 처음 시작하면 `swb up`이 인스턴스 폴더에 `.env`, `config/switchboard.yaml`, `data/`를 만듭니다. 나중에 새 링크가 필요하면 `swb login-link`를 실행하세요.
+
+서버를 시작하기 전에 파일을 만들려면 `swb init`을 실행하세요. 그다음 `swb up`을 실행하세요. 같은 폴더의 두 번째 터미널에서 `swb login-link`를 실행하세요.
+
+`swb up`은 기본적으로 `127.0.0.1`의 `8870` 포트에서 연결을 기다립니다. 기본 로컬 MCP 주소는 `http://localhost:8870/mcp`입니다. 다른 포트를 쓰려면 셸이나 `.env`에 `SWB_PORT`를 설정하세요.
+
+인스턴스 폴더를 고르려면 `swb up --dir ./my-swb`를 사용하세요. `swb init`, `swb status`, `swb login-link`, `swb connect`, `swb claim`에도 같은 `--dir`를 사용하세요. 바인드 주소, 설정 파일, 데이터 폴더는 [설정 파일](/ko/docs/config)을 참고하세요.
+
+## 서버 확인
+
+```bash
+curl -fsS http://127.0.0.1:8870/healthz
+```
+
+로그인 전의 이 요청은 `status`와 `version`을 보여 줍니다. 블록 목록, 블록 상태, 빠진 변수를 보려면 `swb status`를 실행하세요. 소유자 키로 `/healthz`를 호출해도 됩니다.
+
+## 서버 명령어
+
+명령 그룹을 보려면 `swb --help`를 실행하세요. 명령의 옵션을 보려면 그 명령에 `--help`를 붙이세요.
+
+| 명령어 | 용도 |
+| - | - |
+| `swb init` | 비공개 소유자 키와 최소 설정 파일을 만듭니다. |
+| `swb up` | 이 컴퓨터에서 SwB을 시작합니다. |
+| `swb connect PLATFORM` | 플랫폼 연결 단계를 안내받습니다. |
+| `swb companion` | 컴패니언을 페어링하거나 실행하거나 연결 해제합니다. |
+| `swb hook HARNESS` | 로컬 에이전트 이벤트를 컴패니언으로 전달합니다. |
+| `swb status` | 상태와 다음 단계를 보여 줍니다. |
+| `swb login-link` | 일회용 소유자 로그인 링크를 만듭니다. |
+| `swb claim` | 등록 링크나 코드로 받은 자격 증명을 저장합니다. |
+| `swb serve` | 설정된 호스트와 포트로 서버를 실행합니다. |
+| `swb export DIR` | 저장된 메모리를 출력 폴더 `DIR`에 Markdown 파일로 저장합니다. |
+| `swb log [--limit N]` | 최근 감사 항목을 출력합니다. 기본 한도는 `50`입니다. |
+| `swb config migrate` | 버전 1 설정을 버전 2 형식으로 출력합니다. |
+| `swb blocks list` | 설정된 블록을 나열합니다. |
+| `swb blocks show BLOCK` | 블록 하나의 설정을 보여 줍니다. |
+| `swb blocks check` | 블록 설정을 점검합니다. |
+| `swb targets` | `send`로 보낼 수 있는 대상을 나열합니다. |
+
+## 버전
+
+{/* prepublication */}
+
+공개 후에는 PyPI가 `swb-one` 패키지를 제공합니다. GitHub Container Registry는 `ghcr.io/zhehanzhang/swb` 이미지를 제공합니다. 특정 릴리스를 고르려면 `1.0.0` 같은 버전을 지정하세요. 이미지 태그 `latest`는 가장 최근의 안정 릴리스를 따릅니다.

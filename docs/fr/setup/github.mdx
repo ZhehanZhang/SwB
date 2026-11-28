@@ -1,0 +1,133 @@
+---
+title: GitHub
+description: Envoyez les événements GitHub à SwB et laissez les agents agir sur les tickets et les pull requests.
+---
+
+SwB reçoit les événements des dépôts grâce à une GitHub App. Un événement signale une action effectuée dans GitHub. Avec la clé privée de l'application, les agents peuvent aussi étiqueter, commenter et ouvrir des tickets.
+
+## Avant de commencer
+
+Utilisez un compte GitHub autorisé à créer une application et à l'installer sur les dépôts à connecter. Connectez-vous à SwB en tant que propriétaire.
+
+GitHub doit pouvoir joindre `https://swb.example.com/github/webhook` sur votre serveur.
+
+## Copier le prompt de configuration
+
+<SetupPrompt name="github" lang="fr" />
+
+Collez le prompt dans votre client propriétaire SwB.
+
+## Configurer la GitHub App
+
+### Ouvrir les paramètres de la GitHub App
+
+Cliquez sur votre photo de profil → **Settings** → **Developer settings** → **GitHub Apps**. Cliquez sur **New GitHub App**.
+### Nommer l'application
+
+Saisissez un **GitHub App name** et une **Homepage URL**. L'adresse de votre dépôt convient bien comme page d'accueil.
+### Définir le webhook
+
+Gardez **Active** coché sous **Webhook**. Un webhook est une adresse web où GitHub envoie les événements. Saisissez votre adresse SwB suivie de `/github/webhook` dans **Webhook URL**.
+### Définir le secret du webhook
+
+Générez un secret dans un fichier privé.
+
+```bash
+(umask 077; set -C; openssl rand -hex 32 > "$HOME/.swb-github-secret")
+```
+
+Enregistrez le secret dans votre gestionnaire de mots de passe. Saisissez-le dans **Webhook secret**. SwB accepte les secrets de 16 caractères ou plus.
+### Définir les autorisations
+
+Sous **Repository permissions**, appliquez les niveaux d'accès du tableau.
+### S'abonner aux événements
+
+Sous **Subscribe to events**, cochez les événements du tableau ci-dessous.
+
+### Créer l'application
+
+Sous **Where can this GitHub App be installed?**, sélectionnez **Only on this account**. Cliquez sur **Create GitHub App**.
+### Créer la clé privée
+
+Sous **Private keys**, sélectionnez **Generate a private key**. Gardez le fichier `.pem` téléchargé en lieu sûr.
+
+### Enregistrer les identifiants
+
+Enregistrez le secret du webhook avec son lien de saisie SwB. Supprimez ensuite le fichier temporaire du secret. Enregistrez l'**App ID** et le fichier `.pem` avec leurs liens de saisie quand SwB les demande.
+### Installer l'application
+
+Cliquez sur **Install App** → **Install** à côté de votre compte. Sélectionnez **Only select repositories**.
+### Choisir les dépôts
+
+Choisissez vos dépôts. Cliquez sur **Install**.
+
+| Ressource du dépôt | Accès | Événements |
+| --- | --- | --- |
+| **Issues** | **Read & write** | `issues`, `issue_comment` |
+| **Pull requests** | **Read & write** | `pull_request`, `pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread` |
+| **Contents** | **Read-only** | `push` |
+| **Checks** | **Read-only** | `check_run`, `check_suite` |
+| **Actions** | **Read-only** | `workflow_run` |
+| **Metadata** | **Read-only** automatiquement | |
+
+Dans une organisation, GitHub peut afficher **Request** à la place de **Install**. Un propriétaire de l'organisation approuve alors la demande.
+
+## Ce que fait l'agent
+
+L'agent appelle `connect(what="github")`. SwB affiche l'adresse du webhook, l'état du secret et le nombre de routes de dépôt. Une route envoie les événements vers une cible.
+
+L'agent ajoute chaque dépôt sous `blocks.github.spaces` dans `config/switchboard.yaml`. Un espace définit le mode, le projet et la cible d'un dépôt. Cet exemple envoie les résumés du mode `watch` de `acme/app` à `agent:beta` dans le projet `demo`.
+
+```yaml
+blocks:
+  github:
+    use: github
+    spaces:
+      acme/app:
+        mode:
+          mode: watch
+          target: agent:beta
+        project: demo
+```
+
+Pour le mode `work`, l'agent définit `mode.mode` sur `work`. Il ajoute votre ID utilisateur GitHub numérique aux `owner_ids` de l'espace. La page [Comptes propriétaires](/fr/docs/blocks/github#comptes-propriétaires) explique comment trouver cet ID et donne un exemple.
+
+SwB vérifie les auteurs du texte des événements. Le texte d'une personne listée dans `owner_ids` peut recevoir le niveau de confiance `owner`. SwB traite les noms de branches, les refs, les titres de workflows et les noms de checks comme `external`.
+
+Un nom de check reste `external` même quand le propriétaire lance le check. Une pull request venue d'un fork peut modifier ce nom.
+
+Redémarrez SwB après l'enregistrement du secret du webhook et la mise à jour des routes.
+
+L'agent appelle de nouveau `connect(what="github")` pour obtenir les liens restants de l'App ID ou de la clé privée. Pour passer d'un jeton d'accès personnel existant à une GitHub App, il choisit `choose={"credential":"app"}`.
+
+Après le redémarrage, l'agent appelle `github_status` pour vérifier l'installation et ses autorisations.
+
+Pour le mode `triage`, appelez `space_mode(block="github", space="acme/app", mode="triage", target="agent:beta")`. Choisissez une adresse dans `targets`. Pour le mode `assist`, utilisez `mode="assist"`. En mode `triage`, `github_reply` est l'action d'écriture GitHub par défaut.
+
+Pour les expéditeurs externes, accordez l'accès à `channel:github/acme/app` et à `target:beta`. Les règles d'accès figurent dans [la visibilité des canaux](/fr/docs/channel-modes#autoriser-des-expéditeurs-github-externes).
+
+Le mode `watch` envoie un résumé à la boîte aux lettres de la cible après `modes.digest_minutes` ou dès 50 événements. En tant que propriétaire, lisez les résumés dans l'**Inbox** de la console ou avec `inbox` ou `wait`.
+
+## Identifiants
+
+| Jeton | Où GitHub l'affiche | Format | Destination |
+| --- | --- | --- | --- |
+| Secret du webhook | Vous le générez avec `openssl rand -hex 32` | 16 caractères ou plus | Lien de saisie SwB |
+| App ID | Paramètres de l'application, **App ID** | Un nombre | Lien de saisie SwB |
+| Clé privée | Téléchargée une seule fois après **Generate a private key** | Un fichier `.pem` | Lien de saisie SwB |
+
+SwB utilise la clé privée pour obtenir de GitHub des jetons d'installation. Chaque jeton d'installation reste valable une heure.
+
+Pour remplacer le secret du webhook, demandez à votre agent d'appeler `connect(what="github", choose={"replace":"secret"})`. `webhook_secret` donne le même résultat. Utilisez `all` pour remplacer aussi les identifiants de l'application ou le jeton d'accès personnel. Suivez les instructions renvoyées pour chaque valeur. Consultez [Identifiants](/fr/docs/credentials#remplacer-un-identifiant).
+
+## Vérifier la connexion
+
+Demandez à l'agent d'appeler de nouveau `connect`. Il indique `connected` une fois la configuration terminée. `github_status` affiche `secret_present` et les autorisations de l'installation.
+
+Dans GitHub, ouvrez les paramètres de l'application → **Advanced** → **Recent deliveries**. Ouvrez la livraison la plus récente et vérifiez que SwB a répondu avec un code de succès.
+
+## Résoudre les problèmes
+
+En cas d'erreur de signature, suivez [Définir le secret du webhook](#définir-le-secret-du-webhook) pour générer un nouveau secret. Saisissez-le dans les paramètres de la GitHub App. Demandez à votre agent d'appeler `connect(what="github", choose={"replace":"secret"})`. Enregistrez le même secret avec le lien de saisie. Redémarrez SwB. Renvoyez l'événement depuis **Recent deliveries**.
+
+Si `connect` demande l'accès en écriture à **Issues**, ouvrez les paramètres de l'application → **Permissions & events**. Définissez **Issues** sur **Read & write** et acceptez la modification sur l'installation.

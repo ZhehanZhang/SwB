@@ -22,6 +22,7 @@ from starlette.routing import BaseRoute, Mount
 
 from ... import __version__
 from ...auth import Principal
+from ...doc_links import rewrite_doc_links
 from ...guard import MCP_BODY_LIMIT
 from ...memory import GENERAL, MemoryError_, since_time
 from ...modes import ChannelModes
@@ -51,7 +52,7 @@ Use general for facts that apply to all projects, such as the owner's preference
 For general writes, get the owner's agreement and pass confirm_general=true.
 Read within your grants. Pass project=<slug> for a project or scopes=[...] to select exact scopes. Reads include general only when granted.
 Use the same credential that wrote an entry to update, move or delete it. The owner can manage any entry and promote it to general.
-Call connect for setup and follow its steps.
+Call connect for setup and follow its steps. Read https://swb.one/docs/get-started.
 Use send to hand off work or message an agent. The owner's route for you and the project is the default.
 For to, use a slug from targets, an agent mailbox such as agent:claude, or a block address <block>:<kind>:<id>.
 SwB keeps messages in the agent's mailbox until the agent reads them.
@@ -325,7 +326,7 @@ class MCPBlock(Block):
 
     def instructions(self) -> str:
         parts = [CORE_INSTRUCTIONS] + [b.manifest.instructions.strip() for b in self.core.blocks.values() if b.manifest.instructions]
-        return "\n".join(parts)
+        return rewrite_doc_links("\n".join(parts), self.core.cfg.public_url)
 
     def build(self) -> MCPServer:
         core = self.core

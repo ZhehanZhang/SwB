@@ -1,0 +1,59 @@
+---
+title: ChatGPT
+description: Connectez ChatGPT et les dots ChatGPT.
+---
+
+## Ajouter SwB à ChatGPT
+
+Suivez la [configuration de ChatGPT](/fr/docs/setup/chatgpt) pour ajouter SwB comme serveur MCP personnalisé. ChatGPT se connecte avec OAuth sous le nom `chatgpt`.
+
+## Recevoir les nouveaux messages
+
+MCP Events envoie une notification à l'arrivée d'un message. Si ChatGPT prend en charge MCP Events, demandez-lui de s'abonner à `switchboard.message.created` avec `mailbox_id` défini sur `chatgpt`. SwB envoie l'ID du message par webhook, c'est-à-dire par une requête vers une URL. ChatGPT lit le texte avec `get_message`. Il répond avec `reply`. ChatGPT peut aussi vérifier l'arrivée de nouveaux messages avec `wait` ou `inbox`.
+
+## Dots ChatGPT
+
+Un dot est un agent ChatGPT personnel. Le bloc `dots` trouve les dots d'un espace de travail Slack et fait de chaque dot une cible. Envoyez depuis Slack avec `@swb <dot name> <message>` ou appelez `send(to="<dot name>", task="<message>")`.
+
+Par défaut, la livraison Slack passe par le canal privé `#agents`. SwB peut créer ce canal avec votre jeton utilisateur. Dans ce canal, utilisez `/invite` pour ajouter le bot SwB et les dots. SwB renvoie la réponse du dot dans la conversation d'origine.
+
+```yaml
+blocks:
+  dots:
+    delivery: slack
+    workspace: home
+    channel: "#agents"
+    match: [dot]
+```
+
+Collez ce texte dans les instructions du dot. Remplacez les ID d'exemple par les ID de votre bot et de votre application SwB.
+
+```text
+In #agents, check the bot and app IDs on SwB posts that mention you. Use bot <BOT_ID> and app <APP_ID>. Answer matching posts in the same thread.
+```
+
+Pour une livraison directe dans la boîte aux lettres, suivez la [configuration des dots ChatGPT](/fr/docs/setup/dots). Indiquez `delivery: mailbox` et ajoutez chaque dot sous `blocks.dots.dots`.
+
+## Configuration
+
+| Clé | Usage |
+| - | - |
+| `blocks.dots` | Paramètres des envois vers les dots ChatGPT |
+| `blocks.dots.use` | Type de bloc. Indiquez `dots` |
+| `blocks.dots.enabled` | Indiquez `false` pour ignorer ce bloc |
+| `blocks.dots.delivery` | Indiquez `slack` pour Slack ou `mailbox` pour MCP Events. Valeur par défaut `slack` |
+| `blocks.dots.workspace` | Espace de travail Slack à parcourir. Par défaut, SwB prend le premier espace de travail |
+| `blocks.dots.channel` | Canal Slack privé qui transmet les messages aux dots. Valeur par défaut `#agents` |
+| `blocks.dots.create` | Indiquez `true` pour créer le canal au nom du propriétaire si besoin. Valeur par défaut `true` |
+| `blocks.dots.app_ids` | ID des applications Slack qui identifient les dots |
+| `blocks.dots.match` | Texte à chercher dans le nom des bots Slack. Valeur par défaut `[dot]` |
+| `blocks.dots.rescan_minutes` | Minutes entre deux recherches de dots Slack. Valeur par défaut `30` |
+| `blocks.dots.poll_seconds` | Secondes entre deux vérifications des réponses dans les messages directs Slack. Valeur par défaut `5` |
+| `blocks.dots.default` | Dot choisi par le nom de cible `dot`. Indiquez son nom court ou son ID |
+| `blocks.dots.dots` | Table des dots pour la livraison `mailbox`, ou paramètres propres à des dots Slack |
+| `blocks.dots.dots.*.name` | Nom affiché du dot |
+| `blocks.dots.dots.*.mailbox` | Boîte aux lettres qui reçoit les messages. Valeur par défaut `chatgpt` |
+| `blocks.dots.group_dm` | Indiquez `true` pour utiliser un message de groupe Slack entre le propriétaire, SwB et le dot |
+| `blocks.dots.owner_dm` | Indiquez `true` pour envoyer les messages publiés au nom du propriétaire dans son message direct Slack avec le dot |
+| `blocks.dots.agents_as_owner` | Indiquez `true` pour utiliser le compte Slack du propriétaire pour les envois de ses agents, en livraison par canal ou par message direct |
+| `blocks.dots.owner_posts_as` | Compte utilisé pour transférer au dot les messages Slack du propriétaire. Valeur par défaut `swb`. Indiquez `owner` pour utiliser le compte du propriétaire |

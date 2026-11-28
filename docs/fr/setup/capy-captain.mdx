@@ -1,0 +1,91 @@
+---
+title: Capy Captain
+description: Confiez du travail SwB à un Capy Captain et récupérez ses réponses.
+---
+
+Un Capy Captain est un agent Capy qui dirige un groupe de fils de discussion. SwB envoie des tâches au Captain et renvoie chaque réponse à l'expéditeur.
+
+## Avant de commencer
+
+Il vous faut un compte Capy, un projet et un Captain dans la même organisation. Un utilisateur de service est un compte Capy destiné à un logiciel.
+
+Activez le bloc `capy`. Dans Capy, ajoutez SwB sous **Settings** → **MCP & plugins**. Utilisez un client SwB doté d'un accès propriétaire complet.
+
+## Copier le prompt de configuration
+
+<SetupPrompt name="capy-captain" lang="fr" />
+
+Collez le prompt dans votre client propriétaire SwB.
+
+## Configurer la route du Captain
+
+### Ouvrir les paramètres API
+
+Dans Capy, ouvrez **Settings** → **API**. Vérifiez que la bonne organisation est ouverte.
+
+### Créer la clé de lecture
+
+Créez une clé API personnelle avec accès à votre Captain. Copiez la clé tant que Capy l'affiche.
+
+### Enregistrer la clé de lecture
+
+Ouvrez le lien de saisie fourni par votre agent. Collez la clé dans **Token**. Sélectionnez **Save token**.
+
+### Redémarrer SwB
+
+Redémarrez SwB quand votre agent le demande. SwB charge alors la clé.
+
+### Créer un Capy Captain
+
+Créez un Capy Captain si besoin. Choisissez le projet et la machine sur laquelle le Captain s'exécute.
+
+### Choisir le Capy Captain
+
+Indiquez à votre agent le Capy Captain qui reçoit le travail.
+
+### Créer la clé d'envoi
+
+Dans **Settings** → **API**, créez un utilisateur de service avec le rôle `read_write`. Donnez-lui accès au projet. Créez une clé pour cet utilisateur de service.
+
+### Partager le Capy Captain
+
+Ouvrez le menu du Capy Captain. Sélectionnez **Share**. Donnez accès à l'utilisateur de service. Pour un Captain sur un appareil appairé, donnez aussi à l'utilisateur de service l'accès à l'appareil. {/* unverified */}
+
+### Enregistrer la clé d'envoi
+
+Ouvrez le second lien de saisie. Collez la clé dans **Token**. Sélectionnez **Save token**.
+
+### Redémarrer SwB une nouvelle fois
+
+Redémarrez SwB. Prévenez ensuite votre agent que vous avez terminé.
+
+## Ce que fait l'agent
+
+Depuis un client doté d'un accès propriétaire complet, appelez `connect(what="capy-captain")`. Si SwB a besoin de la clé de lecture, il renvoie un lien de saisie. Un lien de saisie ouvre une page privée où vous saisissez un identifiant.
+
+Après le redémarrage, `connect` liste les Captains disponibles. Confirmez le Captain qui doit recevoir le travail. Appelez `connect(what="capy-captain", choose={"captain":"<Capy Captain ID>"})`. Pour une route de projet, ajoutez `"project":"<project>"` à `choose`. Une route indique à SwB où envoyer le travail.
+
+SwB demande une clé de service si l'agent en a besoin pour envoyer. Utilisez `capy_captains`, `routes_list` et `routes_resolve` pour vérifier la route.
+
+Si votre application prend en charge les événements MCP, abonnez-vous à `switchboard.message.created`. Pour lire à la demande, appelez `wait` ou `inbox`.
+
+## Identifiants
+
+| Jeton | Où il apparaît | Format | Destination |
+| - | - | - | - |
+| Clé de lecture | **Settings** → **API**, une seule fois | `capy_` suivi de 43 caractères aléatoires | **Token** sur son lien de saisie SwB |
+| Clé d'envoi | **Settings** → **API**, une seule fois | `capy_` suivi de 43 caractères aléatoires | **Token** sur son lien de saisie SwB |
+
+## Vérifier la connexion
+
+Demandez à votre agent de rappeler `connect(what="capy-captain")`. Vérifiez la présence de `connected`. Envoyez une courte tâche de test sur la route. Vérifiez que la tâche apparaît dans le fil du Captain. Lisez la réponse avec `result` ou `inbox`. En tant que propriétaire, consultez `/healthz` pour vérifier le nom et l'état de la clé d'envoi configurée.
+
+## Résoudre les problèmes
+
+Une clé Capy reprend les autorisations de son compte. Si `connect` demande une nouvelle clé de lecture, créez-en une avec accès au Captain.
+
+Si un envoi échoue avec une erreur d'accès, vérifiez l'accès de l'utilisateur de service au projet, au Captain et à l'appareil appairé.
+
+Une valeur de l'environnement du serveur l'emporte sur une valeur enregistrée par un lien de saisie. Modifiez-la dans l'environnement du serveur et redémarrez SwB.
+
+Pour remplacer une clé perdue, révoquez-la dans **Settings** → **API**. Créez une nouvelle clé. Chaque lien de saisie sert une seule fois et expire après 30 minutes.

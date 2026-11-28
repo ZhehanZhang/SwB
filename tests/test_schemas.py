@@ -85,6 +85,7 @@ def test_initialize_advertises_swb_and_enabled_block_instructions(make, capy_ena
     assert (info["name"], info["title"], info["version"]) == ("swb", "SwB", version("swb-one"))
     instructions = r["result"]["instructions"]
     assert instructions.startswith("SwB is a shared workspace")
+    assert "Read https://swb.one/docs/get-started#swb=https%3A%2F%2Fswitchboard.example.test." in instructions
     assert re.search(r"\b(switchboard|he|him|his)\b", instructions, re.IGNORECASE) is None
     assert ("capy" in instructions.lower()) == capy_enabled
     assert ("Slack" in instructions) == slack_enabled

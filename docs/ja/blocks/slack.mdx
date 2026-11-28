@@ -1,0 +1,129 @@
+---
+title: Slack
+description: Slack のメッセージをエージェントにルーティングし、回答をスレッドに投稿します。
+---
+
+## Slack アプリを作成する
+
+[Slack のセットアップ](/ja/docs/setup/slack#アプリマニフェスト)を開いてください。両方のアカウント用か、ユーザーアカウント用のマニフェストを選んでください。マニフェストとは、Slack アプリの設定を書いたファイルです。
+
+ワークスペースにアプリをインストールしてください。Slack の接続をエージェントに頼むか、`swb connect slack` を実行してください。受け取りリンクで、ワークスペースのトークンを保存してください。保存したトークンを読み込むために、SwB を再起動してください。
+
+| トークン | 確認する場所 |
+| - | - |
+| ボットトークン、`xoxb-` | OAuth & Permissions → Bot User OAuth Token |
+| ユーザートークン、`xoxp-` | OAuth & Permissions → User OAuth Token |
+| アプリレベルトークン、`xapp-` | Basic Information → App-Level Tokens（`connections:write` 付き） |
+
+## Slack から送る
+
+ボットをメンションし、送信先の短い名前を書いてください。名前は `targets` で調べられます。
+
+```text
+@swb claude check the release notes
+```
+
+SwB は送信先の名前を取り除き、残りのメッセージを送ります。通常のボットの返信では、SwB は送信先の名前と画像でスレッドに投稿します。続きのメッセージでは、SwB はスレッドの送信先を使い回せます。ワークスペースの `default_target` は予備の送信先です。
+
+## エージェントとして投稿する
+
+エージェントは `slack_post` で投稿します。エージェントが投稿できる場所と使えるアカウントは、`blocks.slack.agents.<agent>.workspaces` で選びます。各アカウントには書き込みポリシーがあります。
+
+| ポリシー | 効果 |
+| - | - |
+| `free` | エージェントがすぐに投稿します |
+| `approval` | 投稿の前に、オーナーが毎回承認します |
+| `never` | そのアカウントは読み取り専用です |
+
+オーナーは、Slack の DM か SwB のページで投稿を承認します。MCP ツールにできるのは、承認の依頼だけです。
+
+## ペルソナ
+
+ペルソナとは、ボットの投稿に付く名前と画像です。SwB は、各 Capy Captain にペルソナを与えます。使えるペルソナを見るときは、`slack_personas` の呼び出しをエージェントに頼んでください。エージェントは `slack_post` で、許可されたペルソナを選べます。独自の画像ファイルは `<data>/avatars` に置いてください。
+
+## チャンネルごとのプロジェクト
+
+`workspace_projects` は、ワークスペースをプロジェクトに対応付けます。`channel_projects` は、1 つのチャンネルをプロジェクトに対応付けます。この対応付けで、プロジェクトのメモリと、`@swb claude` のメインのルーティンが決まります。
+
+## ブロックの設定
+
+| キー | 用途 |
+| - | - |
+| `blocks.slack` | Slack ブロックとそのワークスペースの設定 |
+| `blocks.slack.use` | `slack` ブロックを読み込みます |
+| `blocks.slack.enabled` | `true` でブロックを読み込み、`false` で止めます |
+| `blocks.slack.refresh_minutes` | 送信先の一覧を更新する間隔（分）。既定値は `30` です |
+| `blocks.slack.target_aliases` | 追加の送信先の名前を、既存の送信先に対応付けます |
+| `blocks.slack.workspace_projects` | ワークスペースごとの既定の SwB プロジェクトを設定します |
+| `blocks.slack.channel_projects` | ワークスペースとチャンネルの名前か ID ごとに、SwB のプロジェクトを設定します |
+| `blocks.slack.listen_channels` | 各ワークスペースのチャンネルの名前か ID に `assist` モードを設定します。チャンネルモードで上書きできます |
+| `blocks.slack.max_text_chars` | 届いた各メッセージから残す最大の文字数。既定値は `4000` です |
+| `blocks.slack.event_retention_days` | Slack のイベントを保持する日数。既定値は `14` です |
+
+プロジェクトのルートを通じてエージェントを起こすときは、[チャンネルモード](/ja/docs/channel-modes)を使ってください。
+
+## ワークスペースとアカウント
+
+| キー | 用途 |
+| - | - |
+| `blocks.slack.workspaces` | SwB で使うワークスペース名を、その Slack の設定に対応付けます |
+| `blocks.slack.workspaces.*.team_id` | Slack のワークスペース ID |
+| `blocks.slack.workspaces.*.app_id` | Slack のアプリ ID。SwB はこの値で、自分のアプリからのメッセージを読み飛ばします |
+| `blocks.slack.workspaces.*.intake` | リアルタイムのイベントには `socket`、チャンネルの履歴を読むときは `poll`、メッセージの受信を止めるときは `none` を選びます |
+| `blocks.slack.workspaces.*.app_token_env` | Socket Mode で使うアプリトークンの環境変数の名前 |
+| `blocks.slack.workspaces.*.identities` | このワークスペースで SwB が使える Slack アカウント |
+| `blocks.slack.workspaces.*.identities.bot` | ボットアカウントの設定 |
+| `blocks.slack.workspaces.*.identities.bot.token_env` | ボットトークンの環境変数の名前 |
+| `blocks.slack.workspaces.*.identities.bot.write` | ボットアカウントの書き込みポリシー。既定値は `free` です |
+| `blocks.slack.workspaces.*.identities.user` | Slack のユーザーアカウントの設定 |
+| `blocks.slack.workspaces.*.identities.user.token_env` | ユーザートークンの環境変数の名前 |
+| `blocks.slack.workspaces.*.identities.user.write` | ユーザーアカウントの書き込みポリシー。既定値は `approval` です |
+| `blocks.slack.workspaces.*.user_only` | `true` にすると、ユーザーアカウントだけを使います。その書き込みポリシーは `approval` か `never` にしてください |
+| `blocks.slack.workspaces.*.watched` | 指定したチャンネルに `watch` モードを設定します。ボットが参加しているすべてのチャンネルには `*` を使います |
+| `blocks.slack.workspaces.*.default_target` | 送信先の名前を省略して SwB 宛てに送った新しいメッセージの送信先 |
+| `blocks.slack.workspaces.*.ack_reaction` | メンションとダイレクトメッセージへの受信確認に使う Slack の絵文字名。ボットの既定値は `eyes` です |
+| `blocks.slack.workspaces.*.owner_user_ids` | オーナーとして扱う Slack のユーザー ID。既定値はワークスペースの承認者です |
+| `blocks.slack.workspaces.*.known` | 既知の Slack のユーザー ID やボット ID を表示名に対応付けます。受け入れるメッセージの送信者を選ぶときに使います |
+| `blocks.slack.workspaces.*.sender_rate` | オーナー以外の送信者ごとに、メッセージの受信を制限します。`assist`、`triage`、コンテキストとして使うメッセージに適用します |
+| `blocks.slack.workspaces.*.sender_rate.count` | 時間枠の中で送信者ごとに受け付ける最大のメッセージ数。既定値は `5` です |
+| `blocks.slack.workspaces.*.sender_rate.window_s` | 時間枠の長さ（秒）。既定値は `600` です |
+| `blocks.slack.workspaces.*.bot_thread_posts_per_hour` | 1 時間に 1 つのスレッドでボットが自由に投稿できる数。超えた分の投稿には承認が必要です。既定値は `20` です |
+
+## エージェントのアクセスと承認
+
+| キー | 用途 |
+| - | - |
+| `blocks.slack.agents` | SwB のエージェントを、その Slack での権限に対応付けます |
+| `blocks.slack.agents.*.workspaces` | 各ワークスペースでエージェントが使えるアカウントを設定します |
+| `blocks.slack.agents.*.allow_persona_override` | `true` にすると、エージェントがボットの投稿のペルソナを選べます |
+| `blocks.slack.agents.*.allowed_personas` | ペルソナを選ぶ権限があるときに、エージェントが選べるペルソナの ID |
+| `blocks.slack.approvals` | Slack の投稿の承認リクエストの既定の設定 |
+| `blocks.slack.approvals.approver_user_id` | 既定の承認リクエストを受け取って判断できる Slack のユーザー ID |
+| `blocks.slack.approvals.notify_workspace` | 既定の承認者に承認リクエストを送るボットがあるワークスペース |
+| `blocks.slack.approvals.ttl_minutes` | 承認リクエストの期限が切れるまでの時間（分）。既定値は `60` です |
+| `blocks.slack.workspaces.*.approver_user_id` | このワークスペースからのリクエストを受け取って判断できる Slack のユーザー ID。既定の設定より優先されます |
+
+## 名前と画像
+
+| キー | 用途 |
+| - | - |
+| `blocks.slack.personas` | ボットが投稿で使える名前と画像を定義します |
+| `blocks.slack.personas.*.name` | そのペルソナを使うボットの投稿の表示名 |
+| `blocks.slack.personas.*.avatar` | ペルソナの画像のファイル名。Slack が画像を取得できるように、`blocks.slack.public_base_url` を設定してください |
+| `blocks.slack.personas.*.emoji` | ペルソナの画像の代わりに使う Slack の絵文字 |
+| `blocks.slack.avatar_dirs` | 同梱の画像より先に、SwB がアバターのファイルを探す追加のフォルダー |
+| `blocks.slack.public_base_url` | Slack がアバターのファイルを取得する公開 HTTPS アドレス。例は `https://swb.example.com` |
+| `blocks.slack.workspaces.*.default_persona` | このワークスペースでのボットの投稿の既定のペルソナ ID |
+
+## イベントの配信
+
+| キー | 用途 |
+| - | - |
+| `blocks.slack.workspaces.*.sinks` | Slack のイベントをほかのサービスに送る Webhook を設定します |
+| `blocks.slack.workspaces.*.sinks.*.name` | ログと状態の表示で Webhook を識別する名前 |
+| `blocks.slack.workspaces.*.sinks.*.url_env` | Webhook の URL の環境変数の名前 |
+| `blocks.slack.workspaces.*.sinks.*.signature` | `stripe` にすると、Stripe の形式でリクエストに署名します |
+| `blocks.slack.workspaces.*.sinks.*.secret_env` | 署名用のキーの環境変数の名前 |
+| `blocks.slack.workspaces.*.sinks.*.kinds` | 送るイベントの種類。`watched`、`mention`、`dm` から選びます。既定では 3 つすべてを送ります |
+| `blocks.slack.workspaces.*.sinks.*.targets` | これらの送信先の名前のイベントだけを送ります |
+| `blocks.slack.workspaces.*.sinks.*.coalesce_seconds` | 1 回のリクエストにまとめるイベントを集める時間（秒）。既定値の `0` では、イベントを 1 件ずつ送ります |

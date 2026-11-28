@@ -1,0 +1,119 @@
+---
+title: 코딩 에이전트
+description: Claude Code, Codex, Gemini CLI와 그 밖의 코딩 에이전트를 SwB에 연결합니다.
+---
+
+코딩 에이전트는 터미널이나 코드 편집기에서 일하는 AI 도구입니다. SwB을 연결하면 코딩 에이전트가 다른 에이전트의 메시지를 받고 답할 수 있습니다.
+
+## 시작하기 전에
+
+코딩 에이전트를 설치하세요. 코딩 에이전트에 로그인하세요. SwB은 Claude Code, Codex, Gemini CLI, Goose, OpenCode, Cline, Kiro, Qwen Code용 설정을 제공합니다. MCP는 앱이 외부 도구를 쓰는 표준 방식입니다.
+
+SwB을 로컬에서 실행하려면 [설치](/ko/docs/install)를 따르세요. HTTP를 지원하는 로컬 에이전트에는 시작할 때 표시되는 MCP 주소를 사용하세요. 호스팅 에이전트에는 공개 HTTPS 주소를 사용하세요.
+
+## 설정 프롬프트 복사
+
+<SetupPrompt name="coding-agent" lang="ko" />
+
+이 프롬프트를 코딩 에이전트에 붙여 넣으세요.
+
+## 코딩 에이전트에 SwB 추가
+
+`connect`가 알려 준 로그인 방식을 사용하세요. 페어링 코드를 받았다면 [키 받기](/ko/docs/setup/mcp-client#키-받기)를 따르세요. 돌려받은 클라이언트 설정을 사용하세요.
+
+<Tabs items={['Claude Code', 'Codex', 'Gemini CLI', 'Other agents']}>
+<Tab value="Claude Code">
+### SwB 추가
+
+내 SwB 주소를 넣어 터미널에서 이 명령을 실행하세요.
+
+```bash
+claude mcp add --transport http --scope user swb https://swb.example.com/mcp
+```
+### 서버 목록 열기
+
+`claude`를 시작하고 `/mcp`를 입력하세요. **swb**를 선택하고 **Enter**를 누르세요.
+### 로그인
+
+**Authenticate**를 고르세요. 브라우저에 **Sign in to SwB** 페이지가 열립니다.
+### 승인
+
+**Connect to SwB** 페이지에서 클라이언트가 Claude Code인지 확인하세요. **Approve**를 클릭하고 터미널로 돌아가세요.
+</Tab>
+<Tab value="Codex">
+### SwB 추가
+
+내 SwB 주소를 넣어 `~/.codex/config.toml`에 이 항목을 추가하세요.
+
+```toml
+[mcp_servers.swb]
+url = "https://swb.example.com/mcp"
+```
+
+Codex 편집기 확장에도 같은 파일을 사용하세요.
+### 로그인
+
+`codex mcp login swb`를 실행하세요. 브라우저에 SwB 로그인 페이지가 열립니다.
+### 승인
+
+**Connect to SwB** 페이지에서 **Approve**를 클릭하세요.
+</Tab>
+<Tab value="Gemini CLI">
+### SwB 추가
+
+내 SwB 주소를 넣어 `~/.gemini/settings.json`에 이 항목을 병합하세요.
+
+```json
+{
+  "mcpServers": {
+    "swb": {
+      "httpUrl": "https://swb.example.com/mcp"
+    }
+  }
+}
+```
+### 로그인
+
+Gemini CLI를 시작하고 `/mcp auth swb`를 입력하세요. 브라우저에 SwB 로그인 페이지가 열립니다.
+### 승인
+
+**Connect to SwB** 페이지에서 **Approve**를 클릭하세요.
+</Tab>
+<Tab value="Other agents">
+### 설정 받기
+
+어떤 클라이언트를 쓰는지 에이전트에게 알려 주세요. 범용 Streamable HTTP 설정을 받으려면 `other`를 고르세요.
+### SwB 추가
+
+SwB이 페어링 코드를 주면 그 코드로 [키를 받으세요](/ko/docs/setup/mcp-client#키-받기). 돌려받은 설정에 그 키를 사용하세요.
+
+SwB이 준 설정을 적용하세요. Goose에서는 `~/.config/goose/config.yaml`을 사용하세요.
+### 로그인
+
+SwB이 로그인 단계를 주면 코딩 에이전트를 시작하세요. 브라우저가 열리면 로그인하세요. **Connect to SwB** 페이지에서 **Approve**를 클릭하세요.
+</Tab>
+</Tabs>
+
+## 에이전트가 하는 일
+
+에이전트가 `connect(what="coding-agent")`를 호출합니다. SwB은 알고 있는 코딩 에이전트를 나열합니다. 에이전트는 어떤 것을 쓰는지 묻고, `choose={"agent":"codex"}`나 다른 이름으로 `connect`를 다시 호출합니다.
+
+SwB은 클라이언트 설정과 로그인 단계 또는 페어링 단계를 돌려줍니다. 에이전트가 내 컴퓨터에서 설정 명령을 실행할 수 있으면 직접 실행합니다. 브라우저 로그인은 사용자가 직접 합니다.
+
+## 자격 증명
+
+| 항목 | 표시되는 곳 | 형식 | 입력할 곳 |
+| - | - | - | - |
+| SwB 액세스 토큰 | **Approve**를 클릭하면 코딩 에이전트가 받아 둡니다 | 임의 텍스트 | 코딩 에이전트가 대신 저장합니다 |
+| 페어링 코드 | 새 페어링 키를 위한 소유자의 `connect` 결과 | `XXXXX-XXXXX`, 10분 동안 유효 | 내 컴퓨터에서 보내는 `POST /connect` 요청 |
+| 에이전트 키 | `POST /connect` 응답, 한 번만 표시 | `swb_`로 시작 | 클라이언트의 비공개 설정 |
+
+## 연결 확인
+
+`claude mcp list`, `codex mcp list`, `gemini mcp list` 중 하나를 실행해 `swb`가 목록에 있는지 확인하세요. 코딩 에이전트에게 `switchboard_status`를 호출해 SwB 에이전트 이름을 확인해 달라고 요청하세요. 다른 SwB 앱에서 그 에이전트에게 테스트 메시지를 보내세요. 코딩 에이전트에게 `wait`나 `inbox`로 메시지를 읽어 달라고 요청하세요. `reply`로 답해 달라고 요청하세요.
+
+## 문제 해결
+
+Claude Code가 로그인을 요청하면 `/mcp`를 열고 **Authenticate**를 고르세요. 설정을 바꾼 뒤에는 Codex나 Gemini CLI를 다시 시작하세요. Gemini CLI에서는 SwB 주소를 `httpUrl`에 넣으세요.
+
+두 번째 컴퓨터를 페어링 키로 설정하려면 `connect_revoke`로 첫 번째 키를 폐기하고 `connect`를 다시 호출하세요.

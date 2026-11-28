@@ -1,0 +1,70 @@
+---
+title: Telegram
+description: Telegram 메시지를 에이전트에게 보내고 답을 올립니다.
+---
+
+SwB은 Telegram에 새 메시지를 직접 요청합니다. 그래서 SwB 서버에 비공개 주소를 써도 됩니다.
+
+## 봇 만들기
+
+[@BotFather](https://t.me/BotFather)에서 `/newbot`을 보내세요. 에이전트에게 Telegram 연결을 요청하세요. 에이전트가 `telegram_provision`을 호출하고 등록 링크를 줍니다. 링크를 열고 봇 토큰을 붙여 넣으세요.
+
+## 그룹에 봇 추가
+
+그룹에 봇을 추가하세요. 그룹에서 `/swb@<bot username>`을 보내세요. 그러면 `telegram_status`의 `setup.seen_chats`에 그룹의 채팅 ID가 나옵니다. 그 ID를 공간의 `chats`에 넣으세요.
+
+봇과 개인 채팅을 시작하세요. 봇에게 메시지를 보내세요. `setup.seen_chats`에서 내 개인 채팅 ID를 찾으세요. 그 ID를 `owner_ids`에 사용하세요.
+
+```yaml
+blocks:
+  telegram:
+    use: telegram
+    agents: {claude: [home]}
+    spaces:
+      home:
+        chats: [-100111222]
+        owner_ids: [222222]
+        default_target: claude
+```
+
+## Telegram에서 보내기
+
+봇에게 개인 메시지를 보내거나, 봇을 멘션하거나, `/swb <target> <message>`를 사용하세요. 대화를 이어 가려면 봇의 답에 답장하세요. `persona_prefix`를 켜면 에이전트 답장에 에이전트 이름이 굵게 표시됩니다.
+
+봇이 그룹의 모든 메시지를 읽게 하려면 @BotFather에서 `/setprivacy`로 프라이버시 모드를 끄세요. 그다음 그룹에서 봇을 내보냈다가 다시 추가하세요.
+
+## 블록 설정
+
+| 키 | 용도 |
+| - | - |
+| `blocks.telegram` | Telegram 봇과 공간 설정 |
+| `blocks.telegram.use` | `telegram` 블록을 불러옵니다 |
+| `blocks.telegram.enabled` | 블록을 불러오려면 `true`, 끄려면 `false`로 설정합니다 |
+| `blocks.telegram.token_env` | 봇 토큰의 환경 변수 이름 |
+| `blocks.telegram.dm_space` | 개인 채팅에 라우팅 설정과 소유자 설정을 적용할 공간. 기본값은 처음 설정한 공간입니다 |
+| `blocks.telegram.dm_mode` | 다른 사람이 보낸 개인 메시지의 모드. 요약본으로 모으려면 `watch`, 건너뛰려면 `off`를 사용합니다 |
+| `blocks.telegram.ack_reaction` | 봇에게 온 메시지를 받았다고 표시할 이모지. 이 반응을 끄려면 `null`로 설정합니다 |
+| `blocks.telegram.persona_prefix` | 에이전트가 쓰는 이름을 첫 줄에 굵게 넣으려면 `true`로 설정합니다 |
+| `blocks.telegram.refresh_minutes` | 대상 목록을 업데이트하는 간격(분). 기본값은 `30`입니다 |
+| `blocks.telegram.target_aliases` | 추가 대상 이름을 기존 대상에 연결합니다 |
+| `blocks.telegram.agents` | 에이전트별로 게시하고 이벤트를 받을 수 있는 공간. 모든 공간에는 `*`를 사용합니다 |
+
+프로젝트 라우트로 에이전트를 깨우려면 [채널 모드](/ko/docs/channel-modes)를 사용하세요.
+
+## 공간과 그룹
+
+| 키 | 용도 |
+| - | - |
+| `blocks.telegram.spaces` | SwB에서 쓰는 이름을 Telegram 그룹 묶음의 설정에 연결합니다 |
+| `blocks.telegram.spaces.*.chats` | 이 공간의 그룹 채팅 ID. 음의 정수를 사용합니다. 그룹 하나는 공간 하나에만 넣습니다 |
+| `blocks.telegram.spaces.*.owner_ids` | 소유자로 취급할 Telegram 사용자 ID |
+| `blocks.telegram.spaces.*.known` | 알고 있는 Telegram 사용자 ID를 표시 이름에 연결합니다 |
+| `blocks.telegram.spaces.*.default_target` | 대상 이름을 생략하고 SwB에 보낸 새 메시지의 대상 |
+| `blocks.telegram.spaces.*.project` | 이 공간의 기본 SwB 프로젝트 |
+| `blocks.telegram.spaces.*.channel_projects` | 그룹 채팅 ID별로 SwB 프로젝트를 정합니다 |
+| `blocks.telegram.spaces.*.mode` | 공간의 모드. 그룹 모드가 이 값보다 우선할 수 있습니다 |
+| `blocks.telegram.spaces.*.channels` | 그룹 채팅 ID별로 모드나 세부 설정을 정합니다 |
+| `blocks.telegram.spaces.*.channels.*.mode` | 그룹 하나의 모드 |
+| `blocks.telegram.spaces.*.channels.*.project` | 그룹 하나의 SwB 프로젝트. 공간의 프로젝트보다 우선합니다 |
+| `blocks.telegram.spaces.*.listen` | `assist` 모드를 쓰는 그룹 채팅 ID를 지정하던 이전 설정 |
+| `blocks.telegram.spaces.*.bot_posts_per_hour` | 대화 스레드당 1시간에 올릴 수 있는 최대 봇 게시물 수. 기본값은 `20`입니다 |

@@ -118,6 +118,8 @@ SwB 優先依 `blocks` 選擇模組。將 MCP 模組的 `enabled` 設為 `false`
 | `auth.key_targets` | 依金鑰名稱設定可傳送的目標，例如 `[agent:claude]`。使用有這項限制的金鑰時，須指定一個允許的目標 |
 | `auth.inbox_keys` | 為每把金鑰指定唯一可讀取的代理收件匣。內建項目為 `channel: claude-code` |
 
+透過 Cloudflare Access 登入時，SwB 先從 `Cf-Access-Jwt-Assertion` 標頭讀取權杖。標頭為空值或缺少時，SwB 會從 `CF_Authorization` Cookie 讀取權杖。Cookie 是瀏覽器隨請求送出的值。SwB 會用 `team_domain` 的公開金鑰驗證 RS256 簽章。權杖的簽發者必須符合 `team_domain` 的 HTTPS 位址。`aud` 必須是權杖的對象之一。權杖若附有簽發時間、生效時間或到期時間，SwB 會檢查該時間。SwB 將電子郵件位址轉成小寫，再與 `owner_emails` 比對。
+
 ## 存取權限
 
 | 設定鍵 | 用途 |

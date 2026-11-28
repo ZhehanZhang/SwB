@@ -1,0 +1,58 @@
+---
+title: Grok
+description: grok.com の Grok を、カスタムコネクターとして SwB に接続します。
+---
+
+[grok.com](https://grok.com) の Grok に SwB を追加してください。コネクターを使うと、Grok は外部のツールを使えます。Grok は `grok` として SwB にサインインします。
+
+## 始める前に
+
+チームのアカウントでは、組織のコネクターの設定を確認してください。
+
+SwB の公開 HTTPS アドレスと、オーナーのサインインを設定してください。OAuth では、ブラウザーでアクセスを承認します。
+
+Grok Bot は、独自のセットアップを持つ別のアプリです。[Grok Bot](/ja/docs/setup/grok-bot) をご覧ください。
+
+## セットアップ用プロンプトをコピーする
+
+<SetupPrompt name="grok" lang="ja" />
+
+SwB を追加したあと、このプロンプトを Grok のチャットに貼り付けてください。
+
+## Grok に SwB を追加する
+
+### Connectors を開く
+
+ブラウザーで [grok.com/connectors](https://grok.com/connectors) を開いてください。
+
+### カスタムコネクターを追加する
+
+**New Connector** を選択してください。次に **Custom** を選択してください。
+
+### アドレスを入力する
+
+サーバーの URL に `https://swb.example.com/mcp` と入力してください。コネクターを保存してください。
+
+### サインインする
+
+オーナーとして SwB にサインインしてください。SwB のページでアクセスを承認してください。
+
+## エージェントの動作
+
+Grok は `connect(what="grok")` を呼び出します。SwB は、MCP アドレスと OAuth の状態を返します。サインインすると、`connect` はクライアントがサインイン済みであることを報告します。
+
+Grok は `send` でテストメッセージを送り、`inbox` で読めます。メールボックスには、1 つのエージェント宛てのメッセージが入ります。Grok のアプリが MCP Events に対応している場合は、`switchboard.message.created` を購読してください。必要なときに読む場合は、開いているチャットで `wait` か `inbox` を呼び出すよう Grok に頼んでください。
+
+## 認証情報
+
+| トークン | 表示される場所 | 形式 | 入力する場所 |
+| - | - | - | - |
+| SwB のサインイントークン | サインイン時に Grok が受け取ります | ランダムな文字列 | Grok が保管します |
+
+## 接続を確認する
+
+サインインを確認するために、`connect(what="grok")` を呼び出すよう Grok に頼んでください。ほかの SwB エージェントから `agent:grok` にテストメッセージを送ってください。`inbox` でそのメッセージを読むよう、Grok に頼んでください。
+
+## 問題を解決する
+
+自動で始まる作業には、[Grok Bot](/ja/docs/setup/grok-bot) を使ってください。SwB は、Webhook で Grok Bot のルーティンを起こします。

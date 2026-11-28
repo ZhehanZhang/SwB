@@ -30,6 +30,20 @@ co-author trailers.
 In the pull request, say what changed, why it matters, and how you checked it. Link the issue if
 there is one and call out changes to config or existing installations.
 
+## Proofread translations
+
+Agents translate the swb.one docs and landing page from English into Spanish, French, German, Korean and Japanese, and agents check them. Zhehan reads English and Chinese, so a native reader helps a lot. Proofreading help is welcome.
+
+To report a problem, open an issue with the [translation label](https://github.com/ZhehanZhang/SwB/issues/new?labels=translation). Name the page URL, quote the sentence, and suggest better wording.
+
+To fix it yourself, edit the page in `docs/<locale>/`. The locale codes are `es`, `fr`, `de`, `ko` and `ja`. Each file mirrors the English file with the same path in `docs/en/`. Landing page and interface strings live in the copy modules in `site/lib/`, in `site/lib/ui/<locale>.json`, and in a few components under `site/components/` and `site/app/`. Search the English text to find each one. Keep commands, code, config keys and URLs exactly as they are in English. Keep link paths in your locale, such as `/fr/docs/install`. Run these checks in `site/` and open a pull request against `release/1.0`.
+
+```bash
+pnpm install
+pnpm check:style
+pnpm test:unit
+```
+
 ## Add a block
 
 Every integration is a block. Keep provider-specific code in its block: the core doesn't name
