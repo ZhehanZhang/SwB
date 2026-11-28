@@ -384,7 +384,12 @@
 .swb-hero-title:lang(zh-Hans) { font-family: var(--font-inter-tight), "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; }
 .swb-hero-title:lang(zh-Hant) { font-family: var(--font-inter-tight), "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
 .swb-hero-comma:lang(zh-Hant) { font-feature-settings: normal; margin-inline-start: -.25em; }
-.swb-hero { width: min(100%, 39rem); justify-self: center; }
+.swb-hero {
+  display: grid;
+  grid-template-rows: auto minmax(1.25rem, auto);
+  width: min(100%, 39rem);
+  justify-self: center;
+}
 
 .swb-node { cursor: pointer; border-radius: 9999px; background: none; padding: 0; animation: swb-drift var(--drift-duration) var(--drift-delay) ease-in-out infinite alternate; }
 .swb-node .swb-mark-tile { transition: transform .2s ease, box-shadow .2s ease; }
