@@ -14,65 +14,67 @@ for (const [locale, path] of [['en', '/'], ['zh-Hans', '/zh-Hans'], ['zh-Hant', 
     await page.goto(path);
     await page.evaluate(() => document.fonts.ready.then(() => null));
     const line = page.locator('[data-hero-pair]');
-    const frames = [];
+    const measureTransition = () => line.evaluate((root) => {
+      const pair = root.querySelector('.swb-pair')!;
+      const slots = [...root.querySelectorAll('.swb-slot')];
+      const textRange = (element: Element | null) => {
+        const node = element?.firstChild;
+        if (!node?.textContent) return null;
+        const { textContent: text } = node;
+        const range = document.createRange();
+        range.setStart(node, text.length - text.trimStart().length);
+        range.setEnd(node, text.trimEnd().length);
+        return range;
+      };
+      const prefix = textRange(root.querySelector(':scope > .swb-between-text:first-child'));
+      const conjunctionElement = pair.querySelector('.swb-between-text')!;
+      const conjunction = textRange(conjunctionElement)!;
+      const suffix = textRange(pair.querySelector('.swb-pair-suffix'));
+      const transitions = pair.getAnimations({ subtree: true });
+      const endTimes = transitions.map((transition) => transition.effect?.getComputedTiming().endTime);
+      const duration = Math.max(0, ...endTimes.filter((value): value is number => typeof value === 'number'));
+      const frameTime = 1000 / 60;
+      transitions.forEach((transition) => transition.pause());
+
+      const samples = [];
+      for (let step = 0; step <= Math.ceil(duration / frameTime); step++) {
+        for (const transition of transitions) transition.currentTime = Math.min(step * frameTime, duration);
+        const lineRect = root.getBoundingClientRect();
+        const pillRects = slots.map((slot) => slot.getBoundingClientRect());
+        const prefixRect = prefix?.getBoundingClientRect();
+        const andRect = conjunction.getBoundingClientRect();
+        const suffixRect = suffix?.getBoundingClientRect();
+        const rects = [...pillRects, prefixRect, andRect, suffixRect].filter((rect) => rect !== undefined);
+        const x = rects.flatMap(({ left, right }) => [left, right]);
+        const y = [lineRect, ...rects, root.nextElementSibling!.getBoundingClientRect()].flatMap(({ top, bottom }) => [top, bottom]);
+        let gap = andRect.left - pillRects[0].right;
+        if (pillRects[1].top < andRect.bottom) gap = Math.min(gap, pillRects[1].left - andRect.right);
+        if (prefixRect && prefixRect.bottom > pillRects[0].top) gap = Math.min(gap, pillRects[0].left - prefixRect.right);
+        if (suffixRect && suffixRect.top < pillRects[1].bottom) gap = Math.min(gap, suffixRect.left - pillRects[1].right);
+
+        const crossfades = slots.map((slot) => [...slot.children].filter((chip) => {
+          const opacity = Number(getComputedStyle(chip).opacity);
+          return opacity > 0 && opacity < 1;
+        }).length > 1);
+        const settled = slots.every((slot, i) => {
+          const active = slot.querySelector('.swb-chip-on')!;
+          const { borderLeftWidth, borderRightWidth } = getComputedStyle(slot);
+          const target = active.getBoundingClientRect().width + parseFloat(borderLeftWidth) + parseFloat(borderRightWidth);
+          return Math.abs(pillRects[i].width - target) < 0.1 && Number(getComputedStyle(active).opacity) === 1;
+        });
+        samples.push({
+          x, y, gap, crossfades, settled, prefix: prefixRect?.left ?? 0, widths: pillRects.map(({ width }) => width),
+          leadGapError: Math.abs(conjunctionElement.getBoundingClientRect().left - pillRects[0].right - 8),
+          overflow: Math.max(0, ...rects.flatMap(({ left, right }) => [lineRect.left - left, right - lineRect.right])),
+        });
+      }
+      transitions.forEach((transition) => transition.finish());
+      return samples;
+    });
+    const frames: Awaited<ReturnType<typeof measureTransition>> = [];
     for (const index of [...pairs, nextRound]) {
       await expect(line).toHaveAttribute('data-hero-pair', index);
-      const samples = await line.evaluate((root) => {
-        const pair = root.querySelector('.swb-pair')!;
-        const slots = [...root.querySelectorAll('.swb-slot')];
-        const textRange = (element: Element | null) => {
-          const node = element?.firstChild;
-          if (!node?.textContent) return null;
-          const { textContent: text } = node;
-          const range = document.createRange();
-          range.setStart(node, text.length - text.trimStart().length);
-          range.setEnd(node, text.trimEnd().length);
-          return range;
-        };
-        const prefix = textRange(root.querySelector(':scope > .swb-between-text:first-child'));
-        const conjunctionElement = pair.querySelector('.swb-between-text')!;
-        const conjunction = textRange(conjunctionElement)!;
-        const suffix = textRange(pair.querySelector('.swb-pair-suffix'));
-        const transitions = pair.getAnimations({ subtree: true });
-        const duration = Math.max(0, ...transitions.map((transition) => transition.effect!.getComputedTiming().endTime));
-        const frameTime = 1000 / 60;
-        transitions.forEach((transition) => transition.pause());
-
-        const samples = [];
-        for (let step = 0; step <= Math.ceil(duration / frameTime); step++) {
-          for (const transition of transitions) transition.currentTime = Math.min(step * frameTime, duration);
-          const lineRect = root.getBoundingClientRect();
-          const pillRects = slots.map((slot) => slot.getBoundingClientRect());
-          const prefixRect = prefix?.getBoundingClientRect();
-          const andRect = conjunction.getBoundingClientRect();
-          const suffixRect = suffix?.getBoundingClientRect();
-          const rects = [...pillRects, prefixRect, andRect, suffixRect].filter((rect) => rect !== undefined);
-          const x = rects.flatMap(({ left, right }) => [left, right]);
-          const y = [lineRect, ...rects, root.nextElementSibling!.getBoundingClientRect()].flatMap(({ top, bottom }) => [top, bottom]);
-          let gap = andRect.left - pillRects[0].right;
-          if (pillRects[1].top < andRect.bottom) gap = Math.min(gap, pillRects[1].left - andRect.right);
-          if (prefixRect && prefixRect.bottom > pillRects[0].top) gap = Math.min(gap, pillRects[0].left - prefixRect.right);
-          if (suffixRect && suffixRect.top < pillRects[1].bottom) gap = Math.min(gap, suffixRect.left - pillRects[1].right);
-
-          const crossfades = slots.map((slot) => [...slot.children].filter((chip) => {
-            const opacity = Number(getComputedStyle(chip).opacity);
-            return opacity > 0 && opacity < 1;
-          }).length > 1);
-          const settled = slots.every((slot, i) => {
-            const active = slot.querySelector('.swb-chip-on')!;
-            const { borderLeftWidth, borderRightWidth } = getComputedStyle(slot);
-            const target = active.getBoundingClientRect().width + parseFloat(borderLeftWidth) + parseFloat(borderRightWidth);
-            return Math.abs(pillRects[i].width - target) < 0.1 && Number(getComputedStyle(active).opacity) === 1;
-          });
-          samples.push({
-            x, y, gap, crossfades, settled, prefix: prefixRect?.left ?? 0, widths: pillRects.map(({ width }) => width),
-            leadGapError: Math.abs(conjunctionElement.getBoundingClientRect().left - pillRects[0].right - 8),
-            overflow: Math.max(0, ...rects.flatMap(({ left, right }) => [lineRect.left - left, right - lineRect.right])),
-          });
-        }
-        transitions.forEach((transition) => transition.finish());
-        return samples;
-      });
+      const samples = await measureTransition();
       expect(samples.at(-1)?.settled, `${locale} pair ${index} settles`).toBe(true);
       frames.push(...samples);
       if (index !== nextRound) await advanceHeroPair(page);
