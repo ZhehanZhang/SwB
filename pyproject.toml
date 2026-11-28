@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "swb-one"
+name = "swb.one"
 version = "1.0.0"
 description = "First-party agents working together."
 readme = "README.md"
@@ -53,6 +53,7 @@ Issues = "https://github.com/ZhehanZhang/SwB/issues"
 swb = "switchboard.entrypoint:cli_main"
 switchboard = "switchboard.entrypoint:cli_main"
 swb-one = "switchboard.entrypoint:cli_main"
+"swb.one" = "switchboard.entrypoint:cli_main"
 
 [dependency-groups]
 dev = ["ruff>=0.11,<1"]
