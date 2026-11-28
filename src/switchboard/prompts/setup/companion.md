@@ -1,6 +1,6 @@
 Read the setup guide at https://swb.one/docs/companion.
 
-Help me pair my device with SwB. A companion is a SwB process on my device. It connects local features to my SwB server.
+Help me pair my device with SwB. A companion is a SwB program that runs on my own device. It connects local features to my SwB server.
 
 Ask me which features I want. Add one `--cap` option for each feature I choose. For MCP, add `--cap mcp`. Ask me which local MCP servers to use. Add `--mcp NAME=COMMAND` for each server. Use its start command or local HTTP address as shown in the guide.
 
