@@ -123,7 +123,7 @@ class _BlessTransport:
         self._tx = server.get_characteristic(TX_UUID)
         if sys.platform == "linux":
             await self._start_bluez(unsubscribe)
-        elif await server.start(prioritize_local_name=False) is False:
+        elif await server.start(prioritize_local_name=True) is False:
             raise CapabilityError(_NO_ADAPTER)
 
     async def _create_corebluetooth(self, params: dict):
