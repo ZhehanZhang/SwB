@@ -7,16 +7,18 @@ description: 备份和升级 SwB，或导出记忆。
 
 ## 备份和升级 [#backups-and-upgrades]
 
-复制数据目录之前，先停止 SwB。整个目录要完整保留，其中有数据库和它的密钥，包括 `mcp-events.key` 和 `claim-key`。配置文件和 `.env` 也要备份。备份要保密。然后安装或构建新版本，用同一个数据目录启动 SwB。
+停止 SwB，然后复制整个数据目录，让数据库及其密钥保存在一起。这些密钥包括 `mcp-events.key` 和 `claim-key`。再复制配置文件和 `.env`。妥善保管备份。
+
+安装或构建新版本，然后用同一个数据目录启动 SwB。
 
 <span id="导出记忆" />
 
 ## 导出记忆 [#export-memory]
 
-在 Compose 容器内运行导出命令。
+在 Compose 容器中运行导出命令。
 
 ```bash
 docker compose exec -T switchboard swb export /data/export
 ```
 
-导出的 Markdown 文件按范围保存在主机的 `./data/export` 下，其中包含一个 `INDEX.md`。设置 `memory.mirror_dir` 可以保留一份随时更新的 Markdown 副本。
+导出的 Markdown 文件按范围保存在主机的 `./data/export` 下。打开 `INDEX.md` 查找文件。要保留一份始终最新的 Markdown 副本，设置 `memory.mirror_dir`。
