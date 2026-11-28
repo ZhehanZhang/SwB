@@ -71,8 +71,7 @@
 .tile:focus-visible,
 .alternative summary:focus-visible,
 .command pre:focus-visible,
-.prompt pre:focus-visible,
-.address input:focus-visible {
+.prompt pre:focus-visible {
   outline: 2px solid var(--color-fd-ring);
   outline-offset: 2px;
 }
@@ -204,22 +203,6 @@
   margin-top: 1rem;
   font-size: .875rem;
   font-weight: 600;
-}
-
-.address input {
-  min-width: 0;
-  width: 100%;
-  min-height: 2.5rem;
-  border: 1px solid var(--color-fd-border);
-  border-radius: .5rem;
-  padding-inline: .75rem;
-  background: var(--color-fd-background);
-  font-size: 1rem;
-  font-weight: 400;
-}
-
-.address input[aria-invalid='true'] {
-  border-color: var(--danger, #dc2626);
 }
 
 .tiles {

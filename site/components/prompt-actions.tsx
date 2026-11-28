@@ -10,7 +10,7 @@ const targetNames: Record<Target, string> = { claude: 'Claude', chatgpt: 'ChatGP
 type CopyLabels = { copy: string; copied: string };
 type Labels = CopyLabels & { open: string };
 
-export function CopyTextButton({ text, labels, className }: { text: string | (() => string | Promise<string>); labels: CopyLabels; className: string }) {
+export function CopyTextButton({ text, labels, className, showIcon = true }: { text: string | (() => string | Promise<string>); labels: CopyLabels; className: string; showIcon?: boolean }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -29,7 +29,7 @@ export function CopyTextButton({ text, labels, className }: { text: string | (()
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => setCopied(false), 1800);
       }}>
-        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+        {showIcon && (copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />)}
         {labels.copy}
       </button>
       <span className="sr-only" role="status">{copied ? labels.copied : ''}</span>

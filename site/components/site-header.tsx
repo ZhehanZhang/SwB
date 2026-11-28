@@ -14,7 +14,7 @@ import { GitHubMark } from './github-mark';
 import { SiteContainer } from './site-container';
 import { SwbAddressControl } from './swb-address-control';
 
-const iconButton = 'grid size-9 shrink-0 place-items-center rounded-md text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground';
+const iconButton = 'grid size-9 shrink-0 place-items-center rounded-md p-1.5 text-fd-muted-foreground transition-colors duration-100 hover:bg-fd-muted hover:text-fd-foreground data-[state=open]:bg-fd-accent';
 const tab = 'rounded-md px-2.5 py-2 text-sm font-medium whitespace-nowrap text-fd-muted-foreground hover:bg-fd-muted hover:text-fd-foreground aria-[current]:text-fd-foreground';
 
 export function SiteHeader({ lang, repository }: { lang: Locale; repository: string }) {
@@ -34,11 +34,11 @@ export function SiteHeader({ lang, repository }: { lang: Locale; repository: str
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <div data-header-item="search-icon" className="flex lg:hidden"><SearchTrigger className={iconButton} /></div>
           <FullSearchTrigger data-header-item="search" className="hidden h-9 w-48 lg:inline-flex" />
-          <SwbAddressControl lang={lang} show={isAddressDocsPath(path)} />
           <LanguageSelect data-header-item="language" className={iconButton}><Languages aria-hidden="true" className="size-4.5" /></LanguageSelect>
           <a data-header-item="github" className={`swb-button swb-button-icon ${iconButton}`} aria-label="GitHub" href={repository} target="_blank" rel="noreferrer">
             <GitHubMark />
           </a>
+          <SwbAddressControl lang={lang} show={isAddressDocsPath(path)} className={iconButton} />
           <Popover>
             <PopoverTrigger data-header-item="menu" type="button" className={`${iconButton} sm:hidden`} aria-label={navLabels[lang].menu}>
               <Menu aria-hidden="true" className="size-5" />

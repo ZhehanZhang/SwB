@@ -115,6 +115,51 @@ test('copies a fragment link, edits from the popover and clears the address ever
   await expect(docs(page).getByRole('region', { name: 'Claude', exact: true }).locator('pre')).toContainText(example);
 });
 
+test('address trigger matches the language control and its aligned popover saves explicitly', async ({ page }) => {
+  await page.goto(`${install}?swb=${encodeURIComponent(origin)}`);
+  const trigger = indicator(page);
+  await expect(trigger).toHaveAccessibleName(`${label} ${new URL(origin).host}`);
+  const dimensions = await page.locator('[data-header-item="address"], [data-header-item="language"]').evaluateAll((buttons) => buttons.map((button) => {
+    const style = getComputedStyle(button);
+    const svg = button.querySelector('svg')!;
+    return {
+      height: style.height, width: style.width, radius: style.borderRadius, padding: style.padding,
+      icon: svg.getBoundingClientRect().width, stroke: getComputedStyle(svg).strokeWidth,
+    };
+  }));
+  expect(dimensions).toHaveLength(2);
+  expect(dimensions[0]).toEqual(dimensions[1]);
+  await trigger.click();
+
+  const popover = page.getByRole('dialog', { name: label });
+  const input = popover.getByRole('textbox', { name: label });
+  const save = popover.getByRole('button', { name: 'Save' });
+  const clear = popover.getByRole('button', { name: 'Clear' });
+  const copy = popover.getByRole('button', { name: 'Copy link with your address' });
+  await expect(popover).toBeFocused();
+  await expect(input).toHaveValue(origin);
+  const [buttonBox, panelBox, clearBox, copyBox] = await Promise.all(
+    [trigger, popover, clear, copy].map((item) => item.boundingBox()),
+  );
+  expect(Math.abs(panelBox!.x + panelBox!.width - buttonBox!.x - buttonBox!.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(clearBox!.y - copyBox!.y)).toBeLessThanOrEqual(1);
+  expect(clearBox!.height).toEqual(copyBox!.height);
+
+  await page.keyboard.press('Tab');
+  await expect(input).toBeFocused();
+  await input.fill('example');
+  await save.click();
+  await expect(input).toHaveAttribute('aria-invalid', 'true');
+  expect(await stored(page)).toBe(origin);
+  const update = 'https://new-swb.example.org';
+  await input.fill(`${update}/mcp`);
+  await input.press('Tab');
+  expect(await stored(page)).toBe(origin);
+  await save.click();
+  await expect(input).toHaveValue(update);
+  expect(await stored(page)).toBe(update);
+});
+
 test('accepts fragment and query prefill and preserves anchors and picker state', async ({ page }) => {
   await page.goto(`${claude}?swb=${encodeURIComponent(`${origin}/mcp`)}#copy-the-setup-prompt`);
   await expect(page).toHaveURL(`${claude}#copy-the-setup-prompt`);
