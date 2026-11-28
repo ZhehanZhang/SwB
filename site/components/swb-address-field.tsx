@@ -1,17 +1,18 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { validSwbOrigin } from '@/lib/address';
 import { exampleSwbOrigins } from '@/lib/urls';
 import { useSwbAddress } from './swb-address-provider';
 
-export function SwbAddressField({ id, label, error, describedBy, saveLabel, onEdit }: {
+export function SwbAddressField({ id, label, error, describedBy, saveLabel, onEdit, children }: {
   id?: string;
   label: string;
   error: string;
   describedBy?: string;
   saveLabel?: string;
   onEdit?: (address: string | null) => void;
+  children?: ReactNode;
 }) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
@@ -57,7 +58,10 @@ export function SwbAddressField({ id, label, error, describedBy, saveLabel, onEd
         <label className="font-semibold" htmlFor={fieldId}>{label}</label>
         {input}
       </div>
-      <button className="swb-button swb-button-primary justify-self-start" type="submit">{saveLabel}</button>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-3">
+        {children}
+        <button className="swb-button swb-button-primary" type="submit">{saveLabel}</button>
+      </div>
     </form>
   );
 }

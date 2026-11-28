@@ -1,11 +1,12 @@
 'use client';
 
-import { Popover, PopoverContent, PopoverTrigger } from 'fumadocs-ui/components/ui/popover';
+import { Popover } from 'fumadocs-ui/components/ui/popover';
 import { Link as LinkIcon } from 'lucide-react';
 import { useId, useRef } from 'react';
 import { isGetStartedAddressPath, linkWithSwbAddress } from '@/lib/address';
 import { getStartedCopy } from '@/lib/get-started-copy';
 import type { Locale } from '@/lib/i18n';
+import { HeaderControl, HeaderPopover } from './header-controls';
 import { CopyTextButton } from './prompt-actions';
 import { SwbAddressField } from './swb-address-field';
 import { useSwbAddress } from './swb-address-provider';
@@ -28,40 +29,39 @@ function removeLegacyAddress() {
   history.replaceState(history.state, '', url);
 }
 
-export function SwbAddressControl({ lang, show, className }: { lang: Locale; show: boolean; className: string }) {
+export function SwbAddressControl({ lang, show }: { lang: Locale; show: boolean }) {
   const { address, saveAddress } = useSwbAddress();
   const fieldId = useId();
   const panel = useRef<HTMLDivElement>(null);
   const copy = getStartedCopy[lang];
   const text = labels[lang];
   const host = address ? new URL(address).host : '';
-  const quietButton = 'swb-button swb-button-compact text-start hover:bg-fd-muted';
+  const quietButton = 'swb-button min-w-0 justify-self-start px-0 text-start text-fd-muted-foreground hover:text-fd-foreground hover:underline hover:underline-offset-4';
 
   return (
     <div className="w-9 shrink-0">
       {show && address && (
         <Popover>
-          <PopoverTrigger data-header-item="address" type="button" aria-label={`${copy.address} ${host}`} title={host} className={className}>
+          <HeaderControl data-header-item="address" aria-label={`${copy.address} ${host}`} title={host}>
             <LinkIcon aria-hidden="true" className="size-4.5" />
-          </PopoverTrigger>
-          <PopoverContent ref={panel} align="end" aria-label={copy.address} collisionPadding={8}
+          </HeaderControl>
+          <HeaderPopover ref={panel} aria-label={copy.address}
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               panel.current?.focus({ preventScroll: true });
             }}
-            className="grid w-80 max-w-[calc(100vw-1rem)] gap-3 bg-fd-popover p-3 motion-reduce:animate-none">
+            className="w-96 p-3">
             <SwbAddressField id={fieldId} label={copy.address} error={copy.addressError} saveLabel={text.save} onEdit={(next) => {
               if (next) removeLegacyAddress();
-            }} />
-            <div className="flex items-stretch gap-2 border-t pt-3">
+            }}>
               <button type="button" onClick={() => {
                 removeLegacyAddress();
                 saveAddress(null);
               }} className={quietButton}>{text.clear}</button>
               <CopyTextButton text={() => linkWithSwbAddress(location.href, address)}
                 labels={{ copy: text.copy, copied: copy.copied }} className={quietButton} showIcon={false} />
-            </div>
-          </PopoverContent>
+            </SwbAddressField>
+          </HeaderPopover>
         </Popover>
       )}
     </div>

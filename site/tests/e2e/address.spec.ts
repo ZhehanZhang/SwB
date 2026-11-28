@@ -138,12 +138,21 @@ test('address trigger matches the language control and its aligned popover saves
   const copy = popover.getByRole('button', { name: 'Copy link with your address' });
   await expect(popover).toBeFocused();
   await expect(input).toHaveValue(origin);
-  const [buttonBox, panelBox, clearBox, copyBox] = await Promise.all(
-    [trigger, popover, clear, copy].map((item) => item.boundingBox()),
+  await popover.evaluate((panel) => Promise.all(panel.getAnimations().map((animation) => animation.finished)));
+  const [buttonBox, panelBox, inputBox, clearBox, copyBox, saveBox] = await Promise.all(
+    [trigger, popover, input, clear, copy, save].map((item) => item.boundingBox()),
   );
-  expect(Math.abs(panelBox!.x + panelBox!.width - buttonBox!.x - buttonBox!.width)).toBeLessThanOrEqual(1);
-  expect(Math.abs(clearBox!.y - copyBox!.y)).toBeLessThanOrEqual(1);
-  expect(clearBox!.height).toEqual(copyBox!.height);
+  const width = page.viewportSize()!.width;
+  const panelRight = panelBox!.x + panelBox!.width;
+  if (width === 390) {
+    expect(Math.abs(panelBox!.x - 20)).toBeLessThanOrEqual(1);
+    expect(Math.abs(panelRight - width + 20)).toBeLessThanOrEqual(1);
+  } else {
+    expect(Math.abs(panelRight - buttonBox!.x - buttonBox!.width)).toBeLessThanOrEqual(1);
+  }
+  expect(Math.abs(clearBox!.x - inputBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(saveBox!.x + saveBox!.width - inputBox!.x - inputBox!.width)).toBeLessThanOrEqual(1);
+  expect(Math.max(clearBox!.y, copyBox!.y, saveBox!.y) - Math.min(clearBox!.y, copyBox!.y, saveBox!.y)).toBeLessThanOrEqual(1);
 
   await page.keyboard.press('Tab');
   await expect(input).toBeFocused();
