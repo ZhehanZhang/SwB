@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
 from slack_sdk.errors import SlackApiError
 from slack_sdk.http_retry.builtin_async_handlers import AsyncRateLimitErrorRetryHandler
@@ -20,6 +20,13 @@ if TYPE_CHECKING:
 DEFAULT_ICON = "swb.png"
 DEFAULT_EMOJI = ":electric_plug:"
 """The bundled neutral icon (no letters) for posts whose app has no picture of its own."""
+CUSTOMIZE_SCOPE = "chat:write.customize"
+
+
+class BotPostIdentity(TypedDict, total=False):
+    username: str
+    icon_url: str
+    post_every_agent: bool
 log = logging.getLogger("switchboard.slack")
 
 # switchboard never adds anyone (itself included) to a conversation, in any workspace.
@@ -78,8 +85,10 @@ class WorkspaceRuntime:
         self.team_url: str | None = None
         self.bot_user_id: str | None = None
         self.bot_id: str | None = None
+        self.bot_app_id = cfg.app_id
         self.bot_image: str | None = None
         self.bot_name: str | None = None
+        self.bot_can_customize = False
         self.user_id: str | None = None
         self.errors: list[str] = []
         self.connected = False
@@ -148,6 +157,18 @@ class WorkspaceRuntime:
             if name == "bot":
                 self.bot_user_id = info.get("user_id")
                 self.bot_id = info.get("bot_id")
+                headers = getattr(info, "headers", {}) or {}
+                scopes = {scope.strip() for key, value in headers.items() if key.lower() == "x-oauth-scopes"
+                          for scope in value.split(",")}
+                self.bot_can_customize = CUSTOMIZE_SCOPE in scopes
+                if self.bot_id and not self.bot_app_id and not self.bot_can_customize and "users:read" in scopes:
+                    try:
+                        bot = (await client.bots_info(bot=self.bot_id)).get("bot") or {}
+                        app_id = bot.get("app_id")
+                        if isinstance(app_id, str) and re.fullmatch(r"A[0-9A-Z]{6,}", app_id):
+                            self.bot_app_id = app_id
+                    except Exception as exc:
+                        log.info("workspace %s: reading the bot app ID failed: %s", self.label, slack_error(exc))
                 await self.refresh_identity()
             else:
                 self.user_id = info.get("user_id")
@@ -347,13 +368,29 @@ class WorkspaceRuntime:
         self.bot_name = profile.get("real_name") or profile.get("display_name") or user.get("real_name") or user.get("name")
         self.bot_image = (profile.get("image_192") or profile.get("image_72")) if profile.get("is_custom_image") else None
 
-    def default_identity(self) -> dict[str, str]:
-        """Name and picture for a post with no persona of its own: config's default_identity, else the app's own, else the
-        bundled neutral icon. Never empty, so Slack never draws its generated initials."""
+    def _saved_bot_identity(self) -> BotPostIdentity:
+        if not self.bot_can_customize or self.core.bot_identity is None:
+            return {}
+        return self.core.bot_identity(self.label)
+
+    def bot_identity_overrides(self) -> dict[str, str]:
+        saved = self._saved_bot_identity()
+        args = {"username": name} if (name := saved.get("username")) else {}
+        if icon := saved.get("icon_url"):
+            args["icon_url"] = icon
+        return args
+
+    def default_identity(self, persona: dict[str, Any] | None = None, *, saved: BotPostIdentity | None = None) -> dict[str, str]:
+        if saved is None:
+            saved = self._saved_bot_identity()
+        fallback = persona_post_args(persona, self.core.avatar_url)
         cfg = self.cfg.default_identity
-        out = {"username": cfg.get("name") or self.bot_name or "SwB"}
-        icon = cfg.get("icon_url") or self.bot_image or self.core.avatar_url(DEFAULT_ICON)
-        if icon:
+        out = {"username": saved.get("username") or fallback.get("username") or cfg.get("name") or self.bot_name or "SwB"}
+        if icon := saved.get("icon_url") or fallback.get("icon_url"):
+            out["icon_url"] = icon
+        elif emoji := fallback.get("icon_emoji"):
+            out["icon_emoji"] = emoji
+        elif icon := cfg.get("icon_url") or self.bot_image or self.core.avatar_url(DEFAULT_ICON):
             out["icon_url"] = icon
         else:
             out["icon_emoji"] = DEFAULT_EMOJI
@@ -367,13 +404,16 @@ class WorkspaceRuntime:
                 args["thread_ts"] = params["thread_ts"]
                 if params.get("reply_broadcast"):
                     args["reply_broadcast"] = True
-            if identity == "bot":
-                if not persona:
-                    args.update(self.default_identity())
+            if identity == "bot" and self.bot_can_customize:
+                saved = self._saved_bot_identity()
+                if saved.get("post_every_agent") and persona and not persona.get("workspace_default"):
+                    persona = None
+                if not persona or persona.get("workspace_default"):
+                    args.update(self.default_identity(persona, saved=saved))
                 else:
                     args.update(persona_post_args(persona, self.core.avatar_url))
                     if not (args.get("icon_url") or args.get("icon_emoji")):
-                        args.update({k: v for k, v in self.default_identity().items() if k != "username"})
+                        args.update({k: v for k, v in self.default_identity(saved=saved).items() if k != "username"})
             resp = await client.chat_postMessage(**args)
             channel, ts = resp["channel"], resp["ts"]
             self.core.store.mark_sent(self.team_id, channel, ts)

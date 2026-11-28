@@ -7,6 +7,7 @@ import { PRODUCT_NAME } from "@/app/brand"
 import { connectionNames, type ConnectionPlatform } from "@/app/navigation"
 import { preloadOnTouch } from "@/app/route-pages"
 import { ConnectionStatus } from "@/components/console/connection-status"
+import { ConfirmAction } from "@/components/console/confirm-action"
 import { Lamp } from "@/components/console/lamp"
 import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
@@ -228,10 +229,12 @@ export function SettingsPage() {
               <span className="order-last col-span-2 wrap-anywhere ps-[34px] text-muted-foreground sm:order-none sm:col-span-1 sm:ps-0">
                 {companion.capabilities.join(", ")}
               </span>
-              <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!csrf || disconnect.isPending}
-                aria-label={`Disconnect ${companion.name}`} onClick={() => disconnect.mutate(companion.id)}>
-                {disconnect.isPending && disconnect.variables === companion.id ? "Disconnecting…" : "Disconnect"}
-              </Button>
+              <ConfirmAction title={`Disconnect ${companion.name}?`} action="Disconnect" onConfirm={() => disconnect.mutate(companion.id)}>
+                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!csrf || disconnect.isPending}
+                  aria-label={`Disconnect ${companion.name}`}>
+                  {disconnect.isPending && disconnect.variables === companion.id ? "Disconnecting…" : "Disconnect"}
+                </Button>
+              </ConfirmAction>
             </li>
           ))}
         </ul>
@@ -291,13 +294,12 @@ export function SettingsPage() {
                             {passkey.last_used_at ? `Last used ${date(passkey.last_used_at)}` : `Added ${date(passkey.created_at)}`}
                           </div>
                         </div>
-                        <Button
-                          size="sm" variant="ghost" className="text-muted-foreground"
-                          disabled={!csrf || pending} aria-label={`Remove ${passkey.name}`}
-                          onClick={() => remove.mutate(passkey.id)}
-                        >
-                          {remove.isPending && remove.variables === passkey.id ? "Removing…" : "Remove"}
-                        </Button>
+                        <ConfirmAction title={`Remove ${passkey.name}?`} action="Remove" onConfirm={() => remove.mutate(passkey.id)}>
+                          <Button size="sm" variant="ghost" className="text-muted-foreground"
+                            disabled={!csrf || pending} aria-label={`Remove ${passkey.name}`}>
+                            {remove.isPending && remove.variables === passkey.id ? "Removing…" : "Remove"}
+                          </Button>
+                        </ConfirmAction>
                       </li>
                     ))}
                   </ul>

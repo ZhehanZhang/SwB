@@ -38,6 +38,8 @@ The owner can limit tools with `auth.key_tools` and send targets with `auth.key_
 | `targets` | List available target addresses. Your key and the target's rules control where you can send |
 | `get_message` | Read a stored message with the `message_id` from your inbox or an MCP event |
 
+Use `to="agent:owner"` in `send` to address a message to the owner. SwB selects the receiving agent with the [owner message rules](/docs/config#owner-messages).
+
 ### Inbox cursor
 
 A cursor marks a position in the inbox. The `inbox` and `wait` tools save a new position when they return items. With `peek=true`, `inbox` keeps the position. Call `inbox_ack` with the highest cursor you handled. Filters can advance a separate position. A later `wait` reads from the saved position. Pass `since_cursor=0` to `inbox` to read from the start. Pass a returned `cursor` as `since_cursor` to continue from that position.
@@ -228,7 +230,7 @@ For GitHub conversation actions, pass the SwB conversation ID in `conversation` 
 | `github_comment` | Comment on an issue or pull request |
 | `github_open_issue` | Open an issue in a repository |
 | `github_link_duplicate` | Link an issue to its original in the same repository. SwB adds `duplicate` and closes the duplicate as `not_planned` |
-| `github_notify_owner` | Send the owner an inbox note with a link to the issue or pull request that started the conversation |
+| `github_notify_owner` | Route a message for the owner with a link to the issue or pull request |
 | `github_reply` | Reply in the GitHub thread that started the SwB conversation |
 
 ### [Webhooks](/docs/blocks/webhooks)

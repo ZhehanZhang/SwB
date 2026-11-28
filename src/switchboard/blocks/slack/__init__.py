@@ -7,9 +7,11 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from .. import BlockError, Manifest, TargetKind
-from ...slack.config import AVATAR_RE, parse_config
+from .. import Manifest, TargetKind
+from ...bot_identity import DEFAULT_ICON, DEFAULT_NAME
+from ...slack.config import parse_config
 from ...slack.engine import SlackEngine
+from ...slack.slack import BotPostIdentity
 from .actions import SlackActions
 from .credentials import TOKEN_PREFIXES, check_slack_auth, slack_workspace, validate_token
 from .intake import SlackIntake
@@ -44,9 +46,6 @@ class SlackBlock(SlackIntake, SlackActions):
     )
 
     def __init__(self, core: "Switchboard", config: dict[str, Any]):
-        self.app_icon = config.get("app_icon")
-        if self.app_icon is not None and (not isinstance(self.app_icon, str) or not AVATAR_RE.fullmatch(self.app_icon)):
-            raise BlockError(f"blocks.{config.get('_name', 'slack')}.app_icon must be a file name like swb.png")
         self.token_names: dict[str, list[str]] = {}
         self.token_kinds: dict[str, dict[str, str]] = {}
         if config.get("engine", True):
@@ -63,8 +62,44 @@ class SlackBlock(SlackIntake, SlackActions):
                 for name in names:
                     if value := core.secret(name):
                         env[name] = value
-            self.engine = SlackEngine(parsed, core.data_dir, env=env, **core.slack_options)
+            self.engine = SlackEngine(parsed, core.data_dir, env=env, bot_identity=self._bot_identity, **core.slack_options)
         super().__init__(core, config)
+
+    def _bot_identity(self, space: str) -> BotPostIdentity:
+        identities = self.core.bot_identities
+        local, default = identities.get(self.name, space), identities.get(self.name)
+        name = (local.name if local else None) or (default.name if default else None)
+        icon = (local.icon if local else None) or (default.icon if default else None)
+        args: BotPostIdentity = {}
+        if local and local.post_every_agent:
+            args["post_every_agent"] = True
+            name = name or DEFAULT_NAME
+            icon = icon or DEFAULT_ICON
+        if name:
+            args["username"] = name
+        if icon and (base := self.identity_public_url()):
+            args["icon_url"] = f"{base}/avatars/{icon}"
+        return args
+
+    def identity_public_url(self) -> str | None:
+        if self.engine is not None and self.engine.config.public_base_url:
+            return self.engine.config.public_base_url
+        url = self.core.cfg.public_url
+        return url.rstrip("/") if url and url.startswith("https://") else None
+
+    def bot_identity_capabilities(self, space: str | None = None) -> tuple[bool, str | None]:
+        runtimes = self.engine.runtimes if self.engine is not None else {}
+        if space is not None and space not in runtimes:
+            return False, None
+        selected = (runtimes[space],) if space is not None else runtimes.values()
+        bots = [rt for rt in selected if "bot" in rt.clients]
+        if not bots:
+            return False, None
+        if not any(rt.bot_can_customize for rt in bots):
+            apps = {rt.bot_app_id for rt in bots}
+            app = next(iter(apps)) if len(apps) == 1 else None
+            return False, f"https://api.slack.com/apps/{app}/oauth" if app else "https://api.slack.com/apps"
+        return True, None
 
     def bind(self) -> None:
         for kind in TOKEN_PREFIXES:
@@ -123,8 +158,6 @@ class SlackBlock(SlackIntake, SlackActions):
         status = super().status()
         status["modes"] = self.core.modes.status(block=self.name)
         status.update(self.core.modes.chat_drop_status(self.name))
-        if self.app_icon is not None:
-            status["manual_steps"] = [f"Upload {self.app_icon} as the app icon at api.slack.com/apps, Basic Information, Display Information"]
         return status
 
     def status_for(self, principal: Principal) -> dict[str, Any]:

@@ -31,6 +31,8 @@ Muse uses model time only when the hook wakes a worker. Each wake is one full wo
 
 SwB answers each check from memory in about 1 ms of server time. Each check uses about 7 KB of network data. At a 5 second interval, this is about 120 MB each day. Ask Muse to set `poll_interval_secs` to a value up to 30 to use less data. A 30 second interval uses about 20 MB each day.
 
+In a live test, one check from Muse took about 430 ms. A reply to a test message arrived in about 30 seconds, including the worker run.
+
 ## Keep the link private
 
 Muse gives hook scripts access to local files only. So the link is in the script file, like the address of a webhook. Anyone with the link can see your unread count and when it changes. The link gives access to this count only. Muse keeps the script in its hook folder. Revoke the link if another person gets it.

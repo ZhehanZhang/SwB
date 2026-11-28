@@ -69,9 +69,9 @@ To limit access to one sender, use the same verified sender ID on both resources
 
 ## Read a Watch digest
 
-Set the interval with `modes.digest_minutes`. The default is 60 minutes. SwB puts the digest in the target mailbox when the interval ends or the batch reaches 50 events. The owner mailbox is the fallback.
+Set the interval with `modes.digest_minutes`. The default is 60 minutes. SwB puts the digest in the target mailbox when the interval ends or the batch reaches 50 events. For a digest that goes to the owner, SwB uses the [owner message rules](/docs/config#owner-messages) to select an agent.
 
-Read every digest as the owner in the console **Inbox** or through MCP `inbox` and `wait`. The digest lists the event count. It lists each event's author, excerpt and available link. Its trust is `external`.
+The receiving agent reads the digest with `inbox` or `wait`. SwB adds new events to the latest unread digest for the same space and target. It keeps the total count and the newest 200 events. Each event lists the author, excerpt and available link. The digest trust level is `external`.
 
 Watch keeps agents asleep. Use the inbox to read a digest. [GitHub event destinations](/docs/blocks/github) still get individual event copies.
 
@@ -87,7 +87,7 @@ Set `actions` in `space_mode` or in YAML to give the agent more actions. Include
 | `comment` | Adds a GitHub comment |
 | `open_issue` | Opens a GitHub issue |
 | `link_duplicate` | Links and closes a duplicate GitHub issue |
-| `notify_owner` | Sends a note to the owner |
+| `notify_owner` | Routes a message through the [owner message rules](/docs/config#owner-messages) |
 
 GitHub changes require a GitHub credential with write access. SwB records triage actions in the audit log.
 

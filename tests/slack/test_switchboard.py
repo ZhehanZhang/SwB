@@ -132,32 +132,14 @@ def test_owner_approval_form_redirects_to_inbox_and_agents_cannot_approve(sb):
     assert replay.status_code == 303 and replay.headers["location"] == "/inbox?notice=decide-refused"
 
 
-def test_owner_saves_a_slack_avatar_and_returns_to_agents(sb):
-    from io import BytesIO
-
-    from PIL import Image
-
+def test_per_agent_avatar_uploads_are_gone(sb):
     core, client, _ = sb
-    assert client.get("/api/agents/avatars").status_code == 401
-    assert client.get("/api/agents/avatars", headers=OWNER).json() == {"personas": [
-        {"id": "avatar-test", "name": "Example", "accept": "image/png"},
-        {"id": "gate", "name": "Gate", "accept": "image/png"},
-        {"id": "other", "name": "Other", "accept": "image/png"},
-    ]}
     csrf = client.get("/auth/session", headers=OWNER).json()["csrf"]
-    image = BytesIO()
-    Image.new("RGB", (2, 2)).save(image, format="PNG")
-    data = image.getvalue()
     path = "/slack/personas/avatar-test/avatar"
-    files = {"file": ("example.png", data, "image/png")}
-    assert client.post(path, headers=OWNER, files=files).status_code == 403
-    assert client.post(path, data={"csrf": csrf}, files=files).status_code == 401
-    invalid = client.post(path, headers=OWNER, data={"csrf": csrf}, files={"file": ("example.png", b"invalid", "image/png")})
-    assert invalid.status_code == 303 and invalid.headers["location"] == "/agents?notice=avatar-refused"
-    assert not (core.slack.avatar_dir / "example.png").exists()
-    saved = client.post(path, headers={**OWNER, "origin": PUBLIC}, data={"csrf": csrf}, files=files)
-    assert saved.status_code == 303 and saved.headers["location"] == "/agents?notice=avatar-saved"
-    assert client.get("/avatars/example.png").content == data
+    response = client.post(path, headers={**OWNER, "origin": PUBLIC}, data={"csrf": csrf}, files={"file": ("example.png", b"x", "image/png")})
+    assert response.status_code in (404, 405)
+    assert client.get("/api/agents/avatars", headers=OWNER).json() == {"error": "agent_not_found"}
+    assert not hasattr(core.slack, "avatar_dir")
 
 
 def test_captain_final_reply_is_posted_back_as_the_captain(sb):

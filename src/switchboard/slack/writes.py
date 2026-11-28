@@ -67,8 +67,14 @@ class WriteGate:
             raise WriteError(f"writes as {identity} in {workspace} are disabled (policy: never)")
         thread_persona = (self.core.thread_persona(workspace, params.get("channel"), params.get("thread_ts"), agent=key.id)
                           if action == "post_message" and not thread_only else None)
-        persona = resolve_persona(cfg, ws, identity, key, persona_id, self.core.personas(), thread_persona) if action == "post_message" else None
-        persona_d = asdict(persona) if persona else None
+        persona_d = None
+        if action == "post_message":
+            personas = self.core.personas()
+            persona = resolve_persona(cfg, ws, identity, key, persona_id, personas, thread_persona, workspace_default=False)
+            if persona is not None:
+                persona_d = asdict(persona)
+            elif identity == "bot" and ws.default_persona and ws.default_persona in personas:
+                persona_d = {**asdict(personas[ws.default_persona]), "workspace_default": True}
         loop_guard = False
         if identity == "bot" and action == "post_message" and params.get("thread_ts") and policy == "free" and not force_approval:
             count = store.bot_posts_in_thread(workspace, params["channel"], params["thread_ts"], since=self.core.clock() - 3600)

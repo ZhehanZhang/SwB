@@ -12,6 +12,7 @@ from zipfile import ZipFile
 
 import httpx
 
+from switchboard import USER_AGENT
 from switchboard.sessions import SESSION_COOKIE
 
 
@@ -37,7 +38,7 @@ with subprocess.Popen([swb, "up"], env=env, stdout=subprocess.PIPE, stderr=subpr
     reader = Thread(target=read_output, daemon=True)
     reader.start()
     try:
-        with httpx.Client(trust_env=False, timeout=2) as client:
+        with httpx.Client(headers={"User-Agent": USER_AGENT}, trust_env=False, timeout=2) as client:
             deadline = time.monotonic() + 15
             while True:
                 if server.poll() is not None or time.monotonic() >= deadline:

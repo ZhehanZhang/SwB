@@ -10,6 +10,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from email.parser import BytesParser
 from email.policy import default
+from functools import partial
 from io import BytesIO
 
 import httpx
@@ -21,6 +22,7 @@ from starlette.testclient import TestClient
 from conftest import OWNER, PUBLIC, STATIC_KEY, Clock, access_verifier, call, payload, use_capy
 from switchboard.app import create_app
 from switchboard.blocks import BlockError
+from switchboard.bot_identity import BotIdentity
 from switchboard.chat import Persona
 from switchboard.core import Switchboard
 from test_project_routines import Anthropic, TOKEN as ROUTINE_TOKEN
@@ -88,7 +90,7 @@ class FakeBotAPI:
                                                    "parameters": {"retry_after": delay}})
             result = {"message_id": self.last_message_id}
         else:
-            assert method == "setMessageReaction"
+            assert method in ("setMessageReaction", "setMyName")
             result = True
         return httpx.Response(200, json={"ok": True, "result": result})
 
@@ -182,6 +184,33 @@ def test_avatar_error_is_non_fatal_and_does_not_expose_the_token(run, caplog):
         assert TOKEN not in caplog.text and TOKEN not in json.dumps(status)
 
 
+def test_telegram_updates_only_the_requested_global_profile_fields(run):
+    with run() as (core, client, block, bot, _):
+        client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+        icon = core.find_avatar("swb.png").read_bytes()
+        client.portal.call(block.update_bot_identity, "Release Bot", None)
+        assert block.setup()["bot"]["name"] == "Release Bot"
+        assert bot.calls["setMyName"] == [{"name": "Release Bot"}]
+        assert not bot.calls["setMyProfilePhoto"]
+        client.portal.call(block.update_bot_identity, None, icon)
+        client.portal.call(partial(block.update_bot_identity, "SwB", icon, reset=True))
+        with pytest.raises(BlockError, match="applies to every chat"):
+            client.portal.call(partial(block.update_bot_identity, "Group Name", icon, space="group"))
+        assert bot.calls["setMyName"] == [{"name": "Release Bot"}, {"name": "SwB"}]
+        assert len(bot.calls["setMyProfilePhoto"]) == 2
+        for fields in bot.calls["setMyProfilePhoto"]:
+            assert json.loads(fields["photo"].get_payload(decode=True)) == {"type": "static", "photo": "attach://p"}
+            assert fields["p"].get_content_type() == "image/jpeg"
+
+
+def test_telegram_saved_icon_prevents_startup_yaml_from_replacing_it(run):
+    with run(connect=False) as (core, client, _, _, _):
+        client.portal.call(core.bot_identities.set, "telegram", "", BotIdentity("Release Bot", "bot-" + "a" * 48 + ".png"))
+    with run(avatar="swb.png") as (_, client, _, bot, _):
+        client.portal.call(lambda: until(lambda: bot.calls["getUpdates"]))
+        assert not bot.calls["setMyProfilePhoto"]
+
+
 def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
     with run() as (core, c, block, bot, anthropic):
         c.portal.call(bot.deliver, update(11, mention=True, text="example-runner can you check?", topic=42))
@@ -189,6 +218,7 @@ def test_owner_mention_and_sticky_reply_go_through_chat_core(run):
         assert f"https://t.me/c/{str(GROUP)[4:]}/11" in anthropic.fired[0][1]
         assert bot.calls["setMessageReaction"] == [{"chat_id": GROUP, "message_id": 11, "reaction": [{"type": "emoji", "emoji": "👀"}]}]
         handle = core.store.one("SELECT handle FROM chat_relays")["handle"]
+        assert core.inbox.handle(handle)["title"] == "can you check?"
         answer = 'Result: <ok> & "ready"'
         result = payload(call(c, STATIC_KEY, "reply", {"conversation": handle, "text": answer}))
         assert result["delivered"]

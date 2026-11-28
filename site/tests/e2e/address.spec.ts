@@ -1,4 +1,6 @@
+import { once } from 'node:events';
 import { readFileSync, readdirSync } from 'node:fs';
+import { createServer, get, type ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { locales, localize } from '../../lib/i18n';
@@ -362,6 +364,50 @@ test('reserves the desktop TOC column before its markup arrives', async ({ page 
   await page.route('**/_next/static/**/*.js', (route) => route.abort());
   await page.reload();
   expect(await layout()).toEqual(complete);
+});
+
+test('reserves the desktop sidebar column before its markup arrives', async ({ page, request, baseURL, viewport }) => {
+  test.skip(!viewport || viewport.width < 768, 'The sidebar is a drawer on mobile.');
+  const response = await request.get(claude);
+  expect(response.ok()).toBe(true);
+  const html = await response.text();
+  const split = html.indexOf('<div data-sidebar-placeholder');
+  expect(split).toBeGreaterThan(0);
+  const upstream = new URL(baseURL!).origin;
+  let documentResponse: ServerResponse | undefined;
+  const server = createServer((incoming, outgoing) => {
+    if (incoming.url === claude) {
+      documentResponse = outgoing;
+      outgoing.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      outgoing.write(html.slice(0, split));
+      return;
+    }
+    get(upstream + incoming.url, (asset) => {
+      outgoing.writeHead(asset.statusCode!, asset.headers);
+      asset.pipe(outgoing);
+    }).on('error', () => outgoing.destroy());
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Expected a TCP address');
+    await page.goto(`http://127.0.0.1:${address.port}${claude}`, { waitUntil: 'commit' });
+    await page.waitForFunction(() => performance.getEntriesByName('first-contentful-paint').length > 0);
+
+    const sidebar = page.locator('#nd-sidebar');
+    const column = () => page.locator('.swb-docs').evaluate((layout) =>
+      getComputedStyle(layout).getPropertyValue('--fd-sidebar-col').trim(),
+    );
+    await expect(sidebar).toHaveCount(0);
+    expect(await column()).toBe('268px');
+    documentResponse!.end(html.slice(split));
+    await expect(sidebar).toBeVisible();
+    expect(await column()).toBe('268px');
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });
 
 test('adds the existing Webhooks prompt and guide to the picker', async ({ page, context }) => {

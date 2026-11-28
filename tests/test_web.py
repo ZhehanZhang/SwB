@@ -114,7 +114,7 @@ def test_missing_build_does_not_prevent_login_or_mcp_starting(make, monkeypatch,
     _, client = make()
     missing = client.get("/", headers=OWNER)
     assert missing.status_code == 503
-    assert "Run npm run build --prefix web" in missing.text
+    assert "<h1>Build the console</h1>" in missing.text and "<code>npm run build --prefix web</code>" in missing.text
     assert client.get("/login").status_code == 200
     assert client.get("/healthz").status_code == 200
     assert client.get("/mcp").status_code == 401

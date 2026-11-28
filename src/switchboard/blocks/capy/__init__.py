@@ -23,7 +23,8 @@ from ...block_env import CAPY_AGENT_KEY_PREFIX as AS_PREFIX
 from ...block_env import CAPY_KEY, CAPY_SEND_KEY
 from ...claims import ClaimInputError
 from ...refusals import CONVERSATION_REQUIRED, SCOPE_REQUIRED, TARGET_REQUIRED
-from ...subject import lead_with_subject, subject
+from ...subject import display_subject, lead_with_subject, subject
+from ...targets import CAPTAIN_SLUG, CaptainTargetError, captain_selection_error
 from .. import Action, Address, AgentSpec, Block, BlockError, BlockRefused, Call, Manifest, TargetKind
 from .api import CapyAPI, CapyError, pr_links, thread_summary
 from .stream import Backoff, Frame, StreamClosed, ThreadStream
@@ -61,11 +62,13 @@ def _api_timestamp(value: Any) -> str | None:
     return None
 
 
-def parse_target(text: str) -> dict[str, str]:
+def parse_target(text: str) -> dict[str, Any]:
     """'captain:<id|name>', 'project:<id|code|name>', 'thread:<jam_id>', or a bare jam_/project_ id or Captain name."""
     text = (text or "").strip()
     kind, sep, value = text.partition(":")
     if sep and kind.lower() in TARGET_KINDS and value.strip():
+        if kind.casefold() == CAPTAIN_SLUG and value.strip().casefold() == CAPTAIN_SLUG:
+            return {CAPTAIN_SLUG: value.strip(), "explicit_name": True}
         return {kind.lower(): value.strip()}
     if text.startswith("jam_"):
         return {"thread": text}
@@ -473,15 +476,17 @@ class CapyBlock(Block):
         task = (task or "").strip()
         if not task:
             raise DestinationError("task is empty")
+        display_title = (call.handle_meta.get("display_subject") if "display_subject" in call.handle_meta
+                         else display_subject(title, task, "")) or None
         if title:
             title = subject("", "", None, title, verb="") or None
         p = call.core.project(project)
         api = self.need_api()
         tgt, defaults, level = self.plan(call.principal, p, target)
         if level == "explicit":
-            tgt, extra = await self.validate_route_target(tgt, {})
+            tgt, extra = await self.validate_route_target(tgt, {}, reveal=call.principal.is_memory_owner)
             defaults = {**defaults, **extra}
-        call.note(target=describe(tgt), title=title, excerpt=task)
+        call.note(target=describe(tgt), title=display_title, excerpt=task)
         repos = sorted({r.strip().lower() for r in [*(repos or []), *(defaults.get("repos") or [])] if r.strip()})
         allowed = self._allowed_repos(p, defaults)
         bad = [r for r in repos if r not in allowed]
@@ -539,9 +544,10 @@ class CapyBlock(Block):
         except CapyError as e:
             raise DestinationError(f"Capy API refused the delegation: {e}") from e
         meta |= {"target": tgt, "route": level, "task": task[:300], "same": same, **call.handle_meta}
+        meta.pop("display_subject", None)
         kind = next((k for k in TARGET_KINDS if tgt.get(k)), "thread")
         call.core.inbox.open_handle(handle=handle, owner=call.principal.source, destination=self.name, ref=thread_id,
-                                    project=p.slug if p else None, title=title, meta=meta, status=status, stream_cursor=cursor,
+                                    project=p.slug if p else None, title=display_title, meta=meta, status=status, stream_cursor=cursor,
                                     target=str(Address(self.name, kind, str(tgt[kind]) if tgt.get(kind) else thread_id)))
         call.note(ref=thread_id)
         self.follow(thread_id)
@@ -804,7 +810,7 @@ class CapyBlock(Block):
             return {"scope": scope, "items": list(await asyncio.gather(*(one(h) for h in hs)))}
         visible = self.core.inbox.provider_refs(self.name, owner=owner, scopes=p.scopes) if owner is not None else None
         if scope == "captain":
-            cid = (await self.resolve_captain(captain))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
+            cid = (await self.resolve_captain(captain, reveal=call.principal.is_memory_owner))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
             if not cid:
                 raise DestinationError("no Captain is routed; pass captain")
             crew = [t for t in await api.captain_crew(cid) if visible is None or t["id"] in visible]
@@ -875,12 +881,27 @@ class CapyBlock(Block):
         out["changed"].append({"route": r.as_dict()})
         return out
 
-    async def resolve_captain(self, hint: str) -> dict[str, Any]:
+    async def resolve_captain(self, hint: str, *, reveal: bool = True, explicit_name: bool = False) -> dict[str, Any]:
         hint = hint.strip()
-        captains = await self.need_api().list_captains()
+        captains = [c for c in await self.need_api().list_captains() if not c.get("archived")]
         exact = next((c for c in captains if (c.get("id") or "").lower() == hint.lower()), None)
         if exact is not None:
             return exact
+        candidates = [{"kind": CAPTAIN_SLUG, "block": self.name, "id": c["id"],
+                       "address": str(Address(self.name, CAPTAIN_SLUG, c["id"])),
+                       "name": c.get("name") or c.get("title"),
+                       "slugs": [_slug(c.get("name") or c.get("title") or ""), str(c.get("code") or "").lower()]}
+                      for c in captains]
+        slugs = self.core.slug_map(candidates)
+        if explicit_name and hint.casefold() == CAPTAIN_SLUG:
+            matches = [c for c in captains if hint.casefold() in {(c.get(k) or "").casefold() for k in ("code", "name", "title")}]
+            if len(matches) == 1:
+                return matches[0]
+            raise CaptainTargetError(captain_selection_error(candidates, slugs, reveal=reveal))
+        if target := slugs.get(hint.casefold()):
+            return next(c for c in captains if c["id"] == target["id"])
+        if hint.casefold() == CAPTAIN_SLUG:
+            raise CaptainTargetError(captain_selection_error(candidates, slugs, reveal=reveal))
         for c in captains:
             names = {(c.get(k) or "").lower() for k in ("code", "name", "title")}
             if hint.lower() in names:
@@ -896,7 +917,7 @@ class CapyBlock(Block):
 
     async def captain_digest(self, call: Call, *, captain: str | None = None, project: str | None = None) -> dict[str, Any]:
         api = self.need_api()
-        cid = (await self.resolve_captain(captain))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
+        cid = (await self.resolve_captain(captain, reveal=call.principal.is_memory_owner))["id"] if captain else self._default_captain(call.principal, call.core.project(project))
         if not cid:
             raise DestinationError("no Captain is routed; pass captain")
         d, crew = await asyncio.gather(api.captain_digest(cid), api.captain_crew(cid))
@@ -907,7 +928,7 @@ class CapyBlock(Block):
 
     # Routes and context ------------------------------------------------------------
 
-    async def validate_route_target(self, target: dict[str, Any], defaults: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def validate_route_target(self, target: dict[str, Any], defaults: dict[str, Any], *, reveal: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
         kinds = [k for k in TARGET_KINDS if target.get(k)]
         if len(kinds) != 1:
             raise DestinationError("a Capy route target names exactly one of captain, project or thread")
@@ -931,7 +952,7 @@ class CapyBlock(Block):
         kind, value = kinds[0], str(target[kinds[0]]).strip()
         try:
             if kind == "captain":
-                c = await self.resolve_captain(value)
+                c = await self.resolve_captain(value, reveal=reveal, explicit_name=target.get("explicit_name") is True)
                 return {"captain": c["id"], "name": c.get("name") or c.get("title"), "captain_project": c.get("projectId")}, clean
             if kind == "project":
                 if value.startswith("project_"):

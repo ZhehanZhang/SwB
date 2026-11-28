@@ -35,6 +35,8 @@ description: SwB 提供給代理的 MCP 工具。
 | `result` | 取得對話的最終回覆。在支援的情況下，用 `tail` 設定近期回覆或訊息的數量 |
 | `cancel` | 停止追蹤某段對話 |
 | `targets` | 列出可用的目標位址。能傳送到哪裡，由你的金鑰和目標的規則決定 |
+
+在 `send` 中設定 `to="agent:owner"`，即可傳送訊息給擁有者。SwB 依照[擁有者訊息規則](/zh-Hant/docs/config#傳給擁有者的訊息)選擇接收訊息的代理。
 | `get_message` | 用收件匣或 MCP 事件中的 `message_id` 讀取已儲存的訊息 |
 
 ### 收件匣讀取位置
@@ -217,7 +219,7 @@ description: SwB 提供給代理的 MCP 工具。
 | `github_comment` | 在議題或 Pull Request 上留言 |
 | `github_open_issue` | 在存放庫中建立議題 |
 | `github_link_duplicate` | 把議題連結到同一個存放庫中的原始議題。SwB 會加上 `duplicate`，並以 `not_planned` 關閉重複的議題 |
-| `github_notify_owner` | 傳送一則收件匣通知給擁有者，並附上發起這段對話的議題或 Pull Request 連結 |
+| `github_notify_owner` | 傳遞給擁有者的訊息，並附上議題或 Pull Request 的連結 |
 | `github_reply` | 在發起 SwB 對話的 GitHub 議題或 Pull Request 中回覆 |
 
 ### [Webhooks](/zh-Hant/docs/blocks/webhooks)

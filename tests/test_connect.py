@@ -296,12 +296,10 @@ def test_slack_connect_names_every_credential_on_the_grouped_form(make):
         assert f">{label}</label>" in page.text and f'name="{name}"' in page.text
 
 
-def test_slack_app_icon_is_a_manual_step_in_status(make):
+def test_legacy_slack_app_icon_does_not_add_a_manual_upload_step(make):
     _, client = make(config=base_config(version=2, blocks={"mcp": {}, "slack": {"app_icon": "swb.png"}}))
     status = payload(call(client, STATIC_KEY, "switchboard_status"))
-    assert status["destinations"]["slack"]["manual_steps"] == [
-        "Upload swb.png as the app icon at api.slack.com/apps, Basic Information, Display Information",
-    ]
+    assert "manual_steps" not in status["destinations"]["slack"]
 
 
 def test_status_missing_oauth_and_missing_github_routes(make):
