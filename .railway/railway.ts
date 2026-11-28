@@ -3,9 +3,9 @@ import { defineRailway, github, preserve, project, service, volume } from "railw
 export default defineRailway(() => {
   const data = volume("switchboard-data", { sizeMB: 1024 });
   const swb = service("swb", {
-    source: github("ZhehanZhang/SwB"),
+    source: github("ZhehanZhang/SwB", { branch: "release/1.0" }),
     build: { builder: "DOCKERFILE" },
-    deploy: { requiredMountPath: "/data" },
+    deploy: { requiredMountPath: "/data", sleepApplication: false, overlapSeconds: 0 },
     healthcheck: "/healthz",
     replicas: 1,
     env: {
