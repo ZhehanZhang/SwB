@@ -29,7 +29,7 @@ const comparison = new Set([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.Equal
 const forbidden = /[:;—]|\b(?:no|not|never|without|nothing|none|cannot|[a-z]+n['’ʼ]t)\b/giu
 
 function prose(text) {
-  if (/^curl -s -X POST https?:\/\/\S+\/connect -H 'content-type: application\/json' -d '\{"code": "[\w-]+"\}'$/.test(text)) return ""
+  if (/^curl -s -A 'SwB\/[\w.+!-]+' -X POST https?:\/\/\S+\/connect -H 'content-type: application\/json' -d '\{"code": "[\w-]+"\}'$/.test(text)) return ""
   if (text.startsWith("[") && text.endsWith("]") && isIP(text.slice(1, -1)) === 6) return ""
   return text
     .replace(/https?:\/\/[^\s<>"'`—]+/g, url => url.match(/[:;]+$/)?.[0] ?? "")
@@ -164,7 +164,7 @@ test("literal syntax and prohibited prose are distinct", () => {
   const matches = text => prose(text).match(forbidden)
   assert.equal(matches("Pair at 09:30 UTC with routine:example at https://swb.one/claim/no"), null)
   assert.equal(matches("Set `routes:` in the file"), null)
-  assert.equal(matches("curl -s -X POST https://swb.one/connect -H 'content-type: application/json' -d '{\"code\": \"example\"}'"), null)
+  assert.equal(matches("curl -s -A 'SwB/1.0.0' -X POST https://swb.one/connect -H 'content-type: application/json' -d '{\"code\": \"example\"}'"), null)
   assert.deepEqual(matches("Status:ready; this ISN’T active—never without it."), [":", ";", "ISN’T", "—", "never", "without"])
   assert.deepEqual(matches("Open https://swb.one/claim; then check."), [";"])
   assert.deepEqual(matches(jsxDecode("N&#111; status&mdash;check.")), ["No", "—"])

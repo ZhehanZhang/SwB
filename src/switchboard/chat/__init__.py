@@ -35,7 +35,8 @@ from ..env import env_value
 from ..inbox import CONTEXT_NOTE
 from ..modes import PROVIDERS, ChatDrop, chat_target_drop
 from ..slack.config import AVATAR_RE
-from ..subject import subject, wake_text
+from ..subject import display_subject, subject, wake_text
+from ..targets import CAPTAIN_SLUG, captain_selection_error
 from ..trust import frame_sender
 from ..visibility import Who
 from .claims import Claims
@@ -136,6 +137,7 @@ class ChatBlock(Block):
         self.principal = Principal(source=self.platform, client_id=f"{self.platform}-block", kind=self.platform, origin=self.platform)
         self.claims = Claims(core, self.name)
         self.targets_by_slug: dict[str, dict[str, Any]] = {}
+        self.captain_error = "Connect a Captain or choose another target."
         self.refresh_s = float(config.get("refresh_minutes", 30)) * 60
         self.refreshed_at: float | None = None
         self._senders: dict[str, list[float]] = {}
@@ -293,6 +295,8 @@ class ChatBlock(Block):
             found = await self.core.targets(refresh=True)
             aliases = {str(k).lower(): str(v).lower() for k, v in (self.config.get("target_aliases") or {}).items()}
             self.targets_by_slug = {s: t for s, t in self.core.slug_map(found, aliases).items() if t.get("block") != self.name}
+            if CAPTAIN_SLUG not in self.targets_by_slug:
+                self.captain_error = captain_selection_error(found, self.targets_by_slug)
             self.refreshed_at = self.core.clock()
 
     def persona_for(self, target: dict[str, Any] | None) -> Persona | None:
@@ -392,11 +396,19 @@ class ChatBlock(Block):
         explicit = False
         if addressed and channel_mode is None:
             m = SLUG_RE.match(text)
-            if m and m.group(1).lower() in self.targets_by_slug:
+            if m and (m.group(1).lower() in self.targets_by_slug or m.group(1).casefold() == CAPTAIN_SLUG):
                 slug, explicit, text = m.group(1).lower(), True, text[m.end():].strip()
         sticky = self.core.store.one("SELECT target FROM chat_threads WHERE block = ? AND space = ? AND channel = ? AND root = ?",
                                      (self.name, msg.space, msg.channel, root))
         slug = channel_mode["target"] if channel_mode else slug or (sticky["target"] if sticky else None) or work_target or space.default_target
+        if (slug or "").casefold() == CAPTAIN_SLUG and CAPTAIN_SLUG not in self.targets_by_slug:
+            self._drop(msg, ChatDrop.CAPTAIN_TARGET)
+            if addressed and sender_class == "owner":
+                with contextlib.suppress(Exception):
+                    dm = msg.channel if msg.dm else await self.open_dm(msg.space, msg.user)
+                    if dm:
+                        await self.post(msg.space, dm, self.captain_error)
+            return None
         routed = route is not None and not explicit and slug == str(route)
         target = self.targets_by_slug.get(slug or "") or next((t for t in self.targets_by_slug.values() if t["address"] == slug), None)
         if routed and target is None and route.block != "agent":
@@ -407,6 +419,7 @@ class ChatBlock(Block):
         trust, framed = frame_sender(text, name, f"{self.platform}:{msg.user}", f"in {self.platform} {msg.space} {place}",
                                     owner=sender_class == "owner")
         sender = {"kind": self.platform, "space": msg.space, "channel": msg.channel, "channel_name": msg.channel_name, "user": msg.user, "user_name": name,
+                  **({"thread": msg.thread} if msg.thread else {}),
                   "is_bot": msg.is_bot, "trust": trust, "message": msg.message, "root": root, "link": msg.link}
         event = {"event_id": f"{msg.space}:{msg.channel}:{msg.message}", "chat_kind": "dm" if msg.dm else "mention" if msg.mention else "reply" if ours else "listen",
                  "addressed_to_us": addressed, "text": framed,
@@ -473,7 +486,7 @@ class ChatBlock(Block):
             return row["handle"]
         meta = {"space": space, **({"channel": thread[0], "root": thread[1]} if thread else {})}
         return self.core.inbox.open_handle(owner=agent, destination=self.name, ref=ref, project=self.spaces[space].project,
-                                           title=f"{self.manifest.title} {space}", meta=meta, status="following")
+                                           title=None, meta=meta, status="following")
 
     async def note_context(self, space: Space, msg: Incoming, event: dict[str, Any], target: dict[str, Any] | None) -> None:
         """A non-owner's message to something private: a context item for the agents behind its target. It wakes
@@ -515,14 +528,15 @@ class ChatBlock(Block):
                 task.add_done_callback(lambda t: t.exception())
             return False
 
-    async def dm_owner(self, text: str) -> None:
-        for space in self.spaces.values():
-            for owner in sorted(self.owners(space)):
+    async def dm_owner(self, text: str) -> bool:
+        for destination in self.spaces.values():
+            for owner in sorted(self.owners(destination)):
                 with contextlib.suppress(Exception):
-                    channel = await self.open_dm(space.label, owner)
+                    channel = await self.open_dm(destination.label, owner)
                     if channel:
-                        await self.post(space.label, channel, text)
-                        return
+                        await self.post(destination.label, channel, text)
+                        return True
+        return False
 
     def _thread_key(self, space: str, channel: str, root: str) -> str:
         return f"{self.name}:{space}:{channel}:{root}"
@@ -541,7 +555,8 @@ class ChatBlock(Block):
         project = route_project or project
         trust = event["trust"]
         kw: dict[str, Any] = {"task": task, "title": title,
-                              "handle_meta": {"chat_trust": trust, **({"boundary": project} if project else {})}}
+                              "handle_meta": {"chat_trust": trust, "display_subject": display_subject(None, event["text"], ""),
+                                              "display_from": event["from"], **({"boundary": project} if project else {})}}
         if mode:
             kw["handle_meta"].update(channel_mode=mode)
             if mode["project"]:

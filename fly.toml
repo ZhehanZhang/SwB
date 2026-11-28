@@ -4,12 +4,14 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
   build-target = "paas"
 
+[deploy]
+  strategy = "rolling"
+
 [env]
   PORT = "8000"
   SWB_DATA_DIR = "/data"
   SWB_DEPLOY_PLATFORM = "fly"
 
-# SwB runs as one Machine on one volume. Deploy with fly deploy --ha=false.
 [mounts]
   source = "switchboard_data"
   destination = "/data"

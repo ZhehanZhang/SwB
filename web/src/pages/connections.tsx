@@ -1,9 +1,9 @@
-import { useLayoutEffect, useState, type ReactNode } from "react"
+import { useLayoutEffect, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronLeft, ExternalLink } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { connectionNames, isConnectionPlatform, type ConnectionPlatform } from "@/app/navigation"
-import { ChannelModeRow } from "@/components/console/channel-mode-row"
+import { BotIdentityEditors } from "@/components/console/bot-identity"
 import { ChannelModeTable } from "@/components/console/channel-mode-table"
 import { ConnectionStatus } from "@/components/console/connection-status"
 import { CopyButton } from "@/components/copy-button"
@@ -11,12 +11,11 @@ import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
 import { Button } from "@/components/ui/button"
 import { channelModesQuery, type ModeRow, type ModesStatus } from "@/lib/channel-modes"
-import { connectionQuery, type BotAvatar, type DiscordDetails, type StatusPlatform, type TelegramDetails, type Webhook } from "@/lib/connections"
+import { connectionQuery, type DiscordDetails, type StatusPlatform, type TelegramDetails, type Webhook } from "@/lib/connections"
 import { cn } from "@/lib/utils"
 
 const cell = "py-3 pe-3 align-top wrap-anywhere"
 const identityRow = "grid min-h-[41px] grid-cols-[minmax(74px,25%)_minmax(0,1fr)] items-center gap-3 border-b py-2.5"
-const avatarLabels = { applied: "Applied", failed: "Update failed", pending: "Pending", not_configured: "" }
 const chatStates = { direct: "Direct messages", listening: "Listening", unlisted: "Unlisted" }
 const slackIntake = { socket: "Socket Mode", poll: "Polling", none: "" }
 const webhookEventTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
@@ -40,8 +39,8 @@ function StatusTable({ label, headings, children, compact = false, wide = false 
   )
 }
 
-function ChannelRow({ name, type, mapping, mode, current, status }: {
-  name: ReactNode; type?: string; mapping: string | null; mode: string; current?: ModeRow; status?: ModesStatus | null
+function ChannelRow({ name, type, mapping, mode }: {
+  name: ReactNode; type?: string; mapping: string | null; mode: string
 }) {
   const columns = type ? 4 : 3
   const desktopCell = cn(cell, "hidden md:table-cell")
@@ -52,9 +51,7 @@ function ChannelRow({ name, type, mapping, mode, current, status }: {
       <td className={`${desktopCell} font-mono text-mono-sm text-muted-foreground`}>{mapping}</td>
     </>
   )
-  return current && status ? (
-    <ChannelModeRow row={current} status={status} label={name} mapping={mapping} columns={columns}>{leading}</ChannelModeRow>
-  ) : (
+  return (
     <tr className="border-b">
       {leading}
       <td className={`${desktopCell} text-muted-foreground`}>{mode}</td>
@@ -80,7 +77,11 @@ function DiscordServers({ guilds, rows, status }: { guilds: DiscordDetails["guil
       <h2 id="discord-servers" className="text-heading-md">Servers</h2>
       {guilds.length > 0 && (
         <div className="mt-4 space-y-6">
-          {guilds.map(guild => (
+          {guilds.map(guild => {
+            const editable = rows.filter(row => row.space === guild.space && guild.channels.some(channel => channel.id === row.channel))
+            const other = guild.channels.filter(channel => !editable.some(row => row.channel === channel.id))
+            const label = `Channels in ${guild.name ?? guild.id}`
+            return (
             <section key={guild.id} aria-labelledby={`discord-server-${guild.id}`}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <h3 id={`discord-server-${guild.id}`} className="wrap-anywhere text-label-sm">{guild.name ?? guild.id}</h3>
@@ -88,18 +89,15 @@ function DiscordServers({ guilds, rows, status }: { guilds: DiscordDetails["guil
                   <span className="text-caption text-muted-foreground">Owner <span className="font-mono">{guild.owner_id}</span></span>
                 )}
               </div>
-              {guild.channels.length > 0 && (
-                <StatusTable label={`Channels in ${guild.name ?? guild.id}`} headings={["Channel", "Space or project", "Mode"]} compact>
-                  {guild.channels.map(channel => {
-                    const current = rows.find(row => row.channel === channel.id && row.space === guild.space)
-                    return <ChannelRow key={channel.id} name={channel.name ?? channel.id}
-                      mapping={current ? current.project ?? current.space : channel.project ?? guild.space}
-                      mode={channel.listening ? "Listening" : "Unlisted"} status={status} current={current} />
-                  })}
+              {status && <ChannelModeTable label={label} rows={editable} status={status} />}
+              {other.length > 0 && (
+                <StatusTable label={editable.length ? `Other channels in ${guild.name ?? guild.id}` : label} headings={["Channel", "Space or project", "Mode"]} compact>
+                  {other.map(channel => <ChannelRow key={channel.id} name={channel.name ?? channel.id}
+                    mapping={channel.project ?? guild.space} mode={channel.listening ? "Listening" : "Unlisted"} />)}
                 </StatusTable>
               )}
             </section>
-          ))}
+          )})}
         </div>
       )}
     </section>
@@ -107,16 +105,18 @@ function DiscordServers({ guilds, rows, status }: { guilds: DiscordDetails["guil
 }
 
 function TelegramChats({ chats, rows, status }: { chats: TelegramDetails["chats"]; rows: ModeRow[]; status?: ModesStatus | null }) {
+  const editable = rows.filter(row => chats.some(chat => chat.space === row.space && chat.id === row.channel))
+  const other = chats.filter(chat => !editable.some(row => row.space === chat.space && row.channel === chat.id))
   return (
     <section aria-labelledby="telegram-chats">
       <h2 id="telegram-chats" className="text-heading-md">Channels</h2>
-      {chats.length > 0 && (
-        <StatusTable label="Telegram channels" headings={["Channel", "Type", "Space", "Mode"]} compact>
-          {chats.map(chat => (
+      {status && <ChannelModeTable label="Telegram channels" rows={editable} status={status} />}
+      {other.length > 0 && (
+        <StatusTable label={editable.length ? "Other Telegram channels" : "Telegram channels"} headings={["Channel", "Type", "Space", "Mode"]} compact>
+          {other.map(chat => (
             <ChannelRow key={chat.id} name={chat.title ?? <span className="font-mono text-mono-sm">{chat.id}</span>}
               type={chat.type ? chat.type.charAt(0).toUpperCase() + chat.type.slice(1) : "Unknown"}
-              mapping={chat.space} mode={chatStates[chat.listen]} status={status}
-              current={rows.find(row => row.channel === chat.id && row.space === chat.space)} />
+              mapping={chat.space} mode={chatStates[chat.listen]} />
           ))}
         </StatusTable>
       )}
@@ -149,11 +149,8 @@ function WebhookTable({ webhooks }: { webhooks: Webhook[] }) {
   )
 }
 
-function BotMetadata({ name, ids, avatar, invite }: { name: string; ids: string[]; avatar: BotAvatar; invite?: string | null }) {
-  const [imageUnavailable, setImageUnavailable] = useState(false)
-  const avatarStatus = imageUnavailable ? "Preview unavailable" : avatarLabels[avatar.state]
-  const showAvatar = Boolean(avatar.url || avatarStatus)
-  if (!invite && ids.length === 0 && !showAvatar) return null
+function BotMetadata({ ids, invite }: { ids: string[]; invite?: string | null }) {
+  if (!invite && ids.length === 0) return null
   return (
     <section aria-labelledby="connection-bot" className="lg:order-last">
       <h2 id="connection-bot" className="text-heading-md">Bot</h2>
@@ -177,18 +174,6 @@ function BotMetadata({ name, ids, avatar, invite }: { name: string; ids: string[
             <dt className="text-muted-foreground">{ids.length === 1 ? "Owner ID" : "Owner IDs"}</dt>
             <dd className="space-y-1 wrap-anywhere font-mono text-mono-sm">
               {ids.map(id => <div key={id}>{id}</div>)}
-            </dd>
-          </div>
-        )}
-        {showAvatar && (
-          <div className={identityRow}>
-            <dt className="text-muted-foreground">{name === "Discord" ? "Avatar" : "Photo"}</dt>
-            <dd className="flex min-w-0 items-center gap-3">
-              {avatar.url && !imageUnavailable && (
-                <img src={avatar.url} alt={`${name} bot ${name === "Discord" ? "avatar" : "photo"}`}
-                  onError={() => setImageUnavailable(true)} className="size-10 shrink-0 rounded-md border border-border object-cover" />
-              )}
-              <span>{avatarStatus}</span>
             </dd>
           </div>
         )}
@@ -226,6 +211,9 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
                 <ConnectionStatus state={data.state} />
               </div>
             </header>
+            {data.platform !== "webhook" && data.platform !== "github" && data.block && (
+              <BotIdentityEditors key={data.block} block={data.block} platform={data.platform} />
+            )}
             {data.platform === "slack" && data.details && (
               <section aria-labelledby="slack-workspaces" className="max-w-[720px]">
                 <h2 id="slack-workspaces" className="text-heading-md">Workspaces</h2>
@@ -244,7 +232,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
             )}
             {(data.platform === "discord" || data.platform === "telegram") && data.details && (
               <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-12">
-                <BotMetadata key={platform} name={name} ids={data.details.owner_ids} avatar={data.details.avatar}
+                <BotMetadata ids={data.details.owner_ids}
                   invite={data.platform === "discord" ? data.details.invite_url : undefined} />
                 {data.platform === "discord"
                   ? <DiscordServers guilds={data.details.guilds} rows={rows} status={modes.data} />
@@ -256,7 +244,7 @@ function ConnectionDetail({ platform }: { platform: StatusPlatform }) {
             {showModes && modes.data && modeRows.length > 0 && (
               <section aria-labelledby="connection-modes">
                 <h2 id="connection-modes" className="text-heading-md">Channel modes</h2>
-                <ChannelModeTable label="Channel modes" rows={modeRows} status={modes.data} />
+                <ChannelModeTable key={platform} label="Channel modes" rows={modeRows} status={modes.data} />
               </section>
             )}
           </>

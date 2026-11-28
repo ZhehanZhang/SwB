@@ -136,7 +136,8 @@ for (const [locale, path, heading, label] of [
     await expect(preview).toHaveValue(/Add a custom connector/);
     await muse.check();
     await expect(preview).toHaveValue(/https:\/\/agent\.meta\.ai\/api\/hatch\/oauth\/callback/);
-    await expect(preview).toHaveValue(/connect\(what="muse", choose=\{"gadget": true\}\)/);
+    await expect(preview).toHaveValue(/connect\(what="muse"/);
+    await expect(preview).toHaveValue(/Call `muse_hook_setup`/);
     expect(await dimensions(picker)).toEqual(start);
 
     await page.goto(path.replace(/\/setup$/, '/companion'));
@@ -149,6 +150,7 @@ test('the Muse guide offers the release connector prompt', async ({ page }) => {
   await page.goto('/docs/setup/muse');
   const guide = page.locator('.swb-prompt');
   await expect(guide.locator('pre')).toContainText('https://agent.meta.ai/api/hatch/oauth/callback');
+  await expect(guide.locator('pre')).toContainText('Call `muse_hook_setup`');
   await expect(guide.getByRole('button', { name: 'Copy prompt' })).toBeVisible();
   await expect(guide.getByRole('link', { name: /Open in/ })).toHaveCount(0);
 });

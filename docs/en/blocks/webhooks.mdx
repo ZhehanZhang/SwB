@@ -26,7 +26,7 @@ Paste the returned URL in the provider’s webhook settings. For this example, g
 
 A claim link opens the page where the owner saves the secret. Sign in to SwB as the owner. Then open the claim link. Save the secret there. SwB keeps the saved secret private.
 
-For `bearer` and `path`, use a random secret with at least 32 characters and at least 10 distinct characters.
+For `bearer`, `path`, `hmac-sha256` and `hmac-sha1`, use a random secret with at least 32 characters. Use at least 10 distinct characters.
 
 Set the [Cloudflare Access policy](/docs/setup/cloudflare#protect-the-console) for `/hooks/*` to **Bypass** if your SwB address uses Cloudflare Access.
 
@@ -97,9 +97,15 @@ Call `webhook_create` with `direction` set to `out` and a name.
 }
 ```
 
-Use a public HTTPS URL on port 443 by default. Set `allow_private` to `true` for HTTPS receivers on private networks or on ports other than 443.
+SwB requires a public HTTPS receiver on port 443 by default. It blocks private, loopback and link-local addresses, including link-local addresses for cloud instance data. Loopback addresses reach the SwB host. Link-local addresses reach only the local network.
 
-Use agent addresses like `agent:claude` in `senders` to grant access. By default, only the owner can send.
+The owner can set `allow_private` to `true` on that webhook to allow those addresses or other HTTPS ports.
+
+SwB looks up the receiver's IP addresses once per delivery. It pins the connection to the first address from that lookup.
+
+By default, only the owner can send. A paired agent needs a `senders` grant to use a `webhook:out` target. Add an agent address such as `agent:claude` to `senders` to grant access to that webhook.
+
+For a caller other than the owner, SwB returns `No such target.` for a missing target or a target outside their grants. Ask the owner to check the target name and your access.
 
 Sign in to SwB as the owner. Then open the claim link. Save the receiver’s HTTPS URL and the signing secret. Share the same `whsec_` signing secret with the receiver through a private channel.
 
@@ -160,9 +166,7 @@ For methods that check the timestamp, tolerance is the maximum difference betwee
 | Setting | Limit |
 | - | - |
 | Request body | 256 KiB by default. Set `blocks.webhook.max_body_kb` to a whole number from 1 to 1024 |
-| New verified events per webhook across all addresses | 600 per 10 minutes |
 | Verification failures per webhook per client IP address | 20 per 10 minutes |
-| Verification failures per webhook across all addresses | 100 per 10 minutes |
 | Requests to wrong addresses per client IP address | 20 per 10 minutes |
 | Replay window for Stripe, Linear, Sentry, Standard Webhooks and HMAC | 30 days |
 | Timestamp tolerance for Stripe and Standard Webhooks | 300 seconds by default |
@@ -171,7 +175,7 @@ For methods that check the timestamp, tolerance is the maximum difference betwee
 | Replay check for Sentry and HMAC | SwB checks for repeat bodies only |
 | Replay check for bearer and path | SwB checks the secret only |
 
-SwB checks the per-address failure limit after verification. After 20 failures for the same webhook and client IP address within 10 minutes, further failures receive `429`. Each counted failure expires after 10 minutes. Verified requests can still proceed while the per-address limit applies. After 100 failures across all addresses, SwB returns `429` before verification. The separate 600-event limit returns `429` for all requests to the webhook once the webhook reaches that limit.
+SwB checks the signature or secret before applying the failure limit. After 20 failures for the same webhook and client IP address within 10 minutes, further failures receive `429`. Each counted failure expires after 10 minutes. Verified requests can still proceed.
 
 SwB uses `trusted_proxies` to find the client IP address when a trusted server forwards requests.
 

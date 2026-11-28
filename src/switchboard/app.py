@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from starlette.applications import Starlette
 from starlette.datastructures import Headers
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
+from starlette.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 
 from . import pages
 from .api_about import release_version
-from .api_display import SLACK_PROFILE_PREFIX
+from .api_display import SLACK_PROFILE_PREFIX, captain_avatar_url, local_avatar_url
 from .auth import COMPANION_KEY_PREFIX
 from .claims import CLAIM_PATH, MEMORY_BACKUP_CREDENTIAL, ClaimError, ClaimInputError, ClaimUnavailable, GroupFieldError
 from .companion_routes import COMPANION_ACTIONS, companion_routes
@@ -25,6 +25,7 @@ from .config import REQUEST_BASE
 from .deployment import OWNER_KEY
 from .env import env_value
 from .guard import Guard, RateLimiter, audit_client_ip, client_ip, reject
+from .hook_wake import routes as hook_wake_routes
 from .owner_login import OwnerLogin
 from .blocks.mcp import PRINCIPAL_SCOPE, principal_of
 from .sessions import Owner, login_redirect
@@ -33,10 +34,10 @@ from .web import web_routes
 if TYPE_CHECKING:
     from .core import Switchboard
 
+HOME_ACTION = '<div class="actions"><a class="button secondary" href="/">Home</a></div>'
 INBOX_FEEDS = ("/inbox/poll", "/inbox/events")
 HEARTBEAT_S = 15.0
 POLL_MAX_S = 55.0
-AVATAR_MAX_BYTES = 2 * 1024 * 1024
 ROUTINE_CLAIM_MESSAGES = {
     "this link isn't valid; ask the Claude session for a new one": "Request a new link",
     "this link was replaced by a newer registration; use the latest link": "Use the latest link",
@@ -201,6 +202,57 @@ def _cursor(request: Request) -> int | None:
         return None
 
 
+def _machine_path(path: str) -> bool:
+    return path.removeprefix("/").partition("/")[0] in {"api", "mcp"}
+
+
+def _wants_html(scope: Any) -> bool:
+    if _machine_path(scope["path"]):
+        return False
+    for media_range in Headers(scope=scope).get("accept", "").split(","):
+        media_type, *parameters = media_range.split(";")
+        if media_type.strip().lower() != "text/html":
+            continue
+        quality = next((param.strip()[2:] for param in parameters if param.strip().startswith("q=")), "1")
+        try:
+            return float(quality) > 0
+        except ValueError:
+            continue
+    return False
+
+
+async def page_failed(request: Request, error: Exception) -> Response:
+    if _machine_path(request.scope["path"]):
+        return JSONResponse({"error": "internal_server_error"}, 500)
+    response = (pages.page("Try again shortly", HOME_ACTION, 500) if _wants_html(request.scope)
+                else PlainTextResponse("Internal Server Error", 500))
+    response.headers.add_vary_header("Accept")
+    return response
+
+
+class BrowserNotFound:
+    """Gives browsers the shared page for a 404 from any mounted app, and leaves other clients the plain response."""
+
+    def __init__(self, app: Any):
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http" or not _wants_html(scope):
+            return await self.app(scope, receive, send)
+        replaced = False
+
+        async def intercept(message: Any) -> None:
+            nonlocal replaced
+            if message["type"] == "http.response.start" and message["status"] == 404:
+                if Headers(raw=message["headers"]).get("content-type", "").startswith("text/plain"):
+                    replaced = True
+                    return await pages.page("Page unavailable", HOME_ACTION, 404)(scope, receive, send)
+            if not replaced:
+                await send(message)
+
+        await self.app(scope, receive, intercept)
+
+
 def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = None) -> Any:
     claim_owner_key = env_value(core.cfg.env, OWNER_KEY)
     claim_principal = core.auth.verify_bearer(claim_owner_key)
@@ -231,7 +283,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         if refused is not None:
             return refused
         if core.slack is None:
-            return pages.message_page("Not available", "Slack approvals need Slack configured.", 403)
+            return pages.page("Set up Slack approvals", status=403)
         verb = request.path_params["verb"]
         if verb not in ("approve", "reject"):
             return Response(status_code=404)
@@ -262,35 +314,11 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         if refused is not None:
             refused.headers.update(headers)
             return refused
-        return JSONResponse({"targets": await core.targets()}, headers=headers)
-
-    async def avatar_upload(request: Request) -> Response:
-        """The owner replaces a persona's picture."""
-        owner, form, refused = await owner_form(request)
-        if refused is not None:
-            return refused
-        if core.slack is None:
-            await request.close()
-            return Response(status_code=403)
-        persona = core.slack.config.personas.get(request.path_params["pid"])
-        if persona is None or not persona.avatar:
-            await request.close()
-            return Response(status_code=404)
-        upload = form.get("file")
-        try:
-            data = await upload.read(AVATAR_MAX_BYTES + 1) if hasattr(upload, "read") else b""
-        finally:
-            await request.close()
-        kind = "png" if data.startswith(b"\x89PNG\r\n\x1a\n") else "jpg" if data.startswith(b"\xff\xd8\xff") else "gif" if data[:6] in (b"GIF87a", b"GIF89a") else None
-        want = persona.avatar.rsplit(".", 1)[1].lower().replace("jpeg", "jpg")
-        if not data or len(data) > AVATAR_MAX_BYTES or kind != want:
-            return RedirectResponse("/agents?notice=avatar-refused", status_code=303)
-        core.slack.avatar_dir.mkdir(parents=True, exist_ok=True)
-        tmp = core.slack.avatar_dir / f".{persona.avatar}.tmp"
-        tmp.write_bytes(data)
-        tmp.replace(core.slack.avatar_dir / persona.avatar)
-        core.slack.store.audit(f"admin:{owner.label}", "avatar_uploaded", persona=persona.id, file=persona.avatar, bytes=len(data))
-        return RedirectResponse("/agents?notice=avatar-saved", status_code=303)
+        rows = await core.targets()
+        return JSONResponse({"targets": [
+            {**row, "console_avatar_url": captain_avatar_url(core, row) or local_avatar_url(core, row.get("avatar_url"))}
+            for row in rows
+        ]}, headers=headers)
 
     async def owner_form(request: Request) -> tuple[Owner | None, Any, Response | None]:
         owner, refused = await core.auth.protect_owner(request)
@@ -388,6 +416,8 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                                           now=core.clock(), error=error)
 
         if request.method != "POST":
+            if group is None and claim is None and not owner_key:
+                return pages.claim_message_page("Link expired" if core.claims.expired(code) else "Request a new link", 410)
             form_csrf, refused = await claim_page_access(request)
             if refused is not None and not owner_key:
                 return refused
@@ -466,6 +496,8 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                 unavailable = ROUTINE_CLAIM_MESSAGES.get(str(e), "Request a new link")
         if request.method == "POST":
             actor, form, form_csrf, refused = await claim_submission(request, unavailable=unavailable, browser_only=registration is not None)
+        elif unavailable and block is not None and (core.cfg.owner_sign_in or not claim_key_actor):
+            return claim_error(request, 410, "claim_unavailable", unavailable)
         elif registration is not None:
             owner, refused = await owner_page(request)
             if refused is None:
@@ -530,6 +562,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         except ValueError:
             timeout = 25.0
         since = _cursor(request)
+        core.owner_delivery.record_activity(p)
         out = await core.inbox.wait(owner=p.source, since=since if since is not None else core.inbox.head(),
                                     timeout=timeout, reader=f"channel:{p.source}", advance=False,
                                     scopes=None if p.kind == "inbox_key" else p.scopes)
@@ -544,6 +577,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             return JSONResponse({"error": "forbidden", "error_description": f"you read {p.source}'s inbox only"}, status_code=403)
         agent = p.source
         start = _cursor(request)
+        core.owner_delivery.record_activity(p)
 
         async def frames() -> AsyncIterator[bytes]:
             cursor = start if start is not None else core.inbox.head()
@@ -585,13 +619,13 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
         routes=[
             Route("/slack/requests/{rid}/{verb}", slack_decide, methods=["POST"]),
             Route("/avatars/{name}", avatar, methods=["GET"]),
-            Route("/slack/personas/{pid}/avatar", avatar_upload, methods=["POST"]),
             Route("/healthz", healthz),
             Route("/api/targets", targets),
             Route("/inbox/poll", inbox_poll, methods=["GET"]),
             Route("/inbox/events", inbox_events, methods=["GET"]),
             Route("/connect", connect_redeem, methods=["POST"]),
             *companion_routes(core, limiter, HEARTBEAT_S),
+            *hook_wake_routes(core, limiter),
             pages.PageRoute("/pairing/code", connect_code, pages.PAIRING_TITLE, methods=["POST"]),
             pages.PageRoute("/routines/claim/{code}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
             pages.PageRoute("/routines/claim/owner/{registration}", routine_claim, pages.ROUTINE_CLAIM_TITLE, methods=["GET", "POST"]),
@@ -604,6 +638,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
             *origin_routes,
         ],
         lifespan=lifespan,
+        exception_handlers={500: page_failed},
     )
     app.state.core = core
     for origin in core.origins.values():
@@ -629,7 +664,7 @@ def create_app(core: "Switchboard", *, on_started: Callable[[], None] | None = N
                 core.audit.record_refusal(origin="companion", client=audit_client_ip(scope), destination="core",
                                           action=f"companion_{action}", target=companion_id, detail=detail)
 
-    gate = Guard(RequestBase(BearerGate(app, core, limiter), core), limiter, on_refusal=refused,
+    gate = Guard(RequestBase(BearerGate(BrowserNotFound(app), core, limiter), core), limiter, on_refusal=refused,
                  on_large_body=large_body, trusted_proxies=core.cfg.trusted_proxies)
     gate.starlette = app
     return gate

@@ -69,9 +69,9 @@ visibility_set(resource="target:beta", visibility="shared")
 
 ## 阅读 Watch 摘要
 
-用 `modes.digest_minutes` 设置间隔，默认值为 60 分钟。间隔结束或一批事件达到 50 个时，SwB 把摘要放入目标邮箱。后备邮箱是所有者邮箱。
+用 `modes.digest_minutes` 设置间隔，默认值为 60 分钟。间隔结束或一批事件达到 50 个时，SwB 把摘要放入目标邮箱。摘要发给所有者时，SwB 按[所有者消息规则](/zh-Hans/docs/config#发给所有者的消息)选择智能体。
 
-以所有者身份在控制台的 **Inbox** 中阅读每一份摘要，也可以用 MCP 的 `inbox` 和 `wait` 阅读。摘要列出事件数量，以及每个事件的作者、摘录和可用的链接。它的信任等级为 `external`。
+接收摘要的智能体用 `inbox` 或 `wait` 读取摘要。同一空间和目标的新事件会加入最新一份待读摘要。摘要保留事件总数和最近的 200 个事件。每个事件列出作者、摘录和可用的链接。摘要的信任等级为 `external`。
 
 Watch 模式让智能体保持休眠。摘要在收件箱中阅读。[GitHub 事件的接收目标](/zh-Hans/docs/blocks/github)仍会收到每个事件的副本。
 
@@ -87,7 +87,7 @@ Watch 模式让智能体保持休眠。摘要在收件箱中阅读。[GitHub 事
 | `comment` | 添加一条 GitHub 评论 |
 | `open_issue` | 创建一个 GitHub 议题 |
 | `link_duplicate` | 关联并关闭重复的 GitHub 议题 |
-| `notify_owner` | 给所有者发送一条通知 |
+| `notify_owner` | 按[所有者消息规则](/zh-Hans/docs/config#发给所有者的消息)投递消息 |
 
 修改 GitHub 上的内容需要具有写入权限的 GitHub 凭据。SwB 会把分流操作记入审计日志。
 

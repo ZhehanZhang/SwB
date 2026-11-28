@@ -10,9 +10,8 @@ from starlette.testclient import TestClient
 from conftest import CLAUDE_CB, OWNER, PUBLIC, STATIC_KEY, authorize, base_config, call, consent, consent_csrf, error_text, new_core, payload, pkce, register, rpc, sign_in, Clock
 from switchboard.agents import Agents
 from switchboard.app import create_app
-from switchboard.brand import TAGLINE
+from switchboard.audit import REFUSAL_AUDIT_INTERVAL_S
 from switchboard.config import ConfigError
-from switchboard.guard import LIMITS
 
 
 def test_metadata_advertises_what_claude_and_chatgpt_need(make):
@@ -339,28 +338,28 @@ def test_access_assertions_require_an_unexpired_exp_claim(make, monkeypatch):
     assert row["detail"] == "access_assertion_rejected"
 
 
-def test_access_refusal_audit_is_fixed_detail_and_globally_bounded(tmp_path, capy):
+def test_access_refusal_audit_is_fixed_detail_and_deduplicated_per_client(tmp_path, capy):
     clock = Clock()
     cfg = base_config(trusted_proxies=["192.0.2.0/24"])
     core = new_core(tmp_path, capy, config=cfg, clock=clock)
     with TestClient(create_app(core), base_url=PUBLIC, client=("192.0.2.1", 10000)) as c:
         assert c.get("/api/audit").status_code == 401
         assert core.audit.recent(action="auth_failure") == []
-        for attempt in range(4):
+        for attempt, client in enumerate(("198.51.100.1", "198.51.100.2", "198.51.100.1", "198.51.100.2")):
             invalid = f"fixture-private-assertion-{attempt}"
             assertion = {"cf-access-jwt-assertion": invalid} if attempt % 2 == 0 else {"Cookie": f"CF_Authorization={invalid}"}
             response = c.get("/api/audit", params={"fixture": "fixture-private-query"},
-                             headers={**assertion, "X-Forwarded-For": f"198.51.100.{attempt + 1}"})
+                             headers={**assertion, "X-Forwarded-For": client})
             assert response.status_code == 401
-        [row] = core.audit.recent(action="auth_failure")
-        assert (row["client"], row["target"], row["detail"], row["outcome"]) == (
-            "198.51.100.1", None, "access_assertion_rejected", "refused",
-        )
-        assert "fixture-private" not in str(row)
-        clock.t += LIMITS["sign_in_refusal_audit"][1]
-        assert c.get("/api/audit", headers={"cf-access-jwt-assertion": "other"}).status_code == 401
+        rows = core.audit.recent(action="auth_failure")
+        assert [row["client"] for row in rows] == ["198.51.100.2", "198.51.100.1"]
+        assert {(row["target"], row["detail"], row["outcome"]) for row in rows} == {(None, "access_assertion_rejected", "refused")}
+        assert "fixture-private" not in str(rows)
+        clock.t += REFUSAL_AUDIT_INTERVAL_S
+        repeated = {"cf-access-jwt-assertion": "other", "X-Forwarded-For": "198.51.100.1"}
+        assert c.get("/api/audit", headers=repeated).status_code == 401
         assert c.get("/api/audit", headers=OWNER).status_code == 200
-        assert len(core.audit.recent(action="auth_failure")) == 2
+        assert [row["client"] for row in core.audit.recent(action="auth_failure")] == ["198.51.100.1", "198.51.100.2", "198.51.100.1"]
 
 
 def test_access_cookie_signs_the_owner_in_on_paths_access_bypasses(make):
@@ -386,8 +385,8 @@ def test_capy_signs_in_with_oauth_as_agent_capy(make):
     cb = "https://capy.ai/web/callbacks/mcp"
     cid = register(c, redirect=cb, client_name="Capy MCP client")["client_id"]
     page, _ = consent(c, cid, redirect=cb)
-    assert page.status_code == 200 and page.text.count("Capy MCP client") == 1
-    assert TAGLINE["en"] in page.text and "Returns to <code>capy.ai</code>" in page.text
+    assert page.status_code == 200 and "<h1>Connect Capy MCP client to SwB</h1>" in page.text
+    assert "/avatars/capy.png" in page.text and "Returns to <code>capy.ai</code>" in page.text
     tok = sign_in(c, redirect=cb)
     me = payload(call(c, tok["access_token"], "switchboard_status"))["you"]
     assert me["agent"] == "capy" and me["auth"] == "oauth"
@@ -399,10 +398,10 @@ def test_unmapped_oauth_agent_is_addressable_after_token_exchange(make):
     redirect = "http://localhost:8765/callback"
     cid = register(c, redirect=redirect, client_name="R3C OAuth <test>")["client_id"]
     page, _ = consent(c, cid, redirect=redirect)
-    assert page.status_code == 200 and page.text.count("R3C OAuth &lt;test&gt;") == 1
+    assert page.status_code == 200 and "<h1>Connect R3C OAuth &lt;test&gt; to SwB</h1>" in page.text
     assert "R3C OAuth <test>" not in page.text
     slug = "r3c-oauth-test"
-    assert f"Mailbox address <code>agent:{slug}</code>" in page.text
+    assert "/assets/claim-connectors.svg#agent" in page.text and f">agent:{slug}</code>" in page.text
     task = {"task": "review this", "to": f"agent:{slug}"}
     assert "no agent" in error_text(call(c, STATIC_KEY, "send", task))
 

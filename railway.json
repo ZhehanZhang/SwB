@@ -6,6 +6,8 @@
   "deploy": {
     "healthcheckPath": "/healthz",
     "numReplicas": 1,
+    "sleepApplication": false,
+    "overlapSeconds": 0,
     "requiredMountPath": "/data"
   }
 }

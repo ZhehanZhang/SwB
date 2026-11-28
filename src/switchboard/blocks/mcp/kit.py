@@ -13,6 +13,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 from pydantic_core import to_json
 
+from ... import USER_AGENT
 from ...audit import iso
 from ...companion.caps.base import CapabilityError
 from ...companion.caps.drop import decode_file_content, valid_name
@@ -243,10 +244,11 @@ class Kit:
             got["next"] = ("Tell the owner the work is still in progress. " if owner_facing else "") + "Check again with wait or inbox."
         return got
 
-    def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None) -> dict[str, Any]:
+    def inbox(self, p: "Principal", *, since_cursor: int | None, handle: str | None, limit: int, project: str | None, block: str | None = None,
+              peek: bool = False) -> dict[str, Any]:
         handle = handle.strip() if handle else None
         owner, reader = self.inbox_reader(p, self.core.inbox.handle(handle) if handle else None)
-        out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit,
+        out = self.core.inbox.read(owner=owner, reader=reader, handle=handle, since=since_cursor, limit=limit, advance=not peek,
                                    project=project, destination=block, scopes=p.scopes, owner_digests=p.is_unrestricted_owner)
         senders = [block] if block else [n for n, b in self.core.blocks.items() if b.verb("send") is not None]
         open_ = [h for name in senders for h in self.core.inbox.handles(owner=p.source, destination=name, open_only=True,
@@ -283,12 +285,12 @@ class Kit:
 
         @mcp.tool(
             title="Send work or a message",
-            description=("Hand work to someone or leave a message; cheap, so send freely. Every agent (claude, claude-code, chatgpt, gemini, "
-                         "capy, ...) has a switchboard mailbox, so a message always goes through even when it isn't running: it reads on its own "
-                         "schedule, in a live chat, or when switchboard wakes it. Its reply reaches your inbox with in_reply_to set to the "
-                         "conversation this returns. Without to, the owner's route decides. to: a slug from targets, agent:<name>, or "
-                         "<block>:<kind>:<id>. Make the task self-contained (goal, context, repos, done). Then wait() and answer with the reply. "
-                         "Use forward to hand off a conversation you received and route the final answer back to its sender."),
+            description=("Send work or leave a message in an agent's mailbox. Leave to empty to use a route, or choose a slug or address from targets. "
+                         "Use captain when exactly one Captain exists. For other cases, use its alias or full address. "
+                         "For agent:owner, SwB tries the most recent agent with owner-trusted activity in the last 30 minutes, "
+                         "then the project's main agent, then the global owner route. Give the goal, context, repos and completion criteria. "
+                         "Use wait with the returned conversation to read the reply. Use forward to hand off a conversation "
+                         "and route the final answer to its sender."),
             annotations=SEND,
         )
         async def send(
@@ -307,7 +309,8 @@ class Kit:
             if in_reply_to is not None:
                 raise ToolError("use reply to answer a conversation")
             p = kit.who(ctx)
-            mailbox = bool(to) and (to.strip().lower().startswith("agent:") or to.strip().lower() in core.known_agents())
+            target = (to or "").strip().lower()
+            mailbox = target.startswith("agent:") or target == "owner" or target in core.known_agents()
             if project or not mailbox:
                 kit.scoped(p, project)
             return await kit.send(p, wait_s=wait_s, task=task, to=to, project=project, title=title, repos=repos,
@@ -316,7 +319,7 @@ class Kit:
         @mcp.tool(title="Reply in a conversation", description="Send a follow-up into a conversation (its handle from send or an inbox item, or a block's id such as a thread id): answer its question, add context, redirect it, or answer a mailbox message. delivery (steer, queue, interrupt) applies where the block supports it.", annotations=SEND)
         async def reply(ctx: Context, text: str, conversation: Conversation, delivery: Literal["steer", "queue", "interrupt"] | None = None,
                         final: Annotated[bool, Field(description="false for an interim note (handed off, working on it); true for the answer")] = True,
-                        to_owner: Annotated[bool, Field(description="Send an owner note from a forwarded Slack message or a triage conversation with notify_owner enabled.")] = False) -> dict[str, Any]:
+                        to_owner: Annotated[bool, Field(description="Route a message through the owner message rules. Use it with a forwarded Slack message or a triage conversation with notify_owner enabled.")] = False) -> dict[str, Any]:
             return await kit.verb(ctx, "reply", conversation, text=text, delivery=delivery, final=final, to_owner=to_owner)
 
         @mcp.tool(
@@ -329,10 +332,48 @@ class Kit:
                        owner_facing: Annotated[bool, Field(description="Set true while you are speaking with the owner.")] = False) -> dict[str, Any]:
             return await kit.wait(kit.who(ctx), handle=conversation, timeout_s=timeout_s, project=project, block=block, owner_facing=owner_facing)
 
-        @mcp.tool(title="Your inbox", description="Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
+        @mcp.tool(title="Your inbox", description="Read SwB messages, Watch digests and open conversations for your agent. Omit since_cursor to read from your last position. Set peek to true to read without moving your position, then call inbox_ack. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.", annotations=READ)
         async def inbox(ctx: Context, since_cursor: int | None = None, conversation: str | None = None, limit: Annotated[int, Field(ge=1, le=50)] = 50,
-                        project: ProjectArg = None, block: str | None = None) -> dict[str, Any]:
-            return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block)
+                        project: ProjectArg = None, block: str | None = None,
+                        peek: Annotated[bool, Field(description="true reads without moving your position")] = False) -> dict[str, Any]:
+            return kit.inbox(kit.who(ctx), since_cursor=since_cursor, handle=conversation, limit=limit, project=project, block=block, peek=peek)
+
+        @mcp.tool(title="Mark inbox items read", description="Move your inbox position to cursor after you handle the items that inbox returned with peek set to true. Items up to cursor count as read.", annotations=WRITE_IDEMPOTENT)
+        async def inbox_ack(ctx: Context, cursor: Annotated[int, Field(ge=1, description="The highest item cursor you handled")]) -> dict[str, Any]:
+            p = kit.who(ctx)
+            return {"cursor": core.inbox.ack(p.source, cursor)}
+
+        @mcp.tool(title="Set up the Muse hook", description="Make a private wake link for your SwB mailbox and return a Muse hook script and hook settings that use it. The script checks the link on each hook poll and wakes a worker when messages wait. Each call replaces your previous link.", annotations=WRITE)
+        async def muse_hook_setup(ctx: Context, poll_interval_secs: Annotated[int, Field(ge=5, le=30, description="Seconds between hook polls")] = 5) -> dict[str, Any]:
+            p = kit.who(ctx)
+            try:
+                out = core.hook_wake.setup(p.source, by=f"{p.kind}:{p.source}", poll_interval_secs=poll_interval_secs)
+            except ValueError as e:
+                raise ToolError(str(e)) from e
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="muse_hook_setup", outcome="ok",
+                              target=p.source)
+            return out
+
+        @mcp.tool(title="Test the Muse hook", description="Leave a test message in your own SwB mailbox. The Muse hook wakes a worker for it at its next poll.", annotations=WRITE)
+        async def muse_hook_test(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            if not core.hook_wake.status(p.source)["configured"]:
+                raise ToolError("Call muse_hook_setup first.")
+            out = await kit.run(core.agent_send(p, to=p.source, title="Muse hook test", allow_self=True,
+                                                text="SwB hook test. Tell the owner in chat that the Muse hook works. Then call inbox_ack."))
+            return {"sent": True, "conversation": out["conversation"]}
+
+        @mcp.tool(title="Muse hook status", description="Show whether your Muse hook link exists, when the hook last checked it, and your unread count.", annotations=READ)
+        async def muse_hook_status(ctx: Context) -> dict[str, Any]:
+            return core.hook_wake.status(kit.who(ctx).source)
+
+        @mcp.tool(title="Revoke the Muse hook link", description="Stop your Muse hook link. The hook turns itself off after its next checks. Call muse_hook_setup to make a new link.", annotations=DELETE)
+        async def muse_hook_revoke(ctx: Context) -> dict[str, Any]:
+            p = kit.who(ctx)
+            revoked = core.hook_wake.revoke(p.source)
+            core.audit.record(origin=p.origin, source=p.source, client=p.client_id, destination="core", action="muse_hook_revoke",
+                              outcome="ok" if revoked else "refused", target=p.source)
+            return {"revoked": revoked}
 
         @mcp.tool(title="Conversation status", description="Status of a conversation (handle or the block's id): working, waiting, idle or failed, whether it needs the owner, its PRs and latest messages, as the block that owns it reports them.", annotations=READ_REMOTE)
         async def status(ctx: Context, conversation: Conversation, messages: Annotated[int, Field(ge=1, le=20)] = 5, include_tools: bool = False) -> dict[str, Any]:
@@ -346,7 +387,7 @@ class Kit:
         async def cancel(ctx: Context, conversation: Conversation) -> dict[str, Any]:
             return await kit.verb(ctx, "cancel", conversation)
 
-        @mcp.tool(title="List targets", description="Everything send can reach: each block's targets (Captains, channels, ...), an agent:<name> mailbox per agent, and project routes, with address, slugs, level and persona. A slug clash goes to the higher priority. block, kind and query narrow it; refresh re-reads the blocks now.", annotations=READ_REMOTE)
+        @mcp.tool(title="List targets", description="List addresses and names for block targets, agent mailboxes and project routes. The reserved name captain works only when SwB finds exactly one Captain. Otherwise, use a named alias or the full Captain address. A clash between other names goes to the higher priority. Filter with block, kind or query. Set refresh to read the blocks again.", annotations=READ_REMOTE)
         async def targets(ctx: Context, block: str | None = None, kind: str | None = None, query: str | None = None, refresh: bool = False) -> dict[str, Any]:
             p = kit.who(ctx)
             got = await core.targets(block=block, kind=kind, query=query, refresh=refresh, principal=p)
@@ -359,7 +400,8 @@ class Kit:
             out = kit.mint_pairing(p, agent, project, client)
             base = core.cfg.public_url or ""
             return {**out, "redeem": f"POST {base}/connect with {{\"code\": \"{out['code']}\"}}",
-                    "curl": f"curl -s -X POST {base}/connect -H 'content-type: application/json' -d '{{\"code\": \"{out['code']}\"}}'"}
+                    "curl": (f"curl -s -A '{USER_AGENT}' -X POST {base}/connect -H 'content-type: application/json'"
+                             f" -d '{{\"code\": \"{out['code']}\"}}'")}
 
         @mcp.tool(title="Pair a companion", description="Create a one-time pairing code valid for ten minutes. Enter it at the hidden prompt for swb companion connect <url>.", annotations=WRITE)
         async def companion_code(ctx: Context) -> dict[str, Any]:

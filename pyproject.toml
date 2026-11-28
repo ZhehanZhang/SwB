@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "First-party agents working together."
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE", "web/licenses/lobe-icons.txt"]
+license-files = ["LICENSE", "NOTICE", "web/licenses/lobe-icons.txt", "web/licenses/opencode.txt"]
 requires-python = ">=3.12"
 keywords = ["mcp", "model-context-protocol", "agents", "self-hosted", "shared-memory", "routing"]
 classifiers = [
@@ -37,7 +37,6 @@ dependencies = [
   "PyJWT[crypto]>=2.9,<3",
   "cryptography>=3.3.2",
   "webauthn>=2.2,<3",
-  "websockets>=15,<17",
   "tzdata",
 ]
 

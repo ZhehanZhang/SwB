@@ -2,6 +2,8 @@ Read the setup guide at https://swb.one/docs/setup/mcp-client.
 
 Help me connect an MCP client that supports Streamable HTTP and custom request headers. Streamable HTTP is how the client sends tool requests to SwB.
 
+Send a `User-Agent` header that names your app in each HTTP request to SwB.
+
 For a new local SwB server, follow **This computer** at https://swb.one/prompts/deploy.md.
 
 Use `http://localhost:8870` if the client runs on the SwB computer. Use the port shown at startup. Use my public HTTPS address if the client runs elsewhere.
@@ -33,7 +35,7 @@ bash -c '
   read -rsp "Pairing code: " code || exit
   printf "\n"
   printf "{\"code\":\"%s\"}" "$code" |
-    curl -fsS http://localhost:8870/connect -H "Content-Type: application/json" \
+    curl -fsS -A "SwB-Setup" http://localhost:8870/connect -H "Content-Type: application/json" \
       --data-binary @- > .swb-pairing.json
 '
 ```

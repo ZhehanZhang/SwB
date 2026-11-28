@@ -15,6 +15,7 @@ GENERIC = {"send", "reply", "wait", "inbox", "get_message", "status", "result", 
 COMPANION = {"companion_code", "companion_list", "companion_invoke", "companion_revoke"}
 CAPY = {"capy_delegate", "capy_wait", "capy_inbox", "capy_status", "capy_list", "capy_reply", "capy_result", "capy_captain_digest", "capy_captains", "capy_cancel"}
 WEBHOOK = {"webhook_create", "webhook_list", "webhook_rotate", "webhook_revoke", "webhook_test"}
+HOOK = {"inbox_ack", "muse_hook_setup", "muse_hook_status", "muse_hook_test", "muse_hook_revoke"}
 
 
 def tools(c):
@@ -24,7 +25,7 @@ def tools(c):
 def test_tool_set_and_schemas(make):
     _, c = make()
     t = tools(c)
-    assert set(t) == CORE | GENERIC | COMPANION | CAPY | WEBHOOK
+    assert set(t) == CORE | GENERIC | COMPANION | CAPY | WEBHOOK | HOOK
     assert t["switchboard_status"]["title"] == "SwB status"
     for name, tool in t.items():
         assert 40 <= len(tool["description"]) <= 700, name
@@ -40,7 +41,7 @@ def test_tool_set_and_schemas(make):
 
 def test_capy_tools_only_with_the_capy_destination(make):
     _, c = make(config={"public_url": "https://switchboard.example.test", "auth": {"owner_emails": ["o@example.test"]}})
-    assert set(tools(c)) == CORE | GENERIC | COMPANION | WEBHOOK
+    assert set(tools(c)) == CORE | GENERIC | COMPANION | WEBHOOK | HOOK
 
 
 def test_annotations_mark_reads_and_writes(make):

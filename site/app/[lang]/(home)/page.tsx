@@ -91,10 +91,10 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
       <HomeLayout nav={{ enabled: false }}>
         <SiteContainer>
           <section className="swb-hero-grid" aria-labelledby="landing-heading">
-            <div className="swb-hero-copy">
+            <div className="swb-hero-copy" data-hero-prefix={copy.hero.between[0] ? '' : undefined}>
               <HeroTitle {...copy.hero}
                 names={{ claude: 'Claude', 'grok-bot': 'Grok Bot', capy: 'Capy Captain', dots: 'ChatGPT dots' }} />
-              <div className="mt-6 grid justify-items-start gap-4 lg:flex lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2">
+              <div className="mt-6 grid justify-items-start gap-4 lg:flex lg:flex-wrap lg:content-start lg:items-center lg:gap-x-4 lg:gap-y-2">
                 <div className="flex items-center gap-2" data-hero-actions>
                   <Link className="swb-button swb-button-primary whitespace-nowrap" href={getStartedHref(lang)} prefetch={false}>
                     <Plug aria-hidden="true" />{copy.setupWithAgent}

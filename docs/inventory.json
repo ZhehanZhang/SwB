@@ -225,21 +225,6 @@
       "use": "mcp"
     },
     {
-      "block_kind": "sink",
-      "connect_target": "muse",
-      "credentials": [
-        {
-          "claim_label": "Token",
-          "env": "MUSE_SDK_TOKEN"
-        }
-      ],
-      "icon": "src/switchboard/slack/avatars/muse.png",
-      "id": "block:muse",
-      "kind": "block",
-      "label": "Muse",
-      "use": "muse"
-    },
-    {
       "block_kind": "both",
       "connect_target": "slack",
       "credentials": [
@@ -2874,7 +2859,7 @@
       "name": "companion_revoke"
     },
     {
-      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram, webhook. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. For Muse device pairing pass choose.gadget=true. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
+      "description": "When someone asks how to connect, set up or link something to SwB, call connect first. Supported kinds include capy-captain, chatgpt, claude, claude-project, cloudflare, coding-agent, discord, dots, github, grok, grok-bot, mcp-client, muse, slack, telegram, webhook. Do steps marked \"you\" in order. Share \"person\" steps and links with the owner. Follow required steps in next until complete is true. The done field lists progress. Use choose for details such as a Captain, project, agent name or dot name. Use private links for credentials. Read the prompt or resource in guide for detailed setup instructions.",
       "icon": null,
       "id": "tool:connect",
       "input_properties": [
@@ -3024,7 +3009,7 @@
       "name": "github_link_duplicate"
     },
     {
-      "description": "Put a triage note with the triggering permalink in the owner's inbox. Pass conversation or handle.",
+      "description": "Route a triage message for the owner with a link to the issue or pull request. Pass conversation or handle.",
       "icon": null,
       "id": "tool:github_notify_owner",
       "input_properties": [
@@ -3033,7 +3018,7 @@
         "text"
       ],
       "kind": "tool",
-      "label": "Notify the owner about triage",
+      "label": "Route a triage message for the owner",
       "name": "github_notify_owner"
     },
     {
@@ -3075,19 +3060,31 @@
       "name": "github_status"
     },
     {
-      "description": "Read SwB messages and open conversations. The owner can also read Watch digests here. Omit since_cursor to read from your last position. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
+      "description": "Read SwB messages, Watch digests and open conversations for your agent. Omit since_cursor to read from your last position. Set peek to true to read without moving your position, then call inbox_ack. Messages give their sender and trust. Replies give the original conversation in in_reply_to. Filter by conversation, project or block. Use reply with the message handle.",
       "icon": null,
       "id": "tool:inbox",
       "input_properties": [
         "block",
         "conversation",
         "limit",
+        "peek",
         "project",
         "since_cursor"
       ],
       "kind": "tool",
       "label": "Your inbox",
       "name": "inbox"
+    },
+    {
+      "description": "Move your inbox position to cursor after you handle the items that inbox returned with peek set to true. Items up to cursor count as read.",
+      "icon": null,
+      "id": "tool:inbox_ack",
+      "input_properties": [
+        "cursor"
+      ],
+      "kind": "tool",
+      "label": "Mark inbox items read",
+      "name": "inbox_ack"
     },
     {
       "description": "Mint a one-time web sign-in link that expires in five minutes. Show it directly to the owner and never paste it anywhere else.",
@@ -3127,7 +3124,9 @@
       "icon": null,
       "id": "tool:memory_backup_restore",
       "input_properties": [
-        "ref"
+        "overwrite",
+        "ref",
+        "trust_owner"
       ],
       "kind": "tool",
       "label": "Restore memory from Git",
@@ -3196,6 +3195,8 @@
       "icon": null,
       "id": "tool:memory_import",
       "input_properties": [
+        "overwrite",
+        "trust_owner",
         "zip_base64"
       ],
       "kind": "tool",
@@ -3350,7 +3351,7 @@
       "name": "memory_summary"
     },
     {
-      "description": "Copy up to 50 native memories. Keep each source key stable.",
+      "description": "Copy up to 50 native memories. Keep each source key stable. Use one of these memory sources agents-md, capy-drive, chatgpt-memory, claude-code-auto-memory, claude-md, claude-memory, codex-memory, gemini-memory, grok-memory, muse-memory, other.",
       "icon": null,
       "id": "tool:memory_sync",
       "input_properties": [
@@ -3403,6 +3404,44 @@
       "kind": "tool",
       "label": "Channel modes",
       "name": "modes_status"
+    },
+    {
+      "description": "Stop your Muse hook link. The hook turns itself off after its next checks. Call muse_hook_setup to make a new link.",
+      "icon": null,
+      "id": "tool:muse_hook_revoke",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Revoke the Muse hook link",
+      "name": "muse_hook_revoke"
+    },
+    {
+      "description": "Make a private wake link for your SwB mailbox and return a Muse hook script and hook settings that use it. The script checks the link on each hook poll and wakes a worker when messages wait. Each call replaces your previous link.",
+      "icon": null,
+      "id": "tool:muse_hook_setup",
+      "input_properties": [
+        "poll_interval_secs"
+      ],
+      "kind": "tool",
+      "label": "Set up the Muse hook",
+      "name": "muse_hook_setup"
+    },
+    {
+      "description": "Show whether your Muse hook link exists, when the hook last checked it, and your unread count.",
+      "icon": null,
+      "id": "tool:muse_hook_status",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Muse hook status",
+      "name": "muse_hook_status"
+    },
+    {
+      "description": "Leave a test message in your own SwB mailbox. The Muse hook wakes a worker for it at its next poll.",
+      "icon": null,
+      "id": "tool:muse_hook_test",
+      "input_properties": [],
+      "kind": "tool",
+      "label": "Test the Muse hook",
+      "name": "muse_hook_test"
     },
     {
       "description": "Create a project, a memory scope 'project:<slug>'. Do this only when the owner starts a genuinely new project. Pass its repos: switchboard then links it to its counterpart in each block (a Capy project, say) and routes it (result.auto); ambiguous matches come back as candidates to ask the owner about.",
@@ -3607,7 +3646,7 @@
       "name": "routine_remove"
     },
     {
-      "description": "Hand work to someone or leave a message; cheap, so send freely. Every agent (claude, claude-code, chatgpt, gemini, capy, ...) has a switchboard mailbox, so a message always goes through even when it isn't running: it reads on its own schedule, in a live chat, or when switchboard wakes it. Its reply reaches your inbox with in_reply_to set to the conversation this returns. Without to, the owner's route decides. to: a slug from targets, agent:<name>, or <block>:<kind>:<id>. Make the task self-contained (goal, context, repos, done). Then wait() and answer with the reply. Use forward to hand off a conversation you received and route the final answer back to its sender.",
+      "description": "Send work or leave a message in an agent's mailbox. Leave to empty to use a route, or choose a slug or address from targets. Use captain when exactly one Captain exists. For other cases, use its alias or full address. For agent:owner, SwB tries the most recent agent with owner-trusted activity in the last 30 minutes, then the project's main agent, then the global owner route. Give the goal, context, repos and completion criteria. Use wait with the returned conversation to read the reply. Use forward to hand off a conversation and route the final answer to its sender.",
       "icon": null,
       "id": "tool:send",
       "input_properties": [
@@ -3853,7 +3892,7 @@
       "name": "switchboard_status"
     },
     {
-      "description": "Everything send can reach: each block's targets (Captains, channels, ...), an agent:<name> mailbox per agent, and project routes, with address, slugs, level and persona. A slug clash goes to the higher priority. block, kind and query narrow it; refresh re-reads the blocks now.",
+      "description": "List addresses and names for block targets, agent mailboxes and project routes. The reserved name captain works only when SwB finds exactly one Captain. Otherwise, use a named alias or the full Captain address. A clash between other names goes to the higher priority. Filter with block, kind or query. Set refresh to read the blocks again.",
       "icon": null,
       "id": "tool:targets",
       "input_properties": [

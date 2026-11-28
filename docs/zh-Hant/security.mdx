@@ -77,6 +77,8 @@ Bearer 金鑰的限制同樣適用於來自同一位址的有效金鑰。在限�
 
 SwB 預設以連線位址來計算限制和寫入稽核記錄。把你的代理伺服器加進 `trusted_proxies` 或 `SWB_TRUSTED_PROXIES` 後，SwB 就會改用代理伺服器傳來的用戶端位址。代理伺服器要依據它驗證過的來源設定用戶端位址標頭。
 
+用戶端位址解析失敗時，SwB 依轉送標頭分開計算上限。含有無效位址的標頭採用 `invalid-forwarded`。只含受信任代理伺服器位址的標頭採用 `trusted-only-forwarded`。
+
 要加入 Cloudflare Tunnel 連接器或 Docker 網路上的反向代理伺服器，參閱[自行託管指南](/zh-Hant/docs/self-hosting#受信任的代理伺服器)。
 
 ## 稽核記錄
@@ -84,6 +86,8 @@ SwB 預設以連線位址來計算限制和寫入稽核記錄。把你的代理�
 存取規則拒絕的工具呼叫，SwB 都會記錄。瀏覽器登入失敗也會記錄，涵蓋設定碼、連結（已使用、過期或無效）、密碼金鑰、CSRF 檢查和 OIDC。
 
 GitHub Webhook 缺少簽章或簽章無效時，SwB 也會記錄。部分瀏覽器登入失敗和 Webhook 遭拒的情況重複發生時，SwB 會限制記錄的列數。失敗記錄會列出原因，並隱藏代碼、權杖和簽章。
+
+Cloudflare Access 憑證遭拒時，SwB 每 10 分鐘為每個用戶端位址記錄一次。
 
 SwB 頁面在 **Audit** 下顯示這些記錄。執行 `swb log` 可印出近期的記錄。傳送到信箱的訊息，動作是 `send`。訊息遭到捨棄時會留下哪些記錄，見[頻道模式](/zh-Hant/docs/channel-modes#檢查傳遞狀況)。
 

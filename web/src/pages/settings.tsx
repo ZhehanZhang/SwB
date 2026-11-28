@@ -1,45 +1,24 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Apple, ChevronRight, KeyRound, LogOut, Monitor, PanelsTopLeft, Smartphone, Terminal, X } from "lucide-react"
+import { Apple, ChevronRight, ExternalLink, KeyRound, LogOut, Monitor, PanelsTopLeft, Smartphone, Terminal, X } from "lucide-react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { PRODUCT_NAME } from "@/app/brand"
 import { connectionNames, type ConnectionPlatform } from "@/app/navigation"
 import { preloadOnTouch } from "@/app/route-pages"
 import { ConnectionStatus } from "@/components/console/connection-status"
+import { ConfirmAction } from "@/components/console/confirm-action"
 import { Lamp } from "@/components/console/lamp"
 import { CopyButton } from "@/components/copy-button"
 import { DataState } from "@/components/data-state"
 import { LogoTile } from "@/components/logo-tile"
 import { ThemePicker } from "@/components/theme-picker"
 import { Button } from "@/components/ui/button"
-import { ApiError, isObject, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
+import { ApiError, markSignedOut, requestJson, sessionQuery, SignedOutError } from "@/lib/api"
 import { companionsQuery, connectionQuery, disconnectCompanion, pairCompanion } from "@/lib/connections"
+import { consoleDocs } from "@/lib/console-docs"
+import { settingsQuery } from "@/lib/console-settings"
 import { addPasskey, listPasskeys, removePasskey, supportsPasskeys } from "@/lib/owner-auth"
-
-type Settings = {
-  version: string | null
-  mcp_url: string | null
-  data_dir: string
-  owner_key_masked: string | null
-  host: string
-  uptime_seconds: number
-}
-
-function isSettings(value: unknown): value is Settings {
-  return isObject(value)
-    && (value.version === null || typeof value.version === "string")
-    && (value.mcp_url === null || typeof value.mcp_url === "string")
-    && typeof value.data_dir === "string"
-    && (value.owner_key_masked === null || typeof value.owner_key_masked === "string")
-    && typeof value.host === "string"
-    && typeof value.uptime_seconds === "number" && Number.isSafeInteger(value.uptime_seconds) && value.uptime_seconds >= 0
-}
-
-const settingsQuery = queryOptions({
-  queryKey: ["settings"],
-  queryFn: ({ signal }) => requestJson("/api/settings", isSettings, { signal }),
-})
 
 const passkeysQuery = queryOptions({
   queryKey: ["passkeys"],
@@ -92,6 +71,7 @@ export function SettingsPage() {
   const endpoint = settings.data?.mcp_url && URL.canParse(settings.data.mcp_url, location.origin)
     ? new URL(settings.data.mcp_url, location.origin).href
     : null
+  const docs = consoleDocs({ platform: settings.data?.deploy_platform, publicUrl: settings.data?.public_url })
 
   const refreshPasskeys = () => Promise.all([
     client.invalidateQueries({ queryKey: passkeysQuery.queryKey }),
@@ -166,7 +146,17 @@ export function SettingsPage() {
       </section>
 
       <section aria-labelledby="settings-server">
-        <h2 id="settings-server" className={headingClass}>Server</h2>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h2 id="settings-server" className={headingClass}>Server</h2>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {[["Docs", docs.deploy], ["Operate", docs.operate], ["Cloudflare Tunnel", docs.tunnel]].map(([label, href]) => href && (
+              <a key={label} className="inline-flex items-center gap-1.5 text-body-sm text-muted-foreground hover:text-foreground hover:underline"
+                href={href} target="_blank" rel="noreferrer">
+                {label}<ExternalLink aria-hidden className="size-3" />
+              </a>
+            ))}
+          </div>
+        </div>
         {settings.isPending ? <DataState kind="loading" />
           : settings.isError ? <DataState kind="error" message="Server settings unavailable" onRetry={() => void settings.refetch()} />
             : (
@@ -239,10 +229,12 @@ export function SettingsPage() {
               <span className="order-last col-span-2 wrap-anywhere ps-[34px] text-muted-foreground sm:order-none sm:col-span-1 sm:ps-0">
                 {companion.capabilities.join(", ")}
               </span>
-              <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!csrf || disconnect.isPending}
-                aria-label={`Disconnect ${companion.name}`} onClick={() => disconnect.mutate(companion.id)}>
-                {disconnect.isPending && disconnect.variables === companion.id ? "Disconnecting…" : "Disconnect"}
-              </Button>
+              <ConfirmAction title={`Disconnect ${companion.name}?`} action="Disconnect" onConfirm={() => disconnect.mutate(companion.id)}>
+                <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!csrf || disconnect.isPending}
+                  aria-label={`Disconnect ${companion.name}`}>
+                  {disconnect.isPending && disconnect.variables === companion.id ? "Disconnecting…" : "Disconnect"}
+                </Button>
+              </ConfirmAction>
             </li>
           ))}
         </ul>
@@ -302,13 +294,12 @@ export function SettingsPage() {
                             {passkey.last_used_at ? `Last used ${date(passkey.last_used_at)}` : `Added ${date(passkey.created_at)}`}
                           </div>
                         </div>
-                        <Button
-                          size="sm" variant="ghost" className="text-muted-foreground"
-                          disabled={!csrf || pending} aria-label={`Remove ${passkey.name}`}
-                          onClick={() => remove.mutate(passkey.id)}
-                        >
-                          {remove.isPending && remove.variables === passkey.id ? "Removing…" : "Remove"}
-                        </Button>
+                        <ConfirmAction title={`Remove ${passkey.name}?`} action="Remove" onConfirm={() => remove.mutate(passkey.id)}>
+                          <Button size="sm" variant="ghost" className="text-muted-foreground"
+                            disabled={!csrf || pending} aria-label={`Remove ${passkey.name}`}>
+                            {remove.isPending && remove.variables === passkey.id ? "Removing…" : "Remove"}
+                          </Button>
+                        </ConfirmAction>
                       </li>
                     ))}
                   </ul>

@@ -5,6 +5,8 @@ import sqlite3
 from dataclasses import replace
 from datetime import datetime, timezone
 from functools import partial
+from html import unescape
+from importlib.metadata import version
 
 import pytest
 import yaml
@@ -136,8 +138,9 @@ def test_mailbox_send_records_the_ask_or_explicit_title(make):
     first_item, second_item = items
     assert first_item["subject"] == f"{core.agents.label('capy')} asks: Check the canary. Reply with the result."
     assert second_item["subject"] == "Canary review"
-    for item, sent in zip(items, (first, second), strict=True):
-        assert item["subject"] == core.inbox.handle(sent["handle"])["title"]
+    assert core.inbox.handle(first["handle"])["title"] == "Check the canary."
+    assert core.inbox.handle(second["handle"])["title"] == "Canary review"
+    for item in items:
         assert item["text"] == task and item["text"].endswith("Reply with the result.")
 
 
@@ -160,6 +163,14 @@ def test_capy_captain_wake_leads_with_the_title_once(make, capy):
     assert new["thread_id"] != CAPTAIN and capy.threads[new["thread_id"]]["title"] == title
 
 
+def test_capy_untitled_handoff_persists_a_body_preview(make, capy):
+    core, client = make()
+    task = "**Check the canary.**\n\nReply with the result."
+    sent = payload(call(client, STATIC_KEY, "send", {"task": task}))
+    assert core.inbox.handle(sent["handle"])["title"] == "Check the canary."
+    assert capy.messages[CAPTAIN][-1]["text"] == task
+
+
 def test_targets_list_blocks_agents_and_projects(make):
     core, c = make()
     beacon(core)
@@ -167,17 +178,19 @@ def test_targets_list_blocks_agents_and_projects(make):
     addresses = {t["address"] for t in got}
     assert {f"capy:captain:{CAPTAIN}", "agent:claude", "project:beacon"} <= addresses
     cap = next(t for t in got if t["address"] == f"capy:captain:{CAPTAIN}")
-    assert cap["level"] == "L4" and cap["slugs"] == ["captain", "bcn-1"] and cap["persona"]["id"] == "captain"
+    assert cap["level"] == "L4" and cap["slugs"] == ["bcn-1"] and cap["persona"]["id"] == "captain"
     assert next(t for t in got if t["address"] == "project:beacon")["routed_to"] == f"capy:captain:{CAPTAIN}"
     assert [t["address"] for t in payload(call(c, STATIC_KEY, "targets", {"block": "agent", "query": "claude"}))["targets"]] == ["agent:claude", "agent:claude-code"]
 
 
 def test_slug_priority_and_aliases():
-    ts = [{"address": "agent:captain", "block": "agent", "kind": "agent", "id": "captain", "slugs": ["captain"]},
-          {"address": "capy:captain:jam_1", "block": "capy", "kind": "captain", "id": "jam_1", "slugs": ["captain"]},
-          {"address": "project:captain", "block": "project", "kind": "project", "id": "captain", "slugs": ["captain"]}]
+    ts = [{"address": "agent:review", "block": "agent", "kind": "agent", "id": "review", "slugs": ["review"]},
+          {"address": "capy:captain:jam_1", "block": "capy", "kind": "captain", "id": "jam_1", "slugs": ["review"]},
+          {"address": "project:review", "block": "project", "kind": "project", "id": "review", "slugs": ["review"]}]
     assert by_slug(ts)["captain"]["block"] == "capy"
-    assert by_slug(ts, ["project"])["captain"]["block"] == "project"
+    assert by_slug(ts, ["project"])["captain"]["block"] == "capy"
+    assert by_slug(ts)["review"]["block"] == "capy"
+    assert by_slug(ts, ["project"])["review"]["block"] == "project"
     assert by_slug(ts, aliases={"boss": "capy:captain:jam_1"})["boss"]["id"] == "jam_1"
     assert parse("capy:captain:jam_1", ["capy"]) == Address("capy", "captain", "jam_1") and parse("hello", ["capy"]) is None
 
@@ -226,6 +239,7 @@ def test_pairing_code_connects_an_agent_once_and_revokes(make):
     core, c = make(clock=clock)
     code = payload(call(c, STATIC_KEY, "connect_code", {"agent": "codex", "client": "codex-cli"}))
     assert len(code["code"]) == 11 and code["agent"] == "codex" and code["code"] in code["curl"]
+    assert f"-A 'SwB/{version('swb-one')}'" in code["curl"]
     bad = c.post("/connect", json={"code": "WRONG-CODE0"})
     assert bad.status_code == 400
     got = c.post("/connect", json={"code": code["code"].lower()})
@@ -319,13 +333,14 @@ def test_owner_api_shows_and_flips_target_visibility(make):
     core, c = make()
     csrf = c.get("/auth/session", headers=OWNER).json()["csrf"]
     path = "/api/visibility"
-    body = {"resource": "target:captain", "visibility": "shared"}
+    resource = f"target:capy:captain:{CAPTAIN}".lower()
+    body = {"resource": resource, "visibility": "shared"}
     assert c.post(path, json=body, headers={**OWNER, "X-CSRF-Token": "nope"}).status_code == 403
     headers = {**OWNER, "X-CSRF-Token": csrf}
     assert c.post(path, json=body, headers=headers).status_code == 200
-    assert core.visibility.rule("target:captain") == "shared"
+    assert core.visibility.rule(resource) == "shared"
     rows = {row["resource"]: row for row in c.get(path, headers=OWNER).json()["resources"]}
-    assert rows["target:captain"]["visibility"] == "shared"
+    assert rows[resource]["visibility"] == "shared"
     assert c.post(path, json={**body, "resource": "tool:deploy"}, headers=headers).status_code == 400
 
 
@@ -335,6 +350,7 @@ def test_pairing_form_mints_a_code_and_tokens_api_revokes_the_key(make):
     assert c.post("/pairing/code", data={"agent": "codex", "csrf": "nope"}, headers=OWNER).status_code == 403
     shown = c.post("/pairing/code", data={"agent": "codex", "csrf": csrf}, headers=OWNER)
     assert shown.status_code == 200 and "https://switchboard.example.test/connect" in shown.text
+    assert f"-A 'SwB/{version('swb-one')}'" in unescape(shown.text)
     code = shown.text.split("&quot;code&quot;: &quot;")[1][:11]
     got = c.post("/connect", json={"code": code})
     assert got.status_code == 200, (code, got.text)

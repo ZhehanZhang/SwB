@@ -21,15 +21,16 @@ from .connect import AGENT_RE
 from .projects import ProjectError, Projects
 from .refusals import CONFIRMATION_REQUIRED, PolicyRefusal
 from .store import Store, fts_query, memory_hash, new_id
-from .trust import MEMORY_TRUNCATION, memory_label, unframe_memory, wrap_memory
+from .trust import MEMORY_IMPORT_PREFIX, MEMORY_TRUNCATION, MEMORY_TRUST, memory_label, unframe_memory, wrap_memory
 
 MAX_BODY = 20_000
 MAX_TITLE = 200
 MAX_VIEW = 16_000
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,79}$")
 GENERAL = "general"
-SYNC_SOURCES = frozenset(("claude-memory", "chatgpt-memory", "grok-memory", "gemini-memory", "claude-code-auto-memory",
+SYNC_SOURCES = frozenset(("claude-memory", "chatgpt-memory", "grok-memory", "gemini-memory", "muse-memory", "claude-code-auto-memory",
                           "claude-md", "agents-md", "codex-memory", "capy-drive", "other"))
+SYNC_SOURCE_LABELS = ", ".join(sorted(SYNC_SOURCES))
 log = logging.getLogger("switchboard.memory")
 CONFIRM_GENERAL = ("Save project facts in project:<slug>. For facts that apply to every project, "
                    "confirm the write with the owner and pass confirm_general=true.")
@@ -514,8 +515,9 @@ class Memory:
         def run(db: sqlite3.Connection) -> sqlite3.Row:
             row = self.locate(db, id, path, deleted=rev is not None)
             check_writer(row["scope"], row["writer_credential"])
+            restored_source, restored_trust = source, trust
             if rev is not None:
-                version = db.execute("SELECT title, body, tags FROM memory_revisions WHERE memory_id = ? AND rowid = ?",
+                version = db.execute("SELECT title, body, tags, source, trust FROM memory_revisions WHERE memory_id = ? AND rowid = ?",
                                      (row["id"], rev)).fetchone()
                 if version is None:
                     raise MemoryNotFound("Memory revision not found.")
@@ -524,12 +526,15 @@ class Memory:
                     raise MemoryError_(f"Error: The destination {slot.normalized} already exists")
                 title, body = version["title"], version["body"]
                 tags = version["tags"] if version["tags"] is not None else row["tags"]
+                if version["source"].startswith(MEMORY_IMPORT_PREFIX):
+                    restored_source = version["source"]
+                    restored_trust = min(trust, version["trust"] or "agent", key=MEMORY_TRUST.index)
             else:
                 assert change is not None
                 title, body, tags = change(row)
             self.validate(row["namespace"], row["key"], title, body)
-            self._replace(db, row, source, now, title.strip(), body, tags, writer, trust)
-            self.revision(db, row["id"], now, source, action)
+            self._replace(db, row, source, now, title.strip(), body, tags, writer, restored_trust, content_by=restored_source)
+            self.revision(db, row["id"], now, restored_source, action)
             return db.execute("SELECT * FROM memories WHERE id = ?", (row["id"],)).fetchone()
 
         row = self.store.tx(run)

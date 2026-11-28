@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test"
 import { readFile } from "node:fs/promises"
-import { fileURLToPath } from "node:url"
 
 test("Sign-in explains an invalid link", async ({ page }) => {
   await page.setExtraHTTPHeaders({ "cf-access-jwt-assertion": "invalid" })
@@ -67,21 +66,24 @@ test("Tokens shows and removes a paired key memory scope", async ({ page, reques
   await table.screenshot({ path, animations: "disabled" })
   await testInfo.attach("Memory access", { path, contentType: "image/png" })
   await project.click()
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove", exact: true }).click()
   await expect(project).toHaveCount(0)
   await expect(agent).toBeVisible()
 })
 
-test("Agents saves a Slack persona avatar", async ({ page }) => {
-  await page.goto("/classic?notice=avatar-refused")
-  await expect(page).toHaveURL("/agents?notice=avatar-refused")
-  const file = page.getByLabel("Review bot")
-  await expect(file).toHaveAttribute("accept", "image/png")
-  await file.setInputFiles(
-    fileURLToPath(new URL("../../src/switchboard/slack/avatars/swb.png", import.meta.url)),
-  )
-  await page.getByRole("button", { name: "Save avatar" }).click()
-  await expect(page).toHaveURL("/agents?notice=avatar-saved")
-  await expect(page.getByRole("status").filter({ hasText: "Avatar saved" })).toBeVisible()
+test("Agents offers one setup prompt per app and no avatar uploads", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async (value: string) => { document.documentElement.dataset.testClipboard = value } },
+    })
+  })
+  await page.goto("/agents")
+  await expect(page.getByRole("heading", { name: "Slack avatars" })).toHaveCount(0)
+  await expect(page.locator('input[type="file"]')).toHaveCount(0)
+  await page.getByRole("button", { name: "Copy Slack setup prompt" }).click()
+  await expect(page.locator("html")).toHaveAttribute("data-test-clipboard", /Slack/)
+  const guide = page.getByRole("link", { name: "Slack setup guide" })
+  await expect(guide).toHaveAttribute("href", /\/docs\/setup\/slack#swb=/)
 })
 
 test("Settings shows the SwB commands", async ({ page }) => {
@@ -89,6 +91,26 @@ test("Settings shows the SwB commands", async ({ page }) => {
   const commands = page.getByRole("region", { name: "Commands", exact: true })
   await expect(commands.locator("code")).toHaveText(["swb up", "swb status", "swb log"])
   await expect(commands.getByRole("button", { name: "Copy swb log" })).toBeVisible()
+})
+
+test("Memory edits tags and renames the note path", async ({ page }) => {
+  await page.goto("/memory")
+  await page.getByRole("button", { name: "release-plan", exact: true }).click()
+  const note = page.getByRole("dialog", { name: "Release plan" })
+  await note.getByRole("button", { name: "Edit", exact: true }).click()
+  await note.getByRole("textbox", { name: "Tags" }).fill("planning, release")
+  await note.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(note.getByText("planning, release", { exact: true })).toBeVisible()
+  await note.getByRole("button", { name: "Rename path" }).click()
+  const path = note.getByRole("textbox", { name: "Path" })
+  await expect(path).toBeFocused()
+  await path.fill("/memories/general/notes/release-schedule.md")
+  await note.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(note.getByText("/memories/general/notes/release-schedule.md", { exact: true })).toBeVisible()
+  await note.getByRole("button", { name: "Rename path" }).click()
+  await path.fill("/memories/general/notes/release-plan.md")
+  await note.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(note.getByText("/memories/general/notes/release-plan.md", { exact: true })).toBeVisible()
 })
 
 test("Project copies the packaged coordinator prompt", async ({ page }, testInfo) => {
@@ -165,12 +187,16 @@ test("Memory runs and restores Git backups on mobile", async ({ page }) => {
   await page.goto("/memory")
   await page.getByRole("button", { name: "Backup", exact: true }).click()
   const backup = page.getByRole("region", { name: "Git backup" })
-  await expect(backup.getByLabel("Repository")).toHaveValue(/^file:\/\//)
+  await expect(backup.getByRole("status")).toContainText("Configured")
+  await expect(backup.getByRole("status")).toContainText("Last backup")
+  await expect(backup.getByRole("status")).toContainText("Complete")
+  await backup.getByRole("button", { name: "Edit settings" }).click()
+  await expect(backup.getByLabel("Repository address")).toHaveValue("example.test:memory-backup.git")
   await expect(backup.getByLabel("Branch")).toHaveValue("main")
   await expect(backup.getByLabel("Author name")).toHaveValue("Fixture Owner")
   await expect(backup.getByLabel("Author email")).toHaveValue("owner@example.test")
-  await expect(backup.getByLabel("Credential")).toHaveAttribute("type", "password")
-  await expect(backup.getByRole("status")).toContainText("Last backup")
+  await expect(backup.getByRole("button", { name: "Add credential" })).toBeVisible()
+  await backup.getByRole("button", { name: "Cancel" }).click()
   await backup.getByRole("button", { name: "Restore from repository" }).click()
   const confirmBackup = page.getByRole("alertdialog", { name: "Restore from repository?" })
   await expect(confirmBackup).toBeVisible()
@@ -259,26 +285,44 @@ test("Memory changes sync and restores an exported archive", async ({ page }) =>
     .toHaveText("4 unchanged")
 })
 
-test("Memory saves a masked credential and shows only its saved state", async ({ page }) => {
+test("Memory configures a new repository through a credential claim", async ({ page }) => {
   await page.goto("/memory")
   await page.getByRole("button", { name: "Backup", exact: true }).click()
   const backup = page.getByRole("region", { name: "Git backup" })
-  await backup.getByLabel("Automatic backup").uncheck()
-  await backup.getByLabel("Repository").fill("https://example.test/memory.git")
-  const credential = backup.getByLabel("Credential")
-  const fixture = "fixture-backup-token"
-  await credential.fill(fixture)
-  const saved = page.waitForResponse((response) => response.request().method() === "POST"
+  await backup.getByRole("button", { name: "Edit settings" }).click()
+  await backup.getByLabel("Repository address").fill("git@example.test:another-backup.git")
+  await backup.getByRole("button", { name: "Save repository and create claim link" }).click()
+  await expect(backup.getByRole("link", { name: /Enter key/ })).toBeVisible()
+  await expect(backup.getByLabel("Repository address")).toHaveValue("example.test:another-backup.git")
+  await backup.getByLabel("Repository address").fill("https://example.test/memory.git")
+  await expect(backup.getByLabel("Author name")).toBeDisabled()
+  await expect(backup.locator("input[type=password], input[type=file]")).toHaveCount(0)
+  const created = page.waitForResponse((response) => response.request().method() === "POST"
     && new URL(response.url()).pathname === "/api/memory/backup")
+  await backup.getByRole("button", { name: "Save repository and create claim link" }).click()
+  const claimResponse = await created
+  expect(claimResponse.ok()).toBe(true)
+  expect(await claimResponse.json()).toMatchObject({ enabled: false, credential_saved: false })
+  await expect(backup.getByRole("button", { name: "Close", exact: true })).toBeVisible()
+  const popup = page.waitForEvent("popup")
+  await backup.getByRole("link", { name: /Enter token/ }).click()
+  const claimPage = await popup
+  const fixture = "fixture-backup-token"
+  await claimPage.getByLabel("Git access token").fill(fixture)
+  await claimPage.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(claimPage.getByRole("heading", { name: "Git access token saved" })).toBeVisible()
+  await claimPage.close()
+  await expect(backup.getByLabel("Author name")).toBeEnabled()
+  await expect(backup.getByRole("group", { name: "Credential" }).getByRole("status")).toHaveText("Saved")
+  await backup.getByLabel("Author name").fill("Backup Author")
+  await backup.getByLabel("Automatic backup").uncheck()
   await backup.getByRole("button", { name: "Save", exact: true }).click()
-  const response = await saved
-  expect(response.ok()).toBe(true)
-  expect(await response.text()).not.toContain(fixture)
-  await expect(credential).toHaveValue("")
-  await expect(credential).toHaveAttribute("placeholder", "Saved")
+  await expect(backup.getByRole("status")).toContainText("Paused")
   await page.reload()
-  await expect(credential).toHaveValue("")
-  await expect(credential).toHaveAttribute("placeholder", "Saved")
+  await backup.getByRole("button", { name: "Edit settings" }).click()
+  await expect(backup.getByLabel("Author name")).toHaveValue("Backup Author")
+  await expect(backup.getByRole("group", { name: "Credential" }).getByRole("status")).toHaveText("Saved")
+  await expect(backup.locator("input[type=password], input[type=file]")).toHaveCount(0)
 })
 
 test("Inbox shows more conversations and preserves the project filter through details", async ({ page }, testInfo) => {

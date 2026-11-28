@@ -34,10 +34,29 @@ Create another Access application on the same hostname for the paths marked **By
 | `/inbox/poll`, `/inbox/events` | Bypass |
 | `/companion/*` | Bypass |
 | `/github/webhook` | Bypass for GitHub |
-| `/hooks/*` | Bypass for Webhooks |
+| `/hooks/*` | Bypass for Webhooks and the Muse hook |
 | All other paths, including `/pairing/companion`, `/authorize` and `/inbox` | Owner |
 
 SwB checks pairing codes at `/companion/pair`. It checks the device key on other companion requests. If you use Access, ask an agent with owner access to call `companion_code`.
+
+## Allow HTTP requests from agents
+
+Browser Integrity Check can block requests from agents. Add a [Configuration Rule](https://developers.cloudflare.com/rules/configuration-rules/) in your Cloudflare zone for these SwB paths.
+
+Replace `swb.example.com` with your SwB hostname. Use this rule expression.
+
+```text
+(http.host eq "swb.example.com" and (
+  starts_with(http.request.uri.path, "/mcp") or
+  starts_with(http.request.uri.path, "/hooks/") or
+  starts_with(http.request.uri.path, "/.well-known/") or
+  http.request.uri.path in {"/register" "/token" "/revoke" "/connect"} or
+  starts_with(http.request.uri.path, "/inbox/") or
+  starts_with(http.request.uri.path, "/companion/")
+))
+```
+
+Set `Browser Integrity Check: Off` in the rule. SwB keeps its own access rules.
 
 ## Set the SwB address
 

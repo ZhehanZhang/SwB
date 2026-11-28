@@ -14,7 +14,7 @@ from switchboard.slack.config import Persona, parse_config
 from switchboard.slack.engine import BUNDLED_AVATARS
 from switchboard.slack.routing import build_targets, near, split_slug
 
-CAPTAINS = [{"id": "jam_P", "name": "HelperBot"}, {"id": "jam_C", "name": "Captain"}, {"id": "jam_X", "name": "Claude"},
+CAPTAINS = [{"id": "jam_P", "name": "HelperBot"}, {"id": "jam_C", "name": "Captain", "code": "ops-captain"}, {"id": "jam_X", "name": "Claude"},
             {"id": "jam_old", "name": "Gone", "archived": True}]
 AGENTS = ["claude", "chatgpt", "slack", "codex"]
 PROJECTS = [{"slug": "orbit", "name": "Orbit"}, {"slug": "codex", "name": "Codex project"}]
@@ -32,6 +32,7 @@ def test_targets_found_automatically_with_collision_order_and_aliases():
     assert t["orbit"].kind == "project"
     assert t["chatgpt"].kind == "agent" and "slack" not in t and "gone" not in t
     assert t["pp"].id == "jam_P" and t["pp"].kind == "captain"
+    assert "captain" not in t
 
 
 def test_split_slug():
@@ -55,12 +56,12 @@ def mention(ts, text, thread_ts=None):
 
 
 async def test_slug_match_no_slug_and_thread_stickiness(make_core, world):
-    core = await make_core(cfg(default_target="captain"))
+    core = await make_core(cfg(default_target="ops-captain"))
     core.set_targets(targets())
     a = await core.ingest("a2a", mention("1700000100.000001", f"<@{BOT_USER}> helperbot deploy status?"))
     assert (a["target"], a["target_kind"], a["text"]) == ("helperbot", "captain", "deploy status?")
     b = await core.ingest("a2a", mention("1700000100.000002", f"<@{BOT_USER}> what is up"))
-    assert (b["target"], b["target_kind"]) == ("captain", "captain") and b["text"] == f"<@{BOT_USER}> what is up"
+    assert (b["target"], b["target_kind"]) == ("ops-captain", "captain") and b["text"] == f"<@{BOT_USER}> what is up"
     c = await core.ingest("a2a", mention("1700000100.000003", f"<@{BOT_USER}> and the logs?", thread_ts="1700000100.000001"))
     assert c["target"] == "helperbot"
     d = await core.ingest("a2a", mention("1700000100.000004", f"<@{BOT_USER}> chatgpt take this one", thread_ts="1700000100.000001"))
@@ -72,17 +73,17 @@ async def test_slug_match_no_slug_and_thread_stickiness(make_core, world):
 
 
 async def test_unknown_slug_gets_a_hint_and_goes_to_the_default(make_core, world):
-    core = await make_core(cfg(default_target="captain"))
+    core = await make_core(cfg(default_target="ops-captain"))
     core.set_targets(targets())
     p = await core.ingest("a2a", mention("1700000200.000001", f"<@{BOT_USER}> helperbo are you there"))
-    assert p["target"] == "captain" and p["text"].endswith("helperbo are you there")
+    assert p["target"] == "ops-captain" and p["text"].endswith("helperbo are you there")
     hints = [kw for t, n, kw in world.calls if n == "chat_postEphemeral"]
     assert len(hints) == 1 and "helperbot" in hints[0]["text"] and hints[0]["user"] == OWNER_A
 
 
 async def test_sinks_take_only_their_targets(make_core, hooks):
-    c = cfg(default_target="captain")
-    c["workspaces"]["a2a"]["sinks"][0]["targets"] = ["captain"]
+    c = cfg(default_target="ops-captain")
+    c["workspaces"]["a2a"]["sinks"][0]["targets"] = ["ops-captain"]
     core = await make_core(c)
     core.set_targets(targets())
     assert core.sink_accepts("a2a", await core.ingest("a2a", mention("1700000300.000001", f"<@{BOT_USER}> hi"))) == ["a"]
@@ -90,7 +91,7 @@ async def test_sinks_take_only_their_targets(make_core, hooks):
 
 
 async def test_capy_posts_in_a_routed_thread_as_the_captain(make_core, world):
-    c = cfg(default_target="captain")
+    c = cfg(default_target="ops-captain")
     c["agents"]["capy"] = {"workspaces": {"a2a": ["bot"]}}
     core = await make_core(c)
     core.set_targets(targets(), {"helperbot": Persona(id="helperbot", name="HelperBot")})
@@ -100,6 +101,18 @@ async def test_capy_posts_in_a_routed_thread_as_the_captain(make_core, world):
     await core.gate.submit(core.config.grant("capy"), "a2a", "bot", "post_message", {"channel": "CPUBLIC01", "text": "top level"})
     posts = [kw for t, n, kw in world.calls if n == "chat_postMessage"]
     assert posts[-2]["username"] == "HelperBot" and posts[-1]["username"] == "Capy"
+
+
+async def test_ambiguous_captain_never_falls_back_to_the_slack_default(make_core, world):
+    core = await make_core(cfg(default_target="ops-captain"))
+    core.set_targets(targets())
+    assert await core.ingest("a2a", mention("1700000401.000001", f"<@{BOT_USER}> captain check the example")) is None
+    assert core.store.thread_target("a2a", "CPUBLIC01", "1700000401.000001") is None
+    hints = [kw["text"] for _, name, kw in world.calls if name == "chat_postEphemeral"]
+    assert hints == ["Choose a Captain by alias or full address."]
+    core.set_targets(build_targets([CAPTAINS[0]], [], []))
+    push = await core.ingest("a2a", mention("1700000401.000002", f"<@{BOT_USER}> captain check the example"))
+    assert (push["target"], push["target_kind"]) == ("captain", "captain")
 
 
 async def test_captain_avatar_preset_composited_and_monogram_fallback(tmp_path):

@@ -129,7 +129,7 @@ async def tokens(request: Request) -> JSONResponse:
                 project = _label(row["project"])
                 stored.append({"id": f"routine:{label}", "name": "Claude routine token", "label": label, "kind": "claude",
                                "used_by": [project] if project else [], "added_by": _actor(row["created_by"]),
-                               "added_at": iso(row["created_at"]), "revoke_id": None})
+                               "added_at": iso(row["created_at"]), "revoke_id": None, "routine_block": routine.name})
 
     for key in core.connections.list():
         project = _label(key["project"])
@@ -137,6 +137,11 @@ async def tokens(request: Request) -> JSONResponse:
                        "used_by": [project] if project else [], "added_by": _actor(key["created_by"]),
                        "added_at": iso(key["created_at"]), "revoke_id": key["id"],
                        "memory_scopes": list(core.connections.memory_scopes(key["id"]))})
+
+    for hook in core.hook_wake.rows():
+        if agent := _label(hook["agent"]):
+            stored.append({"id": f"hook:{agent}", "name": "Muse hook", "label": agent, "kind": "muse", "used_by": [],
+                           "added_by": _actor(hook["created_by"]), "added_at": iso(hook["created_at"]), "revoke_id": f"hook:{agent}"})
 
     waiting.sort(key=lambda row: row["requested_at"] or "", reverse=True)
     return JSONResponse({"waiting": waiting, "stored": stored})

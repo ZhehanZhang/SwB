@@ -3,6 +3,7 @@ import json
 import os
 import stat
 from dataclasses import replace
+from importlib.metadata import version
 from unittest.mock import AsyncMock
 
 import httpx
@@ -92,6 +93,7 @@ def test_connect_pairs_with_hidden_code_and_persists_options(settings, tmp_path,
     [request] = posts
     assert str(request.url) == URL + "/companion/pair"
     assert "authorization" not in request.headers
+    assert request.headers["User-Agent"] == f"SwB/{version('swb-one')}"
     payload = json.loads(request.content)
     assert payload["code"] == CODE and payload["name"] == "fixture-host" and payload["platform"]
     assert [cap["id"] for cap in payload["capabilities"]] == ["drop"]
@@ -422,6 +424,7 @@ async def test_run_sends_hello_progress_claim_and_result(settings, paired, monke
 
     async def handler(request):
         assert request.headers["Authorization"] == f"Bearer {KEY}"
+        assert request.headers["User-Agent"] == f"SwB/{version('swb-one')}"
         endpoint = request.url.path.removeprefix("/companion/")
         if endpoint == "events":
             assert request.headers["Accept"] == "text/event-stream"

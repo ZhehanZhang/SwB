@@ -67,6 +67,7 @@ test.each([false, true])("uses legacy names only when needed with either standal
     expect(new URL(req.url).pathname).toBe("/inbox/events")
     expect(new URL(req.url).searchParams.toString()).toBe("agent=fixture-agent&after=28")
     expect(req.headers.get("Authorization")).toBe("Bearer fixture-key")
+    expect(req.headers.get("User-Agent")).toBe(`SwB/${pkg.version} (channel)`)
   } finally {
     child.kill()
     await child.exited
